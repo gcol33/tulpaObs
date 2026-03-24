@@ -1,0 +1,18 @@
+# R build artifacts
+src/*.o
+src/*.dll
+src/*.so
+src/*.dylib
+
+# R package build
+*.Rcheck/
+*.tar.gz
+
+# IDE
+.Rhistory
+.RData
+.Rproj.user
+
+# Temp
+test_*.R
+run_*.R
