@@ -490,3 +490,182 @@ print.tulpaOcc_priors <- function(x, ...) {
   cat(sprintf("  alpha ~ Normal(%.2f, %.2f)\n", x$alpha_mean, x$alpha_sd))
   invisible(x)
 }
+
+
+# ============================================================================
+# spOccupancy $ compatibility accessor
+# ============================================================================
+
+#' Access spOccupancy-compatible fields from tulpaOcc fits
+#'
+#' Allows accessing spOccupancy-style fields (e.g., `$beta.samples`,
+#' `$psi.samples`) on tulpaOcc_fit objects. Since tulpaOcc stores actual
+#' posterior draws, this is a thin remapping layer.
+#'
+#' @param x A `tulpaOcc_fit` object.
+#' @param name Field name to access.
+#' @return The requested field value.
+#' @export
+`$.tulpaOcc_fit` <- function(x, name) {
+  # First check native fields
+  val <- .subset2(x, name)
+  if (!is.null(val)) return(val)
+
+  model <- .subset2(x, "model")
+  draws <- .subset2(x, "draws")
+  pi_list <- if (!is.null(model)) model$process_info else NULL
+
+  switch(name,
+    # Occupancy fixed effect draws
+    "beta.samples" = {
+      if (is.null(pi_list)) return(NULL)
+      p_occ <- pi_list[[1]]$p
+      draws[, seq_len(p_occ), drop = FALSE]
+    },
+
+    # Detection fixed effect draws
+    "alpha.samples" = {
+      if (is.null(pi_list) || length(pi_list) < 2) return(NULL)
+      p_occ <- pi_list[[1]]$p
+      p_det <- pi_list[[2]]$p
+      draws[, p_occ + seq_len(p_det), drop = FALSE]
+    },
+
+    # Occupancy probabilities (n_draws x n_sites)
+    "psi.samples" = {
+      fit_vals <- fitted(x)
+      if (!is.null(fit_vals$psi)) {
+        # Recompute from draws for proper uncertainty
+        if (is.null(pi_list)) return(NULL)
+        p_occ <- pi_list[[1]]$p
+        X_occ <- model$X_processes[[1]]
+        n_draws <- nrow(draws)
+        psi_mat <- matrix(NA_real_, n_draws, nrow(X_occ))
+        for (s in seq_len(n_draws)) {
+          beta <- draws[s, seq_len(p_occ)]
+          psi_mat[s, ] <- plogis(as.vector(X_occ %*% beta))
+        }
+        psi_mat
+      }
+    },
+
+    # Latent occupancy state
+    "z.samples" = {
+      psi <- x$psi.samples
+      if (!is.null(psi)) {
+        matrix(rbinom(length(psi), 1, psi), nrow = nrow(psi))
+      }
+    },
+
+    # Detection probabilities
+    "p.samples" = {
+      if (is.null(pi_list) || length(pi_list) < 2) return(NULL)
+      p_occ <- pi_list[[1]]$p
+      p_det <- pi_list[[2]]$p
+      X_det <- model$X_processes[[2]]
+      n_draws <- nrow(draws)
+      p_mat <- matrix(NA_real_, n_draws, nrow(X_det))
+      for (s in seq_len(n_draws)) {
+        alpha <- draws[s, p_occ + seq_len(p_det)]
+        p_mat[s, ] <- plogis(as.vector(X_det %*% alpha))
+      }
+      p_mat
+    },
+
+    # Computation time
+    "run.time" = .subset2(x, "elapsed"),
+
+    # Not a compat field
+    NULL
+  )
+}
+
+
+# ============================================================================
+# Spatial prediction at new locations
+# ============================================================================
+
+#' Predict occupancy at new spatial locations
+#'
+#' Generates occupancy predictions at new coordinates, including the
+#' spatial random effect interpolated from the fitted field.
+#'
+#' @param object A `tulpaOcc_fit` object fitted with a spatial component.
+#' @param newcoords Matrix of new coordinates (n_new x 2).
+#' @param newocc.covs Optional data.frame of covariates at new locations.
+#' @param quantiles Quantiles for credible intervals (default 0.025, 0.5, 0.975).
+#' @return A data.frame with `mean`, `sd`, and quantile columns.
+#' @export
+predict_spatial <- function(object, newcoords, newocc.covs = NULL,
+                            quantiles = c(0.025, 0.5, 0.975)) {
+  if (is.null(object$spatial)) {
+    stop("predict_spatial requires a model fitted with a spatial component", call. = FALSE)
+  }
+
+  # Build design matrix at new locations
+  if (!is.null(newocc.covs)) {
+    # Use model's formula to build X
+    model <- object$model
+    occ_formula <- model$occ_formula
+    if (!is.null(occ_formula)) {
+      X.0 <- model.matrix(occ_formula, data = newocc.covs)
+    } else {
+      X.0 <- as.matrix(cbind(1, newocc.covs))
+    }
+  } else {
+    n_new <- nrow(newcoords)
+    p_occ <- object$model$process_info[[1]]$p
+    X.0 <- matrix(0, n_new, p_occ)
+    X.0[, 1] <- 1  # Intercept only
+  }
+
+  # Fixed effect prediction
+  draws <- object$draws
+  p_occ <- object$model$process_info[[1]]$p
+  n_draws <- nrow(draws)
+  n_new <- nrow(newcoords)
+
+  eta_draws <- matrix(NA_real_, n_draws, n_new)
+  for (s in seq_len(n_draws)) {
+    beta <- draws[s, seq_len(p_occ)]
+    eta_draws[s, ] <- as.vector(X.0 %*% beta)
+  }
+
+  # Interpolate spatial field to new locations using nearest-neighbor
+  sp_type <- object$spatial$type
+  cn <- colnames(draws)
+  sp_cols <- grep("^phi_spatial\\[|^w_gp\\[|^gp_w\\[", cn)
+
+  if (length(sp_cols) > 0 && !is.null(object$spatial$coords)) {
+    fit_coords <- object$spatial$coords
+    n_fit <- nrow(fit_coords)
+
+    # Compute distances from new points to fitted points
+    for (s in seq_len(n_draws)) {
+      sp_effects <- draws[s, sp_cols]
+      # Nearest-neighbor interpolation
+      for (i in seq_len(n_new)) {
+        dists <- sqrt((fit_coords[, 1] - newcoords[i, 1])^2 +
+                       (fit_coords[, 2] - newcoords[i, 2])^2)
+        # IDW with k=5 nearest neighbors
+        k <- min(5, n_fit)
+        nn <- order(dists)[seq_len(k)]
+        w <- 1 / (dists[nn] + 1e-10)
+        w <- w / sum(w)
+        eta_draws[s, i] <- eta_draws[s, i] + sum(w * sp_effects[nn])
+      }
+    }
+  }
+
+  psi_draws <- plogis(eta_draws)
+
+  result <- data.frame(
+    mean = colMeans(psi_draws),
+    sd = apply(psi_draws, 2, sd)
+  )
+  for (q in quantiles) {
+    qname <- paste0("q", gsub("\\.", "", format(q * 100, nsmall = 1)))
+    result[[qname]] <- apply(psi_draws, 2, quantile, q)
+  }
+  result
+}

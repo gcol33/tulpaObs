@@ -149,6 +149,139 @@ print.occu_data <- function(x, ...) {
   invisible(x)
 }
 
+#' Summarise occupancy data
+#'
+#' Returns detection statistics including naive occupancy, naive detection,
+#' per-visit rates, and detection frequency table.
+#'
+#' @param object An `occu_data` object.
+#' @param ... Ignored.
+#' @return An `occu_data_summary` object (printed automatically).
+#' @export
+summary.occu_data <- function(object, ...) {
+  y <- if (is.matrix(object$y)) object$y else object$y[, , 1]
+  N <- nrow(y)
+  J <- ncol(y)
+
+  not_na <- y >= 0 | !is.na(y)
+  # Treat -1 and NA as missing
+  valid <- !is.na(y) & y >= 0
+  n_obs <- sum(valid)
+  n_missing <- N * J - n_obs
+
+  det_count <- rowSums(y == 1 & valid)
+  n_visits <- rowSums(valid)
+  detected <- det_count > 0
+
+  naive_psi <- mean(detected)
+  naive_p <- if (sum(n_visits[detected]) > 0) {
+    sum(det_count[detected]) / sum(n_visits[detected])
+  } else NA_real_
+
+  det_freq <- table(factor(det_count, levels = 0:J))
+  det_per_visit <- vapply(seq_len(J), function(j) {
+    v <- y[, j]
+    ok <- !is.na(v) & v >= 0
+    if (sum(ok) > 0) mean(v[ok]) else NA_real_
+  }, numeric(1))
+
+  out <- list(
+    N = N, J = J, n_obs = n_obs, n_missing = n_missing,
+    naive_psi = naive_psi, naive_p = naive_p,
+    det_freq = det_freq, det_count = det_count,
+    n_visits = n_visits, det_per_visit = det_per_visit,
+    has_coords = !is.null(object$coords)
+  )
+  class(out) <- "occu_data_summary"
+  out
+}
+
+#' @export
+print.occu_data_summary <- function(x, ...) {
+  cat("Occupancy data summary\n")
+  cat(sprintf("  Sites: %d | Max visits: %d\n", x$N, x$J))
+  cat(sprintf("  Observations: %d | Missing: %d (%.1f%%)\n",
+              x$n_obs, x$n_missing,
+              100 * x$n_missing / (x$n_obs + x$n_missing)))
+  cat(sprintf("  Naive occupancy: %.3f (%d / %d sites)\n",
+              x$naive_psi, sum(x$det_freq[-1]), x$N))
+  if (!is.na(x$naive_p)) {
+    cat(sprintf("  Naive detection: %.3f\n", x$naive_p))
+  }
+  cat("\n  Detection frequency (detections per site):\n")
+  df <- as.data.frame(x$det_freq)
+  names(df) <- c("detections", "sites")
+  print(df, row.names = FALSE)
+  cat(sprintf("\n  Per-visit detection rate: %s\n",
+              paste(sprintf("V%d=%.2f", seq_along(x$det_per_visit),
+                            x$det_per_visit), collapse = "  ")))
+  if (x$has_coords) cat("  Coordinates: available\n")
+  invisible(x)
+}
+
+#' Plot detection history patterns
+#'
+#' 2x2 panel: detection frequency histogram, per-visit detection rates,
+#' visit completeness, and spatial detection map (if coordinates available).
+#'
+#' @param x An `occu_data` object.
+#' @param ... Ignored.
+#' @return Invisible `NULL`.
+#' @importFrom graphics hist barplot par polygon legend
+#' @importFrom grDevices rgb
+#' @export
+plot.occu_data <- function(x, ...) {
+  y <- if (is.matrix(x$y)) x$y else x$y[, , 1]
+  N <- nrow(y)
+  J <- ncol(y)
+
+  valid <- !is.na(y) & y >= 0
+  det_count <- rowSums(y == 1 & valid)
+  detected <- det_count > 0
+
+  has_coords <- !is.null(x$coords)
+  old_par <- par(mfrow = if (has_coords) c(2, 2) else c(1, 3),
+                 mar = c(4, 4, 2.5, 1))
+  on.exit(par(old_par))
+
+  # Panel 1: detection frequency
+  hist(det_count, breaks = seq(-0.5, max(det_count) + 0.5, by = 1),
+       main = "Detections per site", xlab = "Number of detections",
+       col = "grey80", border = "grey50")
+
+  # Panel 2: per-visit detection rate
+  det_per_visit <- vapply(seq_len(J), function(j) {
+    v <- y[, j]; ok <- !is.na(v) & v >= 0
+    if (sum(ok) > 0) mean(v[ok]) else 0
+  }, numeric(1))
+  barplot(det_per_visit, names.arg = paste0("V", seq_len(J)),
+          main = "Detection rate by visit",
+          ylab = "P(detect)", col = "steelblue",
+          ylim = c(0, max(det_per_visit) * 1.2 + 0.01))
+
+  # Panel 3: visit completeness
+  completeness <- vapply(seq_len(J), function(j) {
+    mean(!is.na(y[, j]) & y[, j] >= 0)
+  }, numeric(1))
+  barplot(completeness, names.arg = paste0("V", seq_len(J)),
+          main = "Visit completeness",
+          ylab = "Proportion surveyed", col = "darkseagreen",
+          ylim = c(0, 1))
+
+  # Panel 4: spatial map
+  if (has_coords) {
+    cols <- ifelse(detected, "tomato", "grey70")
+    plot(x$coords[, 1], x$coords[, 2],
+         col = cols, pch = 19,
+         cex = 0.5 + det_count / max(max(det_count), 1),
+         xlab = "X", ylab = "Y", main = "Detection map")
+    legend("topright",
+           legend = c("Detected", "Not detected"),
+           col = c("tomato", "grey70"), pch = 19, cex = 0.8)
+  }
+  invisible(NULL)
+}
+
 # ============================================================================
 # Simulation functions
 # ============================================================================

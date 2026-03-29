@@ -33,10 +33,13 @@ See memory file `project_tulpa_boundary.md` for full details.
 | Spatial GP (NNGP) | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Spatial + community | — | Yes | |
-| All S3 methods | Yes | Yes | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update |
-| All diagnostics | Yes | Yes | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram |
+| All S3 methods | Yes | Yes | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update, summary, $ accessor |
+| All diagnostics | Yes | Yes | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram, spatialRange, temporalCorr |
 | All simulation | Yes | Yes | simulate_occu, simMsOcc, simTOcc, simIntOcc, simTMsOcc, simIntMsOcc |
-| Model comparison | Yes | Yes | compare_models, modelAverage |
+| Model comparison | Yes | Yes | compare_models, modelAverage, postHocLM |
+| Data exploration | Yes | Yes | summary.occu_data, plot.occu_data |
+| Spatial prediction | — | Yes | predict_spatial (IDW interpolation of spatial field) |
+| Components | Yes | Yes | occu_re, occu_temporal, occu_svc, occu_latent, occu_community_re, occu_areal |
 
 ## What's Wired But Blocked by tulpa Bugs
 
@@ -75,12 +78,11 @@ R/
   occu_fit.R        — occu_fit() dispatcher (Laplace default, NUTS fallback)
   occu_output.R     — print/summary
   laplace.R         — EM callbacks per model type, build_laplace_fit
-  components.R      — occu_re, occu_temporal, occu_svc, occu_latent
+  components.R      — occu_re, occu_temporal, occu_svc, occu_latent, occu_community_re, occu_areal
   spatial.R         — occ_icar/bym2/gp/multiscale_gp/spde
-  methods.R         — All S3 methods + checkIdentifiability, getSVCSamples, etc.
-  diagnostics.R     — waicOccu, ppcOccu, compare_models, modelAverage, moranI, etc.
-  data.R            — occu_format, occu_data, all simulation functions
-  compat.R          — occuMap, spOccupancy $ accessor, plot.tulpaOcc_fit
+  methods.R         — S3 methods, $.tulpaOcc_fit, predict_spatial, checkIdentifiability
+  diagnostics.R     — waicOccu, ppcOccu (generic diagnostics inherited from tulpa)
+  data.R            — occu_format, occu_data, summary/plot.occu_data, all simulation functions
 src/
   occu_fit.cpp               — Unified C++ entry point
   populate_helpers.h          — populate_spatial/temporal/re/svc/latent

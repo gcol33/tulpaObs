@@ -146,3 +146,48 @@ print.tulpaOcc_temporal <- function(x, ...) {
   if (x$cyclic) cat("  Cyclic: yes\n")
   invisible(x)
 }
+
+
+#' Specify community-level random effects
+#'
+#' Adds a species-level random effect for community occupancy models.
+#' This is a convenience wrapper around [occu_re()] that sets the group
+#' to the species identifier.
+#'
+#' @param type `"intercept"` (default) or `"slope"`.
+#' @param covariate For random slopes, the covariate name.
+#' @param shared Logical vector: which processes get this RE.
+#'   Default `c(TRUE, TRUE)` = both occupancy and detection.
+#' @param sigma_scale Prior scale for RE standard deviation (default 1).
+#'
+#' @return A `tulpaOcc_re` object with group set to `"species"`.
+#' @export
+occu_community_re <- function(type = c("intercept", "slope"),
+                              covariate = NULL,
+                              shared = c(TRUE, TRUE),
+                              sigma_scale = 1) {
+  type <- match.arg(type)
+  occu_re(group = "species", type = type, covariate = covariate,
+          shared = shared, sigma_scale = sigma_scale)
+}
+
+
+#' Specify areal spatial structure
+#'
+#' Convenience wrapper for BYM2 or ICAR spatial models using
+#' an adjacency matrix. Equivalent to [occu_bym2()] or [occu_icar()].
+#'
+#' @param adj Adjacency matrix (n_sites x n_sites, symmetric, 0/1).
+#' @param model `"bym2"` (default) or `"icar"`.
+#' @param ... Additional arguments passed to [occu_bym2()] or [occu_icar()].
+#'
+#' @return A `tulpaOcc_spatial` object.
+#' @export
+occu_areal <- function(adj, model = c("bym2", "icar"), ...) {
+  model <- match.arg(model)
+  if (model == "bym2") {
+    occu_bym2(adj = adj, ...)
+  } else {
+    occu_icar(adj = adj, ...)
+  }
+}
