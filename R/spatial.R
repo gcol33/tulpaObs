@@ -15,7 +15,7 @@ NULL
 #'   effect. Default `c(TRUE, FALSE)` = occupancy only, not detection.
 #' @return A `tulpaOcc_spatial` object
 #' @export
-occ_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
+occu_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
   if (!is.matrix(adjacency)) stop("adjacency must be a matrix")
   if (!isSymmetric(adjacency)) stop("adjacency must be symmetric")
   n <- nrow(adjacency)
@@ -40,7 +40,7 @@ occ_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
 #' @param shared Which processes get spatial effect (default: occupancy only)
 #' @return A `tulpaOcc_spatial` object
 #' @export
-occ_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
+occu_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
   if (!is.matrix(adjacency)) stop("adjacency must be a matrix")
   if (!isSymmetric(adjacency)) stop("adjacency must be symmetric")
   n <- nrow(adjacency)
@@ -75,7 +75,7 @@ occ_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
 #' @param phi_prior_upper Upper bound for uniform prior on phi (range)
 #' @return A `tulpaOcc_spatial` object
 #' @export
-occ_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
+occu_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
                    shared = c(TRUE, FALSE),
                    sigma2_prior_U = 1.0, sigma2_prior_alpha = 0.01,
                    phi_prior_lower = 0.01, phi_prior_upper = 10.0) {
@@ -122,7 +122,7 @@ occ_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
 #' @param sigma2_regional_prior_U,sigma2_regional_prior_alpha Prior for regional sigma2
 #' @return A `tulpaOcc_spatial` object
 #' @export
-occ_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
+occu_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
                               nn_local = 15, nn_regional = 15,
                               shared = c(TRUE, FALSE),
                               range_local_lower = 0.01,
@@ -174,12 +174,57 @@ occ_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
   ), class = "tulpaOcc_spatial")
 }
 
+#' SPDE Spatial Random Effect (Matérn via Triangular Mesh)
+#'
+#' Specifies a continuous Matérn spatial field for occupancy models using the
+#' SPDE approach. Builds a triangular mesh and FEM matrices via tulpaMesh,
+#' then uses tulpa's CHOLMOD-accelerated SPDE Laplace engine.
+#'
+#' @param coords Matrix of coordinates (n_sites x 2) or a formula `~ x + y`.
+#' @param data Optional data.frame for formula evaluation.
+#' @param mesh A pre-built `tulpa_mesh` object (from tulpaMesh). If NULL,
+#'   built automatically from coords.
+#' @param max_edge Maximum mesh edge length. Scalar or `c(inner, outer)`.
+#' @param cutoff Minimum distance between mesh vertices. Default 0.
+#' @param nu Matérn smoothness parameter. Default 1. Fractional values (0.5, 1.5)
+#'   use rational SPDE approximation.
+#' @param shared Which processes get the spatial effect.
+#'   Default `c(TRUE, FALSE)` = occupancy only.
+#' @param prior_range Prior for range: `c(U, alpha)` where P(range < U) = alpha.
+#' @param prior_sigma Prior for sigma: `c(U, alpha)` where P(sigma > U) = alpha.
+#' @return A `tulpaOcc_spatial` object
+#' @export
+occu_spde <- function(coords, data = NULL, mesh = NULL,
+                     max_edge = NULL, cutoff = 0,
+                     nu = 1, shared = c(TRUE, FALSE),
+                     prior_range = c(0.5, 0.5),
+                     prior_sigma = c(1, 0.5)) {
+  tulpa_spec <- tulpa::spatial_spde(
+    coords = coords, data = data, mesh = mesh,
+    max_edge = max_edge, cutoff = cutoff, nu = nu,
+    prior_range = prior_range, prior_sigma = prior_sigma
+  )
+
+  structure(list(
+    type = "spde",
+    tulpa_spec = tulpa_spec,
+    n_units = tulpa_spec$n_mesh,
+    shared = shared,
+    nu = nu,
+    prior_range = prior_range,
+    prior_sigma = prior_sigma
+  ), class = "tulpaOcc_spatial")
+}
+
 #' @export
 print.tulpaOcc_spatial <- function(x, ...) {
-  cat(sprintf("tulpaOcc spatial: %s (%d units)\n", x$type,
-              if (!is.null(x$n_units)) x$n_units else x$n_obs))
+  n <- if (!is.null(x$n_units)) x$n_units else x$n_obs
+  cat(sprintf("tulpaOcc spatial: %s (%d units)\n", x$type, n))
   shared_str <- ifelse(x$shared, "yes", "no")
   cat(sprintf("  Shared: psi=%s, p=%s\n", shared_str[1], shared_str[2]))
+  if (x$type == "spde") {
+    cat(sprintf("  Matern nu=%g, mesh=%d nodes\n", x$nu, x$n_units))
+  }
   invisible(x)
 }
 

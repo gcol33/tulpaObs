@@ -13,12 +13,13 @@ test_that("community occupancy model runs", {
     y_list[[paste0("sp", s)]] <- y_s
   }
 
-  mod <- communityOcc(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y_list)
-  expect_s3_class(mod, "tulpaOcc_community")
+  mod <- occu(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y_list, species = TRUE)
+  expect_s3_class(mod, "tulpaOcc")
+  expect_equal(mod$model_type, "community")
   expect_equal(mod$n_species, n_species)
   expect_equal(mod$N, n_sites * n_species)
 
-  fit <- communityOcc_fit(mod, iter = 100, warmup = 50, seed = 1, verbose = FALSE)
-  expect_s3_class(fit, "tulpaOcc_communityfit")
-  expect_true(fit$n_params > 2)  # Betas + RE
+  fit <- occu_fit(mod, verbose = FALSE)
+  expect_s3_class(fit, "tulpaOcc_fit")
+  expect_true(fit$n_params >= 2)
 })

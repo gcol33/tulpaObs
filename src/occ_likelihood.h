@@ -238,21 +238,6 @@ inline void occ_residual(
     }
 }
 
-// ============================================================================
-// Build LikelihoodSpec for single-season occupancy
-// ============================================================================
-inline tulpa::LikelihoodSpec make_occ_likelihood_spec(int n_visit_covariates) {
-    tulpa::LikelihoodSpec spec;
-    spec.name = "occupancy";
-    spec.n_processes = 2;
-    spec.ll_double = occ_log_likelihood<double>;
-    // TODO: Wire arena/fwd AD when tulpa exports full autodiff types
-    // For now, use numerical gradients (ll_arena = ll_fwd = nullptr)
-    spec.residual_fn = occ_residual;
-    spec.n_extra_params = n_visit_covariates;
-    return spec;
-}
-
 } // namespace tulpaOcc
 
 #endif // TULPAOCC_OCC_LIKELIHOOD_H

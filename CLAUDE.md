@@ -1,33 +1,67 @@
 # tulpaOcc — Bayesian Occupancy Models via tulpa
 
-Single-season and multi-season Bayesian occupancy models using the tulpa engine.
+Full-featured Bayesian occupancy modeling. Feature parity with inlaocc.
 
 ## Architecture
 
-tulpaOcc plugs occupancy likelihoods into tulpa's generic multi-process interface:
-- **Process 0**: Occupancy (psi) — site-level covariates
-- **Process 1**: Detection (p) — site-level covariates
-- **Extra params**: Visit-level detection covariates (optional)
-- **Response data**: Detection histories (sites × visits) via `OccResponseData`
+Compositional builder: one C++ entry point (`cpp_occu_fit`) for NUTS.
+Laplace via tulpa's EM+Laplace engine with MI/Gibbs correction.
 
-## Current Status
+### Boundary: What Lives Here vs tulpa
 
-- **Single-season occupancy**: working (MacKenzie et al. 2002)
-- **Multi-season dynamic occupancy**: working (MacKenzie et al. 2003). HMM forward algorithm with colonization/extinction.
-- **Community occupancy**: working. Multi-species with species-level random effects.
-- **Spatial occupancy**: working. ICAR, BYM2, GP (NNGP), multi-scale GP on psi and/or p.
-- Sampler: full NUTS via tulpa cross-package API (R_GetCCallable)
-- Gradients: arena AD (reverse-mode) + forward AD wired.
-- Cross-DLL arena sync: required on Windows/MinGW (static thread_local duplicated per DLL).
-  Fix: `if constexpr` sync of `current_arena()` at likelihood entry point.
-- TODO: Spatial on dynamic occupancy / community models
-- TODO: Season-varying detection/colonization/extinction covariates
-- TODO: Correlated species random slopes for community models
+**tulpaOcc owns**: likelihoods, E-step weights, M-step encoding, occupancy-specific S3/diagnostics.
+**tulpa owns**: EM engine, MI/Gibbs correction, Rubin's pooling, generic S3, generic diagnostics.
+
+See memory file `project_tulpa_boundary.md` for full details.
+
+### Key Design Rules
+- **Never pass `Rcpp::Nullable<T>` to header helper functions** — MinGW crash
+- **Composition over registry**
+- **tulpaOcc defines likelihoods, tulpa handles structure**
+
+## What Works (Tested)
+
+| Feature | Laplace | NUTS | Notes |
+|---|---|---|---|
+| Single-season | Yes | Yes | Full parity with inlaocc |
+| Dynamic (HMM) | Yes | Yes | Colonization/extinction |
+| Community | Yes | Yes | Species-level RE |
+| Integrated | Yes | Yes | Multi-source, shared psi |
+| JSDM | Yes | Yes | No detection process |
+| Spatial ICAR | — | Yes | |
+| Spatial BYM2 | — | Yes | |
+| Spatial GP (NNGP) | — | Yes | |
+| Spatial + dynamic | — | Yes | |
+| Spatial + community | — | Yes | |
+| All S3 methods | Yes | Yes | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update |
+| All diagnostics | Yes | Yes | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram |
+| All simulation | Yes | Yes | simulate_occu, simMsOcc, simTOcc, simIntOcc, simTMsOcc, simIntMsOcc |
+| Model comparison | Yes | Yes | compare_models, modelAverage |
+
+## What's Wired But Blocked by tulpa Bugs
+
+These components have correct populate_* code in tulpaOcc but segfault in tulpa's
+NUTS engine via the cross-package API. Need to fix in tulpa's hmc_sampler.cpp.
+
+- **Temporal** (AR1, RW1, RW2, IID): `n_temporal_params` is set but NUTS crashes
+- **Multi-term RE**: `populate_re` builds correct `re_group_multi_flat` but NUTS crashes
+- **SVC**: `populate_svc` fills `SVCData` but NUTS crashes
+- **Latent factors**: `populate_latent` sets `latent_n_factors` but NUTS crashes
+
+Root cause: tulpa's multi-process NUTS path only tested with spatial + legacy single-term RE.
+The temporal/RE/SVC/latent gradient code paths haven't been exercised via `LikelihoodSpec`.
+
+## Performance
+
+N=200, single-season, p=0.4:
+- tulpaOcc Laplace+Gibbs: **0.01s** (90x faster than spOccupancy)
+- inlaocc: 0.7s (after Gibbs fix)
+- spOccupancy MCMC: 0.9s
+- tulpaOcc NUTS: 12.8s
 
 ## Building
 
 ```r
-# Requires tulpa installed first
 devtools::install("../tulpa", quick = TRUE)
 devtools::load_all()
 devtools::check(args = "--no-manual")
@@ -37,20 +71,25 @@ devtools::check(args = "--no-manual")
 
 ```
 R/
-  occ.R             — occ() single-season model constructor
-  fit.R             — occ_fit() with spatial support, print/summary methods
-  spatial.R         — occ_icar(), occ_bym2(), occ_gp(), occ_multiscale_gp()
-  dyn_occ.R         — dynOcc() multi-season model constructor
-  dyn_fit.R         — dynOcc_fit(), print/summary methods
-  community_occ.R   — communityOcc() multi-species constructor
-  community_fit.R   — communityOcc_fit(), print/summary methods
+  occu.R            — occu() constructor (single/dynamic/community/integrated/jsdm)
+  occu_fit.R        — occu_fit() dispatcher (Laplace default, NUTS fallback)
+  occu_output.R     — print/summary
+  laplace.R         — EM callbacks per model type, build_laplace_fit
+  components.R      — occu_re, occu_temporal, occu_svc, occu_latent
+  spatial.R         — occ_icar/bym2/gp/multiscale_gp/spde
+  methods.R         — All S3 methods + checkIdentifiability, getSVCSamples, etc.
+  diagnostics.R     — waicOccu, ppcOccu, compare_models, modelAverage, moranI, etc.
+  data.R            — occu_format, occu_data, all simulation functions
+  compat.R          — occuMap, spOccupancy $ accessor, plot.tulpaOcc_fit
 src/
-  occ_data.h           — OccResponseData (single-season + community)
-  occ_likelihood.h     — Templated occupancy log-likelihood + AD helpers
-  occ_fit.cpp          — Rcpp entry: single-season with spatial support
-  dyn_occ_data.h       — DynOccResponseData (multi-season)
-  dyn_occ_likelihood.h — HMM forward algorithm likelihood
-  dyn_occ_fit.cpp      — Rcpp entry: dynamic occupancy
-  community_occ_fit.cpp — Rcpp entry: community occupancy with species RE
-tests/testthat/        — Unit and integration tests
+  occu_fit.cpp               — Unified C++ entry point
+  populate_helpers.h          — populate_spatial/temporal/re/svc/latent
+  occ_data.h                  — OccResponseData
+  occ_likelihood.h            — Single-season occupancy likelihood
+  dyn_occ_data.h              — DynOccResponseData
+  dyn_occ_likelihood.h        — HMC forward algorithm
+  integrated_occ_data.h       — IntegratedOccResponseData
+  integrated_occ_likelihood.h — Integrated multi-source likelihood
+  jsdm_likelihood.h           — JSDM (Bernoulli)
+tests/testthat/               — ~132 tests across 7 test files
 ```
