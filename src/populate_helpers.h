@@ -498,6 +498,7 @@ inline Rcpp::List run_nuts_and_collect(
         n_iter, n_warmup, max_treedepth, adapt_delta,
         static_cast<unsigned int>(seed),
         verbose ? 1 : 0,
+        nullptr,            // inv_metric_diag (v11) — default mass-adaptation
         &result
     );
 
