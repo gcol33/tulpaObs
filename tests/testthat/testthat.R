@@ -1,4 +1,4 @@
 library(testthat)
-library(tulpaOcc)
+library(TulpaObs)
 
-test_check("tulpaOcc")
+test_check("TulpaObs")

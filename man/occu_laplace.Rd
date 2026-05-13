@@ -17,7 +17,7 @@ occu_laplace(
 )
 }
 \arguments{
-\item{model}{A \code{tulpaOcc} object from \code{\link[=occu]{occu()}}.}
+\item{model}{A \code{TulpaObs} object from \code{\link[=occu]{occu()}}.}
 
 \item{spatial}{Optional spatial specification.}
 
@@ -36,7 +36,7 @@ occu_laplace(
 \item{verbose}{Print progress (default TRUE).}
 }
 \value{
-A \code{tulpaOcc_fit} object.
+A \code{TulpaObs_fit} object.
 }
 \description{
 Uses tulpa's generic EM+Laplace engine with occupancy-specific

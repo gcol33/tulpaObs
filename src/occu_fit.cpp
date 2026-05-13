@@ -1,5 +1,5 @@
 // occu_fit.cpp
-// Unified Rcpp entry point for all tulpaOcc model types.
+// Unified Rcpp entry point for all TulpaObs model types.
 // Selects likelihood by model_type, builds ModelData compositionally
 // with orthogonal spatial/temporal/RE/SVC/latent components.
 
@@ -44,10 +44,10 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     int p_det_visit = 0;
 
     // Response data — one of these will be populated
-    tulpaOcc::OccResponseData occ_response;
-    tulpaOcc::DynOccResponseData dyn_response;
-    tulpaOcc::IntegratedOccResponseData int_response;
-    tulpaOcc::JSDMResponseData jsdm_response;
+    TulpaObs::OccResponseData occ_response;
+    TulpaObs::DynOccResponseData dyn_response;
+    TulpaObs::IntegratedOccResponseData int_response;
+    TulpaObs::JSDMResponseData jsdm_response;
     void* response_ptr = nullptr;
 
     // LikelihoodSpec
@@ -60,23 +60,23 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         N = y_r.nrow();
         int max_visits = y_r.ncol();
 
-        occ_response = tulpaOcc::build_occ_response(y_r, N, max_visits);
+        occ_response = TulpaObs::build_occ_response(y_r, N, max_visits);
 
         // Add visit-level covariates if present
         if (spec_r.containsElementNamed("X_det_visit")) {
             SEXP xv = spec_r["X_det_visit"];
             if (!Rf_isNull(xv)) {
                 NumericMatrix Xv = Rcpp::as<NumericMatrix>(xv);
-                tulpaOcc::add_visit_covariates(occ_response, Xv);
+                TulpaObs::add_visit_covariates(occ_response, Xv);
                 p_det_visit = Xv.ncol();
             }
         }
 
         spec.name = (model_type == "single") ? "occupancy" : "community_occupancy";
-        spec.ll_double = tulpaOcc::occ_log_likelihood<double>;
-        spec.ll_arena  = tulpaOcc::occ_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaOcc::occ_log_likelihood<fwd::Dual>;
-        spec.residual_fn = tulpaOcc::occ_residual;
+        spec.ll_double = TulpaObs::occ_log_likelihood<double>;
+        spec.ll_arena  = TulpaObs::occ_log_likelihood<tulpa::arena::Var>;
+        spec.ll_fwd    = TulpaObs::occ_log_likelihood<fwd::Dual>;
+        spec.residual_fn = TulpaObs::occ_residual;
         spec.n_extra_params = p_det_visit;
         response_ptr = &occ_response;
 
@@ -90,13 +90,13 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         int max_visits = Rcpp::as<int>(spec_r["max_visits"]);
         N = n_sites;
 
-        dyn_response = tulpaOcc::build_dyn_occ_response(
+        dyn_response = TulpaObs::build_dyn_occ_response(
             y_flat_r, n_visits_r, any_det_r, n_sites, n_seasons, max_visits);
 
         spec.name = "dynamic_occupancy";
-        spec.ll_double = tulpaOcc::dyn_occ_log_likelihood<double>;
-        spec.ll_arena  = tulpaOcc::dyn_occ_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaOcc::dyn_occ_log_likelihood<fwd::Dual>;
+        spec.ll_double = TulpaObs::dyn_occ_log_likelihood<double>;
+        spec.ll_arena  = TulpaObs::dyn_occ_log_likelihood<tulpa::arena::Var>;
+        spec.ll_fwd    = TulpaObs::dyn_occ_log_likelihood<fwd::Dual>;
         spec.n_extra_params = 0;
         response_ptr = &dyn_response;
 
@@ -144,9 +144,9 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         }
 
         spec.name = "integrated_occupancy";
-        spec.ll_double = tulpaOcc::integrated_occ_log_likelihood<double>;
-        spec.ll_arena  = tulpaOcc::integrated_occ_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaOcc::integrated_occ_log_likelihood<fwd::Dual>;
+        spec.ll_double = TulpaObs::integrated_occ_log_likelihood<double>;
+        spec.ll_arena  = TulpaObs::integrated_occ_log_likelihood<tulpa::arena::Var>;
+        spec.ll_fwd    = TulpaObs::integrated_occ_log_likelihood<fwd::Dual>;
         spec.n_extra_params = 0;
         response_ptr = &int_response;
 
@@ -158,9 +158,9 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         jsdm_response.y = Rcpp::as<std::vector<int>>(y_vec);
 
         spec.name = "jsdm";
-        spec.ll_double = tulpaOcc::jsdm_log_likelihood<double>;
-        spec.ll_arena  = tulpaOcc::jsdm_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaOcc::jsdm_log_likelihood<fwd::Dual>;
+        spec.ll_double = TulpaObs::jsdm_log_likelihood<double>;
+        spec.ll_arena  = TulpaObs::jsdm_log_likelihood<tulpa::arena::Var>;
+        spec.ll_fwd    = TulpaObs::jsdm_log_likelihood<fwd::Dual>;
         spec.n_extra_params = 0;
         response_ptr = &jsdm_response;
 
@@ -180,7 +180,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     List X_list = Rcpp::as<List>(spec_r["X_processes"]);
     for (int k = 0; k < n_processes; k++) {
         NumericMatrix X_r = Rcpp::as<NumericMatrix>(X_list[k]);
-        tulpaOcc::add_process(data, X_r, N);
+        TulpaObs::add_process(data, X_r, N);
     }
 
     data.sharing.init(n_processes);
@@ -203,7 +203,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
                 if (model_type == "community" && spec_r.containsElementNamed("n_sites_raw")) {
                     n_spatial_units = Rcpp::as<int>(spec_r["n_sites_raw"]);
                 }
-                tulpaOcc::populate_spatial(data, sp, n_spatial_units);
+                TulpaObs::populate_spatial(data, sp, n_spatial_units);
 
                 if (model_type == "community" && spec_r.containsElementNamed("spatial_group")) {
                     data.spatial_group = Rcpp::as<std::vector<int>>(spec_r["spatial_group"]);
@@ -244,7 +244,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     if (spec_r.containsElementNamed("re_spec")) {
         SEXP re_sexp = spec_r["re_spec"];
         if (!Rf_isNull(re_sexp)) {
-            tulpaOcc::populate_re(data, Rcpp::as<Rcpp::List>(re_sexp));
+            TulpaObs::populate_re(data, Rcpp::as<Rcpp::List>(re_sexp));
         }
     }
 
@@ -252,7 +252,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     if (spec_r.containsElementNamed("temporal_spec")) {
         SEXP temp_sexp = spec_r["temporal_spec"];
         if (!Rf_isNull(temp_sexp)) {
-            tulpaOcc::populate_temporal(data, Rcpp::as<Rcpp::List>(temp_sexp));
+            TulpaObs::populate_temporal(data, Rcpp::as<Rcpp::List>(temp_sexp));
         }
     }
 
@@ -260,7 +260,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     if (spec_r.containsElementNamed("svc_spec")) {
         SEXP svc_sexp = spec_r["svc_spec"];
         if (!Rf_isNull(svc_sexp)) {
-            tulpaOcc::populate_svc(data, Rcpp::as<Rcpp::List>(svc_sexp));
+            TulpaObs::populate_svc(data, Rcpp::as<Rcpp::List>(svc_sexp));
         }
     }
 
@@ -268,14 +268,14 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     if (spec_r.containsElementNamed("latent_spec")) {
         SEXP lat_sexp = spec_r["latent_spec"];
         if (!Rf_isNull(lat_sexp)) {
-            tulpaOcc::populate_latent(data, Rcpp::as<Rcpp::List>(lat_sexp));
+            TulpaObs::populate_latent(data, Rcpp::as<Rcpp::List>(lat_sexp));
         }
     }
 
     // ---- Compute layout and run NUTS ----
     tulpa::ParamLayout layout = tulpa::compute_layout(data);
 
-    Rcpp::List result = tulpaOcc::run_nuts_and_collect(
+    Rcpp::List result = TulpaObs::run_nuts_and_collect(
         data, layout, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose);
 
     // ---- Add column names for fixed effects ----

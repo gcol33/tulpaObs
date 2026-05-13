@@ -43,7 +43,7 @@ occu_multiscale_gp(
 \item{sigma2_regional_prior_U, sigma2_regional_prior_alpha}{Prior for regional sigma2}
 }
 \value{
-A \code{tulpaOcc_spatial} object
+A \code{TulpaObs_spatial} object
 }
 \description{
 Multi-scale GP spatial random effect

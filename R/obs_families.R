@@ -61,7 +61,7 @@ obs_family <- function(name,
 
 
 # ---------------------------------------------------------------------------
-# Working families — dispatch to existing tulpaOcc builders
+# Working families — dispatch to existing TulpaObs builders
 # ---------------------------------------------------------------------------
 
 #' Single-season occupancy family

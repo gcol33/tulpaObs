@@ -22,7 +22,7 @@ Default \code{c(TRUE, TRUE)} = both occupancy and detection.}
 \item{sigma_scale}{Prior scale for RE standard deviation (default 1).}
 }
 \value{
-A \code{tulpaOcc_re} object with group set to \code{"species"}.
+A \code{TulpaObs_re} object with group set to \code{"species"}.
 }
 \description{
 Adds a species-level random effect for community occupancy models.

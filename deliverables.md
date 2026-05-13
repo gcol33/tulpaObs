@@ -8,14 +8,14 @@ the full roadmap and the conversation context below for what was decided.
 
 ## Context the next session needs
 
-**The package**: `tulpaOcc` is being expanded in place into **TulpaObs** — a
-unified framework for hierarchical latent-state observation models on the
-`tulpa` backend. Package rename is deferred to Phase 5; the directory is
-still `tulpaOcc/` and `Package: tulpaOcc` in `DESCRIPTION` until then.
+**The package**: `TulpaObs` (renamed from `tulpaOcc` as Phase 5) is a unified
+framework for hierarchical latent-state observation models on the `tulpa`
+backend. The directory on disk is still `tulpaOcc/` and the GitHub repo URL
+is still `gcol33/tulpaOcc`; only the package name itself was renamed.
 
 **What already exists**:
 
-- `tulpaOcc` (this package) — full-featured occupancy: single-season, dynamic,
+- `TulpaObs` (this package, formerly `tulpaOcc`) — full-featured occupancy: single-season, dynamic,
   community, integrated, JSDM, ICAR/BYM2/GP/SPDE, Laplace + NUTS. ~132 tests.
 - `tulpa` — engine. `tulpa_laplace()` (binomial/poisson/negbin/gaussian),
   `tulpa_em_laplace()` EM driver, `tulpa_nested_laplace()` (registry-based,
@@ -196,14 +196,14 @@ simulate_cover_hurdle <- function(N             = 200,
 - Do not implement Mundlak helpers. That's 1d.
 - Do not compare to INLA on real data. That's 1e.
 - Do not touch the existing `occu()` / `occu_fit()` pipeline.
-- Do not regenerate `tulpaOcc.dll` or `RcppExports.cpp` — Phase 1a is
+- Do not regenerate `TulpaObs.dll` or `RcppExports.cpp` — Phase 1a is
   pure R.
 
 ---
 
 ## Phase 1b — Beta family in tulpa
 
-**Triggered after 1a passes review.** Lives in `tulpa`, not `tulpaOcc`.
+**Triggered after 1a passes review.** Lives in `tulpa`, not `TulpaObs`.
 
 ### Files to touch in `tulpa`
 
@@ -349,7 +349,7 @@ In this order, before writing any code:
 1. `PLAN_TulpaObs.md` — strategic context.
 2. `R/tulpa_obs.R` (this package) — dispatcher pattern.
 3. `R/obs_families.R` (this package) — family-object pattern.
-4. `R/laplace.R` (this package) — existing tulpaOcc Laplace path; the cover
+4. `R/laplace.R` (this package) — existing TulpaObs Laplace path; the cover
    hurdle should follow the same shape (encode → tulpa call → decode).
 5. `example/MOT_abund_data.Rmd` lines 2480–2950 — the joint INLA hurdle
    model the design must eventually match.
@@ -389,7 +389,7 @@ From `~/.claude/CLAUDE.md`:
 
 From this package's `CLAUDE.md`:
 
-- **tulpaOcc owns**: family encode/decode, family-specific S3, family-
+- **TulpaObs owns**: family encode/decode, family-specific S3, family-
   specific diagnostics.
 - **tulpa owns**: engines, MI/Gibbs, generic S3, generic diagnostics.
 - **Never pass `Rcpp::Nullable<T>` to header helpers** — MinGW crash. Not

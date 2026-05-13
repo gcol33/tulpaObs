@@ -14,7 +14,7 @@ occu_bym2(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE))
 \item{shared}{Which processes get spatial effect (default: occupancy only)}
 }
 \value{
-A \code{tulpaOcc_spatial} object
+A \code{TulpaObs_spatial} object
 }
 \description{
 BYM2 spatial random effect

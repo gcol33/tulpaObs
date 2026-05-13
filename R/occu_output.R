@@ -1,5 +1,5 @@
 #' @export
-print.tulpaOcc <- function(x, ...) {
+print.TulpaObs <- function(x, ...) {
   type_label <- switch(x$model_type,
     single = "Single-season occupancy model",
     dynamic = "Multi-season dynamic occupancy model",
@@ -39,12 +39,12 @@ print.tulpaOcc <- function(x, ...) {
 }
 
 #' @export
-print.tulpaOcc_fit <- function(x, ...) {
+print.TulpaObs_fit <- function(x, ...) {
   model <- x$model
   type_label <- switch(model$model_type,
-    single = "tulpaOcc fit (single-season occupancy, NUTS)",
-    dynamic = "tulpaOcc fit (dynamic occupancy, NUTS)",
-    community = "tulpaOcc fit (community occupancy, NUTS)"
+    single = "TulpaObs fit (single-season occupancy, NUTS)",
+    dynamic = "TulpaObs fit (dynamic occupancy, NUTS)",
+    community = "TulpaObs fit (community occupancy, NUTS)"
   )
   cat(type_label, "\n")
 

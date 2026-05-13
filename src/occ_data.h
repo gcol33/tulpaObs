@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace tulpaOcc {
+namespace TulpaObs {
 
 // Single-season occupancy response data
 struct OccResponseData {
@@ -32,6 +32,6 @@ struct OccResponseData {
     std::vector<int> n_detections;
 };
 
-} // namespace tulpaOcc
+} // namespace TulpaObs
 
 #endif // TULPAOCC_OCC_DATA_H

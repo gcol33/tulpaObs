@@ -1,7 +1,9 @@
 # TulpaObs — Roadmap
 
-`tulpaOcc` is being expanded in place into **TulpaObs**: a unified framework
-for hierarchical latent-state observation models on the `tulpa` backend.
+`tulpaOcc` has been renamed to **TulpaObs**: a unified framework for
+hierarchical latent-state observation models on the `tulpa` backend. The
+rename (Phase 5 in the rollout below) was completed ahead of schedule to
+keep the rename diff mechanical before further families ship.
 
 This document captures the target architecture, the family roster, the
 engine matrix, and the phased rollout. Nothing in this file ships in v0.1
@@ -77,7 +79,7 @@ What lives inside TulpaObs (in tension, by user request):
   EM+Laplace, MI/Gibbs correction, NUTS, nested Laplace, generic S3.
 - `tulpaMesh` — mesh + SPDE precision builders.
 - `tulpaglmm` — GLMM with the same engines, no latent observation layer.
-- `tulpaOcc` (this package, renaming to `TulpaObs`) — families, family-
+- `TulpaObs` (this package, formerly `tulpaOcc`) — families, family-
   specific E-step weights, family-specific encode/decode, prediction,
   family-specific diagnostics.
 
@@ -243,12 +245,17 @@ These are scheduled under Phase 3 below.
 
 - `distance()`, `removal()`, `false_positive()`, `dynamic_nmix()`.
 
-**Phase 5 — Package rename**
+**Phase 5 — Package rename (DONE ahead of schedule, before Phase 1b)**
 
-- Rename `tulpaOcc` → `TulpaObs` (Package field, DLL symbol,
-  `useDynLib`, all `tulpaOcc_*` S3 class names). Done in a single
-  dedicated commit with a deprecation shim package `tulpaOcc` that
-  re-exports the public API.
+- `tulpaOcc` → `TulpaObs`: Package field, `useDynLib`, all `tulpaOcc_*`
+  S3 class names → `TulpaObs_*`, C++ `namespace tulpaOcc` → `namespace
+  TulpaObs`, DLL symbol via `Rcpp::compileAttributes()`. Single mechanical
+  commit. Git folder on disk and GitHub remote URL still say `tulpaOcc`
+  — only the R package name was renamed.
+- **Deferred**: deprecation shim package `tulpaOcc` that re-exports the
+  public API. Not needed yet because INLAabun and other downstream
+  consumers don't import `tulpaOcc::` directly. File when the first
+  external consumer breaks.
 
 ---
 
@@ -271,5 +278,6 @@ These are scheduled under Phase 3 below.
    the family grows compositional-data-specific machinery.
 2. Should `tulpa_obs()` accept `engine = "auto"` and select per-family
    defaults? Tentative: yes, with explicit override.
-3. Should the rename happen before or after Phase 1? Tentative: after,
-   so the rename diff is mechanical, not entangled with new features.
+3. Should the rename happen before or after Phase 1? **Resolved 2026-05-13**:
+   done after Phase 1a so the rename commit is mechanical and isolated
+   from Phase 1b feature work.

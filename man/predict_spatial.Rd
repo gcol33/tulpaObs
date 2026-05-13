@@ -12,7 +12,7 @@ predict_spatial(
 )
 }
 \arguments{
-\item{object}{A \code{tulpaOcc_fit} object fitted with a spatial component.}
+\item{object}{A \code{TulpaObs_fit} object fitted with a spatial component.}
 
 \item{newcoords}{Matrix of new coordinates (n_new x 2).}
 

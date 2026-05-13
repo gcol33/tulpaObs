@@ -13,7 +13,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // cpp_occu_fit
 Rcpp::List cpp_occu_fit(Rcpp::List spec_r);
-RcppExport SEXP _tulpaOcc_cpp_occu_fit(SEXP spec_rSEXP) {
+RcppExport SEXP _TulpaObs_cpp_occu_fit(SEXP spec_rSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,11 +24,11 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_tulpaOcc_cpp_occu_fit", (DL_FUNC) &_tulpaOcc_cpp_occu_fit, 1},
+    {"_TulpaObs_cpp_occu_fit", (DL_FUNC) &_TulpaObs_cpp_occu_fit, 1},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_tulpaOcc(DllInfo *dll) {
+RcppExport void R_init_TulpaObs(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

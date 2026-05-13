@@ -1,13 +1,14 @@
-# tulpaOcc — Bayesian Occupancy Models via tulpa
+# TulpaObs — Hierarchical Latent-State Observation Models via tulpa
 
-> **Expanding into TulpaObs.** This package is being broadened in place from
-> occupancy-only into a unified framework for hierarchical latent-state
-> observation models (occupancy, N-mixture, distance, removal, false-positive,
-> cover hurdle, ...). The new entry point is `tulpa_obs()`; existing
-> `occu()` / `occu_fit()` API stays exported. See `PLAN_TulpaObs.md` for the
-> roadmap and `R/obs_families.R` / `R/tulpa_obs.R` for the new surface.
-> Package rename `tulpaOcc` → `TulpaObs` is scheduled as Phase 5 (after new
-> families ship), to keep the rename diff mechanical.
+> **Renamed from `tulpaOcc`.** This package is a unified framework for
+> hierarchical latent-state observation models (occupancy, N-mixture, distance,
+> removal, false-positive, cover hurdle, ...). New entry point is `tulpa_obs()`;
+> existing `occu()` / `occu_fit()` API stays exported. See `PLAN_TulpaObs.md`
+> for the roadmap and `R/obs_families.R` / `R/tulpa_obs.R` for the new surface.
+> The `tulpaOcc` → `TulpaObs` package rename (Phase 5) is now complete: package
+> field, NAMESPACE, useDynLib, all `tulpaOcc_*` S3 class names → `TulpaObs_*`,
+> and C++ `namespace tulpaOcc` → `namespace TulpaObs`. Git folder and GitHub
+> repo URL still say `tulpaOcc` (no folder/remote rename was done).
 
 Full-featured Bayesian occupancy modeling. Feature parity with inlaocc.
 
@@ -18,7 +19,7 @@ Laplace via tulpa's EM+Laplace engine with MI/Gibbs correction.
 
 ### Boundary: What Lives Here vs tulpa
 
-**tulpaOcc owns**: likelihoods, E-step weights, M-step encoding, occupancy-specific S3/diagnostics.
+**TulpaObs owns**: family-specific likelihoods, E-step weights, M-step encoding, family-specific S3/diagnostics.
 **tulpa owns**: EM engine, MI/Gibbs correction, Rubin's pooling, generic S3, generic diagnostics.
 
 See memory file `project_tulpa_boundary.md` for full details.
@@ -26,7 +27,7 @@ See memory file `project_tulpa_boundary.md` for full details.
 ### Key Design Rules
 - **Never pass `Rcpp::Nullable<T>` to header helper functions** — MinGW crash
 - **Composition over registry**
-- **tulpaOcc defines likelihoods, tulpa handles structure**
+- **TulpaObs defines likelihoods, tulpa handles structure**
 
 ## What Works (Tested)
 
@@ -52,7 +53,7 @@ See memory file `project_tulpa_boundary.md` for full details.
 
 ## What's Wired But Blocked by tulpa Bugs
 
-These components have correct populate_* code in tulpaOcc but segfault in tulpa's
+These components have correct populate_* code in TulpaObs but segfault in tulpa's
 NUTS engine via the cross-package API. Need to fix in tulpa's hmc_sampler.cpp.
 
 - **Temporal** (AR1, RW1, RW2, IID): `n_temporal_params` is set but NUTS crashes
@@ -66,10 +67,10 @@ The temporal/RE/SVC/latent gradient code paths haven't been exercised via `Likel
 ## Performance
 
 N=200, single-season, p=0.4:
-- tulpaOcc Laplace+Gibbs: **0.01s** (90x faster than spOccupancy)
+- TulpaObs Laplace+Gibbs: **0.01s** (90x faster than spOccupancy)
 - inlaocc: 0.7s (after Gibbs fix)
 - spOccupancy MCMC: 0.9s
-- tulpaOcc NUTS: 12.8s
+- TulpaObs NUTS: 12.8s
 
 ## Building
 
@@ -89,7 +90,7 @@ R/
   laplace.R         — EM callbacks per model type, build_laplace_fit
   components.R      — occu_re, occu_temporal, occu_svc, occu_latent, occu_community_re, occu_areal
   spatial.R         — occ_icar/bym2/gp/multiscale_gp/spde
-  methods.R         — S3 methods, $.tulpaOcc_fit, predict_spatial, checkIdentifiability
+  methods.R         — S3 methods, $.TulpaObs_fit, predict_spatial, checkIdentifiability
   diagnostics.R     — waicOccu, ppcOccu (generic diagnostics inherited from tulpa)
   data.R            — occu_format, occu_data, summary/plot.occu_data, all simulation functions
 src/

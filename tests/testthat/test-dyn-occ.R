@@ -17,13 +17,13 @@ test_that("dynamic occupancy model runs", {
 
   mod <- occu(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y_array,
               col_formula = ~ 1, ext_formula = ~ 1)
-  expect_s3_class(mod, "tulpaOcc")
+  expect_s3_class(mod, "TulpaObs")
   expect_equal(mod$model_type, "dynamic")
   expect_equal(mod$n_sites, n_sites)
   expect_equal(mod$n_seasons, n_seasons)
 
   fit <- occu_fit(mod, iter = 100, warmup = 50, seed = 1, verbose = FALSE)
-  expect_s3_class(fit, "tulpaOcc_fit")
+  expect_s3_class(fit, "TulpaObs_fit")
   expect_equal(fit$n_params, 4)
   expect_true(fit$intercepts$psi1 > 0 && fit$intercepts$psi1 < 1)
 })

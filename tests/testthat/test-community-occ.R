@@ -14,12 +14,12 @@ test_that("community occupancy model runs", {
   }
 
   mod <- occu(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y_list, species = TRUE)
-  expect_s3_class(mod, "tulpaOcc")
+  expect_s3_class(mod, "TulpaObs")
   expect_equal(mod$model_type, "community")
   expect_equal(mod$n_species, n_species)
   expect_equal(mod$N, n_sites * n_species)
 
   fit <- occu_fit(mod, verbose = FALSE)
-  expect_s3_class(fit, "tulpaOcc_fit")
+  expect_s3_class(fit, "TulpaObs_fit")
   expect_true(fit$n_params >= 2)
 })

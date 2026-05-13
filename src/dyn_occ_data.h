@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace tulpaOcc {
+namespace TulpaObs {
 
 // Multi-season occupancy response data
 // N observations = n_sites (likelihood loops over seasons internally)
@@ -32,6 +32,6 @@ struct DynOccResponseData {
     int p_det_visit = 0;
 };
 
-} // namespace tulpaOcc
+} // namespace TulpaObs
 
 #endif // TULPAOCC_DYN_OCC_DATA_H

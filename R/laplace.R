@@ -7,7 +7,7 @@
 #' Uses tulpa's generic EM+Laplace engine with occupancy-specific
 #' E-step and M-step encoding. Supports all model types.
 #'
-#' @param model A `tulpaOcc` object from [occu()].
+#' @param model A `TulpaObs` object from [occu()].
 #' @param spatial Optional spatial specification.
 #' @param sigma_beta Prior SD for regression coefficients (default 10).
 #' @param max_iter Maximum EM iterations (default 50).
@@ -17,7 +17,7 @@
 #' @param n_imputations MI imputations (default 20).
 #' @param verbose Print progress (default TRUE).
 #'
-#' @return A `tulpaOcc_fit` object.
+#' @return A `TulpaObs_fit` object.
 #' @export
 occu_laplace <- function(model, spatial = NULL, sigma_beta = 10,
                          max_iter = 50L, tol = 1e-4, damping = 0.3,
@@ -25,7 +25,7 @@ occu_laplace <- function(model, spatial = NULL, sigma_beta = 10,
                          n_imputations = 20L,
                          verbose = TRUE) {
   correction <- match.arg(correction)
-  if (!inherits(model, "tulpaOcc")) stop("model must be a tulpaOcc object")
+  if (!inherits(model, "TulpaObs")) stop("model must be a TulpaObs object")
 
   callbacks <- switch(model$model_type,
     single     = build_single_callbacks(model),
@@ -549,7 +549,7 @@ glm_init <- function(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det) 
   })
 }
 
-# Build tulpaOcc_fit from EM result
+# Build TulpaObs_fit from EM result
 build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
   pi_list <- model$process_info
 
@@ -605,5 +605,5 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
     method = "laplace",
     convergence = em_result$convergence,
     correction = em_result$correction
-  ), class = c("tulpaOcc_fit", "tulpa_fit"))
+  ), class = c("TulpaObs_fit", "tulpa_fit"))
 }

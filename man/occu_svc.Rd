@@ -35,7 +35,7 @@ Default \code{c(TRUE, FALSE)} = occupancy only.}
 \item{phi_prior_upper}{Upper bound for range prior (default 10).}
 }
 \value{
-A \code{tulpaOcc_svc} object
+A \code{TulpaObs_svc} object
 }
 \description{
 Specify spatially-varying coefficients

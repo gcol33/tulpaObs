@@ -32,7 +32,7 @@ Default \code{c(TRUE, FALSE)} = occupancy only.}
 \item{sigma_scale}{Prior scale for RE standard deviation (default 1).}
 }
 \value{
-A \code{tulpaOcc_re} object
+A \code{TulpaObs_re} object
 }
 \description{
 Specify random effects for occupancy models

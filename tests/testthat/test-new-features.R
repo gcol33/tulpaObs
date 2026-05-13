@@ -5,7 +5,7 @@ test_that("JSDM model constructs and prints", {
   d <- data.frame(x = rnorm(n))
 
   mod <- occu(~ x, data = d, y = y, jsdm = TRUE, species = TRUE)
-  expect_s3_class(mod, "tulpaOcc")
+  expect_s3_class(mod, "TulpaObs")
   expect_equal(mod$model_type, "jsdm")
   expect_equal(mod$n_species, sp)
   expect_output(print(mod), "Joint species distribution")
@@ -19,7 +19,7 @@ test_that("integrated model constructs", {
   y2 <- matrix(rbinom(n * 4, 1, 0.4), n, 4)
 
   mod <- occu(~ x, ~ 1, d, y = list(s1 = y1, s2 = y2), integrated = TRUE)
-  expect_s3_class(mod, "tulpaOcc")
+  expect_s3_class(mod, "TulpaObs")
   expect_equal(mod$model_type, "integrated")
   expect_equal(mod$n_sources, 2)
   expect_output(print(mod), "Integrated")
@@ -123,7 +123,7 @@ test_that("update works", {
   fit <- occu_fit(occu(~ 1, ~ 1, d, y), verbose = FALSE)
 
   fit2 <- update(fit, verbose = FALSE)
-  expect_s3_class(fit2, "tulpaOcc_fit")
+  expect_s3_class(fit2, "TulpaObs_fit")
   expect_true(fit2$n_samples > 0)
 })
 
@@ -137,5 +137,5 @@ test_that("checkModel runs without error", {
   y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
   fit <- occu_fit(occu(~ 1, ~ 1, d, y), iter = 200, warmup = 100, seed = 42, verbose = FALSE)
 
-  expect_output(checkModel(fit), "tulpaOcc Model Diagnostics")
+  expect_output(checkModel(fit), "TulpaObs Model Diagnostics")
 })

@@ -32,7 +32,7 @@ Default \code{c(TRUE, FALSE)} = occupancy only.}
 \item{tau_rate}{Rate parameter for Gamma prior on temporal precision.}
 }
 \value{
-A \code{tulpaOcc_temporal} object
+A \code{TulpaObs_temporal} object
 }
 \description{
 Specify temporal structure for occupancy models

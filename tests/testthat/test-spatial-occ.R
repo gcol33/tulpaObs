@@ -10,7 +10,7 @@ test_that("ICAR spatial occupancy runs", {
 
   mod <- occu(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y)
   sp <- occu_icar(adj)
-  expect_s3_class(sp, "tulpaOcc_spatial")
+  expect_s3_class(sp, "TulpaObs_spatial")
 
   fit <- occu_fit(mod, spatial = sp, method = "nuts", iter = 100, warmup = 50, seed = 1, verbose = FALSE)
   expect_true(fit$n_params > 2)
@@ -26,7 +26,7 @@ test_that("GP spatial occupancy runs", {
 
   mod <- occu(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y)
   sp <- occu_gp(coords, nn = 5)
-  expect_s3_class(sp, "tulpaOcc_spatial")
+  expect_s3_class(sp, "TulpaObs_spatial")
 
   fit <- occu_fit(mod, spatial = sp, method = "nuts", iter = 100, warmup = 50, seed = 1, verbose = FALSE)
   expect_true(fit$n_params > 2)

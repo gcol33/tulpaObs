@@ -36,7 +36,7 @@ occu_gp(
 \item{phi_prior_upper}{Upper bound for uniform prior on phi (range)}
 }
 \value{
-A \code{tulpaOcc_spatial} object
+A \code{TulpaObs_spatial} object
 }
 \description{
 GP (NNGP) spatial random effect

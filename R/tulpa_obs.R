@@ -147,7 +147,7 @@ tulpa_obs <- function(formula,
 # ---------------------------------------------------------------------------
 # Internal dispatchers — one per working family.
 #
-# Each thin-wraps the existing tulpaOcc builder during the Phase 0
+# Each thin-wraps the existing TulpaObs builder during the Phase 0
 # transition. Phase 1+ will replace these with direct engine calls.
 # ---------------------------------------------------------------------------
 

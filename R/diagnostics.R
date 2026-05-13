@@ -6,7 +6,7 @@
 
 #' Compute WAIC for occupancy models
 #'
-#' @param object A `tulpaOcc_fit` object.
+#' @param object A `TulpaObs_fit` object.
 #' @param ... Ignored.
 #' @return A list with `waic`, `elpd`, `p_waic`, and pointwise values.
 #' @export
@@ -51,7 +51,7 @@ waicOccu <- function(object, ...) {
 }
 
 #' Posterior predictive check
-#' @param object A `tulpaOcc_fit` object.
+#' @param object A `TulpaObs_fit` object.
 #' @param fit.stat `"freeman-tukey"` (default) or `"chi-squared"`.
 #' @param n.samples Number of posterior samples (default 500).
 #' @return A list with `fit.y`, `fit.y.rep`, and `bayesian.p`.
@@ -93,7 +93,7 @@ ppcOccu <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
 }
 
 #' PIT residuals
-#' @param object A `tulpaOcc_fit` object.
+#' @param object A `TulpaObs_fit` object.
 #' @param n.samples Number of posterior samples (default 250).
 #' @return Numeric vector of PIT residuals.
 #' @export
@@ -167,13 +167,13 @@ testOutliers <- function(object, n.samples = 250) {
 }
 
 #' Comprehensive model checking
-#' @param object A `tulpaOcc_fit` object.
+#' @param object A `TulpaObs_fit` object.
 #' @param coords Optional coordinates for spatial diagnostics.
 #' @param n.samples Posterior samples for simulation tests.
 #' @return Invisibly, diagnostic results.
 #' @export
 checkModel <- function(object, coords = NULL, n.samples = 250) {
-  cat("=== tulpaOcc Model Diagnostics ===\n\n")
+  cat("=== TulpaObs Model Diagnostics ===\n\n")
   cat(sprintf("Sampler: %d samples, %d divergent, mean accept = %.3f\n",
               object$n_samples, sum(object$divergent), mean(object$accept_prob)))
 

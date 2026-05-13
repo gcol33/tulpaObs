@@ -28,7 +28,7 @@ Phase 1e; the code chunks below for that comparison are marked
 `eval = FALSE`.
 
 ```{r simulate}
-library(tulpaOcc)
+library(TulpaObs)
 sim <- simulate_cover_hurdle(
   N         = 400,
   beta_occ  = c(-0.4, 0.7),

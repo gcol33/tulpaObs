@@ -1,9 +1,9 @@
-# Speed comparison: tulpaOcc (NUTS) vs inlaocc (EM+INLA)
+# Speed comparison: TulpaObs (NUTS) vs inlaocc (EM+INLA)
 library(tulpa)
-library(tulpaOcc)
+library(TulpaObs)
 library(INLAocc)
 
-cat("=== tulpaOcc vs inlaocc Speed Comparison ===\n\n")
+cat("=== TulpaObs vs inlaocc Speed Comparison ===\n\n")
 
 # ============================================================================
 # 1. Single-season occupancy (intercept-only)
@@ -16,8 +16,8 @@ y <- matrix(rbinom(N * J, 1, z * 0.4), N, J)
 d <- data.frame(x = rnorm(N))
 
 t1 <- system.time({
-  mod_t <- tulpaOcc::occu(~ 1, ~ 1, d, y)
-  fit_t <- tulpaOcc::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
+  mod_t <- TulpaObs::occu(~ 1, ~ 1, d, y)
+  fit_t <- TulpaObs::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
 })
 
 t2 <- system.time({
@@ -25,9 +25,9 @@ t2 <- system.time({
   fit_i <- INLAocc::occu(~ 1, ~ 1, data = dat_i, verbose = 0)
 })
 
-cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
+cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
             t1["elapsed"], t2["elapsed"], t1["elapsed"] / t2["elapsed"]))
-cat(sprintf("  tulpaOcc psi=%.3f\n", fit_t$intercepts$psi))
+cat(sprintf("  TulpaObs psi=%.3f\n", fit_t$intercepts$psi))
 
 # ============================================================================
 # 2. Single-season with covariates
@@ -43,8 +43,8 @@ z <- rbinom(N, 1, psi)
 y2 <- matrix(rbinom(N * J, 1, z * p), N, J)
 
 t1 <- system.time({
-  mod_t <- tulpaOcc::occu(~ x1 + x2 + x3, ~ d1 + d2, d2, y2)
-  fit_t <- tulpaOcc::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
+  mod_t <- TulpaObs::occu(~ x1 + x2 + x3, ~ d1 + d2, d2, y2)
+  fit_t <- TulpaObs::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
 })
 
 t2 <- system.time({
@@ -53,7 +53,7 @@ t2 <- system.time({
   fit_i <- INLAocc::occu(~ x1 + x2 + x3, ~ d1 + d2, data = dat_i, verbose = 0)
 })
 
-cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
+cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
             t1["elapsed"], t2["elapsed"], t1["elapsed"] / t2["elapsed"]))
 
 # ============================================================================
@@ -68,8 +68,8 @@ z <- rbinom(N, 1, psi)
 y3 <- matrix(rbinom(N * J, 1, z * 0.5), N, J)
 
 t1 <- system.time({
-  mod_t <- tulpaOcc::occu(~ x1 + x2, ~ 1, d3, y3)
-  fit_t <- tulpaOcc::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
+  mod_t <- TulpaObs::occu(~ x1 + x2, ~ 1, d3, y3)
+  fit_t <- TulpaObs::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
 })
 
 t2 <- system.time({
@@ -77,7 +77,7 @@ t2 <- system.time({
   fit_i <- INLAocc::occu(~ x1 + x2, ~ 1, data = dat_i, verbose = 0)
 })
 
-cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
+cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
             t1["elapsed"], t2["elapsed"], t1["elapsed"] / t2["elapsed"]))
 
 # ============================================================================
@@ -94,8 +94,8 @@ for (s in 1:S) {
 }
 
 t1 <- system.time({
-  mod_t <- tulpaOcc::occu(~ x, ~ 1, d4, y4, species = TRUE)
-  fit_t <- tulpaOcc::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
+  mod_t <- TulpaObs::occu(~ x, ~ 1, d4, y4, species = TRUE)
+  fit_t <- TulpaObs::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
 })
 
 t2 <- system.time({
@@ -103,7 +103,7 @@ t2 <- system.time({
   fit_i <- INLAocc::occu(~ x, ~ 1, data = dat_i, multispecies = TRUE, verbose = 0)
 })
 
-cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
+cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
             t1["elapsed"], t2["elapsed"], t1["elapsed"] / t2["elapsed"]))
 
 # ============================================================================
@@ -123,9 +123,9 @@ z <- rbinom(N, 1, psi)
 y5 <- matrix(rbinom(N * J, 1, z * 0.5), N, J)
 
 t1 <- system.time({
-  mod_t <- tulpaOcc::occu(~ x, ~ 1, d5, y5)
-  sp_t <- tulpaOcc::occu_gp(coords, nn = 10)
-  fit_t <- tulpaOcc::occu_fit(mod_t, spatial = sp_t, iter = 2000, warmup = 1000,
+  mod_t <- TulpaObs::occu(~ x, ~ 1, d5, y5)
+  sp_t <- TulpaObs::occu_gp(coords, nn = 10)
+  fit_t <- TulpaObs::occu_fit(mod_t, spatial = sp_t, iter = 2000, warmup = 1000,
                                seed = 42, verbose = FALSE)
 })
 
@@ -134,7 +134,7 @@ t2 <- system.time({
   fit_i <- INLAocc::occu(~ x, ~ 1, data = dat_i, spatial = coords, verbose = 0)
 })
 
-cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
+cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
             t1["elapsed"], t2["elapsed"], t1["elapsed"] / t2["elapsed"]))
 
 # ============================================================================
@@ -153,8 +153,8 @@ y6 <- array(0L, dim = c(N, J, T_s))
 for (i in 1:N) for (t in 1:T_s) if (z[i, t] == 1) y6[i, , t] <- rbinom(J, 1, 0.5)
 
 t1 <- system.time({
-  mod_t <- tulpaOcc::occu(~ 1, ~ 1, d6, y6, col_formula = ~ 1, ext_formula = ~ 1)
-  fit_t <- tulpaOcc::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
+  mod_t <- TulpaObs::occu(~ 1, ~ 1, d6, y6, col_formula = ~ 1, ext_formula = ~ 1)
+  fit_t <- TulpaObs::occu_fit(mod_t, iter = 2000, warmup = 1000, seed = 42, verbose = FALSE)
 })
 
 # inlaocc temporal uses different interface
@@ -168,10 +168,10 @@ t2 <- tryCatch(system.time({
 })
 
 if (!is.null(t2)) {
-  cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
+  cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: %.2fs  |  ratio: %.1fx\n",
               t1["elapsed"], t2["elapsed"], t1["elapsed"] / t2["elapsed"]))
 } else {
-  cat(sprintf("  tulpaOcc: %.2fs  |  inlaocc: N/A (different temporal API)\n",
+  cat(sprintf("  TulpaObs: %.2fs  |  inlaocc: N/A (different temporal API)\n",
               t1["elapsed"]))
 }
 

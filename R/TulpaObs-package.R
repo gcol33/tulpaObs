@@ -1,7 +1,7 @@
 #' @keywords internal
 "_PACKAGE"
 
-#' @useDynLib tulpaOcc, .registration = TRUE
+#' @useDynLib TulpaObs, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
 NULL
 

@@ -14,7 +14,7 @@ occu_areal(adj, model = c("bym2", "icar"), ...)
 \item{...}{Additional arguments passed to \code{\link[=occu_bym2]{occu_bym2()}} or \code{\link[=occu_icar]{occu_icar()}}.}
 }
 \value{
-A \code{tulpaOcc_spatial} object.
+A \code{TulpaObs_spatial} object.
 }
 \description{
 Convenience wrapper for BYM2 or ICAR spatial models using
