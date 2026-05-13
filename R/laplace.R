@@ -393,7 +393,7 @@ build_community_callbacks <- function(model, spatial = NULL) {
 # ============================================================================
 build_integrated_callbacks <- function(model, spatial = NULL) {
   if (!is.null(spatial)) {
-    stop("Integrated occupancy with SPDE is not yet plumbed in occu_laplace.",
+    stop("Integrated occupancy with SPDE is not yet plumbed in .tobs_laplace.",
          call. = FALSE)
   }
   y_sources <- model$y_sources
@@ -504,7 +504,7 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
   # JSDM is N = n_sites * n_species; SPDE A_x is n_sites-indexed, so attaching
   # would require row-expansion. Deferred.
   if (!is.null(spatial)) {
-    stop("JSDM with SPDE is not yet plumbed in occu_laplace.", call. = FALSE)
+    stop("JSDM with SPDE is not yet plumbed in .tobs_laplace.", call. = FALSE)
   }
   y_jsdm <- model$y_jsdm
   X_occ <- model$X_processes[[1]]

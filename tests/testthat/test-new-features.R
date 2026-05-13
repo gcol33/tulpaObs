@@ -41,49 +41,49 @@ test_that("integrated model fits", {
 })
 
 test_that("simulation functions produce correct dimensions", {
-  sim_int <- simIntOcc(N_total = 30, n_data = 2, J = c(3, 4), seed = 42)
+  sim_int <- simulate_int_occu(N_total = 30, n_data = 2, J = c(3, 4), seed = 42)
   expect_length(sim_int$y, 2)
   expect_equal(ncol(sim_int$y[[1]]), 3)
   expect_equal(ncol(sim_int$y[[2]]), 4)
 
-  sim_tms <- simTMsOcc(N = 10, J = 3, n_species = 3, n_seasons = 4, seed = 42)
+  sim_tms <- simulate_dyn_ms_occu(N = 10, J = 3, n_species = 3, n_seasons = 4, seed = 42)
   expect_equal(dim(sim_tms$y), c(10, 3, 4, 3))
 
-  sim_ims <- simIntMsOcc(N = 10, J = c(3, 4), n_species = 3, seed = 42)
+  sim_ims <- simulate_int_ms_occu(N = 10, J = c(3, 4), n_species = 3, seed = 42)
   expect_length(sim_ims$y, 2)
 })
 
-test_that("checkIdentifiability works", {
+test_that("tobs_check_id works", {
   set.seed(42)
   n <- 20
   d <- data.frame(x = rnorm(n))
   y <- matrix(rbinom(n * 3, 1, 0.3), n, 3)
   mod <- .tobs_build_model(~ x, ~ 1, d, y)
 
-  result <- checkIdentifiability(mod)
+  result <- tobs_check_id(mod)
   expect_type(result, "list")
   expect_true("identifiable" %in% names(result))
 })
 
-test_that("pitResiduals returns uniform-ish values", {
+test_that("tobs_pit_residuals returns uniform-ish values", {
   res <- .simple_fit(engine = "nuts")
-  pit <- pitResiduals(res$fit, n.samples = 50)
+  pit <- tobs_pit_residuals(res$fit, n.samples = 50)
   expect_length(pit, res$n)
   expect_true(all(pit >= 0 & pit <= 1))
-  ks <- testUniformity(pit)
+  ks <- tobs_test_uniformity(pit)
   expect_s3_class(ks, "htest")
 })
 
-test_that("testDispersion returns sensible output", {
+test_that("tobs_test_dispersion returns sensible output", {
   res <- .simple_fit(engine = "nuts")
-  disp <- testDispersion(res$fit, n.samples = 20)
+  disp <- tobs_test_dispersion(res$fit, n.samples = 20)
   expect_true(is.finite(disp$ratio))
   expect_true(disp$p.value >= 0 && disp$p.value <= 1)
 })
 
-test_that("testZeroInflation returns sensible output", {
+test_that("tobs_test_zero_inflation returns sensible output", {
   res <- .simple_fit(engine = "nuts")
-  zi <- testZeroInflation(res$fit, n.samples = 20)
+  zi <- tobs_test_zero_inflation(res$fit, n.samples = 20)
   expect_true(is.finite(zi$ratio))
 })
 
@@ -108,7 +108,7 @@ test_that("update works", {
   expect_true(fit2$n_samples > 0)
 })
 
-test_that("checkModel runs without error", {
+test_that("tobs_check runs without error", {
   res <- .simple_fit(engine = "nuts")
-  expect_output(checkModel(res$fit), "tobs Model Diagnostics")
+  expect_output(tobs_check(res$fit), "tobs Model Diagnostics")
 })

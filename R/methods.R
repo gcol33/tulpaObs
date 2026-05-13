@@ -281,12 +281,12 @@ predict_terms <- function(object, terms, type, quantiles, n_points) {
   )
   attr(result, "term") <- term_var
   attr(result, "process") <- pi_list[[proc_idx]]$name
-  class(result) <- c("occu_prediction", "data.frame")
+  class(result) <- c("tobs_prediction", "data.frame")
   result
 }
 
 #' @export
-plot.occu_prediction <- function(x, ...) {
+plot.tobs_prediction <- function(x, ...) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     plot(x$x, x$estimate, type = "l", ylim = range(c(x$lower, x$upper)),
          xlab = attr(x, "term"), ylab = attr(x, "process"),
@@ -310,9 +310,9 @@ plot.occu_prediction <- function(x, ...) {
 #' @param n_points Number of prediction points (default 100).
 #' @return A data.frame with covariate values and predicted probabilities.
 #' @export
-marginal_effect <- function(object, covariate,
-                            process = c("occupancy", "detection"),
-                            n_points = 100L) {
+tobs_marginal_effect <- function(object, covariate,
+                                 process = c("occupancy", "detection"),
+                                 n_points = 100L) {
   process <- match.arg(process)
   type <- if (process == "detection") "detection" else "occupancy"
   predict_terms(object, terms = covariate, type = type,
@@ -323,10 +323,10 @@ marginal_effect <- function(object, covariate,
 #' @param object A `tobs_fit` object from a community model.
 #' @return A data.frame with site-level richness estimates.
 #' @export
-richness <- function(object) {
+tobs_richness <- function(object) {
   model <- object$model
   if (model$model_type != "community") {
-    stop("richness() requires a community model")
+    stop("tobs_richness() requires a community model")
   }
 
   draws <- object$draws
@@ -391,7 +391,7 @@ update.tobs_fit <- function(object, ..., evaluate = TRUE) {
 #' @param fit Optional `tobs_fit` object (for post-fit diagnostics).
 #' @return A list with diagnostic messages and flags.
 #' @export
-checkIdentifiability <- function(model, fit = NULL) {
+tobs_check_id <- function(model, fit = NULL) {
   issues <- character()
 
   if (!inherits(model, "tobs_model")) {
@@ -596,10 +596,10 @@ print.tobs_priors <- function(x, ...) {
 #' @param quantiles Quantiles for credible intervals (default 0.025, 0.5, 0.975).
 #' @return A data.frame with `mean`, `sd`, and quantile columns.
 #' @export
-predict_spatial <- function(object, newcoords, newocc.covs = NULL,
-                            quantiles = c(0.025, 0.5, 0.975)) {
+tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
+                                 quantiles = c(0.025, 0.5, 0.975)) {
   if (is.null(object$spatial)) {
-    stop("predict_spatial requires a model fitted with a spatial component", call. = FALSE)
+    stop("tobs_predict_spatial requires a model fitted with a spatial component", call. = FALSE)
   }
 
   # Build design matrix at new locations

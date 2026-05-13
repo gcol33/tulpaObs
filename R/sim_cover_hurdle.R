@@ -9,7 +9,7 @@
 
 #' Simulate cover-hurdle data (lognormal positive part)
 #'
-#' Generates synthetic data matching the `cover_hurdle(positive = "lognormal")`
+#' Generates synthetic data matching the `cover(positive = "lognormal")`
 #' generative model used in Phase 1a:
 #'
 #' \describe{
@@ -39,16 +39,16 @@
 #' @return A list with:
 #' \describe{
 #'   \item{data}{A data frame with `cover`, covariate `x`, and `lon`, `lat`.}
-#'   \item{y}{`data$cover` (length-N numeric vector, for passing to `tulpa_obs`).}
+#'   \item{y}{`data$cover` (length-N numeric vector, for passing to `tobs()`).}
 #'   \item{coords}{An N x 2 matrix of coordinates.}
 #'   \item{truth}{A list with `beta_occ`, `beta_pos`, `sigma_pos`,
 #'     `p`, `mu`, `occur`, `spatial_occ`, `spatial_pos`.}
 #' }
 #' @export
 #' @examples
-#' sim <- simulate_cover_hurdle(N = 200, seed = 1)
+#' sim <- simulate_cover(N = 200, seed = 1)
 #' head(sim$data)
-simulate_cover_hurdle <- function(N             = 200L,
+simulate_cover <- function(N             = 200L,
                                   beta_occ      = c(-0.5, 0.8),
                                   beta_pos      = c(-1.0, 0.3),
                                   sigma_pos     = 0.4,

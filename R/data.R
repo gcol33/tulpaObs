@@ -6,9 +6,9 @@
 #'   (length n_sites, constant across visits) or matrix (n_sites x max_visits).
 #' @param coords Optional n_sites x 2 coordinate matrix.
 #' @param species Optional character or integer species identifier.
-#' @return An `occu_data` object.
+#' @return An `tobs_data` object.
 #' @export
-occu_format <- function(y, occ.covs = NULL, det.covs = NULL,
+tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
                         coords = NULL, species = NULL) {
   if (is.list(occ.covs) && !is.data.frame(occ.covs)) {
     occ.covs <- as.data.frame(occ.covs)
@@ -24,7 +24,7 @@ occu_format <- function(y, occ.covs = NULL, det.covs = NULL,
     det.covs = det.covs,
     coords = coords,
     species = species
-  ), class = "occu_data")
+  ), class = "tobs_data")
 }
 
 #' Convert long-format data to occupancy format
@@ -36,9 +36,9 @@ occu_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #' @param occ.covs Character vector of site-level covariate names.
 #' @param det.covs Character vector of visit-level covariate names.
 #' @param coords Character vector of length 2 for coordinate columns.
-#' @return An `occu_data` object.
+#' @return An `tobs_data` object.
 #' @export
-occu_data <- function(df, y, site, visit,
+tobs_data <- function(df, y, site, visit,
                       occ.covs = NULL, det.covs = NULL,
                       coords = NULL) {
   if (!is.data.frame(df)) stop("df must be a data.frame")
@@ -91,7 +91,7 @@ occu_data <- function(df, y, site, visit,
     coord_mat <- as.matrix(df[site_rows, coords])
   }
 
-  occu_format(y = y_mat, occ.covs = occ_df, det.covs = det_list,
+  tobs_format(y = y_mat, occ.covs = occ_df, det.covs = det_list,
               coords = coord_mat)
 }
 
@@ -102,9 +102,9 @@ occu_data <- function(df, y, site, visit,
 #' @param det.covs Named list of detection covariates.
 #' @param coords Optional n_sites x 2 coordinate matrix.
 #' @param species_names Optional character vector of species names.
-#' @return An `occu_data` object with multi-species structure.
+#' @return An `tobs_data` object with multi-species structure.
 #' @export
-occu_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
+tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
                            coords = NULL, species_names = NULL) {
   if (is.list(y) && !is.array(y)) {
     n_species <- length(y)
@@ -131,14 +131,14 @@ occu_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
     coords = coords,
     species_names = species_names,
     n_species = dim(y)[3]
-  ), class = "occu_data")
+  ), class = "tobs_data")
 }
 
 #' @export
-print.occu_data <- function(x, ...) {
+print.tobs_data <- function(x, ...) {
   n_sites <- nrow(x$y)
   max_visits <- if (is.matrix(x$y)) ncol(x$y) else dim(x$y)[2]
-  cat(sprintf("occu_data: %d sites, %d visits\n", n_sites, max_visits))
+  cat(sprintf("tobs_data: %d sites, %d visits\n", n_sites, max_visits))
   if (!is.null(x$occ.covs)) {
     cat(sprintf("  Occupancy covariates: %s\n", paste(names(x$occ.covs), collapse = ", ")))
   }
@@ -154,11 +154,11 @@ print.occu_data <- function(x, ...) {
 #' Returns detection statistics including naive occupancy, naive detection,
 #' per-visit rates, and detection frequency table.
 #'
-#' @param object An `occu_data` object.
+#' @param object An `tobs_data` object.
 #' @param ... Ignored.
-#' @return An `occu_data_summary` object (printed automatically).
+#' @return An `tobs_data_summary` object (printed automatically).
 #' @export
-summary.occu_data <- function(object, ...) {
+summary.tobs_data <- function(object, ...) {
   y <- if (is.matrix(object$y)) object$y else object$y[, , 1]
   N <- nrow(y)
   J <- ncol(y)
@@ -192,12 +192,12 @@ summary.occu_data <- function(object, ...) {
     n_visits = n_visits, det_per_visit = det_per_visit,
     has_coords = !is.null(object$coords)
   )
-  class(out) <- "occu_data_summary"
+  class(out) <- "tobs_data_summary"
   out
 }
 
 #' @export
-print.occu_data_summary <- function(x, ...) {
+print.tobs_data_summary <- function(x, ...) {
   cat("Occupancy data summary\n")
   cat(sprintf("  Sites: %d | Max visits: %d\n", x$N, x$J))
   cat(sprintf("  Observations: %d | Missing: %d (%.1f%%)\n",
@@ -224,13 +224,13 @@ print.occu_data_summary <- function(x, ...) {
 #' 2x2 panel: detection frequency histogram, per-visit detection rates,
 #' visit completeness, and spatial detection map (if coordinates available).
 #'
-#' @param x An `occu_data` object.
+#' @param x An `tobs_data` object.
 #' @param ... Ignored.
 #' @return Invisible `NULL`.
 #' @importFrom graphics hist barplot par polygon legend
 #' @importFrom grDevices rgb
 #' @export
-plot.occu_data <- function(x, ...) {
+plot.tobs_data <- function(x, ...) {
   y <- if (is.matrix(x$y)) x$y else x$y[, , 1]
   N <- nrow(y)
   J <- ncol(y)
@@ -344,7 +344,7 @@ simulate_occu <- function(N = 100, J = 4,
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
 #' @export
-simMsOcc <- function(N = 100, J = 4, n_species = 10,
+simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
                      beta_comm_mean = c(0, 0.5),
                      beta_comm_sd = c(0.5, 0.3),
                      alpha_comm_mean = c(0),
@@ -408,7 +408,7 @@ simMsOcc <- function(N = 100, J = 4, n_species = 10,
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
 #' @export
-simTOcc <- function(N = 100, J = 4, n_seasons = 5,
+simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
                     beta_occ = c(0.5), beta_det = c(0),
                     gamma = 0.2, epsilon = 0.1,
                     seed = NULL) {
@@ -453,7 +453,7 @@ simTOcc <- function(N = 100, J = 4, n_seasons = 5,
 #' @param seed Random seed.
 #' @return A list with `y` (list of matrices), `data`, `site_maps`, and `truth`.
 #' @export
-simIntOcc <- function(N_total = 150, n_data = 2, J = c(4, 3),
+simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
                       n_shared = 20,
                       beta_occ = c(0.5, 0.3),
                       beta_det = list(c(0.2, -0.4), c(-0.1, 0.3)),
@@ -512,7 +512,7 @@ simIntOcc <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #' @param seed Random seed.
 #' @return A list with `y` (4D array), `data`, and `truth`.
 #' @export
-simTMsOcc <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
+simulate_dyn_ms_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
                       beta_comm_mean = c(0), beta_comm_sd = c(0.5),
                       gamma = 0.15, epsilon = 0.1,
                       seed = NULL) {
@@ -557,7 +557,7 @@ simTMsOcc <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
 #' @param seed Random seed.
 #' @return A list with `y` (list of 3D arrays), `data`, and `truth`.
 #' @export
-simIntMsOcc <- function(N = 100, J = c(3, 4), n_species = 5,
+simulate_int_ms_occu <- function(N = 100, J = c(3, 4), n_species = 5,
                         n_data = 2, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   if (length(J) != n_data) J <- rep(J[1], n_data)

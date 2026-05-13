@@ -64,7 +64,7 @@ test_that("S3 methods work on single-season fit", {
 
 test_that("WAIC works on single-season fit", {
   res <- .fit_simple(formula = ~ elev, n = 30, seed = 42)
-  w <- waicOccu(res$fit)
+  w <- tobs_waic(res$fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(w$elpd))
   expect_true(w$p_waic >= 0)
@@ -72,7 +72,7 @@ test_that("WAIC works on single-season fit", {
 
 test_that("PPC works on single-season fit", {
   res <- .fit_simple(formula = ~ 1, n = 30, seed = 42)
-  ppc <- ppcOccu(res$fit, n.samples = 50)
+  ppc <- tobs_ppc(res$fit, n.samples = 50)
   expect_length(ppc$fit.y, 50)
   expect_length(ppc$fit.y.rep, 50)
   expect_true(ppc$bayesian.p >= 0 && ppc$bayesian.p <= 1)
@@ -102,22 +102,22 @@ test_that("simulation functions work", {
   expect_equal(dim(sim$y), c(20, 3))
   expect_equal(nrow(sim$data), 20)
 
-  sim_ms <- simMsOcc(N = 10, J = 3, n_species = 3, seed = 42)
+  sim_ms <- simulate_ms_occu(N = 10, J = 3, n_species = 3, seed = 42)
   expect_equal(dim(sim_ms$y), c(10, 3, 3))
 
-  sim_t <- simTOcc(N = 10, J = 3, n_seasons = 4, seed = 42)
+  sim_t <- simulate_dyn_occu(N = 10, J = 3, n_seasons = 4, seed = 42)
   expect_equal(dim(sim_t$y), c(10, 3, 4))
 })
 
-test_that("occu_data long format conversion works", {
+test_that("tobs_data long format conversion works", {
   df <- expand.grid(site = 1:5, visit = 1:3)
   df$detected <- rbinom(15, 1, 0.3)
   df$effort <- rnorm(15)
   df$habitat <- rep(c("forest", "grass", "forest", "grass", "forest"), each = 3)
 
-  od <- occu_data(df, y = "detected", site = "site", visit = "visit",
+  od <- tobs_data(df, y = "detected", site = "site", visit = "visit",
                   occ.covs = "habitat", det.covs = "effort")
-  expect_s3_class(od, "occu_data")
+  expect_s3_class(od, "tobs_data")
   expect_equal(nrow(od$y), 5)
   expect_equal(ncol(od$y), 3)
   expect_equal(nrow(od$occ.covs), 5)

@@ -39,7 +39,7 @@ documents what "closely" means.
 ```{r simulate}
 library(tulpaObs)
 
-sim <- simulate_cover_hurdle(
+sim <- simulate_cover(
   N         = 400,
   beta_occ  = c(-0.4, 0.8),
   beta_pos  = c(-1.0, 0.3),

@@ -10,14 +10,14 @@
 #' @param ... Ignored.
 #' @return A list with `waic`, `elpd`, `p_waic`, and pointwise values.
 #' @export
-waicOccu <- function(object, ...) {
+tobs_waic <- function(object, ...) {
   model <- object$model
   draws <- object$draws
   pi_list <- model$process_info
   n_draws <- nrow(draws)
 
   if (model$model_type != "single") {
-    stop("waicOccu currently supports single-season models only")
+    stop("tobs_waic currently supports single-season models only")
   }
 
   X_occ <- model$X_processes[[1]]
@@ -56,11 +56,11 @@ waicOccu <- function(object, ...) {
 #' @param n.samples Number of posterior samples (default 500).
 #' @return A list with `fit.y`, `fit.y.rep`, and `bayesian.p`.
 #' @export
-ppcOccu <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
-                    n.samples = 500) {
+tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
+                     n.samples = 500) {
   fit.stat <- match.arg(fit.stat)
   model <- object$model
-  if (model$model_type != "single") stop("ppcOccu supports single-season only")
+  if (model$model_type != "single") stop("tobs_ppc supports single-season only")
 
   draws <- object$draws; pi_list <- model$process_info
   X_occ <- model$X_processes[[1]]; X_det <- model$X_processes[[2]]
@@ -97,9 +97,9 @@ ppcOccu <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
 #' @param n.samples Number of posterior samples (default 250).
 #' @return Numeric vector of PIT residuals.
 #' @export
-pitResiduals <- function(object, n.samples = 250) {
+tobs_pit_residuals <- function(object, n.samples = 250) {
   model <- object$model
-  if (model$model_type != "single") stop("pitResiduals supports single-season only")
+  if (model$model_type != "single") stop("tobs_pit_residuals supports single-season only")
   draws <- object$draws; pi_list <- model$process_info
   X_occ <- model$X_processes[[1]]; X_det <- model$X_processes[[2]]
   y <- model$y; n_sites <- model$n_sites
@@ -123,7 +123,7 @@ pitResiduals <- function(object, n.samples = 250) {
 }
 
 #' @export
-testUniformity <- function(pit) {
+tobs_test_uniformity <- function(pit) {
   # PIT residuals can have ties when the response is discrete (counts /
   # detections). The asymptotic KS p-value remains valid; only the
   # ties-warning is noisy, so suppress just that warning class.
@@ -137,7 +137,7 @@ testUniformity <- function(pit) {
 }
 
 #' @export
-testDispersion <- function(object, n.samples = 250) {
+tobs_test_dispersion <- function(object, n.samples = 250) {
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   obs_var <- var(rowSums(y_obs * (y_obs >= 0), na.rm = TRUE))
   sim_vars <- vapply(sims, function(ys) var(rowSums(ys * (ys >= 0), na.rm = TRUE)), double(1))
@@ -146,7 +146,7 @@ testDispersion <- function(object, n.samples = 250) {
 }
 
 #' @export
-testZeroInflation <- function(object, n.samples = 250) {
+tobs_test_zero_inflation <- function(object, n.samples = 250) {
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   count_zeros <- function(y) sum(apply(y, 1, function(r) { v <- r >= 0; all(r[v] == 0) }))
   obs <- count_zeros(y_obs); sim <- vapply(sims, count_zeros, integer(1))
@@ -155,7 +155,7 @@ testZeroInflation <- function(object, n.samples = 250) {
 }
 
 #' @export
-testOutliers <- function(object, n.samples = 250) {
+tobs_test_outliers <- function(object, n.samples = 250) {
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   n_sites <- nrow(y_obs)
   obs_det <- apply(y_obs, 1, function(r) sum(r[r >= 0] == 1))
@@ -172,21 +172,21 @@ testOutliers <- function(object, n.samples = 250) {
 #' @param n.samples Posterior samples for simulation tests.
 #' @return Invisibly, diagnostic results.
 #' @export
-checkModel <- function(object, coords = NULL, n.samples = 250) {
+tobs_check <- function(object, coords = NULL, n.samples = 250) {
   cat("=== tobs Model Diagnostics ===\n\n")
   cat(sprintf("Sampler: %d samples, %d divergent, mean accept = %.3f\n",
               object$n_samples, sum(object$divergent), mean(object$accept_prob)))
 
-  w <- tryCatch(waicOccu(object), error = function(e) NULL)
+  w <- tryCatch(tobs_waic(object), error = function(e) NULL)
   if (!is.null(w)) cat(sprintf("\nWAIC: %.1f (p_waic = %.1f)\n", w$waic, w$p_waic))
 
-  ppc <- tryCatch(ppcOccu(object, n.samples = n.samples), error = function(e) NULL)
+  ppc <- tryCatch(tobs_ppc(object, n.samples = n.samples), error = function(e) NULL)
   if (!is.null(ppc)) {
     cat(sprintf("\nPPC: Bayesian p = %.3f\n", ppc$bayesian.p))
     if (ppc$bayesian.p < 0.05 || ppc$bayesian.p > 0.95) cat("  WARNING: poor fit\n")
   }
 
-  zi <- tryCatch(testZeroInflation(object, n.samples = n.samples), error = function(e) NULL)
+  zi <- tryCatch(tobs_test_zero_inflation(object, n.samples = n.samples), error = function(e) NULL)
   if (!is.null(zi)) cat(sprintf("\nZero-inflation: obs=%d, exp=%.1f, p=%.3f\n", zi$observed, zi$expected, zi$p.value))
 
   if (!is.null(coords)) {

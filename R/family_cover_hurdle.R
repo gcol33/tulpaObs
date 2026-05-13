@@ -173,7 +173,7 @@ fit_cover_hurdle_lognormal <- function(enc, engine = "laplace",
 # Decode
 # ---------------------------------------------------------------------------
 
-#' Decode the two-arm fit into a cover_hurdle_fit object
+#' Decode the two-arm fit into a cover_fit object
 #'
 #' Extracts beta vectors and SEs for each arm. For the Gaussian arm, beta
 #' SEs are scaled by `sigma_pos` (since `tulpa_laplace(family='gaussian')`
@@ -215,7 +215,7 @@ decode_cover_hurdle <- function(fits, enc, family) {
       log_marginal = c(occ = fits$m_occ$log_marginal,
                        pos = fits$m_pos$log_marginal)
     ),
-    class = c("cover_hurdle_fit", "tobs_fit", "tulpa_fit")
+    class = c("cover_fit", "tobs_fit", "tulpa_fit")
   )
   out
 }
@@ -225,7 +225,7 @@ decode_cover_hurdle <- function(fits, enc, family) {
 # Predict
 # ---------------------------------------------------------------------------
 
-#' Predict cover from a cover_hurdle_fit
+#' Predict cover from a cover_fit
 #'
 #' For the lognormal positive part:
 #'
@@ -238,14 +238,14 @@ decode_cover_hurdle <- function(fits, enc, family) {
 #' (Phase 1a is fixed-effects-only for prediction; spatial projection
 #' lands in 1c).
 #'
-#' @param object A `cover_hurdle_fit`.
+#' @param object A `cover_fit`.
 #' @param newdata A data frame of covariates matching the original formula.
 #' @param type One of `"expected"`, `"occupancy"`, `"conditional"`.
 #' @param include_RE Currently ignored (no spatial projection in 1a).
 #' @param ... Unused.
 #' @return Numeric vector of predictions.
 #' @export
-predict.cover_hurdle_fit <- function(object, newdata,
+predict.cover_fit <- function(object, newdata,
                                      type = c("expected", "occupancy",
                                               "conditional"),
                                      include_RE = FALSE, ...) {
@@ -254,7 +254,7 @@ predict.cover_hurdle_fit <- function(object, newdata,
     stop("`newdata` is required.", call. = FALSE)
   }
   if (isTRUE(include_RE) && !is.null(object$encoding$spatial_spec)) {
-    message("predict.cover_hurdle_fit(): spatial RE projection at new ",
+    message("predict.cover_fit(): spatial RE projection at new ",
             "locations is not implemented in Phase 1a; returning ",
             "fixed-effects-only predictions.")
   }
@@ -285,8 +285,8 @@ predict.cover_hurdle_fit <- function(object, newdata,
 # ---------------------------------------------------------------------------
 
 #' @export
-print.cover_hurdle_fit <- function(x, ...) {
-  cat("<cover_hurdle_fit (lognormal positive part)>\n")
+print.cover_fit <- function(x, ...) {
+  cat("<cover_fit (lognormal positive part)>\n")
   cat(sprintf("  N total      : %d\n", x$n_total))
   cat(sprintf("  N positive   : %d (%.1f%%)\n",
               x$n_positive, 100 * x$n_positive / x$n_total))
@@ -301,7 +301,7 @@ print.cover_hurdle_fit <- function(x, ...) {
 }
 
 #' @export
-summary.cover_hurdle_fit <- function(object, ...) {
+summary.cover_fit <- function(object, ...) {
   out <- list(
     family       = object$family,
     n_total      = object$n_total,
@@ -313,12 +313,12 @@ summary.cover_hurdle_fit <- function(object, ...) {
     log_marginal = object$log_marginal,
     hyperpar     = object$hyperpar
   )
-  class(out) <- "summary.cover_hurdle_fit"
+  class(out) <- "summary.cover_fit"
   out
 }
 
 #' @export
-print.summary.cover_hurdle_fit <- function(x, ...) {
+print.summary.cover_fit <- function(x, ...) {
   cat("Cover hurdle fit summary\n")
   cat(sprintf("  N total = %d, N positive = %d\n", x$n_total, x$n_positive))
   cat(sprintf("  sigma_pos = %.4f\n", x$sigma_pos))

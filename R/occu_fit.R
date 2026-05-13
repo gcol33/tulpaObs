@@ -211,7 +211,7 @@
   fit
 }
 
-# Build multi-term RE spec for C++ from list of occu_re objects
+# Build multi-term RE spec for C++ from list of tobs_re objects
 build_re_spec <- function(re_list, model) {
   n_terms <- length(re_list)
   N <- if (!is.null(model$N)) model$N else model$n_sites

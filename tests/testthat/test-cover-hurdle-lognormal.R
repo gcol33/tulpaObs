@@ -11,7 +11,7 @@ test_that("cover(positive = 'lognormal') flips to working", {
 
 test_that("cover(positive = 'beta') still errors with Phase 1d note", {
   expect_equal(cover("beta")$status, "planned")
-  sim <- simulate_cover_hurdle(N = 50, seed = 1)
+  sim <- simulate_cover(N = 50, seed = 1)
   expect_error(
     tobs(
       formula = ~ x,
@@ -24,7 +24,7 @@ test_that("cover(positive = 'beta') still errors with Phase 1d note", {
 })
 
 test_that("simulator round-trips a coefficient prior", {
-  sim <- simulate_cover_hurdle(N = 500, seed = 42)
+  sim <- simulate_cover(N = 500, seed = 42)
   expect_named(sim, c("data", "y", "coords", "truth"))
   expect_equal(length(sim$y), 500)
   expect_true(all(sim$y >= 0 & sim$y <= 1))
@@ -34,7 +34,7 @@ test_that("simulator round-trips a coefficient prior", {
 })
 
 test_that("single fit recovers truth within tolerance and prediction identity holds", {
-  sim <- simulate_cover_hurdle(
+  sim <- simulate_cover(
     N         = 800,
     beta_occ  = c(-0.5, 0.8),
     beta_pos  = c(-1.0, 0.3),
@@ -47,7 +47,7 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
     family  = cover(positive = "lognormal"),
     y       = sim$y
   )
-  expect_s3_class(fit, "cover_hurdle_fit")
+  expect_s3_class(fit, "cover_fit")
   expect_true(fit$converged)
 
   expect_lt(abs(fit$beta_occ[1] - sim$truth$beta_occ[1]), 0.4)
@@ -69,7 +69,7 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
 })
 
 test_that("Gaussian arm uses only positive-cover rows", {
-  sim <- simulate_cover_hurdle(N = 300, seed = 7)
+  sim <- simulate_cover(N = 300, seed = 7)
   fit <- tobs(
     formula = ~ x,
     data    = sim$data,
@@ -89,7 +89,7 @@ test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
   hits_pos <- integer(2)
   sigma_diffs <- numeric(10)
   for (r in seq_len(10)) {
-    sim <- simulate_cover_hurdle(
+    sim <- simulate_cover(
       N         = 600,
       beta_occ  = truth$beta_occ,
       beta_pos  = truth$beta_pos,
@@ -114,7 +114,7 @@ test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
 })
 
 test_that("predict requires newdata with the same columns as the formula", {
-  sim <- simulate_cover_hurdle(N = 200, seed = 11)
+  sim <- simulate_cover(N = 200, seed = 11)
   fit <- tobs(
     formula = ~ x,
     data    = sim$data,
@@ -129,7 +129,7 @@ test_that("predict requires newdata with the same columns as the formula", {
 })
 
 test_that("temporal = errors with the Phase 1d scheduling message", {
-  sim <- simulate_cover_hurdle(N = 50, seed = 13)
+  sim <- simulate_cover(N = 50, seed = 13)
   expect_error(
     tobs(
       formula  = ~ x,
@@ -143,7 +143,7 @@ test_that("temporal = errors with the Phase 1d scheduling message", {
 })
 
 test_that("detection = errors (cover has no detection layer)", {
-  sim <- simulate_cover_hurdle(N = 50, seed = 17)
+  sim <- simulate_cover(N = 50, seed = 17)
   expect_error(
     tobs(
       formula   = ~ x,

@@ -2,7 +2,7 @@
 % Please edit documentation in R/family_cover_hurdle.R
 \name{decode_cover_hurdle}
 \alias{decode_cover_hurdle}
-\title{Decode the two-arm fit into a cover_hurdle_fit object}
+\title{Decode the two-arm fit into a cover_fit object}
 \usage{
 decode_cover_hurdle(fits, enc, family)
 }
