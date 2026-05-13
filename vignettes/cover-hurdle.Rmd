@@ -40,10 +40,10 @@ head(sim$data)
 ```
 
 ```{r fit}
-fit <- tulpa_obs(
+fit <- tobs(
   formula = ~ x,
   data    = sim$data,
-  family  = cover_hurdle(positive = "lognormal"),
+  family  = cover(positive = "lognormal"),
   y       = sim$y
 )
 fit

@@ -15,21 +15,27 @@ test_that("dynamic occupancy model runs", {
     for (t in seq_len(n_seasons))
       if (z[i, t] == 1) y_array[i, , t] <- rbinom(max_visits, 1, 0.5)
 
-  mod <- occu(~ 1, ~ 1, data.frame(x = rnorm(n_sites)), y_array,
-              col_formula = ~ 1, ext_formula = ~ 1)
-  expect_s3_class(mod, "tulpaObs")
-  expect_equal(mod$model_type, "dynamic")
-  expect_equal(mod$n_sites, n_sites)
-  expect_equal(mod$n_seasons, n_seasons)
-
-  fit <- occu_fit(mod, iter = 100, warmup = 50, seed = 1, verbose = FALSE)
-  expect_s3_class(fit, "tulpaObs_fit")
+  fit <- tobs(
+    formula     = ~ 1,
+    data        = data.frame(x = rnorm(n_sites)),
+    family      = dyn_occu(),
+    detection   = ~ 1,
+    y           = y_array,
+    col_formula = ~ 1,
+    ext_formula = ~ 1,
+    engine      = "laplace",
+    control     = list(verbose = FALSE)
+  )
+  expect_s3_class(fit, "tobs_fit")
   expect_equal(fit$n_params, 4)
   expect_true(fit$intercepts$psi1 > 0 && fit$intercepts$psi1 < 1)
 })
 
-test_that("dynamic occu validates inputs", {
-  expect_error(occu(~ 1, ~ 1, data.frame(x = 1:5), y = matrix(0, 3, 2),
-                    col_formula = ~ 1),
-               "3D array")
+test_that("dynamic tobs validates inputs", {
+  expect_error(
+    tobs(~ 1, data.frame(x = 1:5), family = dyn_occu(),
+         detection = ~ 1, y = matrix(0, 3, 2),
+         col_formula = ~ 1, ext_formula = ~ 1),
+    "3D array"
+  )
 })

@@ -1,4 +1,4 @@
-#' Specify random effects for occupancy models
+#' Specify random effects for tobs models
 #'
 #' @param group Character name of grouping variable in data, or integer vector
 #'   of group assignments (1-based).
@@ -10,9 +10,9 @@
 #' @param correlated Logical; for slopes, estimate correlations? Default TRUE.
 #' @param sigma_scale Prior scale for RE standard deviation (default 1).
 #'
-#' @return A `tulpaObs_re` object
+#' @return A `tobs_re` object
 #' @export
-occu_re <- function(group, type = c("intercept", "slope", "iid"),
+tobs_re <- function(group, type = c("intercept", "slope", "iid"),
                     covariate = NULL, model = "iid",
                     shared = c(TRUE, FALSE), correlated = TRUE,
                     sigma_scale = 1) {
@@ -31,10 +31,10 @@ occu_re <- function(group, type = c("intercept", "slope", "iid"),
     shared = shared,
     correlated = correlated,
     sigma_scale = sigma_scale
-  ), class = "tulpaObs_re")
+  ), class = "tobs_re")
 }
 
-#' Specify temporal structure for occupancy models
+#' Specify temporal structure for tobs models
 #'
 #' @param type One of `"ar1"`, `"rw1"`, `"rw2"`, `"iid"`.
 #' @param time Character name of time variable in data, or integer vector
@@ -46,9 +46,9 @@ occu_re <- function(group, type = c("intercept", "slope", "iid"),
 #' @param tau_shape Shape parameter for Gamma prior on temporal precision.
 #' @param tau_rate Rate parameter for Gamma prior on temporal precision.
 #'
-#' @return A `tulpaObs_temporal` object
+#' @return A `tobs_temporal` object
 #' @export
-occu_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
+tobs_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
                           time, group = NULL,
                           shared = c(TRUE, FALSE),
                           cyclic = FALSE,
@@ -63,7 +63,7 @@ occu_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
     cyclic = cyclic,
     tau_shape = tau_shape,
     tau_rate = tau_rate
-  ), class = "tulpaObs_temporal")
+  ), class = "tobs_temporal")
 }
 
 #' Specify spatially-varying coefficients
@@ -79,9 +79,9 @@ occu_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
 #' @param phi_prior_lower Lower bound for range prior (default 0.01).
 #' @param phi_prior_upper Upper bound for range prior (default 10).
 #'
-#' @return A `tulpaObs_svc` object
+#' @return A `tobs_svc` object
 #' @export
-occu_svc <- function(indices, coords, cov = "exponential", nn = 15,
+tobs_svc <- function(indices, coords, cov = "exponential", nn = 15,
                      shared = c(TRUE, FALSE),
                      sigma2_prior_scale = 1,
                      phi_prior_lower = 0.01, phi_prior_upper = 10) {
@@ -109,7 +109,7 @@ occu_svc <- function(indices, coords, cov = "exponential", nn = 15,
     sigma2_prior_scale = sigma2_prior_scale,
     phi_prior_lower = phi_prior_lower,
     phi_prior_upper = phi_prior_upper
-  ), class = "tulpaObs_svc")
+  ), class = "tobs_svc")
 }
 
 #' Specify latent factors for community models
@@ -119,29 +119,29 @@ occu_svc <- function(indices, coords, cov = "exponential", nn = 15,
 #' @param constraint `0` = sum-to-zero (default), `1` = first-zero.
 #' @param sigma_prior_rate Rate for Gamma prior on factor precision (default 1).
 #'
-#' @return A `tulpaObs_latent` object
+#' @return A `tobs_latent` object
 #' @export
-occu_latent <- function(n_factors, shared = TRUE, constraint = 0,
+tobs_latent <- function(n_factors, shared = TRUE, constraint = 0,
                         sigma_prior_rate = 1) {
   structure(list(
     n_factors = as.integer(n_factors),
     shared = shared,
     constraint = as.integer(constraint),
     sigma_prior_rate = sigma_prior_rate
-  ), class = "tulpaObs_latent")
+  ), class = "tobs_latent")
 }
 
 #' @export
-print.tulpaObs_re <- function(x, ...) {
-  cat(sprintf("tulpaObs RE: %s (%s model)\n", x$type, x$model))
+print.tobs_re <- function(x, ...) {
+  cat(sprintf("tobs RE: %s (%s model)\n", x$type, x$model))
   cat(sprintf("  Group: %s\n", if (is.character(x$group)) x$group else "custom"))
   if (!is.null(x$covariate)) cat(sprintf("  Covariate: %s\n", x$covariate))
   invisible(x)
 }
 
 #' @export
-print.tulpaObs_temporal <- function(x, ...) {
-  cat(sprintf("tulpaObs temporal: %s\n", x$type))
+print.tobs_temporal <- function(x, ...) {
+  cat(sprintf("tobs temporal: %s\n", x$type))
   cat(sprintf("  Time: %s\n", if (is.character(x$time)) x$time else "custom"))
   if (x$cyclic) cat("  Cyclic: yes\n")
   invisible(x)
@@ -150,9 +150,9 @@ print.tulpaObs_temporal <- function(x, ...) {
 
 #' Specify community-level random effects
 #'
-#' Adds a species-level random effect for community occupancy models.
-#' This is a convenience wrapper around [occu_re()] that sets the group
-#' to the species identifier.
+#' Adds a species-level random effect for community occupancy models. A
+#' convenience wrapper around [tobs_re()] that sets the group to the species
+#' identifier.
 #'
 #' @param type `"intercept"` (default) or `"slope"`.
 #' @param covariate For random slopes, the covariate name.
@@ -160,34 +160,34 @@ print.tulpaObs_temporal <- function(x, ...) {
 #'   Default `c(TRUE, TRUE)` = both occupancy and detection.
 #' @param sigma_scale Prior scale for RE standard deviation (default 1).
 #'
-#' @return A `tulpaObs_re` object with group set to `"species"`.
+#' @return A `tobs_re` object with group set to `"species"`.
 #' @export
-occu_community_re <- function(type = c("intercept", "slope"),
+tobs_community_re <- function(type = c("intercept", "slope"),
                               covariate = NULL,
                               shared = c(TRUE, TRUE),
                               sigma_scale = 1) {
   type <- match.arg(type)
-  occu_re(group = "species", type = type, covariate = covariate,
+  tobs_re(group = "species", type = type, covariate = covariate,
           shared = shared, sigma_scale = sigma_scale)
 }
 
 
 #' Specify areal spatial structure
 #'
-#' Convenience wrapper for BYM2 or ICAR spatial models using
-#' an adjacency matrix. Equivalent to [occu_bym2()] or [occu_icar()].
+#' Convenience wrapper for BYM2 or ICAR spatial models using an adjacency
+#' matrix. Equivalent to [tobs_bym2()] or [tobs_icar()].
 #'
 #' @param adj Adjacency matrix (n_sites x n_sites, symmetric, 0/1).
 #' @param model `"bym2"` (default) or `"icar"`.
-#' @param ... Additional arguments passed to [occu_bym2()] or [occu_icar()].
+#' @param ... Additional arguments passed to [tobs_bym2()] or [tobs_icar()].
 #'
-#' @return A `tulpaObs_spatial` object.
+#' @return A `tobs_spatial` object.
 #' @export
-occu_areal <- function(adj, model = c("bym2", "icar"), ...) {
+tobs_areal <- function(adj, model = c("bym2", "icar"), ...) {
   model <- match.arg(model)
   if (model == "bym2") {
-    occu_bym2(adj = adj, ...)
+    tobs_bym2(adjacency = adj, ...)
   } else {
-    occu_icar(adj = adj, ...)
+    tobs_icar(adjacency = adj, ...)
   }
 }

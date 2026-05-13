@@ -1,73 +1,56 @@
-#' Define an occupancy model
+# =============================================================================
+# occu.R — Internal model builders for tobs()
+#
+# `.tobs_build_model()` is the data-binding constructor: it consumes formulas
+# + data + response and returns a `tobs_model` structure with the design
+# matrices, response, and process metadata that the engine needs. Dispatched
+# from `tobs()` via the per-family `.dispatch_*` helpers.
+# =============================================================================
+
+
+#' Build a tobs model object
 #'
-#' Unified entry point for single-season, dynamic, and community occupancy models.
-#' The model type is inferred from arguments:
+#' Inferred model type from arguments:
 #' - **Single-season**: no `col_formula`, no `species`
 #' - **Dynamic**: `col_formula` and/or `ext_formula` provided
-#' - **Community**: `species` provided (3D array or named list for y)
+#' - **Community**: `species` provided
+#' - **Integrated**: `integrated = TRUE`, `y` a list of matrices
+#' - **JSDM**: `jsdm = TRUE`
 #'
-#' @param occ_formula Formula for occupancy probability (e.g., `~ elevation + forest`).
-#'   For dynamic models this is the initial occupancy formula.
-#' @param det_formula Formula for detection probability (e.g., `~ effort`).
-#' @param data A data frame with site-level covariates.
-#' @param y Detection history. One of:
-#'   - **Matrix** (n_sites x max_visits): single-season
-#'   - **3D array** or list of matrices: dynamic (n_sites x max_visits x n_seasons)
-#'     or community (n_sites x max_visits x n_species)
-#' @param col_formula Formula for colonization (dynamic models). Default NULL.
-#' @param ext_formula Formula for extinction (dynamic models). Default NULL.
-#' @param species Character vector of species names, or TRUE to auto-name.
-#'   Signals a community model. Default NULL.
-#' @param det_visit_formula Optional formula for visit-level detection covariates.
-#' @param det_visit_data Optional data frame with visit-level covariates.
-#'
-#' @return A `tulpaObs` object
-#' @export
-occu <- function(occ_formula, det_formula = NULL, data, y,
-                 col_formula = NULL, ext_formula = NULL,
-                 species = NULL, integrated = FALSE, jsdm = FALSE,
-                 det_visit_formula = NULL, det_visit_data = NULL) {
+#' @keywords internal
+.tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
+                              col_formula = NULL, ext_formula = NULL,
+                              species = NULL, integrated = FALSE, jsdm = FALSE,
+                              det_visit_formula = NULL, det_visit_data = NULL) {
 
-  # ---- Determine model type ----
-  is_dynamic <- !is.null(col_formula) || !is.null(ext_formula)
+  is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
   is_community <- !is.null(species) && !isTRUE(jsdm)
   is_integrated <- isTRUE(integrated)
-  is_jsdm <- isTRUE(jsdm)
+  is_jsdm      <- isTRUE(jsdm)
 
   if (is_dynamic && is_community) {
     stop("Dynamic community models are not yet supported. ",
          "Use col_formula/ext_formula OR species, not both.")
   }
 
-  if (is_jsdm) {
-    return(build_jsdm_model(occ_formula, data, y, species))
-  }
+  if (is_jsdm)       return(.tobs_build_jsdm(occ_formula, data, y, species))
+  if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
+  if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,
+                                                col_formula, ext_formula))
+  if (is_community)  return(.tobs_build_community(occ_formula, det_formula, data, y, species))
 
-  if (is_integrated) {
-    return(build_integrated_model(occ_formula, det_formula, data, y))
-  }
-
-  if (is_dynamic) {
-    return(build_dynamic_model(occ_formula, det_formula, data, y,
-                                col_formula, ext_formula))
-  }
-
-  if (is_community) {
-    return(build_community_model(occ_formula, det_formula, data, y, species))
-  }
-
-  # Single-season
   if (is.null(det_formula)) stop("det_formula required for non-JSDM models")
-  build_single_model(occ_formula, det_formula, data, y,
+  .tobs_build_single(occ_formula, det_formula, data, y,
                      det_visit_formula, det_visit_data)
 }
 
+
 # ============================================================================
-# Internal builders
+# Per-model-type builders
 # ============================================================================
 
-build_single_model <- function(occ_formula, det_formula, data, y,
-                                det_visit_formula = NULL, det_visit_data = NULL) {
+.tobs_build_single <- function(occ_formula, det_formula, data, y,
+                               det_visit_formula = NULL, det_visit_data = NULL) {
   if (!is.matrix(y)) {
     stop("y must be a matrix (n_sites x max_visits)")
   }
@@ -107,15 +90,14 @@ build_single_model <- function(occ_formula, det_formula, data, y,
     ),
     det_visit_names = if (!is.null(X_det_visit)) colnames(X_det_visit) else character(0),
     naive_occ = n_detected / nrow(y)
-  ), class = "tulpaObs")
+  ), class = "tobs_model")
 }
 
-build_dynamic_model <- function(occ_formula, det_formula, data, y,
-                                 col_formula, ext_formula) {
+.tobs_build_dynamic <- function(occ_formula, det_formula, data, y,
+                                col_formula, ext_formula) {
   if (is.null(col_formula)) col_formula <- ~ 1
   if (is.null(ext_formula)) ext_formula <- ~ 1
 
-  # Handle y as 3D array or list of matrices
   if (is.list(y) && !is.array(y)) {
     n_seasons <- length(y)
     n_sites <- nrow(y[[1]])
@@ -144,7 +126,6 @@ build_dynamic_model <- function(occ_formula, det_formula, data, y,
   X_col <- model.matrix(col_formula, data)
   X_ext <- model.matrix(ext_formula, data)
 
-  # Flatten detection history and compute metadata
   y_int <- as.integer(y)
   y_int[is.na(y_int)] <- -1L
 
@@ -179,11 +160,10 @@ build_dynamic_model <- function(occ_formula, det_formula, data, y,
       list(name = "gamma",   p = ncol(X_col), coef_names = colnames(X_col)),
       list(name = "epsilon", p = ncol(X_ext), coef_names = colnames(X_ext))
     )
-  ), class = "tulpaObs")
+  ), class = "tobs_model")
 }
 
-build_community_model <- function(occ_formula, det_formula, data, y, species) {
-  # Handle y as 3D array or list of matrices
+.tobs_build_community <- function(occ_formula, det_formula, data, y, species) {
   if (is.list(y) && !is.array(y)) {
     n_species <- length(y)
     n_sites <- nrow(y[[1]])
@@ -221,12 +201,10 @@ build_community_model <- function(occ_formula, det_formula, data, y, species) {
   X_occ <- model.matrix(occ_formula, data)
   X_det <- model.matrix(det_formula, data)
 
-  # Expand to site-species: N = n_sites * n_species
   N <- n_sites * n_species
   X_occ_expanded <- X_occ[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
   X_det_expanded <- X_det[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
 
-  # Flatten detection history to [N x max_visits]
   y_expanded <- matrix(NA_integer_, nrow = N, ncol = max_visits)
   for (i in seq_len(n_sites)) {
     for (s in seq_len(n_species)) {
@@ -236,7 +214,6 @@ build_community_model <- function(occ_formula, det_formula, data, y, species) {
   }
   y_expanded[is.na(y_expanded)] <- -1L
 
-  # Species grouping (1-based)
   species_group <- rep(seq_len(n_species), times = n_sites)
 
   structure(list(
@@ -254,10 +231,10 @@ build_community_model <- function(occ_formula, det_formula, data, y, species) {
       list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ)),
       list(name = "p",   p = ncol(X_det), coef_names = colnames(X_det))
     )
-  ), class = "tulpaObs")
+  ), class = "tobs_model")
 }
 
-build_integrated_model <- function(occ_formula, det_formula, data, y) {
+.tobs_build_integrated <- function(occ_formula, det_formula, data, y) {
   if (!is.list(y) || is.array(y)) {
     stop("For integrated models, y must be a list of detection matrices (one per source)")
   }
@@ -331,11 +308,10 @@ build_integrated_model <- function(occ_formula, det_formula, data, y) {
     n_sites = n_sites,
     n_sources = n_sources,
     process_info = process_info
-  ), class = "tulpaObs")
+  ), class = "tobs_model")
 }
 
-build_jsdm_model <- function(occ_formula, data, y, species) {
-  # y: 3D array [n_sites x 1 x n_species] or named list of vectors/single-col matrices
+.tobs_build_jsdm <- function(occ_formula, data, y, species) {
   if (is.list(y) && !is.array(y)) {
     n_species <- length(y)
     n_sites <- length(y[[1]])
@@ -347,7 +323,6 @@ build_jsdm_model <- function(occ_formula, data, y, species) {
       y_mat[, s] <- as.integer(if (is.matrix(y[[s]])) y[[s]][, 1] else y[[s]])
     }
   } else if (is.matrix(y)) {
-    # y: n_sites x n_species matrix of 0/1
     n_sites <- nrow(y)
     n_species <- ncol(y)
     species_names <- if (is.character(species)) species
@@ -364,11 +339,9 @@ build_jsdm_model <- function(occ_formula, data, y, species) {
 
   X_occ <- model.matrix(occ_formula, data)
 
-  # Expand to site-species (same as community but no detection)
   N <- n_sites * n_species
   X_occ_expanded <- X_occ[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
 
-  # Flatten y to vector: site-species order
   y_flat <- integer(N)
   for (i in seq_len(n_sites)) {
     for (s in seq_len(n_species)) {
@@ -393,5 +366,50 @@ build_jsdm_model <- function(occ_formula, data, y, species) {
     process_info = list(
       list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ))
     )
-  ), class = "tulpaObs")
+  ), class = "tobs_model")
+}
+
+
+# ============================================================================
+# Print method
+# ============================================================================
+
+#' @export
+print.tobs_model <- function(x, ...) {
+  type_label <- switch(x$model_type,
+    single = "Single-season occupancy model",
+    dynamic = "Multi-season dynamic occupancy model",
+    community = "Community occupancy model",
+    integrated = sprintf("Integrated occupancy model (%d sources)", x$n_sources),
+    jsdm = sprintf("Joint species distribution model (%d species)", x$n_species)
+  )
+  cat(type_label, "\n")
+
+  if (x$model_type == "single") {
+    cat(sprintf("  Sites: %d, Max visits: %d\n", x$n_sites, x$max_visits))
+  } else if (x$model_type == "dynamic") {
+    cat(sprintf("  Sites: %d, Seasons: %d, Max visits: %d\n",
+                x$n_sites, x$n_seasons, x$max_visits))
+  } else if (x$model_type == "community") {
+    cat(sprintf("  Sites: %d, Species: %d, Max visits: %d\n",
+                x$n_sites, x$n_species, x$max_visits))
+  } else if (x$model_type == "integrated") {
+    cat(sprintf("  Sites: %d, Sources: %d\n", x$n_sites, x$n_sources))
+  } else if (x$model_type == "jsdm") {
+    cat(sprintf("  Sites: %d, Species: %d\n", x$n_sites, x$n_species))
+  }
+
+  for (pi in x$process_info) {
+    cat(sprintf("  %s covariates (%d): %s\n",
+                pi$name, pi$p, paste(pi$coef_names, collapse = ", ")))
+  }
+
+  if (x$model_type == "single" && !is.null(x$naive_occ)) {
+    cat(sprintf("  Naive occupancy: %.1f%%\n", 100 * x$naive_occ))
+  }
+  if (x$model_type == "community") {
+    cat(sprintf("  Species RE: intercept on psi and p\n"))
+  }
+
+  invisible(x)
 }

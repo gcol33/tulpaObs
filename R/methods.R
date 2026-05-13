@@ -1,15 +1,15 @@
 # ============================================================================
-# Occupancy-specific S3 methods for tulpaObs_fit objects
+# tobs_fit-specific S3 methods.
 # Generic S3 (coef, confint, vcov, logLik, summary, tidy, glance, ranef, plot)
-# are inherited from tulpa::tulpa_fit via class = c("tulpaObs_fit", "tulpa_fit")
+# are inherited from tulpa::tulpa_fit via class = c("tobs_fit", "tulpa_fit").
 # ============================================================================
 
 #' Number of observations
-#' @param object A `tulpaObs_fit` object.
+#' @param object A `tobs_fit` object.
 #' @param ... Ignored.
 #' @return Integer count of non-NA detection history entries.
 #' @export
-nobs.tulpaObs_fit <- function(object, ...) {
+nobs.tobs_fit <- function(object, ...) {
   model <- object$model
   if (model$model_type == "single" || model$model_type == "community") {
     y <- model$y
@@ -22,12 +22,12 @@ nobs.tulpaObs_fit <- function(object, ...) {
 }
 
 #' Fitted values (occupancy and detection probabilities)
-#' @param object A `tulpaObs_fit` object.
+#' @param object A `tobs_fit` object.
 #' @param ... Ignored.
 #' @return A list with `psi` (occupancy probabilities), `p` (detection probabilities),
 #'   and `z` (posterior P(z=1)) at posterior mean.
 #' @export
-fitted.tulpaObs_fit <- function(object, ...) {
+fitted.tobs_fit <- function(object, ...) {
   model <- object$model
   means <- object$means
   pi_list <- model$process_info
@@ -70,12 +70,12 @@ fitted.tulpaObs_fit <- function(object, ...) {
 }
 
 #' Residuals from occupancy model
-#' @param object A `tulpaObs_fit` object.
+#' @param object A `tobs_fit` object.
 #' @param type One of `"deviance"` (default), `"pearson"`, or `"response"`.
 #' @param ... Ignored.
 #' @return A list with `occ` (site-level) and `det` (visit-level) residuals.
 #' @export
-residuals.tulpaObs_fit <- function(object, type = c("deviance", "pearson", "response"), ...) {
+residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response"), ...) {
   type <- match.arg(type)
   fit_vals <- fitted(object)
   model <- object$model
@@ -129,13 +129,13 @@ residuals.tulpaObs_fit <- function(object, type = c("deviance", "pearson", "resp
 }
 
 #' Simulate replicate datasets from posterior
-#' @param object A `tulpaObs_fit` object.
+#' @param object A `tobs_fit` object.
 #' @param nsim Number of simulated datasets (default 1).
 #' @param seed Optional random seed.
 #' @param ... Ignored.
 #' @return A list of simulated detection history matrices.
 #' @export
-simulate.tulpaObs_fit <- function(object, nsim = 1, seed = NULL, ...) {
+simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (!is.null(seed)) set.seed(seed)
   model <- object$model
   draws <- object$draws
@@ -183,7 +183,7 @@ simulate.tulpaObs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' - **Design-matrix**: `predict(fit, X.0 = ...)` predicts at new covariate values.
 #' - **Terms-based**: `predict(fit, terms = "elev")` varies one covariate, others at mean.
 #'
-#' @param object A `tulpaObs_fit` object.
+#' @param object A `tobs_fit` object.
 #' @param X.0 Optional design matrix for occupancy prediction.
 #' @param type `"occupancy"` (default), `"detection"`, or `"both"`.
 #' @param quantiles Quantile levels for credible intervals.
@@ -193,7 +193,7 @@ simulate.tulpaObs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' @return Depends on mode. In-sample: `fitted()` result. Design-matrix/terms:
 #'   data.frame with estimate and CIs.
 #' @export
-predict.tulpaObs_fit <- function(object, X.0 = NULL,
+predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both"),
                                  quantiles = c(0.025, 0.5, 0.975),
                                  terms = NULL, n_points = 50L, ...) {
@@ -304,7 +304,7 @@ plot.occu_prediction <- function(x, ...) {
 }
 
 #' Compute marginal effect of a covariate
-#' @param object A `tulpaObs_fit` object.
+#' @param object A `tobs_fit` object.
 #' @param covariate Name of covariate.
 #' @param process `"occupancy"` (default) or `"detection"`.
 #' @param n_points Number of prediction points (default 100).
@@ -320,7 +320,7 @@ marginal_effect <- function(object, covariate,
 }
 
 #' Estimate species richness from community model
-#' @param object A `tulpaObs_fit` object from a community model.
+#' @param object A `tobs_fit` object from a community model.
 #' @return A data.frame with site-level richness estimates.
 #' @export
 richness <- function(object) {
@@ -363,12 +363,12 @@ richness <- function(object) {
 # tidy, glance, ranef inherited from tulpa::tulpa_fit
 
 #' Update and refit an occupancy model
-#' @param object A `tulpaObs_fit` object.
-#' @param ... Named arguments to override in `occu_fit()`.
+#' @param object A `tobs_fit` object.
+#' @param ... Named arguments to override in the underlying fit.
 #' @param evaluate If TRUE (default), refit the model.
-#' @return Updated `tulpaObs_fit` object (or call if `evaluate = FALSE`).
+#' @return Updated `tobs_fit` object (or call if `evaluate = FALSE`).
 #' @export
-update.tulpaObs_fit <- function(object, ..., evaluate = TRUE) {
+update.tobs_fit <- function(object, ..., evaluate = TRUE) {
   args <- list(model = object$model,
                spatial = object$spatial,
                temporal = object$temporal,
@@ -379,7 +379,7 @@ update.tulpaObs_fit <- function(object, ..., evaluate = TRUE) {
   for (nm in names(dots)) args[[nm]] <- dots[[nm]]
 
   if (!evaluate) return(args)
-  do.call(occu_fit, args)
+  do.call(.tobs_fit_model, args)
 }
 
 #' Check model identifiability
@@ -387,15 +387,15 @@ update.tulpaObs_fit <- function(object, ..., evaluate = TRUE) {
 #' Diagnostics for potential identifiability issues in occupancy models.
 #' Checks for: confounded covariates, low detection rates, sparse data.
 #'
-#' @param model A `tulpaObs` model object (before fitting).
-#' @param fit Optional `tulpaObs_fit` object (for post-fit diagnostics).
+#' @param model A `tobs_model` object (before fitting).
+#' @param fit Optional `tobs_fit` object (for post-fit diagnostics).
 #' @return A list with diagnostic messages and flags.
 #' @export
 checkIdentifiability <- function(model, fit = NULL) {
   issues <- character()
 
-  if (!inherits(model, "tulpaObs")) {
-    stop("model must be a tulpaObs object")
+  if (!inherits(model, "tobs_model")) {
+    stop("model must be a tobs_model object")
   }
 
   # Pre-fit checks
@@ -438,7 +438,7 @@ checkIdentifiability <- function(model, fit = NULL) {
   }
 
   # Post-fit checks
-  if (!is.null(fit) && inherits(fit, "tulpaObs_fit")) {
+  if (!is.null(fit) && inherits(fit, "tobs_fit")) {
     if (sum(fit$divergent) > 0) {
       issues <- c(issues, sprintf("%d divergent transitions. Consider increasing adapt_delta or reparameterizing.", sum(fit$divergent)))
     }
@@ -465,9 +465,9 @@ checkIdentifiability <- function(model, fit = NULL) {
 #' @param alpha.normal Prior for detection fixed effects: `list(mean, sd)`.
 #' @param sigma.sq.psi Prior for occupancy RE variance: `c(shape, rate)`.
 #' @param sigma.sq.p Prior for detection RE variance: `c(shape, rate)`.
-#' @return A `tulpaObs_priors` object.
+#' @return A `tobs_priors` object.
 #' @export
-occu_priors <- function(beta.normal = list(mean = 0, sd = sqrt(2.72)),
+tobs_priors <- function(beta.normal = list(mean = 0, sd = sqrt(2.72)),
                         alpha.normal = list(mean = 0, sd = sqrt(2.72)),
                         sigma.sq.psi = c(0.1, 0.1),
                         sigma.sq.p = c(0.1, 0.1)) {
@@ -480,12 +480,12 @@ occu_priors <- function(beta.normal = list(mean = 0, sd = sqrt(2.72)),
     sigma_sq_psi_rate = sigma.sq.psi[2],
     sigma_sq_p_shape = sigma.sq.p[1],
     sigma_sq_p_rate = sigma.sq.p[2]
-  ), class = "tulpaObs_priors")
+  ), class = "tobs_priors")
 }
 
 #' @export
-print.tulpaObs_priors <- function(x, ...) {
-  cat("tulpaObs priors:\n")
+print.tobs_priors <- function(x, ...) {
+  cat("tobs priors:\n")
   cat(sprintf("  beta ~ Normal(%.2f, %.2f)\n", x$beta_mean, x$beta_sd))
   cat(sprintf("  alpha ~ Normal(%.2f, %.2f)\n", x$alpha_mean, x$alpha_sd))
   invisible(x)
@@ -496,17 +496,17 @@ print.tulpaObs_priors <- function(x, ...) {
 # spOccupancy $ compatibility accessor
 # ============================================================================
 
-#' Access spOccupancy-compatible fields from tulpaObs fits
+#' Access spOccupancy-compatible fields from tobs fits
 #'
 #' Allows accessing spOccupancy-style fields (e.g., `$beta.samples`,
-#' `$psi.samples`) on tulpaObs_fit objects. Since tulpaObs stores actual
-#' posterior draws, this is a thin remapping layer.
+#' `$psi.samples`) on tobs_fit objects. Since tobs stores actual posterior
+#' draws, this is a thin remapping layer.
 #'
-#' @param x A `tulpaObs_fit` object.
+#' @param x A `tobs_fit` object.
 #' @param name Field name to access.
 #' @return The requested field value.
 #' @export
-`$.tulpaObs_fit` <- function(x, name) {
+`$.tobs_fit` <- function(x, name) {
   # First check native fields
   val <- .subset2(x, name)
   if (!is.null(val)) return(val)
@@ -590,7 +590,7 @@ print.tulpaObs_priors <- function(x, ...) {
 #' Generates occupancy predictions at new coordinates, including the
 #' spatial random effect interpolated from the fitted field.
 #'
-#' @param object A `tulpaObs_fit` object fitted with a spatial component.
+#' @param object A `tobs_fit` object fitted with a spatial component.
 #' @param newcoords Matrix of new coordinates (n_new x 2).
 #' @param newocc.covs Optional data.frame of covariates at new locations.
 #' @param quantiles Quantiles for credible intervals (default 0.025, 0.5, 0.975).

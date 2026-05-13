@@ -1,62 +1,57 @@
-test_that("S3 methods work on single-season fit", {
-  set.seed(42)
-  n <- 50
+.fit_simple <- function(formula = ~ elev, det = ~ 1, n = 50, seed = 42,
+                       engine = "laplace") {
+  set.seed(seed)
   d <- data.frame(elev = rnorm(n))
   psi <- plogis(0.5 + 0.5 * d$elev)
   z <- rbinom(n, 1, psi)
   y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
+  fit <- tobs(formula = formula, data = d, family = occu(),
+              detection = det, y = y, engine = engine,
+              control = list(verbose = FALSE))
+  list(fit = fit, y = y, d = d, n = n)
+}
 
-  mod <- occu(~ elev, ~ 1, d, y)
-  fit <- occu_fit(mod, verbose = FALSE)
+test_that("S3 methods work on single-season fit", {
+  res <- .fit_simple()
+  fit <- res$fit; y <- res$y; n <- res$n
 
-  # coef (from tulpa::coef.tulpa_fit)
   cf <- coef(fit)
   expect_type(cf, "list")
   expect_length(cf$psi, 2)
   expect_length(cf$p, 1)
 
-  # confint (from tulpa)
   ci <- confint(fit)
   expect_true(nrow(ci) >= 3)
 
-  # vcov (from tulpa)
   V <- vcov(fit)
   expect_true(all(diag(V) > 0))
 
-  # logLik (from tulpa)
   ll <- logLik(fit)
   expect_s3_class(ll, "logLik")
 
-  # nobs
   expect_equal(nobs(fit), sum(y >= 0, na.rm = TRUE))
 
-  # fitted
   fv <- fitted(fit)
   expect_named(fv, c("psi", "p", "z"))
   expect_length(fv$psi, n)
   expect_true(all(fv$psi >= 0 & fv$psi <= 1))
 
-  # residuals
   r <- residuals(fit)
   expect_named(r, c("occ", "det"))
   expect_length(r$occ, n)
   expect_equal(dim(r$det), c(n, 3))
 
-  # simulate
   y_sim <- simulate(fit, nsim = 1, seed = 1)
   expect_equal(dim(y_sim), dim(y))
 
-  # predict (in-sample)
   pred <- predict(fit)
   expect_named(pred, c("psi", "p", "z"))
 
-  # predict (design matrix)
   X0 <- model.matrix(~ elev, data.frame(elev = c(-1, 0, 1)))
   pred_dm <- predict(fit, X.0 = X0)
   expect_equal(nrow(pred_dm), 3)
   expect_true(all(pred_dm$mean >= 0 & pred_dm$mean <= 1))
 
-  # tidy, glance, ranef from tulpa
   td <- tulpa::tidy(fit)
   expect_s3_class(td, "data.frame")
 
@@ -68,32 +63,16 @@ test_that("S3 methods work on single-season fit", {
 })
 
 test_that("WAIC works on single-season fit", {
-  set.seed(42)
-  n <- 30
-  d <- data.frame(x = rnorm(n))
-  z <- rbinom(n, 1, 0.5)
-  y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
-
-  mod <- occu(~ x, ~ 1, d, y)
-  fit <- occu_fit(mod, verbose = FALSE)
-
-  w <- waicOccu(fit)
+  res <- .fit_simple(formula = ~ elev, n = 30, seed = 42)
+  w <- waicOccu(res$fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(w$elpd))
   expect_true(w$p_waic >= 0)
 })
 
 test_that("PPC works on single-season fit", {
-  set.seed(42)
-  n <- 30
-  d <- data.frame(x = rnorm(n))
-  z <- rbinom(n, 1, 0.5)
-  y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
-
-  mod <- occu(~ 1, ~ 1, d, y)
-  fit <- occu_fit(mod, verbose = FALSE)
-
-  ppc <- ppcOccu(fit, n.samples = 50)
+  res <- .fit_simple(formula = ~ 1, n = 30, seed = 42)
+  ppc <- ppcOccu(res$fit, n.samples = 50)
   expect_length(ppc$fit.y, 50)
   expect_length(ppc$fit.y.rep, 50)
   expect_true(ppc$bayesian.p >= 0 && ppc$bayesian.p <= 1)
@@ -106,8 +85,12 @@ test_that("compare_models works", {
   z <- rbinom(n, 1, 0.5)
   y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
 
-  fit1 <- occu_fit(occu(~ 1, ~ 1, d, y), iter = 200, warmup = 100, seed = 42, verbose = FALSE)
-  fit2 <- occu_fit(occu(~ x, ~ 1, d, y), iter = 200, warmup = 100, seed = 42, verbose = FALSE)
+  fit1 <- tobs(~ 1, d, family = occu(), detection = ~ 1, y = y,
+               engine = "nuts",
+               control = list(iter = 200, warmup = 100, seed = 42, verbose = FALSE))
+  fit2 <- tobs(~ x, d, family = occu(), detection = ~ 1, y = y,
+               engine = "nuts",
+               control = list(iter = 200, warmup = 100, seed = 42, verbose = FALSE))
 
   comp <- tulpa::compare_models(null = fit1, elev = fit2)
   expect_s3_class(comp, "data.frame")

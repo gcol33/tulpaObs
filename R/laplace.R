@@ -538,23 +538,23 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 # Shared helpers
 # ============================================================================
 
-# Validate that `spatial` (a `tulpaObs_spatial` or NULL) can be consumed by the
+# Validate that `spatial` (a `tobs_spatial` or NULL) can be consumed by the
 # Laplace path. Slice A: SPDE on the occupancy/state submodel only, single +
 # integrated + jsdm model types. Other combinations error explicitly rather
 # than silently dropping the spec.
 .validate_spatial_laplace <- function(spatial, model_type) {
   if (is.null(spatial)) return(invisible())
-  if (!inherits(spatial, "tulpaObs_spatial")) {
-    stop("spatial must be a tulpaObs_spatial object (from occu_spde(), etc.)",
+  if (!inherits(spatial, "tobs_spatial")) {
+    stop("spatial must be a tobs_spatial object (from tobs_spde(), etc.)",
          call. = FALSE)
   }
   if (!identical(spatial$type, "spde")) {
     stop(sprintf(
-      "occu_laplace currently supports spatial$type == 'spde' only (got '%s'). Use method = 'nuts' for other spatial types.",
+      ".tobs_laplace currently supports spatial$type == 'spde' only (got '%s'). Use engine = 'nuts' for other spatial types.",
       spatial$type), call. = FALSE)
   }
   if (length(spatial$shared) >= 2 && isTRUE(spatial$shared[2])) {
-    stop("SPDE on the detection process is not yet plumbed in occu_laplace; use shared = c(TRUE, FALSE).",
+    stop("SPDE on the detection process is not yet plumbed in .tobs_laplace; use shared = c(TRUE, FALSE).",
          call. = FALSE)
   }
   if (!isTRUE(spatial$shared[1])) {
@@ -562,11 +562,11 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
          call. = FALSE)
   }
   if (model_type == "community") {
-    stop("Community models with SPDE are not yet plumbed in occu_laplace.",
+    stop("Community models with SPDE are not yet plumbed in .tobs_laplace.",
          call. = FALSE)
   }
   if (model_type == "dynamic") {
-    stop("Dynamic models with SPDE are not yet plumbed in occu_laplace; coming after single-season.",
+    stop("Dynamic models with SPDE are not yet plumbed in .tobs_laplace; coming after single-season.",
          call. = FALSE)
   }
   invisible()
@@ -631,7 +631,7 @@ glm_init <- function(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det) 
   })
 }
 
-# Build tulpaObs_fit from EM result
+# Build tobs_fit from EM result
 build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
   pi_list <- model$process_info
 
@@ -688,5 +688,5 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
     method = "laplace",
     convergence = em_result$convergence,
     correction = em_result$correction
-  ), class = c("tulpaObs_fit", "tulpa_fit"))
+  ), class = c("tobs_fit", "tulpa_fit"))
 }

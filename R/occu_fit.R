@@ -1,66 +1,42 @@
-#' Fit an occupancy model
+#' Internal engine entry point
 #'
-#' Unified fitting function for all tulpaObs model types.
-#' Default method is Laplace approximation (fast, Tier 2).
-#' Use `method = "nuts"` for full MCMC posterior sampling (Tier 1).
+#' Dispatches to Laplace (default) or NUTS for a built `tobs_model`. Not
+#' user-facing; called from `tobs()` via the per-family `.dispatch_*` helpers.
 #'
-#' @param model A `tulpaObs` object from [occu()].
-#' @param spatial Optional spatial specification from [occu_icar()], [occu_bym2()],
-#'   [occu_gp()], [occu_multiscale_gp()], or [occu_spde()].
-#' @param temporal Optional temporal specification from [occu_temporal()].
-#' @param re Optional list of random effect specifications from [occu_re()].
-#'   A single `occu_re` object is also accepted.
-#' @param svc Optional SVC specification from [occu_svc()].
-#' @param latent Optional latent factor specification from [occu_latent()].
-#' @param method Inference method: `"laplace"` (default, fast) or `"nuts"` (exact MCMC).
-#' @param sigma_beta Prior SD for regression coefficients (default 10).
-#' @param sigma_re_scale Prior scale for RE standard deviations (default 1).
-#'   Only used for community models with species RE.
-#' @param max_iter Maximum EM iterations for Laplace (default 50).
-#' @param tol Convergence tolerance for Laplace EM (default 1e-4).
-#' @param damping EM damping factor 0-1 for Laplace (default 0.3).
-#' @param iter Total NUTS iterations (default 2000). Only used if `method = "nuts"`.
-#' @param warmup Warmup iterations (default 1000). Only used if `method = "nuts"`.
-#' @param max_treedepth Maximum NUTS tree depth (default 10).
-#' @param adapt_delta Target acceptance rate (default 0.8).
-#' @param seed Random seed (default 42).
-#' @param verbose Print progress (default TRUE).
-#'
-#' @return A `tulpaObs_fit` object with posterior draws and diagnostics.
-#' @export
-occu_fit <- function(model, spatial = NULL, temporal = NULL,
-                     re = NULL, svc = NULL, latent = NULL,
-                     method = c("laplace", "nuts"),
-                     sigma_beta = 10, sigma_re_scale = 1,
-                     max_iter = 100L, tol = 1e-4, damping = 0.7,
-                     iter = 2000, warmup = 1000,
-                     max_treedepth = 10, adapt_delta = 0.8, seed = 42,
-                     verbose = TRUE) {
+#' @keywords internal
+.tobs_fit_model <- function(model, spatial = NULL, temporal = NULL,
+                            re = NULL, svc = NULL, latent = NULL,
+                            method = c("laplace", "nuts"),
+                            priors = NULL,
+                            sigma_beta = 10, sigma_re_scale = 1,
+                            max_iter = 100L, tol = 1e-4, damping = 0.7,
+                            iter = 2000, warmup = 1000,
+                            max_treedepth = 10, adapt_delta = 0.8, seed = 42,
+                            verbose = TRUE) {
 
   method <- match.arg(method)
 
-  if (!inherits(model, "tulpaObs")) {
-    stop("model must be a tulpaObs object from occu()")
+  if (!inherits(model, "tobs_model")) {
+    stop("model must be a tobs_model object (from `.tobs_build_model()`)")
   }
 
-  # Dispatch to Laplace if requested
   if (method == "laplace") {
-    return(occu_laplace(model, spatial = spatial, sigma_beta = sigma_beta,
-                        max_iter = max_iter, tol = tol, damping = damping,
-                        verbose = verbose))
+    return(.tobs_laplace(model, spatial = spatial, sigma_beta = sigma_beta,
+                         max_iter = max_iter, tol = tol, damping = damping,
+                         verbose = verbose))
   }
 
-  if (!is.null(spatial) && !inherits(spatial, "tulpaObs_spatial")) {
-    stop("spatial must be a tulpaObs_spatial object")
+  if (!is.null(spatial) && !inherits(spatial, "tobs_spatial")) {
+    stop("spatial must be a tobs_spatial object")
   }
-  if (!is.null(temporal) && !inherits(temporal, "tulpaObs_temporal")) {
-    stop("temporal must be a tulpaObs_temporal object from occu_temporal()")
+  if (!is.null(temporal) && !inherits(temporal, "tobs_temporal")) {
+    stop("temporal must be a tobs_temporal object from tobs_temporal()")
   }
-  if (!is.null(svc) && !inherits(svc, "tulpaObs_svc")) {
-    stop("svc must be a tulpaObs_svc object from occu_svc()")
+  if (!is.null(svc) && !inherits(svc, "tobs_svc")) {
+    stop("svc must be a tobs_svc object from tobs_svc()")
   }
-  if (!is.null(latent) && !inherits(latent, "tulpaObs_latent")) {
-    stop("latent must be a tulpaObs_latent object from occu_latent()")
+  if (!is.null(latent) && !inherits(latent, "tobs_latent")) {
+    stop("latent must be a tobs_latent object from tobs_latent()")
   }
 
   model_type <- model$model_type
@@ -169,8 +145,8 @@ occu_fit <- function(model, spatial = NULL, temporal = NULL,
 
   # ---- Random effects ----
   if (!is.null(re)) {
-    # Accept single occu_re or list of occu_re
-    if (inherits(re, "tulpaObs_re")) re <- list(re)
+    # Accept single tobs_re or list of tobs_re
+    if (inherits(re, "tobs_re")) re <- list(re)
     re_spec <- build_re_spec(re, model)
     spec$re_spec <- re_spec
   }
@@ -231,7 +207,7 @@ occu_fit <- function(model, spatial = NULL, temporal = NULL,
   fit$latent <- latent
   # Expose process_info at top level for tulpa generic S3 methods
   fit$process_info <- model$process_info
-  class(fit) <- c("tulpaObs_fit", "tulpa_fit")
+  class(fit) <- c("tobs_fit", "tulpa_fit")
   fit
 }
 

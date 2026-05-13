@@ -1,22 +1,22 @@
-# Tests for cover_hurdle(positive = "lognormal") — Phase 1a.
+# Tests for cover(positive = "lognormal") -- Phase 1a.
 
-test_that("cover_hurdle(positive = 'lognormal') flips to working", {
-  fam <- cover_hurdle(positive = "lognormal")
-  expect_s3_class(fam, "tulpa_obs_family")
-  expect_equal(fam$name, "cover_hurdle")
+test_that("cover(positive = 'lognormal') flips to working", {
+  fam <- cover(positive = "lognormal")
+  expect_s3_class(fam, "tobs_family")
+  expect_equal(fam$name, "cover")
   expect_equal(fam$status, "working")
   expect_equal(fam$default_engine, "laplace")
   expect_equal(fam$params$positive, "lognormal")
 })
 
-test_that("cover_hurdle(positive = 'beta') still errors with Phase 1d note", {
-  expect_equal(cover_hurdle("beta")$status, "planned")
+test_that("cover(positive = 'beta') still errors with Phase 1d note", {
+  expect_equal(cover("beta")$status, "planned")
   sim <- simulate_cover_hurdle(N = 50, seed = 1)
   expect_error(
-    tulpa_obs(
+    tobs(
       formula = ~ x,
       data    = sim$data,
-      family  = cover_hurdle("beta"),
+      family  = cover("beta"),
       y       = sim$y
     ),
     "planned but not yet implemented"
@@ -41,10 +41,10 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
     sigma_pos = 0.4,
     seed      = 2026
   )
-  fit <- tulpa_obs(
+  fit <- tobs(
     formula = ~ x,
     data    = sim$data,
-    family  = cover_hurdle(positive = "lognormal"),
+    family  = cover(positive = "lognormal"),
     y       = sim$y
   )
   expect_s3_class(fit, "cover_hurdle_fit")
@@ -62,7 +62,6 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
   e_hat  <- predict(fit, newdata, type = "expected")
   expect_equal(e_hat, p_hat * mu_hat, tolerance = 1e-8)
 
-  # Coverage check: estimates should sit inside +/- 2 SE most of the time.
   z_occ <- (fit$beta_occ - sim$truth$beta_occ) / fit$se_occ
   z_pos <- (fit$beta_pos - sim$truth$beta_pos) / fit$se_pos
   expect_true(all(abs(z_occ) < 4))
@@ -71,15 +70,14 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
 
 test_that("Gaussian arm uses only positive-cover rows", {
   sim <- simulate_cover_hurdle(N = 300, seed = 7)
-  fit <- tulpa_obs(
+  fit <- tobs(
     formula = ~ x,
     data    = sim$data,
-    family  = cover_hurdle(positive = "lognormal"),
+    family  = cover(positive = "lognormal"),
     y       = sim$y
   )
   n_pos_obs <- sum(sim$y > 0)
   expect_equal(fit$n_positive, n_pos_obs)
-  # The fitted Gaussian arm should have been built on exactly these rows.
   expect_equal(length(fit$encoding$pos_data$y), n_pos_obs)
 })
 
@@ -98,10 +96,10 @@ test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
       sigma_pos = truth$sigma_pos,
       seed      = 100 + r
     )
-    fit <- tulpa_obs(
+    fit <- tobs(
       formula = ~ x,
       data    = sim$data,
-      family  = cover_hurdle("lognormal"),
+      family  = cover("lognormal"),
       y       = sim$y
     )
     hits_occ <- hits_occ +
@@ -110,7 +108,6 @@ test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
       as.integer(abs(fit$beta_pos - truth$beta_pos) <= 2 * fit$se_pos)
     sigma_diffs[r] <- abs(fit$sigma_pos - truth$sigma_pos) / truth$sigma_pos
   }
-  # Coverage should be at least 70% across 10 reps (light bar for a POC test).
   expect_gte(min(hits_occ), 7)
   expect_gte(min(hits_pos), 7)
   expect_lt(mean(sigma_diffs), 0.15)
@@ -118,10 +115,10 @@ test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
 
 test_that("predict requires newdata with the same columns as the formula", {
   sim <- simulate_cover_hurdle(N = 200, seed = 11)
-  fit <- tulpa_obs(
+  fit <- tobs(
     formula = ~ x,
     data    = sim$data,
-    family  = cover_hurdle("lognormal"),
+    family  = cover("lognormal"),
     y       = sim$y
   )
   expect_error(
@@ -134,10 +131,10 @@ test_that("predict requires newdata with the same columns as the formula", {
 test_that("temporal = errors with the Phase 1d scheduling message", {
   sim <- simulate_cover_hurdle(N = 50, seed = 13)
   expect_error(
-    tulpa_obs(
+    tobs(
       formula  = ~ x,
       data     = sim$data,
-      family   = cover_hurdle("lognormal"),
+      family   = cover("lognormal"),
       y        = sim$y,
       temporal = "placeholder"
     ),
@@ -145,13 +142,13 @@ test_that("temporal = errors with the Phase 1d scheduling message", {
   )
 })
 
-test_that("detection = errors (cover_hurdle has no detection layer)", {
+test_that("detection = errors (cover has no detection layer)", {
   sim <- simulate_cover_hurdle(N = 50, seed = 17)
   expect_error(
-    tulpa_obs(
+    tobs(
       formula   = ~ x,
       data      = sim$data,
-      family    = cover_hurdle("lognormal"),
+      family    = cover("lognormal"),
       y         = sim$y,
       detection = ~ 1
     ),

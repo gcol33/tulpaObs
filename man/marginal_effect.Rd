@@ -12,7 +12,7 @@ marginal_effect(
 )
 }
 \arguments{
-\item{object}{A \code{tulpaObs_fit} object.}
+\item{object}{A \code{tobs_fit} object.}
 
 \item{covariate}{Name of covariate.}
 

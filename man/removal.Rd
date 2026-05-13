@@ -7,7 +7,7 @@
 removal()
 }
 \value{
-A \code{tulpa_obs_family} object.
+A \code{tobs_family} object.
 }
 \description{
 Latent N with sequential removal observations.

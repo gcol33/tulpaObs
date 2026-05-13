@@ -10,9 +10,8 @@ distance(key = c("halfnorm", "hazard"))
 \item{key}{detection-function key. \code{"halfnorm"} or \code{"hazard"}.}
 }
 \value{
-A \code{tulpa_obs_family} object.
+A \code{tobs_family} object.
 }
 \description{
-Latent density with hazard-rate or half-normal detection over distance
-bins.
+Latent density with hazard-rate or half-normal detection over distance bins.
 }

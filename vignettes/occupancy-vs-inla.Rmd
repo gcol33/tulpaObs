@@ -72,16 +72,18 @@ The naive proportion of sites with any detection is biased low by
 $(1 - p)^J$ at each occupied site — exactly the bias an occupancy model
 is supposed to correct.
 
-## tulpaObs: true occupancy fit via `occu()`
+## tulpaObs: true occupancy fit via `tobs(family = occu())`
 
 ```{r fit-tulpa-laplace}
-mod_tulpa <- occu(
-  occ_formula = ~ occ_cov1,
-  det_formula = ~ det_cov1,
-  data        = dat,
-  y           = y
+fit_tulpa_lap <- tobs(
+  formula   = ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  engine    = "laplace",
+  control   = list(verbose = FALSE)
 )
-fit_tulpa_lap <- occu_fit(mod_tulpa, method = "laplace", verbose = FALSE)
 ```
 
 For the parameter-recovery story below the EM-Laplace point estimates
@@ -90,9 +92,15 @@ mode of the $\psi$-$p$ ambiguity rather than integrating over both).
 NUTS samples the full posterior and is unbiased:
 
 ```{r fit-tulpa-nuts}
-fit_tulpa_nuts <- occu_fit(mod_tulpa, method = "nuts",
-                           iter = 1500, warmup = 750,
-                           seed = 42, verbose = FALSE)
+fit_tulpa_nuts <- tobs(
+  formula   = ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  engine    = "nuts",
+  control   = list(iter = 1500, warmup = 750, seed = 42, verbose = FALSE)
+)
 fit_tulpa_nuts
 ```
 
@@ -256,5 +264,5 @@ you may as well use the package that already has it.
   Glaser's binomial workaround, with detectability proxies.
 * `example/info.md` — Michael's note on why a proper single-species
   occupancy model is hard in INLA (the marginalization problem).
-* `?occu` and `?occu_fit` — the tulpaObs entry points used here.
+* `?tobs` and `?occu` — the tulpaObs entry points used here.
 * `?simulate_occu` — the detection-history simulator.

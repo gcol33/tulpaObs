@@ -17,9 +17,10 @@ knitr::opts_chunk$set(
 have_inla <- requireNamespace("INLA", quietly = TRUE)
 ```
 
-`tulpaObs::cover_hurdle()` fits a two-arm hurdle model: a binomial GLM on
-the occurrence indicator $\mathbf{1}\{y_i > 0\}$, and a Gaussian GLM on
-$\log y_i$ over the positive subset, with the lognormal back-transform
+`tulpaObs::cover(positive = "lognormal")` fits a two-arm hurdle model: a
+binomial GLM on the occurrence indicator $\mathbf{1}\{y_i > 0\}$, and a
+Gaussian GLM on $\log y_i$ over the positive subset, with the lognormal
+back-transform
 $E[y_i \mid y_i > 0] = \exp(\eta_i^{\text{pos}} + \sigma^2 / 2)$ applied at
 prediction time. The same generative model can be fit in `INLA::inla()` as
 two independent calls (Michael Glaser's separate-hurdle workflow in
@@ -62,10 +63,10 @@ drawn.
 ## Fit with tulpaObs
 
 ```{r fit-tulpaobs}
-fit_tulpa <- tulpa_obs(
+fit_tulpa <- tobs(
   formula = ~ x,
   data    = dat,
-  family  = cover_hurdle(positive = "lognormal"),
+  family  = cover(positive = "lognormal"),
   y       = dat$cover
 )
 fit_tulpa
@@ -176,8 +177,8 @@ doesn't surface:
    (`tulpa_nested_laplace()` multi-likelihood).
 2. **Beta positive part.** Michael's earlier joint model uses
    `family = c("binomial", "beta")` for cover in $(0, 1)$ on the natural
-   scale. tulpaObs's Phase 1d will add `cover_hurdle(positive = "beta")`
-   once `tulpa_laplace()` supports the beta likelihood (Phase 1b).
+   scale. tulpaObs's Phase 1d will add `cover(positive = "beta")` once
+   `tulpa_laplace()` supports the beta likelihood (Phase 1b).
 3. **Uncertainty propagation.** INLA returns full posterior marginals on
    both arms; tulpaObs returns the Laplace mode and a Hessian-based SE
    per arm. The two agree on the means within sampling noise but diverge

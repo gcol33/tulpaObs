@@ -1,14 +1,16 @@
 # tulpaObs — Hierarchical Latent-State Observation Models via tulpa
 
-> **Renamed from `tulpaOcc`.** This package is a unified framework for
-> hierarchical latent-state observation models (occupancy, N-mixture, distance,
-> removal, false-positive, cover hurdle, ...). New entry point is `tulpa_obs()`;
-> existing `occu()` / `occu_fit()` API stays exported. See `PLAN_tulpaObs.md`
-> for the roadmap and `R/obs_families.R` / `R/tulpa_obs.R` for the new surface.
-> The `tulpaOcc` → `tulpaObs` package rename (Phase 5) is now complete: package
-> field, NAMESPACE, useDynLib, all `tulpaOcc_*` S3 class names → `tulpaObs_*`,
-> and C++ `namespace tulpaOcc` → `namespace tulpaObs`. Git folder and GitHub
-> repo URL still say `tulpaOcc` (no folder/remote rename was done).
+> **API clean-slate complete.** Public surface is now `tobs()` + family
+> constructors (`occu()`, `dyn_occu()`, `ms_occu()`, `int_occu()`, `jsdm()`,
+> `abun()`, `ms_abun()`, `dyn_abun()`, `distance()`, `removal()`, `fp_occu()`,
+> `cover()`). The legacy `occu()` data-binder and `occu_fit()` engine entry
+> are now internal (`.tobs_build_model()`, `.tobs_fit_model()`, `.tobs_laplace()`).
+> All `tulpaObs_*` S3 classes renamed to `tobs_*` (`tobs_fit`, `tobs_model`,
+> `tobs_family`, `tobs_spatial`, `tobs_temporal`, `tobs_re`, `tobs_svc`,
+> `tobs_latent`, `tobs_priors`). Spatial/component helpers renamed to `tobs_*`
+> (e.g. `occu_icar` → `tobs_icar`, `occu_re` → `tobs_re`).
+> See `PLAN_tulpaObs.md` for the family roster and `R/obs_families.R` /
+> `R/tobs.R` for the public API.
 
 Full-featured Bayesian occupancy modeling. Feature parity with inlaocc.
 
@@ -84,13 +86,15 @@ devtools::check(args = "--no-manual")
 
 ```
 R/
-  occu.R            — occu() constructor (single/dynamic/community/integrated/jsdm)
-  occu_fit.R        — occu_fit() dispatcher (Laplace default, NUTS fallback)
-  occu_output.R     — print/summary
-  laplace.R         — EM callbacks per model type, build_laplace_fit
-  components.R      — occu_re, occu_temporal, occu_svc, occu_latent, occu_community_re, occu_areal
-  spatial.R         — occ_icar/bym2/gp/multiscale_gp/spde
-  methods.R         — S3 methods, $.tulpaObs_fit, predict_spatial, checkIdentifiability
+  tobs.R            — tobs() public dispatcher + print.tobs_fit
+  obs_families.R    — family constructors (occu, dyn_occu, ms_occu, …, cover)
+  occu.R            — internal .tobs_build_model() (single/dynamic/community/integrated/jsdm)
+  occu_fit.R        — internal .tobs_fit_model() (Laplace default, NUTS fallback)
+  laplace.R         — internal .tobs_laplace() + EM callbacks per model type
+  family_cover_hurdle.R — .dispatch_cover() (two-Laplace hurdle)
+  components.R      — tobs_re, tobs_temporal, tobs_svc, tobs_latent, tobs_community_re, tobs_areal
+  spatial.R         — tobs_icar/bym2/gp/multiscale_gp/spde (returns tobs_spatial)
+  methods.R         — S3 methods on tobs_fit, $.tobs_fit, predict_spatial, checkIdentifiability, tobs_priors
   diagnostics.R     — waicOccu, ppcOccu (generic diagnostics inherited from tulpa)
   data.R            — occu_format, occu_data, summary/plot.occu_data, all simulation functions
 src/

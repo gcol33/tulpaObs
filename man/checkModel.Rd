@@ -7,7 +7,7 @@
 checkModel(object, coords = NULL, n.samples = 250)
 }
 \arguments{
-\item{object}{A \code{tulpaObs_fit} object.}
+\item{object}{A \code{tobs_fit} object.}
 
 \item{coords}{Optional coordinates for spatial diagnostics.}
 

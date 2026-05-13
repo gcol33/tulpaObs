@@ -2,7 +2,7 @@
 % Please edit documentation in R/obs_families.R
 \name{obs_family}
 \alias{obs_family}
-\title{Construct a tulpaObs family object}
+\title{Construct a tobs family object}
 \usage{
 obs_family(
   name,
@@ -16,7 +16,7 @@ obs_family(
 )
 }
 \arguments{
-\item{name}{short name, e.g. \code{"occ"}.}
+\item{name}{short slug, e.g. \code{"occu"}.}
 
 \item{class_long}{human-readable name, e.g. \code{"single-season occupancy"}.}
 
@@ -36,11 +36,11 @@ obs_family(
 object (K_max, positive-part link, etc.).}
 }
 \value{
-A \code{tulpa_obs_family} object.
+A \code{tobs_family} object.
 }
 \description{
-Low-level constructor for \code{tulpa_obs_family} objects. End users should
-call the specific family functions (\code{\link[=occ]{occ()}}, \code{\link[=nmixture]{nmixture()}}, etc.) rather
-than this directly.
+Low-level constructor for \code{tobs_family} objects. End users should call the
+specific family functions (\code{\link[=occu]{occu()}}, \code{\link[=abun]{abun()}}, \code{\link[=cover]{cover()}}, ...) rather than
+this directly.
 }
 \keyword{internal}

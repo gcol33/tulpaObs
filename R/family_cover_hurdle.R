@@ -9,15 +9,15 @@
 
 
 # ---------------------------------------------------------------------------
-# Dispatcher (called from tulpa_obs())
+# Dispatcher (called from tobs())
 # ---------------------------------------------------------------------------
 
-.dispatch_cover_hurdle <- function(formula, data, family, detection, y,
-                                   visit_data, spatial, temporal, engine,
-                                   priors, control, ...) {
+.dispatch_cover <- function(formula, data, family, detection, y,
+                            visit_data, spatial, temporal, engine,
+                            priors, control, ...) {
   positive <- family$params$positive
   if (positive != "lognormal") {
-    stop("cover_hurdle(positive = 'beta') is scheduled for Phase 1d. ",
+    stop("cover(positive = 'beta') is scheduled for Phase 1d. ",
          "Use positive = 'lognormal' for now.", call. = FALSE)
   }
   if (!is.null(temporal)) {
@@ -25,12 +25,12 @@
          "Add a year covariate to `formula` for Phase 1a.", call. = FALSE)
   }
   if (!is.null(detection)) {
-    stop("`cover_hurdle()` does not use a detection formula ",
+    stop("`cover()` does not use a detection formula ",
          "(replicates = 'single'). Drop the `detection` argument.",
          call. = FALSE)
   }
   if (is.null(y)) {
-    stop("`cover_hurdle()` requires `y` (a length-N numeric vector of cover ",
+    stop("`cover()` requires `y` (a length-N numeric vector of cover ",
          "in [0, 1]).", call. = FALSE)
   }
   enc  <- encode_cover_hurdle(formula, data, y, spatial)
@@ -215,7 +215,7 @@ decode_cover_hurdle <- function(fits, enc, family) {
       log_marginal = c(occ = fits$m_occ$log_marginal,
                        pos = fits$m_pos$log_marginal)
     ),
-    class = c("cover_hurdle_fit", "tulpa_obs_fit", "tulpa_fit")
+    class = c("cover_hurdle_fit", "tobs_fit", "tulpa_fit")
   )
   out
 }

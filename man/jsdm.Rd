@@ -7,7 +7,7 @@
 jsdm()
 }
 \value{
-A \code{tulpa_obs_family} object.
+A \code{tobs_family} object.
 }
 \description{
 Multivariate occurrence with shared latent factors. No observation

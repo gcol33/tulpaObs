@@ -1,11 +1,10 @@
-#' Spatial specifications for occupancy models
+#' Spatial specifications for tobs models
 #'
 #' @description
-#' Functions to specify spatial random effects for occupancy models.
-#' These wrap tulpa's spatial infrastructure and handle NNGP neighbor
-#' computation internally.
+#' Functions to specify spatial random effects. These wrap tulpa's spatial
+#' infrastructure and handle NNGP neighbor computation internally.
 #'
-#' @name tulpaObs_spatial
+#' @name tobs_spatial
 NULL
 
 #' ICAR spatial random effect
@@ -13,9 +12,9 @@ NULL
 #' @param adjacency Symmetric adjacency matrix (1 = neighbors, 0 = not)
 #' @param shared Logical vector of length 2: which processes get the spatial
 #'   effect. Default `c(TRUE, FALSE)` = occupancy only, not detection.
-#' @return A `tulpaObs_spatial` object
+#' @return A `tobs_spatial` object
 #' @export
-occu_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
+tobs_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
   if (!is.matrix(adjacency)) stop("adjacency must be a matrix")
   if (!isSymmetric(adjacency)) stop("adjacency must be symmetric")
   n <- nrow(adjacency)
@@ -30,7 +29,7 @@ occu_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
     adj_col_idx = csr$col_idx,
     n_neighbors = csr$n_neighbors,
     shared = shared
-  ), class = "tulpaObs_spatial")
+  ), class = "tobs_spatial")
 }
 
 #' BYM2 spatial random effect
@@ -38,9 +37,9 @@ occu_icar <- function(adjacency, shared = c(TRUE, FALSE)) {
 #' @param adjacency Symmetric adjacency matrix
 #' @param scale_factor BYM2 scaling factor (computed from graph if NULL)
 #' @param shared Which processes get spatial effect (default: occupancy only)
-#' @return A `tulpaObs_spatial` object
+#' @return A `tobs_spatial` object
 #' @export
-occu_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
+tobs_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
   if (!is.matrix(adjacency)) stop("adjacency must be a matrix")
   if (!isSymmetric(adjacency)) stop("adjacency must be symmetric")
   n <- nrow(adjacency)
@@ -59,7 +58,7 @@ occu_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
     n_neighbors = csr$n_neighbors,
     scale_factor = scale_factor,
     shared = shared
-  ), class = "tulpaObs_spatial")
+  ), class = "tobs_spatial")
 }
 
 #' GP (NNGP) spatial random effect
@@ -73,9 +72,9 @@ occu_bym2 <- function(adjacency, scale_factor = NULL, shared = c(TRUE, FALSE)) {
 #' @param sigma2_prior_alpha Shape for half-Cauchy prior on sigma2
 #' @param phi_prior_lower Lower bound for uniform prior on phi (range)
 #' @param phi_prior_upper Upper bound for uniform prior on phi (range)
-#' @return A `tulpaObs_spatial` object
+#' @return A `tobs_spatial` object
 #' @export
-occu_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
+tobs_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
                    shared = c(TRUE, FALSE),
                    sigma2_prior_U = 1.0, sigma2_prior_alpha = 0.01,
                    phi_prior_lower = 0.01, phi_prior_upper = 10.0) {
@@ -105,7 +104,7 @@ occu_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
     sigma2_prior_alpha = sigma2_prior_alpha,
     phi_prior_lower = phi_prior_lower,
     phi_prior_upper = phi_prior_upper
-  ), class = "tulpaObs_spatial")
+  ), class = "tobs_spatial")
 }
 
 #' Multi-scale GP spatial random effect
@@ -120,9 +119,9 @@ occu_gp <- function(coords, cov = "exponential", nu = 1.5, nn = 15,
 #' @param range_regional_lower,range_regional_upper Range bounds for regional
 #' @param sigma2_local_prior_U,sigma2_local_prior_alpha Prior for local sigma2
 #' @param sigma2_regional_prior_U,sigma2_regional_prior_alpha Prior for regional sigma2
-#' @return A `tulpaObs_spatial` object
+#' @return A `tobs_spatial` object
 #' @export
-occu_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
+tobs_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
                               nn_local = 15, nn_regional = 15,
                               shared = c(TRUE, FALSE),
                               range_local_lower = 0.01,
@@ -171,7 +170,7 @@ occu_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
     sigma2_local_prior_alpha = sigma2_local_prior_alpha,
     sigma2_regional_prior_U = sigma2_regional_prior_U,
     sigma2_regional_prior_alpha = sigma2_regional_prior_alpha
-  ), class = "tulpaObs_spatial")
+  ), class = "tobs_spatial")
 }
 
 #' SPDE Spatial Random Effect (Matérn via Triangular Mesh)
@@ -192,9 +191,9 @@ occu_multiscale_gp <- function(coords, cov = "exponential", nu = 1.5,
 #'   Default `c(TRUE, FALSE)` = occupancy only.
 #' @param prior_range Prior for range: `c(U, alpha)` where P(range < U) = alpha.
 #' @param prior_sigma Prior for sigma: `c(U, alpha)` where P(sigma > U) = alpha.
-#' @return A `tulpaObs_spatial` object
+#' @return A `tobs_spatial` object
 #' @export
-occu_spde <- function(coords, data = NULL, mesh = NULL,
+tobs_spde <- function(coords, data = NULL, mesh = NULL,
                      max_edge = NULL, cutoff = 0,
                      nu = 1, shared = c(TRUE, FALSE),
                      prior_range = c(0.5, 0.5),
@@ -213,13 +212,13 @@ occu_spde <- function(coords, data = NULL, mesh = NULL,
     nu = nu,
     prior_range = prior_range,
     prior_sigma = prior_sigma
-  ), class = "tulpaObs_spatial")
+  ), class = "tobs_spatial")
 }
 
 #' @export
-print.tulpaObs_spatial <- function(x, ...) {
+print.tobs_spatial <- function(x, ...) {
   n <- if (!is.null(x$n_units)) x$n_units else x$n_obs
-  cat(sprintf("tulpaObs spatial: %s (%d units)\n", x$type, n))
+  cat(sprintf("tobs spatial: %s (%d units)\n", x$type, n))
   shared_str <- ifelse(x$shared, "yes", "no")
   cat(sprintf("  Shared: psi=%s, p=%s\n", shared_str[1], shared_str[2]))
   if (x$type == "spde") {
