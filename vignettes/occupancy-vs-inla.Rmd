@@ -1,0 +1,260 @@
+---
+title: "Occupancy: TulpaObs vs INLA aggregated-binomial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Occupancy: TulpaObs vs INLA aggregated-binomial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 6,
+  fig.height = 4
+)
+have_inla <- requireNamespace("INLA", quietly = TRUE)
+set.seed(1)
+```
+
+A proper single-season occupancy model has a latent occupancy state
+$z_i \sim \text{Bernoulli}(\psi_i)$ and a conditional detection process
+$y_{ij} \mid z_i \sim \text{Bernoulli}(z_i \, p_{ij})$. The site-level
+marginal likelihood is
+
+$$
+L_i
+\;=\;
+\psi_i \prod_{j=1}^{J} p_{ij}^{y_{ij}} (1 - p_{ij})^{1 - y_{ij}}
+\;+\;
+\mathbf{1}\!\left\{\sum_{j} y_{ij} = 0\right\}
+(1 - \psi_i).
+$$
+
+That mixture cannot be written as a row-wise GLM likelihood, so
+`INLA::inla()` cannot fit it directly without `inla.rgeneric`. Michael
+Glaser's `example/info.md` is the same observation: in INLA, occupancy at
+the site level and detection at the visit level don't share a row
+structure, and the marginalization over $z_i$ has to be programmed
+explicitly.
+
+The practical workaround in `MOT_abund_data.Rmd` §"VISIT-LEVEL BERNOULLI
+MODEL" is to fit a single binomial on the row-stacked detection
+histories. This vignette shows what's lost compared to the true
+marginalized fit.
+
+## Simulate detection histories with known $\psi$ and $p$
+
+```{r simulate}
+library(TulpaObs)
+
+sim <- simulate_occu(
+  N          = 600,
+  J          = 6,
+  n_occ_covs = 1,
+  n_det_covs = 1,
+  beta_occ   = c(0.5, 1.2),    # intercept + slope on occ_cov1
+  beta_det   = c(0.0, 0.8),    # intercept + slope on det_cov1
+  seed       = 42
+)
+
+dat   <- sim$data
+y     <- sim$y                 # N x J detection-history matrix
+truth <- sim$truth
+
+c(naive_occ      = mean(rowSums(y) > 0),
+  true_psi_mean  = mean(truth$psi),
+  true_p_mean    = mean(truth$p))
+```
+
+The naive proportion of sites with any detection is biased low by
+$(1 - p)^J$ at each occupied site — exactly the bias an occupancy model
+is supposed to correct.
+
+## TulpaObs: true occupancy fit via `occu()`
+
+```{r fit-tulpa-laplace}
+mod_tulpa <- occu(
+  occ_formula = ~ occ_cov1,
+  det_formula = ~ det_cov1,
+  data        = dat,
+  y           = y
+)
+fit_tulpa_lap <- occu_fit(mod_tulpa, method = "laplace", verbose = FALSE)
+```
+
+For the parameter-recovery story below the EM-Laplace point estimates
+underestimate detection in this small-J setting (the joint MAP picks one
+mode of the $\psi$-$p$ ambiguity rather than integrating over both).
+NUTS samples the full posterior and is unbiased:
+
+```{r fit-tulpa-nuts}
+fit_tulpa_nuts <- occu_fit(mod_tulpa, method = "nuts",
+                           iter = 1500, warmup = 750,
+                           seed = 42, verbose = FALSE)
+fit_tulpa_nuts
+```
+
+## INLA workaround: row-stack the detection histories, fit a single binomial
+
+This is the structural shape Michael's `mod.visit` uses. Each site
+contributes `J` Bernoulli rows; site-level occupancy covariates broadcast
+across the J visits.
+
+```{r reshape, eval = have_inla}
+N <- nrow(y)
+J <- ncol(y)
+
+long <- data.frame(
+  y        = as.integer(t(y)),
+  site     = rep(seq_len(N), each = J),
+  visit    = rep(seq_len(J), times = N),
+  occ_cov1 = rep(dat$occ_cov1, each = J),
+  det_cov1 = rep(dat$det_cov1, each = J)
+)
+
+head(long)
+```
+
+```{r fit-inla, eval = have_inla}
+library(INLA)
+
+m_inla <- INLA::inla(
+  y ~ occ_cov1 + det_cov1,
+  family = "binomial",
+  data   = long,
+  control.compute = list(waic = TRUE)
+)
+
+inla_fixed <- m_inla$summary.fixed[, c("mean", "0.025quant", "0.975quant")]
+inla_fixed
+```
+
+## What the workaround estimates
+
+Site $i$ contributes $J$ Bernoulli rows with success probability
+$\psi_i\, p_{ij}$. Because the response is binary and the model is
+row-wise, the linear predictor $\eta_{ij}$ fits
+
+$$
+P(y_{ij} = 1)
+\;=\;
+\psi_i \, p_{ij}.
+$$
+
+There is no factor that separates the $\psi_i$ contribution from the
+$p_{ij}$ contribution: the workaround can identify the product, never the
+two factors. The `occ_cov1` coefficient is pulled toward zero by the
+detection probability, and the `det_cov1` coefficient soaks up whatever
+signal is left.
+
+```{r compare, eval = have_inla}
+compare <- data.frame(
+  parameter        = c("(occ Intercept)", "occ_cov1",
+                       "(det Intercept)", "det_cov1"),
+  truth            = c(truth$beta_occ, truth$beta_det),
+  TulpaObs_NUTS    = c(
+    fit_tulpa_nuts$means["psi_(Intercept)"],
+    fit_tulpa_nuts$means["psi_occ_cov1"],
+    fit_tulpa_nuts$means["p_(Intercept)"],
+    fit_tulpa_nuts$means["p_det_cov1"]
+  ),
+  TulpaObs_Laplace = c(
+    fit_tulpa_lap$means["psi_(Intercept)"],
+    fit_tulpa_lap$means["psi_occ_cov1"],
+    fit_tulpa_lap$means["p_(Intercept)"],
+    fit_tulpa_lap$means["p_det_cov1"]
+  ),
+  INLA_workaround  = c(
+    inla_fixed["(Intercept)", "mean"],
+    inla_fixed["occ_cov1",    "mean"],
+    NA_real_,    # no separate detection intercept exists
+    inla_fixed["det_cov1",    "mean"]
+  ),
+  row.names = NULL
+)
+compare
+```
+
+NUTS lands on the truth on both processes. Laplace gives biased point
+estimates with this $J = 6$ setting — the joint MAP underestimates
+detection probability when sites are weakly identified. INLA's
+workaround returns *one* intercept that mixes occupancy and detection,
+and the slopes on occupancy-side and detection-side covariates pull
+toward each other.
+
+## Predictive divergence at the site level
+
+Despite the Laplace point-estimate bias, the predicted *per-site*
+occupancy probability still correlates strongly with the truth — the
+bias mostly cancels in the linear predictor. The INLA workaround cannot
+recover site-level $\psi$ even in principle, because what it estimates is
+not $\psi$.
+
+```{r predict, eval = have_inla}
+# TulpaObs returns per-site psi_hat. fitted() also returns $p (per-site
+# detection probability) and $z (posterior occupancy probability given
+# the detection history); $psi is the right comparator for true psi.
+psi_hat_nuts <- fitted(fit_tulpa_nuts)$psi
+psi_hat_lap  <- fitted(fit_tulpa_lap)$psi
+
+# INLA workaround: predicted "any-visit detection" probability at the
+# site, back-projected to a single row per site. This is the product
+# psi * p, not psi.
+X_site       <- model.matrix(~ occ_cov1 + det_cov1, data = dat)
+eta_site     <- as.numeric(X_site %*% inla_fixed[, "mean"])
+psi_hat_inla <- plogis(eta_site)
+
+cor_with_truth <- c(
+  TulpaObs_NUTS    = cor(psi_hat_nuts, truth$psi),
+  TulpaObs_Laplace = cor(psi_hat_lap,  truth$psi),
+  INLA_workaround  = cor(psi_hat_inla, truth$psi),
+  naive_any        = cor(as.numeric(rowSums(y) > 0), truth$psi)
+)
+round(cor_with_truth, 3)
+```
+
+For population-trend questions ("did $\psi$ change?") the workaround
+answers a different question ("did $\psi \cdot p$ change?"), and its
+trend can be driven by detection improvements that have nothing to do
+with the species' actual occupancy.
+
+```{r predict-plot, eval = have_inla, fig.height = 4}
+op <- par(mfrow = c(1, 2))
+plot(truth$psi, psi_hat_nuts, pch = 16, col = rgb(0, 0, 0, 0.4),
+     xlab = "true psi", ylab = "TulpaObs psi_hat (NUTS)",
+     main = "occu(): recovers psi")
+abline(0, 1, col = 2, lwd = 2)
+plot(truth$psi, psi_hat_inla, pch = 16, col = rgb(0, 0, 0, 0.4),
+     xlab = "true psi", ylab = "INLA aggregated p(detection)",
+     main = "binomial workaround: confounds psi and p")
+abline(0, 1, col = 2, lwd = 2)
+par(op)
+```
+
+## What about the "detectability proxies" trick?
+
+Michael's `mod.visit` adds plot-level fixed effects (`area.sc`,
+`richness.sc`, `sample.density.sc`, `sample.extent.sc`) to the same
+linear predictor that drives the occupancy-side covariates. Those proxies
+*can* improve fit if they correlate with $p$, but their coefficients are
+still confounded with the occupancy coefficients on the same linear
+predictor — there is no hierarchical structure in the model that
+attributes one slope to $\psi$ and another to $p$. The workaround does
+not become an occupancy model by adding more covariates.
+
+The only way to recover $\psi$ and $p$ separately from a row-wise INLA
+likelihood is `inla.rgeneric`: a custom likelihood that implements the
+mixture above. That is the same level of work as building TulpaObs's
+EM/NUTS engine; if you're going to write the marginalized likelihood,
+you may as well use the package that already has it.
+
+## References
+
+* `example/MOT_abund_data.Rmd` §"VISIT-LEVEL BERNOULLI MODEL" — Michael
+  Glaser's binomial workaround, with detectability proxies.
+* `example/info.md` — Michael's note on why a proper single-species
+  occupancy model is hard in INLA (the marginalization problem).
+* `?occu` and `?occu_fit` — the TulpaObs entry points used here.
+* `?simulate_occu` — the detection-history simulator.
