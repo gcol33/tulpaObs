@@ -673,6 +673,19 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
 
   intercepts <- compute_intercepts(model, means)
 
+  # When SPDE is attached to the occ submodel, the M-step mode is
+  # c(beta_occ, u_mesh). Extract u_mesh so callers can inspect or project
+  # the latent field to observation locations via A %*% u_mesh.
+  spatial_field <- NULL
+  if (!is.null(spatial) && identical(spatial$type, "spde") &&
+      !is.null(em_result$fits$occ$mode)) {
+    p_occ <- pi_list[[1]]$p
+    mode_vec <- em_result$fits$occ$mode
+    if (length(mode_vec) > p_occ) {
+      spatial_field <- mode_vec[(p_occ + 1L):length(mode_vec)]
+    }
+  }
+
   structure(list(
     draws = draws, means = means, sds = sds,
     n_samples = n_pseudo, n_params = n_params,
@@ -684,6 +697,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
     col_names = nms, param_names = nms,
     intercepts = intercepts,
     model = model, spatial = spatial,
+    spatial_field = spatial_field,
     process_info = model$process_info,
     method = "laplace",
     convergence = em_result$convergence,

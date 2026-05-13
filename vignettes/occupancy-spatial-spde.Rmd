@@ -1,0 +1,199 @@
+---
+title: "Occupancy with a continuous SPDE spatial field"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Occupancy with a continuous SPDE spatial field}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 6,
+  fig.height = 4
+)
+set.seed(1)
+```
+
+Occupancy data are usually spatially structured: nearby sites share habitat
+and species pressures that the row-wise covariates can't fully capture. The
+Matern field via the SPDE approach (Lindgren, Rue & Lindstrom, 2011) gives
+a continuous spatial random effect with an interpretable range and marginal
+SD, and `tobs_spde()` wires it through tulpaObs's Laplace EM engine.
+
+This vignette simulates an occupancy dataset with a known smooth spatial
+signal, fits a non-spatial model and an SPDE model, and compares them on
+parameter recovery and the latent state.
+
+## Simulation
+
+```{r simulate}
+library(tulpaObs)
+
+n_sites <- 400
+J <- 8
+coords <- cbind(runif(n_sites), runif(n_sites))
+
+# A smooth spatial signal: amplitude ~0.8 on the logit scale
+u_true <- 0.8 * cos(3 * coords[, 1]) * sin(3 * coords[, 2])
+
+x_cov   <- rnorm(n_sites)
+det_cov <- rnorm(n_sites)
+beta_occ_true <- c(-0.5, 0.7)
+beta_det_true <- c(-0.3, 0.4)
+
+eta_occ <- beta_occ_true[1] + beta_occ_true[2] * x_cov + u_true
+psi <- plogis(eta_occ)
+z <- rbinom(n_sites, 1, psi)
+
+eta_det <- beta_det_true[1] + beta_det_true[2] * det_cov
+p <- plogis(eta_det)
+
+y <- matrix(0L, n_sites, J)
+for (i in seq_len(n_sites)) {
+  if (z[i] == 1L) y[i, ] <- rbinom(J, 1, p[i])
+}
+
+dat <- data.frame(occ_cov = x_cov, det_cov = det_cov)
+c(true_occupancy_rate = mean(z),
+  naive_any_detection = mean(rowSums(y) > 0))
+```
+
+The naive any-detection rate is biased low by `(1 - p)^J` at each occupied
+site; a proper occupancy fit should correct that bias, and a spatial fit
+should additionally recover the smooth field that drives the
+site-to-site variation in `psi`.
+
+## Non-spatial fit
+
+```{r fit-non-spatial}
+fit_ns <- tobs(
+  formula   = ~ occ_cov,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov,
+  y         = y,
+  engine    = "laplace",
+  control   = list(verbose = FALSE)
+)
+round(fit_ns$means, 3)
+```
+
+## SPDE fit
+
+`tobs_spde()` builds a triangular mesh over the observation coordinates
+(via tulpaMesh) and constructs the SPDE precision at the prior modes of
+`prior_range` and `prior_sigma`. The mesh covers the data extent plus a
+small buffer; `max_edge = c(inner, outer)` controls the spacing inside
+and outside the data.
+
+```{r build-spde}
+sp <- tobs_spde(
+  coords      = coords,
+  max_edge    = c(0.3, 0.6),
+  nu          = 1,
+  prior_range = c(0.3, 0.5),
+  prior_sigma = c(0.7, 0.5)
+)
+sp
+```
+
+The same `tobs()` call gets a `spatial = sp` argument:
+
+```{r fit-spde}
+fit_sp <- tobs(
+  formula   = ~ occ_cov,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov,
+  y         = y,
+  spatial   = sp,
+  engine    = "laplace",
+  control   = list(verbose = FALSE)
+)
+round(fit_sp$means, 3)
+```
+
+## Coefficient recovery
+
+```{r compare-betas}
+compare <- data.frame(
+  parameter = c("psi_(Intercept)", "psi_occ_cov",
+                "p_(Intercept)",   "p_det_cov"),
+  truth     = c(beta_occ_true, beta_det_true),
+  non_spat  = unname(round(fit_ns$means, 3)),
+  spde      = unname(round(fit_sp$means, 3))
+)
+compare
+```
+
+The detection coefficients are essentially unchanged: detection covariates
+don't carry spatial structure in this simulation, so the detection
+submodel sees the same data both times. Occupancy coefficients shift
+because the SPDE absorbs site-to-site logit deviations that the
+non-spatial fit had to attribute to the global intercept.
+
+## Recovered spatial field
+
+The fitted SPDE field is stored on the fit as `spatial_field`, a length-
+`n_units` numeric vector at the mesh nodes. Project it to observation
+locations through the spec's `A` matrix to compare against the truth.
+
+```{r field-recovery, fig.height = 4}
+u_hat <- fit_sp$spatial_field
+field_at_sites <- as.numeric(sp$tulpa_spec$A %*% u_hat)
+
+corr <- cor(field_at_sites, u_true)
+cat(sprintf("Correlation field-at-sites vs truth: %.3f\n", corr))
+
+op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+plot(u_true, field_at_sites, pch = 16, col = rgb(0, 0, 0, 0.4),
+     xlab = "truth u(s)", ylab = "fitted u_hat(s)",
+     main = "Field recovery at sites")
+abline(0, 1, col = 2, lwd = 2)
+
+plot(coords[, 1], coords[, 2], pch = 16, cex = 0.6,
+     col = ifelse(field_at_sites > 0, "red", "blue"),
+     xlab = "x", ylab = "y",
+     main = "Fitted field sign")
+par(op)
+```
+
+The fitted field is regularized by the SPDE prior, so it is smoother than
+the truth and slightly attenuated in amplitude. The site-level
+correlation with the truth is well above what the non-spatial fit could
+achieve (where there is no field at all).
+
+## When to reach for SPDE
+
+The SPDE field earns its keep when:
+
+- spatial autocorrelation in `psi` is real and not captured by available
+  covariates, and ignoring it would bias the regression coefficients
+- you want continuous prediction across the study area (the field is
+  defined on a mesh that can be extended beyond the sites)
+- you care about uncertainty: the field's prior carries through to the
+  posterior, unlike point covariates added post-hoc
+
+It is not a free lunch:
+
+- a mesh adds latent variables — usually a few hundred to a few thousand;
+  fits are slower than non-spatial Laplace
+- the prior at the prior modes (range, sigma) is what the engine currently
+  uses; nested-Laplace integration over hyperparameters lands in a later
+  release
+- detection-side SPDE is not plumbed for the Laplace engine yet; set
+  `shared = c(TRUE, FALSE)` (the default)
+
+## References
+
+* Lindgren, F., Rue, H., & Lindstrom, J. (2011). An explicit link between
+  Gaussian fields and Gaussian Markov random fields: the stochastic
+  partial differential equation approach. *Journal of the Royal
+  Statistical Society B*, 73, 423-498.
+* `?tobs_spde` for the spatial spec.
+* `?tobs` for the unified fitter.
+* `vignette("occupancy-vs-inla", package = "tulpaObs")` for the
+  non-spatial occupancy story.
