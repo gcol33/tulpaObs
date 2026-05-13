@@ -2,37 +2,29 @@
 # Occupancy-specific callbacks for tulpa's EM+Laplace engine
 # ============================================================================
 
-#' Fit occupancy model with Laplace approximation
+#' Fit a tobs model with Laplace approximation (internal)
 #'
-#' Uses tulpa's generic EM+Laplace engine with occupancy-specific
-#' E-step and M-step encoding. Supports all model types.
+#' Uses tulpa's generic EM+Laplace engine with occupancy-specific E-step and
+#' M-step encoding. Supports all built-in model types. Called from
+#' `.tobs_fit_model()`; not user-facing.
 #'
-#' @param model A `tulpaObs` object from [occu()].
-#' @param spatial Optional spatial specification.
-#' @param sigma_beta Prior SD for regression coefficients (default 10).
-#' @param max_iter Maximum EM iterations (default 50).
-#' @param tol Convergence tolerance (default 1e-4).
-#' @param damping EM damping factor 0-1 (default 0.3).
-#' @param correction Post-EM correction: `"auto"` (default), `"mi"`, `"gibbs"`, `"none"`.
-#' @param n_imputations MI imputations (default 20).
-#' @param verbose Print progress (default TRUE).
-#'
-#' @return A `tulpaObs_fit` object.
-#' @export
-occu_laplace <- function(model, spatial = NULL, sigma_beta = 10,
-                         max_iter = 50L, tol = 1e-4, damping = 0.3,
-                         correction = c("auto", "mi", "gibbs", "none"),
-                         n_imputations = 20L,
-                         verbose = TRUE) {
+#' @keywords internal
+.tobs_laplace <- function(model, spatial = NULL, sigma_beta = 10,
+                          max_iter = 50L, tol = 1e-4, damping = 0.3,
+                          correction = c("auto", "mi", "gibbs", "none"),
+                          n_imputations = 20L,
+                          verbose = TRUE) {
   correction <- match.arg(correction)
-  if (!inherits(model, "tulpaObs")) stop("model must be a tulpaObs object")
+  if (!inherits(model, "tobs_model")) stop("model must be a tobs_model object")
+
+  .validate_spatial_laplace(spatial, model$model_type)
 
   callbacks <- switch(model$model_type,
-    single     = build_single_callbacks(model),
-    dynamic    = build_dynamic_callbacks(model),
-    community  = build_community_callbacks(model),
-    integrated = build_integrated_callbacks(model),
-    jsdm       = build_jsdm_callbacks(model),
+    single     = build_single_callbacks(model, spatial),
+    dynamic    = build_dynamic_callbacks(model, spatial),
+    community  = build_community_callbacks(model, spatial),
+    integrated = build_integrated_callbacks(model, spatial),
+    jsdm       = build_jsdm_callbacks(model, spatial),
     stop(sprintf("Laplace not supported for model_type '%s'", model$model_type))
   )
 
@@ -54,7 +46,7 @@ occu_laplace <- function(model, spatial = NULL, sigma_beta = 10,
 # ============================================================================
 # Single-season callbacks
 # ============================================================================
-build_single_callbacks <- function(model) {
+build_single_callbacks <- function(model, spatial = NULL) {
   y <- model$y
   X_occ <- model$X_processes[[1]]
   X_det <- model$X_processes[[2]]
@@ -76,18 +68,39 @@ build_single_callbacks <- function(model) {
   e_step <- function(fits, ...) {
     beta_occ <- extract_beta(fits$occ, p_occ)
     beta_det <- extract_beta(fits$det, p_det)
-    psi <- plogis(as.vector(X_occ %*% beta_occ))
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial, fits$occ, p_occ)
+    if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
+    psi <- plogis(eta_occ)
     p <- plogis(as.vector(X_det %*% beta_det))
     list(weights = occ_weights(psi, p, n_sites, n_valid, n_det, any_det))
   }
 
   m_step_encode <- function(weights, ...) {
-    M <- 1000L
-    y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-    y_occ <- pmin(pmax(y_occ, 0L), M)
+    if (is.null(spatial)) {
+      # Pseudo-binomial encoding: y = round(M*w), n_trials = M. The
+      # M-inflation makes the M-step into a sharp binomial whose mode
+      # equals the weighted mean, and is the historical encoding used
+      # everywhere else in the package.
+      M <- 1000L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+    } else {
+      # Modest pseudo-binomial encoding for SPDE: M = 4 gives some
+      # fractional resolution on the weights while keeping the per-site
+      # effective sample size O(1), so the SPDE prior precision is not
+      # swamped by the data signal as it would be at M = 1000.
+      M <- 4L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+      occ_block <- .attach_spatial_spde(occ_block, spatial)
+    }
     list(
-      occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                 family = "binomial"),
+      occ = occ_block,
       det = list(y = n_det[keep], n_trials = n_valid[keep],
                  X = X_det[keep, , drop = FALSE], family = "binomial")
     )
@@ -102,9 +115,11 @@ build_single_callbacks <- function(model) {
   hard_encode <- function(z, ...) {
     occ_sites <- which(z == 1L)
     det_keep <- occ_sites[n_valid[occ_sites] > 0]
+    occ_block <- list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial)
     list(
-      occ = list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
-                 family = "binomial"),
+      occ = occ_block,
       det = if (length(det_keep) > 0)
         list(y = n_det[det_keep], n_trials = n_valid[det_keep],
              X = X_det[det_keep, , drop = FALSE], family = "binomial")
@@ -121,7 +136,8 @@ build_single_callbacks <- function(model) {
 # ============================================================================
 # Dynamic occupancy callbacks
 # ============================================================================
-build_dynamic_callbacks <- function(model) {
+build_dynamic_callbacks <- function(model, spatial = NULL) {
+  # spatial guaranteed NULL here by .validate_spatial_laplace.
   y_flat <- model$y_flat
   n_sites <- model$n_sites
   n_seasons <- model$n_seasons
@@ -303,7 +319,8 @@ build_dynamic_callbacks <- function(model) {
 # ============================================================================
 # Community occupancy callbacks
 # ============================================================================
-build_community_callbacks <- function(model) {
+build_community_callbacks <- function(model, spatial = NULL) {
+  # spatial guaranteed NULL here by .validate_spatial_laplace.
   y <- model$y  # N x max_visits (expanded: site-species rows)
   X_occ <- model$X_processes[[1]]
   X_det <- model$X_processes[[2]]
@@ -374,7 +391,11 @@ build_community_callbacks <- function(model) {
 # ============================================================================
 # Integrated occupancy callbacks
 # ============================================================================
-build_integrated_callbacks <- function(model) {
+build_integrated_callbacks <- function(model, spatial = NULL) {
+  if (!is.null(spatial)) {
+    stop("Integrated occupancy with SPDE is not yet plumbed in occu_laplace.",
+         call. = FALSE)
+  }
   y_sources <- model$y_sources
   site_maps <- model$site_maps
   X_occ <- model$X_processes[[1]]
@@ -479,7 +500,12 @@ build_integrated_callbacks <- function(model) {
 # ============================================================================
 # JSDM callbacks (no detection — simple Bernoulli)
 # ============================================================================
-build_jsdm_callbacks <- function(model) {
+build_jsdm_callbacks <- function(model, spatial = NULL) {
+  # JSDM is N = n_sites * n_species; SPDE A_x is n_sites-indexed, so attaching
+  # would require row-expansion. Deferred.
+  if (!is.null(spatial)) {
+    stop("JSDM with SPDE is not yet plumbed in occu_laplace.", call. = FALSE)
+  }
   y_jsdm <- model$y_jsdm
   X_occ <- model$X_processes[[1]]
   N <- model$N
@@ -511,6 +537,62 @@ build_jsdm_callbacks <- function(model) {
 # ============================================================================
 # Shared helpers
 # ============================================================================
+
+# Validate that `spatial` (a `tulpaObs_spatial` or NULL) can be consumed by the
+# Laplace path. Slice A: SPDE on the occupancy/state submodel only, single +
+# integrated + jsdm model types. Other combinations error explicitly rather
+# than silently dropping the spec.
+.validate_spatial_laplace <- function(spatial, model_type) {
+  if (is.null(spatial)) return(invisible())
+  if (!inherits(spatial, "tulpaObs_spatial")) {
+    stop("spatial must be a tulpaObs_spatial object (from occu_spde(), etc.)",
+         call. = FALSE)
+  }
+  if (!identical(spatial$type, "spde")) {
+    stop(sprintf(
+      "occu_laplace currently supports spatial$type == 'spde' only (got '%s'). Use method = 'nuts' for other spatial types.",
+      spatial$type), call. = FALSE)
+  }
+  if (length(spatial$shared) >= 2 && isTRUE(spatial$shared[2])) {
+    stop("SPDE on the detection process is not yet plumbed in occu_laplace; use shared = c(TRUE, FALSE).",
+         call. = FALSE)
+  }
+  if (!isTRUE(spatial$shared[1])) {
+    stop("SPDE must be attached to the occupancy/state submodel (shared[1] = TRUE).",
+         call. = FALSE)
+  }
+  if (model_type == "community") {
+    stop("Community models with SPDE are not yet plumbed in occu_laplace.",
+         call. = FALSE)
+  }
+  if (model_type == "dynamic") {
+    stop("Dynamic models with SPDE are not yet plumbed in occu_laplace; coming after single-season.",
+         call. = FALSE)
+  }
+  invisible()
+}
+
+# Linear-predictor offset induced by the SPDE mesh field at the current fit.
+# After tulpa_laplace returns mode = c(beta, u_mesh), the spatial contribution
+# to eta at the observed locations is A %*% u_mesh.
+.spatial_eta_offset <- function(spatial, fits_sub, p_fixed) {
+  if (is.null(spatial) || is.null(fits_sub) || is.null(fits_sub$mode)) {
+    return(rep(0, 0))
+  }
+  if (!identical(spatial$type, "spde")) return(rep(0, 0))
+  mode_vec <- fits_sub$mode
+  if (length(mode_vec) <= p_fixed) return(rep(0, 0))
+  u <- mode_vec[(p_fixed + 1L):length(mode_vec)]
+  as.numeric(spatial$tulpa_spec$A %*% u)
+}
+
+# Attach the tulpa-side spatial spec to an M-step block. The block's `spatial`
+# field is forwarded as-is by tulpa_em_laplace -> tulpa_laplace.
+.attach_spatial_spde <- function(block, spatial) {
+  if (is.null(spatial) || !identical(spatial$type, "spde")) return(block)
+  block$spatial <- spatial$tulpa_spec
+  block
+}
 
 extract_beta <- function(sub, p) {
   if (is.null(sub)) return(rep(0, p))
@@ -563,8 +645,9 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
     sub_name <- names(p_per_submodel)[k]
     if (is.null(sub_name)) sub_name <- names(p_per_submodel)[min(k, length(p_per_submodel))]
 
-    if (!is.null(em_result$correction) && !is.null(em_result$correction[[sub_name]])) {
-      cr <- em_result$correction[[sub_name]]
+    if (is.list(em_result$pooled) && !is.null(em_result$pooled[[sub_name]])) {
+      # MI/Gibbs correction pool from rubins_pool().
+      cr <- em_result$pooled[[sub_name]]
       means <- c(means, cr$mean)
       sds <- c(sds, cr$se)
     } else if (!is.null(em_result$fits[[sub_name]])) {
