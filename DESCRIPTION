@@ -21,7 +21,10 @@ Imports:
 Suggests:
     testthat (>= 3.0.0),
     bayesplot,
-    ggplot2
+    ggplot2,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 LinkingTo:
     Rcpp,
     RcppEigen,

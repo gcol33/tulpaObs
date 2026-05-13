@@ -1,0 +1,85 @@
+---
+title: "Cover hurdle (Phase 1a)"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cover hurdle (Phase 1a)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 6,
+  fig.height = 4
+)
+```
+
+This vignette shows the Phase 1a cover-hurdle dispatcher on simulated data.
+The fit uses two independent Laplace approximations through `tulpa`:
+
+* a binomial GLM on the occurrence indicator $\mathbf{1}\{y_i > 0\}$;
+* a Gaussian GLM on $\log y_i$ for the sites where $y_i > 0$.
+
+The shared-field joint model (and the beta positive variant) land in
+Phase 1c / 1d. Comparison to `INLA::inla()` on the real MOTIVATE data is
+Phase 1e; the code chunks below for that comparison are marked
+`eval = FALSE`.
+
+```{r simulate}
+library(tulpaOcc)
+sim <- simulate_cover_hurdle(
+  N         = 400,
+  beta_occ  = c(-0.4, 0.7),
+  beta_pos  = c(-1.0, 0.3),
+  sigma_pos = 0.4,
+  seed      = 7
+)
+head(sim$data)
+```
+
+```{r fit}
+fit <- tulpa_obs(
+  formula = ~ x,
+  data    = sim$data,
+  family  = cover_hurdle(positive = "lognormal"),
+  y       = sim$y
+)
+fit
+```
+
+```{r predict}
+newdata <- data.frame(x = seq(-2, 2, length.out = 50))
+preds <- data.frame(
+  x         = newdata$x,
+  occupancy = predict(fit, newdata, type = "occupancy"),
+  expected  = predict(fit, newdata, type = "expected")
+)
+head(preds)
+```
+
+```{r compare-inla, eval = FALSE}
+# Phase 1e: compare against the joint INLA hurdle fit on the MOTIVATE
+# resurvey data. Skeleton retained here so the comparison drops in
+# without restructuring the vignette.
+#
+# library(INLA)
+# joint <- inla(
+#   list(
+#     occur ~ x + f(site, model = "bym2", graph = adj),
+#     log_cover ~ x + f(site, model = "bym2", graph = adj, copy = "site",
+#                       fixed = FALSE)
+#   ),
+#   family = c("binomial", "gaussian"),
+#   data   = inla_stack
+# )
+```
+
+## Phase 1a scope
+
+The Phase 1a fit is fixed-effects-only at prediction time. Spatial fields
+fit through the `spatial` argument, but spatial projection at new
+coordinates lands together with the shared-field joint engine in Phase 1c.
+Temporal helpers (the MOTIVATE within/between Mundlak decomposition) land
+in Phase 1d.

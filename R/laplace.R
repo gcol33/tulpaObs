@@ -37,18 +37,15 @@ occu_laplace <- function(model, spatial = NULL, sigma_beta = 10,
   )
 
   em_result <- tulpa::tulpa_em_laplace(
-    e_step       = callbacks$e_step,
+    e_step        = callbacks$e_step,
     m_step_encode = callbacks$m_step_encode,
-    init         = callbacks$init,
-    z_draw       = callbacks$z_draw,
-    hard_encode  = callbacks$hard_encode,
-    family       = "binomial",
-    max_iter     = max_iter,
-    tol          = tol,
-    damping      = damping,
-    correction   = correction,
+    draw_z        = callbacks$z_draw,
+    max_iter      = max_iter,
+    tol           = tol,
+    damping       = damping,
+    correction    = correction,
     n_imputations = n_imputations,
-    verbose      = verbose
+    verbose       = verbose
   )
 
   build_laplace_fit(em_result, model, spatial, callbacks$p_per_submodel)
@@ -89,8 +86,10 @@ build_single_callbacks <- function(model) {
     y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
     y_occ <- pmin(pmax(y_occ, 0L), M)
     list(
-      occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ),
-      det = list(y = n_det[keep], n_trials = n_valid[keep], X = X_det[keep, , drop = FALSE])
+      occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                 family = "binomial"),
+      det = list(y = n_det[keep], n_trials = n_valid[keep],
+                 X = X_det[keep, , drop = FALSE], family = "binomial")
     )
   }
 
@@ -104,9 +103,11 @@ build_single_callbacks <- function(model) {
     occ_sites <- which(z == 1L)
     det_keep <- occ_sites[n_valid[occ_sites] > 0]
     list(
-      occ = list(y = z, n_trials = rep(1L, n_sites), X = X_occ),
+      occ = list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
+                 family = "binomial"),
       det = if (length(det_keep) > 0)
-        list(y = n_det[det_keep], n_trials = n_valid[det_keep], X = X_det[det_keep, , drop = FALSE])
+        list(y = n_det[det_keep], n_trials = n_valid[det_keep],
+             X = X_det[det_keep, , drop = FALSE], family = "binomial")
       else NULL
     )
   }
@@ -222,10 +223,14 @@ build_dynamic_callbacks <- function(model) {
     dk <- total_vis > 0
 
     list(
-      occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ),
-      det = list(y = total_det[dk], n_trials = total_vis[dk], X = X_det[dk, , drop = FALSE]),
-      col = list(y = col_y, n_trials = col_n, X = X_col),
-      ext = list(y = ext_y, n_trials = ext_n, X = X_ext)
+      occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                 family = "binomial"),
+      det = list(y = total_det[dk], n_trials = total_vis[dk],
+                 X = X_det[dk, , drop = FALSE], family = "binomial"),
+      col = list(y = col_y, n_trials = col_n, X = X_col,
+                 family = "binomial"),
+      ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
+                 family = "binomial")
     )
   }
 
@@ -270,10 +275,16 @@ build_dynamic_callbacks <- function(model) {
     dk <- total_vis > 0
 
     list(
-      occ = list(y = z1, n_trials = rep(1L, n_sites), X = X_occ),
-      det = if (sum(dk) > 0) list(y = total_det[dk], n_trials = total_vis[dk], X = X_det[dk,,drop=FALSE]) else NULL,
-      col = list(y = col_y, n_trials = col_n, X = X_col),
-      ext = list(y = ext_y, n_trials = ext_n, X = X_ext)
+      occ = list(y = z1, n_trials = rep(1L, n_sites), X = X_occ,
+                 family = "binomial"),
+      det = if (sum(dk) > 0)
+        list(y = total_det[dk], n_trials = total_vis[dk],
+             X = X_det[dk,,drop=FALSE], family = "binomial")
+      else NULL,
+      col = list(y = col_y, n_trials = col_n, X = X_col,
+                 family = "binomial"),
+      ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
+                 family = "binomial")
     )
   }
 
@@ -324,8 +335,10 @@ build_community_callbacks <- function(model) {
     y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
     y_occ <- pmin(pmax(y_occ, 0L), M)
     list(
-      occ = list(y = y_occ, n_trials = rep(M, N), X = X_occ),
-      det = list(y = n_det[keep], n_trials = n_valid[keep], X = X_det[keep, , drop = FALSE])
+      occ = list(y = y_occ, n_trials = rep(M, N), X = X_occ,
+                 family = "binomial"),
+      det = list(y = n_det[keep], n_trials = n_valid[keep],
+                 X = X_det[keep, , drop = FALSE], family = "binomial")
     )
   }
 
@@ -339,9 +352,11 @@ build_community_callbacks <- function(model) {
     occ_obs <- which(z == 1L)
     det_keep <- occ_obs[n_valid[occ_obs] > 0]
     list(
-      occ = list(y = z, n_trials = rep(1L, N), X = X_occ),
+      occ = list(y = z, n_trials = rep(1L, N), X = X_occ,
+                 family = "binomial"),
       det = if (length(det_keep) > 0)
-        list(y = n_det[det_keep], n_trials = n_valid[det_keep], X = X_det[det_keep,,drop=FALSE])
+        list(y = n_det[det_keep], n_trials = n_valid[det_keep],
+             X = X_det[det_keep,,drop=FALSE], family = "binomial")
       else NULL
     )
   }
@@ -414,11 +429,14 @@ build_integrated_callbacks <- function(model) {
     M <- 1000L
     y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
     y_occ <- pmin(pmax(y_occ, 0L), M)
-    specs <- list(occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ))
+    specs <- list(occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                             family = "binomial"))
     for (s in seq_len(n_sources)) {
       si <- src_info[[s]]
       dk <- si$keep
-      specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk], X = si$X_det[dk,,drop=FALSE])
+      specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk],
+                                        X = si$X_det[dk,,drop=FALSE],
+                                        family = "binomial")
     }
     specs
   }
@@ -431,13 +449,16 @@ build_integrated_callbacks <- function(model) {
   }
 
   hard_encode <- function(z, ...) {
-    specs <- list(occ = list(y = z, n_trials = rep(1L, n_sites), X = X_occ))
+    specs <- list(occ = list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
+                             family = "binomial"))
     for (s in seq_len(n_sources)) {
       si <- src_info[[s]]
       occ_local <- z[si$src_rows] == 1L & si$nv > 0
       if (any(occ_local)) {
-        specs[[paste0("det", s)]] <- list(y = si$nd[occ_local], n_trials = si$nv[occ_local],
-                                           X = si$X_det[occ_local,,drop=FALSE])
+        specs[[paste0("det", s)]] <- list(y = si$nd[occ_local],
+                                          n_trials = si$nv[occ_local],
+                                          X = si$X_det[occ_local,,drop=FALSE],
+                                          family = "binomial")
       }
     }
     specs
@@ -471,11 +492,15 @@ build_jsdm_callbacks <- function(model) {
   }
 
   m_step_encode <- function(weights, ...) {
-    list(occ = list(y = as.integer(y_jsdm), n_trials = rep(1L, N), X = X_occ))
+    list(occ = list(y = as.integer(y_jsdm), n_trials = rep(1L, N), X = X_occ,
+                    family = "binomial"))
   }
 
   z_draw <- function(weights, ...) as.integer(y_jsdm)
-  hard_encode <- function(z, ...) list(occ = list(y = z, n_trials = rep(1L, N), X = X_occ))
+  hard_encode <- function(z, ...) {
+    list(occ = list(y = z, n_trials = rep(1L, N), X = X_occ,
+                    family = "binomial"))
+  }
 
   init <- list(occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)))
 

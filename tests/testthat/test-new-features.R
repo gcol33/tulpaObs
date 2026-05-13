@@ -103,13 +103,14 @@ test_that("tulpa generic diagnostics work via inheritance", {
   fit <- occu_fit(occu(~ 1, ~ 1, d, y), verbose = FALSE)
 
   r <- residuals(fit)$occ
-  mi <- tulpa::moranI(r, coords, k = 3)
-  expect_true(is.finite(mi$I))
+  mi <- tulpa::moran_i(r, coords, k = 3)
+  expect_true(is.finite(unname(mi$statistic)))
 
-  dw <- tulpa::durbinWatson(r)
-  expect_true(dw$DW > 0 && dw$DW < 4)
+  dw <- tulpa::durbin_watson(r)
+  dw_stat <- unname(dw$statistic)
+  expect_true(dw_stat > 0 && dw_stat < 4)
 
-  vg <- tulpa::variogram(r, coords, n_bins = 5)
+  vg <- tulpa::tulpa_variogram(r, coords, n_bins = 5)
   expect_true(nrow(vg) > 0)
 })
 

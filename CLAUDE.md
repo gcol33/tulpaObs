@@ -1,5 +1,14 @@
 # tulpaOcc — Bayesian Occupancy Models via tulpa
 
+> **Expanding into TulpaObs.** This package is being broadened in place from
+> occupancy-only into a unified framework for hierarchical latent-state
+> observation models (occupancy, N-mixture, distance, removal, false-positive,
+> cover hurdle, ...). The new entry point is `tulpa_obs()`; existing
+> `occu()` / `occu_fit()` API stays exported. See `PLAN_TulpaObs.md` for the
+> roadmap and `R/obs_families.R` / `R/tulpa_obs.R` for the new surface.
+> Package rename `tulpaOcc` → `TulpaObs` is scheduled as Phase 5 (after new
+> families ship), to keep the rename diff mechanical.
+
 Full-featured Bayesian occupancy modeling. Feature parity with inlaocc.
 
 ## Architecture

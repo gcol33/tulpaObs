@@ -123,7 +123,18 @@ pitResiduals <- function(object, n.samples = 250) {
 }
 
 #' @export
-testUniformity <- function(pit) ks.test(pit, "punif")
+testUniformity <- function(pit) {
+  # PIT residuals can have ties when the response is discrete (counts /
+  # detections). The asymptotic KS p-value remains valid; only the
+  # ties-warning is noisy, so suppress just that warning class.
+  withCallingHandlers(
+    ks.test(pit, "punif"),
+    warning = function(w) {
+      if (grepl("ties should not be present", conditionMessage(w),
+                fixed = TRUE)) invokeRestart("muffleWarning")
+    }
+  )
+}
 
 #' @export
 testDispersion <- function(object, n.samples = 250) {
