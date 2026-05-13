@@ -39,7 +39,7 @@ Default \code{c(TRUE, FALSE)} = occupancy only.}
 \item{prior_sigma}{Prior for sigma: \code{c(U, alpha)} where P(sigma > U) = alpha.}
 }
 \value{
-A \code{TulpaObs_spatial} object
+A \code{tulpaObs_spatial} object
 }
 \description{
 Specifies a continuous Matérn spatial field for occupancy models using the

@@ -28,7 +28,7 @@
 #include <tulpa/autodiff_arena.h>
 #include <tulpa/autodiff_fwd.h>
 
-namespace TulpaObs {
+namespace tulpaObs {
 
 template<typename T>
 T integrated_occ_log_likelihood(
@@ -107,6 +107,6 @@ T integrated_occ_log_likelihood(
     }
 }
 
-} // namespace TulpaObs
+} // namespace tulpaObs
 
 #endif // TULPAOCC_INTEGRATED_OCC_LIKELIHOOD_H

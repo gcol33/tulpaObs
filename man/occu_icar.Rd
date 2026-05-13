@@ -13,7 +13,7 @@ occu_icar(adjacency, shared = c(TRUE, FALSE))
 effect. Default \code{c(TRUE, FALSE)} = occupancy only, not detection.}
 }
 \value{
-A \code{TulpaObs_spatial} object
+A \code{tulpaObs_spatial} object
 }
 \description{
 ICAR spatial random effect

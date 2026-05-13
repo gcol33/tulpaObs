@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace TulpaObs {
+namespace tulpaObs {
 
 struct IntegratedOccResponseData {
     int n_sites;
@@ -25,6 +25,6 @@ struct IntegratedOccResponseData {
     std::vector<std::vector<int>> site_map;
 };
 
-} // namespace TulpaObs
+} // namespace tulpaObs
 
 #endif // TULPAOCC_INTEGRATED_OCC_DATA_H

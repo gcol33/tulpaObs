@@ -1,6 +1,6 @@
-# TulpaObs — Roadmap
+# tulpaObs — Roadmap
 
-`tulpaOcc` has been renamed to **TulpaObs**: a unified framework for
+`tulpaOcc` has been renamed to **tulpaObs**: a unified framework for
 hierarchical latent-state observation models on the `tulpa` backend. The
 rename (Phase 5 in the rollout below) was completed ahead of schedule to
 keep the rename diff mechanical before further families ship.
@@ -13,21 +13,21 @@ beyond the new `tulpa_obs()` dispatcher and the family-object stubs.
 
 ## 1. Conceptual identity
 
-TulpaObs models share four assumptions:
+tulpaObs models share four assumptions:
 
 1. A latent ecological state exists (`z`, `N`, distance-attenuated density, ...).
 2. Observations are imperfect.
 3. Detection is probabilistic.
 4. Replication identifies detectability.
 
-What lives outside TulpaObs:
+What lives outside tulpaObs:
 
 - Pure GLMM / GLM regression without a latent observation process — that is
   `tulpaglmm`.
 - Process-only spatial smoothing without detection — that is `tulpa` directly.
 - Compositional / Dirichlet community-cover models — separate scope.
 
-What lives inside TulpaObs (in tension, by user request):
+What lives inside tulpaObs (in tension, by user request):
 
 - `cover_hurdle()` family. Strictly, vegetation cover does not share the
   replicate-detection assumption (single survey per plot, the cover scale
@@ -45,7 +45,7 @@ What lives inside TulpaObs (in tension, by user request):
 
 ```
 +-----------------------------------------------------------------+
-| TulpaObs — latent-state observation models                      |
+| tulpaObs — latent-state observation models                      |
 |                                                                 |
 |   tulpa_obs(                                                    |
 |     formula,           # state-process formula                  |
@@ -79,7 +79,7 @@ What lives inside TulpaObs (in tension, by user request):
   EM+Laplace, MI/Gibbs correction, NUTS, nested Laplace, generic S3.
 - `tulpaMesh` — mesh + SPDE precision builders.
 - `tulpaglmm` — GLMM with the same engines, no latent observation layer.
-- `TulpaObs` (this package, formerly `tulpaOcc`) — families, family-
+- `tulpaObs` (this package, formerly `tulpaOcc`) — families, family-
   specific E-step weights, family-specific encode/decode, prediction,
   family-specific diagnostics.
 
@@ -247,9 +247,9 @@ These are scheduled under Phase 3 below.
 
 **Phase 5 — Package rename (DONE ahead of schedule, before Phase 1b)**
 
-- `tulpaOcc` → `TulpaObs`: Package field, `useDynLib`, all `tulpaOcc_*`
-  S3 class names → `TulpaObs_*`, C++ `namespace tulpaOcc` → `namespace
-  TulpaObs`, DLL symbol via `Rcpp::compileAttributes()`. Single mechanical
+- `tulpaOcc` → `tulpaObs`: Package field, `useDynLib`, all `tulpaOcc_*`
+  S3 class names → `tulpaObs_*`, C++ `namespace tulpaOcc` → `namespace
+  tulpaObs`, DLL symbol via `Rcpp::compileAttributes()`. Single mechanical
   commit. Git folder on disk and GitHub remote URL still say `tulpaOcc`
   — only the R package name was renamed.
 - **Deferred**: deprecation shim package `tulpaOcc` that re-exports the
@@ -272,9 +272,9 @@ These are scheduled under Phase 3 below.
 
 ## 9. Open questions
 
-1. Should `cover_hurdle()` live in TulpaObs or in a sibling package
+1. Should `cover_hurdle()` live in tulpaObs or in a sibling package
    `tulpaCover` that depends on `tulpa` + `tulpaMesh`? Decision: in
-   TulpaObs for now, behind a clear family identity flag. Reconsider if
+   tulpaObs for now, behind a clear family identity flag. Reconsider if
    the family grows compositional-data-specific machinery.
 2. Should `tulpa_obs()` accept `engine = "auto"` and select per-family
    defaults? Tentative: yes, with explicit override.

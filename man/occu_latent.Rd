@@ -16,7 +16,7 @@ occu_latent(n_factors, shared = TRUE, constraint = 0, sigma_prior_rate = 1)
 \item{sigma_prior_rate}{Rate for Gamma prior on factor precision (default 1).}
 }
 \value{
-A \code{TulpaObs_latent} object
+A \code{tulpaObs_latent} object
 }
 \description{
 Specify latent factors for community models

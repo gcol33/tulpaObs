@@ -28,7 +28,7 @@
 #include <tulpa/autodiff_arena.h>
 #include <tulpa/autodiff_fwd.h>
 
-namespace TulpaObs {
+namespace tulpaObs {
 
 // ============================================================================
 // Dynamic occupancy log-likelihood (per site)
@@ -162,6 +162,6 @@ T dyn_occ_log_likelihood(
     return log_lik;
 }
 
-} // namespace TulpaObs
+} // namespace tulpaObs
 
 #endif // TULPAOCC_DYN_OCC_LIKELIHOOD_H

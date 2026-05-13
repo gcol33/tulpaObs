@@ -11,7 +11,7 @@
 #include <cmath>
 #include <tulpa/model_data.h>
 
-namespace TulpaObs {
+namespace tulpaObs {
 
 // ============================================================================
 // Populate spatial fields on ModelData from R list
@@ -395,10 +395,10 @@ inline void populate_latent(tulpa::ModelData& data, Rcpp::List latent_spec) {
 // Build OccResponseData from R matrices
 // ============================================================================
 // Build OccResponseData from y matrix. Visit-level covariates added separately.
-inline TulpaObs::OccResponseData build_occ_response(
+inline tulpaObs::OccResponseData build_occ_response(
     Rcpp::IntegerMatrix y_r, int n_sites, int max_visits
 ) {
-    TulpaObs::OccResponseData occ;
+    tulpaObs::OccResponseData occ;
     occ.n_sites = n_sites;
     occ.max_visits = max_visits;
     occ.y.resize(n_sites * max_visits);
@@ -427,7 +427,7 @@ inline TulpaObs::OccResponseData build_occ_response(
 
 // Add visit-level detection covariates to an existing OccResponseData
 inline void add_visit_covariates(
-    TulpaObs::OccResponseData& occ, Rcpp::NumericMatrix Xv
+    tulpaObs::OccResponseData& occ, Rcpp::NumericMatrix Xv
 ) {
     int n_sites = occ.n_sites;
     int max_visits = occ.max_visits;
@@ -447,13 +447,13 @@ inline void add_visit_covariates(
 // ============================================================================
 // Build DynOccResponseData from R vectors
 // ============================================================================
-inline TulpaObs::DynOccResponseData build_dyn_occ_response(
+inline tulpaObs::DynOccResponseData build_dyn_occ_response(
     Rcpp::IntegerVector y_flat_r,
     Rcpp::IntegerVector n_visits_r,
     Rcpp::LogicalVector any_detected_r,
     int n_sites, int n_seasons, int max_visits
 ) {
-    TulpaObs::DynOccResponseData dyn;
+    tulpaObs::DynOccResponseData dyn;
     dyn.n_sites = n_sites;
     dyn.n_seasons = n_seasons;
     dyn.max_visits = max_visits;
@@ -539,6 +539,6 @@ inline Rcpp::List run_nuts_and_collect(
     );
 }
 
-} // namespace TulpaObs
+} // namespace tulpaObs
 
 #endif // TULPAOCC_POPULATE_HELPERS_H

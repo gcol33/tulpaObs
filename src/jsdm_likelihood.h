@@ -16,7 +16,7 @@
 #include <tulpa/autodiff_arena.h>
 #include <tulpa/autodiff_fwd.h>
 
-namespace TulpaObs {
+namespace tulpaObs {
 
 // JSDM response: simple binary presence/absence vector
 struct JSDMResponseData {
@@ -49,6 +49,6 @@ T jsdm_log_likelihood(
     }
 }
 
-} // namespace TulpaObs
+} // namespace tulpaObs
 
 #endif // TULPAOCC_JSDM_LIKELIHOOD_H

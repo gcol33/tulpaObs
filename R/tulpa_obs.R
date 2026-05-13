@@ -1,5 +1,5 @@
 # =============================================================================
-# tulpa_obs.R — Unified entry point for TulpaObs latent-state observation models
+# tulpa_obs.R — Unified entry point for tulpaObs latent-state observation models
 #
 # This is the new public API. During the Phase 0 transition it is a thin
 # dispatcher that calls the existing occu() / occu_fit() pipeline for the
@@ -16,7 +16,7 @@
 #' generative template. The specific model is chosen via the `family`
 #' argument; the engine (Laplace / nested Laplace / NUTS) via `engine`.
 #'
-#' This function is the canonical TulpaObs API. The package-specific
+#' This function is the canonical tulpaObs API. The package-specific
 #' entry points (`occu()`, `occu_fit()`) remain exported for backward
 #' compatibility and are called internally during the Phase 0 transition.
 #'
@@ -24,7 +24,7 @@
 #'
 #' Only `family = occ()` is wired to a real engine in v0.1. Other families
 #' raise informative errors pointing to the planned phase in
-#' `PLAN_TulpaObs.md`.
+#' `PLAN_tulpaObs.md`.
 #'
 #' @param formula state-process formula, e.g. `~ elev + forest`. For
 #'   occupancy this is the occupancy probability formula; for N-mixture
@@ -147,7 +147,7 @@ tulpa_obs <- function(formula,
 # ---------------------------------------------------------------------------
 # Internal dispatchers — one per working family.
 #
-# Each thin-wraps the existing TulpaObs builder during the Phase 0
+# Each thin-wraps the existing tulpaObs builder during the Phase 0
 # transition. Phase 1+ will replace these with direct engine calls.
 # ---------------------------------------------------------------------------
 
@@ -261,7 +261,7 @@ tulpa_obs <- function(formula,
 # ---------------------------------------------------------------------------
 
 .map_engine <- function(engine) {
-  # Engine name translation between the TulpaObs vocabulary and what the
+  # Engine name translation between the tulpaObs vocabulary and what the
   # underlying occu_fit() currently understands. Phase 0 maps both
   # "laplace" and "nested_laplace" to occu_fit's "laplace" mode and
   # surfaces a NOTE when the user asked for nested_laplace specifically.
@@ -298,7 +298,7 @@ tulpa_obs <- function(formula,
       "Family `%s` (%s) is planned but not yet implemented. Scheduled: %s. ",
       family$name, family$class_long, phase
     ),
-    "See PLAN_TulpaObs.md for the rollout. ",
+    "See PLAN_tulpaObs.md for the rollout. ",
     "In the meantime, use the existing entry points where they exist ",
     "(occu() for occupancy variants).",
     call. = FALSE

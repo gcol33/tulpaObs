@@ -21,7 +21,7 @@
 #' @param det_visit_formula Optional formula for visit-level detection covariates.
 #' @param det_visit_data Optional data frame with visit-level covariates.
 #'
-#' @return A `TulpaObs` object
+#' @return A `tulpaObs` object
 #' @export
 occu <- function(occ_formula, det_formula = NULL, data, y,
                  col_formula = NULL, ext_formula = NULL,
@@ -107,7 +107,7 @@ build_single_model <- function(occ_formula, det_formula, data, y,
     ),
     det_visit_names = if (!is.null(X_det_visit)) colnames(X_det_visit) else character(0),
     naive_occ = n_detected / nrow(y)
-  ), class = "TulpaObs")
+  ), class = "tulpaObs")
 }
 
 build_dynamic_model <- function(occ_formula, det_formula, data, y,
@@ -179,7 +179,7 @@ build_dynamic_model <- function(occ_formula, det_formula, data, y,
       list(name = "gamma",   p = ncol(X_col), coef_names = colnames(X_col)),
       list(name = "epsilon", p = ncol(X_ext), coef_names = colnames(X_ext))
     )
-  ), class = "TulpaObs")
+  ), class = "tulpaObs")
 }
 
 build_community_model <- function(occ_formula, det_formula, data, y, species) {
@@ -254,7 +254,7 @@ build_community_model <- function(occ_formula, det_formula, data, y, species) {
       list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ)),
       list(name = "p",   p = ncol(X_det), coef_names = colnames(X_det))
     )
-  ), class = "TulpaObs")
+  ), class = "tulpaObs")
 }
 
 build_integrated_model <- function(occ_formula, det_formula, data, y) {
@@ -331,7 +331,7 @@ build_integrated_model <- function(occ_formula, det_formula, data, y) {
     n_sites = n_sites,
     n_sources = n_sources,
     process_info = process_info
-  ), class = "TulpaObs")
+  ), class = "tulpaObs")
 }
 
 build_jsdm_model <- function(occ_formula, data, y, species) {
@@ -393,5 +393,5 @@ build_jsdm_model <- function(occ_formula, data, y, species) {
     process_info = list(
       list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ))
     )
-  ), class = "TulpaObs")
+  ), class = "tulpaObs")
 }

@@ -10,7 +10,7 @@
 #' @param correlated Logical; for slopes, estimate correlations? Default TRUE.
 #' @param sigma_scale Prior scale for RE standard deviation (default 1).
 #'
-#' @return A `TulpaObs_re` object
+#' @return A `tulpaObs_re` object
 #' @export
 occu_re <- function(group, type = c("intercept", "slope", "iid"),
                     covariate = NULL, model = "iid",
@@ -31,7 +31,7 @@ occu_re <- function(group, type = c("intercept", "slope", "iid"),
     shared = shared,
     correlated = correlated,
     sigma_scale = sigma_scale
-  ), class = "TulpaObs_re")
+  ), class = "tulpaObs_re")
 }
 
 #' Specify temporal structure for occupancy models
@@ -46,7 +46,7 @@ occu_re <- function(group, type = c("intercept", "slope", "iid"),
 #' @param tau_shape Shape parameter for Gamma prior on temporal precision.
 #' @param tau_rate Rate parameter for Gamma prior on temporal precision.
 #'
-#' @return A `TulpaObs_temporal` object
+#' @return A `tulpaObs_temporal` object
 #' @export
 occu_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
                           time, group = NULL,
@@ -63,7 +63,7 @@ occu_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
     cyclic = cyclic,
     tau_shape = tau_shape,
     tau_rate = tau_rate
-  ), class = "TulpaObs_temporal")
+  ), class = "tulpaObs_temporal")
 }
 
 #' Specify spatially-varying coefficients
@@ -79,7 +79,7 @@ occu_temporal <- function(type = c("ar1", "rw1", "rw2", "iid"),
 #' @param phi_prior_lower Lower bound for range prior (default 0.01).
 #' @param phi_prior_upper Upper bound for range prior (default 10).
 #'
-#' @return A `TulpaObs_svc` object
+#' @return A `tulpaObs_svc` object
 #' @export
 occu_svc <- function(indices, coords, cov = "exponential", nn = 15,
                      shared = c(TRUE, FALSE),
@@ -109,7 +109,7 @@ occu_svc <- function(indices, coords, cov = "exponential", nn = 15,
     sigma2_prior_scale = sigma2_prior_scale,
     phi_prior_lower = phi_prior_lower,
     phi_prior_upper = phi_prior_upper
-  ), class = "TulpaObs_svc")
+  ), class = "tulpaObs_svc")
 }
 
 #' Specify latent factors for community models
@@ -119,7 +119,7 @@ occu_svc <- function(indices, coords, cov = "exponential", nn = 15,
 #' @param constraint `0` = sum-to-zero (default), `1` = first-zero.
 #' @param sigma_prior_rate Rate for Gamma prior on factor precision (default 1).
 #'
-#' @return A `TulpaObs_latent` object
+#' @return A `tulpaObs_latent` object
 #' @export
 occu_latent <- function(n_factors, shared = TRUE, constraint = 0,
                         sigma_prior_rate = 1) {
@@ -128,20 +128,20 @@ occu_latent <- function(n_factors, shared = TRUE, constraint = 0,
     shared = shared,
     constraint = as.integer(constraint),
     sigma_prior_rate = sigma_prior_rate
-  ), class = "TulpaObs_latent")
+  ), class = "tulpaObs_latent")
 }
 
 #' @export
-print.TulpaObs_re <- function(x, ...) {
-  cat(sprintf("TulpaObs RE: %s (%s model)\n", x$type, x$model))
+print.tulpaObs_re <- function(x, ...) {
+  cat(sprintf("tulpaObs RE: %s (%s model)\n", x$type, x$model))
   cat(sprintf("  Group: %s\n", if (is.character(x$group)) x$group else "custom"))
   if (!is.null(x$covariate)) cat(sprintf("  Covariate: %s\n", x$covariate))
   invisible(x)
 }
 
 #' @export
-print.TulpaObs_temporal <- function(x, ...) {
-  cat(sprintf("TulpaObs temporal: %s\n", x$type))
+print.tulpaObs_temporal <- function(x, ...) {
+  cat(sprintf("tulpaObs temporal: %s\n", x$type))
   cat(sprintf("  Time: %s\n", if (is.character(x$time)) x$time else "custom"))
   if (x$cyclic) cat("  Cyclic: yes\n")
   invisible(x)
@@ -160,7 +160,7 @@ print.TulpaObs_temporal <- function(x, ...) {
 #'   Default `c(TRUE, TRUE)` = both occupancy and detection.
 #' @param sigma_scale Prior scale for RE standard deviation (default 1).
 #'
-#' @return A `TulpaObs_re` object with group set to `"species"`.
+#' @return A `tulpaObs_re` object with group set to `"species"`.
 #' @export
 occu_community_re <- function(type = c("intercept", "slope"),
                               covariate = NULL,
@@ -181,7 +181,7 @@ occu_community_re <- function(type = c("intercept", "slope"),
 #' @param model `"bym2"` (default) or `"icar"`.
 #' @param ... Additional arguments passed to [occu_bym2()] or [occu_icar()].
 #'
-#' @return A `TulpaObs_spatial` object.
+#' @return A `tulpaObs_spatial` object.
 #' @export
 occu_areal <- function(adj, model = c("bym2", "icar"), ...) {
   model <- match.arg(model)

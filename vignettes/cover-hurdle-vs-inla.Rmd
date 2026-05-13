@@ -1,8 +1,8 @@
 ---
-title: "Cover hurdle: TulpaObs vs INLA on simulated cover data"
+title: "Cover hurdle: tulpaObs vs INLA on simulated cover data"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Cover hurdle: TulpaObs vs INLA on simulated cover data}
+  %\VignetteIndexEntry{Cover hurdle: tulpaObs vs INLA on simulated cover data}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 have_inla <- requireNamespace("INLA", quietly = TRUE)
 ```
 
-`TulpaObs::cover_hurdle()` fits a two-arm hurdle model: a binomial GLM on
+`tulpaObs::cover_hurdle()` fits a two-arm hurdle model: a binomial GLM on
 the occurrence indicator $\mathbf{1}\{y_i > 0\}$, and a Gaussian GLM on
 $\log y_i$ over the positive subset, with the lognormal back-transform
 $E[y_i \mid y_i > 0] = \exp(\eta_i^{\text{pos}} + \sigma^2 / 2)$ applied at
@@ -28,7 +28,7 @@ two on simulated data where the truth is known.
 
 The joint shared-spatial-field variant Michael uses in his
 `mod.joint`/`copy=` model is not included here — that lands in Phase 1c
-of the TulpaObs roadmap (`PLAN_TulpaObs.md` §7) when
+of the tulpaObs roadmap (`PLAN_tulpaObs.md` §7) when
 `tulpa_nested_laplace()` gains multi-likelihood support. For the
 separate-fit case the two approaches should agree closely; this vignette
 documents what "closely" means.
@@ -36,7 +36,7 @@ documents what "closely" means.
 ## Simulate
 
 ```{r simulate}
-library(TulpaObs)
+library(tulpaObs)
 
 sim <- simulate_cover_hurdle(
   N         = 400,
@@ -59,7 +59,7 @@ give the parameters used to generate `cover`. Site-level prevalence
 `mean(occur)` lands near `mean(plogis(eta_occ))` once enough sites are
 drawn.
 
-## Fit with TulpaObs
+## Fit with tulpaObs
 
 ```{r fit-tulpaobs}
 fit_tulpa <- tulpa_obs(
@@ -113,10 +113,10 @@ recovery <- data.frame(
                 "beta_pos_0", "beta_pos_x",
                 "sigma_pos"),
   truth     = c(truth$beta_occ, truth$beta_pos, truth$sigma_pos),
-  TulpaObs  = c(fit_tulpa$beta_occ, fit_tulpa$beta_pos, fit_tulpa$sigma_pos),
+  tulpaObs  = c(fit_tulpa$beta_occ, fit_tulpa$beta_pos, fit_tulpa$sigma_pos),
   INLA      = c(inla_beta_occ,    inla_beta_pos,    inla_sigma_pos)
 )
-recovery$delta_tulpa <- recovery$TulpaObs - recovery$truth
+recovery$delta_tulpa <- recovery$tulpaObs - recovery$truth
 recovery$delta_inla  <- recovery$INLA     - recovery$truth
 recovery
 ```
@@ -125,7 +125,7 @@ Both engines hit the same fixed-effects estimates to within the
 Laplace/MAP vs. INLA-integrated marginal-mean tolerance. The two
 discrepancies that matter:
 
-* `sigma_pos` — TulpaObs computes the Gaussian residual SD post-hoc as
+* `sigma_pos` — tulpaObs computes the Gaussian residual SD post-hoc as
   `sqrt(SS_res / (n - p))` because `tulpa::tulpa_laplace(family = "gaussian")`
   treats `phi = 1` internally. INLA estimates the precision as a
   hyperparameter and reports its posterior mean. The two converge as
@@ -159,7 +159,7 @@ max(abs(pred_tulpa$E_cover - pred_inla$E_cover))
 ```{r predict-plot, eval = have_inla, fig.height = 3.5}
 plot(pred_tulpa$x, pred_tulpa$E_cover, type = "l", lwd = 2,
      xlab = "x", ylab = "E[cover]",
-     main = "Expected cover: TulpaObs (black) vs INLA (red)")
+     main = "Expected cover: tulpaObs (black) vs INLA (red)")
 lines(pred_inla$x, pred_inla$E_cover, col = 2, lwd = 2, lty = 2)
 ```
 
@@ -171,15 +171,15 @@ doesn't surface:
 1. **Joint shared spatial field.** Michael's `mod.joint`/`copy=` model
    forces the cover linear predictor's spatial component to be a scalar
    multiple of the occurrence linear predictor's. Pattern is locked,
-   magnitude is fitted. TulpaObs's Phase 1a cover-hurdle does not couple
+   magnitude is fitted. tulpaObs's Phase 1a cover-hurdle does not couple
    the two arms at all. The joint engine arrives in Phase 1c
    (`tulpa_nested_laplace()` multi-likelihood).
 2. **Beta positive part.** Michael's earlier joint model uses
    `family = c("binomial", "beta")` for cover in $(0, 1)$ on the natural
-   scale. TulpaObs's Phase 1d will add `cover_hurdle(positive = "beta")`
+   scale. tulpaObs's Phase 1d will add `cover_hurdle(positive = "beta")`
    once `tulpa_laplace()` supports the beta likelihood (Phase 1b).
 3. **Uncertainty propagation.** INLA returns full posterior marginals on
-   both arms; TulpaObs returns the Laplace mode and a Hessian-based SE
+   both arms; tulpaObs returns the Laplace mode and a Hessian-based SE
    per arm. The two agree on the means within sampling noise but diverge
    on tail behaviour for small `n_positive`.
 
@@ -190,5 +190,5 @@ doesn't surface:
   data.
 * `example/info.md` — Michael's note on why a proper single-species
   occupancy model is hard in INLA (the marginalization problem).
-* `PLAN_TulpaObs.md` §7 — Phase 1 roadmap for the joint engine and the
+* `PLAN_tulpaObs.md` §7 — Phase 1 roadmap for the joint engine and the
   beta positive variant.

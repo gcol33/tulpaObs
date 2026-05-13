@@ -45,7 +45,7 @@ Signals a community model. Default NULL.}
 \item{det_visit_data}{Optional data frame with visit-level covariates.}
 }
 \value{
-A \code{TulpaObs} object
+A \code{tulpaObs} object
 }
 \description{
 Unified entry point for single-season, dynamic, and community occupancy models.

@@ -20,7 +20,7 @@ test_that("single-season occupancy model runs", {
   site_data <- data.frame(elevation = x_elev)
 
   mod <- occu(~ elevation, ~ 1, data = site_data, y = y)
-  expect_s3_class(mod, "TulpaObs")
+  expect_s3_class(mod, "tulpaObs")
   expect_equal(mod$model_type, "single")
   expect_equal(mod$n_sites, n_sites)
   expect_equal(mod$max_visits, max_visits)
@@ -28,7 +28,7 @@ test_that("single-season occupancy model runs", {
   expect_equal(mod$process_info[[2]]$p, 1)
 
   fit <- occu_fit(mod, verbose = FALSE)
-  expect_s3_class(fit, "TulpaObs_fit")
+  expect_s3_class(fit, "tulpaObs_fit")
   expect_true(fit$n_samples > 0)
   expect_true(ncol(fit$draws) >= 3)
 

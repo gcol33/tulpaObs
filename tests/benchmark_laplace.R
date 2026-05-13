@@ -1,6 +1,6 @@
-# Speed comparison: TulpaObs Laplace vs inlaocc vs TulpaObs NUTS
+# Speed comparison: tulpaObs Laplace vs inlaocc vs tulpaObs NUTS
 library(tulpa)
-library(TulpaObs)
+library(tulpaObs)
 library(INLAocc)
 
 cat("=== Speed Comparison: Laplace vs INLA vs NUTS ===\n\n")
@@ -16,12 +16,12 @@ y <- matrix(rbinom(N * J, 1, z * 0.4), N, J)
 d <- data.frame(x = rnorm(N))
 
 t_laplace <- system.time({
-  mod <- TulpaObs::occu(~ 1, ~ 1, d, y)
-  fit_l <- TulpaObs::occu_fit(mod, method = "laplace", verbose = FALSE)
+  mod <- tulpaObs::occu(~ 1, ~ 1, d, y)
+  fit_l <- tulpaObs::occu_fit(mod, method = "laplace", verbose = FALSE)
 })
 
 t_nuts <- system.time({
-  fit_n <- TulpaObs::occu_fit(mod, method = "nuts", iter = 2000, warmup = 1000,
+  fit_n <- tulpaObs::occu_fit(mod, method = "nuts", iter = 2000, warmup = 1000,
                                seed = 42, verbose = FALSE)
 })
 
@@ -49,12 +49,12 @@ z <- rbinom(N, 1, psi)
 y2 <- matrix(rbinom(N * J, 1, z * p), N, J)
 
 t_laplace <- system.time({
-  mod2 <- TulpaObs::occu(~ x1 + x2 + x3, ~ d1 + d2, d2, y2)
-  fit_l <- TulpaObs::occu_fit(mod2, method = "laplace", verbose = FALSE)
+  mod2 <- tulpaObs::occu(~ x1 + x2 + x3, ~ d1 + d2, d2, y2)
+  fit_l <- tulpaObs::occu_fit(mod2, method = "laplace", verbose = FALSE)
 })
 
 t_nuts <- system.time({
-  fit_n <- TulpaObs::occu_fit(mod2, method = "nuts", iter = 2000, warmup = 1000,
+  fit_n <- tulpaObs::occu_fit(mod2, method = "nuts", iter = 2000, warmup = 1000,
                                seed = 42, verbose = FALSE)
 })
 
@@ -79,12 +79,12 @@ z <- rbinom(N, 1, psi)
 y3 <- matrix(rbinom(N * J, 1, z * 0.5), N, J)
 
 t_laplace <- system.time({
-  mod3 <- TulpaObs::occu(~ x1 + x2, ~ 1, d3, y3)
-  fit_l <- TulpaObs::occu_fit(mod3, method = "laplace", verbose = FALSE)
+  mod3 <- tulpaObs::occu(~ x1 + x2, ~ 1, d3, y3)
+  fit_l <- tulpaObs::occu_fit(mod3, method = "laplace", verbose = FALSE)
 })
 
 t_nuts <- system.time({
-  fit_n <- TulpaObs::occu_fit(mod3, method = "nuts", iter = 2000, warmup = 1000,
+  fit_n <- tulpaObs::occu_fit(mod3, method = "nuts", iter = 2000, warmup = 1000,
                                seed = 42, verbose = FALSE)
 })
 

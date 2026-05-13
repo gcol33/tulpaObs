@@ -21,7 +21,7 @@ occu_priors(
 \item{sigma.sq.p}{Prior for detection RE variance: \code{c(shape, rate)}.}
 }
 \value{
-A \code{TulpaObs_priors} object.
+A \code{tulpaObs_priors} object.
 }
 \description{
 Specify prior distributions for occupancy models

@@ -1,21 +1,21 @@
-# TulpaObs Phase 1 — Deliverables for the next session
+# tulpaObs Phase 1 — Deliverables for the next session
 
 Self-contained brief for picking this up cold. Phase 0 (architecture + dispatcher
-+ family objects) shipped in the previous session — see `PLAN_TulpaObs.md` for
++ family objects) shipped in the previous session — see `PLAN_tulpaObs.md` for
 the full roadmap and the conversation context below for what was decided.
 
 ---
 
 ## Context the next session needs
 
-**The package**: `TulpaObs` (renamed from `tulpaOcc` as Phase 5) is a unified
+**The package**: `tulpaObs` (renamed from `tulpaOcc` as Phase 5) is a unified
 framework for hierarchical latent-state observation models on the `tulpa`
 backend. The directory on disk is still `tulpaOcc/` and the GitHub repo URL
 is still `gcol33/tulpaOcc`; only the package name itself was renamed.
 
 **What already exists**:
 
-- `TulpaObs` (this package, formerly `tulpaOcc`) — full-featured occupancy: single-season, dynamic,
+- `tulpaObs` (this package, formerly `tulpaOcc`) — full-featured occupancy: single-season, dynamic,
   community, integrated, JSDM, ICAR/BYM2/GP/SPDE, Laplace + NUTS. ~132 tests.
 - `tulpa` — engine. `tulpa_laplace()` (binomial/poisson/negbin/gaussian),
   `tulpa_em_laplace()` EM driver, `tulpa_nested_laplace()` (registry-based,
@@ -196,14 +196,14 @@ simulate_cover_hurdle <- function(N             = 200,
 - Do not implement Mundlak helpers. That's 1d.
 - Do not compare to INLA on real data. That's 1e.
 - Do not touch the existing `occu()` / `occu_fit()` pipeline.
-- Do not regenerate `TulpaObs.dll` or `RcppExports.cpp` — Phase 1a is
+- Do not regenerate `tulpaObs.dll` or `RcppExports.cpp` — Phase 1a is
   pure R.
 
 ---
 
 ## Phase 1b — Beta family in tulpa
 
-**Triggered after 1a passes review.** Lives in `tulpa`, not `TulpaObs`.
+**Triggered after 1a passes review.** Lives in `tulpa`, not `tulpaObs`.
 
 ### Files to touch in `tulpa`
 
@@ -346,10 +346,10 @@ After 1d. Reproducible reduction of the MOTIVATE workflow:
 
 In this order, before writing any code:
 
-1. `PLAN_TulpaObs.md` — strategic context.
+1. `PLAN_tulpaObs.md` — strategic context.
 2. `R/tulpa_obs.R` (this package) — dispatcher pattern.
 3. `R/obs_families.R` (this package) — family-object pattern.
-4. `R/laplace.R` (this package) — existing TulpaObs Laplace path; the cover
+4. `R/laplace.R` (this package) — existing tulpaObs Laplace path; the cover
    hurdle should follow the same shape (encode → tulpa call → decode).
 5. `example/MOT_abund_data.Rmd` lines 2480–2950 — the joint INLA hurdle
    model the design must eventually match.
@@ -389,7 +389,7 @@ From `~/.claude/CLAUDE.md`:
 
 From this package's `CLAUDE.md`:
 
-- **TulpaObs owns**: family encode/decode, family-specific S3, family-
+- **tulpaObs owns**: family encode/decode, family-specific S3, family-
   specific diagnostics.
 - **tulpa owns**: engines, MI/Gibbs, generic S3, generic diagnostics.
 - **Never pass `Rcpp::Nullable<T>` to header helpers** — MinGW crash. Not
@@ -423,7 +423,7 @@ From this package's `CLAUDE.md`:
       (`devtools::test()`).
 - [ ] `devtools::check(args = "--no-manual")` clean (no new NOTEs / WARNINGs).
 - [ ] `vignettes/cover-hurdle.Rmd` stub builds.
-- [ ] `PLAN_TulpaObs.md` updated: `cover_hurdle` table row status flipped
+- [ ] `PLAN_tulpaObs.md` updated: `cover_hurdle` table row status flipped
       to `working (lognormal)` / `planned (beta)`.
 - [ ] Single git commit on `main` with message
       `feat(cover_hurdle): lognormal hurdle via two-Laplace fit (Phase 1a)`.
@@ -433,7 +433,7 @@ From this package's `CLAUDE.md`:
 ## Quick start command for the next session
 
 ```
-Read tulpaOcc/deliverables.md and tulpaOcc/PLAN_TulpaObs.md, then start
+Read tulpaOcc/deliverables.md and tulpaOcc/PLAN_tulpaObs.md, then start
 Phase 1a. Stop before writing code if any of the four open decisions need
 my input.
 ```

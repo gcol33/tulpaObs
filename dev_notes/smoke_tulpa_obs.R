@@ -1,5 +1,5 @@
-source("C:/GillesC/Documents/dev/TulpaObs/R/obs_families.R")
-source("C:/GillesC/Documents/dev/TulpaObs/R/tulpa_obs.R")
+source("C:/GillesC/Documents/dev/tulpaObs/R/obs_families.R")
+source("C:/GillesC/Documents/dev/tulpaObs/R/tulpa_obs.R")
 
 cat("=== family constructors ===\n")
 print(occ())

@@ -7,9 +7,9 @@
 checkIdentifiability(model, fit = NULL)
 }
 \arguments{
-\item{model}{A \code{TulpaObs} model object (before fitting).}
+\item{model}{A \code{tulpaObs} model object (before fitting).}
 
-\item{fit}{Optional \code{TulpaObs_fit} object (for post-fit diagnostics).}
+\item{fit}{Optional \code{tulpaObs_fit} object (for post-fit diagnostics).}
 }
 \value{
 A list with diagnostic messages and flags.

@@ -7,7 +7,7 @@
 richness(object)
 }
 \arguments{
-\item{object}{A \code{TulpaObs_fit} object from a community model.}
+\item{object}{A \code{tulpaObs_fit} object from a community model.}
 }
 \value{
 A data.frame with site-level richness estimates.

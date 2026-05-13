@@ -1,5 +1,5 @@
 # =============================================================================
-# obs_families.R — Family-object constructors for TulpaObs
+# obs_families.R — Family-object constructors for tulpaObs
 #
 # Each family is a small list with class "tulpa_obs_family". It carries
 # the latent-state type, the observation likelihood, replicate requirements,
@@ -11,7 +11,7 @@
 # =============================================================================
 
 
-#' Construct a TulpaObs family object
+#' Construct a tulpaObs family object
 #'
 #' Low-level constructor for `tulpa_obs_family` objects. End users should
 #' call the specific family functions ([occ()], [nmixture()], etc.) rather
@@ -61,7 +61,7 @@ obs_family <- function(name,
 
 
 # ---------------------------------------------------------------------------
-# Working families — dispatch to existing TulpaObs builders
+# Working families — dispatch to existing tulpaObs builders
 # ---------------------------------------------------------------------------
 
 #' Single-season occupancy family

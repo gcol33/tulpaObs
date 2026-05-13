@@ -1,8 +1,8 @@
 ---
-title: "Occupancy: TulpaObs vs INLA aggregated-binomial"
+title: "Occupancy: tulpaObs vs INLA aggregated-binomial"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Occupancy: TulpaObs vs INLA aggregated-binomial}
+  %\VignetteIndexEntry{Occupancy: tulpaObs vs INLA aggregated-binomial}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -47,7 +47,7 @@ marginalized fit.
 ## Simulate detection histories with known $\psi$ and $p$
 
 ```{r simulate}
-library(TulpaObs)
+library(tulpaObs)
 
 sim <- simulate_occu(
   N          = 600,
@@ -72,7 +72,7 @@ The naive proportion of sites with any detection is biased low by
 $(1 - p)^J$ at each occupied site — exactly the bias an occupancy model
 is supposed to correct.
 
-## TulpaObs: true occupancy fit via `occu()`
+## tulpaObs: true occupancy fit via `occu()`
 
 ```{r fit-tulpa-laplace}
 mod_tulpa <- occu(
@@ -154,13 +154,13 @@ compare <- data.frame(
   parameter        = c("(occ Intercept)", "occ_cov1",
                        "(det Intercept)", "det_cov1"),
   truth            = c(truth$beta_occ, truth$beta_det),
-  TulpaObs_NUTS    = c(
+  tulpaObs_NUTS    = c(
     fit_tulpa_nuts$means["psi_(Intercept)"],
     fit_tulpa_nuts$means["psi_occ_cov1"],
     fit_tulpa_nuts$means["p_(Intercept)"],
     fit_tulpa_nuts$means["p_det_cov1"]
   ),
-  TulpaObs_Laplace = c(
+  tulpaObs_Laplace = c(
     fit_tulpa_lap$means["psi_(Intercept)"],
     fit_tulpa_lap$means["psi_occ_cov1"],
     fit_tulpa_lap$means["p_(Intercept)"],
@@ -193,7 +193,7 @@ recover site-level $\psi$ even in principle, because what it estimates is
 not $\psi$.
 
 ```{r predict, eval = have_inla}
-# TulpaObs returns per-site psi_hat. fitted() also returns $p (per-site
+# tulpaObs returns per-site psi_hat. fitted() also returns $p (per-site
 # detection probability) and $z (posterior occupancy probability given
 # the detection history); $psi is the right comparator for true psi.
 psi_hat_nuts <- fitted(fit_tulpa_nuts)$psi
@@ -207,8 +207,8 @@ eta_site     <- as.numeric(X_site %*% inla_fixed[, "mean"])
 psi_hat_inla <- plogis(eta_site)
 
 cor_with_truth <- c(
-  TulpaObs_NUTS    = cor(psi_hat_nuts, truth$psi),
-  TulpaObs_Laplace = cor(psi_hat_lap,  truth$psi),
+  tulpaObs_NUTS    = cor(psi_hat_nuts, truth$psi),
+  tulpaObs_Laplace = cor(psi_hat_lap,  truth$psi),
   INLA_workaround  = cor(psi_hat_inla, truth$psi),
   naive_any        = cor(as.numeric(rowSums(y) > 0), truth$psi)
 )
@@ -223,7 +223,7 @@ with the species' actual occupancy.
 ```{r predict-plot, eval = have_inla, fig.height = 4}
 op <- par(mfrow = c(1, 2))
 plot(truth$psi, psi_hat_nuts, pch = 16, col = rgb(0, 0, 0, 0.4),
-     xlab = "true psi", ylab = "TulpaObs psi_hat (NUTS)",
+     xlab = "true psi", ylab = "tulpaObs psi_hat (NUTS)",
      main = "occu(): recovers psi")
 abline(0, 1, col = 2, lwd = 2)
 plot(truth$psi, psi_hat_inla, pch = 16, col = rgb(0, 0, 0, 0.4),
@@ -246,7 +246,7 @@ not become an occupancy model by adding more covariates.
 
 The only way to recover $\psi$ and $p$ separately from a row-wise INLA
 likelihood is `inla.rgeneric`: a custom likelihood that implements the
-mixture above. That is the same level of work as building TulpaObs's
+mixture above. That is the same level of work as building tulpaObs's
 EM/NUTS engine; if you're going to write the marginalized likelihood,
 you may as well use the package that already has it.
 
@@ -256,5 +256,5 @@ you may as well use the package that already has it.
   Glaser's binomial workaround, with detectability proxies.
 * `example/info.md` — Michael's note on why a proper single-species
   occupancy model is hard in INLA (the marginalization problem).
-* `?occu` and `?occu_fit` — the TulpaObs entry points used here.
+* `?occu` and `?occu_fit` — the tulpaObs entry points used here.
 * `?simulate_occu` — the detection-history simulator.

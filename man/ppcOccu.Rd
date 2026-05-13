@@ -7,7 +7,7 @@
 ppcOccu(object, fit.stat = c("freeman-tukey", "chi-squared"), n.samples = 500)
 }
 \arguments{
-\item{object}{A \code{TulpaObs_fit} object.}
+\item{object}{A \code{tulpaObs_fit} object.}
 
 \item{fit.stat}{\code{"freeman-tukey"} (default) or \code{"chi-squared"}.}
 

@@ -27,7 +27,7 @@
 #include <tulpa/autodiff_arena.h>
 #include <tulpa/autodiff_fwd.h>
 
-namespace TulpaObs {
+namespace tulpaObs {
 
 // AD-safe log(1 + exp(x)) that avoids overflow.
 // Uses comparison operators (work for double, arena::Var, fwd::Dual)
@@ -79,7 +79,7 @@ T occ_log_likelihood(
     const void* model_data
 ) {
     // Cross-DLL arena sync: on Windows/MinGW, the thread-local current_arena()
-    // is duplicated per DLL. Sync TulpaObs's copy from the incoming Var objects
+    // is duplicated per DLL. Sync tulpaObs's copy from the incoming Var objects
     // so that T(0.0) constructors inside this function find the correct arena.
     if constexpr (std::is_same_v<T, tulpa::arena::Var>) {
         tulpa::arena::current_arena() = eta[0].arena_;
@@ -238,6 +238,6 @@ inline void occ_residual(
     }
 }
 
-} // namespace TulpaObs
+} // namespace tulpaObs
 
 #endif // TULPAOCC_OCC_LIKELIHOOD_H

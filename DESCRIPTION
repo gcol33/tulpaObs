@@ -1,4 +1,4 @@
-Package: TulpaObs
+Package: tulpaObs
 Title: Bayesian Occupancy Models via tulpa
 Version: 0.1.0
 Authors@R: person("Gilles", "Colling", email = "gilles.colling@univie.ac.at",

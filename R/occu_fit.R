@@ -1,10 +1,10 @@
 #' Fit an occupancy model
 #'
-#' Unified fitting function for all TulpaObs model types.
+#' Unified fitting function for all tulpaObs model types.
 #' Default method is Laplace approximation (fast, Tier 2).
 #' Use `method = "nuts"` for full MCMC posterior sampling (Tier 1).
 #'
-#' @param model A `TulpaObs` object from [occu()].
+#' @param model A `tulpaObs` object from [occu()].
 #' @param spatial Optional spatial specification from [occu_icar()], [occu_bym2()],
 #'   [occu_gp()], [occu_multiscale_gp()], or [occu_spde()].
 #' @param temporal Optional temporal specification from [occu_temporal()].
@@ -26,7 +26,7 @@
 #' @param seed Random seed (default 42).
 #' @param verbose Print progress (default TRUE).
 #'
-#' @return A `TulpaObs_fit` object with posterior draws and diagnostics.
+#' @return A `tulpaObs_fit` object with posterior draws and diagnostics.
 #' @export
 occu_fit <- function(model, spatial = NULL, temporal = NULL,
                      re = NULL, svc = NULL, latent = NULL,
@@ -39,8 +39,8 @@ occu_fit <- function(model, spatial = NULL, temporal = NULL,
 
   method <- match.arg(method)
 
-  if (!inherits(model, "TulpaObs")) {
-    stop("model must be a TulpaObs object from occu()")
+  if (!inherits(model, "tulpaObs")) {
+    stop("model must be a tulpaObs object from occu()")
   }
 
   # Dispatch to Laplace if requested
@@ -50,17 +50,17 @@ occu_fit <- function(model, spatial = NULL, temporal = NULL,
                         verbose = verbose))
   }
 
-  if (!is.null(spatial) && !inherits(spatial, "TulpaObs_spatial")) {
-    stop("spatial must be a TulpaObs_spatial object")
+  if (!is.null(spatial) && !inherits(spatial, "tulpaObs_spatial")) {
+    stop("spatial must be a tulpaObs_spatial object")
   }
-  if (!is.null(temporal) && !inherits(temporal, "TulpaObs_temporal")) {
-    stop("temporal must be a TulpaObs_temporal object from occu_temporal()")
+  if (!is.null(temporal) && !inherits(temporal, "tulpaObs_temporal")) {
+    stop("temporal must be a tulpaObs_temporal object from occu_temporal()")
   }
-  if (!is.null(svc) && !inherits(svc, "TulpaObs_svc")) {
-    stop("svc must be a TulpaObs_svc object from occu_svc()")
+  if (!is.null(svc) && !inherits(svc, "tulpaObs_svc")) {
+    stop("svc must be a tulpaObs_svc object from occu_svc()")
   }
-  if (!is.null(latent) && !inherits(latent, "TulpaObs_latent")) {
-    stop("latent must be a TulpaObs_latent object from occu_latent()")
+  if (!is.null(latent) && !inherits(latent, "tulpaObs_latent")) {
+    stop("latent must be a tulpaObs_latent object from occu_latent()")
   }
 
   model_type <- model$model_type
@@ -170,7 +170,7 @@ occu_fit <- function(model, spatial = NULL, temporal = NULL,
   # ---- Random effects ----
   if (!is.null(re)) {
     # Accept single occu_re or list of occu_re
-    if (inherits(re, "TulpaObs_re")) re <- list(re)
+    if (inherits(re, "tulpaObs_re")) re <- list(re)
     re_spec <- build_re_spec(re, model)
     spec$re_spec <- re_spec
   }
@@ -231,7 +231,7 @@ occu_fit <- function(model, spatial = NULL, temporal = NULL,
   fit$latent <- latent
   # Expose process_info at top level for tulpa generic S3 methods
   fit$process_info <- model$process_info
-  class(fit) <- c("TulpaObs_fit", "tulpa_fit")
+  class(fit) <- c("tulpaObs_fit", "tulpa_fit")
   fit
 }
 

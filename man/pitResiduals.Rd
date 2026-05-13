@@ -7,7 +7,7 @@
 pitResiduals(object, n.samples = 250)
 }
 \arguments{
-\item{object}{A \code{TulpaObs_fit} object.}
+\item{object}{A \code{tulpaObs_fit} object.}
 
 \item{n.samples}{Number of posterior samples (default 250).}
 }

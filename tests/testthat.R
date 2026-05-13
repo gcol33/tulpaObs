@@ -1,4 +1,4 @@
 library(testthat)
-library(TulpaObs)
+library(tulpaObs)
 
-test_check("TulpaObs")
+test_check("tulpaObs")

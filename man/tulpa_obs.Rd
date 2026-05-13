@@ -72,7 +72,7 @@ generative template. The specific model is chosen via the \code{family}
 argument; the engine (Laplace / nested Laplace / NUTS) via \code{engine}.
 }
 \details{
-This function is the canonical TulpaObs API. The package-specific
+This function is the canonical tulpaObs API. The package-specific
 entry points (\code{occu()}, \code{occu_fit()}) remain exported for backward
 compatibility and are called internally during the Phase 0 transition.
 }
@@ -81,7 +81,7 @@ compatibility and are called internally during the Phase 0 transition.
 
 Only \code{family = occ()} is wired to a real engine in v0.1. Other families
 raise informative errors pointing to the planned phase in
-\code{PLAN_TulpaObs.md}.
+\code{PLAN_tulpaObs.md}.
 }
 
 \examples{

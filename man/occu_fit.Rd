@@ -26,7 +26,7 @@ occu_fit(
 )
 }
 \arguments{
-\item{model}{A \code{TulpaObs} object from \code{\link[=occu]{occu()}}.}
+\item{model}{A \code{tulpaObs} object from \code{\link[=occu]{occu()}}.}
 
 \item{spatial}{Optional spatial specification from \code{\link[=occu_icar]{occu_icar()}}, \code{\link[=occu_bym2]{occu_bym2()}},
 \code{\link[=occu_gp]{occu_gp()}}, \code{\link[=occu_multiscale_gp]{occu_multiscale_gp()}}, or \code{\link[=occu_spde]{occu_spde()}}.}
@@ -66,10 +66,10 @@ Only used for community models with species RE.}
 \item{verbose}{Print progress (default TRUE).}
 }
 \value{
-A \code{TulpaObs_fit} object with posterior draws and diagnostics.
+A \code{tulpaObs_fit} object with posterior draws and diagnostics.
 }
 \description{
-Unified fitting function for all TulpaObs model types.
+Unified fitting function for all tulpaObs model types.
 Default method is Laplace approximation (fast, Tier 2).
 Use \code{method = "nuts"} for full MCMC posterior sampling (Tier 1).
 }

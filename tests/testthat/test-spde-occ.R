@@ -6,7 +6,7 @@ test_that("occu_spde creates valid specification", {
   coords <- cbind(runif(30), runif(30))
   spec <- occu_spde(coords)
 
-  expect_s3_class(spec, "TulpaObs_spatial")
+  expect_s3_class(spec, "tulpaObs_spatial")
   expect_equal(spec$type, "spde")
   expect_true(spec$n_units >= 30)
   expect_equal(spec$shared, c(TRUE, FALSE))
@@ -17,7 +17,7 @@ test_that("occu_spde creates spec from formula", {
   df <- data.frame(x = runif(20), y = runif(20))
   spec <- occu_spde(~ x + y, data = df)
 
-  expect_s3_class(spec, "TulpaObs_spatial")
+  expect_s3_class(spec, "tulpaObs_spatial")
   expect_equal(spec$type, "spde")
 })
 
@@ -34,5 +34,5 @@ test_that("occu_spde with fractional nu creates valid spec", {
   spec <- occu_spde(coords, nu = 1.5)
 
   expect_equal(spec$nu, 1.5)
-  expect_s3_class(spec, "TulpaObs_spatial")
+  expect_s3_class(spec, "tulpaObs_spatial")
 })

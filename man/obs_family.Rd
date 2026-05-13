@@ -2,7 +2,7 @@
 % Please edit documentation in R/obs_families.R
 \name{obs_family}
 \alias{obs_family}
-\title{Construct a TulpaObs family object}
+\title{Construct a tulpaObs family object}
 \usage{
 obs_family(
   name,

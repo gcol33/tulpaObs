@@ -7,7 +7,7 @@
 waicOccu(object, ...)
 }
 \arguments{
-\item{object}{A \code{TulpaObs_fit} object.}
+\item{object}{A \code{tulpaObs_fit} object.}
 
 \item{...}{Ignored.}
 }
