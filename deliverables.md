@@ -10,8 +10,8 @@ the full roadmap and the conversation context below for what was decided.
 
 **The package**: `tulpaObs` (renamed from `tulpaOcc` as Phase 5) is a unified
 framework for hierarchical latent-state observation models on the `tulpa`
-backend. The directory on disk is still `tulpaOcc/` and the GitHub repo URL
-is still `gcol33/tulpaOcc`; only the package name itself was renamed.
+backend. Local directory and GitHub repo are both `tulpaObs` /
+`gcol33/tulpaObs` as of 2026-05-15 (GitHub 301-redirects the old URL).
 
 **What already exists**:
 
@@ -382,7 +382,7 @@ From `~/.claude/CLAUDE.md`:
 - **Surface Bugs in Dependencies**: any tulpa bug discovered in 1b/1c/1d
   gets a `gh issue create --repo gcol33/tulpa` *before* the workaround
   lands. Reference the issue from any skipped test.
-- **Work on Main Branch by Default**: commit Phase 1a to `tulpaOcc/main`
+- **Work on Main Branch by Default**: commit Phase 1a to `tulpaObs/main`
   unless the user explicitly asks for a branch.
 - **Try Before Deferring**: e.g. for the simulator's spatial draw, try the
   existing `tulpa::spatial_*` simulator before reaching for `MASS::mvrnorm`.
@@ -433,7 +433,7 @@ From this package's `CLAUDE.md`:
 ## Quick start command for the next session
 
 ```
-Read tulpaOcc/deliverables.md and tulpaOcc/PLAN_tulpaObs.md, then start
+Read tulpaObs/deliverables.md and tulpaObs/PLAN_tulpaObs.md, then start
 Phase 1a. Stop before writing code if any of the four open decisions need
 my input.
 ```

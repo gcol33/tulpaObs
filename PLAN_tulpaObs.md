@@ -269,8 +269,9 @@ These are scheduled under Phase 3 below.
 - `tulpaOcc` → `tulpaObs`: Package field, `useDynLib`, all `tulpaOcc_*`
   S3 class names → `tulpaObs_*`, C++ `namespace tulpaOcc` → `namespace
   tulpaObs`, DLL symbol via `Rcpp::compileAttributes()`. Single mechanical
-  commit. Git folder on disk and GitHub remote URL still say `tulpaOcc`
-  — only the R package name was renamed.
+  commit. Local folder renamed `tulpaOcc/` → `tulpaObs/`; GitHub repo
+  renamed `gcol33/tulpaOcc` → `gcol33/tulpaObs` on 2026-05-15 (GitHub
+  301-redirects the old URL, so prior install_github clones keep working).
 - **Deferred**: deprecation shim package `tulpaOcc` that re-exports the
   public API. Not needed yet because INLAabun and other downstream
   consumers don't import `tulpaOcc::` directly. File when the first
