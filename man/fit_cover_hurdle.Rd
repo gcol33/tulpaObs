@@ -17,7 +17,8 @@ fit_cover_hurdle(
 
 \item{positive}{\code{"lognormal"} or \code{"beta"} (taken from \code{enc$positive}).}
 
-\item{engine}{Currently \code{"laplace"} is the only supported value.}
+\item{engine}{\code{"laplace"} (default) or \code{"nested_laplace"}. The latter is
+routed through \code{\link[=fit_cover_hurdle_joint_nested]{fit_cover_hurdle_joint_nested()}}.}
 
 \item{priors}{Currently ignored — passed through for forward compat.}
 

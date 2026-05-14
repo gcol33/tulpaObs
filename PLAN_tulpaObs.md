@@ -100,7 +100,7 @@ What lives inside tulpaObs (in tension, by user request):
 | `distance()`         | density               | hazard / half-normal binned   | replaced by distance bins | all | L, NUTS  | planned (Phase 4) |
 | `removal()`          | N                     | sequential removal            | required  | spatial            | L, NUTS    | planned (Phase 4) |
 | `false_positive()`   | z + classification    | confirmed / ambiguous         | required  | all                | NUTS       | planned (Phase 4) |
-| `cover_hurdle()`     | latent presence + mu  | Binomial(occur) + Beta or LN  | single    | CAR, BYM2, SPDE    | L, NL      | working (lognormal, Phase 1a) / planned (beta, Phase 1d) |
+| `cover_hurdle()`     | latent presence + mu  | Binomial(occur) + Beta or LN  | single    | CAR, BYM2, SPDE    | L, NL      | working (lognormal + beta on L; lognormal + beta on NL via shared spatial field) |
 
 Engines: **L** = single Laplace via tulpa, **NL** = nested Laplace via
 tulpa, **NUTS** = HMC via tulpa.
@@ -167,7 +167,7 @@ dispatches to `occu()` internally during the transition.
 | dynamic_occ       | working      | not yet        | working |
 | multispecies_occ  | working      | not yet        | working |
 | nmixture          | needs port from INLAabun | needs likelihood added to tulpa nested-Laplace registry | planned |
-| cover_hurdle      | n/a (no E-step) | shipped (BYM2 / ICAR / CAR_proper, lognormal positive; beta likelihood available in `tulpa_nested_laplace_joint()` and ready for cover_hurdle wire-up) | planned |
+| cover_hurdle      | n/a (no E-step) | shipped (BYM2 / ICAR / CAR_proper, lognormal *and* beta positive; phi profiled via `tulpa_laplace_beta()` pre-fit, full posterior integration over phi is Phase 3) | planned |
 | distance          | needs E-step over distance bins | not yet | planned |
 
 ---
@@ -232,8 +232,17 @@ These are scheduled under Phase 3 below.
   `engine = "nested_laplace"` for the lognormal-positive variant on any
   of the three areal spatial specs. Remaining: beta-positive variant of
   cover_hurdle, NNGP/HSGP/RW1/RW2/AR1 joint backends — Phase 3.
-- *(Phase 1d — planned)* MOTIVATE-style within/between time
-  decomposition helper, beta-positive variant of `cover_hurdle()`.
+- *(Phase 1d — shipped)* Beta-positive variant of `cover_hurdle()` on the
+  joint nested-Laplace engine. Precision `phi` is **profiled**: pre-fit via
+  `tulpa::tulpa_laplace_beta()` on the positive subset (no spatial), then
+  held fixed while the joint engine integrates over the spatial
+  hyperparameters. Mirrors the `sigma_pos` handling for lognormal. Full
+  posterior integration over `phi` is Phase 3. MOTIVATE-style
+  within/between (Mundlak) decomposition helper shipped as
+  `tulpaObs::within_between(data, group, vars)` — adds `<var>_btw`
+  (per-group mean) and `<var>_wtn` (deviation from per-group mean) so
+  longitudinal formulas like `~ year_btw + year_wtn` separate cross-plot
+  baseline heterogeneity from within-plot temporal trend.
 - *(Phase 1e — planned)* Reproducible reduction of the MOTIVATE example.
 
 **Phase 2 — N-mixture**

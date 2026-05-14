@@ -2,9 +2,13 @@
 # family_cover_hurdle.R — Vegetation cover hurdle on the tulpa Laplace backend
 #
 # Phase 1a: lognormal-positive variant via two independent tulpa_laplace()
-# calls (binomial on occur, gaussian on log(cover[occur==1])). The joint
-# shared-field model with proper hyperparameter integration is Phase 1c;
-# the beta-positive variant is Phase 1d.
+# calls (binomial on occur, gaussian on log(cover[occur==1])).
+# Phase 1c: joint shared-field model via tulpa_nested_laplace_joint(),
+# lognormal-positive on BYM2/ICAR/CAR_proper.
+# Phase 1d: beta-positive on the joint engine. phi is profiled (pre-fit on
+# the positive subset alone via tulpa_laplace_beta(), then plugged into the
+# joint as fixed dispersion). Mirrors the sigma_pos handling for lognormal.
+# Full posterior integration over phi is scheduled for Phase 3.
 # =============================================================================
 
 
@@ -411,30 +415,39 @@ print.summary.cover_fit <- function(x, ...) {
 
 
 # ---------------------------------------------------------------------------
-# Joint nested-Laplace fit (Phase 1c)
+# Joint nested-Laplace fit (Phase 1c lognormal, Phase 1d beta)
 # ---------------------------------------------------------------------------
 
-#' Fit cover_hurdle as a joint binomial+gaussian model with shared spatial
-#' field via [tulpa::tulpa_nested_laplace_joint()].
+#' Fit cover_hurdle as a joint binomial+(gaussian|beta) model with shared
+#' spatial field via [tulpa::tulpa_nested_laplace_joint()].
 #'
-#' First-cut Phase 1c: lognormal positive arm only, BYM2 spatial only. Beta
-#' positive and other backends land under P1c-7.
+#' For `positive = "lognormal"` the positive arm runs as Gaussian on
+#' `log(cover)` with `sigma_pos` estimated post-hoc as the residual standard
+#' error at the joint mode (matches Phase 1a).
+#'
+#' For `positive = "beta"` the positive arm runs as Beta on `cover` (logit
+#' link). The precision `phi` is **profiled**: a pre-fit via
+#' [tulpa::tulpa_laplace_beta()] on the positive subset (no spatial) gives
+#' `phi_hat`, which is then held fixed in the joint engine while the
+#' spatial hyperparameters are integrated out. Full posterior integration
+#' over `phi` is scheduled for Phase 3.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
 #' @param data The original (un-subsetted) data frame — required to resolve
 #'   the spatial spec (group_var lookup, n_spatial_units check).
-#' @param positive `"lognormal"` (only supported value in the first cut).
+#' @param positive `"lognormal"` or `"beta"`.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
-#'   `sigma_grid`, `rho_grid`, `alpha_grid`.
+#'   `sigma_grid`, `rho_grid`, `tau_grid`, `rho_car_grid`, `alpha_grid`,
+#'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta
+#'   pre-fit when `positive = "beta"`).
 #' @return List shaped like the single-Laplace fit output but with extra
 #'   `joint` field carrying the raw `tulpa_nested_laplace_joint` result.
 #' @keywords internal
 fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                           control = list()) {
-  if (positive != "lognormal") {
-    stop("engine = 'nested_laplace' for cover() currently supports only ",
-         "positive = 'lognormal' (Phase 1c first cut). beta lands in P1c-7.",
-         call. = FALSE)
+  if (!positive %in% c("lognormal", "beta")) {
+    stop("engine = 'nested_laplace' for cover() supports positive = ",
+         "'lognormal' or 'beta'. Got '", positive, "'.", call. = FALSE)
   }
   if (is.null(enc$spatial_spec)) {
     stop("engine = 'nested_laplace' for cover() requires a spatial spec. ",
@@ -478,6 +491,19 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     family      = "binomial",
     phi         = 1.0
   )
+
+  # Positive-arm dispersion: gaussian holds phi=1 (estimated post-hoc as
+  # residual SD; gaussian Hessian is invariant to phi up to a scalar);
+  # beta needs a real phi to make the joint Newton step well-scaled, so
+  # pre-fit it on the positive subset alone.
+  if (positive == "lognormal") {
+    pos_family <- "gaussian"
+    phi_hat    <- 1.0
+  } else {
+    phi_hat <- .prefit_beta_phi(enc, control)
+    pos_family <- "beta"
+  }
+
   arm_pos <- list(
     y           = as.numeric(enc$pos_data$y),
     n_trials    = rep(1L, N_pos),
@@ -486,8 +512,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     re_idx      = rep(0, N_pos),
     n_re_groups = 0L,
     sigma_re    = 1.0,
-    family      = "gaussian",
-    phi         = 1.0       # estimated post-hoc as residual SD; matches Phase 1a
+    family      = pos_family,
+    phi         = phi_hat
   )
 
   # Strip the per-obs spatial_idx (tulpa_nested_laplace_joint takes it per
@@ -535,11 +561,19 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     as.numeric(crossprod(fit$weights, fit$modes[, bpos_idx, drop = FALSE]^2))
     - beta_pos^2))
 
-  # Residual SD on the positive arm at the posterior-weighted-mean beta_pos,
-  # matching the Phase 1a convention.
-  eta_pos   <- as.numeric(enc$pos_data$X %*% beta_pos)
-  resid     <- enc$pos_data$y - eta_pos
-  sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
+  # Dispersion summary on the positive arm at the posterior-weighted-mean
+  # beta_pos. For lognormal this is the residual SD on the log scale (matches
+  # Phase 1a); for beta it is the profiled phi from the pre-fit, recorded as
+  # phi_pos.
+  if (positive == "lognormal") {
+    eta_pos   <- as.numeric(enc$pos_data$X %*% beta_pos)
+    resid     <- enc$pos_data$y - eta_pos
+    sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
+    phi_pos   <- NA_real_
+  } else {
+    sigma_pos <- NA_real_
+    phi_pos   <- phi_hat
+  }
 
   m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
                 log_marginal = NA_real_)
@@ -549,8 +583,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   list(
     m_occ      = m_occ,
     m_pos      = m_pos,
-    positive   = "lognormal",
+    positive   = positive,
     sigma_pos  = sigma_pos,
+    phi_pos    = phi_pos,
     pos_fit_n  = N_pos,
     pos_fit_p  = p_pos,
     beta_occ   = beta_occ,
@@ -559,6 +594,30 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     se_pos     = se_pos,
     joint      = fit
   )
+}
+
+# Pre-fit the beta precision on the positive subset (no spatial). Profiled
+# treatment of phi: held fixed at this value while the joint engine integrates
+# over the spatial hyperparameters. Cheap, runs in well under a second on
+# Phase 1d test sizes.
+.prefit_beta_phi <- function(enc, control) {
+  fit <- tulpa::tulpa_laplace_beta(
+    y          = enc$pos_data$y,
+    X          = enc$pos_data$X,
+    spatial    = NULL,
+    max_iter   = control$max_iter   %||% 100L,
+    tol        = control$tol        %||% 1e-6,
+    n_threads  = control$n_threads  %||% 1L,
+    phi_init   = control$phi_init,
+    phi_bounds = control$phi_bounds %||% c(0.1, 1e4)
+  )
+  phi <- fit$phi
+  if (!is.finite(phi) || phi <= 0) {
+    stop("Pre-fit of beta precision returned a non-positive phi (",
+         phi, "). Pass `control$phi_init` or `control$phi_bounds`.",
+         call. = FALSE)
+  }
+  phi
 }
 
 #' Decode a joint-nested-Laplace cover-hurdle fit into a `cover_fit`.
@@ -580,10 +639,14 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
   if (length(se_pos)) names(se_pos) <- names(beta_pos)
 
   hyperpar <- list(
-    spatial   = fits$joint$theta_mean,
-    sigma_pos = fits$sigma_pos,
-    engine    = "nested_laplace"
+    spatial = fits$joint$theta_mean,
+    engine  = "nested_laplace"
   )
+  if (fits$positive == "lognormal") {
+    hyperpar$sigma_pos <- fits$sigma_pos
+  } else {
+    hyperpar$phi_pos <- fits$phi_pos
+  }
 
   out <- structure(
     list(
@@ -595,7 +658,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
       se_pos       = se_pos,
       positive     = fits$positive,
       sigma_pos    = fits$sigma_pos,
-      phi_pos      = NA_real_,
+      phi_pos      = fits$phi_pos,
       hyperpar     = hyperpar,
       encoding     = enc,
       family       = family,
