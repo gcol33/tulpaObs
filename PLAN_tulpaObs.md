@@ -167,7 +167,7 @@ dispatches to `occu()` internally during the transition.
 | dynamic_occ       | working      | not yet        | working |
 | multispecies_occ  | working      | not yet        | working |
 | nmixture          | needs port from INLAabun | needs likelihood added to tulpa nested-Laplace registry | planned |
-| cover_hurdle      | n/a (no E-step) | needs joint binomial+beta in tulpa nested-Laplace | planned |
+| cover_hurdle      | n/a (no E-step) | shipped (BYM2, lognormal positive) via `tulpa_nested_laplace_joint()`; beta-positive + ICAR/CAR_proper land under P1c-7 | planned |
 | distance          | needs E-step over distance bins | not yet | planned |
 
 ---
@@ -187,7 +187,10 @@ What's missing for full INLA parity:
 
 - **Joint multi-likelihood models** — e.g. binomial + beta in one fit with
   shared latent fields (the hurdle pattern, INLA `family = c(...)`).
-  Add multi-response support to `tulpa_nested_laplace()`.
+  *Phase 1c first cut* shipped `tulpa::tulpa_nested_laplace_joint()` for
+  BYM2 with binomial + gaussian arms and INLA-style `copy=` scaling on a
+  designated arm; ICAR/CAR_proper/NNGP/HSGP joint variants and beta-arm
+  support land under P1c-7 / Phase 3.
 - **Beta and lognormal likelihoods**.
 - **Multiple latent prior blocks** in one call — e.g. spatial BYM2 + temporal
   AR1 + IID habitat. Currently single-block; extend the grid construction
@@ -220,10 +223,15 @@ These are scheduled under Phase 3 below.
   Gaussian-arm Hessian SEs are scaled by `sigma_pos^2`. Files:
   `R/family_cover_hurdle.R`, `R/sim_cover_hurdle.R`,
   `tests/testthat/test-cover-hurdle-lognormal.R`, `vignettes/cover-hurdle.Rmd`.
-- *(Phase 1b–1d — planned)* Beta likelihood in tulpa, joint multi-likelihood
-  `tulpa_nested_laplace()` with shared latent fields, MOTIVATE-style
-  within/between time decomposition helper, beta-positive variant of
-  `cover_hurdle()`.
+- *(Phase 1b — done)* Beta likelihood in tulpa via `tulpa_laplace_beta()`.
+- *(Phase 1c — first cut shipped)* Joint multi-likelihood
+  `tulpa_nested_laplace_joint()` with shared latent fields. Currently:
+  BYM2 backend, binomial + gaussian arms, INLA-style `copy=` scaling.
+  cover_hurdle wired through with `engine = "nested_laplace"` for the
+  lognormal-positive variant. Remaining: beta-positive arm, ICAR /
+  CAR_proper / NNGP / HSGP joint backends — tracked under P1c-7.
+- *(Phase 1d — planned)* MOTIVATE-style within/between time
+  decomposition helper, beta-positive variant of `cover_hurdle()`.
 - *(Phase 1e — planned)* Reproducible reduction of the MOTIVATE example.
 
 **Phase 2 — N-mixture**

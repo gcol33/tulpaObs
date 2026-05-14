@@ -34,6 +34,13 @@
          "in [0, 1]).", call. = FALSE)
   }
   enc  <- encode_cover_hurdle(formula, data, y, spatial, positive = positive)
+
+  if (identical(engine, "nested_laplace")) {
+    return(decode_cover_hurdle_joint(
+      fit_cover_hurdle_joint_nested(enc, data, positive, control), enc, family
+    ))
+  }
+
   fits <- fit_cover_hurdle(enc, positive, engine, priors, control)
   decode_cover_hurdle(fits, enc, family)
 }
@@ -126,7 +133,8 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
 #'
 #' @param enc Output of [encode_cover_hurdle()].
 #' @param positive `"lognormal"` or `"beta"` (taken from `enc$positive`).
-#' @param engine Currently `"laplace"` is the only supported value.
+#' @param engine `"laplace"` (default) or `"nested_laplace"`. The latter is
+#'   routed through [fit_cover_hurdle_joint_nested()].
 #' @param priors Currently ignored — passed through for forward compat.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`.
 #' @return List with `m_occ`, `m_pos`, `positive`, `pos_fit_n`, `pos_fit_p`,
@@ -136,9 +144,9 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
                              engine = "laplace",
                              priors = NULL, control = list()) {
   if (!engine %in% c("laplace", "auto")) {
-    stop("cover() currently supports only engine = 'laplace' ",
-         "(got '", engine, "'). nested_laplace / nuts land in later phases.",
-         call. = FALSE)
+    stop("cover() currently supports only engine = 'laplace' or ",
+         "'nested_laplace' (got '", engine,
+         "'). nuts lands in later phases.", call. = FALSE)
   }
   max_iter  <- control$max_iter  %||% 100L
   tol       <- control$tol       %||% 1e-6
@@ -399,6 +407,194 @@ print.summary.cover_fit <- function(x, ...) {
   pos_header <- if (x$positive == "beta") "Cover (beta, logit):" else "Log-cover (Gaussian):"
   cat("\n", pos_header, "\n", sep = ""); print(x$positive_arm)
   invisible(x)
+}
+
+
+# ---------------------------------------------------------------------------
+# Joint nested-Laplace fit (Phase 1c)
+# ---------------------------------------------------------------------------
+
+#' Fit cover_hurdle as a joint binomial+gaussian model with shared spatial
+#' field via [tulpa::tulpa_nested_laplace_joint()].
+#'
+#' First-cut Phase 1c: lognormal positive arm only, BYM2 spatial only. Beta
+#' positive and other backends land under P1c-7.
+#'
+#' @param enc Output of [encode_cover_hurdle()].
+#' @param data The original (un-subsetted) data frame — required to resolve
+#'   the spatial spec (group_var lookup, n_spatial_units check).
+#' @param positive `"lognormal"` (only supported value in the first cut).
+#' @param control List with optional `max_iter`, `tol`, `n_threads`,
+#'   `sigma_grid`, `rho_grid`, `alpha_grid`.
+#' @return List shaped like the single-Laplace fit output but with extra
+#'   `joint` field carrying the raw `tulpa_nested_laplace_joint` result.
+#' @keywords internal
+fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
+                                          control = list()) {
+  if (positive != "lognormal") {
+    stop("engine = 'nested_laplace' for cover() currently supports only ",
+         "positive = 'lognormal' (Phase 1c first cut). beta lands in P1c-7.",
+         call. = FALSE)
+  }
+  if (is.null(enc$spatial_spec)) {
+    stop("engine = 'nested_laplace' for cover() requires a spatial spec ",
+         "(currently BYM2 only). Pass `spatial = tulpa::spatial_bym2(adj)`.",
+         call. = FALSE)
+  }
+  spec <- enc$spatial_spec
+  if (!inherits(spec, "tulpa_spatial") || tolower(spec$type) != "bym2") {
+    stop("engine = 'nested_laplace' for cover() currently supports only ",
+         "BYM2 spatial. Got type = '", spec$type, "'.", call. = FALSE)
+  }
+
+  # Resolve obs -> spatial unit via tulpa's prior_from_spec. The dropped-NA
+  # rows in encode_cover_hurdle (obs_keep) shrink the obs set; subset the
+  # spatial_idx vector accordingly.
+  data_obs <- data[enc$obs_keep, , drop = FALSE]
+  prior    <- tulpa::prior_from_spec(spec, data_obs)
+  spi_full <- prior$spatial_idx                 # length N (post-NA-drop)
+  spi_pos  <- spi_full[enc$idx_pos]             # length N_pos
+
+  N     <- enc$N
+  N_pos <- length(enc$pos_data$y)
+
+  arm_occ <- list(
+    y           = as.numeric(enc$occ_data$y),
+    n_trials    = enc$occ_data$n_trials,
+    X           = enc$occ_data$X,
+    spatial_idx = as.integer(spi_full),
+    re_idx      = rep(0, N),
+    n_re_groups = 0L,
+    sigma_re    = 1.0,
+    family      = "binomial",
+    phi         = 1.0
+  )
+  arm_pos <- list(
+    y           = as.numeric(enc$pos_data$y),
+    n_trials    = rep(1L, N_pos),
+    X           = enc$pos_data$X,
+    spatial_idx = as.integer(spi_pos),
+    re_idx      = rep(0, N_pos),
+    n_re_groups = 0L,
+    sigma_re    = 1.0,
+    family      = "gaussian",
+    phi         = 1.0       # estimated post-hoc as residual SD; matches Phase 1a
+  )
+
+  # Strip out the spatial_idx field; tulpa_nested_laplace_joint takes spatial_idx
+  # per arm, not in the prior list.
+  prior_for_joint <- prior
+  prior_for_joint$spatial_idx <- NULL
+  if (!is.null(control$sigma_grid)) prior_for_joint$sigma_grid <- control$sigma_grid
+  if (!is.null(control$rho_grid))   prior_for_joint$rho_grid   <- control$rho_grid
+
+  copy_spec <- list(
+    arm        = "pos",
+    alpha_grid = control$alpha_grid %||% c(0.0, 0.5, 1.0, 1.5, 2.0)
+  )
+
+  fit <- tulpa::tulpa_nested_laplace_joint(
+    responses = list(occ = arm_occ, pos = arm_pos),
+    prior     = prior_for_joint,
+    copy      = copy_spec,
+    max_iter  = control$max_iter  %||% 50L,
+    tol       = control$tol       %||% 1e-6,
+    n_threads = control$n_threads %||% 1L
+  )
+
+  # Posterior-weighted mean / SE for the per-arm beta blocks.
+  layout <- fit$arm_layout
+  p_occ  <- layout$p[1]
+  p_pos  <- layout$p[2]
+  bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
+  bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
+
+  beta_occ <- as.numeric(crossprod(fit$weights, fit$modes[, bocc_idx, drop = FALSE]))
+  beta_pos <- as.numeric(crossprod(fit$weights, fit$modes[, bpos_idx, drop = FALSE]))
+
+  # SE = posterior SD of beta_j across grid points (mixture-of-normal
+  # approximation: ignore inner-Hessian uncertainty for the first cut, which
+  # matches what the existing single-Laplace decode does for beta SEs).
+  se_occ <- sqrt(pmax(0,
+    as.numeric(crossprod(fit$weights, fit$modes[, bocc_idx, drop = FALSE]^2))
+    - beta_occ^2))
+  se_pos <- sqrt(pmax(0,
+    as.numeric(crossprod(fit$weights, fit$modes[, bpos_idx, drop = FALSE]^2))
+    - beta_pos^2))
+
+  # Residual SD on the positive arm at the posterior-weighted-mean beta_pos,
+  # matching the Phase 1a convention.
+  eta_pos   <- as.numeric(enc$pos_data$X %*% beta_pos)
+  resid     <- enc$pos_data$y - eta_pos
+  sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
+
+  m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
+                log_marginal = NA_real_)
+  m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
+                log_marginal = NA_real_)
+
+  list(
+    m_occ      = m_occ,
+    m_pos      = m_pos,
+    positive   = "lognormal",
+    sigma_pos  = sigma_pos,
+    pos_fit_n  = N_pos,
+    pos_fit_p  = p_pos,
+    beta_occ   = beta_occ,
+    beta_pos   = beta_pos,
+    se_occ     = se_occ,
+    se_pos     = se_pos,
+    joint      = fit
+  )
+}
+
+#' Decode a joint-nested-Laplace cover-hurdle fit into a `cover_fit`.
+#'
+#' Lighter-weight than the single-Laplace decode: the joint engine has
+#' already produced posterior moments for beta and the spatial hyperparameters,
+#' so we just shape them into the existing `cover_fit` structure.
+#'
+#' @keywords internal
+decode_cover_hurdle_joint <- function(fits, enc, family) {
+  beta_occ <- fits$beta_occ
+  beta_pos <- fits$beta_pos
+  names(beta_occ) <- colnames(enc$occ_data$X)
+  names(beta_pos) <- colnames(enc$pos_data$X)
+
+  se_occ <- fits$se_occ
+  se_pos <- fits$se_pos
+  if (length(se_occ)) names(se_occ) <- names(beta_occ)
+  if (length(se_pos)) names(se_pos) <- names(beta_pos)
+
+  hyperpar <- list(
+    spatial   = fits$joint$theta_mean,
+    sigma_pos = fits$sigma_pos,
+    engine    = "nested_laplace"
+  )
+
+  out <- structure(
+    list(
+      occ          = fits$m_occ,
+      pos          = fits$m_pos,
+      beta_occ     = beta_occ,
+      beta_pos     = beta_pos,
+      se_occ       = se_occ,
+      se_pos       = se_pos,
+      positive     = fits$positive,
+      sigma_pos    = fits$sigma_pos,
+      phi_pos      = NA_real_,
+      hyperpar     = hyperpar,
+      encoding     = enc,
+      family       = family,
+      n_total      = enc$N,
+      n_positive   = length(enc$idx_pos),
+      converged    = TRUE,
+      log_marginal = c(joint = max(fits$joint$log_marginal)),
+      joint        = fits$joint
+    ),
+    class = c("cover_fit", "tobs_fit", "tulpa_fit")
+  )
+  out
 }
 
 
