@@ -4,7 +4,13 @@
 \alias{encode_cover_hurdle}
 \title{Encode cover-hurdle data for the two-Laplace fit}
 \usage{
-encode_cover_hurdle(formula, data, y, spatial = NULL)
+encode_cover_hurdle(
+  formula,
+  data,
+  y,
+  spatial = NULL,
+  positive = c("lognormal", "beta")
+)
 }
 \arguments{
 \item{formula}{State-process formula (no LHS); used for both occurrence
@@ -16,14 +22,23 @@ and positive-cover arms.}
 from both arms (treated as missing, not as zero cover).}
 
 \item{spatial}{Optional \code{tulpa_spatial} spec, passed to both arms.}
+
+\item{positive}{One of \code{"lognormal"} or \code{"beta"}.}
 }
 \value{
 A list with: \code{occ_data}, \code{pos_data}, \code{spatial_spec}, \code{N},
-\code{idx_pos} (row indices of the positive subset within \code{data}), \code{formula}.
+\code{idx_pos} (row indices of the positive subset within \code{data}),
+\code{formula}, \code{positive}.
 }
 \description{
 Splits \code{y} into a binomial occurrence indicator and a positive-cover
 subset, builds design matrices for each arm using the same \code{formula},
 and packages the spatial spec for both arms.
+}
+\details{
+For \code{positive = "lognormal"} the positive arm's response is
+\code{log(y[occur == 1])}. For \code{positive = "beta"} it is \code{y[occur == 1]} on
+the natural (0, 1) scale; an additional eps-clip is applied so the
+Laplace engine does not see exact 1's introduced upstream.
 }
 \keyword{internal}

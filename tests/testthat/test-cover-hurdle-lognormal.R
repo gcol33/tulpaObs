@@ -9,18 +9,22 @@ test_that("cover(positive = 'lognormal') flips to working", {
   expect_equal(fam$params$positive, "lognormal")
 })
 
-test_that("cover(positive = 'beta') still errors with Phase 1d note", {
-  expect_equal(cover("beta")$status, "planned")
-  sim <- simulate_cover(N = 50, seed = 1)
-  expect_error(
-    tobs(
-      formula = ~ x,
-      data    = sim$data,
-      family  = cover("beta"),
-      y       = sim$y
-    ),
-    "planned but not yet implemented"
+test_that("cover(positive = 'beta') is wired through to the beta Laplace engine", {
+  fam <- cover("beta")
+  expect_equal(fam$status, "working")
+  expect_equal(fam$params$positive, "beta")
+
+  sim <- simulate_cover(N = 300, seed = 1)
+  fit <- tobs(
+    formula = ~ x,
+    data    = sim$data,
+    family  = cover("beta"),
+    y       = sim$y
   )
+  expect_s3_class(fit, "cover_fit")
+  expect_equal(fit$positive, "beta")
+  expect_true(is.finite(fit$phi_pos) && fit$phi_pos > 0)
+  expect_true(is.na(fit$sigma_pos))
 })
 
 test_that("simulator round-trips a coefficient prior", {

@@ -7,8 +7,15 @@
 decode_cover_hurdle(fits, enc, family)
 }
 \description{
-Extracts beta vectors and SEs for each arm. For the Gaussian arm, beta
-SEs are scaled by \code{sigma_pos} (since \code{tulpa_laplace(family='gaussian')}
-computes the Hessian assuming phi = 1).
+Extracts beta vectors and SEs for each arm. SEs are scaled to match
+each arm's dispersion convention:
+}
+\details{
+\itemize{
+\item lognormal arm: \code{tulpa_laplace(family = "gaussian")} computes the
+Hessian assuming phi = 1, so SEs are rescaled by \code{sigma_pos^2}.
+\item beta arm: \code{tulpa_laplace_beta()} already weights the Hessian by phi
+(Fisher information), so SEs are returned at scale 1.
+}
 }
 \keyword{internal}

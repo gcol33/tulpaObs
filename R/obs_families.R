@@ -312,20 +312,14 @@ fp_occu <- function() {
 #' @export
 cover <- function(positive = c("beta", "lognormal")) {
   positive <- match.arg(positive)
-  # Phase 1a: lognormal-positive variant flips to "working" with the two-Laplace
-  # dispatcher; the beta-positive variant stays "planned" until Phase 1c/1d
-  # (joint multi-likelihood in tulpa_nested_laplace).
-  is_working    <- positive == "lognormal"
-  default_eng   <- if (is_working) "laplace" else "nested_laplace"
-  status_value  <- if (is_working) "working" else "planned"
   obs_family(
     name           = "cover",
     class_long     = "vegetation cover hurdle",
     latent         = "hurdle",
     observation    = if (positive == "beta") "binomial_plus_beta" else "binomial_plus_lognormal",
     replicates     = "single",
-    default_engine = default_eng,
-    status         = status_value,
+    default_engine = "laplace",
+    status         = "working",
     params         = list(positive = positive)
   )
 }

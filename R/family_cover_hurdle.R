@@ -16,9 +16,9 @@
                             visit_data, spatial, temporal, engine,
                             priors, control, ...) {
   positive <- family$params$positive
-  if (positive != "lognormal") {
-    stop("cover(positive = 'beta') is scheduled for Phase 1d. ",
-         "Use positive = 'lognormal' for now.", call. = FALSE)
+  if (!positive %in% c("lognormal", "beta")) {
+    stop("cover(positive = '", positive, "') is not supported. ",
+         "Use 'lognormal' or 'beta'.", call. = FALSE)
   }
   if (!is.null(temporal)) {
     stop("`temporal = ` is scheduled for Phase 1d (Mundlak helper). ",
@@ -33,8 +33,8 @@
     stop("`cover()` requires `y` (a length-N numeric vector of cover ",
          "in [0, 1]).", call. = FALSE)
   }
-  enc  <- encode_cover_hurdle(formula, data, y, spatial)
-  fits <- fit_cover_hurdle_lognormal(enc, engine, priors, control)
+  enc  <- encode_cover_hurdle(formula, data, y, spatial, positive = positive)
+  fits <- fit_cover_hurdle(enc, positive, engine, priors, control)
   decode_cover_hurdle(fits, enc, family)
 }
 
@@ -49,16 +49,25 @@
 #' subset, builds design matrices for each arm using the same `formula`,
 #' and packages the spatial spec for both arms.
 #'
+#' For `positive = "lognormal"` the positive arm's response is
+#' `log(y[occur == 1])`. For `positive = "beta"` it is `y[occur == 1]` on
+#' the natural (0, 1) scale; an additional eps-clip is applied so the
+#' Laplace engine does not see exact 1's introduced upstream.
+#'
 #' @param formula State-process formula (no LHS); used for both occurrence
 #'   and positive-cover arms.
 #' @param data Data frame with `nrow(data) == length(y)`.
 #' @param y Length-N numeric vector of cover in `[0, 1]`. NAs are dropped
 #'   from both arms (treated as missing, not as zero cover).
 #' @param spatial Optional `tulpa_spatial` spec, passed to both arms.
+#' @param positive One of `"lognormal"` or `"beta"`.
 #' @return A list with: `occ_data`, `pos_data`, `spatial_spec`, `N`,
-#'   `idx_pos` (row indices of the positive subset within `data`), `formula`.
+#'   `idx_pos` (row indices of the positive subset within `data`),
+#'   `formula`, `positive`.
 #' @keywords internal
-encode_cover_hurdle <- function(formula, data, y, spatial = NULL) {
+encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
+                                positive = c("lognormal", "beta")) {
+  positive <- match.arg(positive)
   if (!is.numeric(y)) stop("`y` must be numeric.", call. = FALSE)
   if (length(y) != nrow(data)) {
     stop(sprintf("length(y) (%d) must equal nrow(data) (%d).",
@@ -79,16 +88,24 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL) {
 
   is_pos <- occur == 1L
   data_pos <- data_obs[is_pos, , drop = FALSE]
-  log_y_pos <- log(y_obs[is_pos])
+  y_pos    <- y_obs[is_pos]
+  if (positive == "lognormal") {
+    y_pos_resp <- log(y_pos)
+  } else {
+    # Beta arm needs y strictly in (0, 1). Cap at 1 - 1e-6; lower bound is
+    # already guaranteed by occur == 1 + the range check above.
+    y_pos_resp <- pmin(y_pos, 1 - 1e-6)
+  }
   X_pos <- stats::model.matrix(formula, data_pos)
 
   list(
     occ_data = list(y = occur, n_trials = rep(1L, length(occur)), X = X_occ),
-    pos_data = list(y = log_y_pos, X = X_pos),
+    pos_data = list(y = y_pos_resp, X = X_pos),
     spatial_spec = spatial,
     N            = length(occur),
     idx_pos      = which(is_pos),
     formula      = formula,
+    positive     = positive,
     obs_keep     = obs_keep
   )
 }
@@ -98,27 +115,30 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL) {
 # Fit
 # ---------------------------------------------------------------------------
 
-#' Fit the two arms of a cover hurdle (lognormal positive part)
+#' Fit the two arms of a cover hurdle
 #'
 #' Two independent `tulpa::tulpa_laplace()` calls. The joint shared-field
-#' fit is Phase 1c. Sigma for the lognormal arm is estimated post-hoc as
-#' the residual standard error on `log(cover)`.
+#' fit is Phase 1c. For `positive = "lognormal"` the positive arm is a
+#' Gaussian fit on `log(cover)` with sigma estimated post-hoc as the
+#' residual standard error. For `positive = "beta"` the positive arm uses
+#' `tulpa::tulpa_laplace_beta()` which estimates the precision `phi` via
+#' an outer 1-D optimisation and weights the Hessian accordingly.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
-#' @param engine Currently `"laplace"` is the only supported value for
-#'   Phase 1a; `"nested_laplace"` and `"nuts"` are reserved for later
-#'   sub-phases.
+#' @param positive `"lognormal"` or `"beta"` (taken from `enc$positive`).
+#' @param engine Currently `"laplace"` is the only supported value.
 #' @param priors Currently ignored — passed through for forward compat.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`.
-#' @return List with `m_occ`, `m_pos`, `sigma_pos`, `pos_fit_n`, `pos_fit_p`.
+#' @return List with `m_occ`, `m_pos`, `positive`, `pos_fit_n`, `pos_fit_p`,
+#'   plus one of `sigma_pos` (lognormal) or `phi_pos` (beta).
 #' @keywords internal
-fit_cover_hurdle_lognormal <- function(enc, engine = "laplace",
-                                       priors = NULL, control = list()) {
+fit_cover_hurdle <- function(enc, positive = enc$positive,
+                             engine = "laplace",
+                             priors = NULL, control = list()) {
   if (!engine %in% c("laplace", "auto")) {
-    stop(sprintf(
-      "Phase 1a `cover_hurdle(positive = 'lognormal')` only supports ",
-      "engine = 'laplace' (got '%s'). nested_laplace and nuts land in ",
-      "Phase 1c / 1d / 1e."), engine, call. = FALSE)
+    stop("cover() currently supports only engine = 'laplace' ",
+         "(got '", engine, "'). nested_laplace / nuts land in later phases.",
+         call. = FALSE)
   }
   max_iter  <- control$max_iter  %||% 100L
   tol       <- control$tol       %||% 1e-6
@@ -139,32 +159,47 @@ fit_cover_hurdle_lognormal <- function(enc, engine = "laplace",
          " coefficients). Need at least ncol(X) + 1.", call. = FALSE)
   }
 
-  m_pos <- tulpa::tulpa_laplace(
-    y        = enc$pos_data$y,
-    n_trials = rep(1L, length(enc$pos_data$y)),
-    X        = enc$pos_data$X,
-    family   = "gaussian",
-    spatial  = enc$spatial_spec,
-    max_iter = max_iter, tol = tol, n_threads = n_threads
+  n_pos <- length(enc$pos_data$y)
+  p_pos <- ncol(enc$pos_data$X)
+
+  if (positive == "lognormal") {
+    m_pos <- tulpa::tulpa_laplace(
+      y        = enc$pos_data$y,
+      n_trials = rep(1L, n_pos),
+      X        = enc$pos_data$X,
+      family   = "gaussian",
+      spatial  = enc$spatial_spec,
+      max_iter = max_iter, tol = tol, n_threads = n_threads
+    )
+    # Gaussian Laplace runs with phi = 1; estimate residual SD post-hoc.
+    beta_pos <- m_pos$mode[seq_len(p_pos)]
+    eta_pos  <- as.numeric(enc$pos_data$X %*% beta_pos)
+    resid    <- enc$pos_data$y - eta_pos
+    sigma_pos <- sqrt(sum(resid^2) / max(n_pos - p_pos, 1L))
+    return(list(
+      m_occ     = m_occ,
+      m_pos     = m_pos,
+      positive  = "lognormal",
+      sigma_pos = sigma_pos,
+      pos_fit_n = n_pos,
+      pos_fit_p = p_pos
+    ))
+  }
+
+  # positive == "beta"
+  m_pos <- tulpa::tulpa_laplace_beta(
+    y         = enc$pos_data$y,
+    X         = enc$pos_data$X,
+    spatial   = enc$spatial_spec,
+    max_iter  = max_iter, tol = tol, n_threads = n_threads
   )
-
-  # Gaussian Laplace runs with phi = 1; estimate residual SD post-hoc.
-  # For non-spatial: residual SE = sqrt(SS_res / (n - p)) on the OLS fit.
-  # For spatial: subtract the spatial contribution from log_y if available
-  # (Phase 1a spatial smoke; full propagation lands in 1c).
-  beta_pos <- m_pos$mode[seq_len(ncol(enc$pos_data$X))]
-  eta_pos  <- as.numeric(enc$pos_data$X %*% beta_pos)
-  resid    <- enc$pos_data$y - eta_pos
-  n_pos    <- length(enc$pos_data$y)
-  p_pos    <- ncol(enc$pos_data$X)
-  sigma_pos <- sqrt(sum(resid^2) / max(n_pos - p_pos, 1L))
-
   list(
-    m_occ      = m_occ,
-    m_pos      = m_pos,
-    sigma_pos  = sigma_pos,
-    pos_fit_n  = n_pos,
-    pos_fit_p  = p_pos
+    m_occ     = m_occ,
+    m_pos     = m_pos,
+    positive  = "beta",
+    phi_pos   = m_pos$phi,
+    pos_fit_n = n_pos,
+    pos_fit_p = p_pos
   )
 }
 
@@ -175,9 +210,13 @@ fit_cover_hurdle_lognormal <- function(enc, engine = "laplace",
 
 #' Decode the two-arm fit into a cover_fit object
 #'
-#' Extracts beta vectors and SEs for each arm. For the Gaussian arm, beta
-#' SEs are scaled by `sigma_pos` (since `tulpa_laplace(family='gaussian')`
-#' computes the Hessian assuming phi = 1).
+#' Extracts beta vectors and SEs for each arm. SEs are scaled to match
+#' each arm's dispersion convention:
+#'
+#' * lognormal arm: `tulpa_laplace(family = "gaussian")` computes the
+#'   Hessian assuming phi = 1, so SEs are rescaled by `sigma_pos^2`.
+#' * beta arm: `tulpa_laplace_beta()` already weights the Hessian by phi
+#'   (Fisher information), so SEs are returned at scale 1.
 #'
 #' @keywords internal
 decode_cover_hurdle <- function(fits, enc, family) {
@@ -187,15 +226,20 @@ decode_cover_hurdle <- function(fits, enc, family) {
   names(beta_pos) <- colnames(enc$pos_data$X)
 
   se_occ <- .se_from_hessian(fits$m_occ$H_beta, scale = 1)
-  se_pos <- .se_from_hessian(fits$m_pos$H_beta, scale = fits$sigma_pos^2)
+  se_pos_scale <- if (fits$positive == "lognormal") fits$sigma_pos^2 else 1
+  se_pos <- .se_from_hessian(fits$m_pos$H_beta, scale = se_pos_scale)
   if (length(se_occ)) names(se_occ) <- names(beta_occ)
   if (length(se_pos)) names(se_pos) <- names(beta_pos)
 
   hyperpar <- list(
     occ = .extract_spatial_hyperpar(fits$m_occ, enc$spatial_spec),
-    pos = .extract_spatial_hyperpar(fits$m_pos, enc$spatial_spec),
-    sigma_pos = fits$sigma_pos
+    pos = .extract_spatial_hyperpar(fits$m_pos, enc$spatial_spec)
   )
+  if (fits$positive == "lognormal") {
+    hyperpar$sigma_pos <- fits$sigma_pos
+  } else {
+    hyperpar$phi_pos <- fits$phi_pos
+  }
 
   out <- structure(
     list(
@@ -205,7 +249,9 @@ decode_cover_hurdle <- function(fits, enc, family) {
       beta_pos     = beta_pos,
       se_occ       = se_occ,
       se_pos       = se_pos,
-      sigma_pos    = fits$sigma_pos,
+      positive     = fits$positive,
+      sigma_pos    = if (fits$positive == "lognormal") fits$sigma_pos else NA_real_,
+      phi_pos      = if (fits$positive == "beta")      fits$phi_pos    else NA_real_,
       hyperpar     = hyperpar,
       encoding     = enc,
       family       = family,
@@ -227,12 +273,15 @@ decode_cover_hurdle <- function(fits, enc, family) {
 
 #' Predict cover from a cover_fit
 #'
-#' For the lognormal positive part:
+#' Occurrence probability is always `p = plogis(X * beta_occ)`. The
+#' conditional positive cover `mu` depends on the positive-part family:
 #'
-#' * `eta_occ = X %*% beta_occ` -> `p = plogis(eta_occ)`.
-#' * `eta_pos = X %*% beta_pos` -> `mu = exp(eta_pos + sigma_pos^2 / 2)`
-#'   (lognormal mean back-transform).
-#' * `expected = p * mu`.
+#' * `positive = "lognormal"`: `mu = exp(eta_pos + sigma_pos^2 / 2)`
+#'   (lognormal back-transform on log-cover).
+#' * `positive = "beta"`: `mu = plogis(eta_pos)` (mean of the beta on
+#'   the natural cover scale with logit link).
+#'
+#' Expected cover is `E[y] = p * mu` under both positive parts.
 #'
 #' Spatial random effects are not yet projected at new locations
 #' (Phase 1a is fixed-effects-only for prediction; spatial projection
@@ -269,7 +318,12 @@ predict.cover_fit <- function(object, newdata,
   eta_occ <- as.numeric(X %*% object$beta_occ)
   eta_pos <- as.numeric(X %*% object$beta_pos)
   p  <- stats::plogis(eta_occ)
-  mu <- exp(eta_pos + object$sigma_pos^2 / 2)
+  positive <- object$positive %||% "lognormal"
+  mu <- if (positive == "beta") {
+    stats::plogis(eta_pos)
+  } else {
+    exp(eta_pos + object$sigma_pos^2 / 2)
+  }
 
   switch(
     type,
@@ -286,16 +340,26 @@ predict.cover_fit <- function(object, newdata,
 
 #' @export
 print.cover_fit <- function(x, ...) {
-  cat("<cover_fit (lognormal positive part)>\n")
+  positive <- x$positive %||% "lognormal"
+  cat(sprintf("<cover_fit (%s positive part)>\n", positive))
   cat(sprintf("  N total      : %d\n", x$n_total))
   cat(sprintf("  N positive   : %d (%.1f%%)\n",
               x$n_positive, 100 * x$n_positive / x$n_total))
-  cat(sprintf("  sigma_pos    : %.4f\n", x$sigma_pos))
+  if (positive == "lognormal") {
+    cat(sprintf("  sigma_pos    : %.4f\n", x$sigma_pos))
+  } else {
+    cat(sprintf("  phi_pos      : %.4f\n", x$phi_pos))
+  }
   cat(sprintf("  converged    : %s\n",
               if (isTRUE(x$converged)) "yes" else "no"))
   cat("\nOccurrence (binomial logit):\n")
   print(.coef_table(x$beta_occ, x$se_occ))
-  cat("\nLog-cover (Gaussian on log y > 0):\n")
+  pos_header <- if (positive == "beta") {
+    "Cover (beta, logit link, on y > 0):"
+  } else {
+    "Log-cover (Gaussian on log y > 0):"
+  }
+  cat("\n", pos_header, "\n", sep = "")
   print(.coef_table(x$beta_pos, x$se_pos))
   invisible(x)
 }
@@ -304,12 +368,14 @@ print.cover_fit <- function(x, ...) {
 summary.cover_fit <- function(object, ...) {
   out <- list(
     family       = object$family,
+    positive     = object$positive %||% "lognormal",
     n_total      = object$n_total,
     n_positive   = object$n_positive,
     sigma_pos    = object$sigma_pos,
+    phi_pos      = object$phi_pos,
     converged    = object$converged,
     occurrence   = .coef_table(object$beta_occ, object$se_occ),
-    log_cover    = .coef_table(object$beta_pos, object$se_pos),
+    positive_arm = .coef_table(object$beta_pos, object$se_pos),
     log_marginal = object$log_marginal,
     hyperpar     = object$hyperpar
   )
@@ -320,12 +386,18 @@ summary.cover_fit <- function(object, ...) {
 #' @export
 print.summary.cover_fit <- function(x, ...) {
   cat("Cover hurdle fit summary\n")
+  cat(sprintf("  positive part: %s\n", x$positive))
   cat(sprintf("  N total = %d, N positive = %d\n", x$n_total, x$n_positive))
-  cat(sprintf("  sigma_pos = %.4f\n", x$sigma_pos))
+  if (x$positive == "lognormal") {
+    cat(sprintf("  sigma_pos = %.4f\n", x$sigma_pos))
+  } else {
+    cat(sprintf("  phi_pos   = %.4f\n", x$phi_pos))
+  }
   cat(sprintf("  log marginal: occ = %.3f, pos = %.3f\n",
               x$log_marginal["occ"], x$log_marginal["pos"]))
-  cat("\nOccurrence:\n");      print(x$occurrence)
-  cat("\nLog-cover (Gaussian):\n"); print(x$log_cover)
+  cat("\nOccurrence:\n"); print(x$occurrence)
+  pos_header <- if (x$positive == "beta") "Cover (beta, logit):" else "Log-cover (Gaussian):"
+  cat("\n", pos_header, "\n", sep = ""); print(x$positive_arm)
   invisible(x)
 }
 

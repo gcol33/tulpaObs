@@ -27,15 +27,18 @@
 Numeric vector of predictions.
 }
 \description{
-For the lognormal positive part:
+Occurrence probability is always \code{p = plogis(X * beta_occ)}. The
+conditional positive cover \code{mu} depends on the positive-part family:
 }
 \details{
 \itemize{
-\item \code{eta_occ = X \%*\% beta_occ} -> \code{p = plogis(eta_occ)}.
-\item \code{eta_pos = X \%*\% beta_pos} -> \code{mu = exp(eta_pos + sigma_pos^2 / 2)}
-(lognormal mean back-transform).
-\item \code{expected = p * mu}.
+\item \code{positive = "lognormal"}: \code{mu = exp(eta_pos + sigma_pos^2 / 2)}
+(lognormal back-transform on log-cover).
+\item \code{positive = "beta"}: \code{mu = plogis(eta_pos)} (mean of the beta on
+the natural cover scale with logit link).
 }
+
+Expected cover is \code{E[y] = p * mu} under both positive parts.
 
 Spatial random effects are not yet projected at new locations
 (Phase 1a is fixed-effects-only for prediction; spatial projection
