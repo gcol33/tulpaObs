@@ -1,11 +1,9 @@
-# Smoke check the tulpaObs joint nested-Laplace dispatch.
+# Smoke check the tulpaObs joint nested-Laplace dispatch end-to-end. We
+# load tulpa from source (its compiled .dll is already current at the
+# install location, so pkgload reuses it) so the new R driver is visible.
 suppressMessages({
-  setwd("C:/Users/Gilles Colling/Documents/dev/tulpa")
-  Rcpp::compileAttributes()
-  devtools::document(quiet = TRUE)
-  devtools::install(quiet = TRUE)
-  setwd("C:/Users/Gilles Colling/Documents/dev/tulpaObs")
-  devtools::load_all(quiet = TRUE)
+  pkgload::load_all("C:/Users/Gilles Colling/Documents/dev/tulpa", quiet = TRUE)
+  pkgload::load_all("C:/Users/Gilles Colling/Documents/dev/tulpaObs", quiet = TRUE)
 })
 
 library(testthat)

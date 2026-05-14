@@ -437,14 +437,23 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
          call. = FALSE)
   }
   if (is.null(enc$spatial_spec)) {
-    stop("engine = 'nested_laplace' for cover() requires a spatial spec ",
-         "(currently BYM2 only). Pass `spatial = tulpa::spatial_bym2(adj)`.",
-         call. = FALSE)
+    stop("engine = 'nested_laplace' for cover() requires a spatial spec. ",
+         "Pass one of `tulpa::spatial_bym2(adj)`, `tulpa::spatial_icar(adj)`, ",
+         "or `tulpa::spatial_car_proper(adj)`.", call. = FALSE)
   }
   spec <- enc$spatial_spec
-  if (!inherits(spec, "tulpa_spatial") || tolower(spec$type) != "bym2") {
-    stop("engine = 'nested_laplace' for cover() currently supports only ",
-         "BYM2 spatial. Got type = '", spec$type, "'.", call. = FALSE)
+  if (!inherits(spec, "tulpa_spatial")) {
+    stop("engine = 'nested_laplace' for cover(): `spatial` must be a ",
+         "tulpa_spatial spec.", call. = FALSE)
+  }
+  spec_type <- tolower(spec$type)
+  # tulpa::spatial_car() returns type = "car" but prior_from_spec maps it
+  # to backend = "icar"; treat the two as equivalent at dispatch time.
+  supported <- c("bym2", "icar", "car", "car_proper")
+  if (!spec_type %in% supported) {
+    stop("engine = 'nested_laplace' for cover() supports spatial types: ",
+         paste(shQuote(supported), collapse = ", "),
+         ". Got type = '", spec$type, "'.", call. = FALSE)
   }
 
   # Resolve obs -> spatial unit via tulpa's prior_from_spec. The dropped-NA
@@ -481,12 +490,16 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     phi         = 1.0       # estimated post-hoc as residual SD; matches Phase 1a
   )
 
-  # Strip out the spatial_idx field; tulpa_nested_laplace_joint takes spatial_idx
-  # per arm, not in the prior list.
+  # Strip the per-obs spatial_idx (tulpa_nested_laplace_joint takes it per
+  # arm) and the legacy rho_bounds field (joint car_proper uses rho_car_grid).
+  # Forward control-grid overrides per backend.
   prior_for_joint <- prior
   prior_for_joint$spatial_idx <- NULL
-  if (!is.null(control$sigma_grid)) prior_for_joint$sigma_grid <- control$sigma_grid
-  if (!is.null(control$rho_grid))   prior_for_joint$rho_grid   <- control$rho_grid
+  prior_for_joint$rho_bounds  <- NULL
+  if (!is.null(control$sigma_grid))   prior_for_joint$sigma_grid   <- control$sigma_grid
+  if (!is.null(control$rho_grid))     prior_for_joint$rho_grid     <- control$rho_grid
+  if (!is.null(control$tau_grid))     prior_for_joint$tau_grid     <- control$tau_grid
+  if (!is.null(control$rho_car_grid)) prior_for_joint$rho_car_grid <- control$rho_car_grid
 
   copy_spec <- list(
     arm        = "pos",

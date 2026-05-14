@@ -68,3 +68,67 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
     expect_gt(fit$beta_occ[2], 0)   # true 0.7 > 0
     expect_lt(fit$beta_pos[2], 0)   # true -0.5 < 0
 })
+
+# ---- ICAR + CAR_proper backends through cover() -------------------------- #
+
+test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
+    sim <- simulate_joint_lognormal_cover(N = 200, n_s = 25, seed = 17)
+
+    n_s <- nlevels(sim$data$region)
+    nbr <- lapply(seq_len(n_s),
+                  function(s) setdiff(c(s - 1L, s + 1L), c(0L, n_s + 1L)))
+    adj <- matrix(0L, n_s, n_s)
+    for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
+
+    spatial <- tulpa::spatial_car(adj, level = "group", group_var = "region")
+
+    fit <- tobs(
+        formula  = ~ x,
+        data     = sim$data,
+        family   = cover("lognormal"),
+        y        = sim$y,
+        spatial  = spatial,
+        engine   = "nested_laplace",
+        control  = list(
+            tau_grid   = c(1.0, 4.0),
+            alpha_grid = c(0.0, 1.0)
+        )
+    )
+
+    expect_s3_class(fit, "cover_fit")
+    expect_true(fit$converged)
+    expect_true(all(is.finite(fit$beta_occ)))
+    expect_true(all(is.finite(fit$beta_pos)))
+})
+
+test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
+    sim <- simulate_joint_lognormal_cover(N = 200, n_s = 25, seed = 19)
+
+    n_s <- nlevels(sim$data$region)
+    nbr <- lapply(seq_len(n_s),
+                  function(s) setdiff(c(s - 1L, s + 1L), c(0L, n_s + 1L)))
+    adj <- matrix(0L, n_s, n_s)
+    for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
+
+    spatial <- tulpa::spatial_car_proper(adj, level = "group",
+                                          group_var = "region")
+
+    fit <- tobs(
+        formula  = ~ x,
+        data     = sim$data,
+        family   = cover("lognormal"),
+        y        = sim$y,
+        spatial  = spatial,
+        engine   = "nested_laplace",
+        control  = list(
+            tau_grid     = c(1.0, 4.0),
+            rho_car_grid = c(0.7, 0.95),
+            alpha_grid   = c(0.0, 1.0)
+        )
+    )
+
+    expect_s3_class(fit, "cover_fit")
+    expect_true(fit$converged)
+    expect_true(all(is.finite(fit$beta_occ)))
+    expect_true(all(is.finite(fit$beta_pos)))
+})
