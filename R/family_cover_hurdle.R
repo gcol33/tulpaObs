@@ -538,7 +538,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     copy      = copy_spec,
     max_iter  = control$max_iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
-    n_threads = control$n_threads %||% 1L
+    n_threads = control$n_threads %||% 1L,
+    store_Q   = TRUE
   )
 
   # Posterior-weighted mean / SE for the per-arm beta blocks.
@@ -551,15 +552,35 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   beta_occ <- as.numeric(crossprod(fit$weights, fit$modes[, bocc_idx, drop = FALSE]))
   beta_pos <- as.numeric(crossprod(fit$weights, fit$modes[, bpos_idx, drop = FALSE]))
 
-  # SE = posterior SD of beta_j across grid points (mixture-of-normal
-  # approximation: ignore inner-Hessian uncertainty for the first cut, which
-  # matches what the existing single-Laplace decode does for beta SEs).
-  se_occ <- sqrt(pmax(0,
-    as.numeric(crossprod(fit$weights, fit$modes[, bocc_idx, drop = FALSE]^2))
-    - beta_occ^2))
-  se_pos <- sqrt(pmax(0,
-    as.numeric(crossprod(fit$weights, fit$modes[, bpos_idx, drop = FALSE]^2))
-    - beta_pos^2))
+  # Total posterior variance per beta = Var-of-means (across grid) +
+  # Mean-of-Var (per-grid inner Laplace variance, posterior-weighted). The
+  # joint-Laplace kernel returns the per-grid joint precision Q_k (lower
+  # triangle, CSC) when `store_Q = TRUE`; per-grid inner variance for the
+  # beta sub-block is diag(Q_k^{-1})[beta_idx], computed via sparse Cholesky.
+  # See gcol33/tulpaObs#2 for the ablation that motivated this.
+  var_of_means_occ <- as.numeric(crossprod(fit$weights,
+    fit$modes[, bocc_idx, drop = FALSE]^2)) - beta_occ^2
+  var_of_means_pos <- as.numeric(crossprod(fit$weights,
+    fit$modes[, bpos_idx, drop = FALSE]^2)) - beta_pos^2
+
+  beta_idx_all <- c(bocc_idx, bpos_idx)
+  inner_var <- .joint_inner_var(fit, beta_idx_all)
+  if (is.null(inner_var)) {
+    # No Q stored (older tulpa or unsupported backend); fall back to the
+    # var-of-means-only SE that the validation harness flagged as too narrow.
+    mean_of_var_occ <- rep(0, p_occ)
+    mean_of_var_pos <- rep(0, p_pos)
+  } else {
+    occ_cols <- seq_along(bocc_idx)
+    pos_cols <- length(bocc_idx) + seq_along(bpos_idx)
+    mean_of_var_occ <- as.numeric(crossprod(fit$weights,
+      inner_var[, occ_cols, drop = FALSE]))
+    mean_of_var_pos <- as.numeric(crossprod(fit$weights,
+      inner_var[, pos_cols, drop = FALSE]))
+  }
+
+  se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
+  se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
 
   # Dispersion summary on the positive arm at the posterior-weighted-mean
   # beta_pos. For lognormal this is the residual SD on the log scale (matches
@@ -679,6 +700,99 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
 # ---------------------------------------------------------------------------
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
+
+# Per-grid inner posterior variance for selected latent coordinates,
+# applying sum-to-zero constraints on the BYM2/ICAR/CAR_proper spatial
+# blocks (phi, theta) so the fixed-effect intercept is data-identified
+# rather than prior-bounded.
+#
+# The joint-Laplace precision Q_k is near-singular along the
+# (intercept, mean(phi)) direction whenever the prior on the spatial
+# block has a sum-to-zero soft-null (ICAR is rank-deficient, BYM2's
+# phi block likewise). The unconstrained inverse maps that direction
+# onto the weak beta prior (1e-4 in the kernel = sd 100), producing
+# meaningless intercept SEs. The fix is the standard INLA constraint
+# correction:
+#
+#   Sigma_c = Q^{-1} - Q^{-1} A^T (A Q^{-1} A^T)^{-1} A Q^{-1}
+#
+# where A picks the per-block sums of phi (and theta, for BYM2). With
+# A = 0 (no spatial block) this reduces to the unconstrained inverse,
+# which is the right behaviour for the SPDE case (Q non-singular).
+#
+# Returns an `n_grid x length(beta_idx)` matrix of constrained
+# Var(beta_j | data, theta_k), or NULL when no Q matrices were stored.
+.joint_inner_var <- function(fit, beta_idx) {
+  Qp <- fit$Q_csc_p_per_grid
+  Qi <- fit$Q_csc_i_per_grid
+  Qx <- fit$Q_csc_x_per_grid
+  n_x <- fit$Q_csc_n
+  if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
+
+  layout <- fit$arm_layout
+  n_s <- layout$n_x - max(layout$phi_start %||% layout$n_x,
+                          layout$theta_start %||% layout$n_x)
+  # Build constraint matrix A (k x n_x): one row of all-ones on each
+  # structured spatial block. layout offsets are 0-based.
+  A_cols <- list()
+  if (!is.null(layout$phi_start)) {
+    n_s_phi <- (layout$theta_start %||% layout$n_x) - layout$phi_start
+    A_cols[[length(A_cols) + 1L]] <- layout$phi_start + seq_len(n_s_phi)
+  }
+  if (!is.null(layout$theta_start)) {
+    n_s_theta <- layout$n_x - layout$theta_start
+    A_cols[[length(A_cols) + 1L]] <- layout$theta_start + seq_len(n_s_theta)
+  }
+  k_constr <- length(A_cols)
+
+  n_grid <- length(Qp)
+  p <- length(beta_idx)
+  out <- matrix(NA_real_, n_grid, p)
+
+  E <- Matrix::sparseMatrix(
+    i = beta_idx, j = seq_len(p), x = 1,
+    dims = c(n_x, p)
+  )
+  A_t <- if (k_constr > 0L) {
+    ii <- unlist(A_cols)
+    jj <- rep(seq_len(k_constr), vapply(A_cols, length, integer(1)))
+    Matrix::sparseMatrix(i = ii, j = jj, x = 1,
+                         dims = c(n_x, k_constr))
+  } else NULL
+
+  for (k in seq_len(n_grid)) {
+    if (is.null(Qp[[k]]) || length(Qx[[k]]) == 0L) next
+    Qk_lt <- Matrix::sparseMatrix(
+      i = as.integer(Qi[[k]]) + 1L,
+      p = as.integer(Qp[[k]]),
+      x = as.numeric(Qx[[k]]),
+      dims = c(n_x, n_x),
+      symmetric = FALSE,
+      index1 = TRUE
+    )
+    Qk <- Matrix::forceSymmetric(Qk_lt, uplo = "L")
+    V <- tryCatch(Matrix::solve(Qk, E), error = function(e) NULL)
+    if (is.null(V)) next
+    var_uncon <- vapply(seq_len(p),
+      function(j) as.numeric(V[beta_idx[j], j]), numeric(1))
+
+    if (k_constr > 0L) {
+      W <- tryCatch(Matrix::solve(Qk, A_t), error = function(e) NULL)
+      if (!is.null(W)) {
+        AV <- as.matrix(Matrix::crossprod(A_t, V))     # k_constr x p
+        M  <- as.matrix(Matrix::crossprod(A_t, W))     # k_constr x k_constr
+        corr <- vapply(seq_len(p), function(j) {
+          v <- AV[, j]
+          as.numeric(crossprod(v, solve(M, v)))
+        }, numeric(1))
+        out[k, ] <- pmax(var_uncon - corr, 0)
+        next
+      }
+    }
+    out[k, ] <- pmax(var_uncon, 0)
+  }
+  out
+}
 
 .se_from_hessian <- function(H, scale = 1) {
   if (is.null(H)) return(numeric(0))
