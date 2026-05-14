@@ -602,6 +602,26 @@ extract_beta <- function(sub, p) {
   rep(0, p)
 }
 
+# SE for the fixed-effect block of a tulpa_laplace() fit. Reads the
+# negative-log-posterior Hessian (`H_beta`, the precision matrix), inverts
+# it, and returns sqrt(diag(.)) restricted to the first `p` fixed effects.
+# When the inner fit had a spatial mesh field attached (`spde` / `gp`),
+# tulpa_laplace skips H_beta — return NA so callers can flag the
+# uncertainty as unavailable instead of carrying a placeholder.
+.se_from_laplace_fit <- function(fi, p) {
+  if (!is.null(fi$se)) {
+    se <- as.numeric(fi$se)
+    if (length(se) >= p) return(se[seq_len(p)])
+  }
+  H <- fi$H_beta
+  if (is.null(H)) return(rep(NA_real_, p))
+  cov <- tryCatch(solve(H), error = function(e) NULL)
+  if (is.null(cov)) return(rep(NA_real_, p))
+  d <- sqrt(pmax(diag(cov), 0))
+  if (length(d) >= p) return(d[seq_len(p)])
+  c(d, rep(NA_real_, p - length(d)))
+}
+
 clamp_w <- function(w) pmin(pmax(w, 0.001), 0.999)
 
 occ_weights <- function(psi, p, N, n_valid, n_det, any_det) {
@@ -654,15 +674,16 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
       fi <- em_result$fits[[sub_name]]
       beta <- extract_beta(fi, pi$p)
       means <- c(means, beta)
-      sds <- c(sds, rep(0.1, pi$p))
+      sds <- c(sds, .se_from_laplace_fit(fi, pi$p))
     } else {
       means <- c(means, rep(0, pi$p))
-      sds <- c(sds, rep(0.1, pi$p))
+      sds <- c(sds, rep(NA_real_, pi$p))
     }
     nms <- c(nms, paste0(pi$name, "_", pi$coef_names))
   }
 
   names(means) <- nms
+  names(sds)   <- nms
   n_params <- length(means)
 
   # Pseudo-draws
