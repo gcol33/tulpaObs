@@ -142,16 +142,68 @@ test_that("separate-hurdle beta recovers phi_pos across 10 seeds", {
   expect_lt(max(rel_err), 0.25)
 })
 
-test_that("joint nested_laplace beta phi_pos: KNOWN biased (skipped)", {
-  # The joint engine pre-fits beta phi on the positive subset alone via
-  # tulpa_laplace_beta() (no spatial term). The between-region positive-arm
-  # variation that would carry the field signal is absorbed into residual
-  # precision, biasing phi downward. INLAabun validation Demo 7 Cell B
-  # measured ~70% downward bias at n_pos ~ 45; dev_notes/probe_joint_recovery2.R
-  # measured ~55% bias at n_pos ~ 320. Filed as gcol33/tulpaObs#5 -
-  # a passing recovery test requires either re-profiling phi on the joint
-  # objective (folds back into Phase 3 phi posterior integration) or
-  # subtracting alpha_hat * w_s_hat from the positive arm before the
-  # phi pre-fit (mirror the lognormal fix in #4).
-  skip("blocked on gcol33/tulpaObs#5")
+simulate_joint_beta_for_recovery <- function(N = 600, n_s = 30,
+                                              sigma = 0.5, rho = 0.7,
+                                              alpha = 1.0, phi = 30,
+                                              beta_occ = c(0.2, 0.7),
+                                              beta_pos = c(0.4, -0.5),
+                                              seed = 23) {
+  set.seed(seed)
+  spatial_idx <- sample.int(n_s, N, replace = TRUE)
+  phi_f       <- rnorm(n_s, 0, 1)
+  theta_f     <- rnorm(n_s, 0, 1)
+  w_s         <- sigma * (sqrt(rho) * phi_f + sqrt(1 - rho) * theta_f)
+  x <- rnorm(N)
+  eta_occ <- beta_occ[1] + beta_occ[2] * x + w_s[spatial_idx]
+  occur   <- rbinom(N, 1, plogis(eta_occ))
+  eta_pos <- beta_pos[1] + beta_pos[2] * x + alpha * w_s[spatial_idx]
+  mu_pos  <- plogis(eta_pos)
+  y       <- numeric(N)
+  is_pos  <- occur == 1L
+  y[is_pos]  <- rbeta(sum(is_pos),
+                      mu_pos[is_pos] * phi,
+                      (1 - mu_pos[is_pos]) * phi)
+  y[!is_pos] <- 0
+  y <- pmin(pmax(y, 0), 1 - 1e-6)
+  list(data = data.frame(x = x, region = factor(spatial_idx)), y = y,
+       truth = list(beta_occ = beta_occ, beta_pos = beta_pos,
+                    phi = phi, alpha = alpha))
+}
+
+test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
+  skip_on_cran()
+  # Post-hoc refit of phi_pos with field subtraction (.refit_beta_phi_postfield)
+  # corrects the previous ~55% downward bias on the joint-beta path. Probe in
+  # dev_notes/probe_joint_recovery2.R measured mean rel err -2.5%, max abs
+  # rel err 16.5% at n_pos median ~325 with truth_phi = 30.
+  truth_phi <- 30
+  n_seeds   <- 10L
+  n_s       <- 30L
+  adj       <- chain_adj_for_test(n_s)
+  phi_hats  <- numeric(n_seeds)
+  for (r in seq_len(n_seeds)) {
+    sim <- simulate_joint_beta_for_recovery(
+      N = 600, n_s = n_s, phi = truth_phi, seed = 2000L + r
+    )
+    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
+    fit <- tobs(
+      formula  = ~ x,
+      data     = sim$data,
+      family   = cover("beta"),
+      y        = sim$y,
+      spatial  = spatial,
+      engine   = "nested_laplace",
+      control  = list(
+        sigma_grid = c(0.3, 0.5, 0.8),
+        rho_grid   = c(0.5, 0.7, 0.9),
+        alpha_grid = c(0.5, 1.0, 1.5)
+      )
+    )
+    expect_s3_class(fit, "cover_fit")
+    expect_true(is.finite(fit$phi_pos) && fit$phi_pos > 0)
+    phi_hats[r] <- fit$phi_pos
+  }
+  rel_err <- abs(phi_hats - truth_phi) / truth_phi
+  expect_lt(abs(mean(phi_hats) - truth_phi) / truth_phi, 0.10)
+  expect_lt(max(rel_err), 0.25)
 })

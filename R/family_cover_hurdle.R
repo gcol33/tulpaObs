@@ -585,21 +585,24 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
 
   # Dispersion summary on the positive arm at the posterior-weighted-mean
-  # beta_pos. For lognormal this is the residual SD on the log scale, after
-  # subtracting the alpha-scaled posterior spatial field at the positive-arm
-  # locations — without that subtraction the residuals double-count the
-  # field-driven variance and sigma_pos absorbs alpha^2 * field_sigma^2
-  # (issue #4). For beta it is the profiled phi from the pre-fit, recorded
-  # as phi_pos.
+  # beta_pos. For both families we subtract the alpha-scaled posterior
+  # spatial field at the positive-arm locations before fitting the
+  # dispersion — without that subtraction the residual / over-dispersion
+  # signal absorbs alpha^2 * field_sigma^2 (lognormal -> sigma_pos in #4,
+  # beta -> phi_pos in #5).
+  eta_pos      <- as.numeric(enc$pos_data$X %*% beta_pos)
+  field_at_pos <- .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
   if (positive == "lognormal") {
-    eta_pos     <- as.numeric(enc$pos_data$X %*% beta_pos)
-    field_at_pos <- .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
-    resid       <- enc$pos_data$y - eta_pos - field_at_pos
-    sigma_pos   <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
-    phi_pos     <- NA_real_
+    resid     <- enc$pos_data$y - eta_pos - field_at_pos
+    sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
+    phi_pos   <- NA_real_
   } else {
     sigma_pos <- NA_real_
-    phi_pos   <- phi_hat
+    phi_pos   <- .refit_beta_phi_postfield(
+      y      = enc$pos_data$y,
+      eta    = eta_pos + field_at_pos,
+      bounds = control$phi_bounds %||% c(0.1, 1e4)
+    )
   }
 
   m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
@@ -694,6 +697,43 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     field_at_obs <- field_at_obs + weights[k] * alpha_k[k] * field_k[spi_obs]
   }
   field_at_obs
+}
+
+# Post-hoc refit of the beta dispersion phi conditional on the
+# posterior-weighted linear predictor (including the alpha-scaled spatial
+# field). The pre-fit in .prefit_beta_phi() runs without the spatial
+# component, so when alpha is non-zero the field variance leaks into phi
+# as apparent over-dispersion and phi_pos comes out downward-biased
+# (issue #5; mirrors the lognormal correction in #4).
+#
+# Beta(mu*phi, (1-mu)*phi) has no closed-form MLE for phi given mu, so we
+# profile the negative log-likelihood by 1D Brent search:
+#
+#   -loglik(phi | y, mu) =
+#       - sum_i [ lgamma(phi) - lgamma(mu_i*phi) - lgamma((1-mu_i)*phi)
+#                 + (mu_i*phi - 1) log(y_i)
+#                 + ((1-mu_i)*phi - 1) log(1 - y_i) ]
+#
+# mu is clipped away from {0, 1} so lgamma(0) doesn't fire; y likewise (the
+# encoder already guards against {0, 1} but the post-hoc mu can land near
+# the boundary even when y is interior).
+.refit_beta_phi_postfield <- function(y, eta, bounds = c(0.1, 1e4)) {
+  if (length(y) < 2L) return(NA_real_)
+  eps <- 1e-6
+  mu  <- pmin(pmax(plogis(eta), eps), 1 - eps)
+  y_c <- pmin(pmax(y,           eps), 1 - eps)
+  nloglik <- function(phi) {
+    a <- mu * phi
+    b <- (1 - mu) * phi
+    -sum(lgamma(phi) - lgamma(a) - lgamma(b) +
+         (a - 1) * log(y_c) + (b - 1) * log(1 - y_c))
+  }
+  res <- tryCatch(
+    stats::optimize(nloglik, interval = bounds, tol = 1e-4),
+    error = function(e) NULL
+  )
+  if (is.null(res) || !is.finite(res$minimum)) return(NA_real_)
+  res$minimum
 }
 
 # Pre-fit the beta precision on the positive subset (no spatial). Profiled
