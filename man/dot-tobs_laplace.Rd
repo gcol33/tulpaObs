@@ -7,6 +7,7 @@
 .tobs_laplace(
   model,
   spatial = NULL,
+  priors = NULL,
   sigma_beta = 10,
   max_iter = 50L,
   tol = 1e-04,
@@ -16,9 +17,35 @@
   verbose = TRUE
 )
 }
+\arguments{
+\item{model}{A \code{tobs_model} from \code{.tobs_build_model()}.}
+
+\item{spatial}{Optional \code{tobs_spatial} spec (NULL for non-spatial).}
+
+\item{priors}{Optional prior spec from \code{\link[=occu_priors]{occu_priors()}}. \code{NULL} -> use
+the package defaults. Pass \code{FALSE} (or \code{"none"}) to disable the prior
+and recover the historical unpenalised MAP behavior — the penalised
+objective is \verb{Q(beta) = -log L(beta) + sum (beta_j - mu_j)^2 / (2 sd_j^2)},
+so \code{sd_j = Inf} yields a zero penalty term.}
+
+\item{sigma_beta}{Reserved for future use (NUTS-side beta prior); ignored
+by the EM-Laplace path.}
+
+\item{max_iter, tol, damping}{EM controls.}
+
+\item{correction}{Post-EM correction (\code{"none"}, \code{"mi"}, \code{"gibbs"}). MI /
+Gibbs are not yet wired into the prior-aware driver and will warn and
+fall back to \code{"none"} when a prior is active.}
+
+\item{n_imputations}{Number of MI draws when \code{correction = "mi"}.}
+
+\item{verbose}{Print per-iteration progress.}
+}
 \description{
 Uses tulpa's generic EM+Laplace engine with occupancy-specific E-step and
-M-step encoding. Supports all built-in model types. Called from
+M-step encoding, augmented with a weakly-informative quadratic prior on
+the fixed-effect coefficients (see \code{\link[=occu_priors]{occu_priors()}} and
+\code{R/penalized_irls.R}). Supports all built-in model types. Called from
 \code{.tobs_fit_model()}; not user-facing.
 }
 \keyword{internal}

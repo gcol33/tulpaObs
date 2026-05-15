@@ -21,7 +21,9 @@
   }
 
   if (method == "laplace") {
-    return(.tobs_laplace(model, spatial = spatial, sigma_beta = sigma_beta,
+    return(.tobs_laplace(model, spatial = spatial,
+                         priors = priors,
+                         sigma_beta = sigma_beta,
                          max_iter = max_iter, tol = tol, damping = damping,
                          verbose = verbose))
   }

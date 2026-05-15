@@ -53,7 +53,14 @@ object), or one of the convenience helpers.}
 \item{engine}{inference engine: \code{"auto"}, \code{"laplace"}, \code{"nested_laplace"},
 or \code{"nuts"}. \code{"auto"} chooses the family's \code{default_engine}.}
 
-\item{priors}{optional \code{\link[tulpa:tulpa_priors]{tulpa::tulpa_priors()}} object.}
+\item{priors}{optional prior specification. For occupancy families fit
+with \code{engine = "laplace"}, pass a list or \code{\link[=occu_priors]{occu_priors()}} object to
+set weakly-informative quadratic priors on the fixed-effect
+coefficients (defaults pull the detection intercept toward
+\code{p = 0.5} and break the psi-p identifiability ridge at small \code{J}).
+Pass \code{priors = FALSE} to disable the default prior and recover the
+historical unpenalised MAP behavior. For NUTS, this is forwarded
+to the underlying tulpa engine.}
 
 \item{control}{list of low-level controls (\code{n_threads}, \code{max_iter}, \code{tol},
 etc.).}

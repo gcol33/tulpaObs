@@ -37,7 +37,14 @@
 #' @param temporal optional temporal spec (e.g. [tulpa::temporal_ar1()]).
 #' @param engine inference engine: `"auto"`, `"laplace"`, `"nested_laplace"`,
 #'   or `"nuts"`. `"auto"` chooses the family's `default_engine`.
-#' @param priors optional [tulpa::tulpa_priors()] object.
+#' @param priors optional prior specification. For occupancy families fit
+#'   with `engine = "laplace"`, pass a list or [occu_priors()] object to
+#'   set weakly-informative quadratic priors on the fixed-effect
+#'   coefficients (defaults pull the detection intercept toward
+#'   `p = 0.5` and break the psi-p identifiability ridge at small `J`).
+#'   Pass `priors = FALSE` to disable the default prior and recover the
+#'   historical unpenalised MAP behavior. For NUTS, this is forwarded
+#'   to the underlying tulpa engine.
 #' @param control list of low-level controls (`n_threads`, `max_iter`, `tol`,
 #'   etc.).
 #' @param ... family-specific named arguments forwarded to the underlying
