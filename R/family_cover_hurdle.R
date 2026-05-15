@@ -492,18 +492,30 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     phi         = 1.0
   )
 
-  # Positive-arm dispersion: gaussian phi is the noise SD — pre-fit it on
-  # the positive subset, otherwise the joint integrand sees noise scale 1
-  # regardless of truth, and the marginal likelihood across the alpha grid
-  # is unable to discriminate alpha because the alpha-driven field variance
-  # is observationally indistinguishable from residual noise of size 1.
-  # (issue #4). Beta needs a real phi for the same Newton-scaling reason.
+  # Positive-arm dispersion. Two regimes:
+  #   * lognormal: gaussian phi is the noise SD — pre-fit it on the positive
+  #     subset, otherwise the joint integrand sees noise scale 1 regardless
+  #     of truth and cannot discriminate alpha (issue #4).
+  #   * beta:      phi is integrated on the outer joint hyperparameter grid
+  #     (tulpaObs#7). The kernel sees a per-arm phi_grid; arm_pos$phi is a
+  #     placeholder overridden per grid point. Default grid is 5 log-spaced
+  #     points spanning realistic cover-dispersion magnitudes; override via
+  #     `control$phi_grid`.
   if (positive == "lognormal") {
-    pos_family <- "gaussian"
-    phi_hat    <- .prefit_lognormal_sigma(enc, control)
+    pos_family   <- "gaussian"
+    phi_hat      <- .prefit_lognormal_sigma(enc, control)
+    phi_grid_pos <- NULL
   } else {
-    phi_hat <- .prefit_beta_phi(enc, control)
-    pos_family <- "beta"
+    pos_family   <- "beta"
+    phi_hat      <- 1.0
+    # 13 log-spaced points span 2..300, with neighbours of phi ~ 30 at
+    # 24.7 and 37.6 (within-grid log-distance ~0.2 in each direction).
+    # Coarser grids underestimate phi when posterior mass concentrates
+    # between two widely-spaced points: 5 points gave ~18% mean bias,
+    # 9 points ~12%. 13 points puts the recovery suite under the 10%
+    # mean-bias and 25% max-per-seed thresholds.
+    phi_grid_pos <- control$phi_grid %||%
+      exp(seq(log(2), log(300), length.out = 13))
   }
 
   arm_pos <- list(
@@ -543,6 +555,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     responses = list(occ = arm_occ, pos = arm_pos),
     prior     = prior_for_joint,
     copy      = copy_spec,
+    phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
     max_iter  = control$max_iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
     n_threads = control$n_threads %||% 1L,
@@ -592,25 +605,22 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
   se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
 
-  # Dispersion summary on the positive arm at the posterior-weighted-mean
-  # beta_pos. For both families we subtract the alpha-scaled posterior
-  # spatial field at the positive-arm locations before fitting the
-  # dispersion — without that subtraction the residual / over-dispersion
-  # signal absorbs alpha^2 * field_sigma^2 (lognormal -> sigma_pos in #4,
-  # beta -> phi_pos in #5).
-  eta_pos      <- as.numeric(enc$pos_data$X %*% beta_pos)
-  field_at_pos <- .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
+  # Dispersion summary on the positive arm.
+  #   * lognormal: sigma_pos is the residual SD on the field-corrected
+  #     linear predictor; the alpha-scaled posterior spatial field at the
+  #     positive-arm locations is subtracted to keep residual variance
+  #     from absorbing alpha^2 * field_sigma^2 (issue #4).
+  #   * beta:      phi is integrated marginally over the outer phi grid
+  #     (tulpaObs#7); read posterior mean directly from theta_grid.
   if (positive == "lognormal") {
+    eta_pos      <- as.numeric(enc$pos_data$X %*% beta_pos)
+    field_at_pos <- .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
     resid     <- enc$pos_data$y - eta_pos - field_at_pos
     sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
     phi_pos   <- NA_real_
   } else {
     sigma_pos <- NA_real_
-    phi_pos   <- .refit_beta_phi_postfield(
-      y      = enc$pos_data$y,
-      eta    = eta_pos + field_at_pos,
-      bounds = control$phi_bounds %||% c(0.1, 1e4)
-    )
+    phi_pos   <- sum(fit$weights * fit$theta_grid[, "phi_pos"])
   }
 
   m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
@@ -705,77 +715,6 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     field_at_obs <- field_at_obs + weights[k] * alpha_k[k] * field_k[spi_obs]
   }
   field_at_obs
-}
-
-# Post-hoc refit of the beta dispersion phi conditional on the
-# posterior-weighted linear predictor (including the alpha-scaled spatial
-# field). The pre-fit in .prefit_beta_phi() runs without the spatial
-# component, so when alpha is non-zero the field variance leaks into phi
-# as apparent over-dispersion and phi_pos comes out downward-biased
-# (issue #5; mirrors the lognormal correction in #4).
-#
-# Beta(mu*phi, (1-mu)*phi) has no closed-form MLE for phi given mu, so we
-# profile the negative log-likelihood by 1D Brent search:
-#
-#   -loglik(phi | y, mu) =
-#       - sum_i [ lgamma(phi) - lgamma(mu_i*phi) - lgamma((1-mu_i)*phi)
-#                 + (mu_i*phi - 1) log(y_i)
-#                 + ((1-mu_i)*phi - 1) log(1 - y_i) ]
-#
-# mu is clipped away from {0, 1} so lgamma(0) doesn't fire; y likewise (the
-# encoder already guards against {0, 1} but the post-hoc mu can land near
-# the boundary even when y is interior).
-#
-# Known limitation: at small n_pos (below ~80) phi_pos is downward-biased
-# even after the field subtraction. The cause is upstream posterior
-# shrinkage of (sigma, rho, alpha, w_s) toward the prior, which collapses
-# the variance of the field-corrected linear predictor below truth; the
-# refit then needs a smaller phi to inflate Beta variance enough to match
-# the spread in y. Not a small-sample MLE bias (a controlled probe with
-# the truth linear predictor recovers phi cleanly at the same n_pos).
-# Principled fix: put phi on the outer joint hyperparameter grid so the
-# marginal likelihood self-corrects. Tracked at issue #7.
-.refit_beta_phi_postfield <- function(y, eta, bounds = c(0.1, 1e4)) {
-  if (length(y) < 2L) return(NA_real_)
-  eps <- 1e-6
-  mu  <- pmin(pmax(plogis(eta), eps), 1 - eps)
-  y_c <- pmin(pmax(y,           eps), 1 - eps)
-  nloglik <- function(phi) {
-    a <- mu * phi
-    b <- (1 - mu) * phi
-    -sum(lgamma(phi) - lgamma(a) - lgamma(b) +
-         (a - 1) * log(y_c) + (b - 1) * log(1 - y_c))
-  }
-  res <- tryCatch(
-    stats::optimize(nloglik, interval = bounds, tol = 1e-4),
-    error = function(e) NULL
-  )
-  if (is.null(res) || !is.finite(res$minimum)) return(NA_real_)
-  res$minimum
-}
-
-# Pre-fit the beta precision on the positive subset (no spatial). Profiled
-# treatment of phi: held fixed at this value while the joint engine integrates
-# over the spatial hyperparameters. Cheap, runs in well under a second on
-# Phase 1d test sizes.
-.prefit_beta_phi <- function(enc, control) {
-  fit <- tulpa::tulpa_laplace_beta(
-    y          = enc$pos_data$y,
-    X          = enc$pos_data$X,
-    spatial    = NULL,
-    max_iter   = control$max_iter   %||% 100L,
-    tol        = control$tol        %||% 1e-6,
-    n_threads  = control$n_threads  %||% 1L,
-    phi_init   = control$phi_init,
-    phi_bounds = control$phi_bounds %||% c(0.1, 1e4)
-  )
-  phi <- fit$phi
-  if (!is.finite(phi) || phi <= 0) {
-    stop("Pre-fit of beta precision returned a non-positive phi (",
-         phi, "). Pass `control$phi_init` or `control$phi_bounds`.",
-         call. = FALSE)
-  }
-  phi
 }
 
 #' Decode a joint-nested-Laplace cover-hurdle fit into a `cover_fit`.

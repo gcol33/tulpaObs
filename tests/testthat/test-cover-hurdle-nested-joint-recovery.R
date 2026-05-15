@@ -172,10 +172,16 @@ simulate_joint_beta_for_recovery <- function(N = 600, n_s = 30,
 
 test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
   skip_on_cran()
-  # Post-hoc refit of phi_pos with field subtraction (.refit_beta_phi_postfield)
-  # corrects the previous ~55% downward bias on the joint-beta path. Probe in
-  # dev_notes/probe_joint_recovery2.R measured mean rel err -2.5%, max abs
-  # rel err 16.5% at n_pos median ~325 with truth_phi = 30.
+  # phi_pos is integrated on the outer joint hyperparameter grid
+  # (tulpaObs#7). The kernel sees a per-arm phi axis (default 5 log-spaced
+  # points in [2, 300]); the marginal likelihood across that axis weights
+  # phi self-consistently with the integrated spatial hyperparameters, so
+  # the previous-design failure mode — a profiled-and-refitted phi that
+  # under-shoots at thin n_pos because upstream shrinkage collapsed the
+  # field-corrected linear-predictor variance — no longer applies. See
+  # dev_notes/plan_phi_outer_grid.md for the math and dev_notes/
+  # probe_beta_phi_small_sample.R for the probe that ruled out a
+  # small-sample MLE bias of the legacy Brent step.
   truth_phi <- 30
   n_seeds   <- 10L
   n_s       <- 30L
