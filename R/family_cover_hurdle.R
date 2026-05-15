@@ -534,6 +534,11 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     alpha_grid = control$alpha_grid %||% c(0.0, 0.5, 1.0, 1.5, 2.0)
   )
 
+  # Adaptive grid forwarding. Defaults match the joint engine's defaults
+  # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
+  # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
+  # `control$adaptive_grid = FALSE` to recover the legacy fixed-grid
+  # behaviour for reproducibility checks.
   fit <- tulpa::tulpa_nested_laplace_joint(
     responses = list(occ = arm_occ, pos = arm_pos),
     prior     = prior_for_joint,
@@ -541,7 +546,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     max_iter  = control$max_iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
     n_threads = control$n_threads %||% 1L,
-    store_Q   = TRUE
+    store_Q   = TRUE,
+    adaptive_grid             = control$adaptive_grid             %||% TRUE,
+    adaptive_grid_edge_thresh = control$adaptive_grid_edge_thresh %||% 0.02,
+    adaptive_grid_max_passes  = control$adaptive_grid_max_passes  %||% 1L
   )
 
   # Posterior-weighted mean / SE for the per-arm beta blocks.
@@ -717,6 +725,16 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 # mu is clipped away from {0, 1} so lgamma(0) doesn't fire; y likewise (the
 # encoder already guards against {0, 1} but the post-hoc mu can land near
 # the boundary even when y is interior).
+#
+# Known limitation: at small n_pos (below ~80) phi_pos is downward-biased
+# even after the field subtraction. The cause is upstream posterior
+# shrinkage of (sigma, rho, alpha, w_s) toward the prior, which collapses
+# the variance of the field-corrected linear predictor below truth; the
+# refit then needs a smaller phi to inflate Beta variance enough to match
+# the spread in y. Not a small-sample MLE bias (a controlled probe with
+# the truth linear predictor recovers phi cleanly at the same n_pos).
+# Principled fix: put phi on the outer joint hyperparameter grid so the
+# marginal likelihood self-corrects. Tracked at issue #7.
 .refit_beta_phi_postfield <- function(y, eta, bounds = c(0.1, 1e4)) {
   if (length(y) < 2L) return(NA_real_)
   eps <- 1e-6
