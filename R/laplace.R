@@ -99,10 +99,19 @@ build_single_callbacks <- function(model, spatial = NULL) {
                         family = "binomial")
       occ_block <- .attach_spatial_spde(occ_block, spatial)
     }
+    # Detection block: weight by w_i = P(z_i = 1 | y_i, theta). Sites that
+    # the E-step thinks are likely empty (w_i ~ 0) must drop out of the
+    # detection fit, otherwise they bias p_hat downward by feeding their
+    # all-zero detection history as evidence about (1 - p)^J. Sites with
+    # any detection have w_i = 1 (the E-step sets this).
+    w_det <- weights
+    w_det[any_det] <- 1
+    keep_det <- keep & (w_det > 1e-6)
     list(
       occ = occ_block,
-      det = list(y = n_det[keep], n_trials = n_valid[keep],
-                 X = X_det[keep, , drop = FALSE], family = "binomial")
+      det = list(y = n_det[keep_det], n_trials = n_valid[keep_det],
+                 X = X_det[keep_det, , drop = FALSE],
+                 weights = w_det[keep_det], family = "binomial")
     )
   }
 
@@ -222,27 +231,55 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
     col_y <- pmin(pmax(col_y, 0L), col_n)
     ext_y <- pmin(pmax(ext_y, 0L), ext_n)
 
-    # Detection: site-level across all seasons
-    total_det <- integer(n_sites); total_vis <- integer(n_sites)
+    # Detection: per-(site, season) rows weighted by w[i, t] = P(z_it = 1 | y).
+    # Replaces the legacy hard threshold (w > 0.5) which silently dropped
+    # site-seasons in the boundary regime and double-counted detection
+    # evidence for site-seasons in the high-confidence regime. X_det is
+    # site-indexed in this model, so per-season rows just replicate the
+    # site's covariates.
+    rows_i <- integer(n_sites * n_seasons)
+    det_count <- integer(n_sites * n_seasons)
+    vis_count <- integer(n_sites * n_seasons)
+    w_it <- numeric(n_sites * n_seasons)
+    n_rows <- 0L
     for (i in seq_len(n_sites)) {
       for (t in seq_len(n_seasons)) {
         idx <- (i - 1) * n_seasons + t
-        if (nv[idx] > 0 && w[i, t] > 0.5) {
-          base <- (i - 1) * n_seasons * max_visits + (t - 1) * max_visits
-          for (j in seq_len(nv[idx])) {
-            v <- y_flat[base + j]
-            if (v >= 0) { total_vis[i] <- total_vis[i] + 1L; if (v == 1) total_det[i] <- total_det[i] + 1L }
-          }
+        if (nv[idx] <= 0) next
+        base <- (i - 1) * n_seasons * max_visits + (t - 1) * max_visits
+        dc <- 0L; vc <- 0L
+        for (j in seq_len(nv[idx])) {
+          v <- y_flat[base + j]
+          if (v >= 0) { vc <- vc + 1L; if (v == 1) dc <- dc + 1L }
         }
+        if (vc == 0L) next
+        w_eff <- if (dc > 0L) 1 else w[i, t]
+        if (w_eff <= 1e-6) next
+        n_rows <- n_rows + 1L
+        rows_i[n_rows] <- i
+        det_count[n_rows] <- dc
+        vis_count[n_rows] <- vc
+        w_it[n_rows] <- w_eff
       }
     }
-    dk <- total_vis > 0
+    if (n_rows > 0L) {
+      rows_i <- rows_i[seq_len(n_rows)]
+      det_count <- det_count[seq_len(n_rows)]
+      vis_count <- vis_count[seq_len(n_rows)]
+      w_it <- w_it[seq_len(n_rows)]
+      det_block <- list(y = det_count, n_trials = vis_count,
+                        X = X_det[rows_i, , drop = FALSE],
+                        weights = w_it, family = "binomial")
+    } else {
+      det_block <- list(y = integer(0), n_trials = integer(0),
+                        X = X_det[integer(0), , drop = FALSE],
+                        weights = numeric(0), family = "binomial")
+    }
 
     list(
       occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
                  family = "binomial"),
-      det = list(y = total_det[dk], n_trials = total_vis[dk],
-                 X = X_det[dk, , drop = FALSE], family = "binomial"),
+      det = det_block,
       col = list(y = col_y, n_trials = col_n, X = X_col,
                  family = "binomial"),
       ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
@@ -351,11 +388,18 @@ build_community_callbacks <- function(model, spatial = NULL) {
     M <- 1000L
     y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
     y_occ <- pmin(pmax(y_occ, 0L), M)
+    # Weight detection rows by E-step occupancy posterior. Same fix as
+    # build_single_callbacks(): species-site rows with low w_i drop out
+    # of the detection fit.
+    w_det <- weights
+    w_det[any_det] <- 1
+    keep_det <- keep & (w_det > 1e-6)
     list(
       occ = list(y = y_occ, n_trials = rep(M, N), X = X_occ,
                  family = "binomial"),
-      det = list(y = n_det[keep], n_trials = n_valid[keep],
-                 X = X_det[keep, , drop = FALSE], family = "binomial")
+      det = list(y = n_det[keep_det], n_trials = n_valid[keep_det],
+                 X = X_det[keep_det, , drop = FALSE],
+                 weights = w_det[keep_det], family = "binomial")
     )
   }
 
@@ -452,11 +496,17 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
     y_occ <- pmin(pmax(y_occ, 0L), M)
     specs <- list(occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
                              family = "binomial"))
+    # Per-source detection blocks: weight each row by w_i at the global
+    # site mapped through src_rows. Sites where the E-step says "almost
+    # certainly empty" drop out of every source's detection fit.
     for (s in seq_len(n_sources)) {
       si <- src_info[[s]]
-      dk <- si$keep
+      w_src <- weights[si$src_rows]
+      w_src[si$ad] <- 1
+      dk <- si$keep & (w_src > 1e-6)
       specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk],
                                         X = si$X_det[dk,,drop=FALSE],
+                                        weights = w_src[dk],
                                         family = "binomial")
     }
     specs
