@@ -492,13 +492,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     phi         = 1.0
   )
 
-  # Positive-arm dispersion: gaussian holds phi=1 (estimated post-hoc as
-  # residual SD; gaussian Hessian is invariant to phi up to a scalar);
-  # beta needs a real phi to make the joint Newton step well-scaled, so
-  # pre-fit it on the positive subset alone.
+  # Positive-arm dispersion: gaussian phi is the noise SD — pre-fit it on
+  # the positive subset, otherwise the joint integrand sees noise scale 1
+  # regardless of truth, and the marginal likelihood across the alpha grid
+  # is unable to discriminate alpha because the alpha-driven field variance
+  # is observationally indistinguishable from residual noise of size 1.
+  # (issue #4). Beta needs a real phi for the same Newton-scaling reason.
   if (positive == "lognormal") {
     pos_family <- "gaussian"
-    phi_hat    <- 1.0
+    phi_hat    <- .prefit_lognormal_sigma(enc, control)
   } else {
     phi_hat <- .prefit_beta_phi(enc, control)
     pos_family <- "beta"
@@ -583,14 +585,18 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
 
   # Dispersion summary on the positive arm at the posterior-weighted-mean
-  # beta_pos. For lognormal this is the residual SD on the log scale (matches
-  # Phase 1a); for beta it is the profiled phi from the pre-fit, recorded as
-  # phi_pos.
+  # beta_pos. For lognormal this is the residual SD on the log scale, after
+  # subtracting the alpha-scaled posterior spatial field at the positive-arm
+  # locations — without that subtraction the residuals double-count the
+  # field-driven variance and sigma_pos absorbs alpha^2 * field_sigma^2
+  # (issue #4). For beta it is the profiled phi from the pre-fit, recorded
+  # as phi_pos.
   if (positive == "lognormal") {
-    eta_pos   <- as.numeric(enc$pos_data$X %*% beta_pos)
-    resid     <- enc$pos_data$y - eta_pos
-    sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
-    phi_pos   <- NA_real_
+    eta_pos     <- as.numeric(enc$pos_data$X %*% beta_pos)
+    field_at_pos <- .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
+    resid       <- enc$pos_data$y - eta_pos - field_at_pos
+    sigma_pos   <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
+    phi_pos     <- NA_real_
   } else {
     sigma_pos <- NA_real_
     phi_pos   <- phi_hat
@@ -615,6 +621,79 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     se_pos     = se_pos,
     joint      = fit
   )
+}
+
+# Pre-fit the lognormal residual SD on the positive subset before handing
+# control to the joint engine. The joint integrand reads `phi` as the noise
+# SD; without a sensible pre-fit it sees scale 1 regardless of truth and the
+# log-marginal across the alpha grid becomes near-flat (issue #4).
+#
+# Strategy: non-spatial Gaussian fit on the positive subset, residual SD as
+# the point estimate. This is an upper bound on the true noise SD (it
+# includes the alpha-mediated field variance), but it sits inside the same
+# order of magnitude as the truth, which is enough to restore the joint
+# engine's discrimination across the alpha grid. The post-hoc sigma_pos in
+# `fit_cover_hurdle_joint_nested` then refines this by subtracting the
+# alpha-scaled posterior field.
+.prefit_lognormal_sigma <- function(enc, control) {
+  y <- enc$pos_data$y
+  X <- enc$pos_data$X
+  n <- length(y); p <- ncol(X)
+  if (n <= p) return(1.0)
+  beta_init  <- tryCatch(qr.solve(X, y), error = function(e) NULL)
+  if (is.null(beta_init)) return(1.0)
+  resid_init <- as.numeric(y - X %*% beta_init)
+  sigma_init <- sqrt(sum(resid_init^2) / max(n - p, 1L))
+  if (!is.finite(sigma_init) || sigma_init <= 0) return(1.0)
+  sigma_init
+}
+
+# Project the posterior-weighted alpha-scaled spatial field at a set of
+# spatial-unit indices (1-based) under a `tulpa_nested_laplace_joint` fit
+# with a copy arm. Backend-aware: BYM2 combines (phi, theta) sub-blocks
+# with the per-grid sigma/rho factors; ICAR / CAR_proper use the phi block
+# unscaled. Returns a numeric vector of the same length as `spi_obs` —
+# zero when `fit` has no modes, no copy spec, or theta_grid lacks an alpha
+# column.
+.joint_field_at_obs_copy <- function(fit, prior, spi_obs) {
+  N <- length(spi_obs)
+  if (N == 0L) return(numeric(0))
+  modes <- fit$modes
+  if (is.null(modes) || !is.matrix(modes)) return(rep(0, N))
+  layout <- fit$arm_layout
+  theta_grid <- fit$theta_grid
+  weights <- fit$weights
+  if (is.null(theta_grid) || !"alpha" %in% colnames(theta_grid)) {
+    return(rep(0, N))
+  }
+  alpha_k <- theta_grid[, "alpha"]
+  n_grid <- length(alpha_k)
+  n_s <- prior$n_spatial_units %||% 0L
+  if (n_s == 0L) return(rep(0, N))
+  phi_start <- layout$phi_start
+  theta_start <- layout$theta_start
+  if (is.null(phi_start) || n_s <= 0L) return(rep(0, N))
+
+  type <- tolower(prior$type %||% "")
+  scale_factor <- as.numeric(prior$scale_factor %||% 1.0)
+  field_at_obs <- numeric(N)
+  for (k in seq_len(n_grid)) {
+    if (type == "bym2") {
+      sigma_k <- theta_grid[k, "sigma"]
+      rho_k   <- theta_grid[k, "rho"]
+      d_phi   <- sigma_k * sqrt(rho_k + 1e-10) * scale_factor
+      d_theta <- sigma_k * sqrt(1 - rho_k + 1e-10)
+      phi_k   <- modes[k, phi_start + seq_len(n_s)]
+      theta_k <- modes[k, theta_start + seq_len(n_s)]
+      field_k <- d_phi * phi_k + d_theta * theta_k
+    } else {
+      # ICAR / CAR_proper: latent x[s] is the field directly (d_phi = 1).
+      phi_k   <- modes[k, phi_start + seq_len(n_s)]
+      field_k <- phi_k
+    }
+    field_at_obs <- field_at_obs + weights[k] * alpha_k[k] * field_k[spi_obs]
+  }
+  field_at_obs
 }
 
 # Pre-fit the beta precision on the positive subset (no spatial). Profiled
