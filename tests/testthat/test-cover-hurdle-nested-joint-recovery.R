@@ -148,10 +148,10 @@ test_that("joint nested_laplace beta phi_pos: KNOWN biased (skipped)", {
   # variation that would carry the field signal is absorbed into residual
   # precision, biasing phi downward. INLAabun validation Demo 7 Cell B
   # measured ~70% downward bias at n_pos ~ 45; dev_notes/probe_joint_recovery2.R
-  # measured ~55% bias at n_pos ~ 320. Filed as gcol33/tulpaObs#? -
+  # measured ~55% bias at n_pos ~ 320. Filed as gcol33/tulpaObs#5 -
   # a passing recovery test requires either re-profiling phi on the joint
   # objective (folds back into Phase 3 phi posterior integration) or
   # subtracting alpha_hat * w_s_hat from the positive arm before the
   # phi pre-fit (mirror the lognormal fix in #4).
-  skip("joint-engine beta phi_pos is downward-biased; see issue tracker")
+  skip("blocked on gcol33/tulpaObs#5")
 })
