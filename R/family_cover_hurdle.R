@@ -511,14 +511,17 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   } else {
     pos_family   <- "beta"
     phi_hat      <- 1.0
-    # 13 log-spaced points span 2..300, with neighbours of phi ~ 30 at
-    # 24.7 and 37.6 (within-grid log-distance ~0.2 in each direction).
-    # Coarser grids underestimate phi when posterior mass concentrates
-    # between two widely-spaced points: 5 points gave ~18% mean bias,
-    # 9 points ~12%. 13 points puts the recovery suite under the 10%
-    # mean-bias and 25% max-per-seed thresholds.
+    # 7 log-spaced points span 2..300 (neighbour-ratio ~2.4); the joint
+    # engine's mode-tracked interior densification (gcol33/tulpa#19
+    # follow-up) adds 1-2 midpoint cells around the peak when adjacent
+    # grid levels carry density above the edge threshold, so the
+    # *effective* phi resolution near the peak matches the previous
+    # 13-point default while the baseline cell count drops ~46%.
+    # History: fixed 13 was set when adaptive_grid was off-by-default;
+    # 5 points gave ~18% mean bias, 9 points ~12% under the static
+    # grid. Refinement now closes that gap dynamically.
     phi_grid_pos <- control$phi_grid %||%
-      exp(seq(log(2), log(300), length.out = 13))
+      exp(seq(log(2), log(300), length.out = 7))
   }
 
   arm_pos <- list(
@@ -708,13 +711,16 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   sigma_init
 }
 
-# Project the posterior-weighted alpha-scaled spatial field at a set of
-# spatial-unit indices (1-based) under a `tulpa_nested_laplace_joint` fit
-# with a copy arm. Backend-aware: BYM2 combines (phi, theta) sub-blocks
-# with the per-grid sigma/rho factors; ICAR / CAR_proper use the phi block
-# unscaled. Returns a numeric vector of the same length as `spi_obs` —
-# zero when `fit` has no modes, no copy spec, or theta_grid lacks an alpha
-# column.
+# Project the posterior-weighted spatial field at a set of spatial-unit
+# indices (1-based) onto the COPY arm under a `tulpa_nested_laplace_joint`
+# fit. Backend-aware: BYM2 combines (phi, theta) sub-blocks with the
+# per-grid (sigma_pos, rho) factors; ICAR / CAR_proper scale the single
+# latent block by sigma_pos.
+#
+# Under the (sigma_occ, sigma_pos) reparam (gcol33/tulpa#18) the stored
+# modes are unit-variance latent z; the per-arm field amplitude lives on
+# the eta multiplier. The copy arm's field is therefore
+# `sigma_pos * z_decomposed` rather than the old `alpha * (sigma * z)`.
 .joint_field_at_obs_copy <- function(fit, prior, spi_obs) {
   N <- length(spi_obs)
   if (N == 0L) return(numeric(0))
@@ -723,11 +729,11 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   layout <- fit$arm_layout
   theta_grid <- fit$theta_grid
   weights <- fit$weights
-  if (is.null(theta_grid) || !"alpha" %in% colnames(theta_grid)) {
+  if (is.null(theta_grid) || !"sigma_pos" %in% colnames(theta_grid)) {
     return(rep(0, N))
   }
-  alpha_k <- theta_grid[, "alpha"]
-  n_grid <- length(alpha_k)
+  sigma_pos_k <- theta_grid[, "sigma_pos"]
+  n_grid <- length(sigma_pos_k)
   n_s <- prior$n_spatial_units %||% 0L
   if (n_s == 0L) return(rep(0, N))
   phi_start <- layout$phi_start
@@ -738,20 +744,19 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   scale_factor <- as.numeric(prior$scale_factor %||% 1.0)
   field_at_obs <- numeric(N)
   for (k in seq_len(n_grid)) {
+    s_pos <- sigma_pos_k[k]
     if (type == "bym2") {
-      sigma_k <- theta_grid[k, "sigma"]
       rho_k   <- theta_grid[k, "rho"]
-      d_phi   <- sigma_k * sqrt(rho_k + 1e-10) * scale_factor
-      d_theta <- sigma_k * sqrt(1 - rho_k + 1e-10)
+      d_phi   <- s_pos * sqrt(rho_k + 1e-10) * scale_factor
+      d_theta <- s_pos * sqrt(1 - rho_k + 1e-10)
       phi_k   <- modes[k, phi_start + seq_len(n_s)]
       theta_k <- modes[k, theta_start + seq_len(n_s)]
       field_k <- d_phi * phi_k + d_theta * theta_k
     } else {
-      # ICAR / CAR_proper: latent x[s] is the field directly (d_phi = 1).
       phi_k   <- modes[k, phi_start + seq_len(n_s)]
-      field_k <- phi_k
+      field_k <- s_pos * phi_k
     }
-    field_at_obs <- field_at_obs + weights[k] * alpha_k[k] * field_k[spi_obs]
+    field_at_obs <- field_at_obs + weights[k] * field_k[spi_obs]
   }
   field_at_obs
 }
