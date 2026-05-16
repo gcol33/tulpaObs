@@ -2,16 +2,19 @@
 # around `tulpa_nested_laplace_joint`. Asserts that 95% credible intervals
 # for the copy-scaling parameter `alpha` cover the truth at the nominal
 # rate when the truth sits *at* the upper edge of the user-supplied
-# `alpha_grid`. The fixed-grid path under-covers in this regime because
-# the integrand cannot extend past the boundary; the adaptive path adds
-# a densification point inside the heaviest cell and two outward extension
-# points whenever the relative integrand density at the boundary exceeds
-# `adaptive_grid_edge_thresh`.
+# `sigma_pos_grid` (the cover-arm field amplitude axis introduced in
+# gcol33/tulpa#18). The fixed-grid path under-covers in this regime
+# because the integrand cannot extend past the boundary; the adaptive
+# path adds a densification point inside the heaviest cell and two
+# outward extension points whenever the relative integrand density at
+# the boundary exceeds `adaptive_grid_edge_thresh`.
 #
 # See gcol33/tulpaObs#8 and gcol33/INLAabun's Demo 3
 # `example/validation/d3_joint_copy.R` for the reproducer that motivated
-# the fix. The configuration here mirrors D3 exactly (N=300, n_s=25, BYM2,
-# beta-positive arm, `alpha_grid = c(0, 0.5, 1, 1.5)`).
+# the fix. The configuration here mirrors D3 (N=300, n_s=25, BYM2,
+# beta-positive arm) with truth `sigma_pos = alpha_true * sigma_true =
+# 1.5 * 0.6 = 0.9` sitting at the upper boundary of
+# `sigma_pos_grid = c(0, 0.3, 0.6, 0.9)`.
 
 simulate_d3_like <- function(seed, alpha_true,
                              N = 300L, n_s = 25L,
@@ -71,10 +74,10 @@ test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
       spatial  = spatial,
       engine   = "nested_laplace",
       control  = list(
-        sigma_grid   = c(0.3, 0.6, 0.9),
-        rho_grid     = c(0.5, 0.7, 0.9),
-        alpha_grid   = c(0.0, 0.5, 1.0, 1.5),
-        adaptive_grid = TRUE
+        sigma_grid     = c(0.3, 0.6, 0.9),
+        rho_grid       = c(0.5, 0.7, 0.9),
+        sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9),
+        adaptive_grid  = TRUE
       )
     )
     expect_s3_class(fit, "cover_fit")
@@ -109,9 +112,9 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
                              n_s = n_s)
     spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
     ctrl <- list(
-      sigma_grid   = c(0.3, 0.6, 0.9),
-      rho_grid     = c(0.5, 0.7, 0.9),
-      alpha_grid   = c(0.0, 0.5, 1.0, 1.5)
+      sigma_grid     = c(0.3, 0.6, 0.9),
+      rho_grid       = c(0.5, 0.7, 0.9),
+      sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9)
     )
     fit_fix <- tobs(formula = ~ x, data = sim$data, family = cover("beta"),
                     y = sim$y, spatial = spatial, engine = "nested_laplace",
@@ -133,10 +136,11 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
 
 test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
   skip_on_cran()
-  # alpha_true = 0 places the truth at the *opposite* edge of the user
-  # grid, but the data drives the posterior to concentrate near 0 with
-  # quickly-decaying tails, so the integrand at the upper boundary
-  # (alpha = 1.5) is essentially zero and refinement should not fire.
+  # alpha_true = 0 (i.e. sigma_pos_true = 0) places the truth at the
+  # *opposite* edge of the user grid, but the data drives the posterior
+  # to concentrate near 0 with quickly-decaying tails, so the integrand
+  # at the upper boundary (sigma_pos = 0.9) is essentially zero and
+  # refinement should not fire.
   sim <- simulate_d3_like(seed = 3101L, alpha_true = 0.0)
   n_s <- nlevels(sim$data$region)
   adj <- chain_adj_for_test(n_s)
@@ -145,25 +149,26 @@ test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
     formula = ~ x, data = sim$data, family = cover("beta"), y = sim$y,
     spatial = spatial, engine = "nested_laplace",
     control = list(
-      sigma_grid = c(0.3, 0.6, 0.9),
-      rho_grid   = c(0.5, 0.7, 0.9),
-      alpha_grid = c(0.0, 0.5, 1.0, 1.5),
-      adaptive_grid = TRUE
+      sigma_grid     = c(0.3, 0.6, 0.9),
+      rho_grid       = c(0.5, 0.7, 0.9),
+      sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9),
+      adaptive_grid  = TRUE
     )
   )
-  # adaptive_grid_info should be present and report refinement on alpha
-  # if and only if the boundary integrand density crossed the threshold.
-  # At alpha_true = 0 the integrand at alpha = 1.5 is ~1e-15 relative to
-  # the peak (lm @ 1.5 << lm @ 0), so the trigger must NOT fire on the
-  # max boundary. The min boundary is at the local mode, so the trigger
-  # is also OK to not fire because the score is dominated by the
-  # density (~ 1) but extension below 0 is bounds-clipped to no points.
+  # adaptive_grid_info should be present and report refinement on
+  # sigma_pos if and only if the boundary integrand density crossed the
+  # threshold. At sigma_pos_true = 0 the integrand at sigma_pos = 0.9 is
+  # ~1e-15 relative to the peak (lm @ 0.9 << lm @ 0), so the trigger
+  # must NOT fire on the max boundary. The min boundary is at the local
+  # mode, so the trigger is also OK to not fire because the score is
+  # dominated by the density (~ 1) but extension below 0 is bounds-
+  # clipped to no points.
   info <- fit$joint$adaptive_grid_info
   if (!is.null(info)) {
     # If refinement fired, it must have been on the min side only
-    # (densification between 0 and 0.5 is the only legal addition; the
-    # outward extension is clipped at alpha >= 0).
-    expect_true("alpha" %in% unlist(strsplit(info$triggered_axes, ",")))
+    # (densification between 0 and 0.3 is the only legal addition; the
+    # outward extension is clipped at sigma_pos >= 0).
+    expect_true("sigma_pos" %in% unlist(strsplit(info$triggered_axes, ",")))
     # Coverage at the true alpha = 0 must remain >= 0.95 nominal.
     expect_lt(abs(fit$joint$theta_mean["alpha"] - 0) /
                   max(fit$joint$theta_sd["alpha"], 1e-6), 1.96)

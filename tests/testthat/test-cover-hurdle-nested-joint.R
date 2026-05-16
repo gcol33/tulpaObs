@@ -50,9 +50,9 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
         spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
-            sigma_grid = c(0.4, 0.8),
-            rho_grid   = c(0.5, 0.9),
-            alpha_grid = c(0.0, 1.0)
+            sigma_grid     = c(0.4, 0.8),
+            rho_grid       = c(0.5, 0.9),
+            sigma_pos_grid = c(0.0, 0.6)
         )
     )
 
@@ -90,8 +90,8 @@ test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
         spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
-            tau_grid   = c(1.0, 4.0),
-            alpha_grid = c(0.0, 1.0)
+            tau_grid       = c(1.0, 4.0),
+            sigma_pos_grid = c(0.0, 0.75)
         )
     )
 
@@ -156,9 +156,9 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
         spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
-            sigma_grid = c(0.4, 0.8),
-            rho_grid   = c(0.5, 0.9),
-            alpha_grid = c(0.0, 1.0)
+            sigma_grid     = c(0.4, 0.8),
+            rho_grid       = c(0.5, 0.9),
+            sigma_pos_grid = c(0.0, 0.6)
         )
     )
 
@@ -194,8 +194,8 @@ test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
         spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
-            tau_grid   = c(1.0, 4.0),
-            alpha_grid = c(0.0, 1.0)
+            tau_grid       = c(1.0, 4.0),
+            sigma_pos_grid = c(0.0, 0.75)
         )
     )
 
@@ -226,9 +226,9 @@ test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
         spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
-            tau_grid     = c(1.0, 4.0),
-            rho_car_grid = c(0.7, 0.95),
-            alpha_grid   = c(0.0, 1.0)
+            tau_grid       = c(1.0, 4.0),
+            rho_car_grid   = c(0.7, 0.95),
+            sigma_pos_grid = c(0.0, 0.75)
         )
     )
 
