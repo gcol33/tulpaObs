@@ -243,7 +243,13 @@ These are scheduled under Phase 3 below.
   (per-group mean) and `<var>_wtn` (deviation from per-group mean) so
   longitudinal formulas like `~ year_btw + year_wtn` separate cross-plot
   baseline heterogeneity from within-plot temporal trend.
-- *(Phase 1e — planned)* Reproducible reduction of the MOTIVATE example.
+- *(Phase 1e — shipped)* Reproducible reduction of the MOTIVATE example as
+  a vignette. `vignettes/cover-hurdle-motivate.Rmd` exercises the joint
+  nested-Laplace cover-hurdle on a synthetic plot × year panel (chain
+  BYM2, 25 plots, 4 visits each) for both `cover("beta")` and
+  `cover("lognormal")` positive parts, using `within_between()` to split
+  raw `year` into the cross-plot baseline and the within-plot deviation.
+  Both within-plot slopes recover to truth at z > 2.4 on n_positive ≈ 37.
 
 **Phase 2 — N-mixture**
 
