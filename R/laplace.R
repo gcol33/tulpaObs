@@ -87,7 +87,8 @@
     )
   }
 
-  fit <- build_laplace_fit(em_result, model, spatial, callbacks$p_per_submodel)
+  fit <- build_laplace_fit(em_result, model, spatial, callbacks$p_per_submodel,
+                           prior_spec = prior_spec)
   fit$priors <- prior_spec
   fit
 }
@@ -721,6 +722,69 @@ extract_beta <- function(sub, p) {
   c(d, rep(NA_real_, p - length(d)))
 }
 
+# Louis-corrected observed Fisher info for the occupancy fixed-effect block
+# of a single-season occu fit (tulpaObs#7).
+#
+# Why this is needed. The inner M-step encodes the soft-imputed P(z_i = 1 | y_i)
+# as a pseudo-binomial likelihood with n_trials = M (M = 1000 non-spatial,
+# M = 4 spatial). The resulting inner Hessian is
+#
+#   H_inner = M * X' diag(psi (1 - psi)) X + P_prior
+#
+# i.e. the complete-data Fisher info inflated by the M trick, plus the prior
+# precision. This is the wrong object for SE reporting on two counts: the M
+# factor is an artefact of the M-step encoding (not data information), and
+# the complete-data info ignores the missing-z variance.
+#
+# Louis identity for the occupancy score s_i = x_i (z_i - psi_i) gives the
+# observed Fisher info at the EM stationary point:
+#
+#   I_obs(beta_psi) = E[-d2 log f / dbeta2 | y] - Var(s_complete | y)
+#                   = X' diag(psi (1 - psi)) X - X' diag(w (1 - w)) X
+#                   = X' diag(psi (1 - psi) - w (1 - w)) X
+#
+# where w_i = P(z_i = 1 | y_i, theta_hat) is the converged E-step weight. The
+# per-site `psi(1-psi) - w(1-w)` term can be negative (the marginal log-lik
+# can be locally convex at a single site), but the aggregate X' D X is PSD at
+# the MLE because it equals minus the marginal log-lik Hessian at its max.
+.louis_info_psi_single <- function(X_occ, beta_psi, weights,
+                                   spatial = NULL, spatial_fit = NULL,
+                                   prior_spec = NULL,
+                                   coef_names = NULL) {
+  p_psi <- length(beta_psi)
+  if (p_psi == 0L) return(NULL)
+  if (is.null(X_occ) || nrow(X_occ) == 0L) return(NULL)
+  if (is.null(weights) || length(weights) != nrow(X_occ)) return(NULL)
+
+  eta <- as.numeric(X_occ %*% beta_psi)
+  sp_off <- .spatial_eta_offset(spatial, spatial_fit, p_psi)
+  if (length(sp_off) == nrow(X_occ)) eta <- eta + sp_off
+  eta <- pmin(pmax(eta, -30), 30)
+  psi <- plogis(eta)
+
+  d <- psi * (1 - psi) - weights * (1 - weights)
+  I_obs <- as.matrix(crossprod(X_occ, d * X_occ))
+
+  if (!is.null(prior_spec)) {
+    if (is.null(coef_names)) coef_names <- colnames(X_occ) %||% paste0("x", seq_len(p_psi))
+    pr <- .prior_for_submodel(prior_spec, "psi", coef_names)
+    if (!is.null(pr)) {
+      pen_prec <- ifelse(is.finite(pr$sd), 1 / (pr$sd^2), 0)
+      diag(I_obs) <- diag(I_obs) + pen_prec[seq_len(p_psi)]
+    }
+  }
+  I_obs
+}
+
+# SE vector from an observed-info matrix; returns NA of length p on failure.
+.se_from_info <- function(I, p) {
+  if (is.null(I)) return(rep(NA_real_, p))
+  cov <- tryCatch(solve(I), error = function(e) NULL)
+  if (is.null(cov)) return(rep(NA_real_, p))
+  d <- sqrt(pmax(diag(cov), 0))
+  if (length(d) >= p) d[seq_len(p)] else c(d, rep(NA_real_, p - length(d)))
+}
+
 clamp_w <- function(w) pmin(pmax(w, 0.001), 0.999)
 
 occ_weights <- function(psi, p, N, n_valid, n_det, any_det) {
@@ -751,13 +815,15 @@ glm_init <- function(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det) 
 }
 
 # Build tobs_fit from EM result
-build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
+build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
+                              prior_spec = NULL) {
   pi_list <- model$process_info
 
   # Collect betas from correction (if available) or EM fits
   means <- numeric()
   sds <- numeric()
   nms <- character()
+  louis_psi_se <- NULL
 
   for (k in seq_along(pi_list)) {
     pi <- pi_list[[k]]
@@ -773,7 +839,29 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel) {
       fi <- em_result$fits[[sub_name]]
       beta <- extract_beta(fi, pi$p)
       means <- c(means, beta)
-      sds <- c(sds, .se_from_laplace_fit(fi, pi$p))
+
+      # Louis-corrected SE on the psi block of a single-season fit. The inner
+      # M-step Hessian is M * I_complete + P_prior (pseudo-binomial trick);
+      # I_obs = X' diag(psi(1-psi) - w(1-w)) X + P_prior is the right object
+      # for SEs. See `.louis_info_psi_single` and tulpaObs#7.
+      use_louis <- identical(model$model_type, "single") &&
+                   identical(sub_name, "occ") &&
+                   !is.null(em_result$weights)
+      if (use_louis) {
+        I_obs <- .louis_info_psi_single(
+          X_occ       = model$X_processes[[1]],
+          beta_psi    = beta,
+          weights     = em_result$weights,
+          spatial     = spatial,
+          spatial_fit = fi,
+          prior_spec  = prior_spec,
+          coef_names  = pi$coef_names
+        )
+        louis_psi_se <- .se_from_info(I_obs, pi$p)
+        sds <- c(sds, louis_psi_se)
+      } else {
+        sds <- c(sds, .se_from_laplace_fit(fi, pi$p))
+      }
     } else {
       means <- c(means, rep(0, pi$p))
       sds <- c(sds, rep(NA_real_, pi$p))
