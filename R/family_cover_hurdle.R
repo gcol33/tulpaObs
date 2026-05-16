@@ -437,9 +437,12 @@ print.summary.cover_fit <- function(x, ...) {
 #'   the spatial spec (group_var lookup, n_spatial_units check).
 #' @param positive `"lognormal"` or `"beta"`.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
-#'   `sigma_grid`, `rho_grid`, `tau_grid`, `rho_car_grid`, `alpha_grid`,
+#'   `sigma_grid`, `rho_grid`, `rho_car_grid`, `sigma_pos_grid`,
 #'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta
-#'   pre-fit when `positive = "beta"`).
+#'   pre-fit when `positive = "beta"`). `alpha_grid` and `tau_grid` are
+#'   accepted as legacy aliases — see gcol33/tulpa#18 for the rationale
+#'   behind moving the cover-arm field amplitude onto its own
+#'   `sigma_pos_grid` axis.
 #' @return List shaped like the single-Laplace fit output but with extra
 #'   `joint` field carrying the raw `tulpa_nested_laplace_joint` result.
 #' @keywords internal
@@ -533,17 +536,53 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # Strip the per-obs spatial_idx (tulpa_nested_laplace_joint takes it per
   # arm) and the legacy rho_bounds field (joint car_proper uses rho_car_grid).
   # Forward control-grid overrides per backend.
+  #
+  # gcol33/tulpa#18: the engine now parameterizes the joint outer grid as
+  # (sigma_occ, sigma_pos) instead of (sigma, alpha). For ICAR / CAR_proper
+  # the spatial field is unit-precision and the donor-arm amplitude lives
+  # on `prior$sigma_grid` (legacy `tau_grid` from prior_from_spec is
+  # translated below). The cover-arm field amplitude lives on
+  # `copy$sigma_pos_grid`. alpha is recovered post-hoc as
+  # sigma_pos / sigma_occ from the joint posterior.
   prior_for_joint <- prior
   prior_for_joint$spatial_idx <- NULL
   prior_for_joint$rho_bounds  <- NULL
+  # Translate any legacy tau_grid that prior_from_spec attached to an
+  # ICAR / CAR_proper prior — the joint engine takes sigma = 1/sqrt(tau)
+  # as its donor-amplitude axis under the new parameterization.
+  if (!is.null(prior_for_joint$tau_grid) &&
+      is.null(prior_for_joint$sigma_grid)) {
+    prior_for_joint$sigma_grid <- 1.0 / sqrt(as.numeric(prior_for_joint$tau_grid))
+    prior_for_joint$tau_grid   <- NULL
+  } else if (!is.null(prior_for_joint$tau_grid)) {
+    prior_for_joint$tau_grid <- NULL
+  }
   if (!is.null(control$sigma_grid))   prior_for_joint$sigma_grid   <- control$sigma_grid
   if (!is.null(control$rho_grid))     prior_for_joint$rho_grid     <- control$rho_grid
-  if (!is.null(control$tau_grid))     prior_for_joint$tau_grid     <- control$tau_grid
+  if (!is.null(control$tau_grid)) {
+    prior_for_joint$sigma_grid <- 1.0 / sqrt(as.numeric(control$tau_grid))
+  }
   if (!is.null(control$rho_car_grid)) prior_for_joint$rho_car_grid <- control$rho_car_grid
 
+  if (!is.null(control$sigma_pos_grid)) {
+    sigma_pos_grid <- as.numeric(control$sigma_pos_grid)
+  } else if (!is.null(control$alpha_grid)) {
+    # Legacy alpha_grid path: anchor sigma_pos at alpha * median(sigma_donor).
+    sigma_donor <- prior_for_joint$sigma_grid %||%
+      exp(seq(log(0.1), log(3), length.out = 5))
+    sigma_pos_grid <- as.numeric(control$alpha_grid) *
+      stats::median(as.numeric(sigma_donor))
+  } else {
+    # Default: mirror the donor sigma grid (gives alpha = sigma_pos /
+    # sigma_occ posterior centered on 1.0 under flat per-axis priors).
+    sigma_donor <- prior_for_joint$sigma_grid %||%
+      exp(seq(log(0.1), log(3), length.out = 5))
+    sigma_pos_grid <- as.numeric(sigma_donor)
+  }
+
   copy_spec <- list(
-    arm        = "pos",
-    alpha_grid = control$alpha_grid %||% c(0.0, 0.5, 1.0, 1.5, 2.0)
+    arm            = "pos",
+    sigma_pos_grid = sigma_pos_grid
   )
 
   # Adaptive grid forwarding. Defaults match the joint engine's defaults
