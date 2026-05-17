@@ -18,7 +18,8 @@
 
 .dispatch_cover <- function(formula, data, family, detection, y,
                             visit_data, spatial, temporal, engine,
-                            priors, control, ...) {
+                            priors, control,
+                            approx = "gaussian_laplace", ...) {
   positive <- family$params$positive
   if (!positive %in% c("lognormal", "beta")) {
     stop("cover(positive = '", positive, "') is not supported. ",
@@ -40,13 +41,20 @@
   enc  <- encode_cover_hurdle(formula, data, y, spatial, positive = positive)
 
   if (identical(engine, "nested_laplace")) {
+    if (identical(approx, "simplified_laplace")) {
+      message(
+        "tobs(): simplified_laplace is currently wired only for the ",
+        "single-Laplace cover path; falling back to gaussian_laplace ",
+        "marginals on the joint nested-Laplace fit."
+      )
+    }
     return(decode_cover_hurdle_joint(
       fit_cover_hurdle_joint_nested(enc, data, positive, control), enc, family
     ))
   }
 
   fits <- fit_cover_hurdle(enc, positive, engine, priors, control)
-  decode_cover_hurdle(fits, enc, family)
+  decode_cover_hurdle(fits, enc, family, approx = approx)
 }
 
 
@@ -230,8 +238,18 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
 #' * beta arm: `tulpa_laplace_beta()` already weights the Hessian by phi
 #'   (Fisher information), so SEs are returned at scale 1.
 #'
+#' When `approx = "simplified_laplace"`, the cover-hurdle SLA gamma is
+#' computed via [`.sla_compute_cover_hurdle()`]: a per-arm 5-point FD of
+#' the *original* Bernoulli / Beta / Lognormal log-likelihood against the
+#' arm's `solve(H_beta)` Sigma (raw Hessian — no Louis correction needed
+#' here because both arms run real likelihoods at the mode, not the
+#' pseudo-binomial M-step encoding). Per-arm pseudo-draws are then
+#' resampled from skew-normals fit by moment-matching `(beta_arm,
+#' se_arm, gamma_arm)`.
+#'
 #' @keywords internal
-decode_cover_hurdle <- function(fits, enc, family) {
+decode_cover_hurdle <- function(fits, enc, family,
+                                approx = "gaussian_laplace") {
   beta_occ <- fits$m_occ$mode[seq_len(ncol(enc$occ_data$X))]
   beta_pos <- fits$m_pos$mode[seq_len(ncol(enc$pos_data$X))]
   names(beta_occ) <- colnames(enc$occ_data$X)
@@ -253,6 +271,26 @@ decode_cover_hurdle <- function(fits, enc, family) {
     hyperpar$phi_pos <- fits$phi_pos
   }
 
+  # Simplified-Laplace gamma + skew-normal pseudo-draws per arm.
+  skew_occ <- NULL
+  skew_pos <- NULL
+  draws_occ <- NULL
+  draws_pos <- NULL
+  sla_status <- "off"
+  if (identical(approx, "simplified_laplace")) {
+    sla_res <- .sla_compute_cover_hurdle(fits, enc, fits$positive)
+    sla_draws <- .sla_build_cover_hurdle_draws(
+      beta_occ, se_occ, beta_pos, se_pos, sla_res
+    )
+    draws_occ <- sla_draws$draws_occ
+    draws_pos <- sla_draws$draws_pos
+    sla_status <- sla_draws$sla_status
+    if (isTRUE(sla_res$valid)) {
+      skew_occ <- sla_res$gamma_occ
+      skew_pos <- sla_res$gamma_pos
+    }
+  }
+
   out <- structure(
     list(
       occ          = fits$m_occ,
@@ -271,7 +309,12 @@ decode_cover_hurdle <- function(fits, enc, family) {
       n_positive   = length(enc$idx_pos),
       converged    = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),
       log_marginal = c(occ = fits$m_occ$log_marginal,
-                       pos = fits$m_pos$log_marginal)
+                       pos = fits$m_pos$log_marginal),
+      skew_occ     = skew_occ,
+      skew_pos     = skew_pos,
+      draws_occ    = draws_occ,
+      draws_pos    = draws_pos,
+      sla_status   = sla_status
     ),
     class = c("cover_fit", "tobs_fit", "tulpa_fit")
   )
@@ -364,6 +407,9 @@ print.cover_fit <- function(x, ...) {
   }
   cat(sprintf("  converged    : %s\n",
               if (isTRUE(x$converged)) "yes" else "no"))
+  if (!is.null(x$sla_status) && !identical(x$sla_status, "off")) {
+    cat(sprintf("  marginals    : %s\n", x$sla_status))
+  }
   cat("\nOccurrence (binomial logit):\n")
   print(.coef_table(x$beta_occ, x$se_occ))
   pos_header <- if (positive == "beta") {
