@@ -110,10 +110,10 @@ test_that("Binomial l3 has expected sign structure", {
                10 * tulpaObs:::.l3_binomial_logit(1, 1))
 })
 
-test_that("sn_match round-trips for a moderately skewed distribution", {
-  sn <- tulpaObs:::.sn_match(mu = 0, sigma = 1, gamma = 0.3)
+test_that("tulpa::sn_match round-trips for a moderately skewed distribution", {
+  sn <- tulpa::sn_match(mu = 0, sigma = 1, gamma = 0.3)
   expect_false(is.null(sn))
-  # Validate SN moments numerically
+  # Validate SN moments numerically via the local Azzalini sampler
   set.seed(1); s <- tulpaObs:::.sn_sample(50000, sn)
   expect_equal(mean(s), 0, tolerance = 0.02)
   expect_equal(sd(s), 1, tolerance = 0.02)
@@ -122,10 +122,14 @@ test_that("sn_match round-trips for a moderately skewed distribution", {
   expect_equal(emp_skew, 0.3, tolerance = 0.05)
 })
 
-test_that("sn_match returns NULL above the SN ceiling", {
-  expect_null(tulpaObs:::.sn_match(0, 1, 1.5))
-  expect_null(tulpaObs:::.sn_match(0, 1, -0.999))
-  expect_null(tulpaObs:::.sn_match(0, 1, NaN))
+test_that("tulpa::sn_match returns NULL (with warning) above the SN ceiling", {
+  # tulpa::sn_match warns + returns NULL above the SN representability ceiling
+  expect_warning(res1 <- tulpa::sn_match(0, 1, 1.5), "exceeds skew-normal ceiling")
+  expect_null(res1)
+  expect_warning(res2 <- tulpa::sn_match(0, 1, -0.999), "exceeds skew-normal ceiling")
+  expect_null(res2)
+  # NaN gamma is a programmer bug upstream — sn_match errors rather than no-ops.
+  expect_error(tulpa::sn_match(0, 1, NaN), "finite numeric")
 })
 
 test_that("sla_replace_draws caps |gamma| > 0.95 and tracks it in attrs", {

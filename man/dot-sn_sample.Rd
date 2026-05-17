@@ -9,7 +9,8 @@
 \arguments{
 \item{n}{Number of samples.}
 
-\item{sn}{Skew-normal parameter list from \code{.sn_match()}.}
+\item{sn}{Skew-normal parameter list from \code{\link[tulpa:sn_match]{tulpa::sn_match()}} (elements
+\code{xi}, \code{omega}, \code{alpha}).}
 }
 \value{
 Numeric vector of length n.

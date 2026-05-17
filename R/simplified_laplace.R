@@ -10,8 +10,8 @@
 # Self-contained: needs no tulpa engine changes for fixed-effects-coefficient
 # marginals. Uses H_beta and X from tulpa_laplace()'s return list directly.
 #
-# The skew-normal utilities here are temporary — they live in tulpaObs until
-# tulpa absorbs them (see upstream spec §2.1).
+# Cumulant -> skew-normal conversion (sn_match, sn_cdf, sn_quantile) lives
+# upstream in tulpa; only the four-line Azzalini sampler stays local.
 # ============================================================================
 
 
@@ -255,38 +255,14 @@
 
 
 # ---------------------------------------------------------------------------
-# Skew-normal utilities (temporary home — to be moved to tulpa per upstream
-# spec §2.1)
+# Skew-normal sampling
+#
+# Cumulant -> skew-normal matching and quantile/CDF evaluation live upstream
+# in tulpa (sn_match, sn_cdf, sn_quantile, exported since the upstream SLA
+# spec in dev_notes/upstream_tulpa_sla_spec.md §2.1 landed). Sampling is not
+# upstream: it has no use outside marginal resampling and is a four-line
+# implementation of Azzalini's (1985) two-component construction.
 # ---------------------------------------------------------------------------
-
-# Skew-normal ceiling: max |skewness| representable by SN.
-# = (4 - pi)/2 * (2/pi)^(3/2) / (1 - 2/pi)^(3/2)
-.SN_GAMMA_MAX <- 0.9952717
-
-#' Match cumulants (mu, sigma, gamma) to skew-normal (xi, omega, alpha)
-#'
-#' Inverse of the skew-normal moment formulas. Returns NULL when
-#' |gamma| >= the skew-normal ceiling (~0.995). Caller falls back to
-#' numerical-quadrature quantiles in that case.
-#'
-#' @param mu Mean (scalar).
-#' @param sigma Standard deviation (positive scalar).
-#' @param gamma Skewness coefficient (scalar).
-#' @return List with elements xi, omega, alpha; or NULL.
-#' @keywords internal
-.sn_match <- function(mu, sigma, gamma) {
-  if (!is.finite(gamma) || abs(gamma) >= .SN_GAMMA_MAX) return(NULL)
-  c1 <- ((4 - pi) / 2)^(2 / 3)
-  ag <- abs(gamma)^(2 / 3)
-  delta_sq <- (pi / 2) * ag / (ag + c1)
-  delta <- sign(gamma) * sqrt(delta_sq)
-  one_m_2d2_over_pi <- 1 - 2 * delta^2 / pi
-  if (one_m_2d2_over_pi <= 0) return(NULL)
-  omega <- sigma / sqrt(one_m_2d2_over_pi)
-  xi    <- mu - omega * delta * sqrt(2 / pi)
-  alpha <- delta / sqrt(max(1 - delta^2, .Machine$double.eps))
-  list(xi = xi, omega = omega, alpha = alpha)
-}
 
 #' Sample from a skew-normal distribution
 #'
@@ -295,7 +271,8 @@
 #'   X = xi + omega * Z
 #'
 #' @param n Number of samples.
-#' @param sn Skew-normal parameter list from `.sn_match()`.
+#' @param sn Skew-normal parameter list from [tulpa::sn_match()] (elements
+#'   `xi`, `omega`, `alpha`).
 #' @return Numeric vector of length n.
 #' @keywords internal
 .sn_sample <- function(n, sn) {
@@ -305,70 +282,6 @@
   z2 <- rnorm(n)
   z <- delta * z1 + sqrt(1 - delta^2) * z2
   sn$xi + sn$omega * z
-}
-
-#' Owen's T function via numerical quadrature
-#'
-#' T(h, a) = (1 / (2*pi)) * integral_0^a exp(-h^2 (1 + x^2) / 2) / (1 + x^2) dx
-#'
-#' Used in the skew-normal CDF:
-#'   Phi_SN(x; xi, omega, alpha) = Phi(z) - 2 * T(z, alpha), z = (x - xi) / omega.
-#'
-#' Pure quadrature implementation. Closed-form series (Patefield-Tandy)
-#' is faster but more error-prone; we only call this from `.sn_cdf()` which
-#' is itself only called from `.sn_quantile()` (rare path, used for CIs
-#' when SN representation kicks in). Speed is not the bottleneck.
-#'
-#' Identities used to handle endpoint cases:
-#'   T(0, a) = atan(a) / (2*pi)
-#'   T(h, 0) = 0
-#'   T(h, a) = sign(a) * T(h, |a|)   (antisymmetric in a)
-#'
-#' @keywords internal
-.owens_t <- function(h, a) {
-  if (a == 0) return(0)
-  if (h == 0) return(atan(a) / (2 * pi))
-  sgn <- sign(a)
-  a_abs <- abs(a)
-  if (is.infinite(a_abs)) {
-    return(sgn * 0.5 * (1 - pnorm(abs(h))))
-  }
-  integrand <- function(x) exp(-h^2 * (1 + x^2) / 2) / (1 + x^2)
-  val <- tryCatch(stats::integrate(integrand, 0, a_abs, rel.tol = 1e-8)$value,
-                  error = function(e) NA_real_)
-  sgn * val / (2 * pi)
-}
-
-#' Skew-normal CDF
-#' @keywords internal
-.sn_cdf <- function(x, sn) {
-  z <- (x - sn$xi) / sn$omega
-  vapply(z, function(zi) pnorm(zi) - 2 * .owens_t(zi, sn$alpha), numeric(1))
-}
-
-#' Skew-normal quantile (Newton iteration)
-#' @keywords internal
-.sn_quantile <- function(p, sn) {
-  if (is.null(sn)) return(rep(NA_real_, length(p)))
-  delta <- sn$alpha / sqrt(1 + sn$alpha^2)
-  # Start from Gaussian quantile centred at SN mean
-  mean_sn <- sn$xi + sn$omega * delta * sqrt(2 / pi)
-  sd_sn   <- sn$omega * sqrt(1 - 2 * delta^2 / pi)
-  q0 <- qnorm(p, mean_sn, sd_sn)
-  vapply(seq_along(p), function(k) {
-    q <- q0[k]
-    for (it in seq_len(40)) {
-      f <- .sn_cdf(q, sn) - p[k]
-      # SN density: 2 * phi(z) * Phi(alpha z) / omega
-      z <- (q - sn$xi) / sn$omega
-      dens <- 2 * dnorm(z) * pnorm(sn$alpha * z) / sn$omega
-      if (!is.finite(dens) || dens < 1e-12) break
-      step <- f / dens
-      q <- q - step
-      if (abs(step) < 1e-8) break
-    }
-    q
-  }, numeric(1))
 }
 
 
@@ -403,7 +316,10 @@
   n_params <- ncol(draws)
   clipped <- character(0)
   fallback <- character(0)
-  cap <- min(cap, .SN_GAMMA_MAX - 1e-3)
+  # cap stays well below the SN ceiling (~0.995), so tulpa::sn_match's
+  # ceiling-warning path is never triggered after clipping. We still
+  # suppress warnings defensively so a degenerate sigma slip doesn't surface
+  # as a noisy fit-side warning.
   for (j in seq_len(n_params)) {
     g <- gamma[j]
     if (!is.finite(g) || abs(g) < 1e-6) next                 # SLA is a no-op
@@ -412,7 +328,10 @@
       g_use <- sign(g) * cap
       clipped <- c(clipped, colnames(draws)[j])
     }
-    sn <- .sn_match(means[j], sds[j], g_use)
+    sn <- tryCatch(
+      suppressWarnings(tulpa::sn_match(means[j], sds[j], g_use)),
+      error = function(e) NULL
+    )
     if (is.null(sn)) {
       fallback <- c(fallback, colnames(draws)[j])
       next
