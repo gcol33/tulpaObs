@@ -127,7 +127,13 @@
   X_col <- model.matrix(col_formula, data)
   X_ext <- model.matrix(ext_formula, data)
 
-  y_int <- as.integer(y)
+  # y_flat layout is site-major: y_flat[i*T*K + t*K + j] (0-indexed)
+  # = y_flat[(i-1)*T*K + (t-1)*K + j] (1-indexed). This matches what
+  # src/dyn_occ_likelihood.h and R/laplace.R::build_dynamic_callbacks
+  # expect. Achieved by permuting the 3D y[site, visit, season] array to
+  # [visit, season, site] so that column-major flattening makes site the
+  # slowest-varying dimension.
+  y_int <- as.integer(aperm(y, c(2, 3, 1)))
   y_int[is.na(y_int)] <- -1L
 
   n_visits <- integer(n_sites * n_seasons)
@@ -146,6 +152,7 @@
 
   structure(list(
     model_type = "dynamic",
+    y = y,
     y_flat = y_int,
     n_visits = n_visits,
     any_detected = any_detected,

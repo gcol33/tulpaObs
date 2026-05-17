@@ -91,21 +91,13 @@
   n_seasons  <- model$n_seasons
   max_visits <- model$max_visits
 
-  y_flat <- model$y_flat
-  nv     <- model$n_visits        # length n_sites * n_seasons
-  ad     <- model$any_detected    # length n_sites * n_seasons
-
-  # IMPORTANT: y_flat is `as.integer(y_array)` where y_array is a 3D R array
-  # of shape [n_sites, max_visits, n_seasons]. R flattens column-major, so
-  # the linear index for y[i, j, t] is i + (j-1)*N + (t-1)*N*K (1-indexed).
-  #
-  # The package's existing dyn_occu C++ likelihood and the M-step encoding
-  # in build_dynamic_callbacks() index as if the layout were site-major
-  # (i.e. y_flat[(i-1)*T*K + (t-1)*K + j]) — that mismatches the actual
-  # column-major flatten and is a latent indexing bug (see PR notes /
-  # parent-agent report). For the SLA path we faithfully consume y_flat
-  # at its real layout so that .loglik_dyn_occu agrees with the data the
-  # user supplied.
+  # Read the 3D y array directly (layout-agnostic). This is the canonical
+  # user-supplied form, stored as model$y by .tobs_build_dynamic. The flat
+  # y_flat layout (site-major as of the indexing fix) is for the C++ HMM
+  # and the M-step encoder; we don't touch it here.
+  y_arr <- model$y
+  nv    <- model$n_visits         # length n_sites * n_seasons
+  ad    <- model$any_detected     # length n_sites * n_seasons
 
   psi1 <- plogis(as.numeric(X_psi %*% beta_psi))
   p_v  <- plogis(as.numeric(X_p   %*% beta_p))
@@ -140,13 +132,11 @@
       det_this <- ad[idx]
 
       if (nv_it > 0L) {
-        # Column-major access for y[i, j, t]:
-        #   y_flat[i + (j-1)*N + (t-1)*N*K]
         log_p_data_occ <- 0
         sum_log1m_p <- 0
         for (j in seq_len(max_visits)) {
-          y_ij <- y_flat[i + (j - 1L) * n_sites + (t - 1L) * n_sites * max_visits]
-          if (y_ij < 0) next
+          y_ij <- y_arr[i, j, t]
+          if (is.na(y_ij) || y_ij < 0L) next
           if (y_ij == 1L) log_p_data_occ <- log_p_data_occ + log_p[i]
           else            log_p_data_occ <- log_p_data_occ + log1m_p[i]
           sum_log1m_p <- sum_log1m_p + log1m_p[i]

@@ -39,3 +39,54 @@ test_that("dynamic tobs validates inputs", {
     "3D array"
   )
 })
+
+
+test_that("dyn_occu recovers (psi1, gamma, epsilon, p) within bias tolerance", {
+  # Regression test for the y_flat indexing fix: prior to commit fixing
+  # R/occu.R::.tobs_build_dynamic, `as.integer(y)` produced column-major
+  # flat while src/dyn_occ_likelihood.h and build_dynamic_callbacks read
+  # site-major — scrambling visits across (site, season) cells.
+  # On N=200 / T=4 / J=4 with p_true=0.5, the buggy version recovered
+  # p~0.32 (60% bias). After the fix, all four parameters recover within
+  # ~0.05 of truth on a single seed; we assert < 0.1 to cover MC noise.
+  set.seed(2026)
+  n_sites <- 200; n_seasons <- 4; n_visits <- 4
+  psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
+
+  z <- matrix(NA_integer_, n_sites, n_seasons)
+  z[, 1] <- rbinom(n_sites, 1, psi1)
+  for (t in 2:n_seasons) {
+    z[, t] <- ifelse(z[, t-1] == 1,
+                     rbinom(n_sites, 1, 1 - eps),
+                     rbinom(n_sites, 1, gam))
+  }
+  y <- array(0L, dim = c(n_sites, n_visits, n_seasons))
+  for (i in seq_len(n_sites)) {
+    for (t in seq_len(n_seasons)) {
+      y[i, , t] <- if (z[i, t]) rbinom(n_visits, 1, p_true) else 0L
+    }
+  }
+
+  fit <- tobs(
+    formula     = ~ 1,
+    data        = data.frame(idx = seq_len(n_sites)),
+    family      = dyn_occu(),
+    detection   = ~ 1,
+    y           = y,
+    col_formula = ~ 1,
+    ext_formula = ~ 1,
+    control     = list(verbose = FALSE)
+  )
+
+  rec <- c(
+    psi1 = plogis(fit$means[["psi1_(Intercept)"]]),
+    p    = plogis(fit$means[["p_(Intercept)"]]),
+    gam  = plogis(fit$means[["gamma_(Intercept)"]]),
+    eps  = plogis(fit$means[["epsilon_(Intercept)"]])
+  )
+  truth <- c(psi1 = psi1, p = p_true, gam = gam, eps = eps)
+  expect_true(all(abs(rec - truth) < 0.1),
+              info = sprintf("recovered: %s; truth: %s",
+                             paste(round(rec, 3), collapse = ","),
+                             paste(round(truth, 3), collapse = ",")))
+})
