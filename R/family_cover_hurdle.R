@@ -17,7 +17,7 @@
 # ---------------------------------------------------------------------------
 
 .dispatch_cover <- function(formula, data, family, detection, y,
-                            visit_data, spatial, temporal, engine,
+                            visit_data, spatial, temporal, re, engine,
                             priors, control,
                             approx = "gaussian_laplace", ...) {
   positive <- family$params$positive
@@ -25,9 +25,12 @@
     stop("cover(positive = '", positive, "') is not supported. ",
          "Use 'lognormal' or 'beta'.", call. = FALSE)
   }
-  if (!is.null(temporal)) {
-    stop("`temporal = ` is scheduled for Phase 1d (Mundlak helper). ",
-         "Add a year covariate to `formula` for Phase 1a.", call. = FALSE)
+  has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
+  if (has_multi && !identical(engine, "nested_laplace")) {
+    stop("`temporal = ` and `re = ` for cover() require ",
+         "engine = 'nested_laplace' (got '", engine, "'). ",
+         "The single-Laplace path is fixed-effects + spatial only.",
+         call. = FALSE)
   }
   if (!is.null(detection)) {
     stop("`cover()` does not use a detection formula ",
@@ -49,7 +52,9 @@
       )
     }
     return(decode_cover_hurdle_joint(
-      fit_cover_hurdle_joint_nested(enc, data, positive, control), enc, family
+      fit_cover_hurdle_joint_nested(enc, data, positive, control,
+                                    temporal = temporal, re = re),
+      enc, family
     ))
   }
 
@@ -493,7 +498,8 @@ print.summary.cover_fit <- function(x, ...) {
 #'   `joint` field carrying the raw `tulpa_nested_laplace_joint` result.
 #' @keywords internal
 fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
-                                          control = list()) {
+                                          control = list(),
+                                          temporal = NULL, re = NULL) {
   if (!positive %in% c("lognormal", "beta")) {
     stop("engine = 'nested_laplace' for cover() supports positive = ",
          "'lognormal' or 'beta'. Got '", positive, "'.", call. = FALSE)
@@ -528,6 +534,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   N     <- enc$N
   N_pos <- length(enc$pos_data$y)
+
+  has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
 
   arm_occ <- list(
     y           = as.numeric(enc$occ_data$y),
@@ -634,24 +642,61 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     sigma_pos_grid = sigma_pos_grid
   )
 
-  # Adaptive grid forwarding. Defaults match the joint engine's defaults
-  # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
-  # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
-  # `control$adaptive_grid = FALSE` to recover the legacy fixed-grid
-  # behaviour for reproducibility checks.
-  fit <- tulpa::tulpa_nested_laplace_joint(
-    responses = list(occ = arm_occ, pos = arm_pos),
-    prior     = prior_for_joint,
-    copy      = copy_spec,
-    phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
-    max_iter  = control$max_iter  %||% 50L,
-    tol       = control$tol       %||% 1e-6,
-    n_threads = control$n_threads %||% 1L,
-    store_Q   = TRUE,
-    adaptive_grid             = control$adaptive_grid             %||% TRUE,
-    adaptive_grid_edge_thresh = control$adaptive_grid_edge_thresh %||% 0.02,
-    adaptive_grid_max_passes  = control$adaptive_grid_max_passes  %||% 1L
-  )
+  # ---- Multi-block path (Phase J-D) -----------------------------------
+  # When `temporal` or `re` components are supplied, stack the spatial
+  # block with AR1/RW/IID blocks and dispatch through the multi-block
+  # joint engine. Copy semantics remain on the spatial block (sigma_occ /
+  # sigma_pos), other blocks are shared identically across the two arms
+  # (no per-arm scale).
+  if (has_multi) {
+    multi <- .cover_build_multi_prior(
+      prior_spatial = prior_for_joint,
+      spi_full      = spi_full,
+      spi_pos       = spi_pos,
+      data_obs      = data_obs,
+      idx_pos       = enc$idx_pos,
+      temporal      = temporal,
+      re            = re,
+      control       = control,
+      sigma_pos_grid = sigma_pos_grid
+    )
+    # Strip spatial_idx from the arms — it lives inside the spatial
+    # block's per-arm spatial_idx list in the multi-block prior.
+    arm_occ$spatial_idx <- NULL
+    arm_pos$spatial_idx <- NULL
+    fit <- tulpa::tulpa_nested_laplace_joint(
+      responses = list(occ = arm_occ, pos = arm_pos),
+      prior     = multi$prior,
+      copy      = multi$copy,
+      phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
+      max_iter  = control$max_iter  %||% 50L,
+      tol       = control$tol       %||% 1e-6,
+      n_threads = control$n_threads %||% 1L,
+      store_Q   = TRUE,
+      adaptive_grid             = control$adaptive_grid             %||% TRUE,
+      adaptive_grid_edge_thresh = control$adaptive_grid_edge_thresh %||% 0.02,
+      adaptive_grid_max_passes  = control$adaptive_grid_max_passes  %||% 1L
+    )
+  } else {
+    # Adaptive grid forwarding. Defaults match the joint engine's defaults
+    # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
+    # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
+    # `control$adaptive_grid = FALSE` to recover the legacy fixed-grid
+    # behaviour for reproducibility checks.
+    fit <- tulpa::tulpa_nested_laplace_joint(
+      responses = list(occ = arm_occ, pos = arm_pos),
+      prior     = prior_for_joint,
+      copy      = copy_spec,
+      phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
+      max_iter  = control$max_iter  %||% 50L,
+      tol       = control$tol       %||% 1e-6,
+      n_threads = control$n_threads %||% 1L,
+      store_Q   = TRUE,
+      adaptive_grid             = control$adaptive_grid             %||% TRUE,
+      adaptive_grid_edge_thresh = control$adaptive_grid_edge_thresh %||% 0.02,
+      adaptive_grid_max_passes  = control$adaptive_grid_max_passes  %||% 1L
+    )
+  }
 
   # Posterior-weighted mean / SE for the per-arm beta blocks.
   layout <- fit$arm_layout
@@ -697,12 +742,20 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   #   * lognormal: sigma_pos is the residual SD on the field-corrected
   #     linear predictor; the alpha-scaled posterior spatial field at the
   #     positive-arm locations is subtracted to keep residual variance
-  #     from absorbing alpha^2 * field_sigma^2 (issue #4).
+  #     from absorbing alpha^2 * field_sigma^2 (issue #4). In the
+  #     multi-block path the additional temporal / iid block contributions
+  #     are not yet subtracted — sigma_pos may be slightly overestimated
+  #     when those blocks carry substantial variance; tracked for a
+  #     follow-up to .joint_field_at_obs_copy.
   #   * beta:      phi is integrated marginally over the outer phi grid
   #     (tulpaObs#7); read posterior mean directly from theta_grid.
   if (positive == "lognormal") {
     eta_pos      <- as.numeric(enc$pos_data$X %*% beta_pos)
-    field_at_pos <- .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
+    field_at_pos <- if (has_multi) {
+      .joint_field_at_obs_copy_multi(fit, multi$prior, spi_pos)
+    } else {
+      .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
+    }
     resid     <- enc$pos_data$y - eta_pos - field_at_pos
     sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
     phi_pos   <- NA_real_
@@ -858,6 +911,226 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
     class = c("cover_fit", "tobs_fit", "tulpa_fit")
   )
   out
+}
+
+
+# ---------------------------------------------------------------------------
+# Multi-block prior assembly (Phase J-D)
+# ---------------------------------------------------------------------------
+
+# Build a multi-block joint prior (spatial + optional temporal + optional
+# IID RE blocks) for tulpa::tulpa_nested_laplace_joint() under
+# cover-hurdle copy semantics (copy on the spatial block).
+#
+# Non-spatial blocks are shared identically across the two arms — no
+# per-arm scaling (INLA convention). This matches the typical cover
+# hurdle use case: a year RE that influences both occurrence and cover
+# magnitude in the same way, an observer RE that introduces a shared
+# offset on both arms.
+.cover_build_multi_prior <- function(prior_spatial, spi_full, spi_pos,
+                                     data_obs, idx_pos, temporal, re,
+                                     control, sigma_pos_grid) {
+  # Spatial block — fill missing grids with defaults and attach per-arm
+  # spatial_idx vectors. (Single-block path stores spi inside the arms;
+  # multi-block puts it in the block.)
+  sp <- prior_spatial
+  if (is.null(sp$sigma_grid)) {
+    sp$sigma_grid <- exp(seq(log(0.1), log(3), length.out = 5))
+  }
+  if (tolower(sp$type) == "bym2" && is.null(sp$rho_grid)) {
+    sp$rho_grid <- c(0.25, 0.5, 0.75)
+  }
+  sp$spatial_idx <- list(as.integer(spi_full), as.integer(spi_pos))
+
+  blocks <- list(sp)
+
+  if (!is.null(temporal)) {
+    blocks[[length(blocks) + 1L]] <- .cover_temporal_block(
+      temporal, data_obs, idx_pos, control
+    )
+  }
+
+  if (!is.null(re) && length(re) > 0L) {
+    for (re_i in re) {
+      blocks[[length(blocks) + 1L]] <- .cover_re_block(
+        re_i, data_obs, idx_pos, control
+      )
+    }
+  }
+
+  list(
+    prior = blocks,
+    copy  = list(block = 1L, arm = "pos",
+                 sigma_pos_grid = as.numeric(sigma_pos_grid))
+  )
+}
+
+.cover_temporal_block <- function(temporal, data_obs, idx_pos, control) {
+  if (!inherits(temporal, "tobs_temporal")) {
+    stop("`temporal` must be a tobs_temporal() object.", call. = FALSE)
+  }
+  # tobs_temporal()'s `shared = c(TRUE, FALSE)` default was designed for
+  # occupancy + detection (state vs. observation). cover() has two
+  # likelihood arms (occurrence + cover magnitude) and the temporal term
+  # enters both identically -- the `shared` field is ignored here.
+  t_full <- .cover_resolve_idx(temporal$time, data_obs, "tobs_temporal$time")
+  t_pos  <- t_full[idx_pos]
+  n_t <- max(t_full)
+  type <- temporal$type
+
+  if (type == "ar1") {
+    list(
+      type         = "ar1",
+      n_times      = as.integer(n_t),
+      tau_grid     = as.numeric(control$tau_temporal_grid %||%
+                                 c(1, 4, 16)),
+      rho_grid     = as.numeric(control$rho_temporal_grid %||%
+                                 c(0.3, 0.7)),
+      temporal_idx = list(as.integer(t_full), as.integer(t_pos))
+    )
+  } else if (type == "iid") {
+    list(
+      type       = "iid",
+      n_units    = as.integer(n_t),
+      sigma_grid = as.numeric(control$sigma_temporal_grid %||%
+                               exp(seq(log(0.1), log(1), length.out = 3))),
+      obs_idx    = list(as.integer(t_full), as.integer(t_pos))
+    )
+  } else if (type %in% c("rw1", "rw2")) {
+    list(
+      type         = type,
+      n_times      = as.integer(n_t),
+      tau_grid     = as.numeric(control$tau_temporal_grid %||%
+                                 c(1, 4, 16)),
+      temporal_idx = list(as.integer(t_full), as.integer(t_pos))
+    )
+  } else {
+    stop(sprintf("Unsupported tobs_temporal$type: '%s'", type),
+         call. = FALSE)
+  }
+}
+
+.cover_re_block <- function(re_i, data_obs, idx_pos, control) {
+  if (!inherits(re_i, "tobs_re")) {
+    stop("`re` elements must be tobs_re() objects.", call. = FALSE)
+  }
+  if (!identical(re_i$type, "intercept") && !identical(re_i$type, "iid")) {
+    stop("cover() multi-block: tobs_re(type = 'intercept' | 'iid') is the ",
+         "only supported config. Random slopes land in a later phase.",
+         call. = FALSE)
+  }
+  if (!identical(re_i$model, "iid")) {
+    stop("cover() multi-block: tobs_re(model = 'iid') is the only ",
+         "supported temporal structure on RE blocks. AR1/RW1/RW2 on RE ",
+         "land in a later phase.", call. = FALSE)
+  }
+  # Same as in .cover_temporal_block: `shared` is ignored in cover-hurdle
+  # context. The RE term enters both arms identically.
+  g_full <- .cover_resolve_idx(re_i$group, data_obs, "tobs_re$group")
+  g_pos  <- g_full[idx_pos]
+  n_g <- max(g_full)
+  list(
+    type       = "iid",
+    n_units    = as.integer(n_g),
+    sigma_grid = as.numeric(control$sigma_re_grid %||%
+                             exp(seq(log(0.1), log(1.5), length.out = 3))),
+    obs_idx    = list(as.integer(g_full), as.integer(g_pos))
+  )
+}
+
+# Resolve a tobs component's `time` / `group` reference to a 1-based
+# integer index vector of length nrow(data).
+.cover_resolve_idx <- function(x, data, what) {
+  if (is.character(x) && length(x) == 1L) {
+    if (!x %in% names(data)) {
+      stop(sprintf("`%s` = '%s' not found in data.", what, x),
+           call. = FALSE)
+    }
+    v <- data[[x]]
+    if (is.factor(v))         return(as.integer(v))
+    if (is.character(v))      return(as.integer(as.factor(v)))
+    if (is.numeric(v) || is.integer(v)) {
+      iv <- as.integer(v)
+      if (any(!is.finite(iv) | iv < 1L)) {
+        stop(sprintf("`%s` = '%s' must be 1-based integer indices.",
+                     what, x), call. = FALSE)
+      }
+      return(iv)
+    }
+    stop(sprintf("`%s` = '%s' must be a factor, character, or 1-based ",
+                 "integer column.", what, x), call. = FALSE)
+  }
+  if (is.integer(x) || is.numeric(x)) {
+    if (length(x) != nrow(data)) {
+      stop(sprintf("length(%s) (%d) must equal nrow(data) (%d).",
+                   what, length(x), nrow(data)), call. = FALSE)
+    }
+    iv <- as.integer(x)
+    if (any(!is.finite(iv) | iv < 1L)) {
+      stop(sprintf("`%s` must be 1-based integer indices.", what),
+           call. = FALSE)
+    }
+    return(iv)
+  }
+  stop(sprintf("`%s` must be a column name or 1-based integer vector.",
+               what), call. = FALSE)
+}
+
+# Multi-block analogue of .joint_field_at_obs_copy: project only the
+# spatial (copy) block's posterior-weighted field at the cover-arm obs
+# rows. The temporal / iid blocks are not yet subtracted — see the note
+# in fit_cover_hurdle_joint_nested.
+.joint_field_at_obs_copy_multi <- function(fit, prior_list, spi_obs) {
+  N <- length(spi_obs)
+  if (N == 0L) return(numeric(0))
+  modes <- fit$modes
+  if (is.null(modes) || !is.matrix(modes)) return(rep(0, N))
+  layout <- fit$arm_layout
+  theta_grid <- fit$theta_grid
+  weights <- fit$weights
+  if (is.null(theta_grid)) return(rep(0, N))
+
+  sp <- prior_list[[1L]]
+  type <- tolower(sp$type %||% "")
+  n_s <- as.integer(sp$n_spatial_units %||% 0L)
+  if (n_s <= 0L) return(rep(0, N))
+
+  # Multi-block joint stores prefixed column names — `b1.sigma_pos` /
+  # `b1.rho`. Fall back to bare names for compatibility with any future
+  # cleanup that strips the prefix from theta_grid.
+  pick_col <- function(name) {
+    if (name %in% colnames(theta_grid)) return(theta_grid[, name])
+    pref <- paste0("b1.", name)
+    if (pref %in% colnames(theta_grid)) return(theta_grid[, pref])
+    NULL
+  }
+  sigma_pos_k <- pick_col("sigma_pos")
+  if (is.null(sigma_pos_k)) return(rep(0, N))
+
+  phi_start <- layout$phi_start
+  if (is.null(phi_start)) return(rep(0, N))
+  theta_start <- layout$theta_start
+  scale_factor <- as.numeric(sp$scale_factor %||% 1.0)
+
+  n_grid <- length(sigma_pos_k)
+  field_at_obs <- numeric(N)
+  for (k in seq_len(n_grid)) {
+    s_pos <- sigma_pos_k[k]
+    if (type == "bym2") {
+      rho_k <- pick_col("rho")[k]
+      d_phi   <- s_pos * sqrt(max(rho_k, 0) + 1e-10) * scale_factor
+      d_theta <- s_pos * sqrt(max(1 - rho_k, 0) + 1e-10)
+      phi_k   <- modes[k, phi_start + seq_len(n_s)]
+      theta_k <- if (!is.null(theta_start))
+        modes[k, theta_start + seq_len(n_s)] else rep(0, n_s)
+      field_k <- d_phi * phi_k + d_theta * theta_k
+    } else {
+      phi_k   <- modes[k, phi_start + seq_len(n_s)]
+      field_k <- s_pos * phi_k
+    }
+    field_at_obs <- field_at_obs + weights[k] * field_k[spi_obs]
+  }
+  field_at_obs
 }
 
 

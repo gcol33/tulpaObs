@@ -132,7 +132,7 @@ test_that("predict requires newdata with the same columns as the formula", {
   )
 })
 
-test_that("temporal = errors with the Phase 1d scheduling message", {
+test_that("temporal = requires engine = 'nested_laplace'", {
   sim <- simulate_cover(N = 50, seed = 13)
   expect_error(
     tobs(
@@ -140,9 +140,10 @@ test_that("temporal = errors with the Phase 1d scheduling message", {
       data     = sim$data,
       family   = cover("lognormal"),
       y        = sim$y,
-      temporal = "placeholder"
+      temporal = tobs_temporal(type = "ar1", time = "year"),
+      engine   = "laplace"
     ),
-    "Phase 1d"
+    "require engine = 'nested_laplace'"
   )
 })
 
