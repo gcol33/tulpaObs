@@ -132,6 +132,108 @@ test_that("tulpa::sn_match returns NULL (with warning) above the SN ceiling", {
   expect_error(tulpa::sn_match(0, 1, NaN), "finite numeric")
 })
 
+test_that("FD gamma matches analytical gamma on a controlled single-season occu", {
+  # Head-to-head numerical check: hold beta_hat and Sigma fixed by hand,
+  # compute gamma both via the closed-form .sla_gamma_diag and via the
+  # generic .sla_gamma_fd against .loglik_occu_single. If they disagree
+  # by more than a few percent, the FD path is wrong and the non-diagonal
+  # extensions can't be trusted.
+  set.seed(2027)
+  n_sites <- 200; n_visits <- 4
+  elev <- rnorm(n_sites)
+  X_occ <- cbind(`(Intercept)` = 1, elev = elev)
+  X_det <- cbind(`(Intercept)` = rep(1, n_sites))
+  beta_occ <- c(0.4, 0.7)
+  beta_det <- -0.2
+  psi_true <- plogis(X_occ %*% beta_occ)
+  z <- rbinom(n_sites, 1, psi_true)
+  p <- plogis(beta_det)
+  y <- matrix(0L, n_sites, n_visits)
+  for (i in seq_len(n_sites)) {
+    y[i, ] <- if (z[i]) rbinom(n_visits, 1, p) else 0L
+  }
+  model <- structure(list(
+    y           = y,
+    X_processes = list(X_occ, X_det),
+    n_sites     = n_sites,
+    max_visits  = n_visits,
+    process_info = list(
+      list(name = "psi", p = 2L, coef_names = c("(Intercept)", "elev")),
+      list(name = "p",   p = 1L, coef_names = "(Intercept)")
+    ),
+    model_type = "single"
+  ), class = "tobs_model")
+
+  # Hand-construct Sigma matching what the analytical SLA path would use:
+  # full Louis I_obs for occ; for det, the original-likelihood weighted
+  # binomial information at the mode.
+  beta_hat <- c(beta_occ, beta_det)
+  psi_hat  <- as.numeric(plogis(X_occ %*% beta_occ))
+  p_hat    <- as.numeric(plogis(X_det %*% beta_det))
+
+  # E-step weights for any-det and no-det sites
+  any_det <- rowSums(y > 0) > 0
+  n_valid <- rowSums(y >= 0)
+  q_i     <- (1 - p_hat)^n_valid
+  w_z1    <- ifelse(any_det, 1, psi_hat * q_i / (psi_hat * q_i + 1 - psi_hat))
+
+  # Louis I_obs (occ): X' diag(psi(1-psi) - w(1-w)) X
+  d_occ <- psi_hat * (1 - psi_hat) - w_z1 * (1 - w_z1)
+  I_obs_occ <- t(X_occ) %*% diag(d_occ) %*% X_occ
+  Sigma_occ <- solve(I_obs_occ)
+
+  # Det H at original likelihood: only any-det sites contribute
+  d_det <- ifelse(any_det, n_valid * p_hat * (1 - p_hat), 0)
+  H_det <- t(X_det) %*% diag(d_det) %*% X_det
+  Sigma_det <- solve(H_det)
+
+  # Block-diagonal joint Sigma
+  p_occ <- 2L; p_det <- 1L
+  Sigma <- matrix(0, p_occ + p_det, p_occ + p_det)
+  Sigma[seq_len(p_occ), seq_len(p_occ)] <- Sigma_occ
+  Sigma[p_occ + seq_len(p_det), p_occ + seq_len(p_det)] <- Sigma_det
+
+  # Analytical gamma: closed-form l3_occ (any-det vs no-det branches) +
+  # .sla_gamma_diag on each block separately.
+  pp     <- psi_hat * (1 - psi_hat)
+  l3_occ <- numeric(n_sites)
+  for (i in seq_len(n_sites)) {
+    if (any_det[i]) {
+      l3_occ[i] <- -psi_hat[i] * (1 - psi_hat[i]) * (1 - 2 * psi_hat[i])
+    } else {
+      one_m_q <- 1 - q_i[i]
+      up      <- pp[i] * one_m_q
+      upp     <- pp[i] * (1 - 2 * psi_hat[i]) * one_m_q
+      uppp    <- pp[i] * (1 - 6 * pp[i]) * one_m_q
+      v       <- 1 - psi_hat[i] * one_m_q
+      vp      <- -up; vpp <- -upp; vppp <- -uppp
+      l3_occ[i] <- vppp / v - 3 * vpp * vp / v^2 + 2 * (vp / v)^3
+    }
+  }
+  gamma_occ_ana <- tulpaObs:::.sla_gamma_diag(l3_occ, X_occ, Sigma_occ)
+
+  l3_det <- ifelse(any_det, -n_valid * p_hat * (1 - p_hat) * (1 - 2 * p_hat), 0)
+  gamma_det_ana <- tulpaObs:::.sla_gamma_diag(l3_det, X_det, Sigma_det)
+  gamma_ana <- c(gamma_occ_ana, gamma_det_ana)
+
+  # FD gamma against the same Sigma + same likelihood
+  log_lik_fn <- function(beta) tulpaObs:::.loglik_occu_single(beta, model)
+  gamma_fd   <- tulpaObs:::.sla_gamma_fd(beta_hat, Sigma, log_lik_fn)
+
+  # On the same Sigma + likelihood the two paths should agree to FD
+  # truncation precision. Compare absolute |fd - ana| against a tolerance
+  # that handles both regimes: for |ana| > 0.05, demand <= 5% relative;
+  # for |ana| <= 0.05, demand <= 0.01 absolute (FD truncation floor).
+  gamma_ana_u <- unname(gamma_ana)
+  for (j in seq_along(gamma_ana_u)) {
+    abs_err <- abs(gamma_fd[j] - gamma_ana_u[j])
+    tol <- max(0.01, 0.05 * abs(gamma_ana_u[j]))
+    expect_lt(abs_err, tol,
+              label = sprintf("|gamma_fd - gamma_ana| at coef %d (fd = %.5f, ana = %.5f)",
+                              j, gamma_fd[j], gamma_ana_u[j]))
+  }
+})
+
 test_that("sla_replace_draws caps |gamma| > 0.95 and tracks it in attrs", {
   set.seed(105)
   draws <- matrix(rnorm(2000), 1000, 2)

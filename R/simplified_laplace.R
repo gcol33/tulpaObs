@@ -98,6 +98,136 @@
 
 
 # ---------------------------------------------------------------------------
+# Generic finite-difference d3 for non-diagonal families
+#
+# For families whose log-likelihood does not decompose as Sum_i l_i(eta_i)
+# with eta_i = X_i beta (HMM dyn_occu, integrated shared-psi, cover hurdle),
+# the analytical formula above does not apply: off-diagonal third derivatives
+# in eta-space are non-zero. We compute kappa_3[beta_j] directly via finite
+# difference along the direction v_j = Sigma[, j] in beta-space:
+#
+#   kappa_3[beta_j] = d^3/dh^3 l(beta_hat + h v_j) |_{h=0}
+#
+# Proof: l(beta_hat + h v_j) Taylor-expanded in beta gives, by chain rule,
+#   d^3/dh^3 l = Sum_{a,b,c} d^3 l / (d beta_a d beta_b d beta_c)
+#                * v_{a,j} v_{b,j} v_{c,j}
+# = Sum_{a,b,c} d^3 l / (d beta_a d beta_b d beta_c) Sigma_{a,j} Sigma_{b,j} Sigma_{c,j}
+# = kappa_3[beta_j] under the Laplace-approximated posterior (see
+#   dev_notes/simplified_laplace_derivation.md eq (2.1)).
+#
+# Then gamma_j = kappa_3[beta_j] / sigma_j^3.
+#
+# Cost: O(p) likelihood evaluations (5-point central difference), all at
+# the mode + small displacement. With a fast R or compiled log-likelihood
+# evaluator this is feasible for the p <= 30 fixed-effect dimensions
+# typical of tulpaObs fits.
+# ---------------------------------------------------------------------------
+
+#' Generic finite-difference SLA gamma for non-diagonal families
+#'
+#' Computes per-coefficient SLA gamma by 5-point central finite difference
+#' of the original observation log-likelihood along the direction
+#' `Sigma[, j]` in beta-space. Use this when the family's third derivative
+#' in eta-space does not decompose into a per-site sum (e.g. HMM forward
+#' likelihood, integrated shared-process, hurdle joints).
+#'
+#' Step size defaults to `eps^{1/5} * sigma_j / ||v_j||`, which keeps
+#' the displacement in beta-space on the natural scale of the j-th
+#' marginal posterior. Override `h` (scalar or length-p vector) to inspect
+#' truncation/cancellation behaviour.
+#'
+#' @param beta_hat Mode of the joint posterior (length p).
+#' @param Sigma Posterior covariance at the mode (p x p, symmetric PD).
+#' @param log_lik_fn Callable: takes a length-p beta vector, returns
+#'   scalar log-likelihood at that beta (no prior contribution — SLA
+#'   gamma uses the observation likelihood only, per RMC 2009 §3.2).
+#' @param h Optional step size override (scalar or length-p vector).
+#' @return Numeric vector of length p with per-coefficient gamma.
+#' @keywords internal
+.sla_gamma_fd <- function(beta_hat, Sigma, log_lik_fn, h = NULL) {
+  p <- length(beta_hat)
+  stopifnot(nrow(Sigma) == p, ncol(Sigma) == p)
+
+  sigma_vec <- sqrt(diag(Sigma))
+  eps_h <- .Machine$double.eps^(1 / 5)
+  if (!is.null(h)) {
+    h <- rep_len(as.numeric(h), p)
+  }
+
+  gamma <- numeric(p)
+  for (j in seq_len(p)) {
+    vj  <- Sigma[, j]
+    nvj <- sqrt(sum(vj^2))
+    hj  <- if (is.null(h)) {
+      eps_h * sigma_vec[j] / max(nvj, .Machine$double.eps)
+    } else h[j]
+
+    L_p2 <- log_lik_fn(beta_hat + 2 * hj * vj)
+    L_p1 <- log_lik_fn(beta_hat +     hj * vj)
+    L_m1 <- log_lik_fn(beta_hat -     hj * vj)
+    L_m2 <- log_lik_fn(beta_hat - 2 * hj * vj)
+
+    d3 <- (L_p2 - 2 * L_p1 + 2 * L_m1 - L_m2) / (2 * hj^3)
+    gamma[j] <- d3 / sigma_vec[j]^3
+  }
+  gamma
+}
+
+
+# ---------------------------------------------------------------------------
+# R-side log-likelihood evaluators (used by FD path and as ground-truth
+# cross-checks against the analytical .sla_gamma_diag in tests).
+#
+# All evaluators take beta = c(beta_occ, beta_det, ...) in process_info
+# order and return the *original* observation log-likelihood (no priors,
+# no pseudo-binomial encoding).
+# ---------------------------------------------------------------------------
+
+#' R-side single-season occupancy log-likelihood
+#'
+#' Computes the marginal observation log-likelihood
+#'   log P(y | beta) = Sum_i log[ psi_i * P(y_i | z=1) + (1 - psi_i) I(no detections) ]
+#' with psi_i = plogis(X_occ_i beta_occ), p_i = plogis(X_det_i beta_det).
+#'
+#' Used to cross-check `.sla_gamma_fd()` against the analytical
+#' `.sla_gamma_diag()` on single-season fits.
+#'
+#' @keywords internal
+.loglik_occu_single <- function(beta, model) {
+  pi_list <- model$process_info
+  p_occ <- pi_list[[1]]$p
+  p_det <- pi_list[[2]]$p
+  beta_occ <- beta[seq_len(p_occ)]
+  beta_det <- beta[p_occ + seq_len(p_det)]
+
+  X_occ <- model$X_processes[[1]]
+  X_det <- model$X_processes[[2]]
+  y     <- model$y
+  n_sites <- model$n_sites
+
+  psi <- plogis(as.numeric(X_occ %*% beta_occ))
+  p   <- plogis(as.numeric(X_det %*% beta_det))
+
+  ll <- 0
+  for (i in seq_len(n_sites)) {
+    valid <- y[i, ] >= 0
+    n_v <- sum(valid)
+    if (n_v == 0L) next
+    n_d <- sum(y[i, valid] == 1L)
+    if (n_d > 0L) {
+      # any-detection: z=1 forced
+      ll <- ll + log(psi[i]) + n_d * log(p[i]) + (n_v - n_d) * log1p(-p[i])
+    } else {
+      # all zeros: marginalise over z
+      q_i <- (1 - p[i])^n_v
+      ll <- ll + log(psi[i] * q_i + (1 - psi[i]))
+    }
+  }
+  ll
+}
+
+
+# ---------------------------------------------------------------------------
 # Family-specific orchestrators
 #
 # Each takes the converged EM result + model metadata and returns a list:
