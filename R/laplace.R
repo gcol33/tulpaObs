@@ -32,8 +32,10 @@
                           max_iter = 50L, tol = 1e-4, damping = 0.3,
                           correction = c("auto", "mi", "gibbs", "none"),
                           n_imputations = 20L,
+                          approx = c("gaussian_laplace", "simplified_laplace"),
                           verbose = TRUE) {
   correction <- match.arg(correction)
+  approx <- match.arg(approx)
   if (!inherits(model, "tobs_model")) stop("model must be a tobs_model object")
 
   .validate_spatial_laplace(spatial, model$model_type)
@@ -88,7 +90,8 @@
   }
 
   fit <- build_laplace_fit(em_result, model, spatial, callbacks$p_per_submodel,
-                           prior_spec = prior_spec)
+                           prior_spec = prior_spec,
+                           approx = approx)
   fit$priors <- prior_spec
   fit
 }
@@ -816,7 +819,8 @@ glm_init <- function(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det) 
 
 # Build tobs_fit from EM result
 build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
-                              prior_spec = NULL) {
+                              prior_spec = NULL,
+                              approx = "gaussian_laplace") {
   pi_list <- model$process_info
 
   # Collect betas from correction (if available) or EM fits
@@ -879,6 +883,35 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   for (j in seq_len(n_params)) draws[, j] <- rnorm(n_pseudo, means[j], max(sds[j], 1e-4))
   colnames(draws) <- nms
 
+  # Simplified-Laplace skewness correction
+  # Computes gamma_j at the original observation likelihood (NOT the M-step
+  # pseudo-binomial encoding — see dev_notes/simplified_laplace_derivation.md
+  # §3 and dev_notes/upstream_tulpa_sla_spec.md §3 for why).
+  sla_gamma <- NULL
+  sla_status <- "off"
+  if (identical(approx, "simplified_laplace")) {
+    sla_res <- switch(model$model_type,
+      single = .sla_compute_occu_single(model, em_result,
+                                        spatial = spatial,
+                                        prior_spec = prior_spec),
+      list(gamma = NULL, valid = FALSE,
+           reason = sprintf("simplified Laplace not yet supported for model_type '%s'",
+                            model$model_type))
+    )
+    if (isTRUE(sla_res$valid)) {
+      sla_gamma  <- sla_res$gamma
+      sla_status <- "simplified_laplace"
+      # Align gamma names with the joint parameter ordering used in `means`
+      sla_gamma <- sla_gamma[intersect(names(means), names(sla_gamma))]
+      gamma_full <- setNames(rep(0, n_params), nms)
+      gamma_full[names(sla_gamma)] <- sla_gamma
+      sla_gamma <- gamma_full
+      draws <- .sla_replace_draws(draws, means, sds, sla_gamma)
+    } else {
+      sla_status <- paste0("fallback_gaussian (", sla_res$reason, ")")
+    }
+  }
+
   intercepts <- compute_intercepts(model, means)
 
   # When SPDE is attached to the occ submodel, the M-step mode is
@@ -896,6 +929,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
 
   structure(list(
     draws = draws, means = means, sds = sds,
+    skew = sla_gamma, sla_status = sla_status,
     n_samples = n_pseudo, n_params = n_params,
     log_prob = rep(NA_real_, n_pseudo),
     accept_prob = rep(1, n_pseudo),

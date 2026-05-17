@@ -1,8 +1,35 @@
 # ============================================================================
 # tobs_fit-specific S3 methods.
-# Generic S3 (coef, confint, vcov, logLik, summary, tidy, glance, ranef, plot)
-# are inherited from tulpa::tulpa_fit via class = c("tobs_fit", "tulpa_fit").
+# Generic S3 (coef, confint, vcov, logLik, tidy, glance, ranef, plot) are
+# inherited from tulpa::tulpa_fit via class = c("tobs_fit", "tulpa_fit").
+# `summary` is overridden below to surface the simplified-Laplace skewness
+# coefficients when present.
 # ============================================================================
+
+#' Summary for tobs_fit, with skewness column when simplified Laplace is used
+#'
+#' Extends `summary.tulpa_fit` with an extra `skew` column populated from
+#' `object$skew` when the fit was produced with `approx = "simplified_laplace"`.
+#' All quantile / mean / sd columns come from `object$draws`, which under
+#' simplified Laplace are skew-normal samples — so 2.5%/97.5% quantiles are
+#' already SLA-corrected.
+#'
+#' @param object A `tobs_fit` object.
+#' @param ... Forwarded to `summary.tulpa_fit`.
+#' @return Data frame as for `summary.tulpa_fit`, with extra `skew` column
+#'   when `$skew` is present.
+#' @export
+summary.tobs_fit <- function(object, ...) {
+  s <- NextMethod()
+  if (!is.null(object$skew)) {
+    sk <- rep(NA_real_, nrow(s))
+    nm <- rownames(s)
+    matched <- intersect(nm, names(object$skew))
+    sk[match(matched, nm)] <- object$skew[matched]
+    s$skew <- sk
+  }
+  s
+}
 
 #' Number of observations
 #' @param object A `tobs_fit` object.

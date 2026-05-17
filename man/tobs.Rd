@@ -13,7 +13,9 @@ tobs(
   visit_data = NULL,
   spatial = NULL,
   temporal = NULL,
+  re = NULL,
   engine = c("auto", "laplace", "nested_laplace", "nuts"),
+  approx = c("gaussian_laplace", "simplified_laplace"),
   priors = NULL,
   control = list(),
   ...
@@ -49,6 +51,13 @@ with \code{nrow(visit_data) == nrow(y) * ncol(y)}.}
 object), or one of the convenience helpers.}
 
 \item{temporal}{optional temporal spec (e.g. \code{\link[tulpa:temporal_ar1]{tulpa::temporal_ar1()}}).}
+
+\item{re}{optional random-effects spec from \code{\link[=tobs_re]{tobs_re()}} or
+\code{\link[=tobs_community_re]{tobs_community_re()}}, or a list of such specs. Can be combined with
+\code{spatial} and \code{temporal} in the same fit. Under \code{engine = "nested_laplace"}
+each \code{re} term with \code{model = "iid"} becomes an IID latent block in the
+multi-block prior; for other engines \code{re} is forwarded to the underlying
+fitter as the per-observation RE structure.}
 
 \item{engine}{inference engine: \code{"auto"}, \code{"laplace"}, \code{"nested_laplace"},
 or \code{"nuts"}. \code{"auto"} chooses the family's \code{default_engine}.}

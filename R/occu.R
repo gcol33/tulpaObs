@@ -82,6 +82,7 @@
     X_processes = list(X_occ, X_det),
     X_det_visit = X_det_visit,
     formulas = list(occ = occ_formula, det = det_formula),
+    data = data,
     n_sites = nrow(y),
     max_visits = ncol(y),
     process_info = list(

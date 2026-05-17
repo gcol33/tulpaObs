@@ -21,9 +21,12 @@ the spatial spec (group_var lookup, n_spatial_units check).}
 \item{positive}{\code{"lognormal"} or \code{"beta"}.}
 
 \item{control}{List with optional \code{max_iter}, \code{tol}, \code{n_threads},
-\code{sigma_grid}, \code{rho_grid}, \code{tau_grid}, \code{rho_car_grid}, \code{alpha_grid},
+\code{sigma_grid}, \code{rho_grid}, \code{rho_car_grid}, \code{sigma_pos_grid},
 \code{phi_init}, \code{phi_bounds} (the last two are forwarded to the beta
-pre-fit when \code{positive = "beta"}).}
+pre-fit when \code{positive = "beta"}). \code{alpha_grid} and \code{tau_grid} are
+accepted as legacy aliases — see gcol33/tulpa#18 for the rationale
+behind moving the cover-arm field amplitude onto its own
+\code{sigma_pos_grid} axis.}
 }
 \value{
 List shaped like the single-Laplace fit output but with extra

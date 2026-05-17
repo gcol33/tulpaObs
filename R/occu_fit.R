@@ -6,15 +6,17 @@
 #' @keywords internal
 .tobs_fit_model <- function(model, spatial = NULL, temporal = NULL,
                             re = NULL, svc = NULL, latent = NULL,
-                            method = c("laplace", "nuts"),
+                            method = c("laplace", "nested_laplace", "nuts"),
                             priors = NULL,
                             sigma_beta = 10, sigma_re_scale = 1,
                             max_iter = 100L, tol = 1e-4, damping = 0.7,
                             iter = 2000, warmup = 1000,
                             max_treedepth = 10, adapt_delta = 0.8, seed = 42,
+                            approx = c("gaussian_laplace", "simplified_laplace"),
                             verbose = TRUE) {
 
   method <- match.arg(method)
+  approx <- match.arg(approx)
 
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object (from `.tobs_build_model()`)")
@@ -25,7 +27,29 @@
                          priors = priors,
                          sigma_beta = sigma_beta,
                          max_iter = max_iter, tol = tol, damping = damping,
+                         approx = approx,
                          verbose = verbose))
+  }
+
+  if (method == "nested_laplace") {
+    # Nested-Laplace path: single-season occupancy only. The driver
+    # builds a multi-block latent prior from spatial + temporal + re
+    # and routes the occupancy M-step block through
+    # tulpa::tulpa_nested_laplace() via the per-block dispatcher in
+    # tulpa::tulpa_em_laplace().
+    nl_max_iter <- min(as.integer(max_iter), 25L)
+    return(.tobs_em_nested_laplace(
+      model    = model,
+      spatial  = spatial,
+      temporal = temporal,
+      re       = re,
+      priors   = priors,
+      sigma_beta = sigma_beta,
+      max_iter = nl_max_iter,
+      tol      = tol,
+      damping  = damping,
+      verbose  = verbose
+    ))
   }
 
   if (!is.null(spatial) && !inherits(spatial, "tobs_spatial")) {

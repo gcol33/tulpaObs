@@ -11,7 +11,7 @@
   re = NULL,
   svc = NULL,
   latent = NULL,
-  method = c("laplace", "nuts"),
+  method = c("laplace", "nested_laplace", "nuts"),
   priors = NULL,
   sigma_beta = 10,
   sigma_re_scale = 1,
@@ -23,6 +23,7 @@
   max_treedepth = 10,
   adapt_delta = 0.8,
   seed = 42,
+  approx = c("gaussian_laplace", "simplified_laplace"),
   verbose = TRUE
 )
 }
