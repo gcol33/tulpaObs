@@ -111,12 +111,7 @@
     if (length(y_pos) == 0L) {
       0
     } else {
-      phi_k <- if ("phi_pos" %in% colnames(fit$theta_grid)) {
-        fit$theta_grid[k, "phi_pos"]
-      } else {
-        # Profiled beta path (legacy): phi held fixed at the prefit value.
-        as.numeric(attr(fit, "phi_fixed") %||% 1.0)
-      }
+      phi_k <- fit$theta_grid[k, "phi_pos"]
       mu_pos <- plogis(eta_pos)
       a <- mu_pos * phi_k
       b <- (1 - mu_pos) * phi_k
@@ -124,21 +119,13 @@
             (a - 1) * log(y_pos) + (b - 1) * log1p(-y_pos))
     }
   } else {
-    # Lognormal: enc$pos_data$y is already log(cover). Noise SD lives on
-    # the per-grid `phi_pos` axis (gaussian arm's phi is the residual SD);
-    # legacy `sigma_pos_noise` name is still recognized for forward compat,
-    # with a final fallback to the posterior-mean `sigma_pos_fixed` attr.
+    # Lognormal: enc$pos_data$y is already log(cover). The noise SD lives
+    # on the per-grid `phi_pos` axis (gaussian arm's phi is the residual SD).
     z <- enc$pos_data$y
     if (length(z) == 0L) {
       0
     } else {
-      sig_k <- if ("phi_pos" %in% colnames(fit$theta_grid)) {
-        fit$theta_grid[k, "phi_pos"]
-      } else if ("sigma_pos_noise" %in% colnames(fit$theta_grid)) {
-        fit$theta_grid[k, "sigma_pos_noise"]
-      } else {
-        as.numeric(attr(fit, "sigma_pos_fixed") %||% 1.0)
-      }
+      sig_k <- fit$theta_grid[k, "phi_pos"]
       sum(stats::dnorm(z, eta_pos, sig_k, log = TRUE))
     }
   }

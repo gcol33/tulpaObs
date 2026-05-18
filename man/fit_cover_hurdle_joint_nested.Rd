@@ -25,8 +25,9 @@ the spatial spec (group_var lookup, n_spatial_units check).}
 \item{control}{List with optional \code{max_iter}, \code{tol}, \code{n_threads},
 \code{sigma_grid}, \code{rho_grid}, \code{rho_car_grid}, \code{sigma_pos_grid},
 \code{phi_init}, \code{phi_bounds} (the last two are forwarded to the beta
-pre-fit when \code{positive = "beta"}). \code{alpha_grid} and \code{tau_grid} are
-accepted as legacy aliases — see gcol33/tulpa#18 for the rationale
+pre-fit when \code{positive = "beta"}). For ICAR / CAR_proper backends
+\code{tau_grid} is also accepted and translated to \code{sigma_grid} as
+\code{sigma = 1 / sqrt(tau)} — see gcol33/tulpa#18 for the rationale
 behind moving the cover-arm field amplitude onto its own
 \code{sigma_pos_grid} axis.}
 }
@@ -35,16 +36,20 @@ List shaped like the single-Laplace fit output but with extra
 \code{joint} field carrying the raw \code{tulpa_nested_laplace_joint} result.
 }
 \description{
-For \code{positive = "lognormal"} the positive arm runs as Gaussian on
-\code{log(cover)} with \code{sigma_pos} estimated post-hoc as the residual standard
-error at the joint mode (matches Phase 1a).
+For both positive parts the dispersion scalar is integrated on the outer
+joint hyperparameter grid (per-arm \code{phi_pos} axis):
 }
 \details{
-For \code{positive = "beta"} the positive arm runs as Beta on \code{cover} (logit
-link). The precision \code{phi} is \strong{profiled}: a pre-fit via
-\code{\link[tulpa:tulpa_laplace_beta]{tulpa::tulpa_laplace_beta()}} on the positive subset (no spatial) gives
-\code{phi_hat}, which is then held fixed in the joint engine while the
-spatial hyperparameters are integrated out. Full posterior integration
-over \code{phi} is scheduled for Phase 3.
+\itemize{
+\item \code{positive = "lognormal"} (gaussian arm): the residual SD is the per-grid
+phi. The default 7-point log-spaced grid is centred on the non-spatial
+prefit from \code{\link[=.prefit_lognormal_sigma]{.prefit_lognormal_sigma()}} and spans \verb{[sigma_hat / 3, sigma_hat * 3]}. The posterior mean and SD across that axis are
+surfaced as \code{sigma_pos} / \code{sigma_pos_sd} on the returned \code{cover_fit}.
+\item \code{positive = "beta"}: the beta precision is the per-grid phi. The
+default 7-point log-spaced grid spans \verb{[2, 300]}; posterior mean and
+SD are surfaced as \code{phi_pos} / \code{phi_pos_sd}.
+}
+
+Override the per-arm phi grid via \code{control$phi_grid}.
 }
 \keyword{internal}

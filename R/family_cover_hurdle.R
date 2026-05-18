@@ -488,8 +488,9 @@ print.summary.cover_fit <- function(x, ...) {
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
 #'   `sigma_grid`, `rho_grid`, `rho_car_grid`, `sigma_pos_grid`,
 #'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta
-#'   pre-fit when `positive = "beta"`). `alpha_grid` and `tau_grid` are
-#'   accepted as legacy aliases — see gcol33/tulpa#18 for the rationale
+#'   pre-fit when `positive = "beta"`). For ICAR / CAR_proper backends
+#'   `tau_grid` is also accepted and translated to `sigma_grid` as
+#'   `sigma = 1 / sqrt(tau)` — see gcol33/tulpa#18 for the rationale
 #'   behind moving the cover-arm field amplitude onto its own
 #'   `sigma_pos_grid` axis.
 #' @return List shaped like the single-Laplace fit output but with extra
@@ -625,12 +626,6 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   if (!is.null(control$sigma_pos_grid)) {
     sigma_pos_grid <- as.numeric(control$sigma_pos_grid)
-  } else if (!is.null(control$alpha_grid)) {
-    # Legacy alpha_grid path: anchor sigma_pos at alpha * median(sigma_donor).
-    sigma_donor <- prior_for_joint$sigma_grid %||%
-      exp(seq(log(0.1), log(3), length.out = 5))
-    sigma_pos_grid <- as.numeric(control$alpha_grid) *
-      stats::median(as.numeric(sigma_donor))
   } else {
     # Default: mirror the donor sigma grid (gives alpha = sigma_pos /
     # sigma_occ posterior centered on 1.0 under flat per-axis priors).
@@ -773,25 +768,17 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
                 log_marginal = NA_real_)
 
-  # Stash the field-decomposition scale_factor (BYM2 Riebler scaling),
-  # the profiled-beta phi fallback, and the lognormal noise SD fallback on
-  # the joint fit so the SLA path can reconstruct per-grid field amplitude
-  # and dispersion without re-deriving them.
+  # Stash the field-decomposition scale_factor (BYM2 Riebler scaling) on the
+  # joint fit so the SLA path can reconstruct per-grid field amplitude
+  # without re-deriving it. Dispersion is always integrated on `phi_pos`
+  # (both lognormal and beta regimes), so the SLA path reads it directly
+  # from `fit$theta_grid[k, "phi_pos"]` and needs no attr fallback.
   if (has_multi) {
     sf_attr <- as.numeric(multi$prior[[1L]]$scale_factor %||% 1.0)
   } else {
     sf_attr <- as.numeric(prior_for_joint$scale_factor %||% 1.0)
   }
   attr(fit, "scale_factor") <- sf_attr
-  # Fixed-dispersion attrs are SLA fallbacks: only consulted when the joint
-  # fit lacks the corresponding per-grid `phi_pos` column. Both regimes now
-  # integrate phi by default, so these are written as posterior-mean
-  # placeholders for forward compatibility.
-  if (identical(positive, "beta")) {
-    attr(fit, "phi_fixed") <- as.numeric(if (is.finite(phi_pos)) phi_pos else arm_pos$phi)
-  } else {
-    attr(fit, "sigma_pos_fixed") <- as.numeric(if (is.finite(sigma_pos)) sigma_pos else phi_hat)
-  }
 
   list(
     m_occ        = m_occ,
