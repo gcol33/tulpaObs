@@ -44,17 +44,10 @@
   enc  <- encode_cover_hurdle(formula, data, y, spatial, positive = positive)
 
   if (identical(engine, "nested_laplace")) {
-    if (identical(approx, "simplified_laplace")) {
-      message(
-        "tobs(): simplified_laplace is currently wired only for the ",
-        "single-Laplace cover path; falling back to gaussian_laplace ",
-        "marginals on the joint nested-Laplace fit."
-      )
-    }
     return(decode_cover_hurdle_joint(
       fit_cover_hurdle_joint_nested(enc, data, positive, control,
                                     temporal = temporal, re = re),
-      enc, family
+      enc, family, approx = approx
     ))
   }
 
@@ -769,6 +762,22 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
                 log_marginal = NA_real_)
 
+  # Stash the field-decomposition scale_factor (BYM2 Riebler scaling),
+  # the profiled-beta phi fallback, and the lognormal noise SD fallback on
+  # the joint fit so the SLA path can reconstruct per-grid field amplitude
+  # and dispersion without re-deriving them.
+  if (has_multi) {
+    sf_attr <- as.numeric(multi$prior[[1L]]$scale_factor %||% 1.0)
+  } else {
+    sf_attr <- as.numeric(prior_for_joint$scale_factor %||% 1.0)
+  }
+  attr(fit, "scale_factor") <- sf_attr
+  if (identical(positive, "beta")) {
+    attr(fit, "phi_fixed") <- as.numeric(arm_pos$phi)
+  } else {
+    attr(fit, "sigma_pos_fixed") <- as.numeric(if (is.finite(sigma_pos)) sigma_pos else phi_hat)
+  }
+
   list(
     m_occ      = m_occ,
     m_pos      = m_pos,
@@ -781,6 +790,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     beta_pos   = beta_pos,
     se_occ     = se_occ,
     se_pos     = se_pos,
+    spi_full   = as.integer(spi_full),
+    spi_pos    = as.integer(spi_pos),
     joint      = fit
   )
 }
@@ -866,8 +877,16 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 #' already produced posterior moments for beta and the spatial hyperparameters,
 #' so we just shape them into the existing `cover_fit` structure.
 #'
+#' When `approx = "simplified_laplace"`, the per-arm marginal skewness is
+#' computed via [`.sla_compute_cover_hurdle_joint()`] (mixture third-moment
+#' over the outer grid; per-grid FD of the joint inner log-lik along the
+#' constraint-corrected Sigma columns), and per-arm pseudo-draws are
+#' resampled from moment-matched skew-normals via
+#' [`.sla_build_cover_hurdle_draws()`].
+#'
 #' @keywords internal
-decode_cover_hurdle_joint <- function(fits, enc, family) {
+decode_cover_hurdle_joint <- function(fits, enc, family,
+                                      approx = "gaussian_laplace") {
   beta_occ <- fits$beta_occ
   beta_pos <- fits$beta_pos
   names(beta_occ) <- colnames(enc$occ_data$X)
@@ -888,6 +907,43 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
     hyperpar$phi_pos <- fits$phi_pos
   }
 
+  # Simplified-Laplace marginal correction on the joint path. The SLA
+  # orchestrator wants `enc$..spi_full` / `enc$..spi_pos` for per-arm field
+  # gather inside the inner log-lik evaluator; we attach them here from
+  # the fits list (computed once inside `fit_cover_hurdle_joint_nested`).
+  skew_occ <- NULL
+  skew_pos <- NULL
+  draws_occ <- NULL
+  draws_pos <- NULL
+  sla_status <- "off"
+  if (identical(approx, "simplified_laplace")) {
+    enc_sla <- enc
+    enc_sla$..spi_full <- as.integer(fits$spi_full %||% integer(0))
+    enc_sla$..spi_pos  <- as.integer(fits$spi_pos  %||% integer(0))
+    sla_res <- .sla_compute_cover_hurdle_joint(fits$joint, enc_sla,
+                                               fits$positive)
+    sla_draws <- .sla_build_cover_hurdle_draws(
+      beta_occ, se_occ, beta_pos, se_pos, sla_res
+    )
+    draws_occ <- sla_draws$draws_occ
+    draws_pos <- sla_draws$draws_pos
+    sla_status <- sla_draws$sla_status
+    if (isTRUE(sla_res$valid)) {
+      skew_occ <- sla_res$gamma_occ
+      skew_pos <- sla_res$gamma_pos
+    } else {
+      # The orchestrator may still return numeric (possibly non-finite)
+      # gamma vectors alongside `valid = FALSE`; surface them only when
+      # they are finite so downstream consumers can inspect them.
+      if (!is.null(sla_res$gamma_occ) && all(is.finite(sla_res$gamma_occ))) {
+        skew_occ <- sla_res$gamma_occ
+      }
+      if (!is.null(sla_res$gamma_pos) && all(is.finite(sla_res$gamma_pos))) {
+        skew_pos <- sla_res$gamma_pos
+      }
+    }
+  }
+
   out <- structure(
     list(
       occ          = fits$m_occ,
@@ -906,7 +962,12 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
       n_positive   = length(enc$idx_pos),
       converged    = TRUE,
       log_marginal = c(joint = max(fits$joint$log_marginal)),
-      joint        = fits$joint
+      joint        = fits$joint,
+      skew_occ     = skew_occ,
+      skew_pos     = skew_pos,
+      draws_occ    = draws_occ,
+      draws_pos    = draws_pos,
+      sla_status   = sla_status
     ),
     class = c("cover_fit", "tobs_fit", "tulpa_fit")
   )
@@ -1158,6 +1219,19 @@ decode_cover_hurdle_joint <- function(fits, enc, family) {
 # where A picks the per-block sums of phi (and theta, for BYM2). With
 # A = 0 (no spatial block) this reduces to the unconstrained inverse,
 # which is the right behaviour for the SPDE case (Q non-singular).
+#
+# IMPORTANT: the same constraint is applied to BOTH BYM2 sub-blocks
+# (phi: rank-deficient ICAR; theta: proper IID). This is a modelling
+# choice rather than a mathematical necessity for theta — the IID
+# prior identifies mean(theta) at precision n_s — but matching INLA's
+# `f(..., model = "bym2", constr = TRUE)` default keeps the reported
+# intercept comparable. Any simulator generating BYM2 data for the
+# joint engine must demean both phi_f and theta_f before scaling,
+# otherwise the constrained-intercept estimator targets
+# `beta_pos_0_truth + alpha * mean(w_s_sim)` rather than the
+# population truth and coverage of the population truth collapses
+# with alpha (see `simulate_cover_joint()` for a demeaned simulator;
+# diagnosed in INLAabun `example/validation/SUMMARY.md` Demo 3).
 #
 # Returns an `n_grid x length(beta_idx)` matrix of constrained
 # Var(beta_j | data, theta_k), or NULL when no Q matrices were stored.

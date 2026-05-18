@@ -18,3 +18,19 @@ Latent presence (Bernoulli) plus conditional positive cover (beta or
 lognormal). Does not share the replicate-detection assumption of the other
 families — see \code{vignette("families")} for the conceptual caveat.
 }
+\section{Joint nested-Laplace engine — spatial-prior parameterisation}{
+
+When fitted with \code{engine = "nested_laplace"} and a \code{spatial = tulpa::spatial_bym2(adj, ...)} (or \code{spatial_car()} / \code{spatial_car_proper()})
+argument, the engine identifies a single latent field \code{z} per region
+and parameterises the two arms as \verb{eta_occ = X beta_occ + sigma * z}
+and \verb{eta_pos = X beta_pos + alpha * sigma * z}. Both BYM2 sub-blocks
+(\code{phi}, \code{theta}) are subject to hard sum-to-zero constraints (see
+\code{.joint_inner_var()} for the math): the cover-arm intercept
+\code{beta_pos[1]} is identified as the population mean of \code{eta_pos}
+under \code{mean(z) = 0}. Any simulator generating data for this engine
+must demean both \code{phi_f} and \code{theta_f} before scaling, otherwise the
+estimator targets \code{beta_pos_0_truth + alpha * mean(w_s_sim)} and
+coverage of the \emph{population} truth collapses with alpha. See
+\code{\link[=simulate_cover_joint]{simulate_cover_joint()}} for a ready-made demeaned simulator.
+}
+

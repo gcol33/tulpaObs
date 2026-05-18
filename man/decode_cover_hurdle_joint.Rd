@@ -4,11 +4,19 @@
 \alias{decode_cover_hurdle_joint}
 \title{Decode a joint-nested-Laplace cover-hurdle fit into a \code{cover_fit}.}
 \usage{
-decode_cover_hurdle_joint(fits, enc, family)
+decode_cover_hurdle_joint(fits, enc, family, approx = "gaussian_laplace")
 }
 \description{
 Lighter-weight than the single-Laplace decode: the joint engine has
 already produced posterior moments for beta and the spatial hyperparameters,
 so we just shape them into the existing \code{cover_fit} structure.
+}
+\details{
+When \code{approx = "simplified_laplace"}, the per-arm marginal skewness is
+computed via \code{\link[=.sla_compute_cover_hurdle_joint]{.sla_compute_cover_hurdle_joint()}} (mixture third-moment
+over the outer grid; per-grid FD of the joint inner log-lik along the
+constraint-corrected Sigma columns), and per-arm pseudo-draws are
+resampled from moment-matched skew-normals via
+\code{\link[=.sla_build_cover_hurdle_draws]{.sla_build_cover_hurdle_draws()}}.
 }
 \keyword{internal}

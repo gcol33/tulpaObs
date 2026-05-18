@@ -9,7 +9,9 @@ fit_cover_hurdle_joint_nested(
   enc,
   data,
   positive = enc$positive,
-  control = list()
+  control = list(),
+  temporal = NULL,
+  re = NULL
 )
 }
 \arguments{

@@ -306,6 +306,21 @@ fp_occu <- function() {
 #' lognormal). Does not share the replicate-detection assumption of the other
 #' families — see `vignette("families")` for the conceptual caveat.
 #'
+#' @section Joint nested-Laplace engine — spatial-prior parameterisation:
+#' When fitted with `engine = "nested_laplace"` and a `spatial =
+#' tulpa::spatial_bym2(adj, ...)` (or `spatial_car()` / `spatial_car_proper()`)
+#' argument, the engine identifies a single latent field `z` per region
+#' and parameterises the two arms as `eta_occ = X beta_occ + sigma * z`
+#' and `eta_pos = X beta_pos + alpha * sigma * z`. Both BYM2 sub-blocks
+#' (`phi`, `theta`) are subject to hard sum-to-zero constraints (see
+#' `.joint_inner_var()` for the math): the cover-arm intercept
+#' `beta_pos[1]` is identified as the population mean of `eta_pos`
+#' under `mean(z) = 0`. Any simulator generating data for this engine
+#' must demean both `phi_f` and `theta_f` before scaling, otherwise the
+#' estimator targets `beta_pos_0_truth + alpha * mean(w_s_sim)` and
+#' coverage of the *population* truth collapses with alpha. See
+#' [simulate_cover_joint()] for a ready-made demeaned simulator.
+#'
 #' @param positive likelihood for the positive part. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
