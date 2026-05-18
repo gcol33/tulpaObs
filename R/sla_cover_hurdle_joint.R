@@ -124,14 +124,17 @@
             (a - 1) * log(y_pos) + (b - 1) * log1p(-y_pos))
     }
   } else {
-    # Lognormal: enc$pos_data$y is already log(cover). Noise SD is the
-    # per-grid `sigma_pos_noise` if exposed, else fall back to the
-    # post-hoc `sigma_pos` stored on the fits list.
+    # Lognormal: enc$pos_data$y is already log(cover). Noise SD lives on
+    # the per-grid `phi_pos` axis (gaussian arm's phi is the residual SD);
+    # legacy `sigma_pos_noise` name is still recognized for forward compat,
+    # with a final fallback to the posterior-mean `sigma_pos_fixed` attr.
     z <- enc$pos_data$y
     if (length(z) == 0L) {
       0
     } else {
-      sig_k <- if ("sigma_pos_noise" %in% colnames(fit$theta_grid)) {
+      sig_k <- if ("phi_pos" %in% colnames(fit$theta_grid)) {
+        fit$theta_grid[k, "phi_pos"]
+      } else if ("sigma_pos_noise" %in% colnames(fit$theta_grid)) {
         fit$theta_grid[k, "sigma_pos_noise"]
       } else {
         as.numeric(attr(fit, "sigma_pos_fixed") %||% 1.0)
@@ -199,10 +202,26 @@
 # Per-grid SLA gamma via 5-point central FD along the constrained Sigma
 # columns.
 #
-# Step size `h_j = eps^(1/5) * sigma_j / ||v_j||` keeps the displacement
-# in the joint latent space on the natural scale of the j-th marginal
-# posterior (standard 5-point choice; see `.sla_gamma_fd()` in
-# R/simplified_laplace.R).
+# Step size derivation. Parameterize the FD path by the standardised
+# variable `s = h * sigma_j`, so one unit of `s` is one marginal SD along
+# v_j (`d^3 L/ds^3 |_{s=0}` is exactly `gamma_j`). The 5-point central
+# rule's optimal step in `s` is `s* = eps^(1/5)`, giving
+#     h_j = eps^(1/5) / sigma_j.
+#
+# Equivalently: pin the beta_j-component displacement at the natural
+# scale of the j-th marginal posterior. Along direction `v_j = Sigma[, j]`
+# we have `v_j[beta_j] = sigma_j^2`, so the beta_j-coordinate moves by
+# `h * v_j[beta_j] = (eps^(1/5)/sigma_j) * sigma_j^2 = eps^(1/5) * sigma_j`
+# -- a fraction of one marginal SD, well-conditioned for FD.
+#
+# Why not `h = eps^(1/5) * sigma_j / ||v_j||` (the standalone formula).
+# When `v_j` is a column of a *beta-only* Sigma, `||v_j|| ~ sigma_j^2` and
+# the two formulas agree. When `v_j` is a column of the *full* joint
+# Sigma, `||v_j||` is inflated by field-block components (proportional
+# to `sigma_pos_k * field_z_scale`), making `h` orders of magnitude
+# smaller than optimal. Roundoff in the Beta `lgamma` evaluations then
+# dominates the FD signal -- see dev_notes/probe_sla_fd_step.R for an
+# h-sweep on the failing grid point.
 # ---------------------------------------------------------------------------
 .sla_inner_gamma_joint <- function(k, beta_idx_arm, fit, enc, positive) {
   layout <- fit$arm_layout
@@ -242,9 +261,11 @@
     sigma2_j <- max(v_j[beta_idx_arm[j]], 0)
     sigma_j  <- sqrt(sigma2_j)
     if (sigma_j <= 0) { gamma[j] <- 0; next }
-    norm_v <- sqrt(sum(v_j^2))
-    if (norm_v <= 0) { gamma[j] <- 0; next }
-    h <- eps_h * sigma_j / norm_v
+    if (sum(v_j^2) <= 0) { gamma[j] <- 0; next }
+    # Standardised step: `s = h * sigma_j` is one marginal SD; pick
+    # `s = eps^(1/5)` for the 5-point central rule => `h = eps^(1/5) / sigma_j`.
+    # See header comment for the field-coupling rationale.
+    h <- eps_h / sigma_j
     L_p2 <- .loglik_cover_joint_at_grid(beta_hat + 2 * h * v_j, k, fit, enc, positive)
     L_p1 <- .loglik_cover_joint_at_grid(beta_hat +     h * v_j, k, fit, enc, positive)
     L_m1 <- .loglik_cover_joint_at_grid(beta_hat -     h * v_j, k, fit, enc, positive)

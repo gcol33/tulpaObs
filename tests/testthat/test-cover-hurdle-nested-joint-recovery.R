@@ -213,3 +213,48 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
   expect_lt(abs(mean(phi_hats) - truth_phi) / truth_phi, 0.10)
   expect_lt(max(rel_err), 0.25)
 })
+
+test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
+  # phi_pos is the posterior-weighted mean across the outer phi grid;
+  # phi_pos_sd is the matching across-grid SD = sqrt(E[phi^2] - E[phi]^2).
+  # Shape test: finite, positive, of the same order as truth.
+  skip_on_cran()
+  truth_phi <- 30
+  n_s       <- 25L
+  adj       <- chain_adj_for_test(n_s)
+  sim <- simulate_joint_beta_for_recovery(
+    N = 600, n_s = n_s, phi = truth_phi, seed = 3001L
+  )
+  spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
+  fit <- tobs(
+    formula  = ~ x,
+    data     = sim$data,
+    family   = cover("beta"),
+    y        = sim$y,
+    spatial  = spatial,
+    engine   = "nested_laplace",
+    control  = list(
+      sigma_grid     = c(0.3, 0.5, 0.8),
+      rho_grid       = c(0.5, 0.7, 0.9),
+      sigma_pos_grid = c(0.25, 0.5, 0.75)
+    )
+  )
+  expect_true(is.finite(fit$phi_pos_sd))
+  expect_gt(fit$phi_pos_sd, 0)
+  # Posterior should not collapse onto a single grid cell (would imply the
+  # outer phi axis is degenerate) nor blow up beyond the grid span (default
+  # span 2..300, so SD > 100 would be a sign the integrator is broken).
+  expect_lt(fit$phi_pos_sd, 100)
+  # 3-SD interval contains truth — loose calibration shape check.
+  expect_gte(fit$phi_pos + 3 * fit$phi_pos_sd, truth_phi)
+  expect_lte(fit$phi_pos - 3 * fit$phi_pos_sd, truth_phi)
+  # Separate-hurdle path returns NA_real_ for the SD because phi is
+  # Brent-profiled there, not integrated.
+  fit_sep <- tobs(
+    formula = ~ x,
+    data    = sim$data,
+    family  = cover(positive = "beta"),
+    y       = sim$y
+  )
+  expect_true(is.na(fit_sep$phi_pos_sd))
+})

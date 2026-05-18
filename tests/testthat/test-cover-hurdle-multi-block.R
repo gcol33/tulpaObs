@@ -10,9 +10,8 @@
 #   * Multi-block hyperparameter summary is attached (block_moments
 #     populated, alpha finite).
 #
-# Uses positive = "beta" so phi is integrated on the outer grid -- this
-# avoids the lognormal sigma_pos field-subtraction follow-up that's
-# tracked alongside .joint_field_at_obs_copy_multi.
+# Uses positive = "beta" so phi is integrated on the outer grid. (The
+# lognormal arm now integrates its noise SD the same way.)
 
 simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
                                        n_obs = 12L,

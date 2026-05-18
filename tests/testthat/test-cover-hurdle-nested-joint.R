@@ -61,7 +61,8 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
     expect_true(fit$converged)
     expect_true(all(is.finite(fit$beta_occ)))
     expect_true(all(is.finite(fit$beta_pos)))
-    expect_named(fit$hyperpar, c("spatial", "engine", "sigma_pos"))
+    expect_named(fit$hyperpar,
+                 c("spatial", "engine", "sigma_pos", "sigma_pos_sd"))
     expect_identical(fit$hyperpar$engine, "nested_laplace")
 
     # Sanity: posterior-weighted slope estimates land on the right side of zero.
@@ -168,7 +169,8 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
     expect_true(all(is.finite(fit$beta_occ)))
     expect_true(all(is.finite(fit$beta_pos)))
     expect_true(is.finite(fit$phi_pos) && fit$phi_pos > 0)
-    expect_named(fit$hyperpar, c("spatial", "engine", "phi_pos"))
+    expect_named(fit$hyperpar,
+                 c("spatial", "engine", "phi_pos", "phi_pos_sd"))
 
     # Posterior-weighted slope estimates land on the right side of zero.
     expect_gt(fit$beta_occ[2], 0)

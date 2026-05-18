@@ -299,7 +299,9 @@ decode_cover_hurdle <- function(fits, enc, family,
       se_pos       = se_pos,
       positive     = fits$positive,
       sigma_pos    = if (fits$positive == "lognormal") fits$sigma_pos else NA_real_,
+      sigma_pos_sd = NA_real_,
       phi_pos      = if (fits$positive == "beta")      fits$phi_pos    else NA_real_,
+      phi_pos_sd   = NA_real_,
       hyperpar     = hyperpar,
       encoding     = enc,
       family       = family,
@@ -465,16 +467,19 @@ print.summary.cover_fit <- function(x, ...) {
 #' Fit cover_hurdle as a joint binomial+(gaussian|beta) model with shared
 #' spatial field via [tulpa::tulpa_nested_laplace_joint()].
 #'
-#' For `positive = "lognormal"` the positive arm runs as Gaussian on
-#' `log(cover)` with `sigma_pos` estimated post-hoc as the residual standard
-#' error at the joint mode (matches Phase 1a).
+#' For both positive parts the dispersion scalar is integrated on the outer
+#' joint hyperparameter grid (per-arm `phi_pos` axis):
 #'
-#' For `positive = "beta"` the positive arm runs as Beta on `cover` (logit
-#' link). The precision `phi` is **profiled**: a pre-fit via
-#' [tulpa::tulpa_laplace_beta()] on the positive subset (no spatial) gives
-#' `phi_hat`, which is then held fixed in the joint engine while the
-#' spatial hyperparameters are integrated out. Full posterior integration
-#' over `phi` is scheduled for Phase 3.
+#' * `positive = "lognormal"` (gaussian arm): the residual SD is the per-grid
+#'   phi. The default 7-point log-spaced grid is centred on the non-spatial
+#'   prefit from [.prefit_lognormal_sigma()] and spans `[sigma_hat / 3,
+#'   sigma_hat * 3]`. The posterior mean and SD across that axis are
+#'   surfaced as `sigma_pos` / `sigma_pos_sd` on the returned `cover_fit`.
+#' * `positive = "beta"`: the beta precision is the per-grid phi. The
+#'   default 7-point log-spaced grid spans `[2, 300]`; posterior mean and
+#'   SD are surfaced as `phi_pos` / `phi_pos_sd`.
+#'
+#' Override the per-arm phi grid via `control$phi_grid`.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
 #' @param data The original (un-subsetted) data frame — required to resolve
@@ -542,31 +547,35 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     phi         = 1.0
   )
 
-  # Positive-arm dispersion. Two regimes:
-  #   * lognormal: gaussian phi is the noise SD — pre-fit it on the positive
-  #     subset, otherwise the joint integrand sees noise scale 1 regardless
-  #     of truth and cannot discriminate alpha (issue #4).
+  # Positive-arm dispersion. Both regimes integrate phi on the outer joint
+  # hyperparameter grid; `arm_pos$phi` is a placeholder overridden per grid
+  # point by the joint engine.
+  #   * lognormal: gaussian phi is the noise SD. The non-spatial residual SD
+  #     from `.prefit_lognormal_sigma()` is an upper bound on the truth (it
+  #     absorbs the alpha-mediated field variance), so we use it as the
+  #     *centre* of a 7-point log-spaced grid spanning [sigma_hat/3,
+  #     sigma_hat*3]. Neighbour-ratio ~1.44 keeps the inner Laplace
+  #     warm-starts close enough that adaptive densification rarely fires.
+  #     Override via `control$phi_grid`.
   #   * beta:      phi is integrated on the outer joint hyperparameter grid
-  #     (tulpaObs#7). The kernel sees a per-arm phi_grid; arm_pos$phi is a
-  #     placeholder overridden per grid point. Default grid is 5 log-spaced
-  #     points spanning realistic cover-dispersion magnitudes; override via
-  #     `control$phi_grid`.
+  #     (tulpaObs#7). 7 log-spaced points span 2..300 (neighbour-ratio
+  #     ~2.4); the joint engine's mode-tracked interior densification
+  #     (gcol33/tulpa#19 follow-up) adds 1-2 midpoint cells around the peak
+  #     when adjacent grid levels carry density above the edge threshold,
+  #     so the *effective* phi resolution near the peak matches the
+  #     previous 13-point default while the baseline cell count drops ~46%.
+  #     History: fixed 13 was set when adaptive_grid was off-by-default;
+  #     5 points gave ~18% mean bias, 9 points ~12% under the static grid.
+  #     Refinement now closes that gap dynamically.
   if (positive == "lognormal") {
     pos_family   <- "gaussian"
-    phi_hat      <- .prefit_lognormal_sigma(enc, control)
-    phi_grid_pos <- NULL
+    sigma_hat    <- .prefit_lognormal_sigma(enc, control)
+    phi_hat      <- sigma_hat
+    phi_grid_pos <- control$phi_grid %||%
+      exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7))
   } else {
     pos_family   <- "beta"
     phi_hat      <- 1.0
-    # 7 log-spaced points span 2..300 (neighbour-ratio ~2.4); the joint
-    # engine's mode-tracked interior densification (gcol33/tulpa#19
-    # follow-up) adds 1-2 midpoint cells around the peak when adjacent
-    # grid levels carry density above the edge threshold, so the
-    # *effective* phi resolution near the peak matches the previous
-    # 13-point default while the baseline cell count drops ~46%.
-    # History: fixed 13 was set when adaptive_grid was off-by-default;
-    # 5 points gave ~18% mean bias, 9 points ~12% under the static
-    # grid. Refinement now closes that gap dynamically.
     phi_grid_pos <- control$phi_grid %||%
       exp(seq(log(2), log(300), length.out = 7))
   }
@@ -731,30 +740,26 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
   se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
 
-  # Dispersion summary on the positive arm.
-  #   * lognormal: sigma_pos is the residual SD on the field-corrected
-  #     linear predictor; the alpha-scaled posterior spatial field at the
-  #     positive-arm locations is subtracted to keep residual variance
-  #     from absorbing alpha^2 * field_sigma^2 (issue #4). In the
-  #     multi-block path the additional temporal / iid block contributions
-  #     are not yet subtracted — sigma_pos may be slightly overestimated
-  #     when those blocks carry substantial variance; tracked for a
-  #     follow-up to .joint_field_at_obs_copy.
-  #   * beta:      phi is integrated marginally over the outer phi grid
-  #     (tulpaObs#7); read posterior mean directly from theta_grid.
+  # Dispersion summary on the positive arm. Both regimes integrate the
+  # dispersion scalar on the outer joint hyperparameter grid; read posterior
+  # mean and SD directly from theta_grid.
+  #   * lognormal: gaussian phi_pos column carries the residual SD per grid
+  #     point. sigma_pos / sigma_pos_sd are the across-grid posterior moments.
+  #   * beta:      phi_pos column carries the beta precision per grid point.
   if (positive == "lognormal") {
-    eta_pos      <- as.numeric(enc$pos_data$X %*% beta_pos)
-    field_at_pos <- if (has_multi) {
-      .joint_field_at_obs_copy_multi(fit, multi$prior, spi_pos)
-    } else {
-      .joint_field_at_obs_copy(fit, prior_for_joint, spi_pos)
-    }
-    resid     <- enc$pos_data$y - eta_pos - field_at_pos
-    sigma_pos <- sqrt(sum(resid^2) / max(N_pos - p_pos, 1L))
-    phi_pos   <- NA_real_
+    sigma_grid   <- as.numeric(fit$theta_grid[, "phi_pos"])
+    sigma_pos    <- sum(fit$weights * sigma_grid)
+    sigma_pos_sd <- sqrt(max(0,
+      sum(fit$weights * sigma_grid^2) - sigma_pos^2))
+    phi_pos      <- NA_real_
+    phi_pos_sd   <- NA_real_
   } else {
-    sigma_pos <- NA_real_
-    phi_pos   <- sum(fit$weights * fit$theta_grid[, "phi_pos"])
+    sigma_pos    <- NA_real_
+    sigma_pos_sd <- NA_real_
+    phi_grid     <- as.numeric(fit$theta_grid[, "phi_pos"])
+    phi_pos      <- sum(fit$weights * phi_grid)
+    phi_pos_sd   <- sqrt(max(0,
+      sum(fit$weights * phi_grid^2) - phi_pos^2))
   }
 
   m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
@@ -772,27 +777,33 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     sf_attr <- as.numeric(prior_for_joint$scale_factor %||% 1.0)
   }
   attr(fit, "scale_factor") <- sf_attr
+  # Fixed-dispersion attrs are SLA fallbacks: only consulted when the joint
+  # fit lacks the corresponding per-grid `phi_pos` column. Both regimes now
+  # integrate phi by default, so these are written as posterior-mean
+  # placeholders for forward compatibility.
   if (identical(positive, "beta")) {
-    attr(fit, "phi_fixed") <- as.numeric(arm_pos$phi)
+    attr(fit, "phi_fixed") <- as.numeric(if (is.finite(phi_pos)) phi_pos else arm_pos$phi)
   } else {
     attr(fit, "sigma_pos_fixed") <- as.numeric(if (is.finite(sigma_pos)) sigma_pos else phi_hat)
   }
 
   list(
-    m_occ      = m_occ,
-    m_pos      = m_pos,
-    positive   = positive,
-    sigma_pos  = sigma_pos,
-    phi_pos    = phi_pos,
-    pos_fit_n  = N_pos,
-    pos_fit_p  = p_pos,
-    beta_occ   = beta_occ,
-    beta_pos   = beta_pos,
-    se_occ     = se_occ,
-    se_pos     = se_pos,
-    spi_full   = as.integer(spi_full),
-    spi_pos    = as.integer(spi_pos),
-    joint      = fit
+    m_occ        = m_occ,
+    m_pos        = m_pos,
+    positive     = positive,
+    sigma_pos    = sigma_pos,
+    sigma_pos_sd = sigma_pos_sd,
+    phi_pos      = phi_pos,
+    phi_pos_sd   = phi_pos_sd,
+    pos_fit_n    = N_pos,
+    pos_fit_p    = p_pos,
+    beta_occ     = beta_occ,
+    beta_pos     = beta_pos,
+    se_occ       = se_occ,
+    se_pos       = se_pos,
+    spi_full     = as.integer(spi_full),
+    spi_pos      = as.integer(spi_pos),
+    joint        = fit
   )
 }
 
@@ -819,56 +830,6 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   sigma_init <- sqrt(sum(resid_init^2) / max(n - p, 1L))
   if (!is.finite(sigma_init) || sigma_init <= 0) return(1.0)
   sigma_init
-}
-
-# Project the posterior-weighted spatial field at a set of spatial-unit
-# indices (1-based) onto the COPY arm under a `tulpa_nested_laplace_joint`
-# fit. Backend-aware: BYM2 combines (phi, theta) sub-blocks with the
-# per-grid (sigma_pos, rho) factors; ICAR / CAR_proper scale the single
-# latent block by sigma_pos.
-#
-# Under the (sigma_occ, sigma_pos) reparam (gcol33/tulpa#18) the stored
-# modes are unit-variance latent z; the per-arm field amplitude lives on
-# the eta multiplier. The copy arm's field is therefore
-# `sigma_pos * z_decomposed` rather than the old `alpha * (sigma * z)`.
-.joint_field_at_obs_copy <- function(fit, prior, spi_obs) {
-  N <- length(spi_obs)
-  if (N == 0L) return(numeric(0))
-  modes <- fit$modes
-  if (is.null(modes) || !is.matrix(modes)) return(rep(0, N))
-  layout <- fit$arm_layout
-  theta_grid <- fit$theta_grid
-  weights <- fit$weights
-  if (is.null(theta_grid) || !"sigma_pos" %in% colnames(theta_grid)) {
-    return(rep(0, N))
-  }
-  sigma_pos_k <- theta_grid[, "sigma_pos"]
-  n_grid <- length(sigma_pos_k)
-  n_s <- prior$n_spatial_units %||% 0L
-  if (n_s == 0L) return(rep(0, N))
-  phi_start <- layout$phi_start
-  theta_start <- layout$theta_start
-  if (is.null(phi_start) || n_s <= 0L) return(rep(0, N))
-
-  type <- tolower(prior$type %||% "")
-  scale_factor <- as.numeric(prior$scale_factor %||% 1.0)
-  field_at_obs <- numeric(N)
-  for (k in seq_len(n_grid)) {
-    s_pos <- sigma_pos_k[k]
-    if (type == "bym2") {
-      rho_k   <- theta_grid[k, "rho"]
-      d_phi   <- s_pos * sqrt(rho_k + 1e-10) * scale_factor
-      d_theta <- s_pos * sqrt(1 - rho_k + 1e-10)
-      phi_k   <- modes[k, phi_start + seq_len(n_s)]
-      theta_k <- modes[k, theta_start + seq_len(n_s)]
-      field_k <- d_phi * phi_k + d_theta * theta_k
-    } else {
-      phi_k   <- modes[k, phi_start + seq_len(n_s)]
-      field_k <- s_pos * phi_k
-    }
-    field_at_obs <- field_at_obs + weights[k] * field_k[spi_obs]
-  }
-  field_at_obs
 }
 
 #' Decode a joint-nested-Laplace cover-hurdle fit into a `cover_fit`.
@@ -902,9 +863,11 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     engine  = "nested_laplace"
   )
   if (fits$positive == "lognormal") {
-    hyperpar$sigma_pos <- fits$sigma_pos
+    hyperpar$sigma_pos    <- fits$sigma_pos
+    hyperpar$sigma_pos_sd <- fits$sigma_pos_sd
   } else {
-    hyperpar$phi_pos <- fits$phi_pos
+    hyperpar$phi_pos    <- fits$phi_pos
+    hyperpar$phi_pos_sd <- fits$phi_pos_sd
   }
 
   # Simplified-Laplace marginal correction on the joint path. The SLA
@@ -954,7 +917,9 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       se_pos       = se_pos,
       positive     = fits$positive,
       sigma_pos    = fits$sigma_pos,
+      sigma_pos_sd = fits$sigma_pos_sd,
       phi_pos      = fits$phi_pos,
+      phi_pos_sd   = fits$phi_pos_sd,
       hyperpar     = hyperpar,
       encoding     = enc,
       family       = family,
@@ -1136,64 +1101,6 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   stop(sprintf("`%s` must be a column name or 1-based integer vector.",
                what), call. = FALSE)
 }
-
-# Multi-block analogue of .joint_field_at_obs_copy: project only the
-# spatial (copy) block's posterior-weighted field at the cover-arm obs
-# rows. The temporal / iid blocks are not yet subtracted — see the note
-# in fit_cover_hurdle_joint_nested.
-.joint_field_at_obs_copy_multi <- function(fit, prior_list, spi_obs) {
-  N <- length(spi_obs)
-  if (N == 0L) return(numeric(0))
-  modes <- fit$modes
-  if (is.null(modes) || !is.matrix(modes)) return(rep(0, N))
-  layout <- fit$arm_layout
-  theta_grid <- fit$theta_grid
-  weights <- fit$weights
-  if (is.null(theta_grid)) return(rep(0, N))
-
-  sp <- prior_list[[1L]]
-  type <- tolower(sp$type %||% "")
-  n_s <- as.integer(sp$n_spatial_units %||% 0L)
-  if (n_s <= 0L) return(rep(0, N))
-
-  # Multi-block joint stores prefixed column names — `b1.sigma_pos` /
-  # `b1.rho`. Fall back to bare names for compatibility with any future
-  # cleanup that strips the prefix from theta_grid.
-  pick_col <- function(name) {
-    if (name %in% colnames(theta_grid)) return(theta_grid[, name])
-    pref <- paste0("b1.", name)
-    if (pref %in% colnames(theta_grid)) return(theta_grid[, pref])
-    NULL
-  }
-  sigma_pos_k <- pick_col("sigma_pos")
-  if (is.null(sigma_pos_k)) return(rep(0, N))
-
-  phi_start <- layout$phi_start
-  if (is.null(phi_start)) return(rep(0, N))
-  theta_start <- layout$theta_start
-  scale_factor <- as.numeric(sp$scale_factor %||% 1.0)
-
-  n_grid <- length(sigma_pos_k)
-  field_at_obs <- numeric(N)
-  for (k in seq_len(n_grid)) {
-    s_pos <- sigma_pos_k[k]
-    if (type == "bym2") {
-      rho_k <- pick_col("rho")[k]
-      d_phi   <- s_pos * sqrt(max(rho_k, 0) + 1e-10) * scale_factor
-      d_theta <- s_pos * sqrt(max(1 - rho_k, 0) + 1e-10)
-      phi_k   <- modes[k, phi_start + seq_len(n_s)]
-      theta_k <- if (!is.null(theta_start))
-        modes[k, theta_start + seq_len(n_s)] else rep(0, n_s)
-      field_k <- d_phi * phi_k + d_theta * theta_k
-    } else {
-      phi_k   <- modes[k, phi_start + seq_len(n_s)]
-      field_k <- s_pos * phi_k
-    }
-    field_at_obs <- field_at_obs + weights[k] * field_k[spi_obs]
-  }
-  field_at_obs
-}
-
 
 # ---------------------------------------------------------------------------
 # Helpers
