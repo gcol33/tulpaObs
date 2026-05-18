@@ -741,25 +741,31 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
 
   # Dispersion summary on the positive arm. Both regimes integrate the
-  # dispersion scalar on the outer joint hyperparameter grid; read posterior
-  # mean and SD directly from theta_grid.
-  #   * lognormal: gaussian phi_pos column carries the residual SD per grid
-  #     point. sigma_pos / sigma_pos_sd are the across-grid posterior moments.
-  #   * beta:      phi_pos column carries the beta precision per grid point.
+  # dispersion scalar on the outer joint hyperparameter grid; read the
+  # posterior mean and SD from the engine's `theta_mean` / `theta_sd`. Those
+  # are computed against the phi-axis marginal (foreign-axis slice cells
+  # filtered out by `.joint_recalibrate_axis_moments`) with Laplace-at-mode
+  # SD at the modal cell (gcol33/tulpa#20), so they are grid-spacing-
+  # independent. Hand-rolling `sum(weights * theta_grid^2) - mean^2` against
+  # `theta_grid[, "phi_pos"]` underestimates SD on sharply peaked axes and
+  # additionally collapses on slice cells that pin phi at the modal value
+  # while varying other axes -- that's the legacy pattern tulpa#20/#21 were
+  # added to replace.
+  #
+  # The phi axis carries the gaussian residual SD for lognormal and the
+  # beta precision for beta; surface under the respective slot names.
+  phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
+  phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
   if (positive == "lognormal") {
-    sigma_grid   <- as.numeric(fit$theta_grid[, "phi_pos"])
-    sigma_pos    <- sum(fit$weights * sigma_grid)
-    sigma_pos_sd <- sqrt(max(0,
-      sum(fit$weights * sigma_grid^2) - sigma_pos^2))
+    sigma_pos    <- phi_mu
+    sigma_pos_sd <- phi_sd
     phi_pos      <- NA_real_
     phi_pos_sd   <- NA_real_
   } else {
     sigma_pos    <- NA_real_
     sigma_pos_sd <- NA_real_
-    phi_grid     <- as.numeric(fit$theta_grid[, "phi_pos"])
-    phi_pos      <- sum(fit$weights * phi_grid)
-    phi_pos_sd   <- sqrt(max(0,
-      sum(fit$weights * phi_grid^2) - phi_pos^2))
+    phi_pos      <- phi_mu
+    phi_pos_sd   <- phi_sd
   }
 
   m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
