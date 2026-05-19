@@ -16,3 +16,9 @@ src/*.dylib
 # Temp
 test_*.R
 run_*.R
+
+# dev_notes/ contains math derivations and probe scripts referenced from
+# R/, man/, vignettes, and tests — override the global gitignore rule
+# (including overriding *.log etc. for files inside dev_notes/).
+!dev_notes/
+!dev_notes/**
