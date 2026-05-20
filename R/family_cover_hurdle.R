@@ -492,11 +492,14 @@ print.summary.cover_fit <- function(x, ...) {
 #'   `tau_grid` is also accepted and translated to `sigma_grid` as
 #'   `sigma = 1 / sqrt(tau)` — see gcol33/tulpa#18 for the rationale
 #'   behind moving the cover-arm field amplitude onto its own
-#'   `sigma_pos_grid` axis. Regularizing hyperpriors on the spatial
-#'   field amplitudes can be set via `prior_sigma_occ` / `prior_sigma_pos`
-#'   (each a length-2 list `list(family, params)` matching tulpa's
-#'   `prior_sigma_*` args — see gcol33/tulpa#22 for the donor-vs-skewed
-#'   small-n_pos motivation).
+#'   `sigma_pos_grid` axis. Regularizing hyperpriors on the joint
+#'   (sigma, alpha) axes can be set via `prior_sigma` (donor amplitude)
+#'   and `prior_alpha` (copy coefficient) — each a length-2 list
+#'   `list(family, params)` matching tulpa's `prior_sigma` / `prior_alpha`
+#'   args. See gcol33/tulpa#22 for the (sigma, alpha) reparam rationale:
+#'   the prior on alpha directly regularizes the copy scalar at small
+#'   `n_pos`, replacing the per-arm `prior_sigma_pos` of the pre-reparam
+#'   API.
 #' @return List shaped like the single-Laplace fit output but with extra
 #'   `joint` field carrying the raw `tulpa_nested_laplace_joint` result.
 #' @keywords internal
@@ -670,8 +673,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       prior     = multi$prior,
       copy      = multi$copy,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
-      prior_sigma_occ = control$prior_sigma_occ,
-      prior_sigma_pos = control$prior_sigma_pos,
+      prior_sigma = control$prior_sigma,
+      prior_alpha = control$prior_alpha,
       max_iter  = control$max_iter  %||% 50L,
       tol       = control$tol       %||% 1e-6,
       n_threads = control$n_threads %||% 1L,
@@ -691,8 +694,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       prior     = prior_for_joint,
       copy      = copy_spec,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
-      prior_sigma_occ = control$prior_sigma_occ,
-      prior_sigma_pos = control$prior_sigma_pos,
+      prior_sigma = control$prior_sigma,
+      prior_alpha = control$prior_alpha,
       max_iter  = control$max_iter  %||% 50L,
       tol       = control$tol       %||% 1e-6,
       n_threads = control$n_threads %||% 1L,
