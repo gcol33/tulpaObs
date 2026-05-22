@@ -129,24 +129,30 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
 
   # Multi-block hyperparameter summary: spatial + temporal + RE blocks all
   # report sensible posterior means inside their grids.
+  # The R-facing outer grid for the BYM2 copy block lives in (sigma,
+  # alpha) space; the C++ kernel sees (sigma_occ, sigma_pos) but those
+  # names are not exposed at the R block_moments layer (see tulpa's
+  # nested_laplace_joint.R "API contract" comment around L672).
   bm <- fit$joint$block_moments
   expect_length(bm, 3L)
-  expect_named(bm[[1L]]$mean, c("sigma_occ", "sigma_pos", "rho"))
+  expect_named(bm[[1L]]$mean, c("sigma", "alpha", "rho"))
   expect_named(bm[[2L]]$mean, c("tau", "rho"))
   expect_named(bm[[3L]]$mean, "sigma")
-  expect_true(bm[[1L]]$mean[["sigma_occ"]] > 0.1 &&
-              bm[[1L]]$mean[["sigma_occ"]] < 1.5)
-  expect_true(bm[[1L]]$mean[["sigma_pos"]] > 0.1 &&
-              bm[[1L]]$mean[["sigma_pos"]] < 2.0)
+  expect_true(bm[[1L]]$mean[["sigma"]] > 0.1 &&
+              bm[[1L]]$mean[["sigma"]] < 1.5)
+  expect_true(bm[[1L]]$mean[["alpha"]] > 0.3 &&
+              bm[[1L]]$mean[["alpha"]] < 3.0)
   expect_true(bm[[2L]]$mean[["tau"]] >= 4 &&
               bm[[2L]]$mean[["tau"]] <= 16)
   expect_true(bm[[3L]]$mean[["sigma"]] >= 0.15 &&
               bm[[3L]]$mean[["sigma"]] <= 0.4)
 
-  # alpha = sigma_pos / sigma_occ exposed via theta_mean on the copy block.
-  expect_true("alpha" %in% names(fit$joint$theta_mean))
-  expect_true(is.finite(fit$joint$theta_mean[["alpha"]]))
-  expect_gt(fit$joint$theta_mean[["alpha"]], 0)
+  # alpha = sigma_pos / sigma_occ exposed via theta_mean on the copy
+  # block. In the multi-block path joint_grid columns are prefixed
+  # `b<N>.` (the copy block here is block 1, so `b1.alpha`).
+  expect_true("b1.alpha" %in% names(fit$joint$theta_mean))
+  expect_true(is.finite(fit$joint$theta_mean[["b1.alpha"]]))
+  expect_gt(fit$joint$theta_mean[["b1.alpha"]], 0)
 })
 
 
