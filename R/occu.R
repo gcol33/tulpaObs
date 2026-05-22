@@ -63,7 +63,10 @@
 
   X_det_visit <- NULL
   if (!is.null(det_visit_formula) && !is.null(det_visit_data)) {
-    X_det_visit <- model.matrix(det_visit_formula, det_visit_data)
+    mf <- stats::model.frame(det_visit_formula, det_visit_data,
+                             na.action = stats::na.pass)
+    X_det_visit <- stats::model.matrix(det_visit_formula, mf)
+    X_det_visit[is.na(X_det_visit)] <- 0
     expected_rows <- nrow(y) * ncol(y)
     if (nrow(X_det_visit) != expected_rows) {
       stop(sprintf("det_visit_data must have %d rows (n_sites * max_visits), got %d",
