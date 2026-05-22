@@ -56,14 +56,27 @@ and `spatialRange` / `temporalCorr` for the latent structure.
 
 ## Installation
 
+`tulpaObs` depends on `tulpa` (shared C++ headers via `LinkingTo`), which
+in turn depends on `tulpaMesh`. Install in order:
+
 ```r
-# install.packages("remotes")
-remotes::install_github("gcol33/tulpaMesh")
-remotes::install_github("gcol33/tulpa")
-remotes::install_github("gcol33/tulpaObs")
+install.packages("pak")
+pak::pak("gcol33/tulpaMesh")
+pak::pak("gcol33/tulpa@v0.0.1")
+pak::pak("gcol33/tulpaObs@v0.0.1")
 ```
 
-Requires a C++17 toolchain.
+For the development versions, drop the tags:
+
+```r
+pak::pak("gcol33/tulpaMesh")
+pak::pak("gcol33/tulpa")
+pak::pak("gcol33/tulpaObs")
+```
+
+Requires a C++17 toolchain (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux). Both `tulpa` and `tulpaObs` compile their C++
+backends on first install.
 
 ## Status
 
