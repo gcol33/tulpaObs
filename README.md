@@ -56,21 +56,16 @@ and `spatialRange` / `temporalCorr` for the latent structure.
 
 ## Installation
 
-`tulpaObs` depends on `tulpa` (shared C++ headers via `LinkingTo`), which
-in turn depends on `tulpaMesh`. Install in order:
-
 ```r
 install.packages("pak")
-pak::pak("gcol33/tulpaMesh")
-pak::pak("gcol33/tulpa@v0.0.1")
 pak::pak("gcol33/tulpaObs@v0.0.1")
 ```
 
-For the development versions, drop the tags:
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+GitHub (declared in `Remotes:`). For the development version, drop the
+tag:
 
 ```r
-pak::pak("gcol33/tulpaMesh")
-pak::pak("gcol33/tulpa")
 pak::pak("gcol33/tulpaObs")
 ```
 

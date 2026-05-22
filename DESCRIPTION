@@ -30,4 +30,7 @@ LinkingTo:
     Rcpp,
     RcppEigen,
     tulpa
+Remotes:
+    gcol33/tulpaMesh@v0.1.1,
+    gcol33/tulpa@v0.0.1
 Config/testthat/edition: 3
