@@ -83,7 +83,8 @@
 #'   `formula`, `positive`.
 #' @keywords internal
 encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
-                                positive = c("lognormal", "beta")) {
+                                positive = c("lognormal", "beta"),
+                                autoscale = TRUE) {
   positive <- match.arg(positive)
   if (!is.numeric(y)) stop("`y` must be numeric.", call. = FALSE)
   if (length(y) != nrow(data)) {
@@ -101,7 +102,7 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
   data_obs <- data[obs_keep, , drop = FALSE]
   occur    <- as.integer(y_obs > 0)
 
-  X_occ <- stats::model.matrix(formula, data_obs)
+  X_occ_natural <- stats::model.matrix(formula, data_obs)
 
   is_pos <- occur == 1L
   data_pos <- data_obs[is_pos, , drop = FALSE]
@@ -113,7 +114,29 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
     # already guaranteed by occur == 1 + the range check above.
     y_pos_resp <- pmin(y_pos, 1 - 1e-6)
   }
-  X_pos <- stats::model.matrix(formula, data_pos)
+  X_pos_natural <- stats::model.matrix(formula, data_pos)
+
+  # Autoscale numeric columns of each arm's design matrix so the optimizer
+  # sees well-conditioned predictors (gcol33/tulpaObs#9). Each arm gets its
+  # own scaling parameters; betas / SEs are transformed back to natural
+  # scale by `decode_cover_hurdle*()`. Pass `autoscale = FALSE` to disable
+  # — used by internal tests that probe `.loglik_cover_*` against a known
+  # natural-scale truth, where any centering would shift the maximum.
+  if (isTRUE(autoscale)) {
+    occ_scaled <- .autoscale_design(X_occ_natural)
+    pos_scaled <- .autoscale_design(X_pos_natural)
+    X_occ      <- occ_scaled$X
+    X_pos      <- pos_scaled$X
+    scale_occ  <- occ_scaled$scale
+    scale_pos  <- pos_scaled$scale
+  } else {
+    X_occ      <- X_occ_natural
+    X_pos      <- X_pos_natural
+    scale_occ  <- .scale_meta(X_occ_natural)
+    scale_pos  <- .scale_meta(X_pos_natural)
+    scale_occ$cols <- integer(0); scale_occ$means <- numeric(0); scale_occ$sds <- numeric(0)
+    scale_pos$cols <- integer(0); scale_pos$means <- numeric(0); scale_pos$sds <- numeric(0)
+  }
 
   list(
     occ_data = list(y = occur, n_trials = rep(1L, length(occur)), X = X_occ),
@@ -123,7 +146,9 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
     idx_pos      = which(is_pos),
     formula      = formula,
     positive     = positive,
-    obs_keep     = obs_keep
+    obs_keep     = obs_keep,
+    scale_occ    = scale_occ,
+    scale_pos    = scale_pos
   )
 }
 
@@ -248,14 +273,37 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
 #' @keywords internal
 decode_cover_hurdle <- function(fits, enc, family,
                                 approx = "gaussian_laplace") {
-  beta_occ <- fits$m_occ$mode[seq_len(ncol(enc$occ_data$X))]
-  beta_pos <- fits$m_pos$mode[seq_len(ncol(enc$pos_data$X))]
+  p_occ_n <- ncol(enc$occ_data$X)
+  p_pos_n <- ncol(enc$pos_data$X)
+
+  # Modes / SEs come back from the engine in the *scaled* design's
+  # parameterization. Transform back to the user-facing natural scale via
+  # the (mean, sd) cache stashed by `encode_cover_hurdle()`. The covariance
+  # transform `V_nat = T %*% V_sc %*% t(T)` is the right object because the
+  # Hessian-based vcov has informative off-diagonals between intercept and
+  # slope; treating it as diagonal here would inflate the intercept SE.
+  beta_occ_sc <- fits$m_occ$mode[seq_len(p_occ_n)]
+  beta_pos_sc <- fits$m_pos$mode[seq_len(p_pos_n)]
+
+  V_occ_sc <- if (!is.null(fits$m_occ$H_beta)) {
+    tryCatch(solve(fits$m_occ$H_beta), error = function(e) NULL)
+  } else NULL
+  pos_vcov_scale <- if (fits$positive == "lognormal") fits$sigma_pos^2 else 1
+  V_pos_sc <- if (!is.null(fits$m_pos$H_beta)) {
+    tryCatch(pos_vcov_scale * solve(fits$m_pos$H_beta), error = function(e) NULL)
+  } else NULL
+
+  beta_occ <- .unscale_beta_vec(beta_occ_sc, enc$scale_occ)
+  beta_pos <- .unscale_beta_vec(beta_pos_sc, enc$scale_pos)
   names(beta_occ) <- colnames(enc$occ_data$X)
   names(beta_pos) <- colnames(enc$pos_data$X)
 
-  se_occ <- .se_from_hessian(fits$m_occ$H_beta, scale = 1)
-  se_pos_scale <- if (fits$positive == "lognormal") fits$sigma_pos^2 else 1
-  se_pos <- .se_from_hessian(fits$m_pos$H_beta, scale = se_pos_scale)
+  V_occ <- .unscale_vcov(V_occ_sc, enc$scale_occ)
+  V_pos <- .unscale_vcov(V_pos_sc, enc$scale_pos)
+  se_occ <- if (is.null(V_occ)) rep(NA_real_, p_occ_n) else
+    sqrt(pmax(diag(as.matrix(V_occ)), 0))
+  se_pos <- if (is.null(V_pos)) rep(NA_real_, p_pos_n) else
+    sqrt(pmax(diag(as.matrix(V_pos)), 0))
   if (length(se_occ)) names(se_occ) <- names(beta_occ)
   if (length(se_pos)) names(se_pos) <- names(beta_pos)
 
@@ -713,34 +761,53 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
   bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
 
-  beta_occ <- as.numeric(crossprod(fit$weights, fit$modes[, bocc_idx, drop = FALSE]))
-  beta_pos <- as.numeric(crossprod(fit$weights, fit$modes[, bpos_idx, drop = FALSE]))
+  # The engine returns per-cell modes and per-cell precision blocks in the
+  # *scaled* design's parameterization (see `encode_cover_hurdle()` and
+  # gcol33/tulpaObs#9). Transform per cell, then aggregate to natural-scale
+  # posterior moments. Doing it cell-by-cell on the full constrained vcov
+  # block preserves the intercept's cross-covariance contribution; a
+  # diag-only approach would underestimate the intercept SE.
+  scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
+  scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
+  T_occ <- .scale_transform(scale_occ)
+  T_pos <- .scale_transform(scale_pos)
 
-  # Total posterior variance per beta = Var-of-means (across grid) +
-  # Mean-of-Var (per-grid inner Laplace variance, posterior-weighted). The
-  # joint-Laplace kernel returns the per-grid joint precision Q_k (lower
-  # triangle, CSC) when `store_Q = TRUE`; per-grid inner variance for the
-  # beta sub-block is diag(Q_k^{-1})[beta_idx], computed via sparse Cholesky.
-  # See gcol33/tulpaObs#2 for the ablation that motivated this.
-  var_of_means_occ <- as.numeric(crossprod(fit$weights,
-    fit$modes[, bocc_idx, drop = FALSE]^2)) - beta_occ^2
-  var_of_means_pos <- as.numeric(crossprod(fit$weights,
-    fit$modes[, bpos_idx, drop = FALSE]^2)) - beta_pos^2
+  modes_occ_sc <- fit$modes[, bocc_idx, drop = FALSE]
+  modes_pos_sc <- fit$modes[, bpos_idx, drop = FALSE]
+  # Per-cell transform: modes_nat[k, ] = T %*% modes_sc[k, ]
+  modes_occ <- modes_occ_sc %*% t(T_occ)
+  modes_pos <- modes_pos_sc %*% t(T_pos)
 
-  beta_idx_all <- c(bocc_idx, bpos_idx)
-  inner_var <- .joint_inner_var(fit, beta_idx_all)
-  if (is.null(inner_var)) {
-    # No Q stored (older tulpa or unsupported backend); fall back to the
-    # var-of-means-only SE that the validation harness flagged as too narrow.
+  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
+  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
+
+  # Var-of-means + Mean-of-Var, both in natural scale.
+  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
+  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
+
+  inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
+  if (is.null(inner_blocks)) {
     mean_of_var_occ <- rep(0, p_occ)
     mean_of_var_pos <- rep(0, p_pos)
   } else {
-    occ_cols <- seq_along(bocc_idx)
-    pos_cols <- length(bocc_idx) + seq_along(bpos_idx)
-    mean_of_var_occ <- as.numeric(crossprod(fit$weights,
-      inner_var[, occ_cols, drop = FALSE]))
-    mean_of_var_pos <- as.numeric(crossprod(fit$weights,
-      inner_var[, pos_cols, drop = FALSE]))
+    occ_rows <- seq_along(bocc_idx)
+    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
+    n_grid_eff <- length(inner_blocks)
+    diag_occ <- matrix(0, n_grid_eff, p_occ)
+    diag_pos <- matrix(0, n_grid_eff, p_pos)
+    for (k in seq_len(n_grid_eff)) {
+      V_block <- inner_blocks[[k]]
+      if (is.null(V_block)) next
+      V_occ_sc <- V_block[occ_rows, occ_rows, drop = FALSE]
+      V_pos_sc <- V_block[pos_rows, pos_rows, drop = FALSE]
+      V_occ_nat <- T_occ %*% V_occ_sc %*% t(T_occ)
+      V_pos_nat <- T_pos %*% V_pos_sc %*% t(T_pos)
+      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
+      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
+    }
+    w_eff <- fit$weights[seq_len(n_grid_eff)]
+    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
+    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
   }
 
   se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
@@ -1223,6 +1290,81 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   cov <- tryCatch(scale * solve(H), error = function(e) NULL)
   if (is.null(cov)) return(rep(NA_real_, nrow(H)))
   sqrt(pmax(diag(cov), 0))
+}
+
+# Per-grid constrained covariance block for the selected latent
+# coordinates. Mirrors `.joint_inner_var()` (same constraint correction
+# on BYM2/ICAR/CAR_proper spatial blocks) but returns the full
+# `length(beta_idx) x length(beta_idx)` sub-block per grid cell, not just
+# the diagonal. Used by the joint-engine autoscale unscaling so the
+# intercept SE carries the correct cross-covariance contribution from the
+# centered+scaled slopes (gcol33/tulpaObs#9).
+#
+# Returns a list of length n_grid, each element either NULL (when the
+# per-cell sparse Cholesky failed) or a dense `p x p` matrix. Returns NULL
+# when no Q matrices were stored at all.
+.joint_inner_vcov_block <- function(fit, beta_idx) {
+  Qp <- fit$Q_csc_p_per_grid
+  Qi <- fit$Q_csc_i_per_grid
+  Qx <- fit$Q_csc_x_per_grid
+  n_x <- fit$Q_csc_n
+  if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
+
+  layout <- fit$arm_layout
+  A_cols <- list()
+  if (!is.null(layout$phi_start)) {
+    n_s_phi <- (layout$theta_start %||% layout$n_x) - layout$phi_start
+    A_cols[[length(A_cols) + 1L]] <- layout$phi_start + seq_len(n_s_phi)
+  }
+  if (!is.null(layout$theta_start)) {
+    n_s_theta <- layout$n_x - layout$theta_start
+    A_cols[[length(A_cols) + 1L]] <- layout$theta_start + seq_len(n_s_theta)
+  }
+  k_constr <- length(A_cols)
+
+  n_grid <- length(Qp)
+  p <- length(beta_idx)
+  out <- vector("list", n_grid)
+
+  E <- Matrix::sparseMatrix(
+    i = beta_idx, j = seq_len(p), x = 1,
+    dims = c(n_x, p)
+  )
+  A_t <- if (k_constr > 0L) {
+    ii <- unlist(A_cols)
+    jj <- rep(seq_len(k_constr), vapply(A_cols, length, integer(1)))
+    Matrix::sparseMatrix(i = ii, j = jj, x = 1,
+                         dims = c(n_x, k_constr))
+  } else NULL
+
+  for (k in seq_len(n_grid)) {
+    if (is.null(Qp[[k]]) || length(Qx[[k]]) == 0L) next
+    Qk_lt <- Matrix::sparseMatrix(
+      i = as.integer(Qi[[k]]) + 1L,
+      p = as.integer(Qp[[k]]),
+      x = as.numeric(Qx[[k]]),
+      dims = c(n_x, n_x),
+      symmetric = FALSE,
+      index1 = TRUE
+    )
+    Qk <- Matrix::forceSymmetric(Qk_lt, uplo = "L")
+    V <- tryCatch(Matrix::solve(Qk, E), error = function(e) NULL)
+    if (is.null(V)) next
+    V_block <- as.matrix(V[beta_idx, , drop = FALSE])
+
+    if (k_constr > 0L) {
+      W <- tryCatch(Matrix::solve(Qk, A_t), error = function(e) NULL)
+      if (!is.null(W)) {
+        AV <- as.matrix(Matrix::crossprod(A_t, V))   # k_constr x p
+        M  <- as.matrix(Matrix::crossprod(A_t, W))   # k_constr x k_constr
+        # corr_{ij} = AV[, i]' M^{-1} AV[, j]
+        corr <- crossprod(AV, solve(M, AV))
+        V_block <- V_block - as.matrix(corr)
+      }
+    }
+    out[[k]] <- V_block
+  }
+  out
 }
 
 .coef_table <- function(beta, se) {

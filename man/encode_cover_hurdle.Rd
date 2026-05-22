@@ -9,7 +9,8 @@ encode_cover_hurdle(
   data,
   y,
   spatial = NULL,
-  positive = c("lognormal", "beta")
+  positive = c("lognormal", "beta"),
+  autoscale = TRUE
 )
 }
 \arguments{

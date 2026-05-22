@@ -118,7 +118,8 @@ test_that("cover() default leaves SLA off and produces no skew fields", {
 test_that(".loglik_cover_occ is locally maximised at truth (Bernoulli arm)", {
   sim <- simulate_beta_cover_local(N = 800, seed = 21)
   enc <- tulpaObs:::encode_cover_hurdle(~ x, sim$data, sim$y,
-                                        positive = "beta")
+                                        positive = "beta",
+                                        autoscale = FALSE)
   ll_truth <- tulpaObs:::.loglik_cover_occ(sim$truth$beta_occ, enc)
   expect_true(is.finite(ll_truth))
   # Perturb each coefficient by +/- 0.3 and check the log-lik decreases.
@@ -138,7 +139,8 @@ test_that(".loglik_cover_occ is locally maximised at truth (Bernoulli arm)", {
 test_that(".loglik_cover_pos_beta is locally maximised at truth", {
   sim <- simulate_beta_cover_local(N = 800, seed = 22)
   enc <- tulpaObs:::encode_cover_hurdle(~ x, sim$data, sim$y,
-                                        positive = "beta")
+                                        positive = "beta",
+                                        autoscale = FALSE)
   ll_truth <- tulpaObs:::.loglik_cover_pos_beta(
     sim$truth$beta_pos, sim$truth$phi, enc
   )
@@ -159,7 +161,8 @@ test_that(".loglik_cover_pos_beta is locally maximised at truth", {
 test_that(".loglik_cover_pos_lognormal is locally maximised at truth", {
   sim <- simulate_lognormal_cover_local(N = 800, seed = 23)
   enc <- tulpaObs:::encode_cover_hurdle(~ x, sim$data, sim$y,
-                                        positive = "lognormal")
+                                        positive = "lognormal",
+                                        autoscale = FALSE)
   ll_truth <- tulpaObs:::.loglik_cover_pos_lognormal(
     sim$truth$beta_pos, sim$truth$sigma_pos, enc
   )
@@ -180,7 +183,8 @@ test_that(".loglik_cover_pos_lognormal is locally maximised at truth", {
 test_that(".sla_compute_cover_hurdle returns finite gamma_occ / gamma_pos on a recoverable beta sim", {
   sim <- simulate_beta_cover_local(N = 500, seed = 24)
   enc <- tulpaObs:::encode_cover_hurdle(~ x, sim$data, sim$y,
-                                        positive = "beta")
+                                        positive = "beta",
+                                        autoscale = FALSE)
   fits <- tulpaObs:::fit_cover_hurdle(enc, positive = "beta")
   sla_res <- tulpaObs:::.sla_compute_cover_hurdle(fits, enc, "beta")
   expect_true(isTRUE(sla_res$valid))
@@ -200,8 +204,14 @@ test_that("log-likelihood evaluated at the fitted mode is finite and order-of-ma
     y       = sim$y
   )
   enc <- fit$encoding
-  ll_occ <- tulpaObs:::.loglik_cover_occ(fit$beta_occ, enc)
-  ll_pos <- tulpaObs:::.loglik_cover_pos_beta(fit$beta_pos, fit$phi_pos, enc)
+  # `fit$beta_*` are on the user-facing natural scale; `enc$*_data$X` is
+  # the centered+scaled design the optimizer saw (gcol33/tulpaObs#9).
+  # Map the natural-scale betas back into the scaled parameterization so
+  # the helper sees a matched (beta, X) pair.
+  beta_occ_sc <- tulpaObs:::.scale_beta_vec(fit$beta_occ, enc$scale_occ)
+  beta_pos_sc <- tulpaObs:::.scale_beta_vec(fit$beta_pos, enc$scale_pos)
+  ll_occ <- tulpaObs:::.loglik_cover_occ(beta_occ_sc, enc)
+  ll_pos <- tulpaObs:::.loglik_cover_pos_beta(beta_pos_sc, fit$phi_pos, enc)
   expect_true(is.finite(ll_occ))
   expect_true(is.finite(ll_pos))
   # ll_total and the log_marginal differ by the Laplace correction (log|H|

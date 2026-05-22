@@ -22,13 +22,28 @@
     stop("model must be a tobs_model object (from `.tobs_build_model()`)")
   }
 
+  # Autoscale every per-process design matrix before the engine sees it
+  # (gcol33/tulpaObs#9). The engine optimizes on the centered+scaled
+  # design; per-process betas / SEs / draws are transformed back to the
+  # user-facing natural scale below. `model` (natural-scale) is restored
+  # on the returned fit so `fitted()`, `residuals()`, `predict()`, and
+  # diagnostics see the same X they would have without this hook.
+  scale_info   <- .autoscale_model_X(model)
+  fit_model    <- scale_info$model
+  scales       <- scale_info$scales
+  process_info <- model$process_info
+
   if (method == "laplace") {
-    return(.tobs_laplace(model, spatial = spatial,
+    fit <- .tobs_laplace(fit_model, spatial = spatial,
                          priors = priors,
                          sigma_beta = sigma_beta,
                          max_iter = max_iter, tol = tol, damping = damping,
                          approx = approx,
-                         verbose = verbose))
+                         verbose = verbose)
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$model      <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
   }
 
   if (method == "nested_laplace") {
@@ -38,8 +53,8 @@
     # tulpa::tulpa_nested_laplace() via the per-block dispatcher in
     # tulpa::tulpa_em_laplace().
     nl_max_iter <- min(as.integer(max_iter), 25L)
-    return(.tobs_em_nested_laplace(
-      model    = model,
+    fit <- .tobs_em_nested_laplace(
+      model    = fit_model,
       spatial  = spatial,
       temporal = temporal,
       re       = re,
@@ -49,7 +64,11 @@
       tol      = tol,
       damping  = damping,
       verbose  = verbose
-    ))
+    )
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$model      <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
   }
 
   if (!is.null(spatial) && !inherits(spatial, "tobs_spatial")) {
@@ -79,8 +98,8 @@
     verbose = verbose
   )
 
-  # ---- Process design matrices ----
-  spec$X_processes <- model$X_processes
+  # ---- Process design matrices (autoscaled; gcol33/tulpaObs#9) ----
+  spec$X_processes <- fit_model$X_processes
 
   # ---- Process names for column labels ----
   spec$process_names <- lapply(model$process_info, function(pi) {
@@ -179,8 +198,13 @@
 
   # ---- SVC ----
   if (!is.null(svc)) {
-    # Build X_svc from the design matrix columns
-    X_occ <- model$X_processes[[1]]
+    # Build X_svc from the design matrix columns. Pull from the
+    # (autoscaled) `fit_model` so the SVC base column values match the
+    # global beta's parameterization seen by the optimizer
+    # (gcol33/tulpaObs#9). For svc on the intercept the values are 1.0 in
+    # both natural and scaled spaces; for svc on a non-intercept numeric
+    # column the per-location offsets land on the scaled-column scale.
+    X_occ <- fit_model$X_processes[[1]]
     svc_indices_0based <- svc$indices - 1L  # C++ 0-based
     X_svc_flat <- numeric(nrow(X_occ) * svc$n_svc)
     for (j in seq_along(svc$indices)) {
@@ -215,6 +239,10 @@
   # ---- Call unified C++ entry point ----
   fit <- cpp_occu_fit(spec)
 
+  # Unscale per-process beta slices in means / sds / draws (the engine
+  # optimized on the centered+scaled design; gcol33/tulpaObs#9).
+  fit <- .unscale_fit_per_process(fit, scales, process_info)
+
   # ---- Build R parameter names ----
   param_names <- unlist(spec$process_names)
   if (!is.null(model$det_visit_names) && length(model$det_visit_names) > 0) {
@@ -222,7 +250,7 @@
   }
   fit$param_names <- param_names
 
-  # ---- Compute probability-scale intercepts ----
+  # ---- Compute probability-scale intercepts (on natural-scale means) ----
   fit$intercepts <- compute_intercepts(model, fit$means)
 
   fit$model <- model
