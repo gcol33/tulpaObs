@@ -29,8 +29,20 @@
 #'   * [abun()] — N x J integer count matrix.
 #'   * `ms_*` — S x N x J array.
 #'   * [cover()] — length-N vector of cover proportions in \[0, 1\].
-#' @param visit_data optional data frame of visit-level detection covariates
-#'   with `nrow(visit_data) == nrow(y) * ncol(y)`.
+#' @param visit_data optional visit-level detection covariates. Accepts
+#'   either:
+#'   * a named list of `[n_sites, max_visits]` matrices (the shape returned by
+#'     `tobs_data()` in `det.covs`) — flattened internally to a long data
+#'     frame in site-major order;
+#'   * a data frame with `nrow(y) * ncol(y)` rows in site-major order.
+#'
+#'   When `visit_data` is provided without a `"formula"` attribute, the
+#'   `detection` argument is interpreted as the visit-level detection
+#'   formula and the site-level detection design matrix is an intercept
+#'   only. To split visit-level and site-level detection covariates
+#'   (e.g. visit-level effort plus site-level observer category), pass a
+#'   long data frame with `attr(visit_data, "formula") = ~ effort` and use
+#'   `detection = ~ observer` for the site-level terms.
 #' @param spatial optional spatial spec from `tulpa` or `tulpaMesh` (e.g.
 #'   [tulpa::spatial_bym2()], [tulpa::spatial_nngp()], or a [tulpaMesh::mesh]
 #'   object), or one of the convenience helpers.
@@ -166,13 +178,15 @@ tobs <- function(formula,
   if (is.null(y)) {
     stop("occu() requires `y` (an N x J detection-history matrix).", call. = FALSE)
   }
+  vd <- .normalize_visit_data(visit_data, detection, n_sites = nrow(y),
+                              max_visits = ncol(y))
   model <- .tobs_build_model(
     occ_formula        = formula,
-    det_formula        = detection,
+    det_formula        = vd$det_formula,
     data               = data,
     y                  = y,
-    det_visit_formula  = if (!is.null(visit_data)) attr(visit_data, "formula") else NULL,
-    det_visit_data     = visit_data
+    det_visit_formula  = vd$det_visit_formula,
+    det_visit_data     = vd$visit_data
   )
   do.call(.tobs_fit_model, c(
     list(model = model, spatial = spatial, temporal = temporal, re = re,
@@ -315,6 +329,106 @@ tobs <- function(formula,
   }
   stop("`re` must be a tobs_re object, a list of tobs_re, or NULL; got ",
        paste(class(re), collapse = "/"), ".", call. = FALSE)
+}
+
+# Normalize the user's `visit_data` argument to the shape `.tobs_build_single`
+# expects: a long data frame with `n_sites * max_visits` rows in site-major
+# order (row `r` corresponds to site `(r-1) %/% max_visits + 1`, visit
+# `(r-1) %% max_visits + 1`), plus the formula to apply to it.
+#
+# Accepts:
+#   * NULL                                  -> NULL, no visit-level path
+#   * named list of [n_sites, max_visits]   -> flatten to long DF, treat
+#       matrices (the `tobs_data()` shape)     `detection` as visit-level
+#                                              (intercept dropped, site-level
+#                                              X_det is intercept-only)
+#   * data.frame with N*J rows + a          -> existing dual-formula behavior:
+#       "formula" attribute                    site-level `detection` against
+#                                              `data`, attr formula against
+#                                              `visit_data`
+#   * data.frame with N*J rows, no formula  -> treat `detection` as visit-level
+#       attribute                              (intercept dropped); site-level
+#                                              X_det is intercept-only
+#
+# Returns a list with:
+#   visit_data         — long data frame (or NULL)
+#   det_visit_formula  — formula applied to visit_data (or NULL)
+#   det_formula        — formula applied to site-level `data`
+.normalize_visit_data <- function(visit_data, detection,
+                                  n_sites, max_visits) {
+  if (is.null(visit_data)) {
+    return(list(visit_data = NULL,
+                det_visit_formula = NULL,
+                det_formula = detection))
+  }
+
+  expected_rows <- n_sites * max_visits
+
+  # Case 1: list of [n_sites, max_visits] matrices (tobs_data() output)
+  if (is.list(visit_data) && !is.data.frame(visit_data)) {
+    nms <- names(visit_data)
+    if (is.null(nms) || any(!nzchar(nms))) {
+      stop("`visit_data` (list of matrices) must be a named list; ",
+           "names become the column names of the flattened frame.",
+           call. = FALSE)
+    }
+    bad <- vapply(visit_data, function(m) {
+      !is.matrix(m) || nrow(m) != n_sites || ncol(m) != max_visits
+    }, logical(1))
+    if (any(bad)) {
+      stop(sprintf(
+        "`visit_data` elements must be [%d x %d] matrices matching y; ",
+        n_sites, max_visits),
+        sprintf("element(s) %s have wrong shape.",
+                paste(nms[bad], collapse = ", ")),
+        call. = FALSE)
+    }
+    flat <- as.data.frame(
+      lapply(visit_data, function(m) as.vector(t(m))),
+      stringsAsFactors = FALSE
+    )
+    return(list(
+      visit_data = flat,
+      det_visit_formula = .drop_intercept(detection),
+      det_formula = ~ 1
+    ))
+  }
+
+  # Case 2 / 3: data frame
+  if (is.data.frame(visit_data)) {
+    if (nrow(visit_data) != expected_rows) {
+      stop(sprintf(
+        "`visit_data` (data frame) must have %d rows (n_sites * max_visits); ",
+        expected_rows),
+        sprintf("got %d.", nrow(visit_data)),
+        call. = FALSE)
+    }
+    attached <- attr(visit_data, "formula")
+    if (!is.null(attached)) {
+      # Dual-formula power-user mode: detection stays site-level
+      return(list(
+        visit_data = visit_data,
+        det_visit_formula = attached,
+        det_formula = detection
+      ))
+    }
+    return(list(
+      visit_data = visit_data,
+      det_visit_formula = .drop_intercept(detection),
+      det_formula = ~ 1
+    ))
+  }
+
+  stop("`visit_data` must be NULL, a named list of [n_sites x max_visits] ",
+       "matrices, or a long data frame with n_sites * max_visits rows; ",
+       "got ", paste(class(visit_data), collapse = "/"), ".",
+       call. = FALSE)
+}
+
+# Drop the intercept term from a formula (returns `~ . - 1`-style update).
+# Preserves the LHS if any (none of our detection formulas have one).
+.drop_intercept <- function(f) {
+  stats::update(f, ~ . - 1)
 }
 
 .stop_planned_family <- function(family) {

@@ -103,30 +103,73 @@ build_single_callbacks <- function(model, spatial = NULL) {
   y <- model$y
   X_occ <- model$X_processes[[1]]
   X_det <- model$X_processes[[2]]
+  X_det_visit <- model$X_det_visit  # NULL when no visit-level covariates
+  max_visits <- ncol(y)
   n_sites <- model$n_sites
   p_occ <- ncol(X_occ)
   p_det <- ncol(X_det)
+  p_det_visit <- if (is.null(X_det_visit)) 0L else ncol(X_det_visit)
+  p_det_total <- p_det + p_det_visit
 
   n_valid <- integer(n_sites)
   n_det <- integer(n_sites)
   any_det <- logical(n_sites)
+  valid_mat <- matrix(FALSE, n_sites, max_visits)
   for (i in seq_len(n_sites)) {
-    valid <- y[i, ] >= 0
-    n_valid[i] <- sum(valid)
-    n_det[i] <- sum(y[i, valid] == 1)
+    v <- y[i, ] >= 0
+    valid_mat[i, ] <- v
+    n_valid[i] <- sum(v)
+    n_det[i] <- sum(y[i, v] == 1)
     any_det[i] <- n_det[i] > 0
   }
   keep <- n_valid > 0
 
+  # Per-visit indexing for the X_det_visit path. Row r of X_det_visit
+  # corresponds to (site = (r-1) %/% max_visits + 1, visit = (r-1) %% max_visits + 1).
+  if (p_det_visit > 0L) {
+    site_idx_all <- rep(seq_len(n_sites), each = max_visits)
+    visit_idx_all <- rep(seq_len(max_visits), times = n_sites)
+  }
+
   e_step <- function(fits, ...) {
     beta_occ <- extract_beta(fits$occ, p_occ)
-    beta_det <- extract_beta(fits$det, p_det)
     eta_occ <- as.vector(X_occ %*% beta_occ)
     sp_off <- .spatial_eta_offset(spatial, fits$occ, p_occ)
     if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
     psi <- plogis(eta_occ)
-    p <- plogis(as.vector(X_det %*% beta_det))
-    list(weights = occ_weights(psi, p, n_sites, n_valid, n_det, any_det))
+
+    if (p_det_visit == 0L) {
+      beta_det <- extract_beta(fits$det, p_det)
+      p_site <- plogis(as.vector(X_det %*% beta_det))
+      return(list(weights = occ_weights(psi, p_site, n_sites,
+                                        n_valid, n_det, any_det)))
+    }
+
+    # Visit-level path: logit(p_ij) = X_det[i,] beta_site + X_det_visit[(i-1)*J + j,] beta_visit
+    beta_det <- extract_beta(fits$det, p_det_total)
+    eta_site <- as.vector(X_det %*% beta_det[seq_len(p_det)])
+    eta_visit_long <- as.vector(X_det_visit %*%
+                                  beta_det[(p_det + 1L):p_det_total])
+    # eta_visit_long is in site-major order: reshape so [i, j] = visit (i, j)
+    eta_visit_mat <- matrix(eta_visit_long, n_sites, max_visits, byrow = TRUE)
+    logit_p_ij <- matrix(eta_site, n_sites, max_visits) + eta_visit_mat
+    logit_p_ij <- pmin(pmax(logit_p_ij, -30), 30)
+    # log(1 - plogis(eta)) = -log1pexp(eta) computed stably as -pmax(eta,0) - log1p(exp(-|eta|))
+    log_1mp <- -(pmax(logit_p_ij, 0) + log1p(exp(-abs(logit_p_ij))))
+    log_1mp[!valid_mat] <- 0
+    log_prod_1mp <- rowSums(log_1mp)
+    weights <- numeric(n_sites)
+    for (i in seq_len(n_sites)) {
+      if (any_det[i]) {
+        weights[i] <- 1
+      } else if (n_valid[i] == 0L) {
+        weights[i] <- psi[i]
+      } else {
+        num <- psi[i] * exp(log_prod_1mp[i])
+        weights[i] <- num / (num + (1 - psi[i]))
+      }
+    }
+    list(weights = weights)
   }
 
   m_step_encode <- function(weights, ...) {
@@ -159,13 +202,42 @@ build_single_callbacks <- function(model, spatial = NULL) {
     # any detection have w_i = 1 (the E-step sets this).
     w_det <- weights
     w_det[any_det] <- 1
-    keep_det <- keep & (w_det > 1e-6)
-    list(
-      occ = occ_block,
-      det = list(y = n_det[keep_det], n_trials = n_valid[keep_det],
-                 X = X_det[keep_det, , drop = FALSE],
-                 weights = w_det[keep_det], family = "binomial")
-    )
+
+    if (p_det_visit == 0L) {
+      keep_det <- keep & (w_det > 1e-6)
+      det_block <- list(y = n_det[keep_det], n_trials = n_valid[keep_det],
+                        X = X_det[keep_det, , drop = FALSE],
+                        weights = w_det[keep_det], family = "binomial")
+    } else {
+      # Per-visit detection block: one Bernoulli row per (site, valid visit)
+      # whose weight is the site's posterior occupancy w_i. Combined design
+      # matrix stacks site-level X_det (replicated across visits) and
+      # visit-level X_det_visit (already in site-major order).
+      keep_visit <- valid_mat & (w_det >= 1e-6)
+      site_kept <- site_idx_all[as.vector(t(keep_visit))]
+      visit_kept <- visit_idx_all[as.vector(t(keep_visit))]
+      n_kept <- length(site_kept)
+      if (n_kept > 0L) {
+        visit_row_idx <- (site_kept - 1L) * max_visits + visit_kept
+        X_combined <- cbind(
+          X_det[site_kept, , drop = FALSE],
+          X_det_visit[visit_row_idx, , drop = FALSE]
+        )
+        y_kept <- y[cbind(site_kept, visit_kept)]
+        det_block <- list(y = as.integer(y_kept),
+                          n_trials = rep(1L, n_kept),
+                          X = X_combined,
+                          weights = w_det[site_kept],
+                          family = "binomial")
+      } else {
+        det_block <- list(y = integer(0),
+                          n_trials = integer(0),
+                          X = matrix(0, 0, p_det_total),
+                          weights = numeric(0),
+                          family = "binomial")
+      }
+    }
+    list(occ = occ_block, det = det_block)
   }
 
   z_draw <- function(weights, ...) {
@@ -180,19 +252,42 @@ build_single_callbacks <- function(model, spatial = NULL) {
     occ_block <- list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
                       family = "binomial")
     occ_block <- .attach_spatial_spde(occ_block, spatial)
-    list(
-      occ = occ_block,
-      det = if (length(det_keep) > 0)
+    if (p_det_visit == 0L) {
+      det_block <- if (length(det_keep) > 0)
         list(y = n_det[det_keep], n_trials = n_valid[det_keep],
              X = X_det[det_keep, , drop = FALSE], family = "binomial")
       else NULL
-    )
+    } else {
+      keep_visit <- valid_mat & matrix(z == 1L, n_sites, max_visits)
+      site_kept <- site_idx_all[as.vector(t(keep_visit))]
+      visit_kept <- visit_idx_all[as.vector(t(keep_visit))]
+      n_kept <- length(site_kept)
+      det_block <- if (n_kept > 0L) {
+        visit_row_idx <- (site_kept - 1L) * max_visits + visit_kept
+        X_combined <- cbind(
+          X_det[site_kept, , drop = FALSE],
+          X_det_visit[visit_row_idx, , drop = FALSE]
+        )
+        y_kept <- y[cbind(site_kept, visit_kept)]
+        list(y = as.integer(y_kept), n_trials = rep(1L, n_kept),
+             X = X_combined, family = "binomial")
+      } else NULL
+    }
+    list(occ = occ_block, det = det_block)
   }
 
   init <- glm_init(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det)
+  if (p_det_visit > 0L) {
+    # Pad det init with zeros for visit-level cols so warm-start shapes
+    # match the combined design when the penalized driver pulls beta_init
+    # from the previous EM iteration.
+    init$det$beta <- c(init$det$beta, rep(0, p_det_visit))
+    init$det$se   <- c(init$det$se,   rep(1, p_det_visit))
+  }
 
   list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
-       hard_encode = hard_encode, init = init, p_per_submodel = c(occ = p_occ, det = p_det))
+       hard_encode = hard_encode, init = init,
+       p_per_submodel = c(occ = p_occ, det = p_det_total))
 }
 
 # ============================================================================
@@ -871,6 +966,39 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
       sds <- c(sds, rep(NA_real_, pi$p))
     }
     nms <- c(nms, paste0(pi$name, "_", pi$coef_names))
+  }
+
+  # Append visit-level detection coefficients when X_det_visit is present.
+  # The detection M-step block has X of width p_det + p_det_visit; the main
+  # loop above extracts only the first p_det elements (the site-level
+  # detection coefs). Pull the visit-level tail and label as `p_visit_<name>`
+  # so the public output matches the NUTS engine's column layout.
+  if (!is.null(model$det_visit_names) && length(model$det_visit_names) > 0L) {
+    p_det_visit <- length(model$det_visit_names)
+    pi_p <- pi_list[[2]]  # detection process metadata
+    p_det <- pi_p$p
+    p_det_total <- as.integer(p_per_submodel[["det"]] %||% (p_det + p_det_visit))
+    visit_idx <- (p_det + 1L):p_det_total
+    visit_nms <- paste0("p_visit_", model$det_visit_names)
+
+    if (is.list(em_result$pooled) && !is.null(em_result$pooled[["det"]])) {
+      cr <- em_result$pooled[["det"]]
+      visit_means <- cr$mean[visit_idx]
+      visit_sds   <- cr$se[visit_idx]
+    } else if (!is.null(em_result$fits[["det"]])) {
+      fi_det <- em_result$fits[["det"]]
+      beta_full <- extract_beta(fi_det, p_det_total)
+      se_full <- .se_from_laplace_fit(fi_det, p_det_total)
+      visit_means <- beta_full[visit_idx]
+      visit_sds   <- se_full[visit_idx]
+    } else {
+      visit_means <- rep(0, p_det_visit)
+      visit_sds   <- rep(NA_real_, p_det_visit)
+    }
+
+    means <- c(means, visit_means)
+    sds   <- c(sds, visit_sds)
+    nms   <- c(nms, visit_nms)
   }
 
   names(means) <- nms

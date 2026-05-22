@@ -64,11 +64,26 @@
   }
 
   bn <- names(blocks); if (is.null(bn)) bn <- rep("", length(blocks))
+  has_visit <- !is.null(model$det_visit_names) &&
+               length(model$det_visit_names) > 0L
   for (k in seq_along(blocks)) {
     pi <- block_to_pi(bn[k], k)
     if (is.null(pi)) next
     # Map block name -> submodel-prior bucket via the process_info name.
     pr <- .prior_for_submodel(prior_spec, pi$name, pi$coef_names)
+    # Detection block carries visit-level slopes on the tail of its X matrix;
+    # extend the prior to match. Visit-level coefs always route through the
+    # `p_slope` bucket (they are slopes by construction, not intercepts).
+    if (has_visit && identical(bn[k], "det")) {
+      pr_visit <- .prior_for_submodel(
+        prior_spec, "p",
+        coef_names = paste0("visit_", model$det_visit_names)
+      )
+      pr <- list(
+        mean = c(pr$mean, pr_visit$mean),
+        sd   = c(pr$sd,   pr_visit$sd)
+      )
+    }
     if (is.null(pr) || all(!is.finite(pr$sd))) next   # no penalty
     blocks[[k]]$prior <- list(mean = pr$mean, sd = pr$sd)
   }

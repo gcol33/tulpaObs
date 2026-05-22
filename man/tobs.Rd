@@ -43,8 +43,22 @@ Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun
 \item \code{\link[=cover]{cover()}} — length-N vector of cover proportions in [0, 1].
 }}
 
-\item{visit_data}{optional data frame of visit-level detection covariates
-with \code{nrow(visit_data) == nrow(y) * ncol(y)}.}
+\item{visit_data}{optional visit-level detection covariates. Accepts
+either:
+\itemize{
+\item a named list of \verb{[n_sites, max_visits]} matrices (the shape returned by
+\code{tobs_data()} in \code{det.covs}) — flattened internally to a long data
+frame in site-major order;
+\item a data frame with \code{nrow(y) * ncol(y)} rows in site-major order.
+}
+
+When \code{visit_data} is provided without a \code{"formula"} attribute, the
+\code{detection} argument is interpreted as the visit-level detection
+formula and the site-level detection design matrix is an intercept
+only. To split visit-level and site-level detection covariates
+(e.g. visit-level effort plus site-level observer category), pass a
+long data frame with \code{attr(visit_data, "formula") = ~ effort} and use
+\code{detection = ~ observer} for the site-level terms.}
 
 \item{spatial}{optional spatial spec from \code{tulpa} or \code{tulpaMesh} (e.g.
 \code{\link[tulpa:spatial_bym2]{tulpa::spatial_bym2()}}, \code{\link[tulpa:spatial_nngp]{tulpa::spatial_nngp()}}, or a \link[tulpaMesh:mesh]{tulpaMesh::mesh}
