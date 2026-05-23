@@ -186,7 +186,7 @@
 #' R-side single-season occupancy log-likelihood
 #'
 #' Computes the marginal observation log-likelihood
-#'   log P(y | beta) = Sum_i log[ psi_i * P(y_i | z=1) + (1 - psi_i) I(no detections) ]
+#'   `log P(y | beta) = Sum_i log[ psi_i * P(y_i | z=1) + (1 - psi_i) I(no detections) ]`
 #' with psi_i = plogis(X_occ_i beta_occ), p_i = plogis(X_det_i beta_det).
 #'
 #' Used to cross-check `.sla_gamma_fd()` against the analytical

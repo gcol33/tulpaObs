@@ -8,11 +8,8 @@ test_that("ICAR spatial occupancy runs", {
   y <- matrix(0L, n_sites, 3)
   for (i in seq_len(n_sites)) if (z[i] == 1) y[i, ] <- rbinom(3, 1, 0.5)
 
-  sp <- tobs_icar(adj)
-  expect_s3_class(sp, "tobs_spatial")
-
-  fit <- tobs(~ 1, data.frame(x = rnorm(n_sites)), family = occu(),
-              detection = ~ 1, y = y, spatial = sp,
+  fit <- tobs(~ icar(graph = adj), data.frame(x = rnorm(n_sites)),
+              family = occu(), detection = ~ 1, y = y,
               engine = "nuts",
               control = list(iter = 100, warmup = 50, seed = 1, verbose = FALSE))
   expect_true(fit$n_params > 2)
@@ -21,21 +18,18 @@ test_that("ICAR spatial occupancy runs", {
 test_that("GP spatial occupancy runs", {
   set.seed(42)
   n_sites <- 20
-  coords <- cbind(runif(n_sites), runif(n_sites))
+  dat <- data.frame(lon = runif(n_sites), lat = runif(n_sites))
   z <- rbinom(n_sites, 1, 0.5)
   y <- matrix(0L, n_sites, 3)
   for (i in seq_len(n_sites)) if (z[i] == 1) y[i, ] <- rbinom(3, 1, 0.5)
 
-  sp <- tobs_gp(coords, nn = 5)
-  expect_s3_class(sp, "tobs_spatial")
-
-  fit <- tobs(~ 1, data.frame(x = rnorm(n_sites)), family = occu(),
-              detection = ~ 1, y = y, spatial = sp,
+  fit <- tobs(~ gp(lon, lat, nn = 5), dat, family = occu(),
+              detection = ~ 1, y = y,
               engine = "nuts",
               control = list(iter = 100, warmup = 50, seed = 1, verbose = FALSE))
   expect_true(fit$n_params > 2)
 })
 
-test_that("tobs_icar validates inputs", {
-  expect_error(tobs_icar(matrix(1:4, 2)), "symmetric")
+test_that("icar() validates its graph", {
+  expect_error(tulpaObs:::.tobs_term_icar(matrix(1:4, 2)), "symmetric")
 })

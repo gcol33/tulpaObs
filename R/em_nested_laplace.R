@@ -13,17 +13,19 @@
 #' list-of-blocks shape that `tulpa::tulpa_nested_laplace()` expects under
 #' its multi-block dispatch (`.is_multi_block_prior`).
 #'
-#' @param spatial Optional `tobs_spatial` from [tobs_bym2()] / [tobs_icar()].
-#'   Only BYM2 / ICAR are wired through to the multi-block engine at present;
-#'   GP / multiscale_gp / SVC are not yet supported and raise.
-#' @param temporal Optional `tobs_temporal` from [tobs_temporal()]. Types
-#'   `"ar1"`, `"rw1"`, `"rw2"`, `"iid"` are supported.
-#' @param re Optional list of `tobs_re` objects. Only `model = "iid"` terms
-#'   are converted to IID latent blocks here; correlated structures (ar1 /
-#'   rw1 / rw2 on RE groups) are passed through as temporal-like blocks.
-#' @param model A `tobs_model` from `.tobs_build_model()`. Used to resolve
-#'   variable-name references in temporal$time / re$group against
-#'   `model$data`, and to pin `N = model$n_sites` for single-season fits.
+#' @param spatial Optional `tobs_spatial` term (from an `icar()` / `bym2()`
+#'   formula term). Only BYM2 / ICAR are wired through to the multi-block
+#'   engine at present; GP / multiscale_gp / SVC are not yet supported and
+#'   raise.
+#' @param temporal Optional `tobs_temporal` term (from a `temporal()` formula
+#'   term). Types `"ar1"`, `"rw1"`, `"rw2"`, `"iid"` are supported.
+#' @param re Optional list of `tobs_re` terms (from `re()` formula terms).
+#'   Only `model = "iid"` terms are converted to IID latent blocks here;
+#'   correlated structures (ar1 / rw1 / rw2 on RE groups) are passed through
+#'   as temporal-like blocks.
+#' @param model A `tobs_model` from `.tobs_build_model()`. The structured
+#'   terms carry pre-resolved index codes; `model` pins `N = model$n_sites`
+#'   for single-season fits.
 #'
 #' @return `NULL` when no latent block is supplied; a single-block list
 #'   when exactly one is supplied; a list-of-blocks otherwise. Each block
@@ -133,21 +135,15 @@
          "nested-Laplace path (supported: ar1, rw1, rw2, iid).",
          call. = FALSE)
   }
-  time_idx <- if (is.character(temporal$time)) {
-    if (is.null(model$data) || !temporal$time %in% names(model$data)) {
-      stop("temporal$time = '", temporal$time, "' not found in model$data.",
-           call. = FALSE)
-    }
-    as.integer(as.factor(model$data[[temporal$time]]))
-  } else {
-    as.integer(temporal$time)
-  }
+  # Index codes were resolved when the temporal() term was constructed.
+  time_idx <- as.integer(temporal$time_idx)
   if (length(time_idx) != N) {
     stop(sprintf(
       "Resolved temporal index has length %d but the model has %d sites.",
       length(time_idx), N), call. = FALSE)
   }
-  n_times <- max(time_idx, na.rm = TRUE)
+  n_times <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+             else max(time_idx, na.rm = TRUE)
 
   if (type == "iid") {
     out <- list(type = "iid", obs_idx = time_idx, n_units = as.integer(n_times))
@@ -191,21 +187,15 @@
          call. = FALSE)
   }
 
-  grp_idx <- if (is.character(re$group)) {
-    if (is.null(model$data) || !re$group %in% names(model$data)) {
-      stop("re$group = '", re$group, "' not found in model$data.",
-           call. = FALSE)
-    }
-    as.integer(as.factor(model$data[[re$group]]))
-  } else {
-    as.integer(re$group)
-  }
+  # Group codes were resolved when the re() term was constructed.
+  grp_idx <- as.integer(re$group_idx)
   if (length(grp_idx) != N) {
     stop(sprintf(
       "Resolved RE group index has length %d but the model has %d sites.",
       length(grp_idx), N), call. = FALSE)
   }
-  n_units <- max(grp_idx, na.rm = TRUE)
+  n_units <- if (!is.null(re$n_groups)) as.integer(re$n_groups)
+             else max(grp_idx, na.rm = TRUE)
 
   model_name <- re$model %||% "iid"
   if (model_name == "iid") {

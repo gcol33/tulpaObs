@@ -17,13 +17,25 @@ coefficients, and latent factors.
 library(tulpaObs)
 
 fit <- tobs(
-  occu(detection ~ wind + time, occupancy ~ elevation + tobs_icar(adj)),
-  data = camera_data
+  ~ elevation + icar(graph = adj),   # occupancy: fixed effects + spatial field
+  data      = camera_data,
+  family    = occu(),
+  detection = ~ wind + time,         # detection process
+  y         = y                      # N x J detection-history matrix
 )
 
 summary(fit)
 predict(fit, newdata = grid)
 ```
+
+Structured effects are written as terms *inside* the formula, the way
+`lme4`, `mgcv`, and `INLA` do — spatial fields `icar()` / `bym2()` /
+`gp()` / `spde()`, random effects `re()`, temporal fields `temporal()`,
+spatially varying coefficients `svc()`, latent factors `latent()`. A term
+enters whichever process formula it is written in (occupancy or
+detection); `copy("id")` shares one realization across both. Random
+effects also take `lme4` bar syntax: `(1 | site)` is `re(site)`,
+`(x | site)` a correlated random slope, `(x || site)` an uncorrelated one.
 
 `tobs()` is the single dispatcher; the family is chosen by the constructor
 passed in:

@@ -14,9 +14,27 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > `distance()`, `removal()`, `fp_occu()`, `cover()`). All S3 classes are
 > `tobs_*` (`tobs_fit`, `tobs_model`, `tobs_family`, `tobs_spatial`,
 > `tobs_temporal`, `tobs_re`, `tobs_svc`, `tobs_latent`, `tobs_priors`).
-> Spatial / component helpers are also `tobs_*` (`tobs_icar`, `tobs_bym2`,
-> `tobs_gp`, `tobs_spde`, `tobs_re`, `tobs_temporal`, `tobs_svc`,
-> `tobs_latent`, `tobs_community_re`, `tobs_areal`).
+>
+> **Structured terms live inside the formula** (lme4 / mgcv / INLA style),
+> not as `tobs()` arguments. The registry in `R/formula_terms.R` maps a term
+> name to a constructor: spatial `icar()`, `bym2()`, `car()`, `car_proper()`,
+> `gp()`, `multiscale_gp()`, `spde()`; `re()`; `temporal()`; `svc()`;
+> `latent()`; and `copy("id")` to share one realization across the state and
+> detection predictors. The term constructors (`.tobs_term_*`) and the AST
+> parser (`.tobs_parse_formula`, `.tobs_bind_formulas`) are internal — there
+> are no exported `tobs_icar()` / `tobs_re()` / `tobs_spde()` constructors and
+> no `spatial = ` / `temporal = ` / `re = ` arguments on `tobs()`. A term's
+> process membership (which linear predictor it enters) is determined by which
+> process formula it appears in; the fitter derives the `shared = c(occ, det)`
+> vector from that via `.tobs_structures_from_model()`.
+>
+> `lme4` bar syntax is supported as sugar over `re()`: `.tobs_desugar_bars()`
+> (in `R/formula_parse.R`) rewrites `(1 | g)`, `(x | g)`, `(x || g)` into the
+> equivalent `re()` calls on the formula AST *before* `terms()` runs, so there
+> is one parser and one term type. Forms the engine can't hold in one `re()`
+> block (slope-only `0 + x`, multi-slope, nested `g/h`) error with a pointer to
+> an explicit `re()`.
+>
 > Legacy data-binder / engine entry are internal: `.tobs_build_model()`,
 > `.tobs_fit_model()`, `.tobs_laplace()`.
 > See `PLAN_tulpaObs.md` for the family roster, `R/obs_families.R` and
@@ -143,8 +161,9 @@ R/
   sla_cover_hurdle_joint.R — SLA path for cover hurdle (joint-Laplace)
   family_cover_hurdle.R    — .dispatch_cover() (two-Laplace hurdle), large
   sim_cover_hurdle.R       — cover hurdle simulators (incl. joint)
-  components.R             — tobs_re, tobs_temporal, tobs_svc, tobs_latent, tobs_community_re, tobs_areal
-  spatial.R                — tobs_icar/bym2/gp/multiscale_gp/spde (returns tobs_spatial)
+  formula_terms.R          — structured-term registry + constructors (.tobs_term_icar/bym2/car/gp/spde/re/temporal/svc/latent/copy), tobs_* print methods, .tobs_term_to_tulpa_spatial
+  formula_parse.R          — AST parser: .tobs_parse_formula / .tobs_parse_processes / .tobs_resolve_terms / .tobs_bind_formulas
+  spatial.R                — internal precompute helpers (adjacency_to_csr, compute_bym2_scale, compute_nngp_neighbors)
   methods.R                — S3 methods on tobs_fit, $.tobs_fit, predict_spatial, checkIdentifiability, tobs_priors
   diagnostics.R            — tobs_waic, tobs_ppc, tobs_test_*, tobs_pit_residuals
   data.R                   — tobs_format, tobs_data, summary/plot.tobs_data, simulators

@@ -743,7 +743,7 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 .validate_spatial_laplace <- function(spatial, model_type) {
   if (is.null(spatial)) return(invisible())
   if (!inherits(spatial, "tobs_spatial")) {
-    stop("spatial must be a tobs_spatial object (from tobs_spde(), etc.)",
+    stop("spatial must be a tobs_spatial term (from a spde() formula term)",
          call. = FALSE)
   }
   if (!identical(spatial$type, "spde")) {

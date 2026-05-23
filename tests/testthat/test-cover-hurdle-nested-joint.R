@@ -40,14 +40,11 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
     adj <- matrix(0L, n_s, n_s)
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
-
     fit <- tobs(
-        formula  = ~ x,
+        formula  = ~ x + bym2(graph = adj, group_var = "region"),
         data     = sim$data,
         family   = cover("lognormal"),
         y        = sim$y,
-        spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
             sigma_grid     = c(0.4, 0.8),
@@ -81,14 +78,11 @@ test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
     adj <- matrix(0L, n_s, n_s)
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
-    spatial <- tulpa::spatial_car(adj, level = "group", group_var = "region")
-
     fit <- tobs(
-        formula  = ~ x,
+        formula  = ~ x + car(graph = adj, group_var = "region"),
         data     = sim$data,
         family   = cover("lognormal"),
         y        = sim$y,
-        spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
             tau_grid       = c(1.0, 4.0),
@@ -147,14 +141,11 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
     adj <- matrix(0L, n_s, n_s)
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
-
     fit <- tobs(
-        formula  = ~ x,
+        formula  = ~ x + bym2(graph = adj, group_var = "region"),
         data     = sim$data,
         family   = cover("beta"),
         y        = sim$y,
-        spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
             sigma_grid     = c(0.4, 0.8),
@@ -186,14 +177,11 @@ test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
     adj <- matrix(0L, n_s, n_s)
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
-    spatial <- tulpa::spatial_car(adj, level = "group", group_var = "region")
-
     fit <- tobs(
-        formula  = ~ x,
+        formula  = ~ x + car(graph = adj, group_var = "region"),
         data     = sim$data,
         family   = cover("beta"),
         y        = sim$y,
-        spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
             tau_grid       = c(1.0, 4.0),
@@ -217,15 +205,11 @@ test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
     adj <- matrix(0L, n_s, n_s)
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
-    spatial <- tulpa::spatial_car_proper(adj, level = "group",
-                                          group_var = "region")
-
     fit <- tobs(
-        formula  = ~ x,
+        formula  = ~ x + car_proper(graph = adj, group_var = "region"),
         data     = sim$data,
         family   = cover("lognormal"),
         y        = sim$y,
-        spatial  = spatial,
         engine   = "nested_laplace",
         control  = list(
             tau_grid       = c(1.0, 4.0),

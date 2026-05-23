@@ -28,11 +28,10 @@ simulate_panel_occu <- function(n_sites = 20, n_visits = 4, n_times = 5,
 
 test_that("tobs(engine='nested_laplace') runs with spatial only", {
   d <- simulate_panel_occu()
-  sp <- tobs_bym2(d$adj)
+  adj <- d$adj
   expect_silent(
-    fit <- tobs(~ x, data = d$data, family = occu(),
+    fit <- tobs(~ x + bym2(graph = adj), data = d$data, family = occu(),
                 detection = ~ 1, y = d$y,
-                spatial = sp,
                 engine = "nested_laplace",
                 control = list(max_iter = 5L, verbose = FALSE))
   )
@@ -44,17 +43,15 @@ test_that("tobs(engine='nested_laplace') runs with spatial only", {
 
 test_that("tobs(engine='nested_laplace') runs with spatial + temporal + re", {
   d <- simulate_panel_occu()
-  sp <- tobs_bym2(d$adj)
-  tm <- tobs_temporal("ar1", time = "year")
-  re <- tobs_re(group = "obs")
+  adj <- d$adj
 
   # The 3-block joint grid (6 BYM2 x 6 AR1 x 3 IID = 108 cells) trips
   # the engine's >50-cell soft warning. CCD integration around the joint
   # pilot mode is the follow-up; suppress here to keep test output clean.
   fit <- suppressWarnings(
-    tobs(~ x, data = d$data, family = occu(),
+    tobs(~ x + bym2(graph = adj) + temporal(year, type = "ar1") + re(obs),
+         data = d$data, family = occu(),
          detection = ~ 1, y = d$y,
-         spatial = sp, temporal = tm, re = re,
          engine = "nested_laplace",
          control = list(max_iter = 5L, verbose = FALSE))
   )
@@ -101,9 +98,9 @@ test_that(".tobs_to_multi_block_prior shapes the block list correctly", {
   )
   class(model) <- "tobs_model"
 
-  sp <- tobs_bym2(d$adj)
-  tm <- tobs_temporal("ar1", time = "year")
-  re <- tobs_re(group = "obs")
+  sp <- .tobs_term_bym2(d$adj)
+  tm <- .tobs_term_temporal(d$data$year, type = "ar1")
+  re <- .tobs_term_re(d$data$obs)
 
   out <- .tobs_to_multi_block_prior(spatial = sp, temporal = tm,
                                     re = list(re), model = model)

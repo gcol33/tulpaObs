@@ -65,13 +65,11 @@ test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
   results <- vapply(seq_len(n_seeds), function(r) {
     sim <- simulate_d3_like(seed = 3400L + r, alpha_true = truth_alpha,
                              n_s = n_s)
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
     fit <- tobs(
-      formula  = ~ x,
+      formula  = ~ x + bym2(graph = adj, group_var = "region"),
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
-      spatial  = spatial,
       engine   = "nested_laplace",
       control  = list(
         sigma_grid     = c(0.3, 0.6, 0.9),
@@ -110,7 +108,6 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
   for (r in seq_len(n_seeds)) {
     sim <- simulate_d3_like(seed = 3400L + r, alpha_true = truth_alpha,
                              n_s = n_s)
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
     # Pin phi_grid to the original 13-point default to keep this test
     # at its calibrated regime: with the post-tulpa#19 default (7-point
     # phi + interior densification) the fixed-grid path already covers
@@ -123,11 +120,11 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
       sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9),
       phi_grid       = exp(seq(log(2), log(300), length.out = 13))
     )
-    fit_fix <- tobs(formula = ~ x, data = sim$data, family = cover("beta"),
-                    y = sim$y, spatial = spatial, engine = "nested_laplace",
+    fit_fix <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
+                    y = sim$y, engine = "nested_laplace",
                     control = c(ctrl, list(adaptive_grid = FALSE)))
-    fit_ad  <- tobs(formula = ~ x, data = sim$data, family = cover("beta"),
-                    y = sim$y, spatial = spatial, engine = "nested_laplace",
+    fit_ad  <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
+                    y = sim$y, engine = "nested_laplace",
                     control = c(ctrl, list(adaptive_grid = TRUE)))
     # Quantile CI coverage on alpha (see comment in the preceding test
     # for the rationale of avoiding the Wald check at the boundary).
@@ -158,10 +155,9 @@ test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
   sim <- simulate_d3_like(seed = 3101L, alpha_true = 0.0)
   n_s <- nlevels(sim$data$region)
   adj <- chain_adj_for_test(n_s)
-  spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
   fit <- tobs(
-    formula = ~ x, data = sim$data, family = cover("beta"), y = sim$y,
-    spatial = spatial, engine = "nested_laplace",
+    formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"), y = sim$y,
+    engine = "nested_laplace",
     control = list(
       sigma_grid     = c(0.3, 0.6, 0.9),
       rho_grid       = c(0.5, 0.7, 0.9),

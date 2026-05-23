@@ -40,13 +40,11 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
       beta_pos = c(beta_pos_0_truth, -0.5),
       seed     = 7000L + r
     )
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
     fit <- tobs(
-      formula = ~ x,
+      formula = ~ x + bym2(graph = adj, group_var = "region"),
       data    = sim$data,
       family  = cover("beta"),
       y       = sim$y,
-      spatial = spatial,
       engine  = "nested_laplace",
       control = list(
         sigma_grid     = c(0.3, 0.6, 0.9),

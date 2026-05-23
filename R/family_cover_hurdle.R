@@ -17,20 +17,12 @@
 # ---------------------------------------------------------------------------
 
 .dispatch_cover <- function(formula, data, family, detection, y,
-                            visit_data, spatial, temporal, re, engine,
-                            priors, control,
+                            visit_data, engine, priors, control,
                             approx = "gaussian_laplace", ...) {
   positive <- family$params$positive
   if (!positive %in% c("lognormal", "beta")) {
     stop("cover(positive = '", positive, "') is not supported. ",
          "Use 'lognormal' or 'beta'.", call. = FALSE)
-  }
-  has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
-  if (has_multi && !identical(engine, "nested_laplace")) {
-    stop("`temporal = ` and `re = ` for cover() require ",
-         "engine = 'nested_laplace' (got '", engine, "'). ",
-         "The single-Laplace path is fixed-effects + spatial only.",
-         call. = FALSE)
   }
   if (!is.null(detection)) {
     stop("`cover()` does not use a detection formula ",
@@ -41,7 +33,16 @@
     stop("`cover()` requires `y` (a length-N numeric vector of cover ",
          "in [0, 1]).", call. = FALSE)
   }
-  enc  <- encode_cover_hurdle(formula, data, y, spatial, positive = positive)
+  enc      <- encode_cover_hurdle(formula, data, y, positive = positive)
+  temporal <- enc$temporal
+  re       <- enc$re
+  has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
+  if (has_multi && !identical(engine, "nested_laplace")) {
+    stop("temporal()/re() terms in a cover() formula require ",
+         "engine = 'nested_laplace' (got '", engine, "'). ",
+         "The single-Laplace path is fixed-effects + spatial only.",
+         call. = FALSE)
+  }
 
   if (identical(engine, "nested_laplace")) {
     return(decode_cover_hurdle_joint(
@@ -63,8 +64,11 @@
 #' Encode cover-hurdle data for the two-Laplace fit
 #'
 #' Splits `y` into a binomial occurrence indicator and a positive-cover
-#' subset, builds design matrices for each arm using the same `formula`,
-#' and packages the spatial spec for both arms.
+#' subset, builds design matrices for each arm using the fixed-effects part
+#' of `formula`, and extracts any structured terms it carried (an areal
+#' `icar()`/`bym2()` spatial field, plus `temporal()` / `re()` blocks). The
+#' formula is parsed against the NA-dropped observations so the structured
+#' index codes align with both arms.
 #'
 #' For `positive = "lognormal"` the positive arm's response is
 #' `log(y[occur == 1])`. For `positive = "beta"` it is `y[occur == 1]` on
@@ -76,13 +80,14 @@
 #' @param data Data frame with `nrow(data) == length(y)`.
 #' @param y Length-N numeric vector of cover in `[0, 1]`. NAs are dropped
 #'   from both arms (treated as missing, not as zero cover).
-#' @param spatial Optional `tulpa_spatial` spec, passed to both arms.
 #' @param positive One of `"lognormal"` or `"beta"`.
-#' @return A list with: `occ_data`, `pos_data`, `spatial_spec`, `N`,
-#'   `idx_pos` (row indices of the positive subset within `data`),
-#'   `formula`, `positive`.
+#' @return A list with: `occ_data`, `pos_data`, `spatial_spec` (a
+#'   `tulpa_spatial` built from an areal formula term, or NULL), `temporal`
+#'   and `re` (structured terms from the formula, or NULL), `N`, `idx_pos`
+#'   (row indices of the positive subset within `data`), `formula` (the
+#'   fixed-effects formula), `positive`.
 #' @keywords internal
-encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
+encode_cover_hurdle <- function(formula, data, y,
                                 positive = c("lognormal", "beta"),
                                 autoscale = TRUE) {
   positive <- match.arg(positive)
@@ -102,7 +107,13 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
   data_obs <- data[obs_keep, , drop = FALSE]
   occur    <- as.integer(y_obs > 0)
 
-  X_occ_natural <- stats::model.matrix(formula, data_obs)
+  # Parse structured terms against the NA-dropped observations so re()/
+  # temporal() index codes align with both hurdle arms. An areal spatial
+  # term is converted to the tulpa_spatial spec the cover engine consumes.
+  cover_struct <- .encode_cover_terms(formula, data_obs)
+  fe_formula    <- cover_struct$fe
+
+  X_occ_natural <- stats::model.matrix(fe_formula, data_obs)
 
   is_pos <- occur == 1L
   data_pos <- data_obs[is_pos, , drop = FALSE]
@@ -114,7 +125,7 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
     # already guaranteed by occur == 1 + the range check above.
     y_pos_resp <- pmin(y_pos, 1 - 1e-6)
   }
-  X_pos_natural <- stats::model.matrix(formula, data_pos)
+  X_pos_natural <- stats::model.matrix(fe_formula, data_pos)
 
   # Autoscale numeric columns of each arm's design matrix so the optimizer
   # sees well-conditioned predictors (gcol33/tulpaObs#9). Each arm gets its
@@ -141,15 +152,47 @@ encode_cover_hurdle <- function(formula, data, y, spatial = NULL,
   list(
     occ_data = list(y = occur, n_trials = rep(1L, length(occur)), X = X_occ),
     pos_data = list(y = y_pos_resp, X = X_pos),
-    spatial_spec = spatial,
+    spatial_spec = cover_struct$spatial,
+    temporal     = cover_struct$temporal,
+    re           = cover_struct$re,
     N            = length(occur),
     idx_pos      = which(is_pos),
-    formula      = formula,
+    formula      = fe_formula,
     positive     = positive,
     obs_keep     = obs_keep,
     scale_occ    = scale_occ,
     scale_pos    = scale_pos
   )
+}
+
+# Parse a cover() formula against the NA-dropped observations: return the
+# fixed-effects formula plus the structured terms it carried, split by kind.
+# An areal spatial term (icar/bym2) is converted to a tulpa_spatial spec;
+# svc()/latent() are not meaningful for the cover hurdle and are rejected.
+.encode_cover_terms <- function(formula, data_obs) {
+  bind <- .tobs_bind_formulas(list(state = formula), data_obs)
+  spatial <- NULL; temporal <- NULL; re <- list()
+  for (t in bind$terms) {
+    spec <- t$spec
+    if (inherits(spec, "tobs_spatial")) {
+      if (!is.null(spatial)) {
+        stop("cover(): only one spatial term is supported.", call. = FALSE)
+      }
+      spatial <- .tobs_term_to_tulpa_spatial(spec)
+    } else if (inherits(spec, "tobs_temporal")) {
+      if (!is.null(temporal)) {
+        stop("cover(): only one temporal term is supported.", call. = FALSE)
+      }
+      temporal <- spec
+    } else if (inherits(spec, "tobs_re")) {
+      re[[length(re) + 1L]] <- spec
+    } else {
+      stop(sprintf("cover() does not support `%s` terms in the formula.",
+                   spec$label %||% class(spec)[1]), call. = FALSE)
+    }
+  }
+  list(fe = bind$fe$state, spatial = spatial, temporal = temporal,
+       re = if (length(re)) re else NULL)
 }
 
 
@@ -520,7 +563,7 @@ print.summary.cover_fit <- function(x, ...) {
 #'
 #' * `positive = "lognormal"` (gaussian arm): the residual SD is the per-grid
 #'   phi. The default 7-point log-spaced grid is centred on the non-spatial
-#'   prefit from [.prefit_lognormal_sigma()] and spans `[sigma_hat / 3,
+#'   prefit from `.prefit_lognormal_sigma()` and spans `[sigma_hat / 3,
 #'   sigma_hat * 3]`. The posterior mean and SD across that axis are
 #'   surfaced as `sigma_pos` / `sigma_pos_sd` on the returned `cover_fit`.
 #' * `positive = "beta"`: the beta precision is the per-grid phi. The
@@ -705,7 +748,6 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       prior_spatial = prior_for_joint,
       spi_full      = spi_full,
       spi_pos       = spi_pos,
-      data_obs      = data_obs,
       idx_pos       = enc$idx_pos,
       temporal      = temporal,
       re            = re,
@@ -910,7 +952,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 #' so we just shape them into the existing `cover_fit` structure.
 #'
 #' When `approx = "simplified_laplace"`, the per-arm marginal skewness is
-#' computed via [`.sla_compute_cover_hurdle_joint()`] (mixture third-moment
+#' computed via `.sla_compute_cover_hurdle_joint()` (mixture third-moment
 #' over the outer grid; per-grid FD of the joint inner log-lik along the
 #' constraint-corrected Sigma columns), and per-arm pseudo-draws are
 #' resampled from moment-matched skew-normals via
@@ -1025,7 +1067,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 # magnitude in the same way, an observer RE that introduces a shared
 # offset on both arms.
 .cover_build_multi_prior <- function(prior_spatial, spi_full, spi_pos,
-                                     data_obs, idx_pos, temporal, re,
+                                     idx_pos, temporal, re,
                                      control, sigma_pos_grid) {
   # Spatial block — fill missing grids with defaults and attach per-arm
   # spatial_idx vectors. (Single-block path stores spi inside the arms;
@@ -1043,14 +1085,14 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 
   if (!is.null(temporal)) {
     blocks[[length(blocks) + 1L]] <- .cover_temporal_block(
-      temporal, data_obs, idx_pos, control
+      temporal, idx_pos, control
     )
   }
 
   if (!is.null(re) && length(re) > 0L) {
     for (re_i in re) {
       blocks[[length(blocks) + 1L]] <- .cover_re_block(
-        re_i, data_obs, idx_pos, control
+        re_i, idx_pos, control
       )
     }
   }
@@ -1062,7 +1104,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   )
 }
 
-.cover_temporal_block <- function(temporal, data_obs, idx_pos, control) {
+.cover_temporal_block <- function(temporal, idx_pos, control) {
   if (!inherits(temporal, "tobs_temporal")) {
     stop("`temporal` must be a tobs_temporal() object.", call. = FALSE)
   }
@@ -1070,9 +1112,11 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   # occupancy + detection (state vs. observation). cover() has two
   # likelihood arms (occurrence + cover magnitude) and the temporal term
   # enters both identically -- the `shared` field is ignored here.
-  t_full <- .cover_resolve_idx(temporal$time, data_obs, "tobs_temporal$time")
+  # Index codes resolved when the temporal() term was constructed (against
+  # the same NA-dropped observations these arms use).
+  t_full <- as.integer(temporal$time_idx)
   t_pos  <- t_full[idx_pos]
-  n_t <- max(t_full)
+  n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times) else max(t_full)
   type <- temporal$type
 
   if (type == "ar1") {
@@ -1107,7 +1151,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   }
 }
 
-.cover_re_block <- function(re_i, data_obs, idx_pos, control) {
+.cover_re_block <- function(re_i, idx_pos, control) {
   if (!inherits(re_i, "tobs_re")) {
     stop("`re` elements must be tobs_re() objects.", call. = FALSE)
   }
@@ -1123,9 +1167,10 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   }
   # Same as in .cover_temporal_block: `shared` is ignored in cover-hurdle
   # context. The RE term enters both arms identically.
-  g_full <- .cover_resolve_idx(re_i$group, data_obs, "tobs_re$group")
+  # Group codes resolved when the re() term was constructed.
+  g_full <- as.integer(re_i$group_idx)
   g_pos  <- g_full[idx_pos]
-  n_g <- max(g_full)
+  n_g <- if (!is.null(re_i$n_groups)) as.integer(re_i$n_groups) else max(g_full)
   list(
     type       = "iid",
     n_units    = as.integer(n_g),
@@ -1133,44 +1178,6 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
                              exp(seq(log(0.1), log(1.5), length.out = 3))),
     obs_idx    = list(as.integer(g_full), as.integer(g_pos))
   )
-}
-
-# Resolve a tobs component's `time` / `group` reference to a 1-based
-# integer index vector of length nrow(data).
-.cover_resolve_idx <- function(x, data, what) {
-  if (is.character(x) && length(x) == 1L) {
-    if (!x %in% names(data)) {
-      stop(sprintf("`%s` = '%s' not found in data.", what, x),
-           call. = FALSE)
-    }
-    v <- data[[x]]
-    if (is.factor(v))         return(as.integer(v))
-    if (is.character(v))      return(as.integer(as.factor(v)))
-    if (is.numeric(v) || is.integer(v)) {
-      iv <- as.integer(v)
-      if (any(!is.finite(iv) | iv < 1L)) {
-        stop(sprintf("`%s` = '%s' must be 1-based integer indices.",
-                     what, x), call. = FALSE)
-      }
-      return(iv)
-    }
-    stop(sprintf("`%s` = '%s' must be a factor, character, or 1-based ",
-                 "integer column.", what, x), call. = FALSE)
-  }
-  if (is.integer(x) || is.numeric(x)) {
-    if (length(x) != nrow(data)) {
-      stop(sprintf("length(%s) (%d) must equal nrow(data) (%d).",
-                   what, length(x), nrow(data)), call. = FALSE)
-    }
-    iv <- as.integer(x)
-    if (any(!is.finite(iv) | iv < 1L)) {
-      stop(sprintf("`%s` must be 1-based integer indices.", what),
-           call. = FALSE)
-    }
-    return(iv)
-  }
-  stop(sprintf("`%s` must be a column name or 1-based integer vector.",
-               what), call. = FALSE)
 }
 
 # ---------------------------------------------------------------------------

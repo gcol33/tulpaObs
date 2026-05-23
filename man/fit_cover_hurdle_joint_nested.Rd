@@ -50,7 +50,7 @@ joint hyperparameter grid (per-arm \code{phi_pos} axis):
 \itemize{
 \item \code{positive = "lognormal"} (gaussian arm): the residual SD is the per-grid
 phi. The default 7-point log-spaced grid is centred on the non-spatial
-prefit from \code{\link[=.prefit_lognormal_sigma]{.prefit_lognormal_sigma()}} and spans \verb{[sigma_hat / 3, sigma_hat * 3]}. The posterior mean and SD across that axis are
+prefit from \code{.prefit_lognormal_sigma()} and spans \verb{[sigma_hat / 3, sigma_hat * 3]}. The posterior mean and SD across that axis are
 surfaced as \code{sigma_pos} / \code{sigma_pos_sd} on the returned \code{cover_fit}.
 \item \code{positive = "beta"}: the beta precision is the per-grid phi. The
 default 7-point log-spaced grid spans \verb{[2, 300]}; posterior mean and

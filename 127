@@ -1,0 +1,10 @@
+53: \item \code{\link[=occu]{occu()}} — N x J detection-history matrix.
+   codepoints  U+2014 
+54: \item \code{\link[=abun]{abun()}} — N x J integer count matrix.
+   codepoints  U+2014 
+55: \item \verb{ms_*} — S x N x J array.
+   codepoints  U+2014 
+56: \item \code{\link[=cover]{cover()}} — length-N vector of cover proportions in [0, 1].
+   codepoints  U+2014 
+63: \code{tobs_data()} in \code{det.covs}) — flattened internally to a long data
+   codepoints  U+2014 

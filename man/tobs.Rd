@@ -11,9 +11,6 @@ tobs(
   detection = NULL,
   y = NULL,
   visit_data = NULL,
-  spatial = NULL,
-  temporal = NULL,
-  re = NULL,
   engine = c("auto", "laplace", "nested_laplace", "nuts"),
   approx = c("gaussian_laplace", "simplified_laplace"),
   priors = NULL,
@@ -24,7 +21,23 @@ tobs(
 \arguments{
 \item{formula}{state-process formula, e.g. \code{~ elev + forest}. For occupancy
 this is the occupancy probability formula; for N-mixture the abundance
-formula; for the cover hurdle the latent-presence formula.}
+formula; for the cover hurdle the latent-presence formula.
+
+Structured effects are written as terms inside the formula, the way
+\code{lme4}, \code{mgcv}, and \code{INLA} do: spatial fields \code{icar(graph = adj)},
+\code{bym2(graph = adj)}, \code{gp(lon, lat)}, \code{spde(lon, lat)}; random effects
+\code{re(group)}; temporal fields \code{temporal(time)}; spatially varying
+coefficients \code{svc(lon, lat, indices = ...)}; community latent factors
+\code{latent(k)}. A term enters whichever linear predictor it is written in
+(occupancy \code{formula} or \code{detection}). To share one realization across
+both predictors, tag the term with \code{id = "u"} and write \code{copy("u")} in
+the other formula.
+
+Random effects also accept \code{lme4} bar syntax as shorthand for \code{re()}:
+\code{(1 | g)} is \code{re(g)}, \code{(x | g)} is a correlated random intercept and
+slope \code{re(g, type = "slope", covariate = x)}, and \code{(x || g)} drops the
+correlation (\code{correlated = FALSE}). Use \code{re()} directly for AR1/RW
+structures or other options.}
 
 \item{data}{data frame of site-level covariates with \code{nrow(data) == nrow(y)}.}
 
@@ -60,21 +73,12 @@ only. To split visit-level and site-level detection covariates
 long data frame with \code{attr(visit_data, "formula") = ~ effort} and use
 \code{detection = ~ observer} for the site-level terms.}
 
-\item{spatial}{optional spatial spec from \code{tulpa} or \code{tulpaMesh} (e.g.
-\code{\link[tulpa:spatial_bym2]{tulpa::spatial_bym2()}}, \code{\link[tulpa:spatial_nngp]{tulpa::spatial_nngp()}}, or a \link[tulpaMesh:mesh]{tulpaMesh::mesh}
-object), or one of the convenience helpers.}
-
-\item{temporal}{optional temporal spec (e.g. \code{\link[tulpa:temporal_ar1]{tulpa::temporal_ar1()}}).}
-
-\item{re}{optional random-effects spec from \code{\link[=tobs_re]{tobs_re()}} or
-\code{\link[=tobs_community_re]{tobs_community_re()}}, or a list of such specs. Can be combined with
-\code{spatial} and \code{temporal} in the same fit. Under \code{engine = "nested_laplace"}
-each \code{re} term with \code{model = "iid"} becomes an IID latent block in the
-multi-block prior; for other engines \code{re} is forwarded to the underlying
-fitter as the per-observation RE structure.}
-
 \item{engine}{inference engine: \code{"auto"}, \code{"laplace"}, \code{"nested_laplace"},
 or \code{"nuts"}. \code{"auto"} chooses the family's \code{default_engine}.}
+
+\item{approx}{marginal approximation for the Laplace path:
+\code{"gaussian_laplace"} (default) or \code{"simplified_laplace"} (skew-corrected
+marginals via the SLA path).}
 
 \item{priors}{optional prior specification. For occupancy families fit
 with \code{engine = "laplace"}, pass a list or \code{\link[=occu_priors]{occu_priors()}} object to

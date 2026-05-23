@@ -21,7 +21,8 @@ Occupancy data are usually spatially structured: nearby sites share habitat
 and species pressures that the row-wise covariates can't fully capture. The
 Matern field via the SPDE approach (Lindgren, Rue & Lindstrom, 2011) gives
 a continuous spatial random effect with an interpretable range and marginal
-SD, and `tobs_spde()` wires it through tulpaObs's Laplace EM engine.
+SD, and an `spde()` term in the formula wires it through tulpaObs's
+Laplace EM engine.
 
 This vignette simulates an occupancy dataset with a known smooth spatial
 signal, fits a non-spatial model and an SPDE model, and compares them on
@@ -56,7 +57,8 @@ for (i in seq_len(n_sites)) {
   if (z[i] == 1L) y[i, ] <- rbinom(J, 1, p[i])
 }
 
-dat <- data.frame(occ_cov = x_cov, det_cov = det_cov)
+dat <- data.frame(occ_cov = x_cov, det_cov = det_cov,
+                  lon = coords[, 1], lat = coords[, 2])
 c(true_occupancy_rate = mean(z),
   naive_any_detection = mean(rowSums(y) > 0))
 ```
@@ -83,33 +85,25 @@ round(fit_ns$means, 3)
 
 ## SPDE fit
 
-`tobs_spde()` builds a triangular mesh over the observation coordinates
-(via tulpaMesh) and constructs the SPDE precision at the prior modes of
-`prior_range` and `prior_sigma`. The mesh covers the data extent plus a
-small buffer; `max_edge = c(inner, outer)` controls the spacing inside
-and outside the data.
-
-```{r build-spde}
-sp <- tobs_spde(
-  coords      = coords,
-  max_edge    = c(0.3, 0.6),
-  nu          = 1,
-  prior_range = c(0.3, 0.5),
-  prior_sigma = c(0.7, 0.5)
-)
-sp
-```
-
-The same `tobs()` call gets a `spatial = sp` argument:
+The spatial field is written directly into the occupancy formula as an
+`spde()` term, the way `mgcv` writes `s(lon, lat)`. `spde()` builds a
+triangular mesh over the observation coordinates (via tulpaMesh) and
+constructs the SPDE precision at the prior modes of `prior_range` and
+`prior_sigma`. The mesh covers the data extent plus a small buffer;
+`max_edge = c(inner, outer)` controls the spacing inside and outside the
+data. The coordinate columns (`lon`, `lat`) are taken from `data`.
 
 ```{r fit-spde}
 fit_sp <- tobs(
-  formula   = ~ occ_cov,
+  formula   = ~ occ_cov + spde(lon, lat,
+                               max_edge    = c(0.3, 0.6),
+                               nu          = 1,
+                               prior_range = c(0.3, 0.5),
+                               prior_sigma = c(0.7, 0.5)),
   data      = dat,
   family    = occu(),
   detection = ~ det_cov,
   y         = y,
-  spatial   = sp,
   engine    = "laplace",
   control   = list(verbose = FALSE)
 )
@@ -143,7 +137,7 @@ locations through the spec's `A` matrix to compare against the truth.
 
 ```{r field-recovery, fig.height = 4}
 u_hat <- fit_sp$spatial_field
-field_at_sites <- as.numeric(sp$tulpa_spec$A %*% u_hat)
+field_at_sites <- as.numeric(fit_sp$spatial$tulpa_spec$A %*% u_hat)
 
 corr <- cor(field_at_sites, u_true)
 cat(sprintf("Correlation field-at-sites vs truth: %.3f\n", corr))
@@ -184,8 +178,8 @@ It is not a free lunch:
 - the prior at the prior modes (range, sigma) is what the engine currently
   uses; nested-Laplace integration over hyperparameters lands in a later
   release
-- detection-side SPDE is not plumbed for the Laplace engine yet; set
-  `shared = c(TRUE, FALSE)` (the default)
+- detection-side SPDE is not plumbed for the Laplace engine yet; keep the
+  `spde()` term in the occupancy formula, not in `detection`
 
 ## References
 
@@ -193,7 +187,6 @@ It is not a free lunch:
   Gaussian fields and Gaussian Markov random fields: the stochastic
   partial differential equation approach. *Journal of the Royal
   Statistical Society B*, 73, 423-498.
-* `?tobs_spde` for the spatial spec.
-* `?tobs` for the unified fitter.
+* `?tobs` for the unified fitter and the in-formula `spde()` term.
 * `vignette("occupancy-vs-inla", package = "tulpaObs")` for the
   non-spatial occupancy story.

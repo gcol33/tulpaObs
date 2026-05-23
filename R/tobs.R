@@ -17,6 +17,22 @@
 #' @param formula state-process formula, e.g. `~ elev + forest`. For occupancy
 #'   this is the occupancy probability formula; for N-mixture the abundance
 #'   formula; for the cover hurdle the latent-presence formula.
+#'
+#'   Structured effects are written as terms inside the formula, the way
+#'   `lme4`, `mgcv`, and `INLA` do: spatial fields `icar(graph = adj)`,
+#'   `bym2(graph = adj)`, `gp(lon, lat)`, `spde(lon, lat)`; random effects
+#'   `re(group)`; temporal fields `temporal(time)`; spatially varying
+#'   coefficients `svc(lon, lat, indices = ...)`; community latent factors
+#'   `latent(k)`. A term enters whichever linear predictor it is written in
+#'   (occupancy `formula` or `detection`). To share one realization across
+#'   both predictors, tag the term with `id = "u"` and write `copy("u")` in
+#'   the other formula.
+#'
+#'   Random effects also accept `lme4` bar syntax as shorthand for `re()`:
+#'   `(1 | g)` is `re(g)`, `(x | g)` is a correlated random intercept and
+#'   slope `re(g, type = "slope", covariate = x)`, and `(x || g)` drops the
+#'   correlation (`correlated = FALSE`). Use `re()` directly for AR1/RW
+#'   structures or other options.
 #' @param data data frame of site-level covariates with `nrow(data) ==
 #'   nrow(y)`.
 #' @param family a `tobs_family` object (see [obs_family()] and the concrete
@@ -43,18 +59,11 @@
 #'   (e.g. visit-level effort plus site-level observer category), pass a
 #'   long data frame with `attr(visit_data, "formula") = ~ effort` and use
 #'   `detection = ~ observer` for the site-level terms.
-#' @param spatial optional spatial spec from `tulpa` or `tulpaMesh` (e.g.
-#'   [tulpa::spatial_bym2()], [tulpa::spatial_nngp()], or a [tulpaMesh::mesh]
-#'   object), or one of the convenience helpers.
-#' @param temporal optional temporal spec (e.g. [tulpa::temporal_ar1()]).
-#' @param re optional random-effects spec from [tobs_re()] or
-#'   [tobs_community_re()], or a list of such specs. Can be combined with
-#'   `spatial` and `temporal` in the same fit. Under `engine = "nested_laplace"`
-#'   each `re` term with `model = "iid"` becomes an IID latent block in the
-#'   multi-block prior; for other engines `re` is forwarded to the underlying
-#'   fitter as the per-observation RE structure.
 #' @param engine inference engine: `"auto"`, `"laplace"`, `"nested_laplace"`,
 #'   or `"nuts"`. `"auto"` chooses the family's `default_engine`.
+#' @param approx marginal approximation for the Laplace path:
+#'   `"gaussian_laplace"` (default) or `"simplified_laplace"` (skew-corrected
+#'   marginals via the SLA path).
 #' @param priors optional prior specification. For occupancy families fit
 #'   with `engine = "laplace"`, pass a list or [occu_priors()] object to
 #'   set weakly-informative quadratic priors on the fixed-effect
@@ -89,9 +98,6 @@ tobs <- function(formula,
                  detection  = NULL,
                  y          = NULL,
                  visit_data = NULL,
-                 spatial    = NULL,
-                 temporal   = NULL,
-                 re         = NULL,
                  engine     = c("auto", "laplace", "nested_laplace", "nuts"),
                  approx     = c("gaussian_laplace", "simplified_laplace"),
                  priors     = NULL,
@@ -115,8 +121,6 @@ tobs <- function(formula,
       call. = FALSE
     )
   }
-
-  re <- .normalize_re_arg(re)
 
   engine <- match.arg(engine)
   if (engine == "auto") engine <- family$default_engine
@@ -146,9 +150,6 @@ tobs <- function(formula,
     detection  = detection,
     y          = y,
     visit_data = visit_data,
-    spatial    = spatial,
-    temporal   = temporal,
-    re         = re,
     engine     = engine,
     approx     = approx,
     priors     = priors,
@@ -170,7 +171,7 @@ tobs <- function(formula,
 # ---------------------------------------------------------------------------
 
 .dispatch_occu <- function(formula, data, family, detection, y, visit_data,
-                           spatial, temporal, re, engine, priors, control,
+                           engine, priors, control,
                            approx = "gaussian_laplace", ...) {
   if (is.null(detection)) {
     stop("occu() requires a `detection` formula.", call. = FALSE)
@@ -189,7 +190,7 @@ tobs <- function(formula,
     det_visit_data     = vd$visit_data
   )
   do.call(.tobs_fit_model, c(
-    list(model = model, spatial = spatial, temporal = temporal, re = re,
+    list(model = model,
          method = .map_engine(engine, family = "occu"), priors = priors,
          approx = approx),
     control
@@ -197,7 +198,7 @@ tobs <- function(formula,
 }
 
 .dispatch_dyn_occu <- function(formula, data, family, detection, y, visit_data,
-                               spatial, temporal, re, engine, priors, control,
+                               engine, priors, control,
                                approx = "gaussian_laplace", ...) {
   dots <- list(...)
   if (is.null(dots$col_formula)) {
@@ -215,7 +216,7 @@ tobs <- function(formula,
     ext_formula  = dots$ext_formula
   )
   do.call(.tobs_fit_model, c(
-    list(model = model, spatial = spatial, temporal = temporal, re = re,
+    list(model = model,
          method = .map_engine(engine, family = "dyn_occu"), priors = priors,
          approx = approx),
     control
@@ -223,7 +224,7 @@ tobs <- function(formula,
 }
 
 .dispatch_ms_occu <- function(formula, data, family, detection, y, visit_data,
-                              spatial, temporal, re, engine, priors, control,
+                              engine, priors, control,
                               approx = "gaussian_laplace", ...) {
   dots <- list(...)
   if (is.null(dots$species)) {
@@ -237,7 +238,7 @@ tobs <- function(formula,
     species     = dots$species
   )
   do.call(.tobs_fit_model, c(
-    list(model = model, spatial = spatial, temporal = temporal, re = re,
+    list(model = model,
          method = .map_engine(engine, family = "ms_occu"), priors = priors,
          approx = approx),
     control
@@ -245,7 +246,7 @@ tobs <- function(formula,
 }
 
 .dispatch_int_occu <- function(formula, data, family, detection, y, visit_data,
-                               spatial, temporal, re, engine, priors, control,
+                               engine, priors, control,
                                approx = "gaussian_laplace", ...) {
   model <- .tobs_build_model(
     occ_formula = formula,
@@ -255,7 +256,7 @@ tobs <- function(formula,
     integrated  = TRUE
   )
   do.call(.tobs_fit_model, c(
-    list(model = model, spatial = spatial, temporal = temporal, re = re,
+    list(model = model,
          method = .map_engine(engine, family = "int_occu"), priors = priors,
          approx = approx),
     control
@@ -263,7 +264,7 @@ tobs <- function(formula,
 }
 
 .dispatch_jsdm <- function(formula, data, family, detection, y, visit_data,
-                           spatial, temporal, re, engine, priors, control,
+                           engine, priors, control,
                            approx = "gaussian_laplace", ...) {
   dots <- list(...)
   model <- .tobs_build_model(
@@ -274,7 +275,7 @@ tobs <- function(formula,
     species     = dots$species
   )
   do.call(.tobs_fit_model, c(
-    list(model = model, spatial = spatial, temporal = temporal, re = re,
+    list(model = model,
          method = .map_engine(engine, family = "jsdm"), priors = priors,
          approx = approx),
     control
@@ -308,27 +309,6 @@ tobs <- function(formula,
     nuts    = "nuts",
     engine
   )
-}
-
-# Coerce the user's `re` argument into a list-of-tobs_re or NULL. Accepts:
-#   * NULL                    -> NULL
-#   * a single tobs_re object -> list(re)
-#   * a list of tobs_re       -> as-is (validated element-wise)
-.normalize_re_arg <- function(re) {
-  if (is.null(re)) return(NULL)
-  if (inherits(re, "tobs_re")) return(list(re))
-  if (is.list(re)) {
-    if (length(re) == 0L) return(NULL)
-    bad <- !vapply(re, inherits, logical(1), what = "tobs_re")
-    if (any(bad)) {
-      stop("`re` must be a tobs_re object or a list of tobs_re objects; ",
-           "element(s) ", paste(which(bad), collapse = ", "),
-           " are not tobs_re.", call. = FALSE)
-    }
-    return(re)
-  }
-  stop("`re` must be a tobs_re object, a list of tobs_re, or NULL; got ",
-       paste(class(re), collapse = "/"), ".", call. = FALSE)
 }
 
 # Normalize the user's `visit_data` argument to the shape `.tobs_build_single`

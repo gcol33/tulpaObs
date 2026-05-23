@@ -3,7 +3,7 @@
 # joint nested-Laplace engine.
 #
 # Verifies:
-#   * tobs(cover, temporal = tobs_temporal(), re = tobs_re(), engine =
+#   * tobs(cover, ~ x + bym2() + temporal() + re(), engine =
 #     "nested_laplace") fits end-to-end and returns a `cover_fit`.
 #   * Beta posterior-weighted estimates land on the correct side of zero.
 #   * The fit's underlying joint object is the multi-block class.
@@ -82,22 +82,16 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
 
 test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
   sim <- simulate_cover_multi_block(N = 400, seed = 7001)
-
-  spatial <- tulpa::spatial_bym2(sim$adj, level = "group", group_var = "region")
-  temporal <- tobs_temporal(type = "ar1", time = "year")
-  re_obs   <- tobs_re(group = "obs", type = "iid", model = "iid",
-                      shared = c(TRUE, TRUE))
+  adj <- sim$adj
 
   # 6 spatial x 2 temporal x 2 RE x 4 phi = 96 cells (above the engine's
   # 50-cell warn threshold but well under the 1000-cell hard cap).
   fit <- suppressWarnings(tobs(
-    formula  = ~ x,
+    formula  = ~ x + bym2(graph = adj, group_var = "region") +
+                 temporal(year, type = "ar1") + re(obs, type = "iid"),
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
-    spatial  = spatial,
-    temporal = temporal,
-    re       = re_obs,
     engine   = "nested_laplace",
     control  = list(
       sigma_grid         = c(0.3, 0.6, 1.0),
@@ -158,15 +152,14 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
 
 test_that("cover(): multi-block rejects engine = 'laplace'", {
   sim <- simulate_cover_multi_block(N = 200, seed = 7002)
-  spatial <- tulpa::spatial_bym2(sim$adj, level = "group", group_var = "region")
+  adj <- sim$adj
   expect_error(
     tobs(
-      formula  = ~ x,
+      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+                   temporal(year, type = "ar1"),
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
-      spatial  = spatial,
-      temporal = tobs_temporal(type = "ar1", time = "year"),
       engine   = "laplace"
     ),
     regexp = "require engine = 'nested_laplace'"
@@ -175,23 +168,23 @@ test_that("cover(): multi-block rejects engine = 'laplace'", {
 
 
 test_that("cover(): multi-block resolves character group / time columns", {
-  # Smoke test that .cover_resolve_idx handles both factor (region) and
-  # plain integer (year, obs) columns. The full fit runs end-to-end in
-  # the first test; this checks the lightweight code path.
+  # Smoke test that the temporal()/re() terms resolve both factor (region,
+  # obs) and plain integer (year) columns to index codes. The full fit runs
+  # end-to-end in the first test; this checks the lightweight code path.
   sim <- simulate_cover_multi_block(N = 200, seed = 7004)
   sim$data$year   <- as.integer(sim$data$year)
   sim$data$obs    <- factor(sim$data$obs)
+  adj <- sim$adj
 
-  spatial <- tulpa::spatial_bym2(sim$adj, level = "group", group_var = "region")
-  fit <- tobs(
-    formula  = ~ x,
+  # Grid trips tulpa's >50-cell soft warning (the copy block inserts midpoint
+  # cells); grid size is irrelevant to this column-resolution smoke test, so
+  # suppress it, as the recovery test above does for the same reason.
+  fit <- suppressWarnings(tobs(
+    formula  = ~ x + bym2(graph = adj, group_var = "region") +
+                 temporal(year, type = "iid") + re(obs, type = "iid"),
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
-    spatial  = spatial,
-    temporal = tobs_temporal(type = "iid", time = "year"),
-    re       = tobs_re(group = "obs", type = "iid", model = "iid",
-                       shared = c(TRUE, TRUE)),
     engine   = "nested_laplace",
     control  = list(
       sigma_grid         = c(0.4, 0.8),
@@ -202,7 +195,7 @@ test_that("cover(): multi-block resolves character group / time columns", {
       phi_grid           = c(10, 40),
       adaptive_grid      = FALSE
     )
-  )
+  ))
   expect_s3_class(fit, "cover_fit")
   expect_true(fit$converged)
   expect_true(inherits(fit$joint, "tulpa_nested_laplace_joint_multi"))

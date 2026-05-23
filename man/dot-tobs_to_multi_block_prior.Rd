@@ -7,20 +7,22 @@
 .tobs_to_multi_block_prior(spatial = NULL, temporal = NULL, re = NULL, model)
 }
 \arguments{
-\item{spatial}{Optional \code{tobs_spatial} from \code{\link[=tobs_bym2]{tobs_bym2()}} / \code{\link[=tobs_icar]{tobs_icar()}}.
-Only BYM2 / ICAR are wired through to the multi-block engine at present;
-GP / multiscale_gp / SVC are not yet supported and raise.}
+\item{spatial}{Optional \code{tobs_spatial} term (from an \code{icar()} / \code{bym2()}
+formula term). Only BYM2 / ICAR are wired through to the multi-block
+engine at present; GP / multiscale_gp / SVC are not yet supported and
+raise.}
 
-\item{temporal}{Optional \code{tobs_temporal} from \code{\link[=tobs_temporal]{tobs_temporal()}}. Types
-\code{"ar1"}, \code{"rw1"}, \code{"rw2"}, \code{"iid"} are supported.}
+\item{temporal}{Optional \code{tobs_temporal} term (from a \code{temporal()} formula
+term). Types \code{"ar1"}, \code{"rw1"}, \code{"rw2"}, \code{"iid"} are supported.}
 
-\item{re}{Optional list of \code{tobs_re} objects. Only \code{model = "iid"} terms
-are converted to IID latent blocks here; correlated structures (ar1 /
-rw1 / rw2 on RE groups) are passed through as temporal-like blocks.}
+\item{re}{Optional list of \code{tobs_re} terms (from \code{re()} formula terms).
+Only \code{model = "iid"} terms are converted to IID latent blocks here;
+correlated structures (ar1 / rw1 / rw2 on RE groups) are passed through
+as temporal-like blocks.}
 
-\item{model}{A \code{tobs_model} from \code{.tobs_build_model()}. Used to resolve
-variable-name references in temporal$time / re$group against
-\code{model$data}, and to pin \code{N = model$n_sites} for single-season fits.}
+\item{model}{A \code{tobs_model} from \code{.tobs_build_model()}. The structured
+terms carry pre-resolved index codes; \code{model} pins \code{N = model$n_sites}
+for single-season fits.}
 }
 \value{
 \code{NULL} when no latent block is supplied; a single-block list

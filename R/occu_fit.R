@@ -2,10 +2,12 @@
 #'
 #' Dispatches to Laplace (default) or NUTS for a built `tobs_model`. Not
 #' user-facing; called from `tobs()` via the per-family `.dispatch_*` helpers.
+#' Spatial / temporal / random-effect / SVC / latent structure is read from
+#' the structured terms the formula carried (`model$structured_terms`), not
+#' from arguments — there is a single user-facing specification path.
 #'
 #' @keywords internal
-.tobs_fit_model <- function(model, spatial = NULL, temporal = NULL,
-                            re = NULL, svc = NULL, latent = NULL,
+.tobs_fit_model <- function(model,
                             method = c("laplace", "nested_laplace", "nuts"),
                             priors = NULL,
                             sigma_beta = 10, sigma_re_scale = 1,
@@ -21,6 +23,14 @@
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object (from `.tobs_build_model()`)")
   }
+
+  # Engine-shaped structure specs derived from the formula's structured terms.
+  structs  <- .tobs_structures_from_model(model)
+  spatial  <- structs$spatial
+  temporal <- structs$temporal
+  re       <- structs$re
+  svc      <- structs$svc
+  latent   <- structs$latent
 
   # Autoscale every per-process design matrix before the engine sees it
   # (gcol33/tulpaObs#9). The engine optimizes on the centered+scaled
@@ -71,19 +81,9 @@
     return(fit)
   }
 
-  if (!is.null(spatial) && !inherits(spatial, "tobs_spatial")) {
-    stop("spatial must be a tobs_spatial object")
-  }
-  if (!is.null(temporal) && !inherits(temporal, "tobs_temporal")) {
-    stop("temporal must be a tobs_temporal object from tobs_temporal()")
-  }
-  if (!is.null(svc) && !inherits(svc, "tobs_svc")) {
-    stop("svc must be a tobs_svc object from tobs_svc()")
-  }
-  if (!is.null(latent) && !inherits(latent, "tobs_latent")) {
-    stop("latent must be a tobs_latent object from tobs_latent()")
-  }
-
+  # spatial / temporal / re / svc / latent are produced by
+  # .tobs_structures_from_model(), which guarantees their classes; no
+  # user-input validation is needed here.
   model_type <- model$model_type
 
   # ---- Build spec list for C++ ----
@@ -162,28 +162,17 @@
   }
 
   # ---- Temporal ----
+  # Index codes were resolved when the temporal() term was constructed.
   if (!is.null(temporal)) {
     temp_spec <- list(type = temporal$type, shared = temporal$shared,
                       cyclic = temporal$cyclic,
                       tau_shape = temporal$tau_shape,
-                      tau_rate = temporal$tau_rate)
-    # Resolve time index from variable name or direct vector
-    if (is.character(temporal$time)) {
-      temp_spec$time_idx <- as.integer(as.factor(model$data[[temporal$time]]))
-      temp_spec$n_times <- length(unique(temp_spec$time_idx))
-    } else {
-      temp_spec$time_idx <- as.integer(temporal$time)
-      temp_spec$n_times <- max(temp_spec$time_idx)
-    }
-    # Optional group index
-    if (!is.null(temporal$group)) {
-      if (is.character(temporal$group)) {
-        temp_spec$group_idx <- as.integer(as.factor(model$data[[temporal$group]]))
-        temp_spec$n_groups <- length(unique(temp_spec$group_idx))
-      } else {
-        temp_spec$group_idx <- as.integer(temporal$group)
-        temp_spec$n_groups <- max(temp_spec$group_idx)
-      }
+                      tau_rate = temporal$tau_rate,
+                      time_idx = temporal$time_idx,
+                      n_times  = temporal$n_times)
+    if (!is.null(temporal$group_idx)) {
+      temp_spec$group_idx <- temporal$group_idx
+      temp_spec$n_groups  <- temporal$n_groups
     }
     spec$temporal_spec <- temp_spec
   }
@@ -265,6 +254,62 @@
   fit
 }
 
+# Translate the structured terms a formula carried (`model$structured_terms`)
+# into the engine-shaped specs the fitter consumes. A term's process
+# membership (`$processes`, set by the formula parser) becomes the length-2
+# `shared = c(occ, det)` vector the C++ engine and Laplace paths read.
+#
+# The engine carries two sharing booleans (occupancy/state + detection), so a
+# structured effect on a later process (colonization / extinction / extra
+# integrated sources) is rejected rather than silently dropped. At most one
+# spatial / temporal / svc / latent term is allowed; random effects may be
+# multiple.
+.tobs_structures_from_model <- function(model) {
+  out <- list(spatial = NULL, temporal = NULL, re = NULL,
+              svc = NULL, latent = NULL)
+  terms <- model$structured_terms
+  if (is.null(terms) || length(terms) == 0L) return(out)
+
+  proc_names <- vapply(model$process_info, function(pi) pi$name, character(1))
+  re_list <- list()
+
+  one <- function(slot, label) {
+    if (!is.null(out[[slot]])) {
+      stop(sprintf("Only one %s term is supported per model.", label),
+           call. = FALSE)
+    }
+  }
+
+  for (t in terms) {
+    spec  <- t$spec
+    procs <- t$processes
+    if (any(procs > 2L)) {
+      late <- proc_names[procs[procs > 2L]]
+      stop(sprintf(
+        "Structured term `%s` enters the '%s' predictor; structured effects ",
+        spec$label %||% class(spec)[1], paste(late, collapse = "', '")),
+        "are supported on the occupancy/state and detection predictors only.",
+        call. = FALSE)
+    }
+    shared <- c(1L %in% procs, 2L %in% procs)
+
+    if (inherits(spec, "tobs_spatial")) {
+      one("spatial", "spatial"); spec$shared <- shared; out$spatial <- spec
+    } else if (inherits(spec, "tobs_temporal")) {
+      one("temporal", "temporal"); spec$shared <- shared; out$temporal <- spec
+    } else if (inherits(spec, "tobs_svc")) {
+      one("svc", "svc"); spec$shared <- shared; out$svc <- spec
+    } else if (inherits(spec, "tobs_latent")) {
+      one("latent", "latent"); spec$shared <- any(shared); out$latent <- spec
+    } else if (inherits(spec, "tobs_re")) {
+      spec$shared <- shared
+      re_list[[length(re_list) + 1L]] <- spec
+    }
+  }
+  if (length(re_list)) out$re <- re_list
+  out
+}
+
 # Build multi-term RE spec for C++ from list of tobs_re objects
 build_re_spec <- function(re_list, model) {
   n_terms <- length(re_list)
@@ -274,6 +319,7 @@ build_re_spec <- function(re_list, model) {
   n_groups <- integer(n_terms)
   has_slopes <- FALSE
   n_coefs <- integer(n_terms)
+  has_intercept <- rep(TRUE, n_terms)
   slope_matrices <- vector("list", n_terms)
 
   # Aggregate shared across all terms (union)
@@ -283,32 +329,34 @@ build_re_spec <- function(re_list, model) {
   for (t in seq_len(n_terms)) {
     re <- re_list[[t]]
 
-    # Resolve group assignment
-    if (is.character(re$group)) {
-      grp <- as.integer(as.factor(model$data[[re$group]]))
-    } else {
-      grp <- as.integer(re$group)
-    }
+    # Group codes were resolved when the re() term was constructed.
+    grp <- as.integer(re$group_idx)
     if (length(grp) != N) {
       stop(sprintf("RE group vector has %d elements but model has %d observations",
                    length(grp), N))
     }
     groups[[t]] <- grp
-    n_groups[t] <- max(grp)
+    n_groups[t] <- if (!is.null(re$n_groups)) re$n_groups else max(grp)
 
     # Sharing
     for (k in seq_along(re$shared)) {
       if (re$shared[k]) shared[k] <- TRUE
     }
 
-    # Slopes
+    # Slopes. The covariate was resolved at construction: a numeric column or
+    # a multi-column matrix (a bare symbol / cbind() in the formula), or column
+    # names for a direct re() call. Each column is one slope; n_coefs is the
+    # slope count plus the implicit intercept unless the block is slope-only.
     if (re$type == "slope" && !is.null(re$covariate)) {
       has_slopes <- TRUE
-      n_coefs[t] <- 2L  # Intercept + 1 slope
-      # Build slope design matrix from model data
-      X_slope <- model.matrix(as.formula(paste("~", re$covariate)), model$data)
-      # Only the slope column (not intercept)
-      slope_matrices[[t]] <- X_slope[, -1, drop = FALSE]
+      Xs <- .tobs_re_slope_matrix(re$covariate, model$data)
+      has_intercept[t] <- isTRUE(re$intercept)
+      if (ncol(Xs) == 0L) {
+        stop("re(): random slope resolved to zero covariate columns.",
+             call. = FALSE)
+      }
+      n_coefs[t] <- (if (has_intercept[t]) 1L else 0L) + ncol(Xs)
+      slope_matrices[[t]] <- Xs
     } else {
       n_coefs[t] <- 1L  # Intercept only
     }
@@ -319,6 +367,7 @@ build_re_spec <- function(re_list, model) {
     groups = groups,
     n_groups = n_groups,
     shared = shared,
+    re_has_intercept = as.integer(has_intercept),
     sigma_re_scale = re_list[[1]]$sigma_scale
   )
 
@@ -326,10 +375,34 @@ build_re_spec <- function(re_list, model) {
     spec$has_slopes <- TRUE
     spec$n_coefs <- n_coefs
     spec$slope_matrices <- slope_matrices
-    spec$correlated <- any(vapply(re_list, function(r) r$correlated, logical(1)))
+    spec$correlated <- any(vapply(re_list, function(r) isTRUE(r$correlated),
+                                  logical(1)))
   }
 
   spec
+}
+
+# Resolve an re() slope covariate to a numeric [N x n_slopes] design matrix.
+# Accepts column name(s) (resolved via model.matrix, intercept dropped), a
+# numeric matrix (e.g. cbind(x, z) from bar desugaring), or a single numeric
+# vector. Column names are carried through for ranef() labelling.
+.tobs_re_slope_matrix <- function(cov, data) {
+  if (is.character(cov)) {
+    X <- stats::model.matrix(stats::reformulate(cov), data)
+    icpt <- match("(Intercept)", colnames(X))
+    if (!is.na(icpt)) X <- X[, -icpt, drop = FALSE]
+    return(X)
+  }
+  if (is.matrix(cov)) {
+    storage.mode(cov) <- "double"
+    if (is.null(colnames(cov))) {
+      colnames(cov) <- paste0("slope", seq_len(ncol(cov)))
+    }
+    return(cov)
+  }
+  m <- matrix(as.numeric(cov), ncol = 1L)
+  colnames(m) <- "slope1"
+  m
 }
 
 # Compute back-transformed intercepts on probability scale

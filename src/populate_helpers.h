@@ -263,6 +263,16 @@ inline void populate_re(tulpa::ModelData& data, Rcpp::List re_spec) {
         data.n_re_groups = n_groups_vec[0];
     }
 
+    // Per-term intercept flag. A block carries the implicit group intercept
+    // (coef 0, z = 1) unless it is slope-only (`(0 + x | g)`). Default all-on
+    // when the R spec omits it.
+    data.re_has_intercept.assign(n_terms, 1);
+    if (re_spec.containsElementNamed("re_has_intercept")) {
+        Rcpp::IntegerVector hi = Rcpp::as<Rcpp::IntegerVector>(re_spec["re_has_intercept"]);
+        for (int t = 0; t < n_terms && t < hi.size(); t++)
+            data.re_has_intercept[t] = hi[t];
+    }
+
     // Random slopes (optional)
     data.has_re_slopes = false;
     data.has_re_correlated_slopes = false;
@@ -277,7 +287,8 @@ inline void populate_re(tulpa::ModelData& data, Rcpp::List re_spec) {
         int total_sigma = 0;
         for (int t = 0; t < n_terms; t++) {
             data.re_n_coefs[t] = n_coefs[t];
-            data.re_n_slopes[t] = n_coefs[t] - 1;  // Slopes = coefs - intercept
+            // Slopes = coefs minus the intercept (0 slopes dropped when none).
+            data.re_n_slopes[t] = n_coefs[t] - (data.re_has_intercept[t] ? 1 : 0);
             total_params += data.re_n_groups_multi[t] * n_coefs[t];
             total_sigma += n_coefs[t];
 
@@ -303,7 +314,10 @@ inline void populate_re(tulpa::ModelData& data, Rcpp::List re_spec) {
             int total_chol = 0;
             for (int t = 0; t < n_terms; t++) {
                 int k = data.re_n_coefs[t];
-                data.re_n_chol[t] = k * (k + 1) / 2;
+                // Strictly-lower triangle: the tanh-Cholesky prior in tulpa
+                // parameterizes k*(k-1)/2 off-diagonal entries and derives the
+                // diagonal from the unit-norm constraint (see tulpa_priors_re.h).
+                data.re_n_chol[t] = k * (k - 1) / 2;
                 total_chol += data.re_n_chol[t];
             }
             data.total_chol_params = total_chol;

@@ -14,6 +14,11 @@
 # fixed-effects labels are reassembled into a formula for `model.matrix()`; the
 # structured-term calls are evaluated with the model `data` columns in scope so
 # bare symbols (`gp(lon, lat)`, `re(observer)`) resolve to columns.
+#
+# lme4-style bar syntax is supported as sugar over re(): `(1 | g)`, `(x | g)`,
+# `(x || g)` are rewritten into the equivalent re() calls on the formula AST
+# *before* terms() runs (see `.tobs_desugar_bars`), so there is one parser and
+# one term type — the bar is just a second spelling of re().
 # =============================================================================
 
 .tobs_spec_classes <- c("tobs_spatial", "tobs_re", "tobs_temporal",
@@ -28,6 +33,130 @@
     if (head %in% reg_names) return(head)
   }
   NA_character_
+}
+
+# ---------------------------------------------------------------------------
+# lme4-style bar syntax is sugar for re(). Each bar is rewritten into the
+# equivalent re() call(s) on the formula AST before terms() runs, so the
+# registry parser handles them through the one re() code path. A random-slope
+# block carries the group intercept (n_coefs = intercept + slopes) with a
+# Cholesky-correlated covariance; `||` makes it diagonal; `0 +` drops the
+# intercept; several slopes stack into one block:
+#
+#   (1 | g)            -> re(g, type = "intercept")
+#   (x | g)            -> re(g, type = "slope", covariate = cbind(x))
+#   (1 + x + z | g)    -> re(g, type = "slope", covariate = cbind(x, z))
+#   (x || g)           -> re(g, type = "slope", covariate = cbind(x), correlated = FALSE)
+#   (0 + x | g)        -> re(g, type = "slope", covariate = cbind(x), intercept = FALSE)
+#
+# Grouping may be crossed or nested (lme4 semantics): a bar expands to one
+# re() per implied grouping factor, joined with `+`.
+#
+#   (1 | g:h)          -> re(interaction(g, h, drop = TRUE), type = "intercept")
+#   (1 | g/h)          -> re(g) + re(interaction(g, h, drop = TRUE))   [both intercept]
+#
+# The LHS (intercept + slopes) is distributed across every grouping factor the
+# RHS implies. See gcol33/tulpaObs#10.
+
+# Recognise a parenthesised bar term `( <lhs> | <rhs> )` / `( <lhs> || <rhs> )`.
+# Returns list(op, lhs, rhs) or NULL. Inspects the AST, never the string.
+.tobs_bar_spec <- function(e) {
+  if (!is.call(e) || !identical(e[[1L]], as.name("(")) || length(e) != 2L)
+    return(NULL)
+  inner <- e[[2L]]
+  if (!is.call(inner) || length(inner) != 3L) return(NULL)
+  op <- inner[[1L]]
+  if (identical(op, as.name("|")) || identical(op, as.name("||"))) {
+    return(list(op = as.character(op), lhs = inner[[2L]], rhs = inner[[3L]]))
+  }
+  NULL
+}
+
+# Flatten a left-associative binary operator tree `a OP b OP c` into the list
+# of its atoms (a, b, c). A node that is not that operator is a single atom.
+.tobs_flatten_op <- function(e, op) {
+  if (is.call(e) && identical(e[[1L]], as.name(op)) && length(e) == 3L) {
+    return(c(.tobs_flatten_op(e[[2L]], op), list(e[[3L]])))
+  }
+  list(e)
+}
+
+# Build a grouping-factor expression from grouping atoms: one atom is returned
+# as-is; several fold into interaction(a, b, ..., drop = TRUE) so the effect
+# groups over observed factor combinations only.
+.tobs_interaction_call <- function(atoms) {
+  if (length(atoms) == 1L) return(atoms[[1L]])
+  as.call(c(list(as.name("interaction")), atoms, list(drop = TRUE)))
+}
+
+# Expand a bar's RHS grouping into the list of grouping-factor expressions it
+# implies (lme4 semantics): crossed `a:b` is one interaction factor; nested
+# `a/b/c` is the cumulative sequence a, a:b, a:b:c; a bare factor is itself.
+.tobs_bar_group_terms <- function(rhs) {
+  if (is.call(rhs) && identical(rhs[[1L]], as.name("/"))) {
+    atoms <- .tobs_flatten_op(rhs, "/")
+    return(lapply(seq_along(atoms),
+                  function(i) .tobs_interaction_call(atoms[seq_len(i)])))
+  }
+  if (is.call(rhs) && identical(rhs[[1L]], as.name(":"))) {
+    return(list(.tobs_interaction_call(.tobs_flatten_op(rhs, ":"))))
+  }
+  list(rhs)
+}
+
+# Convert a recognised bar into the equivalent re() call(s) (a language
+# object). Multi-slope bars stack their covariates with cbind(); slope-only
+# bars set intercept = FALSE; `||` sets correlated = FALSE; nested/crossed
+# grouping expands to one re() per grouping factor, joined with `+`.
+.tobs_bar_to_re <- function(bar) {
+  groups <- .tobs_bar_group_terms(bar$rhs)
+
+  # Read intercept / slopes off the bar LHS via the parse tree (no regex): drop
+  # the LHS into a one-sided formula template and let terms() decompose it.
+  lhs_f <- ~ .
+  lhs_f[[2L]] <- bar$lhs
+  tt      <- stats::terms(lhs_f)
+  has_int <- attr(tt, "intercept") == 1L
+  slopes  <- attr(tt, "term.labels")
+  correlated <- identical(bar$op, "|")
+
+  make_re <- function(group) {
+    if (length(slopes) == 0L) {
+      if (!has_int)
+        stop("Empty random effect `(0 | g)`: nothing to estimate.", call. = FALSE)
+      return(call("re", group, type = "intercept"))
+    }
+    # Stack all slope covariates (1 or more) into one block; cbind() preserves
+    # the column names for ranef() labelling.
+    cov_expr <- as.call(c(list(as.name("cbind")), lapply(slopes, str2lang)))
+    re_call <- call("re", group, type = "slope", covariate = cov_expr)
+    if (!has_int)    re_call[["intercept"]]  <- FALSE
+    if (!correlated) re_call[["correlated"]] <- FALSE
+    re_call
+  }
+
+  re_calls <- lapply(groups, make_re)
+  Reduce(function(a, b) call("+", a, b), re_calls)
+}
+
+# Walk the additive structure of an expression, rewriting bars in place.
+.tobs_rewrite_bars <- function(e) {
+  if (is.call(e) && identical(e[[1L]], as.name("+")) && length(e) == 3L) {
+    e[[2L]] <- .tobs_rewrite_bars(e[[2L]])
+    e[[3L]] <- .tobs_rewrite_bars(e[[3L]])
+    return(e)
+  }
+  bar <- .tobs_bar_spec(e)
+  if (!is.null(bar)) return(.tobs_bar_to_re(bar))
+  e
+}
+
+# Desugar every lme4 bar in a formula's RHS into re() calls, preserving the
+# formula's class and environment.
+.tobs_desugar_bars <- function(formula) {
+  n <- length(formula)
+  formula[[n]] <- .tobs_rewrite_bars(formula[[n]])
+  formula
 }
 
 #' Parse a process formula into fixed effects and structured terms
@@ -49,6 +178,9 @@
   }
   if (is.null(env)) env <- parent.frame()
 
+  # lme4 bar syntax -> re() calls before terms() sees the formula.
+  formula <- .tobs_desugar_bars(formula)
+
   tt        <- if (is.null(data)) stats::terms(formula, keep.order = TRUE)
                else stats::terms(formula, data = data, keep.order = TRUE)
   labels    <- attr(tt, "term.labels")
@@ -63,6 +195,9 @@
     termlabels = if (length(fe_labels)) fe_labels else "1",
     intercept  = as.logical(intercept)
   )
+  # model.matrix() resolves any non-data symbols (offsets, transforms) in this
+  # environment, so anchor the rebuilt formula to the original one's env.
+  environment(fe_formula) <- env
 
   terms_list <- list()
   if (any(is_spec)) {
@@ -95,14 +230,15 @@
 # are kept in the flat list for later resolution against defining `id`s.
 #
 #   processes: named list like list(psi = ~ ..., p = ~ ...)
-.tobs_parse_processes <- function(processes, data, env) {
+.tobs_parse_processes <- function(processes, data, env = NULL) {
   fe        <- vector("list", length(processes))
   names(fe) <- names(processes)
   terms     <- list()
   for (k in seq_along(processes)) {
     f <- processes[[k]]
-    if (is.null(f)) { fe[[k]] <- NULL; next }
-    parsed  <- .tobs_parse_formula(f, data = data, env = env)
+    if (is.null(f)) next   # leave fe[[k]] as the pre-allocated NULL slot
+    e <- if (is.null(env)) environment(f) else env
+    parsed  <- .tobs_parse_formula(f, data = data, env = e)
     fe[[k]] <- parsed$fe_formula
     for (spec in parsed$terms) {
       terms[[length(terms) + 1L]] <- list(
@@ -150,4 +286,17 @@
   }
 
   defs
+}
+
+# Bind a family's process formulas in one shot: parse each into a
+# fixed-effects design formula + structured terms, then resolve copy()
+# references across processes. `processes` is a named list of formulas in the
+# family's natural process order (e.g. list(psi = , p = ) for single-season;
+# NULL entries are allowed and keep their slot). Returns:
+#   fe    — named list of fixed-effects formulas (same names/positions)
+#   terms — resolved structured-term list, each tagged with `$processes`
+#           (integer process indices it enters), `$proc_name`, `$spec`.
+.tobs_bind_formulas <- function(processes, data, env = NULL) {
+  parsed <- .tobs_parse_processes(processes, data = data, env = env)
+  list(fe = parsed$fe, terms = .tobs_resolve_terms(parsed$terms))
 }

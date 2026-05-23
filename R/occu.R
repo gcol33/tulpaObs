@@ -58,8 +58,9 @@
     stop(sprintf("y has %d rows but data has %d rows", nrow(y), nrow(data)))
   }
 
-  X_occ <- model.matrix(occ_formula, data)
-  X_det <- model.matrix(det_formula, data)
+  bind  <- .tobs_bind_formulas(list(psi = occ_formula, p = det_formula), data)
+  X_occ <- model.matrix(bind$fe$psi, data)
+  X_det <- model.matrix(bind$fe$p, data)
 
   X_det_visit <- NULL
   if (!is.null(det_visit_formula) && !is.null(det_visit_data)) {
@@ -84,7 +85,8 @@
     y = y_int,
     X_processes = list(X_occ, X_det),
     X_det_visit = X_det_visit,
-    formulas = list(occ = occ_formula, det = det_formula),
+    formulas = list(occ = bind$fe$psi, det = bind$fe$p),
+    structured_terms = bind$terms,
     data = data,
     n_sites = nrow(y),
     max_visits = ncol(y),
@@ -125,10 +127,13 @@
     stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)))
   }
 
-  X_occ <- model.matrix(occ_formula, data)
-  X_det <- model.matrix(det_formula, data)
-  X_col <- model.matrix(col_formula, data)
-  X_ext <- model.matrix(ext_formula, data)
+  bind  <- .tobs_bind_formulas(
+    list(psi1 = occ_formula, p = det_formula,
+         gamma = col_formula, epsilon = ext_formula), data)
+  X_occ <- model.matrix(bind$fe$psi1, data)
+  X_det <- model.matrix(bind$fe$p, data)
+  X_col <- model.matrix(bind$fe$gamma, data)
+  X_ext <- model.matrix(bind$fe$epsilon, data)
 
   # y_flat layout is site-major: y_flat[i*T*K + t*K + j] (0-indexed)
   # = y_flat[(i-1)*T*K + (t-1)*K + j] (1-indexed). This matches what
@@ -160,8 +165,9 @@
     n_visits = n_visits,
     any_detected = any_detected,
     X_processes = list(X_occ, X_det, X_col, X_ext),
-    formulas = list(occ = occ_formula, det = det_formula,
-                    col = col_formula, ext = ext_formula),
+    formulas = list(occ = bind$fe$psi1, det = bind$fe$p,
+                    col = bind$fe$gamma, ext = bind$fe$epsilon),
+    structured_terms = bind$terms,
     n_sites = n_sites,
     n_seasons = n_seasons,
     max_visits = max_visits,
@@ -209,8 +215,9 @@
                  length(species_names), n_species))
   }
 
-  X_occ <- model.matrix(occ_formula, data)
-  X_det <- model.matrix(det_formula, data)
+  bind  <- .tobs_bind_formulas(list(psi = occ_formula, p = det_formula), data)
+  X_occ <- model.matrix(bind$fe$psi, data)
+  X_det <- model.matrix(bind$fe$p, data)
 
   N <- n_sites * n_species
   X_occ_expanded <- X_occ[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
@@ -231,7 +238,8 @@
     model_type = "community",
     y = y_expanded,
     X_processes = list(X_occ_expanded, X_det_expanded),
-    formulas = list(occ = occ_formula, det = det_formula),
+    formulas = list(occ = bind$fe$psi, det = bind$fe$p),
+    structured_terms = bind$terms,
     n_sites = n_sites,
     n_species = n_species,
     max_visits = max_visits,
@@ -264,10 +272,14 @@
   }
 
   n_sites <- nrow(data)
-  X_occ <- model.matrix(occ_formula, data)
+  # Structured terms (spatial / re / temporal) are supported on the shared
+  # occupancy field only; the per-source detection formulas are fixed-effects.
+  occ_bind <- .tobs_bind_formulas(list(psi = occ_formula), data)
+  X_occ    <- model.matrix(occ_bind$fe$psi, data)
 
   y_sources <- vector("list", n_sources)
   X_det_list <- vector("list", n_sources)
+  det_fe     <- vector("list", n_sources)
   site_maps <- vector("list", n_sources)
 
   for (s in seq_len(n_sources)) {
@@ -286,8 +298,15 @@
     y_int[is.na(y_int)] <- -1L
     y_sources[[s]] <- y_int
 
+    det_parsed <- .tobs_parse_formula(det_formulas[[s]], data = data)
+    if (length(det_parsed$terms)) {
+      stop("Structured terms on integrated detection sources are not ",
+           "supported; place spatial / re / temporal terms on the ",
+           "occupancy formula.", call. = FALSE)
+    }
+    det_fe[[s]] <- det_parsed$fe_formula
     src_rows <- site_maps[[s]] + 1L
-    X_det_list[[s]] <- model.matrix(det_formulas[[s]], data[src_rows, , drop = FALSE])
+    X_det_list[[s]] <- model.matrix(det_fe[[s]], data[src_rows, , drop = FALSE])
   }
 
   X_processes <- vector("list", 1 + n_sources)
@@ -315,7 +334,8 @@
     y_sources = y_sources,
     site_maps = site_maps,
     X_processes = X_processes,
-    formulas = c(list(occ = occ_formula), setNames(det_formulas, names(y))),
+    formulas = c(list(occ = occ_bind$fe$psi), setNames(det_fe, names(y))),
+    structured_terms = occ_bind$terms,
     n_sites = n_sites,
     n_sources = n_sources,
     process_info = process_info
@@ -348,7 +368,8 @@
     stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)))
   }
 
-  X_occ <- model.matrix(occ_formula, data)
+  bind  <- .tobs_bind_formulas(list(psi = occ_formula), data)
+  X_occ <- model.matrix(bind$fe$psi, data)
 
   N <- n_sites * n_species
   X_occ_expanded <- X_occ[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
@@ -368,7 +389,8 @@
     model_type = "jsdm",
     y_jsdm = y_flat,
     X_processes = list(X_occ_expanded),
-    formulas = list(occ = occ_formula),
+    formulas = list(occ = bind$fe$psi),
+    structured_terms = bind$terms,
     n_sites = n_sites,
     n_species = n_species,
     N = N,

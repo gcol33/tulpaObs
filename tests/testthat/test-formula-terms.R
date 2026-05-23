@@ -106,3 +106,119 @@ test_that("copy() to a missing id is an error", {
   )
   expect_error(tulpaObs:::.tobs_resolve_terms(parsed$terms), "no term with id")
 })
+
+# --- lme4-style bar syntax: sugar over re() --------------------------------
+
+# Compare two tobs_re specs on their substantive fields (ignore the recorded
+# call text, which differs between `(1|g)` and `re(g)`).
+re_fields <- function(spec) {
+  spec[setdiff(names(spec), "term_call")]
+}
+
+test_that("(1 | g) desugars to re(g, type = 'intercept')", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ elev + (1 | observer), data = dat)
+  ref <- tulpaObs:::.tobs_parse_formula(~ elev + re(observer), data = dat)
+  expect_length(bar$terms, 1L)
+  expect_s3_class(bar$terms[[1]], "tobs_re")
+  expect_identical(bar$terms[[1]]$type, "intercept")
+  expect_identical(re_fields(bar$terms[[1]]), re_fields(ref$terms[[1]]))
+  # the bar leaves elev in the fixed-effects design
+  expect_setequal(attr(stats::terms(bar$fe_formula), "term.labels"), "elev")
+})
+
+test_that("(x | g) is a correlated random intercept + slope", {
+  dat <- make_dat()
+  bar  <- tulpaObs:::.tobs_parse_formula(~ (elev | observer), data = dat)
+  ref  <- tulpaObs:::.tobs_parse_formula(
+    ~ re(observer, type = "slope", covariate = cbind(elev)), data = dat)
+  expect_identical(bar$terms[[1]]$type, "slope")
+  expect_true(bar$terms[[1]]$correlated)
+  expect_true(bar$terms[[1]]$intercept)
+  # one slope column, named after the covariate
+  expect_identical(colnames(bar$terms[[1]]$covariate), "elev")
+  expect_identical(re_fields(bar$terms[[1]]), re_fields(ref$terms[[1]]))
+})
+
+test_that("(1 + x | g) equals (x | g)", {
+  dat <- make_dat()
+  a <- tulpaObs:::.tobs_parse_formula(~ (1 + elev | observer), data = dat)
+  b <- tulpaObs:::.tobs_parse_formula(~ (elev | observer), data = dat)
+  expect_identical(re_fields(a$terms[[1]]), re_fields(b$terms[[1]]))
+})
+
+test_that("(x || g) drops the intercept/slope correlation", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ (elev || observer), data = dat)
+  expect_identical(bar$terms[[1]]$type, "slope")
+  expect_false(bar$terms[[1]]$correlated)
+})
+
+test_that("multiple bars yield multiple re terms alongside fixed effects", {
+  dat <- make_dat()
+  p <- tulpaObs:::.tobs_parse_formula(
+    ~ forest + (1 | observer) + (elev || year), data = dat)
+  expect_length(p$terms, 2L)
+  expect_true(all(vapply(p$terms, inherits, logical(1), "tobs_re")))
+  expect_setequal(attr(stats::terms(p$fe_formula), "term.labels"), "forest")
+})
+
+test_that("bars work in a process formula and tag to that process", {
+  dat <- make_dat()
+  parsed <- tulpaObs:::.tobs_parse_processes(
+    list(psi = ~ elev, p = ~ effort + (1 | observer)),
+    data = cbind(dat, effort = rnorm(nrow(dat))), env = environment()
+  )
+  resolved <- tulpaObs:::.tobs_resolve_terms(parsed$terms)
+  expect_length(resolved, 1L)
+  expect_s3_class(resolved[[1]]$spec, "tobs_re")
+  expect_identical(resolved[[1]]$processes, 2L)
+})
+
+test_that("(0 + x | g) is a slope-only block (no intercept)", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ (0 + elev | observer), data = dat)
+  expect_length(bar$terms, 1L)
+  expect_identical(bar$terms[[1]]$type, "slope")
+  expect_false(bar$terms[[1]]$intercept)
+  expect_identical(colnames(bar$terms[[1]]$covariate), "elev")
+})
+
+test_that("(1 + x + z | g) stacks multiple slopes in one block", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ (1 + elev + forest | observer), data = dat)
+  expect_length(bar$terms, 1L)
+  expect_identical(bar$terms[[1]]$type, "slope")
+  expect_true(bar$terms[[1]]$intercept)
+  expect_identical(colnames(bar$terms[[1]]$covariate), c("elev", "forest"))
+})
+
+test_that("(1 | g:h) groups over the interaction factor", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ (1 | observer:year), data = dat)
+  expect_length(bar$terms, 1L)
+  expect_identical(bar$terms[[1]]$type, "intercept")
+  # interaction(observer, year, drop = TRUE) has one group per observed combo
+  combos <- length(unique(interaction(dat$observer, dat$year, drop = TRUE)))
+  expect_identical(bar$terms[[1]]$n_groups, combos)
+})
+
+test_that("(1 | g/h) expands to nested grouping (g and g:h)", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ (1 | observer/year), data = dat)
+  expect_length(bar$terms, 2L)
+  expect_true(all(vapply(bar$terms, inherits, logical(1), "tobs_re")))
+  expect_identical(bar$terms[[1]]$n_groups, nlevels(dat$observer))
+  combos <- length(unique(interaction(dat$observer, dat$year, drop = TRUE)))
+  expect_identical(bar$terms[[2]]$n_groups, combos)
+})
+
+test_that("the LHS slopes distribute across nested grouping factors", {
+  dat <- make_dat()
+  bar <- tulpaObs:::.tobs_parse_formula(~ (1 + elev | observer/year), data = dat)
+  expect_length(bar$terms, 2L)
+  expect_true(all(vapply(bar$terms, function(s) s$type == "slope", logical(1))))
+  expect_true(all(vapply(bar$terms,
+                         function(s) identical(colnames(s$covariate), "elev"),
+                         logical(1))))
+})

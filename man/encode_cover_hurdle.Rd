@@ -8,7 +8,6 @@ encode_cover_hurdle(
   formula,
   data,
   y,
-  spatial = NULL,
   positive = c("lognormal", "beta"),
   autoscale = TRUE
 )
@@ -22,19 +21,22 @@ and positive-cover arms.}
 \item{y}{Length-N numeric vector of cover in \verb{[0, 1]}. NAs are dropped
 from both arms (treated as missing, not as zero cover).}
 
-\item{spatial}{Optional \code{tulpa_spatial} spec, passed to both arms.}
-
 \item{positive}{One of \code{"lognormal"} or \code{"beta"}.}
 }
 \value{
-A list with: \code{occ_data}, \code{pos_data}, \code{spatial_spec}, \code{N},
-\code{idx_pos} (row indices of the positive subset within \code{data}),
-\code{formula}, \code{positive}.
+A list with: \code{occ_data}, \code{pos_data}, \code{spatial_spec} (a
+\code{tulpa_spatial} built from an areal formula term, or NULL), \code{temporal}
+and \code{re} (structured terms from the formula, or NULL), \code{N}, \code{idx_pos}
+(row indices of the positive subset within \code{data}), \code{formula} (the
+fixed-effects formula), \code{positive}.
 }
 \description{
 Splits \code{y} into a binomial occurrence indicator and a positive-cover
-subset, builds design matrices for each arm using the same \code{formula},
-and packages the spatial spec for both arms.
+subset, builds design matrices for each arm using the fixed-effects part
+of \code{formula}, and extracts any structured terms it carried (an areal
+\code{icar()}/\code{bym2()} spatial field, plus \code{temporal()} / \code{re()} blocks). The
+formula is parsed against the NA-dropped observations so the structured
+index codes align with both arms.
 }
 \details{
 For \code{positive = "lognormal"} the positive arm's response is

@@ -89,13 +89,11 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
     sim <- simulate_joint_lognormal_for_recovery(
       N = 400, n_s = n_s, sigma_pos_true = truth_sigma, seed = 1000L + r
     )
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
     fit <- tobs(
-      formula  = ~ x,
+      formula  = ~ x + bym2(graph = adj, group_var = "region"),
       data     = sim$data,
       family   = cover("lognormal"),
       y        = sim$y,
-      spatial  = spatial,
       engine   = "nested_laplace",
       control  = list(
         sigma_grid     = c(0.3, 0.6, 0.9),
@@ -191,13 +189,11 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
     sim <- simulate_joint_beta_for_recovery(
       N = 600, n_s = n_s, phi = truth_phi, seed = 2000L + r
     )
-    spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
     fit <- tobs(
-      formula  = ~ x,
+      formula  = ~ x + bym2(graph = adj, group_var = "region"),
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
-      spatial  = spatial,
       engine   = "nested_laplace",
       control  = list(
         sigma_grid     = c(0.3, 0.5, 0.8),
@@ -225,13 +221,11 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
   sim <- simulate_joint_beta_for_recovery(
     N = 600, n_s = n_s, phi = truth_phi, seed = 3001L
   )
-  spatial <- tulpa::spatial_bym2(adj, level = "group", group_var = "region")
   fit <- tobs(
-    formula  = ~ x,
+    formula  = ~ x + bym2(graph = adj, group_var = "region"),
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
-    spatial  = spatial,
     engine   = "nested_laplace",
     control  = list(
       sigma_grid     = c(0.3, 0.5, 0.8),

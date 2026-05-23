@@ -1,6 +1,6 @@
 # Structural NUTS coverage for the four components previously flagged as
-# blocked by upstream tulpa bugs: tobs_temporal, multi-term tobs_re, tobs_svc,
-# tobs_latent. Smoke iter counts: these verify the end-to-end C++ NUTS path
+# blocked by upstream tulpa bugs: temporal(), multi-term re(), svc(),
+# latent(). Smoke iter counts: these verify the end-to-end C++ NUTS path
 # runs without crashing and returns a fit with the expected shape, not that
 # gradients are correct or posteriors are calibrated. Recovery is a separate
 # concern (see test-spde-occ.R for the recovery pattern with N=400).
@@ -18,7 +18,7 @@ expect_nuts_fit <- function(fit, n_expected_cols, label = "") {
   expect_true(all(is.finite(fit$means)), label = paste(label, "means all finite"))
 }
 
-test_that("NUTS runs with tobs_temporal (AR1) attached", {
+test_that("NUTS runs with a temporal(ar1) term attached", {
   skip_on_cran()
 
   set.seed(1)
@@ -27,16 +27,15 @@ test_that("NUTS runs with tobs_temporal (AR1) attached", {
   sim$data$time <- sample.int(4, N, replace = TRUE)
 
   fit <- tobs(
-    ~ occ_cov1, data = sim$data, family = occu(),
-    detection = ~ det_cov1, y = sim$y,
-    temporal = tobs_temporal(type = "ar1", time = "time"),
+    ~ occ_cov1 + temporal(time, type = "ar1"), data = sim$data,
+    family = occu(), detection = ~ det_cov1, y = sim$y,
     engine = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 4, label = "temporal-ar1")
   expect_s3_class(fit$temporal, "tobs_temporal")
 })
 
-test_that("NUTS runs with two-term tobs_re list attached", {
+test_that("NUTS runs with two re() terms attached", {
   skip_on_cran()
 
   set.seed(1)
@@ -46,12 +45,8 @@ test_that("NUTS runs with two-term tobs_re list attached", {
   sim$data$time <- sample.int(4, N, replace = TRUE)
 
   fit <- tobs(
-    ~ occ_cov1, data = sim$data, family = occu(),
+    ~ occ_cov1 + re(grp) + re(time), data = sim$data, family = occu(),
     detection = ~ det_cov1, y = sim$y,
-    re = list(
-      tobs_re(group = "grp",  type = "intercept"),
-      tobs_re(group = "time", type = "intercept")
-    ),
     engine = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 4, label = "multi-re")
@@ -60,25 +55,48 @@ test_that("NUTS runs with two-term tobs_re list attached", {
   expect_s3_class(fit$re[[1]], "tobs_re")
 })
 
-test_that("NUTS runs with tobs_svc attached", {
+test_that("lme4 bar syntax fits identically to the equivalent re() call", {
   skip_on_cran()
 
   set.seed(1)
   N <- 40; J <- 3
   sim <- simulate_occu(N = N, J = J, seed = 1)
-  coords <- matrix(runif(N * 2), N, 2)
+  sim$data$grp <- sample.int(5, N, replace = TRUE)
+
+  fit_bar <- tobs(
+    ~ occ_cov1 + (1 | grp), data = sim$data, family = occu(),
+    detection = ~ det_cov1, y = sim$y, engine = "nuts", control = ctl_nuts()
+  )
+  fit_re <- tobs(
+    ~ occ_cov1 + re(grp), data = sim$data, family = occu(),
+    detection = ~ det_cov1, y = sim$y, engine = "nuts", control = ctl_nuts()
+  )
+
+  expect_nuts_fit(fit_bar, n_expected_cols = 3, label = "bar (1|grp)")
+  expect_s3_class(fit_bar$re[[1]], "tobs_re")
+  # Same spec + same seed => bit-identical fit.
+  expect_equal(fit_bar$means, fit_re$means)
+})
+
+test_that("NUTS runs with an svc() term attached", {
+  skip_on_cran()
+
+  set.seed(1)
+  N <- 40; J <- 3
+  sim <- simulate_occu(N = N, J = J, seed = 1)
+  sim$data$lon <- runif(N)
+  sim$data$lat <- runif(N)
 
   fit <- tobs(
-    ~ occ_cov1, data = sim$data, family = occu(),
-    detection = ~ det_cov1, y = sim$y,
-    engine = "nuts",
-    control = ctl_nuts(list(svc = tobs_svc(indices = 1L, coords = coords, nn = 8)))
+    ~ occ_cov1 + svc(lon, lat, indices = 1L, nn = 8), data = sim$data,
+    family = occu(), detection = ~ det_cov1, y = sim$y,
+    engine = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 4, label = "svc")
   expect_s3_class(fit$svc, "tobs_svc")
 })
 
-test_that("NUTS runs with tobs_latent on ms_occu", {
+test_that("NUTS runs with a latent() term on ms_occu", {
   skip_on_cran()
 
   set.seed(1)
@@ -87,10 +105,9 @@ test_that("NUTS runs with tobs_latent on ms_occu", {
   sp_names <- paste0("sp", seq_len(n_sp))
 
   fit <- tobs(
-    ~ x, data = ms$data, family = ms_occu(),
+    ~ x + latent(2), data = ms$data, family = ms_occu(),
     detection = ~ 1, y = ms$y, species = sp_names,
-    engine = "nuts",
-    control = ctl_nuts(list(latent = tobs_latent(n_factors = 2)))
+    engine = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 2, label = "latent")
   expect_s3_class(fit$latent, "tobs_latent")

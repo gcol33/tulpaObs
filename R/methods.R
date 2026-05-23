@@ -396,12 +396,10 @@ tobs_richness <- function(object) {
 #' @return Updated `tobs_fit` object (or call if `evaluate = FALSE`).
 #' @export
 update.tobs_fit <- function(object, ..., evaluate = TRUE) {
-  args <- list(model = object$model,
-               spatial = object$spatial,
-               temporal = object$temporal,
-               re = object$re,
-               svc = object$svc,
-               latent = object$latent)
+  # Structured terms (spatial / temporal / re / svc / latent) travel with the
+  # model via `model$structured_terms`, so refitting only needs the model plus
+  # any overridden fit controls.
+  args <- list(model = object$model)
   dots <- list(...)
   for (nm in names(dots)) args[[nm]] <- dots[[nm]]
 

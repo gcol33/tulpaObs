@@ -72,29 +72,58 @@
 # Spatial terms (areal)
 # ---------------------------------------------------------------------------
 
+# Areal terms accept an optional `group_var`: the name of a column that maps
+# each observation to an areal unit (a graph node), for graphs defined over
+# regions rather than over observations directly. When NULL the graph is over
+# the observations 1:1. `group_var` is a deferred column-name string (matching
+# tulpa's spatial_*() convention) — it is resolved by the engine, not here.
+.tobs_check_graph <- function(graph, term) {
+  if (!is.matrix(graph)) {
+    stop(sprintf("%s(): `graph` must be an adjacency matrix.", term), call. = FALSE)
+  }
+  if (!isSymmetric(graph)) {
+    stop(sprintf("%s(): `graph` must be symmetric.", term), call. = FALSE)
+  }
+}
+
 # icar(graph)              — intrinsic CAR over an adjacency graph
-.tobs_term_icar <- function(graph, id = NULL) {
-  if (!is.matrix(graph)) stop("icar(): `graph` must be an adjacency matrix.", call. = FALSE)
-  if (!isSymmetric(graph)) stop("icar(): `graph` must be symmetric.", call. = FALSE)
+.tobs_term_icar <- function(graph, group_var = NULL, id = NULL) {
+  .tobs_check_graph(graph, "icar")
   csr <- adjacency_to_csr(graph)
   .tobs_term(list(
-    type = "icar", n_units = nrow(graph),
+    type = "icar", n_units = nrow(graph), graph = graph, group_var = group_var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
     n_neighbors = csr$n_neighbors
   ), class = "tobs_spatial", id = id, label = "icar")
 }
 
 # bym2(graph, scale_factor) — BYM2 reparameterization of ICAR + IID
-.tobs_term_bym2 <- function(graph, scale_factor = NULL, id = NULL) {
-  if (!is.matrix(graph)) stop("bym2(): `graph` must be an adjacency matrix.", call. = FALSE)
-  if (!isSymmetric(graph)) stop("bym2(): `graph` must be symmetric.", call. = FALSE)
+.tobs_term_bym2 <- function(graph, scale_factor = NULL, group_var = NULL, id = NULL) {
+  .tobs_check_graph(graph, "bym2")
   csr <- adjacency_to_csr(graph)
   if (is.null(scale_factor)) scale_factor <- compute_bym2_scale(graph)
   .tobs_term(list(
-    type = "bym2", n_units = nrow(graph),
+    type = "bym2", n_units = nrow(graph), graph = graph, group_var = group_var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
     n_neighbors = csr$n_neighbors, scale_factor = scale_factor
   ), class = "tobs_spatial", id = id, label = "bym2")
+}
+
+# car(graph) / car_proper(graph) — (improper / proper) CAR areal fields.
+# Consumed by the cover-hurdle nested-Laplace engine via tulpa; the occupancy
+# C++ engine does not implement these, so they only carry the graph + group.
+.tobs_term_car <- function(graph, group_var = NULL, id = NULL) {
+  .tobs_check_graph(graph, "car")
+  .tobs_term(list(type = "car", n_units = nrow(graph), graph = graph,
+                  group_var = group_var),
+             class = "tobs_spatial", id = id, label = "car")
+}
+
+.tobs_term_car_proper <- function(graph, group_var = NULL, id = NULL) {
+  .tobs_check_graph(graph, "car_proper")
+  .tobs_term(list(type = "car_proper", n_units = nrow(graph), graph = graph,
+                  group_var = group_var),
+             class = "tobs_spatial", id = id, label = "car_proper")
 }
 
 
@@ -182,19 +211,36 @@
 # ---------------------------------------------------------------------------
 
 # re(group, ...)           — grouped random effect (intercept / slope / iid)
+#
+# `covariate` may be a single column (one random slope) or several stacked
+# columns (a multi-slope block): pass a numeric matrix (e.g. `cbind(x, z)`),
+# several column names, or a one-sided formula. Every column becomes a slope
+# sharing the group's correlated covariance. `intercept = FALSE` drops the
+# implicit group intercept, giving a slope-only block (lme4 `(0 + x | g)`).
 .tobs_term_re <- function(group, type = c("intercept", "slope", "iid"),
                           covariate = NULL, model = "iid",
-                          correlated = TRUE, sigma_scale = 1, id = NULL) {
+                          correlated = TRUE, intercept = TRUE,
+                          sigma_scale = 1, id = NULL) {
   type  <- match.arg(type)
   model <- match.arg(model, c("iid", "ar1", "rw1", "rw2"))
   if (type == "slope" && is.null(covariate)) {
     stop("re(): `covariate` must be given for a random slope.", call. = FALSE)
   }
+  if (!isTRUE(intercept) && type != "slope") {
+    stop("re(): `intercept = FALSE` is only meaningful for a random slope.",
+         call. = FALSE)
+  }
+  # A one-sided formula spells out several slope columns by name; normalise it
+  # to the term labels so build_re_spec() resolves them against the data.
+  if (inherits(covariate, "formula")) {
+    covariate <- attr(stats::terms(covariate), "term.labels")
+  }
   codes <- .tobs_index_codes(group, "re", "group")
   .tobs_term(list(
     group_idx = codes$idx, n_groups = codes$n,
     type = type, covariate = covariate, model = model,
-    correlated = correlated, sigma_scale = sigma_scale
+    correlated = correlated, intercept = isTRUE(intercept),
+    sigma_scale = sigma_scale
   ), class = "tobs_re", id = id, label = "re")
 }
 
@@ -261,6 +307,8 @@
 .tobs_terms <- list(
   icar          = .tobs_term_icar,
   bym2          = .tobs_term_bym2,
+  car           = .tobs_term_car,
+  car_proper    = .tobs_term_car_proper,
   gp            = .tobs_term_gp,
   multiscale_gp = .tobs_term_multiscale_gp,
   spde          = .tobs_term_spde,
@@ -273,6 +321,37 @@
 
 # Names of the registered special terms (used by the parser to detect them).
 .tobs_term_names <- function() names(.tobs_terms)
+
+
+# Convert an areal `tobs_spatial` term into the `tulpa_spatial` spec the
+# cover-hurdle nested-Laplace path consumes. The areal terms retain the raw
+# adjacency `graph` (and an optional `group_var` mapping observations to graph
+# nodes), so the tulpa-side spec is rebuilt from them. SPDE terms already
+# carry a `tulpa_spec`; continuous (gp / multiscale_gp) terms are not areal
+# and are not supported by the cover engine. tulpa has no spatial_icar(); an
+# intrinsic ICAR is the improper CAR, so icar maps to spatial_car().
+.tobs_term_to_tulpa_spatial <- function(spec) {
+  if (identical(spec$type, "spde")) return(spec$tulpa_spec)
+  if (is.null(spec$graph)) {
+    stop(sprintf(
+      "cover() spatial supports areal terms icar()/bym2()/car()/car_proper() ",
+      "(got '%s').", spec$type), call. = FALSE)
+  }
+  level_args <- if (!is.null(spec$group_var)) {
+    list(level = "group", group_var = spec$group_var)
+  } else {
+    list(level = "obs")
+  }
+  ctor <- switch(spec$type,
+    bym2       = tulpa::spatial_bym2,
+    car        = tulpa::spatial_car,
+    car_proper = tulpa::spatial_car_proper,
+    icar       = tulpa::spatial_car,   # intrinsic CAR
+    stop(sprintf("cover() spatial does not support term type '%s'.", spec$type),
+         call. = FALSE)
+  )
+  do.call(ctor, c(list(spec$graph), level_args))
+}
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +373,16 @@ print.tobs_spatial <- function(x, ...) {
 print.tobs_re <- function(x, ...) {
   cat(sprintf("tobs re term: %s (%s, %d groups)%s\n", x$type, x$model,
               x$n_groups, if (!is.null(x$id)) sprintf(" [id: %s]", x$id) else ""))
-  if (!is.null(x$covariate)) cat(sprintf("  Covariate: %s\n", x$covariate))
+  if (!is.null(x$covariate)) {
+    nm <- if (is.character(x$covariate)) x$covariate
+          else if (is.matrix(x$covariate)) colnames(x$covariate)
+          else NULL
+    label <- if (length(nm)) paste(nm, collapse = ", ")
+             else if (is.matrix(x$covariate)) sprintf("%d slopes", ncol(x$covariate))
+             else "1 slope"
+    cat(sprintf("  Covariate: %s%s\n", label,
+                if (isFALSE(x$intercept)) " (no intercept)" else ""))
+  }
   invisible(x)
 }
 

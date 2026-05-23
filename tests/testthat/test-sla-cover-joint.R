@@ -89,17 +89,13 @@ test_that("joint SLA path no longer falls back via message", {
     set.seed(101)
     sim <- .make_cover_data(seed = 101, N = 200, n_s = 25)
 
-    spatial <- tulpa::spatial_bym2(sim$adj, level = "group",
-                                   group_var = "region")
-
     msgs <- character(0)
     fit <- withCallingHandlers(
         tobs(
-            formula = ~ x,
+            formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
             data    = sim$data,
             family  = cover("beta"),
             y       = sim$y,
-            spatial = spatial,
             engine  = "nested_laplace",
             approx  = "simplified_laplace",
             control = list(
@@ -130,15 +126,11 @@ test_that("SLA joint fit exposes skew + draws fields", {
     set.seed(102)
     sim <- .make_cover_data(seed = 102, N = 200, n_s = 25)
 
-    spatial <- tulpa::spatial_bym2(sim$adj, level = "group",
-                                   group_var = "region")
-
     fit <- suppressMessages(tobs(
-        formula = ~ x,
+        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        spatial = spatial,
         engine  = "nested_laplace",
         approx  = "simplified_laplace",
         control = list(
@@ -186,15 +178,11 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
     set.seed(103)
     sim <- .make_cover_data(seed = 103, N = 200, n_s = 25)
 
-    spatial <- tulpa::spatial_bym2(sim$adj, level = "group",
-                                   group_var = "region")
-
     fit <- suppressMessages(tobs(
-        formula = ~ x,
+        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        spatial = spatial,
         engine  = "nested_laplace",
         # Default approx (or explicit gaussian_laplace) — both should leave
         # the SLA fields un-populated.
@@ -226,15 +214,11 @@ test_that("SLA gamma near zero at large N", {
     sim <- .make_cover_data(seed = 104, N = 1000, n_s = 25,
                             alpha_true = 1.0)
 
-    spatial <- tulpa::spatial_bym2(sim$adj, level = "group",
-                                   group_var = "region")
-
     fit <- suppressMessages(tobs(
-        formula = ~ x,
+        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        spatial = spatial,
         engine  = "nested_laplace",
         approx  = "simplified_laplace",
         control = list(
@@ -267,15 +251,11 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
     sim <- .make_cover_data(seed = 105, N = 200, n_s = 25,
                             alpha_true = 0.01, sigma = 0.05)
 
-    spatial <- tulpa::spatial_bym2(sim$adj, level = "group",
-                                   group_var = "region")
-
     fit_joint <- suppressMessages(tobs(
-        formula = ~ x,
+        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        spatial = spatial,
         engine  = "nested_laplace",
         approx  = "simplified_laplace",
         control = list(

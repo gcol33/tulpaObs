@@ -172,17 +172,17 @@ within every plot.
 
 ## Fit: beta-positive joint engine
 
-```{r fit-beta, message = FALSE, warning = FALSE}
-spatial <- tulpa::spatial_bym2(sim_beta$adj,
-                               level     = "group",
-                               group_var = "plot_id")
+The BYM2 plot-level field is written into the formula as a `bym2()` term.
+The graph is over plots, so the term carries `group_var = "plot_id"` to
+map each visit row to its plot.
 
+```{r fit-beta, message = FALSE, warning = FALSE}
 fit_beta <- tobs(
-  formula   = ~ year_btw + year_wtn,
+  formula   = ~ year_btw + year_wtn +
+               bym2(graph = sim_beta$adj, group_var = "plot_id"),
   data      = dat_beta,
   family    = cover("beta"),
   y         = sim_beta$y,
-  spatial   = spatial,
   engine    = "nested_laplace",
   control   = list(verbose = FALSE)
 )
@@ -193,11 +193,11 @@ fit_beta
 
 ```{r fit-lognormal, message = FALSE, warning = FALSE}
 fit_ln <- tobs(
-  formula   = ~ year_btw + year_wtn,
+  formula   = ~ year_btw + year_wtn +
+               bym2(graph = sim_ln$adj, group_var = "plot_id"),
   data      = dat_ln,
   family    = cover("lognormal"),
   y         = sim_ln$y,
-  spatial   = spatial,
   engine    = "nested_laplace",
   control   = list(verbose = FALSE)
 )
@@ -288,8 +288,8 @@ A few features of the real MOTIVATE workflow are deliberately absent:
   pipeline is unchanged.
 * **Observer / method effects.** Real resurveys carry a "visit
   protocol" covariate (taxonomic resolution, season, observer team).
-  Add as a fixed effect to the `tobs()` formula or as an RE via
-  `tobs_re()`.
+  Add as a fixed effect to the `tobs()` formula or as a random effect
+  with an `re(observer)` term.
 * **Missing visits.** This simulator gives every plot the same number
   of visits at the same spacing. `tobs()` handles ragged panels — drop
   rows for missing visits and the within-between decomposition still

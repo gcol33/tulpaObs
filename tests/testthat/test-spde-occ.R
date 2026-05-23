@@ -1,36 +1,36 @@
-# Tests for SPDE spatial spec via tobs_spde()
+# Tests for the SPDE spatial term spde() inside a tobs() formula.
 
-test_that("tobs_spde creates valid specification", {
+test_that("spde() term builds a valid spatial spec", {
   set.seed(42)
   coords <- cbind(runif(30), runif(30))
-  spec <- tobs_spde(coords)
+  spec <- tulpaObs:::.tobs_term_spde(coords = coords)
 
   expect_s3_class(spec, "tobs_spatial")
   expect_equal(spec$type, "spde")
   expect_true(spec$n_units >= 30)
-  expect_equal(spec$shared, c(TRUE, FALSE))
 })
 
-test_that("tobs_spde creates spec from formula", {
+test_that("spde() term resolves bare coordinate columns", {
   set.seed(42)
   df <- data.frame(x = runif(20), y = runif(20))
-  spec <- tobs_spde(~ x + y, data = df)
+  p <- tulpaObs:::.tobs_parse_formula(~ spde(x, y), data = df)
 
-  expect_s3_class(spec, "tobs_spatial")
-  expect_equal(spec$type, "spde")
+  expect_length(p$terms, 1L)
+  expect_s3_class(p$terms[[1]], "tobs_spatial")
+  expect_equal(p$terms[[1]]$type, "spde")
 })
 
-test_that("tobs_spde print method works", {
+test_that("spde() spatial spec print method works", {
   set.seed(42)
-  spec <- tobs_spde(cbind(runif(20), runif(20)))
+  spec <- tulpaObs:::.tobs_term_spde(coords = cbind(runif(20), runif(20)))
   expect_output(print(spec), "spde")
   expect_output(print(spec), "Matern")
 })
 
-test_that("tobs_spde with fractional nu creates valid spec", {
+test_that("spde() with fractional nu builds a valid spec", {
   set.seed(42)
   coords <- cbind(runif(30), runif(30))
-  spec <- tobs_spde(coords, nu = 1.5)
+  spec <- tulpaObs:::.tobs_term_spde(coords = coords, nu = 1.5)
 
   expect_equal(spec$nu, 1.5)
   expect_s3_class(spec, "tobs_spatial")
@@ -40,7 +40,7 @@ test_that("tobs_spde with fractional nu creates valid spec", {
 # returns sensible (beta_occ, beta_det) and a positively-correlated mesh
 # field. Generous tolerances — this tier catches structural regressions
 # (sign flips, missing field, dropped prior).
-test_that("tobs() + tobs_spde() Laplace recovers beta and the field shape", {
+test_that("tobs() + spde() Laplace recovers beta and the field shape", {
   skip_on_cran()
   skip_if_not_installed("tulpaMesh")
 
@@ -65,13 +65,14 @@ test_that("tobs() + tobs_spde() Laplace recovers beta and the field shape", {
   for (i in seq_len(n_sites)) {
     if (z[i] == 1L) y[i, ] <- rbinom(J, 1, p[i])
   }
-  dat <- data.frame(occ_cov = x_cov, det_cov = det_cov)
+  dat <- data.frame(occ_cov = x_cov, det_cov = det_cov,
+                    lon = coords[, 1], lat = coords[, 2])
 
-  sp <- tobs_spde(coords = coords, max_edge = c(0.3, 0.6), nu = 1,
-                  prior_range = c(0.3, 0.5), prior_sigma = c(0.7, 0.5))
-
-  fit <- tobs(formula = ~ occ_cov, data = dat, family = occu(),
-              detection = ~ det_cov, y = y, spatial = sp,
+  fit <- tobs(formula = ~ occ_cov + spde(lon, lat, max_edge = c(0.3, 0.6),
+                                         nu = 1, prior_range = c(0.3, 0.5),
+                                         prior_sigma = c(0.7, 0.5)),
+              data = dat, family = occu(),
+              detection = ~ det_cov, y = y,
               engine = "laplace", control = list(verbose = FALSE))
 
   # Detection coefficients should be sensible
@@ -83,13 +84,13 @@ test_that("tobs() + tobs_spde() Laplace recovers beta and the field shape", {
 
   # The latent SPDE mesh field should be stored on the fit
   expect_false(is.null(fit$spatial_field))
-  expect_equal(length(fit$spatial_field), sp$n_units)
+  expect_equal(length(fit$spatial_field), fit$spatial$n_units)
 
   # And it should be positively correlated with the truth at sites.
   # Sanity threshold only — the SPDE-Laplace EM converges to a slightly
   # damped field at this n_sites / J / max_edge mix, sitting around 0.4
   # in practice and tipping above or below by a few hundredths per seed.
-  field_at_sites <- as.numeric(sp$tulpa_spec$A %*% fit$spatial_field)
+  field_at_sites <- as.numeric(fit$spatial$tulpa_spec$A %*% fit$spatial_field)
   expect_gt(cor(field_at_sites, u_true), 0.3)
 })
 
@@ -100,7 +101,7 @@ test_that("tobs() + tobs_spde() Laplace recovers beta and the field shape", {
 # dev_notes/_spde_highN_probe.R). Bounds below sit comfortably outside
 # those observed maxima and detect regressions that the N = 400 slim
 # tier is too noisy to catch.
-test_that("tobs() + tobs_spde() Laplace recovery tightens at N = 1500", {
+test_that("tobs() + spde() Laplace recovery tightens at N = 1500", {
   skip_on_cran()
   skip_if_not_installed("tulpaMesh")
 
@@ -123,13 +124,15 @@ test_that("tobs() + tobs_spde() Laplace recovery tightens at N = 1500", {
     for (i in seq_len(n_sites)) {
       if (z[i] == 1L) y[i, ] <- rbinom(J, 1, p[i])
     }
-    dat <- data.frame(occ_cov = x_cov, det_cov = det_cov)
-    sp <- tobs_spde(coords = coords, max_edge = c(0.18, 0.45), nu = 1,
-                    prior_range = c(0.3, 0.5), prior_sigma = c(0.7, 0.5))
-    fit <- tobs(formula = ~ occ_cov, data = dat, family = occu(),
-                detection = ~ det_cov, y = y, spatial = sp,
+    dat <- data.frame(occ_cov = x_cov, det_cov = det_cov,
+                      lon = coords[, 1], lat = coords[, 2])
+    fit <- tobs(formula = ~ occ_cov + spde(lon, lat, max_edge = c(0.18, 0.45),
+                                           nu = 1, prior_range = c(0.3, 0.5),
+                                           prior_sigma = c(0.7, 0.5)),
+                data = dat, family = occu(),
+                detection = ~ det_cov, y = y,
                 engine = "laplace", control = list(verbose = FALSE))
-    field_at_sites <- as.numeric(sp$tulpa_spec$A %*% fit$spatial_field)
+    field_at_sites <- as.numeric(fit$spatial$tulpa_spec$A %*% fit$spatial_field)
     list(
       psi_slope_bias = unname(fit$means["psi_occ_cov"]) - beta_occ[2],
       p_slope_bias   = unname(fit$means["p_det_cov"])   - beta_det[2],
