@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+* feat(re): correlated random slopes `(1 + x | g)` now fit under the default
+  `method = "laplace"` (gcol33/tulpaObs#11), not only NUTS. The variance-
+  component EM (`R/em_laplace_re.R`) carries a full per-term RE covariance
+  `Sigma` (diagonal for `(x || g)`, full for `(1 + x | g)`) and updates it with
+  `Sigma_k <- mean_g [b_g b_g' + Cov(b_g | y)]`, consuming the per-group
+  posterior covariance from `tulpa::tulpa_laplace(return_re_cov = TRUE)`. Because
+  the M-step fits the package's M-inflated pseudo-binomial (`n = M`, prior
+  `Sigma/M`), the natural-scale covariance is `M` times the block tulpa returns
+  (the inflated Hessian is `M` times the natural one). The estimated off-diagonal
+  is reported as a `cor_<g>_<ci>_<cj>` correlation alongside the `sigma_` marginal
+  SDs. This removes the previous `.validate_re_laplace()` rejection that routed
+  `(1 + x | g)` to NUTS; the duplicate R-side Schur for the RE posterior variance
+  is dropped in favour of the engine's `cov_blocks`. Deterministic Laplace still
+  carries the small-cluster (PQL) bias -- NUTS is the calibrated route. Recovery
+  test in `tests/testthat/test-re-laplace-recovery.R` (sigmas, correlation, and
+  BLUPs vs simulated truth).
+
 * feat(priors): `cover_priors()` adds opt-in Gaussian fixed-effect priors to the
   cover hurdle, penalising *both* arms -- the occurrence (Bernoulli) intercept /
   slopes and the positive-part (beta or lognormal) intercept / slopes. The

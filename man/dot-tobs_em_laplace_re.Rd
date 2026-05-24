@@ -19,7 +19,7 @@ variance-component EM (internal).}
 \item{model}{A single-season \code{tobs_model}.}
 
 \item{re}{A list of \code{tobs_re} specs on the occupancy predictor (iid
-intercept or uncorrelated slopes).}
+intercept, uncorrelated slopes, or correlated slopes).}
 
 \item{priors}{Prior spec; not applied on this path (warns when active).}
 

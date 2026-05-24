@@ -40,21 +40,25 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > `re_has_intercept` flag in tulpa's engine (ABI 22).
 >
 > Random effects fit under both engines (gcol33/tulpaObs#11). NUTS fits every
-> form (incl. correlated slopes). The default `engine = "laplace"` fits iid
-> intercept RE and *uncorrelated* slopes (`(x || g)`, `(0 + x | g)`,
-> `(1 + x || g)`) on the occupancy predictor of a single-season model via a
+> form. The default `engine = "laplace"` fits iid intercept RE, uncorrelated
+> slopes (`(x || g)`, `(0 + x | g)`, `(1 + x || g)`), and *correlated* slopes
+> (`(1 + x | g)`) on the occupancy predictor of a single-season model via a
 > variance-component EM (`R/em_laplace_re.R`, `.tobs_em_laplace_re()`): it wraps
-> tulpa's fixed-sigma `tulpa_laplace()` in the occupancy missing-data EM (the RE
-> mode is fed back into psi) and an EM/REML variance-component update, with the
-> RE posterior covariance recomputed at natural scale via Schur. tulpa's Laplace
-> uses a *diagonal* RE precision, so correlated slopes (`(1 + x | g)`), RE on
-> detection, RE + spatial, RE + visit-level detection, and RE on non-single
-> families error from `.validate_re_laplace()` with a pointer to NUTS rather
-> than being silently dropped. Deterministic Laplace variance estimates for
-> binary occupancy carry the usual small-cluster (PQL) bias; NUTS is the
+> tulpa's fixed-covariance `tulpa_laplace()` in the occupancy missing-data EM
+> (the RE mode is fed back into psi) and an EM/REML update of the per-term RE
+> covariance `Sigma_k <- mean_g [b_g b_g' + Cov(b_g | y)]`. The per-group
+> posterior covariance `Cov(b_g | y)` comes from
+> `tulpa_laplace(return_re_cov = TRUE)$cov_blocks`, scaled to natural scale by
+> `M` (the M-step's pseudo-binomial inflation): a correlated term keeps the full
+> `Sigma`, an uncorrelated term is projected to its diagonal each M-step. RE +
+> spatial, RE + visit-level detection, RE on / shared with detection, and RE on
+> non-single families error from `.validate_re_laplace()` with a pointer to NUTS
+> rather than being silently dropped. Deterministic Laplace variance estimates
+> for binary occupancy carry the usual small-cluster (PQL) bias; NUTS is the
 > calibrated route. RE parameter naming + per-group BLUP reconstruction for both
 > engines live in `R/re_effects.R` (`ranef()` / `coef()` overrides in
-> `R/methods.R`).
+> `R/methods.R`); the correlated-block off-diagonal is reported as a
+> `cor_<g>_<ci>_<cj>` correlation.
 >
 > Legacy data-binder / engine entry are internal: `.tobs_build_model()`,
 > `.tobs_fit_model()`, `.tobs_laplace()`.
@@ -149,7 +153,7 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Spatial + community     | —       | Yes   |                                         |
 | Formula RE (intercept)  | Yes     | Yes   | `(1 \| g)`; Laplace via variance-component EM (gcol33/tulpaObs#11) |
 | Formula RE (uncorr slope)| Yes    | Yes   | `(x \|\| g)`, `(0 + x \| g)`, `(1 + x \|\| g)` |
-| Formula RE (corr slope) | —       | Yes   | `(1 + x \| g)`; Cholesky cov is NUTS-only (Laplace errors -> NUTS) |
+| Formula RE (corr slope) | Yes     | Yes   | `(1 + x \| g)`; Laplace fits the full cov via the EM M-step consuming tulpa `cov_blocks` (gcol33/tulpaObs#11) |
 | All S3 methods          | Yes     | Yes   | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update, summary, `$.tobs_fit` |
 | Diagnostics             | Yes     | Yes   | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram, spatialRange, temporalCorr |
 | Simulation              | Yes     | Yes   | `simulate_occu`, `simulate_ms_occu`, `simulate_dyn_occu`, `simulate_int_occu`, `simulate_dyn_ms_occu`, `simulate_int_ms_occu`, `simulate_cover`, `simulate_cover_joint` |

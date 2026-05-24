@@ -45,9 +45,9 @@
   .validate_spatial_laplace(spatial, model$model_type)
 
   # Formula random effects on the deterministic path. Supported forms (iid
-  # intercept + uncorrelated slopes on the occupancy predictor of a
-  # single-season model) are fit via the variance-component EM in
-  # R/em_laplace_re.R; everything else errors with a pointer to NUTS rather
+  # intercept, uncorrelated slopes, and correlated slopes on the occupancy
+  # predictor of a single-season model) are fit via the variance-component EM
+  # in R/em_laplace_re.R; everything else errors with a pointer to NUTS rather
   # than being silently dropped (gcol33/tulpaObs#11).
   if (!is.null(re)) {
     .validate_re_laplace(re, model, spatial, approx)
@@ -804,8 +804,10 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 }
 
 # Gate the deterministic random-effect path. The variance-component EM in
-# R/em_laplace_re.R fits iid intercept + UNCORRELATED slopes on the occupancy
-# predictor of a single-season model. Forms it cannot fit error here with a
+# R/em_laplace_re.R fits iid intercept, uncorrelated slopes, and correlated
+# slopes (a full RE covariance) on the occupancy predictor of a single-season
+# model. Forms it cannot fit -- non-single families, RE + spatial, RE +
+# visit-level detection, RE on / shared with detection -- error here with a
 # pointer to `method = "nuts"` (which fits every RE form) rather than being
 # silently dropped (gcol33/tulpaObs#11). The deterministic Laplace variance
 # estimate carries the usual small-cluster (PQL) bias; NUTS is the calibrated
@@ -833,17 +835,6 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
     }
     if (length(r$shared) >= 2L && isTRUE(r$shared[2])) {
       stop("A random effect shared across occupancy and detection is not supported on the Laplace path. Use method = 'nuts'.",
-           call. = FALSE)
-    }
-    n_slopes <- if (identical(r$type, "slope") && !is.null(r$covariate)) {
-      ncol(.tobs_re_slope_matrix(r$covariate, model$data))
-    } else 0L
-    n_coefs <- (if (isTRUE(r$intercept)) 1L else 0L) + n_slopes
-    if (isTRUE(r$correlated) && n_coefs > 1L) {
-      # Blocked on gcol33/tulpa#28: tulpa's Laplace RE precision is diagonal
-      # (per-coefficient marginal sigma, no Cholesky factor), so a correlated
-      # block is not representable. NUTS fits it via a Cholesky covariance.
-      stop("Correlated random slopes (a Cholesky-factored covariance, e.g. `(1 + x | g)`) are fit by the NUTS sampler only; the Laplace engine uses a diagonal random-effect covariance (gcol33/tulpa#28). Use `method = 'nuts'`, or `(1 + x || g)` for an uncorrelated block.",
            call. = FALSE)
     }
   }
