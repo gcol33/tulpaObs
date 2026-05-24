@@ -37,7 +37,7 @@ test_that("tobs(engine='nested_laplace') runs with spatial only", {
   )
   expect_s3_class(fit, "tobs_fit")
   expect_true(!is.null(fit$nested_laplace$multi_prior))
-  expect_identical(fit$nested_laplace$multi_prior$type, "bym2")
+  expect_identical(fit$nested_laplace$multi_prior[[1]]$type, "bym2")
 })
 
 
@@ -76,14 +76,18 @@ test_that("nested_laplace requires at least one latent block", {
 })
 
 
-test_that(".map_engine routes nested_laplace by family", {
-  expect_identical(.map_engine("nested_laplace", family = "occu"),
-                   "nested_laplace")
-  expect_message(
-    mapped <- .map_engine("nested_laplace", family = "dyn_occu"),
-    "nested_laplace is currently wired only for single-season occupancy"
+test_that(".map_engine routes nested_laplace for the multi-block families, errors for jsdm", {
+  for (fam in c("occu", "int_occu", "ms_occu", "dyn_occu")) {
+    expect_identical(.map_engine("nested_laplace", family = fam),
+                     "nested_laplace")
+  }
+  # jsdm has no nested-Laplace driver; the registry rejects it before dispatch,
+  # so reaching .map_engine with it is an internal mis-wire (not a silent
+  # downgrade to single-Laplace).
+  expect_error(
+    .map_engine("nested_laplace", family = "jsdm"),
+    "Internal error"
   )
-  expect_identical(mapped, "laplace")
   expect_identical(.map_engine("laplace", family = "occu"), "laplace")
   expect_identical(.map_engine("nuts", family = "occu"), "nuts")
 })
@@ -92,9 +96,12 @@ test_that(".map_engine routes nested_laplace by family", {
 test_that(".tobs_to_multi_block_prior shapes the block list correctly", {
   d <- simulate_panel_occu()
   model <- list(
-    model_type = "single",
-    n_sites    = nrow(d$y),
-    data       = d$data
+    model_type  = "single",
+    n_sites     = nrow(d$y),
+    # The state-block geometry is read from X_processes[[1]] (one occ row per
+    # site for single-season); a 1-column placeholder suffices here.
+    X_processes = list(matrix(0, nrow(d$y), 1L)),
+    data        = d$data
   )
   class(model) <- "tobs_model"
 

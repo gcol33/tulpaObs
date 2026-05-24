@@ -105,10 +105,58 @@ correction), where the fixed-effect prior is attached to each M-step block as a
 per-block `beta_prior` that tulpa applies. MI/Gibbs corrections are opt-in via
 `method = "laplace_gibbs"` / `"laplace_mi"`; the same prior threads into the
 correction refits (gcol33/tulpa#27), so they are penalised like `"laplace"`
-unless `priors = FALSE`. A second nested-Laplace path (`em_nested_laplace.R`,
-`simplified_laplace.R`, the `sla_*` files) handles families where the standard
-EM closed-form does not apply (cover hurdle joint, dynamic/integrated occupancy
-under `method = "nested_laplace"`).
+unless `priors = FALSE`. A second **nested-Laplace** engine (`em_nested_laplace.R`,
+`method = "nested_laplace"`) handles non-conjugate hyperpriors via a multi-block
+latent prior. `.tobs_em_nested_laplace()` is a thin wrapper over
+`.tobs_laplace(latent_prior = )`: the multi-block prior built from the formula's
+`spatial` / `temporal` / `re` terms is attached to the state ("occ") M-step
+block (`.tobs_laplace_nested()`), so tulpa's EM routes that block through
+`tulpa_nested_laplace()`. It is wired for single-season, integrated, community,
+and dynamic occupancy (one set of `build_*_callbacks` shared with the
+single-Laplace path; `.tobs_state_block_dims()` maps each state row to its
+spatial unit, so a community model shares a site-level field across species),
+and the cover hurdle joint path uses `tulpa_nested_laplace_joint()` separately.
+The single-season path also does **INLA-style NA-response prediction** with
+**calibrated credible intervals**: sites with an all-missing detection history
+(`.tobs_heldout_sites()`) are interpolated by the latent field, and
+`predict(type = "state")` returns the per-site psi posterior (`psi`,
+`psi_lower`, `psi_upper`, 95%) marginalised over the hyperparameter grid. The
+intervals are calibrated by refining the EM field with one exact-marginal pass
+(`.tobs_occu_state_marginal_fit()`): the latent occupancy state z is integrated
+out, so each site is a Bernoulli on D = 1{>=1 detection} with mean
+q*sigma(eta), where q = 1 - (1-p)^J (a held-out site has no visits -> q = 0 ->
+dropped from the likelihood, interpolated by the field). This fits tulpa's
+generic `family = "bernoulli"` with a per-observation probability scale
+`det_prob = q` (gcol33/tulpa: scaled-Bernoulli family), so the converged Hessian
+is the marginal curvature -- `fitted_eta_var` (a_i' H^{-1} a_i off the live
+factor) is the calibrated per-cell predictive variance and the grid weights are
+on the natural scale (no M-inflation). The EM's M-inflated pseudo-binomial,
+which weights the data ~M times the prior and whose unit-trial Hessian is the
+complete-data information, is kept only for the mode/detection estimate; reading
+variance or grid weights off it under-covers and collapses the grid (the
+refinement is the field analogue of `.tobs_occu_marginal_refine()` for the
+fixed effects). The per-row eta posterior is a Gaussian mixture over grid cells
+(`.nested_psi_mean()` Gauss-Hermite mean, `.nested_psi_quantiles()` mixture-CDF
+quantiles). Measured held-out coverage ~1.0 (conservative), cor ~0.88, MAE ~0.11
+on a 10x10 icar/bym2 grid (`dev_notes/probe_nested_ci_coverage.R`). Other model
+types keep the EM occ fit (their NA-response mapping is not yet wired). Older
+tulpa without `fitted_eta_var` reports `psi` only with NA interval columns.
+Orthogonal to the engine, the **simplified-
+Laplace skewness correction** (`simplified_laplace.R`, the `sla_*` files) is a
+post-fit marginal refinement selected by `approx = "simplified_laplace"` (the
+`*_sla` method names); it is computed for single / dynamic / integrated
+occupancy and the cover hurdle, and no-ops to the Gaussian marginal (recording
+`sla_status`) for community / jsdm.
+
+Backend coverage is uneven across families and is enforced centrally:
+`.tobs_family_methods` in `R/tobs.R` is the single source of truth for which
+`method` each working family supports, and `tobs()` errors with a pointer to the
+supported set rather than silently downgrading the engine. `nested_laplace` is
+occu / int_occu / ms_occu / dyn_occu + cover; the `*_sla` skew variants on the
+nested path are occu + cover only; the cover hurdle has no NUTS likelihood or
+EM-correction engine (no `nuts` / `laplace_gibbs` / `laplace_mi`). Half the
+family roster (`abun`, `ms_abun`, `dyn_abun`, `distance`, `removal`, `fp_occu`)
+is `status = "planned"` and errors via `.stop_planned_family()` on any method.
 
 ### Boundary: What lives here vs tulpa
 
@@ -151,6 +199,8 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
 | Spatial + community     | —       | Yes   |                                         |
+| Nested-Laplace (areal)  | n-L     | —     | `method="nested_laplace"`: icar/bym2/car (+ temporal/iid) on occu / int_occu / ms_occu / dyn_occu |
+| NA-response prediction  | n-L     | —     | `predict(type="state")`: all-NA single-season sites interpolated by the field (any prior incl. bym2, via engine `fitted_eta`), with calibrated 95% `psi_lower`/`psi_upper` from the exact-marginal `bernoulli`-family pass (held-out coverage ~1.0) |
 | Formula RE (intercept)  | Yes     | Yes   | `(1 \| g)`; Laplace via variance-component EM (gcol33/tulpaObs#11) |
 | Formula RE (uncorr slope)| Yes    | Yes   | `(x \|\| g)`, `(0 + x \| g)`, `(1 + x \|\| g)` |
 | Formula RE (corr slope) | Yes     | Yes   | `(1 + x \| g)`; Laplace fits the full cov via the EM M-step consuming tulpa `cov_blocks` (gcol33/tulpaObs#11) |

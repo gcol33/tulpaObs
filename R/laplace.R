@@ -37,10 +37,38 @@
                           correction = c("auto", "mi", "gibbs", "none"),
                           n_imputations = 20L, n_gibbs = 10L, seed = NULL,
                           approx = c("gaussian_laplace", "simplified_laplace"),
+                          latent_prior = NULL, heldout_state = NULL,
                           verbose = TRUE) {
   correction <- match.arg(correction)
   approx <- match.arg(approx)
   if (!inherits(model, "tobs_model")) stop("model must be a tobs_model object")
+
+  # Nested-Laplace path: a multi-block latent prior is attached to the state
+  # ("occ") M-step block so tulpa's EM dispatches it through
+  # tulpa_nested_laplace() with hyperparameter integration (see
+  # `.tobs_em_nested_laplace()`). The latent prior is mutually exclusive with an
+  # SPDE `spatial` term (that is the single-Laplace continuous-spatial route)
+  # and with the variance-component RE EM (RE blocks are folded into the multi-
+  # block prior upstream), and it has no MI/Gibbs correction.
+  if (!is.null(latent_prior)) {
+    if (!is.null(spatial)) {
+      stop("latent_prior and an SPDE spatial term cannot be combined on the ",
+           "Laplace path.", call. = FALSE)
+    }
+    if (!is.null(re)) {
+      stop("latent_prior is built from the spatial/temporal/re terms upstream; ",
+           "pass re = NULL when latent_prior is set.", call. = FALSE)
+    }
+    if (!correction %in% c("auto", "none")) {
+      stop("Nested Laplace (latent_prior) has no MI/Gibbs correction.",
+           call. = FALSE)
+    }
+    return(.tobs_laplace_nested(model, latent_prior = latent_prior,
+                                heldout_state = heldout_state,
+                                priors = priors, max_iter = max_iter,
+                                tol = tol, damping = damping, approx = approx,
+                                verbose = verbose))
+  }
 
   .validate_spatial_laplace(spatial, model$model_type)
 
@@ -122,6 +150,20 @@
                            prior_spec = prior_spec,
                            approx = approx)
   fit$priors <- prior_spec
+
+  # Debias step (gcol33/tulpaObs#7): for single-season occupancy the marginal
+  # likelihood is closed-form, so refine the EM mode with an exact-marginal
+  # Newton step and read calibrated SEs from its Hessian. The EM's M-inflated
+  # pseudo-binomial Laplace attenuates the detection coefficients and
+  # under-disperses their SEs at small J; the refinement restores unbiased,
+  # near-nominal-coverage fixed effects. Spatial / multi-season fits have no
+  # closed-form marginal and keep the EM result.
+  if (identical(model$model_type, "single") && is.null(spatial) &&
+      identical(approx, "gaussian_laplace") &&
+      correction %in% c("auto", "none")) {
+    fit <- .tobs_occu_marginal_refine(fit, model, prior_spec)
+  }
+
   # Record the seed used for a stochastic correction so the run reproduces.
   if (correction %in% c("mi", "gibbs") && !is.null(seed)) {
     fit$seed <- as.integer(seed)
@@ -130,9 +172,102 @@
 }
 
 # ============================================================================
+# Nested-Laplace driver
+#
+# Shares the per-model-type E-step / M-step callbacks with `.tobs_laplace`
+# (single source of truth: there is no `build_*_callbacks_nested` family). The
+# only difference from the single-Laplace path is that the multi-block latent
+# `prior` is attached to the state ("occ") M-step block, which makes tulpa's
+# generic EM engine dispatch that block through `tulpa::tulpa_nested_laplace()`
+# (hyperparameter integration) instead of `tulpa::tulpa_laplace()`. The
+# detection block(s) stay single-Laplace (nested-Laplace does not accept the
+# per-row observation weights they carry).
+#
+# Held-out state units (`heldout_state`, integer indices into the state block's
+# rows) are encoded with `n_trials = 0`: they drop out of the likelihood but
+# stay in the design so their latent value is pulled from the prior (spatial
+# neighbours / shared field) and `X beta` -- the INLA NA-response mechanism that
+# `.tobs_predict_heldout()` reads back marginalised over the grid.
+# ============================================================================
+.tobs_laplace_nested <- function(model, latent_prior, heldout_state = NULL,
+                                 priors = NULL, max_iter = 25L, tol = 1e-3,
+                                 damping = 0.3, approx = "gaussian_laplace",
+                                 verbose = TRUE) {
+  if (!is.null(priors) && !isFALSE(priors)) {
+    message(".tobs_laplace_nested(): fixed-effect priors are not applied on ",
+            "the nested-Laplace path; the latent block carries its own prior.")
+  }
+
+  callbacks <- switch(model$model_type,
+    single     = build_single_callbacks(model, spatial = NULL,
+                                        latent_prior = latent_prior),
+    dynamic    = build_dynamic_callbacks(model, spatial = NULL),
+    community  = build_community_callbacks(model, spatial = NULL),
+    integrated = build_integrated_callbacks(model, spatial = NULL),
+    jsdm       = build_jsdm_callbacks(model, spatial = NULL),
+    stop(sprintf("nested Laplace not supported for model_type '%s'",
+                 model$model_type), call. = FALSE)
+  )
+
+  m_step_encode <- function(weights, ...) {
+    blocks <- callbacks$m_step_encode(weights, ...)
+    blocks$occ$prior <- latent_prior
+    if (!is.null(heldout_state) && length(heldout_state) > 0L) {
+      blocks$occ$n_trials[heldout_state] <- 0L
+      blocks$occ$y[heldout_state]        <- 0L
+    }
+    blocks
+  }
+
+  em_result <- tulpa::tulpa_em_laplace(
+    e_step        = callbacks$e_step,
+    m_step_encode = m_step_encode,
+    max_iter      = max_iter,
+    tol           = tol,
+    damping       = damping,
+    correction    = "none",
+    verbose       = verbose
+  )
+  if (is.null(em_result$convergence)) {
+    em_result$convergence <- list(converged = em_result$converged,
+                                  n_iter = em_result$n_iter,
+                                  history = em_result$history)
+  }
+
+  fit <- build_laplace_fit(em_result, model, spatial = NULL,
+                           callbacks$p_per_submodel,
+                           prior_spec = NULL, approx = approx,
+                           latent_prior = latent_prior)
+  fit$method <- "nested_laplace"
+
+  # State-field posterior. For single-season occupancy, refine the EM field with
+  # one exact-marginal occupancy-family pass (calibrated mode, fitted_eta_var and
+  # grid weights with no M-inflation; see .tobs_occu_state_marginal_fit). Other
+  # model types keep the EM occ fit (their NA-response mapping is not yet wired,
+  # and the occupancy-family reduction is single-season specific).
+  state_fit <- if (identical(model$model_type, "single")) {
+    .tobs_occu_state_marginal_fit(model, em_result, latent_prior,
+                                  max_iter = max_iter, tol = tol)
+  } else {
+    em_result$fits$occ
+  }
+  fit$nested_laplace <- list(multi_prior = latent_prior,
+                             occ_fit     = state_fit,
+                             heldout     = heldout_state)
+  # Marginalised state-level psi posterior (per state row, integrated over the
+  # hyperparameter grid). Computed here on the fitting-scale design so the
+  # per-cell betas and the field share one space; psi is scale-invariant and
+  # survives the per-process unscaling downstream. Held-out rows are the
+  # NA-response prediction targets.
+  fit$state_posterior <- .tobs_nested_state_posterior(
+    model, state_fit, latent_prior, heldout = heldout_state)
+  fit
+}
+
+# ============================================================================
 # Single-season callbacks
 # ============================================================================
-build_single_callbacks <- function(model, spatial = NULL) {
+build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   y <- model$y
   X_occ <- model$X_processes[[1]]
   X_det <- model$X_processes[[2]]
@@ -169,6 +304,22 @@ build_single_callbacks <- function(model, spatial = NULL) {
     eta_occ <- as.vector(X_occ %*% beta_occ)
     sp_off <- .spatial_eta_offset(spatial, fits$occ, p_occ)
     if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
+    # Nested-Laplace: make the E-step weight P(z_i = 1 | y_i) field-aware (the
+    # field informs which undetected sites are occupied; without this the EM
+    # converges to the fixed-effect-only fixed point and the field cannot track
+    # the data). Prefer the engine's exact per-cell fitted eta, marginalised
+    # over the hyperparameter grid -- correct for every prior including bym2.
+    # Fall back to the grid-weighted mode field offset (exact for d_fac = 1
+    # priors; skips bym2) when the engine did not return fitted_eta.
+    if (!is.null(latent_prior)) {
+      eta_marg <- .nested_eta_marginal(fits$occ, n_sites)
+      if (!is.null(eta_marg)) {
+        eta_occ <- eta_marg
+      } else {
+        lat_off <- .nested_eta_offset(latent_prior, fits$occ, p_occ, n_sites)
+        if (length(lat_off) == n_sites) eta_occ <- eta_occ + lat_off
+      }
+    }
     psi <- plogis(eta_occ)
 
     if (p_det_visit == 0L) {
@@ -945,6 +1096,84 @@ extract_beta <- function(sub, p) {
   I_obs
 }
 
+# Marginal Louis observed Fisher info for the SITE-LEVEL detection block of a
+# single-season fit (tulpaObs#7, detection arm). The detection M-step fits a
+# weighted binomial whose returned H_beta = X_det' diag(w n_valid p(1-p)) X_det
+# is the *complete-data* info: it treats the soft occupancy weight
+# w_i = P(z_i = 1 | y) as known and so under-states the SE (the M-step Hessian
+# is the wrong object for SEs, exactly as on the psi arm). The occupancy and
+# detection estimating equations both depend on the latent z, so the detection
+# SE must come from the JOINT (psi, det) Louis observed info, marginalized over
+# psi -- the diagonal det block alone fixes the intercept but leaves the slope
+# under-dispersed.
+#
+# Complete-data scores: s_psi,i = x_psi,i (z_i - psi_i),
+# s_det,i = z_i (n_det_i - n_valid_i p_i) x_det,i. With z_i | y ~ Bern(w_i) the
+# Louis identity (E[I_complete | y] - Var(s_complete | y)) gives the joint
+# observed info in three blocks (the complete-data cross block is 0):
+#
+#   I_pp = X_psi' diag( psi(1-psi) - w(1-w) ) X_psi                 (+ psi prior)
+#   I_dd = X_det' diag( w n_valid p(1-p) - (n_valid p)^2 w(1-w) ) X_det (+ p prior)
+#   I_pd = - X_psi' diag( n_valid p w(1-w) ) X_det
+#
+# (a detected site has w_i = 1 so its w(1-w) terms vanish.) The marginal
+# detection info is the Schur complement I_dd - I_pd' I_pp^{-1} I_pd, whose
+# inverse is the (beta_det) block of the full joint covariance.
+.louis_info_det_single <- function(X_occ, beta_psi, X_det, beta_det,
+                                   weights, n_valid, prior_spec = NULL,
+                                   occ_coef_names = NULL, det_coef_names = NULL,
+                                   spatial = NULL, spatial_fit = NULL) {
+  p_det <- length(beta_det)
+  p_psi <- length(beta_psi)
+  if (p_det == 0L) return(NULL)
+  if (is.null(X_det) || nrow(X_det) == 0L) return(NULL)
+  if (is.null(weights) || length(weights) != nrow(X_det)) return(NULL)
+  if (is.null(n_valid) || length(n_valid) != nrow(X_det)) return(NULL)
+
+  w  <- weights
+  nv <- as.numeric(n_valid)
+  p  <- plogis(pmin(pmax(as.numeric(X_det %*% beta_det), -30), 30))
+
+  add_prior <- function(I, arm, p_k, coef_names, Xcols) {
+    if (is.null(prior_spec)) return(I)
+    if (is.null(coef_names)) coef_names <- Xcols %||% paste0("x", seq_len(p_k))
+    pr <- .prior_for_submodel(prior_spec, arm, coef_names)
+    if (!is.null(pr)) {
+      pen <- ifelse(is.finite(pr$sd), 1 / (pr$sd^2), 0)
+      diag(I) <- diag(I) + pen[seq_len(p_k)]
+    }
+    I
+  }
+
+  # Detection diagonal block.
+  d_dd <- w * nv * p * (1 - p) - (nv * p)^2 * w * (1 - w)
+  d_dd[nv <= 0] <- 0
+  I_dd <- add_prior(as.matrix(crossprod(X_det, d_dd * X_det)),
+                    "p", p_det, det_coef_names, colnames(X_det))
+
+  # Couple with the occupancy block via the joint Louis cross term, then
+  # marginalize psi out by Schur complement. Skip when the occupancy inputs are
+  # unavailable (fall back to the diagonal block, which still fixes the level).
+  if (p_psi > 0L && !is.null(X_occ) && nrow(X_occ) == nrow(X_det)) {
+    eta_o <- as.numeric(X_occ %*% beta_psi)
+    sp_off <- .spatial_eta_offset(spatial, spatial_fit, p_psi)
+    if (length(sp_off) == nrow(X_occ)) eta_o <- eta_o + sp_off
+    psi <- plogis(pmin(pmax(eta_o, -30), 30))
+
+    d_pp <- psi * (1 - psi) - w * (1 - w)
+    I_pp <- add_prior(as.matrix(crossprod(X_occ, d_pp * X_occ)),
+                      "psi", p_psi, occ_coef_names, colnames(X_occ))
+    d_pd <- -nv * p * w * (1 - w)
+    d_pd[nv <= 0] <- 0
+    I_pd <- as.matrix(crossprod(X_occ, d_pd * X_det))    # p_psi x p_det
+
+    schur <- tryCatch(I_dd - crossprod(I_pd, solve(I_pp, I_pd)),
+                      error = function(e) NULL)
+    if (!is.null(schur)) I_dd <- schur
+  }
+  I_dd
+}
+
 # SE vector from an observed-info matrix; returns NA of length p on failure.
 .se_from_info <- function(I, p) {
   if (is.null(I)) return(rep(NA_real_, p))
@@ -987,7 +1216,7 @@ glm_init <- function(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det) 
 build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
                               prior_spec = NULL,
                               approx = "gaussian_laplace",
-                              re_block = NULL) {
+                              re_block = NULL, latent_prior = NULL) {
   pi_list <- model$process_info
 
   # Collect betas from correction (if available) or EM fits
@@ -1040,6 +1269,35 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
         )
         louis_psi_se <- .se_from_info(I_obs, pi$p)
         sds <- c(sds, louis_psi_se)
+      } else if (identical(model$model_type, "single") &&
+                 identical(sub_name, "det") &&
+                 is.null(re_block) &&
+                 is.null(model$X_det_visit) &&
+                 !is.null(em_result$weights) &&
+                 nrow(model$X_processes[[2]]) == length(em_result$weights)) {
+        # Site-level detection SE via the marginal Louis observed info
+        # (tulpaObs#7, detection arm). The detection M-step's H_beta is the
+        # complete-data info (soft occupancy weight treated as known), which
+        # under-states the SE the same way the psi arm did; recompute the
+        # observed info, marginalizing over the coupled occupancy block.
+        beta_psi_fit <- extract_beta(em_result$fits[["occ"]],
+                                     ncol(model$X_processes[[1]]))
+        I_obs <- .louis_info_det_single(
+          X_occ          = model$X_processes[[1]],
+          beta_psi       = beta_psi_fit,
+          X_det          = model$X_processes[[2]],
+          beta_det       = beta,
+          weights        = em_result$weights,
+          n_valid        = rowSums(model$y >= 0),
+          prior_spec     = prior_spec,
+          occ_coef_names = pi_list[[1]]$coef_names,
+          det_coef_names = pi$coef_names,
+          spatial        = spatial,
+          spatial_fit    = em_result$fits[["occ"]]
+        )
+        se_det <- .se_from_info(I_obs, pi$p)
+        sds <- c(sds, if (any(!is.finite(se_det)))
+                        .se_from_laplace_fit(fi, pi$p) else se_det)
       } else {
         sds <- c(sds, .se_from_laplace_fit(fi, pi$p))
       }
@@ -1152,6 +1410,16 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # the latent field to observation locations via A %*% u_mesh.
   spatial_field <- NULL
   if (!is.null(spatial) && identical(spatial$type, "spde") &&
+      !is.null(em_result$fits$occ$mode)) {
+    p_occ <- pi_list[[1]]$p
+    mode_vec <- em_result$fits$occ$mode
+    if (length(mode_vec) > p_occ) {
+      spatial_field <- mode_vec[(p_occ + 1L):length(mode_vec)]
+    }
+  }
+  # Nested-Laplace: the occ block mode is c(beta_occ, latent units...) where the
+  # latent tail is the grid-weighted posterior mean of the multi-block field.
+  if (is.null(spatial_field) && !is.null(latent_prior) &&
       !is.null(em_result$fits$occ$mode)) {
     p_occ <- pi_list[[1]]$p
     mode_vec <- em_result$fits$occ$mode

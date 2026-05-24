@@ -96,6 +96,9 @@ for the unpenalised correction.
 occupancy and cover-hurdle joint).
 \item \code{"nested_laplace_sla"} — nested Laplace with skew-corrected marginals.
 \item \code{"nuts"} — HMC / NUTS sampler (every structure; reports Rhat / ESS).
+Not every method is available for every family (e.g. the cover hurdle has
+no \code{"nuts"} path; \code{"nested_laplace"} is occupancy- and cover-only). An
+unsupported method errors with the list of methods that family supports.
 }}
 
 \item{priors}{optional prior specification. For occupancy families fit

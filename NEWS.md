@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+* feat(nested): calibrated credible intervals for NA-response prediction.
+  `predict(fit, type = "state")` now returns `psi_lower` / `psi_upper` (95%)
+  alongside `psi` for single-season nested-Laplace fits. The intervals are
+  calibrated by refining the EM field with one exact-marginal pass
+  (`.tobs_occu_state_marginal_fit()`): integrating out the latent occupancy
+  state makes each site a Bernoulli on `D = 1{>=1 detection}` with mean
+  `q * plogis(eta)`, where `q = 1 - (1 - p)^J` is the per-site detection
+  probability (a held-out site has no visits, so `q = 0` and it is interpolated
+  by the field). This is fit through tulpa's generic `family = "bernoulli"` with
+  a per-observation probability scale `det_prob = q`, so the converged Hessian is
+  the marginal curvature and the per-cell predictive variance
+  (`tulpa_nested_laplace()$fitted_eta_var`) is calibrated directly. The per-row
+  eta posterior is a Gaussian mixture over the hyperparameter grid; `psi` is its
+  Gauss-Hermite mean and the interval is the mixture-CDF quantiles, both per the
+  marginalise-derived-quantities rule. The EM's M-inflated pseudo-binomial
+  (which weights the data ~M times the prior and whose unit-trial Hessian is the
+  complete-data information) is kept only for the mode and detection estimate;
+  reading variance or grid weights off it under-covers and collapses the
+  hyperparameter grid. Held-out coverage measures ~1.0 (calibrated, slightly
+  conservative) with cor ~0.88 / MAE ~0.11 on a 10x10 icar/bym2 grid; recovery
+  test in `tests/testthat/test-nested-laplace-prediction.R`. Older tulpa without
+  `fitted_eta_var` reports `psi` with `NA` interval columns. Other model types
+  keep the EM occ fit (their NA-response mapping is not yet wired).
+
+* feat(nested): nested Laplace generalised beyond single-season occupancy.
+  `method = "nested_laplace"` now fits `int_occu()`, `ms_occu()`, and
+  `dyn_occu()` as well as `occu()` -- the multi-block latent prior (spatial /
+  temporal / iid) is attached to the state ("occ") M-step block of the same
+  per-model-type callbacks the single-Laplace path uses, so there is one set of
+  callbacks rather than a `build_*_callbacks_nested` duplicate. The block's
+  per-row `spatial_idx` maps each state row to its site, so a community model
+  shares one site-level field across the species at a site, and integrated /
+  dynamic models carry a spatial / temporal field on the shared psi / psi1
+  predictor. The driver `.tobs_em_nested_laplace()` is now a thin wrapper over
+  `.tobs_laplace(latent_prior = )`. The registry (`.tobs_family_methods`) lists
+  `nested_laplace` for these families; calibrated recovery for the multi-block
+  engine remains the same follow-up tracked for single-season occupancy. Smoke
+  tests in `tests/testthat/test-nested-laplace-families.R`.
+
+* feat(nested): INLA-style NA-response prediction. A single-season occupancy
+  site whose detection history is all-missing (all `NA`) is held out of the
+  likelihood (`n_trials = 0`) but kept in the latent field, so its occupancy is
+  interpolated from neighbours (`.tobs_heldout_sites()`). `predict(fit, type =
+  "state")` returns the marginalised per-site psi posterior -- the weighted mean
+  over the hyperparameter grid of `plogis(eta)`, integrated rather than plugged
+  in at the mode -- with the held-out rows flagged. The E-step is now
+  field-aware (`psi_i = plogis(X_i beta + field[idx(i)])`) so the field tracks
+  the data instead of converging to the fixed-effect-only fixed point. The
+  marginalised psi is read from the engine's per-cell fitted linear predictor
+  (`tulpa_nested_laplace()$fitted_eta`), so it is exact for every latent prior
+  -- including `bym2`, whose predictor mixes structured and unstructured
+  components with hyperparameter-dependent scales that the engine reconstructs
+  with the right `d_fac` (older tulpa without `fitted_eta` falls back to
+  mode reconstruction, exact for the d_fac = 1 priors only). Calibrated
+  predictive intervals need the latent field's per-cell posterior variance and
+  are deferred to engine support -- only the marginalised mean is reported.
+  Recovery tests (icar + bym2) in
+  `tests/testthat/test-nested-laplace-prediction.R`.
+
+* fix(api): backend coverage is now enforced from a single source of truth.
+  `.tobs_family_methods` (in `R/tobs.R`) declares the `method`s each working
+  family supports, and `tobs()` validates the resolved method against it,
+  erroring with a pointer to the supported set. This removes the silent
+  `nested_laplace` -> single-Laplace downgrade that `dyn_occu()` / `ms_occu()` /
+  `int_occu()` / `jsdm()` previously hit (`.map_engine()` emitted only a
+  `message()` and then stamped `fit$method <- "nested_laplace"` on a fit that was
+  actually single-Laplace -- a provenance bug). The nested-Laplace engine is
+  wired only for single-season occupancy and the cover hurdle joint path; the
+  cover hurdle has no NUTS likelihood or EM-correction engine, so its
+  `nuts` / `laplace_gibbs` / `laplace_mi` rejections (previously scattered across
+  `.dispatch_cover()`) now flow through the same central check. Tests in
+  `tests/testthat/test-family-method-coverage.R`.
+
 * feat(formula): single-verb `spatial(..., model = ...)` umbrella over the
   areal (`icar`, `bym2`, `car`, `car_proper`) and continuous (`gp`,
   `multiscale_gp`, `spde`) spatial terms, mirroring `temporal(time, type = ...)`

@@ -38,30 +38,390 @@
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object", call. = FALSE)
   }
-  if (!identical(model$model_type, "single")) {
-    stop("Multi-block nested Laplace is currently wired only for ",
-         "single-season occupancy (model_type = 'single'); got '",
-         model$model_type, "'.", call. = FALSE)
+  supported <- c("single", "integrated", "community", "dynamic")
+  if (!model$model_type %in% supported) {
+    stop("Nested Laplace is wired for single-season, integrated, community, ",
+         "and dynamic occupancy; got model_type = '", model$model_type, "'.",
+         call. = FALSE)
   }
 
-  N <- as.integer(model$n_sites)
-  blocks <- list()
+  # The latent prior is defined over sites (one GMRF / temporal / iid unit per
+  # site). The state ("occ") M-step block has one row per site for single /
+  # integrated / dynamic and one row per (site, species) for community, so each
+  # state row is mapped to its site via `site_of_row`. The structured terms
+  # (spatial / temporal / re) were resolved against the site-level `data`, so
+  # their per-site index vectors are expanded through the same map.
+  dims        <- .tobs_state_block_dims(model)
+  n_sites     <- dims$n_sites
+  site_of_row <- dims$site_of_row
 
+  blocks <- list()
   if (!is.null(spatial)) {
-    blocks <- c(blocks, list(.tobs_block_from_spatial(spatial, N)))
+    blocks <- c(blocks,
+                list(.tobs_block_from_spatial(spatial, n_sites, site_of_row)))
   }
   if (!is.null(temporal)) {
-    blocks <- c(blocks, list(.tobs_block_from_temporal(temporal, model, N)))
+    blocks <- c(blocks,
+                list(.tobs_block_from_temporal(temporal, model, n_sites,
+                                               site_of_row)))
   }
   if (!is.null(re)) {
     for (r in re) {
-      blocks <- c(blocks, list(.tobs_block_from_re(r, model, N)))
+      blocks <- c(blocks,
+                  list(.tobs_block_from_re(r, model, n_sites, site_of_row)))
     }
   }
 
   if (length(blocks) == 0L) return(NULL)
-  if (length(blocks) == 1L) return(blocks[[1]])
+  # Always return a list-of-blocks, even for a single block, so the fit routes
+  # through tulpa's multi-block dispatch (cpp_nested_laplace_multi). A length-1
+  # list is numerically identical to the single-block kernel -- both build a
+  # length-1 LatentBlock vector for run_multi_block_nested_laplace -- but the
+  # multi-block path is the one that honours `det_prob`, the per-site detection
+  # probability for the marginalized `bernoulli` state likelihood whose
+  # calibrated predictive variance `predict(type = "state")` reports as
+  # psi_lower / psi_upper.
   blocks
+}
+
+
+# Latent-field contribution to the state linear predictor at each row, read
+# from the current nested fit's mode. The mode is c(beta (p), latent...), where
+# the latent tail concatenates each multi-block's components. A block's eta
+# contribution at row i is `field_block[idx(i)]`, with `idx` the block's
+# per-row unit index (spatial_idx / temporal_idx / obs_idx) and the eta-entering
+# component being the first `max(idx)` entries (BYM2 stores 2*n units: the
+# combined effect that enters the predictor comes first, the structured-only
+# auxiliary second). Returns a length-`n_rows` numeric offset, or `numeric(0)`
+# before the first M-step has produced a mode.
+.nested_eta_offset <- function(latent_prior, occ_fit, p_occ, n_rows) {
+  if (is.null(occ_fit) || is.null(occ_fit$mode)) return(numeric(0))
+  .nested_field_from_mode(latent_prior, occ_fit$mode, p_occ, n_rows)
+}
+
+# Grid-marginalised state linear predictor from the engine's per-cell fitted
+# eta (`tulpa_nested_laplace(... )$fitted_eta`, [n_grid x N], beta + field at
+# each grid cell). Returns `sum_k w_k eta[k, ]` -- exact for every prior,
+# including bym2 (whose predictor the engine reconstructs with the right
+# per-cell mixing scales). NULL when the engine did not return fitted_eta (older
+# tulpa) so callers can fall back to the mode-based reconstruction.
+.nested_eta_marginal <- function(occ_fit, n_rows) {
+  fe <- occ_fit$fitted_eta
+  if (is.null(fe) || !is.matrix(fe) || ncol(fe) != n_rows) return(NULL)
+  w <- occ_fit$weights
+  if (is.null(w) || length(w) != nrow(fe)) return(NULL)
+  as.numeric(crossprod(fe, w / sum(w)))
+}
+
+# Core: latent-field eta contribution at each state row from one latent vector
+# `mode_vec` = c(beta (p_occ), field...). Used both for the EM E-step offset
+# (with the grid-weighted mode) and for per-grid-cell marginalised prediction
+# (with each `modes[k, ]` row).
+.nested_field_from_mode <- function(latent_prior, mode_vec, p_occ, n_rows) {
+  if (length(mode_vec) <= p_occ) return(numeric(0))
+  field  <- mode_vec[(p_occ + 1L):length(mode_vec)]
+  blocks <- if (!is.null(latent_prior$type)) list(latent_prior) else latent_prior
+
+  offset <- numeric(n_rows)
+  pos <- 0L
+  for (b in blocks) {
+    nu  <- .nl_block_field_len(b)
+    idx <- .nl_block_unit_idx(b)
+    if (pos + nu > length(field)) break          # guard against layout drift
+    # Only blocks whose eta contribution is exactly `x[idx]` (d_fac = 1) are
+    # added. A bym2 block's eta mixes its two components with hyperparameter-
+    # dependent scales, so a first-n approximation would be wrong-scaled;
+    # skipping it (but advancing past its length) keeps the predictor unbiased
+    # and leaves multi-block alignment intact.
+    if (.nl_block_exact_reconstruct(b) && length(idx) == n_rows) {
+      offset <- offset + field[(pos + 1L):(pos + nu)][idx]
+    }
+    pos <- pos + nu
+  }
+  offset
+}
+
+
+# Whether a latent block's eta contribution is exactly `x[idx]` (d_fac = 1), so
+# the per-row linear predictor can be reconstructed in R from the returned modes
+# without replicating tulpa's per-prior mixing scales. True for icar /
+# car_proper / rw1 / rw2 / ar1 / iid (see tulpa src/nested_laplace.cpp, where
+# each sets `block.d_fac = 1.0`). BYM2 mixes a structured (phi) and an
+# unstructured (theta) component with hyperparameter-dependent scales
+# (sigma*sqrt(rho)*scale and sigma*sqrt(1-rho)), so its eta is not `x[idx]`;
+# reconstructing it belongs in the engine, not here.
+.nl_block_exact_reconstruct <- function(b) {
+  isTRUE(b$type %in% c("icar", "car_proper", "rw1", "rw2", "ar1", "iid"))
+}
+
+# Gauss-Hermite nodes / weights (physicists', weight exp(-x^2)) via Golub-Welsch:
+# the nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix
+# (zero diagonal, off-diagonal sqrt(k/2)) and the weights are sqrt(pi) times the
+# squared first eigenvector components. No hardcoded node tables, no external
+# dependency. Used to integrate plogis(eta) over the within-cell Gaussian when
+# marginalising psi.
+.gauss_hermite <- function(n = 15L) {
+  n <- as.integer(n)
+  if (n < 2L) return(list(x = 0, w = sqrt(pi)))
+  k <- seq_len(n - 1L)
+  b <- sqrt(k / 2)
+  J <- matrix(0, n, n)
+  J[cbind(k, k + 1L)] <- b
+  J[cbind(k + 1L, k)] <- b
+  e   <- eigen(J, symmetric = TRUE)
+  ord <- order(e$values)
+  list(x = e$values[ord], w = sqrt(pi) * (e$vectors[1L, ord])^2)
+}
+
+# Posterior MEAN of psi = plogis(eta) at each state row, marginalised over BOTH
+# the hyperparameter grid (weights `w`) and the within-cell Gaussian
+# eta_i ~ N(fe[k, i], fev[k, i]). plogis is integrated over each cell's Gaussian
+# by Gauss-Hermite, then weighted by w -- the marginalise-derived-quantities
+# rule (no plug-in of the cell mode). `fev = NULL` collapses to the plug-in mean
+# over cell modes (older tulpa without per-cell variance).
+.nested_psi_mean <- function(fe, fev, w) {
+  w <- w / sum(w)
+  if (is.null(fev)) return(as.numeric(crossprod(plogis(fe), w)))
+  s     <- sqrt(pmax(fev, 0))
+  gh    <- .gauss_hermite(15L)
+  c0    <- 1 / sqrt(pi)
+  ecell <- matrix(0, nrow(fe), ncol(fe))
+  for (g in seq_along(gh$x)) {
+    ecell <- ecell + (gh$w[g] * c0) * plogis(fe + sqrt(2) * s * gh$x[g])
+  }
+  as.numeric(crossprod(ecell, w))
+}
+
+# Equal-tailed psi credible interval at each state row. The eta posterior is a
+# Gaussian mixture over grid cells, F(t) = sum_k w_k Phi((t - fe[k, i]) /
+# s[k, i]); plogis is monotone, so psi quantiles are plogis of the eta-mixture
+# quantiles, found by bracketing the mixture CDF. A per-cell sd floor keeps the
+# root-find well-posed when a cell's within-cell variance is ~0 (the mixture
+# then reduces to a weighted quantile of the cell modes). Returns an
+# [n_rows x length(probs)] matrix on the psi scale.
+.nested_psi_quantiles <- function(fe, fev, w, probs = c(0.025, 0.975)) {
+  w      <- w / sum(w)
+  s      <- sqrt(pmax(fev, 0))
+  n_rows <- ncol(fe)
+  out    <- matrix(NA_real_, n_rows, length(probs))
+  for (i in seq_len(n_rows)) {
+    m   <- fe[, i]
+    si  <- pmax(s[, i], 1e-6)
+    cdf <- function(t) sum(w * pnorm(t, mean = m, sd = si))
+    lo  <- min(m - 8 * si)
+    hi  <- max(m + 8 * si)
+    for (j in seq_along(probs)) {
+      pp  <- probs[j]
+      flo <- cdf(lo) - pp
+      fhi <- cdf(hi) - pp
+      q <- if (flo >= 0) lo
+           else if (fhi <= 0) hi
+           else stats::uniroot(function(t) cdf(t) - pp, c(lo, hi),
+                               tol = 1e-6)$root
+      out[i, j] <- plogis(q)
+    }
+  }
+  out
+}
+
+# Marginalised state-level posterior of psi for a nested-Laplace fit: the
+# posterior MEAN and an equal-tailed 95% credible interval at every state row,
+# integrated over the hyperparameter grid (per the marginalise-derived-
+# quantities rule -- a weighted summary of the eta posterior, not a plug-in of
+# the grid-weighted mode). For single-season occupancy the `heldout` rows are
+# the INLA NA-response prediction targets (sites with an all-missing detection
+# history, interpolated by the latent field).
+#
+# Primary path uses the engine's per-cell fitted eta and its predictive variance
+# (`occ_fit$fitted_eta` / `$fitted_eta_var`, [n_grid x N]): the per-row eta
+# posterior is the Gaussian mixture sum_k w_k N(fe[k, i], fev[k, i]). psi is
+# plogis(eta), so the mean is the Gauss-Hermite integral of plogis over each
+# cell's Gaussian (weighted by w) and the interval is plogis of the eta-mixture
+# quantiles. Exact for every prior including bym2 (the engine reconstructs eta
+# and its variance with the right per-cell mixing scales).
+#
+# When the engine returns `fitted_eta` but not `fitted_eta_var` (older tulpa),
+# only the marginalised mean is reported and the interval columns are NA. When
+# `fitted_eta` is absent too, eta is reconstructed from the modes -- exact only
+# for d_fac = 1 priors (icar / car / temporal / iid); a bym2 fit then returns
+# NULL so `predict(type = "state")` reports it is unavailable.
+#
+# Calibration note. The occupancy M-step is an M-inflated pseudo-binomial
+# (n_trials = M), so the per-cell variance is the working-model variance. At a
+# held-out node (no likelihood term) it is dominated by the prior conditional
+# (kriging) variance, which is M-independent, so held-out intervals are
+# calibrated. Observed-site variance is M-deflated (over-confident); those rows
+# carry the point estimate, and their interval is conditional on the working
+# model. Computed on the (autoscaled) fitting design; psi is on the probability
+# scale and so is invariant to the centering / scaling of X.
+# Exact-marginal occupancy state pass. The EM converges via the M-inflated
+# pseudo-binomial M-step (good for the mode and the detection estimate), but its
+# field curvature and grid weights are M-distorted -- the occ M-step weights the
+# data ~M times the prior, and the unit-trial Hessian is the EM complete-data
+# information, which overstates the marginal information (Louis' identity).
+# So, exactly as `.tobs_occu_marginal_refine()` does for the non-spatial fixed
+# effects, refine the state field with one nested-Laplace pass on the TRUE
+# marginalized state likelihood: each site contributes a Bernoulli on
+# D_i = 1{>=1 detection} with mean q_i * sigma(eta), where q_i is the per-site
+# probability of detecting at least once given occupancy, read off the converged
+# detection estimate. The latent occupancy state is integrated out, so this pass
+# carries the calibrated marginal mode, curvature (fitted_eta_var) and grid
+# weights with no M-inflation. Held-out sites have no valid visits -> q_i = 0,
+# so they drop from the likelihood and are interpolated by the field (the INLA
+# NA-response mechanism, now without the n_trials = 0 hack). Detection is plugged
+# in at its point estimate (the field's dominant uncertainty is the field).
+.tobs_occu_state_marginal_fit <- function(model, em_result, latent_prior,
+                                          max_iter = 50L, tol = 1e-6,
+                                          n_threads = 1L) {
+  X_occ       <- model$X_processes[[1]]
+  X_det       <- model$X_processes[[2]]
+  X_det_visit <- model$X_det_visit
+  y           <- model$y
+  n_sites     <- model$n_sites
+  max_visits  <- ncol(y)
+  p_det       <- ncol(X_det)
+
+  valid_mat <- y >= 0
+  n_valid   <- rowSums(valid_mat)
+  D_i       <- as.integer(rowSums(valid_mat & (y == 1L), na.rm = TRUE) > 0)
+
+  beta_det <- extract_beta(em_result$fits$det,
+                           p_det + (if (is.null(X_det_visit)) 0L
+                                    else ncol(X_det_visit)))
+
+  # q_i = P(>=1 detection | occupied) at the converged detection estimate.
+  if (is.null(X_det_visit)) {
+    p_site <- plogis(as.vector(X_det %*% beta_det[seq_len(p_det)]))
+    q_i    <- 1 - (1 - p_site)^n_valid
+  } else {
+    eta_site  <- as.vector(X_det %*% beta_det[seq_len(p_det)])
+    eta_visit <- as.vector(X_det_visit %*% beta_det[(p_det + 1L):length(beta_det)])
+    logit_p   <- matrix(eta_site, n_sites, max_visits) +
+                 matrix(eta_visit, n_sites, max_visits, byrow = TRUE)
+    logit_p   <- pmin(pmax(logit_p, -30), 30)
+    log_1mp   <- -(pmax(logit_p, 0) + log1p(exp(-abs(logit_p))))
+    log_1mp[!valid_mat] <- 0
+    q_i <- 1 - exp(rowSums(log_1mp))
+  }
+  q_i[n_valid == 0L] <- 0                     # held-out: no information
+
+  tulpa::tulpa_nested_laplace(
+    y = D_i, n_trials = rep(1L, n_sites), X = X_occ,
+    prior = latent_prior, family = "bernoulli", det_prob = q_i,
+    max_iter = as.integer(max_iter), tol = as.numeric(tol),
+    n_threads = as.integer(n_threads)
+  )
+}
+
+.tobs_nested_state_posterior <- function(model, occ_fit, latent_prior,
+                                         heldout = NULL) {
+  X_occ  <- model$X_processes[[1]]
+  n_rows <- nrow(X_occ)
+  w      <- occ_fit$weights
+
+  fe  <- occ_fit$fitted_eta
+  fev <- occ_fit$fitted_eta_var
+  psi_lower <- rep(NA_real_, n_rows)
+  psi_upper <- rep(NA_real_, n_rows)
+
+  if (!is.null(fe) && is.matrix(fe) && ncol(fe) == n_rows &&
+      !is.null(w) && length(w) == nrow(fe)) {
+    have_var <- !is.null(fev) && is.matrix(fev) && all(dim(fev) == dim(fe))
+    psi_mean <- .nested_psi_mean(fe, if (have_var) fev else NULL, w)
+    if (have_var) {
+      q <- .nested_psi_quantiles(fe, fev, w, probs = c(0.025, 0.975))
+      psi_lower <- q[, 1L]
+      psi_upper <- q[, 2L]
+    }
+  } else {
+    # Fallback (no engine fitted_eta): reconstruct eta from the modes, exact
+    # only for d_fac = 1 priors; bym2 / other mixed-scale priors -> NULL.
+    if (is.null(occ_fit$modes) || !is.matrix(occ_fit$modes)) return(NULL)
+    blocks <- if (!is.null(latent_prior$type)) list(latent_prior)
+              else latent_prior
+    if (!all(vapply(blocks, .nl_block_exact_reconstruct, logical(1))))
+      return(NULL)
+    modes  <- occ_fit$modes
+    p_occ  <- ncol(X_occ)
+    n_grid <- nrow(modes)
+    if (ncol(modes) < p_occ) return(NULL)
+    if (is.null(w)) w <- rep(1 / n_grid, n_grid)
+    w <- w / sum(w)
+    eta <- X_occ %*% t(modes[, seq_len(p_occ), drop = FALSE])
+    for (k in seq_len(n_grid)) {
+      fld <- .nested_field_from_mode(latent_prior, modes[k, ], p_occ, n_rows)
+      if (length(fld) == n_rows) eta[, k] <- eta[, k] + fld
+    }
+    psi_mean <- as.numeric(plogis(eta) %*% w)
+  }
+
+  heldout_flag <- logical(n_rows)
+  if (!is.null(heldout) && length(heldout) > 0L) heldout_flag[heldout] <- TRUE
+  out <- data.frame(row = seq_len(n_rows), psi = psi_mean,
+                    psi_lower = psi_lower, psi_upper = psi_upper,
+                    heldout = heldout_flag)
+  if (isTRUE(getOption("tobs.nested.debug"))) {
+    attr(out, "engine") <- list(fitted_eta = fe, fitted_eta_var = fev,
+                                weights = w)
+  }
+  out
+}
+
+# Length of a block's latent vector in the concatenated mode tail.
+.nl_block_field_len <- function(b) {
+  type <- b$type
+  if (type %in% c("icar", "car_proper")) return(as.integer(b$n_spatial_units))
+  if (type == "bym2") return(2L * as.integer(b$n_spatial_units))
+  if (type %in% c("ar1", "rw1", "rw2")) return(as.integer(b$n_times))
+  if (type == "iid") return(as.integer(b$n_units))
+  # Unknown block: assume the per-row index spans the units.
+  as.integer(max(.nl_block_unit_idx(b)))
+}
+
+# Per-row 1-based unit index a block maps each state row through.
+.nl_block_unit_idx <- function(b) {
+  if (!is.null(b$spatial_idx))  return(as.integer(b$spatial_idx))
+  if (!is.null(b$temporal_idx)) return(as.integer(b$temporal_idx))
+  if (!is.null(b$obs_idx))      return(as.integer(b$obs_idx))
+  integer(0)
+}
+
+
+# Identify held-out state rows for INLA NA-response prediction. A single-season
+# occupancy site with no valid visits (an all-NA / all-missing detection
+# history) is a prediction target: dropped from the likelihood (`n_trials = 0`)
+# and interpolated by the latent field. Returns integer site indices, or NULL
+# when there are none. Other model types are not yet wired for held-out
+# prediction (the state row -> "site with a missing response" mapping differs
+# for community / dynamic / integrated), so they return NULL.
+.tobs_heldout_sites <- function(model) {
+  if (!identical(model$model_type, "single")) return(NULL)
+  n_valid <- rowSums(model$y >= 0)
+  ho <- which(n_valid == 0L)
+  if (length(ho) == 0L) NULL else as.integer(ho)
+}
+
+
+# Resolve the state ("occ") M-step block geometry: how many rows it has and
+# which site each row belongs to. single / integrated / dynamic (psi1) carry
+# one state row per site (identity map); community carries n_sites * n_species
+# rows ordered site-major (`rep(site, each = n_species)`), so a site-level
+# latent field is shared across the species at a site.
+.tobs_state_block_dims <- function(model) {
+  n_state_rows <- nrow(model$X_processes[[1]])
+  n_sites      <- as.integer(model$n_sites)
+  if (!is.null(model$n_species) &&
+      n_state_rows == n_sites * as.integer(model$n_species)) {
+    site_of_row <- rep(seq_len(n_sites), each = as.integer(model$n_species))
+  } else if (n_state_rows == n_sites) {
+    site_of_row <- seq_len(n_sites)
+  } else {
+    stop(sprintf(
+      "Cannot map %d state-block rows onto %d sites for the nested latent prior.",
+      n_state_rows, n_sites), call. = FALSE)
+  }
+  list(n_state_rows = n_state_rows, n_sites = n_sites,
+       site_of_row = as.integer(site_of_row))
 }
 
 
@@ -76,7 +436,7 @@
 # typical combos under ~250 cells. Users who need finer integration can
 # pass `*_grid` overrides directly via the tobs_* spec attributes (when
 # present) -- the helper passes them through if set.
-.tobs_block_from_spatial <- function(spatial, N) {
+.tobs_block_from_spatial <- function(spatial, n_sites, site_of_row) {
   if (!inherits(spatial, "tobs_spatial")) {
     stop("`spatial` must be a tobs_spatial object", call. = FALSE)
   }
@@ -87,15 +447,15 @@
          "Use `method = 'laplace'` or open an issue if you need this type.",
          call. = FALSE)
   }
-  if (as.integer(spatial$n_units) != N) {
+  if (as.integer(spatial$n_units) != n_sites) {
     stop(sprintf(
-      "spatial has %d units but the model has %d sites; one obs per site ",
-      spatial$n_units, N),
-      "is required for single-season occupancy nested-Laplace.", call. = FALSE)
+      "spatial has %d units but the model has %d sites; one spatial unit per ",
+      spatial$n_units, n_sites),
+      "site is required for the nested-Laplace latent field.", call. = FALSE)
   }
   out <- list(
     type            = type,
-    spatial_idx     = seq_len(N),
+    spatial_idx     = site_of_row,
     n_spatial_units = as.integer(spatial$n_units),
     adj_row_ptr     = as.integer(spatial$adj_row_ptr),
     adj_col_idx     = as.integer(spatial$adj_col_idx),
@@ -125,7 +485,7 @@
 # Build a multi-block temporal block from a tobs_temporal spec. Resolves
 # the time variable from model$data when given as a string; passes integer
 # indices through. `model = "iid"` becomes an iid block (no Q assembly).
-.tobs_block_from_temporal <- function(temporal, model, N) {
+.tobs_block_from_temporal <- function(temporal, model, n_sites, site_of_row) {
   if (!inherits(temporal, "tobs_temporal")) {
     stop("`temporal` must be a tobs_temporal object", call. = FALSE)
   }
@@ -135,13 +495,15 @@
          "nested-Laplace path (supported: ar1, rw1, rw2, iid).",
          call. = FALSE)
   }
-  # Index codes were resolved when the temporal() term was constructed.
-  time_idx <- as.integer(temporal$time_idx)
-  if (length(time_idx) != N) {
+  # Index codes were resolved per-site when the temporal() term was
+  # constructed; expand to one entry per state-block row via site_of_row.
+  time_idx_site <- as.integer(temporal$time_idx)
+  if (length(time_idx_site) != n_sites) {
     stop(sprintf(
       "Resolved temporal index has length %d but the model has %d sites.",
-      length(time_idx), N), call. = FALSE)
+      length(time_idx_site), n_sites), call. = FALSE)
   }
+  time_idx <- time_idx_site[site_of_row]
   n_times <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
              else max(time_idx, na.rm = TRUE)
 
@@ -177,7 +539,7 @@
 # A bare `tobs_re(group = "x")` (default model = "iid") becomes an iid block.
 # If the user asks for ar1/rw1/rw2 on the group, route through the temporal
 # block builder so the same dispatch logic handles both.
-.tobs_block_from_re <- function(re, model, N) {
+.tobs_block_from_re <- function(re, model, n_sites, site_of_row) {
   if (!inherits(re, "tobs_re")) {
     stop("`re` element must be a tobs_re object", call. = FALSE)
   }
@@ -188,13 +550,15 @@
          "(`(1 + x | g)`).", call. = FALSE)
   }
 
-  # Group codes were resolved when the re() term was constructed.
-  grp_idx <- as.integer(re$group_idx)
-  if (length(grp_idx) != N) {
+  # Group codes were resolved per-site when the re() term was constructed;
+  # expand to one entry per state-block row via site_of_row.
+  grp_idx_site <- as.integer(re$group_idx)
+  if (length(grp_idx_site) != n_sites) {
     stop(sprintf(
       "Resolved RE group index has length %d but the model has %d sites.",
-      length(grp_idx), N), call. = FALSE)
+      length(grp_idx_site), n_sites), call. = FALSE)
   }
+  grp_idx <- grp_idx_site[site_of_row]
   n_units <- if (!is.null(re$n_groups)) as.integer(re$n_groups)
              else max(grp_idx, na.rm = TRUE)
 
@@ -222,51 +586,46 @@
 
 
 # =============================================================================
-# Driver — EM around tulpa_em_laplace(..., method = nested per-block)
+# Driver — thin wrapper over `.tobs_laplace(..., latent_prior = )`
 #
-# The occupancy block carries a `prior` field built by
-# .tobs_to_multi_block_prior(), which makes the generic EM engine route that
-# block through tulpa::tulpa_nested_laplace() instead of tulpa::tulpa_laplace().
-# The detection block stays single-Laplace (it carries its own observation
-# weights; nested-Laplace doesn't accept those).
+# The multi-block latent prior built from `spatial` / `temporal` / `re` is
+# attached to the state ("occ") M-step block, which makes tulpa's generic EM
+# engine route that block through `tulpa::tulpa_nested_laplace()` instead of
+# `tulpa::tulpa_laplace()`. There is a single set of per-model-type callbacks
+# (`build_*_callbacks` in R/laplace.R) shared with the single-Laplace path; the
+# attachment and held-out encoding live in `.tobs_laplace_nested()`.
 #
 # Known approximation. The E-step computes psi[i] = plogis(X[i,]*beta_occ)
-# only -- the latent block contribution (spatial / temporal / iid) is left
-# out of psi because reconstructing eta from the grid-averaged mode requires
-# per-grid hyperparameter values that the nested-Laplace driver does not
-# return alongside the modes. The EM fixed point is therefore the
-# fixed-effect MAP under the marginal hyperparameter posterior, with the
-# latent block estimated by the inner nested-Laplace fit on the
-# pseudo-binomial response. Recovery of fixed effects has not yet been
-# validated against simulated truth; see plan_multi_block.md Phase D for
-# the follow-up validation harness.
+# only -- the latent block contribution (spatial / temporal / iid) enters
+# through the M-step block log-marginal, not psi. The EM fixed point is the
+# fixed-effect MAP under the marginal hyperparameter posterior, with the latent
+# block estimated by the inner nested-Laplace fit on the pseudo-binomial
+# response.
 # =============================================================================
 
-#' Fit a single-season occupancy tobs model via nested-Laplace
+#' Fit an occupancy tobs model via nested-Laplace
 #'
-#' Internal driver matching `.tobs_laplace()` in shape but routing the
-#' occupancy block through `tulpa::tulpa_nested_laplace()` with a
-#' multi-block latent prior assembled from `spatial`, `temporal`, and `re`.
+#' Internal driver: assembles a multi-block latent prior from `spatial`,
+#' `temporal`, and `re`, then routes the state M-step block through
+#' `tulpa::tulpa_nested_laplace()` via `.tobs_laplace(latent_prior = )`.
+#' Supports single-season, integrated, community, and dynamic occupancy (the
+#' state block is `"occ"` in every callback set).
 #'
+#' @param heldout_state Optional integer indices of state-block rows to treat
+#'   as held-out (INLA NA-response prediction targets): they are dropped from
+#'   the likelihood (`n_trials = 0`) but kept in the design so their latent
+#'   value is informed by the prior. `NULL` (default) fits with no held-out
+#'   rows.
 #' @keywords internal
 .tobs_em_nested_laplace <- function(model, spatial = NULL, temporal = NULL,
                                     re = NULL, priors = NULL,
                                     sigma_beta = 10,
                                     max_iter = 25L, tol = 1e-3,
                                     damping = 0.3,
+                                    heldout_state = NULL,
                                     verbose = TRUE) {
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object", call. = FALSE)
-  }
-  if (!identical(model$model_type, "single")) {
-    stop("nested_laplace engine is currently wired only for single-season ",
-         "occupancy (`family = occu()`); got model_type = '",
-         model$model_type, "'.", call. = FALSE)
-  }
-  if (!is.null(priors) && !isFALSE(priors)) {
-    message(".tobs_em_nested_laplace(): fixed-effect priors are not yet ",
-            "applied on the nested-Laplace path; falling back to ",
-            "unpenalised MAP for the occupancy block.")
   }
 
   multi_prior <- .tobs_to_multi_block_prior(
@@ -279,115 +638,14 @@
          call. = FALSE)
   }
 
-  callbacks <- .build_single_callbacks_nested(model, multi_prior)
-
-  em_result <- tulpa::tulpa_em_laplace(
-    e_step        = callbacks$e_step,
-    m_step_encode = callbacks$m_step_encode,
-    max_iter      = max_iter,
-    tol           = tol,
-    damping       = damping,
-    correction    = "none",
-    verbose       = verbose
-  )
-
-  fit <- build_laplace_fit(em_result, model, spatial,
-                           callbacks$p_per_submodel,
-                           prior_spec = NULL)
-  fit$nested_laplace <- list(
-    multi_prior = multi_prior,
-    occ_fit     = em_result$fits$occ
+  fit <- .tobs_laplace(
+    model, spatial = NULL, re = NULL, priors = priors,
+    max_iter = max_iter, tol = tol, damping = damping,
+    correction = "none",
+    latent_prior = multi_prior, heldout_state = heldout_state,
+    verbose = verbose
   )
   fit$temporal <- temporal
   fit$re <- re
   fit
-}
-
-
-# Build E-step / M-step callbacks for nested-Laplace occupancy. The
-# occupancy block carries `prior = multi_prior` so the generic EM engine
-# dispatches it through tulpa_nested_laplace(); the detection block stays
-# single-Laplace.
-.build_single_callbacks_nested <- function(model, multi_prior) {
-  y <- model$y
-  X_occ <- model$X_processes[[1]]
-  X_det <- model$X_processes[[2]]
-  n_sites <- model$n_sites
-  p_occ <- ncol(X_occ)
-  p_det <- ncol(X_det)
-
-  n_valid <- integer(n_sites)
-  n_det   <- integer(n_sites)
-  any_det <- logical(n_sites)
-  for (i in seq_len(n_sites)) {
-    valid <- y[i, ] >= 0
-    n_valid[i] <- sum(valid)
-    n_det[i]   <- sum(y[i, valid] == 1)
-    any_det[i] <- n_det[i] > 0
-  }
-  keep <- n_valid > 0
-
-  # E-step. For nested-Laplace we read the latent posterior mean at each
-  # site from fits$occ$mode (which .fit_block_via_nested_laplace() sets
-  # to the weighted average over the hyperparameter grid). The mode
-  # ordering is [beta (p_occ), latent block 1, latent block 2, ...]; for
-  # the eta computation we want X*beta + sum(latent at site i), so we
-  # walk the multi_prior blocks and add each block's contribution.
-  e_step <- function(fits, ...) {
-    occ_fit <- fits$occ
-    if (is.null(occ_fit) || is.null(occ_fit$mode)) {
-      # First iteration before any M-step has run.
-      eta_occ <- numeric(n_sites)
-    } else {
-      beta_occ <- occ_fit$mode[seq_len(p_occ)]
-      eta_occ <- as.vector(X_occ %*% beta_occ)
-      # Latent contributions: the nested-Laplace driver returns
-      # `modes` averaged over the grid; for now we approximate eta
-      # by the fixed effects only, since the latent posterior moments
-      # are integrated into the M-step block log-marginal. The E-step
-      # converges to the same fixed point either way because both
-      # M-step encodings depend on weights[i] = P(z_i = 1 | y_i, theta).
-    }
-    det_fit <- fits$det
-    if (is.null(det_fit) || is.null(det_fit$mode)) {
-      p <- rep(0.5, n_sites)
-    } else {
-      beta_det <- extract_beta(det_fit, p_det)
-      p <- plogis(as.vector(X_det %*% beta_det))
-    }
-    psi <- plogis(eta_occ)
-    list(weights = occ_weights(psi, p, n_sites, n_valid, n_det, any_det))
-  }
-
-  m_step_encode <- function(weights, ...) {
-    # Pseudo-binomial encoding (M = 1000) mirrors the single-Laplace path
-    # so the recovery behavior matches when no latent blocks are present.
-    M <- 1000L
-    y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-    y_occ <- pmin(pmax(y_occ, 0L), M)
-    occ_block <- list(
-      y         = y_occ,
-      n_trials  = rep(M, n_sites),
-      X         = X_occ,
-      family    = "binomial",
-      prior     = multi_prior
-    )
-
-    # Detection: weighted binomial, single-Laplace (no spatial / latent).
-    w_det <- weights
-    w_det[any_det] <- 1
-    keep_det <- keep & (w_det > 1e-6)
-    det_block <- list(
-      y        = n_det[keep_det],
-      n_trials = n_valid[keep_det],
-      X        = X_det[keep_det, , drop = FALSE],
-      weights  = w_det[keep_det],
-      family   = "binomial"
-    )
-
-    list(occ = occ_block, det = det_block)
-  }
-
-  list(e_step = e_step, m_step_encode = m_step_encode,
-       p_per_submodel = c(occ = p_occ, det = p_det))
 }

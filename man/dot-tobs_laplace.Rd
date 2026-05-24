@@ -18,6 +18,8 @@
   n_gibbs = 10L,
   seed = NULL,
   approx = c("gaussian_laplace", "simplified_laplace"),
+  latent_prior = NULL,
+  heldout_state = NULL,
   verbose = TRUE
 )
 }

@@ -7,7 +7,7 @@
 \method{predict}{tobs_fit}(
   object,
   X.0 = NULL,
-  type = c("occupancy", "detection", "both"),
+  type = c("occupancy", "detection", "both", "state"),
   quantiles = c(0.025, 0.5, 0.975),
   terms = NULL,
   n_points = 50L,
@@ -19,7 +19,8 @@
 
 \item{X.0}{Optional design matrix for occupancy prediction.}
 
-\item{type}{\code{"occupancy"} (default), \code{"detection"}, or \code{"both"}.}
+\item{type}{\code{"occupancy"} (default), \code{"detection"}, \code{"both"}, or \code{"state"}
+(nested-Laplace marginalised per-site psi, incl. held-out sites).}
 
 \item{quantiles}{Quantile levels for credible intervals.}
 
@@ -30,13 +31,26 @@
 \item{...}{Ignored.}
 }
 \value{
-Depends on mode. In-sample: \code{fitted()} result. Design-matrix/terms:
-data.frame with estimate and CIs.
+Depends on mode. In-sample: \code{fitted()} result. \code{"state"}: a
+data.frame with \code{row}, \code{psi} (marginalised posterior mean), \code{psi_lower} /
+\code{psi_upper} (equal-tailed 95\% credible interval; \code{NA} when the engine did
+not return per-cell predictive variance), and \code{heldout}. Design-matrix/
+terms: data.frame with estimate and CIs.
 }
 \description{
-Three modes:
+Four modes:
 \itemize{
 \item \strong{In-sample}: \code{predict(fit)} returns fitted values.
+\item \strong{State posterior / NA-response}: \code{predict(fit, type = "state")} returns
+the marginalised per-site occupancy posterior of a \code{"nested_laplace"} fit:
+the per-row eta posterior is a Gaussian mixture over the hyperparameter
+grid (per-cell fitted linear predictor and predictive variance), so \code{psi}
+is its Gauss-Hermite mean and \code{psi_lower} / \code{psi_upper} are the mixture-CDF
+quantiles -- a calibrated 95\% credible interval, exact for every latent
+prior. Rows with \code{heldout = TRUE} are the INLA-style NA-response
+prediction targets (single-season sites whose detection history was
+all-missing), where occupancy is interpolated from the latent field rather
+than informed by detections.
 \item \strong{Design-matrix}: \code{predict(fit, X.0 = ...)} predicts at new covariate values.
 \item \strong{Terms-based}: \code{predict(fit, terms = "elev")} varies one covariate, others at mean.
 }

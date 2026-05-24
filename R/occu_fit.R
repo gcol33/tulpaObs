@@ -63,12 +63,16 @@
   }
 
   if (method == "nested_laplace") {
-    # Nested-Laplace path: single-season occupancy only. The driver
-    # builds a multi-block latent prior from spatial + temporal + re
-    # and routes the occupancy M-step block through
-    # tulpa::tulpa_nested_laplace() via the per-block dispatcher in
-    # tulpa::tulpa_em_laplace().
+    # Nested-Laplace path: single-season, integrated, community, or dynamic
+    # occupancy. The driver builds a multi-block latent prior from spatial +
+    # temporal + re and attaches it to the state ("occ") M-step block, which
+    # tulpa::tulpa_em_laplace() routes through tulpa::tulpa_nested_laplace().
     nl_max_iter <- min(as.integer(max.iter), 25L)
+    # INLA NA-response prediction: single-season sites with an all-missing
+    # detection history are held out of the likelihood (n_trials = 0) but stay
+    # in the design so the latent field interpolates their occupancy from
+    # neighbours / shared structure (`.tobs_heldout_sites()`).
+    heldout_state <- .tobs_heldout_sites(model)
     fit <- .tobs_em_nested_laplace(
       model    = fit_model,
       spatial  = spatial,
@@ -79,6 +83,7 @@
       max_iter = nl_max_iter,
       tol      = tol,
       damping  = damping,
+      heldout_state = heldout_state,
       verbose  = verbose
     )
     fit <- .unscale_fit_per_process(fit, scales, process_info)

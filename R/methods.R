@@ -282,26 +282,57 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 
 #' Predict from occupancy model
 #'
-#' Three modes:
+#' Four modes:
 #' - **In-sample**: `predict(fit)` returns fitted values.
+#' - **State posterior / NA-response**: `predict(fit, type = "state")` returns
+#'   the marginalised per-site occupancy posterior of a `"nested_laplace"` fit:
+#'   the per-row eta posterior is a Gaussian mixture over the hyperparameter
+#'   grid (per-cell fitted linear predictor and predictive variance), so `psi`
+#'   is its Gauss-Hermite mean and `psi_lower` / `psi_upper` are the mixture-CDF
+#'   quantiles -- a calibrated 95% credible interval, exact for every latent
+#'   prior. Rows with `heldout = TRUE` are the INLA-style NA-response
+#'   prediction targets (single-season sites whose detection history was
+#'   all-missing), where occupancy is interpolated from the latent field rather
+#'   than informed by detections.
 #' - **Design-matrix**: `predict(fit, X.0 = ...)` predicts at new covariate values.
 #' - **Terms-based**: `predict(fit, terms = "elev")` varies one covariate, others at mean.
 #'
 #' @param object A `tobs_fit` object.
 #' @param X.0 Optional design matrix for occupancy prediction.
-#' @param type `"occupancy"` (default), `"detection"`, or `"both"`.
+#' @param type `"occupancy"` (default), `"detection"`, `"both"`, or `"state"`
+#'   (nested-Laplace marginalised per-site psi, incl. held-out sites).
 #' @param quantiles Quantile levels for credible intervals.
 #' @param terms Character vector of terms to vary (ggpredict-style).
 #' @param n_points Number of prediction points per continuous term.
 #' @param ... Ignored.
-#' @return Depends on mode. In-sample: `fitted()` result. Design-matrix/terms:
-#'   data.frame with estimate and CIs.
+#' @return Depends on mode. In-sample: `fitted()` result. `"state"`: a
+#'   data.frame with `row`, `psi` (marginalised posterior mean), `psi_lower` /
+#'   `psi_upper` (equal-tailed 95% credible interval; `NA` when the engine did
+#'   not return per-cell predictive variance), and `heldout`. Design-matrix/
+#'   terms: data.frame with estimate and CIs.
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
-                                 type = c("occupancy", "detection", "both"),
+                                 type = c("occupancy", "detection", "both",
+                                          "state"),
                                  quantiles = c(0.025, 0.5, 0.975),
                                  terms = NULL, n_points = 50L, ...) {
   type <- match.arg(type)
+
+  # State posterior / NA-response prediction (nested-Laplace only).
+  if (type == "state") {
+    sp <- object$state_posterior
+    if (!is.null(sp)) return(sp)
+    if (identical(object$method, "nested_laplace")) {
+      stop("predict(type = \"state\") is unavailable for this nested-Laplace ",
+           "fit: the engine returned no per-cell fitted predictor and the ",
+           "latent field is not reconstructable from the modes alone (a mixed-",
+           "scale prior such as bym2 on an older tulpa). Reinstall tulpa so ",
+           "`tulpa_nested_laplace()` returns `fitted_eta`.", call. = FALSE)
+    }
+    stop("predict(type = \"state\") is available for method = ",
+         "\"nested_laplace\" fits only (it reads the marginalised per-site psi ",
+         "posterior the nested path stores).", call. = FALSE)
+  }
 
   # In-sample mode
   if (is.null(X.0) && is.null(terms)) return(fitted(object))

@@ -2,7 +2,7 @@
 % Please edit documentation in R/em_nested_laplace.R
 \name{.tobs_em_nested_laplace}
 \alias{.tobs_em_nested_laplace}
-\title{Fit a single-season occupancy tobs model via nested-Laplace}
+\title{Fit an occupancy tobs model via nested-Laplace}
 \usage{
 .tobs_em_nested_laplace(
   model,
@@ -14,12 +14,22 @@
   max_iter = 25L,
   tol = 0.001,
   damping = 0.3,
+  heldout_state = NULL,
   verbose = TRUE
 )
 }
+\arguments{
+\item{heldout_state}{Optional integer indices of state-block rows to treat
+as held-out (INLA NA-response prediction targets): they are dropped from
+the likelihood (\code{n_trials = 0}) but kept in the design so their latent
+value is informed by the prior. \code{NULL} (default) fits with no held-out
+rows.}
+}
 \description{
-Internal driver matching \code{.tobs_laplace()} in shape but routing the
-occupancy block through \code{tulpa::tulpa_nested_laplace()} with a
-multi-block latent prior assembled from \code{spatial}, \code{temporal}, and \code{re}.
+Internal driver: assembles a multi-block latent prior from \code{spatial},
+\code{temporal}, and \code{re}, then routes the state M-step block through
+\code{tulpa::tulpa_nested_laplace()} via \code{.tobs_laplace(latent_prior = )}.
+Supports single-season, integrated, community, and dynamic occupancy (the
+state block is \code{"occ"} in every callback set).
 }
 \keyword{internal}

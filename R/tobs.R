@@ -82,6 +82,9 @@
 #'     occupancy and cover-hurdle joint).
 #'   * `"nested_laplace_sla"` — nested Laplace with skew-corrected marginals.
 #'   * `"nuts"` — HMC / NUTS sampler (every structure; reports Rhat / ESS).
+#'   Not every method is available for every family (e.g. the cover hurdle has
+#'   no `"nuts"` path; `"nested_laplace"` is occupancy- and cover-only). An
+#'   unsupported method errors with the list of methods that family supports.
 #' @param priors optional prior specification. For occupancy families fit
 #'   with a Laplace method (`method = "laplace"`, `"laplace_sla"`,
 #'   `"nested_laplace"`), pass a list or [occu_priors()] object to set
@@ -191,6 +194,13 @@ tobs <- function(formula,
   if (family$status == "planned") {
     .stop_planned_family(family)
   }
+
+  # Backend coverage is enforced centrally: each working family declares the
+  # methods it actually supports (`.tobs_family_methods`). Reject an unsupported
+  # method with a pointer to the supported set, rather than silently downgrading
+  # the engine (e.g. nested_laplace -> single-Laplace) and then mislabelling
+  # `fit$method`.
+  .tobs_validate_family_method(route$method, family)
 
   # n.seeds > 1: fit K members under offset RNG seeds and LOO-stack them (see
   # `tobs_stack()`). Control validation has already rejected `n.seeds` on the
@@ -415,6 +425,66 @@ tobs <- function(formula,
 }
 
 # ---------------------------------------------------------------------------
+# Per-family backend coverage
+#
+# Single source of truth for which `method` each working family supports.
+# `tobs()` validates the resolved (auto -> concrete) method against this set
+# and errors with a pointer to the supported methods, rather than silently
+# downgrading the engine (the old `.map_engine()` nested_laplace -> single-
+# Laplace fall-back, which also mislabelled `fit$method`) or scattering the
+# rejection across each family's dispatcher (the cover hurdle's bespoke
+# `stop()`s). Gating mirrors the (engine, approx, correction) architecture: a
+# method is listed iff its engine has a real execution path for the family.
+#
+#   * nested_laplace -- the nested-Laplace engine assembles a multi-block latent
+#     prior (spatial / temporal / iid) and routes the state ("occ") M-step block
+#     through `tulpa::tulpa_nested_laplace()`. Wired for single-season,
+#     integrated, community, and dynamic occupancy (`.tobs_em_nested_laplace()`,
+#     which shares the per-model-type callbacks with the Laplace path) and for
+#     the cover hurdle's joint path (`tulpa_nested_laplace_joint()`). It also
+#     supports INLA-style NA-response prediction (held-out sites), so the latent
+#     field interpolates occupancy at unsurveyed sites.
+#   * nested_laplace_sla -- the skew correction on the nested path is wired for
+#     single-season occupancy and the cover hurdle only.
+#   * laplace / laplace_sla / laplace_gibbs / laplace_mi -- run on tulpa's
+#     EM+Laplace engine, which has callbacks for every occupancy family. The
+#     cover hurdle is fit by a separate two-Laplace dispatcher with no EM
+#     correction engine, so it offers laplace / laplace_sla only (no gibbs/mi).
+#   * nuts -- the C++ sampler covers single / dynamic / community / integrated /
+#     jsdm; the cover hurdle has no HMC likelihood yet.
+#
+# Planned families (status == "planned") have no entry and error earlier via
+# `.stop_planned_family()`; the validator is a no-op for them.
+.tobs_family_methods <- list(
+  occu     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
+               "nested_laplace", "nested_laplace_sla", "nuts"),
+  dyn_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
+               "nested_laplace", "nuts"),
+  ms_occu  = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
+               "nested_laplace", "nuts"),
+  int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
+               "nested_laplace", "nuts"),
+  jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),
+  cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla")
+)
+
+# Validate a resolved public method name against the family's supported set.
+# `method` is the concrete name ("auto" already resolved upstream). No-op for a
+# family with no entry (planned families, which error before reaching here).
+.tobs_validate_family_method <- function(method, family) {
+  supported <- .tobs_family_methods[[family$name]]
+  if (is.null(supported) || method %in% supported) return(invisible(NULL))
+  stop(
+    sprintf(
+      "method = \"%s\" is not available for %s() (%s). Supported: %s.",
+      method, family$name, family$class_long,
+      paste0("\"", supported, "\"", collapse = ", ")
+    ),
+    call. = FALSE
+  )
+}
+
+# ---------------------------------------------------------------------------
 # Control-option validation
 #
 # `control` is splatted as named args onto `.tobs_fit_model()`, whose formals
@@ -515,19 +585,19 @@ tobs <- function(formula,
 
 .map_engine <- function(engine, family = NULL) {
   # Engine name translation between the tobs vocabulary and what the underlying
-  # fitter currently understands. Single-season occupancy (`family = "occu"`)
-  # has a real nested-Laplace path that routes through tulpa's multi-block
-  # nested-Laplace engine via `.tobs_em_nested_laplace()`; other families
-  # still fall back to single-Laplace with a NOTE because their dispatch
-  # hasn't been wired through yet.
+  # fitter currently understands. The nested-Laplace engine (`.tobs_fit_model()`
+  # -> `.tobs_em_nested_laplace()`) is wired for single-season, integrated,
+  # community, and dynamic occupancy; the per-family method registry
+  # (`.tobs_family_methods`) rejects `nested_laplace` for every other family
+  # before dispatch, so reaching here with an unsupported family is an internal
+  # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
-    if (identical(family, "occu")) return("nested_laplace")
-    message(
-      "tobs(): nested_laplace is currently wired only for single-season ",
-      "occupancy (`family = occu()`); falling back to single-Laplace for ",
-      "family '", family %||% "(unspecified)", "'."
-    )
-    return("laplace")
+    if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu")) {
+      return("nested_laplace")
+    }
+    stop(sprintf(
+      "Internal error: nested_laplace reached .map_engine for family '%s'; the method registry should have rejected it.",
+      family %||% "(unspecified)"), call. = FALSE)
   }
   switch(
     engine,
