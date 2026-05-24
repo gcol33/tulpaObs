@@ -319,13 +319,36 @@
 # and `id` unchanged, so `spatial(graph = adj, model = "bym2")` is identical to
 # `bym2(graph = adj)` and `spatial(lon, lat, model = "spde")` to
 # `spde(lon, lat)`. Only spatial models dispatch here; re() / temporal() /
-# svc() / latent() keep their own verbs. Per-model argument validation lives in
-# the target constructor, so a stray argument is forwarded rather than caught
-# at the `spatial()` call site — use the specific constructor for strict arg
-# checking.
+# svc() / latent() keep their own verbs.
+#
+# Named arguments are validated against the target constructor's formals before
+# dispatch. The areal terms have no `...`, so R already rejects an unknown named
+# arg, but the continuous terms (gp / multiscale_gp / spde) take coords through
+# `...` and would otherwise *silently* absorb a typo'd or wrong-model named
+# argument (`spatial(lon, lat, model = "gp", graph = adj)`) as if it were a
+# coordinate. Checking names here closes that gap and names `spatial()`/`model`
+# in the error. Positional arguments (the bare coordinate columns) carry no
+# name and pass through untouched.
 .tobs_term_spatial <- function(..., model = .tobs_spatial_models, id = NULL) {
   model <- match.arg(model)
-  .tobs_terms[[model]](..., id = id)
+  ctor  <- .tobs_terms[[model]]
+
+  named <- names(list(...))
+  named <- named[nzchar(named)]
+  if (length(named)) {
+    fmls <- setdiff(names(formals(ctor)), "...")
+    bad  <- setdiff(named, fmls)
+    if (length(bad)) {
+      stop(sprintf(
+        "spatial(model = \"%s\"): unknown argument%s %s. %s takes: %s.",
+        model, if (length(bad) > 1L) "s" else "",
+        paste0("`", bad, "`", collapse = ", "), model,
+        paste0("`", fmls, "`", collapse = ", ")),
+        call. = FALSE)
+    }
+  }
+
+  ctor(..., id = id)
 }
 
 

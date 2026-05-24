@@ -96,6 +96,26 @@ test_that("spatial() rejects an unknown / non-spatial model", {
     tulpaObs:::.tobs_parse_formula(~ spatial(lon, lat, model = "nope"), data = dat))
 })
 
+test_that("spatial() rejects a typo'd or wrong-model argument", {
+  dat <- make_dat()
+  adj <- chain_adj(20L)
+  # continuous term: `...` would otherwise swallow the typo as a coordinate
+  expect_error(
+    tulpaObs:::.tobs_parse_formula(
+      ~ spatial(lon, lat, model = "gp", nnn = 5), data = dat),
+    "unknown argument")
+  # areal argument passed to a continuous model
+  expect_error(
+    tulpaObs:::.tobs_parse_formula(
+      ~ spatial(lon, lat, model = "gp", graph = adj), data = dat),
+    "unknown argument")
+  # continuous argument passed to an areal model (no `...`, named in message)
+  expect_error(
+    tulpaObs:::.tobs_parse_formula(
+      ~ spatial(graph = adj, model = "bym2", nn = 5), data = dat),
+    "unknown argument")
+})
+
 test_that("re() and temporal() resolve grouping/time columns to codes", {
   dat <- make_dat()
   pr <- tulpaObs:::.tobs_parse_formula(~ re(observer), data = dat)

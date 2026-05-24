@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+* feat(formula): single-verb `spatial(..., model = ...)` umbrella over the
+  areal (`icar`, `bym2`, `car`, `car_proper`) and continuous (`gp`,
+  `multiscale_gp`, `spde`) spatial terms, mirroring `temporal(time, type = ...)`
+  and `INLA`'s `f(i, model = ...)`. `spatial(graph = adj, model = "bym2")` is
+  identical to `bym2(graph = adj)` and `spatial(lon, lat, model = "spde")` to
+  `spde(lon, lat)`; the specific constructors still work. Dispatches through the
+  term registry (single source of truth), forwarding coords / `graph =` /
+  per-model arguments and `id` unchanged. Named arguments are validated against
+  the target constructor's formals, so a typo'd or wrong-model argument
+  (`spatial(lon, lat, model = "gp", graph = adj)`) errors at the call site
+  rather than being silently absorbed as a coordinate by the continuous terms'
+  `...`.
+
 * feat(re): correlated random slopes `(1 + x | g)` now fit under the default
   `method = "laplace"` (gcol33/tulpaObs#11), not only NUTS. The variance-
   component EM (`R/em_laplace_re.R`) carries a full per-term RE covariance
