@@ -56,6 +56,7 @@ test_that("cover(positive='beta') with year ~ 2000 column reaches the well-condi
   # equivalent), and slope * sd(year_btw) must match the user-side scaled
   # slope coefficient.
   skip_on_cran()
+  skip_if_fast()
   suppressPackageStartupMessages({library(dplyr, quietly = TRUE)})
 
   set.seed(2026)
@@ -110,6 +111,7 @@ test_that("cover(positive='beta') with year ~ 2000 column reaches the well-condi
 
 test_that("occu() with mean-2000 covariate matches manually-scaled fit (predictions)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(7)
   N <- 80L; J <- 4L
   year <- sample(1985:2005, N, replace = TRUE)  # ~ mean 2000, sd ~ 6

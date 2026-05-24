@@ -74,6 +74,7 @@ test_that("the prior threads into the Gibbs correction at the small-J ridge", {
   # better than the unpenalised one -- evidence the prior actually flows into
   # the correction refits, not just the EM point estimate.
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 12L
   truth_slope <- 0.8

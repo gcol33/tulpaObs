@@ -80,6 +80,7 @@ chain_adj_for_test <- function(n_s) {
 
 test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds", {
   skip_on_cran()
+  skip_if_fast()
   truth_sigma <- 0.4
   n_seeds <- 10L
   n_s     <- 30L
@@ -115,6 +116,7 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
 
 test_that("separate-hurdle beta recovers phi_pos across 10 seeds", {
   skip_on_cran()
+  skip_if_fast()
   truth_phi <- 30
   n_seeds <- 10L
   phi_hats <- numeric(n_seeds)
@@ -170,6 +172,7 @@ simulate_joint_beta_for_recovery <- function(N = 600, n_s = 30,
 
 test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
   skip_on_cran()
+  skip_if_fast()
   # phi_pos is integrated on the outer joint hyperparameter grid
   # (tulpaObs#7). The kernel sees a per-arm phi axis (default 5 log-spaced
   # points in [2, 300]); the marginal likelihood across that axis weights
@@ -215,6 +218,7 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
   # phi_pos_sd is the matching across-grid SD = sqrt(E[phi^2] - E[phi]^2).
   # Shape test: finite, positive, of the same order as truth.
   skip_on_cran()
+  skip_if_fast()
   truth_phi <- 30
   n_s       <- 25L
   adj       <- chain_adj_for_test(n_s)

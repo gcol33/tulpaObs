@@ -42,6 +42,7 @@ test_that("spde() with fractional nu builds a valid spec", {
 # (sign flips, missing field, dropped prior).
 test_that("tobs() + spde() Laplace recovers beta and the field shape", {
   skip_on_cran()
+  skip_if_fast()
   skip_if_not_installed("tulpaMesh")
 
   set.seed(42)
@@ -103,6 +104,7 @@ test_that("tobs() + spde() Laplace recovers beta and the field shape", {
 # tier is too noisy to catch.
 test_that("tobs() + spde() Laplace recovery tightens at N = 1500", {
   skip_on_cran()
+  skip_if_fast()
   skip_if_not_installed("tulpaMesh")
 
   n_sites <- 1500

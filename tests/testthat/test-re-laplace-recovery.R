@@ -94,6 +94,7 @@ test_that("uncorrelated random slopes (1 + x || g) recover under Laplace", {
 
 test_that("deterministic sigma and BLUPs track the NUTS fit on the same data", {
   skip_on_cran()
+  skip_if_fast()
   s <- sim_occu_re_intercept(seed = 7, ng = 30L, per = 25L)
 
   fit_l <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
@@ -114,6 +115,7 @@ test_that("deterministic sigma and BLUPs track the NUTS fit on the same data", {
 
 test_that("correlated random slopes (1 + x | g) recover under Laplace", {
   skip_on_cran()
+  skip_if_fast()
   s <- sim_occu_re_corr(seed = 402)
 
   fit <- tobs(~ x + (1 + x | g), data = s$d, y = s$y, detection = ~ 1,

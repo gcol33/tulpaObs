@@ -6,7 +6,7 @@
 # concern (see test-spde-occ.R for the recovery pattern with N=400).
 
 ctl_nuts <- function(extra = NULL) {
-  c(list(iter = 60, warmup = 30, seed = 1, verbose = FALSE), extra)
+  c(list(n.iter = 60, n.warmup = 30, seed = 1, verbose = FALSE), extra)
 }
 
 expect_nuts_fit <- function(fit, n_expected_cols, label = "") {
@@ -20,6 +20,7 @@ expect_nuts_fit <- function(fit, n_expected_cols, label = "") {
 
 test_that("NUTS runs with a temporal(ar1) term attached", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(1)
   N <- 40; J <- 3
@@ -37,6 +38,7 @@ test_that("NUTS runs with a temporal(ar1) term attached", {
 
 test_that("NUTS runs with two re() terms attached", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(1)
   N <- 40; J <- 3
@@ -57,6 +59,7 @@ test_that("NUTS runs with two re() terms attached", {
 
 test_that("lme4 bar syntax fits identically to the equivalent re() call", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(1)
   N <- 40; J <- 3
@@ -80,6 +83,7 @@ test_that("lme4 bar syntax fits identically to the equivalent re() call", {
 
 test_that("NUTS runs with an svc() term attached", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(1)
   N <- 40; J <- 3
@@ -98,6 +102,7 @@ test_that("NUTS runs with an svc() term attached", {
 
 test_that("NUTS runs with a latent() term on ms_occu", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(1)
   N <- 40; J <- 3; n_sp <- 4

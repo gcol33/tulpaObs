@@ -207,6 +207,7 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
 
 test_that("SLA gamma near zero at large N", {
     skip_on_cran()
+    skip_if_fast()
 
     set.seed(104)
     sim <- .make_cover_data(seed = 104, N = 1000, n_s = 25,
@@ -240,6 +241,7 @@ test_that("SLA gamma near zero at large N", {
 
 test_that("joint SLA matches separate SLA at vanishing sigma", {
     skip_on_cran()
+    skip_if_fast()
 
     set.seed(105)
     # Use a near-zero alpha and small sigma so the donor field has

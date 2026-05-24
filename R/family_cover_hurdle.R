@@ -25,11 +25,8 @@
     stop("cover(positive = '", positive, "') is not supported. ",
          "Use 'lognormal' or 'beta'.", call. = FALSE)
   }
-  if (!identical(correction, "none")) {
-    stop("cover() has no Gibbs/MI correction path; use method = 'laplace', ",
-         "'laplace_sla', 'nested_laplace', or 'nested_laplace_sla'.",
-         call. = FALSE)
-  }
+  # gibbs/mi are rejected centrally by the per-family method registry
+  # (.tobs_family_methods), so `correction` is always "none" here.
   if (!is.null(detection)) {
     stop("`cover()` does not use a detection formula ",
          "(replicates = 'single'). Drop the `detection` argument.",

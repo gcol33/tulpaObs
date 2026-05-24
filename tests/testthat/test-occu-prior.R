@@ -16,6 +16,7 @@
 
 test_that("penalised default recovers beta_p across multiple seeds", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 15L
   truth <- list(
@@ -69,6 +70,7 @@ test_that("penalised default recovers beta_p across multiple seeds", {
 
 test_that("disabling the prior makes the detection slope bias worse", {
   skip_on_cran()
+  skip_if_fast()
 
   # Probe the ridge using the detection-slope bias. At N = 200, J = 4 the
   # unpenalised MAP drifts along the psi-p ridge and *under*-shrinks the
@@ -130,6 +132,7 @@ test_that("disabling the prior makes the detection slope bias worse", {
 
 test_that("95% Wald CI covers the detection slope at the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 20L
   truth_slope <- 0.8
@@ -196,6 +199,7 @@ test_that("occu_priors() validates its arguments", {
 
 test_that("priors = FALSE disables the penalty entirely", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(123)
   N <- 200L; J <- 4L

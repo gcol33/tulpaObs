@@ -57,6 +57,7 @@ chain_adj_for_test <- function(n_s) {
 
 test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
   skip_on_cran()
+  skip_if_fast()
   truth_alpha <- 1.5
   n_seeds <- 20L
   n_s     <- 25L
@@ -98,6 +99,7 @@ test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
 
 test_that("adaptive grid is strictly better than fixed grid at the boundary", {
   skip_on_cran()
+  skip_if_fast()
   truth_alpha <- 1.5
   n_seeds <- 20L
   n_s     <- 25L
@@ -147,6 +149,7 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
 
 test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
   skip_on_cran()
+  skip_if_fast()
   # alpha_true = 0 (i.e. sigma_pos_true = 0) places the truth at the
   # *opposite* edge of the user grid, but the data drives the posterior
   # to concentrate near 0 with quickly-decaying tails, so the integrand

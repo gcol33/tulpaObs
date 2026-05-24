@@ -37,6 +37,7 @@ rmvn_rows <- function(ng, Sigma) {
 
 test_that("(1 + x + z | g) recovers a 3x3 correlated RE block", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(101)
   ng <- 25L; per <- 20L; N <- ng * per; J <- 8L
@@ -82,6 +83,7 @@ test_that("(1 + x + z | g) recovers a 3x3 correlated RE block", {
 
 test_that("(1 + x + z || g) is an uncorrelated multi-slope block (no Cholesky)", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(303)
   ng <- 20L; per <- 20L; N <- ng * per; J <- 8L
@@ -118,6 +120,7 @@ test_that("(1 + x + z || g) is an uncorrelated multi-slope block (no Cholesky)",
 
 test_that("(0 + x | g) is a slope-only block with no group intercept", {
   skip_on_cran()
+  skip_if_fast()
 
   set.seed(202)
   ng <- 25L; per <- 20L; N <- ng * per; J <- 8L

@@ -19,6 +19,7 @@
 
 test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", {
   skip_on_cran()
+  skip_if_fast()
   n_seeds      <- 20L
   n_s          <- 25L
   N            <- 200L

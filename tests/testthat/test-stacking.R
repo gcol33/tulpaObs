@@ -144,6 +144,7 @@ test_that("predict.tobs_stack with X.0 needs matching member designs", {
 
 test_that("n.seeds builds a tobs_stack of K members and predicts out-of-sample", {
   skip_on_cran()
+  skip_if_fast()
   skip_if_not_installed("loo")
   sim <- sim_occu()
   ens <- tobs(~ x, data = sim$data, y = sim$y, detection = ~ 1,

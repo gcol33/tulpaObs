@@ -87,6 +87,7 @@ test_that("Gaussian arm uses only positive-cover rows", {
 
 test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
   skip_on_cran()
+  skip_if_fast()
   truth <- list(beta_occ = c(-0.5, 0.8), beta_pos = c(-1.0, 0.3),
                 sigma_pos = 0.4)
   hits_occ <- integer(2)

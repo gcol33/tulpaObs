@@ -1,0 +1,77 @@
+START test-autoscale.R 
+DONE  test-autoscale.R  fail=0 warn=0 skip=0 
+START test-community-occ.R 
+DONE  test-community-occ.R  fail=0 warn=0 skip=0 
+START test-control-validation.R 
+DONE  test-control-validation.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-adaptive-grid.R 
+DONE  test-cover-hurdle-adaptive-grid.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-beta.R 
+DONE  test-cover-hurdle-beta.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-bpos0-coverage.R 
+DONE  test-cover-hurdle-bpos0-coverage.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-lognormal.R 
+DONE  test-cover-hurdle-lognormal.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-multi-block.R 
+DONE  test-cover-hurdle-multi-block.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-nested-joint-recovery.R 
+DONE  test-cover-hurdle-nested-joint-recovery.R  fail=0 warn=0 skip=0 
+START test-cover-hurdle-nested-joint.R 
+DONE  test-cover-hurdle-nested-joint.R  fail=0 warn=0 skip=0 
+START test-cover-priors.R 
+DONE  test-cover-priors.R  fail=0 warn=0 skip=0 
+START test-dyn-occ.R 
+DONE  test-dyn-occ.R  fail=0 warn=0 skip=0 
+START test-family-method-coverage.R 
+DONE  test-family-method-coverage.R  fail=0 warn=0 skip=0 
+START test-formula-terms.R 
+DONE  test-formula-terms.R  fail=0 warn=0 skip=0 
+START test-issue8-visit-detection.R 
+DONE  test-issue8-visit-detection.R  fail=0 warn=0 skip=0 
+START test-method-gibbs-recovery.R 
+DONE  test-method-gibbs-recovery.R  fail=0 warn=0 skip=0 
+START test-methods.R 
+DONE  test-methods.R  fail=0 warn=0 skip=0 
+START test-nested-laplace-families.R 
+DONE  test-nested-laplace-families.R  fail=0 warn=0 skip=0 
+START test-nested-laplace-occu.R 
+DONE  test-nested-laplace-occu.R  fail=0 warn=0 skip=0 
+START test-nested-laplace-prediction.R 
+DONE  test-nested-laplace-prediction.R  fail=0 warn=0 skip=0 
+START test-new-features.R 
+DONE  test-new-features.R  fail=0 warn=0 skip=0 
+START test-nuts-components.R 
+DONE  test-nuts-components.R  fail=0 warn=0 skip=0 
+START test-nuts-controls.R 
+DONE  test-nuts-controls.R  fail=0 warn=0 skip=0 
+START test-occ.R 
+DONE  test-occ.R  fail=0 warn=0 skip=0 
+START test-occu-laplace-se.R 
+DONE  test-occu-laplace-se.R  fail=0 warn=0 skip=0 
+START test-occu-prior.R 
+DONE  test-occu-prior.R  fail=0 warn=0 skip=0 
+START test-re-bar-recovery.R 
+DONE  test-re-bar-recovery.R  fail=0 warn=0 skip=0 
+START test-re-laplace-recovery.R 
+DONE  test-re-laplace-recovery.R  fail=0 warn=0 skip=0 
+START test-simplified-laplace.R 
+DONE  test-simplified-laplace.R  fail=0 warn=0 skip=0 
+START test-sla-cover-hurdle.R 
+DONE  test-sla-cover-hurdle.R  fail=0 warn=0 skip=0 
+START test-sla-cover-joint.R 
+DONE  test-sla-cover-joint.R  fail=0 warn=0 skip=0 
+START test-sla-dyn-occu.R 
+DONE  test-sla-dyn-occu.R  fail=0 warn=0 skip=0 
+START test-sla-int-occu.R 
+DONE  test-sla-int-occu.R  fail=0 warn=0 skip=0 
+START test-spatial-occ.R 
+DONE  test-spatial-occ.R  fail=0 warn=0 skip=0 
+START test-spde-occ.R 
+DONE  test-spde-occ.R  fail=0 warn=0 skip=0 
+START test-stacking.R 
+DONE  test-stacking.R  fail=0 warn=0 skip=0 
+START test-visit-data.R 
+DONE  test-visit-data.R  fail=0 warn=0 skip=0 
+START test-within-between.R 
+DONE  test-within-between.R  fail=0 warn=0 skip=0 
+=== TOTAL FAILURES: 0 === 

@@ -14,6 +14,7 @@ simulate_occu_small <- function(seed = 1, N = 60L, J = 4L,
 
 test_that("n.chains pools chains and reports convergence diagnostics", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_occu_small()
   fit <- tobs(~ 1, data = sim$data, y = sim$y, detection = ~ 1,
               family = occu(), method = "nuts",
@@ -35,6 +36,7 @@ test_that("n.chains pools chains and reports convergence diagnostics", {
 
 test_that("n.thin reduces retained draws per chain", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_occu_small(seed = 2)
   fit <- tobs(~ 1, data = sim$data, y = sim$y, detection = ~ 1,
               family = occu(), method = "nuts",
@@ -46,6 +48,7 @@ test_that("n.thin reduces retained draws per chain", {
 
 test_that("summary() carries Rhat / ESS columns for a NUTS fit", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_occu_small(seed = 3)
   fit <- tobs(~ 1, data = sim$data, y = sim$y, detection = ~ 1,
               family = occu(), method = "nuts",
@@ -58,6 +61,7 @@ test_that("summary() carries Rhat / ESS columns for a NUTS fit", {
 
 test_that("single-chain NUTS still works and reports a 1-chain convergence table", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_occu_small(seed = 4)
   fit <- tobs(~ 1, data = sim$data, y = sim$y, detection = ~ 1,
               family = occu(), method = "nuts",

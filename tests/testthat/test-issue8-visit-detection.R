@@ -31,6 +31,7 @@ test_that("tobs_data() det.covs list composes with tobs(visits = ...)", {
 
 test_that("visit-level detection slope is recovered (Laplace, 20 seeds)", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 20L
   N <- 300L; J <- 6L

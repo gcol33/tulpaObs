@@ -16,6 +16,7 @@
 
 test_that("Louis-corrected SE matches MC sd of beta_psi_hat (D1 sweep)", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 20L
   N <- 600L; J <- 6L
@@ -69,6 +70,7 @@ test_that("Louis-corrected SE matches MC sd of beta_psi_hat (D1 sweep)", {
 
 test_that("95% Wald CI on psi block covers truth at near-nominal rate", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 20L
   N <- 600L; J <- 6L
@@ -114,6 +116,7 @@ test_that("95% Wald CI on psi block covers truth at near-nominal rate", {
 
 test_that("Louis fix also applies when priors = FALSE (unpenalised path)", {
   skip_on_cran()
+  skip_if_fast()
 
   # The unpenalised path routes through tulpa::tulpa_em_laplace; the Louis
   # post-fix should still apply because em_result$weights is returned by
