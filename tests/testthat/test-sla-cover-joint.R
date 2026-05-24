@@ -98,9 +98,9 @@ test_that("joint SLA path no longer falls back via message", {
             y       = sim$y,
             method  = "nested_laplace_sla",
             control = list(
-                sigma_grid     = c(0.4, 0.8),
-                rho_grid       = c(0.5, 0.9),
-                sigma_pos_grid = c(0.0, 0.6)
+                sigma.grid     = c(0.4, 0.8),
+                rho.grid       = c(0.5, 0.9),
+                sigma.pos.grid = c(0.0, 0.6)
             )
         ),
         message = function(m) {
@@ -132,9 +132,9 @@ test_that("SLA joint fit exposes skew + draws fields", {
         y       = sim$y,
         method  = "nested_laplace_sla",
         control = list(
-            sigma_grid     = c(0.4, 0.8),
-            rho_grid       = c(0.5, 0.9),
-            sigma_pos_grid = c(0.0, 0.6)
+            sigma.grid     = c(0.4, 0.8),
+            rho.grid       = c(0.5, 0.9),
+            sigma.pos.grid = c(0.0, 0.6)
         )
     ))
 
@@ -185,9 +185,9 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
         # Default approx (or explicit gaussian_laplace) — both should leave
         # the SLA fields un-populated.
         control = list(
-            sigma_grid     = c(0.4, 0.8),
-            rho_grid       = c(0.5, 0.9),
-            sigma_pos_grid = c(0.0, 0.6)
+            sigma.grid     = c(0.4, 0.8),
+            rho.grid       = c(0.5, 0.9),
+            sigma.pos.grid = c(0.0, 0.6)
         )
     ))
 
@@ -219,9 +219,9 @@ test_that("SLA gamma near zero at large N", {
         y       = sim$y,
         method  = "nested_laplace_sla",
         control = list(
-            sigma_grid     = c(0.4, 0.8),
-            rho_grid       = c(0.5, 0.9),
-            sigma_pos_grid = c(0.0, 0.6)
+            sigma.grid     = c(0.4, 0.8),
+            rho.grid       = c(0.5, 0.9),
+            sigma.pos.grid = c(0.0, 0.6)
         )
     ))
 
@@ -255,9 +255,9 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
         y       = sim$y,
         method  = "nested_laplace_sla",
         control = list(
-            sigma_grid     = c(0.01, 0.02, 0.03),
-            rho_grid       = c(0.5),
-            sigma_pos_grid = c(0.0, 0.01, 0.02)
+            sigma.grid     = c(0.01, 0.02, 0.03),
+            rho.grid       = c(0.5),
+            sigma.pos.grid = c(0.0, 0.01, 0.02)
         )
     ))
 

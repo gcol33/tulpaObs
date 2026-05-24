@@ -14,7 +14,7 @@
 # the fix. The configuration here mirrors D3 (N=300, n_s=25, BYM2,
 # beta-positive arm) with truth `sigma_pos = alpha_true * sigma_true =
 # 1.5 * 0.6 = 0.9` sitting at the upper boundary of
-# `sigma_pos_grid = c(0, 0.3, 0.6, 0.9)`.
+# `sigma.pos.grid = c(0, 0.3, 0.6, 0.9)`.
 
 simulate_d3_like <- function(seed, alpha_true,
                              N = 300L, n_s = 25L,
@@ -72,10 +72,10 @@ test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
       y        = sim$y,
       method   = "nested_laplace",
       control  = list(
-        sigma_grid     = c(0.3, 0.6, 0.9),
-        rho_grid       = c(0.5, 0.7, 0.9),
-        sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9),
-        adaptive_grid  = TRUE
+        sigma.grid     = c(0.3, 0.6, 0.9),
+        rho.grid       = c(0.5, 0.7, 0.9),
+        sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9),
+        adaptive.grid  = TRUE
       )
     )
     expect_s3_class(fit, "cover_fit")
@@ -115,17 +115,17 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
     # joint Sd(alpha), so the gap that motivated this test no longer
     # opens up. Holding phi fixed isolates the sigma_pos boundary fix.
     ctrl <- list(
-      sigma_grid     = c(0.3, 0.6, 0.9),
-      rho_grid       = c(0.5, 0.7, 0.9),
-      sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9),
-      phi_grid       = exp(seq(log(2), log(300), length.out = 13))
+      sigma.grid     = c(0.3, 0.6, 0.9),
+      rho.grid       = c(0.5, 0.7, 0.9),
+      sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9),
+      phi.grid       = exp(seq(log(2), log(300), length.out = 13))
     )
     fit_fix <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
                     y = sim$y, method = "nested_laplace",
-                    control = c(ctrl, list(adaptive_grid = FALSE)))
+                    control = c(ctrl, list(adaptive.grid = FALSE)))
     fit_ad  <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
                     y = sim$y, method = "nested_laplace",
-                    control = c(ctrl, list(adaptive_grid = TRUE)))
+                    control = c(ctrl, list(adaptive.grid = TRUE)))
     # Quantile CI coverage on alpha (see comment in the preceding test
     # for the rationale of avoiding the Wald check at the boundary).
     cover_fixed[r] <- fit_fix$joint$theta_ci_lo["alpha"] <= truth_alpha &&
@@ -159,10 +159,10 @@ test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
     formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"), y = sim$y,
     method = "nested_laplace",
     control = list(
-      sigma_grid     = c(0.3, 0.6, 0.9),
-      rho_grid       = c(0.5, 0.7, 0.9),
-      sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9),
-      adaptive_grid  = TRUE
+      sigma.grid     = c(0.3, 0.6, 0.9),
+      rho.grid       = c(0.5, 0.7, 0.9),
+      sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9),
+      adaptive.grid  = TRUE
     )
   )
   # adaptive_grid_info should be present and report refinement on

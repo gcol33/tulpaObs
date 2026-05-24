@@ -183,20 +183,22 @@ jsdm <- function() {
 #' (Royle 2004).
 #'
 #' @param K_max upper bound for latent N in the EM E-step summation.
-#' @param family `"poisson"` or `"negbin"`.
+#' @param mixture latent-abundance distribution: `"poisson"` or `"negbin"`.
+#'   Named `mixture` (after `unmarked::pcount()`) to avoid collision with the
+#'   model-type `family` argument of [tobs()].
 #' @return A `tobs_family` object.
 #' @export
-abun <- function(K_max = NULL, family = c("poisson", "negbin")) {
-  family <- match.arg(family)
+abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+  mixture <- match.arg(mixture)
   obs_family(
     name           = "abun",
     class_long     = "N-mixture abundance",
-    latent         = if (family == "poisson") "poisson" else "negbin",
+    latent         = mixture,
     observation    = "binomial_N",
     replicates     = "required",
     default_engine = "laplace",
     status         = "planned",
-    params         = list(K_max = K_max, family = family)
+    params         = list(K_max = K_max, mixture = mixture)
   )
 }
 
@@ -208,17 +210,17 @@ abun <- function(K_max = NULL, family = c("poisson", "negbin")) {
 #' @inheritParams abun
 #' @return A `tobs_family` object.
 #' @export
-ms_abun <- function(K_max = NULL, family = c("poisson", "negbin")) {
-  family <- match.arg(family)
+ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+  mixture <- match.arg(mixture)
   obs_family(
     name           = "ms_abun",
     class_long     = "multispecies N-mixture",
-    latent         = if (family == "poisson") "poisson" else "negbin",
+    latent         = mixture,
     observation    = "binomial_N",
     replicates     = "required",
     default_engine = "laplace",
     status         = "planned",
-    params         = list(K_max = K_max, family = family)
+    params         = list(K_max = K_max, mixture = mixture)
   )
 }
 
@@ -230,8 +232,8 @@ ms_abun <- function(K_max = NULL, family = c("poisson", "negbin")) {
 #' @inheritParams abun
 #' @return A `tobs_family` object.
 #' @export
-dyn_abun <- function(K_max = NULL, family = c("poisson", "negbin")) {
-  family <- match.arg(family)
+dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+  mixture <- match.arg(mixture)
   obs_family(
     name           = "dyn_abun",
     class_long     = "Dail-Madsen open N-mixture",
@@ -240,7 +242,7 @@ dyn_abun <- function(K_max = NULL, family = c("poisson", "negbin")) {
     replicates     = "required",
     default_engine = "nuts",
     status         = "planned",
-    params         = list(K_max = K_max, family = family)
+    params         = list(K_max = K_max, mixture = mixture)
   )
 }
 
@@ -346,11 +348,11 @@ cover <- function(positive = c("beta", "lognormal")) {
     # separate from the occupancy fitter and named with underscores. Declaring
     # the keys keeps tobs()'s control validation from rejecting them.
     control_keys   = c(
-      "max_iter", "tol", "n_threads", "prior_sigma", "prior_alpha",
-      "phi_grid", "sigma_grid", "sigma_pos_grid", "rho_grid", "tau_grid",
-      "rho_car_grid", "tau_temporal_grid", "rho_temporal_grid",
-      "sigma_temporal_grid", "sigma_re_grid",
-      "adaptive_grid", "adaptive_grid_edge_thresh", "adaptive_grid_max_passes"
+      "max.iter", "tol", "n.threads", "prior.sigma", "prior.alpha",
+      "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",
+      "rho.car.grid", "tau.temporal.grid", "rho.temporal.grid",
+      "sigma.temporal.grid", "sigma.re.grid",
+      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes"
     )
   )
 }
@@ -371,7 +373,7 @@ print.tobs_family <- function(x, ...) {
   cat(sprintf("  latent state   : %s\n", x$latent))
   cat(sprintf("  observation    : %s\n", x$observation))
   cat(sprintf("  replicates     : %s\n", x$replicates))
-  cat(sprintf("  default engine : %s\n", x$default_engine))
+  cat(sprintf("  default method : %s  (method = \"auto\")\n", x$default_engine))
   cat(sprintf("  status         : %s\n", x$status))
   if (length(x$params)) {
     cat("  params         :\n")

@@ -47,9 +47,9 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            sigma_grid     = c(0.4, 0.8),
-            rho_grid       = c(0.5, 0.9),
-            sigma_pos_grid = c(0.0, 0.6)
+            sigma.grid     = c(0.4, 0.8),
+            rho.grid       = c(0.5, 0.9),
+            sigma.pos.grid = c(0.0, 0.6)
         )
     )
 
@@ -85,8 +85,8 @@ test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            tau_grid       = c(1.0, 4.0),
-            sigma_pos_grid = c(0.0, 0.75)
+            tau.grid       = c(1.0, 4.0),
+            sigma.pos.grid = c(0.0, 0.75)
         )
     )
 
@@ -148,9 +148,9 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            sigma_grid     = c(0.4, 0.8),
-            rho_grid       = c(0.5, 0.9),
-            sigma_pos_grid = c(0.0, 0.6)
+            sigma.grid     = c(0.4, 0.8),
+            rho.grid       = c(0.5, 0.9),
+            sigma.pos.grid = c(0.0, 0.6)
         )
     )
 
@@ -184,8 +184,8 @@ test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            tau_grid       = c(1.0, 4.0),
-            sigma_pos_grid = c(0.0, 0.75)
+            tau.grid       = c(1.0, 4.0),
+            sigma.pos.grid = c(0.0, 0.75)
         )
     )
 
@@ -212,9 +212,9 @@ test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            tau_grid       = c(1.0, 4.0),
-            rho_car_grid   = c(0.7, 0.95),
-            sigma_pos_grid = c(0.0, 0.75)
+            tau.grid       = c(1.0, 4.0),
+            rho.car.grid   = c(0.7, 0.95),
+            sigma.pos.grid = c(0.0, 0.75)
         )
     )
 

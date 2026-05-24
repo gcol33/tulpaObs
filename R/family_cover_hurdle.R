@@ -51,6 +51,12 @@
   }
 
   if (identical(engine, "nested_laplace")) {
+    if (!is.null(.resolve_cover_priors(priors))) {
+      stop("cover fixed-effect priors (cover_priors()) are not yet wired for ",
+           "method = 'nested_laplace' / 'nested_laplace_sla'. Use ",
+           "method = 'laplace' / 'laplace_sla', or drop the prior.",
+           call. = FALSE)
+    }
     return(decode_cover_hurdle_joint(
       fit_cover_hurdle_joint_nested(enc, data, positive, control,
                                     temporal = temporal, re = re),
@@ -219,8 +225,12 @@ encode_cover_hurdle <- function(formula, data, y,
 #' @param positive `"lognormal"` or `"beta"` (taken from `enc$positive`).
 #' @param engine `"laplace"` (default) or `"nested_laplace"`. The latter is
 #'   routed through [fit_cover_hurdle_joint_nested()].
-#' @param priors Currently ignored — passed through for forward compat.
-#' @param control List with optional `max_iter`, `tol`, `n_threads`.
+#' @param priors Optional [cover_priors()] object (or a coercible list /
+#'   `FALSE`). Adds a weakly-informative fixed-effect penalty on both arms
+#'   (occurrence + positive, beta or lognormal); `NULL` / `FALSE` fit
+#'   unpenalised. Rejected with a spatial formula (the spatial solver carries
+#'   its own prior).
+#' @param control List with optional `max.iter`, `tol`, `n.threads`.
 #' @return List with `m_occ`, `m_pos`, `positive`, `pos_fit_n`, `pos_fit_p`,
 #'   plus one of `sigma_pos` (lognormal) or `phi_pos` (beta).
 #' @keywords internal
@@ -232,9 +242,25 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
          "or 'nested_laplace'/'nested_laplace_sla' (got engine '", engine,
          "'). nuts lands in later phases.", call. = FALSE)
   }
-  max_iter  <- control$max_iter  %||% 100L
+  max_iter  <- control$max.iter  %||% 100L
   tol       <- control$tol       %||% 1e-6
-  n_threads <- control$n_threads %||% 1L
+  n_threads <- control$n.threads %||% 1L
+
+  # Opt-in fixed-effect priors (cover_priors()): the same quadratic beta_prior
+  # tulpa_laplace() applies on the occupancy path, specified on natural-scale
+  # coefficients and applied on the autoscaled design (occupancy convention).
+  # NULL = unpenalised. Both arms are penalisable -- the occurrence and
+  # lognormal arms through tulpa_laplace(), the beta arm through
+  # tulpa_laplace_beta()'s beta_prior. Spatial cover formulas still reject the
+  # prior (the spatial solver carries its own).
+  cprior <- .resolve_cover_priors(priors)
+  if (!is.null(cprior) && !is.null(enc$spatial_spec)) {
+    stop("cover priors are not supported with a spatial term in the formula ",
+         "(the spatial Laplace solver carries its own fixed-effect prior). ",
+         "Drop the prior or the spatial term.", call. = FALSE)
+  }
+  occ_bp <- .cover_arm_prior(cprior, "occ", colnames(enc$occ_data$X))
+  pos_bp <- .cover_arm_prior(cprior, "pos", colnames(enc$pos_data$X))
 
   m_occ <- tulpa::tulpa_laplace(
     y        = enc$occ_data$y,
@@ -242,7 +268,8 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
     X        = enc$occ_data$X,
     family   = "binomial",
     spatial  = enc$spatial_spec,
-    max_iter = max_iter, tol = tol, n_threads = n_threads
+    max_iter = max_iter, tol = tol, n_threads = n_threads,
+    beta_prior = occ_bp
   )
 
   if (length(enc$pos_data$y) < ncol(enc$pos_data$X) + 1L) {
@@ -261,7 +288,8 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
       X        = enc$pos_data$X,
       family   = "gaussian",
       spatial  = enc$spatial_spec,
-      max_iter = max_iter, tol = tol, n_threads = n_threads
+      max_iter = max_iter, tol = tol, n_threads = n_threads,
+      beta_prior = pos_bp
     )
     # Gaussian Laplace runs with phi = 1; estimate residual SD post-hoc.
     beta_pos <- m_pos$mode[seq_len(p_pos)]
@@ -278,12 +306,15 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
     ))
   }
 
-  # positive == "beta"
+  # positive == "beta": the beta arm is penalised via the beta solver's own
+  # beta_prior (gcol33/tulpa, tulpa_laplace_beta gained beta_prior); the
+  # occurrence arm is penalised by occ_bp above.
   m_pos <- tulpa::tulpa_laplace_beta(
     y         = enc$pos_data$y,
     X         = enc$pos_data$X,
     spatial   = enc$spatial_spec,
-    max_iter  = max_iter, tol = tol, n_threads = n_threads
+    max_iter  = max_iter, tol = tol, n_threads = n_threads,
+    beta_prior = pos_bp
   )
   list(
     m_occ     = m_occ,
@@ -660,7 +691,7 @@ print.summary.cover_fit <- function(x, ...) {
 #'   default 7-point log-spaced grid spans `[2, 300]`; posterior mean and
 #'   SD are surfaced as `phi_pos` / `phi_pos_sd`.
 #'
-#' Override the per-arm phi grid via `control$phi_grid`.
+#' Override the per-arm phi grid via `control$phi.grid`.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
 #' @param data The original (un-subsetted) data frame — required to resolve
@@ -746,7 +777,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   #     *centre* of a 7-point log-spaced grid spanning [sigma_hat/3,
   #     sigma_hat*3]. Neighbour-ratio ~1.44 keeps the inner Laplace
   #     warm-starts close enough that adaptive densification rarely fires.
-  #     Override via `control$phi_grid`.
+  #     Override via `control$phi.grid`.
   #   * beta:      phi is integrated on the outer joint hyperparameter grid
   #     (tulpaObs#7). 7 log-spaced points span 2..300 (neighbour-ratio
   #     ~2.4); the joint engine's mode-tracked interior densification
@@ -761,12 +792,12 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     pos_family   <- "gaussian"
     sigma_hat    <- .prefit_lognormal_sigma(enc, control)
     phi_hat      <- sigma_hat
-    phi_grid_pos <- control$phi_grid %||%
+    phi_grid_pos <- control$phi.grid %||%
       exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7))
   } else {
     pos_family   <- "beta"
     phi_hat      <- 1.0
-    phi_grid_pos <- control$phi_grid %||%
+    phi_grid_pos <- control$phi.grid %||%
       exp(seq(log(2), log(300), length.out = 7))
   }
 
@@ -806,15 +837,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   } else if (!is.null(prior_for_joint$tau_grid)) {
     prior_for_joint$tau_grid <- NULL
   }
-  if (!is.null(control$sigma_grid))   prior_for_joint$sigma_grid   <- control$sigma_grid
-  if (!is.null(control$rho_grid))     prior_for_joint$rho_grid     <- control$rho_grid
-  if (!is.null(control$tau_grid)) {
-    prior_for_joint$sigma_grid <- 1.0 / sqrt(as.numeric(control$tau_grid))
+  if (!is.null(control$sigma.grid))   prior_for_joint$sigma_grid   <- control$sigma.grid
+  if (!is.null(control$rho.grid))     prior_for_joint$rho_grid     <- control$rho.grid
+  if (!is.null(control$tau.grid)) {
+    prior_for_joint$sigma_grid <- 1.0 / sqrt(as.numeric(control$tau.grid))
   }
-  if (!is.null(control$rho_car_grid)) prior_for_joint$rho_car_grid <- control$rho_car_grid
+  if (!is.null(control$rho.car.grid)) prior_for_joint$rho_car_grid <- control$rho.car.grid
 
-  if (!is.null(control$sigma_pos_grid)) {
-    sigma_pos_grid <- as.numeric(control$sigma_pos_grid)
+  if (!is.null(control$sigma.pos.grid)) {
+    sigma_pos_grid <- as.numeric(control$sigma.pos.grid)
   } else {
     # Default: mirror the donor sigma grid (gives alpha = sigma_pos /
     # sigma_occ posterior centered on 1.0 under flat per-axis priors).
@@ -854,36 +885,36 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       prior     = multi$prior,
       copy      = multi$copy,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
-      prior_sigma = control$prior_sigma,
-      prior_alpha = control$prior_alpha,
-      max_iter  = control$max_iter  %||% 50L,
+      prior_sigma = control$prior.sigma,
+      prior_alpha = control$prior.alpha,
+      max_iter  = control$max.iter  %||% 50L,
       tol       = control$tol       %||% 1e-6,
-      n_threads = control$n_threads %||% 1L,
+      n_threads = control$n.threads %||% 1L,
       store_Q   = TRUE,
-      adaptive_grid             = control$adaptive_grid             %||% TRUE,
-      adaptive_grid_edge_thresh = control$adaptive_grid_edge_thresh %||% 0.02,
-      adaptive_grid_max_passes  = control$adaptive_grid_max_passes  %||% 1L
+      adaptive_grid             = control$adaptive.grid             %||% TRUE,
+      adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+      adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
     )
   } else {
     # Adaptive grid forwarding. Defaults match the joint engine's defaults
     # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
     # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
-    # `control$adaptive_grid = FALSE` to recover the legacy fixed-grid
+    # `control$adaptive.grid = FALSE` to recover the legacy fixed-grid
     # behaviour for reproducibility checks.
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),
       prior     = prior_for_joint,
       copy      = copy_spec,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
-      prior_sigma = control$prior_sigma,
-      prior_alpha = control$prior_alpha,
-      max_iter  = control$max_iter  %||% 50L,
+      prior_sigma = control$prior.sigma,
+      prior_alpha = control$prior.alpha,
+      max_iter  = control$max.iter  %||% 50L,
       tol       = control$tol       %||% 1e-6,
-      n_threads = control$n_threads %||% 1L,
+      n_threads = control$n.threads %||% 1L,
       store_Q   = TRUE,
-      adaptive_grid             = control$adaptive_grid             %||% TRUE,
-      adaptive_grid_edge_thresh = control$adaptive_grid_edge_thresh %||% 0.02,
-      adaptive_grid_max_passes  = control$adaptive_grid_max_passes  %||% 1L
+      adaptive_grid             = control$adaptive.grid             %||% TRUE,
+      adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+      adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
     )
   }
 
@@ -1215,9 +1246,9 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     list(
       type         = "ar1",
       n_times      = as.integer(n_t),
-      tau_grid     = as.numeric(control$tau_temporal_grid %||%
+      tau_grid     = as.numeric(control$tau.temporal.grid %||%
                                  c(1, 4, 16)),
-      rho_grid     = as.numeric(control$rho_temporal_grid %||%
+      rho_grid     = as.numeric(control$rho.temporal.grid %||%
                                  c(0.3, 0.7)),
       temporal_idx = list(as.integer(t_full), as.integer(t_pos))
     )
@@ -1225,7 +1256,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     list(
       type       = "iid",
       n_units    = as.integer(n_t),
-      sigma_grid = as.numeric(control$sigma_temporal_grid %||%
+      sigma_grid = as.numeric(control$sigma.temporal.grid %||%
                                exp(seq(log(0.1), log(1), length.out = 3))),
       obs_idx    = list(as.integer(t_full), as.integer(t_pos))
     )
@@ -1233,7 +1264,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     list(
       type         = type,
       n_times      = as.integer(n_t),
-      tau_grid     = as.numeric(control$tau_temporal_grid %||%
+      tau_grid     = as.numeric(control$tau.temporal.grid %||%
                                  c(1, 4, 16)),
       temporal_idx = list(as.integer(t_full), as.integer(t_pos))
     )
@@ -1266,7 +1297,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   list(
     type       = "iid",
     n_units    = as.integer(n_g),
-    sigma_grid = as.numeric(control$sigma_re_grid %||%
+    sigma_grid = as.numeric(control$sigma.re.grid %||%
                              exp(seq(log(0.1), log(1.5), length.out = 3))),
     obs_idx    = list(as.integer(g_full), as.integer(g_pos))
   )

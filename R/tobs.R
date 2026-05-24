@@ -666,7 +666,7 @@ print.tobs_fit <- function(x, ...) {
   if (!is.null(fam)) {
     cat(sprintf("<tobs_fit: %s>\n", fam$class_long))
     cat(sprintf("  family         : %s (status: %s)\n", fam$name, fam$status))
-    cat(sprintf("  default engine : %s\n", fam$default_engine))
+    cat(sprintf("  default method : %s\n", fam$default_engine))
     cat("\n")
   }
   model <- x$model

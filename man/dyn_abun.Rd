@@ -4,12 +4,14 @@
 \alias{dyn_abun}
 \title{Open-population (Dail-Madsen) N-mixture family}
 \usage{
-dyn_abun(K_max = NULL, family = c("poisson", "negbin"))
+dyn_abun(K_max = NULL, mixture = c("poisson", "negbin"))
 }
 \arguments{
 \item{K_max}{upper bound for latent N in the EM E-step summation.}
 
-\item{family}{\code{"poisson"} or \code{"negbin"}.}
+\item{mixture}{latent-abundance distribution: \code{"poisson"} or \code{"negbin"}.
+Named \code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
+model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.

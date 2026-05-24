@@ -20,9 +20,13 @@ fit_cover_hurdle(
 \item{engine}{\code{"laplace"} (default) or \code{"nested_laplace"}. The latter is
 routed through \code{\link[=fit_cover_hurdle_joint_nested]{fit_cover_hurdle_joint_nested()}}.}
 
-\item{priors}{Currently ignored — passed through for forward compat.}
+\item{priors}{Optional \code{\link[=cover_priors]{cover_priors()}} object (or a coercible list /
+\code{FALSE}). Adds a weakly-informative fixed-effect penalty on both arms
+(occurrence + positive, beta or lognormal); \code{NULL} / \code{FALSE} fit
+unpenalised. Rejected with a spatial formula (the spatial solver carries
+its own prior).}
 
-\item{control}{List with optional \code{max_iter}, \code{tol}, \code{n_threads}.}
+\item{control}{List with optional \code{max.iter}, \code{tol}, \code{n.threads}.}
 }
 \value{
 List with \code{m_occ}, \code{m_pos}, \code{positive}, \code{pos_fit_n}, \code{pos_fit_p},

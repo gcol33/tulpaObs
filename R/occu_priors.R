@@ -32,6 +32,31 @@
 # =============================================================================
 
 
+# Validate one `list(mean, sd)` prior bucket (shared by occu_priors() and
+# cover_priors()). Returns the bucket unchanged, or NULL for an unset bucket.
+.check_prior_bucket <- function(p, nm) {
+  if (is.null(p)) return(NULL)
+  if (!is.list(p) || is.null(p$mean) || is.null(p$sd)) {
+    stop(sprintf("`%s` must be a list with `mean` and `sd` (or NULL).", nm),
+         call. = FALSE)
+  }
+  if ((!is.numeric(p$mean) && !is.logical(p$mean)) ||
+      (!is.numeric(p$sd)   && !is.logical(p$sd))) {
+    stop(sprintf("`%s$mean` and `%s$sd` must be numeric.", nm, nm),
+         call. = FALSE)
+  }
+  if (any(is.na(p$mean)) || any(!is.finite(suppressWarnings(as.numeric(p$mean))))) {
+    stop(sprintf("`%s$mean` must be finite (got NA / -Inf / +Inf).", nm),
+         call. = FALSE)
+  }
+  if (any(p$sd <= 0)) {
+    stop(sprintf("`%s$sd` must be positive (Inf is allowed = no penalty).", nm),
+         call. = FALSE)
+  }
+  p
+}
+
+
 #' Weakly-informative priors for occupancy Laplace fits
 #'
 #' Constructs a prior specification consumed by [tobs()] when a Laplace
@@ -71,32 +96,11 @@ occu_priors <- function(p_intercept       = list(mean = 0, sd = 1.5),
                         p_slope           = list(mean = 0, sd = 2.5),
                         beta_occ_intercept = list(mean = 0, sd = 2),
                         beta_occ_slope    = list(mean = 0, sd = 5)) {
-  .check_one <- function(p, nm) {
-    if (is.null(p)) return(NULL)
-    if (!is.list(p) || is.null(p$mean) || is.null(p$sd)) {
-      stop(sprintf("`%s` must be a list with `mean` and `sd` (or NULL).", nm),
-           call. = FALSE)
-    }
-    if ((!is.numeric(p$mean) && !is.logical(p$mean)) ||
-        (!is.numeric(p$sd)   && !is.logical(p$sd))) {
-      stop(sprintf("`%s$mean` and `%s$sd` must be numeric.", nm, nm),
-           call. = FALSE)
-    }
-    if (any(is.na(p$mean)) || any(!is.finite(suppressWarnings(as.numeric(p$mean))))) {
-      stop(sprintf("`%s$mean` must be finite (got NA / -Inf / +Inf).", nm),
-           call. = FALSE)
-    }
-    if (any(p$sd <= 0)) {
-      stop(sprintf("`%s$sd` must be positive (Inf is allowed = no penalty).", nm),
-           call. = FALSE)
-    }
-    p
-  }
   out <- list(
-    p_intercept        = .check_one(p_intercept,        "p_intercept"),
-    p_slope            = .check_one(p_slope,            "p_slope"),
-    beta_occ_intercept = .check_one(beta_occ_intercept, "beta_occ_intercept"),
-    beta_occ_slope     = .check_one(beta_occ_slope,     "beta_occ_slope")
+    p_intercept        = .check_prior_bucket(p_intercept,        "p_intercept"),
+    p_slope            = .check_prior_bucket(p_slope,            "p_slope"),
+    beta_occ_intercept = .check_prior_bucket(beta_occ_intercept, "beta_occ_intercept"),
+    beta_occ_slope     = .check_prior_bucket(beta_occ_slope,     "beta_occ_slope")
   )
   structure(out, class = c("occu_priors", "tobs_priors_spec"))
 }
@@ -196,6 +200,30 @@ print.occu_priors <- function(x, ...) {
 }
 
 
+# Expand an (intercept-bucket, slope-bucket) pair into per-coefficient
+# (mean, sd) vectors aligned to `coef_names`. The intercept column is the one
+# named "(Intercept)" (model.matrix convention), falling back to the first
+# column. A NULL bucket means "no penalty" (mean 0, sd Inf) for that role.
+# Shared by the occupancy (.prior_for_submodel) and cover (.cover_arm_prior)
+# prior builders so the intercept/slope split lives in one place.
+.expand_int_slope_prior <- function(int_b, slp_b, coef_names) {
+  p <- length(coef_names)
+  if (p == 0L) return(list(mean = numeric(0), sd = numeric(0)))
+  is_intercept <- coef_names == "(Intercept)"
+  if (!any(is_intercept)) {
+    is_intercept <- c(TRUE, rep(FALSE, p - 1L))[seq_len(p)]
+  }
+  mean_vec <- numeric(p)
+  sd_vec   <- numeric(p)
+  for (j in seq_len(p)) {
+    b <- if (is_intercept[j]) int_b else slp_b
+    mean_vec[j] <- if (is.null(b)) 0   else b$mean %||% 0
+    sd_vec[j]   <- if (is.null(b)) Inf else b$sd   %||% Inf
+  }
+  list(mean = mean_vec, sd = sd_vec)
+}
+
+
 # Build a prior block for the occupancy / detection submodel given the
 # user-facing tobs prior list and the coefficient names. The prior spec
 # accepts four named buckets:
@@ -210,11 +238,6 @@ print.occu_priors <- function(x, ...) {
   p <- length(coef_names)
   if (p == 0L) return(.expand_prior(NULL, 0L))
   if (is.null(prior_spec)) return(.expand_prior(NULL, p))
-
-  is_intercept <- coef_names == "(Intercept)"
-  if (!any(is_intercept)) {
-    is_intercept <- c(TRUE, rep(FALSE, p - 1L))[seq_len(p)]
-  }
 
   if (sub_name %in% c("p")) {
     int_b <- prior_spec$p_intercept
@@ -236,20 +259,7 @@ print.occu_priors <- function(x, ...) {
     slp_b <- prior_spec$p_slope
   }
 
-  mean_vec <- numeric(p)
-  sd_vec   <- numeric(p)
-  for (j in seq_len(p)) {
-    if (is_intercept[j]) {
-      m <- if (is.null(int_b)) 0     else int_b$mean %||% 0
-      s <- if (is.null(int_b)) Inf   else int_b$sd   %||% Inf
-    } else {
-      m <- if (is.null(slp_b)) 0     else slp_b$mean %||% 0
-      s <- if (is.null(slp_b)) Inf   else slp_b$sd   %||% Inf
-    }
-    mean_vec[j] <- m
-    sd_vec[j]   <- s
-  }
-  list(mean = mean_vec, sd = sd_vec)
+  .expand_int_slope_prior(int_b, slp_b, coef_names)
 }
 
 
@@ -315,4 +325,129 @@ print.occu_priors <- function(x, ...) {
     blocks[[k]]$beta_prior <- list(mean = pr$mean, sd = pr$sd)
   }
   blocks
+}
+
+
+# =============================================================================
+# Cover-hurdle fixed-effect priors.
+#
+# The cover hurdle has two linear predictors with their own fixed-effect
+# coefficients: an occurrence arm (Bernoulli presence) and a positive-cover arm
+# (beta or lognormal). Unlike occupancy, the two arms are separately identified
+# (presence from 0/>0, positive cover from the positive values), so there is no
+# psi-p-style ridge that demands a default prior. Cover priors are therefore
+# OPT-IN: `tobs(..., family = cover(), priors = NULL)` fits unpenalised (the
+# historical behaviour the recovery tests assume). Passing `cover_priors()`
+# adds the same quadratic `beta_prior` penalty tulpa_laplace() applies on the
+# occupancy path, mainly to tame perfect separation in the occurrence arm at
+# small N. The prior is specified on natural-scale coefficients and applied on
+# the autoscaled design, matching the occupancy convention.
+# =============================================================================
+
+
+#' Weakly-informative priors for cover-hurdle Laplace fits
+#'
+#' Builds an opt-in fixed-effect prior for [cover()] models fit with a Laplace
+#' method. The cover hurdle has two arms with their own coefficients -- an
+#' occurrence arm (Bernoulli presence) and a positive-cover arm (beta or
+#' lognormal) -- each with an intercept and a slope bucket. The penalty is the
+#' quadratic `+ sum((beta_j - mu_j)^2 / (2 sd_j^2))` added to each arm's
+#' negative log-likelihood, the same mechanism [occu_priors()] uses.
+#'
+#' Cover priors are opt-in: without `priors`, a cover fit is unpenalised. The
+#' main use is regularising perfect separation in the occurrence arm at small
+#' `N`. Set any `sd = Inf` to drop that component.
+#'
+#' @section Coverage: Applied on the separate-Laplace path
+#'   (`method = "laplace"` / `"laplace_sla"`) when the formula has no spatial
+#'   term. Both arms are penalised: the occurrence and lognormal-positive arms
+#'   through [tulpa::tulpa_laplace()], and the beta-positive arm through
+#'   [tulpa::tulpa_laplace_beta()]. The joint nested-Laplace path
+#'   (`method = "nested_laplace"`) does not yet thread fixed-effect priors and
+#'   errors if one is supplied; spatial cover formulas likewise reject the
+#'   prior (the spatial Laplace solver carries its own).
+#'
+#' @param occ_intercept Prior on the occurrence (presence) intercept, logit
+#'   scale. `list(mean, sd)`. Default `list(mean = 0, sd = 2)`.
+#' @param occ_slope Prior on occurrence slopes. Default
+#'   `list(mean = 0, sd = 2.5)`.
+#' @param pos_intercept Prior on the positive-cover intercept (logit scale for
+#'   `"beta"`, log scale for `"lognormal"`). Default `list(mean = 0, sd = 3)`.
+#' @param pos_slope Prior on positive-cover slopes. Default
+#'   `list(mean = 0, sd = 2.5)`.
+#' @return A `cover_priors` object, ready to pass to `tobs(..., priors = ...)`.
+#' @seealso [occu_priors()]
+#' @examples
+#' \dontrun{
+#' # regularise the occurrence arm, leave the positive arm unpenalised
+#' fit <- tobs(~ x, data = d, family = cover(positive = "lognormal"),
+#'             y = cov, method = "laplace",
+#'             priors = cover_priors(pos_intercept = list(mean = 0, sd = Inf),
+#'                                   pos_slope     = list(mean = 0, sd = Inf)))
+#' }
+#' @export
+cover_priors <- function(occ_intercept = list(mean = 0, sd = 2),
+                         occ_slope     = list(mean = 0, sd = 2.5),
+                         pos_intercept = list(mean = 0, sd = 3),
+                         pos_slope     = list(mean = 0, sd = 2.5)) {
+  out <- list(
+    occ_intercept = .check_prior_bucket(occ_intercept, "occ_intercept"),
+    occ_slope     = .check_prior_bucket(occ_slope,     "occ_slope"),
+    pos_intercept = .check_prior_bucket(pos_intercept, "pos_intercept"),
+    pos_slope     = .check_prior_bucket(pos_slope,     "pos_slope")
+  )
+  structure(out, class = c("cover_priors", "tobs_priors_spec"))
+}
+
+
+#' @export
+print.cover_priors <- function(x, ...) {
+  cat("cover_priors (opt-in, for cover() Laplace fits):\n")
+  fmt <- function(p, label) {
+    if (is.null(p)) cat(sprintf("  %s: <unset>\n", label))
+    else cat(sprintf("  %s ~ Normal(%.2g, %.2g)\n", label, p$mean, p$sd))
+  }
+  fmt(x$occ_intercept, "occ_(Intercept)")
+  fmt(x$occ_slope,     "occ slopes     ")
+  fmt(x$pos_intercept, "pos_(Intercept)")
+  fmt(x$pos_slope,     "pos slopes     ")
+  invisible(x)
+}
+
+
+# Resolve a user `priors` argument for the cover hurdle. Cover priors are
+# opt-in, so NULL / FALSE / "none" all mean "no penalty" (returns NULL). A
+# `cover_priors` object is used as-is; a plain list with the cover bucket names
+# is coerced via cover_priors(). An `occu_priors` object is rejected (the
+# buckets differ: occ/pos vs psi/p).
+.resolve_cover_priors <- function(priors) {
+  if (is.null(priors) || identical(priors, FALSE) || identical(priors, "none")) {
+    return(NULL)
+  }
+  if (inherits(priors, "cover_priors")) return(priors)
+  if (inherits(priors, "occu_priors")) {
+    stop("cover() takes cover_priors(), not occu_priors() ",
+         "(the arms are occ/pos, not psi/p).", call. = FALSE)
+  }
+  if (is.list(priors)) {
+    args <- priors[intersect(names(priors),
+                             c("occ_intercept", "occ_slope",
+                               "pos_intercept", "pos_slope"))]
+    return(do.call(cover_priors, args))
+  }
+  stop("`priors` for cover() must be NULL, FALSE, a cover_priors object, ",
+       "or a named list.", call. = FALSE)
+}
+
+
+# Per-coefficient (mean, sd) beta_prior for one cover arm, or NULL if the arm
+# is unpenalised (no bucket active -> all sd Inf). `arm` is "occ" or "pos";
+# `coef_names` are the arm's design-matrix column names.
+.cover_arm_prior <- function(cprior, arm, coef_names) {
+  if (is.null(cprior)) return(NULL)
+  pr <- .expand_int_slope_prior(cprior[[paste0(arm, "_intercept")]],
+                                cprior[[paste0(arm, "_slope")]],
+                                coef_names)
+  if (length(pr$sd) == 0L || all(!is.finite(pr$sd))) return(NULL)
+  pr
 }

@@ -13,7 +13,7 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > `ms_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`, `dyn_abun()`,
 > `distance()`, `removal()`, `fp_occu()`, `cover()`). All S3 classes are
 > `tobs_*` (`tobs_fit`, `tobs_model`, `tobs_family`, `tobs_spatial`,
-> `tobs_temporal`, `tobs_re`, `tobs_svc`, `tobs_latent`, `tobs_priors`).
+> `tobs_temporal`, `tobs_re`, `tobs_svc`, `tobs_latent`, `tobs_priors_spec`).
 >
 > **Structured terms live inside the formula** (lme4 / mgcv / INLA style),
 > not as `tobs()` arguments. The registry in `R/formula_terms.R` maps a term
@@ -203,7 +203,7 @@ R/
   formula_terms.R          — structured-term registry + constructors (.tobs_term_icar/bym2/car/gp/spde/re/temporal/svc/latent/copy), tobs_* print methods, .tobs_term_to_tulpa_spatial
   formula_parse.R          — AST parser: .tobs_parse_formula / .tobs_parse_processes / .tobs_resolve_terms / .tobs_bind_formulas
   spatial.R                — internal precompute helpers (adjacency_to_csr, compute_bym2_scale, compute_nngp_neighbors)
-  methods.R                — S3 methods on tobs_fit, $.tobs_fit, predict_spatial, checkIdentifiability, tobs_priors
+  methods.R                — S3 methods on tobs_fit, $.tobs_fit, predict_spatial, checkIdentifiability
   diagnostics.R            — tobs_waic, tobs_ppc, tobs_test_*, tobs_pit_residuals
   data.R                   — tobs_format, tobs_data, summary/plot.tobs_data, simulators
   within_between.R         — within_between() covariate decomposition

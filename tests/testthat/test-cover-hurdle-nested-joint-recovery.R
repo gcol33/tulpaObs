@@ -96,9 +96,9 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
       y        = sim$y,
       method   = "nested_laplace",
       control  = list(
-        sigma_grid     = c(0.3, 0.6, 0.9),
-        rho_grid       = c(0.5, 0.7, 0.9),
-        sigma_pos_grid = c(0.3, 0.6, 0.9)
+        sigma.grid     = c(0.3, 0.6, 0.9),
+        rho.grid       = c(0.5, 0.7, 0.9),
+        sigma.pos.grid = c(0.3, 0.6, 0.9)
       )
     )
     expect_s3_class(fit, "cover_fit")
@@ -196,9 +196,9 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
       y        = sim$y,
       method   = "nested_laplace",
       control  = list(
-        sigma_grid     = c(0.3, 0.5, 0.8),
-        rho_grid       = c(0.5, 0.7, 0.9),
-        sigma_pos_grid = c(0.25, 0.5, 0.75)
+        sigma.grid     = c(0.3, 0.5, 0.8),
+        rho.grid       = c(0.5, 0.7, 0.9),
+        sigma.pos.grid = c(0.25, 0.5, 0.75)
       )
     )
     expect_s3_class(fit, "cover_fit")
@@ -228,9 +228,9 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
     y        = sim$y,
     method   = "nested_laplace",
     control  = list(
-      sigma_grid     = c(0.3, 0.5, 0.8),
-      rho_grid       = c(0.5, 0.7, 0.9),
-      sigma_pos_grid = c(0.25, 0.5, 0.75)
+      sigma.grid     = c(0.3, 0.5, 0.8),
+      rho.grid       = c(0.5, 0.7, 0.9),
+      sigma.pos.grid = c(0.25, 0.5, 0.75)
     )
   )
   expect_true(is.finite(fit$phi_pos_sd))

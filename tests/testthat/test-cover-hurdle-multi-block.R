@@ -94,14 +94,14 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
     y        = sim$y,
     method   = "nested_laplace",
     control  = list(
-      sigma_grid         = c(0.3, 0.6, 1.0),
-      rho_grid           = c(0.5, 0.85),
-      sigma_pos_grid     = c(0.4, 0.8, 1.2),
-      tau_temporal_grid  = c(4, 16),
-      rho_temporal_grid  = c(0.3, 0.7),
-      sigma_re_grid      = c(0.15, 0.4),
-      phi_grid           = exp(seq(log(5), log(80), length.out = 4)),
-      adaptive_grid      = FALSE
+      sigma.grid         = c(0.3, 0.6, 1.0),
+      rho.grid           = c(0.5, 0.85),
+      sigma.pos.grid     = c(0.4, 0.8, 1.2),
+      tau.temporal.grid  = c(4, 16),
+      rho.temporal.grid  = c(0.3, 0.7),
+      sigma.re.grid      = c(0.15, 0.4),
+      phi.grid           = exp(seq(log(5), log(80), length.out = 4)),
+      adaptive.grid      = FALSE
     )
   ))
 
@@ -187,13 +187,13 @@ test_that("cover(): multi-block resolves character group / time columns", {
     y        = sim$y,
     method   = "nested_laplace",
     control  = list(
-      sigma_grid         = c(0.4, 0.8),
-      rho_grid           = c(0.5, 0.85),
-      sigma_pos_grid     = c(0.6, 1.0),
-      sigma_temporal_grid = c(0.2, 0.4),
-      sigma_re_grid      = c(0.2, 0.4),
-      phi_grid           = c(10, 40),
-      adaptive_grid      = FALSE
+      sigma.grid         = c(0.4, 0.8),
+      rho.grid           = c(0.5, 0.85),
+      sigma.pos.grid     = c(0.6, 1.0),
+      sigma.temporal.grid = c(0.2, 0.4),
+      sigma.re.grid      = c(0.2, 0.4),
+      phi.grid           = c(10, 40),
+      adaptive.grid      = FALSE
     )
   ))
   expect_s3_class(fit, "cover_fit")

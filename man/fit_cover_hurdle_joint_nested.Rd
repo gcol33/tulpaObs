@@ -57,6 +57,6 @@ default 7-point log-spaced grid spans \verb{[2, 300]}; posterior mean and
 SD are surfaced as \code{phi_pos} / \code{phi_pos_sd}.
 }
 
-Override the per-arm phi grid via \code{control$phi_grid}.
+Override the per-arm phi grid via \code{control$phi.grid}.
 }
 \keyword{internal}

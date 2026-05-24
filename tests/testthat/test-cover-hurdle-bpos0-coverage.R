@@ -47,10 +47,10 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
       y       = sim$y,
       method  = "nested_laplace",
       control = list(
-        sigma_grid     = c(0.3, 0.6, 0.9),
-        rho_grid       = c(0.5, 0.7, 0.9),
-        sigma_pos_grid = c(0.0, 0.3, 0.6, 0.9, 1.2, 1.5),
-        adaptive_grid  = FALSE
+        sigma.grid     = c(0.3, 0.6, 0.9),
+        rho.grid       = c(0.5, 0.7, 0.9),
+        sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9, 1.2, 1.5),
+        adaptive.grid  = FALSE
       )
     )
     expect_s3_class(fit, "cover_fit")

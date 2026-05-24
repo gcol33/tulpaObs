@@ -78,7 +78,7 @@ replicate requirement, default engine, and status. Families do not fit —
 
 ### Planned (error informatively until implemented)
 
-`abun(K_max, family)`, `ms_abun(...)`, `dyn_abun(...)` (Dail-Madsen),
+`abun(K_max, mixture)`, `ms_abun(...)`, `dyn_abun(...)` (Dail-Madsen),
 `distance(key)`, `removal()`, `fp_occu()` (false-positive occupancy).
 
 `obs_family()` is the low-level constructor behind all of these (exported but
@@ -189,12 +189,20 @@ Sampler controls (`method = "nuts"`):
 | `adapt.delta`    | 0.8     | Target acceptance probability |
 | `max.treedepth`  | 10      | NUTS maximum tree depth |
 | `seed`           | 42      | Base RNG seed; chain `c` uses `seed + c - 1` |
+| `n.seeds`        | 1       | Fit K seed-offset refits and LOO-stack them into a `tobs_stack` (see §9). Member `k` uses base seed `seed + k - 1`. |
 
 Laplace controls (`method = "laplace"` / `"laplace_sla"` / `"nested_laplace"` /
 `"nested_laplace_sla"`): `max.iter`, `tol`, `damping`, `sigma.beta`,
 `sigma.re.scale`. Stochastic-correction controls (`"laplace_gibbs"` /
 `"laplace_mi"`): `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and
 `seed` (stored on `$seed`).
+
+`n.seeds > 1` is only meaningful for the stochastic routes (`"nuts"`,
+`"laplace_gibbs"`, `"laplace_mi"`) — seed-variants would be identical under the
+deterministic Laplace methods, which reject it. The seed-offset members are
+statistically identical, so this is a Monte-Carlo robustness device with
+roughly-uniform stacking weights; pass distinct fits to `tobs_stack()` for a
+genuine model average.
 
 ---
 
@@ -211,8 +219,29 @@ occu_priors(p_intercept        = list(mean = 0, sd = 1.5),
 ```
 
 Set any `sd = Inf` to disable that component. Pass `priors = FALSE` to `tobs()`
-to recover the unpenalised MAP. `tobs_priors()` is the generic prior container
-(`beta.normal`, `alpha.normal`, `sigma.sq.psi`, `sigma.sq.p`).
+to recover the unpenalised MAP. For NUTS, the occupancy path does not currently
+apply a user `priors` argument.
+
+`cover_priors()` is the opt-in fixed-effect prior for the cover hurdle, with one
+intercept/slope bucket per arm:
+
+```r
+cover_priors(occ_intercept = list(mean = 0, sd = 2),
+             occ_slope     = list(mean = 0, sd = 2.5),
+             pos_intercept = list(mean = 0, sd = 3),
+             pos_slope     = list(mean = 0, sd = 2.5))
+```
+
+Cover has no psi-p-style ridge, so priors are off by default (a cover fit with
+`priors = NULL` is unpenalised); the main use is taming perfect separation in
+the occurrence arm at small `N`. Applied on the separate-Laplace path
+(`method = "laplace"`/`"laplace_sla"`, no spatial term): both arms are penalised
+— occurrence and lognormal-positive through `tulpa_laplace()`, beta-positive
+through `tulpa_laplace_beta()`. The joint nested-Laplace path does not yet
+thread fixed-effect priors and errors on a supplied prior; spatial cover
+formulas likewise reject it (the spatial solver carries its own). Each prior
+constructor (`occu_priors`, `cover_priors`) carries the natural parameters of
+its family group — there is no generic prior object.
 
 ---
 
@@ -271,6 +300,14 @@ inherited from `tulpa::tulpa_fit`. tulpaObs overrides or adds:
 `tobs_richness(object)` (community models) are standalone exported helpers;
 `predict(..., terms=)` returns a `tobs_prediction` with a `plot()` method.
 
+`tobs_stack(..., method = c("stacking", "pseudobma"))` combines two or more
+`tobs_fit` objects (fit to the same observation set, otherwise free to differ
+in covariates / priors / `method`) into a LOO-weighted ensemble. Returns a
+`tobs_stack` with `weights`, `fits`, `loo`, `comparison`, and `method`;
+`predict()` / `fitted()` return the weight-combined predictive. Works across
+every family. `tobs(..., control = list(n.seeds = K))` produces one of these
+directly from seed-offset refits (§5).
+
 ---
 
 ## 10. Diagnostics
@@ -309,15 +346,15 @@ support single-season models only.
 
 **Fitter** `tobs` · **Families** `occu` `dyn_occu` `ms_occu` `int_occu` `jsdm`
 `cover` `abun` `ms_abun` `dyn_abun` `distance` `removal` `fp_occu` `obs_family`
-· **Priors** `occu_priors` `tobs_priors` · **Data** `tobs_format` `tobs_data`
+· **Priors** `occu_priors` `cover_priors` · **Data** `tobs_format` `tobs_data`
 `tobs_format_ms` · **Simulators** `simulate_occu` `simulate_ms_occu`
 `simulate_dyn_occu` `simulate_int_occu` `simulate_dyn_ms_occu`
 `simulate_int_ms_occu` `simulate_cover` `simulate_cover_joint` · **Diagnostics**
 `tobs_waic` `tobs_ppc` `tobs_pit_residuals` `tobs_test_uniformity`
 `tobs_test_dispersion` `tobs_test_zero_inflation` `tobs_test_outliers`
 `tobs_check` `tobs_check_id` · **Prediction / effects** `tobs_predict_spatial`
-`tobs_marginal_effect` `tobs_richness` `within_between` · **Generic re-export**
-`ranef`
+`tobs_marginal_effect` `tobs_richness` `within_between` · **Ensembles**
+`tobs_stack` · **Generic re-export** `ranef`
 
 > Structured terms (`icar`, `bym2`, `car`, `car_proper`, `gp`, `multiscale_gp`,
 > `spde`, `re`, `temporal`, `svc`, `latent`, `copy`) are **not exported** — they
