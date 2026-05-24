@@ -1,5 +1,7 @@
 Sys.setenv(NOT_CRAN = "true")
-suppressMessages(devtools::load_all("C:/Users/Gilles Colling/Documents/dev/tulpaObs", quiet = TRUE))
+pkgbuild::clean_dll("C:/Users/Gilles Colling/Documents/dev/tulpaObs")
+suppressMessages(devtools::load_all("C:/Users/Gilles Colling/Documents/dev/tulpaObs",
+                                    quiet = TRUE, recompile = TRUE))
 library(testthat)
 files <- c("test-formula-terms.R",
            "test-issue8-visit-detection.R",

@@ -375,8 +375,12 @@ build_re_spec <- function(re_list, model) {
     spec$has_slopes <- TRUE
     spec$n_coefs <- n_coefs
     spec$slope_matrices <- slope_matrices
-    spec$correlated <- any(vapply(re_list, function(r) isTRUE(r$correlated),
-                                  logical(1)))
+    # Per-term correlation flag (0/1): a term is correlated only if it asked
+    # for it and has more than one coefficient. The engine reads this per term
+    # (re_correlated[t] / re_n_chol[t]), so mixed `|` / `||` blocks are honoured.
+    spec$correlated <- as.integer(
+      vapply(re_list, function(r) isTRUE(r$correlated), logical(1)) &
+      (n_coefs > 1L))
   }
 
   spec

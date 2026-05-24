@@ -29,11 +29,17 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > vector from that via `.tobs_structures_from_model()`.
 >
 > `lme4` bar syntax is supported as sugar over `re()`: `.tobs_desugar_bars()`
-> (in `R/formula_parse.R`) rewrites `(1 | g)`, `(x | g)`, `(x || g)` into the
-> equivalent `re()` calls on the formula AST *before* `terms()` runs, so there
-> is one parser and one term type. Forms the engine can't hold in one `re()`
-> block (slope-only `0 + x`, multi-slope, nested `g/h`) error with a pointer to
-> an explicit `re()`.
+> (in `R/formula_parse.R`) rewrites bar terms into the equivalent `re()`
+> calls on the formula AST *before* `terms()` runs, so there is one parser and
+> one term type. Supported forms (gcol33/tulpaObs#10): `(1 | g)`, `(x | g)`,
+> `(1 + x + z | g)` (multi-slope, stacked via `cbind()`), `(x || g)`
+> (uncorrelated), `(0 + x | g)` (slope-only, no group intercept), and crossed
+> / nested grouping `(1 | g:h)`, `(1 | g/h)` (one `re()` per implied grouping
+> factor). Multi-slope and nested are pure R-side (`build_re_spec()` computes
+> `n_coefs` from the slope-matrix width); slope-only needs the per-term
+> `re_has_intercept` flag in tulpa's engine (ABI 22). Random slopes fit under
+> NUTS only — the EM-Laplace path does not carry formula random effects and
+> nested-Laplace rejects slopes.
 >
 > Legacy data-binder / engine entry are internal: `.tobs_build_model()`,
 > `.tobs_fit_model()`, `.tobs_laplace()`.

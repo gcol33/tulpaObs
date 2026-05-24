@@ -80,6 +80,42 @@ test_that("(1 + x + z | g) recovers a 3x3 correlated RE block", {
   }
 })
 
+test_that("(1 + x + z || g) is an uncorrelated multi-slope block (no Cholesky)", {
+  skip_on_cran()
+
+  set.seed(303)
+  ng <- 20L; per <- 20L; N <- ng * per; J <- 8L
+  g <- rep(seq_len(ng), each = per)
+  x <- rnorm(N); z <- rnorm(N)
+  sig <- c(0.8, 0.6, 0.5)
+  B <- sapply(sig, function(s) rnorm(ng, 0, s))   # independent columns
+  eta <- 0.3 + B[g, 1] + B[g, 2] * x + B[g, 3] * z
+  zocc <- rbinom(N, 1, plogis(eta))
+  y <- matrix(0L, N, J)
+  for (i in seq_len(N)) y[i, ] <- rbinom(J, 1, zocc[i] * 0.6)
+  d <- data.frame(g = factor(g), x = x, z = z)
+
+  fit <- tobs(~ (1 + x + z || g), data = d, y = y, detection = ~ 1,
+              family = occu(), engine = "nuts",
+              control = list(iter = 300, warmup = 150, seed = 1, verbose = FALSE))
+
+  # q = 3 but uncorrelated -> NO Cholesky block: [psi_int, p_int, sigma(3),
+  # z_effects(ng*3)]. (Before per-term correlation handling, re_correlated was
+  # left unsized for a fully-`||` block and the param layout read past its end.)
+  expect_false(fit$re[[1]]$correlated)
+  expect_equal(length(fit$means), 2L + 3L + ng * 3L)
+
+  m <- fit$means
+  sig_hat <- exp(m[3:5])
+  expect_true(all(is.finite(sig_hat)) && all(sig_hat > 0) && all(sig_hat < 2))
+  # Diagonal block: b_{g,c} = sigma_c * z_{g,c}.
+  zoff <- 5L
+  Bhat <- t(vapply(seq_len(ng), function(gg) {
+    sig_hat * m[zoff + (gg - 1L) * 3L + 1:3]
+  }, numeric(3)))
+  for (cc in 1:3) expect_gt(cor(Bhat[, cc], B[, cc]), 0.45)
+})
+
 test_that("(0 + x | g) is a slope-only block with no group intercept", {
   skip_on_cran()
 

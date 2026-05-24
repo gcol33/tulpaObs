@@ -306,20 +306,34 @@ inline void populate_re(tulpa::ModelData& data, Rcpp::List re_spec) {
         data.total_re_params = total_params;
         data.total_sigma_params = total_sigma;
 
-        // Correlated slopes via Cholesky
-        if (re_spec.containsElementNamed("correlated") && Rcpp::as<bool>(re_spec["correlated"])) {
-            data.has_re_correlated_slopes = true;
-            data.re_correlated.resize(n_terms, true);
-            data.re_n_chol.resize(n_terms);
+        // Correlated slopes via Cholesky, per term. `correlated` is a length-
+        // n_terms 0/1 vector from build_re_spec(); a term is correlated only
+        // when it asked for it AND has more than one coefficient. Always size
+        // re_correlated / re_n_chol to n_terms (the param layout indexes them
+        // per term, even for fully-uncorrelated `||` blocks).
+        {
+            data.re_correlated.assign(n_terms, false);
+            data.re_n_chol.assign(n_terms, 0);
             int total_chol = 0;
+            bool any_corr = false;
+            Rcpp::IntegerVector corr;
+            if (re_spec.containsElementNamed("correlated"))
+                corr = Rcpp::as<Rcpp::IntegerVector>(re_spec["correlated"]);
             for (int t = 0; t < n_terms; t++) {
                 int k = data.re_n_coefs[t];
-                // Strictly-lower triangle: the tanh-Cholesky prior in tulpa
-                // parameterizes k*(k-1)/2 off-diagonal entries and derives the
-                // diagonal from the unit-norm constraint (see tulpa_priors_re.h).
-                data.re_n_chol[t] = k * (k - 1) / 2;
-                total_chol += data.re_n_chol[t];
+                bool ct = (t < corr.size()) && (corr[t] != 0) && (k > 1);
+                if (ct) {
+                    data.re_correlated[t] = true;
+                    // Strictly-lower triangle: the tanh-Cholesky prior in tulpa
+                    // parameterizes k*(k-1)/2 off-diagonal entries and derives
+                    // the diagonal from the unit-norm constraint (see
+                    // tulpa_priors_re.h).
+                    data.re_n_chol[t] = k * (k - 1) / 2;
+                    total_chol += data.re_n_chol[t];
+                    any_corr = true;
+                }
             }
+            data.has_re_correlated_slopes = any_corr;
             data.total_chol_params = total_chol;
         }
     }
