@@ -48,6 +48,54 @@ test_that("gp() resolves bare coordinate columns from data", {
   expect_identical(p$terms[[1]]$n_obs, 20L)
 })
 
+# --- spatial() umbrella: dispatches to the specific constructors -----------
+
+# Compare two specs on their substantive fields (the recorded call text and
+# label differ between `spatial(..., model = "x")` and `x(...)`).
+spec_fields <- function(spec) {
+  spec[setdiff(names(spec), c("term_call", "label"))]
+}
+
+test_that("spatial(model = 'bym2') is identical to bym2() (areal)", {
+  dat <- make_dat()
+  adj <- chain_adj(20L)
+  u <- tulpaObs:::.tobs_parse_formula(
+    ~ elev + spatial(graph = adj, model = "bym2"), data = dat)
+  r <- tulpaObs:::.tobs_parse_formula(~ elev + bym2(graph = adj), data = dat)
+  expect_length(u$terms, 1L)
+  expect_s3_class(u$terms[[1]], "tobs_spatial")
+  expect_identical(u$terms[[1]]$type, "bym2")
+  expect_identical(spec_fields(u$terms[[1]]), spec_fields(r$terms[[1]]))
+  # the umbrella is stripped from the fixed-effects design like any term
+  expect_setequal(attr(stats::terms(u$fe_formula), "term.labels"), "elev")
+})
+
+test_that("spatial(lon, lat, model = 'gp') is identical to gp() (continuous)", {
+  dat <- make_dat()
+  u <- tulpaObs:::.tobs_parse_formula(~ spatial(lon, lat, model = "gp"), data = dat)
+  r <- tulpaObs:::.tobs_parse_formula(~ gp(lon, lat), data = dat)
+  expect_identical(u$terms[[1]]$type, "gp")
+  expect_identical(spec_fields(u$terms[[1]]), spec_fields(r$terms[[1]]))
+})
+
+test_that("spatial() forwards per-model arguments and id", {
+  dat <- make_dat()
+  u <- tulpaObs:::.tobs_parse_formula(
+    ~ spatial(lon, lat, model = "gp", nn = 5, id = "f"), data = dat)
+  r <- tulpaObs:::.tobs_parse_formula(~ gp(lon, lat, nn = 5, id = "f"), data = dat)
+  expect_equal(u$terms[[1]]$nn, 5)
+  expect_identical(u$terms[[1]]$id, "f")
+  expect_identical(spec_fields(u$terms[[1]]), spec_fields(r$terms[[1]]))
+})
+
+test_that("spatial() rejects an unknown / non-spatial model", {
+  dat <- make_dat()
+  expect_error(
+    tulpaObs:::.tobs_parse_formula(~ spatial(lon, lat, model = "re"), data = dat))
+  expect_error(
+    tulpaObs:::.tobs_parse_formula(~ spatial(lon, lat, model = "nope"), data = dat))
+})
+
 test_that("re() and temporal() resolve grouping/time columns to codes", {
   dat <- make_dat()
   pr <- tulpaObs:::.tobs_parse_formula(~ re(observer), data = dat)

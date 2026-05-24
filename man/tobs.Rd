@@ -33,6 +33,13 @@ coefficients \code{svc(lon, lat, indices = ...)}; community latent factors
 both predictors, tag the term with \code{id = "u"} and write \code{copy("u")} in
 the other formula.
 
+The spatial fields also have a single-verb umbrella \code{spatial(..., model = ...)} that selects the field type by name, mirroring
+\code{temporal(time, type = ...)} and \code{INLA}'s \code{f(i, model = ...)}:
+\code{spatial(graph = adj, model = "bym2")} is \code{bym2(graph = adj)} and
+\code{spatial(lon, lat, model = "spde")} is \code{spde(lon, lat)}. \code{model} is one
+of \code{"icar"}, \code{"bym2"}, \code{"car"}, \code{"car_proper"}, \code{"gp"}, \code{"multiscale_gp"},
+\code{"spde"}; per-model arguments pass through unchanged.
+
 Random effects also accept \code{lme4} bar syntax as shorthand for \code{re()}:
 \code{(1 | g)} is \code{re(g)}, \code{(x | g)} is a correlated random intercept and
 slope \code{re(g, type = "slope", covariate = x)}, and \code{(x || g)} drops the

@@ -28,6 +28,14 @@
 #'   both predictors, tag the term with `id = "u"` and write `copy("u")` in
 #'   the other formula.
 #'
+#'   The spatial fields also have a single-verb umbrella `spatial(...,
+#'   model = ...)` that selects the field type by name, mirroring
+#'   `temporal(time, type = ...)` and `INLA`'s `f(i, model = ...)`:
+#'   `spatial(graph = adj, model = "bym2")` is `bym2(graph = adj)` and
+#'   `spatial(lon, lat, model = "spde")` is `spde(lon, lat)`. `model` is one
+#'   of `"icar"`, `"bym2"`, `"car"`, `"car_proper"`, `"gp"`, `"multiscale_gp"`,
+#'   `"spde"`; per-model arguments pass through unchanged.
+#'
 #'   Random effects also accept `lme4` bar syntax as shorthand for `re()`:
 #'   `(1 | g)` is `re(g)`, `(x | g)` is a correlated random intercept and
 #'   slope `re(g, type = "slope", covariate = x)`, and `(x || g)` drops the

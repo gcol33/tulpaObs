@@ -302,6 +302,34 @@
 
 
 # ---------------------------------------------------------------------------
+# Spatial umbrella
+# ---------------------------------------------------------------------------
+
+# Spatial model names, in registry order. Single source of truth for the
+# `spatial()` umbrella's `model =` choices; an areal/continuous term added to
+# the registry below is exposed through `spatial()` by listing it here too.
+.tobs_spatial_models <- c("icar", "bym2", "car", "car_proper",
+                          "gp", "multiscale_gp", "spde")
+
+# spatial(..., model = ...) — single-verb umbrella over the areal (icar / bym2
+# / car / car_proper) and continuous (gp / multiscale_gp / spde) spatial terms,
+# mirroring temporal()'s one-verb-plus-`type=` surface and INLA's
+# f(i, model = ...). Dispatches to the specific constructor via the registry,
+# forwarding `...` (bare coord columns, `graph =`, and any per-model arguments)
+# and `id` unchanged, so `spatial(graph = adj, model = "bym2")` is identical to
+# `bym2(graph = adj)` and `spatial(lon, lat, model = "spde")` to
+# `spde(lon, lat)`. Only spatial models dispatch here; re() / temporal() /
+# svc() / latent() keep their own verbs. Per-model argument validation lives in
+# the target constructor, so a stray argument is forwarded rather than caught
+# at the `spatial()` call site — use the specific constructor for strict arg
+# checking.
+.tobs_term_spatial <- function(..., model = .tobs_spatial_models, id = NULL) {
+  model <- match.arg(model)
+  .tobs_terms[[model]](..., id = id)
+}
+
+
+# ---------------------------------------------------------------------------
 # Registry — name -> constructor. Adding a component is one entry here.
 # ---------------------------------------------------------------------------
 .tobs_terms <- list(
@@ -312,6 +340,7 @@
   gp            = .tobs_term_gp,
   multiscale_gp = .tobs_term_multiscale_gp,
   spde          = .tobs_term_spde,
+  spatial       = .tobs_term_spatial,
   re            = .tobs_term_re,
   temporal      = .tobs_term_temporal,
   svc           = .tobs_term_svc,
