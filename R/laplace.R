@@ -26,7 +26,7 @@
 #' @param n_imputations Number of MI draws when `correction = "mi"`.
 #' @param verbose Print per-iteration progress.
 #' @keywords internal
-.tobs_laplace <- function(model, spatial = NULL,
+.tobs_laplace <- function(model, spatial = NULL, re = NULL,
                           priors = NULL,
                           sigma_beta = 10,
                           max_iter = 50L, tol = 1e-4, damping = 0.3,
@@ -39,6 +39,26 @@
   if (!inherits(model, "tobs_model")) stop("model must be a tobs_model object")
 
   .validate_spatial_laplace(spatial, model$model_type)
+
+  # Formula random effects on the deterministic path. Supported forms (iid
+  # intercept + uncorrelated slopes on the occupancy predictor of a
+  # single-season model) are fit via the variance-component EM in
+  # R/em_laplace_re.R; everything else errors with a pointer to NUTS rather
+  # than being silently dropped (gcol33/tulpaObs#11).
+  if (!is.null(re)) {
+    .validate_re_laplace(re, model, spatial, approx)
+    em_result <- .tobs_em_laplace_re(model, re, priors = priors,
+                                     max_iter = max_iter, tol = tol,
+                                     damping = damping, verbose = verbose)
+    re_block <- .tobs_re_param_block(em_result$re_post)
+    fit <- build_laplace_fit(em_result, model, spatial,
+                             c(occ = ncol(model$X_processes[[1]]),
+                               det = ncol(model$X_processes[[2]])),
+                             prior_spec = NULL, approx = "gaussian_laplace",
+                             re_block = re_block)
+    fit$re <- if (inherits(re, "tobs_re")) list(re) else re
+    return(fit)
+  }
 
   callbacks <- switch(model$model_type,
     single     = build_single_callbacks(model, spatial),
@@ -770,6 +790,50 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
   invisible()
 }
 
+# Gate the deterministic random-effect path. The variance-component EM in
+# R/em_laplace_re.R fits iid intercept + UNCORRELATED slopes on the occupancy
+# predictor of a single-season model. Forms it cannot fit error here with a
+# pointer to `engine = "nuts"` (which fits every RE form) rather than being
+# silently dropped (gcol33/tulpaObs#11). The deterministic Laplace variance
+# estimate carries the usual small-cluster (PQL) bias; NUTS is the calibrated
+# route when that matters.
+.validate_re_laplace <- function(re, model, spatial, approx) {
+  re_list <- if (inherits(re, "tobs_re")) list(re) else re
+
+  if (!identical(model$model_type, "single")) {
+    stop(sprintf(
+      "Random effects under engine = 'laplace' are wired for single-season occupancy only (got model_type = '%s'). Use engine = 'nuts' for random effects on this family.",
+      model$model_type), call. = FALSE)
+  }
+  if (!is.null(spatial)) {
+    stop("A random effect combined with a spatial term is not supported on the Laplace path. Use engine = 'nuts'.",
+         call. = FALSE)
+  }
+  if (!is.null(model$X_det_visit)) {
+    stop("Random effects with visit-level detection covariates are not supported on the Laplace path. Use engine = 'nuts'.",
+         call. = FALSE)
+  }
+  for (r in re_list) {
+    if (length(r$shared) >= 2L && isTRUE(r$shared[2]) && !isTRUE(r$shared[1])) {
+      stop("A random effect on the detection predictor is not supported on the Laplace path. Use engine = 'nuts'.",
+           call. = FALSE)
+    }
+    if (length(r$shared) >= 2L && isTRUE(r$shared[2])) {
+      stop("A random effect shared across occupancy and detection is not supported on the Laplace path. Use engine = 'nuts'.",
+           call. = FALSE)
+    }
+    n_slopes <- if (identical(r$type, "slope") && !is.null(r$covariate)) {
+      ncol(.tobs_re_slope_matrix(r$covariate, model$data))
+    } else 0L
+    n_coefs <- (if (isTRUE(r$intercept)) 1L else 0L) + n_slopes
+    if (isTRUE(r$correlated) && n_coefs > 1L) {
+      stop("Correlated random slopes (a Cholesky-factored covariance, e.g. `(1 + x | g)`) are fit by the NUTS sampler only; the Laplace engine uses a diagonal random-effect covariance. Use `engine = 'nuts'`, or `(1 + x || g)` for an uncorrelated block.",
+           call. = FALSE)
+    }
+  }
+  invisible()
+}
+
 # Linear-predictor offset induced by the SPDE mesh field at the current fit.
 # After tulpa_laplace returns mode = c(beta, u_mesh), the spatial contribution
 # to eta at the observed locations is A %*% u_mesh.
@@ -915,7 +979,8 @@ glm_init <- function(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det) 
 # Build tobs_fit from EM result
 build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
                               prior_spec = NULL,
-                              approx = "gaussian_laplace") {
+                              approx = "gaussian_laplace",
+                              re_block = NULL) {
   pi_list <- model$process_info
 
   # Collect betas from correction (if available) or EM fits
@@ -943,10 +1008,20 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
       # M-step Hessian is M * I_complete + P_prior (pseudo-binomial trick);
       # I_obs = X' diag(psi(1-psi) - w(1-w)) X + P_prior is the right object
       # for SEs. See `.louis_info_psi_single` and tulpaObs#7.
+      # Louis-corrected occupancy SE applies to the fixed-effect-only fit. When
+      # random effects are present the occupancy block's fixed-effect SE comes
+      # from the GLMM marginal precision (`H_beta`, Schur over the RE block)
+      # that tulpa_laplace returns, so skip Louis on the RE path.
       use_louis <- identical(model$model_type, "single") &&
                    identical(sub_name, "occ") &&
-                   !is.null(em_result$weights)
-      if (use_louis) {
+                   !is.null(em_result$weights) &&
+                   is.null(re_block)
+      if (!is.null(re_block) && identical(sub_name, "occ")) {
+        # Occupancy fixed-effect SE on the RE path: natural-scale observed info
+        # marginalised over the random-effect block (the M-step H_beta is
+        # M-inflated). Computed in .tobs_re_occ_fixed_se().
+        sds <- c(sds, re_block$occ_se)
+      } else if (use_louis) {
         I_obs <- .louis_info_psi_single(
           X_occ       = model$X_processes[[1]],
           beta_psi    = beta,
@@ -1001,6 +1076,15 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     nms   <- c(nms, visit_nms)
   }
 
+  # Append the deterministic random-effect block (sigma hyperparameters +
+  # per-group BLUPs) so the public output matches the NUTS column layout and
+  # ranef() / summary() can name them (gcol33/tulpaObs#11).
+  if (!is.null(re_block)) {
+    means <- c(means, re_block$means)
+    sds   <- c(sds, re_block$sds)
+    nms   <- c(nms, re_block$names)
+  }
+
   names(means) <- nms
   names(sds)   <- nms
   n_params <- length(means)
@@ -1008,7 +1092,13 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # Pseudo-draws
   n_pseudo <- 1000L
   draws <- matrix(NA_real_, n_pseudo, n_params)
-  for (j in seq_len(n_params)) draws[, j] <- rnorm(n_pseudo, means[j], max(sds[j], 1e-4))
+  for (j in seq_len(n_params)) {
+    # Hyperparameters without an analytic SE (e.g. RE sigma on the
+    # variance-component path) carry NA sd -> draw a near-constant column at
+    # the point estimate rather than NAs.
+    sd_j <- if (is.finite(sds[j])) sds[j] else 0
+    draws[, j] <- rnorm(n_pseudo, means[j], max(sd_j, 1e-4))
+  }
   colnames(draws) <- nms
 
   # Simplified-Laplace skewness correction
@@ -1017,7 +1107,9 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # §3 and dev_notes/upstream_tulpa_sla_spec.md §3 for why).
   sla_gamma <- NULL
   sla_status <- "off"
-  if (identical(approx, "simplified_laplace")) {
+  # Simplified-Laplace skewness correction is not wired for the random-effect
+  # path (the gamma derivation assumes a fixed-effect-only M-step).
+  if (identical(approx, "simplified_laplace") && is.null(re_block)) {
     sla_res <- switch(model$model_type,
       single     = .sla_compute_occu_single(model, em_result,
                                             spatial = spatial,
@@ -1076,6 +1168,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     spatial_field = spatial_field,
     process_info = model$process_info,
     method = "laplace",
+    re_effects = re_block$re_effects,
     convergence = em_result$convergence,
     correction = em_result$correction
   ), class = c("tobs_fit", "tulpa_fit"))

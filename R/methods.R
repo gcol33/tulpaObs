@@ -48,6 +48,64 @@ nobs.tobs_fit <- function(object, ...) {
   }
 }
 
+# Re-export tulpa's ranef() generic so it is reachable as tulpaObs::ranef()
+# / after library(tulpaObs) without attaching tulpa (which is Imports-only).
+#' @importFrom tulpa ranef
+#' @export
+tulpa::ranef
+
+#' Random-effect estimates (BLUPs) for a tobs_fit
+#'
+#' Returns the per-group random-effect posterior summaries. Under NUTS the
+#' non-centred draws are reconstructed to the natural BLUP scale
+#' (`b_{g,c} = sigma_c * (L z_g)_c`) and summarised; the deterministic Laplace
+#' path returns the variance-component EM modes and their Schur-complement
+#' standard errors. When the fit carries no formula random effects this falls
+#' back to the generic flat random-effect table.
+#'
+#' @param object A `tobs_fit` object.
+#' @param ... Ignored.
+#' @return A data frame with one row per group level and coefficient
+#'   (`group`, `level`, `term`, `estimate`, `std.error`), or the generic
+#'   `ranef` table when no `re_effects` are present.
+#' @export
+ranef.tobs_fit <- function(object, ...) {
+  if (!is.null(object$re_effects) && length(object$re_effects) > 0L) {
+    out <- do.call(rbind, object$re_effects)
+    rownames(out) <- NULL
+    return(out)
+  }
+  NextMethod()
+}
+
+#' Coefficients for a tobs_fit
+#'
+#' Extends the generic per-process coefficient list with the visit-level
+#' detection coefficients (`p_visit_<cov>`) that the `process_info` loop omits
+#' because the visit-level design is carried separately from the site-level
+#' detection process (gcol33/tulpaObs#11).
+#'
+#' @param object A `tobs_fit` object.
+#' @param ... Ignored.
+#' @return The per-process coefficient list, with visit-level detection
+#'   coefficients appended to the detection process when present.
+#' @export
+coef.tobs_fit <- function(object, ...) {
+  cf <- NextMethod()
+  vn <- object$model$det_visit_names
+  if (!is.null(vn) && length(vn) > 0L && is.list(cf)) {
+    det_name <- object$process_info[[2]]$name
+    pv_names <- paste0("p_visit_", vn)
+    pv <- object$means[pv_names]
+    if (!is.null(cf[[det_name]])) {
+      cf[[det_name]] <- c(cf[[det_name]], pv)
+    } else {
+      cf[["p_visit"]] <- pv
+    }
+  }
+  cf
+}
+
 #' Fitted values (occupancy and detection probabilities)
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.

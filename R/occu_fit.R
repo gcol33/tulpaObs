@@ -44,7 +44,7 @@
   process_info <- model$process_info
 
   if (method == "laplace") {
-    fit <- .tobs_laplace(fit_model, spatial = spatial,
+    fit <- .tobs_laplace(fit_model, spatial = spatial, re = re,
                          priors = priors,
                          sigma_beta = sigma_beta,
                          max_iter = max_iter, tol = tol, damping = damping,
@@ -236,6 +236,27 @@
   param_names <- unlist(spec$process_names)
   if (!is.null(model$det_visit_names) && length(model$det_visit_names) > 0) {
     param_names <- c(param_names, paste0("p_visit_", model$det_visit_names))
+  }
+
+  # Name the random-effect block (log_sigma / chol / z, type-blocked per
+  # tulpa's layout) and reconstruct per-group BLUPs into `re_effects` so
+  # summary() / ranef() label them instead of showing param[i]
+  # (gcol33/tulpaObs#11). Counts and positions are unchanged.
+  if (!is.null(re)) {
+    re_design <- .tobs_re_design(if (inherits(re, "tobs_re")) list(re) else re,
+                                 model)
+    n_lead <- length(param_names)
+    re_nms <- .tobs_re_nuts_param_names(re_design)
+    if (n_lead + length(re_nms) <= length(fit$means)) {
+      param_names <- c(param_names, re_nms)
+      names(fit$means)[seq_along(param_names)] <- param_names
+      if (!is.null(fit$draws) && ncol(fit$draws) >= length(param_names)) {
+        colnames(fit$draws)[seq_along(param_names)] <- param_names
+      }
+      fit$re_effects <- tryCatch(
+        .tobs_re_nuts_effects(fit$draws, re_design, n_lead),
+        error = function(e) NULL)
+    }
   }
   fit$param_names <- param_names
 

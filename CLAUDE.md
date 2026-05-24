@@ -37,9 +37,24 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > / nested grouping `(1 | g:h)`, `(1 | g/h)` (one `re()` per implied grouping
 > factor). Multi-slope and nested are pure R-side (`build_re_spec()` computes
 > `n_coefs` from the slope-matrix width); slope-only needs the per-term
-> `re_has_intercept` flag in tulpa's engine (ABI 22). Random slopes fit under
-> NUTS only — the EM-Laplace path does not carry formula random effects and
-> nested-Laplace rejects slopes.
+> `re_has_intercept` flag in tulpa's engine (ABI 22).
+>
+> Random effects fit under both engines (gcol33/tulpaObs#11). NUTS fits every
+> form (incl. correlated slopes). The default `engine = "laplace"` fits iid
+> intercept RE and *uncorrelated* slopes (`(x || g)`, `(0 + x | g)`,
+> `(1 + x || g)`) on the occupancy predictor of a single-season model via a
+> variance-component EM (`R/em_laplace_re.R`, `.tobs_em_laplace_re()`): it wraps
+> tulpa's fixed-sigma `tulpa_laplace()` in the occupancy missing-data EM (the RE
+> mode is fed back into psi) and an EM/REML variance-component update, with the
+> RE posterior covariance recomputed at natural scale via Schur. tulpa's Laplace
+> uses a *diagonal* RE precision, so correlated slopes (`(1 + x | g)`), RE on
+> detection, RE + spatial, RE + visit-level detection, and RE on non-single
+> families error from `.validate_re_laplace()` with a pointer to NUTS rather
+> than being silently dropped. Deterministic Laplace variance estimates for
+> binary occupancy carry the usual small-cluster (PQL) bias; NUTS is the
+> calibrated route. RE parameter naming + per-group BLUP reconstruction for both
+> engines live in `R/re_effects.R` (`ranef()` / `coef()` overrides in
+> `R/methods.R`).
 >
 > Legacy data-binder / engine entry are internal: `.tobs_build_model()`,
 > `.tobs_fit_model()`, `.tobs_laplace()`.
@@ -119,6 +134,9 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
 | Spatial + community     | —       | Yes   |                                         |
+| Formula RE (intercept)  | Yes     | Yes   | `(1 \| g)`; Laplace via variance-component EM (gcol33/tulpaObs#11) |
+| Formula RE (uncorr slope)| Yes    | Yes   | `(x \|\| g)`, `(0 + x \| g)`, `(1 + x \|\| g)` |
+| Formula RE (corr slope) | —       | Yes   | `(1 + x \| g)`; Cholesky cov is NUTS-only (Laplace errors -> NUTS) |
 | All S3 methods          | Yes     | Yes   | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update, summary, `$.tobs_fit` |
 | Diagnostics             | Yes     | Yes   | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram, spatialRange, temporalCorr |
 | Simulation              | Yes     | Yes   | `simulate_occu`, `simulate_ms_occu`, `simulate_dyn_occu`, `simulate_int_occu`, `simulate_dyn_ms_occu`, `simulate_int_ms_occu`, `simulate_cover`, `simulate_cover_joint` |

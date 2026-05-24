@@ -182,9 +182,10 @@
     stop("`re` element must be a tobs_re object", call. = FALSE)
   }
   if (identical(re$type, "slope")) {
-    stop("Random slopes are not yet supported by the multi-block ",
-         "nested-Laplace path. Use `engine = 'laplace'` for slopes.",
-         call. = FALSE)
+    stop("Random slopes are not supported by the multi-block nested-Laplace ",
+         "path. Use `engine = 'laplace'` for uncorrelated slopes (`(x || g)`, ",
+         "`(0 + x | g)`) or `engine = 'nuts'` for correlated slopes ",
+         "(`(1 + x | g)`).", call. = FALSE)
   }
 
   # Group codes were resolved when the re() term was constructed.

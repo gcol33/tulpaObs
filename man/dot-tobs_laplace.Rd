@@ -7,6 +7,7 @@
 .tobs_laplace(
   model,
   spatial = NULL,
+  re = NULL,
   priors = NULL,
   sigma_beta = 10,
   max_iter = 50L,
