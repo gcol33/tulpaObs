@@ -4,7 +4,8 @@
 # identifiability ridge at small J: small revisit counts mean "site is
 # unoccupied" and "site is occupied but detection failed" are nearly
 # indistinguishable from data alone. NUTS escapes via priors; the unpenalised
-# Laplace doesn't. The penalised driver in `R/penalized_irls.R` adds a
+# Laplace doesn't. The default prior (see `occu_priors()`, attached per M-step
+# block as a tulpa `beta_prior`) adds a
 # weakly-informative Normal prior on the detection intercept (sd = 1.5),
 # detection slopes (sd = 2.5), psi intercept (sd = 2), and psi slopes
 # (sd = 5).

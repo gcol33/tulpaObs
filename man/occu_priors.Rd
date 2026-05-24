@@ -33,8 +33,8 @@ Constructs a prior specification consumed by \code{\link[=tobs]{tobs()}} when a 
 method (\code{method = "laplace"} etc.) is used for the occupancy family. The
 penalty is applied as
 a quadratic term \code{+ sum((beta_j - mu_j)^2 / (2 * sd_j^2))} added to the
-negative-log-posterior in each M-step submodel block. See
-\code{R/penalized_irls.R} for the full derivation.
+negative-log-posterior in each M-step submodel block by
+\code{\link[tulpa:tulpa_laplace]{tulpa::tulpa_laplace()}} (via the per-block \code{beta_prior}).
 }
 \details{
 The defaults are weakly informative: they pull the detection intercept

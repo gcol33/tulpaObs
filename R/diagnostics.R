@@ -11,43 +11,199 @@
 #' @return A list with `waic`, `elpd`, `p_waic`, and pointwise values.
 #' @export
 tobs_waic <- function(object, ...) {
-  model <- object$model
-  draws <- object$draws
-  pi_list <- model$process_info
-  n_draws <- nrow(draws)
-
-  if (model$model_type != "single") {
-    stop("tobs_waic currently supports single-season models only")
-  }
-
-  X_occ <- model$X_processes[[1]]
-  X_det <- model$X_processes[[2]]
-  y <- model$y
-  n_sites <- model$n_sites
-  p_occ <- pi_list[[1]]$p
-  p_det <- pi_list[[2]]$p
-
-  ll_mat <- matrix(NA_real_, n_draws, n_sites)
-  for (s in seq_len(n_draws)) {
-    beta_occ <- draws[s, seq_len(p_occ)]
-    beta_det <- draws[s, p_occ + seq_len(p_det)]
-    psi <- plogis(as.vector(X_occ %*% beta_occ))
-    p <- plogis(as.vector(X_det %*% beta_det))
-    for (i in seq_len(n_sites)) {
-      yi <- y[i, ]; valid <- yi >= 0; n_valid <- sum(valid)
-      if (n_valid == 0) { ll_mat[s, i] <- 0; next }
-      if (any(yi[valid] == 1)) {
-        ll_mat[s, i] <- log(psi[i]) + sum(yi[valid] * log(p[i]) + (1 - yi[valid]) * log(1 - p[i]))
-      } else {
-        ll_mat[s, i] <- log(psi[i] * (1 - p[i])^n_valid + (1 - psi[i]))
-      }
-    }
-  }
-
+  ll_mat <- .tobs_pointwise_loglik(object)
   lppd <- sum(log(colMeans(exp(ll_mat))))
   p_waic <- sum(apply(ll_mat, 2, var))
   list(waic = -2 * (lppd - p_waic), elpd = lppd - p_waic,
        p_waic = p_waic, lppd = lppd)
+}
+
+# Pointwise log-likelihood matrix [n_draws x n_obs], marginalized over the
+# latent state, for every family. This is the input WAIC, PSIS-LOO, and LOO
+# stacking all consume, so it lives in one place (tobs_stack reuses it). The
+# per-family marginal likelihoods mirror the C++ kernels in src/*_likelihood.h.
+#
+# Fidelity note: the linear predictors are evaluated from the *process fixed-
+# effect* coefficient draws (the leading columns of `draws`), exactly as
+# `fitted()` and the historical WAIC do. Structured-term contributions
+# (spatial / temporal / random-effect fields) are not added to the predictor,
+# and dynamic visit-level detection covariates are not folded in. For models
+# with those components the score is conditional on the fixed-effect predictor.
+.tobs_pointwise_loglik <- function(object) {
+  if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object))
+
+  model <- object$model
+  draws <- object$draws
+  if (is.null(draws) || !is.matrix(draws)) {
+    stop("Pointwise log-likelihood needs a posterior draw matrix; ",
+         "`object$draws` is missing or not a matrix.", call. = FALSE)
+  }
+  mt <- model$model_type %||% "NULL"
+  switch(
+    mt,
+    single     = ,
+    community  = .tobs_ploglik_replicated(model, draws),
+    dynamic    = .tobs_ploglik_dynamic(model, draws),
+    integrated = .tobs_ploglik_integrated(model, draws),
+    jsdm       = .tobs_ploglik_jsdm(model, draws),
+    stop("Pointwise log-likelihood is not implemented for model_type = '",
+         mt, "'.", call. = FALSE)
+  )
+}
+
+# --- shared numerics --------------------------------------------------------
+
+# log(inv_logit(eta)) = log(p) and log(1 - inv_logit(eta)) = log(1 - p),
+# computed stably via plogis(log.p) -- the R analogues of the C++
+# log_inv_logit / log1m_inv_logit.
+.tobs_log_p   <- function(eta) stats::plogis(eta,  log.p = TRUE)
+.tobs_log_1mp <- function(eta) stats::plogis(-eta, log.p = TRUE)
+
+# Numerically stable elementwise log(exp(a) + exp(b)).
+.tobs_logaddexp <- function(a, b) {
+  m <- pmax(a, b)
+  out <- m + log1p(exp(-abs(a - b)))
+  both_inf <- is.infinite(m) & (a == b)
+  out[both_inf] <- m[both_inf]
+  out
+}
+
+# Cumulative column offset of process k's beta block within the draw matrix
+# (processes are laid out in order, fixed-effect betas first).
+.tobs_proc_offset <- function(model, k) {
+  if (k == 1L) return(0L)
+  sum(vapply(model$process_info[seq_len(k - 1L)],
+             function(p) p$p, integer(1)))
+}
+
+# Linear-predictor draws for process k: [n_draws x nrow(X_k)].
+.tobs_eta_draws <- function(model, draws, k) {
+  p_k    <- model$process_info[[k]]$p
+  off    <- .tobs_proc_offset(model, k)
+  beta_k <- draws[, off + seq_len(p_k), drop = FALSE]
+  beta_k %*% t(model$X_processes[[k]])
+}
+
+# --- per-family marginal likelihoods ---------------------------------------
+
+# Single-season + community occupancy: per replicate row, marginalized over z.
+# (community stacks site x species rows but is otherwise identical.)
+.tobs_ploglik_replicated <- function(model, draws) {
+  eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_obs]
+  eta_p   <- .tobs_eta_draws(model, draws, 2L)
+  y       <- model$y                             # [n_obs x max_visits], <0 = NA
+  S <- nrow(eta_psi); n_obs <- nrow(y)
+  ll <- matrix(0, S, n_obs)
+  for (i in seq_len(n_obs)) {
+    yi <- y[i, ]; valid <- yi >= 0; nv <- sum(valid)
+    if (nv == 0L) next                           # no data -> 0 contribution
+    log_p   <- .tobs_log_p(eta_p[, i]);   log_1mp <- .tobs_log_1mp(eta_p[, i])
+    log_psi <- .tobs_log_p(eta_psi[, i]); log1m_psi <- .tobs_log_1mp(eta_psi[, i])
+    k1 <- sum(yi[valid] == 1); k0 <- nv - k1
+    if (k1 > 0L) {
+      ll[, i] <- log_psi + k1 * log_p + k0 * log_1mp
+    } else {
+      ll[, i] <- .tobs_logaddexp(log_psi + nv * log_1mp, log1m_psi)
+    }
+  }
+  ll
+}
+
+# JSDM: per site x species, y ~ Bernoulli(psi). No detection, no marginalization.
+.tobs_ploglik_jsdm <- function(model, draws) {
+  eta <- .tobs_eta_draws(model, draws, 1L)       # [S x N]
+  y   <- model$y_jsdm
+  Y   <- matrix(y, nrow(eta), length(y), byrow = TRUE)
+  Y * .tobs_log_p(eta) + (1 - Y) * .tobs_log_1mp(eta)
+}
+
+# Integrated multi-source: per site, shared psi, detection summed over the
+# sources that observed it (src/integrated_occ_likelihood.h).
+.tobs_ploglik_integrated <- function(model, draws) {
+  eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_sites]
+  S <- nrow(eta_psi); n_sites <- model$n_sites
+  n_sources <- model$n_sources
+  log_psi   <- .tobs_log_p(eta_psi); log1m_psi <- .tobs_log_1mp(eta_psi)
+  # per-source log(p) / log(1-p) at every site (valid only where observed)
+  log_p_src   <- vector("list", n_sources)
+  log_1mp_src <- vector("list", n_sources)
+  for (s in seq_len(n_sources)) {
+    eta_s <- .tobs_eta_draws(model, draws, 1L + s)
+    log_p_src[[s]]   <- .tobs_log_p(eta_s)
+    log_1mp_src[[s]] <- .tobs_log_1mp(eta_s)
+  }
+
+  ll <- matrix(0, S, n_sites)
+  for (i in seq_len(n_sites)) {
+    log_det_occ <- numeric(S)   # sum_s log P(y_is | occupied)
+    any_det <- FALSE
+    for (s in seq_len(n_sources)) {
+      local <- which(model$site_maps[[s]] + 1L == i)
+      if (!length(local)) next
+      yvec <- model$y_sources[[s]][local[1L], ]
+      valid <- yvec >= 0; nv <- sum(valid)
+      if (nv == 0L) next
+      k1 <- sum(yvec[valid] == 1); k0 <- nv - k1
+      log_det_occ <- log_det_occ + k1 * log_p_src[[s]][, i] +
+                                   k0 * log_1mp_src[[s]][, i]
+      if (k1 > 0L) any_det <- TRUE
+    }
+    if (any_det) {
+      ll[, i] <- log_psi[, i] + log_det_occ
+    } else {
+      # log_det_occ here is sum_s nv_s * log(1-p_s) (all-zero across sources)
+      ll[, i] <- .tobs_logaddexp(log_psi[, i] + log_det_occ, log1m_psi[, i])
+    }
+  }
+  ll
+}
+
+# Dynamic (multi-season HMM): per-site forward recursion in log space,
+# mirroring src/dyn_occ_likelihood.h. Site-level detection only.
+.tobs_ploglik_dynamic <- function(model, draws) {
+  eta_psi1 <- .tobs_eta_draws(model, draws, 1L)
+  eta_p    <- .tobs_eta_draws(model, draws, 2L)
+  eta_gam  <- .tobs_eta_draws(model, draws, 3L)
+  eta_eps  <- .tobs_eta_draws(model, draws, 4L)
+  S <- nrow(eta_psi1); n_sites <- model$n_sites; Tn <- model$n_seasons
+  n_visits <- model$n_visits; any_det <- model$any_detected
+  NEG <- -1e10
+
+  out <- matrix(0, S, n_sites)
+  for (i in seq_len(n_sites)) {
+    lp    <- .tobs_log_p(eta_p[, i]);    l1mp   <- .tobs_log_1mp(eta_p[, i])
+    lgam  <- .tobs_log_p(eta_gam[, i]);  l1mgam <- .tobs_log_1mp(eta_gam[, i])
+    leps  <- .tobs_log_p(eta_eps[, i]);  l1meps <- .tobs_log_1mp(eta_eps[, i])
+    a_occ <- .tobs_log_p(eta_psi1[, i]); a_un   <- .tobs_log_1mp(eta_psi1[, i])
+    site_ll <- numeric(S)
+    for (t in seq_len(Tn)) {
+      idx <- (i - 1L) * Tn + (t - 1L) + 1L
+      nv  <- n_visits[idx]
+      if (nv > 0L) {
+        yvec <- model$y[i, , t]; yvec[is.na(yvec)] <- -1L
+        valid <- yvec >= 0
+        k1 <- sum(yvec[valid] == 1); k0 <- sum(yvec[valid] == 0)
+        if (any_det[idx]) {
+          site_ll <- site_ll + a_occ + (k1 * lp + k0 * l1mp)
+          a_occ <- numeric(S); a_un <- rep(NEG, S)   # z_t = 1 known
+        } else {
+          term1 <- a_occ + nv * l1mp                 # occupied, all non-detections
+          term2 <- a_un                              # unoccupied
+          lnorm <- .tobs_logaddexp(term1, term2)
+          site_ll <- site_ll + lnorm
+          a_occ <- term1 - lnorm
+          a_un  <- term2 - lnorm
+        }
+      }
+      if (t < Tn) {
+        new_occ <- .tobs_logaddexp(a_occ + l1meps, a_un + lgam)
+        new_un  <- .tobs_logaddexp(a_occ + leps,   a_un + l1mgam)
+        a_occ <- new_occ; a_un <- new_un
+      }
+    }
+    out[, i] <- site_ll
+  }
+  out
 }
 
 #' Posterior predictive check

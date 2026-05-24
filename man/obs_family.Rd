@@ -12,7 +12,8 @@ obs_family(
   replicates = c("required", "optional", "single"),
   default_engine = c("laplace", "nested_laplace", "nuts"),
   status = c("working", "planned", "experimental"),
-  params = list()
+  params = list(),
+  control_keys = character(0)
 )
 }
 \arguments{
@@ -34,6 +35,11 @@ obs_family(
 
 \item{params}{named list of family-specific parameters carried with the
 object (K_max, positive-part link, etc.).}
+
+\item{control_keys}{character vector of extra \code{control} names this family's
+dispatcher accepts beyond the engine/route controls. These are added to
+the allowlist \code{tobs()} validates \code{control} against, so a family with a
+bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.}
 }
 \value{
 A \code{tobs_family} object.

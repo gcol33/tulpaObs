@@ -66,9 +66,10 @@
 #'   * `"laplace_sla"` — Laplace with skew-corrected (simplified-Laplace)
 #'     marginals.
 #'   * `"laplace_gibbs"` / `"laplace_mi"` — Laplace with a post-EM Gibbs /
-#'     multiple-imputation correction. These run the unpenalised EM, so the
-#'     weakly-informative fixed-effect prior is disabled unless you pass
-#'     `priors` explicitly.
+#'     multiple-imputation correction. The fixed-effect prior threads into the
+#'     correction refits (gcol33/tulpa#27), so these use the same
+#'     weakly-informative default prior as `"laplace"`; pass `priors = FALSE`
+#'     for the unpenalised correction.
 #'   * `"nested_laplace"` — multi-block nested Laplace (single-season
 #'     occupancy and cover-hurdle joint).
 #'   * `"nested_laplace_sla"` — nested Laplace with skew-corrected marginals.
@@ -80,10 +81,9 @@
 #'   (defaults pull the detection intercept toward `p = 0.5` and break the
 #'   psi-p identifiability ridge at small `J`). Pass `priors = FALSE` to
 #'   disable the default prior and recover the unpenalised MAP. The
-#'   `"laplace_gibbs"` / `"laplace_mi"` routes set `priors = FALSE`
-#'   automatically (the correction is defined on the unpenalised EM; see
-#'   gcol33/tulpa#27). For NUTS, this is forwarded to the underlying tulpa
-#'   engine.
+#'   `"laplace_gibbs"` / `"laplace_mi"` routes apply the same default prior and
+#'   thread it through the correction refits (gcol33/tulpa#27). For NUTS, this
+#'   is forwarded to the underlying tulpa engine.
 #' @param control list of low-level engine controls. Names follow the
 #'   dotted-separator convention. Sampler controls (`method = "nuts"`):
 #'   * `n.iter` — total iterations per chain, including warmup (default 2000).
@@ -97,16 +97,31 @@
 #'   * `max.treedepth` — NUTS maximum tree depth (default 10).
 #'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42).
 #'     The resolved per-chain seeds are stored on `$seeds`.
+#'   * `n.seeds` — number of seed-offset refits to fit and LOO-stack into a
+#'     `tobs_stack` ensemble (default 1, a single fit). Member `k` uses base
+#'     seed `seed + k - 1`. Only meaningful for the stochastic routes
+#'     (`"nuts"`, `"laplace_gibbs"`, `"laplace_mi"`); the deterministic Laplace
+#'     methods reject it. Seed-variants are statistically identical, so their
+#'     stacking weights come out roughly uniform (this is a Monte-Carlo
+#'     robustness device) -- pass distinct fits to [tobs_stack()] for a genuine
+#'     model average.
 #'
 #'   Laplace controls (`method = "laplace"` / `"laplace_sla"` /
-#'   `"nested_laplace"`): `max.iter`, `tol`, `damping`, `sigma.beta`,
-#'   `sigma.re.scale`. Stochastic-correction controls (`"laplace_gibbs"` /
-#'   `"laplace_mi"`): `n.gibbs` / `n.imputations` (Rubin-pooled draw count)
-#'   and `seed` (stored on `$seed`).
+#'   `"nested_laplace"`): `max.iter`, `tol`, `damping`, `sigma.beta`.
+#'   Stochastic-correction controls (`"laplace_gibbs"` / `"laplace_mi"`):
+#'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
+#'   on `$seed`).
+#'
+#'   Control names are validated against the chosen `method`: passing a
+#'   sampler control (e.g. `n.chains`) to a Laplace method, a Laplace control
+#'   (e.g. `max.iter`) to `"nuts"`, `seed` to a deterministic route, or an
+#'   unrecognized name raises an error rather than being silently ignored.
 #' @param ... family-specific named arguments forwarded to the underlying
 #'   engine builder.
 #'
 #' @return An object of class `c("tobs_fit", "<family>_fit", "tulpa_fit")`.
+#'   When `control$n.seeds > 1`, a `tobs_stack` ensemble of the seed-offset
+#'   refits is returned instead (see [tobs_stack()]).
 #'
 #' @examples
 #' \dontrun{
@@ -156,18 +171,39 @@ tobs <- function(formula,
   engine  <- route$engine
   approx  <- route$approx
 
-  # Gibbs / MI corrections are defined on the unpenalised EM, so the
-  # weakly-informative fixed-effect prior is switched off for those routes
-  # unless the user asked for one explicitly. A penalized correction is
-  # blocked upstream: tulpa's Laplace block fitter takes no beta prior, so
-  # the correction phases cannot regularize (gcol33/tulpa#27).
-  if (route$correction %in% c("gibbs", "mi") && is.null(priors)) {
-    priors <- FALSE
-  }
+  # Reject control options that the resolved method does not use, rather than
+  # silently swallowing them via the splat into `.tobs_fit_model()`'s `...`.
+  .tobs_validate_control(control, route, family)
+
+  # Gibbs / MI corrections thread the fixed-effect prior through their refits
+  # (gcol33/tulpa#27), so the `"laplace_gibbs"` / `"laplace_mi"` routes use the
+  # same weakly-informative default prior as `"laplace"`. Pass `priors = FALSE`
+  # to recover the unpenalised correction.
 
   if (family$status == "planned") {
     .stop_planned_family(family)
   }
+
+  # n.seeds > 1: fit K members under offset RNG seeds and LOO-stack them (see
+  # `tobs_stack()`). Control validation has already rejected `n.seeds` on the
+  # deterministic Laplace routes, where seed-variants would be identical.
+  n_seeds <- control[["n.seeds"]]
+  if (!is.null(n_seeds) && as.integer(n_seeds) > 1L) {
+    K           <- as.integer(n_seeds)
+    base_seed   <- as.integer(control[["seed"]] %||% 42L)
+    member_ctrl <- control
+    member_ctrl[["n.seeds"]] <- NULL
+    members <- lapply(seq_len(K), function(i) {
+      ci <- member_ctrl
+      ci[["seed"]] <- base_seed + i - 1L
+      tobs(formula = formula, data = data, family = family,
+           detection = detection, y = y, visits = visits,
+           method = method, priors = priors, control = ci, ...)
+    })
+    names(members) <- paste0("seed", base_seed + seq_len(K) - 1L)
+    return(tobs_stack(members))
+  }
+  control[["n.seeds"]] <- NULL   # orchestration knob, not a fitter argument
 
   dispatch <- switch(
     family$name,
@@ -366,7 +402,107 @@ tobs <- function(formula,
     stop(sprintf("Unknown method '%s'. See `?tobs` for the route list.",
                  method), call. = FALSE)
   }
+  route$method <- method   # resolved public name (auto -> concrete) for messages
   route
+}
+
+# ---------------------------------------------------------------------------
+# Control-option validation
+#
+# `control` is splatted as named args onto `.tobs_fit_model()`, whose formals
+# are the union of every knob across all methods (plus a trailing `...`). That
+# means a control that does not apply to the chosen method is silently ignored
+# (e.g. `n.chains` under `"laplace"`) and a typo (`niter`) vanishes into `...`.
+# We validate names up front against a per-route allowlist so misapplied or
+# misspelled controls error instead.
+#
+# Single source of truth: control names are grouped by capability, and each
+# engine/correction route admits a set of groups. `sigma.beta` is shared by the
+# Laplace and NUTS paths; `seed` and `n.seeds` by the stochastic-correction and
+# NUTS paths (the deterministic Laplace routes reject `n.seeds` here, since
+# seed-variant fits would be identical -- see the ensemble branch in tobs()).
+# ---------------------------------------------------------------------------
+.tobs_control_groups <- list(
+  laplace_em = c("max.iter", "tol", "damping", "sigma.beta"),
+  correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
+  sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
+                 "adapt.delta", "max.treedepth", "seed", "sigma.beta",
+                 "sigma.re.scale", "n.seeds"),
+  universal  = c("verbose")
+)
+
+# Capability groups admitted by a resolved (engine, correction) route.
+.tobs_control_allow <- function(engine, correction) {
+  switch(
+    engine,
+    laplace        = c("laplace_em", if (correction != "none") "correction"),
+    nested_laplace = "laplace_em",
+    nuts           = "sampler",
+    character(0)
+  )
+}
+
+# Public method names that accept a given control key (for "wrong method"
+# hints). Derived from the route table + allowlist so it stays in sync.
+.tobs_methods_for_control <- function(key) {
+  in_group <- vapply(.tobs_control_groups, function(g) key %in% g, logical(1))
+  groups   <- names(.tobs_control_groups)[in_group]
+  if (!length(groups)) return(character(0))
+  methods <- names(.tobs_method_table)
+  keep <- vapply(methods, function(m) {
+    r <- .tobs_method_table[[m]]
+    any(.tobs_control_allow(r$engine, r$correction) %in% groups)
+  }, logical(1))
+  methods[keep]
+}
+
+# Validate `control` names against the resolved route. Errors on (a) a known
+# control that the chosen method does not use, or (b) an unrecognized name
+# (with a fuzzy "did you mean" suggestion). Collects all offenders into one
+# message. No-op for a valid (or empty) control list.
+.tobs_validate_control <- function(control, route, family = NULL) {
+  if (length(control) == 0L) return(invisible(NULL))
+  nms <- names(control)
+  if (is.null(nms) || any(!nzchar(nms))) {
+    stop("`control` must be a fully named list, e.g. ",
+         "control = list(n.iter = 4000).", call. = FALSE)
+  }
+
+  # Family-specific dispatchers (e.g. the cover hurdle) declare extra control
+  # names via family$control_keys; admit those alongside the engine controls.
+  family_keys <- if (!is.null(family)) family$control_keys %||% character(0)
+                 else character(0)
+
+  allowed_groups <- c("universal",
+                      .tobs_control_allow(route$engine, route$correction))
+  allowed_keys <- unique(c(unlist(.tobs_control_groups[allowed_groups],
+                                  use.names = FALSE),
+                           family_keys))
+  vocabulary   <- unique(c(unlist(.tobs_control_groups, use.names = FALSE),
+                           family_keys))
+
+  bad <- setdiff(nms, allowed_keys)
+  if (!length(bad)) return(invisible(NULL))
+
+  method <- route$method %||% route$engine
+  msgs <- vapply(bad, function(key) {
+    if (key %in% vocabulary) {
+      uses <- .tobs_methods_for_control(key)
+      sprintf("  - '%s' is not used by method = \"%s\"; it applies to %s.",
+              key, method,
+              paste0("method = \"", uses, "\"", collapse = " / "))
+    } else {
+      near <- agrep(key, vocabulary, value = TRUE, max.distance = 0.34)
+      hint <- if (length(near))
+        sprintf(" Did you mean %s?",
+                paste0("'", near, "'", collapse = " / ")) else ""
+      sprintf("  - '%s' is not a known control option.%s", key, hint)
+    }
+  }, character(1))
+
+  stop("Invalid `control` option(s) for method = \"", method, "\":\n",
+       paste(msgs, collapse = "\n"),
+       "\nSee `?tobs` for the controls each method uses.", call. = FALSE)
 }
 
 .map_engine <- function(engine, family = NULL) {

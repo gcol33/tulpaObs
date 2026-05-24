@@ -28,6 +28,10 @@
 #' @param status `"working"`, `"planned"`, or `"experimental"`.
 #' @param params named list of family-specific parameters carried with the
 #'   object (K_max, positive-part link, etc.).
+#' @param control_keys character vector of extra `control` names this family's
+#'   dispatcher accepts beyond the engine/route controls. These are added to
+#'   the allowlist `tobs()` validates `control` against, so a family with a
+#'   bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.
 #'
 #' @return A `tobs_family` object.
 #' @keywords internal
@@ -39,7 +43,8 @@ obs_family <- function(name,
                        replicates    = c("required", "optional", "single"),
                        default_engine = c("laplace", "nested_laplace", "nuts"),
                        status         = c("working", "planned", "experimental"),
-                       params         = list()) {
+                       params         = list(),
+                       control_keys   = character(0)) {
   replicates     <- match.arg(replicates)
   default_engine <- match.arg(default_engine)
   status         <- match.arg(status)
@@ -53,7 +58,8 @@ obs_family <- function(name,
       replicates     = replicates,
       default_engine = default_engine,
       status         = status,
-      params         = params
+      params         = params,
+      control_keys   = control_keys
     ),
     class = "tobs_family"
   )
@@ -335,7 +341,17 @@ cover <- function(positive = c("beta", "lognormal")) {
     replicates     = "single",
     default_engine = "laplace",
     status         = "working",
-    params         = list(positive = positive)
+    params         = list(positive = positive),
+    # The cover hurdle has its own (.dispatch_cover) grid-based control surface,
+    # separate from the occupancy fitter and named with underscores. Declaring
+    # the keys keeps tobs()'s control validation from rejecting them.
+    control_keys   = c(
+      "max_iter", "tol", "n_threads", "prior_sigma", "prior_alpha",
+      "phi_grid", "sigma_grid", "sigma_pos_grid", "rho_grid", "tau_grid",
+      "rho_car_grid", "tau_temporal_grid", "rho_temporal_grid",
+      "sigma_temporal_grid", "sigma_re_grid",
+      "adaptive_grid", "adaptive_grid_edge_thresh", "adaptive_grid_max_passes"
+    )
   )
 }
 

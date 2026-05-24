@@ -421,6 +421,89 @@ decode_cover_hurdle <- function(fits, enc, family,
 
 
 # ---------------------------------------------------------------------------
+# Pointwise log-likelihood (for WAIC / PSIS-LOO / tobs_stack)
+# ---------------------------------------------------------------------------
+
+# Pointwise log-likelihood [n_draws x N] for a cover hurdle fit. The hurdle is
+# fully observed (nothing to marginalize): per site, an occurrence Bernoulli
+# plus, when y > 0, the positive-part density. Per-arm betas are sampled from
+# the Gaussian-Laplace posterior in the optimizer's (scaled) parameterization
+# and paired with the stored scaled designs, so eta matches the fitted model
+# without needing the raw data frame. Dispersion (sigma_pos / phi_pos) is held
+# at its fitted value; SLA skew is not applied to the LOO marginals.
+#
+# Only the separate-Laplace path (method = "laplace" / "laplace_sla") carries
+# the per-arm mode + Hessian this needs; the nested-joint path errors.
+.tobs_ploglik_cover <- function(object, n.draws = 1000L) {
+  enc <- object$encoding
+  if (is.null(enc) || is.null(object$occ$mode) || is.null(object$occ$H_beta) ||
+      is.null(object$pos$mode) || is.null(object$pos$H_beta)) {
+    stop("Pointwise log-likelihood for cover() is implemented for the ",
+         "separate-Laplace path (method = 'laplace' / 'laplace_sla'); the ",
+         "nested-joint fit (method = 'nested_laplace') is not yet supported.",
+         call. = FALSE)
+  }
+  positive <- object$positive %||% "lognormal"
+  X_occ <- enc$occ_data$X            # scaled occurrence design [N x p_occ]
+  X_pos <- enc$pos_data$X            # scaled positive design   [n_pos x p_pos]
+  occur <- enc$occ_data$y            # 0/1, length N
+  y_pos <- enc$pos_data$y            # log(y) (lognormal) or clipped y (beta)
+  idx_pos <- enc$idx_pos
+  N <- enc$N
+  p_occ <- ncol(X_occ); p_pos <- ncol(X_pos)
+
+  mode_occ   <- object$occ$mode[seq_len(p_occ)]
+  mode_pos   <- object$pos$mode[seq_len(p_pos)]
+  pos_vscale <- if (positive == "lognormal") (object$sigma_pos %||% 1)^2 else 1
+  V_occ <- tryCatch(solve(object$occ$H_beta), error = function(e) NULL)
+  V_pos <- tryCatch(pos_vscale * solve(object$pos$H_beta), error = function(e) NULL)
+
+  S <- as.integer(n.draws)
+  B_occ <- .tobs_mvn_draws(mode_occ, V_occ, S)   # [S x p_occ]
+  B_pos <- .tobs_mvn_draws(mode_pos, V_pos, S)   # [S x p_pos]
+
+  eta_occ <- B_occ %*% t(X_occ)                  # [S x N]
+  eta_pos <- B_pos %*% t(X_pos)                  # [S x n_pos]
+  log_p   <- .tobs_log_p(eta_occ)
+  log_1mp <- .tobs_log_1mp(eta_occ)
+
+  ll <- matrix(0, S, N)
+  absent <- occur == 0L
+  if (any(absent)) ll[, absent] <- log_1mp[, absent, drop = FALSE]
+
+  pos_col <- match(seq_len(N), idx_pos)          # eta_pos column per site (NA if absent)
+  for (i in which(occur == 1L)) {
+    j <- pos_col[i]
+    if (positive == "lognormal") {
+      # y_pos = log(y); density of natural-scale y is the Gaussian on log(y)
+      # times the Jacobian 1/y, i.e. dnorm(log y, eta, sigma, log) - log(y).
+      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j],
+                           sd = object$sigma_pos, log = TRUE) - y_pos[j]
+    } else {
+      mu  <- stats::plogis(eta_pos[, j])
+      phi <- object$phi_pos
+      dens <- stats::dbeta(y_pos[j], mu * phi, (1 - mu) * phi, log = TRUE)
+    }
+    ll[, i] <- log_p[, i] + dens
+  }
+  ll
+}
+
+# Draw S rows ~ MVN(mu, V) via Cholesky (mu + Z R, V = R'R). Falls back to the
+# mode (point mass) if V is unavailable, and jitters a near-singular V.
+.tobs_mvn_draws <- function(mu, V, S) {
+  p <- length(mu)
+  if (is.null(V)) return(matrix(mu, S, p, byrow = TRUE))
+  R <- tryCatch(chol(V), error = function(e) {
+    jit <- 1e-8 * (mean(diag(V)) + 1e-8)
+    chol(V + diag(jit, p))
+  })
+  Z <- matrix(stats::rnorm(S * p), S, p)
+  matrix(mu, S, p, byrow = TRUE) + Z %*% R
+}
+
+
+# ---------------------------------------------------------------------------
 # Predict
 # ---------------------------------------------------------------------------
 

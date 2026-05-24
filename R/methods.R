@@ -164,6 +164,15 @@ fitted.tobs_fit <- function(object, ...) {
   list(psi = psi, p = p, z = z)
 }
 
+# Occupancy-probability draws at a design matrix X.0: plogis(X.0 %*% beta_occ)
+# for every posterior draw, returned as [n_draws x nrow(X.0)]. Used by
+# predict.tobs_fit (design-matrix mode) and predict.tobs_stack (stacked
+# predictive); kept in one place so the two share the same parameterization.
+.tobs_psi_draws <- function(draws, X.0, p_occ) {
+  beta <- draws[, seq_len(p_occ), drop = FALSE]
+  plogis(beta %*% t(X.0))
+}
+
 #' Residuals from occupancy model
 #' @param object A `tobs_fit` object.
 #' @param type One of `"deviance"` (default), `"pearson"`, or `"response"`.
@@ -316,12 +325,9 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                  ncol(X.0), p_occ))
   }
 
-  # Compute predictions for each draw
-  psi_draws <- matrix(NA_real_, n_draws, n_pred)
-  for (s in seq_len(n_draws)) {
-    beta <- draws[s, seq_len(p_occ)]
-    psi_draws[s, ] <- plogis(as.vector(X.0 %*% beta))
-  }
+  # Occupancy probability draws at the new design (shared with the ensemble
+  # stacked-predictive path; see .tobs_psi_draws()).
+  psi_draws <- .tobs_psi_draws(draws, X.0, p_occ)
 
   data.frame(
     mean = colMeans(psi_draws),
@@ -551,39 +557,6 @@ tobs_check_id <- function(model, fit = NULL) {
   }
   invisible(result)
 }
-
-#' Specify prior distributions for occupancy models
-#'
-#' @param beta.normal Prior for occupancy fixed effects: `list(mean, sd)`.
-#' @param alpha.normal Prior for detection fixed effects: `list(mean, sd)`.
-#' @param sigma.sq.psi Prior for occupancy RE variance: `c(shape, rate)`.
-#' @param sigma.sq.p Prior for detection RE variance: `c(shape, rate)`.
-#' @return A `tobs_priors` object.
-#' @export
-tobs_priors <- function(beta.normal = list(mean = 0, sd = sqrt(2.72)),
-                        alpha.normal = list(mean = 0, sd = sqrt(2.72)),
-                        sigma.sq.psi = c(0.1, 0.1),
-                        sigma.sq.p = c(0.1, 0.1)) {
-  structure(list(
-    beta_mean = beta.normal$mean,
-    beta_sd = beta.normal$sd,
-    alpha_mean = alpha.normal$mean,
-    alpha_sd = alpha.normal$sd,
-    sigma_sq_psi_shape = sigma.sq.psi[1],
-    sigma_sq_psi_rate = sigma.sq.psi[2],
-    sigma_sq_p_shape = sigma.sq.p[1],
-    sigma_sq_p_rate = sigma.sq.p[2]
-  ), class = "tobs_priors")
-}
-
-#' @export
-print.tobs_priors <- function(x, ...) {
-  cat("tobs priors:\n")
-  cat(sprintf("  beta ~ Normal(%.2f, %.2f)\n", x$beta_mean, x$beta_sd))
-  cat(sprintf("  alpha ~ Normal(%.2f, %.2f)\n", x$alpha_mean, x$alpha_sd))
-  invisible(x)
-}
-
 
 # ============================================================================
 # spOccupancy $ compatibility accessor

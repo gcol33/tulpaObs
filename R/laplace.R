@@ -4,11 +4,14 @@
 
 #' Fit a tobs model with Laplace approximation (internal)
 #'
-#' Uses tulpa's generic EM+Laplace engine with occupancy-specific E-step and
-#' M-step encoding, augmented with a weakly-informative quadratic prior on
-#' the fixed-effect coefficients (see [occu_priors()] and
-#' `R/penalized_irls.R`). Supports all built-in model types. Called from
-#' `.tobs_fit_model()`; not user-facing.
+#' Uses tulpa's generic EM+Laplace engine ([tulpa::tulpa_em_laplace()]) with
+#' occupancy-specific E-step and M-step encoding, augmented with a
+#' weakly-informative quadratic prior on the fixed-effect coefficients (see
+#' [occu_priors()]). The prior is attached to each M-step block as a per-block
+#' `beta_prior` (see `.attach_priors_to_blocks()` in `R/occu_priors.R`), which
+#' tulpa threads through every phase -- the EM iterations and the MI / Gibbs
+#' correction refits alike (gcol33/tulpa#27). Supports all built-in model
+#' types. Called from `.tobs_fit_model()`; not user-facing.
 #'
 #' @param model A `tobs_model` from `.tobs_build_model()`.
 #' @param spatial Optional `tobs_spatial` spec (NULL for non-spatial).
@@ -21,8 +24,9 @@
 #'   by the EM-Laplace path.
 #' @param max_iter,tol,damping EM controls.
 #' @param correction Post-EM correction (`"none"`, `"mi"`, `"gibbs"`). MI /
-#'   Gibbs are not yet wired into the prior-aware driver and will warn and
-#'   fall back to `"none"` when a prior is active.
+#'   Gibbs run tulpa's post-EM Rubin-pooled correction; the fixed-effect prior
+#'   (when active) threads into the correction refits, so the corrected fit is
+#'   penalised the same way as the EM point estimate (gcol33/tulpa#27).
 #' @param n_imputations Number of MI draws when `correction = "mi"`.
 #' @param verbose Print per-iteration progress.
 #' @keywords internal
@@ -70,50 +74,48 @@
   )
 
   prior_spec <- .resolve_occu_priors(priors)
-  use_local_driver <- !is.null(prior_spec) && is.null(spatial)
-  # SPDE / spatial callbacks attach `spatial = ...` to the occ block, which
-  # the local penalised IRLS doesn't yet handle — route spatial fits through
-  # the generic tulpa engine (no fixed-effect prior in that path; tracked
-  # under tulpaObs#5).
 
-  if (use_local_driver) {
-    if (correction != "none" && correction != "auto") {
-      warning(
-        "EM correction='", correction, "' is not yet wired into the ",
-        "prior-aware Laplace driver; falling back to correction='none'. ",
-        "Set priors = FALSE to use the unpenalised driver with MI/Gibbs ",
-        "correction.",
-        call. = FALSE
-      )
+  # Single engine for every Laplace fit: tulpa's generic EM+Laplace. The
+  # fixed-effect prior is attached per M-step block as a `beta_prior` (see
+  # .attach_priors_to_blocks); tulpa's block fitter applies it in every phase,
+  # so a prior-aware MI/Gibbs correction comes for free (gcol33/tulpa#27).
+  # Spatial fits are left unpenalised here -- the SPDE/NNGP solver carries its
+  # own fixed-effect prior and tulpa_laplace() rejects `beta_prior` on the
+  # spatial path (tulpaObs#5) -- so the prior is attached only when there is no
+  # spatial term.
+  m_step_encode <- if (is.null(spatial)) {
+    function(weights, ...) {
+      .attach_priors_to_blocks(callbacks$m_step_encode(weights, ...),
+                               model, prior_spec)
     }
-    em_result <- .tobs_em_laplace_penalized(
-      model       = model,
-      callbacks   = callbacks,
-      prior_spec  = prior_spec,
-      max_iter    = max_iter,
-      tol         = tol,
-      damping     = damping,
-      verbose     = verbose
-    )
   } else {
-    # MI / Gibbs draw hard z with R's RNG. Seed it so the corrected fit is
-    # reproducible (the unpenalised driver is the only correction path; the
-    # penalized driver can't carry the prior + a correction, gcol33/tulpa#27).
-    if (correction %in% c("mi", "gibbs") && !is.null(seed)) {
-      set.seed(as.integer(seed))
-    }
-    em_result <- tulpa::tulpa_em_laplace(
-      e_step        = callbacks$e_step,
-      m_step_encode = callbacks$m_step_encode,
-      draw_z        = callbacks$z_draw,
-      max_iter      = max_iter,
-      tol           = tol,
-      damping       = damping,
-      correction    = correction,
-      n_imputations = n_imputations,
-      n_gibbs       = n_gibbs,
-      verbose       = verbose
-    )
+    callbacks$m_step_encode
+  }
+
+  # MI / Gibbs draw hard z with R's RNG; seed it so the corrected fit
+  # reproduces.
+  if (correction %in% c("mi", "gibbs") && !is.null(seed)) {
+    set.seed(as.integer(seed))
+  }
+  em_result <- tulpa::tulpa_em_laplace(
+    e_step        = callbacks$e_step,
+    m_step_encode = m_step_encode,
+    draw_z        = callbacks$z_draw,
+    max_iter      = max_iter,
+    tol           = tol,
+    damping       = damping,
+    correction    = correction,
+    n_imputations = n_imputations,
+    n_gibbs       = n_gibbs,
+    verbose       = verbose
+  )
+
+  # tulpa_em_laplace returns flat convergence fields; synthesize the nested
+  # `convergence` list that build_laplace_fit() / summary() expect.
+  if (is.null(em_result$convergence)) {
+    em_result$convergence <- list(converged = em_result$converged,
+                                  n_iter = em_result$n_iter,
+                                  history = em_result$history)
   }
 
   fit <- build_laplace_fit(em_result, model, spatial, callbacks$p_per_submodel,

@@ -95,10 +95,13 @@ are minimal reproducers — useful when surfacing upstream `tulpa` bugs).
 ## Architecture
 
 Compositional builder: one C++ entry point (`cpp_occu_fit`) for NUTS.
-Laplace via tulpa's EM+Laplace engine; the default `method = "laplace"` is a
-penalized EM with Gaussian marginals (no post-EM correction), and MI/Gibbs
-corrections are opt-in via `method = "laplace_gibbs"` / `"laplace_mi"` (which
-run the unpenalised EM). A second nested-Laplace path (`em_nested_laplace.R`,
+Laplace via tulpa's EM+Laplace engine (`tulpa::tulpa_em_laplace`); the default
+`method = "laplace"` is a penalized EM with Gaussian marginals (no post-EM
+correction), where the fixed-effect prior is attached to each M-step block as a
+per-block `beta_prior` that tulpa applies. MI/Gibbs corrections are opt-in via
+`method = "laplace_gibbs"` / `"laplace_mi"`; the same prior threads into the
+correction refits (gcol33/tulpa#27), so they are penalised like `"laplace"`
+unless `priors = FALSE`. A second nested-Laplace path (`em_nested_laplace.R`,
 `simplified_laplace.R`, the `sla_*` files) handles families where the standard
 EM closed-form does not apply (cover hurdle joint, dynamic/integrated occupancy
 under `method = "nested_laplace"`).
@@ -171,7 +174,7 @@ the smoke test as "not blocked", not "validated".
 
 N=200 sites, single-season (J=3), measured 2026-05-24:
 - tulpaObs `method = "laplace"` (prior-aware penalized EM, default): **~0.2 s**
-- tulpaObs `method = "laplace_gibbs"` (unpenalised EM + Gibbs, n.gibbs=10): ~1.7 s
+- tulpaObs `method = "laplace_gibbs"` (prior-aware EM + Gibbs, n.gibbs=10): ~1.7 s
 - tulpaObs `method = "nuts"`: ~13 s (historical)
 - inlaocc: 0.7 s; spOccupancy MCMC: 0.9 s (historical reference)
 
@@ -187,12 +190,10 @@ R/
   obs_families.R           — family constructors (occu, dyn_occu, ms_occu, …, cover)
   occu.R                   — internal .tobs_build_model() (single/dynamic/community/integrated/jsdm)
   occu_fit.R               — internal .tobs_fit_model() (Laplace default, NUTS fallback)
-  occu_priors.R            — prior constructors + print.tobs_priors
+  occu_priors.R            — occu_priors() + print + prior-spec -> per-block beta_prior plumbing (.expand_prior/.prior_for_submodel/.attach_priors_to_blocks)
   laplace.R                — internal .tobs_laplace() + EM callbacks per model type
-  em_laplace_penalized.R   — penalized EM (ridge / IRLS-style)
   em_nested_laplace.R      — nested Laplace EM for non-conjugate hyperpriors
   simplified_laplace.R     — SLA wrapper used by sla_*.R families
-  penalized_irls.R         — IRLS solver for the penalized M-step
   sla_dyn_occu.R           — SLA path for dynamic occupancy
   sla_int_occu.R           — SLA path for integrated occupancy
   sla_cover_hurdle.R       — SLA path for cover hurdle (separate-Laplace)

@@ -24,6 +24,7 @@ Suggests:
     bayesplot,
     ggplot2,
     knitr,
+    loo (>= 2.7.0),
     rmarkdown
 VignetteBuilder: knitr
 LinkingTo:

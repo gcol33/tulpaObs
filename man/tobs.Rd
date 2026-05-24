@@ -81,9 +81,10 @@ pair of orthogonal knobs:
 \item \code{"laplace_sla"} — Laplace with skew-corrected (simplified-Laplace)
 marginals.
 \item \code{"laplace_gibbs"} / \code{"laplace_mi"} — Laplace with a post-EM Gibbs /
-multiple-imputation correction. These run the unpenalised EM, so the
-weakly-informative fixed-effect prior is disabled unless you pass
-\code{priors} explicitly.
+multiple-imputation correction. The fixed-effect prior threads into the
+correction refits (gcol33/tulpa#27), so these use the same
+weakly-informative default prior as \code{"laplace"}; pass \code{priors = FALSE}
+for the unpenalised correction.
 \item \code{"nested_laplace"} — multi-block nested Laplace (single-season
 occupancy and cover-hurdle joint).
 \item \code{"nested_laplace_sla"} — nested Laplace with skew-corrected marginals.
@@ -97,10 +98,9 @@ weakly-informative quadratic priors on the fixed-effect coefficients
 (defaults pull the detection intercept toward \code{p = 0.5} and break the
 psi-p identifiability ridge at small \code{J}). Pass \code{priors = FALSE} to
 disable the default prior and recover the unpenalised MAP. The
-\code{"laplace_gibbs"} / \code{"laplace_mi"} routes set \code{priors = FALSE}
-automatically (the correction is defined on the unpenalised EM; see
-gcol33/tulpa#27). For NUTS, this is forwarded to the underlying tulpa
-engine.}
+\code{"laplace_gibbs"} / \code{"laplace_mi"} routes apply the same default prior and
+thread it through the correction refits (gcol33/tulpa#27). For NUTS, this
+is forwarded to the underlying tulpa engine.}
 
 \item{control}{list of low-level engine controls. Names follow the
 dotted-separator convention. Sampler controls (\code{method = "nuts"}):
@@ -116,19 +116,34 @@ dotted-separator convention. Sampler controls (\code{method = "nuts"}):
 \item \code{max.treedepth} — NUTS maximum tree depth (default 10).
 \item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42).
 The resolved per-chain seeds are stored on \verb{$seeds}.
+\item \code{n.seeds} — number of seed-offset refits to fit and LOO-stack into a
+\code{tobs_stack} ensemble (default 1, a single fit). Member \code{k} uses base
+seed \code{seed + k - 1}. Only meaningful for the stochastic routes
+(\code{"nuts"}, \code{"laplace_gibbs"}, \code{"laplace_mi"}); the deterministic Laplace
+methods reject it. Seed-variants are statistically identical, so their
+stacking weights come out roughly uniform (this is a Monte-Carlo
+robustness device) -- pass distinct fits to \code{\link[=tobs_stack]{tobs_stack()}} for a genuine
+model average.
 }
 
 Laplace controls (\code{method = "laplace"} / \code{"laplace_sla"} /
-\code{"nested_laplace"}): \code{max.iter}, \code{tol}, \code{damping}, \code{sigma.beta},
-\code{sigma.re.scale}. Stochastic-correction controls (\code{"laplace_gibbs"} /
-\code{"laplace_mi"}): \code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count)
-and \code{seed} (stored on \verb{$seed}).}
+\code{"nested_laplace"}): \code{max.iter}, \code{tol}, \code{damping}, \code{sigma.beta}.
+Stochastic-correction controls (\code{"laplace_gibbs"} / \code{"laplace_mi"}):
+\code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count) and \code{seed} (stored
+on \verb{$seed}).
+
+Control names are validated against the chosen \code{method}: passing a
+sampler control (e.g. \code{n.chains}) to a Laplace method, a Laplace control
+(e.g. \code{max.iter}) to \code{"nuts"}, \code{seed} to a deterministic route, or an
+unrecognized name raises an error rather than being silently ignored.}
 
 \item{...}{family-specific named arguments forwarded to the underlying
 engine builder.}
 }
 \value{
 An object of class \code{c("tobs_fit", "<family>_fit", "tulpa_fit")}.
+When \code{control$n.seeds > 1}, a \code{tobs_stack} ensemble of the seed-offset
+refits is returned instead (see \code{\link[=tobs_stack]{tobs_stack()}}).
 }
 \description{
 Unified entry point for occupancy, abundance, distance, removal, and related
