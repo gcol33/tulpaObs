@@ -10,8 +10,8 @@ test_that("ICAR spatial occupancy runs", {
 
   fit <- tobs(~ icar(graph = adj), data.frame(x = rnorm(n_sites)),
               family = occu(), detection = ~ 1, y = y,
-              engine = "nuts",
-              control = list(iter = 100, warmup = 50, seed = 1, verbose = FALSE))
+              method = "nuts",
+              control = list(n.iter = 100, n.warmup = 50, seed = 1, verbose = FALSE))
   expect_true(fit$n_params > 2)
 })
 
@@ -25,8 +25,8 @@ test_that("GP spatial occupancy runs", {
 
   fit <- tobs(~ gp(lon, lat, nn = 5), dat, family = occu(),
               detection = ~ 1, y = y,
-              engine = "nuts",
-              control = list(iter = 100, warmup = 50, seed = 1, verbose = FALSE))
+              method = "nuts",
+              control = list(n.iter = 100, n.warmup = 50, seed = 1, verbose = FALSE))
   expect_true(fit$n_params > 2)
 })
 

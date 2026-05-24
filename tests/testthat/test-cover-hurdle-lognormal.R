@@ -132,7 +132,7 @@ test_that("predict requires newdata with the same columns as the formula", {
   )
 })
 
-test_that("a temporal() term requires engine = 'nested_laplace'", {
+test_that("a temporal() term requires method = 'nested_laplace'", {
   sim <- simulate_cover(N = 50, seed = 13)
   sim$data$year <- sample.int(3, nrow(sim$data), replace = TRUE)
   expect_error(
@@ -141,9 +141,9 @@ test_that("a temporal() term requires engine = 'nested_laplace'", {
       data     = sim$data,
       family   = cover("lognormal"),
       y        = sim$y,
-      engine   = "laplace"
+      method   = "laplace"
     ),
-    "require engine = 'nested_laplace'"
+    "require method = 'nested_laplace'"
   )
 })
 

@@ -22,7 +22,7 @@ sim_occu_re_intercept <- function(seed = 101, ng = 30L, per = 25L, J = 6L,
 test_that("iid intercept RE is fit (not dropped) by the default Laplace engine", {
   s <- sim_occu_re_intercept()
   fit <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
-              family = occu(), engine = "laplace",
+              family = occu(), method = "laplace",
               control = list(verbose = FALSE))
 
   expect_identical(fit$method, "laplace")
@@ -60,7 +60,7 @@ test_that("uncorrelated random slopes (1 + x || g) recover under Laplace", {
   d <- data.frame(g = factor(g), x = x)
 
   fit <- tobs(~ x + (1 + x || g), data = d, y = y, detection = ~ 1,
-              family = occu(), engine = "laplace", control = list(verbose = FALSE))
+              family = occu(), method = "laplace", control = list(verbose = FALSE))
 
   sig_nm <- grep("^sigma_", names(fit$means), value = TRUE)
   expect_length(sig_nm, 2L)   # intercept + slope sigma
@@ -80,10 +80,10 @@ test_that("deterministic sigma and BLUPs track the NUTS fit on the same data", {
   s <- sim_occu_re_intercept(seed = 7, ng = 30L, per = 25L)
 
   fit_l <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
-                family = occu(), engine = "laplace", control = list(verbose = FALSE))
+                family = occu(), method = "laplace", control = list(verbose = FALSE))
   fit_n <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
-                family = occu(), engine = "nuts",
-                control = list(iter = 400, warmup = 200, seed = 1, verbose = FALSE))
+                family = occu(), method = "nuts",
+                control = list(n.iter = 400, n.warmup = 200, seed = 1, verbose = FALSE))
 
   sig_l <- fit_l$means[[grep("^sigma_", names(fit_l$means), value = TRUE)]]
   sig_n <- exp(fit_n$means[[grep("^log_sigma_", names(fit_n$means), value = TRUE)]])
@@ -101,7 +101,7 @@ test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
   # Correlated slopes: Cholesky covariance is NUTS-only.
   expect_error(
     tobs(~ x + (1 + x | g), data = s$d, y = s$y, detection = ~ 1,
-         family = occu(), engine = "laplace", control = list(verbose = FALSE)),
+         family = occu(), method = "laplace", control = list(verbose = FALSE)),
     "nuts|Cholesky")
 
   # Non-single model types route RE to NUTS (validator guard, exercised

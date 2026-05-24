@@ -29,7 +29,7 @@ test_that("approx = 'simplified_laplace' attaches a numeric skew vector", {
     family    = occu(),
     detection = ~ 1,
     y         = y,
-    approx    = "simplified_laplace",
+    method    = "laplace_sla",
     control   = list(verbose = FALSE)
   )
   expect_identical(fit$sla_status, "simplified_laplace")
@@ -57,7 +57,7 @@ test_that("SLA draws have approximately the requested skew (small-gamma regime)"
     family    = occu(),
     detection = ~ 1,
     y         = y,
-    approx    = "simplified_laplace",
+    method    = "laplace_sla",
     control   = list(verbose = FALSE)
   )
 
@@ -86,7 +86,7 @@ test_that("SLA gracefully no-ops when EM has no detections at all", {
     family    = occu(),
     detection = ~ 1,
     y         = y,
-    approx    = "simplified_laplace",
+    method    = "laplace_sla",
     control   = list(verbose = FALSE)
   )
   expect_true(fit$sla_status %in% c("simplified_laplace",

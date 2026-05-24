@@ -10,12 +10,15 @@
 .tobs_fit_model <- function(model,
                             method = c("laplace", "nested_laplace", "nuts"),
                             priors = NULL,
-                            sigma_beta = 10, sigma_re_scale = 1,
-                            max_iter = 100L, tol = 1e-4, damping = 0.7,
-                            iter = 2000, warmup = 1000,
-                            max_treedepth = 10, adapt_delta = 0.8, seed = 42,
+                            sigma.beta = 10, sigma.re.scale = 1,
+                            max.iter = 100L, tol = 1e-4, damping = 0.7,
+                            n.iter = 2000, n.warmup = 1000, n.thin = 1L,
+                            n.chains = 1L, n.threads = 1L,
+                            max.treedepth = 10, adapt.delta = 0.8, seed = 42,
                             approx = c("gaussian_laplace", "simplified_laplace"),
-                            verbose = TRUE) {
+                            correction = "none",
+                            n.gibbs = 10L, n.imputations = 20L,
+                            verbose = TRUE, ...) {
 
   method <- match.arg(method)
   approx <- match.arg(approx)
@@ -46,9 +49,12 @@
   if (method == "laplace") {
     fit <- .tobs_laplace(fit_model, spatial = spatial, re = re,
                          priors = priors,
-                         sigma_beta = sigma_beta,
-                         max_iter = max_iter, tol = tol, damping = damping,
+                         sigma_beta = sigma.beta,
+                         max_iter = max.iter, tol = tol, damping = damping,
                          approx = approx,
+                         correction = correction,
+                         n_imputations = n.imputations, n_gibbs = n.gibbs,
+                         seed = seed,
                          verbose = verbose)
     fit <- .unscale_fit_per_process(fit, scales, process_info)
     fit$model      <- model
@@ -62,14 +68,14 @@
     # and routes the occupancy M-step block through
     # tulpa::tulpa_nested_laplace() via the per-block dispatcher in
     # tulpa::tulpa_em_laplace().
-    nl_max_iter <- min(as.integer(max_iter), 25L)
+    nl_max_iter <- min(as.integer(max.iter), 25L)
     fit <- .tobs_em_nested_laplace(
       model    = fit_model,
       spatial  = spatial,
       temporal = temporal,
       re       = re,
       priors   = priors,
-      sigma_beta = sigma_beta,
+      sigma_beta = sigma.beta,
       max_iter = nl_max_iter,
       tol      = tol,
       damping  = damping,
@@ -89,11 +95,11 @@
   # ---- Build spec list for C++ ----
   spec <- list(
     model_type = model_type,
-    sigma_beta = sigma_beta,
-    n_iter = as.integer(iter),
-    n_warmup = as.integer(warmup),
-    max_treedepth = as.integer(max_treedepth),
-    adapt_delta = adapt_delta,
+    sigma_beta = sigma.beta,
+    n_iter = as.integer(n.iter),               # total iterations (incl. warmup)
+    n_warmup = as.integer(n.warmup),
+    max_treedepth = as.integer(max.treedepth),
+    adapt_delta = adapt.delta,
     seed = as.integer(seed),
     verbose = verbose
   )
@@ -126,7 +132,7 @@
     spec$y <- model$y
     spec$re_group <- model$species_group
     spec$n_re_groups <- model$n_species
-    spec$sigma_re_scale <- sigma_re_scale
+    spec$sigma_re_scale <- sigma.re.scale
     spec$re_shared_occ <- TRUE
     spec$re_shared_det <- TRUE
     spec$n_sites_raw <- model$n_sites
@@ -142,7 +148,7 @@
     # Species RE for JSDM (like community)
     spec$re_group <- model$species_group
     spec$n_re_groups <- model$n_species
-    spec$sigma_re_scale <- sigma_re_scale
+    spec$sigma_re_scale <- sigma.re.scale
     spec$re_shared_occ <- TRUE
   }
 
@@ -225,8 +231,9 @@
     )
   }
 
-  # ---- Call unified C++ entry point ----
-  fit <- cpp_occu_fit(spec)
+  # ---- Run NUTS: one or more chains, pooled in R (see nuts_chains.R) ----
+  fit <- .tobs_run_chains(spec, n.chains = n.chains, n.thin = n.thin,
+                          n.threads = n.threads, verbose = verbose)
 
   # Unscale per-process beta slices in means / sds / draws (the engine
   # optimized on the centered+scaled design; gcol33/tulpaObs#9).
@@ -269,8 +276,15 @@
   fit$re <- re
   fit$svc <- svc
   fit$latent <- latent
+  # Resolved per-chain seeds (chain c used seed + c - 1) for reproducibility.
+  fit$seeds <- as.integer(seed) + seq_len(as.integer(n.chains)) - 1L
   # Expose process_info at top level for tulpa generic S3 methods
   fit$process_info <- model$process_info
+  # Cross-chain convergence diagnostics (Rhat / bulk + tail ESS). tulpa owns
+  # the generic estimator (mcmc_diagnostics); it reads fit$draws + fit$chain_id.
+  # Computed on the named, natural-scale draws (Rhat / ESS are scale-invariant).
+  fit$convergence <- tryCatch(tulpa::mcmc_diagnostics(fit),
+                              error = function(e) NULL)
   class(fit) <- c("tobs_fit", "tulpa_fit")
   fit
 }

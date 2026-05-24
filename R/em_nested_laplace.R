@@ -84,7 +84,7 @@
   if (!type %in% c("bym2", "icar", "car_proper")) {
     stop("Spatial type '", type, "' is not yet wired into the multi-block ",
          "nested-Laplace path (supported: bym2, icar, car_proper). ",
-         "Use `engine = 'laplace'` or open an issue if you need this type.",
+         "Use `method = 'laplace'` or open an issue if you need this type.",
          call. = FALSE)
   }
   if (as.integer(spatial$n_units) != N) {
@@ -183,8 +183,8 @@
   }
   if (identical(re$type, "slope")) {
     stop("Random slopes are not supported by the multi-block nested-Laplace ",
-         "path. Use `engine = 'laplace'` for uncorrelated slopes (`(x || g)`, ",
-         "`(0 + x | g)`) or `engine = 'nuts'` for correlated slopes ",
+         "path. Use `method = 'laplace'` for uncorrelated slopes (`(x || g)`, ",
+         "`(0 + x | g)`) or `method = 'nuts'` for correlated slopes ",
          "(`(1 + x | g)`).", call. = FALSE)
   }
 
@@ -275,7 +275,7 @@
   if (is.null(multi_prior)) {
     stop("nested_laplace engine requires at least one latent block ",
          "(spatial, temporal, or re); none were supplied. Use ",
-         "`engine = 'laplace'` for a fit with no latent structure.",
+         "`method = 'laplace'` for a fit with no latent structure.",
          call. = FALSE)
   }
 

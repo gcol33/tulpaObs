@@ -92,7 +92,7 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
-    engine   = "nested_laplace",
+    method   = "nested_laplace",
     control  = list(
       sigma_grid         = c(0.3, 0.6, 1.0),
       rho_grid           = c(0.5, 0.85),
@@ -150,7 +150,7 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
 })
 
 
-test_that("cover(): multi-block rejects engine = 'laplace'", {
+test_that("cover(): multi-block rejects method = 'laplace'", {
   sim <- simulate_cover_multi_block(N = 200, seed = 7002)
   adj <- sim$adj
   expect_error(
@@ -160,9 +160,9 @@ test_that("cover(): multi-block rejects engine = 'laplace'", {
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
-      engine   = "laplace"
+      method   = "laplace"
     ),
-    regexp = "require engine = 'nested_laplace'"
+    regexp = "require method = 'nested_laplace'"
   )
 })
 
@@ -185,7 +185,7 @@ test_that("cover(): multi-block resolves character group / time columns", {
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
-    engine   = "nested_laplace",
+    method   = "nested_laplace",
     control  = list(
       sigma_grid         = c(0.4, 0.8),
       rho_grid           = c(0.5, 0.85),

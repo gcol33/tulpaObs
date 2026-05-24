@@ -75,8 +75,7 @@ test_that("dyn_occu with simplified_laplace attaches a numeric skew vector", {
     y           = y,
     col_formula = ~ 1,
     ext_formula = ~ 1,
-    engine      = "laplace",
-    approx      = "simplified_laplace",
+    method      = "laplace_sla",
     control     = list(verbose = FALSE)
   )
 
@@ -223,8 +222,7 @@ test_that("SLA gamma is finite on N=80, T=3, J=4 dyn_occu", {
     y           = y,
     col_formula = ~ 1,
     ext_formula = ~ 1,
-    engine      = "laplace",
-    approx      = "simplified_laplace",
+    method      = "laplace_sla",
     control     = list(verbose = FALSE)
   )
 
@@ -272,8 +270,7 @@ test_that(".loglik_dyn_occu returns a reasonable number at the EM mode", {
     y           = y,
     col_formula = ~ 1,
     ext_formula = ~ 1,
-    engine      = "laplace",
-    approx      = "gaussian_laplace",
+    method      = "laplace",
     control     = list(verbose = FALSE)
   )
   model <- tulpaObs:::.tobs_build_model(

@@ -1,5 +1,5 @@
 ## Smoke tests for the single-season occupancy nested-Laplace path. These
-## exercise tobs(engine = "nested_laplace") end-to-end with the multi-block
+## exercise tobs(method = "nested_laplace") end-to-end with the multi-block
 ## prior built from spatial + temporal + re. Recovery thresholds for the
 ## underlying multi-block engine are still relaxed (per
 ## `dev_notes/plan_multi_block.md` Phase D), so these tests only assert that
@@ -32,8 +32,8 @@ test_that("tobs(engine='nested_laplace') runs with spatial only", {
   expect_silent(
     fit <- tobs(~ x + bym2(graph = adj), data = d$data, family = occu(),
                 detection = ~ 1, y = d$y,
-                engine = "nested_laplace",
-                control = list(max_iter = 5L, verbose = FALSE))
+                method = "nested_laplace",
+                control = list(max.iter = 5L, verbose = FALSE))
   )
   expect_s3_class(fit, "tobs_fit")
   expect_true(!is.null(fit$nested_laplace$multi_prior))
@@ -52,8 +52,8 @@ test_that("tobs(engine='nested_laplace') runs with spatial + temporal + re", {
     tobs(~ x + bym2(graph = adj) + temporal(year, type = "ar1") + re(obs),
          data = d$data, family = occu(),
          detection = ~ 1, y = d$y,
-         engine = "nested_laplace",
-         control = list(max_iter = 5L, verbose = FALSE))
+         method = "nested_laplace",
+         control = list(max.iter = 5L, verbose = FALSE))
   )
 
   expect_s3_class(fit, "tobs_fit")
@@ -69,8 +69,8 @@ test_that("nested_laplace requires at least one latent block", {
   expect_error(
     tobs(~ x, data = d$data, family = occu(),
          detection = ~ 1, y = d$y,
-         engine = "nested_laplace",
-         control = list(max_iter = 2L, verbose = FALSE)),
+         method = "nested_laplace",
+         control = list(max.iter = 2L, verbose = FALSE)),
     "at least one latent block"
   )
 })

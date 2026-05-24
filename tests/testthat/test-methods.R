@@ -1,12 +1,12 @@
 .fit_simple <- function(formula = ~ elev, det = ~ 1, n = 50, seed = 42,
-                       engine = "laplace") {
+                       method = "laplace") {
   set.seed(seed)
   d <- data.frame(elev = rnorm(n))
   psi <- plogis(0.5 + 0.5 * d$elev)
   z <- rbinom(n, 1, psi)
   y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
   fit <- tobs(formula = formula, data = d, family = occu(),
-              detection = det, y = y, engine = engine,
+              detection = det, y = y, method = method,
               control = list(verbose = FALSE))
   list(fit = fit, y = y, d = d, n = n)
 }
@@ -86,11 +86,11 @@ test_that("compare_models works", {
   y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
 
   fit1 <- tobs(~ 1, d, family = occu(), detection = ~ 1, y = y,
-               engine = "nuts",
-               control = list(iter = 200, warmup = 100, seed = 42, verbose = FALSE))
+               method = "nuts",
+               control = list(n.iter = 200, n.warmup = 100, seed = 42, verbose = FALSE))
   fit2 <- tobs(~ x, d, family = occu(), detection = ~ 1, y = y,
-               engine = "nuts",
-               control = list(iter = 200, warmup = 100, seed = 42, verbose = FALSE))
+               method = "nuts",
+               control = list(n.iter = 200, n.warmup = 100, seed = 42, verbose = FALSE))
 
   comp <- tulpa::compare_models(null = fit1, elev = fit2)
   expect_s3_class(comp, "data.frame")

@@ -12,7 +12,8 @@ already produced posterior moments for beta and the spatial hyperparameters,
 so we just shape them into the existing \code{cover_fit} structure.
 }
 \details{
-When \code{approx = "simplified_laplace"}, the per-arm marginal skewness is
+Under an SLA method (\code{method = "nested_laplace_sla"}), the per-arm marginal
+skewness is
 computed via \code{.sla_compute_cover_hurdle_joint()} (mixture third-moment
 over the outer grid; per-grid FD of the joint inner log-lik along the
 constraint-corrected Sigma columns), and per-arm pseudo-draws are

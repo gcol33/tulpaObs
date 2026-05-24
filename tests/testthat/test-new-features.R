@@ -1,15 +1,15 @@
 .simple_fit <- function(formula = ~ 1, det = ~ 1, n = 30, seed = 42,
-                       engine = "nuts", iter = 200, warmup = 100) {
+                       method = "nuts", iter = 200, warmup = 100) {
   set.seed(seed)
   d <- data.frame(x = rnorm(n))
   z <- rbinom(n, 1, 0.5)
   y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
-  ctrl <- if (engine == "nuts")
-    list(iter = iter, warmup = warmup, seed = seed, verbose = FALSE)
+  ctrl <- if (method == "nuts")
+    list(n.iter = iter, n.warmup = warmup, seed = seed, verbose = FALSE)
   else
     list(verbose = FALSE)
   fit <- tobs(formula, data = d, family = occu(),
-              detection = det, y = y, engine = engine,
+              detection = det, y = y, method = method,
               control = ctrl)
   list(fit = fit, y = y, d = d, n = n)
 }
@@ -21,8 +21,8 @@ test_that("JSDM model fits", {
   d <- data.frame(x = rnorm(n))
 
   fit <- tobs(~ x, data = d, family = jsdm(), y = y, species = TRUE,
-              engine = "nuts",
-              control = list(iter = 200, warmup = 100, seed = 42, verbose = FALSE))
+              method = "nuts",
+              control = list(n.iter = 200, n.warmup = 100, seed = 42, verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
 })
 
@@ -35,7 +35,7 @@ test_that("integrated model fits", {
 
   fit <- tobs(~ x, data = d, family = int_occu(),
               detection = ~ 1, y = list(s1 = y1, s2 = y2),
-              engine = "laplace",
+              method = "laplace",
               control = list(verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
 })
@@ -66,7 +66,7 @@ test_that("tobs_check_id works", {
 })
 
 test_that("tobs_pit_residuals returns uniform-ish values", {
-  res <- .simple_fit(engine = "nuts")
+  res <- .simple_fit(method = "nuts")
   pit <- tobs_pit_residuals(res$fit, n.samples = 50)
   expect_length(pit, res$n)
   expect_true(all(pit >= 0 & pit <= 1))
@@ -75,14 +75,14 @@ test_that("tobs_pit_residuals returns uniform-ish values", {
 })
 
 test_that("tobs_test_dispersion returns sensible output", {
-  res <- .simple_fit(engine = "nuts")
+  res <- .simple_fit(method = "nuts")
   disp <- tobs_test_dispersion(res$fit, n.samples = 20)
   expect_true(is.finite(disp$ratio))
   expect_true(disp$p.value >= 0 && disp$p.value <= 1)
 })
 
 test_that("tobs_test_zero_inflation returns sensible output", {
-  res <- .simple_fit(engine = "nuts")
+  res <- .simple_fit(method = "nuts")
   zi <- tobs_test_zero_inflation(res$fit, n.samples = 20)
   expect_true(is.finite(zi$ratio))
 })
@@ -90,7 +90,7 @@ test_that("tobs_test_zero_inflation returns sensible output", {
 test_that("tulpa generic diagnostics work via inheritance", {
   set.seed(42)
   n <- 30; coords <- cbind(runif(n), runif(n))
-  res <- .simple_fit(engine = "laplace", n = n)
+  res <- .simple_fit(method = "laplace", n = n)
   r <- residuals(res$fit)$occ
   mi <- tulpa::moran_i(r, coords, k = 3)
   expect_true(is.finite(unname(mi$statistic)))
@@ -102,13 +102,13 @@ test_that("tulpa generic diagnostics work via inheritance", {
 })
 
 test_that("update works", {
-  res <- .simple_fit(engine = "laplace")
+  res <- .simple_fit(method = "laplace")
   fit2 <- update(res$fit, verbose = FALSE)
   expect_s3_class(fit2, "tobs_fit")
   expect_true(fit2$n_samples > 0)
 })
 
 test_that("tobs_check runs without error", {
-  res <- .simple_fit(engine = "nuts")
+  res <- .simple_fit(method = "nuts")
   expect_output(tobs_check(res$fit), "tobs Model Diagnostics")
 })

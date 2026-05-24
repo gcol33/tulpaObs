@@ -94,7 +94,7 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
       data     = sim$data,
       family   = cover("lognormal"),
       y        = sim$y,
-      engine   = "nested_laplace",
+      method   = "nested_laplace",
       control  = list(
         sigma_grid     = c(0.3, 0.6, 0.9),
         rho_grid       = c(0.5, 0.7, 0.9),
@@ -194,7 +194,7 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
-      engine   = "nested_laplace",
+      method   = "nested_laplace",
       control  = list(
         sigma_grid     = c(0.3, 0.5, 0.8),
         rho_grid       = c(0.5, 0.7, 0.9),
@@ -226,7 +226,7 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
-    engine   = "nested_laplace",
+    method   = "nested_laplace",
     control  = list(
       sigma_grid     = c(0.3, 0.5, 0.8),
       rho_grid       = c(0.5, 0.7, 0.9),

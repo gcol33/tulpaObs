@@ -41,7 +41,7 @@ test_that("penalised default recovers beta_p across multiple seeds", {
 
     fit <- tryCatch(
       tobs(formula = ~ x_occ, data = dat, family = occu(),
-           detection = ~ x_det, y = y, engine = "laplace",
+           detection = ~ x_det, y = y, method = "laplace",
            control = list(verbose = FALSE)),
       error = function(e) NULL
     )
@@ -95,13 +95,13 @@ test_that("disabling the prior makes the detection slope bias worse", {
 
     fit_pen <- tryCatch(
       tobs(formula = ~ x_occ, data = dat, family = occu(),
-           detection = ~ x_det, y = y, engine = "laplace",
+           detection = ~ x_det, y = y, method = "laplace",
            control = list(verbose = FALSE)),
       error = function(e) NULL
     )
     fit_unp <- tryCatch(
       tobs(formula = ~ x_occ, data = dat, family = occu(),
-           detection = ~ x_det, y = y, engine = "laplace",
+           detection = ~ x_det, y = y, method = "laplace",
            priors = FALSE,
            control = list(verbose = FALSE)),
       error = function(e) NULL
@@ -150,7 +150,7 @@ test_that("95% Wald CI covers the detection slope at the nominal rate", {
 
     fit <- tryCatch(
       tobs(formula = ~ x_occ, data = dat, family = occu(),
-           detection = ~ x_det, y = y, engine = "laplace",
+           detection = ~ x_det, y = y, method = "laplace",
            control = list(verbose = FALSE)),
       error = function(e) NULL
     )
@@ -209,7 +209,7 @@ test_that("priors = FALSE disables the penalty entirely", {
   dat <- data.frame(x_occ = x_occ, x_det = x_det)
 
   fit_off <- tobs(formula = ~ x_occ, data = dat, family = occu(),
-                  detection = ~ x_det, y = y, engine = "laplace",
+                  detection = ~ x_det, y = y, method = "laplace",
                   priors = FALSE,
                   control = list(verbose = FALSE))
   expect_null(fit_off$priors)

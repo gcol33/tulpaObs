@@ -52,7 +52,7 @@ test_that("cover(positive='beta') with simplified_laplace attaches skew + status
     data    = sim$data,
     family  = cover("beta"),
     y       = sim$y,
-    approx  = "simplified_laplace"
+    method  = "laplace_sla"
   )
   expect_s3_class(fit, "cover_fit")
   expect_identical(fit$sla_status, "simplified_laplace")
@@ -81,7 +81,7 @@ test_that("cover(positive='lognormal') with simplified_laplace attaches skew + s
     data    = sim$data,
     family  = cover("lognormal"),
     y       = sim$y,
-    approx  = "simplified_laplace"
+    method  = "laplace_sla"
   )
   expect_s3_class(fit, "cover_fit")
   expect_identical(fit$sla_status, "simplified_laplace")

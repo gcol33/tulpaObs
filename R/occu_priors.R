@@ -25,8 +25,9 @@
 
 #' Weakly-informative priors for occupancy Laplace fits
 #'
-#' Constructs a prior specification consumed by [tobs()] when
-#' `engine = "laplace"` for the occupancy family. The penalty is applied as
+#' Constructs a prior specification consumed by [tobs()] when a Laplace
+#' method (`method = "laplace"` etc.) is used for the occupancy family. The
+#' penalty is applied as
 #' a quadratic term `+ sum((beta_j - mu_j)^2 / (2 * sd_j^2))` added to the
 #' negative-log-posterior in each M-step submodel block. See
 #' `R/penalized_irls.R` for the full derivation.
@@ -51,7 +52,7 @@
 #' \dontrun{
 #' # default weakly-informative priors
 #' fit <- tobs(~ x, data = d, family = occu(), detection = ~ z, y = y,
-#'             engine = "laplace", priors = occu_priors())
+#'             method = "laplace", priors = occu_priors())
 #'
 #' # disable detection-slope penalty
 #' priors <- occu_priors(p_slope = list(mean = 0, sd = Inf))
@@ -94,7 +95,7 @@ occu_priors <- function(p_intercept       = list(mean = 0, sd = 1.5),
 
 #' @export
 print.occu_priors <- function(x, ...) {
-  cat("occu_priors (weakly-informative for engine='laplace'):\n")
+  cat("occu_priors (weakly-informative for method='laplace'):\n")
   fmt <- function(p, label) {
     if (is.null(p)) {
       cat(sprintf("  %s: <unset>\n", label))

@@ -18,7 +18,8 @@ Hessian assuming phi = 1, so SEs are rescaled by \code{sigma_pos^2}.
 (Fisher information), so SEs are returned at scale 1.
 }
 
-When \code{approx = "simplified_laplace"}, the cover-hurdle SLA gamma is
+Under an SLA method (\code{method = "laplace_sla"} / \code{"nested_laplace_sla"}), the
+cover-hurdle SLA gamma is
 computed via \code{\link[=.sla_compute_cover_hurdle]{.sla_compute_cover_hurdle()}}: a per-arm 5-point FD of
 the \emph{original} Bernoulli / Beta / Lognormal log-likelihood against the
 arm's \code{solve(H_beta)} Sigma (raw Hessian — no Louis correction needed

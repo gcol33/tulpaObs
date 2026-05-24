@@ -81,7 +81,7 @@ fit_tulpa_lap <- tobs(
   family    = occu(),
   detection = ~ det_cov1,
   y         = y,
-  engine    = "laplace",
+  method    = "laplace",
   control   = list(verbose = FALSE)
 )
 ```
@@ -98,7 +98,7 @@ fit_tulpa_nuts <- tobs(
   family    = occu(),
   detection = ~ det_cov1,
   y         = y,
-  engine    = "nuts",
+  method    = "nuts",
   control   = list(iter = 1500, warmup = 750, seed = 42, verbose = FALSE)
 )
 fit_tulpa_nuts

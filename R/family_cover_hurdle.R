@@ -17,12 +17,18 @@
 # ---------------------------------------------------------------------------
 
 .dispatch_cover <- function(formula, data, family, detection, y,
-                            visit_data, engine, priors, control,
-                            approx = "gaussian_laplace", ...) {
+                            visits, engine, priors, control,
+                            approx = "gaussian_laplace",
+                            correction = "none", ...) {
   positive <- family$params$positive
   if (!positive %in% c("lognormal", "beta")) {
     stop("cover(positive = '", positive, "') is not supported. ",
          "Use 'lognormal' or 'beta'.", call. = FALSE)
+  }
+  if (!identical(correction, "none")) {
+    stop("cover() has no Gibbs/MI correction path; use method = 'laplace', ",
+         "'laplace_sla', 'nested_laplace', or 'nested_laplace_sla'.",
+         call. = FALSE)
   }
   if (!is.null(detection)) {
     stop("`cover()` does not use a detection formula ",
@@ -39,8 +45,8 @@
   has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
   if (has_multi && !identical(engine, "nested_laplace")) {
     stop("temporal()/re() terms in a cover() formula require ",
-         "engine = 'nested_laplace' (got '", engine, "'). ",
-         "The single-Laplace path is fixed-effects + spatial only.",
+         "method = 'nested_laplace' or 'nested_laplace_sla' (got engine '",
+         engine, "'). The single-Laplace path is fixed-effects + spatial only.",
          call. = FALSE)
   }
 
@@ -222,8 +228,8 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
                              engine = "laplace",
                              priors = NULL, control = list()) {
   if (!engine %in% c("laplace", "auto")) {
-    stop("cover() currently supports only engine = 'laplace' or ",
-         "'nested_laplace' (got '", engine,
+    stop("cover() currently supports only method = 'laplace'/'laplace_sla' ",
+         "or 'nested_laplace'/'nested_laplace_sla' (got engine '", engine,
          "'). nuts lands in later phases.", call. = FALSE)
   }
   max_iter  <- control$max_iter  %||% 100L
@@ -304,7 +310,8 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
 #' * beta arm: `tulpa_laplace_beta()` already weights the Hessian by phi
 #'   (Fisher information), so SEs are returned at scale 1.
 #'
-#' When `approx = "simplified_laplace"`, the cover-hurdle SLA gamma is
+#' Under an SLA method (`method = "laplace_sla"` / `"nested_laplace_sla"`), the
+#' cover-hurdle SLA gamma is
 #' computed via [`.sla_compute_cover_hurdle()`]: a per-arm 5-point FD of
 #' the *original* Bernoulli / Beta / Lognormal log-likelihood against the
 #' arm's `solve(H_beta)` Sigma (raw Hessian — no Louis correction needed
@@ -598,17 +605,18 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                           control = list(),
                                           temporal = NULL, re = NULL) {
   if (!positive %in% c("lognormal", "beta")) {
-    stop("engine = 'nested_laplace' for cover() supports positive = ",
+    stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() supports positive = ",
          "'lognormal' or 'beta'. Got '", positive, "'.", call. = FALSE)
   }
   if (is.null(enc$spatial_spec)) {
-    stop("engine = 'nested_laplace' for cover() requires a spatial spec. ",
-         "Pass one of `tulpa::spatial_bym2(adj)`, `tulpa::spatial_icar(adj)`, ",
-         "or `tulpa::spatial_car_proper(adj)`.", call. = FALSE)
+    stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() requires ",
+         "a spatial term in the formula. Add one of `bym2(graph = adj)`, ",
+         "`icar(graph = adj)`, `car(graph = adj)`, or `car_proper(graph = adj)` ",
+         "to the latent-presence formula.", call. = FALSE)
   }
   spec <- enc$spatial_spec
   if (!inherits(spec, "tulpa_spatial")) {
-    stop("engine = 'nested_laplace' for cover(): `spatial` must be a ",
+    stop("method = 'nested_laplace'/'nested_laplace_sla' for cover(): `spatial` must be a ",
          "tulpa_spatial spec.", call. = FALSE)
   }
   spec_type <- tolower(spec$type)
@@ -616,7 +624,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # to backend = "icar"; treat the two as equivalent at dispatch time.
   supported <- c("bym2", "icar", "car", "car_proper")
   if (!spec_type %in% supported) {
-    stop("engine = 'nested_laplace' for cover() supports spatial types: ",
+    stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() supports spatial types: ",
          paste(shQuote(supported), collapse = ", "),
          ". Got type = '", spec$type, "'.", call. = FALSE)
   }
@@ -951,7 +959,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 #' already produced posterior moments for beta and the spatial hyperparameters,
 #' so we just shape them into the existing `cover_fit` structure.
 #'
-#' When `approx = "simplified_laplace"`, the per-arm marginal skewness is
+#' Under an SLA method (`method = "nested_laplace_sla"`), the per-arm marginal
+#' skewness is
 #' computed via `.sla_compute_cover_hurdle_joint()` (mixture third-moment
 #' over the outer grid; per-grid FD of the joint inner log-lik along the
 #' constraint-corrected Sigma columns), and per-arm pseudo-draws are

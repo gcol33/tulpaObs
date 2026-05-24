@@ -29,8 +29,9 @@ Default \code{list(mean = 0, sd = 2)}.}
 An \code{occu_priors} object, ready to pass to \code{tobs(..., priors = ...)}.
 }
 \description{
-Constructs a prior specification consumed by \code{\link[=tobs]{tobs()}} when
-\code{engine = "laplace"} for the occupancy family. The penalty is applied as
+Constructs a prior specification consumed by \code{\link[=tobs]{tobs()}} when a Laplace
+method (\code{method = "laplace"} etc.) is used for the occupancy family. The
+penalty is applied as
 a quadratic term \code{+ sum((beta_j - mu_j)^2 / (2 * sd_j^2))} added to the
 negative-log-posterior in each M-step submodel block. See
 \code{R/penalized_irls.R} for the full derivation.
@@ -46,7 +47,7 @@ that component of the prior (same penalised objective, just \code{1/Inf^2 = 0}).
 \dontrun{
 # default weakly-informative priors
 fit <- tobs(~ x, data = d, family = occu(), detection = ~ z, y = y,
-            engine = "laplace", priors = occu_priors())
+            method = "laplace", priors = occu_priors())
 
 # disable detection-slope penalty
 priors <- occu_priors(p_slope = list(mean = 0, sd = Inf))

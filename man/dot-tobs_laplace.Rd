@@ -15,6 +15,8 @@
   damping = 0.3,
   correction = c("auto", "mi", "gibbs", "none"),
   n_imputations = 20L,
+  n_gibbs = 10L,
+  seed = NULL,
   approx = c("gaussian_laplace", "simplified_laplace"),
   verbose = TRUE
 )

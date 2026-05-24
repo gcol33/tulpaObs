@@ -9,7 +9,8 @@
 #' Summary for tobs_fit, with skewness column when simplified Laplace is used
 #'
 #' Extends `summary.tulpa_fit` with an extra `skew` column populated from
-#' `object$skew` when the fit was produced with `approx = "simplified_laplace"`.
+#' `object$skew` when the fit was produced with an SLA method
+#' (`method = "laplace_sla"` / `"nested_laplace_sla"`).
 #' All quantile / mean / sd columns come from `object$draws`, which under
 #' simplified Laplace are skew-normal samples — so 2.5%/97.5% quantiles are
 #' already SLA-corrected.
@@ -27,6 +28,15 @@ summary.tobs_fit <- function(object, ...) {
     matched <- intersect(nm, names(object$skew))
     sk[match(matched, nm)] <- object$skew[matched]
     s$skew <- sk
+  }
+  # Surface cross-chain convergence diagnostics (NUTS) alongside the
+  # posterior summary, matched by parameter name.
+  if (!is.null(object$convergence)) {
+    cv  <- object$convergence
+    idx <- match(rownames(s), cv$parameter)
+    s$rhat     <- cv$rhat[idx]
+    s$ess_bulk <- cv$ess_bulk[idx]
+    s$ess_tail <- cv$ess_tail[idx]
   }
   s
 }

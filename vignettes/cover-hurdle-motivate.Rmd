@@ -183,7 +183,7 @@ fit_beta <- tobs(
   data      = dat_beta,
   family    = cover("beta"),
   y         = sim_beta$y,
-  engine    = "nested_laplace",
+  method    = "nested_laplace",
   control   = list(verbose = FALSE)
 )
 fit_beta
@@ -198,7 +198,7 @@ fit_ln <- tobs(
   data      = dat_ln,
   family    = cover("lognormal"),
   y         = sim_ln$y,
-  engine    = "nested_laplace",
+  method    = "nested_laplace",
   control   = list(verbose = FALSE)
 )
 fit_ln

@@ -20,8 +20,9 @@ families — see \code{vignette("families")} for the conceptual caveat.
 }
 \section{Joint nested-Laplace engine — spatial-prior parameterisation}{
 
-When fitted with \code{engine = "nested_laplace"} and a \code{spatial = tulpa::spatial_bym2(adj, ...)} (or \code{spatial_car()} / \code{spatial_car_proper()})
-argument, the engine identifies a single latent field \code{z} per region
+When fitted with \code{method = "nested_laplace"} and an areal spatial term in
+the latent-presence formula (\code{bym2(graph = adj)}, or \code{car()} /
+\code{car_proper()}), the engine identifies a single latent field \code{z} per region
 and parameterises the two arms as \verb{eta_occ = X beta_occ + sigma * z}
 and \verb{eta_pos = X beta_pos + alpha * sigma * z}. Both BYM2 sub-blocks
 (\code{phi}, \code{theta}) are subject to hard sum-to-zero constraints (see

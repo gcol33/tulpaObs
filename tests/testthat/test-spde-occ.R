@@ -73,7 +73,7 @@ test_that("tobs() + spde() Laplace recovers beta and the field shape", {
                                          prior_sigma = c(0.7, 0.5)),
               data = dat, family = occu(),
               detection = ~ det_cov, y = y,
-              engine = "laplace", control = list(verbose = FALSE))
+              method = "laplace", control = list(verbose = FALSE))
 
   # Detection coefficients should be sensible
   expect_lt(abs(fit$means["p_det_cov"] - beta_det[2]), 1.0)
@@ -131,7 +131,7 @@ test_that("tobs() + spde() Laplace recovery tightens at N = 1500", {
                                            prior_sigma = c(0.7, 0.5)),
                 data = dat, family = occu(),
                 detection = ~ det_cov, y = y,
-                engine = "laplace", control = list(verbose = FALSE))
+                method = "laplace", control = list(verbose = FALSE))
     field_at_sites <- as.numeric(fit$spatial$tulpa_spec$A %*% fit$spatial_field)
     list(
       psi_slope_bias = unname(fit$means["psi_occ_cov"]) - beta_occ[2],

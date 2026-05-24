@@ -10,9 +10,9 @@ tobs(
   family,
   detection = NULL,
   y = NULL,
-  visit_data = NULL,
-  engine = c("auto", "laplace", "nested_laplace", "nuts"),
-  approx = c("gaussian_laplace", "simplified_laplace"),
+  visits = NULL,
+  method = c("auto", "laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
+    "nested_laplace", "nested_laplace_sla", "nuts"),
   priors = NULL,
   control = list(),
   ...
@@ -56,7 +56,7 @@ Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun
 \item \code{\link[=cover]{cover()}} — length-N vector of cover proportions in [0, 1].
 }}
 
-\item{visit_data}{optional visit-level detection covariates. Accepts
+\item{visits}{optional visit-level detection covariates. Accepts
 either:
 \itemize{
 \item a named list of \verb{[n_sites, max_visits]} matrices (the shape returned by
@@ -65,32 +65,64 @@ frame in site-major order;
 \item a data frame with \code{nrow(y) * ncol(y)} rows in site-major order.
 }
 
-When \code{visit_data} is provided without a \code{"formula"} attribute, the
+When \code{visits} is provided without a \code{"formula"} attribute, the
 \code{detection} argument is interpreted as the visit-level detection
 formula and the site-level detection design matrix is an intercept
 only. To split visit-level and site-level detection covariates
 (e.g. visit-level effort plus site-level observer category), pass a
-long data frame with \code{attr(visit_data, "formula") = ~ effort} and use
+long data frame with \code{attr(visits, "formula") = ~ effort} and use
 \code{detection = ~ observer} for the site-level terms.}
 
-\item{engine}{inference engine: \code{"auto"}, \code{"laplace"}, \code{"nested_laplace"},
-or \code{"nuts"}. \code{"auto"} chooses the family's \code{default_engine}.}
-
-\item{approx}{marginal approximation for the Laplace path:
-\code{"gaussian_laplace"} (default) or \code{"simplified_laplace"} (skew-corrected
-marginals via the SLA path).}
+\item{method}{inference route, naming a fully-specified path rather than a
+pair of orthogonal knobs:
+\itemize{
+\item \code{"auto"} — the family's default route (see \code{default_engine}).
+\item \code{"laplace"} — EM + Laplace with Gaussian marginals (fast default).
+\item \code{"laplace_sla"} — Laplace with skew-corrected (simplified-Laplace)
+marginals.
+\item \code{"laplace_gibbs"} / \code{"laplace_mi"} — Laplace with a post-EM Gibbs /
+multiple-imputation correction. These run the unpenalised EM, so the
+weakly-informative fixed-effect prior is disabled unless you pass
+\code{priors} explicitly.
+\item \code{"nested_laplace"} — multi-block nested Laplace (single-season
+occupancy and cover-hurdle joint).
+\item \code{"nested_laplace_sla"} — nested Laplace with skew-corrected marginals.
+\item \code{"nuts"} — HMC / NUTS sampler (every structure; reports Rhat / ESS).
+}}
 
 \item{priors}{optional prior specification. For occupancy families fit
-with \code{engine = "laplace"}, pass a list or \code{\link[=occu_priors]{occu_priors()}} object to
-set weakly-informative quadratic priors on the fixed-effect
-coefficients (defaults pull the detection intercept toward
-\code{p = 0.5} and break the psi-p identifiability ridge at small \code{J}).
-Pass \code{priors = FALSE} to disable the default prior and recover the
-historical unpenalised MAP behavior. For NUTS, this is forwarded
-to the underlying tulpa engine.}
+with a Laplace method (\code{method = "laplace"}, \code{"laplace_sla"},
+\code{"nested_laplace"}), pass a list or \code{\link[=occu_priors]{occu_priors()}} object to set
+weakly-informative quadratic priors on the fixed-effect coefficients
+(defaults pull the detection intercept toward \code{p = 0.5} and break the
+psi-p identifiability ridge at small \code{J}). Pass \code{priors = FALSE} to
+disable the default prior and recover the unpenalised MAP. The
+\code{"laplace_gibbs"} / \code{"laplace_mi"} routes set \code{priors = FALSE}
+automatically (the correction is defined on the unpenalised EM; see
+gcol33/tulpa#27). For NUTS, this is forwarded to the underlying tulpa
+engine.}
 
-\item{control}{list of low-level controls (\code{n_threads}, \code{max_iter}, \code{tol},
-etc.).}
+\item{control}{list of low-level engine controls. Names follow the
+dotted-separator convention. Sampler controls (\code{method = "nuts"}):
+\itemize{
+\item \code{n.iter} — total iterations per chain, including warmup (default 2000).
+\item \code{n.warmup} — warmup / adaptation iterations per chain (default 1000).
+\item \code{n.thin} — keep every \code{n.thin}-th post-warmup draw (default 1).
+\item \code{n.chains} — number of chains, run with offset seeds and pooled
+(default 1). Split-Rhat / bulk / tail ESS are reported on \verb{$convergence}.
+\item \code{n.threads} — chains to run in parallel (default 1, sequential). Values
+\verb{> 1} use a PSOCK cluster and require tulpaObs to be installed.
+\item \code{adapt.delta} — target acceptance probability (default 0.8).
+\item \code{max.treedepth} — NUTS maximum tree depth (default 10).
+\item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42).
+The resolved per-chain seeds are stored on \verb{$seeds}.
+}
+
+Laplace controls (\code{method = "laplace"} / \code{"laplace_sla"} /
+\code{"nested_laplace"}): \code{max.iter}, \code{tol}, \code{damping}, \code{sigma.beta},
+\code{sigma.re.scale}. Stochastic-correction controls (\code{"laplace_gibbs"} /
+\code{"laplace_mi"}): \code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count)
+and \code{seed} (stored on \verb{$seed}).}
 
 \item{...}{family-specific named arguments forwarded to the underlying
 engine builder.}

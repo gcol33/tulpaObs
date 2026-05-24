@@ -8,18 +8,25 @@
   model,
   method = c("laplace", "nested_laplace", "nuts"),
   priors = NULL,
-  sigma_beta = 10,
-  sigma_re_scale = 1,
-  max_iter = 100L,
+  sigma.beta = 10,
+  sigma.re.scale = 1,
+  max.iter = 100L,
   tol = 1e-04,
   damping = 0.7,
-  iter = 2000,
-  warmup = 1000,
-  max_treedepth = 10,
-  adapt_delta = 0.8,
+  n.iter = 2000,
+  n.warmup = 1000,
+  n.thin = 1L,
+  n.chains = 1L,
+  n.threads = 1L,
+  max.treedepth = 10,
+  adapt.delta = 0.8,
   seed = 42,
   approx = c("gaussian_laplace", "simplified_laplace"),
-  verbose = TRUE
+  correction = "none",
+  n.gibbs = 10L,
+  n.imputations = 20L,
+  verbose = TRUE,
+  ...
 )
 }
 \description{

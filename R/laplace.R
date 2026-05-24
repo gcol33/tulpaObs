@@ -31,7 +31,7 @@
                           sigma_beta = 10,
                           max_iter = 50L, tol = 1e-4, damping = 0.3,
                           correction = c("auto", "mi", "gibbs", "none"),
-                          n_imputations = 20L,
+                          n_imputations = 20L, n_gibbs = 10L, seed = NULL,
                           approx = c("gaussian_laplace", "simplified_laplace"),
                           verbose = TRUE) {
   correction <- match.arg(correction)
@@ -96,6 +96,12 @@
       verbose     = verbose
     )
   } else {
+    # MI / Gibbs draw hard z with R's RNG. Seed it so the corrected fit is
+    # reproducible (the unpenalised driver is the only correction path; the
+    # penalized driver can't carry the prior + a correction, gcol33/tulpa#27).
+    if (correction %in% c("mi", "gibbs") && !is.null(seed)) {
+      set.seed(as.integer(seed))
+    }
     em_result <- tulpa::tulpa_em_laplace(
       e_step        = callbacks$e_step,
       m_step_encode = callbacks$m_step_encode,
@@ -105,6 +111,7 @@
       damping       = damping,
       correction    = correction,
       n_imputations = n_imputations,
+      n_gibbs       = n_gibbs,
       verbose       = verbose
     )
   }
@@ -113,6 +120,10 @@
                            prior_spec = prior_spec,
                            approx = approx)
   fit$priors <- prior_spec
+  # Record the seed used for a stochastic correction so the run reproduces.
+  if (correction %in% c("mi", "gibbs") && !is.null(seed)) {
+    fit$seed <- as.integer(seed)
+  }
   fit
 }
 
@@ -768,7 +779,7 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
   }
   if (!identical(spatial$type, "spde")) {
     stop(sprintf(
-      ".tobs_laplace currently supports spatial$type == 'spde' only (got '%s'). Use engine = 'nuts' for other spatial types.",
+      ".tobs_laplace currently supports spatial$type == 'spde' only (got '%s'). Use method = 'nuts' for other spatial types.",
       spatial$type), call. = FALSE)
   }
   if (length(spatial$shared) >= 2 && isTRUE(spatial$shared[2])) {
@@ -793,7 +804,7 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 # Gate the deterministic random-effect path. The variance-component EM in
 # R/em_laplace_re.R fits iid intercept + UNCORRELATED slopes on the occupancy
 # predictor of a single-season model. Forms it cannot fit error here with a
-# pointer to `engine = "nuts"` (which fits every RE form) rather than being
+# pointer to `method = "nuts"` (which fits every RE form) rather than being
 # silently dropped (gcol33/tulpaObs#11). The deterministic Laplace variance
 # estimate carries the usual small-cluster (PQL) bias; NUTS is the calibrated
 # route when that matters.
@@ -802,24 +813,24 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 
   if (!identical(model$model_type, "single")) {
     stop(sprintf(
-      "Random effects under engine = 'laplace' are wired for single-season occupancy only (got model_type = '%s'). Use engine = 'nuts' for random effects on this family.",
+      "Random effects under method = 'laplace' are wired for single-season occupancy only (got model_type = '%s'). Use method = 'nuts' for random effects on this family.",
       model$model_type), call. = FALSE)
   }
   if (!is.null(spatial)) {
-    stop("A random effect combined with a spatial term is not supported on the Laplace path. Use engine = 'nuts'.",
+    stop("A random effect combined with a spatial term is not supported on the Laplace path. Use method = 'nuts'.",
          call. = FALSE)
   }
   if (!is.null(model$X_det_visit)) {
-    stop("Random effects with visit-level detection covariates are not supported on the Laplace path. Use engine = 'nuts'.",
+    stop("Random effects with visit-level detection covariates are not supported on the Laplace path. Use method = 'nuts'.",
          call. = FALSE)
   }
   for (r in re_list) {
     if (length(r$shared) >= 2L && isTRUE(r$shared[2]) && !isTRUE(r$shared[1])) {
-      stop("A random effect on the detection predictor is not supported on the Laplace path. Use engine = 'nuts'.",
+      stop("A random effect on the detection predictor is not supported on the Laplace path. Use method = 'nuts'.",
            call. = FALSE)
     }
     if (length(r$shared) >= 2L && isTRUE(r$shared[2])) {
-      stop("A random effect shared across occupancy and detection is not supported on the Laplace path. Use engine = 'nuts'.",
+      stop("A random effect shared across occupancy and detection is not supported on the Laplace path. Use method = 'nuts'.",
            call. = FALSE)
     }
     n_slopes <- if (identical(r$type, "slope") && !is.null(r$covariate)) {
@@ -827,7 +838,10 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
     } else 0L
     n_coefs <- (if (isTRUE(r$intercept)) 1L else 0L) + n_slopes
     if (isTRUE(r$correlated) && n_coefs > 1L) {
-      stop("Correlated random slopes (a Cholesky-factored covariance, e.g. `(1 + x | g)`) are fit by the NUTS sampler only; the Laplace engine uses a diagonal random-effect covariance. Use `engine = 'nuts'`, or `(1 + x || g)` for an uncorrelated block.",
+      # Blocked on gcol33/tulpa#28: tulpa's Laplace RE precision is diagonal
+      # (per-coefficient marginal sigma, no Cholesky factor), so a correlated
+      # block is not representable. NUTS fits it via a Cholesky covariance.
+      stop("Correlated random slopes (a Cholesky-factored covariance, e.g. `(1 + x | g)`) are fit by the NUTS sampler only; the Laplace engine uses a diagonal random-effect covariance (gcol33/tulpa#28). Use `method = 'nuts'`, or `(1 + x || g)` for an uncorrelated block.",
            call. = FALSE)
     }
   }

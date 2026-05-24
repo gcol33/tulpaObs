@@ -77,7 +77,7 @@ fit_ns <- tobs(
   family    = occu(),
   detection = ~ det_cov,
   y         = y,
-  engine    = "laplace",
+  method    = "laplace",
   control   = list(verbose = FALSE)
 )
 round(fit_ns$means, 3)
@@ -104,7 +104,7 @@ fit_sp <- tobs(
   family    = occu(),
   detection = ~ det_cov,
   y         = y,
-  engine    = "laplace",
+  method    = "laplace",
   control   = list(verbose = FALSE)
 )
 round(fit_sp$means, 3)

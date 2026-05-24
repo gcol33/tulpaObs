@@ -45,35 +45,64 @@
 #'   * [abun()] — N x J integer count matrix.
 #'   * `ms_*` — S x N x J array.
 #'   * [cover()] — length-N vector of cover proportions in \[0, 1\].
-#' @param visit_data optional visit-level detection covariates. Accepts
+#' @param visits optional visit-level detection covariates. Accepts
 #'   either:
 #'   * a named list of `[n_sites, max_visits]` matrices (the shape returned by
 #'     `tobs_data()` in `det.covs`) — flattened internally to a long data
 #'     frame in site-major order;
 #'   * a data frame with `nrow(y) * ncol(y)` rows in site-major order.
 #'
-#'   When `visit_data` is provided without a `"formula"` attribute, the
+#'   When `visits` is provided without a `"formula"` attribute, the
 #'   `detection` argument is interpreted as the visit-level detection
 #'   formula and the site-level detection design matrix is an intercept
 #'   only. To split visit-level and site-level detection covariates
 #'   (e.g. visit-level effort plus site-level observer category), pass a
-#'   long data frame with `attr(visit_data, "formula") = ~ effort` and use
+#'   long data frame with `attr(visits, "formula") = ~ effort` and use
 #'   `detection = ~ observer` for the site-level terms.
-#' @param engine inference engine: `"auto"`, `"laplace"`, `"nested_laplace"`,
-#'   or `"nuts"`. `"auto"` chooses the family's `default_engine`.
-#' @param approx marginal approximation for the Laplace path:
-#'   `"gaussian_laplace"` (default) or `"simplified_laplace"` (skew-corrected
-#'   marginals via the SLA path).
+#' @param method inference route, naming a fully-specified path rather than a
+#'   pair of orthogonal knobs:
+#'   * `"auto"` — the family's default route (see `default_engine`).
+#'   * `"laplace"` — EM + Laplace with Gaussian marginals (fast default).
+#'   * `"laplace_sla"` — Laplace with skew-corrected (simplified-Laplace)
+#'     marginals.
+#'   * `"laplace_gibbs"` / `"laplace_mi"` — Laplace with a post-EM Gibbs /
+#'     multiple-imputation correction. These run the unpenalised EM, so the
+#'     weakly-informative fixed-effect prior is disabled unless you pass
+#'     `priors` explicitly.
+#'   * `"nested_laplace"` — multi-block nested Laplace (single-season
+#'     occupancy and cover-hurdle joint).
+#'   * `"nested_laplace_sla"` — nested Laplace with skew-corrected marginals.
+#'   * `"nuts"` — HMC / NUTS sampler (every structure; reports Rhat / ESS).
 #' @param priors optional prior specification. For occupancy families fit
-#'   with `engine = "laplace"`, pass a list or [occu_priors()] object to
-#'   set weakly-informative quadratic priors on the fixed-effect
-#'   coefficients (defaults pull the detection intercept toward
-#'   `p = 0.5` and break the psi-p identifiability ridge at small `J`).
-#'   Pass `priors = FALSE` to disable the default prior and recover the
-#'   historical unpenalised MAP behavior. For NUTS, this is forwarded
-#'   to the underlying tulpa engine.
-#' @param control list of low-level controls (`n_threads`, `max_iter`, `tol`,
-#'   etc.).
+#'   with a Laplace method (`method = "laplace"`, `"laplace_sla"`,
+#'   `"nested_laplace"`), pass a list or [occu_priors()] object to set
+#'   weakly-informative quadratic priors on the fixed-effect coefficients
+#'   (defaults pull the detection intercept toward `p = 0.5` and break the
+#'   psi-p identifiability ridge at small `J`). Pass `priors = FALSE` to
+#'   disable the default prior and recover the unpenalised MAP. The
+#'   `"laplace_gibbs"` / `"laplace_mi"` routes set `priors = FALSE`
+#'   automatically (the correction is defined on the unpenalised EM; see
+#'   gcol33/tulpa#27). For NUTS, this is forwarded to the underlying tulpa
+#'   engine.
+#' @param control list of low-level engine controls. Names follow the
+#'   dotted-separator convention. Sampler controls (`method = "nuts"`):
+#'   * `n.iter` — total iterations per chain, including warmup (default 2000).
+#'   * `n.warmup` — warmup / adaptation iterations per chain (default 1000).
+#'   * `n.thin` — keep every `n.thin`-th post-warmup draw (default 1).
+#'   * `n.chains` — number of chains, run with offset seeds and pooled
+#'     (default 1). Split-Rhat / bulk / tail ESS are reported on `$convergence`.
+#'   * `n.threads` — chains to run in parallel (default 1, sequential). Values
+#'     `> 1` use a PSOCK cluster and require tulpaObs to be installed.
+#'   * `adapt.delta` — target acceptance probability (default 0.8).
+#'   * `max.treedepth` — NUTS maximum tree depth (default 10).
+#'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42).
+#'     The resolved per-chain seeds are stored on `$seeds`.
+#'
+#'   Laplace controls (`method = "laplace"` / `"laplace_sla"` /
+#'   `"nested_laplace"`): `max.iter`, `tol`, `damping`, `sigma.beta`,
+#'   `sigma.re.scale`. Stochastic-correction controls (`"laplace_gibbs"` /
+#'   `"laplace_mi"`): `n.gibbs` / `n.imputations` (Rubin-pooled draw count)
+#'   and `seed` (stored on `$seed`).
 #' @param ... family-specific named arguments forwarded to the underlying
 #'   engine builder.
 #'
@@ -97,14 +126,15 @@ tobs <- function(formula,
                  family,
                  detection  = NULL,
                  y          = NULL,
-                 visit_data = NULL,
-                 engine     = c("auto", "laplace", "nested_laplace", "nuts"),
-                 approx     = c("gaussian_laplace", "simplified_laplace"),
+                 visits     = NULL,
+                 method     = c("auto", "laplace", "laplace_sla",
+                                "laplace_gibbs", "laplace_mi",
+                                "nested_laplace", "nested_laplace_sla", "nuts"),
                  priors     = NULL,
                  control    = list(),
                  ...) {
 
-  approx <- match.arg(approx)
+  method <- match.arg(method)
 
   if (missing(family)) {
     stop(
@@ -122,8 +152,18 @@ tobs <- function(formula,
     )
   }
 
-  engine <- match.arg(engine)
-  if (engine == "auto") engine <- family$default_engine
+  route   <- .tobs_resolve_method(method, family)
+  engine  <- route$engine
+  approx  <- route$approx
+
+  # Gibbs / MI corrections are defined on the unpenalised EM, so the
+  # weakly-informative fixed-effect prior is switched off for those routes
+  # unless the user asked for one explicitly. A penalized correction is
+  # blocked upstream: tulpa's Laplace block fitter takes no beta prior, so
+  # the correction phases cannot regularize (gcol33/tulpa#27).
+  if (route$correction %in% c("gibbs", "mi") && is.null(priors)) {
+    priors <- FALSE
+  }
 
   if (family$status == "planned") {
     .stop_planned_family(family)
@@ -149,9 +189,10 @@ tobs <- function(formula,
     family     = family,
     detection  = detection,
     y          = y,
-    visit_data = visit_data,
+    visits     = visits,
     engine     = engine,
     approx     = approx,
+    correction = route$correction,
     priors     = priors,
     control    = control,
     ...
@@ -161,6 +202,8 @@ tobs <- function(formula,
     class(fit) <- c("tobs_fit", class(fit))
   }
   attr(fit, "tobs_family") <- family
+  # Record the resolved public route for provenance / reproducibility.
+  fit$method <- method
   fit
 }
 
@@ -170,36 +213,38 @@ tobs <- function(formula,
 # model builder + fitter for that family's structure.
 # ---------------------------------------------------------------------------
 
-.dispatch_occu <- function(formula, data, family, detection, y, visit_data,
+.dispatch_occu <- function(formula, data, family, detection, y, visits,
                            engine, priors, control,
-                           approx = "gaussian_laplace", ...) {
+                           approx = "gaussian_laplace",
+                           correction = "none", ...) {
   if (is.null(detection)) {
     stop("occu() requires a `detection` formula.", call. = FALSE)
   }
   if (is.null(y)) {
     stop("occu() requires `y` (an N x J detection-history matrix).", call. = FALSE)
   }
-  vd <- .normalize_visit_data(visit_data, detection, n_sites = nrow(y),
-                              max_visits = ncol(y))
+  vd <- .normalize_visits(visits, detection, n_sites = nrow(y),
+                          max_visits = ncol(y))
   model <- .tobs_build_model(
     occ_formula        = formula,
     det_formula        = vd$det_formula,
     data               = data,
     y                  = y,
     det_visit_formula  = vd$det_visit_formula,
-    det_visit_data     = vd$visit_data
+    det_visit_data     = vd$visits
   )
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "occu"), priors = priors,
-         approx = approx),
+         approx = approx, correction = correction),
     control
   ))
 }
 
-.dispatch_dyn_occu <- function(formula, data, family, detection, y, visit_data,
+.dispatch_dyn_occu <- function(formula, data, family, detection, y, visits,
                                engine, priors, control,
-                               approx = "gaussian_laplace", ...) {
+                               approx = "gaussian_laplace",
+                               correction = "none", ...) {
   dots <- list(...)
   if (is.null(dots$col_formula)) {
     stop("dyn_occu() requires a `col_formula = ~ ...` argument.", call. = FALSE)
@@ -218,14 +263,15 @@ tobs <- function(formula,
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "dyn_occu"), priors = priors,
-         approx = approx),
+         approx = approx, correction = correction),
     control
   ))
 }
 
-.dispatch_ms_occu <- function(formula, data, family, detection, y, visit_data,
+.dispatch_ms_occu <- function(formula, data, family, detection, y, visits,
                               engine, priors, control,
-                              approx = "gaussian_laplace", ...) {
+                              approx = "gaussian_laplace",
+                              correction = "none", ...) {
   dots <- list(...)
   if (is.null(dots$species)) {
     stop("ms_occu() requires a `species` argument.", call. = FALSE)
@@ -240,14 +286,15 @@ tobs <- function(formula,
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "ms_occu"), priors = priors,
-         approx = approx),
+         approx = approx, correction = correction),
     control
   ))
 }
 
-.dispatch_int_occu <- function(formula, data, family, detection, y, visit_data,
+.dispatch_int_occu <- function(formula, data, family, detection, y, visits,
                                engine, priors, control,
-                               approx = "gaussian_laplace", ...) {
+                               approx = "gaussian_laplace",
+                               correction = "none", ...) {
   model <- .tobs_build_model(
     occ_formula = formula,
     det_formula = detection,
@@ -258,14 +305,15 @@ tobs <- function(formula,
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "int_occu"), priors = priors,
-         approx = approx),
+         approx = approx, correction = correction),
     control
   ))
 }
 
-.dispatch_jsdm <- function(formula, data, family, detection, y, visit_data,
+.dispatch_jsdm <- function(formula, data, family, detection, y, visits,
                            engine, priors, control,
-                           approx = "gaussian_laplace", ...) {
+                           approx = "gaussian_laplace",
+                           correction = "none", ...) {
   dots <- list(...)
   model <- .tobs_build_model(
     occ_formula = formula,
@@ -277,7 +325,7 @@ tobs <- function(formula,
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "jsdm"), priors = priors,
-         approx = approx),
+         approx = approx, correction = correction),
     control
   ))
 }
@@ -286,6 +334,40 @@ tobs <- function(formula,
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# Public `method` names are sugar over the orthogonal internal triple
+# (engine, approx, correction). Each method names one fully-specified route;
+# invalid cross-products (e.g. NUTS with an SLA marginal) simply have no name.
+.tobs_method_table <- list(
+  laplace            = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "none"),
+  laplace_sla        = list(engine = "laplace",        approx = "simplified_laplace", correction = "none"),
+  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs"),
+  laplace_mi         = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "mi"),
+  nested_laplace     = list(engine = "nested_laplace", approx = "gaussian_laplace",   correction = "none"),
+  nested_laplace_sla = list(engine = "nested_laplace", approx = "simplified_laplace", correction = "none"),
+  nuts               = list(engine = "nuts",           approx = "gaussian_laplace",   correction = "none")
+)
+
+# Resolve a public method name to the internal (engine, approx, correction)
+# triple. `"auto"` maps the family's default engine to its base method.
+.tobs_resolve_method <- function(method, family) {
+  if (identical(method, "auto")) {
+    method <- switch(
+      family$default_engine,
+      laplace        = "laplace",
+      nested_laplace = "nested_laplace",
+      nuts           = "nuts",
+      stop(sprintf("Family '%s' has an unknown default_engine '%s'.",
+                   family$name, family$default_engine), call. = FALSE)
+    )
+  }
+  route <- .tobs_method_table[[method]]
+  if (is.null(route)) {
+    stop(sprintf("Unknown method '%s'. See `?tobs` for the route list.",
+                 method), call. = FALSE)
+  }
+  route
+}
 
 .map_engine <- function(engine, family = NULL) {
   # Engine name translation between the tobs vocabulary and what the underlying
@@ -311,7 +393,7 @@ tobs <- function(formula,
   )
 }
 
-# Normalize the user's `visit_data` argument to the shape `.tobs_build_single`
+# Normalize the user's `visits` argument to the shape `.tobs_build_single`
 # expects: a long data frame with `n_sites * max_visits` rows in site-major
 # order (row `r` corresponds to site `(r-1) %/% max_visits + 1`, visit
 # `(r-1) %% max_visits + 1`), plus the formula to apply to it.
@@ -325,19 +407,19 @@ tobs <- function(formula,
 #   * data.frame with N*J rows + a          -> existing dual-formula behavior:
 #       "formula" attribute                    site-level `detection` against
 #                                              `data`, attr formula against
-#                                              `visit_data`
+#                                              `visits`
 #   * data.frame with N*J rows, no formula  -> treat `detection` as visit-level
 #       attribute                              (intercept dropped); site-level
 #                                              X_det is intercept-only
 #
 # Returns a list with:
-#   visit_data         — long data frame (or NULL)
-#   det_visit_formula  — formula applied to visit_data (or NULL)
+#   visits             — long data frame (or NULL)
+#   det_visit_formula  — formula applied to visits (or NULL)
 #   det_formula        — formula applied to site-level `data`
-.normalize_visit_data <- function(visit_data, detection,
-                                  n_sites, max_visits) {
-  if (is.null(visit_data)) {
-    return(list(visit_data = NULL,
+.normalize_visits <- function(visits, detection,
+                              n_sites, max_visits) {
+  if (is.null(visits)) {
+    return(list(visits = NULL,
                 det_visit_formula = NULL,
                 det_formula = detection))
   }
@@ -345,63 +427,63 @@ tobs <- function(formula,
   expected_rows <- n_sites * max_visits
 
   # Case 1: list of [n_sites, max_visits] matrices (tobs_data() output)
-  if (is.list(visit_data) && !is.data.frame(visit_data)) {
-    nms <- names(visit_data)
+  if (is.list(visits) && !is.data.frame(visits)) {
+    nms <- names(visits)
     if (is.null(nms) || any(!nzchar(nms))) {
-      stop("`visit_data` (list of matrices) must be a named list; ",
+      stop("`visits` (list of matrices) must be a named list; ",
            "names become the column names of the flattened frame.",
            call. = FALSE)
     }
-    bad <- vapply(visit_data, function(m) {
+    bad <- vapply(visits, function(m) {
       !is.matrix(m) || nrow(m) != n_sites || ncol(m) != max_visits
     }, logical(1))
     if (any(bad)) {
       stop(sprintf(
-        "`visit_data` elements must be [%d x %d] matrices matching y; ",
+        "`visits` elements must be [%d x %d] matrices matching y; ",
         n_sites, max_visits),
         sprintf("element(s) %s have wrong shape.",
                 paste(nms[bad], collapse = ", ")),
         call. = FALSE)
     }
     flat <- as.data.frame(
-      lapply(visit_data, function(m) as.vector(t(m))),
+      lapply(visits, function(m) as.vector(t(m))),
       stringsAsFactors = FALSE
     )
     return(list(
-      visit_data = flat,
+      visits = flat,
       det_visit_formula = .drop_intercept(detection),
       det_formula = ~ 1
     ))
   }
 
   # Case 2 / 3: data frame
-  if (is.data.frame(visit_data)) {
-    if (nrow(visit_data) != expected_rows) {
+  if (is.data.frame(visits)) {
+    if (nrow(visits) != expected_rows) {
       stop(sprintf(
-        "`visit_data` (data frame) must have %d rows (n_sites * max_visits); ",
+        "`visits` (data frame) must have %d rows (n_sites * max_visits); ",
         expected_rows),
-        sprintf("got %d.", nrow(visit_data)),
+        sprintf("got %d.", nrow(visits)),
         call. = FALSE)
     }
-    attached <- attr(visit_data, "formula")
+    attached <- attr(visits, "formula")
     if (!is.null(attached)) {
       # Dual-formula power-user mode: detection stays site-level
       return(list(
-        visit_data = visit_data,
+        visits = visits,
         det_visit_formula = attached,
         det_formula = detection
       ))
     }
     return(list(
-      visit_data = visit_data,
+      visits = visits,
       det_visit_formula = .drop_intercept(detection),
       det_formula = ~ 1
     ))
   }
 
-  stop("`visit_data` must be NULL, a named list of [n_sites x max_visits] ",
+  stop("`visits` must be NULL, a named list of [n_sites x max_visits] ",
        "matrices, or a long data frame with n_sites * max_visits rows; ",
-       "got ", paste(class(visit_data), collapse = "/"), ".",
+       "got ", paste(class(visits), collapse = "/"), ".",
        call. = FALSE)
 }
 
@@ -468,10 +550,34 @@ print.tobs_fit <- function(x, ...) {
   }
   if (!is.null(x$n_samples)) {
     cat(sprintf("  Samples: %d", x$n_samples))
+    if (!is.null(x$n_chains)) {
+      cat(sprintf(" (%d chain%s%s)", x$n_chains,
+                  if (x$n_chains > 1L) "s" else "",
+                  if (!is.null(x$n_thin) && x$n_thin > 1L)
+                    sprintf(", thin %d", x$n_thin) else ""))
+    }
     if (!is.null(x$epsilon) && !is.na(x$epsilon)) {
       cat(sprintf(", step size: %.4f", x$epsilon))
     }
     cat("\n")
+  }
+  # Reproducibility: seeds for stochastic routes (NUTS chains / MI / Gibbs).
+  if (!is.null(x$seeds)) {
+    cat(sprintf("  Seeds: %s\n", paste(x$seeds, collapse = ", ")))
+  } else if (!is.null(x$seed)) {
+    cat(sprintf("  Seed: %d\n", x$seed))
+  }
+  if (!is.null(x$convergence)) {
+    rh <- x$convergence$rhat
+    eb <- x$convergence$ess_bulk
+    if (any(is.finite(rh)) || any(is.finite(eb))) {
+      cat(sprintf("  Convergence: max Rhat %.3f, min bulk ESS %.0f\n",
+                  max(rh, na.rm = TRUE), min(eb, na.rm = TRUE)))
+      if (any(rh > 1.01, na.rm = TRUE)) {
+        cat("    WARNING: Rhat > 1.01 for some parameters; chains may not have ",
+            "mixed. Increase n.iter / n.chains.\n", sep = "")
+      }
+    }
   }
   if (!is.null(x$sla_status) && !identical(x$sla_status, "off")) {
     cat(sprintf("  Marginals: %s\n", x$sla_status))

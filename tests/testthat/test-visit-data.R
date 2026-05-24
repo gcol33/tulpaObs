@@ -1,4 +1,4 @@
-# Tests for the tobs(visit_data = ...) composition fix (issue #8).
+# Tests for the tobs(visits = ...) composition fix (issue #8).
 # Verifies that tobs_data() output (list of [N, J] matrices) composes with
 # tobs() without requiring the user to hand-build a long visit-level frame.
 
@@ -33,7 +33,7 @@ simulate_visit_effort_data <- function(seed = 42) {
        elev = elev, effort_mat = effort_mat)
 }
 
-test_that("tobs_data() output composes with tobs(visit_data = ...)", {
+test_that("tobs_data() output composes with tobs(visits = ...)", {
   sim <- simulate_visit_effort_data()
   od <- tobs_data(sim$long, y = "occur", site = "site_id", visit = "year",
                   det.covs = "effort")
@@ -48,16 +48,16 @@ test_that("tobs_data() output composes with tobs(visit_data = ...)", {
     data       = site_df,
     y          = od$y,
     detection  = ~ effort,
-    visit_data = od$det.covs,
+    visits = od$det.covs,
     family     = occu(),
-    engine     = "laplace",
+    method     = "laplace",
     control    = list(verbose = FALSE)
   )
   expect_s3_class(fit, "tobs_fit")
   expect_true(any(grepl("p_visit_effort", colnames(fit$draws))))
 })
 
-test_that("visit_data accepts a long data frame without a formula attribute", {
+test_that("visits accepts a long data frame without a formula attribute", {
   sim <- simulate_visit_effort_data()
   effort_long <- data.frame(effort = as.vector(t(sim$effort_mat)))
   site_df <- data.frame(dummy = rep(0, sim$n_sites))
@@ -67,16 +67,16 @@ test_that("visit_data accepts a long data frame without a formula attribute", {
     data       = site_df,
     y          = sim$y,
     detection  = ~ effort,
-    visit_data = effort_long,
+    visits = effort_long,
     family     = occu(),
-    engine     = "laplace",
+    method     = "laplace",
     control    = list(verbose = FALSE)
   )
   expect_s3_class(fit, "tobs_fit")
   expect_true(any(grepl("p_visit_effort", colnames(fit$draws))))
 })
 
-test_that("attr(visit_data, 'formula') keeps dual site/visit detection split", {
+test_that("attr(visits, 'formula') keeps dual site/visit detection split", {
   sim <- simulate_visit_effort_data()
   effort_long <- data.frame(effort = as.vector(t(sim$effort_mat)))
   attr(effort_long, "formula") <- ~ effort
@@ -88,9 +88,9 @@ test_that("attr(visit_data, 'formula') keeps dual site/visit detection split", {
     data       = site_df,
     y          = sim$y,
     detection  = ~ observer,
-    visit_data = effort_long,
+    visits = effort_long,
     family     = occu(),
-    engine     = "laplace",
+    method     = "laplace",
     control    = list(verbose = FALSE)
   )
   expect_s3_class(fit, "tobs_fit")
@@ -98,14 +98,14 @@ test_that("attr(visit_data, 'formula') keeps dual site/visit detection split", {
   expect_true(any(grepl("p_visit_effort", colnames(fit$draws))))
 })
 
-test_that("visit_data shape mismatch is rejected with a clear message", {
+test_that("visits shape mismatch is rejected with a clear message", {
   sim <- simulate_visit_effort_data()
   bad_list <- list(effort = sim$effort_mat[, 1:2, drop = FALSE])
   site_df <- data.frame(dummy = rep(0, sim$n_sites))
   expect_error(
     tobs(formula = ~ 1, data = site_df, y = sim$y,
-         detection = ~ effort, visit_data = bad_list,
-         family = occu(), engine = "laplace",
+         detection = ~ effort, visits = bad_list,
+         family = occu(), method = "laplace",
          control = list(verbose = FALSE)),
     "wrong shape"
   )
@@ -113,8 +113,8 @@ test_that("visit_data shape mismatch is rejected with a clear message", {
   bad_df <- data.frame(effort = runif(sim$n_sites * sim$max_visits + 3))
   expect_error(
     tobs(formula = ~ 1, data = site_df, y = sim$y,
-         detection = ~ effort, visit_data = bad_df,
-         family = occu(), engine = "laplace",
+         detection = ~ effort, visits = bad_df,
+         family = occu(), method = "laplace",
          control = list(verbose = FALSE)),
     "must have .* rows"
   )
@@ -122,8 +122,8 @@ test_that("visit_data shape mismatch is rejected with a clear message", {
   unnamed_list <- list(sim$effort_mat)
   expect_error(
     tobs(formula = ~ 1, data = site_df, y = sim$y,
-         detection = ~ effort, visit_data = unnamed_list,
-         family = occu(), engine = "laplace",
+         detection = ~ effort, visits = unnamed_list,
+         family = occu(), method = "laplace",
          control = list(verbose = FALSE)),
     "named list"
   )

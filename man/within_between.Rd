@@ -43,10 +43,9 @@ that they be the same coefficient (the random-effects assumption).
 Typical use in the MOTIVATE cover-resurvey workflow:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{plots <- within_between(plots, group = "plot_id", vars = "year")
-fit   <- tobs(~ year_btw + year_wtn, data = plots,
+fit   <- tobs(~ year_btw + year_wtn + bym2(graph = adj), data = plots,
               family = cover("beta"), y = plots$cover,
-              spatial = tulpa::spatial_bym2(adj),
-              engine  = "nested_laplace")
+              method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
 \code{year_wtn} then carries the within-plot temporal trend; \code{year_btw} absorbs

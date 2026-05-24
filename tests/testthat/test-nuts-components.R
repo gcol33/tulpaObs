@@ -29,7 +29,7 @@ test_that("NUTS runs with a temporal(ar1) term attached", {
   fit <- tobs(
     ~ occ_cov1 + temporal(time, type = "ar1"), data = sim$data,
     family = occu(), detection = ~ det_cov1, y = sim$y,
-    engine = "nuts", control = ctl_nuts()
+    method = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 4, label = "temporal-ar1")
   expect_s3_class(fit$temporal, "tobs_temporal")
@@ -47,7 +47,7 @@ test_that("NUTS runs with two re() terms attached", {
   fit <- tobs(
     ~ occ_cov1 + re(grp) + re(time), data = sim$data, family = occu(),
     detection = ~ det_cov1, y = sim$y,
-    engine = "nuts", control = ctl_nuts()
+    method = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 4, label = "multi-re")
   expect_true(is.list(fit$re))
@@ -65,11 +65,11 @@ test_that("lme4 bar syntax fits identically to the equivalent re() call", {
 
   fit_bar <- tobs(
     ~ occ_cov1 + (1 | grp), data = sim$data, family = occu(),
-    detection = ~ det_cov1, y = sim$y, engine = "nuts", control = ctl_nuts()
+    detection = ~ det_cov1, y = sim$y, method = "nuts", control = ctl_nuts()
   )
   fit_re <- tobs(
     ~ occ_cov1 + re(grp), data = sim$data, family = occu(),
-    detection = ~ det_cov1, y = sim$y, engine = "nuts", control = ctl_nuts()
+    detection = ~ det_cov1, y = sim$y, method = "nuts", control = ctl_nuts()
   )
 
   expect_nuts_fit(fit_bar, n_expected_cols = 3, label = "bar (1|grp)")
@@ -90,7 +90,7 @@ test_that("NUTS runs with an svc() term attached", {
   fit <- tobs(
     ~ occ_cov1 + svc(lon, lat, indices = 1L, nn = 8), data = sim$data,
     family = occu(), detection = ~ det_cov1, y = sim$y,
-    engine = "nuts", control = ctl_nuts()
+    method = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 4, label = "svc")
   expect_s3_class(fit$svc, "tobs_svc")
@@ -107,7 +107,7 @@ test_that("NUTS runs with a latent() term on ms_occu", {
   fit <- tobs(
     ~ x + latent(2), data = ms$data, family = ms_occu(),
     detection = ~ 1, y = ms$y, species = sp_names,
-    engine = "nuts", control = ctl_nuts()
+    method = "nuts", control = ctl_nuts()
   )
   expect_nuts_fit(fit, n_expected_cols = 2, label = "latent")
   expect_s3_class(fit$latent, "tobs_latent")

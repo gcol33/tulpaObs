@@ -41,7 +41,7 @@ test_that("simplified_laplace attaches finite skew on int_occu (smoke)", {
     family    = int_occu(),
     detection = ~ 1,
     y         = sim$y,
-    approx    = "simplified_laplace",
+    method    = "laplace_sla",
     control   = list(verbose = FALSE)
   )
 
@@ -75,7 +75,7 @@ test_that(".loglik_int_occu agrees with EM log_marginal_likelihood at beta_hat",
     family    = int_occu(),
     detection = ~ 1,
     y         = sim$y,
-    approx    = "gaussian_laplace",
+    method    = "laplace",
     control   = list(verbose = FALSE)
   )
 
@@ -120,7 +120,7 @@ test_that(".loglik_int_occu is finite and on the same magnitude as EM marginal",
     family    = int_occu(),
     detection = ~ 1,
     y         = sim$y,
-    approx    = "gaussian_laplace",
+    method    = "laplace",
     control   = list(verbose = FALSE)
   )
   beta_hat <- as.numeric(fit$means)
@@ -146,7 +146,7 @@ test_that("SLA gamma on int_occu is finite on a realistic simulated setup", {
     family    = int_occu(),
     detection = ~ 1,
     y         = sim$y,
-    approx    = "simplified_laplace",
+    method    = "laplace_sla",
     control   = list(verbose = FALSE)
   )
 

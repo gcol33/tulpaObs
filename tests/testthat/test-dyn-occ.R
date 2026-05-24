@@ -23,7 +23,7 @@ test_that("dynamic occupancy model runs", {
     y           = y_array,
     col_formula = ~ 1,
     ext_formula = ~ 1,
-    engine      = "laplace",
+    method      = "laplace",
     control     = list(verbose = FALSE)
   )
   expect_s3_class(fit, "tobs_fit")

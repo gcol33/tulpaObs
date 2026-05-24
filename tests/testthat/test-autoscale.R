@@ -81,14 +81,14 @@ test_that("cover(positive='beta') with year ~ 2000 column reaches the well-condi
 
   fit_raw <- tobs(~ year_btw + year_wtn, data = dat,
                   family = cover(positive = "beta"), y = dat$y,
-                  engine = "laplace")
+                  method = "laplace")
 
   dat_sc <- dat %>%
     dplyr::mutate(year_btw_sc = as.numeric(scale(year_btw)),
                   year_wtn_sc = as.numeric(scale(year_wtn)))
   fit_sc <- tobs(~ year_btw_sc + year_wtn_sc, data = dat_sc,
                  family = cover(positive = "beta"), y = dat_sc$y,
-                 engine = "laplace")
+                 method = "laplace")
 
   # Predictions on the training data must match between the two fits
   # (both parameterizations of the same MAP).
@@ -126,10 +126,10 @@ test_that("occu() with mean-2000 covariate matches manually-scaled fit (predicti
   dat_s <- dat; dat_s$year_sc <- as.numeric(scale(dat_s$year))
 
   fit_raw <- tobs(~ year, data = dat, family = occu(),
-                  detection = ~ x_det, y = y, engine = "laplace",
+                  detection = ~ x_det, y = y, method = "laplace",
                   control = list(verbose = FALSE))
   fit_sc  <- tobs(~ year_sc, data = dat_s, family = occu(),
-                  detection = ~ x_det, y = y, engine = "laplace",
+                  detection = ~ x_det, y = y, method = "laplace",
                   control = list(verbose = FALSE))
 
   # Probability-scale intercepts (psi(0) under each parameterization) differ

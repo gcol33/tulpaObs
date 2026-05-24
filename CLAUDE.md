@@ -95,11 +95,13 @@ are minimal reproducers — useful when surfacing upstream `tulpa` bugs).
 ## Architecture
 
 Compositional builder: one C++ entry point (`cpp_occu_fit`) for NUTS.
-Laplace via tulpa's EM+Laplace engine with MI/Gibbs correction. A second
-nested-Laplace path (`em_nested_laplace.R`, `simplified_laplace.R`, the
-`sla_*` files) handles families where the standard EM closed-form does
-not apply (cover hurdle joint, dynamic/integrated occupancy under
-`engine = "nested_laplace"`).
+Laplace via tulpa's EM+Laplace engine; the default `method = "laplace"` is a
+penalized EM with Gaussian marginals (no post-EM correction), and MI/Gibbs
+corrections are opt-in via `method = "laplace_gibbs"` / `"laplace_mi"` (which
+run the unpenalised EM). A second nested-Laplace path (`em_nested_laplace.R`,
+`simplified_laplace.R`, the `sla_*` files) handles families where the standard
+EM closed-form does not apply (cover hurdle joint, dynamic/integrated occupancy
+under `method = "nested_laplace"`).
 
 ### Boundary: What lives here vs tulpa
 
@@ -120,6 +122,14 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
   temporal / re / svc / latent specs orthogonally; no per-combination
   branches.
 - **tulpaObs defines likelihoods, tulpa handles structure.**
+- **Dotted argument names (spOccupancy / base-R style), never underscores.**
+  Prefer a single word (`visits`, `priors`, `control`); when a compound is
+  unavoidable, separate with `.` not `_` — e.g. `n.iter`, `n.warmup`,
+  `n.chains`, `n.thin`, `n.threads`, `adapt.delta`, `max.treedepth`,
+  `max.iter`, `sigma.beta`. This governs `tobs()` arguments and every
+  `control = list(...)` key (the control names are the user-facing vocabulary;
+  they are splatted into `.tobs_fit_model()`). Internal-only helper formals may
+  stay underscore, but anything a user types follows the dotted convention.
 
 ## What works (tested)
 
@@ -159,11 +169,15 @@ the smoke test as "not blocked", not "validated".
 
 ## Performance
 
-N=200 sites, single-season, p=0.4:
-- tulpaObs Laplace+Gibbs: **0.01 s** (90× faster than spOccupancy)
-- inlaocc: 0.7 s (after Gibbs fix)
-- spOccupancy MCMC: 0.9 s
-- tulpaObs NUTS: 12.8 s
+N=200 sites, single-season (J=3), measured 2026-05-24:
+- tulpaObs `method = "laplace"` (prior-aware penalized EM, default): **~0.2 s**
+- tulpaObs `method = "laplace_gibbs"` (unpenalised EM + Gibbs, n.gibbs=10): ~1.7 s
+- tulpaObs `method = "nuts"`: ~13 s (historical)
+- inlaocc: 0.7 s; spOccupancy MCMC: 0.9 s (historical reference)
+
+The earlier "0.01 s" figure predates the prior-aware default driver; the
+penalized EM trades a little speed for breaking the psi-p identifiability
+ridge at small J. Gibbs/MI add the Rubin-pooled correction phase on top.
 
 ## File organization
 

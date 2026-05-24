@@ -32,7 +32,7 @@ test_that("Louis-corrected SE matches MC sd of beta_psi_hat (D1 sweep)", {
                          seed = 7000L + s)
     fit <- tryCatch(
       tobs(formula = ~ occ_cov1, data = sim$data, family = occu(),
-           detection = ~ det_cov1, y = sim$y, engine = "laplace",
+           detection = ~ det_cov1, y = sim$y, method = "laplace",
            control = list(verbose = FALSE)),
       error = function(e) NULL
     )
@@ -85,7 +85,7 @@ test_that("95% Wald CI on psi block covers truth at near-nominal rate", {
                          seed = 8000L + s)
     fit <- tryCatch(
       tobs(formula = ~ occ_cov1, data = sim$data, family = occu(),
-           detection = ~ det_cov1, y = sim$y, engine = "laplace",
+           detection = ~ det_cov1, y = sim$y, method = "laplace",
            control = list(verbose = FALSE)),
       error = function(e) NULL
     )
@@ -134,7 +134,7 @@ test_that("Louis fix also applies when priors = FALSE (unpenalised path)", {
                          seed = 9000L + s)
     fit <- tryCatch(
       tobs(formula = ~ occ_cov1, data = sim$data, family = occu(),
-           detection = ~ det_cov1, y = sim$y, engine = "laplace",
+           detection = ~ det_cov1, y = sim$y, method = "laplace",
            priors = FALSE,
            control = list(verbose = FALSE)),
       error = function(e) NULL

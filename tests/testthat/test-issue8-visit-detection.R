@@ -1,11 +1,11 @@
 # Regression + recovery test for gcol33/tulpaObs#8: the tobs_data() output
 # (det.covs as a named list of [N, J] matrices) must compose with
-# tobs(visit_data = ...), and the visit-level detection covariate it carries
+# tobs(visits = ...), and the visit-level detection covariate it carries
 # must be estimated correctly. Before the fix the call errored with
 # "object 'effort' not found"; the visit-level-detection path - the whole
 # point of occu() - had no clean public route and was unexercised by tests.
 
-test_that("tobs_data() det.covs list composes with tobs(visit_data = ...)", {
+test_that("tobs_data() det.covs list composes with tobs(visits = ...)", {
   set.seed(1)
   N <- 40L; J <- 4L
   df <- data.frame(
@@ -21,8 +21,8 @@ test_that("tobs_data() det.covs list composes with tobs(visit_data = ...)", {
   expect_equal(dim(od$det.covs$effort), c(N, J))
 
   fit <- tobs(~ 1, data = data.frame(site_id = unique(df$site_id)),
-              y = od$y, detection = ~ effort, visit_data = od$det.covs,
-              family = occu(), engine = "laplace",
+              y = od$y, detection = ~ effort, visits = od$det.covs,
+              family = occu(), method = "laplace",
               control = list(verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
   # The visit-level covariate is carried into the detection design.
@@ -55,8 +55,8 @@ test_that("visit-level detection slope is recovered (Laplace, 20 seeds)", {
                     det.covs = "effort")
     fit <- tryCatch(
       tobs(~ 1, data = data.frame(site_id = unique(df$site_id)),
-           y = od$y, detection = ~ effort, visit_data = od$det.covs,
-           family = occu(), engine = "laplace", control = list(verbose = FALSE)),
+           y = od$y, detection = ~ effort, visits = od$det.covs,
+           family = occu(), method = "laplace", control = list(verbose = FALSE)),
       error = function(e) NULL)
     if (is.null(fit)) next
     est[s] <- fit$means["p_visit_effort"]

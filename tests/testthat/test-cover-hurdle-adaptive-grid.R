@@ -70,7 +70,7 @@ test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
-      engine   = "nested_laplace",
+      method   = "nested_laplace",
       control  = list(
         sigma_grid     = c(0.3, 0.6, 0.9),
         rho_grid       = c(0.5, 0.7, 0.9),
@@ -121,10 +121,10 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
       phi_grid       = exp(seq(log(2), log(300), length.out = 13))
     )
     fit_fix <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
-                    y = sim$y, engine = "nested_laplace",
+                    y = sim$y, method = "nested_laplace",
                     control = c(ctrl, list(adaptive_grid = FALSE)))
     fit_ad  <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
-                    y = sim$y, engine = "nested_laplace",
+                    y = sim$y, method = "nested_laplace",
                     control = c(ctrl, list(adaptive_grid = TRUE)))
     # Quantile CI coverage on alpha (see comment in the preceding test
     # for the rationale of avoiding the Wald check at the boundary).
@@ -157,7 +157,7 @@ test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
   adj <- chain_adj_for_test(n_s)
   fit <- tobs(
     formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"), y = sim$y,
-    engine = "nested_laplace",
+    method = "nested_laplace",
     control = list(
       sigma_grid     = c(0.3, 0.6, 0.9),
       rho_grid       = c(0.5, 0.7, 0.9),

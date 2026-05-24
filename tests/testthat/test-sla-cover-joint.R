@@ -2,7 +2,7 @@
 #
 # These tests are written ahead of the implementation so the API surface
 # is pinned. They mirror the existing standalone-Laplace SLA tests in
-# test-sla-cover-hurdle.R but exercise the engine = "nested_laplace" path
+# test-sla-cover-hurdle.R but exercise the method = "nested_laplace" path
 # (BYM2-spatial joint fit). See dev_notes/sla_joint_proposal.md for the
 # spec these tests pin.
 
@@ -96,8 +96,7 @@ test_that("joint SLA path no longer falls back via message", {
             data    = sim$data,
             family  = cover("beta"),
             y       = sim$y,
-            engine  = "nested_laplace",
-            approx  = "simplified_laplace",
+            method  = "nested_laplace_sla",
             control = list(
                 sigma_grid     = c(0.4, 0.8),
                 rho_grid       = c(0.5, 0.9),
@@ -131,8 +130,7 @@ test_that("SLA joint fit exposes skew + draws fields", {
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        engine  = "nested_laplace",
-        approx  = "simplified_laplace",
+        method  = "nested_laplace_sla",
         control = list(
             sigma_grid     = c(0.4, 0.8),
             rho_grid       = c(0.5, 0.9),
@@ -183,7 +181,7 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        engine  = "nested_laplace",
+        method  = "nested_laplace",
         # Default approx (or explicit gaussian_laplace) — both should leave
         # the SLA fields un-populated.
         control = list(
@@ -219,8 +217,7 @@ test_that("SLA gamma near zero at large N", {
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        engine  = "nested_laplace",
-        approx  = "simplified_laplace",
+        method  = "nested_laplace_sla",
         control = list(
             sigma_grid     = c(0.4, 0.8),
             rho_grid       = c(0.5, 0.9),
@@ -256,8 +253,7 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        engine  = "nested_laplace",
-        approx  = "simplified_laplace",
+        method  = "nested_laplace_sla",
         control = list(
             sigma_grid     = c(0.01, 0.02, 0.03),
             rho_grid       = c(0.5),
@@ -271,7 +267,7 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
-        approx  = "simplified_laplace"
+        method  = "laplace_sla"
     ))
 
     expect_true(is.numeric(fit_joint$skew_pos))

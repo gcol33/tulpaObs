@@ -13,6 +13,9 @@ src/*.dylib
 .RData
 .Rproj.user
 
+# Claude Code local state (lock files, machine-local settings)
+.claude/
+
 # Temp
 test_*.R
 run_*.R

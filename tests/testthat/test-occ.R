@@ -25,7 +25,7 @@ test_that("single-season occupancy model runs", {
     family    = occu(),
     detection = ~ 1,
     y         = y,
-    engine    = "laplace",
+    method    = "laplace",
     control   = list(verbose = FALSE)
   )
   expect_s3_class(fit, "tobs_fit")

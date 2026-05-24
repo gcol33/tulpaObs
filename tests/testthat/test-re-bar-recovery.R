@@ -53,8 +53,8 @@ test_that("(1 + x + z | g) recovers a 3x3 correlated RE block", {
   d <- data.frame(g = factor(g), x = x, z = z)
 
   fit <- tobs(~ (1 + x + z | g), data = d, y = y, detection = ~ 1,
-              family = occu(), engine = "nuts",
-              control = list(iter = 400, warmup = 200, seed = 1, verbose = FALSE))
+              family = occu(), method = "nuts",
+              control = list(n.iter = 400, n.warmup = 200, seed = 1, verbose = FALSE))
 
   # Layout / structure: q = 3, k(k-1)/2 = 3 Cholesky params (NOT k(k+1)/2 = 6).
   expect_length(fit$re, 1L)
@@ -96,8 +96,8 @@ test_that("(1 + x + z || g) is an uncorrelated multi-slope block (no Cholesky)",
   d <- data.frame(g = factor(g), x = x, z = z)
 
   fit <- tobs(~ (1 + x + z || g), data = d, y = y, detection = ~ 1,
-              family = occu(), engine = "nuts",
-              control = list(iter = 300, warmup = 150, seed = 1, verbose = FALSE))
+              family = occu(), method = "nuts",
+              control = list(n.iter = 300, n.warmup = 150, seed = 1, verbose = FALSE))
 
   # q = 3 but uncorrelated -> NO Cholesky block: [psi_int, p_int, sigma(3),
   # z_effects(ng*3)]. (Before per-term correlation handling, re_correlated was
@@ -132,8 +132,8 @@ test_that("(0 + x | g) is a slope-only block with no group intercept", {
   d <- data.frame(g = factor(g), x = x)
 
   fit <- tobs(~ (0 + x | g), data = d, y = y, detection = ~ 1,
-              family = occu(), engine = "nuts",
-              control = list(iter = 400, warmup = 200, seed = 1, verbose = FALSE))
+              family = occu(), method = "nuts",
+              control = list(n.iter = 400, n.warmup = 200, seed = 1, verbose = FALSE))
 
   # Structural proof of "no intercept": q = 1 -> one effect per group, so the
   # param vector is [psi_int, p_int, log_sigma, z_effects(ng)]. An implicit
