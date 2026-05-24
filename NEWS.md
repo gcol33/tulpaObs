@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+* feat(priors): `cover_priors()` adds opt-in Gaussian fixed-effect priors to the
+  cover hurdle, penalising *both* arms -- the occurrence (Bernoulli) intercept /
+  slopes and the positive-part (beta or lognormal) intercept / slopes. The
+  penalty threads through `tulpa::tulpa_laplace()` for the occurrence and
+  lognormal arms and through `tulpa::tulpa_laplace_beta(beta_prior = )` for the
+  beta arm. Priors are opt-in (`priors = NULL`/`FALSE` fits unpenalised); an
+  `sd = Inf` component is a no-op. `occu_priors()` is rejected for `cover()` with
+  a pointer to `cover_priors()`, and the prior errors (no silent drop) when
+  combined with a spatial term or with `method = "nested_laplace"`. Recovery
+  tests in `tests/testthat/test-cover-priors.R`.
+
+* break(api): `abun()`, `ms_abun()`, and `dyn_abun()` rename the latent-mixture
+  argument `family =` to `mixture =` (`"poisson"` / `"negbin"`, after
+  `unmarked::pcount()`), removing the collision with the family-object concept
+  that `tobs(family = )` already owns.
+
+* break(api): the exported `tobs_priors()` constructor (and its print method)
+  are removed -- it was wired to no fitting path. Use the family-group prior
+  builders `occu_priors()` (occupancy group) and `cover_priors()` (cover).
+
+* break(control): cover-hurdle `control = list(...)` keys are renamed from
+  underscores to the package's dotted convention (`max_iter` -> `max.iter`,
+  `prior_sigma` -> `prior.sigma`, `prior_alpha` -> `prior.alpha`,
+  `sigma_pos_grid` -> `sigma.pos.grid`, etc.), matching every other
+  user-facing `control` key.
+
+* fix(print): `print.tobs_fit` and `print.tobs_family` label the default route
+  "default method" instead of "engine", matching the `method = ` argument users
+  actually type.
+
 * feat(re): formula random effects are now fit by the default `engine =
   "laplace"` instead of being silently dropped (gcol33/tulpaObs#11). A
   variance-component EM (`R/em_laplace_re.R`) wraps tulpa's fixed-sigma Laplace
