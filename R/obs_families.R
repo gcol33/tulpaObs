@@ -182,11 +182,26 @@ jsdm <- function() {
 #' Latent Poisson (or NB) abundance with binomial detection per visit
 #' (Royle 2004).
 #'
-#' @param K_max upper bound for latent N in the EM E-step summation.
-#' @param mixture latent-abundance distribution: `"poisson"` or `"negbin"`.
-#'   Named `mixture` (after `unmarked::pcount()`) to avoid collision with the
-#'   model-type `family` argument of [tobs()].
+#' @param K_max upper bound for the latent-abundance marginal sum (the exact
+#'   integration over `N` is truncated at `K_max`). `NULL` (default) lets the
+#'   engine pick `max(y) + 100` (matching `unmarked::pcount()`); raise it if a
+#'   fit warns that the posterior over `N` puts mass on the boundary.
+#' @param mixture latent-abundance distribution. `"poisson"` is fitted via
+#'   tulpa's closed-form marginal Laplace engine. `"negbin"` (overdispersed
+#'   abundance) is not yet available — it needs the negative-binomial marginal
+#'   likelihood in tulpa and currently errors with a pointer. Named `mixture`
+#'   (after `unmarked::pcount()`) to avoid collision with the model-type
+#'   `family` argument of [tobs()].
 #' @return A `tobs_family` object.
+#' @details
+#' Royle's (2004) N-mixture model: latent abundance `N_i ~ Poisson(lambda_i)`
+#' with `log lambda_i = X_lambda beta_lambda`, and counts
+#' `y_ij | N_i ~ Binomial(N_i, p_ij)` with `logit p_ij = X_p beta_p`. The
+#' abundance formula is the `tobs()` `formula`; the per-visit detection formula
+#' is `detection`. The marginal likelihood integrates `N` out exactly, so the
+#' fit is a direct Laplace approximation (no EM): `method = "laplace"`
+#' (fixed effects) or `method = "nested_laplace"` (an areal `icar()` / `bym2()`
+#' / `car()` offset on the abundance arm).
 #' @export
 abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
   mixture <- match.arg(mixture)
@@ -197,7 +212,7 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
     observation    = "binomial_N",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "planned",
+    status         = "working",
     params         = list(K_max = K_max, mixture = mixture)
   )
 }

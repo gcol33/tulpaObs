@@ -25,6 +25,8 @@
   correction = "none",
   n.gibbs = 10L,
   n.imputations = 20L,
+  K.max = NULL,
+  mixture = "poisson",
   verbose = TRUE,
   ...
 )

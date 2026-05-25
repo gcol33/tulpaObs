@@ -230,6 +230,7 @@ tobs <- function(formula,
     ms_occu  = .dispatch_ms_occu,
     int_occu = .dispatch_int_occu,
     jsdm     = .dispatch_jsdm,
+    abun     = .dispatch_abun,
     cover    = .dispatch_cover,
     stop(sprintf(
       "Internal error: family %q has status 'working' but no dispatcher.",
@@ -384,6 +385,38 @@ tobs <- function(formula,
   ))
 }
 
+.dispatch_abun <- function(formula, data, family, detection, y, visits,
+                           engine, priors, control,
+                           approx = "gaussian_laplace",
+                           correction = "none", ...) {
+  if (is.null(detection)) {
+    stop("abun() requires a `detection` formula.", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("abun() requires `y` (an N x J integer count matrix).", call. = FALSE)
+  }
+  vd <- .normalize_visits(visits, detection, n_sites = nrow(y),
+                          max_visits = ncol(y))
+  model <- .tobs_build_model(
+    occ_formula        = formula,
+    det_formula        = vd$det_formula,
+    data               = data,
+    y                  = y,
+    abundance          = TRUE,
+    det_visit_formula  = vd$det_visit_formula,
+    det_visit_data     = vd$visits
+  )
+  # K_max and the abundance mixture travel with the family object (abun(K_max =,
+  # mixture =)); thread them into the fitter alongside the engine controls.
+  do.call(.tobs_fit_model, c(
+    list(model = model,
+         method = .map_engine(engine, family = "abun"), priors = priors,
+         approx = approx, correction = correction,
+         K.max = family$params$K_max, mixture = family$params$mixture),
+    control
+  ))
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -465,6 +498,12 @@ tobs <- function(formula,
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),
+  # abun: non-spatial Poisson N-mixture (laplace) + areal-spatial offset
+  # (nested_laplace: icar / bym2 / car_proper on the abundance arm). tulpa's
+  # spatial fitters return the grid-integrated coefficient covariance, so the
+  # spatial SEs are calibrated (law-of-total-covariance over the hyperparameter
+  # grid). negbin and NUTS remain upstream-pending.
+  abun     = c("laplace", "nested_laplace"),
   cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla")
 )
 
@@ -592,7 +631,7 @@ tobs <- function(formula,
   # before dispatch, so reaching here with an unsupported family is an internal
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
-    if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu")) {
+    if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu", "abun")) {
       return("nested_laplace")
     }
     stop(sprintf(
@@ -711,8 +750,7 @@ tobs <- function(formula,
   phase <- switch(
     family$name,
     cover    = "Phase 1 (cover hurdle, beta variant)",
-    abun     = "Phase 2 (N-mixture)",
-    ms_abun  = "Phase 2 (N-mixture)",
+    ms_abun  = "Phase 2 (multispecies N-mixture)",
     dyn_abun = "Phase 3 (open N-mixture)",
     distance = "Phase 4 (distance / removal / FP)",
     removal  = "Phase 4 (distance / removal / FP)",
@@ -749,7 +787,7 @@ print.tobs_fit <- function(x, ...) {
   }
   model <- x$model
   if (!is.null(model)) {
-    if (model$model_type == "single") {
+    if (model$model_type == "single" || model$model_type == "nmix") {
       cat(sprintf("  Sites: %d, Max visits: %d\n", model$n_sites, model$max_visits))
     } else if (model$model_type == "dynamic") {
       cat(sprintf("  Sites: %d, Seasons: %d, Max visits: %d\n",
@@ -817,7 +855,8 @@ print.tobs_fit <- function(x, ...) {
         psi1 = "Mean initial occupancy (intercept)",
         p    = "Mean detection (intercept)",
         gamma   = "Mean colonization (intercept)",
-        epsilon = "Mean extinction (intercept)"
+        epsilon = "Mean extinction (intercept)",
+        lambda  = "Mean abundance (intercept)"
       )
       if (!is.null(label)) {
         cat(sprintf("%s: %.3f\n", label, x$intercepts[[nm]]))

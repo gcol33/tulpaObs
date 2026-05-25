@@ -154,9 +154,45 @@ Backend coverage is uneven across families and is enforced centrally:
 supported set rather than silently downgrading the engine. `nested_laplace` is
 occu / int_occu / ms_occu / dyn_occu + cover; the `*_sla` skew variants on the
 nested path are occu + cover only; the cover hurdle has no NUTS likelihood or
-EM-correction engine (no `nuts` / `laplace_gibbs` / `laplace_mi`). Half the
-family roster (`abun`, `ms_abun`, `dyn_abun`, `distance`, `removal`, `fp_occu`)
-is `status = "planned"` and errors via `.stop_planned_family()` on any method.
+EM-correction engine (no `nuts` / `laplace_gibbs` / `laplace_mi`). `abun`
+(N-mixture) supports `laplace` (non-spatial) + `nested_laplace` (areal spatial);
+see below. The remaining roster (`ms_abun`, `dyn_abun`, `distance`, `removal`,
+`fp_occu`) is `status = "planned"` and errors via `.stop_planned_family()`.
+
+### N-mixture abundance (`abun()`)
+
+Royle (2004) N-mixture: `N_i ~ Poisson(lambda_i)`, `y_ij | N_i ~ Binomial(N_i,
+p_ij)`. Unlike occupancy, there is **no EM** — the latent `N` marginalises out
+in closed form (sum to `K_max`), so tulpa fits the marginal directly with
+analytical gradients and observed-Fisher curvature. tulpaObs owns only the
+family wiring (`R/abun.R`): the data binder produces `model_type = "nmix"`
+(site-level `X_lambda`, long-form `y` / `site_idx` / `X_p` dropping NA visits),
+and `.tobs_fit_nmix()` dispatches to tulpa's engine, wrapped by
+`build_nmix_fit()`. Pseudo-draws are MVN from the **joint** (lambda, p)
+coefficient covariance, so derived quantities propagate the cross-arm
+covariance. The abundance arm uses a log link: `compute_intercepts()` reads a
+per-process `pi$link` (default `"logit"`, `"log"` for lambda) so the lambda
+intercept back-transforms with `exp()`. `simulate_abun()` +
+`tests/testthat/test-abun.R` cover point recovery and 95% CI coverage.
+
+- **Non-spatial** (`method = "laplace"`): `tulpa::tulpa_nmix_laplace()`. `vcov`
+  is the marginal observed-Fisher inverse (full joint lambda/p block).
+- **Areal spatial** (`method = "nested_laplace"`): an `icar()` / `bym2()` /
+  `car_proper()` term on the abundance formula ->
+  `.tobs_fit_nmix_spatial()` -> `tulpa_nmix_laplace_{icar,bym2,car_proper}`
+  (one spatial unit per site). The coefficient covariance is **grid-integrated**
+  (law of total covariance over the hyperparameter grid): tulpa's spatial
+  kernels now return per-grid `cov_blocks` (the beta-block of each grid mode's
+  joint `H^{-1}`), and the R wrapper assembles
+  `V = sum_k w_k [cov_k + (m_k - mbar)(m_k - mbar)']` (see `.nmix_grid_vcov()`).
+  For the rank-deficient intrinsic fields (ICAR, BYM2's structured component)
+  the within-grid block is computed under the sum-to-zero constraint (a large
+  `(sum field)^2` penalty in `nmix_spatial_beta_cov()` / `nmix_beta_cov_bym2()`)
+  so the intercept variance reflects the constraint the mode sits under rather
+  than the flat (intercept, field-mean) confounding of the improper prior.
+- **Pending upstream tulpa**: `abun(mixture = "negbin")` errors (negbin marginal
+  likelihood not in tulpa's N-mixture kernel); no NUTS path (no N-mixture HMC
+  likelihood in tulpa yet).
 
 ### Boundary: What lives here vs tulpa
 
@@ -196,6 +232,8 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Integrated multi-source | Yes     | Yes   | Shared psi                              |
 | JSDM                    | Yes     | Yes   | No detection process                    |
 | Cover hurdle (joint)    | Yes     | —     | `family_cover_hurdle.R`, `sla_cover_*`  |
+| N-mixture (Poisson)     | Yes     | —     | `abun()`; closed-form marginal via `tulpa_nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). negbin/NUTS pending |
+| N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
 | Spatial + community     | —       | Yes   |                                         |
@@ -242,8 +280,9 @@ ridge at small J. Gibbs/MI add the Rubin-pooled correction phase on top.
 R/
   tobs.R                   — tobs() public dispatcher + print.tobs_fit
   obs_families.R           — family constructors (occu, dyn_occu, ms_occu, …, cover)
-  occu.R                   — internal .tobs_build_model() (single/dynamic/community/integrated/jsdm)
-  occu_fit.R               — internal .tobs_fit_model() (Laplace default, NUTS fallback)
+  occu.R                   — internal .tobs_build_model() (single/dynamic/community/integrated/jsdm/nmix)
+  abun.R                   — N-mixture family: .tobs_build_abun(), .tobs_fit_nmix() (-> tulpa nmix Laplace), build_nmix_fit(), nmix S3 helpers, simulate_abun()
+  occu_fit.R               — internal .tobs_fit_model() (Laplace default, NUTS fallback; routes model_type=="nmix" to .tobs_fit_nmix)
   occu_priors.R            — occu_priors() + print + prior-spec -> per-block beta_prior plumbing (.expand_prior/.prior_for_submodel/.attach_priors_to_blocks)
   laplace.R                — internal .tobs_laplace() + EM callbacks per model type
   em_nested_laplace.R      — nested Laplace EM for non-conjugate hyperpriors

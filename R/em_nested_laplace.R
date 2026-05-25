@@ -309,11 +309,13 @@
   # Bernoulli, latent state integrated out); build it as a tulpa LikelihoodSpec
   # over (D_i, q_i) and route it through the nested grid via `likelihood`.
   lik <- occ_make_nested_likelihood(y = as.numeric(D_i), det_prob = q_i)
+  # tulpa keeps statistical args top-level; perf/numerical knobs go in `control`.
   tulpa::tulpa_nested_laplace(
     y = D_i, n_trials = rep(1L, n_sites), X = X_occ,
     prior = latent_prior, likelihood = lik,
-    max_iter = as.integer(max_iter), tol = as.numeric(tol),
-    n_threads = as.integer(n_threads)
+    control = list(max_iter = as.integer(max_iter),
+                   tol = as.numeric(tol),
+                   n_threads = as.integer(n_threads))
   )
 }
 

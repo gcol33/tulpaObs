@@ -7,11 +7,17 @@
 dyn_abun(K_max = NULL, mixture = c("poisson", "negbin"))
 }
 \arguments{
-\item{K_max}{upper bound for latent N in the EM E-step summation.}
+\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
+fit warns that the posterior over \code{N} puts mass on the boundary.}
 
-\item{mixture}{latent-abundance distribution: \code{"poisson"} or \code{"negbin"}.
-Named \code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
-model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
+\item{mixture}{latent-abundance distribution. \code{"poisson"} is fitted via
+tulpa's closed-form marginal Laplace engine. \code{"negbin"} (overdispersed
+abundance) is not yet available — it needs the negative-binomial marginal
+likelihood in tulpa and currently errors with a pointer. Named \code{mixture}
+(after \code{unmarked::pcount()}) to avoid collision with the model-type
+\code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.

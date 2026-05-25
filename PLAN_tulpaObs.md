@@ -94,7 +94,7 @@ What lives inside tulpaObs (in tension, by user request):
 | `multispecies_occ()` | z_{s,i}               | Binomial(p_{s,i,j})           | required  | all                | L, NUTS    | working (community RE)  |
 | `integrated_occ()`   | shared z              | multi-source likelihoods      | required  | all                | L, NUTS    | working |
 | `jsdm()`             | latent factor         | multivariate Bernoulli/Probit | no        | spatial            | NUTS       | working |
-| `nmixture()`         | Poisson N             | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| planned (Phase 2) |
+| `abun()` / `nmixture`| Poisson N             | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson, non-spatial L). negbin / areal-spatial / NUTS pending upstream tulpa |
 | `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| planned (Phase 2) |
 | `dynamic_nmix()`     | Dail-Madsen N_t       | Binomial(N_t, p)              | required  | all                | NUTS       | planned (Phase 3) |
 | `distance()`         | density               | hazard / half-normal binned   | replaced by distance bins | all | L, NUTS  | planned (Phase 4) |
@@ -253,9 +253,35 @@ These are scheduled under Phase 3 below.
 
 **Phase 2 — N-mixture**
 
-- Port INLAabun's EM-around-INLA pattern to EM-around-tulpa-Laplace.
-- `nmixture()` and `multispecies_nmix()`.
-- Closed multi-season via season RE / AR1.
+- *(Phase 2a — shipped)* Single-species Poisson `abun()` on the **closed-form
+  marginal** Laplace path. tulpa grew a direct N-mixture engine
+  (`tulpa_nmix_laplace()`, analytical gradients + observed-Fisher curvature,
+  exact sum over N to `K_max`) — strictly better than EM-around-INLA, so
+  tulpaObs wires the family rather than porting the EM. `R/abun.R`:
+  `.tobs_build_abun()` (`model_type = "nmix"`), `.tobs_fit_nmix()` ->
+  `tulpa_nmix_laplace()`, `build_nmix_fit()` (joint lambda/p vcov, MVN draws),
+  nmix S3 (`fitted`/`predict`/`simulate`/`residuals`/`nobs`), `simulate_abun()`.
+  `tests/testthat/test-abun.R`: point recovery + 95% CI coverage across 30 seeds.
+- *(Phase 2b — shipped)* Areal-spatial Poisson `abun()` via
+  `method = "nested_laplace"` (an `icar()` / `bym2()` / `car_proper()` term on
+  the abundance formula). Required a tulpa engine addition: the spatial
+  N-mixture kernels (`nmix_spatial.cpp`, `nmix_spatial_bym2.cpp`) now return
+  per-grid `cov_blocks` — the beta-block of each grid mode's joint `H^{-1}`,
+  computed under the sum-to-zero constraint for the rank-deficient intrinsic
+  fields (penalty-method, so the intercept variance is the constrained one, not
+  the flat (intercept, field-mean) confounding of the improper prior). The R
+  wrappers assemble the grid-integrated coefficient covariance via the law of
+  total covariance (`.nmix_grid_vcov()`), returned as `vcov`. tulpaObs ungates
+  the path (`.tobs_fit_nmix_spatial()` -> `tulpa_nmix_laplace_{icar,bym2,
+  car_proper}`, one spatial unit per site) and reads the returned `vcov`.
+  Calibrated: slope 95% CIs cover at nominal rate over seeds; intercept SE is
+  finite/sane (`test-abun.R`).
+- **Pending upstream tulpa** (deferred, not bugs):
+  - **negbin marginal likelihood** — `abun(mixture = "negbin")` errors until the
+    NB marginal sum lands in tulpa's N-mixture kernel.
+  - **N-mixture NUTS** — no HMC likelihood for N-mixture in tulpa yet.
+- `multispecies_nmix()` (`ms_abun`) and the closed multi-season via season RE /
+  AR1: after the negbin gap closes.
 - spAbundance / unmarked benchmarks.
 
 **Phase 3 — Nested-Laplace extensions in `tulpa`**

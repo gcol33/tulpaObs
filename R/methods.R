@@ -53,6 +53,8 @@ nobs.tobs_fit <- function(object, ...) {
     sum(y >= 0)
   } else if (model$model_type == "dynamic") {
     sum(model$y_flat >= 0)
+  } else if (model$model_type == "nmix") {
+    length(model$y_long)
   } else {
     NA_integer_
   }
@@ -124,6 +126,7 @@ coef.tobs_fit <- function(object, ...) {
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
+  if (identical(model$model_type, "nmix")) return(.tobs_fitted_nmix(object))
   means <- object$means
   pi_list <- model$process_info
 
@@ -181,6 +184,9 @@ fitted.tobs_fit <- function(object, ...) {
 #' @export
 residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response"), ...) {
   type <- match.arg(type)
+  if (identical(object$model$model_type, "nmix")) {
+    return(.tobs_residuals_nmix(object, type))
+  }
   fit_vals <- fitted(object)
   model <- object$model
 
@@ -242,6 +248,9 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
 simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (!is.null(seed)) set.seed(seed)
   model <- object$model
+  if (identical(model$model_type, "nmix")) {
+    return(.tobs_simulate_nmix(object, nsim))
+  }
   draws <- object$draws
   n_samples <- nrow(draws)
   pi_list <- model$process_info
@@ -316,6 +325,14 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                           "state"),
                                  quantiles = c(0.025, 0.5, 0.975),
                                  terms = NULL, n_points = 50L, ...) {
+  # N-mixture abundance: the response types are "abundance" / "detection", so
+  # route before the occupancy-specific match.arg(type) rejects them.
+  if (identical(object$model$model_type, "nmix")) {
+    nmix_type <- if (missing(type) || length(type) > 1L) "abundance" else type
+    return(.tobs_predict_nmix(object, X.0 = X.0, type = nmix_type,
+                              quantiles = quantiles, terms = terms,
+                              n_points = n_points))
+  }
   type <- match.arg(type)
 
   # State posterior / NA-response prediction (nested-Laplace only).

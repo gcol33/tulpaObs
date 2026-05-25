@@ -884,13 +884,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
       prior_alpha = control$prior.alpha,
-      max_iter  = control$max.iter  %||% 50L,
-      tol       = control$tol       %||% 1e-6,
-      n_threads = control$n.threads %||% 1L,
-      store_Q   = TRUE,
-      adaptive_grid             = control$adaptive.grid             %||% TRUE,
-      adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-      adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
+      control = list(
+        max_iter  = control$max.iter  %||% 50L,
+        tol       = control$tol       %||% 1e-6,
+        n_threads = control$n.threads %||% 1L,
+        store_Q   = TRUE,
+        adaptive_grid             = control$adaptive.grid             %||% TRUE,
+        adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+        adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
+      )
     )
   } else {
     # Adaptive grid forwarding. Defaults match the joint engine's defaults
@@ -905,13 +907,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
       prior_alpha = control$prior.alpha,
-      max_iter  = control$max.iter  %||% 50L,
-      tol       = control$tol       %||% 1e-6,
-      n_threads = control$n.threads %||% 1L,
-      store_Q   = TRUE,
-      adaptive_grid             = control$adaptive.grid             %||% TRUE,
-      adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-      adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
+      control = list(
+        max_iter  = control$max.iter  %||% 50L,
+        tol       = control$tol       %||% 1e-6,
+        n_threads = control$n.threads %||% 1L,
+        store_Q   = TRUE,
+        adaptive_grid             = control$adaptive.grid             %||% TRUE,
+        adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+        adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
+      )
     )
   }
 

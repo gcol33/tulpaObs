@@ -18,6 +18,7 @@
                             approx = c("gaussian_laplace", "simplified_laplace"),
                             correction = "none",
                             n.gibbs = 10L, n.imputations = 20L,
+                            K.max = NULL, mixture = "poisson",
                             verbose = TRUE, ...) {
 
   method <- match.arg(method)
@@ -45,6 +46,24 @@
   fit_model    <- scale_info$model
   scales       <- scale_info$scales
   process_info <- model$process_info
+
+  # N-mixture abundance: a closed-form marginal Laplace fit (tulpa owns the
+  # likelihood). No EM, no NUTS yet. `method` is "laplace" (non-spatial) or
+  # "nested_laplace" (areal spatial offset). Reuses the per-process autoscaler;
+  # the coefficient covariance is transformed back to natural scale alongside
+  # the means / draws.
+  if (identical(model$model_type, "nmix")) {
+    nmix_method <- if (is.null(spatial)) "laplace" else "nested_laplace"
+    fit <- .tobs_fit_nmix(fit_model, method = nmix_method, spatial = spatial,
+                          temporal = temporal, re = re, priors = priors,
+                          mixture = mixture, K_max = K.max,
+                          max_iter = max.iter, tol = tol, verbose = verbose)
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+    fit$model  <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
+  }
 
   if (method == "laplace") {
     fit <- .tobs_laplace(fit_model, spatial = spatial, re = re,
@@ -449,15 +468,44 @@ build_re_spec <- function(re_list, model) {
   m
 }
 
-# Compute back-transformed intercepts on probability scale
+# Compute back-transformed intercepts on the response scale. The link is read
+# per process (`pi$link`, default "logit"): logit-link processes (occupancy /
+# detection probabilities) back-transform with plogis(); the log-link
+# abundance process (lambda) with exp(), giving the mean per-site abundance.
 compute_intercepts <- function(model, means) {
   result <- list()
   offset <- 0
   for (pi in model$process_info) {
-    result[[pi$name]] <- plogis(means[offset + 1])
+    b0 <- means[offset + 1]
+    link <- pi$link %||% "logit"
+    result[[pi$name]] <- if (identical(link, "log")) exp(b0) else plogis(b0)
     offset <- offset + pi$p
   }
   result
+}
+
+# Transform a coefficient covariance from the autoscaled design back to the
+# natural scale. The per-process scaling is a block-diagonal linear map T (each
+# block's `.scale_transform()`), so vcov_natural = T vcov_scaled T'. Cross-arm
+# blocks are transformed exactly (block-diagonal T preserves them).
+.unscale_vcov <- function(vcov, scales, process_info) {
+  if (is.null(vcov) || is.null(scales) || is.null(process_info)) return(vcov)
+  p_tot <- nrow(vcov)
+  Tfull <- diag(p_tot)
+  off <- 0L
+  for (k in seq_along(process_info)) {
+    p_k <- as.integer(process_info[[k]]$p)
+    if (p_k == 0L) next
+    sc <- scales[[k]]
+    if (!is.null(sc) && length(sc$cols) > 0L) {
+      idx <- off + seq_len(p_k)
+      Tfull[idx, idx] <- .scale_transform(sc)
+    }
+    off <- off + p_k
+  }
+  out <- Tfull %*% vcov %*% t(Tfull)
+  dimnames(out) <- dimnames(vcov)
+  out
 }
 
 # Build spatial params list for C++ from spatial spec (or NULL)

@@ -7,11 +7,17 @@
 abun(K_max = NULL, mixture = c("poisson", "negbin"))
 }
 \arguments{
-\item{K_max}{upper bound for latent N in the EM E-step summation.}
+\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
+fit warns that the posterior over \code{N} puts mass on the boundary.}
 
-\item{mixture}{latent-abundance distribution: \code{"poisson"} or \code{"negbin"}.
-Named \code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
-model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
+\item{mixture}{latent-abundance distribution. \code{"poisson"} is fitted via
+tulpa's closed-form marginal Laplace engine. \code{"negbin"} (overdispersed
+abundance) is not yet available — it needs the negative-binomial marginal
+likelihood in tulpa and currently errors with a pointer. Named \code{mixture}
+(after \code{unmarked::pcount()}) to avoid collision with the model-type
+\code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.
@@ -19,4 +25,14 @@ A \code{tobs_family} object.
 \description{
 Latent Poisson (or NB) abundance with binomial detection per visit
 (Royle 2004).
+}
+\details{
+Royle's (2004) N-mixture model: latent abundance \code{N_i ~ Poisson(lambda_i)}
+with \verb{log lambda_i = X_lambda beta_lambda}, and counts
+\code{y_ij | N_i ~ Binomial(N_i, p_ij)} with \verb{logit p_ij = X_p beta_p}. The
+abundance formula is the \code{tobs()} \code{formula}; the per-visit detection formula
+is \code{detection}. The marginal likelihood integrates \code{N} out exactly, so the
+fit is a direct Laplace approximation (no EM): \code{method = "laplace"}
+(fixed effects) or \code{method = "nested_laplace"} (an areal \code{icar()} / \code{bym2()}
+/ \code{car()} offset on the abundance arm).
 }

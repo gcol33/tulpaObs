@@ -21,18 +21,25 @@
 .tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
                               col_formula = NULL, ext_formula = NULL,
                               species = NULL, integrated = FALSE, jsdm = FALSE,
+                              abundance = FALSE,
                               det_visit_formula = NULL, det_visit_data = NULL) {
 
   is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
   is_community <- !is.null(species) && !isTRUE(jsdm)
   is_integrated <- isTRUE(integrated)
   is_jsdm      <- isTRUE(jsdm)
+  is_abundance <- isTRUE(abundance)
 
   if (is_dynamic && is_community) {
     stop("Dynamic community models are not yet supported. ",
          "Use col_formula/ext_formula OR species, not both.")
   }
 
+  if (is_abundance) {
+    if (is.null(det_formula)) stop("det_formula required for N-mixture models")
+    return(.tobs_build_abun(occ_formula, det_formula, data, y,
+                            det_visit_formula, det_visit_data))
+  }
   if (is_jsdm)       return(.tobs_build_jsdm(occ_formula, data, y, species))
   if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
   if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,

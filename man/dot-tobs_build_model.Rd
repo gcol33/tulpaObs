@@ -14,6 +14,7 @@
   species = NULL,
   integrated = FALSE,
   jsdm = FALSE,
+  abundance = FALSE,
   det_visit_formula = NULL,
   det_visit_data = NULL
 )
