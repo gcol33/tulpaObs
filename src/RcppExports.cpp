@@ -11,6 +11,18 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// occ_make_nested_likelihood
+SEXP occ_make_nested_likelihood(Rcpp::NumericVector y, Rcpp::NumericVector det_prob);
+RcppExport SEXP _tulpaObs_occ_make_nested_likelihood(SEXP ySEXP, SEXP det_probSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type det_prob(det_probSEXP);
+    rcpp_result_gen = Rcpp::wrap(occ_make_nested_likelihood(y, det_prob));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_occu_fit
 Rcpp::List cpp_occu_fit(Rcpp::List spec_r);
 RcppExport SEXP _tulpaObs_cpp_occu_fit(SEXP spec_rSEXP) {
@@ -24,6 +36,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_tulpaObs_occ_make_nested_likelihood", (DL_FUNC) &_tulpaObs_occ_make_nested_likelihood, 2},
     {"_tulpaObs_cpp_occu_fit", (DL_FUNC) &_tulpaObs_cpp_occu_fit, 1},
     {NULL, NULL, 0}
 };
