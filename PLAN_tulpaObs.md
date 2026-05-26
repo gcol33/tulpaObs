@@ -94,7 +94,7 @@ What lives inside tulpaObs (in tension, by user request):
 | `multispecies_occ()` | z_{s,i}               | Binomial(p_{s,i,j})           | required  | all                | L, NUTS    | working (community RE)  |
 | `integrated_occ()`   | shared z              | multi-source likelihoods      | required  | all                | L, NUTS    | working |
 | `jsdm()`             | latent factor         | multivariate Bernoulli/Probit | no        | spatial            | NUTS       | working |
-| `abun()` / `nmixture`| Poisson N             | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson, non-spatial L). negbin / areal-spatial / NUTS pending upstream tulpa |
+| `abun()` / `nmixture`| Poisson / NB N        | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson + negbin, non-spatial L + areal-spatial NL). NUTS pending upstream tulpa |
 | `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| planned (Phase 2) |
 | `dynamic_nmix()`     | Dail-Madsen N_t       | Binomial(N_t, p)              | required  | all                | NUTS       | planned (Phase 3) |
 | `distance()`         | density               | hazard / half-normal binned   | replaced by distance bins | all | L, NUTS  | planned (Phase 4) |
@@ -276,9 +276,16 @@ These are scheduled under Phase 3 below.
   car_proper}`, one spatial unit per site) and reads the returned `vcov`.
   Calibrated: slope 95% CIs cover at nominal rate over seeds; intercept SE is
   finite/sane (`test-abun.R`).
+- *(Phase 2c — shipped)* Negative-binomial abundance mixture
+  (`abun(mixture = "negbin")`). tulpa's N-mixture kernel grew a parameterized
+  marginal (`mixture = "NB"`, analytic dispersion score, NB size integrated as
+  an extra outer grid axis on the spatial fitters); tulpaObs maps the family
+  `mixture` to the kernel code and threads it through both the non-spatial and
+  areal-spatial paths. Non-spatial: `log_r` jointly estimated (trailing `vcov`
+  coordinate, with SE). Spatial: `r` grid-integrated (`r_mean` / `r_sd`).
+  `simulate*()` draw NB. Matches `unmarked::pcount(mixture = "NB")`; recovery /
+  coverage in `test-abun.R`.
 - **Pending upstream tulpa** (deferred, not bugs):
-  - **negbin marginal likelihood** — `abun(mixture = "negbin")` errors until the
-    NB marginal sum lands in tulpa's N-mixture kernel.
   - **N-mixture NUTS** — no HMC likelihood for N-mixture in tulpa yet.
 - `multispecies_nmix()` (`ms_abun`) and the closed multi-season via season RE /
   AR1: after the negbin gap closes.

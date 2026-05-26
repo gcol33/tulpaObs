@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+* feat(abun): `abun(mixture = "negbin")` now fits. The negative-binomial
+  abundance mixture (`Var(N) = lambda + lambda^2 / r`) is wired through to
+  tulpa's N-mixture kernel (`mixture = "NB"`) on both the non-spatial Laplace
+  path and the areal-spatial nested-Laplace path (`icar()` / `bym2()` /
+  `car_proper()`). Non-spatially the log size `log_r` is estimated jointly with
+  the coefficients and reported with a standard error (the trailing `vcov`
+  coordinate); spatially the size `r` is integrated over the outer
+  hyperparameter grid and reported as a posterior mean / sd. `coef()` /
+  `confint()` / `vcov()` report the abundance and detection arms; the dispersion
+  is surfaced via `fit$nmix_dispersion`. `simulate()` and `simulate_abun()` draw
+  `N ~ NegBin(mu, r)` under the NB mixture. Matches `unmarked::pcount(mixture =
+  "NB")`; `test-abun.R` adds NB point recovery, dispersion recovery, 95% CI
+  coverage, and a spatial NB fit. Requires tulpa >= 0.0.2.
+
 * refactor(re): the AGHQ quadrature engine moved to tulpa (`tulpa::tulpa_re_aghq`,
   requires tulpa >= 0.0.2). `R/re_aghq.R` previously reimplemented the
   Gauss-Hermite nodes, the log-Cholesky covariance parametrization, and the LKJ

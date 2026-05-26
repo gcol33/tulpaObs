@@ -127,15 +127,19 @@
                            verbose = TRUE) {
   method <- match.arg(method)
 
-  # Capability gates. tulpa's N-mixture engine is Poisson-only, fixed effects
-  # plus an areal spatial offset; negbin / temporal / random effects on the
-  # abundance arm are upstream extensions. Error with a pointer rather than
-  # silently dropping the requested structure.
-  if (!identical(mixture, "poisson")) {
-    stop("abun(mixture = \"negbin\") is not yet available: the negative-",
-         "binomial marginal likelihood is an upstream tulpa engine extension. ",
-         "Use abun() (Poisson) for now.", call. = FALSE)
-  }
+  # tulpaObs vocabulary ("poisson" / "negbin") -> tulpa's mixing-distribution
+  # code ("P" / "NB"). The NB marginal sum and its analytic dispersion score
+  # live in tulpa's N-mixture kernel; both the non-spatial and the areal
+  # nested-Laplace paths accept it.
+  mix_code <- switch(mixture,
+                     poisson = "P", negbin = "NB",
+                     stop(sprintf("Unknown mixture '%s' (use \"poisson\" or \"negbin\").",
+                                  mixture), call. = FALSE))
+
+  # Capability gates. tulpa's N-mixture engine carries fixed effects plus an
+  # optional areal spatial offset; temporal / random effects on the abundance
+  # arm are upstream extensions. Error with a pointer rather than silently
+  # dropping the requested structure.
   if (!is.null(temporal)) {
     stop("A temporal term on N-mixture abundance is not yet supported.",
          call. = FALSE)
@@ -161,6 +165,7 @@
       site_idx  = site_idx,
       X_lambda  = X_lambda,
       X_p       = X_p,
+      mixture   = mix_code,
       K_max     = K_max,
       max_iter  = as.integer(max_iter),
       tol       = as.numeric(tol),
@@ -172,7 +177,8 @@
   # Areal spatial offset on the abundance arm via tulpa's nested-Laplace
   # N-mixture fitters (icar / bym2 / car_proper).
   raw <- .tobs_fit_nmix_spatial(model, spatial, X_lambda, X_p, y_long, site_idx,
-                                K_max = K_max, max_iter = max_iter, tol = tol,
+                                mixture = mix_code, K_max = K_max,
+                                max_iter = max_iter, tol = tol,
                                 verbose = verbose)
   build_nmix_fit(raw, model, spatial = spatial)
 }
@@ -181,7 +187,8 @@
 # Areal spatial N-mixture: one spatial unit per site (identity map). Routes to
 # the tulpa fitter matching the spatial term type.
 .tobs_fit_nmix_spatial <- function(model, spatial, X_lambda, X_p, y_long,
-                                   site_idx, K_max, max_iter, tol, verbose) {
+                                   site_idx, mixture = "P", K_max, max_iter,
+                                   tol, verbose) {
   if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
     stop(sprintf(
       "N-mixture abundance supports the areal spatial terms icar() / bym2() / %s",
@@ -209,6 +216,7 @@
     X_lambda = X_lambda, X_p = X_p,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
     n_neighbors = csr$n_neighbors, n_spatial = spatial$n_units,
+    mixture = mixture,
     K_max = K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
     verbose = isTRUE(verbose)
   )
@@ -236,19 +244,33 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
   pi_list <- model$process_info
   p_lam   <- pi_list[[1]]$p
   p_p     <- pi_list[[2]]$p
+  is_nb   <- identical(raw$mixture, "NB")
   nms <- c(paste0("lambda_", pi_list[[1]]$coef_names),
            paste0("p_",      pi_list[[2]]$coef_names))
 
   beta_lambda <- if (!is.null(raw$beta_lambda)) raw$beta_lambda else raw$beta_lambda_mean
   beta_p      <- if (!is.null(raw$beta_p))      raw$beta_p      else raw$beta_p_mean
   means <- c(as.numeric(beta_lambda), as.numeric(beta_p))
+
+  # NB dispersion. The non-spatial fit estimates log_r jointly with the betas
+  # and returns it as the last vcov coordinate, so it is carried as a model
+  # coefficient (reported by coef() / vcov() / confint() with an SE). The
+  # spatial fit integrates the NB size r over the outer hyperparameter grid
+  # instead (alongside tau / rho / sigma), so it carries no log_r coordinate
+  # and is summarized as a grid hyperparameter (r_mean / r_sd) below.
+  has_logr <- is_nb && is.null(spatial) && is.finite(raw$log_r %||% NA_real_)
+  if (has_logr) {
+    nms   <- c(nms, "log_r")
+    means <- c(means, as.numeric(raw$log_r))
+  }
   names(means) <- nms
 
-  # Joint covariance: the non-spatial fit returns the full (lambda, p) marginal
-  # observed-Fisher inverse; the spatial fits return per-arm grid-integrated
-  # covariances, assembled block-diagonally (cross-arm posterior covariance
-  # through the shared field is not returned by the grid integrator).
-  vcov <- .nmix_vcov(raw, p_lam, p_p)
+  # Joint covariance: the non-spatial fit returns the full marginal
+  # observed-Fisher inverse over (lambda, p[, log_r]); the spatial fits return
+  # per-arm grid-integrated covariances, assembled block-diagonally (cross-arm
+  # posterior covariance through the shared field is not returned by the grid
+  # integrator).
+  vcov <- .nmix_vcov(raw, p_lam, p_p, p_extra = if (has_logr) 1L else 0L)
   rownames(vcov) <- colnames(vcov) <- nms
   sds <- sqrt(pmax(diag(vcov), 0))
   names(sds) <- nms
@@ -259,6 +281,22 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
 
   spatial_field <- raw$phi_mean %||% raw$z_mean %||% raw$v_mean
   hyper <- .nmix_hyper(raw)
+
+  # NB dispersion summary on the natural (r) scale, for simulate() and print().
+  # Non-spatial: r = exp(log_r), SE by the delta method r * SE(log_r). Spatial:
+  # r_mean / r_sd straight from the grid weights. Poisson -> NULL.
+  dispersion <- NULL
+  if (is_nb) {
+    if (has_logr) {
+      se_logr <- sqrt(pmax(vcov["log_r", "log_r"], 0))
+      dispersion <- list(r = as.numeric(raw$r %||% exp(raw$log_r)),
+                         log_r = as.numeric(raw$log_r),
+                         r_sd = as.numeric(exp(raw$log_r) * se_logr))
+    } else if (is.finite(raw$r_mean %||% NA_real_)) {
+      dispersion <- list(r = as.numeric(raw$r_mean), log_r = NA_real_,
+                         r_sd = as.numeric(raw$r_sd))
+    }
+  }
 
   # The non-spatial engine returns a scalar marginal log-likelihood at the mode
   # (N summed out); the spatial fitters return a per-grid vector, reduced here to
@@ -298,18 +336,21 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
     mean_N = raw$mean_N, var_N = raw$var_N,
     boundary_weight = raw$boundary_weight,
     nmix_hyper = hyper,
+    mixture = if (is_nb) "negbin" else "poisson",
+    nmix_dispersion = dispersion,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))
 }
 
-# Assemble the (lambda, p) coefficient covariance from a tulpa N-mixture fit.
-# Non-spatial: the engine returns the full joint `vcov`. Spatial: per-arm
-# covariance blocks (vcov_lambda / vcov_p) integrated over the hyperparameter
-# grid, stitched block-diagonally; falls back to a diagonal from per-arm sds.
-.nmix_vcov <- function(raw, p_lam, p_p) {
-  p_tot <- p_lam + p_p
-  if (!is.null(raw$vcov) && all(dim(raw$vcov) == p_tot)) {
+# Assemble the coefficient covariance from a tulpa N-mixture fit. Non-spatial:
+# the engine returns the full joint `vcov` over (lambda, p) and, under NB, the
+# trailing `log_r` coordinate (`p_extra = 1`). Spatial: per-arm covariance
+# blocks (vcov_lambda / vcov_p) integrated over the hyperparameter grid,
+# stitched block-diagonally; falls back to a diagonal from per-arm sds.
+.nmix_vcov <- function(raw, p_lam, p_p, p_extra = 0L) {
+  p_tot <- p_lam + p_p + p_extra
+  if (!is.null(raw$vcov) && all(dim(as.matrix(raw$vcov)) == p_tot)) {
     return(unname(as.matrix(raw$vcov)))
   }
   V <- matrix(0, p_tot, p_tot)
@@ -334,6 +375,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
   if (!is.null(raw$sigma_mean)) out$sigma <- c(mean = raw$sigma_mean, sd = raw$sigma_sd)
   if (!is.null(raw$rho_mean))   out$rho   <- c(mean = raw$rho_mean,   sd = raw$rho_sd)
   if (!is.null(raw$tau_mean))   out$tau   <- c(mean = raw$tau_mean,   sd = raw$tau_sd)
+  # Spatial NB: the size r is integrated over the outer grid alongside the
+  # spatial hyperparameters, so it is reported here rather than in vcov.
+  if (is.finite(raw$r_mean %||% NA_real_)) out$r <- c(mean = raw$r_mean, sd = raw$r_sd)
   if (length(out) == 0L) NULL else out
 }
 
@@ -440,7 +484,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
   )
 }
 
-# simulate() for N-mixture: draw N_i ~ Poisson(lambda_i) per site, then
+# simulate() for N-mixture: draw N_i from the abundance mixing distribution
+# (Poisson, or NegBin(mu = lambda_i, size = r) under mixture = "negbin"), then
 # y_ij ~ Binomial(N_i, p_ij) at the observed visits, respecting the NA pattern.
 .tobs_simulate_nmix <- function(object, nsim = 1) {
   model   <- object$model
@@ -454,6 +499,7 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
   max_visits <- model$max_visits
   site_idx   <- model$site_idx
   visit_idx  <- model$visit_idx
+  r_size     <- object$nmix_dispersion$r   # NULL under Poisson
 
   result <- vector("list", nsim)
   for (s in seq_len(nsim)) {
@@ -462,7 +508,11 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
     beta_p      <- draws[di, p_lam + seq_len(p_p)]
     lambda <- exp(as.vector(X_lambda %*% beta_lambda))
     p_obs  <- plogis(as.vector(X_p %*% beta_p))
-    N <- stats::rpois(n_sites, lambda)
+    N <- if (!is.null(r_size) && is.finite(r_size)) {
+      stats::rnbinom(n_sites, size = r_size, mu = lambda)
+    } else {
+      stats::rpois(n_sites, lambda)
+    }
     y_sim <- matrix(NA_integer_, n_sites, max_visits)
     for (k in seq_along(site_idx)) {
       i <- site_idx[k]; j <- visit_idx[k]
@@ -509,7 +559,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
 
 #' Simulate Royle (2004) N-mixture abundance data
 #'
-#' Latent abundance `N_i ~ Poisson(lambda_i)` with `log lambda_i = X_lambda
+#' Latent abundance `N_i ~ Poisson(lambda_i)` (or, under
+#' `mixture = "negbin"`, `N_i ~ NegBin(mean = lambda_i, size = size)` with
+#' variance `lambda + lambda^2 / size`) with `log lambda_i = X_lambda
 #' beta_lambda`, and replicate counts `y_ij ~ Binomial(N_i, p_i)` with
 #' `logit p_i = X_p beta_p` (site-level detection). The returned `y` is an
 #' `N x J` integer count matrix suitable for [tobs()] with [abun()].
@@ -522,14 +574,22 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
 #'   log scale. Default `c(log(3), runif(n_abund_covs, -0.5, 0.5))`.
 #' @param beta_p Detection coefficients `c(intercept, slopes...)` on the logit
 #'   scale. Default `c(0, runif(n_det_covs, -0.5, 0.5))` (intercept 0 = p 0.5).
+#' @param mixture Abundance mixing distribution: `"poisson"` (default) or
+#'   `"negbin"` (negative binomial, overdispersed).
+#' @param size Negative-binomial size `r` (the `mixture = "negbin"` dispersion;
+#'   variance `lambda + lambda^2 / r`). Smaller `r` means more overdispersion;
+#'   `r -> Inf` recovers Poisson. Default 2. Ignored under Poisson.
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J count matrix), `data` (covariate data frame),
-#'   and `truth` (the coefficients, per-site `lambda`, `p`, and latent `N`).
+#'   and `truth` (the coefficients, per-site `lambda`, `p`, latent `N`, and the
+#'   `mixture` / `size` used).
 #' @export
 simulate_abun <- function(N = 100, J = 4,
                           n_abund_covs = 2, n_det_covs = 1,
                           beta_lambda = NULL, beta_p = NULL,
+                          mixture = c("poisson", "negbin"), size = 2,
                           seed = NULL) {
+  mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
   if (is.null(beta_lambda)) beta_lambda <- c(log(3), stats::runif(n_abund_covs, -0.5, 0.5))
   if (is.null(beta_p))      beta_p      <- c(0, stats::runif(n_det_covs, -0.5, 0.5))
@@ -545,7 +605,11 @@ simulate_abun <- function(N = 100, J = 4,
 
   lambda <- exp(as.vector(X_lambda %*% beta_lambda))
   p      <- plogis(as.vector(X_det %*% beta_p))
-  Nlat   <- stats::rpois(N, lambda)
+  Nlat   <- if (identical(mixture, "negbin")) {
+    stats::rnbinom(N, size = size, mu = lambda)
+  } else {
+    stats::rpois(N, lambda)
+  }
 
   y <- matrix(NA_integer_, N, J)
   for (i in seq_len(N)) {
@@ -556,6 +620,8 @@ simulate_abun <- function(N = 100, J = 4,
     y = y,
     data = data,
     truth = list(beta_lambda = beta_lambda, beta_p = beta_p,
-                 lambda = lambda, p = p, N = Nlat)
+                 lambda = lambda, p = p, N = Nlat,
+                 mixture = mixture,
+                 size = if (identical(mixture, "negbin")) size else NA_real_)
   )
 }

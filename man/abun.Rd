@@ -12,12 +12,15 @@ integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) l
 engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
 fit warns that the posterior over \code{N} puts mass on the boundary.}
 
-\item{mixture}{latent-abundance distribution. \code{"poisson"} is fitted via
-tulpa's closed-form marginal Laplace engine. \code{"negbin"} (overdispersed
-abundance) is not yet available — it needs the negative-binomial marginal
-likelihood in tulpa and currently errors with a pointer. Named \code{mixture}
-(after \code{unmarked::pcount()}) to avoid collision with the model-type
-\code{family} argument of \code{\link[=tobs]{tobs()}}.}
+\item{mixture}{latent-abundance distribution, both fitted via tulpa's
+closed-form marginal Laplace engine. \code{"poisson"} is the default;
+\code{"negbin"} (negative binomial, \code{Var(N) = lambda + lambda^2 / r}) adds an
+overdispersion parameter \code{r}. Non-spatially the log size \code{log_r} is
+estimated jointly with the coefficients and reported with an SE; on the
+areal-spatial path (\code{method = "nested_laplace"}) \code{r} is integrated over the
+outer hyperparameter grid and reported as a posterior mean / sd. Named
+\code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
+model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.

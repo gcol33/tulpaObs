@@ -877,5 +877,13 @@ print.tobs_fit <- function(x, ...) {
       }
     }
   }
+  if (!is.null(x$nmix_dispersion)) {
+    d <- x$nmix_dispersion
+    if (isTRUE(is.finite(d$r_sd))) {
+      cat(sprintf("NB dispersion (size r): %.3f (SE %.3f)\n", d$r, d$r_sd))
+    } else {
+      cat(sprintf("NB dispersion (size r): %.3f\n", d$r))
+    }
+  }
   invisible(x)
 }

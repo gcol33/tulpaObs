@@ -186,12 +186,15 @@ jsdm <- function() {
 #'   integration over `N` is truncated at `K_max`). `NULL` (default) lets the
 #'   engine pick `max(y) + 100` (matching `unmarked::pcount()`); raise it if a
 #'   fit warns that the posterior over `N` puts mass on the boundary.
-#' @param mixture latent-abundance distribution. `"poisson"` is fitted via
-#'   tulpa's closed-form marginal Laplace engine. `"negbin"` (overdispersed
-#'   abundance) is not yet available — it needs the negative-binomial marginal
-#'   likelihood in tulpa and currently errors with a pointer. Named `mixture`
-#'   (after `unmarked::pcount()`) to avoid collision with the model-type
-#'   `family` argument of [tobs()].
+#' @param mixture latent-abundance distribution, both fitted via tulpa's
+#'   closed-form marginal Laplace engine. `"poisson"` is the default;
+#'   `"negbin"` (negative binomial, `Var(N) = lambda + lambda^2 / r`) adds an
+#'   overdispersion parameter `r`. Non-spatially the log size `log_r` is
+#'   estimated jointly with the coefficients and reported with an SE; on the
+#'   areal-spatial path (`method = "nested_laplace"`) `r` is integrated over the
+#'   outer hyperparameter grid and reported as a posterior mean / sd. Named
+#'   `mixture` (after `unmarked::pcount()`) to avoid collision with the
+#'   model-type `family` argument of [tobs()].
 #' @return A `tobs_family` object.
 #' @details
 #' Royle's (2004) N-mixture model: latent abundance `N_i ~ Poisson(lambda_i)`

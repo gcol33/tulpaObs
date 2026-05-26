@@ -216,9 +216,23 @@ intercept back-transforms with `exp()`. `simulate_abun()` +
   `(sum field)^2` penalty in `nmix_spatial_beta_cov()` / `nmix_beta_cov_bym2()`)
   so the intercept variance reflects the constraint the mode sits under rather
   than the flat (intercept, field-mean) confounding of the improper prior.
-- **Pending upstream tulpa**: `abun(mixture = "negbin")` errors (negbin marginal
-  likelihood not in tulpa's N-mixture kernel); no NUTS path (no N-mixture HMC
-  likelihood in tulpa yet).
+- **Negative binomial** (`abun(mixture = "negbin")`): tulpaObs maps the family
+  `mixture` (`"poisson"`/`"negbin"`) to tulpa's `"P"`/`"NB"` code and threads it
+  into both paths (`tulpa_nmix_laplace(mixture=)` non-spatial, the spatial grid
+  fitters via `common$mixture`). The NB adds an overdispersion `r`
+  (`Var(N) = lambda + lambda^2 / r`). Non-spatially `log_r` is estimated jointly
+  with the betas and returned as the trailing vcov coordinate; `build_nmix_fit()`
+  carries it (`means`/`vcov`/`draws` gain a `log_r` column, named in
+  `nmix_dispersion` with its delta-method `r_sd`) -- the autoscale unscaler
+  leaves the trailing non-process coordinate untouched, and `coef()`/`confint()`/
+  `vcov()` (which walk `process_info`) report the two arms only. On the
+  areal-spatial path `r` is integrated over the outer grid alongside tau/rho/
+  sigma, so it carries no `log_r` coordinate and is summarized as `r_mean`/`r_sd`
+  in `nmix_hyper$r`. `simulate()` draws `N ~ NegBin(mu, r)` under NB. Matches
+  `unmarked::pcount(mixture = "NB")`; `test-abun.R` covers point recovery,
+  dispersion recovery, 95% CI coverage, and the spatial NB path.
+- **Pending upstream tulpa**: no NUTS path (no N-mixture HMC likelihood in tulpa
+  yet).
 
 ### Boundary: What lives here vs tulpa
 
@@ -262,8 +276,8 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Integrated multi-source | Yes     | Yes   | Shared psi                              |
 | JSDM                    | Yes     | Yes   | No detection process                    |
 | Cover hurdle (joint)    | Yes     | —     | `family_cover_hurdle.R`, `sla_cover_*`  |
-| N-mixture (Poisson)     | Yes     | —     | `abun()`; closed-form marginal via `tulpa_nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). negbin/NUTS pending |
-| N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
+| N-mixture (Poisson/NB)  | Yes     | —     | `abun(mixture=)`; closed-form marginal via `tulpa_nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB adds jointly-estimated `log_r`. NUTS pending |
+| N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; Poisson or NB (size `r` integrated over the grid); grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
 | Spatial + community     | —       | Yes   |                                         |

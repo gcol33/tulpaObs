@@ -11,6 +11,8 @@ simulate_abun(
   n_det_covs = 1,
   beta_lambda = NULL,
   beta_p = NULL,
+  mixture = c("poisson", "negbin"),
+  size = 2,
   seed = NULL
 )
 }
@@ -29,14 +31,24 @@ log scale. Default \code{c(log(3), runif(n_abund_covs, -0.5, 0.5))}.}
 \item{beta_p}{Detection coefficients \code{c(intercept, slopes...)} on the logit
 scale. Default \code{c(0, runif(n_det_covs, -0.5, 0.5))} (intercept 0 = p 0.5).}
 
+\item{mixture}{Abundance mixing distribution: \code{"poisson"} (default) or
+\code{"negbin"} (negative binomial, overdispersed).}
+
+\item{size}{Negative-binomial size \code{r} (the \code{mixture = "negbin"} dispersion;
+variance \code{lambda + lambda^2 / r}). Smaller \code{r} means more overdispersion;
+\code{r -> Inf} recovers Poisson. Default 2. Ignored under Poisson.}
+
 \item{seed}{Optional random seed.}
 }
 \value{
 A list with \code{y} (N x J count matrix), \code{data} (covariate data frame),
-and \code{truth} (the coefficients, per-site \code{lambda}, \code{p}, and latent \code{N}).
+and \code{truth} (the coefficients, per-site \code{lambda}, \code{p}, latent \code{N}, and the
+\code{mixture} / \code{size} used).
 }
 \description{
-Latent abundance \code{N_i ~ Poisson(lambda_i)} with \verb{log lambda_i = X_lambda beta_lambda}, and replicate counts \code{y_ij ~ Binomial(N_i, p_i)} with
+Latent abundance \code{N_i ~ Poisson(lambda_i)} (or, under
+\code{mixture = "negbin"}, \code{N_i ~ NegBin(mean = lambda_i, size = size)} with
+variance \code{lambda + lambda^2 / size}) with \verb{log lambda_i = X_lambda beta_lambda}, and replicate counts \code{y_ij ~ Binomial(N_i, p_i)} with
 \verb{logit p_i = X_p beta_p} (site-level detection). The returned \code{y} is an
 \verb{N x J} integer count matrix suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=abun]{abun()}}.
 }
