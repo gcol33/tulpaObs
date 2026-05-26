@@ -147,7 +147,7 @@
   if (!is.null(re)) {
     stop("Random effects on N-mixture abundance are not yet supported ",
          "(community / site-level abundance RE is an upstream tulpa ",
-         "extension).", call. = FALSE)
+         "extension, tracked at gcol33/tulpa#31).", call. = FALSE)
   }
   if (!is.null(priors) && !isFALSE(priors)) {
     message(".tobs_fit_nmix(): fixed-effect priors are not applied on the ",
