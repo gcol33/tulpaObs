@@ -433,7 +433,11 @@
     ref <- tryCatch(
       .tobs_re_aghq(model, design, beta_occ, beta_det, Sigma_list, b,
                     n_quad = n_quad, lkj_eta = lkj_eta),
-      error = function(e) NULL)
+      error = function(e) {
+        warning("AGHQ variance-component refine failed; keeping the EM result. ",
+                "Cause: ", conditionMessage(e), call. = FALSE)
+        NULL
+      })
     if (!is.null(ref) && isTRUE(ref$ok)) {
       beta_occ <- ref$beta_occ; beta_det <- ref$beta_det
       Sigma_list <- ref$Sigma_list; b <- ref$b; b_var <- ref$b_var

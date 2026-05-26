@@ -63,9 +63,13 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > the fixed-effect SEs are read at natural scale and do not. By default
 > (`re.aghq = TRUE`, `control = list(n.quad = )`) the variance components are
 > debiased after the EM by an adaptive Gauss-Hermite quadrature refinement on the
-> exact per-group marginal (`R/re_aghq.R`, `.tobs_re_aghq()` -- the nAGQ > 1 fix;
-> single grouping factor on one arm, RE dim <= 3, falls back to the EM otherwise
-> -- including when the RE is split across both arms). The per-group marginal
+> exact per-group marginal (the nAGQ > 1 fix; single grouping factor on one arm,
+> RE dim <= 3, falls back to the EM otherwise -- including when the RE is split
+> across both arms). The generic quadrature engine is `tulpa::tulpa_re_aghq()`
+> (quadrature grid, per-group mode, log-Cholesky covariance, LKJ penalty, joint
+> optimization, marginal Hessian); `R/re_aghq.R` (`.tobs_re_aghq()`) is a thin
+> wrapper supplying only the occupancy / detection site marginal as a
+> `make_site` callback. The per-group marginal
 > branches on the arm: an occupancy-arm RE moves `psi`, a detection-arm RE moves
 > `p` (binomial-in-`p` site derivatives, FD-verified). Measured (occupancy arm):
 > per-group-n = 8 sigma bias ~18% (EM) -> ~4% (AGHQ), matching NUTS; correlated
@@ -219,8 +223,12 @@ intercept back-transforms with `exp()`. `simulate_abun()` +
 ### Boundary: What lives here vs tulpa
 
 - **tulpaObs owns**: family-specific likelihoods (`src/*_likelihood.h`),
-  E-step weights, M-step encoding, family-specific S3 / diagnostics.
-- **tulpa owns**: EM engine, MI/Gibbs correction, Rubin's pooling,
+  E-step weights, M-step encoding, family-specific S3 / diagnostics. For the RE
+  AGHQ debias it owns only the occupancy / detection per-site marginal (the
+  `make_site` callback in `R/re_aghq.R`).
+- **tulpa owns**: EM engine, MI/Gibbs correction, Rubin's pooling, the
+  callback-driven AGHQ variance-component engine (`tulpa_re_aghq()`, with the
+  quadrature grid / log-Cholesky covariance / LKJ penalty / marginal Hessian),
   generic S3, generic diagnostics, NUTS/HMC sampler.
 
 When NUTS crashes for a component that has correct `populate_*` code here,

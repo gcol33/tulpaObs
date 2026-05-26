@@ -203,18 +203,12 @@ test_that("AGHQ variance-component debias runs by default and is toggleable", {
   expect_false(isTRUE(fit_off$aghq$applied))
 
   # The refine moves the estimate (the two fits are not identical) and keeps a
-  # finite, positive sigma.
+  # finite, positive sigma. (The quadrature engine itself lives in tulpa and is
+  # tested there -- tulpa/tests/testthat/test-re-aghq.R.)
   sig_on  <- fit_on$means[[grep("^sigma_", names(fit_on$means), value = TRUE)]]
   sig_off <- fit_off$means[[grep("^sigma_", names(fit_off$means), value = TRUE)]]
   expect_true(is.finite(sig_on) && sig_on > 0)
   expect_false(isTRUE(all.equal(sig_on, sig_off)))
-
-  # Gauss-Hermite helper: nodes/weights integrate exp(-x^2) (= sqrt(pi)) and are
-  # symmetric about 0.
-  gh <- tulpaObs:::.gauss_hermite(9L)
-  expect_equal(sum(gh$w), sqrt(pi), tolerance = 1e-8)
-  expect_equal(sum(gh$w * gh$x), 0, tolerance = 1e-8)
-  expect_equal(sum(gh$w * gh$x^2), sqrt(pi) / 2, tolerance = 1e-8)  # int x^2 e^-x^2
 })
 
 test_that("AGHQ removes the small-cluster sigma attenuation (multi-seed)", {

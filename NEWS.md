@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+* refactor(re): the AGHQ quadrature engine moved to tulpa (`tulpa::tulpa_re_aghq`,
+  requires tulpa >= 0.0.2). `R/re_aghq.R` previously reimplemented the
+  Gauss-Hermite nodes, the log-Cholesky covariance parametrization, and the LKJ
+  penalty -- all of which tulpa already owns -- which duplicated generic
+  inference machinery across the package boundary. It is now a thin wrapper that
+  supplies only the family-specific occupancy / detection per-site marginal (the
+  `make_site` callback) and delegates the quadrature, mode-finding, joint
+  optimization, and marginal Hessian to the engine. Behaviour is unchanged
+  (the recovery numbers are identical); the engine is reusable by other families
+  and is recovery-tested in tulpa. A failed refine now warns (it kept the EM
+  result silently before).
+
 * feat(re): random effects on the **detection** predictor now fit under
   `method = "laplace"` (gcol33/tulpaObs#11 follow-up). Previously a `(1 | g)` /
   `(x | g)` term on the detection formula errored toward NUTS; the
