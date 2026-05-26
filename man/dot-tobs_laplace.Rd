@@ -18,6 +18,9 @@
   n_gibbs = 10L,
   seed = NULL,
   approx = c("gaussian_laplace", "simplified_laplace"),
+  re_aghq = TRUE,
+  n_quad = 9L,
+  lkj_eta = 1.5,
   latent_prior = NULL,
   heldout_state = NULL,
   verbose = TRUE

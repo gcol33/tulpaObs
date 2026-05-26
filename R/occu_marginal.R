@@ -9,10 +9,11 @@
 #   site with no detection: L_i = psi_i * prod_{valid j} (1 - p_ij) + (1 - psi_i)
 #
 # The default deterministic engine fits this via an EM whose occupancy M-step
-# uses an M-inflated pseudo-binomial Laplace step; that approximation attenuates
-# the detection coefficients at small J (a PQL-style bias) and -- because the
-# M-step Hessian and the Louis observed info are the wrong curvature for the
-# *marginal* likelihood -- under-disperses the detection-slope SE by ~3x
+# uses an M-inflated pseudo-binomial Laplace step; that encoding attenuates the
+# detection coefficients at small J (an EM/M-step encoding artifact, not PQL) and
+# -- because the M-step Hessian and the Louis observed info are the wrong
+# curvature for the *marginal* likelihood -- under-disperses the detection-slope
+# SE by ~3x
 # regardless of N or J. Per tulpa's "nested approximation + debias" design, this
 # is the debias step: a Newton refinement of the EM mode on the exact marginal
 # log-posterior, with standard errors read from its Hessian. It restores

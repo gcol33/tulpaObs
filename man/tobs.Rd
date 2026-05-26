@@ -138,9 +138,24 @@ model average.
 
 Laplace controls (\code{method = "laplace"} / \code{"laplace_sla"} /
 \code{"nested_laplace"}): \code{max.iter}, \code{tol}, \code{damping}, \code{sigma.beta}.
+\itemize{
+\item \code{re.aghq} — for a formula random effect under \code{method = "laplace"}, run
+the adaptive Gauss-Hermite debias of the variance components after the
+EM converges (default \code{TRUE}). Removes the Laplace small-cluster
+attenuation of \code{sigma} / the RE correlation for binary occupancy; set
+\code{FALSE} for the raw EM (Laplace, \code{nAGQ = 1}) fit.
+\item \code{n.quad} — quadrature points per random-effect dimension for \code{re.aghq}
+(default 9). \code{n.quad = 1} is the plain Laplace (\code{nAGQ = 1}) marginal;
+higher values refine it toward the exact marginal.
+\item \code{re.lkj} — LKJ shape (\code{eta}) regularizing a \emph{correlated} random slope's
+correlation in the \code{re.aghq} refine (default 1.5). Pulls a
+weakly-identified RE correlation off the \code{+-1} boundary toward 0 without
+touching the marginal SDs; \code{re.lkj = 1} disables it (uniform). No effect
+on intercept / uncorrelated terms.
 Stochastic-correction controls (\code{"laplace_gibbs"} / \code{"laplace_mi"}):
 \code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count) and \code{seed} (stored
 on \verb{$seed}).
+}
 
 Control names are validated against the chosen \code{method}: passing a
 sampler control (e.g. \code{n.chains}) to a Laplace method, a Laplace control

@@ -12,18 +12,33 @@ variance-component EM (internal).}
   max_iter = 100L,
   tol = 1e-05,
   damping = 0.3,
+  aghq = TRUE,
+  n_quad = 9L,
+  lkj_eta = 1.5,
   verbose = TRUE
 )
 }
 \arguments{
 \item{model}{A single-season \code{tobs_model}.}
 
-\item{re}{A list of \code{tobs_re} specs on the occupancy predictor (iid
-intercept, uncorrelated slopes, or correlated slopes).}
+\item{re}{A list of \code{tobs_re} specs. Each enters either the occupancy or the
+detection predictor (its \verb{$shared = c(occ, det)} membership); the iid
+intercept, uncorrelated-slope, and correlated-slope forms are supported on
+both arms. A term shared across both predictors is rejected (use NUTS).}
 
 \item{priors}{Prior spec; not applied on this path (warns when active).}
 
 \item{max_iter, tol, damping}{EM controls.}
+
+\item{aghq}{Logical; run the adaptive Gauss-Hermite debias pass on the
+variance components after the EM converges (default \code{TRUE}). See
+\code{R/re_aghq.R}.}
+
+\item{n_quad}{Quadrature points per random-effect dimension for the AGHQ
+debias (default 9).}
+
+\item{lkj_eta}{LKJ shape for the RE-correlation regularization in the AGHQ
+debias (default 1.5; \code{1} disables it). See \code{R/re_aghq.R}.}
 
 \item{verbose}{Print per-iteration progress.}
 }

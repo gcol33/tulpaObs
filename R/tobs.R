@@ -119,6 +119,19 @@
 #'
 #'   Laplace controls (`method = "laplace"` / `"laplace_sla"` /
 #'   `"nested_laplace"`): `max.iter`, `tol`, `damping`, `sigma.beta`.
+#'   * `re.aghq` — for a formula random effect under `method = "laplace"`, run
+#'     the adaptive Gauss-Hermite debias of the variance components after the
+#'     EM converges (default `TRUE`). Removes the Laplace small-cluster
+#'     attenuation of `sigma` / the RE correlation for binary occupancy; set
+#'     `FALSE` for the raw EM (Laplace, `nAGQ = 1`) fit.
+#'   * `n.quad` — quadrature points per random-effect dimension for `re.aghq`
+#'     (default 9). `n.quad = 1` is the plain Laplace (`nAGQ = 1`) marginal;
+#'     higher values refine it toward the exact marginal.
+#'   * `re.lkj` — LKJ shape (`eta`) regularizing a *correlated* random slope's
+#'     correlation in the `re.aghq` refine (default 1.5). Pulls a
+#'     weakly-identified RE correlation off the `+-1` boundary toward 0 without
+#'     touching the marginal SDs; `re.lkj = 1` disables it (uniform). No effect
+#'     on intercept / uncorrelated terms.
 #'   Stochastic-correction controls (`"laplace_gibbs"` / `"laplace_mi"`):
 #'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
 #'   on `$seed`).
@@ -540,7 +553,8 @@ tobs <- function(formula,
 # seed-variant fits would be identical -- see the ensemble branch in tobs()).
 # ---------------------------------------------------------------------------
 .tobs_control_groups <- list(
-  laplace_em = c("max.iter", "tol", "damping", "sigma.beta"),
+  laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
+                 "re.aghq", "n.quad", "re.lkj"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",

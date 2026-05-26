@@ -18,6 +18,7 @@
                             approx = c("gaussian_laplace", "simplified_laplace"),
                             correction = "none",
                             n.gibbs = 10L, n.imputations = 20L,
+                            re.aghq = TRUE, n.quad = 9L, re.lkj = 1.5,
                             K.max = NULL, mixture = "poisson",
                             verbose = TRUE, ...) {
 
@@ -74,6 +75,7 @@
                          correction = correction,
                          n_imputations = n.imputations, n_gibbs = n.gibbs,
                          seed = seed,
+                         re_aghq = re.aghq, n_quad = n.quad, lkj_eta = re.lkj,
                          verbose = verbose)
     fit <- .unscale_fit_per_process(fit, scales, process_info)
     fit$model      <- model

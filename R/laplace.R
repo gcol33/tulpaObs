@@ -37,6 +37,7 @@
                           correction = c("auto", "mi", "gibbs", "none"),
                           n_imputations = 20L, n_gibbs = 10L, seed = NULL,
                           approx = c("gaussian_laplace", "simplified_laplace"),
+                          re_aghq = TRUE, n_quad = 9L, lkj_eta = 1.5,
                           latent_prior = NULL, heldout_state = NULL,
                           verbose = TRUE) {
   correction <- match.arg(correction)
@@ -81,7 +82,9 @@
     .validate_re_laplace(re, model, spatial, approx)
     em_result <- .tobs_em_laplace_re(model, re, priors = priors,
                                      max_iter = max_iter, tol = tol,
-                                     damping = damping, verbose = verbose)
+                                     damping = damping, aghq = re_aghq,
+                                     n_quad = n_quad, lkj_eta = lkj_eta,
+                                     verbose = verbose)
     re_block <- .tobs_re_param_block(em_result$re_post)
     fit <- build_laplace_fit(em_result, model, spatial,
                              c(occ = ncol(model$X_processes[[1]]),
@@ -956,13 +959,17 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 
 # Gate the deterministic random-effect path. The variance-component EM in
 # R/em_laplace_re.R fits iid intercept, uncorrelated slopes, and correlated
-# slopes (a full RE covariance) on the occupancy predictor of a single-season
-# model. Forms it cannot fit -- non-single families, RE + spatial, RE +
-# visit-level detection, RE on / shared with detection -- error here with a
+# slopes (a full RE covariance) on EITHER the occupancy or the detection
+# predictor of a single-season model (each arm carries its own RE block). Forms
+# it cannot fit -- non-single families, RE + spatial, RE + visit-level
+# detection, a single RE shared across both predictors -- error here with a
 # pointer to `method = "nuts"` (which fits every RE form) rather than being
-# silently dropped (gcol33/tulpaObs#11). The deterministic Laplace variance
-# estimate carries the usual small-cluster (PQL) bias; NUTS is the calibrated
-# route when that matters.
+# silently dropped (gcol33/tulpaObs#11). The raw EM variance components (sigma,
+# correlation) carry the Laplace small-cluster bias for binary data (the glmer
+# nAGQ=1 regime, not Breslow-Clayton PQL); the default re.aghq = TRUE refines
+# them on the exact-marginal adaptive Gauss-Hermite likelihood (R/re_aghq.R),
+# removing the attenuation, with a default LKJ(re.lkj = 1.5) penalty
+# regularizing a weakly-identified RE correlation off the +-1 boundary.
 .validate_re_laplace <- function(re, model, spatial, approx) {
   re_list <- if (inherits(re, "tobs_re")) list(re) else re
 
@@ -980,12 +987,8 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
          call. = FALSE)
   }
   for (r in re_list) {
-    if (length(r$shared) >= 2L && isTRUE(r$shared[2]) && !isTRUE(r$shared[1])) {
-      stop("A random effect on the detection predictor is not supported on the Laplace path. Use method = 'nuts'.",
-           call. = FALSE)
-    }
-    if (length(r$shared) >= 2L && isTRUE(r$shared[2])) {
-      stop("A random effect shared across occupancy and detection is not supported on the Laplace path. Use method = 'nuts'.",
+    if (length(r$shared) >= 2L && isTRUE(r$shared[1]) && isTRUE(r$shared[2])) {
+      stop("A single random effect shared across occupancy and detection is not supported on the Laplace path (each arm fits its own RE block). Use method = 'nuts'.",
            call. = FALSE)
     }
   }
@@ -1444,6 +1447,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     process_info = model$process_info,
     method = "laplace",
     re_effects = re_block$re_effects,
+    aghq = em_result$aghq,
     convergence = em_result$convergence,
     correction = em_result$correction
   ), class = c("tobs_fit", "tulpa_fit"))

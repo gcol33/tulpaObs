@@ -27,9 +27,28 @@
 # CORRELATED random slopes (a full Sigma, lme4 `(1 + x | g)`) on the occupancy
 # predictor of a single-season occupancy model. The per-term Sigma is full for
 # a correlated block and projected to its diagonal each M-step otherwise, so the
-# uncorrelated path is the special case Sigma = diag(sigma^2). Deterministic
-# Laplace variance estimates for binary occupancy carry the usual small-cluster
-# (PQL) bias; see NEWS and ?tobs. NUTS is the calibrated route.
+# uncorrelated path is the special case Sigma = diag(sigma^2).
+#
+# Bias note. The random-effect block b is integrated by Laplace (mode + Gaussian
+# curvature of the TRUE binomial conditional). The occupancy state z is
+# integrated exactly by the outer EM, and the M-step linearizes nothing -- it
+# fits the real likelihood -- so this is NOT Breslow-Clayton PQL (no
+# working-response linearization). It is the lme4 glmer nAGQ=1 regime: a
+# Laplace-approximate marginal likelihood. For binary data that Laplace integral
+# attenuates the VARIANCE COMPONENTS (sigma, and the correlation of a full block)
+# toward zero at small per-group sample size. The fixed-effect estimate is the
+# conditional mode and its SE is read at natural scale (.tobs_re_occ_fixed_se),
+# not off the M-inflated M-step Hessian, so the attenuation is confined to the RE
+# covariance.
+#
+# By DEFAULT (aghq = TRUE) that attenuation is then removed: after the EM
+# converges, .tobs_re_aghq() (R/re_aghq.R) refines the variance components on the
+# exact-marginal adaptive Gauss-Hermite likelihood (the nAGQ > 1 fix), cutting
+# the per-group-n = 8 sigma bias from ~18% to ~4%. A weakly-identified RE
+# correlation is regularized off the +-1 boundary by a default LKJ(eta = 1.5)
+# penalty (control re.lkj; see R/re_aghq.R). Set re.aghq = FALSE for the raw
+# nAGQ = 1 EM. NUTS integrates b by MCMC and is available for a full posterior
+# treatment of the RE correlation. See NEWS and ?tobs.
 # =============================================================================
 
 
@@ -69,6 +88,7 @@
 # `b` is the concatenated latent vector (term-major, then group-major within a
 # term: [t1_g1_c1, t1_g1_c2, ..., t1_g2_c1, ...]).
 .tobs_re_offset <- function(design, b) {
+  if (!length(design)) return(0)  # no RE on this arm -> scalar 0 broadcasts
   N <- nrow(design[[1]]$Z)
   off <- numeric(N)
   pos <- 0L
@@ -198,21 +218,95 @@
 }
 
 
+# Build the per-term `re_list` tulpa_laplace() consumes from a design and the
+# current per-term covariance. `rows` optionally restricts the design to a row
+# subset (the detection arm drops near-empty sites before fitting); the group
+# count is left intact so tulpa still returns one latent block per group.
+# `inflate` is the M-step pseudo-binomial inflation factor: the occupancy arm
+# encodes the soft weight as a binomial with n = M trials and so passes the RE
+# prior at covariance Sigma / M (the penalty scales with the data term, leaving
+# the penalised MAP unchanged); the detection arm is a genuine weighted binomial
+# (inflate = 1) and passes Sigma at natural scale. A correlated term passes the
+# full covariance, an uncorrelated term its per-coefficient marginal SD.
+.re_list_for_tulpa <- function(design, Sigma_list, rows = NULL, inflate = 1) {
+  lapply(seq_along(design), function(k) {
+    d   <- design[[k]]
+    idx <- if (is.null(rows)) d$idx else d$idx[rows]
+    Z   <- if (d$n_coefs > 1L) {
+      if (is.null(rows)) d$Z else d$Z[rows, , drop = FALSE]
+    } else NULL
+    el <- list(idx = idx, n_groups = d$n_groups, n_coefs = d$n_coefs, Z = Z)
+    if (isTRUE(d$correlated)) {
+      el$cov <- Sigma_list[[k]] / inflate
+    } else {
+      el$sigma <- sqrt(diag(Sigma_list[[k]])) / sqrt(inflate)
+    }
+    el
+  })
+}
+
+
+# Partition a list of `tobs_re` specs into the occupancy-predictor and
+# detection-predictor arms by their `$shared = c(occ, det)` membership, tagging
+# each design element with its arm and giving the detection terms a distinct
+# group label (`p<t>`, matching the `p_` detection fixed-effect prefix) so the
+# two arms never collide in the parameter block. A term shared across BOTH
+# predictors is rejected here -- the deterministic path fits a separate RE block
+# per arm, not one realization shared across them (use method = "nuts").
+.tobs_re_split_arms <- function(re_list, model) {
+  arm_of <- function(r) {
+    sh <- r$shared
+    on_occ <- length(sh) >= 1L && isTRUE(sh[1])
+    on_det <- length(sh) >= 2L && isTRUE(sh[2])
+    if (on_occ && on_det) {
+      stop("A random effect shared across occupancy and detection is not ",
+           "supported on the Laplace path. Use method = 'nuts'.", call. = FALSE)
+    }
+    if (on_det) "det" else "occ"
+  }
+  arms <- vapply(re_list, arm_of, character(1))
+  tag <- function(sub, arm) {
+    if (!length(sub)) return(list())
+    design <- .tobs_re_design(sub, model)
+    lapply(seq_along(design), function(i) {
+      d <- design[[i]]
+      d$arm <- arm
+      if (arm == "det") d$group_label <- sprintf("p%d", i)
+      d
+    })
+  }
+  list(occ = tag(re_list[arms == "occ"], "occ"),
+       det = tag(re_list[arms == "det"], "det"))
+}
+
+
 #' Fit single-season occupancy with formula random effects via Laplace + a
 #' variance-component EM (internal).
 #'
 #' @param model A single-season `tobs_model`.
-#' @param re A list of `tobs_re` specs on the occupancy predictor (iid
-#'   intercept, uncorrelated slopes, or correlated slopes).
+#' @param re A list of `tobs_re` specs. Each enters either the occupancy or the
+#'   detection predictor (its `$shared = c(occ, det)` membership); the iid
+#'   intercept, uncorrelated-slope, and correlated-slope forms are supported on
+#'   both arms. A term shared across both predictors is rejected (use NUTS).
 #' @param priors Prior spec; not applied on this path (warns when active).
 #' @param max_iter,tol,damping EM controls.
+#' @param aghq Logical; run the adaptive Gauss-Hermite debias pass on the
+#'   variance components after the EM converges (default `TRUE`). See
+#'   `R/re_aghq.R`.
+#' @param n_quad Quadrature points per random-effect dimension for the AGHQ
+#'   debias (default 9).
+#' @param lkj_eta LKJ shape for the RE-correlation regularization in the AGHQ
+#'   debias (default 1.5; `1` disables it). See `R/re_aghq.R`.
 #' @param verbose Print per-iteration progress.
 #' @keywords internal
 .tobs_em_laplace_re <- function(model, re, priors = NULL,
                                 max_iter = 100L, tol = 1e-5, damping = 0.3,
+                                aghq = TRUE, n_quad = 9L, lkj_eta = 1.5,
                                 verbose = TRUE) {
   if (inherits(re, "tobs_re")) re <- list(re)
-  design <- .tobs_re_design(re, model)
+  arms <- .tobs_re_split_arms(re, model)
+  design_occ <- arms$occ        # RE on the occupancy predictor (may be empty)
+  design_det <- arms$det        # RE on the detection predictor (may be empty)
 
   y <- model$y
   X_occ <- model$X_processes[[1]]
@@ -231,84 +325,137 @@
   }
   keep <- n_valid > 0
 
-  # State.
+  # State. Each arm carries its own latent block b and per-term covariance;
+  # a starting diagonal sigma = 0.5 mirrors the historical single-arm path.
   init <- glm_init(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det)
   beta_occ <- init$occ$beta
   beta_det <- init$det$beta
-  n_latent <- sum(vapply(design, function(d) d$n_groups * d$n_coefs, integer(1)))
-  b <- numeric(n_latent)
-  # Per-term RE covariance; starts at a mild diagonal (sigma = 0.5).
-  Sigma_list <- lapply(design, function(d) diag(0.25, d$n_coefs))
+  n_lat <- function(d) sum(vapply(d, function(x) x$n_groups * x$n_coefs, integer(1)))
+  b_occ <- numeric(n_lat(design_occ))
+  b_det <- numeric(n_lat(design_det))
+  Sigma_occ <- lapply(design_occ, function(d) diag(0.25, d$n_coefs))
+  Sigma_det <- lapply(design_det, function(d) diag(0.25, d$n_coefs))
 
   weights <- NULL
   converged <- FALSE
+  occ_fit <- NULL; det_fit <- NULL
   for (it in seq_len(max_iter)) {
-    # ---- E-step: psi includes the RE posterior mode. ----
-    eta_occ <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design, b)
+    # ---- E-step: psi and p both carry their arm's RE posterior mode. ----
+    eta_occ <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design_occ, b_occ)
+    eta_det <- as.numeric(X_det %*% beta_det) + .tobs_re_offset(design_det, b_det)
     psi <- plogis(eta_occ)
-    p_site <- plogis(as.numeric(X_det %*% beta_det))
+    p_site <- plogis(eta_det)
     w <- occ_weights(psi, p_site, N, n_valid, n_det, any_det)
     weights <- w
 
-    # ---- M-step (occupancy): pseudo-binomial + rescaled RE prior. ----
-    # A correlated term passes cov = Sigma_k / M (the M-inflated covariance);
-    # an uncorrelated term passes the per-coefficient marginal SD sigma/sqrt(M).
+    # ---- M-step (occupancy): pseudo-binomial, RE prior rescaled by M. ----
     y_occ <- pmin(pmax(ifelse(any_det, M, as.integer(round(w * M))), 0L), M)
-    re_list_tulpa <- lapply(seq_along(design), function(k) {
-      d <- design[[k]]
-      el <- list(idx = d$idx, n_groups = d$n_groups, n_coefs = d$n_coefs,
-                 Z = if (d$n_coefs > 1L) d$Z else NULL)
-      if (isTRUE(d$correlated)) {
-        el$cov <- Sigma_list[[k]] / M
-      } else {
-        el$sigma <- sqrt(diag(Sigma_list[[k]])) / sqrt(M)
-      }
-      el
-    })
     fo <- tulpa::tulpa_laplace(
       y = y_occ, n_trials = rep(M, N), X = X_occ,
-      re_list = re_list_tulpa, family = "binomial",
-      return_hessian = TRUE, return_re_cov = TRUE)
-    beta_new <- fo$mode[seq_len(p_occ)]
-    b_new <- fo$mode[-seq_len(p_occ)]
+      re_list = .re_list_for_tulpa(design_occ, Sigma_occ, inflate = M),
+      family = "binomial", return_hessian = TRUE,
+      return_re_cov = length(design_occ) > 0L)
+    beta_occ_new <- fo$mode[seq_len(p_occ)]
+    b_occ_new <- if (length(design_occ)) fo$mode[-seq_len(p_occ)] else numeric(0)
+    Sigma_occ_new <- if (length(design_occ)) {
+      .tobs_re_sigma_update(design_occ, b_occ_new,
+                            .tobs_re_cov_natural(fo$cov_blocks, design_occ, M))
+    } else list()
 
-    # ---- Variance-component update from the natural-scale posterior cov. ----
-    cov_nat <- .tobs_re_cov_natural(fo$cov_blocks, design, M)
-    Sigma_new <- .tobs_re_sigma_update(design, b_new, cov_nat)
-
-    # ---- M-step (detection): weighted binomial, site level. ----
+    # ---- M-step (detection): weighted binomial, RE prior at natural scale. ----
+    # Near-empty sites (w ~ 0) drop out; the group count stays intact so tulpa
+    # still returns one latent block per detection group. The fit is a genuine
+    # binomial (no M-inflation), so its posterior cov is natural-scale already.
     w_det <- w; w_det[any_det] <- 1
     keep_det <- keep & (w_det > 1e-6)
     fd <- tulpa::tulpa_laplace(
       y = n_det[keep_det], n_trials = n_valid[keep_det],
       X = X_det[keep_det, , drop = FALSE], weights = w_det[keep_det],
-      family = "binomial", return_hessian = TRUE)
+      re_list = .re_list_for_tulpa(design_det, Sigma_det, rows = keep_det,
+                                   inflate = 1),
+      family = "binomial", return_hessian = TRUE,
+      return_re_cov = length(design_det) > 0L)
     beta_det_new <- fd$mode[seq_len(p_det)]
+    b_det_new <- if (length(design_det)) fd$mode[-seq_len(p_det)] else numeric(0)
+    Sigma_det_new <- if (length(design_det)) {
+      .tobs_re_sigma_update(design_det, b_det_new,
+                            .tobs_re_cov_natural(fd$cov_blocks, design_det, 1))
+    } else list()
 
-    delta <- max(abs(c(beta_new - beta_occ,
+    delta <- max(abs(c(beta_occ_new - beta_occ,
                        beta_det_new - beta_det,
-                       unlist(Sigma_new) - unlist(Sigma_list))))
-    beta_occ <- beta_new; b <- b_new
-    beta_det <- beta_det_new; Sigma_list <- Sigma_new
+                       unlist(Sigma_occ_new) - unlist(Sigma_occ),
+                       unlist(Sigma_det_new) - unlist(Sigma_det))))
+    beta_occ <- beta_occ_new; b_occ <- b_occ_new; Sigma_occ <- Sigma_occ_new
+    beta_det <- beta_det_new; b_det <- b_det_new; Sigma_det <- Sigma_det_new
     occ_fit <- fo; det_fit <- fd
 
     if (verbose) cat(sprintf("  RE-EM iter %d: delta = %.6g\n", it, delta))
     if (is.finite(delta) && delta < tol) { converged <- TRUE; break }
   }
 
-  # Final per-group posterior covariance (BLUP SEs + reporting) from the last
-  # fit -- modes and their covariance come from the same Laplace solve -- and
-  # the natural-scale occupancy fixed-effect SE (the M-step H_beta is inflated).
-  cov_nat <- .tobs_re_cov_natural(occ_fit$cov_blocks, design, M)
-  b_var <- .tobs_re_bvar_from_cov(design, cov_nat)
-  eta_mode <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design, b)
-  beta_occ_se <- .tobs_re_occ_fixed_se(X_occ, eta_mode, weights, design, Sigma_list)
+  # ---- Combine the two arms into one design / latent layout (occ then det). ----
+  # .tobs_re_param_block(), ranef(), and the AGHQ pass all consume one ordered
+  # set of (design, b, b_var, Sigma) parallel lists; occupancy terms come first.
+  design <- c(design_occ, design_det)
+
+  # Final per-group posterior covariance (BLUP SEs + reporting): each arm reads
+  # its own M-step fit (occ inflated by M, det natural scale).
+  bvar_occ <- if (length(design_occ))
+    .tobs_re_bvar_from_cov(design_occ,
+                           .tobs_re_cov_natural(occ_fit$cov_blocks, design_occ, M))
+  else numeric(0)
+  bvar_det <- if (length(design_det))
+    .tobs_re_bvar_from_cov(design_det,
+                           .tobs_re_cov_natural(det_fit$cov_blocks, design_det, 1))
+  else numeric(0)
+  b <- c(b_occ, b_det); b_var <- c(bvar_occ, bvar_det)
+  Sigma_list <- c(Sigma_occ, Sigma_det)
+
+  # Occupancy fixed-effect SE at natural scale (the M-step H_beta is inflated);
+  # the detection SE is tulpa's RE-marginalised H_beta on the det arm (read by
+  # .se_from_laplace_fit from det_fit$se). AGHQ recalibrates both when it runs.
+  eta_mode <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design_occ, b_occ)
+  beta_occ_se <- if (length(design_occ))
+    .tobs_re_occ_fixed_se(X_occ, eta_mode, weights, design_occ, Sigma_occ)
+  else .se_from_laplace_fit(occ_fit, p_occ)
+  aghq_status <- list(applied = FALSE)
+
+  # ---- AGHQ debias of the variance components (R/re_aghq.R). ----
+  # The EM integrates b by Laplace, which attenuates sigma/correlation for
+  # binary data at small per-group n. Refine on the exact-marginal (adaptive
+  # Gauss-Hermite) likelihood: removes the attenuation, recalibrates the
+  # fixed-effect SEs off the marginal Hessian, and refreshes the BLUPs. Applies
+  # to a single grouping factor on one arm (RE dim <= 3); falls back to the EM
+  # result on any failure, on RE split across both arms, or on crossed / nested
+  # groupings. The arm is read from the combined design.
+  if (isTRUE(aghq)) {
+    ref <- tryCatch(
+      .tobs_re_aghq(model, design, beta_occ, beta_det, Sigma_list, b,
+                    n_quad = n_quad, lkj_eta = lkj_eta),
+      error = function(e) NULL)
+    if (!is.null(ref) && isTRUE(ref$ok)) {
+      beta_occ <- ref$beta_occ; beta_det <- ref$beta_det
+      Sigma_list <- ref$Sigma_list; b <- ref$b; b_var <- ref$b_var
+      weights <- ref$weights
+      occ_fit$beta <- beta_occ            # build_laplace_fit reads $beta first
+      det_fit$beta <- beta_det
+      # Both fixed-effect SEs come from the one joint marginal Hessian (psi and p
+      # are coupled through the occupancy weight), independent of which arm
+      # carries the RE.
+      beta_occ_se <- ref$beta_occ_se
+      det_fit$se  <- ref$det_se           # .se_from_laplace_fit reads $se first
+      aghq_status <- list(applied = TRUE, arm = ref$arm, n_quad = ref$n_quad,
+                          lkj_eta = ref$lkj_eta, converged = ref$converged)
+    }
+  }
 
   list(
     fits = list(occ = occ_fit, det = det_fit),
     weights = weights,
     convergence = list(converged = converged, n_iter = it),
     correction = "none",
+    aghq = aghq_status,
     re_post = list(design = design, b = b, b_var = b_var, Sigma = Sigma_list,
                    beta_occ_se = beta_occ_se)
   )

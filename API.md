@@ -139,18 +139,27 @@ there is one parser and one term type:
 | `(x \|\| g)`        | uncorrelated slope     | Laplace + NUTS |
 | `(0 + x \| g)`      | slope only, no intercept | Laplace + NUTS |
 | `(1 + x \|\| g)`    | uncorrelated int+slope | Laplace + NUTS |
-| `(x \| g)`          | correlated int + slope | **NUTS only**  |
-| `(1 + x + z \| g)`  | multi-slope, correlated| **NUTS only**  |
+| `(x \| g)`          | correlated int + slope | Laplace + NUTS |
+| `(1 + x + z \| g)`  | multi-slope, correlated| Laplace + NUTS (RE dim <= 3 for the AGHQ debias) |
 | `(1 \| g:h)`, `(1 \| g/h)` | crossed / nested | one `re()` per implied factor |
 
-The Laplace methods fit iid intercept RE and *uncorrelated* slopes on the
-occupancy predictor of a single-season model. Correlated slopes, RE on
-detection, RE + spatial, and RE on non-single families error from
-`.validate_re_laplace()` with a pointer to `method = "nuts"` rather than being
-dropped (correlated slopes are blocked upstream by tulpa's diagonal RE
-precision, gcol33/tulpa#28). Deterministic Laplace variance estimates for
-binary occupancy carry the usual small-cluster (PQL) bias; NUTS is the
-calibrated route.
+Each form fits on EITHER the occupancy or the detection predictor (its position
+in the formula sets the arm: `detection = ~ (1 | g)` puts the RE on detection).
+The Laplace methods fit iid intercept RE, *uncorrelated* slopes, and *correlated*
+slopes (a full RE covariance) on a single-season model. A single RE shared across
+BOTH predictors, RE + visit-level detection, RE + spatial, and RE on non-single
+families error from `.validate_re_laplace()` with a pointer to `method = "nuts"`
+rather than being dropped. The raw EM variance components (sigma, correlation)
+carry the Laplace small-cluster bias for binary data (the glmer nAGQ=1 regime,
+not Breslow-Clayton PQL); by default (`re.aghq = TRUE`, `n.quad = 9`) they are
+debiased after the EM by an adaptive Gauss-Hermite refinement on the exact
+per-group marginal (the nAGQ > 1 fix), branching on the arm (an occupancy-arm RE
+moves psi, a detection-arm RE moves p). It cuts the occupancy per-group-n = 8
+sigma bias from ~18% to ~4% (matching NUTS), and the detection-arm bias from
+~70% (only occupied sites inform p) to ~1%. A default LKJ (`re.lkj = 1.5`)
+penalty regularizes a weakly-identified RE correlation off the `+-1` boundary
+(without touching the marginal SDs); NUTS is available for a full posterior
+treatment of the correlation.
 
 ---
 

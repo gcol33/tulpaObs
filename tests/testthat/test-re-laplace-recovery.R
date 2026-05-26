@@ -1,10 +1,13 @@
 # Parameter-recovery tests for formula random effects fit under the
-# DETERMINISTIC engine (gcol33/tulpaObs#11). The default Laplace engine now
-# fits iid intercept RE and uncorrelated random slopes via a variance-component
-# EM (R/em_laplace_re.R) instead of silently dropping them. Deterministic
-# Laplace variance estimates for binary occupancy carry the usual small-cluster
-# (PQL) bias, so the sigma tolerances are generous and the calibrated check is
-# against the NUTS fit on the same data.
+# DETERMINISTIC engine (gcol33/tulpaObs#11). The default Laplace engine fits iid
+# intercept RE, uncorrelated random slopes, and correlated slopes via a
+# variance-component EM (R/em_laplace_re.R) instead of silently dropping them.
+# The raw EM integrates the RE block by Laplace (the glmer nAGQ=1 regime, not
+# Breslow-Clayton PQL), which attenuates sigma / the RE correlation for binary
+# data; by default an adaptive Gauss-Hermite pass (R/re_aghq.R) debiases them.
+# The sigma tolerances here are still generous (single-seed noise + detection
+# thinning), with the calibrated check against NUTS and a multi-seed AGHQ-vs-EM
+# bias check below.
 
 sim_occu_re_intercept <- function(seed = 101, ng = 30L, per = 25L, J = 6L,
                                   b0 = 0.3, b1 = -0.6, sigma = 0.9, p = 0.45) {
@@ -105,8 +108,8 @@ test_that("deterministic sigma and BLUPs track the NUTS fit on the same data", {
 
   sig_l <- fit_l$means[[grep("^sigma_", names(fit_l$means), value = TRUE)]]
   sig_n <- exp(fit_n$means[[grep("^log_sigma_", names(fit_n$means), value = TRUE)]])
-  # Deterministic Laplace sigma is in the NUTS ballpark (PQL bias is modest at
-  # this cluster size; both should land within ~60% of each other).
+  # Deterministic Laplace sigma is in the NUTS ballpark (the Laplace
+  # small-cluster bias is modest at this cluster size; both within ~60%).
   expect_lt(abs(sig_l - sig_n) / sig_n, 0.6)
 
   re_l <- ranef(fit_l); re_n <- ranef(fit_n)
@@ -134,7 +137,7 @@ test_that("correlated random slopes (1 + x | g) recover under Laplace", {
   expect_length(cor_nm, 1L)
   rho_hat <- fit$means[[cor_nm]]
   # Simulated correlation is +0.61; recover the sign / a positive association
-  # (PQL attenuates the magnitude, so the bound is generous).
+  # (the Laplace approximation attenuates the magnitude, so the bound is generous).
   expect_gt(rho_hat, 0.2)
   expect_lt(rho_hat, 0.99)
 
@@ -161,11 +164,175 @@ test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
     tulpaObs:::.validate_re_laplace(re_int, stub, NULL, "gaussian_laplace"),
     "single|nuts")
 
-  # RE on the detection predictor is still NUTS-only.
+  # RE on the detection predictor alone is now supported (own RE block), so the
+  # validator accepts it.
   re_det <- tulpaObs:::.tobs_term_re(group = s$d$g, type = "intercept")
   re_det$shared <- c(FALSE, TRUE)
   stub2 <- list(model_type = "single", data = s$d, X_det_visit = NULL)
+  expect_silent(
+    tulpaObs:::.validate_re_laplace(re_det, stub2, NULL, "gaussian_laplace"))
+
+  # A single RE shared across BOTH predictors stays NUTS-only (each arm fits its
+  # own block on the deterministic path, not one shared realization).
+  re_both <- tulpaObs:::.tobs_term_re(group = s$d$g, type = "intercept")
+  re_both$shared <- c(TRUE, TRUE)
   expect_error(
-    tulpaObs:::.validate_re_laplace(re_det, stub2, NULL, "gaussian_laplace"),
-    "detection|nuts")
+    tulpaObs:::.validate_re_laplace(re_both, stub2, NULL, "gaussian_laplace"),
+    "shared|nuts")
+
+  # RE + visit-level detection covariates also stays NUTS-only.
+  stub3 <- list(model_type = "single", data = s$d,
+                X_det_visit = matrix(0, nrow(s$d), 1L))
+  expect_error(
+    tulpaObs:::.validate_re_laplace(re_det, stub3, NULL, "gaussian_laplace"),
+    "visit|nuts")
+})
+
+test_that("AGHQ variance-component debias runs by default and is toggleable", {
+  s <- sim_occu_re_intercept(seed = 21, ng = 25L, per = 12L)
+  args <- list(formula = ~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
+               family = occu(), method = "laplace")
+
+  fit_on  <- do.call(tobs, c(args, list(control = list(verbose = FALSE))))
+  fit_off <- do.call(tobs, c(args, list(control = list(re.aghq = FALSE,
+                                                       verbose = FALSE))))
+
+  # On by default; status surfaced on the fit.
+  expect_true(isTRUE(fit_on$aghq$applied))
+  expect_identical(fit_on$aghq$n_quad, 9L)
+  expect_false(isTRUE(fit_off$aghq$applied))
+
+  # The refine moves the estimate (the two fits are not identical) and keeps a
+  # finite, positive sigma.
+  sig_on  <- fit_on$means[[grep("^sigma_", names(fit_on$means), value = TRUE)]]
+  sig_off <- fit_off$means[[grep("^sigma_", names(fit_off$means), value = TRUE)]]
+  expect_true(is.finite(sig_on) && sig_on > 0)
+  expect_false(isTRUE(all.equal(sig_on, sig_off)))
+
+  # Gauss-Hermite helper: nodes/weights integrate exp(-x^2) (= sqrt(pi)) and are
+  # symmetric about 0.
+  gh <- tulpaObs:::.gauss_hermite(9L)
+  expect_equal(sum(gh$w), sqrt(pi), tolerance = 1e-8)
+  expect_equal(sum(gh$w * gh$x), 0, tolerance = 1e-8)
+  expect_equal(sum(gh$w * gh$x^2), sqrt(pi) / 2, tolerance = 1e-8)  # int x^2 e^-x^2
+})
+
+test_that("AGHQ removes the small-cluster sigma attenuation (multi-seed)", {
+  skip_on_cran()
+  skip_if_fast()
+  # True sigma = 0.9; per-group n = 8 is small enough that the Laplace EM
+  # attenuates sigma. AGHQ should land closer to truth on the seed average.
+  truth <- 0.9
+  sig <- function(fit) fit$means[[grep("^sigma_", names(fit$means), value = TRUE)]]
+  one <- function(seed, aghq) {
+    s <- sim_occu_re_intercept(seed = seed, ng = 30L, per = 8L, sigma = truth)
+    fit <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
+                family = occu(), method = "laplace",
+                control = list(re.aghq = aghq, verbose = FALSE))
+    sig(fit)
+  }
+  seeds <- 1:8
+  em   <- vapply(seeds, one, numeric(1), aghq = FALSE)
+  aghq <- vapply(seeds, one, numeric(1), aghq = TRUE)
+
+  # EM attenuates (mean below truth); AGHQ corrects upward and lands closer.
+  expect_lt(mean(em), truth)
+  expect_lt(abs(mean(aghq) - truth), abs(mean(em) - truth))
+  expect_lt(abs(mean(aghq) - truth), 0.12)
+})
+
+test_that("LKJ regularization keeps the RE correlation off the +-1 boundary", {
+  skip_on_cran()
+  skip_if_fast()
+  # Weakly-identified correlated slope (per-group n = 12), true rho = +0.61.
+  # Unregularized ML (re.lkj = 1) over-estimates rho and can hit +-1; the
+  # default LKJ pulls it off the boundary while staying near-unbiased.
+  rho_of <- function(f) f$means[[grep("^cor_", names(f$means), value = TRUE)]]
+  one <- function(seed, eta) {
+    s <- sim_occu_re_corr(seed = seed, ng = 40L, per = 12L)
+    f <- tobs(~ x + (1 + x | g), data = s$d, y = s$y, detection = ~ 1,
+              family = occu(), method = "laplace",
+              control = list(n.quad = 7L, re.lkj = eta, verbose = FALSE))
+    list(rho = rho_of(f), eta = f$aghq$lkj_eta)
+  }
+  seeds <- 401:410
+  off  <- vapply(seeds, function(s) one(s, 1)$rho,   numeric(1))   # ML, no prior
+  reg  <- lapply(seeds, function(s) one(s, 1.5))                   # default
+  reg_rho <- vapply(reg, `[[`, numeric(1), "rho")
+
+  # Status surfaced; default eta is 1.5.
+  expect_equal(reg[[1]]$eta, 1.5)
+  # The default keeps every fit strictly inside the boundary; the unregularized
+  # ML reaches it on at least one seed in this weak regime.
+  expect_true(all(reg_rho < 0.97))
+  expect_gt(max(off), max(reg_rho))
+  # ... while staying near the truth (0.61) on the seed average.
+  expect_lt(abs(mean(reg_rho) - 0.612), 0.12)
+})
+
+# Single-season occupancy with a DETECTION random intercept (gcol33/tulpaObs#11
+# follow-up): detection p = sigmoid(d0 + b_obs[observer]), b_obs ~ N(0, sigma);
+# occupancy psi = sigmoid(b0 + b1 occ_cov). The random effect enters the
+# detection predictor, so the AGHQ refine integrates b through p (not psi).
+sim_det_re_intercept <- function(seed = 1, N = 400L, J = 6L, ng = 40L,
+                                 b0 = 0.4, b1 = -0.7, d0 = 0.2, sigma = 0.8) {
+  set.seed(seed)
+  occ_cov  <- rnorm(N)
+  observer <- sample.int(ng, N, replace = TRUE)
+  b_obs    <- rnorm(ng, 0, sigma)
+  z <- rbinom(N, 1, plogis(b0 + b1 * occ_cov))
+  p <- plogis(d0 + b_obs[observer])
+  y <- matrix(0L, N, J)
+  for (i in seq_len(N)) if (z[i] == 1L) y[i, ] <- rbinom(J, 1L, p[i])
+  list(y = y, d = data.frame(occ_cov = occ_cov, observer = factor(observer)),
+       b_obs = b_obs, sigma = sigma, d0 = d0, b1 = b1)
+}
+
+test_that("a detection random intercept is fit on its own arm (AGHQ arm = det)", {
+  s <- sim_det_re_intercept(seed = 1)
+  fit <- tobs(~ occ_cov, detection = ~ (1 | observer), family = occu(),
+              data = s$d, y = s$y, method = "laplace",
+              control = list(verbose = FALSE))
+
+  expect_identical(fit$method, "laplace")
+  # The RE landed on the detection process: the sigma hyperparameter is named
+  # for the detection arm (sigma_p<t>), not the occupancy arm (sigma_g<t>).
+  sig_nm <- grep("^sigma_", names(fit$means), value = TRUE)
+  expect_length(sig_nm, 1L)
+  expect_match(sig_nm, "^sigma_p")
+  expect_true(is.finite(fit$means[[sig_nm]]) && fit$means[[sig_nm]] > 0)
+
+  # AGHQ ran on the detection arm.
+  expect_true(isTRUE(fit$aghq$applied))
+  expect_identical(fit$aghq$arm, "det")
+
+  # Per-group detection BLUPs track the simulated observer effects.
+  re <- ranef(fit)
+  rp <- re[re$group == "p1", ]
+  expect_equal(nrow(rp), 40L)
+  expect_gt(cor(rp$estimate, s$b_obs), 0.6)
+
+  # Fixed effects recover.
+  expect_lt(abs(plogis(fit$means[["p_(Intercept)"]]) - plogis(s$d0)), 0.1)
+})
+
+test_that("AGHQ removes the detection-RE sigma attenuation (multi-seed)", {
+  skip_on_cran()
+  skip_if_fast()
+  # Detection RE is only informed by occupied sites, so the raw nAGQ=1 EM
+  # attenuates sigma severely; the AGHQ refine on the exact p-marginal restores
+  # it. True sigma = 0.8.
+  truth <- 0.8
+  sig <- function(fit) fit$means[[grep("^sigma_", names(fit$means), value = TRUE)]]
+  em <- aghq <- numeric(6L)
+  for (k in 1:6) {
+    s <- sim_det_re_intercept(seed = 100L + k)
+    args <- list(formula = ~ occ_cov, detection = ~ (1 | observer),
+                 family = occu(), data = s$d, y = s$y, method = "laplace")
+    em[k]   <- sig(do.call(tobs, c(args, list(control = list(re.aghq = FALSE, verbose = FALSE)))))
+    aghq[k] <- sig(do.call(tobs, c(args, list(control = list(verbose = FALSE)))))
+  }
+  # AGHQ is closer to truth than the (heavily attenuated) EM, and near-unbiased.
+  expect_lt(abs(mean(aghq) - truth), abs(mean(em) - truth))
+  expect_lt(abs(mean(aghq) - truth), 0.15)
 })

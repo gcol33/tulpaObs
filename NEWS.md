@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+* feat(re): random effects on the **detection** predictor now fit under
+  `method = "laplace"` (gcol33/tulpaObs#11 follow-up). Previously a `(1 | g)` /
+  `(x | g)` term on the detection formula errored toward NUTS; the
+  variance-component EM (`R/em_laplace_re.R`) now partitions the RE terms into an
+  occupancy and a detection arm (`.tobs_re_split_arms()`), fits each arm's RE
+  block in its own M-step (occupancy as the M-inflated pseudo-binomial, detection
+  as a genuine weighted binomial at natural prior scale), and folds both RE
+  posterior modes back into psi and p at the E-step. The AGHQ debias
+  (`R/re_aghq.R`) is generalized to either arm: when the random effect enters the
+  detection predictor `b` moves `p` (not `psi`), so the per-group marginal uses
+  the binomial-in-`p` site derivatives (finite-difference verified,
+  `dev_notes/probe_re_det_aghq_deriv.R`). Detection-arm RE parameters are named
+  for the detection process (`sigma_p<t>_*`, `re_p<t>_*`). Measured recovery
+  (`dev_notes/probe_re_det_*.R`, 24 seeds, per-group n ~ 10): the raw `nAGQ = 1`
+  EM attenuates the detection `sigma` by ~70% (only occupied sites inform `p`);
+  the AGHQ refine restores it to within ~1% of truth (0.805 at truth 0.80) with
+  88-96% fixed-effect CI coverage. Supports the same iid-intercept /
+  uncorrelated-slope / correlated-slope forms as the occupancy arm. A single RE
+  shared across BOTH predictors, RE + visit-level detection, RE + spatial, and
+  non-single families still point to NUTS.
+
+* feat(re): adaptive Gauss-Hermite (AGHQ) debias of the random-effect variance
+  components under `method = "laplace"`, on by default (`R/re_aghq.R`,
+  `.tobs_re_aghq()`). The variance-component EM integrates the RE block `b` by
+  Laplace (the glmer `nAGQ = 1` regime), which attenuates `sigma` / the RE
+  correlation toward zero for binary occupancy at small per-group sample size.
+  After the EM converges, the per-group marginal `int prod_i L_i(eta_i + Z_i b)
+  N(b; 0, Sigma) db` -- reusing the exact closed-form occupancy site marginal
+  (`z` integrated out) -- is refined by `n.quad`-point adaptive Gauss-Hermite
+  quadrature centred at the EM mode, and `(beta, chol Sigma)` are re-optimized on
+  it; the fixed-effect SEs are read from the exact-marginal Hessian. Measured
+  recovery (`dev_notes/probe_re_aghq*.R`): at per-group `n = 8` the EM attenuates
+  `sigma` by ~18% (bias -0.16 at truth 0.9), AGHQ cuts that to ~4% (matching
+  NUTS); correlated-slope `sigma`s recover to ~1% on the seed average. Controls:
+  `re.aghq` (default `TRUE`; `FALSE` keeps the raw `nAGQ = 1` EM), `n.quad`
+  (default 9; `n.quad = 1` is the plain Laplace marginal), and `re.lkj` (default
+  1.5). Applies to a single grouping factor with RE dimension <= 3 (the
+  recovery-tested forms); crossed / nested groupings fall back to the EM. A
+  weakly-identified *correlated* random slope's correlation is regularized off
+  the `+-1` boundary by a default LKJ(`re.lkj = 1.5`) penalty on the block's
+  correlation matrix -- `(eta - 1) log det R`, maximized at independence,
+  leaving the marginal SDs untouched and `O(1)` against the `O(n_groups)`
+  likelihood; `re.lkj = 1` disables it. On the recovery sim (truth rho = 0.61)
+  this removes every `+-1` boundary hit while keeping rho near-unbiased (bias
+  -0.00 at per-group n = 12, +0.02 at n = 25), where unregularized ML
+  over-estimates rho and hits the boundary. The fit is then a MAP and the
+  reported SEs come from the penalized (posterior-precision) Hessian. NUTS
+  remains available for a full posterior treatment of the correlation. Recovery
+  tests in `tests/testthat/test-re-laplace-recovery.R`.
+
 * feat(nested): calibrated credible intervals for NA-response prediction.
   `predict(fit, type = "state")` now returns `psi_lower` / `psi_upper` (95%)
   alongside `psi` for single-season nested-Laplace fits. The intervals are
@@ -100,8 +150,10 @@
   is reported as a `cor_<g>_<ci>_<cj>` correlation alongside the `sigma_` marginal
   SDs. This removes the previous `.validate_re_laplace()` rejection that routed
   `(1 + x | g)` to NUTS; the duplicate R-side Schur for the RE posterior variance
-  is dropped in favour of the engine's `cov_blocks`. Deterministic Laplace still
-  carries the small-cluster (PQL) bias -- NUTS is the calibrated route. Recovery
+  is dropped in favour of the engine's `cov_blocks`. The variance components
+  still carry the Laplace approximation's small-cluster bias for binary data
+  (the glmer nAGQ=1 regime, not Breslow-Clayton PQL) -- NUTS is the calibrated
+  route for the covariance. Recovery
   test in `tests/testthat/test-re-laplace-recovery.R` (sigmas, correlation, and
   BLUPs vs simulated truth).
 
@@ -141,9 +193,10 @@
   in the occupancy missing-data EM (feeding the random-effect mode back into
   psi) and an EM/REML update for the variance components, fitting iid intercept
   RE (`(1 | g)`) and uncorrelated random slopes (`(x || g)`, `(0 + x | g)`,
-  `(1 + x || g)`) on the occupancy predictor of a single-season model.
-  Deterministic Laplace variance estimates for binary occupancy carry the usual
-  small-cluster (PQL) bias; `engine = "nuts"` remains the calibrated route.
+  `(1 + x || g)`) on the occupancy predictor of a single-season model. The
+  variance-component estimates carry the Laplace approximation's small-cluster
+  bias for binary data (the glmer nAGQ=1 regime, not Breslow-Clayton PQL);
+  `engine = "nuts"` remains the calibrated route for the covariance.
   Forms the deterministic path cannot fit -- correlated slopes (a
   Cholesky-factored covariance, `(1 + x | g)`), random effects on the detection
   predictor, RE combined with a spatial term, RE with visit-level detection

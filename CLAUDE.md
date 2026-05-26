@@ -42,20 +42,42 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 > Random effects fit under both engines (gcol33/tulpaObs#11). NUTS fits every
 > form. The default `engine = "laplace"` fits iid intercept RE, uncorrelated
 > slopes (`(x || g)`, `(0 + x | g)`, `(1 + x || g)`), and *correlated* slopes
-> (`(1 + x | g)`) on the occupancy predictor of a single-season model via a
-> variance-component EM (`R/em_laplace_re.R`, `.tobs_em_laplace_re()`): it wraps
+> (`(1 + x | g)`) on EITHER the occupancy or the detection predictor of a
+> single-season model via a variance-component EM (`R/em_laplace_re.R`,
+> `.tobs_em_laplace_re()`): it splits the RE terms into an occupancy and a
+> detection arm by their `shared` membership (`.tobs_re_split_arms()`) and wraps
 > tulpa's fixed-covariance `tulpa_laplace()` in the occupancy missing-data EM
-> (the RE mode is fed back into psi) and an EM/REML update of the per-term RE
-> covariance `Sigma_k <- mean_g [b_g b_g' + Cov(b_g | y)]`. The per-group
-> posterior covariance `Cov(b_g | y)` comes from
-> `tulpa_laplace(return_re_cov = TRUE)$cov_blocks`, scaled to natural scale by
-> `M` (the M-step's pseudo-binomial inflation): a correlated term keeps the full
-> `Sigma`, an uncorrelated term is projected to its diagonal each M-step. RE +
-> spatial, RE + visit-level detection, RE on / shared with detection, and RE on
-> non-single families error from `.validate_re_laplace()` with a pointer to NUTS
-> rather than being silently dropped. Deterministic Laplace variance estimates
-> for binary occupancy carry the usual small-cluster (PQL) bias; NUTS is the
-> calibrated route. RE parameter naming + per-group BLUP reconstruction for both
+> (each arm's RE mode is fed back into psi / p at the E-step) with an EM/REML
+> update of the per-term RE covariance `Sigma_k <- mean_g [b_g b_g' + Cov(b_g |
+> y)]`. The per-group posterior covariance `Cov(b_g | y)` comes from
+> `tulpa_laplace(return_re_cov = TRUE)$cov_blocks`: the occupancy arm scales it to
+> natural scale by `M` (the M-step's pseudo-binomial inflation), the detection
+> arm is a genuine weighted binomial (`M = 1`, prior at natural scale); a
+> correlated term keeps the full `Sigma`, an uncorrelated term is projected to its
+> diagonal each M-step. A single RE shared across BOTH predictors, RE + spatial,
+> RE + visit-level detection, and RE on non-single families error from
+> `.validate_re_laplace()` with a pointer to NUTS rather than being silently
+> dropped. The raw EM variance components (sigma,
+> correlation) carry the Laplace small-cluster bias for binary data (the glmer
+> nAGQ=1 regime, not Breslow-Clayton PQL -- attenuated at small per-group n);
+> the fixed-effect SEs are read at natural scale and do not. By default
+> (`re.aghq = TRUE`, `control = list(n.quad = )`) the variance components are
+> debiased after the EM by an adaptive Gauss-Hermite quadrature refinement on the
+> exact per-group marginal (`R/re_aghq.R`, `.tobs_re_aghq()` -- the nAGQ > 1 fix;
+> single grouping factor on one arm, RE dim <= 3, falls back to the EM otherwise
+> -- including when the RE is split across both arms). The per-group marginal
+> branches on the arm: an occupancy-arm RE moves `psi`, a detection-arm RE moves
+> `p` (binomial-in-`p` site derivatives, FD-verified). Measured (occupancy arm):
+> per-group-n = 8 sigma bias ~18% (EM) -> ~4% (AGHQ), matching NUTS; correlated
+> sigmas to ~1%. Detection arm: the EM attenuates sigma ~70% (only occupied sites
+> inform `p`) -> AGHQ to ~1% with 88-96% fixed-effect CI coverage. Detection-arm
+> RE parameters are named for the detection process (`sigma_p<t>_*`, `re_p<t>_*`). A default LKJ(`re.lkj = 1.5`) penalty on each correlated block's
+> correlation matrix regularizes a weakly-identified RE correlation off the +-1
+> boundary toward 0 (untouching the marginal SDs; `re.lkj = 1` disables) -- on
+> the recovery sim it removes every boundary hit while keeping rho near-unbiased;
+> NUTS is available for a full posterior treatment of the correlation. RE
+> parameter
+> naming + per-group BLUP reconstruction for both
 > engines live in `R/re_effects.R` (`ranef()` / `coef()` overrides in
 > `R/methods.R`); the correlated-block off-diagonal is reported as a
 > `cor_<g>_<ci>_<cj>` correlation.
@@ -239,9 +261,10 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Spatial + community     | —       | Yes   |                                         |
 | Nested-Laplace (areal)  | n-L     | —     | `method="nested_laplace"`: icar/bym2/car (+ temporal/iid) on occu / int_occu / ms_occu / dyn_occu |
 | NA-response prediction  | n-L     | —     | `predict(type="state")`: all-NA single-season sites interpolated by the field (any prior incl. bym2, via engine `fitted_eta`), with calibrated 95% `psi_lower`/`psi_upper` from the exact-marginal `bernoulli`-family pass (held-out coverage ~1.0) |
-| Formula RE (intercept)  | Yes     | Yes   | `(1 \| g)`; Laplace via variance-component EM (gcol33/tulpaObs#11) |
-| Formula RE (uncorr slope)| Yes    | Yes   | `(x \|\| g)`, `(0 + x \| g)`, `(1 + x \|\| g)` |
-| Formula RE (corr slope) | Yes     | Yes   | `(1 + x \| g)`; Laplace fits the full cov via the EM M-step consuming tulpa `cov_blocks` (gcol33/tulpaObs#11) |
+| Formula RE (intercept)  | Yes     | Yes   | `(1 \| g)`; Laplace via variance-component EM, occupancy OR detection arm (gcol33/tulpaObs#11) |
+| Formula RE (uncorr slope)| Yes    | Yes   | `(x \|\| g)`, `(0 + x \| g)`, `(1 + x \|\| g)`; either arm |
+| Formula RE (corr slope) | Yes     | Yes   | `(1 + x \| g)`; Laplace fits the full cov via the EM M-step consuming tulpa `cov_blocks`; either arm (gcol33/tulpaObs#11) |
+| Formula RE on detection | Yes     | Yes   | RE on the detection predictor (`detection = ~ (1 \| g)`); Laplace fits a separate detection-arm RE block, AGHQ debias branches on the arm |
 | All S3 methods          | Yes     | Yes   | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update, summary, `$.tobs_fit` |
 | Diagnostics             | Yes     | Yes   | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram, spatialRange, temporalCorr |
 | Simulation              | Yes     | Yes   | `simulate_occu`, `simulate_ms_occu`, `simulate_dyn_occu`, `simulate_int_occu`, `simulate_dyn_ms_occu`, `simulate_int_ms_occu`, `simulate_cover`, `simulate_cover_joint` |
