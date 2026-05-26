@@ -133,9 +133,11 @@
   beta_sc
 }
 
-# Transform a scaled-space variance-covariance matrix to natural space:
-# V_natural = T %*% V_sc %*% t(T).
-.unscale_vcov <- function(V_sc, scale) {
+# Transform a SINGLE scale-block's scaled-space variance-covariance matrix to
+# natural space: V_natural = T %*% V_sc %*% t(T). (The multi-process,
+# block-diagonal generalisation is `.unscale_vcov()` in R/occu_fit.R; this
+# single-block helper is what the cover-hurdle decode applies per arm.)
+.unscale_vcov_block <- function(V_sc, scale) {
   if (is.null(V_sc) || length(scale$cols) == 0L) return(V_sc)
   T <- .scale_transform(scale)
   T %*% V_sc %*% t(T)

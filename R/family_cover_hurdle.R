@@ -376,8 +376,8 @@ decode_cover_hurdle <- function(fits, enc, family,
   names(beta_occ) <- colnames(enc$occ_data$X)
   names(beta_pos) <- colnames(enc$pos_data$X)
 
-  V_occ <- .unscale_vcov(V_occ_sc, enc$scale_occ)
-  V_pos <- .unscale_vcov(V_pos_sc, enc$scale_pos)
+  V_occ <- .unscale_vcov_block(V_occ_sc, enc$scale_occ)
+  V_pos <- .unscale_vcov_block(V_pos_sc, enc$scale_pos)
   se_occ <- if (is.null(V_occ)) rep(NA_real_, p_occ_n) else
     sqrt(pmax(diag(as.matrix(V_occ)), 0))
   se_pos <- if (is.null(V_pos)) rep(NA_real_, p_pos_n) else
