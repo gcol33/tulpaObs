@@ -214,9 +214,15 @@ test_that("log-likelihood evaluated at the fitted mode is finite and order-of-ma
   ll_pos <- tulpaObs:::.loglik_cover_pos_beta(beta_pos_sc, fit$phi_pos, enc)
   expect_true(is.finite(ll_occ))
   expect_true(is.finite(ll_pos))
-  # ll_total and the log_marginal differ by the Laplace correction (log|H|
-  # terms) but should remain in the same order of magnitude.
-  ll_total <- ll_occ + ll_pos
-  lm_total <- fit$log_marginal["occ"] + fit$log_marginal["pos"]
-  expect_lt(abs(ll_total - lm_total) / max(abs(ll_total), 1), 0.5)
+  # ll and the log_marginal differ by the per-arm Laplace correction (the
+  # -0.5 log|H/(2pi)| term) but should stay within an order of magnitude.
+  # Check each arm separately: the two arms' log-liks are large and opposite-
+  # signed (the beta arm's log-lik is positive at high phi), so normalising the
+  # TOTAL correction by |ll_occ + ll_pos| divides by their near-cancellation and
+  # a modest per-arm correction (~5-8% here) blows up against it. Per arm the
+  # check is meaningful and immune to the cross-arm cancellation.
+  rel_occ <- abs(ll_occ - fit$log_marginal["occ"]) / max(abs(ll_occ), 1)
+  rel_pos <- abs(ll_pos - fit$log_marginal["pos"]) / max(abs(ll_pos), 1)
+  expect_lt(rel_occ, 0.5)
+  expect_lt(rel_pos, 0.5)
 })
