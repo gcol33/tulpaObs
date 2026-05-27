@@ -169,7 +169,8 @@
 # ---------------------------------------------------------------------------
 
 .tobs_fit_ms_nmix <- function(model, mixture = "poisson", K_max = NULL,
-                              max_iter = 100L, tol = 1e-6, verbose = TRUE) {
+                              max_iter = 100L, optimizer = "em",
+                              n_quad = 1L, lkj_eta = 1, verbose = TRUE) {
   if (!identical(mixture, "poisson")) {
     stop("Community N-mixture currently supports mixture = \"poisson\" only ",
          "(a global negative-binomial size is a planned tulpa extension).",
@@ -180,7 +181,8 @@
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
     X_lambda = model$X_processes[[1]], X_p = lf$X_p,
     n_sites = model$n_sites, n_species = model$n_species,
-    K_max = K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
+    K_max = K_max, max_iter = as.integer(max_iter),
+    optimizer = optimizer, n_quad = as.integer(n_quad), lkj_eta = lkj_eta,
     verbose = isTRUE(verbose))
   build_ms_nmix_fit(raw, model, mixture = mixture)
 }
@@ -241,7 +243,9 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
       sd_lambda = sqrt(pmax(diag(Sigma_lambda), 0)),
       sd_p      = sqrt(pmax(diag(Sigma_p), 0)),
       coef_lambda = coef_lambda, coef_p = coef_p,
-      blup_lambda = blup_lambda, blup_p = blup_p
+      blup_lambda = blup_lambda, blup_p = blup_p,
+      optimizer = raw$optimizer %||% "em",
+      n_quad = raw$n_quad %||% 1L, lkj_eta = raw$lkj_eta %||% 1
     ),
     convergence = list(converged = isTRUE(raw$converged),
                        n_iter = raw$n_iter %||% NA_integer_)

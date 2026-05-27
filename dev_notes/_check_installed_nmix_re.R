@@ -1,0 +1,6 @@
+cat("installed tulpa:", as.character(utils::packageVersion("tulpa")), "\n")
+cat("formals(tulpa_nmix_laplace_re):\n")
+print(names(formals(tulpa::tulpa_nmix_laplace_re)))
+cat("\nhas n_quad arg:", "n_quad" %in% names(formals(tulpa::tulpa_nmix_laplace_re)), "\n")
+cat("has tol arg:   ", "tol" %in% names(formals(tulpa::tulpa_nmix_laplace_re)), "\n")
+cat("has ... :      ", "..." %in% names(formals(tulpa::tulpa_nmix_laplace_re)), "\n")

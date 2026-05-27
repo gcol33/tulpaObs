@@ -452,16 +452,31 @@ tobs <- function(formula,
     data = data, y = y, species = dots$species,
     det_visit_formula = dots$det_visit_formula,
     det_visit_data    = dots$det_visit_data)
-  # Community N-mixture is fit directly by tulpa's C++ Laplace-EM (no EM-around-
-  # INLA path), so it bypasses .tobs_fit_model and reads the dotted Laplace
-  # controls here.
+  # Community N-mixture is fit directly by tulpa over a shared native oracle (no
+  # EM-around-INLA path), so it bypasses .tobs_fit_model and reads the dotted
+  # controls here. `optimizer` selects the outer driver over that one oracle:
+  #   - "em" (default): the fast Laplace-EM (block-Newton mode + closed-form
+  #     covariance M-step). Production path -- profiling shows the FD-gradient
+  #     joint optimizer dominates the residual runtime, so EM is the default.
+  #   - "joint_fd": the finite-difference joint (theta, Sigma) optimizer. Opt-in
+  #     for correctness / architecture validation, and the only driver that does
+  #     the n.quad > 1 AGHQ variance-component debias. Slower than EM.
+  #   - "joint_grad": reserved analytic-gradient extension; errors for now.
+  # The AGHQ debias barely moves the community covariances for this family (each
+  # species' count marginal is informative, so the per-group Laplace is already
+  # accurate), so the EM default loses nothing in practice; n.quad is exposed via
+  # joint_fd for sparse / rare-species regimes.
+  optimizer <- control[["optimizer"]] %||% "em"
+  n_quad    <- as.integer(control[["n.quad"]] %||% 1L)
   .tobs_fit_ms_nmix(
     model,
-    mixture  = family$params$mixture %||% "poisson",
-    K_max    = family$params$K_max,
-    max_iter = control[["max.iter"]] %||% 100L,
-    tol      = control[["tol"]] %||% 1e-6,
-    verbose  = isTRUE(control[["verbose"]]))
+    mixture   = family$params$mixture %||% "poisson",
+    K_max     = family$params$K_max,
+    max_iter  = control[["max.iter"]] %||% 100L,
+    optimizer = optimizer,
+    n_quad    = n_quad,
+    lkj_eta   = control[["re.lkj"]] %||% 1.5,
+    verbose   = isTRUE(control[["verbose"]]))
 }
 
 
@@ -593,7 +608,7 @@ tobs <- function(formula,
 # ---------------------------------------------------------------------------
 .tobs_control_groups <- list(
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
-                 "re.aghq", "n.quad", "re.lkj"),
+                 "re.aghq", "n.quad", "re.lkj", "optimizer"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",
