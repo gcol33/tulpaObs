@@ -244,6 +244,7 @@ tobs <- function(formula,
     int_occu = .dispatch_int_occu,
     jsdm     = .dispatch_jsdm,
     abun     = .dispatch_abun,
+    ms_abun  = .dispatch_ms_abun,
     cover    = .dispatch_cover,
     stop(sprintf(
       "Internal error: family %q has status 'working' but no dispatcher.",
@@ -430,6 +431,39 @@ tobs <- function(formula,
   ))
 }
 
+.dispatch_ms_abun <- function(formula, data, family, detection, y, visits,
+                              engine, priors, control,
+                              approx = "gaussian_laplace",
+                              correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("ms_abun() requires a `detection` formula.", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("ms_abun() requires `y` (a 3D array [n_sites x max_visits x ",
+         "n_species] or a named list of count matrices).", call. = FALSE)
+  }
+  if (is.null(dots$species)) {
+    stop("ms_abun() requires a `species` argument (the species labels).",
+         call. = FALSE)
+  }
+  model <- .tobs_build_ms_abun(
+    abund_formula = formula, det_formula = detection,
+    data = data, y = y, species = dots$species,
+    det_visit_formula = dots$det_visit_formula,
+    det_visit_data    = dots$det_visit_data)
+  # Community N-mixture is fit directly by tulpa's C++ Laplace-EM (no EM-around-
+  # INLA path), so it bypasses .tobs_fit_model and reads the dotted Laplace
+  # controls here.
+  .tobs_fit_ms_nmix(
+    model,
+    mixture  = family$params$mixture %||% "poisson",
+    K_max    = family$params$K_max,
+    max_iter = control[["max.iter"]] %||% 100L,
+    tol      = control[["tol"]] %||% 1e-6,
+    verbose  = isTRUE(control[["verbose"]]))
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -517,6 +551,11 @@ tobs <- function(formula,
   # spatial SEs are calibrated (law-of-total-covariance over the hyperparameter
   # grid). negbin and NUTS remain upstream-pending.
   abun     = c("laplace", "nested_laplace"),
+  # ms_abun: community / multispecies N-mixture via tulpa's C++ Laplace-EM
+  # (per-species coefficient RE with Gaussian community covariances). Poisson
+  # only for now; the global negbin size and an areal-spatial community field
+  # are upstream-pending.
+  ms_abun  = c("laplace"),
   cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla")
 )
 

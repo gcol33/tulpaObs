@@ -182,8 +182,9 @@ occu / int_occu / ms_occu / dyn_occu + cover; the `*_sla` skew variants on the
 nested path are occu + cover only; the cover hurdle has no NUTS likelihood or
 EM-correction engine (no `nuts` / `laplace_gibbs` / `laplace_mi`). `abun`
 (N-mixture) supports `laplace` (non-spatial) + `nested_laplace` (areal spatial);
-see below. The remaining roster (`ms_abun`, `dyn_abun`, `distance`, `removal`,
-`fp_occu`) is `status = "planned"` and errors via `.stop_planned_family()`.
+`ms_abun` (community / multispecies N-mixture) supports `laplace`; see below.
+The remaining roster (`dyn_abun`, `distance`, `removal`, `fp_occu`) is
+`status = "planned"` and errors via `.stop_planned_family()`.
 
 ### N-mixture abundance (`abun()`)
 
@@ -234,6 +235,48 @@ intercept back-transforms with `exp()`. `simulate_abun()` +
 - **Pending upstream tulpa**: no NUTS path (no N-mixture HMC likelihood in tulpa
   yet).
 
+### Community / multispecies N-mixture (`ms_abun()`)
+
+The spAbundance `msNMix` model: a per-species N-mixture with Gaussian community
+hyperpriors on the per-species abundance and detection coefficients,
+`beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`, `beta_p_s ~ N(mu_p, Sigma_p)`.
+The latent `N_{s,i}` integrates out per species-site in closed form (the same
+kernel as `abun()`); the per-species coefficient deviations `b_s =
+(b_lambda_s, b_p_s)` are the random effects, with the Gaussian community priors
+pinning `(mu_lambda, mu_p)` as fixed effects (no sum-to-zero constraint, unlike
+the intrinsic spatial fields). `y` is a 3D array `[n_sites x max_visits x
+n_species]` or a named list of count matrices; `species =` is required.
+
+tulpaObs owns the family wiring (`R/ms_abun.R`): the binder produces
+`model_type = "ms_nmix"`, `.tobs_ms_nmix_longform()` flattens the 3D array to
+the stacked `(y, site_idx, species_idx, X_p)` long form, and `.tobs_fit_ms_nmix()`
+calls tulpa's **C++ Laplace-EM** `tulpa::tulpa_nmix_laplace_re()`
+(gcol33/tulpa#31) -- the fast path. (An R-only route also exists: wrapping
+`tulpa::tulpa_nmix_site_marginal()` into `tulpa_re_aghq(make_group=)`; correct
+but slow because the marginal optimizer runs its per-group Newton loop in the R
+interpreter. The C++ path is the production fitter.) The fit does per-species
+coefficient mode-finding (complete-data Fisher, PSD), a closed-form EM
+covariance M-step `Sigma_k = mean_s[b_s b_s' + Cov(b_s | y)]`, and fixed-effect
+SEs from the marginal observed-information **Schur complement** of the b-block
+(with the `Var[N|y]` rank-1 coupling between the two arms; Louis 1982). The
+N-mixture per-site kernel (`tulpa/src/nmix_kernel.h`) caches its eta-independent
+`lgamma` combinatorial terms (`compute_nmix_site_cached`), so the EM's repeated
+per-site evaluations skip the lgamma recompute -- the single-shot
+`compute_nmix_site()` Poisson path delegates to the same cached helper, so the
+single-species / spatial fits are byte-identical (nmix regression suite passes).
+
+`coef()` returns the community means; `ranef()` the per-species coefficient
+deviations (long form: species / arm / term / estimate); `vcov()` / `confint()`
+the community-mean covariance; `fitted()` / `simulate()` the per-species
+`lambda` / `p` / counts. `simulate_ms_abun()` + `tests/testthat/test-ms-abun.R`
+cover community-mean recovery, 95% CI coverage over 20 seeds, per-species
+coefficient recovery, and the S3 surface.
+
+- **Poisson only** for now. A global negative-binomial size (the
+  `compute_nmix_site` kernel already supports `r`; the community fitter would
+  add a scalar dispersion to `theta`) and an areal-spatial community field are
+  upstream-pending follow-ups.
+
 ### Boundary: What lives here vs tulpa
 
 - **tulpaObs owns**: family-specific likelihoods (`src/*_likelihood.h`),
@@ -278,6 +321,7 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Cover hurdle (joint)    | Yes     | —     | `family_cover_hurdle.R`, `sla_cover_*`  |
 | N-mixture (Poisson/NB)  | Yes     | —     | `abun(mixture=)`; closed-form marginal via `tulpa_nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB adds jointly-estimated `log_r`. NUTS pending |
 | N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; Poisson or NB (size `r` integrated over the grid); grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
+| Community N-mixture     | Yes     | —     | `ms_abun()` (spAbundance `msNMix`); per-species coef RE with Gaussian community covariances; C++ Laplace-EM (`tulpa_nmix_laplace_re`), Schur-complement mean SEs; Poisson only; recovery + 20-seed coverage (`test-ms-abun.R`). NUTS / negbin / spatial pending |
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
 | Spatial + community     | —       | Yes   |                                         |
@@ -327,6 +371,7 @@ R/
   obs_families.R           — family constructors (occu, dyn_occu, ms_occu, …, cover)
   occu.R                   — internal .tobs_build_model() (single/dynamic/community/integrated/jsdm/nmix)
   abun.R                   — N-mixture family: .tobs_build_abun(), .tobs_fit_nmix() (-> tulpa nmix Laplace), build_nmix_fit(), nmix S3 helpers, simulate_abun()
+  ms_abun.R                — community N-mixture: .tobs_build_ms_abun(), .tobs_ms_nmix_longform(), .tobs_fit_ms_nmix() (-> tulpa::tulpa_nmix_laplace_re), build_ms_nmix_fit(), ms_nmix S3 helpers, simulate_ms_abun()
   occu_fit.R               — internal .tobs_fit_model() (Laplace default, NUTS fallback; routes model_type=="nmix" to .tobs_fit_nmix)
   occu_priors.R            — occu_priors() + print + prior-spec -> per-block beta_prior plumbing (.expand_prior/.prior_for_submodel/.attach_priors_to_blocks)
   laplace.R                — internal .tobs_laplace() + EM callbacks per model type

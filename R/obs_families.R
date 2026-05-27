@@ -237,7 +237,7 @@ ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
     observation    = "binomial_N",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "planned",
+    status         = "working",
     params         = list(K_max = K_max, mixture = mixture)
   )
 }

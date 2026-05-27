@@ -36,7 +36,8 @@ scale. Default \code{c(0, runif(n_det_covs, -0.5, 0.5))} (intercept 0 = p 0.5).}
 
 \item{size}{Negative-binomial size \code{r} (the \code{mixture = "negbin"} dispersion;
 variance \code{lambda + lambda^2 / r}). Smaller \code{r} means more overdispersion;
-\code{r -> Inf} recovers Poisson. Default 2. Ignored under Poisson.}
+as \code{r} grows large the model approaches Poisson. Default 2. Ignored under
+Poisson.}
 
 \item{seed}{Optional random seed.}
 }

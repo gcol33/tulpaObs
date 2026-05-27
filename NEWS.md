@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+* feat(ms_abun): community / multispecies N-mixture (`ms_abun()`, the
+  spAbundance `msNMix` model) now fits under `method = "laplace"`. Per-species
+  abundance and detection coefficients are random effects with Gaussian
+  community hyperpriors (`beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`,
+  `beta_p_s ~ N(mu_p, Sigma_p)`); the latent abundances integrate out in closed
+  form per species-site, and the fit is a C++ Laplace-EM in tulpa
+  (`tulpa::tulpa_nmix_laplace_re`, gcol33/tulpa#31) -- per-species coefficient
+  modes, a closed-form covariance M-step, and fixed-effect SEs from the marginal
+  observed-information Schur complement (with the `Var[N|y]` rank-1 correction).
+  `y` is a 3D array `[n_sites x max_visits x n_species]` or a named list of
+  count matrices; pass `species =`. `coef()` returns the community means;
+  `ranef()` the per-species coefficient deviations; `vcov()` / `confint()` the
+  community-mean covariance; `fitted()` / `simulate()` the per-species
+  `lambda` / `p` / counts. `simulate_ms_abun()` +
+  `tests/testthat/test-ms-abun.R` cover community-mean recovery, 95% CI
+  coverage over 20 seeds, per-species coefficient recovery, and the S3 surface.
+  Poisson only for now (a global negative-binomial size and an areal-spatial
+  community field are upstream-pending). Requires tulpa >= 0.0.2.
+
 * feat(abun): `abun(mixture = "negbin")` now fits. The negative-binomial
   abundance mixture (`Var(N) = lambda + lambda^2 / r`) is wired through to
   tulpa's N-mixture kernel (`mixture = "NB"`) on both the non-spatial Laplace

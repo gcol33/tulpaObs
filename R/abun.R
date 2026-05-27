@@ -578,7 +578,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
 #'   `"negbin"` (negative binomial, overdispersed).
 #' @param size Negative-binomial size `r` (the `mixture = "negbin"` dispersion;
 #'   variance `lambda + lambda^2 / r`). Smaller `r` means more overdispersion;
-#'   `r -> Inf` recovers Poisson. Default 2. Ignored under Poisson.
+#'   as `r` grows large the model approaches Poisson. Default 2. Ignored under
+#'   Poisson.
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J count matrix), `data` (covariate data frame),
 #'   and `truth` (the coefficients, per-site `lambda`, `p`, latent `N`, and the

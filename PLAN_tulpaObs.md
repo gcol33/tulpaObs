@@ -95,7 +95,7 @@ What lives inside tulpaObs (in tension, by user request):
 | `integrated_occ()`   | shared z              | multi-source likelihoods      | required  | all                | L, NUTS    | working |
 | `jsdm()`             | latent factor         | multivariate Bernoulli/Probit | no        | spatial            | NUTS       | working |
 | `abun()` / `nmixture`| Poisson / NB N        | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson + negbin, non-spatial L + areal-spatial NL). NUTS pending upstream tulpa |
-| `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| planned (Phase 2) |
+| `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| working (Poisson, `ms_abun()` on L via C++ community Laplace-EM; negbin / spatial / NUTS pending) |
 | `dynamic_nmix()`     | Dail-Madsen N_t       | Binomial(N_t, p)              | required  | all                | NUTS       | planned (Phase 3) |
 | `distance()`         | density               | hazard / half-normal binned   | replaced by distance bins | all | L, NUTS  | planned (Phase 4) |
 | `removal()`          | N                     | sequential removal            | required  | spatial            | L, NUTS    | planned (Phase 4) |
@@ -285,10 +285,26 @@ These are scheduled under Phase 3 below.
   coordinate, with SE). Spatial: `r` grid-integrated (`r_mean` / `r_sd`).
   `simulate*()` draw NB. Matches `unmarked::pcount(mixture = "NB")`; recovery /
   coverage in `test-abun.R`.
+- *(Phase 2d — shipped)* Community / multispecies N-mixture (`ms_abun()`, the
+  spAbundance `msNMix` model). Per-species abundance and detection coefficients
+  are random effects with Gaussian community hyperpriors
+  (`beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`, `beta_p_s ~ N(mu_p, Sigma_p)`).
+  Required a tulpa engine addition: a C++ community N-mixture Laplace-EM
+  (`tulpa_nmix_laplace_re`, `src/nmix_re.cpp`) reusing the per-site marginal
+  kernel -- per-species coefficient mode-finding (complete-data Fisher), a
+  closed-form covariance M-step, and fixed-effect SEs from the marginal
+  observed-information Schur complement. The kernel grew a cached path
+  (`compute_nmix_site_cached`, eta-independent `lgamma` precompute) that the
+  single-shot Poisson kernel also delegates to (byte-identical; nmix regression
+  suite passes). tulpaObs wires the family (`R/ms_abun.R`,
+  `.tobs_fit_ms_nmix()` -> `tulpa_nmix_laplace_re`). Poisson only; recovery /
+  20-seed coverage / per-species recovery / S3 in `test-ms-abun.R`. The R-only
+  alternative (`tulpa_nmix_site_marginal()` -> `tulpa_re_aghq(make_group=)`) is
+  correct but slow (R-interpreter per-group Newton); the C++ path is production.
 - **Pending upstream tulpa** (deferred, not bugs):
   - **N-mixture NUTS** — no HMC likelihood for N-mixture in tulpa yet.
-- `multispecies_nmix()` (`ms_abun`) and the closed multi-season via season RE /
-  AR1: after the negbin gap closes.
+  - **Community NB / spatial** — global negbin size and an areal community
+    field for `ms_abun()`.
 - spAbundance / unmarked benchmarks.
 
 **Phase 3 — Nested-Laplace extensions in `tulpa`**

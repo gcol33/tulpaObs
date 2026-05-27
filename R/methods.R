@@ -55,6 +55,8 @@ nobs.tobs_fit <- function(object, ...) {
     sum(model$y_flat >= 0)
   } else if (model$model_type == "nmix") {
     length(model$y_long)
+  } else if (model$model_type == "ms_nmix") {
+    sum(!is.na(model$y))
   } else {
     NA_integer_
   }
@@ -82,6 +84,9 @@ tulpa::ranef
 #'   `ranef` table when no `re_effects` are present.
 #' @export
 ranef.tobs_fit <- function(object, ...) {
+  if (identical(object$model$model_type, "ms_nmix")) {
+    return(.tobs_ranef_ms_nmix(object))
+  }
   if (!is.null(object$re_effects) && length(object$re_effects) > 0L) {
     out <- do.call(rbind, object$re_effects)
     rownames(out) <- NULL
@@ -127,6 +132,7 @@ coef.tobs_fit <- function(object, ...) {
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
   if (identical(model$model_type, "nmix")) return(.tobs_fitted_nmix(object))
+  if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
   means <- object$means
   pi_list <- model$process_info
 
@@ -250,6 +256,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   model <- object$model
   if (identical(model$model_type, "nmix")) {
     return(.tobs_simulate_nmix(object, nsim))
+  }
+  if (identical(model$model_type, "ms_nmix")) {
+    return(.tobs_simulate_ms_nmix(object, nsim))
   }
   draws <- object$draws
   n_samples <- nrow(draws)
