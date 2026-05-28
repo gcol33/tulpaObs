@@ -1,6 +1,15 @@
 # tulpaObs NEWS
 
-## Unreleased
+## 0.0.2 (2026-05-28)
+
+* fix(build): clean-slate compile against tulpa restored. The
+  in-tree N-mixture move (commit c8b6912) left two casing mismatches
+  (`using tulpaObs::NMix_*` for functions defined as `tulpaObs::nmix_*`) in
+  `src/nmix_spatial.cpp` / `src/nmix_spatial_bym2.cpp`, and a broken include
+  guard in `src/nmix_spatial_assemble.h` (`#ifndef TULPA_NMIX_SPATIAL_ASSEMBLE_H`
+  vs `#define TULPAOBS_NMIX_SPATIAL_ASSEMBLE_H`) that re-included the file and
+  redefined its templates on the second pass. All three fixed; cold parallel
+  build is ~13 s (`R CMD INSTALL -j8`, rtools45). Requires tulpa >= 0.0.3.
 
 * refactor: the N-mixture observation model (single-species, areal-spatial,
   community) has moved from the tulpa engine into tulpaObs as a
@@ -10,7 +19,7 @@
   `NMixCommunityOracle` is now a tulpaObs `XPtr<tulpa::REGroupOracle>` that
   reaches the engine through `<tulpa/aghq_oracle.h>`; the community fit
   drives it through `tulpa::tulpa_re_aghq()`. Bumps the tulpa pin to
-  v0.0.2.1.
+  v0.0.3.
 
 * feat(ms_abun): community / multispecies N-mixture (`ms_abun()`, the
   spAbundance `msNMix` model) now fits under `method = "laplace"`. Per-species

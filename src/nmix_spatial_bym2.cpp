@@ -36,15 +36,15 @@ namespace {
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::Map;
-using tulpaObs::NMix_kernel_sweep_spatial;
-using tulpaObs::NMix_kernel_log_lik_only_spatial;
+using tulpaObs::nmix_kernel_sweep_spatial;
+using tulpaObs::nmix_kernel_log_lik_only_spatial;
 using tulpaObs::compute_eta_lambda_bym2;
-using tulpaObs::NMix_assemble_obs_info_bym2;
-using tulpaObs::NMix_assemble_complete_fisher_bym2;
-using tulpaObs::NMix_add_bym2_prior_to_grad_and_H;
-using tulpaObs::NMix_add_bym2_prior_to_H_only;
-using tulpaObs::NMix_bym2_log_prior;
-using tulpaObs::NMix_center_v_bym2;
+using tulpaObs::nmix_assemble_obs_info_bym2;
+using tulpaObs::nmix_assemble_complete_fisher_bym2;
+using tulpaObs::nmix_add_bym2_prior_to_grad_and_H;
+using tulpaObs::nmix_add_bym2_prior_to_H_only;
+using tulpaObs::nmix_bym2_log_prior;
+using tulpaObs::nmix_center_v_bym2;
 
 inline void add_diagonal_ridge_bym2(MatrixXd& H, double rel_ridge = 1e-10) {
     const int n = static_cast<int>(H.rows());

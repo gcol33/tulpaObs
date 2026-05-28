@@ -17,7 +17,7 @@
 // (int s) -> SpatialLoading and assemble once, so adding a spatial structure is
 // a new loading functor rather than a copied 90-line assembler (CLAUDE.md #5).
 
-#ifndef TULPA_NMIX_SPATIAL_ASSEMBLE_H
+#ifndef TULPAOBS_NMIX_SPATIAL_ASSEMBLE_H
 #define TULPAOBS_NMIX_SPATIAL_ASSEMBLE_H
 
 #include <Rcpp.h>

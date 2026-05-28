@@ -44,17 +44,17 @@ namespace {
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::Map;
-using tulpaObs::NMix_kernel_sweep_spatial;
-using tulpaObs::NMix_kernel_log_lik_only_spatial;
+using tulpaObs::nmix_kernel_sweep_spatial;
+using tulpaObs::nmix_kernel_log_lik_only_spatial;
 using tulpaObs::compute_eta_lambda_spatial;
-using tulpaObs::NMix_assemble_obs_info_spatial;
-using tulpaObs::NMix_assemble_complete_fisher_spatial;
-using tulpaObs::NMix_add_car_to_spatial_block;
-using tulpaObs::NMix_add_car_to_H_only;
-using tulpaObs::NMix_add_diagonal_ridge;
-using tulpaObs::NMix_icar_log_prior;
-using tulpaObs::NMix_car_proper_log_prior;
-using tulpaObs::NMix_center_z;
+using tulpaObs::nmix_assemble_obs_info_spatial;
+using tulpaObs::nmix_assemble_complete_fisher_spatial;
+using tulpaObs::nmix_add_car_to_spatial_block;
+using tulpaObs::nmix_add_car_to_H_only;
+using tulpaObs::nmix_add_diagonal_ridge;
+using tulpaObs::nmix_icar_log_prior;
+using tulpaObs::nmix_car_proper_log_prior;
+using tulpaObs::nmix_center_z;
 
 enum class CarPriorKind { ICAR, CAR_PROPER };
 
