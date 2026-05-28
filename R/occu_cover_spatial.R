@@ -346,8 +346,13 @@
   pmean[n_par]      <- 0
   pprec[n_par]      <- 1 / (0.6^2)
 
+  # max_calls ceiling for the v2 outer BFGS: n_par + 3 calls per iter
+  # (FD gradient + line search), * max.iter.
+  calls_per_iter_est <- n_par + 3L
+  max_calls_est <- as.integer(max.iter) * calls_per_iter_est
   report <- if (isTRUE(verbose) || is.null(verbose) || verbose != FALSE)
-              .tobs_progress_reporter("occu_cover v2", throttle = 5)
+              .tobs_progress_reporter("occu_cover v2", throttle = 5,
+                                       max_calls = max_calls_est)
             else
               function(...) invisible(NULL)
 

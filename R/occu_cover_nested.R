@@ -37,11 +37,17 @@
 # Motivation: collaborators cancel a long fit when nothing prints for
 # minutes -- a 5 s heartbeat eliminates that failure mode.
 # ---------------------------------------------------------------------------
-.tobs_progress_reporter <- function(label, throttle = 5) {
+.tobs_progress_reporter <- function(label, throttle = 5, max_calls = NULL) {
   start <- Sys.time()
   last  <- start
   iter  <- 0L
   best  <- Inf
+  fmt_secs <- function(s) {
+    if (!is.finite(s) || s < 0) return("?")
+    if (s < 90)        sprintf("%.0fs",   s)
+    else if (s < 5400) sprintf("%.1fmin", s / 60)
+    else                sprintf("%.1fh",  s / 3600)
+  }
   function(value = NA_real_, extra = "") {
     iter <<- iter + 1L
     if (is.finite(value) && value < best) best <<- value
@@ -49,8 +55,19 @@
     if (iter == 1L ||
         as.numeric(difftime(now, last, units = "secs")) >= throttle) {
       elapsed <- as.numeric(difftime(now, start, units = "secs"))
-      msg <- sprintf("[%s] outer call %d  nlp = %.4f  best = %.4f  elapsed %.1fs",
-                      label, iter, value, best, elapsed)
+      rate    <- if (iter > 1L) elapsed / iter else NA_real_
+      rate_str <- if (is.finite(rate)) sprintf("  %.2fs/call", rate) else ""
+      eta_str <- ""
+      if (!is.null(max_calls) && is.finite(rate)) {
+        # Upper bound: assume the optim runs the full max-call ceiling
+        # (calls/iter * max.iter). Ceiling shrinks each line; the fit
+        # almost always converges before it.
+        remaining <- max(0, max_calls - iter)
+        eta_str <- sprintf("  max ETA %s", fmt_secs(remaining * rate))
+      }
+      msg <- sprintf("[%s] call %d  nlp = %.4f  best = %.4f  elapsed %s%s%s",
+                      label, iter, value, best, fmt_secs(elapsed),
+                      rate_str, eta_str)
       if (nzchar(extra)) msg <- paste0(msg, "  ", extra)
       cat(msg, "\n", sep = "")
       utils::flush.console()
@@ -460,8 +477,15 @@
   warm_env$z <- numeric(n_cells)
 
   # Progress heartbeat (default on; silenced by verbose = FALSE).
+  # max_calls ceiling = max.iter * (FD-gradient calls + ~2 line-search calls).
+  # Gradient takes n_outer + 1 calls under stats::optim's default FD;
+  # line search is typically 1-4 calls per iter. Use n_outer + 3 as a tight
+  # upper bound on calls / iter.
+  calls_per_iter_est <- n_outer + 3L
+  max_calls_est <- as.integer(max.iter) * calls_per_iter_est
   report <- if (isTRUE(verbose) || is.null(verbose) || verbose != FALSE)
-              .tobs_progress_reporter("occu_cover v3", throttle = 5)
+              .tobs_progress_reporter("occu_cover v3", throttle = 5,
+                                       max_calls = max_calls_est)
             else
               function(...) invisible(NULL)
 
