@@ -2,13 +2,23 @@
 
 ## Unreleased
 
+* refactor: the N-mixture observation model (single-species, areal-spatial,
+  community) has moved from the tulpa engine into tulpaObs as a
+  consumer-side `LikelihoodSpec`, restoring the principled
+  engine/model-package boundary. No user-facing API change: `abun()` and
+  `ms_abun()` continue to be the public surface. The native
+  `NMixCommunityOracle` is now a tulpaObs `XPtr<tulpa::REGroupOracle>` that
+  reaches the engine through `<tulpa/aghq_oracle.h>`; the community fit
+  drives it through `tulpa::tulpa_re_aghq()`. Bumps the tulpa pin to
+  v0.0.2.1.
+
 * feat(ms_abun): community / multispecies N-mixture (`ms_abun()`, the
   spAbundance `msNMix` model) now fits under `method = "laplace"`. Per-species
   abundance and detection coefficients are random effects with Gaussian
   community hyperpriors (`beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`,
   `beta_p_s ~ N(mu_p, Sigma_p)`); the latent abundances integrate out in closed
-  form per species-site, and the fit is a C++ Laplace-EM in tulpa
-  (`tulpa::tulpa_nmix_laplace_re`, gcol33/tulpa#31) -- per-species coefficient
+  form per species-site, and the fit is a C++ Laplace-EM (`nmix_laplace_re()`,
+  driving a native `NMixCommunityOracle`) -- per-species coefficient
   modes, a closed-form covariance M-step, and fixed-effect SEs from the marginal
   observed-information Schur complement (with the `Var[N|y]` rank-1 correction).
   `y` is a 3D array `[n_sites x max_visits x n_species]` or a named list of

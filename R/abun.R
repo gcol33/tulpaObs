@@ -3,14 +3,14 @@
 #
 # Latent abundance N_i ~ Poisson(lambda_i), counts y_ij | N_i ~ Binomial(N_i,
 # p_ij). The marginal likelihood integrates N out exactly (closed-form sum to
-# K_max), so there is no EM: tulpa's `tulpa_nmix_laplace()` family fits the
-# marginal directly with analytical gradients and observed Fisher curvature.
-# This file owns the family interface — data binding, the thin call into
-# tulpa's engine, and the `tobs_fit` wrapper. tulpa owns the likelihood math.
+# K_max), so there is no EM: the package-internal `nmix_laplace()` family fits
+# the marginal directly with analytical gradients and observed Fisher curvature.
+# This file owns the family interface — data binding, the thin call into the
+# (spatial) N-mixture Laplace fitter, and the `tobs_fit` wrapper.
 #
 #   .tobs_build_abun()   data binder -> model_type = "nmix"
-#   .tobs_fit_nmix()     dispatch to tulpa's (spatial) N-mixture Laplace
-#   build_nmix_fit()     wrap a tulpa_nmix_fit into a tobs_fit
+#   .tobs_fit_nmix()     dispatch to the package's (spatial) N-mixture Laplace
+#   build_nmix_fit()     wrap a nmix_fit into a tobs_fit
 # =============================================================================
 
 
@@ -160,7 +160,7 @@
   site_idx <- model$site_idx
 
   if (is.null(spatial)) {
-    raw <- tulpa::tulpa_nmix_laplace(
+    raw <- nmix_laplace(
       y         = y_long,
       site_idx  = site_idx,
       X_lambda  = X_lambda,
@@ -223,10 +223,10 @@
   scale_factor <- spatial$scale_factor %||% compute_bym2_scale(spatial$graph)
   switch(
     spatial$type,
-    icar = do.call(tulpa::tulpa_nmix_laplace_icar, common),
-    bym2 = do.call(tulpa::tulpa_nmix_laplace_bym2,
+    icar = do.call(nmix_laplace_icar, common),
+    bym2 = do.call(nmix_laplace_bym2,
                    c(common, list(scale_factor = scale_factor))),
-    car_proper = do.call(tulpa::tulpa_nmix_laplace_car_proper, common)
+    car_proper = do.call(nmix_laplace_car_proper, common)
   )
 }
 

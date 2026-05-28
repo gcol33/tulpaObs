@@ -12,18 +12,21 @@
 #
 # The latent N_{s,i} integrates out per species-site in closed form; the
 # per-species coefficient deviations are the random effects, integrated by a
-# C++ Laplace-EM in tulpa (`tulpa_nmix_laplace_re`, the fast path for
-# gcol33/tulpa#31). This file owns only the family wiring: the data binder, the
-# long-form marshalling into tulpa's fitter, and the `tobs_fit` wrapper. tulpa
-# owns the marginal math, the per-species mode-finding, the EM covariance
-# update, and the marginal observed-information SEs.
+# C++ Laplace-EM in `nmix_laplace_re()`. The community fitter consumes tulpa's
+# generic AGHQ RE engine (`tulpa::tulpa_re_aghq()`) through an
+# `NMixCommunityOracle` (an `XPtr<tulpa::REGroupOracle>` constructed in
+# tulpaObs's src/), so the per-species marginal / score / observed-info
+# assembly runs entirely in tulpaObs while the structure-agnostic integration,
+# log-Cholesky parametrization and LKJ penalty come from the engine. This file
+# owns the family wiring: the data binder, the long-form marshalling into the
+# fitter, and the `tobs_fit` wrapper.
 #
-# Poisson first cut. (A global negative-binomial size is a planned tulpa
-# extension; the family already carries the `mixture` flag.)
+# Poisson first cut. (A global negative-binomial size is wired in the oracle
+# but not yet plumbed through the community fitter's `mixture` flag.)
 #
 #   .tobs_build_ms_abun()    data binder -> model_type = "ms_nmix"
 #   .tobs_ms_nmix_longform() 3D y -> stacked (y, site_idx, species_idx, X_p)
-#   .tobs_fit_ms_nmix()      -> tulpa::tulpa_nmix_laplace_re()
+#   .tobs_fit_ms_nmix()      -> nmix_laplace_re()
 #   build_ms_nmix_fit()      wrap into a tobs_fit
 #   simulate_ms_abun()       community N-mixture simulator
 # =============================================================================
@@ -177,7 +180,7 @@
          call. = FALSE)
   }
   lf  <- .tobs_ms_nmix_longform(model)
-  raw <- tulpa::tulpa_nmix_laplace_re(
+  raw <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
     X_lambda = model$X_processes[[1]], X_p = lf$X_p,
     n_sites = model$n_sites, n_species = model$n_species,
