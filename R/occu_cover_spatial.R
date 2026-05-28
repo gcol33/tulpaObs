@@ -346,9 +346,18 @@
   pmean[n_par]      <- 0
   pprec[n_par]      <- 1 / (0.6^2)
 
-  opt <- stats::optim(start, .tobs_occu_cover_spatial_nlp,
-                       model = model, Q = Q, scale_q = scale_q,
-                       pmean = pmean, pprec = pprec,
+  report <- if (isTRUE(verbose) || is.null(verbose) || verbose != FALSE)
+              .tobs_progress_reporter("occu_cover v2", throttle = 5)
+            else
+              function(...) invisible(NULL)
+
+  wrapped_nlp <- function(par) {
+    val <- .tobs_occu_cover_spatial_nlp(par, model, Q, scale_q, pmean, pprec)
+    report(val)
+    val
+  }
+
+  opt <- stats::optim(start, wrapped_nlp,
                        method = "BFGS", hessian = TRUE,
                        control = list(maxit = max.iter, reltol = tol,
                                       trace = if (isTRUE(verbose)) 1L else 0L))

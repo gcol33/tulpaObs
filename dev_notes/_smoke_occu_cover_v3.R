@@ -47,7 +47,7 @@ fit_v3 <- tobs(
   positive  = ~ pos_cov1,
   y         = od$y, y_pos = y_pos, visits = od$det.covs,
   method    = "nested_laplace",
-  control   = list(verbose = FALSE, max.iter = 200L)
+  control   = list(max.iter = 60L)        # progress heartbeat default on
 )
 dt <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
 

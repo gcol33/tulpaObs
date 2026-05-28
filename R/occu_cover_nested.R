@@ -30,6 +30,38 @@
 
 
 # ---------------------------------------------------------------------------
+# Time-throttled Stan-style progress reporter. Returns a closure called once
+# per outer BFGS call; emits a line when more than `throttle` seconds have
+# passed since the last emit. Text-only (no cursor control), so it works in
+# batch logs, file redirects, and CI as well as in interactive R.
+# Motivation: collaborators cancel a long fit when nothing prints for
+# minutes -- a 5 s heartbeat eliminates that failure mode.
+# ---------------------------------------------------------------------------
+.tobs_progress_reporter <- function(label, throttle = 5) {
+  start <- Sys.time()
+  last  <- start
+  iter  <- 0L
+  best  <- Inf
+  function(value = NA_real_, extra = "") {
+    iter <<- iter + 1L
+    if (is.finite(value) && value < best) best <<- value
+    now <- Sys.time()
+    if (iter == 1L ||
+        as.numeric(difftime(now, last, units = "secs")) >= throttle) {
+      elapsed <- as.numeric(difftime(now, start, units = "secs"))
+      msg <- sprintf("[%s] outer call %d  nlp = %.4f  best = %.4f  elapsed %.1fs",
+                      label, iter, value, best, elapsed)
+      if (nzchar(extra)) msg <- paste0(msg, "  ", extra)
+      cat(msg, "\n", sep = "")
+      utils::flush.console()
+      last <<- now
+    }
+    invisible(NULL)
+  }
+}
+
+
+# ---------------------------------------------------------------------------
 # Conditional log-density of z given (betas, alpha, sigma), unnormalised.
 # Returns -log p_unnorm(z | other), the negative log NLP for inner Newton.
 # Vectorised across cells; per-cell data contributions are independent.
@@ -427,9 +459,17 @@
   warm_env <- new.env(parent = emptyenv())
   warm_env$z <- numeric(n_cells)
 
+  # Progress heartbeat (default on; silenced by verbose = FALSE).
+  report <- if (isTRUE(verbose) || is.null(verbose) || verbose != FALSE)
+              .tobs_progress_reporter("occu_cover v3", throttle = 5)
+            else
+              function(...) invisible(NULL)
+
   outer_nlp_with_prior <- function(par) {
-    .occu_cover_outer_nlp(par, model, Q, scale_q, warm_env) +
-      0.5 * sum(pprec * (par - pmean)^2)
+    val <- .occu_cover_outer_nlp(par, model, Q, scale_q, warm_env) +
+             0.5 * sum(pprec * (par - pmean)^2)
+    report(val)
+    val
   }
 
   opt <- stats::optim(start, outer_nlp_with_prior,
