@@ -173,6 +173,58 @@ jsdm <- function() {
 }
 
 
+#' Joint occupancy-detection + cover hurdle family
+#'
+#' Cell-level latent presence `psi`, per-visit binomial detection `p`, and
+#' per-visit positive cover `f_pos` (beta or lognormal) on a third linear
+#' predictor. The N-mixture analogue for vegetation cover: where [abun()]
+#' couples occupancy to counts via Royle's binomial-N marginal, [occu_cover()]
+#' couples it to a positive-cover observation at each detected visit. The
+#' latent presence z marginalises out in closed form (two states), so the
+#' marginal log-likelihood is exact.
+#'
+#' Per-cell likelihood:
+#'
+#'     any_det_i : L_i = psi_i * prod_j h_ij
+#'     no_det_i  : L_i = psi_i * prod_j (1 - p_ij) + (1 - psi_i)
+#'
+#'     h_ij = (1 - p_ij) * 1{y_ij = 0}
+#'          + p_ij       * f_pos(y_pos_ij; eta_pos_ij, ...) * 1{y_ij = 1}
+#'
+#' Reduces to [occu()] when the cover arm is degenerate, and to the
+#' plot-level cover hurdle ([cover()]) when J = 1 and detection is perfect.
+#'
+#' @section v1 scope (status `"experimental"`):
+#' Laplace only; non-spatial. A shared spatial field across the three arms
+#' (the analogue of [cover()]'s nested-Laplace joint engine) is v2. Structured
+#' terms (`bym2()`, `icar()`, `re()`, ...) error from the dispatcher with a
+#' pointer to this note.
+#'
+#' @param positive likelihood for the positive cover arm. `"beta"` (cover
+#'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#' @return A `tobs_family` object.
+#' @seealso [occu()] (no cover), [cover()] (plot-level hurdle, no detection),
+#'   [abun()] (counts not cover).
+#' @export
+occu_cover <- function(positive = c("beta", "lognormal")) {
+  positive <- match.arg(positive)
+  obs_family(
+    name           = "occu_cover",
+    class_long     = "joint occupancy-detection + cover hurdle",
+    latent         = "bernoulli",
+    observation    = if (positive == "beta")
+                       "detection_plus_beta"
+                     else
+                       "detection_plus_lognormal",
+    replicates     = "required",
+    default_engine = "laplace",
+    status         = "experimental",
+    params         = list(positive = positive),
+    control_keys   = c("max.iter", "tol", "sigma.beta", "engine")
+  )
+}
+
+
 # ---------------------------------------------------------------------------
 # Planned families — error informatively when used until implemented
 # ---------------------------------------------------------------------------

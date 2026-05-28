@@ -246,6 +246,7 @@ tobs <- function(formula,
     abun     = .dispatch_abun,
     ms_abun  = .dispatch_ms_abun,
     cover    = .dispatch_cover,
+    occu_cover = .dispatch_occu_cover,
     stop(sprintf(
       "Internal error: family %q has status 'working' but no dispatcher.",
       family$name
@@ -571,7 +572,13 @@ tobs <- function(formula,
   # only for now; the global negbin size and an areal-spatial community field
   # are upstream-pending.
   ms_abun  = c("laplace"),
-  cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla")
+  cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla"),
+  # occu_cover: non-spatial Laplace via direct optim on the exact two-state
+  # marginal (v1); nested-Laplace adds a cell-level ICAR field shared across
+  # psi and cover arms with scaling alpha (v2, the mod.joint analogue with
+  # `copy = "cell.occ"`). v2 currently reads bym2() as ICAR (rho fixed to 1);
+  # free-rho BYM2 + outer-grid integration of (sigma, alpha) is v3.
+  occu_cover = c("laplace", "nested_laplace")
 )
 
 # Validate a resolved public method name against the family's supported set.
@@ -699,7 +706,8 @@ tobs <- function(formula,
   # before dispatch, so reaching here with an unsupported family is an internal
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
-    if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu", "abun")) {
+    if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu", "abun",
+                       "occu_cover")) {
       return("nested_laplace")
     }
     stop(sprintf(

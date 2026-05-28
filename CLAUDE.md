@@ -11,7 +11,7 @@ backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
 
 > **Public API:** `tobs()` + family constructors (`occu()`, `dyn_occu()`,
 > `ms_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`, `dyn_abun()`,
-> `distance()`, `removal()`, `fp_occu()`, `cover()`). All S3 classes are
+> `distance()`, `removal()`, `fp_occu()`, `cover()`, `occu_cover()`). All S3 classes are
 > `tobs_*` (`tobs_fit`, `tobs_model`, `tobs_family`, `tobs_spatial`,
 > `tobs_temporal`, `tobs_re`, `tobs_svc`, `tobs_latent`, `tobs_priors_spec`).
 >
@@ -324,6 +324,7 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Integrated multi-source | Yes     | Yes   | Shared psi                              |
 | JSDM                    | Yes     | Yes   | No detection process                    |
 | Cover hurdle (joint)    | Yes     | —     | `family_cover_hurdle.R`, `sla_cover_*`  |
+| Joint occu + cover      | Yes     | —     | `occu_cover()`. **Non-spatial** (`method = "laplace"`, `R/occu_cover.R`): cell-level psi + per-visit detection + per-visit cover (beta or lognormal) on the exact two-state marginal. **Spatial v3** (`method = "nested_laplace"`, `R/occu_cover_nested.R`): nested Laplace with field z profiled out per outer (alpha, sigma) candidate; ICAR/besag (rho fixed) field shared across psi and cover arms via `alpha`. Lognormal positive arm only on spatial path (beta arm v4). Recovery: 20-seed lognormal v1 + 10-seed beta v1 + 10-seed v3 spatial; status `"experimental"`. v2's joint Laplace (`control = list(engine = "v2_joint")`) kept as a debug escape hatch (had a (z, alpha, sigma) ridge that v3 breaks). |
 | N-mixture (Poisson/NB)  | Yes     | —     | `abun(mixture=)`; closed-form marginal via in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB adds jointly-estimated `log_r`. NUTS pending |
 | N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; Poisson or NB (size `r` integrated over the grid); grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
 | Community N-mixture     | Yes     | —     | `ms_abun()` (spAbundance `msNMix`); per-species coef RE with Gaussian community covariances; in-tree C++ Laplace-EM (`nmix_laplace_re`) driving a native `NMixCommunityOracle` via tulpa's generic AGHQ engine, Schur-complement mean SEs; Poisson only; recovery + 20-seed coverage (`test-ms-abun.R`). NUTS / negbin / spatial pending |
@@ -391,6 +392,9 @@ R/
   sla_cover_hurdle.R       — SLA path for cover hurdle (separate-Laplace)
   sla_cover_hurdle_joint.R — SLA path for cover hurdle (joint-Laplace)
   family_cover_hurdle.R    — .dispatch_cover() (two-Laplace hurdle), large
+  occu_cover.R             — joint occu-detection + cover hurdle: family wiring (builder, dispatcher, simulator, non-spatial Laplace fitter).
+  occu_cover_spatial.R     — v2 joint-Laplace spatial path (debug escape hatch via control$engine = "v2_joint"); shares the ICAR Q + Sorbye-Rue scale helpers with v3.
+  occu_cover_nested.R      — v3 nested-Laplace spatial path (default for method = "nested_laplace"): inner Newton on z profiled out per outer (alpha, sigma) candidate; outer BFGS over ~10 params; ICAR/besag field shared across psi and cover arms via alpha. Lognormal positive arm only.
   sim_cover_hurdle.R       — cover hurdle simulators (incl. joint)
   formula_terms.R          — structured-term registry + constructors (.tobs_term_icar/bym2/car/gp/spde/re/temporal/svc/latent/copy), tobs_* print methods, .tobs_term_to_tulpa_spatial
   formula_parse.R          — AST parser: .tobs_parse_formula / .tobs_parse_processes / .tobs_resolve_terms / .tobs_bind_formulas

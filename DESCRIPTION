@@ -8,7 +8,6 @@ Description: Single-season and multi-season Bayesian occupancy models with
     tulpa engine for HMC/NUTS inference with automatic differentiation.
 SystemRequirements: C++17
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends:
@@ -39,3 +38,4 @@ Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, method-gibbs-recovery, re-laplace-recovery,
     re-bar-recovery, occu-laplace-se, occu-prior, issue8*, spde-occ, spatial-occ,
     nested-laplace*, cover-hurdle-nested-joint-recovery, cover-hurdle-bpos0-coverage
+Config/roxygen2/version: 8.0.0

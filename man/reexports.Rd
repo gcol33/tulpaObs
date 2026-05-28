@@ -11,6 +11,6 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{tulpa}{\code{\link[tulpa]{ranef}}}
+  \item{tulpa}{\code{\link[tulpa:ranef]{ranef()}}}
 }}
 

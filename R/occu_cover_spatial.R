@@ -1,0 +1,432 @@
+# =============================================================================
+# occu_cover_spatial.R - v2 nested-Laplace spatial path for occu_cover().
+#
+# Adds a cell-level latent ICAR field z[1..n_cells] (sum-to-zero) shared
+# across the psi and cover arms, mirroring Michael Glaser's mod.joint
+# (`copy = "cell.occ"` linking the besag field on cell.occ to cell.ab).
+#
+# Augmented linear predictors:
+#
+#   eta_psi_i   = X_psi[i, ] %*% beta_psi + z[i]
+#   eta_p_ij    = X_p[i, ] %*% beta_p_site + X_p_visit[ij, ] %*% beta_p_visit
+#   eta_pos_ij  = X_pos[i, ] %*% beta_pos_site + X_pos_visit[ij, ] %*% beta_pos_visit
+#                 + alpha * z[i]
+#
+# This is `cover()`'s joint parameterisation, not "sigma * z + alpha * sigma *
+# z": the latter confounds `alpha` with `sigma` when detection is weak.
+# Here `z` carries its own marginal variance sigma^2 via the prior precision,
+# and `alpha` is the cover-arm scaling alone (matches INLA `copy=` semantics).
+#
+# z's prior is the ICAR (intrinsic CAR / Besag) penalty (1/(2 sigma^2)) * z' Q z with
+# Q = D - W (degree minus adjacency, the unscaled graph Laplacian). The
+# field is rank-deficient (kernel = constant vector), so a soft sum-to-zero
+# penalty 0.5 * kappa * (sum(z))^2 is added to identify the psi intercept
+# separately from the field mean.
+#
+# Fit:
+#   joint Laplace MAP via optim(BFGS) on
+#     par = c(beta_psi, beta_p, beta_pos, log_disp, z, alpha, log_sigma)
+#   SEs from the inverse observed-Fisher Hessian (full joint covariance).
+#
+# v2.0 limitations (intentional, will be addressed in v3):
+#   - ICAR only (rho = 1). BYM2 with free rho mixing requires another
+#     latent block; for now bym2() in the formula is read as ICAR with a
+#     warning the first time. Most of Michael's `mod.joint` runs use
+#     besag (= ICAR), so the head-to-head still holds.
+#   - Joint optim grows linearly in n_cells. For n_cells > ~2000 the
+#     dense Hessian becomes the bottleneck; sparse-Q + sparse linear
+#     algebra is v3.
+#   - No outer-grid integration of (sigma, alpha); they're point-estimated
+#     at the joint MAP with their SE read off the Hessian. The full
+#     nested-Laplace integration of these hyperpriors is v3.
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# Build the ICAR precision matrix Q = D - W from an adjacency.
+# ---------------------------------------------------------------------------
+.occu_cover_icar_Q <- function(adj) {
+  n <- nrow(adj)
+  D <- rowSums(adj)
+  if (any(D == 0L)) {
+    isolated <- which(D == 0L)
+    stop(sprintf("ICAR graph has %d isolated node(s) (no neighbours): %s. ",
+                 length(isolated),
+                 paste(utils::head(isolated, 5L), collapse = ", ")),
+         "Drop them or connect them before fitting.", call. = FALSE)
+  }
+  Q <- -as.matrix(adj)
+  diag(Q) <- D
+  Q
+}
+
+
+# ---------------------------------------------------------------------------
+# Sorbye-Rue scaling factor: geometric mean of diag(Q^+) under the sum-to-zero
+# constraint. Multiplying Q by this factor gives a precision whose
+# generalized-inverse diagonal has geometric mean 1, so `sigma` in the linear
+# predictor `sigma * z` is the geo-mean marginal SD of the field.
+# Matches INLA's `scale.model = TRUE` (Sorbye & Rue 2014), the convention
+# Michael's `mod.joint` uses on the besag field.
+# ---------------------------------------------------------------------------
+.occu_cover_icar_scale <- function(adj) {
+  n <- nrow(adj)
+  Q <- .occu_cover_icar_Q(adj)
+  eig <- eigen(Q, symmetric = TRUE)
+  pos <- eig$values > 1e-10
+  if (!any(pos)) {
+    stop("ICAR graph has no positive eigenvalues; check connectivity.",
+         call. = FALSE)
+  }
+  V_p <- eig$vectors[, pos, drop = FALSE]
+  Qinv_diag <- rowSums(V_p^2 /
+                          matrix(eig$values[pos], n, sum(pos), byrow = TRUE))
+  exp(mean(log(Qinv_diag)))
+}
+
+
+# ---------------------------------------------------------------------------
+# Pull the spatial term from the psi formula. Returns NULL when no spatial
+# term is present, errors when something other than ICAR/BYM2 appears.
+# ---------------------------------------------------------------------------
+.occu_cover_spatial_term <- function(formula, data) {
+  bind <- .tobs_bind_formulas(list(psi = formula), data)
+  if (length(bind$terms) == 0L) return(NULL)
+  # `.tobs_bind_formulas` returns terms wrapped in `list(spec = ..., process = ...)`.
+  spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
+  if (length(spatial) == 0L) return(NULL)
+  if (length(spatial) > 1L) {
+    stop("occu_cover() v2 supports at most one spatial term in the psi ",
+         "formula; got ", length(spatial), ".", call. = FALSE)
+  }
+  term_spec <- spatial[[1L]]$spec
+  if (!term_spec$type %in% c("icar", "bym2")) {
+    stop(sprintf(
+      "occu_cover() v2 spatial path supports icar() or bym2() in the psi formula; got %s().",
+      term_spec$type), call. = FALSE)
+  }
+  if (term_spec$type == "bym2") {
+    warning("occu_cover() v2 reads bym2() as ICAR (rho fixed to 1); ",
+            "BYM2 with free rho mixing is v3.", call. = FALSE)
+  }
+  list(fe = bind$fe$psi, term = term_spec)
+}
+
+
+# ---------------------------------------------------------------------------
+# NLP for the spatial v2 fit.
+#
+# par layout (offsets recorded once in the fitter):
+#   beta_psi      [1, p_psi]
+#   beta_p        [p_psi + 1, p_psi + p_p]
+#   beta_pos      [p_psi + p_p + 1, p_psi + p_p + p_pos]
+#   log_disp      [.. + 1]
+#   z             [.. + (1 .. n_cells)]
+#   alpha         [.. + 1]
+#   log_sigma     [.. + 1]
+# ---------------------------------------------------------------------------
+.tobs_occu_cover_spatial_nlp <- function(par, model, Q, scale_q, pmean, pprec,
+                                          kappa_sum = 1e4) {
+  cl <- function(e) pmin(pmax(e, -30), 30)
+
+  pi_list <- model$process_info
+  p_psi   <- pi_list[[1L]]$p
+  p_p     <- pi_list[[2L]]$p
+  p_pos   <- pi_list[[3L]]$p
+  n_cells <- model$n_sites
+  max_visits <- model$max_visits
+
+  off <- 0L
+  beta_psi <- par[off + seq_len(p_psi)]; off <- off + p_psi
+  beta_p   <- par[off + seq_len(p_p)];   off <- off + p_p
+  beta_pos <- par[off + seq_len(p_pos)]; off <- off + p_pos
+  log_disp <- par[off + 1L];             off <- off + 1L
+  z        <- par[off + seq_len(n_cells)]; off <- off + n_cells
+  alpha    <- par[off + 1L];             off <- off + 1L
+  log_sigma <- par[off + 1L]
+  sigma    <- exp(log_sigma)
+
+  # Psi linear predictor: cell-level + field (z carries its own marginal SD
+  # sigma via the prior precision; no sigma multiplier here).
+  eta_psi <- as.numeric(model$X_occ %*% beta_psi) + z
+  psi     <- stats::plogis(cl(eta_psi))
+
+  # Detection: site-level + visit-level (no field — detection is observation-
+  # process, the shared field belongs to the latent state and the cover arm).
+  bp_site  <- beta_p[seq_len(ncol(model$X_det_site))]
+  bp_visit <- if (!is.null(model$X_det_visit)) {
+    beta_p[ncol(model$X_det_site) + seq_len(ncol(model$X_det_visit))]
+  } else {
+    numeric(0)
+  }
+  eta_p_site <- as.numeric(model$X_det_site %*% bp_site)
+  p_mat <- matrix(eta_p_site, n_cells, max_visits)
+  if (length(bp_visit)) {
+    eta_p_visit <- as.numeric(model$X_det_visit %*% bp_visit)
+    p_mat <- p_mat + matrix(eta_p_visit, n_cells, max_visits, byrow = TRUE)
+  }
+  p_mat <- stats::plogis(cl(p_mat))
+
+  # Cover-arm linear predictor (site-level + visit-level + alpha * sigma * z).
+  bpos_site  <- beta_pos[seq_len(ncol(model$X_pos_site))]
+  bpos_visit <- if (!is.null(model$X_pos_visit)) {
+    beta_pos[ncol(model$X_pos_site) + seq_len(ncol(model$X_pos_visit))]
+  } else {
+    numeric(0)
+  }
+  eta_pos_site <- as.numeric(model$X_pos_site %*% bpos_site)
+  ep_mat <- matrix(eta_pos_site, n_cells, max_visits)
+  if (length(bpos_visit)) {
+    eta_pos_visit <- as.numeric(model$X_pos_visit %*% bpos_visit)
+    ep_mat <- ep_mat + matrix(eta_pos_visit, n_cells, max_visits, byrow = TRUE)
+  }
+  ep_mat <- ep_mat + matrix(alpha * z, n_cells, max_visits)
+
+  valid <- model$valid
+  y     <- model$y
+  y_pos <- model$y_pos
+
+  log_p   <- ifelse(valid, log(p_mat),     0)
+  log_1mp <- ifelse(valid, log(1 - p_mat), 0)
+
+  pos_mask <- valid & (y == 1L)
+  log_f_pos <- matrix(0, n_cells, max_visits)
+  if (identical(model$positive, "beta")) {
+    phi_d <- exp(log_disp)
+    mu_pos <- stats::plogis(cl(ep_mat))
+    a <- mu_pos * phi_d
+    b <- (1 - mu_pos) * phi_d
+    dens <- lgamma(phi_d) - lgamma(a) - lgamma(b) +
+            (a - 1) * log(y_pos) + (b - 1) * log(1 - y_pos)
+    log_f_pos[pos_mask] <- dens[pos_mask]
+  } else {
+    sigma_pos <- exp(log_disp)
+    dens <- -log(y_pos) - log(sigma_pos) - 0.5 * log(2 * pi) -
+            0.5 * ((log(y_pos) - ep_mat) / sigma_pos)^2
+    log_f_pos[pos_mask] <- dens[pos_mask]
+  }
+
+  log_h <- ifelse(valid,
+                  ifelse(y == 1L, log_p + log_f_pos, log_1mp),
+                  0)
+
+  any_det <- rowSums(y * valid, na.rm = FALSE) > 0
+  log_psi   <- log(pmax(psi, 1e-300))
+  log_1mpsi <- log(pmax(1 - psi, 1e-300))
+
+  det_ll <- log_psi + rowSums(log_h)
+  ln_a <- log_psi   + rowSums(log_1mp)
+  ln_b <- log_1mpsi
+  m    <- pmax(ln_a, ln_b)
+  nodet_ll <- m + log(exp(ln_a - m) + exp(ln_b - m))
+
+  ll <- sum(ifelse(any_det, det_ll, nodet_ll))
+
+  # Priors and penalties.
+  # - Gaussian prior on betas (and on alpha, log_sigma via pprec).
+  # - ICAR prior on z: 0.5 * z' Q z.
+  # - Soft sum-to-zero on z: 0.5 * kappa_sum * sum(z)^2.
+  beta_penalty <- 0.5 * sum(pprec * (par - pmean)^2)
+  # Sorbye-Rue scaled ICAR with marginal variance sigma^2:
+  #   z ~ N(0, sigma^2 * (scale_q * Q)^{-1})
+  #   -log p(z) = 0.5 * (scale_q / sigma^2) * z' Q z + (n_eff/2) * log(sigma^2)
+  # The log-determinant term is constant in z but needed for sigma's score.
+  # n_eff = rank of Q under sum-to-zero = n_cells - 1.
+  inv_sig2 <- exp(-2 * log_sigma)
+  z_prior  <- 0.5 * inv_sig2 * scale_q *
+              as.numeric(crossprod(z, Q %*% z)) +
+              (n_cells - 1) * log_sigma
+  z_sumzero <- 0.5 * kappa_sum * sum(z)^2
+
+  -ll + beta_penalty + z_prior + z_sumzero
+}
+
+
+# ---------------------------------------------------------------------------
+# Spatial fitter.
+# ---------------------------------------------------------------------------
+.tobs_fit_occu_cover_spatial <- function(model, adj,
+                                          priors    = NULL,
+                                          max.iter  = 300L,
+                                          tol       = 1e-6,
+                                          verbose   = TRUE,
+                                          sigma.beta = 5,
+                                          ...) {
+  pi_list <- model$process_info
+  p_psi   <- pi_list[[1L]]$p
+  p_p     <- pi_list[[2L]]$p
+  p_pos   <- pi_list[[3L]]$p
+  n_cells <- model$n_sites
+
+  if (nrow(adj) != n_cells) {
+    stop(sprintf("Spatial graph has %d nodes but data has %d cells. ",
+                 nrow(adj), n_cells),
+         "Pass an adjacency matching the cell grid (one node per cell).",
+         call. = FALSE)
+  }
+
+  Q       <- .occu_cover_icar_Q(adj)
+  scale_q <- .occu_cover_icar_scale(adj)
+  n_par <- p_psi + p_p + p_pos + 1L + n_cells + 2L
+
+  par_names <- c(
+    paste0("psi_", pi_list[[1L]]$coef_names),
+    paste0("p_",   pi_list[[2L]]$coef_names),
+    paste0("pos_", pi_list[[3L]]$coef_names),
+    if (identical(model$positive, "beta")) "log_phi" else "log_sigma_pos",
+    sprintf("z[%d]", seq_len(n_cells)),
+    "alpha", "log_sigma"
+  )
+
+  # Warm starts.
+  start <- numeric(n_par)
+  any_det <- rowSums(model$y * model$valid) > 0
+  det_rate <- max(mean(any_det), 1e-3)
+  start[1L] <- stats::qlogis(min(max(det_rate, 1e-3), 1 - 1e-3))
+
+  pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  disp_idx <- p_psi + p_p + p_pos + 1L
+  pos_int_idx <- p_psi + p_p + 1L
+  if (length(pos_vals) > 0L) {
+    if (identical(model$positive, "beta")) {
+      start[pos_int_idx] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))
+      start[disp_idx]    <- log(10)
+    } else {
+      start[pos_int_idx] <- mean(log(pos_vals))
+      start[disp_idx]    <- log(stats::sd(log(pos_vals)) + 0.1)
+    }
+  } else {
+    start[disp_idx] <- if (identical(model$positive, "beta")) log(10) else log(0.4)
+  }
+
+  # Warm-start z from each cell's per-cell mean cover residual.
+  # If cell i has positive observations with cover values, log(mean(cover))
+  # minus the population mean gives a rough estimate of the cell deviation
+  # on the cover-arm scale; scale to roughly the prior amplitude. Starting
+  # z at 0 traps the optim in (small z, small sigma, large alpha) ridge.
+  z_idx_init <- p_psi + p_p + p_pos + 1L + seq_len(n_cells)
+  cell_pos_mean <- rep(NA_real_, n_cells)
+  for (i in seq_len(n_cells)) {
+    vals <- model$y_pos[i, model$valid[i, ] & model$y[i, ] == 1L]
+    if (length(vals) > 0L) {
+      cell_pos_mean[i] <- if (identical(model$positive, "beta"))
+                            stats::qlogis(min(max(mean(vals), 1e-3), 1 - 1e-3))
+                          else
+                            mean(log(vals))
+    }
+  }
+  z_init <- cell_pos_mean - mean(cell_pos_mean, na.rm = TRUE)
+  z_init[is.na(z_init)] <- 0
+  # Soft-shrink toward zero and rescale to a modest amplitude (sigma ~ 0.5).
+  if (stats::sd(z_init) > 0) z_init <- 0.5 * z_init / stats::sd(z_init)
+  start[z_idx_init] <- z_init
+
+  start[n_par - 1L] <- 1.0   # alpha — same sign, same scale anchor
+  start[n_par]      <- 0     # log_sigma — start at sigma = 1
+
+  # Gaussian-prior precision aligned with par. Penalize only fixed-effect
+  # betas (not z, not alpha, not log_sigma — those carry their own priors).
+  pmean <- numeric(n_par)
+  pprec <- numeric(n_par)
+  if (isTRUE(is.null(priors)) || !isFALSE(priors)) {
+    beta_idx <- c(seq_len(p_psi),
+                  p_psi + seq_len(p_p),
+                  p_psi + p_p + seq_len(p_pos))
+    pprec[beta_idx] <- 1 / (sigma.beta^2)
+  }
+  # Anchors on the hyperparameters to break the (z, alpha, sigma) ridge.
+  # alpha ~ N(0, 1^2) — symmetric "no-effect" prior; lets alpha be either
+  # sign / scale without nudging toward 1. log_sigma ~ N(0, 0.6^2) — sigma
+  # in roughly [0.3, 3.3], wide enough to not dominate when data has signal.
+  # The joint Laplace still slides this ridge when the cover arm dominates
+  # in info; v3 (proper nested-Laplace with z profiled out) is the structural
+  # fix.
+  pmean[n_par - 1L] <- 0
+  pprec[n_par - 1L] <- 1 / 1
+  pmean[n_par]      <- 0
+  pprec[n_par]      <- 1 / (0.6^2)
+
+  opt <- stats::optim(start, .tobs_occu_cover_spatial_nlp,
+                       model = model, Q = Q, scale_q = scale_q,
+                       pmean = pmean, pprec = pprec,
+                       method = "BFGS", hessian = TRUE,
+                       control = list(maxit = max.iter, reltol = tol,
+                                      trace = if (isTRUE(verbose)) 1L else 0L))
+
+  # Post-process: re-center z to sum to zero (the soft penalty makes
+  # mean(z) ~ 0 but not exactly), absorbing the residual into the two
+  # intercepts. Linear predictors are psi = beta + z and pos = beta + alpha * z,
+  # so the offsets are +z_mean on psi[1] and +alpha * z_mean on pos[1].
+  z_idx     <- p_psi + p_p + p_pos + 1L + seq_len(n_cells)
+  alpha_idx <- n_par - 1L
+  z_mean    <- mean(opt$par[z_idx])
+  alpha_hat <- opt$par[alpha_idx]
+  opt$par[z_idx] <- opt$par[z_idx] - z_mean
+  opt$par[1L]                  <- opt$par[1L]                  + z_mean
+  opt$par[p_psi + p_p + 1L]    <- opt$par[p_psi + p_p + 1L]    + alpha_hat * z_mean
+
+  V <- tryCatch(solve(opt$hessian), error = function(e) NULL)
+  if (is.null(V)) {
+    warning("occu_cover spatial: Hessian not invertible; SEs unreliable.",
+            call. = FALSE)
+    V <- matrix(NA_real_, n_par, n_par)
+  }
+  se <- sqrt(pmax(diag(V), 0))
+
+  means <- opt$par
+  names(means) <- par_names
+  names(se)    <- par_names
+  dimnames(V)  <- list(par_names, par_names)
+
+  # Split betas from field for cleaner downstream summaries.
+  beta_names <- par_names[-z_idx]
+  field_names <- par_names[z_idx]
+  beta_idx_all <- setdiff(seq_len(n_par), z_idx)
+
+  # Pseudo-draws on the FIXED-EFFECT / hyperparameter block only (not z;
+  # the field draws are large and the user typically wants the cell-level
+  # marginal summaries computed below).
+  n_draws <- 1000L
+  draws <- .occu_cover_rmvn(n_draws, means[beta_idx_all], V[beta_idx_all, beta_idx_all, drop = FALSE])
+  colnames(draws) <- beta_names
+
+  # Per-cell field summary (posterior mean + 95% Wald CI).
+  z_mean_post <- means[z_idx]
+  z_sd_post   <- se[z_idx]
+  field_table <- data.frame(
+    cell      = seq_len(n_cells),
+    z_mean    = z_mean_post,
+    z_sd      = z_sd_post,
+    z_lower   = z_mean_post - 1.96 * z_sd_post,
+    z_upper   = z_mean_post + 1.96 * z_sd_post
+  )
+
+  structure(list(
+    draws        = draws,
+    means        = means,
+    sds          = se,
+    vcov         = V,
+    n_samples    = n_draws,
+    n_params     = n_par,
+    log_prob     = rep(-opt$value, n_draws),
+    log_lik      = -opt$value,
+    N            = sum(model$valid),
+    accept_prob  = rep(1, n_draws),
+    divergent    = rep(0L, n_draws),
+    treedepth    = rep(0L, n_draws),
+    epsilon      = NA_real_,
+    col_names    = beta_names,
+    param_names  = beta_names,
+    process_info = pi_list,
+    model        = model,
+    spatial      = list(type = "icar", graph = adj,
+                        sigma_mean = exp(means["log_sigma"]),
+                        alpha_mean = means["alpha"]),
+    spatial_field = z_mean_post,
+    field_table  = field_table,
+    method       = "nested_laplace",
+    positive     = model$positive,
+    convergence  = list(converged = opt$convergence == 0L,
+                        n_iter    = opt$counts[1L])
+  ), class = c("tobs_fit", "tulpa_fit"))
+}
