@@ -1,0 +1,327 @@
+---
+title: "Getting started with tulpaObs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with tulpaObs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 6, fig.height = 4
+)
+set.seed(20260529)
+```
+
+```{r load, message = FALSE}
+library(tulpaObs)
+```
+
+## What tulpaObs fits
+
+A survey that visits a site a handful of times and records whether a
+species was seen carries two things at once: whether the species is there
+at all, and whether you happened to detect it on a given visit. tulpaObs
+fits the hierarchical models that separate those two. You pass the latent
+process formula, a `detection` formula, the detection-history matrix `y`,
+and a `family`; `tobs()` builds the design, plugs the family likelihood
+into the [`tulpa`](https://github.com/gcol33/tulpa) engine, and returns a
+fitted object you can summarise, predict from, and compare.
+
+The package covers occupancy (single-season, dynamic, community,
+integrated, joint species distribution), N-mixture abundance (single
+species and community, Poisson or negative binomial), and a vegetation
+cover hurdle. Spatial fields, temporal structure, and random effects
+attach to any of them through terms inside the formula. The default
+engine is a fast Laplace approximation; the same model fits under NUTS
+when you want the full posterior.
+
+This vignette stays on the spine: simulate a dataset with known truth,
+fit it, read the estimates, predict, compare. The dedicated vignettes go
+deeper on each family.
+
+## A first occupancy model
+
+`simulate_occu()` draws a single-season dataset with parameters you set,
+so the fit has a truth to recover. Occupancy depends on one site
+covariate (`occ_cov1`) with intercept 0.3 and slope 1.0; detection
+depends on `det_cov1` with intercept 0.7 (so detection probability is
+about 0.67) and slope 0.6. Six visits per site keep the two processes
+identifiable.
+
+```{r sim}
+sim <- simulate_occu(
+  N = 300, J = 6,
+  n_occ_covs = 1, n_det_covs = 1,
+  beta_occ = c(0.3, 1.0),    # occupancy intercept + slope on occ_cov1
+  beta_det = c(0.7, 0.6),    # detection intercept + slope on det_cov1
+  seed = 1
+)
+dat <- sim$data              # site covariates, one row per site
+y   <- sim$y                 # 300 x 6 detection-history matrix
+y[1:3, ]
+```
+
+The raw proportion of sites with any detection understates true
+occupancy, because an occupied site can go undetected on every visit.
+
+```{r naive}
+c(naive_occupied = mean(rowSums(y) > 0),
+  true_occupied  = mean(sim$truth$z))
+```
+
+Fit the proper model with `tobs()`. The latent occupancy formula is the
+first argument, detection is its own formula, and `occu()` selects the
+single-season family. `method = "laplace"` is the default: it finds the
+posterior mode and the curvature there and returns in a fraction of a
+second.
+
+```{r fit}
+fit <- tobs(
+  ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  method    = "laplace",
+  control   = list(verbose = FALSE)   # the EM prints its iterations otherwise
+)
+```
+
+`coef()` returns the estimates as a list with one element per process.
+The occupancy and detection coefficients both land near the simulated
+truth.
+
+```{r coef}
+coef(fit)
+```
+
+`summary()` adds the posterior standard deviation and the 2.5%/50%/97.5%
+credible bounds for every coefficient. The `psi_` rows are the occupancy
+linear predictor, the `p_` rows the detection one.
+
+```{r summary}
+summary(fit)
+```
+
+`confint()` returns the same bounds as a matrix, reading the fixed-effect
+block of the Hessian the Laplace fit already computed, so there is no
+extra sampling step.
+
+```{r confint}
+confint(fit)
+```
+
+## Occupancy, detection, and the latent state
+
+`fitted()` returns three per-site quantities: `psi` (the modelled
+occupancy probability), `p` (detection probability), and `z` (the
+posterior probability the site is occupied given its detection history).
+A site with at least one detection has `z = 1`; a site with all-zero
+visits gets the partial credit the model assigns from `psi` and `p`.
+
+```{r fitted}
+fv <- fitted(fit)
+str(lapply(fv, head, 4))
+```
+
+Plotting the fitted `psi` against the true occupancy probability shows
+the model recovers the site-level signal, not just the population mean.
+
+```{r fitted-plot, fig.alt = "Fitted occupancy probability against the true simulated probability, scattered around the identity line"}
+plot(sim$truth$psi, fv$psi, pch = 16, col = rgb(0, 0, 0, 0.35),
+     xlab = "true psi", ylab = "fitted psi")
+abline(0, 1, col = "steelblue", lwd = 2)
+```
+
+## Laplace and NUTS
+
+The Laplace fit conditions on a Gaussian posterior shape. That is exact
+for the fixed-effect curvature here and immediate to compute. When you
+want draws from the full posterior, `method = "nuts"` runs the
+gradient sampler; it reports `Rhat` and effective sample size alongside
+the estimates.
+
+```{r nuts}
+fit_nuts <- tobs(
+  ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  method    = "nuts",
+  control   = list(n.iter = 800, n.warmup = 400, seed = 1, verbose = FALSE)
+)
+summary(fit_nuts)
+```
+
+The two backends agree on the coefficients to within their uncertainty.
+`Rhat` near 1 and effective sample sizes in the hundreds say the chains
+mixed. With six visits and detection near 0.67 the Laplace mode and the
+posterior mean coincide; at fewer visits or lower detection the joint
+mode can drift, and NUTS is the honest choice.
+
+```{r compare-backends}
+data.frame(
+  term    = names(unlist(coef(fit))),
+  laplace = round(unlist(coef(fit)), 3),
+  nuts    = round(unlist(coef(fit_nuts)), 3),
+  row.names = NULL
+)
+```
+
+## Prediction
+
+`tobs_marginal_effect()` varies one covariate across its range, holds the
+others at their mean, and returns the predicted probability with a
+credible band. Here it traces how occupancy responds to `occ_cov1`.
+
+```{r marginal, fig.alt = "Predicted occupancy probability rising with occ_cov1, with a shaded 95% credible band"}
+me <- tobs_marginal_effect(fit_nuts, "occ_cov1", process = "occupancy")
+plot(me)
+```
+
+For prediction at an explicit design, pass a matrix to `X.0` with one
+column per occupancy coefficient. The result carries the posterior mean,
+SD, and credible bounds of `psi` at each new row.
+
+```{r predict-design}
+X0 <- cbind(`(Intercept)` = 1, occ_cov1 = c(-1, 0, 1))
+predict(fit_nuts, X.0 = X0)
+```
+
+## Comparing models
+
+`tobs_waic()` computes the widely applicable information criterion from
+the pointwise log-likelihood. Lower is better. Compare the covariate
+model against an intercept-only occupancy model to check the covariate
+earns its place.
+
+```{r waic}
+fit0 <- tobs(~ 1, data = dat, family = occu(),
+             detection = ~ det_cov1, y = y, method = "laplace",
+             control = list(verbose = FALSE))
+
+c(intercept_only = tobs_waic(fit0)$waic,
+  with_covariate = tobs_waic(fit)$waic)
+```
+
+The covariate model has the lower WAIC, matching how the data were
+generated. The drop reflects the occupancy slope the intercept-only model
+cannot represent.
+
+## Other families
+
+The same call shape fits counts and cover; only `family` and the response
+change. Each gets its own vignette, so these are tastes, not tours.
+
+### N-mixture abundance
+
+`abun()` fits Royle's N-mixture model: latent abundance per site, binomial
+detection per visit. The abundance arm uses a log link, so its intercept
+back-transforms with `exp()`.
+
+```{r abun}
+sa  <- simulate_abun(N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
+                     beta_lambda = c(log(3), 0.5), beta_p = c(0.4, 0.3),
+                     seed = 2)
+fa  <- tobs(~ abund_cov1, data = sa$data, family = abun(),
+            detection = ~ det_cov1, y = sa$y, method = "laplace",
+            control = list(verbose = FALSE))
+coef(fa)
+```
+
+`abun(mixture = "negbin")` adds an overdispersion parameter for counts
+with more spread than Poisson. See `vignette("abundance")`.
+
+### Community occupancy
+
+`ms_occu()` fits many species at once, with community-level hyperpriors
+tying the species coefficients together. `y` is a sites-by-visits-by-species
+array and `species` names the third dimension.
+
+```{r ms}
+sm <- simulate_ms_occu(N = 120, J = 5, n_species = 8, seed = 3)
+fm <- tobs(~ x, data = sm$data, family = ms_occu(), detection = ~ 1,
+           y = sm$y, species = paste0("sp", 1:8), method = "laplace",
+           control = list(verbose = FALSE))
+coef(fm)
+```
+
+`tobs_richness()` turns the per-species occupancy posteriors into a
+site-level species-richness estimate with uncertainty. See
+`vignette("community-models")`.
+
+### Vegetation cover
+
+`cover()` fits a hurdle for continuous cover: a presence process plus a
+positive-cover process (beta or lognormal) for where the species occurs.
+See `vignette("cover-hurdle")`.
+
+```{r cover}
+sc <- simulate_cover(N = 200, beta_occ = c(-0.3, 0.8),
+                     beta_pos = c(-1, 0.3), sigma_pos = 0.4, seed = 4)
+str(sc$data, max.level = 1)
+```
+
+## Extracting results
+
+The fitted object answers the standard accessors. They behave the same on
+a Laplace fit and a NUTS fit; the Laplace tier reports the Gaussian
+approximation, the sampler tier reports empirical posterior summaries.
+
+| Accessor | Returns |
+|---|---|
+| `coef()` | per-process fixed-effect estimates |
+| `summary()` | estimate, SD, credible bounds (plus Rhat/ESS under NUTS) |
+| `confint()` | credible intervals (matrix) |
+| `vcov()` | fixed-effect covariance |
+| `ranef()` | group-level random effects (when present) |
+| `fitted()` | per-site `psi`, `p`, `z` |
+| `predict()` | occupancy at a new design or varied term |
+| `tobs_waic()` | WAIC, elpd, effective parameters |
+| `residuals()` | deviance / Pearson / response residuals |
+| `simulate()` | replicate detection histories from the fit |
+
+## Practical guidance
+
+- **Start with `method = "laplace"`.** It is deterministic and returns
+  in well under a second on a few hundred sites. Use it for the first
+  look and for WAIC comparison. Move to `method = "nuts"` when detection
+  is low, visits are few, or you need the full posterior shape rather than
+  a Gaussian approximation at the mode.
+- **Visits drive identifiability.** Occupancy and detection trade off
+  against each other. With two or three visits and detection below about
+  0.3, the two processes are weakly separated and the Laplace mode can
+  drift; NUTS or more visits resolve it. The
+  [identifiability discussion in `vignette("occupancy")`](occupancy.html)
+  works through where recovery fails.
+- **Detection covariates broadcast across visits** when the data frame
+  has one row per site, as in `simulate_occu()`. For covariates that
+  change between visits (effort, observer, weather), pass a per-visit
+  design; see `vignette("data-formatting")`.
+- **Read uncertainty, not just point estimates.** `confint()` and the
+  `summary()` quantile columns carry the credible bounds. A coefficient
+  whose interval spans zero is not pulling its weight regardless of the
+  point estimate.
+- **WAIC compares, it does not validate.** A lower WAIC says one model
+  predicts the in-sample data better; it does not say the model is
+  calibrated. Pair it with a posterior-predictive check
+  (`tobs_ppc()`, see `vignette("diagnostics")`).
+
+## Where to go next
+
+- Single-season occupancy end to end, with model comparison and
+  identifiability: `vignette("occupancy")`.
+- N-mixture abundance, negative binomial, and areal spatial counts:
+  `vignette("abundance")`.
+- Many species at once: `vignette("community-models")`.
+- Colonisation and extinction across seasons:
+  `vignette("dynamic-occupancy")`.
+- Random effects with `lme4` bar syntax: `vignette("random-effects")`.
+- Posterior-predictive checks, WAIC, and spatial residual diagnostics:
+  `vignette("diagnostics")`.
+```

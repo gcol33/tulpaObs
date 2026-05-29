@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## (unreleased)
+
+* feat(abun): grouped random effects on the single-species N-mixture
+  (gcol33/tulpaObs#13). `abun()` now accepts `(1 | g)` (and the slope /
+  uncorrelated / correlated variants the formula RE machinery already
+  understands) on either the abundance or the detection predictor of a
+  single-species fit. `.tobs_fit_nmix_re()` warm-starts the betas with the
+  no-RE Laplace fit and refines through `.tobs_nmix_re_aghq()`, a thin
+  `make_site` callback over `nmix_site_marginal()` driven by
+  `tulpa::tulpa_re_aghq()`. `control$n.quad = 1` is the joint Laplace
+  (production); `n.quad > 1` is the AGHQ debias of the small-cluster sigma
+  attenuation. Poisson and negbin (the global `log_r` is carried as the
+  trailing theta coordinate, jointly estimated with the betas). Gated: RE
+  combined with an areal spatial term, RE with visit-level detection
+  covariates, and RE shared across both arms (each errors with a pointer
+  rather than silently dropping the requested structure). `coef()`,
+  `vcov()`, and `ranef()` carry the RE component. `tests/testthat/test-abun-re.R`
+  covers the structural surface, the capability gates, and (under
+  `NOT_CRAN=true`) sigma recovery, fixed-effect CI coverage, and the NB+RE
+  path.
+
 ## 0.0.2 (2026-05-28)
 
 * fix(build): clean-slate compile against tulpa restored. The

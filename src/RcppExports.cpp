@@ -139,6 +139,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_nmix_grouped_oracle
+SEXP cpp_nmix_grouped_oracle(int arm, Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, int K_max, bool nb);
+RcppExport SEXP _tulpaObs_cpp_nmix_grouped_oracle(SEXP armSEXP, SEXP ySEXP, SEXP site_idxSEXP, SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type arm(armSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type Z_site(Z_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_group(site_groupSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_groups(n_groupsSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_nmix_grouped_oracle(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_nested_laplace_nmix_icar
 Rcpp::List cpp_nested_laplace_nmix_icar(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector map_site_to_unit_R, Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, int n_spatial, Rcpp::NumericVector tau_grid, Rcpp::NumericVector r_grid, Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init, Rcpp::Nullable<Rcpp::NumericVector> z_init, int K_max, int max_iter, double tol, bool verbose);
 RcppExport SEXP _tulpaObs_cpp_nested_laplace_nmix_icar(SEXP ySEXP, SEXP site_idxSEXP, SEXP map_site_to_unit_RSEXP, SEXP X_lambda_RSEXP, SEXP X_p_RSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP n_spatialSEXP, SEXP tau_gridSEXP, SEXP r_gridSEXP, SEXP beta_lambda_initSEXP, SEXP beta_p_initSEXP, SEXP z_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP) {
@@ -260,6 +281,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},
     {"_tulpaObs_cpp_nmix_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_nmix_laplace_fixed, 13},
     {"_tulpaObs_cpp_nmix_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_nmix_total_log_lik, 6},
+    {"_tulpaObs_cpp_nmix_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_grouped_oracle, 11},
     {"_tulpaObs_cpp_nested_laplace_nmix_icar", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_icar, 18},
     {"_tulpaObs_cpp_nested_laplace_nmix_car_proper", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_car_proper, 19},
     {"_tulpaObs_cpp_nested_laplace_nmix_bym2", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_bym2, 21},

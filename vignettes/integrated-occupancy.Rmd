@@ -1,0 +1,394 @@
+---
+title: "Integrated occupancy: combining data sources"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Integrated occupancy: combining data sources}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 6, fig.height = 4
+)
+set.seed(20260529)
+```
+
+```{r load, message = FALSE}
+library(tulpaObs)
+```
+
+## Two surveys, one species
+
+A structured survey is expensive. A field crew visits a fixed set of sites a
+fixed number of times, records presence and absence under a known protocol,
+and the resulting detection histories support a clean occupancy model. The
+catch is reach: a few hundred sites, often clustered near roads or stations,
+covering a fraction of the range you care about.
+
+Citizen-science records cover the rest. Birders, naturalists, and app users
+report sightings across the whole landscape, far beyond where any crew can go.
+The records are plentiful and broad, but the detection process behind them is
+murky. Nobody logged the visits that found nothing, effort varies from one
+observer to the next, and the protocol is whatever each person happened to do
+that day.
+
+An integrated occupancy model uses both. The two sources disagree about how
+species are detected, yet they agree about one thing: whether a site is
+occupied. Occupancy is a property of the place and the species, not of who is
+looking. So you let the sources share a single latent occupancy state and give
+each its own detection process. The structured survey anchors the detection
+calibration; the opportunistic records extend the spatial and covariate reach.
+`int_occu()` fits exactly this.
+
+This vignette simulates two sources with a known shared truth, fits the
+integrated model, reads the per-source detection, and shows where integration
+sharpens the occupancy estimate over a single source fit alone. It closes with
+rules for when sources may share a state and when they may not.
+
+## The model
+
+Let $z_i \in \{0, 1\}$ be the occupancy state of site $i$, shared across every
+source. It depends on site covariates $x_i$ through one occupancy regression:
+
+$$
+z_i \sim \mathrm{Bernoulli}(\psi_i), \qquad
+\mathrm{logit}(\psi_i) = x_i^\top \beta_{\mathrm{occ}}.
+$$
+
+Each source $s$ then sees that same state through its own detection process. On
+a visit $j$ to site $i$ by source $s$, the observation $y_{sij}$ is a detection
+only when the site is occupied and the source happens to catch it:
+
+$$
+y_{sij} \mid z_i \sim \mathrm{Bernoulli}\!\left(z_i \, p_{sij}\right),
+\qquad
+\mathrm{logit}(p_{sij}) = w_{sij}^\top \beta_{\mathrm{det},\,s}.
+$$
+
+The occupancy coefficient vector $\beta_{\mathrm{occ}}$ is one object,
+estimated from all sources at once. The detection coefficients
+$\beta_{\mathrm{det},\,s}$ are a separate vector per source, so a precise
+survey and a noisy citizen-science stream get their own detection
+probabilities. A site visited by both sources contributes two detection
+histories that both inform the one $z_i$. A site seen by only one source
+contributes through that source alone. The shared $\psi$ is where the pooling
+happens: every detection history, from every source, is evidence about the
+same occupancy surface.
+
+This is the structure that makes integration pay. A single sparse source has to
+estimate $\psi$ and its own $p$ from a thin set of visits, and the two trade off
+against each other. Adding a second source that observes overlapping sites
+brings more visits to bear on $z$ without forcing the detection processes to
+match. The occupancy slope sharpens; each $p_s$ stays free.
+
+The likelihood spells out how the pooling works. For one site, the latent
+state $z_i$ is unobserved, so the model sums over its two values. With every
+source's visits to that site collected into the histories
+$y_{1i}, y_{2i}, \dots$, the site's contribution is
+
+$$
+\psi_i \prod_s \Pr(y_{si} \mid z_i = 1)
+\;+\; (1 - \psi_i)\, \mathbf{1}\!\left[\text{no detection in any source}\right].
+$$
+
+The first term is the occupied case, where every source's detection history
+enters through its own $p_s$. The second is the unoccupied case, possible only
+when no source detected anything. A single detection in any one source rules out
+$z_i = 0$ for that site, which is why a deeper source can resolve the state of a
+site that a shallow source left ambiguous. The product over sources inside the
+occupied term is the channel through which the structured survey's clean
+detection sharpens the state estimate that the casual records also depend on.
+
+## Simulating two sources
+
+`simulate_int_occu()` draws a shared occupancy state and then observes it
+through several sources with their own visit counts and detection
+probabilities. Here source 1 is a shallow survey with two visits per site;
+source 2 is a deeper opportunistic stream with five visits. Both observe a
+block of shared sites, and each also covers sites the other does not.
+
+```{r sim}
+si <- simulate_int_occu(
+  N_total  = 500,                       # unique sites across both sources
+  n_data   = 2,                         # two sources
+  J        = c(2, 5),                   # visits per source: shallow vs deep
+  n_shared = 250,                       # sites observed by both
+  beta_occ = c(0.3, 0.9),               # occupancy intercept + slope on x
+  beta_det = list(c(0.5, 0), c(0.7, 0)),# per-source detection intercept
+  seed     = 11
+)
+```
+
+The response `si$y` is a list with one detection-history matrix per source.
+They have different visit counts and, in general, different numbers of rows,
+because each source covers its own set of sites.
+
+```{r y-structure}
+str(si$y, max.level = 1)
+c(survey_sites = nrow(si$y[[1]]), casual_sites = nrow(si$y[[2]]))
+```
+
+The site covariates live in a single data frame with one row per unique site.
+`si$site_maps` records which rows of that frame each source observed, and
+`si$truth` carries the occupancy coefficients and the latent state for checking
+the fit.
+
+```{r truth}
+str(si$data)
+si$truth$beta_occ
+```
+
+## Fitting the integrated model
+
+The call mirrors a single-season occupancy fit. The occupancy formula is the
+first argument and applies to the shared state. `detection` is the detection
+formula. `y` is the list of source matrices, and naming the list elements names
+the detection processes in the output. `family = int_occu()` selects the
+integrated likelihood.
+
+```{r fit}
+fit <- tobs(
+  ~ x,
+  data      = si$data,
+  family    = int_occu(),
+  detection = ~ 1,
+  y         = list(survey = si$y[[1]], casual = si$y[[2]]),
+  method    = "laplace",
+  control   = list(verbose = FALSE)
+)
+```
+
+`coef()` returns the shared occupancy block plus one detection block per
+source, keyed by the names you gave `y`.
+
+```{r coef}
+coef(fit)
+```
+
+The occupancy slope on `x` lands near the simulated `r si$truth$beta_occ[2]`.
+The two detection intercepts come back separately, one labelled `survey` and
+one `casual`, because each source carries its own detection process.
+`summary()` adds the posterior standard deviation and credible bounds; the
+`psi_` rows are the shared occupancy predictor, the `survey_` and `casual_` rows
+the two detection predictors.
+
+```{r summary}
+summary(fit)
+```
+
+## Why integration helps
+
+The payoff is in the occupancy slope. To see it, fit the shallow survey on its
+own and compare. Source 1 alone is a single-season occupancy model on the
+sites that source observed, pulled out through `site_maps`.
+
+```{r survey-only}
+rows1 <- si$site_maps[[1]]
+d1    <- si$data[rows1, , drop = FALSE]
+
+fit_survey <- tobs(
+  ~ x, data = d1, family = occu(),
+  detection = ~ 1, y = si$y[[1]],
+  method = "laplace", control = list(verbose = FALSE)
+)
+coef(fit_survey)$psi
+```
+
+The point estimates are in the same neighbourhood, so the comparison that
+matters is the uncertainty, and that needs an honest interval. The default
+Laplace approximation runs its occupancy intervals optimistically narrow on the
+integrated fit, because the penalised EM weights the pooled data heavily at the
+mode. For comparing uncertainty across the two fits, run both under NUTS, which
+samples the full posterior and reports a calibrated spread.
+
+```{r nuts-payoff}
+fit_int_nuts <- tobs(
+  ~ x, data = si$data, family = int_occu(),
+  detection = ~ 1, y = list(survey = si$y[[1]], casual = si$y[[2]]),
+  method = "nuts",
+  control = list(n.iter = 1000, n.warmup = 500, seed = 1, verbose = FALSE)
+)
+
+fit_survey_nuts <- tobs(
+  ~ x, data = d1, family = occu(),
+  detection = ~ 1, y = si$y[[1]],
+  method = "nuts",
+  control = list(n.iter = 1000, n.warmup = 500, seed = 1, verbose = FALSE)
+)
+```
+
+Read the occupancy slope from each posterior. The integrated fit borrows the
+deeper source's visits and the extra sites it covers, so its slope sits closer
+to the truth of `r si$truth$beta_occ[2]` and carries a smaller standard
+deviation and a narrower credible interval.
+
+```{r payoff-table}
+row_x <- function(f) {
+  s <- summary(f)["psi_x", c("mean", "sd", "q2.5", "q97.5")]
+  s <- as.numeric(s)
+  c(estimate = s[1], sd = s[2], lower = s[3], upper = s[4],
+    width = s[4] - s[3])
+}
+
+comparison <- rbind(
+  `survey only` = row_x(fit_survey_nuts),
+  integrated    = row_x(fit_int_nuts)
+)
+round(comparison, 3)
+```
+
+The integrated credible interval is narrower than the survey-only one, and its
+centre is closer to the true slope. The shallow survey, with two visits per
+site, struggles to separate occupancy from detection on its own. Folding in the
+deeper source tightens the shared state without making the two sources pretend
+to share a detection process.
+
+The gain has a shape worth naming. Integration does not manufacture
+information; it pools what the sources already carry onto the one quantity they
+agree about. When the second source is itself thin, or observes few of the same
+sites, the interval barely moves. The benefit scales with how much real
+occupancy signal the added source brings to the shared state.
+
+It is worth being precise about what gets sharper and what does not. The
+occupancy slope tightens because more sites and more visits inform the shared
+state surface. The detection parameters do not pool across sources, by design,
+so each source's detection precision still depends only on that source's own
+visits. A casual stream with few visits per site keeps a loose detection
+estimate even inside a large integrated fit. That separation is the feature, not
+a shortcoming: the survey's detection stays calibrated by survey data, and the
+occupancy estimate borrows strength from both. If you find the casual detection
+intercept wandering, the fix is more casual visits, not more survey sites.
+
+## Source-specific detection
+
+Each source detects the species at its own rate, and the model estimates those
+rates separately. Make the difference stark: a careful survey with high
+detection and a casual stream with low detection, observing the same occupancy
+surface.
+
+```{r sim-detection}
+sd2 <- simulate_int_occu(
+  N_total  = 500, n_data = 2, J = c(5, 4), n_shared = 200,
+  beta_occ = c(0.3, 0.9),
+  beta_det = list(c(1.2, 0),   # survey: logit p = 1.2, so p about 0.77
+                  c(-0.8, 0)), # casual: logit p = -0.8, so p about 0.31
+  seed = 21
+)
+```
+
+Fit it and read the two detection intercepts back on the probability scale.
+NUTS keeps the detection blocks honest here.
+
+```{r fit-detection}
+fit2 <- tobs(
+  ~ x, data = sd2$data, family = int_occu(),
+  detection = ~ 1, y = list(survey = sd2$y[[1]], casual = sd2$y[[2]]),
+  method = "nuts",
+  control = list(n.iter = 800, n.warmup = 400, seed = 1, verbose = FALSE)
+)
+
+data.frame(
+  source       = c("survey", "casual"),
+  true_p       = round(plogis(c(1.2, -0.8)), 2),
+  fitted_p     = round(plogis(c(coef(fit2)$survey, coef(fit2)$casual)), 2),
+  row.names    = NULL
+)
+```
+
+The casual stream comes back near its true detection of 0.31 and the survey
+near its higher rate, exactly the contrast the data carry. This is the point of
+the separate detection blocks: a single pooled detection probability would
+average the two and misrepresent both. The survey arm can attenuate a little
+when occupancy and detection trade off along their shared ridge, so read the
+detection intercepts as a calibration of each source's reporting rate rather
+than an exact constant.
+
+The detection formula can also differ in structure across sources, beyond
+differing in its fitted value. Pass a list of formulas, one per source, to give a source its
+own detection covariates. A structured survey often records effort or observer,
+while opportunistic records carry no such fields, so the survey arm can take a
+covariate the casual arm omits.
+
+```{r per-source-formula}
+sd2$data$effort <- rnorm(nrow(sd2$data))   # a survey-side detection covariate
+
+fit3 <- tobs(
+  ~ x, data = sd2$data, family = int_occu(),
+  detection = list(survey = ~ effort, casual = ~ 1),
+  y = list(survey = sd2$y[[1]], casual = sd2$y[[2]]),
+  method = "laplace", control = list(verbose = FALSE)
+)
+names(coef(fit3))
+```
+
+The `survey` block now carries an `effort` slope alongside its intercept, while
+the `casual` block stays intercept-only. Detection covariates must be columns of
+the site data frame, since the integrated builder reads each source's detection
+design from that frame; place any spatial, temporal, or random-effect term on
+the occupancy formula, where the shared field lives, not on a per-source
+detection formula.
+
+## Practical guidance
+
+Integration is a modelling commitment, not a free lunch. It rests on the
+assumption that the sources observe the same latent state, and that assumption
+does real work. A few rules keep it honest.
+
+- **Sources must share the same definition of occupied, over the same closure
+  period.** The shared $z_i$ is one event: the species is present at site $i$
+  during the season both sources sampled. If the structured survey ran in
+  spring and the citizen records span the whole year, they are not measuring
+  the same state, and pooling them biases $\psi$ toward whichever source sampled
+  the wider window. Align the temporal window before you align the model.
+
+- **Overlap is the currency. Aim for a real block of shared sites, not a
+  handful.** The deeper source sharpens the shared slope only through sites it
+  observes in common with the others, since those are where two detection
+  histories pin one $z_i$. As a working target, want at least 20 to 30 shared
+  sites, and more when detection is low, so the cross-source calibration has
+  something to stand on. With near-zero overlap the model reduces to fitting
+  each source independently and stacking them, and the integration buys little.
+
+- **Lean on integration when the primary source is thin.** The gain is largest
+  when the structured survey is small or shallow, two or three visits per site,
+  a few hundred sites, and a broad opportunistic source can extend its reach.
+  When the structured survey is already deep and wide, a single-source occupancy
+  fit may be cleaner, and the second source mostly adds detection nuisance
+  parameters.
+
+- **Give each source its own detection process, always.** The reason to
+  integrate rather than concatenate is that the sources detect differently.
+  Forcing one shared $p$ across a calibrated survey and a casual stream throws
+  away the calibration the survey provides. Keep the detection blocks separate
+  and let the survey anchor the scale.
+
+- **Read the occupancy slopes, treat the intercepts with care.** Occupancy and
+  detection trade off along a ridge, more so with few visits, and the
+  occupancy intercept absorbs part of that trade. The slopes are the
+  inferential payload and recover cleanly; the intercept is a level to report
+  with its interval, not a precise baseline rate. NUTS gives the honest spread
+  when the default Laplace intervals on the integrated fit run narrow.
+
+**When not to integrate.** The model fails quietly when the sources measure
+different states. A breeding-season survey and an autumn-migration dataset both
+record the same species, but presence in one is not presence in the other, and
+a shared $z$ forces a contradiction the fit will resolve by splitting the
+difference. The same applies to a survey that scores a $5 \times 5$ km cell as
+occupied and an app that pins a point: the spatial grain differs, so the
+occupancy units differ, and they cannot share one state without first being
+brought to a common resolution. When in doubt, ask whether a single coin flip,
+the one $z_i$, could have generated both sources' data at that site. If not, fit
+them separately.
+
+## Where to go next
+
+- Single-season occupancy, identifiability, and model comparison:
+  `vignette("occupancy")`.
+- Many species at once, with community hyperpriors: `vignette("community-models")`.
+- Posterior-predictive checks and residual diagnostics on any fit:
+  `vignette("diagnostics")`.
+- The shared engine, tiers, and how the Laplace and NUTS backends differ:
+  `vignette("quickstart")`.

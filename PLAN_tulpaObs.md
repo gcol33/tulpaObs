@@ -301,6 +301,17 @@ These are scheduled under Phase 3 below.
   20-seed coverage / per-species recovery / S3 in `test-ms-abun.R`. The R-only
   alternative (`tulpa_nmix_site_marginal()` -> `tulpa_re_aghq(make_group=)`) is
   correct but slow (R-interpreter per-group Newton); the C++ path is production.
+- *(Phase 2e — shipped, gcol33/tulpaObs#13)* Grouped random effects on the
+  single-species N-mixture. `abun()` accepts `(1 | g)` / slope / correlated
+  formula RE on either arm (site-level grouping; observer-per-site, station,
+  site cluster). `R/nmix_re_aghq.R::.tobs_nmix_re_aghq()` is a thin `make_site`
+  callback over `nmix_site_marginal()` driven by `tulpa::tulpa_re_aghq()` --
+  `n_quad = 1` is the joint Laplace, `n_quad > 1` is the AGHQ debias of the
+  small-cluster sigma attenuation. Poisson and NB (`log_r` jointly estimated
+  as the trailing theta coordinate). Gated: RE + spatial, RE + visit-level
+  detection covariates, RE shared across both arms. Cost is tens of seconds
+  per fit (R-closure marginal eval); a native per-group oracle along the
+  `NMixCommunityOracle` pattern would close that gap.
 - **Pending upstream tulpa** (deferred, not bugs):
   - **N-mixture NUTS** — no HMC likelihood for N-mixture in tulpa yet.
   - **Community NB / spatial** — global negbin size and an areal community

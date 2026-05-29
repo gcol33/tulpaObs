@@ -99,7 +99,7 @@ fit_tulpa_nuts <- tobs(
   detection = ~ det_cov1,
   y         = y,
   method    = "nuts",
-  control   = list(iter = 1500, warmup = 750, seed = 42, verbose = FALSE)
+  control   = list(n.iter = 1500, n.warmup = 750, seed = 42, verbose = FALSE)
 )
 fit_tulpa_nuts
 ```

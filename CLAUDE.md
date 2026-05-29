@@ -232,6 +232,38 @@ intercept back-transforms with `exp()`. `simulate_abun()` +
   in `nmix_hyper$r`. `simulate()` draws `N ~ NegBin(mu, r)` under NB. Matches
   `unmarked::pcount(mixture = "NB")`; `test-abun.R` covers point recovery,
   dispersion recovery, 95% CI coverage, and the spatial NB path.
+- **Random effects** (`abun(...) + (1 | g)` or formula random slope, on either
+  arm; gcol33/tulpaObs#13): site-level grouped random effects on the abundance
+  OR detection predictor of a single-species N-mixture. The grouping factor
+  is something other than species (station, observer-per-site, site cluster);
+  the per-group RE is a SUBSET of coefficients on ONE arm; `theta` is the plain
+  fixed-effect vector (no community mean concept -- the wrong shape for the
+  community oracle path, see `R/nmix_re_aghq.R` header). `.tobs_fit_nmix_re()`
+  warm-starts the betas with the no-RE Laplace fit and refines through
+  `.tobs_nmix_re_aghq()`, a thin `make_site` callback over
+  `nmix_site_marginal()`. The engine
+  `tulpa::tulpa_re_aghq(make_site = , ...)` integrates the per-group RE by
+  adaptive Gauss-Hermite quadrature (`n_quad = 1` Laplace, the default coming
+  from `control$n.quad`; `n_quad > 1` debiases the small-cluster sigma
+  attenuation). On the detection arm the engine-supplied per-site RE offset is
+  applied uniformly to all of that site's visits, leaving the per-site marginal
+  a function of one scalar shift per site (the per-row separability the
+  `make_site` contract needs). Visit-level p RE where observers vary WITHIN
+  a site is unreachable from the public API (the binder does not parse
+  structured terms inside `det_visit_formula`) -- and the per-site latent-N
+  coupling would break the per-group factorization anyway, so it would need
+  a different engine, not just a different callback. NB threads `log_r` as the
+  trailing theta coordinate. **Gates** (error with a pointer): RE + areal
+  spatial; RE + visit-level detection covariates; RE shared across both arms.
+  `tests/testthat/test-abun-re.R` covers recovery, fixed-effect CI coverage,
+  the S3 surface, and the capability gates. Routes through a native compiled
+  `NMixGroupedOracle` (`src/nmix_re_oracle.{h,cpp}`): per-group calls iterate
+  only over that group's sites instead of recomputing the full per-site
+  marginal at every perturbed eta candidate, and the engine stays in C++ with
+  no per-call R/C++ round trip. Drops a single recovery fit at the suite
+  scale (N = 100, J = 4, 10 groups) from tens of seconds to ~2 s
+  (`dev_notes/probe_nmix_re_oracle_speedup.R`); the gated 27-test suite
+  finishes in ~110 s.
 - **Pending**: no NUTS path (no N-mixture HMC likelihood wired yet).
 
 ### Community / multispecies N-mixture (`ms_abun()`)
@@ -284,10 +316,12 @@ coefficient recovery, and the S3 surface.
 - **tulpaObs owns**: family-specific likelihoods (`src/*_likelihood.h`,
   `src/nmix_*.{cpp,h}`), E-step weights, M-step encoding, family-specific S3 /
   diagnostics. For the RE AGHQ debias it owns the occupancy / detection
-  per-site marginal (the `make_site` callback in `R/re_aghq.R`) and the
+  per-site marginal (the `make_site` callback in `R/re_aghq.R`), the
+  single-species N-mixture grouped-RE native oracle (`NMixGroupedOracle` in
+  `src/nmix_re_oracle.{h,cpp}`, wired in `R/nmix_re_aghq.R`), and the
   community N-mixture native oracle (`NMixCommunityOracle` in
-  `src/nmix_community_oracle.{h,cpp}`, exported to the engine as an
-  `XPtr<tulpa::REGroupOracle>`).
+  `src/nmix_community_oracle.{h,cpp}`); both are exported to the engine as an
+  `XPtr<tulpa::REGroupOracle>` through `tulpa::tulpa_re_aghq(oracle = )`.
 - **tulpa owns**: EM engine, MI/Gibbs correction, Rubin's pooling, the
   callback-driven AGHQ variance-component engine (`tulpa_re_aghq()`, with the
   quadrature grid / log-Cholesky covariance / LKJ penalty / marginal Hessian),
@@ -328,6 +362,7 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | N-mixture (Poisson/NB)  | Yes     | —     | `abun(mixture=)`; closed-form marginal via in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB adds jointly-estimated `log_r`. NUTS pending |
 | N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; Poisson or NB (size `r` integrated over the grid); grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
 | Community N-mixture     | Yes     | —     | `ms_abun()` (spAbundance `msNMix`); per-species coef RE with Gaussian community covariances; in-tree C++ Laplace-EM (`nmix_laplace_re`) driving a native `NMixCommunityOracle` via tulpa's generic AGHQ engine, Schur-complement mean SEs; Poisson only; recovery + 20-seed coverage (`test-ms-abun.R`). NUTS / negbin / spatial pending |
+| N-mixture + grouped RE  | Yes     | —     | `abun()` + `(1 \| g)` / `(x \| g)` on either arm (gcol33/tulpaObs#13); site-level grouping factors (station, observer-per-site); Poisson or NB (log_r jointly estimated under NB); AGHQ via `tulpa::tulpa_re_aghq(oracle=)` driving a native `NMixGroupedOracle`. Gated: RE + spatial, RE + visit-level det covariates, RE shared across both arms. ~2 s per Poisson fit at recovery scale (N = 100, J = 4, 10 groups, n.quad = 5) |
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
 | Spatial + community     | —       | Yes   |                                         |
@@ -380,6 +415,7 @@ R/
   ms_abun.R                — community N-mixture: .tobs_build_ms_abun(), .tobs_ms_nmix_longform(), .tobs_fit_ms_nmix() (-> nmix_laplace_re()), build_ms_nmix_fit(), ms_nmix S3 helpers, simulate_ms_abun()
   nmix_laplace.R           — in-tree non-spatial N-mixture (Royle 2004) Laplace fitter (Poisson + NB)
   nmix_laplace_re.R        — in-tree community / multispecies N-mixture (msNMix), .nmix_re_oracle() helper
+  nmix_re_aghq.R           — single-species N-mixture grouped RE: .tobs_nmix_re_aghq() driving the native NMixGroupedOracle
   nmix_laplace_spatial.R   — nmix_laplace_icar() / _bym2() / _car_proper() areal spatial fitters
   nmix_site_marginal.R     — per-site marginal exposed as a composable AGHQ RE callback
   occu_fit.R               — internal .tobs_fit_model() (Laplace default, NUTS fallback; routes model_type=="nmix" to .tobs_fit_nmix)

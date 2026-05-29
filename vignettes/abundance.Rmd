@@ -1,0 +1,615 @@
+---
+title: "N-mixture abundance with tulpaObs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{N-mixture abundance with tulpaObs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 6, fig.height = 4
+)
+set.seed(20260529)
+```
+
+```{r load, message = FALSE}
+library(tulpaObs)
+```
+
+## From presence to counts
+
+Occupancy models ask one question per site: is the species there or not.
+A repeated-count survey asks a harder one. A surveyor visits a site five
+times and records not whether a marbled salamander was seen, but how
+many: 3, then 1, then 4, then 0, then 2. Those numbers carry more than
+presence. They carry the size of the local population, blurred by the
+fact that nobody counts every individual on every visit.
+
+Royle's (2004) N-mixture model is the tool for that data. It keeps the
+two-level structure occupancy taught us, a true state we cannot see and a
+noisy observation we can, but the latent state is now a count rather than
+a coin flip. Each site holds some unknown number of animals $N_i$, fixed
+across the short survey window. On each visit the surveyor detects each
+animal independently with probability $p_{ij}$, so the recorded count
+$y_{ij}$ is a thinned version of $N_i$. Five visits to a site with eight
+animals and detection 0.4 might read 4, 2, 3, 4, 1. The counts never reach
+eight, and the model's job is to see eight through the thinning.
+
+This buys you something occupancy cannot give. Where occupancy estimates
+the probability a site is used, N-mixture estimates how many individuals
+use it, and how that number responds to a covariate, all from counts that
+systematically undercount. The price is the same identifiability tension
+occupancy has, sharpened: abundance and detection both push the counts
+down or up, and the data have to separate them. A site that averages two
+animals per visit is consistent with twenty animals seen one in ten times,
+or with three animals seen two in three times. What breaks the tie is the
+spread of the counts across visits. Twenty animals at detection 0.1 produce
+counts that jump around a lot relative to their mean; three animals at
+detection 0.67 produce counts that barely move. The model reads that spread
+and infers the abundance behind it. More visits sharpen the read, and
+counts that vary across them are what carry the information at all.
+
+The model leans on one assumption worth naming up front: the population is
+closed across the survey window. The $N_i$ animals at a site stay put and
+stay the same animals from the first visit to the last, so every count is a
+thinning of the same latent number. A survey spread over a season that lets
+animals move in and out, breed, or die violates this, and the model will
+read the movement as detection noise. The closure window is usually a few
+days to a few weeks, short enough that the standing population is fixed but
+long enough to gather replicate counts. Designing the survey to respect
+that window matters as much as any modelling choice that follows.
+
+This vignette builds an N-mixture fit from a simulation with known truth,
+reads the estimates back, handles the count-ceiling parameter, switches to
+a negative-binomial state for overdispersed counts, predicts abundance at
+new covariate values, adds an areal spatial field, and closes with the
+rules of thumb that decide when the model is the right one.
+
+## The model
+
+Write the two levels for site $i$ and visit $j$. The latent abundance is
+Poisson with a log-linear mean, and the counts are binomial thinnings of
+that abundance with a logit-linear detection:
+
+$$
+\begin{aligned}
+N_i        &\sim \mathrm{Poisson}(\lambda_i), &
+  \log \lambda_i &= x_i^\top \beta_\lambda, \\
+y_{ij} \mid N_i &\sim \mathrm{Binomial}(N_i, p_{ij}), &
+  \mathrm{logit}\, p_{ij} &= w_{ij}^\top \beta_p.
+\end{aligned}
+$$
+
+Here $\lambda_i$ is the expected abundance at site $i$, driven by site
+covariates $x_i$ through a log link, and $p_{ij}$ is the per-individual
+detection probability on visit $j$, driven by detection covariates
+$w_{ij}$ through a logit link. The abundance arm uses a log link because
+$\lambda$ is a rate that must stay positive; that detail comes back the
+first time you read a coefficient.
+
+The latent $N_i$ never appears in the data. What occupancy did with a
+single sum over $\{0, 1\}$, N-mixture does with a sum over every possible
+abundance:
+
+$$
+p(y_{i\cdot} \mid \lambda_i, p_{i\cdot}) \;=\;
+  \sum_{N = \max_j y_{ij}}^{K} \mathrm{Poisson}(N \mid \lambda_i)
+  \prod_j \mathrm{Binomial}(y_{ij} \mid N, p_{ij}).
+$$
+
+The sum runs from the largest count seen at the site (you cannot have
+fewer animals than you counted on your best visit) up to a ceiling $K$.
+This marginal has a closed form, so tulpa evaluates it directly with
+analytical gradients and reads the curvature at the mode for standard
+errors. There is no EM loop and no data augmentation over $N$: the latent
+count integrates out exactly, term by term, which is why the fit returns
+in a fraction of a second. The ceiling $K$ is the one approximation, and
+the next sections treat it as such.
+
+The exact marginalisation is what separates this from occupancy mechanically.
+An occupancy model sums over two states and the arithmetic is trivial. An
+N-mixture model sums over a few hundred, and a naive implementation would
+recompute the binomial product for every candidate $N$ at every site on
+every gradient step. tulpa caches the parts of each term that do not depend
+on the coefficients, so the repeated evaluations across the optimisation
+reuse work rather than redo it. The practical effect is that a fit on a few
+hundred sites with a ceiling in the low hundreds is a sub-second operation,
+not a sampler you wait on. The same closed form also means the standard
+errors are the genuine observed-information curvature of the marginal, not a
+Monte-Carlo approximation, so the credible intervals are deterministic and
+repeatable across runs.
+
+One consequence of the log link deserves a flag before the first fit. A
+coefficient on the abundance arm is a multiplicative effect on expected
+abundance, not an additive one. A slope of 0.5 means a one-unit increase in
+the covariate multiplies $\lambda$ by $e^{0.5} \approx 1.65$, a 65 percent
+rise, and the same slope adds more animals where abundance is already high
+than where it is low. The intercept is the log of baseline abundance, so it
+reads as a number of animals only after `exp()`. This is the same arithmetic
+a Poisson GLM uses, and the coefficients carry the same interpretation; the
+only twist is that the counts feeding them are thinned, and the model
+corrects for the thinning before it reports the slope.
+
+## Simulating and fitting a Poisson model
+
+`simulate_abun()` draws a dataset with the truth you set, so the fit has a
+target to recover. Abundance depends on one site covariate with intercept
+$\log 3$ (so baseline expected abundance is 3 animals) and slope 0.5;
+detection depends on one covariate with intercept 0.4 (detection near
+0.6) and slope 0.3. Five visits per site give the thinning enough
+replication to separate the two arms.
+
+```{r sim}
+sa <- simulate_abun(
+  N = 200, J = 5,
+  n_abund_covs = 1, n_det_covs = 1,
+  beta_lambda = c(log(3), 0.5),   # log link: intercept is log(baseline lambda)
+  beta_p      = c(0.4, 0.3),      # logit link on detection
+  seed = 2
+)
+dat <- sa$data       # site covariates, one row per site
+y   <- sa$y          # 200 x 5 count matrix
+y[1:4, ]
+```
+
+The counts undercount the latent abundance. Averaging the per-site maximum
+count against the simulated truth shows the gap that detection opens.
+
+```{r naive}
+c(mean_max_count = mean(apply(y, 1, max)),
+  mean_true_N    = mean(sa$truth$N))
+```
+
+The fit follows the same call shape as occupancy. The abundance formula
+is the first argument, detection is its own formula, and `abun()` selects
+the N-mixture family. `method = "laplace"` is the default and the only
+backend wired for counts; it finds the mode of the marginal likelihood and
+the curvature there.
+
+```{r fit}
+fa <- tobs(
+  ~ abund_cov1,
+  data      = dat,
+  family    = abun(),
+  detection = ~ det_cov1,
+  y         = y,
+  method    = "laplace",
+  control   = list(verbose = FALSE)   # the fitter prints iterations otherwise
+)
+```
+
+`coef()` returns the estimates as a list with one element per arm.
+Read the `lambda` arm with the log link in mind: the intercept is on the
+log scale, so back-transforming with `exp()` gives baseline expected
+abundance.
+
+```{r coef}
+coef(fa)
+```
+
+```{r coef-exp}
+c(baseline_lambda = exp(coef(fa)$lambda[["(Intercept)"]]),
+  true_baseline   = 3)
+```
+
+The abundance intercept back-transforms to roughly the three animals the
+data were built with, and the slope on `abund_cov1` lands near the
+simulated 0.5. `summary()` adds the posterior standard deviation and the
+credible bounds for every coefficient; the `lambda_` rows are the
+abundance arm and the `p_` rows the detection arm.
+
+```{r summary}
+summary(fa)
+```
+
+`fitted()` returns the per-site quantities the fit implies: expected
+abundance `lambda`, detection probability `p`, and the posterior mean
+abundance `N` given the counts. The last one is the estimate that matters
+for a population total, since it conditions on what was actually seen at
+each site.
+
+```{r fitted}
+fv <- fitted(fa)
+str(lapply(fv, head, 4))
+```
+
+Plotting the posterior mean abundance against the simulated truth shows
+the model recovers the site-level signal through the thinning, not just
+the population average.
+
+```{r fitted-plot, fig.alt = "Posterior mean abundance per site against the true simulated abundance, scattered around the identity line"}
+plot(sa$truth$N, fv$N, pch = 16, col = rgb(0, 0, 0, 0.35),
+     xlab = "true N", ylab = "fitted E[N | y]")
+abline(0, 1, col = "steelblue", lwd = 2)
+```
+
+The points track the identity line with scatter that grows at higher
+abundance, which is the right behaviour: a site with more animals leaves
+more room for the binomial thinning to vary the counts, so its posterior
+abundance is less certain.
+
+## The count ceiling K_max
+
+The marginal likelihood sums over abundance from each site's maximum count
+up to a ceiling. That ceiling is `K_max`, and the fit chooses a default
+from the data when you do not set it. The sum has to reach high enough
+that the Poisson mass above `K_max` is negligible; if `K_max` sits too
+close to the true abundance, the model truncates probability that belongs
+in the likelihood and biases $\lambda$ downward.
+
+The default works for ordinary counts. You raise `K_max` when abundance is
+large relative to detection, so the latent $N$ can sit far above any
+single count. A site with $\lambda = 40$ and detection 0.2 might never
+record more than a dozen animals on a visit, yet its abundance routinely
+exceeds thirty, and the sum has to climb past that. The symptom of a
+ceiling set too low is a boundary warning or an abundance estimate that
+drifts when you raise it. The check is to refit with a higher `K_max` and
+confirm the estimate is stable.
+
+```{r kmax}
+fa_k <- tobs(~ abund_cov1, data = dat, family = abun(),
+             detection = ~ det_cov1, y = y, method = "laplace",
+             control = list(verbose = FALSE), K_max = 200)
+rbind(default_K = coef(fa)$lambda,
+      K_max_200 = coef(fa_k)$lambda)
+```
+
+The two fits agree to several decimals, so the default ceiling was already
+high enough here. On data where they disagree, take the higher-`K_max`
+fit and keep raising it until the estimate settles. The cost of a generous
+ceiling is compute time, since the inner sum runs over more terms, and
+that cost is linear in `K_max`, so a ceiling a few times the largest
+plausible abundance is a safe default rather than an expensive one.
+
+It helps to see why a low ceiling pulls the estimate down. The likelihood
+asks how probable the observed counts are under a given $\lambda$, and it
+answers by summing over every abundance that could have produced them. If
+the true $\lambda$ wants to place real probability on abundances above the
+ceiling, cutting the sum off there throws that probability away. The
+optimiser then finds a smaller $\lambda$ that fits its mass entirely below
+the ceiling, and the abundance estimate comes out biased low. The bias is
+invisible in any single fit; it shows only when you raise the ceiling and
+watch the estimate move. That is why the stability check is the diagnostic
+rather than any one number. A practical starting point is to set `K_max`
+to several times the largest count you would believe at the most abundant
+site, then confirm a doubling of it leaves the coefficients unchanged. The
+negative-binomial state, with its heavier tail, needs more headroom than
+Poisson for the same mean, so a ceiling that suffices under Poisson can be
+tight under overdispersion.
+
+## Overdispersion and the negative binomial
+
+The Poisson state assumes the variance of abundance equals its mean. Real
+populations rarely oblige. Animals cluster, habitat varies in ways no
+covariate captures, and the spread of true abundance across sites runs
+wider than Poisson allows. When it does, a Poisson N-mixture absorbs the
+extra spread into $\lambda$ and detection, and the standard errors come
+out too small.
+
+The biology behind overdispersion is worth holding in mind, because it
+tells you when to expect it. A Poisson abundance is what you get when
+individuals settle independently and at the same rate everywhere a covariate
+says they should. Real animals do neither. They aggregate around resources,
+they respond to gradients no survey measured, and a good patch holds far
+more than its covariates predict while a poor one holds far fewer. Each of
+those produces sites that are more variable than their fitted mean, which is
+overdispersion exactly. The clustering need not be spatial; it can be any
+unmeasured driver that makes some sites richer and others poorer than the
+covariates explain. Whenever you suspect such a driver, and in count data
+you usually should, the negative binomial is the safer default state.
+
+`abun(mixture = "negbin")` replaces the Poisson state with a negative
+binomial, $N_i \sim \mathrm{NegBin}(\lambda_i, r)$, where the size $r$
+sets the overdispersion through $\mathrm{Var}(N) = \lambda +
+\lambda^2 / r$. A small $r$ means heavy clustering; as $r$ grows the
+negative binomial approaches the Poisson, and the extra parameter costs
+nothing. Simulate overdispersed counts with $r = 2$, so a site with mean
+abundance 4 has variance $4 + 16/2 = 12$, three times the Poisson value.
+
+```{r sim-nb}
+sb <- simulate_abun(
+  N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
+  mixture = "negbin", size = 2,
+  beta_lambda = c(log(4), 0.4), beta_p = c(0.5, 0.2),
+  seed = 5
+)
+```
+
+Fit the negative-binomial model by passing the same `mixture` flag to the
+family. The size $r$ is estimated jointly with the coefficients on the log
+scale and reported on the object.
+
+```{r fit-nb}
+fb <- tobs(~ abund_cov1, data = sb$data, family = abun(mixture = "negbin"),
+           detection = ~ det_cov1, y = sb$y, method = "laplace",
+           control = list(verbose = FALSE))
+coef(fb)
+```
+
+The dispersion lives in `fb$nmix_dispersion`: the natural-scale size `$r`,
+its log-scale value `$log_r`, and the delta-method standard error `$r_sd`.
+
+```{r nb-dispersion}
+fb$nmix_dispersion
+```
+
+The estimated $r$ sits near the simulated 2, with a standard error wide
+enough to tell you the size is the least certain quantity in the fit. That
+is normal. The size is identified only through the tail of the count
+distribution, and a single dataset of 200 sites pins it loosely.
+
+Fitting a negative binomial when the data are actually Poisson is close to
+free, since the size simply drifts large. Fitting a Poisson when the data
+are overdispersed is the costly mistake, because the missing variance has
+nowhere to go but the standard errors. A quick dispersion check tells you
+which regime you are in. Compare the variance of the per-site maximum count
+against its mean: a ratio well above one is the signature of
+overdispersion that a Poisson state cannot represent.
+
+```{r dispersion-check}
+maxcount <- apply(sb$y, 1, max)
+c(mean = mean(maxcount), var = var(maxcount),
+  ratio = var(maxcount) / mean(maxcount))
+```
+
+A ratio near one says Poisson will do; a ratio of two or more says reach
+for the negative binomial. This is a rough diagnostic on the observed
+counts, not the latent state, so treat it as a flag rather than a test.
+The cleaner comparison is to fit both and read the marginal log-likelihood,
+which the next-to-last section does.
+
+## Predicting abundance
+
+`predict()` with a design matrix `X.0` returns the abundance arm's
+prediction at new covariate values, on the response scale, with the
+posterior spread propagated through the joint coefficient covariance. Pass
+one column per abundance coefficient.
+
+```{r predict-design}
+X0 <- cbind(`(Intercept)` = 1, abund_cov1 = c(-1.5, 0, 1.5))
+predict(fa, X.0 = X0)
+```
+
+Expected abundance climbs across the three covariate values, and the
+credible bounds widen with the mean, the multiplicative spread a log link
+produces. That widening is what the log link means. A fixed uncertainty on
+the log scale becomes a proportional
+uncertainty on the count scale, so a prediction of 8 animals carries a wider
+absolute band than a prediction of 2, even when the coefficient is equally
+well known. Reading the bounds on the response scale, as `predict()` returns
+them, keeps that proportionality visible rather than hiding it on the log
+scale where it looks constant.
+
+The draws behind these summaries come from the joint coefficient
+covariance, so the abundance and detection arms vary together rather than
+independently. This matters for any quantity that combines the two, a
+detection-corrected total or a ratio of abundances at two covariate values,
+because the two arms are negatively correlated through the counts: a fit
+that nudges detection up has to nudge abundance down to match the same
+counts. Drawing them jointly propagates that correlation into the derived
+quantity, where drawing them separately would overstate its uncertainty. To
+trace the response across the whole covariate range rather than at three
+points, pass `terms` and the predictor name; the result carries an estimate
+and a band at each grid point, ready to plot.
+
+```{r predict-terms, fig.alt = "Predicted expected abundance rising with abund_cov1, with a shaded 95 percent credible band"}
+pr <- predict(fa, terms = "abund_cov1")
+plot(pr$x, pr$estimate, type = "n",
+     xlab = "abund_cov1", ylab = "expected abundance",
+     ylim = range(pr$lower, pr$upper))
+polygon(c(pr$x, rev(pr$x)), c(pr$lower, rev(pr$upper)),
+        col = adjustcolor("steelblue", 0.25), border = NA)
+lines(pr$x, pr$estimate, lwd = 2)
+```
+
+The band is the abundance arm's uncertainty alone. The detection arm has
+its own prediction surface, reached with `type = "detection"`, which is
+the right call when the question is about survey efficiency rather than
+population size.
+
+```{r predict-detection}
+predict(fa, X.0 = cbind(`(Intercept)` = 1, det_cov1 = c(-1, 0, 1)),
+        type = "detection")
+```
+
+## Counts on a map
+
+Sites near each other often hold similar numbers of animals for reasons no
+covariate records: shared microclimate, a corridor of good habitat, a
+patch the survey design happened to cluster. Left unmodelled, that
+structure does two kinds of damage. It inflates confidence in the slopes,
+because neighbouring sites carry correlated leftovers and the model counts
+each as fresh information when they are partly the same observation seen
+twice. And it biases the slopes themselves whenever a covariate is
+spatially patterned, since the covariate and the unmeasured regional driver
+vary together and a model with nowhere to put the driver loads it onto the
+covariate. An areal spatial field gives the regional signal a place to
+live, one random effect per spatial unit, tied to neighbours so the surface
+stays smooth. The slope is then read against a background that already
+accounts for location, and its standard error widens to its honest size
+because the field, not the covariate, now carries the autocorrelation.
+
+The same logic that motivates a spatial field for a binomial or Gaussian
+response carries over to counts unchanged. What differs is only where the
+field attaches: it enters the log-abundance predictor, alongside the
+covariate slopes, so it soaks up the regional variation in how many animals
+a site holds. The detection arm is left non-spatial here, which is the usual
+choice, since detection is a property of the survey rather than the place.
+If survey effort is itself spatially clustered, a field on detection is
+possible too, but the common case puts the field on abundance and reads it
+as the smoothed map of population density the covariates do not explain.
+
+For N-mixture the field attaches to the abundance arm through a spatial
+term inside the formula, with `method = "nested_laplace"`. The areal terms
+are `icar()`, `bym2()`, and `car_proper()`; each takes a dense 0/1
+adjacency matrix with one row and column per site. Build a small grid and
+its rook adjacency, where each cell neighbours the cells directly above,
+below, left, and right.
+
+```{r grid-adj}
+grid_adj <- function(side) {
+  ng <- side * side
+  co <- expand.grid(x = seq_len(side), y = seq_len(side))
+  adj <- matrix(0L, ng, ng)
+  for (i in seq_len(ng)) for (j in seq_len(ng)) {
+    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L)
+      adj[i, j] <- 1L
+  }
+  adj
+}
+adj <- grid_adj(6)        # 36 cells, one site per cell
+dim(adj)
+```
+
+Simulate counts on the grid with a smooth abundance field added to the
+log-linear mean, then thin them to visits. The field is the regional
+signal the fit has to recover alongside the covariate slope.
+
+```{r sim-spatial}
+sim_spatial <- function(adj, b_lambda, b_p, J = 5, sd_phi = 0.6, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  ng <- nrow(adj)
+  phi <- as.numeric(scale(rnorm(ng)))
+  for (rep in 1:3) {                       # smooth toward neighbours
+    pn <- phi
+    for (i in seq_len(ng)) {
+      nb <- which(adj[i, ] == 1L)
+      pn[i] <- 0.5 * phi[i] + 0.5 * mean(phi[nb])
+    }
+    phi <- pn
+  }
+  phi <- sd_phi * as.numeric(scale(phi)); phi <- phi - mean(phi)
+  x_ab <- rnorm(ng); x_det <- rnorm(ng)
+  lambda <- exp(b_lambda[1] + b_lambda[2] * x_ab + phi)
+  p <- plogis(b_p[1] + b_p[2] * x_det)
+  N <- rpois(ng, lambda)
+  y <- matrix(NA_integer_, ng, J)
+  for (i in seq_len(ng)) y[i, ] <- rbinom(J, N[i], p[i])
+  list(y = y, data = data.frame(abund_cov1 = x_ab, det_cov1 = x_det),
+       phi = phi)
+}
+ss <- sim_spatial(adj, b_lambda = c(log(5), 0.5), b_p = c(0.3, 0.4), seed = 42)
+```
+
+Fit the spatial model with a `bym2()` term on the abundance formula. The
+field's smoothing strength is integrated over a grid rather than fixed, so
+the slope standard errors carry the field's own uncertainty. The fit
+returns the same `tobs_fit` object as the non-spatial path, with
+`fs$method` reading `"nested_laplace"`.
+
+```{r fit-spatial}
+fs <- suppressWarnings(tobs(
+  ~ abund_cov1 + bym2(graph = adj),
+  data      = ss$data,
+  family    = abun(),
+  detection = ~ det_cov1,
+  y         = ss$y,
+  method    = "nested_laplace",
+  control   = list(verbose = FALSE, max.iter = 50)
+))
+coef(fs)
+```
+
+The covariate slopes recover with the regional signal absorbed into the
+field rather than blended into the coefficient: `coef(fs)` reads back the
+abundance slope near the simulated 0.5 and the detection slope near 0.4.
+
+Read the slopes, not the abundance intercept, under an intrinsic field.
+The intrinsic prior pins the field only up to an overall level, so the
+intercept and the field mean trade off along a flat direction; the BYM2
+field's independent component tames that confounding but the slopes are
+the inferential payload regardless. The recovered field comes back on the
+object as `fs$spatial_field`, one value per cell, and
+`cor(fs$spatial_field, ss$phi)` is positive: the fit cannot reconstruct one
+draw of a noisy field exactly, but it recovers its shape, and that shape is
+what removes the bias from the slopes.
+
+```{r spatial-field}
+c(field_cor = cor(fs$spatial_field, ss$phi),
+  method    = fs$method)
+```
+
+Under `mixture = "negbin"` the size $r$ is integrated over the
+outer grid alongside the field's smoothing parameters and reported in
+`fs$nmix_hyper$r` rather than as a coefficient, so the spatial path
+handles overdispersion without adding a fixed parameter to the covariance.
+
+## Comparing models and practical guidance
+
+Does the negative binomial earn its extra parameter? Fit both states on
+the overdispersed data and read the marginal log-likelihood through
+`logLik()`. The marginal already integrates the latent abundance out, so a
+higher value means the state genuinely fits the counts better, not that it
+has more freedom.
+
+```{r compare}
+fb_pois <- tobs(~ abund_cov1, data = sb$data, family = abun(),
+                detection = ~ det_cov1, y = sb$y, method = "laplace",
+                control = list(verbose = FALSE))
+
+c(poisson = as.numeric(logLik(fb_pois)),
+  negbin  = as.numeric(logLik(fb)))
+```
+
+The negative binomial carries the higher log-likelihood on data built with
+$r = 2$, which is the answer the simulation should give. On real data the
+same comparison decides the state: a meaningfully higher negative-binomial
+log-likelihood says the counts are overdispersed and the Poisson was
+hiding it in the standard errors. A near-tie says Poisson is adequate and
+the simpler state is the honest choice.
+
+A handful of rules of thumb make the rest of the modelling decisions.
+
+- **At least three visits, more when detection is low.** The abundance and
+  detection arms separate only through the spread of counts across visits.
+  With two visits and detection below about 0.3 they are weakly
+  identified, and the abundance estimate can drift toward the count ceiling
+  or collapse toward the mean count. Three visits is the practical floor;
+  five or more is comfortable, and they buy more than extra sites do
+  because replication, not site count, is what pins detection.
+
+- **Counts must vary within a site.** A site that reads 2, 2, 2, 2 tells
+  the model almost nothing about detection, since constant counts are
+  consistent with high abundance and high detection or low abundance seen
+  perfectly. Variation across visits is the signal the binomial thinning
+  leaves, and it is what the detection arm reads. If your counts barely
+  move across visits, the fit will lean on the prior and the covariates
+  rather than the data.
+
+- **Check the dispersion before trusting Poisson standard errors.** A
+  variance-to-mean ratio of the per-site counts above roughly two is a
+  flag for the negative binomial. Fitting Poisson on overdispersed counts
+  does not bias the slopes badly, but it understates their uncertainty, so
+  a coefficient can read significant when it is not. When in doubt, fit
+  both and compare the marginal log-likelihood.
+
+- **Raise K_max when abundance dwarfs detection.** The default ceiling
+  suits ordinary counts. When expected abundance is large and detection is
+  small, the latent $N$ sits far above any visit's count, and a ceiling set
+  too low truncates the likelihood and biases $\lambda$ down. Refit with a
+  higher `K_max` and confirm the estimate is stable.
+
+- **When N-mixture is the wrong tool.** Three cases call for a different
+  model. If the surveys are not closed, animals moving in and out between
+  visits so abundance is not fixed, the binomial thinning assumption breaks
+  and the model reads movement as detection. If you only have
+  detection or non-detection rather than counts, occupancy is the honest
+  model and N-mixture adds a latent abundance the data cannot inform. And
+  if detection is near one, the counts are nearly the abundance itself, so
+  a plain Poisson or negative-binomial regression on the counts is simpler
+  and loses nothing.
+
+## Where to go next
+
+- Single-season occupancy, the binary cousin of this model, with the same
+  detection structure: `vignette("occupancy")`.
+- Many species at once, each with its own N-mixture, tied by community
+  hyperpriors: `vignette("community-models")`.
+- Areal and continuous spatial fields in depth, with field extraction and
+  the smoothing-precision posterior: the `tulpa` spatial vignettes.
+- Posterior-predictive checks and residual diagnostics:
+  `vignette("diagnostics")`.

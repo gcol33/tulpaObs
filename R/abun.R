@@ -124,6 +124,7 @@
                            spatial = NULL, temporal = NULL, re = NULL,
                            priors = NULL, mixture = "poisson",
                            K_max = NULL, max_iter = 100L, tol = 1e-6,
+                           n_quad = 9L, lkj_eta = 1.5, sigma_beta = 10,
                            verbose = TRUE) {
   method <- match.arg(method)
 
@@ -137,17 +138,22 @@
                                   mixture), call. = FALSE))
 
   # Capability gates. tulpa's N-mixture engine carries fixed effects plus an
-  # optional areal spatial offset; temporal / random effects on the abundance
-  # arm are upstream extensions. Error with a pointer rather than silently
-  # dropping the requested structure.
+  # optional areal spatial offset and (since gcol33/tulpaObs#13) site-level
+  # random effects on one arm; temporal is the open upstream extension. Error
+  # with a pointer rather than silently dropping the requested structure.
   if (!is.null(temporal)) {
     stop("A temporal term on N-mixture abundance is not yet supported.",
          call. = FALSE)
   }
-  if (!is.null(re)) {
-    stop("Random effects on N-mixture abundance are not yet supported ",
-         "(community / site-level abundance RE is an upstream tulpa ",
-         "extension, tracked at gcol33/tulpa#31).", call. = FALSE)
+  if (!is.null(re) && !is.null(spatial)) {
+    stop("Random effects together with an areal spatial term on N-mixture ",
+         "abundance are not yet supported. Use one or the other.",
+         call. = FALSE)
+  }
+  if (!is.null(re) && !is.null(model$X_det_visit)) {
+    stop("Random effects with visit-level detection covariates ",
+         "(det_visit_formula) are not yet supported; the site-level make_site ",
+         "path assumes a per-site detection design.", call. = FALSE)
   }
   if (!is.null(priors) && !isFALSE(priors)) {
     message(".tobs_fit_nmix(): fixed-effect priors are not applied on the ",
@@ -158,6 +164,19 @@
   X_p      <- model$X_processes[[2]]
   y_long   <- model$y_long
   site_idx <- model$site_idx
+
+  # Random-effect path: warm-start the betas with the no-RE Laplace fit, then
+  # refine on the exact-marginal AGHQ likelihood with a variance-component
+  # update. n_quad = 1 is the joint Laplace (the small-cluster sigma
+  # attenuation regime); n_quad > 1 debiases it.
+  if (!is.null(re)) {
+    return(.tobs_fit_nmix_re(model, re = re,
+                             mixture = mix_code, K_max = K_max,
+                             max_iter = max_iter, tol = tol,
+                             n_quad = n_quad, lkj_eta = lkj_eta,
+                             theta_prior_sd = sigma_beta,
+                             verbose = verbose))
+  }
 
   if (is.null(spatial)) {
     raw <- nmix_laplace(
@@ -181,6 +200,135 @@
                                 max_iter = max_iter, tol = tol,
                                 verbose = verbose)
   build_nmix_fit(raw, model, spatial = spatial)
+}
+
+
+# ---------------------------------------------------------------------------
+# Random-effect path: warm-start + AGHQ refinement
+# ---------------------------------------------------------------------------
+
+# Partition `re` (a list of `tobs_re` specs) into lambda-arm and p-arm RE by
+# the `$shared = c(lambda, p)` membership. A term shared across BOTH arms is
+# rejected -- the AGHQ make_site path integrates one arm at a time; a
+# cross-arm RE would need a joint two-arm oracle. Tags each design element
+# with `$arm` ("lambda" or "p") and gives the p-arm terms a `p<t>` group
+# label to match the detection fixed-effect prefix.
+.tobs_nmix_re_split_arms <- function(re_list, model) {
+  arm_of <- function(r) {
+    sh <- r$shared
+    on_lam <- length(sh) >= 1L && isTRUE(sh[1])
+    on_p   <- length(sh) >= 2L && isTRUE(sh[2])
+    if (on_lam && on_p) {
+      stop("A random effect shared across the abundance (lambda) and ",
+           "detection (p) arms is not supported on the N-mixture AGHQ path.",
+           call. = FALSE)
+    }
+    if (on_p) "p" else "lambda"
+  }
+  arms <- vapply(re_list, arm_of, character(1))
+  tag <- function(sub, arm) {
+    if (!length(sub)) return(list())
+    design <- .tobs_re_design(sub, model)
+    lapply(seq_along(design), function(i) {
+      d <- design[[i]]
+      d$arm <- arm
+      if (arm == "p") d$group_label <- sprintf("p%d", i)
+      d
+    })
+  }
+  list(lambda = tag(re_list[arms == "lambda"], "lambda"),
+       p      = tag(re_list[arms == "p"],      "p"))
+}
+
+
+# Fit an N-mixture with grouped random effects. Warm-starts the betas with the
+# no-RE Laplace fit (so the AGHQ joint optimization sits near the MLE rather
+# than starting from origin), seeds Sigma at a diagonal 0.25 per term, and
+# routes through .tobs_nmix_re_aghq() for the variance-component fit.
+.tobs_fit_nmix_re <- function(model, re, mixture = "P", K_max = NULL,
+                              max_iter = 100L, tol = 1e-6, verbose = TRUE,
+                              n_quad = 1L, lkj_eta = 1.5,
+                              theta_prior_sd = 100) {
+  if (inherits(re, "tobs_re")) re <- list(re)
+  arms <- .tobs_nmix_re_split_arms(re, model)
+  # v1: single arm. Both populated -> reject (cross-arm AGHQ needs make_group
+  # with a joint two-arm oracle, a separate engine path).
+  if (length(arms$lambda) && length(arms$p)) {
+    stop("Random effects on BOTH the abundance and detection arms in one ",
+         "N-mixture fit are not yet supported; the AGHQ path integrates one ",
+         "arm at a time. Put the RE on lambda OR p, not both.",
+         call. = FALSE)
+  }
+  design <- if (length(arms$lambda)) arms$lambda else arms$p
+  arm    <- if (length(arms$lambda)) "lambda" else "p"
+
+  X_lambda <- model$X_processes[[1]]
+  X_p      <- model$X_processes[[2]]
+  y_long   <- model$y_long
+  site_idx <- model$site_idx
+
+  # Warm-start the betas (and log_r under NB) from the no-RE fit. A well-placed
+  # start matters more here than for the closed-form non-spatial fit: the AGHQ
+  # objective wraps n_groups inner Newton mode-finds at every theta candidate,
+  # so a far start can spend an extra 5-10 outer iterations on betas the no-RE
+  # fit already locates cheaply.
+  warm <- tryCatch(
+    nmix_laplace(y = y_long, site_idx = site_idx,
+                 X_lambda = X_lambda, X_p = X_p,
+                 mixture = mixture, K_max = K_max,
+                 max_iter = as.integer(max_iter), tol = as.numeric(tol),
+                 verbose = FALSE),
+    error = function(e) NULL)
+  beta_lambda_init <- if (!is.null(warm)) warm$beta_lambda
+                      else c(log(max(mean(y_long), 0.1)), rep(0, ncol(X_lambda) - 1L))
+  beta_p_init      <- if (!is.null(warm)) warm$beta_p else rep(0, ncol(X_p))
+  r_init <- if (!is.null(warm) && identical(mixture, "NB") &&
+                is.finite(warm$r %||% NA_real_)) as.numeric(warm$r) else 10
+
+  Sigma_init <- lapply(design, function(d) diag(0.25, d$n_coefs))
+  b_init <- numeric(sum(vapply(design,
+                               function(d) as.integer(d$n_groups * d$n_coefs),
+                               integer(1))))
+
+  ref <- .tobs_nmix_re_aghq(model, design,
+                            beta_lambda = beta_lambda_init,
+                            beta_p      = beta_p_init,
+                            Sigma_list  = Sigma_init,
+                            b           = b_init,
+                            mixture     = mixture,
+                            r_init      = r_init,
+                            K_max       = K_max,
+                            n_quad      = as.integer(n_quad),
+                            lkj_eta     = lkj_eta,
+                            theta_prior_sd = theta_prior_sd,
+                            max_iter    = as.integer(max_iter),
+                            verbose     = isTRUE(verbose))
+  if (is.null(ref) || !isTRUE(ref$ok)) {
+    stop("N-mixture AGHQ random-effect refinement did not produce a usable ",
+         "fit (singular marginal Hessian or non-finite optimum). Try a ",
+         "different K_max or simplify the RE structure.", call. = FALSE)
+  }
+
+  # Assemble a `raw`-shaped object build_nmix_fit consumes. The AGHQ marginal
+  # Hessian over theta is the joint (lambda coefs, p coefs[, log_r]) covariance
+  # the engine returned -- the same coordinate set the non-spatial fit's
+  # observed-Fisher inverse covers.
+  raw <- list(
+    mixture     = mixture,
+    beta_lambda = ref$beta_lambda,
+    beta_p      = ref$beta_p,
+    log_r       = ref$log_r,
+    r           = ref$r,
+    vcov        = ref$vcov,
+    log_lik     = ref$log_marginal,
+    converged   = ref$converged,
+    K_max       = K_max
+  )
+  re_post <- list(arm = arm, design = design,
+                  Sigma_list = ref$Sigma_list,
+                  b = ref$b, b_var = ref$b_var,
+                  n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
+  build_nmix_fit(raw, model, spatial = NULL, re_post = re_post)
 }
 
 
@@ -240,7 +388,7 @@
 # covariance so derived quantities (e.g. lambda * detection-corrected counts,
 # total abundance) propagate the cross-arm covariance rather than treating the
 # arms as independent.
-build_nmix_fit <- function(raw, model, spatial = NULL) {
+build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   pi_list <- model$process_info
   p_lam   <- pi_list[[1]]$p
   p_p     <- pi_list[[2]]$p
@@ -278,6 +426,32 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
   n_pseudo <- 1000L
   draws <- .rmvn(n_pseudo, means, vcov)
   colnames(draws) <- nms
+
+  # Random-effect block (gcol33/tulpaObs#13): append the variance components
+  # (sigma_g_*, cor_g_*_* for a correlated block) and per-group BLUPs to the
+  # public parameter layout the same way the occupancy RE path does. AGHQ
+  # returns point estimates for these (no analytic joint covariance with the
+  # fixed effects), so the pseudo-draws fill them with near-constant columns
+  # at the point estimate -- ranef() / summary() read them by name.
+  re_block <- NULL
+  if (!is.null(re_post) && length(re_post$design)) {
+    re_block <- .tobs_re_param_block(list(design = re_post$design,
+                                          b      = re_post$b,
+                                          b_var  = re_post$b_var,
+                                          Sigma  = re_post$Sigma_list))
+    re_means <- re_block$means; re_sds <- re_block$sds; re_names <- re_block$names
+    means <- c(means, re_means); sds <- c(sds, re_sds)
+    nms   <- c(nms, re_names)
+    names(means) <- nms; names(sds) <- nms
+    n_re <- length(re_means)
+    re_draws <- matrix(NA_real_, n_pseudo, n_re)
+    for (j in seq_len(n_re)) {
+      sd_j <- if (is.finite(re_sds[j])) re_sds[j] else 0
+      re_draws[, j] <- stats::rnorm(n_pseudo, re_means[j], max(sd_j, 1e-4))
+    }
+    colnames(re_draws) <- re_names
+    draws <- cbind(draws, re_draws)
+  }
 
   spatial_field <- raw$phi_mean %||% raw$z_mean %||% raw$v_mean
   hyper <- .nmix_hyper(raw)
@@ -338,6 +512,12 @@ build_nmix_fit <- function(raw, model, spatial = NULL) {
     nmix_hyper = hyper,
     mixture = if (is_nb) "negbin" else "poisson",
     nmix_dispersion = dispersion,
+    re_effects = re_block$re_effects,
+    nmix_re = if (!is.null(re_post))
+      list(arm = re_post$arm, n_quad = re_post$n_quad,
+           lkj_eta = re_post$lkj_eta,
+           Sigma_list = re_post$Sigma_list)
+      else NULL,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))

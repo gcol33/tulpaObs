@@ -58,7 +58,10 @@
     fit <- .tobs_fit_nmix(fit_model, method = nmix_method, spatial = spatial,
                           temporal = temporal, re = re, priors = priors,
                           mixture = mixture, K_max = K.max,
-                          max_iter = max.iter, tol = tol, verbose = verbose)
+                          max_iter = max.iter, tol = tol,
+                          n_quad = n.quad, lkj_eta = re.lkj,
+                          sigma_beta = sigma.beta,
+                          verbose = verbose)
     fit <- .unscale_fit_per_process(fit, scales, process_info)
     fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
     fit$model  <- model

@@ -164,7 +164,7 @@ nmix_laplace_icar <- function(y,
   )
 
   # Normalise grid weights.
-  weights <- .nl_normalise_weights_safe(fit$log_marginal, "tau_grid / data")
+  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal, "tau_grid / data")
 
   # Per-grid hyperparameter values (theta_grid columns: tau, r).
   tau_vec <- fit$theta_grid[, "tau"]
@@ -357,7 +357,7 @@ nmix_laplace_car_proper <- function(y,
   )
 
   # Normalise grid weights (joint over the (tau, rho) grid).
-  weights <- .nl_normalise_weights_safe(fit$log_marginal)
+  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
 
   tau_vec <- fit$theta_grid[, "tau"]
   rho_vec <- fit$theta_grid[, "rho"]
@@ -592,7 +592,7 @@ nmix_laplace_bym2 <- function(y,
   )
 
   # Normalise grid weights (joint over (sigma, rho)).
-  weights <- .nl_normalise_weights_safe(fit$log_marginal)
+  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
 
   sigma_vec <- fit$theta_grid[, "sigma"]
   rho_vec   <- fit$theta_grid[, "rho"]
