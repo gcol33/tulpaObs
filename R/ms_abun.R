@@ -174,17 +174,27 @@
 .tobs_fit_ms_nmix <- function(model, mixture = "poisson", K_max = NULL,
                               max_iter = 100L, optimizer = "em",
                               n_quad = 1L, lkj_eta = 1, verbose = TRUE) {
-  if (!identical(mixture, "poisson")) {
-    stop("Community N-mixture currently supports mixture = \"poisson\" only ",
-         "(a global negative-binomial size is a planned tulpa extension).",
-         call. = FALSE)
+  if (!identical(mixture, "poisson") && !identical(mixture, "negbin")) {
+    stop("Community N-mixture supports mixture = \"poisson\" or \"negbin\" ",
+         "(got \"", mixture, "\").", call. = FALSE)
   }
+  # tulpaObs vocabulary ("poisson" / "negbin") -> nmix_laplace_re's
+  # mixing-distribution code ("P" / "NB"). NB carries a global (non-RE)
+  # dispersion size `r` as the (d+1)-th theta entry, joint-optimised with the
+  # community means via the analytic-gradient AGHQ path. There is no
+  # closed-form EM for NB, so when the user does not pin them, switch the EM
+  # defaults to the joint_grad / n_quad = 5 NB defaults (matching
+  # nmix_laplace_re()'s own missing()-driven NB defaults).
+  mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
+  if (mix_code == "NB" && identical(optimizer, "em")) optimizer <- "joint_grad"
+  if (mix_code == "NB" && n_quad == 1L)               n_quad    <- 5L
   lf  <- .tobs_ms_nmix_longform(model)
   raw <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
     X_lambda = model$X_processes[[1]], X_p = lf$X_p,
     n_sites = model$n_sites, n_species = model$n_species,
     K_max = K_max, max_iter = as.integer(max_iter),
+    mixture = mix_code,
     optimizer = optimizer, n_quad = as.integer(n_quad), lkj_eta = lkj_eta,
     verbose = isTRUE(verbose))
   build_ms_nmix_fit(raw, model, mixture = mixture)
@@ -207,9 +217,29 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
   p_nm    <- pi_list[[2]]$coef_names
   nms     <- c(paste0("lambda_", lam_nm), paste0("p_", p_nm))
 
+  # NB carries a global dispersion size `r` as the trailing theta coordinate
+  # log_r (the joint optimizer estimates it alongside the community means).
+  # Mirror the abun()-NB convention: append "log_r" to the coefficient surface
+  # (means / vcov / sds / draws), so coef() / vcov() / confint() see it with
+  # an SE; expose r on `ms_dispersion` with the delta-method SE for printing.
+  is_nb <- identical(mixture, "negbin") && !is.null(raw$r) &&
+           is.finite(raw$r) && raw$r > 0
+  log_r <- if (is_nb) log(unname(as.numeric(raw$r))) else NA_real_
+
   means <- c(as.numeric(raw$mu_lambda), as.numeric(raw$mu_p))
+  if (is_nb) {
+    means <- c(means, log_r)
+    nms   <- c(nms, "log_r")
+  }
   names(means) <- nms
   vcov  <- as.matrix(raw$vcov)
+  if (nrow(vcov) != length(nms) || ncol(vcov) != length(nms)) {
+    stop(sprintf("build_ms_nmix_fit(): vcov dim %dx%d does not match the %d ",
+                 nrow(vcov), ncol(vcov), length(nms)),
+         "coefficient names. Expected the joint optimizer to return one ",
+         "trailing log_r row/col under NB and a plain (p_lambda + p_p) block ",
+         "under Poisson.", call. = FALSE)
+  }
   rownames(vcov) <- colnames(vcov) <- nms
   sds   <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
 
@@ -232,6 +262,13 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
   draws <- .rmvn(n_pseudo, means, vcov)
   colnames(draws) <- nms
 
+  ms_dispersion <- if (is_nb) {
+    se_logr <- unname(sds["log_r"])
+    list(r     = exp(log_r),
+         log_r = log_r,
+         r_sd  = exp(log_r) * se_logr)
+  } else NULL
+
   structure(list(
     draws = draws, means = means, sds = sds, vcov = vcov,
     n_samples = n_pseudo, n_params = length(means),
@@ -250,6 +287,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
       optimizer = raw$optimizer %||% "em",
       n_quad = raw$n_quad %||% 1L, lkj_eta = raw$lkj_eta %||% 1
     ),
+    ms_dispersion = ms_dispersion,
     convergence = list(converged = isTRUE(raw$converged),
                        n_iter = raw$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))
