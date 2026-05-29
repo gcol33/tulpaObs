@@ -31,12 +31,19 @@
 // nmix_community_em.cpp) does not re-instantiate the per-site assembly inline,
 // which overflows the MinGW g++ compiler under -O2.
 //
-// Poisson OR negative-binomial abundance. NB adds a GLOBAL dispersion size r
-// (shared across species, not a per-species RE) carried as the (d+1)-th theta
-// entry log_r; n_theta is then d+1 so the engine's theta-gradient picks up the
-// log_r row, while the per-species RE dimension stays d. Poisson is the
-// r = +Inf limit. The per-site NB marginal / score / dispersion machinery is
-// nmix_kernel.h (the single source).
+// Poisson OR negative-binomial abundance. Under NB the dispersion is a
+// PER-SPECIES random effect log_r_s ~ N(mu_log_r, sigma_log_r), so the
+// per-species RE vector widens to b_s = (b_lambda_s, b_p_s, b_logr_s) of
+// dimension d = p_lambda + p_p + 1 and the community mean log_r enters theta as
+// the trailing fixed effect mu_log_r (n_theta = d). The per-species size is
+// r_s = exp(mu_log_r + b_logr_s); the engine integrates b_logr_s as a third
+// (scalar, diagonal) covariance block. Poisson keeps d = p_lambda + p_p (no
+// dispersion coordinate) and is the r = +Inf limit. The per-site NB marginal /
+// score / dispersion machinery is nmix_kernel.h (the single source); the log_r
+// coordinate's design is the identity (it enters every site directly), so the
+// log_r row of the score / observed-info block is assembled from the kernel's
+// dispersion outputs (grad_theta / info_theta / info_lambda_theta /
+// cov_N_stheta / var_stheta).
 
 #ifndef TULPAOBS_NMIX_COMMUNITY_ORACLE_H
 #define TULPAOBS_NMIX_COMMUNITY_ORACLE_H
@@ -52,10 +59,10 @@ namespace tulpaObs {
 
 struct NMixCommunityOracle : tulpa::REGroupOracle {
     int p_lam = 0, p_p = 0;
+    int idx_logr = -1;                    // RE/coef index of log_r_s (NB only; -1 = Poisson)
     Eigen::MatrixXd Xlam;                 // n_sites x p_lambda (shared across species)
     Eigen::VectorXd mu;                   // active community means (theta), length d
-    bool   is_nb = false;                 // negative-binomial abundance
-    double r     = std::numeric_limits<double>::infinity();  // active NB size (Poisson: +Inf)
+    bool   is_nb = false;                 // negative-binomial abundance (per-species log_r RE)
 
     // Per species, per site: the cached Poisson marginal (lgamma precompute) and
     // the detection design rows for that site's visits, in input order.
@@ -71,10 +78,11 @@ struct NMixCommunityOracle : tulpa::REGroupOracle {
     // source for grad_hess / newton_hess / theta_score.
     struct SpeciesEval {
         double logL = 0.0;
-        Eigen::VectorXd grad;             // d ell_g / db  (== d ell_g / d mu)
+        Eigen::VectorXd grad;             // d ell_g / db  (== d ell_g / d mu); under NB the
+                                          // trailing entry is d ell_g / d log_r_s (chain
+                                          // rule derivative 1: log_r_s = mu_log_r + b_logr_s)
         Eigen::MatrixXd negH;             // -d^2 ell_g / db^2 (marginal observed info)
         Eigen::MatrixXd fisher;           // complete-data Fisher (PSD)
-        double grad_logr = 0.0;           // d ell_g / d log_r summed over sites (NB only)
     };
 
     NMixCommunityOracle(const Rcpp::IntegerVector& y,
@@ -93,8 +101,10 @@ struct NMixCommunityOracle : tulpa::REGroupOracle {
                              bool want_negH = true, bool want_fisher = true) const;
 
     void rebind(const double* theta) override {
+        // n_theta == d: the community means (mu_lambda, mu_p) and, under NB, the
+        // trailing community log-dispersion mu_log_r. The per-species size is
+        // r_s = exp(mu_log_r + b_logr_s), assembled per group in eval_species.
         for (int i = 0; i < d; ++i) mu(i) = theta[i];
-        if (is_nb) r = std::exp(theta[d]);   // theta[d] = log_r (global dispersion)
     }
     void grad_hess(int g, const double* b, double& logL,
                    double* grad, double* negH) const override;

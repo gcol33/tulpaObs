@@ -32,9 +32,15 @@
 #' marginal observed-information Hessian.
 #'
 #' The abundance mixing distribution is Poisson (`mixture = "P"`) or negative
-#' binomial (`mixture = "NB"`, a single global dispersion size `r` shared across
-#' species, carried as an extra fixed effect and integrated jointly with the
-#' community means). Poisson is the r -> Inf limit.
+#' binomial (`mixture = "NB"`). Under NB the dispersion is itself a per-species
+#' random effect, `log_r_s ~ N(mu_log_r, sigma_log_r)` (i.e.
+#' `r_s ~ LogNormal`): the per-species RE vector widens to
+#' `b_s = (b_lambda_s, b_p_s, b_logr_s)`, the community log-dispersion `mu_log_r`
+#' joins `(mu_lambda, mu_p)` as a fixed effect, and `sigma_log_r` joins the
+#' community covariances as a third (scalar) block, all integrated jointly by the
+#' same AGHQ engine. The per-species size is
+#' \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)}. Poisson is the
+#' \eqn{r \to \infty} limit (no dispersion coordinate).
 #'
 #' @param y Integer vector of counts, one entry per observed visit (long form,
 #'   all species stacked).
@@ -66,12 +72,17 @@
 #'   is kept for correctness / architecture validation and as the `n_quad = 1`
 #'   joint reference.
 #' @param mixture Abundance mixing distribution: `"P"` (Poisson, default) or
-#'   `"NB"` (negative binomial, one global dispersion size `r`). `"NB"` has no
-#'   closed-form EM, so it defaults `optimizer` to `"joint_grad"` and `n_quad`
-#'   to `5` when those are not supplied, and errors on `optimizer = "em"`.
-#' @param r_init Initial negative-binomial size for the joint optimizer
-#'   (`mixture = "NB"` only; default `10`, a moderate overdispersion start). The
-#'   optimizer carries `log_r` as the `(p_lambda + p_p + 1)`-th fixed effect.
+#'   `"NB"` (negative binomial with a per-species dispersion random effect
+#'   `log_r_s ~ N(mu_log_r, sigma_log_r)`). `"NB"` has no closed-form EM, so it
+#'   defaults `optimizer` to `"joint_grad"` and `n_quad` to `5` when those are
+#'   not supplied, and errors on `optimizer = "em"`.
+#' @param r_init Initial community-mean negative-binomial size for the joint
+#'   optimizer (`mixture = "NB"` only; default `10`, a moderate overdispersion
+#'   start). The optimizer carries `mu_log_r = log(r_init)` as the
+#'   `(p_lambda + p_p + 1)`-th fixed effect.
+#' @param sigma_logr_init Initial standard deviation of the per-species
+#'   log-dispersion random effect `log_r_s` (`mixture = "NB"` only; default
+#'   `0.5`). Seeds the scalar third covariance block.
 #' @param n_quad Quadrature points per random-effect dimension passed to
 #'   [tulpa_re_aghq()] (default 1, the joint Laplace). A higher `n_quad`
 #'   debiases the community covariances at a `n_quad^(p_lambda + p_p)`
@@ -91,8 +102,12 @@
 #'   uncertainty rather than plugging in `Sigma`), `Sigma_lambda`, `Sigma_p`
 #'   (community covariances), `b_lambda`, `b_p` (per-species BLUP deviations,
 #'   `n_species` rows), `log_lik` (AGHQ marginal), `converged`, `K_max`,
-#'   `n_quad`, `lkj_eta`, and (when `mixture = "NB"`) `r`, the fitted global
-#'   negative-binomial size (its `log_r` SE is in `vcov`).
+#'   `n_quad`, `lkj_eta`, and (when `mixture = "NB"`) the dispersion summaries:
+#'   `mu_log_r` (community-mean log-dispersion; its SE is the trailing `vcov`
+#'   diagonal), `sigma_log_r` (the per-species log-dispersion SD), `b_logr`
+#'   (per-species deviations), `r_s` (per-species sizes
+#'   \eqn{\exp(\mu_{\log r} + b^{\log r}_s)}), and `r` equal to
+#'   \eqn{\exp(\mu_{\log r})} (the community-mean size, the LogNormal median).
 #'
 #' @references
 #' Royle, J. A. (2004). N-mixture models for estimating population size from
@@ -109,6 +124,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   K_max = NULL, max_iter = 200L,
                                   optimizer = c("em", "joint_fd", "joint_grad"),
                                   mixture = c("P", "NB"), r_init = 10,
+                                  sigma_logr_init = 0.5,
                                   n_quad = 1L, lkj_eta = 1,
                                   sigma_beta = 100, verbose = FALSE) {
   mixture <- match.arg(mixture)
@@ -239,15 +255,26 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
          call. = FALSE)
   }
   grad_mode <- if (optimizer == "joint_grad") "analytic" else "fd"
-  # NB carries a global dispersion log_r as the (d+1)-th theta entry (the oracle
-  # built with nb = TRUE exposes n_theta = d + 1); Poisson omits it.
+  # NB makes the dispersion a per-species random effect log_r_s ~ N(mu_log_r,
+  # sigma_log_r): the oracle widens the per-species RE vector to d = p_lambda +
+  # p_p + 1 (the trailing log_r_s coordinate) and carries mu_log_r as the trailing
+  # fixed effect (n_theta = d). A third scalar (diagonal) covariance block
+  # integrates b_logr_s; r_s = exp(mu_log_r + b_logr_s). Poisson omits all of it.
   theta0 <- c(as.numeric(mu_lambda_init), as.numeric(mu_p_init))
-  if (mixture == "NB") theta0 <- c(theta0, log(r_init))
-  fit <- tulpa_re_aghq(
+  re_terms <- list(
+    list(n_groups = n_species, n_coefs = p_lam, correlated = p_lam > 1L),
+    list(n_groups = n_species, n_coefs = p_p,   correlated = p_p   > 1L))
+  Sigma0 <- list(as.matrix(Sigma_lambda_init), as.matrix(Sigma_p_init))
+  if (mixture == "NB") {
+    theta0   <- c(theta0, log(r_init))
+    re_terms <- c(re_terms,
+                  list(list(n_groups = n_species, n_coefs = 1L, correlated = FALSE)))
+    Sigma0   <- c(Sigma0, list(matrix(sigma_logr_init^2, 1L, 1L)))
+  }
+  fit <- tulpa::tulpa_re_aghq(
     theta0  = theta0,
-    re_terms = list(list(n_groups = n_species, n_coefs = p_lam, correlated = p_lam > 1L),
-                    list(n_groups = n_species, n_coefs = p_p,   correlated = p_p   > 1L)),
-    Sigma0  = list(as.matrix(Sigma_lambda_init), as.matrix(Sigma_p_init)),
+    re_terms = re_terms,
+    Sigma0  = Sigma0,
     oracle  = orc, gradient = grad_mode,
     n_quad = n_quad, lkj_eta = lkj_eta,
     theta_prior_sd = sigma_beta, maxit = as.integer(max_iter))
@@ -274,9 +301,18 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     optimizer    = optimizer,
     mixture      = mixture
   )
-  # NB: the (d+1)-th theta entry is log_r; report the size r (its log-scale SE is
-  # the corresponding marginal-Hessian diagonal in `vcov`).
-  if (mixture == "NB") out$r <- exp(mu[p_lam + p_p + 1L])
+  # NB: the trailing theta entry is mu_log_r (community-mean log-dispersion); its
+  # log-scale SE is the corresponding marginal-Hessian diagonal in `vcov`. The
+  # third covariance block is sigma_log_r^2, and the per-species deviation BLUPs
+  # give r_s = exp(mu_log_r + b_logr_s).
+  if (mixture == "NB") {
+    out$mu_log_r    <- unname(mu[p_lam + p_p + 1L])
+    out$sigma_log_r <- sqrt(pmax(as.numeric(fit$Sigma_list[[3L]]), 0))
+    out$b_logr      <- as.numeric(fit$blup[[3L]])
+    out$r_s         <- exp(out$mu_log_r + out$b_logr)
+    # Community-mean size (the LogNormal median; the report's headline r).
+    out$r           <- exp(out$mu_log_r)
+  }
   class(out) <- c("nmix_re_fit", "list")
   out
 }

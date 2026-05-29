@@ -4,7 +4,7 @@
 # Per-species N-mixture with Gaussian community hyperpriors on the per-species
 # abundance and detection coefficients:
 #
-#   N_{s,i}        ~ Poisson(lambda_{s,i})            (or NegBin(lambda, r))
+#   N_{s,i}        ~ Poisson(lambda_{s,i})            (or NegBin(lambda, r_s))
 #   y_{s,i,j} | N  ~ Binomial(N_{s,i}, p_{s,i,j})
 #   log lambda_{s,i} = X_lambda_i . (mu_lambda + b_lambda_s)
 #   logit p_{s,i,j}  = X_p_{ij}   . (mu_p      + b_p_s)
@@ -21,8 +21,10 @@
 # owns the family wiring: the data binder, the long-form marshalling into the
 # fitter, and the `tobs_fit` wrapper.
 #
-# Poisson first cut. (A global negative-binomial size is wired in the oracle
-# but not yet plumbed through the community fitter's `mixture` flag.)
+# Poisson and negative-binomial abundance. Under NB the dispersion is a
+# per-species random effect log_r_s ~ N(mu_log_r, sigma_log_r); the oracle widens
+# the per-species RE vector with a trailing log_r_s coordinate and the community
+# log-dispersion (mu_log_r, sigma_log_r) joins the community hyperparameters.
 #
 #   .tobs_build_ms_abun()    data binder -> model_type = "ms_nmix"
 #   .tobs_ms_nmix_longform() 3D y -> stacked (y, site_idx, species_idx, X_p)
@@ -179,12 +181,13 @@
          "(got \"", mixture, "\").", call. = FALSE)
   }
   # tulpaObs vocabulary ("poisson" / "negbin") -> nmix_laplace_re's
-  # mixing-distribution code ("P" / "NB"). NB carries a global (non-RE)
-  # dispersion size `r` as the (d+1)-th theta entry, joint-optimised with the
-  # community means via the analytic-gradient AGHQ path. There is no
-  # closed-form EM for NB, so when the user does not pin them, switch the EM
-  # defaults to the joint_grad / n_quad = 5 NB defaults (matching
-  # nmix_laplace_re()'s own missing()-driven NB defaults).
+  # mixing-distribution code ("P" / "NB"). NB makes the dispersion a per-species
+  # random effect log_r_s ~ N(mu_log_r, sigma_log_r): mu_log_r joins the community
+  # means as a fixed effect and b_logr_s is the trailing per-species RE coordinate,
+  # joint-optimised via the analytic-gradient AGHQ path. There is no closed-form EM
+  # for NB, so when the user does not pin them, switch the EM defaults to the
+  # joint_grad / n_quad = 5 NB defaults (matching nmix_laplace_re()'s own
+  # missing()-driven NB defaults).
   mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
   if (mix_code == "NB" && identical(optimizer, "em")) optimizer <- "joint_grad"
   if (mix_code == "NB" && n_quad == 1L)               n_quad    <- 5L
@@ -217,14 +220,16 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
   p_nm    <- pi_list[[2]]$coef_names
   nms     <- c(paste0("lambda_", lam_nm), paste0("p_", p_nm))
 
-  # NB carries a global dispersion size `r` as the trailing theta coordinate
-  # log_r (the joint optimizer estimates it alongside the community means).
-  # Mirror the abun()-NB convention: append "log_r" to the coefficient surface
-  # (means / vcov / sds / draws), so coef() / vcov() / confint() see it with
-  # an SE; expose r on `ms_dispersion` with the delta-method SE for printing.
-  is_nb <- identical(mixture, "negbin") && !is.null(raw$r) &&
-           is.finite(raw$r) && raw$r > 0
-  log_r <- if (is_nb) log(unname(as.numeric(raw$r))) else NA_real_
+  # NB makes the dispersion a per-species random effect log_r_s ~ N(mu_log_r,
+  # sigma_log_r): the community log-dispersion mu_log_r is the trailing theta
+  # coordinate (the joint optimizer estimates it alongside the community means),
+  # so append "log_r" to the coefficient surface (means / vcov / sds / draws) and
+  # coef() / vcov() / confint() see mu_log_r with its marginal SE. The per-species
+  # sizes r_s and the community covariance term sigma_log_r are summarized on
+  # `ms_dispersion`.
+  is_nb <- identical(mixture, "negbin") &&
+           !is.null(raw$mu_log_r) && is.finite(raw$mu_log_r)
+  log_r <- if (is_nb) unname(as.numeric(raw$mu_log_r)) else NA_real_
 
   means <- c(as.numeric(raw$mu_lambda), as.numeric(raw$mu_p))
   if (is_nb) {
@@ -264,9 +269,14 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
 
   ms_dispersion <- if (is_nb) {
     se_logr <- unname(sds["log_r"])
-    list(r     = exp(log_r),
-         log_r = log_r,
-         r_sd  = exp(log_r) * se_logr)
+    r_s <- as.numeric(raw$r_s)
+    names(r_s) <- model$species_names
+    list(r           = exp(log_r),          # community-mean size (LogNormal median)
+         log_r       = log_r,               # == mu_log_r
+         mu_log_r    = log_r,
+         sigma_log_r = unname(as.numeric(raw$sigma_log_r)),
+         r_s         = r_s,                 # per-species sizes exp(mu_log_r + b_logr_s)
+         r_sd        = exp(log_r) * se_logr)
   } else NULL
 
   structure(list(
@@ -284,6 +294,11 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
       sd_p      = sqrt(pmax(diag(Sigma_p), 0)),
       coef_lambda = coef_lambda, coef_p = coef_p,
       blup_lambda = blup_lambda, blup_p = blup_p,
+      # NB per-species log-dispersion deviation b_logr_s (NULL under Poisson),
+      # so ranef() carries the dispersion RE alongside the coefficient REs.
+      blup_logr = if (is_nb)
+        matrix(as.numeric(raw$b_logr), ncol = 1L,
+               dimnames = list(model$species_names, "log_r")) else NULL,
       optimizer = raw$optimizer %||% "em",
       n_quad = raw$n_quad %||% 1L, lkj_eta = raw$lkj_eta %||% 1
     ),
@@ -313,6 +328,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
       stringsAsFactors = FALSE)
   }
   out <- rbind(to_long(cm$blup_lambda, "lambda"), to_long(cm$blup_p, "p"))
+  if (!is.null(cm$blup_logr)) out <- rbind(out, to_long(cm$blup_logr, "logr"))
   rownames(out) <- NULL
   out
 }
@@ -370,9 +386,10 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
 #' Per-species Royle (2004) N-mixture with Gaussian community hyperpriors:
 #' `beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`,
 #' `beta_p_s ~ N(mu_p, Sigma_p)`, then `N_{s,i} ~ Poisson(lambda_{s,i})`
-#' (or `NegBin(mu = lambda, size)`) and `y_{s,i,j} ~ Binomial(N_{s,i}, p_{s,i,j})`.
-#' The returned `y` is a 3D array `[n_sites x J x n_species]` suitable for
-#' [tobs()] with [ms_abun()].
+#' (or `NegBin(mu = lambda, size = r_s)` with a per-species size
+#' `r_s = exp(mu_log_r + b_logr_s)`) and
+#' `y_{s,i,j} ~ Binomial(N_{s,i}, p_{s,i,j})`. The returned `y` is a 3D array
+#' `[n_sites x J x n_species]` suitable for [tobs()] with [ms_abun()].
 #'
 #' @param n_species Number of species (default 12).
 #' @param N Number of sites (default 80).
@@ -389,17 +406,25 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
 #' @param sd_p Per-coefficient community SD for the detection arm. Default 0.4.
 #' @param mixture Abundance mixing distribution: `"poisson"` (default) or
 #'   `"negbin"`.
-#' @param size Negative-binomial size `r` (ignored under Poisson). Default 3.
+#' @param size Community-mean negative-binomial size, equal to
+#'   \eqn{\exp(\mu_{\log r})} (ignored under Poisson). Default 3. The per-species
+#'   sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
+#'   \eqn{b^{\log r}_s \sim N(0, \sigma_{\log r}^2)}.
+#' @param sigma_logr Standard deviation of the per-species log-dispersion random
+#'   effect `log_r_s` (used only under `mixture = "negbin"`). Default 0.4. Set to
+#'   0 for a shared (single-`r`) community.
 #' @param seed Optional random seed.
 #' @return A list with `y` (3D count array), `data` (site covariate frame),
-#'   `species` (species names), and `truth` (community means / SDs and the
-#'   per-species coefficients, lambda, p, latent N).
+#'   `species` (species names), and `truth` (community means / SDs, the
+#'   per-species coefficients, lambda, p, latent N, and -- under `negbin` --
+#'   `mu_log_r`, `sigma_log_r`, the per-species `b_logr` / `r_s`).
 #' @export
 simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
                              n_abund_covs = 1, n_det_covs = 1,
                              mu_lambda = NULL, mu_p = NULL,
                              sd_lambda = 0.5, sd_p = 0.4,
                              mixture = c("poisson", "negbin"), size = 3,
+                             sigma_logr = 0.4,
                              seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
@@ -422,6 +447,13 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
   beta_p <- matrix(stats::rnorm(n_species * p_p, 0, rep(sd_p, each = n_species)),
                    n_species, p_p) + matrix(mu_p, n_species, p_p, byrow = TRUE)
 
+  # Per-species NB size r_s = exp(mu_log_r + b_logr_s), b_logr_s ~ N(0, sigma_logr^2);
+  # mu_log_r = log(size). NA-valued under Poisson.
+  is_nb    <- identical(mixture, "negbin")
+  mu_log_r <- if (is_nb) log(size) else NA_real_
+  b_logr   <- if (is_nb) stats::rnorm(n_species, 0, sigma_logr) else rep(0, n_species)
+  r_s      <- if (is_nb) exp(mu_log_r + b_logr) else rep(NA_real_, n_species)
+
   species_names <- paste0("sp", seq_len(n_species))
   y <- array(NA_integer_, dim = c(N, J, n_species),
              dimnames = list(NULL, NULL, species_names))
@@ -430,11 +462,12 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
   for (s in seq_len(n_species)) {
     lam <- exp(as.vector(X_lambda %*% beta_lambda[s, ]))
     pp  <- plogis(as.vector(X_det %*% beta_p[s, ]))
-    Ns  <- if (identical(mixture, "negbin")) stats::rnbinom(N, size = size, mu = lam)
+    Ns  <- if (is_nb) stats::rnbinom(N, size = r_s[s], mu = lam)
            else stats::rpois(N, lam)
     for (i in seq_len(N)) y[i, , s] <- stats::rbinom(J, Ns[i], pp[i])
     lambda[, s] <- lam; p_arr[, s] <- pp; Nlat[, s] <- Ns
   }
+  names(r_s) <- names(b_logr) <- species_names
 
   list(
     y = y, data = data, species = species_names,
@@ -443,6 +476,11 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
       sd_lambda = sd_lambda, sd_p = sd_p,
       beta_lambda = beta_lambda, beta_p = beta_p,
       lambda = lambda, p = p_arr, N = Nlat,
-      mixture = mixture, size = if (identical(mixture, "negbin")) size else NA_real_)
+      mixture = mixture,
+      size = if (is_nb) size else NA_real_,
+      mu_log_r = mu_log_r,
+      sigma_log_r = if (is_nb) sigma_logr else NA_real_,
+      b_logr = b_logr,
+      r_s = r_s)
   )
 }

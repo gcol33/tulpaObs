@@ -23,9 +23,13 @@ NMixCommunityOracle::NMixCommunityOracle(const Rcpp::IntegerVector& y,
                                          bool nb) {
     p_lam    = X_lambda.ncol();
     p_p      = X_p.ncol();
-    d        = p_lam + p_p;
     is_nb    = nb;
-    n_theta  = d + (nb ? 1 : 0);     // NB carries log_r as the (d+1)-th theta entry
+    // Under NB the per-species RE vector carries a trailing log_r_s coordinate
+    // (dispersion is a per-species random effect); Poisson omits it. n_theta == d
+    // in both cases (the community means, plus mu_log_r under NB).
+    idx_logr = nb ? (p_lam + p_p) : -1;
+    d        = p_lam + p_p + (nb ? 1 : 0);
+    n_theta  = d;
     n_groups = n_species;
     mu       = Eigen::VectorXd::Zero(d);
 
@@ -71,6 +75,14 @@ NMixCommunityOracle::eval_species(int g, const double* b,
     Eigen::VectorXd coef(d);
     for (int i = 0; i < d; ++i) coef(i) = mu(i) + b[i];
 
+    // Per-species NB size r_s = exp(mu_log_r + b_logr_s) = exp(coef[idx_logr]);
+    // Poisson is the r = +Inf limit (idx_logr < 0). The log_r coordinate enters
+    // every site directly (design = identity), so its row of the score / curvature
+    // is the per-site dispersion outputs summed over the species' sites, with the
+    // lambda<->log_r cross sandwiched only through the abundance design.
+    const double r_s = is_nb ? std::exp(coef(idx_logr))
+                             : std::numeric_limits<double>::infinity();
+
     std::vector<double> eta_p;
     for (const SiteRec& rec : sp_sites[g]) {
         const int J = rec.cache.n_visits;
@@ -86,7 +98,7 @@ NMixCommunityOracle::eval_species(int g, const double* b,
         }
 
         const NMixSiteResult res =
-            compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r);
+            compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r_s);
         e.logL += res.log_lik;
 
         // Score: lambda block += Xlam_i * grad_eta_lambda; p block += Xp * grad_eta_p.
@@ -95,14 +107,16 @@ NMixCommunityOracle::eval_species(int g, const double* b,
         for (int j = 0; j < J; ++j)
             for (int c = 0; c < p_p; ++c)
                 e.grad(p_lam + c) += rec.Xp(j, c) * res.grad_eta_p[j];
-        // Dispersion: log_r enters every site directly (design = 1), so its score
-        // is the per-site d ell/d log_r summed over the species' sites.
-        if (is_nb) e.grad_logr += res.grad_theta;
+        // log_r_s score: design = 1, so the RE-coordinate score is the per-site
+        // d ell / d log_r summed over the species' sites.
+        if (is_nb) e.grad(idx_logr) += res.grad_theta;
 
         if (!want_negH && !want_fisher) continue;
 
-        // Per-site eta-space blocks (coords: 0 = lambda, 1..J = visits).
-        const int dd = 1 + J;
+        // Per-site eta-space block. Coords: 0 = lambda, 1..J = visits, and (under
+        // NB) a trailing log_r coordinate at index `tt = 1 + J`.
+        const int dd = 1 + J + (is_nb ? 1 : 0);
+        const int tt = 1 + J;                       // log_r eta-coord index (NB only)
         Eigen::MatrixXd Bobs, Bfis;
         if (want_negH)   { Bobs = Eigen::MatrixXd::Zero(dd, dd); Bobs(0, 0) = res.info_eta_lambda; }
         if (want_fisher) { Bfis = Eigen::MatrixXd::Zero(dd, dd); Bfis(0, 0) = res.info_eta_lambda; }
@@ -110,7 +124,23 @@ NMixCommunityOracle::eval_species(int g, const double* b,
             if (want_negH)   Bobs(1 + j, 1 + j) = res.info_eta_p[j];
             if (want_fisher) Bfis(1 + j, 1 + j) = res.info_eta_p[j];
         }
-        if (want_negH && J > 0) {
+        if (is_nb) {
+            // Complete-data Fisher: log_r diagonal info_theta and the lambda<->log_r
+            // cross info_lambda_theta (Poisson-neutral / zero under r = +Inf).
+            if (want_fisher) {
+                Bfis(tt, tt) = res.info_theta;
+                Bfis(0, tt)  = Bfis(tt, 0) = res.info_lambda_theta;
+            }
+            if (want_negH) {
+                Bobs(tt, tt) = res.info_theta;
+                Bobs(0, tt)  = Bobs(tt, 0) = res.info_lambda_theta;
+            }
+        }
+        if (want_negH && (J > 0 || is_nb)) {
+            // Marginal observed info = complete-data Fisher - Cov(score | y). The eta
+            // scores are affine in N, contributing the rank-1 var_N * vv vv'
+            // (vv = N-coefficients, sign squares out); the log_r score is non-affine
+            // (psi(N+r)), so its row uses the kernel's cov_N_stheta / var_stheta.
             Eigen::VectorXd vv(dd);
             vv(0) = -res.score_wt_lambda;
             for (int j = 0; j < J; ++j) {
@@ -119,15 +149,31 @@ NMixCommunityOracle::eval_species(int g, const double* b,
                     : std::exp(eta_p[j]) / (1.0 + std::exp(eta_p[j]));
                 vv(1 + j) = pj;
             }
-            Bobs.noalias() -= res.var_N * (vv * vv.transpose());
+            if (is_nb) {
+                vv(tt) = 0.0;
+                Bobs.noalias() -= res.var_N * (vv * vv.transpose());
+                // log_r row/col of Cov(score): Cov(s_coord, s_logr) = (N-coeff of
+                // s_coord) * Cov(N, s_logr) = -vv(coord) * cov_N_stheta; the
+                // log_r/log_r entry is var_stheta.
+                for (int c = 0; c < tt; ++c) {
+                    const double cv = -vv(c) * res.cov_N_stheta;
+                    Bobs(c, tt) -= cv;
+                    Bobs(tt, c) -= cv;
+                }
+                Bobs(tt, tt) -= res.var_stheta;
+            } else if (J > 0) {
+                Bobs.noalias() -= res.var_N * (vv * vv.transpose());
+            }
         }
 
         // Design map Z_i: eta coord 0 -> Xlam_i over the lambda coefs,
-        // eta coord 1+j -> Xp row j over the p coefs.
+        // eta coord 1+j -> Xp row j over the p coefs, and (NB) the log_r eta coord
+        // -> identity on the log_r RE coordinate.
         Eigen::MatrixXd Zi = Eigen::MatrixXd::Zero(dd, d);
         for (int c = 0; c < p_lam; ++c) Zi(0, c) = Xlam(rec.site, c);
         for (int j = 0; j < J; ++j)
             for (int c = 0; c < p_p; ++c) Zi(1 + j, p_lam + c) = rec.Xp(j, c);
+        if (is_nb) Zi(tt, idx_logr) = 1.0;
 
         const Eigen::MatrixXd Zt = Zi.transpose();
         if (want_negH) {
@@ -158,6 +204,8 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
     for (int k = 0; k < n_nodes; ++k) {
         const double* bk = B + (std::size_t)k * d;
         for (int i = 0; i < d; ++i) coef(i) = mu(i) + bk[i];
+        const double r_s = is_nb ? std::exp(coef(idx_logr))
+                                 : std::numeric_limits<double>::infinity();
         double ll = 0.0;
         for (const SiteRec& rec : sp_sites[g]) {
             const int J = rec.cache.n_visits;
@@ -170,7 +218,7 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
                 for (int c = 0; c < p_p; ++c) v += rec.Xp(j, c) * coef(p_lam + c);
                 eta_p[j] = clamp30(v);
             }
-            ll += compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r).log_lik;
+            ll += compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r_s).log_lik;
         }
         out[k] = ll;
     }
@@ -178,9 +226,11 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
 
 void NMixCommunityOracle::theta_score(int g, const double* b,
                                       double* dl_dtheta) const {
+    // n_theta == d. The community means' score is the eta-coordinate RE score; the
+    // trailing mu_log_r score equals the b_logr_s score (chain rule derivative 1,
+    // log_r_s = mu_log_r + b_logr_s), already carried in e.grad[idx_logr].
     const SpeciesEval e = eval_species(g, b, /*want_negH=*/false, /*want_fisher=*/false);
     for (int i = 0; i < d; ++i) dl_dtheta[i] = e.grad(i);
-    if (is_nb) dl_dtheta[d] = e.grad_logr;   // d ell_g / d log_r (global dispersion)
 }
 
 bool NMixCommunityOracle::newton_hess(int g, const double* b, double* H) const {

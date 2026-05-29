@@ -16,6 +16,7 @@ simulate_ms_abun(
   sd_p = 0.4,
   mixture = c("poisson", "negbin"),
   size = 3,
+  sigma_logr = 0.4,
   seed = NULL
 )
 }
@@ -44,20 +45,29 @@ Default 0.5.}
 \item{mixture}{Abundance mixing distribution: \code{"poisson"} (default) or
 \code{"negbin"}.}
 
-\item{size}{Negative-binomial size \code{r} (ignored under Poisson). Default 3.}
+\item{size}{Community-mean negative-binomial size, equal to
+\eqn{\exp(\mu_{\log r})} (ignored under Poisson). Default 3. The per-species
+sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
+\eqn{b^{\log r}_s \sim N(0, \sigma_{\log r}^2)}.}
+
+\item{sigma_logr}{Standard deviation of the per-species log-dispersion random
+effect \code{log_r_s} (used only under \code{mixture = "negbin"}). Default 0.4. Set to
+0 for a shared (single-\code{r}) community.}
 
 \item{seed}{Optional random seed.}
 }
 \value{
 A list with \code{y} (3D count array), \code{data} (site covariate frame),
-\code{species} (species names), and \code{truth} (community means / SDs and the
-per-species coefficients, lambda, p, latent N).
+\code{species} (species names), and \code{truth} (community means / SDs, the
+per-species coefficients, lambda, p, latent N, and -- under \code{negbin} --
+\code{mu_log_r}, \code{sigma_log_r}, the per-species \code{b_logr} / \code{r_s}).
 }
 \description{
 Per-species Royle (2004) N-mixture with Gaussian community hyperpriors:
 \code{beta_lambda_s ~ N(mu_lambda, Sigma_lambda)},
 \code{beta_p_s ~ N(mu_p, Sigma_p)}, then \verb{N_\{s,i\} ~ Poisson(lambda_\{s,i\})}
-(or \code{NegBin(mu = lambda, size)}) and \verb{y_\{s,i,j\} ~ Binomial(N_\{s,i\}, p_\{s,i,j\})}.
-The returned \code{y} is a 3D array \verb{[n_sites x J x n_species]} suitable for
-\code{\link[=tobs]{tobs()}} with \code{\link[=ms_abun]{ms_abun()}}.
+(or \code{NegBin(mu = lambda, size = r_s)} with a per-species size
+\code{r_s = exp(mu_log_r + b_logr_s)}) and
+\verb{y_\{s,i,j\} ~ Binomial(N_\{s,i\}, p_\{s,i,j\})}. The returned \code{y} is a 3D array
+\verb{[n_sites x J x n_species]} suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=ms_abun]{ms_abun()}}.
 }

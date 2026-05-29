@@ -21,6 +21,7 @@ nmix_laplace_re(
   optimizer = c("em", "joint_fd", "joint_grad"),
   mixture = c("P", "NB"),
   r_init = 10,
+  sigma_logr_init = 0.5,
   n_quad = 1L,
   lkj_eta = 1,
   sigma_beta = 100,
@@ -69,13 +70,19 @@ is kept for correctness / architecture validation and as the \code{n_quad = 1}
 joint reference.}
 
 \item{mixture}{Abundance mixing distribution: \code{"P"} (Poisson, default) or
-\code{"NB"} (negative binomial, one global dispersion size \code{r}). \code{"NB"} has no
-closed-form EM, so it defaults \code{optimizer} to \code{"joint_grad"} and \code{n_quad}
-to \code{5} when those are not supplied, and errors on \code{optimizer = "em"}.}
+\code{"NB"} (negative binomial with a per-species dispersion random effect
+\code{log_r_s ~ N(mu_log_r, sigma_log_r)}). \code{"NB"} has no closed-form EM, so it
+defaults \code{optimizer} to \code{"joint_grad"} and \code{n_quad} to \code{5} when those are
+not supplied, and errors on \code{optimizer = "em"}.}
 
-\item{r_init}{Initial negative-binomial size for the joint optimizer
-(\code{mixture = "NB"} only; default \code{10}, a moderate overdispersion start). The
-optimizer carries \code{log_r} as the \code{(p_lambda + p_p + 1)}-th fixed effect.}
+\item{r_init}{Initial community-mean negative-binomial size for the joint
+optimizer (\code{mixture = "NB"} only; default \code{10}, a moderate overdispersion
+start). The optimizer carries \code{mu_log_r = log(r_init)} as the
+\code{(p_lambda + p_p + 1)}-th fixed effect.}
+
+\item{sigma_logr_init}{Initial standard deviation of the per-species
+log-dispersion random effect \code{log_r_s} (\code{mixture = "NB"} only; default
+\code{0.5}). Seeds the scalar third covariance block.}
 
 \item{n_quad}{Quadrature points per random-effect dimension passed to
 \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}} (default 1, the joint Laplace). A higher \code{n_quad}
@@ -100,8 +107,12 @@ means), \code{vcov} (their joint covariance from the AGHQ marginal Hessian,
 uncertainty rather than plugging in \code{Sigma}), \code{Sigma_lambda}, \code{Sigma_p}
 (community covariances), \code{b_lambda}, \code{b_p} (per-species BLUP deviations,
 \code{n_species} rows), \code{log_lik} (AGHQ marginal), \code{converged}, \code{K_max},
-\code{n_quad}, \code{lkj_eta}, and (when \code{mixture = "NB"}) \code{r}, the fitted global
-negative-binomial size (its \code{log_r} SE is in \code{vcov}).
+\code{n_quad}, \code{lkj_eta}, and (when \code{mixture = "NB"}) the dispersion summaries:
+\code{mu_log_r} (community-mean log-dispersion; its SE is the trailing \code{vcov}
+diagonal), \code{sigma_log_r} (the per-species log-dispersion SD), \code{b_logr}
+(per-species deviations), \code{r_s} (per-species sizes
+\eqn{\exp(\mu_{\log r} + b^{\log r}_s)}), and \code{r} equal to
+\eqn{\exp(\mu_{\log r})} (the community-mean size, the LogNormal median).
 }
 \description{
 Fits the community (spAbundance \code{msNMix}) N-mixture model: a per-species
@@ -135,9 +146,15 @@ no sum-to-zero constraint is needed; their standard errors come from the
 marginal observed-information Hessian.
 
 The abundance mixing distribution is Poisson (\code{mixture = "P"}) or negative
-binomial (\code{mixture = "NB"}, a single global dispersion size \code{r} shared across
-species, carried as an extra fixed effect and integrated jointly with the
-community means). Poisson is the r -> Inf limit.
+binomial (\code{mixture = "NB"}). Under NB the dispersion is itself a per-species
+random effect, \code{log_r_s ~ N(mu_log_r, sigma_log_r)} (i.e.
+\code{r_s ~ LogNormal}): the per-species RE vector widens to
+\verb{b_s = (b_lambda_s, b_p_s, b_logr_s)}, the community log-dispersion \code{mu_log_r}
+joins \verb{(mu_lambda, mu_p)} as a fixed effect, and \code{sigma_log_r} joins the
+community covariances as a third (scalar) block, all integrated jointly by the
+same AGHQ engine. The per-species size is
+\eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)}. Poisson is the
+\eqn{r \to \infty} limit (no dispersion coordinate).
 }
 \references{
 Royle, J. A. (2004). N-mixture models for estimating population size from
