@@ -104,7 +104,8 @@ test_that("occu_cover() v3 nested-Laplace recovers slopes, hypers, field (10 see
         detection = ~ det_cov1, positive = ~ pos_cov1,
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
-        control = list(verbose = FALSE, max.iter = 1500L)
+        control = list(engine = "v3_nested",
+                       verbose = FALSE, max.iter = 1500L)
       )),
       error = function(e) NULL
     )

@@ -491,22 +491,22 @@
     fit_args <- list(model = model, adj = spatial_info$term$graph,
                      priors = priors)
     fit_args <- c(fit_args, control)
-    # v3 nested-Laplace (inner Newton on z profiled out + outer BFGS) is the
-    # default. v2's joint Laplace is reachable via control$engine = "v2_joint"
-    # for comparison / debugging. joint_coupled routes through tulpa's joint
-    # nested-Laplace engine with the occu_cover_lognormal cell-coupling spec
-    # (gcol33/tulpa#32 Layer B.2 consumer): a 3-arm joint fit with outer-grid
-    # integration over (sigma, alpha), inner Newton driven by the per-cell
-    # occupancy mixture's closed-form derivatives.
-    engine_pick <- control[["engine"]] %||% "v3_nested"
+    # joint_coupled (3-arm nested-Laplace via tulpa's cell_coupling spec) is the
+    # default: outer-grid integration over (sigma, alpha) with inner Newton driven
+    # by the occu_cover_{lognormal,beta} cell-coupling spec. 150-300x faster than
+    # v3 at N=100 and reliably completes at N=200+ where v3 trips on a
+    # missing-value compare in its outer BFGS. v3 pure-R nested-Laplace and v2's
+    # joint Laplace stay reachable via control$engine = "v3_nested" /
+    # "v2_joint" as debug escape hatches.
+    engine_pick <- control[["engine"]] %||% "joint_coupled"
     fit_args[["engine"]] <- NULL
     if (engine_pick == "v2_joint") {
       return(do.call(.tobs_fit_occu_cover_spatial, fit_args))
     }
-    if (engine_pick == "joint_coupled") {
-      return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
+    if (engine_pick == "v3_nested") {
+      return(do.call(.tobs_fit_occu_cover_nested, fit_args))
     }
-    return(do.call(.tobs_fit_occu_cover_nested, fit_args))
+    return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
   }
 
   fit_args <- list(model = model, method = engine, priors = priors)
