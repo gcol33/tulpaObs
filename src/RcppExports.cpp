@@ -20,6 +20,15 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// cpp_register_occu_cover_beta_coupling
+void cpp_register_occu_cover_beta_coupling();
+RcppExport SEXP _tulpaObs_cpp_register_occu_cover_beta_coupling() {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    cpp_register_occu_cover_beta_coupling();
+    return R_NilValue;
+END_RCPP
+}
 // cpp_eval_occu_cover_lognormal_cell
 Rcpp::List cpp_eval_occu_cover_lognormal_cell(double eta_psi, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos, double sigma_pos);
 RcppExport SEXP _tulpaObs_cpp_eval_occu_cover_lognormal_cell(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_posSEXP, SEXP sigma_posSEXP) {
@@ -33,6 +42,22 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
     Rcpp::traits::input_parameter< double >::type sigma_pos(sigma_posSEXP);
     rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_cover_lognormal_cell(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_eval_occu_cover_beta_cell
+Rcpp::List cpp_eval_occu_cover_beta_cell(double eta_psi, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos, double phi_pos);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_cover_beta_cell(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_posSEXP, SEXP phi_posSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< double >::type phi_pos(phi_posSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_cover_beta_cell(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -228,7 +253,9 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_register_occu_cover_lognormal_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_lognormal_coupling, 0},
+    {"_tulpaObs_cpp_register_occu_cover_beta_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_beta_coupling, 0},
     {"_tulpaObs_cpp_eval_occu_cover_lognormal_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_lognormal_cell, 6},
+    {"_tulpaObs_cpp_eval_occu_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_beta_cell, 6},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},
     {"_tulpaObs_cpp_nmix_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_nmix_laplace_fixed, 13},

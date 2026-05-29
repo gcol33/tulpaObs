@@ -5,8 +5,16 @@ cpp_register_occu_cover_lognormal_coupling <- function() {
     invisible(.Call(`_tulpaObs_cpp_register_occu_cover_lognormal_coupling`))
 }
 
+cpp_register_occu_cover_beta_coupling <- function() {
+    invisible(.Call(`_tulpaObs_cpp_register_occu_cover_beta_coupling`))
+}
+
 cpp_eval_occu_cover_lognormal_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos) {
     .Call(`_tulpaObs_cpp_eval_occu_cover_lognormal_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos)
+}
+
+cpp_eval_occu_cover_beta_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos) {
+    .Call(`_tulpaObs_cpp_eval_occu_cover_beta_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos)
 }
 
 cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter = 100L, tol = 1e-6, inner_max = 50L, inner_tol = 1e-8, sigma_beta = 100.0, verbose = FALSE) {

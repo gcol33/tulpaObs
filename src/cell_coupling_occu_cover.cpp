@@ -1,11 +1,12 @@
 // cell_coupling_occu_cover.cpp
-// Registration of `OccuCoverLognormalCoupling` against tulpa's
-// CellCouplingSpec registry via the `tulpa_register_cell_coupling`
-// registered C callable, plus an Rcpp-export'd direct evaluator used by
-// tests/testthat/test-occu-cover-coupling.R to FD-check every closed-form
-// derivative against numerical derivatives of the cell log-density.
+// Registration of `OccuCoverLognormalCoupling` + `OccuCoverBetaCoupling`
+// against tulpa's CellCouplingSpec registry via the
+// `tulpa_register_cell_coupling` registered C callable, plus Rcpp-export'd
+// direct evaluators used by tests/testthat/test-occu-cover-coupling.R to
+// FD-check every closed-form derivative against numerical derivatives of
+// the cell log-density.
 //
-// The registration is invoked from R via `.onLoad` (R/tulpaObs-package.R)
+// Registration is invoked from R via `.onLoad` (R/tulpaObs-package.R)
 // rather than from a `R_init_tulpaObs` C entry point -- Rcpp's
 // compileAttributes already owns R_init, and a single `tulpa_register_*`
 // call on package load is the standard pattern across the tulpa
@@ -17,57 +18,42 @@
 #include <R_ext/Rdynload.h>
 #include <Rcpp.h>
 #include <memory>
+#include <string>
 #include <vector>
 
-// [[Rcpp::export]]
-void cpp_register_occu_cover_lognormal_coupling() {
+namespace {
+
+inline tulpa::RegisterCellCouplingFn lookup_registrar() {
     auto fp = (tulpa::RegisterCellCouplingFn) R_GetCCallable(
         "tulpa", "tulpa_register_cell_coupling");
     if (!fp) {
         Rcpp::stop("tulpaObs: R_GetCCallable('tulpa', 'tulpa_register_cell_coupling') "
                    "returned NULL -- tulpa not loaded or ABI mismatch.");
     }
-    fp("occu_cover_lognormal",
-       std::make_shared<tulpaObs::OccuCoverLognormalCoupling>());
+    return fp;
 }
 
-// Direct evaluator returning the spec's closed-form log-density and every
-// nonzero derivative buffer for a single synthetic cell. R-side FD test
-// rebuilds the same cell density by varying each eta numerically and
-// compares.
-//
-// `y_det` is a length-J 0/1 integer vector; `y_pos` is the raw lognormal
-// data at detected visits (0 ignored at undetected). `eta_p` and
-// `eta_pos` are length-J. `sigma_pos` is the lognormal SD on the log
-// scale (= the pos arm's phi).
-//
-// Returns a list with `cell_ll` (scalar) plus `grad_psi` (scalar),
-// `grad_p` (length J), `grad_pos` (length J), `neg_hess_psi` (scalar),
-// `neg_hess_p` (length J), `neg_hess_pos` (length J), `cross_psi_p`
-// (length J; zero in det case), `cross_p_p` (J x J row-major; zero in
-// det case and along its diagonal).
-// [[Rcpp::export]]
-Rcpp::List cpp_eval_occu_cover_lognormal_cell(
-    double                     eta_psi,
-    Rcpp::NumericVector        eta_p,
-    Rcpp::NumericVector        eta_pos,
-    Rcpp::IntegerVector        y_det,
-    Rcpp::NumericVector        y_pos,
-    double                     sigma_pos
-) {
+// Shared body: builds CellEtas / CellResponse / CellDerivs views over a
+// single synthetic cell and dispatches into `spec.evaluate_cell()`. The
+// caller picks the spec (lognormal or beta). Used by both direct
+// evaluators below.
+template <class Spec>
+Rcpp::List eval_one_cell_(double                eta_psi,
+                          Rcpp::NumericVector   eta_p,
+                          Rcpp::NumericVector   eta_pos,
+                          Rcpp::IntegerVector   y_det,
+                          Rcpp::NumericVector   y_pos,
+                          double                phi_pos,
+                          const char*           fam_pos_str) {
     const int Jc = eta_p.size();
     if (eta_pos.size() != Jc || y_det.size() != Jc || y_pos.size() != Jc) {
-        Rcpp::stop("cpp_eval_occu_cover_lognormal_cell: length mismatch (Jc=%d).", Jc);
+        Rcpp::stop("cpp_eval_occu_cover_*_cell: length mismatch (Jc=%d).", Jc);
     }
 
     std::vector<double> eta_psi_buf(1, eta_psi);
     std::vector<double> eta_p_buf(eta_p.begin(), eta_p.end());
     std::vector<double> eta_pos_buf(eta_pos.begin(), eta_pos.end());
 
-    // CellEtas wants per-arm full eta buffers (length = arm's total row
-    // count) plus per-arm row indices for this cell. For a single-cell
-    // synthetic, the row indices are 0..J-1 and the full eta buffer is
-    // exactly the cell's rows.
     std::vector<const double*> arm_eta_ptr(3);
     arm_eta_ptr[0] = eta_psi_buf.data();
     arm_eta_ptr[1] = eta_p_buf.data();
@@ -99,9 +85,12 @@ Rcpp::List cpp_eval_occu_cover_lognormal_cell(
     arm_n_trials_ptr[1] = n_trials_p.data();
     arm_n_trials_ptr[2] = n_trials_pos.data();
 
-    std::string fam_psi = "binomial", fam_p = "binomial", fam_pos = "lognormal";
-    std::vector<const char*> arm_family_ptr = {fam_psi.c_str(), fam_p.c_str(), fam_pos.c_str()};
-    std::vector<double> arm_phi = {1.0, 1.0, sigma_pos};
+    std::string fam_psi = "binomial", fam_p = "binomial";
+    std::string fam_pos = fam_pos_str;
+    std::vector<const char*> arm_family_ptr = {
+        fam_psi.c_str(), fam_p.c_str(), fam_pos.c_str()
+    };
+    std::vector<double> arm_phi = {1.0, 1.0, phi_pos};
 
     tulpa::CellEtas etas_view;
     etas_view.arm_eta_ptr   = arm_eta_ptr.data();
@@ -131,7 +120,6 @@ Rcpp::List cpp_eval_occu_cover_lognormal_cell(
                                                    neg_hess_p_buf.data(),
                                                    neg_hess_pos_buf.data()};
 
-    // cross_hess buffers: 3 x 3 of pointers; kk > ll set nullptr.
     std::vector<double> cross_00(1 * 1, 0.0);
     std::vector<double> cross_01(1 * Jc, 0.0);
     std::vector<double> cross_02(1 * Jc, 0.0);
@@ -153,7 +141,7 @@ Rcpp::List cpp_eval_occu_cover_lognormal_cell(
     out.arm_row_count      = arm_row_count.data();
     out.n_arms_            = 3;
 
-    tulpaObs::OccuCoverLognormalCoupling spec;
+    Spec spec;
     const double cell_ll = spec.evaluate_cell(0, etas_view, y_view, out);
 
     Rcpp::NumericVector grad_p_r(grad_p_buf.begin(), grad_p_buf.end());
@@ -178,5 +166,69 @@ Rcpp::List cpp_eval_occu_cover_lognormal_cell(
         Rcpp::Named("neg_hess_pos") = neg_hess_pos_r,
         Rcpp::Named("cross_psi_p")  = cross_psi_p_r,
         Rcpp::Named("cross_p_p")    = cross_p_p_r
+    );
+}
+
+} // namespace
+
+
+// [[Rcpp::export]]
+void cpp_register_occu_cover_lognormal_coupling() {
+    auto fp = lookup_registrar();
+    fp("occu_cover_lognormal",
+       std::make_shared<tulpaObs::OccuCoverLognormalCoupling>());
+}
+
+// [[Rcpp::export]]
+void cpp_register_occu_cover_beta_coupling() {
+    auto fp = lookup_registrar();
+    fp("occu_cover_beta",
+       std::make_shared<tulpaObs::OccuCoverBetaCoupling>());
+}
+
+
+// Direct evaluator returning the spec's closed-form log-density and every
+// nonzero derivative buffer for a single synthetic cell. R-side FD test
+// rebuilds the same cell density by varying each eta numerically and
+// compares.
+//
+// `y_det` is a length-J 0/1 integer vector; `y_pos` is the raw lognormal
+// data at detected visits (0 ignored at undetected). `eta_p` and
+// `eta_pos` are length-J. `sigma_pos` is the lognormal SD on the log
+// scale (= the pos arm's phi).
+//
+// Returns a list with `cell_ll` (scalar) plus `grad_psi` (scalar),
+// `grad_p` (length J), `grad_pos` (length J), `neg_hess_psi` (scalar),
+// `neg_hess_p` (length J), `neg_hess_pos` (length J), `cross_psi_p`
+// (length J; zero in det case), `cross_p_p` (J x J row-major; zero in
+// det case and along its diagonal).
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_cover_lognormal_cell(
+    double                     eta_psi,
+    Rcpp::NumericVector        eta_p,
+    Rcpp::NumericVector        eta_pos,
+    Rcpp::IntegerVector        y_det,
+    Rcpp::NumericVector        y_pos,
+    double                     sigma_pos
+) {
+    return eval_one_cell_<tulpaObs::OccuCoverLognormalCoupling>(
+        eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, "lognormal"
+    );
+}
+
+// Beta-arm twin of `cpp_eval_occu_cover_lognormal_cell`. `y_pos` is in
+// (0, 1) at detected visits and 0 at undetected visits; `phi_pos` is the
+// beta precision (mean is sigmoid(eta_pos), variance is mu(1-mu)/(1+phi)).
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_cover_beta_cell(
+    double                     eta_psi,
+    Rcpp::NumericVector        eta_p,
+    Rcpp::NumericVector        eta_pos,
+    Rcpp::IntegerVector        y_det,
+    Rcpp::NumericVector        y_pos,
+    double                     phi_pos
+) {
+    return eval_one_cell_<tulpaObs::OccuCoverBetaCoupling>(
+        eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta"
     );
 }

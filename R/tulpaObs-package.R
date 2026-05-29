@@ -10,7 +10,8 @@ NULL
   requireNamespace("Matrix", quietly = TRUE)
   # Ensure tulpa's DLL (with the CellCouplingSpec registry + the
   # `tulpa_register_cell_coupling` R_GetCCallable entry) is loaded before
-  # registering OccuCoverLognormalCoupling against it.
+  # registering the OccuCover specs against it.
   requireNamespace("tulpa", quietly = TRUE)
   cpp_register_occu_cover_lognormal_coupling()
+  cpp_register_occu_cover_beta_coupling()
 }

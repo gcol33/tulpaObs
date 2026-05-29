@@ -20,6 +20,18 @@ cell_ll_at <- function(eta_psi, eta_p, eta_pos,
     )$cell_ll
 }
 
+cell_ll_at_beta <- function(eta_psi, eta_p, eta_pos,
+                            y_det, y_pos, phi_pos) {
+    cpp_eval_occu_cover_beta_cell(
+        eta_psi = eta_psi,
+        eta_p   = eta_p,
+        eta_pos = eta_pos,
+        y_det   = y_det,
+        y_pos   = y_pos,
+        phi_pos = phi_pos
+    )$cell_ll
+}
+
 fd1 <- function(f, h = 1e-5) {
     (f(+h) - f(-h)) / (2 * h)
 }
@@ -184,4 +196,123 @@ test_that("det case with single detection out of many visits: derivs match FD", 
 
 test_that("spec is registered under occu_cover_lognormal at package load", {
     expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_lognormal"))
+})
+
+
+# ---------------------------------------------------------------------------
+# Beta-positive-arm FD checks. Mirrors the lognormal helpers but uses
+# `cpp_eval_occu_cover_beta_cell` and beta-distributed y_pos in (0, 1).
+# ---------------------------------------------------------------------------
+
+setup_cell_beta <- function(seed, Jc, any_det) {
+    set.seed(seed)
+    eta_psi <- rnorm(1, 0, 0.5)
+    eta_p   <- rnorm(Jc, -0.3, 0.6)
+    eta_pos <- rnorm(Jc, 0.4, 0.4)
+    if (any_det) {
+        y_det <- rbinom(Jc, 1, 0.6)
+        if (all(y_det == 0)) y_det[1] <- 1L
+    } else {
+        y_det <- rep(0L, Jc)
+    }
+    phi_pos <- 12
+    y_pos <- vapply(seq_len(Jc), function(v) {
+        if (y_det[v] == 1L) {
+            mu <- plogis(eta_pos[v])
+            rbeta(1, mu * phi_pos, (1 - mu) * phi_pos)
+        } else 0
+    }, numeric(1))
+    list(eta_psi = eta_psi, eta_p = eta_p, eta_pos = eta_pos,
+         y_det = as.integer(y_det), y_pos = y_pos, phi_pos = phi_pos)
+}
+
+check_grad_diag_beta <- function(d, label, tol1 = 1e-5, tol2 = 1e-3) {
+    res <- cpp_eval_occu_cover_beta_cell(
+        eta_psi = d$eta_psi, eta_p = d$eta_p, eta_pos = d$eta_pos,
+        y_det = d$y_det, y_pos = d$y_pos, phi_pos = d$phi_pos
+    )
+
+    grad_psi_fd <- fd1(function(h) cell_ll_at_beta(
+        d$eta_psi + h, d$eta_p, d$eta_pos,
+        d$y_det, d$y_pos, d$phi_pos
+    ))
+    expect_equal(res$grad_psi, grad_psi_fd, tolerance = tol1,
+                 info = paste0(label, ": grad_psi"))
+
+    nh_psi_fd <- -fd2(function(h) cell_ll_at_beta(
+        d$eta_psi + h, d$eta_p, d$eta_pos,
+        d$y_det, d$y_pos, d$phi_pos
+    ))
+    expect_equal(res$neg_hess_psi, nh_psi_fd, tolerance = tol2,
+                 info = paste0(label, ": neg_hess_psi"))
+
+    Jc <- length(d$eta_p)
+    for (v in seq_len(Jc)) {
+        grad_p_fd <- fd1(function(h) {
+            eta_p_perturb <- d$eta_p
+            eta_p_perturb[v] <- eta_p_perturb[v] + h
+            cell_ll_at_beta(d$eta_psi, eta_p_perturb, d$eta_pos,
+                            d$y_det, d$y_pos, d$phi_pos)
+        })
+        expect_equal(res$grad_p[v], grad_p_fd, tolerance = tol1,
+                     info = paste0(label, ": grad_p[", v, "]"))
+
+        nh_p_fd <- -fd2(function(h) {
+            eta_p_perturb <- d$eta_p
+            eta_p_perturb[v] <- eta_p_perturb[v] + h
+            cell_ll_at_beta(d$eta_psi, eta_p_perturb, d$eta_pos,
+                            d$y_det, d$y_pos, d$phi_pos)
+        })
+        expect_equal(res$neg_hess_p[v], nh_p_fd, tolerance = tol2,
+                     info = paste0(label, ": neg_hess_p[", v, "]"))
+
+        grad_pos_fd <- fd1(function(h) {
+            eta_pos_perturb <- d$eta_pos
+            eta_pos_perturb[v] <- eta_pos_perturb[v] + h
+            cell_ll_at_beta(d$eta_psi, d$eta_p, eta_pos_perturb,
+                            d$y_det, d$y_pos, d$phi_pos)
+        })
+        expect_equal(res$grad_pos[v], grad_pos_fd, tolerance = tol1,
+                     info = paste0(label, ": grad_pos[", v, "]"))
+
+        nh_pos_fd <- -fd2(function(h) {
+            eta_pos_perturb <- d$eta_pos
+            eta_pos_perturb[v] <- eta_pos_perturb[v] + h
+            cell_ll_at_beta(d$eta_psi, d$eta_p, eta_pos_perturb,
+                            d$y_det, d$y_pos, d$phi_pos)
+        })
+        expect_equal(res$neg_hess_pos[v], nh_pos_fd, tolerance = tol2,
+                     info = paste0(label, ": neg_hess_pos[", v, "]"))
+    }
+
+    res
+}
+
+test_that("beta det case: gradients + diagonal neg-Hess match FD", {
+    d <- setup_cell_beta(seed = 707L, Jc = 4L, any_det = TRUE)
+    res <- check_grad_diag_beta(d, label = "beta-det")
+    expect_true(all(res$cross_psi_p == 0))
+    expect_true(all(res$cross_p_p == 0))
+})
+
+test_that("beta nodet case: gradients + diagonal neg-Hess match FD (family-indep)", {
+    d <- setup_cell_beta(seed = 808L, Jc = 4L, any_det = FALSE)
+    res <- check_grad_diag_beta(d, label = "beta-nodet")
+    # The nodet branch ignores the pos arm, so its psi/p derivatives must
+    # match the lognormal spec's exactly under the same eta_psi / eta_p.
+    res_lnrm <- cpp_eval_occu_cover_lognormal_cell(
+        eta_psi = d$eta_psi, eta_p = d$eta_p, eta_pos = d$eta_pos,
+        y_det = d$y_det, y_pos = d$y_pos, sigma_pos = 0.35
+    )
+    expect_equal(res$cell_ll,       res_lnrm$cell_ll,       tolerance = 1e-12)
+    expect_equal(res$grad_psi,      res_lnrm$grad_psi,      tolerance = 1e-12)
+    expect_equal(res$grad_p,        res_lnrm$grad_p,        tolerance = 1e-12)
+    expect_equal(res$neg_hess_psi,  res_lnrm$neg_hess_psi,  tolerance = 1e-12)
+    expect_equal(res$neg_hess_p,    res_lnrm$neg_hess_p,    tolerance = 1e-12)
+    expect_equal(res$cross_psi_p,   res_lnrm$cross_psi_p,   tolerance = 1e-12)
+    expect_equal(res$cross_p_p,     res_lnrm$cross_p_p,     tolerance = 1e-12)
+})
+
+test_that("beta spec is registered under occu_cover_beta at package load", {
+    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_beta"))
 })

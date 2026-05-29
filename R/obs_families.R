@@ -220,7 +220,11 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
     default_engine = "laplace",
     status         = "experimental",
     params         = list(positive = positive),
-    control_keys   = c("max.iter", "tol", "sigma.beta", "engine")
+    control_keys   = c(
+      "max.iter", "tol", "sigma.beta", "engine",
+      "sigma.grid", "alpha.grid", "phi.grid.pos", "n.threads",
+      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes"
+    )
   )
 }
 

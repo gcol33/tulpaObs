@@ -53,7 +53,8 @@
 # in identical row order -- the spec reads them positionally inside each
 # cell.
 .occu_cover_build_joint_coupled_arms <- function(model, sigma_pos_init,
-                                                  alpha_grid) {
+                                                  alpha_grid,
+                                                  positive = "lognormal") {
   n_cells    <- model$n_sites
   max_visits <- model$max_visits
 
@@ -116,14 +117,18 @@
 
   # pos arm: one row per valid visit. field_coef carries the alpha axis;
   # spatial_idx maps each visit to its cell so alpha * sigma * z[cell]
-  # contributes the cover-arm field. phi is the lognormal SD on the log
-  # scale; the spec reads y_cell.phi(2) = sigma_pos.
+  # contributes the cover-arm field. `phi` is the pos-arm dispersion --
+  # the lognormal SD on the log scale for `positive = "lognormal"` and the
+  # beta precision for `positive = "beta"` (the spec reads y_cell.phi(2)
+  # and interprets it per its policy). `family` is unused for coupled arms
+  # (per-obs scatter + per-obs log-lik are both skipped); we tag it with
+  # the positive family so the responses list reads as intended.
   arm_pos <- list(
     y            = y_pos_visit,
     n_trials     = rep(1L, n_visits_valid),
     X            = X_pos,
     spatial_idx  = cell_idx_visit,
-    family       = "lognormal",
+    family       = positive,
     phi          = sigma_pos_init,
     field_coef   = list(name = "alpha", grid = alpha_grid),
     coupled      = TRUE,
@@ -164,12 +169,13 @@
                                                 verbose   = TRUE,
                                                 sigma.beta = 5,
                                                 ...) {
-  if (!identical(model$positive, "lognormal")) {
+  is_beta <- identical(model$positive, "beta")
+  is_lnrm <- identical(model$positive, "lognormal")
+  if (!is_beta && !is_lnrm) {
     stop("occu_cover() joint_coupled engine supports positive = ",
-         "\"lognormal\" only (the occu_cover_lognormal cell-coupling spec is ",
-         "lognormal-specific). Beta positive arm is a follow-up.",
-         call. = FALSE)
+         "\"lognormal\" or \"beta\".", call. = FALSE)
   }
+  spec_name <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
 
   pi_list <- model$process_info
   n_cells <- model$n_sites
@@ -180,14 +186,27 @@
 
   dots <- list(...)
 
-  # Pre-fit sigma_pos at the empirical log-SD of detected cover values.
-  # Matches the v3 nested-Laplace warm start for log_disp.
+  # Pre-fit the pos-arm dispersion at the empirical sample value at detected
+  # visits. For lognormal, that's the SD of log(y_pos) (matching the v3
+  # nested-Laplace warm start for log_disp); for beta, a moment-matched
+  # precision from the sample mean and variance of y_pos in (0, 1).
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
-  sigma_pos_init <- if (length(pos_vals) > 0L) {
-    max(stats::sd(log(pos_vals)), 0.05) + 0.05
+  phi_pos_init <- if (is_beta) {
+    if (length(pos_vals) >= 2L) {
+      mu_hat   <- mean(pos_vals)
+      var_hat  <- max(stats::var(pos_vals), 1e-6)
+      max((mu_hat * (1 - mu_hat)) / var_hat - 1, 1)
+    } else {
+      10
+    }
   } else {
-    0.4
+    if (length(pos_vals) > 0L) {
+      max(stats::sd(log(pos_vals)), 0.05) + 0.05
+    } else {
+      0.4
+    }
   }
+  sigma_pos_init <- phi_pos_init  # passed through as pos-arm phi
 
   alpha_grid <- dots$alpha.grid %||%
                 c(0, exp(seq(log(0.1), log(3), length.out = 5)))
@@ -197,7 +216,8 @@
   responses <- .occu_cover_build_joint_coupled_arms(
     model           = model,
     sigma_pos_init  = sigma_pos_init,
-    alpha_grid      = alpha_grid
+    alpha_grid      = alpha_grid,
+    positive        = model$positive
   )
 
   csr <- .occu_cover_adj_to_csr(adj)
@@ -220,20 +240,19 @@
     responses     = responses,
     prior         = prior_block,
     phi_grid      = phi_grid_arg,
-    cell_coupling = "occu_cover_lognormal",
+    cell_coupling = spec_name,
     control = list(
       max_iter  = as.integer(max.iter),
       tol       = as.numeric(tol),
       n_threads = as.integer(dots$n.threads %||% 1L),
       store_Q   = TRUE,
-      # Adaptive-grid refinement defaults OFF for the first joint_coupled
-      # release. Edge-detection compares per-cell log_marginal across the
-      # outer grid; a degenerate hyperpoint (e.g. sigma at the lower bound
-      # combined with alpha = 0) can land non-finite log_marginal that
-      # propagates NA into the refine helper's threshold comparison. Pass
-      # `control$adaptive.grid = TRUE` to opt in once the per-cell log_marginal
-      # stays finite across the whole grid.
-      adaptive_grid             = dots$adaptive.grid             %||% FALSE,
+      # Adaptive-grid refinement defaults ON. Non-convergent inner Newton
+      # cells (degenerate sigma + small non-zero alpha hyperpoints) drop to
+      # -Inf log_marginal under the engine's NaN-safe edge-score path
+      # (tulpa/R/hyper_grid_refine.R::.hyper_axis_edge_scores), so the
+      # refinement walks finite mass only and never trips on a missing-value
+      # threshold compare.
+      adaptive_grid             = dots$adaptive.grid             %||% TRUE,
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
       adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L
     )
@@ -273,21 +292,45 @@
   beta_p_m    <- as.numeric(crossprod(w, modes[, bp_idx,   drop = FALSE]))
   beta_pos_m  <- as.numeric(crossprod(w, modes[, bpos_idx, drop = FALSE]))
 
-  # Per-coefficient SD via var-of-means across the outer grid (Rubin's
-  # between-imputation variance). Underestimates the full posterior SD by
-  # the within-cell Laplace contribution (the law-of-total-variance inner
-  # term); the inner term requires diag(Q^-1) at each grid cell and Q has
-  # the ICAR field's sum-to-zero null direction so a naive Cholesky-then-
-  # solve blows up on the fixed-effect intercepts that share variance with
-  # the field. Inner-term integration is a follow-up (constrained Sigma-
-  # column solve like sla_cover_hurdle_joint.R).
-  outer_sd <- function(modes_block, mean_vec) {
-    outer_part <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
-    sqrt(pmax(outer_part, 0))
+  # Per-coefficient SD via law of total variance across the outer grid:
+  #
+  #   Var(beta_j | y) = E_k[Var(beta_j | y, theta_k)]      <- inner Laplace
+  #                   + Var_k[E(beta_j | y, theta_k)]      <- var-of-means
+  #
+  # The inner Laplace contribution at grid cell k is diag(Q_k^-1) at the
+  # beta-block coordinates, computed under the ICAR sum-to-zero constraint
+  # on the field block so the intercept SD is data-identified rather than
+  # prior-bounded (without the constraint, Q has a near-null direction
+  # along (intercept, mean(phi)) and the unconstrained inverse maps the
+  # intercept onto the weak beta prior). The shared helper
+  # `.joint_inner_var()` (family_cover_hurdle.R) walks the per-grid sparse
+  # Q_csc_*_per_grid triplets, builds the constraint matrix from
+  # arm_layout$phi_start / theta_start, and applies
+  #   Sigma_c = Q^-1 - Q^-1 A^T (A Q^-1 A^T)^-1 A Q^-1
+  # consistently with what the cover-hurdle joint path uses. Same engine,
+  # same layout convention -- one source of truth across families.
+  beta_idx_all <- c(bpsi_idx, bp_idx, bpos_idx)
+  inner_var    <- .joint_inner_var(fit, beta_idx_all)
+  total_var <- function(modes_block, mean_vec, iv_block) {
+    vom <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
+    mov <- if (is.null(iv_block)) {
+      0
+    } else {
+      iv_k <- iv_block[ok_cells, , drop = FALSE]
+      iv_k[!is.finite(iv_k)] <- 0  # rank-deficient Q -> drop, var-of-means only
+      as.numeric(crossprod(w, iv_k))
+    }
+    pmax(vom + mov, 0)
   }
-  sd_psi <- outer_sd(modes[, bpsi_idx, drop = FALSE], beta_psi_m)
-  sd_p   <- outer_sd(modes[, bp_idx,   drop = FALSE], beta_p_m)
-  sd_pos <- outer_sd(modes[, bpos_idx, drop = FALSE], beta_pos_m)
+  iv_psi <- if (is.null(inner_var)) NULL
+            else inner_var[, seq_len(p_psi), drop = FALSE]
+  iv_p   <- if (is.null(inner_var)) NULL
+            else inner_var[, p_psi + seq_len(p_p), drop = FALSE]
+  iv_pos <- if (is.null(inner_var)) NULL
+            else inner_var[, p_psi + p_p + seq_len(p_pos), drop = FALSE]
+  sd_psi <- sqrt(total_var(modes[, bpsi_idx, drop = FALSE], beta_psi_m, iv_psi))
+  sd_p   <- sqrt(total_var(modes[, bp_idx,   drop = FALSE], beta_p_m,   iv_p))
+  sd_pos <- sqrt(total_var(modes[, bpos_idx, drop = FALSE], beta_pos_m, iv_pos))
 
   means <- c(beta_psi_m, beta_p_m, beta_pos_m)
   sds   <- c(sd_psi,    sd_p,     sd_pos)
