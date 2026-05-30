@@ -9,12 +9,12 @@ cpp_register_occu_cover_beta_coupling <- function() {
     invisible(.Call(`_tulpaObs_cpp_register_occu_cover_beta_coupling`))
 }
 
-cpp_eval_occu_cover_lognormal_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos) {
-    .Call(`_tulpaObs_cpp_eval_occu_cover_lognormal_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos)
+cpp_eval_occu_cover_lognormal_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature = "observed") {
+    .Call(`_tulpaObs_cpp_eval_occu_cover_lognormal_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature)
 }
 
-cpp_eval_occu_cover_beta_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos) {
-    .Call(`_tulpaObs_cpp_eval_occu_cover_beta_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos)
+cpp_eval_occu_cover_beta_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature = "observed") {
+    .Call(`_tulpaObs_cpp_eval_occu_cover_beta_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature)
 }
 
 cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter = 100L, tol = 1e-6, inner_max = 50L, inner_tol = 1e-8, sigma_beta = 100.0, verbose = FALSE) {
@@ -23,6 +23,18 @@ cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_in
 
 cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE) {
     .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb)
+}
+
+cpp_nmix_community_spatial_icar <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_spatial_icar`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose)
+}
+
+cpp_nmix_community_spatial_car_proper <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, log_det_Q_rho, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_spatial_car_proper`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, log_det_Q_rho, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose)
+}
+
+cpp_nmix_community_spatial_bym2 <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_spatial_bym2`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose)
 }
 
 cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {

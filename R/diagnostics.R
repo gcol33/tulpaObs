@@ -1,6 +1,6 @@
 # ============================================================================
 # Occupancy-specific diagnostics
-# Generic diagnostics (moranI, durbinWatson, variogram, compare_models,
+# Generic diagnostics (moran_i, durbin_watson, variogram, compare_models,
 # modelAverage) are in tulpa — inherited via tulpa_fit class.
 # ============================================================================
 
@@ -231,12 +231,27 @@ tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
     function(obs, exp) sum((obs - exp)^2 / (exp + 1e-10), na.rm = TRUE)
   }
 
+  # Per-site valid mask, visit count, and whether the species was ever
+  # detected. The latent z is sampled from its full conditional given this
+  # detection history (the spOccupancy ppcOcc construction), not from the
+  # prior psi: a site with any detection is occupied with probability 1, an
+  # all-zero history occupied with probability
+  #   psi (1-p)^J / [psi (1-p)^J + (1-psi)].
+  valid_mat <- y >= 0
+  n_valid   <- rowSums(valid_mat)
+  any_det   <- rowSums(y * valid_mat) > 0
+
   fit_y <- fit_y_rep <- numeric(n.samples)
   for (s in seq_len(n.samples)) {
     idx <- draw_idx[s]
     psi <- plogis(as.vector(X_occ %*% draws[idx, seq_len(p_occ)]))
-    p <- plogis(as.vector(X_det %*% draws[idx, p_occ + seq_len(p_det)]))
-    z <- rbinom(n_sites, 1, psi)
+    p   <- plogis(as.vector(X_det %*% draws[idx, p_occ + seq_len(p_det)]))
+    z_prob <- ifelse(
+      any_det, 1,
+      psi * (1 - p)^n_valid / (psi * (1 - p)^n_valid + (1 - psi))
+    )
+    z_prob[n_valid == 0L] <- psi[n_valid == 0L]   # no data -> prior
+    z <- rbinom(n_sites, 1, z_prob)
     expected <- y_rep <- matrix(NA, n_sites, max_visits)
     for (i in seq_len(n_sites)) for (j in seq_len(max_visits)) if (y[i,j] >= 0) {
       expected[i,j] <- z[i] * p[i]; y_rep[i,j] <- rbinom(1, 1, z[i] * p[i])
@@ -346,9 +361,9 @@ tobs_check <- function(object, coords = NULL, n.samples = 250) {
   if (!is.null(zi)) cat(sprintf("\nZero-inflation: obs=%d, exp=%.1f, p=%.3f\n", zi$observed, zi$expected, zi$p.value))
 
   if (!is.null(coords)) {
-    mi <- tryCatch(tulpa::moranI(residuals(object)$occ, coords), error = function(e) NULL)
+    mi <- tryCatch(tulpa::moran_i(residuals(object)$occ, coords), error = function(e) NULL)
     if (!is.null(mi)) {
-      cat(sprintf("\nMoran's I: %.3f (p = %.3f)\n", mi$I, mi$p.value))
+      cat(sprintf("\nMoran's I: %.3f (p = %.3f)\n", unname(mi$statistic), mi$p.value))
       if (mi$p.value < 0.05) cat("  WARNING: spatial autocorrelation\n")
     }
   }

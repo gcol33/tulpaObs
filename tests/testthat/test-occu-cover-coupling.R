@@ -182,6 +182,55 @@ test_that("nodet case: gradients + diagonal neg-Hess match FD", {
     }
 })
 
+test_that("nodet case: Fisher (expected) curvature is block-diagonal PSD, shares the gradient", {
+    d <- setup_cell(seed = 202L, Jc = 4L, any_det = FALSE)
+    res_o <- cpp_eval_occu_cover_lognormal_cell(
+        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
+        curvature = "observed")
+    res_e <- cpp_eval_occu_cover_lognormal_cell(
+        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
+        curvature = "expected")
+
+    # Fisher scoring changes the curvature, not the score: gradient identical.
+    expect_equal(res_e$grad_psi, res_o$grad_psi, tolerance = 1e-12)
+    expect_equal(res_e$grad_p,   res_o$grad_p,   tolerance = 1e-12)
+
+    # Complete-data Fisher diagonals: psi(1-psi) and gamma_c * p_v(1-p_v),
+    # gamma_c = P(z = 1 | all undetected) = psi*P0 / L.
+    psi     <- plogis(d$eta_psi)
+    p       <- plogis(d$eta_p)
+    P0      <- prod(1 - p)
+    L       <- psi * P0 + (1 - psi)
+    gamma_c <- psi * P0 / L
+    expect_equal(res_e$neg_hess_psi, psi * (1 - psi), tolerance = 1e-10)
+    for (v in seq_along(p)) {
+        expect_equal(res_e$neg_hess_p[v], gamma_c * p[v] * (1 - p[v]),
+                     tolerance = 1e-10,
+                     info = paste0("fisher: neg_hess_p[", v, "]"))
+    }
+
+    # Block-diagonal (no cross-Hessian) and PSD (non-negative diagonals).
+    expect_true(all(res_e$cross_psi_p == 0))
+    expect_true(all(res_e$cross_p_p == 0))
+    expect_true(res_e$neg_hess_psi >= 0)
+    expect_true(all(res_e$neg_hess_p >= 0))
+})
+
+test_that("det case: Fisher (expected) equals observed (already complete-data, z known)", {
+    d <- setup_cell(seed = 101L, Jc = 4L, any_det = TRUE)
+    res_o <- cpp_eval_occu_cover_lognormal_cell(
+        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
+        curvature = "observed")
+    res_e <- cpp_eval_occu_cover_lognormal_cell(
+        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
+        curvature = "expected")
+    expect_equal(res_e$neg_hess_psi, res_o$neg_hess_psi, tolerance = 1e-12)
+    expect_equal(res_e$neg_hess_p,   res_o$neg_hess_p,   tolerance = 1e-12)
+    expect_equal(res_e$neg_hess_pos, res_o$neg_hess_pos, tolerance = 1e-12)
+    expect_true(all(res_e$cross_psi_p == 0))
+    expect_true(all(res_e$cross_p_p == 0))
+})
+
 test_that("nodet case with single visit: derivs match FD", {
     d <- setup_cell(seed = 303L, Jc = 1L, any_det = FALSE)
     check_grad_diag(d, label = "nodet-J1")

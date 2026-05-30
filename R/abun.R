@@ -351,8 +351,8 @@
                  "spatial unit per site is required for N-mixture.",
                  spatial$n_units, n_sites), call. = FALSE)
   }
-  # icar/bym2 precompute the CSR adjacency; car_proper carries only the graph,
-  # so derive CSR uniformly here.
+  # icar/bym2/car_proper precompute the CSR adjacency; fall back to deriving
+  # it from the graph for any spatial term that carries only the graph.
   csr <- if (!is.null(spatial$adj_row_ptr)) {
     list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
          n_neighbors = spatial$n_neighbors)

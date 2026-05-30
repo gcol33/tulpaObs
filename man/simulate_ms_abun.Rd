@@ -17,6 +17,8 @@ simulate_ms_abun(
   mixture = c("poisson", "negbin"),
   size = 3,
   sigma_logr = 0.4,
+  graph = NULL,
+  sigma.field = 0.6,
   seed = NULL
 )
 }
@@ -54,13 +56,24 @@ sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
 effect \code{log_r_s} (used only under \code{mixture = "negbin"}). Default 0.4. Set to
 0 for a shared (single-\code{r}) community.}
 
+\item{graph}{Optional \verb{N x N} 0/1 adjacency matrix. When supplied, a single
+shared spatial field \code{f} (one value per site) is drawn from a proper GMRF on
+the graph, centered and scaled to standard deviation \code{sigma.field}, and
+added to every species' abundance log-linear predictor
+(\verb{log lambda_\{s,i\} = X_lambda_i . beta_lambda_s + f_i}). \code{N} is taken from
+\code{nrow(graph)}. The truth field is returned in \code{truth$field}.}
+
+\item{sigma.field}{Standard deviation of the shared spatial field (used only
+when \code{graph} is supplied). Default 0.6.}
+
 \item{seed}{Optional random seed.}
 }
 \value{
 A list with \code{y} (3D count array), \code{data} (site covariate frame),
 \code{species} (species names), and \code{truth} (community means / SDs, the
-per-species coefficients, lambda, p, latent N, and -- under \code{negbin} --
-\code{mu_log_r}, \code{sigma_log_r}, the per-species \code{b_logr} / \code{r_s}).
+per-species coefficients, lambda, p, latent N, the shared \code{field} when
+\code{graph} is given, and -- under \code{negbin} -- \code{mu_log_r}, \code{sigma_log_r}, the
+per-species \code{b_logr} / \code{r_s}).
 }
 \description{
 Per-species Royle (2004) N-mixture with Gaussian community hyperpriors:

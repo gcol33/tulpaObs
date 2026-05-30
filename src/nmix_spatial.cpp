@@ -28,6 +28,7 @@
 
 #include "nmix_kernel.h"
 #include "nmix_spatial_kernel.h"
+#include "nmix_linalg.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -75,19 +76,6 @@ inline double nmix_car_log_prior_dispatch(
         adj_row_ptr, adj_col_idx, n_neighbors, z);
 }
 
-// Marginal (beta_lambda, beta_p) covariance from the factored joint Hessian:
-// the top-left p_beta block of H^{-1}, obtained by solving H X = [I; 0]. For a
-// Gaussian (Laplace) approximation the marginal covariance of a subvector is
-// the corresponding block of the full inverse, so this is the within-grid
-// conditional Cov(beta | theta_k) the R-side grid mixture integrates.
-inline MatrixXd nmix_beta_cov_from_chol(const Eigen::LLT<MatrixXd>& chol,
-                                        int n_x, int p_beta) {
-    MatrixXd E = MatrixXd::Zero(n_x, p_beta);
-    E.topLeftCorner(p_beta, p_beta).setIdentity();
-    MatrixXd Hinv_cols = chol.solve(E);          // n_x x p_beta = H^{-1}[:, beta]
-    return Hinv_cols.topLeftCorner(p_beta, p_beta);
-}
-
 // Coefficient covariance for an intrinsic (rank-deficient, sum-to-zero) field
 // such as ICAR. The improper prior leaves the (intercept, field-mean) direction
 // flat in the joint log-posterior -- the mode is pinned by sum-to-zero
@@ -95,23 +83,13 @@ inline MatrixXd nmix_beta_cov_from_chol(const Eigen::LLT<MatrixXd>& chol,
 // intercept variance is meaningless. We add a large quadratic penalty on
 // (sum of the field block)^2, the penalty-method form of the sum-to-zero
 // constraint, so the beta-block of the (augmented) inverse is the constrained
-// covariance (intercept variance = data precision for the global level). `H` is
-// taken by value so the caller's matrix is untouched.
+// covariance (intercept variance = data precision for the global level). The
+// shared `nmix_constrained_top_cov` (nmix_linalg.h) is the single source.
 inline MatrixXd nmix_spatial_beta_cov(MatrixXd H, int n_x, int p_beta,
                                       int field_start, int field_len,
                                       bool constrain) {
-    if (constrain && field_len > 0) {
-        double md = H.diagonal().head(p_beta).cwiseAbs().mean();
-        if (!(md > 0)) md = 1.0;
-        const double kappa = 1e6 * md;          // >> ridge; pins sum(field)=0
-        for (int i = 0; i < field_len; ++i)
-            for (int j = 0; j < field_len; ++j)
-                H(field_start + i, field_start + j) += kappa;
-    }
-    Eigen::LLT<MatrixXd> chol(H);
-    if (chol.info() != Eigen::Success)
-        return MatrixXd::Constant(p_beta, p_beta, R_NaN);
-    return nmix_beta_cov_from_chol(chol, n_x, p_beta);
+    return tulpaObs::nmix_constrained_top_cov(std::move(H), n_x, p_beta,
+                                              field_start, field_len, constrain);
 }
 
 // Per-grid-point inner solve result.

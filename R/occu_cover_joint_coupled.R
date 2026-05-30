@@ -246,6 +246,7 @@
       tol       = as.numeric(tol),
       n_threads = as.integer(dots$n.threads %||% 1L),
       store_Q   = TRUE,
+      hessian   = dots$hessian %||% "lm",
       # Adaptive-grid refinement defaults ON. Non-convergent inner Newton
       # cells (degenerate sigma + small non-zero alpha hyperpoints) drop to
       # -Inf log_marginal under the engine's NaN-safe edge-score path
@@ -292,45 +293,90 @@
   beta_p_m    <- as.numeric(crossprod(w, modes[, bp_idx,   drop = FALSE]))
   beta_pos_m  <- as.numeric(crossprod(w, modes[, bpos_idx, drop = FALSE]))
 
-  # Per-coefficient SD via law of total variance across the outer grid:
+  # Joint (betas + field) posterior covariance by the law of total covariance
+  # over the outer hyperparameter grid:
   #
-  #   Var(beta_j | y) = E_k[Var(beta_j | y, theta_k)]      <- inner Laplace
-  #                   + Var_k[E(beta_j | y, theta_k)]      <- var-of-means
+  #   Cov(x | y) = sum_k w_k [ Cov(x | y, theta_k) + (m_k - mbar)(m_k - mbar)' ]
   #
-  # The inner Laplace contribution at grid cell k is diag(Q_k^-1) at the
-  # beta-block coordinates, computed under the ICAR sum-to-zero constraint
-  # on the field block so the intercept SD is data-identified rather than
-  # prior-bounded (without the constraint, Q has a near-null direction
-  # along (intercept, mean(phi)) and the unconstrained inverse maps the
-  # intercept onto the weak beta prior). The shared helper
-  # `.joint_inner_var()` (family_cover_hurdle.R) walks the per-grid sparse
-  # Q_csc_*_per_grid triplets, builds the constraint matrix from
-  # arm_layout$phi_start / theta_start, and applies
-  #   Sigma_c = Q^-1 - Q^-1 A^T (A Q^-1 A^T)^-1 A Q^-1
-  # consistently with what the cover-hurdle joint path uses. Same engine,
-  # same layout convention -- one source of truth across families.
-  beta_idx_all <- c(bpsi_idx, bp_idx, bpos_idx)
-  inner_var    <- .joint_inner_var(fit, beta_idx_all)
-  total_var <- function(modes_block, mean_vec, iv_block) {
-    vom <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
-    mov <- if (is.null(iv_block)) {
-      0
-    } else {
-      iv_k <- iv_block[ok_cells, , drop = FALSE]
-      iv_k[!is.finite(iv_k)] <- 0  # rank-deficient Q -> drop, var-of-means only
-      as.numeric(crossprod(w, iv_k))
+  # where x = (beta_psi, beta_p, beta_pos, field) stacked, Cov(x | y, theta_k)
+  # is the inner-Laplace covariance at grid cell k (the ICAR sum-to-zero
+  # constrained sub-block of Q_k^-1, so the intercept covariance is
+  # data-identified rather than collapsing along the (intercept, mean(phi))
+  # near-null direction of the improper field prior), and (m_k - mbar) is the
+  # between-grid mode deviation. Carrying the field block (not just the betas)
+  # means downstream derived quantities (delta_p, delta_cover) can marginalize
+  # the joint betas+field posterior instead of a marginal-only diagonal. The
+  # constrained per-grid block comes from `.joint_inner_vcov_block()`
+  # (family_cover_hurdle.R) -- the dense-block analogue of `.joint_inner_var()`,
+  # same constraint correction, one source of truth across families.
+  p_beta    <- p_psi + p_p + p_pos
+  field_idx <- layout$phi_start + seq_len(n_cells)
+  idx_joint <- c(bpsi_idx, bp_idx, bpos_idx, field_idx)
+  blocks    <- .joint_inner_vcov_block(fit, idx_joint)
+
+  if (is.null(blocks)) {
+    # Older tulpa without stored per-grid Q: fall back to the marginal-only
+    # diagonal (var-of-means plus the diagonal inner-Laplace variance) so the
+    # fit still completes, with no betas+field cross-covariance.
+    beta_idx_all <- c(bpsi_idx, bp_idx, bpos_idx)
+    inner_var    <- .joint_inner_var(fit, beta_idx_all)
+    total_var <- function(modes_block, mean_vec, iv_block) {
+      vom <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
+      mov <- if (is.null(iv_block)) {
+        0
+      } else {
+        iv_k <- iv_block[ok_cells, , drop = FALSE]
+        iv_k[!is.finite(iv_k)] <- 0  # rank-deficient Q -> var-of-means only
+        as.numeric(crossprod(w, iv_k))
+      }
+      pmax(vom + mov, 0)
     }
-    pmax(vom + mov, 0)
+    iv_psi <- if (is.null(inner_var)) NULL
+              else inner_var[, seq_len(p_psi), drop = FALSE]
+    iv_p   <- if (is.null(inner_var)) NULL
+              else inner_var[, p_psi + seq_len(p_p), drop = FALSE]
+    iv_pos <- if (is.null(inner_var)) NULL
+              else inner_var[, p_psi + p_p + seq_len(p_pos), drop = FALSE]
+    sds_beta <- c(
+      sqrt(total_var(modes[, bpsi_idx, drop = FALSE], beta_psi_m, iv_psi)),
+      sqrt(total_var(modes[, bp_idx,   drop = FALSE], beta_p_m,   iv_p)),
+      sqrt(total_var(modes[, bpos_idx, drop = FALSE], beta_pos_m, iv_pos))
+    )
+    beta_block <- diag(sds_beta^2, nrow = p_beta)
+
+    field_modes <- modes[, field_idx, drop = FALSE]
+    field_at_cell <- as.numeric(crossprod(w, field_modes))
+    field_var <- as.numeric(crossprod(w, field_modes^2)) - field_at_cell^2
+    field_demeaned <- field_at_cell - mean(field_at_cell)
+    Vj <- NULL  # no joint covariance available
+  } else {
+    p_joint     <- length(idx_joint)
+    modes_joint <- modes[, idx_joint, drop = FALSE]
+    mbar_joint  <- as.numeric(crossprod(w, modes_joint))
+    Vj <- matrix(0, p_joint, p_joint)
+    for (kk in seq_along(ok_cells)) {
+      dk     <- modes_joint[kk, ] - mbar_joint
+      Ck     <- blocks[[ ok_cells[kk] ]]
+      within <- if (is.null(Ck) || anyNA(Ck)) matrix(0, p_joint, p_joint)
+                else as.matrix(Ck)
+      Vj <- Vj + w[kk] * (within + tcrossprod(dk))
+    }
+    Vj <- (Vj + t(Vj)) / 2  # symmetrize off floating-point constraint residuals
+    diag_Vj    <- diag(Vj)
+    sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
+    beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
+
+    # Field summary uses the full (within + between) variance, demeaned to the
+    # sum-to-zero convention the field-block covariance already sits under.
+    field_at_cell  <- mbar_joint[p_beta + seq_len(n_cells)]
+    field_var      <- diag_Vj[p_beta + seq_len(n_cells)]
+    field_demeaned <- field_at_cell - mean(field_at_cell)
   }
-  iv_psi <- if (is.null(inner_var)) NULL
-            else inner_var[, seq_len(p_psi), drop = FALSE]
-  iv_p   <- if (is.null(inner_var)) NULL
-            else inner_var[, p_psi + seq_len(p_p), drop = FALSE]
-  iv_pos <- if (is.null(inner_var)) NULL
-            else inner_var[, p_psi + p_p + seq_len(p_pos), drop = FALSE]
-  sd_psi <- sqrt(total_var(modes[, bpsi_idx, drop = FALSE], beta_psi_m, iv_psi))
-  sd_p   <- sqrt(total_var(modes[, bp_idx,   drop = FALSE], beta_p_m,   iv_p))
-  sd_pos <- sqrt(total_var(modes[, bpos_idx, drop = FALSE], beta_pos_m, iv_pos))
+  field_sd <- sqrt(pmax(field_var, 0))
+
+  sd_psi <- sds_beta[seq_len(p_psi)]
+  sd_p   <- sds_beta[p_psi + seq_len(p_p)]
+  sd_pos <- sds_beta[p_psi + p_p + seq_len(p_pos)]
 
   means <- c(beta_psi_m, beta_p_m, beta_pos_m)
   sds   <- c(sd_psi,    sd_p,     sd_pos)
@@ -370,37 +416,51 @@
 
   names(means) <- par_names
   names(sds)   <- par_names
-  V_dummy <- diag(sds^2)
-  dimnames(V_dummy) <- list(par_names, par_names)
+
+  # Parameter-surface vcov: betas correlated (the beta block of the joint
+  # covariance), hyperparameters diagonal (grid-summarised, no cross-covariance
+  # with the betas). Block-diagonal across the two.
+  n_par <- length(means)
+  V <- matrix(0, n_par, n_par)
+  V[seq_len(p_beta), seq_len(p_beta)] <- beta_block
+  if (length(hyper_names) > 0L) {
+    hyper_idx <- p_beta + seq_along(hyper_names)
+    diag(V)[hyper_idx] <- sds[hyper_idx]^2
+  }
+  dimnames(V) <- list(par_names, par_names)
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V_dummy)
+  draws <- .occu_cover_rmvn(n_draws, means, V)
   colnames(draws) <- par_names
-
-  # Field summary at the posterior-mean grid mode (simple weighted average
-  # across grid cells, like nested fitter's z_final).
-  field_at_cell <- as.numeric(crossprod(w, modes[, layout$phi_start +
-                                                   seq_len(n_cells),
-                                                 drop = FALSE]))
-  field_at_cell <- field_at_cell - mean(field_at_cell)
-  field_sd      <- sqrt(pmax(
-    as.numeric(crossprod(w, modes[, layout$phi_start + seq_len(n_cells),
-                                  drop = FALSE]^2)) - field_at_cell^2,
-    0))
 
   field_table <- data.frame(
     cell    = seq_len(n_cells),
-    z_mean  = field_at_cell,
+    z_mean  = field_demeaned,
     z_sd    = field_sd,
-    z_lower = field_at_cell - 1.96 * field_sd,
-    z_upper = field_at_cell + 1.96 * field_sd
+    z_lower = field_demeaned - 1.96 * field_sd,
+    z_upper = field_demeaned + 1.96 * field_sd
   )
+
+  # Joint betas+field posterior for downstream derived-quantity prediction
+  # (delta_p / delta_cover marginalized over the full correlated posterior).
+  # `joint_means` carries the field in the same demeaned convention as
+  # `spatial_field`; `joint_vcov` is the law-of-total-covariance Vj (NULL on
+  # the older-tulpa diagonal fallback).
+  joint_par_names <- c(
+    paste0("psi_",   pi_list[[1L]]$coef_names),
+    paste0("p_",     pi_list[[2L]]$coef_names),
+    paste0("pos_",   pi_list[[3L]]$coef_names),
+    paste0("field_", seq_len(n_cells))
+  )
+  joint_means <- c(beta_psi_m, beta_p_m, beta_pos_m, field_demeaned)
+  names(joint_means) <- joint_par_names
+  if (!is.null(Vj)) dimnames(Vj) <- list(joint_par_names, joint_par_names)
 
   structure(list(
     draws        = draws,
     means        = means,
     sds          = sds,
-    vcov         = V_dummy,
+    vcov         = V,
     n_samples    = n_draws,
     n_params     = length(means),
     log_prob     = rep(0, n_draws),
@@ -417,8 +477,11 @@
     spatial      = list(type = "icar", graph = adj,
                         sigma_mean = unname(hyper_means["sigma"]),
                         alpha_mean = unname(hyper_means["alpha"])),
-    spatial_field = field_at_cell,
+    spatial_field = field_demeaned,
     field_table  = field_table,
+    joint_par_names = joint_par_names,
+    joint_means     = joint_means,
+    joint_vcov      = Vj,
     method       = "joint_coupled",
     positive     = model$positive,
     joint_fit    = fit,

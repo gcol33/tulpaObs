@@ -41,6 +41,27 @@ test_that("tobs(engine='nested_laplace') runs with spatial only", {
 })
 
 
+test_that("tobs(engine='nested_laplace') runs with icar and car_proper", {
+  # car_proper drives the proper-CAR multi-block kernel: its term constructor
+  # must carry the CSR adjacency (icar/bym2 do; car_proper used to omit it,
+  # which crashed cpp_nested_laplace_multi with an empty adjacency).
+  d <- simulate_panel_occu()
+  adj <- d$adj
+
+  fit_icar <- tobs(~ x + icar(graph = adj), data = d$data, family = occu(),
+                   detection = ~ 1, y = d$y, method = "nested_laplace",
+                   control = list(max.iter = 5L, verbose = FALSE))
+  expect_s3_class(fit_icar, "tobs_fit")
+  expect_identical(fit_icar$nested_laplace$multi_prior[[1]]$type, "icar")
+
+  fit_cp <- tobs(~ x + car_proper(graph = adj), data = d$data, family = occu(),
+                 detection = ~ 1, y = d$y, method = "nested_laplace",
+                 control = list(max.iter = 5L, verbose = FALSE))
+  expect_s3_class(fit_cp, "tobs_fit")
+  expect_identical(fit_cp$nested_laplace$multi_prior[[1]]$type, "car_proper")
+})
+
+
 test_that("tobs(engine='nested_laplace') runs with spatial + temporal + re", {
   d <- simulate_panel_occu()
   adj <- d$adj

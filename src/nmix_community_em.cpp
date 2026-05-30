@@ -26,6 +26,7 @@
 // Poisson only (the oracle's NB path is a follow-up).
 
 #include "nmix_community_oracle.h"
+#include "nmix_linalg.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <limits>
@@ -34,30 +35,15 @@
 using namespace Rcpp;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
+using tulpaObs::nmix_safe_inverse;
+using tulpaObs::nmix_logdet_spd;
 
 namespace {
 
-// Symmetric inverse of a small PD matrix via LLT, with a tiny ridge fallback.
-MatrixXd safe_inverse(const MatrixXd& M) {
-    const int d = (int)M.rows();
-    Eigen::LLT<MatrixXd> llt(M);
-    if (llt.info() == Eigen::Success)
-        return llt.solve(MatrixXd::Identity(d, d));
-    MatrixXd Mr = M;
-    double md = M.diagonal().cwiseAbs().mean();
-    if (!(md > 0)) md = 1.0;
-    Mr.diagonal().array() += 1e-8 * md;
-    return Mr.ldlt().solve(MatrixXd::Identity(d, d));
-}
-
-double logdet_spd(const MatrixXd& M) {
-    Eigen::LLT<MatrixXd> llt(M);
-    if (llt.info() != Eigen::Success) return std::numeric_limits<double>::quiet_NaN();
-    double ld = 0.0;
-    const MatrixXd& L = llt.matrixL();
-    for (int i = 0; i < L.rows(); ++i) ld += std::log(L(i, i));
-    return 2.0 * ld;
-}
+// Local aliases for the shared dense-linalg primitives (single source in
+// nmix_linalg.h), keeping the call sites below unchanged.
+inline MatrixXd safe_inverse(const MatrixXd& M) { return nmix_safe_inverse(M); }
+inline double   logdet_spd(const MatrixXd& M)   { return nmix_logdet_spd(M); }
 
 }  // namespace
 

@@ -297,11 +297,22 @@ The proper CAR term, `car_proper(graph = adj)`, estimates the
 autocorrelation strength $\rho$ rather than fixing it at one. That makes
 the precision proper and the intercept identifiable, at the cost of
 integrating one extra parameter, and it is the field to reach for when
-$\rho$ is a number you want to report rather than a nuisance. On the
-current backend the proper CAR is wired for the cover-hurdle
-nested-Laplace path rather than the occupancy engine, so for occupancy
-the choice is between `icar()` and `bym2()`; the practical guidance below
-covers when each fits.
+$\rho$ is a number you want to report rather than a nuisance. It fits on
+the same nested-Laplace path as `icar()` and `bym2()`, again a one-token
+change to the field term.
+
+```{r fit-car-proper}
+fit_car <- tobs(
+  ~ car_proper(graph = adj),
+  data      = dat,
+  family    = occu(),
+  detection = ~ 1,
+  y         = y,
+  method    = "nested_laplace",
+  control   = list(max.iter = 30L, tol = 1e-5, verbose = FALSE)
+)
+fit_car$nested_laplace$multi_prior[[1]]$type
+```
 
 ## Recovering and mapping the field
 
@@ -529,10 +540,9 @@ make them usable.
   independent noise rather than smooth signal, when you want the
   interpretable spatial fraction $\lambda$, or when the Riebler scaling
   matters for comparing field magnitude across maps with different graphs.
-  The proper CAR (`car_proper()`), which estimates the autocorrelation
-  $\rho$ directly, is wired for the cover-hurdle nested-Laplace path and
-  the areal N-mixture rather than the occupancy engine, so it is not a
-  choice for `occu()` on the current backend.
+  Reach for the proper CAR (`car_proper()`) when the autocorrelation
+  strength $\rho$ is itself a quantity you want to estimate and report; it
+  integrates one extra parameter over the same nested-Laplace grid.
 
 - **When areal is the wrong tool.** Three cases call for a different
   approach. If a non-spatial fit leaves no neighbour correlation in its

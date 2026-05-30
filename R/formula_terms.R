@@ -110,8 +110,11 @@
 }
 
 # car(graph) / car_proper(graph) — (improper / proper) CAR areal fields.
-# Consumed by the cover-hurdle nested-Laplace engine via tulpa; the occupancy
-# C++ engine does not implement these, so they only carry the graph + group.
+# Both carry the graph for the cover-hurdle nested-Laplace engine, which
+# precomputes its own adjacency via tulpa::spatial_car(). car_proper also
+# carries the CSR adjacency so it can drive the occupancy / N-mixture
+# multi-block nested-Laplace kernel (cpp_nested_laplace_multi reads the CSR
+# directly when assembling the proper-CAR precision Q = tau (D - rho W)).
 .tobs_term_car <- function(graph, group_var = NULL, id = NULL) {
   .tobs_check_graph(graph, "car")
   .tobs_term(list(type = "car", n_units = nrow(graph), graph = graph,
@@ -121,8 +124,11 @@
 
 .tobs_term_car_proper <- function(graph, group_var = NULL, id = NULL) {
   .tobs_check_graph(graph, "car_proper")
+  csr <- adjacency_to_csr(graph)
   .tobs_term(list(type = "car_proper", n_units = nrow(graph), graph = graph,
-                  group_var = group_var),
+                  group_var = group_var,
+                  adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
+                  n_neighbors = csr$n_neighbors),
              class = "tobs_spatial", id = id, label = "car_proper")
 }
 

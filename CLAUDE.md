@@ -182,7 +182,8 @@ occu / int_occu / ms_occu / dyn_occu + cover; the `*_sla` skew variants on the
 nested path are occu + cover only; the cover hurdle has no NUTS likelihood or
 EM-correction engine (no `nuts` / `laplace_gibbs` / `laplace_mi`). `abun`
 (N-mixture) supports `laplace` (non-spatial) + `nested_laplace` (areal spatial);
-`ms_abun` (community / multispecies N-mixture) supports `laplace`; see below.
+`ms_abun` (community / multispecies N-mixture) supports `laplace` (non-spatial) +
+`nested_laplace` (a shared areal field on the abundance arm); see below.
 The remaining roster (`dyn_abun`, `distance`, `removal`, `fp_occu`) is
 `status = "planned"` and errors via `.stop_planned_family()`.
 
@@ -308,8 +309,43 @@ coefficient recovery, and the S3 surface.
 - **Poisson only** for now. The native `NMixCommunityOracle` already carries a
   global negative-binomial size (`log_r` as the trailing theta coordinate) and
   the per-site kernel branches on `is.finite(r)`; the community fitter just
-  needs the `mixture` flag plumbed through. An areal-spatial community field is
-  the other open follow-up.
+  needs the `mixture` flag plumbed through.
+
+#### Areal-spatial community N-mixture (`ms_abun()` + a shared field; sfMsNMix)
+
+A shared ICAR / BYM2 / proper-CAR field on the abundance arm fits via
+`method = "nested_laplace"` (gcol33/tulpaObs#12): an `icar()` / `bym2()` /
+`car_proper()` term on the abundance formula routes to
+`.tobs_fit_ms_nmix_spatial()` -> the in-tree nested Laplace-EM
+`nmix_community_laplace_{icar,bym2,car_proper}()` (`R/nmix_laplace_re_spatial.R`)
+over the C++ driver `cpp_nmix_community_spatial_*` (`src/nmix_community_spatial.cpp`).
+The model is `log lambda_{s,i} = X_lambda_i . (mu_lambda + b_lambda_s) + f_{u(i)}`
+with one field `f` shared across species. tulpa's AGHQ and nested-Laplace engines
+do not combine a per-group RE block with a shared latent field on one predictor,
+so this is a dedicated tulpaObs fit: the "top" block `(mu_lambda, mu_p, f)` has the
+same layout as the single-species spatial state (`field_start = p_lambda + p_p`), so
+the field prior / centering / constrained-covariance helpers in
+`nmix_spatial_kernel*.h` apply to it directly. Per outer grid point
+(tau[, rho] / sigma, rho [, NB size r]) an EM iterates a joint `(mu, f, {b_s})`
+mode-find (block-elimination Newton on the complete-data-Fisher arrowhead, the
+per-species `b_s` folded out by a Schur complement) with a closed-form `Sigma`
+M-step; at convergence the grid-point Laplace log-marginal and the b- and
+field-folded community-mean covariance `vcov_mu` are accumulated, then the R wrapper
+grid-integrates over the hyperparameter posterior (law of total covariance for the
+means; weighted mean for the field / Sigma / BLUPs). The community means are kept
+**flat** (no ridge): the abundance intercept and the field constant mode are an
+exactly flat direction, so any ridge on `mu` would drive the intercept to 0 and the
+field would absorb the level (then deleted by sum-to-zero centering) -- the
+single-species path keeps the fixed effects flat for the same reason. The NB size
+`r` is integrated over the outer grid (field-agnostic, falling out of the existing
+r-grid plumbing), so under NB it is a hyperparameter (`ms_dispersion` / `ms_hyper`),
+not a `log_r` model coordinate. `fit$spatial_field` is the posterior-mean field;
+`test-ms-abun-spatial.R` covers community-mean + field-shape recovery (icar / bym2 /
+car_proper, Poisson + NB), 95% CI coverage, the S3 surface, and a
+`spAbundance::sfMsNMix()` interop *smoke* (a tiny chain confirms plumbing only).
+The numerical head-to-head is an offline manual benchmark
+(`dev_notes/probe_ms_abun_spatial_vs_spabundance.R`), not a test -- a converged
+sfMsNMix chain runs for hours. NUTS pending.
 
 ### Boundary: What lives here vs tulpa
 
@@ -361,7 +397,8 @@ blocked" below). File the issue against `gcol33/tulpa`, not this repo.
 | Joint occu + cover      | Yes     | —     | `occu_cover()`. **Non-spatial** (`method = "laplace"`, `R/occu_cover.R`): cell-level psi + per-visit detection + per-visit cover (beta or lognormal) on the exact two-state marginal. **Spatial default** (`method = "nested_laplace"`, `R/occu_cover_joint_coupled.R`): the `joint_coupled` engine routes through `tulpa_nested_laplace_joint()` with the `occu_cover_{lognormal,beta}` cell-coupling spec (gcol33/tulpa#32) — 3-arm joint nested-Laplace with outer-grid integration over `(sigma, alpha)` and a per-cell occupancy mixture's closed-form derivatives driving the inner Newton. Lognormal + beta positive arms both supported. ~150-300x faster than v3_nested at N=100 (measured `dev_notes/probe_bench_v3_vs_jc.R`) and reliably completes at N=200+ where v3 trips on a missing-value compare in its outer BFGS. Recovery: 10-seed lognormal + 10-seed beta (`test-occu-cover-joint-coupled.R`); status `"experimental"`. **Escape hatches**: `control$engine = "v3_nested"` (the pure-R outer-BFGS path, `R/occu_cover_nested.R`, lognormal only — still gated by `test-occu-cover-spatial.R`), `control$engine = "v2_joint"` (v2's joint Laplace, kept for the (z, alpha, sigma) ridge investigation). |
 | N-mixture (Poisson/NB)  | Yes     | —     | `abun(mixture=)`; closed-form marginal via in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB adds jointly-estimated `log_r`. NUTS pending |
 | N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; Poisson or NB (size `r` integrated over the grid); grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
-| Community N-mixture     | Yes     | —     | `ms_abun()` (spAbundance `msNMix`); per-species coef RE with Gaussian community covariances; in-tree C++ Laplace-EM (`nmix_laplace_re`) driving a native `NMixCommunityOracle` via tulpa's generic AGHQ engine, Schur-complement mean SEs; Poisson only; recovery + 20-seed coverage (`test-ms-abun.R`). NUTS / negbin / spatial pending |
+| Community N-mixture     | Yes     | —     | `ms_abun()` (spAbundance `msNMix`); per-species coef RE with Gaussian community covariances; in-tree C++ Laplace-EM (`nmix_laplace_re`) driving a native `NMixCommunityOracle` via tulpa's generic AGHQ engine, Schur-complement mean SEs; Poisson only; recovery + 20-seed coverage (`test-ms-abun.R`). NUTS / negbin pending |
+| Community N-mixture + areal spatial | n-L | — | `ms_abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"` (spAbundance `sfMsNMix` analogue, gcol33/tulpaObs#12); one shared field on log lambda + per-species community RE; in-tree nested Laplace-EM (`nmix_community_spatial.cpp`), joint `(mu,f,{b_s})` mode-find with b-Schur-folded community-mean covariance, field/Sigma grid-integrated; Poisson or grid-integrated NB size `r`; community-mean + field-shape recovery, 95% coverage, `sfMsNMix` head-to-head (`test-ms-abun-spatial.R`). NUTS pending |
 | N-mixture + grouped RE  | Yes     | —     | `abun()` + `(1 \| g)` / `(x \| g)` on either arm (gcol33/tulpaObs#13); site-level grouping factors (station, observer-per-site); Poisson or NB (log_r jointly estimated under NB); AGHQ via `tulpa::tulpa_re_aghq(oracle=)` driving a native `NMixGroupedOracle`. Gated: RE + spatial, RE + visit-level det covariates, RE shared across both arms. ~2 s per Poisson fit at recovery scale (N = 100, J = 4, 10 groups, n.quad = 5) |
 | Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
 | Spatial + dynamic       | —       | Yes   |                                         |
@@ -415,6 +452,7 @@ R/
   ms_abun.R                — community N-mixture: .tobs_build_ms_abun(), .tobs_ms_nmix_longform(), .tobs_fit_ms_nmix() (-> nmix_laplace_re()), build_ms_nmix_fit(), ms_nmix S3 helpers, simulate_ms_abun()
   nmix_laplace.R           — in-tree non-spatial N-mixture (Royle 2004) Laplace fitter (Poisson + NB)
   nmix_laplace_re.R        — in-tree community / multispecies N-mixture (msNMix), .nmix_re_oracle() helper
+  nmix_laplace_re_spatial.R — spatial community N-mixture (sfMsNMix): nmix_community_laplace_icar()/_bym2()/_car_proper() over cpp_nmix_community_spatial_*, grid-integration of community means / field / Sigma
   nmix_re_aghq.R           — single-species N-mixture grouped RE: .tobs_nmix_re_aghq() driving the native NMixGroupedOracle
   nmix_laplace_spatial.R   — nmix_laplace_icar() / _bym2() / _car_proper() areal spatial fitters
   nmix_site_marginal.R     — per-site marginal exposed as a composable AGHQ RE callback

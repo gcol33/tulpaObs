@@ -20,6 +20,7 @@
 #include "nmix_kernel.h"
 #include "nmix_spatial_kernel.h"      // nmix_kernel_sweep_spatial, log_lik_only_spatial
 #include "nmix_spatial_kernel_bym2.h"
+#include "nmix_linalg.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -56,34 +57,16 @@ inline void add_diagonal_ridge_bym2(MatrixXd& H, double rel_ridge = 1e-10) {
     for (int i = 0; i < n; ++i) H(i, i) += ridge;
 }
 
-// Marginal (beta_lambda, beta_p) covariance from the factored joint Hessian:
-// the top-left p_beta block of H^{-1} (the Gaussian/Laplace marginal of the
-// coefficient subvector), solved as H X = [I; 0].
-inline MatrixXd nmix_beta_cov_from_chol_bym2(const Eigen::LLT<MatrixXd>& chol,
-                                             int n_x, int p_beta) {
-    MatrixXd E = MatrixXd::Zero(n_x, p_beta);
-    E.topLeftCorner(p_beta, p_beta).setIdentity();
-    MatrixXd Hinv_cols = chol.solve(E);
-    return Hinv_cols.topLeftCorner(p_beta, p_beta);
-}
-
 // Constrained coefficient covariance for BYM2. The structured component v is
 // rank-deficient (sum-to-zero), so the (intercept, v-mean) direction is flat in
 // the joint posterior and the unconstrained intercept variance is meaningless.
 // Pin sum(v)=0 with a large quadratic penalty (the penalty-method form of the
-// constraint); the iid component w is proper and is left alone. `H` is by value.
+// constraint); the iid component w is proper and is left alone. The shared
+// `nmix_constrained_top_cov` (nmix_linalg.h) is the single source.
 inline MatrixXd nmix_beta_cov_bym2(MatrixXd H, int n_x, int p_beta,
                                    int v_start, int n_spatial) {
-    double md = H.diagonal().head(p_beta).cwiseAbs().mean();
-    if (!(md > 0)) md = 1.0;
-    const double kappa = 1e6 * md;
-    for (int i = 0; i < n_spatial; ++i)
-        for (int j = 0; j < n_spatial; ++j)
-            H(v_start + i, v_start + j) += kappa;
-    Eigen::LLT<MatrixXd> chol(H);
-    if (chol.info() != Eigen::Success)
-        return MatrixXd::Constant(p_beta, p_beta, R_NaN);
-    return nmix_beta_cov_from_chol_bym2(chol, n_x, p_beta);
+    return tulpaObs::nmix_constrained_top_cov(std::move(H), n_x, p_beta,
+                                              v_start, n_spatial, /*constrain=*/true);
 }
 
 struct BYM2InnerResult {

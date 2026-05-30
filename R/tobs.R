@@ -453,6 +453,27 @@ tobs <- function(formula,
     data = data, y = y, species = dots$species,
     det_visit_formula = dots$det_visit_formula,
     det_visit_data    = dots$det_visit_data)
+
+  # A spatial term on the abundance formula (icar() / bym2() / car_proper())
+  # routes to the shared-field nested Laplace-EM (gcol33/tulpaObs#12). The fit is
+  # driven directly by the in-tree community-spatial C++ grid driver, so it reads
+  # the dotted controls here (mirroring the non-spatial community path below).
+  structs <- .tobs_structures_from_model(model)
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc) || !is.null(structs$latent)) {
+    stop("ms_abun() supports a spatial term (icar()/bym2()/car_proper()) on the ",
+         "abundance formula; temporal / re / svc / latent terms are not yet ",
+         "wired for the community N-mixture.", call. = FALSE)
+  }
+  if (!is.null(structs$spatial)) {
+    return(.tobs_fit_ms_nmix_spatial(
+      model, spatial = structs$spatial,
+      mixture  = family$params$mixture %||% "poisson",
+      K_max    = family$params$K_max,
+      max_iter = control[["max.iter"]] %||% 100L,
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+
   # Community N-mixture is fit directly by tulpa over a shared native oracle (no
   # EM-around-INLA path), so it bypasses .tobs_fit_model and reads the dotted
   # controls here. `optimizer` selects the outer driver over that one oracle:
@@ -567,11 +588,11 @@ tobs <- function(formula,
   # spatial SEs are calibrated (law-of-total-covariance over the hyperparameter
   # grid). negbin and NUTS remain upstream-pending.
   abun     = c("laplace", "nested_laplace"),
-  # ms_abun: community / multispecies N-mixture via tulpa's C++ Laplace-EM
-  # (per-species coefficient RE with Gaussian community covariances). Poisson
-  # only for now; the global negbin size and an areal-spatial community field
-  # are upstream-pending.
-  ms_abun  = c("laplace"),
+  # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
+  # (per-species coefficient RE with Gaussian community covariances). A shared
+  # areal field (icar / bym2 / car_proper) on the abundance arm fits under
+  # nested_laplace (gcol33/tulpaObs#12); Poisson or grid-integrated negbin size.
+  ms_abun  = c("laplace", "nested_laplace"),
   cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla"),
   # occu_cover: non-spatial Laplace via direct optim on the exact two-state
   # marginal (v1); nested-Laplace adds a cell-level ICAR field shared across
@@ -615,7 +636,7 @@ tobs <- function(formula,
 # ---------------------------------------------------------------------------
 .tobs_control_groups <- list(
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
-                 "re.aghq", "n.quad", "re.lkj", "optimizer"),
+                 "re.aghq", "n.quad", "re.lkj", "optimizer", "hessian"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",

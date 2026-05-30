@@ -44,7 +44,8 @@ Rcpp::List eval_one_cell_(double                eta_psi,
                           Rcpp::IntegerVector   y_det,
                           Rcpp::NumericVector   y_pos,
                           double                phi_pos,
-                          const char*           fam_pos_str) {
+                          const char*           fam_pos_str,
+                          tulpa::CurvatureMode  curv) {
     const int Jc = eta_p.size();
     if (eta_pos.size() != Jc || y_det.size() != Jc || y_pos.size() != Jc) {
         Rcpp::stop("cpp_eval_occu_cover_*_cell: length mismatch (Jc=%d).", Jc);
@@ -140,6 +141,7 @@ Rcpp::List eval_one_cell_(double                eta_psi,
     out.arm_cross_hess     = cross_outer.data();
     out.arm_row_count      = arm_row_count.data();
     out.n_arms_            = 3;
+    out.curvature          = curv;
 
     Spec spec;
     const double cell_ll = spec.evaluate_cell(0, etas_view, y_view, out);
@@ -167,6 +169,15 @@ Rcpp::List eval_one_cell_(double                eta_psi,
         Rcpp::Named("cross_psi_p")  = cross_psi_p_r,
         Rcpp::Named("cross_p_p")    = cross_p_p_r
     );
+}
+
+// Map the test-facing curvature string to the engine enum. "expected" /
+// "fisher" select the complete-data Fisher curvature; anything else is the
+// observed Hessian (the default the inner solver uses at the mode-pass).
+static tulpa::CurvatureMode parse_curvature_(const std::string& s) {
+    return (s == "expected" || s == "fisher")
+             ? tulpa::CurvatureMode::Expected
+             : tulpa::CurvatureMode::Observed;
 }
 
 } // namespace
@@ -209,10 +220,12 @@ Rcpp::List cpp_eval_occu_cover_lognormal_cell(
     Rcpp::NumericVector        eta_pos,
     Rcpp::IntegerVector        y_det,
     Rcpp::NumericVector        y_pos,
-    double                     sigma_pos
+    double                     sigma_pos,
+    std::string                curvature = "observed"
 ) {
     return eval_one_cell_<tulpaObs::OccuCoverLognormalCoupling>(
-        eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, "lognormal"
+        eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, "lognormal",
+        parse_curvature_(curvature)
     );
 }
 
@@ -226,9 +239,11 @@ Rcpp::List cpp_eval_occu_cover_beta_cell(
     Rcpp::NumericVector        eta_pos,
     Rcpp::IntegerVector        y_det,
     Rcpp::NumericVector        y_pos,
-    double                     phi_pos
+    double                     phi_pos,
+    std::string                curvature = "observed"
 ) {
     return eval_one_cell_<tulpaObs::OccuCoverBetaCoupling>(
-        eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta"
+        eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta",
+        parse_curvature_(curvature)
     );
 }

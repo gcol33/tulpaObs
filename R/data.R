@@ -27,20 +27,27 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
   ), class = "tobs_data")
 }
 
-#' Convert long-format data to occupancy format
+#' Convert long-format data to a site x visit observation object
 #'
 #' @param df Data.frame in long format (one row per site-visit).
-#' @param y Character, name of detection column (0/1/NA).
+#' @param y Character, name of the response column. Its meaning is set by
+#'   `type`: a 0/1 detection (`"occurrence"`), an integer count
+#'   (`"abundance"`), or a continuous cover proportion in [0, 1] (`"cover"`).
 #' @param site Character, name of site identifier column.
 #' @param visit Character, name of visit/replicate column.
+#' @param type Response kind. `"occurrence"` (default) and `"abundance"` build
+#'   an integer site x visit matrix; `"cover"` builds a double matrix and
+#'   preserves continuous values (it does not coerce the response to integer).
 #' @param occ.covs Character vector of site-level covariate names.
 #' @param det.covs Character vector of visit-level covariate names.
 #' @param coords Character vector of length 2 for coordinate columns.
 #' @return An `tobs_data` object.
 #' @export
 tobs_data <- function(df, y, site, visit,
+                      type = c("occurrence", "abundance", "cover"),
                       occ.covs = NULL, det.covs = NULL,
                       coords = NULL) {
+  type <- match.arg(type)
   if (!is.data.frame(df)) stop("df must be a data.frame")
   for (col in c(y, site, visit)) {
     if (!col %in% names(df)) stop(sprintf("column '%s' not found in df", col))
@@ -51,14 +58,28 @@ tobs_data <- function(df, y, site, visit,
   visits <- sort(unique(df[[visit]]))
   max_visits <- length(visits)
 
-  # Build detection history matrix
-  y_mat <- matrix(NA_integer_, n_sites, max_visits)
-  rownames(y_mat) <- sites
-  for (i in seq_len(nrow(df))) {
-    si <- match(df[[site]][i], sites)
-    vi <- match(df[[visit]][i], visits)
-    y_mat[si, vi] <- as.integer(df[[y]][i])
+  # Site x visit response matrix. The response type drives both the storage
+  # type and the validation: occurrence / abundance are integer (counts), cover
+  # is a continuous proportion kept as double -- coercing it to integer would
+  # silently truncate every value < 1 to zero.
+  si <- match(df[[site]], sites)
+  vi <- match(df[[visit]], visits)
+  yv <- df[[y]]
+  if (type == "cover") {
+    if (any(yv < 0 | yv > 1, na.rm = TRUE))
+      stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
+    y_mat <- matrix(NA_real_, n_sites, max_visits)
+    y_mat[cbind(si, vi)] <- as.numeric(yv)
+  } else {
+    yi <- as.integer(yv)
+    if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
+      stop("tobs_data(type = 'occurrence'): y must be 0/1")
+    if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
+      stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
+    y_mat <- matrix(NA_integer_, n_sites, max_visits)
+    y_mat[cbind(si, vi)] <- yi
   }
+  rownames(y_mat) <- sites
 
   # Extract site-level covariates
   occ_df <- NULL
@@ -69,19 +90,15 @@ tobs_data <- function(df, y, site, visit,
     rownames(occ_df) <- NULL
   }
 
-  # Extract visit-level detection covariates
+  # Extract visit-level detection covariates (same site x visit layout as y_mat)
   det_list <- NULL
   if (!is.null(det.covs)) {
-    det_list <- list()
-    for (dc in det.covs) {
+    det_list <- lapply(det.covs, function(dc) {
       mat <- matrix(NA_real_, n_sites, max_visits)
-      for (i in seq_len(nrow(df))) {
-        si <- match(df[[site]][i], sites)
-        vi <- match(df[[visit]][i], visits)
-        mat[si, vi] <- as.numeric(df[[dc]][i])
-      }
-      det_list[[dc]] <- mat
-    }
+      mat[cbind(si, vi)] <- as.numeric(df[[dc]])
+      mat
+    })
+    names(det_list) <- det.covs
   }
 
   # Extract coordinates

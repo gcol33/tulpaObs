@@ -25,3 +25,6 @@ run_*.R
 # (including overriding *.log etc. for files inside dev_notes/).
 !dev_notes/
 !dev_notes/**
+
+# Ad-hoc probes, reproducers, build/test logs (kept in-tree, not committed)
+dev_notes/

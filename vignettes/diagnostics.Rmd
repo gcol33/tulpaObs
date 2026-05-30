@@ -44,11 +44,10 @@ handful of sites by its residuals.
 
 Occupancy adds a wrinkle that single-process models do not have. The data
 you observe are detections, but the quantity of interest is occupancy, and
-the link between them runs through a latent state you never see directly. A
-diagnostic that conditions correctly on that latent state behaves
-differently from one that draws it afresh, and the difference shows up
-below in how the posterior-predictive check and the PIT residuals disagree
-on the same fit.
+the link between them runs through a latent state you never see directly.
+The posterior-predictive check and the PIT residuals both handle this by
+conditioning on the latent state given the detection history, rather than
+redrawing it from the fitted occupancy probability.
 
 Everything below runs on one occupancy dataset, so the diagnostics stay
 comparable. `simulate_occu()` gives us a model with known truth: occupancy
@@ -201,7 +200,10 @@ a smaller gap means the fit reproduces the data more closely.
 sums $(\sqrt{\text{obs}} - \sqrt{\text{exp}})^2$ over cells, which tames the
 mean-variance link of binary counts. The chi-squared statistic sums
 $(\text{obs} - \text{exp})^2 / \text{exp}$ in the usual way. The expected
-cell value is $z_i \, p_i$ under a draw of the latent state.
+cell value is $z_i \, p_i$, where $z_i$ is drawn from its full conditional
+given the detection history: a site with any detection is occupied, an
+all-zero site is occupied with probability
+$\psi_i (1 - p_i)^J / [\psi_i (1 - p_i)^J + (1 - \psi_i)]$.
 
 ```{r ppc-shape}
 ppc <- tobs_ppc(fit, fit.stat = "freeman-tukey")
@@ -223,36 +225,30 @@ legend("topright", c("observed", "replicate"), lwd = 2,
        col = c("firebrick", "steelblue"), bty = "n")
 ```
 
-The observed statistic runs higher than the replicate statistic here, so
-the Bayesian p-value is near 0, even though the model matches how the data
-were generated.
+The observed and replicate clouds overlap here, and the Bayesian p-value
+sits near the middle of its range, which is what a correctly specified model
+produces. The chi-squared statistic reads the same way.
 
 ```{r ppc-chisq}
 tobs_ppc(fit, fit.stat = "chi-squared")$bayesian.p
 ```
 
-The offset comes from how the check draws the latent state. For each
-replicate it samples occupancy as $z_i \sim \text{Bernoulli}(\psi_i)$ from
-the fitted occupancy probability, then builds the expected cell value as
-$z_i \, p_i$ and a replicate detection as $\text{Bernoulli}(z_i \, p_i)$.
-The replicates therefore agree with their own expected values, while the
-real detections were produced by the true latent state rather than this
-draw. A site that truly held detections but draws $z_i = 0$ contributes a
-large observed discrepancy and none on the replicate side, which pushes the
-observed statistic up by construction. The consequence is that the absolute
-Bayesian p-value from `tobs_ppc()` is not calibrated to 0.5 under a correct
-occupancy model. Read it as a relative quantity: a fit whose Bayesian
-p-value moves toward the middle, or whose observed and replicate clouds draw
-closer, reproduces the data better than one whose clouds separate further.
-For an absolute, per-site calibration that does condition on the observed
-history, the PIT residuals in the next section are the better tool.
+Conditioning the latent state on the detection history is what keeps the
+p-value calibrated. A site with at least one detection is occupied with
+probability 1; a site with an all-zero history is occupied with the
+posterior probability $\psi_i (1 - p_i)^J / [\psi_i (1 - p_i)^J +
+(1 - \psi_i)]$. Sampling $z_i$ from the prior $\psi_i$ instead would force a
+truly occupied but $z_i = 0$ draw to register a large observed discrepancy
+with no matching replicate term, pulling the p-value toward 0 even when the
+model is correct. A value far from 0.5 now flags a real misfit: a p-value
+near 0 means the data are more dispersed than the fit predicts, near 1 means
+less.
 
 ## PIT residuals and uniformity
 
 The probability integral transform offers a sharper, per-site view than a
-single discrepancy statistic, and it conditions on the observed history
-rather than redrawing the latent state, so it is the calibrated counterpart
-to the posterior-predictive check. The idea is general. If you evaluate the
+single discrepancy statistic collapses into one number. The idea is general.
+If you evaluate the
 cumulative distribution function of a correct predictive model at the value
 it actually observed, the result is uniform on $[0, 1]$, because that is
 what running a random variable through its own CDF does. Departures from
@@ -580,11 +576,11 @@ rejected.
    covariate, add a plausible one, and read the `delta`. A change of a few
    units or less is a tie; prefer the simpler model. WAIC ranks, it does
    not validate.
-3. **Run a posterior-predictive check with `tobs_ppc()`** to compare
-   candidates. Read the Bayesian p-value as a relative quantity: the fit
-   whose observed and replicate statistics sit closer together reproduces
-   the data better. The absolute value is not calibrated to 0.5 for
-   occupancy, since the check draws the latent state from the prior.
+3. **Run a posterior-predictive check with `tobs_ppc()`.** The Bayesian
+   p-value sits near 0.5 for a fit that reproduces the data. A value near 0
+   means the data are more dispersed than the fit predicts, near 1 means
+   less. The check conditions the latent state on the detection history, so
+   the value is calibrated rather than purely relative.
 4. **Inspect the PIT histogram and `tobs_test_uniformity()`.** A flat
    histogram is the target. A U-shape means underdispersion, a central hump
    overdispersion, a slope a biased mean.

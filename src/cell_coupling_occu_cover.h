@@ -200,13 +200,23 @@ public:
         const double one_m_P0 = 1.0 - P0;
         const double psi_1mp  = psi * (1.0 - psi);
 
+        // Gradients are identical in both curvature modes (Fisher scoring
+        // changes the curvature, not the score). Only the neg-Hessian and the
+        // cross-Hessian differ: Observed writes the true mixture Hessian (which
+        // is indefinite away from the mode); Expected writes the complete-data
+        // expected information (Fisher), which is block-diagonal and PSD by
+        // construction. gamma_c = P(z_c = 1 | all undetected) = psi*P0/L is the
+        // occupancy responsibility that weights the detection arm's information.
+        const bool expected = (out.curvature == tulpa::CurvatureMode::Expected);
+        const double gamma_c = (L > 0.0) ? (psi * P0 * inv_L) : 0.0;
+
         // psi: grad and neg-hess diagonal
         const double g_psi = -psi_1mp * one_m_P0 * inv_L;
         out.arm_grad[0][0] = g_psi;
-        // -d^2/d eta_psi^2 = psi(1-psi)(1-2psi)(1-P0)/L + g_psi^2
-        out.arm_neg_hess_diag[0][0] =
-            psi_1mp * (1.0 - 2.0 * psi) * one_m_P0 * inv_L
-            + g_psi * g_psi;
+        out.arm_neg_hess_diag[0][0] = expected
+            ? psi_1mp                                            // complete-data Fisher: psi(1-psi)
+            // -d^2/d eta_psi^2 = psi(1-psi)(1-2psi)(1-P0)/L + g_psi^2
+            : psi_1mp * (1.0 - 2.0 * psi) * one_m_P0 * inv_L + g_psi * g_psi;
 
         // p arm: per-visit grad + neg-hess diagonal
         for (int v = 0; v < Jc; v++) {
@@ -214,33 +224,39 @@ public:
             const double psi_P0_p   = psi * P0 * p_v;
             const double g_p_v      = -psi_P0_p * inv_L;
             out.arm_grad[1][v] = g_p_v;
-            // -d^2/d eta_p_v^2 = psi*P0*p_v*(1 - 2 p_v)/L + g_p_v^2
-            out.arm_neg_hess_diag[1][v] =
-                psi_P0_p * (1.0 - 2.0 * p_v) * inv_L
-                + g_p_v * g_p_v;
+            out.arm_neg_hess_diag[1][v] = expected
+                ? gamma_c * p_v * (1.0 - p_v)                    // complete-data Fisher
+                // -d^2/d eta_p_v^2 = psi*P0*p_v*(1 - 2 p_v)/L + g_p_v^2
+                : psi_P0_p * (1.0 - 2.0 * p_v) * inv_L + g_p_v * g_p_v;
         }
 
         // pos arm contributes nothing in the nodet case (no detected
         // visits). Gradient and neg-hess buffers already zeroed.
 
-        // Cross-Hessian (psi, p_v): -d^2/d eta_psi d eta_p_v = P0 p_v psi(1-psi)/L^2
-        if (out.arm_cross_hess && out.arm_cross_hess[0]
-            && out.arm_cross_hess[0][1]) {
-            for (int v = 0; v < Jc; v++) {
-                out.arm_cross_hess[0][1][v] =
-                    P0 * p_cache[v] * psi_1mp * inv_L2;
+        // Cross-Hessians: the complete-data Fisher (Expected) is block-diagonal
+        // -- given z the arms are independent GLMs -- so it writes none. The
+        // observed (Expected = false) cross terms are the missing-information
+        // contribution that makes the mixture Hessian indefinite.
+        if (!expected) {
+            // (psi, p_v): -d^2/d eta_psi d eta_p_v = P0 p_v psi(1-psi)/L^2
+            if (out.arm_cross_hess && out.arm_cross_hess[0]
+                && out.arm_cross_hess[0][1]) {
+                for (int v = 0; v < Jc; v++) {
+                    out.arm_cross_hess[0][1][v] =
+                        P0 * p_cache[v] * psi_1mp * inv_L2;
+                }
             }
-        }
-        // Cross-Hessian (p_v, p_w) for v != w in nodet:
-        //   -d^2/d eta_p_v d eta_p_w = -psi P0 p_v p_w (1-psi) / L^2
-        if (out.arm_cross_hess && out.arm_cross_hess[1]
-            && out.arm_cross_hess[1][1]) {
-            const double a = -psi * P0 * (1.0 - psi) * inv_L2;
-            for (int v = 0; v < Jc; v++) {
-                for (int w = v + 1; w < Jc; w++) {
-                    const double val = a * p_cache[v] * p_cache[w];
-                    out.arm_cross_hess[1][1][(std::size_t)v * Jc + w] = val;
-                    out.arm_cross_hess[1][1][(std::size_t)w * Jc + v] = val;
+            // (p_v, p_w) for v != w:
+            //   -d^2/d eta_p_v d eta_p_w = -psi P0 p_v p_w (1-psi) / L^2
+            if (out.arm_cross_hess && out.arm_cross_hess[1]
+                && out.arm_cross_hess[1][1]) {
+                const double a = -psi * P0 * (1.0 - psi) * inv_L2;
+                for (int v = 0; v < Jc; v++) {
+                    for (int w = v + 1; w < Jc; w++) {
+                        const double val = a * p_cache[v] * p_cache[w];
+                        out.arm_cross_hess[1][1][(std::size_t)v * Jc + w] = val;
+                        out.arm_cross_hess[1][1][(std::size_t)w * Jc + v] = val;
+                    }
                 }
             }
         }

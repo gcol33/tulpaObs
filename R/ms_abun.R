@@ -205,6 +205,54 @@
 
 
 # ---------------------------------------------------------------------------
+# Spatial fitter: a shared ICAR / BYM2 / proper-CAR field on the abundance arm
+# ---------------------------------------------------------------------------
+
+# Fit the spatial community N-mixture (the sfMsNMix analogue, gcol33/tulpaObs#12).
+# One spatial unit per site (identity map, as for single-species abun()).
+# Dispatches on the abundance-formula spatial term type to the matching nested
+# Laplace-EM wrapper in nmix_laplace_re_spatial.R. The NB size r is integrated
+# over the outer grid (field-agnostic), so it falls out of the existing r-grid
+# plumbing as a global grid hyperparameter (not the per-species log_r RE the
+# non-spatial NB path uses).
+.tobs_fit_ms_nmix_spatial <- function(model, spatial, mixture = "poisson",
+                                      K_max = NULL, max_iter = 100L,
+                                      verbose = TRUE) {
+  if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
+    stop(sprintf(
+      "ms_abun() spatial supports the areal terms icar() / bym2() / car_proper() ",
+      "under method = \"nested_laplace\"; got '%s'. (car() is the improper ",
+      "non-intrinsic CAR; use icar() for the intrinsic field. Continuous gp() / ",
+      "spde() community fields are not yet wired.)"), spatial$type, call. = FALSE)
+  }
+  n_sites <- model$n_sites
+  if ((spatial$n_units %||% n_sites) != n_sites) {
+    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
+                 "spatial unit per site is required for the community N-mixture.",
+                 spatial$n_units, n_sites), call. = FALSE)
+  }
+  mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
+  lf  <- .tobs_ms_nmix_longform(model)
+  csr <- .nmix_spatial_csr(spatial)
+  common <- list(lf = lf, X_lambda = model$X_processes[[1]],
+                 n_sites = n_sites, n_species = model$n_species,
+                 csr = csr, n_spatial = spatial$n_units %||% n_sites,
+                 mixture = mix_code, K_max = K_max,
+                 max_iter = as.integer(max_iter), verbose = isTRUE(verbose))
+  raw <- switch(
+    spatial$type,
+    icar = do.call(nmix_community_laplace_icar, common),
+    car_proper = do.call(nmix_community_laplace_car_proper,
+                         c(common, list(graph = spatial$graph))),
+    bym2 = do.call(nmix_community_laplace_bym2,
+                   c(common, list(scale_factor = spatial$scale_factor %||%
+                                    compute_bym2_scale(spatial$graph))))
+  )
+  build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial)
+}
+
+
+# ---------------------------------------------------------------------------
 # Wrap a tulpa community N-mixture fit into a tobs_fit
 # ---------------------------------------------------------------------------
 
@@ -212,7 +260,7 @@
 # covariance. The community covariances Sigma_lambda / Sigma_p and the per-
 # species coefficients (mu + BLUP deviation) are carried as N-mixture community
 # structure for ranef() / coef() / simulate().
-build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
+build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   pi_list <- model$process_info
   p_lam   <- pi_list[[1]]$p
   p_p     <- pi_list[[2]]$p
@@ -227,7 +275,11 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
   # coef() / vcov() / confint() see mu_log_r with its marginal SE. The per-species
   # sizes r_s and the community covariance term sigma_log_r are summarized on
   # `ms_dispersion`.
-  is_nb <- identical(mixture, "negbin") &&
+  # On the SPATIAL path the NB size r is integrated over the outer grid (it is
+  # field-agnostic), so it carries no log_r coordinate and is summarized as a
+  # grid hyperparameter (raw$dispersion / ms_hyper) rather than the per-species
+  # log_r RE the non-spatial NB path appends here.
+  is_nb <- is.null(spatial) && identical(mixture, "negbin") &&
            !is.null(raw$mu_log_r) && is.finite(raw$mu_log_r)
   log_r <- if (is_nb) unname(as.numeric(raw$mu_log_r)) else NA_real_
 
@@ -277,6 +329,9 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
          sigma_log_r = unname(as.numeric(raw$sigma_log_r)),
          r_s         = r_s,                 # per-species sizes exp(mu_log_r + b_logr_s)
          r_sd        = exp(log_r) * se_logr)
+  } else if (!is.null(spatial)) {
+    # Spatial NB: r is grid-integrated, summarized in raw$dispersion.
+    raw$dispersion
   } else NULL
 
   structure(list(
@@ -284,8 +339,10 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
     n_samples = n_pseudo, n_params = length(means),
     col_names = nms, param_names = nms,
     process_info = pi_list,
-    model = model, spatial = NULL,
-    method = "laplace",
+    model = model, spatial = spatial,
+    spatial_field = raw$spatial_field,
+    ms_hyper = raw$hyper,
+    method = if (is.null(spatial)) "laplace" else "nested_laplace",
     mixture = mixture,
     log_lik = raw$log_lik %||% NA_real_,
     ms_community = list(
@@ -342,7 +399,13 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
   X_lambda   <- model$X_processes[[1]]
   X_det_site <- model$X_processes[[2]]
   p_p_site   <- ncol(X_det_site)
-  lambda <- exp(X_lambda %*% t(cm$coef_lambda))
+  # Abundance log-linear predictor; on the spatial path add the shared field
+  # offset f_i (one spatial unit per site) to every species' log lambda.
+  eta_lambda <- X_lambda %*% t(cm$coef_lambda)
+  if (!is.null(object$spatial_field)) {
+    eta_lambda <- sweep(eta_lambda, 1, as.numeric(object$spatial_field), "+")
+  }
+  lambda <- exp(eta_lambda)
   # Detection arm: use only the site-level columns of the coefficient vector
   # (visit-level detection covariates, if any, are not site-summarised here).
   p <- plogis(X_det_site %*% t(cm$coef_p[, seq_len(p_p_site), drop = FALSE]))
@@ -413,11 +476,20 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson") {
 #' @param sigma_logr Standard deviation of the per-species log-dispersion random
 #'   effect `log_r_s` (used only under `mixture = "negbin"`). Default 0.4. Set to
 #'   0 for a shared (single-`r`) community.
+#' @param graph Optional `N x N` 0/1 adjacency matrix. When supplied, a single
+#'   shared spatial field `f` (one value per site) is drawn from a proper GMRF on
+#'   the graph, centered and scaled to standard deviation `sigma.field`, and
+#'   added to every species' abundance log-linear predictor
+#'   (`log lambda_{s,i} = X_lambda_i . beta_lambda_s + f_i`). `N` is taken from
+#'   `nrow(graph)`. The truth field is returned in `truth$field`.
+#' @param sigma.field Standard deviation of the shared spatial field (used only
+#'   when `graph` is supplied). Default 0.6.
 #' @param seed Optional random seed.
 #' @return A list with `y` (3D count array), `data` (site covariate frame),
 #'   `species` (species names), and `truth` (community means / SDs, the
-#'   per-species coefficients, lambda, p, latent N, and -- under `negbin` --
-#'   `mu_log_r`, `sigma_log_r`, the per-species `b_logr` / `r_s`).
+#'   per-species coefficients, lambda, p, latent N, the shared `field` when
+#'   `graph` is given, and -- under `negbin` -- `mu_log_r`, `sigma_log_r`, the
+#'   per-species `b_logr` / `r_s`).
 #' @export
 simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
                              n_abund_covs = 1, n_det_covs = 1,
@@ -425,9 +497,11 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
                              sd_lambda = 0.5, sd_p = 0.4,
                              mixture = c("poisson", "negbin"), size = 3,
                              sigma_logr = 0.4,
+                             graph = NULL, sigma.field = 0.6,
                              seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
+  if (!is.null(graph)) N <- nrow(graph)
   if (is.null(mu_lambda)) mu_lambda <- c(log(3), rep(0.4, n_abund_covs))
   if (is.null(mu_p))      mu_p      <- c(0.3, rep(-0.3, n_det_covs))
   p_lam <- length(mu_lambda); p_p <- length(mu_p)
@@ -454,13 +528,24 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
   b_logr   <- if (is_nb) stats::rnorm(n_species, 0, sigma_logr) else rep(0, n_species)
   r_s      <- if (is_nb) exp(mu_log_r + b_logr) else rep(NA_real_, n_species)
 
+  # Shared spatial field f ~ N(0, Q^{-1}) on the graph (Q = D - W + ridge, a
+  # proper GMRF), centred and scaled to sigma.field. Zero when no graph.
+  field <- rep(0, N)
+  if (!is.null(graph)) {
+    Q  <- diag(rowSums(graph)) - graph + diag(1e-3, N)
+    Lc <- chol(Q)                              # Q = Lc' Lc
+    f0 <- backsolve(Lc, stats::rnorm(N))       # ~ N(0, Q^{-1})
+    f0 <- f0 - mean(f0)
+    field <- as.numeric(sigma.field * f0 / stats::sd(f0))
+  }
+
   species_names <- paste0("sp", seq_len(n_species))
   y <- array(NA_integer_, dim = c(N, J, n_species),
              dimnames = list(NULL, NULL, species_names))
   lambda <- matrix(NA_real_, N, n_species); p_arr <- matrix(NA_real_, N, n_species)
   Nlat   <- matrix(NA_integer_, N, n_species)
   for (s in seq_len(n_species)) {
-    lam <- exp(as.vector(X_lambda %*% beta_lambda[s, ]))
+    lam <- exp(as.vector(X_lambda %*% beta_lambda[s, ]) + field)
     pp  <- plogis(as.vector(X_det %*% beta_p[s, ]))
     Ns  <- if (is_nb) stats::rnbinom(N, size = r_s[s], mu = lam)
            else stats::rpois(N, lam)
@@ -476,6 +561,7 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
       sd_lambda = sd_lambda, sd_p = sd_p,
       beta_lambda = beta_lambda, beta_p = beta_p,
       lambda = lambda, p = p_arr, N = Nlat,
+      field = if (!is.null(graph)) field else NULL,
       mixture = mixture,
       size = if (is_nb) size else NA_real_,
       mu_log_r = mu_log_r,

@@ -24,7 +24,8 @@ Suggests:
     ggplot2,
     knitr,
     loo (>= 2.7.0),
-    rmarkdown
+    rmarkdown,
+    spAbundance
 VignetteBuilder: knitr
 LinkingTo:
     Rcpp,

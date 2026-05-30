@@ -112,3 +112,29 @@ test_that("tobs_check runs without error", {
   res <- .simple_fit(method = "nuts")
   expect_output(tobs_check(res$fit), "tobs Model Diagnostics")
 })
+
+test_that("tobs_check reports Moran's I when coords are supplied", {
+  set.seed(7)
+  res <- .simple_fit(method = "nuts", n = 30)
+  coords <- cbind(runif(res$n), runif(res$n))
+  expect_output(tobs_check(res$fit, coords = coords), "Moran's I")
+})
+
+test_that("tobs_ppc is calibrated for a correct occupancy model", {
+  # The latent state is sampled from its full conditional given the detection
+  # history, so the Bayesian p-value sits near 0.5 for a correct fit. Drawing
+  # z from the prior psi instead collapsed it toward 0.
+  set.seed(11)
+  n <- 200
+  d <- data.frame(x = rnorm(n))
+  psi <- plogis(0.3 + 0.9 * d$x)
+  z <- rbinom(n, 1, psi)
+  y <- matrix(rbinom(n * 5, 1, z * 0.45), n, 5)
+  fit <- tobs(~ x, data = d, family = occu(), detection = ~ 1, y = y,
+              method = "nuts",
+              control = list(n.iter = 800, n.warmup = 400, seed = 11,
+                             verbose = FALSE))
+  bp <- tobs_ppc(fit, n.samples = 300)$bayesian.p
+  expect_gt(bp, 0.1)
+  expect_lt(bp, 0.9)
+})
