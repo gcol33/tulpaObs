@@ -553,11 +553,24 @@
 #' @param alpha Cover-arm scaling on the shared field (used only when `adj`
 #'   is supplied). 1.0 = arms see the field identically; positive = same sign,
 #'   negative = opposite.
+#' @param trend Logical; when `TRUE` (and `adj` is supplied) a SECOND shared
+#'   ICAR field `f2` (a spatially-varying temporal trend) is generated on the
+#'   same graph, weighted by a per-cell covariate `time` drawn IID standard
+#'   normal. The trend enters the occupancy and cover predictors as
+#'   `sigma_trend * time_i * f2[i]` (occupancy) and
+#'   `alpha_trend * sigma_trend * time_i * f2[i]` (cover); the detection
+#'   predictor is unaffected. The `time` covariate is per-cell and broadcast
+#'   to every visit of that cell.
+#' @param sigma_trend Trend-field amplitude (used only when `trend = TRUE`).
+#' @param alpha_trend Cover-arm scaling on the trend field (used only when
+#'   `trend = TRUE`).
 #' @param seed Optional integer seed.
 #' @return A list with `y` (N x J detection matrix), `y_pos` (N x J cover
-#'   matrix, NA where not detected), `data` (per-site covariate frame),
-#'   `visit_data` (per-visit covariate frame, N*J rows in site-major order),
-#'   and `truth` (the coefficients, dispersion, and field if generated).
+#'   matrix, NA where not detected), `data` (per-site covariate frame, gaining
+#'   a `time` column when `trend = TRUE`), `visit_data` (per-visit covariate
+#'   frame, N*J rows in site-major order), and `truth` (the coefficients,
+#'   dispersion, and field(s) if generated; `f2`, `sigma_trend`, `alpha_trend`,
+#'   and `time` when `trend = TRUE`).
 #' @export
 simulate_occu_cover <- function(N             = 200L,
                                  J             = 4L,
@@ -573,6 +586,9 @@ simulate_occu_cover <- function(N             = 200L,
                                  adj           = NULL,
                                  sigma         = 0.6,
                                  alpha         = 1.0,
+                                 trend         = FALSE,
+                                 sigma_trend   = 0.6,
+                                 alpha_trend   = 1.0,
                                  seed          = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
@@ -585,27 +601,35 @@ simulate_occu_cover <- function(N             = 200L,
     beta_pos <- c(pos_int, stats::runif(n_pos_covs, -0.5, 0.5))
   }
 
-  # Optional shared ICAR field. Draw f as N(0, Q^-) via the eigendecomposition
-  # of Q; the constant (null) component is dropped, giving a zero-mean draw on
-  # the constrained space.
-  f <- numeric(N)
+  # Optional shared ICAR field(s). Draw each f as N(0, Q^-) via the
+  # eigendecomposition of Q; the constant (null) component is dropped, giving a
+  # zero-mean draw on the constrained space, then divide by sqrt(scale_q) so the
+  # field has geo-mean marginal variance 1 (the Sorbye-Rue convention; `sigma *
+  # f` then has geo-mean marginal SD sigma, matching INLA's `scale.model = TRUE`
+  # and the fitter's parameterisation).
+  f  <- numeric(N)
+  f2 <- numeric(N)
+  time_cov <- numeric(N)
   if (!is.null(adj)) {
     if (!is.matrix(adj) || nrow(adj) != N || ncol(adj) != N) {
       stop("adj must be an N x N adjacency matrix.", call. = FALSE)
     }
-    # Draw from N(0, Q^+) on the constrained subspace, then divide by
-    # sqrt(scale_q) so the field has geo-mean marginal variance 1 (the
-    # Sorbye-Rue convention; `sigma * f` then has geo-mean marginal SD sigma,
-    # matching INLA's `scale.model = TRUE` and the fitter's parameterisation).
     Q       <- .occu_cover_icar_Q(adj)
     scale_q <- .occu_cover_icar_scale(adj)
     eig <- eigen(Q, symmetric = TRUE)
     keep <- eig$values > 1e-8
-    z_white <- stats::rnorm(sum(keep))
-    f <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                      (z_white / sqrt(eig$values[keep])))
-    f <- f - mean(f)
-    f <- f / sqrt(scale_q)
+    draw_field <- function() {
+      z_white <- stats::rnorm(sum(keep))
+      fk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
+                         (z_white / sqrt(eig$values[keep])))
+      fk <- fk - mean(fk)
+      fk / sqrt(scale_q)
+    }
+    f <- draw_field()
+    if (isTRUE(trend)) {
+      f2       <- draw_field()
+      time_cov <- as.numeric(scale(stats::rnorm(N)))
+    }
   }
 
   # Site-level covariates (psi predictor).
@@ -613,6 +637,9 @@ simulate_occu_cover <- function(N             = 200L,
   names(occ_covs) <- paste0("occ_cov", seq_len(n_occ_covs))
   X_occ <- stats::model.matrix(~ ., occ_covs)
   eta_psi <- as.vector(X_occ %*% beta_occ) + sigma * f
+  if (!is.null(adj) && isTRUE(trend)) {
+    eta_psi <- eta_psi + sigma_trend * time_cov * f2
+  }
   psi <- stats::plogis(eta_psi)
   z_state <- stats::rbinom(N, 1L, psi)
 
@@ -641,6 +668,9 @@ simulate_occu_cover <- function(N             = 200L,
         y[i, j] <- d
         if (d == 1L) {
           eta_pos_ij <- eta_pos_base[idx] + alpha * sigma * f[i]
+          if (!is.null(adj) && isTRUE(trend)) {
+            eta_pos_ij <- eta_pos_ij + alpha_trend * sigma_trend * time_cov[i] * f2[i]
+          }
           if (positive == "beta") {
             mu <- stats::plogis(eta_pos_ij)
             y_pos[i, j] <- stats::rbeta(1L, mu * phi, (1 - mu) * phi)
@@ -652,24 +682,32 @@ simulate_occu_cover <- function(N             = 200L,
     }
   }
 
+  occ_out <- occ_covs
+  has_trend <- !is.null(adj) && isTRUE(trend)
+  if (has_trend) occ_out$time <- time_cov
+
   list(
     y          = y,
     y_pos      = y_pos,
-    data       = occ_covs,
+    data       = occ_out,
     visit_data = visit_data,
     adj        = adj,
     truth      = list(
-      beta_occ  = beta_occ,
-      beta_p    = beta_p,
-      beta_pos  = beta_pos,
-      psi       = psi,
-      z         = z_state,
-      positive  = positive,
-      phi       = if (positive == "beta")      phi       else NA_real_,
-      sigma_pos = if (positive == "lognormal") sigma_pos else NA_real_,
-      f         = f,
-      sigma     = if (!is.null(adj)) sigma else NA_real_,
-      alpha     = if (!is.null(adj)) alpha else NA_real_
+      beta_occ    = beta_occ,
+      beta_p      = beta_p,
+      beta_pos    = beta_pos,
+      psi         = psi,
+      z           = z_state,
+      positive    = positive,
+      phi         = if (positive == "beta")      phi       else NA_real_,
+      sigma_pos   = if (positive == "lognormal") sigma_pos else NA_real_,
+      f           = f,
+      sigma       = if (!is.null(adj)) sigma else NA_real_,
+      alpha       = if (!is.null(adj)) alpha else NA_real_,
+      f2          = if (has_trend) f2          else NULL,
+      time        = if (has_trend) time_cov    else NULL,
+      sigma_trend = if (has_trend) sigma_trend else NA_real_,
+      alpha_trend = if (has_trend) alpha_trend else NA_real_
     )
   )
 }

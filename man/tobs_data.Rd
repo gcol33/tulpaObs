@@ -2,18 +2,33 @@
 % Please edit documentation in R/data.R
 \name{tobs_data}
 \alias{tobs_data}
-\title{Convert long-format data to occupancy format}
+\title{Convert long-format data to a site x visit observation object}
 \usage{
-tobs_data(df, y, site, visit, occ.covs = NULL, det.covs = NULL, coords = NULL)
+tobs_data(
+  df,
+  y,
+  site,
+  visit,
+  type = c("occurrence", "abundance", "cover"),
+  occ.covs = NULL,
+  det.covs = NULL,
+  coords = NULL
+)
 }
 \arguments{
 \item{df}{Data.frame in long format (one row per site-visit).}
 
-\item{y}{Character, name of detection column (0/1/NA).}
+\item{y}{Character, name of the response column. Its meaning is set by
+\code{type}: a 0/1 detection (\code{"occurrence"}), an integer count
+(\code{"abundance"}), or a continuous cover proportion in \link{0, 1} (\code{"cover"}).}
 
 \item{site}{Character, name of site identifier column.}
 
 \item{visit}{Character, name of visit/replicate column.}
+
+\item{type}{Response kind. \code{"occurrence"} (default) and \code{"abundance"} build
+an integer site x visit matrix; \code{"cover"} builds a double matrix and
+preserves continuous values (it does not coerce the response to integer).}
 
 \item{occ.covs}{Character vector of site-level covariate names.}
 
@@ -25,5 +40,5 @@ tobs_data(df, y, site, visit, occ.covs = NULL, det.covs = NULL, coords = NULL)
 An \code{tobs_data} object.
 }
 \description{
-Convert long-format data to occupancy format
+Convert long-format data to a site x visit observation object
 }

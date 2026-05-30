@@ -19,6 +19,9 @@ simulate_occu_cover(
   adj = NULL,
   sigma = 0.6,
   alpha = 1,
+  trend = FALSE,
+  sigma_trend = 0.6,
+  alpha_trend = 1,
   seed = NULL
 )
 }
@@ -50,13 +53,29 @@ shared ICAR field; when NULL, the simulator is non-spatial (matches v1).}
 is supplied). 1.0 = arms see the field identically; positive = same sign,
 negative = opposite.}
 
+\item{trend}{Logical; when \code{TRUE} (and \code{adj} is supplied) a SECOND shared
+ICAR field \code{f2} (a spatially-varying temporal trend) is generated on the
+same graph, weighted by a per-cell covariate \code{time} drawn IID standard
+normal. The trend enters the occupancy and cover predictors as
+\code{sigma_trend * time_i * f2[i]} (occupancy) and
+\code{alpha_trend * sigma_trend * time_i * f2[i]} (cover); the detection
+predictor is unaffected. The \code{time} covariate is per-cell and broadcast
+to every visit of that cell.}
+
+\item{sigma_trend}{Trend-field amplitude (used only when \code{trend = TRUE}).}
+
+\item{alpha_trend}{Cover-arm scaling on the trend field (used only when
+\code{trend = TRUE}).}
+
 \item{seed}{Optional integer seed.}
 }
 \value{
 A list with \code{y} (N x J detection matrix), \code{y_pos} (N x J cover
-matrix, NA where not detected), \code{data} (per-site covariate frame),
-\code{visit_data} (per-visit covariate frame, N*J rows in site-major order),
-and \code{truth} (the coefficients, dispersion, and field if generated).
+matrix, NA where not detected), \code{data} (per-site covariate frame, gaining
+a \code{time} column when \code{trend = TRUE}), \code{visit_data} (per-visit covariate
+frame, N*J rows in site-major order), and \code{truth} (the coefficients,
+dispersion, and field(s) if generated; \code{f2}, \code{sigma_trend}, \code{alpha_trend},
+and \code{time} when \code{trend = TRUE}).
 }
 \description{
 Per-cell mixture: latent z_i ~ Bernoulli(psi_i), per-visit detection

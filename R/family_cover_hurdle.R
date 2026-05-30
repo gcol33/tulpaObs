@@ -1346,19 +1346,41 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 #
 # Returns an `n_grid x length(beta_idx)` matrix of constrained
 # Var(beta_j | data, theta_k), or NULL when no Q matrices were stored.
-.joint_inner_var <- function(fit, beta_idx) {
-  Qp <- fit$Q_csc_p_per_grid
-  Qi <- fit$Q_csc_i_per_grid
-  Qx <- fit$Q_csc_x_per_grid
-  n_x <- fit$Q_csc_n
-  if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
-
-  layout <- fit$arm_layout
-  n_s <- layout$n_x - max(layout$phi_start %||% layout$n_x,
-                          layout$theta_start %||% layout$n_x)
-  # Build constraint matrix A (k x n_x): one row of all-ones on each
-  # structured spatial block. layout offsets are 0-based.
+# Build the sum-to-zero constraint columns for the joint-Laplace field
+# block(s). Returns a list of 1-based column-index vectors, one all-ones
+# constraint per structured spatial field block. Constraint columns index into
+# the joint latent vector.
+#
+# Two layouts are handled:
+#   * Multi-block layout (`field_starts` reported): one constraint per ICAR /
+#     CAR_proper / BYM2 field, derived from the engine's per-block offsets and
+#     sizes (BYM2 contributes the phi sub-block constraint plus the theta IID
+#     constraint, matching INLA's bym2 constr = TRUE default).
+#   * Single-block layout (`phi_start` / `theta_start`): the original
+#     one-(ICAR)-or-two-(BYM2) constraint behaviour, kept byte-identical.
+.joint_field_constraint_cols <- function(layout) {
   A_cols <- list()
+  if (!is.null(layout$field_starts)) {
+    starts <- layout$field_starts
+    types  <- layout$field_block_types %||% rep("icar", length(starts))
+    bstart <- layout$block_start
+    bsize  <- layout$block_size
+    for (i in seq_along(starts)) {
+      s0   <- starts[i]
+      type <- tolower(types[i])
+      b    <- match(s0, bstart)
+      sz   <- if (is.na(b)) NA_integer_ else bsize[b]
+      if (type == "bym2") {
+        n_units <- as.integer(sz / 2L)
+        A_cols[[length(A_cols) + 1L]] <- s0 + seq_len(n_units)
+        A_cols[[length(A_cols) + 1L]] <- s0 + n_units + seq_len(n_units)
+      } else {
+        n_units <- as.integer(sz)
+        A_cols[[length(A_cols) + 1L]] <- s0 + seq_len(n_units)
+      }
+    }
+    return(A_cols)
+  }
   if (!is.null(layout$phi_start)) {
     n_s_phi <- (layout$theta_start %||% layout$n_x) - layout$phi_start
     A_cols[[length(A_cols) + 1L]] <- layout$phi_start + seq_len(n_s_phi)
@@ -1367,6 +1389,20 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     n_s_theta <- layout$n_x - layout$theta_start
     A_cols[[length(A_cols) + 1L]] <- layout$theta_start + seq_len(n_s_theta)
   }
+  A_cols
+}
+
+.joint_inner_var <- function(fit, beta_idx) {
+  Qp <- fit$Q_csc_p_per_grid
+  Qi <- fit$Q_csc_i_per_grid
+  Qx <- fit$Q_csc_x_per_grid
+  n_x <- fit$Q_csc_n
+  if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
+
+  layout <- fit$arm_layout
+  # Build constraint matrix A (k x n_x): one row of all-ones per structured
+  # spatial field block. layout offsets are 0-based.
+  A_cols <- .joint_field_constraint_cols(layout)
   k_constr <- length(A_cols)
 
   n_grid <- length(Qp)
@@ -1444,15 +1480,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
 
   layout <- fit$arm_layout
-  A_cols <- list()
-  if (!is.null(layout$phi_start)) {
-    n_s_phi <- (layout$theta_start %||% layout$n_x) - layout$phi_start
-    A_cols[[length(A_cols) + 1L]] <- layout$phi_start + seq_len(n_s_phi)
-  }
-  if (!is.null(layout$theta_start)) {
-    n_s_theta <- layout$n_x - layout$theta_start
-    A_cols[[length(A_cols) + 1L]] <- layout$theta_start + seq_len(n_s_theta)
-  }
+  A_cols <- .joint_field_constraint_cols(layout)
   k_constr <- length(A_cols)
 
   n_grid <- length(Qp)

@@ -200,6 +200,22 @@ jsdm <- function() {
 #' terms (`bym2()`, `icar()`, `re()`, ...) error from the dispatcher with a
 #' pointer to this note.
 #'
+#' @section Spatially-varying temporal trend (`control$trend`):
+#' The spatial engine (`method = "nested_laplace"`, default
+#' `control$engine = "joint_coupled"`) couples one shared areal field (the
+#' cell intercept) across the occupancy and cover arms. A SECOND coupled field
+#' - a spatially-varying temporal trend - is requested with
+#' `control = list(trend = list(weight = "<col>"))`, naming a numeric per-cell
+#' covariate present in the cell `data` frame. The trend field enters the
+#' occupancy predictor as `weight_i * sigma_trend * z2[cell_i]` and the cover
+#' predictor as `weight_i * alpha_trend * sigma_trend * z2[cell_i]`; the
+#' detection predictor is unaffected. Both fields share the same graph; each
+#' couples onto the cover arm with its own scale (`alpha`, `alpha_trend`)
+#' integrated over the outer grid. The intercept field is reported in
+#' `fit$spatial_field`, the trend field in `fit$trend_field`. The coupling
+#' grid for the trend field defaults to `control$alpha.grid`; override it with
+#' `control$alpha.grid.trend`.
+#'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
@@ -222,7 +238,8 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
     params         = list(positive = positive),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
-      "sigma.grid", "alpha.grid", "phi.grid.pos", "n.threads",
+      "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
+      "phi.grid.pos", "n.threads",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes"
     )
   )

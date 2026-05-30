@@ -43,6 +43,26 @@ terms (\code{bym2()}, \code{icar()}, \code{re()}, ...) error from the dispatcher
 pointer to this note.
 }
 
+\section{Spatially-varying temporal trend (\code{control$trend})}{
+
+The spatial engine (\code{method = "nested_laplace"}, default
+\code{control$engine = "joint_coupled"}) couples one shared areal field (the
+cell intercept) across the occupancy and cover arms. A SECOND coupled field
+\itemize{
+\item a spatially-varying temporal trend - is requested with
+\code{control = list(trend = list(weight = "<col>"))}, naming a numeric per-cell
+covariate present in the cell \code{data} frame. The trend field enters the
+occupancy predictor as \code{weight_i * sigma_trend * z2[cell_i]} and the cover
+predictor as \code{weight_i * alpha_trend * sigma_trend * z2[cell_i]}; the
+detection predictor is unaffected. Both fields share the same graph; each
+couples onto the cover arm with its own scale (\code{alpha}, \code{alpha_trend})
+integrated over the outer grid. The intercept field is reported in
+\code{fit$spatial_field}, the trend field in \code{fit$trend_field}. The coupling
+grid for the trend field defaults to \code{control$alpha.grid}; override it with
+\code{control$alpha.grid.trend}.
+}
+}
+
 \seealso{
 \code{\link[=occu]{occu()}} (no cover), \code{\link[=cover]{cover()}} (plot-level hurdle, no detection),
 \code{\link[=abun]{abun()}} (counts not cover).

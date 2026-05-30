@@ -1,6 +1,0 @@
-options(crayon.enabled = FALSE)
-suppressMessages(library(devtools))
-load_all("C:/Users/Gilles Colling/Documents/dev/tulpa", quiet = TRUE, export_all = FALSE)
-cat("== document tulpaObs ==\n")
-document("C:/Users/Gilles Colling/Documents/dev/tulpaObs", quiet = TRUE)
-cat("done\n")
