@@ -152,6 +152,15 @@ correlation in the \code{re.aghq} refine (default 1.5). Pulls a
 weakly-identified RE correlation off the \code{+-1} boundary toward 0 without
 touching the marginal SDs; \code{re.lkj = 1} disables it (uniform). No effect
 on intercept / uncorrelated terms.
+\item \code{inner_solver} — for a spatial community N-mixture (\code{ms_abun()} with an
+\code{icar()} / \code{bym2()} / \code{car_proper()} field on the abundance arm), the
+inner solver integrating the shared field given the community: \code{"em"}
+(default) the closed-form Laplace-EM M-step, or \code{"newton"} the exact-
+Newton shared-field solve alternated with a tulpa AGHQ community debias.
+Both integrate the field hyperparameter on the outer grid and return the
+same fit object; \code{"newton"} is Poisson- and areal-only, and markedly
+slower (an FD-gradient profile loop per grid node) -- an accuracy /
+validation alternative, not the production default.
 Stochastic-correction controls (\code{"laplace_gibbs"} / \code{"laplace_mi"}):
 \code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count) and \code{seed} (stored
 on \verb{$seed}).

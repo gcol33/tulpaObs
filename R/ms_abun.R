@@ -217,8 +217,32 @@
 # non-spatial NB path uses).
 .tobs_fit_ms_nmix_spatial <- function(model, spatial, mixture = "poisson",
                                       K_max = NULL, max_iter = 100L,
-                                      verbose = TRUE) {
+                                      inner_solver = "em", n_quad = 1L,
+                                      lkj_eta = 1, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "ms_abun() spatial")
+  # The areal shared field is integrated by one of two inner solvers (the field
+  # hyperparameter is outer-grid integrated either way -- the nested-approx +
+  # debias split). "em" (default): the closed-form community Laplace-EM M-step.
+  # "newton": the exact-Newton shared-field solve alternated with a tulpa AGHQ
+  # community solve (the prototype debias). Same model, different inner method;
+  # the fit object is identical in shape.
+  inner_solver <- match.arg(inner_solver, c("em", "newton"))
+  if (identical(inner_solver, "newton")) {
+    if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
+      stop("control$inner_solver = \"newton\" (the exact-Newton shared-field ",
+           "solver) supports the areal terms icar() / bym2() / car_proper() ",
+           "only; '", spatial$type, "' is integrated by the default EM solver. ",
+           "Drop control$inner_solver.", call. = FALSE)
+    }
+    if (identical(mixture, "negbin")) {
+      stop("control$inner_solver = \"newton\" is Poisson-only; ",
+           "negative-binomial abundance with a shared field uses the EM solver ",
+           "(drop control$inner_solver).", call. = FALSE)
+    }
+    return(.tobs_fit_ms_nmix_spatial_newton(
+      model, spatial, K_max = K_max, max_iter = max_iter,
+      n_quad = n_quad, lkj_eta = lkj_eta, verbose = isTRUE(verbose)))
+  }
   mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
   n_sites <- model$n_sites
   # Continuous Matern field shared across species: thread the SPDE FEM precision
@@ -269,6 +293,211 @@
                                     compute_bym2_scale(spatial$graph))))
   )
   build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial)
+}
+
+
+# Exact-Newton inner solver for the areal shared-field community N-mixture
+# (control$inner_solver = "newton"). Same model as the EM path: the field
+# hyperparameter (tau for ICAR; (tau, rho) for proper CAR; BYM2 as its intrinsic
+# ICAR limit) is integrated on the outer grid; at each node a profile loop
+# alternates (a) the community solve -- tulpa::tulpa_re_aghq() over the per-
+# species RE (b_lambda_s, b_p_s) and community means GIVEN the current shared-
+# field offset, through the native SpatialNMixCommunityOracle -- with (b) the
+# exact-Newton shared-field solve (cpp_nmix_community_field_solve), aggregating
+# every species' per-site abundance score / observed-info onto the shared field,
+# until the field stabilises. The node log-marginal is the community AGHQ
+# marginal at the offset plus the field Laplace correction. Poisson-only,
+# areal-only. Returns the SAME tobs_fit shape as the EM path (one `raw` ->
+# build_ms_nmix_fit), so coef / summary / ranef are solver-agnostic.
+.tobs_fit_ms_nmix_spatial_newton <- function(model, spatial, K_max = NULL,
+                                             max_iter = 100L, n_quad = 1L,
+                                             lkj_eta = 1, verbose = FALSE,
+                                             tau_grid = NULL, rho_grid = NULL,
+                                             inner_iter = 3L, inner_tol = 3e-3,
+                                             inner_maxit = 20L) {
+  n_sites   <- model$n_sites
+  n_species <- model$n_species
+  if ((spatial$n_units %||% n_sites) != n_sites) {
+    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
+                 "spatial unit per site is required.", spatial$n_units, n_sites),
+         call. = FALSE)
+  }
+  csr <- .nmix_spatial_csr(spatial)
+
+  X_lambda <- model$X_processes[[1]]
+  p_lam    <- ncol(X_lambda)
+  p_p      <- model$process_info[[2]]$p
+  lf       <- .tobs_ms_nmix_longform(model)
+  if (is.null(K_max)) K_max <- max(lf$y) + 100L
+  K_max <- as.integer(K_max)
+
+  # Proper CAR integrates (tau, rho); ICAR integrates tau; BYM2 is fit as its
+  # intrinsic ICAR limit (rho = 1) with the joint sd carried as 1/sqrt(tau).
+  if (identical(spatial$type, "car_proper")) {
+    if (is.null(rho_grid)) rho_grid <- c(0.5)
+  } else {
+    rho_grid <- 1.0
+  }
+  if (is.null(tau_grid)) tau_grid <- exp(seq(log(0.5), log(20), length.out = 4L))
+
+  # Native oracle: one shared backend, offset set per node before the AGHQ solve.
+  orc <- cpp_nmix_spatial_community_oracle(
+    lf$y, lf$site_idx, lf$species_idx, X_lambda, lf$X_p,
+    n_sites, n_species, K_max)
+  map_site_to_unit <- seq_len(n_sites)
+  d <- p_lam + p_p
+
+  # Warm-start community means / Sigma from the non-spatial community fit.
+  warm <- nmix_laplace_re(
+    y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
+    X_lambda = X_lambda, X_p = lf$X_p, n_sites = n_sites, n_species = n_species,
+    K_max = K_max, max_iter = as.integer(max_iter), mixture = "P",
+    optimizer = "em", n_quad = 1L, lkj_eta = lkj_eta, verbose = FALSE)
+  mu0  <- c(as.numeric(warm$mu_lambda), as.numeric(warm$mu_p))
+  Sig0 <- list(as.matrix(warm$Sigma_lambda), as.matrix(warm$Sigma_p))
+
+  proper_car_logdet <- function(rho) {
+    Q <- matrix(0, n_sites, n_sites)
+    for (s in seq_len(n_sites)) {
+      Q[s, s] <- csr$n_neighbors[s]
+      a <- csr$row_ptr[s] + 1L; b <- csr$row_ptr[s + 1L]
+      if (b >= a) for (kk in a:b) Q[s, csr$col_idx[kk] + 1L] <- -rho
+    }
+    ch <- tryCatch(chol(Q), error = function(e) NULL)
+    if (is.null(ch)) return(-Inf)
+    2 * sum(log(diag(ch)))
+  }
+
+  # One profile-loop fit at a fixed field-hyperparameter node. `z_start` warm-
+  # starts the field from a neighbouring node; the community (theta, Sigma) warm-
+  # starts from the previous profile iteration.
+  fit_node <- function(tau, rho, ldQ, z_start = NULL) {
+    z <- if (is.null(z_start)) rep(0, n_sites) else z_start
+    re_terms <- list(
+      list(n_groups = n_species, n_coefs = p_lam, correlated = p_lam > 1L),
+      list(n_groups = n_species, n_coefs = p_p,   correlated = p_p   > 1L))
+    comm <- NULL; field <- NULL
+    theta_cur <- mu0; Sigma_cur <- Sig0
+    for (it in seq_len(inner_iter)) {
+      cpp_nmix_spatial_community_set_offset(orc, z)
+      comm <- tulpa::tulpa_re_aghq(
+        theta0 = theta_cur, re_terms = re_terms, Sigma0 = Sigma_cur,
+        oracle = orc, gradient = "fd", n_quad = as.integer(n_quad),
+        lkj_eta = lkj_eta, theta_prior_sd = 100, maxit = as.integer(inner_maxit))
+      if (is.null(comm)) return(NULL)
+      theta_cur <- comm$theta; Sigma_cur <- comm$Sigma_list
+      mu_lambda <- comm$theta[seq_len(p_lam)]
+      mu_p      <- comm$theta[p_lam + seq_len(p_p)]
+      coef_lambda <- sweep(as.matrix(comm$blup[[1L]]), 2, mu_lambda, "+")
+      coef_p      <- sweep(as.matrix(comm$blup[[2L]]), 2, mu_p,      "+")
+      field <- cpp_nmix_community_field_solve(
+        y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
+        X_lambda = X_lambda, X_p = lf$X_p,
+        coef_lambda = coef_lambda, coef_p = coef_p,
+        map_site_to_unit_R = as.integer(map_site_to_unit),
+        adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
+        n_neighbors = csr$n_neighbors, n_spatial = n_sites,
+        tau = tau, rho = rho, log_det_Q_rho = ldQ, z_init = z,
+        K_max = K_max, max_iter = as.integer(max_iter), tol = 1e-6,
+        verbose = FALSE)
+      z_new <- field$z
+      dz <- max(abs(z_new - z)); z <- z_new
+      if (dz < inner_tol) break
+    }
+    list(comm = comm, field = field, z = z)
+  }
+
+  n_tau <- length(tau_grid); n_rho <- length(rho_grid)
+  n_grid <- n_tau * n_rho
+  log_marg  <- numeric(n_grid)
+  z_modes   <- matrix(0, n_grid, n_sites)
+  theta_mat <- matrix(0, n_grid, d)
+  Sigma_l_list <- vector("list", n_grid); Sigma_p_list <- vector("list", n_grid)
+  blup_l_list  <- vector("list", n_grid); blup_p_list  <- vector("list", n_grid)
+  vcov_list    <- vector("list", n_grid)
+  tau_vec <- numeric(n_grid); rho_vec <- numeric(n_grid)
+  boundary <- numeric(n_grid)
+
+  k <- 0L; z_prev <- NULL
+  for (ir in seq_len(n_rho)) {
+    rho_k <- rho_grid[ir]
+    ldQ   <- if (identical(spatial$type, "car_proper")) proper_car_logdet(rho_k) else 0.0
+    for (itau in seq_len(n_tau)) {
+      k <- k + 1L
+      tau_k <- tau_grid[itau]
+      tau_vec[k] <- tau_k; rho_vec[k] <- rho_k
+      node <- fit_node(tau_k, rho_k, ldQ, z_start = z_prev)
+      if (is.null(node) || !is.finite(node$field$field_marginal)) {
+        log_marg[k] <- -Inf; next
+      }
+      log_marg[k]  <- node$comm$log_marginal + node$field$field_marginal
+      z_modes[k, ] <- node$z; z_prev <- node$z
+      theta_mat[k, ] <- node$comm$theta
+      Sigma_l_list[[k]] <- node$comm$Sigma_list[[1L]]
+      Sigma_p_list[[k]] <- node$comm$Sigma_list[[2L]]
+      blup_l_list[[k]]  <- node$comm$blup[[1L]]
+      blup_p_list[[k]]  <- node$comm$blup[[2L]]
+      vcov_list[[k]]    <- node$comm$theta_cov
+      boundary[k]       <- node$field$boundary_max
+      if (isTRUE(verbose)) {
+        message(sprintf(
+          "[ms_abun spatial newton node %d/%d] tau=%.3g rho=%.3g log_marg=%.4g",
+          k, n_grid, tau_k, rho_k, log_marg[k]))
+      }
+    }
+  }
+
+  weights <- tulpa:::.nl_normalise_weights_safe(log_marg)
+  ok <- is.finite(weights) & weights > 0
+  if (!any(ok)) {
+    stop("Spatial community N-mixture (newton): every grid node produced a ",
+         "non-finite log-marginal. Check K_max / the adjacency graph / the grids.",
+         call. = FALSE)
+  }
+
+  # Weighted (marginalised) community means + field; weighted-average covariances.
+  theta_mean   <- as.numeric(crossprod(weights, theta_mat))
+  z_mean       <- as.numeric(crossprod(weights, z_modes))
+  Sigma_lambda <- Reduce(`+`, Map(function(w, S) w * S, weights[ok], Sigma_l_list[ok]))
+  Sigma_p      <- Reduce(`+`, Map(function(w, S) w * S, weights[ok], Sigma_p_list[ok]))
+  blup_lambda  <- Reduce(`+`, Map(function(w, B) w * B, weights[ok], blup_l_list[ok]))
+  blup_p       <- Reduce(`+`, Map(function(w, B) w * B, weights[ok], blup_p_list[ok]))
+  # Coefficient covariance: law of total covariance over the grid.
+  vcov <- matrix(0, d, d)
+  for (kk in which(ok)) {
+    dk <- theta_mat[kk, ] - theta_mean
+    vcov <- vcov + weights[kk] * (as.matrix(vcov_list[[kk]]) + tcrossprod(dk))
+  }
+  tau_mean   <- sum(weights * tau_vec, na.rm = TRUE)
+  tau_sd     <- sqrt(max(0, sum(weights * tau_vec^2, na.rm = TRUE) - tau_mean^2))
+  sigma_mean <- sum(weights * (1 / sqrt(tau_vec)), na.rm = TRUE)
+  hyper <- list(tau   = c(mean = tau_mean,   sd = tau_sd),
+                sigma = c(mean = sigma_mean, sd = NA_real_))
+  if (identical(spatial$type, "car_proper")) {
+    rho_mean <- sum(weights * rho_vec, na.rm = TRUE)
+    rho_sd   <- sqrt(max(0, sum(weights * rho_vec^2, na.rm = TRUE) - rho_mean^2))
+    hyper$rho <- c(mean = rho_mean, sd = rho_sd)
+  }
+  if (any(boundary > 1e-4, na.rm = TRUE)) {
+    warning(sprintf(
+      "Max posterior weight on N = K_max is %.2e at one or more grid nodes; ",
+      "raise K_max.", max(boundary, na.rm = TRUE)), call. = FALSE)
+  }
+
+  # main-convention `raw` -> the SAME assembler the EM path uses, so the fit
+  # shape (fit$spatial term, fit$spatial_field, fit$ms_hyper, ms_community) is
+  # identical; only the numbers differ by solver. `optimizer = "newton"` records
+  # which inner solver produced the fit.
+  raw <- list(
+    mu_lambda = theta_mean[seq_len(p_lam)],
+    mu_p      = theta_mean[p_lam + seq_len(p_p)],
+    vcov = vcov, Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
+    b_lambda = blup_lambda, b_p = blup_p,
+    spatial_field = z_mean, hyper = hyper, prior_type = spatial$type,
+    weights = weights, boundary_max = max(boundary, na.rm = TRUE),
+    log_lik = max(log_marg[ok]), converged = TRUE, n_iter = NA_integer_,
+    optimizer = "newton", n_quad = n_quad, lkj_eta = lkj_eta)
+  build_ms_nmix_fit(raw, model, mixture = "poisson", spatial = spatial)
 }
 
 

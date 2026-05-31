@@ -21,6 +21,10 @@ cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_in
     .Call(`_tulpaObs_cpp_nmix_community_em`, oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter, tol, inner_max, inner_tol, sigma_beta, verbose)
 }
 
+cpp_nmix_community_field_solve <- function(y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau, rho, log_det_Q_rho, z_init, K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_field_solve`, y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau, rho, log_det_Q_rho, z_init, K_max, max_iter, tol, verbose)
+}
+
 cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE) {
     .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb)
 }
@@ -39,6 +43,14 @@ cpp_nmix_community_spatial_bym2 <- function(oracle, map_site_to_unit_R, X_lambda
 
 cpp_nmix_community_spatial_spde <- function(oracle, X_lambda_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE) {
     .Call(`_tulpaObs_cpp_nmix_community_spatial_spde`, oracle, X_lambda_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose)
+}
+
+cpp_nmix_spatial_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max) {
+    .Call(`_tulpaObs_cpp_nmix_spatial_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max)
+}
+
+cpp_nmix_spatial_community_set_offset <- function(oracle_ptr, z) {
+    invisible(.Call(`_tulpaObs_cpp_nmix_spatial_community_set_offset`, oracle_ptr, z))
 }
 
 cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {

@@ -132,6 +132,15 @@
 #'     weakly-identified RE correlation off the `+-1` boundary toward 0 without
 #'     touching the marginal SDs; `re.lkj = 1` disables it (uniform). No effect
 #'     on intercept / uncorrelated terms.
+#'   * `inner_solver` — for a spatial community N-mixture (`ms_abun()` with an
+#'     `icar()` / `bym2()` / `car_proper()` field on the abundance arm), the
+#'     inner solver integrating the shared field given the community: `"em"`
+#'     (default) the closed-form Laplace-EM M-step, or `"newton"` the exact-
+#'     Newton shared-field solve alternated with a tulpa AGHQ community debias.
+#'     Both integrate the field hyperparameter on the outer grid and return the
+#'     same fit object; `"newton"` is Poisson- and areal-only, and markedly
+#'     slower (an FD-gradient profile loop per grid node) -- an accuracy /
+#'     validation alternative, not the production default.
 #'   Stochastic-correction controls (`"laplace_gibbs"` / `"laplace_mi"`):
 #'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
 #'   on `$seed`).
@@ -455,9 +464,12 @@ tobs <- function(formula,
     det_visit_data    = dots$det_visit_data)
 
   # A spatial term on the abundance formula (icar() / bym2() / car_proper())
-  # routes to the shared-field nested Laplace-EM (gcol33/tulpaObs#12). The fit is
-  # driven directly by the in-tree community-spatial C++ grid driver, so it reads
-  # the dotted controls here (mirroring the non-spatial community path below).
+  # routes to the shared-field community N-mixture (gcol33/tulpaObs#12). The fit
+  # is driven directly by the in-tree community-spatial C++ grid driver, so it
+  # reads the dotted controls here (mirroring the non-spatial community path
+  # below). control$inner_solver picks the inner method: "em" (default, the
+  # closed-form Laplace-EM) or "newton" (the exact-Newton shared-field solve +
+  # AGHQ community debias; areal Poisson only).
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
       !is.null(structs$svc) || !is.null(structs$latent)) {
@@ -468,10 +480,13 @@ tobs <- function(formula,
   if (!is.null(structs$spatial)) {
     return(.tobs_fit_ms_nmix_spatial(
       model, spatial = structs$spatial,
-      mixture  = family$params$mixture %||% "poisson",
-      K_max    = family$params$K_max,
-      max_iter = control[["max.iter"]] %||% 100L,
-      verbose  = isTRUE(control[["verbose"]])))
+      mixture      = family$params$mixture %||% "poisson",
+      K_max        = family$params$K_max,
+      max_iter     = control[["max.iter"]] %||% 100L,
+      inner_solver = control[["inner_solver"]] %||% "em",
+      n_quad       = as.integer(control[["n.quad"]] %||% 1L),
+      lkj_eta      = control[["re.lkj"]] %||% 1.5,
+      verbose      = isTRUE(control[["verbose"]])))
   }
 
   # Community N-mixture is fit directly by tulpa over a shared native oracle (no
@@ -636,7 +651,8 @@ tobs <- function(formula,
 # ---------------------------------------------------------------------------
 .tobs_control_groups <- list(
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
-                 "re.aghq", "n.quad", "re.lkj", "optimizer", "hessian"),
+                 "re.aghq", "n.quad", "re.lkj", "optimizer", "hessian",
+                 "inner_solver"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",
