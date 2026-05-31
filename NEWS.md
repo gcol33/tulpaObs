@@ -1,6 +1,6 @@
 # tulpaObs NEWS
 
-## 0.0.3 (2026-05-31)
+## 0.0.4 (2026-05-31)
 
 Requires tulpa (>= 0.0.4): the joint cover-hurdle path links against the
 engine's `cell_coupling.h` / `model_data.h` (ABI 32).
