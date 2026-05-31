@@ -388,6 +388,14 @@
       # at realistic field sizes the sparse factorization is milliseconds, so
       # reuse buys nothing once the iteration count is fixed by the curvature.
       inner_refresh = as.integer(dots$inner.refresh %||% 1L),
+      # Outer-grid parallelism (gcol33/tulpa#46, lever 2). The cover hurdle's
+      # large spatial field takes the sparse inner-solve path, whose outer grid
+      # now runs across `n.threads.outer` threads (per-thread Hessian builder /
+      # scratch / specs). Defaults to serial; set it for the full-field fits.
+      # `force.sparse` forces the sparse path on small fields (testing / the
+      # parallel and factor-reuse paths live there).
+      n_threads_outer = as.integer(dots$n.threads.outer %||% 1L),
+      force_sparse    = isTRUE(dots$force.sparse),
       # Adaptive-grid refinement defaults ON. Non-convergent inner Newton
       # cells (degenerate sigma + small non-zero alpha hyperpoints) drop to
       # -Inf log_marginal under the engine's NaN-safe edge-score path

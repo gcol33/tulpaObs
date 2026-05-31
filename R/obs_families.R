@@ -248,7 +248,8 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
     control_keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
-      "phi.grid.pos", "n.threads", "inner.refresh",
+      "phi.grid.pos", "n.threads", "inner.refresh", "hessian",
+      "n.threads.outer", "force.sparse",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes"
     )
   )
@@ -453,7 +454,8 @@ cover <- function(positive = c("beta", "lognormal")) {
       "rho.car.grid", "tau.temporal.grid", "rho.temporal.grid",
       "sigma.temporal.grid", "sigma.re.grid",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
-      "prune", "prune.tol", "hessian"
+      "prune", "prune.tol", "hessian",
+      "progress", "progress.every", "progress.throttle", "progress.file"
     )
   )
 }

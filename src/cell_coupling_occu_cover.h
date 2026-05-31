@@ -39,7 +39,8 @@
 #define TULPAOBS_CELL_COUPLING_OCCU_COVER_H
 
 #include <tulpa/cell_coupling.h>
-#include <Rcpp.h>   // pulls in <R.h> + R::digamma / R::trigamma
+#include <tulpa/portable_math.h>   // portable_digamma / portable_trigamma (R-free, inlinable)
+#include <Rcpp.h>                  // M_PI and R headers (no R::digamma in the hot path now)
 #include <cmath>
 #include <string>
 #include <vector>
@@ -77,14 +78,26 @@ struct LognormalPositive {
     }
     // d log f / d eta_pos = (log y - eta) / sigma^2
     static double grad_eta(double y_pos, double eta_pos, double phi) {
-        const double sigma  = phi;
-        const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
-        return (log_safe_(y_pos) - eta_pos) * inv_s2;
+        double g = 0.0, h = 0.0;
+        grad_hess_eta(y_pos, eta_pos, phi, false, g, h);
+        return g;
     }
     // -d^2 log f / d eta_pos^2 = 1 / sigma^2
-    static double neg_hess_eta(double /*y_pos*/, double /*eta_pos*/, double phi) {
+    static double neg_hess_eta(double y_pos, double eta_pos, double phi) {
+        double g = 0.0, h = 0.0;
+        grad_hess_eta(y_pos, eta_pos, phi, true, g, h);
+        return h;
+    }
+    // Combined eta-gradient and (constant) negative Hessian in one pass.
+    // `want_hess` gates the curvature; a grad-only inner-Newton step
+    // (cached-factor reuse) passes false. Single source for grad_eta /
+    // neg_hess_eta and the cell-coupling hot path.
+    static void grad_hess_eta(double y_pos, double eta_pos, double phi,
+                              bool want_hess, double& grad, double& neg_hess) {
         const double sigma  = phi;
-        return (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
+        const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
+        grad = (log_safe_(y_pos) - eta_pos) * inv_s2;
+        if (want_hess) neg_hess = inv_s2;
     }
 };
 
@@ -107,29 +120,43 @@ struct BetaPositive {
     // d log f / d eta = phi * mu (1 - mu) * g
     //   where g = -digamma(mu phi) + digamma((1-mu) phi) + log y - log(1-y).
     static double grad_eta(double y_pos, double eta_pos, double phi) {
-        const double mu      = sigmoid_(eta_pos);
-        const double log_y   = log_safe_(y_pos);
-        const double log_1my = log_safe_(1.0 - y_pos);
-        const double g       = -R::digamma(mu * phi)
-                              + R::digamma((1.0 - mu) * phi)
-                              + log_y - log_1my;
-        return phi * mu * (1.0 - mu) * g;
+        double g = 0.0, h = 0.0;
+        grad_hess_eta(y_pos, eta_pos, phi, false, g, h);
+        return g;
     }
     // -d^2 log f / d eta^2 = phi^2 mu^2 (1-mu)^2 (trigamma(mu phi)
     //                          + trigamma((1-mu) phi))
     //                       - phi mu (1-mu) g (1 - 2 mu)
     static double neg_hess_eta(double y_pos, double eta_pos, double phi) {
+        double g = 0.0, h = 0.0;
+        grad_hess_eta(y_pos, eta_pos, phi, true, g, h);
+        return h;
+    }
+    // Combined eta-gradient + negative Hessian in one pass. The digamma terms
+    // are shared between the score and the curvature (computed once); the
+    // trigamma terms are computed ONLY when `want_hess` is true, so a grad-only
+    // inner-Newton step (cached-factor reuse) skips them entirely. Uses tulpa's
+    // portable, inlinable, OpenMP-safe digamma/trigamma rather than the R math
+    // library calls. Single source for grad_eta / neg_hess_eta and the
+    // cell-coupling hot path.
+    static void grad_hess_eta(double y_pos, double eta_pos, double phi,
+                              bool want_hess, double& grad, double& neg_hess) {
         const double mu      = sigmoid_(eta_pos);
         const double log_y   = log_safe_(y_pos);
         const double log_1my = log_safe_(1.0 - y_pos);
-        const double g       = -R::digamma(mu * phi)
-                              + R::digamma((1.0 - mu) * phi)
+        const double a       = mu * phi;
+        const double b       = (1.0 - mu) * phi;
+        const double g       = -tulpa::math::portable_digamma(a)
+                              +  tulpa::math::portable_digamma(b)
                               + log_y - log_1my;
         const double m1m     = mu * (1.0 - mu);
-        const double trig    = R::trigamma(mu * phi)
-                              + R::trigamma((1.0 - mu) * phi);
-        return phi * phi * m1m * m1m * trig
-             - phi * m1m * g * (1.0 - 2.0 * mu);
+        grad = phi * m1m * g;
+        if (want_hess) {
+            const double trig = tulpa::math::portable_trigamma(a)
+                              + tulpa::math::portable_trigamma(b);
+            neg_hess = phi * phi * m1m * m1m * trig
+                     - phi * m1m * g * (1.0 - 2.0 * mu);
+        }
     }
 };
 
@@ -148,6 +175,13 @@ public:
         const double psi     = sigmoid_(eta_psi);
         const double phi_pos = y_cell.phi(2);
 
+        // Grad-only request (cached-factor reuse step): the kernel discards the
+        // Hessian this call would produce, so skip every negative-Hessian and
+        // cross-Hessian term -- including the positive arm's trigamma -- and
+        // leave the pre-zeroed buffers untouched. The gradient and the returned
+        // log-density are still exact.
+        const bool want_hess = !out.grad_only;
+
         bool any_det = false;
         for (int v = 0; v < Jc; v++) {
             if (y_cell.y(1, v) > 0.5) { any_det = true; break; }
@@ -157,7 +191,7 @@ public:
             double cell_ll = log_safe_(psi);
 
             out.arm_grad[0][0]          = 1.0 - psi;
-            out.arm_neg_hess_diag[0][0] = psi * (1.0 - psi);
+            if (want_hess) out.arm_neg_hess_diag[0][0] = psi * (1.0 - psi);
 
             for (int v = 0; v < Jc; v++) {
                 const double eta_p = etas.eta(1, v);
@@ -167,17 +201,20 @@ public:
                 if (y_det > 0.5) {
                     cell_ll += log_safe_(p_v);
                     out.arm_grad[1][v]          = 1.0 - p_v;
-                    out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
+                    if (want_hess) out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
 
                     const double y_pos   = y_cell.y(2, v);
                     const double eta_pos = etas.eta(2, v);
                     cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
-                    out.arm_grad[2][v]          = PosPolicy::grad_eta(y_pos, eta_pos, phi_pos);
-                    out.arm_neg_hess_diag[2][v] = PosPolicy::neg_hess_eta(y_pos, eta_pos, phi_pos);
+                    double g_pos = 0.0, h_pos = 0.0;
+                    PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
+                                             want_hess, g_pos, h_pos);
+                    out.arm_grad[2][v] = g_pos;
+                    if (want_hess) out.arm_neg_hess_diag[2][v] = h_pos;
                 } else {
                     cell_ll += log_safe_(1.0 - p_v);
                     out.arm_grad[1][v]          = -p_v;
-                    out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
+                    if (want_hess) out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
                 }
             }
             // Cross-Hessians all zero in the det case (psi, p, pos arms
@@ -213,10 +250,12 @@ public:
         // psi: grad and neg-hess diagonal
         const double g_psi = -psi_1mp * one_m_P0 * inv_L;
         out.arm_grad[0][0] = g_psi;
-        out.arm_neg_hess_diag[0][0] = expected
-            ? psi_1mp                                            // complete-data Fisher: psi(1-psi)
-            // -d^2/d eta_psi^2 = psi(1-psi)(1-2psi)(1-P0)/L + g_psi^2
-            : psi_1mp * (1.0 - 2.0 * psi) * one_m_P0 * inv_L + g_psi * g_psi;
+        if (want_hess) {
+            out.arm_neg_hess_diag[0][0] = expected
+                ? psi_1mp                                        // complete-data Fisher: psi(1-psi)
+                // -d^2/d eta_psi^2 = psi(1-psi)(1-2psi)(1-P0)/L + g_psi^2
+                : psi_1mp * (1.0 - 2.0 * psi) * one_m_P0 * inv_L + g_psi * g_psi;
+        }
 
         // p arm: per-visit grad + neg-hess diagonal
         for (int v = 0; v < Jc; v++) {
@@ -224,10 +263,12 @@ public:
             const double psi_P0_p   = psi * P0 * p_v;
             const double g_p_v      = -psi_P0_p * inv_L;
             out.arm_grad[1][v] = g_p_v;
-            out.arm_neg_hess_diag[1][v] = expected
-                ? gamma_c * p_v * (1.0 - p_v)                    // complete-data Fisher
-                // -d^2/d eta_p_v^2 = psi*P0*p_v*(1 - 2 p_v)/L + g_p_v^2
-                : psi_P0_p * (1.0 - 2.0 * p_v) * inv_L + g_p_v * g_p_v;
+            if (want_hess) {
+                out.arm_neg_hess_diag[1][v] = expected
+                    ? gamma_c * p_v * (1.0 - p_v)                // complete-data Fisher
+                    // -d^2/d eta_p_v^2 = psi*P0*p_v*(1 - 2 p_v)/L + g_p_v^2
+                    : psi_P0_p * (1.0 - 2.0 * p_v) * inv_L + g_p_v * g_p_v;
+            }
         }
 
         // pos arm contributes nothing in the nodet case (no detected
@@ -236,8 +277,9 @@ public:
         // Cross-Hessians: the complete-data Fisher (Expected) is block-diagonal
         // -- given z the arms are independent GLMs -- so it writes none. The
         // observed (Expected = false) cross terms are the missing-information
-        // contribution that makes the mixture Hessian indefinite.
-        if (!expected) {
+        // contribution that makes the mixture Hessian indefinite. A grad-only
+        // step writes none either (the kernel discards them).
+        if (!expected && want_hess) {
             // (psi, p_v): -d^2/d eta_psi d eta_p_v = P0 p_v psi(1-psi)/L^2
             if (out.arm_cross_hess && out.arm_cross_hess[0]
                 && out.arm_cross_hess[0][1]) {

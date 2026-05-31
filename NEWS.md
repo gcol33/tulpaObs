@@ -5,6 +5,17 @@
 Requires tulpa (>= 0.0.4): the joint cover-hurdle path links against the
 engine's `cell_coupling.h` / `model_data.h` (ABI 32).
 
+* perf(occu_cover): speed up the beta positive arm in the joint cover-hurdle
+  cell-coupling spec (gcol33/tulpa#46, lever 3). The per-observation
+  `digamma`/`trigamma` now use tulpa's portable, inlinable, OpenMP-safe
+  implementations instead of the `R::` math-library calls; the score and
+  curvature share their `digamma` terms in a single pass; and the spec honours
+  the engine's `CellDerivs::grad_only` request, skipping the `trigamma` entirely
+  on a factor-reuse inner-Newton step. The `joint_coupled` engine now also
+  exposes `control$n.threads.outer` (the engine's parallel sparse outer grid)
+  and `control$force.sparse`. End-to-end invariance of the beta cover fit to
+  `inner.refresh` and `n.threads.outer` is covered in
+  `tests/testthat/test-occu-cover-joint-reuse.R`.
 * feat(occu_cover): joint occupancy-detection + cover-hurdle family
   (`occu_cover("lognormal")` / `occu_cover("beta")`, gcol33/tulpa#32). A site's
   occupancy/detection arm and a positive-cover arm (lognormal or beta) are fit
