@@ -1,4 +1,5 @@
 Sys.setenv(NOT_CRAN = "true")
+Sys.setenv(TESTTHAT_PARALLEL = "false")
 suppressMessages(devtools::load_all("C:/Users/Gilles Colling/Documents/dev/tulpaObs", quiet = TRUE))
 res <- testthat::test_dir("C:/Users/Gilles Colling/Documents/dev/tulpaObs/tests/testthat",
                           reporter = testthat::SummaryReporter$new(),
