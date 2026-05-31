@@ -449,7 +449,7 @@ cover <- function(positive = c("beta", "lognormal")) {
     # separate from the occupancy fitter and named with underscores. Declaring
     # the keys keeps tobs()'s control validation from rejecting them.
     control_keys   = c(
-      "max.iter", "tol", "n.threads", "prior.sigma", "prior.alpha",
+      "max.iter", "tol", "n.threads", "n.threads.outer", "prior.sigma", "prior.alpha",
       "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",
       "rho.car.grid", "tau.temporal.grid", "rho.temporal.grid",
       "sigma.temporal.grid", "sigma.re.grid",

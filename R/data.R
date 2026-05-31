@@ -32,7 +32,7 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #' @param df Data.frame in long format (one row per site-visit).
 #' @param y Character, name of the response column. Its meaning is set by
 #'   `type`: a 0/1 detection (`"occurrence"`), an integer count
-#'   (`"abundance"`), or a continuous cover proportion in [0, 1] (`"cover"`).
+#'   (`"abundance"`), or a continuous cover proportion in `[0, 1]` (`"cover"`).
 #' @param site Character, name of site identifier column.
 #' @param visit Character, name of visit/replicate column.
 #' @param type Response kind. `"occurrence"` (default) and `"abundance"` build

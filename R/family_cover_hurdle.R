@@ -609,7 +609,7 @@ decode_cover_hurdle <- function(fits, enc, family,
 #' The separate-Laplace fit (`method = "laplace"`) returns a fixed-effects-only
 #' numeric vector. The nested-Laplace shared-field fit
 #' (`method = "nested_laplace"`) instead projects the shared occupancy-cover
-#' field and returns a [`tobs_prediction`] of posterior draws -- the same tidy /
+#' field and returns a `tobs_prediction` of posterior draws -- the same tidy /
 #' `change` contract as [predict.tobs_fit()] for `occu_cover()`: pass
 #' `type = "change"` with `times = c(t1, t2)` and `time_col` for a per-cell
 #' delta map. Each prediction unit is a row of `newdata` (or a `cell` column
@@ -629,7 +629,7 @@ decode_cover_hurdle <- function(fits, enc, family,
 #'   level, `nsim` the draw count, `draws` whether to attach the draw matrices.
 #' @param ... Unused.
 #' @return Separate-Laplace fit: a numeric vector. Nested-Laplace fit: a
-#'   [`tobs_prediction`].
+#'   `tobs_prediction`.
 #' @export
 predict.cover_fit <- function(object, newdata = NULL,
                                      type = NULL, include_RE = FALSE,
@@ -964,6 +964,13 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     max_iter  = control$max.iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
     n_threads = control$n.threads %||% 1L,
+    # Outer-grid parallelism (gcol33/tulpa#46 lever 2). The sparse joint driver
+    # dispatches grid cells across n_threads_outer threads, each with its own
+    # replicated cell-solve state (the engine clamps the count if the replicas
+    # would be too large). Default 1 (serial outer, prior behaviour). Preferred
+    # over inner per-observation threads on many-core hardware for the cover
+    # hurdle's large outer grid, where the expensive mode-region cells dominate.
+    n_threads_outer = control$n.threads.outer %||% 1L,
     store_Q   = TRUE,
     # Inner-Newton curvature (gcol33/tulpa#46). The beta positive arm's observed
     # mixture Hessian is indefinite away from the mode, so observed-curvature

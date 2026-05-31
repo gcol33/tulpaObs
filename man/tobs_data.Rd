@@ -20,7 +20,7 @@ tobs_data(
 
 \item{y}{Character, name of the response column. Its meaning is set by
 \code{type}: a 0/1 detection (\code{"occurrence"}), an integer count
-(\code{"abundance"}), or a continuous cover proportion in \link{0, 1} (\code{"cover"}).}
+(\code{"abundance"}), or a continuous cover proportion in \verb{[0, 1]} (\code{"cover"}).}
 
 \item{site}{Character, name of site identifier column.}
 

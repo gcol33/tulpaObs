@@ -6,25 +6,38 @@
 \usage{
 \method{predict}{cover_fit}(
   object,
-  newdata,
-  type = c("expected", "occupancy", "conditional"),
+  newdata = NULL,
+  type = NULL,
   include_RE = FALSE,
+  times = NULL,
+  time_col = NULL,
+  level = 0.95,
+  nsim = 1000L,
+  draws = TRUE,
   ...
 )
 }
 \arguments{
 \item{object}{A \code{cover_fit}.}
 
-\item{newdata}{A data frame of covariates matching the original formula.}
+\item{newdata}{A data frame of covariates matching the original formula. For
+the nested-Laplace fit, one row per spatial unit (or a \code{cell} column).}
 
-\item{type}{One of \code{"expected"}, \code{"occupancy"}, \code{"conditional"}.}
+\item{type}{Separate-Laplace fit: one of \code{"expected"}, \code{"occupancy"},
+\code{"conditional"}. Nested-Laplace fit: \code{"occurrence"}, \code{"cover_cond"},
+\code{"cover_exp"}, or \code{"change"} (the legacy aliases are accepted and mapped).}
 
-\item{include_RE}{Currently ignored (no spatial projection in 1a).}
+\item{include_RE}{Ignored for the separate-Laplace fit (no spatial
+projection); the nested-Laplace fit always projects the shared field.}
+
+\item{times, time_col, level, nsim, draws}{Nested-Laplace fit only: \code{times = c(t1, t2)} and \code{time_col} drive the \code{"change"} map; \code{level} is the credible
+level, \code{nsim} the draw count, \code{draws} whether to attach the draw matrices.}
 
 \item{...}{Unused.}
 }
 \value{
-Numeric vector of predictions.
+Separate-Laplace fit: a numeric vector. Nested-Laplace fit: a
+\code{tobs_prediction}.
 }
 \description{
 Occurrence probability is always \code{p = plogis(X * beta_occ)}. The
@@ -40,7 +53,13 @@ the natural cover scale with logit link).
 
 Expected cover is \code{E[y] = p * mu} under both positive parts.
 
-Spatial random effects are not yet projected at new locations
-(Phase 1a is fixed-effects-only for prediction; spatial projection
-lands in 1c).
+The separate-Laplace fit (\code{method = "laplace"}) returns a fixed-effects-only
+numeric vector. The nested-Laplace shared-field fit
+(\code{method = "nested_laplace"}) instead projects the shared occupancy-cover
+field and returns a \code{tobs_prediction} of posterior draws -- the same tidy /
+\code{change} contract as \code{\link[=predict.tobs_fit]{predict.tobs_fit()}} for \code{occu_cover()}: pass
+\code{type = "change"} with \code{times = c(t1, t2)} and \code{time_col} for a per-cell
+delta map. Each prediction unit is a row of \code{newdata} (or a \code{cell} column
+indexing the field cells), and every quantity is marginalized per draw over
+the grid-integrated joint posterior.
 }

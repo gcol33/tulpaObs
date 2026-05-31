@@ -168,39 +168,6 @@
 #' )
 #' }
 #'
-# Normalize the outer-grid progress knobs from a `control` list into the scoped
-# `tulpa.nl_progress` option value read by tulpa's nested-Laplace fitters and the
-# tulpaObs N-mixture spatial fitters (tulpaObs#25 / gcol33/tulpa#45). Off by
-# default; `progress = TRUE` turns on the flushed cell-k/n_grid + ETA reporter,
-# `progress.file` adds a heartbeat file for detached runs.
-.tobs_progress_opt <- function(control) {
-  list(
-    progress          = isTRUE(control$progress),
-    progress_every    = as.integer(control$progress.every    %||% 0L),
-    progress_throttle = as.numeric(control$progress.throttle %||% 2),
-    progress_file     = as.character(control$progress.file    %||% "")
-  )
-}
-
-# The four cpp-side progress arguments for the tulpaObs N-mixture spatial
-# entries (which run their own outer grids, not tulpa's driver). Reads the same
-# scoped `tulpa.nl_progress` option `tobs()` sets, so a single control surfaces
-# to every spatial backend.
-.tobs_nl_progress_cpp <- function() {
-  p <- getOption("tulpa.nl_progress", NULL)
-  if (!is.list(p)) p <- .tobs_progress_opt(list())
-  list(progress          = isTRUE(p$progress),
-       progress_every    = as.integer(p$progress_every),
-       progress_throttle = as.numeric(p$progress_throttle),
-       progress_file     = as.character(p$progress_file))
-}
-
-# Call an N-mixture spatial cpp entry with the four progress arguments appended
-# from the scoped option. One injection point for every nmix spatial backend.
-.cpp_nmix_progress <- function(.fn, ...) {
-  do.call(.fn, c(list(...), .tobs_nl_progress_cpp()))
-}
-
 #' @export
 tobs <- function(formula,
                  data,
@@ -324,6 +291,40 @@ tobs <- function(formula,
   # Record the resolved public route for provenance / reproducibility.
   fit$method <- method
   fit
+}
+
+
+# Normalize the outer-grid progress knobs from a `control` list into the scoped
+# `tulpa.nl_progress` option value read by tulpa's nested-Laplace fitters and the
+# tulpaObs N-mixture spatial fitters (tulpaObs#25 / gcol33/tulpa#45). Off by
+# default; `progress = TRUE` turns on the flushed cell-k/n_grid + ETA reporter,
+# `progress.file` adds a heartbeat file for detached runs.
+.tobs_progress_opt <- function(control) {
+  list(
+    progress          = isTRUE(control$progress),
+    progress_every    = as.integer(control$progress.every    %||% 0L),
+    progress_throttle = as.numeric(control$progress.throttle %||% 2),
+    progress_file     = as.character(control$progress.file    %||% "")
+  )
+}
+
+# The four cpp-side progress arguments for the tulpaObs N-mixture spatial
+# entries (which run their own outer grids, not tulpa's driver). Reads the same
+# scoped `tulpa.nl_progress` option `tobs()` sets, so a single control surfaces
+# to every spatial backend.
+.tobs_nl_progress_cpp <- function() {
+  p <- getOption("tulpa.nl_progress", NULL)
+  if (!is.list(p)) p <- .tobs_progress_opt(list())
+  list(progress          = isTRUE(p$progress),
+       progress_every    = as.integer(p$progress_every),
+       progress_throttle = as.numeric(p$progress_throttle),
+       progress_file     = as.character(p$progress_file))
+}
+
+# Call an N-mixture spatial cpp entry with the four progress arguments appended
+# from the scoped option. One injection point for every nmix spatial backend.
+.cpp_nmix_progress <- function(.fn, ...) {
+  do.call(.fn, c(list(...), .tobs_nl_progress_cpp()))
 }
 
 
