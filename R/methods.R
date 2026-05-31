@@ -504,9 +504,9 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     oc_type <- if (missing(type) || length(type) > 1L) "occurrence" else type
     nd <- newdata
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_occu_cover(object, newdata = nd, type = oc_type,
-                                    times = times, level = level, nsim = nsim,
-                                    draws = draws, time_col = time_col))
+    return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
+                               times = times, level = level, nsim = nsim,
+                               draws = draws, time_col = time_col))
   }
   type <- match.arg(type)
 

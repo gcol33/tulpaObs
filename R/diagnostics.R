@@ -31,6 +31,9 @@ tobs_waic <- function(object, ...) {
 # with those components the score is conditional on the fixed-effect predictor.
 .tobs_pointwise_loglik <- function(object) {
   if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object))
+  if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
+    return(.tobs_ploglik_occu_cover(object))
+  }
 
   model <- object$model
   draws <- object$draws

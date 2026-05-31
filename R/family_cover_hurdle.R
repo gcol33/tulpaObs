@@ -464,11 +464,17 @@ decode_cover_hurdle <- function(fits, enc, family,
 # the per-arm mode + Hessian this needs; the nested-joint path errors.
 .tobs_ploglik_cover <- function(object, n.draws = 1000L) {
   enc <- object$encoding
+  # Nested-joint shared-field fit: sample the joint posterior and accumulate the
+  # per-obs hurdle log-likelihood with the shared field projected at each obs.
+  if (!is.null(.tobs_joint_fit(object))) {
+    return(.tobs_ploglik_cover_joint(object, n.draws))
+  }
   if (is.null(enc) || is.null(object$occ$mode) || is.null(object$occ$H_beta) ||
       is.null(object$pos$mode) || is.null(object$pos$H_beta)) {
     stop("Pointwise log-likelihood for cover() is implemented for the ",
-         "separate-Laplace path (method = 'laplace' / 'laplace_sla'); the ",
-         "nested-joint fit (method = 'nested_laplace') is not yet supported.",
+         "separate-Laplace path (method = 'laplace' / 'laplace_sla') and the ",
+         "nested-joint shared-field path (method = 'nested_laplace'); this fit ",
+         "carries neither a per-arm mode + Hessian nor a joint object.",
          call. = FALSE)
   }
   positive <- object$positive %||% "lognormal"
@@ -517,6 +523,59 @@ decode_cover_hurdle <- function(fits, enc, family,
   ll
 }
 
+# Pointwise log-likelihood [n_draws x N] for the nested-joint cover() fit: the
+# fully-observed hurdle (occurrence Bernoulli, plus the positive-part density at
+# y > 0) with the shared occupancy-cover field projected at each observation's
+# spatial unit. The joint latent (per-arm betas + field) is sampled from the
+# grid-integrated posterior via the joint substrate; the positive-arm dispersion
+# is the per-draw grid value, so the LOO marginals carry the hyperparameter
+# uncertainty rather than a plug-in.
+.tobs_ploglik_cover_joint <- function(object, n.draws = 1000L) {
+  enc      <- object$encoding
+  spi_full <- object$spi_full
+  spi_pos  <- object$spi_pos
+  if (is.null(spi_full) || is.null(spi_pos)) {
+    stop("Pointwise log-likelihood for the nested-joint cover() fit needs the ",
+         "per-observation spatial-unit index (`spi_full` / `spi_pos`); refit ",
+         "with the current tulpaObs so they are stored on the fit.",
+         call. = FALSE)
+  }
+  bundle   <- .tobs_joint_draws(object, n = n.draws)
+  positive <- object$positive %||% "lognormal"
+  occur    <- enc$occ_data$y
+  y_pos    <- enc$pos_data$y          # log(y) (lognormal) / clipped y (beta)
+  idx_pos  <- enc$idx_pos
+  N        <- enc$N
+
+  # Per-arm linear predictors with the shared field projected at each obs's
+  # spatial unit; [S x N] / [S x N_pos] after transpose.
+  eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", spi_full))
+  eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", spi_pos))
+  disp    <- bundle$disp              # per-draw residual SD (lognormal) / precision (beta)
+
+  log_p   <- .tobs_log_p(eta_occ)
+  log_1mp <- .tobs_log_1mp(eta_occ)
+
+  S  <- bundle$n
+  ll <- matrix(0, S, N)
+  absent <- occur == 0L
+  if (any(absent)) ll[, absent] <- log_1mp[, absent, drop = FALSE]
+
+  pos_col <- match(seq_len(N), idx_pos)   # eta_pos column per site (NA if absent)
+  for (i in which(occur == 1L)) {
+    j <- pos_col[i]
+    if (positive == "lognormal") {
+      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = disp,
+                           log = TRUE) - y_pos[j]
+    } else {
+      mu   <- stats::plogis(eta_pos[, j])
+      dens <- stats::dbeta(y_pos[j], mu * disp, (1 - mu) * disp, log = TRUE)
+    }
+    ll[, i] <- log_p[, i] + dens
+  }
+  ll
+}
+
 # Draw S rows ~ MVN(mu, V) via Cholesky (mu + Z R, V = R'R). Falls back to the
 # mode (point mass) if V is unavailable, and jitters a near-singular V.
 .tobs_mvn_draws <- function(mu, V, S) {
@@ -547,29 +606,60 @@ decode_cover_hurdle <- function(fits, enc, family,
 #'
 #' Expected cover is `E[y] = p * mu` under both positive parts.
 #'
-#' Spatial random effects are not yet projected at new locations
-#' (Phase 1a is fixed-effects-only for prediction; spatial projection
-#' lands in 1c).
+#' The separate-Laplace fit (`method = "laplace"`) returns a fixed-effects-only
+#' numeric vector. The nested-Laplace shared-field fit
+#' (`method = "nested_laplace"`) instead projects the shared occupancy-cover
+#' field and returns a [`tobs_prediction`] of posterior draws -- the same tidy /
+#' `change` contract as [predict.tobs_fit()] for `occu_cover()`: pass
+#' `type = "change"` with `times = c(t1, t2)` and `time_col` for a per-cell
+#' delta map. Each prediction unit is a row of `newdata` (or a `cell` column
+#' indexing the field cells), and every quantity is marginalized per draw over
+#' the grid-integrated joint posterior.
 #'
 #' @param object A `cover_fit`.
-#' @param newdata A data frame of covariates matching the original formula.
-#' @param type One of `"expected"`, `"occupancy"`, `"conditional"`.
-#' @param include_RE Currently ignored (no spatial projection in 1a).
+#' @param newdata A data frame of covariates matching the original formula. For
+#'   the nested-Laplace fit, one row per spatial unit (or a `cell` column).
+#' @param type Separate-Laplace fit: one of `"expected"`, `"occupancy"`,
+#'   `"conditional"`. Nested-Laplace fit: `"occurrence"`, `"cover_cond"`,
+#'   `"cover_exp"`, or `"change"` (the legacy aliases are accepted and mapped).
+#' @param include_RE Ignored for the separate-Laplace fit (no spatial
+#'   projection); the nested-Laplace fit always projects the shared field.
+#' @param times,time_col,level,nsim,draws Nested-Laplace fit only: `times =
+#'   c(t1, t2)` and `time_col` drive the `"change"` map; `level` is the credible
+#'   level, `nsim` the draw count, `draws` whether to attach the draw matrices.
 #' @param ... Unused.
-#' @return Numeric vector of predictions.
+#' @return Separate-Laplace fit: a numeric vector. Nested-Laplace fit: a
+#'   [`tobs_prediction`].
 #' @export
-predict.cover_fit <- function(object, newdata,
-                                     type = c("expected", "occupancy",
-                                              "conditional"),
-                                     include_RE = FALSE, ...) {
-  type <- match.arg(type)
+predict.cover_fit <- function(object, newdata = NULL,
+                                     type = NULL, include_RE = FALSE,
+                                     times = NULL, time_col = NULL,
+                                     level = 0.95, nsim = 1000L, draws = TRUE,
+                                     ...) {
+  # Nested-Laplace shared-field fit: route through the unified joint predict
+  # substrate (gcol33/tulpaObs#23). Map the legacy fixed-effects type names onto
+  # the joint vocabulary so old calls keep working.
+  if (!is.null(.tobs_joint_fit(object))) {
+    if (is.null(type)) type <- "occurrence"
+    type <- switch(type,
+                   expected    = "cover_exp",
+                   occupancy   = "occurrence",
+                   conditional = "cover_cond",
+                   type)
+    return(.tobs_predict_joint(object, newdata = newdata, type = type,
+                               times = times, level = level, nsim = nsim,
+                               draws = draws, time_col = time_col))
+  }
+
+  if (is.null(type)) type <- "expected"
+  type <- match.arg(type, c("expected", "occupancy", "conditional"))
   if (missing(newdata) || is.null(newdata)) {
     stop("`newdata` is required.", call. = FALSE)
   }
   if (isTRUE(include_RE) && !is.null(object$encoding$spatial_spec)) {
     message("predict.cover_fit(): spatial RE projection at new ",
-            "locations is not implemented in Phase 1a; returning ",
-            "fixed-effects-only predictions.")
+            "locations is not implemented for the separate-Laplace fit; ",
+            "returning fixed-effects-only predictions.")
   }
 
   X <- stats::model.matrix(object$encoding$formula, newdata)
@@ -875,12 +965,28 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     tol       = control$tol       %||% 1e-6,
     n_threads = control$n.threads %||% 1L,
     store_Q   = TRUE,
-    hessian   = control$hessian   %||% "lm",
+    # Inner-Newton curvature (gcol33/tulpa#46). The beta positive arm's observed
+    # mixture Hessian is indefinite away from the mode, so observed-curvature
+    # Newton steps stall and the inner Newton hits max.iter in every grid cell.
+    # Expected/Fisher curvature is PSD by construction and converges in ~12
+    # steps. The final mode-pass always re-factorizes with the observed Hessian,
+    # so the reported SEs, log_det and grid weights are unchanged. The lognormal
+    # arm is exactly quadratic (one inner step), so observed curvature is already
+    # optimal -> keep "lm".
+    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
     prune     = control$prune     %||% FALSE,
     prune_tol = control$prune.tol %||% 1e-4,
     adaptive_grid             = control$adaptive.grid             %||% TRUE,
     adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
+    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
+    # Outer-grid progress + ETA (gcol33/tulpa#45). `.nl_progress_args()` reads
+    # these dotted keys off the control passed to tulpa_nested_laplace_joint;
+    # progress.file writes the ETA to disk, which is the only channel that
+    # survives a detached Start-Process stdout buffer.
+    progress          = control$progress          %||% FALSE,
+    progress.every    = control$progress.every    %||% 0L,
+    progress.throttle = control$progress.throttle %||% 2,
+    progress.file     = control$progress.file     %||% ""
   )
 
   # ---- Multi-block path (Phase J-D) -----------------------------------
@@ -1176,6 +1282,8 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       converged    = TRUE,
       log_marginal = c(joint = max(fits$joint$log_marginal)),
       joint        = fits$joint,
+      spi_full     = fits$spi_full,
+      spi_pos      = fits$spi_pos,
       skew_occ     = skew_occ,
       skew_pos     = skew_pos,
       draws_occ    = draws_occ,

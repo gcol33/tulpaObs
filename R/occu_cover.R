@@ -246,9 +246,25 @@
     ep_mat <- ep_mat + matrix(eta_pos_visit, n_sites, max_visits, byrow = TRUE)
   }
 
+  ll <- sum(.occu_cover_site_ll(model, psi, p_mat, ep_mat, log_disp))
+  penalty <- 0.5 * sum(pprec * (par - pmean)^2)
+  -ll + penalty
+}
+
+# Per-site marginal log-likelihood (latent occupancy state z integrated out in
+# closed form over its two states), returned as a length-`n_sites` vector. The
+# inputs are the per-cell occupancy probability `psi`, the per-visit detection
+# probability matrix `p_mat` [n_sites x max_visits], the per-visit cover
+# linear-predictor matrix `ep_mat` [n_sites x max_visits], and the scalar
+# `log_dispersion`. This is the single source of truth shared by the fit's
+# negative-log-posterior and the WAIC / PSIS-LOO pointwise log-likelihood.
+.occu_cover_site_ll <- function(model, psi, p_mat, ep_mat, log_disp) {
+  cl <- function(e) pmin(pmax(e, -30), 30)
   valid <- model$valid
   y     <- model$y
   y_pos <- model$y_pos
+  n_sites    <- model$n_sites
+  max_visits <- model$max_visits
 
   log_p   <- ifelse(valid, log(p_mat),     0)
   log_1mp <- ifelse(valid, log(1 - p_mat), 0)
@@ -288,9 +304,7 @@
   m    <- pmax(ln_a, ln_b)
   nodet_ll <- m + log(exp(ln_a - m) + exp(ln_b - m))
 
-  ll <- sum(ifelse(any_det, det_ll, nodet_ll))
-  penalty <- 0.5 * sum(pprec * (par - pmean)^2)
-  -ll + penalty
+  ifelse(any_det, det_ll, nodet_ll)
 }
 
 
@@ -520,6 +534,128 @@
   fit_args <- list(model = model, method = engine, priors = priors)
   fit_args <- c(fit_args, control)
   do.call(.tobs_fit_occu_cover, fit_args)
+}
+
+
+# ---------------------------------------------------------------------------
+# Pointwise log-likelihood (WAIC / PSIS-LOO) -- gcol33/tulpaObs#26
+# ---------------------------------------------------------------------------
+
+# Pointwise log-likelihood [n_draws x n_sites] for an occu_cover() fit: the
+# per-site marginal log-likelihood (latent occupancy state integrated out)
+# evaluated at each posterior draw. The spatial nested-Laplace fit samples the
+# grid-integrated joint (betas + shared field) via the joint substrate; the
+# non-spatial Laplace fit reuses the stored coefficient draws (no field). Both
+# feed the same per-draw site-likelihood accumulation.
+.tobs_ploglik_occu_cover <- function(object, n.draws = 1000L) {
+  model   <- object$model
+  pi_list <- model$process_info
+  p_occ   <- pi_list[[1L]]$p
+  p_det   <- pi_list[[2L]]$p
+  p_pos   <- pi_list[[3L]]$p
+  n_sites <- model$n_sites
+
+  if (!is.null(.tobs_joint_fit(object))) {
+    bundle <- .tobs_joint_draws(object, n = n.draws)
+    S      <- bundle$n
+    b_occ  <- bundle$b$occ
+    b_det  <- bundle$b$det
+    b_pos  <- bundle$b$pos
+    disp   <- bundle$disp
+    units  <- seq_len(n_sites)
+    wfun   <- function(nm) {
+      if (!nm %in% names(model$data)) {
+        stop("occu_cover WAIC: trend-field weight column '", nm,
+             "' is not in the fitted data.", call. = FALSE)
+      }
+      as.numeric(model$data[[nm]])
+    }
+    # Shared-field contributions [n_sites x S] on the occupancy and cover arms.
+    field_occ <- matrix(0, n_sites, S)
+    field_pos <- matrix(0, n_sites, S)
+    for (blk in bundle$blocks) {
+      z_unit <- blk$z[, units, drop = FALSE]   # [S x n_sites]
+      w <- if (is.null(blk$weight)) rep(1, n_sites) else wfun(blk$weight)
+      field_occ <- field_occ + t(z_unit * blk$amp_occ) * w
+      field_pos <- field_pos + t(z_unit * blk$amp_pos) * w
+    }
+  } else {
+    draws <- object$draws
+    if (is.null(draws) || !is.matrix(draws)) {
+      stop("occu_cover WAIC: the fit carries no posterior draw matrix.",
+           call. = FALSE)
+    }
+    S     <- nrow(draws)
+    b_occ <- draws[, seq_len(p_occ), drop = FALSE]
+    b_det <- draws[, p_occ + seq_len(p_det), drop = FALSE]
+    b_pos <- draws[, p_occ + p_det + seq_len(p_pos), drop = FALSE]
+    disp  <- exp(draws[, ncol(draws)])         # trailing log-dispersion column
+    field_occ <- matrix(0, n_sites, S)
+    field_pos <- matrix(0, n_sites, S)
+  }
+
+  .occu_cover_ploglik_core(model, b_occ, b_det, b_pos, disp,
+                           field_occ, field_pos)
+}
+
+# Accumulate the [S x n_sites] pointwise log-likelihood from per-draw arm
+# coefficients (`b_occ` / `b_det` / `b_pos`, each [S x p_arm]), per-draw
+# dispersion `disp` [S], and per-arm shared-field contributions `field_occ` /
+# `field_pos` [n_sites x S] (zero matrices for a non-spatial fit). The detection
+# and cover arms split into site-level and visit-level coefficient blocks exactly
+# as the fitter packs them.
+.occu_cover_ploglik_core <- function(model, b_occ, b_det, b_pos, disp,
+                                     field_occ, field_pos) {
+  n_sites    <- model$n_sites
+  max_visits <- model$max_visits
+  S <- nrow(b_occ)
+
+  p_det_site <- ncol(model$X_det_site)
+  p_pos_site <- ncol(model$X_pos_site)
+  has_det_visit <- !is.null(model$X_det_visit)
+  has_pos_visit <- !is.null(model$X_pos_visit)
+
+  # [n_sites x S] occupancy + site-level detection / cover predictors.
+  eta_psi_all      <- tcrossprod(model$X_occ, b_occ) + field_occ
+  eta_p_site_all   <- tcrossprod(model$X_det_site,
+                                 b_det[, seq_len(p_det_site), drop = FALSE])
+  eta_pos_site_all <- tcrossprod(model$X_pos_site,
+                                 b_pos[, seq_len(p_pos_site), drop = FALSE]) +
+                      field_pos
+
+  # [n_sites*max_visits x S] visit-level parts in site-major order.
+  eta_p_visit_all <- if (has_det_visit) {
+    tcrossprod(model$X_det_visit,
+               b_det[, p_det_site + seq_len(ncol(model$X_det_visit)),
+                     drop = FALSE])
+  } else NULL
+  eta_pos_visit_all <- if (has_pos_visit) {
+    tcrossprod(model$X_pos_visit,
+               b_pos[, p_pos_site + seq_len(ncol(model$X_pos_visit)),
+                     drop = FALSE])
+  } else NULL
+
+  cl <- function(e) pmin(pmax(e, -30), 30)
+  ll <- matrix(0, S, n_sites)
+  for (d in seq_len(S)) {
+    psi <- stats::plogis(cl(eta_psi_all[, d]))
+
+    p_eta <- matrix(eta_p_site_all[, d], n_sites, max_visits)
+    if (has_det_visit) {
+      p_eta <- p_eta + matrix(eta_p_visit_all[, d], n_sites, max_visits,
+                              byrow = TRUE)
+    }
+    p_mat <- stats::plogis(cl(p_eta))
+
+    ep_mat <- matrix(eta_pos_site_all[, d], n_sites, max_visits)
+    if (has_pos_visit) {
+      ep_mat <- ep_mat + matrix(eta_pos_visit_all[, d], n_sites, max_visits,
+                                byrow = TRUE)
+    }
+
+    ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, ep_mat, log(disp[d]))
+  }
+  ll
 }
 
 
