@@ -373,7 +373,21 @@
       tol       = as.numeric(tol),
       n_threads = as.integer(dots$n.threads %||% 1L),
       store_Q   = TRUE,
-      hessian   = dots$hessian %||% "lm",
+      # Inner-Newton curvature (gcol33/tulpa#46). The beta positive arm's
+      # observed mixture Hessian is indefinite away from the mode, so observed-
+      # curvature Newton steps stall and the inner Newton hits max.iter in every
+      # grid cell (non-convergence -- the dominant cost). Expected/Fisher
+      # information is PSD by construction, so the steps are well-conditioned and
+      # the inner Newton converges in ~12 steps instead. The reported SEs,
+      # log_det and grid weights are unchanged: the final mode-pass always
+      # re-factorizes with the observed Hessian; the curvature mode only steers
+      # the path to the mode. The lognormal arm is exactly quadratic (one inner
+      # step), so observed curvature is already optimal -> keep "lm".
+      hessian   = dots$hessian %||% (if (is_beta) "fisher" else "lm"),
+      # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off:
+      # at realistic field sizes the sparse factorization is milliseconds, so
+      # reuse buys nothing once the iteration count is fixed by the curvature.
+      inner_refresh = as.integer(dots$inner.refresh %||% 1L),
       # Adaptive-grid refinement defaults ON. Non-convergent inner Newton
       # cells (degenerate sigma + small non-zero alpha hyperpoints) drop to
       # -Inf log_marginal under the engine's NaN-safe edge-score path
