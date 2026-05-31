@@ -2,18 +2,36 @@
 % Please edit documentation in R/diagnostics.R
 \name{tobs_waic}
 \alias{tobs_waic}
-\title{Compute WAIC for occupancy models}
+\alias{tobs_dic}
+\alias{tobs_cpo}
+\title{Model criteria for occupancy / cover models}
 \usage{
-tobs_waic(object, ...)
+tobs_waic(object, n.draws = 1000L, ...)
+
+tobs_dic(object, n.draws = 1000L, ...)
+
+tobs_cpo(object, n.draws = 1000L, ...)
 }
 \arguments{
 \item{object}{A \code{tobs_fit} object.}
 
-\item{...}{Ignored.}
+\item{n.draws}{Posterior draws used to build the pointwise log-likelihood
+(the cover / occu_cover paths sample this many; the draw-matrix families use
+the first \code{n.draws} stored draws). Default 1000.}
+
+\item{...}{Forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} (e.g. \code{chunk_size}).}
 }
 \value{
-A list with \code{waic}, \code{elpd}, \code{p_waic}, and pointwise values.
+A \code{tulpa_criteria} object. \code{tobs_waic()} also carries \verb{$elpd}
+(an alias for \code{elpd_waic}) for back-compatibility.
 }
 \description{
-Compute WAIC for occupancy models
+\code{tobs_waic()}, \code{tobs_dic()}, and \code{tobs_cpo()} build the family pointwise
+log-likelihood matrix once and hand it to the engine's single criteria layer
+\code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}, which derives WAIC / DIC / CPO / LPML / PSIS-LOO.
+DIC additionally evaluates the deviance at the posterior mean of the
+parameters, supplied by the family-specific \code{\link[=.tobs_loglik_at_mean]{.tobs_loglik_at_mean()}}.
+}
+\seealso{
+\code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}
 }

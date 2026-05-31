@@ -462,12 +462,72 @@ decode_cover_hurdle <- function(fits, enc, family,
 #
 # Only the separate-Laplace path (method = "laplace" / "laplace_sla") carries
 # the per-arm mode + Hessian this needs; the nested-joint path errors.
-.tobs_ploglik_cover <- function(object, n.draws = 1000L) {
-  enc <- object$encoding
-  # Nested-joint shared-field fit: sample the joint posterior and accumulate the
-  # per-obs hurdle log-likelihood with the shared field projected at each obs.
+# Shared hurdle log-likelihood kernel: given per-draw linear predictors
+# `eta_occ` [S x N] (occurrence) and `eta_pos` [S x N_pos] (positive part),
+# dispersion `disp` (scalar or length-S), and the response encoding, accumulate
+# the [S x N] pointwise hurdle log-likelihood -- log(1 - p) at absent sites,
+# log(p) + positive-part log-density at occupied sites. The single source of
+# truth for both the separate-Laplace and nested-joint cover paths and for the
+# posterior-mean plug-in (S = 1).
+.tobs_cover_hurdle_ll <- function(eta_occ, eta_pos, disp, occur, y_pos, idx_pos,
+                                  positive) {
+  S <- nrow(eta_occ); N <- ncol(eta_occ)
+  sd_disp <- if (length(disp) == 1L) rep(disp, S) else disp
+  log_p   <- .tobs_log_p(eta_occ)
+  log_1mp <- .tobs_log_1mp(eta_occ)
+
+  ll <- matrix(0, S, N)
+  absent <- occur == 0L
+  if (any(absent)) ll[, absent] <- log_1mp[, absent, drop = FALSE]
+
+  pos_col <- match(seq_len(N), idx_pos)   # eta_pos column per site (NA if absent)
+  for (i in which(occur == 1L)) {
+    j <- pos_col[i]
+    if (positive == "lognormal") {
+      # y_pos = log(y); density of natural-scale y is the Gaussian on log(y)
+      # times the Jacobian 1/y, i.e. dnorm(log y, eta, sigma, log) - log(y).
+      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
+                           log = TRUE) - y_pos[j]
+    } else {
+      mu   <- stats::plogis(eta_pos[, j])
+      dens <- stats::dbeta(y_pos[j], mu * sd_disp, (1 - mu) * sd_disp,
+                           log = TRUE)
+    }
+    ll[, i] <- log_p[, i] + dens
+  }
+  ll
+}
+
+# Per-draw cover linear predictors [S x N] / [S x N_pos]. Separate-Laplace path:
+# sample each arm's Gaussian-Laplace posterior at its scaled design. Nested-joint
+# path: sample the grid-integrated joint and project the shared field at each
+# observation's spatial unit (`spi_full` / `spi_pos`); the dispersion is then the
+# per-draw grid value. Returns list(eta_occ, eta_pos, disp).
+.tobs_cover_eta_draws <- function(object, n.draws = 1000L) {
+  enc      <- object$encoding
+  positive <- object$positive %||% "lognormal"
   if (!is.null(.tobs_joint_fit(object))) {
-    return(.tobs_ploglik_cover_joint(object, n.draws))
+    spi_full <- object$spi_full
+    spi_pos  <- object$spi_pos
+    if (is.null(spi_full) || is.null(spi_pos)) {
+      stop("Pointwise log-likelihood for the nested-joint cover() fit needs the ",
+           "per-observation spatial-unit index (`spi_full` / `spi_pos`); refit ",
+           "with the current tulpaObs so they are stored on the fit.",
+           call. = FALSE)
+    }
+    bundle  <- .tobs_joint_draws(object, n = n.draws)
+    # A coupled trend field carries a per-observation weight; resolve it per arm
+    # via wfun (the engine's svc_weight replayed at predict time). NULL when the
+    # fit has no trend field, in which case .tobs_joint_arm_eta never calls it.
+    w_occ_fun <- if (!is.null(object$trend_w_occ))
+                   function(col) as.numeric(object$trend_w_occ) else NULL
+    w_pos_fun <- if (!is.null(object$trend_w_pos))
+                   function(col) as.numeric(object$trend_w_pos) else NULL
+    eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", spi_full,
+                                     wfun = w_occ_fun))
+    eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", spi_pos,
+                                     wfun = w_pos_fun))
+    return(list(eta_occ = eta_occ, eta_pos = eta_pos, disp = bundle$disp))
   }
   if (is.null(enc) || is.null(object$occ$mode) || is.null(object$occ$H_beta) ||
       is.null(object$pos$mode) || is.null(object$pos$H_beta)) {
@@ -477,106 +537,140 @@ decode_cover_hurdle <- function(fits, enc, family,
          "carries neither a per-arm mode + Hessian nor a joint object.",
          call. = FALSE)
   }
-  positive <- object$positive %||% "lognormal"
-  X_occ <- enc$occ_data$X            # scaled occurrence design [N x p_occ]
-  X_pos <- enc$pos_data$X            # scaled positive design   [n_pos x p_pos]
-  occur <- enc$occ_data$y            # 0/1, length N
-  y_pos <- enc$pos_data$y            # log(y) (lognormal) or clipped y (beta)
-  idx_pos <- enc$idx_pos
-  N <- enc$N
+  X_occ <- enc$occ_data$X
+  X_pos <- enc$pos_data$X
   p_occ <- ncol(X_occ); p_pos <- ncol(X_pos)
-
   mode_occ   <- object$occ$mode[seq_len(p_occ)]
   mode_pos   <- object$pos$mode[seq_len(p_pos)]
   pos_vscale <- if (positive == "lognormal") (object$sigma_pos %||% 1)^2 else 1
   V_occ <- tryCatch(solve(object$occ$H_beta), error = function(e) NULL)
   V_pos <- tryCatch(pos_vscale * solve(object$pos$H_beta), error = function(e) NULL)
-
   S <- as.integer(n.draws)
   B_occ <- .tobs_mvn_draws(mode_occ, V_occ, S)   # [S x p_occ]
   B_pos <- .tobs_mvn_draws(mode_pos, V_pos, S)   # [S x p_pos]
-
-  eta_occ <- B_occ %*% t(X_occ)                  # [S x N]
-  eta_pos <- B_pos %*% t(X_pos)                  # [S x n_pos]
-  log_p   <- .tobs_log_p(eta_occ)
-  log_1mp <- .tobs_log_1mp(eta_occ)
-
-  ll <- matrix(0, S, N)
-  absent <- occur == 0L
-  if (any(absent)) ll[, absent] <- log_1mp[, absent, drop = FALSE]
-
-  pos_col <- match(seq_len(N), idx_pos)          # eta_pos column per site (NA if absent)
-  for (i in which(occur == 1L)) {
-    j <- pos_col[i]
-    if (positive == "lognormal") {
-      # y_pos = log(y); density of natural-scale y is the Gaussian on log(y)
-      # times the Jacobian 1/y, i.e. dnorm(log y, eta, sigma, log) - log(y).
-      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j],
-                           sd = object$sigma_pos, log = TRUE) - y_pos[j]
-    } else {
-      mu  <- stats::plogis(eta_pos[, j])
-      phi <- object$phi_pos
-      dens <- stats::dbeta(y_pos[j], mu * phi, (1 - mu) * phi, log = TRUE)
-    }
-    ll[, i] <- log_p[, i] + dens
-  }
-  ll
+  disp  <- if (positive == "lognormal") object$sigma_pos else object$phi_pos
+  list(eta_occ = B_occ %*% t(X_occ), eta_pos = B_pos %*% t(X_pos), disp = disp)
 }
 
-# Pointwise log-likelihood [n_draws x N] for the nested-joint cover() fit: the
-# fully-observed hurdle (occurrence Bernoulli, plus the positive-part density at
-# y > 0) with the shared occupancy-cover field projected at each observation's
-# spatial unit. The joint latent (per-arm betas + field) is sampled from the
-# grid-integrated posterior via the joint substrate; the positive-arm dispersion
-# is the per-draw grid value, so the LOO marginals carry the hyperparameter
-# uncertainty rather than a plug-in.
-.tobs_ploglik_cover_joint <- function(object, n.draws = 1000L) {
+# Pointwise log-likelihood [n_draws x N] for a cover hurdle fit (separate-Laplace
+# or nested-joint shared-field), assembled from the per-draw linear predictors
+# through the shared hurdle kernel.
+.tobs_ploglik_cover <- function(object, n.draws = 1000L) {
+  enc <- object$encoding
+  e   <- .tobs_cover_eta_draws(object, n.draws)
+  .tobs_cover_hurdle_ll(e$eta_occ, e$eta_pos, e$disp, enc$occ_data$y,
+                        enc$pos_data$y, enc$idx_pos,
+                        object$positive %||% "lognormal")
+}
+
+# Pointwise log-likelihood at the posterior mean of the parameters (length N):
+# the hurdle kernel evaluated at the mean linear predictors and mean dispersion.
+.tobs_cover_loglik_at_mean <- function(object, n.draws = 1000L) {
+  enc <- object$encoding
+  e   <- .tobs_cover_eta_draws(object, n.draws)
+  mean_eta_occ <- matrix(colMeans(e$eta_occ), nrow = 1L)
+  mean_eta_pos <- matrix(colMeans(e$eta_pos), nrow = 1L)
+  as.numeric(.tobs_cover_hurdle_ll(
+    mean_eta_occ, mean_eta_pos, mean(e$disp), enc$occ_data$y,
+    enc$pos_data$y, enc$idx_pos, object$positive %||% "lognormal"
+  ))
+}
+
+
+# ---------------------------------------------------------------------------
+# Posterior predictive check + PIT for the cover hurdle (gcol33/tulpaObs#27)
+# ---------------------------------------------------------------------------
+
+# Randomized PIT for a cover() hurdle fit (length N). The predictive CDF mixes a
+# point mass 1 - p at the structural zero with p * F_pos on the positive part
+# (lognormal / beta CDF at the fitted per-draw predictor), projecting the shared
+# field per observation for the nested-joint fit. Absent sites use the left /
+# right limits [0, 1 - p] around the zero mass; occupied sites are continuous
+# (F = 1 - p + p F_pos), so the engine's randomized PIT is degenerate there.
+.tobs_pit_cover <- function(object, n.samples = 250) {
   enc      <- object$encoding
-  spi_full <- object$spi_full
-  spi_pos  <- object$spi_pos
-  if (is.null(spi_full) || is.null(spi_pos)) {
-    stop("Pointwise log-likelihood for the nested-joint cover() fit needs the ",
-         "per-observation spatial-unit index (`spi_full` / `spi_pos`); refit ",
-         "with the current tulpaObs so they are stored on the fit.",
-         call. = FALSE)
-  }
-  bundle   <- .tobs_joint_draws(object, n = n.draws)
   positive <- object$positive %||% "lognormal"
-  occur    <- enc$occ_data$y
-  y_pos    <- enc$pos_data$y          # log(y) (lognormal) / clipped y (beta)
-  idx_pos  <- enc$idx_pos
-  N        <- enc$N
+  e <- .tobs_cover_eta_draws(object, n.draws = n.samples)
+  eta_occ <- e$eta_occ; eta_pos <- e$eta_pos
+  S <- nrow(eta_occ); N <- ncol(eta_occ)
+  occur <- enc$occ_data$y; y_pos <- enc$pos_data$y; idx_pos <- enc$idx_pos
+  sd_disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
 
-  # Per-arm linear predictors with the shared field projected at each obs's
-  # spatial unit; [S x N] / [S x N_pos] after transpose.
-  eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", spi_full))
-  eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", spi_pos))
-  disp    <- bundle$disp              # per-draw residual SD (lognormal) / precision (beta)
+  p      <- stats::plogis(eta_occ)            # [S x N]
+  one_mp <- 1 - p
+  Fl <- matrix(0, S, N)
+  Fu <- one_mp                                # absent: F in [0, 1 - p]
 
-  log_p   <- .tobs_log_p(eta_occ)
-  log_1mp <- .tobs_log_1mp(eta_occ)
-
-  S  <- bundle$n
-  ll <- matrix(0, S, N)
-  absent <- occur == 0L
-  if (any(absent)) ll[, absent] <- log_1mp[, absent, drop = FALSE]
-
-  pos_col <- match(seq_len(N), idx_pos)   # eta_pos column per site (NA if absent)
+  pos_col <- match(seq_len(N), idx_pos)
   for (i in which(occur == 1L)) {
     j <- pos_col[i]
     if (positive == "lognormal") {
-      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = disp,
-                           log = TRUE) - y_pos[j]
+      Fpos <- stats::pnorm((y_pos[j] - eta_pos[, j]) / sd_disp)
     } else {
       mu   <- stats::plogis(eta_pos[, j])
-      dens <- stats::dbeta(y_pos[j], mu * disp, (1 - mu) * disp, log = TRUE)
+      Fpos <- stats::pbeta(y_pos[j], mu * sd_disp, (1 - mu) * sd_disp)
     }
-    ll[, i] <- log_p[, i] + dens
+    val <- one_mp[, i] + p[, i] * Fpos        # continuous -> no randomization
+    Fu[, i] <- val
+    Fl[, i] <- val
   }
-  ll
+  tulpa::tulpa_pit(Fu, cdf_lower = Fl)
 }
 
-# Draw S rows ~ MVN(mu, V) via Cholesky (mu + Z R, V = R'R). Falls back to the
+# Posterior predictive check for a cover() hurdle fit. Per draw, occurrence
+# replicates from Bernoulli(p) and cover replicates from the fitted positive
+# part; the discrepancy is a Freeman-Tukey (or chi-squared) sum on the
+# occurrence arm (all N sites, against p) plus the positive arm (occupied
+# subset, against the positive-part mean), returning a Bayesian p-value.
+.tobs_ppc_cover <- function(object,
+                            fit.stat = c("freeman-tukey", "chi-squared"),
+                            n.samples = 500) {
+  fit.stat <- match.arg(fit.stat)
+  enc      <- object$encoding
+  positive <- object$positive %||% "lognormal"
+  e <- .tobs_cover_eta_draws(object, n.draws = n.samples)
+  eta_occ <- e$eta_occ; eta_pos <- e$eta_pos
+  S <- nrow(eta_occ); N <- ncol(eta_occ)
+  occur <- enc$occ_data$y; y_pos <- enc$pos_data$y
+  sd_disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
+  # Observed cover on the natural scale at occupied sites (positive subset).
+  y_pos_nat <- if (positive == "lognormal") exp(y_pos) else y_pos
+  n_pos <- length(y_pos_nat)
+
+  stat_fn <- if (fit.stat == "freeman-tukey") {
+    function(o, ex) sum((sqrt(o) - sqrt(ex))^2, na.rm = TRUE)
+  } else {
+    function(o, ex) sum((o - ex)^2 / (ex + 1e-10), na.rm = TRUE)
+  }
+  p_all <- stats::plogis(eta_occ)
+
+  fit_y <- fit_rep <- numeric(S)
+  for (s in seq_len(S)) {
+    p_s     <- p_all[s, ]
+    occ_rep <- stats::rbinom(N, 1, p_s)
+    occ_obs <- stat_fn(occur, p_s)
+    occ_rp  <- stat_fn(occ_rep, p_s)
+
+    pos_obs <- pos_rp <- 0
+    if (n_pos > 0L) {
+      if (positive == "lognormal") {
+        mu_log <- eta_pos[s, ]; sg <- sd_disp[s]
+        Epos     <- exp(mu_log + sg^2 / 2)
+        ypos_rep <- exp(stats::rnorm(n_pos, mu_log, sg))
+      } else {
+        mu   <- stats::plogis(eta_pos[s, ]); phi <- sd_disp[s]
+        Epos <- mu
+        ypos_rep <- stats::rbeta(n_pos, mu * phi, (1 - mu) * phi)
+      }
+      pos_obs <- stat_fn(y_pos_nat, Epos)
+      pos_rp  <- stat_fn(ypos_rep, Epos)
+    }
+    fit_y[s]   <- occ_obs + pos_obs
+    fit_rep[s] <- occ_rp + pos_rp
+  }
+  list(fit.y = fit_y, fit.y.rep = fit_rep,
+       bayesian.p = mean(fit_rep > fit_y))
+}
 # mode (point mass) if V is unavailable, and jitters a near-singular V.
 .tobs_mvn_draws <- function(mu, V, S) {
   p <- length(mu)
@@ -843,6 +937,22 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
 
+  # Coupled spatially-varying trend (SVC) field on the cover hurdle. The base
+  # spatial term is the shared intercept field; `control$trend = list(weight =
+  # "<col>")` adds a SECOND shared areal field on the same graph, weighted per
+  # observation by the named covariate and copied onto the positive arm with its
+  # own alpha axis. This is the analogue of the INLA joint model's
+  # `f(cell.slope, time, model = "besag") + f(cell.slope.ab, time, copy =)`
+  # spatially-varying time trend (two coupled besag fields, two copy
+  # coefficients). The per-observation weight enters each arm's field
+  # contribution via the engine's per-block `svc_weight`.
+  trend_spec <- .cover_resolve_trend(control$trend, data_obs, enc$idx_pos)
+  has_trend  <- !is.null(trend_spec)
+  if (has_trend && has_multi) {
+    stop("cover(): a coupled trend field (control$trend) cannot yet be ",
+         "combined with temporal()/re() blocks in the same fit.", call. = FALSE)
+  }
+
   arm_occ <- list(
     y           = as.numeric(enc$occ_data$y),
     n_trials    = enc$occ_data$n_trials,
@@ -1002,7 +1112,47 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # joint engine. Copy semantics remain on the spatial block (sigma_occ /
   # sigma_pos), other blocks are shared identically across the two arms
   # (no per-arm scale).
-  if (has_multi) {
+  if (has_trend) {
+    # Coupled trend path: two shared areal blocks on the same graph -- block 1
+    # the unweighted intercept field, block 2 the per-observation-weighted SVC
+    # field -- each copied onto the positive arm with its own alpha axis. The
+    # engine's multi-block driver (list-valued prior + list-valued copy) carries
+    # the per-block svc_weight and per-block alpha; the returned theta_grid axes
+    # are b<k>.sigma / b<k>.alpha (gcol33/tulpaObs#15 on the cover hurdle).
+    base_block <- prior_for_joint
+    if (is.null(base_block$sigma_grid)) {
+      base_block$sigma_grid <- exp(seq(log(0.1), log(3), length.out = 5))
+    }
+    if (tolower(base_block$type) == "bym2" && is.null(base_block$rho_grid)) {
+      base_block$rho_grid <- c(0.25, 0.5, 0.75)
+    }
+    base_block$spatial_idx <- list(as.integer(spi_full), as.integer(spi_pos))
+
+    trend_block <- base_block
+    trend_block$svc_weight <- list(as.numeric(trend_spec$w_occ),
+                                   as.numeric(trend_spec$w_pos))
+
+    alpha_grid_base  <- control$alpha.grid %||%
+      c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+    alpha_grid_trend <- control$alpha.grid.trend %||% alpha_grid_base
+
+    prior_coupled <- list(base_block, trend_block)
+    copy_coupled  <- list(
+      list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid_base)),
+      list(arm = "pos", block = 2L, alpha_grid = as.numeric(alpha_grid_trend))
+    )
+    arm_occ$spatial_idx <- NULL
+    arm_pos$spatial_idx <- NULL
+    fit <- tulpa::tulpa_nested_laplace_joint(
+      responses = list(occ = arm_occ, pos = arm_pos),
+      prior     = prior_coupled,
+      copy      = copy_coupled,
+      phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
+      prior_sigma = control$prior.sigma,
+      prior_alpha = control$prior.alpha,
+      control = joint_control
+    )
+  } else if (has_multi) {
     multi <- .cover_build_multi_prior(
       prior_spatial = prior_for_joint,
       spi_full      = spi_full,
@@ -1140,12 +1290,19 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # without re-deriving it. Dispersion is always integrated on `phi_pos`
   # (both lognormal and beta regimes), so the SLA path reads it directly
   # from `fit$theta_grid[k, "phi_pos"]` and needs no attr fallback.
-  if (has_multi) {
+  if (has_trend) {
+    sf_attr <- as.numeric(base_block$scale_factor %||% 1.0)
+  } else if (has_multi) {
     sf_attr <- as.numeric(multi$prior[[1L]]$scale_factor %||% 1.0)
   } else {
     sf_attr <- as.numeric(prior_for_joint$scale_factor %||% 1.0)
   }
   attr(fit, "scale_factor") <- sf_attr
+
+  # Trend-field hyperparameter summaries (block 2: sigma_trend, alpha_trend),
+  # read off the multi-block (sigma, alpha) axes of the integrated posterior.
+  sigma_trend <- if (has_trend) as.numeric(fit$theta_mean[["b2.sigma"]] %||% NA) else NULL
+  alpha_trend <- if (has_trend) as.numeric(fit$theta_mean[["b2.alpha"]] %||% NA) else NULL
 
   list(
     m_occ        = m_occ,
@@ -1163,8 +1320,45 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     se_pos       = se_pos,
     spi_full     = as.integer(spi_full),
     spi_pos      = as.integer(spi_pos),
+    n_cells      = as.integer(prior_for_joint$n_spatial_units %||% NA),
+    n_fields     = if (has_trend) 2L else 1L,
+    trend_weight  = if (has_trend) trend_spec$label else NULL,
+    trend_weights = if (has_trend) list(trend_spec$label) else NULL,
+    trend_w_occ   = if (has_trend) trend_spec$w_occ else NULL,
+    trend_w_pos   = if (has_trend) trend_spec$w_pos else NULL,
+    sigma_trend   = sigma_trend,
+    alpha_trend   = alpha_trend,
     joint        = fit
   )
+}
+
+# Resolve the optional coupled-trend spec for the cover hurdle.
+#   control$trend = NULL / FALSE          -> no trend field.
+#   control$trend = list(weight = "<col>") -> a second shared areal field,
+#     weighted per observation by `data_obs[[col]]` on the occurrence arm and
+#     by the same column subset to the positive obs on the cover arm.
+# Returns NULL when no trend, else list(w_occ [N], w_pos [N_pos], label).
+.cover_resolve_trend <- function(trend, data_obs, idx_pos) {
+  if (is.null(trend) || isFALSE(trend)) return(NULL)
+  if (!is.list(trend) || is.null(trend$weight)) {
+    stop("cover() trend spec must be a list naming the weighting covariate, ",
+         "e.g. control = list(trend = list(weight = \"time.sc\")).",
+         call. = FALSE)
+  }
+  wcol <- trend$weight
+  if (!is.character(wcol) || length(wcol) != 1L) {
+    stop("cover() trend$weight must be a single column name.", call. = FALSE)
+  }
+  if (!wcol %in% names(data_obs)) {
+    stop(sprintf("cover() trend$weight = '%s' is not a column of the data.", wcol),
+         call. = FALSE)
+  }
+  w_occ <- as.numeric(data_obs[[wcol]])
+  if (anyNA(w_occ) || !all(is.finite(w_occ))) {
+    stop(sprintf("cover() trend$weight = '%s' must be a finite numeric covariate.",
+                 wcol), call. = FALSE)
+  }
+  list(w_occ = w_occ, w_pos = w_occ[idx_pos], label = wcol)
 }
 
 # Pre-fit the lognormal residual SD on the positive subset before handing
@@ -1291,6 +1485,14 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       joint        = fits$joint,
       spi_full     = fits$spi_full,
       spi_pos      = fits$spi_pos,
+      n_cells      = fits$n_cells,
+      n_fields     = fits$n_fields,
+      trend_weight  = fits$trend_weight,
+      trend_weights = fits$trend_weights,
+      trend_w_occ   = fits$trend_w_occ,
+      trend_w_pos   = fits$trend_w_pos,
+      sigma_trend   = fits$sigma_trend,
+      alpha_trend   = fits$alpha_trend,
       skew_occ     = skew_occ,
       skew_pos     = skew_pos,
       draws_occ    = draws_occ,

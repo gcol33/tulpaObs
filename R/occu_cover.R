@@ -547,7 +547,12 @@
 # grid-integrated joint (betas + shared field) via the joint substrate; the
 # non-spatial Laplace fit reuses the stored coefficient draws (no field). Both
 # feed the same per-draw site-likelihood accumulation.
-.tobs_ploglik_occu_cover <- function(object, n.draws = 1000L) {
+# Per-draw arm coefficients + dispersion + shared-field contributions for an
+# occu_cover() fit. Joint path: sample the grid-integrated posterior and
+# accumulate each block's field on the occupancy / cover arms. Non-spatial path:
+# read the stored coefficient draws (no field). Returns a list consumed by both
+# the pointwise log-likelihood and the posterior-mean plug-in.
+.tobs_occu_cover_components <- function(object, n.draws = 1000L) {
   model   <- object$model
   pi_list <- model$process_info
   p_occ   <- pi_list[[1L]]$p
@@ -570,7 +575,6 @@
       }
       as.numeric(model$data[[nm]])
     }
-    # Shared-field contributions [n_sites x S] on the occupancy and cover arms.
     field_occ <- matrix(0, n_sites, S)
     field_pos <- matrix(0, n_sites, S)
     for (blk in bundle$blocks) {
@@ -585,17 +589,41 @@
       stop("occu_cover WAIC: the fit carries no posterior draw matrix.",
            call. = FALSE)
     }
-    S     <- nrow(draws)
+    if (!is.null(n.draws) && n.draws < nrow(draws)) {
+      draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
+    }
     b_occ <- draws[, seq_len(p_occ), drop = FALSE]
     b_det <- draws[, p_occ + seq_len(p_det), drop = FALSE]
     b_pos <- draws[, p_occ + p_det + seq_len(p_pos), drop = FALSE]
     disp  <- exp(draws[, ncol(draws)])         # trailing log-dispersion column
+    S     <- nrow(draws)
     field_occ <- matrix(0, n_sites, S)
     field_pos <- matrix(0, n_sites, S)
   }
+  list(b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
+       field_occ = field_occ, field_pos = field_pos)
+}
 
-  .occu_cover_ploglik_core(model, b_occ, b_det, b_pos, disp,
-                           field_occ, field_pos)
+.tobs_ploglik_occu_cover <- function(object, n.draws = 1000L) {
+  c0 <- .tobs_occu_cover_components(object, n.draws)
+  .occu_cover_ploglik_core(object$model, c0$b_occ, c0$b_det, c0$b_pos,
+                           c0$disp, c0$field_occ, c0$field_pos)
+}
+
+# Pointwise log-likelihood at the posterior mean (length n_sites): the per-site
+# marginal evaluated at the mean arm coefficients, mean dispersion, and mean
+# shared field -- the same core driven by a one-draw mean.
+.tobs_occu_cover_loglik_at_mean <- function(object, n.draws = 1000L) {
+  c0 <- .tobs_occu_cover_components(object, n.draws)
+  as.numeric(.occu_cover_ploglik_core(
+    object$model,
+    matrix(colMeans(c0$b_occ), nrow = 1L),
+    matrix(colMeans(c0$b_det), nrow = 1L),
+    matrix(colMeans(c0$b_pos), nrow = 1L),
+    mean(c0$disp),
+    matrix(rowMeans(c0$field_occ), ncol = 1L),
+    matrix(rowMeans(c0$field_pos), ncol = 1L)
+  ))
 }
 
 # Accumulate the [S x n_sites] pointwise log-likelihood from per-draw arm
@@ -604,58 +632,175 @@
 # `field_pos` [n_sites x S] (zero matrices for a non-spatial fit). The detection
 # and cover arms split into site-level and visit-level coefficient blocks exactly
 # as the fitter packs them.
+# Per-draw linear-predictor blocks for an occu_cover() fit: the occupancy
+# `eta_psi_all` [n_sites x S] (with the shared field), and the site-level +
+# optional visit-level detection / cover blocks the fitter packs. Split out so
+# the pointwise log-likelihood, the posterior predictive check, and the PIT all
+# build the per-draw psi / p / cover predictors from one source.
+.occu_cover_eta_components <- function(model, b_occ, b_det, b_pos,
+                                       field_occ, field_pos) {
+  p_det_site <- ncol(model$X_det_site)
+  p_pos_site <- ncol(model$X_pos_site)
+  has_det_visit <- !is.null(model$X_det_visit)
+  has_pos_visit <- !is.null(model$X_pos_visit)
+  list(
+    eta_psi_all = tcrossprod(model$X_occ, b_occ) + field_occ,
+    eta_p_site_all = tcrossprod(model$X_det_site,
+                                b_det[, seq_len(p_det_site), drop = FALSE]),
+    eta_pos_site_all = tcrossprod(model$X_pos_site,
+                                  b_pos[, seq_len(p_pos_site), drop = FALSE]) +
+                       field_pos,
+    eta_p_visit_all = if (has_det_visit) {
+      tcrossprod(model$X_det_visit,
+                 b_det[, p_det_site + seq_len(ncol(model$X_det_visit)),
+                       drop = FALSE])
+    } else NULL,
+    eta_pos_visit_all = if (has_pos_visit) {
+      tcrossprod(model$X_pos_visit,
+                 b_pos[, p_pos_site + seq_len(ncol(model$X_pos_visit)),
+                       drop = FALSE])
+    } else NULL,
+    has_det_visit = has_det_visit, has_pos_visit = has_pos_visit
+  )
+}
+
+# Draw `d`'s occupancy predictor and the [n_sites x max_visits] detection /
+# cover linear predictors, folding the visit-level block in site-major order.
+.occu_cover_draw_eta <- function(comp, d, n_sites, max_visits) {
+  p_eta <- matrix(comp$eta_p_site_all[, d], n_sites, max_visits)
+  if (comp$has_det_visit) {
+    p_eta <- p_eta + matrix(comp$eta_p_visit_all[, d], n_sites, max_visits,
+                            byrow = TRUE)
+  }
+  ep_mat <- matrix(comp$eta_pos_site_all[, d], n_sites, max_visits)
+  if (comp$has_pos_visit) {
+    ep_mat <- ep_mat + matrix(comp$eta_pos_visit_all[, d], n_sites, max_visits,
+                              byrow = TRUE)
+  }
+  list(psi_eta = comp$eta_psi_all[, d], p_eta = p_eta, ep_mat = ep_mat)
+}
+
 .occu_cover_ploglik_core <- function(model, b_occ, b_det, b_pos, disp,
                                      field_occ, field_pos) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
   S <- nrow(b_occ)
-
-  p_det_site <- ncol(model$X_det_site)
-  p_pos_site <- ncol(model$X_pos_site)
-  has_det_visit <- !is.null(model$X_det_visit)
-  has_pos_visit <- !is.null(model$X_pos_visit)
-
-  # [n_sites x S] occupancy + site-level detection / cover predictors.
-  eta_psi_all      <- tcrossprod(model$X_occ, b_occ) + field_occ
-  eta_p_site_all   <- tcrossprod(model$X_det_site,
-                                 b_det[, seq_len(p_det_site), drop = FALSE])
-  eta_pos_site_all <- tcrossprod(model$X_pos_site,
-                                 b_pos[, seq_len(p_pos_site), drop = FALSE]) +
-                      field_pos
-
-  # [n_sites*max_visits x S] visit-level parts in site-major order.
-  eta_p_visit_all <- if (has_det_visit) {
-    tcrossprod(model$X_det_visit,
-               b_det[, p_det_site + seq_len(ncol(model$X_det_visit)),
-                     drop = FALSE])
-  } else NULL
-  eta_pos_visit_all <- if (has_pos_visit) {
-    tcrossprod(model$X_pos_visit,
-               b_pos[, p_pos_site + seq_len(ncol(model$X_pos_visit)),
-                     drop = FALSE])
-  } else NULL
-
+  comp <- .occu_cover_eta_components(model, b_occ, b_det, b_pos,
+                                     field_occ, field_pos)
   cl <- function(e) pmin(pmax(e, -30), 30)
   ll <- matrix(0, S, n_sites)
   for (d in seq_len(S)) {
-    psi <- stats::plogis(cl(eta_psi_all[, d]))
-
-    p_eta <- matrix(eta_p_site_all[, d], n_sites, max_visits)
-    if (has_det_visit) {
-      p_eta <- p_eta + matrix(eta_p_visit_all[, d], n_sites, max_visits,
-                              byrow = TRUE)
-    }
-    p_mat <- stats::plogis(cl(p_eta))
-
-    ep_mat <- matrix(eta_pos_site_all[, d], n_sites, max_visits)
-    if (has_pos_visit) {
-      ep_mat <- ep_mat + matrix(eta_pos_visit_all[, d], n_sites, max_visits,
-                                byrow = TRUE)
-    }
-
-    ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, ep_mat, log(disp[d]))
+    de    <- .occu_cover_draw_eta(comp, d, n_sites, max_visits)
+    psi   <- stats::plogis(cl(de$psi_eta))
+    p_mat <- stats::plogis(cl(de$p_eta))
+    ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat, log(disp[d]))
   }
   ll
+}
+
+
+# ---------------------------------------------------------------------------
+# Posterior predictive check + PIT (gcol33/tulpaObs#27)
+# ---------------------------------------------------------------------------
+
+# Posterior predictive check for an occu_cover() fit. Per draw, the latent
+# occupancy z is sampled from its full conditional given the detection history
+# (the spOccupancy construction), detection replicates from Bernoulli(z p), and
+# cover replicates at the detected visits from the fitted positive part. The
+# discrepancy is a Freeman-Tukey (or chi-squared) sum over the detection cells
+# plus the positive-part cells, returning a Bayesian p-value.
+.tobs_ppc_occu_cover <- function(object,
+                                 fit.stat = c("freeman-tukey", "chi-squared"),
+                                 n.samples = 500) {
+  fit.stat <- match.arg(fit.stat)
+  model    <- object$model
+  positive <- model$positive %||% "lognormal"
+  c0   <- .tobs_occu_cover_components(object, n.samples)
+  comp <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
+                                     c0$field_occ, c0$field_pos)
+  disp <- c0$disp
+  S <- nrow(c0$b_occ)
+  n_sites <- model$n_sites; max_visits <- model$max_visits
+  y <- model$y; y_pos <- model$y_pos; valid <- model$valid
+  cl <- function(e) pmin(pmax(e, -30), 30)
+  stat_fn <- if (fit.stat == "freeman-tukey") {
+    function(o, e) sum((sqrt(o) - sqrt(e))^2, na.rm = TRUE)
+  } else {
+    function(o, e) sum((o - e)^2 / (e + 1e-10), na.rm = TRUE)
+  }
+  any_det <- rowSums(y * valid, na.rm = TRUE) > 0
+  n_valid <- rowSums(valid)
+  pos_mask <- valid & (y == 1L)
+
+  fit_y <- fit_rep <- numeric(S)
+  for (s in seq_len(S)) {
+    de    <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
+    psi   <- stats::plogis(cl(de$psi_eta))
+    p_mat <- stats::plogis(cl(de$p_eta))
+    prod1mp <- exp(rowSums(ifelse(valid, log(1 - p_mat), 0)))
+    z_prob <- ifelse(any_det, 1, psi * prod1mp / (psi * prod1mp + (1 - psi)))
+    z_prob[n_valid == 0L] <- psi[n_valid == 0L]
+    z <- stats::rbinom(n_sites, 1, z_prob)
+
+    exp_det <- z * p_mat
+    yrep <- matrix(stats::rbinom(n_sites * max_visits, 1, as.vector(exp_det)),
+                   n_sites, max_visits)
+    det_obs <- stat_fn(y[valid], exp_det[valid])
+    det_rep <- stat_fn(yrep[valid], exp_det[valid])
+
+    if (positive == "lognormal") {
+      sg   <- disp[s]
+      Epos <- exp(cl(de$ep_mat) + sg^2 / 2)
+      ypos_rep <- matrix(exp(stats::rnorm(n_sites * max_visits,
+                                          as.vector(de$ep_mat), sg)),
+                         n_sites, max_visits)
+    } else {
+      phi  <- disp[s]
+      mu   <- stats::plogis(cl(de$ep_mat))
+      Epos <- mu
+      ypos_rep <- matrix(stats::rbeta(n_sites * max_visits,
+                                      as.vector(mu) * phi,
+                                      (1 - as.vector(mu)) * phi),
+                         n_sites, max_visits)
+    }
+    pos_obs <- if (any(pos_mask)) stat_fn(y_pos[pos_mask], Epos[pos_mask]) else 0
+    pos_rep <- if (any(pos_mask)) stat_fn(ypos_rep[pos_mask], Epos[pos_mask]) else 0
+
+    fit_y[s]   <- det_obs + pos_obs
+    fit_rep[s] <- det_rep + pos_rep
+  }
+  list(fit.y = fit_y, fit.y.rep = fit_rep,
+       bayesian.p = mean(fit_rep > fit_y))
+}
+
+# Randomized PIT for an occu_cover() fit, on the per-site detection summary
+# (any-detection vs all-zero) marginalized over the latent occupancy state, with
+# the shared field projected per site. The detected / non-detected outcome is the
+# ordered event; the left and right CDF limits feed the engine's randomized PIT.
+.tobs_pit_occu_cover <- function(object, n.samples = 250) {
+  model <- object$model
+  c0    <- .tobs_occu_cover_components(object, n.samples)
+  comp  <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
+                                      c0$field_occ, c0$field_pos)
+  S <- nrow(c0$b_occ)
+  n_sites <- model$n_sites; max_visits <- model$max_visits
+  y <- model$y; valid <- model$valid
+  cl <- function(e) pmin(pmax(e, -30), 30)
+  any_det <- rowSums(y * valid, na.rm = TRUE) > 0
+
+  Fl <- matrix(0, S, n_sites); Fu <- matrix(0, S, n_sites)
+  for (s in seq_len(S)) {
+    de    <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
+    psi   <- stats::plogis(cl(de$psi_eta))
+    p_mat <- stats::plogis(cl(de$p_eta))
+    prod1mp <- exp(rowSums(ifelse(valid, log(1 - p_mat), 0)))
+    pdet0 <- psi * prod1mp + (1 - psi)        # P(all-zero detection outcome)
+    nd <- !any_det
+    Fu[s, nd]      <- pdet0[nd]                # all-zero observed: below the mass
+    Fl[s, any_det] <- pdet0[any_det]           # detected observed: above the mass
+    Fu[s, any_det] <- 1
+  }
+  tulpa::tulpa_pit(Fu, cdf_lower = Fl)
 }
 
 

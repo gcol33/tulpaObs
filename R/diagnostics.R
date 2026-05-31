@@ -4,18 +4,44 @@
 # modelAverage) are in tulpa — inherited via tulpa_fit class.
 # ============================================================================
 
-#' Compute WAIC for occupancy models
+#' Model criteria for occupancy / cover models
+#'
+#' `tobs_waic()`, `tobs_dic()`, and `tobs_cpo()` build the family pointwise
+#' log-likelihood matrix once and hand it to the engine's single criteria layer
+#' [tulpa::tulpa_criteria()], which derives WAIC / DIC / CPO / LPML / PSIS-LOO.
+#' DIC additionally evaluates the deviance at the posterior mean of the
+#' parameters, supplied by the family-specific [.tobs_loglik_at_mean()].
 #'
 #' @param object A `tobs_fit` object.
-#' @param ... Ignored.
-#' @return A list with `waic`, `elpd`, `p_waic`, and pointwise values.
+#' @param n.draws Posterior draws used to build the pointwise log-likelihood
+#'   (the cover / occu_cover paths sample this many; the draw-matrix families use
+#'   the first `n.draws` stored draws). Default 1000.
+#' @param ... Forwarded to [tulpa::tulpa_criteria()] (e.g. `chunk_size`).
+#' @return A `tulpa_criteria` object. `tobs_waic()` also carries `$elpd`
+#'   (an alias for `elpd_waic`) for back-compatibility.
+#' @seealso [tulpa::tulpa_criteria()]
 #' @export
-tobs_waic <- function(object, ...) {
-  ll_mat <- .tobs_pointwise_loglik(object)
-  lppd <- sum(log(colMeans(exp(ll_mat))))
-  p_waic <- sum(apply(ll_mat, 2, var))
-  list(waic = -2 * (lppd - p_waic), elpd = lppd - p_waic,
-       p_waic = p_waic, lppd = lppd)
+tobs_waic <- function(object, n.draws = 1000L, ...) {
+  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
+  cr <- tulpa::tulpa_criteria(ll_mat, criteria = "waic", ...)
+  cr$elpd <- cr$elpd_waic
+  cr
+}
+
+#' @rdname tobs_waic
+#' @export
+tobs_dic <- function(object, n.draws = 1000L, ...) {
+  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
+  lam <- .tobs_loglik_at_mean(object, n.draws = n.draws)
+  tulpa::tulpa_criteria(ll_mat, criteria = "dic", loglik_at_mean = lam, ...)
+}
+
+#' @rdname tobs_waic
+#' @export
+tobs_cpo <- function(object, n.draws = 1000L, ...) {
+  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
+  tulpa::tulpa_criteria(ll_mat, criteria = c("loo", "cpo", "lpml"),
+                        pointwise = TRUE, ...)
 }
 
 # Pointwise log-likelihood matrix [n_draws x n_obs], marginalized over the
@@ -29,18 +55,28 @@ tobs_waic <- function(object, ...) {
 # (spatial / temporal / random-effect fields) are not added to the predictor,
 # and dynamic visit-level detection covariates are not folded in. For models
 # with those components the score is conditional on the fixed-effect predictor.
-.tobs_pointwise_loglik <- function(object) {
-  if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object))
+.tobs_pointwise_loglik <- function(object, n.draws = NULL) {
+  nd <- n.draws %||% 1000L
+  if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object, nd))
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
-    return(.tobs_ploglik_occu_cover(object))
+    return(.tobs_ploglik_occu_cover(object, nd))
   }
 
-  model <- object$model
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {
     stop("Pointwise log-likelihood needs a posterior draw matrix; ",
          "`object$draws` is missing or not a matrix.", call. = FALSE)
   }
+  if (!is.null(n.draws) && n.draws < nrow(draws)) {
+    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
+  }
+  .tobs_ploglik_from_draws(object$model, draws)
+}
+
+# Per-family pointwise log-likelihood given an explicit [n_draws x p] draw
+# matrix. Split out from the dispatcher so the posterior-mean evaluation
+# (.tobs_loglik_at_mean) drives the same per-family kernels with a one-row mean.
+.tobs_ploglik_from_draws <- function(model, draws) {
   mt <- model$model_type %||% "NULL"
   switch(
     mt,
@@ -52,6 +88,27 @@ tobs_waic <- function(object, ...) {
     stop("Pointwise log-likelihood is not implemented for model_type = '",
          mt, "'.", call. = FALSE)
   )
+}
+
+# Pointwise log-likelihood at the posterior mean of the parameters, the plug-in
+# DIC needs (length n_obs). The draw-matrix families evaluate their per-family
+# kernel at the column-mean draw; the cover / occu_cover families plug in the
+# posterior-mean linear predictors (and mean dispersion) via family helpers.
+.tobs_loglik_at_mean <- function(object, n.draws = 1000L) {
+  if (inherits(object, "cover_fit")) {
+    return(.tobs_cover_loglik_at_mean(object, n.draws))
+  }
+  if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
+    return(.tobs_occu_cover_loglik_at_mean(object, n.draws))
+  }
+  draws <- object$draws
+  if (is.null(draws) || !is.matrix(draws)) {
+    stop("DIC needs a posterior draw matrix to evaluate the deviance at the ",
+         "posterior mean; `object$draws` is missing or not a matrix.",
+         call. = FALSE)
+  }
+  mean_draw <- matrix(colMeans(draws), nrow = 1L)
+  as.numeric(.tobs_ploglik_from_draws(object$model, mean_draw))
 }
 
 # --- shared numerics --------------------------------------------------------
@@ -218,8 +275,17 @@ tobs_waic <- function(object, ...) {
 tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
                      n.samples = 500) {
   fit.stat <- match.arg(fit.stat)
+  if (inherits(object, "cover_fit")) {
+    return(.tobs_ppc_cover(object, fit.stat, n.samples))
+  }
+  if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
+    return(.tobs_ppc_occu_cover(object, fit.stat, n.samples))
+  }
   model <- object$model
-  if (model$model_type != "single") stop("tobs_ppc supports single-season only")
+  if (model$model_type != "single") {
+    stop("tobs_ppc supports single-season occupancy, cover(), and occu_cover() ",
+         "fits.", call. = FALSE)
+  }
 
   draws <- object$draws; pi_list <- model$process_info
   X_occ <- model$X_processes[[1]]; X_det <- model$X_processes[[2]]
@@ -272,8 +338,17 @@ tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
 #' @return Numeric vector of PIT residuals.
 #' @export
 tobs_pit_residuals <- function(object, n.samples = 250) {
+  if (inherits(object, "cover_fit")) {
+    return(.tobs_pit_cover(object, n.samples))
+  }
+  if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
+    return(.tobs_pit_occu_cover(object, n.samples))
+  }
   model <- object$model
-  if (model$model_type != "single") stop("tobs_pit_residuals supports single-season only")
+  if (model$model_type != "single") {
+    stop("tobs_pit_residuals supports single-season occupancy, cover(), and ",
+         "occu_cover() fits.", call. = FALSE)
+  }
   draws <- object$draws; pi_list <- model$process_info
   X_occ <- model$X_processes[[1]]; X_det <- model$X_processes[[2]]
   y <- model$y; n_sites <- model$n_sites
@@ -359,6 +434,14 @@ tobs_check <- function(object, coords = NULL, n.samples = 250) {
   w <- tryCatch(tobs_waic(object), error = function(e) NULL)
   if (!is.null(w)) cat(sprintf("\nWAIC: %.1f (p_waic = %.1f)\n", w$waic, w$p_waic))
 
+  dic <- tryCatch(tobs_dic(object), error = function(e) NULL)
+  if (!is.null(dic) && is.finite(dic$dic))
+    cat(sprintf("DIC:  %.1f (p_DIC = %.1f)\n", dic$dic, dic$p_dic))
+
+  cpo <- tryCatch(tobs_cpo(object), error = function(e) NULL)
+  if (!is.null(cpo)) cat(sprintf("LPML: %.1f (elpd_loo = %.1f)\n",
+                                 cpo$lpml, cpo$elpd_loo))
+
   ppc <- tryCatch(tobs_ppc(object, n.samples = n.samples), error = function(e) NULL)
   if (!is.null(ppc)) {
     cat(sprintf("\nPPC: Bayesian p = %.3f\n", ppc$bayesian.p))
@@ -376,5 +459,6 @@ tobs_check <- function(object, coords = NULL, n.samples = 250) {
     }
   }
   cat("\n")
-  invisible(list(waic = w, ppc = ppc, zero_inflation = zi))
+  invisible(list(waic = w, dic = dic, cpo = cpo, ppc = ppc,
+                 zero_inflation = zi))
 }
