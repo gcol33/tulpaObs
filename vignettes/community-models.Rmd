@@ -454,11 +454,11 @@ many counts keeps its own.
 
 Simulate an assemblage with genuine overdispersion. `size = 5` sets the
 community-mean size (so $\mu_{\log r} = \log 5$), and `sigma_logr = 0.5` spreads
-the per-species sizes around it. Twenty species over 120 sites with five visits
-gives each species enough replicate counts for its own dispersion to register.
+the per-species sizes around it. Eight species over 80 sites with four visits
+keep the example quick while still letting per-species dispersion register.
 
 ```{r ms-nb-sim}
-snb <- simulate_ms_abun(n_species = 20, N = 120, J = 5,
+snb <- simulate_ms_abun(n_species = 8, N = 80, J = 4,
                         n_abund_covs = 1, n_det_covs = 1,
                         mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
                         sd_lambda = 0.4, sd_p = 0.35,
@@ -470,8 +470,8 @@ snb$truth$sigma_log_r       # spread of per-species log r
 
 Fit with `ms_abun(mixture = "negbin")`. The call is the Poisson community call
 with the mixture switched. The per-species RE vector widens by one coordinate
-for `log_r_s`, so the AGHQ grid grows; `control$n.quad = 3` keeps it tractable
-at this species count without losing the small-cluster correction.
+for `log_r_s`, so the AGHQ grid grows; `control$n.quad = 2` keeps it small
+without losing the small-cluster correction.
 
 ```{r ms-nb-fit}
 fnb <- tobs(
@@ -482,14 +482,14 @@ fnb <- tobs(
   y         = snb$y,
   species   = snb$species,
   method    = "laplace",
-  control   = list(verbose = FALSE, n.quad = 3L)
+  control   = list(verbose = FALSE, n.quad = 2L)
 )
 fnb$mixture
 ```
 
 The community log-dispersion sits on `fit$ms_dispersion`, alongside the
 per-species sizes `r_s` and the community spread `sigma_log_r`. `mu_log_r` is the
-assemblage-mean log size; `r = exp(mu_log_r)` is the size of the typical species.
+assemblage-mean log size; $\exp(\mu_{\log r})$ is the size of the typical species.
 
 ```{r ms-nb-dispersion}
 disp <- fnb$ms_dispersion
