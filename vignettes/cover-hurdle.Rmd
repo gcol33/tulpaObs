@@ -1,8 +1,8 @@
 ---
-title: "Cover hurdle (Phase 1a)"
+title: "Cover hurdle (independent arms)"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Cover hurdle (Phase 1a)}
+  %\VignetteIndexEntry{Cover hurdle (independent arms)}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -16,16 +16,17 @@ knitr::opts_chunk$set(
 )
 ```
 
-This vignette shows the Phase 1a cover-hurdle dispatcher on simulated data.
-The fit uses two independent Laplace approximations through `tulpa`:
+This vignette shows the independent-arm cover-hurdle dispatcher on simulated
+data. The fit uses two independent Laplace approximations through `tulpa`:
 
 * a binomial GLM on the occurrence indicator $\mathbf{1}\{y_i > 0\}$;
 * a Gaussian GLM on $\log y_i$ for the sites where $y_i > 0$.
 
-The shared-field joint model (and the beta positive variant) land in
-Phase 1c / 1d. Comparison to `INLA::inla()` on the real MOTIVATE data is
-Phase 1e; the code chunks below for that comparison are marked
-`eval = FALSE`.
+The shared-field joint model -- occurrence, detection, and cover arms coupled
+through one spatial field -- is the `occu_cover()` family;
+`vignette("cover-hurdle-motivate")` builds it end to end, including the beta
+positive variant. The `INLA::inla()` comparison on the real MOTIVATE data is
+sketched below (marked `eval = FALSE`).
 
 ```{r simulate}
 library(tulpaObs)
@@ -76,10 +77,9 @@ head(preds)
 # )
 ```
 
-## Phase 1a scope
+## Scope
 
-The Phase 1a fit is fixed-effects-only at prediction time. Spatial fields
-fit through the `spatial` argument, but spatial projection at new
-coordinates lands together with the shared-field joint engine in Phase 1c.
-Temporal helpers (the MOTIVATE within/between Mundlak decomposition) land
-in Phase 1d.
+This dispatcher predicts from fixed effects only. Spatial fields fit through
+the `spatial` argument, and spatial projection at new coordinates -- together
+with the within/between (Mundlak) temporal decomposition -- comes with the
+joint `occu_cover()` engine; see `vignette("cover-hurdle-motivate")`.

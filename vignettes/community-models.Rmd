@@ -429,10 +429,15 @@ species' value is close to the community mean because the pooling supplied most 
 it; an abundant species with ample counts sits at its own data. The community SD
 above is what set how far each was allowed to stray.
 
-`ms_abun()` fits a Poisson community N-mixture under `method = "laplace"`. A
-negative-binomial community arm and an areal-spatial community field are not yet
-wired; for overdispersed single-species counts, `abun(mixture = "negbin")` covers
-that case (see `vignette("abundance")`).
+`ms_abun()` fits a community N-mixture under `method = "laplace"` -- Poisson by
+default, or negative-binomial with `mixture = "negbin"`. The NB arm gives each
+species its own overdispersion through a log-normal random effect
+(`log r_s ~ N(mu_log_r, sigma_log_r)`), so the dispersion is partially pooled
+across the assemblage the same way the coefficients are; `fit$ms_dispersion`
+returns the per-species `r_s` alongside the community `mu_log_r` and
+`sigma_log_r`. For a single overdispersed species on its own,
+`abun(mixture = "negbin")` covers that case directly (see
+`vignette("abundance")`).
 
 ## Reading community against species-level effects
 

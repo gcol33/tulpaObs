@@ -28,10 +28,9 @@ two independent calls (Michael Glaser's separate-hurdle workflow in
 two on simulated data where the truth is known.
 
 The joint shared-spatial-field variant Michael uses in his
-`mod.joint`/`copy=` model is not included here — that lands in Phase 1c
-of the tulpaObs roadmap (`PLAN_tulpaObs.md` §7) when
-`tulpa_nested_laplace()` gains multi-likelihood support. For the
-separate-fit case the two approaches should agree closely; this vignette
+`mod.joint`/`copy=` model is the `occu_cover()` family in tulpaObs --
+`vignette("cover-hurdle-motivate")` fits it. This vignette stays on the
+separate-fit case, where the two approaches should agree closely, and
 documents what "closely" means.
 
 ## Simulate
@@ -171,18 +170,18 @@ doesn't surface:
 
 1. **Joint shared spatial field.** Michael's `mod.joint`/`copy=` model
    forces the cover linear predictor's spatial component to be a scalar
-   multiple of the occurrence linear predictor's. Pattern is locked,
-   magnitude is fitted. tulpaObs's Phase 1a cover-hurdle does not couple
-   the two arms at all. The joint engine arrives in Phase 1c
-   (`tulpa_nested_laplace()` multi-likelihood).
-2. **Beta positive part.** Michael's earlier joint model uses
+   multiple of the occurrence linear predictor's -- pattern locked,
+   magnitude fitted. The separate-fit `cover()` path compared here does not
+   couple the two arms; tulpaObs's `occu_cover()` family is the coupled
+   analogue (a fitted copy coefficient on a shared field), shown in
+   `vignette("cover-hurdle-motivate")`.
+2. **Beta positive part.** Michael's joint model uses
    `family = c("binomial", "beta")` for cover in $(0, 1)$ on the natural
-   scale. tulpaObs's Phase 1d will add `cover(positive = "beta")` once
-   `tulpa_laplace()` supports the beta likelihood (Phase 1b).
+   scale; `occu_cover("beta")` is the tulpaObs equivalent.
 3. **Uncertainty propagation.** INLA returns full posterior marginals on
-   both arms; tulpaObs returns the Laplace mode and a Hessian-based SE
-   per arm. The two agree on the means within sampling noise but diverge
-   on tail behaviour for small `n_positive`.
+   both arms; the separate-fit path here returns the Laplace mode and a
+   Hessian-based SE per arm. The two agree on the means within sampling
+   noise but diverge on tail behaviour for small `n_positive`.
 
 ## References
 
@@ -191,5 +190,5 @@ doesn't surface:
   data.
 * `example/info.md` — Michael's note on why a proper single-species
   occupancy model is hard in INLA (the marginalization problem).
-* `PLAN_tulpaObs.md` §7 — Phase 1 roadmap for the joint engine and the
-  beta positive variant.
+* `vignette("cover-hurdle-motivate")` — the joint `occu_cover()` shared-field
+  model and the beta positive variant.

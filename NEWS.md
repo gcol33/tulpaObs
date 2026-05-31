@@ -1,6 +1,42 @@
 # tulpaObs NEWS
 
-## (unreleased)
+## 0.0.3 (2026-05-31)
+
+Requires tulpa (>= 0.0.4): the joint cover-hurdle path links against the
+engine's `cell_coupling.h` / `model_data.h` (ABI 32).
+
+* feat(occu_cover): joint occupancy-detection + cover-hurdle family
+  (`occu_cover("lognormal")` / `occu_cover("beta")`, gcol33/tulpa#32). A site's
+  occupancy/detection arm and a positive-cover arm (lognormal or beta) are fit
+  jointly, with the two linear predictors sharing a spatial field through a
+  cell-coupling spec. `method = "nested_laplace"` routes through the
+  `joint_coupled` engine by default; the engine integrates the shared field's
+  hyperparameters and the coupling coefficient on the outer grid. `coef()`,
+  `vcov()`, `ranef()`, `fitted()` and `simulate()` carry both arms.
+
+* feat(occu_cover): `predict()` for the joint fit (gcol33/tulpaObs#22). Samples
+  the grid-integrated joint latent via `tulpa::tulpa_posterior_draws()` and
+  marginalizes each derived quantity per draw, returning a `tobs_prediction`
+  with per-unit draw matrices and the change-column contract (`delta_p`,
+  `delta_cover_cond`, `delta_cover_exp`) with `.lwr` / `.upr` at the requested
+  level.
+
+* feat(ms_abun): per-species negative-binomial dispersion (gcol33/tulpaObs#14).
+  `ms_abun(mixture = "negbin")` gives each species its own overdispersion
+  `log r_s ~ N(mu_log_r, sigma_log_r)`, partially pooled across the assemblage;
+  `fit$ms_dispersion` reports the per-species `r_s` with the community
+  `mu_log_r` / `sigma_log_r`, and `ranef()` carries a `logr` arm.
+
+* feat(spde): native SPDE (Matern-via-mesh) continuous spatial fields on the
+  occupancy state and detection arms and on the single-species / community
+  N-mixture abundance arm, with the (range, sigma) hyperparameters integrated on
+  the outer grid under a PC prior. Requires `tulpaMesh` for mesh construction.
+
+* feat(ms_abun): opt-in exact-Newton inner solver for the areal shared-field
+  community N-mixture (`control$inner_solver = "newton"`, default `"em"`,
+  gcol33/tulpaObs#12) -- an accuracy/validation alternative to the EM M-step on
+  the same outer field-hyperparameter grid; both return the same `tobs_fit`
+  shape and `ms_community$optimizer` records which ran.
 
 * feat(abun): grouped random effects on the single-species N-mixture
   (gcol33/tulpaObs#13). `abun()` now accepts `(1 | g)` (and the slope /
