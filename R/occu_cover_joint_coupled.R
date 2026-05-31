@@ -223,13 +223,17 @@
 # empirical SD of log(y_pos) at detected visits; pass
 # control$phi.grid.pos to integrate over it as a phi_grid axis on the
 # pos arm.
-.tobs_fit_occu_cover_joint_coupled <- function(model, adj,
+.tobs_fit_occu_cover_joint_coupled <- function(model, fields,
                                                 priors    = NULL,
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
                                                 sigma.beta = 5,
                                                 ...) {
+  # `fields` is the coupled-field list from .occu_cover_spatial_fields(): the
+  # unweighted intercept field first, then any weighted SVC fields. They share
+  # one areal graph, so the base graph drives the (single) CSR.
+  adj <- fields[[1L]]$graph
   is_beta <- identical(model$positive, "beta")
   is_lnrm <- identical(model$positive, "lognormal")
   if (!is_beta && !is_lnrm) {
@@ -274,14 +278,29 @@
   sigma_grid <- dots$sigma.grid %||%
                 exp(seq(log(0.1), log(3), length.out = 5))
 
-  # Trend spec: a spatially-varying temporal-trend field weighted by a per-cell
-  # covariate. `control$trend = list(weight = "<col>")` names a numeric column
-  # of the cell data; the field's contribution is weight_i * sigma_trend *
-  # z2[cell_i] on occupancy and weight_i * alpha_trend * sigma_trend * z2[cell_i]
-  # on cover. A list of coupled fields (the intercept field PLUS the trend
-  # field) is the multi-block path; absent, the single shared-intercept field.
+  # Coupled trend (SVC) fields: each is a per-cell-weighted areal field that
+  # contributes weight_i * sigma_trend * z[cell_i] on occupancy and
+  # weight_i * alpha_trend * sigma_trend * z[cell_i] on cover. They arrive
+  # either as weighted areal terms in the formula (`fields[-1]`, each carrying a
+  # resolved per-cell `$weight`) or via the back-compat `control$trend =
+  # list(weight = "<col>")`. The two routes are mutually exclusive. With at
+  # least one trend field the fit takes the multi-block copy path; absent, the
+  # single shared-intercept field.
+  coupled_trends <- lapply(fields[-1L], function(f) {
+    list(weight = f$weight, weight_label = f$weight_label %||% "trend")
+  })
   trend_spec <- .occu_cover_resolve_trend(dots$trend, model)
-  has_trend  <- !is.null(trend_spec)
+  if (!is.null(trend_spec)) {
+    if (length(coupled_trends) > 0L) {
+      stop("occu_cover(): give the trend field EITHER as a weighted areal term ",
+           "in the formula (icar(graph = adj, weight = col)) OR via ",
+           "control$trend, not both.", call. = FALSE)
+    }
+    coupled_trends <- list(list(weight = trend_spec$time_cell,
+                                weight_label = trend_spec$weight))
+  }
+  n_trend   <- length(coupled_trends)
+  has_trend <- n_trend > 0L
 
   arms_out <- .occu_cover_build_joint_coupled_arms(
     model           = model,
@@ -313,26 +332,31 @@
                   else NULL
 
   if (has_trend) {
-    # Multi-block path: two ICAR blocks (intercept + trend) on the same graph,
-    # both copied onto the pos arm with their own alpha axis. The p arm is
-    # excluded from BOTH via its field_coef = 0. Per-block svc_weight injects
-    # the per-row trend weight on the psi (per-cell) and pos (per-visit) arms;
-    # the p-arm weight is irrelevant (field_coef = 0 already zeroes its field).
-    time_cell  <- trend_spec$time_cell
-    time_visit <- time_cell[cell_idx_visit]
-    block_int <- icar_template(list(
-      spatial_idx = list(seq_len(n_cells), cell_idx_visit, cell_idx_visit),
-      svc_weight  = list(rep(1.0, n_cells), rep(1.0, n_v), rep(1.0, n_v))
-    ))
-    block_trend <- icar_template(list(
-      spatial_idx = list(seq_len(n_cells), cell_idx_visit, cell_idx_visit),
-      svc_weight  = list(time_cell, rep(1.0, n_v), time_visit)
-    ))
+    # Multi-block path: the intercept ICAR block plus one ICAR block per coupled
+    # trend field, all on the same graph and each copied onto the pos arm with
+    # its own alpha axis. The p arm is excluded from every field via its
+    # field_coef = 0. Per-block svc_weight injects the per-row field weight on
+    # the psi (per-cell) and pos (per-visit) arms; the p-arm weight is
+    # irrelevant (field_coef = 0 already zeroes the p field).
+    spatial_idx_arms <- list(seq_len(n_cells), cell_idx_visit, cell_idx_visit)
+    make_block <- function(weight_cell) {
+      w_cell  <- if (is.null(weight_cell)) rep(1.0, n_cells)
+                 else as.numeric(weight_cell)
+      w_visit <- w_cell[cell_idx_visit]
+      icar_template(list(
+        spatial_idx = spatial_idx_arms,
+        svc_weight  = list(w_cell, rep(1.0, n_v), w_visit)
+      ))
+    }
     alpha_grid_trend <- dots$alpha.grid.trend %||% alpha_grid
-    prior_arg <- list(block_int, block_trend)
-    copy_arg  <- list(
-      list(arm = "pos", block = 1L, alpha_grid = alpha_grid),
-      list(arm = "pos", block = 2L, alpha_grid = alpha_grid_trend)
+    prior_arg <- c(
+      list(make_block(NULL)),
+      lapply(coupled_trends, function(tf) make_block(tf$weight))
+    )
+    copy_arg <- c(
+      list(list(arm = "pos", block = 1L, alpha_grid = alpha_grid)),
+      lapply(seq_len(n_trend), function(j)
+        list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend))
     )
   } else {
     prior_arg <- icar_template()
@@ -533,11 +557,16 @@
     hyper_names <<- c(hyper_names, public)
   }
   if (has_trend) {
-    # Multi-block: block 1 is the intercept field, block 2 the trend field.
-    pick2("sigma",       "b1.sigma")
-    pick2("alpha",       "b1.alpha")
-    pick2("sigma_trend", "b2.sigma")
-    pick2("alpha_trend", "b2.alpha")
+    # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields.
+    # A single trend field keeps the bare sigma_trend/alpha_trend names; several
+    # are indexed (sigma_trend1, alpha_trend1, ...).
+    pick2("sigma", "b1.sigma")
+    pick2("alpha", "b1.alpha")
+    for (j in seq_len(n_trend)) {
+      suffix <- if (n_trend == 1L) "" else as.character(j)
+      pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
+      pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
+    }
     pick("phi_pos")
   } else {
     for (nm in c("sigma", "alpha", "phi_pos")) pick(nm)
@@ -567,43 +596,49 @@
   draws <- .occu_cover_rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
-  # Split the stacked per-field summaries into one block of n_cells per field.
-  # Field 1 is the intercept field (the back-compat `spatial_field`); field 2,
-  # when present, is the spatially-varying trend field.
-  field_intercept    <- field_demeaned[seq_len(n_cells)]
-  field_intercept_sd <- field_sd[seq_len(n_cells)]
-  field_trend    <- if (n_fields >= 2L) field_demeaned[n_cells + seq_len(n_cells)] else NULL
-  field_trend_sd <- if (n_fields >= 2L) field_sd[n_cells + seq_len(n_cells)]       else NULL
+  # Split the stacked per-field summaries into one block of n_cells per coupled
+  # field. Field 1 is the intercept field (the back-compat `spatial_field`);
+  # fields 2.. are the spatially-varying trend fields, in block order.
+  field_block <- function(b) {
+    idx <- (b - 1L) * n_cells + seq_len(n_cells)
+    list(mean = field_demeaned[idx], sd = field_sd[idx])
+  }
+  field_z_table <- function(blk) {
+    data.frame(cell = seq_len(n_cells), z_mean = blk$mean, z_sd = blk$sd,
+               z_lower = blk$mean - 1.96 * blk$sd,
+               z_upper = blk$mean + 1.96 * blk$sd)
+  }
+  fblocks <- lapply(seq_len(n_fields), field_block)
 
-  field_table <- data.frame(
-    cell    = seq_len(n_cells),
-    z_mean  = field_intercept,
-    z_sd    = field_intercept_sd,
-    z_lower = field_intercept - 1.96 * field_intercept_sd,
-    z_upper = field_intercept + 1.96 * field_intercept_sd
-  )
-  trend_field_table <- if (n_fields >= 2L) {
-    data.frame(
-      cell    = seq_len(n_cells),
-      z_mean  = field_trend,
-      z_sd    = field_trend_sd,
-      z_lower = field_trend - 1.96 * field_trend_sd,
-      z_upper = field_trend + 1.96 * field_trend_sd
-    )
-  } else NULL
+  field_intercept <- fblocks[[1L]]$mean
+  field_table     <- field_z_table(fblocks[[1L]])
+
+  trend_blocks <- if (n_fields >= 2L) fblocks[-1L] else list()
+  trend_means  <- lapply(trend_blocks, function(b) b$mean)
+  trend_tables <- lapply(trend_blocks, field_z_table)
+  trend_labels <- vapply(coupled_trends, function(tf) tf$weight_label,
+                         character(1))
+  if (length(trend_labels) == length(trend_means)) {
+    names(trend_means)  <- trend_labels
+    names(trend_tables) <- trend_labels
+  }
+  # Back-compat single-trend accessors (the first trend field).
+  field_trend       <- if (length(trend_means))  trend_means[[1L]]  else NULL
+  trend_field_table <- if (length(trend_tables)) trend_tables[[1L]] else NULL
 
   # Joint betas+field posterior for downstream derived-quantity prediction
   # (delta_p / delta_cover marginalized over the full correlated posterior).
-  # `joint_means` carries the field(s) in the same demeaned convention as
+  # `joint_means` carries every field in the same demeaned convention as
   # `spatial_field`; `joint_vcov` is the law-of-total-covariance Vj (NULL on
-  # the older-tulpa diagonal fallback). With a trend field, both fields are
-  # stacked in block order (intercept then trend).
-  field_par_names <- if (n_fields >= 2L) {
-    c(paste0("field_",       seq_len(n_cells)),
-      paste0("trend_field_", seq_len(n_cells)))
-  } else {
-    paste0("field_", seq_len(n_cells))
-  }
+  # the older-tulpa diagonal fallback). Fields are stacked in block order
+  # (intercept then trend fields).
+  field_par_names <- unlist(c(
+    list(paste0("field_", seq_len(n_cells))),
+    lapply(seq_len(n_fields - 1L), function(j) {
+      suffix <- if (n_fields - 1L == 1L) "" else as.character(j)
+      paste0("trend_field", suffix, "_", seq_len(n_cells))
+    })
+  ))
   joint_par_names <- c(
     paste0("psi_",   pi_list[[1L]]$coef_names),
     paste0("p_",     pi_list[[2L]]$coef_names),
@@ -614,20 +649,19 @@
   names(joint_means) <- joint_par_names
   if (!is.null(Vj)) dimnames(Vj) <- list(joint_par_names, joint_par_names)
 
-  structure(list(
+  log_lik_val <- sum(w * fit$log_marginal[ok_cells])
+  structure(c(list(
     draws        = draws,
     means        = means,
     sds          = sds,
     vcov         = V,
     n_samples    = n_draws,
     n_params     = length(means),
-    log_prob     = rep(0, n_draws),
-    log_lik      = sum(w * fit$log_marginal[ok_cells]),
-    N            = sum(model$valid),
-    accept_prob  = rep(1, n_draws),
-    divergent    = rep(0L, n_draws),
-    treedepth    = rep(0L, n_draws),
-    epsilon      = NA_real_,
+    log_prob     = rep(log_lik_val, n_draws),
+    log_lik      = log_lik_val,
+    N            = sum(model$valid)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
     col_names    = par_names,
     param_names  = par_names,
     process_info = pi_list,
@@ -635,13 +669,20 @@
     spatial      = list(type = "icar", graph = adj,
                         sigma_mean = unname(hyper_means["sigma"]),
                         alpha_mean = unname(hyper_means["alpha"]),
-                        sigma_trend_mean = if (has_trend) unname(hyper_means["sigma_trend"]) else NULL,
-                        alpha_trend_mean = if (has_trend) unname(hyper_means["alpha_trend"]) else NULL),
+                        sigma_trend_mean = if (has_trend)
+                          unname(hyper_means[if (n_trend == 1L) "sigma_trend"
+                                             else "sigma_trend1"]) else NULL,
+                        alpha_trend_mean = if (has_trend)
+                          unname(hyper_means[if (n_trend == 1L) "alpha_trend"
+                                             else "alpha_trend1"]) else NULL),
     spatial_field = field_intercept,
     trend_field   = field_trend,
+    trend_fields  = if (length(trend_means))  trend_means  else NULL,
     field_table  = field_table,
-    trend_field_table = trend_field_table,
-    trend_weight = if (has_trend) trend_spec$weight else NULL,
+    trend_field_table  = trend_field_table,
+    trend_field_tables = if (length(trend_tables)) trend_tables else NULL,
+    trend_weight  = if (has_trend) trend_labels[[1L]] else NULL,
+    trend_weights = if (has_trend) trend_labels        else NULL,
     joint_par_names = joint_par_names,
     joint_means     = joint_means,
     joint_vcov      = Vj,
@@ -649,5 +690,5 @@
     positive     = model$positive,
     joint_fit    = fit,
     convergence  = list(converged = TRUE, n_iter = NA_integer_)
-  ), class = c("tobs_fit", "tulpa_fit"))
+  )), class = c("tobs_fit", "tulpa_fit"))
 }

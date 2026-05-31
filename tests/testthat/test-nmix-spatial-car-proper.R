@@ -1,4 +1,4 @@
-﻿# Tests for nmix_laplace_car_proper() -- nested-Laplace fit of the
+# Tests for nmix_laplace_car_proper() -- nested-Laplace fit of the
 # spatial Royle (2004) N-mixture model with a proper CAR(rho) prior on
 # log lambda.
 

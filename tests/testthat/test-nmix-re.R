@@ -1,4 +1,4 @@
-﻿# Community / multispecies N-mixture (nmix_laplace_re), routed through the
+# Community / multispecies N-mixture (nmix_laplace_re), routed through the
 # shared AGHQ engine (tulpa_re_aghq at n_quad = 1) with nmix_site_marginal
 # as the per-species oracle. Two gates:
 #   * correctness  -- the engine's community Laplace marginal equals an

@@ -1,4 +1,4 @@
-﻿# joint_grad (analytic Fisher-identity gradient) vs joint_fd (finite-difference
+# joint_grad (analytic Fisher-identity gradient) vs joint_fd (finite-difference
 # of the objective) for the community N-mixture. Both drive the same native
 # oracle through the AGHQ engine and target nearly-coincident optima at the AGHQ
 # default n_quad = 9 (they differ only by the O(AGHQ-truncation) node-placement

@@ -358,6 +358,7 @@
     shared <- c(1L %in% procs, 2L %in% procs)
 
     if (inherits(spec, "tobs_spatial")) {
+      .tobs_reject_weighted_spatial(spec, "occupancy/abundance spatial")
       one("spatial", "spatial"); spec$shared <- shared; out$spatial <- spec
     } else if (inherits(spec, "tobs_temporal")) {
       one("temporal", "temporal"); spec$shared <- shared; out$temporal <- spec

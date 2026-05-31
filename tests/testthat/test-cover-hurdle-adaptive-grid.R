@@ -198,3 +198,48 @@ test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
     expect_lt(fit$joint$theta_ci_hi["alpha"], 0.5)
   }
 })
+
+test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
+  skip_on_cran()
+  skip_if_fast()
+  # tulpaObs#20: the dense outer tensor concentrates posterior mass on a few
+  # cells (ESS ~ 1), so most cells run a full-data inner solve for negligible
+  # weight. The cheap-pass prune skips them. This test asserts pruning is a
+  # no-op on the inference: the modal hyperparameters and the coefficient
+  # estimates must match the un-pruned dense-grid fit, and the pruned cells
+  # must carry negligible weight (the mode is never pruned).
+  n_s <- 25L; adj <- chain_adj_for_test(n_s)
+  sim <- simulate_d3_like(seed = 101L, alpha_true = 1.0, N = 400L, n_s = n_s)
+  ctrl_grid <- list(
+    sigma.grid     = exp(seq(log(0.2), log(1.5), length.out = 5)),
+    rho.grid       = c(0.25, 0.5, 0.7, 0.9),
+    sigma.pos.grid = c(0.0, 0.2, 0.4, 0.6, 0.9, 1.3),
+    phi.grid       = exp(seq(log(2), log(300), length.out = 7)),
+    adaptive.grid  = FALSE
+  )
+  run <- function(prune)
+    tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
+         data = sim$data, family = cover("beta"), y = sim$y,
+         method = "nested_laplace",
+         control = c(ctrl_grid, list(prune = prune, prune.tol = 1e-4)))
+
+  f_off <- run(FALSE)
+  f_on  <- run(TRUE)
+
+  # Most cells pruned; the prune machinery is engaged.
+  expect_true(f_on$joint$prune_n_pruned > 0.5 * f_on$joint$n_grid)
+
+  # The modal hyperparameters (highest-weight cell) agree between fits.
+  mode_off <- f_off$joint$theta_grid[which.max(f_off$joint$weights), ]
+  mode_on  <- f_on$joint$theta_grid[which.max(f_on$joint$weights), ]
+  names(mode_off) <- f_off$joint$theta_names
+  names(mode_on)  <- f_on$joint$theta_names
+  for (nm in c("sigma", "rho", "alpha"))
+    expect_equal(unname(mode_on[nm]), unname(mode_off[nm]), tolerance = 0.05)
+
+  # Coefficient estimates materially unchanged by pruning.
+  expect_equal(f_on$beta_occ, f_off$beta_occ, tolerance = 0.02)
+  expect_equal(f_on$beta_pos, f_off$beta_pos, tolerance = 0.02)
+  expect_equal(unname(f_on$joint$theta_mean["alpha"]),
+               unname(f_off$joint$theta_mean["alpha"]), tolerance = 0.05)
+})

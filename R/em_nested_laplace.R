@@ -126,15 +126,25 @@
   pos <- 0L
   for (b in blocks) {
     nu  <- .nl_block_field_len(b)
-    idx <- .nl_block_unit_idx(b)
     if (pos + nu > length(field)) break          # guard against layout drift
-    # Only blocks whose eta contribution is exactly `x[idx]` (d_fac = 1) are
-    # added. A bym2 block's eta mixes its two components with hyperparameter-
-    # dependent scales, so a first-n approximation would be wrong-scaled;
-    # skipping it (but advancing past its length) keeps the predictor unbiased
-    # and leaves multi-block alignment intact.
-    if (.nl_block_exact_reconstruct(b) && length(idx) == n_rows) {
-      offset <- offset + field[(pos + 1L):(pos + nu)][idx]
+    block_field <- field[(pos + 1L):(pos + nu)]
+    if (identical(b$type, "spde")) {
+      # The SPDE field enters eta as the FEM projection (A u), with A re-rowed
+      # onto the state rows (b$A is n_rows x n_mesh). d_fac = 1, so the per-row
+      # contribution is the many-to-one (A u)_row.
+      if (!is.null(b$A) && nrow(b$A) == n_rows && ncol(b$A) == nu) {
+        offset <- offset + as.numeric(b$A %*% block_field)
+      }
+    } else {
+      idx <- .nl_block_unit_idx(b)
+      # Only blocks whose eta contribution is exactly `x[idx]` (d_fac = 1) are
+      # added. A bym2 block's eta mixes its two components with hyperparameter-
+      # dependent scales, so a first-n approximation would be wrong-scaled;
+      # skipping it (but advancing past its length) keeps the predictor unbiased
+      # and leaves multi-block alignment intact.
+      if (.nl_block_exact_reconstruct(b) && length(idx) == n_rows) {
+        offset <- offset + block_field[idx]
+      }
     }
     pos <- pos + nu
   }
@@ -380,6 +390,7 @@
   if (type == "bym2") return(2L * as.integer(b$n_spatial_units))
   if (type %in% c("ar1", "rw1", "rw2")) return(as.integer(b$n_times))
   if (type == "iid") return(as.integer(b$n_units))
+  if (type == "spde") return(as.integer(b$n_mesh))
   # Unknown block: assume the per-row index spans the units.
   as.integer(max(.nl_block_unit_idx(b)))
 }
@@ -447,6 +458,51 @@
     stop("`spatial` must be a tobs_spatial object", call. = FALSE)
   }
   type <- spatial$type
+  if (type == "spde") {
+    # Continuous Matern field on the multi-block nested-Laplace path. The
+    # mesh projection A (n_sites x n_mesh) is re-rowed onto the n_state_rows
+    # state block via site_of_row (one state row per site for single /
+    # integrated / dynamic; community broadcasts the site field across the
+    # species at a site), so a state row's field contribution is (A u)_row,
+    # the many-to-one FEM projection -- not a one-node spatial_idx. The FEM
+    # matrices / n_mesh / Matern priors are unchanged; only A is re-rowed.
+    sp <- spatial$tulpa_spec
+    if (as.integer(sp$n_mesh) <= 0L) {
+      stop("SPDE mesh has 0 nodes; rebuild the mesh (see the tulpaMesh ",
+           "zero-triangle note: use cutoff = 0 with the default max_edge).",
+           call. = FALSE)
+    }
+    A_b   <- sp$A[site_of_row, , drop = FALSE]
+    A_csc <- methods::as(A_b, "CsparseMatrix")
+    n_state_rows <- length(site_of_row)
+    out <- list(
+      type        = "spde",
+      n_mesh      = as.integer(sp$n_mesh),
+      n_obs       = as.integer(n_state_rows),
+      A           = A_b,                 # broadcast projection (eta offset reader)
+      A_x         = as.numeric(A_csc@x),
+      A_i         = as.integer(A_csc@i),
+      A_p         = as.integer(A_csc@p),
+      C0_diag     = as.numeric(sp$C0_diag),
+      G1_x        = as.numeric(sp$G1_x),
+      G1_i        = as.integer(sp$G1_i),
+      G1_p        = as.integer(sp$G1_p),
+      nu          = as.numeric(sp$nu),
+      prior_range = as.numeric(sp$prior_range),
+      prior_sigma = as.numeric(sp$prior_sigma)
+    )
+    if (!is.null(spatial$range_grid)) out$range_grid <- as.numeric(spatial$range_grid)
+    if (!is.null(spatial$sigma_grid)) out$sigma_grid <- as.numeric(spatial$sigma_grid)
+    return(out)
+  }
+  if (type %in% c("gp", "multiscale_gp")) {
+    stop("Continuous-field spatial type '", type, "' is not yet wired into the ",
+         "multi-block nested-Laplace path (method = 'nested_laplace'); the ",
+         "FEM/basis projection for this type is not assembled here. The ",
+         "spde() Matern field IS available on this path, and gp()/spde() are ",
+         "available on the single-Laplace path (method = 'laplace').",
+         call. = FALSE)
+  }
   if (!type %in% c("bym2", "icar", "car_proper")) {
     stop("Spatial type '", type, "' is not yet wired into the multi-block ",
          "nested-Laplace path (supported: bym2, icar, car_proper). ",
@@ -653,5 +709,10 @@
   )
   fit$temporal <- temporal
   fit$re <- re
+  # Expose the spatial term so downstream code (predict / diagnostics) and the
+  # field-shape check can read the mesh projection `fit$spatial$tulpa_spec$A`,
+  # mirroring the single-Laplace fit. The latent realization is in
+  # `fit$spatial_field`; for a continuous SPDE block it is the n_mesh field.
+  if (!is.null(spatial)) fit$spatial <- spatial
   fit
 }

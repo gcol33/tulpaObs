@@ -1,4 +1,4 @@
-﻿#' Per-site N-mixture marginal as a composable random-effect callback
+#' Per-site N-mixture marginal as a composable random-effect callback
 #'
 #' @description
 #' Exposes the Royle (2004) N-mixture per-site marginal -- the latent abundance
@@ -171,6 +171,7 @@ nmix_site_marginal <- function(y,
   )
 }
 
+#' @exportS3Method print nmix_marginal
 print.nmix_marginal <- function(x, ...) {
   cat(sprintf("tulpa N-mixture per-site marginal (mixture = %s)\n", x$mixture))
   cat(sprintf("  n_sites = %d   n_obs = %d   K_max = %d\n",

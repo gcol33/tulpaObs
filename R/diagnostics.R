@@ -345,8 +345,13 @@ tobs_test_outliers <- function(object, n.samples = 250) {
 #' @export
 tobs_check <- function(object, coords = NULL, n.samples = 250) {
   cat("=== tobs Model Diagnostics ===\n\n")
-  cat(sprintf("Sampler: %d samples, %d divergent, mean accept = %.3f\n",
-              object$n_samples, sum(object$divergent), mean(object$accept_prob)))
+  if (identical(object$method, "nuts")) {
+    cat(sprintf("Sampler: %d samples, %d divergent, mean accept = %.3f\n",
+                object$n_samples, sum(object$divergent), mean(object$accept_prob)))
+  } else {
+    cat(sprintf("Fit: %s, %d posterior draws (no NUTS sampler diagnostics)\n",
+                object$method %||% "laplace", object$n_samples))
+  }
 
   w <- tryCatch(tobs_waic(object), error = function(e) NULL)
   if (!is.null(w)) cat(sprintf("\nWAIC: %.1f (p_waic = %.1f)\n", w$waic, w$p_waic))

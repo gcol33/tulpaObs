@@ -1,4 +1,4 @@
-﻿# Analytic-derivative validation for the negative-binomial N-mixture kernel.
+# Analytic-derivative validation for the negative-binomial N-mixture kernel.
 #
 # These complement the statistical NB tests in test-nmix-laplace.R (convergence,
 # multi-seed recovery, unmarked cross-check). Here we check the kernel math

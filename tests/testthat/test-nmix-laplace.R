@@ -1,4 +1,4 @@
-﻿# Tests for nmix_laplace() -- non-spatial Royle (2004) N-mixture
+# Tests for nmix_laplace() -- non-spatial Royle (2004) N-mixture
 # Laplace fit via inner Newton with marginal observed Fisher info.
 
 simulate_nmix <- function(seed,

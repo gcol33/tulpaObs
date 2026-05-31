@@ -70,14 +70,13 @@ test_that("ms_abun S3 methods work", {
   expect_s3_class(fit, "tobs_fit")
   expect_no_error(print(fit))
 
-  # coef.tobs_fit returns the flat named numeric vector tulpa's generic
-  # coef.tulpa_fit produces (no per-arm splitting). Check shape + names rather
-  # than a list-by-arm structure that the contract has never produced.
+  # coef.tobs_fit returns the per-process list (community means by arm), the
+  # same contract every other tobs family uses.
   cf <- coef(fit)
-  expect_true(is.numeric(cf))
-  expect_setequal(names(cf),
-                  c("lambda_(Intercept)", "lambda_abund_cov1",
-                    "p_(Intercept)",      "p_det_cov1"))
+  expect_true(is.list(cf))
+  expect_setequal(names(cf), c("lambda", "p"))
+  expect_setequal(names(cf$lambda), c("(Intercept)", "abund_cov1"))
+  expect_setequal(names(cf$p),      c("(Intercept)", "det_cov1"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))

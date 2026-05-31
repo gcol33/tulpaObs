@@ -11,6 +11,12 @@
   quantiles = c(0.025, 0.5, 0.975),
   terms = NULL,
   n_points = 50L,
+  newdata = NULL,
+  times = NULL,
+  level = 0.95,
+  nsim = 1000L,
+  draws = TRUE,
+  time_col = NULL,
   ...
 )
 }
@@ -20,13 +26,34 @@
 \item{X.0}{Optional design matrix for occupancy prediction.}
 
 \item{type}{\code{"occupancy"} (default), \code{"detection"}, \code{"both"}, or \code{"state"}
-(nested-Laplace marginalised per-site psi, incl. held-out sites).}
+(nested-Laplace marginalised per-site psi, incl. held-out sites). For an
+\code{occu_cover} fit: \code{"occurrence"}, \code{"cover_cond"}, \code{"cover_exp"}, or
+\code{"change"}.}
 
 \item{quantiles}{Quantile levels for credible intervals.}
 
 \item{terms}{Character vector of terms to vary (ggpredict-style).}
 
 \item{n_points}{Number of prediction points per continuous term.}
+
+\item{newdata}{\code{occu_cover} only: data.frame of prediction units, one row per
+field cell (or carrying a \code{cell} column mapping rows to field cells).
+Defaults to the training data.}
+
+\item{times}{\code{occu_cover} \code{type = "change"} only: length-2 numeric
+\code{c(t1, t2)}, the two values of the time covariate to difference.}
+
+\item{level}{\code{occu_cover} only: credible level for the interval columns
+(default 0.95).}
+
+\item{nsim}{\code{occu_cover} only: number of joint posterior draws (default 1000).}
+
+\item{draws}{\code{occu_cover} only: if \code{TRUE} (default), carry the per-unit
+\verb{[cell x nsim]} draw matrices in \code{attr(, "draws")}.}
+
+\item{time_col}{\code{occu_cover} only: name of the time covariate weighting the
+trend field / driving the change map; auto-resolved from the fit's stored
+trend weight when omitted.}
 
 \item{...}{Ignored.}
 }
@@ -35,7 +62,8 @@ Depends on mode. In-sample: \code{fitted()} result. \code{"state"}: a
 data.frame with \code{row}, \code{psi} (marginalised posterior mean), \code{psi_lower} /
 \code{psi_upper} (equal-tailed 95\% credible interval; \code{NA} when the engine did
 not return per-cell predictive variance), and \code{heldout}. Design-matrix/
-terms: data.frame with estimate and CIs.
+terms: data.frame with estimate and CIs. \code{occu_cover}: a \code{tobs_prediction}
+table (one row per cell) with per-unit draw matrices in \code{attr(, "draws")}.
 }
 \description{
 Four modes:
@@ -53,5 +81,16 @@ all-missing), where occupancy is interpolated from the latent field rather
 than informed by detections.
 \item \strong{Design-matrix}: \code{predict(fit, X.0 = ...)} predicts at new covariate values.
 \item \strong{Terms-based}: \code{predict(fit, terms = "elev")} varies one covariate, others at mean.
+\item \strong{Joint occu_cover}: for a \code{occu_cover} joint-coupled fit,
+\code{predict(fit, newdata, type = "occurrence" | "cover_cond" | "cover_exp" | "change")} samples the joint latent from the grid-integrated posterior
+(the outer-grid mixture via \code{\link[tulpa:tulpa_posterior_draws]{tulpa::tulpa_posterior_draws()}}) and
+marginalises every derived quantity per draw. \code{type = "change"} with
+\code{times = c(t1, t2)} returns a per-cell change table (\code{delta_p},
+\code{delta_cover_cond}, \code{delta_cover_exp}, the occupancy / abundance
+decomposition, and \code{.lwr} / \code{.upr} at \code{level}). The result is a
+\code{tobs_prediction} table (one row per cell) carrying per-unit \verb{[cell x nsim]}
+draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
+\code{left_join(cents, pr, by = "cell")} then
+\code{geom_tile(aes(x, y, fill = delta_p))} (or \code{geom_sf()} on polygon cells).
 }
 }

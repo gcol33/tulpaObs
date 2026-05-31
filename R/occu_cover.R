@@ -377,7 +377,7 @@
   draws <- .occu_cover_rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
-  structure(list(
+  structure(c(list(
     draws        = draws,
     means        = means,
     sds          = se,
@@ -386,11 +386,9 @@
     n_params     = n_par,
     log_prob     = rep(-opt$value, n_draws),
     log_lik      = -opt$value,
-    N            = sum(model$valid),
-    accept_prob  = rep(1, n_draws),
-    divergent    = rep(0L, n_draws),
-    treedepth    = rep(0L, n_draws),
-    epsilon      = NA_real_,
+    N            = sum(model$valid)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
     col_names    = par_names,
     param_names  = par_names,
     process_info = pi_list,
@@ -400,7 +398,7 @@
     positive     = model$positive,
     convergence  = list(converged = opt$convergence == 0L,
                         n_iter    = opt$counts[1L])
-  ), class = c("tobs_fit", "tulpa_fit"))
+  )), class = c("tobs_fit", "tulpa_fit"))
 }
 
 # Draw from MVN via Cholesky; fall back to independent normals if not PD.
@@ -444,10 +442,11 @@
   pos_formula <- dots$positive
   if (is.null(pos_formula)) pos_formula <- detection
 
-  # Detect a spatial term on the psi formula. Spatial path is v2
-  # (nested-Laplace, shared field across psi and cover arms); non-spatial
-  # path is v1 (plain Laplace on the exact two-state marginal).
-  spatial_info <- .occu_cover_spatial_term(formula, data)
+  # Detect the coupled spatial field(s) on the psi formula. The spatial path is
+  # the joint nested-Laplace engine (shared field(s) across the psi and cover
+  # arms); the non-spatial path is plain Laplace on the exact two-state
+  # marginal. A weighted areal term adds a second coupled (SVC) field.
+  spatial_info <- .occu_cover_spatial_fields(formula, data)
   has_spatial  <- !is.null(spatial_info)
 
   if (has_spatial && engine == "laplace") {
@@ -488,24 +487,33 @@
   )
 
   if (has_spatial) {
-    fit_args <- list(model = model, adj = spatial_info$term$graph,
-                     priors = priors)
-    fit_args <- c(fit_args, control)
+    fields      <- spatial_info$fields
+    base_graph  <- fields[[1L]]$graph
     # joint_coupled (3-arm nested-Laplace via tulpa's cell_coupling spec) is the
-    # default: outer-grid integration over (sigma, alpha) with inner Newton driven
-    # by the occu_cover_{lognormal,beta} cell-coupling spec. 150-300x faster than
-    # v3 at N=100 and reliably completes at N=200+ where v3 trips on a
-    # missing-value compare in its outer BFGS. v3 pure-R nested-Laplace and v2's
-    # joint Laplace stay reachable via control$engine = "v3_nested" /
-    # "v2_joint" as debug escape hatches.
+    # default: outer-grid integration over (sigma, alpha [, sigma_trend,
+    # alpha_trend]) with inner Newton driven by the occu_cover_{lognormal,beta}
+    # cell-coupling spec. 150-300x faster than v3 at N=100 and reliably completes
+    # at N=200+ where v3 trips on a missing-value compare in its outer BFGS. v3
+    # pure-R nested-Laplace and v2's joint Laplace stay reachable via
+    # control$engine = "v3_nested" / "v2_joint" as debug escape hatches; both
+    # take only the single intercept field.
     engine_pick <- control[["engine"]] %||% "joint_coupled"
-    fit_args[["engine"]] <- NULL
-    if (engine_pick == "v2_joint") {
-      return(do.call(.tobs_fit_occu_cover_spatial, fit_args))
+    control[["engine"]] <- NULL
+    if (engine_pick %in% c("v2_joint", "v3_nested")) {
+      if (length(fields) > 1L) {
+        stop(sprintf(paste0(
+          "occu_cover() engine \"%s\" couples a single shared field; ",
+          "weighted SVC field(s) need the default joint_coupled engine."),
+          engine_pick), call. = FALSE)
+      }
+      fit_args <- c(list(model = model, adj = base_graph, priors = priors),
+                    control)
+      fitter <- if (engine_pick == "v2_joint") .tobs_fit_occu_cover_spatial
+                else .tobs_fit_occu_cover_nested
+      return(do.call(fitter, fit_args))
     }
-    if (engine_pick == "v3_nested") {
-      return(do.call(.tobs_fit_occu_cover_nested, fit_args))
-    }
+    fit_args <- c(list(model = model, fields = fields, priors = priors),
+                  control)
     return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
   }
 

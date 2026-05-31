@@ -337,12 +337,29 @@
 .tobs_fit_nmix_spatial <- function(model, spatial, X_lambda, X_p, y_long,
                                    site_idx, mixture = "P", K_max, max_iter,
                                    tol, verbose) {
+  .tobs_reject_weighted_spatial(spatial, "N-mixture abundance spatial")
+  # Continuous Matern field: the SPDE FEM precision Q(range, sigma) and the
+  # mesh projection A are threaded through the same outer-grid integrator the
+  # areal path uses, with (range, sigma) as the grid axes.
+  if (identical(spatial$type, "spde")) {
+    return(nmix_laplace_spde(
+      y = y_long, site_idx = site_idx, X_lambda = X_lambda, X_p = X_p,
+      spatial = spatial, mixture = mixture, K_max = K_max,
+      max_iter = max_iter, tol = tol, verbose = verbose))
+  }
+  if (identical(spatial$type, "gp") || identical(spatial$type, "multiscale_gp")) {
+    stop(sprintf(
+      "N-mixture abundance supports the continuous field via spde(); the dense ",
+      "GP term '%s' is not wired. Use spde() for a mesh-based continuous Matern ",
+      "field, or icar() / bym2() / car_proper() for an areal field.",
+      spatial$type), call. = FALSE)
+  }
   if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
     stop(sprintf(
       "N-mixture abundance supports the areal spatial terms icar() / bym2() / %s",
-      "car_proper() under method = \"nested_laplace\"; got '%s'. (car() is the ",
-      "improper non-intrinsic CAR; use icar() for the intrinsic field. ",
-      "Continuous gp() / spde() fields on the abundance arm are not yet wired.)"),
+      "car_proper() and the continuous mesh field spde() under method = ",
+      "\"nested_laplace\"; got '%s'. (car() is the improper non-intrinsic CAR; ",
+      "use icar() for the intrinsic field.)"),
       spatial$type, call. = FALSE)
   }
   n_sites <- model$n_sites
@@ -413,15 +430,26 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   }
   names(means) <- nms
 
-  # Joint covariance: the non-spatial fit returns the full marginal
-  # observed-Fisher inverse over (lambda, p[, log_r]); the spatial fits return
-  # per-arm grid-integrated covariances, assembled block-diagonally (cross-arm
-  # posterior covariance through the shared field is not returned by the grid
-  # integrator).
+  # Joint covariance over (lambda, p[, log_r]). The non-spatial fit returns the
+  # full marginal observed-Fisher inverse; the spatial fits return the
+  # grid-integrated coefficient covariance over the full (beta_lambda, beta_p)
+  # block (the constrained top block of each grid cell's joint Hessian inverse,
+  # with the shared field folded out, then law-of-total-covariance integrated --
+  # `.nmix_grid_vcov()`). Both carry the cross-arm (lambda, p) covariance, so
+  # derived quantities that combine the two arms (expected counts lambda * p,
+  # detection-corrected abundance) propagate the correlation.
   vcov <- .nmix_vcov(raw, p_lam, p_p, p_extra = if (has_logr) 1L else 0L)
   rownames(vcov) <- colnames(vcov) <- nms
   sds <- sqrt(pmax(diag(vcov), 0))
   names(sds) <- nms
+
+  # The fixed-effect block is the leading (lambda, p[, log_r]) coordinates; the
+  # RE variance-component / BLUP columns appended below are not fixed effects.
+  # Recording the count + names lets the generic coefficient table
+  # (.fit_fixed_table -> .fixed_draws_mat) restrict coef() / confint() / vcov()
+  # to the fixed block instead of defaulting to every draw column.
+  n_fixed     <- length(nms)
+  fixed_names <- nms
 
   n_pseudo <- 1000L
   draws <- .rmvn(n_pseudo, means, vcov)
@@ -429,10 +457,16 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 
   # Random-effect block (gcol33/tulpaObs#13): append the variance components
   # (sigma_g_*, cor_g_*_* for a correlated block) and per-group BLUPs to the
-  # public parameter layout the same way the occupancy RE path does. AGHQ
-  # returns point estimates for these (no analytic joint covariance with the
-  # fixed effects), so the pseudo-draws fill them with near-constant columns
-  # at the point estimate -- ranef() / summary() read them by name.
+  # public parameter layout the same way the occupancy RE path does. The
+  # per-group BLUPs carry their AGHQ marginal posterior SD, so their pseudo-draws
+  # are Gaussian at the BLUP mean with that SD. The variance components are AGHQ
+  # marginal-optimum point estimates whose joint posterior covariance with the
+  # fixed effects the marginal-Hessian path does not surface; their SD is NA, so
+  # their draws are left NA rather than a fabricated near-degenerate column that
+  # would read as "known almost exactly" (NA-on-unavailable, the same rule as the
+  # NUTS-only sampler diagnostics, tulpaObs#17). ranef() / summary() read the
+  # point estimate and BLUP SE by name; no consumer of the fixed-effect draws
+  # touches these trailing columns.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,
@@ -446,14 +480,14 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
     n_re <- length(re_means)
     re_draws <- matrix(NA_real_, n_pseudo, n_re)
     for (j in seq_len(n_re)) {
-      sd_j <- if (is.finite(re_sds[j])) re_sds[j] else 0
-      re_draws[, j] <- stats::rnorm(n_pseudo, re_means[j], max(sd_j, 1e-4))
+      if (is.finite(re_sds[j]))
+        re_draws[, j] <- stats::rnorm(n_pseudo, re_means[j], re_sds[j])
     }
     colnames(re_draws) <- re_names
     draws <- cbind(draws, re_draws)
   }
 
-  spatial_field <- raw$phi_mean %||% raw$z_mean %||% raw$v_mean
+  spatial_field <- raw$phi_mean %||% raw$z_mean %||% raw$u_mean %||% raw$v_mean
   hyper <- .nmix_hyper(raw)
 
   # NB dispersion summary on the natural (r) scale, for simulate() and print().
@@ -491,16 +525,15 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   n_it <- raw$n_iter %||% NA_integer_
   if (length(n_it) > 1L) n_it <- max(n_it, na.rm = TRUE)
 
-  structure(list(
+  structure(c(list(
     draws = draws, means = means, sds = sds, vcov = vcov,
     n_samples = n_pseudo, n_params = length(means),
     log_prob = rep(ll, n_pseudo),
-    N = length(model$y_long),
-    accept_prob = rep(1, n_pseudo),
-    divergent = rep(0L, n_pseudo),
-    treedepth = rep(0L, n_pseudo),
-    epsilon = NA_real_,
+    N = length(model$y_long)),
+    .tobs_na_nuts_diagnostics(n_pseudo),
+    list(
     col_names = nms, param_names = nms,
+    n_fixed = n_fixed, fixed_names = fixed_names,
     process_info = pi_list,
     model = model, spatial = spatial,
     spatial_field = spatial_field,
@@ -520,14 +553,17 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
       else NULL,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
-  ), class = c("tobs_fit", "tulpa_fit"))
+  )), class = c("tobs_fit", "tulpa_fit"))
 }
 
 # Assemble the coefficient covariance from a tulpa N-mixture fit. Non-spatial:
 # the engine returns the full joint `vcov` over (lambda, p) and, under NB, the
-# trailing `log_r` coordinate (`p_extra = 1`). Spatial: per-arm covariance
-# blocks (vcov_lambda / vcov_p) integrated over the hyperparameter grid,
-# stitched block-diagonally; falls back to a diagonal from per-arm sds.
+# trailing `log_r` coordinate (`p_extra = 1`). Spatial: the grid integrator
+# returns the full joint (lambda, p) `vcov` (the field-folded cross-arm block,
+# from .nmix_grid_vcov over each cell's constrained joint Hessian inverse),
+# which is used directly. The per-arm `vcov_lambda` / `vcov_p` block-diagonal
+# stitch (and the diagonal from per-arm sds) is only a fallback for an older
+# engine that does not surface the full joint block.
 .nmix_vcov <- function(raw, p_lam, p_p, p_extra = 0L) {
   p_tot <- p_lam + p_p + p_extra
   if (!is.null(raw$vcov) && all(dim(as.matrix(raw$vcov)) == p_tot)) {
@@ -555,6 +591,7 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   if (!is.null(raw$sigma_mean)) out$sigma <- c(mean = raw$sigma_mean, sd = raw$sigma_sd)
   if (!is.null(raw$rho_mean))   out$rho   <- c(mean = raw$rho_mean,   sd = raw$rho_sd)
   if (!is.null(raw$tau_mean))   out$tau   <- c(mean = raw$tau_mean,   sd = raw$tau_sd)
+  if (!is.null(raw$range_mean)) out$range <- c(mean = raw$range_mean, sd = raw$range_sd)
   # Spatial NB: the size r is integrated over the outer grid alongside the
   # spatial hyperparameters, so it is reported here rather than in vcov.
   if (is.finite(raw$r_mean %||% NA_real_)) out$r <- c(mean = raw$r_mean, sd = raw$r_sd)

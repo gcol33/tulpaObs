@@ -62,6 +62,47 @@ test_that("S3 methods work on single-season fit", {
   expect_true(is.data.frame(re) || is.list(re))
 })
 
+test_that("non-NUTS fits report NA sampler diagnostics, NUTS reports numeric", {
+  # tulpaObs#17: a Laplace / nested-Laplace fit ran no HMC trajectory, so the
+  # NUTS-only sampler-health fields (acceptance, divergence, tree depth, step
+  # size) must be NA rather than the constants 1 / 0 / 0 / 0 -- otherwise a user
+  # checking sampler health reads "no sampler ran" as "sampler ran cleanly".
+  fit_lap <- .fit_simple(method = "laplace")$fit
+  expect_identical(fit_lap$method, "laplace")
+  expect_true(all(is.na(fit_lap$accept_prob)))
+  expect_true(all(is.na(fit_lap$divergent)))
+  expect_true(all(is.na(fit_lap$treedepth)))
+  expect_true(is.na(fit_lap$epsilon))
+
+  # Areal nested-Laplace N-mixture build path (abun.R) -- the same rule.
+  set.seed(11)
+  side <- 5L; ng <- side * side
+  co <- expand.grid(x = seq_len(side), y = seq_len(side))
+  adj <- matrix(0L, ng, ng)
+  for (i in seq_len(ng)) for (j in seq_len(ng))
+    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i, j] <- 1L
+  phi <- as.numeric(scale(rnorm(ng))) * 0.5; phi <- phi - mean(phi)
+  x_ab <- rnorm(ng)
+  N <- rpois(ng, exp(log(5) + 0.5 * x_ab + phi))
+  yA <- matrix(NA_integer_, ng, 5L)
+  for (i in seq_len(ng)) yA[i, ] <- rbinom(5L, N[i], plogis(0.4))
+  fit_nl <- tobs(~ abund_cov1 + icar(graph = adj),
+                 data = data.frame(abund_cov1 = x_ab), family = abun(),
+                 detection = ~ 1, y = yA, method = "nested_laplace",
+                 control = list(verbose = FALSE))
+  expect_identical(fit_nl$method, "nested_laplace")
+  expect_true(all(is.na(fit_nl$accept_prob)))
+  expect_true(all(is.na(fit_nl$divergent)))
+  expect_true(all(is.na(fit_nl$treedepth)))
+  expect_true(is.na(fit_nl$epsilon))
+
+  # A NUTS fit, by contrast, carries real numeric diagnostics.
+  fit_nuts <- .fit_simple(method = "nuts")$fit
+  expect_identical(fit_nuts$method, "nuts")
+  expect_true(any(is.finite(fit_nuts$accept_prob)))
+  expect_false(all(is.na(fit_nuts$divergent)))
+})
+
 test_that("WAIC works on single-season fit", {
   res <- .fit_simple(formula = ~ elev, n = 30, seed = 42)
   w <- tobs_waic(res$fit)

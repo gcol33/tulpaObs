@@ -856,6 +856,33 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     sigma_pos_grid = sigma_pos_grid
   )
 
+  # Outer joint-grid integration controls, shared by the multi-block and
+  # single-block dispatch. The dense outer tensor (sigma_occ x [rho] x
+  # sigma_pos x phi_pos) concentrates almost all posterior mass on a handful
+  # of cells, but the inner latent mode moves substantially across the grid,
+  # so the cheap-pass prune is OFF by default: the full-grid solve is the
+  # correct default (gcol33/tulpaObs#20). The rank-safe speed path is the
+  # adaptive grid (`adaptive_grid = TRUE`): it brackets the mode with FULL
+  # inner solves and densifies near it, so it never approximates the
+  # marginal and cannot drop the true mode. The cheap-pass prune is available
+  # opt-in via control$prune = TRUE; it is now rank-faithful (a neighbour-
+  # warm-started lattice sweep) and gated (a safety check falls back to the
+  # full grid if the screen's ranking looks unreliable), but the correct
+  # full grid remains the default. Override via control$prune /
+  # control$prune.tol.
+  joint_control <- list(
+    max_iter  = control$max.iter  %||% 50L,
+    tol       = control$tol       %||% 1e-6,
+    n_threads = control$n.threads %||% 1L,
+    store_Q   = TRUE,
+    hessian   = control$hessian   %||% "lm",
+    prune     = control$prune     %||% FALSE,
+    prune_tol = control$prune.tol %||% 1e-4,
+    adaptive_grid             = control$adaptive.grid             %||% TRUE,
+    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
+  )
+
   # ---- Multi-block path (Phase J-D) -----------------------------------
   # When `temporal` or `re` components are supplied, stack the spatial
   # block with AR1/RW/IID blocks and dispatch through the multi-block
@@ -884,16 +911,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
       prior_alpha = control$prior.alpha,
-      control = list(
-        max_iter  = control$max.iter  %||% 50L,
-        tol       = control$tol       %||% 1e-6,
-        n_threads = control$n.threads %||% 1L,
-        store_Q   = TRUE,
-        hessian   = control$hessian   %||% "lm",
-        adaptive_grid             = control$adaptive.grid             %||% TRUE,
-        adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-        adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
-      )
+      control = joint_control
     )
   } else {
     # Adaptive grid forwarding. Defaults match the joint engine's defaults
@@ -908,16 +926,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
       prior_alpha = control$prior.alpha,
-      control = list(
-        max_iter  = control$max.iter  %||% 50L,
-        tol       = control$tol       %||% 1e-6,
-        n_threads = control$n.threads %||% 1L,
-        store_Q   = TRUE,
-        hessian   = control$hessian   %||% "lm",
-        adaptive_grid             = control$adaptive.grid             %||% TRUE,
-        adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-        adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L
-      )
+      control = joint_control
     )
   }
 

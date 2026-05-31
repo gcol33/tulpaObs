@@ -97,23 +97,29 @@ ranef.tobs_fit <- function(object, ...) {
 
 #' Coefficients for a tobs_fit
 #'
-#' Extends the generic per-process coefficient list with the visit-level
-#' detection coefficients (`p_visit_<cov>`) that the `process_info` loop omits
-#' because the visit-level design is carried separately from the site-level
-#' detection process (gcol33/tulpaObs#11).
+#' Returns a per-process coefficient list keyed by the model's process names
+#' (`psi`, `p`, `gamma`, `lambda`, ...), splitting the generic flat fixed-effect
+#' vector on the `<process>_<coef>` name prefix, and appends the visit-level
+#' detection coefficients (`p_visit_<cov>`) carried separately from the
+#' site-level detection design (gcol33/tulpaObs#11). Coordinates with no process
+#' prefix (e.g. the `log_r` overdispersion nuisance) are not arm coefficients
+#' and are omitted from the list (they remain in `vcov()` / `confint()`).
 #'
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
-#' @return The per-process coefficient list, with visit-level detection
-#'   coefficients appended to the detection process when present.
+#' @return A per-process coefficient list, one named numeric vector per linear
+#'   predictor, with visit-level detection coefficients appended to the
+#'   detection process when present.
 #' @export
 coef.tobs_fit <- function(object, ...) {
   cf <- NextMethod()
+  if (!is.list(cf)) cf <- .tobs_coef_by_process(cf, object$process_info)
+
   vn <- object$model$det_visit_names
   if (!is.null(vn) && length(vn) > 0L && is.list(cf)) {
     det_name <- object$process_info[[2]]$name
-    pv_names <- paste0("p_visit_", vn)
-    pv <- object$means[pv_names]
+    pv <- object$means[paste0("p_visit_", vn)]
+    names(pv) <- paste0("visit_", vn)
     if (!is.null(cf[[det_name]])) {
       cf[[det_name]] <- c(cf[[det_name]], pv)
     } else {
@@ -123,11 +129,33 @@ coef.tobs_fit <- function(object, ...) {
   cf
 }
 
+# Split a flat fixed-effect coefficient vector into a per-process list keyed by
+# process name. Each name is "<process>_<coef>"; group by prefix in
+# process_info order and strip the prefix from the inner names. Returns the
+# input unchanged when there is no process_info or no name matches a prefix.
+.tobs_coef_by_process <- function(flat, pi_list) {
+  if (is.null(pi_list) || is.null(names(flat))) return(flat)
+  nm <- names(flat)
+  cf <- list()
+  for (pp in pi_list) {
+    prefix <- paste0(pp$name, "_")
+    hit <- startsWith(nm, prefix)
+    if (!any(hit)) next
+    vals <- flat[hit]
+    names(vals) <- sub(paste0("^", prefix), "", nm[hit])
+    cf[[pp$name]] <- vals
+  }
+  if (length(cf) == 0L) flat else cf
+}
+
 #' Fitted values (occupancy and detection probabilities)
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
 #' @return A list with `psi` (occupancy probabilities), `p` (detection probabilities),
-#'   and `z` (posterior P(z=1)) at posterior mean.
+#'   and `z` (posterior state probability at posterior-mean parameters). For
+#'   single-season and community models `z` is the per-site Bayes posterior
+#'   `P(z=1 | y)`; for dynamic models `z` is the forward-backward (HMM smoothing)
+#'   state posterior `P(z_t=1 | y_{1:T})` as an `[n_sites x n_seasons]` matrix.
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
@@ -166,11 +194,94 @@ fitted.tobs_fit <- function(object, ...) {
         z[i] <- psi[i] * prod_1mp / (psi[i] * prod_1mp + (1 - psi[i]))
       }
     }
+  } else if (identical(model$model_type, "dynamic")) {
+    z <- .tobs_dynamic_smoothed_z(model, means, pi_list)
   } else {
-    z <- psi  # Approximate for dynamic models
+    z <- psi
   }
 
   list(psi = psi, p = p, z = z)
+}
+
+# Forward-backward (HMM smoothing) state posterior P(z_{i,t} = 1 | y_{i,1:T})
+# for a dynamic (MacKenzie et al. 2003) occupancy fit. The forward filter is the
+# same recursion the likelihood evaluates (src/dyn_occ_likelihood.h); the
+# backward pass folds in the future detection history so each season's state is
+# conditioned on the whole series, not just the marginal occupancy probability.
+# Returns an [n_sites x n_seasons] matrix. Detection / colonization / extinction
+# are site-level (constant across seasons), matching the engine.
+.tobs_dynamic_smoothed_z <- function(model, means, pi_list) {
+  n_sites   <- model$n_sites
+  T_seasons <- model$n_seasons
+
+  X <- model$X_processes
+  off <- cumsum(c(0L, vapply(pi_list, function(pp) pp$p, integer(1))))
+  beta_psi1 <- means[off[1] + seq_len(pi_list[[1]]$p)]
+  beta_p    <- means[off[2] + seq_len(pi_list[[2]]$p)]
+  beta_gam  <- means[off[3] + seq_len(pi_list[[3]]$p)]
+  beta_eps  <- means[off[4] + seq_len(pi_list[[4]]$p)]
+
+  psi1  <- plogis(as.vector(X[[1]] %*% beta_psi1))
+  p     <- plogis(as.vector(X[[2]] %*% beta_p))
+  gamma <- plogis(as.vector(X[[3]] %*% beta_gam))
+  eps   <- plogis(as.vector(X[[4]] %*% beta_eps))
+
+  y <- model$y  # [n_sites x max_visits x n_seasons]
+  z <- matrix(NA_real_, n_sites, T_seasons)
+
+  for (i in seq_len(n_sites)) {
+    pi_i <- p[i]; gam_i <- gamma[i]; eps_i <- eps[i]
+
+    # Per-season emission likelihood under each state, and a hard-detection mask.
+    em <- matrix(1, T_seasons, 2L)  # columns: state 0 (unocc), state 1 (occ)
+    for (t in seq_len(T_seasons)) {
+      raw <- y[i, , t]
+      raw <- raw[!is.na(raw) & raw >= 0]
+      if (length(raw) == 0L) {
+        em[t, ] <- c(1, 1)  # no visits: uninformative
+      } else if (any(raw == 1)) {
+        # A detection rules out the unoccupied state.
+        em[t, 1L] <- 0
+        em[t, 2L] <- prod(p[i]^raw * (1 - p[i])^(1 - raw))
+      } else {
+        em[t, 1L] <- 1                       # unoccupied -> all non-detections
+        em[t, 2L] <- prod(1 - p[i])^length(raw)
+      }
+    }
+
+    # Transition matrix Tr[a, b] = P(z_{t+1}=b-1 | z_t=a-1).
+    Tr <- matrix(c(1 - gam_i, eps_i,
+                   gam_i,     1 - eps_i), 2L, 2L)
+
+    # Forward filtering (scaled).
+    fwd <- matrix(0, T_seasons, 2L)
+    prior <- c(1 - psi1[i], psi1[i])
+    a <- prior * em[1L, ]
+    a <- a / sum(a)
+    fwd[1L, ] <- a
+    if (T_seasons > 1L) {
+      for (t in 2L:T_seasons) {
+        pred <- as.vector(t(Tr) %*% fwd[t - 1L, ])
+        a <- pred * em[t, ]
+        a <- a / sum(a)
+        fwd[t, ] <- a
+      }
+    }
+
+    # Backward smoothing (Rauch-Tung-Striebel style for discrete HMM).
+    sm <- matrix(0, T_seasons, 2L)
+    sm[T_seasons, ] <- fwd[T_seasons, ]
+    if (T_seasons > 1L) {
+      for (t in (T_seasons - 1L):1L) {
+        pred <- as.vector(t(Tr) %*% fwd[t, ])  # P(z_{t+1} | y_{1:t})
+        ratio <- ifelse(pred > 0, sm[t + 1L, ] / pred, 0)
+        sm[t, ] <- fwd[t, ] * as.vector(Tr %*% ratio)
+        s <- sum(sm[t, ]); if (s > 0) sm[t, ] <- sm[t, ] / s
+      }
+    }
+    z[i, ] <- sm[, 2L]
+  }
+  z
 }
 
 # Occupancy-probability draws at a design matrix X.0: plogis(X.0 %*% beta_occ)
@@ -196,9 +307,21 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   fit_vals <- fitted(object)
   model <- object$model
 
-  # Occupancy residuals (site-level)
+  # Occupancy residuals (site-level; site-by-season for dynamic, matching the
+  # smoothed fitted()$z matrix). z_obs is the realized "ever-detected" indicator
+  # the smoothed state posterior is compared against (NA where the unit had no
+  # visits, so the state is unobserved).
   z_obs <- if (model$model_type %in% c("single", "community")) {
     apply(model$y, 1, function(row) as.integer(any(row[row >= 0] == 1)))
+  } else if (identical(model$model_type, "dynamic")) {
+    y <- model$y
+    n_sites <- dim(y)[1]; T_seasons <- dim(y)[3]
+    zo <- matrix(NA_real_, n_sites, T_seasons)
+    for (i in seq_len(n_sites)) for (t in seq_len(T_seasons)) {
+      raw <- y[i, , t]; raw <- raw[!is.na(raw) & raw >= 0]
+      if (length(raw)) zo[i, t] <- as.numeric(any(raw == 1))
+    }
+    zo
   } else {
     rep(NA_real_, model$n_sites)
   }
@@ -314,26 +437,57 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   than informed by detections.
 #' - **Design-matrix**: `predict(fit, X.0 = ...)` predicts at new covariate values.
 #' - **Terms-based**: `predict(fit, terms = "elev")` varies one covariate, others at mean.
+#' - **Joint occu_cover**: for a `occu_cover` joint-coupled fit,
+#'   `predict(fit, newdata, type = "occurrence" | "cover_cond" | "cover_exp" |
+#'   "change")` samples the joint latent from the grid-integrated posterior
+#'   (the outer-grid mixture via [tulpa::tulpa_posterior_draws()]) and
+#'   marginalises every derived quantity per draw. `type = "change"` with
+#'   `times = c(t1, t2)` returns a per-cell change table (`delta_p`,
+#'   `delta_cover_cond`, `delta_cover_exp`, the occupancy / abundance
+#'   decomposition, and `.lwr` / `.upr` at `level`). The result is a
+#'   `tobs_prediction` table (one row per cell) carrying per-unit `[cell x nsim]`
+#'   draw matrices in `attr(, "draws")`; map it yourself, e.g.
+#'   `left_join(cents, pr, by = "cell")` then
+#'   `geom_tile(aes(x, y, fill = delta_p))` (or `geom_sf()` on polygon cells).
 #'
 #' @param object A `tobs_fit` object.
 #' @param X.0 Optional design matrix for occupancy prediction.
 #' @param type `"occupancy"` (default), `"detection"`, `"both"`, or `"state"`
-#'   (nested-Laplace marginalised per-site psi, incl. held-out sites).
+#'   (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
+#'   `occu_cover` fit: `"occurrence"`, `"cover_cond"`, `"cover_exp"`, or
+#'   `"change"`.
 #' @param quantiles Quantile levels for credible intervals.
 #' @param terms Character vector of terms to vary (ggpredict-style).
 #' @param n_points Number of prediction points per continuous term.
+#' @param newdata `occu_cover` only: data.frame of prediction units, one row per
+#'   field cell (or carrying a `cell` column mapping rows to field cells).
+#'   Defaults to the training data.
+#' @param times `occu_cover` `type = "change"` only: length-2 numeric
+#'   `c(t1, t2)`, the two values of the time covariate to difference.
+#' @param level `occu_cover` only: credible level for the interval columns
+#'   (default 0.95).
+#' @param nsim `occu_cover` only: number of joint posterior draws (default 1000).
+#' @param draws `occu_cover` only: if `TRUE` (default), carry the per-unit
+#'   `[cell x nsim]` draw matrices in `attr(, "draws")`.
+#' @param time_col `occu_cover` only: name of the time covariate weighting the
+#'   trend field / driving the change map; auto-resolved from the fit's stored
+#'   trend weight when omitted.
 #' @param ... Ignored.
 #' @return Depends on mode. In-sample: `fitted()` result. `"state"`: a
 #'   data.frame with `row`, `psi` (marginalised posterior mean), `psi_lower` /
 #'   `psi_upper` (equal-tailed 95% credible interval; `NA` when the engine did
 #'   not return per-cell predictive variance), and `heldout`. Design-matrix/
-#'   terms: data.frame with estimate and CIs.
+#'   terms: data.frame with estimate and CIs. `occu_cover`: a `tobs_prediction`
+#'   table (one row per cell) with per-unit draw matrices in `attr(, "draws")`.
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
                                           "state"),
                                  quantiles = c(0.025, 0.5, 0.975),
-                                 terms = NULL, n_points = 50L, ...) {
+                                 terms = NULL, n_points = 50L,
+                                 newdata = NULL, times = NULL, level = 0.95,
+                                 nsim = 1000L, draws = TRUE, time_col = NULL,
+                                 ...) {
   # N-mixture abundance: the response types are "abundance" / "detection", so
   # route before the occupancy-specific match.arg(type) rejects them.
   if (identical(object$model$model_type, "nmix")) {
@@ -341,6 +495,18 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     return(.tobs_predict_nmix(object, X.0 = X.0, type = nmix_type,
                               quantiles = quantiles, terms = terms,
                               n_points = n_points))
+  }
+  # occu_cover joint fit: the response types are occurrence / cover_cond /
+  # cover_exp / change, so route before the occupancy match.arg(type) rejects
+  # them. `newdata` (or the positional `X.0` when a data.frame) carries the
+  # prediction units; `times` drives the change map. See ?predict.tobs_fit.
+  if (identical(object$model$model_type, "occu_cover")) {
+    oc_type <- if (missing(type) || length(type) > 1L) "occurrence" else type
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_occu_cover(object, newdata = nd, type = oc_type,
+                                    times = times, level = level, nsim = nsim,
+                                    draws = draws, time_col = time_col))
   }
   type <- match.arg(type)
 
@@ -445,6 +611,17 @@ predict_terms <- function(object, terms, type, quantiles, n_points) {
 
 #' @export
 plot.tobs_prediction <- function(x, ...) {
+  # occu_cover predictions are objects-only (a tidy table + per-unit draw
+  # matrices in attr "draws"); the real map is one join away in the user's own
+  # ggplot/sf. See ?predict.tobs_fit.
+  if (!is.null(attr(x, "quantity"))) {
+    q <- attr(x, "quantity")
+    message("predict(occu_cover) returns a table (one row per cell) plus ",
+            "per-unit draw matrices in attr(x, \"draws\"); join it to your ",
+            "spatial geometry and map it yourself (geom_tile / geom_sf). ",
+            "Quantity: ", q, ".")
+    return(invisible(x))
+  }
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     plot(x$x, x$estimate, type = "l", ylim = range(c(x$lower, x$upper)),
          xlab = attr(x, "term"), ylab = attr(x, "process"),
@@ -593,8 +770,8 @@ tobs_check_id <- function(model, fit = NULL) {
     }
   }
 
-  # Post-fit checks
-  if (!is.null(fit) && inherits(fit, "tobs_fit")) {
+  # Post-fit checks (NUTS only; Laplace fits carry NA sampler diagnostics)
+  if (!is.null(fit) && inherits(fit, "tobs_fit") && identical(fit$method, "nuts")) {
     if (sum(fit$divergent) > 0) {
       issues <- c(issues, sprintf("%d divergent transitions. Consider increasing adapt_delta or reparameterizing.", sum(fit$divergent)))
     }

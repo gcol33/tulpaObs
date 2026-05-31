@@ -43,24 +43,30 @@ terms (\code{bym2()}, \code{icar()}, \code{re()}, ...) error from the dispatcher
 pointer to this note.
 }
 
-\section{Spatially-varying temporal trend (\code{control$trend})}{
+\section{Coupled fields and spatially-varying trends}{
 
 The spatial engine (\code{method = "nested_laplace"}, default
 \code{control$engine = "joint_coupled"}) couples one shared areal field (the
-cell intercept) across the occupancy and cover arms. A SECOND coupled field
-\itemize{
-\item a spatially-varying temporal trend - is requested with
-\code{control = list(trend = list(weight = "<col>"))}, naming a numeric per-cell
-covariate present in the cell \code{data} frame. The trend field enters the
-occupancy predictor as \code{weight_i * sigma_trend * z2[cell_i]} and the cover
-predictor as \code{weight_i * alpha_trend * sigma_trend * z2[cell_i]}; the
-detection predictor is unaffected. Both fields share the same graph; each
-couples onto the cover arm with its own scale (\code{alpha}, \code{alpha_trend})
+cell intercept, an unweighted \code{icar()} / \code{bym2()} term) across the occupancy
+and cover arms. ADDITIONAL coupled fields - spatially-varying coefficients,
+e.g. a temporal trend - are added as \emph{weighted} areal terms in the formula:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{~ elev + icar(graph = adj) + icar(graph = adj, weight = year)
+}\if{html}{\out{</div>}}
+
+Each weighted term \code{icar(graph, weight = col)} is a second coupled field
+whose contribution to a predictor row is \code{weight_i * z[cell_i]}. All coupled
+fields share the same graph; each couples onto the cover arm with its own
+scale (\code{alpha} for the intercept field, \code{alpha_trend} for a trend field),
 integrated over the outer grid. The intercept field is reported in
-\code{fit$spatial_field}, the trend field in \code{fit$trend_field}. The coupling
-grid for the trend field defaults to \code{control$alpha.grid}; override it with
+\code{fit$spatial_field}, trend fields in \code{fit$trend_field} / \code{fit$trend_fields}.
+The trend coupling grid defaults to \code{control$alpha.grid}; override it with
 \code{control$alpha.grid.trend}.
-}
+
+A single trend field may also be requested out-of-band with
+\code{control = list(trend = list(weight = "<col>"))}, naming a numeric per-cell
+covariate in the cell \code{data}; this is the equivalent of one weighted formula
+term. Specify the trend field one way or the other, not both.
 }
 
 \seealso{

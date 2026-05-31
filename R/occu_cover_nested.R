@@ -537,7 +537,7 @@
   draws <- .occu_cover_rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
-  structure(list(
+  structure(c(list(
     draws        = draws,
     means        = means,
     sds          = se,
@@ -546,11 +546,9 @@
     n_params     = n_outer,
     log_prob     = rep(-opt$value, n_draws),
     log_lik      = -opt$value,
-    N            = sum(model$valid),
-    accept_prob  = rep(1, n_draws),
-    divergent    = rep(0L, n_draws),
-    treedepth    = rep(0L, n_draws),
-    epsilon      = NA_real_,
+    N            = sum(model$valid)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
     col_names    = par_names,
     param_names  = par_names,
     process_info = pi_list,
@@ -564,5 +562,5 @@
     positive     = model$positive,
     convergence  = list(converged = opt$convergence == 0L,
                         n_iter    = opt$counts[1L])
-  ), class = c("tobs_fit", "tulpa_fit"))
+  )), class = c("tobs_fit", "tulpa_fit"))
 }

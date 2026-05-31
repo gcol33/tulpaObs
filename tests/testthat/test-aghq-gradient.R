@@ -93,16 +93,23 @@ test_that("analytic AGHQ gradient matches FD with NB dispersion (community, incl
     Sig_p = matrix(c(0.25, -0.05, -0.05, 0.15), 2, 2))
   K_max <- max(d$y) + 25L
 
-  # nb = TRUE: the oracle exposes n_theta = d + 1, carrying log_r as theta[d].
+  # nb = TRUE: the dispersion is a per-species random effect log_r_s ~
+  # N(mu_log_r, sigma_log_r). The oracle widens the per-species RE vector to
+  # d = p_lambda + p_p + 1 (the trailing log_r_s coordinate) and carries mu_log_r
+  # as the trailing fixed effect (n_theta = d). The RE-covariance layout therefore
+  # has THREE blocks: the abundance and detection coefficient blocks plus a scalar
+  # log_r_s block (sigma_log_r), all integrated by the AGHQ engine.
   orc <- cpp_nmix_community_oracle(
     d$y, d$site_idx, d$species_idx, d$X_lambda, d$X_p, d$R, d$S, K_max, nb = TRUE)
-  nc <- c(p_lam, p_p); full <- c(TRUE, TRUE)
+  nc <- c(p_lam, p_p, 1L); full <- c(TRUE, TRUE, FALSE)
   layout <- tulpa:::.re_cov_block_layout(
     list(list(n_groups = d$S, n_coefs = p_lam, correlated = TRUE),
-         list(n_groups = d$S, n_coefs = p_p,   correlated = TRUE)), NULL)
+         list(n_groups = d$S, n_coefs = p_p,   correlated = TRUE),
+         list(n_groups = d$S, n_coefs = 1L,    correlated = FALSE)), NULL)
   re_par <- tulpa:::.re_cov_L_list_to_theta(
     lapply(list(matrix(c(0.30, 0.10, 0.10, 0.20), 2, 2),
-                matrix(c(0.25, -0.05, -0.05, 0.15), 2, 2)), tulpa:::.re_chol_spd),
+                matrix(c(0.25, -0.05, -0.05, 0.15), 2, 2),
+                matrix(0.5^2, 1, 1)), tulpa:::.re_chol_spd),
     layout)
   par0 <- c(c(1.0, 0.4) + 0.10, c(0.2, -0.3) - 0.10, log(8), re_par)
   nq <- 9L; lkj <- 1

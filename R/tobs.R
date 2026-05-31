@@ -941,7 +941,7 @@ print.tobs_fit <- function(x, ...) {
                   paste(fallback, collapse = ", ")))
     }
   }
-  if (!is.null(x$divergent) && sum(x$divergent) > 0) {
+  if (!is.null(x$divergent) && isTRUE(sum(x$divergent) > 0)) {
     cat(sprintf("  WARNING: %d divergent transitions\n", sum(x$divergent)))
   }
   if (!is.null(x$intercepts)) {

@@ -218,20 +218,40 @@
 .tobs_fit_ms_nmix_spatial <- function(model, spatial, mixture = "poisson",
                                       K_max = NULL, max_iter = 100L,
                                       verbose = TRUE) {
+  .tobs_reject_weighted_spatial(spatial, "ms_abun() spatial")
+  mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
+  n_sites <- model$n_sites
+  # Continuous Matern field shared across species: thread the SPDE FEM precision
+  # Q(range, sigma) and the mesh projection A through the same community
+  # Laplace-EM driver, broadcasting the site-level field across species.
+  if (identical(spatial$type, "spde")) {
+    lf  <- .tobs_ms_nmix_longform(model)
+    raw <- nmix_community_laplace_spde(
+      lf = lf, X_lambda = model$X_processes[[1]],
+      n_sites = n_sites, n_species = model$n_species,
+      spatial = spatial, mixture = mix_code, K_max = K_max,
+      max_iter = max_iter, verbose = isTRUE(verbose))
+    return(build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial))
+  }
+  if (identical(spatial$type, "gp") || identical(spatial$type, "multiscale_gp")) {
+    stop(sprintf(
+      "ms_abun() spatial supports the continuous field via spde(); the dense ",
+      "GP term '%s' is not wired. Use spde() for a mesh-based continuous Matern ",
+      "field, or icar() / bym2() / car_proper() for an areal field.",
+      spatial$type), call. = FALSE)
+  }
   if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
     stop(sprintf(
       "ms_abun() spatial supports the areal terms icar() / bym2() / car_proper() ",
-      "under method = \"nested_laplace\"; got '%s'. (car() is the improper ",
-      "non-intrinsic CAR; use icar() for the intrinsic field. Continuous gp() / ",
-      "spde() community fields are not yet wired.)"), spatial$type, call. = FALSE)
+      "and the continuous mesh field spde() under method = \"nested_laplace\"; ",
+      "got '%s'. (car() is the improper non-intrinsic CAR; use icar() for the ",
+      "intrinsic field.)"), spatial$type, call. = FALSE)
   }
-  n_sites <- model$n_sites
   if ((spatial$n_units %||% n_sites) != n_sites) {
     stop(sprintf("spatial term has %d units but the model has %d sites; one ",
                  "spatial unit per site is required for the community N-mixture.",
                  spatial$n_units, n_sites), call. = FALSE)
   }
-  mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
   lf  <- .tobs_ms_nmix_longform(model)
   csr <- .nmix_spatial_csr(spatial)
   common <- list(lf = lf, X_lambda = model$X_processes[[1]],
@@ -338,6 +358,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     draws = draws, means = means, sds = sds, vcov = vcov,
     n_samples = n_pseudo, n_params = length(means),
     col_names = nms, param_names = nms,
+    n_fixed = length(means), fixed_names = nms,
     process_info = pi_list,
     model = model, spatial = spatial,
     spatial_field = raw$spatial_field,
@@ -414,20 +435,33 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 }
 
 # simulate(): draw counts under the fitted per-species coefficients. Each draw
-# samples N_{s,i} ~ Poisson(lambda_{s,i}) then y ~ Binomial(N, p) at the
-# observed visit pattern, returning a 3D array matching the input y.
+# samples N_{s,i} ~ Poisson(lambda_{s,i}) (or NegBin(mu = lambda, size = r_s)
+# under mixture = "negbin") then y ~ Binomial(N, p) at the observed visit
+# pattern, returning a 3D array matching the input y. Under NB the per-species
+# size is the fitted r_s (non-spatial, per-species log_r RE) or the grid-
+# integrated community size r (spatial); a non-finite size is the Poisson limit.
 .tobs_simulate_ms_nmix <- function(object, nsim = 1) {
   model <- object$model
   fit   <- .tobs_fitted_ms_nmix(object)
   n_sites <- model$n_sites; max_visits <- model$max_visits
   n_species <- model$n_species
   obs_mask <- !is.na(model$y)
+  # Per-species NB size: r_s if present (non-spatial NB), else the community r
+  # (spatial NB), recycled across species; NA -> Poisson.
+  size_s <- rep(NA_real_, n_species)
+  if (identical(object$mixture, "negbin") && !is.null(object$ms_dispersion)) {
+    rs <- object$ms_dispersion$r_s
+    size_s <- if (!is.null(rs) && length(rs) == n_species) as.numeric(rs)
+              else rep(as.numeric(object$ms_dispersion$r %||% NA_real_), n_species)
+  }
   draws <- vector("list", nsim)
   for (s in seq_len(nsim)) {
     y_sim <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),
                    dimnames = list(NULL, NULL, model$species_names))
     for (sp in seq_len(n_species)) {
-      N <- stats::rpois(n_sites, fit$lambda[, sp])
+      N <- if (is.finite(size_s[sp]))
+             stats::rnbinom(n_sites, size = size_s[sp], mu = fit$lambda[, sp])
+           else stats::rpois(n_sites, fit$lambda[, sp])
       for (i in seq_len(n_sites)) {
         vis <- which(obs_mask[i, , sp])
         if (length(vis))
@@ -508,13 +542,29 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
   sd_lambda <- if (length(sd_lambda) == 1L) rep(sd_lambda, p_lam) else sd_lambda
   sd_p      <- if (length(sd_p) == 1L)      rep(sd_p, p_p)        else sd_p
 
-  abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
-  names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
-  det_covs <- data.frame(matrix(stats::rnorm(N * n_det_covs), N, n_det_covs))
-  names(det_covs) <- paste0("det_cov", seq_len(n_det_covs))
-  data <- cbind(abund_covs, det_covs)
-  X_lambda <- stats::model.matrix(~ ., abund_covs)
-  X_det    <- stats::model.matrix(~ ., det_covs)
+  # n_*_covs may be 0 (an intercept-only arm). Build each covariate frame with
+  # N rows and the requested number of columns, then stitch a single N-row data
+  # frame; a 0-column arm contributes no columns but keeps the row count.
+  make_covs <- function(n_covs, prefix) {
+    if (n_covs <= 0L) return(data.frame(row.names = seq_len(N)))
+    m <- matrix(stats::rnorm(N * n_covs), N, n_covs)
+    df <- as.data.frame(m)
+    names(df) <- paste0(prefix, seq_len(n_covs))
+    df
+  }
+  abund_covs <- make_covs(n_abund_covs, "abund_cov")
+  det_covs   <- make_covs(n_det_covs,   "det_cov")
+  data <- data.frame(row.names = seq_len(N))
+  if (ncol(abund_covs)) data <- cbind(data, abund_covs)
+  if (ncol(det_covs))   data <- cbind(data, det_covs)
+  # `~ .` needs at least one column; an intercept-only arm uses `~ 1` with an
+  # N-row frame so the design is the N x 1 intercept.
+  design_of <- function(df) {
+    if (ncol(df)) stats::model.matrix(~ ., df)
+    else stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
+  }
+  X_lambda <- design_of(abund_covs)
+  X_det    <- design_of(det_covs)
 
   beta_lambda <- matrix(stats::rnorm(n_species * p_lam, 0, rep(sd_lambda, each = n_species)),
                         n_species, p_lam) + matrix(mu_lambda, n_species, p_lam, byrow = TRUE)

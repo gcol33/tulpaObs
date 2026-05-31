@@ -96,6 +96,23 @@ test_that("S3 surface (coef, vcov, ranef) carries the RE component", {
   # ranef surfaces the per-group BLUP table.
   re <- ranef(fit)
   expect_false(is.null(re))
+
+  # tulpaObs#19 (RE note): the variance-component pseudo-draw columns
+  # (sigma_*, cor_*) have no analytic joint covariance with the fixed effects
+  # under the marginal-Hessian AGHQ path, so they are NA (uncertainty
+  # explicitly unavailable) rather than a fabricated near-degenerate column.
+  # The per-group BLUP columns carry their real AGHQ marginal posterior SD, so
+  # their draws are genuinely dispersed.
+  dn <- colnames(fit$draws)
+  sig_cols <- grep("^sigma_", dn)
+  blup_cols <- grep("^re_", dn)
+  expect_true(length(sig_cols) >= 1L)
+  expect_true(length(blup_cols) >= 1L)
+  expect_true(all(is.na(fit$draws[, sig_cols])))
+  expect_true(all(is.na(fit$sds[grep("^sigma_", names(fit$sds))])))
+  blup_sds <- apply(fit$draws[, blup_cols, drop = FALSE], 2, sd)
+  expect_true(all(is.finite(blup_sds)))
+  expect_true(any(blup_sds > 1e-3))
 })
 
 

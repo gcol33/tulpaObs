@@ -69,7 +69,20 @@ using tulpaObs::nmix_safe_inverse;
 using tulpaObs::nmix_logdet_spd;
 using tulpaObs::nmix_constrained_top_cov;
 
-enum class FieldKind { ICAR, CAR_PROPER, BYM2 };
+enum class FieldKind { ICAR, CAR_PROPER, BYM2, SPDE };
+
+// SPDE field context: the continuous Matern field lives at n_mesh FEM nodes;
+// the dense projection A (n_sites x n_mesh) maps mesh nodes onto sites, and Q
+// (n_mesh x n_mesh, carrying tau_spde^2) is the proper Matern precision built
+// once per grid point on the R side. The areal kinds carry a single field unit
+// per site; SPDE carries the whole mesh row, so the field loading and prior are
+// threaded through this struct rather than the (u, a, b) areal triple.
+struct SpdeCtx {
+    const MatrixXd* A = nullptr;     // n_sites x n_mesh
+    const MatrixXd* Q = nullptr;     // n_mesh x n_mesh (with tau_spde^2)
+    double log_det_Q = 0.0;
+    int n_mesh = 0;
+};
 
 inline double clamp30(double e) { return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e); }
 
@@ -147,14 +160,19 @@ double site_blocks(const NMixCommunityOracle::SiteRec& rec,
     return res.log_lik;
 }
 
-// Field geometry for one spatial unit u: the field-column loadings on
-// eta_lambda and their global indices in the top block (field_start = d).
+// Field geometry for one site: the field-column loadings on eta_lambda and
+// their global indices in the top block (field_start = d). Areal kinds load a
+// single field unit (BYM2 two: v + w); the SPDE field loads the mesh nodes of
+// the site's projection row (a 2D P1 FEM row has at most MAX_FIELD_LOAD
+// nonzeros -- the barycentric weights of the triangle the site falls in).
+static const int MAX_FIELD_LOAD = 4;
 struct FieldGeom {
     int nfield;
-    double load[2];
-    int    idx[2];
+    double load[MAX_FIELD_LOAD];
+    int    idx[MAX_FIELD_LOAD];
 };
 
+// Areal field geometry for spatial unit u.
 inline FieldGeom field_geom(FieldKind kind, int d, int n_spatial, int u,
                             double a, double b) {
     FieldGeom g;
@@ -169,10 +187,39 @@ inline FieldGeom field_geom(FieldKind kind, int d, int n_spatial, int u,
     return g;
 }
 
+// SPDE field geometry for one site: read the nonzeros of A.row(site).
+inline FieldGeom field_geom_spde(int d, const SpdeCtx& sp, int site) {
+    FieldGeom g;
+    g.nfield = 0;
+    for (int k = 0; k < sp.n_mesh; ++k) {
+        const double w = (*sp.A)(site, k);
+        if (w != 0.0) {
+            if (g.nfield >= MAX_FIELD_LOAD)
+                Rcpp::stop("SPDE projection row has more than %d nonzeros; "
+                           "raise MAX_FIELD_LOAD.", MAX_FIELD_LOAD);
+            g.load[g.nfield] = w;
+            g.idx[g.nfield]  = d + k;
+            ++g.nfield;
+        }
+    }
+    return g;
+}
+
 inline double field_offset(FieldKind kind, const VectorXd& field, int n_spatial,
                            int u, double a, double b) {
     if (kind == FieldKind::BYM2) return a * field(u) + b * field(n_spatial + u);
     return field(u);
+}
+
+// SPDE per-site offset: (A u)_site = sum_k A[site, k] u[k].
+inline double field_offset_spde(const VectorXd& field, const SpdeCtx& sp,
+                                int site) {
+    double off = 0.0;
+    for (int k = 0; k < sp.n_mesh; ++k) {
+        const double w = (*sp.A)(site, k);
+        if (w != 0.0) off += w * field(k);
+    }
+    return off;
 }
 
 // log p(field | hyper), dropping grid-independent constants. BYM2's (v, w)
@@ -183,7 +230,14 @@ inline double field_log_prior(FieldKind kind, int n_spatial,
                               const Rcpp::IntegerVector& adj_row_ptr,
                               const Rcpp::IntegerVector& adj_col_idx,
                               const Rcpp::IntegerVector& n_neighbors,
-                              const VectorXd& field) {
+                              const VectorXd& field,
+                              const SpdeCtx* spde = nullptr) {
+    if (kind == FieldKind::SPDE) {
+        // 0.5 log|Q| - 0.5 u' Q u (full rank; the (2 pi)^{-n_mesh/2} constant is
+        // grid-independent and dropped, as in the single-species SPDE path).
+        return 0.5 * spde->log_det_Q
+             - 0.5 * (field.transpose() * ((*spde->Q) * field))(0, 0);
+    }
     if (kind == FieldKind::BYM2) {
         const VectorXd v = field.head(n_spatial);
         const VectorXd w = field.tail(n_spatial);
@@ -208,7 +262,15 @@ inline void add_field_prior(FieldKind kind, int p_lam, int p_p, int n_spatial,
                             const Rcpp::IntegerVector& adj_col_idx,
                             const Rcpp::IntegerVector& n_neighbors,
                             const VectorXd& field,
-                            VectorXd& grad_top, MatrixXd& T) {
+                            VectorXd& grad_top, MatrixXd& T,
+                            const SpdeCtx* spde = nullptr) {
+    if (kind == FieldKind::SPDE) {
+        // Field prior -Q u to the score, +Q to the negative-Hessian field block.
+        const int d = p_lam + p_p;
+        grad_top.segment(d, spde->n_mesh).noalias() -= (*spde->Q) * field;
+        T.block(d, d, spde->n_mesh, spde->n_mesh).noalias() += (*spde->Q);
+        return;
+    }
     if (kind == FieldKind::BYM2) {
         const VectorXd v = field.head(n_spatial);
         const VectorXd w = field.tail(n_spatial);
@@ -225,7 +287,10 @@ inline void add_field_prior(FieldKind kind, int p_lam, int p_p, int n_spatial,
 // CAR_proper is full-rank and needs none.
 inline void center_field(FieldKind kind, int p_lam, int p_p, int n_spatial,
                          VectorXd& field) {
-    if (kind == FieldKind::CAR_PROPER || n_spatial <= 0) return;
+    // CAR_proper and SPDE are full rank: the (intercept, field-mean) direction
+    // is identified by Q itself, so no sum-to-zero centering.
+    if (kind == FieldKind::CAR_PROPER || kind == FieldKind::SPDE ||
+        n_spatial <= 0) return;
     const int len = (kind == FieldKind::BYM2) ? 2 * n_spatial : n_spatial;
     VectorXd holder(p_lam + p_p + len);
     holder.setZero();
@@ -266,7 +331,8 @@ CommSpatialResult community_spatial_em(
     const VectorXd& mu_init, const MatrixXd& Sigma_l_init,
     const MatrixXd& Sigma_p_init,
     int max_iter_em, double tol_em, int inner_max, double inner_tol,
-    double sigma_beta, bool verbose) {
+    double sigma_beta, bool verbose,
+    const SpdeCtx* spde = nullptr) {
 
     const int p_lam = orc.p_lam;
     const int p_p   = orc.p_p;
@@ -297,6 +363,17 @@ CommSpatialResult community_spatial_em(
         return P;
     };
 
+    // Per-site (geometry, offset) -- branches on the field kind once. SPDE reads
+    // the site's projection row; the areal kinds use the single-unit map.
+    auto site_geom = [&](int site, const VectorXd& field_) {
+        if (kind == FieldKind::SPDE)
+            return std::make_pair(field_geom_spde(d, *spde, site),
+                                  field_offset_spde(field_, *spde, site));
+        const int u = map_site_to_unit[site];
+        return std::make_pair(field_geom(kind, d, n_spatial, u, a, b),
+                              field_offset(kind, field_, n_spatial, u, a, b));
+    };
+
     // Data log-lik at the current state (line-search objective helper).
     auto data_loglik = [&](const VectorXd& mu_, const VectorXd& field_,
                            const std::vector<VectorXd>& b_) {
@@ -305,10 +382,9 @@ CommSpatialResult community_spatial_em(
         for (int s = 0; s < S; ++s) {
             VectorXd coef = mu_ + b_[s];
             for (const auto& rec : orc.sp_sites[s]) {
-                const int u = map_site_to_unit[rec.site];
-                FieldGeom g = field_geom(kind, d, n_spatial, u, a, b);
-                double off = field_offset(kind, field_, n_spatial, u, a, b);
-                double l = site_blocks(rec, Xlam, p_lam, p_p, coef, off,
+                auto go = site_geom(rec.site, field_);
+                const FieldGeom& g = go.first;
+                double l = site_blocks(rec, Xlam, p_lam, p_p, coef, go.second,
                                        g.load, g.nfield, r, false, false,
                                        grad_aug, small);
                 if (!R_finite(l)) return R_NegInf;
@@ -324,7 +400,7 @@ CommSpatialResult community_spatial_em(
         double obj = data_loglik(mu_, field_, b_);
         if (!R_finite(obj)) return R_NegInf;
         obj += field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
-                               adj_row_ptr, adj_col_idx, n_neighbors, field_);
+                               adj_row_ptr, adj_col_idx, n_neighbors, field_, spde);
         for (int s = 0; s < S; ++s) obj -= 0.5 * b_[s].dot(P * b_[s]);
         return obj;
     };
@@ -350,11 +426,10 @@ CommSpatialResult community_spatial_em(
             C[s].setZero(m, d);
             VectorXd coef = mu_ + b_[s];
             for (const auto& rec : orc.sp_sites[s]) {
-                const int u = map_site_to_unit[rec.site];
-                FieldGeom g = field_geom(kind, d, n_spatial, u, a, b);
-                double off = field_offset(kind, field_, n_spatial, u, a, b);
+                auto go = site_geom(rec.site, field_);
+                const FieldGeom& g = go.first;
                 double bw = 0.0;
-                ll += site_blocks(rec, Xlam, p_lam, p_p, coef, off,
+                ll += site_blocks(rec, Xlam, p_lam, p_p, coef, go.second,
                                   g.load, g.nfield, r, true, want_obs,
                                   grad_aug, small, &bw);
                 if (bw > bmax) bmax = bw;
@@ -385,7 +460,7 @@ CommSpatialResult community_spatial_em(
         // Field prior on the top block (mu is flat -- see the no-ridge note).
         add_field_prior(kind, p_lam, p_p, n_spatial, tau, rho,
                         adj_row_ptr, adj_col_idx, n_neighbors, field_,
-                        grad_top, T);
+                        grad_top, T, spde);
         if (log_lik_out) *log_lik_out = ll;
         if (boundary_out) *boundary_out = bmax;
     };
@@ -429,7 +504,7 @@ CommSpatialResult community_spatial_em(
             bool stepped = false;
             double obj_cur = ll_cur
                 + field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
-                                  adj_row_ptr, adj_col_idx, n_neighbors, field);
+                                  adj_row_ptr, adj_col_idx, n_neighbors, field, spde);
             for (int s = 0; s < S; ++s) obj_cur -= 0.5 * bvec[s].dot(P * bvec[s]);
             double max_step = 0.0;
             for (int h = 0; h < 12; ++h) {
@@ -511,7 +586,7 @@ CommSpatialResult community_spatial_em(
 
         // Per-species b-prior normaliser + the b-Schur determinant.
         double lp = field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
-                                    adj_row_ptr, adj_col_idx, n_neighbors, field);
+                                    adj_row_ptr, adj_col_idx, n_neighbors, field, spde);
         double bquad = 0.0;
         for (int s = 0; s < S; ++s) bquad += bvec[s].dot(P * bvec[s]);
         loglik_marg = ll + lp
@@ -521,9 +596,10 @@ CommSpatialResult community_spatial_em(
         // vcov_mu = top-left d-block of M^{-1}, constrained (sum field = 0) for
         // the rank-deficient intrinsic fields (ICAR / BYM2 v); CAR_proper is
         // full rank.
-        const bool constrain = (kind != FieldKind::CAR_PROPER);
+        const bool constrain = (kind != FieldKind::CAR_PROPER &&
+                                kind != FieldKind::SPDE);
         MatrixXd cov_top = nmix_constrained_top_cov(
-            M, m, d, /*field_start=*/d, /*field_len=*/n_spatial, constrain);
+            M, m, d, /*field_start=*/d, /*field_len=*/field_len, constrain);
         if (!cov_top.allFinite()) return false;
         vcov_mu = cov_top;
         return true;
@@ -787,4 +863,69 @@ Rcpp::List cpp_nmix_community_spatial_bym2(
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("sigma", "rho", "r");
     return pack_grid(FieldKind::BYM2, d, 2 * n_spatial, n_grid, results,
                      theta_grid_out, p_lam, p_p, n_spatial);
+}
+
+// Continuous Matern (SPDE) shared field on the abundance arm. The field lives
+// at n_mesh FEM nodes; the dense projection A (n_sites x n_mesh) maps mesh nodes
+// onto sites, shared across species exactly as the areal field is. Per grid
+// point the proper Matern precision Q(range, sigma) (carrying tau_spde^2) and
+// its log|Q| are built once on the R side and passed in; the outer grid axes are
+// (range, sigma) [, NB size r]. n_spatial is the mesh node count here.
+// [[Rcpp::export]]
+Rcpp::List cpp_nmix_community_spatial_spde(
+    SEXP oracle,
+    Rcpp::NumericMatrix X_lambda_R,
+    Rcpp::NumericMatrix A_R,            // dense [n_sites x n_mesh]
+    Rcpp::List Q_list,                  // per-grid-point precision [n_mesh x n_mesh]
+    Rcpp::NumericVector log_det_Q,      // per-grid-point log|Q|
+    Rcpp::NumericMatrix theta_grid_R,   // [n_grid x n_theta] (range, sigma, r)
+    Rcpp::NumericVector r_grid,         // NB size per grid point (or +Inf)
+    Rcpp::NumericVector mu_init,
+    Rcpp::NumericMatrix Sigma_lambda_init,
+    Rcpp::NumericMatrix Sigma_p_init,
+    int max_iter_em = 100, double tol_em = 1e-4,
+    int inner_max = 50, double inner_tol = 1e-6,
+    double sigma_beta = 100.0, bool verbose = false) {
+
+    const NMixCommunityOracle& orc = as_community_oracle(oracle);
+    const int n_sites = X_lambda_R.nrow();
+    const int n_mesh  = A_R.ncol();
+    const int p_lam = orc.p_lam, p_p = orc.p_p, d = p_lam + p_p;
+    if (A_R.nrow() != n_sites)
+        Rcpp::stop("nrow(A) must equal nrow(X_lambda).");
+    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
+    const MatrixXd A = Map<MatrixXd>(REAL(A_R), n_sites, n_mesh);
+    VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
+    MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
+    MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);
+
+    const int n_grid = Q_list.size();
+    if ((int)log_det_Q.size() != n_grid)
+        Rcpp::stop("length(log_det_Q) must equal length(Q_list).");
+    if (theta_grid_R.nrow() != n_grid)
+        Rcpp::stop("nrow(theta_grid) must equal length(Q_list).");
+    if ((int)r_grid.size() != n_grid)
+        Rcpp::stop("length(r_grid) must equal length(Q_list).");
+
+    // Empty CSR adjacency (unused on the SPDE path).
+    Rcpp::IntegerVector empty_int(0);
+
+    std::vector<CommSpatialResult> results(n_grid);
+    std::vector<MatrixXd> Qmats(n_grid);   // keep alive for the SpdeCtx pointers
+    for (int k = 0; k < n_grid; ++k) {
+        Rcpp::NumericMatrix Qk_R = Q_list[k];
+        if (Qk_R.nrow() != n_mesh || Qk_R.ncol() != n_mesh)
+            Rcpp::stop("Q_list[[%d]] must be n_mesh x n_mesh.", k + 1);
+        Qmats[k] = Map<MatrixXd>(REAL(Qk_R), n_mesh, n_mesh);
+        SpdeCtx sp;
+        sp.A = &A; sp.Q = &Qmats[k]; sp.log_det_Q = log_det_Q[k]; sp.n_mesh = n_mesh;
+        results[k] = community_spatial_em(
+            FieldKind::SPDE, orc, Xl, /*map=*/std::vector<int>(), /*n_spatial=*/n_mesh,
+            empty_int, empty_int, empty_int,
+            /*tau=*/1.0, /*rho=*/1.0, /*log_det_Q_rho=*/0.0, /*a=*/0.0, /*b=*/0.0,
+            r_grid[k], mu0, Sl0, Sp0,
+            max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose, &sp);
+    }
+    return pack_grid(FieldKind::SPDE, d, n_mesh, n_grid, results,
+                     theta_grid_R, p_lam, p_p, n_mesh);
 }

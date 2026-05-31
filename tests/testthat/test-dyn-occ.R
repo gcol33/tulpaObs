@@ -90,3 +90,48 @@ test_that("dyn_occu recovers (psi1, gamma, epsilon, p) within bias tolerance", {
                              paste(round(rec, 3), collapse = ","),
                              paste(round(truth, 3), collapse = ",")))
 })
+
+test_that("fitted()$z is the forward-backward smoothed state for dynamic models", {
+  # tulpaObs#18: dynamic fitted()$z must be the HMM smoothing posterior
+  # P(z_t=1 | y_{1:T}), not the marginal occupancy psi_t. We verify (a) shape
+  # [n_sites x n_seasons], (b) any detected (site, season) smooths to 1, and
+  # (c) recovery against simulated truth beats the marginal-psi plug-in baseline.
+  set.seed(7)
+  n_sites <- 250; n_seasons <- 4; n_visits <- 4
+  psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
+
+  ztrue <- matrix(NA_integer_, n_sites, n_seasons)
+  ztrue[, 1] <- rbinom(n_sites, 1, psi1)
+  for (t in 2:n_seasons)
+    ztrue[, t] <- ifelse(ztrue[, t-1] == 1, rbinom(n_sites, 1, 1 - eps),
+                         rbinom(n_sites, 1, gam))
+  y <- array(0L, dim = c(n_sites, n_visits, n_seasons))
+  for (i in seq_len(n_sites)) for (t in seq_len(n_seasons))
+    y[i, , t] <- if (ztrue[i, t]) rbinom(n_visits, 1, p_true) else 0L
+
+  fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
+              detection = ~ 1, y = y, col_formula = ~ 1, ext_formula = ~ 1,
+              method = "laplace", control = list(verbose = FALSE))
+  z <- fitted(fit)$z
+  expect_true(is.matrix(z))
+  expect_equal(dim(z), c(n_sites, n_seasons))
+  expect_true(all(z >= 0 & z <= 1))
+
+  # Any season with a detection is certainly occupied -> smoothed z == 1.
+  det_mask <- apply(y, c(1, 3), function(v) any(v == 1))
+  expect_true(all(abs(z[det_mask] - 1) < 1e-6))
+
+  # Smoothed posterior beats the marginal-psi plug-in (the old behavior).
+  psi1_hat <- plogis(fit$means[["psi1_(Intercept)"]])
+  gam_hat  <- plogis(fit$means[["gamma_(Intercept)"]])
+  eps_hat  <- plogis(fit$means[["epsilon_(Intercept)"]])
+  psi_marg <- numeric(n_seasons); psi_marg[1] <- psi1_hat
+  for (t in 2:n_seasons)
+    psi_marg[t] <- psi_marg[t-1] * (1 - eps_hat) + (1 - psi_marg[t-1]) * gam_hat
+  zmarg <- matrix(rep(psi_marg, each = n_sites), n_sites, n_seasons)
+
+  brier_sm   <- mean((z     - ztrue)^2)
+  brier_marg <- mean((zmarg - ztrue)^2)
+  expect_lt(brier_sm, brier_marg)              # strictly better calibration
+  expect_gt(mean((z > 0.5) == (ztrue == 1)), 0.9)  # high classification acc
+})

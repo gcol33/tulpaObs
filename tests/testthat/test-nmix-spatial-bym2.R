@@ -1,4 +1,4 @@
-﻿# Tests for nmix_laplace_bym2() -- nested-Laplace fit of the spatial
+# Tests for nmix_laplace_bym2() -- nested-Laplace fit of the spatial
 # Royle (2004) N-mixture model with a BYM2 (Riebler et al. 2016) prior on the
 # abundance-arm spatial offset.
 

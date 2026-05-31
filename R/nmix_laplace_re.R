@@ -1,4 +1,4 @@
-﻿#' Community / multispecies N-mixture by Laplace
+#' Community / multispecies N-mixture by Laplace
 #'
 #' @description
 #' Fits the community (spAbundance `msNMix`) N-mixture model: a per-species

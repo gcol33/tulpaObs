@@ -282,6 +282,29 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   p_det_visit <- if (is.null(X_det_visit)) 0L else ncol(X_det_visit)
   p_det_total <- p_det + p_det_visit
 
+  # An SPDE term may enter the state arm, the detection arm, or both (its
+  # `$shared = c(occ, det)` membership). Resolve the per-arm field once: the
+  # state field attaches to the occ block, the detection field to the det
+  # block. A detection field with visit-level detection covariates is not yet
+  # wired (the field is site-indexed; the det block is per (site, visit) and
+  # would need a row-expanded mesh projection).
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  spatial_det <- .spatial_for_arm(spatial, 2L)
+  if (!is.null(spatial_det) && p_det_visit > 0L) {
+    stop("SPDE on the detection process with visit-level detection covariates ",
+         "is not yet plumbed in .tobs_laplace; use shared occupancy-arm SPDE ",
+         "or method = 'nuts'.", call. = FALSE)
+  }
+
+  # A continuous Matern (SPDE) block on the nested-Laplace latent prior needs
+  # the same modest pseudo-binomial inflation the single-Laplace SPDE path uses
+  # (M = 4): at M = 1000 the data signal swamps the SPDE prior precision, the
+  # mesh field over-fits, and the occupancy slope inflates (the field absorbs
+  # the covariate signal). The areal icar/bym2/car_proper blocks are strongly
+  # informative at the grid scale and tolerate the sharp M = 1000 encoding, so
+  # the modest M is gated on a continuous-field block only.
+  nested_has_spde <- .tobs_latent_prior_has_spde(latent_prior)
+
   n_valid <- integer(n_sites)
   n_det <- integer(n_sites)
   any_det <- logical(n_sites)
@@ -305,7 +328,7 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   e_step <- function(fits, ...) {
     beta_occ <- extract_beta(fits$occ, p_occ)
     eta_occ <- as.vector(X_occ %*% beta_occ)
-    sp_off <- .spatial_eta_offset(spatial, fits$occ, p_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
     if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
     # Nested-Laplace: make the E-step weight P(z_i = 1 | y_i) field-aware (the
     # field informs which undetected sites are occupied; without this the EM
@@ -327,7 +350,10 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
 
     if (p_det_visit == 0L) {
       beta_det <- extract_beta(fits$det, p_det)
-      p_site <- plogis(as.vector(X_det %*% beta_det))
+      eta_det <- as.vector(X_det %*% beta_det)
+      det_off <- .spatial_eta_offset(spatial_det, fits$det, p_det)
+      if (length(det_off) == n_sites) eta_det <- eta_det + det_off
+      p_site <- plogis(eta_det)
       return(list(weights = occ_weights(psi, p_site, n_sites,
                                         n_valid, n_det, any_det)))
     }
@@ -360,12 +386,23 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   }
 
   m_step_encode <- function(weights, ...) {
-    if (is.null(spatial)) {
+    if (is.null(spatial_occ) && !nested_has_spde) {
       # Pseudo-binomial encoding: y = round(M*w), n_trials = M. The
       # M-inflation makes the M-step into a sharp binomial whose mode
       # equals the weighted mean, and is the historical encoding used
-      # everywhere else in the package.
+      # everywhere else in the package (areal nested-Laplace blocks too --
+      # their intrinsic-field prior is strong at the grid scale).
       M <- 1000L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+    } else if (is.null(spatial_occ) && nested_has_spde) {
+      # Nested-Laplace continuous SPDE block: modest M (= 4) so the mesh-field
+      # prior is not swamped, mirroring the single-Laplace SPDE encoding. The
+      # block prior is attached to occ$prior upstream (.tobs_laplace_nested),
+      # so no .attach_spatial_spde() here.
+      M <- 4L
       y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
       y_occ <- pmin(pmax(y_occ, 0L), M)
       occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
@@ -380,7 +417,7 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
       y_occ <- pmin(pmax(y_occ, 0L), M)
       occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
                         family = "binomial")
-      occ_block <- .attach_spatial_spde(occ_block, spatial)
+      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
     }
     # Detection block: weight by w_i = P(z_i = 1 | y_i, theta). Sites that
     # the E-step thinks are likely empty (w_i ~ 0) must drop out of the
@@ -390,7 +427,24 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
     w_det <- weights
     w_det[any_det] <- 1
 
-    if (p_det_visit == 0L) {
+    if (!is.null(spatial_det)) {
+      # SPDE detection field: the single-Laplace spatial solver consumes no
+      # per-observation `weights`, so the occupancy weight is folded into the
+      # binomial response by scaling both successes and trials by w_i
+      # (y = round(w_i n_det_i), n = round(w_i n_valid_i)). This is the
+      # frequency-weight-as-counts identity for a binomial mode/Hessian, and it
+      # keeps ALL n_sites rows so the per-site rows stay aligned with the full
+      # mesh projection A (n_sites x n_mesh). A near-empty site (w_i ~ 0)
+      # collapses to a (0, 0) row that contributes nothing to the likelihood,
+      # score, or Hessian -- the analogue of dropping it under the explicit
+      # weight on the non-spatial path.
+      y_det_w <- as.integer(round(w_det * n_det))
+      n_det_w <- as.integer(round(w_det * n_valid))
+      y_det_w <- pmin(pmax(y_det_w, 0L), n_det_w)
+      det_block <- list(y = y_det_w, n_trials = n_det_w, X = X_det,
+                        family = "binomial")
+      det_block <- .attach_spatial_spde(det_block, spatial_det)
+    } else if (p_det_visit == 0L) {
       keep_det <- keep & (w_det > 1e-6)
       det_block <- list(y = n_det[keep_det], n_trials = n_valid[keep_det],
                         X = X_det[keep_det, , drop = FALSE],
@@ -438,8 +492,18 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
     det_keep <- occ_sites[n_valid[occ_sites] > 0]
     occ_block <- list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
                       family = "binomial")
-    occ_block <- .attach_spatial_spde(occ_block, spatial)
-    if (p_det_visit == 0L) {
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    if (!is.null(spatial_det)) {
+      # Hard-z detection field: keep ALL n_sites rows aligned with the mesh
+      # projection by zeroing the trials of sites that contribute no detection
+      # evidence (z = 0 or no valid visits); a (0, 0) row drops out cleanly.
+      keep_det_mask <- (z == 1L) & (n_valid > 0L)
+      n_det_h <- ifelse(keep_det_mask, n_valid, 0L)
+      y_det_h <- ifelse(keep_det_mask, n_det, 0L)
+      det_block <- list(y = as.integer(y_det_h), n_trials = as.integer(n_det_h),
+                        X = X_det, family = "binomial")
+      det_block <- .attach_spatial_spde(det_block, spatial_det)
+    } else if (p_det_visit == 0L) {
       det_block <- if (length(det_keep) > 0)
         list(y = n_det[det_keep], n_trials = n_valid[det_keep],
              X = X_det[det_keep, , drop = FALSE], family = "binomial")
@@ -481,7 +545,6 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
 # Dynamic occupancy callbacks
 # ============================================================================
 build_dynamic_callbacks <- function(model, spatial = NULL) {
-  # spatial guaranteed NULL here by .validate_spatial_laplace.
   y_flat <- model$y_flat
   n_sites <- model$n_sites
   n_seasons <- model$n_seasons
@@ -493,6 +556,14 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
   p_occ <- ncol(X_occ); p_det <- ncol(X_det)
   p_col <- ncol(X_col); p_ext <- ncol(X_ext)
 
+  # The state field enters season-1 occupancy psi1 only (one psi1 row per
+  # site, the identity map). The colonization (gamma) and extinction
+  # (epsilon) transition predictors are separate latent processes whose own
+  # mesh fields are not wired here; `.validate_spatial_laplace` only routes a
+  # state-arm (shared[1]) SPDE term to the dynamic path, and the term
+  # constructor maps it to the psi1 predictor.
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+
   # Precompute per site-season
   nv <- model$n_visits
   ad <- model$any_detected
@@ -503,7 +574,10 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
     beta_col <- extract_beta(fits$col, p_col)
     beta_ext <- extract_beta(fits$ext, p_ext)
 
-    psi1 <- plogis(as.vector(X_occ %*% beta_occ))
+    eta_psi1 <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
+    if (length(sp_off) == n_sites) eta_psi1 <- eta_psi1 + sp_off
+    psi1 <- plogis(eta_psi1)
     p <- plogis(as.vector(X_det %*% beta_det))
     gam <- plogis(as.vector(X_col %*% beta_col))
     eps <- plogis(as.vector(X_ext %*% beta_ext))
@@ -539,12 +613,16 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
 
   m_step_encode <- function(weights, ...) {
     w <- weights  # n_sites x n_seasons matrix
-    # Occupancy: psi1 from season 1 weights
+    # Occupancy: psi1 from season 1 weights. The pseudo-binomial inflation is
+    # M = 1000 without a field; with the psi1 SPDE field it drops to M = 4 so
+    # the field prior precision is not swamped by the data signal (the same
+    # modest-M encoding the single-season state arm uses).
     M <- 1000L
+    M_occ <- if (is.null(spatial_occ)) 1000L else 4L
     w1 <- w[, 1]
-    y_occ <- ifelse(ad[seq(1, by = n_seasons, length.out = n_sites)], M,
-                    as.integer(round(w1 * M)))
-    y_occ <- pmin(pmax(y_occ, 0L), M)
+    y_occ <- ifelse(ad[seq(1, by = n_seasons, length.out = n_sites)], M_occ,
+                    as.integer(round(w1 * M_occ)))
+    y_occ <- pmin(pmax(y_occ, 0L), M_occ)
 
     # Colonization: from transitions where z_{t-1}=0, z_t=1
     # Extinction: from transitions where z_{t-1}=1, z_t=0
@@ -611,9 +689,12 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
                         weights = numeric(0), family = "binomial")
     }
 
+    occ_block <- list(y = y_occ, n_trials = rep(M_occ, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+
     list(
-      occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                 family = "binomial"),
+      occ = occ_block,
       det = det_block,
       col = list(y = col_y, n_trials = col_n, X = X_col,
                  family = "binomial"),
@@ -662,9 +743,11 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
     }
     dk <- total_vis > 0
 
+    occ_block <- list(y = z1, n_trials = rep(1L, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
     list(
-      occ = list(y = z1, n_trials = rep(1L, n_sites), X = X_occ,
-                 family = "binomial"),
+      occ = occ_block,
       det = if (sum(dk) > 0)
         list(y = total_det[dk], n_trials = total_vis[dk],
              X = X_det[dk,,drop=FALSE], family = "binomial")
@@ -692,7 +775,6 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
 # Community occupancy callbacks
 # ============================================================================
 build_community_callbacks <- function(model, spatial = NULL) {
-  # spatial guaranteed NULL here by .validate_spatial_laplace.
   y <- model$y  # N x max_visits (expanded: site-species rows)
   X_occ <- model$X_processes[[1]]
   X_det <- model$X_processes[[2]]
@@ -701,6 +783,17 @@ build_community_callbacks <- function(model, spatial = NULL) {
   n_species <- model$n_species
   max_visits <- model$max_visits
   p_occ <- ncol(X_occ); p_det <- ncol(X_det)
+
+  # A site-level psi field is shared across the species at a site. The state
+  # block carries N = n_sites * n_species rows in site-major order, so the
+  # site-indexed mesh projection A is broadcast onto those rows via
+  # `site_of_row` (the same site->state-row map the nested-Laplace community
+  # path uses). The detection arm is not wired for the community model.
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  if (!is.null(spatial_occ)) {
+    site_of_row <- .tobs_state_block_dims(model)$site_of_row
+    spatial_occ <- .tobs_spde_broadcast_spec(spatial_occ, site_of_row)
+  }
 
   n_valid <- integer(N); n_det <- integer(N); any_det <- logical(N)
   for (i in seq_len(N)) {
@@ -714,15 +807,29 @@ build_community_callbacks <- function(model, spatial = NULL) {
   e_step <- function(fits, ...) {
     beta_occ <- extract_beta(fits$occ, p_occ)
     beta_det <- extract_beta(fits$det, p_det)
-    psi <- plogis(as.vector(X_occ %*% beta_occ))
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
+    if (length(sp_off) == N) eta_occ <- eta_occ + sp_off
+    psi <- plogis(eta_occ)
     p <- plogis(as.vector(X_det %*% beta_det))
     list(weights = occ_weights(psi, p, N, n_valid, n_det, any_det))
   }
 
   m_step_encode <- function(weights, ...) {
-    M <- 1000L
-    y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-    y_occ <- pmin(pmax(y_occ, 0L), M)
+    if (is.null(spatial_occ)) {
+      M <- 1000L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, N), X = X_occ,
+                        family = "binomial")
+    } else {
+      M <- 4L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, N), X = X_occ,
+                        family = "binomial")
+      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    }
     # Weight detection rows by E-step occupancy posterior. Same fix as
     # build_single_callbacks(): species-site rows with low w_i drop out
     # of the detection fit.
@@ -730,8 +837,7 @@ build_community_callbacks <- function(model, spatial = NULL) {
     w_det[any_det] <- 1
     keep_det <- keep & (w_det > 1e-6)
     list(
-      occ = list(y = y_occ, n_trials = rep(M, N), X = X_occ,
-                 family = "binomial"),
+      occ = occ_block,
       det = list(y = n_det[keep_det], n_trials = n_valid[keep_det],
                  X = X_det[keep_det, , drop = FALSE],
                  weights = w_det[keep_det], family = "binomial")
@@ -747,9 +853,11 @@ build_community_callbacks <- function(model, spatial = NULL) {
   hard_encode <- function(z, ...) {
     occ_obs <- which(z == 1L)
     det_keep <- occ_obs[n_valid[occ_obs] > 0]
+    occ_block <- list(y = z, n_trials = rep(1L, N), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
     list(
-      occ = list(y = z, n_trials = rep(1L, N), X = X_occ,
-                 family = "binomial"),
+      occ = occ_block,
       det = if (length(det_keep) > 0)
         list(y = n_det[det_keep], n_trials = n_valid[det_keep],
              X = X_det[det_keep,,drop=FALSE], family = "binomial")
@@ -771,16 +879,22 @@ build_community_callbacks <- function(model, spatial = NULL) {
 # Integrated occupancy callbacks
 # ============================================================================
 build_integrated_callbacks <- function(model, spatial = NULL) {
-  if (!is.null(spatial)) {
-    stop("Integrated occupancy with SPDE is not yet plumbed in .tobs_laplace.",
-         call. = FALSE)
-  }
   y_sources <- model$y_sources
   site_maps <- model$site_maps
   X_occ <- model$X_processes[[1]]
   n_sites <- model$n_sites
   n_sources <- model$n_sources
   p_occ <- ncol(X_occ)
+
+  # The shared psi field enters the state arm (one state row per site, the
+  # identity map -- the proven single-season path). A field on the detection
+  # arm enters every source's per-source detection block, broadcast onto that
+  # source's sites (`src_rows`) and folded into the response by count-scaling,
+  # exactly as the single-season detection arm does. The field is fit
+  # independently per source block (one realization per submodel block; a
+  # genuinely shared realization across sources needs the copy() path).
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  spatial_det <- .spatial_for_arm(spatial, 2L)
 
   # Per-source detection info
   src_info <- lapply(seq_len(n_sources), function(s) {
@@ -792,8 +906,12 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
     }
     X_det <- model$X_processes[[1 + s]]
     src_rows <- site_maps[[s]] + 1L
+    # Detection-arm field projection broadcast onto this source's sites.
+    spatial_det_s <- if (!is.null(spatial_det))
+      .tobs_spde_broadcast_spec(spatial_det, src_rows) else NULL
     list(nv = nv, nd = nd, ad = ad, X_det = X_det[src_rows, , drop = FALSE],
-         p_det = ncol(X_det), keep = nv > 0, src_rows = src_rows)
+         p_det = ncol(X_det), keep = nv > 0, src_rows = src_rows,
+         spatial_det = spatial_det_s)
   })
 
   # Global detection status per site
@@ -806,12 +924,19 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
 
   e_step <- function(fits, ...) {
     beta_occ <- extract_beta(fits$occ, p_occ)
-    psi <- plogis(as.vector(X_occ %*% beta_occ))
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
+    if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
+    psi <- plogis(eta_occ)
     weights <- psi  # Prior occupancy
     for (s in seq_len(n_sources)) {
       si <- src_info[[s]]
       beta_det <- extract_beta(fits[[paste0("det", s)]], si$p_det)
-      p_s <- plogis(as.vector(si$X_det %*% beta_det))
+      eta_det <- as.vector(si$X_det %*% beta_det)
+      det_off <- .spatial_eta_offset(si$spatial_det, fits[[paste0("det", s)]],
+                                     si$p_det)
+      if (length(det_off) == length(si$src_rows)) eta_det <- eta_det + det_off
+      p_s <- plogis(eta_det)
       for (j in seq_along(si$src_rows)) {
         i <- si$src_rows[j]
         if (si$ad[j]) { weights[i] <- 1 }
@@ -826,11 +951,21 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
   }
 
   m_step_encode <- function(weights, ...) {
-    M <- 1000L
-    y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
-    y_occ <- pmin(pmax(y_occ, 0L), M)
-    specs <- list(occ = list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                             family = "binomial"))
+    if (is.null(spatial_occ)) {
+      M <- 1000L
+      y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+    } else {
+      M <- 4L
+      y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    }
+    specs <- list(occ = occ_block)
     # Per-source detection blocks: weight each row by w_i at the global
     # site mapped through src_rows. Sites where the E-step says "almost
     # certainly empty" drop out of every source's detection fit.
@@ -838,11 +973,25 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
       si <- src_info[[s]]
       w_src <- weights[si$src_rows]
       w_src[si$ad] <- 1
-      dk <- si$keep & (w_src > 1e-6)
-      specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk],
-                                        X = si$X_det[dk,,drop=FALSE],
-                                        weights = w_src[dk],
-                                        family = "binomial")
+      if (!is.null(si$spatial_det)) {
+        # SPDE detection field on this source: fold the occupancy weight into
+        # the binomial response by count-scaling (y = round(w nd), n =
+        # round(w nv)) so every source row stays aligned with the broadcast
+        # mesh projection A; a near-empty site collapses to a (0, 0) row.
+        y_det_w <- as.integer(round(w_src * si$nd))
+        n_det_w <- as.integer(round(w_src * si$nv))
+        y_det_w <- pmin(pmax(y_det_w, 0L), n_det_w)
+        det_block <- list(y = y_det_w, n_trials = n_det_w, X = si$X_det,
+                          family = "binomial")
+        specs[[paste0("det", s)]] <- .attach_spatial_spde(det_block,
+                                                          si$spatial_det)
+      } else {
+        dk <- si$keep & (w_src > 1e-6)
+        specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk],
+                                          X = si$X_det[dk,,drop=FALSE],
+                                          weights = w_src[dk],
+                                          family = "binomial")
+      }
     }
     specs
   }
@@ -855,16 +1004,29 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
   }
 
   hard_encode <- function(z, ...) {
-    specs <- list(occ = list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
-                             family = "binomial"))
+    occ_block <- list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    specs <- list(occ = occ_block)
     for (s in seq_len(n_sources)) {
       si <- src_info[[s]]
-      occ_local <- z[si$src_rows] == 1L & si$nv > 0
-      if (any(occ_local)) {
-        specs[[paste0("det", s)]] <- list(y = si$nd[occ_local],
-                                          n_trials = si$nv[occ_local],
-                                          X = si$X_det[occ_local,,drop=FALSE],
-                                          family = "binomial")
+      if (!is.null(si$spatial_det)) {
+        keep_det_mask <- (z[si$src_rows] == 1L) & (si$nv > 0L)
+        n_det_h <- ifelse(keep_det_mask, si$nv, 0L)
+        y_det_h <- ifelse(keep_det_mask, si$nd, 0L)
+        det_block <- list(y = as.integer(y_det_h),
+                          n_trials = as.integer(n_det_h),
+                          X = si$X_det, family = "binomial")
+        specs[[paste0("det", s)]] <- .attach_spatial_spde(det_block,
+                                                          si$spatial_det)
+      } else {
+        occ_local <- z[si$src_rows] == 1L & si$nv > 0
+        if (any(occ_local)) {
+          specs[[paste0("det", s)]] <- list(y = si$nd[occ_local],
+                                            n_trials = si$nv[occ_local],
+                                            X = si$X_det[occ_local,,drop=FALSE],
+                                            family = "binomial")
+        }
       }
     }
     specs
@@ -886,15 +1048,23 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
 # JSDM callbacks (no detection — simple Bernoulli)
 # ============================================================================
 build_jsdm_callbacks <- function(model, spatial = NULL) {
-  # JSDM is N = n_sites * n_species; SPDE A_x is n_sites-indexed, so attaching
-  # would require row-expansion. Deferred.
-  if (!is.null(spatial)) {
-    stop("JSDM with SPDE is not yet plumbed in .tobs_laplace.", call. = FALSE)
-  }
   y_jsdm <- model$y_jsdm
   X_occ <- model$X_processes[[1]]
   N <- model$N
   p_occ <- ncol(X_occ)
+
+  # JSDM has no detection process: y is observed directly, so the state arm is
+  # a plain Bernoulli on the observed presence/absence. A site-level field is
+  # shared across the species at a site -- the state block carries
+  # N = n_sites * n_species rows in site-major order, so the site-indexed mesh
+  # projection A is broadcast onto those rows via `site_of_row`. No occupancy
+  # weight to fold in (no latent state), so the response is the observed y at
+  # unit trials with the broadcast field attached directly.
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  if (!is.null(spatial_occ)) {
+    site_of_row <- .tobs_state_block_dims(model)$site_of_row
+    spatial_occ <- .tobs_spde_broadcast_spec(spatial_occ, site_of_row)
+  }
 
   # No E-step needed — no latent variable (y is observed directly)
   # But we still use EM framework for consistency with species RE
@@ -903,14 +1073,18 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
   }
 
   m_step_encode <- function(weights, ...) {
-    list(occ = list(y = as.integer(y_jsdm), n_trials = rep(1L, N), X = X_occ,
-                    family = "binomial"))
+    occ_block <- list(y = as.integer(y_jsdm), n_trials = rep(1L, N), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    list(occ = occ_block)
   }
 
   z_draw <- function(weights, ...) as.integer(y_jsdm)
   hard_encode <- function(z, ...) {
-    list(occ = list(y = z, n_trials = rep(1L, N), X = X_occ,
-                    family = "binomial"))
+    occ_block <- list(y = z, n_trials = rep(1L, N), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    list(occ = occ_block)
   }
 
   init <- list(occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)))
@@ -923,10 +1097,39 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
 # Shared helpers
 # ============================================================================
 
+# SPDE (continuous mesh field) coverage on the .tobs_laplace path, by model
+# type and arm (each cell is "wired" or an honest stop()):
+#
+#   model_type   state arm (shared[1])   detection arm (shared[2])
+#   single       wired                   wired
+#   integrated   wired                   wired (per source)
+#   jsdm         wired                   n/a (no detection process)
+#   community    wired                   stop()
+#   dynamic      wired (psi1 only)       stop()
+#
+# The state field on jsdm / community broadcasts the site-indexed mesh
+# projection A onto the N = n_sites * n_species state rows (one shared
+# site-level field across the species at a site, via .tobs_spde_broadcast_spec
+# and .tobs_state_block_dims). The dynamic state field enters season-1 psi1
+# only; the colonization / extinction transition predictors are separate latent
+# processes whose own mesh fields are not wired (a state-arm spde() term maps to
+# psi1). A single field shared across both arms at once (shared = c(TRUE, TRUE))
+# is a stop() everywhere: the single-Laplace block fitter fits one field
+# realization per submodel block, so a genuinely shared realization needs the
+# copy() path, not two independent blocks. The areal path (icar/bym2/car_proper
+# via nested_laplace) is wider; this matrix is the continuous-mesh SPDE path
+# only. The continuous gp()/spde() fields on the N-mixture arms (abun /
+# em_nested / ms_abun) are tracked separately (gcol33/tulpaObs#21).
+
 # Validate that `spatial` (a `tobs_spatial` or NULL) can be consumed by the
-# Laplace path. Slice A: SPDE on the occupancy/state submodel only, single +
-# integrated + jsdm model types. Other combinations error explicitly rather
-# than silently dropping the spec.
+# Laplace path. Wired by arm and model type:
+#   state arm (shared[1]): single, integrated, jsdm, community, dynamic (psi1)
+#   detection arm (shared[2]): single, integrated (per source)
+# jsdm has no detection process; community and dynamic do not yet carry a
+# detection-arm field. A single realization shared across both arms at once
+# needs the copy() path (the single-Laplace block fitter fits one realization
+# per submodel block), so c(TRUE, TRUE) errors here rather than silently fitting
+# two independent fields. Other combinations error explicitly.
 .validate_spatial_laplace <- function(spatial, model_type) {
   if (is.null(spatial)) return(invisible())
   if (!inherits(spatial, "tobs_spatial")) {
@@ -938,21 +1141,20 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
       ".tobs_laplace currently supports spatial$type == 'spde' only (got '%s'). Use method = 'nuts' for other spatial types.",
       spatial$type), call. = FALSE)
   }
-  if (length(spatial$shared) >= 2 && isTRUE(spatial$shared[2])) {
-    stop("SPDE on the detection process is not yet plumbed in .tobs_laplace; use shared = c(TRUE, FALSE).",
+  on_occ <- isTRUE(spatial$shared[1])
+  on_det <- length(spatial$shared) >= 2 && isTRUE(spatial$shared[2])
+  if (!on_occ && !on_det) {
+    stop("SPDE must be attached to the occupancy/state or detection submodel.",
          call. = FALSE)
   }
-  if (!isTRUE(spatial$shared[1])) {
-    stop("SPDE must be attached to the occupancy/state submodel (shared[1] = TRUE).",
+  if (on_occ && on_det) {
+    stop("A single SPDE field shared across the occupancy and detection arms is not plumbed in .tobs_laplace; attach the field to one arm, or use method = 'nuts'.",
          call. = FALSE)
   }
-  if (model_type == "community") {
-    stop("Community models with SPDE are not yet plumbed in .tobs_laplace.",
-         call. = FALSE)
-  }
-  if (model_type == "dynamic") {
-    stop("Dynamic models with SPDE are not yet plumbed in .tobs_laplace; coming after single-season.",
-         call. = FALSE)
+  if (on_det && model_type %in% c("jsdm", "community", "dynamic")) {
+    stop(sprintf(
+      "SPDE on the detection process is plumbed for single-season and integrated occupancy only in .tobs_laplace (got model_type = '%s'). Attach the field to the state arm, or use method = 'nuts'.",
+      model_type), call. = FALSE)
   }
   invisible()
 }
@@ -1015,6 +1217,66 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
   if (is.null(spatial) || !identical(spatial$type, "spde")) return(block)
   block$spatial <- spatial$tulpa_spec
   block
+}
+
+# Broadcast a site-indexed SPDE field onto a state block whose rows are
+# (site, species) -- community and jsdm carry N = n_sites * n_species rows
+# ordered site-major, so a single site-level field is shared across the species
+# at a site. The mesh / FEM matrices (C, G, n_mesh, nu, priors) describe the
+# field on the sites and are unchanged; only the projection A (and its
+# pre-extracted CSC slots A_x / A_i / A_p, which `laplace_spde_at()` hands to
+# the SPDE solver) is re-rowed so row r of the block projects through the mesh
+# basis at `site_of_row[r]`. The eta offset reader `.spatial_eta_offset()` uses
+# the same broadcast A, so the field contribution lands on every species row of
+# a site identically. `site_of_row` is 1-based into the n_sites mesh rows.
+.tobs_spde_broadcast_spec <- function(spatial, site_of_row) {
+  if (is.null(spatial) || !identical(spatial$type, "spde")) return(spatial)
+  sp <- spatial$tulpa_spec
+  A_b <- sp$A[site_of_row, , drop = FALSE]
+  A_csc <- methods::as(A_b, "CsparseMatrix")
+  sp$A   <- A_b
+  sp$A_x <- A_csc@x
+  sp$A_i <- A_csc@i
+  sp$A_p <- A_csc@p
+  spatial$tulpa_spec <- sp
+  spatial
+}
+
+# Select the SPDE spec for a given arm (1 = occupancy/state, 2 = detection)
+# from a `tobs_spatial` term carrying a `$shared = c(occ, det)` membership.
+# Returns the spec when the arm carries the field, NULL otherwise. One mesh
+# term is shared across the arms it enters, so each arm references the same
+# `tulpa_spec` (the field realization is fit independently per arm here -- two
+# separate mesh blocks, not a copied realization, which the single-Laplace path
+# does not support across submodels).
+.spatial_for_arm <- function(spatial, arm) {
+  if (is.null(spatial) || !identical(spatial$type, "spde")) return(NULL)
+  sh <- spatial$shared
+  if (length(sh) >= arm && isTRUE(sh[arm])) spatial else NULL
+}
+
+# TRUE when a nested-Laplace multi-block latent prior carries a continuous
+# Matern (SPDE) field block. Used to switch the occupancy M-step to the modest
+# pseudo-binomial inflation that keeps the mesh-field prior from being swamped.
+.tobs_latent_prior_has_spde <- function(latent_prior) {
+  if (is.null(latent_prior)) return(FALSE)
+  blocks <- if (!is.null(latent_prior$type)) list(latent_prior) else latent_prior
+  any(vapply(blocks, function(b) identical(b$type, "spde"), logical(1)))
+}
+
+# NUTS sampler-health diagnostics for a non-sampled (Laplace / nested-Laplace)
+# fit. No HMC trajectory exists, so acceptance, divergence, tree depth and the
+# integrator step size are unavailable; they are NA rather than 0/1 so a user
+# inspecting sampler health does not read "no sampler ran" as "sampler ran
+# cleanly" (NA-on-unavailable, the same rule as .se_from_laplace_fit). Splice
+# into a tobs_fit build with !!! / do.call so the named fields land directly.
+.tobs_na_nuts_diagnostics <- function(n_draws) {
+  list(
+    accept_prob = rep(NA_real_, n_draws),
+    divergent   = rep(NA_real_, n_draws),
+    treedepth   = rep(NA_integer_, n_draws),
+    epsilon     = NA_real_
+  )
 }
 
 extract_beta <- function(sub, p) {
@@ -1222,6 +1484,13 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
                               re_block = NULL, latent_prior = NULL) {
   pi_list <- model$process_info
 
+  # Per-arm SPDE membership: the field may sit on the state arm, the detection
+  # arm, or both. The fixed-effect SE machinery is arm-specific (the Louis
+  # observed-info correction assumes a non-spatial M-step Hessian on that arm),
+  # so route each arm with its own field.
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  spatial_det <- .spatial_for_arm(spatial, 2L)
+
   # Collect betas from correction (if available) or EM fits
   means <- numeric()
   sds <- numeric()
@@ -1265,7 +1534,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
           X_occ       = model$X_processes[[1]],
           beta_psi    = beta,
           weights     = em_result$weights,
-          spatial     = spatial,
+          spatial     = spatial_occ,
           spatial_fit = fi,
           prior_spec  = prior_spec,
           coef_names  = pi$coef_names
@@ -1274,6 +1543,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
         sds <- c(sds, louis_psi_se)
       } else if (identical(model$model_type, "single") &&
                  identical(sub_name, "det") &&
+                 is.null(spatial_det) &&
                  is.null(re_block) &&
                  is.null(model$X_det_visit) &&
                  !is.null(em_result$weights) &&
@@ -1295,7 +1565,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
           prior_spec     = prior_spec,
           occ_coef_names = pi_list[[1]]$coef_names,
           det_coef_names = pi$coef_names,
-          spatial        = spatial,
+          spatial        = spatial_occ,
           spatial_fit    = em_result$fits[["occ"]]
         )
         se_det <- .se_from_info(I_obs, pi$p)
@@ -1412,8 +1682,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # c(beta_occ, u_mesh). Extract u_mesh so callers can inspect or project
   # the latent field to observation locations via A %*% u_mesh.
   spatial_field <- NULL
-  if (!is.null(spatial) && identical(spatial$type, "spde") &&
-      !is.null(em_result$fits$occ$mode)) {
+  if (!is.null(spatial_occ) && !is.null(em_result$fits$occ$mode)) {
     p_occ <- pi_list[[1]]$p
     mode_vec <- em_result$fits$occ$mode
     if (length(mode_vec) > p_occ) {
@@ -1431,24 +1700,37 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     }
   }
 
-  structure(list(
+  # When SPDE is attached to the detection submodel, the det M-step mode is
+  # c(beta_det, u_mesh_det); extract the detection field tail. The field is
+  # identified off its own proper Matern (range, sigma) PC prior the same way
+  # the state field is -- no separate sum-to-zero constraint is imposed (the
+  # detection intercept absorbs the field level under the mean-zero prior).
+  spatial_field_det <- NULL
+  if (!is.null(spatial_det) && !is.null(em_result$fits$det$mode)) {
+    p_det <- pi_list[[2]]$p
+    mode_det <- em_result$fits$det$mode
+    if (length(mode_det) > p_det) {
+      spatial_field_det <- mode_det[(p_det + 1L):length(mode_det)]
+    }
+  }
+
+  structure(c(list(
     draws = draws, means = means, sds = sds,
     skew = sla_gamma, sla_status = sla_status,
     n_samples = n_pseudo, n_params = n_params,
-    log_prob = rep(NA_real_, n_pseudo),
-    accept_prob = rep(1, n_pseudo),
-    divergent = rep(0L, n_pseudo),
-    treedepth = rep(0L, n_pseudo),
-    epsilon = NA_real_,
+    log_prob = rep(NA_real_, n_pseudo)),
+    .tobs_na_nuts_diagnostics(n_pseudo),
+    list(
     col_names = nms, param_names = nms,
     intercepts = intercepts,
     model = model, spatial = spatial,
     spatial_field = spatial_field,
+    spatial_field_det = spatial_field_det,
     process_info = model$process_info,
     method = "laplace",
     re_effects = re_block$re_effects,
     aghq = em_result$aghq,
     convergence = em_result$convergence,
     correction = em_result$correction
-  ), class = c("tobs_fit", "tulpa_fit"))
+  )), class = c("tobs_fit", "tulpa_fit"))
 }

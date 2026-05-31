@@ -279,6 +279,100 @@ nmix_community_laplace_bym2 <- function(lf, X_lambda, n_sites, n_species,
 }
 
 
+# ---------------------------------------------------------------------------
+# SPDE (continuous Matern field shared across species)
+# ---------------------------------------------------------------------------
+
+# Shared continuous Matern field on the abundance arm:
+#   log lambda_{s,i} = X_lambda_i . (mu_lambda + b_lambda_s) + (A u)_i
+# with u ~ N(0, Q(range, sigma)^{-1}) on the FEM mesh and A (n_sites x n_mesh)
+# the projection shared across species. The outer grid integrates the SPDE
+# hyperparameters (range, sigma) [, NB size r]; per grid point the proper Matern
+# precision Q (and log|Q|) is built once on the R side (the same FEM assembly the
+# single-species SPDE and the occupancy SPDE paths use) and passed into the same
+# community Laplace-EM driver as the areal fields.
+nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
+                                        spatial, mixture = "P",
+                                        range_grid = NULL, sigma_grid = NULL,
+                                        r_grid = NULL, K_max = NULL,
+                                        max_iter = 100L, verbose = FALSE) {
+  p_lam <- ncol(X_lambda); p_p <- ncol(lf$X_p)
+  ts <- spatial$tulpa_spec
+  if (is.null(ts) || !identical(ts$type, "spde")) {
+    stop("nmix_community_laplace_spde() requires an SPDE tulpa_spec.", call. = FALSE)
+  }
+  n_mesh  <- ts$n_mesh
+  A_dense <- as.matrix(ts$A)
+  if (nrow(A_dense) != n_sites) {
+    stop(sprintf("SPDE projection A has %d rows but the model has %d sites.",
+                 nrow(A_dense), n_sites), call. = FALSE)
+  }
+
+  prior_range <- ts$prior_range
+  prior_sigma <- ts$prior_sigma
+  # Coarser default grid than the single-species SPDE path (3 x 3): each
+  # community grid point is an n_species-fold-more-expensive EM, so the outer
+  # (range x sigma [x r]) product is kept small -- the same rationale the areal
+  # community fitters use for their coarser sigma/rho/r grids.
+  if (is.null(range_grid)) {
+    r_med <- prior_range[1]
+    range_grid <- exp(seq(log(r_med * 0.4), log(r_med * 2.2), length.out = 3L))
+  }
+  if (is.null(sigma_grid)) {
+    s_scale <- prior_sigma[1]
+    sigma_grid <- exp(seq(log(s_scale * 0.4), log(s_scale * 1.8), length.out = 3L))
+  }
+  if (any(range_grid <= 0)) stop("range_grid must be strictly positive.", call. = FALSE)
+  if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
+  r_grid_use <- .nmix_community_r_grid(mixture, r_grid)
+
+  build_Q <- function(range_val, sigma_val) {
+    kappa    <- sqrt(8 * ts$nu) / range_val
+    tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
+    Q <- Matrix::forceSymmetric(tulpa:::.spde_precision_Q(ts, kappa, tau_spde))
+    list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
+  }
+
+  grid <- expand.grid(range = range_grid, sigma = sigma_grid,
+                      r = r_grid_use, KEEP.OUT.ATTRS = FALSE)
+  n_grid <- nrow(grid)
+  Q_list   <- vector("list", n_grid)
+  log_dets <- numeric(n_grid)
+  pc_lp    <- numeric(n_grid)
+  cache    <- list()
+  for (k in seq_len(n_grid)) {
+    key <- paste0(grid$range[k], "_", grid$sigma[k])
+    if (is.null(cache[[key]])) cache[[key]] <- build_Q(grid$range[k], grid$sigma[k])
+    Q_list[[k]] <- cache[[key]]$Q
+    log_dets[k] <- cache[[key]]$log_det
+    pc_lp[k]    <- tulpa:::pc_prior_log_density(grid$range[k], grid$sigma[k],
+                                                prior_range, prior_sigma)
+  }
+  theta_grid <- as.matrix(grid[, c("range", "sigma", "r"), drop = FALSE])
+
+  ws  <- .nmix_community_warm_start(lf$y, p_lam, p_p)
+  orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
+  raw <- cpp_nmix_community_spatial_spde(
+    oracle = orc$ptr, X_lambda_R = X_lambda, A_R = A_dense,
+    Q_list = Q_list, log_det_Q = log_dets,
+    theta_grid_R = theta_grid, r_grid = as.numeric(grid$r),
+    mu_init = ws$mu, Sigma_lambda_init = ws$Sigma_lambda,
+    Sigma_p_init = ws$Sigma_p,
+    max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
+
+  # Fold the Matern PC prior on (range, sigma) into each grid log-marginal so the
+  # integrated posterior is proper (the areal fields fold their prior into the
+  # C++ marginal; the SPDE PC prior lives in R, as on the single-species path).
+  raw$log_marginal <- raw$log_marginal + pc_lp
+
+  out <- .nmix_community_spatial_post(raw, p_lam, p_p, n_mesh, "spde",
+                                      .nmix_mix_label(mixture),
+                                      c("range", "sigma", "r"))
+  class(out) <- c("nmix_community_spatial_fit", "list")
+  out
+}
+
+
 # tulpaObs mixture code ("P"/"NB") -> public label ("poisson"/"negbin").
 .nmix_mix_label <- function(mixture) {
   if (identical(mixture, "NB")) "negbin" else "poisson"

@@ -1,4 +1,4 @@
-﻿# Correctness of nmix_site_marginal() -- the composable per-site N-mixture
+# Correctness of nmix_site_marginal() -- the composable per-site N-mixture
 # marginal callback that a grouped random-effect integrator consumes.
 #
 # These are derivative-level checks (the part most prone to silent error and the

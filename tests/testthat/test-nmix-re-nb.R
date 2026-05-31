@@ -1,4 +1,4 @@
-﻿# Negative-binomial community N-mixture: end-to-end recovery via the joint_grad
+# Negative-binomial community N-mixture: end-to-end recovery via the joint_grad
 # debias path (the analytic gradient now carries the global log_r dispersion as
 # an extra fixed effect). The gradient correctness itself is locked in
 # test-aghq-gradient.R; this confirms the wired pipeline recovers sensible

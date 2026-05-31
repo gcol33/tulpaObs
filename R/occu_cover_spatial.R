@@ -86,30 +86,62 @@
 
 
 # ---------------------------------------------------------------------------
-# Pull the spatial term from the psi formula. Returns NULL when no spatial
-# term is present, errors when something other than ICAR/BYM2 appears.
+# Pull the coupled spatial field(s) from the psi formula. Returns NULL when no
+# spatial term is present, otherwise a list with `fe` (the fixed-effects psi
+# formula) and `fields` (the ordered field specs: the one unweighted intercept
+# field first, then any weighted spatially-varying-coefficient fields).
+#
+# A weighted areal term (`icar(graph = adj, weight = col)`) is a second coupled
+# field -- a spatially-varying coefficient on `col` sharing the same areal
+# graph -- the formula-DSL spelling of the trend field that `control$trend`
+# also produces (gcol33/tulpaObs#15). The joint_coupled engine couples N such
+# fields; the legacy single-field v2/v3 engines take only the intercept field.
 # ---------------------------------------------------------------------------
-.occu_cover_spatial_term <- function(formula, data) {
+.occu_cover_spatial_fields <- function(formula, data) {
   bind <- .tobs_bind_formulas(list(psi = formula), data)
   if (length(bind$terms) == 0L) return(NULL)
   # `.tobs_bind_formulas` returns terms wrapped in `list(spec = ..., process = ...)`.
   spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
   if (length(spatial) == 0L) return(NULL)
-  if (length(spatial) > 1L) {
-    stop("occu_cover() v2 supports at most one spatial term in the psi ",
-         "formula; got ", length(spatial), ".", call. = FALSE)
-  }
-  term_spec <- spatial[[1L]]$spec
-  if (!term_spec$type %in% c("icar", "bym2")) {
+  specs <- lapply(spatial, function(t) t$spec)
+
+  bad <- Filter(function(s) !s$type %in% c("icar", "bym2"), specs)
+  if (length(bad)) {
     stop(sprintf(
-      "occu_cover() v2 spatial path supports icar() or bym2() in the psi formula; got %s().",
-      term_spec$type), call. = FALSE)
+      "occu_cover() spatial path supports icar() or bym2() in the psi formula; got %s().",
+      bad[[1L]]$type), call. = FALSE)
   }
-  if (term_spec$type == "bym2") {
-    warning("occu_cover() v2 reads bym2() as ICAR (rho fixed to 1); ",
-            "BYM2 with free rho mixing is v3.", call. = FALSE)
+  if (any(vapply(specs, function(s) identical(s$type, "bym2"), logical(1)))) {
+    warning("occu_cover() reads bym2() as ICAR (rho fixed to 1); ",
+            "BYM2 with free rho mixing is the v3 escape hatch.", call. = FALSE)
   }
-  list(fe = bind$fe$psi, term = term_spec)
+
+  # Exactly one unweighted (intercept) field is the shared base field; the rest
+  # are weighted SVC fields. The cell-coupling model has one node per cell, so
+  # every coupled field shares the base graph (only the weight column differs).
+  weighted <- vapply(specs, function(s) !is.null(s$weight), logical(1))
+  base <- specs[!weighted]
+  if (length(base) == 0L) {
+    stop("occu_cover() spatial requires one unweighted intercept field ",
+         "(e.g. icar(graph = adj)); only weighted SVC field(s) were given.",
+         call. = FALSE)
+  }
+  if (length(base) > 1L) {
+    stop("occu_cover() spatial supports exactly one unweighted intercept ",
+         "field; got ", length(base), ". Additional coupled fields must be ",
+         "weighted SVC terms, e.g. icar(graph = adj, weight = year).",
+         call. = FALSE)
+  }
+  base_graph <- base[[1L]]$graph
+  for (s in specs[weighted]) {
+    if (!identical(dim(s$graph), dim(base_graph)) ||
+        !all(s$graph == base_graph)) {
+      stop("occu_cover() coupled fields must share the same areal graph as ",
+           "the intercept field (same nodes / adjacency).", call. = FALSE)
+    }
+  }
+
+  list(fe = bind$fe$psi, fields = c(base, specs[weighted]))
 }
 
 
@@ -415,7 +447,7 @@
     z_upper   = z_mean_post + 1.96 * z_sd_post
   )
 
-  structure(list(
+  structure(c(list(
     draws        = draws,
     means        = means,
     sds          = se,
@@ -424,11 +456,9 @@
     n_params     = n_par,
     log_prob     = rep(-opt$value, n_draws),
     log_lik      = -opt$value,
-    N            = sum(model$valid),
-    accept_prob  = rep(1, n_draws),
-    divergent    = rep(0L, n_draws),
-    treedepth    = rep(0L, n_draws),
-    epsilon      = NA_real_,
+    N            = sum(model$valid)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
     col_names    = beta_names,
     param_names  = beta_names,
     process_info = pi_list,
@@ -442,5 +472,5 @@
     positive     = model$positive,
     convergence  = list(converged = opt$convergence == 0L,
                         n_iter    = opt$counts[1L])
-  ), class = c("tobs_fit", "tulpa_fit"))
+  )), class = c("tobs_fit", "tulpa_fit"))
 }

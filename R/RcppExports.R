@@ -37,6 +37,10 @@ cpp_nmix_community_spatial_bym2 <- function(oracle, map_site_to_unit_R, X_lambda
     .Call(`_tulpaObs_cpp_nmix_community_spatial_bym2`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose)
 }
 
+cpp_nmix_community_spatial_spde <- function(oracle, X_lambda_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_spatial_spde`, oracle, X_lambda_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose)
+}
+
 cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {
     .Call(`_tulpaObs_cpp_nmix_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max)
 }
@@ -59,6 +63,10 @@ cpp_nested_laplace_nmix_car_proper <- function(y, site_idx, map_site_to_unit_R, 
 
 cpp_nested_laplace_nmix_bym2 <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init = NULL, w_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE) {
     .Call(`_tulpaObs_cpp_nested_laplace_nmix_bym2`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init, w_init, K_max, max_iter, tol, verbose)
+}
+
+cpp_nested_laplace_nmix_spde <- function(y, site_idx, X_lambda_R, X_p_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, beta_lambda_init, beta_p_init, u_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nested_laplace_nmix_spde`, y, site_idx, X_lambda_R, X_p_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, beta_lambda_init, beta_p_init, u_init, K_max, max_iter, tol, verbose)
 }
 
 occ_make_nested_likelihood <- function(y, det_prob) {

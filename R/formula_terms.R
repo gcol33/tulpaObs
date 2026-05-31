@@ -67,6 +67,30 @@
                term, arg), call. = FALSE)
 }
 
+# Resolve an optional per-node SVC weight for an areal term. A non-NULL `weight`
+# is a numeric column with one value per graph node; it turns the field into a
+# spatially-varying coefficient whose contribution to a predictor row is
+# `weight_i * amplitude * z[node_i]` (the areal analogue of INLA's
+# f(node, weight, model = ...)). NULL is an unweighted (intercept) field. Only
+# the occu_cover joint spatial path consumes the weight; the other areal
+# consumers reject a weighted term via .tobs_reject_weighted_spatial().
+.tobs_resolve_field_weight <- function(weight, n_units, term) {
+  if (is.null(weight)) return(NULL)
+  w <- tryCatch(as.numeric(weight),
+                error = function(e) stop(sprintf(
+                  "%s(): `weight` must be a numeric per-node column.", term),
+                  call. = FALSE))
+  if (length(w) != n_units) {
+    stop(sprintf(
+      "%s(): `weight` has length %d but the graph has %d node(s).",
+      term, length(w), n_units), call. = FALSE)
+  }
+  if (any(!is.finite(w))) {
+    stop(sprintf("%s(): `weight` has non-finite entries.", term), call. = FALSE)
+  }
+  w
+}
+
 
 # ---------------------------------------------------------------------------
 # Spatial terms (areal)
@@ -87,25 +111,35 @@
 }
 
 # icar(graph)              — intrinsic CAR over an adjacency graph
-.tobs_term_icar <- function(graph, group_var = NULL, id = NULL) {
+#
+# `weight` (optional) is a per-node numeric column that makes this a
+# spatially-varying coefficient (a weighted field, `weight_i * z[node_i]`)
+# instead of a plain intercept field; see .tobs_resolve_field_weight().
+.tobs_term_icar <- function(graph, group_var = NULL, weight = NULL, id = NULL) {
   .tobs_check_graph(graph, "icar")
   csr <- adjacency_to_csr(graph)
+  wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
+  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "icar")
   .tobs_term(list(
     type = "icar", n_units = nrow(graph), graph = graph, group_var = group_var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
-    n_neighbors = csr$n_neighbors
+    n_neighbors = csr$n_neighbors, weight = weight, weight_label = wlabel
   ), class = "tobs_spatial", id = id, label = "icar")
 }
 
 # bym2(graph, scale_factor) — BYM2 reparameterization of ICAR + IID
-.tobs_term_bym2 <- function(graph, scale_factor = NULL, group_var = NULL, id = NULL) {
+.tobs_term_bym2 <- function(graph, scale_factor = NULL, group_var = NULL,
+                            weight = NULL, id = NULL) {
   .tobs_check_graph(graph, "bym2")
   csr <- adjacency_to_csr(graph)
   if (is.null(scale_factor)) scale_factor <- compute_bym2_scale(graph)
+  wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
+  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "bym2")
   .tobs_term(list(
     type = "bym2", n_units = nrow(graph), graph = graph, group_var = group_var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
-    n_neighbors = csr$n_neighbors, scale_factor = scale_factor
+    n_neighbors = csr$n_neighbors, scale_factor = scale_factor,
+    weight = weight, weight_label = wlabel
   ), class = "tobs_spatial", id = id, label = "bym2")
 }
 
@@ -122,13 +156,17 @@
              class = "tobs_spatial", id = id, label = "car")
 }
 
-.tobs_term_car_proper <- function(graph, group_var = NULL, id = NULL) {
+.tobs_term_car_proper <- function(graph, group_var = NULL, weight = NULL,
+                                  id = NULL) {
   .tobs_check_graph(graph, "car_proper")
   csr <- adjacency_to_csr(graph)
+  wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
+  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "car_proper")
   .tobs_term(list(type = "car_proper", n_units = nrow(graph), graph = graph,
                   group_var = group_var,
                   adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
-                  n_neighbors = csr$n_neighbors),
+                  n_neighbors = csr$n_neighbors,
+                  weight = weight, weight_label = wlabel),
              class = "tobs_spatial", id = id, label = "car_proper")
 }
 
@@ -381,6 +419,22 @@
 .tobs_term_names <- function() names(.tobs_terms)
 
 
+# A per-node SVC weight (icar/bym2/car_proper `weight =`) is a weighted field
+# that only the occu_cover joint spatial path consumes. Every other areal
+# consumer treats the field as an unweighted intercept field; rather than
+# silently dropping the weighting, error with a pointer to the supported path.
+.tobs_reject_weighted_spatial <- function(spec, context) {
+  if (inherits(spec, "tobs_spatial") && !is.null(spec$weight)) {
+    stop(sprintf(paste0(
+      "%s: a weighted areal term (%s(..., weight = )) is a spatially-varying ",
+      "coefficient, supported only on the occu_cover() joint spatial path ",
+      "(method = \"nested_laplace\"). Drop `weight` here."),
+      context, spec$type), call. = FALSE)
+  }
+  invisible(spec)
+}
+
+
 # Convert an areal `tobs_spatial` term into the `tulpa_spatial` spec the
 # cover-hurdle nested-Laplace path consumes. The areal terms retain the raw
 # adjacency `graph` (and an optional `group_var` mapping observations to graph
@@ -389,6 +443,7 @@
 # and are not supported by the cover engine. tulpa has no spatial_icar(); an
 # intrinsic ICAR is the improper CAR, so icar maps to spatial_car().
 .tobs_term_to_tulpa_spatial <- function(spec) {
+  .tobs_reject_weighted_spatial(spec, "cover() spatial")
   if (identical(spec$type, "spde")) return(spec$tulpa_spec)
   if (is.null(spec$graph)) {
     stop(sprintf(
@@ -423,6 +478,10 @@ print.tobs_spatial <- function(x, ...) {
               if (!is.null(x$id)) sprintf(" [id: %s]", x$id) else ""))
   if (identical(x$type, "spde")) {
     cat(sprintf("  Matern nu=%g, mesh=%d nodes\n", x$nu, x$n_units))
+  }
+  if (!is.null(x$weight)) {
+    cat(sprintf("  Spatially-varying coefficient, weight: %s\n",
+                x$weight_label %||% "<numeric>"))
   }
   invisible(x)
 }

@@ -13,7 +13,10 @@
 }
 \value{
 A list with \code{psi} (occupancy probabilities), \code{p} (detection probabilities),
-and \code{z} (posterior P(z=1)) at posterior mean.
+and \code{z} (posterior state probability at posterior-mean parameters). For
+single-season and community models \code{z} is the per-site Bayes posterior
+\code{P(z=1 | y)}; for dynamic models \code{z} is the forward-backward (HMM smoothing)
+state posterior \verb{P(z_t=1 | y_\{1:T\})} as an \verb{[n_sites x n_seasons]} matrix.
 }
 \description{
 Fitted values (occupancy and detection probabilities)

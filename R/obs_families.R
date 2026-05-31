@@ -200,21 +200,30 @@ jsdm <- function() {
 #' terms (`bym2()`, `icar()`, `re()`, ...) error from the dispatcher with a
 #' pointer to this note.
 #'
-#' @section Spatially-varying temporal trend (`control$trend`):
+#' @section Coupled fields and spatially-varying trends:
 #' The spatial engine (`method = "nested_laplace"`, default
 #' `control$engine = "joint_coupled"`) couples one shared areal field (the
-#' cell intercept) across the occupancy and cover arms. A SECOND coupled field
-#' - a spatially-varying temporal trend - is requested with
-#' `control = list(trend = list(weight = "<col>"))`, naming a numeric per-cell
-#' covariate present in the cell `data` frame. The trend field enters the
-#' occupancy predictor as `weight_i * sigma_trend * z2[cell_i]` and the cover
-#' predictor as `weight_i * alpha_trend * sigma_trend * z2[cell_i]`; the
-#' detection predictor is unaffected. Both fields share the same graph; each
-#' couples onto the cover arm with its own scale (`alpha`, `alpha_trend`)
+#' cell intercept, an unweighted `icar()` / `bym2()` term) across the occupancy
+#' and cover arms. ADDITIONAL coupled fields - spatially-varying coefficients,
+#' e.g. a temporal trend - are added as *weighted* areal terms in the formula:
+#'
+#' ```r
+#' ~ elev + icar(graph = adj) + icar(graph = adj, weight = year)
+#' ```
+#'
+#' Each weighted term `icar(graph, weight = col)` is a second coupled field
+#' whose contribution to a predictor row is `weight_i * z[cell_i]`. All coupled
+#' fields share the same graph; each couples onto the cover arm with its own
+#' scale (`alpha` for the intercept field, `alpha_trend` for a trend field),
 #' integrated over the outer grid. The intercept field is reported in
-#' `fit$spatial_field`, the trend field in `fit$trend_field`. The coupling
-#' grid for the trend field defaults to `control$alpha.grid`; override it with
+#' `fit$spatial_field`, trend fields in `fit$trend_field` / `fit$trend_fields`.
+#' The trend coupling grid defaults to `control$alpha.grid`; override it with
 #' `control$alpha.grid.trend`.
+#'
+#' A single trend field may also be requested out-of-band with
+#' `control = list(trend = list(weight = "<col>"))`, naming a numeric per-cell
+#' covariate in the cell `data`; this is the equivalent of one weighted formula
+#' term. Specify the trend field one way or the other, not both.
 #'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
@@ -443,7 +452,8 @@ cover <- function(positive = c("beta", "lognormal")) {
       "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",
       "rho.car.grid", "tau.temporal.grid", "rho.temporal.grid",
       "sigma.temporal.grid", "sigma.re.grid",
-      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes"
+      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      "prune", "prune.tol", "hessian"
     )
   )
 }

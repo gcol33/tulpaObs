@@ -19,7 +19,7 @@
   adj
 }
 
-.trend_fit <- function(sim, N, J, max.iter = 100L) {
+.trend_data <- function(sim, N, J) {
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
     y = as.vector(t(sim$y)),
@@ -29,16 +29,35 @@
                    det.covs = c("det_cov1", "pos_cov1"))
   cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+  list(od = od, cell_dat = cell_dat, y_pos = y_pos)
+}
 
+# Trend field requested out-of-band via control$trend (back-compat route).
+.trend_fit <- function(sim, N, J, max.iter = 100L) {
+  d <- .trend_data(sim, N, J)
   suppressWarnings(tobs(
-    formula = ~ occ_cov1 + bym2(graph = sim$adj), data = cell_dat,
+    formula = ~ occ_cov1 + bym2(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter,
                    engine = "joint_coupled",
                    trend = list(weight = "time"))
+  ))
+}
+
+# Trend field requested via the formula DSL (a weighted areal term).
+.trend_fit_dsl <- function(sim, N, J, max.iter = 100L) {
+  d <- .trend_data(sim, N, J)
+  suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = sim$adj) +
+                icar(graph = sim$adj, weight = time),
+    data = d$cell_dat, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint_coupled")
   ))
 }
 
@@ -85,6 +104,70 @@ test_that("occu_cover trend smoke fit runs end-to-end and exposes both fields", 
   expect_true(all(is.finite(Vj)))
 })
 
+
+test_that("trend field via a weighted formula term matches the control$trend route", {
+  N <- 30L; J <- 4L
+  adj <- .trend_chain_adj(N)
+  sim <- simulate_occu_cover(
+    N = N, J = J, positive = "lognormal", adj = adj,
+    sigma = 0.8, alpha = 1.0, trend = TRUE,
+    sigma_trend = 0.7, alpha_trend = 0.9, seed = 31337L
+  )
+  d <- .trend_data(sim, N, J)
+
+  fit_dsl <- .trend_fit_dsl(sim, N, J, max.iter = 300L)
+  expect_s3_class(fit_dsl, "tobs_fit")
+  expect_length(fit_dsl$spatial_field, N)
+  expect_length(fit_dsl$trend_field, N)
+  expect_true(all(is.finite(fit_dsl$trend_field)))
+  expect_identical(fit_dsl$trend_weight, "time")
+  expect_true(all(c("sigma", "alpha", "sigma_trend", "alpha_trend") %in%
+                    names(fit_dsl$means)))
+
+  # The DSL term and control$trend build identical internal blocks (icar
+  # intercept + one icar trend block, same alpha grids), so the fits are
+  # numerically identical given the same intercept term.
+  fit_ctrl <- suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
+    family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+                   trend = list(weight = "time"))
+  ))
+  keys <- c("psi_occ_cov1", "p_det_cov1", "pos_pos_cov1", "alpha", "alpha_trend")
+  expect_equal(unname(fit_dsl$means[keys]), unname(fit_ctrl$means[keys]),
+               tolerance = 1e-6)
+  expect_equal(fit_dsl$joint_vcov, fit_ctrl$joint_vcov, tolerance = 1e-7)
+
+  # Specifying the trend both ways is rejected.
+  expect_error(suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = sim$adj) +
+                icar(graph = sim$adj, weight = time),
+    data = d$cell_dat, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    control = list(verbose = FALSE, engine = "joint_coupled",
+                   trend = list(weight = "time"))
+  )), "not both")
+})
+
+test_that("a weighted areal term is rejected off the joint occu_cover path", {
+  N <- 12L
+  adj <- .trend_chain_adj(N)
+  cell_dat <- data.frame(site_id = seq_len(N), x = rnorm(N))
+  long <- data.frame(site_id = rep(seq_len(N), each = 2L),
+                     visit = rep(1:2, N), y = rbinom(2L * N, 1L, 0.4),
+                     w = rnorm(2L * N))
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                   det.covs = "w")
+  # An occupancy fit (not occu_cover) cannot consume a per-node field weight.
+  expect_error(
+    suppressWarnings(tobs(
+      formula = ~ x + icar(graph = adj, weight = x), data = cell_dat,
+      family = occu(), detection = ~ w, y = od$y, visits = od$det.covs,
+      method = "nested_laplace", control = list(verbose = FALSE))),
+    "spatially-varying coefficient")
+})
 
 test_that("occu_cover trend recovers slopes, both couplings, both fields (10 seeds)", {
   skip_on_cran()

@@ -295,3 +295,50 @@ test_that("spatial-slope 95% CI covers truth across seeds (calibration)", {
   # Calibrated SE -> ~95% coverage; allow Monte-Carlo slack at 20 seeds.
   expect_gte(mean(cov_slope), 0.8)
 })
+
+test_that("spatial N-mixture carries cross-arm (lambda,p) covariance", {
+  # tulpaObs#19: under the spatial path the coefficient covariance must NOT be
+  # block-diagonal across the abundance and detection arms -- the cross-arm
+  # (lambda, p) block, folded through the shared field, has to be non-zero so
+  # derived quantities combining the two arms propagate the correlation.
+  adj <- .grid_adj(7L)
+  b_lambda <- c(log(6), 0.6); b_p <- c(0.3, 0.5)
+  sim <- .sim_spatial_nmix(adj, b_lambda, b_p, J = 6L, seed = 19)
+  fit <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+              family = abun(), detection = ~ det_cov1, y = sim$y,
+              method = "nested_laplace", control = list(verbose = FALSE))
+  nm <- rownames(fit$vcov)
+  cross <- fit$vcov[grep("^lambda_", nm), grep("^p_", nm), drop = FALSE]
+  expect_gt(max(abs(cross)), 1e-6)
+  # The draws used for derived quantities inherit that covariance.
+  cor_draws <- cor(fit$draws[, grep("^lambda_", nm)[1]],
+                   fit$draws[, grep("^p_", nm)[1]])
+  expect_gt(abs(cor_draws), 0.02)
+})
+
+test_that("spatial N-mixture expected-count (lambda*p) CI is calibrated", {
+  skip_on_cran()
+  # The derived expected count mu = lambda * p combines BOTH arms, so its CI is
+  # only calibrated if the posterior draws carry the cross-arm covariance
+  # (tulpaObs#19). We evaluate mu per draw at a fixed design point and check
+  # 95% quantile-CI coverage vs the simulated truth across seeds.
+  adj <- .grid_adj(6L)
+  b_lambda <- c(log(5), 0.5); b_p <- c(0.3, 0.4)
+  x_lam <- c(1, 0.4); x_p <- c(1, -0.3)               # fixed evaluation point
+  mu_true <- exp(sum(x_lam * b_lambda)) * plogis(sum(x_p * b_p))
+  n_seed <- 20L
+  covered <- logical(n_seed)
+  for (s in seq_len(n_seed)) {
+    sim <- .sim_spatial_nmix(adj, b_lambda, b_p, J = 5L, seed = 500 + s)
+    fit <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+                family = abun(), detection = ~ det_cov1, y = sim$y,
+                method = "nested_laplace", control = list(verbose = FALSE))
+    nm <- rownames(fit$vcov)
+    bl <- fit$draws[, grep("^lambda_", nm), drop = FALSE]
+    bp <- fit$draws[, grep("^p_", nm), drop = FALSE]
+    mu_draws <- exp(as.numeric(bl %*% x_lam)) * plogis(as.numeric(bp %*% x_p))
+    ci <- quantile(mu_draws, c(0.025, 0.975))
+    covered[s] <- ci[1] <= mu_true && mu_true <= ci[2]
+  }
+  expect_gte(mean(covered), 0.8)
+})

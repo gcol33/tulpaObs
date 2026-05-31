@@ -1,4 +1,4 @@
-﻿# Tests for nmix_laplace_icar() -- nested-Laplace fit of the spatial
+# Tests for nmix_laplace_icar() -- nested-Laplace fit of the spatial
 # Royle (2004) N-mixture model with an ICAR prior on log lambda.
 
 # Build CSR adjacency for an n_row x n_col rook (4-neighbour) grid.

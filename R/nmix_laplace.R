@@ -1,4 +1,4 @@
-﻿#' Laplace fit of the Royle (2004) N-mixture model
+#' Laplace fit of the Royle (2004) N-mixture model
 #'
 #' @description
 #' Maximum-likelihood fit (non-spatial, fixed effects only) of the
@@ -204,6 +204,7 @@ nmix_laplace <- function(y,
   fit
 }
 
+#' @exportS3Method print nmix_fit
 print.nmix_fit <- function(x, ...) {
   mix <- x$mixture %||% "P"
   cat(sprintf("tulpa N-mixture Laplace fit (mixture = %s)\n", mix))

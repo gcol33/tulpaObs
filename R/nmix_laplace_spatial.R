@@ -1,4 +1,4 @@
-﻿#' Spatial Royle (2004) N-mixture model via nested Laplace
+#' Spatial Royle (2004) N-mixture model via nested Laplace
 #'
 #' @description
 #' Nested-Laplace fit of the spatial N-mixture model
@@ -660,6 +660,7 @@ nmix_laplace_bym2 <- function(y,
   out
 }
 
+#' @exportS3Method print nmix_spatial_fit
 print.nmix_spatial_fit <- function(x, ...) {
   ptype <- x$prior_type %||% "icar"
   label <- switch(ptype,
