@@ -20,6 +20,17 @@ set.seed(20260529)
 library(tulpaObs)
 ```
 
+```{r ggtheme, include = FALSE}
+have_gg <- requireNamespace("ggplot2", quietly = TRUE)
+if (have_gg) {
+  library(ggplot2)
+  transparent <- theme(
+    panel.background = element_rect(fill = "transparent", colour = NA),
+    plot.background  = element_rect(fill = "transparent", colour = NA)
+  )
+}
+```
+
 ## What tulpaObs fits
 
 A survey that visits a site a handful of times and records whether a
@@ -39,9 +50,39 @@ attach to any of them through terms inside the formula. The default
 engine is a fast Laplace approximation; the same model fits under NUTS
 when you want the full posterior.
 
+The split that defines the package is between the state and the
+observation. The state is the thing you care about: occupied or not,
+how many individuals, what fraction of ground a plant covers. The
+observation is what the field crew wrote down, and it is the state seen
+through a detection process that misses some of what is there. A naive
+analysis reads the observation as the state and undercounts everywhere
+detection is below one. Every family in tulpaObs writes the two levels
+separately, integrates the latent state out of the likelihood in closed
+form where it can, and reports both the state coefficients and the
+detection coefficients. You read occupancy against a background that
+already accounts for the visits where the species was present and missed.
+
+Where this differs from the tools next to it is the engine underneath.
+tulpaObs is a thin observation layer; the inference lives in `tulpa`,
+which composes a fast deterministic approximation with an exact sampler.
+The Laplace path finds the posterior mode and the curvature there and
+returns in a fraction of a second, which is the right tool for the first
+look and for comparing candidate models. The NUTS path samples the full
+posterior and reports `Rhat` and effective sample size, which is the
+right tool when detection is low, visits are few, or the posterior is
+skewed enough that a Gaussian summary at the mode would mislead. The same
+`tobs()` call switches between them with one argument, and the fitted
+object answers the same accessors either way. Against `unmarked`, the
+draw is a Bayesian posterior with credible intervals rather than a
+maximum-likelihood point fit; against a hand-written Stan model, the draw
+is the speed of the deterministic path and a formula interface that reads
+like `lme4`. You write the model once and choose the inference per run.
+
 This vignette stays on the spine: simulate a dataset with known truth,
-fit it, read the estimates, predict, compare. The dedicated vignettes go
-deeper on each family.
+fit it, read the estimates, predict, compare. It then takes one short
+taste of each model family, fits a random effect, and walks the standard
+S3 accessors. The dedicated vignettes go deeper on each family, and the
+taste tests link out to them rather than repeating their depth here.
 
 ## A first occupancy model
 
@@ -65,6 +106,16 @@ y   <- sim$y                 # 300 x 6 detection-history matrix
 y[1:3, ]
 ```
 
+The simulated object carries three pieces. `sim$data` is the site frame,
+one row per site, holding the covariates the occupancy and detection
+formulas will read. `sim$y` is the detection history, a matrix with one
+row per site and one column per visit, each entry a 0 or 1. `sim$truth`
+holds the parameters and the latent occupancy state, which the fit never
+sees and which you keep only to check recovery. Real data arrive without
+that last piece, so the recovery checks here are a luxury of working from
+a simulation; on a field dataset you fit, predict, and compare without a
+truth to measure against.
+
 The raw proportion of sites with any detection understates true
 occupancy, because an occupied site can go undetected on every visit.
 
@@ -72,6 +123,29 @@ occupancy, because an occupied site can go undetected on every visit.
 c(naive_occupied = mean(rowSums(y) > 0),
   true_occupied  = mean(sim$truth$z))
 ```
+
+The gap between those two numbers is the whole reason an occupancy model
+exists. The naive rate counts a site as occupied only if the species was
+seen at least once, and with detection near two thirds across six visits
+a present species is missed on every visit about one time in a thousand,
+so the gap is small here. Cut the visits to two or the detection to 0.3
+and the gap widens fast, because a present species then slips through
+undetected often enough to drag the observed rate well below the truth.
+The model recovers the difference by reading how often a species seen on
+one visit was missed on the next.
+
+The mechanism is worth one sentence before the fit. Across six visits an
+occupied site at detection $p$ produces at least one sighting with
+probability $1 - (1 - p)^6$, so the fraction of occupied sites that never
+register a single detection is $(1 - p)^6$. Invert that and the observed
+detection rate tells you both how many occupied sites you missed and what
+$p$ must have been to miss them, provided you have enough visits for the
+two to separate. Six visits at detection 0.67 leave almost no occupied
+site silent, which is why the naive and true rates nearly agree here and
+why this design recovers cleanly. The same model run on a two-visit
+survey would carry a wide interval on $p$ and a noticeably higher
+estimated occupancy than the naive count, because more occupied sites
+would have gone unseen.
 
 Fit the proper model with `tobs()`. The latent occupancy formula is the
 first argument, detection is its own formula, and `occu()` selects the
@@ -91,6 +165,18 @@ fit <- tobs(
 )
 ```
 
+Five arguments carry the whole model, and they map one to one onto the
+two-level structure. The first formula is the occupancy linear predictor
+on the logit of $\psi$. The `detection` formula is the per-visit
+detection predictor on the logit of $p$. The `family` names the
+likelihood, here single-season occupancy. The `y` matrix is the
+observation. The `method` picks the inference. Everything that is not a
+statistical choice (verbosity, iteration caps, tolerances, thread counts)
+lives inside `control`, so the call signature stays statistical and the
+knobs stay in one place. Swapping `occu()` for `abun()` and handing it a
+count matrix turns the same call into an N-mixture fit; the shape does
+not change.
+
 `coef()` returns the estimates as a list with one element per process.
 The occupancy and detection coefficients both land near the simulated
 truth.
@@ -99,6 +185,29 @@ truth.
 coef(fit)
 ```
 
+The list has two elements because the model has two processes. `coef(fit)$psi`
+holds the occupancy intercept and the slope on `occ_cov1`, both on the
+logit scale, and `coef(fit)$p` holds the detection coefficients. Reading
+the occupancy intercept of about 0.3 through `plogis()` gives a baseline
+occupancy near 0.57 at the covariate mean; the slope of about 1.0 says
+occupancy rises steeply with `occ_cov1`. Keep the link in mind whenever
+you read a coefficient: occupancy and detection are both logit-scale, so
+a coefficient is a change in log-odds, not in probability, and the
+mapping to probability is steepest near the middle of the range and flat
+at the ends.
+
+The per-process list is the shape every family in the package returns, so
+the same line of code reads the right block whatever the model. A
+single-season occupancy fit has `psi` and `p`; an N-mixture fit has
+`lambda` and `p`; an integrated fit has one occupancy block and a
+detection block per source. Reaching into the named element rather than a
+flat coefficient vector keeps the two arms distinct, which matters because
+they live on different links and mean different things. A common slip is
+to back-transform the whole vector with one function; the occupancy
+intercept needs `plogis()` to read as a probability, while an abundance
+intercept needs `exp()` to read as a count, and mixing them produces
+numbers that look plausible and are wrong.
+
 `summary()` adds the posterior standard deviation and the 2.5%/50%/97.5%
 credible bounds for every coefficient. The `psi_` rows are the occupancy
 linear predictor, the `p_` rows the detection one.
@@ -106,6 +215,16 @@ linear predictor, the `p_` rows the detection one.
 ```{r summary}
 summary(fit)
 ```
+
+Read the summary as four numbers per coefficient: the posterior mean, its
+standard deviation, and the lower and upper credible bounds. The bounds
+are the honest report. A slope whose interval clears zero is doing work;
+one whose interval straddles zero is consistent with no effect regardless
+of how large the point estimate looks. Here the occupancy slope on
+`occ_cov1` sits well clear of zero, which is the signal the simulation
+built in. The standard deviation and the bounds come straight from the
+curvature of the log-posterior at the mode, so the Laplace fit reports
+them without a sampling step.
 
 `confint()` returns the same bounds as a matrix, reading the fixed-effect
 block of the Hessian the Laplace fit already computed, so there is no
@@ -128,6 +247,29 @@ fv <- fitted(fit)
 str(lapply(fv, head, 4))
 ```
 
+The three quantities answer three different questions about a site. `psi`
+is what the model expects before seeing the visits: the occupancy
+probability the covariates imply. `p` is the per-visit detection
+probability the covariates imply. `z` is the posterior after the visits:
+given what was actually recorded, how sure are we the site is occupied. A
+site detected once has `z = 1` because detection rules out absence. A site
+with six blank visits has a `z` below one, pulled down from `psi` by the
+chance that six visits at this detection would all miss a present species.
+That posterior occupancy is the quantity richness sums over in a community
+model, and it is the right thing to map when you want occupancy rather
+than detections.
+
+The three numbers also pull apart the two ways a model can be wrong about
+a site. If `psi` is high but the visits are all blank and `z` stays high,
+the model is saying the covariates expect occupancy and the few visits
+were not enough to overturn that expectation. If `psi` is low and `z` is
+also low, the model and the data agree the site is probably empty. The
+disagreements are the interesting cases: a low `psi` with a detection
+pulling `z` up means the species turned up somewhere the covariates did
+not predict, which is the kind of residual a map of `z` minus `psi` makes
+visible. Reading the three together, rather than any one alone, is how you
+tell a confident prediction from a guess the covariates had to make.
+
 Plotting the fitted `psi` against the true occupancy probability shows
 the model recovers the site-level signal, not just the population mean.
 
@@ -136,6 +278,14 @@ plot(sim$truth$psi, fv$psi, pch = 16, col = rgb(0, 0, 0, 0.35),
      xlab = "true psi", ylab = "fitted psi")
 abline(0, 1, col = "steelblue", lwd = 2)
 ```
+
+The points scatter along the identity line rather than collapsing onto a
+single horizontal band, which is the test that matters. A model that
+recovered only the population mean would predict the same `psi` for every
+site and the cloud would be flat. This one tracks the covariate-driven
+spread, so a site with high `occ_cov1` is predicted high and a low one
+low. The scatter around the line is the irreducible uncertainty six binary
+visits leave behind, not bias.
 
 ## Laplace and NUTS
 
@@ -164,6 +314,21 @@ mixed. With six visits and detection near 0.67 the Laplace mode and the
 posterior mean coincide; at fewer visits or lower detection the joint
 mode can drift, and NUTS is the honest choice.
 
+The two diagnostics report different things, and a fit is trustworthy only
+when both pass. `Rhat` compares the variance within each chain to the
+variance across chains; a value near 1 means the chains explored the same
+region and agree on it, while a value above about 1.01 says they have not
+converged on a common answer and the summaries are premature. Effective
+sample size discounts the autocorrelation in the chain: a thousand draws
+that wander slowly might carry the information of only a few dozen
+independent ones, and a small effective sample size means the reported
+standard error is itself noisy. The Laplace fit reports neither, because
+it has no chains; its summaries come from the curvature at the mode, which
+is exact for the fixed-effect block and immediate. The decision between
+the two is not Laplace-versus-NUTS in general but per run: fast and
+deterministic when the posterior is well behaved, sampled when it is
+skewed or weakly identified.
+
 ```{r compare-backends}
 data.frame(
   term    = names(unlist(coef(fit))),
@@ -184,6 +349,13 @@ me <- tobs_marginal_effect(fit_nuts, "occ_cov1", process = "occupancy")
 plot(me)
 ```
 
+The curve rises across the covariate range because the occupancy slope is
+positive, and the band widens at the ends where the data thin out. The
+`process` argument switches the same call to the detection arm; pass
+`process = "detection"` and the same machinery traces $p$ against one of
+its covariates instead. Either way the result is a tidy table you can plot
+with the built-in method or feed to your own ggplot.
+
 For prediction at an explicit design, pass a matrix to `X.0` with one
 column per occupancy coefficient. The result carries the posterior mean,
 SD, and credible bounds of `psi` at each new row.
@@ -192,6 +364,87 @@ SD, and credible bounds of `psi` at each new row.
 X0 <- cbind(`(Intercept)` = 1, occ_cov1 = c(-1, 0, 1))
 predict(fit_nuts, X.0 = X0)
 ```
+
+The three rows ask for occupancy at `occ_cov1` of -1, 0, and 1 with the
+intercept held in. The returned mean climbs across the rows and each row
+carries its own credible bounds, which is the prediction you would map
+across a landscape: build `X.0` from the covariate raster, predict, and
+plot the posterior mean with its band. A ggplot of the marginal effect
+draws the same picture as a smooth curve, with the band carried straight
+from the prediction table.
+
+```{r predict-plot, eval = have_gg, fig.alt = "Predicted occupancy probability against occ_cov1 as a line with a shaded 95 percent credible band"}
+ggplot(me, aes(x = x, y = estimate)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
+  geom_line(colour = "steelblue", linewidth = 1) +
+  labs(x = "occ_cov1", y = "occupancy probability") +
+  transparent
+```
+
+## Random effects
+
+Surveys carry structure that is not a covariate of interest: sites fall
+into clusters, observers differ in effort, regions sit under their own
+unmeasured baseline. A grouping factor with many exchangeable levels
+belongs in a random effect, which assumes the level effects are draws
+from a common distribution $N(0, \sigma^2)$ and estimates the spread
+rather than one free intercept per level. A level with little data is
+pulled toward the population mean; a level with plenty keeps its own
+signal. tulpaObs writes random effects the `lme4` way, with a bar inside
+the formula, and `(1 | g)` enters whichever linear predictor it sits in.
+
+Simulate occupancy that varies by a site cluster: thirty clusters of
+twenty-five sites, each with its own intercept drawn from $N(0, 0.9^2)$,
+plus one site covariate.
+
+```{r re-sim}
+set.seed(101)
+ng <- 30L; per <- 25L; N <- ng * per
+g  <- rep(seq_len(ng), each = per)
+x  <- rnorm(N)
+b_true <- rnorm(ng, 0, 0.9)                       # per-cluster intercepts
+z  <- rbinom(N, 1, plogis(0.3 - 0.6 * x + b_true[g]))
+y_re <- matrix(0L, N, 6L)
+for (i in seq_len(N)) y_re[i, ] <- rbinom(6L, 1, z[i] * 0.45)
+d_re <- data.frame(g = factor(g), x = x)
+```
+
+Put `(1 | g)` in the occupancy formula. The default Laplace path fits the
+variance component through a variance-component EM with an adaptive
+Gauss-Hermite debias for small clusters; `coef()` returns the fixed
+effects and `ranef()` the per-group BLUPs.
+
+```{r re-fit}
+fit_re <- tobs(~ x + (1 | g), data = d_re, y = y_re, detection = ~ 1,
+               family = occu(), method = "laplace",
+               control = list(verbose = FALSE))
+coef(fit_re)$psi
+```
+
+The variance component lands in `fit$means`, named for the group it
+belongs to, and the per-cluster intercepts come back from `ranef()` as a
+table with one row per group. Plotting the recovered BLUPs against the
+simulated cluster effects shows the random effect tracks the cluster-level
+signal, with the shrinkage that pulls thin clusters toward zero.
+
+```{r re-blup, eval = have_gg, fig.alt = "Recovered per-cluster random intercepts against the simulated truth, scattered along the identity line"}
+re <- ranef(fit_re)
+bl <- data.frame(truth = b_true, blup = re$estimate)
+ggplot(bl, aes(x = truth, y = blup)) +
+  geom_abline(slope = 1, intercept = 0, colour = "steelblue", linewidth = 1) +
+  geom_point(alpha = 0.6) +
+  labs(x = "true cluster effect", y = "estimated BLUP") +
+  transparent
+```
+
+The estimated intercepts line up along the identity with a slight pull
+toward zero, the shrinkage the random effect applies where a cluster's own
+data are thin. Correlated random slopes `(1 + x | g)`, the uncorrelated
+form `(x || g)`, crossed `(1 | g:h)`, and nested `(1 | g/h)` grouping all
+fit the same way, and a bar in the `detection` formula moves the random
+effect onto the detection arm instead. The dedicated treatment, including
+the small-cluster bias and when to reach for NUTS, is in
+`vignette("random-effects")`.
 
 ## Comparing models
 
@@ -213,65 +466,424 @@ The covariate model has the lower WAIC, matching how the data were
 generated. The drop reflects the occupancy slope the intercept-only model
 cannot represent.
 
-## Other families
+The same comparison weighs the random effect. Fit the clustered data with
+and without the grouping term, then read the two WAICs side by side. The
+random-intercept model should win when the clusters genuinely differ,
+because the flat model has nowhere to put the between-cluster variance and
+predicts the clustered sites worse.
 
-The same call shape fits counts and cover; only `family` and the response
-change. Each gets its own vignette, so these are tastes, not tours.
+```{r waic-re}
+fit_re0 <- tobs(~ x, data = d_re, y = y_re, detection = ~ 1,
+                family = occu(), method = "laplace",
+                control = list(verbose = FALSE))
+
+c(no_random_effect = tobs_waic(fit_re0)$waic,
+  with_random_int  = tobs_waic(fit_re)$waic)
+```
+
+The clustered model carries the lower WAIC, the random intercept paying
+for its one variance parameter by predicting the between-cluster spread
+the flat model averages away. `tobs_waic()` returns more than the headline
+number: `$waic` is the criterion, `$elpd` the expected log pointwise
+predictive density it is built from, and `$p_waic` the effective number of
+parameters, which is what docks a flexible model for its complexity. Read
+WAIC as a comparison, not a verdict: a lower value says one model predicts
+the in-sample data better, not that its intervals are calibrated. Pair it
+with a posterior-predictive check (`tobs_ppc()`) before trusting a fit.
+The full model-comparison and diagnostic workflow is in
+`vignette("diagnostics")`.
+
+## Taste tests
+
+The same call shape fits counts, communities, cover, and the spatial,
+dynamic, and integrated extensions; only `family`, the response, and a
+formula term or two change. These are tastes, one short fit each, with a
+plot and a pointer to the vignette that goes deep.
+
+### Single-season occupancy
+
+The model from the worked example is the base case, and it is worth seeing
+its output as a print rather than a coefficient list. The `print` method
+lays out both processes with their estimates and the family that produced
+them, which is the first thing you read off a fresh fit.
+
+```{r taste-occu}
+fit
+```
+
+A bar plot of the two occupancy coefficients against zero reads the model
+at a glance: the slope clears zero, the intercept sits where the baseline
+occupancy puts it. The same picture for the detection arm comes from
+`coef(fit)$p`.
+
+```{r taste-occu-plot, eval = have_gg, fig.alt = "Occupancy coefficients as bars against a zero reference line"}
+co <- data.frame(term = names(coef(fit)$psi), est = coef(fit)$psi)
+ggplot(co, aes(x = term, y = est)) +
+  geom_col(fill = "steelblue", width = 0.6) +
+  geom_hline(yintercept = 0, colour = "grey40") +
+  labs(x = NULL, y = "estimate (logit scale)") +
+  transparent
+```
+
+Single-season occupancy is the spine the other families extend, and the
+identifiability tension between occupancy and detection runs through all
+of them. The tension has a simple source: a string of zeros at a site is
+consistent with absence and with a present species missed on every visit,
+and only the repeat visits and the covariates pull the two apart. When the
+visits are few or detection is low, the likelihood flattens along the
+ridge where occupancy and detection trade off, the mode becomes a poor
+summary, and the Laplace standard errors run optimistic. The same fit
+under NUTS traces the ridge and reports the honest, wider interval. Where
+recovery fails, how visits and detection trade off, and how to read a
+model that has too few visits to separate the two are worked through in
+`vignette("occupancy")`.
 
 ### N-mixture abundance
 
-`abun()` fits Royle's N-mixture model: latent abundance per site, binomial
-detection per visit. The abundance arm uses a log link, so its intercept
-back-transforms with `exp()`.
+`abun()` fits Royle's N-mixture model: a latent count per site drawn from
+a Poisson, thinned by binomial detection on each visit. The abundance arm
+uses a log link, so its intercept back-transforms with `exp()`. The fit
+reads the spread of counts across visits to separate abundance from
+detection.
 
-```{r abun}
-sa  <- simulate_abun(N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                     beta_lambda = c(log(3), 0.5), beta_p = c(0.4, 0.3),
-                     seed = 2)
-fa  <- tobs(~ abund_cov1, data = sa$data, family = abun(),
-            detection = ~ det_cov1, y = sa$y, method = "laplace",
-            control = list(verbose = FALSE))
-coef(fa)
+```{r taste-abun}
+sa <- simulate_abun(N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
+                    beta_lambda = c(log(3), 0.5), beta_p = c(0.4, 0.3),
+                    seed = 2)
+fa <- tobs(~ abund_cov1, data = sa$data, family = abun(),
+           detection = ~ det_cov1, y = sa$y, method = "laplace",
+           control = list(verbose = FALSE))
+exp(coef(fa)$lambda[["(Intercept)"]])    # baseline expected abundance
 ```
 
-`abun(mixture = "negbin")` adds an overdispersion parameter for counts
-with more spread than Poisson. See `vignette("abundance")`.
+The back-transformed intercept lands near the simulated baseline of three
+animals per site. Predicting abundance across the covariate range and
+plotting it shows the log-linear rise on the response scale.
 
-### Community occupancy
+```{r taste-abun-plot, eval = have_gg, fig.alt = "Predicted expected abundance rising with abund_cov1 across its range"}
+pr <- predict(fa, terms = "abund_cov1")
+ggplot(pr, aes(x = x, y = estimate)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
+  geom_line(colour = "darkorange", linewidth = 1) +
+  labs(x = "abund_cov1", y = "expected abundance") +
+  transparent
+```
+
+The curve climbs because the abundance slope is positive, and the band
+carries the count uncertainty through the exponential. What lets the model
+see eight animals through counts that never reach eight is the spread of
+the counts across visits. A site that averages two animals per visit could
+hold twenty seen one time in ten or three seen two times in three, and the
+two readings produce counts with very different variance: many animals at
+low detection jump around relative to their mean, few at high detection
+barely move. The N-mixture reads that spread and infers the abundance
+behind it, which is why replicate visits are not optional here. The model
+also leans on closure, that the same animals stay put across the survey
+window, so a season long enough to let animals move violates it and reads
+the movement as detection noise. `abun(mixture = "negbin")` adds an
+overdispersion parameter for counts with more spread than a Poisson
+allows, common when animals cluster, and the same `icar()` / `bym2()`
+terms that smooth occupancy smooth a count surface. The closure
+assumption, the count ceiling $K$, the negative-binomial state, and areal
+spatial counts are in `vignette("abundance")`.
+
+### Community models
 
 `ms_occu()` fits many species at once, with community-level hyperpriors
-tying the species coefficients together. `y` is a sites-by-visits-by-species
-array and `species` names the third dimension.
+tying the species coefficients together so a rare species borrows the
+shape of the assemblage. `y` is a sites-by-visits-by-species array and
+`species` names the third dimension. The community mean is the fixed
+effect `coef()` returns.
 
-```{r ms}
+```{r taste-ms}
 sm <- simulate_ms_occu(N = 120, J = 5, n_species = 8, seed = 3)
 fm <- tobs(~ x, data = sm$data, family = ms_occu(), detection = ~ 1,
            y = sm$y, species = paste0("sp", 1:8), method = "laplace",
            control = list(verbose = FALSE))
-coef(fm)
+coef(fm)$psi                                # community occupancy mean
 ```
 
 `tobs_richness()` turns the per-species occupancy posteriors into a
-site-level species-richness estimate with uncertainty. See
-`vignette("community-models")`.
+site-level species-richness estimate with uncertainty, summing occupancy
+probabilities across species rather than counting detections. Plotting
+richness against site, ordered, shows the spread across the survey with
+its band.
 
-### Vegetation cover
-
-`cover()` fits a hurdle for continuous cover: a presence process plus a
-positive-cover process (beta or lognormal) for where the species occurs.
-See `vignette("cover-hurdle")`.
-
-```{r cover}
-sc <- simulate_cover(N = 200, beta_occ = c(-0.3, 0.8),
-                     beta_pos = c(-1, 0.3), sigma_pos = 0.4, seed = 4)
-str(sc$data, max.level = 1)
+```{r taste-ms-plot, eval = have_gg, fig.alt = "Estimated species richness per site, sorted, with a shaded 95 percent credible band"}
+rich <- tobs_richness(fm)
+rich <- rich[order(rich$mean), ]
+rich$site <- seq_len(nrow(rich))
+ggplot(rich, aes(x = site, y = mean)) +
+  geom_ribbon(aes(ymin = q2.5, ymax = q97.5), alpha = 0.25, fill = "steelblue") +
+  geom_line(colour = "steelblue", linewidth = 1) +
+  labs(x = "site (ordered by richness)", y = "expected richness") +
+  transparent
 ```
 
-## Extracting results
+The modelled richness exceeds the naive detected count because it adds the
+species probably present but undetected, and the band carries every
+species' occupancy uncertainty into the sum. The reason to fit the
+assemblage jointly rather than species by species is the rare species. A
+bird seen at three sites out of a hundred carries almost no information on
+its own, and its single-species slope would run from deeply negative to
+deeply positive. The community prior assumes the species coefficients are
+draws from a shared distribution and pulls a thin species toward the
+assemblage mean, hardest where its own data are weakest. The pull strength
+is the fitted community covariance, learned from how the species scatter
+rather than set by hand, so a homogeneous assemblage pools hard and a
+heterogeneous one barely pools at all. The count analogue is `ms_abun()`,
+the community N-mixture, which pools abundance and detection across the
+assemblage the same way and exposes per-species deviations through
+`ranef()`. When pooling helps, when it hurts, and how to read the
+community covariance are in `vignette("community-models")`.
 
-The fitted object answers the standard accessors. They behave the same on
-a Laplace fit and a NUTS fit; the Laplace tier reports the Gaussian
-approximation, the sampler tier reports empirical posterior summaries.
+### Cover hurdle
+
+`cover()` fits a hurdle for continuous vegetation cover: a binomial
+occurrence process on whether the species is present at all, plus a
+positive-cover process (lognormal or beta) for how much ground it covers
+where it occurs. The two arms fit as independent Laplace approximations,
+and `predict()` reads occupancy and expected cover at new covariate
+values.
+
+```{r taste-cover}
+sc <- simulate_cover(N = 400, beta_occ = c(-0.4, 0.7),
+                     beta_pos = c(-1.0, 0.3), sigma_pos = 0.4, seed = 7)
+fc <- tobs(~ x, data = sc$data, family = cover(positive = "lognormal"),
+           y = sc$y)
+nd <- data.frame(x = seq(-2, 2, length.out = 50))
+nd$expected <- predict(fc, nd, type = "expected")
+head(nd)
+```
+
+The expected-cover curve combines both arms: the chance the species occurs
+times the cover it carries where it does. Plotting it across the covariate
+range traces the unconditional expected cover.
+
+```{r taste-cover-plot, eval = have_gg, fig.alt = "Expected vegetation cover rising with the covariate across its range"}
+nd$occupancy <- predict(fc, nd, type = "occupancy")
+ggplot(nd, aes(x = x, y = expected)) +
+  geom_line(colour = "forestgreen", linewidth = 1) +
+  labs(x = "x", y = "expected cover") +
+  transparent
+```
+
+The rise reflects both a higher occurrence probability and more cover
+where present as the covariate climbs. Cover data have a shape that breaks
+an ordinary regression: a pile of exact zeros where the species is absent,
+and a continuous positive distribution where it occurs. Modelling the two
+together with one Gaussian forces a single mean to explain both the zeros
+and the spread, and it predicts impossible negative cover at the low end.
+The hurdle splits them, a binomial arm on presence and a positive arm on
+the cover where present, so the zeros inform occurrence and the positive
+values inform the cover distribution without contaminating each other. The
+expected cover the plot shows is the product of the two arms, which is why
+it can rise both because the species occurs more often and because it
+covers more ground where it does. This dispatcher predicts from fixed
+effects only; the shared-field joint model, where occurrence, detection,
+and cover couple through one spatial field, is the `occu_cover()` family.
+The independent-arm hurdle is in `vignette("cover-hurdle")`, and the joint
+engine in `vignette("cover-hurdle-motivate")`.
+
+### Spatial occupancy
+
+A neighbourhood graph lets adjacent regions share what the covariates
+miss. An areal spatial field adds one smoothed random effect per cell,
+ties neighbours together, and soaks up the part of occupancy that depends
+on where a cell sits. The fields are formula terms: `icar()`, `bym2()`,
+and `car_proper()`, each taking a dense 0/1 adjacency matrix. They route
+through `method = "nested_laplace"`, which integrates the smoothing
+strength over a grid.
+
+```{r taste-spatial}
+gx <- 5; n <- gx * gx
+coord <- expand.grid(cx = seq_len(gx), cy = seq_len(gx))
+adj <- matrix(0, n, n)
+for (i in seq_len(gx)) for (j in seq_len(gx)) {
+  a <- (j - 1) * gx + i
+  if (i < gx) { b <- (j - 1) * gx + i + 1; adj[a, b] <- adj[b, a] <- 1 }
+  if (j < gx) { b <- j * gx + i;           adj[a, b] <- adj[b, a] <- 1 }
+}
+field <- 1.4 * exp(-((coord$cx - 3)^2 + (coord$cy - 3)^2) / 4)
+field <- field - mean(field)
+z <- rbinom(n, 1, plogis(field))
+ys <- matrix(0L, n, 8L)
+for (i in seq_len(n)) if (z[i]) ys[i, ] <- rbinom(8L, 1, 0.5)
+fit_sp <- tobs(~ bym2(graph = adj), data = data.frame(site = seq_len(n)),
+               family = occu(), detection = ~ 1, y = ys,
+               method = "nested_laplace",
+               control = list(max.iter = 30L, tol = 1e-5, verbose = FALSE))
+```
+
+`predict(type = "state")` returns the smoothed per-cell occupancy
+posterior. Laying it back on the grid coordinates and shading each cell
+maps the field, which peaks where the simulated bump put it.
+
+```{r taste-spatial-plot, eval = have_gg, fig.alt = "Grid map of fitted occupancy shaded by cell, peaking in the grid centre"}
+sp <- predict(fit_sp, type = "state")
+mp <- cbind(coord, psi = sp$psi)
+ggplot(mp, aes(x = cx, y = cy, fill = psi)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(x = NULL, y = NULL, fill = "psi") +
+  transparent
+```
+
+The high-occupancy ridge runs through the grid centre, smoothed from the
+binary noise an isolated per-cell estimate would carry. The field earns
+its keep two ways. It widens the slope standard errors to their honest
+size, because adjacent cells share unmeasured drivers and a non-spatial
+fit treats them as independent and runs its errors too narrow. And it
+keeps a patterned covariate from absorbing the regional signal it competes
+with, so the fitted slope reads against a background that already accounts
+for location. The smoothing strength is itself a parameter, and the nested
+path integrates it over a grid rather than fixing it, so the slope errors
+inherit the field's uncertainty instead of pretending the smoothing was
+known. ICAR is the plain smoother, BYM2 splits structured from
+unstructured variation, and the proper CAR estimates the autocorrelation
+strength. Areal fields, the floating intercept under ICAR, and
+held-out-cell interpolation are in `vignette("spatial-occupancy")`;
+continuous fields on point coordinates are in
+`vignette("occupancy-spatial-spde")`.
+
+### Dynamic occupancy
+
+`dyn_occu()` fits the multi-season model of MacKenzie and colleagues: a
+first-season occupancy, a colonisation rate for empty sites, an extinction
+rate for occupied sites, and a detection process over the latent state.
+The response carries a season dimension, and the model sums the latent
+Markov chain out with the forward algorithm.
+
+```{r taste-dyn}
+sd_dyn <- simulate_dyn_occu(N = 200, J = 4, n_seasons = 6,
+                            beta_occ = c(0), beta_det = c(0),
+                            gamma = 0.3, epsilon = 0.2, seed = 2026)
+fit_dyn <- tobs(~ 1, data = sd_dyn$data, family = dyn_occu(),
+                detection = ~ 1, y = sd_dyn$y,
+                col_formula = ~ 1, ext_formula = ~ 1,
+                method = "laplace", control = list(verbose = FALSE))
+fit_dyn$intercepts                          # psi1, gamma, epsilon, p
+```
+
+The four rates land near their simulated values. The two transition rates
+imply an equilibrium occupancy $\gamma / (\gamma + \epsilon)$, and
+iterating the transition forward from $\psi_1$ draws the modelled
+trajectory across seasons against the realised occupancy fractions.
+
+```{r taste-dyn-plot, eval = have_gg, fig.alt = "Modelled occupancy trajectory across six seasons against the realised fractions"}
+g <- fit_dyn$intercepts$gamma; e <- fit_dyn$intercepts$epsilon
+ns <- dim(sd_dyn$y)[3]; psi_t <- numeric(ns); psi_t[1] <- fit_dyn$intercepts$psi1
+for (t in 2:ns) psi_t[t] <- psi_t[t - 1] * (1 - e) + (1 - psi_t[t - 1]) * g
+tj <- data.frame(season = seq_len(ns), realised = colMeans(sd_dyn$truth$z),
+                 modelled = psi_t)
+ggplot(tj, aes(x = season)) +
+  geom_line(aes(y = modelled), colour = "darkorange", linewidth = 1) +
+  geom_point(aes(y = realised)) +
+  ylim(0, 1) + labs(y = "occupied fraction") + transparent
+```
+
+The modelled curve rises from the fitted starting occupancy toward the
+equilibrium the rates imply, tracking the realised fractions. The reason
+to estimate the two rates rather than occupancy alone is that the same
+standing occupancy can come from opposite dynamics. A level holding at
+sixty percent could be a placid system where the same sites stay occupied
+for years, or a churning one where many sites wink out each season and as
+many are colonised. The static occupancy is identical; the rates tell them
+apart, and they imply different conservation responses. The model reads
+the rates from the pattern of which sites change state between consecutive
+seasons, which is why a multi-season survey is worth the extra effort over
+repeating a single-season one. Covariates on colonisation and extinction,
+turnover, and the count analogue `dyn_abun()` are in
+`vignette("dynamic-occupancy")`.
+
+### Integrated occupancy
+
+`int_occu()` combines several data sources that disagree about detection
+but agree about occupancy. The sources share one latent occupancy state
+and each carries its own detection process, so a structured survey anchors
+the calibration while opportunistic records extend the reach. `y` is a
+list of detection-history matrices, one per source.
+
+```{r taste-int}
+si <- simulate_int_occu(N_total = 500, n_data = 2, J = c(2, 5),
+                        n_shared = 250, beta_occ = c(0.3, 0.9),
+                        beta_det = list(c(0.5, 0), c(0.7, 0)), seed = 11)
+fit_int <- tobs(~ x, data = si$data, family = int_occu(), detection = ~ 1,
+                y = list(survey = si$y[[1]], casual = si$y[[2]]),
+                method = "laplace", control = list(verbose = FALSE))
+coef(fit_int)$psi                           # shared occupancy block
+```
+
+The fit returns one shared occupancy block plus a detection block per
+source, keyed by the names you gave `y`. Plotting the two detection
+intercepts on the probability scale shows each source's reporting rate,
+estimated separately.
+
+```{r taste-int-plot, eval = have_gg, fig.alt = "Per-source detection probability as bars, one per data source"}
+dp <- data.frame(source = c("survey", "casual"),
+                 p = plogis(c(coef(fit_int)$survey, coef(fit_int)$casual)))
+ggplot(dp, aes(x = source, y = p)) +
+  geom_col(fill = "steelblue", width = 0.5) +
+  ylim(0, 1) + labs(x = NULL, y = "detection probability") +
+  transparent
+```
+
+The two bars sit at different heights because the sources detect at
+different rates, which is the point of the separate detection blocks. The
+shared state borrows strength from both; the detection arms stay
+independent. The logic that makes integration pay is that occupancy is a
+property of the place and the species, not of who is looking, so a
+structured survey and a casual stream can share one $z$ while keeping
+their own $p$. A single thin source has to estimate occupancy and its own
+detection from a few visits, and the two trade off; a second source that
+observes overlapping sites brings more visits to bear on the shared state
+without forcing the detection processes to match. The gain scales with the
+overlap and with how much real occupancy signal the added source carries.
+Where integration sharpens the occupancy slope, the overlap that drives
+the gain, and source-specific detection covariates are in
+`vignette("integrated-occupancy")`. The joint species distribution family
+`jsdm()` and the detection-protocol families `removal()`, `distance()`,
+and `fp_occu()` extend the same observation layer.
+
+## S3 methods
+
+The fitted object answers the standard R accessors, and they behave the
+same on a Laplace fit and a NUTS fit; the Laplace tier reports the
+Gaussian approximation at the mode, the sampler tier reports empirical
+posterior summaries. `print()` lays out both processes and the family.
+`summary()` adds the standard deviation and credible bounds, plus `Rhat`
+and effective sample size under NUTS. `coef()` returns the per-process
+estimates as a list, `confint()` the credible intervals as a matrix, and
+`vcov()` the fixed-effect covariance.
+
+```{r s3-methods}
+co  <- coef(fit)            # list, one element per process
+ci  <- confint(fit)         # matrix of credible bounds
+vc  <- vcov(fit)            # fixed-effect covariance
+list(coef = names(co), confint_rows = rownames(ci), vcov_dim = dim(vc))
+```
+
+Beyond the four above, `fitted()` returns the per-site `psi`, `p`, and
+`z`; `ranef()` returns the group-level random effects when a model carries
+them; `residuals()` returns deviance, Pearson, or response residuals;
+`predict()` returns occupancy at a new design or a varied term; and
+`simulate()` draws replicate detection histories from the fit. The
+`plot()` method on a prediction object draws the marginal-effect curve
+with its band, and on a data object summarises the detection histories.
+The accessor surface is deliberately the base-R one, so a `tobs_fit`
+drops into code written for `lm` or `glmer` outputs.
+
+The accessors that involve uncertainty read it from whichever inference
+produced the fit, without you having to ask. On a Laplace fit, `confint()`
+and `vcov()` come from the curvature of the log-posterior at the mode, so
+they are the Gaussian approximation and they return instantly. On a NUTS
+fit, the same calls summarise the posterior draws, so the interval is the
+empirical quantile of the chain and `summary()` carries the `Rhat` and
+effective-sample-size columns alongside. The code you write does not
+change between the two; only the numbers and their provenance do. That is
+the practical payoff of keeping the observation layer thin and the
+inference in the engine: you choose the backend per run and read the
+result through one set of methods.
 
 | Accessor | Returns |
 |---|---|
@@ -321,6 +933,12 @@ approximation, the sampler tier reports empirical posterior summaries.
 - Many species at once: `vignette("community-models")`.
 - Colonisation and extinction across seasons:
   `vignette("dynamic-occupancy")`.
+- Combining detection histories from several sources:
+  `vignette("integrated-occupancy")`.
+- The vegetation cover hurdle, independent and joint:
+  `vignette("cover-hurdle")` and `vignette("cover-hurdle-motivate")`.
+- Areal and continuous spatial fields:
+  `vignette("spatial-occupancy")` and `vignette("occupancy-spatial-spde")`.
 - Random effects with `lme4` bar syntax: `vignette("random-effects")`.
 - Posterior-predictive checks, WAIC, and spatial residual diagnostics:
   `vignette("diagnostics")`.

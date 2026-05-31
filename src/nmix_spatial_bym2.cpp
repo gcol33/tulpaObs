@@ -21,6 +21,7 @@
 #include "nmix_spatial_kernel.h"      // nmix_kernel_sweep_spatial, log_lik_only_spatial
 #include "nmix_spatial_kernel_bym2.h"
 #include "nmix_linalg.h"
+#include "nmix_progress.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -353,7 +354,9 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
     int K_max = -1,
     int max_iter = 100,
     double tol = 1e-6,
-    bool verbose = false
+    bool verbose = false,
+    bool progress = false, int progress_every = 0,
+    double progress_throttle = 0.0, std::string progress_file = ""
 ) {
     const int n_sites = X_lambda_R.nrow();
     const int p_lam   = X_lambda_R.ncol();
@@ -428,6 +431,9 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
     Rcpp::NumericMatrix modes(n_grid, n_x);
     Rcpp::List cov_blocks(n_grid);   // per-grid marginal coef covariance
 
+    // outer-grid progress (tulpa#45)
+    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
+                                           progress_every, progress_throttle, progress_file);
     int k = 0;
     for (int ir_disp = 0; ir_disp < n_r; ++ir_disp) {
         const double rr = r_grid[ir_disp];
@@ -446,6 +452,7 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
                     grad_norms[k]     = R_PosInf;
                     log_liks[k]       = R_NegInf;
                     boundary_maxes[k] = 0.0;
+                    if (gp) gp->tick();
                     continue;
                 }
 
@@ -489,9 +496,11 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
                                 << " n_iter=" << ir.n_iter
                                 << " conv=" << ir.converged << "\n";
                 }
+                if (gp) gp->tick();
             }
         }
     }
+    if (gp) gp->finish();
 
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("sigma", "rho", "r");
     return Rcpp::List::create(

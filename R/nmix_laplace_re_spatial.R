@@ -163,7 +163,7 @@ nmix_community_laplace_icar <- function(lf, X_lambda, n_sites, n_species,
   r_grid_use <- .nmix_community_r_grid(mixture, r_grid)
   ws <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
-  raw <- cpp_nmix_community_spatial_icar(
+  raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_icar,
     oracle = orc$ptr, map_site_to_unit_R = seq_len(n_sites),
     X_lambda_R = X_lambda,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
@@ -216,7 +216,7 @@ nmix_community_laplace_car_proper <- function(lf, X_lambda, n_sites, n_species,
   log_det_Q  <- .nmix_car_logdet_Q(graph, rho_grid)
   ws <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
-  raw <- cpp_nmix_community_spatial_car_proper(
+  raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_car_proper,
     oracle = orc$ptr, map_site_to_unit_R = seq_len(n_sites),
     X_lambda_R = X_lambda,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
@@ -253,7 +253,7 @@ nmix_community_laplace_bym2 <- function(lf, X_lambda, n_sites, n_species,
   r_grid_use <- .nmix_community_r_grid(mixture, r_grid)
   ws <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
-  raw <- cpp_nmix_community_spatial_bym2(
+  raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_bym2,
     oracle = orc$ptr, map_site_to_unit_R = seq_len(n_sites),
     X_lambda_R = X_lambda,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
@@ -352,7 +352,7 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
 
   ws  <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
-  raw <- cpp_nmix_community_spatial_spde(
+  raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_spde,
     oracle = orc$ptr, X_lambda_R = X_lambda, A_R = A_dense,
     Q_list = Q_list, log_det_Q = log_dets,
     theta_grid_R = theta_grid, r_grid = as.numeric(grid$r),

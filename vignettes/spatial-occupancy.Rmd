@@ -18,6 +18,7 @@ set.seed(20260529)
 
 ```{r load, message = FALSE}
 library(tulpaObs)
+library(ggplot2)
 ```
 
 ## Adjacent regions share what the covariates miss
@@ -393,6 +394,142 @@ here makes the point starkly, since the floating level is the only
 occupancy coefficient there is; with real covariates the slopes sit
 beside it, unaffected by the ridge.
 
+## Checking the fit
+
+A recovered map that tracks the truth is the simulation luxury. On real
+data the check that matters is whether the field actually removed the
+spatial signal it was supposed to. A non-spatial occupancy fit leaves that
+signal in its residuals, where neighbouring cells carry correlated errors;
+the spatial field should soak that correlation up. Moran's I is the formal
+test. It scores the spatial autocorrelation of the residuals against the
+null of no pattern and returns a z-test, so a significant positive I on a
+non-spatial fit and a non-significant I on the spatial fit is the signature
+of a field that did its job.
+
+Fit a flat occupancy model first, take its per-site occupancy residuals,
+and run `tulpa::moran_i()` against the grid coordinates. The residuals come
+back from `residuals()` as a list with an `occ` element, one value per
+cell.
+
+```{r moran-flat}
+fit_flat <- tobs(
+  ~ 1, data = dat, family = occu(), detection = ~ 1, y = y,
+  method = "laplace", control = list(verbose = FALSE)
+)
+coords <- cbind(coord$cx, coord$cy)
+mi_flat <- tulpa::moran_i(residuals(fit_flat)$occ, coords)
+c(I = round(mi_flat$statistic, 3), p = signif(mi_flat$p.value, 3))
+```
+
+The flat fit's residuals carry positive autocorrelation, the smooth field
+leaking into the part of the model that has nowhere to put it. Now repeat
+on the BYM2 residuals. With the field absorbing the spatial structure, the
+leftover residual correlation should drop toward its null expectation.
+
+```{r moran-bym2}
+mi_bym2 <- tulpa::moran_i(residuals(fit_bym2)$occ, coords)
+c(I = round(mi_bym2$statistic, 3), p = signif(mi_bym2$p.value, 3))
+```
+
+The spatial fit's Moran's I sits far closer to its expected value under no
+pattern, and its p-value no longer rejects the null. The field pulled the
+neighbour correlation out of the residuals, which is the assumption an
+areal model needs to hold before its standard errors are trustworthy.
+
+A residual map makes the same point by eye. Lay each fit's occupancy
+residual back on the grid and shade it. The flat residuals show patches of
+like sign, high in the grid centre where the bump sits, the spatial print
+of an unmodelled field. The BYM2 residuals scatter without that block
+structure.
+
+```{r resid-map, fig.width = 7, fig.height = 3.4, fig.alt = "Two grid maps of occupancy residuals, flat model showing a central patch and BYM2 model showing scattered residuals"}
+resid_df <- rbind(
+  data.frame(coord, r = residuals(fit_flat)$occ, model = "flat"),
+  data.frame(coord, r = residuals(fit_bym2)$occ, model = "BYM2")
+)
+ggplot(resid_df, aes(cx, cy, fill = r)) +
+  geom_tile() +
+  facet_wrap(~ model) +
+  scale_fill_gradient2(low = "steelblue", mid = "white", high = "firebrick") +
+  labs(x = "", y = "", fill = "residual") +
+  theme(panel.background = element_rect(fill = "transparent"),
+        plot.background  = element_rect(fill = "transparent"))
+```
+
+A clean residual map plus a non-significant Moran's I is the pair to report
+together. The map shows where any leftover pattern sits; the test says
+whether it is more than noise. If the field leaves a significant I behind,
+the smoother is too stiff for the signal, or the autocorrelation is
+operating at a scale the adjacency graph does not capture, and a denser
+graph or a mixed-scale field is the next thing to try.
+
+## Interpreting results: credible intervals and an uncertainty map
+
+The state posterior carries more than a point estimate. Each cell's `psi`
+comes with `psi_lower` and `psi_upper`, the equal-tailed 95% credible band
+the nested path computes from the mixture over the smoothing grid, so the
+interval already accounts for the uncertainty in the smoothing strength
+rather than conditioning on a single value. The band width is the quantity
+to read off a spatial fit: a narrow band where neighbours agree and
+surveys are dense, a wide band where the field has little to lean on.
+
+```{r ci-width}
+sp_bym2$width <- sp_bym2$psi_upper - sp_bym2$psi_lower
+c(median_width = round(median(sp_bym2$width), 3),
+  min_width    = round(min(sp_bym2$width), 3),
+  max_width    = round(max(sp_bym2$width), 3))
+```
+
+The widths vary cell to cell, which is the point of a Bayesian field over a
+single smoothed surface. A cell with many detecting visits and agreeing
+neighbours pins `psi` tightly; a cell on the grid edge with few neighbours
+and a marginal detection history carries a wider band. Mapping the width
+turns that into a picture of where the model is confident.
+
+```{r uncertainty-map, fig.height = 4, fig.alt = "Grid map of the 95 percent credible-interval width of fitted occupancy, wider at the grid edges and corners"}
+unc_df <- data.frame(coord, width = sp_bym2$width)
+ggplot(unc_df, aes(cx, cy, fill = width)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "magma") +
+  labs(x = "", y = "", fill = "CI width",
+       title = "Posterior 95% interval width") +
+  theme(panel.background = element_rect(fill = "transparent"),
+        plot.background  = element_rect(fill = "transparent"))
+```
+
+Brighter cells carry more uncertainty. The pattern is the honest
+counterpart to the smoothed occupancy map: the field reports both its best
+guess and how far that guess can be trusted, and the two maps read
+together say more than either alone. A cell with a high fitted `psi` and a
+wide band is a candidate occupancy that the data only weakly support; a
+high `psi` with a tight band is one the neighbourhood backs.
+
+For a single cell the interval reads directly. Pull the cell with the
+highest fitted occupancy and report its band as a sentence.
+
+```{r ci-cell}
+peak <- which.max(sp_bym2$psi)
+with(sp_bym2[peak, ],
+     sprintf("cell %d: psi = %.2f (95%% CI %.2f to %.2f)",
+             row, psi, psi_lower, psi_upper))
+```
+
+Reporting the band rather than the point is the difference between "this
+cell is occupied" and "this cell is probably occupied, with this much room
+for doubt". For an unsurveyed or thinly surveyed cell that room is the part
+a reader needs, because the point estimate alone hides how much of it came
+from the neighbours rather than the cell itself.
+
+The same band is what you would carry into any downstream summary. A map of
+mean occupancy answers "where", and the width map answers "how sure", but a
+question like "how many cells exceed 0.7 occupancy" needs the full
+posterior, not the point estimate, because counting on the means alone
+ignores the cells that straddle the threshold. The state posterior gives
+you the ingredients: the per-cell mean for the headline number and the band
+for the cells where that number could flip. When the field is the input to
+a further calculation, propagate the band rather than the mean, the same
+discipline that keeps the slope errors honest under the smoothing.
+
 ## Predicting unsurveyed cells
 
 Here is what the areal field buys that a non-spatial model cannot. A cell
@@ -478,16 +615,19 @@ parameters the field spends. Compare the BYM2 fit against a non-spatial
 occupancy fit on the same data.
 
 ```{r waic}
-fit_flat <- tobs(
-  ~ 1, data = dat, family = occu(), detection = ~ 1, y = y,
-  method = "laplace", control = list(verbose = FALSE)
+waic_row <- function(fit) {
+  w <- tobs_waic(fit)
+  c(waic = round(w$waic, 1), elpd = round(w$elpd, 1), p_waic = round(w$p_waic, 1))
+}
+waic_tab <- rbind(
+  non_spatial = waic_row(fit_flat),
+  icar        = waic_row(fit_icar),
+  bym2        = waic_row(fit_bym2)
 )
-
-c(non_spatial = tobs_waic(fit_flat)$waic,
-  bym2        = tobs_waic(fit_bym2)$waic)
+waic_tab[order(waic_tab[, "waic"]), ]
 ```
 
-The spatial fit carries the lower WAIC, matching how the data were built:
+The two spatial fits carry the lower WAIC, matching how the data were built:
 occupancy here is driven entirely by a smooth field, so a model with no
 place to put it predicts worse. The gap is the field paying for its
 parameters and still coming out ahead. Had the data been spatially flat,
@@ -499,9 +639,10 @@ alone, only for flexibility the data actually use.
 WAIC compares predictive accuracy; it does not certify that the model is
 right. A lower WAIC says the spatial model predicts the in-sample cells
 better, not that its credible intervals are calibrated or its
-assumptions hold. Pair it with a residual check for leftover spatial
-autocorrelation (a Moran's I test on the residuals) before trusting the
-field. The diagnostics vignette walks through those checks.
+assumptions hold. Pair it with the residual check from the "Checking the
+fit" section above, the Moran's I test for leftover spatial
+autocorrelation, before trusting the field. The diagnostics vignette
+covers the rest of the posterior-predictive battery.
 
 ## Practical guidance
 
@@ -544,6 +685,20 @@ make them usable.
   strength $\rho$ is itself a quantity you want to estimate and report; it
   integrates one extra parameter over the same nested-Laplace grid.
 
+- **Prior sensitivity sits on the smoothing precision, not the slopes.**
+  The smoothing precision $\tau$ carries a weakly-informative penalised-
+  complexity prior by default, and the nested path integrates over it
+  rather than fixing it, so the field's flexibility is set by the data
+  where the data have something to say. The prior matters most exactly
+  where the data say little: a graph of a dozen cells, or a field with few
+  detecting visits per cell, leans on the prior for its smoothing strength,
+  and there a tighter or looser PC prior moves the field's wiggliness
+  noticeably. A graph of a few hundred well-surveyed cells barely feels the
+  prior. The check is the same one you would run anywhere: refit with the
+  prior nudged and confirm the slopes you report do not move. The fixed
+  effects are usually stable across reasonable smoothing priors even when
+  the field's roughness is not.
+
 - **When areal is the wrong tool.** Three cases call for a different
   approach. If a non-spatial fit leaves no neighbour correlation in its
   residuals, a field adds parameters for nothing and WAIC will say so. If
@@ -555,6 +710,20 @@ make them usable.
   `vignette("occupancy-spatial-spde")` story: a Matern field on
   coordinates, with a range parameter that says how far correlation
   reaches, rather than a graph that says who borders whom.
+
+The decision condenses to a short table. Pick the row whose left column
+matches your data and goal.
+
+| Situation | Field | Why |
+|---|---|---|
+| Smooth signal, no need to split structure from noise | `icar()` | One parameter, pure smoother, lightest fit |
+| Some cell variation is plausibly independent noise | `bym2()` | Splits structured vs IID, reports the fraction $\lambda$ |
+| Comparing field magnitude across maps with different graphs | `bym2()` | Riebler scaling puts $\lambda$ on a common scale |
+| Autocorrelation strength is a number you want to report | `car_proper()` | Estimates $\rho$ directly, proper precision |
+| Need a clean, interpretable intercept | `bym2()` or `car_proper()` | Both break the intrinsic intercept confounding |
+| Fewer than ~8 regions | none (fixed effects) | Smoothing parameter too weakly informed |
+| Raw point coordinates, no borders | SPDE / GP | Continuous field fits the geometry; see the SPDE vignette |
+| Non-spatial residuals already uncorrelated | none | A field adds parameters WAIC will penalise |
 
 ## Where to go next
 

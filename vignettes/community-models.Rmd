@@ -439,6 +439,122 @@ returns the per-species `r_s` alongside the community `mu_log_r` and
 `abun(mixture = "negbin")` covers that case directly (see
 `vignette("abundance")`).
 
+### Per-species overdispersion
+
+Counts in the wild are rarely Poisson. A site that suits a species holds a
+cluster; an unsuitable one holds none, and the variance of the counts outruns
+their mean. The Poisson abundance arm has no room for that, so an overdispersed
+species inflates the detection estimate to soak up the extra variance and the
+abundance mean drifts. `mixture = "negbin"` gives each species its own
+negative-binomial size $r_s$, with the per-species log-dispersions drawn from a
+community Normal, $\log r_s \sim \mathcal{N}(\mu_{\log r}, \sigma_{\log r}^2)$.
+The dispersion pools across the assemblage the same way the coefficients do: a
+species with thin counts borrows the community log-dispersion, a species with
+many counts keeps its own.
+
+Simulate an assemblage with genuine overdispersion. `size = 5` sets the
+community-mean size (so $\mu_{\log r} = \log 5$), and `sigma_logr = 0.5` spreads
+the per-species sizes around it. Twenty species over 120 sites with five visits
+gives each species enough replicate counts for its own dispersion to register.
+
+```{r ms-nb-sim}
+snb <- simulate_ms_abun(n_species = 20, N = 120, J = 5,
+                        n_abund_covs = 1, n_det_covs = 1,
+                        mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
+                        sd_lambda = 0.4, sd_p = 0.35,
+                        mixture = "negbin", size = 5, sigma_logr = 0.5,
+                        seed = 14)
+snb$truth$mu_log_r          # community log-dispersion: log(5)
+snb$truth$sigma_log_r       # spread of per-species log r
+```
+
+Fit with `ms_abun(mixture = "negbin")`. The call is the Poisson community call
+with the mixture switched. The per-species RE vector widens by one coordinate
+for `log_r_s`, so the AGHQ grid grows; `control$n.quad = 3` keeps it tractable
+at this species count without losing the small-cluster correction.
+
+```{r ms-nb-fit}
+fnb <- tobs(
+  ~ abund_cov1,
+  data      = snb$data,
+  family    = ms_abun(mixture = "negbin"),
+  detection = ~ det_cov1,
+  y         = snb$y,
+  species   = snb$species,
+  method    = "laplace",
+  control   = list(verbose = FALSE, n.quad = 3L)
+)
+fnb$mixture
+```
+
+The community log-dispersion sits on `fit$ms_dispersion`, alongside the
+per-species sizes `r_s` and the community spread `sigma_log_r`. `mu_log_r` is the
+assemblage-mean log size; `r = exp(mu_log_r)` is the size of the typical species.
+
+```{r ms-nb-dispersion}
+disp <- fnb$ms_dispersion
+c(mu_log_r    = round(disp$mu_log_r, 3),
+  sigma_log_r = round(disp$sigma_log_r, 3),
+  r_community = round(disp$r, 3))
+```
+
+Read the community log-dispersion against its truth. `mu_log_r` enters the
+coefficient surface as `log_r`, so its standard error is on `fit$sds`, and the
+estimate lands within a couple of standard errors of $\log 5$.
+
+```{r ms-nb-recovery}
+data.frame(
+  quantity  = c("mu_log_r", "sigma_log_r"),
+  estimate  = round(c(disp$mu_log_r, disp$sigma_log_r), 3),
+  truth     = round(c(snb$truth$mu_log_r, snb$truth$sigma_log_r), 3),
+  row.names = NULL
+)
+```
+
+A community fit gains more from per-species dispersion than a single-species one
+does. The negative binomial carries variance $\lambda + \lambda^2 / r_s$, so a
+small $r_s$ lets a species' counts spread well beyond their mean without forcing
+the detection probability down to absorb the slack. Under a shared Poisson the
+clumped species would each push the community detection mean low, and the rare
+species, leaning on that mean, would inherit the bias. Pooling the dispersion
+keeps the overdispersion where it belongs, on the abundance arm, species by
+species, so the detection community mean stays clean for the species that depend
+on it.
+
+The per-species sizes are in `disp$r_s`, one per species. A small $r_s$ marks a
+clumped species whose counts vary far more than their mean; a large one
+approaches the Poisson limit. The deviations behind them reach `ranef()` as a
+`logr` arm, the per-species $\log r_s - \mu_{\log r}$ on the same scale the
+coefficient deviations use.
+
+```{r ms-nb-ranef}
+re_nb <- ranef(fnb)
+head(re_nb[re_nb$arm == "logr", ], 6)
+```
+
+Plot the per-species sizes with a band for the community spread. The points are
+each species' fitted $r_s$, sorted; the dashed line is the community-mean size
+$\exp(\mu_{\log r})$, and the shaded band spans $\exp(\mu_{\log r} \pm
+\sigma_{\log r})$, the central interval the community distribution places on a
+new species.
+
+```{r ms-nb-plot, fig.alt = "Per-species negative-binomial size r_s, sorted, against the community-mean size and its one-SD band"}
+rs   <- sort(disp$r_s)
+band <- exp(disp$mu_log_r + c(-1, 1) * disp$sigma_log_r)
+plot(seq_along(rs), rs, pch = 19, col = "steelblue", log = "y",
+     xlab = "species (ordered by size)", ylab = expression(r[s]~"(log axis)"),
+     panel.first = rect(0, band[1], length(rs) + 1, band[2],
+                        col = adjustcolor("steelblue", 0.15), border = NA))
+abline(h = disp$r, lty = 2, col = "grey40")
+```
+
+A species sitting below the band is more overdispersed than the assemblage
+typically is; one above it is closer to Poisson. The species that fall inside the
+band are the ones whose own counts told the model little, so the community
+log-dispersion supplied most of their size. With `sigma_logr = 0` the simulator
+would give a single shared $r$ and every point would land on the line; the spread
+here is the assemblage genuinely differing in how clumped its species are.
+
 ## Reading community against species-level effects
 
 The two scales a community model reports answer different questions, and keeping
@@ -541,9 +657,10 @@ is itself a quantity you want to report with an interval, the sampler is the
 honest choice; for richness and community means on a well-populated assemblage,
 the Laplace fit and the sampler agree to within their uncertainty.
 
-The community N-mixture `ms_abun()` is Laplace-only and Poisson-only at present;
-its community-mean covariances come from the marginal observed information at the
-mode.
+The community N-mixture `ms_abun()` is Laplace-only at present; its
+community-mean covariances come from the marginal observed information at the
+mode. Both the Poisson and the negative-binomial arm run under that one engine,
+the NB through the AGHQ path that integrates the per-species log-dispersion.
 
 ## Where to go next
 

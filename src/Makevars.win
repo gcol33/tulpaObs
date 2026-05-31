@@ -10,3 +10,9 @@ PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 # at -O1 keeps the object within section limits at no runtime cost.
 nmix_community_em.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))
 nmix_community_spatial.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))
+# The single-species areal / SPDE spatial drivers carry the same Eigen + nmix
+# kernel inline weight and sit at the same COFF COMDAT section ceiling; build
+# them at -O1 too so the object stays within section limits at no runtime cost.
+nmix_spatial.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))
+nmix_spatial_bym2.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))
+nmix_spde.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))

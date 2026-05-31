@@ -161,7 +161,7 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
   }
   theta_grid <- as.matrix(grid[, c("range", "sigma", "r"), drop = FALSE])
 
-  fit <- cpp_nested_laplace_nmix_spde(
+  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_spde,
     y = y, site_idx = site_idx,
     X_lambda_R = X_lambda, X_p_R = X_p, A_R = A_dense,
     Q_list = Q_list, log_det_Q = log_dets,

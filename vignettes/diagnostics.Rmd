@@ -92,6 +92,48 @@ below is to surface exactly those failures, on a fit whose coefficients
 already look right, so that the checks are doing real work rather than
 confirming an obviously broken model.
 
+## The one-call panel
+
+Before working through the diagnostics one at a time, `tobs_check()` runs the
+main ones in a single call and prints a compact report. It is the fast first
+pass: fit the model, call `tobs_check()`, and read the headline numbers to
+decide whether anything needs a closer look. The detailed sections below are
+where you go once the panel flags something or once you want the plot behind
+a number.
+
+```{r check-panel}
+tobs_check(fit)
+```
+
+The report has four blocks, each a condensed form of a section that follows.
+The first line records how the fit was produced. Under `method = "laplace"`
+there is no Markov chain, so it reports the draw count and notes that the
+NUTS sampler diagnostics (divergences, accept probability) do not apply; a
+fit produced with `method = "nuts"` prints those instead. The WAIC line is
+the single number from `tobs_waic()`, useful only against a rival model, with
+the effective parameter count `p_waic` alongside. The PPC line is the
+Bayesian p-value from `tobs_ppc()`; the panel attaches a `WARNING: poor fit`
+when it falls below 0.05 or above 0.95, the two-sided cue that the fit fails
+to reproduce the data. The zero-inflation line reports the observed and
+expected counts of all-zero sites from `tobs_test_zero_inflation()`. Passing
+a `coords` matrix adds a Moran's I line that warns when residual spatial
+autocorrelation is significant.
+
+```{r check-coords}
+out <- tobs_check(fit, coords = cbind(dat$occ_cov1, dat$det_cov1))
+names(out)
+```
+
+The panel returns its components invisibly, so `out$waic`, `out$ppc`, and
+`out$zero_inflation` carry the same objects the individual functions return,
+ready to feed a table or a plot. The coordinates here are covariate columns
+standing in for real geography, which is enough to exercise the Moran's I
+line; with true site coordinates this is the one call that screens for a
+missing spatial field at the same time as everything else. The panel is a
+triage tool. It does not draw the PIT histogram, the residual cloud, or the
+variogram, and a number that sits in the warning band is the signal to open
+the matching section below rather than the end of the check.
+
 ## WAIC and model comparison
 
 `tobs_waic()` computes the widely applicable information criterion from the
@@ -559,6 +601,69 @@ helpers also accept a fitted model directly and call `residuals()` for you,
 but the tobs residual list means passing the `$occ` vector is the safe
 route.
 
+## Prior specification and its effect on the fit
+
+The Laplace fit carries a weakly-informative prior by default, and it is part
+of the diagnostic story because it changes the numbers a check reads. The
+unpenalised occupancy MAP sits on the psi-p identifiability ridge when visits
+are few: with a handful of revisits per site, "unoccupied" and "occupied but
+never detected" look almost the same from the data alone, and the likelihood
+flattens along the direction that trades one for the other. NUTS escapes the
+ridge through its prior; an unpenalised Laplace fit does not, and its
+detection coefficients can drift far with large standard errors. `occu_priors()`
+builds the penalty that breaks the ridge, a Normal prior on each coefficient
+group.
+
+```{r priors-default}
+occu_priors()
+```
+
+The four buckets cover the detection intercept (`sd = 1.5`), detection slopes
+(`sd = 2.5`), occupancy intercept (`sd = 2`), and occupancy slopes (`sd = 5`).
+The detection side is tighter because that is where the ridge bites; the
+occupancy side is looser because occupancy is identified more directly by
+which sites ever detect. To see the prior at work, build a low-information
+dataset with only three visits per site, where the ridge is sharp, and fit it
+both with the default prior and with `priors = FALSE` to recover the
+unpenalised MAP.
+
+```{r priors-sim}
+sim3 <- simulate_occu(N = 120, J = 3, n_occ_covs = 1, n_det_covs = 1,
+                      beta_occ = c(0.3, 1.0), beta_det = c(0.0, 0.8), seed = 7)
+fit_pen   <- tobs(~ occ_cov1, data = sim3$data, family = occu(),
+                  detection = ~ det_cov1, y = sim3$y, method = "laplace",
+                  control = list(verbose = FALSE))
+fit_unpen <- tobs(~ occ_cov1, data = sim3$data, family = occu(),
+                  detection = ~ det_cov1, y = sim3$y, method = "laplace",
+                  priors = FALSE, control = list(verbose = FALSE))
+```
+
+Line up the detection-intercept estimate and its standard error from the two
+fits against the truth of 0.0. The penalised fit holds the estimate near
+zero with a controlled standard error; the unpenalised fit, free to slide
+along the ridge, returns a larger magnitude and a wider interval.
+
+```{r priors-compare}
+data.frame(
+  fit  = c("penalised", "unpenalised"),
+  p_int = round(c(fit_pen$means["p_(Intercept)"],
+                  fit_unpen$means["p_(Intercept)"]), 3),
+  se    = round(c(fit_pen$sds[["p_(Intercept)"]],
+                  fit_unpen$sds[["p_(Intercept)"]]), 3)
+)
+```
+
+The prior is doing identification work, not imposing a result. At moderate
+information, more visits or a stronger detection signal, the two fits
+converge because the likelihood pins the coefficient and the prior barely
+registers; the gap above is a small-`J` phenomenon. Setting any bucket's `sd`
+to `Inf` removes the penalty on that group while keeping the others, so you
+can penalise only the detection side that needs it. The diagnostic reading is
+that a detection coefficient with an implausibly large magnitude and a
+standard error to match, on a fit with few visits, is the ridge showing
+through, and the default prior is the first thing to confirm is in place
+before chasing the estimate as a substantive finding.
+
 ## A diagnostic workflow
 
 The checks fall into an order that catches the cheap problems first and
@@ -569,28 +674,34 @@ coordinates and a second fit. Running them in this order means you rarely
 pay for the expensive checks on a model that a cheap check would have
 rejected.
 
-1. **Read the coefficients against their intervals.** A coefficient whose
+1. **Run `tobs_check()` for a first pass.** The one-call panel prints the
+   WAIC, the PPC p-value, the zero-inflation count, and, with `coords`, the
+   Moran's I, each with a warning band. A clean panel means the detailed
+   steps are confirmation; a warning means open the matching section.
+2. **Read the coefficients against their intervals.** A coefficient whose
    credible interval spans zero is not earning its place, whatever its
-   point estimate. Start with `summary()` and `confint()`.
-2. **Compare against nested alternatives with `tobs_waic()`.** Drop the
+   point estimate. Start with `summary()` and `confint()`. On a fit with
+   few visits, an outsized detection coefficient is the identifiability
+   ridge, not a finding; confirm the default `occu_priors()` is in place.
+3. **Compare against nested alternatives with `tobs_waic()`.** Drop the
    covariate, add a plausible one, and read the `delta`. A change of a few
    units or less is a tie; prefer the simpler model. WAIC ranks, it does
    not validate.
-3. **Run a posterior-predictive check with `tobs_ppc()`.** The Bayesian
+4. **Run a posterior-predictive check with `tobs_ppc()`.** The Bayesian
    p-value sits near 0.5 for a fit that reproduces the data. A value near 0
    means the data are more dispersed than the fit predicts, near 1 means
    less. The check conditions the latent state on the detection history, so
    the value is calibrated rather than purely relative.
-4. **Inspect the PIT histogram and `tobs_test_uniformity()`.** A flat
+5. **Inspect the PIT histogram and `tobs_test_uniformity()`.** A flat
    histogram is the target. A U-shape means underdispersion, a central hump
    overdispersion, a slope a biased mean.
-5. **Target specific failures.** `tobs_test_dispersion()` for spread,
+6. **Target specific failures.** `tobs_test_dispersion()` for spread,
    `tobs_test_zero_inflation()` for excess empty sites,
    `tobs_test_outliers()` for individual sites the model cannot fit.
-6. **Plot residuals against fitted values.** Structure in the cloud points
+7. **Plot residuals against fitted values.** Structure in the cloud points
    to a misspecified mean or variance. Use Pearson residuals for a common
    scale.
-7. **If sites have coordinates, test for residual spatial structure** with
+8. **If sites have coordinates, test for residual spatial structure** with
    `moran_i()` and `tulpa_variogram()` on `residuals(fit)$occ`. Significant
    autocorrelation is the cue to add a spatial field and refit, then
    confirm the autocorrelation shrinks.

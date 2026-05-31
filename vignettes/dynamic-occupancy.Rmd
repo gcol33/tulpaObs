@@ -18,6 +18,12 @@ set.seed(20260529)
 
 ```{r load, message = FALSE}
 library(tulpaObs)
+library(ggplot2)
+
+transparent <- theme(
+  panel.background = element_rect(fill = "transparent"),
+  plot.background  = element_rect(fill = "transparent")
+)
 ```
 
 ## When occupancy changes over time
@@ -185,9 +191,12 @@ then settles.
 ```{r z-traj, fig.alt = "Realised occupancy fraction across six seasons, rising from one half toward about six tenths"}
 occ_by_season <- colMeans(sim$truth$z)
 round(occ_by_season, 3)
-plot(seq_along(occ_by_season), occ_by_season, type = "b", pch = 16,
-     ylim = c(0, 1), xlab = "season", ylab = "occupied fraction")
-abline(h = 0.3 / (0.3 + 0.2), col = "steelblue", lwd = 2, lty = 2)
+traj <- data.frame(season = seq_along(occ_by_season), occ = occ_by_season)
+ggplot(traj, aes(season, occ)) +
+  geom_hline(yintercept = 0.3 / (0.3 + 0.2), colour = "steelblue",
+             linewidth = 1, linetype = 2) +
+  geom_line() + geom_point(size = 2) +
+  ylim(0, 1) + labs(x = "season", y = "occupied fraction") + transparent
 ```
 
 The dashed line marks $\gamma / (\gamma + \epsilon) = 0.6$, the occupancy the
@@ -316,6 +325,89 @@ gap between an estimate and its truth here is a few hundredths because the desig
 is generous. A design with three seasons and two visits would show a wider gap
 and warn you off before fieldwork.
 
+## Checking the fit
+
+Recovering the simulated rates shows the fitter can find the truth when the
+truth matches the model. It says nothing about whether the model matches the
+data in front of you, which on a real survey is the only question that has no
+answer key. Three checks come at that question from different angles: an
+information criterion that scores predictive accuracy, the smoothed state
+posterior compared against what the model implies, and the per-site-season
+residuals.
+
+`tobs_waic()` computes the widely applicable information criterion from the
+pointwise marginal log-likelihood. For a dynamic fit that pointwise term is the
+forward-algorithm likelihood of each site's whole detection history with the
+latent chain summed out, so the score measures how well the model predicts the
+detection records you saw rather than the unobservable state sequence. A single
+WAIC means little on its own; it earns its keep in the comparison section below,
+against a simpler model on the same data.
+
+```{r dyn-waic}
+w <- tobs_waic(fit)
+c(waic = round(w$waic, 1), elpd = round(w$elpd, 1), p_waic = round(w$p_waic, 2))
+```
+
+The `elpd` is the expected log pointwise predictive density, higher meaning a
+better predictor of new histories of the same shape; `p_waic` is the effective
+number of parameters read from how much the pointwise log-likelihood varies
+across the posterior, which sits near the four rates plus a little slack; and
+`waic` is `-2 * elpd` on the deviance scale, so lower is better and it reads
+like an AIC with an estimated rather than counted penalty.
+
+The smoothed state posterior gives a second, more direct check. `fitted()`
+returns the forward-backward smoothed $P(z_{i,t} = 1 \mid y_{i,1:T})$ as a
+site-by-season matrix, the model's belief about occupancy at every cell after
+seeing the whole record. Any season with a detection smooths to one because a
+sighting proves presence; a silent season inherits a probability between zero
+and one from the rates and its neighbours in time. Comparing the column means of
+that matrix against the realised occupancy from the hidden truth shows the
+smoothed states tracking the simulation season by season.
+
+```{r dyn-fitted-z, fig.alt = "Smoothed occupancy probability per season against the realised truth, points near the identity line"}
+fv  <- fitted(fit)
+chk <- data.frame(
+  truth    = colMeans(sim$truth$z),
+  smoothed = colMeans(fv$z)
+)
+ggplot(chk, aes(truth, smoothed)) +
+  geom_abline(slope = 1, intercept = 0, colour = "steelblue", linewidth = 1) +
+  geom_point(size = 3) +
+  labs(x = "realised occupied fraction", y = "smoothed P(z = 1)") + transparent
+```
+
+The points hug the identity line, so the per-season smoothed occupancy lands
+where the truth put it. On a real dataset there is no truth column, but the same
+matrix is still the honest layer to map: it carries the per-cell uncertainty the
+rates and the detection history imply rather than collapsing every silent season
+to a flat zero.
+
+The residuals localise any misfit. `residuals()` returns an occupancy component
+shaped like the smoothed `z` matrix, one residual per site and season comparing
+the ever-detected indicator at that cell against the smoothed state, with `NA`
+where a cell had no visits. Deviance residuals are the default and the natural
+scale for binary outcomes.
+
+```{r dyn-resid, fig.alt = "Occupancy deviance residuals against smoothed state probability, scattered with no trend"}
+res <- residuals(fit, type = "deviance")
+rd  <- data.frame(z = as.vector(fv$z), r = as.vector(res$occ))
+rd  <- rd[is.finite(rd$r), ]
+ggplot(rd, aes(z, r)) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_point(alpha = 0.3) +
+  labs(x = "smoothed P(z = 1)", y = "occupancy deviance residual") + transparent
+```
+
+A residual cloud with no trend against the smoothed state, as here, says the
+state structure is adequate across the range of fitted probabilities. A funnel
+opening toward one end, or a band that drifts off zero, would point to a rate
+that varies with something the constant-rate model leaves out, the cue to add a
+covariate to colonisation or extinction. The posterior-predictive machinery
+(`tobs_ppc()`, the dispersion and zero-inflation tests) is wired for the
+single-season detection-history shape and does not run on the three-dimensional
+dynamic array, so the WAIC, the smoothed-state comparison, and the residuals are
+the dynamic model's fit checks.
+
 ## Turnover and equilibrium occupancy
 
 The two transition rates imply quantities that are often more interesting than
@@ -378,29 +470,64 @@ $$
 so the modelled curve can be drawn forward from the fitted $\psi_1$, $\gamma$,
 and $\epsilon$ and laid over the realised fractions from the simulation.
 
-```{r traj-plot, fig.alt = "Modelled occupancy trajectory from the fitted rates overlaid on the realised occupancy fractions across six seasons"}
-n_seasons <- dim(sim$y)[3]
-psi_t <- numeric(n_seasons)
-psi_t[1] <- fit$intercepts$psi1
-for (t in 2:n_seasons) {
-  psi_t[t] <- psi_t[t - 1] * (1 - e) + (1 - psi_t[t - 1]) * g
-}
+A point trajectory hides the uncertainty in the rates that drive it. The
+posterior draws make that uncertainty explicit: iterate the recursion once per
+draw, using that draw's $\psi_1$, $\gamma$, and $\epsilon$, and the spread of the
+resulting curves at each season is the credible band on the modelled occupancy.
+This is the marginalise-the-derived-quantity move applied to a trajectory,
+propagating the rate posterior through the nonlinear recursion rather than
+plugging in point estimates.
 
-plot(seq_len(n_seasons), colMeans(sim$truth$z), type = "b", pch = 16,
-     ylim = c(0, 1), xlab = "season", ylab = "occupied fraction")
-lines(seq_len(n_seasons), psi_t, col = "darkorange", lwd = 2)
-abline(h = psi_eq, col = "steelblue", lwd = 2, lty = 2)
-legend("bottomright",
-       c("realised (truth)", "modelled trajectory", "equilibrium"),
-       col = c("black", "darkorange", "steelblue"),
-       lwd = c(1, 2, 2), pch = c(16, NA, NA), lty = c(1, 1, 2), bty = "n")
+```{r traj-curves}
+n_seasons <- dim(sim$y)[3]
+dr <- fit$draws
+psi_draws <- function(b) {
+  pt <- numeric(n_seasons); pt[1] <- plogis(b["psi1_(Intercept)"])
+  gg <- plogis(b["gamma_(Intercept)"]); ee <- plogis(b["epsilon_(Intercept)"])
+  for (t in 2:n_seasons) pt[t] <- pt[t - 1] * (1 - ee) + (1 - pt[t - 1]) * gg
+  pt
+}
+curves <- t(apply(dr, 1, psi_draws))
+band <- data.frame(
+  season = seq_len(n_seasons), mean = colMeans(curves),
+  lo = apply(curves, 2, quantile, 0.025), hi = apply(curves, 2, quantile, 0.975),
+  truth = colMeans(sim$truth$z)
+)
+```
+
+```{r traj-band, fig.alt = "Modelled occupancy trajectory with a shaded credible band overlaid on the realised occupancy fractions across six seasons"}
+ggplot(band, aes(season, mean)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.2) +
+  geom_hline(yintercept = psi_eq, colour = "steelblue", linewidth = 1, linetype = 2) +
+  geom_line(colour = "darkorange", linewidth = 1) +
+  geom_point(aes(y = truth), size = 2) +
+  ylim(0, 1) + labs(x = "season", y = "occupied fraction") + transparent
 ```
 
 The modelled curve rises from the fitted starting occupancy toward the
-equilibrium line and tracks the realised fractions across the six seasons. The
-gap between the orange curve and the black points is sampling noise in two
-hundred finite chains, not a failure of fit; the curve is the expectation those
-chains scatter around.
+equilibrium line and the realised fractions sit inside the band across the six
+seasons. The band is widest in the middle seasons, where the rate uncertainty
+has had a step or two to compound but the curve has not yet been pinned to the
+equilibrium it converges on. The gap between the orange curve and the points is
+sampling noise in two hundred finite chains, not a failure of fit; the curve is
+the expectation those chains scatter around, and the shaded region is how firmly
+the rates pin that expectation.
+
+The same draws give a credible interval on the derived equilibrium, computed by
+evaluating $\gamma / (\gamma + \epsilon)$ on every draw and taking the quantiles,
+rather than reading a single ratio off the point estimates.
+
+```{r eq-ci}
+gd <- plogis(dr[, "gamma_(Intercept)"]); ed <- plogis(dr[, "epsilon_(Intercept)"])
+eq_draws <- gd / (gd + ed)
+round(quantile(eq_draws, c(0.025, 0.5, 0.975)), 3)
+```
+
+The interval straddles the true equilibrium of 0.6 and its width reports how
+much the rate uncertainty leaves open about the level the metapopulation settles
+at. A point ratio of the two modal rates would land in the middle of this
+interval and hide its width, which is why the derived equilibrium is worth
+reporting with the band the draws carry rather than as a bare number.
 
 The speed of approach is itself informative. The distance to equilibrium shrinks
 by a factor of $1 - \gamma - \epsilon$ each season, so when the two rates are
@@ -460,6 +587,140 @@ about persisting in occupied habitat. The first-season occupancy formula and the
 detection formula accept covariates in the same way, so every layer of the model
 can be made a function of site or visit attributes without changing the call
 shape.
+
+## Prediction
+
+Prediction for a dynamic model has two parts: where occupancy starts at a site
+you describe with covariates, and where it goes once the transition rates push
+it forward. The first uses the same machinery the single-season model does.
+`predict(fit, X.0 = )` evaluates the first-season occupancy $\psi_1$ at an
+explicit design matrix with one column per $\psi_1$ coefficient, the intercept
+first, and propagates the fixed-effect posterior through to a mean, a standard
+deviation, and credible bounds at each new row. To make the design carry a
+covariate, fit $\psi_1$ on a site predictor.
+
+```{r pred-fit}
+dat_pred <- sim$data
+dat_pred$elev <- rnorm(nrow(dat_pred))     # a site-level predictor on psi1
+
+fit_pred <- tobs(
+  ~ elev,                                  # first-season occupancy varies by site
+  data        = dat_pred,
+  family      = dyn_occu(),
+  detection   = ~ 1,
+  y           = sim$y,
+  col_formula = ~ 1,
+  ext_formula = ~ 1,
+  method      = "laplace",
+  control     = list(verbose = FALSE)
+)
+```
+
+The columns of `X.0` line up with the $\psi_1$ coefficients in order, the
+intercept first then the `elev` slope, which is why the rows below name them.
+The three rows are a site one standard deviation below the mean elevation, at
+the mean, and one above, and the predicted first-season occupancy comes back
+with an interval that widens at the extremes where the data thin out.
+
+```{r pred-psi1}
+X0 <- cbind(`(Intercept)` = 1, elev = c(-1, 0, 1))
+predict(fit_pred, X.0 = X0)
+```
+
+The second part projects each of those starting points forward through the
+fitted rates. Because the colonisation and extinction here are constant across
+sites, the recursion $\psi_t = \psi_{t-1}(1 - \epsilon) + (1 - \psi_{t-1})\gamma$
+carries any starting occupancy toward the same equilibrium, so a site that
+begins low climbs and a site that begins high settles, both approaching the
+shared level. Running the recursion forward a few seasons past the survey shows
+where each starting design is headed.
+
+```{r pred-project}
+psi0 <- predict(fit_pred, X.0 = X0)$mean          # psi1 at the three designs
+gp <- fit_pred$intercepts$gamma; ep <- fit_pred$intercepts$epsilon
+horizon <- 8L
+proj <- do.call(rbind, lapply(seq_along(psi0), function(k) {
+  pt <- numeric(horizon); pt[1] <- psi0[k]
+  for (t in 2:horizon) pt[t] <- pt[t - 1] * (1 - ep) + (1 - pt[t - 1]) * gp
+  data.frame(season = seq_len(horizon), psi = pt, site = paste0("elev=", c(-1, 0, 1)[k]))
+}))
+```
+
+```{r pred-forward, fig.alt = "Projected occupancy for three starting sites converging toward the shared equilibrium over future seasons"}
+ggplot(proj, aes(season, psi, colour = site)) +
+  geom_hline(yintercept = gp / (gp + ep), colour = "grey50", linetype = 2) +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  ylim(0, 1) + labs(x = "season", y = "projected occupancy") + transparent
+```
+
+The three curves start apart, ranked by elevation, and converge on the dashed
+equilibrium line within a few seasons because the rates that drive them are
+shared. The initial spread is the covariate effect on first-season occupancy;
+the convergence is the dynamics washing the initial condition out. A site's
+elevation buys it a head start or a deficit that the transition rates erode
+season by season, which is the practical reason first-season covariates matter
+most for short surveys and least for long ones.
+
+To carry the full posterior uncertainty into the projection rather than the
+modal rates, iterate the recursion per draw as the trajectory band did, starting
+each draw's curve from that draw's $\psi_1$ at the design. The point projection
+above is the fast read; the per-draw version is the one to report when the
+horizon is long enough that the rate uncertainty compounds into a wide band by
+the end. Prediction here is for the occupancy side of the model; the detection
+probability at a new design comes from the detection arm through
+`tobs_marginal_effect(fit, ..., process = "detection")`, the same accessor the
+single-season vignette uses.
+
+## Comparing models
+
+WAIC earns its keep in comparison. A single value is uninterpretable on its own;
+what carries meaning is the difference between two models fit to the same data.
+The natural comparison for a dynamic model is the dynamic fit against the
+structure that drops the transitions, a model that holds occupancy constant
+across seasons and so cannot represent colonisation or extinction. The
+covariate-on-colonisation fit from earlier and the constant-rate fit give a
+second comparison: whether the data support letting a rate vary. Fit a simpler
+model and read the scores side by side; the lower WAIC is the better predictor
+of the histories you have.
+
+```{r waic-table}
+fit_cov_e <- tobs(
+  ~ 1, data = dat_cov, family = dyn_occu(), detection = ~ 1, y = sim$y,
+  col_formula = ~ connectivity, ext_formula = ~ connectivity,
+  method = "laplace", control = list(verbose = FALSE)
+)
+
+waic_tab <- data.frame(
+  model  = c("constant rates", "connectivity on colonisation",
+             "connectivity on both rates"),
+  waic   = c(tobs_waic(fit)$waic, tobs_waic(fit_cov)$waic,
+             tobs_waic(fit_cov_e)$waic),
+  p_waic = c(tobs_waic(fit)$p_waic, tobs_waic(fit_cov)$p_waic,
+             tobs_waic(fit_cov_e)$p_waic)
+)
+waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 1)
+waic_tab$waic  <- round(waic_tab$waic, 1)
+waic_tab$p_waic <- round(waic_tab$p_waic, 2)
+waic_tab
+```
+
+The constant-rate model carries the lowest WAIC here, because `connectivity` was
+drawn independently of the simulated trajectory and the covariate slots add
+parameters the data cannot put to work. The `delta` column is the gap from the
+best model; a drop of more than a few units is the usual rough threshold for
+preferring the larger model, and the covariate models miss that threshold,
+matching how the data were generated. On a real dataset where connectivity
+genuinely drove colonisation, the covariate model would carry the lower WAIC and
+the `delta` would favour it, which is the signal that the predictor is doing
+real work on the rate rather than fitting noise.
+
+WAIC ranks models on predictive accuracy; it does not certify that the winner is
+correctly specified, and it will happily hand you the less wrong of two wrong
+models. Pair it with the smoothed-state and residual checks above before
+trusting the ranking. The comparison also guides model building one decision at
+a time: a covariate that belongs on colonisation should lower WAIC when added to
+`col_formula` and do little when forced onto `ext_formula`, the same way a
+single-season covariate sorts into the occupancy or the detection arm.
 
 ## Full posterior with NUTS
 
@@ -537,6 +798,15 @@ the rates identifiable.
   equilibrium a long way, so report the equilibrium with the uncertainty that
   flows from the rate intervals rather than from a point plug-in.
 
+- **Check prior sensitivity when transitions are rare.** The rates carry weakly
+  informative priors on the logit scale, which barely move a rate that the data
+  pin but pull a rate estimated from a handful of transitions toward its prior
+  mean. When realised occupancy sits near zero or one, refit with the rate's
+  prior loosened and tightened and watch whether the posterior moves with it; a
+  rate that tracks its prior is a rate the data did not inform, and reporting it
+  as an estimate overstates what the survey saw. The cross-engine check below
+  catches the same problem from the likelihood side.
+
 - **When not to fit it.** If you have a single season, fit `occu()`; there is no
   transition to estimate. If you have many seasons but the species never changes
   state, the rates collapse to zero or one and the dynamic structure adds
@@ -545,6 +815,24 @@ the rates identifiable.
   several unobserved transitions folded into each observed step, the colonisation
   and extinction you estimate describe the observation interval rather than the
   biological process.
+
+The choices above collapse into a short decision table, read top to bottom: the
+first row whose condition your design meets points to the model that matches what
+the data can actually estimate.
+
+| Your design | Fit this | Why |
+|---|---|---|
+| One season | `occu()` | no transition to estimate |
+| Two seasons | `occu()` per season, or `dyn_occu()` with caution | one transition step blends colonisation and extinction |
+| Three or more seasons, state changes | `dyn_occu()` | rates jointly estimable, equilibrium readable |
+| Many seasons, state never changes | static `occu()` per season | rates degenerate to 0/1, dynamic params uninformed |
+| Seasons far apart, Markov broken | `dyn_occu()` reporting interval-scale rates | rates describe the observation gap, not the biology |
+
+The reliable test underneath the table is the cross-engine check: fit under
+Laplace and under NUTS and compare the rates. When the deterministic mode and
+the sampled posterior agree, the design supports the model and the cheap fit is
+faithful; when they pull apart, the transitions are too rare to pin and only the
+sampler, or a longer survey, will settle the rates.
 
 ## Where to go next
 

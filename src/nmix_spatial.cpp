@@ -29,6 +29,7 @@
 #include "nmix_kernel.h"
 #include "nmix_spatial_kernel.h"
 #include "nmix_linalg.h"
+#include "nmix_progress.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -377,7 +378,9 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
     int K_max = -1,
     int max_iter = 100,
     double tol = 1e-6,
-    bool verbose = false
+    bool verbose = false,
+    bool progress = false, int progress_every = 0,
+    double progress_throttle = 0.0, std::string progress_file = ""
 ) {
     const int n_sites = X_lambda_R.nrow();
     const int p_lam   = X_lambda_R.ncol();
@@ -443,6 +446,9 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
 
     // Outer grid integrates the NB dispersion r (outermost) and the ICAR
     // precision tau. For Poisson, r_grid = c(Inf) (single pass, Poisson kernel).
+    // outer-grid progress (tulpa#45)
+    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
+                                           progress_every, progress_throttle, progress_file);
     int k = 0;
     for (int ri = 0; ri < n_r; ++ri) {
         for (int t = 0; t < n_tau; ++t, ++k) {
@@ -487,8 +493,10 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
                             << " n_iter=" << ir.n_iter
                             << " conv=" << ir.converged << "\n";
             }
+            if (gp) gp->tick();
         }
     }
+    if (gp) gp->finish();
 
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "r");
     return Rcpp::List::create(
@@ -560,7 +568,9 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
     int K_max = -1,
     int max_iter = 100,
     double tol = 1e-6,
-    bool verbose = false
+    bool verbose = false,
+    bool progress = false, int progress_every = 0,
+    double progress_throttle = 0.0, std::string progress_file = ""
 ) {
     const int n_sites = X_lambda_R.nrow();
     const int p_lam   = X_lambda_R.ncol();
@@ -633,6 +643,9 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
     Rcpp::NumericMatrix modes(n_grid, n_x);
     Rcpp::List cov_blocks(n_grid);   // per-grid marginal coef covariance
 
+    // outer-grid progress (tulpa#45)
+    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
+                                           progress_every, progress_throttle, progress_file);
     int k = 0;
     for (int ir_disp = 0; ir_disp < n_r; ++ir_disp) {
         const double rr = r_grid[ir_disp];
@@ -652,6 +665,7 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
                     grad_norms[k]     = R_PosInf;
                     log_liks[k]       = R_NegInf;
                     boundary_maxes[k] = 0.0;
+                    if (gp) gp->tick();
                     continue;
                 }
 
@@ -690,9 +704,11 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
                                 << " n_iter=" << ir.n_iter
                                 << " conv=" << ir.converged << "\n";
                 }
+                if (gp) gp->tick();
             }
         }
     }
+    if (gp) gp->finish();
 
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "rho", "r");
     return Rcpp::List::create(

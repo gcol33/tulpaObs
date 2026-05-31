@@ -142,7 +142,7 @@ nmix_laplace_icar <- function(y,
     stop("length(z_init) must equal n_spatial.", call. = FALSE)
   }
 
-  fit <- cpp_nested_laplace_nmix_icar(
+  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_icar,
     y                  = y,
     site_idx           = site_idx,
     map_site_to_unit_R = map_site_to_unit,
@@ -334,7 +334,7 @@ nmix_laplace_car_proper <- function(y,
     stop("length(z_init) must equal n_spatial.", call. = FALSE)
   }
 
-  fit <- cpp_nested_laplace_nmix_car_proper(
+  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_car_proper,
     y                  = y,
     site_idx           = site_idx,
     map_site_to_unit_R = map_site_to_unit,
@@ -567,7 +567,7 @@ nmix_laplace_bym2 <- function(y,
     stop("length(w_init) must equal n_spatial.", call. = FALSE)
   }
 
-  fit <- cpp_nested_laplace_nmix_bym2(
+  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_bym2,
     y                  = y,
     site_idx           = site_idx,
     map_site_to_unit_R = map_site_to_unit,

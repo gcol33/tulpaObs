@@ -416,6 +416,127 @@ predict(fa, X.0 = cbind(`(Intercept)` = 1, det_cov1 = c(-1, 0, 1)),
         type = "detection")
 ```
 
+## Random effects on abundance
+
+Counts arrive grouped. Sites cluster into watersheds, plots nest inside
+forest stands, transects fall under the field crew that walked them. The
+group carries its own baseline abundance that no measured covariate
+captures, and treating that grouping as one fixed intercept per level
+burns a parameter on every group and leaves the sparse ones with wild
+estimates. A random intercept ties the levels together instead: each
+group's abundance baseline is a draw from $N(0, \sigma^2)$, and the model
+estimates the single spread $\sigma$ rather than one free intercept per
+group. Groups with many sites keep their own signal; groups with few are
+pulled toward the population mean, the shrinkage that is the point of the
+random effect rather than a side effect of it.
+
+`abun()` carries the `lme4` bar syntax on either arm. A term in the
+abundance formula varies log-abundance by group; a term in the
+`detection` formula varies the logit of detection. The single-species
+N-mixture takes `(1 | g)` for a random intercept and the slope variants
+`(x | g)`, `(x || g)`, and `(1 + x | g)` the same way the occupancy model
+does, with one restriction: a term cannot sit on both arms of one fit, and
+a random effect cannot share a fit with an areal spatial field. Either of
+those needs the joint sampler. Put the bar on one arm at a time and the
+deterministic path handles it.
+
+Simulate grouped abundance with eight watersheds, each holding its own
+log-abundance offset drawn from $N(0, 0.6^2)$, on top of a site covariate
+`x1`. Detection is constant near 0.5, and four visits give the thinning
+enough replication.
+
+```{r sim-re}
+sim_re <- function(N = 120, J = 4, ngrp = 8, sigma_b = 0.6, seed = 11) {
+  set.seed(seed)
+  grp <- rep(seq_len(ngrp), length.out = N)
+  b   <- rnorm(ngrp, sd = sigma_b)
+  dat <- data.frame(x1 = rnorm(N), g = factor(grp))
+  eta <- as.numeric(model.matrix(~ x1, dat) %*% c(0.6, 0.4)) + b[grp]
+  Nlat <- rpois(N, exp(eta))
+  y <- matrix(NA_integer_, N, J)
+  for (i in seq_len(N)) y[i, ] <- rbinom(J, Nlat[i], plogis(0))
+  list(y = y, data = dat, b = b)
+}
+sr <- sim_re()
+```
+
+The fit reads like the others, with the bar inside the abundance formula.
+`control = list(n.quad = 5)` sets the adaptive Gauss-Hermite resolution
+that debiases the small-cluster variance attenuation; `n.quad = 1` is the
+plain joint Laplace, and higher values recover the spread the single
+Gaussian per group misses.
+
+```{r fit-re}
+fr <- tobs(
+  ~ x1 + (1 | g),
+  data      = sr$data,
+  family    = abun(),
+  detection = ~ 1,
+  y         = sr$y,
+  method    = "laplace",
+  verbose   = FALSE,
+  control   = list(n.quad = 5)
+)
+coef(fr)$lambda
+```
+
+The abundance intercept and slope recover near the simulated 0.6 and 0.4
+with the group structure absorbed into the random effect rather than
+blended into the coefficients. The variance component lives in `fr$means`
+under a `sigma_g`-prefixed name, the spread across watershed baselines.
+
+```{r re-sigma}
+sig_name <- grep("^sigma_g", names(fr$means), value = TRUE)
+c(estimate = fr$means[[sig_name]], truth = 0.6)
+```
+
+`vcov()` returns the joint fixed-effect covariance over the abundance and
+detection coefficients alone, the same block the non-grouped fit carries.
+The variance-component point estimate sits outside it, since the
+marginal-Hessian path does not surface its joint posterior covariance with
+the fixed effects.
+
+```{r re-vcov}
+round(vcov(fr), 4)
+```
+
+`ranef()` returns the per-group effects, the BLUPs, one row per group level
+and coefficient: the grouping factor, the level, the term, the estimate,
+and its standard error. The standard error is the genuine AGHQ marginal
+posterior spread, wider for groups with fewer sites.
+
+```{r re-ranef}
+re <- ranef(fr)
+re
+```
+
+Plot the recovered group effects against the simulated truth with the BLUP
+standard error as an interval. The points track the identity line, with
+the shrinkage that pulls sparse groups toward zero and the uncertainty band
+that widens where a group carries less data.
+
+```{r re-plot, fig.alt = "Recovered per-group random intercepts against the simulated truth, with standard-error bars, scattered along the identity line"}
+library(ggplot2)
+re$truth <- sr$b[as.integer(re$level)]
+ggplot(re, aes(truth, estimate)) +
+  geom_abline(slope = 1, intercept = 0, colour = "steelblue", linewidth = 1) +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error),
+                width = 0, colour = "grey50") +
+  geom_point(size = 2) +
+  labs(x = "true group effect", y = "estimated BLUP") +
+  theme(panel.background = element_rect(fill = "transparent"),
+        plot.background  = element_rect(fill = "transparent"))
+```
+
+The same machinery moves to detection by writing the bar in the
+`detection` formula, where it varies the per-group logit of detection and
+the variance component is named `sigma_p` for the detection arm. Under
+`mixture = "negbin"` the random effect and the overdispersion size are
+estimated together on the same AGHQ likelihood, with the size as the
+trailing log-scale coordinate. The recovery here used eight groups; the
+variance starts to mean something around five to eight levels, and below
+that a fixed effect that names each group is the honest choice.
+
 ## Counts on a map
 
 Sites near each other often hold similar numbers of animals for reasons no
@@ -590,8 +711,19 @@ A handful of rules of thumb make the rest of the modelling decisions.
 - **Raise K_max when abundance dwarfs detection.** The default ceiling
   suits ordinary counts. When expected abundance is large and detection is
   small, the latent $N$ sits far above any visit's count, and a ceiling set
-  too low truncates the likelihood and biases $\lambda$ down. Refit with a
-  higher `K_max` and confirm the estimate is stable.
+  too low truncates the likelihood and biases $\lambda$ down. A workable
+  rule is to set `K_max` to roughly three to five times the largest count
+  you would believe at the richest site, then double it and confirm the
+  coefficients do not move. The negative-binomial state needs the upper end
+  of that range for the same mean, since its heavier tail puts mass higher.
+
+- **Group with five to eight levels before trusting the variance.** A
+  random effect on the abundance arm estimates the spread across groups, and
+  with two or three groups there is almost no information about that spread.
+  Five to eight levels is the rough floor; below it, name each group with a
+  fixed intercept instead. Keep at least ten sites per group when the term
+  carries a random slope rather than only an intercept, since a slope asks
+  each group's own data to inform its covariate effect before shrinkage.
 
 - **When N-mixture is the wrong tool.** Three cases call for a different
   model. If the surveys are not closed, animals moving in and out between
@@ -609,6 +741,8 @@ A handful of rules of thumb make the rest of the modelling decisions.
   detection structure: `vignette("occupancy")`.
 - Many species at once, each with its own N-mixture, tied by community
   hyperpriors: `vignette("community-models")`.
+- Grouped random effects in full, with slopes, the `||` forms, and the
+  AGHQ debias: `vignette("random-effects")`.
 - Areal and continuous spatial fields in depth, with field extraction and
   the smoothing-precision posterior: the `tulpa` spatial vignettes.
 - Posterior-predictive checks and residual diagnostics:

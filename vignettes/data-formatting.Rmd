@@ -157,6 +157,81 @@ holds the per-site `elev` column. A detection covariate passed through
 `det.covs` would come back as its own `N x J` matrix rather than a single
 column, so a per-visit value lands in the right visit slot.
 
+The `type` argument controls what the response column means. The default,
+`"occurrence"`, builds an integer 0/1 matrix; `"abundance"` keeps integer
+counts; `"cover"` keeps a continuous proportion in `[0, 1]` without coercing
+it to integer. Picking the wrong one is a common quiet error: a cover value of
+`0.6` run through the integer path truncates to `0`. The same long frame can
+feed an occurrence and a cover model side by side as long as each call names
+the matching column and `type`.
+
+```{r tobs-data-cover}
+cov_long <- data.frame(
+  site  = rep(paste0("S", 1:4), each = 2),
+  visit = rep(1:2, times = 4),
+  cover = round(runif(8, 0, 0.8), 2)
+)
+cov_obs <- tobs_data(cov_long, y = "cover", site = "site", visit = "visit",
+                     type = "cover")
+cov_obs$y
+```
+
+## Building a `tobs_data` object by hand
+
+When the matrix and covariates already sit in the right shape, skip the long
+frame and assemble the object directly. `tobs_format()` is the low-level
+constructor: it wraps a detection matrix, a site-covariate frame, and a named
+list of detection-covariate matrices into the `tobs_data` class with no
+reshaping. The named elements it expects are `y` (the `N x J` matrix),
+`occ.covs` (a per-site data frame), and `det.covs` (a named list of `N x J`
+matrices, one per visit-varying covariate).
+
+```{r build-scratch}
+N <- 5; J <- 3
+y_hand   <- matrix(rbinom(N * J, 1, 0.4), N, J,
+                   dimnames = list(paste0("S", 1:N), paste0("V", 1:J)))
+occ_hand <- data.frame(elev = round(rnorm(N), 2))
+eff_hand <- matrix(round(runif(N * J, 1, 4)), N, J)   # per-visit effort
+obs_hand <- tobs_format(y = y_hand, occ.covs = occ_hand,
+                        det.covs = list(effort = eff_hand))
+obs_hand
+str(obs_hand$y)
+```
+
+`obs_hand$det.covs$effort` carries one effort value per site-visit cell, so the
+detection formula `~ effort` reads a genuinely per-visit covariate rather than a
+broadcast site value. The site covariate `elev` stays a single column in
+`occ.covs`. A scalar detection covariate that does not vary by visit can still
+go through `det.covs` as an `N x J` matrix with the same value down each row, or
+through `occ.covs` if it is constant within a site, since `tobs_format()` stores
+whatever layout you hand it.
+
+For the array families the named elements are the same except `y` carries an
+extra dimension and `tobs_format_ms()` is the constructor. It accepts either a
+3D `N x J x species` array or a named list of per-species matrices, and records
+`species_names` and `n_species` alongside `y`, `occ.covs`, and `det.covs`.
+
+```{r build-ms-scratch}
+sp_list <- lapply(1:3, function(s) matrix(rbinom(N * J, 1, 0.3), N, J))
+names(sp_list) <- c("warbler", "finch", "wren")
+ms_hand <- tobs_format_ms(sp_list, occ.covs = occ_hand)
+dim(ms_hand$y)          # sites x visits x species
+ms_hand$species_names
+```
+
+The list-of-matrices form is convenient when species come from separate files:
+each matrix is one species, the list names become the species dimension. Passing
+a pre-built `N x J x species` array works the same way, with `species_names`
+supplied separately or defaulted to `sp1`, `sp2`, and so on.
+
+Which constructor to reach for follows from where the data already sits.
+`tobs_data()` takes a long site-visit table and does the reshape for you, which
+suits raw field exports. `tobs_format()` takes matrices you have already shaped,
+which suits data that arrives wide or that you built in an earlier step.
+`tobs_format_ms()` is the multi-species counterpart of `tobs_format()`. All
+three return the same `tobs_data` class, so the `print()`, `summary()`, and
+`plot()` methods and the `tobs()` fitter treat their output identically.
+
 ## Inspecting a `tobs_data` object
 
 `tobs_format()` is the lower-level constructor: it wraps an existing
@@ -256,6 +331,27 @@ tobs(~ occ_cov1, data = dat[1:100, , drop = FALSE], family = occu(),
      method = "laplace", control = list(verbose = FALSE))
 ```
 
+`tobs_data()` validates earlier, while it is still reshaping the long frame.
+Naming a covariate column that is not in the frame stops with the missing name
+quoted, before any matrix is built.
+
+```{r err-col, error = TRUE}
+tobs_data(long, y = "detected", site = "site", visit = "visit",
+          occ.covs = "elevation")   # column is named 'elev', not 'elevation'
+```
+
+The `type` argument is checked against the response values. An occurrence
+response carrying a `2` is rejected, since occurrence data is 0/1; an abundance
+response with a negative count and a cover response outside `[0, 1]` fail the
+same way against their own domains.
+
+```{r err-type-data, error = TRUE}
+bad <- long
+bad$detected[1] <- 2
+tobs_data(bad, y = "detected", site = "site", visit = "visit",
+          type = "occurrence")
+```
+
 The community and dynamic builders apply the matching check on their own
 shapes. A `dyn_occu()` fit wants a 3D `[site x visit x season]` array, and
 handing it a 2D matrix reports the array requirement directly.
@@ -271,11 +367,17 @@ response, let the builder reconcile them, and read the error when they do
 not match. When a fit refuses to start, checking `dim(y)` against
 `nrow(data)` resolves most of it before any inference runs.
 
-## Other response shapes
+## Response shapes per family
 
-The wide-matrix logic extends to the array and list families. The
-simulators are the fastest way to see each shape, since they return a `y`
-already in the form the matching family expects.
+The wide-matrix logic extends to the array and list families, and the named
+elements stay constant: `y` holds the response, `occ.covs` the per-site
+covariate frame, `det.covs` the per-visit covariate matrices. Only the shape of
+`y` moves. A single-season `occu()` or `abun()` fit reads an `N x J` matrix; a
+community `ms_occu()` or `ms_abun()` fit reads an `N x J x species` array; a
+dynamic `dyn_occu()` fit reads an `N x J x season` array; an integrated
+`int_occu()` fit reads a list of matrices, one per source, that may differ in
+their visit counts. The simulators are the fastest way to see each shape, since
+they return a `y` already in the form the matching family expects.
 
 A community model stacks species on a third dimension. `simulate_ms_occu()`
 returns an `N x J x species` array, and `species` names that dimension.
