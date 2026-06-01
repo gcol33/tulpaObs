@@ -239,6 +239,17 @@ jsdm <- function() {
 #' `joint_coupled` engine; the `v2_joint` / `v3_nested` escape hatches bind the
 #' field 1:1 to sites and reject `group_var`.
 #'
+#' @section Checkpoint / resume:
+#' A full-field `occu_cover()` fit integrates over a large outer hyperparameter
+#' grid and can run for hours, so a reboot or OOM kill otherwise loses the whole
+#' run. `control$checkpoint = list(path = "fit.ckpt", resume = TRUE)` makes the
+#' joint engine append each completed grid cell to `path`; a `resume = TRUE` run
+#' loads the finished cells and solves only the remaining ones, reproducing the
+#' from-scratch fit. `resume = FALSE` starts a fresh file (any stale checkpoint at
+#' `path` is removed first). A torn tail from a killed write is discarded and
+#' re-solved, and a checkpoint written for different data or settings is rejected
+#' rather than resumed onto. Forwarded to [tulpa::tulpa_nested_laplace_joint()].
+#'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
@@ -264,7 +275,8 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
       "phi.grid.pos", "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse",
-      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes"
+      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      "checkpoint"
     )
   )
 }
@@ -444,6 +456,15 @@ fp_occu <- function() {
 #' coverage of the *population* truth collapses with alpha. See
 #' [simulate_cover_joint()] for a ready-made demeaned simulator.
 #'
+#' @section Checkpoint / resume:
+#' A spatial cover-hurdle fit integrates over a large outer hyperparameter grid
+#' and can run for hours. `control$checkpoint = list(path = "fit.ckpt", resume =
+#' TRUE)` makes the joint engine append each completed grid cell to `path`; a
+#' `resume = TRUE` run loads the finished cells and solves only the rest,
+#' reproducing the from-scratch fit, so a killed or rebooted fit resumes instead
+#' of restarting. `resume = FALSE` starts a fresh file. Forwarded to
+#' [tulpa::tulpa_nested_laplace_joint()].
+#'
 #' @param positive likelihood for the positive part. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
@@ -470,7 +491,8 @@ cover <- function(positive = c("beta", "lognormal")) {
       "trend", "alpha.grid", "alpha.grid.trend",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "prune", "prune.tol", "hessian",
-      "progress", "progress.every", "progress.throttle", "progress.file"
+      "progress", "progress.every", "progress.throttle", "progress.file",
+      "checkpoint"
     )
   )
 }

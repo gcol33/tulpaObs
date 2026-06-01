@@ -429,7 +429,13 @@
       # threshold compare.
       adaptive_grid             = dots$adaptive.grid             %||% TRUE,
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
-      adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L
+      adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
+      # Grid-cell checkpoint/resume (gcol33/tulpa#50). An EVA-scale occu_cover
+      # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
+      # the outer grid append each completed cell to `path` and a resume run
+      # load the finished cells and solve only the rest, so a killed/rebooted
+      # fit resumes instead of restarting. Forwarded verbatim to the engine.
+      checkpoint = dots$checkpoint
     )
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg

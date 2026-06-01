@@ -35,3 +35,13 @@ coverage of the \emph{population} truth collapses with alpha. See
 \code{\link[=simulate_cover_joint]{simulate_cover_joint()}} for a ready-made demeaned simulator.
 }
 
+\section{Checkpoint / resume}{
+
+A spatial cover-hurdle fit integrates over a large outer hyperparameter grid
+and can run for hours. \code{control$checkpoint = list(path = "fit.ckpt", resume = TRUE)} makes the joint engine append each completed grid cell to \code{path}; a
+\code{resume = TRUE} run loads the finished cells and solves only the rest,
+reproducing the from-scratch fit, so a killed or rebooted fit resumes instead
+of restarting. \code{resume = FALSE} starts a fresh file. Forwarded to
+\code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}.
+}
+

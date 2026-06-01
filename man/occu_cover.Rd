@@ -85,6 +85,19 @@ occupancy trend on a shared cell field. Supported on the default
 field 1:1 to sites and reject \code{group_var}.
 }
 
+\section{Checkpoint / resume}{
+
+A full-field \code{occu_cover()} fit integrates over a large outer hyperparameter
+grid and can run for hours, so a reboot or OOM kill otherwise loses the whole
+run. \code{control$checkpoint = list(path = "fit.ckpt", resume = TRUE)} makes the
+joint engine append each completed grid cell to \code{path}; a \code{resume = TRUE} run
+loads the finished cells and solves only the remaining ones, reproducing the
+from-scratch fit. \code{resume = FALSE} starts a fresh file (any stale checkpoint at
+\code{path} is removed first). A torn tail from a killed write is discarded and
+re-solved, and a checkpoint written for different data or settings is rejected
+rather than resumed onto. Forwarded to \code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}.
+}
+
 \seealso{
 \code{\link[=occu]{occu()}} (no cover), \code{\link[=cover]{cover()}} (plot-level hurdle, no detection),
 \code{\link[=abun]{abun()}} (counts not cover).

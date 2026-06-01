@@ -1103,7 +1103,13 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     progress          = control$progress          %||% FALSE,
     progress.every    = control$progress.every    %||% 0L,
     progress.throttle = control$progress.throttle %||% 2,
-    progress.file     = control$progress.file     %||% ""
+    progress.file     = control$progress.file     %||% "",
+    # Grid-cell checkpoint/resume (gcol33/tulpa#50). A full-field cover-hurdle
+    # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
+    # the outer grid append each completed cell to `path` and a resume run load
+    # the finished cells and solve only the rest, so a killed/rebooted fit
+    # resumes instead of restarting. Forwarded verbatim to the engine.
+    checkpoint        = control$checkpoint
   )
 
   # ---- Multi-block path (Phase J-D) -----------------------------------
