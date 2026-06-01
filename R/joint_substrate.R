@@ -74,7 +74,10 @@
 .tobs_joint_draws_occu_cover <- function(object, jf, layout, n) {
   tg       <- jf$theta_grid
   positive <- object$positive %||% "lognormal"
-  n_cells  <- object$model$n_sites
+  # Field nodes (cells), not occupancy units (sites): under group_var the shared
+  # field is sized by the graph, so n_sites can exceed it. Each block holds
+  # n_cells field entries; consumers map sites -> cells via model$site_cell.
+  n_cells  <- object$model$n_cells %||% object$model$n_sites
   p        <- layout$p
   bstart   <- layout$beta_start
 

@@ -111,6 +111,18 @@ test_that("occu_cover group_var runs with more sites than field nodes", {
   # columns), one sum-to-zero row per ICAR block.
   p_beta <- sum(vapply(fit$process_info, function(p) length(p$coef_names), 1L))
   expect_equal(dim(fit$joint_vcov), c(p_beta + 2L*n_cells, p_beta + 2L*n_cells))
+
+  # The joint-draw substrate slices the field by CELLS, not sites (WAIC /
+  # prediction read it). Each field block must be [n_draws x n_cells].
+  bundle <- tulpaObs:::.tobs_joint_draws(fit, n = 40L)
+  expect_identical(bundle$n_cells, n_cells)
+  for (blk in bundle$blocks) expect_equal(ncol(blk$z), n_cells)
+
+  # Pointwise log-likelihood runs end-to-end and returns one column per site
+  # (the per-site marginal projects the per-cell field via site_cell).
+  ll <- tulpaObs:::.tobs_ploglik_occu_cover(fit, n.draws = 40L)
+  expect_equal(ncol(ll), sim$n_sites)
+  expect_true(all(is.finite(ll)))
 })
 
 
