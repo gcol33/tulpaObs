@@ -4,6 +4,13 @@
 
 Requires tulpa (>= 0.0.6) and tulpaMesh (>= 0.1.2).
 
+* feat(occu_cover): `group_var` on the `icar()` / `bym2()` term decouples the
+  occupancy units (sites) from the field nodes (cells), so many sites share one
+  areal field node. A site = cell x time-period then carries a per-site trend
+  weight, giving a detection-corrected occupancy trend on a shared cell field
+  (the field stays length n_cells while psi / p / cover run over n_sites).
+  Joint_coupled engine only; the v2/v3 escape hatches reject it. Recovery in
+  `test-occu-cover-group-var.R`.
 * feat(cover): the joint cover-hurdle predict substrate now handles the coupled
   multi-block case (an ICAR intercept field plus one or more SVC trend fields)
   under the per-block `(sigma, alpha)` copy convention -- the occupancy arm

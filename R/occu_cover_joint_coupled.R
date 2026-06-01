@@ -103,20 +103,28 @@
 .occu_cover_build_joint_coupled_arms <- function(model, sigma_pos_init,
                                                   alpha_grid,
                                                   positive = "lognormal",
-                                                  multi = FALSE) {
-  n_cells    <- model$n_sites
+                                                  multi = FALSE,
+                                                  n_cells = NULL,
+                                                  site_cell = NULL) {
+  n_sites    <- model$n_sites
   max_visits <- model$max_visits
+  if (is.null(site_cell)) site_cell <- seq_len(n_sites)
+  if (is.null(n_cells))   n_cells   <- max(site_cell)
 
   valid_flat  <- as.logical(t(model$valid))   # site-major: site 1 visits 1..J, ...
   y_flat      <- as.numeric(t(model$y))
   y_pos_flat  <- as.numeric(t(model$y_pos))
-  cell_flat   <- rep(seq_len(n_cells), each = max_visits)
+  site_flat   <- rep(seq_len(n_sites), each = max_visits)
 
   keep             <- which(valid_flat)
   n_visits_valid   <- length(keep)
   y_det_visit      <- as.integer(y_flat[keep])
   y_pos_visit      <- y_pos_flat[keep]
-  cell_idx_visit   <- as.integer(cell_flat[keep])
+  # Each valid visit carries its occupancy unit (site, for the mixture grouping
+  # via cell_obs_map) and its field node (cell, for the shared field via
+  # spatial_idx). The two coincide when site_cell is the identity.
+  site_of_visit    <- as.integer(site_flat[keep])
+  cell_of_visit    <- as.integer(site_cell[site_of_visit])
 
   if (n_visits_valid == 0L) {
     stop("occu_cover joint_coupled: no valid visits in the data.",
@@ -125,28 +133,30 @@
 
   # Site-level + visit-level fixed-effect design on each observation arm.
   X_p_site <- model$X_det_site
-  X_p <- X_p_site[cell_idx_visit, , drop = FALSE]
+  X_p <- X_p_site[site_of_visit, , drop = FALSE]
   if (!is.null(model$X_det_visit)) {
     X_p <- cbind(X_p, model$X_det_visit[keep, , drop = FALSE])
   }
   X_pos_site <- model$X_pos_site
-  X_pos <- X_pos_site[cell_idx_visit, , drop = FALSE]
+  X_pos <- X_pos_site[site_of_visit, , drop = FALSE]
   if (!is.null(model$X_pos_visit)) {
     X_pos <- cbind(X_pos, model$X_pos_visit[keep, , drop = FALSE])
   }
 
-  # psi arm: one row per cell. y / n_trials / family are placeholders -- the
-  # per-obs scatter is skipped for coupled = TRUE and the cell-coupling spec
-  # writes every derivative from the cell-level occupancy mixture.
+  # psi arm: one row per site (occupancy unit). spatial_idx maps the site to its
+  # field node (cell); cell_obs_map indexes the occupancy unit itself. y /
+  # n_trials / family are placeholders -- the per-obs scatter is skipped for
+  # coupled = TRUE and the cell-coupling spec writes every derivative from the
+  # per-site occupancy mixture.
   arm_psi <- list(
-    y            = rep(0, n_cells),
-    n_trials     = rep(0L, n_cells),
+    y            = rep(0, n_sites),
+    n_trials     = rep(0L, n_sites),
     X            = model$X_occ,
-    spatial_idx  = seq_len(n_cells),
+    spatial_idx  = as.integer(site_cell),
     family       = "binomial",
     phi          = 1.0,
     coupled      = TRUE,
-    cell_obs_map = seq_len(n_cells)
+    cell_obs_map = seq_len(n_sites)
   )
 
   # p arm: one row per valid visit. field_coef = 0 excludes the detection
@@ -163,7 +173,7 @@
     phi          = 1.0,
     field_coef   = 0,
     coupled      = TRUE,
-    cell_obs_map = cell_idx_visit
+    cell_obs_map = site_of_visit
   )
 
   # pos arm: one row per valid visit. spatial_idx maps each visit to its cell.
@@ -184,18 +194,19 @@
     y            = y_pos_visit,
     n_trials     = rep(1L, n_visits_valid),
     X            = X_pos,
-    spatial_idx  = cell_idx_visit,
+    spatial_idx  = cell_of_visit,
     family       = positive,
     phi          = sigma_pos_init,
     coupled      = TRUE,
-    cell_obs_map = cell_idx_visit
+    cell_obs_map = site_of_visit
   )
   if (!multi) {
     arm_pos$field_coef <- list(name = "alpha", grid = alpha_grid)
   }
 
-  list(responses     = list(psi = arm_psi, p = arm_p, pos = arm_pos),
-       cell_idx_visit = cell_idx_visit,
+  list(responses      = list(psi = arm_psi, p = arm_p, pos = arm_pos),
+       site_of_visit  = site_of_visit,
+       cell_of_visit  = cell_of_visit,
        n_visits_valid = n_visits_valid)
 }
 
@@ -243,10 +254,17 @@
   spec_name <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
 
   pi_list <- model$process_info
-  n_cells <- model$n_sites
-  if (nrow(adj) != n_cells) {
-    stop(sprintf("Spatial graph has %d nodes but data has %d cells.",
-                 nrow(adj), n_cells), call. = FALSE)
+  # Field nodes (cells) and occupancy units (sites) are distinct under
+  # group_var: many sites can share one cell field node. site_cell maps each
+  # site to its node; absent, the two coincide 1:1.
+  n_cells   <- nrow(adj)
+  n_sites   <- model$n_sites
+  site_cell <- model$site_cell %||% seq_len(n_sites)
+  if (length(site_cell) != n_sites || max(site_cell) > n_cells ||
+      min(site_cell) < 1L) {
+    stop(sprintf(paste0(
+      "occu_cover joint_coupled: site_cell must map %d sites into 1..%d ",
+      "graph nodes."), n_sites, n_cells), call. = FALSE)
   }
 
   dots <- list(...)
@@ -307,10 +325,13 @@
     sigma_pos_init  = sigma_pos_init,
     alpha_grid      = alpha_grid,
     positive        = model$positive,
-    multi           = has_trend
+    multi           = has_trend,
+    n_cells         = n_cells,
+    site_cell       = site_cell
   )
   responses      <- arms_out$responses
-  cell_idx_visit <- arms_out$cell_idx_visit
+  site_of_visit  <- arms_out$site_of_visit
+  cell_of_visit  <- arms_out$cell_of_visit
   n_v            <- arms_out$n_visits_valid
 
   csr <- .occu_cover_adj_to_csr(adj)
@@ -338,14 +359,18 @@
     # field_coef = 0. Per-block svc_weight injects the per-row field weight on
     # the psi (per-cell) and pos (per-visit) arms; the p-arm weight is
     # irrelevant (field_coef = 0 already zeroes the p field).
-    spatial_idx_arms <- list(seq_len(n_cells), cell_idx_visit, cell_idx_visit)
-    make_block <- function(weight_cell) {
-      w_cell  <- if (is.null(weight_cell)) rep(1.0, n_cells)
-                 else as.numeric(weight_cell)
-      w_visit <- w_cell[cell_idx_visit]
+    # Field node per arm row: psi rows are sites (-> site_cell), p / pos rows are
+    # visits (-> cell_of_visit). The SVC weight is per occupancy unit (site) on
+    # the psi arm and per visit's site on the pos arm; the field it multiplies
+    # is the per-cell node addressed by spatial_idx.
+    spatial_idx_arms <- list(as.integer(site_cell), cell_of_visit, cell_of_visit)
+    make_block <- function(weight_site) {
+      w_psi   <- if (is.null(weight_site)) rep(1.0, n_sites)
+                 else as.numeric(weight_site)
+      w_visit <- w_psi[site_of_visit]
       icar_template(list(
         spatial_idx = spatial_idx_arms,
-        svc_weight  = list(w_cell, rep(1.0, n_v), w_visit)
+        svc_weight  = list(w_psi, rep(1.0, n_v), w_visit)
       ))
     }
     alpha_grid_trend <- dots$alpha.grid.trend %||% alpha_grid

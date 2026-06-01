@@ -141,7 +141,18 @@
     }
   }
 
-  list(fe = bind$fe$psi, fields = c(base, specs[weighted]))
+  # Optional group_var maps each site (occupancy unit) to a field node, so the
+  # site count can exceed the node count (e.g. site = cell-year sharing one cell
+  # field). All coupled fields must name the same group_var (or none).
+  gvs <- unique(Filter(Negate(is.null), lapply(specs, function(s) s$group_var)))
+  if (length(gvs) > 1L) {
+    stop("occu_cover() coupled fields must share a single group_var (or none).",
+         call. = FALSE)
+  }
+  group_var <- if (length(gvs) == 1L) gvs[[1L]] else NULL
+
+  list(fe = bind$fe$psi, fields = c(base, specs[weighted]),
+       group_var = group_var)
 }
 
 

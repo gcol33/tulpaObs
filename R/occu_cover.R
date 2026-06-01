@@ -503,6 +503,39 @@
   if (has_spatial) {
     fields      <- spatial_info$fields
     base_graph  <- fields[[1L]]$graph
+
+    # Resolve the site -> field-node map. With group_var the occupancy units
+    # (sites, one per row of `data` / `y`) map onto fewer field nodes (cells),
+    # so the same cell field is shared across that cell's sites (e.g. cell-year
+    # sites sharing one cell). Without group_var the two coincide 1:1.
+    n_cells_field <- nrow(base_graph)
+    gv <- spatial_info$group_var
+    if (!is.null(gv)) {
+      if (!gv %in% names(data)) {
+        stop(sprintf("occu_cover() group_var '%s' is not a column of data.", gv),
+             call. = FALSE)
+      }
+      site_cell <- as.integer(data[[gv]])
+      if (length(site_cell) != model$n_sites || anyNA(site_cell) ||
+          min(site_cell) < 1L || max(site_cell) > n_cells_field) {
+        stop(sprintf(paste0(
+          "occu_cover() group_var '%s' must be an integer cell index in 1..%d, ",
+          "one per site (%d sites)."), gv, n_cells_field, model$n_sites),
+          call. = FALSE)
+      }
+    } else {
+      if (model$n_sites != n_cells_field) {
+        stop(sprintf(paste0(
+          "occu_cover() spatial: %d sites but the graph has %d nodes. Map sites ",
+          "to cells with group_var = \"<col>\" on the icar()/bym2() term (e.g. ",
+          "site = cell-year), or match the site count to the graph."),
+          model$n_sites, n_cells_field), call. = FALSE)
+      }
+      site_cell <- seq_len(model$n_sites)
+    }
+    model$site_cell <- site_cell
+    model$n_cells   <- n_cells_field
+
     # joint_coupled (3-arm nested-Laplace via tulpa's cell_coupling spec) is the
     # default: outer-grid integration over (sigma, alpha [, sigma_trend,
     # alpha_trend]) with inner Newton driven by the occu_cover_{lognormal,beta}
@@ -518,6 +551,12 @@
         stop(sprintf(paste0(
           "occu_cover() engine \"%s\" couples a single shared field; ",
           "weighted SVC field(s) need the default joint_coupled engine."),
+          engine_pick), call. = FALSE)
+      }
+      if (!is.null(gv)) {
+        stop(sprintf(paste0(
+          "occu_cover() engine \"%s\" binds the field 1:1 to sites and does ",
+          "not support group_var; use the default joint_coupled engine."),
           engine_pick), call. = FALSE)
       }
       fit_args <- c(list(model = model, adj = base_graph, priors = priors),
@@ -567,7 +606,10 @@
     b_det  <- bundle$b$det
     b_pos  <- bundle$b$pos
     disp   <- bundle$disp
-    units  <- seq_len(n_sites)
+    # Each site reads its field node (cell) via site_cell; the field draws
+    # blk$z carry one column per node, so blk$z[, units] broadcasts the shared
+    # cell field across that cell's sites. Identity when no group_var.
+    units  <- model$site_cell %||% seq_len(n_sites)
     wfun   <- function(nm) {
       if (!nm %in% names(model$data)) {
         stop("occu_cover WAIC: trend-field weight column '", nm,

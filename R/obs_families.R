@@ -225,6 +225,20 @@ jsdm <- function() {
 #' covariate in the cell `data`; this is the equivalent of one weighted formula
 #' term. Specify the trend field one way or the other, not both.
 #'
+#' @section Sites larger than cells (`group_var`):
+#' By default each site (one row of `y` / `data`, one latent occupancy state) is
+#' its own field node, so the graph must have one node per site. Passing
+#' `group_var = "<col>"` to the `icar()` / `bym2()` term maps each site to a
+#' field node named by that integer column, so several sites can share one node.
+#' The field then stays length `n_cells` (the graph) while occupancy, detection,
+#' and cover run over `n_sites`. The motivating layout is a site = cell x
+#' time-period: plots in a cell-period are the detection replicates, occupancy is
+#' per cell-period, and a per-site time weight on a coupled trend field
+#' (`icar(graph, weight = time, group_var = "cell")`) gives a detection-corrected
+#' occupancy trend on a shared cell field. Supported on the default
+#' `joint_coupled` engine; the `v2_joint` / `v3_nested` escape hatches bind the
+#' field 1:1 to sites and reject `group_var`.
+#'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.

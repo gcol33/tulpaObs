@@ -69,6 +69,22 @@ covariate in the cell \code{data}; this is the equivalent of one weighted formul
 term. Specify the trend field one way or the other, not both.
 }
 
+\section{Sites larger than cells (\code{group_var})}{
+
+By default each site (one row of \code{y} / \code{data}, one latent occupancy state) is
+its own field node, so the graph must have one node per site. Passing
+\code{group_var = "<col>"} to the \code{icar()} / \code{bym2()} term maps each site to a
+field node named by that integer column, so several sites can share one node.
+The field then stays length \code{n_cells} (the graph) while occupancy, detection,
+and cover run over \code{n_sites}. The motivating layout is a site = cell x
+time-period: plots in a cell-period are the detection replicates, occupancy is
+per cell-period, and a per-site time weight on a coupled trend field
+(\code{icar(graph, weight = time, group_var = "cell")}) gives a detection-corrected
+occupancy trend on a shared cell field. Supported on the default
+\code{joint_coupled} engine; the \code{v2_joint} / \code{v3_nested} escape hatches bind the
+field 1:1 to sites and reject \code{group_var}.
+}
+
 \seealso{
 \code{\link[=occu]{occu()}} (no cover), \code{\link[=cover]{cover()}} (plot-level hurdle, no detection),
 \code{\link[=abun]{abun()}} (counts not cover).

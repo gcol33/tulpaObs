@@ -74,13 +74,16 @@
 # f(node, weight, model = ...)). NULL is an unweighted (intercept) field. Only
 # the occu_cover joint spatial path consumes the weight; the other areal
 # consumers reject a weighted term via .tobs_reject_weighted_spatial().
-.tobs_resolve_field_weight <- function(weight, n_units, term) {
+.tobs_resolve_field_weight <- function(weight, n_units, term, per_obs = FALSE) {
   if (is.null(weight)) return(NULL)
   w <- tryCatch(as.numeric(weight),
                 error = function(e) stop(sprintf(
-                  "%s(): `weight` must be a numeric per-node column.", term),
+                  "%s(): `weight` must be a numeric column.", term),
                   call. = FALSE))
-  if (length(w) != n_units) {
+  # With group_var the weight is per observation (one per site / data row),
+  # not per graph node; its length is validated downstream against the site
+  # count. Without group_var it is a per-node SVC covariate.
+  if (!per_obs && length(w) != n_units) {
     stop(sprintf(
       "%s(): `weight` has length %d but the graph has %d node(s).",
       term, length(w), n_units), call. = FALSE)
@@ -119,7 +122,8 @@
   .tobs_check_graph(graph, "icar")
   csr <- adjacency_to_csr(graph)
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
-  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "icar")
+  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "icar",
+                                       per_obs = !is.null(group_var))
   .tobs_term(list(
     type = "icar", n_units = nrow(graph), graph = graph, group_var = group_var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
@@ -134,7 +138,8 @@
   csr <- adjacency_to_csr(graph)
   if (is.null(scale_factor)) scale_factor <- compute_bym2_scale(graph)
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
-  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "bym2")
+  weight <- .tobs_resolve_field_weight(weight, nrow(graph), "bym2",
+                                       per_obs = !is.null(group_var))
   .tobs_term(list(
     type = "bym2", n_units = nrow(graph), graph = graph, group_var = group_var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
