@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.7 (2026-06-01)
+
+Requires tulpa (>= 0.0.7) and tulpaMesh (>= 0.1.2).
+
+* feat(occu_cover/cover): forward grid-cell checkpoint/resume into the joint
+  nested-Laplace engine (gcol33/tulpa#50). `control$checkpoint = list(path =,
+  resume =)` is passed verbatim to `tulpa::tulpa_nested_laplace_joint()` from
+  both the `occu_cover()` joint-coupled path and the `cover()` hurdle path, so a
+  full-field fit killed by a reboot or OOM resumes from the last completed outer
+  grid cell instead of restarting. `"checkpoint"` is on the `occu_cover` + `cover`
+  control allowlist and documented as a Checkpoint/resume section on both
+  families. Tests: `test-occu-cover-checkpoint.R`.
+
 ## 0.0.6 (2026-06-01)
 
 Requires tulpa (>= 0.0.6) and tulpaMesh (>= 0.1.2).

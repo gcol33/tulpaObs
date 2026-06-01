@@ -1,6 +1,6 @@
 Package: tulpaObs
 Title: Bayesian Occupancy Models via tulpa
-Version: 0.0.6
+Version: 0.0.7
 Authors@R: person("Gilles", "Colling", email = "gilles.colling@univie.ac.at",
     role = c("aut", "cre"), comment = c(ORCID = "0000-0003-3070-6066"))
 Description: Single-season and multi-season Bayesian occupancy models with
@@ -16,7 +16,7 @@ Imports:
     Matrix,
     Rcpp (>= 1.0.12),
     RcppEigen (>= 0.3.4),
-    tulpa (>= 0.0.6),
+    tulpa (>= 0.0.7),
     parallel
 Suggests:
     testthat (>= 3.0.0),
@@ -33,7 +33,7 @@ LinkingTo:
     tulpa
 Remotes:
     gcol33/tulpaMesh@v0.1.2,
-    gcol33/tulpa@v0.0.6
+    gcol33/tulpa@v0.0.7
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, method-gibbs-recovery, re-laplace-recovery,
