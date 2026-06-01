@@ -126,6 +126,36 @@
   idx_occ <- bstart[1L] + seq_len(p[1L])
   idx_pos <- bstart[2L] + seq_len(p[2L])
 
+  # Coupled multi-block path (intercept field + one or more SVC trend fields):
+  # ICAR blocks under the (sigma, alpha) per-block copy convention, axes named
+  # b<k>.sigma / b<k>.alpha. The occupancy arm scales block k by b<k>.sigma, the
+  # positive arm by b<k>.alpha * b<k>.sigma; block 1 is the unweighted intercept
+  # field, blocks 2.. carry the per-observation trend weight. (gcol33/tulpaObs#15)
+  field_starts <- layout$field_starts
+  n_field <- length(field_starts %||% integer(0))
+  if (n_field > 1L) {
+    n_cells <- object$n_cells %||% as.integer(field_starts[2L] - field_starts[1L])
+    field_idx <- lapply(field_starts, function(s0) s0 + seq_len(n_cells))
+    idx <- c(idx_occ, idx_pos, unlist(field_idx))
+    D   <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
+    cells <- attr(D, "cells")
+    off <- 0L
+    take <- function(k) { v <- D[, off + seq_len(k), drop = FALSE]; off <<- off + k; v }
+    b_occ <- take(p[1L]); b_pos <- take(p[2L])
+    trend_cols <- object$trend_weights %||% list(object$trend_weight)
+    blocks <- lapply(seq_len(n_field), function(b) {
+      z     <- take(n_cells)
+      sigma <- .tobs_joint_amp(tg, cells, b, "sigma")
+      alpha <- .tobs_joint_amp(tg, cells, b, "alpha")
+      list(z = z, amp_occ = sigma, amp_pos = alpha * sigma,
+           weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
+    })
+    return(list(n = n, positive = positive, cells = cells,
+                disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = 1),
+                b = list(occ = b_occ, det = NULL, pos = b_pos),
+                blocks = blocks, n_cells = n_cells))
+  }
+
   phi_start   <- layout$phi_start
   theta_start <- layout$theta_start
   n_phi <- if (!is.null(theta_start)) as.integer(theta_start - phi_start)

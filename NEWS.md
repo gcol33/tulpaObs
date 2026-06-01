@@ -1,8 +1,20 @@
 # tulpaObs NEWS
 
-## 0.0.4 (2026-05-31)
+## 0.0.6 (2026-06-01)
 
-Requires tulpa (>= 0.0.4): the joint cover-hurdle path links against the
+Requires tulpa (>= 0.0.6) and tulpaMesh (>= 0.1.2).
+
+* feat(cover): the joint cover-hurdle predict substrate now handles the coupled
+  multi-block case (an ICAR intercept field plus one or more SVC trend fields)
+  under the per-block `(sigma, alpha)` copy convention -- the occupancy arm
+  scales block `k` by `sigma`, the positive arm by `alpha * sigma`
+  (gcol33/tulpaObs#15).
+* feat(cover): `cover()` accepts the `trend`, `alpha.grid`, and
+  `alpha.grid.trend` control knobs for the trend-field integration.
+
+## 0.0.5 (2026-06-01)
+
+Requires tulpa (>= 0.0.5): the joint cover-hurdle path links against the
 engine's `cell_coupling.h` / `model_data.h` (ABI 32).
 
 * perf(occu_cover): speed up the beta positive arm in the joint cover-hurdle
