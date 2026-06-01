@@ -4,6 +4,12 @@
 
 Requires tulpa (>= 0.0.6) and tulpaMesh (>= 0.1.2).
 
+* perf(occu_cover): forward `control$diagnose.k` / `control$k.samples` to the
+  joint engine. The outer Pareto-k diagnostic re-solves the inner Laplace at
+  `k.samples` sampled hyperparameters; at field scale the draws stall at extreme
+  sigma and the diagnostic costs ~50x the grid integration while returning NA
+  for the multi-block ICAR config (gcol33/tulpa#51). `control$diagnose.k = FALSE`
+  skips it for a production fit; small fits keep the engine default.
 * feat(occu_cover): `group_var` on the `icar()` / `bym2()` term decouples the
   occupancy units (sites) from the field nodes (cells), so many sites share one
   areal field node. A site = cell x time-period then carries a per-site trend

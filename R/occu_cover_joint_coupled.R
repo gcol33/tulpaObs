@@ -430,6 +430,15 @@
       adaptive_grid             = dots$adaptive.grid             %||% TRUE,
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
       adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
+      # Outer Pareto-k accuracy diagnostic. The engine draws `k_samples`
+      # hyperparameter points and re-solves the inner Laplace at each; on a large
+      # field the Gaussian proposal lands many draws at extreme sigma where the
+      # inner Newton stalls to max.iter, so the diagnostic can cost far more than
+      # the grid integration itself (~50x at EVA scale). Forward the knobs so a
+      # production fit can disable it (`control$diagnose.k = FALSE`) or shrink the
+      # sample; small fits keep the engine default.
+      diagnose_k = dots$diagnose.k %||% TRUE,
+      k_samples  = as.integer(dots$k.samples %||% 200L),
       # Grid-cell checkpoint/resume (gcol33/tulpa#50). An EVA-scale occu_cover
       # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
       # the outer grid append each completed cell to `path` and a resume run

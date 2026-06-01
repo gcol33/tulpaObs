@@ -276,6 +276,7 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
       "phi.grid.pos", "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      "diagnose.k", "k.samples",
       "checkpoint"
     )
   )
