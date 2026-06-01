@@ -22,6 +22,7 @@
 #include "nmix_spatial_kernel_bym2.h"
 #include "nmix_linalg.h"
 #include "nmix_progress.h"
+#include "nmix_spatial_grid.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -358,46 +359,14 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
     bool progress = false, int progress_every = 0,
     double progress_throttle = 0.0, std::string progress_file = ""
 ) {
-    const int n_sites = X_lambda_R.nrow();
-    const int p_lam   = X_lambda_R.ncol();
-    const int n_obs   = X_p_R.nrow();
-    const int p_p     = X_p_R.ncol();
-    if ((int)y.size() != n_obs) Rcpp::stop("length(y) must equal nrow(X_p).");
-    if ((int)site_idx.size() != n_obs) Rcpp::stop("length(site_idx) must equal nrow(X_p).");
-    if ((int)map_site_to_unit_R.size() != n_sites) {
-        Rcpp::stop("length(map_site_to_unit) must equal nrow(X_lambda).");
-    }
-    if ((int)beta_lambda_init.size() != p_lam) Rcpp::stop("beta_lambda_init length mismatch.");
-    if ((int)beta_p_init.size() != p_p) Rcpp::stop("beta_p_init length mismatch.");
     if (scale_factor <= 0) Rcpp::stop("scale_factor must be positive.");
-    if (r_grid.size() < 1) Rcpp::stop("r_grid must have length >= 1.");
-    if (K_max < 0) {
-        int ymax = 0;
-        for (int o = 0; o < n_obs; ++o) if (y[o] > ymax) ymax = y[o];
-        K_max = ymax + 100;
-    }
+    tulpaObs::NmixSpatialPrep pp = tulpaObs::prep_nmix_spatial(
+        y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, n_spatial,
+        r_grid, beta_lambda_init, beta_p_init, K_max);
+    const int p_lam = pp.p_lam, p_p = pp.p_p;
+    Map<MatrixXd> Xl(REAL(X_lambda_R), pp.n_sites, p_lam);
+    Map<MatrixXd> Xp(REAL(X_p_R), pp.n_obs, p_p);
 
-    std::vector<std::vector<int>> obs_by_site(n_sites);
-    for (int o = 0; o < n_obs; ++o) {
-        int s = site_idx[o] - 1;
-        if (s < 0 || s >= n_sites) Rcpp::stop("site_idx out of range at obs %d.", o + 1);
-        obs_by_site[s].push_back(o);
-    }
-    std::vector<int> map_site_to_unit(n_sites);
-    for (int s = 0; s < n_sites; ++s) {
-        int u = map_site_to_unit_R[s] - 1;
-        if (u < 0 || u >= n_spatial) {
-            Rcpp::stop("map_site_to_unit[%d] = %d out of range [1, %d].",
-                       s + 1, map_site_to_unit_R[s], n_spatial);
-        }
-        map_site_to_unit[s] = u;
-    }
-
-    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
-    Map<MatrixXd> Xp(REAL(X_p_R), n_obs, p_p);
-
-    VectorXd beta_lam_default = Map<VectorXd>(REAL(beta_lambda_init), p_lam);
-    VectorXd beta_p_default   = Map<VectorXd>(REAL(beta_p_init), p_p);
     VectorXd v_default(n_spatial);
     VectorXd w_default(n_spatial);
     if (v_init.isNotNull()) {
@@ -415,115 +384,68 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
         w_default.setZero();
     }
 
-    const int n_sigma = sigma_grid.size();
-    const int n_rho   = rho_grid.size();
-    const int n_r     = r_grid.size();
-    const int n_grid  = n_sigma * n_rho * n_r;
-    const int n_x     = p_lam + p_p + 2 * n_spatial;
-
-    Rcpp::NumericMatrix theta_grid_out(n_grid, 3);  // (sigma, rho, r)
-    Rcpp::NumericVector log_marginals(n_grid);
-    Rcpp::IntegerVector n_iters(n_grid);
-    Rcpp::LogicalVector convergeds(n_grid);
-    Rcpp::NumericVector grad_norms(n_grid);
-    Rcpp::NumericVector log_liks(n_grid);
-    Rcpp::NumericVector boundary_maxes(n_grid);
-    Rcpp::NumericMatrix modes(n_grid, n_x);
-    Rcpp::List cov_blocks(n_grid);   // per-grid marginal coef covariance
-
-    // outer-grid progress (tulpa#45)
-    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
-                                           progress_every, progress_throttle, progress_file);
-    int k = 0;
-    for (int ir_disp = 0; ir_disp < n_r; ++ir_disp) {
-        const double rr = r_grid[ir_disp];
-        for (int ir_rho = 0; ir_rho < n_rho; ++ir_rho) {
-            for (int sg = 0; sg < n_sigma; ++sg, ++k) {
-                const double sigma = sigma_grid[sg];
-                const double rho   = rho_grid[ir_rho];
-                theta_grid_out(k, 0) = sigma;
-                theta_grid_out(k, 1) = rho;
-                theta_grid_out(k, 2) = rr;
-
-                if (sigma <= 0 || rho < 0 || rho > 1) {
-                    log_marginals[k]  = R_NegInf;
-                    n_iters[k]        = 0;
-                    convergeds[k]     = false;
-                    grad_norms[k]     = R_PosInf;
-                    log_liks[k]       = R_NegInf;
-                    boundary_maxes[k] = 0.0;
-                    if (gp) gp->tick();
-                    continue;
+    // Grid axes: r (outermost) x rho x sigma. BYM2 mixes an ICAR component (v,
+    // scaled by a) with an IID component (w, scaled by b); precompute (a, b) and
+    // the validity flag per cell so the solver just plugs them into the inner
+    // Newton (its field is [v; w], length 2 * n_spatial).
+    const int n_sigma = sigma_grid.size(), n_rho = rho_grid.size(), n_r = r_grid.size();
+    const int n_grid = n_sigma * n_rho * n_r;
+    Rcpp::NumericMatrix theta_grid_out(n_grid, 3);
+    std::vector<double> a_k(n_grid), b_k(n_grid), r_k(n_grid);
+    std::vector<bool> valid_k(n_grid);
+    {
+        int k = 0;
+        for (int ir_disp = 0; ir_disp < n_r; ++ir_disp)
+            for (int ir_rho = 0; ir_rho < n_rho; ++ir_rho)
+                for (int sg = 0; sg < n_sigma; ++sg, ++k) {
+                    const double sigma = sigma_grid[sg], rho = rho_grid[ir_rho];
+                    theta_grid_out(k, 0) = sigma;
+                    theta_grid_out(k, 1) = rho;
+                    theta_grid_out(k, 2) = r_grid[ir_disp];
+                    valid_k[k] = (sigma > 0 && rho >= 0 && rho <= 1);
+                    a_k[k] = valid_k[k] ? sigma * std::sqrt(rho / scale_factor) : 0.0;
+                    b_k[k] = valid_k[k] ? sigma * std::sqrt(1.0 - rho) : 0.0;
+                    r_k[k] = r_grid[ir_disp];
                 }
-
-                const double a = sigma * std::sqrt(rho / scale_factor);
-                const double b = sigma * std::sqrt(1.0 - rho);
-
-                // Cold-restart per grid point (the (lambda, p) identifiability
-                // ridge shifts with the joint variance budget controlled by
-                // (sigma, rho, r); warm-starting across it confounds step-halving).
-                VectorXd beta_lam = beta_lam_default;
-                VectorXd beta_p   = beta_p_default;
-                VectorXd v        = v_default;
-                VectorXd w        = w_default;
-
-                BYM2InnerResult ir = inner_newton_bym2(
-                    p_lam, p_p, n_sites, n_spatial, n_obs,
-                    a, b,
-                    Xl, Xp, y, obs_by_site, map_site_to_unit,
-                    adj_row_ptr, adj_col_idx, n_neighbors,
-                    rr, K_max, max_iter, tol,
-                    beta_lam, beta_p, v, w, verbose
-                );
-                log_marginals[k]  = ir.log_marginal;
-                n_iters[k]        = ir.n_iter;
-                convergeds[k]     = ir.converged;
-                grad_norms[k]     = ir.grad_norm;
-                log_liks[k]       = ir.log_lik;
-                boundary_maxes[k] = ir.boundary_max;
-
-                for (int j = 0; j < p_lam; ++j)     modes(k, j) = ir.beta_lambda(j);
-                for (int j = 0; j < p_p; ++j)       modes(k, p_lam + j) = ir.beta_p(j);
-                for (int j = 0; j < n_spatial; ++j) modes(k, p_lam + p_p + j) = ir.v(j);
-                for (int j = 0; j < n_spatial; ++j) modes(k, p_lam + p_p + n_spatial + j) = ir.w(j);
-                cov_blocks[k] = Rcpp::wrap(ir.cov_beta);
-
-                if (verbose) {
-                    Rcpp::Rcout << "[grid " << k + 1 << "/" << n_grid
-                                << "] sigma=" << sigma << " rho=" << rho << " r=" << rr
-                                << " a=" << a << " b=" << b
-                                << " log_marg=" << ir.log_marginal
-                                << " n_iter=" << ir.n_iter
-                                << " conv=" << ir.converged << "\n";
-                }
-                if (gp) gp->tick();
-            }
-        }
     }
-    if (gp) gp->finish();
-
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("sigma", "rho", "r");
-    return Rcpp::List::create(
-        Rcpp::Named("theta_grid")      = theta_grid_out,
-        Rcpp::Named("sigma_grid")      = sigma_grid,
-        Rcpp::Named("rho_grid")        = rho_grid,
-        Rcpp::Named("r_grid")          = r_grid,
-        Rcpp::Named("scale_factor")    = scale_factor,
-        Rcpp::Named("log_marginal")    = log_marginals,
-        Rcpp::Named("modes")           = modes,
-        Rcpp::Named("cov_blocks")      = cov_blocks,
-        Rcpp::Named("n_iter")          = n_iters,
-        Rcpp::Named("converged")       = convergeds,
-        Rcpp::Named("grad_norm")       = grad_norms,
-        Rcpp::Named("log_lik")         = log_liks,
-        Rcpp::Named("boundary_max")    = boundary_maxes,
-        Rcpp::Named("p_lambda")        = p_lam,
-        Rcpp::Named("p_p")             = p_p,
-        Rcpp::Named("n_spatial")       = n_spatial,
-        Rcpp::Named("n_grid")          = n_grid,
-        Rcpp::Named("n_sigma")         = n_sigma,
-        Rcpp::Named("n_rho")           = n_rho,
-        Rcpp::Named("n_r")             = n_r,
-        Rcpp::Named("K_max")           = K_max
-    );
+
+    auto solve = [&](int k) -> tulpaObs::NmixSpatialPoint {
+        tulpaObs::NmixSpatialPoint pt;
+        if (!valid_k[k]) { pt.skipped = true; return pt; }  // (sigma, rho) out of range
+        VectorXd beta_lam = pp.beta_lam_default;
+        VectorXd beta_p   = pp.beta_p_default;
+        VectorXd v        = v_default;
+        VectorXd w        = w_default;
+        BYM2InnerResult ir = inner_newton_bym2(
+            p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
+            a_k[k], b_k[k],
+            Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
+            adj_row_ptr, adj_col_idx, n_neighbors,
+            r_k[k], pp.K_max, max_iter, tol, beta_lam, beta_p, v, w, verbose);
+        pt.log_marginal = ir.log_marginal; pt.n_iter = ir.n_iter;
+        pt.converged = ir.converged;       pt.grad_norm = ir.grad_norm;
+        pt.log_lik = ir.log_lik;           pt.boundary_max = ir.boundary_max;
+        pt.coef = VectorXd(p_lam + p_p);
+        pt.coef.head(p_lam) = ir.beta_lambda;
+        pt.coef.tail(p_p)   = ir.beta_p;
+        pt.field = VectorXd(2 * n_spatial);
+        pt.field.head(n_spatial) = ir.v;
+        pt.field.tail(n_spatial) = ir.w;
+        pt.cov_beta = ir.cov_beta;
+        return pt;
+    };
+
+    Rcpp::List out = tulpaObs::run_nmix_spatial_grid(
+        n_grid, p_lam, p_p, n_spatial, /*field_len=*/2 * n_spatial, pp.K_max,
+        theta_grid_out, solve,
+        progress, progress_every, progress_throttle, progress_file);
+    out["sigma_grid"]   = sigma_grid;
+    out["rho_grid"]     = rho_grid;
+    out["r_grid"]       = r_grid;
+    out["scale_factor"] = scale_factor;
+    out["n_sigma"]      = n_sigma;
+    out["n_rho"]        = n_rho;
+    out["n_r"]          = n_r;
+    return out;
 }

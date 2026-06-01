@@ -30,6 +30,7 @@
 #include "nmix_spatial_kernel.h"
 #include "nmix_linalg.h"
 #include "nmix_progress.h"
+#include "nmix_spatial_grid.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -382,45 +383,13 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
     bool progress = false, int progress_every = 0,
     double progress_throttle = 0.0, std::string progress_file = ""
 ) {
-    const int n_sites = X_lambda_R.nrow();
-    const int p_lam   = X_lambda_R.ncol();
-    const int n_obs   = X_p_R.nrow();
-    const int p_p     = X_p_R.ncol();
-    if ((int)y.size() != n_obs) Rcpp::stop("length(y) must equal nrow(X_p).");
-    if ((int)site_idx.size() != n_obs) Rcpp::stop("length(site_idx) must equal nrow(X_p).");
-    if ((int)map_site_to_unit_R.size() != n_sites) {
-        Rcpp::stop("length(map_site_to_unit) must equal nrow(X_lambda).");
-    }
-    if ((int)beta_lambda_init.size() != p_lam) Rcpp::stop("beta_lambda_init length mismatch.");
-    if ((int)beta_p_init.size() != p_p) Rcpp::stop("beta_p_init length mismatch.");
-    if (r_grid.size() < 1) Rcpp::stop("r_grid must have length >= 1.");
-    if (K_max < 0) {
-        int ymax = 0;
-        for (int o = 0; o < n_obs; ++o) if (y[o] > ymax) ymax = y[o];
-        K_max = ymax + 100;
-    }
+    tulpaObs::NmixSpatialPrep pp = tulpaObs::prep_nmix_spatial(
+        y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, n_spatial,
+        r_grid, beta_lambda_init, beta_p_init, K_max);
+    const int p_lam = pp.p_lam, p_p = pp.p_p;
+    Map<MatrixXd> Xl(REAL(X_lambda_R), pp.n_sites, p_lam);
+    Map<MatrixXd> Xp(REAL(X_p_R), pp.n_obs, p_p);
 
-    std::vector<std::vector<int>> obs_by_site(n_sites);
-    for (int o = 0; o < n_obs; ++o) {
-        int s = site_idx[o] - 1;
-        if (s < 0 || s >= n_sites) Rcpp::stop("site_idx out of range at obs %d.", o + 1);
-        obs_by_site[s].push_back(o);
-    }
-    std::vector<int> map_site_to_unit(n_sites);
-    for (int s = 0; s < n_sites; ++s) {
-        int u = map_site_to_unit_R[s] - 1;
-        if (u < 0 || u >= n_spatial) {
-            Rcpp::stop("map_site_to_unit[%d] = %d out of range [1, %d].",
-                       s + 1, map_site_to_unit_R[s], n_spatial);
-        }
-        map_site_to_unit[s] = u;
-    }
-
-    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
-    Map<MatrixXd> Xp(REAL(X_p_R), n_obs, p_p);
-
-    VectorXd beta_lam_default = Map<VectorXd>(REAL(beta_lambda_init), p_lam);
-    VectorXd beta_p_default   = Map<VectorXd>(REAL(beta_p_init), p_p);
     VectorXd z_default(n_spatial);
     if (z_init.isNotNull()) {
         Rcpp::NumericVector zi(z_init);
@@ -429,96 +398,60 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
     } else {
         z_default.setZero();
     }
-    const int n_tau  = tau_grid.size();
-    const int n_r    = r_grid.size();
+
+    // Grid axes: NB dispersion r (outermost) x ICAR precision tau. For Poisson,
+    // r_grid = c(Inf) (single pass, Poisson kernel). Fill the display grid and
+    // the per-cell hyperparameters in one nesting; the driver walks them.
+    const int n_tau = tau_grid.size(), n_r = r_grid.size();
     const int n_grid = n_tau * n_r;
-    const int n_x    = p_lam + p_p + n_spatial;
-
-    Rcpp::NumericMatrix theta_grid_out(n_grid, 2);   // (tau, r) per grid point
-    Rcpp::NumericVector log_marginals(n_grid);
-    Rcpp::IntegerVector n_iters(n_grid);
-    Rcpp::LogicalVector convergeds(n_grid);
-    Rcpp::NumericVector grad_norms(n_grid);
-    Rcpp::NumericVector log_liks(n_grid);
-    Rcpp::NumericVector boundary_maxes(n_grid);
-    Rcpp::NumericMatrix modes(n_grid, n_x);
-    Rcpp::List cov_blocks(n_grid);   // per-grid marginal coef covariance
-
-    // Outer grid integrates the NB dispersion r (outermost) and the ICAR
-    // precision tau. For Poisson, r_grid = c(Inf) (single pass, Poisson kernel).
-    // outer-grid progress (tulpa#45)
-    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
-                                           progress_every, progress_throttle, progress_file);
-    int k = 0;
-    for (int ri = 0; ri < n_r; ++ri) {
-        for (int t = 0; t < n_tau; ++t, ++k) {
-            const double tau = tau_grid[t];
-            const double rr  = r_grid[ri];
-            theta_grid_out(k, 0) = tau;
-            theta_grid_out(k, 1) = rr;
-
-            // Cold-restart per grid point: the N-mixture identifiability ridge
-            // between (lambda intercept) and (p intercept) shifts substantially
-            // across tau (and r) as z absorbs different fractions of variance;
-            // warm-starting across it confounds Newton's step-halving.
-            VectorXd beta_lam = beta_lam_default;
-            VectorXd beta_p   = beta_p_default;
-            VectorXd z        = z_default;
-
-            SpatialInnerResult ir = inner_newton_spatial_car(
-                CarPriorKind::ICAR,
-                p_lam, p_p, n_sites, n_spatial, n_obs,
-                Xl, Xp, y, obs_by_site, map_site_to_unit,
-                adj_row_ptr, adj_col_idx, n_neighbors,
-                tau, /*rho=*/1.0, /*log_det_Q_rho=*/0.0, rr,
-                K_max, max_iter, tol,
-                beta_lam, beta_p, z, verbose
-            );
-            log_marginals[k]  = ir.log_marginal;
-            n_iters[k]        = ir.n_iter;
-            convergeds[k]     = ir.converged;
-            grad_norms[k]     = ir.grad_norm;
-            log_liks[k]       = ir.log_lik;
-            boundary_maxes[k] = ir.boundary_max;
-
-            for (int j = 0; j < p_lam; ++j)     modes(k, j) = ir.beta_lambda(j);
-            for (int j = 0; j < p_p; ++j)       modes(k, p_lam + j) = ir.beta_p(j);
-            for (int j = 0; j < n_spatial; ++j) modes(k, p_lam + p_p + j) = ir.z(j);
-            cov_blocks[k] = Rcpp::wrap(ir.cov_beta);
-
-            if (verbose) {
-                Rcpp::Rcout << "[grid " << k + 1 << "/" << n_grid << "] tau=" << tau
-                            << " r=" << rr
-                            << " log_marg=" << ir.log_marginal
-                            << " n_iter=" << ir.n_iter
-                            << " conv=" << ir.converged << "\n";
+    Rcpp::NumericMatrix theta_grid_out(n_grid, 2);
+    std::vector<double> tau_k(n_grid), r_k(n_grid);
+    {
+        int k = 0;
+        for (int ri = 0; ri < n_r; ++ri)
+            for (int t = 0; t < n_tau; ++t, ++k) {
+                theta_grid_out(k, 0) = tau_grid[t];
+                theta_grid_out(k, 1) = r_grid[ri];
+                tau_k[k] = tau_grid[t];
+                r_k[k]   = r_grid[ri];
             }
-            if (gp) gp->tick();
-        }
     }
-    if (gp) gp->finish();
-
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "r");
-    return Rcpp::List::create(
-        Rcpp::Named("theta_grid")      = theta_grid_out,
-        Rcpp::Named("tau_grid")        = tau_grid,
-        Rcpp::Named("r_grid")          = r_grid,
-        Rcpp::Named("log_marginal")    = log_marginals,
-        Rcpp::Named("modes")           = modes,
-        Rcpp::Named("cov_blocks")      = cov_blocks,
-        Rcpp::Named("n_iter")          = n_iters,
-        Rcpp::Named("converged")       = convergeds,
-        Rcpp::Named("grad_norm")       = grad_norms,
-        Rcpp::Named("log_lik")         = log_liks,
-        Rcpp::Named("boundary_max")    = boundary_maxes,
-        Rcpp::Named("p_lambda")        = p_lam,
-        Rcpp::Named("p_p")             = p_p,
-        Rcpp::Named("n_spatial")       = n_spatial,
-        Rcpp::Named("n_grid")          = n_grid,
-        Rcpp::Named("n_tau")           = n_tau,
-        Rcpp::Named("n_r")             = n_r,
-        Rcpp::Named("K_max")           = K_max
-    );
+
+    // Cold restart per cell (the (lambda, p) identifiability ridge shifts with
+    // the variance z absorbs across tau / r; warm-starting confounds Newton).
+    auto solve = [&](int k) -> tulpaObs::NmixSpatialPoint {
+        VectorXd beta_lam = pp.beta_lam_default;
+        VectorXd beta_p   = pp.beta_p_default;
+        VectorXd z        = z_default;
+        SpatialInnerResult ir = inner_newton_spatial_car(
+            CarPriorKind::ICAR,
+            p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
+            Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
+            adj_row_ptr, adj_col_idx, n_neighbors,
+            tau_k[k], /*rho=*/1.0, /*log_det_Q_rho=*/0.0, r_k[k],
+            pp.K_max, max_iter, tol, beta_lam, beta_p, z, verbose);
+        tulpaObs::NmixSpatialPoint pt;
+        pt.log_marginal = ir.log_marginal; pt.n_iter = ir.n_iter;
+        pt.converged = ir.converged;       pt.grad_norm = ir.grad_norm;
+        pt.log_lik = ir.log_lik;           pt.boundary_max = ir.boundary_max;
+        pt.coef = VectorXd(p_lam + p_p);
+        pt.coef.head(p_lam) = ir.beta_lambda;
+        pt.coef.tail(p_p)   = ir.beta_p;
+        pt.field = ir.z;
+        pt.cov_beta = ir.cov_beta;
+        return pt;
+    };
+
+    Rcpp::List out = tulpaObs::run_nmix_spatial_grid(
+        n_grid, p_lam, p_p, n_spatial, /*field_len=*/n_spatial, pp.K_max,
+        theta_grid_out, solve,
+        progress, progress_every, progress_throttle, progress_file);
+    out["tau_grid"] = tau_grid;
+    out["r_grid"]   = r_grid;
+    out["n_tau"]    = n_tau;
+    out["n_r"]      = n_r;
+    return out;
 }
 
 namespace {
@@ -572,45 +505,13 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
     bool progress = false, int progress_every = 0,
     double progress_throttle = 0.0, std::string progress_file = ""
 ) {
-    const int n_sites = X_lambda_R.nrow();
-    const int p_lam   = X_lambda_R.ncol();
-    const int n_obs   = X_p_R.nrow();
-    const int p_p     = X_p_R.ncol();
-    if ((int)y.size() != n_obs) Rcpp::stop("length(y) must equal nrow(X_p).");
-    if ((int)site_idx.size() != n_obs) Rcpp::stop("length(site_idx) must equal nrow(X_p).");
-    if ((int)map_site_to_unit_R.size() != n_sites) {
-        Rcpp::stop("length(map_site_to_unit) must equal nrow(X_lambda).");
-    }
-    if ((int)beta_lambda_init.size() != p_lam) Rcpp::stop("beta_lambda_init length mismatch.");
-    if ((int)beta_p_init.size() != p_p) Rcpp::stop("beta_p_init length mismatch.");
-    if (r_grid.size() < 1) Rcpp::stop("r_grid must have length >= 1.");
-    if (K_max < 0) {
-        int ymax = 0;
-        for (int o = 0; o < n_obs; ++o) if (y[o] > ymax) ymax = y[o];
-        K_max = ymax + 100;
-    }
+    tulpaObs::NmixSpatialPrep pp = tulpaObs::prep_nmix_spatial(
+        y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, n_spatial,
+        r_grid, beta_lambda_init, beta_p_init, K_max);
+    const int p_lam = pp.p_lam, p_p = pp.p_p;
+    Map<MatrixXd> Xl(REAL(X_lambda_R), pp.n_sites, p_lam);
+    Map<MatrixXd> Xp(REAL(X_p_R), pp.n_obs, p_p);
 
-    std::vector<std::vector<int>> obs_by_site(n_sites);
-    for (int o = 0; o < n_obs; ++o) {
-        int s = site_idx[o] - 1;
-        if (s < 0 || s >= n_sites) Rcpp::stop("site_idx out of range at obs %d.", o + 1);
-        obs_by_site[s].push_back(o);
-    }
-    std::vector<int> map_site_to_unit(n_sites);
-    for (int s = 0; s < n_sites; ++s) {
-        int u = map_site_to_unit_R[s] - 1;
-        if (u < 0 || u >= n_spatial) {
-            Rcpp::stop("map_site_to_unit[%d] = %d out of range [1, %d].",
-                       s + 1, map_site_to_unit_R[s], n_spatial);
-        }
-        map_site_to_unit[s] = u;
-    }
-
-    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
-    Map<MatrixXd> Xp(REAL(X_p_R), n_obs, p_p);
-
-    VectorXd beta_lam_default = Map<VectorXd>(REAL(beta_lambda_init), p_lam);
-    VectorXd beta_p_default   = Map<VectorXd>(REAL(beta_p_init), p_p);
     VectorXd z_default(n_spatial);
     if (z_init.isNotNull()) {
         Rcpp::NumericVector zi(z_init);
@@ -620,118 +521,69 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
         z_default.setZero();
     }
 
-    const int n_tau = tau_grid.size();
-    const int n_rho = rho_grid.size();
-    const int n_r   = r_grid.size();
+    const int n_tau = tau_grid.size(), n_rho = rho_grid.size(), n_r = r_grid.size();
     const int n_grid = n_tau * n_rho * n_r;
-    const int n_x    = p_lam + p_p + n_spatial;
 
-    // Precompute log|Q(rho)| once per rho grid point.
+    // Precompute log|Q(rho)| once per rho grid point (the proper-CAR Q policy).
     std::vector<double> log_det_Q_rho(n_rho);
-    for (int ir_rho = 0; ir_rho < n_rho; ++ir_rho) {
+    for (int ir_rho = 0; ir_rho < n_rho; ++ir_rho)
         log_det_Q_rho[ir_rho] = log_det_Q_car_proper(
             n_spatial, rho_grid[ir_rho], adj_row_ptr, adj_col_idx, n_neighbors);
-    }
 
-    Rcpp::NumericMatrix theta_grid_out(n_grid, 3);  // (tau, rho, r) per grid point
-    Rcpp::NumericVector log_marginals(n_grid);
-    Rcpp::IntegerVector n_iters(n_grid);
-    Rcpp::LogicalVector convergeds(n_grid);
-    Rcpp::NumericVector grad_norms(n_grid);
-    Rcpp::NumericVector log_liks(n_grid);
-    Rcpp::NumericVector boundary_maxes(n_grid);
-    Rcpp::NumericMatrix modes(n_grid, n_x);
-    Rcpp::List cov_blocks(n_grid);   // per-grid marginal coef covariance
-
-    // outer-grid progress (tulpa#45)
-    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
-                                           progress_every, progress_throttle, progress_file);
-    int k = 0;
-    for (int ir_disp = 0; ir_disp < n_r; ++ir_disp) {
-        const double rr = r_grid[ir_disp];
-        for (int ir_rho = 0; ir_rho < n_rho; ++ir_rho) {
-            for (int t = 0; t < n_tau; ++t, ++k) {
-                const double tau = tau_grid[t];
-                const double rho = rho_grid[ir_rho];
-                theta_grid_out(k, 0) = tau;
-                theta_grid_out(k, 1) = rho;
-                theta_grid_out(k, 2) = rr;
-
-                if (!R_finite(log_det_Q_rho[ir_rho])) {
-                    // Q(rho) not PD: skip but record placeholder.
-                    log_marginals[k]  = R_NegInf;
-                    n_iters[k]        = 0;
-                    convergeds[k]     = false;
-                    grad_norms[k]     = R_PosInf;
-                    log_liks[k]       = R_NegInf;
-                    boundary_maxes[k] = 0.0;
-                    if (gp) gp->tick();
-                    continue;
+    // Grid axes: r (outermost) x rho x tau. Carry each cell's log|Q(rho)| so the
+    // solver can detect the non-PD tail without re-deriving the nesting.
+    Rcpp::NumericMatrix theta_grid_out(n_grid, 3);
+    std::vector<double> tau_k(n_grid), rho_k(n_grid), r_k(n_grid), logdet_k(n_grid);
+    {
+        int k = 0;
+        for (int ir_disp = 0; ir_disp < n_r; ++ir_disp)
+            for (int ir_rho = 0; ir_rho < n_rho; ++ir_rho)
+                for (int t = 0; t < n_tau; ++t, ++k) {
+                    theta_grid_out(k, 0) = tau_grid[t];
+                    theta_grid_out(k, 1) = rho_grid[ir_rho];
+                    theta_grid_out(k, 2) = r_grid[ir_disp];
+                    tau_k[k]    = tau_grid[t];
+                    rho_k[k]    = rho_grid[ir_rho];
+                    r_k[k]      = r_grid[ir_disp];
+                    logdet_k[k] = log_det_Q_rho[ir_rho];
                 }
-
-                // Cold-restart per grid point (same rationale as ICAR: the
-                // identifiability ridge between (lambda intercept) and (p
-                // intercept) shifts substantially across tau, rho, and r).
-                VectorXd beta_lam = beta_lam_default;
-                VectorXd beta_p   = beta_p_default;
-                VectorXd z        = z_default;
-
-                SpatialInnerResult ir = inner_newton_spatial_car(
-                    CarPriorKind::CAR_PROPER,
-                    p_lam, p_p, n_sites, n_spatial, n_obs,
-                    Xl, Xp, y, obs_by_site, map_site_to_unit,
-                    adj_row_ptr, adj_col_idx, n_neighbors,
-                    tau, rho, log_det_Q_rho[ir_rho], rr,
-                    K_max, max_iter, tol,
-                    beta_lam, beta_p, z, verbose
-                );
-                log_marginals[k]  = ir.log_marginal;
-                n_iters[k]        = ir.n_iter;
-                convergeds[k]     = ir.converged;
-                grad_norms[k]     = ir.grad_norm;
-                log_liks[k]       = ir.log_lik;
-                boundary_maxes[k] = ir.boundary_max;
-
-                for (int j = 0; j < p_lam; ++j)     modes(k, j) = ir.beta_lambda(j);
-                for (int j = 0; j < p_p; ++j)       modes(k, p_lam + j) = ir.beta_p(j);
-                for (int j = 0; j < n_spatial; ++j) modes(k, p_lam + p_p + j) = ir.z(j);
-                cov_blocks[k] = Rcpp::wrap(ir.cov_beta);
-
-                if (verbose) {
-                    Rcpp::Rcout << "[grid " << k + 1 << "/" << n_grid
-                                << "] tau=" << tau << " rho=" << rho << " r=" << rr
-                                << " log_marg=" << ir.log_marginal
-                                << " n_iter=" << ir.n_iter
-                                << " conv=" << ir.converged << "\n";
-                }
-                if (gp) gp->tick();
-            }
-        }
     }
-    if (gp) gp->finish();
-
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "rho", "r");
-    return Rcpp::List::create(
-        Rcpp::Named("theta_grid")      = theta_grid_out,
-        Rcpp::Named("tau_grid")        = tau_grid,
-        Rcpp::Named("rho_grid")        = rho_grid,
-        Rcpp::Named("r_grid")          = r_grid,
-        Rcpp::Named("log_det_Q_rho")   = Rcpp::wrap(log_det_Q_rho),
-        Rcpp::Named("log_marginal")    = log_marginals,
-        Rcpp::Named("modes")           = modes,
-        Rcpp::Named("cov_blocks")      = cov_blocks,
-        Rcpp::Named("n_iter")          = n_iters,
-        Rcpp::Named("converged")       = convergeds,
-        Rcpp::Named("grad_norm")       = grad_norms,
-        Rcpp::Named("log_lik")         = log_liks,
-        Rcpp::Named("boundary_max")    = boundary_maxes,
-        Rcpp::Named("p_lambda")        = p_lam,
-        Rcpp::Named("p_p")             = p_p,
-        Rcpp::Named("n_spatial")       = n_spatial,
-        Rcpp::Named("n_grid")          = n_grid,
-        Rcpp::Named("n_tau")           = n_tau,
-        Rcpp::Named("n_rho")           = n_rho,
-        Rcpp::Named("n_r")             = n_r,
-        Rcpp::Named("K_max")           = K_max
-    );
+
+    auto solve = [&](int k) -> tulpaObs::NmixSpatialPoint {
+        tulpaObs::NmixSpatialPoint pt;
+        if (!R_finite(logdet_k[k])) { pt.skipped = true; return pt; }  // Q(rho) not PD
+        VectorXd beta_lam = pp.beta_lam_default;
+        VectorXd beta_p   = pp.beta_p_default;
+        VectorXd z        = z_default;
+        SpatialInnerResult ir = inner_newton_spatial_car(
+            CarPriorKind::CAR_PROPER,
+            p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
+            Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
+            adj_row_ptr, adj_col_idx, n_neighbors,
+            tau_k[k], rho_k[k], logdet_k[k], r_k[k],
+            pp.K_max, max_iter, tol, beta_lam, beta_p, z, verbose);
+        pt.log_marginal = ir.log_marginal; pt.n_iter = ir.n_iter;
+        pt.converged = ir.converged;       pt.grad_norm = ir.grad_norm;
+        pt.log_lik = ir.log_lik;           pt.boundary_max = ir.boundary_max;
+        pt.coef = VectorXd(p_lam + p_p);
+        pt.coef.head(p_lam) = ir.beta_lambda;
+        pt.coef.tail(p_p)   = ir.beta_p;
+        pt.field = ir.z;
+        pt.cov_beta = ir.cov_beta;
+        return pt;
+    };
+
+    Rcpp::List out = tulpaObs::run_nmix_spatial_grid(
+        n_grid, p_lam, p_p, n_spatial, /*field_len=*/n_spatial, pp.K_max,
+        theta_grid_out, solve,
+        progress, progress_every, progress_throttle, progress_file);
+    out["tau_grid"]      = tau_grid;
+    out["rho_grid"]      = rho_grid;
+    out["r_grid"]        = r_grid;
+    out["log_det_Q_rho"] = Rcpp::wrap(log_det_Q_rho);
+    out["n_tau"]         = n_tau;
+    out["n_rho"]         = n_rho;
+    out["n_r"]           = n_r;
+    return out;
 }

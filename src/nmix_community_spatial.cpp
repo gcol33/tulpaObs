@@ -698,6 +698,66 @@ Rcpp::List pack_grid(FieldKind kind, int d, int field_len, int n_grid,
         Rcpp::Named("n_grid")       = n_grid);
 }
 
+// One outer-grid point: the field hyperparameters (tau / rho / log|Q(rho)| and
+// the BYM2 mixing loadings a, b) plus the NB size r that the inner Laplace-EM
+// conditions on. Each entry builds a plan of these in its own grid-nesting
+// order; the driver below just walks the plan.
+struct CommGridPoint { double tau, rho, log_det_Q_rho, a, b, r; };
+
+// Shared outer-grid driver for the community spatial nested-Laplace-EM. Owns the
+// oracle / map / init unpacking, the grid walk, progress plumbing, and the
+// pack_grid output assembly; each field kind supplies only its FieldKind, its
+// field length, and the per-point plan + theta_grid_out it filled. community_
+// spatial_em already dispatches the field prior on FieldKind, so adding a field
+// kind is a new plan-builder, not a new copy of this loop.
+Rcpp::List run_community_spatial_grid(
+    FieldKind kind, int field_len,
+    SEXP oracle,
+    const Rcpp::IntegerVector& map_site_to_unit_R,
+    const Rcpp::NumericMatrix& X_lambda_R,
+    int n_spatial,
+    const Rcpp::IntegerVector& adj_row_ptr,
+    const Rcpp::IntegerVector& adj_col_idx,
+    const Rcpp::IntegerVector& n_neighbors,
+    const std::vector<CommGridPoint>& plan,
+    const Rcpp::NumericMatrix& theta_grid_out,
+    const Rcpp::NumericVector& mu_init,
+    const Rcpp::NumericMatrix& Sigma_lambda_init,
+    const Rcpp::NumericMatrix& Sigma_p_init,
+    int max_iter_em, double tol_em, int inner_max, double inner_tol,
+    double sigma_beta, bool verbose,
+    bool progress, int progress_every, double progress_throttle,
+    const std::string& progress_file) {
+
+    const NMixCommunityOracle& orc = as_community_oracle(oracle);
+    const int n_sites = X_lambda_R.nrow();
+    const int p_lam = orc.p_lam, p_p = orc.p_p, d = p_lam + p_p;
+    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
+    std::vector<int> map = resolve_map(map_site_to_unit_R, n_sites, n_spatial);
+    VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
+    MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
+    MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);
+
+    const int n_grid = (int)plan.size();
+    std::vector<CommSpatialResult> results(n_grid);
+    // outer-grid progress (tulpa#45)
+    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
+                                           progress_every, progress_throttle, progress_file);
+    for (int k = 0; k < n_grid; ++k) {
+        const CommGridPoint& g = plan[k];
+        results[k] = community_spatial_em(
+            kind, orc, Xl, map, n_spatial,
+            adj_row_ptr, adj_col_idx, n_neighbors,
+            g.tau, g.rho, g.log_det_Q_rho, g.a, g.b,
+            g.r, mu0, Sl0, Sp0,
+            max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose);
+        if (gp) gp->tick();
+    }
+    if (gp) gp->finish();
+    return pack_grid(kind, d, field_len, n_grid, results,
+                     theta_grid_out, p_lam, p_p, n_spatial);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -729,39 +789,25 @@ Rcpp::List cpp_nmix_community_spatial_icar(
     bool progress = false, int progress_every = 0,
     double progress_throttle = 0.0, std::string progress_file = "") {
 
-    const NMixCommunityOracle& orc = as_community_oracle(oracle);
-    const int n_sites = X_lambda_R.nrow();
-    const int p_lam = orc.p_lam, p_p = orc.p_p, d = p_lam + p_p;
-    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
-    std::vector<int> map = resolve_map(map_site_to_unit_R, n_sites, n_spatial);
-    VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
-    MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
-    MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);
-
     const int n_tau = tau_grid.size(), n_r = r_grid.size();
     const int n_grid = n_tau * n_r;
     Rcpp::NumericMatrix theta_grid_out(n_grid, 2);
-    std::vector<CommSpatialResult> results(n_grid);
-    // outer-grid progress (tulpa#45)
-    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
-                                           progress_every, progress_throttle, progress_file);
+    std::vector<CommGridPoint> plan(n_grid);
     int k = 0;
     for (int ri = 0; ri < n_r; ++ri)
         for (int t = 0; t < n_tau; ++t, ++k) {
             theta_grid_out(k, 0) = tau_grid[t];
             theta_grid_out(k, 1) = r_grid[ri];
-            results[k] = community_spatial_em(
-                FieldKind::ICAR, orc, Xl, map, n_spatial,
-                adj_row_ptr, adj_col_idx, n_neighbors,
-                tau_grid[t], /*rho=*/1.0, /*log_det_Q_rho=*/0.0, /*a=*/0.0, /*b=*/0.0,
-                r_grid[ri], mu0, Sl0, Sp0,
-                max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose);
-            if (gp) gp->tick();
+            plan[k] = CommGridPoint{ tau_grid[t], /*rho=*/1.0, /*log_det_Q_rho=*/0.0,
+                                     /*a=*/0.0, /*b=*/0.0, r_grid[ri] };
         }
-    if (gp) gp->finish();
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "r");
-    return pack_grid(FieldKind::ICAR, d, n_spatial, n_grid, results,
-                     theta_grid_out, p_lam, p_p, n_spatial);
+    return run_community_spatial_grid(
+        FieldKind::ICAR, /*field_len=*/n_spatial, oracle, map_site_to_unit_R,
+        X_lambda_R, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors,
+        plan, theta_grid_out, mu_init, Sigma_lambda_init, Sigma_p_init,
+        max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose,
+        progress, progress_every, progress_throttle, progress_file);
 }
 
 // [[Rcpp::export]]
@@ -786,24 +832,12 @@ Rcpp::List cpp_nmix_community_spatial_car_proper(
     bool progress = false, int progress_every = 0,
     double progress_throttle = 0.0, std::string progress_file = "") {
 
-    const NMixCommunityOracle& orc = as_community_oracle(oracle);
-    const int n_sites = X_lambda_R.nrow();
-    const int p_lam = orc.p_lam, p_p = orc.p_p, d = p_lam + p_p;
-    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
-    std::vector<int> map = resolve_map(map_site_to_unit_R, n_sites, n_spatial);
-    VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
-    MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
-    MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);
-
     const int n_tau = tau_grid.size(), n_rho = rho_grid.size(), n_r = r_grid.size();
     if ((int)log_det_Q_rho.size() != n_rho)
         Rcpp::stop("length(log_det_Q_rho) must equal length(rho_grid).");
     const int n_grid = n_tau * n_rho * n_r;
     Rcpp::NumericMatrix theta_grid_out(n_grid, 3);
-    std::vector<CommSpatialResult> results(n_grid);
-    // outer-grid progress (tulpa#45)
-    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
-                                           progress_every, progress_throttle, progress_file);
+    std::vector<CommGridPoint> plan(n_grid);
     int k = 0;
     for (int ri = 0; ri < n_r; ++ri)
         for (int rh = 0; rh < n_rho; ++rh)
@@ -811,18 +845,16 @@ Rcpp::List cpp_nmix_community_spatial_car_proper(
                 theta_grid_out(k, 0) = tau_grid[t];
                 theta_grid_out(k, 1) = rho_grid[rh];
                 theta_grid_out(k, 2) = r_grid[ri];
-                results[k] = community_spatial_em(
-                    FieldKind::CAR_PROPER, orc, Xl, map, n_spatial,
-                    adj_row_ptr, adj_col_idx, n_neighbors,
-                    tau_grid[t], rho_grid[rh], log_det_Q_rho[rh], 0.0, 0.0,
-                    r_grid[ri], mu0, Sl0, Sp0,
-                    max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose);
-                if (gp) gp->tick();
+                plan[k] = CommGridPoint{ tau_grid[t], rho_grid[rh], log_det_Q_rho[rh],
+                                         /*a=*/0.0, /*b=*/0.0, r_grid[ri] };
             }
-    if (gp) gp->finish();
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "rho", "r");
-    return pack_grid(FieldKind::CAR_PROPER, d, n_spatial, n_grid, results,
-                     theta_grid_out, p_lam, p_p, n_spatial);
+    return run_community_spatial_grid(
+        FieldKind::CAR_PROPER, /*field_len=*/n_spatial, oracle, map_site_to_unit_R,
+        X_lambda_R, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors,
+        plan, theta_grid_out, mu_init, Sigma_lambda_init, Sigma_p_init,
+        max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose,
+        progress, progress_every, progress_throttle, progress_file);
 }
 
 // [[Rcpp::export]]
@@ -847,22 +879,10 @@ Rcpp::List cpp_nmix_community_spatial_bym2(
     bool progress = false, int progress_every = 0,
     double progress_throttle = 0.0, std::string progress_file = "") {
 
-    const NMixCommunityOracle& orc = as_community_oracle(oracle);
-    const int n_sites = X_lambda_R.nrow();
-    const int p_lam = orc.p_lam, p_p = orc.p_p, d = p_lam + p_p;
-    Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
-    std::vector<int> map = resolve_map(map_site_to_unit_R, n_sites, n_spatial);
-    VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
-    MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
-    MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);
-
     const int n_sig = sigma_grid.size(), n_rho = rho_grid.size(), n_r = r_grid.size();
     const int n_grid = n_sig * n_rho * n_r;
     Rcpp::NumericMatrix theta_grid_out(n_grid, 3);
-    std::vector<CommSpatialResult> results(n_grid);
-    // outer-grid progress (tulpa#45)
-    auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
-                                           progress_every, progress_throttle, progress_file);
+    std::vector<CommGridPoint> plan(n_grid);
     int k = 0;
     for (int ri = 0; ri < n_r; ++ri)
         for (int rh = 0; rh < n_rho; ++rh)
@@ -873,18 +893,16 @@ Rcpp::List cpp_nmix_community_spatial_bym2(
                 theta_grid_out(k, 0) = sigma;
                 theta_grid_out(k, 1) = rho;
                 theta_grid_out(k, 2) = r_grid[ri];
-                results[k] = community_spatial_em(
-                    FieldKind::BYM2, orc, Xl, map, n_spatial,
-                    adj_row_ptr, adj_col_idx, n_neighbors,
-                    /*tau=*/1.0, rho, /*log_det_Q_rho=*/0.0, a, b,
-                    r_grid[ri], mu0, Sl0, Sp0,
-                    max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose);
-                if (gp) gp->tick();
+                plan[k] = CommGridPoint{ /*tau=*/1.0, rho, /*log_det_Q_rho=*/0.0,
+                                         a, b, r_grid[ri] };
             }
-    if (gp) gp->finish();
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("sigma", "rho", "r");
-    return pack_grid(FieldKind::BYM2, d, 2 * n_spatial, n_grid, results,
-                     theta_grid_out, p_lam, p_p, n_spatial);
+    return run_community_spatial_grid(
+        FieldKind::BYM2, /*field_len=*/2 * n_spatial, oracle, map_site_to_unit_R,
+        X_lambda_R, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors,
+        plan, theta_grid_out, mu_init, Sigma_lambda_init, Sigma_p_init,
+        max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose,
+        progress, progress_every, progress_throttle, progress_file);
 }
 
 // Continuous Matern (SPDE) shared field on the abundance arm. The field lives
