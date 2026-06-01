@@ -207,37 +207,14 @@
 # Random-effect path: warm-start + AGHQ refinement
 # ---------------------------------------------------------------------------
 
-# Partition `re` (a list of `tobs_re` specs) into lambda-arm and p-arm RE by
-# the `$shared = c(lambda, p)` membership. A term shared across BOTH arms is
-# rejected -- the AGHQ make_site path integrates one arm at a time; a
-# cross-arm RE would need a joint two-arm oracle. Tags each design element
-# with `$arm` ("lambda" or "p") and gives the p-arm terms a `p<t>` group
-# label to match the detection fixed-effect prefix.
+# Abundance(lambda)/detection(p) arm split (N-mixture AGHQ path). A shared term
+# is rejected -- the make_site path integrates one arm at a time; a cross-arm RE
+# would need a joint two-arm oracle. Shares .tobs_split_re_arms (R/em_laplace_re.R).
 .tobs_nmix_re_split_arms <- function(re_list, model) {
-  arm_of <- function(r) {
-    sh <- r$shared
-    on_lam <- length(sh) >= 1L && isTRUE(sh[1])
-    on_p   <- length(sh) >= 2L && isTRUE(sh[2])
-    if (on_lam && on_p) {
-      stop("A random effect shared across the abundance (lambda) and ",
-           "detection (p) arms is not supported on the N-mixture AGHQ path.",
-           call. = FALSE)
-    }
-    if (on_p) "p" else "lambda"
-  }
-  arms <- vapply(re_list, arm_of, character(1))
-  tag <- function(sub, arm) {
-    if (!length(sub)) return(list())
-    design <- .tobs_re_design(sub, model)
-    lapply(seq_along(design), function(i) {
-      d <- design[[i]]
-      d$arm <- arm
-      if (arm == "p") d$group_label <- sprintf("p%d", i)
-      d
-    })
-  }
-  list(lambda = tag(re_list[arms == "lambda"], "lambda"),
-       p      = tag(re_list[arms == "p"],      "p"))
+  .tobs_split_re_arms(
+    re_list, model, "lambda", "p",
+    paste0("A random effect shared across the abundance (lambda) and ",
+           "detection (p) arms is not supported on the N-mixture AGHQ path."))
 }
 
 

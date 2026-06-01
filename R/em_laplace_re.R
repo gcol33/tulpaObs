@@ -246,23 +246,20 @@
 }
 
 
-# Partition a list of `tobs_re` specs into the occupancy-predictor and
-# detection-predictor arms by their `$shared = c(occ, det)` membership, tagging
-# each design element with its arm and giving the detection terms a distinct
-# group label (`p<t>`, matching the `p_` detection fixed-effect prefix) so the
-# two arms never collide in the parameter block. A term shared across BOTH
-# predictors is rejected here -- the deterministic path fits a separate RE block
-# per arm, not one realization shared across them (use method = "nuts").
-.tobs_re_split_arms <- function(re_list, model) {
+# Partition a list of `tobs_re` specs into two predictor arms by their
+# `$shared = c(arm1_on, arm2_on)` membership, tagging each design element with
+# its arm name and giving the second arm's terms a `p<t>` group label (matching
+# the `p_` detection fixed-effect prefix) so the two arms never collide in the
+# parameter block. A term flagged on BOTH arms is rejected with `both_msg` --
+# the deterministic paths fit a separate RE block per arm, not one realization
+# shared across them.
+.tobs_split_re_arms <- function(re_list, model, arm1, arm2, both_msg) {
   arm_of <- function(r) {
     sh <- r$shared
-    on_occ <- length(sh) >= 1L && isTRUE(sh[1])
-    on_det <- length(sh) >= 2L && isTRUE(sh[2])
-    if (on_occ && on_det) {
-      stop("A random effect shared across occupancy and detection is not ",
-           "supported on the Laplace path. Use method = 'nuts'.", call. = FALSE)
-    }
-    if (on_det) "det" else "occ"
+    on1 <- length(sh) >= 1L && isTRUE(sh[1])
+    on2 <- length(sh) >= 2L && isTRUE(sh[2])
+    if (on1 && on2) stop(both_msg, call. = FALSE)
+    if (on2) arm2 else arm1
   }
   arms <- vapply(re_list, arm_of, character(1))
   tag <- function(sub, arm) {
@@ -271,12 +268,21 @@
     lapply(seq_along(design), function(i) {
       d <- design[[i]]
       d$arm <- arm
-      if (arm == "det") d$group_label <- sprintf("p%d", i)
+      if (arm == arm2) d$group_label <- sprintf("p%d", i)
       d
     })
   }
-  list(occ = tag(re_list[arms == "occ"], "occ"),
-       det = tag(re_list[arms == "det"], "det"))
+  stats::setNames(list(tag(re_list[arms == arm1], arm1),
+                       tag(re_list[arms == arm2], arm2)),
+                  c(arm1, arm2))
+}
+
+# Occupancy/detection arm split (Laplace path). A shared term routes to NUTS.
+.tobs_re_split_arms <- function(re_list, model) {
+  .tobs_split_re_arms(
+    re_list, model, "occ", "det",
+    paste0("A random effect shared across occupancy and detection is not ",
+           "supported on the Laplace path. Use method = 'nuts'."))
 }
 
 
