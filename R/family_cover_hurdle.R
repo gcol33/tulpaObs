@@ -1407,41 +1407,6 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 #' over the outer grid; per-grid FD of the joint inner log-lik along the
 #' constraint-corrected Sigma columns), and per-arm pseudo-draws are
 #' resampled from moment-matched skew-normals via
-# Warn when the joint occupancy fit lands in the degenerate weak-detection corner
-# (gcol33/tulpa#57): the occupancy intercept saturates at the psi -> 0/1 boundary,
-# or its SE blows up (the occupancy parameter reverted to its prior because the
-# data do not identify it). Conservative triggers so a genuinely high/low but
-# identified occupancy fit does not false-positive: probability past 0.97/0.03 on
-# the bare intercept, or a non-finite / very large (> 50 on the logit scale)
-# intercept SE. Fires at most one message per fit.
-.occu_cover_warn_degenerate_psi <- function(beta_occ, se_occ) {
-  ix <- if ("(Intercept)" %in% names(beta_occ)) "(Intercept)" else 1L
-  b0 <- suppressWarnings(as.numeric(beta_occ[[ix]]))
-  if (length(b0) != 1L || !is.finite(b0)) return(invisible(NULL))
-  s0 <- if (length(se_occ) && (is.character(ix) && ix %in% names(se_occ) ||
-                               is.numeric(ix) && ix <= length(se_occ)))
-          suppressWarnings(as.numeric(se_occ[[ix]])) else NA_real_
-  psi <- stats::plogis(b0)
-  reverted <- is.finite(s0) && s0 > 50
-  boundary <- psi > 0.97 || psi < 0.03
-  if (reverted) {
-    warning(sprintf(paste0(
-      "occu_cover(): the occupancy intercept SE is %.0f (reverted to the prior) -- ",
-      "the occupancy parameter is not identified by these data (weak detection). ",
-      "Read psi as uninformative here; detection/cover are unaffected. ",
-      "Cross-check with a constant-(psi, p) profile occupancy MLE (gcol33/tulpa#57)."),
-      s0), call. = FALSE)
-  } else if (boundary) {
-    warning(sprintf(paste0(
-      "occu_cover(): the occupancy estimate sits at the psi = %.3f boundary. On ",
-      "weak-detection data the constant-detection occupancy parameter is weakly ",
-      "identified and can saturate at the boundary; do not read this as a ",
-      "calibrated occupancy probability. Cross-check with a constant-(psi, p) ",
-      "profile occupancy MLE (gcol33/tulpa#57)."), psi), call. = FALSE)
-  }
-  invisible(NULL)
-}
-
 #' [`.sla_build_cover_hurdle_draws()`].
 #'
 #' @keywords internal
@@ -1456,15 +1421,6 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   se_pos <- fits$se_pos
   if (length(se_occ)) names(se_occ) <- names(beta_occ)
   if (length(se_pos)) names(se_pos) <- names(beta_pos)
-
-  # Surface the degenerate occupancy corner (gcol33/tulpa#57). On weak-detection
-  # data the constant-detection occupancy parameter is weakly identified, and the
-  # joint fit can land on the psi -> 1 boundary or revert to the occupancy prior
-  # (a huge intercept SE). Either way the occupancy map is uninformative; the
-  # estimate should NOT be read as a calibrated occupancy probability. Warn rather
-  # than fail (the fit is otherwise usable, and detection/cover are unaffected),
-  # and recommend a constant-(psi, p) profile-MLE cross-check.
-  .occu_cover_warn_degenerate_psi(beta_occ, se_occ)
 
   hyperpar <- list(
     spatial = fits$joint$theta_mean,
