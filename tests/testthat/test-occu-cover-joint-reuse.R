@@ -43,6 +43,7 @@
 
 test_that("beta cover joint fit is invariant to inner.refresh (grad-only reuse)", {
     skip_on_cran()
+    skip_if_fast()
     fit1 <- .fit_joint_beta(6789L, inner.refresh = 1L)
     fit3 <- .fit_joint_beta(6789L, inner.refresh = 3L)
     .expect_joint_equiv(fit1, fit3)
@@ -50,6 +51,7 @@ test_that("beta cover joint fit is invariant to inner.refresh (grad-only reuse)"
 
 test_that("beta cover joint fit is invariant to n.threads.outer (parallel sparse)", {
     skip_on_cran()
+    skip_if_fast()
     skip_if_not(parallel::detectCores() >= 2L, "needs multi-core")
     n_outer <- max(2L, min(4L, parallel::detectCores() - 1L))
     fit_s <- .fit_joint_beta(6789L, n.threads.outer = 1L)

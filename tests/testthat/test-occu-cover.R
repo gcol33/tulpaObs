@@ -59,6 +59,7 @@ test_that("occu_cover() rejects structured terms in v1", {
 
 test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 20L
   N <- 300L; J <- 5L
@@ -154,6 +155,7 @@ test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
 
 test_that("occu_cover() recovers parameters (beta positive, 10 seeds smoke)", {
   skip_on_cran()
+  skip_if_fast()
 
   n_seeds <- 10L
   N <- 200L; J <- 5L

@@ -46,6 +46,7 @@
 
 test_that("analytic AGHQ gradient matches central FD (Poisson community N-mixture)", {
   skip_on_cran()
+  skip_if_fast()
   p_lam <- 2L; p_p <- 2L
   d <- .sim_community_nmix(
     seed = 404L, S = 5L, R = 8L, J = 3L,
@@ -85,6 +86,7 @@ test_that("analytic AGHQ gradient matches central FD (Poisson community N-mixtur
 
 test_that("analytic AGHQ gradient matches FD with NB dispersion (community, incl log_r)", {
   skip_on_cran()
+  skip_if_fast()
   p_lam <- 2L; p_p <- 2L
   d <- .sim_community_nmix(
     seed = 505L, S = 5L, R = 8L, J = 3L,

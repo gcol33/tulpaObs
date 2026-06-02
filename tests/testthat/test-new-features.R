@@ -15,6 +15,7 @@
 }
 
 test_that("JSDM model fits", {
+  skip_if_fast()
   set.seed(42)
   n <- 20; sp <- 3
   y <- matrix(rbinom(n * sp, 1, 0.4), n, sp)
@@ -27,6 +28,7 @@ test_that("JSDM model fits", {
 })
 
 test_that("integrated model fits", {
+  skip_if_fast()
   set.seed(42)
   n <- 20
   d <- data.frame(x = rnorm(n))
@@ -66,6 +68,7 @@ test_that("tobs_check_id works", {
 })
 
 test_that("tobs_pit_residuals returns uniform-ish values", {
+  skip_if_fast()
   res <- .simple_fit(method = "nuts")
   pit <- tobs_pit_residuals(res$fit, n.samples = 50)
   expect_length(pit, res$n)
@@ -75,6 +78,7 @@ test_that("tobs_pit_residuals returns uniform-ish values", {
 })
 
 test_that("tobs_test_dispersion returns sensible output", {
+  skip_if_fast()
   res <- .simple_fit(method = "nuts")
   disp <- tobs_test_dispersion(res$fit, n.samples = 20)
   expect_true(is.finite(disp$ratio))
@@ -82,12 +86,14 @@ test_that("tobs_test_dispersion returns sensible output", {
 })
 
 test_that("tobs_test_zero_inflation returns sensible output", {
+  skip_if_fast()
   res <- .simple_fit(method = "nuts")
   zi <- tobs_test_zero_inflation(res$fit, n.samples = 20)
   expect_true(is.finite(zi$ratio))
 })
 
 test_that("tulpa generic diagnostics work via inheritance", {
+  skip_if_fast()
   set.seed(42)
   n <- 30; coords <- cbind(runif(n), runif(n))
   res <- .simple_fit(method = "laplace", n = n)
@@ -102,6 +108,7 @@ test_that("tulpa generic diagnostics work via inheritance", {
 })
 
 test_that("update works", {
+  skip_if_fast()
   res <- .simple_fit(method = "laplace")
   fit2 <- update(res$fit, verbose = FALSE)
   expect_s3_class(fit2, "tobs_fit")
@@ -109,11 +116,13 @@ test_that("update works", {
 })
 
 test_that("tobs_check runs without error", {
+  skip_if_fast()
   res <- .simple_fit(method = "nuts")
   expect_output(tobs_check(res$fit), "tobs Model Diagnostics")
 })
 
 test_that("tobs_check reports Moran's I when coords are supplied", {
+  skip_if_fast()
   set.seed(7)
   res <- .simple_fit(method = "nuts", n = 30)
   coords <- cbind(runif(res$n), runif(res$n))
@@ -121,6 +130,7 @@ test_that("tobs_check reports Moran's I when coords are supplied", {
 })
 
 test_that("tobs_ppc is calibrated for a correct occupancy model", {
+  skip_if_fast()
   # The latent state is sampled from its full conditional given the detection
   # history, so the Bayesian p-value sits near 0.5 for a correct fit. Drawing
   # z from the prior psi instead collapsed it toward 0.

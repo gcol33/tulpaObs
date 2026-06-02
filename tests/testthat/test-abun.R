@@ -13,6 +13,7 @@ test_that("abun() family is wired and reports its supported methods", {
 })
 
 test_that("single Poisson N-mixture fit recovers truth", {
+  skip_if_fast()
   beta_lambda <- c(log(4), 0.6, -0.4)
   beta_p      <- c(0.2, 0.5)
   sim <- simulate_abun(N = 400, J = 5, n_abund_covs = 2, n_det_covs = 1,
@@ -42,6 +43,7 @@ test_that("single Poisson N-mixture fit recovers truth", {
 
 test_that("95% CIs cover the truth at nominal rate across seeds", {
   skip_on_cran()
+  skip_if_fast()
   beta_lambda <- c(log(5), 0.5, -0.3)
   beta_p      <- c(0.4, 0.4)
   n_seed <- 30L
@@ -67,6 +69,7 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
 })
 
 test_that("S3 surface works for N-mixture fits", {
+  skip_if_fast()
   # Explicit betas so the abund_cov1 effect direction is deterministic.
   sim <- simulate_abun(N = 200, J = 4, n_abund_covs = 2, n_det_covs = 1,
                        beta_lambda = c(log(4), 0.5, -0.3),
@@ -101,6 +104,7 @@ test_that("S3 surface works for N-mixture fits", {
 
 test_that("negbin N-mixture recovers truth, surfaces dispersion, covers CIs", {
   skip_on_cran()
+  skip_if_fast()
   beta_lambda <- c(log(5), 0.6, -0.4)
   beta_p      <- c(0.4, 0.5)
   size_true   <- 2                       # Var(N) = lambda + lambda^2 / 2
@@ -177,6 +181,7 @@ test_that("poisson and negbin paths differ only by the dispersion coordinate", {
 })
 
 test_that("unsupported methods are rejected with the supported set", {
+  skip_if_fast()
   sim <- simulate_abun(N = 60, J = 3, seed = 9)
   expect_error(
     tobs(formula = ~ abund_cov1, data = sim$data, family = abun(),
@@ -226,6 +231,7 @@ test_that("unsupported methods are rejected with the supported set", {
 
 test_that("areal-spatial negbin N-mixture fits and reports grid-integrated r", {
   skip_on_cran()
+  skip_if_fast()
   adj <- .grid_adj(6L)
   b_lambda <- c(log(6), 0.5); b_p <- c(0.4, 0.4)
   sim <- .sim_spatial_nmix(adj, b_lambda, b_p, J = 6L, size = 3, seed = 77)
@@ -250,6 +256,7 @@ test_that("areal-spatial negbin N-mixture fits and reports grid-integrated r", {
 
 test_that("areal-spatial (icar/bym2) N-mixture fits with calibrated coef cov", {
   skip_on_cran()
+  skip_if_fast()
   adj <- .grid_adj(6L)
   b_lambda <- c(log(5), 0.5); b_p <- c(0.3, 0.4)
   sim <- .sim_spatial_nmix(adj, b_lambda, b_p, J = 5L, seed = 42)
@@ -280,6 +287,7 @@ test_that("areal-spatial (icar/bym2) N-mixture fits with calibrated coef cov", {
 
 test_that("spatial-slope 95% CI covers truth across seeds (calibration)", {
   skip_on_cran()
+  skip_if_fast()
   adj <- .grid_adj(6L)
   b_lambda <- c(log(5), 0.5); b_p <- c(0.3, 0.4)
   n_seed <- 20L
@@ -297,6 +305,7 @@ test_that("spatial-slope 95% CI covers truth across seeds (calibration)", {
 })
 
 test_that("spatial N-mixture carries cross-arm (lambda,p) covariance", {
+  skip_if_fast()
   # tulpaObs#19: under the spatial path the coefficient covariance must NOT be
   # block-diagonal across the abundance and detection arms -- the cross-arm
   # (lambda, p) block, folded through the shared field, has to be non-zero so
@@ -318,6 +327,7 @@ test_that("spatial N-mixture carries cross-arm (lambda,p) covariance", {
 
 test_that("spatial N-mixture expected-count (lambda*p) CI is calibrated", {
   skip_on_cran()
+  skip_if_fast()
   # The derived expected count mu = lambda * p combines BOTH arms, so its CI is
   # only calibrated if the posterior draws carry the cross-arm covariance
   # (tulpaObs#19). We evaluate mu per draw at a fixed design point and check

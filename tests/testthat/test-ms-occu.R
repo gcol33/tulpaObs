@@ -22,6 +22,7 @@ test_that("ms_occu() constructor returns a tobs_family", {
 
 test_that("ms_occu() recovers community means + per-species coefs", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_ms_occu(N = 130, J = 4, n_species = 16,
                           beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
                           alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
@@ -49,6 +50,7 @@ test_that("ms_occu() recovers community means + per-species coefs", {
 
 test_that("ms_occu() community-mean 95% CIs cover near the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
   n_seed <- 12L
   covered <- logical(0)
   truth <- c("psi_(Intercept)" = 0, "psi_x" = 0.6, "p_(Intercept)" = 0.2)
@@ -72,6 +74,7 @@ test_that("ms_occu() community-mean 95% CIs cover near the nominal rate", {
 
 test_that("ms_occu() S3 methods work, incl. richness", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_ms_occu(N = 60, J = 3, n_species = 8,
                           beta_comm_mean = c(0, 0.5), alpha_comm_mean = c(0.2),
                           seed = 5)

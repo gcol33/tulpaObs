@@ -1,4 +1,5 @@
 test_that("dynamic occupancy model runs", {
+  skip_if_fast()
   set.seed(42)
   n_sites <- 30
   n_seasons <- 3
@@ -32,6 +33,7 @@ test_that("dynamic occupancy model runs", {
 })
 
 test_that("dynamic tobs validates inputs", {
+  skip_if_fast()
   expect_error(
     tobs(~ 1, data.frame(x = 1:5), family = dyn_occu(),
          detection = ~ 1, y = matrix(0, 3, 2),
@@ -42,6 +44,7 @@ test_that("dynamic tobs validates inputs", {
 
 
 test_that("dyn_occu recovers (psi1, gamma, epsilon, p) within bias tolerance", {
+  skip_if_fast()
   # Regression test for the y_flat indexing fix: prior to commit fixing
   # R/occu.R::.tobs_build_dynamic, `as.integer(y)` produced column-major
   # flat while src/dyn_occ_likelihood.h and build_dynamic_callbacks read
@@ -92,6 +95,7 @@ test_that("dyn_occu recovers (psi1, gamma, epsilon, p) within bias tolerance", {
 })
 
 test_that("fitted()$z is the forward-backward smoothed state for dynamic models", {
+  skip_if_fast()
   # tulpaObs#18: dynamic fitted()$z must be the HMM smoothing posterior
   # P(z_t=1 | y_{1:T}), not the marginal occupancy psi_t. We verify (a) shape
   # [n_sites x n_seasons], (b) any detected (site, season) smooths to 1, and

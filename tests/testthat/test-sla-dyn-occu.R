@@ -50,6 +50,7 @@ make_small_dyn_model <- function(N = 60, J = 3, n_seasons = 3,
 # Smoke test: end-to-end fit with approx = "simplified_laplace"
 # ---------------------------------------------------------------------------
 test_that("dyn_occu with simplified_laplace attaches a numeric skew vector", {
+  skip_if_fast()
   set.seed(201)
   N <- 60; J <- 3; n_seasons <- 3
   data <- data.frame(x = rnorm(N))
@@ -188,6 +189,7 @@ test_that(".loglik_dyn_occu matches an independent reference HMM forward", {
 # (N = 80, T = 3, J = 4). This is the spec's "Sigma sanity test".
 # ---------------------------------------------------------------------------
 test_that("SLA gamma is finite on N=80, T=3, J=4 dyn_occu", {
+  skip_if_fast()
   set.seed(203)
   N <- 80; J <- 4; n_seasons <- 3
   elev <- rnorm(N)
@@ -245,6 +247,7 @@ test_that("SLA gamma is finite on N=80, T=3, J=4 dyn_occu", {
 # a *reasonable* number at the converged mode (negative, finite, not crazy).
 # ---------------------------------------------------------------------------
 test_that(".loglik_dyn_occu returns a reasonable number at the EM mode", {
+  skip_if_fast()
   set.seed(204)
   N <- 50; J <- 3; n_seasons <- 3
   data <- data.frame(x = rnorm(N))

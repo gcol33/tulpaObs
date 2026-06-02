@@ -50,6 +50,7 @@ test_that("occu_multiscale_cover() rejects laplace and a non-spatial state formu
 
 test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplace)", {
   skip_on_cran()
+  skip_if_fast()
 
   truth <- list(beta_psi = c(0.0, 0.5), beta_theta = c(0.4, 0.4),
                 beta_p = c(0.3, 0.5), beta_pos = c(log(0.12), -0.3),
@@ -116,6 +117,7 @@ test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplac
 
 test_that("occu_multiscale_cover() beta positive arm fits end-to-end", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_occu_multiscale_cover(
     n_cells = 50L, plots_per_cell = 4L, visits_per_plot = 3L,
     beta_pos = c(stats::qlogis(0.3), -0.3), positive = "beta", phi = 12,

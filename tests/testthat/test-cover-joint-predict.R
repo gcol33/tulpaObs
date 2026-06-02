@@ -41,6 +41,7 @@
 
 test_that("the unified substrate accesses both family joint objects (#24)", {
   skip_on_cran()
+  skip_if_fast()
   f <- .cjp_build_fit()
   jf <- tulpaObs:::.tobs_joint_fit(f$fit)
   expect_s3_class(jf, "tulpa_nested_laplace_joint")
@@ -58,6 +59,7 @@ test_that("the unified substrate accesses both family joint objects (#24)", {
 
 test_that("cover() joint predict: single-quantity tobs_prediction per cell (#23)", {
   skip_on_cran()
+  skip_if_fast()
   f <- .cjp_build_fit()
   nd <- data.frame(x = 0, cell = seq_len(f$n_s))
   for (ty in c("occurrence", "cover_cond", "cover_exp")) {
@@ -77,6 +79,7 @@ test_that("cover() joint predict: single-quantity tobs_prediction per cell (#23)
 
 test_that("cover() joint predict: change decomposition identity holds (#23)", {
   skip_on_cran()
+  skip_if_fast()
   f <- .cjp_build_fit()
   nd <- data.frame(x = 0, cell = seq_len(f$n_s))
   pr <- predict(f$fit, newdata = nd, type = "change",
@@ -98,6 +101,7 @@ test_that("cover() joint predict: change decomposition identity holds (#23)", {
 
 test_that("cover() joint predict reconstructs the ICAR field too (#24)", {
   skip_on_cran()
+  skip_if_fast()
   f <- .cjp_build_fit(prior = "icar", seed = 53L)
   nd <- data.frame(x = 0, cell = seq_len(f$n_s))
   pr <- predict(f$fit, newdata = nd, type = "cover_exp", nsim = 300L)
@@ -108,6 +112,7 @@ test_that("cover() joint predict reconstructs the ICAR field too (#24)", {
 
 test_that("legacy fixed-effects type names map onto the joint vocabulary (#23)", {
   skip_on_cran()
+  skip_if_fast()
   f <- .cjp_build_fit()
   nd <- data.frame(x = 0, cell = seq_len(f$n_s))
   a <- predict(f$fit, newdata = nd, type = "expected", nsim = 300L)
@@ -119,6 +124,7 @@ test_that("legacy fixed-effects type names map onto the joint vocabulary (#23)",
 
 test_that("separate-Laplace cover() predict is unchanged (numeric vector)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(7)
   N <- 150L
   x <- rnorm(N)

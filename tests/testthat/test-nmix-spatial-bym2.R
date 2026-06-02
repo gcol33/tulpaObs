@@ -133,6 +133,7 @@ test_that("BYM2 nested Laplace runs end-to-end", {
 
 test_that("BYM2 recovers slopes and total offset on simulated data", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_bym2(seed = 23, n_row = 8, n_col = 8,
                             sigma_true = 1.0, rho_true = 0.7)
   fit <- nmix_laplace_bym2(
@@ -157,6 +158,7 @@ test_that("BYM2 recovers slopes and total offset on simulated data", {
 
 test_that("BYM2 at small sigma collapses to a non-spatial fit", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(27)
   n_row <- 6; n_col <- 6; J <- 4
   adj <- grid_adj_csr_bym2(n_row, n_col)
@@ -223,6 +225,7 @@ test_that("Print method runs for BYM2 fit", {
 
 test_that("BYM2 NB integrates r as a third grid axis", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_bym2(seed = 31, n_row = 6, n_col = 6, J = 5, r = 2)
   fit <- suppressWarnings(nmix_laplace_bym2(
     y = dat$y, site_idx = dat$site_idx,

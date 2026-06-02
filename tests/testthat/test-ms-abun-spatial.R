@@ -26,6 +26,7 @@ rook_adj <- function(g) {
 
 test_that("spatial ms_abun (ICAR) recovers community means and the shared field", {
   skip_on_cran()
+  skip_if_fast()
   adj <- rook_adj(7L)
   # 20 species: a community covariance is a variance component, so it needs
   # enough groups to be identified -- the non-spatial recovery fixture uses 14,
@@ -64,6 +65,7 @@ test_that("spatial ms_abun (ICAR) recovers community means and the shared field"
 
 test_that("spatial ms_abun S3 surface carries the field", {
   skip_on_cran()
+  skip_if_fast()
   adj <- rook_adj(5L)
   sim <- simulate_ms_abun(n_species = 6, J = 4, graph = adj,
                           sigma.field = 0.5, seed = 3)

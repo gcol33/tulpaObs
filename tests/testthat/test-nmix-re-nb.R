@@ -26,6 +26,7 @@
 
 test_that("NB community N-mixture recovers community means / variances / dispersion", {
   skip_on_cran()
+  skip_if_fast()
   mu_l <- 1.2; mu_p <- 0.3; sd_l <- 0.5; sd_p <- 0.4; r_true <- 8
   d <- .sim_nb_community(seed = 321L, S = 14L, R = 15L, J = 4L,
                          mu_l = mu_l, mu_p = mu_p, sd_l = sd_l, sd_p = sd_p,
@@ -49,6 +50,7 @@ test_that("NB community N-mixture recovers community means / variances / dispers
 
 test_that("mixture = 'NB' rejects the EM optimizer (Poisson-only solver)", {
   skip_on_cran()
+  skip_if_fast()
   d <- .sim_nb_community(seed = 7L, S = 3L, R = 5L, J = 2L,
                          mu_l = 1.0, mu_p = 0.2, sd_l = 0.3, sd_p = 0.3, r_true = 6)
   expect_error(

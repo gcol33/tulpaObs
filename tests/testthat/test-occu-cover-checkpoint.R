@@ -11,6 +11,7 @@
 # =============================================================================
 
 skip_on_cran()
+skip_if_fast()
 
 .cc_build <- function(N = 30L, J = 4L, positive = "lognormal", seed = 12345L) {
   adj <- matrix(0L, N, N)

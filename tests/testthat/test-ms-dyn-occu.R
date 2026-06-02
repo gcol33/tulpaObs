@@ -21,6 +21,7 @@ test_that("ms_dyn_occu() constructor returns a tobs_family", {
 
 test_that("ms_dyn_occu() recovers community means + per-species coefs", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_dyn_ms_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
                               beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = 31)
@@ -54,6 +55,7 @@ test_that("ms_dyn_occu() recovers community means + per-species coefs", {
 
 test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
   n_seed <- 12L
   covered <- logical(0)
   truth <- c("psi1_(Intercept)"  = 0.3,
@@ -79,6 +81,7 @@ test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
 
 test_that("ms_dyn_occu() S3 methods work", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_dyn_ms_occu(N = 50, J = 3, n_species = 8, n_seasons = 4,
                               seed = 5)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(),

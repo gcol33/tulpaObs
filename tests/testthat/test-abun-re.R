@@ -39,6 +39,7 @@ sim_abun_p_re <- function(N, J, ngrp, beta_lambda, beta_p, sigma_b, seed = NULL)
 # --- Structural tests (always run) -----------------------------------------
 
 test_that("RE on the lambda arm fits and surfaces sigma_g + BLUPs", {
+  skip_if_fast()
   s <- sim_abun_lambda_re(N = 60, J = 3, ngrp = 6,
                           beta_lambda = c(0.5, 0.3), beta_p = 0,
                           sigma_b = 0.6, seed = 1)
@@ -59,6 +60,7 @@ test_that("RE on the lambda arm fits and surfaces sigma_g + BLUPs", {
 })
 
 test_that("RE on the p arm fits and the sigma carries the p<t> label", {
+  skip_if_fast()
   sp <- sim_abun_p_re(N = 60, J = 3, ngrp = 6,
                      beta_lambda = 1.5, beta_p = c(0, 0.4),
                      sigma_b = 0.6, seed = 2)
@@ -74,6 +76,7 @@ test_that("RE on the p arm fits and the sigma carries the p<t> label", {
 })
 
 test_that("S3 surface (coef, vcov, ranef) carries the RE component", {
+  skip_if_fast()
   s <- sim_abun_lambda_re(N = 60, J = 3, ngrp = 6,
                           beta_lambda = c(0.5, 0.3), beta_p = 0,
                           sigma_b = 0.5, seed = 3)
@@ -119,6 +122,7 @@ test_that("S3 surface (coef, vcov, ranef) carries the RE component", {
 # --- Capability gates ------------------------------------------------------
 
 test_that("RE + spatial errors with a pointer to the one-or-the-other rule", {
+  skip_if_fast()
   s <- sim_abun_lambda_re(N = 30, J = 3, ngrp = 5,
                           beta_lambda = c(0.5, 0.3), beta_p = 0,
                           sigma_b = 0.4, seed = 4)
@@ -135,6 +139,7 @@ test_that("RE + spatial errors with a pointer to the one-or-the-other rule", {
 })
 
 test_that("RE shared across both arms is rejected", {
+  skip_if_fast()
   s <- sim_abun_lambda_re(N = 30, J = 3, ngrp = 5,
                           beta_lambda = c(0.5, 0.3), beta_p = 0,
                           sigma_b = 0.4, seed = 5)
@@ -155,6 +160,7 @@ test_that("RE shared across both arms is rejected", {
 
 test_that("sigma recovery on the lambda arm (multi-seed mean within 25%)", {
   skip_on_cran()
+  skip_if_fast()
   beta_lambda <- c(0.6, 0.4); beta_p <- 0; sigma_b <- 0.6
   n_seed <- 8L
   sig_hat <- numeric(n_seed)
@@ -174,6 +180,7 @@ test_that("sigma recovery on the lambda arm (multi-seed mean within 25%)", {
 
 test_that("95% CI coverage of beta_lambda at nominal rate (lambda-arm RE)", {
   skip_on_cran()
+  skip_if_fast()
   beta_lambda <- c(0.6, 0.4); beta_p <- 0; sigma_b <- 0.6
   n_seed <- 8L
   cov_int <- logical(n_seed); cov_slope <- logical(n_seed)
@@ -198,6 +205,7 @@ test_that("95% CI coverage of beta_lambda at nominal rate (lambda-arm RE)", {
 
 test_that("NB + lambda-arm RE returns a usable fit with positive r", {
   skip_on_cran()
+  skip_if_fast()
   beta_lambda <- c(0.6, 0.3); beta_p <- 0; sigma_b <- 0.5; size_true <- 4
   sim <- sim_abun_lambda_re(N = 80, J = 4, ngrp = 8,
                             beta_lambda = beta_lambda, beta_p = beta_p,

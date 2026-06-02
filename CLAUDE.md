@@ -84,6 +84,28 @@ testthat::test_file("tests/testthat/test-occu.R", desc = "single fit recovers tr
 Convention: probes/repros/notes in `dev_notes/` (`_` prefix = runner, `probe_*`
 = diagnostic, `repro_*` = minimal reproducer for upstream tulpa bugs).
 
+## Testing: smoke-first (DEFAULT for iteration)
+
+The full suite fits 15-20 models per seed across many seeds plus NUTS/spatial
+recovery -> it takes HOURS. Do NOT run it on every edit. Use this ladder:
+
+1. **While iterating** -> run only the test file(s) covering the code you
+   touched: `testthat::test_file("tests/testthat/test-occu.R")` or
+   `devtools::test(filter = "occu")`. Seconds.
+2. **Whole-suite smoke** (plumbing/dispatch/closed-form, no model fits) -> set
+   the fast tier: `Sys.setenv(TULPAOBS_FAST = "1"); devtools::test()`. **~22s**,
+   ~1330 assertions, the ~215 heavy fitting/recovery/NUTS blocks report as skips
+   (never silently dropped). `skip_if_fast()` gates every model-fitting block;
+   it is a no-op when the env var is unset, so the full run is unchanged.
+3. **Full recovery suite** (all seeds, NUTS, spatial) -> ONLY before committing
+   to main, before a release, or when explicitly asked. `Sys.unsetenv(
+   "TULPAOBS_FAST"); devtools::test()`. Hours; uses `Config/testthat/parallel`.
+
+Adding a slow test: pair `skip_if_fast()` with `skip_on_cran()` at the top of
+any block whose cost is a multi-seed fit or a NUTS sample (helper
+`tests/testthat/helper-speed.R`). C++ recompiles are ccache-backed, so a clean
+edit-rebuild is fast; only a killed/partial build needs `pkgbuild::clean_dll()`.
+
 ## Architecture
 
 One C++ entry `cpp_occu_fit` for NUTS. Laplace via tulpa EM+Laplace

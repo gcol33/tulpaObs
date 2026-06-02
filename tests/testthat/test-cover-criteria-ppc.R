@@ -22,6 +22,7 @@
 
 test_that("cover() separate-Laplace: WAIC/DIC/CPO + PIT + PPC", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(101)
   N <- 200L
   x <- rnorm(N)
@@ -56,6 +57,7 @@ test_that("cover() separate-Laplace: WAIC/DIC/CPO + PIT + PPC", {
 
 test_that("cover() beta arm: criteria + PIT + PPC run", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(102)
   N <- 200L
   x <- rnorm(N)
@@ -73,6 +75,7 @@ test_that("cover() beta arm: criteria + PIT + PPC run", {
 
 test_that("cover() nested-joint: PIT + PPC project the shared field", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(103)
   N <- 200L; n_s <- 25L
   spatial_idx <- sample.int(n_s, N, replace = TRUE)
@@ -99,6 +102,7 @@ test_that("cover() nested-joint: PIT + PPC project the shared field", {
 
 test_that("occu_cover(): DIC/CPO + PIT + PPC", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(104)
   N <- 120L; J <- 5L
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", seed = 41L)

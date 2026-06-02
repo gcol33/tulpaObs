@@ -70,6 +70,7 @@ test_that("ms_abun(negbin) recovers mu_log_r, sigma_log_r, and per-species r_s",
 
 test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
   if (!nzchar(Sys.getenv("TULPA_SLOW_TESTS")))
     skip("set TULPA_SLOW_TESTS to run the 20-seed mu_log_r coverage gate")
   n_seed <- 20L

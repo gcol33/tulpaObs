@@ -7,6 +7,7 @@
 
 test_that("ms_abun recovers community means and per-species coefficients", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(11)
   sim <- simulate_ms_abun(n_species = 14, N = 90, J = 4,
                           n_abund_covs = 1, n_det_covs = 1,
@@ -38,6 +39,7 @@ test_that("ms_abun recovers community means and per-species coefficients", {
 
 test_that("ms_abun community-mean 95% CIs cover at the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
   n_seed <- 20L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
@@ -60,6 +62,7 @@ test_that("ms_abun community-mean 95% CIs cover at the nominal rate", {
 
 test_that("ms_abun S3 methods work", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(3)
   sim <- simulate_ms_abun(n_species = 8, N = 40, J = 3, seed = 3)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,

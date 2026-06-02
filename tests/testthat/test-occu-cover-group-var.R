@@ -82,6 +82,7 @@
 
 
 test_that("occu_cover group_var runs with more sites than field nodes", {
+  skip_if_fast()
   n_cells <- 16L; n_per <- 4L; J <- 12L
   adj <- .gv_chain_adj(n_cells)
   sim <- .gv_sim(n_cells, n_per, J, adj, seed = 4242L)
@@ -168,6 +169,7 @@ test_that("occu_cover group_var runs with more sites than field nodes", {
 
 test_that("occu_cover group_var: unequal design keeps the psi intercept anchored (tulpa#52)", {
   skip_on_cran()
+  skip_if_fast()
   n_cells <- 16L
   adj <- .gv_chain_adj(n_cells)
   sim <- .gv_sim_unequal(n_cells, adj, seed = 521L)
@@ -215,6 +217,7 @@ test_that("occu_cover flags the degenerate occupancy corner (tulpa#57)", {
 
 test_that("occu_cover group_var recovers fields and slopes (multi-seed)", {
   skip_on_cran()
+  skip_if_fast()
   n_cells <- 20L; n_per <- 6L; J <- 15L
   adj <- .gv_chain_adj(n_cells)
   seeds <- c(101L, 202L, 303L, 404L, 505L)

@@ -23,6 +23,7 @@ rook_adj <- function(g) {
 
 test_that("inner_solver = \"newton\" is a recognized control with regime guards", {
   skip_on_cran()
+  skip_if_fast()
   adj <- rook_adj(3L)
   sim <- simulate_ms_abun(n_species = 4, J = 2, graph = adj,
                           sigma.field = 0.3, seed = 5)

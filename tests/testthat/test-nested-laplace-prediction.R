@@ -33,6 +33,7 @@
 
 
 test_that("all-NA sites are flagged held-out and dropped from the likelihood", {
+  skip_if_fast()
   d <- .make_grid_occu()
   heldout <- seq(2, d$n, by = 4)
   y <- d$y; y[heldout, ] <- NA
@@ -52,6 +53,7 @@ test_that("all-NA sites are flagged held-out and dropped from the likelihood", {
 
 
 test_that("held-out occupancy is recovered by spatial interpolation (icar)", {
+  skip_if_fast()
   d <- .make_grid_occu()
   heldout <- seq(2, d$n, by = 4)
   y <- d$y; y[heldout, ] <- NA
@@ -71,6 +73,7 @@ test_that("held-out occupancy is recovered by spatial interpolation (icar)", {
 
 
 test_that("held-out occupancy is recovered for a bym2 field too", {
+  skip_if_fast()
   # bym2's predictor mixes structured + unstructured components with
   # hyperparameter-dependent scales, so it cannot be reconstructed from the
   # modes alone; prediction reads the engine's per-cell fitted eta
@@ -99,6 +102,7 @@ test_that("held-out 95% intervals are calibrated (coverage recovery)", {
   # and integrates over the tau grid, so the held-out psi interval should cover
   # the true psi at ~the nominal rate. Pool over seeds for a stable estimate.
   skip_on_cran()
+  skip_if_fast()
   covered <- logical(0)
   widths  <- numeric(0)
   for (s in 1:5) {
@@ -124,6 +128,7 @@ test_that("held-out 95% intervals are calibrated (coverage recovery)", {
 
 
 test_that("predict(type = 'state') errors for a non-nested fit", {
+  skip_if_fast()
   d <- .make_grid_occu(seed = 3)
   fit_lap <- tobs(~ 1, data = data.frame(s = seq_len(d$n)), family = occu(),
                   detection = ~ 1, y = d$y, method = "laplace",

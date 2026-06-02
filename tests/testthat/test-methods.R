@@ -63,6 +63,7 @@ test_that("S3 methods work on single-season fit", {
 })
 
 test_that("non-NUTS fits report NA sampler diagnostics, NUTS reports numeric", {
+  skip_if_fast()
   # tulpaObs#17: a Laplace / nested-Laplace fit ran no HMC trajectory, so the
   # NUTS-only sampler-health fields (acceptance, divergence, tree depth, step
   # size) must be NA rather than the constants 1 / 0 / 0 / 0 -- otherwise a user
@@ -120,6 +121,7 @@ test_that("PPC works on single-season fit", {
 })
 
 test_that("compare_models works", {
+  skip_if_fast()
   set.seed(42)
   n <- 30
   d <- data.frame(x = rnorm(n))

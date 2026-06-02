@@ -40,6 +40,7 @@ sim_occu_re_corr <- function(seed = 404, ng = 40L, per = 25L, J = 6L,
 }
 
 test_that("iid intercept RE is fit (not dropped) by the default Laplace engine", {
+  skip_if_fast()
   s <- sim_occu_re_intercept()
   fit <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
               family = occu(), method = "laplace",
@@ -70,6 +71,7 @@ test_that("iid intercept RE is fit (not dropped) by the default Laplace engine",
 })
 
 test_that("uncorrelated random slopes (1 + x || g) recover under Laplace", {
+  skip_if_fast()
   set.seed(202)
   ng <- 30L; per <- 30L; N <- ng * per; J <- 6L
   g <- rep(seq_len(ng), each = per); x <- rnorm(N)
@@ -154,6 +156,7 @@ test_that("correlated random slopes (1 + x | g) recover under Laplace", {
 })
 
 test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
+  skip_if_fast()
   s <- sim_occu_re_intercept(seed = 3, ng = 12L, per = 12L)
 
   # Non-single model types route RE to NUTS (validator guard, exercised
@@ -283,6 +286,7 @@ sim_det_re_intercept <- function(seed = 1, N = 400L, J = 6L, ng = 40L,
 }
 
 test_that("a detection random intercept is fit on its own arm (AGHQ arm = det)", {
+  skip_if_fast()
   s <- sim_det_re_intercept(seed = 1)
   fit <- tobs(~ occ_cov, detection = ~ (1 | observer), family = occu(),
               data = s$d, y = s$y, method = "laplace",

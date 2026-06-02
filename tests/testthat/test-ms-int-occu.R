@@ -22,6 +22,7 @@ test_that("ms_int_occu() constructor returns a tobs_family", {
 
 test_that("ms_int_occu() recovers community means + per-species coefs", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_int_ms_occu(N = 140, J = c(3, 4), n_species = 14,
                               n_data = 2, seed = 23)
   fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(),
@@ -47,6 +48,7 @@ test_that("ms_int_occu() recovers community means + per-species coefs", {
 
 test_that("ms_int_occu() community-mean 95% CIs cover near the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
   n_seed <- 12L
   covered <- logical(0)
   truth <- c("psi_(Intercept)" = 0, "p1_(Intercept)" = 0, "p2_(Intercept)" = 0)
@@ -68,6 +70,7 @@ test_that("ms_int_occu() community-mean 95% CIs cover near the nominal rate", {
 
 test_that("ms_int_occu() S3 methods work", {
   skip_on_cran()
+  skip_if_fast()
   sim <- simulate_int_ms_occu(N = 80, J = c(3, 4), n_species = 8,
                               n_data = 2, seed = 5)
   fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,

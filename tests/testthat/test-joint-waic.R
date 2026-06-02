@@ -23,6 +23,7 @@
 
 test_that("occu_cover() non-spatial: WAIC + pointwise log-lik (#26)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(11)
   N <- 120L; J <- 5L
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", seed = 21L)
@@ -49,6 +50,7 @@ test_that("occu_cover() non-spatial: WAIC + pointwise log-lik (#26)", {
 
 test_that("occu_cover() beta arm: pointwise log-lik is finite (#26)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(12)
   N <- 120L; J <- 5L
   sim <- simulate_occu_cover(N = N, J = J, positive = "beta", phi = 30, seed = 22L)
@@ -68,6 +70,7 @@ test_that("occu_cover() beta arm: pointwise log-lik is finite (#26)", {
 
 test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(13)
   N <- 30L; J <- 5L
   adj <- .jw_chain_adj(N)
@@ -97,6 +100,7 @@ test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
 
 test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(14)
   N <- 200L; n_s <- 25L
   spatial_idx <- sample.int(n_s, N, replace = TRUE)
@@ -131,6 +135,7 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
 
 test_that("cover() separate-Laplace WAIC is unaffected (#26)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(15)
   N <- 150L
   x <- rnorm(N)

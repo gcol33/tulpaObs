@@ -90,6 +90,7 @@ test_that("ms_occu_cover() enforces its capability gates", {
 
 test_that("ms_occu_cover() recovers community means + per-species coefs (lognormal)", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(21)
   sim <- simulate_ms_occu_cover(
     n_species = 14, N = 90, J = 4,
@@ -136,6 +137,7 @@ test_that("ms_occu_cover() recovers community means + per-species coefs (lognorm
 
 test_that("ms_occu_cover() community-mean 95% CIs cover near the nominal rate", {
   skip_on_cran()
+  skip_if_fast()
   n_seed <- 15L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
@@ -164,6 +166,7 @@ test_that("ms_occu_cover() community-mean 95% CIs cover near the nominal rate", 
 
 test_that("ms_occu_cover() S3 methods work", {
   skip_on_cran()
+  skip_if_fast()
   set.seed(5)
   sim <- simulate_ms_occu_cover(n_species = 8, N = 45, J = 3,
                                 positive = "lognormal", seed = 5)
@@ -211,6 +214,7 @@ test_that("ms_occu_cover() S3 methods work", {
 
 test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   skip_on_cran()
+  skip_if_fast()
   n_seeds <- 8L
   occ_x <- p_x <- pos_x <- phi_e <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {

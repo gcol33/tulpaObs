@@ -14,6 +14,7 @@ sim_occu_fixed <- function(seed = 41, N = 400L, J = 5L,
 }
 
 test_that("method = 'laplace_gibbs' recovers occupancy/detection fixed effects", {
+  skip_if_fast()
   s <- sim_occu_fixed(seed = 41)
   fit <- tobs(~ occ_cov1, data = s$data, y = s$y, detection = ~ det_cov1,
               family = occu(), method = "laplace_gibbs",
@@ -35,6 +36,7 @@ test_that("method = 'laplace_gibbs' recovers occupancy/detection fixed effects",
 })
 
 test_that("a fixed seed makes method = 'laplace_gibbs' reproducible", {
+  skip_if_fast()
   s <- sim_occu_fixed(seed = 41)
   f <- function() tobs(~ occ_cov1, data = s$data, y = s$y,
                        detection = ~ det_cov1, family = occu(),
@@ -45,6 +47,7 @@ test_that("a fixed seed makes method = 'laplace_gibbs' reproducible", {
 })
 
 test_that("method = 'laplace_mi' recovers fixed effects and records its seed", {
+  skip_if_fast()
   s <- sim_occu_fixed(seed = 42)
   fit <- tobs(~ occ_cov1, data = s$data, y = s$y, detection = ~ det_cov1,
               family = occu(), method = "laplace_mi",
@@ -59,6 +62,7 @@ test_that("method = 'laplace_mi' recovers fixed effects and records its seed", {
 })
 
 test_that("priors = FALSE recovers the unpenalised Gibbs correction", {
+  skip_if_fast()
   s <- sim_occu_fixed(seed = 41)
   fit <- tobs(~ occ_cov1, data = s$data, y = s$y, detection = ~ det_cov1,
               family = occu(), method = "laplace_gibbs", priors = FALSE,

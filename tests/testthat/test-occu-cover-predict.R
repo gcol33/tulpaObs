@@ -54,6 +54,7 @@
 
 test_that("the joint_coupled occu_cover fit carries a sampleable joint_fit", {
     skip_on_cran()
+    skip_if_fast()
     f <- .ocp_build_fit()
     expect_s3_class(f$fit$joint_fit, "tulpa_nested_laplace_joint")
     expect_false(is.null(f$fit$joint_fit$Q_csc_p_per_grid))   # store_Q forced on
@@ -66,6 +67,7 @@ test_that("the joint_coupled occu_cover fit carries a sampleable joint_fit", {
 
 test_that("single-quantity predictions: cell + mean + CI + draw matrices", {
     skip_on_cran()
+    skip_if_fast()
     f <- .ocp_build_fit()
     for (ty in c("occurrence", "cover_cond", "cover_exp")) {
         pr <- predict(f$fit, newdata = f$cell_dat, type = ty, nsim = 400L)
@@ -86,6 +88,7 @@ test_that("single-quantity predictions: cell + mean + CI + draw matrices", {
 
 test_that("change decomposition identity holds per draw and in the summary", {
     skip_on_cran()
+    skip_if_fast()
     f <- .ocp_build_fit()
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
                   times = c(0, 1), time_col = "year", nsim = 600L)
@@ -100,6 +103,7 @@ test_that("change decomposition identity holds per draw and in the summary", {
 
 test_that("type = change emits the exact column contract keyed by cell", {
     skip_on_cran()
+    skip_if_fast()
     f <- .ocp_build_fit()
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
                   times = c(0, 1), time_col = "year", nsim = 200L)
@@ -120,6 +124,7 @@ test_that("type = change emits the exact column contract keyed by cell", {
 
 test_that("in-sample occurrence tracks the plug-in predictor", {
     skip_on_cran()
+    skip_if_fast()
     f <- .ocp_build_fit()
     fit <- f$fit
     pr <- predict(fit, type = "occurrence", nsim = 2000L)   # defaults to training

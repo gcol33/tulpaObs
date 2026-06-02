@@ -43,6 +43,7 @@ simulate_nmix <- function(seed,
 }
 
 test_that("Newton converges to a finite MLE on the Royle simulation", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 42)
   fit <- nmix_laplace(
     y = dat$y, site_idx = dat$site_idx,
@@ -67,6 +68,7 @@ test_that("Newton converges to a finite MLE on the Royle simulation", {
 
 test_that("Multi-seed coverage of 95% Wald CIs is near nominal", {
   skip_on_cran()
+  skip_if_fast()
   n_seeds <- 30L
   covered_lam <- 0L
   covered_p   <- 0L
@@ -96,6 +98,7 @@ test_that("Multi-seed coverage of 95% Wald CIs is near nominal", {
 })
 
 test_that("Cross-check against unmarked::pcount", {
+  skip_if_fast()
   skip_if_not_installed("unmarked")
   # unmarked fits are S4. Call its coef()/logLik() namespace-qualified so they
   # bind to unmarked's S4 generics directly: under R CMD check all test files
@@ -126,6 +129,7 @@ test_that("Cross-check against unmarked::pcount", {
 })
 
 test_that("K_max sanity: low K_max triggers boundary warning", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 42)
   # Force K_max close to mean(N) so a heavy posterior tail at K_max is likely
   expect_warning(
@@ -140,6 +144,7 @@ test_that("K_max sanity: low K_max triggers boundary warning", {
 })
 
 test_that("K_max < max(y) errors clearly", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 42)
   expect_error(
     nmix_laplace(
@@ -152,6 +157,7 @@ test_that("K_max < max(y) errors clearly", {
 })
 
 test_that("print method runs without error", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 42)
   fit <- nmix_laplace(
     y = dat$y, site_idx = dat$site_idx,
@@ -166,6 +172,7 @@ test_that("print method runs without error", {
 # --------------------------------------------------------------------------
 
 test_that("NB fit converges and estimates a finite dispersion", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 5, n_sites = 250, r = 2)
   fit <- nmix_laplace(
     y = dat$y, site_idx = dat$site_idx,
@@ -187,6 +194,7 @@ test_that("NB fit converges and estimates a finite dispersion", {
 })
 
 test_that("NB log-lik exceeds Poisson on overdispersed data; matches on Poisson data", {
+  skip_if_fast()
   dat_nb <- simulate_nmix(seed = 6, n_sites = 250, r = 1.5)
   fit_nb <- nmix_laplace(dat_nb$y, dat_nb$site_idx, dat_nb$X_lambda, dat_nb$X_p,
                                mixture = "NB", max_iter = 100L, tol = 1e-7)
@@ -199,6 +207,7 @@ test_that("NB log-lik exceeds Poisson on overdispersed data; matches on Poisson 
 
 test_that("NB multi-seed recovery: slopes and dispersion, near-nominal coverage", {
   skip_on_cran()
+  skip_if_fast()
   n_seeds <- 30L
   r_true <- 2
   covered_lam <- 0L; covered_p <- 0L; covered_r <- 0L
@@ -231,6 +240,7 @@ test_that("NB multi-seed recovery: slopes and dispersion, near-nominal coverage"
 })
 
 test_that("NB cross-check against unmarked::pcount(mixture = 'NB')", {
+  skip_if_fast()
   skip_if_not_installed("unmarked")
   suppressPackageStartupMessages(library(unmarked))
   dat <- simulate_nmix(seed = 5, n_sites = 250, r = 2)
@@ -262,6 +272,7 @@ test_that("NB cross-check against unmarked::pcount(mixture = 'NB')", {
 })
 
 test_that("NB on Poisson data with low r_max pins dispersion and warns", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 7, n_sites = 200, r = Inf)  # Poisson truth
   expect_warning(
     fit <- nmix_laplace(
@@ -274,6 +285,7 @@ test_that("NB on Poisson data with low r_max pins dispersion and warns", {
 })
 
 test_that("NB print method shows the dispersion", {
+  skip_if_fast()
   dat <- simulate_nmix(seed = 5, n_sites = 150, r = 2)
   fit <- nmix_laplace(dat$y, dat$site_idx, dat$X_lambda, dat$X_p,
                             mixture = "NB", max_iter = 60L)

@@ -118,6 +118,7 @@ test_that("Spatial N-mix CAR_proper nested Laplace runs end-to-end", {
 
 test_that("CAR_proper recovers rho near truth on simulated data", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_car_proper(seed = 13, n_row = 8, n_col = 8,
                                   rho_true = 0.85, tau_true = 1.0)
   fit <- nmix_laplace_car_proper(
@@ -144,6 +145,7 @@ test_that("CAR_proper recovers rho near truth on simulated data", {
 
 test_that("CAR_proper at low rho is close to non-spatial fit", {
   skip_on_cran()
+  skip_if_fast()
   # Use truth with no spatial structure (rho effectively zero via z_scale).
   set.seed(17)
   n_row <- 6; n_col <- 6; J <- 4
@@ -209,6 +211,7 @@ test_that("Print method runs for CAR_proper fit", {
 
 test_that("CAR_proper NB integrates r as a third grid axis", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_car_proper(seed = 24, n_row = 6, n_col = 6, J = 5, r = 2)
   fit <- suppressWarnings(nmix_laplace_car_proper(
     y = dat$y, site_idx = dat$site_idx,

@@ -30,6 +30,7 @@
 
 test_that("joint_grad matches joint_fd at n_quad = 9 (Poisson community N-mixture)", {
   skip_on_cran()
+  skip_if_fast()
   d <- .sim_small_community(
     seed = 77L, S = 6L, R = 8L, J = 3L,
     mu_lambda = c(1.0, 0.3), mu_p = 0.2,
@@ -53,6 +54,7 @@ test_that("joint_grad matches joint_fd at n_quad = 9 (Poisson community N-mixtur
 
 test_that("joint_grad requires n_quad > 1 (points to the EM)", {
   skip_on_cran()
+  skip_if_fast()
   d <- .sim_small_community(
     seed = 9L, S = 3L, R = 5L, J = 2L,
     mu_lambda = c(0.8, 0.0), mu_p = 0.1,

@@ -112,6 +112,7 @@ test_that("Spatial N-mix nested Laplace runs end-to-end", {
 
 test_that("Spatial N-mix slopes are near truth on simulated data", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 13, n_row = 8, n_col = 8)
   fit <- nmix_laplace_icar(
     y = dat$y, site_idx = dat$site_idx,
@@ -136,6 +137,7 @@ test_that("Spatial N-mix slopes are near truth on simulated data", {
 
 test_that("High-tau spatial fit collapses to non-spatial fit", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 17, z_scale = 0)   # truth has no field
   # Use a strict, high-only tau grid that drives z toward zero.
   fit_sp <- nmix_laplace_icar(
@@ -181,6 +183,7 @@ test_that("Print method runs", {
 
 test_that("Spatial ICAR NB integrates r and recovers slopes / dispersion", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 21, n_row = 7, n_col = 7, J = 5, r = 2)
   fit <- suppressWarnings(nmix_laplace_icar(
     y = dat$y, site_idx = dat$site_idx,
@@ -213,6 +216,7 @@ test_that("Spatial ICAR NB integrates r and recovers slopes / dispersion", {
 
 test_that("Spatial NB log-marginal beats Poisson on overdispersed data", {
   skip_on_cran()
+  skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 23, n_row = 7, n_col = 7, J = 5, r = 1.5)
   args <- list(
     y = dat$y, site_idx = dat$site_idx,
