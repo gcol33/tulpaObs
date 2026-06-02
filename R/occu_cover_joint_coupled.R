@@ -488,7 +488,13 @@
       # the outer grid append each completed cell to `path` and a resume run
       # load the finished cells and solve only the rest, so a killed/rebooted
       # fit resumes instead of restarting. Forwarded verbatim to the engine.
-      checkpoint = dots$checkpoint
+      checkpoint = dots$checkpoint,
+      # Outer-grid node layout (gcol33/tulpa#61, tulpaObs#31). "ccd" places a
+      # central composite design over the >= 3 latent axes (intercept + trend
+      # sigma/alpha) and crosses the pos-arm phi tensor on top; "grid" forces
+      # the dense tensor. Forwarded so a two-field trend fit can request CCD
+      # from the consumer side; NULL falls through to the engine default.
+      integration = dots$integration
     )
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg

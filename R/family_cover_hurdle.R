@@ -1112,7 +1112,14 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # the outer grid append each completed cell to `path` and a resume run load
     # the finished cells and solve only the rest, so a killed/rebooted fit
     # resumes instead of restarting. Forwarded verbatim to the engine.
-    checkpoint        = control$checkpoint
+    checkpoint        = control$checkpoint,
+    # Outer-grid node layout (gcol33/tulpa#61, tulpaObs#31). On the coupled-trend
+    # multi-block path (>= 3 latent axes: intercept + trend sigma/alpha) "ccd"
+    # places a central composite design over the latent axes and crosses the
+    # pos-arm phi tensor on top; "grid" forces the dense tensor. Forwarded so a
+    # two-field trend fit can request CCD; NULL falls through to the engine
+    # default.
+    integration       = control$integration
   )
 
   # ---- Multi-block path (Phase J-D) -----------------------------------
