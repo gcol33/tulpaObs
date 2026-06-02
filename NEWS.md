@@ -23,6 +23,23 @@
   reduction), `test-occu-multiscale-cover-recovery.R` (parameter recovery + CI
   coverage + field shape). `fitted()` / `predict()` for the family are pending.
 
+* feat(ms_occu_cover): community (multispecies) joint occupancy-detection +
+  cover family, the community version of `occu_cover()`. Per-species coefficient
+  random effects with Gaussian community hyperpriors on all three arms
+  (occupancy `psi`, detection `p`, positive cover), so rare species borrow
+  strength from common ones through the shared community means and covariances.
+  The latent presence `z` integrates out per species-cell in closed form (the
+  same two-state mixture as `occu_cover()`); the per-species deviations are
+  integrated by a Laplace-EM (arrowhead joint Newton with the per-species RE
+  blocks Schur-folded, closed-form community-covariance M-step, Louis 1982
+  Schur-complement community-mean SEs). Beta + lognormal positive arms,
+  non-spatial Laplace only (`method = "nested_laplace"` errors: the per-group RE
+  on a shared coupled field needs upstream engine support). Adds
+  `ms_occu_cover()` and `simulate_ms_occu_cover()`. Tests: `test-ms-occu-cover.R`
+  (community-mean recovery + 15-seed CI coverage + per-species coefficient
+  recovery). Status `"experimental"`; NUTS / negbin / per-species dispersion RE /
+  AGHQ variance-component debias pending.
+
 ## 0.0.7 (2026-06-01)
 
 Requires tulpa (>= 0.0.7) and tulpaMesh (>= 0.1.2).
