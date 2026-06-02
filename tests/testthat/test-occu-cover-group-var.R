@@ -195,6 +195,24 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
   expect_gt(stats::sd(fit$spatial_field), 0.05)
 })
 
+test_that("occu_cover flags the degenerate occupancy corner (tulpa#57)", {
+  warn_fn <- tulpaObs:::.occu_cover_warn_degenerate_psi
+  # psi -> 1 boundary (intercept ~ logit(0.978)).
+  expect_warning(
+    warn_fn(c("(Intercept)" = 3.8, x = 0.2), c("(Intercept)" = 0.05, x = 0.1)),
+    "boundary")
+  # psi -> 0 boundary.
+  expect_warning(
+    warn_fn(c("(Intercept)" = -3.8), c("(Intercept)" = 0.1)), "boundary")
+  # Reverted to the occupancy prior (SE blown up).
+  expect_warning(
+    warn_fn(c("(Intercept)" = -1.1), c("(Intercept)" = 100)),
+    "reverted to the prior")
+  # Interior, identified occupancy: no warning.
+  expect_silent(
+    warn_fn(c("(Intercept)" = 0.4, x = 0.3), c("(Intercept)" = 0.2, x = 0.15)))
+})
+
 test_that("occu_cover group_var recovers fields and slopes (multi-seed)", {
   skip_on_cran()
   n_cells <- 20L; n_per <- 6L; J <- 15L
