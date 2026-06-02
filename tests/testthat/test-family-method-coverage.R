@@ -18,9 +18,9 @@ test_that(".tobs_validate_family_method accepts every supported method", {
 })
 
 test_that(".tobs_validate_family_method rejects an unsupported method", {
-  # nested_laplace is wired for occu / int_occu / ms_occu / dyn_occu (the
-  # multi-block driver) and the cover joint path -- but NOT jsdm (no latent
-  # state to integrate; the response is observed directly).
+  # nested_laplace is wired for occu / int_occu / dyn_occu (the multi-block
+  # driver) and the cover joint path -- but NOT jsdm (no latent state to
+  # integrate; the response is observed directly).
   expect_error(.tobs_validate_family_method("nested_laplace", jsdm()),
                "not available for jsdm")
   # nested_laplace_sla (skew on the nested path) is occu + cover only.
@@ -36,8 +36,19 @@ test_that(".tobs_validate_family_method rejects an unsupported method", {
 test_that(".tobs_validate_family_method now accepts nested_laplace for the multi-block families", {
   # gcol33/tulpaObs: nested-Laplace generalised beyond single-season occupancy.
   expect_silent(.tobs_validate_family_method("nested_laplace", int_occu()))
-  expect_silent(.tobs_validate_family_method("nested_laplace", ms_occu()))
   expect_silent(.tobs_validate_family_method("nested_laplace", dyn_occu()))
+})
+
+test_that("community occupancy families are laplace-only (gcol33/tulpaObs#30)", {
+  # ms_occu / ms_dyn_occu / ms_int_occu fit by the dedicated community Laplace-EM
+  # (independent per-arm REs); the generic-engine nested_laplace / nuts community
+  # paths were removed with the mis-specified legacy RE path.
+  for (fam in list(ms_occu(), ms_dyn_occu(), ms_int_occu())) {
+    expect_silent(.tobs_validate_family_method("laplace", fam))
+    expect_error(.tobs_validate_family_method("nested_laplace", fam),
+                 "not available")
+    expect_error(.tobs_validate_family_method("nuts", fam), "not available")
+  }
 })
 
 test_that("the rejection lists the family's supported methods", {

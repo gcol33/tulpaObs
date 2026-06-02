@@ -97,18 +97,22 @@ test_that("nested_laplace requires at least one latent block", {
 })
 
 
-test_that(".map_engine routes nested_laplace for the multi-block families, errors for jsdm", {
-  for (fam in c("occu", "int_occu", "ms_occu", "dyn_occu")) {
+test_that(".map_engine routes nested_laplace for the multi-block families, errors for unsupported", {
+  for (fam in c("occu", "int_occu", "dyn_occu")) {
     expect_identical(.map_engine("nested_laplace", family = fam),
                      "nested_laplace")
   }
-  # jsdm has no nested-Laplace driver; the registry rejects it before dispatch,
-  # so reaching .map_engine with it is an internal mis-wire (not a silent
-  # downgrade to single-Laplace).
-  expect_error(
-    .map_engine("nested_laplace", family = "jsdm"),
-    "Internal error"
-  )
+  # Families with no nested-Laplace driver: the registry rejects them before
+  # dispatch, so reaching .map_engine is an internal mis-wire (not a silent
+  # downgrade to single-Laplace). jsdm has no nested driver; ms_occu is
+  # Laplace-only (community nested-Laplace needs upstream per-arm RE + shared
+  # field support, tulpaObs#30).
+  for (fam in c("jsdm", "ms_occu")) {
+    expect_error(
+      .map_engine("nested_laplace", family = fam),
+      "Internal error"
+    )
+  }
   expect_identical(.map_engine("laplace", family = "occu"), "laplace")
   expect_identical(.map_engine("nuts", family = "occu"), "nuts")
 })

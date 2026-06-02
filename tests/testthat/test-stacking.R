@@ -32,21 +32,12 @@ test_that(".tobs_pointwise_loglik errors on an unknown model_type", {
 })
 
 test_that(".tobs_pointwise_loglik covers every family (shape + finite)", {
-  # community: site x species replicated occupancy
-  set.seed(2); ns <- 18L; nsp <- 3L; mv <- 3L; yl <- list()
-  for (s in seq_len(nsp)) {
-    zz <- rbinom(ns, 1, 0.5); ys <- matrix(0L, ns, mv)
-    for (i in seq_len(ns)) if (zz[i]) ys[i, ] <- rbinom(mv, 1, 0.4)
-    yl[[paste0("sp", s)]] <- ys
-  }
-  fc <- tobs(~ 1, data = data.frame(x = rnorm(ns)), family = ms_occu(),
-             detection = ~ 1, y = yl, species = TRUE, method = "laplace",
-             control = list(verbose = FALSE))
-  ll <- tulpaObs:::.tobs_pointwise_loglik(fc)
-  expect_equal(ncol(ll), ns * nsp)
-  expect_true(all(is.finite(ll)))
+  # The dedicated community families (ms_occu / ms_dyn_occu / ms_int_occu /
+  # ms_occu_cover / ms_abun) are fit by the community Laplace-EM and are not in
+  # the draws-based pointwise-loglik / stacking path (laplace-only, deterministic).
 
   # dynamic: per-site HMM marginal
+  mv <- 3L
   set.seed(3); ns <- 24L; Tn <- 3L; ya <- array(0L, c(ns, mv, Tn))
   z <- matrix(0, ns, Tn); z[, 1] <- rbinom(ns, 1, 0.6)
   for (t in 2:Tn) z[, t] <- z[, t-1]*(1-rbinom(ns,1,0.1)) + (1-z[, t-1])*rbinom(ns,1,0.2)

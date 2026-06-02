@@ -80,8 +80,7 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   mt <- model$model_type %||% "NULL"
   switch(
     mt,
-    single     = ,
-    community  = .tobs_ploglik_replicated(model, draws),
+    single     = .tobs_ploglik_replicated(model, draws),
     dynamic    = .tobs_ploglik_dynamic(model, draws),
     integrated = .tobs_ploglik_integrated(model, draws),
     jsdm       = .tobs_ploglik_jsdm(model, draws),
@@ -146,8 +145,7 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
 
 # --- per-family marginal likelihoods ---------------------------------------
 
-# Single-season + community occupancy: per replicate row, marginalized over z.
-# (community stacks site x species rows but is otherwise identical.)
+# Single-season occupancy: per replicate row, marginalized over z.
 .tobs_ploglik_replicated <- function(model, draws) {
   eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_obs]
   eta_p   <- .tobs_eta_draws(model, draws, 2L)

@@ -48,7 +48,7 @@ summary.tobs_fit <- function(object, ...) {
 #' @export
 nobs.tobs_fit <- function(object, ...) {
   model <- object$model
-  if (model$model_type == "single" || model$model_type == "community") {
+  if (model$model_type == "single") {
     y <- model$y
     sum(y >= 0)
   } else if (model$model_type == "dynamic") {
@@ -59,6 +59,11 @@ nobs.tobs_fit <- function(object, ...) {
              model$model_type == "ms_occu_cover" ||
              model$model_type == "occu_multiscale_cover") {
     sum(!is.na(model$y))
+  } else if (model$model_type == "ms_occu" ||
+             model$model_type == "ms_dyn_occu") {
+    sum(model$valid)
+  } else if (model$model_type == "ms_int_occu") {
+    sum(vapply(model$valid, sum, integer(1)))
   } else {
     NA_integer_
   }
@@ -89,8 +94,17 @@ ranef.tobs_fit <- function(object, ...) {
   if (identical(object$model$model_type, "ms_nmix")) {
     return(.tobs_ranef_ms_nmix(object))
   }
+  if (identical(object$model$model_type, "ms_occu")) {
+    return(.tobs_ranef_ms_occu(object))
+  }
   if (identical(object$model$model_type, "ms_occu_cover")) {
     return(.tobs_ranef_ms_occu_cover(object))
+  }
+  if (identical(object$model$model_type, "ms_dyn_occu")) {
+    return(.tobs_ranef_ms_dyn_occu(object))
+  }
+  if (identical(object$model$model_type, "ms_int_occu")) {
+    return(.tobs_ranef_ms_int_occu(object))
   }
   if (!is.null(object$re_effects) && length(object$re_effects) > 0L) {
     out <- do.call(rbind, object$re_effects)
@@ -166,8 +180,17 @@ fitted.tobs_fit <- function(object, ...) {
   model <- object$model
   if (identical(model$model_type, "nmix")) return(.tobs_fitted_nmix(object))
   if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
+  if (identical(model$model_type, "ms_occu")) {
+    return(.tobs_fitted_ms_occu(object))
+  }
   if (identical(model$model_type, "ms_occu_cover")) {
     return(.tobs_fitted_ms_occu_cover(object))
+  }
+  if (identical(model$model_type, "ms_dyn_occu")) {
+    return(.tobs_fitted_ms_dyn_occu(object))
+  }
+  if (identical(model$model_type, "ms_int_occu")) {
+    return(.tobs_fitted_ms_int_occu(object))
   }
   if (identical(model$model_type, "occu_multiscale_cover")) {
     stop("fitted() is not yet implemented for occu_multiscale_cover(). Use ",
@@ -191,7 +214,7 @@ fitted.tobs_fit <- function(object, ...) {
   p <- plogis(eta_det)
 
   # Compute z posterior: P(z=1 | y)
-  if (model$model_type %in% c("single", "community")) {
+  if (identical(model$model_type, "single")) {
     y <- model$y
     n_obs <- nrow(y)
     max_visits <- ncol(y)
@@ -318,6 +341,11 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   if (identical(object$model$model_type, "nmix")) {
     return(.tobs_residuals_nmix(object, type))
   }
+  if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
+    stop(sprintf(paste0("residuals() is not defined for %s() community fits; ",
+         "use fitted() / ranef() / coef()."), object$model$model_type),
+         call. = FALSE)
+  }
   fit_vals <- fitted(object)
   model <- object$model
 
@@ -325,7 +353,7 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   # smoothed fitted()$z matrix). z_obs is the realized "ever-detected" indicator
   # the smoothed state posterior is compared against (NA where the unit had no
   # visits, so the state is unobserved).
-  z_obs <- if (model$model_type %in% c("single", "community")) {
+  z_obs <- if (identical(model$model_type, "single")) {
     apply(model$y, 1, function(row) as.integer(any(row[row >= 0] == 1)))
   } else if (identical(model$model_type, "dynamic")) {
     y <- model$y
@@ -352,9 +380,9 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
     }
   )
 
-  # Detection residuals (visit-level, for single/community)
+  # Detection residuals (visit-level, single-season)
   det_resid <- NULL
-  if (model$model_type %in% c("single", "community")) {
+  if (identical(model$model_type, "single")) {
     y <- model$y
     p_hat <- fit_vals$p
     n_obs <- nrow(y)
@@ -397,8 +425,17 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (identical(model$model_type, "ms_nmix")) {
     return(.tobs_simulate_ms_nmix(object, nsim))
   }
+  if (identical(model$model_type, "ms_occu")) {
+    return(.tobs_simulate_ms_occu(object, nsim))
+  }
   if (identical(model$model_type, "ms_occu_cover")) {
     return(.tobs_simulate_ms_occu_cover(object, nsim))
+  }
+  if (identical(model$model_type, "ms_dyn_occu")) {
+    return(.tobs_simulate_ms_dyn_occu(object, nsim))
+  }
+  if (identical(model$model_type, "ms_int_occu")) {
+    return(.tobs_simulate_ms_int_occu(object, nsim))
   }
   draws <- object$draws
   n_samples <- nrow(draws)
@@ -529,6 +566,12 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     stop("predict() is not yet implemented for occu_multiscale_cover(). The ",
          "fit carries the per-arm coefficients (coef() / summary()) and the ",
          "cell field (fit$spatial_field / fit$field_table).", call. = FALSE)
+  }
+  if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
+    stop(sprintf(paste0("predict() is not yet implemented for %s(). Use ",
+         "fitted() for per-species occupancy / detection probabilities, ",
+         "coef() / summary() for the community means, and ranef() for the ",
+         "per-species deviations."), object$model$model_type), call. = FALSE)
   }
   type <- match.arg(type)
 
@@ -681,40 +724,10 @@ tobs_marginal_effect <- function(object, covariate,
 #' @return A data.frame with site-level richness estimates.
 #' @export
 tobs_richness <- function(object) {
-  model <- object$model
-  if (model$model_type != "community") {
-    stop("tobs_richness() requires a community model")
+  if (!identical(object$model$model_type, "ms_occu")) {
+    stop("tobs_richness() requires an ms_occu() community fit.", call. = FALSE)
   }
-
-  draws <- object$draws
-  pi_list <- model$process_info
-  X_occ <- model$X_processes[[1]]
-  p_occ <- pi_list[[1]]$p
-  n_draws <- nrow(draws)
-  n_sites <- model$n_sites
-  n_species <- model$n_species
-  N <- model$N
-
-  # For each draw, compute psi per site-species, sum across species per site
-  richness_draws <- matrix(0, n_draws, n_sites)
-  for (s in seq_len(n_draws)) {
-    beta_occ <- draws[s, seq_len(p_occ)]
-    psi <- plogis(as.vector(X_occ %*% beta_occ))
-    # psi is length N = n_sites * n_species
-    # obs = (site-1)*n_species + species
-    for (i in seq_len(n_sites)) {
-      idx <- (i - 1) * n_species + seq_len(n_species)
-      richness_draws[s, i] <- sum(psi[idx])
-    }
-  }
-
-  data.frame(
-    site = seq_len(n_sites),
-    mean = colMeans(richness_draws),
-    sd = apply(richness_draws, 2, sd),
-    q2.5 = apply(richness_draws, 2, quantile, 0.025),
-    q97.5 = apply(richness_draws, 2, quantile, 0.975)
-  )
+  .tobs_richness_ms_occu(object)
 }
 
 # tidy, glance, ranef inherited from tulpa::tulpa_fit

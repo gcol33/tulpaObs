@@ -13,9 +13,11 @@
 #' Inferred model type from arguments:
 #' - **Single-season**: no `col_formula`, no `species`
 #' - **Dynamic**: `col_formula` and/or `ext_formula` provided
-#' - **Community**: `species` provided
 #' - **Integrated**: `integrated = TRUE`, `y` a list of matrices
 #' - **JSDM**: `jsdm = TRUE`
+#'
+#' Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover) have
+#' their own in-tree binders + Laplace-EM fitter and do not pass through here.
 #'
 #' @keywords internal
 .tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
@@ -25,15 +27,9 @@
                               det_visit_formula = NULL, det_visit_data = NULL) {
 
   is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
-  is_community <- !is.null(species) && !isTRUE(jsdm)
   is_integrated <- isTRUE(integrated)
   is_jsdm      <- isTRUE(jsdm)
   is_abundance <- isTRUE(abundance)
-
-  if (is_dynamic && is_community) {
-    stop("Dynamic community models are not yet supported. ",
-         "Use col_formula/ext_formula OR species, not both.")
-  }
 
   if (is_abundance) {
     if (is.null(det_formula)) stop("det_formula required for N-mixture models")
@@ -44,7 +40,6 @@
   if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
   if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,
                                                 col_formula, ext_formula))
-  if (is_community)  return(.tobs_build_community(occ_formula, det_formula, data, y, species))
 
   if (is.null(det_formula)) stop("det_formula required for non-JSDM models")
   .tobs_build_single(occ_formula, det_formula, data, y,
@@ -183,79 +178,6 @@
       list(name = "p",       p = ncol(X_det), coef_names = colnames(X_det)),
       list(name = "gamma",   p = ncol(X_col), coef_names = colnames(X_col)),
       list(name = "epsilon", p = ncol(X_ext), coef_names = colnames(X_ext))
-    )
-  ), class = "tobs_model")
-}
-
-.tobs_build_community <- function(occ_formula, det_formula, data, y, species) {
-  if (is.list(y) && !is.array(y)) {
-    n_species <- length(y)
-    n_sites <- nrow(y[[1]])
-    max_visits <- ncol(y[[1]])
-    species_names <- if (is.character(species)) species
-                     else if (!is.null(names(y))) names(y)
-                     else paste0("sp", seq_len(n_species))
-    y_array <- array(NA_integer_, dim = c(n_sites, max_visits, n_species))
-    for (s in seq_len(n_species)) {
-      y_array[, , s] <- as.integer(y[[s]])
-    }
-    y <- y_array
-  } else {
-    species_names <- if (is.character(species)) species
-                     else paste0("sp", seq_len(dim(y)[3]))
-  }
-
-  if (length(dim(y)) != 3) {
-    stop("y must be a 3D array [n_sites x max_visits x n_species] or a list of matrices")
-  }
-
-  n_sites <- dim(y)[1]
-  max_visits <- dim(y)[2]
-  n_species <- dim(y)[3]
-
-  if (nrow(data) != n_sites) {
-    stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)))
-  }
-
-  if (length(species_names) != n_species) {
-    stop(sprintf("species has %d names but y has %d species",
-                 length(species_names), n_species))
-  }
-
-  bind  <- .tobs_bind_formulas(list(psi = occ_formula, p = det_formula), data)
-  X_occ <- model.matrix(bind$fe$psi, data)
-  X_det <- model.matrix(bind$fe$p, data)
-
-  N <- n_sites * n_species
-  X_occ_expanded <- X_occ[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
-  X_det_expanded <- X_det[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
-
-  y_expanded <- matrix(NA_integer_, nrow = N, ncol = max_visits)
-  for (i in seq_len(n_sites)) {
-    for (s in seq_len(n_species)) {
-      obs <- (i - 1) * n_species + s
-      y_expanded[obs, ] <- as.integer(y[i, , s])
-    }
-  }
-  y_expanded[is.na(y_expanded)] <- -1L
-
-  species_group <- rep(seq_len(n_species), times = n_sites)
-
-  structure(list(
-    model_type = "community",
-    y = y_expanded,
-    X_processes = list(X_occ_expanded, X_det_expanded),
-    formulas = list(occ = bind$fe$psi, det = bind$fe$p),
-    structured_terms = bind$terms,
-    n_sites = n_sites,
-    n_species = n_species,
-    max_visits = max_visits,
-    N = N,
-    species_group = as.integer(species_group),
-    species_names = species_names,
-    process_info = list(
-      list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ)),
-      list(name = "p",   p = ncol(X_det), coef_names = colnames(X_det))
     )
   ), class = "tobs_model")
 }
@@ -419,7 +341,6 @@ print.tobs_model <- function(x, ...) {
   type_label <- switch(x$model_type,
     single = "Single-season occupancy model",
     dynamic = "Multi-season dynamic occupancy model",
-    community = "Community occupancy model",
     integrated = sprintf("Integrated occupancy model (%d sources)", x$n_sources),
     jsdm = sprintf("Joint species distribution model (%d species)", x$n_species)
   )
@@ -430,9 +351,6 @@ print.tobs_model <- function(x, ...) {
   } else if (x$model_type == "dynamic") {
     cat(sprintf("  Sites: %d, Seasons: %d, Max visits: %d\n",
                 x$n_sites, x$n_seasons, x$max_visits))
-  } else if (x$model_type == "community") {
-    cat(sprintf("  Sites: %d, Species: %d, Max visits: %d\n",
-                x$n_sites, x$n_species, x$max_visits))
   } else if (x$model_type == "integrated") {
     cat(sprintf("  Sites: %d, Sources: %d\n", x$n_sites, x$n_sources))
   } else if (x$model_type == "jsdm") {
@@ -446,9 +364,6 @@ print.tobs_model <- function(x, ...) {
 
   if (x$model_type == "single" && !is.null(x$naive_occ)) {
     cat(sprintf("  Naive occupancy: %.1f%%\n", 100 * x$naive_occ))
-  }
-  if (x$model_type == "community") {
-    cat(sprintf("  Species RE: intercept on psi and p\n"))
   }
 
   invisible(x)

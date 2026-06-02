@@ -38,32 +38,6 @@ test_that("integrated occupancy fits nested_laplace with a spatial field", {
 })
 
 
-test_that("community occupancy fits nested_laplace with a site-level spatial field", {
-  set.seed(2)
-  n_sites <- 24; n_species <- 3; adj <- chain_adj(n_sites)
-  y <- list()
-  for (s in seq_len(n_species)) {
-    z <- rbinom(n_sites, 1, plogis(rnorm(1, 0, 0.3)))
-    m <- matrix(0L, n_sites, 3)
-    for (i in seq_len(n_sites)) if (z[i]) m[i, ] <- rbinom(3, 1, 0.4)
-    y[[paste0("sp", s)]] <- m
-  }
-
-  fit <- tobs(~ 1 + icar(graph = adj), data = data.frame(x = rnorm(n_sites)),
-              family = ms_occu(), detection = ~ 1, y = y, species = TRUE,
-              method = "nested_laplace",
-              control = list(max.iter = 6L, verbose = FALSE))
-
-  expect_s3_class(fit, "tobs_fit")
-  expect_identical(fit$nested_laplace$multi_prior[[1]]$type, "icar")
-  # One icar unit per site, shared across species (site-level field).
-  expect_equal(length(fit$spatial_field), n_sites)
-  # The state block maps each (site, species) row to its site.
-  expect_identical(fit$nested_laplace$multi_prior[[1]]$spatial_idx,
-                   rep(seq_len(n_sites), each = n_species))
-})
-
-
 test_that("dynamic occupancy fits nested_laplace with a spatial field on psi1", {
   set.seed(3)
   n_sites <- 36; n_seasons <- 3; J <- 3; adj <- chain_adj(n_sites)

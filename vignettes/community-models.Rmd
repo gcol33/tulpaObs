@@ -645,22 +645,26 @@ community SD is where the model tells you which case you are in, and reading it 
 the habit that separates a community fit you can defend from one that merely
 produced numbers.
 
-## Laplace and NUTS
+## The community engine
 
-The examples here use `method = "laplace"`, the fast default. It finds the
-posterior mode and the curvature there and returns in a fraction of a second,
-which is what you want for the first look and for comparing models. For community
-occupancy, `method = "nuts"` runs the gradient sampler and returns the full
-posterior, including a proper posterior for the community covariance $\Sigma$
-rather than its modal estimate. When the assemblage is small or the community SD
-is itself a quantity you want to report with an interval, the sampler is the
-honest choice; for richness and community means on a well-populated assemblage,
-the Laplace fit and the sampler agree to within their uncertainty.
+The community families fit under `method = "laplace"`. Each is driven by one
+community Laplace-EM: per species the latent state integrates out in closed form,
+the per-species coefficient deviations are integrated by a joint-Newton mode-find
+with the random-effect blocks folded out by a Schur complement, and a closed-form
+M-step updates the per-arm community covariance. The occupancy and detection
+deviations are independent, each with its own covariance $\Sigma$, so a species'
+occupancy departure and its detection departure are estimated separately rather
+than tied together. Community-mean standard errors come from the marginal
+observed information at the mode (the Schur complement of the random-effect
+block). The fit finds the posterior mode and the curvature there and returns in a
+fraction of a second.
 
-The community N-mixture `ms_abun()` is Laplace-only at present; its
-community-mean covariances come from the marginal observed information at the
-mode. Both the Poisson and the negative-binomial arm run under that one engine,
-the NB through the AGHQ path that integrates the per-species log-dispersion.
+The community N-mixture `ms_abun()` runs the same way; both its Poisson and
+negative-binomial arms use that one engine, the NB through the AGHQ path that
+integrates the per-species log-dispersion. A gradient sampler for the community
+families is not offered: a correct community posterior needs independent
+per-arm random-effect blocks in the sampler, which the shared HMC path does not
+yet carry.
 
 ## Where to go next
 

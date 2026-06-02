@@ -87,7 +87,7 @@
   }
 
   if (method == "nested_laplace") {
-    # Nested-Laplace path: single-season, integrated, community, or dynamic
+    # Nested-Laplace path: single-season, integrated, or dynamic
     # occupancy. The driver builds a multi-block latent prior from spatial +
     # temporal + re and attaches it to the state ("occ") M-step block, which
     # tulpa::tulpa_em_laplace() routes through tulpa::tulpa_nested_laplace().
@@ -157,15 +157,6 @@
     spec$n_seasons <- model$n_seasons
     spec$max_visits <- model$max_visits
 
-  } else if (model_type == "community") {
-    spec$y <- model$y
-    spec$re_group <- model$species_group
-    spec$n_re_groups <- model$n_species
-    spec$sigma_re_scale <- sigma.re.scale
-    spec$re_shared_occ <- TRUE
-    spec$re_shared_det <- TRUE
-    spec$n_sites_raw <- model$n_sites
-
   } else if (model_type == "integrated") {
     spec$y_sources <- model$y_sources
     spec$site_maps <- model$site_maps
@@ -185,15 +176,6 @@
   if (!is.null(spatial)) {
     spatial_params <- build_spatial_params(spatial, model$n_sites)
     spec$spatial_params <- spatial_params
-
-    # For community models, build spatial_group mapping site-species -> site
-    if (model_type == "community") {
-      n_species <- model$n_species
-      n_sites <- model$n_sites
-      # spatial_group[obs] = site index (1-based)
-      # obs = (site-1)*n_species + species, so site = floor((obs-1)/n_species) + 1
-      spec$spatial_group <- as.integer(rep(seq_len(n_sites), each = n_species))
-    }
   }
 
   # ---- Temporal ----

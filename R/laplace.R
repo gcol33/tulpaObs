@@ -98,7 +98,6 @@
   callbacks <- switch(model$model_type,
     single     = build_single_callbacks(model, spatial),
     dynamic    = build_dynamic_callbacks(model, spatial),
-    community  = build_community_callbacks(model, spatial),
     integrated = build_integrated_callbacks(model, spatial),
     jsdm       = build_jsdm_callbacks(model, spatial),
     stop(sprintf("Laplace not supported for model_type '%s'", model$model_type))
@@ -205,7 +204,6 @@
     single     = build_single_callbacks(model, spatial = NULL,
                                         latent_prior = latent_prior),
     dynamic    = build_dynamic_callbacks(model, spatial = NULL),
-    community  = build_community_callbacks(model, spatial = NULL),
     integrated = build_integrated_callbacks(model, spatial = NULL),
     jsdm       = build_jsdm_callbacks(model, spatial = NULL),
     stop(sprintf("nested Laplace not supported for model_type '%s'",
@@ -769,110 +767,6 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
   list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
        hard_encode = hard_encode, init = init,
        p_per_submodel = c(occ = p_occ, det = p_det, col = p_col, ext = p_ext))
-}
-
-# ============================================================================
-# Community occupancy callbacks
-# ============================================================================
-build_community_callbacks <- function(model, spatial = NULL) {
-  y <- model$y  # N x max_visits (expanded: site-species rows)
-  X_occ <- model$X_processes[[1]]
-  X_det <- model$X_processes[[2]]
-  N <- model$N  # n_sites * n_species
-  n_sites <- model$n_sites
-  n_species <- model$n_species
-  max_visits <- model$max_visits
-  p_occ <- ncol(X_occ); p_det <- ncol(X_det)
-
-  # A site-level psi field is shared across the species at a site. The state
-  # block carries N = n_sites * n_species rows in site-major order, so the
-  # site-indexed mesh projection A is broadcast onto those rows via
-  # `site_of_row` (the same site->state-row map the nested-Laplace community
-  # path uses). The detection arm is not wired for the community model.
-  spatial_occ <- .spatial_for_arm(spatial, 1L)
-  if (!is.null(spatial_occ)) {
-    site_of_row <- .tobs_state_block_dims(model)$site_of_row
-    spatial_occ <- .tobs_spde_broadcast_spec(spatial_occ, site_of_row)
-  }
-
-  n_valid <- integer(N); n_det <- integer(N); any_det <- logical(N)
-  for (i in seq_len(N)) {
-    valid <- y[i, ] >= 0
-    n_valid[i] <- sum(valid)
-    n_det[i] <- sum(y[i, valid] == 1)
-    any_det[i] <- n_det[i] > 0
-  }
-  keep <- n_valid > 0
-
-  e_step <- function(fits, ...) {
-    beta_occ <- extract_beta(fits$occ, p_occ)
-    beta_det <- extract_beta(fits$det, p_det)
-    eta_occ <- as.vector(X_occ %*% beta_occ)
-    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
-    if (length(sp_off) == N) eta_occ <- eta_occ + sp_off
-    psi <- plogis(eta_occ)
-    p <- plogis(as.vector(X_det %*% beta_det))
-    list(weights = occ_weights(psi, p, N, n_valid, n_det, any_det))
-  }
-
-  m_step_encode <- function(weights, ...) {
-    if (is.null(spatial_occ)) {
-      M <- 1000L
-      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, N), X = X_occ,
-                        family = "binomial")
-    } else {
-      M <- 4L
-      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, N), X = X_occ,
-                        family = "binomial")
-      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
-    }
-    # Weight detection rows by E-step occupancy posterior. Same fix as
-    # build_single_callbacks(): species-site rows with low w_i drop out
-    # of the detection fit.
-    w_det <- weights
-    w_det[any_det] <- 1
-    keep_det <- keep & (w_det > 1e-6)
-    list(
-      occ = occ_block,
-      det = list(y = n_det[keep_det], n_trials = n_valid[keep_det],
-                 X = X_det[keep_det, , drop = FALSE],
-                 weights = w_det[keep_det], family = "binomial")
-    )
-  }
-
-  z_draw <- function(weights, ...) {
-    z <- as.integer(any_det)
-    z[!any_det] <- rbinom(sum(!any_det), 1, clamp_w(weights[!any_det]))
-    z
-  }
-
-  hard_encode <- function(z, ...) {
-    occ_obs <- which(z == 1L)
-    det_keep <- occ_obs[n_valid[occ_obs] > 0]
-    occ_block <- list(y = z, n_trials = rep(1L, N), X = X_occ,
-                      family = "binomial")
-    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
-    list(
-      occ = occ_block,
-      det = if (length(det_keep) > 0)
-        list(y = n_det[det_keep], n_trials = n_valid[det_keep],
-             X = X_det[det_keep,,drop=FALSE], family = "binomial")
-      else NULL
-    )
-  }
-
-  init <- list(
-    occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)),
-    det = list(beta = rep(0, p_det), se = rep(1, p_det))
-  )
-
-  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
-       hard_encode = hard_encode, init = init,
-       p_per_submodel = c(occ = p_occ, det = p_det))
 }
 
 # ============================================================================

@@ -38,9 +38,9 @@
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object", call. = FALSE)
   }
-  supported <- c("single", "integrated", "community", "dynamic")
+  supported <- c("single", "integrated", "dynamic")
   if (!model$model_type %in% supported) {
-    stop("Nested Laplace is wired for single-season, integrated, community, ",
+    stop("Nested Laplace is wired for single-season, integrated, ",
          "and dynamic occupancy; got model_type = '", model$model_type, "'.",
          call. = FALSE)
   }

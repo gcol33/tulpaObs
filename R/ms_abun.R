@@ -40,7 +40,7 @@
 
 # Bind a community N-mixture model. `y` is a 3D array
 # [n_sites x max_visits x n_species] or a (named) list of n_sites x max_visits
-# count matrices, one per species (mirrors .tobs_build_community). The abundance
+# count matrices, one per species. The abundance
 # design X_lambda and the site-level detection design X_det_site are shared
 # across species (community covariates); the counts differ per species.
 .tobs_build_ms_abun <- function(abund_formula, det_formula, data, y, species,

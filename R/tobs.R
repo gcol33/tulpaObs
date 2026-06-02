@@ -265,6 +265,8 @@ tobs <- function(formula,
     occu_cover = .dispatch_occu_cover,
     occu_multiscale_cover = .dispatch_occu_multiscale_cover,
     ms_occu_cover = .dispatch_ms_occu_cover,
+    ms_dyn_occu = .dispatch_ms_dyn_occu,
+    ms_int_occu = .dispatch_ms_int_occu,
     stop(sprintf(
       "Internal error: family %q has status 'working' but no dispatcher.",
       family$name
@@ -395,22 +397,19 @@ tobs <- function(formula,
                               approx = "gaussian_laplace",
                               correction = "none", ...) {
   dots <- list(...)
-  if (is.null(dots$species)) {
-    stop("ms_occu() requires a `species` argument.", call. = FALSE)
+  if (is.null(detection)) {
+    stop("ms_occu() requires a `detection` formula.", call. = FALSE)
   }
-  model <- .tobs_build_model(
-    occ_formula = formula,
-    det_formula = detection,
-    data        = data,
-    y           = y,
-    species     = dots$species
-  )
-  do.call(.tobs_fit_model, c(
-    list(model = model,
-         method = .map_engine(engine, family = "ms_occu"), priors = priors,
-         approx = approx, correction = correction),
-    control
-  ))
+  if (is.null(y)) {
+    stop("ms_occu() requires `y` (a 3D array [n_sites x max_visits x ",
+         "n_species] or a named list of detection-history matrices).",
+         call. = FALSE)
+  }
+  model <- .tobs_build_ms_occu(
+    occ_formula = formula, det_formula = detection,
+    data = data, y = y, species = dots$species)
+  fit_args <- c(list(model = model, priors = priors), control)
+  do.call(.tobs_fit_ms_occu, fit_args)
 }
 
 .dispatch_int_occu <- function(formula, data, family, detection, y, visits,
@@ -638,6 +637,48 @@ tobs <- function(formula,
 }
 
 
+.dispatch_ms_dyn_occu <- function(formula, data, family, detection, y, visits,
+                                  engine, priors, control,
+                                  approx = "gaussian_laplace",
+                                  correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("ms_dyn_occu() requires a `detection` formula.", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("ms_dyn_occu() requires `y` (a 4D array [n_sites x max_visits x ",
+         "n_seasons x n_species] or a named list of 3D arrays).", call. = FALSE)
+  }
+  model <- .tobs_build_ms_dyn_occu(
+    occ_formula = formula, det_formula = detection,
+    col_formula = dots$col_formula, ext_formula = dots$ext_formula,
+    data = data, y = y, species = dots$species)
+  fit_args <- c(list(model = model, priors = priors), control)
+  do.call(.tobs_fit_ms_dyn_occu, fit_args)
+}
+
+
+.dispatch_ms_int_occu <- function(formula, data, family, detection, y, visits,
+                                  engine, priors, control,
+                                  approx = "gaussian_laplace",
+                                  correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("ms_int_occu() requires a `detection` formula (or a list of formulas, ",
+         "one per source).", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("ms_int_occu() requires `y` (a list of per-source 3D arrays ",
+         "[n_sites x J_d x n_species]).", call. = FALSE)
+  }
+  model <- .tobs_build_ms_int_occu(
+    occ_formula = formula, det_formula = detection,
+    data = data, y = y, species = dots$species)
+  fit_args <- c(list(model = model, priors = priors), control)
+  do.call(.tobs_fit_ms_int_occu, fit_args)
+}
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -692,7 +733,7 @@ tobs <- function(formula,
 #   * nested_laplace -- the nested-Laplace engine assembles a multi-block latent
 #     prior (spatial / temporal / iid) and routes the state ("occ") M-step block
 #     through `tulpa::tulpa_nested_laplace()`. Wired for single-season,
-#     integrated, community, and dynamic occupancy (`.tobs_em_nested_laplace()`,
+#     integrated, and dynamic occupancy (`.tobs_em_nested_laplace()`,
 #     which shares the per-model-type callbacks with the Laplace path) and for
 #     the cover hurdle's joint path (`tulpa_nested_laplace_joint()`). It also
 #     supports INLA-style NA-response prediction (held-out sites), so the latent
@@ -713,8 +754,13 @@ tobs <- function(formula,
                "nested_laplace", "nested_laplace_sla", "nuts"),
   dyn_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
-  ms_occu  = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
-               "nested_laplace", "nuts"),
+  # ms_occu: community single-season occupancy via the shared community
+  # Laplace-EM (R/community_em.R) -- per-species occupancy / detection
+  # coefficient RE with independent per-arm Gaussian community covariances. The
+  # latent state marginalizes in closed form. Non-spatial Laplace only; correct
+  # community NUTS needs independent per-arm RE blocks in the sampler
+  # (gcol33/tulpaObs#30).
+  ms_occu  = c("laplace"),
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),
@@ -748,7 +794,15 @@ tobs <- function(formula,
   # Non-spatial only -- the community analogue of the joint-coupled spatial
   # engine (per-species RE layered on the shared coupled field) needs upstream
   # tulpa support, so nested_laplace is not offered.
-  ms_occu_cover = c("laplace")
+  ms_occu_cover = c("laplace"),
+  # ms_dyn_occu / ms_int_occu: community dynamic / integrated occupancy. Per-
+  # species coefficient RE with per-arm Gaussian community covariances, fit by
+  # the shared community Laplace-EM (R/community_em.R). The latent occupancy
+  # path (HMM forward for dynamic, two-state mixture for integrated) marginalizes
+  # in closed form. Non-spatial Laplace only; correct community NUTS needs
+  # independent per-arm RE blocks in the sampler (gcol33/tulpaObs#30).
+  ms_dyn_occu = c("laplace"),
+  ms_int_occu = c("laplace")
 )
 
 # Validate a resolved public method name against the family's supported set.
@@ -874,12 +928,12 @@ tobs <- function(formula,
   # Engine name translation between the tobs vocabulary and what the underlying
   # fitter currently understands. The nested-Laplace engine (`.tobs_fit_model()`
   # -> `.tobs_em_nested_laplace()`) is wired for single-season, integrated,
-  # community, and dynamic occupancy; the per-family method registry
+  # and dynamic occupancy; the per-family method registry
   # (`.tobs_family_methods`) rejects `nested_laplace` for every other family
   # before dispatch, so reaching here with an unsupported family is an internal
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
-    if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu", "abun",
+    if (family %in% c("occu", "int_occu", "dyn_occu", "abun",
                        "occu_cover", "occu_multiscale_cover")) {
       return("nested_laplace")
     }
@@ -1041,10 +1095,16 @@ print.tobs_fit <- function(x, ...) {
     } else if (model$model_type == "dynamic") {
       cat(sprintf("  Sites: %d, Seasons: %d, Max visits: %d\n",
                   model$n_sites, model$n_seasons, model$max_visits))
-    } else if (model$model_type == "community" ||
+    } else if (model$model_type == "ms_occu" ||
                model$model_type == "ms_nmix" ||
                model$model_type == "ms_occu_cover") {
       cat(sprintf("  Sites: %d, Species: %d\n", model$n_sites, model$n_species))
+    } else if (model$model_type == "ms_dyn_occu") {
+      cat(sprintf("  Sites: %d, Seasons: %d, Species: %d\n",
+                  model$n_sites, model$n_seasons, model$n_species))
+    } else if (model$model_type == "ms_int_occu") {
+      cat(sprintf("  Sites: %d, Sources: %d, Species: %d\n",
+                  model$n_sites, model$n_sources, model$n_species))
     } else if (model$model_type == "occu_multiscale_cover") {
       cat(sprintf("  Cells: %d, Plots: %d, Max visits: %d\n",
                   model$n_cells, model$n_plots, model$max_visits))

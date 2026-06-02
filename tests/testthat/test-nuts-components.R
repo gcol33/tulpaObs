@@ -100,21 +100,3 @@ test_that("NUTS runs with an svc() term attached", {
   expect_s3_class(fit$svc, "tobs_svc")
 })
 
-test_that("NUTS runs with a latent() term on ms_occu", {
-  skip_on_cran()
-  skip_if_fast()
-
-  set.seed(1)
-  N <- 40; J <- 3; n_sp <- 4
-  ms <- simulate_ms_occu(N = N, J = J, n_species = n_sp, seed = 1)
-  sp_names <- paste0("sp", seq_len(n_sp))
-
-  fit <- tobs(
-    ~ x + latent(2), data = ms$data, family = ms_occu(),
-    detection = ~ 1, y = ms$y, species = sp_names,
-    method = "nuts", control = ctl_nuts()
-  )
-  expect_nuts_fit(fit, n_expected_cols = 2, label = "latent")
-  expect_s3_class(fit$latent, "tobs_latent")
-  expect_equal(fit$latent$n_factors, 2L)
-})

@@ -24,9 +24,12 @@ Inferred model type from arguments:
 \itemize{
 \item \strong{Single-season}: no \code{col_formula}, no \code{species}
 \item \strong{Dynamic}: \code{col_formula} and/or \code{ext_formula} provided
-\item \strong{Community}: \code{species} provided
 \item \strong{Integrated}: \code{integrated = TRUE}, \code{y} a list of matrices
 \item \strong{JSDM}: \code{jsdm = TRUE}
 }
+}
+\details{
+Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover) have
+their own in-tree binders + Laplace-EM fitter and do not pass through here.
 }
 \keyword{internal}

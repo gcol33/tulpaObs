@@ -1,5 +1,36 @@
 # tulpaObs NEWS
 
+## 0.0.9 (unreleased)
+
+* feat(ms_dyn_occu, ms_int_occu): community (multispecies) dynamic and integrated
+  occupancy families. `ms_dyn_occu()` is the community version of `dyn_occu()`
+  (per-species first-season occupancy + detection coefficient random effects,
+  shared community-wide colonisation / extinction); `ms_int_occu()` is the
+  community version of `int_occu()` (multiple detection sources share one latent
+  occupancy state per species, per-species occupancy + per-source detection RE).
+  Both fit by a shared community Laplace-EM (`R/community_em.R`): the latent state
+  marginalizes in closed form (HMM forward for dynamic, two-state mixture for
+  integrated), the per-species coefficient deviations are integrated by a
+  joint-Newton mode-find with the RE blocks Schur-folded, and a closed-form
+  M-step updates the per-arm community covariance. Parameter-recovery + 95% CI
+  coverage tests (`test-ms-dyn-occu.R`, `test-ms-int-occu.R`).
+
+* fix(ms_occu): community single-season occupancy is now a correct community
+  model (gcol33/tulpaObs#30). The previous `ms_occu()` did not fit per-species
+  random effects in either engine: the Laplace route collapsed to a pooled GLM
+  over the stacked species rows (no species RE), and the NUTS route forced one
+  shared species intercept onto both the occupancy and detection arms. `ms_occu()`
+  now uses the shared community Laplace-EM with independent per-arm Gaussian
+  community covariances (the spOccupancy `msPGOcc` model), recovering the
+  per-species occupancy and detection coefficients its own `simulate_ms_occu()`
+  generates. `ranef()`, per-species `fitted()`, and `tobs_richness()` read the
+  per-species structure; recovery + coverage tests in `test-ms-occu.R`. The
+  legacy generic-engine community path (`build_community_callbacks`,
+  `.tobs_build_community`, the `community` model_type in `src/occu_fit.cpp`, and
+  the community entries in the Laplace / nested-Laplace switches) is removed.
+  `ms_occu()` is Laplace-only; a correct community NUTS / areal-spatial path
+  needs independent per-arm RE blocks in the sampler and is deferred.
+
 ## 0.0.8 (2026-06-02)
 
 * feat(occu_multiscale_cover): three-level occupancy + cover hurdle family

@@ -11,9 +11,9 @@ Bayesian occupancy / abundance / distance / removal / cover. Built on
 (Rcpp/RcppEigen). Needs sibling `../tulpa` checkout (`LinkingTo: tulpa`).
 
 **Public API:** `tobs()` + family ctors: `occu()`, `dyn_occu()`, `ms_occu()`,
-`int_occu()`, `jsdm()`, `abun()`, `ms_abun()`, `dyn_abun()`, `distance()`,
-`removal()`, `fp_occu()`, `cover()`, `occu_cover()`, `ms_occu_cover()`,
-`occu_multiscale_cover()`. S3
+`ms_dyn_occu()`, `ms_int_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`,
+`dyn_abun()`, `distance()`, `removal()`, `fp_occu()`, `cover()`, `occu_cover()`,
+`ms_occu_cover()`, `occu_multiscale_cover()`. S3
 classes all `tobs_*` (`tobs_fit/model/family/spatial/temporal/re/svc/latent/priors_spec`).
 
 **Structured terms live in formula** (lme4/mgcv/INLA style), NOT `tobs()` args.
@@ -124,17 +124,19 @@ mapping not wired). Old tulpa w/o `fitted_eta_var` -> `psi` only, NA intervals.
 **Simplified-Laplace skew correction** (`simplified_laplace.R`, `sla_*` files):
 orthogonal post-fit marginal refine, `approx="simplified_laplace"` (`*_sla`
 methods). Computed for single/dynamic/integrated occ + cover hurdle; no-ops to
-Gaussian (records `sla_status`) for community/jsdm.
+Gaussian (records `sla_status`) for jsdm.
 
 **Backend coverage enforced centrally**: `.tobs_family_methods` in `R/tobs.R` =
 single source of truth for which `method` each family supports; `tobs()` errors
-with pointer, no silent downgrade. `nested_laplace` = occu/int_occu/ms_occu/
-dyn_occu + cover; `*_sla` on nested = occu + cover only; cover hurdle has no
+with pointer, no silent downgrade. `nested_laplace` = occu/int_occu/dyn_occu +
+cover; `*_sla` on nested = occu + cover only; cover hurdle has no
 NUTS / `laplace_gibbs` / `laplace_mi`. `abun` = laplace (non-spatial) +
 nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field
 on abundance arm). `occu_multiscale_cover` = nested_laplace ONLY (spatial joint).
-Planned (error via `.stop_planned_family()`): `dyn_abun`, `distance`,
-`removal`, `fp_occu`.
+Community occupancy families `ms_occu`/`ms_dyn_occu`/`ms_int_occu` = laplace ONLY
+(shared community Laplace-EM, `R/community_em.R`; per-species coef RE, per-arm
+community covariance). Planned (error via `.stop_planned_family()`): `dyn_abun`,
+`distance`, `removal`, `fp_occu`.
 
 ### N-mixture abundance (`abun()`)
 
@@ -285,7 +287,9 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 |---|---|---|---|
 | Single-season occupancy | Yes | Yes | parity w/ inlaocc |
 | Dynamic (HMM) | Yes | Yes | colonization/extinction |
-| Community / multi-spp | Yes | Yes | species-level RE |
+| Community single-season (`ms_occu`) | Yes | — | independent per-arm community RE via shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); spOccupancy `msPGOcc`. Legacy generic-engine community path removed (tulpaObs#30); NUTS/spatial deferred |
+| Community dynamic (`ms_dyn_occu`) | Yes | — | per-species psi1/p RE + shared gamma/eps; HMM-forward marginal; `R/ms_dyn_occu.R`; recovery `test-ms-dyn-occu.R` |
+| Community integrated (`ms_int_occu`) | Yes | — | per-species psi + per-source detection RE; multi-source two-state marginal (analytic grad); `R/ms_int_occu.R`; recovery `test-ms-int-occu.R` |
 | Integrated multi-source | Yes | Yes | shared psi |
 | JSDM | Yes | — | no detection |
 | Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*` |
@@ -299,8 +303,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms. ~2s/fit (N=100,J=4,10g,n.quad=5) |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
-| Spatial + community | — | Yes | |
-| Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/ms_occu/dyn_occu |
+| Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |
 | NA-response prediction | n-L | — | `predict(type="state")`: all-NA single-season sites field-interpolated, calibrated 95% `psi_lower`/`psi_upper` from exact-marginal bernoulli pass (coverage ~1.0) |
 | Formula RE (intercept) | Yes | Yes | `(1\|g)`; variance-component EM, occ OR det arm (tulpaObs#11) |
 | Formula RE (uncorr slope) | Yes | Yes | `(x\|\|g)`, `(0+x\|g)`, `(1+x\|\|g)`; either arm |
@@ -434,8 +437,9 @@ checks (`test-occu-multiscale-cover-coupling.R`). `simulate_occu_multiscale_cove
 
 Prior CLAUDE.md flagged `temporal`, multi-term `re`, `svc`, `latent` as NUTS
 crashers. Smoke-tested 2026-05-20 (`dev_notes/probe_blocked_nuts.R`, N=40, 50
-iter/25 warmup, single-season occ + `ms_occu` for latent) — all 4 return
-`tobs_fit` w/o crash. C++ population not segfaulting.
+iter/25 warmup, single-season occ) — return `tobs_fit` w/o crash. C++ population
+not segfaulting. (The community NUTS path the original probe used for `latent`
+was removed with the legacy community engine; tulpaObs#30.)
 
 NOT verified: gradient correctness, posterior calibration, production-iter
 convergence, stacking (spatial+temporal+multi-RE). No `tests/testthat/` exercise
@@ -458,8 +462,12 @@ psi-p identifiability ridge at small J. Gibbs/MI add Rubin-pooled correction.
 ```
 R/
   tobs.R                    — tobs() dispatcher + print.tobs_fit
-  obs_families.R            — family ctors (occu, dyn_occu, ms_occu, …, cover)
-  occu.R                    — .tobs_build_model() (single/dynamic/community/integrated/jsdm/nmix)
+  obs_families.R            — family ctors (occu, dyn_occu, int_occu, jsdm, …, cover)
+  occu.R                    — .tobs_build_model() (single/dynamic/integrated/jsdm/nmix)
+  community_em.R            — shared community Laplace-EM engine .tobs_community_em() (arrowhead Newton + per-arm covariance M-step + marginal info); drives ms_occu/ms_dyn_occu/ms_int_occu
+  ms_occu.R                 — community single-season occupancy (msPGOcc): build, fit (reuses ms_int single-source kernel), S3, .tobs_richness_ms_occu, ms_occu() ctor
+  ms_dyn_occu.R             — community dynamic occupancy: build, HMM-forward marginal, fit (psi1/p RE + gamma/eps global), S3, simulate, ms_dyn_occu() ctor
+  ms_int_occu.R             — community integrated occupancy: build, multi-source two-state marginal + analytic grad, fit, S3, simulate, ms_int_occu() ctor
   abun.R                    — nmix family: build_abun, fit_nmix, build_nmix_fit, S3, simulate_abun
   ms_abun.R                 — community nmix: build_ms_abun, ms_nmix_longform, fit_ms_nmix (-> nmix_laplace_re), build_ms_nmix_fit, S3, simulate_ms_abun
   nmix_laplace.R            — in-tree non-spatial nmix (Royle 2004) Laplace (Pois+NB)

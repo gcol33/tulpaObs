@@ -54,7 +54,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     tulpa::LikelihoodSpec spec;
     spec.n_extra_params = 0;
 
-    if (model_type == "single" || model_type == "community") {
+    if (model_type == "single") {
         n_processes = 2;
         IntegerMatrix y_r = Rcpp::as<IntegerMatrix>(spec_r["y"]);
         N = y_r.nrow();
@@ -72,7 +72,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
             }
         }
 
-        spec.name = (model_type == "single") ? "occupancy" : "community_occupancy";
+        spec.name = "occupancy";
         spec.ll_double = tulpaObs::occ_log_likelihood<double>;
         spec.ll_arena  = tulpaObs::occ_log_likelihood<tulpa::arena::Var>;
         spec.ll_fwd    = tulpaObs::occ_log_likelihood<fwd::Dual>;
@@ -199,21 +199,13 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
             Rcpp::List sp = Rcpp::as<Rcpp::List>(sp_sexp);
             std::string sp_type = Rcpp::as<std::string>(sp["type"]);
             if (sp_type != "none") {
-                int n_spatial_units = N;
-                if (model_type == "community" && spec_r.containsElementNamed("n_sites_raw")) {
-                    n_spatial_units = Rcpp::as<int>(spec_r["n_sites_raw"]);
-                }
-                tulpaObs::populate_spatial(data, sp, n_spatial_units);
-
-                if (model_type == "community" && spec_r.containsElementNamed("spatial_group")) {
-                    data.spatial_group = Rcpp::as<std::vector<int>>(spec_r["spatial_group"]);
-                }
+                tulpaObs::populate_spatial(data, sp, N);
             }
         }
     }
 
     // ---- Random effects (optional) ----
-    // Legacy single-term path (community species RE)
+    // Single-term species RE path (jsdm species random intercept on the one arm)
     if (spec_r.containsElementNamed("re_group")) {
         SEXP re_sexp = spec_r["re_group"];
         if (!Rf_isNull(re_sexp)) {

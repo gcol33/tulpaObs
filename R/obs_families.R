@@ -113,26 +113,6 @@ dyn_occu <- function() {
 }
 
 
-#' Multispecies (community) occupancy family
-#'
-#' Per-species occupancy with shared community-level hyperparameters on the
-#' species random effects.
-#'
-#' @return A `tobs_family` object.
-#' @export
-ms_occu <- function() {
-  obs_family(
-    name           = "ms_occu",
-    class_long     = "multispecies occupancy",
-    latent         = "bernoulli",
-    observation    = "binomial_detection",
-    replicates     = "required",
-    default_engine = "laplace",
-    status         = "working"
-  )
-}
-
-
 #' Integrated occupancy family
 #'
 #' Multiple data sources informing a shared latent occupancy state, each with

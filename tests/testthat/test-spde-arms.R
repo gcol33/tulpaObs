@@ -84,60 +84,6 @@ test_that("jsdm() state-arm spde() recovery holds across seeds", {
   expect_gt(mean(cors), 0.72)
 })
 
-# --- COMMUNITY: shared site-level field across species ----------------------
-# Calibration over 6 seeds (N = 500, 6 species, J = 8): x-slope 0.600-0.689
-# (truth 0.7), field_cor min 0.741, mean 0.798.
-.sim_spde_community <- function(seed, n_sites = 500, n_species = 6, J = 8) {
-  set.seed(seed)
-  coords <- cbind(runif(n_sites), runif(n_sites))
-  u_true <- .spde_sfield(coords)
-  x_cov  <- rnorm(n_sites)
-  beta0  <- c(-0.2, 0.2, 0.5, -0.3, 0.1, 0.0)[seq_len(n_species)]
-  ylist <- vector("list", n_species)
-  for (k in seq_len(n_species)) {
-    z <- rbinom(n_sites, 1, plogis(beta0[k] + 0.7 * x_cov + u_true))
-    ymat <- matrix(0L, n_sites, J)
-    for (i in seq_len(n_sites)) if (z[i] == 1L) ymat[i, ] <- rbinom(J, 1, 0.5)
-    ylist[[k]] <- ymat
-  }
-  names(ylist) <- paste0("sp", seq_len(n_species))
-  list(data = data.frame(occ_cov = x_cov, lon = coords[, 1], lat = coords[, 2]),
-       y = ylist, u_true = u_true)
-}
-
-test_that("tobs() + ms_occu() state-arm spde() Laplace recovers beta and the field", {
-  skip_on_cran()
-  skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
-
-  sim <- .sim_spde_community(seed = 1)
-  fit <- tobs(.spde_field_term(), data = sim$data, family = ms_occu(),
-              detection = ~ 1, y = sim$y, species = TRUE, method = "laplace",
-              control = list(verbose = FALSE))
-
-  expect_lt(abs(fit$means["psi_occ_cov"] - 0.7), 0.25)
-  expect_false(is.null(fit$spatial_field))
-  expect_equal(length(fit$spatial_field), fit$spatial$n_units)
-  expect_gt(.spde_field_cor(fit, sim$u_true), 0.7)
-})
-
-test_that("ms_occu() state-arm spde() recovery holds across seeds", {
-  skip_on_cran()
-  skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
-
-  seeds <- c(2L, 3L, 4L)
-  cors <- vapply(seeds, function(s) {
-    sim <- .sim_spde_community(seed = s)
-    fit <- tobs(.spde_field_term(), data = sim$data, family = ms_occu(),
-                detection = ~ 1, y = sim$y, species = TRUE, method = "laplace",
-                control = list(verbose = FALSE))
-    .spde_field_cor(fit, sim$u_true)
-  }, numeric(1))
-  for (c_k in cors) expect_gt(c_k, 0.7)
-  expect_gt(mean(cors), 0.72)
-})
-
 # --- INTEGRATED: shared psi field, two sources ------------------------------
 # Calibration over 6 seeds (N = 1200, 2 sources, field amp 1.0): psi-slope
 # 0.649-0.816 (truth 0.7), field_cor min 0.613, mean 0.667 -- the single-season
