@@ -1,510 +1,521 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code in this repo. Caveman speak: terse, telegraphic. File
+paths + function names exact. (Compacted from a much longer original; if a
+detail you need is missing, read the source file named.)
 
-## tulpaObs — Hierarchical Latent-State Observation Models via tulpa
+## tulpaObs — hierarchical latent-state observation models on tulpa
 
-Bayesian occupancy / abundance / distance / removal / cover models built on the
-[`tulpa`](https://github.com/gcol33/tulpa) inference engine. R package, C++17
-backend via Rcpp/RcppEigen, depends on a sibling checkout of `tulpa` at
-`../tulpa` (via `LinkingTo: tulpa`).
+Bayesian occupancy / abundance / distance / removal / cover. Built on
+[`tulpa`](https://github.com/gcol33/tulpa) engine. R pkg, C++17 backend
+(Rcpp/RcppEigen). Needs sibling `../tulpa` checkout (`LinkingTo: tulpa`).
 
-> **Public API:** `tobs()` + family constructors (`occu()`, `dyn_occu()`,
-> `ms_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`, `dyn_abun()`,
-> `distance()`, `removal()`, `fp_occu()`, `cover()`, `occu_cover()`). All S3 classes are
-> `tobs_*` (`tobs_fit`, `tobs_model`, `tobs_family`, `tobs_spatial`,
-> `tobs_temporal`, `tobs_re`, `tobs_svc`, `tobs_latent`, `tobs_priors_spec`).
->
-> **Structured terms live inside the formula** (lme4 / mgcv / INLA style),
-> not as `tobs()` arguments. The registry in `R/formula_terms.R` maps a term
-> name to a constructor: spatial `icar()`, `bym2()`, `car()`, `car_proper()`,
-> `gp()`, `multiscale_gp()`, `spde()`; `re()`; `temporal()`; `svc()`;
-> `latent()`; and `copy("id")` to share one realization across the state and
-> detection predictors. The term constructors (`.tobs_term_*`) and the AST
-> parser (`.tobs_parse_formula`, `.tobs_bind_formulas`) are internal — there
-> are no exported `tobs_icar()` / `tobs_re()` / `tobs_spde()` constructors and
-> no `spatial = ` / `temporal = ` / `re = ` arguments on `tobs()`. A term's
-> process membership (which linear predictor it enters) is determined by which
-> process formula it appears in; the fitter derives the `shared = c(occ, det)`
-> vector from that via `.tobs_structures_from_model()`.
->
-> `lme4` bar syntax is supported as sugar over `re()`: `.tobs_desugar_bars()`
-> (in `R/formula_parse.R`) rewrites bar terms into the equivalent `re()`
-> calls on the formula AST *before* `terms()` runs, so there is one parser and
-> one term type. Supported forms (gcol33/tulpaObs#10): `(1 | g)`, `(x | g)`,
-> `(1 + x + z | g)` (multi-slope, stacked via `cbind()`), `(x || g)`
-> (uncorrelated), `(0 + x | g)` (slope-only, no group intercept), and crossed
-> / nested grouping `(1 | g:h)`, `(1 | g/h)` (one `re()` per implied grouping
-> factor). Multi-slope and nested are pure R-side (`build_re_spec()` computes
-> `n_coefs` from the slope-matrix width); slope-only needs the per-term
-> `re_has_intercept` flag in tulpa's engine (ABI 22).
->
-> Random effects fit under both engines (gcol33/tulpaObs#11). NUTS fits every
-> form. The default `engine = "laplace"` fits iid intercept RE, uncorrelated
-> slopes (`(x || g)`, `(0 + x | g)`, `(1 + x || g)`), and *correlated* slopes
-> (`(1 + x | g)`) on EITHER the occupancy or the detection predictor of a
-> single-season model via a variance-component EM (`R/em_laplace_re.R`,
-> `.tobs_em_laplace_re()`): it splits the RE terms into an occupancy and a
-> detection arm by their `shared` membership (`.tobs_re_split_arms()`) and wraps
-> tulpa's fixed-covariance `tulpa_laplace()` in the occupancy missing-data EM
-> (each arm's RE mode is fed back into psi / p at the E-step) with an EM/REML
-> update of the per-term RE covariance `Sigma_k <- mean_g [b_g b_g' + Cov(b_g |
-> y)]`. The per-group posterior covariance `Cov(b_g | y)` comes from
-> `tulpa_laplace(return_re_cov = TRUE)$cov_blocks`: the occupancy arm scales it to
-> natural scale by `M` (the M-step's pseudo-binomial inflation), the detection
-> arm is a genuine weighted binomial (`M = 1`, prior at natural scale); a
-> correlated term keeps the full `Sigma`, an uncorrelated term is projected to its
-> diagonal each M-step. A single RE shared across BOTH predictors, RE + spatial,
-> RE + visit-level detection, and RE on non-single families error from
-> `.validate_re_laplace()` with a pointer to NUTS rather than being silently
-> dropped. The raw EM variance components (sigma,
-> correlation) carry the Laplace small-cluster bias for binary data (the glmer
-> nAGQ=1 regime, not Breslow-Clayton PQL -- attenuated at small per-group n);
-> the fixed-effect SEs are read at natural scale and do not. By default
-> (`re.aghq = TRUE`, `control = list(n.quad = )`) the variance components are
-> debiased after the EM by an adaptive Gauss-Hermite quadrature refinement on the
-> exact per-group marginal (the nAGQ > 1 fix; single grouping factor on one arm,
-> RE dim <= 3, falls back to the EM otherwise -- including when the RE is split
-> across both arms). The generic quadrature engine is `tulpa::tulpa_re_aghq()`
-> (quadrature grid, per-group mode, log-Cholesky covariance, LKJ penalty, joint
-> optimization, marginal Hessian); `R/re_aghq.R` (`.tobs_re_aghq()`) is a thin
-> wrapper supplying only the occupancy / detection site marginal as a
-> `make_site` callback. The per-group marginal
-> branches on the arm: an occupancy-arm RE moves `psi`, a detection-arm RE moves
-> `p` (binomial-in-`p` site derivatives, FD-verified). Measured (occupancy arm):
-> per-group-n = 8 sigma bias ~18% (EM) -> ~4% (AGHQ), matching NUTS; correlated
-> sigmas to ~1%. Detection arm: the EM attenuates sigma ~70% (only occupied sites
-> inform `p`) -> AGHQ to ~1% with 88-96% fixed-effect CI coverage. Detection-arm
-> RE parameters are named for the detection process (`sigma_p<t>_*`, `re_p<t>_*`). A default LKJ(`re.lkj = 1.5`) penalty on each correlated block's
-> correlation matrix regularizes a weakly-identified RE correlation off the +-1
-> boundary toward 0 (untouching the marginal SDs; `re.lkj = 1` disables) -- on
-> the recovery sim it removes every boundary hit while keeping rho near-unbiased;
-> NUTS is available for a full posterior treatment of the correlation. RE
-> parameter
-> naming + per-group BLUP reconstruction for both
-> engines live in `R/re_effects.R` (`ranef()` / `coef()` overrides in
-> `R/methods.R`); the correlated-block off-diagonal is reported as a
-> `cor_<g>_<ci>_<cj>` correlation.
->
-> Legacy data-binder / engine entry are internal: `.tobs_build_model()`,
-> `.tobs_fit_model()`, `.tobs_laplace()`.
-> See `PLAN_tulpaObs.md` for the family roster, `R/obs_families.R` and
-> `R/tobs.R` for the public dispatcher.
+**Public API:** `tobs()` + family ctors: `occu()`, `dyn_occu()`, `ms_occu()`,
+`int_occu()`, `jsdm()`, `abun()`, `ms_abun()`, `dyn_abun()`, `distance()`,
+`removal()`, `fp_occu()`, `cover()`, `occu_cover()`, `ms_occu_cover()`,
+`occu_multiscale_cover()`. S3
+classes all `tobs_*` (`tobs_fit/model/family/spatial/temporal/re/svc/latent/priors_spec`).
+
+**Structured terms live in formula** (lme4/mgcv/INLA style), NOT `tobs()` args.
+Registry `R/formula_terms.R` maps name -> ctor: spatial `icar() bym2() car()
+car_proper() gp() multiscale_gp() spde()`; `re()`; `temporal()`; `svc()`;
+`latent()`; `copy("id")` (share one realization across state + detection).
+Ctors `.tobs_term_*` + parser `.tobs_parse_formula`/`.tobs_bind_formulas`
+internal. No exported `tobs_icar()` etc, no `spatial=`/`temporal=`/`re=` args.
+Term's process = which process formula it sits in; fitter derives `shared =
+c(occ, det)` via `.tobs_structures_from_model()`.
+
+**lme4 bars = sugar over `re()`.** `.tobs_desugar_bars()` (`R/formula_parse.R`)
+rewrites bars to `re()` on AST before `terms()`. One parser, one term type.
+Forms (tulpaObs#10): `(1|g)`, `(x|g)`, `(1+x+z|g)` (multi-slope, `cbind()`
+stack), `(x||g)` (uncorr), `(0+x|g)` (slope-only), crossed/nested `(1|g:h)`
+`(1|g/h)`. Multi-slope + nested pure R-side (`build_re_spec()` width->`n_coefs`);
+slope-only needs tulpa `re_has_intercept` flag (ABI 22).
+
+**RE both engines** (tulpaObs#11). NUTS fits all forms. Default
+`engine="laplace"` fits iid intercept RE, uncorr slopes, AND corr slopes
+(`(1+x|g)`) on occ OR det arm of single-season via variance-component EM
+(`R/em_laplace_re.R`, `.tobs_em_laplace_re()`): splits RE into occ/det arm by
+`shared` (`.tobs_re_split_arms()`), wraps tulpa `tulpa_laplace()` in occupancy
+missing-data EM (arm RE mode fed to psi/p at E-step), EM/REML cov update
+`Sigma_k <- mean_g[b_g b_g' + Cov(b_g|y)]`. `Cov(b_g|y)` from
+`tulpa_laplace(return_re_cov=TRUE)$cov_blocks`: occ arm scales by `M`
+(pseudo-binomial inflation), det arm genuine weighted binomial (`M=1`). Corr
+term keeps full `Sigma`; uncorr projected to diag each M-step. Gates (error,
+point to NUTS, not silent drop) via `.validate_re_laplace()`: RE shared across
+BOTH arms, RE+spatial, RE+visit-level det, RE on non-single families.
+
+Raw EM variance components (sigma, cor) carry Laplace small-cluster bias for
+binary (glmer nAGQ=1 regime, attenuated at small per-group n); fixed-effect SEs
+(natural scale) do not. Default `re.aghq=TRUE` (`control=list(n.quad=)`)
+debiases variance components after EM via adaptive Gauss-Hermite quad on exact
+per-group marginal (nAGQ>1 fix; single grouping factor, one arm, RE dim<=3;
+falls back to EM else, incl. split-across-arms). Engine
+`tulpa::tulpa_re_aghq()` (quad grid, per-group mode, log-Cholesky cov, LKJ
+penalty, joint opt, marginal Hessian); `R/re_aghq.R` (`.tobs_re_aghq()`) thin
+wrapper supplying occ/det site marginal as `make_site` callback. Marginal
+branches on arm: occ-arm moves `psi`, det-arm moves `p` (binomial-in-p, FD
+verified). Measured occ arm: per-group-n=8 sigma bias ~18% (EM)->~4% (AGHQ),
+matches NUTS; corr sigmas ~1%. Det arm: EM attenuates sigma ~70% (only occupied
+sites inform p)->AGHQ ~1%, 88-96% fixed-effect CI coverage. Det-arm RE params
+named for det process (`sigma_p<t>_*`, `re_p<t>_*`). Default LKJ
+(`re.lkj=1.5`) penalty per corr block regularizes weak correlation off +-1
+boundary toward 0 (SDs untouched; `re.lkj=1` disables); NUTS for full posterior.
+RE naming + per-group BLUP recon both engines in `R/re_effects.R`
+(`ranef()`/`coef()` in `R/methods.R`); corr off-diag reported `cor_<g>_<ci>_<cj>`.
+
+Legacy internal: `.tobs_build_model()`, `.tobs_fit_model()`, `.tobs_laplace()`.
+Family roster: `PLAN_tulpaObs.md`; dispatcher `R/obs_families.R` + `R/tobs.R`.
 
 ## Common commands
 
 ```r
-# Rebuild C++ exports + roxygen after editing src/ or R/ docs
-Rcpp::compileAttributes()
+Rcpp::compileAttributes()                  # after src/ or R/ doc edits
 devtools::document()
-
-# Install upstream tulpa from sibling checkout (required after tulpa ABI bumps)
-devtools::install("../tulpa", quick = TRUE)
-
-# Iterative dev
-devtools::load_all()
-
-# Full check (skip manual since we may have non-ASCII issues in dev)
-devtools::check(args = "--no-manual")
-
-# Run all tests
-devtools::test()
-
-# Run a single test file
-devtools::test(filter = "sla-cover-joint")          # matches test-sla-cover-joint.R
+devtools::install("../tulpa", quick = TRUE)# after tulpa ABI bump
+devtools::load_all()                       # iterative dev
+devtools::check(args = "--no-manual")      # full check (skip manual: dev non-ASCII)
+devtools::test()                           # all tests
+devtools::test(filter = "sla-cover-joint") # one file -> test-sla-cover-joint.R
 testthat::test_file("tests/testthat/test-occu.R")
-
-# Run a single test_that block
 testthat::test_file("tests/testthat/test-occu.R", desc = "single fit recovers truth")
 ```
 
-Convention: ad-hoc probes / reproducers / planning notes live in `dev_notes/`
-(R files prefixed `_` are runners, `probe_*.R` are diagnostics, `repro_*.R`
-are minimal reproducers — useful when surfacing upstream `tulpa` bugs).
+Convention: probes/repros/notes in `dev_notes/` (`_` prefix = runner, `probe_*`
+= diagnostic, `repro_*` = minimal reproducer for upstream tulpa bugs).
 
 ## Architecture
 
-Compositional builder: one C++ entry point (`cpp_occu_fit`) for NUTS.
-Laplace via tulpa's EM+Laplace engine (`tulpa::tulpa_em_laplace`); the default
-`method = "laplace"` is a penalized EM with Gaussian marginals (no post-EM
-correction), where the fixed-effect prior is attached to each M-step block as a
-per-block `beta_prior` that tulpa applies. MI/Gibbs corrections are opt-in via
-`method = "laplace_gibbs"` / `"laplace_mi"`; the same prior threads into the
-correction refits (gcol33/tulpa#27), so they are penalised like `"laplace"`
-unless `priors = FALSE`. A second **nested-Laplace** engine (`em_nested_laplace.R`,
-`method = "nested_laplace"`) handles non-conjugate hyperpriors via a multi-block
-latent prior. `.tobs_em_nested_laplace()` is a thin wrapper over
-`.tobs_laplace(latent_prior = )`: the multi-block prior built from the formula's
-`spatial` / `temporal` / `re` terms is attached to the state ("occ") M-step
-block (`.tobs_laplace_nested()`), so tulpa's EM routes that block through
-`tulpa_nested_laplace()`. It is wired for single-season, integrated, community,
-and dynamic occupancy (one set of `build_*_callbacks` shared with the
-single-Laplace path; `.tobs_state_block_dims()` maps each state row to its
-spatial unit, so a community model shares a site-level field across species),
-and the cover hurdle joint path uses `tulpa_nested_laplace_joint()` separately.
-The single-season path also does **INLA-style NA-response prediction** with
-**calibrated credible intervals**: sites with an all-missing detection history
-(`.tobs_heldout_sites()`) are interpolated by the latent field, and
-`predict(type = "state")` returns the per-site psi posterior (`psi`,
-`psi_lower`, `psi_upper`, 95%) marginalised over the hyperparameter grid. The
-intervals are calibrated by refining the EM field with one exact-marginal pass
-(`.tobs_occu_state_marginal_fit()`): the latent occupancy state z is integrated
-out, so each site is a Bernoulli on D = 1{>=1 detection} with mean
-q*sigma(eta), where q = 1 - (1-p)^J (a held-out site has no visits -> q = 0 ->
-dropped from the likelihood, interpolated by the field). This fits tulpa's
-generic `family = "bernoulli"` with a per-observation probability scale
-`det_prob = q` (gcol33/tulpa: scaled-Bernoulli family), so the converged Hessian
-is the marginal curvature -- `fitted_eta_var` (a_i' H^{-1} a_i off the live
-factor) is the calibrated per-cell predictive variance and the grid weights are
-on the natural scale (no M-inflation). The EM's M-inflated pseudo-binomial,
-which weights the data ~M times the prior and whose unit-trial Hessian is the
-complete-data information, is kept only for the mode/detection estimate; reading
-variance or grid weights off it under-covers and collapses the grid (the
-refinement is the field analogue of `.tobs_occu_marginal_refine()` for the
-fixed effects). The per-row eta posterior is a Gaussian mixture over grid cells
-(`.nested_psi_mean()` Gauss-Hermite mean, `.nested_psi_quantiles()` mixture-CDF
-quantiles). Measured held-out coverage ~1.0 (conservative), cor ~0.88, MAE ~0.11
-on a 10x10 icar/bym2 grid (`dev_notes/probe_nested_ci_coverage.R`). Other model
-types keep the EM occ fit (their NA-response mapping is not yet wired). Older
-tulpa without `fitted_eta_var` reports `psi` only with NA interval columns.
-Orthogonal to the engine, the **simplified-
-Laplace skewness correction** (`simplified_laplace.R`, the `sla_*` files) is a
-post-fit marginal refinement selected by `approx = "simplified_laplace"` (the
-`*_sla` method names); it is computed for single / dynamic / integrated
-occupancy and the cover hurdle, and no-ops to the Gaussian marginal (recording
-`sla_status`) for community / jsdm.
+One C++ entry `cpp_occu_fit` for NUTS. Laplace via tulpa EM+Laplace
+(`tulpa::tulpa_em_laplace`). Default `method="laplace"` = penalized EM, Gaussian
+marginals, no post-EM correction; fixed-effect prior attached per M-step block
+as `beta_prior`. MI/Gibbs opt-in: `method="laplace_gibbs"`/`"laplace_mi"`; same
+prior threads into correction refits (tulpa#27), penalised like laplace unless
+`priors=FALSE`.
 
-Backend coverage is uneven across families and is enforced centrally:
-`.tobs_family_methods` in `R/tobs.R` is the single source of truth for which
-`method` each working family supports, and `tobs()` errors with a pointer to the
-supported set rather than silently downgrading the engine. `nested_laplace` is
-occu / int_occu / ms_occu / dyn_occu + cover; the `*_sla` skew variants on the
-nested path are occu + cover only; the cover hurdle has no NUTS likelihood or
-EM-correction engine (no `nuts` / `laplace_gibbs` / `laplace_mi`). `abun`
-(N-mixture) supports `laplace` (non-spatial) + `nested_laplace` (areal spatial);
-`ms_abun` (community / multispecies N-mixture) supports `laplace` (non-spatial) +
-`nested_laplace` (a shared areal field on the abundance arm); see below.
-The remaining roster (`dyn_abun`, `distance`, `removal`, `fp_occu`) is
-`status = "planned"` and errors via `.stop_planned_family()`.
+**nested-Laplace** engine (`em_nested_laplace.R`, `method="nested_laplace"`):
+non-conjugate hyperpriors via multi-block latent prior.
+`.tobs_em_nested_laplace()` thin wrapper over `.tobs_laplace(latent_prior=)`:
+multi-block prior from formula `spatial`/`temporal`/`re` attached to state
+("occ") M-step block (`.tobs_laplace_nested()`), routed through
+`tulpa_nested_laplace()`. Wired: single-season, integrated, community, dynamic
+occ (shared `build_*_callbacks`; `.tobs_state_block_dims()` maps state row ->
+spatial unit, so community shares site-level field across species). Cover hurdle
+joint uses `tulpa_nested_laplace_joint()` separately.
+
+**INLA-style NA-response prediction + calibrated CIs** (single-season): all-NA
+detection sites (`.tobs_heldout_sites()`) interpolated by field;
+`predict(type="state")` returns per-site psi posterior (`psi`, `psi_lower`,
+`psi_upper`, 95%) marginalised over hyperparam grid. Calibrated by one
+exact-marginal refine pass (`.tobs_occu_state_marginal_fit()`): integrate out z,
+each site Bernoulli on D=1{>=1 detection}, mean q*sigma(eta), q=1-(1-p)^J
+(held-out -> q=0 -> dropped, field-interpolated). Fits tulpa
+`family="bernoulli"` with per-obs prob scale `det_prob=q` (scaled-Bernoulli
+family): converged Hessian = marginal curvature, `fitted_eta_var` = calibrated
+per-cell predictive variance, grid weights natural scale (no M-inflation).
+EM M-inflated pseudo-binomial kept only for mode/det estimate (reading
+variance/weights off it under-covers + collapses grid). Per-row eta posterior =
+Gaussian mixture over cells (`.nested_psi_mean()` GH mean,
+`.nested_psi_quantiles()` mixture-CDF quantiles). Measured held-out coverage
+~1.0 (conservative), cor ~0.88, MAE ~0.11 on 10x10 icar/bym2
+(`dev_notes/probe_nested_ci_coverage.R`). Other model types keep EM occ fit (NA
+mapping not wired). Old tulpa w/o `fitted_eta_var` -> `psi` only, NA intervals.
+
+**Simplified-Laplace skew correction** (`simplified_laplace.R`, `sla_*` files):
+orthogonal post-fit marginal refine, `approx="simplified_laplace"` (`*_sla`
+methods). Computed for single/dynamic/integrated occ + cover hurdle; no-ops to
+Gaussian (records `sla_status`) for community/jsdm.
+
+**Backend coverage enforced centrally**: `.tobs_family_methods` in `R/tobs.R` =
+single source of truth for which `method` each family supports; `tobs()` errors
+with pointer, no silent downgrade. `nested_laplace` = occu/int_occu/ms_occu/
+dyn_occu + cover; `*_sla` on nested = occu + cover only; cover hurdle has no
+NUTS / `laplace_gibbs` / `laplace_mi`. `abun` = laplace (non-spatial) +
+nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field
+on abundance arm). `occu_multiscale_cover` = nested_laplace ONLY (spatial joint).
+Planned (error via `.stop_planned_family()`): `dyn_abun`, `distance`,
+`removal`, `fp_occu`.
 
 ### N-mixture abundance (`abun()`)
 
-Royle (2004) N-mixture: `N_i ~ Poisson(lambda_i)`, `y_ij | N_i ~ Binomial(N_i,
-p_ij)`. Unlike occupancy, there is **no EM** — the latent `N` marginalises out
-in closed form (sum to `K_max`), so tulpa fits the marginal directly with
-analytical gradients and observed-Fisher curvature. tulpaObs owns only the
-family wiring (`R/abun.R`): the data binder produces `model_type = "nmix"`
-(site-level `X_lambda`, long-form `y` / `site_idx` / `X_p` dropping NA visits),
-and `.tobs_fit_nmix()` dispatches to the in-tree N-mixture Laplace fitter
-(`R/nmix_laplace*.R`, `src/nmix_*.{cpp,h}`), wrapped by `build_nmix_fit()`. Pseudo-draws are MVN from the **joint** (lambda, p)
-coefficient covariance, so derived quantities propagate the cross-arm
-covariance. The abundance arm uses a log link: `compute_intercepts()` reads a
-per-process `pi$link` (default `"logit"`, `"log"` for lambda) so the lambda
-intercept back-transforms with `exp()`. `simulate_abun()` +
-`tests/testthat/test-abun.R` cover point recovery and 95% CI coverage.
+Royle 2004: `N_i ~ Pois(lambda_i)`, `y_ij|N_i ~ Binom(N_i, p_ij)`. NO EM — N
+marginalises closed-form (sum to `K_max`), tulpa fits marginal directly,
+analytic gradients + observed-Fisher. tulpaObs owns family wiring (`R/abun.R`):
+binder -> `model_type="nmix"` (site `X_lambda`, long-form `y`/`site_idx`/`X_p`,
+drop NA visits), `.tobs_fit_nmix()` -> in-tree fitter (`R/nmix_laplace*.R`,
+`src/nmix_*.{cpp,h}`), wrapped `build_nmix_fit()`. Pseudo-draws MVN from JOINT
+(lambda,p) cov -> cross-arm cov propagates. Abundance log link:
+`compute_intercepts()` reads per-process `pi$link` (default logit, log for
+lambda). `simulate_abun()` + `test-abun.R` cover point recovery + 95% coverage.
 
-- **Non-spatial** (`method = "laplace"`): `nmix_laplace()` (package-internal).
-  `vcov` is the marginal observed-Fisher inverse (full joint lambda/p block).
-- **Areal spatial** (`method = "nested_laplace"`): an `icar()` / `bym2()` /
-  `car_proper()` term on the abundance formula ->
-  `.tobs_fit_nmix_spatial()` -> `nmix_laplace_{icar,bym2,car_proper}`
-  (one spatial unit per site). The coefficient covariance is **grid-integrated**
-  (law of total covariance over the hyperparameter grid): the spatial kernels
-  return per-grid `cov_blocks` (the beta-block of each grid mode's joint
-  `H^{-1}`), and the R wrapper assembles
-  `V = sum_k w_k [cov_k + (m_k - mbar)(m_k - mbar)']` (see `.nmix_grid_vcov()`).
-  For the rank-deficient intrinsic fields (ICAR, BYM2's structured component)
-  the within-grid block is computed under the sum-to-zero constraint (a large
-  `(sum field)^2` penalty in `nmix_spatial_beta_cov()` / `nmix_beta_cov_bym2()`)
-  so the intercept variance reflects the constraint the mode sits under rather
-  than the flat (intercept, field-mean) confounding of the improper prior.
-- **Negative binomial** (`abun(mixture = "negbin")`): the family `mixture`
-  (`"poisson"`/`"negbin"`) maps to the kernel's `"P"`/`"NB"` code and threads
-  into both paths (`nmix_laplace(mixture=)` non-spatial, the spatial grid
-  fitters via `common$mixture`). The NB adds an overdispersion `r`
-  (`Var(N) = lambda + lambda^2 / r`). Non-spatially `log_r` is estimated jointly
-  with the betas and returned as the trailing vcov coordinate; `build_nmix_fit()`
-  carries it (`means`/`vcov`/`draws` gain a `log_r` column, named in
-  `nmix_dispersion` with its delta-method `r_sd`) -- the autoscale unscaler
-  leaves the trailing non-process coordinate untouched, and `coef()`/`confint()`/
-  `vcov()` (which walk `process_info`) report the two arms only. On the
-  areal-spatial path `r` is integrated over the outer grid alongside tau/rho/
-  sigma, so it carries no `log_r` coordinate and is summarized as `r_mean`/`r_sd`
-  in `nmix_hyper$r`. `simulate()` draws `N ~ NegBin(mu, r)` under NB. Matches
-  `unmarked::pcount(mixture = "NB")`; `test-abun.R` covers point recovery,
-  dispersion recovery, 95% CI coverage, and the spatial NB path.
-- **Random effects** (`abun(...) + (1 | g)` or formula random slope, on either
-  arm; gcol33/tulpaObs#13): site-level grouped random effects on the abundance
-  OR detection predictor of a single-species N-mixture. The grouping factor
-  is something other than species (station, observer-per-site, site cluster);
-  the per-group RE is a SUBSET of coefficients on ONE arm; `theta` is the plain
-  fixed-effect vector (no community mean concept -- the wrong shape for the
-  community oracle path, see `R/nmix_re_aghq.R` header). `.tobs_fit_nmix_re()`
-  warm-starts the betas with the no-RE Laplace fit and refines through
-  `.tobs_nmix_re_aghq()`, a thin `make_site` callback over
-  `nmix_site_marginal()`. The engine
-  `tulpa::tulpa_re_aghq(make_site = , ...)` integrates the per-group RE by
-  adaptive Gauss-Hermite quadrature (`n_quad = 1` Laplace, the default coming
-  from `control$n.quad`; `n_quad > 1` debiases the small-cluster sigma
-  attenuation). On the detection arm the engine-supplied per-site RE offset is
-  applied uniformly to all of that site's visits, leaving the per-site marginal
-  a function of one scalar shift per site (the per-row separability the
-  `make_site` contract needs). Visit-level p RE where observers vary WITHIN
-  a site is unreachable from the public API (the binder does not parse
-  structured terms inside `det_visit_formula`) -- and the per-site latent-N
-  coupling would break the per-group factorization anyway, so it would need
-  a different engine, not just a different callback. NB threads `log_r` as the
-  trailing theta coordinate. **Gates** (error with a pointer): RE + areal
-  spatial; RE + visit-level detection covariates; RE shared across both arms.
-  `tests/testthat/test-abun-re.R` covers recovery, fixed-effect CI coverage,
-  the S3 surface, and the capability gates. Routes through a native compiled
-  `NMixGroupedOracle` (`src/nmix_re_oracle.{h,cpp}`): per-group calls iterate
-  only over that group's sites instead of recomputing the full per-site
-  marginal at every perturbed eta candidate, and the engine stays in C++ with
-  no per-call R/C++ round trip. Drops a single recovery fit at the suite
-  scale (N = 100, J = 4, 10 groups) from tens of seconds to ~2 s
-  (`dev_notes/probe_nmix_re_oracle_speedup.R`); the gated 27-test suite
-  finishes in ~110 s.
-- **Pending**: no NUTS path (no N-mixture HMC likelihood wired yet).
+- **Non-spatial** (`laplace`): `nmix_laplace()`. vcov = marginal observed-Fisher
+  inverse (full joint lambda/p block).
+- **Areal spatial** (`nested_laplace`): `icar()`/`bym2()`/`car_proper()` on
+  abundance formula -> `.tobs_fit_nmix_spatial()` ->
+  `nmix_laplace_{icar,bym2,car_proper}` (one unit/site). Cov grid-integrated
+  (law of total cov over hyperparam grid): kernels return per-grid `cov_blocks`
+  (beta-block of grid mode `H^{-1}`); wrapper `V = sum_k w_k[cov_k +
+  (m_k-mbar)(m_k-mbar)']` (`.nmix_grid_vcov()`). Rank-deficient intrinsic fields
+  (ICAR, BYM2 structured): within-grid block under sum-to-zero constraint (big
+  `(sum field)^2` penalty in `nmix_spatial_beta_cov()`/`nmix_beta_cov_bym2()`)
+  so intercept variance reflects constraint, not flat intercept/field-mean
+  confounding.
+- **Negbin** (`abun(mixture="negbin")`): `mixture` poisson/negbin -> kernel
+  P/NB, threads both paths. NB adds overdispersion `r` (`Var=lambda+lambda^2/r`).
+  Non-spatial: `log_r` jointly estimated, trailing vcov coord; `build_nmix_fit()`
+  carries it (means/vcov/draws gain `log_r` col, `nmix_dispersion` w/ delta `r_sd`);
+  autoscale leaves trailing coord untouched; coef/confint/vcov report 2 arms only.
+  Spatial: `r` integrated over outer grid (tau/rho/sigma), no `log_r` coord,
+  summarized `r_mean`/`r_sd` in `nmix_hyper$r`. `simulate()` draws NB. Matches
+  `unmarked::pcount(mixture="NB")`; `test-abun.R` covers recovery/dispersion/
+  coverage/spatial-NB.
+- **Random effects** (`abun(...) + (1|g)` / random slope, either arm;
+  tulpaObs#13): site-level grouped RE on abundance OR detection of single-species
+  nmix. Grouping = non-species (station, observer-per-site, cluster); RE = subset
+  of coefs on ONE arm; `theta` = plain fixed-effect vector (no community-mean,
+  wrong shape for community oracle; see `R/nmix_re_aghq.R` header).
+  `.tobs_fit_nmix_re()` warm-starts no-RE Laplace betas, refines via
+  `.tobs_nmix_re_aghq()` (thin `make_site` over `nmix_site_marginal()`). Engine
+  `tulpa::tulpa_re_aghq(make_site=)`: adaptive GH (`n_quad=1` Laplace, default
+  from `control$n.quad`; `>1` debiases small-cluster sigma). Det arm: per-site RE
+  offset uniform over visits -> marginal = fn of one scalar shift/site (the
+  per-row separability `make_site` needs). Visit-level p RE (observers vary
+  WITHIN site) unreachable from public API (binder doesn't parse structured terms
+  in `det_visit_formula`); per-site latent-N coupling would break factorization
+  anyway -> needs different engine. NB threads `log_r` trailing theta. Gates
+  (error+pointer): RE+areal spatial, RE+visit-level det, RE both arms.
+  `test-abun-re.R` covers recovery/coverage/S3/gates. Native
+  `NMixGroupedOracle` (`src/nmix_re_oracle.{h,cpp}`): per-group iterates only that
+  group's sites, stays in C++ no round trip. ~tens of s -> ~2s at N=100/J=4/10
+  groups (`dev_notes/probe_nmix_re_oracle_speedup.R`); 27-test suite ~110s.
+- **Pending**: no NUTS (no nmix HMC likelihood).
 
 ### Community / multispecies N-mixture (`ms_abun()`)
 
-The spAbundance `msNMix` model: a per-species N-mixture with Gaussian community
-hyperpriors on the per-species abundance and detection coefficients,
-`beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`, `beta_p_s ~ N(mu_p, Sigma_p)`.
-The latent `N_{s,i}` integrates out per species-site in closed form (the same
-kernel as `abun()`); the per-species coefficient deviations `b_s =
-(b_lambda_s, b_p_s)` are the random effects, with the Gaussian community priors
-pinning `(mu_lambda, mu_p)` as fixed effects (no sum-to-zero constraint, unlike
-the intrinsic spatial fields). `y` is a 3D array `[n_sites x max_visits x
-n_species]` or a named list of count matrices; `species =` is required.
+spAbundance `msNMix`: per-species nmix w/ Gaussian community hyperpriors on
+per-species abundance + det coefs, `beta_lambda_s ~ N(mu_lambda, Sigma_lambda)`,
+`beta_p_s ~ N(mu_p, Sigma_p)`. `N_{s,i}` integrates closed-form per species-site
+(same kernel as `abun()`); per-species deviations `b_s` = random effects,
+community priors pin `(mu_lambda, mu_p)` fixed (no sum-to-zero, unlike spatial).
+`y` = 3D array `[sites x max_visits x species]` or named list of count matrices;
+`species=` required.
 
-tulpaObs owns the family wiring (`R/ms_abun.R`): the binder produces
-`model_type = "ms_nmix"`, `.tobs_ms_nmix_longform()` flattens the 3D array to
-the stacked `(y, site_idx, species_idx, X_p)` long form, and `.tobs_fit_ms_nmix()`
-calls the in-tree **C++ Laplace-EM** `nmix_laplace_re()` -- the fast path. The
-community fitter builds a native `tulpaObs::NMixCommunityOracle` (a subclass of
-`tulpa::REGroupOracle` declared in `<tulpa/aghq_oracle.h>`) via
-`cpp_nmix_community_oracle()`, then drives it either through the in-tree
-`cpp_nmix_community_em()` EM driver (default, `n_quad = 1`) or via tulpa's
-generic AGHQ engine `tulpa::tulpa_re_aghq(oracle = , ...)` for the `n_quad > 1`
-variance-component debias. The fit does per-species coefficient mode-finding
-(complete-data Fisher, PSD), a closed-form EM covariance M-step
-`Sigma_k = mean_s[b_s b_s' + Cov(b_s | y)]`, and fixed-effect SEs from the
-marginal observed-information **Schur complement** of the b-block (with the
-`Var[N|y]` rank-1 coupling between the two arms; Louis 1982). The N-mixture
-per-site kernel (`src/nmix_kernel.h`) caches its eta-independent `lgamma`
-combinatorial terms (`compute_nmix_site_cached`), so the EM's repeated per-site
-evaluations skip the lgamma recompute -- the single-shot `compute_nmix_site()`
-Poisson path delegates to the same cached helper, so the single-species /
-spatial fits are byte-identical (nmix regression suite passes).
+Family wiring `R/ms_abun.R`: binder -> `model_type="ms_nmix"`,
+`.tobs_ms_nmix_longform()` flattens 3D -> stacked `(y, site_idx, species_idx,
+X_p)`, `.tobs_fit_ms_nmix()` -> in-tree C++ Laplace-EM `nmix_laplace_re()` (fast
+path). Builds native `tulpaObs::NMixCommunityOracle` (subclass
+`tulpa::REGroupOracle`, `<tulpa/aghq_oracle.h>`) via
+`cpp_nmix_community_oracle()`, then drives via in-tree `cpp_nmix_community_em()`
+(default `n_quad=1`) OR `tulpa::tulpa_re_aghq(oracle=)` for `n_quad>1` variance
+debias. Fit: per-species coef mode-find (complete-data Fisher, PSD), closed-form
+EM cov M-step `Sigma_k=mean_s[b_s b_s'+Cov(b_s|y)]`, fixed-effect SEs from
+marginal observed-info Schur complement of b-block (`Var[N|y]` rank-1 cross-arm
+coupling; Louis 1982). Per-site kernel `src/nmix_kernel.h` caches eta-independent
+`lgamma` (`compute_nmix_site_cached`); single-shot `compute_nmix_site()` Poisson
+delegates -> single-species/spatial byte-identical (regression passes).
 
-`coef()` returns the community means; `ranef()` the per-species coefficient
-deviations (long form: species / arm / term / estimate); `vcov()` / `confint()`
-the community-mean covariance; `fitted()` / `simulate()` the per-species
-`lambda` / `p` / counts. `simulate_ms_abun()` + `tests/testthat/test-ms-abun.R`
-cover community-mean recovery, 95% CI coverage over 20 seeds, per-species
-coefficient recovery, and the S3 surface.
+`coef()` = community means; `ranef()` = per-species deviations (long:
+species/arm/term/estimate); `vcov()`/`confint()` = community-mean cov;
+`fitted()`/`simulate()` = per-species lambda/p/counts. `simulate_ms_abun()` +
+`test-ms-abun.R` cover community-mean recovery, 95% coverage (20 seeds),
+per-species coef recovery, S3.
 
-- **Poisson only** for now. The native `NMixCommunityOracle` already carries a
-  global negative-binomial size (`log_r` as the trailing theta coordinate) and
-  the per-site kernel branches on `is.finite(r)`; the community fitter just
-  needs the `mixture` flag plumbed through.
+- **Poisson only.** Native oracle already carries global NB `log_r` + kernel
+  branches on `is.finite(r)`; just needs `mixture` plumbed.
 
-#### Areal-spatial community N-mixture (`ms_abun()` + a shared field; sfMsNMix)
+#### Areal-spatial community N-mixture (`ms_abun()` + shared field; sfMsNMix)
 
-A shared ICAR / BYM2 / proper-CAR field on the abundance arm fits via
-`method = "nested_laplace"` (gcol33/tulpaObs#12): an `icar()` / `bym2()` /
-`car_proper()` term on the abundance formula routes to
-`.tobs_fit_ms_nmix_spatial()` -> the in-tree nested Laplace-EM
-`nmix_community_laplace_{icar,bym2,car_proper}()` (`R/nmix_laplace_re_spatial.R`)
-over the C++ driver `cpp_nmix_community_spatial_*` (`src/nmix_community_spatial.cpp`).
-The model is `log lambda_{s,i} = X_lambda_i . (mu_lambda + b_lambda_s) + f_{u(i)}`
-with one field `f` shared across species. tulpa's AGHQ and nested-Laplace engines
-do not combine a per-group RE block with a shared latent field on one predictor,
-so this is a dedicated tulpaObs fit: the "top" block `(mu_lambda, mu_p, f)` has the
-same layout as the single-species spatial state (`field_start = p_lambda + p_p`), so
-the field prior / centering / constrained-covariance helpers in
-`nmix_spatial_kernel*.h` apply to it directly. Per outer grid point
-(tau[, rho] / sigma, rho [, NB size r]) an EM iterates a joint `(mu, f, {b_s})`
-mode-find (block-elimination Newton on the complete-data-Fisher arrowhead, the
-per-species `b_s` folded out by a Schur complement) with a closed-form `Sigma`
-M-step; at convergence the grid-point Laplace log-marginal and the b- and
-field-folded community-mean covariance `vcov_mu` are accumulated, then the R wrapper
-grid-integrates over the hyperparameter posterior (law of total covariance for the
-means; weighted mean for the field / Sigma / BLUPs). The community means are kept
-**flat** (no ridge): the abundance intercept and the field constant mode are an
-exactly flat direction, so any ridge on `mu` would drive the intercept to 0 and the
-field would absorb the level (then deleted by sum-to-zero centering) -- the
-single-species path keeps the fixed effects flat for the same reason. The NB size
-`r` is integrated over the outer grid (field-agnostic, falling out of the existing
-r-grid plumbing), so under NB it is a hyperparameter (`ms_dispersion` / `ms_hyper`),
-not a `log_r` model coordinate. `fit$spatial_field` is the posterior-mean field;
-`test-ms-abun-spatial.R` covers community-mean + field-shape recovery (icar / bym2 /
-car_proper, Poisson + NB), 95% CI coverage, the S3 surface, and a
-`spAbundance::sfMsNMix()` interop *smoke* (a tiny chain confirms plumbing only).
-The numerical head-to-head is an offline manual benchmark
-(`dev_notes/probe_ms_abun_spatial_vs_spabundance.R`), not a test -- a converged
-sfMsNMix chain runs for hours. NUTS pending.
+Shared ICAR/BYM2/proper-CAR field on abundance via `nested_laplace`
+(tulpaObs#12): term on abundance formula -> `.tobs_fit_ms_nmix_spatial()` ->
+in-tree nested Laplace-EM `nmix_community_laplace_{icar,bym2,car_proper}()`
+(`R/nmix_laplace_re_spatial.R`) over `cpp_nmix_community_spatial_*`
+(`src/nmix_community_spatial.cpp`). Model `log lambda_{s,i} = X_lambda_i.(mu_lambda
++ b_lambda_s) + f_{u(i)}`, one `f` shared across species. tulpa AGHQ/nested-Laplace
+don't combine per-group RE block + shared field on one predictor -> dedicated
+tulpaObs fit: top block `(mu_lambda, mu_p, f)` same layout as single-species
+spatial state (`field_start = p_lambda+p_p`), so `nmix_spatial_kernel*.h` helpers
+apply. Per outer grid point (tau[,rho]/sigma,rho[,r]) EM iterates joint
+`(mu,f,{b_s})` mode-find (block-elim Newton on complete-data-Fisher arrowhead,
+`b_s` Schur-folded) + closed-form `Sigma` M-step; at convergence accumulate
+grid-point Laplace log-marginal + b/field-folded community-mean cov `vcov_mu`,
+then R grid-integrates (law of total cov for means; weighted mean for
+field/Sigma/BLUPs). Community means kept FLAT (no ridge): abundance intercept +
+field constant mode exactly flat dir; ridge would drive intercept->0, field
+absorbs level (then sum-to-zero deletes). NB `r` integrated over outer grid
+(field-agnostic) -> hyperparameter (`ms_dispersion`/`ms_hyper`), no `log_r`
+coord. `fit$spatial_field` = posterior-mean field. `test-ms-abun-spatial.R`:
+community-mean + field-shape recovery (icar/bym2/car_proper, Pois+NB), 95%
+coverage, S3, `spAbundance::sfMsNMix()` interop SMOKE (plumbing only). Numerical
+head-to-head = offline manual bench
+(`dev_notes/probe_ms_abun_spatial_vs_spabundance.R`), not test (converged
+sfMsNMix chain runs hours). NUTS pending.
 
-### Boundary: What lives here vs tulpa
+### Boundary: tulpaObs vs tulpa
 
-- **tulpaObs owns**: family-specific likelihoods (`src/*_likelihood.h`,
-  `src/nmix_*.{cpp,h}`), E-step weights, M-step encoding, family-specific S3 /
-  diagnostics. For the RE AGHQ debias it owns the occupancy / detection
-  per-site marginal (the `make_site` callback in `R/re_aghq.R`), the
-  single-species N-mixture grouped-RE native oracle (`NMixGroupedOracle` in
-  `src/nmix_re_oracle.{h,cpp}`, wired in `R/nmix_re_aghq.R`), and the
-  community N-mixture native oracle (`NMixCommunityOracle` in
-  `src/nmix_community_oracle.{h,cpp}`); both are exported to the engine as an
-  `XPtr<tulpa::REGroupOracle>` through `tulpa::tulpa_re_aghq(oracle = )`.
-- **tulpa owns**: EM engine, MI/Gibbs correction, Rubin's pooling, the
-  callback-driven AGHQ variance-component engine (`tulpa_re_aghq()`, with the
-  quadrature grid / log-Cholesky covariance / LKJ penalty / marginal Hessian),
-  generic S3, generic diagnostics, NUTS/HMC sampler.
+- **tulpaObs owns**: family likelihoods (`src/*_likelihood.h`,
+  `src/nmix_*.{cpp,h}`), E-step weights, M-step encoding, family S3/diagnostics.
+  RE AGHQ: occ/det per-site marginal (`make_site` in `R/re_aghq.R`), native
+  `NMixGroupedOracle` (`src/nmix_re_oracle.{h,cpp}`, `R/nmix_re_aghq.R`),
+  `NMixCommunityOracle` (`src/nmix_community_oracle.{h,cpp}`); both exported as
+  `XPtr<tulpa::REGroupOracle>` via `tulpa::tulpa_re_aghq(oracle=)`.
+- **tulpa owns**: EM engine, MI/Gibbs, Rubin pooling, AGHQ engine
+  (`tulpa_re_aghq()`: quad grid / log-Cholesky / LKJ / marginal Hessian), generic
+  S3/diagnostics, NUTS/HMC.
 
-When NUTS crashes for a component that has correct `populate_*` code here,
-the bug is in tulpa's `hmc_sampler.cpp`, not tulpaObs (see "Wired but
-blocked" below). File the issue against `gcol33/tulpa`, not this repo.
+NUTS crash for component w/ correct `populate_*` here = bug in tulpa
+`hmc_sampler.cpp`, not here. File against `gcol33/tulpa`.
 
 ### Key design rules
 
-- **Never pass `Rcpp::Nullable<T>` to header helper functions** — MinGW
-  crashes. Unwrap in the `.cpp` and pass concrete types into headers.
-- **Composition over registry** — families combine with spatial /
-  temporal / re / svc / latent specs orthogonally; no per-combination
-  branches.
+- **Never pass `Rcpp::Nullable<T>` to header helpers** — MinGW crashes. Unwrap in
+  `.cpp`, pass concrete types into headers.
+- **Composition over registry** — families x spatial/temporal/re/svc/latent
+  orthogonal, no per-combination branches.
 - **tulpaObs defines likelihoods, tulpa handles structure.**
-- **Dotted argument names (spOccupancy / base-R style), never underscores.**
-  Prefer a single word (`visits`, `priors`, `control`); when a compound is
-  unavoidable, separate with `.` not `_` — e.g. `n.iter`, `n.warmup`,
-  `n.chains`, `n.thin`, `n.threads`, `adapt.delta`, `max.treedepth`,
-  `max.iter`, `sigma.beta`. This governs `tobs()` arguments and every
-  `control = list(...)` key (the control names are the user-facing vocabulary;
-  they are splatted into `.tobs_fit_model()`). Internal-only helper formals may
-  stay underscore, but anything a user types follows the dotted convention.
+- **Dotted arg names (spOccupancy/base-R), never underscores.** Prefer single
+  word (`visits`, `priors`, `control`); compound separated `.` not `_`:
+  `n.iter`, `n.warmup`, `n.chains`, `n.thin`, `n.threads`, `adapt.delta`,
+  `max.treedepth`, `max.iter`, `sigma.beta`. Governs `tobs()` args + every
+  `control=list(...)` key (splatted into `.tobs_fit_model()`). Internal helper
+  formals may stay underscore; anything user types = dotted.
 
 ## What works (tested)
 
-| Feature                 | Laplace | NUTS  | Notes                                   |
-|-------------------------|---------|-------|-----------------------------------------|
-| Single-season occupancy | Yes     | Yes   | Full parity with inlaocc                |
-| Dynamic (HMM)           | Yes     | Yes   | Colonization / extinction               |
-| Community / multi-spp   | Yes     | Yes   | Species-level RE                        |
-| Integrated multi-source | Yes     | Yes   | Shared psi                              |
-| JSDM                    | Yes     | Yes   | No detection process                    |
-| Cover hurdle (joint)    | Yes     | —     | `family_cover_hurdle.R`, `sla_cover_*`  |
-| Joint occu + cover      | Yes     | —     | `occu_cover()`. **Non-spatial** (`method = "laplace"`, `R/occu_cover.R`): cell-level psi + per-visit detection + per-visit cover (beta or lognormal) on the exact two-state marginal. **Spatial default** (`method = "nested_laplace"`, `R/occu_cover_joint_coupled.R`): the `joint_coupled` engine routes through `tulpa_nested_laplace_joint()` with the `occu_cover_{lognormal,beta}` cell-coupling spec (gcol33/tulpa#32) — 3-arm joint nested-Laplace with outer-grid integration over `(sigma, alpha)` and a per-cell occupancy mixture's closed-form derivatives driving the inner Newton. Lognormal + beta positive arms both supported. ~150-300x faster than v3_nested at N=100 (measured `dev_notes/probe_bench_v3_vs_jc.R`) and reliably completes at N=200+ where v3 trips on a missing-value compare in its outer BFGS. Recovery: 10-seed lognormal + 10-seed beta (`test-occu-cover-joint-coupled.R`); status `"experimental"`. **Coupled SVC / trend fields** (gcol33/tulpaObs#15): additional shared areal fields are added as *weighted* areal terms in the psi formula — `icar(graph = adj, weight = year)` couples a second field (a spatially-varying coefficient on `year`) on top of the unweighted intercept field `icar(graph = adj)`. N such fields compose (each with its own outer-grid `alpha` axis) via tulpa's multi-block copy path (`prior = list(icar_intercept, icar_trend, ...)`, one `copy` spec per block onto the pos arm, per-block `svc_weight`). The intercept field (`fit$spatial_field`) couples uniformly; each weighted field (`fit$trend_field`, and `fit$trend_fields` for >1) is weighted by `weight_i` on the psi (per-cell) and pos (per-visit broadcast) arms with its own scale (`alpha_trend`, `control$alpha.grid.trend`). The p (detection) arm is excluded from every field by its `field_coef = 0` (one per-arm scalar zeroes the field on every block — `svc_weight = 0` on the p arm is NOT equivalent: it leaves the p-arm intercept biased through the cell-coupling cross-arm Hessian, so `field_coef = 0` is the correct exclusion; verified `dev_notes/_phase1_altwire.R`). The weighted areal term is the formula-DSL spelling of the field list, resolved by `.occu_cover_spatial_fields()` (exactly one unweighted base field + N weighted SVC fields, all on one graph); `control = list(trend = list(weight = "<col>"))` is a back-compat alias for a single trend field (specify one way or the other, not both — the fitter errors). A weighted areal term off the joint occu_cover path (occupancy / N-mixture / cover-hurdle) errors via `.tobs_reject_weighted_spatial()` rather than silently dropping the weighting. Recovery: 10-seed 2-field lognormal + DSL/`control$trend` route-equivalence (`test-occu-cover-trend.R`). **Escape hatches**: `control$engine = "v3_nested"` (the pure-R outer-BFGS path, `R/occu_cover_nested.R`, lognormal only — still gated by `test-occu-cover-spatial.R`), `control$engine = "v2_joint"` (v2's joint Laplace, kept for the (z, alpha, sigma) ridge investigation). **`group_var` (sites > cells)**: `group_var = "<col>"` on the `icar()`/`bym2()` term maps each site (`y`/`data` row, one occupancy state) to a field node, so `n_sites` can exceed `n_cells`. The field stays length `n_cells` (graph) while psi/p/cover run over `n_sites`; the per-arm `spatial_idx` (field node) and `cell_obs_map` (occupancy unit) decouple — psi arm `spatial_idx = site_cell`, pos arm `spatial_idx = cell_of_visit`, both `cell_obs_map` over sites — and the SVC trend weight becomes per-site. The motivating layout is site = cell x time-period (plots-in-cell-period are the detection replicates), giving a detection-corrected occupancy trend on a shared cell field. R-side only (`.dispatch_occu_cover` resolves `site_cell`, `.occu_cover_build_joint_coupled_arms` splits site/cell); joint_coupled only (v2/v3 reject it). Recovery: `test-occu-cover-group-var.R` (field cor + slope recovery, n_sites > n_cells). |
-| N-mixture (Poisson/NB)  | Yes     | —     | `abun(mixture=)`; closed-form marginal via in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB adds jointly-estimated `log_r`. NUTS pending |
-| N-mixture + areal spatial| n-L    | —     | `abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"`; Poisson or NB (size `r` integrated over the grid); grid-integrated coefficient covariance (constrained intercept), calibrated slope CIs |
-| Community N-mixture     | Yes     | —     | `ms_abun()` (spAbundance `msNMix`); per-species coef RE with Gaussian community covariances; in-tree C++ Laplace-EM (`nmix_laplace_re`) driving a native `NMixCommunityOracle` via tulpa's generic AGHQ engine, Schur-complement mean SEs; Poisson only; recovery + 20-seed coverage (`test-ms-abun.R`). NUTS / negbin pending |
-| Community N-mixture + areal spatial | n-L | — | `ms_abun()` + `icar()`/`bym2()`/`car_proper()`, `method="nested_laplace"` (spAbundance `sfMsNMix` analogue, gcol33/tulpaObs#12); one shared field on log lambda + per-species community RE; in-tree nested Laplace-EM (`nmix_community_spatial.cpp`), joint `(mu,f,{b_s})` mode-find with b-Schur-folded community-mean covariance, field/Sigma grid-integrated; Poisson or grid-integrated NB size `r`; community-mean + field-shape recovery, 95% coverage, `sfMsNMix` head-to-head (`test-ms-abun-spatial.R`). NUTS pending |
-| N-mixture + grouped RE  | Yes     | —     | `abun()` + `(1 \| g)` / `(x \| g)` on either arm (gcol33/tulpaObs#13); site-level grouping factors (station, observer-per-site); Poisson or NB (log_r jointly estimated under NB); AGHQ via `tulpa::tulpa_re_aghq(oracle=)` driving a native `NMixGroupedOracle`. Gated: RE + spatial, RE + visit-level det covariates, RE shared across both arms. ~2 s per Poisson fit at recovery scale (N = 100, J = 4, 10 groups, n.quad = 5) |
-| Spatial ICAR/BYM2/NNGP  | —       | Yes   |                                         |
-| Spatial + dynamic       | —       | Yes   |                                         |
-| Spatial + community     | —       | Yes   |                                         |
-| Nested-Laplace (areal)  | n-L     | —     | `method="nested_laplace"`: icar/bym2/car (+ temporal/iid) on occu / int_occu / ms_occu / dyn_occu |
-| NA-response prediction  | n-L     | —     | `predict(type="state")`: all-NA single-season sites interpolated by the field (any prior incl. bym2, via engine `fitted_eta`), with calibrated 95% `psi_lower`/`psi_upper` from the exact-marginal `bernoulli`-family pass (held-out coverage ~1.0) |
-| Formula RE (intercept)  | Yes     | Yes   | `(1 \| g)`; Laplace via variance-component EM, occupancy OR detection arm (gcol33/tulpaObs#11) |
-| Formula RE (uncorr slope)| Yes    | Yes   | `(x \|\| g)`, `(0 + x \| g)`, `(1 + x \|\| g)`; either arm |
-| Formula RE (corr slope) | Yes     | Yes   | `(1 + x \| g)`; Laplace fits the full cov via the EM M-step consuming tulpa `cov_blocks`; either arm (gcol33/tulpaObs#11) |
-| Formula RE on detection | Yes     | Yes   | RE on the detection predictor (`detection = ~ (1 \| g)`); Laplace fits a separate detection-arm RE block, AGHQ debias branches on the arm |
-| All S3 methods          | Yes     | Yes   | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update, summary, `$.tobs_fit` |
-| Diagnostics             | Yes     | Yes   | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram, spatialRange, temporalCorr |
-| Simulation              | Yes     | Yes   | `simulate_occu`, `simulate_ms_occu`, `simulate_dyn_occu`, `simulate_int_occu`, `simulate_dyn_ms_occu`, `simulate_int_ms_occu`, `simulate_cover`, `simulate_cover_joint` |
-| Spatial prediction      | —       | Yes   | `tobs_predict_spatial` (IDW on field)   |
-| Components              | Yes     | Yes   | `tobs_re`, `tobs_temporal`, `tobs_svc`, `tobs_latent`, `tobs_community_re`, `tobs_areal` |
+| Feature | Laplace | NUTS | Notes |
+|---|---|---|---|
+| Single-season occupancy | Yes | Yes | parity w/ inlaocc |
+| Dynamic (HMM) | Yes | Yes | colonization/extinction |
+| Community / multi-spp | Yes | Yes | species-level RE |
+| Integrated multi-source | Yes | Yes | shared psi |
+| JSDM | Yes | — | no detection |
+| Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*` |
+| Joint occu + cover | Yes | — | `occu_cover()` — see below |
+| Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
+| Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only — see below |
+| N-mixture (Pois/NB) | Yes | — | `abun(mixture=)`; in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB jointly-est `log_r`. NUTS pending |
+| N-mixture + areal spatial | n-L | — | `abun()`+icar/bym2/car_proper, `nested_laplace`; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
+| Community N-mixture | Yes | — | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> native `NMixCommunityOracle` via AGHQ, Schur SEs; Pois only; recovery+20-seed (`test-ms-abun.R`). NUTS/negbin pending |
+| Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; tulpaObs#12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`), joint `(mu,f,{b_s})` mode-find, field/Sigma grid-int; Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
+| N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms. ~2s/fit (N=100,J=4,10g,n.quad=5) |
+| Spatial ICAR/BYM2/NNGP | — | Yes | |
+| Spatial + dynamic | — | Yes | |
+| Spatial + community | — | Yes | |
+| Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/ms_occu/dyn_occu |
+| NA-response prediction | n-L | — | `predict(type="state")`: all-NA single-season sites field-interpolated, calibrated 95% `psi_lower`/`psi_upper` from exact-marginal bernoulli pass (coverage ~1.0) |
+| Formula RE (intercept) | Yes | Yes | `(1\|g)`; variance-component EM, occ OR det arm (tulpaObs#11) |
+| Formula RE (uncorr slope) | Yes | Yes | `(x\|\|g)`, `(0+x\|g)`, `(1+x\|\|g)`; either arm |
+| Formula RE (corr slope) | Yes | Yes | `(1+x\|g)`; EM M-step consumes tulpa `cov_blocks`; either arm (tulpaObs#11) |
+| Formula RE on detection | Yes | Yes | `detection=~(1\|g)`; separate det-arm RE block, AGHQ branches on arm |
+| All S3 methods | Yes | Yes | coef, confint, vcov, logLik, nobs, fitted, residuals, simulate, predict, tidy, glance, ranef, update, summary, `$.tobs_fit` |
+| Diagnostics | Yes | Yes | WAIC, PPC, PIT, dispersion, zero-inflation, outliers, Moran's I, DW, variogram, spatialRange, temporalCorr |
+| Simulation | Yes | Yes | `simulate_occu/ms_occu/dyn_occu/int_occu/dyn_ms_occu/int_ms_occu/cover/cover_joint` |
+| Spatial prediction | — | Yes | `tobs_predict_spatial` (IDW on field) |
+| Components | Yes | Yes | `tobs_re`, `tobs_temporal`, `tobs_svc`, `tobs_latent`, `tobs_community_re`, `tobs_areal` |
+
+### `occu_cover()` detail
+
+Joint occu-detection + cover hurdle. **Non-spatial** (`laplace`,
+`R/occu_cover.R`): cell psi + per-visit detection + per-visit cover (beta or
+lognormal) on exact two-state marginal. **Spatial default** (`nested_laplace`,
+`R/occu_cover_joint_coupled.R`): `joint_coupled` engine via
+`tulpa_nested_laplace_joint()` w/ `occu_cover_{lognormal,beta}` cell-coupling
+spec (tulpa#32) — 3-arm joint nested-Laplace, outer-grid over `(sigma, alpha)`,
+per-cell occupancy mixture closed-form derivs drive inner Newton. Lognormal+beta
+both. ~150-300x faster than v3_nested at N=100
+(`dev_notes/probe_bench_v3_vs_jc.R`), completes N=200+ where v3 trips on
+missing-value compare in outer BFGS. Recovery: 10-seed lognormal + 10-seed beta
+(`test-occu-cover-joint-coupled.R`); status `"experimental"`.
+
+**Coupled SVC/trend fields** (tulpaObs#15): extra shared areal fields = WEIGHTED
+areal terms in psi formula — `icar(graph=adj, weight=year)` couples a
+spatially-varying coef on `year` atop unweighted intercept field
+`icar(graph=adj)`. N fields compose (each own outer-grid `alpha`) via tulpa
+multi-block copy (`prior=list(icar_intercept, icar_trend, ...)`, one `copy`/block
+onto pos arm, per-block `svc_weight`). Intercept field (`fit$spatial_field`)
+couples uniformly; each weighted field (`fit$trend_field`, `fit$trend_fields` for
+>1) weighted by `weight_i` on psi (per-cell) + pos (per-visit broadcast), own
+scale (`alpha_trend`, `control$alpha.grid.trend`). p (detection) arm excluded via
+`field_coef=0` (per-arm scalar zeroes field every block — `svc_weight=0` NOT
+equivalent: leaves p-intercept biased through cross-arm Hessian; verified
+`dev_notes/_phase1_altwire.R`). Weighted term = formula-DSL of field list,
+resolved `.occu_cover_spatial_fields()` (exactly 1 unweighted base + N weighted
+SVC, one graph); `control=list(trend=list(weight="<col>"))` = back-compat alias
+for single trend field (one way or other, not both — errors). Weighted areal off
+joint occu_cover path errors via `.tobs_reject_weighted_spatial()`. Recovery:
+10-seed 2-field lognormal + route-equiv (`test-occu-cover-trend.R`).
+
+**Escape hatches**: `control$engine="v3_nested"` (pure-R outer-BFGS,
+`R/occu_cover_nested.R`, lognormal only, `test-occu-cover-spatial.R`),
+`control$engine="v2_joint"` (v2 joint Laplace, kept for (z,alpha,sigma) ridge
+investigation).
+
+**`group_var` (sites > cells)**: `group_var="<col>"` on `icar()`/`bym2()` maps
+each site (y/data row, one occupancy state) -> field node, so `n_sites` >
+`n_cells`. Field stays length `n_cells` (graph) while psi/p/cover run over
+`n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_map` (occupancy unit)
+decouple — psi `spatial_idx=site_cell`, pos `spatial_idx=cell_of_visit`, both
+`cell_obs_map` over sites; SVC trend weight per-site. Motivating layout: site =
+cell x time-period (plots-in-cell-period = detection replicates) ->
+detection-corrected occupancy trend on shared cell field. R-side only
+(`.dispatch_occu_cover` resolves `site_cell`,
+`.occu_cover_build_joint_coupled_arms` splits site/cell); joint_coupled only
+(v2/v3 reject). Recovery: `test-occu-cover-group-var.R`.
+
+### `ms_occu_cover()` detail
+
+Community version of `occu_cover()` (`R/ms_occu_cover.R`); per-species coef RE w/
+Gaussian community covariances across psi/p/cover arms, shared dispersion. Latent
+z integrates closed-form per species-cell (reuses `.occu_cover_site_ll`);
+per-species deviations integrated by in-tree pure-R Laplace-EM — arrowhead joint
+Newton (per-species RE Schur-folded, analytic grads `.occu_cover_eta_grad`,
+FD-of-gradient observed-info) + closed-form community-cov M-step
+`Sigma_arm=mean_s[b_s b_s'+Cov(b_s|y)]`. Community-mean SEs = marginal observed
+info (Louis 1982 Schur of b-block), natural scale. Beta+lognormal. Non-spatial
+Laplace only; `nested_laplace` NOT offered (community analogue needs upstream
+tulpa support combining per-group RE + shared field; structured term any arm
+errors+pointer). Community-mean recovery + 15-seed coverage + per-species coef
+recovery (`test-ms-occu-cover.R`); status `"experimental"`. Binary-detection
+community VARIANCE carries Laplace small-cluster attenuation (EM n_quad=1, like
+single-species RE); community MEANS do not. NUTS/negbin/per-species dispersion
+RE/AGHQ variance debias pending.
+
+### `occu_multiscale_cover()` detail
+
+Three-level occupancy + cover hurdle (tulpaObs#29; `R/occu_multiscale_cover.R`,
+fitter `R/occu_multiscale_cover_joint_coupled.R`). For data where "visits" are
+spatially distinct PLOTS aggregated into `(cell, period)`, not temporal revisits
+(EVA/MOTIVATE vegetation; Nichols 2008, Mordecai 2011). `occu_cover()` treats
+plots as detection replicates of one occupancy state -> conflates within-cell
+prevalence into detection (Kendall & White 2009); this family adds explicit
+middle level:
+
+```
+z_c        ~ Bernoulli(psi_c)        # cell/range occupancy
+a_cj|z=1   ~ Bernoulli(theta_cj)     # plot availability/use
+y_cjv|a=1  ~ Bernoulli(p_cjv)        # detection
+cover|y=1  ~ f_pos(eta_pos, disp)    # hurdle (beta/lognormal)
+```
+
+Both z (cells) + a (plots) marginalize closed-form (two states each) -> exact
+joint marginal LL, reuses occu_cover nested-Laplace cell-coupling machinery.
+
+**Inputs**: `y`/`y_pos` = `[n_plots x max_visits]` matrices (plots = rows /
+availability units, visits = cols). State `formula` = cell-level psi, MUST carry
+areal field naming per-plot cell col: `icar(graph=adj, group_var="cell")`.
+`availability=~...` = plot-level theta (default `~1`); `detection` = per-visit p;
+`positive=~...` = cover (default = detection formula). `y_pos` read only where
+`y==1`.
+
+**Engine** (`method="nested_laplace"` only): 4-arm generalization of occu_cover
+joint_coupled via `tulpa_nested_laplace_joint(cell_coupling=
+"occu_multiscale_cover_*")`. Arm field coupling: psi row/cell `field_coef=1`
+(shared field); theta row/plot `field_coef=0`; p row/valid-visit `field_coef=0`;
+pos row/valid-visit `field_coef=list(name="alpha")`. Single shared intercept
+field, outer `(sigma, alpha)` grid. Cell-coupling spec
+(`src/cell_coupling_occu_multiscale_cover.{cpp,h}`, registered per-fit carrying
+this fit's per-cell plot structure) writes closed-form derivs; visit rows
+compacted to valid + laid plot-major within cell. Reuses occu_cover CSR /
+field-demean / inner-vcov / rmvn helpers (shared `src/occu_coupling_shared.h`).
+
+**Identifiability**: theta + p separate only with replication WITHIN a plot.
+Single releves -> plain fit identifies psi (cell) + product theta*p (plot),
+reduces to occu_cover w/ `p:=theta*p`. Within-plot temporal replication
+(plot resurvey later period) makes 3rd level estimable.
+
+**Scope** (status `"experimental"`): spatial joint nested-Laplace only. SVC
+trend fields + non-spatial Laplace not wired. Dispatcher
+`.dispatch_occu_multiscale_cover` rejects laplace + non-spatial state formula.
+Recovery: 8 fixed-effect coefs within 0.25 mean, 95% Wald coverage >=0.80,
+field cor(z_hat, f_true)>0.70, lognormal + beta arms
+(`test-occu-multiscale-cover-recovery.R`); spec FD-derivative + 2-level-reduction
+checks (`test-occu-multiscale-cover-coupling.R`). `simulate_occu_multiscale_cover()`.
 
 ## NUTS coverage status
 
-A prior CLAUDE.md flagged `temporal`, multi-term `re`, `svc`, and `latent` as
-crashing under NUTS. Smoke-tested 2026-05-20 (`dev_notes/probe_blocked_nuts.R`,
-N=40, 50 iter / 25 warmup, single-season occupancy + `ms_occu` for latent) —
-all four return `tobs_fit` objects without crashing. The C++ population path is
-not segfaulting.
+Prior CLAUDE.md flagged `temporal`, multi-term `re`, `svc`, `latent` as NUTS
+crashers. Smoke-tested 2026-05-20 (`dev_notes/probe_blocked_nuts.R`, N=40, 50
+iter/25 warmup, single-season occ + `ms_occu` for latent) — all 4 return
+`tobs_fit` w/o crash. C++ population not segfaulting.
 
-What this **does not** verify: correctness of gradients, posterior calibration,
-convergence at production iter counts, or behavior under stacking (spatial +
-temporal + multi-RE in one fit). No tests in `tests/testthat/` exercise these
-components under NUTS — only Laplace / nested-Laplace paths are covered. Treat
-the smoke test as "not blocked", not "validated".
+NOT verified: gradient correctness, posterior calibration, production-iter
+convergence, stacking (spatial+temporal+multi-RE). No `tests/testthat/` exercise
+these under NUTS — only Laplace/nested-Laplace covered. Treat as "not blocked",
+not "validated".
 
 ## Performance
 
-N=200 sites, single-season (J=3), measured 2026-05-24:
-- tulpaObs `method = "laplace"` (prior-aware penalized EM, default): **~0.2 s**
-- tulpaObs `method = "laplace_gibbs"` (prior-aware EM + Gibbs, n.gibbs=10): ~1.7 s
-- tulpaObs `method = "nuts"`: ~13 s (historical)
-- inlaocc: 0.7 s; spOccupancy MCMC: 0.9 s (historical reference)
+N=200, single-season (J=3), 2026-05-24:
+- `laplace` (prior-aware penalized EM, default): **~0.2s**
+- `laplace_gibbs` (EM+Gibbs, n.gibbs=10): ~1.7s
+- `nuts`: ~13s (historical)
+- inlaocc 0.7s; spOccupancy MCMC 0.9s (historical ref)
 
-The earlier "0.01 s" figure predates the prior-aware default driver; the
-penalized EM trades a little speed for breaking the psi-p identifiability
-ridge at small J. Gibbs/MI add the Rubin-pooled correction phase on top.
+Old "0.01s" predates prior-aware default; penalized EM trades speed to break
+psi-p identifiability ridge at small J. Gibbs/MI add Rubin-pooled correction.
 
 ## File organization
 
 ```
 R/
-  tobs.R                   — tobs() public dispatcher + print.tobs_fit
-  obs_families.R           — family constructors (occu, dyn_occu, ms_occu, …, cover)
-  occu.R                   — internal .tobs_build_model() (single/dynamic/community/integrated/jsdm/nmix)
-  abun.R                   — N-mixture family: .tobs_build_abun(), .tobs_fit_nmix() (-> tulpa nmix Laplace), build_nmix_fit(), nmix S3 helpers, simulate_abun()
-  ms_abun.R                — community N-mixture: .tobs_build_ms_abun(), .tobs_ms_nmix_longform(), .tobs_fit_ms_nmix() (-> nmix_laplace_re()), build_ms_nmix_fit(), ms_nmix S3 helpers, simulate_ms_abun()
-  nmix_laplace.R           — in-tree non-spatial N-mixture (Royle 2004) Laplace fitter (Poisson + NB)
-  nmix_laplace_re.R        — in-tree community / multispecies N-mixture (msNMix), .nmix_re_oracle() helper
-  nmix_laplace_re_spatial.R — spatial community N-mixture (sfMsNMix): nmix_community_laplace_icar()/_bym2()/_car_proper() over cpp_nmix_community_spatial_*, grid-integration of community means / field / Sigma
-  nmix_re_aghq.R           — single-species N-mixture grouped RE: .tobs_nmix_re_aghq() driving the native NMixGroupedOracle
-  nmix_laplace_spatial.R   — nmix_laplace_icar() / _bym2() / _car_proper() areal spatial fitters
-  nmix_site_marginal.R     — per-site marginal exposed as a composable AGHQ RE callback
-  occu_fit.R               — internal .tobs_fit_model() (Laplace default, NUTS fallback; routes model_type=="nmix" to .tobs_fit_nmix)
-  occu_priors.R            — occu_priors() + print + prior-spec -> per-block beta_prior plumbing (.expand_prior/.prior_for_submodel/.attach_priors_to_blocks)
-  laplace.R                — internal .tobs_laplace() + EM callbacks per model type
-  em_nested_laplace.R      — nested Laplace EM for non-conjugate hyperpriors
-  simplified_laplace.R     — SLA wrapper used by sla_*.R families
-  sla_dyn_occu.R           — SLA path for dynamic occupancy
-  sla_int_occu.R           — SLA path for integrated occupancy
-  sla_cover_hurdle.R       — SLA path for cover hurdle (separate-Laplace)
-  sla_cover_hurdle_joint.R — SLA path for cover hurdle (joint-Laplace)
-  family_cover_hurdle.R    — .dispatch_cover() (two-Laplace hurdle), large
-  occu_cover.R             — joint occu-detection + cover hurdle: family wiring (builder, dispatcher, simulator, non-spatial Laplace fitter).
-  occu_cover_spatial.R     — v2 joint-Laplace spatial path (debug escape hatch via control$engine = "v2_joint"); shares the ICAR Q + Sorbye-Rue scale helpers with v3.
-  occu_cover_nested.R      — v3 nested-Laplace spatial path (default for method = "nested_laplace"): inner Newton on z profiled out per outer (alpha, sigma) candidate; outer BFGS over ~10 params; ICAR/besag field shared across psi and cover arms via alpha. Lognormal positive arm only.
-  sim_cover_hurdle.R       — cover hurdle simulators (incl. joint)
-  formula_terms.R          — structured-term registry + constructors (.tobs_term_icar/bym2/car/gp/spde/re/temporal/svc/latent/copy), tobs_* print methods, .tobs_term_to_tulpa_spatial
-  formula_parse.R          — AST parser: .tobs_parse_formula / .tobs_parse_processes / .tobs_resolve_terms / .tobs_bind_formulas
-  spatial.R                — internal precompute helpers (adjacency_to_csr, compute_bym2_scale, compute_nngp_neighbors)
-  methods.R                — S3 methods on tobs_fit, $.tobs_fit, predict_spatial, checkIdentifiability
-  diagnostics.R            — tobs_waic, tobs_ppc, tobs_test_*, tobs_pit_residuals
-  data.R                   — tobs_format, tobs_data, summary/plot.tobs_data, simulators
-  within_between.R         — within_between() covariate decomposition
-  RcppExports.R            — generated, do not edit
+  tobs.R                    — tobs() dispatcher + print.tobs_fit
+  obs_families.R            — family ctors (occu, dyn_occu, ms_occu, …, cover)
+  occu.R                    — .tobs_build_model() (single/dynamic/community/integrated/jsdm/nmix)
+  abun.R                    — nmix family: build_abun, fit_nmix, build_nmix_fit, S3, simulate_abun
+  ms_abun.R                 — community nmix: build_ms_abun, ms_nmix_longform, fit_ms_nmix (-> nmix_laplace_re), build_ms_nmix_fit, S3, simulate_ms_abun
+  nmix_laplace.R            — in-tree non-spatial nmix (Royle 2004) Laplace (Pois+NB)
+  nmix_laplace_re.R         — in-tree community nmix (msNMix), .nmix_re_oracle()
+  nmix_laplace_re_spatial.R — spatial community nmix (sfMsNMix): _icar/_bym2/_car_proper over cpp_nmix_community_spatial_*, grid-int means/field/Sigma
+  nmix_re_aghq.R            — single-species grouped RE: .tobs_nmix_re_aghq() -> NMixGroupedOracle
+  nmix_laplace_spatial.R    — nmix_laplace_icar/_bym2/_car_proper areal fitters
+  nmix_site_marginal.R      — per-site marginal as composable AGHQ callback
+  occu_fit.R                — .tobs_fit_model() (Laplace default, NUTS fallback; nmix -> fit_nmix)
+  occu_priors.R             — occu_priors() + per-block beta_prior plumbing
+  laplace.R                 — .tobs_laplace() + EM callbacks per model type
+  em_nested_laplace.R       — nested Laplace EM for non-conjugate hyperpriors
+  simplified_laplace.R      — SLA wrapper for sla_*.R
+  sla_dyn_occu.R / sla_int_occu.R / sla_cover_hurdle.R / sla_cover_hurdle_joint.R — SLA paths
+  family_cover_hurdle.R     — .dispatch_cover() (two-Laplace hurdle), large
+  occu_cover.R              — joint occu-det + cover hurdle: wiring + shared .occu_cover_eta_from_par()
+  ms_occu_cover.R           — community joint: build_ms_occu_cover, per-species kernel, Laplace-EM fit, build fit, S3, simulate
+  occu_multiscale_cover.R   — 3-level occu+cover (tulpaObs#29): builder, dispatcher, simulate_occu_multiscale_cover
+  occu_multiscale_cover_joint_coupled.R — 4-arm joint nested-Laplace fitter (cell/plot/visit + cover)
+  occu_cover_spatial.R      — v2 joint-Laplace (escape hatch control$engine="v2_joint")
+  occu_cover_nested.R       — v3 nested-Laplace (control$engine="v3_nested", lognormal only)
+  sim_cover_hurdle.R        — cover hurdle simulators (incl joint)
+  formula_terms.R           — term registry + ctors (.tobs_term_*), print, .tobs_term_to_tulpa_spatial
+  formula_parse.R           — AST parser: parse_formula/parse_processes/resolve_terms/bind_formulas
+  spatial.R                 — precompute (adjacency_to_csr, compute_bym2_scale, compute_nngp_neighbors)
+  methods.R                 — S3 on tobs_fit, $.tobs_fit, predict_spatial, checkIdentifiability
+  diagnostics.R             — tobs_waic/ppc/test_*/pit_residuals
+  data.R                    — tobs_format/data, summary/plot.tobs_data, simulators
+  within_between.R          — within_between() decomposition
+  RcppExports.R             — generated, do not edit
 src/
-  occu_fit.cpp                — Unified C++ entry point
+  occu_fit.cpp                — unified C++ entry
   populate_helpers.h          — populate_spatial/temporal/re/svc/latent
-  occ_data.h                  — OccResponseData
-  occ_likelihood.h            — Single-season occupancy likelihood
-  dyn_occ_data.h              — DynOccResponseData
-  dyn_occ_likelihood.h        — HMC forward algorithm
-  integrated_occ_data.h       — IntegratedOccResponseData
-  integrated_occ_likelihood.h — Integrated multi-source likelihood
+  occ_data.h / occ_likelihood.h — single-season occupancy
+  dyn_occ_data.h / dyn_occ_likelihood.h — HMC forward algorithm
+  integrated_occ_data.h / integrated_occ_likelihood.h — integrated multi-source
   jsdm_likelihood.h           — JSDM (Bernoulli, no detection)
+  cell_coupling_occu_cover.h  — occu_cover joint cell-coupling spec
+  cell_coupling_occu_multiscale_cover.{cpp,h} — 4-arm multiscale cell-coupling spec
+  occu_coupling_shared.h      — shared coupling helpers (CSR/field-demean/inner-vcov/rmvn)
   RcppExports.cpp             — generated, do not edit
-  Makevars.win                — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-object MinGW workaround)
-tests/testthat/                — 19 test files
-vignettes/                     — cover-hurdle-*.Rmd, occupancy-spatial-spde.Rmd, occupancy-vs-inla.Rmd
-dev_notes/                     — ad-hoc probes, reproducers, planning notes (gitignored history, but kept in-tree)
+  Makevars.win                — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-obj MinGW)
+tests/testthat/  — test files
+vignettes/       — cover-hurdle-*.Rmd, occupancy-spatial-spde.Rmd, occupancy-vs-inla.Rmd
+dev_notes/       — probes, repros, notes (kept in-tree)
 ```
 
 ## Roxygen / Rd
 
-After editing exported function docs or adding/removing `@export`:
+After exported-doc edits or `@export` changes:
 
 ```r
 Rcpp::compileAttributes()   # only if src/ changed
 devtools::document()
 ```
 
-If `devtools::document()` regenerates an Rd that contains a non-Latin-1
-Unicode char (e.g. `n⁴`, `≤`, `→`), CRAN's PDF manual build will fail.
-Stick to ASCII or Latin-1 Supplement in roxygen; see global CLAUDE.md
-"ASCII-Only in Roxygen/Rd" rule for the safe/unsafe character map.
+`devtools::document()` regenerating Rd w/ non-Latin-1 Unicode (`n⁴`, `≤`, `→`)
+breaks CRAN PDF manual. Stick ASCII / Latin-1 Supplement; see global CLAUDE.md
+"ASCII-Only in Roxygen/Rd" for safe/unsafe map.

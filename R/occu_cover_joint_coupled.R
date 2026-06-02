@@ -222,6 +222,38 @@
 }
 
 
+# Resolve per-arm weakly-informative fixed-effect priors for the coupled arms,
+# returning list(psi=, p=, pos=) of list(mean, prec) (NULL per arm -> the weak
+# engine default). The occupancy (psi) and detection (p) arms carry the
+# occu_priors() defaults; the detection-arm intercept prior in particular is
+# load-bearing -- without it the coupled occupancy mixture slides to the psi = 1
+# boundary at weak detection (the logit-scale score vanishes as psi -> 1, so an
+# unpenalised intercept runs away). The pos (cover) arm carries cover_priors()
+# only when supplied, matching the opt-in cover-prior convention of the
+# non-spatial path. `priors = FALSE` / "none" disables all three. Precisions are
+# 1 / sd^2, floored at the engine's own weak default (1e-4) so an Inf-sd bucket
+# reproduces the pre-existing weak ridge rather than dropping the diagonal.
+.occu_cover_coupled_arm_priors <- function(priors, responses) {
+  if (identical(priors, FALSE) || identical(priors, "none")) {
+    return(list(psi = NULL, p = NULL, pos = NULL))
+  }
+  to_prec <- function(pr) {
+    if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
+    list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
+  }
+  occ_spec <- if (inherits(priors, "occu_priors")) priors
+              else if (inherits(priors, "cover_priors")) occu_priors()
+              else .resolve_occu_priors(priors)        # NULL / list -> defaults
+  cover_spec <- if (inherits(priors, "cover_priors")) priors else NULL
+
+  list(
+    psi = to_prec(.prior_for_submodel(occ_spec, "psi", colnames(responses$psi$X))),
+    p   = to_prec(.prior_for_submodel(occ_spec, "p",   colnames(responses$p$X))),
+    pos = to_prec(.cover_arm_prior(cover_spec, "pos",  colnames(responses$pos$X)))
+  )
+}
+
+
 # Joint-coupled fitter. Calls tulpa_nested_laplace_joint() with the
 # 3-arm responses and the occu_cover_lognormal cell-coupling spec, then
 # unpacks the integrated posterior into a tobs_fit shaped to match
@@ -333,6 +365,18 @@
   site_of_visit  <- arms_out$site_of_visit
   cell_of_visit  <- arms_out$cell_of_visit
   n_v            <- arms_out$n_visits_valid
+
+  # Attach the per-arm fixed-effect priors. These reach tulpa's joint engine as
+  # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replace
+  # the engine's uniform weak default in add_per_arm_beta_re_priors().
+  arm_priors <- .occu_cover_coupled_arm_priors(priors, responses)
+  for (nm in c("psi", "p", "pos")) {
+    ap <- arm_priors[[nm]]
+    if (!is.null(ap)) {
+      responses[[nm]]$beta_prior_mean <- ap$mean
+      responses[[nm]]$beta_prior_prec <- ap$prec
+    }
+  }
 
   csr <- .occu_cover_adj_to_csr(adj)
   icar_template <- function(extra = list()) {

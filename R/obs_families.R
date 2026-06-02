@@ -283,6 +283,145 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
 }
 
 
+#' Community (multispecies) joint occupancy-detection + cover family
+#'
+#' The community version of [occu_cover()]: a per-species joint occupancy-cover
+#' model with Gaussian community hyperpriors on the per-species coefficients of
+#' all three arms (occupancy `psi`, detection `p`, and positive cover). Rare
+#' species borrow strength from common ones through the shared community means
+#' and covariances, the same pooling that stabilises [ms_occu()] and
+#' [ms_abun()] but on the joint occupancy + vegetation-cover response.
+#'
+#' Per species `s`, cell `i`, visit `j`:
+#'
+#'     z_{s,i}        ~ Bernoulli(psi_{s,i})
+#'     y_{s,i,j} | z  ~ Bernoulli(p_{s,i,j})
+#'     c_{s,i,j} | y  ~ f_pos(eta_pos_{s,i,j}, disp)
+#'     logit psi_{s,i}  = X_occ_i . (mu_occ + b_occ_s)
+#'     logit p_{s,i,j}  = X_p_{ij} . (mu_p   + b_p_s)
+#'     g(cover)         = X_pos_{ij} . (mu_pos + b_pos_s)
+#'     b_occ_s ~ N(0, Sigma_occ), b_p_s ~ N(0, Sigma_p),
+#'     b_pos_s ~ N(0, Sigma_pos)
+#'
+#' The latent presence `z` integrates out per species-cell in closed form (the
+#' same two-state mixture as [occu_cover()]); the per-species coefficient
+#' deviations are the random effects, integrated by a Laplace-EM. The
+#' positive-arm dispersion is a shared community parameter.
+#'
+#' @section Inputs:
+#' `y` and `y_pos` are 3D arrays `[n_sites x max_visits x n_species]` (or named
+#' lists of `n_sites x max_visits` matrices, one per species); `species =` is
+#' required. The occupancy `formula`, the `detection` formula, and the cover
+#' `positive` formula carry community covariates shared across species. `coef()`
+#' returns the community means; `ranef()` the per-species coefficient deviations.
+#'
+#' @section Scope (status `"experimental"`):
+#' Non-spatial Laplace only. A shared coupled spatial field across the three
+#' arms with the per-species RE block layered on top (the community analogue of
+#' [occu_cover()]'s `nested_laplace` joint-coupled engine) needs upstream engine
+#' support that does not yet combine a per-group RE block with a shared latent
+#' field on one predictor; a structured term on any arm errors from the
+#' dispatcher rather than being silently dropped.
+#'
+#' @param positive likelihood for the positive cover arm. `"beta"` (cover in
+#'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#' @return A `tobs_family` object.
+#' @seealso [occu_cover()] (single species), [ms_occu()] (community occupancy,
+#'   no cover), [ms_abun()] (community N-mixture).
+#' @export
+ms_occu_cover <- function(positive = c("beta", "lognormal")) {
+  positive <- match.arg(positive)
+  obs_family(
+    name           = "ms_occu_cover",
+    class_long     = "community joint occupancy-detection + cover hurdle",
+    latent         = "bernoulli",
+    observation    = if (positive == "beta")
+                       "detection_plus_beta"
+                     else
+                       "detection_plus_lognormal",
+    replicates     = "required",
+    default_engine = "laplace",
+    status         = "experimental",
+    params         = list(positive = positive),
+    control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max")
+  )
+}
+
+
+#' Three-level (multiscale) occupancy + cover hurdle family
+#'
+#' A cell-level occupancy gate, a plot-level availability gate, per-visit
+#' detection, and the cover hurdle, for data where a site's "visits" are
+#' spatially distinct plots aggregated into a `(cell, period)` rather than
+#' temporal revisits (the EVA / MOTIVATE vegetation layout; Nichols et al.
+#' 2008; Mordecai et al. 2011). [occu_cover()] treats plots as detection
+#' replicates of one occupancy state, which on spatial subunits conflates
+#' within-cell prevalence into the detection arm (Kendall & White 2009); this
+#' family separates them with an explicit middle level:
+#'
+#'     z_c        ~ Bernoulli(psi_c)                 # cell / range occupancy
+#'     a_cj | z=1 ~ Bernoulli(theta_cj)              # plot availability / use
+#'     y_cjv|a=1  ~ Bernoulli(p_cjv)                 # detection
+#'     cover|y=1  ~ f_pos(.; eta_pos, disp)          # cover hurdle (beta / lognormal)
+#'
+#' Both `z` (over cells) and `a` (over plots) marginalize in closed form (two
+#' states each), so the joint marginal log-likelihood is exact and reuses the
+#' same nested-Laplace cell-coupling machinery as [occu_cover()].
+#'
+#' @section Inputs:
+#' `y` / `y_pos` are `[n_plots x max_visits]` matrices (plots are the rows, the
+#' availability units; visits the columns). The state-process `formula` is the
+#' cell-level occupancy predictor and MUST carry an areal field naming the
+#' per-plot cell column, `icar(graph = adj, group_var = "cell")`. `availability
+#' = ~ ...` is the plot-level theta predictor (default `~ 1`); `detection` the
+#' per-visit p predictor; `positive = ~ ...` the cover predictor (default the
+#' detection formula). `y_pos` is read only where `y == 1`.
+#'
+#' @section Identifiability:
+#' The availability (`theta`) and detection (`p`) levels separate only with
+#' replication WITHIN a plot. Single releves supply none, so a plain fit
+#' identifies `psi` (cell) and the product `theta * p` (plot) -- it reduces to
+#' [occu_cover()] with `p := theta * p`. Within-plot temporal replication (e.g.
+#' a resurvey of the same plot in a later period) makes the third level
+#' estimable.
+#'
+#' @section Scope (status `"experimental"`):
+#' Spatial joint nested-Laplace only (`method = "nested_laplace"`): a single
+#' shared areal field coupled across the occupancy (`sigma`) and cover
+#' (`alpha * sigma`) arms, integrated over the outer `(sigma, alpha)` grid.
+#' Spatially varying trend fields and a non-spatial Laplace path are not yet
+#' wired.
+#'
+#' @param positive likelihood for the positive cover arm. `"beta"` (cover in
+#'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#' @return A `tobs_family` object.
+#' @seealso [occu_cover()] (two-level), [cover()] (plot hurdle, no detection).
+#' @export
+occu_multiscale_cover <- function(positive = c("beta", "lognormal")) {
+  positive <- match.arg(positive)
+  obs_family(
+    name           = "occu_multiscale_cover",
+    class_long     = "three-level occupancy + cover hurdle",
+    latent         = "bernoulli",
+    observation    = if (positive == "beta")
+                       "availability_detection_plus_beta"
+                     else
+                       "availability_detection_plus_lognormal",
+    replicates     = "required",
+    default_engine = "nested_laplace",
+    status         = "experimental",
+    params         = list(positive = positive),
+    control_keys   = c(
+      "max.iter", "tol", "sigma.beta",
+      "sigma.grid", "alpha.grid", "phi.grid.pos", "n.threads",
+      "inner.refresh", "hessian", "n.threads.outer", "force.sparse",
+      "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      "diagnose.k", "k.samples", "checkpoint"
+    )
+  )
+}
+
+
 # ---------------------------------------------------------------------------
 # Planned families — error informatively when used until implemented
 # ---------------------------------------------------------------------------

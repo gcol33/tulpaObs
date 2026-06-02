@@ -197,8 +197,6 @@
 # evaluated against the bound model. Gaussian prior with diagonal (mean, prec)
 # aligned with par; flat prior when pprec == 0.
 .tobs_occu_cover_nlp <- function(par, model, pmean, pprec) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
-
   pi_list <- model$process_info
   p_occ   <- pi_list[[1L]]$p
   p_p     <- pi_list[[2L]]$p
@@ -209,30 +207,41 @@
   bpos<- par[p_occ + p_p + seq_len(p_pos)]
   log_disp <- par[length(par)]
 
-  X_occ <- model$X_occ
-  psi   <- stats::plogis(cl(as.numeric(X_occ %*% bo)))
+  eta <- .occu_cover_eta_from_par(model, bo, bp, bpos)
+  ll <- sum(.occu_cover_site_ll(model, eta$psi, eta$p_mat, eta$ep_mat, log_disp))
+  penalty <- 0.5 * sum(pprec * (par - pmean)^2)
+  -ll + penalty
+}
 
-  # Per-visit eta = site-level + visit-level part.
-  # X_*_site is n_sites x ?, X_*_visit is (n_sites * max_visits) x ? in
-  # site-major order. Broadcast site-level eta across visits.
+# Build the three arm linear predictors from an arm-split coefficient triple.
+# `bo` is the occupancy (psi) coefficient vector; `bp` / `bpos` are the
+# detection / cover coefficient vectors, each packed as the site-level block
+# followed by the optional visit-level block exactly as the fitter stacks them.
+# Returns `psi` (length n_sites), `p_mat` (the per-visit detection probability,
+# [n_sites x max_visits]), and `ep_mat` (the per-visit cover linear predictor on
+# its link scale, [n_sites x max_visits]). The eta does not depend on the
+# response, so the single-species fit and the community per-species marginal
+# share one builder (single source of truth for the occu_cover predictors).
+.occu_cover_eta_from_par <- function(model, bo, bp, bpos) {
+  cl <- function(e) pmin(pmax(e, -30), 30)
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
+
+  psi <- stats::plogis(cl(as.numeric(model$X_occ %*% bo)))
 
   bp_site <- bp[seq_len(ncol(model$X_det_site))]
   bp_visit <- if (!is.null(model$X_det_visit)) {
     bp[ncol(model$X_det_site) + seq_len(ncol(model$X_det_visit))]
-  } else {
-    numeric(0)
-  }
+  } else numeric(0)
   bpos_site <- bpos[seq_len(ncol(model$X_pos_site))]
   bpos_visit <- if (!is.null(model$X_pos_visit)) {
     bpos[ncol(model$X_pos_site) + seq_len(ncol(model$X_pos_visit))]
-  } else {
-    numeric(0)
-  }
+  } else numeric(0)
 
+  # X_*_site is n_sites x ?, X_*_visit is (n_sites * max_visits) x ? in
+  # site-major order. Broadcast the site-level eta across visits.
   eta_p_site <- as.numeric(model$X_det_site %*% bp_site)
-  p_mat <- matrix(eta_p_site, n_sites, max_visits)   # site-constant across visits
+  p_mat <- matrix(eta_p_site, n_sites, max_visits)
   if (length(bp_visit)) {
     eta_p_visit <- as.numeric(model$X_det_visit %*% bp_visit)
     p_mat <- p_mat + matrix(eta_p_visit, n_sites, max_visits, byrow = TRUE)
@@ -246,9 +255,7 @@
     ep_mat <- ep_mat + matrix(eta_pos_visit, n_sites, max_visits, byrow = TRUE)
   }
 
-  ll <- sum(.occu_cover_site_ll(model, psi, p_mat, ep_mat, log_disp))
-  penalty <- 0.5 * sum(pprec * (par - pmean)^2)
-  -ll + penalty
+  list(psi = psi, p_mat = p_mat, ep_mat = ep_mat)
 }
 
 # Per-site marginal log-likelihood (latent occupancy state z integrated out in

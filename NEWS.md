@@ -1,5 +1,28 @@
 # tulpaObs NEWS
 
+## 0.0.8 (2026-06-02)
+
+* feat(occu_multiscale_cover): three-level occupancy + cover hurdle family
+  (gcol33/tulpaObs#29). A cell-level occupancy gate (`psi`), a plot-level
+  availability gate (`theta`), per-visit detection (`p`) and the cover hurdle
+  (`pos`), for vegetation data where a site's "visits" are spatially distinct
+  plots aggregated into a `(cell, period)` rather than temporal revisits
+  (Nichols et al. 2008; Mordecai et al. 2011). Where `occu_cover()` conflates
+  within-cell prevalence into the detection arm (Kendall & White 2009), the
+  explicit middle level separates them. Both `z` (over cells) and `a` (over
+  plots) marginalize in closed form, so the joint marginal log-likelihood is
+  exact -- a new four-arm cell-coupling spec
+  (`src/cell_coupling_occu_multiscale_cover.h`, the nested two-state mixture)
+  drives `tulpa::tulpa_nested_laplace_joint()` over the shared `(sigma, alpha)`
+  field grid. Spatial-only (`method = "nested_laplace"`); a single shared areal
+  field. The no-detection occupancy-mixture math is now shared with
+  `occu_cover()` via `nodet_mixture_block` (`src/occu_coupling_shared.h`). Adds
+  `occu_multiscale_cover()` and `simulate_occu_multiscale_cover()`. Tests:
+  `test-occu-multiscale-cover-coupling.R` (FD-checks every closed-form
+  derivative, both families, branches A/B, Expected curvature, 2-level
+  reduction), `test-occu-multiscale-cover-recovery.R` (parameter recovery + CI
+  coverage + field shape). `fitted()` / `predict()` for the family are pending.
+
 ## 0.0.7 (2026-06-01)
 
 Requires tulpa (>= 0.0.7) and tulpaMesh (>= 0.1.2).

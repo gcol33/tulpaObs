@@ -1,0 +1,134 @@
+# =============================================================================
+# test-occu-multiscale-cover-recovery.R - three-level occupancy + cover hurdle
+# (gcol33/tulpaObs#29), joint nested-Laplace cell-coupling path.
+#
+# Structural gates (always run):
+#   - rejects method = "laplace" (spatial-only)
+#   - rejects a state formula with no areal field / no group_var
+# Recovery gate (skip_on_cran): across seeds with moderate occupancy /
+# availability / detection rates and enough cells the four arms separate:
+#   - point recovery of the 8 fixed-effect coefficients within 0.25 (mean)
+#   - 95% Wald CI coverage of the coefficients >= 0.80
+#   - field SHAPE recovery: mean cor(z_hat, f_true) > 0.70
+#   - sigma within 0.40, alpha within 0.55 (small-field nested-Laplace
+#     attenuation, matching the occu_cover spatial gate's loose hyper tols)
+# =============================================================================
+
+
+test_that("occu_multiscale_cover() rejects laplace and a non-spatial state formula", {
+  sim <- simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
+                                        visits_per_plot = 2L, seed = 1L)
+  fam <- occu_multiscale_cover(positive = "lognormal")
+
+  # method = "laplace" is not in the family's supported set (spatial-only).
+  expect_error(
+    tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+         data = sim$data, family = fam, detection = ~ x_pdet,
+         availability = ~ x_plot, positive = ~ x_cov,
+         y = sim$y, y_pos = sim$y_pos, method = "laplace"),
+    "not available"
+  )
+
+  # No areal field on the state formula.
+  expect_error(
+    tobs(formula = ~ x_cell, data = sim$data, family = fam,
+         detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+         y = sim$y, y_pos = sim$y_pos, method = "nested_laplace"),
+    "spatial"
+  )
+
+  # Areal field but no group_var naming the cell column.
+  expect_error(
+    tobs(formula = ~ x_cell + icar(graph = sim$adj), data = sim$data,
+         family = fam, detection = ~ x_pdet, availability = ~ x_plot,
+         positive = ~ x_cov, y = sim$y, y_pos = sim$y_pos,
+         method = "nested_laplace"),
+    "group_var"
+  )
+})
+
+
+test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplace)", {
+  skip_on_cran()
+
+  truth <- list(beta_psi = c(0.0, 0.5), beta_theta = c(0.4, 0.4),
+                beta_p = c(0.3, 0.5), beta_pos = c(log(0.12), -0.3),
+                sigma = 0.6, alpha = 1.0)
+  tv <- c(truth$beta_psi, truth$beta_theta, truth$beta_p, truth$beta_pos)
+  nm <- c("psi_(Intercept)", "psi_x_cell", "theta_(Intercept)", "theta_x_plot",
+          "p_(Intercept)", "p_x_pdet", "pos_(Intercept)", "pos_x_cov")
+  n_seeds <- 15L
+
+  est <- matrix(NA_real_, n_seeds, length(nm), dimnames = list(NULL, nm))
+  se  <- matrix(NA_real_, n_seeds, length(nm), dimnames = list(NULL, nm))
+  hyp <- matrix(NA_real_, n_seeds, 2L, dimnames = list(NULL, c("sigma", "alpha")))
+  field_cor <- rep(NA_real_, n_seeds)
+
+  for (s in seq_len(n_seeds)) {
+    sim <- simulate_occu_multiscale_cover(
+      n_cells = 80L, plots_per_cell = 5L, visits_per_plot = 3L,
+      beta_psi = truth$beta_psi, beta_theta = truth$beta_theta,
+      beta_p = truth$beta_p, beta_pos = truth$beta_pos,
+      positive = "lognormal", sigma = truth$sigma, alpha = truth$alpha,
+      seed = 5000L + s)
+
+    fit <- tryCatch(suppressWarnings(tobs(
+      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+      data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+      detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+      y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+      control = list(sigma.grid = c(0.3, 0.6, 1.0),
+                     alpha.grid = c(0, 0.5, 1, 2),
+                     diagnose.k = FALSE, max.iter = 500L))),
+      error = function(e) NULL)
+    if (is.null(fit)) next
+
+    est[s, ] <- fit$means[nm]
+    se[s, ]  <- fit$sds[nm]
+    hyp[s, ] <- fit$means[c("sigma", "alpha")]
+    f_true <- sim$truth$f - mean(sim$truth$f)
+    field_cor[s] <- stats::cor(fit$spatial_field, f_true)
+  }
+
+  ok <- stats::complete.cases(est)
+  expect_gte(sum(ok), 12L)   # pipeline runs end-to-end across most seeds
+
+  # Point recovery of every fixed-effect coefficient (mean over seeds).
+  bias <- colMeans(est[ok, , drop = FALSE]) - tv
+  for (j in seq_along(nm)) {
+    expect_lt(abs(bias[j]), 0.25, label = paste0("bias ", nm[j]))
+  }
+
+  # 95% Wald CI coverage of the coefficients (experimental floor 0.80).
+  cover <- vapply(seq_along(nm), function(j) {
+    lo <- est[ok, j] - 1.96 * se[ok, j]
+    hi <- est[ok, j] + 1.96 * se[ok, j]
+    mean(tv[j] >= lo & tv[j] <= hi)
+  }, numeric(1))
+  expect_gte(min(cover), 0.80)
+
+  # Field shape + hyperparameters (loose: small-field nested-Laplace attenuation).
+  expect_gt(mean(field_cor[ok]), 0.70)
+  expect_lt(abs(mean(hyp[ok, "sigma"]) - truth$sigma), 0.40)
+  expect_lt(abs(mean(hyp[ok, "alpha"]) - truth$alpha), 0.55)
+})
+
+
+test_that("occu_multiscale_cover() beta positive arm fits end-to-end", {
+  skip_on_cran()
+  sim <- simulate_occu_multiscale_cover(
+    n_cells = 50L, plots_per_cell = 4L, visits_per_plot = 3L,
+    beta_pos = c(stats::qlogis(0.3), -0.3), positive = "beta", phi = 12,
+    sigma = 0.6, alpha = 1.0, seed = 909L)
+  fit <- suppressWarnings(tobs(
+    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    data = sim$data, family = occu_multiscale_cover(positive = "beta"),
+    detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
+                   diagnose.k = FALSE, max.iter = 500L)))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true(all(is.finite(fit$means)))
+  expect_true(all(c("psi_(Intercept)", "theta_(Intercept)",
+                    "p_(Intercept)", "pos_(Intercept)") %in% names(fit$means)))
+})

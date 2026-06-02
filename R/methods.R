@@ -55,7 +55,9 @@ nobs.tobs_fit <- function(object, ...) {
     sum(model$y_flat >= 0)
   } else if (model$model_type == "nmix") {
     length(model$y_long)
-  } else if (model$model_type == "ms_nmix") {
+  } else if (model$model_type == "ms_nmix" ||
+             model$model_type == "ms_occu_cover" ||
+             model$model_type == "occu_multiscale_cover") {
     sum(!is.na(model$y))
   } else {
     NA_integer_
@@ -86,6 +88,9 @@ tulpa::ranef
 ranef.tobs_fit <- function(object, ...) {
   if (identical(object$model$model_type, "ms_nmix")) {
     return(.tobs_ranef_ms_nmix(object))
+  }
+  if (identical(object$model$model_type, "ms_occu_cover")) {
+    return(.tobs_ranef_ms_occu_cover(object))
   }
   if (!is.null(object$re_effects) && length(object$re_effects) > 0L) {
     out <- do.call(rbind, object$re_effects)
@@ -161,6 +166,15 @@ fitted.tobs_fit <- function(object, ...) {
   model <- object$model
   if (identical(model$model_type, "nmix")) return(.tobs_fitted_nmix(object))
   if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
+  if (identical(model$model_type, "ms_occu_cover")) {
+    return(.tobs_fitted_ms_occu_cover(object))
+  }
+  if (identical(model$model_type, "occu_multiscale_cover")) {
+    stop("fitted() is not yet implemented for occu_multiscale_cover(). Use ",
+         "coef() / summary() for the per-arm (psi / theta / p / cover) ",
+         "coefficients and fit$spatial_field / fit$field_table for the cell ",
+         "field.", call. = FALSE)
+  }
   means <- object$means
   pi_list <- model$process_info
 
@@ -383,6 +397,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (identical(model$model_type, "ms_nmix")) {
     return(.tobs_simulate_ms_nmix(object, nsim))
   }
+  if (identical(model$model_type, "ms_occu_cover")) {
+    return(.tobs_simulate_ms_occu_cover(object, nsim))
+  }
   draws <- object$draws
   n_samples <- nrow(draws)
   pi_list <- model$process_info
@@ -507,6 +524,11 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
                                times = times, level = level, nsim = nsim,
                                draws = draws, time_col = time_col))
+  }
+  if (identical(object$model$model_type, "occu_multiscale_cover")) {
+    stop("predict() is not yet implemented for occu_multiscale_cover(). The ",
+         "fit carries the per-arm coefficients (coef() / summary()) and the ",
+         "cell field (fit$spatial_field / fit$field_table).", call. = FALSE)
   }
   type <- match.arg(type)
 

@@ -63,6 +63,57 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_register_occu_multiscale_cover_coupling
+std::string cpp_register_occu_multiscale_cover_coupling(std::string positive, Rcpp::IntegerVector n_plots_per_cell, Rcpp::IntegerVector plot_sizes_flat);
+RcppExport SEXP _tulpaObs_cpp_register_occu_multiscale_cover_coupling(SEXP positiveSEXP, SEXP n_plots_per_cellSEXP, SEXP plot_sizes_flatSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type positive(positiveSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_plots_per_cell(n_plots_per_cellSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type plot_sizes_flat(plot_sizes_flatSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_register_occu_multiscale_cover_coupling(positive, n_plots_per_cell, plot_sizes_flat));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_eval_occu_multiscale_cover_lognormal_cell
+Rcpp::List cpp_eval_occu_multiscale_cover_lognormal_cell(double eta_psi, Rcpp::NumericVector eta_theta, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos, Rcpp::IntegerVector plot_sizes, double sigma_pos, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell(SEXP eta_psiSEXP, SEXP eta_thetaSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_posSEXP, SEXP plot_sizesSEXP, SEXP sigma_posSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_theta(eta_thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type plot_sizes(plot_sizesSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_pos(sigma_posSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_multiscale_cover_lognormal_cell(eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, sigma_pos, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_eval_occu_multiscale_cover_beta_cell
+Rcpp::List cpp_eval_occu_multiscale_cover_beta_cell(double eta_psi, Rcpp::NumericVector eta_theta, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos, Rcpp::IntegerVector plot_sizes, double phi_pos, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell(SEXP eta_psiSEXP, SEXP eta_thetaSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_posSEXP, SEXP plot_sizesSEXP, SEXP phi_posSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_theta(eta_thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type plot_sizes(plot_sizesSEXP);
+    Rcpp::traits::input_parameter< double >::type phi_pos(phi_posSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_multiscale_cover_beta_cell(eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, phi_pos, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_nmix_community_em
 List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init, NumericMatrix Sigma_lambda_init, NumericMatrix Sigma_p_init, int max_iter, double tol, int inner_max, double inner_tol, double sigma_beta, bool verbose);
 RcppExport SEXP _tulpaObs_cpp_nmix_community_em(SEXP oracleSEXP, SEXP mu_initSEXP, SEXP Sigma_lambda_initSEXP, SEXP Sigma_p_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP inner_maxSEXP, SEXP inner_tolSEXP, SEXP sigma_betaSEXP, SEXP verboseSEXP) {
@@ -510,6 +561,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_register_occu_cover_beta_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_beta_coupling, 0},
     {"_tulpaObs_cpp_eval_occu_cover_lognormal_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_lognormal_cell, 7},
     {"_tulpaObs_cpp_eval_occu_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_beta_cell, 7},
+    {"_tulpaObs_cpp_register_occu_multiscale_cover_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_multiscale_cover_coupling, 3},
+    {"_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell, 9},
+    {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 20},
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},

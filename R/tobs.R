@@ -263,6 +263,8 @@ tobs <- function(formula,
     ms_abun  = .dispatch_ms_abun,
     cover    = .dispatch_cover,
     occu_cover = .dispatch_occu_cover,
+    occu_multiscale_cover = .dispatch_occu_multiscale_cover,
+    ms_occu_cover = .dispatch_ms_occu_cover,
     stop(sprintf(
       "Internal error: family %q has status 'working' but no dispatcher.",
       family$name
@@ -558,6 +560,84 @@ tobs <- function(formula,
 }
 
 
+.dispatch_ms_occu_cover <- function(formula, data, family, detection, y, visits,
+                                    engine, priors, control,
+                                    approx = "gaussian_laplace",
+                                    correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("ms_occu_cover() requires a `detection` formula.", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("ms_occu_cover() requires `y` (a 3D array [n_sites x max_visits x ",
+         "n_species] or a named list of detection-history matrices).",
+         call. = FALSE)
+  }
+  if (is.null(dots$y_pos)) {
+    stop("ms_occu_cover() requires `y_pos` (a 3D array / list matching `y`; ",
+         "values used only where y == 1).", call. = FALSE)
+  }
+  if (is.null(dots$species)) {
+    stop("ms_occu_cover() requires a `species` argument (the species labels).",
+         call. = FALSE)
+  }
+
+  pos_formula <- dots$positive %||% detection
+
+  # The community joint-coupled spatial engine (per-species RE layered on a
+  # shared coupled field) is not wired; reject a structured term on any arm with
+  # a pointer rather than dropping the structure silently.
+  has_struct <- function(f) {
+    if (is.null(f)) return(FALSE)
+    labs <- attr(stats::terms(f), "term.labels")
+    structured <- c("bym2", "icar", "car", "car_proper", "gp", "spde",
+                    "multiscale_gp", "re", "temporal", "svc", "latent", "copy")
+    any(vapply(labs, function(lab) {
+      fn <- tryCatch(as.character(as.call(parse(text = lab)[[1]])[[1]]),
+                     error = function(e) NA_character_)
+      !is.na(fn) && fn %in% structured
+    }, logical(1)))
+  }
+  if (has_struct(formula) || has_struct(detection) || has_struct(pos_formula)) {
+    stop("ms_occu_cover() is non-spatial: structured terms (icar / bym2 / re ",
+         "/ ...) are not supported. A shared coupled field across the three ",
+         "arms with the per-species RE layered on top needs upstream tulpa ",
+         "engine support; use a plain fixed-effects formula on each arm.",
+         call. = FALSE)
+  }
+
+  # Site / visit dimensions, robust to y being a 3D array or a list of matrices.
+  if (is.list(y) && !is.array(y)) {
+    n_sites <- nrow(y[[1L]]); max_visits <- ncol(y[[1L]])
+  } else {
+    n_sites <- dim(y)[1L]; max_visits <- dim(y)[2L]
+  }
+
+  vd_det <- .normalize_visits(visits, detection,
+                              n_sites = n_sites, max_visits = max_visits)
+  vd_pos <- .normalize_visits(visits, pos_formula,
+                              n_sites = n_sites, max_visits = max_visits)
+
+  model <- .tobs_build_ms_occu_cover(
+    occ_formula      = formula,
+    det_formula      = vd_det$det_formula,
+    pos_formula      = vd_pos$det_formula,
+    data             = data,
+    y                = y,
+    y_pos            = dots$y_pos,
+    positive         = family$params$positive,
+    species          = dots$species,
+    det_visit_formula = vd_det$det_visit_formula,
+    det_visit_data    = vd_det$visits,
+    pos_visit_formula = vd_pos$det_visit_formula,
+    pos_visit_data    = vd_pos$visits
+  )
+
+  fit_args <- c(list(model = model, priors = priors), control)
+  do.call(.tobs_fit_ms_occu_cover, fit_args)
+}
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -655,7 +735,20 @@ tobs <- function(formula,
   # psi and cover arms with scaling alpha (v2, the mod.joint analogue with
   # `copy = "cell.occ"`). v2 currently reads bym2() as ICAR (rho fixed to 1);
   # free-rho BYM2 + outer-grid integration of (sigma, alpha) is v3.
-  occu_cover = c("laplace", "nested_laplace")
+  occu_cover = c("laplace", "nested_laplace"),
+  # occu_multiscale_cover: three-level cell / plot / visit occupancy + cover.
+  # Spatial joint nested-Laplace only (the four-arm cell-coupling spec); both z
+  # (cells) and a (plots) marginalize in closed form. A non-spatial Laplace path
+  # is not yet wired.
+  occu_multiscale_cover = c("nested_laplace"),
+  # ms_occu_cover: community joint occupancy-detection + cover. Per-species
+  # coefficient RE with Gaussian community covariances across the psi / p / pos
+  # arms; the latent presence z integrates out in closed form (the occu_cover
+  # marginal) and the per-species deviations are integrated by a Laplace-EM.
+  # Non-spatial only -- the community analogue of the joint-coupled spatial
+  # engine (per-species RE layered on the shared coupled field) needs upstream
+  # tulpa support, so nested_laplace is not offered.
+  ms_occu_cover = c("laplace")
 )
 
 # Validate a resolved public method name against the family's supported set.
@@ -787,7 +880,7 @@ tobs <- function(formula,
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
     if (family %in% c("occu", "int_occu", "ms_occu", "dyn_occu", "abun",
-                       "occu_cover")) {
+                       "occu_cover", "occu_multiscale_cover")) {
       return("nested_laplace")
     }
     stop(sprintf(
@@ -948,8 +1041,13 @@ print.tobs_fit <- function(x, ...) {
     } else if (model$model_type == "dynamic") {
       cat(sprintf("  Sites: %d, Seasons: %d, Max visits: %d\n",
                   model$n_sites, model$n_seasons, model$max_visits))
-    } else if (model$model_type == "community") {
+    } else if (model$model_type == "community" ||
+               model$model_type == "ms_nmix" ||
+               model$model_type == "ms_occu_cover") {
       cat(sprintf("  Sites: %d, Species: %d\n", model$n_sites, model$n_species))
+    } else if (model$model_type == "occu_multiscale_cover") {
+      cat(sprintf("  Cells: %d, Plots: %d, Max visits: %d\n",
+                  model$n_cells, model$n_plots, model$max_visits))
     } else if (model$model_type == "integrated") {
       cat(sprintf("  Sites: %d, Sources: %d\n", model$n_sites, model$n_sources))
     } else if (model$model_type == "jsdm") {
