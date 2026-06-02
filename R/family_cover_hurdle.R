@@ -1099,8 +1099,11 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # Outer-grid progress + ETA (gcol33/tulpa#45). `.nl_progress_args()` reads
     # these dotted keys off the control passed to tulpa_nested_laplace_joint;
     # progress.file writes the ETA to disk, which is the only channel that
-    # survives a detached Start-Process stdout buffer.
-    progress          = control$progress          %||% FALSE,
+    # survives a detached Start-Process stdout buffer. Default progress ON
+    # (silenced by control$verbose = FALSE), so the heaviest cover() path
+    # reports an ETA by default like the nested/spatial paths -- this fit runs
+    # for hours and the only other liveness signal is OS CPU time (gcol33/tulpa#53).
+    progress          = control$progress          %||% !isFALSE(control$verbose),
     progress.every    = control$progress.every    %||% 0L,
     progress.throttle = control$progress.throttle %||% 2,
     progress.file     = control$progress.file     %||% "",

@@ -126,6 +126,75 @@ test_that("occu_cover group_var runs with more sites than field nodes", {
 })
 
 
+# Build an UNEQUAL sites-per-cell design (1..max_per sites per field node) with
+# high true occupancy. This is the regime that triggered gcol33/tulpa#52: the
+# coupled psi-arm intercept was unconstrained by the per-arm beta prior and the
+# inner Newton drifted to the psi->1 boundary (intercept ~28, field collapsing
+# to 0). A regular (equal sites/cell) design recovers either way, so the test
+# must use an irregular one.
+.gv_sim_unequal <- function(n_cells, adj, seed, max_per = 8L, J = 10L,
+                            psi_int = 1.0, sigma = 0.9, alpha = 1.0,
+                            b_p = c(stats::qlogis(0.5), 0.4),
+                            b_pos = c(stats::qlogis(0.3), 0.4), phi = 25) {
+  set.seed(seed)
+  n_per_cell <- sample(seq_len(max_per), n_cells, replace = TRUE)
+  cell_idx <- rep(seq_len(n_cells), times = n_per_cell)
+  n_sites  <- length(cell_idx)
+  Q  <- tulpaObs:::.occu_cover_icar_Q(adj)
+  sq <- tulpaObs:::.occu_cover_icar_scale(adj)
+  eig <- eigen(Q, symmetric = TRUE); keep <- eig$values > 1e-8
+  zk <- stats::rnorm(sum(keep))
+  fk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*% (zk / sqrt(eig$values[keep])))
+  f  <- (fk - mean(fk)) / sqrt(sq)
+  site <- data.frame(cell_idx = cell_idx)
+  eta_psi <- psi_int + sigma * f[cell_idx]
+  z <- stats::rbinom(n_sites, 1L, stats::plogis(eta_psi))
+  det_cov <- matrix(stats::rnorm(n_sites*J), n_sites, J)
+  pos_cov <- matrix(stats::rnorm(n_sites*J), n_sites, J)
+  Y <- matrix(0L, n_sites, J); Ypos <- matrix(0, n_sites, J)
+  for (i in seq_len(n_sites)) for (j in seq_len(J)) if (z[i] == 1L) {
+    d <- stats::rbinom(1L, 1L, stats::plogis(b_p[1] + b_p[2]*det_cov[i,j])); Y[i,j] <- d
+    if (d == 1L) {
+      mu <- stats::plogis(b_pos[1] + b_pos[2]*pos_cov[i,j] + alpha*sigma*f[cell_idx[i]])
+      Ypos[i,j] <- stats::rbeta(1L, mu*phi, (1-mu)*phi)
+    }
+  }
+  Ypos[Ypos <= 0] <- 0; Ypos[Ypos >= 1] <- 1 - 1e-6
+  list(site = site, Y = Y, Ypos = Ypos,
+       vd = data.frame(det_cov = as.vector(t(det_cov)),
+                       pos_cov = as.vector(t(pos_cov))),
+       n_sites = n_sites, n_cells = n_cells)
+}
+
+test_that("occu_cover group_var: unequal design keeps the psi intercept anchored (tulpa#52)", {
+  skip_on_cran()
+  n_cells <- 16L
+  adj <- .gv_chain_adj(n_cells)
+  sim <- .gv_sim_unequal(n_cells, adj, seed = 521L)
+  expect_gt(sim$n_sites, sim$n_cells)
+  expect_gt(length(unique(table(sim$site$cell_idx))), 1L)   # genuinely unequal
+
+  fit <- suppressWarnings(tobs(
+    formula = ~ icar(graph = adj, group_var = "cell_idx"),
+    data = sim$site, family = occu_cover("beta"),
+    detection = ~ det_cov, positive = ~ pos_cov,
+    y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+                   sigma.grid = exp(seq(log(0.4), log(2.0), length.out = 4)),
+                   alpha.grid = c(0, 0.6, 1.5), adaptive.grid = TRUE)))
+
+  psi_int <- unname(fit$means[["psi_(Intercept)"]])
+  sig_hat <- unname(fit$means[["sigma"]])
+  # Pre-fix the per-arm beta prior never reached the coupled psi arm, so the
+  # intercept ran to ~28 (psi == 1 everywhere) and the shared field collapsed.
+  # The informative prior now anchors the intercept and the field stays alive.
+  expect_true(is.finite(psi_int))
+  expect_lt(abs(psi_int), 5)                # NOT the ~28 boundary value
+  expect_gt(sig_hat, 0.1)                   # field amplitude did NOT collapse
+  expect_gt(stats::sd(fit$spatial_field), 0.05)
+})
+
 test_that("occu_cover group_var recovers fields and slopes (multi-seed)", {
   skip_on_cran()
   n_cells <- 20L; n_per <- 6L; J <- 15L
