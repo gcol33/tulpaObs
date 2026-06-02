@@ -11,6 +11,11 @@
   posterior SEs of the 2x2 (logit psi, logit p) information), with a `plot()`
   method.
 
+* feat(occu_cover, cover): forward the `integration` control key to the tulpa
+  joint backend (gcol33/tulpaObs#31). `control$integration = "ccd"` / `"grid"`
+  now reaches `tulpa_nested_laplace_joint()`, so the coupled cover-hurdle fit
+  can select CCD outer integration over the latent + phi hyperparameter axes.
+
 * feat(ms_dyn_occu, ms_int_occu): community (multispecies) dynamic and integrated
   occupancy families. `ms_dyn_occu()` is the community version of `dyn_occu()`
   (per-species first-season occupancy + detection coefficient random effects,
