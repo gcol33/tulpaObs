@@ -188,11 +188,16 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
 
   psi_int <- unname(fit$means[["psi_(Intercept)"]])
   sig_hat <- unname(fit$means[["sigma"]])
-  # Pre-fix the per-arm beta prior never reached the coupled psi arm, so the
-  # intercept ran to ~28 (psi == 1 everywhere) and the shared field collapsed.
-  # The informative prior now anchors the intercept and the field stays alive.
+  # On a CORRECTLY built Y the engine anchors the occupancy intercept at an
+  # interior value with a live field on an unequal-sites-per-cell design. The
+  # ~28 / psi==1 drift originally reported for gcol33/tulpa#52 was a probe
+  # data-construction bug (a row-major `Y[slot]` index into a column-major
+  # matrix scrambled Y; same bug as tulpa#57), not a missing prior -- verified
+  # that the anchoring is independent of the per-arm beta prior (priors = "none"
+  # gives the same interior intercept). This test guards that the engine stays
+  # interior on correctly built data.
   expect_true(is.finite(psi_int))
-  expect_lt(abs(psi_int), 5)                # NOT the ~28 boundary value
+  expect_lt(abs(psi_int), 5)                # interior, not the ~28 boundary value
   expect_gt(sig_hat, 0.1)                   # field amplitude did NOT collapse
   expect_gt(stats::sd(fit$spatial_field), 0.05)
 })
