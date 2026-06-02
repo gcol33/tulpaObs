@@ -1,6 +1,15 @@
 # tulpaObs NEWS
 
-## 0.0.9 (unreleased)
+## 0.0.9 (2026-06-02)
+
+* feat(occu_aggregation_scan): suggest a spatial cell size and yearly clustering
+  that make a single-season occupancy model identifiable. Single-visit plot data
+  carries no within-unit replication, so psi and p are confounded until records
+  are pooled into (cell, year-block) buckets; the scan scores candidate (cell
+  size x year block) pairs by structural replication (`"count"`) or the curvature
+  of the constant-model occupancy likelihood (`"info"`, smallest eigenvalue /
+  posterior SEs of the 2x2 (logit psi, logit p) information), with a `plot()`
+  method.
 
 * feat(ms_dyn_occu, ms_int_occu): community (multispecies) dynamic and integrated
   occupancy families. `ms_dyn_occu()` is the community version of `dyn_occu()`
