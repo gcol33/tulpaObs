@@ -107,8 +107,14 @@
          weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
   })
 
+  # Pos-arm dispersion: the `phi_pos` axis when it is integrated on the outer
+  # grid (control$phi.grid.pos, or the latent path's sigma_u); otherwise the
+  # dispersion the fit held FIXED in the cell-coupling spec. Falling back to a
+  # bare 1 would score every spatial occu_cover fit at unit dispersion regardless
+  # of the value the spec used (gcol33/tulpaObs#34).
+  fixed_disp <- object$model$cover_pos_disp %||% 1
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = 1),
+       disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = fixed_disp),
        b = list(occ = b_occ, det = b_det, pos = b_pos),
        blocks = blocks, n_cells = n_cells)
 }

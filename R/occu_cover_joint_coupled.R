@@ -683,11 +683,12 @@
   # left none usable. tulpa_posterior_draws() (predict / WAIC grid sampling) reads
   # fit$weights; when some cells carry a non-finite log_marginal (a corner of the
   # grid where the inner Newton -- e.g. the beta latent spec's Gauss-Hermite arm
-  # -- did not converge) the engine's normalized weights can collapse to all zero,
-  # so the sampler finds no positive-weight cell. Fall back to the same pure
-  # softmax over finite-log_marginal cells the reported posterior moments use, so
-  # predict() / WAIC stay consistent with the point estimates. Untouched when the
-  # engine weights are already usable (every finite-grid fit).
+  # -- did not converge) an unguarded weight normalization upstream collapses
+  # fit$weights to all NaN (gcol33/tulpa#65), so the sampler finds no
+  # positive-weight cell. Fall back to the same pure softmax over
+  # finite-log_marginal cells the reported posterior moments use, so predict() /
+  # WAIC stay consistent with the point estimates. Untouched when the engine
+  # weights are already usable (every finite-grid fit).
   if (!any(is.finite(fit$weights) & fit$weights > 0)) {
     w_full <- numeric(length(fit$log_marginal))
     w_full[ok_cells] <- w
