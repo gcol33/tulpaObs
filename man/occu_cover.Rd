@@ -4,11 +4,16 @@
 \alias{occu_cover}
 \title{Joint occupancy-detection + cover hurdle family}
 \usage{
-occu_cover(positive = c("beta", "lognormal"))
+occu_cover(positive = c("beta", "lognormal"), cover_aggregate = NULL)
 }
 \arguments{
 \item{positive}{likelihood for the positive cover arm. \code{"beta"} (cover
 in (0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
+
+\item{cover_aggregate}{how the cover arm aggregates per occupancy unit on the
+shared-field spatial path: \code{"mean"}, \code{"median"}, or \code{"none"} (per-visit).
+\code{NULL} (default) is \code{"mean"} on the spatial path and \code{"none"} on the
+non-spatial path. See the \emph{Cell-aggregated cover} section.}
 }
 \value{
 A \code{tobs_family} object.
@@ -96,6 +101,30 @@ from-scratch fit. \code{resume = FALSE} starts a fresh file (any stale checkpoin
 \code{path} is removed first). A torn tail from a killed write is discarded and
 re-solved, and a checkpoint written for different data or settings is rejected
 rather than resumed onto. Forwarded to \code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}.
+}
+
+\section{Cell-aggregated cover (\code{cover_aggregate})}{
+
+On the shared-field spatial path the cover arm has one observation per
+detected visit, so a cell with many detected plots informs the shared field
+far more than the single occupancy observation for that cell; the field is
+then driven almost entirely by the cover arm and the detection-corrected
+occupancy surface flattens. \code{cover_aggregate} collapses the cover arm to a
+single response per occupancy unit (cell-period) so the two arms inform the
+field with comparable weight:
+\itemize{
+\item \code{"mean"} -- model the mean cover over the unit's detected visits;
+\item \code{"median"} -- model the median cover;
+\item \code{"none"} -- the per-visit cover arm (one cover observation per
+detected visit).
+}
+\code{NULL} (the default) selects \code{"mean"} on the shared-field spatial
+\code{nested_laplace} path and \code{"none"} on the non-spatial \code{laplace} path (which
+has no shared field to over-weight). Aggregation needs a cell-level positive
+design: a visit-level covariate in the \code{positive} formula cannot be collapsed
+to one value per cell and errors. Aggregation is currently wired on the
+spatial path only; requesting \code{"mean"} / \code{"median"} on the non-spatial
+\code{laplace} fit errors rather than silently using per-visit cover.
 }
 
 \seealso{

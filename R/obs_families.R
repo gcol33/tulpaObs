@@ -230,14 +230,45 @@ jsdm <- function() {
 #' re-solved, and a checkpoint written for different data or settings is rejected
 #' rather than resumed onto. Forwarded to [tulpa::tulpa_nested_laplace_joint()].
 #'
+#' @section Cell-aggregated cover (`cover_aggregate`):
+#' On the shared-field spatial path the cover arm has one observation per
+#' detected visit, so a cell with many detected plots informs the shared field
+#' far more than the single occupancy observation for that cell; the field is
+#' then driven almost entirely by the cover arm and the detection-corrected
+#' occupancy surface flattens. `cover_aggregate` collapses the cover arm to a
+#' single response per occupancy unit (cell-period) so the two arms inform the
+#' field with comparable weight:
+#' \itemize{
+#'   \item `"mean"` -- model the mean cover over the unit's detected visits;
+#'   \item `"median"` -- model the median cover;
+#'   \item `"none"` -- the per-visit cover arm (one cover observation per
+#'     detected visit).
+#' }
+#' `NULL` (the default) selects `"mean"` on the shared-field spatial
+#' `nested_laplace` path and `"none"` on the non-spatial `laplace` path (which
+#' has no shared field to over-weight). Aggregation needs a cell-level positive
+#' design: a visit-level covariate in the `positive` formula cannot be collapsed
+#' to one value per cell and errors. Aggregation is currently wired on the
+#' spatial path only; requesting `"mean"` / `"median"` on the non-spatial
+#' `laplace` fit errors rather than silently using per-visit cover.
+#'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#' @param cover_aggregate how the cover arm aggregates per occupancy unit on the
+#'   shared-field spatial path: `"mean"`, `"median"`, or `"none"` (per-visit).
+#'   `NULL` (default) is `"mean"` on the spatial path and `"none"` on the
+#'   non-spatial path. See the *Cell-aggregated cover* section.
 #' @return A `tobs_family` object.
 #' @seealso [occu()] (no cover), [cover()] (plot-level hurdle, no detection),
 #'   [abun()] (counts not cover).
 #' @export
-occu_cover <- function(positive = c("beta", "lognormal")) {
+occu_cover <- function(positive = c("beta", "lognormal"),
+                       cover_aggregate = NULL) {
   positive <- match.arg(positive)
+  if (!is.null(cover_aggregate)) {
+    cover_aggregate <- match.arg(cover_aggregate,
+                                 c("mean", "median", "none"))
+  }
   obs_family(
     name           = "occu_cover",
     class_long     = "joint occupancy-detection + cover hurdle",
@@ -249,7 +280,8 @@ occu_cover <- function(positive = c("beta", "lognormal")) {
     replicates     = "required",
     default_engine = "laplace",
     status         = "experimental",
-    params         = list(positive = positive),
+    params         = list(positive = positive,
+                          cover_aggregate = cover_aggregate),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",

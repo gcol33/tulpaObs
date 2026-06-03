@@ -47,8 +47,14 @@ Rcpp::List eval_one_cell_(double                eta_psi,
                           const char*           fam_pos_str,
                           tulpa::CurvatureMode  curv) {
     const int Jc = eta_p.size();
-    if (eta_pos.size() != Jc || y_det.size() != Jc || y_pos.size() != Jc) {
-        Rcpp::stop("cpp_eval_occu_cover_*_cell: length mismatch (Jc=%d).", Jc);
+    // The aggregated specs carry one pos row per cell (the mean / median cover),
+    // so eta_pos / y_pos are length 1 there; the per-visit specs carry Jc pos
+    // rows. Size the pos arm from eta_pos rather than assuming it equals Jc.
+    const int n_pos = eta_pos.size();
+    if (y_det.size() != Jc || y_pos.size() != n_pos ||
+        (n_pos != Jc && n_pos != 1)) {
+        Rcpp::stop("cpp_eval_occu_cover_*_cell: length mismatch "
+                   "(Jc=%d, n_pos=%d).", Jc, n_pos);
     }
 
     std::vector<double> eta_psi_buf(1, eta_psi);
@@ -62,12 +68,12 @@ Rcpp::List eval_one_cell_(double                eta_psi,
 
     std::vector<int> rows_psi(1, 0);
     std::vector<int> rows_p(Jc); for (int v = 0; v < Jc; v++) rows_p[v] = v;
-    std::vector<int> rows_pos(Jc); for (int v = 0; v < Jc; v++) rows_pos[v] = v;
+    std::vector<int> rows_pos(n_pos); for (int v = 0; v < n_pos; v++) rows_pos[v] = v;
     std::vector<const int*> arm_rows(3);
     arm_rows[0] = rows_psi.data();
     arm_rows[1] = rows_p.data();
     arm_rows[2] = rows_pos.data();
-    std::vector<int> arm_row_count = {1, Jc, Jc};
+    std::vector<int> arm_row_count = {1, Jc, n_pos};
 
     std::vector<double> y_dummy_psi(1, 0.0);
     std::vector<double> y_det_buf(Jc);
@@ -80,7 +86,7 @@ Rcpp::List eval_one_cell_(double                eta_psi,
 
     std::vector<int> n_trials_psi(1, 0);
     std::vector<int> n_trials_p(Jc, 1);
-    std::vector<int> n_trials_pos(Jc, 0);
+    std::vector<int> n_trials_pos(n_pos, 0);
     std::vector<const int*> arm_n_trials_ptr(3);
     arm_n_trials_ptr[0] = n_trials_psi.data();
     arm_n_trials_ptr[1] = n_trials_p.data();
@@ -110,10 +116,10 @@ Rcpp::List eval_one_cell_(double                eta_psi,
 
     std::vector<double> grad_psi_buf(1, 0.0);
     std::vector<double> grad_p_buf(Jc, 0.0);
-    std::vector<double> grad_pos_buf(Jc, 0.0);
+    std::vector<double> grad_pos_buf(n_pos, 0.0);
     std::vector<double> neg_hess_psi_buf(1, 0.0);
     std::vector<double> neg_hess_p_buf(Jc, 0.0);
-    std::vector<double> neg_hess_pos_buf(Jc, 0.0);
+    std::vector<double> neg_hess_pos_buf(n_pos, 0.0);
     std::vector<double*> arm_grad_ptr = {grad_psi_buf.data(),
                                           grad_p_buf.data(),
                                           grad_pos_buf.data()};
@@ -123,10 +129,10 @@ Rcpp::List eval_one_cell_(double                eta_psi,
 
     std::vector<double> cross_00(1 * 1, 0.0);
     std::vector<double> cross_01(1 * Jc, 0.0);
-    std::vector<double> cross_02(1 * Jc, 0.0);
+    std::vector<double> cross_02((std::size_t)1 * n_pos, 0.0);
     std::vector<double> cross_11((std::size_t)Jc * Jc, 0.0);
-    std::vector<double> cross_12((std::size_t)Jc * Jc, 0.0);
-    std::vector<double> cross_22((std::size_t)Jc * Jc, 0.0);
+    std::vector<double> cross_12((std::size_t)Jc * n_pos, 0.0);
+    std::vector<double> cross_22((std::size_t)n_pos * n_pos, 0.0);
 
     std::vector<double*> cross_row0 = {cross_00.data(), cross_01.data(), cross_02.data()};
     std::vector<double*> cross_row1 = {nullptr,         cross_11.data(), cross_12.data()};
@@ -197,6 +203,22 @@ void cpp_register_occu_cover_beta_coupling() {
        std::make_shared<tulpaObs::OccuCoverBetaCoupling>());
 }
 
+// Cell-aggregated cover variants (tulpaObs#33): the pos arm carries one row per
+// detected occupancy unit (the mean / median cover), evaluated once per cell.
+// [[Rcpp::export]]
+void cpp_register_occu_cover_lognormal_agg_coupling() {
+    auto fp = lookup_registrar();
+    fp("occu_cover_lognormal_agg",
+       std::make_shared<tulpaObs::OccuCoverLognormalAggCoupling>());
+}
+
+// [[Rcpp::export]]
+void cpp_register_occu_cover_beta_agg_coupling() {
+    auto fp = lookup_registrar();
+    fp("occu_cover_beta_agg",
+       std::make_shared<tulpaObs::OccuCoverBetaAggCoupling>());
+}
+
 
 // Direct evaluator returning the spec's closed-form log-density and every
 // nonzero derivative buffer for a single synthetic cell. R-side FD test
@@ -243,6 +265,41 @@ Rcpp::List cpp_eval_occu_cover_beta_cell(
     std::string                curvature = "observed"
 ) {
     return eval_one_cell_<tulpaObs::OccuCoverBetaCoupling>(
+        eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta",
+        parse_curvature_(curvature)
+    );
+}
+
+// Cell-aggregated twins (tulpaObs#33). `eta_pos` and `y_pos` are length 1 (the
+// cell's aggregated cover predictor / mean-or-median observation); `eta_p` /
+// `y_det` stay length J. The returned `grad_pos` / `neg_hess_pos` are length 1.
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_cover_lognormal_agg_cell(
+    double                     eta_psi,
+    Rcpp::NumericVector        eta_p,
+    Rcpp::NumericVector        eta_pos,
+    Rcpp::IntegerVector        y_det,
+    Rcpp::NumericVector        y_pos,
+    double                     sigma_pos,
+    std::string                curvature = "observed"
+) {
+    return eval_one_cell_<tulpaObs::OccuCoverLognormalAggCoupling>(
+        eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, "lognormal",
+        parse_curvature_(curvature)
+    );
+}
+
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_cover_beta_agg_cell(
+    double                     eta_psi,
+    Rcpp::NumericVector        eta_p,
+    Rcpp::NumericVector        eta_pos,
+    Rcpp::IntegerVector        y_det,
+    Rcpp::NumericVector        y_pos,
+    double                     phi_pos,
+    std::string                curvature = "observed"
+) {
+    return eval_one_cell_<tulpaObs::OccuCoverBetaAggCoupling>(
         eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta",
         parse_curvature_(curvature)
     );

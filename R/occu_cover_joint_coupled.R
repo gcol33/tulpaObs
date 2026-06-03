@@ -105,7 +105,8 @@
                                                   positive = "lognormal",
                                                   multi = FALSE,
                                                   n_cells = NULL,
-                                                  site_cell = NULL) {
+                                                  site_cell = NULL,
+                                                  cover_aggregate = "none") {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
   if (is.null(site_cell)) site_cell <- seq_len(n_sites)
@@ -176,7 +177,36 @@
     cell_obs_map = site_of_visit
   )
 
-  # pos arm: one row per valid visit. spatial_idx maps each visit to its cell.
+  # pos arm rows. `cover_aggregate = "none"` (per-visit) keeps one row per valid
+  # detected visit, aligned with the p arm so the cell-coupling spec reads them
+  # positionally. "mean" / "median" (tulpaObs#33) collapse the cover arm to ONE
+  # row per occupancy unit (site) that has any detection, carrying the
+  # mean / median cover over that site's detected visits and the site-level
+  # positive design; the `_agg` cell-coupling spec evaluates the cover density
+  # once per cell so the cover arm contributes at the cell scale rather than the
+  # per-visit scale (otherwise a cell with many detected plots drives the shared
+  # field far more than the single occupancy observation for that cell).
+  if (identical(cover_aggregate, "none")) {
+    pos_site  <- site_of_visit
+    pos_cell  <- cell_of_visit
+    y_pos_arm <- y_pos_visit
+    X_pos_arm <- X_pos
+  } else {
+    aggfun <- if (identical(cover_aggregate, "median")) stats::median else mean
+    det_mat  <- model$valid & (model$y == 1L)   # n_sites x max_visits
+    pos_site <- which(rowSums(det_mat) > 0L)
+    if (length(pos_site) == 0L) {
+      stop("occu_cover joint_coupled: no detected visits to aggregate cover ",
+           "over.", call. = FALSE)
+    }
+    y_pos_arm <- vapply(pos_site, function(i) {
+      as.numeric(aggfun(model$y_pos[i, det_mat[i, ]]))
+    }, numeric(1))
+    X_pos_arm <- X_pos_site[pos_site, , drop = FALSE]   # site-level design only
+    pos_cell  <- as.integer(site_cell[pos_site])
+  }
+  n_pos_rows <- length(pos_site)
+
   # `phi` is the pos-arm dispersion -- the lognormal SD on the log scale for
   # `positive = "lognormal"` and the beta precision for `positive = "beta"`
   # (the spec reads y_cell.phi(2) and interprets it per its policy). `family`
@@ -191,14 +221,14 @@
   #     axis, so the pos arm carries NO field_coef (the engine rejects copy +
   #     field_coef together).
   arm_pos <- list(
-    y            = y_pos_visit,
-    n_trials     = rep(1L, n_visits_valid),
-    X            = X_pos,
-    spatial_idx  = cell_of_visit,
+    y            = as.numeric(y_pos_arm),
+    n_trials     = rep(1L, n_pos_rows),
+    X            = X_pos_arm,
+    spatial_idx  = pos_cell,
     family       = positive,
     phi          = sigma_pos_init,
     coupled      = TRUE,
-    cell_obs_map = site_of_visit
+    cell_obs_map = as.integer(pos_site)
   )
   if (!multi) {
     arm_pos$field_coef <- list(name = "alpha", grid = alpha_grid)
@@ -207,7 +237,9 @@
   list(responses      = list(psi = arm_psi, p = arm_p, pos = arm_pos),
        site_of_visit  = site_of_visit,
        cell_of_visit  = cell_of_visit,
-       n_visits_valid = n_visits_valid)
+       n_visits_valid = n_visits_valid,
+       pos_site       = as.integer(pos_site),
+       n_pos_rows     = n_pos_rows)
 }
 
 
@@ -224,15 +256,26 @@
 
 # Resolve per-arm weakly-informative fixed-effect priors for the coupled arms,
 # returning list(psi=, p=, pos=) of list(mean, prec) (NULL per arm -> the weak
-# engine default). The occupancy (psi) and detection (p) arms carry the
-# occu_priors() defaults; the detection-arm intercept prior in particular is
-# load-bearing -- without it the coupled occupancy mixture slides to the psi = 1
-# boundary at weak detection (the logit-scale score vanishes as psi -> 1, so an
-# unpenalised intercept runs away). The pos (cover) arm carries cover_priors()
-# only when supplied, matching the opt-in cover-prior convention of the
-# non-spatial path. `priors = FALSE` / "none" disables all three. Precisions are
-# 1 / sd^2, floored at the engine's own weak default (1e-4) so an Inf-sd bucket
-# reproduces the pre-existing weak ridge rather than dropping the diagonal.
+# engine default). All three arms carry weakly-informative defaults; the
+# intercept priors are load-bearing in the shared-field path:
+#   * The detection (p) intercept prior keeps the coupled occupancy mixture off
+#     the psi = 1 boundary at weak detection (the logit-scale score vanishes as
+#     psi -> 1, so an unpenalised intercept runs away).
+#   * The cover (pos) intercept prior keeps the cover intercept off the
+#     field-level confound (tulpaObs#32). The cover arm sees the shared field
+#     only at detected visits, so its intercept trades off against the field
+#     level over those cells -- a direction the sum-to-zero field constraint
+#     does not pin when low-occupancy regions carry no cover. Left at the
+#     engine's flat 1e-4 default that intercept floats to a huge posterior SD
+#     (occupancy stays tight: it is regularised and observes every cell), which
+#     blows up predict()'s conditional cover via Jensen. The weakly-informative
+#     cover_priors() default (pos_intercept sd 3) bounds it without biasing the
+#     data-identified mode.
+# `priors = FALSE` / "none" disables all three. A supplied occu_priors() /
+# cover_priors() / list overrides the matching arm(s); the cover arm still gets
+# the cover_priors() default unless a cover_priors object narrows it. Precisions
+# are 1 / sd^2, floored at the engine's own weak default (1e-4) so an Inf-sd
+# bucket reproduces the pre-existing weak ridge rather than dropping the diagonal.
 .occu_cover_coupled_arm_priors <- function(priors, responses) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
     return(list(psi = NULL, p = NULL, pos = NULL))
@@ -244,7 +287,7 @@
   occ_spec <- if (inherits(priors, "occu_priors")) priors
               else if (inherits(priors, "cover_priors")) occu_priors()
               else .resolve_occu_priors(priors)        # NULL / list -> defaults
-  cover_spec <- if (inherits(priors, "cover_priors")) priors else NULL
+  cover_spec <- if (inherits(priors, "cover_priors")) priors else cover_priors()
 
   list(
     psi = to_prec(.prior_for_submodel(occ_spec, "psi", colnames(responses$psi$X))),
@@ -283,7 +326,12 @@
     stop("occu_cover() joint_coupled engine supports positive = ",
          "\"lognormal\" or \"beta\".", call. = FALSE)
   }
-  spec_name <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
+  # Cell-aggregated cover (tulpaObs#33) routes through the `_agg` cell-coupling
+  # spec, which evaluates the cover density once per occupancy unit.
+  cover_aggregate <- model$cover_aggregate %||% "none"
+  aggregated <- !identical(cover_aggregate, "none")
+  spec_base <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
+  spec_name <- if (aggregated) paste0(spec_base, "_agg") else spec_base
 
   pi_list <- model$process_info
   # Field nodes (cells) and occupancy units (sites) are distinct under
@@ -301,11 +349,22 @@
 
   dots <- list(...)
 
-  # Pre-fit the pos-arm dispersion at the empirical sample value at detected
-  # visits. For lognormal, that's the SD of log(y_pos) (matching the v3
-  # nested-Laplace warm start for log_disp); for beta, a moment-matched
-  # precision from the sample mean and variance of y_pos in (0, 1).
-  pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  # Pre-fit the pos-arm dispersion at the empirical sample value of the cover
+  # observations the arm actually models. For lognormal, that's the SD of
+  # log(y_pos) (matching the v3 nested-Laplace warm start for log_disp); for
+  # beta, a moment-matched precision from the sample mean and variance of y_pos
+  # in (0, 1). Under aggregation the modelled observation is the per-site mean /
+  # median, so the dispersion is pre-fit on those aggregated values (a
+  # per-visit-scale dispersion would over-state the noise of a cell mean).
+  pos_vals <- if (aggregated) {
+    aggfun  <- if (identical(cover_aggregate, "median")) stats::median else mean
+    det_mat <- model$valid & (model$y == 1L)
+    sw      <- which(rowSums(det_mat) > 0L)
+    vapply(sw, function(i) as.numeric(aggfun(model$y_pos[i, det_mat[i, ]])),
+           numeric(1))
+  } else {
+    model$y_pos[model$valid & model$y == 1L]
+  }
   phi_pos_init <- if (is_beta) {
     if (length(pos_vals) >= 2L) {
       mu_hat   <- mean(pos_vals)
@@ -359,12 +418,15 @@
     positive        = model$positive,
     multi           = has_trend,
     n_cells         = n_cells,
-    site_cell       = site_cell
+    site_cell       = site_cell,
+    cover_aggregate = cover_aggregate
   )
   responses      <- arms_out$responses
   site_of_visit  <- arms_out$site_of_visit
   cell_of_visit  <- arms_out$cell_of_visit
   n_v            <- arms_out$n_visits_valid
+  pos_site       <- arms_out$pos_site
+  n_pos_rows     <- arms_out$n_pos_rows
 
   # Attach the per-arm fixed-effect priors. These reach tulpa's joint engine as
   # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replace
@@ -403,18 +465,21 @@
     # field_coef = 0. Per-block svc_weight injects the per-row field weight on
     # the psi (per-cell) and pos (per-visit) arms; the p-arm weight is
     # irrelevant (field_coef = 0 already zeroes the p field).
-    # Field node per arm row: psi rows are sites (-> site_cell), p / pos rows are
-    # visits (-> cell_of_visit). The SVC weight is per occupancy unit (site) on
-    # the psi arm and per visit's site on the pos arm; the field it multiplies
-    # is the per-cell node addressed by spatial_idx.
-    spatial_idx_arms <- list(as.integer(site_cell), cell_of_visit, cell_of_visit)
+    # Field node per arm row: psi rows are sites (-> site_cell), p rows are
+    # visits (-> cell_of_visit), pos rows are either visits (per-visit cover) or
+    # aggregated occupancy units (cell-aggregated cover); `pos_site` is the site
+    # behind each pos row either way, so its field node is site_cell[pos_site]
+    # and its SVC weight is w_psi[pos_site]. Under per-visit cover pos_site ==
+    # site_of_visit, so this reduces to the previous cell_of_visit / w_visit.
+    pos_field_node <- as.integer(site_cell[pos_site])
+    spatial_idx_arms <- list(as.integer(site_cell), cell_of_visit, pos_field_node)
     make_block <- function(weight_site) {
-      w_psi   <- if (is.null(weight_site)) rep(1.0, n_sites)
-                 else as.numeric(weight_site)
-      w_visit <- w_psi[site_of_visit]
+      w_psi <- if (is.null(weight_site)) rep(1.0, n_sites)
+               else as.numeric(weight_site)
+      w_pos <- w_psi[pos_site]
       icar_template(list(
         spatial_idx = spatial_idx_arms,
-        svc_weight  = list(w_psi, rep(1.0, n_v), w_visit)
+        svc_weight  = list(w_psi, rep(1.0, n_v), w_pos)
       ))
     }
     alpha_grid_trend <- dots$alpha.grid.trend %||% alpha_grid

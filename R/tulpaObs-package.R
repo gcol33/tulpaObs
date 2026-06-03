@@ -14,4 +14,6 @@ NULL
   requireNamespace("tulpa", quietly = TRUE)
   cpp_register_occu_cover_lognormal_coupling()
   cpp_register_occu_cover_beta_coupling()
+  cpp_register_occu_cover_lognormal_agg_coupling()
+  cpp_register_occu_cover_beta_agg_coupling()
 }

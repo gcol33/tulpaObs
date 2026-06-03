@@ -26,10 +26,23 @@
 //
 // Only the det branch's pos contribution changes between positive families
 // — the psi / p derivatives and the nodet branch are family-independent.
-// The templated `OccuCoverCoupling<PosPolicy>` factors that out; each
-// concrete spec (`occu_cover_lognormal`, `occu_cover_beta`) is a typedef
-// over a positive-arm policy supplying log_density / grad_eta /
-// neg_hess_eta.
+// The templated `OccuCoverCoupling<PosPolicy, Aggregated>` factors that out;
+// each concrete spec (`occu_cover_lognormal`, `occu_cover_beta`) is a typedef
+// over a positive-arm policy supplying log_density / grad_eta / neg_hess_eta.
+//
+// `Aggregated` (tulpaObs#33) selects the cover arm's granularity:
+//   * Aggregated = false (per-visit): the pos arm carries one row per visit
+//     aligned with the detection arm; the det branch adds log f_pos at every
+//     detected visit (the J_det-factor cover likelihood).
+//   * Aggregated = true  (cell-aggregated): the pos arm carries ONE row per
+//     occupancy unit holding the mean / median cover over that unit's detected
+//     visits; the det branch adds a single log f_pos(ybar; eta_pos_cell) when
+//     the cell has any detection. The cover arm then contributes one
+//     observation per cell rather than one per detected visit, so a per-cell
+//     cover signal no longer outweighs the occupancy arm on a shared field.
+// Both share the psi / p derivatives and the nodet branch; only the pos
+// evaluation count differs, and the pos term factorises from psi / p either
+// way (cross-Hessians stay zero in the det branch).
 //
 // All closed-form first + second + cross derivatives below are FD-checked
 // in tulpaObs/tests/testthat/test-occu-cover-coupling.R against numerical
@@ -46,7 +59,7 @@
 
 namespace tulpaObs {
 
-template <class PosPolicy>
+template <class PosPolicy, bool Aggregated = false>
 class OccuCoverCoupling final : public tulpa::CellCouplingSpec {
 public:
     std::vector<int> arm_ids() const override { return {0, 1, 2}; }
@@ -88,23 +101,43 @@ public:
                     out.arm_grad[1][v]          = 1.0 - p_v;
                     if (want_hess) out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
 
-                    const double y_pos   = y_cell.y(2, v);
-                    const double eta_pos = etas.eta(2, v);
-                    cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
-                    double g_pos = 0.0, h_pos = 0.0;
-                    PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
-                                             want_hess, g_pos, h_pos);
-                    out.arm_grad[2][v] = g_pos;
-                    if (want_hess) out.arm_neg_hess_diag[2][v] = h_pos;
+                    if (!Aggregated) {
+                        // Per-visit cover: one log f_pos per detected visit, the
+                        // pos arm row aligned with this detection visit.
+                        const double y_pos   = y_cell.y(2, v);
+                        const double eta_pos = etas.eta(2, v);
+                        cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
+                        double g_pos = 0.0, h_pos = 0.0;
+                        PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
+                                                 want_hess, g_pos, h_pos);
+                        out.arm_grad[2][v] = g_pos;
+                        if (want_hess) out.arm_neg_hess_diag[2][v] = h_pos;
+                    }
                 } else {
                     cell_ll += log_safe_(1.0 - p_v);
                     out.arm_grad[1][v]          = -p_v;
                     if (want_hess) out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
                 }
             }
+            if (Aggregated) {
+                // Cell-aggregated cover: a single log f_pos at the occupancy
+                // unit's one pos row (the mean / median cover over its detected
+                // visits), evaluated once because any_det holds here. The pos
+                // arm carries exactly one row per detected occupancy unit, so
+                // eta(2, 0) / y(2, 0) is the cell's aggregated cover predictor /
+                // observation.
+                const double y_pos   = y_cell.y(2, 0);
+                const double eta_pos = etas.eta(2, 0);
+                cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
+                double g_pos = 0.0, h_pos = 0.0;
+                PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
+                                         want_hess, g_pos, h_pos);
+                out.arm_grad[2][0] = g_pos;
+                if (want_hess) out.arm_neg_hess_diag[2][0] = h_pos;
+            }
             // Cross-Hessians all zero in the det case (psi, p, pos arms
-            // factorise: log psi + sum_v log h_v, with each log h_v
-            // depending on disjoint etas). Buffers come zeroed.
+            // factorise: log psi + sum_v log h_v + (pos term), each depending
+            // on disjoint etas). Buffers come zeroed.
             return cell_ll;
         }
 
@@ -139,14 +172,16 @@ public:
     }
 
     std::string name() const override {
-        return std::string(PosPolicy::spec_name());
+        return std::string(PosPolicy::spec_name()) + (Aggregated ? "_agg" : "");
     }
 
     bool thread_safe() const override { return true; }
 };
 
-typedef OccuCoverCoupling<LognormalPositive> OccuCoverLognormalCoupling;
-typedef OccuCoverCoupling<BetaPositive>      OccuCoverBetaCoupling;
+typedef OccuCoverCoupling<LognormalPositive, false> OccuCoverLognormalCoupling;
+typedef OccuCoverCoupling<BetaPositive,      false> OccuCoverBetaCoupling;
+typedef OccuCoverCoupling<LognormalPositive, true>  OccuCoverLognormalAggCoupling;
+typedef OccuCoverCoupling<BetaPositive,      true>  OccuCoverBetaAggCoupling;
 
 } // namespace tulpaObs
 

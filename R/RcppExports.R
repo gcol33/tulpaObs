@@ -9,12 +9,28 @@ cpp_register_occu_cover_beta_coupling <- function() {
     invisible(.Call(`_tulpaObs_cpp_register_occu_cover_beta_coupling`))
 }
 
+cpp_register_occu_cover_lognormal_agg_coupling <- function() {
+    invisible(.Call(`_tulpaObs_cpp_register_occu_cover_lognormal_agg_coupling`))
+}
+
+cpp_register_occu_cover_beta_agg_coupling <- function() {
+    invisible(.Call(`_tulpaObs_cpp_register_occu_cover_beta_agg_coupling`))
+}
+
 cpp_eval_occu_cover_lognormal_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature = "observed") {
     .Call(`_tulpaObs_cpp_eval_occu_cover_lognormal_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature)
 }
 
 cpp_eval_occu_cover_beta_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature = "observed") {
     .Call(`_tulpaObs_cpp_eval_occu_cover_beta_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature)
+}
+
+cpp_eval_occu_cover_lognormal_agg_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature = "observed") {
+    .Call(`_tulpaObs_cpp_eval_occu_cover_lognormal_agg_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature)
+}
+
+cpp_eval_occu_cover_beta_agg_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature = "observed") {
+    .Call(`_tulpaObs_cpp_eval_occu_cover_beta_agg_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature)
 }
 
 cpp_register_occu_multiscale_cover_coupling <- function(positive, n_plots_per_cell, plot_sizes_flat) {

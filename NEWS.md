@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.10 (development)
+
+* feat(occu_cover): cell-aggregated cover (`cover_aggregate`, tulpaObs#33). On
+  the shared-field spatial path the cover arm carried one observation per
+  detected visit, so a cell with many detected plots drove the shared ICAR field
+  far more than the single occupancy observation for that cell and the
+  detection-corrected occupancy surface flattened. `cover_aggregate = "mean"`
+  (the new default on the spatial path) / `"median"` collapses the cover arm to
+  one response per occupancy unit (the mean / median cover over its detected
+  visits), so occupancy and cover inform the field with comparable weight;
+  `"none"` keeps the per-visit arm. Aggregation reads a cell-level positive
+  design from `data`; a visit-level `positive` covariate keeps the per-visit arm
+  (the bare default falls back, an explicit request errors). New `_agg`
+  cell-coupling specs evaluate the cover density once per cell (FD-checked in
+  `test-occu-cover-coupling.R`); recovery + gates in
+  `test-occu-cover-aggregate.R`.
+
+* fix(occu_cover): regularise the cover (pos) arm intercept by default on the
+  joint spatial path (tulpaObs#32). The cover intercept was left at the engine's
+  flat 1e-4 ridge while occupancy / detection carried the `occu_priors()`
+  defaults, so on a shared field it could float along the field-level confound to
+  a huge posterior SD (occupancy stayed tight) and blow up `predict()`'s
+  conditional cover via Jensen. It now carries the weakly-informative
+  `cover_priors()` intercept prior by default, like the load-bearing detection
+  prior; `priors = FALSE` / `"none"` still disables it.
+
 ## 0.0.9 (2026-06-02)
 
 * feat(occu_aggregation_scan): suggest a spatial cell size and yearly clustering

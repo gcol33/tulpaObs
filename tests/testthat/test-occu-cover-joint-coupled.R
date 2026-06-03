@@ -190,6 +190,49 @@ test_that("joint_coupled errors on non-spatial occu_cover", {
 })
 
 
+test_that("joint_coupled regularises the cover (pos) intercept by default (tulpaObs#32)", {
+  # The pos arm sees the shared field only at detected visits, so its intercept
+  # confounds with the field level over those cells -- a direction the
+  # sum-to-zero field constraint does not pin when low-occupancy regions carry
+  # no cover. Left unpenalised (the engine's flat 1e-4 ridge, sd ~100) the cover
+  # intercept floats to a huge posterior SD while the regularised occupancy
+  # intercept stays tight, blowing up predict()'s conditional cover via Jensen.
+  # The default must hand the pos arm a finite-precision intercept prior, like
+  # the psi / p arms get from occu_priors().
+  responses <- list(
+    psi = list(X = matrix(1, 3, 1, dimnames = list(NULL, "(Intercept)"))),
+    p   = list(X = matrix(1, 3, 1, dimnames = list(NULL, "(Intercept)"))),
+    pos = list(X = cbind(`(Intercept)` = rep(1, 3), x = rnorm(3)))
+  )
+
+  # Default priors -> all three arms regularised.
+  ap <- tulpaObs:::.occu_cover_coupled_arm_priors(NULL, responses)
+  expect_false(is.null(ap$pos))
+  expect_true(all(is.finite(ap$pos$prec)))
+  expect_true(all(ap$pos$prec > 1e-4))           # tighter than the flat engine ridge
+  expect_false(is.null(ap$psi))
+  expect_false(is.null(ap$p))
+
+  # A custom occu_priors() still leaves the cover arm regularised by the
+  # cover_priors() default.
+  ap2 <- tulpaObs:::.occu_cover_coupled_arm_priors(occu_priors(), responses)
+  expect_false(is.null(ap2$pos))
+  expect_true(all(is.finite(ap2$pos$prec)))
+
+  # priors = FALSE / "none" disables every arm (back to the flat ridge).
+  apN <- tulpaObs:::.occu_cover_coupled_arm_priors(FALSE, responses)
+  expect_null(apN$pos); expect_null(apN$psi); expect_null(apN$p)
+  apN2 <- tulpaObs:::.occu_cover_coupled_arm_priors("none", responses)
+  expect_null(apN2$pos)
+
+  # An explicit cover_priors() narrows the cover arm.
+  ap3 <- tulpaObs:::.occu_cover_coupled_arm_priors(
+    cover_priors(pos_intercept = list(mean = 0, sd = 0.5)), responses)
+  expect_false(is.null(ap3$pos))
+  expect_gt(ap3$pos$prec[1], ap$pos$prec[1])      # sd 0.5 -> higher precision than default sd 3
+})
+
+
 test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
   skip_on_cran()
   skip_if_fast()

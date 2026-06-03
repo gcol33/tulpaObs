@@ -470,6 +470,49 @@
   spatial_info <- .occu_cover_spatial_fields(formula, data)
   has_spatial  <- !is.null(spatial_info)
 
+  # Resolve cover aggregation (tulpaObs#33). NULL (unset) -> "mean" on the
+  # shared-field spatial path (so the cover arm contributes at the cell scale and
+  # does not outweigh occupancy on the shared field), "none" (per-visit) on the
+  # non-spatial path (no shared field to over-weight). `agg_explicit` records
+  # whether the user set it: an explicit mean / median on an unsupported
+  # configuration errors, whereas the bare default quietly falls back to
+  # per-visit cover so a plain visit-level fit keeps working.
+  #
+  # Aggregated cover is a per-cell observation, so its positive design must be
+  # cell-level (resolved from the cell `data`). A `positive` formula that
+  # references a visit-level covariate (a name carried in `visits`) is a
+  # per-visit design and cannot be aggregated: an explicit request errors, the
+  # bare default falls back to per-visit cover.
+  visit_cov_names <- if (is.null(visits)) character(0)
+                     else if (is.data.frame(visits) || is.list(visits)) names(visits)
+                     else character(0)
+  pos_is_visit_level <- length(intersect(all.vars(pos_formula),
+                                          visit_cov_names)) > 0L
+
+  agg_explicit    <- !is.null(family$params$cover_aggregate)
+  cover_aggregate <- family$params$cover_aggregate %||%
+                     (if (has_spatial) "mean" else "none")
+  if (!has_spatial && cover_aggregate != "none") {
+    stop(sprintf(paste0(
+      "occu_cover(cover_aggregate = \"%s\") aggregates the cover arm on the ",
+      "shared-field spatial path (method = \"nested_laplace\"); the non-spatial ",
+      "laplace fit uses per-visit cover (cover_aggregate = \"none\")."),
+      cover_aggregate), call. = FALSE)
+  }
+  if (cover_aggregate != "none" && pos_is_visit_level) {
+    if (agg_explicit) {
+      stop(sprintf(paste0(
+        "occu_cover() cell-aggregated cover (cover_aggregate = \"%s\") needs a ",
+        "cell-level positive design, but the `positive` formula references the ",
+        "visit-level covariate(s) %s (carried in `visits`). Use a cell-level ",
+        "positive covariate (a column of `data`), or cover_aggregate = \"none\" ",
+        "for per-visit cover."), cover_aggregate,
+        paste(intersect(all.vars(pos_formula), visit_cov_names),
+              collapse = ", ")), call. = FALSE)
+    }
+    cover_aggregate <- "none"
+  }
+
   if (has_spatial && engine == "laplace") {
     stop("occu_cover() found a spatial term (icar/bym2) in the psi formula ",
          "but method = \"laplace\" is non-spatial. Use method = ",
@@ -490,22 +533,36 @@
 
   vd_det <- .normalize_visits(visits, detection,
                               n_sites = nrow(y), max_visits = ncol(y))
-  vd_pos <- .normalize_visits(visits, pos_formula,
-                              n_sites = nrow(y), max_visits = ncol(y))
+  # Positive design. Per-visit cover reads the visit-level positive formula from
+  # `visits`; cell-aggregated cover reads a cell-level positive design directly
+  # from `data` (one value per occupancy unit) and carries no visit-level term.
+  if (cover_aggregate == "none") {
+    vd_pos            <- .normalize_visits(visits, pos_formula,
+                                           n_sites = nrow(y), max_visits = ncol(y))
+    pos_site_formula  <- vd_pos$det_formula
+    pos_visit_formula <- vd_pos$det_visit_formula
+    pos_visit_data    <- vd_pos$visits
+  } else {
+    pos_site_formula  <- pos_formula
+    pos_visit_formula <- NULL
+    pos_visit_data    <- NULL
+  }
 
   model <- .tobs_build_occu_cover(
     occ_formula      = fe_formula,
     det_formula      = vd_det$det_formula,
-    pos_formula      = vd_pos$det_formula,
+    pos_formula      = pos_site_formula,
     data             = data,
     y                = y,
     y_pos            = dots$y_pos,
     positive         = family$params$positive,
     det_visit_formula = vd_det$det_visit_formula,
     det_visit_data    = vd_det$visits,
-    pos_visit_formula = vd_pos$det_visit_formula,
-    pos_visit_data    = vd_pos$visits
+    pos_visit_formula = pos_visit_formula,
+    pos_visit_data    = pos_visit_data
   )
+
+  model$cover_aggregate <- cover_aggregate
 
   if (has_spatial) {
     fields      <- spatial_info$fields
@@ -554,6 +611,19 @@
     engine_pick <- control[["engine"]] %||% "joint_coupled"
     control[["engine"]] <- NULL
     if (engine_pick %in% c("v2_joint", "v3_nested")) {
+      # The v2/v3 escape hatches model per-visit cover only; cell-aggregated
+      # cover is a joint_coupled feature. An explicit request errors; the bare
+      # default falls back to per-visit on these engines.
+      if (cover_aggregate != "none") {
+        if (agg_explicit) {
+          stop(sprintf(paste0(
+            "occu_cover() cell-aggregated cover (cover_aggregate = \"%s\") is ",
+            "wired on the default joint_coupled engine; the \"%s\" escape hatch ",
+            "models per-visit cover only."), cover_aggregate, engine_pick),
+            call. = FALSE)
+        }
+        model$cover_aggregate <- "none"
+      }
       if (length(fields) > 1L) {
         stop(sprintf(paste0(
           "occu_cover() engine \"%s\" couples a single shared field; ",

@@ -365,3 +365,100 @@ test_that("beta nodet case: gradients + diagonal neg-Hess match FD (family-indep
 test_that("beta spec is registered under occu_cover_beta at package load", {
     expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_beta"))
 })
+
+
+# ---------------------------------------------------------------------------
+# Cell-aggregated cover (tulpaObs#33). The pos arm carries ONE row per cell
+# (the mean / median cover over the cell's detected visits), so the det branch
+# adds a single log f_pos(ybar; eta_pos_cell). eta_pos / y_pos are length 1;
+# eta_p / y_det stay length J. FD-check the single pos gradient + neg-Hess and
+# confirm the psi / p block is byte-identical to the per-visit spec (the
+# aggregation changes only the pos evaluation count).
+# ---------------------------------------------------------------------------
+
+test_that("aggregated lognormal det case: pos deriv matches FD, psi/p match per-visit", {
+    set.seed(511L)
+    Jc <- 5L
+    eta_psi <- rnorm(1, 0, 0.5)
+    eta_p   <- rnorm(Jc, -0.2, 0.6)
+    y_det   <- c(1L, 0L, 1L, 1L, 0L)
+    eta_pos_cell <- rnorm(1, 1.0, 0.4)
+    ybar    <- exp(eta_pos_cell + rnorm(1, 0, 0.2))     # one aggregated cover
+    sigma_pos <- 0.35
+
+    agg <- function(ep) cpp_eval_occu_cover_lognormal_agg_cell(
+        eta_psi = eta_psi, eta_p = eta_p, eta_pos = ep,
+        y_det = y_det, y_pos = ybar, sigma_pos = sigma_pos)
+    res <- agg(eta_pos_cell)
+    expect_length(res$grad_pos, 1L)
+    expect_length(res$neg_hess_pos, 1L)
+
+    g_fd  <- fd1(function(h) agg(eta_pos_cell + h)$cell_ll)
+    nh_fd <- -fd2(function(h) agg(eta_pos_cell + h)$cell_ll)
+    expect_equal(res$grad_pos[1],     g_fd,  tolerance = 1e-6)
+    expect_equal(res$neg_hess_pos[1], nh_fd, tolerance = 1e-4)
+
+    # psi / p block independent of the cover granularity: equal to the per-visit
+    # spec fed the same psi / p etas (pos arm zeroed there).
+    pv <- cpp_eval_occu_cover_lognormal_cell(
+        eta_psi = eta_psi, eta_p = eta_p, eta_pos = rep(eta_pos_cell, Jc),
+        y_det = y_det, y_pos = ifelse(y_det == 1, ybar, 0), sigma_pos = sigma_pos)
+    expect_equal(res$grad_psi,     pv$grad_psi,     tolerance = 1e-12)
+    expect_equal(res$grad_p,       pv$grad_p,       tolerance = 1e-12)
+    expect_equal(res$neg_hess_psi, pv$neg_hess_psi, tolerance = 1e-12)
+    expect_equal(res$neg_hess_p,   pv$neg_hess_p,   tolerance = 1e-12)
+
+    # One detected visit's cover, aggregated, equals adding that single log f_pos
+    # on top of the psi/p-only density.
+    base_ll <- pv$cell_ll -
+        sum(vapply(which(y_det == 1L), function(v)
+            dlnorm(ifelse(y_det[v] == 1, ybar, 1), eta_pos_cell, sigma_pos,
+                   log = TRUE), numeric(1)))
+    expect_equal(res$cell_ll,
+                 base_ll + dlnorm(ybar, eta_pos_cell, sigma_pos, log = TRUE),
+                 tolerance = 1e-9)
+})
+
+test_that("aggregated beta det case: pos deriv matches FD", {
+    set.seed(622L)
+    Jc <- 4L
+    eta_psi <- rnorm(1, 0, 0.5)
+    eta_p   <- rnorm(Jc, -0.2, 0.6)
+    y_det   <- c(1L, 1L, 0L, 1L)
+    eta_pos_cell <- rnorm(1, 0.3, 0.4)
+    mu <- plogis(eta_pos_cell); phi_pos <- 14
+    ybar <- rbeta(1, mu * phi_pos, (1 - mu) * phi_pos)
+
+    agg <- function(ep) cpp_eval_occu_cover_beta_agg_cell(
+        eta_psi = eta_psi, eta_p = eta_p, eta_pos = ep,
+        y_det = y_det, y_pos = ybar, phi_pos = phi_pos)
+    res <- agg(eta_pos_cell)
+    expect_length(res$grad_pos, 1L)
+
+    g_fd  <- fd1(function(h) agg(eta_pos_cell + h)$cell_ll)
+    nh_fd <- -fd2(function(h) agg(eta_pos_cell + h)$cell_ll)
+    expect_equal(res$grad_pos[1],     g_fd,  tolerance = 1e-5)
+    expect_equal(res$neg_hess_pos[1], nh_fd, tolerance = 1e-3)
+})
+
+test_that("aggregated nodet case: pos arm contributes nothing", {
+    set.seed(733L)
+    Jc <- 4L
+    eta_psi <- rnorm(1, 0, 0.5)
+    eta_p   <- rnorm(Jc, -0.3, 0.6)
+    res <- cpp_eval_occu_cover_lognormal_agg_cell(
+        eta_psi = eta_psi, eta_p = eta_p, eta_pos = 0.7,
+        y_det = rep(0L, Jc), y_pos = 1.0, sigma_pos = 0.35)
+    expect_equal(res$grad_pos[1], 0, tolerance = 1e-12)
+    expect_equal(res$neg_hess_pos[1], 0, tolerance = 1e-12)
+    # cell_ll equals the per-visit spec's nodet density (pos ignored either way).
+    pv <- cpp_eval_occu_cover_lognormal_cell(
+        eta_psi = eta_psi, eta_p = eta_p, eta_pos = rep(0.7, Jc),
+        y_det = rep(0L, Jc), y_pos = rep(0, Jc), sigma_pos = 0.35)
+    expect_equal(res$cell_ll, pv$cell_ll, tolerance = 1e-12)
+})
+
+test_that("aggregated specs are registered at package load", {
+    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_lognormal_agg"))
+    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_beta_agg"))
+})

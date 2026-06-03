@@ -351,6 +351,34 @@ both. ~150-300x faster than v3_nested at N=100
 missing-value compare in outer BFGS. Recovery: 10-seed lognormal + 10-seed beta
 (`test-occu-cover-joint-coupled.R`); status `"experimental"`.
 
+**Cover-arm intercept prior (tulpaObs#32)**: on the shared-field path the cover
+intercept confounds with the field level over detected cells (the cover arm sees
+the field only where detected; the sum-to-zero field constraint pins only the
+global field mean). `.occu_cover_coupled_arm_priors()` therefore hands the pos
+arm the `cover_priors()` weakly-informative intercept prior **by default** (like
+the load-bearing detection-arm prior), not the engine's flat 1e-4 ridge —
+otherwise the cover intercept floats to a huge posterior SD (occupancy stays
+tight, being regularised + observing every cell) and `predict()`'s conditional
+cover blows up via Jensen. `priors = FALSE`/`"none"` disables all three arms.
+
+**Cell-aggregated cover (`cover_aggregate`, tulpaObs#33)**: per-visit cover gives
+the cover arm one row per *valid visit*, so a cell with many detected plots
+drives the shared field far more than its single occupancy obs (field flattens).
+`cover_aggregate = "mean"` (default on the spatial path) / `"median"` collapses
+the cover arm to ONE row per occupancy unit (the per-site mean/median cover over
+detected visits) so the two arms inform the field with comparable weight;
+`"none"` keeps per-visit. Wired ONLY on the spatial `joint_coupled` path (v2/v3 +
+non-spatial laplace reject explicit aggregation, default falls back to per-visit).
+Aggregation needs a **cell-level** positive design (resolved from `data`, not
+`visits`): a visit-level `positive` covariate keeps the per-visit arm (bare
+default falls back, explicit request errors). C++: compile-time `Aggregated`
+template flag on `OccuCoverCoupling` (`src/cell_coupling_occu_cover.h`) evaluates
+the pos density once per cell at arm-2 row 0; registered as
+`occu_cover_{lognormal,beta}_agg`. R: `.occu_cover_build_joint_coupled_arms(
+cover_aggregate=)` builds the one-row-per-detected-site pos arm; the fitter picks
+the `_agg` spec + pre-fits dispersion on the aggregated values. FD checks
+(`test-occu-cover-coupling.R`), recovery + gates (`test-occu-cover-aggregate.R`).
+
 **Coupled SVC/trend fields** (tulpaObs#15): extra shared areal fields = WEIGHTED
 areal terms in psi formula — `icar(graph=adj, weight=year)` couples a
 spatially-varying coef on `year` atop unweighted intercept field
