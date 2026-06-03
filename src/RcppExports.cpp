@@ -115,6 +115,67 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_register_occu_cover_lognormal_latent_coupling
+void cpp_register_occu_cover_lognormal_latent_coupling(Rcpp::List cover_values, double sigma_eps, int n_quad);
+RcppExport SEXP _tulpaObs_cpp_register_occu_cover_lognormal_latent_coupling(SEXP cover_valuesSEXP, SEXP sigma_epsSEXP, SEXP n_quadSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type cover_values(cover_valuesSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_eps(sigma_epsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_quad(n_quadSEXP);
+    cpp_register_occu_cover_lognormal_latent_coupling(cover_values, sigma_eps, n_quad);
+    return R_NilValue;
+END_RCPP
+}
+// cpp_register_occu_cover_beta_latent_coupling
+void cpp_register_occu_cover_beta_latent_coupling(Rcpp::List cover_values, double phi_prec, int n_quad);
+RcppExport SEXP _tulpaObs_cpp_register_occu_cover_beta_latent_coupling(SEXP cover_valuesSEXP, SEXP phi_precSEXP, SEXP n_quadSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type cover_values(cover_valuesSEXP);
+    Rcpp::traits::input_parameter< double >::type phi_prec(phi_precSEXP);
+    Rcpp::traits::input_parameter< int >::type n_quad(n_quadSEXP);
+    cpp_register_occu_cover_beta_latent_coupling(cover_values, phi_prec, n_quad);
+    return R_NilValue;
+END_RCPP
+}
+// cpp_eval_occu_cover_lognormal_latent_cell
+Rcpp::List cpp_eval_occu_cover_lognormal_latent_cell(double eta_psi, Rcpp::NumericVector eta_p, double eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos_vals, double sigma_eps, double sigma_u, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_cover_lognormal_latent_cell(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_pos_valsSEXP, SEXP sigma_epsSEXP, SEXP sigma_uSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< double >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos_vals(y_pos_valsSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_eps(sigma_epsSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_u(sigma_uSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_cover_lognormal_latent_cell(eta_psi, eta_p, eta_pos, y_det, y_pos_vals, sigma_eps, sigma_u, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_eval_occu_cover_beta_latent_cell
+Rcpp::List cpp_eval_occu_cover_beta_latent_cell(double eta_psi, Rcpp::NumericVector eta_p, double eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos_vals, double phi_prec, double sigma_u, int n_quad, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_cover_beta_latent_cell(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_pos_valsSEXP, SEXP phi_precSEXP, SEXP sigma_uSEXP, SEXP n_quadSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< double >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos_vals(y_pos_valsSEXP);
+    Rcpp::traits::input_parameter< double >::type phi_prec(phi_precSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_u(sigma_uSEXP);
+    Rcpp::traits::input_parameter< int >::type n_quad(n_quadSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_cover_beta_latent_cell(eta_psi, eta_p, eta_pos, y_det, y_pos_vals, phi_prec, sigma_u, n_quad, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_register_occu_multiscale_cover_coupling
 std::string cpp_register_occu_multiscale_cover_coupling(std::string positive, Rcpp::IntegerVector n_plots_per_cell, Rcpp::IntegerVector plot_sizes_flat);
 RcppExport SEXP _tulpaObs_cpp_register_occu_multiscale_cover_coupling(SEXP positiveSEXP, SEXP n_plots_per_cellSEXP, SEXP plot_sizes_flatSEXP) {
@@ -617,6 +678,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_eval_occu_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_beta_cell, 7},
     {"_tulpaObs_cpp_eval_occu_cover_lognormal_agg_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_lognormal_agg_cell, 7},
     {"_tulpaObs_cpp_eval_occu_cover_beta_agg_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_beta_agg_cell, 7},
+    {"_tulpaObs_cpp_register_occu_cover_lognormal_latent_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_lognormal_latent_coupling, 3},
+    {"_tulpaObs_cpp_register_occu_cover_beta_latent_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_beta_latent_coupling, 3},
+    {"_tulpaObs_cpp_eval_occu_cover_lognormal_latent_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_lognormal_latent_cell, 8},
+    {"_tulpaObs_cpp_eval_occu_cover_beta_latent_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_beta_latent_cell, 9},
     {"_tulpaObs_cpp_register_occu_multiscale_cover_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_multiscale_cover_coupling, 3},
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell, 9},
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},

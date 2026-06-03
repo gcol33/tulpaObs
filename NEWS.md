@@ -2,6 +2,47 @@
 
 ## 0.0.10 (development)
 
+* fix(occu_cover): GOF (`tobs_waic` / `tobs_dic` / `tobs_cpo`) now scores the
+  cover term at the granularity the fit used (tulpaObs#34). The pointwise
+  log-likelihood evaluated the positive-arm density at every detected visit even
+  for a `cover_aggregate = "mean"` / `"median"` / `"latent"` fit, so it scored a
+  likelihood the model was never fit to: `p_waic` grew super-linearly in the
+  visits-per-site count and the LOO Pareto-k fraction went pathological. The
+  cover term is now evaluated once per occupancy unit at the aggregated cover
+  (mean / median) or via the per-unit cover-RE marginal (latent), matching the
+  fitter. The pointwise log-likelihood also reads the dispersion the spec held
+  fixed (`sigma_pos` / beta precision) instead of a bare unit default, so the
+  WAIC / DIC / LOO of every spatial `occu_cover()` fit is on the fitted
+  dispersion scale. Regression test in `test-occu-cover-aggregate.R`.
+
+* fix(occu_cover): `predict()` / WAIC grid sampling no longer fails when the
+  outer grid has non-converged cells. `tulpa_posterior_draws()` samples the grid
+  mixture by `fit$weights`; when a corner of the grid carries a non-finite
+  `log_marginal` (e.g. the beta latent spec's Gauss-Hermite arm not converging)
+  the engine's normalized weights could collapse to all-zero, leaving the sampler
+  with no positive-weight cell ("nothing to sample"). The joint-coupled fitter now
+  falls back to the same finite-cell softmax weights it uses for the reported
+  posterior moments, so `predict()` and WAIC stay consistent with the point
+  estimates. Covered by the beta latent predict test in
+  `test-occu-cover-latent.R`.
+
+* feat(occu_cover): latent cover-per-unit (`cover_aggregate = "latent"`). The
+  principled counterpart of mean / median aggregation: instead of collapsing a
+  unit's detected covers to one number, the cover arm carries a per-unit cover
+  random effect `u_i ~ N(0, sigma_u^2)` shared across the unit's detected visits
+  and integrates it out per unit, keeping every detected visit. The lognormal
+  arm integrates in closed form (compound-symmetry sufficient statistics); the
+  beta arm uses adaptive Gauss-Hermite quadrature (`control$n.quad`, default 15).
+  Because the cover predictor is unit-level the per-unit marginal is a scalar
+  function of one eta, so it slots into the one-row-per-unit layout with no
+  within-arm Hessian coupling. The within-unit dispersion is pre-fit from the
+  within-unit spread and held fixed; `sigma_u` is integrated on the outer grid
+  (reported as the `phi_pos` hyperparameter; `control$sigma.u.grid`). Same gates
+  as aggregation (cell-level positive design, shared-field spatial path,
+  `joint_coupled` engine). New stateful `_latent` cell-coupling specs
+  (FD-checked vs brute-force numerical integration in `test-occu-cover-latent.R`);
+  `sigma_u` + field + coefficient recovery in the same file.
+
 * feat(occu_cover): cell-aggregated cover (`cover_aggregate`, tulpaObs#33). On
   the shared-field spatial path the cover arm carried one observation per
   detected visit, so a cell with many detected plots drove the shared ICAR field

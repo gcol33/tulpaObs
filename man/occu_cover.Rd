@@ -10,10 +10,11 @@ occu_cover(positive = c("beta", "lognormal"), cover_aggregate = NULL)
 \item{positive}{likelihood for the positive cover arm. \code{"beta"} (cover
 in (0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
 
-\item{cover_aggregate}{how the cover arm aggregates per occupancy unit on the
-shared-field spatial path: \code{"mean"}, \code{"median"}, or \code{"none"} (per-visit).
-\code{NULL} (default) is \code{"mean"} on the spatial path and \code{"none"} on the
-non-spatial path. See the \emph{Cell-aggregated cover} section.}
+\item{cover_aggregate}{how the cover arm collapses per occupancy unit on the
+shared-field spatial path: \code{"mean"}, \code{"median"}, \code{"latent"} (a per-unit
+cover random effect integrated out), or \code{"none"} (per-visit). \code{NULL}
+(default) is \code{"mean"} on the spatial path and \code{"none"} on the non-spatial
+path. See the \emph{Cell-aggregated cover} section.}
 }
 \value{
 A \code{tobs_family} object.
@@ -115,6 +116,15 @@ field with comparable weight:
 \itemize{
 \item \code{"mean"} -- model the mean cover over the unit's detected visits;
 \item \code{"median"} -- model the median cover;
+\item \code{"latent"} -- model a per-unit cover random effect
+\eqn{u_i \sim N(0, \sigma_u^2)} shared across the unit's detected visits
+and integrated out per unit, so the cover arm contributes one marginal
+observation per unit while keeping every detected visit (the principled
+counterpart of mean / median aggregation). The lognormal arm integrates
+in closed form (compound-symmetry); the beta arm uses adaptive
+Gauss-Hermite quadrature (\code{control$n.quad}, default 15). The within-unit
+dispersion is pre-fit from the within-unit spread and held fixed;
+\eqn{\sigma_u} is integrated on the outer grid (\code{control$sigma.u.grid}).
 \item \code{"none"} -- the per-visit cover arm (one cover observation per
 detected visit).
 }

@@ -186,22 +186,33 @@
   # once per cell so the cover arm contributes at the cell scale rather than the
   # per-visit scale (otherwise a cell with many detected plots drives the shared
   # field far more than the single occupancy observation for that cell).
+  pos_cover_values <- NULL
   if (identical(cover_aggregate, "none")) {
     pos_site  <- site_of_visit
     pos_cell  <- cell_of_visit
     y_pos_arm <- y_pos_visit
     X_pos_arm <- X_pos
   } else {
-    aggfun <- if (identical(cover_aggregate, "median")) stats::median else mean
-    det_mat  <- model$valid & (model$y == 1L)   # n_sites x max_visits
-    pos_site <- which(rowSums(det_mat) > 0L)
+    # "mean" / "median" / "latent" all carry one pos row per detected occupancy
+    # unit with the site-level positive design; they differ only in the cover
+    # response. "latent" (per-unit cover RE integrated out) keeps every detected
+    # visit's cover in `pos_cover_values` for the stateful latent spec and uses
+    # the per-site mean only as the arm's placeholder y (the spec reads its own
+    # captured data, not y(2, j)).
+    units    <- .occu_cover_unit_cover(model)
+    pos_site <- units$pos_site
     if (length(pos_site) == 0L) {
       stop("occu_cover joint_coupled: no detected visits to aggregate cover ",
            "over.", call. = FALSE)
     }
-    y_pos_arm <- vapply(pos_site, function(i) {
-      as.numeric(aggfun(model$y_pos[i, det_mat[i, ]]))
-    }, numeric(1))
+    if (identical(cover_aggregate, "latent")) {
+      pos_cover_values <- units$vals
+      y_pos_arm <- vapply(units$vals, mean, numeric(1))   # placeholder
+    } else {
+      aggfun <- if (identical(cover_aggregate, "median")) stats::median else mean
+      y_pos_arm <- vapply(units$vals, function(v) as.numeric(aggfun(v)),
+                          numeric(1))
+    }
     X_pos_arm <- X_pos_site[pos_site, , drop = FALSE]   # site-level design only
     pos_cell  <- as.integer(site_cell[pos_site])
   }
@@ -239,7 +250,8 @@
        cell_of_visit  = cell_of_visit,
        n_visits_valid = n_visits_valid,
        pos_site       = as.integer(pos_site),
-       n_pos_rows     = n_pos_rows)
+       n_pos_rows     = n_pos_rows,
+       pos_cover_values = pos_cover_values)
 }
 
 
@@ -326,12 +338,17 @@
     stop("occu_cover() joint_coupled engine supports positive = ",
          "\"lognormal\" or \"beta\".", call. = FALSE)
   }
-  # Cell-aggregated cover (tulpaObs#33) routes through the `_agg` cell-coupling
-  # spec, which evaluates the cover density once per occupancy unit.
+  # Cover-arm granularity. "mean" / "median" (tulpaObs#33) route through the
+  # `_agg` spec (one log f_pos at the per-unit mean / median); "latent" routes
+  # through the stateful `_latent` spec (a per-unit cover RE integrated out, one
+  # marginal per unit); "none" is the per-visit spec.
   cover_aggregate <- model$cover_aggregate %||% "none"
-  aggregated <- !identical(cover_aggregate, "none")
-  spec_base <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
-  spec_name <- if (aggregated) paste0(spec_base, "_agg") else spec_base
+  is_latent  <- identical(cover_aggregate, "latent")
+  aggregated <- !identical(cover_aggregate, "none") && !is_latent
+  spec_base  <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
+  spec_name  <- if (is_latent) paste0(spec_base, "_latent")
+                else if (aggregated) paste0(spec_base, "_agg")
+                else spec_base
 
   pi_list <- model$process_info
   # Field nodes (cells) and occupancy units (sites) are distinct under
@@ -349,38 +366,78 @@
 
   dots <- list(...)
 
-  # Pre-fit the pos-arm dispersion at the empirical sample value of the cover
-  # observations the arm actually models. For lognormal, that's the SD of
-  # log(y_pos) (matching the v3 nested-Laplace warm start for log_disp); for
-  # beta, a moment-matched precision from the sample mean and variance of y_pos
-  # in (0, 1). Under aggregation the modelled observation is the per-site mean /
-  # median, so the dispersion is pre-fit on those aggregated values (a
-  # per-visit-scale dispersion would over-state the noise of a cell mean).
-  pos_vals <- if (aggregated) {
-    aggfun  <- if (identical(cover_aggregate, "median")) stats::median else mean
-    det_mat <- model$valid & (model$y == 1L)
-    sw      <- which(rowSums(det_mat) > 0L)
-    vapply(sw, function(i) as.numeric(aggfun(model$y_pos[i, det_mat[i, ]])),
-           numeric(1))
-  } else {
-    model$y_pos[model$valid & model$y == 1L]
-  }
-  phi_pos_init <- if (is_beta) {
-    if (length(pos_vals) >= 2L) {
-      mu_hat   <- mean(pos_vals)
-      var_hat  <- max(stats::var(pos_vals), 1e-6)
-      max((mu_hat * (1 - mu_hat)) / var_hat - 1, 1)
+  # Pre-fit the pos-arm dispersion(s). The non-latent paths carry a single
+  # dispersion on the pos arm's phi slot; the latent path carries the integrated
+  # cover-latent SD (sigma_u) there and holds a SECOND, within-unit dispersion
+  # (disp2_fixed) fixed in the stateful spec.
+  disp2_fixed <- NULL
+  if (is_latent) {
+    # The within-unit dispersion (disp2) is FIXED and captured in the spec;
+    # sigma_u (the integrated cover-latent SD) rides the pos arm's phi axis.
+    # Pre-fit disp2 from the WITHIN-unit spread and seed sigma_u from the
+    # BETWEEN-unit spread: Var(log y) = sigma_eps^2 + sigma_u^2, so pre-fitting
+    # disp2 at the total spread would swallow sigma_u and leave it unidentified.
+    det_mat   <- model$valid & (model$y == 1L)
+    det_sites <- which(rowSums(det_mat) > 0L)
+    site_vals <- lapply(det_sites, function(i)
+                        as.numeric(model$y_pos[i, det_mat[i, ]]))
+    has_2 <- length(det_sites) >= 2L
+    if (is_beta) {
+      all_v   <- unlist(site_vals)
+      mu_hat  <- mean(all_v)
+      var_hat <- max(stats::var(all_v), 1e-6)
+      disp2_fixed  <- max((mu_hat * (1 - mu_hat)) / var_hat - 1, 1)
+      site_mu      <- vapply(site_vals, function(v)
+        stats::qlogis(min(max(mean(v), 1e-3), 1 - 1e-3)), numeric(1))
+      sigma_u_init <- if (has_2) max(stats::sd(site_mu), 0.1) else 0.5
     } else {
-      10
+      logvals    <- lapply(site_vals, log)
+      site_means <- vapply(logvals, mean, numeric(1))
+      m_per      <- lengths(logvals)
+      within_ss  <- sum(vapply(logvals, function(lv)
+        if (length(lv) >= 2L) sum((lv - mean(lv))^2) else 0, numeric(1)))
+      within_df  <- sum(pmax(m_per - 1L, 0L))
+      disp2_fixed  <- if (within_df > 0L) max(sqrt(within_ss / within_df), 0.05)
+                      else max(stats::sd(unlist(logvals)), 0.05)
+      between_var  <- if (has_2)
+                        stats::var(site_means) - disp2_fixed^2 / mean(m_per)
+                      else NA_real_
+      sigma_u_init <- if (is.finite(between_var))
+                        max(sqrt(max(between_var, 1e-4)), 0.1) else 0.5
     }
+    sigma_pos_init <- sigma_u_init
   } else {
-    if (length(pos_vals) > 0L) {
-      max(stats::sd(log(pos_vals)), 0.05) + 0.05
+    # Pre-fit the single pos-arm dispersion at the empirical sample value of the
+    # cover observations the arm actually models. For lognormal, the SD of
+    # log(y_pos); for beta, a moment-matched precision. Under mean / median
+    # aggregation the modelled observation is the per-unit mean / median, so the
+    # dispersion is pre-fit on those aggregated values.
+    pos_vals <- if (aggregated) {
+      aggfun  <- if (identical(cover_aggregate, "median")) stats::median else mean
+      det_mat <- model$valid & (model$y == 1L)
+      sw      <- which(rowSums(det_mat) > 0L)
+      vapply(sw, function(i) as.numeric(aggfun(model$y_pos[i, det_mat[i, ]])),
+             numeric(1))
     } else {
-      0.4
+      model$y_pos[model$valid & model$y == 1L]
     }
+    phi_pos_init <- if (is_beta) {
+      if (length(pos_vals) >= 2L) {
+        mu_hat   <- mean(pos_vals)
+        var_hat  <- max(stats::var(pos_vals), 1e-6)
+        max((mu_hat * (1 - mu_hat)) / var_hat - 1, 1)
+      } else {
+        10
+      }
+    } else {
+      if (length(pos_vals) > 0L) {
+        max(stats::sd(log(pos_vals)), 0.05) + 0.05
+      } else {
+        0.4
+      }
+    }
+    sigma_pos_init <- phi_pos_init  # passed through as pos-arm phi
   }
-  sigma_pos_init <- phi_pos_init  # passed through as pos-arm phi
 
   alpha_grid <- dots$alpha.grid %||%
                 c(0, exp(seq(log(0.1), log(3), length.out = 5)))
@@ -427,6 +484,7 @@
   n_v            <- arms_out$n_visits_valid
   pos_site       <- arms_out$pos_site
   n_pos_rows     <- arms_out$n_pos_rows
+  pos_cover_values <- arms_out$pos_cover_values
 
   # Attach the per-arm fixed-effect priors. These reach tulpa's joint engine as
   # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replace
@@ -452,11 +510,36 @@
       ), extra)
   }
 
-  # Optional sigma_pos integration via a phi_grid axis on the pos arm.
-  phi_grid_pos <- dots$phi.grid.pos
-  phi_grid_arg <- if (!is.null(phi_grid_pos))
-                    list(pos = as.numeric(phi_grid_pos))
-                  else NULL
+  # Pos-arm phi axis on the outer grid. For the latent path the pos arm's phi IS
+  # sigma_u (the cover-latent SD), integrated over `sigma.u.grid` (default a
+  # log-spaced grid around the between-unit init); the within-unit dispersion is
+  # fixed in the spec. Otherwise the phi slot is sigma_pos and the optional
+  # `phi.grid.pos` integrates it.
+  if (is_latent) {
+    su_grid <- dots$sigma.u.grid %||%
+               (sigma_u_init * exp(seq(log(0.4), log(2.5), length.out = 4L)))
+    phi_grid_arg <- list(pos = as.numeric(su_grid))
+  } else {
+    phi_grid_pos <- dots$phi.grid.pos
+    phi_grid_arg <- if (!is.null(phi_grid_pos))
+                      list(pos = as.numeric(phi_grid_pos))
+                    else NULL
+  }
+
+  # Register the stateful latent spec for THIS fit: it captures the per-unit
+  # detected cover values (indexed by pos-arm row, the order the builder emits)
+  # and the fixed within-unit dispersion. Last-writer-wins under the fixed name;
+  # the joint driver holds the resolved shared_ptr for the duration of the fit.
+  if (is_latent) {
+    n_quad_latent <- as.integer(dots$n.quad %||% (if (is_beta) 15L else 1L))
+    if (is_beta) {
+      cpp_register_occu_cover_beta_latent_coupling(
+        pos_cover_values, disp2_fixed, n_quad_latent)
+    } else {
+      cpp_register_occu_cover_lognormal_latent_coupling(
+        pos_cover_values, disp2_fixed, n_quad_latent)
+    }
+  }
 
   if (has_trend) {
     # Multi-block path: the intercept ICAR block plus one ICAR block per coupled
@@ -595,6 +678,22 @@
   }
   w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
   w     <- w_raw / sum(w_raw)
+
+  # Reconcile the engine's grid weights with the ok-cell weights when the engine
+  # left none usable. tulpa_posterior_draws() (predict / WAIC grid sampling) reads
+  # fit$weights; when some cells carry a non-finite log_marginal (a corner of the
+  # grid where the inner Newton -- e.g. the beta latent spec's Gauss-Hermite arm
+  # -- did not converge) the engine's normalized weights can collapse to all zero,
+  # so the sampler finds no positive-weight cell. Fall back to the same pure
+  # softmax over finite-log_marginal cells the reported posterior moments use, so
+  # predict() / WAIC stay consistent with the point estimates. Untouched when the
+  # engine weights are already usable (every finite-grid fit).
+  if (!any(is.finite(fit$weights) & fit$weights > 0)) {
+    w_full <- numeric(length(fit$log_marginal))
+    w_full[ok_cells] <- w
+    fit$weights <- w_full
+  }
+
   modes <- fit$modes[ok_cells, , drop = FALSE]
   beta_psi_m  <- as.numeric(crossprod(w, modes[, bpsi_idx, drop = FALSE]))
   beta_p_m    <- as.numeric(crossprod(w, modes[, bp_idx,   drop = FALSE]))
@@ -712,16 +811,19 @@
   hyper_means <- numeric(0)
   hyper_sds   <- numeric(0)
   hyper_names <- character(0)
-  pick <- function(name) {
+  pick <- function(name, public = name) {
     j <- match(name, tg_names)
     if (is.na(j)) return(invisible(NULL))
     vals <- as.numeric(tg_ok[, j])
     m <- sum(w * vals)
     v <- sum(w * vals^2) - m^2
-    hyper_means[[name]] <<- m
-    hyper_sds  [[name]] <<- sqrt(max(v, 0))
-    hyper_names <<- c(hyper_names, name)
+    hyper_means[[public]] <<- m
+    hyper_sds  [[public]] <<- sqrt(max(v, 0))
+    hyper_names <<- c(hyper_names, public)
   }
+  # On the latent path the pos arm's phi axis IS the cover-latent SD; surface it
+  # as `sigma_u` rather than the engine's generic `phi_pos`.
+  phi_pos_public <- if (is_latent) "sigma_u" else "phi_pos"
   # pick2 reads a multi-block axis column (`b<k>.<axis>`) under a public name.
   pick2 <- function(public, col) {
     j <- match(col, tg_names)
@@ -744,9 +846,9 @@
       pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
     }
-    pick("phi_pos")
+    pick("phi_pos", phi_pos_public)
   } else {
-    for (nm in c("sigma", "alpha", "phi_pos")) pick(nm)
+    pick("sigma"); pick("alpha"); pick("phi_pos", phi_pos_public)
   }
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])
@@ -827,6 +929,20 @@
   if (!is.null(Vj)) dimnames(Vj) <- list(joint_par_names, joint_par_names)
 
   log_lik_val <- sum(w * fit$log_marginal[ok_cells])
+
+  # Record the fixed within-unit dispersion (sigma_eps / beta precision) so the
+  # latent-path predict can reconstruct the marginal cover (it pairs with the
+  # integrated sigma_u reported in `means`).
+  if (is_latent) {
+    model$cover_latent_disp2 <- disp2_fixed
+    model$cover_latent_nquad <- n_quad_latent
+  }
+  # Record the pos-arm dispersion the spec held fixed (sigma_pos for non-latent;
+  # the latent path integrates sigma_u on the grid instead). The pointwise
+  # log-likelihood reads it to score the cover term at the fitted dispersion
+  # rather than a bare unit default (gcol33/tulpaObs#34).
+  if (!is_latent) model$cover_pos_disp <- sigma_pos_init
+
   structure(c(list(
     draws        = draws,
     means        = means,

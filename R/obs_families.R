@@ -241,6 +241,15 @@ jsdm <- function() {
 #' \itemize{
 #'   \item `"mean"` -- model the mean cover over the unit's detected visits;
 #'   \item `"median"` -- model the median cover;
+#'   \item `"latent"` -- model a per-unit cover random effect
+#'     \eqn{u_i \sim N(0, \sigma_u^2)} shared across the unit's detected visits
+#'     and integrated out per unit, so the cover arm contributes one marginal
+#'     observation per unit while keeping every detected visit (the principled
+#'     counterpart of mean / median aggregation). The lognormal arm integrates
+#'     in closed form (compound-symmetry); the beta arm uses adaptive
+#'     Gauss-Hermite quadrature (`control$n.quad`, default 15). The within-unit
+#'     dispersion is pre-fit from the within-unit spread and held fixed;
+#'     \eqn{\sigma_u} is integrated on the outer grid (`control$sigma.u.grid`).
 #'   \item `"none"` -- the per-visit cover arm (one cover observation per
 #'     detected visit).
 #' }
@@ -254,10 +263,11 @@ jsdm <- function() {
 #'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
-#' @param cover_aggregate how the cover arm aggregates per occupancy unit on the
-#'   shared-field spatial path: `"mean"`, `"median"`, or `"none"` (per-visit).
-#'   `NULL` (default) is `"mean"` on the spatial path and `"none"` on the
-#'   non-spatial path. See the *Cell-aggregated cover* section.
+#' @param cover_aggregate how the cover arm collapses per occupancy unit on the
+#'   shared-field spatial path: `"mean"`, `"median"`, `"latent"` (a per-unit
+#'   cover random effect integrated out), or `"none"` (per-visit). `NULL`
+#'   (default) is `"mean"` on the spatial path and `"none"` on the non-spatial
+#'   path. See the *Cell-aggregated cover* section.
 #' @return A `tobs_family` object.
 #' @seealso [occu()] (no cover), [cover()] (plot-level hurdle, no detection),
 #'   [abun()] (counts not cover).
@@ -267,7 +277,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
   positive <- match.arg(positive)
   if (!is.null(cover_aggregate)) {
     cover_aggregate <- match.arg(cover_aggregate,
-                                 c("mean", "median", "none"))
+                                 c("mean", "median", "latent", "none"))
   }
   obs_family(
     name           = "occu_cover",
@@ -285,7 +295,8 @@ occu_cover <- function(positive = c("beta", "lognormal"),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
-      "phi.grid.pos", "n.threads", "inner.refresh", "hessian",
+      "phi.grid.pos", "sigma.u.grid", "n.quad",
+      "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "diagnose.k", "k.samples",

@@ -61,6 +61,44 @@
   cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
 }
 
+# Cover mean on the natural scale from the cover linear predictor `eta_pos`
+# ([nrow x n]). `bundle$disp` is the per-draw positive-arm dispersion read off
+# the `phi_pos` grid axis: the residual SD (lognormal) / precision (beta) for the
+# non-latent paths, the integrated cover-latent SD sigma_u for the latent path.
+#
+# Non-latent: the per-visit cover mean. Lognormal log-normal mean exp(eta +
+# sigma^2/2); beta mean plogis(eta) (the beta mean given the linear predictor).
+#
+# Latent (cover_aggregate == "latent"): the cover mean marginalized over the
+# per-unit cover latent u ~ N(0, sigma_u^2), with the within-unit dispersion
+# (sigma_eps lognormal / precision beta) held fixed at model$cover_latent_disp2.
+# Lognormal: total log-scale variance sigma_eps^2 + sigma_u^2, so the marginal
+# mean is exp(eta + (sigma_eps^2 + sigma_u^2)/2). Beta: the marginal mean is
+# E_u[plogis(eta + u)] (no closed form), integrated by Gauss-Hermite. sigma_u
+# rides the grid per draw, so the marginal cover is integrated over the joint
+# outer grid -- the marginalize-derived-quantities rule, not a plug-in of the
+# posterior-mean sigma_u.
+.tobs_cover_mu <- function(eta_pos, bundle, object) {
+  latent <- identical(object$model$cover_aggregate, "latent")
+  if (identical(bundle$positive, "beta")) {
+    if (!latent) return(stats::plogis(eta_pos))
+    sigma_u <- bundle$disp
+    gh <- .gauss_hermite(15L)
+    c0 <- 1 / sqrt(pi)
+    mu <- matrix(0, nrow(eta_pos), ncol(eta_pos))
+    for (g in seq_along(gh$x)) {
+      shift <- sqrt(2) * sigma_u * gh$x[g]                # per-draw u node
+      mu <- mu + (gh$w[g] * c0) *
+        stats::plogis(sweep(eta_pos, 2L, shift, "+"))
+    }
+    return(mu)
+  }
+  if (!latent) return(exp(sweep(eta_pos, 2L, bundle$disp^2 / 2, "+")))
+  sigma_eps <- as.numeric(object$model$cover_latent_disp2)
+  log_var   <- sigma_eps^2 + bundle$disp^2               # per-draw total variance
+  exp(sweep(eta_pos, 2L, log_var / 2, "+"))
+}
+
 # Posterior-summary table for a single quantity: per-unit mean + level CI.
 .occu_cover_summ <- function(mat, cell, level) {
   a <- (1 - level) / 2
@@ -137,11 +175,7 @@
     eta_occ <- .tobs_joint_arm_eta(bundle, X_occ, "occ", cell, wf)
     eta_pos <- .tobs_joint_arm_eta(bundle, X_pos, "pos", cell, wf)
     p <- stats::plogis(eta_occ)
-    mu <- if (identical(bundle$positive, "beta")) {
-      stats::plogis(eta_pos)
-    } else {
-      exp(sweep(eta_pos, 2L, bundle$disp^2 / 2, "+"))
-    }
+    mu <- .tobs_cover_mu(eta_pos, bundle, object)
     list(p = p, mu = mu, E = p * mu)
   }
 

@@ -23,6 +23,7 @@
 #define TULPAOBS_OCCU_COUPLING_SHARED_H
 
 #include <tulpa/portable_math.h>   // portable_digamma / portable_trigamma
+#include <tulpa/cell_coupling.h>   // CellEtas / CellResponse / CellDerivs / CurvatureMode
 #include <Rcpp.h>                  // M_PI
 #include <cmath>
 #include <cstddef>
@@ -235,6 +236,75 @@ inline double nodet_mixture_block(
         }
     }
     return log_safe_(L);
+}
+
+
+// ---------------------------------------------------------------------------
+// occu_det_psi_p_block -- shared det-branch occupancy + detection accumulation
+// for the occu_cover specs (per-visit, aggregated, and latent). At a cell with
+// >= 1 detection the occupancy / detection arms factorise from the cover arm,
+// so this writes arm 0 (psi) and arm 1 (p) score / observed information and
+// returns  log psi + sum_v [ y_det log p_v + (1 - y_det) log(1 - p_v) ]
+// WITHOUT any cover (pos) contribution -- the caller adds its positive-arm
+// term (one log f_pos per detected visit, one aggregated log f_pos, or one
+// latent marginal log M). Cross-Hessians are zero in the det branch.
+inline double occu_det_psi_p_block(double                     psi,
+                                   const tulpa::CellEtas&     etas,
+                                   const tulpa::CellResponse& y_cell,
+                                   int                        Jc,
+                                   bool                       want_hess,
+                                   tulpa::CellDerivs&         out) {
+    double cell_ll = log_safe_(psi);
+    out.arm_grad[0][0] = 1.0 - psi;
+    if (want_hess) out.arm_neg_hess_diag[0][0] = psi * (1.0 - psi);
+    for (int v = 0; v < Jc; ++v) {
+        const double p_v   = sigmoid_(etas.eta(1, v));
+        const double y_det = y_cell.y(1, v);
+        if (y_det > 0.5) {
+            cell_ll += log_safe_(p_v);
+            out.arm_grad[1][v] = 1.0 - p_v;
+        } else {
+            cell_ll += log_safe_(1.0 - p_v);
+            out.arm_grad[1][v] = -p_v;
+        }
+        if (want_hess) out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
+    }
+    return cell_ll;
+}
+
+
+// ---------------------------------------------------------------------------
+// occu_nodet_block -- shared no-detection branch for the occu_cover specs. The
+// whole cell collapses to the all-undetected occupancy mixture
+// L = psi P0 + (1 - psi); the cover arm contributes nothing. Drives the shared
+// nodet_mixture_block with w = psi over the cell's Jc visits, places the
+// occupancy score / curvature into arm 0 and the detection terms into arm 1
+// (incl. the (psi, p) and (p, p) cross-Hessian blocks under the Observed
+// curvature), and returns log L.
+inline double occu_nodet_block(double                     psi,
+                               const tulpa::CellEtas&     etas,
+                               int                        Jc,
+                               bool                       want_hess,
+                               tulpa::CellDerivs&         out) {
+    const bool expected = (out.curvature == tulpa::CurvatureMode::Expected);
+    std::vector<double> eta_p_buf(Jc);
+    for (int v = 0; v < Jc; v++) eta_p_buf[v] = etas.eta(1, v);
+
+    double* cross_w_p = (!expected && want_hess && out.arm_cross_hess
+                         && out.arm_cross_hess[0] && out.arm_cross_hess[0][1])
+                        ? out.arm_cross_hess[0][1] : nullptr;
+    double* cross_p_p = (!expected && want_hess && out.arm_cross_hess
+                         && out.arm_cross_hess[1] && out.arm_cross_hess[1][1])
+                        ? out.arm_cross_hess[1][1] : nullptr;
+
+    double g_psi = 0.0, nh_psi = 0.0;
+    const double cell_ll = nodet_mixture_block(
+        psi, eta_p_buf.data(), Jc, want_hess, expected,
+        g_psi, nh_psi, out.arm_grad[1], out.arm_neg_hess_diag[1],
+        cross_w_p, cross_p_p);
+    out.arm_grad[0][0] = g_psi;
+    if (want_hess) out.arm_neg_hess_diag[0][0] = nh_psi;
+    return cell_ll;
 }
 
 } // namespace tulpaObs

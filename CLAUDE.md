@@ -379,6 +379,31 @@ cover_aggregate=)` builds the one-row-per-detected-site pos arm; the fitter pick
 the `_agg` spec + pre-fits dispersion on the aggregated values. FD checks
 (`test-occu-cover-coupling.R`), recovery + gates (`test-occu-cover-aggregate.R`).
 
+**Latent cover-per-unit (`cover_aggregate = "latent"`)**: the principled version
+of mean/median — instead of collapsing a unit's detected covers to one number,
+the cover arm carries a per-unit cover RE `u_i ~ N(0, sigma_u^2)` shared across
+the unit's detected visits and integrates it out per unit (keeping every detected
+visit). Because the cover predictor is unit-level the per-unit marginal `log M_i`
+is a SCALAR function of one eta, so it reuses the one-row-per-unit layout with no
+within-arm Hessian coupling. Lognormal = closed form (compound-symmetry suff
+stats `m,T1,T2` → `src/occu_cover_latent.h::LognormalLatent`); beta = adaptive
+Gauss-Hermite over scalar `u_i` reusing `BetaPositive` (`BetaLatent`, GH nodes
+from the engine's exported `<tulpa/gauss_hermite.h>`, `control$n.quad` default
+15). Two dispersions: the within-unit one (`sigma_eps` / beta precision) is
+pre-fit from the **within-unit** spread (NOT the total — that would swallow
+`sigma_u`) and held FIXED in the spec; `sigma_u` rides the pos arm's `phi_grid`
+axis (`control$sigma.u.grid`), integrated on the outer grid and reported as the
+`phi_pos` hyperparameter (`joint_fit$theta_mean[["phi_pos"]]`). The spec is
+**stateful** (`OccuCoverLatentCoupling<PosLatent>`,
+`src/cell_coupling_occu_cover_latent.h`): it captures the per-unit cover data +
+fixed dispersion at construction and is (re)registered per fit via
+`cpp_register_occu_cover_{lognormal,beta}_latent_coupling()` (last-writer-wins; the
+joint driver holds the resolved shared_ptr for the fit). Shared det-branch psi/p
++ nodet logic is factored into `occu_det_psi_p_block` / `occu_nodet_block`
+(`src/occu_coupling_shared.h`), used by both the per-visit/agg template and the
+latent spec. Same gates as aggregation. FD vs brute-force integration + recovery
+in `test-occu-cover-latent.R`.
+
 **Coupled SVC/trend fields** (tulpaObs#15): extra shared areal fields = WEIGHTED
 areal terms in psi formula — `icar(graph=adj, weight=year)` couples a
 spatially-varying coef on `year` atop unweighted intercept field

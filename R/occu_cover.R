@@ -258,6 +258,134 @@
   list(psi = psi, p_mat = p_mat, ep_mat = ep_mat)
 }
 
+# Detected occupancy units and their per-unit detected-visit cover values. The
+# single source of truth for "which units carry a cover observation and what
+# covers they hold", shared by the joint-coupled arm builder (which collapses
+# these to one aggregated / latent pos-arm row per unit) and the pointwise
+# log-likelihood (which must score the cover term at the same granularity the
+# fitter optimised, gcol33/tulpaObs#34). `pos_site` indexes the occupancy units
+# with at least one detection; `vals[[k]]` is that unit's detected covers.
+.occu_cover_unit_cover <- function(model) {
+  det_mat  <- model$valid & (model$y == 1L)
+  pos_site <- which(rowSums(det_mat) > 0L)
+  vals <- lapply(pos_site, function(i) as.numeric(model$y_pos[i, det_mat[i, ]]))
+  list(pos_site = pos_site, vals = vals)
+}
+
+# Positive-arm log-density of cover value(s) `y` at cover predictor `eta`
+# (link scale) and dispersion `disp` (lognormal residual SD or beta precision).
+# Vectorised over y / eta (and matrices), so the per-visit and the per-unit
+# aggregated cover terms read one formula. Beta clamps the predictor before the
+# logistic; lognormal uses the raw predictor (matching the historical kernels).
+.occu_cover_pos_logdens <- function(y, eta, disp, is_beta) {
+  if (is_beta) {
+    mu <- stats::plogis(pmin(pmax(eta, -30), 30))
+    a  <- mu * disp
+    b  <- (1 - mu) * disp
+    lgamma(disp) - lgamma(a) - lgamma(b) +
+      (a - 1) * log(y) + (b - 1) * log(1 - y)
+  } else {
+    -log(y) - log(disp) - 0.5 * log(2 * pi) -
+      0.5 * ((log(y) - eta) / disp)^2
+  }
+}
+
+# Closed-form per-unit lognormal latent-cover marginal log M_i (the compound-
+# symmetry integral over the per-unit cover RE u_i ~ N(0, sigma_u^2) with fixed
+# within-unit residual SD `disp2`). Mirrors src/occu_cover_latent.h::LognormalLatent
+# exactly: Sigma = a I + b 11', a = disp2^2, b = sigma_u^2, plus the lognormal
+# change-of-variables Jacobian -sum log y. `eta` is the unit-level predictor.
+.occu_cover_latent_lognormal_logm <- function(vals, eta, disp2, sigma_u) {
+  a <- disp2^2
+  b <- sigma_u^2
+  vapply(seq_along(vals), function(i) {
+    v  <- vals[[i]]; m <- length(v); ly <- log(v)
+    t1 <- sum(ly); t2 <- sum(ly * ly)
+    denom <- a + m * b
+    s1  <- t1 - m * eta[i]
+    s2c <- t2 - 2 * eta[i] * t1 + m * eta[i]^2
+    quad   <- if (a > 0) (s2c - (b / denom) * s1 * s1) / a else 0
+    logdet <- (m - 1) * log(a) + log(denom)
+    -0.5 * m * log(2 * pi) - 0.5 * logdet - 0.5 * quad - t1
+  }, numeric(1))
+}
+
+# Probabilist Gauss-Hermite nodes / weights (weight exp(-x^2/2)/sqrt(2 pi),
+# weights sum to 1) by Golub-Welsch on the symmetric Jacobi matrix. Dependency-
+# free; integrates E_{N(0,1)}[g] ~ sum_k w_k g(z_k).
+.gauss_hermite_prob <- function(n) {
+  if (n <= 1L) return(list(nodes = 0, weights = 1))
+  i <- seq_len(n - 1L)
+  J <- matrix(0, n, n)
+  J[cbind(i, i + 1L)] <- sqrt(i)
+  J[cbind(i + 1L, i)] <- sqrt(i)
+  e   <- eigen(J, symmetric = TRUE)
+  ord <- order(e$values)
+  list(nodes = e$values[ord], weights = (e$vectors[1L, ])[ord]^2)
+}
+
+# Per-unit beta latent-cover marginal log M_i = log integral of
+# prod_j Beta(y_ij | sigmoid(eta + u), phi) * N(u; 0, sigma_u^2) du, by
+# Gauss-Hermite against the cover-RE prior. Same marginal as
+# src/occu_cover_latent.h::BetaLatent (non-adaptive quadrature of the same
+# integral). `eta` is the unit-level predictor.
+.occu_cover_latent_beta_logm <- function(vals, eta, phi, sigma_u, n_quad) {
+  gh <- .gauss_hermite_prob(max(as.integer(n_quad), 15L))
+  z  <- gh$nodes
+  lw <- log(gh$weights)
+  vapply(seq_along(vals), function(i) {
+    v  <- vals[[i]]
+    lt <- vapply(seq_along(z), function(k) {
+      ell <- sum(.occu_cover_pos_logdens(v, eta[i] + sigma_u * z[k], phi, TRUE))
+      lw[k] + ell
+    }, numeric(1))
+    mx <- max(lt)
+    mx + log(sum(exp(lt - mx)))
+  }, numeric(1))
+}
+
+# Per-unit cover contribution to the marginal log-likelihood (length n_sites,
+# zero for units with no detection). For `cover_aggregate = "none"` this is the
+# per-visit sum of the positive-arm density at detected visits; for "mean" /
+# "median" it is one density at the per-unit aggregated cover; for "latent" it is
+# the per-unit cover-RE marginal. `ep_mat` is the [n_sites x max_visits] cover
+# predictor; under aggregation the cover design is unit-level so the predictor is
+# constant across a unit's visits (column 1 is the unit value).
+.occu_cover_cover_term <- function(model, ep_mat, log_disp, units = NULL) {
+  n_sites <- model$n_sites
+  is_beta <- identical(model$positive, "beta")
+  mode    <- model$cover_aggregate %||% "none"
+
+  if (identical(mode, "none")) {
+    pos_mask <- model$valid & (model$y == 1L)
+    dens <- .occu_cover_pos_logdens(model$y_pos, ep_mat, exp(log_disp), is_beta)
+    log_f_pos <- matrix(0, n_sites, model$max_visits)
+    log_f_pos[pos_mask] <- dens[pos_mask]
+    return(rowSums(log_f_pos))
+  }
+
+  if (is.null(units)) units <- .occu_cover_unit_cover(model)
+  out <- numeric(n_sites)
+  ps  <- units$pos_site
+  if (length(ps) == 0L) return(out)
+  eta <- ep_mat[ps, 1L]
+  if (identical(mode, "latent")) {
+    sigma_u <- exp(log_disp)
+    disp2   <- model$cover_latent_disp2
+    out[ps] <- if (is_beta) {
+      .occu_cover_latent_beta_logm(units$vals, eta, disp2, sigma_u,
+                                   model$cover_latent_nquad %||% 15L)
+    } else {
+      .occu_cover_latent_lognormal_logm(units$vals, eta, disp2, sigma_u)
+    }
+  } else {
+    aggfun <- if (identical(mode, "median")) stats::median else mean
+    yv  <- vapply(units$vals, function(v) as.numeric(aggfun(v)), numeric(1))
+    out[ps] <- .occu_cover_pos_logdens(yv, eta, exp(log_disp), is_beta)
+  }
+  out
+}
+
 # Per-site marginal log-likelihood (latent occupancy state z integrated out in
 # closed form over its two states), returned as a length-`n_sites` vector. The
 # inputs are the per-cell occupancy probability `psi`, the per-visit detection
@@ -265,46 +393,26 @@
 # linear-predictor matrix `ep_mat` [n_sites x max_visits], and the scalar
 # `log_dispersion`. This is the single source of truth shared by the fit's
 # negative-log-posterior and the WAIC / PSIS-LOO pointwise log-likelihood.
-.occu_cover_site_ll <- function(model, psi, p_mat, ep_mat, log_disp) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+.occu_cover_site_ll <- function(model, psi, p_mat, ep_mat, log_disp,
+                                 units = NULL) {
   valid <- model$valid
   y     <- model$y
-  y_pos <- model$y_pos
-  n_sites    <- model$n_sites
-  max_visits <- model$max_visits
 
   log_p   <- ifelse(valid, log(p_mat),     0)
   log_1mp <- ifelse(valid, log(1 - p_mat), 0)
 
-  # Positive-arm log-density at detected visits.
-  pos_mask <- valid & (y == 1L)
-  log_f_pos <- matrix(0, n_sites, max_visits)
-  if (identical(model$positive, "beta")) {
-    phi_d <- exp(log_disp)
-    mu_pos <- stats::plogis(cl(ep_mat))
-    a <- mu_pos * phi_d
-    b <- (1 - mu_pos) * phi_d
-    # Beta density (positive support 0 < y < 1).
-    dens <- lgamma(phi_d) - lgamma(a) - lgamma(b) +
-            (a - 1) * log(y_pos) + (b - 1) * log(1 - y_pos)
-    log_f_pos[pos_mask] <- dens[pos_mask]
-  } else {
-    sigma_pos <- exp(log_disp)
-    dens <- -log(y_pos) - log(sigma_pos) - 0.5 * log(2 * pi) -
-            0.5 * ((log(y_pos) - ep_mat) / sigma_pos)^2
-    log_f_pos[pos_mask] <- dens[pos_mask]
-  }
-
-  # Per-visit log-likelihood under z = 1 (occupied).
-  log_h <- ifelse(valid,
-                  ifelse(y == 1L, log_p + log_f_pos, log_1mp),
-                  0)
+  # Detection mixture under z = 1, then the cover term at the granularity the
+  # fitter optimised (per-visit / aggregated / latent, gcol33/tulpaObs#34). The
+  # cover term is non-zero only for units with a detection, matching the
+  # any-detection branch below.
+  log_h_det  <- ifelse(valid, ifelse(y == 1L, log_p, log_1mp), 0)
+  cover_term <- .occu_cover_cover_term(model, ep_mat, log_disp, units)
 
   any_det <- rowSums(y * valid, na.rm = FALSE) > 0
   log_psi   <- log(pmax(psi, 1e-300))
   log_1mpsi <- log(pmax(1 - psi, 1e-300))
 
-  det_ll <- log_psi + rowSums(log_h)
+  det_ll <- log_psi + rowSums(log_h_det) + cover_term
   # No detection: psi * prod(1-p) + (1-psi). Logsumexp form for stability.
   ln_a <- log_psi   + rowSums(log_1mp)
   ln_b <- log_1mpsi
@@ -807,12 +915,17 @@
   comp <- .occu_cover_eta_components(model, b_occ, b_det, b_pos,
                                      field_occ, field_pos)
   cl <- function(e) pmin(pmax(e, -30), 30)
+  # Detected-unit cover values are draw-invariant, so resolve them once and feed
+  # them to every draw's cover term (gcol33/tulpaObs#34).
+  units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
+           else .occu_cover_unit_cover(model)
   ll <- matrix(0, S, n_sites)
   for (d in seq_len(S)) {
     de    <- .occu_cover_draw_eta(comp, d, n_sites, max_visits)
     psi   <- stats::plogis(cl(de$psi_eta))
     p_mat <- stats::plogis(cl(de$p_eta))
-    ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat, log(disp[d]))
+    ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat,
+                                   log(disp[d]), units = units)
   }
   ll
 }
