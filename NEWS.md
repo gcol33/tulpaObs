@@ -1,5 +1,14 @@
 # tulpaObs NEWS
 
+## 0.0.12 (2026-06-03)
+
+* docs: clean up two roxygen warnings surfaced on `R CMD Rd2pdf` / `document()`.
+  `simulate_cover()` had a bare `%*%` in its generative-model `\describe` block
+  (the `%` opened an Rd comment and mangled the `\item` entries); the criteria
+  page (`tobs_waic()` / `tobs_dic()` / `tobs_cpo()`) linked to the unexported
+  `.tobs_loglik_at_mean()`, which has no Rd topic. Both now render as inline
+  code.
+
 ## 0.0.11 (2026-06-03)
 
 * Bump the tulpa dependency to (>= 0.0.9) / gcol33/tulpa@v0.0.9, which carries
