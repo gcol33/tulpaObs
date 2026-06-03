@@ -1,5 +1,12 @@
 # tulpaObs NEWS
 
+## 0.0.11 (2026-06-03)
+
+* Bump the tulpa dependency to (>= 0.0.9) / gcol33/tulpa@v0.0.9, which carries
+  the finite-guarded outer-grid weight normalisation (gcol33/tulpa#65). The
+  defensive softmax fallback in the joint-coupled fitter is retained, but the
+  upstream NaN-weight path it guards against is now fixed in the engine itself.
+
 ## 0.0.10 (2026-06-03)
 
 * fix(occu_cover): the beta latent cover spec honours the engine's Expected
