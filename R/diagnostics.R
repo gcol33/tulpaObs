@@ -10,7 +10,7 @@
 #' log-likelihood matrix once and hand it to the engine's single criteria layer
 #' [tulpa::tulpa_criteria()], which derives WAIC / DIC / CPO / LPML / PSIS-LOO.
 #' DIC additionally evaluates the deviance at the posterior mean of the
-#' parameters, supplied by the family-specific [.tobs_loglik_at_mean()].
+#' parameters, supplied by the family-specific `.tobs_loglik_at_mean()`.
 #'
 #' @param object A `tobs_fit` object.
 #' @param n.draws Posterior draws used to build the pointwise log-likelihood

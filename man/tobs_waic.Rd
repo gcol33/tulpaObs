@@ -30,7 +30,7 @@ A \code{tulpa_criteria} object. \code{tobs_waic()} also carries \verb{$elpd}
 log-likelihood matrix once and hand it to the engine's single criteria layer
 \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}, which derives WAIC / DIC / CPO / LPML / PSIS-LOO.
 DIC additionally evaluates the deviance at the posterior mean of the
-parameters, supplied by the family-specific \code{\link[=.tobs_loglik_at_mean]{.tobs_loglik_at_mean()}}.
+parameters, supplied by the family-specific \code{.tobs_loglik_at_mean()}.
 }
 \seealso{
 \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}
