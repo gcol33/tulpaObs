@@ -1,6 +1,6 @@
 # tulpaObs NEWS
 
-## 0.0.10 (development)
+## 0.0.10 (2026-06-03)
 
 * fix(occu_cover): the beta latent cover spec honours the engine's Expected
   (Fisher) curvature request, so the outer-grid corner cells converge instead of
