@@ -147,6 +147,89 @@ test_that("beta latent marginal + eta-derivatives match brute force / FD", {
 })
 
 
+# Brute-force expected (Fisher) marginal information for the beta latent:
+# E_pi[ sum_j fisher_beta(eta + u) ] with the per-obs beta Fisher term
+# phi^2 mu^2 (1-mu)^2 (trigamma(mu phi) + trigamma((1-mu) phi)), summed over the
+# m detected visits (all share the unit-level predictor eta + u) and integrated
+# over the exact latent posterior pi(u) prod beta(y | mu(eta+u), phi) N(u;0,su).
+.lat_brute_beta_expinfo <- function(y, eta, phi, sigma_u) {
+  fish1 <- function(pred) {
+    mu <- stats::plogis(pred)
+    phi^2 * mu^2 * (1 - mu)^2 *
+      (trigamma(mu * phi) + trigamma((1 - mu) * phi))
+  }
+  # Posterior density (unnormalised) and the Fisher-weighted integrand, both
+  # zeroed wherever the beta log-density underflows in the divergent tail (mu
+  # -> 0/1), so integrate()'s extreme sample points stay finite. Those points
+  # carry ~0 posterior mass, so zeroing them does not bias the ratio.
+  guard <- function(v) { v[!is.finite(v)] <- 0; v }
+  post <- function(u) guard(vapply(u, function(uu) {
+    mu <- stats::plogis(eta + uu)
+    exp(sum(stats::dbeta(y, mu * phi, (1 - mu) * phi, log = TRUE)) +
+        stats::dnorm(uu, 0, sigma_u, log = TRUE))
+  }, numeric(1)))
+  # Weight the Fisher term only where the posterior carries mass; in the
+  # divergent tail (post underflows to 0) the Fisher term is 0 * Inf, so skip it
+  # rather than form the NaN at all.
+  num <- function(u) {
+    p <- post(u)
+    out <- numeric(length(u))
+    ok <- p > 0
+    if (any(ok)) out[ok] <- p[ok] * length(y) * fish1(eta + u[ok])
+    guard(out)
+  }
+  stats::integrate(num,  -Inf, Inf, rel.tol = 1e-9)$value /
+    stats::integrate(post, -Inf, Inf, rel.tol = 1e-9)$value
+}
+
+test_that("beta latent Expected curvature is the PSD Fisher marginal info (tulpaObs#35)", {
+  set.seed(303)
+  saw_indefinite_observed <- FALSE
+  for (trial in 1:8) {
+    m   <- sample(2:6, 1)
+    eta <- stats::rnorm(1, 0, 0.8)
+    phi <- stats::runif(1, 4, 25)
+    su  <- stats::runif(1, 0.3, 1.2)
+    mu  <- stats::plogis(eta + stats::rnorm(1, 0, su))
+    y   <- pmin(pmax(stats::rbeta(m, mu * phi, (1 - mu) * phi), 1e-4), 1 - 1e-4)
+    J   <- m
+
+    obs <- tulpaObs:::cpp_eval_occu_cover_beta_latent_cell(
+      0.3, rep(0.5, J), eta, rep(1L, J), y, phi, su,
+      n_quad = 25L, curvature = "observed")
+    exp_ <- tulpaObs:::cpp_eval_occu_cover_beta_latent_cell(
+      0.3, rep(0.5, J), eta, rep(1L, J), y, phi, su,
+      n_quad = 25L, curvature = "expected")
+
+    # Curvature mode changes ONLY neg_hess: the log-density and score are the
+    # same posterior expectations regardless of which curvature is requested.
+    expect_equal(exp_$cell_ll,  obs$cell_ll,  tolerance = 1e-12)
+    expect_equal(exp_$grad_pos, obs$grad_pos, tolerance = 1e-12)
+
+    # Expected curvature == the brute-force Fisher marginal information, and is
+    # strictly positive (PSD by construction).
+    expect_equal(exp_$neg_hess_pos,
+                 .lat_brute_beta_expinfo(y, eta, phi, su),
+                 tolerance = 1e-3)
+    expect_gt(exp_$neg_hess_pos, 0)
+
+    if (obs$neg_hess_pos <= 0) saw_indefinite_observed <- TRUE
+  }
+
+  # The Expected branch exists because the observed marginal information goes
+  # indefinite at extreme cells; confirm one such cell, where observed <= 0 but
+  # the Fisher curvature stays positive.
+  yx <- pmin(pmax(stats::rbeta(5, 0.04, 0.96), 1e-4), 1 - 1e-4)  # mu ~ 0.04
+  obs_x <- tulpaObs:::cpp_eval_occu_cover_beta_latent_cell(
+    0.3, rep(0.5, 5), 3.0, rep(1L, 5), yx, 3.0, 2.0,
+    n_quad = 25L, curvature = "observed")
+  exp_x <- tulpaObs:::cpp_eval_occu_cover_beta_latent_cell(
+    0.3, rep(0.5, 5), 3.0, rep(1L, 5), yx, 3.0, 2.0,
+    n_quad = 25L, curvature = "expected")
+  expect_gt(exp_x$neg_hess_pos, 0)
+  expect_true(is.finite(exp_x$neg_hess_pos))
+})
+
 test_that("family carries the latent choice and dispatcher gates it", {
   expect_identical(occu_cover("beta", cover_aggregate = "latent")$params$cover_aggregate,
                    "latent")

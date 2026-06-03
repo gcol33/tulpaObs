@@ -112,8 +112,14 @@ struct BetaPositive {
     //   g = -digamma(mu phi) + digamma((1-mu) phi) + log y - log(1-y).
     // -d^2 log f / d eta^2 = phi^2 mu^2 (1-mu)^2 (trigamma(mu phi)
     //                          + trigamma((1-mu) phi)) - phi mu(1-mu) g (1-2mu).
+    // The first term is the (always-positive) expected information; the second
+    // is the data-dependent part that can drive the observed Hessian indefinite.
+    // When `fisher` is non-null it receives that first term -- the per-obs Fisher
+    // information -- so the latent marginal can build a PSD curvature without
+    // recomputing the digamma / trigamma evaluation (single source of truth).
     static void grad_hess_eta(double y_pos, double eta_pos, double phi,
-                              bool want_hess, double& grad, double& neg_hess) {
+                              bool want_hess, double& grad, double& neg_hess,
+                              double* fisher = nullptr) {
         const double mu      = sigmoid_(eta_pos);
         const double log_y   = log_safe_(y_pos);
         const double log_1my = log_safe_(1.0 - y_pos);
@@ -124,11 +130,12 @@ struct BetaPositive {
                               + log_y - log_1my;
         const double m1m     = mu * (1.0 - mu);
         grad = phi * m1m * g;
-        if (want_hess) {
+        if (want_hess || fisher) {
             const double trig = tulpa::math::portable_trigamma(a)
                               + tulpa::math::portable_trigamma(b);
-            neg_hess = phi * phi * m1m * m1m * trig
-                     - phi * m1m * g * (1.0 - 2.0 * mu);
+            const double fish = phi * phi * m1m * m1m * trig;
+            if (fisher) *fisher = fish;
+            if (want_hess) neg_hess = fish - phi * m1m * g * (1.0 - 2.0 * mu);
         }
     }
 };

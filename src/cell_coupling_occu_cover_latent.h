@@ -80,7 +80,7 @@ public:
                 const int grow = y_cell.arm_rows[2][j];
                 const double eta_pos = etas.eta(2, j);
                 const LatentMarginal lm = PosLatent::marginal(
-                    site_[grow], eta_pos, disp2_, sigma_u, gh_);
+                    site_[grow], eta_pos, disp2_, sigma_u, gh_, out.curvature);
                 cell_ll += lm.log_m;
                 out.arm_grad[2][j] = lm.score;
                 if (want_hess) out.arm_neg_hess_diag[2][j] = lm.neg_hess;

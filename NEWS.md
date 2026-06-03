@@ -2,6 +2,21 @@
 
 ## 0.0.10 (development)
 
+* fix(occu_cover): the beta latent cover spec honours the engine's Expected
+  (Fisher) curvature request, so the outer-grid corner cells converge instead of
+  returning a non-finite `log_marginal` (tulpaObs#35). The latent marginal's
+  observed information `E_pi[sneg] - Var_pi(s)` can go indefinite at extreme
+  hyperparameter cells (large `sigma_u` driving the beta mean toward 0/1), where
+  it stalled the inner Newton; under `hessian = "fisher"` (the beta default) the
+  inner step now uses the always-positive marginal Fisher information
+  `E_pi[sum_j fisher_beta(eta + u)]`. The reported `log_marginal` / SEs are
+  unchanged (the final mode-pass re-evaluates with observed curvature); the fix
+  recovers the ~20% of grid mass previously discarded at the corners and removes
+  the fragile NaN path for beta latent. The lognormal latent path is exactly
+  quadratic (observed == expected) and is unchanged. Ground-truth check (Expected
+  curvature == the brute-force Fisher marginal integral, PSD) in
+  `test-occu-cover-latent.R`.
+
 * fix(occu_cover): GOF (`tobs_waic` / `tobs_dic` / `tobs_cpo`) now scores the
   cover term at the granularity the fit used (tulpaObs#34). The pointwise
   log-likelihood evaluated the positive-arm density at every detected visit even
