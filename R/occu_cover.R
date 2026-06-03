@@ -935,25 +935,84 @@
 # Posterior predictive check + PIT (gcol33/tulpaObs#27)
 # ---------------------------------------------------------------------------
 
+# Posterior-predictive cover discrepancy for one draw, at the granularity the
+# fitter optimised (gcol33/tulpaObs#34). Returns the observed and replicated
+# positive-part discrepancy (`obs` / `rep`) the PPC adds to the detection term.
+# `ep_mat` is the draw's [n_sites x max_visits] cover predictor; `disp` its
+# dispersion (beta precision / lognormal residual SD, or the cover-RE SD under
+# "latent"); `units` the per-unit detected covers from .occu_cover_unit_cover().
+# Mode branches mirror .occu_cover_cover_term: "none" scores the per-visit cells;
+# "mean" / "median" one aggregated cover per detected unit at the unit predictor
+# and dispersion the fit held; "latent" the per-unit covers replicated through
+# the shared cover RE (u_i ~ N(0, sigma_u^2)) at the within-unit residual disp2.
+.occu_cover_ppc_cover <- function(model, ep_mat, disp, units, is_beta, stat_fn,
+                                  cl) {
+  draw_pos <- function(eta, d) {
+    if (is_beta) {
+      mu <- stats::plogis(cl(eta))
+      stats::rbeta(length(eta), mu * d, (1 - mu) * d)
+    } else {
+      exp(stats::rnorm(length(eta), eta, d))
+    }
+  }
+  mean_pos <- function(eta, d) {
+    if (is_beta) stats::plogis(cl(eta)) else exp(cl(eta) + d^2 / 2)
+  }
+  mode <- model$cover_aggregate %||% "none"
+
+  if (identical(mode, "none")) {
+    pos_mask <- model$valid & (model$y == 1L)
+    if (!any(pos_mask)) return(c(obs = 0, rep = 0))
+    Epos <- mean_pos(ep_mat, disp)
+    yrep <- matrix(draw_pos(as.vector(ep_mat), disp), nrow(ep_mat), ncol(ep_mat))
+    return(c(obs = stat_fn(model$y_pos[pos_mask], Epos[pos_mask]),
+             rep = stat_fn(yrep[pos_mask],        Epos[pos_mask])))
+  }
+
+  ps <- units$pos_site
+  if (length(ps) == 0L) return(c(obs = 0, rep = 0))
+  eta <- ep_mat[ps, 1L]                     # unit-level cover predictor
+
+  if (identical(mode, "latent")) {
+    disp2   <- model$cover_latent_disp2
+    m       <- lengths(units$vals)
+    unit_of <- rep(seq_along(ps), m)
+    v_all   <- unlist(units$vals, use.names = FALSE)
+    eta_all <- eta[unit_of]
+    u_all   <- stats::rnorm(length(ps), 0, disp)[unit_of]
+    e_all   <- mean_pos(eta_all, disp2)
+    return(c(obs = stat_fn(v_all, e_all),
+             rep = stat_fn(draw_pos(eta_all + u_all, disp2), e_all)))
+  }
+
+  aggfun <- if (identical(mode, "median")) stats::median else mean
+  yv   <- vapply(units$vals, function(v) as.numeric(aggfun(v)), numeric(1))
+  Epos <- mean_pos(eta, disp)
+  c(obs = stat_fn(yv, Epos), rep = stat_fn(draw_pos(eta, disp), Epos))
+}
+
 # Posterior predictive check for an occu_cover() fit. Per draw, the latent
 # occupancy z is sampled from its full conditional given the detection history
 # (the spOccupancy construction), detection replicates from Bernoulli(z p), and
-# cover replicates at the detected visits from the fitted positive part. The
-# discrepancy is a Freeman-Tukey (or chi-squared) sum over the detection cells
-# plus the positive-part cells, returning a Bayesian p-value.
+# the cover replicate is built at the granularity the fit used (per-visit for
+# cover_aggregate = "none", one aggregated cover per detected unit for "mean" /
+# "median", and the shared cover-RE marginal for "latent"; gcol33/tulpaObs#34).
+# The discrepancy is a Freeman-Tukey (or chi-squared) sum over the detection
+# cells plus the positive-part term, returning a Bayesian p-value.
 .tobs_ppc_occu_cover <- function(object,
                                  fit.stat = c("freeman-tukey", "chi-squared"),
                                  n.samples = 500) {
   fit.stat <- match.arg(fit.stat)
   model    <- object$model
   positive <- model$positive %||% "lognormal"
+  is_beta  <- identical(positive, "beta")
   c0   <- .tobs_occu_cover_components(object, n.samples)
   comp <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
                                      c0$field_occ, c0$field_pos)
   disp <- c0$disp
   S <- nrow(c0$b_occ)
   n_sites <- model$n_sites; max_visits <- model$max_visits
-  y <- model$y; y_pos <- model$y_pos; valid <- model$valid
+  y <- model$y; valid <- model$valid
   cl <- function(e) pmin(pmax(e, -30), 30)
   stat_fn <- if (fit.stat == "freeman-tukey") {
     function(o, e) sum((sqrt(o) - sqrt(e))^2, na.rm = TRUE)
@@ -962,7 +1021,10 @@
   }
   any_det <- rowSums(y * valid, na.rm = TRUE) > 0
   n_valid <- rowSums(valid)
-  pos_mask <- valid & (y == 1L)
+  # Detected-unit cover values are draw-invariant; resolve once for the
+  # aggregated / latent cover discrepancy (gcol33/tulpaObs#34).
+  units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
+           else .occu_cover_unit_cover(model)
 
   fit_y <- fit_rep <- numeric(S)
   for (s in seq_len(S)) {
@@ -980,26 +1042,11 @@
     det_obs <- stat_fn(y[valid], exp_det[valid])
     det_rep <- stat_fn(yrep[valid], exp_det[valid])
 
-    if (positive == "lognormal") {
-      sg   <- disp[s]
-      Epos <- exp(cl(de$ep_mat) + sg^2 / 2)
-      ypos_rep <- matrix(exp(stats::rnorm(n_sites * max_visits,
-                                          as.vector(de$ep_mat), sg)),
-                         n_sites, max_visits)
-    } else {
-      phi  <- disp[s]
-      mu   <- stats::plogis(cl(de$ep_mat))
-      Epos <- mu
-      ypos_rep <- matrix(stats::rbeta(n_sites * max_visits,
-                                      as.vector(mu) * phi,
-                                      (1 - as.vector(mu)) * phi),
-                         n_sites, max_visits)
-    }
-    pos_obs <- if (any(pos_mask)) stat_fn(y_pos[pos_mask], Epos[pos_mask]) else 0
-    pos_rep <- if (any(pos_mask)) stat_fn(ypos_rep[pos_mask], Epos[pos_mask]) else 0
+    cov_term <- .occu_cover_ppc_cover(model, de$ep_mat, disp[s], units,
+                                      is_beta, stat_fn, cl)
 
-    fit_y[s]   <- det_obs + pos_obs
-    fit_rep[s] <- det_rep + pos_rep
+    fit_y[s]   <- det_obs + cov_term[["obs"]]
+    fit_rep[s] <- det_rep + cov_term[["rep"]]
   }
   list(fit.y = fit_y, fit.y.rep = fit_rep,
        bayesian.p = mean(fit_rep > fit_y))

@@ -205,3 +205,50 @@ test_that("median aggregation runs and tracks the mean on symmetric cover", {
   expect_equal(unname(fit_median$means[["pos_(Intercept)"]]),
                unname(fit_mean$means[["pos_(Intercept)"]]), tolerance = 0.4)
 })
+
+
+test_that("WAIC scores aggregated cover at the unit scale, not per visit (#34)", {
+  skip_on_cran()
+  skip_if_fast()
+  # An aggregated fit collapses the cover arm to one observation per occupancy
+  # unit, so its pointwise log-likelihood must score the cover term once per
+  # unit. The pre-fix GOF summed the per-visit cover density at the fitted
+  # (aggregated, tight) dispersion, so p_waic grew super-linearly in the
+  # visits-per-site J. Post-fix p_waic stays on the unit scale and flat in J.
+  pw <- vapply(c(12L, 60L), function(J) {
+    sim <- .agg_sim(seed = 909L, J = J)
+    fit <- .agg_fit(sim, cover_aggregate = "mean")
+    tobs_waic(fit, n.draws = 200L)$p_waic
+  }, numeric(1))
+  n_sites <- 30L * 5L
+  # Effective parameter count stays well below the site count (it scaled past it
+  # before the fix) and does not balloon with J (a 5x J increase).
+  expect_lt(pw[1], n_sites)
+  expect_lt(pw[2], n_sites)
+  expect_lt(pw[2], 3 * pw[1])
+
+  # The pointwise log-likelihood reads the dispersion the spec held fixed (a beta
+  # precision well away from 1), not the bare unit default of the pre-fix path.
+  sim <- .agg_sim(seed = 909L)
+  fit <- .agg_fit(sim, cover_aggregate = "mean")
+  expect_gt(tulpaObs:::.tobs_joint_draws(fit, n = 20L)$disp[1], 2)
+})
+
+
+test_that("tobs_ppc scores aggregated cover at the unit scale, not per visit (#34)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The aggregated fit's dispersion is fit on the per-unit cover (tight, high phi).
+  # The pre-fix PPC replicated that phi per detected visit, so the positive-part
+  # discrepancy ran off scale and drove the Bayesian p-value to the boundary,
+  # worse as the visits-per-site J grew. Post-fix the cover discrepancy is one
+  # term per detected unit, so the p-value stays interior and does not collapse
+  # with J.
+  bp <- vapply(c(12L, 60L), function(J) {
+    sim <- .agg_sim(seed = 707L, J = J)
+    fit <- .agg_fit(sim, cover_aggregate = "mean")
+    set.seed(1L)
+    tobs_ppc(fit, n.samples = 200L)$bayesian.p
+  }, numeric(1))
+  expect_true(all(bp > 0.02 & bp < 0.98))
+})
