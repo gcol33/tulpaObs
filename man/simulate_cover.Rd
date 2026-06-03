@@ -46,8 +46,8 @@ generative model used in Phase 1a:
 }
 \details{
 \describe{
-\item{eta_occ}{= X \%\emph{\% beta_occ + spatial_occ}
-\item{eta_pos}{= X \%}\% beta_pos + spatial_pos}
+\item{eta_occ}{\verb{= X \%*\% beta_occ + spatial_occ}}
+\item{eta_pos}{\verb{= X \%*\% beta_pos + spatial_pos}}
 \item{p}{= plogis(eta_occ)}
 \item{occur}{~ Bernoulli(p)}
 \item{log_cover}{~ Normal(eta_pos, sigma_pos^2) | occur = 1}
