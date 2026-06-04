@@ -199,6 +199,50 @@ test_that("penalised joint gradient matches finite differences at K = 2", {
             label = "max|analytic - FD| over the full K=2 packed gradient")
 })
 
+test_that("constrained (triangular) penalised gradient matches FD at K = 2", {
+  adj <- .mscs_grid_adj(4L, 4L)
+  S <- 4L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+                                        seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K)
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  tr <- sim$truth
+
+  # Pack a constrained par: mu, b, lfree (triangular truth -> log-diagonal), W, ld.
+  mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b  <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+  lfree <- tulpaObs:::.ms_ocs_L_to_lfree(tr$L, S, K)
+  expect_length(lfree, tulpaObs:::.ms_ocs_lfree_dim(S, K))
+  par_c <- c(mu, b, lfree, as.numeric(tr$w), log(tr$sigma_pos))
+  set.seed(2L); par_c <- par_c + stats::rnorm(length(par_c), 0, 0.05)
+
+  Sinv <- diag(c(rep(1 / 0.4^2, d$P_occ), rep(1 / 0.4^2, d$P_p),
+                 rep(1 / 0.3^2, d$P_pos)))
+  Pmu  <- diag(1 / 25, d$P); inv_sdL2 <- 1; tau_w <- c(1.3, 0.9)
+
+  out <- tulpaObs:::.ms_ocs_penll_grad_c(model, par_c, Sinv, Pmu, inv_sdL2,
+                                         tau_w, grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_penll_grad_c(model, p, Sinv, Pmu, inv_sdL2,
+                                                   tau_w, grad = FALSE)$ll
+  h <- 1e-5; gnum <- numeric(length(par_c))
+  for (k in seq_along(par_c)) {
+    pp <- par_c; pp[k] <- pp[k] + h
+    pm <- par_c; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the constrained K=2 gradient")
+
+  # The triangular map round-trips and respects the structural zeros.
+  Lr <- tulpaObs:::.ms_ocs_lfree_to_L(lfree, S, K)
+  expect_equal(Lr, tr$L, tolerance = 1e-8)
+  expect_true(all(Lr[upper.tri(Lr)] == 0))
+  expect_true(all(diag(Lr) > 0))
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells

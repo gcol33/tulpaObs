@@ -349,6 +349,90 @@ simulate_ms_occu_cover_spatial <- function(adj,
 
 
 # ---------------------------------------------------------------------------
+# Identifiability-constrained loading parameterisation (gllvm/HMSC)
+# ---------------------------------------------------------------------------
+#
+# For K > 1 the unconstrained loadings are identified only up to an orthogonal
+# rotation, so the unconstrained posterior is improper along the rotation
+# manifold -- fine for the rotation-invariant point quantities (F = W L', psi),
+# but it corrupts per-factor uncertainty and any posterior-based model
+# comparison (WAIC explodes). The standard fix is the lower-triangular,
+# positive-diagonal constraint: factor k loads on species k..S only, and
+# L[k, k] = exp(l_kk) > 0. That uniquely fixes the rotation, giving a full-rank
+# Hessian. The free loading vector packs, column by column,
+#   [l_kk (log-diagonal), L[k+1, k], ..., L[S, k]].
+
+.ms_ocs_lfree_dim <- function(S, K) as.integer(K * S - K * (K - 1L) / 2L)
+
+# Free triangular loading vector -> full S x K loading matrix (zeros above the
+# diagonal, exp() on the diagonal).
+.ms_ocs_lfree_to_L <- function(lfree, S, K) {
+  L <- matrix(0, S, K); pos <- 0L
+  for (k in seq_len(K)) {
+    nfree <- S - k + 1L
+    blk <- lfree[pos + seq_len(nfree)]; pos <- pos + nfree
+    L[k, k] <- exp(blk[1L])
+    if (nfree > 1L) L[(k + 1L):S, k] <- blk[-1L]
+  }
+  L
+}
+
+# Full S x K loading matrix -> free triangular vector (log the diagonal).
+.ms_ocs_L_to_lfree <- function(L, S, K) {
+  out <- numeric(0)
+  for (k in seq_len(K)) {
+    diag_l <- log(max(L[k, k], 1e-6))
+    off    <- if (k < S) L[(k + 1L):S, k] else numeric(0)
+    out <- c(out, diag_l, off)
+  }
+  out
+}
+
+# Gradient w.r.t. full L (S x K) -> gradient w.r.t. the free triangular vector.
+# The structural zeros (s < k) are dropped; the diagonal carries the log-link
+# chain factor dL[k,k]/dl_kk = exp(l_kk) = L[k, k].
+.ms_ocs_gL_to_glfree <- function(gL, L, S, K) {
+  out <- numeric(0)
+  for (k in seq_len(K)) {
+    diag_g <- gL[k, k] * L[k, k]
+    off_g  <- if (k < S) gL[(k + 1L):S, k] else numeric(0)
+    out <- c(out, diag_g, off_g)
+  }
+  out
+}
+
+# Constrained penalised log-lik + gradient in the triangular parameterisation.
+# par_c = c(mu[P], b[S*P], lfree[nL], vec(W)[N*K], log_disp); it expands lfree to
+# the full L, defers to the (validated) unconstrained objective, then maps the
+# L-block gradient back to lfree by the chain rule. No likelihood math is
+# duplicated -- this is purely the reparameterisation adapter.
+.ms_ocs_penll_grad_c <- function(model, par_c, Sinv, Pmu, inv_sdL2, tau_w,
+                                 grad = TRUE) {
+  d <- .ms_ocs_dims(model); S <- d$S; K <- d$K; P <- d$P
+  nL <- .ms_ocs_lfree_dim(S, K)
+  head_n <- P + S * P                       # mu + b prefix (shared layout)
+  tail_n <- d$N * K + 1L                    # vec(W) + log_disp suffix (shared)
+
+  pre   <- par_c[seq_len(head_n)]
+  lfree <- par_c[head_n + seq_len(nL)]
+  suf   <- par_c[head_n + nL + seq_len(tail_n)]
+  L     <- .ms_ocs_lfree_to_L(lfree, S, K)
+  par_full <- c(pre, as.numeric(L), suf)
+
+  res <- .ms_ocs_penll_grad(model, par_full, Sinv, Pmu, inv_sdL2, tau_w,
+                            grad = grad)
+  if (!grad) return(list(ll = res$ll))
+
+  g <- res$grad
+  g_pre <- g[seq_len(head_n)]
+  g_L   <- matrix(g[head_n + seq_len(S * K)], S, K)
+  g_suf <- g[head_n + S * K + seq_len(tail_n)]
+  g_lfree <- .ms_ocs_gL_to_glfree(g_L, L, S, K)
+  list(ll = res$ll, grad = c(g_pre, g_lfree, g_suf))
+}
+
+
+# ---------------------------------------------------------------------------
 # Inner mode-find (conditional on the hyperparameters)
 # ---------------------------------------------------------------------------
 
