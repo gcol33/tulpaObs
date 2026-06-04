@@ -857,6 +857,29 @@ print.summary.cover_fit <- function(x, ...) {
 # Joint nested-Laplace fit (Phase 1c lognormal, Phase 1d beta)
 # ---------------------------------------------------------------------------
 
+# Collapse the occurrence (binomial) arm to its exact sufficient statistic.
+# Plots sharing an occurrence design row, spatial cell, and per-observation
+# trend weight are exchangeable Bernoulli trials: replacing them with one
+# Binomial row (n = count, y = successes) leaves the log-likelihood, gradient,
+# and Hessian unchanged while cutting the row count. `w` is the trend field's
+# per-observation weight (NULL when there is no coupled trend field). Returns
+# the aggregated `y`, `n` (n_trials), `X`, spatial index `spi`, and weight `w`,
+# one row per unique (X-row, cell, weight) group.
+.cover_aggregate_occ <- function(y, X, spi, w = NULL) {
+  parts <- c(as.data.frame(X, stringsAsFactors = FALSE), list(spi))
+  if (!is.null(w)) parts <- c(parts, list(w))
+  gid   <- as.integer(factor(do.call(paste, c(parts, list(sep = "\r")))))
+  ord   <- order(gid)
+  rep_i <- ord[!duplicated(gid[ord])]               # first row per group, group order
+  list(
+    y   = as.numeric(rowsum(as.numeric(y), gid)),     # rowsum orders by sorted gid
+    n   = as.integer(tabulate(gid, nbins = max(gid))),
+    X   = X[rep_i, , drop = FALSE],
+    spi = spi[rep_i],
+    w   = if (is.null(w)) NULL else w[rep_i]
+  )
+}
+
 #' Fit cover_hurdle as a joint binomial+(gaussian|beta) model with shared
 #' spatial field via [tulpa::tulpa_nested_laplace_joint()].
 #'
@@ -1147,6 +1170,20 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     trend_block <- base_block
     trend_block$svc_weight <- list(as.numeric(trend_spec$w_occ),
                                    as.numeric(trend_spec$w_pos))
+
+    # Exact sufficient-statistic reduction of the occurrence arm. The positive
+    # (beta) arm and its spatial / weight wiring are untouched; the two arms
+    # couple only through the shared cell field, which the grouping preserves.
+    if (isTRUE(control$aggregate.occ)) {
+      og <- .cover_aggregate_occ(arm_occ$y, arm_occ$X, spi_full, trend_spec$w_occ)
+      arm_occ$y        <- og$y
+      arm_occ$n_trials <- og$n
+      arm_occ$X        <- og$X
+      arm_occ$re_idx   <- rep(0, length(og$y))
+      base_block$spatial_idx[[1]]  <- as.integer(og$spi)
+      trend_block$spatial_idx[[1]] <- as.integer(og$spi)
+      trend_block$svc_weight[[1]]  <- as.numeric(og$w)
+    }
 
     alpha_grid_base  <- control$alpha.grid %||%
       c(0, exp(seq(log(0.1), log(3), length.out = 5)))

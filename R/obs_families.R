@@ -653,7 +653,7 @@ cover <- function(positive = c("beta", "lognormal")) {
       "sigma.temporal.grid", "sigma.re.grid",
       "trend", "alpha.grid", "alpha.grid.trend", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
-      "prune", "prune.tol", "hessian",
+      "prune", "prune.tol", "hessian", "aggregate.occ",
       "progress", "progress.every", "progress.throttle", "progress.file",
       "checkpoint"
     )
