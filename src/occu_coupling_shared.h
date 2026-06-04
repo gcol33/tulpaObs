@@ -255,26 +255,34 @@ inline double nodet_mixture_block(
 // WITHOUT any cover (pos) contribution -- the caller adds its positive-arm
 // term (one log f_pos per detected visit, one aggregated log f_pos, or one
 // latent marginal log M). Cross-Hessians are zero in the det branch.
+// `s` is the batch (species) index (gcol33/tulpa#66). It offsets the reads
+// (eta / y species column) and the writes (the rc * n_batch species-major
+// buffer slot [s * rc + j]). s = 0 with a B=1 CellEtas/Derivs is byte-identical
+// to the pre-batch path, so the existing per-visit / latent / multiscale
+// callers (which omit s) are unchanged.
 inline double occu_det_psi_p_block(double                     psi,
                                    const tulpa::CellEtas&     etas,
                                    const tulpa::CellResponse& y_cell,
                                    int                        Jc,
                                    bool                       want_hess,
-                                   tulpa::CellDerivs&         out) {
+                                   tulpa::CellDerivs&         out,
+                                   int                        s = 0) {
+    const int base0 = s * out.n_rows_in_arm(0);
+    const int base1 = s * out.n_rows_in_arm(1);
     double cell_ll = log_safe_(psi);
-    out.arm_grad[0][0] = 1.0 - psi;
-    if (want_hess) out.arm_neg_hess_diag[0][0] = psi * (1.0 - psi);
+    out.arm_grad[0][base0] = 1.0 - psi;
+    if (want_hess) out.arm_neg_hess_diag[0][base0] = psi * (1.0 - psi);
     for (int v = 0; v < Jc; ++v) {
-        const double p_v   = sigmoid_(etas.eta(1, v));
-        const double y_det = y_cell.y(1, v);
+        const double p_v   = sigmoid_(etas.eta(1, v, s));
+        const double y_det = y_cell.y(1, v, s);
         if (y_det > 0.5) {
             cell_ll += log_safe_(p_v);
-            out.arm_grad[1][v] = 1.0 - p_v;
+            out.arm_grad[1][base1 + v] = 1.0 - p_v;
         } else {
             cell_ll += log_safe_(1.0 - p_v);
-            out.arm_grad[1][v] = -p_v;
+            out.arm_grad[1][base1 + v] = -p_v;
         }
-        if (want_hess) out.arm_neg_hess_diag[1][v] = p_v * (1.0 - p_v);
+        if (want_hess) out.arm_neg_hess_diag[1][base1 + v] = p_v * (1.0 - p_v);
     }
     return cell_ll;
 }
@@ -288,29 +296,41 @@ inline double occu_det_psi_p_block(double                     psi,
 // occupancy score / curvature into arm 0 and the detection terms into arm 1
 // (incl. the (psi, p) and (p, p) cross-Hessian blocks under the Observed
 // curvature), and returns log L.
+// `s` (gcol33/tulpa#66) offsets the species column of the reads and the
+// species-major slot of the writes; s = 0 / B=1 is byte-identical, so the
+// pre-batch callers (which omit s) are unchanged. The compact (psi, p) and
+// (p, p) cross buffers are sliced to species s by the same s * (rc_k * rc_l)
+// offset the kernel uses to lay them out.
 inline double occu_nodet_block(double                     psi,
                                const tulpa::CellEtas&     etas,
                                int                        Jc,
                                bool                       want_hess,
-                               tulpa::CellDerivs&         out) {
+                               tulpa::CellDerivs&         out,
+                               int                        s = 0) {
     const bool expected = (out.curvature == tulpa::CurvatureMode::Expected);
+    const int rc0   = out.n_rows_in_arm(0);
+    const int rc1   = out.n_rows_in_arm(1);
+    const int base0 = s * rc0;
+    const int base1 = s * rc1;
     std::vector<double> eta_p_buf(Jc);
-    for (int v = 0; v < Jc; v++) eta_p_buf[v] = etas.eta(1, v);
+    for (int v = 0; v < Jc; v++) eta_p_buf[v] = etas.eta(1, v, s);
 
     double* cross_w_p = (!expected && want_hess && out.arm_cross_hess
                          && out.arm_cross_hess[0] && out.arm_cross_hess[0][1])
-                        ? out.arm_cross_hess[0][1] : nullptr;
+                        ? out.arm_cross_hess[0][1] + (std::size_t) s * rc0 * rc1
+                        : nullptr;
     double* cross_p_p = (!expected && want_hess && out.arm_cross_hess
                          && out.arm_cross_hess[1] && out.arm_cross_hess[1][1])
-                        ? out.arm_cross_hess[1][1] : nullptr;
+                        ? out.arm_cross_hess[1][1] + (std::size_t) s * rc1 * rc1
+                        : nullptr;
 
     double g_psi = 0.0, nh_psi = 0.0;
     const double cell_ll = nodet_mixture_block(
         psi, eta_p_buf.data(), Jc, want_hess, expected,
-        g_psi, nh_psi, out.arm_grad[1], out.arm_neg_hess_diag[1],
+        g_psi, nh_psi, out.arm_grad[1] + base1, out.arm_neg_hess_diag[1] + base1,
         cross_w_p, cross_p_p);
-    out.arm_grad[0][0] = g_psi;
-    if (want_hess) out.arm_neg_hess_diag[0][0] = nh_psi;
+    out.arm_grad[0][base0] = g_psi;
+    if (want_hess) out.arm_neg_hess_diag[0][base0] = nh_psi;
     return cell_ll;
 }
 

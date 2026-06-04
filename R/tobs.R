@@ -200,6 +200,26 @@ tobs <- function(formula,
     )
   }
 
+  # Batched multi-response (gcol33/tulpa#66): occu_cover with `y` a list of >= 2
+  # response matrices (or a 3D array [n_sites x max_visits x B]) fits B species,
+  # each with the per-species model, and returns a `tobs_batch`. Intercept here
+  # so each species replays the full single-species tobs() pipeline below --
+  # making every per-species fit byte-identical to an independent fit (the
+  # validation oracle for the fused block-diagonal backend; see
+  # R/occu_cover_batch.R).
+  if (identical(family$name, "occu_cover")) {
+    B <- .tobs_multiresponse_n(y)
+    if (!is.null(B) && B >= 2L) {
+      return(.tobs_fit_occu_cover_batch(
+        tobs_args = list(formula = formula, data = data, family = family,
+                         detection = detection, visits = visits,
+                         method = method, priors = priors, control = control,
+                         dots = list(...)),
+        y = y, B = B
+      ))
+    }
+  }
+
   route   <- .tobs_resolve_method(method, family)
   engine  <- route$engine
   approx  <- route$approx

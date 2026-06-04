@@ -69,8 +69,7 @@ public:
                          const tulpa::CellResponse& y_cell,
                          tulpa::CellDerivs&         out) const override {
         const int Jc = etas.n_rows_in_arm(1);
-        const double psi     = sigmoid_(etas.eta(0, 0));
-        const double phi_pos = y_cell.phi(2);
+        const int B  = etas.n_batch();   // 1 (single species) or B (batched)
 
         // Grad-only request (cached-factor reuse step): the kernel discards the
         // Hessian this call would produce, so skip every negative-Hessian and
@@ -79,50 +78,65 @@ public:
         // log-density are still exact.
         const bool want_hess = !out.grad_only;
 
-        bool any_det = false;
-        for (int v = 0; v < Jc; v++) {
-            if (y_cell.y(1, v) > 0.5) { any_det = true; break; }
-        }
+        // Batched multi-response (gcol33/tulpa#66): the visit-design row is
+        // species-invariant, so loop species INNER -- the kernel scatters each
+        // species' derivatives into its own block. With B = 1 the loop runs
+        // once at s = 0 and every (.., s) accessor / species-major write
+        // [s * rc + j] reduces to the pre-batch path, byte-identical.
+        const int base2_stride = out.n_rows_in_arm(2);
+        double total_ll = 0.0;
+        for (int s = 0; s < B; s++) {
+            const double psi     = sigmoid_(etas.eta(0, 0, s));
+            const double phi_pos = y_cell.phi(2, s);
 
-        if (any_det) {
+            bool any_det = false;
+            for (int v = 0; v < Jc; v++) {
+                if (y_cell.y(1, v, s) > 0.5) { any_det = true; break; }
+            }
+
+            if (!any_det) {
+                // nodet case (family-independent: pos arm doesn't contribute).
+                total_ll += occu_nodet_block(psi, etas, Jc, want_hess, out, s);
+                continue;
+            }
+
             // Occupancy + detection arms (shared with the latent spec); cross-
             // Hessians stay zero (the psi / p / pos arms factorise in the det
             // branch).
             double cell_ll = occu_det_psi_p_block(psi, etas, y_cell, Jc,
-                                                  want_hess, out);
+                                                  want_hess, out, s);
+            const int base2 = s * base2_stride;
 
             if (!Aggregated) {
                 // Per-visit cover: one log f_pos per detected visit, the pos
                 // arm row aligned with the detection visit.
                 for (int v = 0; v < Jc; v++) {
-                    if (y_cell.y(1, v) <= 0.5) continue;
-                    const double y_pos   = y_cell.y(2, v);
-                    const double eta_pos = etas.eta(2, v);
+                    if (y_cell.y(1, v, s) <= 0.5) continue;
+                    const double y_pos   = y_cell.y(2, v, s);
+                    const double eta_pos = etas.eta(2, v, s);
                     cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
                     double g_pos = 0.0, h_pos = 0.0;
                     PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
                                              want_hess, g_pos, h_pos);
-                    out.arm_grad[2][v] = g_pos;
-                    if (want_hess) out.arm_neg_hess_diag[2][v] = h_pos;
+                    out.arm_grad[2][base2 + v] = g_pos;
+                    if (want_hess) out.arm_neg_hess_diag[2][base2 + v] = h_pos;
                 }
             } else {
                 // Cell-aggregated cover: a single log f_pos at the occupancy
                 // unit's one pos row (the mean / median cover over its detected
                 // visits), evaluated once because any_det holds here.
-                const double y_pos   = y_cell.y(2, 0);
-                const double eta_pos = etas.eta(2, 0);
+                const double y_pos   = y_cell.y(2, 0, s);
+                const double eta_pos = etas.eta(2, 0, s);
                 cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
                 double g_pos = 0.0, h_pos = 0.0;
                 PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
                                          want_hess, g_pos, h_pos);
-                out.arm_grad[2][0] = g_pos;
-                if (want_hess) out.arm_neg_hess_diag[2][0] = h_pos;
+                out.arm_grad[2][base2] = g_pos;
+                if (want_hess) out.arm_neg_hess_diag[2][base2] = h_pos;
             }
-            return cell_ll;
+            total_ll += cell_ll;
         }
-
-        // nodet case (family-independent: pos arm doesn't contribute).
-        return occu_nodet_block(psi, etas, Jc, want_hess, out);
+        return total_ll;
     }
 
     std::string name() const override {
