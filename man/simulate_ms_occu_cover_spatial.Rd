@@ -23,8 +23,9 @@ simulate_ms_occu_cover_spatial(
   cover_factor = FALSE,
   mean_load_pos = 0,
   sd_load_pos = 1,
-  field = c("icar", "car_proper"),
+  field = c("icar", "car_proper", "bym2"),
   rho = 0.9,
+  phi = 0.7,
   sigma_pos = 0.4,
   positive = c("lognormal", "beta"),
   seed = NULL
@@ -63,12 +64,17 @@ exactly. \code{truth$L_pos} carries the generating cover loadings.}
 (used only when \code{cover_factor = TRUE}).}
 
 \item{field}{Areal structure of the shared latent factors: \code{"icar"} (improper
-intrinsic CAR, the default) or \code{"car_proper"} (proper CAR with a correlation
-\code{rho}, field precision \verb{tau (D - rho A)}). \code{"icar"} reproduces the Stage 1-2
-RNG stream byte for byte; \code{truth$field} / \code{truth$rho} carry the choice.}
+intrinsic CAR, the default), \code{"car_proper"} (proper CAR with a correlation
+\code{rho}, field precision \verb{tau (D - rho A)}), or \code{"bym2"} (the Riebler 2016
+reparameterised convolution with a spatial-variance fraction \code{phi}). \code{"icar"}
+reproduces the Stage 1-2 RNG stream byte for byte; \code{truth$field} / \code{truth$rho}
+/ \code{truth$phi} carry the choice.}
 
 \item{rho}{Proper-CAR correlation in \verb{[0, 1)}, used only when
 \code{field = "car_proper"} (the \code{rho -> 1} limit is the ICAR field).}
+
+\item{phi}{BYM2 spatial-variance fraction in \verb{[0, 1]}, used only when
+\code{field = "bym2"} (\code{phi = 1} is the pure ICAR field, \code{phi = 0} pure iid).}
 
 \item{sigma_pos}{Lognormal cover residual SD (on the log scale).}
 

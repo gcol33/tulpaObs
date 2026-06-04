@@ -339,10 +339,10 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' returns the community means; `ranef()` the per-species coefficient deviations.
 #'
 #' @section Reduced-rank spatial factors:
-#' A single areal field term (`icar(graph = adj)` or `car_proper(graph = adj)`)
-#' on the occupancy `formula` fits the reduced-rank (HMSC / spatial-gllvm)
-#' community model: `K` shared latent fields with per-species loadings on the
-#' occupancy predictor,
+#' A single areal field term (`icar(graph = adj)`, `car_proper(graph = adj)`, or
+#' `bym2(graph = adj)`) on the occupancy `formula` fits the reduced-rank (HMSC /
+#' spatial-gllvm) community model: `K` shared latent fields with per-species
+#' loadings on the occupancy predictor,
 #' `logit psi_sc = X_c (mu_occ + b_occ_s) + sum_k L_sk w_kc`. A single shared
 #' field with only a species intercept can shift each map's level but not its
 #' shape; the loadings give each species its own spatial shape as a combination
@@ -366,11 +366,13 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' type and graph), and a cover-arm field without a matching occupancy field errors.
 #'
 #' The field structure is set by the term: `icar()` (improper intrinsic CAR, the
-#' default) or `car_proper(graph = adj)` (a proper CAR whose per-factor
-#' correlation `rho` is estimated by EM and returned in `fit$spatial$rho_w`). The
-#' two share one engine; `fit$spatial$field_type` records the choice. Structured
-#' terms on the detection arm, or an unsupported field term, error from the
-#' dispatcher.
+#' default), `car_proper(graph = adj)` (a proper CAR whose per-factor correlation
+#' `rho` is returned in `fit$spatial$rho_w`), or `bym2(graph = adj)` (the
+#' Riebler 2016 convolution whose per-factor spatial-variance fraction `phi` is
+#' returned in `fit$spatial$phi_w`); the field hyperparameter is estimated by EM.
+#' All three share one engine; `fit$spatial$field_type` records the choice.
+#' Structured terms on the detection arm, or an unsupported field term, error from
+#' the dispatcher.
 #'
 #' @section Scope (status `"experimental"`):
 #' The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace

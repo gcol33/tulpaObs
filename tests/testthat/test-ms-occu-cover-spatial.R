@@ -523,7 +523,7 @@ test_that("tobs() front door selects K via control$n.factors = 'auto'", {
   expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
 })
 
-test_that("a structured term on the detection arm, or a non-icar term, is rejected", {
+test_that("a structured term on the detection arm, or an unsupported field, is rejected", {
   adj <- .mscs_grid_adj(5L, 5L)
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
   expect_error(
@@ -531,8 +531,10 @@ test_that("a structured term on the detection arm, or a non-icar term, is reject
          detection = ~ det_cov1 + icar(graph = adj), positive = ~ pos_cov1,
          y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
     "detection arm")
+  # car() (improper CAR) is not a supported field for this family (icar /
+  # car_proper / bym2 are); it errors from the dispatcher.
   expect_error(
-    tobs(~ occ_cov1 + bym2(graph = adj), data = sim$data,
+    tobs(~ occ_cov1 + car(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
          positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
          species = sim$species, method = "laplace"),
@@ -773,4 +775,147 @@ test_that("auto-K rank selection composes with a proper-CAR field", {
   expect_true(Ksel >= 1L && Ksel <= 3L)
   expect_length(fit$spatial$rho_w, Ksel)
   expect_true(all(is.finite(fit$spatial$rho_w)))
+})
+
+# ---------------------------------------------------------------------------
+# Richer fields: BYM2 factors (gcol33/tulpa#67 Stage 3)
+# ---------------------------------------------------------------------------
+
+test_that("penalised gradient matches FD on the BYM2 field path", {
+  # BYM2's combined effect has marginal precision tau * R(phi) with
+  # R(phi) = [(1-phi) I + phi Sigma_u]^{-1}; the objective reads it from
+  # model$field_R exactly as for car_proper, so the analytic gradient must match
+  # finite differences (the field enters only the W-block prior).
+  adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells
+  S <- 4L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+                                        field = "bym2", phi = 0.7, seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K,
+    field_type = "bym2")
+  model$field_R <- tulpaObs:::.ms_ocs_build_field_R(model, hyper_w = c(0.6, 0.4))
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  tr <- sim$truth
+  mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b  <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+  Sinv <- diag(c(rep(1 / 0.4^2, d$P_occ), rep(1 / 0.4^2, d$P_p),
+                 rep(1 / 0.3^2, d$P_pos)))
+  Pmu <- diag(1 / 25, d$P); inv_sdL2 <- 1; tau_w <- c(1.3, 0.9)
+
+  par <- c(mu, b, as.numeric(tr$L), as.numeric(tr$w), log(tr$sigma_pos))
+  set.seed(1L); par <- par + stats::rnorm(length(par), 0, 0.05)
+  out <- tulpaObs:::.ms_ocs_penll_grad(model, par, Sinv, Pmu, inv_sdL2, tau_w,
+                                       grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2,
+                                                 tau_w, grad = FALSE)$ll
+  h <- 1e-5; gnum <- numeric(length(par))
+  for (k in seq_along(par)) {
+    pp <- par; pp[k] <- pp[k] + h; pm <- par; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the BYM2 K=2 gradient")
+
+  lfree <- tulpaObs:::.ms_ocs_L_to_lfree(tr$L, S, K)
+  par_c <- c(mu, b, lfree, as.numeric(tr$w), log(tr$sigma_pos))
+  set.seed(2L); par_c <- par_c + stats::rnorm(length(par_c), 0, 0.05)
+  outc <- tulpaObs:::.ms_ocs_penll_grad_c(model, par_c, Sinv, Pmu, inv_sdL2,
+                                          tau_w, grad = TRUE)
+  fc <- function(p) tulpaObs:::.ms_ocs_penll_grad_c(model, p, Sinv, Pmu, inv_sdL2,
+                                                    tau_w, grad = FALSE)$ll
+  gnumc <- numeric(length(par_c))
+  for (k in seq_along(par_c)) {
+    pp <- par_c; pp[k] <- pp[k] + h; pm <- par_c; pm[k] <- pm[k] - h
+    gnumc[k] <- (fc(pp) - fc(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(outc$grad - gnumc)), 1e-4,
+            label = "max|analytic - FD| over the constrained BYM2 gradient")
+})
+
+test_that("simulate_ms_occu_cover_spatial BYM2 field is well-formed and RNG-gated", {
+  adj <- .mscs_grid_adj(7L, 7L); N <- nrow(adj); S <- 8L
+  by <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+                                       field = "bym2", phi = 0.7, seed = 11L)
+  expect_identical(by$truth$field, "bym2")
+  expect_identical(by$truth$phi, 0.7)
+  w <- by$truth$w
+  expect_length(w, N)
+  expect_gt(stats::sd(w), 0.2)
+  expect_lt(stats::sd(w), 5)
+
+  # The bym2 branch is gated: field = "icar" (default) reproduces the Stage 1-2
+  # RNG stream byte for byte.
+  a <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+                                      field = "icar", seed = 11L)
+  expect_identical(a$y, b$y)
+  expect_identical(a$truth$w, b$truth$w)
+  expect_null(a$truth$phi)
+})
+
+test_that("tobs() front door recovers a BYM2 field and its variance fraction", {
+  skip_on_cran()
+  skip_if_fast()
+  # bym2() on the occupancy arm routes to the spatial fit with a BYM2 field: the
+  # combined-effect shape + F = W L' are recovered, and the spatial-variance
+  # fraction phi is a positive fraction. phi is a single-field-realisation
+  # variance component, so its EM point estimate is high-variance and attenuated
+  # at small N (it recovers toward truth as species / visits grow); the field
+  # shape -- the quantity that matters -- recovers strongly throughout.
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L
+  phi_true <- 0.7
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 8L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        field = "bym2", phi = phi_true,
+                                        seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + bym2(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(n.factors = 1L, sd.load = 1.2, max.iter = 25L, tol = 1e-3))
+
+  expect_identical(fit$spatial$type, "bym2")
+  expect_identical(fit$spatial$field_type, "bym2")
+  expect_null(fit$spatial$rho_w)
+  expect_length(fit$spatial$phi_w, 1L)
+  expect_gt(fit$spatial$phi_w, 0.2)        # a real spatial fraction
+  expect_lt(fit$spatial$phi_w, 1)
+  expect_lt(abs(fit$spatial$phi_w - phi_true), 0.45)
+
+  W_hat <- as.numeric(fit$spatial$field)
+  F_hat <- outer(W_hat, as.numeric(fit$spatial$loadings))
+  F_t   <- outer(as.numeric(sim$truth$w), as.numeric(sim$truth$L))
+  expect_gt(abs(stats::cor(W_hat, as.numeric(sim$truth$w))), 0.75)
+  expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_t)), 0.75)
+})
+
+test_that("auto-K rank selection composes with a BYM2 field", {
+  skip_on_cran()
+  skip_if_fast()
+  # The Laplace evidence integrates the field out with the BYM2 full-rank
+  # normaliser (|R(phi)| at rank N); auto-K must run that path end to end.
+  adj <- .mscs_grid_adj(9L, 9L); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 8L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        field = "bym2", phi = 0.7, seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + bym2(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(n.factors = "auto", n.factors.max = 3L, sd.load = 1.2,
+                   max.iter = 40L, tol = 1e-4))
+
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$spatial$field_type, "bym2")
+  expect_true(is.data.frame(fit$spatial$K_selection))
+  Ksel <- fit$spatial$K
+  expect_true(Ksel >= 1L && Ksel <= 3L)
+  expect_length(fit$spatial$phi_w, Ksel)
+  expect_true(all(is.finite(fit$spatial$phi_w)))
 })

@@ -50,10 +50,10 @@ returns the community means; \code{ranef()} the per-species coefficient deviatio
 
 \section{Reduced-rank spatial factors}{
 
-A single areal field term (\code{icar(graph = adj)} or \code{car_proper(graph = adj)})
-on the occupancy \code{formula} fits the reduced-rank (HMSC / spatial-gllvm)
-community model: \code{K} shared latent fields with per-species loadings on the
-occupancy predictor,
+A single areal field term (\code{icar(graph = adj)}, \code{car_proper(graph = adj)}, or
+\code{bym2(graph = adj)}) on the occupancy \code{formula} fits the reduced-rank (HMSC /
+spatial-gllvm) community model: \code{K} shared latent fields with per-species
+loadings on the occupancy predictor,
 \verb{logit psi_sc = X_c (mu_occ + b_occ_s) + sum_k L_sk w_kc}. A single shared
 field with only a species intercept can shift each map's level but not its
 shape; the loadings give each species its own spatial shape as a combination
@@ -77,11 +77,13 @@ The field is shared, so the cover-arm term must match the occupancy arm (same
 type and graph), and a cover-arm field without a matching occupancy field errors.
 
 The field structure is set by the term: \code{icar()} (improper intrinsic CAR, the
-default) or \code{car_proper(graph = adj)} (a proper CAR whose per-factor
-correlation \code{rho} is estimated by EM and returned in \code{fit$spatial$rho_w}). The
-two share one engine; \code{fit$spatial$field_type} records the choice. Structured
-terms on the detection arm, or an unsupported field term, error from the
-dispatcher.
+default), \code{car_proper(graph = adj)} (a proper CAR whose per-factor correlation
+\code{rho} is returned in \code{fit$spatial$rho_w}), or \code{bym2(graph = adj)} (the
+Riebler 2016 convolution whose per-factor spatial-variance fraction \code{phi} is
+returned in \code{fit$spatial$phi_w}); the field hyperparameter is estimated by EM.
+All three share one engine; \code{fit$spatial$field_type} records the choice.
+Structured terms on the detection arm, or an unsupported field term, error from
+the dispatcher.
 }
 
 \section{Scope (status \code{"experimental"})}{
