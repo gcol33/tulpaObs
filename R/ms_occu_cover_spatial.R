@@ -43,6 +43,10 @@
 #' @param adj N x N 0/1 adjacency matrix of the cell graph (required); `N` cells.
 #' @param n_species Number of species.
 #' @param J Number of detection visits per cell.
+#' @param K Number of shared latent spatial factors (`1 <= K <= n_species`).
+#'   `K = 1` is the Stage-1 single-field case (loading vector, field vector);
+#'   `K > 1` draws `K` ICAR fields with lower-triangular, positive-diagonal
+#'   loadings and returns the `S x K` loading matrix / `N x K` field matrix.
 #' @param n_occ_covs,n_det_covs,n_pos_covs Number of (Gaussian) covariates on the
 #'   occupancy, detection, and cover arms; each arm also has an intercept.
 #' @param mu_occ,mu_p,mu_pos Community mean coefficient vectors (intercept first).
@@ -63,6 +67,7 @@
 simulate_ms_occu_cover_spatial <- function(adj,
                                            n_species  = 8L,
                                            J          = 4L,
+                                           K          = 1L,
                                            n_occ_covs = 1L,
                                            n_det_covs = 1L,
                                            n_pos_covs = 1L,
@@ -85,6 +90,10 @@ simulate_ms_occu_cover_spatial <- function(adj,
   if (missing(adj) || is.null(adj) || !is.matrix(adj) ||
       nrow(adj) != ncol(adj)) {
     stop("adj must be a square N x N adjacency matrix.", call. = FALSE)
+  }
+  K <- as.integer(K)
+  if (K < 1L || K > n_species) {
+    stop("K must satisfy 1 <= K <= n_species.", call. = FALSE)
   }
   if (!is.null(seed)) set.seed(seed)
   N <- nrow(adj)
@@ -123,20 +132,31 @@ simulate_ms_occu_cover_spatial <- function(adj,
   X_pos <- if (ncol(pos_covs)) stats::model.matrix(~ ., pos_covs)
            else stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
 
-  # Shared latent factor w: unit-marginal-scale ICAR draw (Sorbye-Rue), the same
-  # convention simulate_occu_cover uses for its single-species field.
+  # K shared latent factors W (N x K): each a unit-marginal-scale ICAR draw
+  # (Sorbye-Rue), the same convention simulate_occu_cover uses for its
+  # single-species field. K = 1 reproduces the single-field random stream.
   Q       <- .occu_cover_icar_Q(adj)
   scale_q <- .occu_cover_icar_scale(adj)
   eig  <- eigen(Q, symmetric = TRUE)
   keep <- eig$values > 1e-8
-  z_white <- stats::rnorm(sum(keep))
-  w <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                    (z_white / sqrt(eig$values[keep])))
-  w <- w - mean(w)
-  w <- w / sqrt(scale_q)
+  W <- matrix(0, N, K)
+  for (k in seq_len(K)) {
+    z_white <- stats::rnorm(sum(keep))
+    wk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
+                       (z_white / sqrt(eig$values[keep])))
+    wk <- wk - mean(wk)
+    W[, k] <- wk / sqrt(scale_q)
+  }
 
-  # Per-species loadings and community RE coefficients.
-  L     <- stats::rnorm(n_species, mean_load, sd_load)
+  # Per-species loadings L (S x K), lower-triangular with positive diagonal --
+  # the rotation/sign/ordering-identified canonical form (gllvm/HMSC): factor k
+  # loads on species k..S only, and L[k, k] > 0. K = 1 is the length-S loading
+  # vector with the reference-species (sp1) sign anchor.
+  L <- matrix(0, n_species, K)
+  for (k in seq_len(K)) {
+    rows <- k:n_species
+    L[rows, k] <- stats::rnorm(length(rows), mean_load, sd_load)
+  }
   b_occ <- matrix(stats::rnorm(n_species * p_occ, 0, rep(sd_occ, each = n_species)),
                   n_species, p_occ)
   b_p   <- matrix(stats::rnorm(n_species * p_p, 0, rep(sd_p, each = n_species)),
@@ -144,9 +164,11 @@ simulate_ms_occu_cover_spatial <- function(adj,
   b_pos <- matrix(stats::rnorm(n_species * p_pos, 0, rep(sd_pos, each = n_species)),
                   n_species, p_pos)
 
-  # Sign anchor: make the reference species' (sp1) loading positive, flipping
-  # (w, L) together so the truth is in the fitter's canonical form.
-  if (L[1L] < 0) { L <- -L; w <- -w }
+  # Canonical sign anchor: make each factor's diagonal loading positive, flipping
+  # that factor's (W[, k], L[, k]) pair together.
+  for (k in seq_len(K)) {
+    if (L[k, k] < 0) { L[, k] <- -L[, k]; W[, k] <- -W[, k] }
+  }
 
   species_names <- paste0("sp", seq_len(n_species))
   y     <- array(NA_integer_, dim = c(N, J, n_species),
@@ -157,7 +179,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
   zmat  <- matrix(NA_integer_, N, n_species, dimnames = list(NULL, species_names))
 
   for (s in seq_len(n_species)) {
-    eta_psi <- as.vector(X_occ %*% (mu_occ + b_occ[s, ])) + L[s] * w
+    eta_psi <- as.vector(X_occ %*% (mu_occ + b_occ[s, ])) +
+               as.numeric(W %*% L[s, ])
     ps      <- stats::plogis(eta_psi)
     z       <- stats::rbinom(N, 1L, ps)
     pp      <- stats::plogis(as.vector(X_p %*% (mu_p + b_p[s, ])))
@@ -179,12 +202,16 @@ simulate_ms_occu_cover_spatial <- function(adj,
   list(
     y = y, y_pos = y_pos, data = data, species = species_names, adj = adj,
     truth = list(
-      K = 1L, positive = positive,
+      K = K, positive = positive,
       mu_occ = mu_occ, mu_p = mu_p, mu_pos = mu_pos,
       sd_occ = sd_occ, sd_p = sd_p, sd_pos = sd_pos,
       sigma_pos = sigma_pos,
       b_occ = b_occ, b_p = b_p, b_pos = b_pos,
-      L = L, w = w, psi = psi, z = zmat
+      # K = 1 keeps the Stage-1 shapes (loading vector, field vector); K > 1
+      # returns the S x K loading matrix and the N x K field matrix.
+      L = if (K == 1L) L[, 1L] else L,
+      w = if (K == 1L) W[, 1L] else W,
+      psi = psi, z = zmat
     )
   )
 }

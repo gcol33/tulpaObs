@@ -8,6 +8,7 @@ simulate_ms_occu_cover_spatial(
   adj,
   n_species = 8L,
   J = 4L,
+  K = 1L,
   n_occ_covs = 1L,
   n_det_covs = 1L,
   n_pos_covs = 1L,
@@ -30,6 +31,11 @@ simulate_ms_occu_cover_spatial(
 \item{n_species}{Number of species.}
 
 \item{J}{Number of detection visits per cell.}
+
+\item{K}{Number of shared latent spatial factors (\verb{1 <= K <= n_species}).
+\code{K = 1} is the Stage-1 single-field case (loading vector, field vector);
+\code{K > 1} draws \code{K} ICAR fields with lower-triangular, positive-diagonal
+loadings and returns the \verb{S x K} loading matrix / \verb{N x K} field matrix.}
 
 \item{n_occ_covs, n_det_covs, n_pos_covs}{Number of (Gaussian) covariates on the
 occupancy, detection, and cover arms; each arm also has an intercept.}

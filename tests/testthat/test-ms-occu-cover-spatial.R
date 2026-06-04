@@ -38,6 +38,48 @@ test_that("simulate_ms_occu_cover_spatial returns well-formed K=1 community data
   }
 })
 
+test_that("K > 1 draws lower-triangular loadings and K unit-scale fields", {
+  adj <- .mscs_grid_adj(7L, 7L)
+  N <- nrow(adj); S <- 10L; K <- 3L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, sd_load = 1.0,
+                                        seed = 42L)
+  expect_identical(sim$truth$K, K)
+  expect_identical(dim(sim$truth$L), c(S, K))   # S x K loading matrix
+  expect_identical(dim(sim$truth$w), c(N, K))   # N x K field matrix
+
+  # Lower-triangular canonical form: factor k loads on species k..S only, with a
+  # positive diagonal loading.
+  L <- sim$truth$L
+  for (k in seq_len(K)) {
+    if (k > 1L) expect_true(all(L[seq_len(k - 1L), k] == 0))
+    expect_gt(L[k, k], 0)
+  }
+
+  # Each field is a centred, unit-ish-scale ICAR draw.
+  for (k in seq_len(K)) {
+    expect_lt(abs(mean(sim$truth$w[, k])), 1e-8)
+    expect_gt(stats::sd(sim$truth$w[, k]), 0.3)
+    expect_lt(stats::sd(sim$truth$w[, k]), 3)
+  }
+
+  # Rank-K structure: the per-cell psi map has more than one degree of spatial
+  # freedom across species (a rank-1 / single-field model cannot produce this).
+  sv <- svd(scale(sim$truth$psi, center = TRUE, scale = FALSE))$d
+  expect_gt(sv[2L] / sv[1L], 0.1)               # a genuine second spatial axis
+})
+
+test_that("K = 1 simulator output is unchanged (Stage-1 shapes preserved)", {
+  adj <- .mscs_grid_adj(6L, 6L)
+  a <- simulate_ms_occu_cover_spatial(adj, n_species = 8L, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n_species = 8L, J = 4L, K = 1L,
+                                      seed = 11L)
+  expect_null(dim(a$truth$L))                   # vector, not matrix
+  expect_null(dim(a$truth$w))
+  expect_equal(a$truth$L, b$truth$L)
+  expect_equal(a$truth$w, b$truth$w)
+  expect_identical(a$y, b$y)
+})
+
 test_that("the shared factor is unit-scaled and sign-anchored", {
   adj <- .mscs_grid_adj(7L, 7L)
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = 6L, seed = 7L)
