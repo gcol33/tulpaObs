@@ -48,13 +48,34 @@ required. The occupancy \code{formula}, the \code{detection} formula, and the co
 returns the community means; \code{ranef()} the per-species coefficient deviations.
 }
 
+\section{Reduced-rank spatial factors}{
+
+A single \code{icar(graph = adj)} term on the occupancy \code{formula} fits the
+reduced-rank (HMSC / spatial-gllvm) community model: \code{K} shared latent ICAR
+fields with per-species loadings on the occupancy predictor,
+\verb{logit psi_sc = X_c (mu_occ + b_occ_s) + sum_k L_sk w_kc}. A single shared
+field with only a species intercept can shift each map's level but not its
+shape; the loadings give each species its own spatial shape as a combination
+of the shared factors, borrowing strength so rare taxa get a calibrated map.
+The number of factors is set by \code{control = list(n.factors = K)}, or chosen
+automatically by \code{control = list(n.factors = "auto", n.factors.max = M)},
+which fits the identified (lower-triangular loading) ladder and picks the rank
+that maximises the empirical-Bayes Laplace marginal likelihood (the field is
+integrated out, so its prior supplies the Occam penalty -- latent-level
+criteria such as WAIC track the field's effective dimension, not the rank, and
+under-select). The per-rank evidence is returned in \code{fit$spatial$K_selection}.
+\code{sd.load} sets the loading prior scale. Structured terms on the detection or
+cover arms, or a non-\code{icar()} field, error from the dispatcher.
+}
+
 \section{Scope (status \code{"experimental"})}{
 
-Non-spatial Laplace only. A shared coupled spatial field across the three
-arms with the per-species RE block layered on top (the community analogue of
+The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace
+/ Laplace-EM. A shared coupled spatial field across all three arms with the
+per-species RE block layered on top (the community analogue of
 \code{\link[=occu_cover]{occu_cover()}}'s \code{nested_laplace} joint-coupled engine) needs upstream engine
 support that does not yet combine a per-group RE block with a shared latent
-field on one predictor; a structured term on any arm errors from the
+field on one predictor; such a structured term on any arm errors from the
 dispatcher rather than being silently dropped.
 }
 

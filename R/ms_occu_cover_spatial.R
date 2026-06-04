@@ -820,6 +820,174 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 }
 
 
+# ---------------------------------------------------------------------------
+# Laplace marginal likelihood + rank (K) selection
+# ---------------------------------------------------------------------------
+#
+# Selecting the number of latent factors K needs a criterion that INTEGRATES the
+# field out, so the field prior supplies the Occam penalty. Latent-level
+# pointwise criteria (held-out cells, WAIC / DIC) fail here: each extra ICAR
+# field adds ~N effective latent parameters, so p_waic rises by ~N whether the
+# rank-K signal is real or not -- they measure the field's effective dimension,
+# not the rank.
+#
+# The right tool is the empirical-Bayes Laplace marginal likelihood log Z(K):
+# the EM hyperparameters (Sigma, tau_w) are the type-II MLEs, and at the
+# converged theta the latent par = c(mu, {b_s}, L, W, log_disp) is integrated out
+# by a Laplace approximation around the joint mode:
+#
+#   log Z(K) ~= logpen(mode)                                 [data LL + prior kernels]
+#            + 0.5*npar*log(2pi) - 0.5*log|H|                 [Laplace volume, H = precision]
+#            + 0.5*(N-1)*sum_k log tau_w[k] + 0.5*K*logpdet(Q)
+#                - 0.5*K*(N-1)*log(2pi)                       [rank-deficient ICAR prior NC]
+#            - 0.5*nL*log(2pi*sd_L^2)                         [loading prior NC]
+#            - 0.5*S*(P*log(2pi) + log|Sigma_occ|+log|Sigma_p|+log|Sigma_pos|)  [RE prior NC]
+#            - 0.5*P*log(2pi) - P*log(sigma.beta)             [community-mean prior NC]
+#            + sum_k log L_kk(mode)                           [log-diagonal Jacobian]
+#
+# The prior normalisers are not optional: a likelihood-flat direction (e.g. the
+# soft ICAR-level / intercept confound, pinned only by the RE prior) contributes
+# a large posterior volume that the matching prior normaliser cancels, so only
+# genuine rank-K signal moves log Z. This requires the IDENTIFIED (constrained,
+# lower-triangular L) parameterisation -- the unconstrained Hessian is
+# rank-deficient along the rotation manifold and |H| is then ill-defined.
+#
+# The ICAR prior normaliser uses the generalized (pseudo) determinant of Q (the
+# product of its N-1 nonzero eigenvalues); the field is improper along its single
+# constant null direction, so the volume bookkeeping counts N-1, not N, per
+# factor.
+
+# log pseudo-determinant of the ICAR precision Q (sum of log nonzero eigenvalues).
+# Cached on the model when present; one eigen solve otherwise.
+.ms_ocs_logpdet_Q <- function(model) {
+  if (!is.null(model$icar_logpdet)) return(model$icar_logpdet)
+  ev <- eigen(model$icar_Q, symmetric = TRUE, only.values = TRUE)$values
+  sum(log(ev[ev > max(ev) * 1e-8]))
+}
+
+# Symmetric positive-definite log-determinant via a Cholesky ridge ladder (the
+# constrained joint precision is PD up to the soft ICAR-level directions); eigen
+# fallback if every ridge fails.
+.ms_ocs_logdet_pd <- function(H) {
+  Hs <- (H + t(H)) / 2
+  for (eps in c(0, 1e-8, 1e-6, 1e-4, 1e-2)) {
+    ch <- tryCatch(chol(Hs + diag(eps, nrow(Hs))), error = function(e) NULL)
+    if (!is.null(ch)) return(2 * sum(log(diag(ch))))
+  }
+  ev <- eigen(Hs, symmetric = TRUE, only.values = TRUE)$values
+  sum(log(pmax(ev, 1e-12)))
+}
+
+# Joint precision H = -Hessian(logpen) at the mode, by central finite differences
+# of the ANALYTIC gradient (more accurate than differencing the objective). gfun
+# returns the penalised-log-lik gradient, which vanishes at the mode, so
+# H[, j] = -(grad(par + h e_j) - grad(par - h e_j)) / (2h) is the (PD) precision.
+.ms_ocs_hess_fd <- function(gfun, par, h = 1e-4) {
+  n <- length(par); H <- matrix(0, n, n)
+  for (j in seq_len(n)) {
+    pp <- par; pp[j] <- pp[j] + h
+    pm <- par; pm[j] <- pm[j] - h
+    H[, j] <- -(gfun(pp) - gfun(pm)) / (2 * h)
+  }
+  (H + t(H)) / 2
+}
+
+# Empirical-Bayes Laplace marginal log-likelihood log Z(K) for a CONVERGED,
+# identifiability-constrained spatial community fit (.tobs_fit_ms_occu_cover_spatial
+# with constrain = TRUE). `fit` carries the converged mode (`par`, triangular `L`),
+# the type-II MLE hyperparameters (`Sigma`, `tau_w`, `sd_L`), and dims (`d`).
+# logpen and H are (re)evaluated at the SAME converged theta so the mode, the
+# curvature, and the prior normalisers are mutually consistent (the EM returns
+# the E-step mode at theta_t alongside the M-step theta_{t+1}; at convergence they
+# coincide, but recomputing removes the half-step). Returns log Z and a per-term
+# breakdown for diagnostics.
+.ms_ocs_log_evidence <- function(model, fit, sigma.beta = 5) {
+  if (!isTRUE(fit$constrained)) {
+    stop("log Z(K) requires the identified (constrained) fit; refit with ",
+         "constrain = TRUE.", call. = FALSE)
+  }
+  d <- .ms_ocs_dims(model); K <- d$K; S <- d$S; P <- d$P; N <- d$N
+  tau_w <- rep_len(fit$tau_w, K); sd_L <- fit$sd_L
+  Sigma <- fit$Sigma
+
+  Sinv <- matrix(0, P, P)
+  Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
+  Sinv[d$p_idx,   d$p_idx]   <- solve(Sigma$p)
+  Sinv[d$pos_idx, d$pos_idx] <- solve(Sigma$pos)
+  Pmu      <- diag(1 / sigma.beta^2, P)
+  inv_sdL2 <- 1 / sd_L^2
+
+  obj  <- function(p, grad) .ms_ocs_penll_grad_c(model, p, Sinv, Pmu, inv_sdL2,
+                                                 tau_w, grad = grad)
+  logpen <- obj(fit$par, FALSE)$ll
+  H      <- .ms_ocs_hess_fd(function(p) obj(p, TRUE)$grad, fit$par)
+  npar   <- length(fit$par)
+
+  logdetH  <- .ms_ocs_logdet_pd(H)
+  logpdetQ <- .ms_ocs_logpdet_Q(model)
+  nL       <- .ms_ocs_lfree_dim(S, K)
+  ld_occ <- as.numeric(determinant(Sigma$occ, logarithm = TRUE)$modulus)
+  ld_p   <- as.numeric(determinant(Sigma$p,   logarithm = TRUE)$modulus)
+  ld_pos <- as.numeric(determinant(Sigma$pos, logarithm = TRUE)$modulus)
+
+  Lmat <- if (K == 1L) matrix(fit$L, S, 1L) else fit$L
+  diagL <- diag(Lmat)[seq_len(K)]
+
+  vol      <- 0.5 * npar * log(2 * pi) - 0.5 * logdetH
+  nc_field <- 0.5 * (N - 1) * sum(log(tau_w)) + 0.5 * K * logpdetQ -
+              0.5 * K * (N - 1) * log(2 * pi)
+  nc_load  <- -0.5 * nL * log(2 * pi * sd_L^2)
+  nc_b     <- -0.5 * S * (P * log(2 * pi) + ld_occ + ld_p + ld_pos)
+  nc_mu    <- -0.5 * P * log(2 * pi) - P * log(sigma.beta)
+  jac      <- sum(log(pmax(diagL, 1e-12)))
+
+  logZ <- logpen + vol + nc_field + nc_load + nc_b + nc_mu + jac
+  list(logZ = as.numeric(logZ), K = K, npar = npar,
+       logpen = logpen, vol = vol, logdetH = logdetH,
+       nc_field = nc_field, nc_load = nc_load, nc_b = nc_b, nc_mu = nc_mu,
+       jac = jac)
+}
+
+# Fit a ladder of K and pick the rank by the Laplace marginal likelihood. Each K
+# is fit with the identifiability-constrained Laplace-EM (so log Z is well posed);
+# the designs are K-invariant, so only model$K changes between fits. Returns a
+# per-K evidence table (logZ + the breakdown terms), the selected K (argmax
+# logZ), and the converged fit at the selected K (ready for the front-door
+# wrapper). `K.max` defaults to a small ladder; selection stops early once log Z
+# has decreased for two consecutive K (the evidence is unimodal in K once the
+# signal is captured).
+.ms_ocs_select_K <- function(model, K.max = 4L, sd_L = 1.0, sigma.beta = 5,
+                             max.em = 40L, tol = 1e-4, verbose = FALSE) {
+  K.max <- min(as.integer(K.max), model$n_species)
+  rows <- list(); fits <- list(); best_drop <- 0L
+  for (K in seq_len(K.max)) {
+    m2 <- model; m2$K <- K
+    f  <- .tobs_fit_ms_occu_cover_spatial(m2, sd_L = sd_L, max.em = max.em,
+                                          tol = tol, sigma.beta = sigma.beta,
+                                          constrain = TRUE)
+    ev <- .ms_ocs_log_evidence(m2, f, sigma.beta = sigma.beta)
+    fits[[K]] <- f
+    rows[[K]] <- data.frame(K = K, logZ = ev$logZ, logpen = ev$logpen,
+                            vol = ev$vol, nc_field = ev$nc_field,
+                            nc_load = ev$nc_load, npar = ev$npar)
+    if (verbose) {
+      cat(sprintf("K=%d  logZ=%.2f  logpen=%.2f  vol=%.2f  nc_field=%.2f\n",
+                  K, ev$logZ, ev$logpen, ev$vol, ev$nc_field))
+    }
+    if (K > 1L && ev$logZ < rows[[K - 1L]]$logZ) {
+      best_drop <- best_drop + 1L
+      if (best_drop >= 2L) break
+    } else {
+      best_drop <- 0L
+    }
+  }
+  tab <- do.call(rbind, rows)
+  K_sel <- tab$K[which.max(tab$logZ)]
+  tab$best <- tab$K == K_sel
+  list(table = tab, K = K_sel, fit = fits[[K_sel]])
+}
+
+
 # Detect a Stage-1 spatial request on the three occu_cover arms. Returns the
 # shared-field adjacency + the fixed-effects occupancy formula when the
 # occupancy arm carries a single icar() term (and detection / cover are plain),

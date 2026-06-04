@@ -455,6 +455,74 @@ test_that("tobs() front door fits K > 1 via control$n.factors", {
   expect_gte(simplicity(rot$loadings) + 1e-9, simplicity(fit$spatial$loadings))
 })
 
+test_that("Laplace marginal likelihood recovers the true number of factors K", {
+  skip_on_cran()
+  skip_if_fast()
+  # Rank selection by the empirical-Bayes Laplace marginal likelihood log Z(K).
+  # The three latent-level criteria (held-out cells, unconstrained / constrained
+  # WAIC) all pick K = 1 on K = 2 truth -- they track the field's effective
+  # dimension, not the rank. The integrated criterion must (a) reject a spurious
+  # second factor on K = 1 truth and (b) recover the second factor on K = 2 truth
+  # at the scale where the recovery suite confirms it is estimable.
+  build <- function(sim, adj) tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = 1L)
+
+  # (a) K = 1 truth -> selected K = 1 (no spurious factor).
+  adj1 <- .mscs_grid_adj(8L, 8L)
+  sim1 <- simulate_ms_occu_cover_spatial(adj1, n_species = 16L, K = 1L, J = 6L,
+                                         sd_occ = 0.5, sd_load = 1.2,
+                                         sigma_pos = 0.4, seed = 11L)
+  sel1 <- tulpaObs:::.ms_ocs_select_K(build(sim1, adj1), K.max = 3L, sd_L = 1.2,
+                                      max.em = 30L, tol = 1e-4)
+  expect_identical(sel1$K, 1L)
+  expect_gt(sel1$table$logZ[1L], sel1$table$logZ[2L])   # log Z peaks at K = 1
+
+  # (b) K = 2 truth -> selected K = 2 (the second factor clears the Occam budget).
+  adj2 <- .mscs_grid_adj(9L, 9L)
+  sim2 <- simulate_ms_occu_cover_spatial(adj2, n_species = 20L, K = 2L, J = 6L,
+                                         sd_occ = 0.5, sd_load = 1.2,
+                                         sigma_pos = 0.4, seed = 2024L)
+  sel2 <- tulpaObs:::.ms_ocs_select_K(build(sim2, adj2), K.max = 3L, sd_L = 1.2,
+                                      max.em = 40L, tol = 1e-4)
+  expect_identical(sel2$K, 2L)
+  expect_gt(sel2$table$logZ[2L], sel2$table$logZ[1L])
+  expect_gt(sel2$table$logZ[2L], sel2$table$logZ[3L])   # unimodal: peak at K = 2
+})
+
+test_that("tobs() front door selects K via control$n.factors = 'auto'", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        sigma_pos = 0.4, seed = 77L)
+  fit <- tobs(
+    ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(n.factors = "auto", n.factors.max = 3L, sd.load = 1.2,
+                   max.iter = 40L, tol = 1e-4))
+
+  # The auto fit is a tobs_fit at the selected rank, carrying the per-K evidence
+  # table that drove the choice.
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$spatial$K, 2L)
+  expect_false(is.null(fit$spatial$K_selection))
+  ks <- fit$spatial$K_selection
+  expect_true(all(c("K", "logZ", "best") %in% names(ks)))
+  expect_identical(ks$K[which.max(ks$logZ)], 2L)
+  expect_true(ks$best[ks$K == 2L])
+
+  # The selected-rank fit recovers the rotation-invariant spatial contribution.
+  F_hat  <- fit$spatial$field %*% t(fit$spatial$loadings)
+  F_true <- sim$truth$w %*% t(sim$truth$L)
+  expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
+})
+
 test_that("a structured term off the occupancy arm is rejected (Stage 1)", {
   adj <- .mscs_grid_adj(5L, 5L)
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)

@@ -626,6 +626,8 @@ tobs <- function(formula,
                               n_sites = n_sites, max_visits = max_visits)
 
   if (!is.null(sp)) {
+    nf     <- control[["n.factors"]] %||% 1L
+    auto_K <- is.character(nf) && identical(tolower(nf), "auto")
     model <- .tobs_build_ms_occu_cover_spatial(
       occ_formula      = sp$fe_occ,
       det_formula      = vd_det$det_formula,
@@ -636,12 +638,33 @@ tobs <- function(formula,
       positive         = family$params$positive,
       species          = dots$species,
       adj              = sp$graph,
-      K                = as.integer(control[["n.factors"]] %||% 1L),
+      K                = if (auto_K) 1L else as.integer(nf),
       det_visit_formula = vd_det$det_visit_formula,
       det_visit_data    = vd_det$visits,
       pos_visit_formula = vd_pos$det_visit_formula,
       pos_visit_data    = vd_pos$visits
     )
+    if (auto_K) {
+      # Choose the latent-factor rank K by the empirical-Bayes Laplace marginal
+      # likelihood: latent-level pointwise criteria (held-out cells, WAIC) fail
+      # because each ICAR field adds ~N effective latent parameters, so they
+      # track field dimension rather than rank. .ms_ocs_select_K fits the
+      # identified (constrained) K-ladder, integrates the field out so its prior
+      # supplies the Occam penalty, and returns the argmax-evidence fit; the
+      # per-K evidence table is attached as fit$spatial$K_selection.
+      sel <- .ms_ocs_select_K(
+        model,
+        K.max      = as.integer(control[["n.factors.max"]] %||% 4L),
+        sd_L       = control[["sd.load"]]    %||% 1.0,
+        sigma.beta = control[["sigma.beta"]] %||% 5,
+        max.em     = control[["max.iter"]]   %||% 30L,
+        tol        = control[["tol"]]        %||% 1e-3,
+        verbose    = isTRUE(control[["verbose"]]))
+      model$K <- sel$K
+      out <- build_ms_occu_cover_spatial_fit(model, sel$fit)
+      out$spatial$K_selection <- sel$table
+      return(out)
+    }
     fit <- .tobs_fit_ms_occu_cover_spatial(
       model,
       sd_L       = control[["sd.load"]]   %||% 1.0,
