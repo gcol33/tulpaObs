@@ -75,8 +75,8 @@ test_that("ms_occu_cover() enforces its capability gates", {
          method = "nested_laplace"),
     "not available"
   )
-  # A structured term on the detection arm is rejected: Stage 1 supports a
-  # shared icar() field on the occupancy arm only (gcol33/tulpa#67).
+  # A structured term on the detection arm is rejected: shared fields are
+  # supported on the occupancy and cover arms only (gcol33/tulpa#67).
   adj <- matrix(0L, 30, 30)
   for (i in seq_len(29)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
   expect_error(
@@ -85,7 +85,7 @@ test_that("ms_occu_cover() enforces its capability gates", {
          detection = ~ det_cov1 + icar(graph = adj),
          positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos, visits = vis,
          species = sim$species, method = "laplace"),
-    "occupancy arm only"
+    "detection arm must use a plain formula"
   )
 })
 

@@ -635,7 +635,7 @@ test_that("penalised gradient matches FD on the proper-CAR field path", {
     positive = "lognormal", species = sim$species, adj = adj, K = K,
     field_type = "car_proper")
   # Per-factor structure at distinct correlations (FD validity is rho-independent).
-  model$field_R <- tulpaObs:::.ms_ocs_build_field_R(model, rho_w = c(0.7, 0.5))
+  model$field_R <- tulpaObs:::.ms_ocs_build_field_R(model, hyper_w = c(0.7, 0.5))
   d <- tulpaObs:::.ms_ocs_dims(model)
   tr <- sim$truth
   mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
