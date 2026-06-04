@@ -327,6 +327,7 @@
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
                                                 sigma.beta = 5,
+                                                .batch_collect = FALSE,
                                                 ...) {
   # `fields` is the coupled-field list from .occu_cover_spatial_fields(): the
   # unweighted intercept field first, then any weighted SVC fields. They share
@@ -575,6 +576,16 @@
       lapply(seq_len(n_trend), function(j)
         list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend))
     )
+  } else if (isTRUE(.batch_collect)) {
+    # Single-field, batched fused path: run the MULTI-block driver so the alpha
+    # axis is an explicit copy spec and the per-arm field-node map is an explicit
+    # `spatial_idx` (the single-block backend derives both from the pos arm's
+    # field_coef; the multi-block driver needs them spelled out). A multi-block
+    # fit with this copy is bit-identical to the single-block fit at a shared
+    # grid (dev_notes/_probe_mb_vs_sb_occucover.R).
+    prior_arg <- icar_template(list(
+      spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
+    copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
   } else {
     prior_arg <- icar_template()
     copy_arg  <- NULL
@@ -647,7 +658,49 @@
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
 
+  ctx <- list(adj = adj, is_latent = is_latent, pi_list = pi_list,
+              n_cells = n_cells,
+              disp2_fixed   = if (is_latent) disp2_fixed   else NULL,
+              n_quad_latent = if (is_latent) n_quad_latent else NULL,
+              sigma_pos_init = sigma_pos_init, has_trend = has_trend,
+              n_trend = n_trend, coupled_trends = coupled_trends, model = model)
+
+  # Batched fused path (gcol33/tulpa#66): return the assembled call + context
+  # instead of fitting, so .tobs_fit_occu_cover_batch_fused can run B species
+  # through one fused multi-block solve and post-process each with the shared
+  # ctx. Eligibility (no pos-arm phi axis -> no latent / phi.grid.pos) is judged
+  # by the caller from `fit_call$phi_grid` + `is_latent`.
+  if (isTRUE(.batch_collect)) {
+    return(structure(
+      list(fit_call = fit_call, ctx = ctx, sigma_pos_init = sigma_pos_init,
+           is_latent = is_latent, spec_name = spec_name, has_trend = has_trend),
+      class = "occu_cover_jc_prep"))
+  }
+
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
+
+  .occu_cover_jc_postprocess(fit, ctx)
+}
+
+# Post-process an occu_cover joint-coupled engine fit into a tobs_fit. `fit` is
+# the tulpa_nested_laplace_joint return (single-species) or a per-species slice
+# of a batched fused fit assembled to the same shape (gcol33/tulpa#66); `ctx`
+# carries the Part-A context the shaping needs. Marginalisation here is a
+# weighted sum over outer-grid cells (order-invariant), so a fused fixed-grid
+# slice and an adaptive single-species fit shape identically given the same
+# cells.
+.occu_cover_jc_postprocess <- function(fit, ctx) {
+  adj            <- ctx$adj
+  is_latent      <- ctx$is_latent
+  pi_list        <- ctx$pi_list
+  n_cells        <- ctx$n_cells
+  disp2_fixed    <- ctx$disp2_fixed
+  n_quad_latent  <- ctx$n_quad_latent
+  sigma_pos_init <- ctx$sigma_pos_init
+  has_trend      <- ctx$has_trend
+  n_trend        <- ctx$n_trend
+  coupled_trends <- ctx$coupled_trends
+  model          <- ctx$model
 
   # Unpack per-arm posterior means + SDs from the joint modes.
   # arm_layout$beta_start[k] is the 0-based offset of arm k's betas in the

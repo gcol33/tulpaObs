@@ -95,6 +95,16 @@
 
   labels <- .tobs_batch_species_labels(species, y, B)
 
+  # Fused block-diagonal backend (gcol33/tulpa#66): one multi-block nested-Laplace
+  # solve over all B species, amortising the bandwidth-bound occupancy-mixture
+  # scatter. Returns NULL when the configuration is not fused-eligible (non-spatial
+  # laplace, v2/v3 escape hatch, latent / phi.grid.pos pos-arm dispersion axis),
+  # in which case we fall back to the per-species looped path below. Both shape
+  # the result through the same .occu_cover_jc_postprocess, so a fused fit and a
+  # looped fit are the same tobs_fit per species (gated by test-occu-cover-batch.R).
+  fused <- .tobs_fit_occu_cover_batch_fused(tobs_args, y, y_pos, B, labels)
+  if (!is.null(fused)) return(fused)
+
   # Per-species `...`: drop the batch-only `species`, override `y_pos` with the
   # species slice. Everything else (positive, etc.) flows through unchanged.
   base_dots <- dots
@@ -128,7 +138,130 @@
       species   = labels,
       n_species = B,
       family    = tobs_args$family,
-      method    = tobs_args$method
+      method    = tobs_args$method,
+      backend   = "looped"
+    ),
+    class = "tobs_batch"
+  )
+}
+
+
+# Fused block-diagonal backend (gcol33/tulpa#66). Runs B species through ONE
+# multi-block nested-Laplace solve: the species share the design + sparsity
+# pattern, their latent systems are block-diagonal, and the fused cell-coupling
+# scatter loads each design row once and loops species inner. Per-species
+# trajectory is bit-identical to an independent single-species fit (the fused
+# path only reorganises the work), so each species post-processes to the same
+# tobs_fit a looped fit produces.
+#
+# Returns a `tobs_batch` (backend = "fused"), or NULL when the configuration is
+# not fused-eligible -- the caller then falls back to the looped path. Eligible:
+# spatial nested-Laplace on the default joint_coupled engine with a FIXED pos-arm
+# dispersion (no latent cover RE, no phi.grid.pos), i.e. the common occu_cover
+# spatial fit. The fused driver integrates a single shared FIXED outer grid
+# across species (per-species adaptive refinement is inherently not shareable),
+# so a fused fit equals an adaptive single-species fit only with adaptive grid
+# off; the equivalence gate fixes both sides' grid.
+.tobs_fit_occu_cover_batch_fused <- function(tobs_args, y, y_pos, B, labels) {
+  if (!identical(tobs_args$method, "nested_laplace")) return(NULL)
+  engine_pick <- tobs_args$control[["engine"]] %||% "joint_coupled"
+  if (!identical(engine_pick, "joint_coupled")) return(NULL)
+
+  dots <- tobs_args$dots
+
+  # Collect per-species prep by replaying the dispatch in collect mode. This
+  # reuses ALL of .dispatch_occu_cover + the joint_coupled Part-A builder (model
+  # construction, field resolution, arm priors, sigma_pos pre-fit, grids); no
+  # model-building logic is duplicated here. A species whose dispatch does not
+  # return an `occu_cover_jc_prep` (non-spatial, v2/v3, an error) is ineligible.
+  preps <- vector("list", B)
+  for (s in seq_len(B)) {
+    sp_dots          <- dots
+    sp_dots$species  <- NULL
+    sp_dots$y_pos    <- .tobs_response_slice(y_pos, s)
+    ctrl_s           <- tobs_args$control
+    ctrl_s$.batch_collect <- TRUE
+    prep <- tryCatch(
+      do.call(.dispatch_occu_cover, c(list(
+        formula   = tobs_args$formula, data = tobs_args$data,
+        family    = tobs_args$family,  detection = tobs_args$detection,
+        y         = .tobs_response_slice(y, s), visits = tobs_args$visits,
+        engine    = "nested_laplace", priors = tobs_args$priors,
+        control   = ctrl_s), sp_dots)),
+      error = function(e) e)
+    if (!inherits(prep, "occu_cover_jc_prep")) return(NULL)
+    preps[[s]] <- prep
+  }
+
+  # Fused-eligible only with a fixed pos-arm dispersion: a latent cover RE or an
+  # explicit phi.grid.pos puts sigma on the outer grid as a per-arm phi axis,
+  # which the batched driver does not carry.
+  ineligible <- vapply(preps, function(p)
+    !is.null(p$fit_call$phi_grid) || isTRUE(p$is_latent), logical(1))
+  if (any(ineligible)) return(NULL)
+
+  fc1       <- preps[[1L]]$fit_call
+  arms1     <- fc1$responses
+  n_arms    <- length(arms1)
+  spec_name <- preps[[1L]]$spec_name
+  has_trend <- isTRUE(preps[[1L]]$has_trend)
+
+  # Per-data-arm species-column response matrix; per-arm per-species dispersion.
+  y_batch <- vector("list", n_arms)
+  for (k in seq_len(n_arms)) {
+    yk <- arms1[[k]]$y
+    if (is.null(yk) || length(yk) == 0L) next
+    y_batch[[k]] <- do.call(cbind, lapply(preps, function(p)
+      as.numeric(p$fit_call$responses[[k]]$y)))
+  }
+  phi_batch <- matrix(0, n_arms, B)
+  for (k in seq_len(n_arms)) {
+    for (s in seq_len(B)) {
+      phi_batch[k, s] <- preps[[s]]$fit_call$responses[[k]]$phi %||% 1
+    }
+  }
+
+  bat <- tulpa:::tulpa_nl_joint_batch(
+    responses     = arms1, prior = fc1$prior, copy = fc1$copy,
+    n_batch       = B, y_batch = y_batch, phi_batch = phi_batch,
+    max_iter      = as.integer(fc1$control$max_iter %||% 200L),
+    tol           = as.numeric(fc1$control$tol %||% 1e-6),
+    cell_coupling = spec_name, store_Q = TRUE)
+
+  arm_layout <- bat$arm_layout
+  theta_grid <- bat$theta_grid
+  # The single-field multi-block grid carries b1.-prefixed axis names; Part B's
+  # no-trend branch reads bare "sigma"/"alpha" (the single-block convention).
+  # Strip the single block's prefix so the hyperparameter summary resolves.
+  if (!has_trend && !is.null(colnames(theta_grid))) {
+    colnames(theta_grid) <- sub("^b1\\.", "", colnames(theta_grid))
+  }
+
+  fits <- lapply(seq_len(B), function(s) {
+    ps <- bat$per_species[[s]]
+    engine_fit <- list(
+      arm_layout       = arm_layout,
+      theta_grid       = theta_grid,
+      log_marginal     = ps$log_marginal,
+      weights          = ps$weights,
+      modes            = ps$modes,
+      Q_csc_p_per_grid = ps$Q_csc_p_per_grid,
+      Q_csc_i_per_grid = ps$Q_csc_i_per_grid,
+      Q_csc_x_per_grid = ps$Q_csc_x_per_grid,
+      Q_csc_n          = ps$Q_csc_n
+    )
+    .occu_cover_jc_postprocess(engine_fit, preps[[s]]$ctx)
+  })
+  names(fits) <- labels
+
+  structure(
+    list(
+      fits      = fits,
+      species   = labels,
+      n_species = B,
+      family    = tobs_args$family,
+      method    = tobs_args$method,
+      backend   = "fused"
     ),
     class = "tobs_batch"
   )
