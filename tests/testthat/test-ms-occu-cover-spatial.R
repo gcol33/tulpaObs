@@ -345,6 +345,31 @@ test_that("tobs() front door routes icar() on the occupancy arm to the spatial f
   expect_true(is.finite(fit$ms_community$sd_occ[1L]))
 })
 
+test_that("tobs() front door fits K > 1 via control$n.factors", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        sigma_pos = 0.4, seed = 77L)
+  fit <- tobs(
+    ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(n.factors = K, sd.load = 1.2, max.iter = 30L, tol = 1e-3))
+
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$spatial$K, K)
+  expect_identical(dim(fit$spatial$field), c(N, K))
+  expect_identical(dim(fit$spatial$loadings), c(S, K))
+
+  F_hat  <- fit$spatial$field %*% t(fit$spatial$loadings)
+  F_true <- sim$truth$w %*% t(sim$truth$L)
+  expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
+})
+
 test_that("a structured term off the occupancy arm is rejected (Stage 1)", {
   adj <- .mscs_grid_adj(5L, 5L)
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
