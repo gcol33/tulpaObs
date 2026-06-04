@@ -95,18 +95,30 @@
 
   labels <- .tobs_batch_species_labels(species, y, B)
 
-  # Fused block-diagonal backend (gcol33/tulpa#66): one multi-block nested-Laplace
-  # solve over all B species, amortising the bandwidth-bound occupancy-mixture
-  # scatter. Returns NULL when the configuration is not fused-eligible (non-spatial
-  # laplace, v2/v3 escape hatch, latent / phi.grid.pos pos-arm dispersion axis),
-  # in which case we fall back to the per-species looped path below. Both shape
-  # the result through the same .occu_cover_jc_postprocess, so a fused fit and a
-  # looped fit are the same tobs_fit per species (gated by test-occu-cover-batch.R).
-  fused <- .tobs_fit_occu_cover_batch_fused(tobs_args, y, y_pos, B, labels)
-  if (!is.null(fused)) return(fused)
+  # Backend selection. The looped backend (B independent single-species fits) is
+  # the DEFAULT: it is correct by construction and as fast as possible. The fused
+  # block-diagonal backend (gcol33/tulpa#66) is correct (bit-identical per
+  # species, gated by test-occu-cover-batch.R) but delivers no measured speed
+  # benefit for occu_cover -- the per-species sparse factorization dominates and
+  # is not amortizable, so it is at best parity and slower than looped at large
+  # fields (dev_notes/_probe_batch_bsweep.R). It is reachable via
+  # control$batch.backend = "fused" for experimentation; the sparse-native
+  # variant that would be needed to make it competitive is tracked as an open
+  # issue (gcol33/tulpa#69). `.tobs_fit_occu_cover_batch_fused` returns NULL when
+  # the configuration is not fused-eligible, falling through to the looped path.
+  backend <- tobs_args$control[["batch.backend"]] %||% "looped"
+  if (identical(backend, "fused")) {
+    fused <- .tobs_fit_occu_cover_batch_fused(tobs_args, y, y_pos, B, labels)
+    if (!is.null(fused)) return(fused)
+  }
 
-  # Per-species `...`: drop the batch-only `species`, override `y_pos` with the
-  # species slice. Everything else (positive, etc.) flows through unchanged.
+  # Looped backend. `batch.backend` is a batch-orchestration knob, not a
+  # single-species control key, so strip it before the per-species fits (it would
+  # otherwise be rejected by .tobs_validate_control). Per-species `...`: drop the
+  # batch-only `species`, override `y_pos` with the species slice; everything else
+  # (positive, etc.) flows through unchanged.
+  sp_control <- tobs_args$control
+  sp_control[["batch.backend"]] <- NULL
   base_dots <- dots
   base_dots$species <- NULL
 
@@ -124,7 +136,7 @@
         visits    = tobs_args$visits,
         method    = tobs_args$method,
         priors    = tobs_args$priors,
-        control   = tobs_args$control
+        control   = sp_control
       ),
       sp_dots
     )

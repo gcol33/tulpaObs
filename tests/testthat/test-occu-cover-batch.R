@@ -96,8 +96,14 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   # (per-species adaptive refinement is not shareable), so the comparison fixes
   # both sides' grid: adaptive.grid = FALSE makes the independent single-species
   # fits use the same base tensor grid the fused batch does.
+  # The fused batch integrates ONE shared fixed outer grid across species, so the
+  # comparison fixes both sides' grid (adaptive.grid = FALSE). The default batch
+  # backend is "looped" (correct + fastest); this gate opts into the FUSED
+  # backend (control$batch.backend = "fused") so it keeps validating the fused
+  # block-diagonal path bit-for-bit against independent fits.
   ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled",
                adaptive.grid = FALSE, diagnose.k = FALSE)
+  ctrl_fused <- c(ctrl, list(batch.backend = "fused"))
 
   fit_one <- function(yy, ypp) {
     suppressWarnings(tobs(
@@ -115,12 +121,25 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
     detection = ~ det_cov1, positive = ~ pos_cov1,
     y = list(a = y1, b = y2), y_pos = list(yp1, yp2),
     visits = od$det.covs,
-    method = "nested_laplace", control = ctrl
+    method = "nested_laplace", control = ctrl_fused
   ))
 
   expect_s3_class(batch, "tobs_batch")
   expect_identical(batch$n_species, 2L)
   expect_identical(batch$species, c("a", "b"))
+  expect_identical(batch$backend, "fused")
+
+  # The DEFAULT backend (no batch.backend) is the looped path.
+  batch_default <- suppressWarnings(tobs(
+    formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = list(a = y1, b = y2), y_pos = list(yp1, yp2),
+    visits = od$det.covs, method = "nested_laplace", control = ctrl
+  ))
+  expect_identical(batch_default$backend, "looped")
+  expect_equal(batch_default$fits[["a"]]$means, batch$fits[["a"]]$means,
+               tolerance = 1e-7)
 
   ind1 <- fit_one(y1, yp1)
   ind2 <- fit_one(y2, yp2)
