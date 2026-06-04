@@ -20,6 +20,9 @@ simulate_ms_occu_cover_spatial(
   sd_pos = 0.3,
   mean_load = 0,
   sd_load = 1,
+  cover_factor = FALSE,
+  mean_load_pos = 0,
+  sd_load_pos = 1,
   sigma_pos = 0.4,
   positive = c("lognormal", "beta"),
   seed = NULL
@@ -47,6 +50,15 @@ occupancy, detection, and cover arms; each arm also has an intercept.}
 (recycled) or per-coefficient.}
 
 \item{mean_load, sd_load}{Mean and SD of the per-species loadings \code{L_s}.}
+
+\item{cover_factor}{Logical; when \code{TRUE} the same shared fields \code{W} also load
+on the cover (positive) predictor through a free \verb{S x K} loading matrix
+\code{L_pos} (the cover-arm factor, gcol33/tulpa#67 Stage 3). The cover-factor
+draws are gated, so \code{FALSE} (the default) reproduces the no-factor RNG stream
+exactly. \code{truth$L_pos} carries the generating cover loadings.}
+
+\item{mean_load_pos, sd_load_pos}{Mean and SD of the cover-arm loadings \code{L_pos}
+(used only when \code{cover_factor = TRUE}).}
 
 \item{sigma_pos}{Lognormal cover residual SD (on the log scale).}
 

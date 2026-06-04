@@ -523,18 +523,93 @@ test_that("tobs() front door selects K via control$n.factors = 'auto'", {
   expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
 })
 
-test_that("a structured term off the occupancy arm is rejected (Stage 1)", {
+test_that("a structured term on the detection arm, or a non-icar term, is rejected", {
   adj <- .mscs_grid_adj(5L, 5L)
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
   expect_error(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1 + icar(graph = adj), positive = ~ pos_cov1,
          y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
-    "occupancy arm only")
+    "detection arm")
   expect_error(
     tobs(~ occ_cov1 + bym2(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
          positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
          species = sim$species, method = "laplace"),
     "icar")
+})
+
+test_that("a cover-arm factor requires a matching shared field on the occupancy arm", {
+  adj  <- .mscs_grid_adj(5L, 5L)
+  adj2 <- .mscs_grid_adj(25L, 1L)        # same N, different graph
+  sim  <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
+  # Cover icar() with a plain occupancy arm: the field is shared, so this errors.
+  expect_error(
+    tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+         detection = ~ det_cov1, positive = ~ pos_cov1 + icar(graph = adj),
+         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+    "occupancy arm")
+  # icar() on both arms but naming different graphs: the field must be one graph.
+  expect_error(
+    tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+         family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+         positive = ~ pos_cov1 + icar(graph = adj2),
+         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+    "same graph")
+})
+
+test_that("simulate_ms_occu_cover_spatial cover factor is well-formed and RNG-gated", {
+  adj <- .mscs_grid_adj(6L, 6L); S <- 8L; K <- 2L
+  cf <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 4L,
+                                       cover_factor = TRUE, seed = 11L)
+  expect_true(isTRUE(cf$truth$cover_factor))
+  expect_identical(dim(cf$truth$L_pos), c(S, K))
+
+  # The cover-factor draws are gated: with cover_factor = FALSE (the default) the
+  # detection / cover data is byte-identical to a call that never requests one, so
+  # every Stage 1-2 fixture is unchanged.
+  a <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+                                      cover_factor = FALSE, seed = 11L)
+  expect_identical(a$y, b$y)
+  expect_identical(a$y_pos, b$y_pos)
+  expect_null(a$truth$L_pos)
+})
+
+test_that("tobs() front door recovers a shared factor on the cover arm", {
+  skip_on_cran()
+  skip_if_fast()
+  # icar() on BOTH the occupancy and cover formulas shares one latent field: the
+  # field loads on occupancy through Locc and on cover through a free Lpos. Both
+  # spatial contributions -- F = W Locc' (occupancy) and Fpos = W Lpos' (cover) --
+  # must be recovered, with the cover loadings carried in the same canonical sign
+  # as the field (so Fpos has the right sign, gcol33/tulpa#67 Stage 3).
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 14L
+  sim <- simulate_ms_occu_cover_spatial(
+    adj, n_species = S, J = 6L, cover_factor = TRUE,
+    mu_occ = c(0.3, 0.6), mu_pos = c(log(5), 0.3),
+    sd_load = 1.0, sd_load_pos = 0.9, sigma_pos = 0.4, seed = 2024L)
+
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1 + icar(graph = adj),
+              y = sim$y, y_pos = sim$y_pos, species = sim$species,
+              method = "laplace", control = list(max.iter = 25L, tol = 1e-3))
+
+  expect_identical(fit$spatial$type, "icar+cover")
+  expect_true(isTRUE(fit$spatial$cover_factor))
+  expect_length(fit$spatial$loadings_cover, S)
+
+  W_hat <- as.numeric(fit$spatial$field)
+  F_hat  <- outer(W_hat, as.numeric(fit$spatial$loadings))
+  Fp_hat <- outer(W_hat, as.numeric(fit$spatial$loadings_cover))
+  F_t    <- outer(as.numeric(sim$truth$w), as.numeric(sim$truth$L))
+  Fp_t   <- outer(as.numeric(sim$truth$w), as.numeric(sim$truth$L_pos))
+
+  expect_gt(stats::cor(as.numeric(F_hat),  as.numeric(F_t)),  0.75)
+  expect_gt(stats::cor(as.numeric(Fp_hat), as.numeric(Fp_t)), 0.80)
+
+  # The community cover-arm intercept is recovered.
+  mu_pos1 <- fit$means[["pos_(Intercept)"]]
+  expect_lt(abs(mu_pos1 - sim$truth$mu_pos[1L]), 0.4)
 })

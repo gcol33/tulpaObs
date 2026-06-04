@@ -16,8 +16,10 @@
 # map level but not its SHAPE, so it forces every species onto one map; the
 # per-species loading L_s gives each species its own spatial shape as a scaling
 # of the shared factor -- the reduced-rank (HMSC / spatial-gllvm) structure that
-# borrows strength and lets rare taxa get a calibrated map. Stage 1 places the
-# factor on the state predictor only (a cover-arm factor is a later stage).
+# borrows strength and lets rare taxa get a calibrated map. The factor sits on
+# the occupancy (state) predictor by default; a cover-arm factor (Stage 3) lets
+# the SAME field also load on the cover predictor through a free loading matrix
+# L_pos, so the latent spatial structure is shared across the two processes.
 #
 # This file currently provides the Stage-1 SIMULATOR (ground truth for the
 # parameter-recovery harness the fitter is built against). The community-Newton
@@ -54,6 +56,13 @@
 #' @param sd_occ,sd_p,sd_pos Community RE SDs (diagonal `Sigma_.`); scalar
 #'   (recycled) or per-coefficient.
 #' @param mean_load,sd_load Mean and SD of the per-species loadings `L_s`.
+#' @param cover_factor Logical; when `TRUE` the same shared fields `W` also load
+#'   on the cover (positive) predictor through a free `S x K` loading matrix
+#'   `L_pos` (the cover-arm factor, gcol33/tulpa#67 Stage 3). The cover-factor
+#'   draws are gated, so `FALSE` (the default) reproduces the no-factor RNG stream
+#'   exactly. `truth$L_pos` carries the generating cover loadings.
+#' @param mean_load_pos,sd_load_pos Mean and SD of the cover-arm loadings `L_pos`
+#'   (used only when `cover_factor = TRUE`).
 #' @param sigma_pos Lognormal cover residual SD (on the log scale).
 #' @param positive Cover family; only `"lognormal"` in Stage 1.
 #' @param seed Optional RNG seed.
@@ -79,6 +88,9 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                            sd_pos     = 0.3,
                                            mean_load  = 0,
                                            sd_load    = 1.0,
+                                           cover_factor  = FALSE,
+                                           mean_load_pos = 0,
+                                           sd_load_pos   = 1.0,
                                            sigma_pos  = 0.4,
                                            positive   = c("lognormal", "beta"),
                                            seed       = NULL) {
@@ -164,10 +176,22 @@ simulate_ms_occu_cover_spatial <- function(adj,
   b_pos <- matrix(stats::rnorm(n_species * p_pos, 0, rep(sd_pos, each = n_species)),
                   n_species, p_pos)
 
+  # Cover-arm shared-factor loadings (Stage 3): the SAME fields W also load on the
+  # cover predictor through a free S x K loading matrix L_pos. Drawn only when
+  # requested, after every Stage 1-2 draw, so the no-cover-factor RNG stream (and
+  # every existing fixture) stays byte-identical.
+  Lpos <- if (isTRUE(cover_factor)) {
+    matrix(stats::rnorm(n_species * K, mean_load_pos, sd_load_pos), n_species, K)
+  } else NULL
+
   # Canonical sign anchor: make each factor's diagonal loading positive, flipping
-  # that factor's (W[, k], L[, k]) pair together.
+  # that factor's (W[, k], L[, k]) pair together -- and the cover loading L_pos[, k]
+  # with them, since it shares the field (F_pos = W L_pos' is sign-invariant).
   for (k in seq_len(K)) {
-    if (L[k, k] < 0) { L[, k] <- -L[, k]; W[, k] <- -W[, k] }
+    if (L[k, k] < 0) {
+      L[, k] <- -L[, k]; W[, k] <- -W[, k]
+      if (!is.null(Lpos)) Lpos[, k] <- -Lpos[, k]
+    }
   }
 
   species_names <- paste0("sp", seq_len(n_species))
@@ -185,6 +209,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
     z       <- stats::rbinom(N, 1L, ps)
     pp      <- stats::plogis(as.vector(X_p %*% (mu_p + b_p[s, ])))
     eta_pos <- as.vector(X_pos %*% (mu_pos + b_pos[s, ]))
+    if (!is.null(Lpos)) eta_pos <- eta_pos + as.numeric(W %*% Lpos[s, ])
     for (i in seq_len(N)) {
       det_ij <- stats::rbinom(J, 1L, z[i] * pp[i])
       y[i, , s] <- det_ij
@@ -211,6 +236,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
       # returns the S x K loading matrix and the N x K field matrix.
       L = if (K == 1L) L[, 1L] else L,
       w = if (K == 1L) W[, 1L] else W,
+      cover_factor = isTRUE(cover_factor),
+      L_pos = if (is.null(Lpos)) NULL else if (K == 1L) Lpos[, 1L] else Lpos,
       psi = psi, z = zmat
     )
   )
@@ -230,6 +257,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
 .tobs_build_ms_occu_cover_spatial <- function(occ_formula, det_formula,
                                               pos_formula, data, y, y_pos,
                                               positive, species, adj, K = 1L,
+                                              cover_factor = FALSE,
                                               det_visit_formula = NULL,
                                               det_visit_data    = NULL,
                                               pos_visit_formula = NULL,
@@ -251,11 +279,12 @@ simulate_ms_occu_cover_spatial <- function(adj,
   if (K < 1L || K > model$n_species) {
     stop("K must satisfy 1 <= K <= n_species.", call. = FALSE)
   }
-  model$model_type <- "ms_occu_cover_spatial"
-  model$K          <- K
-  model$adj        <- adj
-  model$icar_Q     <- .occu_cover_icar_Q(adj)
-  model$icar_scale <- .occu_cover_icar_scale(adj)
+  model$model_type   <- "ms_occu_cover_spatial"
+  model$K            <- K
+  model$cover_factor <- isTRUE(cover_factor)
+  model$adj          <- adj
+  model$icar_Q       <- .occu_cover_icar_Q(adj)
+  model$icar_scale   <- .occu_cover_icar_scale(adj)
   model
 }
 
@@ -275,8 +304,12 @@ simulate_ms_occu_cover_spatial <- function(adj,
 .ms_ocs_dims <- function(model) {
   pil <- model$process_info
   P_occ <- pil[[1L]]$p; P_p <- pil[[2L]]$p; P_pos <- pil[[3L]]$p
+  K  <- model$K %||% 1L
+  S  <- model$n_species
+  cf <- isTRUE(model$cover_factor)
   list(P_occ = P_occ, P_p = P_p, P_pos = P_pos, P = P_occ + P_p + P_pos,
-       S = model$n_species, N = model$n_sites, K = model$K %||% 1L,
+       S = S, N = model$n_sites, K = K,
+       cover_factor = cf, Lpos_w = if (cf) S * K else 0L,
        occ_idx = seq_len(P_occ), p_idx = P_occ + seq_len(P_p),
        pos_idx = P_occ + P_p + seq_len(P_pos))
 }
@@ -287,9 +320,12 @@ simulate_ms_occu_cover_spatial <- function(adj,
   b   <- lapply(seq_len(d$S), function(s) par[off + (s - 1L) * d$P + seq_len(d$P)])
   off <- off + d$S * d$P
   L   <- matrix(par[off + seq_len(d$S * d$K)], d$S, d$K); off <- off + d$S * d$K
+  Lpos <- if (d$cover_factor) {
+    m <- matrix(par[off + seq_len(d$Lpos_w)], d$S, d$K); off <- off + d$Lpos_w; m
+  } else NULL
   W   <- matrix(par[off + seq_len(d$N * d$K)], d$N, d$K); off <- off + d$N * d$K
   ld  <- par[off + 1L]
-  list(mu = mu, b = b, L = L, W = W, ld = ld)
+  list(mu = mu, b = b, L = L, Lpos = Lpos, W = W, ld = ld)
 }
 
 # Penalised joint log-likelihood and its gradient w.r.t. par. `Sinv` is the
@@ -297,11 +333,17 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # Gaussian precision on the community means; `inv_sdL2 = 1/sd_L^2` the loading
 # ridge; `tau_w` the per-factor field precisions (scalar recycled, or length K;
 # prior sum_k 0.5 * tau_w[k] * W[, k]' Q W[, k]). The shared-factor offset on the
-# occupancy predictor is sum_k L[s, k] * W[, k] = W %*% L[s, ].
+# occupancy predictor is sum_k L[s, k] * W[, k] = W %*% L[s, ]; when the model
+# carries a cover-arm factor (model$cover_factor), the SAME fields W also load on
+# the cover (positive) predictor through a free loading matrix Lpos (S x K),
+# adding the per-cell offset sum_k Lpos[s, k] * W[, k] to every visit of the cell.
+# Both loading matrices share the weakly-informative ridge inv_sdL2; the field's
+# scale / rotation / sign is anchored by the occupancy loadings (triangular in the
+# constrained parameterisation), so Lpos rides free.
 .ms_ocs_penll_grad <- function(model, par, Sinv, Pmu, inv_sdL2, tau_w,
                                grad = TRUE) {
   d <- .ms_ocs_dims(model); up <- .ms_ocs_unpack(par, d)
-  mu <- up$mu; b <- up$b; L <- up$L; W <- up$W; ld <- up$ld
+  mu <- up$mu; b <- up$b; L <- up$L; Lpos <- up$Lpos; W <- up$W; ld <- up$ld
   Q  <- model$icar_Q
   tau_w <- rep_len(tau_w, d$K)
   cl <- function(e) pmin(pmax(e, -30), 30)
@@ -309,6 +351,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   ll <- 0
   g_mu <- numeric(d$P); g_b <- vector("list", d$S)
   g_L  <- matrix(0, d$S, d$K); g_W <- matrix(0, d$N, d$K); g_ld <- 0
+  g_Lpos <- if (d$cover_factor) matrix(0, d$S, d$K) else NULL
   for (s in seq_len(d$S)) {
     v   <- .ms_occu_cover_species_view(model, s)
     th  <- mu + b[[s]]
@@ -316,6 +359,12 @@ simulate_ms_occu_cover_spatial <- function(adj,
     # Inject the shared-factor offset on the occupancy predictor.
     eta$psi <- stats::plogis(cl(as.numeric(v$X_occ %*% th[d$occ_idx]) +
                                   as.numeric(W %*% L[s, ])))
+    # ...and, with a cover-arm factor, on the cover predictor: one per-cell offset
+    # broadcast across the cell's visits (ep_mat is n_sites x max_visits, so a
+    # length-N vector recycles down the rows = cells).
+    if (d$cover_factor) {
+      eta$ep_mat <- eta$ep_mat + as.numeric(W %*% Lpos[s, ])
+    }
     ll <- ll + sum(.occu_cover_site_ll(v, eta$psi, eta$p_mat, eta$ep_mat, ld))
     if (grad) {
       eg <- .occu_cover_eta_grad(v, eta$psi, eta$p_mat, eta$ep_mat, ld)
@@ -325,6 +374,13 @@ simulate_ms_occu_cover_spatial <- function(adj,
       g_b[[s]] <- cg_coef                              # RE prior added below
       g_L[s, ] <- as.numeric(crossprod(W, eg$g_psi))  # t(W) %*% g_psi_s
       g_W      <- g_W + outer(eg$g_psi, L[s, ])
+      if (d$cover_factor) {
+        # The cover-offset gradient is the per-cell sum of the per-visit cover
+        # eta-gradient (the offset enters every visit of the cell identically).
+        gpos_cell    <- rowSums(eg$g_pos)
+        g_Lpos[s, ]  <- as.numeric(crossprod(W, gpos_cell))
+        g_W          <- g_W + outer(gpos_cell, Lpos[s, ])
+      }
       g_ld    <- g_ld + cg[d$P + 1L]
     }
   }
@@ -333,6 +389,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   ll <- ll - 0.5 * sum(vapply(b, function(bb) as.numeric(bb %*% Sinv %*% bb), 0))
   ll <- ll - 0.5 * as.numeric(mu %*% Pmu %*% mu)
   ll <- ll - 0.5 * inv_sdL2 * sum(L^2)
+  if (d$cover_factor) ll <- ll - 0.5 * inv_sdL2 * sum(Lpos^2)
   QW <- Q %*% W                                        # N x K
   ll <- ll - 0.5 * sum(tau_w * colSums(W * QW))
 
@@ -341,9 +398,12 @@ simulate_ms_occu_cover_spatial <- function(adj,
   g_mu <- g_mu - as.numeric(Pmu %*% mu)
   for (s in seq_len(d$S)) g_b[[s]] <- g_b[[s]] - as.numeric(Sinv %*% b[[s]])
   g_L  <- g_L - inv_sdL2 * L
+  if (d$cover_factor) g_Lpos <- g_Lpos - inv_sdL2 * Lpos
   g_W  <- g_W - sweep(as.matrix(QW), 2L, tau_w, "*")
 
-  grad_vec <- c(g_mu, unlist(g_b), as.numeric(g_L), as.numeric(g_W), g_ld)
+  grad_vec <- c(g_mu, unlist(g_b), as.numeric(g_L),
+                if (d$cover_factor) as.numeric(g_Lpos) else numeric(0),
+                as.numeric(g_W), g_ld)
   list(ll = ll, grad = grad_vec)
 }
 
@@ -411,7 +471,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   d <- .ms_ocs_dims(model); S <- d$S; K <- d$K; P <- d$P
   nL <- .ms_ocs_lfree_dim(S, K)
   head_n <- P + S * P                       # mu + b prefix (shared layout)
-  tail_n <- d$N * K + 1L                    # vec(W) + log_disp suffix (shared)
+  tail_n <- d$Lpos_w + d$N * K + 1L         # vec(Lpos) + vec(W) + log_disp suffix
 
   pre   <- par_c[seq_len(head_n)]
   lfree <- par_c[head_n + seq_len(nL)]
@@ -458,9 +518,13 @@ simulate_ms_occu_cover_spatial <- function(adj,
   b   <- lapply(seq_len(S), function(s) par_c[off + (s - 1L) * P + seq_len(P)])
   off <- off + S * P
   lfree <- par_c[off + seq_len(nL)]; off <- off + nL
+  Lpos <- if (d$cover_factor) {
+    m <- matrix(par_c[off + seq_len(d$Lpos_w)], S, K); off <- off + d$Lpos_w; m
+  } else NULL
   W   <- matrix(par_c[off + seq_len(N * K)], N, K); off <- off + N * K
   ld  <- par_c[off + 1L]
-  list(mu = mu, b = b, L = .ms_ocs_lfree_to_L(lfree, S, K), W = W, ld = ld)
+  list(mu = mu, b = b, L = .ms_ocs_lfree_to_L(lfree, S, K), Lpos = Lpos,
+       W = W, ld = ld)
 }
 
 .ms_ocs_inner_mode <- function(model, Sigma, sd_L = 1.0, tau_w = 1.0,
@@ -520,9 +584,13 @@ simulate_ms_occu_cover_spatial <- function(adj,
         if (abs(L0[k, k]) < 1e-3) L0[k, k] <- 0.1
       }
       par_init <- c(mu0, numeric(d$S * d$P),
-                    .ms_ocs_L_to_lfree(L0, d$S, K), as.numeric(W0), ld0)
+                    .ms_ocs_L_to_lfree(L0, d$S, K),
+                    if (d$cover_factor) numeric(d$Lpos_w) else numeric(0),
+                    as.numeric(W0), ld0)
     } else {
-      par_init <- c(mu0, numeric(d$S * d$P), as.numeric(L0), as.numeric(W0), ld0)
+      par_init <- c(mu0, numeric(d$S * d$P), as.numeric(L0),
+                    if (d$cover_factor) numeric(d$Lpos_w) else numeric(0),
+                    as.numeric(W0), ld0)
     }
   }
 
@@ -540,16 +608,22 @@ simulate_ms_occu_cover_spatial <- function(adj,
   } else {
     up <- .ms_ocs_unpack(opt$par, d)
     # Canonical sign anchor: make each factor's diagonal loading L[k, k]
-    # positive, flipping (L[, k], W[, k]) together. The Hessian over the packed
-    # par is sign-flip invariant in those blocks, so it stays valid for the
-    # M-step covariances after the anchor.
+    # positive, flipping (L[, k], W[, k]) -- and the cover loading Lpos[, k], which
+    # shares the field -- together. The penalised objective is even in this joint
+    # flip, so the Hessian over the packed par stays valid for the M-step
+    # covariances (the reported field / loadings just adopt one canonical sign).
     for (k in seq_len(K)) {
-      if (up$L[k, k] < 0) { up$L[, k] <- -up$L[, k]; up$W[, k] <- -up$W[, k] }
+      if (up$L[k, k] < 0) {
+        up$L[, k] <- -up$L[, k]; up$W[, k] <- -up$W[, k]
+        if (!is.null(up$Lpos)) up$Lpos[, k] <- -up$Lpos[, k]
+      }
     }
   }
+  Lpos_out <- if (is.null(up$Lpos)) NULL else if (K == 1L) as.numeric(up$Lpos) else up$Lpos
   list(mu = up$mu, b = up$b, ld = up$ld, constrained = constrain,
        L = if (K == 1L) as.numeric(up$L) else up$L,
        w = if (K == 1L) as.numeric(up$W) else up$W,
+       Lpos = Lpos_out,
        par = opt$par, logpen = -opt$value, convergence = opt$convergence,
        hessian = if (hessian) opt$hessian else NULL, d = d)
 }
@@ -586,7 +660,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   # constrained.
   L_width <- if (constrain) .ms_ocs_lfree_dim(d$S, K) else d$S * K
   b_off <- function(s) d$P + (s - 1L) * d$P
-  w_off <- d$P + d$S * d$P + L_width
+  w_off <- d$P + d$S * d$P + L_width + d$Lpos_w
 
   ridge_inv <- function(H) {
     Hs <- (H + t(H)) / 2
@@ -714,10 +788,25 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   # loadings. K = 1 keeps the Stage-1 vector shapes; K > 1 returns N x K / S x K.
   K      <- d$K
   L_width <- if (isTRUE(fit$constrained)) .ms_ocs_lfree_dim(d$S, K) else d$S * K
-  w_off  <- P + d$S * P + L_width
+  w_off  <- P + d$S * P + L_width + d$Lpos_w
   widx   <- w_off + seq_len(d$N * K)
   field_sd <- matrix(sqrt(pmax(diag(Cov)[widx], 0)), d$N, K)
   L <- fit$L
+
+  # Cover-arm loadings (the same shared fields W loading on the cover predictor),
+  # carried from the inner mode in the SAME canonical sign as the reported field
+  # (so the cover spatial contribution F_pos = W Lpos' has the right sign). K = 1
+  # keeps the length-S vector shape; K > 1 returns S x K.
+  Lpos <- fit$Lpos
+  if (!is.null(Lpos)) {
+    if (K == 1L) {
+      Lpos <- as.numeric(Lpos); names(Lpos) <- model$species_names
+    } else {
+      Lpos <- matrix(Lpos, d$S, K)
+      rownames(Lpos) <- model$species_names
+      colnames(Lpos) <- paste0("factor", seq_len(K))
+    }
+  }
   rot <- NULL
   if (K == 1L) {
     field_sd <- as.numeric(field_sd)
@@ -737,7 +826,13 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
       L_rot <- L %*% R; W_rot <- fit$w %*% R
       dimnames(L_rot) <- dimnames(L)
       colnames(W_rot) <- colnames(L)
-      rot <- list(rotmat = R, loadings = L_rot, field = W_rot)
+      # The cover loadings share W, so rotate them by the same R to keep the
+      # cover spatial contribution F_pos = W Lpos' invariant under the relabelling.
+      Lpos_rot <- if (!is.null(Lpos)) {
+        lr <- Lpos %*% R; dimnames(lr) <- dimnames(Lpos); lr
+      } else NULL
+      rot <- list(rotmat = R, loadings = L_rot, field = W_rot,
+                  loadings_cover = Lpos_rot)
     }
   }
 
@@ -762,11 +857,13 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     method       = "laplace-em",
     positive     = model$positive,
     spatial      = list(
-      type     = "icar",
+      type     = if (isTRUE(d$cover_factor)) "icar+cover" else "icar",
       K        = K,
       field    = fit$w,
       field_sd = field_sd,
       loadings = L,
+      loadings_cover = Lpos,
+      cover_factor   = isTRUE(d$cover_factor),
       rotation = rot,
       tau_w    = fit$tau_w,
       sd_L     = fit$sd_L
@@ -926,6 +1023,9 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   logdetH  <- .ms_ocs_logdet_pd(H)
   logpdetQ <- .ms_ocs_logpdet_Q(model)
   nL       <- .ms_ocs_lfree_dim(S, K)
+  # The cover-arm loadings (if present) share the occupancy loadings' ridge, so
+  # they add S*K free parameters to the loading-prior normaliser.
+  n_load   <- nL + if (isTRUE(d$cover_factor)) d$Lpos_w else 0L
   ld_occ <- as.numeric(determinant(Sigma$occ, logarithm = TRUE)$modulus)
   ld_p   <- as.numeric(determinant(Sigma$p,   logarithm = TRUE)$modulus)
   ld_pos <- as.numeric(determinant(Sigma$pos, logarithm = TRUE)$modulus)
@@ -936,7 +1036,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   vol      <- 0.5 * npar * log(2 * pi) - 0.5 * logdetH
   nc_field <- 0.5 * (N - 1) * sum(log(tau_w)) + 0.5 * K * logpdetQ -
               0.5 * K * (N - 1) * log(2 * pi)
-  nc_load  <- -0.5 * nL * log(2 * pi * sd_L^2)
+  nc_load  <- -0.5 * n_load * log(2 * pi * sd_L^2)
   nc_b     <- -0.5 * S * (P * log(2 * pi) + ld_occ + ld_p + ld_pos)
   nc_mu    <- -0.5 * P * log(2 * pi) - P * log(sigma.beta)
   jac      <- sum(log(pmax(diagL, 1e-12)))
@@ -988,11 +1088,15 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 }
 
 
-# Detect a Stage-1 spatial request on the three occu_cover arms. Returns the
-# shared-field adjacency + the fixed-effects occupancy formula when the
-# occupancy arm carries a single icar() term (and detection / cover are plain),
-# NULL when no arm carries a structured term (the non-spatial path), and errors
-# on any other structured term (the supported surface is icar() on occupancy).
+# Detect a spatial request on the three occu_cover arms. The supported surface is
+# a single icar() shared field on the occupancy arm and, optionally, the SAME
+# field on the cover (positive) arm (a cover-arm factor, gcol33/tulpa#67 Stage 3).
+# Returns the shared-field adjacency, the fixed-effects occupancy / cover formulas
+# (with the icar() term stripped), and `cover_factor` (TRUE when the cover arm
+# also carries the field); NULL when no arm carries a structured term (the
+# non-spatial path). Detection terms, non-icar terms, a multi-term arm, a
+# cover-arm field without a matching occupancy field, or a mismatched graph all
+# error (the field is shared, so the two arms must name one graph).
 .tobs_ms_ocs_spatial_request <- function(occ_formula, det_formula, pos_formula,
                                          data) {
   parse_terms <- function(f) {
@@ -1003,21 +1107,50 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   det_terms <- parse_terms(det_formula)
   pos_terms <- parse_terms(pos_formula)
 
-  if (length(det_terms) || length(pos_terms)) {
-    stop("ms_occu_cover(): structured terms are supported on the occupancy arm ",
-         "only (Stage 1: a single icar() shared field). Use a plain formula on ",
-         "detection / cover.", call. = FALSE)
+  if (length(det_terms)) {
+    stop("ms_occu_cover(): structured terms are supported on the occupancy and ",
+         "cover arms only; the detection arm must use a plain formula.",
+         call. = FALSE)
   }
-  if (length(occ_terms) == 0L) return(NULL)             # non-spatial path
-  if (length(occ_terms) > 1L) {
-    stop("ms_occu_cover(): Stage 1 supports a single icar() term on the ",
-         "occupancy arm.", call. = FALSE)
+  if (length(occ_terms) == 0L) {
+    if (length(pos_terms)) {
+      stop("ms_occu_cover(): a cover-arm spatial factor shares the occupancy ",
+           "field, so it requires a matching icar() term on the occupancy arm.",
+           call. = FALSE)
+    }
+    return(NULL)                                        # non-spatial path
   }
-  spec <- occ_terms[[1L]]
-  if (!inherits(spec, "tobs_spatial") || !identical(spec$label, "icar")) {
-    stop(sprintf("ms_occu_cover(): Stage 1 spatial supports icar() only; got %s().",
-                 spec$label %||% class(spec)[1L]), call. = FALSE)
+
+  # The single supported field is icar(); validate one such term per spatial arm.
+  one_icar <- function(terms, arm) {
+    if (length(terms) > 1L) {
+      stop(sprintf("ms_occu_cover(): the %s arm supports a single icar() term.",
+                   arm), call. = FALSE)
+    }
+    spec <- terms[[1L]]
+    if (!inherits(spec, "tobs_spatial") || !identical(spec$label, "icar")) {
+      stop(sprintf("ms_occu_cover(): spatial supports icar() only; got %s() on the %s arm.",
+                   spec$label %||% class(spec)[1L], arm), call. = FALSE)
+    }
+    spec
   }
-  list(graph  = spec$graph,
-       fe_occ = .tobs_parse_formula(occ_formula, data = data)$fe_formula)
+  occ_spec <- one_icar(occ_terms, "occupancy")
+  graph <- occ_spec$graph
+
+  cover_factor <- length(pos_terms) > 0L
+  if (cover_factor) {
+    pos_spec <- one_icar(pos_terms, "cover")
+    if (!isTRUE(all.equal(unname(as.matrix(pos_spec$graph)),
+                          unname(as.matrix(graph))))) {
+      stop("ms_occu_cover(): the cover-arm factor shares the occupancy field, so ",
+           "icar() must name the same graph on both arms.", call. = FALSE)
+    }
+  }
+
+  list(graph        = graph,
+       cover_factor = cover_factor,
+       fe_occ = .tobs_parse_formula(occ_formula, data = data)$fe_formula,
+       fe_pos = if (cover_factor) {
+         .tobs_parse_formula(pos_formula, data = data)$fe_formula
+       } else NULL)
 }

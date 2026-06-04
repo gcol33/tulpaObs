@@ -353,8 +353,18 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' integrated out, so its prior supplies the Occam penalty -- latent-level
 #' criteria such as WAIC track the field's effective dimension, not the rank, and
 #' under-select). The per-rank evidence is returned in `fit$spatial$K_selection`.
-#' `sd.load` sets the loading prior scale. Structured terms on the detection or
-#' cover arms, or a non-`icar()` field, error from the dispatcher.
+#' `sd.load` sets the loading prior scale.
+#'
+#' Adding the SAME `icar(graph = adj)` term to the cover `positive` formula
+#' shares the latent fields across the two processes: the fields then also load on
+#' the cover predictor through a free loading matrix,
+#' `g(cover)_sc = X_c (mu_pos + b_pos_s) + sum_k Lpos_sk w_kc`, so a species'
+#' spatial occupancy pattern and its spatial cover pattern are linked through one
+#' set of factors. The cover loadings are returned in `fit$spatial$loadings_cover`.
+#' The field is shared, so the cover-arm `icar()` must name the same graph as the
+#' occupancy arm, and a cover-arm field without a matching occupancy field errors.
+#' Structured terms on the detection arm, or a non-`icar()` field, error from the
+#' dispatcher.
 #'
 #' @section Scope (status `"experimental"`):
 #' The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace

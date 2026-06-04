@@ -620,9 +620,14 @@ tobs <- function(formula,
     n_sites <- dim(y)[1L]; max_visits <- dim(y)[2L]
   }
 
+  # A cover-arm spatial factor carries an icar() term on the cover formula; strip
+  # it to the fixed-effects part before visit-normalization (the field is wired
+  # separately via the shared-graph builder, not as a cover covariate).
+  pos_formula_eff <- if (!is.null(sp) && !is.null(sp$fe_pos)) sp$fe_pos else pos_formula
+
   vd_det <- .normalize_visits(visits, detection,
                               n_sites = n_sites, max_visits = max_visits)
-  vd_pos <- .normalize_visits(visits, pos_formula,
+  vd_pos <- .normalize_visits(visits, pos_formula_eff,
                               n_sites = n_sites, max_visits = max_visits)
 
   if (!is.null(sp)) {
@@ -639,6 +644,7 @@ tobs <- function(formula,
       species          = dots$species,
       adj              = sp$graph,
       K                = if (auto_K) 1L else as.integer(nf),
+      cover_factor     = isTRUE(sp$cover_factor),
       det_visit_formula = vd_det$det_visit_formula,
       det_visit_data    = vd_det$visits,
       pos_visit_formula = vd_pos$det_visit_formula,
