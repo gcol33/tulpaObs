@@ -593,6 +593,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   widx   <- w_off + seq_len(d$N * K)
   field_sd <- matrix(sqrt(pmax(diag(Cov)[widx], 0)), d$N, K)
   L <- fit$L
+  rot <- NULL
   if (K == 1L) {
     field_sd <- as.numeric(field_sd)
     names(L) <- model$species_names
@@ -600,6 +601,19 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     rownames(L) <- model$species_names
     colnames(L) <- paste0("factor", seq_len(K))
     colnames(field_sd) <- paste0("factor", seq_len(K))
+    # Post-hoc varimax rotation for interpretable factors. The fit is invariant
+    # to an orthogonal rotation R of the factors (F = W L' = (W R)(L R)'), so
+    # rotate the loadings to a simple structure and the fields by the same R --
+    # the predictor, the psi posterior, and every recovery quantity are
+    # unchanged; only the per-factor labelling becomes interpretable.
+    vm <- tryCatch(stats::varimax(L, normalize = FALSE), error = function(e) NULL)
+    if (!is.null(vm)) {
+      R <- matrix(as.numeric(vm$rotmat), K, K)
+      L_rot <- L %*% R; W_rot <- fit$w %*% R
+      dimnames(L_rot) <- dimnames(L)
+      colnames(W_rot) <- colnames(L)
+      rot <- list(rotmat = R, loadings = L_rot, field = W_rot)
+    }
   }
 
   structure(c(list(
@@ -628,6 +642,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
       field    = fit$w,
       field_sd = field_sd,
       loadings = L,
+      rotation = rot,
       tau_w    = fit$tau_w,
       sd_L     = fit$sd_L
     ),

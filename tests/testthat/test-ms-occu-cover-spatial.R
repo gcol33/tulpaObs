@@ -368,6 +368,16 @@ test_that("tobs() front door fits K > 1 via control$n.factors", {
   F_hat  <- fit$spatial$field %*% t(fit$spatial$loadings)
   F_true <- sim$truth$w %*% t(sim$truth$L)
   expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
+
+  # Post-hoc varimax rotation: the spatial predictor F = W L' is invariant under
+  # the orthogonal rotation, and the rotated loadings are at least as "simple"
+  # (higher sum of squared loading variances) as the raw ones.
+  rot <- fit$spatial$rotation
+  expect_false(is.null(rot))
+  F_rot <- rot$field %*% t(rot$loadings)
+  expect_lt(max(abs(F_rot - F_hat)), 1e-8)
+  simplicity <- function(M) sum(apply(M^2, 2L, stats::var))
+  expect_gte(simplicity(rot$loadings) + 1e-9, simplicity(fit$spatial$loadings))
 })
 
 test_that("a structured term off the occupancy arm is rejected (Stage 1)", {
