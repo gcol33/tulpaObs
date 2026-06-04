@@ -1105,7 +1105,8 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
         rho_w    = if (identical(ft, "car_proper")) hypr else NULL,
         phi_w    = if (identical(ft, "bym2"))       hypr else NULL,
         sd_L     = fit$sd_L,
-        associations = .ms_ocs_associations(fit, d, model$species_names)
+        associations = .ms_ocs_associations(fit, d, model$species_names),
+        psi      = .ms_ocs_psi_summary(model, fit)
       )
     },
     ms_community = list(
@@ -1154,6 +1155,43 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     }
   }
   psi
+}
+
+
+# Per-cell per-species occupancy posterior summary (the spatial-JSDM map output):
+# the mean, median, and a central interval of psi_sc at every cell c and species
+# s, from the joint-posterior draws above. The shared latent fields let a species'
+# map borrow strength across the community, so a rare species gets a calibrated
+# map (mean + interval) rather than the ragged empirical detection rate. Returns
+# a list of N x S matrices (rows = cells, columns = species).
+.ms_ocs_psi_summary <- function(model, fit, n_draws = 300L,
+                                probs = c(0.025, 0.975)) {
+  psi <- .ms_ocs_psi_posterior(model, fit, n_draws)        # n_draws x N x S
+  sp  <- model$species_names
+  pull <- function(f) { m <- apply(psi, c(2L, 3L), f); dimnames(m) <- list(NULL, sp); m }
+  list(mean   = pull(mean),
+       median = pull(stats::median),
+       lower  = pull(function(x) stats::quantile(x, probs[1L], names = FALSE)),
+       upper  = pull(function(x) stats::quantile(x, probs[2L], names = FALSE)))
+}
+
+# Tidy long form of the per-species per-cell occupancy posterior, returned by
+# predict() for a spatial-factor ms_occu_cover() fit (one row per cell x species).
+.tobs_ms_ocs_predict_state <- function(object) {
+  ps <- object$spatial$psi
+  if (is.null(ps))
+    stop("This fit carries no per-cell occupancy posterior (refit with a current ",
+         "tulpaObs).", call. = FALSE)
+  N  <- nrow(ps$mean); S <- ncol(ps$mean)
+  sp <- colnames(ps$mean) %||% paste0("sp", seq_len(S))
+  data.frame(
+    cell       = rep(seq_len(N), times = S),
+    species    = rep(sp, each = N),
+    psi        = as.numeric(ps$mean),
+    psi_median = as.numeric(ps$median),
+    psi_lower  = as.numeric(ps$lower),
+    psi_upper  = as.numeric(ps$upper),
+    stringsAsFactors = FALSE)
 }
 
 

@@ -89,7 +89,10 @@ The shared fields imply a residual species-association matrix (the
 spatial-JSDM / HMSC output): \code{\link[=tobs_associations]{tobs_associations()}} returns the occupancy
 association \verb{corr(L L')} and, with a cover-arm factor, the cover association
 and the cross-arm occupancy-vs-cover association, each marginalised over the
-loading posterior so an interval accompanies the estimate.
+loading posterior so an interval accompanies the estimate. \code{predict()} returns
+the other JSDM output -- the per-species per-cell occupancy maps (\code{psi} with
+\code{psi_lower} / \code{psi_upper}), marginalised over the loading + field posterior so
+a rare species borrows strength across the shared factors for a calibrated map.
 }
 
 \section{Scope (status \code{"experimental"})}{

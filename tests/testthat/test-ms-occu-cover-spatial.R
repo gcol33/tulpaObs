@@ -979,3 +979,40 @@ test_that("tobs_associations() errors off the spatial-factor surface", {
     class = "tobs_fit")
   expect_error(tobs_associations(no_cover, "cover"), "cover-arm")
 })
+
+test_that("predict() returns calibrated per-species occupancy maps", {
+  skip_on_cran()
+  skip_if_fast()
+  # The latent fields are tied to the cell graph, so predict() returns the
+  # in-sample per-species per-cell occupancy posterior: a long table (cell x
+  # species) of psi with a credible interval, marginalised over the loading +
+  # field posterior. The maps recover the true psi surface and the interval is
+  # calibrated -- a rare species borrows strength across the shared factors.
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+           sd_occ = 0.6, sd_load = 1.2, sigma_pos = 0.4, seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace",
+    control = list(n.factors = K, sd.load = 1.2, max.iter = 30L, tol = 1e-3))
+
+  pr <- predict(fit)
+  expect_true(is.data.frame(pr))
+  expect_identical(nrow(pr), N * S)
+  expect_true(all(c("cell", "species", "psi", "psi_median",
+                    "psi_lower", "psi_upper") %in% names(pr)))
+  expect_true(all(pr$psi >= 0 & pr$psi <= 1))
+  expect_true(all(pr$psi_lower <= pr$psi_upper + 1e-8))
+  expect_identical(sort(unique(pr$species)), sort(sim$species))
+
+  psi_t <- sim$truth$psi                      # N x S
+  M  <- matrix(pr$psi,       N, S)
+  Lo <- matrix(pr$psi_lower, N, S); Hi <- matrix(pr$psi_upper, N, S)
+  expect_gt(stats::cor(as.numeric(M), as.numeric(psi_t)), 0.7)
+  expect_gte(mean(psi_t >= Lo & psi_t <= Hi), 0.8)
+
+  # New-data prediction is unsupported (no field at an unseen cell).
+  expect_error(predict(fit, X.0 = matrix(1, 2, 2)), "not supported")
+})

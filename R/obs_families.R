@@ -378,7 +378,10 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' spatial-JSDM / HMSC output): [tobs_associations()] returns the occupancy
 #' association `corr(L L')` and, with a cover-arm factor, the cover association
 #' and the cross-arm occupancy-vs-cover association, each marginalised over the
-#' loading posterior so an interval accompanies the estimate.
+#' loading posterior so an interval accompanies the estimate. `predict()` returns
+#' the other JSDM output -- the per-species per-cell occupancy maps (`psi` with
+#' `psi_lower` / `psi_upper`), marginalised over the loading + field posterior so
+#' a rare species borrows strength across the shared factors for a calibrated map.
 #'
 #' @section Scope (status `"experimental"`):
 #' The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace

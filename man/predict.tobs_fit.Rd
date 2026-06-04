@@ -92,5 +92,13 @@ decomposition, and \code{.lwr} / \code{.upr} at \code{level}). The result is a
 draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then
 \code{geom_tile(aes(x, y, fill = delta_p))} (or \code{geom_sf()} on polygon cells).
+\item \strong{Spatial-factor community}: for a reduced-rank spatial-factor
+\code{ms_occu_cover()} fit, \code{predict(fit)} returns the per-species per-cell
+occupancy posterior as a long table (one row per cell x species) with \code{psi}
+(posterior mean), \code{psi_median}, and \code{psi_lower} / \code{psi_upper} -- the
+calibrated occupancy maps, marginalised over the loading + field posterior,
+so a rare species borrows strength across the shared factors. The latent
+fields are tied to the cell graph, so \code{X.0} / \code{newdata} prediction is not
+supported.
 }
 }
