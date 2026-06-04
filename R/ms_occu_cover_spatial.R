@@ -583,6 +583,39 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 }
 
 
+# Posterior draws of the per-species per-cell occupancy probability psi for the
+# K=1 spatial community fit. Samples the packed inner latent from its Gaussian
+# Laplace posterior N(mode, Cov) -- via an eigen PSD square root, since the
+# joint Hessian is only PSD in the confounded ICAR-level / intercept direction
+# -- and maps each draw through the occupancy predictor
+# eta_s = X_occ (mu_occ + b_s_occ) + L_s * w. psi depends on (L, w) only through
+# the product L_s * w, so it is invariant to the (L, w) -> (-L, -w) sign symmetry
+# and needs no anchoring. Returns an [n_draws x N x S] array.
+.ms_ocs_psi_posterior <- function(model, fit, n_draws = 300L) {
+  d <- fit$d
+  Sg <- (fit$cov + t(fit$cov)) / 2
+  eg <- eigen(Sg, symmetric = TRUE)
+  rt <- eg$vectors %*% (sqrt(pmax(eg$values, 0)) * t(eg$vectors))   # PSD sqrt
+  npar <- length(fit$par)
+  Z <- matrix(stats::rnorm(n_draws * npar), n_draws, npar)
+  draws_par <- sweep(Z %*% rt, 2L, fit$par, "+")
+
+  X_occ <- lapply(seq_len(d$S),
+                  function(s) .ms_occu_cover_species_view(model, s)$X_occ)
+  cl  <- function(e) pmin(pmax(e, -30), 30)
+  psi <- array(0, dim = c(n_draws, d$N, d$S))
+  for (i in seq_len(n_draws)) {
+    up <- .ms_ocs_unpack(draws_par[i, ], d)
+    for (s in seq_len(d$S)) {
+      th_occ <- (up$mu + up$b[[s]])[d$occ_idx]
+      eta <- as.numeric(X_occ[[s]] %*% th_occ) + up$L[s] * up$w
+      psi[i, , s] <- stats::plogis(cl(eta))
+    }
+  }
+  psi
+}
+
+
 # Detect a Stage-1 spatial request on the three occu_cover arms. Returns the
 # shared-field adjacency + the fixed-effects occupancy formula when the
 # occupancy arm carries a single icar() term (and detection / cover are plain),
