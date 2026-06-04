@@ -186,6 +186,9 @@ fitted.tobs_fit <- function(object, ...) {
   if (identical(model$model_type, "ms_occu_cover")) {
     return(.tobs_fitted_ms_occu_cover(object))
   }
+  if (identical(model$model_type, "ms_occu_cover_spatial")) {
+    return(.tobs_fitted_ms_occu_cover_spatial(object))
+  }
   if (identical(model$model_type, "ms_dyn_occu")) {
     return(.tobs_fitted_ms_dyn_occu(object))
   }

@@ -1138,14 +1138,22 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 # cover_cond). The derived covers are formed per draw (the nonlinear cover mean +
 # the psi product), then summarised -- the marginalize-derived-quantities rule,
 # not a plug-in of the posterior-mean eta.
-.ms_ocs_joint_posterior <- function(model, fit, n_draws = 300L) {
-  d <- fit$d
-  Sg <- (fit$cov + t(fit$cov)) / 2
+# Draw the packed inner latent from its Gaussian Laplace posterior N(par, cov)
+# via an eigen PSD square root (the joint Hessian is only PSD along the confounded
+# ICAR-level / intercept / rotational directions). Returns an [n_draws x npar]
+# matrix. Shared by the map posterior and the pointwise-log-likelihood kernel.
+.ms_ocs_draw_par <- function(par, cov, n_draws) {
+  Sg <- (cov + t(cov)) / 2
   eg <- eigen(Sg, symmetric = TRUE)
   rt <- eg$vectors %*% (sqrt(pmax(eg$values, 0)) * t(eg$vectors))   # PSD sqrt
-  npar <- length(fit$par)
+  npar <- length(par)
   Z <- matrix(stats::rnorm(n_draws * npar), n_draws, npar)
-  draws_par <- sweep(Z %*% rt, 2L, fit$par, "+")
+  sweep(Z %*% rt, 2L, par, "+")
+}
+
+.ms_ocs_joint_posterior <- function(model, fit, n_draws = 300L) {
+  d <- fit$d
+  draws_par <- .ms_ocs_draw_par(fit$par, fit$cov, n_draws)
 
   unpack    <- if (isTRUE(fit$constrained)) .ms_ocs_unpack_c else .ms_ocs_unpack
   lognormal <- !identical(model$positive, "beta")
@@ -1218,6 +1226,25 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   out[[paste0(nm, "_lower")]]  <- as.numeric(m$lower)
   out[[paste0(nm, "_upper")]]  <- as.numeric(m$upper)
   out
+}
+
+# Fitted per-species surfaces (posterior means): the field-augmented occupancy
+# psi and conditional cover (from the map posterior, so they carry the latent
+# field) and the per-species detection probability p (no field on detection).
+# Returns list(psi, p, cover), each N x S -- the shape the non-spatial community
+# fitted() uses.
+.tobs_fitted_ms_occu_cover_spatial <- function(object) {
+  model <- object$model
+  maps  <- object$spatial$maps
+  if (is.null(maps))
+    stop("This fit carries no fitted surfaces (refit with a current tulpaObs).",
+         call. = FALSE)
+  cm <- object$ms_community
+  X_det_site <- model$X_det_site
+  p <- stats::plogis(X_det_site %*%
+                     t(cm$coef_p[, seq_len(ncol(X_det_site)), drop = FALSE]))
+  dimnames(p) <- list(NULL, model$species_names)
+  list(psi = maps$psi$mean, p = p, cover = maps$cover_cond$mean)
 }
 
 

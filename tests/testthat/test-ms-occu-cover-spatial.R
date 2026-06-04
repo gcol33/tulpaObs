@@ -1062,3 +1062,29 @@ test_that("predict() returns calibrated per-species cover maps", {
 
   expect_error(predict(fit, type = "detection"), "not available")
 })
+
+test_that("fitted() returns per-species occupancy / detection / cover surfaces", {
+  skip_on_cran()
+  skip_if_fast()
+  # fitted() gives the per-species posterior-mean surfaces: field-augmented
+  # occupancy psi and conditional cover (from the map posterior), and the
+  # detection probability p (no field on detection). Same shape as the
+  # non-spatial community fitted(); the occupancy surface matches predict().
+  adj <- .mscs_grid_adj(7L, 7L); N <- nrow(adj); S <- 12L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = 2L, J = 5L,
+           sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "laplace",
+              control = list(n.factors = 2L, sd.load = 1.1, max.iter = 25L))
+
+  ft <- fitted(fit)
+  expect_named(ft, c("psi", "p", "cover"))
+  for (m in ft) expect_identical(dim(m), c(N, S))
+  expect_true(all(ft$psi >= 0 & ft$psi <= 1))
+  expect_true(all(ft$p   >= 0 & ft$p   <= 1))
+  expect_true(all(ft$cover > 0))
+  expect_identical(colnames(ft$psi), sim$species)
+  expect_equal(as.numeric(ft$psi), predict(fit)$psi, tolerance = 1e-8)
+})
