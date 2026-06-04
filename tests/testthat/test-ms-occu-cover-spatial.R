@@ -613,3 +613,164 @@ test_that("tobs() front door recovers a shared factor on the cover arm", {
   mu_pos1 <- fit$means[["pos_(Intercept)"]]
   expect_lt(abs(mu_pos1 - sim$truth$mu_pos[1L]), 0.4)
 })
+
+# ---------------------------------------------------------------------------
+# Richer fields: proper-CAR factors (gcol33/tulpa#67 Stage 3)
+# ---------------------------------------------------------------------------
+
+test_that("penalised gradient matches FD on the proper-CAR field path", {
+  # The car_proper field replaces the fixed ICAR structure with R(rho) = D - rho A
+  # per factor; the objective reads it from model$field_R. The analytic gradient
+  # must still match finite differences (the field enters only the W-block prior).
+  adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells
+  S <- 4L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+                                        field = "car_proper", rho = 0.85,
+                                        seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K,
+    field_type = "car_proper")
+  # Per-factor structure at distinct correlations (FD validity is rho-independent).
+  model$field_R <- tulpaObs:::.ms_ocs_build_field_R(model, rho_w = c(0.7, 0.5))
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  tr <- sim$truth
+  mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b  <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+  Sinv <- diag(c(rep(1 / 0.4^2, d$P_occ), rep(1 / 0.4^2, d$P_p),
+                 rep(1 / 0.3^2, d$P_pos)))
+  Pmu <- diag(1 / 25, d$P); inv_sdL2 <- 1; tau_w <- c(1.3, 0.9)
+
+  # Unconstrained packing.
+  par <- c(mu, b, as.numeric(tr$L), as.numeric(tr$w), log(tr$sigma_pos))
+  set.seed(1L); par <- par + stats::rnorm(length(par), 0, 0.05)
+  out <- tulpaObs:::.ms_ocs_penll_grad(model, par, Sinv, Pmu, inv_sdL2, tau_w,
+                                       grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2,
+                                                 tau_w, grad = FALSE)$ll
+  h <- 1e-5; gnum <- numeric(length(par))
+  for (k in seq_along(par)) {
+    pp <- par; pp[k] <- pp[k] + h; pm <- par; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the car_proper K=2 gradient")
+
+  # Constrained (triangular) packing.
+  lfree <- tulpaObs:::.ms_ocs_L_to_lfree(tr$L, S, K)
+  par_c <- c(mu, b, lfree, as.numeric(tr$w), log(tr$sigma_pos))
+  set.seed(2L); par_c <- par_c + stats::rnorm(length(par_c), 0, 0.05)
+  outc <- tulpaObs:::.ms_ocs_penll_grad_c(model, par_c, Sinv, Pmu, inv_sdL2,
+                                          tau_w, grad = TRUE)
+  fc <- function(p) tulpaObs:::.ms_ocs_penll_grad_c(model, p, Sinv, Pmu, inv_sdL2,
+                                                    tau_w, grad = FALSE)$ll
+  gnumc <- numeric(length(par_c))
+  for (k in seq_along(par_c)) {
+    pp <- par_c; pp[k] <- pp[k] + h; pm <- par_c; pm[k] <- pm[k] - h
+    gnumc[k] <- (fc(pp) - fc(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(outc$grad - gnumc)), 1e-4,
+            label = "max|analytic - FD| over the constrained car_proper gradient")
+})
+
+test_that("simulate_ms_occu_cover_spatial proper-CAR field is well-formed and RNG-gated", {
+  adj <- .mscs_grid_adj(7L, 7L); N <- nrow(adj); S <- 8L
+  cr <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+                                       field = "car_proper", rho = 0.9, seed = 11L)
+  expect_identical(cr$truth$field, "car_proper")
+  expect_identical(cr$truth$rho, 0.9)
+  w <- cr$truth$w
+  expect_length(w, N)
+  expect_gt(stats::sd(w), 0.2)            # genuine spatial amplitude
+  expect_lt(stats::sd(w), 5)             # not blown up
+
+  # The car branch is gated: field = "icar" (the default) reproduces the Stage 1-2
+  # RNG stream byte for byte, so every existing fixture is unchanged.
+  a <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+                                      field = "icar", seed = 11L)
+  expect_identical(a$y, b$y)
+  expect_identical(a$y_pos, b$y_pos)
+  expect_identical(a$truth$w, b$truth$w)
+  expect_null(a$truth$rho)
+})
+
+test_that("a car_proper field must be the same term on both spatial arms", {
+  adj <- .mscs_grid_adj(5L, 5L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
+  # Mixed field types across the shared arms: the field is one GMRF, so its type
+  # cannot differ between occupancy and cover.
+  expect_error(
+    tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+         family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+         positive = ~ pos_cov1 + car_proper(graph = adj),
+         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+    "same term")
+})
+
+test_that("tobs() front door recovers a proper-CAR field and its correlation", {
+  skip_on_cran()
+  skip_if_fast()
+  # car_proper() on the occupancy arm routes to the spatial fit with a proper CAR
+  # field: the per-factor correlation rho is estimated by EM alongside tau, and
+  # the field shape + spatial contribution F = W L' are recovered (gcol33/tulpa#67
+  # Stage 3, richer fields).
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 14L
+  rho_true <- 0.9
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
+                                        sd_load = 1.2, field = "car_proper",
+                                        rho = rho_true, seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + car_proper(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(n.factors = 1L, sd.load = 1.2, max.iter = 25L, tol = 1e-3))
+
+  expect_identical(fit$spatial$type, "car_proper")
+  expect_identical(fit$spatial$field_type, "car_proper")
+  expect_length(fit$spatial$rho_w, 1L)
+  # A proper, positive-dependence correlation in the right band (an empirical-Bayes
+  # point estimate of a field correlation from occupancy data carries real
+  # uncertainty, so the band is generous).
+  expect_gt(fit$spatial$rho_w, 0.5)
+  expect_lt(fit$spatial$rho_w, 1)
+  expect_lt(abs(fit$spatial$rho_w - rho_true), 0.3)
+
+  W_hat <- as.numeric(fit$spatial$field)
+  F_hat <- outer(W_hat, as.numeric(fit$spatial$loadings))
+  F_t   <- outer(as.numeric(sim$truth$w), as.numeric(sim$truth$L))
+  expect_gt(abs(stats::cor(W_hat, as.numeric(sim$truth$w))), 0.75)
+  expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_t)), 0.75)
+})
+
+test_that("auto-K rank selection composes with a proper-CAR field", {
+  skip_on_cran()
+  skip_if_fast()
+  # The Laplace evidence integrates the field out with the full-rank car_proper
+  # normaliser (|R(rho)| at rank N, not the rank-(N-1) ICAR pseudo-determinant);
+  # auto-K must run that path end to end and return a fit at the selected rank.
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        field = "car_proper", rho = 0.9,
+                                        seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + car_proper(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(n.factors = "auto", n.factors.max = 3L, sd.load = 1.2,
+                   max.iter = 40L, tol = 1e-4))
+
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$spatial$field_type, "car_proper")
+  expect_true(is.data.frame(fit$spatial$K_selection))
+  Ksel <- fit$spatial$K
+  expect_true(Ksel >= 1L && Ksel <= 3L)
+  expect_length(fit$spatial$rho_w, Ksel)
+  expect_true(all(is.finite(fit$spatial$rho_w)))
+})

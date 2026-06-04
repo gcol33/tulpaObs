@@ -339,9 +339,10 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' returns the community means; `ranef()` the per-species coefficient deviations.
 #'
 #' @section Reduced-rank spatial factors:
-#' A single `icar(graph = adj)` term on the occupancy `formula` fits the
-#' reduced-rank (HMSC / spatial-gllvm) community model: `K` shared latent ICAR
-#' fields with per-species loadings on the occupancy predictor,
+#' A single areal field term (`icar(graph = adj)` or `car_proper(graph = adj)`)
+#' on the occupancy `formula` fits the reduced-rank (HMSC / spatial-gllvm)
+#' community model: `K` shared latent fields with per-species loadings on the
+#' occupancy predictor,
 #' `logit psi_sc = X_c (mu_occ + b_occ_s) + sum_k L_sk w_kc`. A single shared
 #' field with only a species intercept can shift each map's level but not its
 #' shape; the loadings give each species its own spatial shape as a combination
@@ -361,9 +362,14 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' `g(cover)_sc = X_c (mu_pos + b_pos_s) + sum_k Lpos_sk w_kc`, so a species'
 #' spatial occupancy pattern and its spatial cover pattern are linked through one
 #' set of factors. The cover loadings are returned in `fit$spatial$loadings_cover`.
-#' The field is shared, so the cover-arm `icar()` must name the same graph as the
-#' occupancy arm, and a cover-arm field without a matching occupancy field errors.
-#' Structured terms on the detection arm, or a non-`icar()` field, error from the
+#' The field is shared, so the cover-arm term must match the occupancy arm (same
+#' type and graph), and a cover-arm field without a matching occupancy field errors.
+#'
+#' The field structure is set by the term: `icar()` (improper intrinsic CAR, the
+#' default) or `car_proper(graph = adj)` (a proper CAR whose per-factor
+#' correlation `rho` is estimated by EM and returned in `fit$spatial$rho_w`). The
+#' two share one engine; `fit$spatial$field_type` records the choice. Structured
+#' terms on the detection arm, or an unsupported field term, error from the
 #' dispatcher.
 #'
 #' @section Scope (status `"experimental"`):

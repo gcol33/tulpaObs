@@ -10,21 +10,23 @@
 #   logit psi_{s,c} = X_occ_c . (mu_occ + b_occ_s) + L_s * w_c
 #   logit p_{s,i,j} = X_p_{ij} . (mu_p  + b_p_s)
 #   g(cover)_{s,i,j} = X_pos_{ij} . (mu_pos + b_pos_s)
-#   b_.s ~ N(0, Sigma_.)   (community RE)   w ~ ICAR (unit marginal scale)
+#   b_.s ~ N(0, Sigma_.)   (community RE)   w ~ GMRF field (unit marginal scale)
 #
 # A single shared field with only a species intercept can shift each species'
 # map level but not its SHAPE, so it forces every species onto one map; the
 # per-species loading L_s gives each species its own spatial shape as a scaling
 # of the shared factor -- the reduced-rank (HMSC / spatial-gllvm) structure that
 # borrows strength and lets rare taxa get a calibrated map. The factor sits on
-# the occupancy (state) predictor by default; a cover-arm factor (Stage 3) lets
-# the SAME field also load on the cover predictor through a free loading matrix
-# L_pos, so the latent spatial structure is shared across the two processes.
+# the occupancy (state) predictor by default; a cover-arm factor lets the SAME
+# field also load on the cover predictor through a free loading matrix L_pos, so
+# the latent spatial structure is shared across the two processes.
 #
-# This file currently provides the Stage-1 SIMULATOR (ground truth for the
-# parameter-recovery harness the fitter is built against). The community-Newton
-# + Sigma M-step fitter extends .tobs_fit_ms_occu_cover with the shared w + L_s
-# block and lands in subsequent increments.
+# The shared field is an areal GMRF whose structure is set by the front-door term:
+# icar() (improper intrinsic CAR, the default) or car_proper() (proper CAR with a
+# per-factor correlation rho, estimated by EM). The fitter is a Laplace-EM over
+# the joint mode of c(mu, {b_s}, L, W, log_disp) with closed-form community-cov
+# and field (tau, rho) M-steps; rank selection and a varimax post-rotation sit on
+# top. The simulator below is the ground truth for the parameter-recovery harness.
 
 # Identifiability (K = 1). The bilinear term L_s * w_c is invariant under
 # (L_s -> c L_s, w -> w / c) for any c != 0, and under the joint sign flip
@@ -63,6 +65,12 @@
 #'   exactly. `truth$L_pos` carries the generating cover loadings.
 #' @param mean_load_pos,sd_load_pos Mean and SD of the cover-arm loadings `L_pos`
 #'   (used only when `cover_factor = TRUE`).
+#' @param field Areal structure of the shared latent factors: `"icar"` (improper
+#'   intrinsic CAR, the default) or `"car_proper"` (proper CAR with a correlation
+#'   `rho`, field precision `tau (D - rho A)`). `"icar"` reproduces the Stage 1-2
+#'   RNG stream byte for byte; `truth$field` / `truth$rho` carry the choice.
+#' @param rho Proper-CAR correlation in `[0, 1)`, used only when
+#'   `field = "car_proper"` (the `rho -> 1` limit is the ICAR field).
 #' @param sigma_pos Lognormal cover residual SD (on the log scale).
 #' @param positive Cover family; only `"lognormal"` in Stage 1.
 #' @param seed Optional RNG seed.
@@ -91,10 +99,13 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                            cover_factor  = FALSE,
                                            mean_load_pos = 0,
                                            sd_load_pos   = 1.0,
+                                           field      = c("icar", "car_proper"),
+                                           rho        = 0.9,
                                            sigma_pos  = 0.4,
                                            positive   = c("lognormal", "beta"),
                                            seed       = NULL) {
   positive <- match.arg(positive)
+  field    <- match.arg(field)
   if (identical(positive, "beta")) {
     stop("Stage 1 of the spatial community occu_cover supports ",
          "positive = 'lognormal' only.", call. = FALSE)
@@ -144,20 +155,34 @@ simulate_ms_occu_cover_spatial <- function(adj,
   X_pos <- if (ncol(pos_covs)) stats::model.matrix(~ ., pos_covs)
            else stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
 
-  # K shared latent factors W (N x K): each a unit-marginal-scale ICAR draw
-  # (Sorbye-Rue), the same convention simulate_occu_cover uses for its
-  # single-species field. K = 1 reproduces the single-field random stream.
-  Q       <- .occu_cover_icar_Q(adj)
-  scale_q <- .occu_cover_icar_scale(adj)
-  eig  <- eigen(Q, symmetric = TRUE)
-  keep <- eig$values > 1e-8
+  # K shared latent factors W (N x K), each drawn at unit-marginal scale (the geo
+  # mean of the field's marginal variances is 1, the Sorbye-Rue convention
+  # simulate_occu_cover uses) so the loadings carry the amplitude. An icar field
+  # uses the improper eigen draw (K = 1 reproduces the single-field stream); a
+  # proper-CAR field draws from R(rho)^{-1}. The car branch is gated, so the
+  # default icar stream stays byte-identical.
   W <- matrix(0, N, K)
-  for (k in seq_len(K)) {
-    z_white <- stats::rnorm(sum(keep))
-    wk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                       (z_white / sqrt(eig$values[keep])))
-    wk <- wk - mean(wk)
-    W[, k] <- wk / sqrt(scale_q)
+  if (identical(field, "car_proper")) {
+    spec    <- .ms_ocs_field_spec(adj, "car_proper")
+    R       <- .ms_ocs_field_R(spec, rho)
+    scale_c <- exp(mean(log(diag(solve(R)))))    # geo-mean marginal variance
+    Rchol   <- chol(R)                           # R = U'U
+    for (k in seq_len(K)) {
+      wk <- backsolve(Rchol, stats::rnorm(N))    # ~ N(0, R^{-1})
+      W[, k] <- wk / sqrt(scale_c)
+    }
+  } else {
+    Q       <- .occu_cover_icar_Q(adj)
+    scale_q <- .occu_cover_icar_scale(adj)
+    eig  <- eigen(Q, symmetric = TRUE)
+    keep <- eig$values > 1e-8
+    for (k in seq_len(K)) {
+      z_white <- stats::rnorm(sum(keep))
+      wk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
+                         (z_white / sqrt(eig$values[keep])))
+      wk <- wk - mean(wk)
+      W[, k] <- wk / sqrt(scale_q)
+    }
   }
 
   # Per-species loadings L (S x K), lower-triangular with positive diagonal --
@@ -228,6 +253,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
     y = y, y_pos = y_pos, data = data, species = species_names, adj = adj,
     truth = list(
       K = K, positive = positive,
+      field = field, rho = if (identical(field, "car_proper")) rho else NULL,
       mu_occ = mu_occ, mu_p = mu_p, mu_pos = mu_pos,
       sd_occ = sd_occ, sd_p = sd_p, sd_pos = sd_pos,
       sigma_pos = sigma_pos,
@@ -245,6 +271,90 @@ simulate_ms_occu_cover_spatial <- function(adj,
 
 
 # ---------------------------------------------------------------------------
+# Areal field structure (icar / proper-CAR)
+# ---------------------------------------------------------------------------
+#
+# The K shared latent fields all share ONE areal structure, abstracted here so
+# the reduced-rank machinery is not hardwired to ICAR. A field type fixes the
+# precision (up to a per-factor scale tau): an `icar` field is improper with a
+# fixed structure Q = D - A (rank N - 1, one constant null direction); a proper
+# `car_proper` field is full rank with a correlation hyperparameter rho and
+# structure R(rho) = D - rho A, positive-definite for rho in [0, 1) (the rho -> 1
+# limit is ICAR). rho is estimated per factor by EM (a profile M-step) alongside
+# tau, exactly as the community covariances are; the Laplace evidence then treats
+# (tau, rho) as the type-II MLEs of an empirical-Bayes field prior.
+
+# log pseudo-determinant of a GMRF precision (sum of log nonzero eigenvalues).
+.ms_ocs_logpdet_from_Q <- function(Q) {
+  ev <- eigen(Q, symmetric = TRUE, only.values = TRUE)$values
+  sum(log(ev[ev > max(ev) * 1e-8]))
+}
+
+# Field-structure spec: everything the prior / M-step / evidence need to treat a
+# field generically. `Q` = D - A (the ICAR structure, also the simulator base);
+# `A`, `deg` the adjacency / degree; `rank` the GMRF rank (N - 1 improper icar,
+# N proper car). For car_proper: `gamma` = eigenvalues of the normalised
+# adjacency D^{-1/2} A D^{-1/2}, so log|R(rho)| = sum(log deg) + sum(log(1 -
+# rho*gamma)) and R(rho) is PD iff rho < 1/max(gamma) = 1 (connected graph,
+# Perron-Frobenius); `rho_bounds` the profile search interval.
+.ms_ocs_field_spec <- function(adj, type = c("icar", "car_proper")) {
+  type <- match.arg(type)
+  N   <- nrow(adj)
+  deg <- rowSums(adj)
+  if (any(deg == 0)) {
+    iso <- which(deg == 0)
+    stop(sprintf("areal graph has %d isolated node(s): %s. Connect or drop them.",
+                 length(iso), paste(utils::head(iso, 5L), collapse = ", ")),
+         call. = FALSE)
+  }
+  A <- unname(as.matrix(adj)); Q <- .occu_cover_icar_Q(adj)
+  spec <- list(type = type, N = N, deg = deg, A = A, Q = Q,
+               has_rho = identical(type, "car_proper"))
+  if (spec$has_rho) {
+    ds <- 1 / sqrt(deg)
+    An <- (ds * A) * rep(ds, each = N)            # D^{-1/2} A D^{-1/2}
+    spec$gamma      <- eigen((An + t(An)) / 2, symmetric = TRUE,
+                             only.values = TRUE)$values
+    spec$logdetD    <- sum(log(deg))
+    spec$rho_bounds <- c(0, 1 - 1e-4)
+    spec$rank       <- N
+  } else {
+    spec$rank     <- N - 1L
+    spec$logpdetQ <- .ms_ocs_logpdet_from_Q(Q)
+  }
+  spec
+}
+
+# Structure matrix R for a field at correlation rho (rho ignored / NULL for an
+# icar field, whose structure is the fixed Q). diag(A) = 0, so R = D - rho A has
+# diagonal = deg and off-diagonal -rho A.
+.ms_ocs_field_R <- function(spec, rho = NULL) {
+  if (!spec$has_rho) return(spec$Q)
+  R <- -rho * spec$A; diag(R) <- spec$deg
+  R
+}
+
+# log (pseudo) determinant of R(rho): fixed pseudo-det for icar, the
+# eigenvalue-sum form for car_proper.
+.ms_ocs_field_logdetR <- function(spec, rho = NULL) {
+  if (!spec$has_rho) return(spec$logpdetQ)
+  spec$logdetD + sum(log1p(-rho * spec$gamma))
+}
+
+# Per-factor structure list (length K) for the objective's field prior: the same
+# Q for every icar factor, or the per-factor R(rho_k) for car_proper.
+.ms_ocs_build_field_R <- function(model, rho_w = NULL) {
+  spec <- model$field_spec
+  K    <- model$K %||% 1L
+  if (is.null(spec) || !isTRUE(spec$has_rho)) {
+    return(rep(list(model$icar_Q), K))
+  }
+  rho_w <- rep_len(rho_w %||% 0.5, K)
+  lapply(rho_w, function(r) .ms_ocs_field_R(spec, r))
+}
+
+
+# ---------------------------------------------------------------------------
 # Model binding
 # ---------------------------------------------------------------------------
 
@@ -258,6 +368,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                               pos_formula, data, y, y_pos,
                                               positive, species, adj, K = 1L,
                                               cover_factor = FALSE,
+                                              field_type = "icar",
                                               det_visit_formula = NULL,
                                               det_visit_data    = NULL,
                                               pos_visit_formula = NULL,
@@ -283,8 +394,10 @@ simulate_ms_occu_cover_spatial <- function(adj,
   model$K            <- K
   model$cover_factor <- isTRUE(cover_factor)
   model$adj          <- adj
-  model$icar_Q       <- .occu_cover_icar_Q(adj)
-  model$icar_scale   <- .occu_cover_icar_scale(adj)
+  model$field_type   <- field_type
+  model$field_spec   <- .ms_ocs_field_spec(adj, field_type)
+  model$icar_Q       <- model$field_spec$Q     # ICAR base (objective fallback,
+  model$icar_scale   <- .occu_cover_icar_scale(adj)  # simulator scale)
   model
 }
 
@@ -344,7 +457,9 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                grad = TRUE) {
   d <- .ms_ocs_dims(model); up <- .ms_ocs_unpack(par, d)
   mu <- up$mu; b <- up$b; L <- up$L; Lpos <- up$Lpos; W <- up$W; ld <- up$ld
-  Q  <- model$icar_Q
+  # Per-factor field structure R_k (D - rho_k A for car_proper; the fixed ICAR
+  # Q for every factor on the icar / fallback path -- byte-identical in value).
+  Rk <- model$field_R %||% rep(list(model$icar_Q), d$K)
   tau_w <- rep_len(tau_w, d$K)
   cl <- function(e) pmin(pmax(e, -30), 30)
 
@@ -390,7 +505,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
   ll <- ll - 0.5 * as.numeric(mu %*% Pmu %*% mu)
   ll <- ll - 0.5 * inv_sdL2 * sum(L^2)
   if (d$cover_factor) ll <- ll - 0.5 * inv_sdL2 * sum(Lpos^2)
-  QW <- Q %*% W                                        # N x K
+  QW <- matrix(0, d$N, d$K)                            # R_k W[, k] per factor
+  for (k in seq_len(d$K)) QW[, k] <- as.numeric(Rk[[k]] %*% W[, k])
   ll <- ll - 0.5 * sum(tau_w * colSums(W * QW))
 
   if (!grad) return(list(ll = ll))
@@ -399,7 +515,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   for (s in seq_len(d$S)) g_b[[s]] <- g_b[[s]] - as.numeric(Sinv %*% b[[s]])
   g_L  <- g_L - inv_sdL2 * L
   if (d$cover_factor) g_Lpos <- g_Lpos - inv_sdL2 * Lpos
-  g_W  <- g_W - sweep(as.matrix(QW), 2L, tau_w, "*")
+  g_W  <- g_W - sweep(QW, 2L, tau_w, "*")
 
   grad_vec <- c(g_mu, unlist(g_b), as.numeric(g_L),
                 if (d$cover_factor) as.numeric(g_Lpos) else numeric(0),
@@ -645,8 +761,14 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                             sigma.beta = 5, verbose = FALSE,
                                             constrain = FALSE) {
   d <- .ms_ocs_dims(model); K <- d$K
-  Q <- model$icar_Q
-  rank_w <- d$N - 1L                       # ICAR rank (one null direction)
+  spec <- model$field_spec %||%
+    .ms_ocs_field_spec(model$adj, model$field_type %||% "icar")
+  model$field_spec <- spec
+  Q <- spec$Q
+  rank_w <- spec$rank                      # N - 1 (improper icar) or N (proper car)
+  rho_w  <- if (isTRUE(spec$has_rho)) rep(0.5, K) else NULL
+  # Per-factor structure fed to the E-step objective; rebuilt after each M-step.
+  model$field_R <- .ms_ocs_build_field_R(model, rho_w)
 
   Sigma <- list(occ = diag(0.3^2, d$P_occ), p = diag(0.3^2, d$P_p),
                 pos = diag(0.3^2, d$P_pos))
@@ -703,18 +825,37 @@ simulate_ms_occu_cover_spatial <- function(adj,
     })
     names(Sigma) <- c("occ", "p", "pos")
 
-    # M-step: per-factor ICAR field precision (rank-deficient GMRF update).
+    # M-step: per-factor field hyperparameters. The field second moment is
+    # Sk = W_k W_k' + Cov(W_k); the precision update is tau_k = rank / tr(R Sk).
+    # A proper-CAR field also profiles its correlation rho_k by 1D maximisation
+    # of the marginal field prior 0.5 log|R(rho)| - 0.5 N log tr(R(rho) Sk)
+    # (tau profiled out), with tr(R(rho) Sk) = tr(D Sk) - rho tr(A Sk) linear in
+    # rho. An icar field has no rho and keeps the rank-deficient (N - 1) update.
     Wm <- matrix(fit$w, d$N, K)
     for (k in seq_len(K)) {
       widx   <- w_off + (k - 1L) * d$N + seq_len(d$N)
       Cov_wk <- Cov[widx, widx, drop = FALSE]
-      quad   <- as.numeric(Wm[, k] %*% (Q %*% Wm[, k])) + sum(Q * Cov_wk)
+      if (isTRUE(spec$has_rho)) {
+        cD <- sum(spec$deg * (Wm[, k]^2 + diag(Cov_wk)))          # tr(D Sk)
+        cA <- as.numeric(Wm[, k] %*% (spec$A %*% Wm[, k])) +
+              sum(spec$A * Cov_wk)                                # tr(A Sk)
+        frho <- function(r) 0.5 * .ms_ocs_field_logdetR(spec, r) -
+                            0.5 * d$N * log(max(cD - r * cA, 1e-8))
+        rho_w[k] <- stats::optimize(frho, spec$rho_bounds,
+                                    maximum = TRUE)$maximum
+        quad     <- max(cD - rho_w[k] * cA, 1e-8)                 # tr(R(rho_k) Sk)
+      } else {
+        quad <- as.numeric(Wm[, k] %*% (Q %*% Wm[, k])) + sum(Q * Cov_wk)
+      }
       tau_w[k] <- rank_w / max(quad, 1e-8)
     }
+    model$field_R <- .ms_ocs_build_field_R(model, rho_w)
 
     if (verbose) {
-      cat(sprintf("EM %2d  logpen=%.3f  tau_w[1]=%.3f  sd_occ1=%.3f\n",
-                  em, fit$logpen, tau_w[1L], sqrt(Sigma$occ[1L, 1L])))
+      cat(sprintf("EM %2d  logpen=%.3f  tau_w[1]=%.3f%s  sd_occ1=%.3f\n",
+                  em, fit$logpen, tau_w[1L],
+                  if (isTRUE(spec$has_rho)) sprintf("  rho[1]=%.3f", rho_w[1L]) else "",
+                  sqrt(Sigma$occ[1L, 1L])))
     }
     if (is.finite(prev) && abs(fit$logpen - prev) < tol * (abs(prev) + tol)) {
       prev <- fit$logpen; break
@@ -722,7 +863,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
     prev <- fit$logpen
   }
 
-  c(fit, list(Sigma = Sigma, tau_w = tau_w, sd_L = sd_L, em_logpen = prev,
+  c(fit, list(Sigma = Sigma, tau_w = tau_w, rho_w = rho_w,
+              field_type = spec$type, sd_L = sd_L, em_logpen = prev,
               cov = Cov))
 }
 
@@ -857,7 +999,11 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     method       = "laplace-em",
     positive     = model$positive,
     spatial      = list(
-      type     = if (isTRUE(d$cover_factor)) "icar+cover" else "icar",
+      type     = {
+        ft <- fit$field_type %||% model$field_type %||% "icar"
+        if (isTRUE(d$cover_factor)) paste0(ft, "+cover") else ft
+      },
+      field_type = fit$field_type %||% model$field_type %||% "icar",
       K        = K,
       field    = fit$w,
       field_sd = field_sd,
@@ -866,6 +1012,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
       cover_factor   = isTRUE(d$cover_factor),
       rotation = rot,
       tau_w    = fit$tau_w,
+      rho_w    = fit$rho_w,
       sd_L     = fit$sd_L
     ),
     ms_community = list(
@@ -929,38 +1076,30 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 # not the rank.
 #
 # The right tool is the empirical-Bayes Laplace marginal likelihood log Z(K):
-# the EM hyperparameters (Sigma, tau_w) are the type-II MLEs, and at the
-# converged theta the latent par = c(mu, {b_s}, L, W, log_disp) is integrated out
-# by a Laplace approximation around the joint mode:
+# the EM hyperparameters (Sigma, tau_w, and rho_w for a proper-CAR field) are the
+# type-II MLEs, and at the converged theta the latent par = c(mu, {b_s}, L, W,
+# log_disp) is integrated out by a Laplace approximation around the joint mode:
 #
 #   log Z(K) ~= logpen(mode)                                 [data LL + prior kernels]
 #            + 0.5*npar*log(2pi) - 0.5*log|H|                 [Laplace volume, H = precision]
-#            + 0.5*(N-1)*sum_k log tau_w[k] + 0.5*K*logpdet(Q)
-#                - 0.5*K*(N-1)*log(2pi)                       [rank-deficient ICAR prior NC]
+#            + 0.5*r*sum_k log tau_w[k] + 0.5*sum_k log|R(rho_k)|
+#                - 0.5*K*r*log(2pi)                           [field prior NC, rank r]
 #            - 0.5*nL*log(2pi*sd_L^2)                         [loading prior NC]
 #            - 0.5*S*(P*log(2pi) + log|Sigma_occ|+log|Sigma_p|+log|Sigma_pos|)  [RE prior NC]
 #            - 0.5*P*log(2pi) - P*log(sigma.beta)             [community-mean prior NC]
 #            + sum_k log L_kk(mode)                           [log-diagonal Jacobian]
 #
 # The prior normalisers are not optional: a likelihood-flat direction (e.g. the
-# soft ICAR-level / intercept confound, pinned only by the RE prior) contributes
+# soft field-level / intercept confound, pinned only by the RE prior) contributes
 # a large posterior volume that the matching prior normaliser cancels, so only
 # genuine rank-K signal moves log Z. This requires the IDENTIFIED (constrained,
 # lower-triangular L) parameterisation -- the unconstrained Hessian is
 # rank-deficient along the rotation manifold and |H| is then ill-defined.
 #
-# The ICAR prior normaliser uses the generalized (pseudo) determinant of Q (the
-# product of its N-1 nonzero eigenvalues); the field is improper along its single
-# constant null direction, so the volume bookkeeping counts N-1, not N, per
-# factor.
-
-# log pseudo-determinant of the ICAR precision Q (sum of log nonzero eigenvalues).
-# Cached on the model when present; one eigen solve otherwise.
-.ms_ocs_logpdet_Q <- function(model) {
-  if (!is.null(model$icar_logpdet)) return(model$icar_logpdet)
-  ev <- eigen(model$icar_Q, symmetric = TRUE, only.values = TRUE)$values
-  sum(log(ev[ev > max(ev) * 1e-8]))
-}
+# The field normaliser uses |R(rho_k)| at the field rank r: a full determinant at
+# rank r = N for a proper-CAR field, or the generalized (pseudo) determinant of Q
+# (product of its N - 1 nonzero eigenvalues) at rank r = N - 1 for an improper
+# ICAR field, whose single constant null direction is counted out.
 
 # Symmetric positive-definite log-determinant via a Cholesky ridge ladder (the
 # constrained joint precision is PD up to the soft ICAR-level directions); eigen
@@ -1006,6 +1145,11 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   d <- .ms_ocs_dims(model); K <- d$K; S <- d$S; P <- d$P; N <- d$N
   tau_w <- rep_len(fit$tau_w, K); sd_L <- fit$sd_L
   Sigma <- fit$Sigma
+  spec  <- model$field_spec %||%
+    .ms_ocs_field_spec(model$adj, model$field_type %||% "icar")
+  rho_w <- fit$rho_w
+  # Recompute logpen / H at the SAME converged field structure R(rho).
+  model$field_R <- .ms_ocs_build_field_R(model, rho_w)
 
   Sinv <- matrix(0, P, P)
   Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
@@ -1021,7 +1165,6 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   npar   <- length(fit$par)
 
   logdetH  <- .ms_ocs_logdet_pd(H)
-  logpdetQ <- .ms_ocs_logpdet_Q(model)
   nL       <- .ms_ocs_lfree_dim(S, K)
   # The cover-arm loadings (if present) share the occupancy loadings' ridge, so
   # they add S*K free parameters to the loading-prior normaliser.
@@ -1034,8 +1177,16 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   diagL <- diag(Lmat)[seq_len(K)]
 
   vol      <- 0.5 * npar * log(2 * pi) - 0.5 * logdetH
-  nc_field <- 0.5 * (N - 1) * sum(log(tau_w)) + 0.5 * K * logpdetQ -
-              0.5 * K * (N - 1) * log(2 * pi)
+  # Field prior normaliser: per factor 0.5 r log(tau) + 0.5 log|R| - 0.5 r log2pi,
+  # with rank r = N (proper car) or N - 1 (improper icar) and the matching (full
+  # or pseudo) determinant of R(rho_k). The improper null direction is counted
+  # out (r = N - 1), so a flat field level contributes no spurious volume.
+  r        <- spec$rank
+  logdetR  <- if (isTRUE(spec$has_rho)) {
+    vapply(rep_len(rho_w, K), function(rr) .ms_ocs_field_logdetR(spec, rr), 0)
+  } else rep(.ms_ocs_field_logdetR(spec), K)
+  nc_field <- 0.5 * r * sum(log(tau_w)) + 0.5 * sum(logdetR) -
+              0.5 * K * r * log(2 * pi)
   nc_load  <- -0.5 * n_load * log(2 * pi * sd_L^2)
   nc_b     <- -0.5 * S * (P * log(2 * pi) + ld_occ + ld_p + ld_pos)
   nc_mu    <- -0.5 * P * log(2 * pi) - P * log(sigma.beta)
@@ -1089,14 +1240,16 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 
 
 # Detect a spatial request on the three occu_cover arms. The supported surface is
-# a single icar() shared field on the occupancy arm and, optionally, the SAME
-# field on the cover (positive) arm (a cover-arm factor, gcol33/tulpa#67 Stage 3).
-# Returns the shared-field adjacency, the fixed-effects occupancy / cover formulas
-# (with the icar() term stripped), and `cover_factor` (TRUE when the cover arm
-# also carries the field); NULL when no arm carries a structured term (the
-# non-spatial path). Detection terms, non-icar terms, a multi-term arm, a
-# cover-arm field without a matching occupancy field, or a mismatched graph all
-# error (the field is shared, so the two arms must name one graph).
+# a single areal field term -- icar() (improper) or car_proper() (proper CAR with
+# a correlation rho) -- on the occupancy arm and, optionally, the SAME field on
+# the cover (positive) arm (a cover-arm factor, gcol33/tulpa#67 Stage 3). Returns
+# the shared-field adjacency, the `field_type` ("icar" / "car_proper"), the
+# fixed-effects occupancy / cover formulas (with the field term stripped), and
+# `cover_factor` (TRUE when the cover arm also carries the field); NULL when no
+# arm carries a structured term (the non-spatial path). Detection terms,
+# unsupported terms, a multi-term arm, a cover-arm field without a matching
+# occupancy field, or a cover field of a different type / graph all error (the
+# field is shared, so the two arms must name one term on one graph).
 .tobs_ms_ocs_spatial_request <- function(occ_formula, det_formula, pos_formula,
                                          data) {
   parse_terms <- function(f) {
@@ -1121,33 +1274,43 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     return(NULL)                                        # non-spatial path
   }
 
-  # The single supported field is icar(); validate one such term per spatial arm.
-  one_icar <- function(terms, arm) {
+  # Supported field terms: icar() (improper) and car_proper() (proper CAR with a
+  # correlation rho). Validate one such term per spatial arm.
+  supported <- c("icar", "car_proper")
+  one_field <- function(terms, arm) {
     if (length(terms) > 1L) {
-      stop(sprintf("ms_occu_cover(): the %s arm supports a single icar() term.",
+      stop(sprintf("ms_occu_cover(): the %s arm supports a single areal field term.",
                    arm), call. = FALSE)
     }
     spec <- terms[[1L]]
-    if (!inherits(spec, "tobs_spatial") || !identical(spec$label, "icar")) {
-      stop(sprintf("ms_occu_cover(): spatial supports icar() only; got %s() on the %s arm.",
-                   spec$label %||% class(spec)[1L], arm), call. = FALSE)
+    if (!inherits(spec, "tobs_spatial") || !(spec$label %in% supported)) {
+      stop(sprintf(
+        "ms_occu_cover(): spatial supports icar() / car_proper() only; got %s() on the %s arm.",
+        spec$label %||% class(spec)[1L], arm), call. = FALSE)
     }
     spec
   }
-  occ_spec <- one_icar(occ_terms, "occupancy")
-  graph <- occ_spec$graph
+  occ_spec   <- one_field(occ_terms, "occupancy")
+  field_type <- occ_spec$label
+  graph      <- occ_spec$graph
 
   cover_factor <- length(pos_terms) > 0L
   if (cover_factor) {
-    pos_spec <- one_icar(pos_terms, "cover")
+    pos_spec <- one_field(pos_terms, "cover")
+    if (!identical(pos_spec$label, field_type)) {
+      stop(sprintf(paste0("ms_occu_cover(): the cover-arm factor shares the ",
+                          "occupancy field, so it must use the same term (%s()) ",
+                          "as the occupancy arm."), field_type), call. = FALSE)
+    }
     if (!isTRUE(all.equal(unname(as.matrix(pos_spec$graph)),
                           unname(as.matrix(graph))))) {
       stop("ms_occu_cover(): the cover-arm factor shares the occupancy field, so ",
-           "icar() must name the same graph on both arms.", call. = FALSE)
+           "the areal term must name the same graph on both arms.", call. = FALSE)
     }
   }
 
   list(graph        = graph,
+       field_type   = field_type,
        cover_factor = cover_factor,
        fe_occ = .tobs_parse_formula(occ_formula, data = data)$fe_formula,
        fe_pos = if (cover_factor) {
