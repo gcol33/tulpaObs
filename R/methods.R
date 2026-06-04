@@ -440,6 +440,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (identical(model$model_type, "ms_int_occu")) {
     return(.tobs_simulate_ms_int_occu(object, nsim))
   }
+  if (identical(model$model_type, "ms_occu_cover_spatial")) {
+    return(.tobs_simulate_ms_occu_cover_spatial(object, nsim))
+  }
   draws <- object$draws
   n_samples <- nrow(draws)
   pi_list <- model$process_info

@@ -1247,6 +1247,56 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   list(psi = maps$psi$mean, p = p, cover = maps$cover_cond$mean)
 }
 
+# Plug-in (posterior-mean) data simulation for the spatial-factor community fit:
+# per species, draw z ~ Bernoulli(psi) with the field-augmented psi, the visit
+# detections, and the cover hurdle at the observed visit pattern. Mirrors the
+# non-spatial community simulate, adding the shared field on psi (and, with a
+# cover-arm factor, on the cover predictor). Returns 3D arrays matching y / y_pos.
+.tobs_simulate_ms_occu_cover_spatial <- function(object, nsim = 1) {
+  model <- object$model; cm <- object$ms_community; sp <- object$spatial
+  asK <- function(M) if (is.null(dim(M))) matrix(M, ncol = 1L) else M
+  W    <- asK(sp$field); L <- asK(sp$loadings)
+  Lpos <- if (is.null(sp$loadings_cover)) NULL else asK(sp$loadings_cover)
+  n_sites <- model$n_sites; max_visits <- model$max_visits
+  n_species <- model$n_species
+  is_beta <- identical(model$positive, "beta")
+  disp <- exp(object$means[[length(object$means)]])
+  cl <- function(e) pmin(pmax(e, -30), 30)
+
+  one <- function() {
+    y_sim  <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),
+                    dimnames = list(NULL, NULL, model$species_names))
+    yp_sim <- array(NA_real_,    dim = c(n_sites, max_visits, n_species),
+                    dimnames = list(NULL, NULL, model$species_names))
+    for (s in seq_len(n_species)) {
+      eta <- .occu_cover_eta_from_par(model, cm$coef_occ[s, ], cm$coef_p[s, ],
+                                      cm$coef_pos[s, ])
+      eta$psi <- stats::plogis(cl(as.numeric(model$X_occ %*% cm$coef_occ[s, ]) +
+                                    as.numeric(W %*% L[s, ])))
+      if (!is.null(Lpos)) eta$ep_mat <- eta$ep_mat + as.numeric(W %*% Lpos[s, ])
+      z <- stats::rbinom(n_sites, 1L, eta$psi)
+      valid_s <- model$valid[, , s]
+      for (i in seq_len(n_sites)) {
+        vis <- which(valid_s[i, ])
+        if (!length(vis)) next
+        if (z[i] == 0L) { y_sim[i, vis, s] <- 0L; next }
+        dd <- stats::rbinom(length(vis), 1L, eta$p_mat[i, vis])
+        y_sim[i, vis, s] <- dd
+        det <- vis[dd == 1L]
+        if (length(det)) {
+          ep <- eta$ep_mat[i, det]
+          yp_sim[i, det, s] <- if (is_beta) {
+            mu <- stats::plogis(cl(ep))
+            stats::rbeta(length(det), mu * disp, (1 - mu) * disp)
+          } else exp(stats::rnorm(length(det), ep, disp))
+        }
+      }
+    }
+    list(y = y_sim, y_pos = yp_sim)
+  }
+  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+}
+
 
 # ---------------------------------------------------------------------------
 # Residual species-association matrices (spatial-JSDM / HMSC output)

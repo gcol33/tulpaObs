@@ -1088,3 +1088,31 @@ test_that("fitted() returns per-species occupancy / detection / cover surfaces",
   expect_identical(colnames(ft$psi), sim$species)
   expect_equal(as.numeric(ft$psi), predict(fit)$psi, tolerance = 1e-8)
 })
+
+test_that("simulate() reproduces the per-species data structure", {
+  skip_on_cran()
+  skip_if_fast()
+  # Plug-in (posterior-mean) simulation at the observed visit pattern: the fitted
+  # model reproduces the data's per-species detection prevalence and cover
+  # magnitude (the basis for posterior-predictive checks).
+  adj <- .mscs_grid_adj(8L, 8L); N <- nrow(adj); S <- 14L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = 2L, J = 5L,
+           sd_occ = 0.5, sd_load = 1.2, sigma_pos = 0.4, seed = 5L)
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "laplace",
+              control = list(n.factors = 2L, sd.load = 1.2, max.iter = 30L))
+
+  s1 <- simulate(fit, nsim = 1, seed = 7)
+  expect_named(s1, c("y", "y_pos"))
+  expect_identical(dim(s1$y), dim(sim$y))
+  expect_identical(dim(s1$y_pos), dim(sim$y_pos))
+  expect_length(simulate(fit, nsim = 3, seed = 7), 3L)
+
+  det_rate <- function(a) apply(a, 3L, function(m) mean(m, na.rm = TRUE))
+  obs  <- det_rate(sim$y)
+  sims <- simulate(fit, nsim = 30, seed = 7)
+  simrate <- rowMeans(vapply(sims, function(ss) det_rate(ss$y), numeric(S)))
+  expect_gt(stats::cor(obs, simrate), 0.8)
+})
