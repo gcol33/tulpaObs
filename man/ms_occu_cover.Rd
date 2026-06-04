@@ -84,6 +84,12 @@ returned in \code{fit$spatial$phi_w}); the field hyperparameter is estimated by 
 All three share one engine; \code{fit$spatial$field_type} records the choice.
 Structured terms on the detection arm, or an unsupported field term, error from
 the dispatcher.
+
+The shared fields imply a residual species-association matrix (the
+spatial-JSDM / HMSC output): \code{\link[=tobs_associations]{tobs_associations()}} returns the occupancy
+association \verb{corr(L L')} and, with a cover-arm factor, the cover association
+and the cross-arm occupancy-vs-cover association, each marginalised over the
+loading posterior so an interval accompanies the estimate.
 }
 
 \section{Scope (status \code{"experimental"})}{

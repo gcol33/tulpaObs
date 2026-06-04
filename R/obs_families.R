@@ -374,6 +374,12 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' Structured terms on the detection arm, or an unsupported field term, error from
 #' the dispatcher.
 #'
+#' The shared fields imply a residual species-association matrix (the
+#' spatial-JSDM / HMSC output): [tobs_associations()] returns the occupancy
+#' association `corr(L L')` and, with a cover-arm factor, the cover association
+#' and the cross-arm occupancy-vs-cover association, each marginalised over the
+#' loading posterior so an interval accompanies the estimate.
+#'
 #' @section Scope (status `"experimental"`):
 #' The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace
 #' / Laplace-EM. A shared coupled spatial field across all three arms with the
@@ -404,7 +410,7 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
     status         = "experimental",
     params         = list(positive = positive),
     control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load",
-                       "n.factors", "n.factors.max")
+                       "n.factors", "n.factors.max", "constrain")
   )
 }
 

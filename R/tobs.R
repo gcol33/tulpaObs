@@ -678,6 +678,12 @@ tobs <- function(formula,
       max.em     = control[["max.iter"]]  %||% 30L,
       tol        = control[["tol"]]       %||% 1e-3,
       sigma.beta = control[["sigma.beta"]] %||% 5,
+      # K > 1 is identified only up to an orthogonal rotation, so the
+      # unconstrained loading posterior is improper along that manifold; the
+      # identified (lower-triangular) parameterisation gives well-posed loading
+      # uncertainty for the residual species-association intervals. K = 1 carries
+      # no continuous rotation, so it stays in the unconstrained parameterisation.
+      constrain  = control[["constrain"]] %||% (model$K > 1L),
       verbose    = isTRUE(control[["verbose"]])
     )
     return(build_ms_occu_cover_spatial_fit(model, fit))

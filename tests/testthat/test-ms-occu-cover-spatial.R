@@ -919,3 +919,63 @@ test_that("auto-K rank selection composes with a BYM2 field", {
   expect_length(fit$spatial$phi_w, Ksel)
   expect_true(all(is.finite(fit$spatial$phi_w)))
 })
+
+test_that("tobs_associations() recovers the residual species associations", {
+  skip_on_cran()
+  skip_if_fast()
+  # The K shared latent fields imply a residual species-association matrix (the
+  # spatial-JSDM / HMSC output): with unit-variance fields the occupancy
+  # association is corr(L L'), invariant to the factor rotation. With a cover-arm
+  # factor the cross-arm association (standardized L_occ L_pos') links a species'
+  # spatial occupancy to another's spatial cover. The matrices are marginalised
+  # over the loading posterior, so an interval accompanies the estimate. Recovery
+  # is checked on the off-diagonals (the diagonal is 1 by construction).
+  corr_self  <- function(L) { Om <- tcrossprod(L); s <- sqrt(diag(Om)); Om / outer(s, s) }
+  corr_cross <- function(Lo, Lp) {
+    so <- sqrt(rowSums(Lo^2)); sp <- sqrt(rowSums(Lp^2)); (Lo %*% t(Lp)) / outer(so, sp)
+  }
+  adj <- .mscs_grid_adj(9L, 9L); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+           sd_occ = 0.5, sd_load = 1.3, sigma_pos = 0.4, cover_factor = TRUE,
+           mean_load_pos = 0, sd_load_pos = 1.2, seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1 + icar(graph = adj),
+    y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace",
+    control = list(n.factors = K, sd.load = 1.3, max.iter = 30L, tol = 1e-3))
+
+  occ <- tobs_associations(fit, "occupancy")
+  expect_identical(dim(occ$median), c(S, S))
+  expect_equal(unname(diag(occ$estimate)), rep(1, S), tolerance = 1e-8)
+  expect_true(isSymmetric(unname(occ$median)))
+  expect_true(all(occ$median >= -1 - 1e-8 & occ$median <= 1 + 1e-8))
+  expect_identical(rownames(occ$median), sim$species)
+  expect_true(all(occ$lower <= occ$upper + 1e-8))
+
+  off <- upper.tri(matrix(0, S, S))
+  occ_t <- corr_self(sim$truth$L)
+  expect_gt(stats::cor(occ$median[off], occ_t[off]), 0.7)
+  cov_occ <- mean(occ_t[off] >= occ$lower[off] & occ_t[off] <= occ$upper[off])
+  expect_gte(cov_occ, 0.8)
+
+  # Cross-arm association (occupancy vs cover); present only with a cover factor.
+  cross <- tobs_associations(fit, "cross")
+  expect_identical(dim(cross$median), c(S, S))
+  offall  <- row(matrix(0, S, S)) != col(matrix(0, S, S))
+  cross_t <- corr_cross(sim$truth$L, sim$truth$L_pos)
+  expect_gt(stats::cor(cross$median[offall], cross_t[offall]), 0.7)
+
+  # A single matrix is returned when a summary is named.
+  expect_identical(dim(tobs_associations(fit, "occupancy", "median")), c(S, S))
+})
+
+test_that("tobs_associations() errors off the spatial-factor surface", {
+  no_spatial <- structure(list(spatial = NULL), class = "tobs_fit")
+  expect_error(tobs_associations(no_spatial), "spatial-factor")
+  no_cover <- structure(
+    list(spatial = list(associations = list(
+      occupancy = list(median = matrix(1, 1, 1))))),
+    class = "tobs_fit")
+  expect_error(tobs_associations(no_cover, "cover"), "cover-arm")
+})

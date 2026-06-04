@@ -1104,7 +1104,8 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
         # CAR correlation rho or the BYM2 spatial-variance fraction phi.
         rho_w    = if (identical(ft, "car_proper")) hypr else NULL,
         phi_w    = if (identical(ft, "bym2"))       hypr else NULL,
-        sd_L     = fit$sd_L
+        sd_L     = fit$sd_L,
+        associations = .ms_ocs_associations(fit, d, model$species_names)
       )
     },
     ms_community = list(
@@ -1153,6 +1154,145 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     }
   }
   psi
+}
+
+
+# ---------------------------------------------------------------------------
+# Residual species-association matrices (spatial-JSDM / HMSC output)
+# ---------------------------------------------------------------------------
+#
+# The K shared latent fields induce residual co-occurrence among species through
+# the loadings: with the fields at unit marginal variance (the simulator's
+# Sorbye-Rue convention, amplitude carried by the loadings), the species'
+# occupancy factor contribution sum_k L_sk w_kc has cross-species covariance
+# Omega_occ = L_occ L_occ' at a unit-variance cell, and the reported association
+# is its correlation form R[s, s'] = Omega[s, s'] / sqrt(Omega[s, s] Omega[s', s']).
+# This is invariant to the factor rotation / sign / column-scale symmetry
+# (L Q Q' L' = L L' for orthogonal Q), so it is identified without anchoring. With
+# a cover-arm factor the cover association is corr(L_pos L_pos') and the joint
+# cross-arm association is the standardized L_occ L_pos' (species-s occupancy vs
+# species-s' cover, sharing the field) -- the genuinely joint-model quantity.
+#
+# Per the marginalize-derived-quantities rule the matrices are summarised from
+# draws of the loading posterior N(mode, cov), not the plug-in mode: each draw's
+# correlation matrix is formed, then per-element median + central interval. The
+# loading block is contiguous in the (constrained or unconstrained) packed
+# coordinates at head_n = P + S*P, so its marginal posterior is the matching
+# sub-block of the joint Laplace covariance. The rotation symmetry lives in the
+# flat directions of that block, and corr(L L') ignores them, so the interval
+# reflects genuine loading uncertainty rather than the gauge freedom.
+.ms_ocs_corr_self <- function(L) {
+  Om  <- tcrossprod(L)
+  s   <- sqrt(pmax(diag(Om), 0))
+  den <- outer(s, s)
+  R   <- Om / den
+  R[!is.finite(R)] <- 0
+  diag(R) <- 1
+  R
+}
+
+.ms_ocs_corr_cross <- function(Locc, Lpos) {
+  so  <- sqrt(pmax(rowSums(Locc^2), 0))
+  sp  <- sqrt(pmax(rowSums(Lpos^2), 0))
+  den <- outer(so, sp)
+  R   <- (Locc %*% t(Lpos)) / den
+  R[!is.finite(R)] <- 0
+  R
+}
+
+.ms_ocs_associations <- function(fit, d, species_names,
+                                  n_draws = 500L, prob = 0.95) {
+  S <- d$S; K <- d$K
+  constrained <- isTRUE(fit$constrained)
+  head_n  <- d$P + d$S * d$P
+  L_width <- if (constrained) .ms_ocs_lfree_dim(S, K) else S * K
+  idx  <- head_n + seq_len(L_width + d$Lpos_w)
+  mode <- fit$par[idx]
+  V    <- fit$cov[idx, idx, drop = FALSE]; V <- (V + t(V)) / 2
+  draws <- .occu_cover_rmvn(n_draws, mode, V)
+
+  to_L    <- function(blk) if (constrained) .ms_ocs_lfree_to_L(blk[seq_len(L_width)], S, K)
+                           else matrix(blk[seq_len(L_width)], S, K)
+  to_Lpos <- function(blk) matrix(blk[L_width + seq_len(d$Lpos_w)], S, K)
+
+  arms <- c("occupancy", if (d$cover_factor) c("cover", "cross"))
+  acc  <- stats::setNames(lapply(arms, function(a) array(0, c(n_draws, S, S))), arms)
+  for (i in seq_len(n_draws)) {
+    Lo <- to_L(draws[i, ])
+    acc$occupancy[i, , ] <- .ms_ocs_corr_self(Lo)
+    if (d$cover_factor) {
+      Lp <- to_Lpos(draws[i, ])
+      acc$cover[i, , ] <- .ms_ocs_corr_self(Lp)
+      acc$cross[i, , ] <- .ms_ocs_corr_cross(Lo, Lp)
+    }
+  }
+
+  qlo <- (1 - prob) / 2; qhi <- 1 - qlo
+  dn  <- list(species_names, species_names)
+  summ <- function(arr, est) {
+    med <- apply(arr, c(2L, 3L), stats::median)
+    lo  <- apply(arr, c(2L, 3L), stats::quantile, probs = qlo, names = FALSE)
+    hi  <- apply(arr, c(2L, 3L), stats::quantile, probs = qhi, names = FALSE)
+    dimnames(est) <- dimnames(med) <- dimnames(lo) <- dimnames(hi) <- dn
+    list(estimate = est, median = med, lower = lo, upper = hi)
+  }
+  L0  <- to_L(mode)
+  out <- list(occupancy = summ(acc$occupancy, .ms_ocs_corr_self(L0)))
+  if (d$cover_factor) {
+    Lp0 <- to_Lpos(mode)
+    out$cover <- summ(acc$cover, .ms_ocs_corr_self(Lp0))
+    out$cross <- summ(acc$cross, .ms_ocs_corr_cross(L0, Lp0))
+  }
+  out$prob <- prob; out$n_draws <- n_draws
+  out
+}
+
+
+#' Residual species-association matrices from a spatial-factor community fit
+#'
+#' For a reduced-rank spatial-factor community occupancy-cover fit (a
+#' [ms_occu_cover()] model carrying an `icar()`, `car_proper()`, or `bym2()`
+#' field on the occupancy arm), return the residual species associations the
+#' shared latent fields imply -- the spatial-JSDM / HMSC output. The K unit-scale
+#' fields induce a residual occupancy covariance `L L'` across species; the
+#' reported matrix is its correlation form, identified (invariant to the factor
+#' rotation, sign, and column scale). When the fit also carries a cover-arm
+#' factor, the cover association `corr(L_pos L_pos')` and the joint cross-arm
+#' association (standardized `L_occ L_pos'`, species occupancy vs species cover)
+#' are available too.
+#'
+#' Each matrix is summarised from draws of the loading posterior (not the plug-in
+#' mode), so a central interval accompanies the point estimate.
+#'
+#' @param object A fitted `tobs_fit` from a spatial-factor `ms_occu_cover()`.
+#' @param type Which association to return: `"occupancy"` (default), `"cover"`,
+#'   or `"cross"` (occupancy vs cover). `"cover"` and `"cross"` require a
+#'   cover-arm factor (an `icar()`/`car_proper()`/`bym2()` term on the cover
+#'   formula).
+#' @param summary One of `"median"`, `"estimate"` (rotation-invariant point
+#'   estimate at the posterior mode), `"lower"`, `"upper"`; or `NULL` (default)
+#'   to return the full list of all four `S x S` matrices plus the interval
+#'   `prob` and draw count.
+#' @return An `S x S` correlation matrix (when `summary` is given) or a list of
+#'   the point estimate, posterior median, and interval bounds.
+#' @export
+tobs_associations <- function(object,
+                              type = c("occupancy", "cover", "cross"),
+                              summary = NULL) {
+  assoc <- object$spatial$associations
+  if (is.null(assoc))
+    stop("No spatial-factor associations: 'object' is not a reduced-rank ",
+         "spatial-factor community fit. Fit ms_occu_cover() with an ",
+         "icar()/car_proper()/bym2() field on the occupancy arm.", call. = FALSE)
+  type <- match.arg(type)
+  arm  <- assoc[[type]]
+  if (is.null(arm))
+    stop(sprintf("No '%s' association in this fit%s.", type,
+                 if (type %in% c("cover", "cross"))
+                   " -- it carries no cover-arm factor" else ""),
+         call. = FALSE)
+  if (is.null(summary)) return(arm)
+  arm[[match.arg(summary, c("median", "estimate", "lower", "upper"))]]
 }
 
 
