@@ -221,14 +221,15 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # Model binding
 # ---------------------------------------------------------------------------
 
-# Bind a K=1 spatial community occu_cover model. Wraps .tobs_build_ms_occu_cover
-# for the (community) designs + per-species masked detection/cover matrices, and
-# attaches the cell-graph ICAR structure (Q + Sorbye-Rue scale) for the shared
-# factor. `adj` is the N x N cell adjacency; N must equal the number of
-# occupancy cells (rows of `data`).
+# Bind a K-factor spatial community occu_cover model. Wraps
+# .tobs_build_ms_occu_cover for the (community) designs + per-species masked
+# detection/cover matrices, and attaches the cell-graph ICAR structure (Q +
+# Sorbye-Rue scale) shared by all K factors. `adj` is the N x N cell adjacency;
+# N must equal the number of occupancy cells (rows of `data`). `K` is the number
+# of shared latent spatial factors (1 <= K <= n_species).
 .tobs_build_ms_occu_cover_spatial <- function(occ_formula, det_formula,
                                               pos_formula, data, y, y_pos,
-                                              positive, species, adj,
+                                              positive, species, adj, K = 1L,
                                               det_visit_formula = NULL,
                                               det_visit_data    = NULL,
                                               pos_visit_formula = NULL,
@@ -246,8 +247,12 @@ simulate_ms_occu_cover_spatial <- function(adj,
     stop(sprintf("adj must be an N x N adjacency with N = %d cells.", N),
          call. = FALSE)
   }
+  K <- as.integer(K)
+  if (K < 1L || K > model$n_species) {
+    stop("K must satisfy 1 <= K <= n_species.", call. = FALSE)
+  }
   model$model_type <- "ms_occu_cover_spatial"
-  model$K          <- 1L
+  model$K          <- K
   model$adj        <- adj
   model$icar_Q     <- .occu_cover_icar_Q(adj)
   model$icar_scale <- .occu_cover_icar_scale(adj)
@@ -259,17 +264,19 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # Penalised joint log-likelihood + gradient (inner mode-find target)
 # ---------------------------------------------------------------------------
 
-# Packed inner-latent parameter for the K=1 spatial community model, at fixed
-# community covariances `Sigma`, loading prior SD `sd_L`, and field precision
-# `tau_w`:
-#   par = c(mu[P], b[S*P], L[S], w[N], log_disp)
+# Packed inner-latent parameter for the K-factor spatial community model, at
+# fixed community covariances `Sigma`, loading prior SD `sd_L`, and per-factor
+# field precisions `tau_w` (length K):
+#   par = c(mu[P], b[S*P], vec(L)[S*K], vec(W)[N*K], log_disp)
 # where P = P_occ + P_p + P_pos, b is species-major (species s occupies
-# b[(s-1)*P + 1:P]), L are the per-species loadings on the shared field w.
+# b[(s-1)*P + 1:P]), L (S x K, column-major) are the per-species loadings on the
+# K shared fields W (N x K, column-major). K = 1 recovers the Stage-1 layout
+# (L a length-S vector, W a length-N vector) bit for bit.
 .ms_ocs_dims <- function(model) {
   pil <- model$process_info
   P_occ <- pil[[1L]]$p; P_p <- pil[[2L]]$p; P_pos <- pil[[3L]]$p
   list(P_occ = P_occ, P_p = P_p, P_pos = P_pos, P = P_occ + P_p + P_pos,
-       S = model$n_species, N = model$n_sites,
+       S = model$n_species, N = model$n_sites, K = model$K %||% 1L,
        occ_idx = seq_len(P_occ), p_idx = P_occ + seq_len(P_p),
        pos_idx = P_occ + P_p + seq_len(P_pos))
 }
@@ -279,32 +286,36 @@ simulate_ms_occu_cover_spatial <- function(adj,
   mu  <- par[off + seq_len(d$P)]; off <- off + d$P
   b   <- lapply(seq_len(d$S), function(s) par[off + (s - 1L) * d$P + seq_len(d$P)])
   off <- off + d$S * d$P
-  L   <- par[off + seq_len(d$S)]; off <- off + d$S
-  w   <- par[off + seq_len(d$N)]; off <- off + d$N
+  L   <- matrix(par[off + seq_len(d$S * d$K)], d$S, d$K); off <- off + d$S * d$K
+  W   <- matrix(par[off + seq_len(d$N * d$K)], d$N, d$K); off <- off + d$N * d$K
   ld  <- par[off + 1L]
-  list(mu = mu, b = b, L = L, w = w, ld = ld)
+  list(mu = mu, b = b, L = L, W = W, ld = ld)
 }
 
 # Penalised joint log-likelihood and its gradient w.r.t. par. `Sinv` is the
 # block-diagonal inverse community covariance over (occ, p, pos); `Pmu` the weak
 # Gaussian precision on the community means; `inv_sdL2 = 1/sd_L^2` the loading
-# ridge; `tau_w` the field precision (prior 0.5 * tau_w * w' Q w).
+# ridge; `tau_w` the per-factor field precisions (scalar recycled, or length K;
+# prior sum_k 0.5 * tau_w[k] * W[, k]' Q W[, k]). The shared-factor offset on the
+# occupancy predictor is sum_k L[s, k] * W[, k] = W %*% L[s, ].
 .ms_ocs_penll_grad <- function(model, par, Sinv, Pmu, inv_sdL2, tau_w,
                                grad = TRUE) {
   d <- .ms_ocs_dims(model); up <- .ms_ocs_unpack(par, d)
-  mu <- up$mu; b <- up$b; L <- up$L; w <- up$w; ld <- up$ld
+  mu <- up$mu; b <- up$b; L <- up$L; W <- up$W; ld <- up$ld
   Q  <- model$icar_Q
+  tau_w <- rep_len(tau_w, d$K)
   cl <- function(e) pmin(pmax(e, -30), 30)
 
   ll <- 0
-  g_mu <- numeric(d$P); g_b <- vector("list", d$S); g_L <- numeric(d$S)
-  g_w  <- numeric(d$N); g_ld <- 0
+  g_mu <- numeric(d$P); g_b <- vector("list", d$S)
+  g_L  <- matrix(0, d$S, d$K); g_W <- matrix(0, d$N, d$K); g_ld <- 0
   for (s in seq_len(d$S)) {
     v   <- .ms_occu_cover_species_view(model, s)
     th  <- mu + b[[s]]
     eta <- .occu_cover_eta_from_par(v, th[d$occ_idx], th[d$p_idx], th[d$pos_idx])
     # Inject the shared-factor offset on the occupancy predictor.
-    eta$psi <- stats::plogis(cl(as.numeric(v$X_occ %*% th[d$occ_idx]) + L[s] * w))
+    eta$psi <- stats::plogis(cl(as.numeric(v$X_occ %*% th[d$occ_idx]) +
+                                  as.numeric(W %*% L[s, ])))
     ll <- ll + sum(.occu_cover_site_ll(v, eta$psi, eta$p_mat, eta$ep_mat, ld))
     if (grad) {
       eg <- .occu_cover_eta_grad(v, eta$psi, eta$p_mat, eta$ep_mat, ld)
@@ -312,28 +323,27 @@ simulate_ms_occu_cover_spatial <- function(adj,
       cg_coef <- cg[seq_len(d$P)]
       g_mu    <- g_mu + cg_coef
       g_b[[s]] <- cg_coef                              # RE prior added below
-      g_L[s]  <- sum(w * eg$g_psi)
-      g_w     <- g_w + L[s] * eg$g_psi
+      g_L[s, ] <- as.numeric(crossprod(W, eg$g_psi))  # t(W) %*% g_psi_s
+      g_W      <- g_W + outer(eg$g_psi, L[s, ])
       g_ld    <- g_ld + cg[d$P + 1L]
     }
   }
 
   # ---- priors (penalty) ----
-  bmat <- do.call(rbind, b)                            # S x P
   ll <- ll - 0.5 * sum(vapply(b, function(bb) as.numeric(bb %*% Sinv %*% bb), 0))
   ll <- ll - 0.5 * as.numeric(mu %*% Pmu %*% mu)
   ll <- ll - 0.5 * inv_sdL2 * sum(L^2)
-  Qw <- as.numeric(Q %*% w)
-  ll <- ll - 0.5 * tau_w * as.numeric(w %*% Qw)
+  QW <- Q %*% W                                        # N x K
+  ll <- ll - 0.5 * sum(tau_w * colSums(W * QW))
 
   if (!grad) return(list(ll = ll))
 
   g_mu <- g_mu - as.numeric(Pmu %*% mu)
   for (s in seq_len(d$S)) g_b[[s]] <- g_b[[s]] - as.numeric(Sinv %*% b[[s]])
   g_L  <- g_L - inv_sdL2 * L
-  g_w  <- g_w - tau_w * Qw
+  g_W  <- g_W - sweep(as.matrix(QW), 2L, tau_w, "*")
 
-  grad_vec <- c(g_mu, unlist(g_b), g_L, g_w, g_ld)
+  grad_vec <- c(g_mu, unlist(g_b), as.numeric(g_L), as.numeric(g_W), g_ld)
   list(ll = ll, grad = grad_vec)
 }
 
@@ -342,19 +352,23 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # Inner mode-find (conditional on the hyperparameters)
 # ---------------------------------------------------------------------------
 
-# Find the joint posterior mode of the inner latent par = c(mu, {b_s}, L, w,
-# log_disp) at fixed community covariances `Sigma`, loading SD `sd_L`, and field
-# precision `tau_w`, by quasi-Newton ascent on the penalised joint
-# log-likelihood with the analytic gradient (.ms_ocs_penll_grad). Correctness
-# first: the arrowhead / Schur-folded Newton of the design doc is a later
-# speed increment; here a BFGS solve on the verified gradient locates the same
-# mode. The (L, w) -> (-L, -w) sign symmetry is resolved with the reference-
-# species anchor (sp1 loading made positive), matching the simulator's canonical
-# form. Returns the unpacked mode plus the achieved penalised log-likelihood.
+# Find the joint posterior mode of the inner latent
+# par = c(mu, {b_s}, vec(L), vec(W), log_disp) at fixed community covariances
+# `Sigma`, loading SD `sd_L`, and per-factor field precisions `tau_w`, by
+# quasi-Newton ascent on the penalised joint log-likelihood with the analytic
+# gradient (.ms_ocs_penll_grad). Correctness first: the arrowhead / Schur-folded
+# Newton of the design doc is a later speed increment; here a BFGS solve on the
+# verified gradient locates the same mode. The per-factor sign symmetry
+# (L[, k], W[, k]) -> (-L[, k], -W[, k]) is resolved by making each factor's
+# diagonal loading L[k, k] positive (matching the simulator's canonical form);
+# for K > 1 the residual rotational freedom is resolved post hoc (psi is
+# rotation-invariant, so the fit is unaffected). Returns the unpacked mode (w / L
+# as a vector at K = 1, a matrix at K > 1) plus the achieved penalised
+# log-likelihood.
 .ms_ocs_inner_mode <- function(model, Sigma, sd_L = 1.0, tau_w = 1.0,
                                par_init = NULL, sigma.beta = 5,
                                maxit = 400L, hessian = FALSE) {
-  d <- .ms_ocs_dims(model)
+  d <- .ms_ocs_dims(model); K <- d$K
   Sinv <- matrix(0, d$P, d$P)
   Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
   Sinv[d$p_idx,   d$p_idx]   <- solve(Sigma$p)
@@ -374,26 +388,29 @@ simulate_ms_occu_cover_spatial <- function(adj,
       mu0[d$pos_idx][1L] <- mean(log(pos_vals))
       ld0 <- log(stats::sd(log(pos_vals)) + 0.1)
     }
-    # The bilinear L_s * w term has a saddle at (L, w) = (0, 0): there both
-    # gradients vanish, so a zero start never leaves it. Warm-start from the
-    # leading EOF of the per-species empirical-occupancy field (the design-doc
+    # The bilinear sum_k L_sk w_kc term has a saddle at (L, W) = (0, 0): there
+    # both gradients vanish, so a zero start never leaves it. Warm-start from the
+    # leading K EOFs of the per-species empirical-occupancy field (the design-doc
     # recipe) to land in the right basin. D[c, s] = 1 if species s was ever
-    # detected at cell c; centring per species removes prevalence so the first
-    # singular vector captures the shared spatial gradient + its loadings.
+    # detected at cell c; centring per species removes prevalence so the top
+    # singular vectors capture the shared spatial gradients + their loadings.
     D <- vapply(views, function(v) as.numeric(rowSums(v$y * v$valid) > 0),
                 numeric(d$N))                          # N x S
     Dc <- sweep(D, 2L, colMeans(D))
-    w0 <- numeric(d$N); L0 <- numeric(d$S)
-    sv <- tryCatch(svd(Dc, nu = 1L, nv = 1L), error = function(e) NULL)
-    if (!is.null(sv) && sv$d[1L] > 1e-8) {
-      u <- as.numeric(sv$u[, 1L]); u <- u - mean(u)
-      sdu <- stats::sd(u)
-      if (sdu > 1e-8) {
-        w0 <- u / sdu                                  # unit-scale field start
-        L0 <- as.numeric(sv$v[, 1L]) * sv$d[1L] * sdu / sqrt(d$N)
+    W0 <- matrix(0, d$N, K); L0 <- matrix(0, d$S, K)
+    sv <- tryCatch(svd(Dc, nu = K, nv = K), error = function(e) NULL)
+    if (!is.null(sv)) {
+      for (k in seq_len(K)) {
+        if (sv$d[k] <= 1e-8) next
+        u <- as.numeric(sv$u[, k]); u <- u - mean(u)
+        sdu <- stats::sd(u)
+        if (sdu > 1e-8) {
+          W0[, k] <- u / sdu                           # unit-scale field start
+          L0[, k] <- as.numeric(sv$v[, k]) * sv$d[k] * sdu / sqrt(d$N)
+        }
       }
     }
-    par_init <- c(mu0, numeric(d$S * d$P), L0, w0, ld0)
+    par_init <- c(mu0, numeric(d$S * d$P), as.numeric(L0), as.numeric(W0), ld0)
   }
 
   fn <- function(p) -.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2, tau_w,
@@ -404,12 +421,18 @@ simulate_ms_occu_cover_spatial <- function(adj,
                       control = list(maxit = maxit, reltol = 1e-10),
                       hessian = hessian)
   up <- .ms_ocs_unpack(opt$par, d)
-  # Canonical sign anchor (sp1 loading positive); flip (L, w) together. The
-  # Hessian (over the packed par) is sign-flip invariant in those blocks, so it
-  # stays valid for the M-step covariances after the anchor.
-  if (up$L[1L] < 0) { up$L <- -up$L; up$w <- -up$w }
-  c(up, list(par = opt$par, logpen = -opt$value, convergence = opt$convergence,
-             hessian = if (hessian) opt$hessian else NULL, d = d))
+  # Canonical sign anchor: make each factor's diagonal loading L[k, k] positive,
+  # flipping (L[, k], W[, k]) together. The Hessian over the packed par is
+  # sign-flip invariant in those blocks, so it stays valid for the M-step
+  # covariances after the anchor.
+  for (k in seq_len(K)) {
+    if (up$L[k, k] < 0) { up$L[, k] <- -up$L[, k]; up$W[, k] <- -up$W[, k] }
+  }
+  list(mu = up$mu, b = up$b, ld = up$ld,
+       L = if (K == 1L) as.numeric(up$L) else up$L,
+       w = if (K == 1L) as.numeric(up$W) else up$W,
+       par = opt$par, logpen = -opt$value, convergence = opt$convergence,
+       hessian = if (hessian) opt$hessian else NULL, d = d)
 }
 
 
@@ -417,29 +440,29 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # Laplace-EM fitter (Stage 1)
 # ---------------------------------------------------------------------------
 
-# Fit the K=1 spatial community occu_cover model by Laplace-EM: the inner
+# Fit the K-factor spatial community occu_cover model by Laplace-EM: the inner
 # mode-find above is the E-step; the M-step is the closed-form community
 # covariance update per arm (Sigma_arm = mean_s[b_s b_s' + Cov(b_s)], the
 # posterior second moment from the mode + the Hessian-block covariance, Louis
-# 1982) and the rank-deficient ICAR field-precision update
-# tau_w = (N - 1) / (w' Q w + tr(Q Cov_ww)). The loading SD `sd_L` fixes the
-# K=1 amplitude split and is held at its supplied value (a hyperparameter).
+# 1982) and the per-factor rank-deficient ICAR field-precision update
+# tau_w[k] = (N - 1) / (W[, k]' Q W[, k] + tr(Q Cov_wk)). The loading SD `sd_L`
+# fixes the amplitude split and is held at its supplied value (a hyperparameter).
 .tobs_fit_ms_occu_cover_spatial <- function(model, sd_L = 1.0,
                                             max.em = 30L, tol = 1e-3,
                                             sigma.beta = 5, verbose = FALSE) {
-  d <- .ms_ocs_dims(model)
+  d <- .ms_ocs_dims(model); K <- d$K
   Q <- model$icar_Q
   rank_w <- d$N - 1L                       # ICAR rank (one null direction)
 
   Sigma <- list(occ = diag(0.3^2, d$P_occ), p = diag(0.3^2, d$P_p),
                 pos = diag(0.3^2, d$P_pos))
-  tau_w <- 1.0
+  tau_w <- rep(1.0, K)
   par_init <- NULL
   prev <- -Inf
 
-  # Packed offsets of each species' b block and the shared w block.
+  # Packed offsets of each species' b block and the K shared field blocks.
   b_off <- function(s) d$P + (s - 1L) * d$P
-  w_off <- d$P + d$S * d$P + d$S
+  w_off <- d$P + d$S * d$P + d$S * K
 
   ridge_inv <- function(H) {
     Hs <- (H + t(H)) / 2
@@ -482,15 +505,18 @@ simulate_ms_occu_cover_spatial <- function(adj,
     })
     names(Sigma) <- c("occ", "p", "pos")
 
-    # M-step: ICAR field precision (rank-deficient GMRF update).
-    widx <- w_off + seq_len(d$N)
-    Cov_ww <- Cov[widx, widx, drop = FALSE]
-    quad   <- as.numeric(fit$w %*% (Q %*% fit$w)) + sum(Q * Cov_ww)
-    tau_w  <- rank_w / max(quad, 1e-8)
+    # M-step: per-factor ICAR field precision (rank-deficient GMRF update).
+    Wm <- matrix(fit$w, d$N, K)
+    for (k in seq_len(K)) {
+      widx   <- w_off + (k - 1L) * d$N + seq_len(d$N)
+      Cov_wk <- Cov[widx, widx, drop = FALSE]
+      quad   <- as.numeric(Wm[, k] %*% (Q %*% Wm[, k])) + sum(Q * Cov_wk)
+      tau_w[k] <- rank_w / max(quad, 1e-8)
+    }
 
     if (verbose) {
-      cat(sprintf("EM %2d  logpen=%.3f  tau_w=%.3f  sd_occ1=%.3f  cor moves\n",
-                  em, fit$logpen, tau_w, sqrt(Sigma$occ[1L, 1L])))
+      cat(sprintf("EM %2d  logpen=%.3f  tau_w[1]=%.3f  sd_occ1=%.3f\n",
+                  em, fit$logpen, tau_w[1L], sqrt(Sigma$occ[1L, 1L])))
     }
     if (is.finite(prev) && abs(fit$logpen - prev) < tol * (abs(prev) + tol)) {
       prev <- fit$logpen; break
@@ -559,13 +585,22 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   dimnames(Sigma_p)   <- list(pil[[2L]]$coef_names, pil[[2L]]$coef_names)
   dimnames(Sigma_pos) <- list(pil[[3L]]$coef_names, pil[[3L]]$coef_names)
 
-  # Shared-factor block: field posterior mean + marginal SD (from the w-block
-  # of the joint posterior covariance) and the per-species loadings.
-  w_off  <- P + d$S * P + d$S
-  widx   <- w_off + seq_len(d$N)
-  Cov_ww <- Cov[widx, widx, drop = FALSE]
-  field_sd <- sqrt(pmax(diag(Cov_ww), 0))
-  L <- fit$L; names(L) <- model$species_names
+  # Shared-factor block: field posterior mean + per-cell marginal SD (from the
+  # K field blocks of the joint posterior covariance) and the per-species
+  # loadings. K = 1 keeps the Stage-1 vector shapes; K > 1 returns N x K / S x K.
+  K      <- d$K
+  w_off  <- P + d$S * P + d$S * K
+  widx   <- w_off + seq_len(d$N * K)
+  field_sd <- matrix(sqrt(pmax(diag(Cov)[widx], 0)), d$N, K)
+  L <- fit$L
+  if (K == 1L) {
+    field_sd <- as.numeric(field_sd)
+    names(L) <- model$species_names
+  } else {
+    rownames(L) <- model$species_names
+    colnames(L) <- paste0("factor", seq_len(K))
+    colnames(field_sd) <- paste0("factor", seq_len(K))
+  }
 
   structure(c(list(
     draws        = draws,
@@ -589,7 +624,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     positive     = model$positive,
     spatial      = list(
       type     = "icar",
-      K        = 1L,
+      K        = K,
       field    = fit$w,
       field_sd = field_sd,
       loadings = L,
@@ -611,13 +646,14 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 
 
 # Posterior draws of the per-species per-cell occupancy probability psi for the
-# K=1 spatial community fit. Samples the packed inner latent from its Gaussian
-# Laplace posterior N(mode, Cov) -- via an eigen PSD square root, since the
-# joint Hessian is only PSD in the confounded ICAR-level / intercept direction
-# -- and maps each draw through the occupancy predictor
-# eta_s = X_occ (mu_occ + b_s_occ) + L_s * w. psi depends on (L, w) only through
-# the product L_s * w, so it is invariant to the (L, w) -> (-L, -w) sign symmetry
-# and needs no anchoring. Returns an [n_draws x N x S] array.
+# K-factor spatial community fit. Samples the packed inner latent from its
+# Gaussian Laplace posterior N(mode, Cov) -- via an eigen PSD square root, since
+# the joint Hessian is only PSD in the confounded ICAR-level / intercept (and,
+# for K > 1, rotational) directions -- and maps each draw through the occupancy
+# predictor eta_s = X_occ (mu_occ + b_s_occ) + sum_k L_sk w_kc. psi depends on
+# (L, W) only through the product W L[s, ]', so it is invariant to the per-factor
+# sign and (K > 1) rotational symmetries and needs no anchoring. Returns an
+# [n_draws x N x S] array.
 .ms_ocs_psi_posterior <- function(model, fit, n_draws = 300L) {
   d <- fit$d
   Sg <- (fit$cov + t(fit$cov)) / 2
@@ -635,7 +671,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     up <- .ms_ocs_unpack(draws_par[i, ], d)
     for (s in seq_len(d$S)) {
       th_occ <- (up$mu + up$b[[s]])[d$occ_idx]
-      eta <- as.numeric(X_occ[[s]] %*% th_occ) + up$L[s] * up$w
+      eta <- as.numeric(X_occ[[s]] %*% th_occ) + as.numeric(up$W %*% up$L[s, ])
       psi[i, , s] <- stats::plogis(cl(eta))
     }
   }

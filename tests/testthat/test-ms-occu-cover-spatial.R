@@ -157,6 +157,48 @@ test_that("penalised joint gradient matches finite differences", {
             label = "max|analytic - FD| over the full packed gradient")
 })
 
+test_that("penalised joint gradient matches finite differences at K = 2", {
+  adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells
+  S <- 4L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+                                        n_occ_covs = 1L, n_det_covs = 1L,
+                                        n_pos_covs = 1L, seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K)
+
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  expect_identical(d$K, K)
+  tr <- sim$truth
+  mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b  <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))   # species-major
+  # tr$L is S x K, tr$w is N x K; column-major vec matches the packed layout.
+  par <- c(mu, b, as.numeric(tr$L), as.numeric(tr$w), log(tr$sigma_pos))
+  set.seed(1L)
+  par <- par + stats::rnorm(length(par), 0, 0.05)
+
+  Sinv <- diag(c(rep(1 / 0.4^2, d$P_occ), rep(1 / 0.4^2, d$P_p),
+                 rep(1 / 0.3^2, d$P_pos)))
+  Pmu  <- diag(1 / 25, d$P)
+  inv_sdL2 <- 1 / 1.0^2
+  tau_w <- c(1.3, 0.9)                      # distinct per-factor precisions
+
+  out <- tulpaObs:::.ms_ocs_penll_grad(model, par, Sinv, Pmu, inv_sdL2, tau_w,
+                                       grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2,
+                                                 tau_w, grad = FALSE)$ll
+  h <- 1e-5
+  gnum <- numeric(length(par))
+  for (k in seq_along(par)) {
+    pp <- par; pp[k] <- pp[k] + h
+    pm <- par; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the full K=2 packed gradient")
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
@@ -229,6 +271,38 @@ test_that("Laplace-EM recovers the factor, loadings and community scales", {
   expect_gt(sd_occ_slope_hat, 0.2)
   expect_lt(sd_occ_slope_hat, 1.2)
   expect_true(is.finite(fit$tau_w) && fit$tau_w > 0)
+})
+
+test_that("Laplace-EM recovers the rank-2 spatial structure (K = 2)", {
+  skip_on_cran()
+  skip_if_fast()
+  # K = 2 unconditional fit. The factors are fit unconstrained, so each factor is
+  # only identified up to rotation / sign; the recovery measure is the
+  # rotation-invariant spatial occupancy contribution F = W L' (N x S), the
+  # quantity that enters every species' occupancy predictor.
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  for (seed in c(2024L, 77L)) {
+    sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+                                          sd_occ = 0.5, sd_load = 1.2,
+                                          sigma_pos = 0.4, seed = seed)
+    model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+      occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+      data = sim$data, y = sim$y, y_pos = sim$y_pos,
+      positive = "lognormal", species = sim$species, adj = adj, K = K)
+    fit <- tulpaObs:::.tobs_fit_ms_occu_cover_spatial(model, sd_L = 1.2,
+                                                      max.em = 30L, tol = 1e-3)
+
+    expect_identical(dim(fit$w), c(N, K))   # N x K field matrix
+    expect_identical(dim(fit$L), c(S, K))   # S x K loading matrix
+
+    F_hat  <- fit$w %*% t(fit$L)
+    F_true <- sim$truth$w %*% t(sim$truth$L)
+    expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
+
+    # The second factor is genuinely used (not collapsed to the rank-1 fit).
+    expect_gt(stats::sd(fit$L[, 2L]), 0.3)
+    expect_true(all(is.finite(fit$tau_w)) && length(fit$tau_w) == K)
+  }
 })
 
 test_that("tobs() front door routes icar() on the occupancy arm to the spatial fit", {
