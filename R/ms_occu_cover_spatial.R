@@ -449,9 +449,24 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # rotation-invariant, so the fit is unaffected). Returns the unpacked mode (w / L
 # as a vector at K = 1, a matrix at K > 1) plus the achieved penalised
 # log-likelihood.
+# Unpack a constrained packed par_c = c(mu, b, lfree, vec(W), log_disp) into the
+# same fields as .ms_ocs_unpack, expanding lfree -> the lower-triangular L.
+.ms_ocs_unpack_c <- function(par_c, d) {
+  S <- d$S; K <- d$K; P <- d$P; N <- d$N; nL <- .ms_ocs_lfree_dim(S, K)
+  off <- 0L
+  mu  <- par_c[off + seq_len(P)]; off <- off + P
+  b   <- lapply(seq_len(S), function(s) par_c[off + (s - 1L) * P + seq_len(P)])
+  off <- off + S * P
+  lfree <- par_c[off + seq_len(nL)]; off <- off + nL
+  W   <- matrix(par_c[off + seq_len(N * K)], N, K); off <- off + N * K
+  ld  <- par_c[off + 1L]
+  list(mu = mu, b = b, L = .ms_ocs_lfree_to_L(lfree, S, K), W = W, ld = ld)
+}
+
 .ms_ocs_inner_mode <- function(model, Sigma, sd_L = 1.0, tau_w = 1.0,
                                par_init = NULL, sigma.beta = 5,
-                               maxit = 400L, hessian = FALSE) {
+                               maxit = 400L, hessian = FALSE,
+                               constrain = FALSE) {
   d <- .ms_ocs_dims(model); K <- d$K
   Sinv <- matrix(0, d$P, d$P)
   Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
@@ -459,6 +474,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   Sinv[d$pos_idx, d$pos_idx] <- solve(Sigma$pos)
   Pmu      <- diag(1 / sigma.beta^2, d$P)
   inv_sdL2 <- 1 / sd_L^2
+  objective <- if (constrain) .ms_ocs_penll_grad_c else .ms_ocs_penll_grad
 
   if (is.null(par_init)) {
     views <- lapply(seq_len(d$S), function(s) .ms_occu_cover_species_view(model, s))
@@ -494,25 +510,44 @@ simulate_ms_occu_cover_spatial <- function(adj,
         }
       }
     }
-    par_init <- c(mu0, numeric(d$S * d$P), as.numeric(L0), as.numeric(W0), ld0)
+    if (constrain) {
+      # Project the EOF loadings to the lower-triangular, positive-diagonal
+      # canonical form for the constrained start: zero the upper triangle, make
+      # each diagonal positive (flipping its field column), and pack to lfree.
+      L0[upper.tri(L0)] <- 0
+      for (k in seq_len(K)) {
+        if (L0[k, k] < 0) { L0[, k] <- -L0[, k]; W0[, k] <- -W0[, k] }
+        if (abs(L0[k, k]) < 1e-3) L0[k, k] <- 0.1
+      }
+      par_init <- c(mu0, numeric(d$S * d$P),
+                    .ms_ocs_L_to_lfree(L0, d$S, K), as.numeric(W0), ld0)
+    } else {
+      par_init <- c(mu0, numeric(d$S * d$P), as.numeric(L0), as.numeric(W0), ld0)
+    }
   }
 
-  fn <- function(p) -.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2, tau_w,
-                                        grad = FALSE)$ll
-  gr <- function(p) -.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2, tau_w,
-                                        grad = TRUE)$grad
+  fn <- function(p) -objective(model, p, Sinv, Pmu, inv_sdL2, tau_w,
+                               grad = FALSE)$ll
+  gr <- function(p) -objective(model, p, Sinv, Pmu, inv_sdL2, tau_w,
+                               grad = TRUE)$grad
   opt <- stats::optim(par_init, fn, gr, method = "BFGS",
                       control = list(maxit = maxit, reltol = 1e-10),
                       hessian = hessian)
-  up <- .ms_ocs_unpack(opt$par, d)
-  # Canonical sign anchor: make each factor's diagonal loading L[k, k] positive,
-  # flipping (L[, k], W[, k]) together. The Hessian over the packed par is
-  # sign-flip invariant in those blocks, so it stays valid for the M-step
-  # covariances after the anchor.
-  for (k in seq_len(K)) {
-    if (up$L[k, k] < 0) { up$L[, k] <- -up$L[, k]; up$W[, k] <- -up$W[, k] }
+  if (constrain) {
+    # The triangular parameterisation is already identified (positive diagonal,
+    # zeros above) -- no post-hoc sign / rotation step needed.
+    up <- .ms_ocs_unpack_c(opt$par, d)
+  } else {
+    up <- .ms_ocs_unpack(opt$par, d)
+    # Canonical sign anchor: make each factor's diagonal loading L[k, k]
+    # positive, flipping (L[, k], W[, k]) together. The Hessian over the packed
+    # par is sign-flip invariant in those blocks, so it stays valid for the
+    # M-step covariances after the anchor.
+    for (k in seq_len(K)) {
+      if (up$L[k, k] < 0) { up$L[, k] <- -up$L[, k]; up$W[, k] <- -up$W[, k] }
+    }
   }
-  list(mu = up$mu, b = up$b, ld = up$ld,
+  list(mu = up$mu, b = up$b, ld = up$ld, constrained = constrain,
        L = if (K == 1L) as.numeric(up$L) else up$L,
        w = if (K == 1L) as.numeric(up$W) else up$W,
        par = opt$par, logpen = -opt$value, convergence = opt$convergence,
@@ -533,7 +568,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # fixes the amplitude split and is held at its supplied value (a hyperparameter).
 .tobs_fit_ms_occu_cover_spatial <- function(model, sd_L = 1.0,
                                             max.em = 30L, tol = 1e-3,
-                                            sigma.beta = 5, verbose = FALSE) {
+                                            sigma.beta = 5, verbose = FALSE,
+                                            constrain = FALSE) {
   d <- .ms_ocs_dims(model); K <- d$K
   Q <- model$icar_Q
   rank_w <- d$N - 1L                       # ICAR rank (one null direction)
@@ -544,9 +580,13 @@ simulate_ms_occu_cover_spatial <- function(adj,
   par_init <- NULL
   prev <- -Inf
 
-  # Packed offsets of each species' b block and the K shared field blocks.
+  # Packed offsets of each species' b block and the K shared field blocks. The
+  # field blocks sit after the loadings, whose width depends on the
+  # parameterisation: S*K unconstrained, or the triangular free count when
+  # constrained.
+  L_width <- if (constrain) .ms_ocs_lfree_dim(d$S, K) else d$S * K
   b_off <- function(s) d$P + (s - 1L) * d$P
-  w_off <- d$P + d$S * d$P + d$S * K
+  w_off <- d$P + d$S * d$P + L_width
 
   ridge_inv <- function(H) {
     Hs <- (H + t(H)) / 2
@@ -564,7 +604,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   for (em in seq_len(max.em)) {
     fit <- .ms_ocs_inner_mode(model, Sigma, sd_L = sd_L, tau_w = tau_w,
                               par_init = par_init, sigma.beta = sigma.beta,
-                              hessian = TRUE)
+                              hessian = TRUE, constrain = constrain)
     par_init <- fit$par
     Cov <- ridge_inv(fit$hessian)          # posterior covariance at the mode
 
@@ -673,7 +713,8 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   # K field blocks of the joint posterior covariance) and the per-species
   # loadings. K = 1 keeps the Stage-1 vector shapes; K > 1 returns N x K / S x K.
   K      <- d$K
-  w_off  <- P + d$S * P + d$S * K
+  L_width <- if (isTRUE(fit$constrained)) .ms_ocs_lfree_dim(d$S, K) else d$S * K
+  w_off  <- P + d$S * P + L_width
   widx   <- w_off + seq_len(d$N * K)
   field_sd <- matrix(sqrt(pmax(diag(Cov)[widx], 0)), d$N, K)
   L <- fit$L
@@ -762,12 +803,13 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   Z <- matrix(stats::rnorm(n_draws * npar), n_draws, npar)
   draws_par <- sweep(Z %*% rt, 2L, fit$par, "+")
 
+  unpack <- if (isTRUE(fit$constrained)) .ms_ocs_unpack_c else .ms_ocs_unpack
   X_occ <- lapply(seq_len(d$S),
                   function(s) .ms_occu_cover_species_view(model, s)$X_occ)
   cl  <- function(e) pmin(pmax(e, -30), 30)
   psi <- array(0, dim = c(n_draws, d$N, d$S))
   for (i in seq_len(n_draws)) {
-    up <- .ms_ocs_unpack(draws_par[i, ], d)
+    up <- unpack(draws_par[i, ], d)
     for (s in seq_len(d$S)) {
       th_occ <- (up$mu + up$b[[s]])[d$occ_idx]
       eta <- as.numeric(X_occ[[s]] %*% th_occ) + as.numeric(up$W %*% up$L[s, ])

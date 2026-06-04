@@ -389,6 +389,37 @@ test_that("tobs() front door routes icar() on the occupancy arm to the spatial f
   expect_true(is.finite(fit$ms_community$sd_occ[1L]))
 })
 
+test_that("constrained (triangular) Laplace-EM recovers the rank-2 structure", {
+  skip_on_cran()
+  skip_if_fast()
+  # The identifiability-constrained fit (lower-triangular L, positive
+  # log-diagonal) must recover the same rotation-invariant spatial contribution
+  # F = W L' as the unconstrained fit, while returning an identified, triangular
+  # loading matrix (the proper-posterior parameterisation for per-factor
+  # uncertainty / model comparison).
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        sigma_pos = 0.4, seed = 2024L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K)
+  fit <- tulpaObs:::.tobs_fit_ms_occu_cover_spatial(model, sd_L = 1.2,
+                                                    max.em = 30L, tol = 1e-3,
+                                                    constrain = TRUE)
+  expect_true(isTRUE(fit$constrained))
+  expect_identical(dim(fit$L), c(S, K))
+
+  # Loadings are in the lower-triangular canonical form with a positive diagonal.
+  expect_true(all(fit$L[upper.tri(fit$L)] == 0))
+  expect_true(all(diag(fit$L) > 0))
+
+  F_hat  <- fit$w %*% t(fit$L)
+  F_true <- sim$truth$w %*% t(sim$truth$L)
+  expect_gt(stats::cor(as.numeric(F_hat), as.numeric(F_true)), 0.6)
+})
+
 test_that("tobs() front door fits K > 1 via control$n.factors", {
   skip_on_cran()
   skip_if_fast()
