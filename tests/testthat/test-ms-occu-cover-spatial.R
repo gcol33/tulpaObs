@@ -1016,3 +1016,49 @@ test_that("predict() returns calibrated per-species occupancy maps", {
   # New-data prediction is unsupported (no field at an unseen cell).
   expect_error(predict(fit, X.0 = matrix(1, 2, 2)), "not supported")
 })
+
+test_that("predict() returns calibrated per-species cover maps", {
+  skip_on_cran()
+  skip_if_fast()
+  # The cover hurdle's spatial output: predict(type = "cover_cond") is the
+  # conditional cover mean E[cover | present], "cover_exp" the unconditional
+  # expected cover psi * E[cover | present]. With a cover-arm factor the cover
+  # has its own spatial structure. Both are derived quantities (the nonlinear
+  # lognormal mean, the psi product), marginalised per draw. Truth is
+  # reconstructed from the fit's own cover design so it matches exactly.
+  adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
+           sd_occ = 0.6, sd_load = 1.2, sigma_pos = 0.4, cover_factor = TRUE,
+           mean_load_pos = 0, sd_load_pos = 1.2, seed = 2024L)
+  fit <- tobs(
+    ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1 + icar(graph = adj),
+    y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace",
+    control = list(n.factors = K, sd.load = 1.2, max.iter = 30L, tol = 1e-3))
+
+  pc <- predict(fit, type = "cover_cond")
+  pe <- predict(fit, type = "cover_exp")
+  expect_identical(nrow(pc), N * S)
+  expect_true(all(c("cover_cond", "cover_cond_lower", "cover_cond_upper") %in% names(pc)))
+  expect_true(all(c("cover_exp", "cover_exp_lower", "cover_exp_upper") %in% names(pe)))
+  expect_true(all(pc$cover_cond >= 0) && all(pe$cover_exp >= 0))
+  expect_true(all(pe$cover_exp_lower <= pe$cover_exp_upper + 1e-8))
+
+  # Truth from the fit's own cover design + field offset.
+  Xp <- fit$model$X_pos_site
+  Wt <- if (K == 1L) matrix(sim$truth$w, N, 1L) else sim$truth$w
+  Lp <- if (K == 1L) matrix(sim$truth$L_pos, S, 1L) else sim$truth$L_pos
+  ce_t <- matrix(0, N, S)
+  for (s in seq_len(S)) {
+    eta <- as.numeric(Xp %*% (sim$truth$mu_pos + sim$truth$b_pos[s, ])) +
+           as.numeric(Wt %*% Lp[s, ])
+    ce_t[, s] <- sim$truth$psi[, s] * exp(eta + sim$truth$sigma_pos^2 / 2)
+  }
+  CE  <- matrix(pe$cover_exp,       N, S)
+  Lo  <- matrix(pe$cover_exp_lower, N, S); Hi <- matrix(pe$cover_exp_upper, N, S)
+  expect_gt(stats::cor(as.numeric(CE), as.numeric(ce_t)), 0.8)
+  expect_gte(mean(ce_t >= Lo & ce_t <= Hi), 0.8)
+
+  expect_error(predict(fit, type = "detection"), "not available")
+})

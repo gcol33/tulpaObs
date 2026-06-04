@@ -93,12 +93,13 @@ draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then
 \code{geom_tile(aes(x, y, fill = delta_p))} (or \code{geom_sf()} on polygon cells).
 \item \strong{Spatial-factor community}: for a reduced-rank spatial-factor
-\code{ms_occu_cover()} fit, \code{predict(fit)} returns the per-species per-cell
-occupancy posterior as a long table (one row per cell x species) with \code{psi}
-(posterior mean), \code{psi_median}, and \code{psi_lower} / \code{psi_upper} -- the
-calibrated occupancy maps, marginalised over the loading + field posterior,
-so a rare species borrows strength across the shared factors. The latent
-fields are tied to the cell graph, so \code{X.0} / \code{newdata} prediction is not
-supported.
+\code{ms_occu_cover()} fit, \code{predict(fit, type = "occupancy" | "cover_cond" | "cover_exp")} returns the per-species per-cell posterior as a long table
+(one row per cell x species): \code{"occupancy"} gives \code{psi}, \code{"cover_cond"} the
+conditional cover mean \code{E[cover | present]}, \code{"cover_exp"} the unconditional
+expected cover \code{psi * E[cover | present]}, each with a \verb{_median} and a
+\verb{_lower} / \verb{_upper} interval. The maps are marginalised over the loading +
+field posterior, so a rare species borrows strength across the shared
+factors for a calibrated map. The latent fields are tied to the cell graph,
+so \code{X.0} / \code{newdata} prediction is not supported.
 }
 }

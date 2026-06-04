@@ -1106,7 +1106,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
         phi_w    = if (identical(ft, "bym2"))       hypr else NULL,
         sd_L     = fit$sd_L,
         associations = .ms_ocs_associations(fit, d, model$species_names),
-        psi      = .ms_ocs_psi_summary(model, fit)
+        maps     = .ms_ocs_map_summary(model, fit)
       )
     },
     ms_community = list(
@@ -1123,16 +1123,22 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 }
 
 
-# Posterior draws of the per-species per-cell occupancy probability psi for the
+# Joint per-species per-cell posterior of the three map quantities for the
 # K-factor spatial community fit. Samples the packed inner latent from its
 # Gaussian Laplace posterior N(mode, Cov) -- via an eigen PSD square root, since
 # the joint Hessian is only PSD in the confounded ICAR-level / intercept (and,
-# for K > 1, rotational) directions -- and maps each draw through the occupancy
-# predictor eta_s = X_occ (mu_occ + b_s_occ) + sum_k L_sk w_kc. psi depends on
-# (L, W) only through the product W L[s, ]', so it is invariant to the per-factor
-# sign and (K > 1) rotational symmetries and needs no anchoring. Returns an
-# [n_draws x N x S] array.
-.ms_ocs_psi_posterior <- function(model, fit, n_draws = 300L) {
+# for K > 1, rotational) directions -- and maps each draw through the per-arm
+# predictors: occupancy eta_occ = X_occ (mu_occ + b_s_occ) + sum_k L_sk w_kc, and
+# cover eta_pos = X_pos (mu_pos + b_s_pos) [+ sum_k Lpos_sk w_kc, with a cover-arm
+# factor]. Both depend on (L, W) / (Lpos, W) only through W L[s, ]', so they are
+# invariant to the per-factor sign and (K > 1) rotational symmetries and need no
+# anchoring. Returns [n_draws x N x S] arrays for psi (occupancy), cover_cond (the
+# hurdle conditional cover mean E[cover | present] -- lognormal exp(eta + sigma^2
+# / 2), beta plogis(eta)), and cover_exp (the unconditional expected cover psi *
+# cover_cond). The derived covers are formed per draw (the nonlinear cover mean +
+# the psi product), then summarised -- the marginalize-derived-quantities rule,
+# not a plug-in of the posterior-mean eta.
+.ms_ocs_joint_posterior <- function(model, fit, n_draws = 300L) {
   d <- fit$d
   Sg <- (fit$cov + t(fit$cov)) / 2
   eg <- eigen(Sg, symmetric = TRUE)
@@ -1141,57 +1147,77 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   Z <- matrix(stats::rnorm(n_draws * npar), n_draws, npar)
   draws_par <- sweep(Z %*% rt, 2L, fit$par, "+")
 
-  unpack <- if (isTRUE(fit$constrained)) .ms_ocs_unpack_c else .ms_ocs_unpack
-  X_occ <- lapply(seq_len(d$S),
-                  function(s) .ms_occu_cover_species_view(model, s)$X_occ)
+  unpack    <- if (isTRUE(fit$constrained)) .ms_ocs_unpack_c else .ms_ocs_unpack
+  lognormal <- !identical(model$positive, "beta")
+  X_occ <- model$X_occ; X_pos <- model$X_pos_site
   cl  <- function(e) pmin(pmax(e, -30), 30)
-  psi <- array(0, dim = c(n_draws, d$N, d$S))
+  psi <- cc <- ce <- array(0, dim = c(n_draws, d$N, d$S))
   for (i in seq_len(n_draws)) {
     up <- unpack(draws_par[i, ], d)
+    sigma2 <- exp(up$ld)^2
     for (s in seq_len(d$S)) {
-      th_occ <- (up$mu + up$b[[s]])[d$occ_idx]
-      eta <- as.numeric(X_occ[[s]] %*% th_occ) + as.numeric(up$W %*% up$L[s, ])
-      psi[i, , s] <- stats::plogis(cl(eta))
+      th     <- up$mu + up$b[[s]]
+      p_s    <- stats::plogis(cl(as.numeric(X_occ %*% th[d$occ_idx]) +
+                                   as.numeric(up$W %*% up$L[s, ])))
+      eta_pos <- as.numeric(X_pos %*% th[d$pos_idx])
+      if (d$cover_factor) eta_pos <- eta_pos + as.numeric(up$W %*% up$Lpos[s, ])
+      cond <- if (lognormal) exp(cl(eta_pos) + sigma2 / 2) else stats::plogis(cl(eta_pos))
+      psi[i, , s] <- p_s
+      cc[i, , s]  <- cond
+      ce[i, , s]  <- p_s * cond
     }
   }
-  psi
+  list(psi = psi, cover_cond = cc, cover_exp = ce)
 }
 
 
-# Per-cell per-species occupancy posterior summary (the spatial-JSDM map output):
-# the mean, median, and a central interval of psi_sc at every cell c and species
-# s, from the joint-posterior draws above. The shared latent fields let a species'
-# map borrow strength across the community, so a rare species gets a calibrated
-# map (mean + interval) rather than the ragged empirical detection rate. Returns
-# a list of N x S matrices (rows = cells, columns = species).
-.ms_ocs_psi_summary <- function(model, fit, n_draws = 300L,
+# Per-cell per-species posterior summary (the spatial-JSDM map output): the mean,
+# median, and a central interval of each map quantity at every cell c and species
+# s, from the joint-posterior draws above. The shared latent fields let a
+# species' map borrow strength across the community, so a rare species gets a
+# calibrated map (mean + interval) rather than the ragged empirical rate. Returns
+# a list with `psi`, `cover_cond`, and `cover_exp`, each a list of N x S matrices.
+.ms_ocs_map_summary <- function(model, fit, n_draws = 300L,
                                 probs = c(0.025, 0.975)) {
-  psi <- .ms_ocs_psi_posterior(model, fit, n_draws)        # n_draws x N x S
-  sp  <- model$species_names
-  pull <- function(f) { m <- apply(psi, c(2L, 3L), f); dimnames(m) <- list(NULL, sp); m }
-  list(mean   = pull(mean),
-       median = pull(stats::median),
-       lower  = pull(function(x) stats::quantile(x, probs[1L], names = FALSE)),
-       upper  = pull(function(x) stats::quantile(x, probs[2L], names = FALSE)))
+  post <- .ms_ocs_joint_posterior(model, fit, n_draws)
+  sp   <- model$species_names
+  summ_one <- function(arr) {
+    pull <- function(f) { m <- apply(arr, c(2L, 3L), f); dimnames(m) <- list(NULL, sp); m }
+    list(mean   = pull(mean),
+         median = pull(stats::median),
+         lower  = pull(function(x) stats::quantile(x, probs[1L], names = FALSE)),
+         upper  = pull(function(x) stats::quantile(x, probs[2L], names = FALSE)))
+  }
+  lapply(post, summ_one)
 }
 
-# Tidy long form of the per-species per-cell occupancy posterior, returned by
-# predict() for a spatial-factor ms_occu_cover() fit (one row per cell x species).
-.tobs_ms_ocs_predict_state <- function(object) {
-  ps <- object$spatial$psi
-  if (is.null(ps))
-    stop("This fit carries no per-cell occupancy posterior (refit with a current ",
+# Tidy long form (one row per cell x species) of a requested map quantity,
+# returned by predict() for a spatial-factor ms_occu_cover() fit: `type`
+# "occupancy" -> psi, "cover_cond" -> conditional cover mean, "cover_exp" ->
+# unconditional expected cover.
+.tobs_ms_ocs_predict_state <- function(object, type = "occupancy") {
+  maps <- object$spatial$maps
+  if (is.null(maps))
+    stop("This fit carries no per-cell map posterior (refit with a current ",
          "tulpaObs).", call. = FALSE)
-  N  <- nrow(ps$mean); S <- ncol(ps$mean)
-  sp <- colnames(ps$mean) %||% paste0("sp", seq_len(S))
-  data.frame(
-    cell       = rep(seq_len(N), times = S),
-    species    = rep(sp, each = N),
-    psi        = as.numeric(ps$mean),
-    psi_median = as.numeric(ps$median),
-    psi_lower  = as.numeric(ps$lower),
-    psi_upper  = as.numeric(ps$upper),
-    stringsAsFactors = FALSE)
+  key <- switch(type,
+                occupancy = , state = , occurrence = "psi",
+                cover_cond = "cover_cond", cover_exp = "cover_exp",
+                stop(sprintf(paste0("predict() type '%s' is not available for a ",
+                             "spatial-factor ms_occu_cover() fit; use ",
+                             "\"occupancy\", \"cover_cond\", or \"cover_exp\"."),
+                             type), call. = FALSE))
+  m  <- maps[[key]]
+  N  <- nrow(m$mean); S <- ncol(m$mean)
+  sp <- colnames(m$mean) %||% paste0("sp", seq_len(S))
+  nm <- if (identical(key, "psi")) "psi" else key
+  out <- data.frame(cell = rep(seq_len(N), times = S),
+                    species = rep(sp, each = N), stringsAsFactors = FALSE)
+  out[[nm]]                  <- as.numeric(m$mean)
+  out[[paste0(nm, "_median")]] <- as.numeric(m$median)
+  out[[paste0(nm, "_lower")]]  <- as.numeric(m$lower)
+  out[[paste0(nm, "_upper")]]  <- as.numeric(m$upper)
+  out
 }
 
 

@@ -504,13 +504,15 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `left_join(cents, pr, by = "cell")` then
 #'   `geom_tile(aes(x, y, fill = delta_p))` (or `geom_sf()` on polygon cells).
 #' - **Spatial-factor community**: for a reduced-rank spatial-factor
-#'   `ms_occu_cover()` fit, `predict(fit)` returns the per-species per-cell
-#'   occupancy posterior as a long table (one row per cell x species) with `psi`
-#'   (posterior mean), `psi_median`, and `psi_lower` / `psi_upper` -- the
-#'   calibrated occupancy maps, marginalised over the loading + field posterior,
-#'   so a rare species borrows strength across the shared factors. The latent
-#'   fields are tied to the cell graph, so `X.0` / `newdata` prediction is not
-#'   supported.
+#'   `ms_occu_cover()` fit, `predict(fit, type = "occupancy" | "cover_cond" |
+#'   "cover_exp")` returns the per-species per-cell posterior as a long table
+#'   (one row per cell x species): `"occupancy"` gives `psi`, `"cover_cond"` the
+#'   conditional cover mean `E[cover | present]`, `"cover_exp"` the unconditional
+#'   expected cover `psi * E[cover | present]`, each with a `_median` and a
+#'   `_lower` / `_upper` interval. The maps are marginalised over the loading +
+#'   field posterior, so a rare species borrows strength across the shared
+#'   factors for a calibrated map. The latent fields are tied to the cell graph,
+#'   so `X.0` / `newdata` prediction is not supported.
 #'
 #' @param object A `tobs_fit` object.
 #' @param X.0 Optional design matrix for occupancy prediction.
@@ -577,17 +579,18 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   }
   if (identical(object$model$model_type, "ms_occu_cover_spatial")) {
     # The latent fields are tied to the cell graph, so prediction is the
-    # in-sample per-species per-cell occupancy posterior (calibrated psi + a
+    # in-sample per-species per-cell posterior (calibrated psi / cover + a
     # central interval, marginalised over the loading + field posterior). New
     # covariate / cell prediction is not supported (no field at an unseen cell).
     if (!is.null(X.0) || !is.null(terms) || !is.null(newdata)) {
       stop("predict() for a spatial-factor ms_occu_cover() fit returns the ",
-           "in-sample per-species per-cell occupancy posterior; the latent ",
-           "fields are tied to the cell graph, so X.0 / newdata / terms ",
-           "prediction is not supported. Call predict(fit) or ",
-           "predict(fit, type = \"state\").", call. = FALSE)
+           "in-sample per-species per-cell posterior; the latent fields are ",
+           "tied to the cell graph, so X.0 / newdata / terms prediction is not ",
+           "supported. Call predict(fit, type = \"occupancy\" / \"cover_cond\" ",
+           "/ \"cover_exp\").", call. = FALSE)
     }
-    return(.tobs_ms_ocs_predict_state(object))
+    oc_type <- if (missing(type) || length(type) > 1L) "occupancy" else type
+    return(.tobs_ms_ocs_predict_state(object, oc_type))
   }
   if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
     stop(sprintf(paste0("predict() is not yet implemented for %s(). Use ",
