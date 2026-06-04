@@ -309,3 +309,75 @@ simulate_ms_occu_cover_spatial <- function(adj,
   grad_vec <- c(g_mu, unlist(g_b), g_L, g_w, g_ld)
   list(ll = ll, grad = grad_vec)
 }
+
+
+# ---------------------------------------------------------------------------
+# Inner mode-find (conditional on the hyperparameters)
+# ---------------------------------------------------------------------------
+
+# Find the joint posterior mode of the inner latent par = c(mu, {b_s}, L, w,
+# log_disp) at fixed community covariances `Sigma`, loading SD `sd_L`, and field
+# precision `tau_w`, by quasi-Newton ascent on the penalised joint
+# log-likelihood with the analytic gradient (.ms_ocs_penll_grad). Correctness
+# first: the arrowhead / Schur-folded Newton of the design doc is a later
+# speed increment; here a BFGS solve on the verified gradient locates the same
+# mode. The (L, w) -> (-L, -w) sign symmetry is resolved with the reference-
+# species anchor (sp1 loading made positive), matching the simulator's canonical
+# form. Returns the unpacked mode plus the achieved penalised log-likelihood.
+.ms_ocs_inner_mode <- function(model, Sigma, sd_L = 1.0, tau_w = 1.0,
+                               par_init = NULL, sigma.beta = 5,
+                               maxit = 400L) {
+  d <- .ms_ocs_dims(model)
+  Sinv <- matrix(0, d$P, d$P)
+  Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
+  Sinv[d$p_idx,   d$p_idx]   <- solve(Sigma$p)
+  Sinv[d$pos_idx, d$pos_idx] <- solve(Sigma$pos)
+  Pmu      <- diag(1 / sigma.beta^2, d$P)
+  inv_sdL2 <- 1 / sd_L^2
+
+  if (is.null(par_init)) {
+    views <- lapply(seq_len(d$S), function(s) .ms_occu_cover_species_view(model, s))
+    any_det <- mean(vapply(views, function(v) mean(rowSums(v$y * v$valid) > 0),
+                           numeric(1)))
+    pos_vals <- unlist(lapply(views, function(v) v$y_pos[v$valid & v$y == 1L]))
+    mu0 <- numeric(d$P)
+    mu0[d$occ_idx][1L] <- stats::qlogis(min(max(any_det, 1e-3), 1 - 1e-3))
+    ld0 <- log(0.4)
+    if (length(pos_vals)) {
+      mu0[d$pos_idx][1L] <- mean(log(pos_vals))
+      ld0 <- log(stats::sd(log(pos_vals)) + 0.1)
+    }
+    # The bilinear L_s * w term has a saddle at (L, w) = (0, 0): there both
+    # gradients vanish, so a zero start never leaves it. Warm-start from the
+    # leading EOF of the per-species empirical-occupancy field (the design-doc
+    # recipe) to land in the right basin. D[c, s] = 1 if species s was ever
+    # detected at cell c; centring per species removes prevalence so the first
+    # singular vector captures the shared spatial gradient + its loadings.
+    D <- vapply(views, function(v) as.numeric(rowSums(v$y * v$valid) > 0),
+                numeric(d$N))                          # N x S
+    Dc <- sweep(D, 2L, colMeans(D))
+    w0 <- numeric(d$N); L0 <- numeric(d$S)
+    sv <- tryCatch(svd(Dc, nu = 1L, nv = 1L), error = function(e) NULL)
+    if (!is.null(sv) && sv$d[1L] > 1e-8) {
+      u <- as.numeric(sv$u[, 1L]); u <- u - mean(u)
+      sdu <- stats::sd(u)
+      if (sdu > 1e-8) {
+        w0 <- u / sdu                                  # unit-scale field start
+        L0 <- as.numeric(sv$v[, 1L]) * sv$d[1L] * sdu / sqrt(d$N)
+      }
+    }
+    par_init <- c(mu0, numeric(d$S * d$P), L0, w0, ld0)
+  }
+
+  fn <- function(p) -.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2, tau_w,
+                                        grad = FALSE)$ll
+  gr <- function(p) -.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2, tau_w,
+                                        grad = TRUE)$grad
+  opt <- stats::optim(par_init, fn, gr, method = "BFGS",
+                      control = list(maxit = maxit, reltol = 1e-10))
+  up <- .ms_ocs_unpack(opt$par, d)
+  # Canonical sign anchor (sp1 loading positive); flip (L, w) together.
+  if (up$L[1L] < 0) { up$L <- -up$L; up$w <- -up$w }
+  c(up, list(par = opt$par, logpen = -opt$value, convergence = opt$convergence,
+             d = d))
+}

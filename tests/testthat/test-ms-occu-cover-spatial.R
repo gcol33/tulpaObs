@@ -114,3 +114,40 @@ test_that("penalised joint gradient matches finite differences", {
   expect_lt(max(abs(out$grad - gnum)), 1e-4,
             label = "max|analytic - FD| over the full packed gradient")
 })
+
+test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
+  skip_on_cran()
+  adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
+  S <- 16L                                 # more species -> sharper shared factor
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
+                                        sd_load = 1.2, sigma_pos = 0.4,
+                                        seed = 2024L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj)
+
+  tr <- sim$truth
+  # Condition on the data-generating community covariances + a unit field
+  # precision (the marginal-scale convention) and unit loading SD.
+  Sigma <- list(occ = diag(tr$sd_occ^2), p = diag(tr$sd_p^2),
+                pos = diag(tr$sd_pos^2))
+  fit <- tulpaObs:::.ms_ocs_inner_mode(model, Sigma, sd_L = 1.2, tau_w = 1.0)
+
+  expect_identical(fit$convergence, 0L)
+
+  # The shared factor and the loadings are recovered up to the K=1 sign anchor
+  # (already applied), which the heterogeneous loadings make identifiable.
+  # Conditional-recovery milestone: a latent ICAR field recovered to cor > 0.75
+  # from binary occupancy + imperfect detection at N=64, and the loadings to
+  # cor > 0.8.
+  expect_gt(stats::cor(fit$w, tr$w), 0.75)
+  expect_gt(stats::cor(fit$L, tr$L), 0.8)
+
+  # Community means recovered (occupancy + cover intercepts and the cover scale).
+  mu_occ_hat <- fit$mu[fit$d$occ_idx]
+  mu_pos_hat <- fit$mu[fit$d$pos_idx]
+  expect_lt(abs(mu_occ_hat[1L] - tr$mu_occ[1L]), 0.4)
+  expect_lt(abs(mu_pos_hat[1L] - tr$mu_pos[1L]), 0.3)
+  expect_lt(abs(exp(fit$ld) - tr$sigma_pos), 0.15)
+})
