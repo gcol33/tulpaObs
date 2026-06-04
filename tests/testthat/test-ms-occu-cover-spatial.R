@@ -71,3 +71,46 @@ test_that("loadings give per-species range heterogeneity (not the naive shared m
   cell_sd <- apply(sim$truth$psi, 1L, stats::sd)
   expect_gt(mean(cell_sd), 0.02)
 })
+
+test_that("penalised joint gradient matches finite differences", {
+  adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells (small for FD)
+  S <- 3L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 3L,
+                                        n_occ_covs = 1L, n_det_covs = 1L,
+                                        n_pos_covs = 1L, seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj)
+
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  # Pack a parameter vector near (but not at) the truth so the gradient is
+  # non-trivial; FD validity is point-independent.
+  tr <- sim$truth
+  mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b  <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))   # species-major
+  par <- c(mu, b, tr$L, tr$w, log(tr$sigma_pos))
+  set.seed(1L)
+  par <- par + stats::rnorm(length(par), 0, 0.05)
+
+  # Fixed hyperparameters for the inner objective.
+  Sinv <- diag(c(rep(1 / 0.4^2, d$P_occ), rep(1 / 0.4^2, d$P_p),
+                 rep(1 / 0.3^2, d$P_pos)))
+  Pmu  <- diag(1 / 25, d$P)
+  inv_sdL2 <- 1 / 1.0^2
+  tau_w <- 1.3
+
+  out <- tulpaObs:::.ms_ocs_penll_grad(model, par, Sinv, Pmu, inv_sdL2, tau_w,
+                                       grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2,
+                                                 tau_w, grad = FALSE)$ll
+  h <- 1e-5
+  gnum <- numeric(length(par))
+  for (k in seq_along(par)) {
+    pp <- par; pp[k] <- pp[k] + h
+    pm <- par; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the full packed gradient")
+})

@@ -188,3 +188,124 @@ simulate_ms_occu_cover_spatial <- function(adj,
     )
   )
 }
+
+
+# ---------------------------------------------------------------------------
+# Model binding
+# ---------------------------------------------------------------------------
+
+# Bind a K=1 spatial community occu_cover model. Wraps .tobs_build_ms_occu_cover
+# for the (community) designs + per-species masked detection/cover matrices, and
+# attaches the cell-graph ICAR structure (Q + Sorbye-Rue scale) for the shared
+# factor. `adj` is the N x N cell adjacency; N must equal the number of
+# occupancy cells (rows of `data`).
+.tobs_build_ms_occu_cover_spatial <- function(occ_formula, det_formula,
+                                              pos_formula, data, y, y_pos,
+                                              positive, species, adj,
+                                              det_visit_formula = NULL,
+                                              det_visit_data    = NULL,
+                                              pos_visit_formula = NULL,
+                                              pos_visit_data    = NULL) {
+  if (identical(positive, "beta")) {
+    stop("Stage 1 of the spatial community occu_cover supports ",
+         "positive = 'lognormal' only.", call. = FALSE)
+  }
+  model <- .tobs_build_ms_occu_cover(
+    occ_formula, det_formula, pos_formula, data, y, y_pos, positive, species,
+    det_visit_formula = det_visit_formula, det_visit_data = det_visit_data,
+    pos_visit_formula = pos_visit_formula, pos_visit_data = pos_visit_data)
+  N <- model$n_sites
+  if (is.null(adj) || !is.matrix(adj) || nrow(adj) != N || ncol(adj) != N) {
+    stop(sprintf("adj must be an N x N adjacency with N = %d cells.", N),
+         call. = FALSE)
+  }
+  model$model_type <- "ms_occu_cover_spatial"
+  model$K          <- 1L
+  model$adj        <- adj
+  model$icar_Q     <- .occu_cover_icar_Q(adj)
+  model$icar_scale <- .occu_cover_icar_scale(adj)
+  model
+}
+
+
+# ---------------------------------------------------------------------------
+# Penalised joint log-likelihood + gradient (inner mode-find target)
+# ---------------------------------------------------------------------------
+
+# Packed inner-latent parameter for the K=1 spatial community model, at fixed
+# community covariances `Sigma`, loading prior SD `sd_L`, and field precision
+# `tau_w`:
+#   par = c(mu[P], b[S*P], L[S], w[N], log_disp)
+# where P = P_occ + P_p + P_pos, b is species-major (species s occupies
+# b[(s-1)*P + 1:P]), L are the per-species loadings on the shared field w.
+.ms_ocs_dims <- function(model) {
+  pil <- model$process_info
+  P_occ <- pil[[1L]]$p; P_p <- pil[[2L]]$p; P_pos <- pil[[3L]]$p
+  list(P_occ = P_occ, P_p = P_p, P_pos = P_pos, P = P_occ + P_p + P_pos,
+       S = model$n_species, N = model$n_sites,
+       occ_idx = seq_len(P_occ), p_idx = P_occ + seq_len(P_p),
+       pos_idx = P_occ + P_p + seq_len(P_pos))
+}
+
+.ms_ocs_unpack <- function(par, d) {
+  off <- 0L
+  mu  <- par[off + seq_len(d$P)]; off <- off + d$P
+  b   <- lapply(seq_len(d$S), function(s) par[off + (s - 1L) * d$P + seq_len(d$P)])
+  off <- off + d$S * d$P
+  L   <- par[off + seq_len(d$S)]; off <- off + d$S
+  w   <- par[off + seq_len(d$N)]; off <- off + d$N
+  ld  <- par[off + 1L]
+  list(mu = mu, b = b, L = L, w = w, ld = ld)
+}
+
+# Penalised joint log-likelihood and its gradient w.r.t. par. `Sinv` is the
+# block-diagonal inverse community covariance over (occ, p, pos); `Pmu` the weak
+# Gaussian precision on the community means; `inv_sdL2 = 1/sd_L^2` the loading
+# ridge; `tau_w` the field precision (prior 0.5 * tau_w * w' Q w).
+.ms_ocs_penll_grad <- function(model, par, Sinv, Pmu, inv_sdL2, tau_w,
+                               grad = TRUE) {
+  d <- .ms_ocs_dims(model); up <- .ms_ocs_unpack(par, d)
+  mu <- up$mu; b <- up$b; L <- up$L; w <- up$w; ld <- up$ld
+  Q  <- model$icar_Q
+  cl <- function(e) pmin(pmax(e, -30), 30)
+
+  ll <- 0
+  g_mu <- numeric(d$P); g_b <- vector("list", d$S); g_L <- numeric(d$S)
+  g_w  <- numeric(d$N); g_ld <- 0
+  for (s in seq_len(d$S)) {
+    v   <- .ms_occu_cover_species_view(model, s)
+    th  <- mu + b[[s]]
+    eta <- .occu_cover_eta_from_par(v, th[d$occ_idx], th[d$p_idx], th[d$pos_idx])
+    # Inject the shared-factor offset on the occupancy predictor.
+    eta$psi <- stats::plogis(cl(as.numeric(v$X_occ %*% th[d$occ_idx]) + L[s] * w))
+    ll <- ll + sum(.occu_cover_site_ll(v, eta$psi, eta$p_mat, eta$ep_mat, ld))
+    if (grad) {
+      eg <- .occu_cover_eta_grad(v, eta$psi, eta$p_mat, eta$ep_mat, ld)
+      cg <- .occu_cover_coef_grad(v, eg)              # c(g_occ, g_det, g_pos, g_ld)
+      cg_coef <- cg[seq_len(d$P)]
+      g_mu    <- g_mu + cg_coef
+      g_b[[s]] <- cg_coef                              # RE prior added below
+      g_L[s]  <- sum(w * eg$g_psi)
+      g_w     <- g_w + L[s] * eg$g_psi
+      g_ld    <- g_ld + cg[d$P + 1L]
+    }
+  }
+
+  # ---- priors (penalty) ----
+  bmat <- do.call(rbind, b)                            # S x P
+  ll <- ll - 0.5 * sum(vapply(b, function(bb) as.numeric(bb %*% Sinv %*% bb), 0))
+  ll <- ll - 0.5 * as.numeric(mu %*% Pmu %*% mu)
+  ll <- ll - 0.5 * inv_sdL2 * sum(L^2)
+  Qw <- as.numeric(Q %*% w)
+  ll <- ll - 0.5 * tau_w * as.numeric(w %*% Qw)
+
+  if (!grad) return(list(ll = ll))
+
+  g_mu <- g_mu - as.numeric(Pmu %*% mu)
+  for (s in seq_len(d$S)) g_b[[s]] <- g_b[[s]] - as.numeric(Sinv %*% b[[s]])
+  g_L  <- g_L - inv_sdL2 * L
+  g_w  <- g_w - tau_w * Qw
+
+  grad_vec <- c(g_mu, unlist(g_b), g_L, g_w, g_ld)
+  list(ll = ll, grad = grad_vec)
+}
