@@ -326,7 +326,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
 # form. Returns the unpacked mode plus the achieved penalised log-likelihood.
 .ms_ocs_inner_mode <- function(model, Sigma, sd_L = 1.0, tau_w = 1.0,
                                par_init = NULL, sigma.beta = 5,
-                               maxit = 400L) {
+                               maxit = 400L, hessian = FALSE) {
   d <- .ms_ocs_dims(model)
   Sinv <- matrix(0, d$P, d$P)
   Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
@@ -374,10 +374,102 @@ simulate_ms_occu_cover_spatial <- function(adj,
   gr <- function(p) -.ms_ocs_penll_grad(model, p, Sinv, Pmu, inv_sdL2, tau_w,
                                         grad = TRUE)$grad
   opt <- stats::optim(par_init, fn, gr, method = "BFGS",
-                      control = list(maxit = maxit, reltol = 1e-10))
+                      control = list(maxit = maxit, reltol = 1e-10),
+                      hessian = hessian)
   up <- .ms_ocs_unpack(opt$par, d)
-  # Canonical sign anchor (sp1 loading positive); flip (L, w) together.
+  # Canonical sign anchor (sp1 loading positive); flip (L, w) together. The
+  # Hessian (over the packed par) is sign-flip invariant in those blocks, so it
+  # stays valid for the M-step covariances after the anchor.
   if (up$L[1L] < 0) { up$L <- -up$L; up$w <- -up$w }
   c(up, list(par = opt$par, logpen = -opt$value, convergence = opt$convergence,
-             d = d))
+             hessian = if (hessian) opt$hessian else NULL, d = d))
+}
+
+
+# ---------------------------------------------------------------------------
+# Laplace-EM fitter (Stage 1)
+# ---------------------------------------------------------------------------
+
+# Fit the K=1 spatial community occu_cover model by Laplace-EM: the inner
+# mode-find above is the E-step; the M-step is the closed-form community
+# covariance update per arm (Sigma_arm = mean_s[b_s b_s' + Cov(b_s)], the
+# posterior second moment from the mode + the Hessian-block covariance, Louis
+# 1982) and the rank-deficient ICAR field-precision update
+# tau_w = (N - 1) / (w' Q w + tr(Q Cov_ww)). The loading SD `sd_L` fixes the
+# K=1 amplitude split and is held at its supplied value (a hyperparameter).
+.tobs_fit_ms_occu_cover_spatial <- function(model, sd_L = 1.0,
+                                            max.em = 30L, tol = 1e-3,
+                                            sigma.beta = 5, verbose = FALSE) {
+  d <- .ms_ocs_dims(model)
+  Q <- model$icar_Q
+  rank_w <- d$N - 1L                       # ICAR rank (one null direction)
+
+  Sigma <- list(occ = diag(0.3^2, d$P_occ), p = diag(0.3^2, d$P_p),
+                pos = diag(0.3^2, d$P_pos))
+  tau_w <- 1.0
+  par_init <- NULL
+  prev <- -Inf
+
+  # Packed offsets of each species' b block and the shared w block.
+  b_off <- function(s) d$P + (s - 1L) * d$P
+  w_off <- d$P + d$S * d$P + d$S
+
+  ridge_inv <- function(H) {
+    Hs <- (H + t(H)) / 2
+    for (eps in c(0, 1e-8, 1e-6, 1e-4, 1e-2)) {
+      ch <- tryCatch(chol(Hs + diag(eps, nrow(Hs))), error = function(e) NULL)
+      if (!is.null(ch)) return(chol2inv(ch))
+    }
+    # SVD pseudo-inverse fallback (no MASS dependency).
+    sv <- svd(Hs)
+    pos <- sv$d > max(sv$d) * 1e-10
+    sv$v[, pos, drop = FALSE] %*% ((1 / sv$d[pos]) *
+        t(sv$u[, pos, drop = FALSE]))
+  }
+
+  for (em in seq_len(max.em)) {
+    fit <- .ms_ocs_inner_mode(model, Sigma, sd_L = sd_L, tau_w = tau_w,
+                              par_init = par_init, sigma.beta = sigma.beta,
+                              hessian = TRUE)
+    par_init <- fit$par
+    Cov <- ridge_inv(fit$hessian)          # posterior covariance at the mode
+
+    # M-step: community covariances (second moment = mode outer product + block
+    # posterior covariance), per arm, averaged over species.
+    acc <- list(occ = matrix(0, d$P_occ, d$P_occ),
+                p   = matrix(0, d$P_p,   d$P_p),
+                pos = matrix(0, d$P_pos, d$P_pos))
+    for (s in seq_len(d$S)) {
+      bs  <- fit$b[[s]]
+      off <- b_off(s)
+      for (arm in c("occ", "p", "pos")) {
+        ai  <- d[[paste0(arm, "_idx")]]
+        idx <- off + ai
+        bb  <- bs[ai]
+        acc[[arm]] <- acc[[arm]] + outer(bb, bb) + Cov[idx, idx, drop = FALSE]
+      }
+    }
+    Sigma <- lapply(acc, function(A) {
+      A <- A / d$S
+      (A + t(A)) / 2
+    })
+    names(Sigma) <- c("occ", "p", "pos")
+
+    # M-step: ICAR field precision (rank-deficient GMRF update).
+    widx <- w_off + seq_len(d$N)
+    Cov_ww <- Cov[widx, widx, drop = FALSE]
+    quad   <- as.numeric(fit$w %*% (Q %*% fit$w)) + sum(Q * Cov_ww)
+    tau_w  <- rank_w / max(quad, 1e-8)
+
+    if (verbose) {
+      cat(sprintf("EM %2d  logpen=%.3f  tau_w=%.3f  sd_occ1=%.3f  cor moves\n",
+                  em, fit$logpen, tau_w, sqrt(Sigma$occ[1L, 1L])))
+    }
+    if (is.finite(prev) && abs(fit$logpen - prev) < tol * (abs(prev) + tol)) {
+      prev <- fit$logpen; break
+    }
+    prev <- fit$logpen
+  }
+
+  c(fit, list(Sigma = Sigma, tau_w = tau_w, sd_L = sd_L, em_logpen = prev))
 }

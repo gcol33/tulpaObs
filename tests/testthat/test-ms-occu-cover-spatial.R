@@ -151,3 +151,40 @@ test_that("inner mode-find recovers the latent field + loadings at the true hype
   expect_lt(abs(mu_pos_hat[1L] - tr$mu_pos[1L]), 0.3)
   expect_lt(abs(exp(fit$ld) - tr$sigma_pos), 0.15)
 })
+
+test_that("Laplace-EM recovers the factor, loadings and community scales", {
+  skip_on_cran()
+  skip_if_fast()
+  # Unconditional fit: Sigma and the field precision tau_w are estimated by the
+  # EM (M-step), not supplied. The milestone is that the full Stage-1 fitter
+  # recovers the shared factor, the loadings, the community means, and the
+  # community covariance scales from data alone.
+  adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 16L, J = 6L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        sigma_pos = 0.4, seed = 4040L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj)
+
+  fit <- tulpaObs:::.tobs_fit_ms_occu_cover_spatial(model, sd_L = 1.2,
+                                                    max.em = 25L, tol = 1e-3)
+  tr <- sim$truth
+
+  # Latent structure recovered (up to the applied K=1 sign anchor).
+  expect_gt(stats::cor(fit$w, tr$w), 0.75)
+  expect_gt(stats::cor(fit$L, tr$L), 0.8)
+
+  # Community means.
+  expect_lt(abs(fit$mu[fit$d$occ_idx][1L] - tr$mu_occ[1L]), 0.5)
+  expect_lt(abs(fit$mu[fit$d$pos_idx][1L] - tr$mu_pos[1L]), 0.3)
+  expect_lt(abs(exp(fit$ld) - tr$sigma_pos), 0.15)
+
+  # Community RE scale on the occupancy slope recovered to the right ballpark
+  # (EM M-step), and the field precision is finite + positive.
+  sd_occ_slope_hat <- sqrt(fit$Sigma$occ[2L, 2L])
+  expect_gt(sd_occ_slope_hat, 0.2)
+  expect_lt(sd_occ_slope_hat, 1.2)
+  expect_true(is.finite(fit$tau_w) && fit$tau_w > 0)
+})
