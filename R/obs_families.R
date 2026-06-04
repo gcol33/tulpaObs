@@ -366,7 +366,7 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
     default_engine = "laplace",
     status         = "experimental",
     params         = list(positive = positive),
-    control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max")
+    control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load")
   )
 }
 

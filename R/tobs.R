@@ -603,27 +603,15 @@ tobs <- function(formula,
 
   pos_formula <- dots$positive %||% detection
 
-  # The community joint-coupled spatial engine (per-species RE layered on a
-  # shared coupled field) is not wired; reject a structured term on any arm with
-  # a pointer rather than dropping the structure silently.
-  has_struct <- function(f) {
-    if (is.null(f)) return(FALSE)
-    labs <- attr(stats::terms(f), "term.labels")
-    structured <- c("bym2", "icar", "car", "car_proper", "gp", "spde",
-                    "multiscale_gp", "re", "temporal", "svc", "latent", "copy")
-    any(vapply(labs, function(lab) {
-      fn <- tryCatch(as.character(as.call(parse(text = lab)[[1]])[[1]]),
-                     error = function(e) NA_character_)
-      !is.na(fn) && fn %in% structured
-    }, logical(1)))
-  }
-  if (has_struct(formula) || has_struct(detection) || has_struct(pos_formula)) {
-    stop("ms_occu_cover() is non-spatial: structured terms (icar / bym2 / re ",
-         "/ ...) are not supported. A shared coupled field across the three ",
-         "arms with the per-species RE layered on top needs upstream tulpa ",
-         "engine support; use a plain fixed-effects formula on each arm.",
-         call. = FALSE)
-  }
+  # A single icar() shared field on the occupancy arm routes to the K=1
+  # reduced-rank spatial-factor community fitter (Laplace-EM): per-species
+  # loadings on one ICAR field give correlated, range-shifted occupancy maps
+  # the plain per-species RE cannot produce (gcol33/tulpa#67). Detected on the
+  # user formulas before visit-normalization (which would move covariates off
+  # the formula). The detector also gates the remaining structured terms
+  # (errors), so the non-spatial path below is reached only when no arm carries
+  # one.
+  sp <- .tobs_ms_ocs_spatial_request(formula, detection, pos_formula, data)
 
   # Site / visit dimensions, robust to y being a 3D array or a list of matrices.
   if (is.list(y) && !is.array(y)) {
@@ -636,6 +624,33 @@ tobs <- function(formula,
                               n_sites = n_sites, max_visits = max_visits)
   vd_pos <- .normalize_visits(visits, pos_formula,
                               n_sites = n_sites, max_visits = max_visits)
+
+  if (!is.null(sp)) {
+    model <- .tobs_build_ms_occu_cover_spatial(
+      occ_formula      = sp$fe_occ,
+      det_formula      = vd_det$det_formula,
+      pos_formula      = vd_pos$det_formula,
+      data             = data,
+      y                = y,
+      y_pos            = dots$y_pos,
+      positive         = family$params$positive,
+      species          = dots$species,
+      adj              = sp$graph,
+      det_visit_formula = vd_det$det_visit_formula,
+      det_visit_data    = vd_det$visits,
+      pos_visit_formula = vd_pos$det_visit_formula,
+      pos_visit_data    = vd_pos$visits
+    )
+    fit <- .tobs_fit_ms_occu_cover_spatial(
+      model,
+      sd_L       = control[["sd.load"]]   %||% 1.0,
+      max.em     = control[["max.iter"]]  %||% 30L,
+      tol        = control[["tol"]]       %||% 1e-3,
+      sigma.beta = control[["sigma.beta"]] %||% 5,
+      verbose    = isTRUE(control[["verbose"]])
+    )
+    return(build_ms_occu_cover_spatial_fit(model, fit))
+  }
 
   model <- .tobs_build_ms_occu_cover(
     occ_formula      = formula,

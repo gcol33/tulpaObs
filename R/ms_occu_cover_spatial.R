@@ -471,5 +471,148 @@ simulate_ms_occu_cover_spatial <- function(adj,
     prev <- fit$logpen
   }
 
-  c(fit, list(Sigma = Sigma, tau_w = tau_w, sd_L = sd_L, em_logpen = prev))
+  c(fit, list(Sigma = Sigma, tau_w = tau_w, sd_L = sd_L, em_logpen = prev,
+              cov = Cov))
+}
+
+
+# ---------------------------------------------------------------------------
+# Front-door wrapper (tobs_fit) + spatial-term detector
+# ---------------------------------------------------------------------------
+
+# Wrap the Laplace-EM output (.tobs_fit_ms_occu_cover_spatial) into a tobs_fit,
+# mirroring build_ms_occu_cover_fit (the non-spatial community wrapper) and
+# adding the shared-factor block (field w, per-species loadings L, field
+# precision tau_w). The community-mean + dispersion posterior covariance comes
+# from the packed-par Hessian block (par = c(mu[P], b[S*P], L[S], w[N], ld)).
+build_ms_occu_cover_spatial_fit <- function(model, fit) {
+  d   <- fit$d
+  pil <- model$process_info
+  P   <- d$P
+
+  beta_names <- c(
+    paste0("psi_", pil[[1L]]$coef_names),
+    paste0("p_",   pil[[2L]]$coef_names),
+    paste0("pos_", pil[[3L]]$coef_names)
+  )
+  disp_name <- "log_sigma_pos"
+  par_names <- c(beta_names, disp_name)
+
+  mu <- fit$mu; ld <- fit$ld
+  means <- c(mu, ld); names(means) <- par_names
+
+  Cov  <- fit$cov
+  npar <- length(fit$par)
+  sel  <- c(seq_len(P), npar)                 # community means + log-dispersion
+  V <- Cov[sel, sel, drop = FALSE]; V <- (V + t(V)) / 2
+  dimnames(V) <- list(par_names, par_names)
+  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+
+  n_draws <- 1000L
+  draws <- .occu_cover_rmvn(n_draws, means, V)
+  colnames(draws) <- par_names
+
+  # Per-species community structure (mu + BLUP deviations) per arm.
+  B <- do.call(rbind, fit$b)                  # S x P
+  arm_idx <- list(occ = d$occ_idx, p = d$p_idx, pos = d$pos_idx)
+  arm_block <- function(arm) {
+    idx  <- arm_idx[[arm]]
+    blup <- B[, idx, drop = FALSE]
+    coef <- sweep(blup, 2L, mu[idx], "+")
+    rownames(blup) <- rownames(coef) <- model$species_names
+    list(blup = blup, coef = coef)
+  }
+  occ_b <- arm_block("occ"); p_b <- arm_block("p"); pos_b <- arm_block("pos")
+  colnames(occ_b$blup) <- colnames(occ_b$coef) <- pil[[1L]]$coef_names
+  colnames(p_b$blup)   <- colnames(p_b$coef)   <- pil[[2L]]$coef_names
+  colnames(pos_b$blup) <- colnames(pos_b$coef) <- pil[[3L]]$coef_names
+
+  Sigma_occ <- fit$Sigma$occ; Sigma_p <- fit$Sigma$p; Sigma_pos <- fit$Sigma$pos
+  dimnames(Sigma_occ) <- list(pil[[1L]]$coef_names, pil[[1L]]$coef_names)
+  dimnames(Sigma_p)   <- list(pil[[2L]]$coef_names, pil[[2L]]$coef_names)
+  dimnames(Sigma_pos) <- list(pil[[3L]]$coef_names, pil[[3L]]$coef_names)
+
+  # Shared-factor block: field posterior mean + marginal SD (from the w-block
+  # of the joint posterior covariance) and the per-species loadings.
+  w_off  <- P + d$S * P + d$S
+  widx   <- w_off + seq_len(d$N)
+  Cov_ww <- Cov[widx, widx, drop = FALSE]
+  field_sd <- sqrt(pmax(diag(Cov_ww), 0))
+  L <- fit$L; names(L) <- model$species_names
+
+  structure(c(list(
+    draws        = draws,
+    means        = means,
+    sds          = sds,
+    vcov         = V,
+    n_samples    = n_draws,
+    n_params     = length(means),
+    log_prob     = rep(fit$logpen, n_draws),
+    log_lik      = fit$logpen,
+    N            = sum(model$valid)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names    = par_names,
+    param_names  = par_names,
+    n_fixed      = length(means),
+    fixed_names  = par_names,
+    process_info = pil,
+    model        = model,
+    method       = "laplace-em",
+    positive     = model$positive,
+    spatial      = list(
+      type     = "icar",
+      K        = 1L,
+      field    = fit$w,
+      field_sd = field_sd,
+      loadings = L,
+      tau_w    = fit$tau_w,
+      sd_L     = fit$sd_L
+    ),
+    ms_community = list(
+      Sigma_occ = Sigma_occ, Sigma_p = Sigma_p, Sigma_pos = Sigma_pos,
+      sd_occ = sqrt(pmax(diag(Sigma_occ), 0)),
+      sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
+      sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
+      coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
+      blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup
+    ),
+    convergence  = list(converged = identical(fit$convergence, 0L),
+                        n_iter = NA_integer_)
+  )), class = c("tobs_fit", "tulpa_fit"))
+}
+
+
+# Detect a Stage-1 spatial request on the three occu_cover arms. Returns the
+# shared-field adjacency + the fixed-effects occupancy formula when the
+# occupancy arm carries a single icar() term (and detection / cover are plain),
+# NULL when no arm carries a structured term (the non-spatial path), and errors
+# on any other structured term (the supported surface is icar() on occupancy).
+.tobs_ms_ocs_spatial_request <- function(occ_formula, det_formula, pos_formula,
+                                         data) {
+  parse_terms <- function(f) {
+    if (is.null(f)) return(list())
+    .tobs_parse_formula(f, data = data)$terms
+  }
+  occ_terms <- parse_terms(occ_formula)
+  det_terms <- parse_terms(det_formula)
+  pos_terms <- parse_terms(pos_formula)
+
+  if (length(det_terms) || length(pos_terms)) {
+    stop("ms_occu_cover(): structured terms are supported on the occupancy arm ",
+         "only (Stage 1: a single icar() shared field). Use a plain formula on ",
+         "detection / cover.", call. = FALSE)
+  }
+  if (length(occ_terms) == 0L) return(NULL)             # non-spatial path
+  if (length(occ_terms) > 1L) {
+    stop("ms_occu_cover(): Stage 1 supports a single icar() term on the ",
+         "occupancy arm.", call. = FALSE)
+  }
+  spec <- occ_terms[[1L]]
+  if (!inherits(spec, "tobs_spatial") || !identical(spec$label, "icar")) {
+    stop(sprintf("ms_occu_cover(): Stage 1 spatial supports icar() only; got %s().",
+                 spec$label %||% class(spec)[1L]), call. = FALSE)
+  }
+  list(graph  = spec$graph,
+       fe_occ = .tobs_parse_formula(occ_formula, data = data)$fe_formula)
 }

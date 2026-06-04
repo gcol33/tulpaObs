@@ -188,3 +188,59 @@ test_that("Laplace-EM recovers the factor, loadings and community scales", {
   expect_lt(sd_occ_slope_hat, 1.2)
   expect_true(is.finite(fit$tau_w) && fit$tau_w > 0)
 })
+
+test_that("tobs() front door routes icar() on the occupancy arm to the spatial fit", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
+  S <- 16L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
+                                        sd_occ = 0.5, sd_load = 1.2,
+                                        sigma_pos = 0.4, seed = 5151L)
+  fit <- tobs(
+    ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family    = ms_occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    method = "laplace",
+    control = list(sd.load = 1.2, max.iter = 25L, tol = 1e-3))
+  tr <- sim$truth
+
+  # The public object is a tobs_fit carrying the shared-factor block.
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$spatial$type, "icar")
+  expect_identical(fit$spatial$K, 1L)
+  expect_length(fit$spatial$field, nrow(adj))
+  expect_length(fit$spatial$loadings, S)
+  expect_true(is.finite(fit$spatial$tau_w) && fit$spatial$tau_w > 0)
+
+  # Same recovery as the internal fitter (field + loadings up to the sign
+  # anchor), now reached through the user-facing front door.
+  expect_gt(stats::cor(fit$spatial$field, tr$w), 0.75)
+  expect_gt(stats::cor(as.numeric(fit$spatial$loadings), tr$L), 0.8)
+
+  # Generic accessors work: coef() splits into the per-arm community means.
+  cf <- coef(fit)
+  expect_true(is.list(cf))
+  psi_int <- cf[[1L]][["(Intercept)"]]
+  expect_lt(abs(unname(psi_int) - tr$mu_occ[1L]), 0.5)
+
+  # Community RE scale is reported and finite.
+  expect_true(is.finite(fit$ms_community$sd_occ[1L]))
+})
+
+test_that("a structured term off the occupancy arm is rejected (Stage 1)", {
+  adj <- .mscs_grid_adj(5L, 5L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
+  expect_error(
+    tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+         detection = ~ det_cov1 + icar(graph = adj), positive = ~ pos_cov1,
+         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+    "occupancy arm only")
+  expect_error(
+    tobs(~ occ_cov1 + bym2(graph = adj), data = sim$data,
+         family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+         positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+         species = sim$species, method = "laplace"),
+    "icar")
+})
