@@ -858,26 +858,79 @@ print.summary.cover_fit <- function(x, ...) {
 # ---------------------------------------------------------------------------
 
 # Collapse the occurrence (binomial) arm to its exact sufficient statistic.
-# Plots sharing an occurrence design row, spatial cell, and per-observation
-# trend weight are exchangeable Bernoulli trials: replacing them with one
-# Binomial row (n = count, y = successes) leaves the log-likelihood, gradient,
-# and Hessian unchanged while cutting the row count. `w` is the trend field's
-# per-observation weight (NULL when there is no coupled trend field). Returns
-# the aggregated `y`, `n` (n_trials), `X`, spatial index `spi`, and weight `w`,
-# one row per unique (X-row, cell, weight) group.
-.cover_aggregate_occ <- function(y, X, spi, w = NULL) {
-  parts <- c(as.data.frame(X, stringsAsFactors = FALSE), list(spi))
-  if (!is.null(w)) parts <- c(parts, list(w))
+# Observations agreeing on the occurrence design row AND every per-observation
+# component of the linear predictor -- the spatial cell, any temporal / RE block
+# index, any SVC weight -- are exchangeable Bernoulli trials: replacing them with
+# one Binomial row (n = count, y = successes) leaves the log-likelihood, gradient
+# and Hessian pointwise unchanged (the engine's binomial kernel carries no
+# combinatorial constant) while cutting the row count. `keys` is the named list
+# of those per-observation vectors; the X-row plus every key forms the grouping
+# key. Returns the aggregated `y`, `n` (n_trials), `X`, the per-group
+# representative of each key, and `rep_i` (the representative row per group).
+.cover_aggregate_occ <- function(y, X, keys) {
+  parts <- c(as.data.frame(X, stringsAsFactors = FALSE), keys)
   gid   <- as.integer(factor(do.call(paste, c(parts, list(sep = "\r")))))
   ord   <- order(gid)
   rep_i <- ord[!duplicated(gid[ord])]               # first row per group, group order
   list(
-    y   = as.numeric(rowsum(as.numeric(y), gid)),     # rowsum orders by sorted gid
-    n   = as.integer(tabulate(gid, nbins = max(gid))),
-    X   = X[rep_i, , drop = FALSE],
-    spi = spi[rep_i],
-    w   = if (is.null(w)) NULL else w[rep_i]
+    y     = as.numeric(rowsum(as.numeric(y), gid)),   # rowsum orders by sorted gid
+    n     = as.integer(tabulate(gid, nbins = max(gid))),
+    X     = X[rep_i, , drop = FALSE],
+    keys  = lapply(keys, function(v) v[rep_i]),
+    rep_i = rep_i
   )
+}
+
+# Aggregate the occurrence arm in place against `keys` and reset its trial /
+# RE bookkeeping. Returns the updated arm plus the per-group key representatives
+# for the caller to scatter back onto the latent blocks.
+.cover_apply_occ_agg <- function(arm_occ, keys) {
+  og <- .cover_aggregate_occ(arm_occ$y, arm_occ$X, keys)
+  arm_occ$y        <- og$y
+  arm_occ$n_trials <- og$n
+  arm_occ$X        <- og$X
+  arm_occ$re_idx   <- rep(0, length(og$y))
+  list(arm_occ = arm_occ, keys = og$keys)
+}
+
+# The per-arm index field a joint prior block keys on: structured spatial blocks
+# carry `spatial_idx`, AR1/RW temporal blocks `temporal_idx`, IID temporal / RE
+# blocks `obs_idx`. Each is a list(occ_idx, pos_idx).
+.cover_block_idx_field <- function(block) {
+  for (f in c("spatial_idx", "temporal_idx", "obs_idx")) {
+    if (!is.null(block[[f]])) return(f)
+  }
+  NULL
+}
+
+# Gather every occurrence-arm component of the linear predictor carried by the
+# prior blocks -- each block's occ index and, for a weighted (SVC) block, its
+# occ weight -- as the exchangeability key (paired with the occ design row).
+.cover_occ_keys_from_blocks <- function(blocks) {
+  keys <- list()
+  for (b in seq_along(blocks)) {
+    f <- .cover_block_idx_field(blocks[[b]])
+    if (!is.null(f)) keys[[sprintf("idx%d", b)]] <- blocks[[b]][[f]][[1L]]
+    if (!is.null(blocks[[b]]$svc_weight)) {
+      keys[[sprintf("w%d", b)]] <- blocks[[b]]$svc_weight[[1L]]
+    }
+  }
+  keys
+}
+
+# Write the per-group key representatives back onto the occurrence arm ([[1]]) of
+# every block, leaving the positive arm ([[2]]) untouched.
+.cover_scatter_occ_keys <- function(blocks, keys) {
+  for (b in seq_along(blocks)) {
+    f <- .cover_block_idx_field(blocks[[b]])
+    if (!is.null(f)) {
+      blocks[[b]][[f]][[1L]] <- as.integer(keys[[sprintf("idx%d", b)]])
+    }
+    if (!is.null(blocks[[b]]$svc_weight)) {
+      blocks[[b]]$svc_weight[[1L]] <- as.numeric(keys[[sprintf("w%d", b)]])
+    }
+  }
+  blocks
 }
 
 #' Fit cover_hurdle as a joint binomial+(gaussian|beta) model with shared
@@ -1172,17 +1225,16 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                    as.numeric(trend_spec$w_pos))
 
     # Exact sufficient-statistic reduction of the occurrence arm. The positive
-    # (beta) arm and its spatial / weight wiring are untouched; the two arms
-    # couple only through the shared cell field, which the grouping preserves.
+    # arm is untouched; the two arms couple only through the shared cell field
+    # (intercept + trend), and the grouping keys on the cell index and the trend
+    # weight, so both fields' per-occ contributions are preserved.
     if (isTRUE(control$aggregate.occ)) {
-      og <- .cover_aggregate_occ(arm_occ$y, arm_occ$X, spi_full, trend_spec$w_occ)
-      arm_occ$y        <- og$y
-      arm_occ$n_trials <- og$n
-      arm_occ$X        <- og$X
-      arm_occ$re_idx   <- rep(0, length(og$y))
-      base_block$spatial_idx[[1]]  <- as.integer(og$spi)
-      trend_block$spatial_idx[[1]] <- as.integer(og$spi)
-      trend_block$svc_weight[[1]]  <- as.numeric(og$w)
+      blocks <- list(base_block, trend_block)
+      ag      <- .cover_apply_occ_agg(arm_occ, .cover_occ_keys_from_blocks(blocks))
+      arm_occ <- ag$arm_occ
+      blocks  <- .cover_scatter_occ_keys(blocks, ag$keys)
+      base_block  <- blocks[[1L]]
+      trend_block <- blocks[[2L]]
     }
 
     alpha_grid_base  <- control$alpha.grid %||%
@@ -1220,6 +1272,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # block's per-arm spatial_idx list in the multi-block prior.
     arm_occ$spatial_idx <- NULL
     arm_pos$spatial_idx <- NULL
+    # Exact sufficient-statistic reduction of the occurrence arm. Every block's
+    # per-occ index (spatial cell, AR1/RW/IID time, RE group) enters the
+    # grouping key, so only observations sharing the FULL linear predictor merge;
+    # the representatives are scattered back onto each block's occ arm.
+    if (isTRUE(control$aggregate.occ)) {
+      ag          <- .cover_apply_occ_agg(arm_occ, .cover_occ_keys_from_blocks(multi$prior))
+      arm_occ     <- ag$arm_occ
+      multi$prior <- .cover_scatter_occ_keys(multi$prior, ag$keys)
+    }
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),
       prior     = multi$prior,
@@ -1230,6 +1291,14 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       control = joint_control
     )
   } else {
+    # Exact sufficient-statistic reduction of the occurrence arm. The single
+    # spatial cell index (carried on the arm here, not in the block) is the only
+    # per-occ latent component, so it is the sole grouping key beyond the design.
+    if (isTRUE(control$aggregate.occ)) {
+      ag      <- .cover_apply_occ_agg(arm_occ, list(idx1 = arm_occ$spatial_idx))
+      arm_occ <- ag$arm_occ
+      arm_occ$spatial_idx <- as.integer(ag$keys$idx1)
+    }
     # Adaptive grid forwarding. Defaults match the joint engine's defaults
     # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
     # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
