@@ -57,6 +57,7 @@ nobs.tobs_fit <- function(object, ...) {
     length(model$y_long)
   } else if (model$model_type == "ms_nmix" ||
              model$model_type == "ms_occu_cover" ||
+             model$model_type == "ms_occu_cover_spatial" ||
              model$model_type == "occu_multiscale_cover") {
     sum(!is.na(model$y))
   } else if (model$model_type == "ms_occu" ||

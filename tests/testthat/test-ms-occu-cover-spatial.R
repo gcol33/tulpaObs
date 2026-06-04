@@ -1087,6 +1087,9 @@ test_that("fitted() returns per-species occupancy / detection / cover surfaces",
   expect_true(all(ft$cover > 0))
   expect_identical(colnames(ft$psi), sim$species)
   expect_equal(as.numeric(ft$psi), predict(fit)$psi, tolerance = 1e-8)
+
+  # nobs() counts the valid detection observations (feeds AIC / BIC).
+  expect_identical(nobs(fit), sum(!is.na(sim$y)))
 })
 
 test_that("simulate() reproduces the per-species data structure", {
