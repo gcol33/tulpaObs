@@ -1,5 +1,14 @@
 # tulpaObs NEWS
 
+## 0.0.15
+
+* Require tulpa (>= 0.0.10) / `gcol33/tulpa@v0.0.10`, which carries the fix for
+  the threaded outer-grid nested-Laplace data race behind gcol33/tulpaObs#42
+  (the coupled cover-arm dispersion was read lock-free across `n.threads.outer`
+  threads). The threaded beta `cover()` / `occu_cover()` EVA-scale fits are now
+  reproducible and crash-free; see the 0.0.14 entry and
+  `dev_notes/issue42_root_cause.md`.
+
 ## 0.0.14
 
 * **Fix: data race in threaded outer-grid nested-Laplace beta fits**

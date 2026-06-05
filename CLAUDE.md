@@ -152,23 +152,46 @@ Gaussian (records `sla_status`) for jsdm.
 single source of truth for which `method` each family supports; `tobs()` errors
 with pointer, no silent downgrade. `nested_laplace` = occu/int_occu/dyn_occu +
 cover; `*_sla` on nested = occu + cover only; cover hurdle has no
-NUTS / `laplace_gibbs` / `laplace_mi`. `abun` = laplace (non-spatial) +
+NUTS / `laplace_gibbs` / `laplace_mi`. `abun` = laplace + nuts (non-spatial) +
 nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field
 on abundance arm). `occu_multiscale_cover` = nested_laplace ONLY (spatial joint).
 Community occupancy families `ms_occu`/`ms_dyn_occu`/`ms_int_occu` = laplace ONLY
 (shared community Laplace-EM, `R/community_em.R`; per-species coef RE, per-arm
-community covariance). `removal` = laplace + nuts (non-spatial Poisson/NB;
-closed-form depleting-binomial marginal, in-tree FullGradFn NUTS). `distance` =
-laplace + nuts (non-spatial Poisson/NB; binned multinomial-over-N marginal,
-half-normal / hazard-rate key, line / point transect, bin integrals by
-Gauss-Legendre quadrature, in-tree FullGradFn NUTS). `fp_occu` = laplace + nuts
-(Miller 2011 multistate false-positive occupancy; `y in {0,1,2}`, two-state
-latent marginal, analytic-grad BFGS + observed-info vcov, in-tree FullGradFn
-NUTS). `dyn_abun` = laplace + nuts (Dail-Madsen open N-mixture; exact HMM forward
-marginal over latent N summed across seasons, forward-mode-diff analytic
-gradients, Poisson init + constant recruitment; analytic-grad BFGS + in-tree
-FullGradFn NUTS). All filed observation-family issues shipped; no planned-status
-families remain.
+community covariance).
+
+Observation families below (`removal`/`distance`/`fp_occu`/`dyn_abun`) = laplace
++ nuts, non-spatial Pois/NB. Each: a closed-form (or exact HMM-forward, dyn_abun)
+marginal over latent N, analytic gradients, an in-tree FullGradFn driving tulpa's
+NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
+
+- `removal` (tulpaObs#39): sequential depletion, pass k sees `N - sum_{l<k} y_l`
+  trials = depleting-binomial product = multinomial removal; latent N summed to
+  `K_max`. SHARES the count-marginal Laplace driver (`src/marginal_count_laplace.h`)
+  + NUTS (`src/marginal_count_nuts.h`) with `abun`; per-site `src/removal_kernel.h`
+  over shared `accumulate_count_moments`/`fill_nb_dispersion` (`src/nmix_kernel.h`).
+- `distance` (tulpaObs#38): latent N in covered region, per-bin detected counts
+  multinomial over `(bin 1..B, undetected)`, `pi_b = int_bin g(x;sigma) f(x) dx`
+  (half-normal / hazard-rate key, line/point transect density `f`), bin integrals
+  + 1st/2nd eta-derivs by Gauss-Legendre quadrature. REUSES the count-marginal
+  core (`src/nmix_kernel.h`); det arm = site-level `log sigma` + optional scalar
+  hazard shape (`src/distance_quad.h`/`src/distance_kernel.h`), own Laplace driver
+  (`src/distance_laplace.cpp`) + NUTS (`src/distance_nuts.cpp`). K_max default
+  `3*max(rowSums)+100`.
+- `fp_occu` (tulpaObs#40): Miller 2011 multistate false-positive occupancy, `y in
+  {0,1,2}` (none/ambiguous/certain), certain detections only at occupied sites
+  identify it. Latent z summed (2-state); 4 site-level logit arms psi/p11/p10/b
+  (`fp_formula`/`b_formula`, default `~1`). Laplace = analytic-grad BFGS, vcov =
+  inv of -FD-Jacobian of analytic grad (`src/fp_occu_kernel.h`, gradient only).
+  NUTS `src/fp_occu_nuts.cpp`.
+- `dyn_abun` (tulpaObs#37): Dail-Madsen open N-mixture, `N_1~Pois(lambda)`,
+  `N_t=Binom(N_{t-1},omega)+Pois(gamma)`, `Binom(N_t,p)` obs. Latent N sequence
+  summed by exact HMM forward over states 0..K_max; analytic gradient by
+  forward-mode diff (`src/dyn_abun_kernel.h`). 4 arms lambda/p/omega/gamma
+  (`omega_formula`/`gamma_formula`, default `~1`). NUTS `src/dyn_abun_nuts.cpp`.
+  K_max default `max(count)+40` (forward cost ~cubic in K). Poisson init +
+  constant recruitment v1 (negbin/season-varying pending).
+
+All filed observation-family issues shipped; no planned-status families remain.
 
 ### N-mixture abundance (`abun()`)
 
@@ -338,10 +361,10 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community N-mixture | Yes | — | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> native `NMixCommunityOracle` via AGHQ, Schur SEs; Pois + negbin (per-species `log_r_s` RE via joint_grad/AGHQ); recovery+20-seed (`test-ms-abun.R`). NUTS pending |
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; tulpaObs#12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`), joint `(mu,f,{b_s})` mode-find, field/Sigma grid-int; Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms. ~2s/fit (N=100,J=4,10g,n.quad=5) |
-| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (tulpaObs#39); sequential depletion, pass k sees `N - sum_{l<k} y_l` trials = depleting-binomial product = multinomial removal; latent N summed to `K_max` closed-form. SHARES the count-marginal Laplace driver (`src/marginal_count_laplace.h`) + NUTS (`src/marginal_count_nuts.h`) with `abun`; per-site math `src/removal_kernel.h` over shared `accumulate_count_moments`/`fill_nb_dispersion` (`src/nmix_kernel.h`). `R/removal.R`, `R/removal_nuts.R`. Non-spatial Pois/NB; NUTS->WAIC/LOO. Recovery+coverage+NB+NUTS+Poisson-equivalence anchor (`test-removal.R`). Spatial/RE pending |
-| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (tulpaObs#38); latent N in covered region, per-bin detected counts multinomial over `(bin 1..B, undetected)`, `pi_b = int_bin g(x;sigma) f(x) dx` (half-normal / hazard-rate key, line/point transect density `f`), bin integrals + 1st/2nd eta-derivs by Gauss-Legendre quadrature; latent N summed to `K_max` closed-form. REUSES the count-marginal core (`accumulate_count_moments`/`fill_nb_dispersion`, `src/nmix_kernel.h`) for abundance/NB; detection arm = site-level `log sigma` + optional scalar hazard shape (`src/distance_quad.h`/`src/distance_kernel.h`), own Laplace driver (`src/distance_laplace.cpp`) + NUTS (`src/distance_nuts.cpp`) over the shared tulpa-NUTS engine driver (`src/nuts_engine.h`). `R/distance.R`, `R/distance_nuts.R`, `simulate_distance()`. `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. K_max default `3*max(rowSums)+100` (latent N >> detected). Recovery+coverage+hazard-shape+NB+point+NUTS->WAIC + Poisson-thinning anchor + analytic-vs-FD observed-info check (`test-distance.R`). Spatial/RE pending |
-| False-positive occupancy (multistate) | Yes | — | `fp_occu()` (tulpaObs#40); Miller 2011 confirmed-detection design, `y in {0,1,2}` (none/ambiguous/certain); certain detections only at occupied sites identify the model. Latent z summed closed-form (2-state); 4 site-level logit arms psi/p11/p10/b (`fp_formula`/`b_formula` for p10/b, default `~1`). Laplace = analytic-grad BFGS over exact marginal, vcov = inv of -FD-Jacobian of analytic grad at mode (`src/fp_occu_kernel.h`, gradient only — no 2nd-deriv needed). NUTS over same marginal (`src/fp_occu_nuts.cpp` via shared `src/nuts_engine.h`). `R/fp_occu.R`, `R/fp_occu_nuts.R`, `simulate_fp_occu()`. Recovery+coverage+fp-covariate+NUTS->WAIC + direct-marginal anchor (`test-fp_occu.R`). Spatial/RE pending |
-| Open N-mixture (Dail-Madsen) | Yes | — | `dyn_abun()` (tulpaObs#37); `N_1~Pois(lambda)`, `N_t=Binom(N_{t-1},omega)+Pois(gamma)`, `Binom(N_t,p)` obs. Latent N sequence summed by an exact HMM forward recursion over states 0..K_max (NOT closed-form); analytic gradient by forward-mode diff of the scaled forward (`src/dyn_abun_kernel.h`). 4 site-level arms lambda/p/omega/gamma (`omega_formula`/`gamma_formula`, default `~1`). Laplace = analytic-grad BFGS + observed-info vcov (FD-Jacobian of analytic grad). NUTS over same marginal (`src/dyn_abun_nuts.cpp` via shared `src/nuts_engine.h`). `R/dyn_abun.R`, `R/dyn_abun_nuts.R`, `simulate_dyn_abun()`; y is 3D `[n_sites x J x T]`. K_max default `max(count)+40` (forward cost ~cubic in K). Poisson init + constant recruitment v1 (negbin/season-varying pending). Recovery+coverage+NUTS->WAIC + R-forward anchor (`test-dyn_abun.R`). Spatial/RE pending |
+| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (tulpaObs#39); `R/removal.R`, `R/removal_nuts.R`, `simulate_removal()`. See Architecture. `test-removal.R`. Spatial/RE pending |
+| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (tulpaObs#38); `R/distance.R`, `R/distance_nuts.R`, `simulate_distance()`. `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. Spatial/RE pending |
+| False-positive occupancy (multistate) | Yes | — | `fp_occu()` (tulpaObs#40); `R/fp_occu.R`, `R/fp_occu_nuts.R`, `simulate_fp_occu()`. See Architecture. `test-fp_occu.R`. Spatial/RE pending |
+| Open N-mixture (Dail-Madsen) | Yes | — | `dyn_abun()` (tulpaObs#37); `R/dyn_abun.R`, `R/dyn_abun_nuts.R`, `simulate_dyn_abun()`; y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. Spatial/RE pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |
@@ -371,92 +394,59 @@ missing-value compare in outer BFGS. Recovery: 10-seed lognormal + 10-seed beta
 (`test-occu-cover-joint-coupled.R`); status `"experimental"`.
 
 **Cover-arm intercept prior (tulpaObs#32)**: on the shared-field path the cover
-intercept confounds with the field level over detected cells (the cover arm sees
-the field only where detected; the sum-to-zero field constraint pins only the
-global field mean). `.occu_cover_coupled_arm_priors()` therefore hands the pos
-arm the `cover_priors()` weakly-informative intercept prior **by default** (like
-the load-bearing detection-arm prior), not the engine's flat 1e-4 ridge —
-otherwise the cover intercept floats to a huge posterior SD (occupancy stays
-tight, being regularised + observing every cell) and `predict()`'s conditional
-cover blows up via Jensen. `priors = FALSE`/`"none"` disables all three arms.
+intercept confounds with the field level over detected cells.
+`.occu_cover_coupled_arm_priors()` hands the pos arm the `cover_priors()`
+weakly-informative intercept prior **by default** (not the engine's flat ridge);
+else the cover intercept floats to huge SD and `predict()`'s conditional cover
+blows up via Jensen. `priors = FALSE`/`"none"` disables all three arms.
 
 **Cell-aggregated cover (`cover_aggregate`, tulpaObs#33)**: per-visit cover gives
-the cover arm one row per *valid visit*, so a cell with many detected plots
-drives the shared field far more than its single occupancy obs (field flattens).
-`cover_aggregate = "mean"` (default on the spatial path) / `"median"` collapses
-the cover arm to ONE row per occupancy unit (the per-site mean/median cover over
-detected visits) so the two arms inform the field with comparable weight;
-`"none"` keeps per-visit. Wired ONLY on the spatial `joint_coupled` path (v2/v3 +
-non-spatial laplace reject explicit aggregation, default falls back to per-visit).
-Aggregation needs a **cell-level** positive design (resolved from `data`, not
-`visits`): a visit-level `positive` covariate keeps the per-visit arm (bare
-default falls back, explicit request errors). C++: compile-time `Aggregated`
-template flag on `OccuCoverCoupling` (`src/cell_coupling_occu_cover.h`) evaluates
-the pos density once per cell at arm-2 row 0; registered as
-`occu_cover_{lognormal,beta}_agg`. R: `.occu_cover_build_joint_coupled_arms(
-cover_aggregate=)` builds the one-row-per-detected-site pos arm; the fitter picks
-the `_agg` spec + pre-fits dispersion on the aggregated values. FD checks
-(`test-occu-cover-coupling.R`), recovery + gates (`test-occu-cover-aggregate.R`).
+the cover arm one row per valid visit, so a cell with many detected plots drives
+the field far more than its single occupancy obs. `cover_aggregate = "mean"`
+(default on spatial path) / `"median"` collapses the cover arm to ONE row per
+occupancy unit; `"none"` keeps per-visit. Wired ONLY on the spatial
+`joint_coupled` path. Needs a cell-level positive design (resolved from `data`);
+a visit-level `positive` keeps the per-visit arm. C++ compile-time `Aggregated`
+flag on `OccuCoverCoupling` (`src/cell_coupling_occu_cover.h`), registered
+`occu_cover_{lognormal,beta}_agg`; R `.occu_cover_build_joint_coupled_arms(
+cover_aggregate=)`. `test-occu-cover-coupling.R`, `test-occu-cover-aggregate.R`.
 
-**Latent cover-per-unit (`cover_aggregate = "latent"`)**: the principled version
-of mean/median — instead of collapsing a unit's detected covers to one number,
-the cover arm carries a per-unit cover RE `u_i ~ N(0, sigma_u^2)` shared across
-the unit's detected visits and integrates it out per unit (keeping every detected
-visit). Because the cover predictor is unit-level the per-unit marginal `log M_i`
-is a SCALAR function of one eta, so it reuses the one-row-per-unit layout with no
-within-arm Hessian coupling. Lognormal = closed form (compound-symmetry suff
-stats `m,T1,T2` → `src/occu_cover_latent.h::LognormalLatent`); beta = adaptive
-Gauss-Hermite over scalar `u_i` reusing `BetaPositive` (`BetaLatent`, GH nodes
-from the engine's exported `<tulpa/gauss_hermite.h>`, `control$n.quad` default
-15). Two dispersions: the within-unit one (`sigma_eps` / beta precision) is
-pre-fit from the **within-unit** spread (NOT the total — that would swallow
-`sigma_u`) and held FIXED in the spec; `sigma_u` rides the pos arm's `phi_grid`
-axis (`control$sigma.u.grid`), integrated on the outer grid and reported as the
-`phi_pos` hyperparameter (`joint_fit$theta_mean[["phi_pos"]]`). The spec is
-**stateful** (`OccuCoverLatentCoupling<PosLatent>`,
-`src/cell_coupling_occu_cover_latent.h`): it captures the per-unit cover data +
-fixed dispersion at construction and is (re)registered per fit via
-`cpp_register_occu_cover_{lognormal,beta}_latent_coupling()` (last-writer-wins; the
-joint driver holds the resolved shared_ptr for the fit). Shared det-branch psi/p
-+ nodet logic is factored into `occu_det_psi_p_block` / `occu_nodet_block`
-(`src/occu_coupling_shared.h`), used by both the per-visit/agg template and the
-latent spec. Same gates as aggregation. FD vs brute-force integration + recovery
-in `test-occu-cover-latent.R`.
+**Latent cover-per-unit (`cover_aggregate = "latent"`)**: principled mean/median
+alternative — cover arm carries a per-unit cover RE `u_i ~ N(0, sigma_u^2)` shared
+across the unit's detected visits, integrated out per unit (keeps every visit).
+Unit-level predictor -> per-unit marginal `log M_i` is SCALAR in one eta, reusing
+the one-row-per-unit layout, no within-arm Hessian coupling. Lognormal = closed
+form (`src/occu_cover_latent.h::LognormalLatent`); beta = adaptive GH over `u_i`
+reusing `BetaPositive` (`BetaLatent`, `<tulpa/gauss_hermite.h>`, `control$n.quad`
+default 15). Within-unit dispersion (`sigma_eps`/beta precision) pre-fit from the
+within-unit spread and held FIXED; `sigma_u` rides the pos arm `phi_grid`
+(`control$sigma.u.grid`), reported as `phi_pos`. Stateful spec
+(`OccuCoverLatentCoupling<PosLatent>`, `src/cell_coupling_occu_cover_latent.h`),
+(re)registered per fit via `cpp_register_occu_cover_{lognormal,beta}_latent_coupling()`.
+Shared det-branch psi/p + nodet logic in `occu_det_psi_p_block`/`occu_nodet_block`
+(`src/occu_coupling_shared.h`). Same gates as aggregation. `test-occu-cover-latent.R`.
 
 **Coupled SVC/trend fields** (tulpaObs#15): extra shared areal fields = WEIGHTED
 areal terms in psi formula — `icar(graph=adj, weight=year)` couples a
-spatially-varying coef on `year` atop unweighted intercept field
-`icar(graph=adj)`. N fields compose (each own outer-grid `alpha`) via tulpa
-multi-block copy (`prior=list(icar_intercept, icar_trend, ...)`, one `copy`/block
-onto pos arm, per-block `svc_weight`). Intercept field (`fit$spatial_field`)
-couples uniformly; each weighted field (`fit$trend_field`, `fit$trend_fields` for
->1) weighted by `weight_i` on psi (per-cell) + pos (per-visit broadcast), own
-scale (`alpha_trend`, `control$alpha.grid.trend`). p (detection) arm excluded via
-`field_coef=0` (per-arm scalar zeroes field every block — `svc_weight=0` NOT
-equivalent: leaves p-intercept biased through cross-arm Hessian; verified
-`dev_notes/_phase1_altwire.R`). Weighted term = formula-DSL of field list,
-resolved `.occu_cover_spatial_fields()` (exactly 1 unweighted base + N weighted
-SVC, one graph); `control=list(trend=list(weight="<col>"))` = back-compat alias
-for single trend field (one way or other, not both — errors). Weighted areal off
-joint occu_cover path errors via `.tobs_reject_weighted_spatial()`. Recovery:
-10-seed 2-field lognormal + route-equiv (`test-occu-cover-trend.R`).
+spatially-varying coef on `year` atop unweighted intercept field `icar(graph=adj)`.
+N fields compose (each own outer-grid `alpha`) via tulpa multi-block copy. Intercept
+field = `fit$spatial_field`; weighted fields `fit$trend_field`/`fit$trend_fields`,
+own scale `alpha_trend` (`control$alpha.grid.trend`). p arm excluded via
+`field_coef=0` (NOT `svc_weight=0` — leaves p-intercept biased). Resolved by
+`.occu_cover_spatial_fields()` (1 unweighted base + N weighted SVC, one graph);
+`control=list(trend=list(weight="<col>"))` = back-compat alias (one or other,
+errors if both). Off-path errors via `.tobs_reject_weighted_spatial()`.
+`test-occu-cover-trend.R`.
 
 **Escape hatches**: `control$engine="v3_nested"` (pure-R outer-BFGS,
-`R/occu_cover_nested.R`, lognormal only, `test-occu-cover-spatial.R`),
-`control$engine="v2_joint"` (v2 joint Laplace, kept for (z,alpha,sigma) ridge
-investigation).
+`R/occu_cover_nested.R`, lognormal only), `"v2_joint"` (v2 joint Laplace).
 
-**`group_var` (sites > cells)**: `group_var="<col>"` on `icar()`/`bym2()` maps
-each site (y/data row, one occupancy state) -> field node, so `n_sites` >
-`n_cells`. Field stays length `n_cells` (graph) while psi/p/cover run over
-`n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_map` (occupancy unit)
-decouple — psi `spatial_idx=site_cell`, pos `spatial_idx=cell_of_visit`, both
-`cell_obs_map` over sites; SVC trend weight per-site. Motivating layout: site =
-cell x time-period (plots-in-cell-period = detection replicates) ->
-detection-corrected occupancy trend on shared cell field. R-side only
-(`.dispatch_occu_cover` resolves `site_cell`,
-`.occu_cover_build_joint_coupled_arms` splits site/cell); joint_coupled only
-(v2/v3 reject). Recovery: `test-occu-cover-group-var.R`.
+**`group_var` (sites > cells)**: `group_var="<col>"` on `icar()`/`bym2()` maps each
+site -> field node, so `n_sites` > `n_cells`. Field length `n_cells` while
+psi/p/cover run over `n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_map`
+(occupancy unit) decouple. Motivating layout: site = cell x time-period. R-side only
+(`.dispatch_occu_cover`, `.occu_cover_build_joint_coupled_arms`); joint_coupled only.
+`test-occu-cover-group-var.R`.
 
 ### `ms_occu_cover()` detail
 
@@ -563,11 +553,12 @@ R/
   ms_dyn_occu.R             — community dynamic occupancy: build, HMM-forward marginal, fit (psi1/p RE + gamma/eps global), S3, simulate, ms_dyn_occu() ctor
   ms_int_occu.R             — community integrated occupancy: build, multi-source two-state marginal + analytic grad, fit, S3, simulate, ms_int_occu() ctor
   abun.R                    — nmix family: build_abun, fit_nmix, build_nmix_fit, S3, simulate_abun
-  abun_nuts.R               — non-spatial nmix NUTS (tulpaObs#41): R joint log-post target (.tobs_abun_nuts_logpost, the oracle), layout/marginal/pack-init helpers, front-door fitter .tobs_fit_abun_nuts (warm-start + Laplace metric -> cpp_abun_nuts -> build_nmix_fit + draws/diagnostics)
+  abun_nuts.R               — non-spatial nmix NUTS (tulpaObs#41): .tobs_abun_nuts_logpost (oracle), .tobs_fit_abun_nuts
   ms_abun.R                 — community nmix: build_ms_abun, ms_nmix_longform, fit_ms_nmix (-> nmix_laplace_re), build_ms_nmix_fit, S3, simulate_ms_abun
+  ms_abun_nuts.R            — community nmix NUTS (tulpaObs#14): .tobs_ms_abun_nuts_logpost (oracle), layout/marginal/metric helpers, .tobs_fit_ms_abun_nuts (warm-start -> cpp_ms_abun_nuts)
   nmix_laplace.R            — in-tree non-spatial nmix (Royle 2004) Laplace (Pois+NB)
   nmix_laplace_re.R         — in-tree community nmix (msNMix), .nmix_re_oracle()
-  nmix_laplace_re_spatial.R — spatial community nmix (sfMsNMix): _icar/_bym2/_car_proper over cpp_nmix_community_spatial_*, grid-int means/field/Sigma
+  nmix_laplace_re_spatial.R — spatial community nmix (sfMsNMix): _icar/_bym2/_car_proper over cpp_nmix_community_spatial_*
   nmix_re_aghq.R            — single-species grouped RE: .tobs_nmix_re_aghq() -> NMixGroupedOracle
   nmix_laplace_spatial.R    — nmix_laplace_icar/_bym2/_car_proper areal fitters
   nmix_site_marginal.R      — per-site marginal as composable AGHQ callback
@@ -606,7 +597,9 @@ src/
   cell_coupling_occu_multiscale_cover.{cpp,h} — 4-arm multiscale cell-coupling spec
   occu_coupling_shared.h      — shared coupling helpers (CSR/field-demean/inner-vcov/rmvn); reused by the spatial-factor NUTS marginal (nodet_mixture_block, Lognormal/BetaPositive)
   ms_occu_cover_spatial_nuts.cpp — spatial-factor community occu_cover NUTS: marginal LL + full joint log-posterior gradient (FullGradFn), field R(h) layer (icar/car/bym2), cpp_ms_ocs_nuts driving tulpa's sampler (tulpa#67)
-  abun_nuts.cpp               — non-spatial nmix NUTS (tulpaObs#41): abun_nuts_eval (joint log-post + gradient over (beta_lambda, beta_p[, log_r]) reusing compute_nmix_site), FullGradFn abun_nuts_full_grad, cpp_abun_nuts_joint_logpost (cross-check) + cpp_abun_nuts (driver); byte-exact vs the R oracle
+  abun_nuts.cpp               — non-spatial nmix NUTS (tulpaObs#41): abun_nuts_eval (joint log-post + gradient reusing compute_nmix_site), FullGradFn, cpp_abun_nuts_joint_logpost (cross-check) + cpp_abun_nuts (driver); byte-exact vs R oracle
+  ms_abun_nuts.cpp            — community nmix NUTS (tulpaObs#14): ms_abun_nuts_eval (joint log-post + gradient over mu/{b_s}/chol arms, per-(species,site) lgamma cache via compute_nmix_site_cached), FullGradFn, cpp_ms_abun_nuts_joint_logpost + cpp_ms_abun_nuts; byte-exact vs R oracle
+  community_chol.h            — shared log-Cholesky helpers (chol_unpack_cpp/lower_tri_inv/sinv_from_cinv/chol_block_grad_cpp) for the community NUTS targets (#14, #67)
   RcppExports.cpp             — generated, do not edit
   Makevars.win                — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-obj MinGW)
 tests/testthat/  — test files
