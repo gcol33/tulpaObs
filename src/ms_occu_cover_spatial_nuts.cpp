@@ -35,6 +35,15 @@ struct MsOcsData {
     bool is_beta = false;
     std::vector<NumericMatrix> y, y_pos, valid;   // length S
     NumericMatrix X_occ, X_p, X_pos;              // n_sites x P_arm
+
+    // Areal field structure: 0 icar (Q), 1 car_proper (D - h A), 2 bym2
+    // (V diag(1/((1-h)+h s)) V'). has_hyper -> a per-factor logit_h coordinate.
+    int field_type = 0;
+    bool has_hyper = false;
+    NumericMatrix Q, A, V;                         // icar Q; car A; bym2 V
+    std::vector<double> deg, gamma, s;             // car deg/gamma; bym2 s
+    double logdetD = 0.0;                          // car log|D|
+    double field_rank = 0.0;                       // N-1 (icar) or N (proper)
 };
 
 // Shared field W is passed per call as a column-major n_sites x K buffer
@@ -65,7 +74,105 @@ inline MsOcsData ms_ocs_build_data(const List& spec) {
         d.y_pos.push_back(as<NumericMatrix>(ypl[s]));
         d.valid.push_back(as<NumericMatrix>(vl[s]));
     }
+    // Field structure
+    if (spec.containsElementNamed("Q")) d.Q = as<NumericMatrix>(spec["Q"]);
+    if (spec.containsElementNamed("field_rank"))
+        d.field_rank = as<double>(spec["field_rank"]);
+    d.has_hyper = spec.containsElementNamed("has_hyper")
+                  && as<bool>(spec["has_hyper"]);
+    std::string ft = spec.containsElementNamed("field_type")
+                     ? as<std::string>(spec["field_type"]) : "icar";
+    if (ft == "car_proper") {
+        d.field_type = 1;
+        d.A = as<NumericMatrix>(spec["A"]);
+        d.deg = as<std::vector<double>>(spec["deg"]);
+        d.gamma = as<std::vector<double>>(spec["gamma"]);
+        d.logdetD = as<double>(spec["logdetD"]);
+    } else if (ft == "bym2") {
+        d.field_type = 2;
+        d.V = as<NumericMatrix>(spec["V"]);
+        d.s = as<std::vector<double>>(spec["s"]);
+    } else {
+        d.field_type = 0;
+    }
     return d;
+}
+
+// ---- Areal field structure R(h): products, quadratic, log-determinant, and
+// hyperparameter derivatives. h is ignored for icar. ----
+
+// R(h) W_k -> out (length N).
+inline void field_RWk(const MsOcsData& d, double h, const double* Wk, double* out) {
+    const int N = d.n_sites;
+    if (d.field_type == 1) {                       // car_proper: D - h A
+        for (int i = 0; i < N; ++i) {
+            double aw = 0.0;
+            for (int j = 0; j < N; ++j) aw += d.A(i, j) * Wk[j];
+            out[i] = d.deg[i] * Wk[i] - h * aw;
+        }
+    } else if (d.field_type == 2) {                // bym2: V diag(1/m) V'
+        std::vector<double> t(N, 0.0);
+        for (int j = 0; j < N; ++j) {
+            double acc = 0.0;
+            for (int i = 0; i < N; ++i) acc += d.V(i, j) * Wk[i];
+            t[j] = acc / ((1.0 - h) + h * d.s[j]);
+        }
+        for (int i = 0; i < N; ++i) {
+            double acc = 0.0;
+            for (int j = 0; j < N; ++j) acc += d.V(i, j) * t[j];
+            out[i] = acc;
+        }
+    } else {                                        // icar: Q
+        for (int i = 0; i < N; ++i) {
+            double acc = 0.0;
+            for (int j = 0; j < N; ++j) acc += d.Q(i, j) * Wk[j];
+            out[i] = acc;
+        }
+    }
+}
+
+// log|R(h)| for the proper fields (constant for icar -> returns 0, dropped).
+inline double field_logdetR(const MsOcsData& d, double h) {
+    const int N = d.n_sites;
+    if (d.field_type == 1) {
+        double acc = d.logdetD;
+        for (int j = 0; j < N; ++j) acc += std::log(1.0 - h * d.gamma[j]);
+        return acc;
+    }
+    if (d.field_type == 2) {
+        double acc = 0.0;
+        for (int j = 0; j < N; ++j) acc -= std::log((1.0 - h) + h * d.s[j]);
+        return acc;
+    }
+    return 0.0;
+}
+
+// dquad = W_k'(dR/dh)W_k and dlogdet = d log|R(h)|/dh (proper fields only).
+inline void field_hyper_terms(const MsOcsData& d, double h, const double* Wk,
+                              double& dquad, double& dlogdet) {
+    const int N = d.n_sites;
+    if (d.field_type == 1) {                       // dR/dh = -A
+        double aw_sum = 0.0;
+        for (int i = 0; i < N; ++i) {
+            double aw = 0.0;
+            for (int j = 0; j < N; ++j) aw += d.A(i, j) * Wk[j];
+            aw_sum += Wk[i] * aw;
+        }
+        dquad = -aw_sum;
+        double dl = 0.0;
+        for (int j = 0; j < N; ++j) dl -= d.gamma[j] / (1.0 - h * d.gamma[j]);
+        dlogdet = dl;
+    } else if (d.field_type == 2) {
+        double dq = 0.0, dl = 0.0;
+        for (int j = 0; j < N; ++j) {
+            double t = 0.0;
+            for (int i = 0; i < N; ++i) t += d.V(i, j) * Wk[i];
+            const double m = (1.0 - h) + h * d.s[j];
+            dq -= (t * t) * (d.s[j] - 1.0) / (m * m);
+            dl -= (d.s[j] - 1.0) / m;
+        }
+        dquad = dq; dlogdet = dl;
+    } else { dquad = 0.0; dlogdet = 0.0; }
 }
 
 inline double clamp30(double e) { return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e); }
@@ -454,7 +561,8 @@ namespace tulpaObs {
 
 struct PriScalars {
     double logdiag_mean, logdiag_sd, offdiag_sd,
-           log_tau_mean, log_tau_sd, log_disp_mean, log_disp_sd;
+           log_tau_mean, log_tau_sd, log_disp_mean, log_disp_sd,
+           logit_h_mean, logit_h_sd;
 };
 
 // Free triangular-loading length: K*S - K(K-1)/2 (matches .ms_ocs_lfree_dim).
@@ -491,7 +599,8 @@ inline int ms_ocs_nuts_total(const MsOcsData& d, bool constrain = false) {
     const int Lw = Lbase + (d.cover_factor ? d.S * d.K : 0);
     const int chol = d.P_occ * (d.P_occ + 1) / 2 + d.P_p * (d.P_p + 1) / 2
                    + d.P_pos * (d.P_pos + 1) / 2;
-    return P + d.S * P + Lw + d.n_sites * d.K + 1 + chol + d.K;
+    const int hyper = d.has_hyper ? d.K : 0;       // logit_h block
+    return P + d.S * P + Lw + d.n_sites * d.K + 1 + chol + d.K + hyper;
 }
 
 // Full-vector joint log-posterior + gradient core (icar, unconstrained). `g` is a
@@ -530,6 +639,8 @@ inline double ms_ocs_joint_eval(const MsOcsData& d, const Rcpp::NumericMatrix& Q
         q_off[a] = off; off += q_dim[a];
     }
     const int tau_off = off; off += K;
+    int logit_h_off = -1;
+    if (d.has_hyper) { logit_h_off = off; off += K; }
     (void) off;
 
     double* g_W = g + w_off;
@@ -629,23 +740,38 @@ inline double ms_ocs_joint_eval(const MsOcsData& d, const Rcpp::NumericMatrix& Q
         }
     }
 
-    // ---- field GMRF: per-factor tau quadratic + rank normaliser; g_W and log_tau
-    //      gradients. icar structure Q, rank = N - 1. ----
+    // ---- field GMRF: per-factor tau quadratic + rank normaliser + (proper
+    //      fields) the h-dependent log|R(h)| and the logit_h gradient. The field
+    //      structure R(h) is icar Q, proper-CAR D - h A, or bym2 V diag(1/m) V'.
+    (void) Q;
+    const double logit_h_mean = pr.logit_h_mean, logit_h_sd = pr.logit_h_sd;
+    std::vector<double> RWk(N);
     for (int k = 0; k < K; ++k) {
         const double log_tau = th[tau_off + k];
         const double tau = std::exp(log_tau);
-        // QW_k and quad = W_k' Q W_k
+        const double h = d.has_hyper
+                       ? 1.0 / (1.0 + std::exp(-th[logit_h_off + k])) : 0.0;
+        field_RWk(d, h, Wbuf.data() + (std::size_t) k * N, RWk.data());
         double quad = 0.0;
         for (int i = 0; i < N; ++i) {
-            double qw = 0.0;
-            for (int j = 0; j < N; ++j) qw += Q(i, j) * Wbuf[(std::size_t) k * N + j];
-            quad += Wbuf[(std::size_t) k * N + i] * qw;
-            g_W[(std::size_t) k * N + i] -= tau * qw;        // field-prior gradient
+            quad += Wbuf[(std::size_t) k * N + i] * RWk[i];
+            g_W[(std::size_t) k * N + i] -= tau * RWk[i];    // field-prior gradient
         }
         lp += -0.5 * tau * quad + 0.5 * field_rank * log_tau;
         lp += -0.5 * ((log_tau - log_tau_mean) / log_tau_sd) * ((log_tau - log_tau_mean) / log_tau_sd);
         g[tau_off + k] = -0.5 * tau * quad + 0.5 * field_rank
                        - (log_tau - log_tau_mean) / log_tau_sd / log_tau_sd;
+        if (d.has_hyper) {
+            lp += 0.5 * field_logdetR(d, h);
+            double dquad = 0.0, dlogdet = 0.0;
+            field_hyper_terms(d, h, Wbuf.data() + (std::size_t) k * N, dquad, dlogdet);
+            const double dlp_dh = -0.5 * tau * dquad + 0.5 * dlogdet;
+            const double dh = h * (1.0 - h);                 // plogis derivative
+            const double zc = th[logit_h_off + k];
+            lp += -0.5 * ((zc - logit_h_mean) / logit_h_sd) * ((zc - logit_h_mean) / logit_h_sd);
+            g[logit_h_off + k] = dlp_dh * dh
+                               - (zc - logit_h_mean) / logit_h_sd / logit_h_sd;
+        }
     }
 
     // ---- log_disp prior ----
@@ -671,7 +797,8 @@ inline double ms_ocs_joint_eval_c(const MsOcsData& d, const Rcpp::NumericMatrix&
     const int nL = ms_ocs_lfree_dim(S, K);
     const int SK = S * K;
     const int chol = d.P_occ*(d.P_occ+1)/2 + d.P_p*(d.P_p+1)/2 + d.P_pos*(d.P_pos+1)/2;
-    const int tail = (d.cover_factor ? SK : 0) + N * K + 1 + chol + K;
+    const int tail = (d.cover_factor ? SK : 0) + N * K + 1 + chol + K
+                   + (d.has_hyper ? K : 0);
 
     std::vector<double> Lfull((std::size_t) SK);
     lfree_to_L_cpp(th + head, S, K, Lfull.data());
@@ -722,7 +849,9 @@ inline PriScalars ms_ocs_pri_from_list(const Rcpp::List& pri) {
                        Rcpp::as<double>(pri["log_tau_mean"]),
                        Rcpp::as<double>(pri["log_tau_sd"]),
                        Rcpp::as<double>(pri["log_disp_mean"]),
-                       Rcpp::as<double>(pri["log_disp_sd"]) };
+                       Rcpp::as<double>(pri["log_disp_sd"]),
+                       Rcpp::as<double>(pri["logit_h_mean"]),
+                       Rcpp::as<double>(pri["logit_h_sd"]) };
 }
 
 } // namespace tulpaObs
