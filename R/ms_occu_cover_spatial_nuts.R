@@ -368,6 +368,109 @@
 
 
 # ---------------------------------------------------------------------------
+# NUTS fit (front-door method = "nuts")
+# ---------------------------------------------------------------------------
+
+# Inverse-mass diagonal for the NUTS warm-start: the posterior variance per
+# coordinate, read off the finite-difference diagonal of the joint
+# log-posterior Hessian at the mode (the Laplace metric). Uses the fast C++
+# gradient so the K*(few) gradient evaluations are cheap.
+.ms_ocs_nuts_metric <- function(spec, theta, pri, sigma.beta, sd_L, constrain,
+                                h = 1e-4) {
+  np <- length(theta); md <- numeric(np)
+  g <- function(th) cpp_ms_ocs_joint_logpost(spec, th, pri, sigma.beta, sd_L,
+                                             constrain)$grad
+  for (j in seq_len(np)) {
+    tp <- theta; tp[j] <- tp[j] + h
+    tm <- theta; tm[j] <- tm[j] - h
+    md[j] <- -(g(tp)[j] - g(tm)[j]) / (2 * h)
+  }
+  1 / pmax(md, 1e-3)
+}
+
+# Reconstruct a Laplace-EM-shaped `fit` object from the NUTS draws so the shared
+# builder (build_ms_occu_cover_spatial_fit) packages the tobs_fit unchanged. The
+# inner-latent posterior is summarised by its mean (`par`) and covariance (`cov`)
+# over the draws; the hyperparameters (community covariances, field precisions,
+# field hyperparameter) by their posterior means. The shared builder's
+# association / map posteriors then draw from N(par, cov) -- a moment-matched
+# Gaussian to the NUTS inner-latent posterior, marginalising the loadings / field
+# the same way the Laplace path does.
+.ms_ocs_nuts_fit_from_draws <- function(model, res, em, constrain) {
+  d   <- .ms_ocs_dims(model)
+  spec_f <- model$field_spec %||%
+    .ms_ocs_field_spec(model$adj, model$field_type %||% "icar")
+  has_hyper <- isTRUE(spec_f$has_hyper)
+  lay <- .ms_ocs_nuts_layout(d, constrain, has_hyper)
+  draws <- res$draws
+  inner <- draws[, lay$inner, drop = FALSE]
+
+  par <- colMeans(inner)
+  cov <- stats::cov(inner)
+  up  <- if (constrain) .ms_ocs_unpack_c(par, d) else .ms_ocs_unpack(par, d)
+
+  # Community covariances: posterior mean of Sigma_arm = C C' over the draws.
+  arm_chol <- list(occ = lay$chol_occ, p = lay$chol_p, pos = lay$chol_pos)
+  arm_P    <- list(occ = d$P_occ, p = d$P_p, pos = d$P_pos)
+  Sigma <- lapply(c("occ", "p", "pos"), function(a) {
+    cols <- arm_chol[[a]]; P <- arm_P[[a]]
+    acc <- matrix(0, P, P)
+    for (i in seq_len(nrow(draws))) {
+      C <- .ms_ocs_chol_unpack(draws[i, cols], P); acc <- acc + tcrossprod(C)
+    }
+    acc <- acc / nrow(draws); (acc + t(acc)) / 2
+  })
+  names(Sigma) <- c("occ", "p", "pos")
+
+  tau_w <- exp(colMeans(draws[, lay$log_tau, drop = FALSE]))
+  field_hyper <- if (has_hyper)
+    stats::plogis(colMeans(draws[, lay$logit_h, drop = FALSE])) else NULL
+
+  list(par = par, cov = cov, mu = up$mu, b = up$b, ld = up$ld,
+       L = up$L, w = up$W, Lpos = up$Lpos, constrained = constrain,
+       Sigma = Sigma, tau_w = tau_w, field_hyper = field_hyper,
+       field_type = spec_f$type, hyper_name = spec_f$hyper_name,
+       sd_L = em$sd_L, em_logpen = em$em_logpen,
+       convergence = 0L, d = d,
+       nuts = list(draws = draws, accept_prob = res$accept_prob,
+                   divergent = res$divergent, treedepth = res$treedepth,
+                   epsilon = res$epsilon, layout = lay))
+}
+
+# Fit the spatial-factor community occu_cover by NUTS: a short Laplace-EM warm
+# start sets the initial position and the inverse-mass metric, then tulpa's NUTS
+# (driven by the C++ FullGradFn) samples the exact joint posterior. Returns the
+# reconstructed fit list consumed by build_ms_occu_cover_spatial_fit.
+.tobs_fit_ms_occu_cover_spatial_nuts <- function(model, sd_L = 1.0,
+                                                 sigma.beta = 5, constrain = FALSE,
+                                                 control = list()) {
+  em <- .tobs_fit_ms_occu_cover_spatial(
+    model, sd_L = sd_L, sigma.beta = sigma.beta, constrain = constrain,
+    max.em = control[["max.iter"]] %||% 30L,
+    tol = control[["tol"]] %||% 1e-3,
+    verbose = isTRUE(control[["verbose"]]))
+
+  theta0 <- .ms_ocs_nuts_pack_init(em)
+  spec   <- .ms_ocs_nuts_spec(model)
+  pri    <- .ms_ocs_nuts_priors()
+  inv_metric <- .ms_ocs_nuts_metric(spec, theta0, pri, sigma.beta, sd_L,
+                                    constrain)
+
+  n_warmup <- control[["n.warmup"]] %||% 500L
+  n_sample <- control[["n.iter"]]   %||% 1000L
+  res <- cpp_ms_ocs_nuts(
+    spec, theta0, pri, sigma.beta, sd_L, inv_metric,
+    n_iter = as.integer(n_warmup + n_sample), n_warmup = as.integer(n_warmup),
+    max_treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+    adapt_delta = control[["adapt.delta"]] %||% 0.95,
+    seed = as.integer(control[["seed"]] %||% 1L),
+    verbose = isTRUE(control[["verbose"]]), constrain = constrain)
+
+  .ms_ocs_nuts_fit_from_draws(model, res, em, constrain)
+}
+
+
+# ---------------------------------------------------------------------------
 # Warm-start packing from an EM fit
 # ---------------------------------------------------------------------------
 

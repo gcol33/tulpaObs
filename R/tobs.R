@@ -633,6 +633,7 @@ tobs <- function(formula,
   if (!is.null(sp)) {
     nf     <- control[["n.factors"]] %||% 1L
     auto_K <- is.character(nf) && identical(tolower(nf), "auto")
+    use_nuts <- identical(engine, "nuts")
     model <- .tobs_build_ms_occu_cover_spatial(
       occ_formula      = sp$fe_occ,
       det_formula      = vd_det$det_formula,
@@ -651,6 +652,11 @@ tobs <- function(formula,
       pos_visit_formula = vd_pos$det_visit_formula,
       pos_visit_data    = vd_pos$visits
     )
+    if (auto_K && use_nuts) {
+      stop("method = \"nuts\" needs an explicit n.factors (K); the auto-K ",
+           "rank selection is a Laplace-evidence procedure. Fit the chosen K ",
+           "with method = \"nuts\".", call. = FALSE)
+    }
     if (auto_K) {
       # Choose the latent-factor rank K by the empirical-Bayes Laplace marginal
       # likelihood: latent-level pointwise criteria (held-out cells, WAIC) fail
@@ -672,21 +678,42 @@ tobs <- function(formula,
       out$spatial$K_selection <- sel$table
       return(out)
     }
+    # K > 1 is identified only up to an orthogonal rotation, so the unconstrained
+    # loading posterior is improper along that manifold; the identified
+    # (lower-triangular) parameterisation gives well-posed loading uncertainty.
+    # K = 1 carries no continuous rotation, so it stays unconstrained.
+    constrain <- control[["constrain"]] %||% (model$K > 1L)
+    if (use_nuts) {
+      fit <- .tobs_fit_ms_occu_cover_spatial_nuts(
+        model, sd_L = control[["sd.load"]] %||% 1.0,
+        sigma.beta = control[["sigma.beta"]] %||% 5,
+        constrain = constrain, control = control)
+      out <- build_ms_occu_cover_spatial_fit(model, fit)
+      # Surface the sampler diagnostics at the top level (the shared builder
+      # stamps NA placeholders); the raw draws stay under fit$nuts.
+      nd <- fit$nuts
+      out$accept_prob <- nd$accept_prob
+      out$divergent   <- nd$divergent
+      out$treedepth   <- nd$treedepth
+      out$epsilon     <- nd$epsilon
+      out$nuts        <- nd
+      return(out)
+    }
     fit <- .tobs_fit_ms_occu_cover_spatial(
       model,
       sd_L       = control[["sd.load"]]   %||% 1.0,
       max.em     = control[["max.iter"]]  %||% 30L,
       tol        = control[["tol"]]       %||% 1e-3,
       sigma.beta = control[["sigma.beta"]] %||% 5,
-      # K > 1 is identified only up to an orthogonal rotation, so the
-      # unconstrained loading posterior is improper along that manifold; the
-      # identified (lower-triangular) parameterisation gives well-posed loading
-      # uncertainty for the residual species-association intervals. K = 1 carries
-      # no continuous rotation, so it stays in the unconstrained parameterisation.
-      constrain  = control[["constrain"]] %||% (model$K > 1L),
+      constrain  = constrain,
       verbose    = isTRUE(control[["verbose"]])
     )
     return(build_ms_occu_cover_spatial_fit(model, fit))
+  }
+  if (identical(engine, "nuts")) {
+    stop("method = \"nuts\" for ms_occu_cover() requires a shared spatial-factor ",
+         "term (icar()/car_proper()/bym2() on the occupancy arm); the ",
+         "non-spatial community fit is Laplace only.", call. = FALSE)
   }
 
   model <- .tobs_build_ms_occu_cover(
@@ -866,7 +893,11 @@ tobs <- function(formula,
   # Non-spatial only -- the community analogue of the joint-coupled spatial
   # engine (per-species RE layered on the shared coupled field) needs upstream
   # tulpa support, so nested_laplace is not offered.
-  ms_occu_cover = c("laplace"),
+  # nuts: the reduced-rank spatial-factor path (a shared icar/car/bym2 field with
+  # per-species loadings) samples the exact joint posterior via tulpa's NUTS +
+  # the in-tree C++ FullGradFn (gcol33/tulpa#67). Non-spatial ms_occu_cover has
+  # no NUTS path (gated in the dispatcher).
+  ms_occu_cover = c("laplace", "nuts"),
   # ms_dyn_occu / ms_int_occu: community dynamic / integrated occupancy. Per-
   # species coefficient RE with per-arm Gaussian community covariances, fit by
   # the shared community Laplace-EM (R/community_em.R). The latent occupancy

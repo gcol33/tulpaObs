@@ -447,6 +447,43 @@ test_that("NUTS samples the spatial-factor community target and recovers the mea
   expect_lt(sum(res$divergent) / nrow(res$draws), 0.2)
 })
 
+test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(5L, 5L); S <- 5L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
+          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "nuts",
+              control = list(n.factors = 1L, sd.load = 1.1, n.iter = 400L,
+                             n.warmup = 200L, adapt.delta = 0.95, seed = 42L))
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$method, "nuts")
+  expect_false(is.null(fit$nuts$draws))
+  expect_identical(nrow(fit$nuts$draws), 400L)
+  expect_false(is.null(fit$spatial$maps))
+  mu_true <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  cm <- fit$means[seq_along(mu_true)]
+  expect_gt(stats::cor(cm, mu_true), 0.7)
+  expect_lt(sum(fit$divergent) / length(fit$divergent), 0.2)
+
+  # NUTS rejects auto-K (a Laplace-evidence procedure) and the non-spatial path.
+  expect_error(
+    tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+         family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+         positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+         species = sim$species, method = "nuts",
+         control = list(n.factors = "auto")),
+    "explicit n.factors")
+  expect_error(
+    tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+         detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+         y_pos = sim$y_pos, species = sim$species, method = "nuts"),
+    "spatial-factor")
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
