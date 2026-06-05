@@ -457,10 +457,38 @@ struct PriScalars {
            log_tau_mean, log_tau_sd, log_disp_mean, log_disp_sd;
 };
 
-// Length of the full NUTS coordinate vector (icar, unconstrained loadings).
-inline int ms_ocs_nuts_total(const MsOcsData& d) {
+// Free triangular-loading length: K*S - K(K-1)/2 (matches .ms_ocs_lfree_dim).
+inline int ms_ocs_lfree_dim(int S, int K) { return K * S - K * (K - 1) / 2; }
+
+// Free triangular vector -> full S x K loading matrix (col-major), exp() on the
+// diagonal, zeros above it. Mirrors .ms_ocs_lfree_to_L.
+inline void lfree_to_L_cpp(const double* lf, int S, int K, double* L) {
+    for (int t = 0; t < S * K; ++t) L[t] = 0.0;
+    int pos = 0;
+    for (int k = 0; k < K; ++k) {
+        L[(std::size_t) k * S + k] = std::exp(lf[pos++]);
+        for (int i = k + 1; i < S; ++i) L[(std::size_t) k * S + i] = lf[pos++];
+    }
+}
+
+// Gradient wrt full L (S x K col-major) -> gradient wrt the free triangular
+// vector: drop the structural zeros, log-link chain on the diagonal. Mirrors
+// .ms_ocs_gL_to_glfree.
+inline void gL_to_glfree_cpp(const double* gL, const double* L, int S, int K,
+                             double* glf) {
+    int pos = 0;
+    for (int k = 0; k < K; ++k) {
+        glf[pos++] = gL[(std::size_t) k * S + k] * L[(std::size_t) k * S + k];
+        for (int i = k + 1; i < S; ++i) glf[pos++] = gL[(std::size_t) k * S + i];
+    }
+}
+
+// Length of the full NUTS coordinate vector. `constrain` swaps the S*K
+// unconstrained loading block for the K*S - K(K-1)/2 triangular free block.
+inline int ms_ocs_nuts_total(const MsOcsData& d, bool constrain = false) {
     const int P = d.P_occ + d.P_p + d.P_pos;
-    const int Lw = d.cover_factor ? 2 * d.S * d.K : d.S * d.K;
+    const int Lbase = constrain ? ms_ocs_lfree_dim(d.S, d.K) : d.S * d.K;
+    const int Lw = Lbase + (d.cover_factor ? d.S * d.K : 0);
     const int chol = d.P_occ * (d.P_occ + 1) / 2 + d.P_p * (d.P_p + 1) / 2
                    + d.P_pos * (d.P_pos + 1) / 2;
     return P + d.S * P + Lw + d.n_sites * d.K + 1 + chol + d.K;
@@ -627,6 +655,40 @@ inline double ms_ocs_joint_eval(const MsOcsData& d, const Rcpp::NumericMatrix& Q
     return lp;
 }
 
+// Constrained-loadings dispatch: when `constrain`, the L block is the triangular
+// free vector. Expand it to a full loading matrix, defer to the (validated)
+// unconstrained core, then map the L-block gradient back to the free vector by
+// the chain rule -- the reparameterisation adapter, mirror of .ms_ocs_penll_grad_c.
+inline double ms_ocs_joint_eval_c(const MsOcsData& d, const Rcpp::NumericMatrix& Q,
+                                  double field_rank, const PriScalars& pr,
+                                  double sigma_beta, double sd_L, bool constrain,
+                                  const double* th, double* g) {
+    if (!constrain)
+        return ms_ocs_joint_eval(d, Q, field_rank, pr, sigma_beta, sd_L, th, g);
+    const int P = d.P_occ + d.P_p + d.P_pos;
+    const int S = d.S, K = d.K, N = d.n_sites;
+    const int head = P + S * P;
+    const int nL = ms_ocs_lfree_dim(S, K);
+    const int SK = S * K;
+    const int chol = d.P_occ*(d.P_occ+1)/2 + d.P_p*(d.P_p+1)/2 + d.P_pos*(d.P_pos+1)/2;
+    const int tail = (d.cover_factor ? SK : 0) + N * K + 1 + chol + K;
+
+    std::vector<double> Lfull((std::size_t) SK);
+    lfree_to_L_cpp(th + head, S, K, Lfull.data());
+    std::vector<double> th_full((std::size_t) head + SK + tail);
+    std::copy(th, th + head, th_full.begin());
+    std::copy(Lfull.begin(), Lfull.end(), th_full.begin() + head);
+    std::copy(th + head + nL, th + head + nL + tail, th_full.begin() + head + SK);
+
+    std::vector<double> g_full((std::size_t) head + SK + tail, 0.0);
+    const double lp = ms_ocs_joint_eval(d, Q, field_rank, pr, sigma_beta, sd_L,
+                                        th_full.data(), g_full.data());
+    std::copy(g_full.begin(), g_full.begin() + head, g);
+    gL_to_glfree_cpp(g_full.data() + head, Lfull.data(), S, K, g + head);
+    std::copy(g_full.begin() + head + SK, g_full.end(), g + head + nL);
+    return lp;
+}
+
 // NUTS model carrying the marshalled data + hyperparameters; the FullGradFn
 // reaches it through ModelData.model_response_data.
 struct MsOcsNutsModel {
@@ -634,6 +696,7 @@ struct MsOcsNutsModel {
     Rcpp::NumericMatrix Q;
     double field_rank = 0.0, sigma_beta = 5.0, sd_L = 1.0;
     PriScalars pr;
+    bool constrain = false;
     int total = 0;
 };
 
@@ -646,9 +709,9 @@ inline void ms_ocs_full_grad(const std::vector<double>& params,
     const MsOcsNutsModel* m =
         static_cast<const MsOcsNutsModel*>(data.model_response_data);
     grad.assign((std::size_t) m->total, 0.0);
-    const double lp = ms_ocs_joint_eval(m->d, m->Q, m->field_rank, m->pr,
-                                        m->sigma_beta, m->sd_L,
-                                        params.data(), grad.data());
+    const double lp = ms_ocs_joint_eval_c(m->d, m->Q, m->field_rank, m->pr,
+                                          m->sigma_beta, m->sd_L, m->constrain,
+                                          params.data(), grad.data());
     if (log_post_out) *log_post_out = lp;
 }
 
@@ -669,15 +732,16 @@ inline PriScalars ms_ocs_pri_from_list(const Rcpp::List& pri) {
 // [[Rcpp::export]]
 Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
                                     Rcpp::List pri, double sigma_beta,
-                                    double sd_L) {
+                                    double sd_L, bool constrain = false) {
     tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
     Rcpp::NumericMatrix Q = spec["Q"];
     const double field_rank = Rcpp::as<double>(spec["field_rank"]);
     tulpaObs::PriScalars pr = tulpaObs::ms_ocs_pri_from_list(pri);
-    const int total = tulpaObs::ms_ocs_nuts_total(d);
+    const int total = tulpaObs::ms_ocs_nuts_total(d, constrain);
     Rcpp::NumericVector grad(total);
-    const double lp = tulpaObs::ms_ocs_joint_eval(
-        d, Q, field_rank, pr, sigma_beta, sd_L, theta.begin(), grad.begin());
+    const double lp = tulpaObs::ms_ocs_joint_eval_c(
+        d, Q, field_rank, pr, sigma_beta, sd_L, constrain,
+        theta.begin(), grad.begin());
     return Rcpp::List::create(Rcpp::Named("lp") = lp, Rcpp::Named("grad") = grad);
 }
 
@@ -690,14 +754,16 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                            Rcpp::List pri, double sigma_beta, double sd_L,
                            Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                            int n_iter, int n_warmup, int max_treedepth,
-                           double adapt_delta, int seed, bool verbose) {
+                           double adapt_delta, int seed, bool verbose,
+                           bool constrain = false) {
     tulpaObs::MsOcsNutsModel m;
     m.d = tulpaObs::ms_ocs_build_data(spec);
     m.Q = Rcpp::as<Rcpp::NumericMatrix>(spec["Q"]);
     m.field_rank = Rcpp::as<double>(spec["field_rank"]);
     m.sigma_beta = sigma_beta; m.sd_L = sd_L;
     m.pr = tulpaObs::ms_ocs_pri_from_list(pri);
-    m.total = tulpaObs::ms_ocs_nuts_total(m.d);
+    m.constrain = constrain;
+    m.total = tulpaObs::ms_ocs_nuts_total(m.d, constrain);
     if ((int) theta0.size() != m.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.total);
 

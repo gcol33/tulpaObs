@@ -252,8 +252,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_ms_ocs_joint_logpost
-Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, Rcpp::List pri, double sigma_beta, double sd_L);
-RcppExport SEXP _tulpaObs_cpp_ms_ocs_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP sd_LSEXP) {
+Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, Rcpp::List pri, double sigma_beta, double sd_L, bool constrain);
+RcppExport SEXP _tulpaObs_cpp_ms_ocs_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP sd_LSEXP, SEXP constrainSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -262,13 +262,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::List >::type pri(priSEXP);
     Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
     Rcpp::traits::input_parameter< double >::type sd_L(sd_LSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_ms_ocs_joint_logpost(spec, theta, pri, sigma_beta, sd_L));
+    Rcpp::traits::input_parameter< bool >::type constrain(constrainSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_ocs_joint_logpost(spec, theta, pri, sigma_beta, sd_L, constrain));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_ms_ocs_nuts
-Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, Rcpp::List pri, double sigma_beta, double sd_L, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose);
-RcppExport SEXP _tulpaObs_cpp_ms_ocs_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP sd_LSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, Rcpp::List pri, double sigma_beta, double sd_L, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose, bool constrain);
+RcppExport SEXP _tulpaObs_cpp_ms_ocs_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP sd_LSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP, SEXP constrainSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -284,7 +285,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type adapt_delta(adapt_deltaSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_ms_ocs_nuts(spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
+    Rcpp::traits::input_parameter< bool >::type constrain(constrainSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_ocs_nuts(spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, constrain));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -748,8 +750,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},
     {"_tulpaObs_cpp_ms_ocs_marginal_grad", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_grad, 2},
     {"_tulpaObs_cpp_ms_ocs_marginal_ll", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_ll, 2},
-    {"_tulpaObs_cpp_ms_ocs_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_joint_logpost, 5},
-    {"_tulpaObs_cpp_ms_ocs_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_nuts, 12},
+    {"_tulpaObs_cpp_ms_ocs_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_joint_logpost, 6},
+    {"_tulpaObs_cpp_ms_ocs_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_nuts, 13},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 20},
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},
