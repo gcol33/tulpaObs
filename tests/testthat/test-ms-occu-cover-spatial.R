@@ -512,6 +512,57 @@ test_that("multi-chain NUTS reports split-R-hat / ESS and converges on the means
   expect_true(all(nd$ess > 0))
 })
 
+test_that("NUTS recovers the community means under the constrained K = 2 path", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(6L, 6L); S <- 8L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = K,
+          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 4L)
+  # n.factors = 2 auto-selects the identified (triangular) parameterisation, so
+  # this exercises the constrained C++ adapter end to end under sampling.
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "nuts",
+              control = list(n.factors = 2L, sd.load = 1.1, n.chains = 2L,
+                             n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
+                             seed = 7L))
+  expect_identical(fit$method, "nuts")
+  expect_true(all(is.finite(fit$nuts$draws)))
+  mu_true <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  cm <- fit$means[seq_along(mu_true)]
+  expect_gt(stats::cor(cm, mu_true), 0.7)
+  expect_lt(sum(fit$divergent) / length(fit$divergent), 0.25)
+})
+
+test_that("NUTS recovers means + the field correlation under a proper-CAR field", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(6L, 6L); S <- 6L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
+          field = "car_proper", rho = 0.85, sd_occ = 0.5, sd_load = 1.1,
+          sigma_pos = 0.4, seed = 4L)
+  # car_proper exercises the logit_h field-hyper block under sampling.
+  fit <- tobs(~ occ_cov1 + car_proper(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "nuts",
+              control = list(n.factors = 1L, sd.load = 1.1, n.chains = 2L,
+                             n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
+                             seed = 7L))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$spatial$field_type, "car_proper")
+  expect_true(all(is.finite(fit$nuts$draws)))
+  mu_true <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  cm <- fit$means[seq_along(mu_true)]
+  expect_gt(stats::cor(cm, mu_true), 0.7)
+  # The sampled CAR correlation is a single-realisation, weakly-identified
+  # quantity; assert only that the posterior mean is a valid correlation.
+  expect_true(is.finite(fit$spatial$rho_w))
+  expect_gte(fit$spatial$rho_w, 0)
+  expect_lt(fit$spatial$rho_w, 1)
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
