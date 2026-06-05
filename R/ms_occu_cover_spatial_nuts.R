@@ -1,0 +1,294 @@
+# ms_occu_cover_spatial_nuts.R - full-vector joint log-posterior for the
+# reduced-rank spatial-factor community occu_cover (gcol33/tulpa#67), the NUTS
+# target density.
+#
+# The Laplace-EM fitter (ms_occu_cover_spatial.R) profiles the community
+# covariances Sigma, the field precisions tau_w, and the field hyperparameters
+# out by closed-form M-steps, then reports a Gaussian Laplace posterior over the
+# inner latent c(mu, {b_s}, L, W, log_disp). NUTS instead samples EVERYTHING
+# jointly -- the inner latent AND the hyperparameters -- from the exact joint
+# posterior, which removes the Gaussian-approximation over-dispersion that makes
+# the Laplace draws unusable for WAIC / LOO and gives calibrated hyperparameter
+# intervals.
+#
+# The target factorises so the inner objective is reused verbatim. Write the
+# joint log-posterior as
+#
+#   log p = [ data log-lik + log N(mu|0,sigma.beta) + log N(L|0,sd_L)
+#             + log N(b|0,Sigma) quadratic + GMRF(W|tau) quadratic ]      (A)
+#         + [ -0.5 S log|Sigma_arm|  (per arm) ]                          (B)
+#         + [  0.5 rank_k log tau_w[k]  (per factor) ]                    (C)
+#         + log p(Sigma coords) + log p(log tau) + log p(log_disp)        (D)
+#
+# Block (A) is EXACTLY .ms_ocs_penll_grad evaluated with the block-diagonal
+# Sinv(Sigma) and tau_w derived from the sampled hyperparameters: the b- and
+# field-quadratics, the mu / loading Gaussian priors, and the data likelihood all
+# live there already, and its gradient over the inner coordinates is complete and
+# FD-verified. The inner solve treats Sigma / tau as constants, so it omits the
+# normalisers (B) and (C); those depend only on the hyperparameter coordinates and
+# are added here with their analytic gradients. (D) are weakly-informative
+# hyperpriors placed DIRECTLY on the sampled unconstrained coordinates (the
+# log-Cholesky entries of Sigma, log tau_w, log_disp), so the target is the
+# density in those coordinates with no further change of variables.
+#
+# The community covariance of an arm is parameterised by the lower-triangular
+# Cholesky factor C (Sigma = C C') with a log-diagonal, the standard unconstrained
+# map for a PD matrix; the field precisions by log tau_w. The icar field has no
+# extra hyperparameter; the proper-CAR rho / BYM2 phi axes are a later increment.
+
+# ---------------------------------------------------------------------------
+# Log-Cholesky packing for a PD community covariance
+# ---------------------------------------------------------------------------
+#
+# A P x P community covariance Sigma = C C' is carried by its lower-triangular
+# Cholesky factor C, packed column-major over the lower triangle (column j
+# contributes rows j..P) with the diagonal stored on the log scale (so the map
+# is onto all of R^{P(P+1)/2} and the diagonal stays positive). The packed length
+# is P(P+1)/2.
+
+.ms_ocs_chol_dim <- function(P) as.integer(P * (P + 1L) / 2L)
+
+# Packed positions (1-based) of the diagonal log-entries within the vector, one
+# per column: column j's block starts after sum_{j'<j}(P-j'+1) entries and its
+# first entry is the diagonal.
+.ms_ocs_chol_diag_pos <- function(P) {
+  pos <- integer(P); off <- 0L
+  for (j in seq_len(P)) { pos[j] <- off + 1L; off <- off + (P - j + 1L) }
+  pos
+}
+
+# Lower-triangular Cholesky factor C (diagonal positive) -> packed vector.
+.ms_ocs_chol_pack <- function(C) {
+  P <- nrow(C); out <- numeric(.ms_ocs_chol_dim(P)); pos <- 0L
+  for (j in seq_len(P)) {
+    out[pos + 1L] <- log(C[j, j]); pos <- pos + 1L
+    if (j < P) {
+      ni <- P - j
+      out[pos + seq_len(ni)] <- C[(j + 1L):P, j]; pos <- pos + ni
+    }
+  }
+  out
+}
+
+# Packed vector -> lower-triangular Cholesky factor C (diagonal = exp()).
+.ms_ocs_chol_unpack <- function(vec, P) {
+  C <- matrix(0, P, P); pos <- 0L
+  for (j in seq_len(P)) {
+    C[j, j] <- exp(vec[pos + 1L]); pos <- pos + 1L
+    if (j < P) {
+      ni <- P - j
+      C[(j + 1L):P, j] <- vec[pos + seq_len(ni)]; pos <- pos + ni
+    }
+  }
+  C
+}
+
+
+# ---------------------------------------------------------------------------
+# Hyperprior specification
+# ---------------------------------------------------------------------------
+#
+# Weakly-informative, proper priors placed directly on the sampled unconstrained
+# coordinates. The Cholesky log-diagonal carries a Normal centred at log(0.5)
+# (community SDs of order 0.5 on the link scale, the recovery-harness regime) with
+# a wide SD; the Cholesky off-diagonals a mean-zero Normal (shrinking the implied
+# community correlations toward independence); log tau_w and log_disp wide Normals.
+# These only regularise the boundaries (near-singular Sigma, runaway field
+# precision) and are swamped by the data at the sample sizes the family targets.
+.ms_ocs_nuts_priors <- function() {
+  list(chol_logdiag_mean = log(0.5), chol_logdiag_sd = 1.5,
+       chol_offdiag_sd   = 1.0,
+       log_tau_mean = 0,  log_tau_sd  = 2.0,
+       log_disp_mean = log(0.5), log_disp_sd = 2.0)
+}
+
+# log density (up to an additive constant) of one arm's Cholesky coordinates and
+# its gradient w.r.t. the packed vector.
+.ms_ocs_chol_logprior <- function(vec, P, priors) {
+  dpos <- .ms_ocs_chol_diag_pos(P)
+  is_d <- logical(length(vec)); is_d[dpos] <- TRUE
+  sd_v <- ifelse(is_d, priors$chol_logdiag_sd, priors$chol_offdiag_sd)
+  mu_v <- ifelse(is_d, priors$chol_logdiag_mean, 0)
+  lp   <- -0.5 * sum(((vec - mu_v) / sd_v)^2)
+  list(lp = lp, grad = -(vec - mu_v) / sd_v^2)
+}
+
+
+# ---------------------------------------------------------------------------
+# Inner-parameter width and hyperparameter layout
+# ---------------------------------------------------------------------------
+
+# Length of the inner-latent prefix c(mu, {b_s}, L-block, [Lpos], W, log_disp),
+# i.e. length(fit$par): the loading block is S*K unconstrained or the triangular
+# free count when constrained.
+.ms_ocs_npar_inner <- function(d, constrain) {
+  L_width <- if (constrain) .ms_ocs_lfree_dim(d$S, d$K) else d$S * d$K
+  d$P + d$S * d$P + L_width + d$Lpos_w + d$N * d$K + 1L
+}
+
+# Full NUTS coordinate layout: the inner prefix, then the three arm Cholesky
+# blocks (occ, p, pos), then log tau_w (length K). Returns the block offsets and
+# the total length.
+.ms_ocs_nuts_layout <- function(d, constrain) {
+  n_inner <- .ms_ocs_npar_inner(d, constrain)
+  q_occ <- .ms_ocs_chol_dim(d$P_occ)
+  q_p   <- .ms_ocs_chol_dim(d$P_p)
+  q_pos <- .ms_ocs_chol_dim(d$P_pos)
+  off <- n_inner
+  occ <- off + seq_len(q_occ); off <- off + q_occ
+  p   <- off + seq_len(q_p);   off <- off + q_p
+  pos <- off + seq_len(q_pos); off <- off + q_pos
+  tau <- off + seq_len(d$K);   off <- off + d$K
+  list(n_inner = n_inner, inner = seq_len(n_inner),
+       chol_occ = occ, chol_p = p, chol_pos = pos, log_tau = tau,
+       total = off)
+}
+
+
+# ---------------------------------------------------------------------------
+# Joint log-posterior + gradient (the NUTS target density)
+# ---------------------------------------------------------------------------
+
+# Full-vector unconstrained joint log-posterior and its gradient for the
+# spatial-factor community occu_cover model. `theta` packs
+#   c(par_inner, chol_occ, chol_p, chol_pos, log_tau_w)
+# with par_inner = c(mu, {b_s}, L-block, [Lpos], W, log_disp) (constrained L-block
+# when `constrain`). Returns list(lp, grad) over the whole vector. icar fields
+# only (the proper-CAR / BYM2 hyperparameter axes are a later increment).
+.ms_ocs_joint_logpost <- function(model, theta, priors = .ms_ocs_nuts_priors(),
+                                  constrain = FALSE, sigma.beta = 5, sd_L = 1.0,
+                                  grad = TRUE) {
+  spec <- model$field_spec %||%
+    .ms_ocs_field_spec(model$adj, model$field_type %||% "icar")
+  if (!identical(spec$type, "icar")) {
+    stop("The NUTS joint target currently supports icar fields only; ",
+         "proper-CAR / BYM2 hyperparameter sampling is not yet wired.",
+         call. = FALSE)
+  }
+  d   <- .ms_ocs_dims(model)
+  lay <- .ms_ocs_nuts_layout(d, constrain)
+  S   <- d$S; K <- d$K
+  rank_k <- spec$rank                                  # N - 1 for icar
+
+  par_inner <- theta[lay$inner]
+  C <- list(occ = .ms_ocs_chol_unpack(theta[lay$chol_occ], d$P_occ),
+            p   = .ms_ocs_chol_unpack(theta[lay$chol_p],   d$P_p),
+            pos = .ms_ocs_chol_unpack(theta[lay$chol_pos], d$P_pos))
+  log_tau <- theta[lay$log_tau]
+  tau_w   <- exp(log_tau)
+
+  Si <- lapply(C, function(Cm) chol2inv(t(Cm)))        # Sigma_arm^{-1}
+  Sinv <- matrix(0, d$P, d$P)
+  Sinv[d$occ_idx, d$occ_idx] <- Si$occ
+  Sinv[d$p_idx,   d$p_idx]   <- Si$p
+  Sinv[d$pos_idx, d$pos_idx] <- Si$pos
+  Pmu      <- diag(1 / sigma.beta^2, d$P)
+  inv_sdL2 <- 1 / sd_L^2
+
+  objective <- if (constrain) .ms_ocs_penll_grad_c else .ms_ocs_penll_grad
+  res <- objective(model, par_inner, Sinv, Pmu, inv_sdL2, tau_w, grad = grad)
+
+  # ---- (B) MVN(b) log-determinant normalisers + (C) GMRF tau normalisers ----
+  logdet <- c(occ = 2 * sum(log(diag(C$occ))),
+              p   = 2 * sum(log(diag(C$p))),
+              pos = 2 * sum(log(diag(C$pos))))
+  lp <- res$ll - 0.5 * S * sum(logdet) + 0.5 * rank_k * sum(log_tau)
+
+  # ---- (D) hyperpriors on the sampled coordinates ----
+  pr_occ <- .ms_ocs_chol_logprior(theta[lay$chol_occ], d$P_occ, priors)
+  pr_p   <- .ms_ocs_chol_logprior(theta[lay$chol_p],   d$P_p,   priors)
+  pr_pos <- .ms_ocs_chol_logprior(theta[lay$chol_pos], d$P_pos, priors)
+  pr_tau <- -0.5 * sum(((log_tau - priors$log_tau_mean) / priors$log_tau_sd)^2)
+  ld     <- par_inner[lay$n_inner]                     # log_disp = last inner coord
+  pr_ld  <- -0.5 * ((ld - priors$log_disp_mean) / priors$log_disp_sd)^2
+  lp <- lp + pr_occ$lp + pr_p$lp + pr_pos$lp + pr_tau + pr_ld
+
+  if (!grad) return(list(lp = lp))
+
+  g <- numeric(lay$total)
+  g_inner <- res$grad
+  g_inner[lay$n_inner] <- g_inner[lay$n_inner] -
+    (ld - priors$log_disp_mean) / priors$log_disp_sd^2  # log_disp prior
+  g[lay$inner] <- g_inner
+
+  # ---- Cholesky-block gradient, per arm ----
+  # b-block second moment M_arm = sum_s b_{s,arm} b_{s,arm}'. The packed inner b
+  # for species s sits at offset P + (s-1)P; extract each arm's sub-vector.
+  up_b <- .ms_ocs_inner_b(par_inner, d, constrain)     # list length S of length-P
+  arm_idx <- list(occ = d$occ_idx, p = d$p_idx, pos = d$pos_idx)
+  chol_slot <- list(occ = lay$chol_occ, p = lay$chol_p, pos = lay$chol_pos)
+  Pa <- list(occ = d$P_occ, p = d$P_p, pos = d$P_pos)
+  for (arm in c("occ", "p", "pos")) {
+    ai <- arm_idx[[arm]]
+    M  <- matrix(0, Pa[[arm]], Pa[[arm]])
+    for (s in seq_len(S)) { bb <- up_b[[s]][ai]; M <- M + outer(bb, bb) }
+    g[chol_slot[[arm]]] <- .ms_ocs_chol_block_grad(
+      C[[arm]], M, S, theta[chol_slot[[arm]]], Pa[[arm]], priors)
+  }
+
+  # ---- log tau_w gradient ----
+  # d/d log_tau_k of [ -0.5 tau_k W_k' Q W_k + 0.5 rank log tau_k - prior ].
+  W  <- .ms_ocs_inner_W(par_inner, d, constrain)       # N x K
+  Q  <- model$icar_Q
+  for (k in seq_len(K)) {
+    quad <- as.numeric(W[, k] %*% (Q %*% W[, k]))
+    g[lay$log_tau[k]] <- -0.5 * tau_w[k] * quad + 0.5 * rank_k -
+      (log_tau[k] - priors$log_tau_mean) / priors$log_tau_sd^2
+  }
+
+  list(lp = lp, grad = g)
+}
+
+# d log p / d (packed Cholesky coords) for one arm, from the term
+#   T = -0.5 tr(Sigma^{-1} M) - 0.5 S log|Sigma|
+# plus the coordinate hyperprior. With Sigma = C C' and G = dT/dSigma (symmetric),
+# dT/dC = 2 G C; the log-diagonal coords carry the extra chain factor C_jj.
+.ms_ocs_chol_block_grad <- function(C, M, S, vec, P, priors) {
+  Si <- chol2inv(t(C))
+  G  <- 0.5 * (Si %*% M %*% Si) - 0.5 * S * Si          # dT/dSigma (symmetric)
+  dC <- 2 * (G %*% C)                                   # dT/dC
+  pr <- .ms_ocs_chol_logprior(vec, P, priors)
+  out <- numeric(length(vec)); pos <- 0L
+  for (j in seq_len(P)) {
+    out[pos + 1L] <- dC[j, j] * C[j, j]; pos <- pos + 1L  # diag: log-link chain
+    if (j < P) {
+      ni <- P - j
+      out[pos + seq_len(ni)] <- dC[(j + 1L):P, j]; pos <- pos + ni
+    }
+  }
+  out + pr$grad
+}
+
+# Extract the per-species b list (length S, each length P) from the inner par,
+# honouring the constrained vs unconstrained loading-block width (b sits in the
+# shared mu + b prefix, ahead of the loadings, so the width does not matter, but
+# the unpackers branch on it for clarity).
+.ms_ocs_inner_b <- function(par_inner, d, constrain) {
+  up <- if (constrain) .ms_ocs_unpack_c(par_inner, d) else .ms_ocs_unpack(par_inner, d)
+  up$b
+}
+
+# Extract the N x K field matrix W from the inner par.
+.ms_ocs_inner_W <- function(par_inner, d, constrain) {
+  up <- if (constrain) .ms_ocs_unpack_c(par_inner, d) else .ms_ocs_unpack(par_inner, d)
+  up$W
+}
+
+
+# ---------------------------------------------------------------------------
+# Warm-start packing from an EM fit
+# ---------------------------------------------------------------------------
+
+# Pack the Laplace-EM solution into the full NUTS coordinate vector: the inner
+# mode (fit$par, already in the constrained vs unconstrained layout the fit used),
+# the arm covariances as log-Cholesky coordinates, and log tau_w. This is the NUTS
+# initial position (the chain starts at the EM mode) and the reference point for
+# the FD gradient check.
+.ms_ocs_nuts_pack_init <- function(fit) {
+  chol_coords <- function(Sig) .ms_ocs_chol_pack(t(chol(Sig)))  # Sigma = C C'
+  c(fit$par,
+    chol_coords(fit$Sigma$occ),
+    chol_coords(fit$Sigma$p),
+    chol_coords(fit$Sigma$pos),
+    log(fit$tau_w))
+}

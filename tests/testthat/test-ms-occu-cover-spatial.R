@@ -243,6 +243,88 @@ test_that("constrained (triangular) penalised gradient matches FD at K = 2", {
   expect_true(all(diag(Lr) > 0))
 })
 
+test_that("joint NUTS log-posterior gradient matches FD (K = 1 unconstrained)", {
+  adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells (small for FD)
+  S <- 3L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 3L, seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj)
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  tr <- sim$truth
+
+  # Pack the full NUTS coordinate vector from truth: inner par, then the three
+  # arm Cholesky blocks (from a chosen Sigma) and log tau_w. FD validity is
+  # point-independent, so a perturbed truth point exercises every block.
+  mu  <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b   <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+  par_inner <- c(mu, b, tr$L, tr$w, log(tr$sigma_pos))
+  chol_v <- function(Sig) tulpaObs:::.ms_ocs_chol_pack(t(chol(Sig)))
+  Sig <- list(occ = diag(0.4^2, d$P_occ), p = diag(0.35^2, d$P_p),
+              pos = diag(0.3^2, d$P_pos))
+  theta <- c(par_inner, chol_v(Sig$occ), chol_v(Sig$p), chol_v(Sig$pos),
+             log(c(1.3)))
+  lay <- tulpaObs:::.ms_ocs_nuts_layout(d, FALSE)
+  expect_identical(length(theta), lay$total)
+  set.seed(1L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
+
+  out <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, constrain = FALSE,
+                                          grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_joint_logpost(model, p, constrain = FALSE,
+                                                    grad = FALSE)$lp
+  expect_true(is.finite(out$lp))
+  h <- 1e-5; gnum <- numeric(length(theta))
+  for (k in seq_along(theta)) {
+    pp <- theta; pp[k] <- pp[k] + h
+    pm <- theta; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the full joint NUTS gradient")
+})
+
+test_that("joint NUTS log-posterior gradient matches FD (K = 2 constrained + cover factor)", {
+  adj <- .mscs_grid_adj(4L, 4L)
+  S <- 4L; K <- 2L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+                                        cover_factor = TRUE, seed = 321L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K,
+    cover_factor = TRUE)
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  tr <- sim$truth
+
+  mu  <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+  b   <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+  lfree <- tulpaObs:::.ms_ocs_L_to_lfree(tr$L, S, K)
+  par_inner <- c(mu, b, lfree, as.numeric(tr$L_pos), as.numeric(tr$w),
+                 log(tr$sigma_pos))
+  chol_v <- function(Sig) tulpaObs:::.ms_ocs_chol_pack(t(chol(Sig)))
+  theta <- c(par_inner,
+             chol_v(diag(0.4^2, d$P_occ)), chol_v(diag(0.35^2, d$P_p)),
+             chol_v(diag(0.3^2, d$P_pos)), log(c(1.3, 0.9)))
+  lay <- tulpaObs:::.ms_ocs_nuts_layout(d, TRUE)
+  expect_identical(length(theta), lay$total)
+  set.seed(2L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
+
+  out <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, constrain = TRUE,
+                                          grad = TRUE)
+  f <- function(p) tulpaObs:::.ms_ocs_joint_logpost(model, p, constrain = TRUE,
+                                                    grad = FALSE)$lp
+  expect_true(is.finite(out$lp))
+  h <- 1e-5; gnum <- numeric(length(theta))
+  for (k in seq_along(theta)) {
+    pp <- theta; pp[k] <- pp[k] + h
+    pm <- theta; pm[k] <- pm[k] - h
+    gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+  }
+  expect_lt(max(abs(out$grad - gnum)), 1e-4,
+            label = "max|analytic - FD| over the constrained cover-factor joint gradient")
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
