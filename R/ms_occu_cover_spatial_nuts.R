@@ -526,9 +526,11 @@
   rhat_ess <- NULL
   if (n_chains > 1L) {
     # Independent chains from the shared warm start under offset seeds, via the
-    # single-chain engine. (tulpa's across-chain OpenMP runner segfaults with a
-    # FullGradFn + minimal ParamLayout; the per-chain loop is robust and the
-    # warm-started chains are short, so the sequential cost is acceptable.)
+    # single-chain engine. (tulpa's across-chain OpenMP runner ignores the
+    # caller's ParamLayout and recomputes it from the minimal ModelData, so it
+    # segfaults on the FullGradFn pathway -- gcol33/tulpa#70. The per-chain loop
+    # is robust and the warm-started chains are short, so the sequential cost is
+    # acceptable; switch to the native runner once #70 lands.)
     rcs <- lapply(seq_len(n_chains), function(c) run_chain(seed + c - 1L))
     chains <- lapply(rcs, function(r) r$draws)
     rhat_ess <- .ms_ocs_rhat_ess(chains)
