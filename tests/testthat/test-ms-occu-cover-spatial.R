@@ -613,6 +613,38 @@ test_that("NUTS recovers the community means with a cover-arm shared factor", {
   expect_gt(stats::cor(cm, mu_true), 0.7)
 })
 
+test_that("tobs_waic / tobs_cpo deliver calibrated WAIC / LOO from the NUTS draws", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(6L, 6L); S <- 8L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
+          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 4L)
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "nuts",
+              control = list(n.factors = 1L, n.iter = 600L, n.warmup = 300L,
+                             n.chains = 2L, adapt.delta = 0.95, seed = 7L))
+  n_obs <- nrow(adj) * S
+  w <- tobs_waic(fit)
+  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$p_waic))
+  expect_gt(w$p_waic, 0)
+  # NUTS draws are the exact posterior, so p_waic is well below the pathological
+  # multiples of n_obs the over-dispersed Laplace draws produced.
+  expect_lt(w$p_waic / n_obs, 1)
+  lo <- tobs_cpo(fit)
+  expect_true(is.finite(lo$elpd_loo) || is.finite(lo$elpd))
+
+  # A Laplace fit (community-mean draws omit the field) errors with a pointer.
+  fitL <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+               positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+               species = sim$species, method = "laplace",
+               control = list(n.factors = 1L))
+  expect_error(tobs_waic(fitL), "NUTS")
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells

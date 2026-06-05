@@ -61,6 +61,12 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
     return(.tobs_ploglik_occu_cover(object, nd))
   }
+  # Spatial-factor community occu_cover: the per-cell likelihood needs the latent
+  # field, so it is scored over the NUTS draws (calibrated WAIC / LOO -- the point
+  # of the NUTS path).
+  if (identical(object$model$model_type %||% "NULL", "ms_occu_cover_spatial")) {
+    return(.tobs_ploglik_ms_occu_cover_spatial(object, nd))
+  }
 
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {

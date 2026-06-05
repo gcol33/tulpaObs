@@ -330,6 +330,58 @@
 
 
 # ---------------------------------------------------------------------------
+# Pointwise log-likelihood over the NUTS draws (WAIC / PSIS-LOO input)
+# ---------------------------------------------------------------------------
+
+# Per-observation log-likelihood matrix [n_draws x (n_cells * n_species)] for a
+# NUTS spatial-factor community occu_cover fit, the input tobs_waic / tobs_cpo
+# consume. The pointwise unit is a (species, cell): the latent presence z is
+# integrated out in closed form (.occu_cover_site_ll) with the shared field
+# injected on psi (and on cover with a cover-arm factor). Evaluated over the
+# actual NUTS draws of the inner latent -- the exact posterior, so the resulting
+# WAIC / LOO are calibrated (the motivation for the NUTS path; the Laplace
+# community-mean draws omit the field and over-disperse, so they are not used).
+.tobs_ploglik_ms_occu_cover_spatial <- function(object, n.draws = 1000L) {
+  nd_info <- object$nuts
+  if (is.null(nd_info) || is.null(nd_info$draws)) {
+    stop("WAIC / LOO for the spatial-factor community occu_cover() needs a NUTS ",
+         "fit (method = \"nuts\"): the Laplace community-mean draws omit the ",
+         "latent field, so the per-cell likelihood is not identified from them.",
+         call. = FALSE)
+  }
+  model <- object$model
+  d   <- .ms_ocs_dims(model)
+  lay <- nd_info$layout
+  constrain <- isTRUE(nd_info$constrain)
+  draws <- nd_info$draws[, lay$inner, drop = FALSE]
+  M <- nrow(draws)
+  if (!is.null(n.draws) && as.integer(n.draws) < M) {
+    idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
+    draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
+  }
+  unpack <- if (constrain) .ms_ocs_unpack_c else .ms_ocs_unpack
+  cl  <- function(e) pmin(pmax(e, -30), 30)
+  out <- matrix(0, M, d$N * d$S)
+  for (i in seq_len(M)) {
+    up <- unpack(draws[i, ], d)
+    LL <- matrix(0, d$N, d$S)
+    for (s in seq_len(d$S)) {
+      v   <- .ms_occu_cover_species_view(model, s)
+      th  <- up$mu + up$b[[s]]
+      eta <- .occu_cover_eta_from_par(v, th[d$occ_idx], th[d$p_idx], th[d$pos_idx])
+      eta$psi <- stats::plogis(cl(as.numeric(v$X_occ %*% th[d$occ_idx]) +
+                                    as.numeric(up$W %*% up$L[s, ])))
+      if (d$cover_factor)
+        eta$ep_mat <- eta$ep_mat + as.numeric(up$W %*% up$Lpos[s, ])
+      LL[, s] <- .occu_cover_site_ll(v, eta$psi, eta$p_mat, eta$ep_mat, up$ld)
+    }
+    out[i, ] <- as.numeric(LL)
+  }
+  out
+}
+
+
+# ---------------------------------------------------------------------------
 # C++ marginal-likelihood marshalling
 # ---------------------------------------------------------------------------
 
@@ -434,7 +486,7 @@
        convergence = 0L, d = d,
        nuts = list(draws = draws, accept_prob = res$accept_prob,
                    divergent = res$divergent, treedepth = res$treedepth,
-                   epsilon = res$epsilon, layout = lay))
+                   epsilon = res$epsilon, layout = lay, constrain = constrain))
 }
 
 # Per-parameter biased autocovariance (lags 0..n-1) via the FFT, for the
