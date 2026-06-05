@@ -330,6 +330,30 @@
 
 
 # ---------------------------------------------------------------------------
+# C++ marginal-likelihood marshalling
+# ---------------------------------------------------------------------------
+
+# Flatten the bound model into the plain list the C++ marginal-likelihood entry
+# (cpp_ms_ocs_marginal_ll, and the NUTS gradient_fn to come) reads: the cell-level
+# designs, the per-species detection / cover / valid matrices, and the model
+# dimensions. The shared field W is supplied per evaluation inside the packed
+# parameter vector, not here.
+.ms_ocs_nuts_spec <- function(model) {
+  d <- .ms_ocs_dims(model)
+  N <- model$n_sites; J <- model$max_visits
+  per_sp <- function(arr) lapply(seq_len(d$S), function(s)
+    matrix(as.double(arr[, , s]), N, J))
+  list(n_sites = N, max_visits = J, S = d$S, K = d$K,
+       P_occ = d$P_occ, P_p = d$P_p, P_pos = d$P_pos,
+       cover_factor = isTRUE(d$cover_factor),
+       is_beta = identical(model$positive, "beta"),
+       X_occ = model$X_occ, X_p = model$X_det_site, X_pos = model$X_pos_site,
+       y = per_sp(model$y), y_pos = per_sp(model$y_pos),
+       valid = per_sp(model$valid))
+}
+
+
+# ---------------------------------------------------------------------------
 # Warm-start packing from an EM fit
 # ---------------------------------------------------------------------------
 

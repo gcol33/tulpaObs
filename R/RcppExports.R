@@ -61,6 +61,10 @@ cpp_eval_occu_multiscale_cover_beta_cell <- function(eta_psi, eta_theta, eta_p, 
     .Call(`_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell`, eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, phi_pos, curvature)
 }
 
+cpp_ms_ocs_marginal_ll <- function(spec, theta_inner) {
+    .Call(`_tulpaObs_cpp_ms_ocs_marginal_ll`, spec, theta_inner)
+}
+
 cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter = 100L, tol = 1e-6, inner_max = 50L, inner_tol = 1e-8, sigma_beta = 100.0, verbose = FALSE) {
     .Call(`_tulpaObs_cpp_nmix_community_em`, oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter, tol, inner_max, inner_tol, sigma_beta, verbose)
 }
