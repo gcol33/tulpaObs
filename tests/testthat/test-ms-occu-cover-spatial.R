@@ -484,6 +484,34 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
     "spatial-factor")
 })
 
+test_that("multi-chain NUTS reports split-R-hat / ESS and converges on the means", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(5L, 5L); S <- 5L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
+          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "nuts",
+              control = list(n.factors = 1L, sd.load = 1.1, n.chains = 4L,
+                             n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
+                             seed = 11L))
+  nd <- fit$nuts
+  expect_identical(nd$n_chains, 4L)
+  expect_identical(nrow(nd$draws), 4L * 500L)
+  expect_length(nd$rhat, ncol(nd$draws))
+  expect_length(nd$ess,  ncol(nd$draws))
+  expect_true(all(is.finite(nd$rhat)))
+  # The community means should mix to R-hat ~ 1; ESS stays positive (the
+  # occupancy intercept is autocorrelated through the ICAR field-level
+  # confounding, so ESS there is modest even when R-hat is clean).
+  d <- tulpaObs:::.ms_ocs_dims(fit$model)
+  expect_lt(max(nd$rhat[seq_len(d$P)]), 1.2)
+  expect_gt(min(nd$ess[seq_len(d$P)]), 10)
+  expect_true(all(nd$ess > 0))
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells

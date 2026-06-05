@@ -437,10 +437,64 @@
                    epsilon = res$epsilon, layout = lay))
 }
 
+# Per-parameter biased autocovariance (lags 0..n-1) via the FFT, for the
+# effective-sample-size sum.
+.ms_ocs_acov <- function(x) {
+  n <- length(x); x <- x - mean(x)
+  nf <- 2^ceiling(log2(2 * n))
+  f  <- stats::fft(c(x, rep(0, nf - n)))
+  ac <- Re(stats::fft(f * Conj(f), inverse = TRUE)) / nf
+  ac[seq_len(n)] / n
+}
+
+# Split-R-hat and bulk effective sample size per parameter from a list of M
+# per-chain draw matrices [N x P] (Vehtari et al. 2021): split each chain in half
+# (2M segments of length n), R-hat = sqrt(((n-1)/n) W + B/n) / W) with W the mean
+# within-segment variance and B the between-segment variance; ESS = (2M n) / tau,
+# tau = 1 + 2 sum rho_t truncated by Geyer's positive-pair rule, rho_t the
+# combined autocorrelation 1 - (W - s_t)/var_plus.
+.ms_ocs_rhat_ess <- function(chains) {
+  M <- length(chains); P <- ncol(chains[[1L]])
+  N <- nrow(chains[[1L]]); n <- N %/% 2L
+  if (n < 2L) return(list(rhat = rep(NA_real_, P), ess = rep(NA_real_, P)))
+  # 2M split segments, each n draws.
+  segs <- vector("list", 2L * M)
+  for (m in seq_len(M)) {
+    segs[[2L * m - 1L]] <- chains[[m]][seq_len(n), , drop = FALSE]
+    segs[[2L * m]]      <- chains[[m]][n + seq_len(n), , drop = FALSE]
+  }
+  K <- length(segs)
+  rhat <- numeric(P); ess <- numeric(P)
+  for (p in seq_len(P)) {
+    means <- vapply(segs, function(s) mean(s[, p]), 0)
+    vars  <- vapply(segs, function(s) stats::var(s[, p]), 0)
+    W <- mean(vars); B <- n * stats::var(means)
+    var_plus <- ((n - 1) / n) * W + B / n
+    rhat[p] <- if (W > 0) sqrt(var_plus / W) else NA_real_
+    # combined autocorrelation rho_t (averaged segment autocovariances).
+    acovs <- vapply(segs, function(s) .ms_ocs_acov(s[, p]), numeric(n))  # n x K
+    s_t <- rowMeans(acovs)                                               # mean acov per lag
+    rho <- if (var_plus > 0) 1 - (W - s_t) / var_plus else rep(0, n)
+    rho[1L] <- 1
+    # Geyer initial positive sequence: sum paired (rho_{2k}, rho_{2k+1}) while >0.
+    tau <- 1
+    t <- 2L
+    while (t + 1L <= n) {
+      pair <- rho[t] + rho[t + 1L]
+      if (pair < 0) break
+      tau <- tau + 2 * pair
+      t <- t + 2L
+    }
+    ess[p] <- if (tau > 0) (K * n) / tau else NA_real_
+  }
+  list(rhat = rhat, ess = ess)
+}
+
 # Fit the spatial-factor community occu_cover by NUTS: a short Laplace-EM warm
 # start sets the initial position and the inverse-mass metric, then tulpa's NUTS
-# (driven by the C++ FullGradFn) samples the exact joint posterior. Returns the
-# reconstructed fit list consumed by build_ms_occu_cover_spatial_fit.
+# (driven by the C++ FullGradFn) samples the exact joint posterior. `n.chains > 1`
+# runs tulpa's across-chain runner and adds split-R-hat / bulk-ESS diagnostics.
+# Returns the reconstructed fit list consumed by build_ms_occu_cover_spatial_fit.
 .tobs_fit_ms_occu_cover_spatial_nuts <- function(model, sd_L = 1.0,
                                                  sigma.beta = 5, constrain = FALSE,
                                                  control = list()) {
@@ -456,17 +510,49 @@
   inv_metric <- .ms_ocs_nuts_metric(spec, theta0, pri, sigma.beta, sd_L,
                                     constrain)
 
-  n_warmup <- control[["n.warmup"]] %||% 500L
-  n_sample <- control[["n.iter"]]   %||% 1000L
-  res <- cpp_ms_ocs_nuts(
-    spec, theta0, pri, sigma.beta, sd_L, inv_metric,
-    n_iter = as.integer(n_warmup + n_sample), n_warmup = as.integer(n_warmup),
-    max_treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-    adapt_delta = control[["adapt.delta"]] %||% 0.95,
-    seed = as.integer(control[["seed"]] %||% 1L),
-    verbose = isTRUE(control[["verbose"]]), constrain = constrain)
+  n_warmup <- as.integer(control[["n.warmup"]] %||% 500L)
+  n_sample <- as.integer(control[["n.iter"]]   %||% 1000L)
+  n_chains <- as.integer(control[["n.chains"]] %||% 1L)
+  md  <- as.integer(control[["max.treedepth"]] %||% 10L)
+  ad  <- control[["adapt.delta"]] %||% 0.95
+  seed <- as.integer(control[["seed"]] %||% 1L)
+  verbose <- isTRUE(control[["verbose"]])
 
-  .ms_ocs_nuts_fit_from_draws(model, res, em, constrain)
+  run_chain <- function(s) cpp_ms_ocs_nuts(
+    spec, theta0, pri, sigma.beta, sd_L, inv_metric,
+    n_iter = n_warmup + n_sample, n_warmup = n_warmup, max_treedepth = md,
+    adapt_delta = ad, seed = s, verbose = verbose, constrain = constrain)
+
+  rhat_ess <- NULL
+  if (n_chains > 1L) {
+    # Independent chains from the shared warm start under offset seeds, via the
+    # single-chain engine. (tulpa's across-chain OpenMP runner segfaults with a
+    # FullGradFn + minimal ParamLayout; the per-chain loop is robust and the
+    # warm-started chains are short, so the sequential cost is acceptable.)
+    rcs <- lapply(seq_len(n_chains), function(c) run_chain(seed + c - 1L))
+    chains <- lapply(rcs, function(r) r$draws)
+    rhat_ess <- .ms_ocs_rhat_ess(chains)
+    res <- list(draws = do.call(rbind, chains),
+                accept_prob = unlist(lapply(rcs, `[[`, "accept_prob")),
+                divergent   = unlist(lapply(rcs, `[[`, "divergent")),
+                treedepth   = unlist(lapply(rcs, `[[`, "treedepth")),
+                epsilon = mean(vapply(rcs, `[[`, 0, "epsilon")),
+                divergent_total = sum(vapply(rcs, function(r) sum(r$divergent), 0L)),
+                n_chains = n_chains)
+  } else {
+    res <- run_chain(seed)
+  }
+
+  fit <- .ms_ocs_nuts_fit_from_draws(model, res, em, constrain)
+  if (!is.null(rhat_ess)) {
+    fit$nuts$rhat <- rhat_ess$rhat
+    fit$nuts$ess  <- rhat_ess$ess
+    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
+    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
+    fit$nuts$n_chains <- n_chains
+    fit$nuts$divergent_total <- res$divergent_total
+  }
+  fit
 }
 
 

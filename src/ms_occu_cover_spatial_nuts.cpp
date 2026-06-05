@@ -947,3 +947,4 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
         Rcpp::Named("treedepth") = td, Rcpp::Named("epsilon") = epsilon,
         Rcpp::Named("n_params") = np);
 }
+
