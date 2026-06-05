@@ -317,6 +317,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*` |
 | Joint occu + cover | Yes | — | `occu_cover()` — see below |
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
+| Spatial-factor community occu + cover (JSDM) | Yes | Yes | `ms_occu_cover()` + `icar()`/`car_proper()`/`bym2()` shared field, per-species loadings (gcol33/tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`method="nuts"`, in-tree C++ FullGradFn `src/ms_occu_cover_spatial_nuts.cpp` driving tulpa's sampler; byte-exact vs the R target). Cover-arm factor, auto-K (Laplace only), `tobs_associations()`, per-species `predict()` maps |
 | Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only — see below |
 | N-mixture (Pois/NB) | Yes | — | `abun(mixture=)`; in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB jointly-est `log_r`. NUTS pending |
 | N-mixture + areal spatial | n-L | — | `abun()`+icar/bym2/car_proper, `nested_laplace`; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
@@ -560,6 +561,8 @@ R/
   family_cover_hurdle.R     — .dispatch_cover() (two-Laplace hurdle), large
   occu_cover.R              — joint occu-det + cover hurdle: wiring + shared .occu_cover_eta_from_par()
   ms_occu_cover.R           — community joint: build_ms_occu_cover, per-species kernel, Laplace-EM fit, build fit, S3, simulate
+  ms_occu_cover_spatial.R   — reduced-rank spatial-factor community occu_cover (JSDM, tulpa#67): simulate, field-structure abstraction (icar/car/bym2), penalised joint LL+grad, constrained-loading param, Laplace-EM fitter, build fit, associations/maps, S3
+  ms_occu_cover_spatial_nuts.R — R NUTS target (.ms_ocs_joint_logpost = the C++ oracle), chol/hyperprior helpers, .ms_ocs_nuts_spec marshalling, .tobs_fit_ms_occu_cover_spatial_nuts (method="nuts" runner)
   occu_multiscale_cover.R   — 3-level occu+cover (tulpaObs#29): builder, dispatcher, simulate_occu_multiscale_cover
   occu_multiscale_cover_joint_coupled.R — 4-arm joint nested-Laplace fitter (cell/plot/visit + cover)
   occu_cover_spatial.R      — v2 joint-Laplace (escape hatch control$engine="v2_joint")
@@ -582,7 +585,8 @@ src/
   jsdm_likelihood.h           — JSDM (Bernoulli, no detection)
   cell_coupling_occu_cover.h  — occu_cover joint cell-coupling spec
   cell_coupling_occu_multiscale_cover.{cpp,h} — 4-arm multiscale cell-coupling spec
-  occu_coupling_shared.h      — shared coupling helpers (CSR/field-demean/inner-vcov/rmvn)
+  occu_coupling_shared.h      — shared coupling helpers (CSR/field-demean/inner-vcov/rmvn); reused by the spatial-factor NUTS marginal (nodet_mixture_block, Lognormal/BetaPositive)
+  ms_occu_cover_spatial_nuts.cpp — spatial-factor community occu_cover NUTS: marginal LL + full joint log-posterior gradient (FullGradFn), field R(h) layer (icar/car/bym2), cpp_ms_ocs_nuts driving tulpa's sampler (tulpa#67)
   RcppExports.cpp             — generated, do not edit
   Makevars.win                — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-obj MinGW)
 tests/testthat/  — test files
