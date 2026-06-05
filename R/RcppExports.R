@@ -73,6 +73,10 @@ cpp_ms_ocs_joint_logpost <- function(spec, theta, pri, sigma_beta, sd_L) {
     .Call(`_tulpaObs_cpp_ms_ocs_joint_logpost`, spec, theta, pri, sigma_beta, sd_L)
 }
 
+cpp_ms_ocs_nuts <- function(spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_ms_ocs_nuts`, spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
 cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter = 100L, tol = 1e-6, inner_max = 50L, inner_tol = 1e-8, sigma_beta = 100.0, verbose = FALSE) {
     .Call(`_tulpaObs_cpp_nmix_community_em`, oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter, tol, inner_max, inner_tol, sigma_beta, verbose)
 }

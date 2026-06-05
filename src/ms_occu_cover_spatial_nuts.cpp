@@ -15,6 +15,10 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include <tulpa/model_data.h>
+#include <tulpa/param_layout.h>
+#include <tulpa/likelihood.h>
+#include <tulpa/nuts_api.h>
 #include "occu_coupling_shared.h"
 
 using namespace Rcpp;
@@ -31,8 +35,14 @@ struct MsOcsData {
     bool is_beta = false;
     std::vector<NumericMatrix> y, y_pos, valid;   // length S
     NumericMatrix X_occ, X_p, X_pos;              // n_sites x P_arm
-    NumericMatrix W;                              // n_sites x K (filled per eval)
 };
+
+// Shared field W is passed per call as a column-major n_sites x K buffer
+// (W[k * n_sites + i]) rather than held on the data struct, so the gradient is
+// re-entrant (the FullGradFn may run concurrently across NUTS chains).
+inline double Wik(const double* W, int N, int i, int k) {
+    return W[(std::size_t) k * N + i];
+}
 
 inline MsOcsData ms_ocs_build_data(const List& spec) {
     MsOcsData d;
@@ -75,8 +85,10 @@ inline double row_dot(const NumericMatrix& X, int i, const double* beta, int p) 
 inline double ms_ocs_species_ll(const MsOcsData& d, int s,
                                 const double* th_occ, const double* th_p,
                                 const double* th_pos, const double* L_s,
-                                const double* Lpos_s, double log_disp) {
+                                const double* Lpos_s, double log_disp,
+                                const double* W) {
     const double disp = std::exp(log_disp);
+    const int N = d.n_sites;
     const NumericMatrix& y  = d.y[s];
     const NumericMatrix& yp = d.y_pos[s];
     const NumericMatrix& vv = d.valid[s];
@@ -85,14 +97,14 @@ inline double ms_ocs_species_ll(const MsOcsData& d, int s,
     for (int i = 0; i < d.n_sites; ++i) {
         // occupancy predictor + shared field offset
         double eta_occ = row_dot(d.X_occ, i, th_occ, d.P_occ);
-        for (int k = 0; k < d.K; ++k) eta_occ += d.W(i, k) * L_s[k];
+        for (int k = 0; k < d.K; ++k) eta_occ += Wik(W, N, i, k) * L_s[k];
         const double psi = sigmoid_(clamp30(eta_occ));
 
         // detection / cover predictors (cell-level, constant across visits)
         const double eta_p   = row_dot(d.X_p,   i, th_p,   d.P_p);
         double eta_pos       = row_dot(d.X_pos, i, th_pos, d.P_pos);
         if (d.cover_factor)
-            for (int k = 0; k < d.K; ++k) eta_pos += d.W(i, k) * Lpos_s[k];
+            for (int k = 0; k < d.K; ++k) eta_pos += Wik(W, N, i, k) * Lpos_s[k];
         const double p_i = sigmoid_(clamp30(eta_p));
 
         bool any_det = false;
@@ -137,7 +149,7 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
                                   const double* Lpos_s, double log_disp,
                                   double* g_occ_s, double* g_p_s, double* g_pos_s,
                                   double* g_L_s, double* g_Lpos_s,
-                                  double* g_W, double& g_ld) {
+                                  double* g_W, double& g_ld, const double* W) {
     const double disp   = std::exp(log_disp);
     const double sigma  = disp;
     const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
@@ -154,12 +166,12 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
 
     for (int i = 0; i < N; ++i) {
         double eta_occ = row_dot(d.X_occ, i, th_occ, d.P_occ);
-        for (int k = 0; k < K; ++k) eta_occ += d.W(i, k) * L_s[k];
+        for (int k = 0; k < K; ++k) eta_occ += Wik(W, N, i, k) * L_s[k];
         const double psi = sigmoid_(clamp30(eta_occ));
         const double eta_p = row_dot(d.X_p, i, th_p, d.P_p);
         double eta_pos     = row_dot(d.X_pos, i, th_pos, d.P_pos);
         if (d.cover_factor)
-            for (int k = 0; k < K; ++k) eta_pos += d.W(i, k) * Lpos_s[k];
+            for (int k = 0; k < K; ++k) eta_pos += Wik(W, N, i, k) * Lpos_s[k];
         const double p_i = sigmoid_(clamp30(eta_p));
 
         bool any_det = false; int n_valid = 0;
@@ -214,10 +226,10 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
         for (int j = 0; j < d.P_p;   ++j) g_p_s[j]   += d.X_p(i, j)   * gp_rowsum;
         for (int j = 0; j < d.P_pos; ++j) g_pos_s[j] += d.X_pos(i, j) * gpos_rowsum;
         for (int k = 0; k < K; ++k) {
-            g_L_s[k] += d.W(i, k) * g_psi;
+            g_L_s[k] += Wik(W, N, i, k) * g_psi;
             g_W[k * N + i] += g_psi * L_s[k];
             if (d.cover_factor) {
-                g_Lpos_s[k] += d.W(i, k) * gpos_rowsum;
+                g_Lpos_s[k] += Wik(W, N, i, k) * gpos_rowsum;
                 g_W[k * N + i] += gpos_rowsum * Lpos_s[k];
             }
         }
@@ -333,9 +345,8 @@ Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec,
     const double* Lv = th + off; off += S * K;
     const double* Lpv = nullptr;
     if (d.cover_factor) { Lpv = th + off; off += S * K; }
-    d.W = Rcpp::NumericMatrix(N, K);
-    for (int k = 0; k < K; ++k)
-        for (int i = 0; i < N; ++i) d.W(i, k) = th[off + k * N + i];
+    std::vector<double> Wbuf((std::size_t) N * K);
+    for (int t = 0; t < N * K; ++t) Wbuf[t] = th[off + t];
     const int w_off = off; off += N * K;
     const double log_disp = th[off];
 
@@ -367,7 +378,7 @@ Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec,
             L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp,
             g_occ_s.data(), g_p_s.data(), g_pos_s.data(),
             g_L_s.data(), d.cover_factor ? g_Lpos_s.data() : nullptr,
-            g_W, g_ld);
+            g_W, g_ld, Wbuf.data());
 
         // mu and b_s share the per-arm coefficient score.
         double* gb = g_b + s * P;
@@ -406,9 +417,8 @@ double cpp_ms_ocs_marginal_ll(Rcpp::List spec, Rcpp::NumericVector theta_inner) 
     const double* Lpv = nullptr;
     if (d.cover_factor) { Lpv = th + off; off += S * K; }
     // fill W (n_sites x K) from vec(W)
-    d.W = Rcpp::NumericMatrix(N, K);
-    for (int k = 0; k < K; ++k)
-        for (int i = 0; i < N; ++i) d.W(i, k) = th[off + k * N + i];
+    std::vector<double> Wbuf((std::size_t) N * K);
+    for (int t = 0; t < N * K; ++t) Wbuf[t] = th[off + t];
     off += N * K;
     const double log_disp = th[off];
 
@@ -426,7 +436,8 @@ double cpp_ms_ocs_marginal_ll(Rcpp::List spec, Rcpp::NumericVector theta_inner) 
             for (int k = 0; k < K; ++k) Lpos_s[k] = Lpv[k * S + s];
         total += tulpaObs::ms_ocs_species_ll(
             d, s, th_occ.data(), th_p.data(), th_pos.data(),
-            L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp);
+            L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp,
+            Wbuf.data());
     }
     return total;
 }
@@ -439,37 +450,48 @@ double cpp_ms_ocs_marginal_ll(Rcpp::List spec, Rcpp::NumericVector theta_inner) 
 // constrained loadings are later increments). `spec` additionally carries `Q`
 // (the ICAR structure, n_sites x n_sites) and `field_rank` (N - 1); `pri` carries
 // the hyperprior scalars. Returns list(lp, grad).
-// [[Rcpp::export]]
-Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
-                                    Rcpp::List pri, double sigma_beta,
-                                    double sd_L) {
+namespace tulpaObs {
+
+struct PriScalars {
+    double logdiag_mean, logdiag_sd, offdiag_sd,
+           log_tau_mean, log_tau_sd, log_disp_mean, log_disp_sd;
+};
+
+// Length of the full NUTS coordinate vector (icar, unconstrained loadings).
+inline int ms_ocs_nuts_total(const MsOcsData& d) {
+    const int P = d.P_occ + d.P_p + d.P_pos;
+    const int Lw = d.cover_factor ? 2 * d.S * d.K : d.S * d.K;
+    const int chol = d.P_occ * (d.P_occ + 1) / 2 + d.P_p * (d.P_p + 1) / 2
+                   + d.P_pos * (d.P_pos + 1) / 2;
+    return P + d.S * P + Lw + d.n_sites * d.K + 1 + chol + d.K;
+}
+
+// Full-vector joint log-posterior + gradient core (icar, unconstrained). `g` is a
+// pre-zeroed length-ms_ocs_nuts_total(d) buffer; returns the log-posterior.
+// Shared by the Rcpp cross-check entry and the NUTS FullGradFn.
+inline double ms_ocs_joint_eval(const MsOcsData& d, const Rcpp::NumericMatrix& Q,
+                                double field_rank, const PriScalars& pr,
+                                double sigma_beta, double sd_L,
+                                const double* th, double* g) {
     using std::vector;
-    tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
-    Rcpp::NumericMatrix Q = spec["Q"];
-    const double field_rank = Rcpp::as<double>(spec["field_rank"]);
     const int P = d.P_occ + d.P_p + d.P_pos;
     const int N = d.n_sites, S = d.S, K = d.K;
     const double inv_sb2 = 1.0 / (sigma_beta * sigma_beta);
     const double inv_sdL2 = 1.0 / (sd_L * sd_L);
 
-    const double logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
-    const double logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
-    const double offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
-    const double log_tau_mean = Rcpp::as<double>(pri["log_tau_mean"]);
-    const double log_tau_sd   = Rcpp::as<double>(pri["log_tau_sd"]);
-    const double log_disp_mean = Rcpp::as<double>(pri["log_disp_mean"]);
-    const double log_disp_sd   = Rcpp::as<double>(pri["log_disp_sd"]);
+    const double logdiag_mean = pr.logdiag_mean, logdiag_sd = pr.logdiag_sd;
+    const double offdiag_sd   = pr.offdiag_sd;
+    const double log_tau_mean = pr.log_tau_mean, log_tau_sd = pr.log_tau_sd;
+    const double log_disp_mean = pr.log_disp_mean, log_disp_sd = pr.log_disp_sd;
 
-    const double* th = theta.begin();
     int off = 0;
     const double* mu = th + off; off += P;
     const double* b  = th + off; off += S * P;
     const double* Lv = th + off; off += S * K;
     const double* Lpv = nullptr;
     if (d.cover_factor) { Lpv = th + off; off += S * K; }
-    d.W = Rcpp::NumericMatrix(N, K);
-    for (int k = 0; k < K; ++k)
-        for (int i = 0; i < N; ++i) d.W(i, k) = th[off + k * N + i];
+    std::vector<double> Wbuf((std::size_t) N * K);
+    for (int t = 0; t < N * K; ++t) Wbuf[t] = th[off + t];
     const int w_off = off; off += N * K;
     const double log_disp = th[off]; const int ld_idx = off; off += 1;
     // hyperparameter blocks
@@ -480,10 +502,8 @@ Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
         q_off[a] = off; off += q_dim[a];
     }
     const int tau_off = off; off += K;
-    const int total = off;
+    (void) off;
 
-    Rcpp::NumericVector grad(total);
-    double* g = grad.begin();
     double* g_W = g + w_off;
     double& g_ld = g[ld_idx];
 
@@ -509,7 +529,8 @@ Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
             d, s, th_occ.data(), th_p.data(), th_pos.data(),
             L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp,
             g_occ_s.data(), g_p_s.data(), g_pos_s.data(),
-            g_L_s.data(), d.cover_factor ? g_Lpos_s.data() : nullptr, g_W, g_ld);
+            g_L_s.data(), d.cover_factor ? g_Lpos_s.data() : nullptr, g_W, g_ld,
+            Wbuf.data());
 
         double* gb = g_b + s * P;
         for (int j = 0; j < d.P_occ; ++j) { g_mu[j] += g_occ_s[j]; gb[j] = g_occ_s[j]; }
@@ -589,8 +610,8 @@ Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
         double quad = 0.0;
         for (int i = 0; i < N; ++i) {
             double qw = 0.0;
-            for (int j = 0; j < N; ++j) qw += Q(i, j) * d.W(j, k);
-            quad += d.W(i, k) * qw;
+            for (int j = 0; j < N; ++j) qw += Q(i, j) * Wbuf[(std::size_t) k * N + j];
+            quad += Wbuf[(std::size_t) k * N + i] * qw;
             g_W[(std::size_t) k * N + i] -= tau * qw;        // field-prior gradient
         }
         lp += -0.5 * tau * quad + 0.5 * field_rank * log_tau;
@@ -603,5 +624,131 @@ Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
     lp += -0.5 * ((log_disp - log_disp_mean) / log_disp_sd) * ((log_disp - log_disp_mean) / log_disp_sd);
     g_ld -= (log_disp - log_disp_mean) / (log_disp_sd * log_disp_sd);
 
+    return lp;
+}
+
+// NUTS model carrying the marshalled data + hyperparameters; the FullGradFn
+// reaches it through ModelData.model_response_data.
+struct MsOcsNutsModel {
+    MsOcsData d;
+    Rcpp::NumericMatrix Q;
+    double field_rank = 0.0, sigma_beta = 5.0, sd_L = 1.0;
+    PriScalars pr;
+    int total = 0;
+};
+
+// FullGradFn: log-posterior + gradient over the entire parameter vector. NUTS
+// maximises the value, so this returns the log-posterior (no negation).
+inline void ms_ocs_full_grad(const std::vector<double>& params,
+                             const tulpa::ModelData& data,
+                             const tulpa::ParamLayout& /*layout*/,
+                             std::vector<double>& grad, double* log_post_out) {
+    const MsOcsNutsModel* m =
+        static_cast<const MsOcsNutsModel*>(data.model_response_data);
+    grad.assign((std::size_t) m->total, 0.0);
+    const double lp = ms_ocs_joint_eval(m->d, m->Q, m->field_rank, m->pr,
+                                        m->sigma_beta, m->sd_L,
+                                        params.data(), grad.data());
+    if (log_post_out) *log_post_out = lp;
+}
+
+inline PriScalars ms_ocs_pri_from_list(const Rcpp::List& pri) {
+    return PriScalars{ Rcpp::as<double>(pri["chol_logdiag_mean"]),
+                       Rcpp::as<double>(pri["chol_logdiag_sd"]),
+                       Rcpp::as<double>(pri["chol_offdiag_sd"]),
+                       Rcpp::as<double>(pri["log_tau_mean"]),
+                       Rcpp::as<double>(pri["log_tau_sd"]),
+                       Rcpp::as<double>(pri["log_disp_mean"]),
+                       Rcpp::as<double>(pri["log_disp_sd"]) };
+}
+
+} // namespace tulpaObs
+
+// Full-vector joint log-posterior + gradient, the Rcpp cross-check entry for the
+// R oracle .ms_ocs_joint_logpost. icar, unconstrained loadings.
+// [[Rcpp::export]]
+Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
+                                    Rcpp::List pri, double sigma_beta,
+                                    double sd_L) {
+    tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
+    Rcpp::NumericMatrix Q = spec["Q"];
+    const double field_rank = Rcpp::as<double>(spec["field_rank"]);
+    tulpaObs::PriScalars pr = tulpaObs::ms_ocs_pri_from_list(pri);
+    const int total = tulpaObs::ms_ocs_nuts_total(d);
+    Rcpp::NumericVector grad(total);
+    const double lp = tulpaObs::ms_ocs_joint_eval(
+        d, Q, field_rank, pr, sigma_beta, sd_L, theta.begin(), grad.begin());
     return Rcpp::List::create(Rcpp::Named("lp") = lp, Rcpp::Named("grad") = grad);
+}
+
+// Run NUTS on the spatial-factor community occu_cover target via tulpa's engine
+// and the FullGradFn (gradient mode "H"). icar, unconstrained loadings. `theta0`
+// is the warm-start (the Laplace mode); `inv_metric` an optional length-n_params
+// inverse-mass diagonal (the Laplace curvature). Returns draws + diagnostics.
+// [[Rcpp::export]]
+Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
+                           Rcpp::List pri, double sigma_beta, double sd_L,
+                           Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
+                           int n_iter, int n_warmup, int max_treedepth,
+                           double adapt_delta, int seed, bool verbose) {
+    tulpaObs::MsOcsNutsModel m;
+    m.d = tulpaObs::ms_ocs_build_data(spec);
+    m.Q = Rcpp::as<Rcpp::NumericMatrix>(spec["Q"]);
+    m.field_rank = Rcpp::as<double>(spec["field_rank"]);
+    m.sigma_beta = sigma_beta; m.sd_L = sd_L;
+    m.pr = tulpaObs::ms_ocs_pri_from_list(pri);
+    m.total = tulpaObs::ms_ocs_nuts_total(m.d);
+    if ((int) theta0.size() != m.total)
+        Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.total);
+
+    tulpa::LikelihoodSpec lspec;
+    lspec.name = "ms_occu_cover_spatial";
+    lspec.n_processes = 1;
+    lspec.gradient_fn = &tulpaObs::ms_ocs_full_grad;
+
+    tulpa::ModelData data;
+    data.N = m.d.n_sites;
+    data.n_processes = 1;
+    data.sigma_beta = sigma_beta;
+    data.model_response_data = &m;
+    data.likelihood_spec = &lspec;
+    data.sharing.init(1);
+    data.zi_type = tulpa::ZIType::NONE;
+    data.p_zi = 0; data.p_oi = 0;
+
+    tulpa::ParamLayout layout;
+    layout.total_params = m.total;
+
+    tulpa::set_gradient_mode_str("H");
+
+    std::vector<double> init(theta0.begin(), theta0.end());
+    std::vector<double> imv;
+    const double* im = nullptr;
+    if (inv_metric.isNotNull()) {
+        Rcpp::NumericVector v(inv_metric);
+        imv.assign(v.begin(), v.end()); im = imv.data();
+    }
+
+    tulpa::NUTSFn run_nuts = tulpa::get_nuts_fn();
+    tulpa::NUTSResult result = {};
+    run_nuts(&data, &layout, init.data(), m.total, n_iter, n_warmup,
+             max_treedepth, adapt_delta, static_cast<unsigned int>(seed),
+             verbose ? 1 : 0, im, &result);
+
+    const int n_samples = result.n_sample, np = m.total;
+    Rcpp::NumericMatrix draws(n_samples, np);
+    Rcpp::NumericVector lp(n_samples), ap(n_samples);
+    Rcpp::IntegerVector div(n_samples), td(n_samples);
+    for (int s = 0; s < n_samples; ++s) {
+        for (int j = 0; j < np; ++j) draws(s, j) = result.samples[s * np + j];
+        lp[s] = result.log_prob[s]; ap[s] = result.accept_prob[s];
+        div[s] = result.divergent[s]; td[s] = result.treedepth[s];
+    }
+    const double epsilon = result.epsilon;
+    result.free_buffers();
+    return Rcpp::List::create(
+        Rcpp::Named("draws") = draws, Rcpp::Named("log_prob") = lp,
+        Rcpp::Named("accept_prob") = ap, Rcpp::Named("divergent") = div,
+        Rcpp::Named("treedepth") = td, Rcpp::Named("epsilon") = epsilon,
+        Rcpp::Named("n_params") = np);
 }

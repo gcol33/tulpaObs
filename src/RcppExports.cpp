@@ -266,6 +266,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_ms_ocs_nuts
+Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, Rcpp::List pri, double sigma_beta, double sd_L, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose);
+RcppExport SEXP _tulpaObs_cpp_ms_ocs_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP sd_LSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta0(theta0SEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type pri(priSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
+    Rcpp::traits::input_parameter< double >::type sd_L(sd_LSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type inv_metric(inv_metricSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type n_warmup(n_warmupSEXP);
+    Rcpp::traits::input_parameter< int >::type max_treedepth(max_treedepthSEXP);
+    Rcpp::traits::input_parameter< double >::type adapt_delta(adapt_deltaSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_ocs_nuts(spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_nmix_community_em
 List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init, NumericMatrix Sigma_lambda_init, NumericMatrix Sigma_p_init, int max_iter, double tol, int inner_max, double inner_tol, double sigma_beta, bool verbose);
 RcppExport SEXP _tulpaObs_cpp_nmix_community_em(SEXP oracleSEXP, SEXP mu_initSEXP, SEXP Sigma_lambda_initSEXP, SEXP Sigma_p_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP inner_maxSEXP, SEXP inner_tolSEXP, SEXP sigma_betaSEXP, SEXP verboseSEXP) {
@@ -727,6 +749,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_ms_ocs_marginal_grad", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_grad, 2},
     {"_tulpaObs_cpp_ms_ocs_marginal_ll", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_ll, 2},
     {"_tulpaObs_cpp_ms_ocs_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_joint_logpost, 5},
+    {"_tulpaObs_cpp_ms_ocs_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_nuts, 12},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 20},
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},
