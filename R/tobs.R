@@ -867,12 +867,15 @@ tobs <- function(formula,
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),
-  # abun: non-spatial Poisson N-mixture (laplace) + areal-spatial offset
-  # (nested_laplace: icar / bym2 / car_proper on the abundance arm). tulpa's
-  # spatial fitters return the grid-integrated coefficient covariance, so the
-  # spatial SEs are calibrated (law-of-total-covariance over the hyperparameter
-  # grid). negbin and NUTS remain upstream-pending.
-  abun     = c("laplace", "nested_laplace"),
+  # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
+  # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
+  # tulpa's spatial fitters return the grid-integrated coefficient covariance, so
+  # the spatial SEs are calibrated (law-of-total-covariance over the
+  # hyperparameter grid). nuts: the non-spatial sampler over the closed-form
+  # marginal via the in-tree C++ FullGradFn (R/abun_nuts.R, src/abun_nuts.cpp);
+  # Poisson or negbin (log_r sampled), warm-started at the Laplace mode. Spatial /
+  # RE NUTS not yet wired.
+  abun     = c("laplace", "nested_laplace", "nuts"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under

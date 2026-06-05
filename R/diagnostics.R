@@ -90,6 +90,7 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
     dynamic    = .tobs_ploglik_dynamic(model, draws),
     integrated = .tobs_ploglik_integrated(model, draws),
     jsdm       = .tobs_ploglik_jsdm(model, draws),
+    nmix       = .tobs_ploglik_nmix(model, draws),
     stop("Pointwise log-likelihood is not implemented for model_type = '",
          mt, "'.", call. = FALSE)
   )
@@ -179,6 +180,33 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   y   <- model$y_jsdm
   Y   <- matrix(y, nrow(eta), length(y), byrow = TRUE)
   Y * .tobs_log_p(eta) + (1 - Y) * .tobs_log_1mp(eta)
+}
+
+# N-mixture: per site, the latent abundance N integrated out in closed form (the
+# Royle 2004 marginal). The observation unit is the site (the per-site marginal
+# pools that site's visits), so the pointwise log-likelihood is [n_draws x
+# n_sites]. NB is detected by the trailing log_r draw column; the per-draw size is
+# r = exp(log_r). Reuses the same nmix_site_marginal() kernel the fit used, so the
+# WAIC / LOO scoring is on one source of truth. (For NUTS fits the draws are the
+# exact posterior; the laplace path's Gaussian draws also score, the N-mixture
+# coefficient marginal being well-behaved.)
+.tobs_ploglik_nmix <- function(model, draws) {
+  X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+  is_nb <- ("log_r" %in% colnames(draws)) || (ncol(draws) > p_lam + p_p)
+  K_max <- as.integer(max(model$y_long) + 100L)
+  marg  <- nmix_site_marginal(y = model$y_long, site_idx = model$site_idx,
+                              X_lambda = X_lambda, X_p = X_p,
+                              mixture = if (is_nb) "NB" else "P", K_max = K_max)
+  S <- nrow(draws); n_sites <- model$n_sites
+  ll <- matrix(0, S, n_sites)
+  for (s in seq_len(S)) {
+    bl <- draws[s, seq_len(p_lam)]
+    bp <- draws[s, p_lam + seq_len(p_p)]
+    r  <- if (is_nb) exp(draws[s, p_lam + p_p + 1L]) else Inf
+    ll[s, ] <- marg$eval_beta(bl, bp, r = r)$log_lik_site
+  }
+  ll
 }
 
 # Integrated multi-source: per site, shared psi, detection summed over the

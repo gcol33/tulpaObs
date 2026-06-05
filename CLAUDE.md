@@ -244,8 +244,12 @@ species/arm/term/estimate); `vcov()`/`confint()` = community-mean cov;
 `test-ms-abun.R` cover community-mean recovery, 95% coverage (20 seeds),
 per-species coef recovery, S3.
 
-- **Poisson only.** Native oracle already carries global NB `log_r` + kernel
-  branches on `is.finite(r)`; just needs `mixture` plumbed.
+- **Poisson + negbin.** `ms_abun(mixture="negbin")`: per-species dispersion RE
+  `log_r_s ~ N(mu_log_r, sigma_log_r)` (native oracle widens the per-species RE
+  vector with a trailing `log_r_s` coord, community `mu_log_r` joins the means),
+  joint_grad / AGHQ (`n_quad=5` default). `coef()`/`vcov()` report `mu_log_r`;
+  `ms_dispersion` carries `r`/`r_s`/`sigma_log_r`. `test-ms-abun.R` covers NB
+  community-mean + dispersion recovery (verified: r=4.27 vs truth 4, means z<0.72).
 
 #### Areal-spatial community N-mixture (`ms_abun()` + shared field; sfMsNMix)
 
@@ -319,9 +323,9 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
 | Spatial-factor community occu + cover (JSDM) | Yes | Yes | `ms_occu_cover()` + `icar()`/`car_proper()`/`bym2()` shared field, per-species loadings (gcol33/tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`method="nuts"`, in-tree C++ FullGradFn `src/ms_occu_cover_spatial_nuts.cpp` driving tulpa's sampler; byte-exact vs the R target). Cover-arm factor, auto-K (Laplace only), `tobs_associations()`, per-species `predict()` maps |
 | Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only — see below |
-| N-mixture (Pois/NB) | Yes | — | `abun(mixture=)`; in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB jointly-est `log_r`. NUTS pending |
+| N-mixture (Pois/NB) | Yes | Yes | `abun(mixture=)`; in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs (`test-abun.R`). NB jointly-est `log_r`. NUTS (`method="nuts"`, tulpaObs#41): in-tree C++ FullGradFn over the closed-form marginal (`src/abun_nuts.cpp`, byte-exact vs the R oracle), warm-start + Laplace metric, draws -> WAIC/LOO; non-spatial Pois/NB |
 | N-mixture + areal spatial | n-L | — | `abun()`+icar/bym2/car_proper, `nested_laplace`; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
-| Community N-mixture | Yes | — | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> native `NMixCommunityOracle` via AGHQ, Schur SEs; Pois only; recovery+20-seed (`test-ms-abun.R`). NUTS/negbin pending |
+| Community N-mixture | Yes | — | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> native `NMixCommunityOracle` via AGHQ, Schur SEs; Pois + negbin (per-species `log_r_s` RE via joint_grad/AGHQ); recovery+20-seed (`test-ms-abun.R`). NUTS pending |
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; tulpaObs#12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`), joint `(mu,f,{b_s})` mode-find, field/Sigma grid-int; Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms. ~2s/fit (N=100,J=4,10g,n.quad=5) |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
@@ -545,6 +549,7 @@ R/
   ms_dyn_occu.R             — community dynamic occupancy: build, HMM-forward marginal, fit (psi1/p RE + gamma/eps global), S3, simulate, ms_dyn_occu() ctor
   ms_int_occu.R             — community integrated occupancy: build, multi-source two-state marginal + analytic grad, fit, S3, simulate, ms_int_occu() ctor
   abun.R                    — nmix family: build_abun, fit_nmix, build_nmix_fit, S3, simulate_abun
+  abun_nuts.R               — non-spatial nmix NUTS (tulpaObs#41): R joint log-post target (.tobs_abun_nuts_logpost, the oracle), layout/marginal/pack-init helpers, front-door fitter .tobs_fit_abun_nuts (warm-start + Laplace metric -> cpp_abun_nuts -> build_nmix_fit + draws/diagnostics)
   ms_abun.R                 — community nmix: build_ms_abun, ms_nmix_longform, fit_ms_nmix (-> nmix_laplace_re), build_ms_nmix_fit, S3, simulate_ms_abun
   nmix_laplace.R            — in-tree non-spatial nmix (Royle 2004) Laplace (Pois+NB)
   nmix_laplace_re.R         — in-tree community nmix (msNMix), .nmix_re_oracle()
@@ -587,6 +592,7 @@ src/
   cell_coupling_occu_multiscale_cover.{cpp,h} — 4-arm multiscale cell-coupling spec
   occu_coupling_shared.h      — shared coupling helpers (CSR/field-demean/inner-vcov/rmvn); reused by the spatial-factor NUTS marginal (nodet_mixture_block, Lognormal/BetaPositive)
   ms_occu_cover_spatial_nuts.cpp — spatial-factor community occu_cover NUTS: marginal LL + full joint log-posterior gradient (FullGradFn), field R(h) layer (icar/car/bym2), cpp_ms_ocs_nuts driving tulpa's sampler (tulpa#67)
+  abun_nuts.cpp               — non-spatial nmix NUTS (tulpaObs#41): abun_nuts_eval (joint log-post + gradient over (beta_lambda, beta_p[, log_r]) reusing compute_nmix_site), FullGradFn abun_nuts_full_grad, cpp_abun_nuts_joint_logpost (cross-check) + cpp_abun_nuts (driver); byte-exact vs the R oracle
   RcppExports.cpp             — generated, do not edit
   Makevars.win                — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-obj MinGW)
 tests/testthat/  — test files

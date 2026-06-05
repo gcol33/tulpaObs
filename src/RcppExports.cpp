@@ -11,6 +11,41 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// cpp_abun_nuts_joint_logpost
+Rcpp::List cpp_abun_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_logr);
+RcppExport SEXP _tulpaObs_cpp_abun_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_logrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_logr(sigma_logrSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_abun_nuts_joint_logpost(spec, theta, sigma_beta, sigma_logr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_abun_nuts
+Rcpp::List cpp_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, double sigma_beta, double sigma_logr, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose);
+RcppExport SEXP _tulpaObs_cpp_abun_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP sigma_betaSEXP, SEXP sigma_logrSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta0(theta0SEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_logr(sigma_logrSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type inv_metric(inv_metricSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type n_warmup(n_warmupSEXP);
+    Rcpp::traits::input_parameter< int >::type max_treedepth(max_treedepthSEXP);
+    Rcpp::traits::input_parameter< double >::type adapt_delta(adapt_deltaSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_abun_nuts(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_register_occu_cover_lognormal_coupling
 void cpp_register_occu_cover_lognormal_coupling();
 RcppExport SEXP _tulpaObs_cpp_register_occu_cover_lognormal_coupling() {
@@ -733,6 +768,8 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_tulpaObs_cpp_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_abun_nuts_joint_logpost, 4},
+    {"_tulpaObs_cpp_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_abun_nuts, 11},
     {"_tulpaObs_cpp_register_occu_cover_lognormal_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_lognormal_coupling, 0},
     {"_tulpaObs_cpp_register_occu_cover_beta_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_beta_coupling, 0},
     {"_tulpaObs_cpp_register_occu_cover_lognormal_agg_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_lognormal_agg_coupling, 0},

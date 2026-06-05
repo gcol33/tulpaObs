@@ -183,9 +183,11 @@ test_that("poisson and negbin paths differ only by the dispersion coordinate", {
 test_that("unsupported methods are rejected with the supported set", {
   skip_if_fast()
   sim <- simulate_abun(N = 60, J = 3, seed = 9)
+  # abun() supports laplace / nested_laplace / nuts; the EM-correction routes
+  # (gibbs / mi) are not wired for the N-mixture marginal.
   expect_error(
     tobs(formula = ~ abund_cov1, data = sim$data, family = abun(),
-         detection = ~ det_cov1, y = sim$y, method = "nuts"),
+         detection = ~ det_cov1, y = sim$y, method = "laplace_gibbs"),
     "not available for abun"
   )
 })
@@ -351,4 +353,100 @@ test_that("spatial N-mixture expected-count (lambda*p) CI is calibrated", {
     covered[s] <- ci[1] <= mu_true && mu_true <= ci[2]
   }
   expect_gte(mean(covered), 0.8)
+})
+
+
+# --- NUTS (gcol33/tulpaObs#41) ----------------------------------------------
+# The non-spatial N-mixture sampler: the in-tree C++ FullGradFn (src/abun_nuts.cpp)
+# over the closed-form marginal, driving tulpa's NUTS engine. The R target
+# .tobs_abun_nuts_logpost (R/abun_nuts.R) is the oracle; the FAST test
+# cross-checks the C++ port against it (no fit), the SLOW tests sample.
+
+test_that("cpp_abun_nuts_joint_logpost matches the R oracle (byte-exact)", {
+  set.seed(7)
+  for (is_nb in c(FALSE, TRUE)) {
+    mix <- if (is_nb) "negbin" else "poisson"
+    sim <- simulate_abun(N = 40, J = 4, n_abund_covs = 1, n_det_covs = 1,
+                         mixture = mix, size = 3, seed = 19)
+    y <- sim$y; n_sites <- nrow(y); mv <- ncol(y)
+    valid  <- as.vector(t(!is.na(y)))
+    smat   <- matrix(seq_len(n_sites), n_sites, mv)
+    y_long <- as.integer(as.vector(t(y))[valid])
+    site_idx <- as.vector(t(smat))[valid]
+    X_lambda <- model.matrix(~ abund_cov1, sim$data)
+    X_p <- model.matrix(~ det_cov1, sim$data)[site_idx, , drop = FALSE]
+    p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+    K_max <- as.integer(max(y_long) + 80L)
+    model <- list(y_long = y_long, site_idx = site_idx,
+                  X_processes = list(X_lambda, X_p))
+    marg <- tulpaObs:::.tobs_abun_nuts_marginal(
+      model, mixture = if (is_nb) "NB" else "P", K_max = K_max)
+    lay  <- tulpaObs:::.tobs_abun_nuts_layout(p_lam, p_p, is_nb)
+    spec <- list(y = y_long, site_idx = as.integer(site_idx),
+                 X_lambda = X_lambda, X_p = X_p, n_sites = n_sites,
+                 K_max = K_max, is_nb = is_nb)
+    theta <- c(sim$truth$beta_lambda, sim$truth$beta_p)
+    if (is_nb) theta <- c(theta, log(sim$truth$size))
+    theta <- theta + rnorm(length(theta), 0, 0.2)
+    rr <- tulpaObs:::.tobs_abun_nuts_logpost(theta, marg, lay,
+                                             sigma.beta = 10, sigma.logr = 1.5)
+    cc <- tulpaObs:::cpp_abun_nuts_joint_logpost(spec, theta, 10, 1.5)
+    expect_equal(rr$lp, cc$lp, tolerance = 1e-7)
+    expect_equal(rr$grad, as.numeric(cc$grad), tolerance = 1e-7)
+  }
+})
+
+test_that("abun() declares nuts among its methods and gates spatial nuts", {
+  expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$abun)
+  # a spatial term on the abundance arm + nuts errors with a pointer
+  sim <- simulate_abun(N = 12, J = 3, n_abund_covs = 1, n_det_covs = 1, seed = 5)
+  adj <- matrix(0L, 12, 12)
+  for (i in 1:11) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
+  expect_error(
+    tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
+         family = abun(), detection = ~ det_cov1, method = "nuts",
+         control = list(verbose = FALSE)),
+    "non-spatial")
+})
+
+test_that("tobs(abun(), method='nuts') recovers truth and scores WAIC", {
+  skip_on_cran(); skip_if_fast()
+  set.seed(101)
+  sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 2, n_det_covs = 1,
+                       beta_lambda = c(log(4), 0.5, -0.3), beta_p = c(0.2, -0.4),
+                       mixture = "poisson", seed = 101)
+  fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, y = sim$y,
+              family = abun(), detection = ~ det_cov1, method = "nuts",
+              control = list(n.iter = 500L, n.warmup = 500L, seed = 1L,
+                             adapt.delta = 0.9, verbose = FALSE))
+  expect_identical(fit$method, "nuts")
+  expect_true(is.matrix(fit$draws) && nrow(fit$draws) == 500L)
+  truth <- c(sim$truth$beta_lambda, sim$truth$beta_p)
+  expect_true(all(abs(as.numeric(fit$means) - truth) / as.numeric(fit$sds) < 3.5))
+  # real sampler diagnostics replaced the NA placeholders
+  expect_false(any(is.na(fit$divergent)))
+  expect_false(any(is.na(fit$accept_prob)))
+  expect_lt(mean(fit$divergent), 0.2)
+  # WAIC / LOO from the NUTS draws (per-site marginal pointwise log-lik)
+  w <- tobs_waic(fit)
+  expect_true(is.finite(w$waic))
+  expect_gt(w$p_waic, 0)
+  expect_lt(w$p_waic, nrow(sim$y))            # p_waic < n_sites
+})
+
+test_that("tobs(abun(mixture='negbin'), method='nuts') recovers dispersion", {
+  skip_on_cran(); skip_if_fast()
+  set.seed(101)
+  sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 2, n_det_covs = 1,
+                       beta_lambda = c(log(4), 0.5, -0.3), beta_p = c(0.2, -0.4),
+                       mixture = "negbin", size = 3, seed = 101)
+  fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, y = sim$y,
+              family = abun(mixture = "negbin"), detection = ~ det_cov1,
+              method = "nuts",
+              control = list(n.iter = 500L, n.warmup = 500L, seed = 1L,
+                             adapt.delta = 0.9, verbose = FALSE))
+  expect_true("log_r" %in% names(fit$means))
+  expect_false(is.null(fit$nmix_dispersion))
+  expect_lt(abs(log(fit$nmix_dispersion$r) - log(3)), log(2.5))
+  expect_lt(mean(fit$divergent), 0.2)
 })

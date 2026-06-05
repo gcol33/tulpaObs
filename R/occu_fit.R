@@ -54,6 +54,30 @@
   # the coefficient covariance is transformed back to natural scale alongside
   # the means / draws.
   if (identical(model$model_type, "nmix")) {
+    # NUTS: sample the exact coefficient posterior of the non-spatial N-mixture
+    # via the in-tree C++ FullGradFn over the closed-form marginal (R/abun_nuts.R).
+    # Spatial / RE / temporal terms are not yet wired on the sampler.
+    if (identical(method, "nuts")) {
+      if (!is.null(spatial)) {
+        stop("method = \"nuts\" for abun() is the non-spatial N-mixture sampler; ",
+             "a spatial term (icar()/bym2()/car_proper()) on the abundance arm ",
+             "fits under method = \"nested_laplace\".", call. = FALSE)
+      }
+      if (!is.null(re) || !is.null(temporal)) {
+        stop("method = \"nuts\" for abun() does not yet support random-effect or ",
+             "temporal terms; use method = \"laplace\".", call. = FALSE)
+      }
+      fit <- .tobs_fit_abun_nuts(
+        fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
+        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+        seed = seed, verbose = verbose)
+      fit <- .unscale_fit_per_process(fit, scales, process_info)
+      fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+      fit$model  <- model
+      fit$intercepts <- compute_intercepts(model, fit$means)
+      return(fit)
+    }
     nmix_method <- if (is.null(spatial)) "laplace" else "nested_laplace"
     fit <- .tobs_fit_nmix(fit_model, method = nmix_method, spatial = spatial,
                           temporal = temporal, re = re, priors = priors,

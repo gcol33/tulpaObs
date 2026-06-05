@@ -94,8 +94,8 @@ What lives inside tulpaObs (in tension, by user request):
 | `multispecies_occ()` | z_{s,i}               | Binomial(p_{s,i,j})           | required  | all                | L, NUTS    | working (community RE)  |
 | `integrated_occ()`   | shared z              | multi-source likelihoods      | required  | all                | L, NUTS    | working |
 | `jsdm()`             | latent factor         | multivariate Bernoulli/Probit | no        | spatial            | NUTS       | working |
-| `abun()` / `nmixture`| Poisson / NB N        | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson + negbin, non-spatial L + areal-spatial NL). NUTS pending upstream tulpa |
-| `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| working (`ms_abun()` on L via C++ community Laplace-EM; non-spatial Poisson + areal-spatial Pois/NB via nested-Laplace, tulpaObs#12; non-spatial negbin + NUTS pending) |
+| `abun()` / `nmixture`| Poisson / NB N        | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson + negbin; non-spatial L + areal-spatial NL + non-spatial NUTS via the in-tree FullGradFn, tulpaObs#41) |
+| `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| working (`ms_abun()` on L via C++ community Laplace-EM; non-spatial Pois + negbin, areal-spatial Pois/NB via nested-Laplace, tulpaObs#12; community NUTS pending) |
 | `dynamic_nmix()`     | Dail-Madsen N_t       | Binomial(N_t, p)              | required  | all                | NUTS       | planned (Phase 3) |
 | `distance()`         | density               | hazard / half-normal binned   | replaced by distance bins | all | L, NUTS  | planned (Phase 4) |
 | `removal()`          | N                     | sequential removal            | required  | spatial            | L, NUTS    | planned (Phase 4) |
@@ -318,12 +318,20 @@ These are scheduled under Phase 3 below.
   fitted by an in-tree nested Laplace-EM (`nmix_community_spatial.cpp`); Poisson
   and NB (`r` grid-integrated). Recovery / coverage / S3 / interop smoke in
   `test-ms-abun-spatial.R`.
-- **Pending upstream tulpa** (deferred, not bugs):
-  - **N-mixture NUTS** — no HMC likelihood for N-mixture in tulpa yet.
-  - **Community non-spatial NB** — global negbin size for non-spatial
-    `ms_abun()` (currently Poisson-only; the native oracle already carries
-    `log_r`, just needs `mixture` plumbed). The areal community field shipped
-    in Phase 2f for both Poisson and NB.
+- *(Phase 2g — shipped, tulpaObs#41)* NUTS for the single-species N-mixture
+  (`abun()`, `method = "nuts"`; Poisson and negbin). The family likelihood is a
+  tulpaObs `FullGradFn` (`src/abun_nuts.cpp`) over the closed-form per-site
+  marginal, driving tulpa's generic NUTS engine -- no upstream tulpa change, the
+  same boundary as the spatial-factor community occu_cover NUTS (gcol33/tulpa#67).
+  Warm-started at the Laplace mode with a diagonal Laplace metric; the draws give
+  calibrated (non-Gaussian) intervals and the per-site WAIC / LOO the Gaussian
+  Laplace draws cannot. R target FD-verified, C++ port byte-exact vs it,
+  front-door recovery + WAIC + cross-check tests in `test-abun.R`. Community
+  non-spatial NB (`ms_abun(mixture = "negbin")`, per-species `log_r_s` RE) is also
+  in place (verified: `r` recovers, community means unbiased; `test-ms-abun.R`).
+- **Pending** (not bugs): NUTS for the community / areal-spatial N-mixture
+  (`ms_abun()`) -- the same `FullGradFn` approach extended with the per-species RE
+  / shared-field blocks.
 - spAbundance / unmarked benchmarks.
 
 **Phase 3 — Nested-Laplace extensions in `tulpa`**
