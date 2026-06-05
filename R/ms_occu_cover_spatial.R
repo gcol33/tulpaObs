@@ -1151,9 +1151,29 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   sweep(Z %*% rt, 2L, par, "+")
 }
 
+# Posterior draws of the packed inner latent (optionally a column subset `cols`)
+# from a NUTS fit: the actual draws (the exact posterior), thinned to ~n_draws.
+# Returns NULL for a non-NUTS fit so the caller falls back to the Gaussian
+# Laplace draw. Keeps the NUTS associations / maps on the same exact-posterior
+# draws the WAIC uses, rather than a moment-matched N(par, cov).
+.ms_ocs_nuts_inner <- function(fit, n_draws, cols = NULL) {
+  nd <- fit$nuts
+  if (is.null(nd) || is.null(nd$draws)) return(NULL)
+  inner <- nd$draws[, nd$layout$inner, drop = FALSE]
+  if (!is.null(cols)) inner <- inner[, cols, drop = FALSE]
+  M <- nrow(inner)
+  if (!is.null(n_draws) && as.integer(n_draws) < M) {
+    idx <- unique(round(seq(1, M, length.out = as.integer(n_draws))))
+    inner <- inner[idx, , drop = FALSE]
+  }
+  inner
+}
+
 .ms_ocs_joint_posterior <- function(model, fit, n_draws = 300L) {
   d <- fit$d
-  draws_par <- .ms_ocs_draw_par(fit$par, fit$cov, n_draws)
+  draws_par <- .ms_ocs_nuts_inner(fit, n_draws) %||%
+    .ms_ocs_draw_par(fit$par, fit$cov, n_draws)
+  n_draws <- nrow(draws_par)
 
   unpack    <- if (isTRUE(fit$constrained)) .ms_ocs_unpack_c else .ms_ocs_unpack
   lognormal <- !identical(model$positive, "beta")
@@ -1349,8 +1369,15 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   L_width <- if (constrained) .ms_ocs_lfree_dim(S, K) else S * K
   idx  <- head_n + seq_len(L_width + d$Lpos_w)
   mode <- fit$par[idx]
-  V    <- fit$cov[idx, idx, drop = FALSE]; V <- (V + t(V)) / 2
-  draws <- .occu_cover_rmvn(n_draws, mode, V)
+  # Exact NUTS draws of the loading block when present, else the Gaussian Laplace
+  # draw -- the loading posterior is non-Gaussian under the triangular constraint,
+  # so the NUTS draws give faithful association intervals (cf. the WAIC path).
+  draws <- .ms_ocs_nuts_inner(fit, n_draws, idx)
+  if (is.null(draws)) {
+    V <- fit$cov[idx, idx, drop = FALSE]; V <- (V + t(V)) / 2
+    draws <- .occu_cover_rmvn(n_draws, mode, V)
+  }
+  n_draws <- nrow(draws)
 
   to_L    <- function(blk) if (constrained) .ms_ocs_lfree_to_L(blk[seq_len(L_width)], S, K)
                            else matrix(blk[seq_len(L_width)], S, K)
