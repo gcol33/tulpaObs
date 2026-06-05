@@ -371,6 +371,82 @@ test_that("joint NUTS log-posterior gradient matches FD on the field-hyper axis 
   }
 })
 
+test_that("C++ joint log-posterior + gradient matches the R target", {
+  for (cfg in list(list(K = 1L, constrain = FALSE),
+                   list(K = 2L, constrain = TRUE))) {
+    adj <- .mscs_grid_adj(4L, 4L); S <- 4L; K <- cfg$K
+    sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+                                          seed = 321L)
+    model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+      occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+      data = sim$data, y = sim$y, y_pos = sim$y_pos,
+      positive = "lognormal", species = sim$species, adj = adj, K = K)
+    d <- tulpaObs:::.ms_ocs_dims(model)
+    tr <- sim$truth
+    Lmat <- if (K == 1L) matrix(tr$L, S, 1L) else tr$L
+    Lblock <- if (cfg$constrain) tulpaObs:::.ms_ocs_L_to_lfree(Lmat, S, K)
+              else as.numeric(Lmat)
+    mu <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+    b  <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+    par_inner <- c(mu, b, Lblock, as.numeric(tr$w), log(tr$sigma_pos))
+    chol_v <- function(Sig) tulpaObs:::.ms_ocs_chol_pack(t(chol(Sig)))
+    theta <- c(par_inner, chol_v(diag(0.4^2, d$P_occ)),
+               chol_v(diag(0.35^2, d$P_p)), chol_v(diag(0.3^2, d$P_pos)),
+               log(rep(1.3, K)))
+    set.seed(1L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
+
+    spec <- tulpaObs:::.ms_ocs_nuts_spec(model)
+    pri  <- tulpaObs:::.ms_ocs_nuts_priors()
+    cpp <- tulpaObs:::cpp_ms_ocs_joint_logpost(spec, theta, pri, 5, 1.0,
+                                               cfg$constrain)
+    rr  <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, priors = pri,
+                                            constrain = cfg$constrain,
+                                            sigma.beta = 5, sd_L = 1.0, grad = TRUE)
+    expect_lt(abs(cpp$lp - rr$lp), 1e-8)
+    expect_lt(max(abs(cpp$grad - rr$grad)), 1e-7)
+  }
+})
+
+test_that("NUTS samples the spatial-factor community target and recovers the means", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(5L, 5L); S <- 5L; K <- 1L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = K,
+          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+    occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    positive = "lognormal", species = sim$species, adj = adj, K = K)
+  fit <- tulpaObs:::.tobs_fit_ms_occu_cover_spatial(model, sd_L = 1.1,
+                                                    max.em = 20L, constrain = FALSE)
+  d <- tulpaObs:::.ms_ocs_dims(model)
+  theta0 <- tulpaObs:::.ms_ocs_nuts_pack_init(fit)
+  spec <- tulpaObs:::.ms_ocs_nuts_spec(model)
+  pri  <- tulpaObs:::.ms_ocs_nuts_priors()
+
+  # Laplace-metric warm-start: inverse mass = posterior variance from the FD
+  # Hessian diagonal of the joint log-posterior at the mode.
+  g_at <- function(th) tulpaObs:::cpp_ms_ocs_joint_logpost(spec, th, pri, 5, 1.1,
+                                                           FALSE)$grad
+  hh <- 1e-4; np <- length(theta0); Md <- numeric(np)
+  for (j in seq_len(np)) {
+    tp <- theta0; tp[j] <- tp[j] + hh; tm <- theta0; tm[j] <- tm[j] - hh
+    Md[j] <- -(g_at(tp)[j] - g_at(tm)[j]) / (2 * hh)
+  }
+  inv_metric <- 1 / pmax(Md, 1e-3)
+
+  res <- tulpaObs:::cpp_ms_ocs_nuts(spec, theta0, pri, 5, 1.1, inv_metric,
+                                    n_iter = 500L, n_warmup = 250L,
+                                    max_treedepth = 10L, adapt_delta = 0.95,
+                                    seed = 42L, verbose = FALSE, constrain = FALSE)
+  expect_identical(nrow(res$draws), 250L)
+  expect_true(all(is.finite(res$draws)))
+  mu_post <- colMeans(res$draws[, seq_len(d$P)])
+  mu_true <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  expect_gt(stats::cor(mu_post, mu_true), 0.7)
+  expect_lt(sum(res$divergent) / nrow(res$draws), 0.2)
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
