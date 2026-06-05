@@ -563,6 +563,31 @@ test_that("NUTS recovers means + the field correlation under a proper-CAR field"
   expect_lt(fit$spatial$rho_w, 1)
 })
 
+test_that("NUTS recovers means + the variance fraction under a BYM2 field", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .mscs_grid_adj(6L, 6L); S <- 6L
+  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
+          field = "bym2", phi = 0.7, sd_occ = 0.5, sd_load = 1.1,
+          sigma_pos = 0.4, seed = 4L)
+  # bym2 exercises the logit_h block with the eigen-form R(h) under sampling.
+  fit <- tobs(~ occ_cov1 + bym2(graph = adj), data = sim$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              species = sim$species, method = "nuts",
+              control = list(n.factors = 1L, sd.load = 1.1, n.chains = 2L,
+                             n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
+                             seed = 7L))
+  expect_identical(fit$spatial$field_type, "bym2")
+  expect_true(all(is.finite(fit$nuts$draws)))
+  mu_true <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  cm <- fit$means[seq_along(mu_true)]
+  expect_gt(stats::cor(cm, mu_true), 0.7)
+  expect_true(is.finite(fit$spatial$phi_w))
+  expect_gte(fit$spatial$phi_w, 0)
+  expect_lt(fit$spatial$phi_w, 1)
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
