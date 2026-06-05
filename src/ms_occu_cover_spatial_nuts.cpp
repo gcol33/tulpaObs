@@ -125,7 +125,171 @@ inline double ms_ocs_species_ll(const MsOcsData& d, int s,
     return ll;
 }
 
+// Accumulate species s's data-log-lik gradient into the per-arm coefficient
+// score (g_occ_s / g_p_rowsum-chained / g_pos_rowsum-chained), the per-species
+// loading scores (g_L_s, g_Lpos_s, length K), the shared-field score (g_W,
+// n_sites x K, accumulated across species), and the dispersion score. Mirrors
+// .occu_cover_eta_grad + the chain in .ms_ocs_penll_grad. `g_occ_s/g_p_s/g_pos_s`
+// are length P_occ/P_p/P_pos outputs for THIS species (mu and b_s share them).
+inline void ms_ocs_species_grad(const MsOcsData& d, int s,
+                                const double* th_occ, const double* th_p,
+                                const double* th_pos, const double* L_s,
+                                const double* Lpos_s, double log_disp,
+                                double* g_occ_s, double* g_p_s, double* g_pos_s,
+                                double* g_L_s, double* g_Lpos_s,
+                                double* g_W, double& g_ld) {
+    const double disp   = std::exp(log_disp);
+    const double sigma  = disp;
+    const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
+    const NumericMatrix& y  = d.y[s];
+    const NumericMatrix& yp = d.y_pos[s];
+    const NumericMatrix& vv = d.valid[s];
+    const int N = d.n_sites, J = d.max_visits, K = d.K;
+
+    for (int j = 0; j < d.P_occ; ++j) g_occ_s[j] = 0.0;
+    for (int j = 0; j < d.P_p;   ++j) g_p_s[j]   = 0.0;
+    for (int j = 0; j < d.P_pos; ++j) g_pos_s[j] = 0.0;
+    for (int k = 0; k < K; ++k) { g_L_s[k] = 0.0; if (g_Lpos_s) g_Lpos_s[k] = 0.0; }
+
+    for (int i = 0; i < N; ++i) {
+        double eta_occ = row_dot(d.X_occ, i, th_occ, d.P_occ);
+        for (int k = 0; k < K; ++k) eta_occ += d.W(i, k) * L_s[k];
+        const double psi = sigmoid_(clamp30(eta_occ));
+        const double eta_p = row_dot(d.X_p, i, th_p, d.P_p);
+        double eta_pos     = row_dot(d.X_pos, i, th_pos, d.P_pos);
+        if (d.cover_factor)
+            for (int k = 0; k < K; ++k) eta_pos += d.W(i, k) * Lpos_s[k];
+        const double p_i = sigmoid_(clamp30(eta_p));
+
+        bool any_det = false; int n_valid = 0;
+        for (int v = 0; v < J; ++v) {
+            if (vv(i, v) < 0.5) continue;
+            ++n_valid;
+            if (y(i, v) > 0.5) any_det = true;
+        }
+
+        double g_psi = 0.0, gp_rowsum = 0.0, gpos_rowsum = 0.0;
+        if (any_det) {
+            g_psi = 1.0 - psi;
+            for (int v = 0; v < J; ++v) {
+                if (vv(i, v) < 0.5) continue;
+                gp_rowsum += (y(i, v) > 0.5) ? (1.0 - p_i) : (-p_i);
+                if (y(i, v) > 0.5) {
+                    if (d.is_beta) {
+                        gpos_rowsum += BetaPositive::grad_eta(yp(i, v), eta_pos, disp);
+                        // dispersion score, beta (per detected visit)
+                        const double mu = sigmoid_(clamp30(eta_pos));
+                        const double a = mu * disp, b = (1.0 - mu) * disp;
+                        const double ly = log_safe_(yp(i, v));
+                        const double l1my = log_safe_(1.0 - yp(i, v));
+                        g_ld += disp * (tulpa::math::portable_digamma(disp)
+                                        - tulpa::math::portable_digamma(a) * mu
+                                        - tulpa::math::portable_digamma(b) * (1.0 - mu)
+                                        + mu * ly + (1.0 - mu) * l1my);
+                    } else {
+                        const double r = (log_safe_(yp(i, v)) - eta_pos) / sigma;
+                        gpos_rowsum += r / sigma;       // (log y - eta) / sigma^2
+                        g_ld += r * r - 1.0;
+                    }
+                }
+            }
+        } else {
+            double log_P0 = (double) n_valid * log_safe_(1.0 - p_i);
+            const double P0 = std::exp(log_P0);
+            const double A = psi * P0, L = A + (1.0 - psi);
+            const double invL = (L > 0.0) ? 1.0 / L : 0.0;
+            g_psi = psi * (1.0 - psi) * (P0 - 1.0) * invL;
+            gp_rowsum = -(A * invL) * p_i * (double) n_valid;
+        }
+
+        // chain to coefficients / loadings / field
+        for (int j = 0; j < d.P_occ; ++j) g_occ_s[j] += d.X_occ(i, j) * g_psi;
+        for (int j = 0; j < d.P_p;   ++j) g_p_s[j]   += d.X_p(i, j)   * gp_rowsum;
+        for (int j = 0; j < d.P_pos; ++j) g_pos_s[j] += d.X_pos(i, j) * gpos_rowsum;
+        for (int k = 0; k < K; ++k) {
+            g_L_s[k] += d.W(i, k) * g_psi;
+            g_W[k * N + i] += g_psi * L_s[k];
+            if (d.cover_factor) {
+                g_Lpos_s[k] += d.W(i, k) * gpos_rowsum;
+                g_W[k * N + i] += gpos_rowsum * Lpos_s[k];
+            }
+        }
+    }
+    (void) inv_s2;
+}
+
 } // namespace tulpaObs
+
+// Data-log-lik gradient (no priors) over the packed inner latent, same layout as
+// cpp_ms_ocs_marginal_ll's theta_inner. Cross-check entry for the R oracle
+// .ms_ocs_penll_grad with the prior precisions zeroed.
+// [[Rcpp::export]]
+Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec,
+                                             Rcpp::NumericVector theta_inner) {
+    tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
+    const int P = d.P_occ + d.P_p + d.P_pos;
+    const int N = d.n_sites, S = d.S, K = d.K;
+    const double* th = theta_inner.begin();
+
+    int off = 0;
+    const double* mu = th + off; off += P;
+    const double* b  = th + off; off += S * P;
+    const double* Lv = th + off; off += S * K;
+    const double* Lpv = nullptr;
+    if (d.cover_factor) { Lpv = th + off; off += S * K; }
+    d.W = Rcpp::NumericMatrix(N, K);
+    for (int k = 0; k < K; ++k)
+        for (int i = 0; i < N; ++i) d.W(i, k) = th[off + k * N + i];
+    const int w_off = off; off += N * K;
+    const double log_disp = th[off];
+
+    const int Lw = d.cover_factor ? 2 * S * K : S * K;
+    Rcpp::NumericVector grad(P + S * P + Lw + N * K + 1);
+    double* g = grad.begin();
+    double* g_mu = g;
+    double* g_b  = g + P;
+    double* g_L  = g + P + S * P;            // vec(g_L) (S x K col-major)
+    double* g_Lpos = d.cover_factor ? (g_L + S * K) : nullptr;
+    double* g_W  = g + w_off;                // reuse packed W offset for field score
+    double& g_ld = g[P + S * P + Lw + N * K];
+
+    std::vector<double> th_occ(d.P_occ), th_p(d.P_p), th_pos(d.P_pos);
+    std::vector<double> L_s(K), Lpos_s(K);
+    std::vector<double> g_occ_s(d.P_occ), g_p_s(d.P_p), g_pos_s(d.P_pos);
+    std::vector<double> g_L_s(K), g_Lpos_s(K);
+    for (int s = 0; s < S; ++s) {
+        const double* b_s = b + s * P;
+        for (int j = 0; j < d.P_occ; ++j) th_occ[j] = mu[j] + b_s[j];
+        for (int j = 0; j < d.P_p; ++j)   th_p[j]   = mu[d.P_occ + j] + b_s[d.P_occ + j];
+        for (int j = 0; j < d.P_pos; ++j) th_pos[j] = mu[d.P_occ + d.P_p + j] +
+                                                      b_s[d.P_occ + d.P_p + j];
+        for (int k = 0; k < K; ++k) L_s[k] = Lv[k * S + s];
+        if (d.cover_factor) for (int k = 0; k < K; ++k) Lpos_s[k] = Lpv[k * S + s];
+
+        tulpaObs::ms_ocs_species_grad(
+            d, s, th_occ.data(), th_p.data(), th_pos.data(),
+            L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp,
+            g_occ_s.data(), g_p_s.data(), g_pos_s.data(),
+            g_L_s.data(), d.cover_factor ? g_Lpos_s.data() : nullptr,
+            g_W, g_ld);
+
+        // mu and b_s share the per-arm coefficient score.
+        double* gb = g_b + s * P;
+        for (int j = 0; j < d.P_occ; ++j) { g_mu[j] += g_occ_s[j]; gb[j] = g_occ_s[j]; }
+        for (int j = 0; j < d.P_p; ++j) {
+            g_mu[d.P_occ + j] += g_p_s[j]; gb[d.P_occ + j] = g_p_s[j];
+        }
+        for (int j = 0; j < d.P_pos; ++j) {
+            g_mu[d.P_occ + d.P_p + j] += g_pos_s[j];
+            gb[d.P_occ + d.P_p + j] = g_pos_s[j];
+        }
+        for (int k = 0; k < K; ++k) {
+            g_L[k * S + s] = g_L_s[k];
+            if (d.cover_factor) g_Lpos[k * S + s] = g_Lpos_s[k];
+        }
+    }
+    return grad;
+}
 
 // Total marginal log-likelihood (data term only, no priors) for the spatial
 // community occu_cover model at the packed inner latent theta_inner =
