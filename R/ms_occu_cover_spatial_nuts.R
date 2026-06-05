@@ -99,7 +99,13 @@
   list(chol_logdiag_mean = log(0.5), chol_logdiag_sd = 1.5,
        chol_offdiag_sd   = 1.0,
        log_tau_mean = 0,  log_tau_sd  = 2.0,
-       log_disp_mean = log(0.5), log_disp_sd = 2.0)
+       log_disp_mean = log(0.5), log_disp_sd = 2.0,
+       # Field hyperparameter (car_proper rho / bym2 phi) on the logit scale: a
+       # weakly-informative Normal centred at logit(0.5) = 0 (no a-priori pull
+       # toward weak or strong spatial structure), wide enough to span the unit
+       # interval. The field shape, well-identified by the shared loadings,
+       # dominates this at the family's sample sizes.
+       logit_h_mean = 0, logit_h_sd = 1.5)
 }
 
 # log density (up to an additive constant) of one arm's Cholesky coordinates and
@@ -127,9 +133,10 @@
 }
 
 # Full NUTS coordinate layout: the inner prefix, then the three arm Cholesky
-# blocks (occ, p, pos), then log tau_w (length K). Returns the block offsets and
-# the total length.
-.ms_ocs_nuts_layout <- function(d, constrain) {
+# blocks (occ, p, pos), then log tau_w (length K), then -- for a hyperparameterised
+# field (proper-CAR rho / BYM2 phi) -- the logit field-hyperparameter block
+# logit_h_w (length K). Returns the block offsets and the total length.
+.ms_ocs_nuts_layout <- function(d, constrain, has_hyper = FALSE) {
   n_inner <- .ms_ocs_npar_inner(d, constrain)
   q_occ <- .ms_ocs_chol_dim(d$P_occ)
   q_p   <- .ms_ocs_chol_dim(d$P_p)
@@ -139,8 +146,11 @@
   p   <- off + seq_len(q_p);   off <- off + q_p
   pos <- off + seq_len(q_pos); off <- off + q_pos
   tau <- off + seq_len(d$K);   off <- off + d$K
+  logit_h <- integer(0)
+  if (has_hyper) { logit_h <- off + seq_len(d$K); off <- off + d$K }
   list(n_inner = n_inner, inner = seq_len(n_inner),
        chol_occ = occ, chol_p = p, chol_pos = pos, log_tau = tau,
+       logit_h = logit_h, has_hyper = has_hyper,
        total = off)
 }
 
@@ -151,24 +161,21 @@
 
 # Full-vector unconstrained joint log-posterior and its gradient for the
 # spatial-factor community occu_cover model. `theta` packs
-#   c(par_inner, chol_occ, chol_p, chol_pos, log_tau_w)
+#   c(par_inner, chol_occ, chol_p, chol_pos, log_tau_w[, logit_h_w])
 # with par_inner = c(mu, {b_s}, L-block, [Lpos], W, log_disp) (constrained L-block
-# when `constrain`). Returns list(lp, grad) over the whole vector. icar fields
-# only (the proper-CAR / BYM2 hyperparameter axes are a later increment).
+# when `constrain`). The trailing logit_h_w block is present iff the field carries
+# a hyperparameter (proper-CAR rho / BYM2 phi); h_k = plogis(logit_h_k) in (0, 1).
+# Returns list(lp, grad) over the whole vector.
 .ms_ocs_joint_logpost <- function(model, theta, priors = .ms_ocs_nuts_priors(),
                                   constrain = FALSE, sigma.beta = 5, sd_L = 1.0,
                                   grad = TRUE) {
   spec <- model$field_spec %||%
     .ms_ocs_field_spec(model$adj, model$field_type %||% "icar")
-  if (!identical(spec$type, "icar")) {
-    stop("The NUTS joint target currently supports icar fields only; ",
-         "proper-CAR / BYM2 hyperparameter sampling is not yet wired.",
-         call. = FALSE)
-  }
+  has_hyper <- isTRUE(spec$has_hyper)
   d   <- .ms_ocs_dims(model)
-  lay <- .ms_ocs_nuts_layout(d, constrain)
+  lay <- .ms_ocs_nuts_layout(d, constrain, has_hyper)
   S   <- d$S; K <- d$K
-  rank_k <- spec$rank                                  # N - 1 for icar
+  rank_k <- spec$rank                                  # N (proper) / N - 1 (icar)
 
   par_inner <- theta[lay$inner]
   C <- list(occ = .ms_ocs_chol_unpack(theta[lay$chol_occ], d$P_occ),
@@ -176,6 +183,12 @@
             pos = .ms_ocs_chol_unpack(theta[lay$chol_pos], d$P_pos))
   log_tau <- theta[lay$log_tau]
   tau_w   <- exp(log_tau)
+  h_w <- if (has_hyper) stats::plogis(theta[lay$logit_h]) else NULL
+
+  # Per-factor field structure R_k(h_k) (the fixed ICAR Q for every factor when
+  # the field has no hyperparameter); the inner objective reads it from field_R.
+  Rk <- .ms_ocs_build_field_R(model, h_w)
+  model_eff <- model; model_eff$field_R <- Rk
 
   Si <- lapply(C, function(Cm) chol2inv(t(Cm)))        # Sigma_arm^{-1}
   Sinv <- matrix(0, d$P, d$P)
@@ -186,13 +199,19 @@
   inv_sdL2 <- 1 / sd_L^2
 
   objective <- if (constrain) .ms_ocs_penll_grad_c else .ms_ocs_penll_grad
-  res <- objective(model, par_inner, Sinv, Pmu, inv_sdL2, tau_w, grad = grad)
+  res <- objective(model_eff, par_inner, Sinv, Pmu, inv_sdL2, tau_w, grad = grad)
 
   # ---- (B) MVN(b) log-determinant normalisers + (C) GMRF tau normalisers ----
   logdet <- c(occ = 2 * sum(log(diag(C$occ))),
               p   = 2 * sum(log(diag(C$p))),
               pos = 2 * sum(log(diag(C$pos))))
   lp <- res$ll - 0.5 * S * sum(logdet) + 0.5 * rank_k * sum(log_tau)
+  # The field-structure log|R(h_k)| enters only for a hyperparameterised field;
+  # for icar it is the constant pseudo-determinant and drops.
+  if (has_hyper) {
+    lp <- lp + 0.5 * sum(vapply(h_w, function(h)
+      .ms_ocs_field_logdetR(spec, h), 0))
+  }
 
   # ---- (D) hyperpriors on the sampled coordinates ----
   pr_occ <- .ms_ocs_chol_logprior(theta[lay$chol_occ], d$P_occ, priors)
@@ -202,6 +221,10 @@
   ld     <- par_inner[lay$n_inner]                     # log_disp = last inner coord
   pr_ld  <- -0.5 * ((ld - priors$log_disp_mean) / priors$log_disp_sd)^2
   lp <- lp + pr_occ$lp + pr_p$lp + pr_pos$lp + pr_tau + pr_ld
+  if (has_hyper) {
+    lp <- lp - 0.5 * sum(((theta[lay$logit_h] - priors$logit_h_mean) /
+                            priors$logit_h_sd)^2)
+  }
 
   if (!grad) return(list(lp = lp))
 
@@ -226,17 +249,48 @@
       C[[arm]], M, S, theta[chol_slot[[arm]]], Pa[[arm]], priors)
   }
 
-  # ---- log tau_w gradient ----
-  # d/d log_tau_k of [ -0.5 tau_k W_k' Q W_k + 0.5 rank log tau_k - prior ].
+  # ---- log tau_w (and, for a hyper field, logit_h_w) gradient ----
+  # d/d log_tau_k of [ -0.5 tau_k W_k' R_k W_k + 0.5 rank log tau_k - prior ];
+  # d/d logit_h_k chains the field hyperparameter through h_k = plogis().
   W  <- .ms_ocs_inner_W(par_inner, d, constrain)       # N x K
-  Q  <- model$icar_Q
   for (k in seq_len(K)) {
-    quad <- as.numeric(W[, k] %*% (Q %*% W[, k]))
+    quad <- as.numeric(W[, k] %*% (Rk[[k]] %*% W[, k]))
     g[lay$log_tau[k]] <- -0.5 * tau_w[k] * quad + 0.5 * rank_k -
       (log_tau[k] - priors$log_tau_mean) / priors$log_tau_sd^2
+    if (has_hyper) {
+      ht <- .ms_ocs_field_hyper_terms(spec, h_w[k], W[, k])
+      dlp_dh <- -0.5 * tau_w[k] * ht$dquad + 0.5 * ht$dlogdet
+      dh     <- h_w[k] * (1 - h_w[k])                  # plogis derivative
+      g[lay$logit_h[k]] <- dlp_dh * dh -
+        (theta[lay$logit_h[k]] - priors$logit_h_mean) / priors$logit_h_sd^2
+    }
   }
 
   list(lp = lp, grad = g)
+}
+
+# Field-hyperparameter derivatives at one factor: the quadratic derivative
+# dquad = W_k'(dR/dh)W_k and the log-determinant derivative dlogdet = d log|R(h)|/dh,
+# both closed form. car_proper: R = D - h A so dR/dh = -A, and log|R| = log|D| +
+# sum log(1 - h gamma) so dlogdet = -sum gamma/(1 - h gamma). bym2: R = V diag(1/m)
+# V' with m = (1-h) + h s, so W'R W = sum a_j/m_j (a = (V'W)^2) gives dquad =
+# -sum a (s-1)/m^2, and log|R| = -sum log m gives dlogdet = -sum (s-1)/m.
+.ms_ocs_field_hyper_terms <- function(spec, h, Wk) {
+  if (identical(spec$type, "car_proper")) {
+    AW    <- as.numeric(spec$A %*% Wk)
+    dquad <- -as.numeric(Wk %*% AW)
+    dlogdet <- -sum(spec$gamma / (1 - h * spec$gamma))
+    return(list(dquad = dquad, dlogdet = dlogdet))
+  }
+  if (identical(spec$type, "bym2")) {
+    Vw <- as.numeric(crossprod(spec$V, Wk))
+    m  <- (1 - h) + h * spec$s
+    a  <- Vw^2
+    dquad   <- -sum(a * (spec$s - 1) / m^2)
+    dlogdet <- -sum((spec$s - 1) / m)
+    return(list(dquad = dquad, dlogdet = dlogdet))
+  }
+  list(dquad = 0, dlogdet = 0)
 }
 
 # d log p / d (packed Cholesky coords) for one arm, from the term
@@ -281,14 +335,17 @@
 
 # Pack the Laplace-EM solution into the full NUTS coordinate vector: the inner
 # mode (fit$par, already in the constrained vs unconstrained layout the fit used),
-# the arm covariances as log-Cholesky coordinates, and log tau_w. This is the NUTS
-# initial position (the chain starts at the EM mode) and the reference point for
-# the FD gradient check.
+# the arm covariances as log-Cholesky coordinates, log tau_w, and -- for a
+# hyperparameterised field -- the logit of the EM field hyperparameter (rho/phi).
+# This is the NUTS initial position (the chain starts at the EM mode) and the
+# reference point for the FD gradient check.
 .ms_ocs_nuts_pack_init <- function(fit) {
   chol_coords <- function(Sig) .ms_ocs_chol_pack(t(chol(Sig)))  # Sigma = C C'
+  hyper <- if (!is.null(fit$field_hyper)) stats::qlogis(fit$field_hyper) else numeric(0)
   c(fit$par,
     chol_coords(fit$Sigma$occ),
     chol_coords(fit$Sigma$p),
     chol_coords(fit$Sigma$pos),
-    log(fit$tau_w))
+    log(fit$tau_w),
+    hyper)
 }

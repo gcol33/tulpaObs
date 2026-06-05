@@ -325,6 +325,52 @@ test_that("joint NUTS log-posterior gradient matches FD (K = 2 constrained + cov
             label = "max|analytic - FD| over the constrained cover-factor joint gradient")
 })
 
+test_that("joint NUTS log-posterior gradient matches FD on the field-hyper axis (car_proper / bym2)", {
+  for (cfg in list(list(field = "car_proper", h = 0.85),
+                   list(field = "bym2",       h = 0.7))) {
+    adj <- .mscs_grid_adj(4L, 4L)
+    S <- 3L
+    sim <- simulate_ms_occu_cover_spatial(
+      adj, n_species = S, J = 3L, field = cfg$field,
+      rho = cfg$h, phi = cfg$h, seed = 321L)
+    model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
+      occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
+      data = sim$data, y = sim$y, y_pos = sim$y_pos,
+      positive = "lognormal", species = sim$species, adj = adj,
+      field_type = cfg$field)
+    d <- tulpaObs:::.ms_ocs_dims(model)
+    expect_true(isTRUE(model$field_spec$has_hyper))
+    tr <- sim$truth
+    h_true <- if (identical(cfg$field, "car_proper")) tr$rho else tr$phi
+
+    mu  <- c(tr$mu_occ, tr$mu_p, tr$mu_pos)
+    b   <- as.numeric(t(cbind(tr$b_occ, tr$b_p, tr$b_pos)))
+    par_inner <- c(mu, b, tr$L, tr$w, log(tr$sigma_pos))
+    chol_v <- function(Sig) tulpaObs:::.ms_ocs_chol_pack(t(chol(Sig)))
+    theta <- c(par_inner, chol_v(diag(0.4^2, d$P_occ)),
+               chol_v(diag(0.35^2, d$P_p)), chol_v(diag(0.3^2, d$P_pos)),
+               log(1.3), stats::qlogis(h_true))
+    lay <- tulpaObs:::.ms_ocs_nuts_layout(d, FALSE, TRUE)
+    expect_identical(length(theta), lay$total)
+    expect_length(lay$logit_h, d$K)
+    set.seed(3L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
+
+    out <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, constrain = FALSE,
+                                            grad = TRUE)
+    f <- function(p) tulpaObs:::.ms_ocs_joint_logpost(model, p, constrain = FALSE,
+                                                      grad = FALSE)$lp
+    expect_true(is.finite(out$lp))
+    h <- 1e-5; gnum <- numeric(length(theta))
+    for (k in seq_along(theta)) {
+      pp <- theta; pp[k] <- pp[k] + h
+      pm <- theta; pm[k] <- pm[k] - h
+      gnum[k] <- (f(pp) - f(pm)) / (2 * h)
+    }
+    expect_lt(max(abs(out$grad - gnum)), 1e-4,
+              label = sprintf("max|analytic - FD| joint gradient (%s)", cfg$field))
+  }
+})
+
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
