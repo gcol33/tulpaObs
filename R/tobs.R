@@ -696,6 +696,10 @@ tobs <- function(formula,
       out$divergent   <- nd$divergent
       out$treedepth   <- nd$treedepth
       out$epsilon     <- nd$epsilon
+      out$n_samples   <- nrow(nd$draws)
+      out$n_chains    <- nd$n_chains
+      out$max_rhat    <- nd$max_rhat
+      out$min_ess     <- nd$min_ess
       out$nuts        <- nd
       return(out)
     }
@@ -1263,6 +1267,10 @@ print.tobs_fit <- function(x, ...) {
   }
   if (!is.null(x$divergent) && isTRUE(sum(x$divergent) > 0)) {
     cat(sprintf("  WARNING: %d divergent transitions\n", sum(x$divergent)))
+  }
+  if (!is.null(x$max_rhat) && is.finite(x$max_rhat)) {
+    cat(sprintf("  Convergence: max R-hat %.3f, min ESS %.0f\n",
+                x$max_rhat, x$min_ess))
   }
   if (!is.null(x$intercepts)) {
     cat("\n")
