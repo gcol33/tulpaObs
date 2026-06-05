@@ -7,24 +7,35 @@
 dyn_abun(K_max = NULL, mixture = c("poisson", "negbin"))
 }
 \arguments{
-\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
-integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
-engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
-fit warns that the posterior over \code{N} puts mass on the boundary.}
+\item{K_max}{abundance-state truncation for the forward recursion (states
+\verb{0..K_max}). \code{NULL} (default) uses \code{max(count) + 40}; raise it if abundance
+may exceed that (the forward cost is roughly cubic in \code{K_max}).}
 
-\item{mixture}{latent-abundance distribution, both fitted via tulpa's
-closed-form marginal Laplace engine. \code{"poisson"} is the default;
-\code{"negbin"} (negative binomial, \code{Var(N) = lambda + lambda^2 / r}) adds an
-overdispersion parameter \code{r}. Non-spatially the log size \code{log_r} is
-estimated jointly with the coefficients and reported with an SE; on the
-areal-spatial path (\code{method = "nested_laplace"}) \code{r} is integrated over the
-outer hyperparameter grid and reported as a posterior mean / sd. Named
-\code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
-model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
+\item{mixture}{initial-abundance distribution. Only \code{"poisson"} is wired this
+round; \code{"negbin"} errors.}
 }
 \value{
 A \code{tobs_family} object.
 }
 \description{
-Latent N evolves across seasons via survival + recruitment.
+Latent abundance evolves across primary seasons via apparent survival and
+recruitment (Dail & Madsen 2011): \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2},
+\code{N_t = S_t + G_t} with survivors \verb{S_t ~ Binomial(N_\{t-1\}, omega)} and recruits
+\code{G_t ~ Poisson(gamma)}; observed via \code{Binomial(N_t, p)} over secondary visits.
+The latent abundance sequence is summed out by an exact HMM forward recursion
+(it is not closed form, unlike the static \code{\link[=abun]{abun()}}); analytic gradients come
+from forward-mode differentiation of the scaled forward algorithm, so the fit
+is a direct maximum-likelihood / Laplace fit with a NUTS path over the same
+marginal.
+}
+\details{
+Four site-level arms: initial abundance \code{lambda} (the \code{tobs()} \code{formula}),
+detection \code{p} (\code{detection}), apparent survival \code{omega} (\code{omega_formula},
+default \code{~ 1}), and recruitment \code{gamma} (\code{gamma_formula}, default \code{~ 1}). The
+response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or a list of
+per-season count matrices); missing visits are \code{NA}.
+}
+\references{
+Dail, D., Madsen, L. (2011). Models for estimating abundance from
+repeated counts of an open metapopulation. \emph{Biometrics} 67, 577-587.
 }

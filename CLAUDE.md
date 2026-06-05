@@ -157,8 +157,18 @@ nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field
 on abundance arm). `occu_multiscale_cover` = nested_laplace ONLY (spatial joint).
 Community occupancy families `ms_occu`/`ms_dyn_occu`/`ms_int_occu` = laplace ONLY
 (shared community Laplace-EM, `R/community_em.R`; per-species coef RE, per-arm
-community covariance). Planned (error via `.stop_planned_family()`): `dyn_abun`,
-`distance`, `removal`, `fp_occu`.
+community covariance). `removal` = laplace + nuts (non-spatial Poisson/NB;
+closed-form depleting-binomial marginal, in-tree FullGradFn NUTS). `distance` =
+laplace + nuts (non-spatial Poisson/NB; binned multinomial-over-N marginal,
+half-normal / hazard-rate key, line / point transect, bin integrals by
+Gauss-Legendre quadrature, in-tree FullGradFn NUTS). `fp_occu` = laplace + nuts
+(Miller 2011 multistate false-positive occupancy; `y in {0,1,2}`, two-state
+latent marginal, analytic-grad BFGS + observed-info vcov, in-tree FullGradFn
+NUTS). `dyn_abun` = laplace + nuts (Dail-Madsen open N-mixture; exact HMM forward
+marginal over latent N summed across seasons, forward-mode-diff analytic
+gradients, Poisson init + constant recruitment; analytic-grad BFGS + in-tree
+FullGradFn NUTS). All filed observation-family issues shipped; no planned-status
+families remain.
 
 ### N-mixture abundance (`abun()`)
 
@@ -328,6 +338,10 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community N-mixture | Yes | — | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> native `NMixCommunityOracle` via AGHQ, Schur SEs; Pois + negbin (per-species `log_r_s` RE via joint_grad/AGHQ); recovery+20-seed (`test-ms-abun.R`). NUTS pending |
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; tulpaObs#12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`), joint `(mu,f,{b_s})` mode-find, field/Sigma grid-int; Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms. ~2s/fit (N=100,J=4,10g,n.quad=5) |
+| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (tulpaObs#39); sequential depletion, pass k sees `N - sum_{l<k} y_l` trials = depleting-binomial product = multinomial removal; latent N summed to `K_max` closed-form. SHARES the count-marginal Laplace driver (`src/marginal_count_laplace.h`) + NUTS (`src/marginal_count_nuts.h`) with `abun`; per-site math `src/removal_kernel.h` over shared `accumulate_count_moments`/`fill_nb_dispersion` (`src/nmix_kernel.h`). `R/removal.R`, `R/removal_nuts.R`. Non-spatial Pois/NB; NUTS->WAIC/LOO. Recovery+coverage+NB+NUTS+Poisson-equivalence anchor (`test-removal.R`). Spatial/RE pending |
+| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (tulpaObs#38); latent N in covered region, per-bin detected counts multinomial over `(bin 1..B, undetected)`, `pi_b = int_bin g(x;sigma) f(x) dx` (half-normal / hazard-rate key, line/point transect density `f`), bin integrals + 1st/2nd eta-derivs by Gauss-Legendre quadrature; latent N summed to `K_max` closed-form. REUSES the count-marginal core (`accumulate_count_moments`/`fill_nb_dispersion`, `src/nmix_kernel.h`) for abundance/NB; detection arm = site-level `log sigma` + optional scalar hazard shape (`src/distance_quad.h`/`src/distance_kernel.h`), own Laplace driver (`src/distance_laplace.cpp`) + NUTS (`src/distance_nuts.cpp`) over the shared tulpa-NUTS engine driver (`src/nuts_engine.h`). `R/distance.R`, `R/distance_nuts.R`, `simulate_distance()`. `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. K_max default `3*max(rowSums)+100` (latent N >> detected). Recovery+coverage+hazard-shape+NB+point+NUTS->WAIC + Poisson-thinning anchor + analytic-vs-FD observed-info check (`test-distance.R`). Spatial/RE pending |
+| False-positive occupancy (multistate) | Yes | — | `fp_occu()` (tulpaObs#40); Miller 2011 confirmed-detection design, `y in {0,1,2}` (none/ambiguous/certain); certain detections only at occupied sites identify the model. Latent z summed closed-form (2-state); 4 site-level logit arms psi/p11/p10/b (`fp_formula`/`b_formula` for p10/b, default `~1`). Laplace = analytic-grad BFGS over exact marginal, vcov = inv of -FD-Jacobian of analytic grad at mode (`src/fp_occu_kernel.h`, gradient only — no 2nd-deriv needed). NUTS over same marginal (`src/fp_occu_nuts.cpp` via shared `src/nuts_engine.h`). `R/fp_occu.R`, `R/fp_occu_nuts.R`, `simulate_fp_occu()`. Recovery+coverage+fp-covariate+NUTS->WAIC + direct-marginal anchor (`test-fp_occu.R`). Spatial/RE pending |
+| Open N-mixture (Dail-Madsen) | Yes | — | `dyn_abun()` (tulpaObs#37); `N_1~Pois(lambda)`, `N_t=Binom(N_{t-1},omega)+Pois(gamma)`, `Binom(N_t,p)` obs. Latent N sequence summed by an exact HMM forward recursion over states 0..K_max (NOT closed-form); analytic gradient by forward-mode diff of the scaled forward (`src/dyn_abun_kernel.h`). 4 site-level arms lambda/p/omega/gamma (`omega_formula`/`gamma_formula`, default `~1`). Laplace = analytic-grad BFGS + observed-info vcov (FD-Jacobian of analytic grad). NUTS over same marginal (`src/dyn_abun_nuts.cpp` via shared `src/nuts_engine.h`). `R/dyn_abun.R`, `R/dyn_abun_nuts.R`, `simulate_dyn_abun()`; y is 3D `[n_sites x J x T]`. K_max default `max(count)+40` (forward cost ~cubic in K). Poisson init + constant recruitment v1 (negbin/season-varying pending). Recovery+coverage+NUTS->WAIC + R-forward anchor (`test-dyn_abun.R`). Spatial/RE pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |

@@ -96,10 +96,10 @@ What lives inside tulpaObs (in tension, by user request):
 | `jsdm()`             | latent factor         | multivariate Bernoulli/Probit | no        | spatial            | NUTS       | working |
 | `abun()` / `nmixture`| Poisson / NB N        | Binomial(N, p) per visit      | required  | all                | L, NL, NUTS| working (Poisson + negbin; non-spatial L + areal-spatial NL + non-spatial NUTS via the in-tree FullGradFn, tulpaObs#41) |
 | `multispecies_nmix()`| Poisson N_{s,i}       | Binomial(N, p)                | required  | all                | L, NL, NUTS| working (`ms_abun()` on L via C++ community Laplace-EM; non-spatial Pois + negbin, areal-spatial Pois/NB via nested-Laplace, tulpaObs#12; community NUTS pending) |
-| `dynamic_nmix()`     | Dail-Madsen N_t       | Binomial(N_t, p)              | required  | all                | NUTS       | planned (Phase 3) |
-| `distance()`         | density               | hazard / half-normal binned   | replaced by distance bins | all | L, NUTS  | planned (Phase 4) |
-| `removal()`          | N                     | sequential removal            | required  | spatial            | L, NUTS    | planned (Phase 4) |
-| `false_positive()`   | z + classification    | confirmed / ambiguous         | required  | all                | NUTS       | planned (Phase 4) |
+| `dyn_abun()`         | Dail-Madsen N_t       | Binomial(N_t, p)              | required  | non-spatial        | L, NUTS    | working (exact HMM forward marginal, forward-mode-diff analytic gradients; Poisson init + constant recruitment; analytic-grad BFGS + in-tree NUTS; tulpaObs#37) |
+| `distance()`         | Poisson / NB N        | hazard / half-normal binned   | replaced by distance bins | non-spatial | L, NUTS  | working (closed-form multinomial-over-N marginal on L + in-tree NUTS; half-normal / hazard-rate, line / point, Poisson + negbin; tulpaObs#38) |
+| `removal()`          | Poisson / NB N        | sequential removal            | required  | non-spatial        | L, NUTS    | working (closed-form depleting-binomial marginal on L + in-tree NUTS; Poisson + negbin; tulpaObs#39) |
+| `fp_occu()`          | z + classification    | confirmed / ambiguous (0/1/2) | required  | non-spatial        | L, NUTS    | working (Miller 2011 multistate; closed-form two-state marginal, analytic-grad BFGS + in-tree NUTS; tulpaObs#40) |
 | `cover_hurdle()`     | latent presence + mu  | Binomial(occur) + Beta or LN  | single    | CAR, BYM2, SPDE    | L, NL      | working (lognormal + beta on L; lognormal + beta on NL via shared spatial field) |
 
 Engines: **L** = single Laplace via tulpa, **NL** = nested Laplace via
@@ -168,7 +168,9 @@ dispatches to `occu()` internally during the transition.
 | multispecies_occ  | working      | not yet        | working |
 | nmixture          | needs port from INLAabun | needs likelihood added to tulpa nested-Laplace registry | planned |
 | cover_hurdle      | n/a (no E-step) | shipped (BYM2 / ICAR / CAR_proper, lognormal *and* beta positive; phi profiled via `tulpa_laplace_beta()` pre-fit, full posterior integration over phi is Phase 3) | planned |
-| distance          | needs E-step over distance bins | not yet | planned |
+| distance          | closed-form multinomial-over-N marginal (no E-step) | non-spatial shipped (tulpaObs#38); spatial offset not yet | working |
+| dyn_abun          | exact HMM forward marginal, forward-mode-diff gradients (no E-step) | non-spatial shipped (tulpaObs#37); spatial / negbin / season-varying not yet | working |
+| fp_occu           | closed-form two-state marginal (no E-step) | non-spatial shipped (tulpaObs#40); spatial not yet | working |
 
 ---
 
@@ -344,7 +346,66 @@ These are scheduled under Phase 3 below.
 
 **Phase 4 — Other observation processes**
 
-- `distance()`, `removal()`, `false_positive()`, `dynamic_nmix()`.
+- *(removal shipped, tulpaObs#39)* `removal()` sequential-depletion sampling.
+  Latent `N ~ Poisson(lambda)` / negbin observed through `K` ordered removal
+  passes; the depleting-binomial product (pass `k` sees `N - sum_{l<k} y_l`
+  trials) equals the multinomial-removal likelihood and the latent `N` is summed
+  out in closed form (sum to `K_max`). Shares the count-marginal Laplace driver
+  (`src/marginal_count_laplace.h`) and NUTS machinery
+  (`src/marginal_count_nuts.h`) with `abun()`; the per-site math is
+  `src/removal_kernel.h` (built on the shared `accumulate_count_moments` /
+  `fill_nb_dispersion` extracted from `src/nmix_kernel.h`). `R/removal.R` (family
+  wiring, S3, `simulate_removal()`), `R/removal_nuts.R`. Non-spatial Poisson + NB
+  on `laplace`, NUTS over the same marginal; recovery / 95% coverage / NB
+  dispersion / NUTS recovery + WAIC + Poisson-equivalence anchor in
+  `test-removal.R`. Spatial / RE removal not yet wired.
+- *(distance shipped, tulpaObs#38)* `distance()` binned distance sampling.
+  Latent `N ~ Poisson(lambda)` / negbin in a covered region; the per-bin detected
+  counts are multinomial over `(bin 1, ..., bin B, undetected)` with cell
+  probabilities `pi_b = integral_bin g(x; sigma) f(x) dx` (half-normal /
+  hazard-rate key, line / point transect distance density `f`), integrated by
+  Gauss-Legendre quadrature, and the latent `N` is summed out in closed form (sum
+  to `K_max`). Reuses the shared count-marginal core (`accumulate_count_moments` /
+  `fill_nb_dispersion` from `src/nmix_kernel.h`) for the abundance / NB arm; the
+  detection arm (site-level `log sigma`, optional scalar hazard shape, bin
+  integrals + first/second eta-derivatives) is `src/distance_quad.h` /
+  `src/distance_kernel.h` with its own Laplace driver (`src/distance_laplace.cpp`)
+  and NUTS target (`src/distance_nuts.cpp`) over the shared tulpa-NUTS engine
+  driver (`src/nuts_engine.h`). `R/distance.R` (family wiring, S3,
+  `simulate_distance()`), `R/distance_nuts.R`. Non-spatial Poisson + NB on
+  `laplace`, NUTS over the same marginal; recovery / 95% coverage / hazard-shape /
+  NB dispersion / point-transect / NUTS recovery + WAIC + a Poisson-thinning
+  closed-form anchor + an analytic-vs-FD observed-information check in
+  `test-distance.R`. Spatial / RE distance not yet wired.
+- *(fp_occu shipped, tulpaObs#40)* `fp_occu()` multistate false-positive
+  occupancy (Miller et al. 2011 confirmed-detection design). Detection states
+  `y in {0,1,2}` (none / ambiguous / certain); certain detections only at
+  occupied sites identify the model. Latent occupancy `z` summed out in closed
+  form (two states); four site-level logit arms (psi, true detection p11,
+  false-positive p10, certain-classification b). Per-site math
+  `src/fp_occu_kernel.h` (analytic gradient, no second derivatives needed for the
+  vcov -- the Laplace fit is analytic-gradient BFGS with an observed-information
+  covariance from the FD-Jacobian of the analytic gradient at the mode), NUTS
+  target `src/fp_occu_nuts.cpp` over the shared `src/nuts_engine.h`. `R/fp_occu.R`
+  (family wiring, S3, `simulate_fp_occu()`), `R/fp_occu_nuts.R`. Recovery / 95%
+  coverage / fp-arm covariate / NUTS recovery + WAIC + a direct-marginal anchor
+  in `test-fp_occu.R`. Spatial / RE not yet wired.
+- *(dyn_abun shipped, tulpaObs#37)* `dyn_abun()` Dail-Madsen open-population
+  N-mixture. `N_1 ~ Poisson(lambda)`; `N_t = Binomial(N_{t-1}, omega) +
+  Poisson(gamma)`; `Binomial(N_t, p)` observation. The latent abundance sequence
+  is summed out by an exact HMM forward recursion over states `0..K_max` (not
+  closed form); analytic gradients by forward-mode differentiation of the scaled
+  forward algorithm (`src/dyn_abun_kernel.h`). Analytic-grad BFGS Laplace with an
+  observed-information vcov (FD-Jacobian of the analytic gradient) and NUTS over
+  the same marginal (`src/dyn_abun_nuts.cpp` via shared `src/nuts_engine.h`).
+  `R/dyn_abun.R` (family wiring, S3, `simulate_dyn_abun()`), `R/dyn_abun_nuts.R`.
+  Recovery / 95% coverage / NUTS recovery + WAIC + a forward-recursion anchor
+  (C++ vs an independent R forward, exact to 1e-9) in `test-dyn_abun.R`. Poisson
+  initial + constant recruitment this round; negbin / season-varying dynamics /
+  spatial / RE not yet wired.
+- All five filed observation-family issues (tulpaObs#37/#38/#39/#40) shipped;
+  remaining open work is spatial / RE / negbin extensions and the threaded
+  nested-Laplace memory issue (tulpaObs#42).
 
 **Phase 5 — Package rename (DONE ahead of schedule, before Phase 1b)**
 

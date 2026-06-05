@@ -2,7 +2,7 @@
 % Please edit documentation in R/obs_families.R
 \name{fp_occu}
 \alias{fp_occu}
-\title{False-positive occupancy family}
+\title{Multistate false-positive occupancy family}
 \usage{
 fp_occu()
 }
@@ -11,5 +11,27 @@ A \code{tobs_family} object.
 }
 \description{
 Occupancy with both false negatives and false positives in the detection
-process (e.g. acoustic classifiers, citizen-science misidentification).
+process (e.g. acoustic classifiers, citizen-science misidentification), using
+the Miller et al. (2011) confirmed-detection design that makes the model
+robustly identifiable. Each visit yields a detection state \verb{y in \{0, 1, 2\}}:
+\code{0} = no detection, \code{1} = ambiguous detection (a true detection OR a false
+positive), \code{2} = certain / confirmed detection (only possible when the site is
+truly occupied). The latent occupancy \code{z} marginalises in closed form (two
+states), so the fit maximises the exact marginal likelihood directly
+(analytic-gradient BFGS, observed-information covariance) with a NUTS path over
+the same marginal.
+}
+\details{
+Four site-level logit arms: occupancy \code{psi} (the \code{tobs()} \code{formula}), true
+detection \code{p11} (\code{detection}), false-positive rate \code{p10}, and the probability a
+true detection is certain \code{b}. The \code{p10} and \code{b} predictors default to
+intercept-only and are set with the \code{fp_formula = ~ ...} and \code{b_formula = ~ ...} arguments to \code{\link[=tobs]{tobs()}}. The response \code{y} is an \verb{n_sites x J} integer
+matrix in \verb{\{0, 1, 2\}} (NA visits dropped).
+}
+\references{
+Miller, D. A. W., Nichols, J. D., McClintock, B. T., Grant, E. H. C., Bailey,
+L. L., Weir, L. A. (2011). Improving occupancy estimation when two types of
+observational error occur. \emph{Ecology} 92, 1422-1428.
+Royle, J. A., Link, W. A. (2006). Generalized site occupancy models allowing
+for false positive and false negative errors. \emph{Ecology} 87, 835-841.
 }

@@ -69,6 +69,54 @@ cpp_eval_occu_multiscale_cover_beta_cell <- function(eta_psi, eta_theta, eta_p, 
     .Call(`_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell`, eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, phi_pos, curvature)
 }
 
+cpp_distance_laplace_fixed <- function(y, X_lambda_R, X_sigma_R, cutpoints, transect, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, quad_order) {
+    .Call(`_tulpaObs_cpp_distance_laplace_fixed`, y, X_lambda_R, X_sigma_R, cutpoints, transect, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, quad_order)
+}
+
+cpp_distance_total_log_lik <- function(y, eta_lambda, eta_sigma, eta_b, cutpoints, transect, key, K_max, r, quad_order) {
+    .Call(`_tulpaObs_cpp_distance_total_log_lik`, y, eta_lambda, eta_sigma, eta_b, cutpoints, transect, key, K_max, r, quad_order)
+}
+
+cpp_distance_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_shape, sigma_logr) {
+    .Call(`_tulpaObs_cpp_distance_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_shape, sigma_logr)
+}
+
+cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
+cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma) {
+    .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma)
+}
+
+cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
+    .Call(`_tulpaObs_cpp_dyn_abun_nuts_joint_logpost`, spec, theta, sigma_beta)
+}
+
+cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
+cpp_fp_occu_total_log_lik <- function(y, site_idx, eta_psi, eta_p11, eta_p10, eta_b) {
+    .Call(`_tulpaObs_cpp_fp_occu_total_log_lik`, y, site_idx, eta_psi, eta_p11, eta_p10, eta_b)
+}
+
+cpp_fp_occu_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
+    .Call(`_tulpaObs_cpp_fp_occu_nuts_joint_logpost`, spec, theta, sigma_beta)
+}
+
+cpp_fp_occu_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_fp_occu_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
+cpp_ms_abun_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta, sigma_logr) {
+    .Call(`_tulpaObs_cpp_ms_abun_nuts_joint_logpost`, spec, theta, pri, sigma_beta, sigma_logr)
+}
+
+cpp_ms_abun_nuts <- function(spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_ms_abun_nuts`, spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
 cpp_ms_ocs_marginal_grad <- function(spec, theta_inner) {
     .Call(`_tulpaObs_cpp_ms_ocs_marginal_grad`, spec, theta_inner)
 }
@@ -155,5 +203,21 @@ occ_make_nested_likelihood <- function(y, det_prob) {
 
 cpp_occu_fit <- function(spec_r) {
     .Call(`_tulpaObs_cpp_occu_fit`, spec_r)
+}
+
+cpp_removal_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {
+    .Call(`_tulpaObs_cpp_removal_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max)
+}
+
+cpp_removal_total_log_lik <- function(y, site_idx, eta_p, eta_lambda, K_max, r) {
+    .Call(`_tulpaObs_cpp_removal_total_log_lik`, y, site_idx, eta_p, eta_lambda, K_max, r)
+}
+
+cpp_removal_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logr) {
+    .Call(`_tulpaObs_cpp_removal_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logr)
+}
+
+cpp_removal_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_removal_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 

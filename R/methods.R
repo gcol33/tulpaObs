@@ -53,8 +53,14 @@ nobs.tobs_fit <- function(object, ...) {
     sum(y >= 0)
   } else if (model$model_type == "dynamic") {
     sum(model$y_flat >= 0)
-  } else if (model$model_type == "nmix") {
+  } else if (model$model_type == "nmix" || model$model_type == "removal") {
     length(model$y_long)
+  } else if (model$model_type == "distance") {
+    sum(!is.na(model$y))
+  } else if (model$model_type == "fp_occu") {
+    length(model$y_long)
+  } else if (model$model_type == "dyn_abun") {
+    sum(!is.na(model$y))
   } else if (model$model_type == "ms_nmix" ||
              model$model_type == "ms_occu_cover" ||
              model$model_type == "ms_occu_cover_spatial" ||
@@ -179,7 +185,11 @@ coef.tobs_fit <- function(object, ...) {
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
-  if (identical(model$model_type, "nmix")) return(.tobs_fitted_nmix(object))
+  if (identical(model$model_type, "nmix") ||
+      identical(model$model_type, "removal")) return(.tobs_fitted_nmix(object))
+  if (identical(model$model_type, "distance")) return(.tobs_fitted_distance(object))
+  if (identical(model$model_type, "fp_occu")) return(.tobs_fitted_fp_occu(object))
+  if (identical(model$model_type, "dyn_abun")) return(.tobs_fitted_dyn_abun(object))
   if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
   if (identical(model$model_type, "ms_occu")) {
     return(.tobs_fitted_ms_occu(object))
@@ -345,6 +355,18 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   if (identical(object$model$model_type, "nmix")) {
     return(.tobs_residuals_nmix(object, type))
   }
+  if (identical(object$model$model_type, "removal")) {
+    return(.tobs_residuals_removal(object, type))
+  }
+  if (identical(object$model$model_type, "distance")) {
+    return(.tobs_residuals_distance(object, type))
+  }
+  if (identical(object$model$model_type, "fp_occu")) {
+    return(.tobs_residuals_fp_occu(object, type))
+  }
+  if (identical(object$model$model_type, "dyn_abun")) {
+    return(.tobs_residuals_dyn_abun(object, type))
+  }
   if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
     stop(sprintf(paste0("residuals() is not defined for %s() community fits; ",
          "use fitted() / ranef() / coef()."), object$model$model_type),
@@ -425,6 +447,18 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   model <- object$model
   if (identical(model$model_type, "nmix")) {
     return(.tobs_simulate_nmix(object, nsim))
+  }
+  if (identical(model$model_type, "removal")) {
+    return(.tobs_simulate_removal(object, nsim))
+  }
+  if (identical(model$model_type, "distance")) {
+    return(.tobs_simulate_distance(object, nsim))
+  }
+  if (identical(model$model_type, "fp_occu")) {
+    return(.tobs_simulate_fp_occu(object, nsim))
+  }
+  if (identical(model$model_type, "dyn_abun")) {
+    return(.tobs_simulate_dyn_abun(object, nsim))
   }
   if (identical(model$model_type, "ms_nmix")) {
     return(.tobs_simulate_ms_nmix(object, nsim))
@@ -561,11 +595,33 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  ...) {
   # N-mixture abundance: the response types are "abundance" / "detection", so
   # route before the occupancy-specific match.arg(type) rejects them.
-  if (identical(object$model$model_type, "nmix")) {
+  if (identical(object$model$model_type, "nmix") ||
+      identical(object$model$model_type, "removal")) {
     nmix_type <- if (missing(type) || length(type) > 1L) "abundance" else type
     return(.tobs_predict_nmix(object, X.0 = X.0, type = nmix_type,
                               quantiles = quantiles, terms = terms,
                               n_points = n_points))
+  }
+  # Distance sampling: response types are "lambda" (abundance / density) and
+  # "sigma" (detection scale); route before the occupancy match.arg(type).
+  if (identical(object$model$model_type, "distance")) {
+    dist_type <- if (missing(type) || length(type) > 1L) "lambda" else type
+    return(.tobs_predict_distance(object, X.0 = X.0, type = dist_type))
+  }
+  # False-positive occupancy: response types are "psi" (occupancy) and "p11"
+  # (true detection); route before the standard occupancy match.arg(type).
+  if (identical(object$model$model_type, "fp_occu")) {
+    fp_type <- if (missing(type) || length(type) > 1L) "psi" else type
+    if (identical(fp_type, "occupancy")) fp_type <- "psi"
+    if (identical(fp_type, "detection")) fp_type <- "p11"
+    return(.tobs_predict_fp_occu(object, X.0 = X.0, type = fp_type))
+  }
+  # Open N-mixture: response types are "lambda" (initial abundance) and "gamma"
+  # (recruitment); route before the standard occupancy match.arg(type).
+  if (identical(object$model$model_type, "dyn_abun")) {
+    da_type <- if (missing(type) || length(type) > 1L) "lambda" else type
+    if (identical(da_type, "abundance")) da_type <- "lambda"
+    return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type))
   }
   # occu_cover joint fit: the response types are occurrence / cover_cond /
   # cover_exp / change, so route before the occupancy match.arg(type) rejects

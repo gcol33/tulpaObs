@@ -67,6 +67,12 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   if (identical(object$model$model_type %||% "NULL", "ms_occu_cover_spatial")) {
     return(.tobs_ploglik_ms_occu_cover_spatial(object, nd))
   }
+  # Community N-mixture (ms_abun): the per-(species, site) likelihood needs the
+  # per-species deviations, so it is scored over the NUTS draws (the calibrated
+  # WAIC / LOO the NUTS path enables; the Laplace community-mean draws omit them).
+  if (identical(object$model$model_type %||% "NULL", "ms_nmix")) {
+    return(.tobs_ploglik_ms_nmix(object, nd))
+  }
 
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {
@@ -91,6 +97,10 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
     integrated = .tobs_ploglik_integrated(model, draws),
     jsdm       = .tobs_ploglik_jsdm(model, draws),
     nmix       = .tobs_ploglik_nmix(model, draws),
+    removal    = .tobs_ploglik_removal(model, draws),
+    distance   = .tobs_ploglik_distance(model, draws),
+    fp_occu    = .tobs_ploglik_fp_occu(model, draws),
+    dyn_abun   = .tobs_ploglik_dyn_abun(model, draws),
     stop("Pointwise log-likelihood is not implemented for model_type = '",
          mt, "'.", call. = FALSE)
   )
@@ -207,6 +217,136 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
     ll[s, ] <- marg$eval_beta(bl, bp, r = r)$log_lik_site
   }
   ll
+}
+
+# Removal sampling: per site, the latent abundance N integrated out in closed
+# form over the depleting-binomial removal likelihood (the same marginal the fit
+# used). The observation unit is the site (its passes are pooled), so the
+# pointwise log-likelihood is [n_draws x n_sites]. NB is detected by the trailing
+# log_r draw column.
+.tobs_ploglik_removal <- function(model, draws) {
+  X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+  is_nb <- ("log_r" %in% colnames(draws)) || (ncol(draws) > p_lam + p_p)
+  marg  <- .tobs_removal_nuts_marginal(model, mixture = if (is_nb) "NB" else "P")
+  S <- nrow(draws); n_sites <- model$n_sites
+  ll <- matrix(0, S, n_sites)
+  for (s in seq_len(S)) {
+    bl <- draws[s, seq_len(p_lam)]
+    bp <- draws[s, p_lam + seq_len(p_p)]
+    r  <- if (is_nb) exp(draws[s, p_lam + p_p + 1L]) else Inf
+    ll[s, ] <- marg$eval_beta(bl, bp, r = r)$log_lik_site
+  }
+  ll
+}
+
+# Distance sampling: per site, the latent abundance N integrated out in closed
+# form over the binned multinomial-over-N detection likelihood (the same marginal
+# the fit used). The observation unit is the site (its bins are pooled), so the
+# pointwise log-likelihood is [n_draws x n_sites]. The hazard-rate shape is read
+# from the model key; NB is detected by the trailing log_r draw column.
+.tobs_ploglik_distance <- function(model, draws) {
+  p_lam <- model$process_info[[1]]$p; p_sig <- model$process_info[[2]]$p
+  hazard <- identical(model$key, "hazard")
+  is_nb  <- "log_r" %in% colnames(draws)
+  marg   <- .tobs_distance_nuts_marginal(model, mixture = if (is_nb) "NB" else "P")
+  S <- nrow(draws); n_sites <- model$n_sites
+  off <- p_lam + p_sig
+  ll <- matrix(0, S, n_sites)
+  for (s in seq_len(S)) {
+    bl <- draws[s, seq_len(p_lam)]
+    bs <- draws[s, p_lam + seq_len(p_sig)]
+    eb <- if (hazard) draws[s, off + 1L] else 0
+    r  <- if (is_nb) exp(draws[s, off + (if (hazard) 2L else 1L)]) else Inf
+    ll[s, ] <- marg$eval_beta(bl, bs, eta_b = eb, r = r)$log_lik_site
+  }
+  ll
+}
+
+# False-positive occupancy: per site, the latent occupancy z integrated out in
+# closed form over the Miller et al. (2011) multistate marginal. The observation
+# unit is the site (its visits are pooled), so the pointwise log-likelihood is
+# [n_draws x n_sites]. Coefficient layout: (psi, p11, p10, b) site-level arms.
+.tobs_ploglik_fp_occu <- function(model, draws) {
+  lay <- .tobs_fp_occu_nuts_layout(model$process_info[[1]]$p,
+                                   model$process_info[[2]]$p,
+                                   model$process_info[[3]]$p,
+                                   model$process_info[[4]]$p)
+  marg <- .tobs_fp_occu_nuts_marginal(model)
+  S <- nrow(draws); n_sites <- model$n_sites
+  ll <- matrix(0, S, n_sites)
+  for (s in seq_len(S)) {
+    ev <- marg$eval_beta(draws[s, lay$psi], draws[s, lay$p11],
+                         draws[s, lay$p10], draws[s, lay$b])
+    ll[s, ] <- ev$log_lik_site
+  }
+  ll
+}
+
+# Open N-mixture (dyn_abun): per site, the latent abundance sequence integrated
+# out by the HMM forward recursion (the same marginal the fit used). The
+# observation unit is the site (its seasons / visits are pooled), so the pointwise
+# log-likelihood is [n_draws x n_sites]. Layout: (lambda, p, omega, gamma) arms.
+.tobs_ploglik_dyn_abun <- function(model, draws) {
+  lay <- .tobs_dyn_abun_nuts_layout(model$process_info[[1]]$p,
+                                    model$process_info[[2]]$p,
+                                    model$process_info[[3]]$p,
+                                    model$process_info[[4]]$p)
+  marg <- .tobs_dyn_abun_nuts_marginal(model)
+  S <- nrow(draws); n_sites <- model$n_sites
+  ll <- matrix(0, S, n_sites)
+  for (s in seq_len(S)) {
+    ev <- marg$eval_beta(draws[s, lay$lambda], draws[s, lay$p],
+                         draws[s, lay$omega], draws[s, lay$gamma])
+    ll[s, ] <- ev$log_lik_site
+  }
+  ll
+}
+
+# Community N-mixture (ms_abun): per (species, site), the latent abundance N
+# integrated out in closed form, scored over the NUTS draws of the FULL parameter
+# vector (community means + per-species deviations + community covariances). The
+# pointwise unit is a (species, site): the per-species marginal pools that
+# species-site's visits, so the matrix is [n_draws x (n_species * n_sites)] with
+# the per-species blocks laid contiguously. NB is read from the layout. Needs a
+# NUTS fit (object$nuts): the Laplace community-mean draws omit the per-species
+# deviations, so the per-(species, site) likelihood is not identified from them
+# (the same constraint as the spatial-factor community occu_cover path).
+.tobs_ploglik_ms_nmix <- function(object, n.draws = 1000L) {
+  nd <- object$nuts
+  if (is.null(nd) || is.null(nd$draws)) {
+    stop("WAIC / LOO for the community N-mixture ms_abun() needs a NUTS fit ",
+         "(method = \"nuts\"): the Laplace community-mean draws omit the ",
+         "per-species deviations, so the per-(species, site) likelihood is not ",
+         "identified from them.", call. = FALSE)
+  }
+  model <- object$model
+  lay   <- nd$layout
+  is_nb <- isTRUE(lay$is_nb)
+  lf    <- .tobs_ms_nmix_longform(model)
+  K_max <- nd$K_max %||% as.integer(max(lf$y) + 100L)
+  margs <- .tobs_ms_abun_nuts_marginals(lf, model$X_processes[[1]],
+                                        model$n_sites,
+                                        if (is_nb) "NB" else "P", K_max)
+  draws <- nd$draws
+  M <- nrow(draws)
+  if (!is.null(n.draws) && as.integer(n.draws) < M) {
+    idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
+    draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
+  }
+  S <- lay$n_species; n_sites <- model$n_sites
+  out <- matrix(0, M, S * n_sites)
+  for (m in seq_len(M)) {
+    mu <- draws[m, lay$mu]
+    for (s in seq_len(S)) {
+      b_s <- draws[m, .tobs_ms_abun_nuts_b_idx(lay, s)]
+      r   <- if (is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
+      ev  <- margs[[s]]$eval_beta(mu[lay$lambda] + b_s[lay$lambda],
+                                  mu[lay$p]      + b_s[lay$p], r = r)
+      out[m, (s - 1L) * n_sites + seq_len(n_sites)] <- ev$log_lik_site
+    }
+  }
+  out
 }
 
 # Integrated multi-source: per site, shared psi, detection summed over the

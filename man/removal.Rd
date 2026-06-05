@@ -4,11 +4,45 @@
 \alias{removal}
 \title{Removal-sampling family}
 \usage{
-removal()
+removal(K_max = NULL, mixture = c("poisson", "negbin"))
+}
+\arguments{
+\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
+fit warns that the posterior over \code{N} puts mass on the boundary.}
+
+\item{mixture}{latent-abundance distribution, both fitted via tulpa's
+closed-form marginal Laplace engine. \code{"poisson"} is the default;
+\code{"negbin"} (negative binomial, \code{Var(N) = lambda + lambda^2 / r}) adds an
+overdispersion parameter \code{r}. Non-spatially the log size \code{log_r} is
+estimated jointly with the coefficients and reported with an SE; on the
+areal-spatial path (\code{method = "nested_laplace"}) \code{r} is integrated over the
+outer hyperparameter grid and reported as a posterior mean / sd. Named
+\code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
+model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.
 }
 \description{
-Latent N with sequential removal observations.
+Sequential-depletion removal sampling: latent abundance
+\code{N_i ~ Poisson(lambda_i)} (or negative binomial) observed through \code{K} ordered
+removal passes, where pass \code{k} removes
+\verb{Binomial(N_i - sum_\{l<k\} y_\{il\}, p_\{ik\})} of the individuals still present.
+The declining catch sequence identifies detection \code{p} and abundance \code{N}; the
+latent \code{N} is summed out in closed form (truncation \code{K_max}), so the fit is a
+direct Laplace approximation (no EM), with a NUTS path over the same marginal.
+}
+\details{
+The \code{tobs()} \code{formula} is the abundance (\verb{log lambda}) model; \code{detection} is
+the per-pass detection (\verb{logit p}) model. The response \code{y} is an
+\verb{n_sites x K} integer matrix of per-pass removals with the passes in column
+order; complete pass sequences are required (no \code{NA}).
+}
+\references{
+Royle, J. A. (2004). N-mixture models for estimating population size from
+spatially replicated counts. \emph{Biometrics} 60, 108-115.
+Dorazio, R. M., Jelks, H. L., Jordan, F. (2005). Improving removal-based
+estimates of abundance. \emph{Biometrics} 61, 1093-1101.
 }

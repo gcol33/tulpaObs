@@ -564,10 +564,30 @@ ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 
 #' Open-population (Dail-Madsen) N-mixture family
 #'
-#' Latent N evolves across seasons via survival + recruitment.
+#' Latent abundance evolves across primary seasons via apparent survival and
+#' recruitment (Dail & Madsen 2011): `N_1 ~ Poisson(lambda)`; for `t >= 2`,
+#' `N_t = S_t + G_t` with survivors `S_t ~ Binomial(N_{t-1}, omega)` and recruits
+#' `G_t ~ Poisson(gamma)`; observed via `Binomial(N_t, p)` over secondary visits.
+#' The latent abundance sequence is summed out by an exact HMM forward recursion
+#' (it is not closed form, unlike the static [abun()]); analytic gradients come
+#' from forward-mode differentiation of the scaled forward algorithm, so the fit
+#' is a direct maximum-likelihood / Laplace fit with a NUTS path over the same
+#' marginal.
 #'
-#' @inheritParams abun
+#' Four site-level arms: initial abundance `lambda` (the `tobs()` `formula`),
+#' detection `p` (`detection`), apparent survival `omega` (`omega_formula`,
+#' default `~ 1`), and recruitment `gamma` (`gamma_formula`, default `~ 1`). The
+#' response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or a list of
+#' per-season count matrices); missing visits are `NA`.
+#'
+#' @param K_max abundance-state truncation for the forward recursion (states
+#'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
+#'   may exceed that (the forward cost is roughly cubic in `K_max`).
+#' @param mixture initial-abundance distribution. Only `"poisson"` is wired this
+#'   round; `"negbin"` errors.
 #' @return A `tobs_family` object.
+#' @references Dail, D., Madsen, L. (2011). Models for estimating abundance from
+#'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.
 #' @export
 dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
   mixture <- match.arg(mixture)
@@ -577,70 +597,143 @@ dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
     latent         = "dail_madsen",
     observation    = "binomial_N",
     replicates     = "required",
-    default_engine = "nuts",
-    status         = "planned",
+    default_engine = "laplace",
+    status         = "working",
     params         = list(K_max = K_max, mixture = mixture)
   )
 }
 
 
-#' Distance-sampling family
+#' Binned distance-sampling family
 #'
-#' Latent density with hazard-rate or half-normal detection over distance bins.
+#' Latent abundance `N_i ~ Poisson(lambda_i)` (or negative binomial) in a covered
+#' region, observed through a half-normal or hazard-rate detection function over
+#' distance bins. With `B` bins the detected counts are multinomial over
+#' `(bin 1, ..., bin B, undetected)` with cell probabilities
+#' `pi_b = integral_bin g(x; sigma) f(x) dx` and `1 - sum_b pi_b`, where `f(x)` is
+#' the distance density (uniform for a line transect, proportional to distance for
+#' a point transect). The latent `N` is summed out in closed form (truncation
+#' `K_max`), so the fit is a direct Laplace approximation (no EM), with a NUTS
+#' path over the same marginal; the per-bin detection integrals are evaluated by
+#' Gauss-Legendre quadrature.
 #'
-#' @param key detection-function key. `"halfnorm"` or `"hazard"`.
+#' The `tobs()` `formula` is the abundance (`log lambda`) model; `detection` is
+#' the site-level detection-scale (`log sigma`) model. The response `y` is an
+#' `n_sites x n_bins` integer matrix of per-bin detected counts. The bin edges and
+#' transect geometry travel with the family: `distance(cutpoints = ...)`.
+#'
+#' @param key detection-function key. `"halfnorm"` (default) or `"hazard"`
+#'   (the hazard-rate shape `b` is estimated as a scalar, reported as
+#'   `log_shape`).
+#' @param transect `"line"` (default; perpendicular distances uniform) or
+#'   `"point"` (radial distances, density proportional to distance).
+#' @param cutpoints numeric distance-bin edges, length `n_bins + 1`
+#'   (`0 = c_0 < c_1 < ... < c_B`). Required.
+#' @inheritParams abun
 #' @return A `tobs_family` object.
+#' @references
+#' Buckland, S. T., Anderson, D. R., Burnham, K. P., Laake, J. L., Borchers,
+#'   D. L., Thomas, L. (2001). Introduction to Distance Sampling. Oxford.
+#' Royle, J. A., Dawson, D. K., Bates, S. (2004). Modeling abundance effects in
+#'   distance sampling. *Ecology* 85, 1591-1597.
 #' @export
-distance <- function(key = c("halfnorm", "hazard")) {
-  key <- match.arg(key)
+distance <- function(key = c("halfnorm", "hazard"),
+                     transect = c("line", "point"),
+                     cutpoints = NULL,
+                     K_max = NULL, mixture = c("poisson", "negbin")) {
+  key      <- match.arg(key)
+  transect <- match.arg(transect)
+  mixture  <- match.arg(mixture)
   obs_family(
     name           = "distance",
-    class_long     = "distance sampling",
-    latent         = "density",
+    class_long     = "binned distance sampling",
+    latent         = mixture,
     observation    = "distance_binned",
     replicates     = "optional",
     default_engine = "laplace",
-    status         = "planned",
-    params         = list(key = key)
+    status         = "working",
+    params         = list(key = key, transect = transect,
+                          cutpoints = cutpoints, K_max = K_max,
+                          mixture = mixture)
   )
 }
 
 
 #' Removal-sampling family
 #'
-#' Latent N with sequential removal observations.
+#' Sequential-depletion removal sampling: latent abundance
+#' `N_i ~ Poisson(lambda_i)` (or negative binomial) observed through `K` ordered
+#' removal passes, where pass `k` removes
+#' `Binomial(N_i - sum_{l<k} y_{il}, p_{ik})` of the individuals still present.
+#' The declining catch sequence identifies detection `p` and abundance `N`; the
+#' latent `N` is summed out in closed form (truncation `K_max`), so the fit is a
+#' direct Laplace approximation (no EM), with a NUTS path over the same marginal.
 #'
+#' The `tobs()` `formula` is the abundance (`log lambda`) model; `detection` is
+#' the per-pass detection (`logit p`) model. The response `y` is an
+#' `n_sites x K` integer matrix of per-pass removals with the passes in column
+#' order; complete pass sequences are required (no `NA`).
+#'
+#' @inheritParams abun
 #' @return A `tobs_family` object.
+#' @references
+#' Royle, J. A. (2004). N-mixture models for estimating population size from
+#'   spatially replicated counts. *Biometrics* 60, 108-115.
+#' Dorazio, R. M., Jelks, H. L., Jordan, F. (2005). Improving removal-based
+#'   estimates of abundance. *Biometrics* 61, 1093-1101.
 #' @export
-removal <- function() {
+removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+  mixture <- match.arg(mixture)
   obs_family(
     name           = "removal",
     class_long     = "removal sampling",
-    latent         = "poisson",
+    latent         = mixture,
     observation    = "removal_sequence",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "planned"
+    status         = "working",
+    params         = list(K_max = K_max, mixture = mixture)
   )
 }
 
 
-#' False-positive occupancy family
+#' Multistate false-positive occupancy family
 #'
 #' Occupancy with both false negatives and false positives in the detection
-#' process (e.g. acoustic classifiers, citizen-science misidentification).
+#' process (e.g. acoustic classifiers, citizen-science misidentification), using
+#' the Miller et al. (2011) confirmed-detection design that makes the model
+#' robustly identifiable. Each visit yields a detection state `y in {0, 1, 2}`:
+#' `0` = no detection, `1` = ambiguous detection (a true detection OR a false
+#' positive), `2` = certain / confirmed detection (only possible when the site is
+#' truly occupied). The latent occupancy `z` marginalises in closed form (two
+#' states), so the fit maximises the exact marginal likelihood directly
+#' (analytic-gradient BFGS, observed-information covariance) with a NUTS path over
+#' the same marginal.
+#'
+#' Four site-level logit arms: occupancy `psi` (the `tobs()` `formula`), true
+#' detection `p11` (`detection`), false-positive rate `p10`, and the probability a
+#' true detection is certain `b`. The `p10` and `b` predictors default to
+#' intercept-only and are set with the `fp_formula = ~ ...` and `b_formula =
+#' ~ ...` arguments to [tobs()]. The response `y` is an `n_sites x J` integer
+#' matrix in `{0, 1, 2}` (NA visits dropped).
 #'
 #' @return A `tobs_family` object.
+#' @references
+#' Miller, D. A. W., Nichols, J. D., McClintock, B. T., Grant, E. H. C., Bailey,
+#'   L. L., Weir, L. A. (2011). Improving occupancy estimation when two types of
+#'   observational error occur. *Ecology* 92, 1422-1428.
+#' Royle, J. A., Link, W. A. (2006). Generalized site occupancy models allowing
+#'   for false positive and false negative errors. *Ecology* 87, 835-841.
 #' @export
 fp_occu <- function() {
   obs_family(
     name           = "fp_occu",
-    class_long     = "false-positive occupancy",
+    class_long     = "multistate false-positive occupancy",
     latent         = "bernoulli",
-    observation    = "binomial_with_fp",
+    observation    = "multistate_detection",
     replicates     = "required",
-    default_engine = "nuts",
-    status         = "planned"
+    default_engine = "laplace",
+    status         = "working"
   )
 }
 

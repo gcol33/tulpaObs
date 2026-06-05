@@ -2,16 +2,66 @@
 % Please edit documentation in R/obs_families.R
 \name{distance}
 \alias{distance}
-\title{Distance-sampling family}
+\title{Binned distance-sampling family}
 \usage{
-distance(key = c("halfnorm", "hazard"))
+distance(
+  key = c("halfnorm", "hazard"),
+  transect = c("line", "point"),
+  cutpoints = NULL,
+  K_max = NULL,
+  mixture = c("poisson", "negbin")
+)
 }
 \arguments{
-\item{key}{detection-function key. \code{"halfnorm"} or \code{"hazard"}.}
+\item{key}{detection-function key. \code{"halfnorm"} (default) or \code{"hazard"}
+(the hazard-rate shape \code{b} is estimated as a scalar, reported as
+\code{log_shape}).}
+
+\item{transect}{\code{"line"} (default; perpendicular distances uniform) or
+\code{"point"} (radial distances, density proportional to distance).}
+
+\item{cutpoints}{numeric distance-bin edges, length \code{n_bins + 1}
+(\verb{0 = c_0 < c_1 < ... < c_B}). Required.}
+
+\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
+fit warns that the posterior over \code{N} puts mass on the boundary.}
+
+\item{mixture}{latent-abundance distribution, both fitted via tulpa's
+closed-form marginal Laplace engine. \code{"poisson"} is the default;
+\code{"negbin"} (negative binomial, \code{Var(N) = lambda + lambda^2 / r}) adds an
+overdispersion parameter \code{r}. Non-spatially the log size \code{log_r} is
+estimated jointly with the coefficients and reported with an SE; on the
+areal-spatial path (\code{method = "nested_laplace"}) \code{r} is integrated over the
+outer hyperparameter grid and reported as a posterior mean / sd. Named
+\code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
+model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.
 }
 \description{
-Latent density with hazard-rate or half-normal detection over distance bins.
+Latent abundance \code{N_i ~ Poisson(lambda_i)} (or negative binomial) in a covered
+region, observed through a half-normal or hazard-rate detection function over
+distance bins. With \code{B} bins the detected counts are multinomial over
+\verb{(bin 1, ..., bin B, undetected)} with cell probabilities
+\verb{pi_b = integral_bin g(x; sigma) f(x) dx} and \verb{1 - sum_b pi_b}, where \code{f(x)} is
+the distance density (uniform for a line transect, proportional to distance for
+a point transect). The latent \code{N} is summed out in closed form (truncation
+\code{K_max}), so the fit is a direct Laplace approximation (no EM), with a NUTS
+path over the same marginal; the per-bin detection integrals are evaluated by
+Gauss-Legendre quadrature.
+}
+\details{
+The \code{tobs()} \code{formula} is the abundance (\verb{log lambda}) model; \code{detection} is
+the site-level detection-scale (\verb{log sigma}) model. The response \code{y} is an
+\verb{n_sites x n_bins} integer matrix of per-bin detected counts. The bin edges and
+transect geometry travel with the family: \code{distance(cutpoints = ...)}.
+}
+\references{
+Buckland, S. T., Anderson, D. R., Burnham, K. P., Laake, J. L., Borchers,
+D. L., Thomas, L. (2001). Introduction to Distance Sampling. Oxford.
+Royle, J. A., Dawson, D. K., Bates, S. (2004). Modeling abundance effects in
+distance sampling. \emph{Ecology} 85, 1591-1597.
 }

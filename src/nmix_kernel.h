@@ -90,6 +90,82 @@ inline void logit_log_probs(double eta, double& log_p, double& log_1mp) {
     }
 }
 
+// --- Shared marginal-count math ------------------------------------------
+// The log-sum-exp moment accumulation and the negative-binomial dispersion
+// algebra below are the SAME for every count-marginal family whose per-site
+// likelihood is a sum over latent N of `exp(a_N)` with a Poisson/NB abundance
+// prior (the N-mixture here, and the removal-sampling family in
+// removal_kernel.h). They are factored out so that family is the single place
+// the per-N weights `a_N` and the detection arm are constructed; the abundance
+// posterior moments and the dispersion row/col are computed once, here.
+
+// Posterior moments of N | y from the per-N log-weights a_N over the grid
+// N = K_lo .. K_lo + K_grid - 1 (a[k] = a_{K_lo+k}, max_a = max_k a[k]). Under
+// NB (is_nb) also accumulates the digamma / trigamma moments of (N + r) the
+// dispersion score / information need.
+struct NMixMoments {
+    double log_lik;
+    double mean_N, var_N, boundary_weight;
+    double S_dg, S_dg2, S_Ndg, S_tg;   // E[psi(N+r)], E[psi^2], E[N psi], E[psi']
+};
+
+inline NMixMoments accumulate_count_moments(
+    const double* a, int K_lo, int K_grid, double max_a, double r, bool is_nb) {
+    NMixMoments m;
+    double sum_exp = 0.0;
+    for (int k = 0; k < K_grid; ++k) sum_exp += std::exp(a[k] - max_a);
+    m.log_lik = max_a + std::log(sum_exp);
+    double mean_N = 0.0, mean_N2 = 0.0, w_boundary = 0.0;
+    double S_dg = 0.0, S_dg2 = 0.0, S_Ndg = 0.0, S_tg = 0.0;
+    for (int k = 0; k < K_grid; ++k) {
+        const double w  = std::exp(a[k] - m.log_lik);
+        const double Nd = (double)(K_lo + k);
+        mean_N += w * Nd; mean_N2 += w * Nd * Nd;
+        if (k == K_grid - 1) w_boundary = w;
+        if (is_nb) {
+            const double dg = tulpa::math::portable_digamma(Nd + r);
+            const double tg = tulpa::math::portable_trigamma(Nd + r);
+            S_dg += w * dg; S_dg2 += w * dg * dg;
+            S_Ndg += w * Nd * dg; S_tg += w * tg;
+        }
+    }
+    m.mean_N = mean_N;
+    m.var_N  = std::max(mean_N2 - mean_N * mean_N, 0.0);
+    m.boundary_weight = w_boundary;
+    m.S_dg = S_dg; m.S_dg2 = S_dg2; m.S_Ndg = S_Ndg; m.S_tg = S_tg;
+    return m;
+}
+
+// Fill the negative-binomial abundance arm (theta = log r): the lambda score /
+// info, the dispersion score grad_theta, and the theta row/col of the joint
+// observed information (Louis 1982). Shared by every NB count marginal; the
+// Poisson lambda arm (grad = E[N]-lambda, info = lambda, weight = 1) is filled
+// by the caller. See the derivation block at the top of this file.
+inline void fill_nb_dispersion(NMixSiteResult& res, double lambda, double r,
+                               const NMixMoments& m) {
+    const double rpl   = r + lambda;
+    const double q     = lambda / rpl;
+    const double omq   = r / rpl;
+    const double dig_r = tulpa::math::portable_digamma(r);
+    const double tri_r = tulpa::math::portable_trigamma(r);
+    res.grad_eta_lambda = r * (m.mean_N - lambda) / rpl;
+    res.info_eta_lambda = (m.mean_N + r) * q * omq;
+    res.score_wt_lambda = omq;
+    const double E_sr = m.S_dg - dig_r - (m.mean_N + r) / rpl
+                        + std::log(r) + 1.0 - std::log(rpl);
+    res.grad_theta = r * E_sr;
+    const double E_gpp = m.S_tg - tri_r + 1.0 / r - 1.0 / rpl
+                         + (m.mean_N - lambda) / (rpl * rpl);
+    res.info_theta = -res.grad_theta - r * r * E_gpp;
+    res.info_lambda_theta = -r * lambda * (m.mean_N - lambda) / (rpl * rpl);
+    const double cov_N_dg = m.S_Ndg - m.mean_N * m.S_dg;
+    const double var_dg   = std::max(m.S_dg2 - m.S_dg * m.S_dg, 0.0);
+    res.cov_N_stheta = r * (cov_N_dg - m.var_N / rpl);
+    res.var_stheta   = r * r * (var_dg + m.var_N / (rpl * rpl)
+                               - 2.0 * cov_N_dg / rpl);
+    if (res.var_stheta < 0.0) res.var_stheta = 0.0;
+}
+
 // --- Cached per-site evaluation (Poisson) --------------------------------
 // The combinatorial lgamma terms of the marginal sum -- (J-1) lgamma(N+1),
 // sum_j lgamma(N - y_j + 1), and the -sum_j lgamma(y_j + 1) constant -- depend
@@ -191,63 +267,25 @@ inline NMixSiteResult compute_nmix_site_cached(
         if (is_nb) a[k] += std::lgamma(Nd + r);
         if (a[k] > max_a) max_a = a[k];
     }
-    double sum_exp = 0.0;
-    for (int k = 0; k < K_grid; ++k) sum_exp += std::exp(a[k] - max_a);
-    const double log_lik = max_a + std::log(sum_exp);
+    const NMixMoments m =
+        accumulate_count_moments(a.data(), c.K_lo, K_grid, max_a, r, is_nb);
+    res.log_lik = m.log_lik; res.mean_N = m.mean_N; res.var_N = m.var_N;
+    res.boundary_weight = m.boundary_weight;
 
-    double mean_N = 0.0, mean_N2 = 0.0, w_boundary = 0.0;
-    double S_dg = 0.0, S_dg2 = 0.0, S_Ndg = 0.0, S_tg = 0.0;
-    for (int k = 0; k < K_grid; ++k) {
-        const double w = std::exp(a[k] - log_lik);
-        const double Nd = (double)(c.K_lo + k);
-        mean_N += w * Nd; mean_N2 += w * Nd * Nd;
-        if (k == K_grid - 1) w_boundary = w;
-        if (is_nb) {
-            const double dg = tulpa::math::portable_digamma(Nd + r);
-            const double tg = tulpa::math::portable_trigamma(Nd + r);
-            S_dg += w * dg; S_dg2 += w * dg * dg;
-            S_Ndg += w * Nd * dg; S_tg += w * tg;
-        }
-    }
-    const double var_N = std::max(mean_N2 - mean_N * mean_N, 0.0);
-    res.log_lik = log_lik; res.mean_N = mean_N; res.var_N = var_N;
-    res.boundary_weight = w_boundary;
-
-    // Detection arm: identical Binomial score / info for both mixtures.
+    // Detection arm: identical Binomial score / info for both mixtures (every
+    // visit sees the full latent N).
     for (int j = 0; j < n_visits; ++j) {
-        res.grad_eta_p[j] = (double)c.y[j] - mean_N * p_vec[j];
-        res.info_eta_p[j] = mean_N * p_vec[j] * (1.0 - p_vec[j]);
+        res.grad_eta_p[j] = (double)c.y[j] - m.mean_N * p_vec[j];
+        res.info_eta_p[j] = m.mean_N * p_vec[j] * (1.0 - p_vec[j]);
     }
 
     if (!is_nb) {
-        res.grad_eta_lambda = mean_N - lambda;
+        res.grad_eta_lambda = m.mean_N - lambda;
         res.info_eta_lambda = lambda;
         res.score_wt_lambda = 1.0;
         return res;
     }
-
-    // ---- Negative-binomial abundance arm (theta = log r) ----
-    const double rpl   = r + lambda;
-    const double q     = lambda / rpl;
-    const double omq   = r / rpl;
-    const double dig_r = tulpa::math::portable_digamma(r);
-    const double tri_r = tulpa::math::portable_trigamma(r);
-    res.grad_eta_lambda = r * (mean_N - lambda) / rpl;
-    res.info_eta_lambda = (mean_N + r) * q * omq;
-    res.score_wt_lambda = omq;
-    const double E_sr = S_dg - dig_r - (mean_N + r) / rpl
-                        + std::log(r) + 1.0 - std::log(rpl);
-    res.grad_theta = r * E_sr;
-    const double E_gpp = S_tg - tri_r + 1.0 / r - 1.0 / rpl
-                         + (mean_N - lambda) / (rpl * rpl);
-    res.info_theta = -res.grad_theta - r * r * E_gpp;
-    res.info_lambda_theta = -r * lambda * (mean_N - lambda) / (rpl * rpl);
-    const double cov_N_dg = S_Ndg - mean_N * S_dg;
-    const double var_dg   = std::max(S_dg2 - S_dg * S_dg, 0.0);
-    res.cov_N_stheta = r * (cov_N_dg - var_N / rpl);
-    res.var_stheta   = r * r * (var_dg + var_N / (rpl * rpl)
-                               - 2.0 * cov_N_dg / rpl);
-    if (res.var_stheta < 0.0) res.var_stheta = 0.0;
+    fill_nb_dispersion(res, lambda, r, m);
     return res;
 }
 

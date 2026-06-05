@@ -281,6 +281,10 @@ tobs <- function(formula,
     jsdm     = .dispatch_jsdm,
     abun     = .dispatch_abun,
     ms_abun  = .dispatch_ms_abun,
+    removal  = .dispatch_removal,
+    distance = .dispatch_distance,
+    fp_occu  = .dispatch_fp_occu,
+    dyn_abun = .dispatch_dyn_abun,
     cover    = .dispatch_cover,
     occu_cover = .dispatch_occu_cover,
     occu_multiscale_cover = .dispatch_occu_multiscale_cover,
@@ -503,6 +507,118 @@ tobs <- function(formula,
   ))
 }
 
+.dispatch_removal <- function(formula, data, family, detection, y, visits,
+                              engine, priors, control,
+                              approx = "gaussian_laplace",
+                              correction = "none", ...) {
+  if (is.null(detection)) {
+    stop("removal() requires a `detection` formula (per-pass detection).",
+         call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("removal() requires `y` (an N x K integer matrix of per-pass ",
+         "removals, passes in column order).", call. = FALSE)
+  }
+  vd <- .normalize_visits(visits, detection, n_sites = nrow(y),
+                          max_visits = ncol(y))
+  model <- .tobs_build_removal(
+    abund_formula     = formula,
+    det_formula       = vd$det_formula,
+    data              = data,
+    y                 = y,
+    det_visit_formula = vd$det_visit_formula,
+    det_visit_data    = vd$visits
+  )
+  do.call(.tobs_fit_model, c(
+    list(model = model,
+         method = .map_engine(engine, family = "removal"), priors = priors,
+         approx = approx, correction = correction,
+         K.max = family$params$K_max, mixture = family$params$mixture),
+    control
+  ))
+}
+
+.dispatch_distance <- function(formula, data, family, detection, y, visits,
+                               engine, priors, control,
+                               approx = "gaussian_laplace",
+                               correction = "none", ...) {
+  if (is.null(detection)) {
+    stop("distance() requires a `detection` formula (the site-level log-sigma ",
+         "detection-scale model, e.g. ~ habitat).", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("distance() requires `y` (an n_sites x n_bins integer matrix of ",
+         "per-distance-bin detected counts).", call. = FALSE)
+  }
+  cutpoints <- family$params$cutpoints
+  if (is.null(cutpoints)) {
+    stop("distance() requires `cutpoints` (the distance-bin edges, ",
+         "0 = c_0 < ... < c_B); pass distance(cutpoints = ...).", call. = FALSE)
+  }
+  model <- .tobs_build_distance(
+    abund_formula = formula, det_formula = detection, data = data, y = y,
+    cutpoints = cutpoints, key = family$params$key,
+    transect = family$params$transect, mixture = family$params$mixture)
+  do.call(.tobs_fit_model, c(
+    list(model = model,
+         method = .map_engine(engine, family = "distance"), priors = priors,
+         approx = approx, correction = correction,
+         K.max = family$params$K_max, mixture = family$params$mixture),
+    control
+  ))
+}
+
+.dispatch_dyn_abun <- function(formula, data, family, detection, y, visits,
+                               engine, priors, control,
+                               approx = "gaussian_laplace",
+                               correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("dyn_abun() requires a `detection` formula (the per-visit detection ",
+         "model).", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("dyn_abun() requires `y` (a 3D array [n_sites x max_visits x n_seasons] ",
+         "of counts, or a list of per-season count matrices).", call. = FALSE)
+  }
+  model <- .tobs_build_dyn_abun(
+    occ_formula = formula, det_formula = detection, data = data, y = y,
+    omega_formula = dots$omega_formula %||% ~1,
+    gamma_formula = dots$gamma_formula %||% ~1,
+    mixture = family$params$mixture %||% "poisson", K_max = family$params$K_max)
+  do.call(.tobs_fit_model, c(
+    list(model = model,
+         method = .map_engine(engine, family = "dyn_abun"), priors = priors,
+         approx = approx, correction = correction,
+         K.max = family$params$K_max, mixture = family$params$mixture),
+    control
+  ))
+}
+
+.dispatch_fp_occu <- function(formula, data, family, detection, y, visits,
+                              engine, priors, control,
+                              approx = "gaussian_laplace",
+                              correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("fp_occu() requires a `detection` formula (the true-detection p11 ",
+         "model).", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("fp_occu() requires `y` (an n_sites x J matrix of detection states in ",
+         "{0, 1, 2}: 0 none, 1 ambiguous, 2 certain).", call. = FALSE)
+  }
+  model <- .tobs_build_fp_occu(
+    occ_formula = formula, det_formula = detection, data = data, y = y,
+    fp_formula = dots$fp_formula %||% ~1, b_formula = dots$b_formula %||% ~1)
+  do.call(.tobs_fit_model, c(
+    list(model = model,
+         method = .map_engine(engine, family = "fp_occu"), priors = priors,
+         approx = approx, correction = correction),
+    control
+  ))
+}
+
 .dispatch_ms_abun <- function(formula, data, family, detection, y, visits,
                               engine, priors, control,
                               approx = "gaussian_laplace",
@@ -524,6 +640,35 @@ tobs <- function(formula,
     data = data, y = y, species = dots$species,
     det_visit_formula = dots$det_visit_formula,
     det_visit_data    = dots$det_visit_data)
+
+  # NUTS (method = "nuts", tulpaObs#14): sample the exact joint posterior of the
+  # non-spatial community N-mixture (community means, per-species deviations, and
+  # community covariances) via the in-tree C++ FullGradFn over the closed-form
+  # per-(species, site) marginal (R/ms_abun_nuts.R, src/ms_abun_nuts.cpp),
+  # warm-started at the Laplace-EM mode. Spatial / temporal / RE terms are not yet
+  # wired on the sampler.
+  if (identical(engine, "nuts")) {
+    structs <- .tobs_structures_from_model(model)
+    if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
+        !is.null(structs$re) || !is.null(structs$svc) || !is.null(structs$latent)) {
+      stop("method = \"nuts\" for ms_abun() is the non-spatial community ",
+           "N-mixture sampler; a spatial / temporal / random-effect term is not ",
+           "yet wired on the sampler. Use method = \"nested_laplace\" for a ",
+           "shared areal field (icar()/bym2()/car_proper()), or ",
+           "method = \"laplace\".", call. = FALSE)
+    }
+    return(.tobs_fit_ms_abun_nuts(
+      model, mixture = family$params$mixture %||% "poisson",
+      K_max         = family$params$K_max,
+      sigma.beta    = control[["sigma.beta"]] %||% 10,
+      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
+      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
+      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
+      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
+      seed          = as.integer(control[["seed"]] %||% 1L),
+      verbose       = isTRUE(control[["verbose"]])))
+  }
 
   # A spatial term on the abundance formula (icar() / bym2() / car_proper())
   # routes to the shared-field community N-mixture (gcol33/tulpaObs#12). The fit
@@ -880,7 +1025,43 @@ tobs <- function(formula,
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under
   # nested_laplace (gcol33/tulpaObs#12); Poisson or grid-integrated negbin size.
-  ms_abun  = c("laplace", "nested_laplace"),
+  # nuts: the non-spatial community sampler over the closed-form per-(species,
+  # site) marginal via the in-tree C++ FullGradFn (R/ms_abun_nuts.R,
+  # src/ms_abun_nuts.cpp) -- samples the community means, per-species deviations,
+  # AND community covariances jointly; Poisson or per-species negbin (log_r_s
+  # sampled), warm-started at the Laplace-EM mode (gcol33/tulpaObs#14). Spatial /
+  # RE NUTS not yet wired.
+  ms_abun  = c("laplace", "nested_laplace", "nuts"),
+  # removal: sequential-depletion removal sampling. Non-spatial closed-form
+  # marginal Laplace (Poisson or negbin; the depleting-binomial product summed
+  # over latent N) and the in-tree C++ FullGradFn NUTS over the same marginal
+  # (R/removal.R, R/removal_nuts.R, src/removal_*.cpp). Spatial / RE not yet
+  # wired (gcol33/tulpaObs#39).
+  removal  = c("laplace", "nuts"),
+  # distance: binned distance sampling (half-normal / hazard-rate key, line /
+  # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin;
+  # the multinomial-over-N detection cells summed over latent N, detection
+  # integrals by quadrature) and the in-tree C++ FullGradFn NUTS over the same
+  # marginal (R/distance.R, R/distance_nuts.R, src/distance_*.cpp). Spatial / RE
+  # not yet wired (gcol33/tulpaObs#38).
+  distance = c("laplace", "nuts"),
+  # fp_occu: multistate false-positive occupancy (Miller et al. 2011). Latent
+  # occupancy z summed out in closed form (two states); four site-level logit
+  # arms (psi, true detection p11, false-positive p10, certain-classification b).
+  # Non-spatial analytic-gradient BFGS over the exact marginal with an
+  # observed-information vcov (laplace) and the in-tree C++ FullGradFn NUTS over
+  # the same marginal (R/fp_occu.R, R/fp_occu_nuts.R, src/fp_occu_*.cpp). Spatial
+  # / RE not yet wired (gcol33/tulpaObs#40).
+  fp_occu  = c("laplace", "nuts"),
+  # dyn_abun: Dail-Madsen open-population N-mixture (Poisson initial abundance,
+  # binomial survival, Poisson recruitment, binomial detection). The latent
+  # abundance sequence is summed out by an exact HMM forward recursion (not closed
+  # form); analytic gradients by forward-mode differentiation. Non-spatial
+  # analytic-gradient BFGS over the forward marginal with an observed-information
+  # vcov (laplace) and the in-tree C++ FullGradFn NUTS over the same marginal
+  # (R/dyn_abun.R, R/dyn_abun_nuts.R, src/dyn_abun_*.cpp). Spatial / RE / negbin /
+  # season-varying dynamics not yet wired (gcol33/tulpaObs#37).
+  dyn_abun = c("laplace", "nuts"),
   cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla"),
   # occu_cover: non-spatial Laplace via direct optim on the exact two-state
   # marginal (v1); nested-Laplace adds a cell-level ICAR field shared across
@@ -1200,8 +1381,10 @@ print.tobs_fit <- function(x, ...) {
   }
   model <- x$model
   if (!is.null(model)) {
-    if (model$model_type == "single" || model$model_type == "nmix") {
-      cat(sprintf("  Sites: %d, Max visits: %d\n", model$n_sites, model$max_visits))
+    if (model$model_type == "single" || model$model_type == "nmix" ||
+        model$model_type == "removal") {
+      lab <- if (identical(model$model_type, "removal")) "Passes" else "Max visits"
+      cat(sprintf("  Sites: %d, %s: %d\n", model$n_sites, lab, model$max_visits))
     } else if (model$model_type == "dynamic") {
       cat(sprintf("  Sites: %d, Seasons: %d, Max visits: %d\n",
                   model$n_sites, model$n_seasons, model$max_visits))

@@ -1,5 +1,110 @@
 # tulpaObs NEWS
 
+## 0.0.14
+
+* **Fix: data race in threaded outer-grid nested-Laplace beta fits**
+  (gcol33/tulpaObs#42). `cover(positive = "beta")` and
+  `occu_cover(positive = "beta")` fits with `n.threads.outer > 1` could
+  intermittently crash (native memory corruption) or hang at MOTIVATE/EVA scale.
+  Root cause: in tulpa's threaded sparse joint outer-grid driver, the coupled
+  (cover) arm's per-cell dispersion -- the beta precision on the `phi.grid.pos`
+  axis -- was read lock-free from the shared `arms` during the inner Newton solve
+  while a concurrent grid cell's `prep_at_grid` rewrote it under the phi-sync
+  critical; every non-coupled arm already read a thread-local snapshot, but the
+  coupled arm did not. Fixed in tulpa (`nested_laplace_joint_multi.{h,cpp}`) by
+  snapshotting the coupled arms' dispersion under that critical and reading the
+  per-thread snapshot in the coupled scatter / log-lik. Verified: a 220-region
+  BYM2 beta cover fit is now identical serial vs `n.threads.outer = 6` to ~1e-10
+  and finishes cleanly. The fix is in the tulpa dependency (root cause is there,
+  compiled into `tulpaObs.dll` via the header-only joint driver); see
+  `dev_notes/issue42_root_cause.md`.
+* **Open-population (Dail-Madsen) N-mixture family `dyn_abun()`**
+  (gcol33/tulpaObs#37). Latent abundance evolves across primary seasons:
+  `N_1 ~ Poisson(lambda)`; for `t >= 2`, `N_t = Binomial(N_{t-1}, omega) +
+  Poisson(gamma)`; observed via `Binomial(N_t, p)` over secondary visits. Unlike
+  the static `abun()`, the latent abundance sequence is not closed form -- it is
+  summed out by an exact HMM forward recursion over the abundance states, with
+  analytic gradients from forward-mode differentiation of the scaled forward
+  algorithm. Direct maximum-likelihood / Laplace fit (analytic-gradient BFGS,
+  observed-information covariance) and a NUTS path over the same marginal
+  (`method = "nuts"`, WAIC / LOO from the draws). Four site-level arms: initial
+  abundance `lambda` (`formula`), detection `p` (`detection`), apparent survival
+  `omega` (`omega_formula`), recruitment `gamma` (`gamma_formula`). The response
+  is a 3D array `[n_sites x max_visits x n_seasons]`. `simulate_dyn_abun()`, full
+  S3. Recovery / 95% coverage / NUTS recovery + WAIC, plus a correctness anchor
+  (the C++ forward log-lik against an independent R forward recursion, exact to
+  1e-9), an FD gradient check, and a C++ <-> R oracle cross-check in
+  `test-dyn_abun.R`. Poisson initial abundance + constant recruitment this round;
+  negative binomial, season-varying dynamics, and spatial / RE not yet wired.
+  Per-site math `src/dyn_abun_kernel.h`; NUTS via the shared `src/nuts_engine.h`.
+* **Multistate false-positive occupancy family `fp_occu()`** (gcol33/tulpaObs#40).
+  The Miller et al. (2011) confirmed-detection design: each visit yields a state
+  `y in {0, 1, 2}` (no detection / ambiguous detection / certain detection), with
+  certain detections (state 2) only possible at occupied sites, which makes the
+  model robustly identifiable. Four site-level logit arms -- occupancy `psi`
+  (`formula`), true detection `p11` (`detection`), false-positive `p10`
+  (`fp_formula`), certain-classification `b` (`b_formula`). The latent occupancy
+  marginalises in closed form (two states); the Laplace fit maximises the exact
+  marginal with an analytic gradient (BFGS) and an observed-information covariance
+  (the inverse of the negative finite-difference Jacobian of the analytic
+  gradient at the mode), and a NUTS path (`method = "nuts"`) samples the same
+  marginal (WAIC / LOO from the draws). `simulate_fp_occu()`, full S3. Recovery /
+  95% coverage / false-positive-arm covariate / NUTS recovery + WAIC, a
+  correctness anchor (the two-state marginal against a direct computation, and the
+  certain-detection identity), an FD gradient check, and a C++ <-> R oracle
+  cross-check in `test-fp_occu.R`. Per-site math `src/fp_occu_kernel.h`; NUTS via
+  the shared `src/nuts_engine.h` driver.
+* **Binned distance-sampling family `distance()`** (gcol33/tulpaObs#38). Latent
+  `N ~ Poisson(lambda)` (or negative binomial) in a covered region, observed
+  through a half-normal or hazard-rate detection function over distance bins. The
+  per-bin detected counts are multinomial over `(bin 1, ..., bin B, undetected)`
+  with cell probabilities `pi_b = integral_bin g(x; sigma) f(x) dx` (line- or
+  point-transect distance density `f`), integrated by Gauss-Legendre quadrature;
+  the latent `N` is summed out in closed form (truncation `K_max`). Direct
+  Laplace fit (`method = "laplace"`, Poisson or negbin, half-normal or
+  hazard-rate with an estimated scalar shape) and a NUTS path over the same
+  marginal (`method = "nuts"`, WAIC / LOO from the draws). The abundance formula
+  is `tobs()`'s `formula`; the site-level `log sigma` model is `detection`; the
+  response is an `n_sites x n_bins` count matrix; the bin edges and transect
+  geometry travel with the family (`distance(cutpoints =, transect =)`).
+  `simulate_distance()`, full S3. Recovery / 95% coverage / hazard-shape / NB
+  dispersion / point-transect / NUTS recovery + WAIC, a closed-form correctness
+  anchor (the Poisson distance marginal equals independent per-bin Poissons by
+  thinning), and an analytic-observed-information vs finite-difference-Hessian
+  check (the Louis curvature, including the second-derivative bin quadrature) in
+  `test-distance.R`.
+* Internal: the distance arm reuses the shared count-marginal core
+  (`accumulate_count_moments` / `fill_nb_dispersion`, `src/nmix_kernel.h`) for
+  the abundance / NB-dispersion math; the detection arm (site-level `log sigma`,
+  optional scalar hazard shape, bin integrals + first/second eta-derivatives by
+  quadrature) is `src/distance_quad.h` / `src/distance_kernel.h`. The tulpa NUTS
+  engine plumbing is factored into a shared driver (`src/nuts_engine.h`) now used
+  by both the count-marginal families and `distance()`. Byte-identical for the
+  existing families (full `test-abun.R` / `test-abun-re.R` / `test-removal.R`
+  suites unchanged).
+
+## 0.0.13
+
+* **Removal-sampling family `removal()`** (gcol33/tulpaObs#39). Sequential
+  depletion: latent `N ~ Poisson(lambda)` (or negative binomial) observed
+  through `K` ordered removal passes, where pass `k` removes
+  `Binomial(N - sum_{l<k} y_l, p_k)` of the individuals still present. The
+  depleting-binomial product is the multinomial-removal likelihood, and the
+  latent `N` is summed out in closed form (truncation `K_max`), so the fit is a
+  direct Laplace approximation (`method = "laplace"`, Poisson or negbin) with a
+  NUTS path over the same marginal (`method = "nuts"`, WAIC / LOO from the
+  draws). `simulate_removal()`, full S3 (`fitted`/`predict`/`simulate`/
+  `residuals`/`coef`/`vcov`/`confint`/`logLik`). Recovery / 95% coverage / NB
+  dispersion / NUTS recovery, plus a closed-form correctness anchor (the Poisson
+  removal marginal equals independent Poissons) in `test-removal.R`.
+* Internal: the N-mixture per-site moment / negative-binomial dispersion math is
+  factored into shared helpers (`accumulate_count_moments`, `fill_nb_dispersion`
+  in `src/nmix_kernel.h`), and the non-spatial count-marginal Laplace driver and
+  NUTS machinery are now shared headers (`src/marginal_count_laplace.h`,
+  `src/marginal_count_nuts.h`) instantiated by both `abun()` and `removal()` --
+  one source of truth for the count-marginal fit. Byte-identical for `abun()`
+  (full `test-abun.R` / `test-abun-re.R` recovery suites unchanged).
+
 ## 0.0.12 (2026-06-03)
 
 * docs: clean up two roxygen warnings surfaced on `R CMD Rd2pdf` / `document()`.

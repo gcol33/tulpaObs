@@ -93,6 +93,111 @@
     return(fit)
   }
 
+  # Removal sampling: the sequential-depletion abundance marginal (its latent N
+  # summed out in closed form, like the N-mixture). Non-spatial fixed effects
+  # only this round (gcol33/tulpaObs#39); "laplace" or "nuts".
+  if (identical(model$model_type, "removal")) {
+    if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
+      stop("removal() currently supports non-spatial fixed effects only; a ",
+           "spatial / random-effect / temporal term is not yet wired. (#39)",
+           call. = FALSE)
+    }
+    if (identical(method, "nuts")) {
+      fit <- .tobs_fit_removal_nuts(
+        fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
+        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+        seed = seed, verbose = verbose)
+    } else {
+      fit <- .tobs_fit_removal(fit_model, mixture = mixture, K_max = K.max,
+                               max_iter = max.iter, tol = tol, verbose = verbose)
+    }
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+    fit$model  <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
+  }
+
+  # Distance sampling: the binned multinomial-over-N marginal (its latent N
+  # summed out in closed form, like the N-mixture). Non-spatial fixed effects
+  # only this round (gcol33/tulpaObs#38); "laplace" or "nuts".
+  if (identical(model$model_type, "distance")) {
+    if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
+      stop("distance() currently supports non-spatial fixed effects only; a ",
+           "spatial / random-effect / temporal term is not yet wired. (#38)",
+           call. = FALSE)
+    }
+    if (identical(method, "nuts")) {
+      fit <- .tobs_fit_distance_nuts(
+        fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
+        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+        seed = seed, verbose = verbose)
+    } else {
+      fit <- .tobs_fit_distance(fit_model, mixture = mixture, K_max = K.max,
+                                max_iter = max.iter, tol = tol, verbose = verbose)
+    }
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+    fit$model  <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
+  }
+
+  # Open-population (Dail-Madsen) N-mixture: the latent abundance sequence summed
+  # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
+  # effects only this round (gcol33/tulpaObs#37); "laplace" or "nuts".
+  if (identical(model$model_type, "dyn_abun")) {
+    if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
+      stop("dyn_abun() currently supports non-spatial fixed effects only; a ",
+           "spatial / random-effect / temporal term is not yet wired. (#37)",
+           call. = FALSE)
+    }
+    if (identical(method, "nuts")) {
+      fit <- .tobs_fit_dyn_abun_nuts(
+        fit_model, sigma.beta = sigma.beta,
+        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+        seed = seed, verbose = verbose)
+    } else {
+      fit <- .tobs_fit_dyn_abun(fit_model, max_iter = 300L, tol = 1e-8,
+                                verbose = verbose)
+    }
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+    fit$model  <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
+  }
+
+  # False-positive occupancy: the Miller et al. (2011) multistate marginal (its
+  # latent occupancy z summed out in closed form). Non-spatial fixed effects only
+  # this round (gcol33/tulpaObs#40); "laplace" (analytic-gradient BFGS over the
+  # exact marginal) or "nuts".
+  if (identical(model$model_type, "fp_occu")) {
+    if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
+      stop("fp_occu() currently supports non-spatial fixed effects only; a ",
+           "spatial / random-effect / temporal term is not yet wired. (#40)",
+           call. = FALSE)
+    }
+    if (identical(method, "nuts")) {
+      fit <- .tobs_fit_fp_occu_nuts(
+        fit_model, sigma.beta = sigma.beta,
+        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+        seed = seed, verbose = verbose)
+    } else {
+      fit <- .tobs_fit_fp_occu(fit_model, max_iter = 500L, tol = 1e-8,
+                               sigma.beta = NULL, verbose = verbose)
+    }
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+    fit$model  <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
+  }
+
   if (method == "laplace") {
     fit <- .tobs_laplace(fit_model, spatial = spatial, re = re,
                          priors = priors,
