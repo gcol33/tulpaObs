@@ -131,13 +131,13 @@ inline double ms_ocs_species_ll(const MsOcsData& d, int s,
 // n_sites x K, accumulated across species), and the dispersion score. Mirrors
 // .occu_cover_eta_grad + the chain in .ms_ocs_penll_grad. `g_occ_s/g_p_s/g_pos_s`
 // are length P_occ/P_p/P_pos outputs for THIS species (mu and b_s share them).
-inline void ms_ocs_species_grad(const MsOcsData& d, int s,
-                                const double* th_occ, const double* th_p,
-                                const double* th_pos, const double* L_s,
-                                const double* Lpos_s, double log_disp,
-                                double* g_occ_s, double* g_p_s, double* g_pos_s,
-                                double* g_L_s, double* g_Lpos_s,
-                                double* g_W, double& g_ld) {
+inline double ms_ocs_species_grad(const MsOcsData& d, int s,
+                                  const double* th_occ, const double* th_p,
+                                  const double* th_pos, const double* L_s,
+                                  const double* Lpos_s, double log_disp,
+                                  double* g_occ_s, double* g_p_s, double* g_pos_s,
+                                  double* g_L_s, double* g_Lpos_s,
+                                  double* g_W, double& g_ld) {
     const double disp   = std::exp(log_disp);
     const double sigma  = disp;
     const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
@@ -150,6 +150,7 @@ inline void ms_ocs_species_grad(const MsOcsData& d, int s,
     for (int j = 0; j < d.P_p;   ++j) g_p_s[j]   = 0.0;
     for (int j = 0; j < d.P_pos; ++j) g_pos_s[j] = 0.0;
     for (int k = 0; k < K; ++k) { g_L_s[k] = 0.0; if (g_Lpos_s) g_Lpos_s[k] = 0.0; }
+    double ll = 0.0;
 
     for (int i = 0; i < N; ++i) {
         double eta_occ = row_dot(d.X_occ, i, th_occ, d.P_occ);
@@ -171,10 +172,15 @@ inline void ms_ocs_species_grad(const MsOcsData& d, int s,
         double g_psi = 0.0, gp_rowsum = 0.0, gpos_rowsum = 0.0;
         if (any_det) {
             g_psi = 1.0 - psi;
+            ll += log_safe_(psi);
             for (int v = 0; v < J; ++v) {
                 if (vv(i, v) < 0.5) continue;
                 gp_rowsum += (y(i, v) > 0.5) ? (1.0 - p_i) : (-p_i);
+                ll += (y(i, v) > 0.5) ? log_safe_(p_i) : log_safe_(1.0 - p_i);
                 if (y(i, v) > 0.5) {
+                    ll += d.is_beta
+                        ? BetaPositive::log_density(yp(i, v), eta_pos, disp)
+                        : LognormalPositive::log_density(yp(i, v), eta_pos, disp);
                     if (d.is_beta) {
                         gpos_rowsum += BetaPositive::grad_eta(yp(i, v), eta_pos, disp);
                         // dispersion score, beta (per detected visit)
@@ -200,6 +206,7 @@ inline void ms_ocs_species_grad(const MsOcsData& d, int s,
             const double invL = (L > 0.0) ? 1.0 / L : 0.0;
             g_psi = psi * (1.0 - psi) * (P0 - 1.0) * invL;
             gp_rowsum = -(A * invL) * p_i * (double) n_valid;
+            ll += log_safe_(L);
         }
 
         // chain to coefficients / loadings / field
@@ -216,6 +223,95 @@ inline void ms_ocs_species_grad(const MsOcsData& d, int s,
         }
     }
     (void) inv_s2;
+    return ll;
+}
+
+// ---------------------------------------------------------------------------
+// Small dense linear algebra on a community covariance Cholesky factor (P_arm is
+// tiny: the number of coefficients on one arm). Matrices are row-major P*P.
+// ---------------------------------------------------------------------------
+
+// Packed column-major lower-triangle (diagonal on the log scale) -> lower
+// Cholesky factor C (row-major), matching .ms_ocs_chol_unpack.
+inline void chol_unpack_cpp(const double* vec, int P, std::vector<double>& C) {
+    C.assign((std::size_t) P * P, 0.0);
+    int pos = 0;
+    for (int j = 0; j < P; ++j) {
+        C[(std::size_t) j * P + j] = std::exp(vec[pos++]);
+        for (int i = j + 1; i < P; ++i) C[(std::size_t) i * P + j] = vec[pos++];
+    }
+}
+
+// Inverse of a lower-triangular matrix (row-major), by forward substitution.
+inline void lower_tri_inv(const std::vector<double>& C, int P,
+                          std::vector<double>& M) {
+    M.assign((std::size_t) P * P, 0.0);
+    for (int j = 0; j < P; ++j) {
+        M[(std::size_t) j * P + j] = 1.0 / C[(std::size_t) j * P + j];
+        for (int i = j + 1; i < P; ++i) {
+            double s = 0.0;
+            for (int k = j; k < i; ++k)
+                s += C[(std::size_t) i * P + k] * M[(std::size_t) k * P + j];
+            M[(std::size_t) i * P + j] = -s / C[(std::size_t) i * P + i];
+        }
+    }
+}
+
+// Sigma^{-1} = Cinv' Cinv (Cinv lower-tri, row-major) -> row-major P*P.
+inline void sinv_from_cinv(const std::vector<double>& Mi, int P,
+                           std::vector<double>& Si) {
+    Si.assign((std::size_t) P * P, 0.0);
+    for (int a = 0; a < P; ++a)
+        for (int b = 0; b < P; ++b) {
+            double s = 0.0;
+            for (int k = 0; k < P; ++k)
+                s += Mi[(std::size_t) k * P + a] * Mi[(std::size_t) k * P + b];
+            Si[(std::size_t) a * P + b] = s;
+        }
+}
+
+// Cholesky-coordinate gradient of T = -0.5 tr(Sigma^{-1} M) - 0.5 S log|Sigma|
+// plus the coordinate hyperprior, written into `out` (packed column-major lower
+// triangle). Mirrors .ms_ocs_chol_block_grad: G = 0.5 Si M Si - 0.5 S Si,
+// dC = 2 G C, with the log-link chain on the diagonal.
+inline void chol_block_grad_cpp(const std::vector<double>& C,
+                                const std::vector<double>& Si,
+                                const std::vector<double>& M, int P, double S,
+                                const double* vec, double logdiag_mean,
+                                double logdiag_sd, double offdiag_sd,
+                                double* out) {
+    std::vector<double> SM((std::size_t) P * P, 0.0), G((std::size_t) P * P, 0.0),
+                        dC((std::size_t) P * P, 0.0);
+    for (int a = 0; a < P; ++a)
+        for (int b = 0; b < P; ++b) {
+            double s = 0.0;
+            for (int k = 0; k < P; ++k) s += Si[a * P + k] * M[k * P + b];
+            SM[a * P + b] = s;
+        }
+    for (int a = 0; a < P; ++a)
+        for (int b = 0; b < P; ++b) {
+            double s = 0.0;
+            for (int k = 0; k < P; ++k) s += SM[a * P + k] * Si[k * P + b];
+            G[a * P + b] = 0.5 * s - 0.5 * S * Si[a * P + b];
+        }
+    for (int a = 0; a < P; ++a)
+        for (int b = 0; b < P; ++b) {
+            double s = 0.0;
+            for (int k = 0; k < P; ++k) s += G[a * P + k] * C[k * P + b];
+            dC[a * P + b] = 2.0 * s;
+        }
+    int pos = 0;
+    for (int j = 0; j < P; ++j) {
+        const double cjj = C[(std::size_t) j * P + j];
+        out[pos] = dC[(std::size_t) j * P + j] * cjj
+                 - (vec[pos] - logdiag_mean) / (logdiag_sd * logdiag_sd);
+        ++pos;
+        for (int i = j + 1; i < P; ++i) {
+            out[pos] = dC[(std::size_t) i * P + j]
+                     - vec[pos] / (offdiag_sd * offdiag_sd);
+            ++pos;
+        }
+    }
 }
 
 } // namespace tulpaObs
@@ -333,4 +429,179 @@ double cpp_ms_ocs_marginal_ll(Rcpp::List spec, Rcpp::NumericVector theta_inner) 
             L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp);
     }
     return total;
+}
+
+
+// Full-vector joint log-posterior + gradient for the spatial-factor community
+// occu_cover NUTS target -- the C++ mirror of .ms_ocs_joint_logpost (the FullGradFn
+// core). `theta` packs c(par_inner, chol_occ, chol_p, chol_pos, log_tau). icar
+// fields, unconstrained loadings (the proper-CAR / BYM2 logit_h block and the
+// constrained loadings are later increments). `spec` additionally carries `Q`
+// (the ICAR structure, n_sites x n_sites) and `field_rank` (N - 1); `pri` carries
+// the hyperprior scalars. Returns list(lp, grad).
+// [[Rcpp::export]]
+Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
+                                    Rcpp::List pri, double sigma_beta,
+                                    double sd_L) {
+    using std::vector;
+    tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
+    Rcpp::NumericMatrix Q = spec["Q"];
+    const double field_rank = Rcpp::as<double>(spec["field_rank"]);
+    const int P = d.P_occ + d.P_p + d.P_pos;
+    const int N = d.n_sites, S = d.S, K = d.K;
+    const double inv_sb2 = 1.0 / (sigma_beta * sigma_beta);
+    const double inv_sdL2 = 1.0 / (sd_L * sd_L);
+
+    const double logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
+    const double logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
+    const double offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
+    const double log_tau_mean = Rcpp::as<double>(pri["log_tau_mean"]);
+    const double log_tau_sd   = Rcpp::as<double>(pri["log_tau_sd"]);
+    const double log_disp_mean = Rcpp::as<double>(pri["log_disp_mean"]);
+    const double log_disp_sd   = Rcpp::as<double>(pri["log_disp_sd"]);
+
+    const double* th = theta.begin();
+    int off = 0;
+    const double* mu = th + off; off += P;
+    const double* b  = th + off; off += S * P;
+    const double* Lv = th + off; off += S * K;
+    const double* Lpv = nullptr;
+    if (d.cover_factor) { Lpv = th + off; off += S * K; }
+    d.W = Rcpp::NumericMatrix(N, K);
+    for (int k = 0; k < K; ++k)
+        for (int i = 0; i < N; ++i) d.W(i, k) = th[off + k * N + i];
+    const int w_off = off; off += N * K;
+    const double log_disp = th[off]; const int ld_idx = off; off += 1;
+    // hyperparameter blocks
+    const int P_arm[3] = {d.P_occ, d.P_p, d.P_pos};
+    int q_off[3]; int q_dim[3];
+    for (int a = 0; a < 3; ++a) {
+        q_dim[a] = P_arm[a] * (P_arm[a] + 1) / 2;
+        q_off[a] = off; off += q_dim[a];
+    }
+    const int tau_off = off; off += K;
+    const int total = off;
+
+    Rcpp::NumericVector grad(total);
+    double* g = grad.begin();
+    double* g_W = g + w_off;
+    double& g_ld = g[ld_idx];
+
+    // ---- data log-lik + inner gradient ----
+    vector<double> th_occ(d.P_occ), th_p(d.P_p), th_pos(d.P_pos);
+    vector<double> L_s(K), Lpos_s(K);
+    vector<double> g_occ_s(d.P_occ), g_p_s(d.P_p), g_pos_s(d.P_pos);
+    vector<double> g_L_s(K), g_Lpos_s(K);
+    double lp = 0.0;
+    const int arm_start[3] = {0, d.P_occ, d.P_occ + d.P_p};
+    double* g_mu = g; double* g_b = g + P;
+    double* g_L = g + P + S * P;
+    double* g_Lpos = d.cover_factor ? (g_L + S * K) : nullptr;
+    for (int s = 0; s < S; ++s) {
+        const double* b_s = b + s * P;
+        for (int j = 0; j < d.P_occ; ++j) th_occ[j] = mu[j] + b_s[j];
+        for (int j = 0; j < d.P_p; ++j)   th_p[j]   = mu[d.P_occ + j] + b_s[d.P_occ + j];
+        for (int j = 0; j < d.P_pos; ++j) th_pos[j] = mu[arm_start[2] + j] + b_s[arm_start[2] + j];
+        for (int k = 0; k < K; ++k) L_s[k] = Lv[k * S + s];
+        if (d.cover_factor) for (int k = 0; k < K; ++k) Lpos_s[k] = Lpv[k * S + s];
+
+        lp += tulpaObs::ms_ocs_species_grad(
+            d, s, th_occ.data(), th_p.data(), th_pos.data(),
+            L_s.data(), d.cover_factor ? Lpos_s.data() : nullptr, log_disp,
+            g_occ_s.data(), g_p_s.data(), g_pos_s.data(),
+            g_L_s.data(), d.cover_factor ? g_Lpos_s.data() : nullptr, g_W, g_ld);
+
+        double* gb = g_b + s * P;
+        for (int j = 0; j < d.P_occ; ++j) { g_mu[j] += g_occ_s[j]; gb[j] = g_occ_s[j]; }
+        for (int j = 0; j < d.P_p; ++j) {
+            g_mu[d.P_occ + j] += g_p_s[j]; gb[d.P_occ + j] = g_p_s[j];
+        }
+        for (int j = 0; j < d.P_pos; ++j) {
+            g_mu[arm_start[2] + j] += g_pos_s[j]; gb[arm_start[2] + j] = g_pos_s[j];
+        }
+        for (int k = 0; k < K; ++k) {
+            g_L[k * S + s] = g_L_s[k];
+            if (d.cover_factor) g_Lpos[k * S + s] = g_Lpos_s[k];
+        }
+    }
+
+    // ---- community covariance: per-arm b-quadratic + log-det normaliser + chol
+    //      block gradient; accumulate the b-prior into g_b. ----
+    for (int a = 0; a < 3; ++a) {
+        const int Pa = P_arm[a]; if (Pa == 0) continue;
+        vector<double> C, Cinv, Si;
+        tulpaObs::chol_unpack_cpp(th + q_off[a], Pa, C);
+        tulpaObs::lower_tri_inv(C, Pa, Cinv);
+        tulpaObs::sinv_from_cinv(Cinv, Pa, Si);
+        double logdet = 0.0;
+        for (int j = 0; j < Pa; ++j) logdet += 2.0 * std::log(C[(std::size_t) j * Pa + j]);
+
+        // M_arm = sum_s b_{s,arm} b_{s,arm}', and the b-quadratic + its gradient.
+        vector<double> M((std::size_t) Pa * Pa, 0.0);
+        double quad_sum = 0.0;
+        for (int s = 0; s < S; ++s) {
+            const double* bsa = b + s * P + arm_start[a];
+            // Si b_{s,arm}
+            for (int u = 0; u < Pa; ++u) {
+                double sib = 0.0;
+                for (int v = 0; v < Pa; ++v) sib += Si[(std::size_t) u * Pa + v] * bsa[v];
+                g_b[s * P + arm_start[a] + u] -= sib;        // b-prior gradient
+                quad_sum += bsa[u] * sib;
+                for (int v = 0; v < Pa; ++v) M[(std::size_t) u * Pa + v] += bsa[u] * bsa[v];
+            }
+        }
+        lp += -0.5 * quad_sum - 0.5 * S * logdet;
+
+        tulpaObs::chol_block_grad_cpp(C, Si, M, Pa, (double) S, th + q_off[a],
+                                      logdiag_mean, logdiag_sd, offdiag_sd,
+                                      g + q_off[a]);
+        // chol coordinate hyperprior contribution to lp
+        int pos = q_off[a];
+        for (int j = 0; j < Pa; ++j) {
+            const double vd = th[pos++];
+            lp += -0.5 * ((vd - logdiag_mean) / logdiag_sd) * ((vd - logdiag_mean) / logdiag_sd);
+            for (int i = j + 1; i < Pa; ++i) {
+                const double vo = th[pos++];
+                lp += -0.5 * (vo / offdiag_sd) * (vo / offdiag_sd);
+            }
+        }
+    }
+
+    // ---- mu / loading Gaussian priors (gradients + lp) ----
+    for (int j = 0; j < P; ++j) { g_mu[j] -= inv_sb2 * mu[j]; lp += -0.5 * inv_sb2 * mu[j] * mu[j]; }
+    {
+        double sumL2 = 0.0;
+        for (int t = 0; t < S * K; ++t) { g_L[t] -= inv_sdL2 * Lv[t]; sumL2 += Lv[t] * Lv[t]; }
+        lp += -0.5 * inv_sdL2 * sumL2;
+        if (d.cover_factor) {
+            double sumLp2 = 0.0;
+            for (int t = 0; t < S * K; ++t) { g_Lpos[t] -= inv_sdL2 * Lpv[t]; sumLp2 += Lpv[t] * Lpv[t]; }
+            lp += -0.5 * inv_sdL2 * sumLp2;
+        }
+    }
+
+    // ---- field GMRF: per-factor tau quadratic + rank normaliser; g_W and log_tau
+    //      gradients. icar structure Q, rank = N - 1. ----
+    for (int k = 0; k < K; ++k) {
+        const double log_tau = th[tau_off + k];
+        const double tau = std::exp(log_tau);
+        // QW_k and quad = W_k' Q W_k
+        double quad = 0.0;
+        for (int i = 0; i < N; ++i) {
+            double qw = 0.0;
+            for (int j = 0; j < N; ++j) qw += Q(i, j) * d.W(j, k);
+            quad += d.W(i, k) * qw;
+            g_W[(std::size_t) k * N + i] -= tau * qw;        // field-prior gradient
+        }
+        lp += -0.5 * tau * quad + 0.5 * field_rank * log_tau;
+        lp += -0.5 * ((log_tau - log_tau_mean) / log_tau_sd) * ((log_tau - log_tau_mean) / log_tau_sd);
+        g[tau_off + k] = -0.5 * tau * quad + 0.5 * field_rank
+                       - (log_tau - log_tau_mean) / log_tau_sd / log_tau_sd;
+    }
+
+    // ---- log_disp prior ----
+    lp += -0.5 * ((log_disp - log_disp_mean) / log_disp_sd) * ((log_disp - log_disp_mean) / log_disp_sd);
+    g_ld -= (log_disp - log_disp_mean) / (log_disp_sd * log_disp_sd);
+
+    return Rcpp::List::create(Rcpp::Named("lp") = lp, Rcpp::Named("grad") = grad);
 }

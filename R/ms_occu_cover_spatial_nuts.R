@@ -343,13 +343,16 @@
   N <- model$n_sites; J <- model$max_visits
   per_sp <- function(arr) lapply(seq_len(d$S), function(s)
     matrix(as.double(arr[, , s]), N, J))
+  spec <- model$field_spec %||%
+    .ms_ocs_field_spec(model$adj, model$field_type %||% "icar")
   list(n_sites = N, max_visits = J, S = d$S, K = d$K,
        P_occ = d$P_occ, P_p = d$P_p, P_pos = d$P_pos,
        cover_factor = isTRUE(d$cover_factor),
        is_beta = identical(model$positive, "beta"),
        X_occ = model$X_occ, X_p = model$X_det_site, X_pos = model$X_pos_site,
        y = per_sp(model$y), y_pos = per_sp(model$y_pos),
-       valid = per_sp(model$valid))
+       valid = per_sp(model$valid),
+       Q = model$icar_Q, field_rank = spec$rank)
 }
 
 
