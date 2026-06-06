@@ -374,8 +374,8 @@ holding the plot fixed, how does cover change with visit time?
 focus_plots <- levels(dat_beta$plot_id)[c(1, 6, 13, 20)]
 focus       <- dat_beta[dat_beta$plot_id %in% focus_plots, ]
 
-focus$pred_beta <- predict(fit_beta, focus, type = "expected")
-focus$pred_ln   <- predict(fit_ln,   focus, type = "expected")
+focus$pred_beta <- predict(fit_beta, focus, type = "expected")$mean
+focus$pred_ln   <- predict(fit_ln,   focus, type = "expected")$mean
 
 op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
 for (variant in c("pred_beta", "pred_ln")) {

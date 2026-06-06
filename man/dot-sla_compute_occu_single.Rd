@@ -29,7 +29,7 @@ at the EM-converged beta, NOT at the M-step pseudo-binomial encoding.
 Why this matters: the EM M-step encodes the occupancy block as a pseudo-
 binomial with M = 1000 pseudo-trials per site. That encoding's Hessian
 is M-inflated and would give Sigma_pseudo ~ Sigma_true / M, so any SLA
-formula using it would be wrong by factor M^{3/2}. The correct posterior
+formula using it would be wrong by factor M^(3/2). The correct posterior
 precision for the occ block is the Louis observed information
 I_obs = X_occ' diag(psi(1-psi) - w(1-w)) X_occ  (+ prior penalty)
 which the package already computes via \code{.louis_info_psi_single()}. We

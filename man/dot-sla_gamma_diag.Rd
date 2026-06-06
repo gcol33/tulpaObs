@@ -19,8 +19,8 @@ Vector of length p with one skewness per coefficient.
 }
 \description{
 Implements equation (2.2) of \code{dev_notes/simplified_laplace_derivation.md}:
-gamma_j = sigma_j^{-3} * sum_i l3_i * v_{i,j}^3,
-v_{i,j} = (X Sigma)_{i,j}
+gamma_j = sigma_j^(-3) * sum_i l3_i * v_(i,j)^3,
+v_(i,j) = (X Sigma)_(i,j)
 }
 \details{
 For \emph{diagonal-in-eta} likelihoods only (binomial, Poisson, Gaussian).

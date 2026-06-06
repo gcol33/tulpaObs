@@ -545,6 +545,23 @@ tobs_pit_residuals <- function(object, n.samples = 250) {
   pit
 }
 
+#' Goodness-of-fit tests for a tobs fit
+#'
+#' Posterior-predictive goodness-of-fit checks for an occupancy / N-mixture
+#' `tobs_fit`: dispersion, zero-inflation, and outlier counts compared against
+#' the fitted model's simulated replicates, plus a Kolmogorov-Smirnov
+#' uniformity test on PIT residuals.
+#'
+#' @param pit Numeric vector of PIT residuals (`tobs_test_uniformity`).
+#' @param object A fitted `tobs_fit`.
+#' @param n.samples Number of posterior-predictive replicates to simulate.
+#' @return A list with the observed statistic, its posterior-predictive
+#'   expectation, and a tail p-value; `tobs_test_uniformity` returns the
+#'   `htest` object from [stats::ks.test()].
+#' @name tobs_gof_tests
+NULL
+
+#' @rdname tobs_gof_tests
 #' @export
 tobs_test_uniformity <- function(pit) {
   # PIT residuals can have ties when the response is discrete (counts /
@@ -559,6 +576,7 @@ tobs_test_uniformity <- function(pit) {
   )
 }
 
+#' @rdname tobs_gof_tests
 #' @export
 tobs_test_dispersion <- function(object, n.samples = 250) {
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
@@ -568,6 +586,7 @@ tobs_test_dispersion <- function(object, n.samples = 250) {
        ratio = obs_var / mean(sim_vars), p.value = mean(sim_vars >= obs_var))
 }
 
+#' @rdname tobs_gof_tests
 #' @export
 tobs_test_zero_inflation <- function(object, n.samples = 250) {
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
@@ -577,6 +596,7 @@ tobs_test_zero_inflation <- function(object, n.samples = 250) {
        p.value = mean(sim >= obs))
 }
 
+#' @rdname tobs_gof_tests
 #' @export
 tobs_test_outliers <- function(object, n.samples = 250) {
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y

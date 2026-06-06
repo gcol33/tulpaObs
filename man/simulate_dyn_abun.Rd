@@ -38,9 +38,9 @@ A list with \code{y} (N x J x T count array), \code{data} (covariates), and
 \code{truth} (coefficients, per-site \code{lambda}, scalar \code{p}/\code{omega}/\code{gamma}).
 }
 \description{
-Latent \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2}, `N_t = Binomial(N_{t-1}, omega)
+Latent \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2}, `N_t = Binomial(N_(t-1), omega)
 \itemize{
-\item Poisson(gamma)\verb{; observed via }Binomial(N_t, p)\code{over}J\verb{secondary visits in each of}T\verb{primary seasons. Returns a 3D array}\link{N x J x T}` suitable for
+\item Poisson(gamma)\verb{; observed via }Binomial(N_t, p)\code{over}J\verb{secondary visits in each of}T\verb{primary seasons. Returns a 3D array}N x J x T` suitable for
 \code{\link[=tobs]{tobs()}} with \code{\link[=dyn_abun]{dyn_abun()}}.
 }
 }

@@ -7,7 +7,7 @@
 .l3_gaussian_identity(eta)
 }
 \description{
-Always zero — the SLA correction reduces to the Laplace approximation
+Always zero -- the SLA correction reduces to the Laplace approximation
 for Gaussian likelihoods. Required regression test.
 }
 \keyword{internal}

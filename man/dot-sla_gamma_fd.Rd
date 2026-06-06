@@ -12,8 +12,8 @@
 \item{Sigma}{Posterior covariance at the mode (p x p, symmetric PD).}
 
 \item{log_lik_fn}{Callable: takes a length-p beta vector, returns
-scalar log-likelihood at that beta (no prior contribution — SLA
-gamma uses the observation likelihood only, per RMC 2009 §3.2).}
+scalar log-likelihood at that beta (no prior contribution -- SLA
+gamma uses the observation likelihood only, per RMC 2009 sec.3.2).}
 
 \item{h}{Optional step size override (scalar or length-p vector).}
 }

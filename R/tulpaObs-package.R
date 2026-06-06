@@ -3,7 +3,16 @@
 
 #' @useDynLib tulpaObs, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
+#' @importFrom stats nobs simulate update coef fitted predict residuals
+#' @importFrom stats dnorm plogis pnorm rbinom rnorm binomial cor glm ks.test
+#' @importFrom stats model.matrix optim quantile runif sd setNames var
+#' @importFrom methods as
+#' @importFrom utils modifyList
 NULL
+
+# `.data` is the rlang/dplyr pronoun used inside conditional dplyr/ggplot2
+# helpers; register it so R CMD check's global-variable analysis stays quiet.
+utils::globalVariables(".data")
 
 .onLoad <- function(libname, pkgname) {
   # Ensure Matrix's CHOLMOD stubs are available before tulpa's DLL init

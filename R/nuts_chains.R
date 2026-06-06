@@ -49,7 +49,7 @@
       s <- spec
       s$seed    <- base_seed + chain_id - 1L
       s$verbose <- FALSE
-      tulpaObs:::cpp_occu_fit(s)
+      cpp_occu_fit(s)
     })
   } else {
     chains <- lapply(seq_len(n.chains), run_one)

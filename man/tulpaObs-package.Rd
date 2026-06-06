@@ -4,7 +4,7 @@
 \name{tulpaObs-package}
 \alias{tulpaObs}
 \alias{tulpaObs-package}
-\title{tulpaObs: Bayesian Occupancy Models via tulpa}
+\title{tulpaObs: Bayesian Occupancy Models via 'tulpa'}
 \description{
 Single-season and multi-season Bayesian occupancy models with spatial, temporal, and random effects. Plugs occupancy likelihoods into the tulpa engine for HMC/NUTS inference with automatic differentiation.
 }

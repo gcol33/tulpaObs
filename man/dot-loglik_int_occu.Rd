@@ -8,7 +8,7 @@
 }
 \arguments{
 \item{beta}{Joint parameter vector in process_info order:
-\verb{c(beta_psi, beta_det_1, beta_det_2, …, beta_det_S)}.}
+\code{c(beta_psi, beta_det_1, beta_det_2, ..., beta_det_S)}.}
 
 \item{model}{A \code{tobs_model} with \code{model_type = "integrated"}.}
 }

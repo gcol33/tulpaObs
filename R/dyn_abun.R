@@ -338,9 +338,9 @@ build_dyn_abun_fit <- function(raw, model) {
 
 #' Simulate Dail-Madsen open N-mixture data
 #'
-#' Latent `N_1 ~ Poisson(lambda)`; for `t >= 2`, `N_t = Binomial(N_{t-1}, omega)
+#' Latent `N_1 ~ Poisson(lambda)`; for `t >= 2`, `N_t = Binomial(N_(t-1), omega)
 #' + Poisson(gamma)`; observed via `Binomial(N_t, p)` over `J` secondary visits in
-#' each of `T` primary seasons. Returns a 3D array `[N x J x T]` suitable for
+#' each of `T` primary seasons. Returns a 3D array `N x J x T` suitable for
 #' [tobs()] with [dyn_abun()].
 #'
 #' @param N Number of sites (default 150).

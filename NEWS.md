@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.17
+
+* fix(check): clears the `R CMD check --as-cran` ERRORs and WARNINGs (now only
+  the GitHub-ecosystem CRAN-incoming WARNING remains). The namespace now
+  imports every `stats`/`utils`/`methods` generic and function it uses
+  (`nobs`, `simulate`, `update`, `model.matrix`, `glm`, `optim`, ...), which
+  fixes the namespace-load failure that blocked the whole test suite; the two
+  vignettes that failed to build are fixed (stale `summary()` column names;
+  `predict()` returns a `tobs_prediction`, so the point estimate is `$mean`);
+  non-ASCII characters and lost-brace Rd math are removed; the `tobs_test_*`
+  goodness-of-fit helpers are documented; `model.matrix`-style globals and the
+  `tulpaObs:::` self-reference are cleaned up.
+* fix(build): drop the debug flags `-D_GLIBCXX_ASSERTIONS -g` from
+  `Makevars.win` -- they triggered a spurious GCC 14 `-Warray-bounds` warning in
+  `std::string` and bloated the shared object; the precompiled header now also
+  rebuilds when `Makevars.win` changes.
+* The progress reporter is on by default, so tests asserting silence pass
+  `control$progress = FALSE`. Requires tulpa (>= 0.0.13).
+
 ## 0.0.16
 
 * **feat(ms-abun): non-centered parameterization for the multi-species

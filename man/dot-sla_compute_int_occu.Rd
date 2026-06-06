@@ -10,9 +10,9 @@
 \item{model}{A \code{tobs_model} (model_type = "integrated").}
 
 \item{em_result}{EM-Laplace return list (with \verb{$fits$occ},
-\verb{$fits$det1},…,\verb{$fits$det<S>}, \verb{$weights}).}
+\verb{$fits$det1},...,\verb{$fits$det<S>}, \verb{$weights}).}
 
-\item{spatial}{Optional \code{tobs_spatial} (skewness disabled when set —
+\item{spatial}{Optional \code{tobs_spatial} (skewness disabled when set --
 integrated + spatial Laplace is not yet plumbed in \code{.tobs_laplace}).}
 
 \item{prior_spec}{Optional prior spec; passed to \code{.louis_info_psi_single()}

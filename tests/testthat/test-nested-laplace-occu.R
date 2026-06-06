@@ -33,7 +33,7 @@ test_that("tobs(engine='nested_laplace') runs with spatial only", {
     fit <- tobs(~ x + bym2(graph = adj), data = d$data, family = occu(),
                 detection = ~ 1, y = d$y,
                 method = "nested_laplace",
-                control = list(max.iter = 5L, verbose = FALSE))
+                control = list(max.iter = 5L, verbose = FALSE, progress = FALSE))
   )
   expect_s3_class(fit, "tobs_fit")
   expect_true(!is.null(fit$nested_laplace$multi_prior))

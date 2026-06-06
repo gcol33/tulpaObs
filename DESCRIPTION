@@ -1,6 +1,6 @@
 Package: tulpaObs
-Title: Bayesian Occupancy Models via tulpa
-Version: 0.0.16
+Title: Bayesian Occupancy Models via 'tulpa'
+Version: 0.0.17
 Authors@R: person("Gilles", "Colling", email = "gilles.colling@univie.ac.at",
     role = c("aut", "cre"), comment = c(ORCID = "0000-0003-3070-6066"))
 Description: Single-season and multi-season Bayesian occupancy models with
@@ -14,18 +14,25 @@ Depends:
     R (>= 4.1.0)
 Imports:
     Matrix,
+    methods,
     Rcpp (>= 1.0.12),
-    RcppEigen (>= 0.3.4),
-    tulpa (>= 0.0.12),
+    tulpa (>= 0.0.13),
     parallel
 Suggests:
     testthat (>= 3.0.0),
     bayesplot,
+    betareg,
+    dplyr,
     ggplot2,
+    INLA,
     knitr,
     loo (>= 2.7.0),
+    MASS,
     rmarkdown,
-    spAbundance
+    spAbundance,
+    tulpaMesh,
+    unmarked
+Additional_repositories: https://inla.r-inla-download.org/R/stable
 VignetteBuilder: knitr
 LinkingTo:
     Rcpp,
@@ -33,7 +40,7 @@ LinkingTo:
     tulpa
 Remotes:
     gcol33/tulpaMesh@v0.1.2,
-    gcol33/tulpa@v0.0.12
+    gcol33/tulpa@v0.0.13
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, dyn_abun, distance, fp_occu, method-gibbs-recovery, re-laplace-recovery,

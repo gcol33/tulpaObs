@@ -1,5 +1,5 @@
 # ============================================================================
-# sla_int_occu.R — Simplified-Laplace skewness for integrated multi-source
+# sla_int_occu.R -- Simplified-Laplace skewness for integrated multi-source
 # occupancy (shared psi across data sources).
 #
 # Math
@@ -35,7 +35,7 @@
 #     inner-fit Hessian is approximately the correct posterior precision
 #     for that detection block.
 #
-# Off-diagonal blocks (cross-block covariance) are dropped — this matches
+# Off-diagonal blocks (cross-block covariance) are dropped -- this matches
 # what `.sla_compute_occu_single` does, and is consistent with the
 # block-coordinate structure of the M-step.
 # ============================================================================
@@ -55,7 +55,7 @@
 #' `model$n_sources`, `model$n_sites`. No priors, no pseudo-binomial encoding.
 #'
 #' @param beta Joint parameter vector in process_info order:
-#'   `c(beta_psi, beta_det_1, beta_det_2, …, beta_det_S)`.
+#'   `c(beta_psi, beta_det_1, beta_det_2, ..., beta_det_S)`.
 #' @param model A `tobs_model` with `model_type = "integrated"`.
 #' @return Scalar log-likelihood.
 #' @keywords internal
@@ -115,7 +115,7 @@
       n_det_ij  <- sum(yij[valid] == 1L)
       n_zero_ij <- sum(valid) - n_det_ij
 
-      # Conditional on z=1: log Π_t p^y (1-p)^{1-y}
+      # Conditional on z=1: log Pi_t p^y (1-p)^{1-y}
       log_p_y_z1 <- n_det_ij * log_p_i + n_zero_ij * log_1mp_i
       log_det_given_occ_anysite[i] <- log_det_given_occ_anysite[i] + log_p_y_z1
 
@@ -123,7 +123,7 @@
         any_det[i] <- TRUE
       } else {
         # All zeros at this source: this also enters the no-det branch as
-        # Π_t (1 - p)^valid. Accumulate; will be reused below if site i ends
+        # Pi_t (1 - p)^valid. Accumulate; will be reused below if site i ends
         # up classified as no_det globally.
         log_p_y_z1_allzero[i] <- log_p_y_z1_allzero[i] + log_p_y_z1
       }
@@ -155,8 +155,8 @@
 #'
 #' @param model A `tobs_model` (model_type = "integrated").
 #' @param em_result EM-Laplace return list (with `$fits$occ`,
-#'   `$fits$det1`,…,`$fits$det<S>`, `$weights`).
-#' @param spatial Optional `tobs_spatial` (skewness disabled when set —
+#'   `$fits$det1`,...,`$fits$det<S>`, `$weights`).
+#' @param spatial Optional `tobs_spatial` (skewness disabled when set --
 #'   integrated + spatial Laplace is not yet plumbed in `.tobs_laplace`).
 #' @param prior_spec Optional prior spec; passed to `.louis_info_psi_single()`
 #'   so the penalty enters Louis I_obs.
@@ -170,7 +170,7 @@
   }
   if (is.null(em_result$weights)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "em_result$weights missing — needed for Louis Sigma_occ"))
+                reason = "em_result$weights missing -- needed for Louis Sigma_occ"))
   }
 
   pi_list   <- model$process_info
@@ -221,7 +221,7 @@
     H <- fi$H_beta
     if (is.null(H)) {
       return(list(gamma = NULL, valid = FALSE,
-                  reason = sprintf("fit_%s$H_beta missing — was return_hessian = TRUE?", nm)))
+                  reason = sprintf("fit_%s$H_beta missing -- was return_hessian = TRUE?", nm)))
     }
     Sigma_s <- tryCatch(solve(H), error = function(e) NULL)
     if (is.null(Sigma_s)) {
@@ -238,7 +238,7 @@
   }
 
   # Assemble joint block-diagonal Sigma in process_info order:
-  # (occ | det1 | det2 | … | detS).
+  # (occ | det1 | det2 | ... | detS).
   p_total <- p_occ + sum(p_det_vec)
   Sigma <- matrix(0, p_total, p_total)
   Sigma[seq_len(p_occ), seq_len(p_occ)] <- Sigma_occ
@@ -262,7 +262,7 @@
                 reason = "FD gamma evaluation failed"))
   }
 
-  # Process-info order names: occ_<coef>, <source_name>_<coef>, …
+  # Process-info order names: occ_<coef>, <source_name>_<coef>, ...
   nms <- paste0(pi_list[[1]]$name, "_", pi_list[[1]]$coef_names)
   for (s in seq_len(n_sources)) {
     nms <- c(nms, paste0(pi_list[[1 + s]]$name, "_", pi_list[[1 + s]]$coef_names))

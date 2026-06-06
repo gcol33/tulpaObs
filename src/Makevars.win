@@ -5,7 +5,7 @@ all: $(SHLIB)
 
 CXX_STD = CXX17
 PKG_CPPFLAGS = -I../inst/include -include tulpaObs_pch.h
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -Wa,-mbig-obj -D_GLIBCXX_ASSERTIONS -g -Winvalid-pch
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -Wa,-mbig-obj -Winvalid-pch
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 # Build the RcppEigen precompiled header before any object, with the exact
@@ -14,7 +14,7 @@ PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 # header itself. -Winvalid-pch downgrades a flag mismatch to a warning plus a
 # normal compile, so the -O1 objects below (which reject the -O2 .gch) and any
 # stale .gch never break the build.
-tulpaObs_pch.h.gch: tulpaObs_pch.h
+tulpaObs_pch.h.gch: tulpaObs_pch.h Makevars.win
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) -x c++-header tulpaObs_pch.h -o tulpaObs_pch.h.gch
 
 $(OBJECTS): tulpaObs_pch.h.gch

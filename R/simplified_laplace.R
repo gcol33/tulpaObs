@@ -1,7 +1,7 @@
 # ============================================================================
-# simplified_laplace.R — Simplified Laplace skewness correction for tobs fits
+# simplified_laplace.R -- Simplified Laplace skewness correction for tobs fits
 #
-# Implements the third-cumulant correction of Rue, Martino & Chopin (2009 §3.2),
+# Implements the third-cumulant correction of Rue, Martino & Chopin (2009 sec.3.2),
 # adapted for the EM-Laplace M-step structure used by tulpaObs.
 #
 # Math:  see dev_notes/simplified_laplace_derivation.md
@@ -21,7 +21,7 @@
 # All are dl^3 / d eta^3 evaluated at eta_i, where eta_i is the linear predictor
 # at site i under the *original* observation model (not the EM-encoded pseudo-
 # binomial). The pseudo-binomial encoding scales l''' by M and is NOT what SLA
-# needs — we evaluate against the original likelihood at the EM-converged
+# needs -- we evaluate against the original likelihood at the EM-converged
 # parameter values.
 # ---------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@
 
 #' Third derivative of Gaussian log-likelihood (identity link)
 #'
-#' Always zero — the SLA correction reduces to the Laplace approximation
+#' Always zero -- the SLA correction reduces to the Laplace approximation
 #' for Gaussian likelihoods. Required regression test.
 #'
 #' @keywords internal
@@ -72,8 +72,8 @@
 #' Assemble per-coefficient skewness from per-site third derivatives
 #'
 #' Implements equation (2.2) of `dev_notes/simplified_laplace_derivation.md`:
-#'   gamma_j = sigma_j^{-3} * sum_i l3_i * v_{i,j}^3,
-#'   v_{i,j} = (X Sigma)_{i,j}
+#'   gamma_j = sigma_j^(-3) * sum_i l3_i * v_(i,j)^3,
+#'   v_(i,j) = (X Sigma)_(i,j)
 #'
 #' For *diagonal-in-eta* likelihoods only (binomial, Poisson, Gaussian).
 #'
@@ -139,8 +139,8 @@
 #' @param beta_hat Mode of the joint posterior (length p).
 #' @param Sigma Posterior covariance at the mode (p x p, symmetric PD).
 #' @param log_lik_fn Callable: takes a length-p beta vector, returns
-#'   scalar log-likelihood at that beta (no prior contribution — SLA
-#'   gamma uses the observation likelihood only, per RMC 2009 §3.2).
+#'   scalar log-likelihood at that beta (no prior contribution -- SLA
+#'   gamma uses the observation likelihood only, per RMC 2009 sec.3.2).
 #' @param h Optional step size override (scalar or length-p vector).
 #' @return Numeric vector of length p with per-coefficient gamma.
 #' @keywords internal
@@ -245,7 +245,7 @@
 #' Why this matters: the EM M-step encodes the occupancy block as a pseudo-
 #' binomial with M = 1000 pseudo-trials per site. That encoding's Hessian
 #' is M-inflated and would give Sigma_pseudo ~ Sigma_true / M, so any SLA
-#' formula using it would be wrong by factor M^{3/2}. The correct posterior
+#' formula using it would be wrong by factor M^(3/2). The correct posterior
 #' precision for the occ block is the Louis observed information
 #'   I_obs = X_occ' diag(psi(1-psi) - w(1-w)) X_occ  (+ prior penalty)
 #' which the package already computes via `.louis_info_psi_single()`. We
@@ -280,7 +280,7 @@
   }
   if (is.null(em_result$weights)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "em_result$weights missing — needed for Louis Sigma_occ"))
+                reason = "em_result$weights missing -- needed for Louis Sigma_occ"))
   }
 
   fit_occ <- em_result$fits$occ
@@ -291,7 +291,7 @@
   }
   if (is.null(fit_det$H_beta)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "fit_det$H_beta missing — was return_hessian = TRUE?"))
+                reason = "fit_det$H_beta missing -- was return_hessian = TRUE?"))
   }
 
   X_occ <- model$X_processes[[1]]
@@ -389,7 +389,7 @@
 #
 # Cumulant -> skew-normal matching and quantile/CDF evaluation live upstream
 # in tulpa (sn_match, sn_cdf, sn_quantile, exported since the upstream SLA
-# spec in dev_notes/upstream_tulpa_sla_spec.md §2.1 landed). Sampling is not
+# spec in dev_notes/upstream_tulpa_sla_spec.md sec.2.1 landed). Sampling is not
 # upstream: it has no use outside marginal resampling and is a four-line
 # implementation of Azzalini's (1985) two-component construction.
 # ---------------------------------------------------------------------------
@@ -423,7 +423,7 @@
 #'
 #' For each parameter j, fit skew-normal (xi_j, omega_j, alpha_j) by moment-
 #' matching (mu_j, sigma_j, gamma_j), and resample the column of `draws`.
-#' Joint correlations are NOT preserved — only marginals are SLA-corrected,
+#' Joint correlations are NOT preserved -- only marginals are SLA-corrected,
 #' matching INLA's behaviour (the SLA paper is about marginal quality).
 #'
 #' Behaviour at large |gamma|:
@@ -431,14 +431,14 @@
 #'   - |gamma| in [cap, SN_GAMMA_MAX): SN draws with gamma clipped to
 #'     `sign(gamma) * cap`. The default `cap = 0.5` aligns with the
 #'     validity envelope identified in dev_notes/simplified_laplace_derivation.md
-#'     §2.6 — the cumulant expansion saturates above |gamma| ~ 0.5 and
+#'     sec.2.6 -- the cumulant expansion saturates above |gamma| ~ 0.5 and
 #'     overstates magnitude. Clipping there avoids over-correcting CIs
 #'     in the high-skew regime where SLA itself is unreliable.
 #'   - |gamma| >= SN_GAMMA_MAX or NaN: Gaussian draws (no SLA correction).
 #'
 #' Returns the modified draws matrix with attributes:
-#'   attr "sla_clipped"  — character vector of param names whose gamma was capped
-#'   attr "sla_fallback" — character vector of param names that stayed Gaussian
+#'   attr "sla_clipped"  -- character vector of param names whose gamma was capped
+#'   attr "sla_fallback" -- character vector of param names that stayed Gaussian
 #'
 #' @keywords internal
 .sla_replace_draws <- function(draws, means, sds, gamma, cap = 0.5) {

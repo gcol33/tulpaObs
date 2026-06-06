@@ -227,7 +227,7 @@ deviation and a narrower credible interval.
 
 ```{r payoff-table}
 row_x <- function(f) {
-  s <- summary(f)["psi_x", c("mean", "sd", "q2.5", "q97.5")]
+  s <- summary(f)["psi_x", c("estimate", "std.error", "2.5%", "97.5%")]
   s <- as.numeric(s)
   c(estimate = s[1], sd = s[2], lower = s[3], upper = s[4],
     width = s[4] - s[3])
