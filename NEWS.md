@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.16
+
+* **feat(ms-abun): non-centered parameterization for the multi-species
+  N-mixture NUTS.** The per-species block now holds standard-normal `z_s` and
+  reconstructs the deviation per arm as `b_{s,arm} = C_arm z_{s,arm}` (`C_arm`
+  the log-Cholesky factor of `Sigma_arm`). The community covariance leaves the
+  `b`-prior (`z ~ N(0, I)`) and enters only the data term through `b = C z`,
+  breaking the centered `b`/`Sigma` funnel that saturated the NUTS treedepth.
+* **feat(progress): ETA reporting across every fitting loop**
+  (gcol33/tulpaObs#43). Wires tulpa 0.0.12's unified progress reporter into all
+  fitters, both channels ON by default -- a console bar plus a heartbeat file
+  (written whenever `control$progress.file` is set, the channel that survives a
+  detached run). The `cover()` / `occu_cover()` outer-grid paths flip progress
+  ON by default (no longer tied to `verbose`); set `control$progress = FALSE`
+  to silence the console bar.
+* Require tulpa (>= 0.0.12) / `gcol33/tulpa@v0.0.12` for the shared progress
+  reporter.
+
 ## 0.0.15
 
 * Require tulpa (>= 0.0.10) / `gcol33/tulpa@v0.0.10`, which carries the fix for
