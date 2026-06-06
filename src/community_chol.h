@@ -105,6 +105,41 @@ inline void chol_block_grad_cpp(const std::vector<double>& C,
     }
 }
 
+// Cholesky-coordinate gradient under the NON-CENTERED map b = C z, where the
+// community covariance leaves the b-prior (z ~ N(0, I)) and enters only the data
+// term through b. With A[i,j] = sum_s grad_b_{s,i} z_{s,j} (row-major, i >= j),
+// the packed data gradient is A's lower triangle laid column-major, the diagonal
+// scaled by C[j,j] (log-diagonal chain rule); the coordinate hyperprior gradient
+// is added and its log-density contribution returned. Mirrors the R
+// .ms_abun_nuts_chol_data_grad + .ms_ocs_chol_logprior. Used by the community
+// N-mixture NUTS target; the centered chol_block_grad_cpp above stays for the
+// spatial-factor target.
+inline double chol_data_grad_noncentered(const std::vector<double>& A,
+                                         const std::vector<double>& C, int P,
+                                         const double* vec, double logdiag_mean,
+                                         double logdiag_sd, double offdiag_sd,
+                                         double* out) {
+    double lp = 0.0;
+    int pos = 0;
+    for (int j = 0; j < P; ++j) {
+        const double cjj = C[(std::size_t) j * P + j];
+        const double vd  = vec[pos];
+        out[pos] = A[(std::size_t) j * P + j] * cjj
+                 - (vd - logdiag_mean) / (logdiag_sd * logdiag_sd);
+        const double zd = (vd - logdiag_mean) / logdiag_sd;
+        lp += -0.5 * zd * zd;
+        ++pos;
+        for (int i = j + 1; i < P; ++i) {
+            const double vo = vec[pos];
+            out[pos] = A[(std::size_t) i * P + j] - vo / (offdiag_sd * offdiag_sd);
+            const double zo = vo / offdiag_sd;
+            lp += -0.5 * zo * zo;
+            ++pos;
+        }
+    }
+    return lp;
+}
+
 }  // namespace tulpaObs
 
 #endif  // TULPAOBS_COMMUNITY_CHOL_H

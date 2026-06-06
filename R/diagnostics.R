@@ -338,8 +338,10 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   out <- matrix(0, M, S * n_sites)
   for (m in seq_len(M)) {
     mu <- draws[m, lay$mu]
+    # Non-centered draws store the whitened z; reconstruct b = C z per draw.
+    B <- .tobs_ms_abun_nuts_b_from_z(draws[m, ], lay)
     for (s in seq_len(S)) {
-      b_s <- draws[m, .tobs_ms_abun_nuts_b_idx(lay, s)]
+      b_s <- B[s, ]
       r   <- if (is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
       ev  <- margs[[s]]$eval_beta(mu[lay$lambda] + b_s[lay$lambda],
                                   mu[lay$p]      + b_s[lay$p], r = r)

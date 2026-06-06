@@ -21,24 +21,31 @@
 // which gives calibrated (non-Gaussian) community-mean / covariance intervals and
 // the per-(species, site) pointwise likelihood WAIC / LOO need.
 //
-// The target factorises as
+// NON-CENTERED parameterisation: the per-species block carries the whitened
+// standard-normal z_s, and the deviation is reconstructed per arm as
+// b_{s,arm} = C_arm z_{s,arm} (C_arm the log-Cholesky factor of Sigma_arm). The
+// community covariance then leaves the b-prior entirely and enters ONLY the data
+// term through b = C z. This breaks the centered b<->Sigma funnel that otherwise
+// saturated the NUTS treedepth. The target factorises as
 //   log p = sum_{s,i} log m_{s,i}(theta)                 # per-species-site marginal
 //         - 0.5 ||mu_coef||^2 / sigma.beta^2             # community-mean priors
 //         [ - 0.5 mu_log_r^2 / sigma.logr^2 ]            # (NB)
-//         - 0.5 sum_s b_{s,arm}' Sigma_arm^{-1} b_{s,arm}   (per arm)  # community RE
-//         - 0.5 S sum_arm log|Sigma_arm|                 # MVN normalisers
+//         - 0.5 sum_s ||z_s||^2                          # whitened RE prior (N(0,I))
 //         + log p(Sigma coords)                          # log-Cholesky hyperpriors
 // where m_{s,i} is the Royle marginal exposed by compute_nmix_site()
 // (nmix_kernel.h, the same kernel the Laplace fit and the AGHQ RE path use); it
 // returns grad_eta_lambda, grad_eta_p, and (NB) grad_theta = d log m / d log_r, so
 // the coefficient gradient is the design-sandwiched eta-gradient -- no new
-// likelihood math. The arm community covariances are carried by their
-// log-Cholesky factors and use the shared helpers in community_chol.h.
+// likelihood math. The chol gradient flows from the data term via b = C z
+// (chol_data_grad_noncentered) plus the coordinate hyperprior; the arm Cholesky
+// factors use the shared helpers in community_chol.h. The R reference
+// .tobs_ms_abun_nuts_logpost mirrors this and is the cross-check oracle.
 
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <algorithm>
 #include <tulpa/model_data.h>
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
@@ -146,43 +153,86 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
     for (int j = 0; j < d.total; ++j) g[j] = 0.0;
 
     const double* mu = th + d.mu_off;
-    const double* b  = th + d.b_off;       // species-major, length P each
+    const double* z  = th + d.b_off;       // species-major z (whitened), length P each
     double* g_mu = g + d.mu_off;
-    double* g_b  = g + d.b_off;
+    double* g_z  = g + d.b_off;
+
+    // Cholesky factors per arm (Sigma_arm = C_arm C_arm', row-major); the logr
+    // arm is the 1x1 scalar SD = exp(chol_logr). Under the non-centered map the
+    // per-species deviation is b_{s,arm} = C_arm z_{s,arm}, so the covariance
+    // enters only the data term (z carries a standard-normal prior).
+    std::vector<double> C_lam, C_p;
+    chol_unpack_cpp(th + d.chol_lam_off, p_lam, C_lam);
+    chol_unpack_cpp(th + d.chol_p_off,   p_p,   C_p);
+    const double C_lr = nb ? std::exp(th[d.chol_logr_off]) : 0.0;
+
+    // chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
+    std::vector<double> A_lam((std::size_t) p_lam * p_lam, 0.0),
+                        A_p((std::size_t) p_p * p_p, 0.0);
+    double A_lr = 0.0;
 
     // ---- data log-lik + inner gradient (per species, per site) ----
-    double lp = 0.0;
-    std::vector<double> eta_p_site;
+    //
+    // The per-species work is independent: each species reconstructs b = C z,
+    // scores its sites, writes its own (disjoint) g_z block, and produces partial
+    // (g_mu, A_arm, log-lik) contributions. The species loop is parallelised over
+    // cores; the partials land in per-species slots and are reduced SERIALLY in
+    // species order afterwards, so the reduction is deterministic (thread-count
+    // independent). The per-species partial-sum reordering differs from the fully
+    // interleaved serial sum only at the floating-point reduction-order level
+    // (~1e-13), well inside the 1e-9 cross-check against the R oracle.
+    std::vector<double> gmu_s((std::size_t) S * P, 0.0), lp_s(S, 0.0);
+    std::vector<double> Alam_s((std::size_t) S * p_lam * p_lam, 0.0);
+    std::vector<double> Ap_s((std::size_t) S * p_p * p_p, 0.0);
+    std::vector<double> Alr_s(S, 0.0);
+
+    #pragma omp parallel for schedule(static)
     for (int s = 0; s < S; ++s) {
-        const double* b_s = b + s * P;
-        const double r = nb
-            ? std::exp(mu[p_lam + p_p] + b_s[p_lam + p_p])
-            : std::numeric_limits<double>::infinity();
-        double* g_b_lam = g_b + s * P;             // coords [0, p_lam)
-        double* g_b_p   = g_b + s * P + p_lam;      // coords [p_lam, p_lam + p_p)
+        const double* z_s = z + s * P;
+        const double* zl  = z_s;             // length p_lam
+        const double* zp  = z_s + p_lam;     // length p_p
+        const double  zr  = nb ? z_s[p_lam + p_p] : 0.0;
+        std::vector<double> b_lam(p_lam), b_p(p_p), gbl(p_lam, 0.0), gbp(p_p, 0.0),
+                            eta_p_site;
+        // reconstruct b = C z (lower-triangular C)
+        for (int i = 0; i < p_lam; ++i) {
+            double v = 0.0;
+            for (int j = 0; j <= i; ++j) v += C_lam[(std::size_t) i * p_lam + j] * zl[j];
+            b_lam[i] = v;
+        }
+        for (int i = 0; i < p_p; ++i) {
+            double v = 0.0;
+            for (int j = 0; j <= i; ++j) v += C_p[(std::size_t) i * p_p + j] * zp[j];
+            b_p[i] = v;
+        }
+        const double b_lr = nb ? C_lr * zr : 0.0;
+        const double r = nb ? std::exp(mu[p_lam + p_p] + b_lr)
+                            : std::numeric_limits<double>::infinity();
+        double* gmu_loc = &gmu_s[(std::size_t) s * P];
+        double lp_loc = 0.0, gblr = 0.0;
         for (int i = 0; i < d.n_sites; ++i) {
             const std::vector<int>& obs = d.obs[s][i];
             const int J = (int) obs.size();
             if (J == 0) continue;
             double eta_lambda = 0.0;
             for (int k = 0; k < p_lam; ++k)
-                eta_lambda += d.X_lambda(i, k) * (mu[k] + b_s[k]);
+                eta_lambda += d.X_lambda(i, k) * (mu[k] + b_lam[k]);
             eta_p_site.resize(J);
             for (int jj = 0; jj < J; ++jj) {
                 const int o = obs[jj];
                 double e = 0.0;
                 for (int k = 0; k < p_p; ++k)
-                    e += d.X_p(o, k) * (mu[p_lam + k] + b_s[p_lam + k]);
+                    e += d.X_p(o, k) * (mu[p_lam + k] + b_p[k]);
                 eta_p_site[jj] = e;
             }
             const NMixSiteResult res = compute_nmix_site_cached(
                 d.cache[s][i], eta_p_site.data(), eta_lambda, r);
-            lp += res.log_lik;
+            lp_loc += res.log_lik;
             // abundance arm: mu_lambda and b_lambda_s share grad_eta_lambda
             for (int k = 0; k < p_lam; ++k) {
                 const double gx = res.grad_eta_lambda * d.X_lambda(i, k);
-                g_mu[k]    += gx;
-                g_b_lam[k] += gx;
+                gmu_loc[k] += gx;
+                gbl[k]     += gx;
             }
             // detection arm: mu_p and b_p_s share the per-visit grad_eta_p
             for (int jj = 0; jj < J; ++jj) {
@@ -190,62 +240,72 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
                 const double ge = res.grad_eta_p[jj];
                 for (int k = 0; k < p_p; ++k) {
                     const double gx = ge * d.X_p(o, k);
-                    g_mu[p_lam + k] += gx;
-                    g_b_p[k]        += gx;
+                    gmu_loc[p_lam + k] += gx;
+                    gbp[k]             += gx;
                 }
             }
             // dispersion arm: mu_log_r and b_logr_s share grad_theta (theta = log r)
             if (nb) {
-                g_mu[p_lam + p_p]        += res.grad_theta;
-                g_b[s * P + p_lam + p_p] += res.grad_theta;
+                gmu_loc[p_lam + p_p] += res.grad_theta;
+                gblr                 += res.grad_theta;
             }
         }
+        lp_s[s] = lp_loc;
+        // z gradient (data part) = C' grad_b -- disjoint per-species write.
+        double* gz_s = g_z + s * P;
+        for (int v = 0; v < p_lam; ++v) {
+            double sg = 0.0;
+            for (int i = v; i < p_lam; ++i) sg += C_lam[(std::size_t) i * p_lam + v] * gbl[i];
+            gz_s[v] += sg;
+        }
+        for (int v = 0; v < p_p; ++v) {
+            double sg = 0.0;
+            for (int i = v; i < p_p; ++i) sg += C_p[(std::size_t) i * p_p + v] * gbp[i];
+            gz_s[p_lam + v] += sg;
+        }
+        if (nb) gz_s[p_lam + p_p] += C_lr * gblr;
+        // per-species chol accumulators A_arm = grad_b z' (reduced in order below).
+        double* Al = &Alam_s[(std::size_t) s * p_lam * p_lam];
+        for (int i = 0; i < p_lam; ++i)
+            for (int j = 0; j <= i; ++j) Al[(std::size_t) i * p_lam + j] = gbl[i] * zl[j];
+        double* Ap = &Ap_s[(std::size_t) s * p_p * p_p];
+        for (int i = 0; i < p_p; ++i)
+            for (int j = 0; j <= i; ++j) Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
+        if (nb) Alr_s[s] = gblr * zr;
     }
 
-    // ---- community covariance: per-arm b-quadratic + log-det normaliser + chol
-    //      block gradient; accumulate the b-prior into g_b. ----
-    const int P_arm[3]     = {p_lam, p_p, nb ? 1 : 0};
-    const int arm_start[3] = {0, p_lam, p_lam + p_p};
-    const int chol_off[3]  = {d.chol_lam_off, d.chol_p_off, d.chol_logr_off};
-    const int n_arms = nb ? 3 : 2;
-    for (int a = 0; a < n_arms; ++a) {
-        const int Pa = P_arm[a]; if (Pa == 0) continue;
-        std::vector<double> C, Cinv, Si;
-        chol_unpack_cpp(th + chol_off[a], Pa, C);
-        lower_tri_inv(C, Pa, Cinv);
-        sinv_from_cinv(Cinv, Pa, Si);
-        double logdet = 0.0;
-        for (int j = 0; j < Pa; ++j) logdet += 2.0 * std::log(C[(std::size_t) j * Pa + j]);
+    // serial reduction in species order -> byte-identical to the serial path.
+    double lp = 0.0;
+    for (int s = 0; s < S; ++s) {
+        const double* gmu_loc = &gmu_s[(std::size_t) s * P];
+        for (int k = 0; k < P; ++k) g_mu[k] += gmu_loc[k];
+        lp += lp_s[s];
+        const double* Al = &Alam_s[(std::size_t) s * p_lam * p_lam];
+        for (int t = 0; t < p_lam * p_lam; ++t) A_lam[t] += Al[t];
+        const double* Ap = &Ap_s[(std::size_t) s * p_p * p_p];
+        for (int t = 0; t < p_p * p_p; ++t) A_p[t] += Ap[t];
+        if (nb) A_lr += Alr_s[s];
+    }
 
-        std::vector<double> M((std::size_t) Pa * Pa, 0.0);
-        double quad_sum = 0.0;
-        for (int s = 0; s < S; ++s) {
-            const double* bsa = b + s * P + arm_start[a];
-            for (int u = 0; u < Pa; ++u) {
-                double sib = 0.0;
-                for (int v = 0; v < Pa; ++v) sib += Si[(std::size_t) u * Pa + v] * bsa[v];
-                g_b[s * P + arm_start[a] + u] -= sib;     // b-prior gradient
-                quad_sum += bsa[u] * sib;
-                for (int v = 0; v < Pa; ++v) M[(std::size_t) u * Pa + v] += bsa[u] * bsa[v];
-            }
-        }
-        lp += -0.5 * quad_sum - 0.5 * S * logdet;
+    // ---- z prior: standard normal over the whole per-species block ----
+    for (int j = 0; j < S * P; ++j) {
+        const double zz = z[j];
+        g_z[j] -= zz;
+        lp     += -0.5 * zz * zz;
+    }
 
-        chol_block_grad_cpp(C, Si, M, Pa, (double) S, th + chol_off[a],
-                            pr.logdiag_mean, pr.logdiag_sd, pr.offdiag_sd,
-                            g + chol_off[a]);
-        // chol coordinate hyperprior contribution to lp
-        int pos = chol_off[a];
-        for (int j = 0; j < Pa; ++j) {
-            const double vd = th[pos++];
-            const double zd = (vd - pr.logdiag_mean) / pr.logdiag_sd;
-            lp += -0.5 * zd * zd;
-            for (int i = j + 1; i < Pa; ++i) {
-                const double vo = th[pos++];
-                const double zo = vo / pr.offdiag_sd;
-                lp += -0.5 * zo * zo;
-            }
-        }
+    // ---- chol coords: data gradient (via b = C z) + coordinate hyperprior ----
+    lp += chol_data_grad_noncentered(A_lam, C_lam, p_lam, th + d.chol_lam_off,
+                                     pr.logdiag_mean, pr.logdiag_sd, pr.offdiag_sd,
+                                     g + d.chol_lam_off);
+    lp += chol_data_grad_noncentered(A_p, C_p, p_p, th + d.chol_p_off,
+                                     pr.logdiag_mean, pr.logdiag_sd, pr.offdiag_sd,
+                                     g + d.chol_p_off);
+    if (nb) {
+        const std::vector<double> A1(1, A_lr), C1(1, C_lr);
+        lp += chol_data_grad_noncentered(A1, C1, 1, th + d.chol_logr_off,
+                                         pr.logdiag_mean, pr.logdiag_sd,
+                                         pr.offdiag_sd, g + d.chol_logr_off);
     }
 
     // ---- community-mean priors: N(0, sigma.beta^2) on the coefficient means,

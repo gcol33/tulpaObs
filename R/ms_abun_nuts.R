@@ -124,6 +124,15 @@
 # `margs` is the per-species list from .tobs_ms_abun_nuts_marginals(); `lay` the
 # layout. Returns list(lp, grad) over the packed coordinates. Mirrors the C++
 # ms_abun_nuts_eval (src/ms_abun_nuts.cpp).
+#
+# NON-CENTERED parameterisation: the per-species block holds standard-normal
+# z_s, and the deviation is reconstructed per arm as b_{s,arm} = C_arm z_{s,arm}
+# (C_arm the log-Cholesky factor of Sigma_arm). The community covariance then
+# leaves the b-prior entirely -- z ~ N(0, I), no b' Sigma^{-1} b quadratic and no
+# -0.5 S log|Sigma| normaliser -- and enters ONLY the data term through b = C z.
+# This breaks the centered b<->Sigma funnel that otherwise saturates the NUTS
+# treedepth (mean ~7, eps ~0.025 measured for the centered map); the chol
+# gradient now flows from the data term via b = C z plus the hyperprior.
 .tobs_ms_abun_nuts_logpost <- function(theta, margs, lay, priors,
                                        sigma.beta = 10, sigma.logr = 1.5,
                                        grad = TRUE) {
@@ -132,59 +141,66 @@
   g    <- numeric(lay$total)
   g_mu <- numeric(P)
   lp   <- 0
-  b_list <- vector("list", S)
 
-  # ---- data log-lik + inner gradient (per species) ----
+  # Cholesky factors per arm (Sigma_arm = C_arm C_arm'); logr arm is the 1x1
+  # scalar SD = exp(chol_logr).
+  C_lam <- .ms_ocs_chol_unpack(theta[lay$chol_lam], lay$p_lam)
+  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
+  C_lr  <- if (is_nb) exp(theta[lay$chol_logr]) else NULL
+
+  # chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
+  A_lam <- matrix(0, lay$p_lam, lay$p_lam)
+  A_p   <- matrix(0, lay$p_p,   lay$p_p)
+  A_lr  <- 0
+
+  # ---- data log-lik + inner gradient (per species), non-centered b = C z ----
   for (s in seq_len(S)) {
     bidx <- .tobs_ms_abun_nuts_b_idx(lay, s)
-    b_s  <- theta[bidx]; b_list[[s]] <- b_s
-    bl   <- mu[lay$lambda] + b_s[lay$lambda]
-    bp   <- mu[lay$p]      + b_s[lay$p]
-    r    <- if (is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
+    z_s  <- theta[bidx]
+    zl <- z_s[lay$lambda]; zp <- z_s[lay$p]
+    bl   <- mu[lay$lambda] + as.numeric(C_lam %*% zl)
+    bp   <- mu[lay$p]      + as.numeric(C_p   %*% zp)
+    if (is_nb) { zr <- z_s[lay$logr]; r <- exp(mu[lay$logr] + C_lr * zr) }
+    else        r <- Inf
     ev   <- margs[[s]]$eval_beta(bl, bp, r = r)
     lp   <- lp + ev$log_lik
     if (grad) {
-      gl <- as.numeric(crossprod(margs[[s]]$X_lambda, ev$grad_eta_lambda))
-      gp <- as.numeric(crossprod(margs[[s]]$X_p,      ev$grad_eta_p))
+      gl <- as.numeric(crossprod(margs[[s]]$X_lambda, ev$grad_eta_lambda)) # grad_b lambda
+      gp <- as.numeric(crossprod(margs[[s]]$X_p,      ev$grad_eta_p))      # grad_b p
       g_mu[lay$lambda]    <- g_mu[lay$lambda] + gl
       g_mu[lay$p]         <- g_mu[lay$p]      + gp
-      g[bidx[lay$lambda]] <- g[bidx[lay$lambda]] + gl
-      g[bidx[lay$p]]      <- g[bidx[lay$p]]      + gp
+      # z gradient (data part) = C' grad_b; the -z prior is added below.
+      g[bidx[lay$lambda]] <- g[bidx[lay$lambda]] + as.numeric(crossprod(C_lam, gl))
+      g[bidx[lay$p]]      <- g[bidx[lay$p]]      + as.numeric(crossprod(C_p,   gp))
+      A_lam <- A_lam + outer(gl, zl)
+      A_p   <- A_p   + outer(gp, zp)
       if (is_nb) {
-        gt <- sum(ev$grad_theta)
+        gt <- sum(ev$grad_theta)                                          # grad_b logr
         g_mu[lay$logr]    <- g_mu[lay$logr] + gt
-        g[bidx[lay$logr]] <- g[bidx[lay$logr]] + gt
+        g[bidx[lay$logr]] <- g[bidx[lay$logr]] + C_lr * gt
+        A_lr <- A_lr + gt * zr
       }
     }
   }
 
-  # ---- community covariance: per-arm b-quadratic + log-det normaliser + chol
-  #      block gradient; accumulate the b-prior into g. ----
-  arms <- list(list(coords = lay$lambda, chol = lay$chol_lam, Pa = lay$p_lam),
-               list(coords = lay$p,      chol = lay$chol_p,   Pa = lay$p_p))
-  if (is_nb) arms <- c(arms, list(list(coords = lay$logr, chol = lay$chol_logr,
-                                       Pa = 1L)))
+  # ---- z prior: standard normal over the entire per-species block ----
+  z_idx <- lay$b_off + seq_len(S * P)
+  z_all <- theta[z_idx]
+  lp <- lp - 0.5 * sum(z_all^2)
+  if (grad) g[z_idx] <- g[z_idx] - z_all
+
+  # ---- chol coords: data gradient (via b = C z) + hyperprior ----
+  arms <- list(list(chol = lay$chol_lam, A = A_lam, C = C_lam, Pa = lay$p_lam),
+               list(chol = lay$chol_p,   A = A_p,   C = C_p,   Pa = lay$p_p))
+  if (is_nb) arms <- c(arms, list(list(chol = lay$chol_logr,
+                                       A = matrix(A_lr, 1, 1),
+                                       C = matrix(C_lr, 1, 1), Pa = 1L)))
   for (arm in arms) {
     Pa <- arm$Pa; if (Pa == 0L) next
-    C  <- .ms_ocs_chol_unpack(theta[arm$chol], Pa)
-    Si <- chol2inv(t(C))
-    logdet <- 2 * sum(log(diag(C)))
-    M <- matrix(0, Pa, Pa); quad <- 0
-    for (s in seq_len(S)) {
-      bb  <- b_list[[s]][arm$coords]
-      sib <- as.numeric(Si %*% bb)
-      quad <- quad + sum(bb * sib)
-      M    <- M + outer(bb, bb)
-      if (grad) {
-        bidx <- .tobs_ms_abun_nuts_b_idx(lay, s)[arm$coords]
-        g[bidx] <- g[bidx] - sib
-      }
-    }
-    lp <- lp - 0.5 * quad - 0.5 * S * logdet
     pr <- .ms_ocs_chol_logprior(theta[arm$chol], Pa, priors)
     lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_ocs_chol_block_grad(C, M, S, theta[arm$chol],
-                                                     Pa, priors)
+    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, Pa) +
+        pr$grad
   }
 
   # ---- community-mean priors ----
@@ -203,13 +219,47 @@
   list(lp = lp, grad = g)
 }
 
+# Data-term gradient w.r.t. one arm's packed log-Cholesky coordinates under the
+# non-centered map b = C z. With A[i,j] = sum_s grad_b_{s,i} z_{s,j}, the packed
+# gradient is A's lower triangle laid column-major (matching .ms_ocs_chol_pack),
+# the diagonal scaled by C[j,j] (chain rule for the log-diagonal coordinate
+# l_j = log C[j,j], since d b_j / d l_j = C[j,j] z_j).
+.ms_abun_nuts_chol_data_grad <- function(A, C, Pa) {
+  out <- numeric(.ms_ocs_chol_dim(Pa)); pos <- 0L
+  for (j in seq_len(Pa)) {
+    out[pos + 1L] <- A[j, j] * C[j, j]; pos <- pos + 1L
+    if (j < Pa) {
+      ni <- Pa - j
+      out[pos + seq_len(ni)] <- A[(j + 1L):Pa, j]; pos <- pos + ni
+    }
+  }
+  out
+}
+
+# Reconstruct the per-species deviation matrix b (S x P) from a packed coordinate
+# vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
+.tobs_ms_abun_nuts_b_from_z <- function(theta, lay) {
+  C_lam <- .ms_ocs_chol_unpack(theta[lay$chol_lam], lay$p_lam)
+  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
+  C_lr  <- if (lay$is_nb) exp(theta[lay$chol_logr]) else NULL
+  B <- matrix(0, lay$n_species, lay$P)
+  for (s in seq_len(lay$n_species)) {
+    z <- theta[.tobs_ms_abun_nuts_b_idx(lay, s)]
+    B[s, lay$lambda] <- as.numeric(C_lam %*% z[lay$lambda])
+    B[s, lay$p]      <- as.numeric(C_p   %*% z[lay$p])
+    if (lay$is_nb) B[s, lay$logr] <- C_lr * z[lay$logr]
+  }
+  B
+}
+
 # Data-only log-likelihood (no priors) at a packed coordinate vector, summed over
 # (species, site). Used for the fit's reported log_lik (the scale-invariant value
 # logLik() / glance() read) at the posterior-mean coefficients.
 .tobs_ms_abun_nuts_data_loglik <- function(theta, margs, lay) {
   mu <- theta[lay$mu]; tot <- 0
+  B  <- .tobs_ms_abun_nuts_b_from_z(theta, lay)
   for (s in seq_len(lay$n_species)) {
-    b_s <- theta[.tobs_ms_abun_nuts_b_idx(lay, s)]
+    b_s <- B[s, ]
     r   <- if (lay$is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
     tot <- tot + margs[[s]]$eval_beta(mu[lay$lambda] + b_s[lay$lambda],
                                       mu[lay$p]      + b_s[lay$p], r = r)$log_lik
@@ -231,29 +281,32 @@
 }
 
 # Pack a nmix_laplace_re() community fit into the full NUTS coordinate vector: the
-# community means, the per-species BLUP deviations, and the community covariances
-# as log-Cholesky coordinates (the 1x1 dispersion covariance as log(sigma_log_r)).
-# This is the NUTS initial position and the FD-gradient reference point.
+# community means, the community covariances as log-Cholesky coordinates (the 1x1
+# dispersion covariance as log(sigma_log_r)), and -- under the non-centered map --
+# the whitened per-species deviations z_s = C_arm^{-1} b_s (so reconstructing
+# b = C z returns the warm BLUPs exactly). This is the NUTS initial position and
+# the FD-gradient reference point.
 .tobs_ms_abun_nuts_pack_init <- function(warm, lay) {
   theta <- numeric(lay$total)
   mu <- c(as.numeric(warm$mu_lambda), as.numeric(warm$mu_p))
   if (lay$is_nb) mu <- c(mu, as.numeric(warm$mu_log_r))
   theta[lay$mu] <- mu
 
+  C_lam <- t(chol(.tobs_ms_abun_pd(as.matrix(warm$Sigma_lambda))))
+  C_p   <- t(chol(.tobs_ms_abun_pd(as.matrix(warm$Sigma_p))))
+  theta[lay$chol_lam] <- .ms_ocs_chol_pack(C_lam)
+  theta[lay$chol_p]   <- .ms_ocs_chol_pack(C_p)
+  s_lr <- if (lay$is_nb) max(as.numeric(warm$sigma_log_r), 1e-3) else NA_real_
+  if (lay$is_nb) theta[lay$chol_logr] <- log(s_lr)   # 1x1 log-Cholesky = log(sd)
+
   bl <- as.matrix(warm$b_lambda); bp <- as.matrix(warm$b_p)
   blogr <- if (lay$is_nb) as.numeric(warm$b_logr) else NULL
   for (s in seq_len(lay$n_species)) {
-    b_s <- c(bl[s, ], bp[s, ])
-    if (lay$is_nb) b_s <- c(b_s, blogr[s])
-    theta[.tobs_ms_abun_nuts_b_idx(lay, s)] <- b_s
-  }
-
-  chol_coords <- function(Sig) .ms_ocs_chol_pack(t(chol(.tobs_ms_abun_pd(Sig))))
-  theta[lay$chol_lam] <- chol_coords(as.matrix(warm$Sigma_lambda))
-  theta[lay$chol_p]   <- chol_coords(as.matrix(warm$Sigma_p))
-  if (lay$is_nb) {
-    s_lr <- max(as.numeric(warm$sigma_log_r), 1e-3)
-    theta[lay$chol_logr] <- log(s_lr)        # 1x1 log-Cholesky = log(sd)
+    z_s <- numeric(lay$P)
+    z_s[lay$lambda] <- forwardsolve(C_lam, bl[s, ])   # C z = b, C lower-tri
+    z_s[lay$p]      <- forwardsolve(C_p,   bp[s, ])
+    if (lay$is_nb) z_s[lay$logr] <- blogr[s] / s_lr
+    theta[.tobs_ms_abun_nuts_b_idx(lay, s)] <- z_s
   }
   theta
 }
@@ -308,8 +361,8 @@
   p_p      <- model$process_info[[2]]$p
   n_species <- model$n_species
   lf <- .tobs_ms_nmix_longform(model)
-  if (is.null(K_max)) K_max <- max(lf$y) + 100L
-  K_max <- as.integer(K_max)
+  user_K  <- !is.null(K_max)
+  K_warm  <- if (user_K) as.integer(K_max) else max(lf$y) + 100L
   lay  <- .tobs_ms_abun_nuts_layout(p_lam, p_p, n_species, is_nb)
   pri  <- .tobs_ms_abun_nuts_priors()
 
@@ -319,11 +372,33 @@
   warm <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
     X_lambda = X_lambda, X_p = lf$X_p, n_sites = model$n_sites,
-    n_species = n_species, K_max = K_max, max_iter = as.integer(max.iter),
+    n_species = n_species, K_max = K_warm, max_iter = as.integer(max.iter),
     mixture = mix_code,
     optimizer = if (is_nb) "joint_grad" else "em",
     n_quad = if (is_nb) as.integer(n.quad) else 1L,
     lkj_eta = lkj_eta, verbose = FALSE)
+
+  # Data-driven K_max for the (expensive) NUTS marginal: the latent N is summed
+  # over [max(y), K_max] on EVERY leapfrog step, so a too-generous cap wastes the
+  # inner loop. Cap at the abundance scale's 10-sigma upper tail (Poisson, or NB
+  # variance lambda + lambda^2/r), where the dropped mass is < 1e-12 -- the
+  # marginal is unchanged to machine precision while the per-step cost drops with
+  # the latent range. A user-supplied K_max is respected verbatim.
+  if (user_K) {
+    K_max <- K_warm
+  } else {
+    bl <- as.matrix(warm$b_lambda)
+    lam_max <- 0
+    for (s in seq_len(n_species))
+      lam_max <- max(lam_max, exp(as.numeric(X_lambda %*% (warm$mu_lambda + bl[s, ]))))
+    var_max <- if (is_nb) {
+      r_min <- max(min(as.numeric(warm$r_s)), 1e-6)
+      lam_max + lam_max^2 / r_min
+    } else lam_max
+    K_tail <- as.integer(ceiling(lam_max + 10 * sqrt(var_max))) + 10L
+    K_max  <- min(K_warm, max(max(lf$y) + 5L, K_tail))
+  }
+  K_max <- as.integer(K_max)
 
   theta0 <- .tobs_ms_abun_nuts_pack_init(warm, lay)
   spec <- list(y = as.integer(lf$y), site_idx = as.integer(lf$site_idx),
@@ -380,13 +455,15 @@
   Sigma_lambda <- sig_mean(lay$chol_lam, lay$p_lam)
   Sigma_p      <- sig_mean(lay$chol_p,   lay$p_p)
 
-  b_lambda <- matrix(0, n_species, lay$p_lam)
-  b_p      <- matrix(0, n_species, lay$p_p)
-  for (s in seq_len(n_species)) {
-    b_s <- par[.tobs_ms_abun_nuts_b_idx(lay, s)]
-    b_lambda[s, ] <- b_s[lay$lambda]
-    b_p[s, ]      <- b_s[lay$p]
-  }
+  # Per-species BLUPs = posterior mean of the RECONSTRUCTED deviation b = C z
+  # (non-centered: the stored coordinates are the whitened z, so b is rebuilt per
+  # draw with that draw's Cholesky factor before averaging).
+  B_bar <- matrix(0, n_species, lay$P)
+  for (i in seq_len(nrow(draws)))
+    B_bar <- B_bar + .tobs_ms_abun_nuts_b_from_z(draws[i, ], lay)
+  B_bar <- B_bar / nrow(draws)
+  b_lambda <- B_bar[, lay$lambda, drop = FALSE]
+  b_p      <- B_bar[, lay$p,      drop = FALSE]
 
   margs   <- .tobs_ms_abun_nuts_marginals(lf, X_lambda, model$n_sites, mix_code,
                                           K_max)
@@ -402,9 +479,7 @@
   if (is_nb) {
     mu_log_r    <- unname(mu_hat[lay$logr])
     sigma_log_r <- mean(exp(draws[, lay$chol_logr]))
-    b_logr <- vapply(seq_len(n_species),
-                     function(s) par[.tobs_ms_abun_nuts_b_idx(lay, s)][lay$logr],
-                     0)
+    b_logr      <- B_bar[, lay$logr]   # reconstructed b = sd * z, posterior mean
     raw$mu_log_r    <- mu_log_r
     raw$sigma_log_r <- sigma_log_r
     raw$b_logr      <- b_logr

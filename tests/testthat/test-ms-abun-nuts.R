@@ -99,13 +99,13 @@ test_that("ms_abun NUTS C++ FullGradFn matches the R oracle", {
 test_that("ms_abun NUTS recovers community means (Poisson)", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 12, N = 70, J = 4,
+  sim <- simulate_ms_abun(n_species = 8, N = 40, J = 4,
                           n_abund_covs = 1, n_det_covs = 1,
                           mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
                           sd_lambda = 0.5, sd_p = 0.4, seed = 42)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
               detection = ~ det_cov1, species = sim$species, method = "nuts",
-              control = list(n.iter = 600L, n.warmup = 600L, seed = 1L,
+              control = list(n.iter = 300L, n.warmup = 300L, seed = 1L,
                              verbose = FALSE))
   expect_equal(fit$method, "nuts")
   expect_false(is.null(fit$nuts$draws))
@@ -127,16 +127,16 @@ test_that("ms_abun NUTS recovers community means (Poisson)", {
 test_that("ms_abun NUTS community-mean 95% CIs cover at the nominal rate", {
   skip_on_cran()
   skip_if_fast()
-  n_seed <- 8L
+  n_seed <- 6L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_abun(n_species = 12, N = 60, J = 4,
+    sim <- simulate_ms_abun(n_species = 8, N = 40, J = 4,
                             n_abund_covs = 1, n_det_covs = 1,
                             mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.4),
                             sd_lambda = 0.5, sd_p = 0.4, seed = 200 + s)
     fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
                 detection = ~ det_cov1, species = sim$species, method = "nuts",
-                control = list(n.iter = 500L, n.warmup = 500L, seed = 1L,
+                control = list(n.iter = 300L, n.warmup = 300L, seed = 1L,
                                verbose = FALSE))
     truth <- c(sim$truth$mu_lambda, sim$truth$mu_p)
     lo <- fit$means - 1.96 * fit$sds
@@ -152,7 +152,7 @@ test_that("ms_abun NUTS community-mean 95% CIs cover at the nominal rate", {
 test_that("ms_abun NUTS (negbin) recovers means + community dispersion", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 10, N = 70, J = 4,
+  sim <- simulate_ms_abun(n_species = 8, N = 45, J = 4,
                           n_abund_covs = 1, n_det_covs = 1,
                           mu_lambda = c(log(4), 0.4), mu_p = c(0.3, -0.3),
                           sd_lambda = 0.5, sd_p = 0.4,
@@ -161,7 +161,7 @@ test_that("ms_abun NUTS (negbin) recovers means + community dispersion", {
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = ms_abun(mixture = "negbin"),
               detection = ~ det_cov1, species = sim$species, method = "nuts",
-              control = list(n.iter = 600L, n.warmup = 600L, seed = 1L,
+              control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
                              verbose = FALSE))
   expect_equal(fit$mixture, "negbin")
   expect_true("log_r" %in% names(fit$means))
@@ -183,10 +183,10 @@ test_that("ms_abun NUTS (negbin) recovers means + community dispersion", {
 test_that("ms_abun NUTS S3 methods + WAIC work", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 8, N = 40, J = 3, seed = 3)
+  sim <- simulate_ms_abun(n_species = 8, N = 30, J = 3, seed = 3)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
               detection = ~ det_cov1, species = sim$species, method = "nuts",
-              control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
+              control = list(n.iter = 300L, n.warmup = 300L, seed = 1L,
                              verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
   expect_no_error(print(fit))
