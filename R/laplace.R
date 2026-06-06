@@ -1342,6 +1342,47 @@ extract_beta <- function(sub, p) {
   if (length(d) >= p) d[seq_len(p)] else c(d, rep(NA_real_, p - length(d)))
 }
 
+# Within-arm covariance block carrying the off-diagonal correlation of the
+# observed-information inverse, rescaled so its diagonal matches the reported
+# marginal SEs exactly (`sds`). `prec` is the precision / observed-information
+# matrix the SEs were derived from (cov = solve(prec)); NULL or a non-invertible
+# `prec` yields the diagonal block diag(sds^2), i.e. the previous behaviour. This
+# keeps the marginal SEs byte-identical while restoring the joint correlation the
+# diagonal pseudo-draws used to discard (gcol33/tulpaObs#44). NA / non-finite SEs
+# map to a zero-variance coordinate (drawn as a point mass downstream).
+.cor_scaled_cov <- function(prec, sds) {
+  p <- length(sds)
+  s <- ifelse(is.finite(sds), sds, 0)
+  if (is.null(prec)) return(diag(s^2, nrow = p))
+  cov <- tryCatch(solve(prec), error = function(e) NULL)
+  if (is.null(cov)) return(diag(s^2, nrow = p))
+  cov <- as.matrix(cov)[seq_len(p), seq_len(p), drop = FALSE]
+  d <- sqrt(pmax(diag(cov), 0))
+  ok <- is.finite(d) & d > 0
+  R <- diag(p)
+  if (sum(ok) > 1L) R[ok, ok] <- cov[ok, ok, drop = FALSE] / tcrossprod(d[ok])
+  outer(s, s) * R
+}
+
+# Assemble a block-diagonal covariance from per-block matrices in append order,
+# flooring zero / NA variances so the matrix is PD and chol-decomposable in
+# .rmvn (mirrors the old `max(sd_j, 1e-4)` point-mass floor for NA-SE columns).
+.assemble_block_diag <- function(blocks, n_params) {
+  V <- matrix(0, n_params, n_params)
+  off <- 0L
+  for (B in blocks) {
+    b <- nrow(B)
+    if (b == 0L) next
+    idx <- off + seq_len(b)
+    V[idx, idx] <- B
+    off <- off + b
+  }
+  dd <- diag(V)
+  dd[!is.finite(dd) | dd <= 0] <- 1e-8
+  diag(V) <- dd
+  V
+}
+
 clamp_w <- function(w) pmin(pmax(w, 0.001), 0.999)
 
 occ_weights <- function(psi, p, N, n_valid, n_det, any_det) {
@@ -1385,22 +1426,31 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   spatial_occ <- .spatial_for_arm(spatial, 1L)
   spatial_det <- .spatial_for_arm(spatial, 2L)
 
-  # Collect betas from correction (if available) or EM fits
+  # Collect betas from correction (if available) or EM fits. Each arm also
+  # contributes its within-arm covariance block (`prec_k` = the precision the
+  # arm's SEs came from), so the pseudo-draws carry the joint correlation rather
+  # than a diagonal stand-in (gcol33/tulpaObs#44). Cross-arm covariance stays
+  # zero, matching the EM's separate-arm M-step factorization.
   means <- numeric()
   sds <- numeric()
   nms <- character()
   louis_psi_se <- NULL
+  cov_blocks <- list()
 
   for (k in seq_along(pi_list)) {
     pi <- pi_list[[k]]
     sub_name <- names(p_per_submodel)[k]
     if (is.null(sub_name)) sub_name <- names(p_per_submodel)[min(k, length(p_per_submodel))]
+    prec_k <- NULL
 
     if (is.list(em_result$pooled) && !is.null(em_result$pooled[[sub_name]])) {
       # MI/Gibbs correction pool from rubins_pool().
       cr <- em_result$pooled[[sub_name]]
       means <- c(means, cr$mean)
-      sds <- c(sds, cr$se)
+      sds_k <- cr$se
+      cov_k <- if (!is.null(cr$vcov) &&
+                   all(dim(as.matrix(cr$vcov)) == length(sds_k)))
+                 as.matrix(cr$vcov) else .cor_scaled_cov(NULL, sds_k)
     } else if (!is.null(em_result$fits[[sub_name]])) {
       fi <- em_result$fits[[sub_name]]
       beta <- extract_beta(fi, pi$p)
@@ -1422,7 +1472,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
         # Occupancy fixed-effect SE on the RE path: natural-scale observed info
         # marginalised over the random-effect block (the M-step H_beta is
         # M-inflated). Computed in .tobs_re_occ_fixed_se().
-        sds <- c(sds, re_block$occ_se)
+        sds_k <- re_block$occ_se
       } else if (use_louis) {
         I_obs <- .louis_info_psi_single(
           X_occ       = model$X_processes[[1]],
@@ -1434,7 +1484,8 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
           coef_names  = pi$coef_names
         )
         louis_psi_se <- .se_from_info(I_obs, pi$p)
-        sds <- c(sds, louis_psi_se)
+        sds_k <- louis_psi_se
+        prec_k <- I_obs
       } else if (identical(model$model_type, "single") &&
                  identical(sub_name, "det") &&
                  is.null(spatial_det) &&
@@ -1463,15 +1514,25 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
           spatial_fit    = em_result$fits[["occ"]]
         )
         se_det <- .se_from_info(I_obs, pi$p)
-        sds <- c(sds, if (any(!is.finite(se_det)))
-                        .se_from_laplace_fit(fi, pi$p) else se_det)
+        if (any(!is.finite(se_det))) {
+          sds_k <- .se_from_laplace_fit(fi, pi$p)
+          prec_k <- fi$H_beta
+        } else {
+          sds_k <- se_det
+          prec_k <- I_obs
+        }
       } else {
-        sds <- c(sds, .se_from_laplace_fit(fi, pi$p))
+        sds_k <- .se_from_laplace_fit(fi, pi$p)
+        prec_k <- fi$H_beta
       }
+      cov_k <- .cor_scaled_cov(prec_k, sds_k)
     } else {
       means <- c(means, rep(0, pi$p))
-      sds <- c(sds, rep(NA_real_, pi$p))
+      sds_k <- rep(NA_real_, pi$p)
+      cov_k <- .cor_scaled_cov(NULL, sds_k)
     }
+    sds <- c(sds, sds_k)
+    cov_blocks[[length(cov_blocks) + 1L]] <- cov_k
     nms <- c(nms, paste0(pi$name, "_", pi$coef_names))
   }
 
@@ -1506,6 +1567,9 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     means <- c(means, visit_means)
     sds   <- c(sds, visit_sds)
     nms   <- c(nms, visit_nms)
+    # Visit-level detection coefs are carried diagonal (their cross-covariance
+    # with the site-level det block is not surfaced separately from the M-step).
+    cov_blocks[[length(cov_blocks) + 1L]] <- .cor_scaled_cov(NULL, visit_sds)
   }
 
   # Append the deterministic random-effect block (sigma hyperparameters +
@@ -1515,22 +1579,22 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     means <- c(means, re_block$means)
     sds   <- c(sds, re_block$sds)
     nms   <- c(nms, re_block$names)
+    cov_blocks[[length(cov_blocks) + 1L]] <- .cor_scaled_cov(NULL, re_block$sds)
   }
 
   names(means) <- nms
   names(sds)   <- nms
   n_params <- length(means)
 
-  # Pseudo-draws
+  # Pseudo-draws from the block-diagonal joint covariance: full within each
+  # fixed-effect arm (so derived quantities like predicted psi = plogis(X beta)
+  # propagate the coefficient correlation), zero across arms. Coordinates with
+  # an unavailable SE (NA) floor to a near-constant point mass, the same as the
+  # previous per-coefficient draw (gcol33/tulpaObs#44).
   n_pseudo <- 1000L
-  draws <- matrix(NA_real_, n_pseudo, n_params)
-  for (j in seq_len(n_params)) {
-    # Hyperparameters without an analytic SE (e.g. RE sigma on the
-    # variance-component path) carry NA sd -> draw a near-constant column at
-    # the point estimate rather than NAs.
-    sd_j <- if (is.finite(sds[j])) sds[j] else 0
-    draws[, j] <- rnorm(n_pseudo, means[j], max(sd_j, 1e-4))
-  }
+  V_draw <- .assemble_block_diag(cov_blocks, n_params)
+  dimnames(V_draw) <- list(nms, nms)
+  draws <- .rmvn(n_pseudo, means, V_draw)
   colnames(draws) <- nms
 
   # Simplified-Laplace skewness correction

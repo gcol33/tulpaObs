@@ -225,17 +225,26 @@
 .sla_build_cover_hurdle_draws <- function(beta_occ, se_occ,
                                           beta_pos, se_pos,
                                           sla_res,
+                                          V_occ = NULL, V_pos = NULL,
                                           n_pseudo = 1000L) {
-  draws_occ <- matrix(NA_real_, n_pseudo, length(beta_occ))
-  draws_pos <- matrix(NA_real_, n_pseudo, length(beta_pos))
-  colnames(draws_occ) <- names(beta_occ)
-  colnames(draws_pos) <- names(beta_pos)
-  for (j in seq_along(beta_occ)) {
-    draws_occ[, j] <- rnorm(n_pseudo, beta_occ[j], max(se_occ[j], 1e-4))
+  # Draw each arm from its full per-arm covariance (V_occ / V_pos) so the
+  # coefficient correlation propagates to predicted cover; fall back to the
+  # diagonal of the reported SEs only when the covariance is unavailable
+  # (gcol33/tulpaObs#45). The subsequent .sla_replace_draws() preserves the
+  # joint rank-correlation while imposing the skew-normal marginals.
+  draw_arm <- function(beta, se, V) {
+    p <- length(beta)
+    if (!is.null(V) && all(dim(as.matrix(V)) == p)) {
+      d <- .rmvn(n_pseudo, beta, (as.matrix(V) + t(as.matrix(V))) / 2)
+    } else {
+      d <- matrix(NA_real_, n_pseudo, p)
+      for (j in seq_len(p)) d[, j] <- rnorm(n_pseudo, beta[j], max(se[j], 1e-4))
+    }
+    colnames(d) <- names(beta)
+    d
   }
-  for (j in seq_along(beta_pos)) {
-    draws_pos[, j] <- rnorm(n_pseudo, beta_pos[j], max(se_pos[j], 1e-4))
-  }
+  draws_occ <- draw_arm(beta_occ, se_occ, V_occ)
+  draws_pos <- draw_arm(beta_pos, se_pos, V_pos)
 
   if (isTRUE(sla_res$valid)) {
     draws_occ <- .sla_replace_draws(draws_occ, beta_occ, se_occ,

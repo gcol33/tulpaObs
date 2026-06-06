@@ -404,7 +404,8 @@ decode_cover_hurdle <- function(fits, enc, family,
   if (identical(approx, "simplified_laplace")) {
     sla_res <- .sla_compute_cover_hurdle(fits, enc, fits$positive)
     sla_draws <- .sla_build_cover_hurdle_draws(
-      beta_occ, se_occ, beta_pos, se_pos, sla_res
+      beta_occ, se_occ, beta_pos, se_pos, sla_res,
+      V_occ = V_occ, V_pos = V_pos
     )
     draws_occ <- sla_draws$draws_occ
     draws_pos <- sla_draws$draws_pos

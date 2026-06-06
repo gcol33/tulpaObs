@@ -103,13 +103,15 @@
     if (any(!is.finite(c(opt$par, se)))) return(fit)
 
     # Overwrite the fixed-effect estimates, SEs, and matching pseudo-draws.
+    # Draw from the full joint covariance V (not its diagonal) so predicted psi
+    # and other derived quantities carry the coefficient correlation the refine
+    # pass computed (gcol33/tulpaObs#44).
     fit$means[all_nm] <- opt$par
     fit$sds[all_nm]   <- se
     if (!is.null(fit$draws) && all(all_nm %in% colnames(fit$draws))) {
       n_pseudo <- nrow(fit$draws)
-      for (j in seq_along(all_nm)) {
-        fit$draws[, all_nm[j]] <- stats::rnorm(n_pseudo, opt$par[j], se[j])
-      }
+      Vsym <- (V + t(V)) / 2
+      fit$draws[, all_nm] <- .rmvn(n_pseudo, opt$par, Vsym)
     }
     # Refresh per-site occupancy weights P(z = 1 | y) at the refined estimate so
     # fitted / residuals stay consistent with the reported coefficients.
