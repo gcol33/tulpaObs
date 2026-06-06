@@ -6,6 +6,7 @@
 // under -O2. The per-site marginal math is nmix_kernel.h (the single source).
 
 #include "nmix_community_oracle.h"
+#include "nmix_oracle_emit.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <cmath>
@@ -190,11 +191,8 @@ NMixCommunityOracle::eval_species(int g, const double* b,
 
 void NMixCommunityOracle::grad_hess(int g, const double* b, double& logL,
                                     double* grad, double* negH) const {
-    const SpeciesEval e = eval_species(g, b, /*want_negH=*/true, /*want_fisher=*/false);
-    logL = e.logL;
-    for (int i = 0; i < d; ++i) grad[i] = e.grad(i);
-    for (int i = 0; i < d; ++i)
-        for (int j = 0; j < d; ++j) negH[(std::size_t)i * d + j] = e.negH(i, j);
+    emit_grad_hess(eval_species(g, b, /*want_negH=*/true, /*want_fisher=*/false),
+                   d, logL, grad, negH);
 }
 
 void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
@@ -234,9 +232,7 @@ void NMixCommunityOracle::theta_score(int g, const double* b,
 }
 
 bool NMixCommunityOracle::newton_hess(int g, const double* b, double* H) const {
-    const SpeciesEval e = eval_species(g, b, /*want_negH=*/false, /*want_fisher=*/true);
-    for (int i = 0; i < d; ++i)
-        for (int j = 0; j < d; ++j) H[(std::size_t)i * d + j] = e.fisher(i, j);
+    emit_fisher(eval_species(g, b, /*want_negH=*/false, /*want_fisher=*/true), d, H);
     return true;
 }
 

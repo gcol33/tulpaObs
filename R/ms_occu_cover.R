@@ -448,7 +448,7 @@
         hll <- info[P + 1L, P + 1L]
         gth <- g[seq_len(P)]; gld <- g[P + 1L]
         C_s  <- Htt + Sinv
-        Cinv <- tryCatch(solve(C_s), error = function(e) .ms_occu_cover_ginv(C_s))
+        Cinv <- tryCatch(solve(C_s), error = function(e) .tobs_cem_ginv(C_s))
         Cinv_list[[s]] <- Cinv
         Bf_list[[s]]   <- rbind(Htt, matrix(htl, 1L, P))     # (P+1) x P
         gb_list[[s]]   <- gth - Sinv %*% b_list[[s]]
@@ -535,7 +535,7 @@
   Sinv <- blockdiag_inv(Sigma)
   res  <- solve_mode(mu, ld, b_list, Sinv)
   mu <- res$mu; ld <- res$ld; b_list <- res$b_list
-  Vf <- tryCatch(solve(res$Sf), error = function(e) .ms_occu_cover_ginv(res$Sf))
+  Vf <- tryCatch(solve(res$Sf), error = function(e) .tobs_cem_ginv(res$Sf))
   Vf <- (Vf + t(Vf)) / 2
   logML <- compute_logML(mu, ld, b_list, res$Cinv, Sigma, Sinv)
 
@@ -543,16 +543,6 @@
                           arm_idx, F_val = logML,
                           converged = converged, n_iter = n_iter)
 }
-
-# Moore-Penrose pseudo-inverse fallback (avoids a hard MASS dependency for the
-# rare singular block; symmetric PSD input).
-.ms_occu_cover_ginv <- function(M) {
-  e <- eigen((M + t(M)) / 2, symmetric = TRUE)
-  pos <- e$values > max(e$values) * 1e-10
-  e$vectors[, pos, drop = FALSE] %*%
-    (t(e$vectors[, pos, drop = FALSE]) / e$values[pos])
-}
-
 
 # ---------------------------------------------------------------------------
 # Wrap the EM output into a tobs_fit
@@ -642,18 +632,8 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 
 # Per-species BLUP deviations, long form: one row per (species, arm, term).
 .tobs_ranef_ms_occu_cover <- function(object) {
-  cm <- object$ms_community
-  to_long <- function(B, arm) {
-    sp <- rownames(B); tm <- colnames(B)
-    data.frame(species = rep(sp, times = ncol(B)), arm = arm,
-               term = rep(tm, each = nrow(B)),
-               estimate = as.numeric(B), stringsAsFactors = FALSE)
-  }
-  out <- rbind(to_long(cm$blup_occ, "psi"),
-               to_long(cm$blup_p,   "p"),
-               to_long(cm$blup_pos, "pos"))
-  rownames(out) <- NULL
-  out
+  .tobs_ranef_ms_long(object$ms_community,
+                      c(psi = "blup_occ", p = "blup_p", pos = "blup_pos"))
 }
 
 # Per-species posterior-mean linear predictors: site-level occupancy psi

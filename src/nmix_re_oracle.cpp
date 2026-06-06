@@ -8,6 +8,7 @@
 // nmix_community_oracle.cpp.
 
 #include "nmix_re_oracle.h"
+#include "nmix_oracle_emit.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <cmath>
@@ -212,13 +213,9 @@ NMixGroupedOracle::eval_group(int g, const double* b,
 
 void NMixGroupedOracle::grad_hess(int g, const double* b, double& logL,
                                   double* grad, double* negH) const {
-    const GroupEval e = eval_group(g, b, /*want_negH=*/true,
-                                   /*want_fisher=*/false,
-                                   /*want_theta_grad=*/false);
-    logL = e.logL;
-    for (int i = 0; i < d; ++i) grad[i] = e.grad(i);
-    for (int i = 0; i < d; ++i)
-        for (int j = 0; j < d; ++j) negH[(std::size_t)i * d + j] = e.negH(i, j);
+    emit_grad_hess(eval_group(g, b, /*want_negH=*/true, /*want_fisher=*/false,
+                              /*want_theta_grad=*/false),
+                   d, logL, grad, negH);
 }
 
 void NMixGroupedOracle::node_ll(int g, const double* B, int n_nodes,
@@ -258,11 +255,8 @@ void NMixGroupedOracle::theta_score(int g, const double* b,
 }
 
 bool NMixGroupedOracle::newton_hess(int g, const double* b, double* H) const {
-    const GroupEval e = eval_group(g, b, /*want_negH=*/false,
-                                   /*want_fisher=*/true,
-                                   /*want_theta_grad=*/false);
-    for (int i = 0; i < d; ++i)
-        for (int j = 0; j < d; ++j) H[(std::size_t)i * d + j] = e.fisher(i, j);
+    emit_fisher(eval_group(g, b, /*want_negH=*/false, /*want_fisher=*/true,
+                           /*want_theta_grad=*/false), d, H);
     return true;
 }
 

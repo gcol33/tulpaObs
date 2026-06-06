@@ -209,9 +209,9 @@
 
 # Abundance(lambda)/detection(p) arm split (N-mixture AGHQ path). A shared term
 # is rejected -- the make_site path integrates one arm at a time; a cross-arm RE
-# would need a joint two-arm oracle. Shares .tobs_split_re_arms (R/em_laplace_re.R).
+# would need a joint two-arm oracle. Shares .tobs_re_split_two_arms (R/em_laplace_re.R).
 .tobs_nmix_re_split_arms <- function(re_list, model) {
-  .tobs_split_re_arms(
+  .tobs_re_split_two_arms(
     re_list, model, "lambda", "p",
     paste0("A random effect shared across the abundance (lambda) and ",
            "detection (p) arms is not supported on the N-mixture AGHQ path."))

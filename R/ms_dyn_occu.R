@@ -378,17 +378,8 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
 # the RE arms (psi1, p). The shared gamma / eps coefficients carry no per-
 # species random effect and so do not appear here.
 .tobs_ranef_ms_dyn_occu <- function(object) {
-  cm <- object$ms_community
-  to_long <- function(B, arm) {
-    sp <- rownames(B); tm <- colnames(B)
-    data.frame(species = rep(sp, times = ncol(B)), arm = arm,
-               term = rep(tm, each = nrow(B)),
-               estimate = as.numeric(B), stringsAsFactors = FALSE)
-  }
-  out <- rbind(to_long(cm$blup_psi1, "psi1"),
-               to_long(cm$blup_p,    "p"))
-  rownames(out) <- NULL
-  out
+  .tobs_ranef_ms_long(object$ms_community,
+                      c(psi1 = "blup_psi1", p = "blup_p"))
 }
 
 # Per-species posterior-mean linear predictors: site-level first-season

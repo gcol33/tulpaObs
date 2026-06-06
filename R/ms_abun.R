@@ -624,20 +624,11 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 # coefficients in `coef()`; here we report the deviations b_s). Long form:
 # one row per (species, arm, term).
 .tobs_ranef_ms_nmix <- function(object) {
-  cm <- object$ms_community
-  to_long <- function(B, arm) {
-    sp <- rownames(B); tm <- colnames(B)
-    data.frame(
-      species  = rep(sp, times = ncol(B)),
-      arm      = arm,
-      term     = rep(tm, each = nrow(B)),
-      estimate = as.numeric(B),
-      stringsAsFactors = FALSE)
-  }
-  out <- rbind(to_long(cm$blup_lambda, "lambda"), to_long(cm$blup_p, "p"))
-  if (!is.null(cm$blup_logr)) out <- rbind(out, to_long(cm$blup_logr, "logr"))
-  rownames(out) <- NULL
-  out
+  # blup_logr is present only under mixture = "negbin"; absent fields are
+  # skipped by .tobs_ranef_ms_long.
+  .tobs_ranef_ms_long(object$ms_community,
+                      c(lambda = "blup_lambda", p = "blup_p",
+                        logr = "blup_logr"))
 }
 
 # Per-species linear predictors at the posterior-mean (mu + BLUP) coefficients:

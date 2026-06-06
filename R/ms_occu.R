@@ -256,17 +256,8 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 
 # Per-species BLUP deviations, long form: one row per (species, arm, term).
 .tobs_ranef_ms_occu <- function(object) {
-  cm <- object$ms_community
-  to_long <- function(B, arm) {
-    sp <- rownames(B); tm <- colnames(B)
-    data.frame(species = rep(sp, times = ncol(B)), arm = arm,
-               term = rep(tm, each = nrow(B)),
-               estimate = as.numeric(B), stringsAsFactors = FALSE)
-  }
-  out <- rbind(to_long(cm$blup_psi, "psi"),
-               to_long(cm$blup_p,   "p"))
-  rownames(out) <- NULL
-  out
+  .tobs_ranef_ms_long(object$ms_community,
+                      c(psi = "blup_psi", p = "blup_p"))
 }
 
 # Per-species posterior-mean linear predictors: site-level occupancy psi and

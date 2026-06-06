@@ -5,6 +5,7 @@
 // offset added to the abundance predictor.
 
 #include "nmix_community_spatial_oracle.h"
+#include "nmix_oracle_emit.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <cmath>
@@ -142,11 +143,8 @@ SpatialNMixCommunityOracle::eval_species(int g, const double* b,
 
 void SpatialNMixCommunityOracle::grad_hess(int g, const double* b, double& logL,
                                            double* grad, double* negH) const {
-    const SpeciesEval e = eval_species(g, b, /*want_negH=*/true, /*want_fisher=*/false);
-    logL = e.logL;
-    for (int i = 0; i < d; ++i) grad[i] = e.grad(i);
-    for (int i = 0; i < d; ++i)
-        for (int j = 0; j < d; ++j) negH[(std::size_t)i * d + j] = e.negH(i, j);
+    emit_grad_hess(eval_species(g, b, /*want_negH=*/true, /*want_fisher=*/false),
+                   d, logL, grad, negH);
 }
 
 void SpatialNMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
@@ -181,9 +179,7 @@ void SpatialNMixCommunityOracle::theta_score(int g, const double* b,
 }
 
 bool SpatialNMixCommunityOracle::newton_hess(int g, const double* b, double* H) const {
-    const SpeciesEval e = eval_species(g, b, /*want_negH=*/false, /*want_fisher=*/true);
-    for (int i = 0; i < d; ++i)
-        for (int j = 0; j < d; ++j) H[(std::size_t)i * d + j] = e.fisher(i, j);
+    emit_fisher(eval_species(g, b, /*want_negH=*/false, /*want_fisher=*/true), d, H);
     return true;
 }
 

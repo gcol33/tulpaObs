@@ -253,7 +253,7 @@
 # parameter block. A term flagged on BOTH arms is rejected with `both_msg` --
 # the deterministic paths fit a separate RE block per arm, not one realization
 # shared across them.
-.tobs_split_re_arms <- function(re_list, model, arm1, arm2, both_msg) {
+.tobs_re_split_two_arms <- function(re_list, model, arm1, arm2, both_msg) {
   arm_of <- function(r) {
     sh <- r$shared
     on1 <- length(sh) >= 1L && isTRUE(sh[1])
@@ -279,7 +279,7 @@
 
 # Occupancy/detection arm split (Laplace path). A shared term routes to NUTS.
 .tobs_re_split_arms <- function(re_list, model) {
-  .tobs_split_re_arms(
+  .tobs_re_split_two_arms(
     re_list, model, "occ", "det",
     paste0("A random effect shared across occupancy and detection is not ",
            "supported on the Laplace path. Use method = 'nuts'."))

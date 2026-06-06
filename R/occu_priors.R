@@ -57,6 +57,15 @@
 }
 
 
+# Validate each named bucket and wrap the result in a priors-spec object of the
+# given class. Shared assembly for occu_priors() and cover_priors(); each keeps
+# its own argument surface and only hands the named buckets and class here.
+.build_prior_spec <- function(buckets, class) {
+  out <- Map(.check_prior_bucket, buckets, names(buckets))
+  structure(out, class = c(class, "tobs_priors_spec"))
+}
+
+
 #' Weakly-informative priors for occupancy Laplace fits
 #'
 #' Constructs a prior specification consumed by [tobs()] when a Laplace
@@ -96,13 +105,12 @@ occu_priors <- function(p_intercept       = list(mean = 0, sd = 1.5),
                         p_slope           = list(mean = 0, sd = 2.5),
                         beta_occ_intercept = list(mean = 0, sd = 2),
                         beta_occ_slope    = list(mean = 0, sd = 5)) {
-  out <- list(
-    p_intercept        = .check_prior_bucket(p_intercept,        "p_intercept"),
-    p_slope            = .check_prior_bucket(p_slope,            "p_slope"),
-    beta_occ_intercept = .check_prior_bucket(beta_occ_intercept, "beta_occ_intercept"),
-    beta_occ_slope     = .check_prior_bucket(beta_occ_slope,     "beta_occ_slope")
-  )
-  structure(out, class = c("occu_priors", "tobs_priors_spec"))
+  .build_prior_spec(
+    list(p_intercept        = p_intercept,
+         p_slope            = p_slope,
+         beta_occ_intercept = beta_occ_intercept,
+         beta_occ_slope     = beta_occ_slope),
+    "occu_priors")
 }
 
 
@@ -390,13 +398,12 @@ cover_priors <- function(occ_intercept = list(mean = 0, sd = 2),
                          occ_slope     = list(mean = 0, sd = 2.5),
                          pos_intercept = list(mean = 0, sd = 3),
                          pos_slope     = list(mean = 0, sd = 2.5)) {
-  out <- list(
-    occ_intercept = .check_prior_bucket(occ_intercept, "occ_intercept"),
-    occ_slope     = .check_prior_bucket(occ_slope,     "occ_slope"),
-    pos_intercept = .check_prior_bucket(pos_intercept, "pos_intercept"),
-    pos_slope     = .check_prior_bucket(pos_slope,     "pos_slope")
-  )
-  structure(out, class = c("cover_priors", "tobs_priors_spec"))
+  .build_prior_spec(
+    list(occ_intercept = occ_intercept,
+         occ_slope     = occ_slope,
+         pos_intercept = pos_intercept,
+         pos_slope     = pos_slope),
+    "cover_priors")
 }
 
 
