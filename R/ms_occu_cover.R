@@ -490,6 +490,10 @@
   }
 
   converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
+  # Progress + ETA for the community joint EM iterations (gcol33/tulpaObs#43);
+  # ON by default, reusing tulpa's shared reporter. ETA is the upper bound to
+  # em.max, finalised on convergence.
+  .prog <- tulpa:::.tulpa_iter_progress("ms-occu-cover-em", em.max, unit = "iter")
   for (em in seq_len(em.max)) {
     n_iter <- em
     Sinv <- blockdiag_inv(Sigma)
@@ -521,9 +525,11 @@
       message(sprintf("[ms_occu_cover EM %d] logML=%.4f  rel_change=%.2e",
                       em, logML, rel))
     }
+    .prog$tick()
     if (em > 1L && rel < em.tol) { converged <- TRUE; break }
     logML_prev <- logML
   }
+  .prog$finish()
 
   # Final marginal fixed-effect information -> community-mean covariance.
   Sinv <- blockdiag_inv(Sigma)

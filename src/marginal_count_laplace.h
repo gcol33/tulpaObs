@@ -22,6 +22,7 @@
 #define TULPAOBS_MARGINAL_COUNT_LAPLACE_H
 
 #include "nmix_kernel.h"   // NMixSiteResult
+#include "nmix_progress.h" // make_grid_progress_from_option
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -236,7 +237,8 @@ void inner_newton_beta(
     VectorXd& beta_lam, VectorXd& beta_p,
     SweepState& st,
     double& log_lik, double& grad_norm, bool& converged, int& n_iter,
-    Kernel kern
+    Kernel kern,
+    tulpa_progress::GridProgress* prog = nullptr
 ) {
     const int pb = p_lam + p_p;
     log_lik = R_NegInf;
@@ -244,6 +246,7 @@ void inner_newton_beta(
     converged = false;
     int iter = 0;
     for (iter = 0; iter < max_iter; ++iter) {
+        if (prog) prog->tick();
         VectorXd eta_lam    = Xl * beta_lam;
         VectorXd eta_p_long = Xp * beta_p;
         log_lik = kernel_sweep(obs_by_site, y, eta_lam, eta_p_long, K_max, r, st, kern);
@@ -365,11 +368,19 @@ Rcpp::List marginal_count_laplace_fixed(
     int outer_iter = 0;
     const int outer_max = nb ? max_iter : 1;
 
+    // Progress + ETA (gcol33/tulpaObs#43); ON by default, reading the scoped
+    // option. Poisson is a single inner Newton -> tick its iterations; NB wraps
+    // the Newton in an outer dispersion loop -> tick that. ETA is the upper
+    // bound to max_iter, finalised by finish().
+    auto prog = tulpaObs::make_grid_progress_from_option("count-laplace", max_iter);
+
     for (outer_iter = 0; outer_iter < outer_max; ++outer_iter) {
         inner_newton_beta(obs_by_site, y, Xl, Xp, p_lam, p_p, K_max, r,
                           max_iter, tol, verbose,
                           beta_lam, beta_p, st,
-                          log_lik, beta_grad_norm, beta_conv, beta_iter, kern);
+                          log_lik, beta_grad_norm, beta_conv, beta_iter, kern,
+                          nb ? nullptr : prog.get());
+        if (nb && prog) prog->tick();
         if (!nb) break;
 
         grad_theta = st.grad_theta.sum();
@@ -409,6 +420,8 @@ Rcpp::List marginal_count_laplace_fixed(
             break;
         }
     }
+
+    if (prog) prog->finish();
 
     // Final state and joint observed-information Hessian at the mode.
     VectorXd eta_lam_f    = Xl * beta_lam;

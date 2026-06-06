@@ -228,6 +228,10 @@
 
   # ---- EM loop ----
   converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
+  # Progress + ETA for the community EM iterations (gcol33/tulpaObs#43); ON by
+  # default, reusing tulpa's shared reporter so the heartbeat file matches every
+  # other fitting loop. ETA is the upper bound to max_iter, finalised on convergence.
+  .prog <- tulpa:::.tulpa_iter_progress("community-em", max_iter, unit = "iter")
   for (em in seq_len(max_iter)) {
     n_iter <- em
     Sinv <- blockdiag_inv(Sigma)
@@ -254,6 +258,7 @@
     }
 
     rel <- abs(logML - logML_prev) / (abs(logML_prev) + 1)
+    .prog$tick()
     if (isTRUE(verbose)) {
       message(sprintf("[community EM %d] logML=%.4f  rel_change=%.2e",
                       em, logML, rel))
@@ -261,6 +266,7 @@
     if (em > 1L && rel < tol) { converged <- TRUE; break }
     logML_prev <- logML
   }
+  .prog$finish()
 
   # ---- final marginal fixed-effect information -> community-mean covariance ----
   Sinv <- blockdiag_inv(Sigma)

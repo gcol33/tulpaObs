@@ -345,6 +345,9 @@
   weights <- NULL
   converged <- FALSE
   occ_fit <- NULL; det_fit <- NULL
+  # Progress + ETA for the variance-component RE-EM iterations
+  # (gcol33/tulpaObs#43); ON by default, finalised on convergence.
+  .prog <- tulpa:::.tulpa_iter_progress("re-em", max_iter, unit = "iter")
   for (it in seq_len(max_iter)) {
     # ---- E-step: psi and p both carry their arm's RE posterior mode. ----
     eta_occ <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design_occ, b_occ)
@@ -396,9 +399,11 @@
     beta_det <- beta_det_new; b_det <- b_det_new; Sigma_det <- Sigma_det_new
     occ_fit <- fo; det_fit <- fd
 
+    .prog$tick()
     if (verbose) cat(sprintf("  RE-EM iter %d: delta = %.6g\n", it, delta))
     if (is.finite(delta) && delta < tol) { converged <- TRUE; break }
   }
+  .prog$finish()
 
   # ---- Combine the two arms into one design / latent layout (occ then det). ----
   # .tobs_re_param_block(), ranef(), and the AGHQ pass all consume one ordered

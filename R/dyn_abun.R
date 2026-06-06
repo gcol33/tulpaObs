@@ -184,8 +184,14 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
   theta0[idx$omega[1]]  <- stats::qlogis(0.6)
   theta0[idx$gamma[1]]  <- log(0.5)
 
-  opt <- stats::optim(theta0, neg_ll, neg_grad, method = "BFGS",
+  # Progress + ETA (gcol33/tulpaObs#43); ON by default. BFGS calls the gradient
+  # ~once per quasi-Newton iteration, so ticking there approximates iteration
+  # progress (maxit is the ETA denominator); finalised after optim returns.
+  .prog <- tulpa:::.tulpa_iter_progress("dyn-abun-laplace", as.integer(max_iter), unit = "iter")
+  neg_grad_p <- function(theta) { .prog$tick(); neg_grad(theta) }
+  opt <- stats::optim(theta0, neg_ll, neg_grad_p, method = "BFGS",
                       control = list(maxit = as.integer(max_iter), reltol = tol))
+  .prog$finish()
   theta <- opt$par
   converged <- opt$convergence == 0L
   out <- eval_cpp(theta)

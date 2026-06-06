@@ -324,12 +324,17 @@ tobs <- function(formula,
 
 # Normalize the outer-grid progress knobs from a `control` list into the scoped
 # `tulpa.nl_progress` option value read by tulpa's nested-Laplace fitters and the
-# tulpaObs N-mixture spatial fitters (tulpaObs#25 / gcol33/tulpa#45). Off by
-# default; `progress = TRUE` turns on the flushed cell-k/n_grid + ETA reporter,
-# `progress.file` adds a heartbeat file for detached runs.
+# tulpaObs N-mixture spatial fitters (tulpaObs#25 / gcol33/tulpa#45). The
+# flushed cell-k/n_grid + ETA reporter is ON by default (tulpaObs#43), matching
+# the cover()/occu_cover() hurdle paths; set control$progress = FALSE to silence
+# it. `progress.file` adds a heartbeat file for detached runs, written whenever
+# it is non-empty regardless of the console bar.
 .tobs_progress_opt <- function(control) {
   list(
-    progress          = isTRUE(control$progress),
+    # `[[` (exact) not `$`: `control$progress` prefix-matches `progress.file`,
+    # so a fit that sets only progress.file would otherwise read the file path
+    # string as the console flag.
+    progress          = control[["progress"]] %||% TRUE,
     progress_every    = as.integer(control$progress.every    %||% 0L),
     progress_throttle = as.numeric(control$progress.throttle %||% 2),
     progress_file     = as.character(control$progress.file    %||% "")

@@ -27,6 +27,7 @@
 
 #include "nmix_community_oracle.h"
 #include "nmix_linalg.h"
+#include "nmix_progress.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <limits>
@@ -91,6 +92,11 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
     int n_iter = 0;
     std::vector<MatrixXd> fisher_s(S, MatrixXd::Zero(d, d));   // last-inner per-species Fisher
 
+    // Progress + ETA for the community-EM iterations (gcol33/tulpaObs#43); ON by
+    // default, reading the scoped option. ETA is the upper bound to max_iter and
+    // is finalised by finish() on convergence.
+    auto prog = tulpaObs::make_grid_progress_from_option("ms-nmix-em", max_iter);
+
     for (int it = 0; it < max_iter; ++it) {
         n_iter = it + 1;
         const MatrixXd P = block_prec(Sig_l, Sig_p);
@@ -145,9 +151,11 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
                                      (Sp_new - Sig_p).cwiseAbs().maxCoeff());
         Sig_l = Sl_new;
         Sig_p = Sp_new;
+        if (prog) prog->tick();
         if (verbose) Rcpp::Rcout << "iter " << n_iter << "  dSigma=" << dSig << "\n";
         if (dSig < tol) { converged = true; break; }
     }
+    if (prog) prog->finish();
 
     // ---- final pass: observed-info marginal Hessian for mu, Laplace logLik ----
     const MatrixXd P = block_prec(Sig_l, Sig_p);

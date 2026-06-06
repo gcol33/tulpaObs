@@ -653,7 +653,19 @@
       # sigma/alpha) and crosses the pos-arm phi tensor on top; "grid" forces
       # the dense tensor. Forwarded so a two-field trend fit can request CCD
       # from the consumer side; NULL falls through to the engine default.
-      integration = dots$integration
+      integration = dots$integration,
+      # Outer-grid progress + ETA (gcol33/tulpa#45, tulpaObs#43). Two channels,
+      # like the cover() hurdle, both ON by default: `progress` gates the Rcout
+      # console progress bar -- ON by default (NOT tied to `verbose`), set
+      # dots$progress = FALSE to silence it; `progress.file` writes the ETA to
+      # disk and is emitted whenever it is non-empty, independent of
+      # `progress`/`verbose` -- the channel that survives a detached
+      # Start-Process stdout buffer. An explicit dotted key overrides.
+      # `[[` (exact) not `$`: `dots$progress` prefix-matches `progress.file`.
+      progress          = dots[["progress"]] %||% TRUE,
+      progress.every    = dots$progress.every,
+      progress.throttle = dots$progress.throttle,
+      progress.file     = dots$progress.file
     )
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
