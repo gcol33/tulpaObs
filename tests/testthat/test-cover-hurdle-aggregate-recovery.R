@@ -1,23 +1,30 @@
 # =============================================================================
 # test-cover-hurdle-aggregate-recovery.R - parameter-recovery suite behind the
-# default-ON aggregate.occ reduction (tulpaObs#48).
+# default-ON sufficient-statistic reductions of BOTH cover-hurdle arms:
+# aggregate.occ (binomial occurrence arm, tulpaObs#48) and aggregate.pos
+# (grouped-beta positive arm, tulpaObs#49). Both default ON, so a default-control
+# fit exercises both reductions at once; this suite is the recovery sign-off
+# behind that default.
 #
-# aggregate.occ collapses the occurrence (binomial) arm to its exact Binomial
-# sufficient statistic. The package convention is that a likelihood-affecting
-# reduction defaults on only with a parameter-recovery suite behind it -- not
-# just shape / exactness checks. Two parts:
+# Each reduction collapses observations sharing a design row AND every
+# per-observation latent component to one row: the occurrence arm to its exact
+# Binomial sufficient statistic, the positive arm to grouped (n, sum log y,
+# sum log(1-y)). The package convention is that a likelihood-affecting reduction
+# defaults on only with a parameter-recovery suite behind it -- not just shape /
+# exactness checks. Two parts:
 #
-#   (1) RECOVERY of simulated truth on the now-default (aggregated) cover() beta
-#       hurdle with two coupled fields (intercept + spatially-varying trend):
-#       bias small and 95% CI coverage >= 85% for the quantities the fit reports
-#       a posterior SD for (both arms' betas + the beta precision phi_pos). The
-#       community-variance hyperparameters (sigma, alpha, sigma_trend,
-#       alpha_trend) carry the expected small-N Laplace attenuation and are not
-#       surfaced with a posterior SD, so they get a bias bracket, not coverage.
+#   (1) RECOVERY of simulated truth on the now-default (both arms aggregated)
+#       cover() beta hurdle with two coupled fields (intercept + spatially-
+#       varying trend): bias small and 95% CI coverage >= 85% for the quantities
+#       the fit reports a posterior SD for (both arms' betas + the beta precision
+#       phi_pos). The community-variance hyperparameters (sigma, alpha,
+#       sigma_trend, alpha_trend) carry the expected small-N Laplace attenuation
+#       and are not surfaced with a posterior SD, so they get a bias bracket,
+#       not coverage.
 #
-#   (2) EXACTNESS: the default (aggregated) fit equals the explicit full per-plot
-#       fit byte-for-byte (betas, SEs, log-marginal), so default-ON loses nothing
-#       -- the property that licenses flipping the default.
+#   (2) EXACTNESS: the default (both arms aggregated) fit equals the explicit
+#       full per-plot fit byte-for-byte (betas, SEs, log-marginal), so default-ON
+#       loses nothing -- the property that licenses flipping both defaults.
 # =============================================================================
 
 
@@ -66,7 +73,7 @@
                alpha.grid = c(0, 0.5, 1.0, 1.5),
                alpha.grid.trend = c(0, 0.5, 1.0, 1.5),
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)
-  if (!is.null(agg)) ctrl$aggregate.occ <- agg
+  if (!is.null(agg)) { ctrl$aggregate.occ <- agg; ctrl$aggregate.pos <- agg }
   suppressWarnings(tobs(
     formula = ~ x + bym2(graph = s$adj, group_var = "region"),
     data = s$data, family = cover("beta"), y = s$y,
@@ -74,7 +81,7 @@
 }
 
 
-test_that("aggregate.occ default-ON recovers truth (cover beta-trend hurdle, tulpaObs#48)", {
+test_that("both arms default-ON recover truth (cover beta-trend hurdle, tulpaObs#48/#49)", {
   skip_on_cran()
   skip_if_fast()
 
@@ -93,7 +100,7 @@ test_that("aggregate.occ default-ON recovers truth (cover beta-trend hurdle, tul
   covd <- matrix(NA_real_, length(seeds), length(calib), dimnames = list(NULL, names(calib)))
 
   for (i in seq_along(seeds)) {
-    f <- .acr_fit(.acr_sim(seeds[i]))   # default control -> aggregate.occ ON
+    f <- .acr_fit(.acr_sim(seeds[i]))   # default control -> both arms aggregated
     if (!isTRUE(f$converged)) next
     hp <- f$hyperpar$spatial
     e <- c(`occ_(Intercept)` = f$beta_occ[[1]], occ_x = f$beta_occ[[2]],
@@ -134,14 +141,14 @@ test_that("aggregate.occ default-ON recovers truth (cover beta-trend hurdle, tul
 })
 
 
-test_that("aggregate.occ default-ON is byte-identical to the full per-plot fit (tulpaObs#48)", {
+test_that("both arms default-ON are byte-identical to the full per-plot fit (tulpaObs#48/#49)", {
   skip_on_cran()
   skip_if_fast()
 
   for (seed in c(101L, 137L)) {
     s  <- .acr_sim(seed)
-    fd <- .acr_fit(s)              # default control -> aggregated
-    ff <- .acr_fit(s, agg = FALSE) # explicit full per-plot occurrence arm
+    fd <- .acr_fit(s)              # default control -> both arms aggregated
+    ff <- .acr_fit(s, agg = FALSE) # explicit full per-plot occurrence + positive arms
     expect_true(fd$converged && ff$converged)
     expect_equal(fd$beta_occ,     ff$beta_occ,     tolerance = 1e-8)
     expect_equal(fd$beta_pos,     ff$beta_pos,     tolerance = 1e-8)

@@ -8,7 +8,8 @@
 # is linear in log(y) and log(1-y), so one row carrying (n, sum log y,
 # sum log(1-y)) reproduces the log-likelihood, gradient and Fisher Hessian
 # exactly. tulpa's built-in beta spec reads those sufficient statistics
-# (slog_y / slog_1my on the arm). Opt-in (default OFF) pending recovery sign-off.
+# (slog_y / slog_1my on the arm). Default ON for the beta arm; the recovery
+# sign-off behind the default lives in test-cover-hurdle-aggregate-recovery.R.
 # =============================================================================
 
 
@@ -121,6 +122,27 @@ test_that("aggregate.pos reduces and preserves the single-block beta cover() fit
 })
 
 
+test_that("aggregate.pos defaults ON for the beta arm", {
+  skip_on_cran()
+  skip_if_fast()
+  s <- .aop_sim(101L, trend = FALSE)
+  # Default control (aggregate.pos unset) must aggregate the beta positive arm:
+  # byte-identical both to the explicit full per-plot fit and to the explicit
+  # aggregate.pos = TRUE fit -- the property that licenses the flipped default.
+  ctrl <- list(verbose = FALSE, sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
+               phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L,
+               sigma.pos.grid = c(0.4, 0.8))
+  fd <- suppressWarnings(tobs(
+    formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+    data = s$data, family = cover("beta"), y = s$y,
+    method = "nested_laplace", control = ctrl))   # default -> pos arm aggregated
+  ff <- .aop_fit(s, trend = FALSE, agg.pos = FALSE)
+  fp <- .aop_fit(s, trend = FALSE, agg.pos = TRUE)
+  .aop_expect_identical_fits(fd, ff)
+  .aop_expect_identical_fits(fd, fp)
+})
+
+
 test_that("aggregate.pos reduces and preserves the coupled-trend beta cover() fit", {
   skip_on_cran()
   skip_if_fast()
@@ -132,6 +154,53 @@ test_that("aggregate.pos reduces and preserves the coupled-trend beta cover() fi
     fb <- .aop_fit(s, trend = TRUE, agg.occ = TRUE, agg.pos = TRUE)
     .aop_expect_identical_fits(fb, ff)
   }
+})
+
+
+# Multi-block path (spatial + AR1 temporal + IID RE). The positive linear
+# predictor carries the spatial cell, the AR1 year and the IID observer, so the
+# grouped collapse fires only when plots share ALL of them; replicate plots per
+# (cell, year, obs) combo with a cell-level positive design make that happen.
+.aop_sim_multi <- function(seed, n_s = 6L, n_year = 2L, n_obs = 2L, reps = 4L) {
+  set.seed(seed); adj <- .aop_chain_adj(n_s); f1 <- .aop_icar_f(adj)
+  combos <- expand.grid(cell = seq_len(n_s), year = seq_len(n_year), obs = seq_len(n_obs))
+  combos <- combos[rep(seq_len(nrow(combos)), each = reps), ]
+  cell <- combos$cell; N <- length(cell)
+  x   <- as.numeric(scale(stats::rnorm(n_s)))[cell]              # cell-level
+  ar  <- (as.numeric(scale(stats::rnorm(n_year))) * 0.3)[combos$year]
+  iid <- stats::rnorm(n_obs, 0, 0.25)[combos$obs]
+  eta_o <- -0.2 + 0.6 * x + 0.8 * f1[cell] + ar + iid
+  occur <- stats::rbinom(N, 1L, stats::plogis(eta_o))
+  eta_p <- 0.2 - 0.4 * x + 0.8 * f1[cell] + ar + iid
+  mu <- stats::plogis(eta_p); y <- numeric(N); pos <- occur == 1L
+  y[pos] <- pmin(pmax(stats::rbeta(sum(pos), mu[pos] * 18, (1 - mu[pos]) * 18), 1e-6), 1 - 1e-6)
+  list(data = data.frame(x = x, region = factor(cell),
+                         year = combos$year, obs = combos$obs),
+       y = y, adj = adj)
+}
+
+.aop_fit_multi <- function(s, agg.pos) suppressWarnings(tobs(
+  formula = ~ x + bym2(graph = s$adj, group_var = "region") +
+              temporal(year, type = "ar1") + re(obs, type = "iid"),
+  data = s$data, family = cover("beta"), y = s$y, method = "nested_laplace",
+  control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = agg.pos,
+                 sigma.grid = c(0.5, 1.0), rho.grid = 0.5, sigma.pos.grid = c(0.5, 1.0),
+                 tau.temporal.grid = 4, rho.temporal.grid = 0.5, sigma.re.grid = 0.25,
+                 phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)))
+
+test_that("aggregate.pos reduces and preserves the multi-block beta cover() fit", {
+  skip_on_cran()
+  skip_if_fast()
+  s <- .aop_sim_multi(101L)
+
+  # The collapse genuinely fires: the (cell, year, obs) key on a cell-level
+  # positive design has fewer levels than the positive rows.
+  n_key <- nrow(unique(s$data[s$y > 0, c("x", "region", "year", "obs")]))
+  expect_lt(n_key, sum(s$y > 0))
+
+  ff <- .aop_fit_multi(s, agg.pos = FALSE)
+  fp <- .aop_fit_multi(s, agg.pos = TRUE)
+  .aop_expect_identical_fits(fp, ff)
 })
 
 

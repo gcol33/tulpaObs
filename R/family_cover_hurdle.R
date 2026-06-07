@@ -1276,14 +1276,21 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   do_agg_occ <- !isFALSE(control[["aggregate.occ"]])
 
   # Exact grouped sufficient-statistic reduction of the positive (beta) arm,
-  # OPT-IN (default OFF, tulpaObs#49). Beta has no single-row collapse, so plots
-  # sharing the positive design row AND every per-observation latent component
-  # are collapsed to one row carrying (n, sum log y, sum log(1-y)); tulpa's
-  # built-in beta spec reads those sufficient statistics. Exact for the beta arm
-  # only -- a lognormal positive arm would need its own (n, sum, sum-of-squares)
-  # statistics, so the flag errors there rather than silently no-op.
-  do_agg_pos <- isTRUE(control[["aggregate.pos"]])
-  if (do_agg_pos && positive != "beta") {
+  # default ON for the beta arm (tulpaObs#49). Beta has no single-row collapse,
+  # so plots sharing the positive design row AND every per-observation latent
+  # component are collapsed to one row carrying (n, sum log y, sum log(1-y));
+  # tulpa's built-in beta spec reads those sufficient statistics. Byte-identical
+  # to the full per-plot beta arm (test-cover-hurdle-aggregate-pos.R), with the
+  # both-arms-aggregated default behind a multi-seed parameter-recovery suite
+  # (test-cover-hurdle-aggregate-recovery.R), so the reduction is the default;
+  # set control$aggregate.pos = FALSE for the full per-plot positive arm. The
+  # collapse is beta-only -- a lognormal positive arm would need its own
+  # (n, sum, sum-of-squares) statistics, so an EXPLICIT aggregate.pos = TRUE
+  # errors there rather than silently no-op, while the default leaves a non-beta
+  # arm untouched. `[[` (exact), never `$` (prefix-matching).
+  agg_pos_req <- control[["aggregate.pos"]]
+  do_agg_pos  <- if (positive == "beta") !isFALSE(agg_pos_req) else isTRUE(agg_pos_req)
+  if (isTRUE(agg_pos_req) && positive != "beta") {
     stop("control$aggregate.pos = TRUE is implemented for positive = \"beta\" ",
          "only (grouped beta sufficient statistics). Got positive = '",
          positive, "'.", call. = FALSE)

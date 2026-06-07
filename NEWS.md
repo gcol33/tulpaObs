@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.21 (2026-06-07)
+
+* feat(cover): `control$aggregate.pos` now defaults ON for the beta positive
+  arm (tulpaObs#49). The grouped sufficient-statistic collapse is byte-identical
+  to the full per-plot beta arm on the single-block, coupled-trend and
+  multi-block paths (`test-cover-hurdle-aggregate-pos.R`), with a multi-seed
+  parameter-recovery suite behind the both-arms-aggregated default
+  (`test-cover-hurdle-aggregate-recovery.R`); set `control$aggregate.pos = FALSE`
+  for the full per-plot arm. An explicit `aggregate.pos = TRUE` still errors on a
+  non-beta positive arm; the default leaves a non-beta arm untouched.
+
 ## 0.0.20 (2026-06-07)
 
 * Require `tulpa (>= 0.0.16)` and update the Remotes pin so a fresh install
