@@ -284,14 +284,54 @@ test_that("dyn_abun() NUTS samples a single initial-abundance RE and recovers it
   expect_lt(mean(fit$nuts$divergent), 0.2)
 })
 
-test_that("dyn_abun() RE is NUTS + initial-abundance-arm only", {
+# --- Laplace + random effect (tulpaObs#51) --------------------------------
+
+test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE", {
+  skip_on_cran()
+  skip_if_fast()
+  # The initial-abundance RE shifts only eta_lambda, which enters the season-1
+  # initial distribution; the per-site conditional likelihood c(N_1) is integrated
+  # against the RE by AGHQ on the exact HMM-forward marginal. The open model's
+  # later seasons dilute the RE signal, so some residual sigma shrinkage remains
+  # at small per-group n; the tolerance reflects that.
+  est_sigma <- numeric(3); est_b0 <- numeric(3); est_b1 <- numeric(3)
+  for (k in seq_len(3)) {
+    s <- sim_dyn_abun_lambda_re(N = 120, T = 3, J = 3, ngrp = 15,
+                                beta_lambda = c(log(4), 0.4), p = 0.5, omega = 0.5,
+                                gamma = 0.5, sigma_b = 0.6, seed = 20 + k)
+    fit <- tobs(formula = ~ x1 + (1 | g), data = s$data,
+                family = dyn_abun(K_max = 30), detection = ~ 1, y = s$y,
+                method = "laplace", verbose = FALSE,
+                control = list(progress = FALSE, n.quad = 5L))
+    if (k == 1L) {
+      expect_identical(fit$method, "laplace")
+      expect_identical(fit$dyn_abun_re$arm, "lambda")
+      expect_true("sigma_g1_(Intercept)" %in% names(fit$means))
+      re <- ranef(fit)
+      expect_true(is.data.frame(re))
+      expect_equal(nrow(re), 15L)
+    }
+    est_b0[k] <- fit$means[["lambda_(Intercept)"]]
+    est_b1[k] <- fit$means[["lambda_x1"]]
+    est_sigma[k] <- fit$means[["sigma_g1_(Intercept)"]]
+  }
+  expect_lt(abs(mean(est_b0) - log(4)), 0.3)
+  expect_lt(abs(mean(est_b1) - 0.4), 0.2)
+  expect_lt(abs(mean(est_sigma) - 0.6), 0.2)
+  expect_gt(mean(est_sigma), 0.3)   # not collapsed to zero
+})
+
+test_that("dyn_abun() RE is initial-abundance-arm only (both engines)", {
   s <- sim_dyn_abun_lambda_re(N = 25, T = 3, J = 2, ngrp = 4,
                               beta_lambda = c(log(5), 0.2), p = 0.5, omega = 0.6,
                               gamma = 1, sigma_b = 0.4, seed = 2)
+  # Laplace: a detection-arm RE is not yet wired -> rejected with a pointer.
   expect_error(
-    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K_max = 25),
-         detection = ~ 1, y = s$y, method = "laplace"),
-    "method = \"nuts\"|nuts")
+    tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 25),
+         detection = ~ (1 | g), y = s$y, method = "laplace",
+         control = list(progress = FALSE)),
+    "initial-abundance|lambda")
+  # NUTS: same arm restriction.
   expect_error(
     tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 25),
          detection = ~ (1 | g), y = s$y, method = "nuts",

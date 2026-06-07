@@ -93,6 +93,14 @@ cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, e
     .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr)
 }
 
+cpp_dyn_abun_init_weights_mat <- function(y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma) {
+    .Call(`_tulpaObs_cpp_dyn_abun_init_weights_mat`, y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma)
+}
+
+cpp_dyn_abun_init_loglik <- function(C, eta_lambda, use_nb = FALSE, eta_logr = 0.0, deriv = TRUE) {
+    .Call(`_tulpaObs_cpp_dyn_abun_init_loglik`, C, eta_lambda, use_nb, eta_logr, deriv)
+}
+
 cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
     .Call(`_tulpaObs_cpp_dyn_abun_nuts_joint_logpost`, spec, theta, sigma_beta)
 }

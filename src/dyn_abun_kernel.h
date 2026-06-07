@@ -53,9 +53,51 @@ inline double da_inv_logit(double e) {
     return ee / (1.0 + ee);
 }
 
-// Per-site Dail-Madsen forward marginal. `y` is laid out season-major
-// (y[t*J + j]) with -1 marking a missing visit; T seasons, J secondary visits,
-// K the abundance truncation (states 0..K).
+// Shared per-season observation pmf obs[n] = prod_j Binom(y_tj | n, p), with
+// obs[n] = 0 for n < max_j y_tj. Season t is laid out y[t*J + j], -1 = missing.
+// Single source of truth for the forward gradient kernel and the backward
+// conditional-likelihood pass below.
+inline void da_obs_season_pmf(const int* y, int t, int J, int S,
+                              double logp, double log1mp, std::vector<double>& obs) {
+    int ymax = 0;
+    for (int j = 0; j < J; ++j) {
+        const int yy = y[t * J + j];
+        if (yy >= 0 && yy > ymax) ymax = yy;
+    }
+    for (int n = 0; n < S; ++n) {
+        if (n < ymax) { obs[n] = 0.0; continue; }
+        double lo = 0.0;
+        for (int j = 0; j < J; ++j) {
+            const int yy = y[t * J + j];
+            if (yy < 0) continue;
+            lo += R::lgammafn((double)n + 1.0) - R::lgammafn((double)yy + 1.0)
+                - R::lgammafn((double)(n - yy) + 1.0)
+                + (double)yy * logp + (double)(n - yy) * log1mp;
+        }
+        obs[n] = std::exp(lo);
+    }
+}
+
+// Shared recruitment pmf pois[g] = Poisson(g | gamma), g = 0..S-1.
+inline void da_recruit_pmf(int S, double gamma, double loggam,
+                           std::vector<double>& pois) {
+    for (int g = 0; g < S; ++g) {
+        const double lp = -gamma + (double)g * loggam - R::lgammafn((double)g + 1.0);
+        pois[g] = std::exp(lp);
+    }
+}
+
+// Shared survivor pmf binom[s] = Binom(s | n, omega), s = 0..n.
+inline void da_binom_pmf_row(int n, double logom, double log1mom,
+                             std::vector<double>& binom) {
+    for (int s = 0; s <= n; ++s) {
+        const double lb = R::lgammafn((double)n + 1.0) - R::lgammafn((double)s + 1.0)
+            - R::lgammafn((double)(n - s) + 1.0)
+            + (double)s * logom + (double)(n - s) * log1mom;
+        binom[s] = std::exp(lb);
+    }
+}
+
 // `use_nb` switches the season-1 initial abundance from Poisson(lambda) to
 // negative-binomial NB(mean = lambda, size = r), r = exp(eta_logr) -- the
 // pcountOpen "NB" mixture. Only the initial distribution changes; survival,
@@ -82,37 +124,23 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     res.grad_eta_lambda = res.grad_eta_p = res.grad_eta_omega = res.grad_eta_gamma = 0.0;
     res.grad_eta_logr = 0.0;
 
-    // Recruitment pmf pois(g) = Poisson(g | gamma) and d/d eta_gamma = pois*(g-gamma).
+    // Recruitment pmf and its eta_gamma derivative dpois_g = pois * (g - gamma).
     std::vector<double> pois(S), dpois_g(S);
-    for (int g = 0; g < S; ++g) {
-        const double lp = -gamma + (double)g * loggam - R::lgammafn((double)g + 1.0);
-        pois[g] = std::exp(lp);
-        dpois_g[g] = pois[g] * ((double)g - gamma);
-    }
+    da_recruit_pmf(S, gamma, loggam, pois);
+    for (int g = 0; g < S; ++g) dpois_g[g] = pois[g] * ((double)g - gamma);
 
     // Observation obs_t(n) = prod_j Binom(y_tj | n, p) and d/d eta_p =
     // obs * sum_j (y_tj - n p). Precompute per season: max y, sum y, count.
-    // obs(n) = 0 for n < max_j y_tj.
     auto obs_season = [&](int t, std::vector<double>& obs, std::vector<double>& dobs) {
-        int ymax = 0, ysum = 0, nv = 0;
+        int ysum = 0, nv = 0;
         for (int j = 0; j < J; ++j) {
             const int yy = y[t * J + j];
             if (yy < 0) continue;
-            nv++; ysum += yy; if (yy > ymax) ymax = yy;
+            nv++; ysum += yy;
         }
-        for (int n = 0; n < S; ++n) {
-            if (n < ymax) { obs[n] = 0.0; dobs[n] = 0.0; continue; }
-            double lo = 0.0;
-            for (int j = 0; j < J; ++j) {
-                const int yy = y[t * J + j];
-                if (yy < 0) continue;
-                lo += R::lgammafn((double)n + 1.0) - R::lgammafn((double)yy + 1.0)
-                    - R::lgammafn((double)(n - yy) + 1.0)
-                    + (double)yy * logp + (double)(n - yy) * log1mp;
-            }
-            obs[n] = std::exp(lo);
+        da_obs_season_pmf(y, t, J, S, logp, log1mp, obs);
+        for (int n = 0; n < S; ++n)
             dobs[n] = obs[n] * ((double)ysum - (double)nv * (double)n * p);
-        }
     };
 
     // Forward state and its derivatives (alpha normalised after each season). da_r
@@ -184,15 +212,9 @@ inline DynAbunSiteResult compute_dyn_abun_site(
         for (int n = 0; n < S; ++n) {
             if (a[n] == 0.0 && da_l[n] == 0.0 && da_p[n] == 0.0 &&
                 da_o[n] == 0.0 && da_g[n] == 0.0 && da_r[n] == 0.0) continue;
-            // Survivor pmf Binom(s | n, omega), s = 0..n, and d/d eta_omega =
-            // binom * (s - n omega).
-            for (int s = 0; s <= n; ++s) {
-                const double lb = R::lgammafn((double)n + 1.0) - R::lgammafn((double)s + 1.0)
-                    - R::lgammafn((double)(n - s) + 1.0)
-                    + (double)s * logom + (double)(n - s) * log1mom;
-                binom[s] = std::exp(lb);
-                dbinom[s] = binom[s] * ((double)s - (double)n * omega);
-            }
+            // Survivor pmf Binom(s | n, omega) and d/d eta_omega = binom*(s - n omega).
+            da_binom_pmf_row(n, logom, log1mom, binom);
+            for (int s = 0; s <= n; ++s) dbinom[s] = binom[s] * ((double)s - (double)n * omega);
             const double an = a[n], dl = da_l[n], dp = da_p[n], dom = da_o[n], dg = da_g[n];
             const double dr = da_r[n];
             // Tr(n -> n') = sum_s binom[s] pois[n'-s]; scatter into pre.
@@ -247,6 +269,58 @@ inline DynAbunSiteResult compute_dyn_abun_site(
 
     res.log_lik = log_lik;
     return res;
+}
+
+// Per-site conditional likelihood c(n1) = P(y_1, ..., y_T | N_1 = n1), the data
+// likelihood given the season-1 abundance, INDEPENDENT of the initial-abundance
+// predictor eta_lambda (it conditions on N_1). This is the workhorse of the
+// grouped random-effect AGHQ path on the initial-abundance arm (tulpaObs#51): a
+// site-level RE shifts only eta_lambda, which enters solely the season-1 initial
+// distribution pi_{n1}(eta_lambda), so the per-site marginal is
+//   L(eta_lambda) = sum_{n1} pi_{n1}(eta_lambda) c(n1),
+// and its first / second eta_lambda derivatives are sum_{n1} pi'_{n1} c(n1) and
+// sum_{n1} pi''_{n1} c(n1) -- O(K) dot products once c is known. The expensive
+// O(K^2 T) work (the survival / recruitment transition and the per-season
+// observation) lives entirely in c, which the engine precomputes ONCE per
+// make_site call (the detection / survival / recruitment predictors are held
+// fixed during the RE integration); each quadrature-node / per-group-Newton
+// evaluation is then a cheap dot product. c is obtained by the HMM backward
+// recursion b_t(n) = sum_{n'} Tr(n -> n') obs_{t+1}(n') b_{t+1}(n'), with
+// c(n1) = obs_1(n1) b_1(n1). Writes c_out[0..K].
+inline void compute_dyn_abun_init_weights(
+    const int* y, int T, int J, int K,
+    double eta_p, double eta_omega, double eta_gamma, double* c_out
+) {
+    const int S = K + 1;
+    const double p     = da_inv_logit(eta_p);
+    const double omega = da_inv_logit(eta_omega);
+    const double gamma = std::exp(eta_gamma);
+    const double logp = std::log(p), log1mp = std::log1p(-p);
+    const double logom = std::log(omega), log1mom = std::log1p(-omega);
+    const double loggam = std::log(gamma);
+
+    std::vector<double> pois(S);
+    da_recruit_pmf(S, gamma, loggam, pois);
+
+    // backward: b_{T-1}(n) = 1 (no future observations); for t = T-2 .. 0,
+    // b_t(n) = sum_{n'} Tr(n -> n') obs_{t+1}(n') b_{t+1}(n').
+    std::vector<double> b(S, 1.0), bprev(S), obs(S), w(S), binom(S);
+    for (int t = T - 2; t >= 0; --t) {
+        da_obs_season_pmf(y, t + 1, J, S, logp, log1mp, obs);
+        for (int np = 0; np < S; ++np) w[np] = obs[np] * b[np];
+        for (int n = 0; n < S; ++n) {
+            da_binom_pmf_row(n, logom, log1mom, binom);
+            double acc = 0.0;
+            for (int s = 0; s <= n; ++s) {
+                const double bs = binom[s];
+                for (int gn = 0; gn + s < S; ++gn) acc += bs * pois[gn] * w[s + gn];
+            }
+            bprev[n] = acc;
+        }
+        b.swap(bprev);
+    }
+    da_obs_season_pmf(y, 0, J, S, logp, log1mp, obs);
+    for (int n = 0; n < S; ++n) c_out[n] = obs[n] * b[n];
 }
 
 }  // namespace tulpaObs

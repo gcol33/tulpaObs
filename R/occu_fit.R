@@ -173,17 +173,21 @@
       stop("dyn_abun() currently supports non-spatial fixed effects only; a ",
            "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
     }
-    if (!is.null(re) && !identical(method, "nuts")) {
-      stop("dyn_abun() random effects fit under method = \"nuts\" (a single ",
-           "intercept RE on the initial-abundance arm, tulpaObs#51); the ",
-           "Laplace path is non-spatial fixed effects only.", call. = FALSE)
-    }
     if (identical(method, "nuts")) {
       fit <- .tobs_fit_dyn_abun_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
+    } else if (!is.null(re)) {
+      # Site-level grouped RE on the initial-abundance (lambda) arm via the
+      # exact HMM-forward AGHQ path (tulpaObs#51). n_quad = 1 is the joint
+      # Laplace (the small-cluster sigma attenuation regime); n_quad > 1
+      # debiases it.
+      fit <- .tobs_fit_dyn_abun_re(fit_model, re = re, max_iter = 300L,
+                                   tol = 1e-8, verbose = verbose,
+                                   n_quad = n.quad, lkj_eta = re.lkj,
+                                   theta_prior_sd = sigma.beta)
     } else {
       fit <- .tobs_fit_dyn_abun(fit_model, max_iter = 300L, tol = 1e-8,
                                 verbose = verbose)

@@ -181,7 +181,18 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   forward-mode diff (`src/dyn_abun_kernel.h`). 4 arms lambda/p/omega/gamma
   (`omega_formula`/`gamma_formula`, default `~1`). NUTS `src/dyn_abun_nuts.cpp`.
   K_max default `max(count)+40` (forward cost ~cubic in K). Poisson init +
-  constant recruitment v1 (negbin/season-varying pending).
+  constant recruitment v1 (negbin/season-varying pending). Laplace grouped RE on
+  the initial-abundance arm (one grouping factor, dim<=3): the RE shifts only
+  eta_lambda, which enters only the season-1 initial distribution, so the per-site
+  marginal factorises as `L(eta_lambda)=sum_n1 pi_n1(eta_lambda) c(n1)` with the
+  conditional likelihood `c(n1)=P(all data|N_1=n1)` (the O(K^2 T) HMM BACKWARD
+  pass, `compute_dyn_abun_init_weights`) precomputed ONCE per make_site
+  (`cpp_dyn_abun_init_weights_mat`); each AGHQ node is then an O(K) dot product
+  (`cpp_dyn_abun_init_loglik`). Pure-R `make_site` AGHQ path
+  (`.tobs_dyn_abun_re_aghq`, no native oracle), Pois+NB; detection-arm RE gated
+  (not yet wired), omega/gamma never carry structured terms; spatial pending.
+  Shared pmf helpers (`da_obs_season_pmf`/`da_recruit_pmf`/`da_binom_pmf_row`)
+  back both the forward gradient kernel and the backward `c` pass.
 
 All filed observation-family issues shipped; no planned-status families remain.
 
@@ -336,7 +347,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm (dim<=3, one grouping factor) via the shared count-model AGHQ path (`RemovalGroupedOracle` over `CountGroupedOracle`, `test-removal.R`); spatial pending |
 | Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated; spatial pending |
 | False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51). Laplace fits a site-level grouped RE on the psi arm (dim<=3, one grouping factor) via the pure-R `make_site` AGHQ path (no native oracle); detection-arm RE gated; spatial pending |
-| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51); spatial + Laplace-RE pending |
+| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51). Laplace fits a site-level grouped RE on the initial-abundance arm (one grouping factor, dim<=3) via the backward-`c` precompute + `make_site` AGHQ path; detection-arm RE gated, spatial pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |

@@ -390,6 +390,40 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_dyn_abun_init_weights_mat
+Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::IntegerVector site, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_init_weights_mat(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP siteSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type J(JSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site(siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_omega(eta_omegaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_gamma(eta_gammaSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_init_weights_mat(y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_dyn_abun_init_loglik
+Rcpp::List cpp_dyn_abun_init_loglik(Rcpp::NumericMatrix C, Rcpp::NumericVector eta_lambda, bool use_nb, double eta_logr, bool deriv);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_init_loglik(SEXP CSEXP, SEXP eta_lambdaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP, SEXP derivSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type C(CSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_lambda(eta_lambdaSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
+    Rcpp::traits::input_parameter< double >::type eta_logr(eta_logrSEXP);
+    Rcpp::traits::input_parameter< bool >::type deriv(derivSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_init_loglik(C, eta_lambda, use_nb, eta_logr, deriv));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_dyn_abun_nuts_joint_logpost
 Rcpp::List cpp_dyn_abun_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta);
 RcppExport SEXP _tulpaObs_cpp_dyn_abun_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP) {
@@ -1133,6 +1167,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
     {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 13},
     {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 11},
+    {"_tulpaObs_cpp_dyn_abun_init_weights_mat", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_init_weights_mat, 9},
+    {"_tulpaObs_cpp_dyn_abun_init_loglik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_init_loglik, 5},
     {"_tulpaObs_cpp_dyn_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_dyn_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts, 10},
     {"_tulpaObs_cpp_fp_occu_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_fp_occu_total_log_lik, 6},

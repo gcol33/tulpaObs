@@ -113,6 +113,227 @@
 
 
 # ---------------------------------------------------------------------------
+# Grouped random effect on the initial-abundance arm (gcol33/tulpaObs#51)
+# ---------------------------------------------------------------------------
+
+# AGHQ refinement of a dyn_abun fit with a site-level grouped RE on the
+# initial-abundance (lambda) arm. The Dail-Madsen marginal is NOT a closed-form
+# per-site mixture (unlike the static N-mixture / fp_occu families), so it does
+# not factorise into the closed-form A / B weights the count oracle and the
+# fp_occu make_site path use. But the random effect shifts only eta_lambda, which
+# enters solely the season-1 initial distribution, and the transition /
+# observation operators are linear in the forward state -- so the per-site log
+# marginal (and its first and second derivatives in eta_lambda) propagate through
+# the exact HMM forward recursion (src/dyn_abun_kernel.h, Want2ndLambda). That
+# makes the per-site marginal a function of one scalar offset per site, exactly
+# the per-row separability the AGHQ engine's make_site contract needs. tulpaObs
+# supplies the forward-recursion derivatives via cpp_dyn_abun_site_curv; tulpa
+# owns the quadrature / per-group mode / log-Cholesky / LKJ / marginal Hessian.
+# The detection / survival / recruitment predictors are held fixed during the RE
+# integration (closed over per make_site call). `design` is the lambda-arm RE
+# design; `beta_*` / `log_r` the warm starts. Returns refined estimates or NULL
+# when the pass does not apply (caller keeps the no-RE fit).
+.tobs_dyn_abun_re_aghq <- function(model, design, beta_lambda, beta_p, beta_omega,
+                                   beta_gamma, log_r = NA_real_, Sigma_list, b,
+                                   n_quad = 9L, lkj_eta = 1.5,
+                                   theta_prior_sd = 100) {
+  idx1 <- as.integer(design[[1]]$idx)
+  ng   <- as.integer(design[[1]]$n_groups)
+  one_group <- all(vapply(design, function(d)
+    identical(as.integer(d$idx), idx1) &&
+      identical(as.integer(d$n_groups), ng), logical(1)))
+  if (!one_group) return(NULL)
+  dtot <- sum(vapply(design, function(d) as.integer(d$n_coefs), integer(1)))
+  if (dtot > 3L) return(NULL)
+
+  X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
+  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+  p_om  <- ncol(X_omega);  p_gm <- ncol(X_gamma)
+  N <- model$n_sites
+  if (any(vapply(design, function(d) length(d$idx) != N, logical(1))) ||
+      any(vapply(design, function(d) nrow(d$Z) != N, logical(1)))) {
+    return(NULL)
+  }
+
+  T <- model$n_seasons; J <- model$max_visits; K <- model$K_max
+  y_flat <- as.integer(model$y_flat)
+  use_nb <- identical(model$mixture %||% "poisson", "negbin")
+  off <- cumsum(c(0L, p_lam, p_p, p_om, p_gm))
+  i_lam <- off[1] + seq_len(p_lam); i_p  <- off[2] + seq_len(p_p)
+  i_om  <- off[3] + seq_len(p_om);  i_gm <- off[4] + seq_len(p_gm)
+  i_logr <- if (use_nb) off[5] + 1L else NA_integer_
+  cl <- function(e) pmin(pmax(e, -30), 30)
+  keep <- seq_len(N)
+
+  # make_site(theta) closes over the current detection / survival / recruitment
+  # predictors (held fixed) and the dispersion. eta_lambda enters only the
+  # season-1 initial distribution, so the per-site conditional likelihood
+  # c(n1) = P(all data | N_1 = n1) is precomputed ONCE here (the O(K^2 T) HMM
+  # backward pass); each per-group-Newton / quadrature-node evaluation is then an
+  # O(K) dot product over c (cpp_dyn_abun_init_loglik). The engine supplies the
+  # RE offset Z b through the eta passed to deriv / lmat.
+  make_site <- function(theta) {
+    e_p  <- cl(as.numeric(X_p %*% theta[i_p]))
+    e_om <- cl(as.numeric(X_omega %*% theta[i_om]))
+    e_gm <- cl(as.numeric(X_gamma %*% theta[i_gm]))
+    elr  <- if (use_nb) as.numeric(theta[i_logr]) else 0
+    Cmat <- cpp_dyn_abun_init_weights_mat(
+      y_flat, N, T, J, K, site = as.integer(seq_len(N) - 1L),
+      eta_p = e_p, eta_omega = e_om, eta_gamma = e_gm)
+    list(
+      eta_re = as.numeric(X_lambda %*% theta[i_lam]),
+      deriv = function(rows, eta) {
+        r <- cpp_dyn_abun_init_loglik(
+          Cmat[rows, , drop = FALSE], as.numeric(eta),
+          use_nb = use_nb, eta_logr = elr, deriv = TRUE)
+        list(logL = r$logL, d1 = r$d1, d2 = r$d2)
+      },
+      lmat = function(rows, ETA) {
+        Csub <- Cmat[rows, , drop = FALSE]
+        out <- matrix(0, length(rows), ncol(ETA))
+        for (cc in seq_len(ncol(ETA))) {
+          out[, cc] <- cpp_dyn_abun_init_loglik(
+            Csub, as.numeric(ETA[, cc]), use_nb = use_nb, eta_logr = elr,
+            deriv = FALSE)$logL
+        }
+        out
+      })
+  }
+
+  re_terms <- lapply(design, function(d) list(
+    idx = as.integer(d$idx), n_groups = as.integer(d$n_groups),
+    n_coefs = as.integer(d$n_coefs),
+    Z = if (d$n_coefs > 1L) d$Z else NULL,
+    correlated = isTRUE(d$correlated)))
+
+  theta0 <- c(beta_lambda, beta_p, beta_omega, beta_gamma)
+  if (use_nb) theta0 <- c(theta0, if (is.finite(log_r)) log_r else log(2))
+
+  ref <- tulpa::tulpa_re_aghq(
+    theta0 = theta0, re_terms = re_terms, Sigma0 = Sigma_list,
+    make_site = make_site, n_obs = N, keep = keep,
+    n_quad = as.integer(n_quad), lkj_eta = lkj_eta,
+    theta_prior_sd = theta_prior_sd)
+  if (is.null(ref)) return(NULL)
+
+  bl <- ref$theta[i_lam]; bp <- ref$theta[i_p]
+  bo <- ref$theta[i_om];  bg <- ref$theta[i_gm]
+  log_r_ref <- if (use_nb) ref$theta[i_logr] else NA_real_
+  b_out    <- unlist(lapply(ref$blup,     function(M) as.numeric(t(M))), use.names = FALSE)
+  bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))), use.names = FALSE)
+
+  # Marginal fixed-effect covariance when the engine surfaces it, else the
+  # diagonal of the per-coefficient marginal SEs (the make_site AGHQ path reports
+  # SEs, not the cross-coefficient covariance -- as the occupancy / fp_occu RE
+  # paths do; no fabricated off-diagonal correlations).
+  p_tot <- p_lam + p_p + p_om + p_gm + if (use_nb) 1L else 0L
+  vcov <- ref$theta_cov
+  if (is.null(vcov) || any(dim(vcov) != p_tot)) {
+    se <- ref$theta_se; if (length(se) != p_tot) se <- rep(NA_real_, p_tot)
+    vcov <- diag(pmax(se, 0)^2, p_tot)
+  }
+
+  # mean_N1 / log_lik at the refined estimate + posterior-mode RE offset (for
+  # fitted()); the reported marginal log-likelihood is the engine's integrated
+  # value.
+  eta_lambda <- cl(as.numeric(X_lambda %*% bl) + .tobs_re_offset(design, b_out))
+  ev <- cpp_dyn_abun_total_log_lik(
+    y_flat, N, T, J, K, eta_lambda, as.numeric(X_p %*% bp),
+    as.numeric(X_omega %*% bo), as.numeric(X_gamma %*% bg),
+    use_nb = use_nb, eta_logr = if (use_nb) log_r_ref else 0)
+
+  list(
+    ok = TRUE, arm = "lambda",
+    beta_lambda = bl, beta_p = bp, beta_omega = bo, beta_gamma = bg,
+    log_r = log_r_ref, r = if (use_nb) exp(log_r_ref) else NA_real_,
+    mixture = model$mixture %||% "poisson",
+    Sigma_list = ref$Sigma_list, b = b_out, b_var = bvar_out,
+    theta_se = ref$theta_se, vcov = vcov,
+    mean_N1 = ev$mean_N1, log_marginal = ref$log_marginal %||% NA_real_,
+    n_quad = ref$n_quad, lkj_eta = ref$lkj_eta, converged = ref$converged)
+}
+
+
+# Fit a Dail-Madsen open N-mixture with a site-level grouped RE on the
+# initial-abundance (lambda) arm under the Laplace / AGHQ path (one grouping
+# factor, RE dim <= 3; tulpaObs#51). The survival (omega) and recruitment (gamma)
+# arms never carry structured terms (rejected upstream -- they are processes > 2);
+# a detection (p) RE is not yet wired on either engine, so this fits only a
+# lambda-arm RE, mirroring the NUTS scope.
+.tobs_fit_dyn_abun_re <- function(model, re, max_iter = 300L, tol = 1e-8,
+                                  verbose = TRUE, n_quad = 9L, lkj_eta = 1.5,
+                                  theta_prior_sd = 100) {
+  if (inherits(re, "tobs_re")) re <- list(re)
+  arms <- .tobs_re_split_two_arms(
+    re, model, "lambda", "p",
+    paste0("A dyn_abun random effect shared across the initial-abundance and ",
+           "detection arms is not supported."))
+  if (length(arms$p)) {
+    stop("dyn_abun() random effects are supported on the initial-abundance ",
+         "(lambda) arm only; a detection-arm random effect is not yet wired on ",
+         "either engine. (tulpaObs#51)", call. = FALSE)
+  }
+  design <- arms$lambda
+  if (!length(design)) {
+    stop("dyn_abun() found no initial-abundance random effect to fit.", call. = FALSE)
+  }
+
+  warm <- tryCatch(
+    dyn_abun_laplace(
+      y_flat = model$y_flat, n_sites = model$n_sites, T = model$n_seasons,
+      J = model$max_visits, K_max = model$K_max,
+      X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
+      X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
+      mixture = model$mixture %||% "poisson",
+      max_iter = as.integer(max_iter), tol = as.numeric(tol), verbose = FALSE),
+    error = function(e) NULL)
+  beta_lambda_init <- if (!is.null(warm)) warm$beta_lambda
+                      else c(log(max(mean(model$mean_count %||% 1), 0.5) + 0.5),
+                             rep(0, ncol(model$X_processes[[1]]) - 1L))
+  beta_p_init     <- if (!is.null(warm)) warm$beta_p     else rep(0, ncol(model$X_processes[[2]]))
+  beta_omega_init <- if (!is.null(warm)) warm$beta_omega else c(stats::qlogis(0.6), rep(0, ncol(model$X_processes[[3]]) - 1L))
+  beta_gamma_init <- if (!is.null(warm)) warm$beta_gamma else c(log(0.5), rep(0, ncol(model$X_processes[[4]]) - 1L))
+  log_r_init <- if (!is.null(warm) && is.finite(warm$log_r %||% NA_real_)) warm$log_r else NA_real_
+
+  Sigma_init <- lapply(design, function(d) diag(0.25, d$n_coefs))
+  b_init <- numeric(sum(vapply(design,
+                               function(d) as.integer(d$n_groups * d$n_coefs),
+                               integer(1))))
+
+  ref <- .tobs_dyn_abun_re_aghq(
+    model, design, beta_lambda = beta_lambda_init, beta_p = beta_p_init,
+    beta_omega = beta_omega_init, beta_gamma = beta_gamma_init, log_r = log_r_init,
+    Sigma_list = Sigma_init, b = b_init,
+    n_quad = as.integer(n_quad), lkj_eta = lkj_eta, theta_prior_sd = theta_prior_sd)
+  if (is.null(ref) || !isTRUE(ref$ok)) {
+    stop("dyn_abun() AGHQ random-effect refinement did not produce a usable fit ",
+         "(singular marginal Hessian or non-finite optimum). Try a different ",
+         "K_max or simplify the RE structure.", call. = FALSE)
+  }
+
+  is_nb <- identical(ref$mixture, "negbin")
+  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
+           paste0("p_",      model$process_info[[2]]$coef_names),
+           paste0("omega_",  model$process_info[[3]]$coef_names),
+           paste0("gamma_",  model$process_info[[4]]$coef_names))
+  means <- c(ref$beta_lambda, ref$beta_p, ref$beta_omega, ref$beta_gamma)
+  if (is_nb) { nms <- c(nms, "log_r"); means <- c(means, ref$log_r) }
+  raw <- list(
+    beta_lambda = ref$beta_lambda, beta_p = ref$beta_p,
+    beta_omega = ref$beta_omega, beta_gamma = ref$beta_gamma,
+    log_r = ref$log_r, r = ref$r, mixture = ref$mixture,
+    means = means, vcov = ref$vcov, log_lik = ref$log_marginal,
+    mean_N1 = ref$mean_N1, K_max = model$K_max,
+    converged = ref$converged, n_iter = NA_integer_, coef_names = nms)
+  re_post <- list(arm = ref$arm, design = design, Sigma_list = ref$Sigma_list,
+                  b = ref$b, b_var = ref$b_var,
+                  n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
+  build_dyn_abun_fit(raw, model, re_post = re_post)
+}
+
+
+# ---------------------------------------------------------------------------
 # Laplace fit (analytic-gradient BFGS over the forward marginal)
 # ---------------------------------------------------------------------------
 
@@ -236,7 +457,7 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
 # Fit packer
 # ---------------------------------------------------------------------------
 
-build_dyn_abun_fit <- function(raw, model) {
+build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
   pi_list <- model$process_info
   mixture <- raw$mixture %||% model$mixture %||% "poisson"
   is_nb   <- identical(mixture, "negbin")
@@ -244,9 +465,28 @@ build_dyn_abun_fit <- function(raw, model) {
   means <- raw$means; names(means) <- nms
   vcov <- as.matrix(raw$vcov); dimnames(vcov) <- list(nms, nms)
   sds <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
+  n_fixed <- length(nms); fixed_names <- nms
   n_pseudo <- 1000L
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
+
+  # Grouped random effect on the initial-abundance arm (gcol33/tulpaObs#51):
+  # append the variance components (sigma_g_*, cor_g_*_* for a correlated block)
+  # and the per-group BLUPs after the fixed block, exactly as the other count
+  # families do. The fixed block (n_fixed leading coords) still governs coef() /
+  # vcov() / confint(); ranef() / summary() read the trailing RE columns by name.
+  re_block <- NULL
+  if (!is.null(re_post) && length(re_post$design)) {
+    re_block <- .tobs_re_param_block(list(design = re_post$design,
+                                          b      = re_post$b,
+                                          b_var  = re_post$b_var,
+                                          Sigma  = re_post$Sigma_list))
+    means <- c(means, re_block$means); sds <- c(sds, re_block$sds)
+    nms   <- c(nms, re_block$names)
+    names(means) <- nms; names(sds) <- nms
+    draws <- cbind(draws, .tobs_re_pseudo_draws(re_block$means, re_block$sds,
+                                                re_block$names, n_pseudo))
+  }
 
   # NB dispersion summary on the natural (r) scale: r = exp(log_r), SE by the
   # delta method r * SE(log_r). Mirrors abun()'s nmix dispersion slot.
@@ -268,10 +508,15 @@ build_dyn_abun_fit <- function(raw, model) {
     .tobs_na_nuts_diagnostics(n_pseudo),
     list(
     col_names = nms, param_names = nms,
-    n_fixed = length(nms), fixed_names = nms,
+    n_fixed = n_fixed, fixed_names = fixed_names,
     process_info = pi_list, model = model, spatial = NULL, method = "laplace",
     log_lik = ll, mean_N1 = raw$mean_N1, K_max = raw$K_max,
     mixture = mixture, dispersion = dispersion,
+    re_effects = re_block$re_effects,
+    dyn_abun_re = if (!is.null(re_post))
+      list(arm = re_post$arm, n_quad = re_post$n_quad,
+           lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
+      else NULL,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
   )), class = c("tobs_fit", "tulpa_fit"))
