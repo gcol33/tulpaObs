@@ -63,12 +63,16 @@
              "a spatial term (icar()/bym2()/car_proper()) on the abundance arm ",
              "fits under method = \"nested_laplace\".", call. = FALSE)
       }
-      if (!is.null(re) || !is.null(temporal)) {
-        stop("method = \"nuts\" for abun() does not yet support random-effect or ",
-             "temporal terms (#51); use method = \"laplace\".", call. = FALSE)
+      if (!is.null(temporal)) {
+        stop("method = \"nuts\" for abun() does not yet support temporal terms ",
+             "(#51); use method = \"laplace\".", call. = FALSE)
       }
+      # Random effects (tulpaObs#51): a single intercept RE on one arm samples
+      # under NUTS (non-centered per-site offset + log_sigma hyperparameter).
+      # Slopes / multi-term / both-arm RE stay on the AGHQ Laplace path.
       fit <- .tobs_fit_abun_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
+        re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)

@@ -43,6 +43,15 @@ struct CountNutsData {
     Rcpp::NumericMatrix X_p;
     std::vector<std::vector<int>> obs_by_site;
     int total = 0;
+    // Optional single-grouping intercept random effect (tulpaObs#51). re_arm =
+    // -1 none, 0 abundance (lambda), 1 detection (p). The RE is a per-site
+    // offset (uniform over a site's visits) sigma_re * z[group], with z ~ N(0,I)
+    // non-centered and one variance hyperparameter log_sigma_re. The flat vector
+    // grows to [beta_lambda, beta_p, (log_r), z_1..z_G, log_sigma_re].
+    int re_arm = -1, n_re_groups = 0;
+    std::vector<int> re_group;        // 0-based group per site (length n_sites)
+    double sigma_re_lsd = 1.5;        // prior SD on log_sigma_re
+    int o_z = 0, o_logsig = 0;        // offsets of the z block / log_sigma_re
 };
 
 inline CountNutsData count_nuts_build_data(const Rcpp::List& spec) {
@@ -65,7 +74,24 @@ inline CountNutsData count_nuts_build_data(const Rcpp::List& spec) {
             Rcpp::stop("site_idx out of range in count_nuts_build_data");
         d.obs_by_site[i].push_back(o);
     }
-    d.total = d.p_lam + d.p_p + (d.is_nb ? 1 : 0);
+    int base = d.p_lam + d.p_p + (d.is_nb ? 1 : 0);
+    if (spec.containsElementNamed("re_arm")) {
+        d.re_arm = Rcpp::as<int>(spec["re_arm"]);
+        if (d.re_arm >= 0) {
+            Rcpp::IntegerVector rg = spec["re_group"];     // 1-based, length n_sites
+            if ((int) rg.size() != d.n_sites)
+                Rcpp::stop("re_group must have length n_sites");
+            d.re_group.resize(d.n_sites);
+            for (int i = 0; i < d.n_sites; ++i) d.re_group[i] = rg[i] - 1;
+            d.n_re_groups = Rcpp::as<int>(spec["n_re_groups"]);
+            if (spec.containsElementNamed("sigma_re_lsd"))
+                d.sigma_re_lsd = Rcpp::as<double>(spec["sigma_re_lsd"]);
+            d.o_z      = base;
+            d.o_logsig = base + d.n_re_groups;
+            base       = d.o_logsig + 1;
+        }
+    }
+    d.total = base;
     return d;
 }
 
@@ -89,29 +115,45 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         eta_p_all[o] = e;
     }
 
+    // Random-effect setup: non-centered per-site intercept offset
+    // sigma_re * z[group(site)] added to the chosen arm's eta.
+    const bool has_re = d.re_arm >= 0;
+    const double sigma_re = has_re ? std::exp(theta[d.o_logsig]) : 0.0;
+    double grad_logsig = 0.0;
+
     double lp = 0.0;
     std::vector<int>    y_site;
     std::vector<double> eta_p_site;
     for (int i = 0; i < d.n_sites; ++i) {
         const std::vector<int>& obs = d.obs_by_site[i];
         const int J = (int) obs.size();
+        const double re_off = has_re ? sigma_re * theta[d.o_z + d.re_group[i]] : 0.0;
         double eta_lambda = 0.0;
         for (int k = 0; k < p_lam; ++k) eta_lambda += d.X_lambda(i, k) * theta[k];
+        if (has_re && d.re_arm == 0) eta_lambda += re_off;
         y_site.resize(J); eta_p_site.resize(J);
         for (int jj = 0; jj < J; ++jj) {
             y_site[jj]     = d.y[obs[jj]];
-            eta_p_site[jj] = eta_p_all[obs[jj]];
+            eta_p_site[jj] = eta_p_all[obs[jj]] + ((has_re && d.re_arm == 1) ? re_off : 0.0);
         }
         const NMixSiteResult res = kern(
             y_site.data(), eta_p_site.data(), J, eta_lambda, d.K_max, r);
         lp += res.log_lik;
         for (int k = 0; k < p_lam; ++k)
             grad[k] += res.grad_eta_lambda * d.X_lambda(i, k);
+        double g_off = 0.0;
         for (int jj = 0; jj < J; ++jj) {
             const double ge = res.grad_eta_p[jj];
             const int o = obs[jj];
             for (int k = 0; k < p_p; ++k)
                 grad[p_lam + k] += ge * d.X_p(o, k);
+            if (has_re && d.re_arm == 1) g_off += ge;
+        }
+        if (has_re && d.re_arm == 0) g_off = res.grad_eta_lambda;
+        if (has_re) {
+            // d eta / d z_g = sigma_re ; d eta / d log_sigma = sigma_re*z = re_off.
+            grad[d.o_z + d.re_group[i]] += sigma_re * g_off;
+            grad_logsig += g_off * re_off;
         }
         if (d.is_nb) grad[p_lam + p_p] += res.grad_theta;
     }
@@ -126,6 +168,19 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         const double ilr2 = 1.0 / (sigma_logr * sigma_logr);
         lp -= 0.5 * ilr2 * lr * lr;
         grad[p_lam + p_p] -= ilr2 * lr;
+    }
+    if (has_re) {
+        // Non-centered RE prior: z ~ N(0, I); weak Gaussian hyperprior on
+        // log_sigma_re.
+        for (int g = 0; g < d.n_re_groups; ++g) {
+            const double zg = theta[d.o_z + g];
+            lp -= 0.5 * zg * zg;
+            grad[d.o_z + g] -= zg;
+        }
+        const double ls   = theta[d.o_logsig];
+        const double ils2 = 1.0 / (d.sigma_re_lsd * d.sigma_re_lsd);
+        lp -= 0.5 * ils2 * ls * ls;
+        grad[d.o_logsig] += grad_logsig - ils2 * ls;
     }
     return lp;
 }

@@ -223,3 +223,48 @@ test_that("NB + lambda-arm RE returns a usable fit with positive r", {
   expect_gt(fit$means["sigma_g1_(Intercept)"], 0.1)
   expect_lt(fit$means["sigma_g1_(Intercept)"], 2.0)
 })
+
+
+# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+
+test_that("abun() NUTS samples a single intercept RE and recovers sigma + betas", {
+  skip_on_cran()
+  skip_if_fast()
+  s <- sim_abun_lambda_re(N = 90, J = 4, ngrp = 9,
+                          beta_lambda = c(0.6, 0.3), beta_p = qlogis(0.5),
+                          sigma_b = 0.7, seed = 5)
+  fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data,
+              y = s$y, family = abun(), method = "nuts", verbose = FALSE,
+              control = list(n.iter = 700L, n.warmup = 500L, seed = 1L))
+
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$re$arm, "lambda")
+  expect_equal(fit$re$n_groups, 9L)
+  expect_length(fit$re$blup, 9L)
+  # Variance component + fixed effects recover the truth; the RE SD is sampled
+  # (not the AGHQ point estimate), so it carries a real posterior SD.
+  expect_lt(abs(fit$re$sigma - 0.7), 0.35)
+  expect_gt(fit$re$sigma_sd, 0)
+  expect_lt(abs(fit$means[["lambda_(Intercept)"]] - 0.6), 0.3)
+  expect_lt(abs(fit$means[["lambda_x1"]] - 0.3), 0.2)
+  expect_lt(mean(fit$nuts$divergent), 0.1)
+  # The RE columns ride in the draws / vcov alongside the fixed coefficients.
+  expect_true(all(c("re_g1_z1", "log_sigma_lambda_g1") %in% colnames(fit$draws)))
+})
+
+test_that("abun() NUTS rejects random slopes / both-arm RE (Laplace-only)", {
+  s <- sim_abun_lambda_re(N = 40, J = 3, ngrp = 5, beta_lambda = c(0.5, 0.2),
+                          beta_p = 0, sigma_b = 0.5, seed = 2)
+  # Random slope is AGHQ-only.
+  expect_error(
+    tobs(formula = ~ x1 + (x1 | g), detection = ~ 1, data = s$data, y = s$y,
+         family = abun(), method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "single intercept random effect|laplace")
+  # RE on both arms is AGHQ-only.
+  expect_error(
+    tobs(formula = ~ x1 + (1 | g), detection = ~ (1 | g), data = s$data, y = s$y,
+         family = abun(), method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "ONE arm|laplace")
+})
