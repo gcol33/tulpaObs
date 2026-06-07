@@ -1,5 +1,11 @@
 # tulpaObs NEWS
 
+## 0.0.20 (2026-06-07)
+
+* Require `tulpa (>= 0.0.16)` and update the Remotes pin so a fresh install
+  resolves the grouped beta sufficient-statistic engine that `aggregate.pos`
+  (0.0.19) depends on; the prior `>= 0.0.13` pin pre-dated that interface.
+
 ## 0.0.19 (2026-06-07)
 
 * fix(occu_cover): the joint-coupled nested-Laplace parameter-surface
