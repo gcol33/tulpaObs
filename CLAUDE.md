@@ -325,10 +325,10 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community N-mixture | Yes | Yes | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> `NMixCommunityOracle` via AGHQ, Schur SEs; Pois + negbin. NUTS (#14, `src/ms_abun_nuts.cpp`). `test-ms-abun.R`/`-nuts.R`. See below |
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; #12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`); Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
-| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts}.R`. See Architecture. `test-removal.R`. Spatial/RE pending |
-| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. Spatial/RE pending |
-| False-positive occupancy (multistate) | Yes | — | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. Spatial/RE pending |
-| Open N-mixture (Dail-Madsen) | Yes | — | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. Spatial/RE pending |
+| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51); spatial + Laplace-RE pending |
+| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51); spatial + Laplace-RE pending |
+| False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51); spatial + Laplace-RE pending |
+| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51); spatial + Laplace-RE pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | `nested_laplace`: icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |

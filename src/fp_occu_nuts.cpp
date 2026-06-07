@@ -21,6 +21,13 @@ struct FpNutsModel {
     std::vector<int> y;
     Rcpp::NumericMatrix X_psi, X_p11, X_p10, X_b;
     std::vector<std::vector<int>> obs_by_site;
+    // Optional single intercept RE on the occupancy (psi) arm (tulpaObs#51):
+    // per-site offset sigma_re * z[group], non-centered, with one log_sigma_re
+    // hyperparameter. re_arm = -1 none, 0 psi. The RE block [z_1..z_G,
+    // log_sigma_re] follows the four coefficient blocks.
+    int re_arm = -1, n_re_groups = 0, o_re_z = 0, o_re_logsig = 0, n_pre_re = 0;
+    double sigma_re_lsd = 1.5;
+    std::vector<int> re_group;        // 0-based group per site
 };
 
 inline FpNutsModel fp_nuts_build(const Rcpp::List& spec) {
@@ -36,6 +43,19 @@ inline FpNutsModel fp_nuts_build(const Rcpp::List& spec) {
     m.p_psi = m.X_psi.ncol(); m.p_p11 = m.X_p11.ncol();
     m.p_p10 = m.X_p10.ncol(); m.p_b = m.X_b.ncol();
     m.total = m.p_psi + m.p_p11 + m.p_p10 + m.p_b;
+    m.n_pre_re = m.total;                                 // coords under the beta prior
+    if (spec.containsElementNamed("re_arm")) m.re_arm = Rcpp::as<int>(spec["re_arm"]);
+    if (m.re_arm == 0) {
+        Rcpp::IntegerVector rg = spec["re_group"];
+        if ((int) rg.size() != m.n_sites) Rcpp::stop("re_group must have length n_sites");
+        m.re_group.resize(m.n_sites);
+        for (int i = 0; i < m.n_sites; ++i) m.re_group[i] = rg[i] - 1;
+        m.n_re_groups = Rcpp::as<int>(spec["n_re_groups"]);
+        if (spec.containsElementNamed("sigma_re_lsd"))
+            m.sigma_re_lsd = Rcpp::as<double>(spec["sigma_re_lsd"]);
+        m.o_re_z = m.total; m.o_re_logsig = m.total + m.n_re_groups;
+        m.total = m.o_re_logsig + 1;
+    } else { m.re_arm = -1; }
     m.y.assign(y.begin(), y.end());
     m.obs_by_site.assign(m.n_sites, std::vector<int>());
     for (int o = 0; o < m.n_obs; ++o) {
@@ -50,6 +70,9 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
     const int p_psi = m.p_psi, p_p11 = m.p_p11, p_p10 = m.p_p10, p_b = m.p_b;
     const int o_psi = 0, o_p11 = p_psi, o_p10 = p_psi + p_p11, o_b = p_psi + p_p11 + p_p10;
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
+    const bool has_re = m.re_arm == 0;
+    const double sigma_re = has_re ? std::exp(theta[m.o_re_logsig]) : 0.0;
+    double grad_re_logsig = 0.0;
 
     std::vector<int> y_site;
     double lp = 0.0;
@@ -59,6 +82,8 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         for (int k = 0; k < p_p11; ++k) eta_p11 += m.X_p11(s, k) * theta[o_p11 + k];
         for (int k = 0; k < p_p10; ++k) eta_p10 += m.X_p10(s, k) * theta[o_p10 + k];
         for (int k = 0; k < p_b;   ++k) eta_b   += m.X_b(s, k)   * theta[o_b + k];
+        const double re_off = has_re ? sigma_re * theta[m.o_re_z + m.re_group[s]] : 0.0;
+        if (has_re) eta_psi += re_off;
         const std::vector<int>& idx = m.obs_by_site[s];
         const int J = (int)idx.size();
         y_site.resize(J);
@@ -70,11 +95,25 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         for (int k = 0; k < p_p11; ++k) grad[o_p11 + k] += r.grad_eta_p11 * m.X_p11(s, k);
         for (int k = 0; k < p_p10; ++k) grad[o_p10 + k] += r.grad_eta_p10 * m.X_p10(s, k);
         for (int k = 0; k < p_b;   ++k) grad[o_b + k]   += r.grad_eta_b   * m.X_b(s, k);
+        if (has_re) {
+            grad[m.o_re_z + m.re_group[s]] += sigma_re * r.grad_eta_psi;
+            grad_re_logsig += r.grad_eta_psi * re_off;
+        }
     }
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
-    for (int k = 0; k < m.total; ++k) {
+    for (int k = 0; k < m.n_pre_re; ++k) {     // beta prior only
         lp -= 0.5 * ib2 * theta[k] * theta[k];
         grad[k] -= ib2 * theta[k];
+    }
+    if (has_re) {
+        for (int g = 0; g < m.n_re_groups; ++g) {
+            const double zg = theta[m.o_re_z + g];
+            lp -= 0.5 * zg * zg;
+            grad[m.o_re_z + g] -= zg;
+        }
+        const double ls = theta[m.o_re_logsig], ils2 = 1.0 / (m.sigma_re_lsd * m.sigma_re_lsd);
+        lp -= 0.5 * ils2 * ls * ls;
+        grad[m.o_re_logsig] += grad_re_logsig - ils2 * ls;
     }
     return lp;
 }

@@ -194,14 +194,18 @@
   # this round (gcol33/tulpaObs#51); "laplace" (analytic-gradient BFGS over the
   # exact marginal) or "nuts".
   if (identical(model$model_type, "fp_occu")) {
-    if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
+    if (!is.null(spatial) || !is.null(temporal)) {
       stop("fp_occu() currently supports non-spatial fixed effects only; a ",
-           "spatial / random-effect / temporal term is not yet wired. (#51)",
-           call. = FALSE)
+           "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
+    }
+    if (!is.null(re) && !identical(method, "nuts")) {
+      stop("fp_occu() random effects fit under method = \"nuts\" (a single ",
+           "intercept RE on the occupancy (psi) arm, tulpaObs#51); the Laplace ",
+           "path is non-spatial fixed effects only.", call. = FALSE)
     }
     if (identical(method, "nuts")) {
       fit <- .tobs_fit_fp_occu_nuts(
-        fit_model, sigma.beta = sigma.beta,
+        fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)

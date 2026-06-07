@@ -196,3 +196,92 @@ test_that("fp_occu NUTS recovers truth and scores WAIC", {
   expect_true(is.finite(w$waic))
   expect_gt(w$p_waic, 0)
 })
+
+
+# --- NUTS + random effect on the occupancy (psi) arm (tulpaObs#51) ----------
+
+# Simulate fp_occu with a site-grouped occupancy random intercept
+# b_g ~ N(0, sigma_re^2): eta_psi = beta0 + b_g.
+sim_fp_psi_re <- function(n_groups = 25L, per_group = 8L, J = 6L,
+                          beta0 = qlogis(0.45), sigma_re = 0.7,
+                          p11 = 0.65, p10 = 0.05, b = 0.5, seed = 1L) {
+  set.seed(seed)
+  N  <- n_groups * per_group
+  g  <- rep(seq_len(n_groups), each = per_group)
+  bg <- rnorm(n_groups, 0, sigma_re)
+  psi <- plogis(beta0 + bg[g])
+  z <- rbinom(N, 1L, psi)
+  y <- matrix(0L, N, J)
+  for (i in seq_len(N)) {
+    if (z[i] == 1L) {
+      det <- rbinom(J, 1L, p11); cert <- rbinom(J, 1L, b)
+      y[i, ] <- ifelse(det == 1L, ifelse(cert == 1L, 2L, 1L), 0L)
+    } else y[i, ] <- rbinom(J, 1L, p10)
+  }
+  list(y = y, data = data.frame(g = factor(g)),
+       truth = list(beta0 = beta0, sigma_re = sigma_re, bg = bg))
+}
+
+test_that("fp_occu NUTS RE log-posterior gradient matches finite differences", {
+  s <- sim_fp_psi_re(n_groups = 12L, per_group = 6L, J = 5L, seed = 4L)
+  model <- tulpaObs:::.tobs_build_fp_occu(~ 1 + (1 | g), ~ 1, s$data, s$y)
+  re_list <- tulpaObs:::.tobs_structures_from_model(model)$re
+  re_info <- tulpaObs:::.tobs_count_nuts_re_info(re_list, model,
+                                                 arms = c("psi", "p11"))
+  expect_identical(re_info$arm, 0L)
+  expect_identical(re_info$arm_tag, "psi")
+  G <- re_info$n_groups
+  spec <- list(y = as.integer(model$y_long), site_idx = as.integer(model$site_idx),
+               X_psi = model$X_processes[[1]], X_p11 = model$X_processes[[2]],
+               X_p10 = model$X_processes[[3]], X_b = model$X_processes[[4]],
+               n_sites = model$n_sites, re_arm = 0L, re_group = re_info$group,
+               n_re_groups = G, sigma_re_lsd = 1.5)
+  set.seed(11)
+  theta <- c(0.1, 0.3, qlogis(0.06), 0.05, rnorm(G, 0, 0.4), log(0.7))
+  out <- tulpaObs:::cpp_fp_occu_nuts_joint_logpost(spec, theta, 10)
+  f <- function(th) tulpaObs:::cpp_fp_occu_nuts_joint_logpost(spec, th, 10)$lp
+  g_fd <- sapply(seq_along(theta), function(j) {
+    h <- 1e-5; tp <- theta; tm <- theta; tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
+    (f(tp) - f(tm)) / (2 * h)
+  })
+  expect_equal(out$grad, g_fd, tolerance = 1e-4)
+})
+
+test_that("fp_occu NUTS recovers a single occupancy-arm intercept RE", {
+  skip_on_cran()
+  skip_if_fast()
+  s <- sim_fp_psi_re(n_groups = 25L, per_group = 8L, J = 6L,
+                     beta0 = qlogis(0.45), sigma_re = 0.7, seed = 3L)
+  fit <- tobs(formula = ~ 1 + (1 | g), data = s$data, family = fp_occu(),
+              detection = ~ 1, y = s$y, method = "nuts", verbose = FALSE,
+              control = list(n.iter = 500L, n.warmup = 500L, seed = 7L))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$re$arm, "psi")
+  expect_equal(fit$re$n_groups, 25L)
+  expect_length(fit$re$blup, 25L)
+  # Variance component + occupancy intercept recover the truth; the RE SD is
+  # sampled, so it carries a real posterior SD.
+  expect_lt(abs(fit$re$sigma - 0.7), 0.35)
+  expect_gt(fit$re$sigma_sd, 0)
+  expect_lt(abs(fit$means[["psi_(Intercept)"]] - qlogis(0.45)), 0.4)
+  expect_lt(mean(fit$nuts$divergent), 0.1)
+  # The BLUPs track the simulated group offsets.
+  expect_gt(cor(fit$re$blup, s$truth$bg), 0.4)
+  # The RE columns ride in the draws alongside the fixed coefficients.
+  expect_true(all(c("re_g1_z1", "log_sigma_psi_g1") %in% colnames(fit$draws)))
+})
+
+test_that("fp_occu RE is NUTS-only and restricted to the psi arm", {
+  s <- sim_fp_psi_re(n_groups = 6L, per_group = 5L, J = 4L, seed = 2L)
+  # RE under the Laplace path is not wired.
+  expect_error(
+    tobs(formula = ~ 1 + (1 | g), data = s$data, family = fp_occu(),
+         detection = ~ 1, y = s$y, method = "laplace"),
+    "random effects fit under method = \"nuts\"|non-spatial fixed effects")
+  # A detection-arm (p11) RE is rejected with a pointer to the state formula.
+  expect_error(
+    tobs(formula = ~ 1, data = s$data, family = fp_occu(),
+         detection = ~ 1 + (1 | g), y = s$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "occupancy \\(psi\\) arm only|state formula")
+})

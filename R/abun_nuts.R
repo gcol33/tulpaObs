@@ -117,20 +117,33 @@
 # ---------------------------------------------------------------------------
 
 # Resolve a single intercept RE from the formula `re` terms. NULL = no RE.
-.tobs_count_nuts_re_info <- function(re, model) {
+# `arms` names the two predictor blocks the term may sit on (state arm first,
+# detection arm second) so the count families (abun/removal: lambda/p), the
+# open N-mixture and distance (lambda only) and the false-positive occupancy
+# family (psi/p11) share one resolver; the returned `arm` is 0 for the first,
+# 1 for the second.
+.tobs_count_nuts_re_info <- function(re, model, arms = c("lambda", "p")) {
   if (is.null(re) || length(re) == 0L) return(NULL)
-  arms <- .tobs_nmix_re_split_arms(re, model)
-  if (length(arms$lambda) && length(arms$p))
-    stop("method = \"nuts\" with a random effect supports the RE on ONE arm; ",
-         "put it on lambda OR p, or use method = \"laplace\".", call. = FALSE)
-  design <- if (length(arms$lambda)) arms$lambda else arms$p
+  if (inherits(re, "tobs_re")) re <- list(re)
+  split <- .tobs_re_split_two_arms(
+    re, model, arms[1L], arms[2L],
+    sprintf(paste0("method = \"nuts\" with a random effect supports the RE on ",
+                   "ONE arm; put it on %s OR %s, or use method = \"laplace\"."),
+            arms[1L], arms[2L]))
+  a1 <- split[[arms[1L]]]; a2 <- split[[arms[2L]]]
+  if (length(a1) && length(a2))
+    stop(sprintf(paste0("method = \"nuts\" with a random effect supports the RE ",
+                        "on ONE arm; put it on %s OR %s, or use ",
+                        "method = \"laplace\"."), arms[1L], arms[2L]),
+         call. = FALSE)
+  design <- if (length(a1)) a1 else a2
   if (length(design) != 1L || design[[1L]]$n_coefs != 1L ||
       !isTRUE(design[[1L]]$has_intercept))
     stop("method = \"nuts\" supports a single intercept random effect (1|g) on ",
          "one arm; random slopes / multiple grouping factors fit under ",
          "method = \"laplace\" (AGHQ).", call. = FALSE)
-  list(arm = if (length(arms$lambda)) 0L else 1L,
-       arm_tag = if (length(arms$lambda)) "lambda" else "p",
+  list(arm = if (length(a1)) 0L else 1L,
+       arm_tag = if (length(a1)) arms[1L] else arms[2L],
        group = as.integer(design[[1L]]$idx),
        n_groups = as.integer(design[[1L]]$n_groups),
        label = design[[1L]]$group_label %||% "g1")
