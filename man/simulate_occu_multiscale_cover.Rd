@@ -17,6 +17,9 @@ simulate_occu_multiscale_cover(
   adj = NULL,
   sigma = 0.7,
   alpha = 1,
+  trend = FALSE,
+  sigma_trend = 0.7,
+  alpha_trend = 1,
   seed = NULL
 )
 }
@@ -39,6 +42,14 @@ coefficients for the four arms (one covariate each).}
 \item{sigma}{areal-field marginal SD on the occupancy arm.}
 
 \item{alpha}{cover-arm field scaling (\code{alpha * sigma} on the cover arm).}
+
+\item{trend}{add a second, spatially-varying-coefficient (SVC) areal field
+weighted per cell by a cell-level covariate \code{tcov} (added to \code{data}):
+\code{tcov_c * sigma_trend * f_trend[c]} on occupancy and
+\code{tcov_c * alpha_trend * sigma_trend * f_trend[c]} on cover. Default \code{FALSE}.}
+
+\item{sigma_trend, alpha_trend}{trend-field marginal SD and its cover-arm
+scaling (used only when \code{trend = TRUE}).}
 
 \item{seed}{optional RNG seed.}
 }

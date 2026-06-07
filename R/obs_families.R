@@ -476,8 +476,12 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
 #' non-spatial path (iid cells, no field): the exact three-level marginal
 #' optimised directly. Cells are declared the same way on both paths, via an
 #' `icar(graph = adj, group_var = "<cell>")` term (the graph drives the field
-#' under `"nested_laplace"` and is ignored under `"laplace"`). Spatially varying
-#' trend fields are not yet wired.
+#' under `"nested_laplace"` and is ignored under `"laplace"`). On the
+#' `"nested_laplace"` path additional weighted areal terms in the psi formula
+#' (`icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)`) add
+#' spatially-varying-coefficient trend fields, each coupled onto the cover arm
+#' with its own `alpha_trend`; the fitted fields are in `fit$trend_field` /
+#' `fit$trend_fields`.
 #'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
@@ -500,7 +504,7 @@ occu_multiscale_cover <- function(positive = c("beta", "lognormal")) {
     params         = list(positive = positive),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta",
-      "sigma.grid", "alpha.grid", "phi.grid.pos", "n.threads",
+      "sigma.grid", "alpha.grid", "alpha.grid.trend", "phi.grid.pos", "n.threads",
       "inner.refresh", "hessian", "n.threads.outer", "force.sparse",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "diagnose.k", "k.samples", "checkpoint"

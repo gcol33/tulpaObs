@@ -519,6 +519,12 @@
 #' @param adj `n_cells x n_cells` adjacency; default a 1-D chain.
 #' @param sigma areal-field marginal SD on the occupancy arm.
 #' @param alpha cover-arm field scaling (`alpha * sigma` on the cover arm).
+#' @param trend add a second, spatially-varying-coefficient (SVC) areal field
+#'   weighted per cell by a cell-level covariate `tcov` (added to `data`):
+#'   `tcov_c * sigma_trend * f_trend[c]` on occupancy and
+#'   `tcov_c * alpha_trend * sigma_trend * f_trend[c]` on cover. Default `FALSE`.
+#' @param sigma_trend,alpha_trend trend-field marginal SD and its cover-arm
+#'   scaling (used only when `trend = TRUE`).
 #' @param seed optional RNG seed.
 #' @return A list with `y`, `y_pos` (`[n_plots x visits_per_plot]`), the
 #'   plot-level `data` (cell id `cell`, covariates), `adj`, and `truth`.
@@ -535,6 +541,9 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
                                            adj        = NULL,
                                            sigma      = 0.7,
                                            alpha      = 1.0,
+                                           trend      = FALSE,
+                                           sigma_trend = 0.7,
+                                           alpha_trend = 1.0,
                                            seed       = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
@@ -551,9 +560,21 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
   scale_q <- .occu_cover_icar_scale(adj)
   eig  <- eigen(Q, symmetric = TRUE)
   keep <- eig$values > 1e-8
-  z_white <- stats::rnorm(sum(keep))
-  f <- as.numeric(eig$vectors[, keep, drop = FALSE] %*% (z_white / sqrt(eig$values[keep])))
-  f <- (f - mean(f)) / sqrt(scale_q)
+  draw_field <- function() {
+    zw <- stats::rnorm(sum(keep))
+    ff <- as.numeric(eig$vectors[, keep, drop = FALSE] %*% (zw / sqrt(eig$values[keep])))
+    (ff - mean(ff)) / sqrt(scale_q)
+  }
+  f <- draw_field()
+
+  # Optional spatially-varying trend: a SECOND ICAR field f_trend, weighted per
+  # cell by a cell-level covariate `tcov`, adding tcov_c * sigma_trend * f_trend
+  # to occupancy and tcov_c * alpha_trend * sigma_trend * f_trend to cover.
+  f_trend <- NULL; tcov <- NULL
+  if (isTRUE(trend)) {
+    f_trend <- draw_field()
+    tcov    <- stats::rnorm(n_cells)
+  }
 
   # Plot -> cell map (balanced).
   plot_cell <- rep(seq_len(n_cells), each = plots_per_cell)
@@ -565,8 +586,9 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
   x_pdet  <- stats::rnorm(n_plots)
   x_cov   <- stats::rnorm(n_plots)
 
-  # Cell occupancy.
+  # Cell occupancy (intercept field + optional cell-level SVC trend).
   eta_psi <- beta_psi[1L] + beta_psi[2L] * x_cell + sigma * f
+  if (isTRUE(trend)) eta_psi <- eta_psi + tcov * sigma_trend * f_trend
   psi     <- stats::plogis(eta_psi)
   z       <- stats::rbinom(n_cells, 1L, psi)
 
@@ -581,6 +603,10 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
   eta_p   <- beta_p[1L]   + beta_p[2L]   * x_pdet
   p_plot  <- stats::plogis(eta_p)
   eta_pos <- beta_pos[1L] + beta_pos[2L] * x_cov + alpha * sigma * f[plot_cell]
+  if (isTRUE(trend)) {
+    eta_pos <- eta_pos +
+      tcov[plot_cell] * alpha_trend * sigma_trend * f_trend[plot_cell]
+  }
   for (i in seq_len(n_plots)) {
     if (a[i] == 1L) {
       yi <- stats::rbinom(J, 1L, p_plot[i])
@@ -599,6 +625,7 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
 
   data <- data.frame(cell = plot_cell, x_cell = x_cell[plot_cell],
                      x_plot = x_plot, x_pdet = x_pdet, x_cov = x_cov)
+  if (isTRUE(trend)) data$tcov <- tcov[plot_cell]
 
   list(
     y     = y,
@@ -610,6 +637,9 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
                  positive = positive, phi = phi,
                  sigma = sigma, alpha = alpha,
                  f = f, psi = psi, z = z, theta = theta, a = a,
-                 plot_cell = plot_cell)
+                 plot_cell = plot_cell,
+                 trend = isTRUE(trend), sigma_trend = if (isTRUE(trend)) sigma_trend else NA_real_,
+                 alpha_trend = if (isTRUE(trend)) alpha_trend else NA_real_,
+                 f_trend = f_trend, tcov = tcov)
   )
 }

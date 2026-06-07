@@ -62,8 +62,12 @@ integrated over the outer \verb{(sigma, alpha)} grid. \code{method = "laplace"} 
 non-spatial path (iid cells, no field): the exact three-level marginal
 optimised directly. Cells are declared the same way on both paths, via an
 \code{icar(graph = adj, group_var = "<cell>")} term (the graph drives the field
-under \code{"nested_laplace"} and is ignored under \code{"laplace"}). Spatially varying
-trend fields are not yet wired.
+under \code{"nested_laplace"} and is ignored under \code{"laplace"}). On the
+\code{"nested_laplace"} path additional weighted areal terms in the psi formula
+(\verb{icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)}) add
+spatially-varying-coefficient trend fields, each coupled onto the cover arm
+with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field} /
+\code{fit$trend_fields}.
 }
 
 \seealso{

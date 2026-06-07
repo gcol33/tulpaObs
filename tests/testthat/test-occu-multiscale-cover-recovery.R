@@ -199,3 +199,44 @@ test_that("occu_multiscale_cover() non-spatial Laplace recovers truth (#53)", {
   expect_true(all(abs(bias) < 0.3),
               info = paste(round(bias, 2), collapse = " | "))
 })
+
+test_that("occu_multiscale_cover() coupled trend field recovers its shape (#53)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A second ICAR field, weighted per cell by `tcov`, on top of the intercept
+  # field: icar(... weight = tcov) in the psi formula. The trend field shape
+  # should recover even though its amplitude (sigma_trend) attenuates under the
+  # small-field nested-Laplace, matching occu_cover's coupled-trend behaviour.
+  n_seeds <- 4L
+  field_cor <- rep(NA_real_, n_seeds)
+  for (s in seq_len(n_seeds)) {
+    sim <- simulate_occu_multiscale_cover(
+      n_cells = 60L, plots_per_cell = 5L, visits_per_plot = 3L,
+      sigma = 0.6, alpha = 1.0, trend = TRUE, sigma_trend = 0.8,
+      alpha_trend = 1.0, positive = "lognormal", seed = 1200L + s)
+    fit <- tryCatch(suppressWarnings(tobs(
+      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell") +
+                  icar(graph = sim$adj, group_var = "cell", weight = tcov),
+      data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+      detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+      y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+      control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
+                     alpha.grid.trend = c(0, 0.5, 1, 2), diagnose.k = FALSE,
+                     max.iter = 400L))),
+      error = function(e) NULL)
+    if (is.null(fit)) next
+    if (s == 1L) {
+      # The trend field is surfaced separately from the intercept field, with
+      # its own sigma_trend / alpha_trend hyperparameters.
+      expect_length(fit$trend_field, fit$model$n_cells)
+      expect_length(fit$spatial_field, fit$model$n_cells)
+      expect_true(all(c("sigma_trend", "alpha_trend") %in% names(fit$means)))
+      expect_true(is.finite(fit$means[["sigma_trend"]]))
+    }
+    ft <- sim$truth$f_trend - mean(sim$truth$f_trend)
+    field_cor[s] <- abs(stats::cor(fit$trend_field, ft))
+  }
+  ok <- is.finite(field_cor)
+  expect_gte(sum(ok), 3L)
+  expect_gt(mean(field_cor[ok]), 0.6)
+})

@@ -28,7 +28,7 @@
 # the order build_cell_rows_from_arms reproduces from input row order so the
 # spec's per-cell `cell_plot_sizes` partition aligns with arm 2/3's flat rows.
 .occu_ms_cover_build_arms <- function(model, sigma_pos_init, alpha_grid,
-                                      positive = "lognormal") {
+                                      positive = "lognormal", multi = FALSE) {
   n_cells   <- model$n_cells
   n_plots   <- model$n_plots
   J         <- model$max_visits
@@ -99,10 +99,14 @@
     spatial_idx  = as.integer(cell_of_v),
     family       = positive,
     phi          = sigma_pos_init,
-    field_coef   = list(name = "alpha", grid = alpha_grid),
     coupled      = TRUE,
     cell_obs_map = as.integer(cell_of_v)
   )
+  # Single-block path: the pos arm carries the alpha axis on the one shared
+  # block. Multi-block (trend) path: each coupled field's copy spec carries its
+  # own alpha axis, so the pos arm carries NO field_coef (the engine rejects
+  # copy + field_coef together) -- mirrors occu_cover's joint-coupled arms.
+  if (!multi) arm_pos$field_coef <- list(name = "alpha", grid = alpha_grid)
 
   # Per-cell plot structure for the spec: plots grouped cell-major, ascending
   # plot index within cell (order(plot_cell) is a stable radix sort on the
@@ -114,7 +118,13 @@
                                p = arm_p, pos = arm_pos),
        n_plots_per_cell = as.integer(n_plots_per_cell),
        plot_sizes_flat  = as.integer(plot_sizes_flat),
-       n_visits_valid   = n_v)
+       n_visits_valid   = n_v,
+       # Per-arm field-node maps (cell index per arm row), for the multi-block
+       # trend prior's per-arm spatial_idx.
+       psi_cell   = seq_len(n_cells),
+       theta_cell = as.integer(plot_cell),
+       p_cell     = as.integer(cell_of_v),
+       pos_cell   = as.integer(cell_of_v))
 }
 
 
@@ -162,11 +172,6 @@
     stop("occu_multiscale_cover() supports positive = \"lognormal\" or ",
          "\"beta\".", call. = FALSE)
   }
-  if (length(fields) > 1L) {
-    stop("occu_multiscale_cover() couples a single shared intercept field; ",
-         "spatially varying trend fields are not yet supported.", call. = FALSE)
-  }
-
   pi_list <- model$process_info
   n_cells <- nrow(adj)
   if (model$n_cells != n_cells) {
@@ -192,9 +197,33 @@
   alpha_grid <- dots$alpha.grid %||% c(0, exp(seq(log(0.1), log(3), length.out = 5)))
   sigma_grid <- dots$sigma.grid %||% exp(seq(log(0.1), log(3), length.out = 5))
 
+  # Coupled trend (SVC) fields (tulpaObs#53): every weighted areal term in the
+  # psi formula beyond the unweighted intercept field is a spatially-varying
+  # coefficient -- weight_c * sigma_trend * z_trend[cell] added to occupancy and
+  # weight_c * alpha_trend * sigma_trend * z_trend[cell] to cover, the four-arm
+  # analogue of occu_cover's coupled trend (tulpaObs#15). The psi field is per
+  # cell, so the trend weight is taken at the cell level (a cell-level covariate,
+  # constant within a cell); with group_var the term resolves it per plot, so the
+  # representative first-plot value per cell is used.
+  first_plot <- match(seq_len(n_cells), model$plot_cell)
+  to_cell_weight <- function(w) {
+    w <- as.numeric(w)
+    if (length(w) == n_cells)        return(w)
+    if (length(w) == model$n_plots)  return(w[first_plot])
+    stop(sprintf(paste0("occu_multiscale_cover(): trend weight has length %d; ",
+                 "expected %d (cells) or %d (plots)."),
+                 length(w), n_cells, model$n_plots), call. = FALSE)
+  }
+  coupled_trends <- lapply(fields[-1L], function(f) {
+    list(weight = to_cell_weight(f$weight),
+         weight_label = f$weight_label %||% "trend")
+  })
+  n_trend   <- length(coupled_trends)
+  has_trend <- n_trend > 0L
+
   arms_out  <- .occu_ms_cover_build_arms(
     model = model, sigma_pos_init = phi_pos_init,
-    alpha_grid = alpha_grid, positive = model$positive)
+    alpha_grid = alpha_grid, positive = model$positive, multi = has_trend)
   responses <- arms_out$responses
 
   # Attach per-arm fixed-effect priors.
@@ -215,20 +244,48 @@
     plot_sizes_flat  = arms_out$plot_sizes_flat)
 
   csr <- .occu_cover_adj_to_csr(adj)
-  prior_arg <- list(
-    type            = "icar",
-    n_spatial_units = csr$n_spatial_units,
-    adj_row_ptr     = csr$adj_row_ptr,
-    adj_col_idx     = csr$adj_col_idx,
-    n_neighbors     = csr$n_neighbors,
-    sigma_grid      = sigma_grid
-  )
+  icar_block <- function(extra = list()) {
+    c(list(type = "icar", n_spatial_units = csr$n_spatial_units,
+           adj_row_ptr = csr$adj_row_ptr, adj_col_idx = csr$adj_col_idx,
+           n_neighbors = csr$n_neighbors, sigma_grid = sigma_grid), extra)
+  }
+
+  if (has_trend) {
+    # Multi-block: the intercept ICAR block plus one per trend field, all on the
+    # same cell graph, each copied onto the pos arm with its own alpha axis. Per
+    # arm the field node is the cell index (psi -> cell, theta/p/pos -> their
+    # cell), and svc_weight injects the per-cell trend weight (theta/p are
+    # neither donor nor copy, so their field coefficient is 0 and their weight is
+    # inert; supplied only for spatial_idx alignment).
+    spatial_idx_arms <- list(arms_out$psi_cell, arms_out$theta_cell,
+                             arms_out$p_cell, arms_out$pos_cell)
+    make_block <- function(w_cell) {
+      if (is.null(w_cell)) return(icar_block(list(spatial_idx = spatial_idx_arms)))
+      icar_block(list(
+        spatial_idx = spatial_idx_arms,
+        svc_weight  = list(as.numeric(w_cell),
+                           as.numeric(w_cell)[arms_out$theta_cell],
+                           as.numeric(w_cell)[arms_out$p_cell],
+                           as.numeric(w_cell)[arms_out$pos_cell])))
+    }
+    alpha_grid_trend <- dots$alpha.grid.trend %||% alpha_grid
+    prior_arg <- c(list(make_block(NULL)),
+                   lapply(coupled_trends, function(tf) make_block(tf$weight)))
+    copy_arg  <- c(
+      list(list(arm = "pos", block = 1L, alpha_grid = alpha_grid)),
+      lapply(seq_len(n_trend), function(j)
+        list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend)))
+  } else {
+    prior_arg <- icar_block()
+    copy_arg  <- NULL
+  }
 
   phi_grid_pos <- dots$phi.grid.pos
   phi_grid_arg <- if (!is.null(phi_grid_pos)) list(pos = as.numeric(phi_grid_pos)) else NULL
 
   fit_call <- list(
     responses     = responses,
+    copy          = copy_arg,
     prior         = prior_arg,
     phi_grid      = phi_grid_arg,
     cell_coupling = spec_name,
@@ -282,8 +339,12 @@
   beta_pos_m   <- as.numeric(crossprod(w, modes[, bpos_idx,   drop = FALSE]))
 
   p_beta        <- p_psi + p_theta + p_p + p_pos
+  # One ICAR field block per coupled field (block 1 = shared intercept field;
+  # blocks 2.. = trend SVC fields). Stack every block's n_cells nodes.
   field_starts0 <- layout$field_starts %||% layout$phi_start
-  field_idx     <- as.integer(field_starts0[1L] + seq_len(n_cells))
+  n_fields      <- length(field_starts0)
+  field_idx     <- as.integer(unlist(lapply(field_starts0,
+                                            function(s) s + seq_len(n_cells))))
   idx_joint     <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx, field_idx)
   blocks        <- .joint_inner_vcov_block(fit, idx_joint)
 
@@ -313,7 +374,7 @@
     field_modes   <- modes[, field_idx, drop = FALSE]
     field_at_cell <- as.numeric(crossprod(w, field_modes))
     field_var     <- as.numeric(crossprod(w, field_modes^2)) - field_at_cell^2
-    field_demeaned <- field_at_cell - mean(field_at_cell)
+    field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
     Vj <- NULL
   } else {
     p_joint     <- length(idx_joint)
@@ -330,9 +391,10 @@
     diag_Vj    <- diag(Vj)
     sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
     beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
-    field_at_cell  <- mbar_joint[p_beta + seq_len(n_cells)]
-    field_var      <- diag_Vj[p_beta + seq_len(n_cells)]
-    field_demeaned <- field_at_cell - mean(field_at_cell)
+    n_field_cols   <- n_fields * n_cells
+    field_at_cell  <- mbar_joint[p_beta + seq_len(n_field_cols)]
+    field_var      <- diag_Vj[p_beta + seq_len(n_field_cols)]
+    field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
   }
   field_sd <- sqrt(pmax(field_var, 0))
 
@@ -356,15 +418,29 @@
   tg_ok    <- tg_full[ok_cells, , drop = FALSE]
   tg_names <- colnames(tg_full)
   hyper_means <- numeric(0); hyper_sds <- numeric(0); hyper_names <- character(0)
-  pick <- function(name) {
-    j <- match(name, tg_names)
+  # `col` is the theta_grid column; `public` the reported name. Single-block axes
+  # are "sigma"/"alpha"; the multi-block trend path names them per block
+  # ("b1.sigma", "b2.alpha", ...), surfaced as sigma/alpha (block 1) and
+  # sigma_trend/alpha_trend (blocks 2..), mirroring occu_cover.
+  pick <- function(public, col = public) {
+    j <- match(col, tg_names)
     if (is.na(j)) return(invisible(NULL))
     vals <- as.numeric(tg_ok[, j])
     m <- sum(w * vals); v <- sum(w * vals^2) - m^2
-    hyper_means[[name]] <<- m; hyper_sds[[name]] <<- sqrt(max(v, 0))
-    hyper_names <<- c(hyper_names, name)
+    hyper_means[[public]] <<- m; hyper_sds[[public]] <<- sqrt(max(v, 0))
+    hyper_names <<- c(hyper_names, public)
   }
-  for (nm in c("sigma", "alpha", "phi_pos")) pick(nm)
+  if (has_trend) {
+    pick("sigma", "b1.sigma"); pick("alpha", "b1.alpha")
+    for (j in seq_len(n_trend)) {
+      suffix <- if (n_trend == 1L) "" else as.character(j)
+      pick(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
+      pick(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
+    }
+    pick("phi_pos")
+  } else {
+    for (nm in c("sigma", "alpha", "phi_pos")) pick(nm)
+  }
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])
     sds   <- c(sds,   unlist(hyper_sds)[hyper_names])
@@ -385,10 +461,29 @@
   draws <- .occu_cover_rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
-  field_table <- data.frame(
-    cell = seq_len(n_cells), z_mean = field_demeaned, z_sd = field_sd,
-    z_lower = field_demeaned - 1.96 * field_sd,
-    z_upper = field_demeaned + 1.96 * field_sd)
+  # Split the stacked field summaries into one block of n_cells per coupled
+  # field: block 1 is the shared intercept field (`spatial_field`); blocks 2..
+  # are the spatially-varying trend fields (`trend_field` / `trend_fields`).
+  field_block <- function(b) {
+    idx <- (b - 1L) * n_cells + seq_len(n_cells)
+    list(mean = field_demeaned[idx], sd = field_sd[idx])
+  }
+  ztab <- function(blk) data.frame(
+    cell = seq_len(n_cells), z_mean = blk$mean, z_sd = blk$sd,
+    z_lower = blk$mean - 1.96 * blk$sd, z_upper = blk$mean + 1.96 * blk$sd)
+  fblocks <- lapply(seq_len(n_fields), field_block)
+
+  field_intercept <- fblocks[[1L]]$mean
+  field_table     <- ztab(fblocks[[1L]])
+  trend_blocks <- if (n_fields >= 2L) fblocks[-1L] else list()
+  trend_means  <- lapply(trend_blocks, function(b) b$mean)
+  trend_tables <- lapply(trend_blocks, ztab)
+  if (length(coupled_trends) == length(trend_means) && length(trend_means)) {
+    tl <- vapply(coupled_trends, function(tf) tf$weight_label, character(1))
+    names(trend_means) <- tl; names(trend_tables) <- tl
+  }
+  field_trend       <- if (length(trend_means))  trend_means[[1L]]  else NULL
+  trend_field_table <- if (length(trend_tables)) trend_tables[[1L]] else NULL
 
   log_lik_val <- sum(w * fit$log_marginal[ok_cells])
   structure(c(list(
@@ -409,9 +504,15 @@
     model        = model,
     spatial      = list(type = "icar", graph = adj,
                         sigma_mean = unname(hyper_means["sigma"]),
-                        alpha_mean = unname(hyper_means["alpha"])),
-    spatial_field = field_demeaned,
+                        alpha_mean = unname(hyper_means["alpha"]),
+                        sigma_trend_mean = unname(hyper_means["sigma_trend"]),
+                        alpha_trend_mean = unname(hyper_means["alpha_trend"])),
+    spatial_field = field_intercept,
     field_table  = field_table,
+    trend_field        = field_trend,
+    trend_fields       = if (length(trend_means))  trend_means  else NULL,
+    trend_field_table  = trend_field_table,
+    trend_field_tables = if (length(trend_tables)) trend_tables else NULL,
     method       = "joint_coupled",
     positive     = model$positive,
     joint_fit    = fit,
