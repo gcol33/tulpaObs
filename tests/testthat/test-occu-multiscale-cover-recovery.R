@@ -3,8 +3,8 @@
 # (gcol33/tulpaObs#29), joint nested-Laplace cell-coupling path.
 #
 # Structural gates (always run):
-#   - rejects method = "laplace" (spatial-only)
-#   - rejects a state formula with no areal field / no group_var
+#   - rejects a state formula with no cell-declaring areal term / no group_var
+# Non-spatial Laplace path (#53): iid cells, no field; recovers the four arms.
 # Recovery gate (skip_on_cran): across seeds with moderate occupancy /
 # availability / detection rates and enough cells the four arms separate:
 #   - point recovery of the 8 fixed-effect coefficients within 0.25 (mean)
@@ -15,26 +15,23 @@
 # =============================================================================
 
 
-test_that("occu_multiscale_cover() rejects laplace and a non-spatial state formula", {
+test_that("occu_multiscale_cover() requires a cell-declaring areal term", {
   sim <- simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
                                         visits_per_plot = 2L, seed = 1L)
   fam <- occu_multiscale_cover(positive = "lognormal")
 
-  # method = "laplace" is not in the family's supported set (spatial-only).
-  expect_error(
-    tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-         data = sim$data, family = fam, detection = ~ x_pdet,
-         availability = ~ x_plot, positive = ~ x_cov,
-         y = sim$y, y_pos = sim$y_pos, method = "laplace"),
-    "not available"
-  )
-
-  # No areal field on the state formula.
+  # No areal term -> cells are undeclared, on either method.
   expect_error(
     tobs(formula = ~ x_cell, data = sim$data, family = fam,
          detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
          y = sim$y, y_pos = sim$y_pos, method = "nested_laplace"),
-    "spatial"
+    "areal"
+  )
+  expect_error(
+    tobs(formula = ~ x_cell, data = sim$data, family = fam,
+         detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+         y = sim$y, y_pos = sim$y_pos, method = "laplace"),
+    "areal"
   )
 
   # Areal field but no group_var naming the cell column.
@@ -168,4 +165,37 @@ test_that("occu_multiscale_cover() fitted() / predict() (#53)", {
   expect_equal(predict(fit, type = "cover"), fv$cover)
   expect_error(predict(fit, newdata = sim$data), "not supported")
   expect_error(predict(fit, type = "bogus"), "not supported")
+})
+
+test_that("occu_multiscale_cover() non-spatial Laplace recovers truth (#53)", {
+  skip_on_cran()
+  skip_if_fast()
+  # No areal field (sigma = 0): the data-generating truth is the non-spatial
+  # three-level model, so method = "laplace" should recover the four arms.
+  truth <- list(beta_psi = c(0.2, 0.6), beta_theta = c(0.5, 0.4),
+                beta_p = c(0.3, -0.4), beta_pos = c(stats::qlogis(0.3), -0.3))
+  set.seed(303)
+  n_seed <- 6L
+  est <- matrix(NA_real_, n_seed, 8L)
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_occu_multiscale_cover(
+      n_cells = 80L, plots_per_cell = 4L, visits_per_plot = 4L,
+      beta_psi = truth$beta_psi, beta_theta = truth$beta_theta,
+      beta_p = truth$beta_p, beta_pos = truth$beta_pos,
+      positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 300L + s)
+    fit <- suppressWarnings(tobs(
+      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+      data = sim$data, family = occu_multiscale_cover(positive = "beta"),
+      detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+      y = sim$y, y_pos = sim$y_pos, method = "laplace",
+      control = list(verbose = FALSE)))
+    expect_s3_class(fit, "tobs_fit")
+    est[s, ] <- as.numeric(fit$means[c(
+      "psi_(Intercept)", "psi_x_cell", "theta_(Intercept)", "theta_x_plot",
+      "p_(Intercept)", "p_x_pdet", "pos_(Intercept)", "pos_x_cov")])
+  }
+  tv <- c(truth$beta_psi, truth$beta_theta, truth$beta_p, truth$beta_pos)
+  bias <- colMeans(est) - tv
+  expect_true(all(abs(bias) < 0.3),
+              info = paste(round(bias, 2), collapse = " | "))
 })

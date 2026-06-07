@@ -1075,10 +1075,12 @@ tobs <- function(formula,
   # free-rho BYM2 + outer-grid integration of (sigma, alpha) is v3.
   occu_cover = c("laplace", "nested_laplace"),
   # occu_multiscale_cover: three-level cell / plot / visit occupancy + cover.
-  # Spatial joint nested-Laplace only (the four-arm cell-coupling spec); both z
-  # (cells) and a (plots) marginalize in closed form. A non-spatial Laplace path
-  # is not yet wired.
-  occu_multiscale_cover = c("nested_laplace"),
+  # "nested_laplace" carries the shared areal field (the four-arm cell-coupling
+  # spec); "laplace" is the non-spatial path (iid cells, no field) -- the exact
+  # three-level marginal optimised directly. Cells are declared the same way on
+  # both paths, via icar(group_var = "<cell>") (the graph is ignored under
+  # "laplace"). Both marginalize z (cells) and a (plots) in closed form.
+  occu_multiscale_cover = c("laplace", "nested_laplace"),
   # ms_occu_cover: community joint occupancy-detection + cover. Per-species
   # coefficient RE with Gaussian community covariances across the psi / p / pos
   # arms; the latent presence z integrates out in closed form (the occu_cover

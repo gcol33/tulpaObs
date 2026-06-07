@@ -56,11 +56,14 @@ estimable.
 
 \section{Scope (status \code{"experimental"})}{
 
-Spatial joint nested-Laplace only (\code{method = "nested_laplace"}): a single
-shared areal field coupled across the occupancy (\code{sigma}) and cover
-(\code{alpha * sigma}) arms, integrated over the outer \verb{(sigma, alpha)} grid.
-Spatially varying trend fields and a non-spatial Laplace path are not yet
-wired.
+Two engines. \code{method = "nested_laplace"} carries a single shared areal field
+coupled across the occupancy (\code{sigma}) and cover (\code{alpha * sigma}) arms,
+integrated over the outer \verb{(sigma, alpha)} grid. \code{method = "laplace"} is the
+non-spatial path (iid cells, no field): the exact three-level marginal
+optimised directly. Cells are declared the same way on both paths, via an
+\code{icar(graph = adj, group_var = "<cell>")} term (the graph drives the field
+under \code{"nested_laplace"} and is ignored under \code{"laplace"}). Spatially varying
+trend fields are not yet wired.
 }
 
 \seealso{

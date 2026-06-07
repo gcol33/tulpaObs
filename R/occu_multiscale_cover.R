@@ -170,11 +170,23 @@
   if (identical(model$positive, "beta")) {
     cover <- stats::plogis(eta_pos)
   } else {
-    sigma_pos <- unname(object$means["phi_pos"]); if (!is.finite(sigma_pos)) sigma_pos <- 0
+    sigma_pos <- .occu_ms_cover_sigma_pos(object)
     cover <- exp(eta_pos + 0.5 * sigma_pos^2)
   }
   list(psi = psi_cell, theta = theta, p = pdet, cover = cover,
        field = field, p_marginal = psi_cell[pc] * theta * pdet)
+}
+
+# Posterior-mean lognormal-cover residual SD, robust to the dispersion naming:
+# the spatial path reports `phi_pos` (already sigma_pos on the natural scale),
+# the non-spatial path a log-scale `log_sigma_pos`. Returns 0 if neither (beta
+# arm / unavailable), giving the conditional median exp(eta).
+.occu_ms_cover_sigma_pos <- function(object) {
+  m <- object$means
+  if ("phi_pos" %in% names(m) && is.finite(m[["phi_pos"]])) return(unname(m[["phi_pos"]]))
+  if ("log_sigma_pos" %in% names(m) && is.finite(m[["log_sigma_pos"]]))
+    return(exp(unname(m[["log_sigma_pos"]])))
+  0
 }
 
 # predict(): in-sample posterior arm predictions. The areal field is tied to the
@@ -196,8 +208,211 @@
 
 
 # ---------------------------------------------------------------------------
-# Dispatcher (wired into tobs.R's switch). Spatial-only: the psi formula must
-# carry an icar()/bym2() term with group_var naming the per-plot cell column.
+# Non-spatial Laplace path (iid cells, no areal field). The exact three-level
+# marginal is optimised directly: z (cells) and a (plots) marginalize in closed
+# form, the cover hurdle multiplies the detected-visit branch. Same closed-form
+# structure as the joint-coupled engine with the field fixed at 0.
+# ---------------------------------------------------------------------------
+
+# Per-arm visit-level eta matrix [n_plots x max_visits]: the site predictor
+# broadcast across a plot's visits, plus the optional visit-varying part (whose
+# rows are ordered (plot - 1) * max_visits + visit, matching .occu_cover_build_visit_X).
+.occu_ms_eta_visit <- function(Xs, bs, Xv, bv, n_plots, J) {
+  eta <- matrix(as.numeric(Xs %*% bs), n_plots, J)
+  if (!is.null(Xv) && length(bv) > 0L) {
+    ev <- as.numeric(Xv %*% bv)
+    eta <- eta + matrix(ev, n_plots, J, byrow = TRUE)
+  }
+  eta
+}
+
+# Exact three-level marginal log-likelihood at the packed parameter vector
+# par = (beta_psi, beta_theta, beta_p[site,visit], beta_pos[site,visit], log_disp).
+# `idx` carries each block's coordinate indices and the per-arm site/visit split.
+.occu_ms_cover_nonspatial_ll <- function(par, model, idx) {
+  J        <- model$max_visits
+  n_plots  <- model$n_plots
+  n_cells  <- model$n_cells
+  pc       <- model$plot_cell
+  valid    <- model$valid
+  y        <- model$y
+  ypos     <- model$y_pos
+  is_beta  <- identical(model$positive, "beta")
+
+  eta_psi   <- as.numeric(model$X_psi %*% par[idx$psi])           # n_cells
+  eta_theta <- as.numeric(model$X_theta %*% par[idx$theta])       # n_plots
+  eta_p   <- .occu_ms_eta_visit(model$X_p_site,   par[idx$p_site],
+                                model$X_p_visit,  par[idx$p_visit],   n_plots, J)
+  eta_pos <- .occu_ms_eta_visit(model$X_pos_site, par[idx$pos_site],
+                                model$X_pos_visit, par[idx$pos_visit], n_plots, J)
+
+  clp   <- function(x) pmin(pmax(x, 1e-12), 1 - 1e-12)
+  psi   <- clp(stats::plogis(eta_psi))
+  theta <- clp(stats::plogis(eta_theta))
+  p_mat <- clp(stats::plogis(eta_p))
+
+  log_p   <- ifelse(valid, log(p_mat),     0)
+  log_1mp <- ifelse(valid, log(1 - p_mat), 0)
+  det_v   <- valid & (y == 1L)
+  log_hdet <- ifelse(valid, ifelse(y == 1L, log_p, log_1mp), 0)
+
+  # Cover density at detected visits only.
+  cover_lf <- matrix(0, n_plots, J)
+  if (any(det_v)) {
+    ep <- eta_pos[det_v]; cv <- ypos[det_v]
+    if (is_beta) {
+      phi <- exp(par[idx$disp]); mu <- clp(stats::plogis(ep))
+      cvc <- pmin(pmax(cv, 1e-9), 1 - 1e-9)
+      cover_lf[det_v] <- stats::dbeta(cvc, mu * phi, (1 - mu) * phi, log = TRUE)
+    } else {
+      sigma <- exp(par[idx$disp])
+      cover_lf[det_v] <- stats::dnorm(log(cv), ep, sigma, log = TRUE) - log(cv)
+    }
+  }
+
+  sum_hdet  <- rowSums(log_hdet)
+  sum_1mp   <- rowSums(log_1mp)
+  sum_cover <- rowSums(cover_lf)
+  det_plot  <- rowSums(det_v) > 0
+
+  log_theta   <- log(theta); log_1mtheta <- log(1 - theta)
+  # Plot log-prob given z = 1: detected -> a = 1 forced; else marginalize a.
+  log_pj_det <- log_theta + sum_hdet + sum_cover
+  ln_a <- log_theta + sum_1mp; ln_b <- log_1mtheta
+  m_p  <- pmax(ln_a, ln_b)
+  log_pj_nodet <- m_p + log(exp(ln_a - m_p) + exp(ln_b - m_p))
+  log_pj <- ifelse(det_plot, log_pj_det, log_pj_nodet)
+
+  # Aggregate plots to their cells.
+  sum_logpj_cell <- numeric(n_cells)
+  agg <- rowsum(log_pj, group = pc, reorder = FALSE)
+  sum_logpj_cell[as.integer(rownames(agg))] <- agg[, 1L]
+  det_cell <- logical(n_cells)
+  aggd <- rowsum(as.numeric(det_plot), group = pc, reorder = FALSE)
+  det_cell[as.integer(rownames(aggd))] <- aggd[, 1L] > 0
+
+  log_psi <- log(psi); log_1mpsi <- log(1 - psi)
+  ll_det <- log_psi + sum_logpj_cell
+  lc_a <- log_psi + sum_logpj_cell; lc_b <- log_1mpsi
+  m_c  <- pmax(lc_a, lc_b)
+  ll_nodet <- m_c + log(exp(lc_a - m_c) + exp(lc_b - m_c))
+  sum(ifelse(det_cell, ll_det, ll_nodet))
+}
+
+# Non-spatial Laplace fit: BFGS over the exact marginal (numeric gradient),
+# observed-information vcov from the marginal Hessian. Returns a tobs_fit shaped
+# like the joint-coupled output (minus the field / hyperparameters).
+.tobs_fit_occu_multiscale_cover_laplace <- function(model, priors = NULL,
+                                                    max.iter = 300L, tol = 1e-7,
+                                                    verbose = TRUE, sigma.beta = 5,
+                                                    ...) {
+  pi_list <- model$process_info
+  p_psi   <- pi_list[[1L]]$p; p_theta <- pi_list[[2L]]$p
+  p_p     <- pi_list[[3L]]$p; p_pos   <- pi_list[[4L]]$p
+  ps_p    <- ncol(model$X_p_site);   ps_pos <- ncol(model$X_pos_site)
+  off     <- cumsum(c(0L, p_psi, p_theta, p_p, p_pos))
+  idx <- list(
+    psi   = off[1] + seq_len(p_psi),
+    theta = off[2] + seq_len(p_theta),
+    p     = off[3] + seq_len(p_p),
+    pos   = off[4] + seq_len(p_pos),
+    disp  = off[5] + 1L)
+  idx$p_site   <- idx$p[seq_len(ps_p)]
+  idx$p_visit  <- if (p_p > ps_p)   idx$p[(ps_p + 1L):p_p]     else integer(0)
+  idx$pos_site <- idx$pos[seq_len(ps_pos)]
+  idx$pos_visit<- if (p_pos > ps_pos) idx$pos[(ps_pos + 1L):p_pos] else integer(0)
+  n_par <- off[5] + 1L
+  is_beta <- identical(model$positive, "beta")
+
+  par_names <- c(
+    paste0("psi_",   pi_list[[1L]]$coef_names),
+    paste0("theta_", pi_list[[2L]]$coef_names),
+    paste0("p_",     pi_list[[3L]]$coef_names),
+    paste0("pos_",   pi_list[[4L]]$coef_names),
+    if (is_beta) "log_phi" else "log_sigma_pos")
+
+  # Warm starts: occupancy / availability / detection intercepts from the
+  # empirical any-detection rate; cover intercept + dispersion from the detected
+  # positive values, mirroring .tobs_fit_occu_cover.
+  start <- numeric(n_par)
+  any_det_plot <- rowSums(model$y * model$valid) > 0
+  rate <- min(max(mean(any_det_plot), 1e-3), 1 - 1e-3)
+  start[idx$psi[1]]   <- stats::qlogis(rate)
+  start[idx$theta[1]] <- stats::qlogis(0.7)
+  start[idx$p[1]]     <- 0
+  pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  if (length(pos_vals) > 0L) {
+    if (is_beta) {
+      start[idx$pos[1]] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))
+      start[idx$disp]   <- log(10)
+    } else {
+      start[idx$pos[1]] <- mean(log(pos_vals))
+      start[idx$disp]   <- log(stats::sd(log(pos_vals)) + 0.1)
+    }
+  } else {
+    start[idx$disp] <- if (is_beta) log(10) else log(0.4)
+  }
+
+  # Weakly-informative Gaussian prior on the betas (dispersion stays flat),
+  # matching the occu_cover convention. priors = FALSE disables it.
+  pprec <- numeric(n_par)
+  if (!isFALSE(priors)) {
+    beta_idx <- c(idx$psi, idx$theta, idx$p, idx$pos)
+    pprec[beta_idx] <- 1 / sigma.beta^2
+  }
+
+  neg_pen <- function(par) {
+    ll <- .occu_ms_cover_nonspatial_ll(par, model, idx)
+    -(ll - 0.5 * sum(pprec * par^2))
+  }
+  .prog <- tulpa:::.tulpa_iter_progress("occu-ms-cover-laplace",
+                                        as.integer(max.iter), unit = "iter")
+  neg_pen_p <- function(par) { .prog$tick(); neg_pen(par) }
+  opt <- stats::optim(start, neg_pen_p, method = "BFGS",
+                      control = list(maxit = as.integer(max.iter), reltol = tol))
+  .prog$finish()
+  par <- opt$par
+  H   <- stats::optimHess(par, neg_pen)
+  V   <- tryCatch(solve(H), error = function(e)
+                  matrix(NA_real_, n_par, n_par))
+  dimnames(V) <- list(par_names, par_names)
+  means <- par; names(means) <- par_names
+  sds   <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+
+  n_draws <- 1000L
+  draws <- .occu_cover_rmvn(n_draws, means, V); colnames(draws) <- par_names
+  ll_val <- .occu_ms_cover_nonspatial_ll(par, model, idx)
+
+  structure(c(list(
+    draws        = draws,
+    means        = means,
+    sds          = sds,
+    vcov         = V,
+    n_samples    = n_draws,
+    n_params     = n_par,
+    log_prob     = rep(ll_val, n_draws),
+    log_lik      = ll_val,
+    N            = sum(model$valid)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names    = par_names,
+    param_names  = par_names,
+    process_info = pi_list,
+    model        = model,
+    spatial      = NULL,
+    spatial_field = NULL,
+    method       = "laplace",
+    positive     = model$positive,
+    convergence  = list(converged = opt$convergence == 0L,
+                        n_iter = unname(opt$counts[[1L]]))
+  )), class = c("tobs_fit", "tulpa_fit"))
+}
+
+
+# ---------------------------------------------------------------------------
+# Dispatcher (wired into tobs.R's switch). Cells are declared via an
+# icar()/bym2() term's group_var; method = "nested_laplace" fits the shared
+# areal field, method = "laplace" the non-spatial (iid-cell) marginal.
 # ---------------------------------------------------------------------------
 .dispatch_occu_multiscale_cover <- function(formula, data, family, detection,
                                             y, visits, engine, priors, control,
@@ -219,12 +434,14 @@
 
   theta_formula <- dots$availability %||% ~ 1
   pos_formula   <- dots$positive %||% detection
+  non_spatial   <- identical(engine, "laplace")
 
   spatial_info <- .occu_cover_spatial_fields(formula, data)
   if (is.null(spatial_info)) {
-    stop("occu_multiscale_cover() is spatial: the state-process formula must ",
-         "carry an areal field (icar(graph = adj, group_var = \"<cell>\")) ",
-         "naming the per-plot cell column. method must be \"nested_laplace\".",
+    stop("occu_multiscale_cover() declares cells via an areal term: the state ",
+         "formula must carry icar(graph = adj, group_var = \"<cell>\") naming ",
+         "the per-plot cell column (the graph is used for the field under ",
+         "method = \"nested_laplace\" and ignored under method = \"laplace\").",
          call. = FALSE)
   }
   gv <- spatial_info$group_var
@@ -270,6 +487,10 @@
   )
 
   control[["engine"]] <- NULL
+  if (non_spatial) {
+    fit_args <- c(list(model = model, priors = priors), control)
+    return(do.call(.tobs_fit_occu_multiscale_cover_laplace, fit_args))
+  }
   fit_args <- c(list(model = model, fields = fields, priors = priors), control)
   do.call(.tobs_fit_occu_multiscale_cover_joint_coupled, fit_args)
 }

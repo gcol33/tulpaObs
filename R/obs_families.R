@@ -467,11 +467,14 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
 #' estimable.
 #'
 #' @section Scope (status `"experimental"`):
-#' Spatial joint nested-Laplace only (`method = "nested_laplace"`): a single
-#' shared areal field coupled across the occupancy (`sigma`) and cover
-#' (`alpha * sigma`) arms, integrated over the outer `(sigma, alpha)` grid.
-#' Spatially varying trend fields and a non-spatial Laplace path are not yet
-#' wired.
+#' Two engines. `method = "nested_laplace"` carries a single shared areal field
+#' coupled across the occupancy (`sigma`) and cover (`alpha * sigma`) arms,
+#' integrated over the outer `(sigma, alpha)` grid. `method = "laplace"` is the
+#' non-spatial path (iid cells, no field): the exact three-level marginal
+#' optimised directly. Cells are declared the same way on both paths, via an
+#' `icar(graph = adj, group_var = "<cell>")` term (the graph drives the field
+#' under `"nested_laplace"` and is ignored under `"laplace"`). Spatially varying
+#' trend fields are not yet wired.
 #'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
