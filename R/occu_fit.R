@@ -101,14 +101,19 @@
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
   # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "removal")) {
-    if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
+    if (!is.null(spatial) || !is.null(temporal)) {
       stop("removal() currently supports non-spatial fixed effects only; a ",
-           "spatial / random-effect / temporal term is not yet wired. (#51)",
-           call. = FALSE)
+           "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
+    }
+    if (!is.null(re) && !identical(method, "nuts")) {
+      stop("removal() random effects fit under method = \"nuts\" (a single ",
+           "intercept RE on one arm, tulpaObs#51); the Laplace path is ",
+           "non-spatial fixed effects only.", call. = FALSE)
     }
     if (identical(method, "nuts")) {
       fit <- .tobs_fit_removal_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
+        re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)

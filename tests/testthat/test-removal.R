@@ -223,3 +223,62 @@ test_that("removal NUTS recovers truth and scores WAIC", {
   expect_true(is.finite(w$waic))
   expect_gt(w$p_waic, 0)
 })
+
+
+# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+
+# Removal data with a per-site intercept RE on the abundance arm.
+sim_removal_lambda_re <- function(N, K, ngrp, beta_lambda, beta_p, sigma_b,
+                                  seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  grp <- rep(seq_len(ngrp), length.out = N)
+  b   <- stats::rnorm(ngrp, sd = sigma_b)
+  data <- data.frame(x1 = stats::rnorm(N), g = factor(grp))
+  lambda <- exp(as.numeric(model.matrix(~ x1, data) %*% beta_lambda) + b[grp])
+  p <- plogis(beta_p)
+  Nlat <- stats::rpois(N, lambda)
+  y <- matrix(0L, N, K)
+  for (i in seq_len(N)) {
+    rem <- Nlat[i]
+    for (k in seq_len(K)) { yk <- stats::rbinom(1L, rem, p); y[i, k] <- yk; rem <- rem - yk }
+  }
+  list(y = y, data = data, sigma_b = sigma_b, beta_lambda = beta_lambda)
+}
+
+test_that("removal() NUTS samples a single intercept RE and recovers sigma + betas", {
+  skip_on_cran()
+  skip_if_fast()
+  # Small counts (lambda ~ 5) + an explicit modest K.max keep the depleting-
+  # binomial marginal cheap so the sampler runs in test time.
+  s <- sim_removal_lambda_re(N = 70, K = 4, ngrp = 8,
+                             beta_lambda = c(log(5), 0.3), beta_p = qlogis(0.5),
+                             sigma_b = 0.6, seed = 7)
+  fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data,
+              y = s$y, family = removal(K_max = 45L), method = "nuts",
+              verbose = FALSE,
+              control = list(n.iter = 400L, n.warmup = 300L, seed = 1L))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$re$arm, "lambda")
+  expect_equal(fit$re$n_groups, 8L)
+  expect_lt(abs(fit$re$sigma - 0.6), 0.4)
+  expect_gt(fit$re$sigma_sd, 0)
+  expect_lt(abs(fit$means[["lambda_(Intercept)"]] - log(5)), 0.35)
+  expect_lt(abs(fit$means[["lambda_x1"]] - 0.3), 0.25)
+  expect_lt(mean(fit$nuts$divergent), 0.15)
+})
+
+test_that("removal() RE is NUTS-only; slopes / both-arm rejected", {
+  s <- sim_removal_lambda_re(N = 40, K = 4, ngrp = 5, beta_lambda = c(log(6), 0.2),
+                             beta_p = 0, sigma_b = 0.5, seed = 2)
+  # RE under the Laplace path is not supported for removal.
+  expect_error(
+    tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
+         family = removal(), method = "laplace"),
+    "method = \"nuts\"|nuts")
+  # Random slope under NUTS is AGHQ-only territory.
+  expect_error(
+    tobs(formula = ~ x1 + (x1 | g), detection = ~ 1, data = s$data, y = s$y,
+         family = removal(), method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "single intercept random effect|laplace")
+})

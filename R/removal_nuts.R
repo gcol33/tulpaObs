@@ -80,7 +80,7 @@
 # the draws into the build_nmix_fit shape. Operates on the (autoscaled) `model`;
 # the caller .tobs_fit_model() unscales the means / draws / vcov back to natural.
 .tobs_fit_removal_nuts <- function(model, mixture = "poisson", K_max = NULL,
-                                   sigma.beta = 10, sigma.logr = 1.5,
+                                   sigma.beta = 10, sigma.logr = 1.5, re = NULL,
                                    n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
                                    max.treedepth = 10L, adapt.delta = 0.9,
                                    seed = 1L, verbose = FALSE) {
@@ -98,16 +98,23 @@
     K_max <- max(as.integer(site_tot)) + 100L
   }
   K_max <- as.integer(K_max)
-  lay <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb)
+
+  # Single intercept RE on one arm (tulpaObs#51), via the shared count-NUTS RE
+  # helpers (same machinery as abun()).
+  re_info <- .tobs_count_nuts_re_info(re, model)
+  n_re_groups <- if (!is.null(re_info)) re_info$n_groups else 0L
+  lay <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb, re_groups = n_re_groups)
 
   warm <- removal_laplace(y = y_long, site_idx = site_idx, X_lambda = X_lambda,
                           X_p = X_p, mixture = mix_code, K_max = K_max,
                           max_iter = 100L, verbose = FALSE)
-  init <- .tobs_abun_nuts_pack_init(warm, lay)
+  init <- .tobs_count_nuts_re_init(.tobs_abun_nuts_pack_init(warm, lay), lay, re_info)
 
-  spec <- list(y = as.integer(y_long), site_idx = as.integer(site_idx),
-               X_lambda = X_lambda, X_p = X_p,
-               n_sites = n_sites, K_max = K_max, is_nb = is_nb)
+  spec <- .tobs_count_nuts_re_spec(
+    list(y = as.integer(y_long), site_idx = as.integer(site_idx),
+         X_lambda = X_lambda, X_p = X_p,
+         n_sites = n_sites, K_max = K_max, is_nb = is_nb),
+    re_info, sigma.logr)
 
   run_chain <- function(ch) {
     cpp_removal_nuts(spec, theta0 = init$theta0,
@@ -123,7 +130,8 @@
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
-           if (is_nb) "log_r")
+           if (is_nb) "log_r",
+           .tobs_count_nuts_re_names(re_info))
   colnames(draws) <- nms
   accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
   divergent <- unlist(lapply(chains, `[[`, "divergent"))
@@ -149,6 +157,7 @@
 
   n_draws <- nrow(draws)
   fit$draws       <- draws
+  fit <- .tobs_count_nuts_re_finish(fit, draws, par, cov, nms, re_info)
   fit$n_samples   <- n_draws
   fit$log_prob    <- rep(ll_mean, n_draws)
   fit$accept_prob <- accept
@@ -161,6 +170,7 @@
                    n_chains = as.integer(n.chains),
                    divergent_total = sum(divergent),
                    is_nb = is_nb, K_max = K_max,
+                   re_arm = if (!is.null(re_info)) re_info$arm else -1L,
                    sigma_beta = sigma.beta, sigma_logr = sigma.logr)
   fit
 }
