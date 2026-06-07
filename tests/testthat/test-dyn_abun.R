@@ -153,17 +153,73 @@ test_that("S3 surface works for dyn_abun fits", {
   expect_equal(dim(rr), dim(sim$y))
 })
 
-test_that("dyn_abun rejects single-season data and negbin", {
+test_that("dyn_abun rejects single-season data", {
   sim <- simulate_dyn_abun(N = 20, T = 4, J = 3, seed = 5)
   y1 <- sim$y[, , 1, drop = FALSE]
   expect_error(
     tobs(formula = ~ 1, data = sim$data, family = dyn_abun(), detection = ~ 1,
          y = y1, method = "laplace"),
     ">= 2 primary seasons")
-  expect_error(
-    tobs(formula = ~ 1, data = sim$data, family = dyn_abun(mixture = "negbin"),
-         detection = ~ 1, y = sim$y, method = "laplace"),
-    "Poisson initial abundance only")
+})
+
+test_that("dyn_abun NB analytic gradient (incl log_r) matches finite differences", {
+  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n_abund_covs = 1,
+                           beta_lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
+                           gamma = 1, mixture = "negbin", r = 2, seed = 2)
+  model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
+                                           mixture = "negbin", K_max = 35)
+  lay  <- tulpaObs:::.tobs_dyn_abun_nuts_layout(2L, 1L, 1L, 1L, use_nb = TRUE)
+  expect_equal(lay$total, 6L)
+  marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
+  theta <- c(log(5), 0.2, 0.1, qlogis(0.6), log(1), log(2))   # last coord = log r
+  f <- function(th) tulpaObs:::.tobs_dyn_abun_nuts_logpost(th, marg, lay)$lp
+  g_an <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay)$grad
+  g_fd <- sapply(seq_along(theta), function(j) {
+    h <- 1e-5; tp <- theta; tm <- theta; tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
+    (f(tp) - f(tm)) / (2 * h)
+  })
+  expect_equal(g_an, g_fd, tolerance = 1e-4)
+})
+
+test_that("C++ dyn_abun NB NUTS log-posterior matches the R oracle byte-for-byte", {
+  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n_abund_covs = 1,
+                           mixture = "negbin", r = 2.5, seed = 12)
+  model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
+                                           mixture = "negbin", K_max = 25)
+  lay  <- tulpaObs:::.tobs_dyn_abun_nuts_layout(2L, 1L, 1L, 1L, use_nb = TRUE)
+  marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
+  theta <- c(log(5), 0.2, 0.1, qlogis(0.6), log(0.8), log(2.5))
+  spec <- list(y = as.integer(model$y_flat), n_sites = model$n_sites,
+               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+               X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
+               X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
+               use_nb = TRUE)
+  r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10)
+  c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10)
+  expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9)
+  expect_equal(as.numeric(c_out$grad), r_out$grad, tolerance = 1e-9)
+})
+
+test_that("dyn_abun negbin Laplace recovers truth (incl dispersion)", {
+  skip_on_cran()
+  skip_if_fast()
+  beta_lambda <- c(log(7), 0.4)
+  sim <- simulate_dyn_abun(N = 300, T = 4, J = 3, n_abund_covs = 1,
+                           beta_lambda = beta_lambda, p = 0.5, omega = 0.6,
+                           gamma = 1.2, mixture = "negbin", r = 3, seed = 21)
+  fit <- tobs(formula = ~ abund_cov1, data = sim$data,
+              family = dyn_abun(K_max = 45, mixture = "negbin"),
+              detection = ~ 1, y = sim$y, method = "laplace",
+              control = list(verbose = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true("log_r" %in% names(fit$means))
+  truth <- c(beta_lambda, qlogis(0.5), qlogis(0.6), log(1.2), log(3))
+  est <- as.numeric(fit$means); se <- as.numeric(fit$sds)
+  expect_true(all(abs(est - truth) / se < 3.5))
+  expect_lt(abs(est[2] - beta_lambda[2]), 0.25)
+  # dispersion summary present and on the right order of magnitude
+  expect_true(is.finite(fit$dispersion$r))
+  expect_lt(abs(log(fit$dispersion$r) - log(3)), 0.8)
 })
 
 test_that("dyn_abun NUTS recovers truth and scores WAIC", {

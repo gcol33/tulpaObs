@@ -16,6 +16,8 @@ namespace tulpaObs {
 struct DynNutsModel {
     int n_sites = 0, T = 0, J = 0, K = 0;
     int p_lam = 0, p_p = 0, p_om = 0, p_gm = 0, total = 0;
+    bool use_nb = false;                          // NB initial abundance
+    int o_logr = -1;                             // trailing log r coord (NB only)
     double sigma_beta = 10.0;
     std::vector<int> y;                          // site-major, season, visit; -1 = NA
     Rcpp::NumericMatrix X_lambda, X_p, X_omega, X_gamma;
@@ -32,9 +34,11 @@ inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
     m.T = Rcpp::as<int>(spec["T"]);
     m.J = Rcpp::as<int>(spec["J"]);
     m.K = Rcpp::as<int>(spec["K_max"]);
+    if (spec.containsElementNamed("use_nb")) m.use_nb = Rcpp::as<bool>(spec["use_nb"]);
     m.p_lam = m.X_lambda.ncol(); m.p_p = m.X_p.ncol();
     m.p_om = m.X_omega.ncol(); m.p_gm = m.X_gamma.ncol();
     m.total = m.p_lam + m.p_p + m.p_om + m.p_gm;
+    if (m.use_nb) { m.o_logr = m.total; m.total += 1; }   // log r is the last coord
     m.y.assign(y.begin(), y.end());
     return m;
 }
@@ -43,6 +47,8 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
     const int p_lam = m.p_lam, p_p = m.p_p, p_om = m.p_om, p_gm = m.p_gm;
     const int o_lam = 0, o_p = p_lam, o_om = p_lam + p_p, o_gm = p_lam + p_p + p_om;
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
+    const double eta_logr = m.use_nb ? theta[m.o_logr] : 0.0;
+    double grad_logr = 0.0;
     double lp = 0.0;
     for (int i = 0; i < m.n_sites; ++i) {
         double el = 0.0, ep = 0.0, eo = 0.0, eg = 0.0;
@@ -51,13 +57,16 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
         for (int k = 0; k < p_om;  ++k) eo += m.X_omega(i, k)  * theta[o_om + k];
         for (int k = 0; k < p_gm;  ++k) eg += m.X_gamma(i, k)  * theta[o_gm + k];
         DynAbunSiteResult r = compute_dyn_abun_site(
-            m.y.data() + (std::size_t)i * m.T * m.J, m.T, m.J, m.K, el, ep, eo, eg);
+            m.y.data() + (std::size_t)i * m.T * m.J, m.T, m.J, m.K, el, ep, eo, eg,
+            m.use_nb, eta_logr);
         lp += r.log_lik;
         for (int k = 0; k < p_lam; ++k) grad[o_lam + k] += r.grad_eta_lambda * m.X_lambda(i, k);
         for (int k = 0; k < p_p;   ++k) grad[o_p + k]   += r.grad_eta_p      * m.X_p(i, k);
         for (int k = 0; k < p_om;  ++k) grad[o_om + k]  += r.grad_eta_omega  * m.X_omega(i, k);
         for (int k = 0; k < p_gm;  ++k) grad[o_gm + k]  += r.grad_eta_gamma  * m.X_gamma(i, k);
+        grad_logr += r.grad_eta_logr;
     }
+    if (m.use_nb) grad[m.o_logr] += grad_logr;
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
     for (int k = 0; k < m.total; ++k) {
         lp -= 0.5 * ib2 * theta[k] * theta[k];

@@ -13,6 +13,8 @@ simulate_dyn_abun(
   p = 0.5,
   omega = 0.6,
   gamma = 1,
+  mixture = c("poisson", "negbin"),
+  r = 2,
   seed = NULL
 )
 }
@@ -31,11 +33,17 @@ simulate_dyn_abun(
 \item{p, omega, gamma}{Detection, apparent-survival, and recruitment parameters
 (scalars; defaults 0.5, 0.6, 1.0).}
 
+\item{mixture}{Initial-abundance distribution: \code{"poisson"} (default) or
+\code{"negbin"} (negative-binomial \code{N_1 ~ NB(mean = lambda, size = r)}).}
+
+\item{r}{Negative-binomial size for \code{mixture = "negbin"} (default 2).}
+
 \item{seed}{Optional random seed.}
 }
 \value{
 A list with \code{y} (N x J x T count array), \code{data} (covariates), and
-\code{truth} (coefficients, per-site \code{lambda}, scalar \code{p}/\code{omega}/\code{gamma}).
+\code{truth} (coefficients, per-site \code{lambda}, scalar \code{p}/\code{omega}/\code{gamma}, and
+\code{r} under \code{"negbin"}).
 }
 \description{
 Latent \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2}, `N_t = Binomial(N_(t-1), omega)

@@ -43,6 +43,7 @@ namespace tulpaObs {
 struct DynAbunSiteResult {
     double log_lik;
     double grad_eta_lambda, grad_eta_p, grad_eta_omega, grad_eta_gamma;
+    double grad_eta_logr;      // d log L / d log r (negbin initial; 0 under Poisson)
     double mean_N1;            // E[N_1 | y] (diagnostic / fitted)
 };
 
@@ -55,9 +56,17 @@ inline double da_inv_logit(double e) {
 // Per-site Dail-Madsen forward marginal. `y` is laid out season-major
 // (y[t*J + j]) with -1 marking a missing visit; T seasons, J secondary visits,
 // K the abundance truncation (states 0..K).
+// `use_nb` switches the season-1 initial abundance from Poisson(lambda) to
+// negative-binomial NB(mean = lambda, size = r), r = exp(eta_logr) -- the
+// pcountOpen "NB" mixture. Only the initial distribution changes; survival,
+// recruitment and detection are identical. The dispersion enters the marginal
+// solely through season 1, so its derivative `da_r` propagates exactly like
+// `da_l` (lambda), which is also initial-only. With `use_nb = false` the
+// Poisson path is byte-identical to before (da_r stays 0, grad_eta_logr = 0).
 inline DynAbunSiteResult compute_dyn_abun_site(
     const int* y, int T, int J, int K,
-    double eta_lambda, double eta_p, double eta_omega, double eta_gamma
+    double eta_lambda, double eta_p, double eta_omega, double eta_gamma,
+    bool use_nb = false, double eta_logr = 0.0
 ) {
     const int S = K + 1;                       // number of abundance states
     const double lambda = std::exp(eta_lambda);
@@ -67,9 +76,11 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     const double logp = std::log(p), log1mp = std::log1p(-p);
     const double logom = std::log(omega), log1mom = std::log1p(-omega);
     const double loggam = std::log(gamma);
+    const double rr = use_nb ? std::exp(eta_logr) : 0.0;  // NB size
 
     DynAbunSiteResult res;
     res.grad_eta_lambda = res.grad_eta_p = res.grad_eta_omega = res.grad_eta_gamma = 0.0;
+    res.grad_eta_logr = 0.0;
 
     // Recruitment pmf pois(g) = Poisson(g | gamma) and d/d eta_gamma = pois*(g-gamma).
     std::vector<double> pois(S), dpois_g(S);
@@ -104,22 +115,43 @@ inline DynAbunSiteResult compute_dyn_abun_site(
         }
     };
 
-    // Forward state and its 4 derivatives (alpha normalised after each season).
-    std::vector<double> a(S), da_l(S), da_p(S), da_o(S), da_g(S);
+    // Forward state and its derivatives (alpha normalised after each season). da_r
+    // is the dispersion derivative, carried alongside da_l (both initial-only).
+    std::vector<double> a(S), da_l(S), da_p(S), da_o(S), da_g(S), da_r(S);
     std::vector<double> obs(S), dobs(S);
 
-    // --- Season 1: initial Poisson(lambda) x observation. ---
+    // --- Season 1: initial Poisson / NB (lambda[, r]) x observation. ---
     obs_season(0, obs, dobs);
-    double c1 = 0.0, dc_l = 0.0, dc_p = 0.0;
+    double c1 = 0.0, dc_l = 0.0, dc_p = 0.0, dc_r = 0.0;
     for (int n = 0; n < S; ++n) {
-        const double lpn = -lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0);
-        const double pi_n = std::exp(lpn);
-        const double dpi_l = pi_n * ((double)n - lambda);     // d/d eta_lambda
+        double pi_n, dpi_l, dpi_r;
+        if (use_nb) {
+            // NB(mean = lambda, size = rr): log pi = lgamma(n+r) - lgamma(r)
+            //   - lgamma(n+1) + r log(r/(r+mu)) + n log(mu/(r+mu)).
+            const double rpm = rr + lambda;
+            const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
+                - R::lgammafn((double)n + 1.0)
+                + rr * std::log(rr / rpm) + (double)n * std::log(lambda / rpm);
+            pi_n = std::exp(lpn);
+            // d log pi / d eta_lambda = n - mu (n+r)/(r+mu).
+            dpi_l = pi_n * ((double)n - lambda * ((double)n + rr) / rpm);
+            // d log pi / d log r = r [psi(n+r) - psi(r) + log(r/(r+mu)) + 1
+            //   - (r+n)/(r+mu)].
+            const double dlog_dlogr = rr * (R::digamma((double)n + rr) - R::digamma(rr)
+                + std::log(rr / rpm) + 1.0 - (rr + (double)n) / rpm);
+            dpi_r = pi_n * dlog_dlogr;
+        } else {
+            const double lpn = -lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0);
+            pi_n = std::exp(lpn);
+            dpi_l = pi_n * ((double)n - lambda);     // d/d eta_lambda
+            dpi_r = 0.0;
+        }
         a[n]   = pi_n * obs[n];
         da_l[n] = dpi_l * obs[n];
         da_p[n] = pi_n * dobs[n];
+        da_r[n] = dpi_r * obs[n];
         da_o[n] = 0.0; da_g[n] = 0.0;
-        c1 += a[n]; dc_l += da_l[n]; dc_p += da_p[n];
+        c1 += a[n]; dc_l += da_l[n]; dc_p += da_p[n]; dc_r += da_r[n];
     }
     if (!(c1 > 0.0)) {           // impossible history (e.g. counts above K)
         res.log_lik = -std::numeric_limits<double>::infinity();
@@ -128,6 +160,7 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     double log_lik = std::log(c1);
     res.grad_eta_lambda += dc_l / c1;
     res.grad_eta_p      += dc_p / c1;
+    res.grad_eta_logr   += dc_r / c1;
     // mean_N1 from the season-1 posterior (before normalisation effects cancel).
     double mN1 = 0.0;
     for (int n = 0; n < S; ++n) mN1 += (double)n * (a[n] / c1);
@@ -137,19 +170,20 @@ inline DynAbunSiteResult compute_dyn_abun_site(
         a[n]   /= c1;
         da_l[n] = (da_l[n] - a[n] * dc_l) / c1;
         da_p[n] = (da_p[n] - a[n] * dc_p) / c1;
+        da_r[n] = (da_r[n] - a[n] * dc_r) / c1;
         da_o[n] = 0.0; da_g[n] = 0.0;       // no omega/gamma dependence yet
     }
 
     // --- Seasons 2..T: transition then observation. ---
-    std::vector<double> pre(S), dpre_l(S), dpre_p(S), dpre_o(S), dpre_g(S);
+    std::vector<double> pre(S), dpre_l(S), dpre_p(S), dpre_o(S), dpre_g(S), dpre_r(S);
     std::vector<double> binom(S), dbinom(S);   // survivor pmf for the current row n
     for (int t = 1; t < T; ++t) {
         for (int n2 = 0; n2 < S; ++n2) {
-            pre[n2] = dpre_l[n2] = dpre_p[n2] = dpre_o[n2] = dpre_g[n2] = 0.0;
+            pre[n2] = dpre_l[n2] = dpre_p[n2] = dpre_o[n2] = dpre_g[n2] = dpre_r[n2] = 0.0;
         }
         for (int n = 0; n < S; ++n) {
             if (a[n] == 0.0 && da_l[n] == 0.0 && da_p[n] == 0.0 &&
-                da_o[n] == 0.0 && da_g[n] == 0.0) continue;
+                da_o[n] == 0.0 && da_g[n] == 0.0 && da_r[n] == 0.0) continue;
             // Survivor pmf Binom(s | n, omega), s = 0..n, and d/d eta_omega =
             // binom * (s - n omega).
             for (int s = 0; s <= n; ++s) {
@@ -160,6 +194,7 @@ inline DynAbunSiteResult compute_dyn_abun_site(
                 dbinom[s] = binom[s] * ((double)s - (double)n * omega);
             }
             const double an = a[n], dl = da_l[n], dp = da_p[n], dom = da_o[n], dg = da_g[n];
+            const double dr = da_r[n];
             // Tr(n -> n') = sum_s binom[s] pois[n'-s]; scatter into pre.
             for (int s = 0; s <= n; ++s) {
                 const double bs = binom[s], dbs = dbinom[s];
@@ -167,24 +202,28 @@ inline DynAbunSiteResult compute_dyn_abun_site(
                     const int n2 = s + gn;
                     const double tr = bs * pois[gn];
                     pre[n2]   += an * tr;
-                    // chain rule: d(alpha_{t-1}(n) Tr)/d eta_k
+                    // chain rule: d(alpha_{t-1}(n) Tr)/d eta_k. The transition
+                    // carries no lambda/r dependence, so those propagate the
+                    // upstream derivative alone (like lambda).
                     dpre_l[n2] += dl * tr;
                     dpre_p[n2] += dp * tr;
                     dpre_o[n2] += dom * tr + an * (dbs * pois[gn]);
                     dpre_g[n2] += dg * tr + an * (bs * dpois_g[gn]);
+                    dpre_r[n2] += dr * tr;
                 }
             }
         }
         obs_season(t, obs, dobs);
-        double ct = 0.0, dct_l = 0.0, dct_p = 0.0, dct_o = 0.0, dct_g = 0.0;
+        double ct = 0.0, dct_l = 0.0, dct_p = 0.0, dct_o = 0.0, dct_g = 0.0, dct_r = 0.0;
         for (int n2 = 0; n2 < S; ++n2) {
             a[n2]   = pre[n2] * obs[n2];
             da_l[n2] = dpre_l[n2] * obs[n2];
             da_p[n2] = dpre_p[n2] * obs[n2] + pre[n2] * dobs[n2];
             da_o[n2] = dpre_o[n2] * obs[n2];
             da_g[n2] = dpre_g[n2] * obs[n2];
+            da_r[n2] = dpre_r[n2] * obs[n2];
             ct += a[n2]; dct_l += da_l[n2]; dct_p += da_p[n2];
-            dct_o += da_o[n2]; dct_g += da_g[n2];
+            dct_o += da_o[n2]; dct_g += da_g[n2]; dct_r += da_r[n2];
         }
         if (!(ct > 0.0)) {
             res.log_lik = -std::numeric_limits<double>::infinity();
@@ -195,12 +234,14 @@ inline DynAbunSiteResult compute_dyn_abun_site(
         res.grad_eta_p      += dct_p / ct;
         res.grad_eta_omega  += dct_o / ct;
         res.grad_eta_gamma  += dct_g / ct;
+        res.grad_eta_logr   += dct_r / ct;
         for (int n2 = 0; n2 < S; ++n2) {
             a[n2]   /= ct;
             da_l[n2] = (da_l[n2] - a[n2] * dct_l) / ct;
             da_p[n2] = (da_p[n2] - a[n2] * dct_p) / ct;
             da_o[n2] = (da_o[n2] - a[n2] * dct_o) / ct;
             da_g[n2] = (da_g[n2] - a[n2] * dct_g) / ct;
+            da_r[n2] = (da_r[n2] - a[n2] * dct_r) / ct;
         }
     }
 

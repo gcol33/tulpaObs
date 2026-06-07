@@ -85,8 +85,8 @@ cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr,
     .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
-cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma) {
-    .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma)
+cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0) {
+    .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr)
 }
 
 cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta) {

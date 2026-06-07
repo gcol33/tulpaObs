@@ -347,8 +347,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_dyn_abun_total_log_lik
-Rcpp::List cpp_dyn_abun_total_log_lik(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma);
-RcppExport SEXP _tulpaObs_cpp_dyn_abun_total_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP) {
+Rcpp::List cpp_dyn_abun_total_log_lik(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, bool use_nb, double eta_logr);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_total_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -361,7 +361,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_omega(eta_omegaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_gamma(eta_gammaSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_total_log_lik(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma));
+    Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
+    Rcpp::traits::input_parameter< double >::type eta_logr(eta_logrSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_total_log_lik(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1085,7 +1087,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_distance_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_distance_total_log_lik, 10},
     {"_tulpaObs_cpp_distance_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_distance_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
-    {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 9},
+    {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 11},
     {"_tulpaObs_cpp_dyn_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_dyn_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts, 10},
     {"_tulpaObs_cpp_fp_occu_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_fp_occu_total_log_lik, 6},

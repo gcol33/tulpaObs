@@ -14,6 +14,8 @@ dyn_abun_laplace(
   X_p,
   X_omega,
   X_gamma,
+  mixture = "poisson",
+  log_r_init = NULL,
   max_iter = 300L,
   tol = 1e-08,
   verbose = FALSE

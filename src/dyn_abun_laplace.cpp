@@ -11,11 +11,15 @@
 #include <vector>
 #include "dyn_abun_kernel.h"
 
+// `use_nb` switches the initial abundance to negative-binomial NB(mean=lambda,
+// size = exp(eta_logr)); `eta_logr` is a single shared dispersion coordinate.
+// `grad_eta_logr` is summed across sites (the score for the one log r parameter).
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_total_log_lik(
     Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p,
-    Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma
+    Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma,
+    bool use_nb = false, double eta_logr = 0.0
 ) {
     if ((int)y.size() != n_sites * T * J)
         Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
@@ -23,7 +27,7 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
         eta_omega.size() != n_sites || eta_gamma.size() != n_sites)
         Rcpp::stop("all eta vectors must have length n_sites.");
 
-    double total = 0.0;
+    double total = 0.0, grad_eta_logr = 0.0;
     Rcpp::NumericVector log_lik_site(n_sites), grad_eta_lambda(n_sites),
         grad_eta_p(n_sites), grad_eta_omega(n_sites), grad_eta_gamma(n_sites),
         mean_N1(n_sites);
@@ -32,7 +36,7 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
     for (int i = 0; i < n_sites; ++i) {
         tulpaObs::DynAbunSiteResult r = tulpaObs::compute_dyn_abun_site(
             yp + (std::size_t)i * T * J, T, J, K,
-            eta_lambda[i], eta_p[i], eta_omega[i], eta_gamma[i]);
+            eta_lambda[i], eta_p[i], eta_omega[i], eta_gamma[i], use_nb, eta_logr);
         if (!R_finite(r.log_lik)) ++n_inadmissible;
         total += r.log_lik;
         log_lik_site[i]    = r.log_lik;
@@ -40,6 +44,7 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
         grad_eta_p[i]      = r.grad_eta_p;
         grad_eta_omega[i]  = r.grad_eta_omega;
         grad_eta_gamma[i]  = r.grad_eta_gamma;
+        grad_eta_logr     += r.grad_eta_logr;
         mean_N1[i]         = r.mean_N1;
     }
     return Rcpp::List::create(
@@ -49,6 +54,7 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
         Rcpp::Named("grad_eta_p")       = grad_eta_p,
         Rcpp::Named("grad_eta_omega")   = grad_eta_omega,
         Rcpp::Named("grad_eta_gamma")   = grad_eta_gamma,
+        Rcpp::Named("grad_eta_logr")    = grad_eta_logr,
         Rcpp::Named("mean_N1")          = mean_N1,
         Rcpp::Named("n_inadmissible")   = n_inadmissible);
 }

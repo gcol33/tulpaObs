@@ -53,9 +53,9 @@
     stop("dyn_abun() needs >= 2 primary seasons; for a single season use abun().",
          call. = FALSE)
   }
-  if (!identical(mixture, "poisson")) {
-    stop("dyn_abun() currently supports the Poisson initial abundance only; ",
-         "negative-binomial dynamics are not yet wired. (#52)", call. = FALSE)
+  if (!mixture %in% c("poisson", "negbin")) {
+    stop("dyn_abun(mixture = '", mixture, "') is not supported. ",
+         "Use 'poisson' or 'negbin'.", call. = FALSE)
   }
 
   bind <- .tobs_bind_formulas(list(lambda = occ_formula, p = det_formula,
@@ -106,6 +106,7 @@
     J = model$max_visits, K_max = model$K_max,
     X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
     X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
+    mixture = model$mixture %||% "poisson",
     max_iter = as.integer(max_iter), tol = as.numeric(tol), verbose = isTRUE(verbose))
   build_dyn_abun_fit(raw, model)
 }
@@ -143,13 +144,19 @@
 #'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.
 dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
                              X_lambda, X_p, X_omega, X_gamma,
+                             mixture = "poisson", log_r_init = NULL,
                              max_iter = 300L, tol = 1e-8, verbose = FALSE) {
   y_flat <- as.integer(y_flat)
   K_max <- as.integer(K_max)
+  is_nb <- identical(mixture, "negbin")
   p <- c(ncol(X_lambda), ncol(X_p), ncol(X_omega), ncol(X_gamma))
   off <- cumsum(c(0L, p))
   idx <- list(lambda = off[1] + seq_len(p[1]), p = off[2] + seq_len(p[2]),
               omega = off[3] + seq_len(p[3]), gamma = off[4] + seq_len(p[4]))
+  # Under NB the dispersion log r is a single trailing coordinate (shared across
+  # sites), jointly estimated with the betas like abun()'s nmix dispersion.
+  n_par  <- sum(p) + if (is_nb) 1L else 0L
+  ir     <- if (is_nb) n_par else NA_integer_
 
   eval_cpp <- function(theta) {
     cpp_dyn_abun_total_log_lik(
@@ -157,32 +164,36 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
       as.numeric(X_lambda %*% theta[idx$lambda]),
       as.numeric(X_p      %*% theta[idx$p]),
       as.numeric(X_omega  %*% theta[idx$omega]),
-      as.numeric(X_gamma  %*% theta[idx$gamma]))
+      as.numeric(X_gamma  %*% theta[idx$gamma]),
+      use_nb = is_nb, eta_logr = if (is_nb) theta[ir] else 0.0)
   }
   grad_design <- function(out) {
-    g <- numeric(sum(p))
+    g <- numeric(n_par)
     g[idx$lambda] <- as.numeric(crossprod(X_lambda, out$grad_eta_lambda))
     g[idx$p]      <- as.numeric(crossprod(X_p,      out$grad_eta_p))
     g[idx$omega]  <- as.numeric(crossprod(X_omega,  out$grad_eta_omega))
     g[idx$gamma]  <- as.numeric(crossprod(X_gamma,  out$grad_eta_gamma))
+    if (is_nb) g[ir] <- as.numeric(out$grad_eta_logr)
     g
   }
   neg_ll   <- function(theta) -eval_cpp(theta)$log_lik
   neg_grad <- function(theta) -grad_design(eval_cpp(theta))
 
   # Warm start: naive initial abundance from the first-season max count, p ~ 0.5,
-  # omega ~ 0.6, gamma ~ 0.5.
+  # omega ~ 0.6, gamma ~ 0.5. NB dispersion log r warm-started at log(2) (mild
+  # overdispersion) unless overridden.
   J0 <- J; first_counts <- numeric(n_sites)
   for (i in seq_len(n_sites)) {
     seg <- y_flat[((i - 1L) * T * J0) + seq_len(J0)]      # season 1 visits
     seg <- seg[seg >= 0]
     first_counts[i] <- if (length(seg)) max(seg) else 0
   }
-  theta0 <- numeric(sum(p))
+  theta0 <- numeric(n_par)
   theta0[idx$lambda[1]] <- log(max(mean(first_counts) / 0.5, 0.5) + 0.5)
   theta0[idx$p[1]]      <- 0
   theta0[idx$omega[1]]  <- stats::qlogis(0.6)
   theta0[idx$gamma[1]]  <- log(0.5)
+  if (is_nb) theta0[ir] <- if (is.null(log_r_init)) log(2) else as.numeric(log_r_init)
 
   # Progress + ETA (gcol33/tulpaObs#43); ON by default. BFGS calls the gradient
   # ~once per quasi-Newton iteration, so ticking there approximates iteration
@@ -201,15 +212,18 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
 
   nm <- c(paste0("lambda_", colnames(X_lambda)), paste0("p_", colnames(X_p)),
           paste0("omega_", colnames(X_omega)), paste0("gamma_", colnames(X_gamma)))
+  if (is_nb) nm <- c(nm, "log_r")
   dimnames(vcov) <- list(nm, nm); dimnames(Hobs) <- list(nm, nm)
   if (!converged) {
     warning(sprintf("dyn_abun_laplace BFGS did not converge (code %d).", opt$convergence),
             call. = FALSE)
   }
 
+  log_r <- if (is_nb) as.numeric(theta[ir]) else NA_real_
   structure(list(
     beta_lambda = theta[idx$lambda], beta_p = theta[idx$p],
     beta_omega = theta[idx$omega], beta_gamma = theta[idx$gamma],
+    log_r = log_r, r = if (is_nb) exp(log_r) else NA_real_, mixture = mixture,
     means = theta, vcov = vcov, H_obs = Hobs,
     log_lik = out$log_lik, log_lik_site = out$log_lik_site, mean_N1 = out$mean_N1,
     converged = converged, n_iter = opt$counts[[1]], K_max = K_max,
@@ -224,6 +238,8 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
 
 build_dyn_abun_fit <- function(raw, model) {
   pi_list <- model$process_info
+  mixture <- raw$mixture %||% model$mixture %||% "poisson"
+  is_nb   <- identical(mixture, "negbin")
   nms <- raw$coef_names
   means <- raw$means; names(means) <- nms
   vcov <- as.matrix(raw$vcov); dimnames(vcov) <- list(nms, nms)
@@ -232,6 +248,19 @@ build_dyn_abun_fit <- function(raw, model) {
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
 
+  # NB dispersion summary on the natural (r) scale: r = exp(log_r), SE by the
+  # delta method r * SE(log_r). Mirrors abun()'s nmix dispersion slot.
+  dispersion <- NULL
+  if (is_nb && is.finite(raw$log_r %||% NA_real_)) {
+    se_logr <- if ("log_r" %in% nms) sqrt(pmax(vcov["log_r", "log_r"], 0)) else NA_real_
+    dispersion <- list(r = as.numeric(raw$r %||% exp(raw$log_r)),
+                       log_r = as.numeric(raw$log_r),
+                       r_sd = as.numeric(exp(raw$log_r) * se_logr))
+  }
+
+  # Fixed-effect block excludes the dispersion coordinate from being treated as a
+  # process coefficient; coef()/confint() still surface log_r as the trailing
+  # fixed coordinate (it has a name and an SE), matching abun().
   structure(c(list(
     draws = draws, means = means, sds = sds, vcov = vcov,
     n_samples = n_pseudo, n_params = length(means),
@@ -242,7 +271,7 @@ build_dyn_abun_fit <- function(raw, model) {
     n_fixed = length(nms), fixed_names = nms,
     process_info = pi_list, model = model, spatial = NULL, method = "laplace",
     log_lik = ll, mean_N1 = raw$mean_N1, K_max = raw$K_max,
-    mixture = "poisson",
+    mixture = mixture, dispersion = dispersion,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
   )), class = c("tobs_fit", "tulpa_fit"))
@@ -276,6 +305,8 @@ build_dyn_abun_fit <- function(raw, model) {
   p <- vapply(model$process_info, function(pp) pp$p, integer(1))
   off <- cumsum(c(0L, p))
   n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
+  is_nb <- identical(object$mixture %||% "poisson", "negbin")
+  r_disp <- object$dispersion$r %||% NA_real_
   result <- vector("list", nsim)
   for (s in seq_len(nsim)) {
     di <- sample.int(n_draws, 1L); th <- draws[di, ]
@@ -285,7 +316,8 @@ build_dyn_abun_fit <- function(raw, model) {
     gamma  <- exp(as.vector(model$X_processes[[4]] %*% th[off[4] + seq_len(p[4])]))
     ya <- array(0L, dim = c(n_sites, J, T))
     for (i in seq_len(n_sites)) {
-      N <- stats::rpois(1L, lambda[i])
+      N <- if (is_nb && is.finite(r_disp)) stats::rnbinom(1L, mu = lambda[i], size = r_disp)
+           else stats::rpois(1L, lambda[i])
       for (t in seq_len(T)) {
         if (t > 1L) N <- stats::rbinom(1L, N, omega[i]) + stats::rpois(1L, gamma[i])
         ya[i, , t] <- stats::rbinom(J, N, pdet[i])
@@ -351,23 +383,31 @@ build_dyn_abun_fit <- function(raw, model) {
 #'   `c(log(5), runif(n_abund_covs, -0.4, 0.4))`.
 #' @param p,omega,gamma Detection, apparent-survival, and recruitment parameters
 #'   (scalars; defaults 0.5, 0.6, 1.0).
+#' @param mixture Initial-abundance distribution: `"poisson"` (default) or
+#'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`).
+#' @param r Negative-binomial size for `mixture = "negbin"` (default 2).
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J x T count array), `data` (covariates), and
-#'   `truth` (coefficients, per-site `lambda`, scalar `p`/`omega`/`gamma`).
+#'   `truth` (coefficients, per-site `lambda`, scalar `p`/`omega`/`gamma`, and
+#'   `r` under `"negbin"`).
 #' @export
 simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
                               beta_lambda = NULL, p = 0.5, omega = 0.6,
-                              gamma = 1.0, seed = NULL) {
+                              gamma = 1.0, mixture = c("poisson", "negbin"),
+                              r = 2, seed = NULL) {
+  mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
   if (is.null(beta_lambda)) beta_lambda <- c(log(5), stats::runif(n_abund_covs, -0.4, 0.4))
   abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
   names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   lambda <- exp(as.vector(X_lambda %*% beta_lambda))
+  is_nb <- identical(mixture, "negbin")
   y <- array(0L, dim = c(N, J, T))
   Nmat <- matrix(0L, N, T)
   for (i in seq_len(N)) {
-    Ni <- stats::rpois(1L, lambda[i])
+    Ni <- if (is_nb) stats::rnbinom(1L, mu = lambda[i], size = r)
+          else stats::rpois(1L, lambda[i])
     for (t in seq_len(T)) {
       if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega) + stats::rpois(1L, gamma)
       Nmat[i, t] <- Ni
@@ -376,5 +416,6 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
   }
   list(y = y, data = abund_covs,
        truth = list(beta_lambda = beta_lambda, lambda = lambda, p = p,
-                    omega = omega, gamma = gamma, N = Nmat))
+                    omega = omega, gamma = gamma, mixture = mixture,
+                    r = if (is_nb) r else NA_real_, N = Nmat))
 }
