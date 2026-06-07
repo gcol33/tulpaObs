@@ -271,17 +271,45 @@ test_that("fp_occu NUTS recovers a single occupancy-arm intercept RE", {
   expect_true(all(c("re_g1_z1", "log_sigma_psi_g1") %in% colnames(fit$draws)))
 })
 
-test_that("fp_occu RE is NUTS-only and restricted to the psi arm", {
+test_that("fp_occu() Laplace AGHQ recovers a site-grouped psi-arm RE", {
+  skip_on_cran()
+  skip_if_fast()
+  # The variance component is recovered on average; the false-positive emission
+  # adds noise to the occupancy signal, so the per-seed estimate is higher-
+  # variance than clean occupancy (hence a mean-of-seeds recovery check).
+  sig_est <- b0_est <- numeric(0)
+  for (sd in 1:5) {
+    s <- sim_fp_psi_re(n_groups = 30L, per_group = 10L, J = 6L,
+                       beta0 = qlogis(0.45), sigma_re = 0.8, seed = sd)
+    fit <- tobs(formula = ~ 1 + (1 | g), data = s$data, family = fp_occu(),
+                detection = ~ 1, y = s$y, method = "laplace", verbose = FALSE,
+                control = list(n.quad = 7L))
+    if (sd == 1L) {
+      expect_identical(fit$method, "laplace")
+      expect_identical(fit$fp_re$arm, "psi")
+      expect_true("sigma_g1_(Intercept)" %in% names(fit$means))
+      re <- ranef(fit)
+      expect_true(is.data.frame(re))
+      expect_equal(nrow(re), 30L)
+    }
+    sig_est <- c(sig_est, fit$means[["sigma_g1_(Intercept)"]])
+    b0_est  <- c(b0_est,  fit$means[["psi_(Intercept)"]])
+  }
+  expect_lt(abs(mean(sig_est) - 0.8), 0.2)
+  expect_lt(abs(mean(b0_est) - qlogis(0.45)), 0.25)
+})
+
+test_that("fp_occu RE is restricted to the psi arm (both engines)", {
   s <- sim_fp_psi_re(n_groups = 6L, per_group = 5L, J = 4L, seed = 2L)
-  # RE under the Laplace path is not wired.
-  expect_error(
-    tobs(formula = ~ 1 + (1 | g), data = s$data, family = fp_occu(),
-         detection = ~ 1, y = s$y, method = "laplace"),
-    "random effects fit under method = \"nuts\"|non-spatial fixed effects")
-  # A detection-arm (p11) RE is rejected with a pointer to the state formula.
+  # A detection-arm (p11) RE is rejected with a pointer, under NUTS ...
   expect_error(
     tobs(formula = ~ 1, data = s$data, family = fp_occu(),
          detection = ~ 1 + (1 | g), y = s$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
+    "occupancy \\(psi\\) arm only|state formula")
+  # ... and under Laplace (the make_site AGHQ path integrates the psi arm only).
+  expect_error(
+    tobs(formula = ~ 1, data = s$data, family = fp_occu(),
+         detection = ~ 1 + (1 | g), y = s$y, method = "laplace"),
     "occupancy \\(psi\\) arm only|state formula")
 })

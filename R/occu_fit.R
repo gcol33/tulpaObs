@@ -204,17 +204,19 @@
       stop("fp_occu() currently supports non-spatial fixed effects only; a ",
            "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
     }
-    if (!is.null(re) && !identical(method, "nuts")) {
-      stop("fp_occu() random effects fit under method = \"nuts\" (a single ",
-           "intercept RE on the occupancy (psi) arm, tulpaObs#51); the Laplace ",
-           "path is non-spatial fixed effects only.", call. = FALSE)
-    }
     if (identical(method, "nuts")) {
       fit <- .tobs_fit_fp_occu_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
+    } else if (!is.null(re)) {
+      # Site-level grouped RE on the occupancy (psi) arm via the pure-R make_site
+      # AGHQ path (tulpaObs#51). n_quad = 1 is the joint Laplace, n_quad > 1
+      # debiases the small-cluster variance-component attenuation.
+      fit <- .tobs_fit_fp_occu_re(fit_model, re = re, max_iter = max.iter,
+                                  tol = tol, n_quad = n.quad, lkj_eta = re.lkj,
+                                  sigma.beta = sigma.beta, verbose = verbose)
     } else {
       fit <- .tobs_fit_fp_occu(fit_model, max_iter = 500L, tol = 1e-8,
                                sigma.beta = NULL, verbose = verbose)

@@ -226,19 +226,259 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
 
 
 # ---------------------------------------------------------------------------
+# Grouped random effect on the occupancy (psi) arm (gcol33/tulpaObs#51)
+# ---------------------------------------------------------------------------
+
+# AGHQ refinement of an fp_occu fit with a site-level grouped RE on the
+# occupancy (psi) arm. The latent z marginalises in closed form to
+# L_i = psi_i A_i + (1 - psi_i) B_i, with A_i the occupied-state emission product
+# (over the site's visits) and B_i the unoccupied-state product (B_i = 0 when a
+# certain detection y = 2 is present). With the false-positive arms (p11, p10, b)
+# held at their current values, this is exactly the occupancy occ-arm marginal
+# (a Bernoulli-in-psi mixture of two fixed weights), so the psi-arm RE goes
+# through the same pure-R `make_site` AGHQ path as occu() (R/re_aghq.R) -- no
+# native oracle. tulpa owns the quadrature / mode-finding / log-Cholesky / LKJ /
+# marginal Hessian; tulpaObs supplies only the per-site emission products and the
+# psi-arm eta-derivatives. `design` is the psi-arm RE design; `beta_*` the warm
+# starts. Returns refined estimates or NULL when the pass does not apply.
+.tobs_fp_occu_re_aghq <- function(model, design, beta_psi, beta_p11, beta_p10,
+                                  beta_b, Sigma_list, b, n_quad = 9L,
+                                  lkj_eta = 1.5) {
+  idx1 <- as.integer(design[[1]]$idx)
+  ng   <- as.integer(design[[1]]$n_groups)
+  one_group <- all(vapply(design, function(d)
+    identical(as.integer(d$idx), idx1) &&
+      identical(as.integer(d$n_groups), ng), logical(1)))
+  if (!one_group) return(NULL)
+  dtot <- sum(vapply(design, function(d) as.integer(d$n_coefs), integer(1)))
+  if (dtot > 3L) return(NULL)
+
+  X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
+  X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
+  p_psi <- ncol(X_psi); p_p11 <- ncol(X_p11)
+  p_p10 <- ncol(X_p10); p_b   <- ncol(X_b)
+  N <- nrow(X_psi)
+  if (any(vapply(design, function(d) length(d$idx) != N, logical(1))) ||
+      any(vapply(design, function(d) nrow(d$Z) != N, logical(1)))) {
+    return(NULL)
+  }
+  off <- cumsum(c(0L, p_psi, p_p11, p_p10, p_b))
+  i_psi <- off[1] + seq_len(p_psi); i_p11 <- off[2] + seq_len(p_p11)
+  i_p10 <- off[3] + seq_len(p_p10); i_b   <- off[4] + seq_len(p_b)
+
+  # Per-site detection-state counts (fixed across the optimization).
+  si <- as.integer(model$site_idx); yl <- as.integer(model$y_long)
+  n0 <- tabulate(si[yl == 0L], nbins = N)
+  n1 <- tabulate(si[yl == 1L], nbins = N)
+  n2 <- tabulate(si[yl == 2L], nbins = N)
+  n_valid <- n0 + n1 + n2
+  bzero   <- n2 > 0L
+  keep    <- which(n_valid > 0L)
+  cl <- function(e) pmin(pmax(e, -30), 30)
+
+  # make_site(theta) closes over the current betas; the engine supplies the RE
+  # offset Z b through the eta passed to deriv / lmat (psi predictor only).
+  make_site <- function(theta) {
+    bp11 <- theta[i_p11]; bp10 <- theta[i_p10]; bb <- theta[i_b]
+    e11 <- cl(as.numeric(X_p11 %*% bp11))
+    e10 <- cl(as.numeric(X_p10 %*% bp10))
+    eb  <- cl(as.numeric(X_b   %*% bb))
+    lp11 <- stats::plogis(e11, log.p = TRUE); l1mp11 <- stats::plogis(-e11, log.p = TRUE)
+    lp10 <- stats::plogis(e10, log.p = TRUE); l1mp10 <- stats::plogis(-e10, log.p = TRUE)
+    lb   <- stats::plogis(eb,  log.p = TRUE); l1mb   <- stats::plogis(-eb,  log.p = TRUE)
+    logA <- (n1 + n2) * lp11 + n0 * l1mp11 + n1 * l1mb + n2 * lb
+    logB <- n0 * l1mp10 + n1 * lp10               # unoccupied; B = 0 where bzero
+    list(
+      eta_re = as.numeric(X_psi %*% theta[i_psi]),
+      deriv = function(rows, eta) {
+        s <- stats::plogis(eta)
+        lA <- logA[rows]; lB <- logB[rows]; bz <- bzero[rows]
+        logL <- d1 <- d2 <- numeric(length(rows))
+        # certain detection present -> L = psi * A  (occupancy-style branch)
+        logL[bz] <- log(s[bz]) + lA[bz]
+        d1[bz]   <- 1 - s[bz]
+        d2[bz]   <- -s[bz] * (1 - s[bz])
+        io <- !bz
+        cc <- pmax(lA[io], lB[io])
+        A_ <- exp(lA[io] - cc); B_ <- exp(lB[io] - cc)
+        sn <- s[io]; sp <- sn * (1 - sn); spp <- sp * (1 - 2 * sn)
+        g <- sn * A_ + (1 - sn) * B_; u <- A_ - B_
+        dd1 <- u * sp / g
+        logL[io] <- cc + log(g)
+        d1[io] <- dd1
+        d2[io] <- u * spp / g - dd1^2
+        list(logL = logL, d1 = d1, d2 = d2)
+      },
+      lmat = function(rows, ETA) {
+        S <- stats::plogis(ETA); lA <- logA[rows]; lB <- logB[rows]; bz <- bzero[rows]
+        out <- matrix(0, length(rows), ncol(ETA))
+        if (any(bz)) out[bz, ] <- log(S[bz, , drop = FALSE]) + lA[bz]
+        if (any(!bz)) {
+          lS   <- log(S[!bz, , drop = FALSE]); l1mS <- log1p(-S[!bz, , drop = FALSE])
+          t1 <- lS + lA[!bz]; t0 <- l1mS + lB[!bz]
+          mx <- pmax(t1, t0)
+          out[!bz, ] <- mx + log(exp(t1 - mx) + exp(t0 - mx))
+        }
+        out
+      })
+  }
+
+  re_terms <- lapply(design, function(d) list(
+    idx = as.integer(d$idx), n_groups = as.integer(d$n_groups),
+    n_coefs = as.integer(d$n_coefs),
+    Z = if (d$n_coefs > 1L) d$Z else NULL,
+    correlated = isTRUE(d$correlated)))
+
+  ref <- tulpa::tulpa_re_aghq(
+    theta0 = c(beta_psi, beta_p11, beta_p10, beta_b), re_terms = re_terms,
+    Sigma0 = Sigma_list, make_site = make_site, n_obs = N,
+    keep = keep, n_quad = n_quad, lkj_eta = lkj_eta)
+  if (is.null(ref)) return(NULL)
+
+  bpsi <- ref$theta[i_psi]; bp11 <- ref$theta[i_p11]
+  bp10 <- ref$theta[i_p10]; bb <- ref$theta[i_b]
+  b_out    <- unlist(lapply(ref$blup,     function(M) as.numeric(t(M))), use.names = FALSE)
+  bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))), use.names = FALSE)
+
+  # Refreshed posterior occupancy w1 at the refined estimate (for fitted()).
+  eta_psi <- cl(as.numeric(X_psi %*% bpsi) + .tobs_re_offset(design, b_out))
+  e11 <- cl(as.numeric(X_p11 %*% bp11)); e10 <- cl(as.numeric(X_p10 %*% bp10))
+  eb  <- cl(as.numeric(X_b %*% bb))
+  lp11 <- stats::plogis(e11, log.p = TRUE); l1mp11 <- stats::plogis(-e11, log.p = TRUE)
+  lp10 <- stats::plogis(e10, log.p = TRUE); l1mp10 <- stats::plogis(-e10, log.p = TRUE)
+  lb   <- stats::plogis(eb,  log.p = TRUE); l1mb   <- stats::plogis(-eb,  log.p = TRUE)
+  logA <- (n1 + n2) * lp11 + n0 * l1mp11 + n1 * l1mb + n2 * lb
+  logB <- n0 * l1mp10 + n1 * lp10
+  s <- stats::plogis(eta_psi)
+  w1 <- numeric(N)
+  w1[bzero] <- 1
+  io <- !bzero
+  t1 <- log(s[io]) + logA[io]; t0 <- log1p(-s[io]) + logB[io]
+  mx <- pmax(t1, t0)
+  w1[io] <- exp(t1 - (mx + log(exp(t1 - mx) + exp(t0 - mx))))
+
+  # Fixed-effect covariance: the full marginal cov when the engine surfaces it,
+  # else the diagonal of the per-coefficient marginal SEs (the make_site AGHQ
+  # path reports SEs, not the cross-coefficient covariance -- the same form the
+  # occupancy RE path uses; no fabricated off-diagonal correlations).
+  p_tot <- p_psi + p_p11 + p_p10 + p_b
+  vcov <- ref$theta_cov
+  if (is.null(vcov) || any(dim(vcov) != p_tot)) {
+    se <- ref$theta_se; if (length(se) != p_tot) se <- rep(NA_real_, p_tot)
+    vcov <- diag(pmax(se, 0)^2, p_tot)
+  }
+
+  list(
+    ok = TRUE, arm = "psi",
+    beta_psi = bpsi, beta_p11 = bp11, beta_p10 = bp10, beta_b = bb,
+    Sigma_list = ref$Sigma_list, b = b_out, b_var = bvar_out,
+    theta_se = ref$theta_se, vcov = vcov, w1 = w1,
+    log_marginal = ref$log_marginal %||% NA_real_,
+    n_quad = ref$n_quad, lkj_eta = ref$lkj_eta, converged = ref$converged)
+}
+
+
+# Fit an fp_occu model with a site-level grouped RE on the occupancy (psi) arm
+# under the Laplace / AGHQ path (one grouping factor, RE dim <= 3; tulpaObs#51).
+# The false-positive (p10) and certain (b) arms never carry structured terms
+# (rejected upstream); a detection (p11) RE is not yet wired here, so this fits
+# only a psi-arm RE.
+.tobs_fit_fp_occu_re <- function(model, re, max_iter = 200L, tol = 1e-8,
+                                 verbose = TRUE, n_quad = 9L, lkj_eta = 1.5,
+                                 sigma.beta = NULL) {
+  if (inherits(re, "tobs_re")) re <- list(re)
+  arms <- .tobs_re_split_two_arms(
+    re, model, "psi", "p11",
+    "An fp_occu random effect shared across the occupancy and detection arms is not supported.")
+  if (length(arms$p11)) {
+    stop("fp_occu() random effects are supported on the occupancy (psi) arm ",
+         "only; a detection-arm random effect is not yet wired on either ",
+         "engine. (tulpaObs#51)", call. = FALSE)
+  }
+  design <- arms$psi
+  if (!length(design)) {
+    stop("fp_occu() found no occupancy-arm random effect to fit.", call. = FALSE)
+  }
+
+  warm <- tryCatch(
+    fp_occu_laplace(y = model$y_long, site_idx = model$site_idx,
+                    X_psi = model$X_processes[[1]], X_p11 = model$X_processes[[2]],
+                    X_p10 = model$X_processes[[3]], X_b = model$X_processes[[4]],
+                    sigma_beta = sigma.beta, max_iter = as.integer(max_iter),
+                    tol = as.numeric(tol), verbose = FALSE),
+    error = function(e) NULL)
+  beta_psi_init <- if (!is.null(warm)) warm$beta_psi else c(0, rep(0, ncol(model$X_processes[[1]]) - 1L))
+  beta_p11_init <- if (!is.null(warm)) warm$beta_p11 else rep(0, ncol(model$X_processes[[2]]))
+  beta_p10_init <- if (!is.null(warm)) warm$beta_p10 else c(stats::qlogis(0.05), rep(0, ncol(model$X_processes[[3]]) - 1L))
+  beta_b_init   <- if (!is.null(warm)) warm$beta_b   else rep(0, ncol(model$X_processes[[4]]))
+
+  Sigma_init <- lapply(design, function(d) diag(0.25, d$n_coefs))
+  b_init <- numeric(sum(vapply(design,
+                               function(d) as.integer(d$n_groups * d$n_coefs),
+                               integer(1))))
+
+  ref <- .tobs_fp_occu_re_aghq(model, design,
+                               beta_psi = beta_psi_init, beta_p11 = beta_p11_init,
+                               beta_p10 = beta_p10_init, beta_b = beta_b_init,
+                               Sigma_list = Sigma_init, b = b_init,
+                               n_quad = as.integer(n_quad), lkj_eta = lkj_eta)
+  if (is.null(ref) || !isTRUE(ref$ok)) {
+    stop("fp_occu() AGHQ random-effect refinement did not produce a usable fit ",
+         "(singular marginal Hessian or non-finite optimum). Simplify the RE ",
+         "structure.", call. = FALSE)
+  }
+
+  raw <- list(
+    beta_psi = ref$beta_psi, beta_p11 = ref$beta_p11,
+    beta_p10 = ref$beta_p10, beta_b = ref$beta_b,
+    means = c(ref$beta_psi, ref$beta_p11, ref$beta_p10, ref$beta_b),
+    vcov = ref$vcov, theta_se = ref$theta_se,
+    log_lik = ref$log_marginal, w1 = ref$w1,
+    converged = ref$converged, n_iter = NA_integer_,
+    coef_names = c(paste0("psi_", model$process_info[[1]]$coef_names),
+                   paste0("p11_", model$process_info[[2]]$coef_names),
+                   paste0("p10_", model$process_info[[3]]$coef_names),
+                   paste0("b_",   model$process_info[[4]]$coef_names)))
+  re_post <- list(arm = ref$arm, design = design, Sigma_list = ref$Sigma_list,
+                  b = ref$b, b_var = ref$b_var,
+                  n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
+  build_fp_occu_fit(raw, model, re_post = re_post)
+}
+
+
+# ---------------------------------------------------------------------------
 # Fit packer
 # ---------------------------------------------------------------------------
 
-build_fp_occu_fit <- function(raw, model) {
+build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   pi_list <- model$process_info
   nms <- raw$coef_names
   means <- raw$means; names(means) <- nms
   vcov <- as.matrix(raw$vcov); dimnames(vcov) <- list(nms, nms)
   sds <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
+  n_fixed <- length(nms); fixed_names <- nms
 
   n_pseudo <- 1000L
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
+
+  # Grouped random effect on the occupancy (psi) arm (gcol33/tulpaObs#51):
+  # append the variance components (sigma_g_*, cor_g_*_* for a correlated block)
+  # and per-group BLUPs after the fixed block, exactly as the count families do.
+  # The fixed block (n_fixed leading coords) still governs coef() / vcov() /
+  # confint(); ranef() / summary() read the trailing RE columns by name.
+  re_block <- NULL
+  if (!is.null(re_post) && length(re_post$design)) {
+    re_block <- .tobs_re_param_block(list(design = re_post$design,
+                                          b      = re_post$b,
+                                          b_var  = re_post$b_var,
+                                          Sigma  = re_post$Sigma_list))
+    means <- c(means, re_block$means); sds <- c(sds, re_block$sds)
+    nms   <- c(nms, re_block$names)
+    names(means) <- nms; names(sds) <- nms
+    draws <- cbind(draws, .tobs_re_pseudo_draws(re_block$means, re_block$sds,
+                                                re_block$names, n_pseudo))
+  }
 
   structure(c(list(
     draws = draws, means = means, sds = sds, vcov = vcov,
@@ -248,10 +488,15 @@ build_fp_occu_fit <- function(raw, model) {
     .tobs_na_nuts_diagnostics(n_pseudo),
     list(
     col_names = nms, param_names = nms,
-    n_fixed = length(nms), fixed_names = nms,
+    n_fixed = n_fixed, fixed_names = fixed_names,
     process_info = pi_list,
     model = model, spatial = NULL, method = "laplace",
     log_lik = ll, w1 = raw$w1,
+    re_effects = re_block$re_effects,
+    fp_re = if (!is.null(re_post))
+      list(arm = re_post$arm, n_quad = re_post$n_quad,
+           lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
+      else NULL,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
   )), class = c("tobs_fit", "tulpa_fit"))
