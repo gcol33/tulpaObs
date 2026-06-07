@@ -1,23 +1,7 @@
-# Keep the package DLL the default goal: R reads this file before
-# winshlib.mk, so the tulpaObs_pch.h.gch rule below would otherwise become the
-# first (default) target and stop the build after the PCH.
-all: $(SHLIB)
-
 CXX_STD = CXX17
-PKG_CPPFLAGS = -I../inst/include -include tulpaObs_pch.h
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -Wa,-mbig-obj -Winvalid-pch
+PKG_CPPFLAGS = -I../inst/include
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -Wa,-mbig-obj
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
-
-# Build the RcppEigen precompiled header before any object, with the exact
-# compiler and flags R uses for the .cpp.o rule so GCC accepts the .gch. The
-# guarded -include tulpaObs_pch.h in PKG_CPPFLAGS is a no-op while building the
-# header itself. -Winvalid-pch downgrades a flag mismatch to a warning plus a
-# normal compile, so the -O1 objects below (which reject the -O2 .gch) and any
-# stale .gch never break the build.
-tulpaObs_pch.h.gch: tulpaObs_pch.h Makevars.win
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) -x c++-header tulpaObs_pch.h -o tulpaObs_pch.h.gch
-
-$(OBJECTS): tulpaObs_pch.h.gch
 
 # At -O2 the community N-mixture EM driver's template/inline instantiation
 # (Eigen + the nmix_kernel.h inlines + std) overflows the COFF COMDAT section
