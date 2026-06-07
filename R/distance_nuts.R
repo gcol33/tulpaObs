@@ -8,14 +8,22 @@
 # this R target and is cross-checked against it; this R version is the oracle.
 
 # Parameter layout.
-.tobs_distance_nuts_layout <- function(p_lam, p_sig, hazard, is_nb) {
-  d <- p_lam + p_sig + (if (hazard) 1L else 0L) + (if (is_nb) 1L else 0L)
+# `re_groups` > 0 appends a trailing [z_1..z_G, log_sigma_re] block (a single
+# intercept RE on the abundance arm, tulpaObs#51).
+.tobs_distance_nuts_layout <- function(p_lam, p_sig, hazard, is_nb, re_groups = 0L) {
+  base <- p_lam + p_sig + (if (hazard) 1L else 0L) + (if (is_nb) 1L else 0L)
   off <- p_lam + p_sig
   log_shape <- if (hazard) { off <- off + 1L; off } else integer(0)
   log_r     <- if (is_nb)  off + 1L else integer(0)
-  list(p_lam = p_lam, p_sig = p_sig, hazard = isTRUE(hazard), is_nb = isTRUE(is_nb),
-       lambda = seq_len(p_lam), sigma = p_lam + seq_len(p_sig),
-       log_shape = log_shape, log_r = log_r, total = d)
+  out <- list(p_lam = p_lam, p_sig = p_sig, hazard = isTRUE(hazard),
+              is_nb = isTRUE(is_nb), lambda = seq_len(p_lam),
+              sigma = p_lam + seq_len(p_sig), log_shape = log_shape, log_r = log_r,
+              re_groups = as.integer(re_groups))
+  if (re_groups > 0L) {
+    out$z <- base + seq_len(re_groups); out$log_sigma <- base + re_groups + 1L
+    out$total <- base + re_groups + 1L
+  } else { out$z <- integer(0); out$log_sigma <- integer(0); out$total <- base }
+  out
 }
 
 # Per-site distance marginal closure (the NUTS oracle's data + eval_beta).
@@ -86,7 +94,7 @@
 
 .tobs_fit_distance_nuts <- function(model, mixture = "poisson", K_max = NULL,
                                     sigma.beta = 10, sigma.shape = 1.5,
-                                    sigma.logr = 1.5,
+                                    sigma.logr = 1.5, re = NULL,
                                     n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
                                     max.treedepth = 10L, adapt.delta = 0.9,
                                     seed = 1L, verbose = FALSE) {
@@ -99,7 +107,18 @@
   p_lam <- ncol(X_lambda); p_sig <- ncol(X_sigma)
   if (is.null(K_max)) K_max <- 3L * max(rowSums(y)) + 100L
   K_max <- as.integer(K_max)
-  lay <- .tobs_distance_nuts_layout(p_lam, p_sig, hazard, is_nb)
+
+  # Single intercept RE on the abundance arm (tulpaObs#51), via the shared
+  # count-NUTS RE helpers. distance's detection arm is the log-sigma scale; an RE
+  # there is not wired, so only the abundance (lambda) arm is supported.
+  re_info <- .tobs_count_nuts_re_info(re, model)
+  if (!is.null(re_info) && re_info$arm != 0L)
+    stop("distance() NUTS supports a random effect on the abundance arm only; ",
+         "a detection-scale (sigma) RE is not wired. Put the RE on the state ",
+         "formula, or use method = \"laplace\".", call. = FALSE)
+  n_re_groups <- if (!is.null(re_info)) re_info$n_groups else 0L
+  lay <- .tobs_distance_nuts_layout(p_lam, p_sig, hazard, is_nb,
+                                    re_groups = n_re_groups)
 
   warm <- distance_laplace(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
                            cutpoints = model$cutpoints, key = model$key,
@@ -110,14 +129,19 @@
   if (hazard) theta0 <- c(theta0, as.numeric(warm$eta_b))
   if (is_nb)  theta0 <- c(theta0, as.numeric(warm$log_r))
   V <- as.matrix(warm$vcov)
-  inv_metric <- if (!is.null(V) && all(dim(V) == lay$total)) pmax(diag(V), 1e-6)
-                else rep(1, lay$total)
+  base_metric <- if (!is.null(V) && nrow(V) == length(theta0)) pmax(diag(V), 1e-6)
+                 else rep(1, length(theta0))
+  init <- .tobs_count_nuts_re_init(list(theta0 = theta0, inv_metric = base_metric),
+                                   lay, re_info)
+  theta0 <- init$theta0; inv_metric <- init$inv_metric
 
-  spec <- list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
-               cutpoints = as.numeric(model$cutpoints),
-               transect = .dist_transect_code(model$transect),
-               key = .dist_key_code(model$key), K_max = K_max,
-               is_nb = is_nb, quad_order = as.integer(model$quad_order))
+  spec <- .tobs_count_nuts_re_spec(
+    list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
+         cutpoints = as.numeric(model$cutpoints),
+         transect = .dist_transect_code(model$transect),
+         key = .dist_key_code(model$key), K_max = K_max,
+         is_nb = is_nb, quad_order = as.integer(model$quad_order)),
+    re_info, sigma.logr)
 
   run_chain <- function(ch) {
     cpp_distance_nuts(spec, theta0 = theta0,
@@ -133,7 +157,8 @@
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("sigma_",  model$process_info[[2]]$coef_names),
-           if (hazard) "log_shape", if (is_nb) "log_r")
+           if (hazard) "log_shape", if (is_nb) "log_r",
+           .tobs_count_nuts_re_names(re_info))
   colnames(draws) <- nms
   accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
   divergent <- unlist(lapply(chains, `[[`, "divergent"))
@@ -163,6 +188,7 @@
 
   n_draws <- nrow(draws)
   fit$draws       <- draws
+  fit <- .tobs_count_nuts_re_finish(fit, draws, par, cov, nms, re_info)
   fit$n_samples   <- n_draws
   fit$log_prob    <- rep(ll_mean, n_draws)
   fit$accept_prob <- accept

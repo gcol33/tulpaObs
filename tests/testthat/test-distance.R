@@ -344,3 +344,74 @@ test_that("distance NUTS recovers truth and scores WAIC", {
   expect_true(is.finite(w$waic))
   expect_gt(w$p_waic, 0)
 })
+
+
+# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+
+# Line-transect half-normal distance data with a per-site intercept RE on the
+# abundance arm. lambda_i = exp(b0 + b1 x_i + b[group_i]); each individual is
+# detected with prob exp(-d^2 / (2 sigma^2)) and binned by its distance.
+sim_distance_lambda_re <- function(N, ngrp, cutpoints, beta_lambda, sigma,
+                                   sigma_b, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  W <- max(cutpoints); n_bins <- length(cutpoints) - 1L
+  grp <- rep(seq_len(ngrp), length.out = N)
+  b   <- stats::rnorm(ngrp, sd = sigma_b)
+  x   <- stats::rnorm(N)
+  data <- data.frame(x1 = x, g = factor(grp))
+  lambda <- exp(beta_lambda[1] + beta_lambda[2] * x + b[grp])
+  y <- matrix(0L, N, n_bins)
+  for (i in seq_len(N)) {
+    Ni <- stats::rpois(1L, lambda[i])
+    if (Ni == 0L) next
+    d <- stats::runif(Ni, 0, W)
+    det <- stats::runif(Ni) < exp(-d^2 / (2 * sigma^2))
+    if (any(det)) {
+      bins <- findInterval(d[det], cutpoints, rightmost.closed = TRUE)
+      bins <- bins[bins >= 1L & bins <= n_bins]
+      for (bb in bins) y[i, bb] <- y[i, bb] + 1L
+    }
+  }
+  list(y = y, data = data, sigma_b = sigma_b, beta_lambda = beta_lambda,
+       sigma = sigma)
+}
+
+test_that("distance() NUTS samples a single abundance RE and recovers sigma + betas", {
+  skip_on_cran()
+  skip_if_fast()
+  cuts <- seq(0, 1, length.out = 5)
+  s <- sim_distance_lambda_re(N = 80, ngrp = 8, cutpoints = cuts,
+                              beta_lambda = c(log(30), 0.3), sigma = 0.4,
+                              sigma_b = 0.5, seed = 9)
+  fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
+              family = distance(cutpoints = cuts, key = "halfnorm",
+                                transect = "line", K_max = 120L),
+              method = "nuts", verbose = FALSE,
+              control = list(n.iter = 400L, n.warmup = 300L, seed = 1L))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$re$arm, "lambda")
+  expect_equal(fit$re$n_groups, 8L)
+  expect_lt(abs(fit$re$sigma - 0.5), 0.4)
+  expect_gt(fit$re$sigma_sd, 0)
+  expect_lt(abs(fit$means[["lambda_(Intercept)"]] - log(30)), 0.4)
+  expect_lt(abs(fit$means[["lambda_x1"]] - 0.3), 0.25)
+  expect_lt(mean(fit$nuts$divergent), 0.15)
+})
+
+test_that("distance() RE is NUTS + abundance-arm only", {
+  cuts <- seq(0, 1, length.out = 5)
+  s <- sim_distance_lambda_re(N = 30, ngrp = 5, cutpoints = cuts,
+                              beta_lambda = c(log(20), 0.2), sigma = 0.4,
+                              sigma_b = 0.4, seed = 2)
+  # RE under Laplace is unsupported for distance.
+  expect_error(
+    tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
+         family = distance(cutpoints = cuts), method = "laplace"),
+    "method = \"nuts\"|nuts")
+  # A detection-scale (sigma-arm) RE is not wired.
+  expect_error(
+    tobs(formula = ~ x1, detection = ~ (1 | g), data = s$data, y = s$y,
+         family = distance(cutpoints = cuts), method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "abundance arm only|single intercept")
+})

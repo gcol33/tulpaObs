@@ -26,6 +26,13 @@ struct DistNutsModel {
     Rcpp::NumericMatrix X_lambda, X_sigma;
     DistQuad quad;
     int total = 0;
+    // Optional single intercept random effect on the abundance arm (tulpaObs#51):
+    // a per-site offset sigma_re * z[group] added to eta_lambda, z ~ N(0, I)
+    // non-centered with one log_sigma_re hyperparameter. re_arm = -1 none, 0
+    // lambda. The flat vector grows by [z_1..z_G, log_sigma_re] at the tail.
+    int re_arm = -1, n_re_groups = 0, o_z = 0, o_logsig = 0;
+    double sigma_re_lsd = 1.5;
+    std::vector<int> re_group;        // 0-based group per site
 };
 
 inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
@@ -46,7 +53,21 @@ inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
     const int quad_order = Rcpp::as<int>(spec["quad_order"]);
     std::vector<double> cut(cutpoints.begin(), cutpoints.end());
     m.quad = dist_build_quad(cut, transect, quad_order);
-    m.total = m.p_lam + m.p_sig + (m.hazard ? 1 : 0) + (m.is_nb ? 1 : 0);
+    int base = m.p_lam + m.p_sig + (m.hazard ? 1 : 0) + (m.is_nb ? 1 : 0);
+    if (spec.containsElementNamed("re_arm")) m.re_arm = Rcpp::as<int>(spec["re_arm"]);
+    if (m.re_arm == 0) {
+        Rcpp::IntegerVector rg = spec["re_group"];     // 1-based, length n_sites
+        if ((int) rg.size() != m.n_sites) Rcpp::stop("re_group must have length n_sites");
+        m.re_group.resize(m.n_sites);
+        for (int i = 0; i < m.n_sites; ++i) m.re_group[i] = rg[i] - 1;
+        m.n_re_groups = Rcpp::as<int>(spec["n_re_groups"]);
+        if (spec.containsElementNamed("sigma_re_lsd"))
+            m.sigma_re_lsd = Rcpp::as<double>(spec["sigma_re_lsd"]);
+        m.o_z = base; m.o_logsig = base + m.n_re_groups; base = m.o_logsig + 1;
+    } else {
+        m.re_arm = -1;
+    }
+    m.total = base;
     return m;
 }
 
@@ -61,6 +82,9 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
     const double r = m.is_nb ? std::exp(theta[lr_idx])
                              : std::numeric_limits<double>::infinity();
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
+    const bool has_re = m.re_arm == 0;
+    const double sigma_re = has_re ? std::exp(theta[m.o_logsig]) : 0.0;
+    double grad_logsig = 0.0;
 
     std::vector<int> y_site(m.n_bins);
     double lp = 0.0;
@@ -68,6 +92,8 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         double eta_lambda = 0.0, eta_sigma = 0.0;
         for (int k = 0; k < p_lam; ++k) eta_lambda += m.X_lambda(s, k) * theta[k];
         for (int k = 0; k < p_sig; ++k) eta_sigma  += m.X_sigma(s, k) * theta[p_lam + k];
+        const double re_off = has_re ? sigma_re * theta[m.o_z + m.re_group[s]] : 0.0;
+        if (has_re) eta_lambda += re_off;
         for (int b = 0; b < m.n_bins; ++b) y_site[b] = m.y(s, b);
         const DistSiteResult res = compute_distance_site(
             y_site.data(), m.n_bins, eta_lambda, eta_sigma, eta_b, m.key,
@@ -77,12 +103,26 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         for (int k = 0; k < p_sig; ++k) grad[p_lam + k] += res.grad_eta_d[0] * m.X_sigma(s, k);
         if (m.hazard) grad[b_idx] += res.grad_eta_d[1];
         if (m.is_nb)  grad[lr_idx] += res.grad_theta;
+        if (has_re) {
+            grad[m.o_z + m.re_group[s]] += sigma_re * res.grad_eta_lambda;
+            grad_logsig += res.grad_eta_lambda * re_off;
+        }
     }
 
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
     for (int k = 0; k < p_lam + p_sig; ++k) {
         lp -= 0.5 * ib2 * theta[k] * theta[k];
         grad[k] -= ib2 * theta[k];
+    }
+    if (has_re) {
+        for (int g = 0; g < m.n_re_groups; ++g) {
+            const double zg = theta[m.o_z + g];
+            lp -= 0.5 * zg * zg;
+            grad[m.o_z + g] -= zg;
+        }
+        const double ls = theta[m.o_logsig], ils2 = 1.0 / (m.sigma_re_lsd * m.sigma_re_lsd);
+        lp -= 0.5 * ils2 * ls * ls;
+        grad[m.o_logsig] += grad_logsig - ils2 * ls;
     }
     if (m.hazard) {
         const double is2 = 1.0 / (m.sigma_shape * m.sigma_shape);
