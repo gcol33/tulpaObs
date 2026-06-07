@@ -1,5 +1,40 @@
 # tulpaObs NEWS
 
+## 0.0.19 (2026-06-07)
+
+* fix(occu_cover): the joint-coupled nested-Laplace parameter-surface
+  covariance now carries the exact beta-hyperparameter cross-covariance and the
+  full hyper-hyper covariance via the law of total covariance (the
+  hyperparameters are the grid coordinates, so the within-cell term is zero and
+  the cross-covariance is purely between-grid). Previously the hyperparameter
+  block was diagonal, under-propagating the covariance of any derived quantity
+  mixing a regression coefficient with `sigma` / `alpha`. Predicted occupancy
+  and cover were unaffected (functions of the betas only). (tulpaObs#46)
+
+* feat(cover): `control$aggregate.occ` (exact Binomial sufficient-statistic
+  reduction of the cover-hurdle occurrence arm) now defaults to `TRUE`, backed
+  by a multi-seed parameter-recovery suite on simulated beta-trend data
+  (`test-cover-hurdle-aggregate-recovery.R`): the aggregated fit recovers truth
+  with nominal 95% CI coverage on both arms' coefficients and the beta
+  precision, and is byte-identical to the full per-plot fit. Set
+  `aggregate.occ = FALSE` for the full occurrence arm. (tulpaObs#48)
+
+* feat(cover): `control$aggregate.pos` (opt-in, default `FALSE`) adds the exact
+  grouped-beta sufficient-statistic reduction of the positive (cover) arm. Plots
+  sharing the positive design row and every per-observation latent component are
+  collapsed to one row carrying `(n, sum log y, sum log(1 - y))`; tulpa's
+  built-in beta likelihood reads those sufficient statistics, leaving the
+  log-likelihood, gradient and Fisher Hessian pointwise unchanged. The fit is
+  byte-identical to the full per-plot beta arm on the single-block and
+  coupled-trend paths, alone and combined with `aggregate.occ`. Beta only (a
+  lognormal positive arm errors with a pointer). (tulpaObs#49)
+
+* docs(ms_occu_cover): the community joint fit now flags that its community
+  VARIANCE components carry Laplace small-cluster attenuation (the community
+  MEANS do not), via `print()`, a machine-readable
+  `fit$ms_community$var_attenuation` marker, and `?ms_occu_cover`, so the
+  reported between-species spread is not read as unbiased. (tulpaObs#47)
+
 ## 0.0.18
 
 * test(ms-abun): correct two `ms_abun()` NUTS recovery assertions. The
