@@ -10,6 +10,8 @@
   beta_pos,
   se_pos,
   sla_res,
+  V_occ = NULL,
+  V_pos = NULL,
   n_pseudo = 1000L
 )
 }

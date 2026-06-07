@@ -1487,5 +1487,11 @@ print.tobs_fit <- function(x, ...) {
       cat(sprintf("NB dispersion (size r): %.3f\n", d$r))
     }
   }
+  # Surface attenuated community variance components so the reported between-
+  # species spread is not read as unbiased (tulpaObs#47). Means are unaffected.
+  va <- x$ms_community$var_attenuation
+  if (!is.null(va) && !identical(va$debias, "aghq")) {
+    cat(sprintf("  Note: %s\n", va$note))
+  }
   invisible(x)
 }

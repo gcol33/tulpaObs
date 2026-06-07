@@ -876,6 +876,7 @@
   tg_names  <- colnames(tg_full)
   hyper_means <- numeric(0)
   hyper_sds   <- numeric(0)
+  hyper_vals  <- list()
   hyper_names <- character(0)
   pick <- function(name, public = name) {
     j <- match(name, tg_names)
@@ -885,6 +886,7 @@
     v <- sum(w * vals^2) - m^2
     hyper_means[[public]] <<- m
     hyper_sds  [[public]] <<- sqrt(max(v, 0))
+    hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
   # On the latent path the pos arm's phi axis IS the cover-latent SD; surface it
@@ -899,6 +901,7 @@
     v <- sum(w * vals^2) - m^2
     hyper_means[[public]] <<- m
     hyper_sds  [[public]] <<- sqrt(max(v, 0))
+    hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
   if (has_trend) {
@@ -925,15 +928,37 @@
   names(means) <- par_names
   names(sds)   <- par_names
 
-  # Parameter-surface vcov: betas correlated (the beta block of the joint
-  # covariance), hyperparameters diagonal (grid-summarised, no cross-covariance
-  # with the betas). Block-diagonal across the two.
+  # Parameter-surface vcov by the law of total covariance over the outer grid.
+  # The betas carry within + between (`beta_block`); the hyperparameters ARE the
+  # grid coordinates, so within a cell their variance -- and their covariance
+  # with the betas -- is exactly zero, leaving only the between (variance- and
+  # covariance-of-modes) term. That between term is computed jointly over
+  # (betas, hyperparameters) so the cross-covariance and the hyper-hyper
+  # covariance are both retained rather than dropped to a diagonal block.
   n_par <- length(means)
   V <- matrix(0, n_par, n_par)
   V[seq_len(p_beta), seq_len(p_beta)] <- beta_block
   if (length(hyper_names) > 0L) {
     hyper_idx <- p_beta + seq_along(hyper_names)
-    diag(V)[hyper_idx] <- sds[hyper_idx]^2
+    H <- do.call(cbind, hyper_vals[hyper_names])              # n_ok x n_hyper
+    H_dm <- sweep(H, 2L, unlist(hyper_means)[hyper_names], "-")
+    if (!is.null(Vj)) {
+      # Joint per-grid covariance available: betas carry the real within+between
+      # block, so the exact between cross- and hyper-covariance keep V PSD.
+      beta_modes <- modes[, c(bpsi_idx, bp_idx, bpos_idx), drop = FALSE]
+      B_dm   <- sweep(beta_modes, 2L, means[seq_len(p_beta)], "-")
+      cross  <- crossprod(B_dm * w, H_dm)                     # p_beta x n_hyper
+      hyhy   <- crossprod(H_dm * w, H_dm)                     # n_hyper x n_hyper
+      hyhy   <- (hyhy + t(hyhy)) / 2
+      V[seq_len(p_beta), hyper_idx] <- cross
+      V[hyper_idx, seq_len(p_beta)] <- t(cross)
+      V[hyper_idx, hyper_idx]       <- hyhy
+    } else {
+      # Fallback (older tulpa, no per-grid block): betas are a marginal-only
+      # diagonal, so a beta-hyper cross block could break PSD. Keep the hyper
+      # block diagonal, matching the betas' marginal treatment.
+      diag(V)[hyper_idx] <- sds[hyper_idx]^2
+    }
   }
   dimnames(V) <- list(par_names, par_names)
 

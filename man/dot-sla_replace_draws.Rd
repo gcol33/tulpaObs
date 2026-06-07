@@ -8,9 +8,14 @@
 }
 \description{
 For each parameter j, fit skew-normal (xi_j, omega_j, alpha_j) by moment-
-matching (mu_j, sigma_j, gamma_j), and resample the column of \code{draws}.
-Joint correlations are NOT preserved -- only marginals are SLA-corrected,
-matching INLA's behaviour (the SLA paper is about marginal quality).
+matching (mu_j, sigma_j, gamma_j), and replace the column of \code{draws} with
+skew-normal samples arranged in the same rank order as the incoming column.
+The incoming draws are the correlated Gaussian pseudo-draws, so the
+reordering is a Gaussian-copula transform: the skew-normal marginals are
+exact and the joint rank-correlation of the Laplace covariance is preserved
+(a derived quantity such as predicted psi keeps the coefficient dependence,
+per gcol33/tulpaObs#44). A column whose gamma is a no-op keeps its correlated
+Gaussian draw unchanged.
 }
 \details{
 Behaviour at large |gamma|:

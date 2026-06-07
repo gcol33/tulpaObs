@@ -619,7 +619,24 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
       sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
       coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
-      blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup
+      blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup,
+      # The community-MEAN estimates (coef / vcov / confint) are unbiased; the
+      # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
+      # sd_*) carry Laplace small-cluster attenuation at small per-species n, the
+      # same bias the single-arm AGHQ path corrects (tulpaObs#47). Not yet
+      # debiased here, so the reported community variance is a lower bound on the
+      # true between-species spread; surfaced by print.tobs_fit and ?ms_occu_cover.
+      var_attenuation = list(
+        affects = c("Sigma_occ", "Sigma_p", "Sigma_pos",
+                    "sd_occ", "sd_p", "sd_pos"),
+        means_affected = FALSE,
+        source = "laplace_small_cluster",
+        debias = "none",
+        note = paste0(
+          "Community variance components carry Laplace small-cluster ",
+          "attenuation (reported as a lower bound); community means are ",
+          "unaffected. AGHQ debias pending (tulpaObs#47).")
+      )
     ),
     convergence  = list(converged = isTRUE(converged), n_iter = n_iter)
   )), class = c("tobs_fit", "tulpa_fit"))

@@ -331,7 +331,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community integrated (`ms_int_occu`) | Yes | — | per-species psi + per-source detection RE; multi-source two-state marginal (analytic grad); `R/ms_int_occu.R`; recovery `test-ms-int-occu.R` |
 | Integrated multi-source | Yes | Yes | shared psi |
 | JSDM | Yes | — | no detection |
-| Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*` |
+| Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*`. `control$aggregate.occ` (default ON, tulpaObs#48) collapses the occurrence arm to its exact Binomial sufficient stat; `control$aggregate.pos` (opt-in, tulpaObs#49) collapses the beta positive arm to grouped `(n, sum log y, sum log(1-y))` read by tulpa's beta spec (`slog_y`/`slog_1my` on the arm). Both byte-identical to full per-plot; `.cover_aggregate_occ`/`.cover_aggregate_pos`, scattered onto blocks' occ([[1]])/pos([[2]]) slot via `.cover_arm_keys_from_blocks`/`.cover_scatter_arm_keys` |
 | Joint occu + cover | Yes | — | `occu_cover()` — see below |
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
 | Spatial-factor community occu + cover (JSDM) | Yes | Yes | `ms_occu_cover()` + `icar()`/`car_proper()`/`bym2()` shared field, per-species loadings (gcol33/tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (in-tree C++ FullGradFn `src/ms_occu_cover_spatial_nuts.cpp`). Cover-arm factor, auto-K (Laplace), `tobs_associations()`, per-species `predict()` maps |
@@ -439,7 +439,9 @@ community-cov M-step. Community-mean SEs = marginal observed info (Louis 1982).
 Beta+lognormal. Non-spatial Laplace only (`nested_laplace` NOT offered; structured
 term any arm errors+pointer). Recovery + 15-seed coverage (`test-ms-occu-cover.R`);
 status `"experimental"`. Community VARIANCE carries Laplace small-cluster
-attenuation (means do not). NUTS/negbin/dispersion RE/AGHQ debias pending.
+attenuation (means do not); flagged to the user via `print.tobs_fit` + the
+machine-readable `fit$ms_community$var_attenuation` marker + `?ms_occu_cover`
+(tulpaObs#47). NUTS/negbin/dispersion RE/AGHQ debias pending.
 
 ### `occu_multiscale_cover()` detail
 

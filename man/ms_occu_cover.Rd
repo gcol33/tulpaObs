@@ -106,6 +106,19 @@ field on one predictor; such a structured term on any arm errors from the
 dispatcher rather than being silently dropped.
 }
 
+\section{Community variance attenuation (tulpaObs#47)}{
+
+The community-MEAN estimates (\code{coef()}, \code{vcov()}, \code{confint()}) are unbiased.
+The community-VARIANCE components -- the per-arm covariance matrices in
+\code{fit$ms_community$Sigma_occ} / \code{Sigma_p} / \code{Sigma_pos} and their \verb{sd_*}, which
+set the spread of the per-species deviations -- carry Laplace small-cluster
+attenuation at small per-species n, the same bias the single-arm AGHQ path
+corrects (measured there: per-group n = 8 sigma bias ~18\% EM -> ~4\% AGHQ).
+They are reported as a lower bound on the true between-species spread; an AGHQ
+debias of the covariance M-step is pending. \code{print()} flags this, and
+\code{fit$ms_community$var_attenuation} carries a machine-readable marker.
+}
+
 \seealso{
 \code{\link[=occu_cover]{occu_cover()}} (single species), \code{\link[=ms_occu]{ms_occu()}} (community occupancy,
 no cover), \code{\link[=ms_abun]{ms_abun()}} (community N-mixture).

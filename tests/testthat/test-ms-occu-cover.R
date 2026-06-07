@@ -214,6 +214,34 @@ test_that("ms_occu_cover() S3 methods work", {
 })
 
 
+test_that("ms_occu_cover() flags community-variance Laplace attenuation (tulpaObs#47)", {
+  skip_on_cran()
+  skip_if_fast()
+  set.seed(5)
+  sim <- simulate_ms_occu_cover(n_species = 8, N = 45, J = 3,
+                                positive = "lognormal", seed = 5)
+  vis <- .msoc_visits(45, 3, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+              detection = ~ det_cov1, positive = ~ pos_cov1,
+              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "laplace", control = list(verbose = FALSE))
+
+  # Machine-readable marker on the community block: variance attenuated, means not.
+  va <- fit$ms_community$var_attenuation
+  expect_type(va, "list")
+  expect_false(va$means_affected)
+  expect_identical(va$source, "laplace_small_cluster")
+  expect_identical(va$debias, "none")
+  expect_true(all(c("Sigma_occ", "Sigma_p", "Sigma_pos") %in% va$affects))
+
+  # print() surfaces the caveat so the reported community variance is not read
+  # as unbiased.
+  out <- paste(utils::capture.output(print(fit)), collapse = "\n")
+  expect_match(out, "community VARIANCE|Community variance|variance components",
+               ignore.case = TRUE)
+})
+
+
 test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   skip_on_cran()
   skip_if_fast()
