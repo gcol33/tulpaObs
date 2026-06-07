@@ -122,11 +122,63 @@ test_that("ms_int_occu() capability gates", {
     tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
          species = paste0("sp", seq_len(4)), method = "laplace"),
     "y")
-  # Partial site overlap is not supported (full overlap only).
+  # A short source without a site_map errors with a pointer to site_map.
   bad <- sim$y
   bad[[2]] <- bad[[2]][1:30, , , drop = FALSE]
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
          y = bad, species = paste0("sp", seq_len(4)), method = "laplace"),
-    "overlap")
+    "site_map")
+  # An out-of-range site_map index is rejected.
+  expect_error(
+    tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
+         y = bad, species = paste0("sp", seq_len(4)), method = "laplace",
+         site_map = list(seq_len(40), c(1:29, 99L))),
+    "1\\.\\.40")
+})
+
+
+test_that("ms_int_occu site_map scatter equals NA-padded full arrays (#57)", {
+  sim <- simulate_int_ms_occu(N = 30, J = c(2, 2), n_species = 3,
+                              n_data = 2, seed = 7)
+  N <- nrow(sim$data); sp <- paste0("sp", seq_len(3))
+  cover2 <- c(1:10, 21:30)                       # source 2 covers a partial subset
+
+  # Full-array form: NA-pad source 2 outside its coverage.
+  y_full <- sim$y
+  y2 <- y_full[[2]]; y2[setdiff(seq_len(N), cover2), , ] <- NA_integer_
+  y_full[[2]] <- y2
+  m_full <- tulpaObs:::.tobs_build_ms_int_occu(~ 1, ~ 1, sim$data, y_full, sp)
+
+  # Subset form + site_map: source 2 carries only its covered rows.
+  y_sub <- sim$y
+  y_sub[[2]] <- sim$y[[2]][cover2, , , drop = FALSE]
+  m_sub <- tulpaObs:::.tobs_build_ms_int_occu(~ 1, ~ 1, sim$data, y_sub, sp,
+                                              site_map = list(seq_len(N), cover2))
+
+  expect_equal(m_sub$y, m_full$y)
+  expect_equal(m_sub$valid, m_full$valid)
+  expect_equal(m_sub$summaries, m_full$summaries)
+})
+
+
+test_that("ms_int_occu recovers truth under partial / overlapping coverage (#57)", {
+  skip_on_cran()
+  skip_if_fast()
+  sim <- simulate_int_ms_occu(N = 170, J = c(3, 4), n_species = 12,
+                              n_data = 2, seed = 41)
+  N <- nrow(sim$data)
+  cov1 <- 1:120; cov2 <- 51:170                  # overlap 51..120, each partial
+  y <- sim$y
+  y[[1]] <- sim$y[[1]][cov1, , , drop = FALSE]
+  y[[2]] <- sim$y[[2]][cov2, , , drop = FALSE]
+  fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
+              y = y, species = paste0("sp", seq_len(12)),
+              site_map = list(cov1, cov2), method = "laplace",
+              control = list(verbose = FALSE))
+  expect_true(isTRUE(fit$convergence$converged))
+  truth <- c("psi_(Intercept)" = 0, "p1_(Intercept)" = 0, "p2_(Intercept)" = 0)
+  m <- fit$means[names(truth)]; s <- fit$sds[names(truth)]
+  expect_true(all(abs(m - truth) / s < 3),
+              info = paste(round(m, 2), collapse = " | "))
 })

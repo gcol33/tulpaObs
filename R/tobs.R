@@ -926,7 +926,7 @@ tobs <- function(formula,
   }
   model <- .tobs_build_ms_int_occu(
     occ_formula = formula, det_formula = detection,
-    data = data, y = y, species = dots$species)
+    data = data, y = y, species = dots$species, site_map = dots$site_map)
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_int_occu, fit_args)
 }

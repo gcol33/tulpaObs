@@ -23,9 +23,14 @@
 # source-site, constant across that source's visits), matching the single-
 # species integrated model in R/laplace.R::build_integrated_callbacks.
 #
-# Scope: each source is assumed to cover all n_sites (full site overlap), as in
-# simulate_int_ms_occu(). Partial per-source site maps are not yet supported.
-# Non-spatial Laplace only.
+# Site coverage: each source covers a (possibly partial, possibly overlapping)
+# subset of the n_sites in `data`, declared by a per-source `site_map` (the
+# global site index of each of that source's rows; full overlap if omitted, the
+# back-compatible default). Sources are scattered into a full n_sites detection
+# array padded with NA (no visit) at the sites a source does not cover; an
+# uncovered (site, source) cell has n_valid = 0 and so drops out of the marginal
+# (zero contribution), which is exactly the partial/overlapping coverage model --
+# no special-casing in the per-species likelihood. Non-spatial Laplace only.
 # =============================================================================
 
 
@@ -151,7 +156,8 @@
 # site-level; each source's detection design X_p_d is site-level (one detection
 # probability per source-site). `det_formula` is one formula applied to every
 # source (separate coefficient vector per source) or a list of D formulas.
-.tobs_build_ms_int_occu <- function(occ_formula, det_formula, data, y, species) {
+.tobs_build_ms_int_occu <- function(occ_formula, det_formula, data, y, species,
+                                    site_map = NULL) {
   if (!is.list(y) || is.data.frame(y)) {
     stop("y must be a list of length n_sources, each a 3D array ",
          "[n_sites x J_d x n_species] or a list of per-species matrices.",
@@ -180,17 +186,46 @@
   n_species <- dim(y_arr[[1L]])[3L]
   J_d       <- vapply(y_arr, function(a) dim(a)[2L], integer(1))
 
-  # Full site overlap only (see file header): every source spans all n_sites.
-  for (d in seq_len(D)) {
-    if (dim(y_arr[[d]])[1L] != n_sites) {
-      stop(sprintf("source %d has %d sites but data has %d rows; partial site ",
-                   d, dim(y_arr[[d]])[1L], n_sites),
-           "overlap across sources is not yet supported for the community ",
-           "integrated family (full overlap only, #57).", call. = FALSE)
+  # Resolve each source's site coverage. `site_map` (a list of D integer vectors,
+  # one global site index per source row) supports partial / overlapping coverage;
+  # omitted, each source must span all n_sites in declaration order (full overlap,
+  # the historical default).
+  if (!is.null(site_map)) {
+    if (!is.list(site_map) || length(site_map) != D) {
+      stop(sprintf("site_map must be a list of %d integer vectors (one per source).",
+                   D), call. = FALSE)
     }
+  }
+  maps <- vector("list", D)
+  for (d in seq_len(D)) {
+    n_d <- dim(y_arr[[d]])[1L]
     if (dim(y_arr[[d]])[3L] != n_species) {
       stop(sprintf("source %d has %d species but source 1 has %d.",
                    d, dim(y_arr[[d]])[3L], n_species), call. = FALSE)
+    }
+    if (is.null(site_map)) {
+      if (n_d != n_sites) {
+        stop(sprintf("source %d has %d sites but data has %d rows. Supply ",
+                     d, n_d, n_sites),
+             "`site_map` (one global site index per source row) for partial / ",
+             "overlapping coverage.", call. = FALSE)
+      }
+      maps[[d]] <- seq_len(n_sites)
+    } else {
+      m <- as.integer(site_map[[d]])
+      if (length(m) != n_d) {
+        stop(sprintf("site_map[[%d]] has %d entries but source %d has %d rows.",
+                     d, length(m), d, n_d), call. = FALSE)
+      }
+      if (anyNA(m) || any(m < 1L) || any(m > n_sites)) {
+        stop(sprintf("site_map[[%d]] must index sites in 1..%d.", d, n_sites),
+             call. = FALSE)
+      }
+      if (anyDuplicated(m)) {
+        stop(sprintf("site_map[[%d]] has duplicate site indices (a source maps ",
+                     d), "each of its rows to a distinct site).", call. = FALSE)
+      }
+      maps[[d]] <- m
     }
   }
 
@@ -223,22 +258,27 @@
   X_p   <- lapply(det_formulas, function(f) stats::model.matrix(f, data))
 
   # Clean each source / species detection matrix: binary, NA -> 0 with a
-  # parallel validity mask.
+  # parallel validity mask. Each source's rows are scattered into the full
+  # n_sites grid at its `maps[[d]]` global sites; sites the source does not cover
+  # stay all-invalid (no visit), so they contribute nothing to that source's
+  # marginal terms.
   y_int <- vector("list", D)
   valid <- vector("list", D)
   for (d in seq_len(D)) {
+    md  <- maps[[d]]
+    n_d <- length(md)
     yi <- array(0L,    dim = c(n_sites, J_d[d], n_species))
     vi <- array(FALSE, dim = c(n_sites, J_d[d], n_species))
     for (s in seq_len(n_species)) {
-      ys <- matrix(as.integer(round(y_arr[[d]][, , s])), n_sites, J_d[d])
+      ys <- matrix(as.integer(round(y_arr[[d]][, , s])), n_d, J_d[d])
       vs <- !is.na(ys)
       if (any(ys[vs] != 0L & ys[vs] != 1L)) {
         stop(sprintf("source %d, species '%s': y must contain only 0, 1, or NA.",
                      d, species_names[s]), call. = FALSE)
       }
       ys[!vs] <- 0L
-      yi[, , s] <- ys
-      vi[, , s] <- vs
+      yi[md, , s] <- ys
+      vi[md, , s] <- vs
     }
     y_int[[d]] <- yi
     valid[[d]] <- vi
@@ -267,6 +307,7 @@
     n_sites       = n_sites,
     n_sources     = D,
     n_visits      = J_d,
+    site_maps     = maps,
     n_species     = n_species,
     species_names = species_names,
     source_names  = src_names,
