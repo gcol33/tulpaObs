@@ -139,11 +139,6 @@
       stop("distance() currently supports non-spatial fixed effects only; a ",
            "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
     }
-    if (!is.null(re) && !identical(method, "nuts")) {
-      stop("distance() random effects fit under method = \"nuts\" (a single ",
-           "intercept RE on the abundance arm, tulpaObs#51); the Laplace path ",
-           "is non-spatial fixed effects only.", call. = FALSE)
-    }
     if (identical(method, "nuts")) {
       fit <- .tobs_fit_distance_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
@@ -151,6 +146,14 @@
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
+    } else if (!is.null(re)) {
+      # Site-level grouped RE on the abundance arm via the shared count-model
+      # AGHQ path (tulpaObs#51; half-normal key, abundance arm only). n_quad = 1
+      # is the joint Laplace, n_quad > 1 debiases the small-cluster attenuation.
+      fit <- .tobs_fit_distance_re(fit_model, re = re, mixture = mixture,
+                                   K_max = K.max, max_iter = max.iter, tol = tol,
+                                   n_quad = n.quad, lkj_eta = re.lkj,
+                                   theta_prior_sd = sigma.beta, verbose = verbose)
     } else {
       fit <- .tobs_fit_distance(fit_model, mixture = mixture, K_max = K.max,
                                 max_iter = max.iter, tol = tol, verbose = verbose)

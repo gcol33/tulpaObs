@@ -117,6 +117,91 @@
 
 
 # ---------------------------------------------------------------------------
+# Grouped random effect on the abundance arm (gcol33/tulpaObs#51)
+# ---------------------------------------------------------------------------
+
+# Warm start for the distance RE fit: the no-RE distance Laplace fit, normalized
+# to the (beta_lambda, beta_p, r) shape the shared count-RE fitter expects (the
+# detection coefficients are the log-sigma betas).
+.tobs_distance_re_warm <- function(model, mixture, K_max, max_iter, tol) {
+  mix_code <- switch(mixture, poisson = "P", negbin = "NB", P = "P", NB = "NB",
+                     stop(sprintf("Unknown mixture '%s'.", mixture), call. = FALSE))
+  fit <- distance_laplace(
+    y = model$y, X_lambda = model$X_processes[[1]], X_sigma = model$X_processes[[2]],
+    cutpoints = model$cutpoints, key = model$key, transect = model$transect,
+    mixture = mix_code, K_max = K_max, quad_order = model$quad_order,
+    max_iter = as.integer(max_iter), tol = as.numeric(tol), verbose = FALSE)
+  list(beta_lambda = fit$beta_lambda, beta_p = fit$beta_sigma,
+       r = if (identical(mix_code, "NB")) fit$r else NA_real_)
+}
+
+# Pack the AGHQ-refined distance RE fit. The shared count-RE helper returns the
+# refined detection block as `beta_p`; distance carries it as the sigma arm.
+.tobs_distance_re_build <- function(ref, model, design, K_max, mixture) {
+  raw <- list(
+    mixture     = mixture,
+    beta_lambda = ref$beta_lambda,
+    beta_sigma  = ref$beta_p,
+    log_r       = ref$log_r,
+    r           = ref$r,
+    vcov        = ref$vcov,
+    log_lik     = ref$log_marginal,
+    converged   = ref$converged,
+    key         = model$key,
+    transect    = model$transect,
+    hazard      = identical(model$key, "hazard"),
+    K_max       = ref$K_max %||% K_max)
+  re_post <- list(arm = ref$arm, design = design,
+                  Sigma_list = ref$Sigma_list,
+                  b = ref$b, b_var = ref$b_var,
+                  n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
+  build_distance_fit(raw, model, re_post = re_post)
+}
+
+# Fit a binned distance-sampling model with a site-level grouped random effect on
+# the abundance arm under the Laplace / AGHQ path (one grouping factor, RE dim
+# <= 3; tulpaObs#51). Half-normal key only -- the hazard-rate key carries a
+# global scalar shape coordinate not expressible in the count-family theta layout
+# -- and abundance-arm only -- a detection RE couples a site's distance bins
+# through the shared latent N, so it does not factorize into the per-site scalar
+# offset the AGHQ engine assumes. Both are rejected here with a pointer.
+.tobs_fit_distance_re <- function(model, re, mixture = "poisson", K_max = NULL,
+                                  max_iter = 100L, tol = 1e-6, verbose = TRUE,
+                                  n_quad = 1L, lkj_eta = 1.5,
+                                  theta_prior_sd = 100) {
+  if (!identical(model$key, "halfnorm")) {
+    stop("distance() random effects fit under the half-normal key only ",
+         "(key = \"halfnorm\"); the hazard-rate key's global shape parameter is ",
+         "not yet wired into the grouped-RE path. (tulpaObs#51)", call. = FALSE)
+  }
+  re_list <- if (inherits(re, "tobs_re")) list(re) else re
+  on_det <- vapply(re_list, function(r) {
+    sh <- r$shared
+    length(sh) >= 2L && isTRUE(sh[2])
+  }, logical(1))
+  if (any(on_det)) {
+    stop("distance() random effects are supported on the abundance arm only; a ",
+         "detection (sigma) random effect couples a site's distance bins through ",
+         "the shared latent abundance, so it does not factorize into the ",
+         "per-site offset the AGHQ engine integrates. (tulpaObs#51)", call. = FALSE)
+  }
+  mix_code <- switch(mixture, poisson = "P", negbin = "NB", P = "P", NB = "NB",
+                     stop(sprintf("Unknown mixture '%s' (use \"poisson\" or \"negbin\").",
+                                  mixture), call. = FALSE))
+  .tobs_fit_count_re(model, re,
+                     warm_fun = .tobs_distance_re_warm,
+                     aghq_fun = .tobs_distance_re_aghq,
+                     family_label = "distance",
+                     mixture = mix_code, K_max = K_max,
+                     max_iter = max_iter, tol = tol, verbose = verbose,
+                     n_quad = n_quad, lkj_eta = lkj_eta,
+                     theta_prior_sd = theta_prior_sd,
+                     det_arm = "sigma",
+                     build_fun = .tobs_distance_re_build)
+}
+
+
+# ---------------------------------------------------------------------------
 # Laplace fit (R wrapper over cpp_distance_laplace_fixed)
 # ---------------------------------------------------------------------------
 
@@ -261,7 +346,7 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
 # a tobs_fit. Coefficient layout: (lambda, sigma[, log_shape][, log_r]); the
 # trailing scalars are model coefficients carried with an SE, left on natural
 # scale by the per-process unscaler in .tobs_fit_model().
-build_distance_fit <- function(raw, model) {
+build_distance_fit <- function(raw, model, re_post = NULL) {
   pi_list <- model$process_info
   p_lam <- pi_list[[1]]$p; p_sig <- pi_list[[2]]$p
   is_nb  <- identical(raw$mixture, "NB") || identical(raw$mixture, "negbin")
@@ -285,6 +370,24 @@ build_distance_fit <- function(raw, model) {
   n_pseudo <- 1000L
   draws <- .rmvn(n_pseudo, means, vcov)
   colnames(draws) <- nms
+
+  # Grouped random effect on the abundance arm (gcol33/tulpaObs#51): append the
+  # variance components (sigma_g_*, cor_g_*_* for a correlated block) and the
+  # per-group BLUPs after the fixed block, exactly as the N-mixture path does.
+  # The fixed block (n_fixed leading coordinates) still governs coef() / vcov() /
+  # confint(); the trailing RE columns are read by ranef() / summary() by name.
+  re_block <- NULL
+  if (!is.null(re_post) && length(re_post$design)) {
+    re_block <- .tobs_re_param_block(list(design = re_post$design,
+                                          b      = re_post$b,
+                                          b_var  = re_post$b_var,
+                                          Sigma  = re_post$Sigma_list))
+    means <- c(means, re_block$means); sds <- c(sds, re_block$sds)
+    nms   <- c(nms, re_block$names)
+    names(means) <- nms; names(sds) <- nms
+    draws <- cbind(draws, .tobs_re_pseudo_draws(re_block$means, re_block$sds,
+                                                re_block$names, n_pseudo))
+  }
 
   dispersion <- NULL
   if (is_nb && is.finite(raw$log_r %||% NA_real_)) {
@@ -318,6 +421,11 @@ build_distance_fit <- function(raw, model) {
     mixture = if (is_nb) "negbin" else "poisson",
     nmix_dispersion = dispersion,
     distance_shape = shape,
+    re_effects = re_block$re_effects,
+    nmix_re = if (!is.null(re_post))
+      list(arm = re_post$arm, n_quad = re_post$n_quad,
+           lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
+      else NULL,
     convergence = list(converged = raw$converged %||% TRUE,
                        n_iter = raw$n_iter %||% NA_integer_)
   )), class = c("tobs_fit", "tulpa_fit"))

@@ -45,20 +45,20 @@
 
 
 # AGHQ refinement (and n_quad = 1 fit) of a single-species COUNT model with
-# grouped random effects. Family-agnostic: `make_oracle` is the native
-# REGroupOracle factory (cpp_nmix_grouped_oracle / cpp_removal_grouped_oracle,
-# identical signatures); everything else -- the applicability gate, the
-# covariance-only re_terms spec, the site-level Z assembly, the AGHQ call, and
-# the BLUP re-pack -- is shared across families. `model` is the autoscaled
-# `tobs_model` whose `X_processes` are (X_lambda, X_p) and whose `y_long` /
-# `site_idx` are the long-form counts (N-mixture visits or removal passes);
-# `design` the per-term RE design (.tobs_re_design output, each tagged with its
-# `arm`: "lambda" if the random effect enters the abundance predictor, "p" if it
-# enters detection); `beta_lambda` / `beta_p` / `Sigma_list` / `b` the warm
-# starts; `mixture` the abundance mixing distribution code; `K_max` the
-# marginal-sum truncation (resolved by the family wrapper). Returns a list of
-# refined estimates or NULL when the engine declines (caller falls back to the
-# no-RE fit).
+# grouped random effects. Family-agnostic: `make_oracle` is a CLOSURE
+# `function(arm_code, Z_site, K_max)` that returns a native REGroupOracle XPtr,
+# capturing whatever per-site data its family kernel needs (the N-mixture /
+# removal long-form counts, the distance per-site bin counts + quadrature, ...).
+# Everything else -- the applicability gate, the covariance-only re_terms spec,
+# the site-level Z assembly, the AGHQ call, and the BLUP re-pack -- is shared
+# across families and reads ONLY the RE `design` (per-term .tobs_re_design
+# output, each tagged with its `arm`: "lambda" if the random effect enters the
+# abundance predictor, "p"/the detection arm otherwise), the warm-start `beta_lambda`
+# / `beta_p` / `Sigma_list` / `b`, the mixing-distribution code `mixture`, and the
+# marginal-sum truncation `K_max` (resolved by the family wrapper). The fixed-effect
+# coefficient counts come from the warm-start lengths, the number of sites from the
+# design, so no model layout is assumed here. Returns a list of refined estimates
+# or NULL when the engine declines (caller falls back to the no-RE fit).
 .tobs_count_re_aghq <- function(make_oracle, model, design, beta_lambda, beta_p,
                                 Sigma_list, b, mixture = "P", r_init = 10,
                                 K_max, n_quad = 1L, lkj_eta = 1.5,
@@ -76,12 +76,8 @@
   dtot <- sum(vapply(design, function(d) as.integer(d$n_coefs), integer(1)))
   if (dtot > 3L) return(NULL)
 
-  X_lambda <- model$X_processes[[1]]
-  X_p      <- model$X_processes[[2]]
-  y_long   <- as.integer(model$y_long)
-  site_idx <- as.integer(model$site_idx)
-  N <- nrow(X_lambda)
-  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+  p_lam <- length(beta_lambda); p_p <- length(beta_p)
+  N <- length(idx1)
 
   # Engine wants n_obs = number of "rows". Rows are sites here: the per-site
   # marginal is per-row in the engine's sense, with each site belonging to one
@@ -116,13 +112,7 @@
                  "expected dtot = %d.", ncol(Z_site), dtot), call. = FALSE)
   }
 
-  orc <- make_oracle(
-    arm = if (arm == "lambda") 0L else 1L,
-    y = y_long, site_idx = site_idx,
-    X_lambda = X_lambda, X_p = X_p,
-    Z_site = Z_site, site_group = idx1,
-    n_sites = N, n_groups = ng, K_max = K_max,
-    nb = is_nb)
+  orc <- make_oracle(if (arm == "lambda") 0L else 1L, Z_site, K_max)
 
   theta0 <- c(as.numeric(beta_lambda), as.numeric(beta_p))
   if (is_nb) theta0 <- c(theta0, log(r_init))
@@ -162,20 +152,32 @@
     log_marginal  = ref$log_marginal,
     n_quad        = ref$n_quad,
     lkj_eta       = ref$lkj_eta,
-    converged     = ref$converged
+    converged     = ref$converged,
+    K_max         = K_max
   )
 }
 
 
-# N-mixture wrapper: the native nmix grouped oracle + the N-mixture K_max default
-# (largest single count + 100). Signature kept stable for .tobs_fit_nmix_re.
+# N-mixture wrapper: the native nmix grouped oracle (long-form visit counts) +
+# the N-mixture K_max default (largest single count + 100). Signature kept stable
+# for .tobs_fit_nmix_re.
 .tobs_nmix_re_aghq <- function(model, design, beta_lambda, beta_p,
                                Sigma_list, b, mixture = "P", r_init = 10,
                                K_max = NULL, n_quad = 1L, lkj_eta = 1.5,
                                theta_prior_sd = 100, max_iter = 200L,
                                verbose = FALSE) {
   if (is.null(K_max)) K_max <- as.integer(max(as.integer(model$y_long)) + 100L)
-  .tobs_count_re_aghq(cpp_nmix_grouped_oracle, model, design,
+  is_nb <- identical(mixture, "NB")
+  idx1  <- as.integer(design[[1]]$idx)
+  make_oracle <- function(arm_code, Z_site, K_max)
+    cpp_nmix_grouped_oracle(
+      arm = arm_code, y = as.integer(model$y_long),
+      site_idx = as.integer(model$site_idx),
+      X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
+      Z_site = Z_site, site_group = idx1,
+      n_sites = length(idx1), n_groups = as.integer(design[[1]]$n_groups),
+      K_max = as.integer(K_max), nb = is_nb)
+  .tobs_count_re_aghq(make_oracle, model, design,
                       beta_lambda, beta_p, Sigma_list, b, mixture, r_init,
                       K_max, n_quad, lkj_eta, theta_prior_sd, max_iter, verbose)
 }
@@ -198,38 +200,115 @@
     site_tot[is.na(site_tot)] <- 0L
     K_max <- as.integer(max(as.integer(site_tot)) + 100L)
   }
-  .tobs_count_re_aghq(cpp_removal_grouped_oracle, model, design,
+  is_nb <- identical(mixture, "NB")
+  idx1  <- as.integer(design[[1]]$idx)
+  make_oracle <- function(arm_code, Z_site, K_max)
+    cpp_removal_grouped_oracle(
+      arm = arm_code, y = as.integer(model$y_long),
+      site_idx = as.integer(model$site_idx),
+      X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
+      Z_site = Z_site, site_group = idx1,
+      n_sites = length(idx1), n_groups = as.integer(design[[1]]$n_groups),
+      K_max = as.integer(K_max), nb = is_nb)
+  .tobs_count_re_aghq(make_oracle, model, design,
                       beta_lambda, beta_p, Sigma_list, b, mixture, r_init,
                       K_max, n_quad, lkj_eta, theta_prior_sd, max_iter, verbose)
 }
 
 
+# Distance wrapper: the native distance grouped oracle (per-site bin counts +
+# the per-fit detection quadrature) + the distance K_max default (3 * largest
+# per-site detected total + 100; the latent total spans the undetected
+# individuals, so the truncation needs the same multiplicative margin the
+# distance Laplace fit uses). Abundance-arm RE only, half-normal key only -- the
+# hazard-rate key carries a global scalar shape coordinate that is not a per-site
+# design column, so it is not expressible in the count-family theta layout; the
+# detection arm couples a site's bins through the shared latent N, so it does not
+# factorize into the per-site scalar offset the base assumes. Both are gated in
+# .tobs_fit_distance_re; this wrapper assumes them.
+.tobs_distance_re_aghq <- function(model, design, beta_lambda, beta_p,
+                                   Sigma_list, b, mixture = "P", r_init = 10,
+                                   K_max = NULL, n_quad = 1L, lkj_eta = 1.5,
+                                   theta_prior_sd = 100, max_iter = 200L,
+                                   verbose = FALSE) {
+  if (is.null(K_max)) {
+    R_max <- if (length(model$y)) max(rowSums(model$y)) else 0L
+    K_max <- as.integer(3L * R_max + 100L)
+  }
+  is_nb <- identical(mixture, "NB")
+  idx1  <- as.integer(design[[1]]$idx)
+  y_bins <- matrix(as.integer(model$y), nrow(model$y), ncol(model$y))
+  make_oracle <- function(arm_code, Z_site, K_max)
+    cpp_distance_grouped_oracle(
+      arm = arm_code, y_bins = y_bins,
+      X_lambda = model$X_processes[[1]], X_sigma = model$X_processes[[2]],
+      Z_site = Z_site, site_group = idx1,
+      n_sites = length(idx1), n_groups = as.integer(design[[1]]$n_groups),
+      cutpoints = as.numeric(model$cutpoints),
+      transect = .dist_transect_code(model$transect),
+      quad_order = as.integer(model$quad_order),
+      K_max = as.integer(K_max), nb = is_nb)
+  .tobs_count_re_aghq(make_oracle, model, design,
+                      beta_lambda, beta_p, Sigma_list, b, mixture, r_init,
+                      K_max, n_quad, lkj_eta, theta_prior_sd, max_iter, verbose)
+}
+
+
+# Default `build_fun` for .tobs_fit_count_re: assemble the `raw` object
+# build_nmix_fit consumes (the (lambda, p[, log_r]) coefficient layout the
+# N-mixture and removal families share) and pack it with the appended RE block.
+.tobs_count_re_build_nmix <- function(ref, model, design, K_max, mixture) {
+  raw <- list(
+    mixture     = mixture,
+    beta_lambda = ref$beta_lambda,
+    beta_p      = ref$beta_p,
+    log_r       = ref$log_r,
+    r           = ref$r,
+    vcov        = ref$vcov,
+    log_lik     = ref$log_marginal,
+    converged   = ref$converged,
+    K_max       = ref$K_max %||% K_max)
+  re_post <- list(arm = ref$arm, design = design,
+                  Sigma_list = ref$Sigma_list,
+                  b = ref$b, b_var = ref$b_var,
+                  n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
+  build_nmix_fit(raw, model, spatial = NULL, re_post = re_post)
+}
+
+
 # Shared grouped-RE fit for a single-species count model (N-mixture / removal /
-# ...): warm-start the betas with the no-RE Laplace fit (`warm_fun`), seed Sigma
-# at a diagonal 0.25 per term, refine through the family AGHQ helper (`aghq_fun`,
-# one of .tobs_nmix_re_aghq / .tobs_removal_re_aghq), and assemble the `raw`
-# object build_nmix_fit consumes. `family_label` only flavours the error text;
-# the structure is identical because the per-site marginals share the
-# (lambda, p[, log_r]) coefficient layout and the REGroupOracle interface.
+# distance / ...): warm-start the betas with the no-RE Laplace fit (`warm_fun`),
+# seed Sigma at a diagonal 0.25 per term, refine through the family AGHQ helper
+# (`aghq_fun`, one of .tobs_nmix_re_aghq / .tobs_removal_re_aghq /
+# .tobs_distance_re_aghq), and pack the refined fit through `build_fun`. The
+# applicability gate, warm-start, Sigma/BLUP seeding, and AGHQ call are identical
+# across families because the per-site marginals share the
+# (lambda, <det>[, log_r]) coefficient layout and the REGroupOracle interface;
+# `det_arm` names the detection process ("p" for N-mixture / removal, "sigma" for
+# distance) and `build_fun(ref, model, design, K_max, mixture)` owns the
+# family-specific fit packing. `family_label` flavours the error text.
 .tobs_fit_count_re <- function(model, re, warm_fun, aghq_fun, family_label,
                                mixture = "P", K_max = NULL,
                                max_iter = 100L, tol = 1e-6, verbose = TRUE,
-                               n_quad = 1L, lkj_eta = 1.5, theta_prior_sd = 100) {
+                               n_quad = 1L, lkj_eta = 1.5, theta_prior_sd = 100,
+                               det_arm = "p",
+                               build_fun = .tobs_count_re_build_nmix) {
   if (inherits(re, "tobs_re")) re <- list(re)
   arms <- .tobs_re_split_two_arms(
-    re, model, "lambda", "p",
+    re, model, "lambda", det_arm,
     sprintf(paste0("A random effect shared across the abundance (lambda) and ",
-                   "detection (p) arms is not supported on the %s AGHQ path."),
-            family_label))
+                   "detection (%s) arms is not supported on the %s AGHQ path."),
+            det_arm, family_label))
   # v1: single arm. Both populated -> reject (cross-arm AGHQ needs a joint
   # two-arm oracle, a separate engine path).
-  if (length(arms$lambda) && length(arms$p)) {
+  if (length(arms$lambda) && length(arms[[det_arm]])) {
     stop(sprintf(paste0("Random effects on BOTH the abundance and detection ",
                         "arms in one %s fit are not yet supported; the AGHQ ",
                         "path integrates one arm at a time. Put the RE on ",
-                        "lambda OR p, not both."), family_label), call. = FALSE)
+                        "lambda OR %s, not both."), family_label, det_arm),
+         call. = FALSE)
   }
-  design <- if (length(arms$lambda)) arms$lambda else arms$p
+  design <- if (length(arms$lambda)) arms$lambda else arms[[det_arm]]
 
   X_lambda <- model$X_processes[[1]]
   X_p      <- model$X_processes[[2]]
@@ -240,7 +319,8 @@
              max_iter = as.integer(max_iter), tol = as.numeric(tol)),
     error = function(e) NULL)
   beta_lambda_init <- if (!is.null(warm)) warm$beta_lambda
-                      else c(log(max(mean(y_long), 0.1)), rep(0, ncol(X_lambda) - 1L))
+                      else c(log(max(mean(y_long %||% 1), 0.1)),
+                             rep(0, ncol(X_lambda) - 1L))
   beta_p_init      <- if (!is.null(warm)) warm$beta_p else rep(0, ncol(X_p))
   r_init <- if (!is.null(warm) && identical(mixture, "NB") &&
                 is.finite(warm$r %||% NA_real_)) as.numeric(warm$r) else 10
@@ -264,20 +344,5 @@
                         "structure."), family_label), call. = FALSE)
   }
 
-  raw <- list(
-    mixture     = mixture,
-    beta_lambda = ref$beta_lambda,
-    beta_p      = ref$beta_p,
-    log_r       = ref$log_r,
-    r           = ref$r,
-    vcov        = ref$vcov,
-    log_lik     = ref$log_marginal,
-    converged   = ref$converged,
-    K_max       = K_max
-  )
-  re_post <- list(arm = ref$arm, design = design,
-                  Sigma_list = ref$Sigma_list,
-                  b = ref$b, b_var = ref$b_var,
-                  n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
-  build_nmix_fit(raw, model, spatial = NULL, re_post = re_post)
+  build_fun(ref, model, design, K_max, mixture)
 }

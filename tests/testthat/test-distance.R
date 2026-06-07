@@ -398,17 +398,54 @@ test_that("distance() NUTS samples a single abundance RE and recovers sigma + be
   expect_lt(mean(fit$nuts$divergent), 0.15)
 })
 
-test_that("distance() RE is NUTS + abundance-arm only", {
+test_that("distance() Laplace AGHQ recovers a site-grouped abundance RE", {
+  skip_on_cran()
+  skip_if_fast()
+  cuts <- seq(0, 1, length.out = 5)
+  s <- sim_distance_lambda_re(N = 120, ngrp = 12, cutpoints = cuts,
+                              beta_lambda = c(log(40), 0.3), sigma = 0.4,
+                              sigma_b = 0.6, seed = 3)
+  fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
+              family = distance(cutpoints = cuts, key = "halfnorm",
+                                transect = "line", K_max = 250L),
+              method = "laplace", verbose = FALSE,
+              control = list(n.quad = 5L))
+  expect_identical(fit$method, "laplace")
+  expect_identical(fit$nmix_re$arm, "lambda")
+  expect_true("sigma_g1_(Intercept)" %in% names(fit$means))
+  # AGHQ-debiased variance component near truth (some small-cluster attenuation
+  # remains at this group size); fixed effects recover tightly.
+  expect_lt(abs(fit$means[["sigma_g1_(Intercept)"]] - 0.6), 0.25)
+  expect_lt(abs(fit$means[["lambda_(Intercept)"]] - log(40)), 0.3)
+  expect_lt(abs(fit$means[["lambda_x1"]] - 0.3), 0.2)
+  # Per-group BLUPs surface through ranef() (one row per group level).
+  re <- ranef(fit)
+  expect_true(is.data.frame(re))
+  expect_equal(nrow(re), 12L)
+})
+
+test_that("distance() Laplace RE rejects the hazard key, detection arm, both arms", {
   cuts <- seq(0, 1, length.out = 5)
   s <- sim_distance_lambda_re(N = 30, ngrp = 5, cutpoints = cuts,
                               beta_lambda = c(log(20), 0.2), sigma = 0.4,
                               sigma_b = 0.4, seed = 2)
-  # RE under Laplace is unsupported for distance.
+  # Hazard-rate key carries a global shape coordinate the count-family theta
+  # layout cannot express, so the grouped-RE path is half-normal only.
   expect_error(
     tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
+         family = distance(cutpoints = cuts, key = "hazard"), method = "laplace"),
+    "half-normal")
+  # A detection-scale (sigma-arm) RE couples a site's bins through the latent N.
+  expect_error(
+    tobs(formula = ~ x1, detection = ~ (1 | g), data = s$data, y = s$y,
          family = distance(cutpoints = cuts), method = "laplace"),
-    "method = \"nuts\"|nuts")
-  # A detection-scale (sigma-arm) RE is not wired.
+    "abundance arm only")
+  # Both arms at once is not yet supported.
+  expect_error(
+    tobs(formula = ~ x1 + (1 | g), detection = ~ (1 | g), data = s$data, y = s$y,
+         family = distance(cutpoints = cuts), method = "laplace"),
+    "abundance arm only|BOTH")
+  # Detection-arm RE under NUTS is likewise abundance-arm only.
   expect_error(
     tobs(formula = ~ x1, detection = ~ (1 | g), data = s$data, y = s$y,
          family = distance(cutpoints = cuts), method = "nuts",

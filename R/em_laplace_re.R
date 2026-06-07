@@ -539,3 +539,23 @@
   list(means = means, sds = sds, names = nms, re_effects = re_effects,
        occ_se = re_post$beta_occ_se)
 }
+
+
+# NA-aware Gaussian pseudo-draws for an appended random-effect parameter block:
+# each column draws rnorm(mean, sd) when its SD is finite (the per-group BLUPs,
+# which carry an AGHQ marginal posterior SD), else stays NA (the variance-
+# component / correlation columns have no surfaced joint posterior SD, so a
+# fabricated near-degenerate column that would read as "known almost exactly" is
+# left NA -- the same NA-on-unavailable rule as the NUTS-only sampler
+# diagnostics). Shared by the count-family fit packers (build_nmix_fit /
+# build_distance_fit) so the appended-RE draw layout has one definition.
+.tobs_re_pseudo_draws <- function(re_means, re_sds, re_names, n_pseudo) {
+  n_re <- length(re_means)
+  re_draws <- matrix(NA_real_, n_pseudo, n_re)
+  for (j in seq_len(n_re)) {
+    if (is.finite(re_sds[j]))
+      re_draws[, j] <- stats::rnorm(n_pseudo, re_means[j], re_sds[j])
+  }
+  colnames(re_draws) <- re_names
+  re_draws
+}

@@ -160,7 +160,11 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   (`src/nmix_kernel.h`); det arm = site-level `log sigma` + optional scalar hazard
   shape (`src/distance_quad.h`/`src/distance_kernel.h`), own Laplace driver
   (`src/distance_laplace.cpp`) + NUTS (`src/distance_nuts.cpp`). K_max default
-  `3*max(rowSums)+100`.
+  `3*max(rowSums)+100`. Laplace grouped RE on the abundance arm (half-normal key,
+  one grouping factor, dim<=3) via the shared count AGHQ path
+  (`DistanceGroupedOracle` over `CountGroupedOracle`; one sigma row/site, so the
+  half-normal theta is the count layout `[beta_lambda|beta_sigma|log_r?]`);
+  hazard-key + detection-arm RE gated.
 - `fp_occu` (tulpaObs#40): Miller 2011 multistate false-positive occupancy, `y in
   {0,1,2}` (none/ambiguous/certain), certain detections only at occupied sites
   identify it. Latent z summed (2-state); 4 site-level logit arms psi/p11/p10/b
@@ -326,7 +330,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; #12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`); Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm (dim<=3, one grouping factor) via the shared count-model AGHQ path (`RemovalGroupedOracle` over `CountGroupedOracle`, `test-removal.R`); spatial pending |
-| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51); spatial + Laplace-RE pending |
+| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated; spatial pending |
 | False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51); spatial + Laplace-RE pending |
 | Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51); spatial + Laplace-RE pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |

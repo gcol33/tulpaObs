@@ -346,6 +346,29 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_distance_grouped_oracle
+SEXP cpp_distance_grouped_oracle(int arm, Rcpp::IntegerMatrix y_bins, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max, bool nb);
+RcppExport SEXP _tulpaObs_cpp_distance_grouped_oracle(SEXP armSEXP, SEXP y_binsSEXP, SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP cutpointsSEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type arm(armSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y_bins(y_binsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_sigma(X_sigmaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type Z_site(Z_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_group(site_groupSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_groups(n_groupsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type cutpoints(cutpointsSEXP);
+    Rcpp::traits::input_parameter< int >::type transect(transectSEXP);
+    Rcpp::traits::input_parameter< int >::type quad_order(quad_orderSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_grouped_oracle(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_dyn_abun_total_log_lik
 Rcpp::List cpp_dyn_abun_total_log_lik(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, bool use_nb, double eta_logr);
 RcppExport SEXP _tulpaObs_cpp_dyn_abun_total_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP) {
@@ -1108,6 +1131,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_distance_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_distance_total_log_lik, 10},
     {"_tulpaObs_cpp_distance_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_distance_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
+    {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 13},
     {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 11},
     {"_tulpaObs_cpp_dyn_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_dyn_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts, 10},

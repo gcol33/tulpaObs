@@ -383,14 +383,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
     means <- c(means, re_means); sds <- c(sds, re_sds)
     nms   <- c(nms, re_names)
     names(means) <- nms; names(sds) <- nms
-    n_re <- length(re_means)
-    re_draws <- matrix(NA_real_, n_pseudo, n_re)
-    for (j in seq_len(n_re)) {
-      if (is.finite(re_sds[j]))
-        re_draws[, j] <- stats::rnorm(n_pseudo, re_means[j], re_sds[j])
-    }
-    colnames(re_draws) <- re_names
-    draws <- cbind(draws, re_draws)
+    draws <- cbind(draws, .tobs_re_pseudo_draws(re_means, re_sds, re_names,
+                                                n_pseudo))
   }
 
   spatial_field <- raw$phi_mean %||% raw$z_mean %||% raw$u_mean %||% raw$v_mean

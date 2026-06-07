@@ -85,6 +85,10 @@ cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr,
     .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb = FALSE) {
+    .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb)
+}
+
 cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0) {
     .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr)
 }
