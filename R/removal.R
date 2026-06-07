@@ -141,6 +141,43 @@
 }
 
 
+# No-RE removal Laplace warm start for the AGHQ RE path (the shape
+# .tobs_fit_count_re's warm_fun expects: (model, mixture, K_max, max_iter, tol)).
+# `mixture` is the "P"/"NB" code.
+.tobs_removal_re_warm <- function(model, mixture, K_max, max_iter, tol) {
+  removal_laplace(y = model$y_long, site_idx = model$site_idx,
+                  X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
+                  mixture = mixture, K_max = K_max,
+                  max_iter = as.integer(max_iter), tol = as.numeric(tol),
+                  verbose = FALSE)
+}
+
+# Fit a removal model with a site-level grouped random effect on the abundance
+# (lambda) OR detection (p) arm (gcol33/tulpaObs#51). Routes through the shared
+# count-model RE path: the per-site removal marginal carries the same
+# (lambda, p[, log_r]) coefficient layout and REGroupOracle interface as the
+# N-mixture, so the only family-specific pieces are the removal warm start and
+# the removal AGHQ helper (its native RemovalGroupedOracle + depletion-aware
+# K_max default).
+.tobs_fit_removal_re <- function(model, re, mixture = "poisson", K_max = NULL,
+                                 max_iter = 100L, tol = 1e-6, verbose = TRUE,
+                                 n_quad = 1L, lkj_eta = 1.5,
+                                 theta_prior_sd = 100) {
+  mix_code <- switch(mixture,
+                     poisson = "P", negbin = "NB", P = "P", NB = "NB",
+                     stop(sprintf("Unknown mixture '%s' (use \"poisson\" or \"negbin\").",
+                                  mixture), call. = FALSE))
+  .tobs_fit_count_re(model, re,
+                     warm_fun = .tobs_removal_re_warm,
+                     aghq_fun = .tobs_removal_re_aghq,
+                     family_label = "removal",
+                     mixture = mix_code, K_max = K_max,
+                     max_iter = max_iter, tol = tol, verbose = verbose,
+                     n_quad = n_quad, lkj_eta = lkj_eta,
+                     theta_prior_sd = theta_prior_sd)
+}
+
+
 # ---------------------------------------------------------------------------
 # Laplace fit (R wrapper over cpp_removal_laplace_fixed)
 # ---------------------------------------------------------------------------

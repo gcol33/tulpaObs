@@ -221,3 +221,7 @@ cpp_removal_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n
     .Call(`_tulpaObs_cpp_removal_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_removal_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb = FALSE) {
+    .Call(`_tulpaObs_cpp_removal_grouped_oracle`, arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb)
+}
+

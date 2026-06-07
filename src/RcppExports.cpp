@@ -1064,6 +1064,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_removal_grouped_oracle
+SEXP cpp_removal_grouped_oracle(int arm, Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, int K_max, bool nb);
+RcppExport SEXP _tulpaObs_cpp_removal_grouped_oracle(SEXP armSEXP, SEXP ySEXP, SEXP site_idxSEXP, SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type arm(armSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type Z_site(Z_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_group(site_groupSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_groups(n_groupsSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_removal_grouped_oracle(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_abun_nuts_joint_logpost, 4},
@@ -1121,6 +1142,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_removal_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_removal_total_log_lik, 6},
     {"_tulpaObs_cpp_removal_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_removal_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_removal_nuts", (DL_FUNC) &_tulpaObs_cpp_removal_nuts, 11},
+    {"_tulpaObs_cpp_removal_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_removal_grouped_oracle, 11},
     {NULL, NULL, 0}
 };
 

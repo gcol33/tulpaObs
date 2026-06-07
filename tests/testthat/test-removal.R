@@ -267,14 +267,31 @@ test_that("removal() NUTS samples a single intercept RE and recovers sigma + bet
   expect_lt(mean(fit$nuts$divergent), 0.15)
 })
 
-test_that("removal() RE is NUTS-only; slopes / both-arm rejected", {
+test_that("removal() Laplace AGHQ recovers a site-grouped intercept RE (sigma + betas)", {
+  skip_on_cran()
+  skip_if_fast()
+  # Site-level intercept RE on the abundance arm, fit on the shared count-model
+  # AGHQ path (tulpaObs#51). n.quad > 1 debiases the small-cluster variance
+  # attenuation so sigma recovers; the per-site removal marginal feeds the same
+  # grouped-RE oracle the N-mixture uses.
+  s <- sim_removal_lambda_re(N = 90, K = 5, ngrp = 10,
+                             beta_lambda = c(log(6), 0.3), beta_p = qlogis(0.5),
+                             sigma_b = 0.7, seed = 11)
+  fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data,
+              y = s$y, family = removal(K_max = 60L), method = "laplace",
+              verbose = FALSE, control = list(n.quad = 5L))
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$nmix_re$arm, "lambda")
+  expect_true("sigma_g1_(Intercept)" %in% names(fit$means))
+  expect_true(any(grepl("^re_g1_", names(fit$means))))
+  expect_lt(abs(fit$means[["sigma_g1_(Intercept)"]] - 0.7), 0.35)
+  expect_lt(abs(fit$means[["lambda_(Intercept)"]] - log(6)), 0.35)
+  expect_lt(abs(fit$means[["lambda_x1"]] - 0.3), 0.25)
+})
+
+test_that("removal() NUTS RE rejects slopes / both-arm", {
   s <- sim_removal_lambda_re(N = 40, K = 4, ngrp = 5, beta_lambda = c(log(6), 0.2),
                              beta_p = 0, sigma_b = 0.5, seed = 2)
-  # RE under the Laplace path is not supported for removal.
-  expect_error(
-    tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
-         family = removal(), method = "laplace"),
-    "method = \"nuts\"|nuts")
   # Random slope under NUTS is AGHQ-only territory.
   expect_error(
     tobs(formula = ~ x1 + (x1 | g), detection = ~ 1, data = s$data, y = s$y,
