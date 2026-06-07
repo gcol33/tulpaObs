@@ -133,6 +133,69 @@
 
 
 # ---------------------------------------------------------------------------
+# S3 helpers (routed from methods.R by model_type == "occu_multiscale_cover")
+# ---------------------------------------------------------------------------
+
+# Posterior-mean arm coefficients, split by process block.
+.occu_ms_cover_arm_betas <- function(object) {
+  m  <- object$means
+  pp <- vapply(object$model$process_info, function(x) as.integer(x$p), integer(1))
+  off <- cumsum(c(0L, pp))
+  list(psi   = m[off[1] + seq_len(pp[1])],
+       theta = m[off[2] + seq_len(pp[2])],
+       p     = m[off[3] + seq_len(pp[3])],
+       pos   = m[off[4] + seq_len(pp[4])])
+}
+
+# fitted(): per-unit posterior-mean predictions for each level of the hierarchy.
+# psi is per cell (the areal field is added with coefficient 1); theta / p / cover
+# are per plot (site-level designs; the visit-level part of p / cover is constant
+# across visits at the posterior mean and so reads off the site design). The cover
+# arm carries the shared field with the copy coefficient `alpha`. Lognormal cover
+# reports the conditional MEAN E[cover | detected] = exp(eta + sigma_pos^2 / 2);
+# beta cover reports the conditional mean plogis(eta). `p_marginal` is the
+# per-plot marginal detection probability psi_cell * theta * p (a single visit).
+.tobs_fitted_occu_multiscale_cover <- function(object) {
+  model <- object$model
+  b     <- .occu_ms_cover_arm_betas(object)
+  field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))   # per cell
+  alpha <- unname(object$means["alpha"]); if (!is.finite(alpha)) alpha <- 0
+  pc    <- model$plot_cell
+
+  eta_psi   <- as.numeric(model$X_psi %*% b$psi) + field                 # per cell
+  psi_cell  <- stats::plogis(eta_psi)
+  theta     <- stats::plogis(as.numeric(model$X_theta %*% b$theta))      # per plot
+  pdet      <- stats::plogis(as.numeric(model$X_p_site %*% b$p))         # per plot
+  eta_pos   <- as.numeric(model$X_pos_site %*% b$pos) + alpha * field[pc] # per plot
+  if (identical(model$positive, "beta")) {
+    cover <- stats::plogis(eta_pos)
+  } else {
+    sigma_pos <- unname(object$means["phi_pos"]); if (!is.finite(sigma_pos)) sigma_pos <- 0
+    cover <- exp(eta_pos + 0.5 * sigma_pos^2)
+  }
+  list(psi = psi_cell, theta = theta, p = pdet, cover = cover,
+       field = field, p_marginal = psi_cell[pc] * theta * pdet)
+}
+
+# predict(): in-sample posterior arm predictions. The areal field is tied to the
+# cell graph, so prediction at new covariates / cells (X.0 / newdata) is not
+# supported (no field at an unseen cell), matching ms_occu_cover_spatial().
+.tobs_predict_occu_multiscale_cover <- function(object, type = "state") {
+  type <- switch(type,
+                 state = "psi", occupancy = "psi", psi = "psi",
+                 availability = "theta", theta = "theta",
+                 detection = "p", p = "p",
+                 cover = "cover", cover_cond = "cover",
+                 stop(sprintf(paste0("predict() type '%s' is not supported for ",
+                      "occu_multiscale_cover(). Use \"state\"/\"psi\", ",
+                      "\"availability\"/\"theta\", \"detection\"/\"p\", or ",
+                      "\"cover\"."), type), call. = FALSE))
+  fv <- .tobs_fitted_occu_multiscale_cover(object)
+  switch(type, psi = fv$psi, theta = fv$theta, p = fv$p, cover = fv$cover)
+}
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher (wired into tobs.R's switch). Spatial-only: the psi formula must
 # carry an icar()/bym2() term with group_var naming the per-plot cell column.
 # ---------------------------------------------------------------------------

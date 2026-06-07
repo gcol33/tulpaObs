@@ -134,3 +134,38 @@ test_that("occu_multiscale_cover() beta positive arm fits end-to-end", {
   expect_true(all(c("psi_(Intercept)", "theta_(Intercept)",
                     "p_(Intercept)", "pos_(Intercept)") %in% names(fit$means)))
 })
+
+test_that("occu_multiscale_cover() fitted() / predict() (#53)", {
+  skip_on_cran()
+  skip_if_fast()
+  sim <- simulate_occu_multiscale_cover(
+    n_cells = 40L, plots_per_cell = 4L, visits_per_plot = 3L,
+    sigma = 0.6, alpha = 1.0, positive = "lognormal", seed = 77L)
+  fit <- suppressWarnings(tobs(
+    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+    detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
+                   diagnose.k = FALSE, max.iter = 500L)))
+
+  n_cells <- fit$model$n_cells; n_plots <- fit$model$n_plots
+  fv <- fitted(fit)
+  expect_named(fv, c("psi", "theta", "p", "cover", "field", "p_marginal"))
+  expect_length(fv$psi, n_cells)
+  expect_length(fv$theta, n_plots)
+  expect_length(fv$cover, n_plots)
+  expect_true(all(fv$psi > 0 & fv$psi < 1))
+  expect_true(all(fv$theta > 0 & fv$theta < 1))
+  expect_true(all(fv$p > 0 & fv$p < 1))
+  expect_true(all(fv$cover > 0))                       # lognormal mean > 0
+  expect_true(all(fv$p_marginal >= 0 & fv$p_marginal <= 1))
+
+  # predict() routes types to the matching arm; in-sample only.
+  expect_equal(predict(fit, type = "state"), fv$psi)
+  expect_equal(predict(fit, type = "availability"), fv$theta)
+  expect_equal(predict(fit, type = "detection"), fv$p)
+  expect_equal(predict(fit, type = "cover"), fv$cover)
+  expect_error(predict(fit, newdata = sim$data), "not supported")
+  expect_error(predict(fit, type = "bogus"), "not supported")
+})

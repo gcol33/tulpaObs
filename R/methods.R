@@ -207,10 +207,7 @@ fitted.tobs_fit <- function(object, ...) {
     return(.tobs_fitted_ms_int_occu(object))
   }
   if (identical(model$model_type, "occu_multiscale_cover")) {
-    stop("fitted() is not yet implemented for occu_multiscale_cover() (#53). Use ",
-         "coef() / summary() for the per-arm (psi / theta / p / cover) ",
-         "coefficients and fit$spatial_field / fit$field_table for the cell ",
-         "field.", call. = FALSE)
+    return(.tobs_fitted_occu_multiscale_cover(object))
   }
   means <- object$means
   pi_list <- model$process_info
@@ -636,9 +633,15 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                draws = draws, time_col = time_col))
   }
   if (identical(object$model$model_type, "occu_multiscale_cover")) {
-    stop("predict() is not yet implemented for occu_multiscale_cover() (#53). The ",
-         "fit carries the per-arm coefficients (coef() / summary()) and the ",
-         "cell field (fit$spatial_field / fit$field_table).", call. = FALSE)
+    if (!is.null(X.0) || !is.null(terms) || !is.null(newdata)) {
+      stop("predict() for an occu_multiscale_cover() fit returns the in-sample ",
+           "per-unit posterior; the areal field is tied to the cell graph, so ",
+           "X.0 / newdata / terms prediction is not supported. Call ",
+           "predict(fit, type = \"state\" / \"availability\" / \"detection\" / ",
+           "\"cover\").", call. = FALSE)
+    }
+    oms_type <- if (missing(type) || length(type) > 1L) "state" else type
+    return(.tobs_predict_occu_multiscale_cover(object, oms_type))
   }
   if (identical(object$model$model_type, "ms_occu_cover_spatial")) {
     # The latent fields are tied to the cell graph, so prediction is the
