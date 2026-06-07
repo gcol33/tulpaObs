@@ -604,15 +604,17 @@ trace.
 
 ## Does the field earn its place?
 
-In simulation a high correlation with a known truth says the field
-works. On real data there is no truth, so the question becomes whether
-the field improves prediction enough to justify its parameters. A field
-adds one effective parameter per cell, give or take, tempered by the
-smoothing, so it is never free. WAIC answers whether it pays for itself:
-it estimates out-of-sample predictive accuracy from the pointwise
-log-likelihood, lower is better, and it docks the model for the effective
-parameters the field spends. Compare the BYM2 fit against a non-spatial
-occupancy fit on the same data.
+In simulation a high correlation with a known truth says the field works. On
+real data there is no truth, so the field's value has to come from out-of-sample
+prediction and from whether it clears the spatial autocorrelation the covariates
+left behind. The held-out correlation above is the first read; the residual
+Moran's I from "Checking the fit" is the second.
+
+`tobs_waic()` scores each fit from its fixed-effect coefficient draws, and the
+areal field is not folded into that predictor (the SPDE vignette makes the same
+point). A flat-versus-spatial WAIC table therefore compares the models' fixed
+parts, which here is the shared intercept, so it does not on its own credit the
+field. The table below is worth reading with that scope in mind.
 
 ```{r waic}
 waic_row <- function(fit) {
@@ -627,22 +629,18 @@ waic_tab <- rbind(
 waic_tab[order(waic_tab[, "waic"]), ]
 ```
 
-The two spatial fits carry the lower WAIC, matching how the data were built:
-occupancy here is driven entirely by a smooth field, so a model with no
-place to put it predicts worse. The gap is the field paying for its
-parameters and still coming out ahead. Had the data been spatially flat,
-the comparison would have reported equal or higher WAIC for the spatial
-model, the field's honest signal that it was not needed. That symmetry is
-the value of the comparison: it does not reward the field for flexibility
-alone, only for flexibility the data actually use.
+The three rows sit close together because the occupancy mean structure is an
+intercept in every fit. The field, which is what separates these models, does not
+enter the score, so the small spread here reflects the field-marginalized
+intercept rather than the field itself. WAIC of this kind checks the fixed-effect
+structure; it is not the test of whether the field earns its place.
 
-WAIC compares predictive accuracy; it does not certify that the model is
-right. A lower WAIC says the spatial model predicts the in-sample cells
-better, not that its credible intervals are calibrated or its
-assumptions hold. Pair it with the residual check from the "Checking the
-fit" section above, the Moran's I test for leftover spatial
-autocorrelation, before trusting the field. The diagnostics vignette
-covers the rest of the posterior-predictive battery.
+For that test, the held-out correlation and the residual Moran's I are the tools,
+and both pointed at a field that tracks the data. WAIC still earns its keep when
+the comparison is over fixed-effect structure, an intercept-only occupancy mean
+against one carrying a habitat covariate, where the field is held fixed and the
+score moves with the predictor. The diagnostics vignette covers the rest of the
+posterior-predictive battery.
 
 ## Practical guidance
 

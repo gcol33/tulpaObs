@@ -301,12 +301,16 @@ times misses less than one that visited twice, so the correction shrinks as
 visits accumulate. Reporting richness without this correction systematically
 undercounts, and the bias is worst exactly where detection is poor.
 
-One note on what `ms_occu()` exposes. The community structure is handled inside
-the fitter, so `ranef()` returns an empty table for an `ms_occu` fit; the
-per-species occupancy probabilities reach you through `tobs_richness()` and
-`fitted()` rather than through a coefficient-deviation table. The community
-N-mixture below does expose per-species deviations through `ranef()`, because its
-random-effect structure is reported directly.
+One note on what `ms_occu()` exposes. `ranef()` returns the per-species
+deviations from the community mean on both arms, occupancy (`psi`) and detection
+(`p`), the BLUPs the fitter places on each species and the same table shape
+`ms_abun()` returns below. `tobs_richness()` and `fitted()` give the per-species
+occupancy on the response scale; `ranef()` gives the deviations on the
+linear-predictor scale.
+
+```{r ms-occu-ranef}
+head(ranef(fm))
+```
 
 ## Community N-mixture
 
@@ -567,9 +571,9 @@ assemblage occupies sites more often where `x` is high, the typical species
 averages three individuals per site.
 
 The per-species coefficients answer "how does this particular species respond".
-For `ms_abun()` they are the community mean plus the `ranef()` deviation; for
-`ms_occu()` the per-species occupancy probabilities reach you through `fitted()`
-and `tobs_richness()`. A rare species' per-species estimate sits close to the
+For both families they are the community mean plus the `ranef()` deviation; for
+`ms_occu()` the per-species occupancy probabilities also come on the response
+scale through `fitted()` and `tobs_richness()`. A rare species' per-species estimate sits close to the
 community mean precisely because the model could not learn much from its own data
 and leaned on the assemblage. Read its credible interval, not just its point, and
 remember that the point is partly borrowed.

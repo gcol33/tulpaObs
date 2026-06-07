@@ -166,9 +166,11 @@ c(mean_max_count = mean(apply(y, 1, max)),
 
 The fit follows the same call shape as occupancy. The abundance formula
 is the first argument, detection is its own formula, and `abun()` selects
-the N-mixture family. `method = "laplace"` is the default and the only
-backend wired for counts; it finds the mode of the marginal likelihood and
-the curvature there.
+the N-mixture family. `method = "laplace"` is the default; it finds the mode of
+the marginal likelihood and the curvature there. A shared areal field fits under
+`method = "nested_laplace"` (used in the spatial section below), and
+`method = "nuts"` samples the closed-form marginal in full when you want the
+whole posterior rather than the Laplace approximation.
 
 ```{r fit}
 fa <- tobs(
@@ -474,8 +476,7 @@ fr <- tobs(
   detection = ~ 1,
   y         = sr$y,
   method    = "laplace",
-  verbose   = FALSE,
-  control   = list(n.quad = 5)
+  control   = list(n.quad = 5, verbose = FALSE)
 )
 coef(fr)$lambda
 ```

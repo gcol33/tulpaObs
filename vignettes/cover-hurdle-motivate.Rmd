@@ -328,6 +328,41 @@ in `fit$joint`. The copy coefficient and donor amplitude come off the joint
 engine's hyperparameter posterior, `fit$joint$theta_mean`, under the names
 `alpha` and `sigma_occ`.
 
+### Exact row reduction
+
+The joint engine collapses each arm to its exact sufficient statistic before the
+inner solve. Plots that share the occurrence design row and every per-observation
+latent component (the spatial cell, the trend weight) are exchangeable Bernoulli
+trials, so the occurrence arm reduces to one Binomial row per group carrying the
+trial count and the success count. The beta positive arm has no single-row form,
+so it reduces instead to one row per group carrying `(n, sum log y, sum log(1 - y))`,
+the statistics the beta log-density depends on. Neither step changes the
+log-likelihood, gradient, or Hessian; the reduced fit returns the same numbers as
+the per-plot fit with fewer rows in the inner scatter.
+
+Both reductions run by default, through `control$aggregate.occ` and
+`control$aggregate.pos`. The fits above already use the collapsed arms. Setting
+either to `FALSE` recovers the full per-plot arm, which lets us check that nothing
+moved:
+
+```{r aggregate-equiv}
+fit_full <- tobs(
+  formula = ~ year_btw + year_wtn +
+             bym2(graph = sim_beta$adj, group_var = "plot_id"),
+  data    = dat_beta, family = cover("beta"), y = sim_beta$y,
+  method  = "nested_laplace",
+  control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = FALSE)
+)
+max(abs(fit_beta$beta_pos - fit_full$beta_pos))
+```
+
+The collapsed and full positive-arm coefficients agree to numerical tolerance.
+`aggregate.pos` is specific to the beta arm; on a lognormal positive arm it stays
+off, and an explicit `aggregate.pos = TRUE` there raises an error rather than
+silently doing nothing. The reduction earns its keep on resurvey datasets where
+many plots share a cell and design row, the regime these joint cover fits are
+built for.
+
 ## Parameter recovery
 
 Both panels were generated with the same occurrence layer and the same slopes

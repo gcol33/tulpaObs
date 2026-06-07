@@ -762,7 +762,7 @@ fit_dyn <- tobs(~ 1, data = sd_dyn$data, family = dyn_occu(),
                 detection = ~ 1, y = sd_dyn$y,
                 col_formula = ~ 1, ext_formula = ~ 1,
                 method = "laplace", control = list(verbose = FALSE))
-fit_dyn$intercepts                          # psi1, gamma, epsilon, p
+fit_dyn$intercepts                          # psi1, p, gamma, epsilon
 ```
 
 The four rates land near their simulated values. The two transition rates

@@ -597,7 +597,11 @@ adds a detection layer that separates non-detection from absence, which the
 plot-level `cover()` cannot do because it has no replicated visits. With fewer
 than roughly 30 spatial units the shared field is weakly identified and the
 joint machinery buys little, so the independent-arm fit here, with spatial
-structure folded into covariates, is the more honest model at small N.
+structure folded into covariates, is the more honest model at small N. The joint
+path stays affordable on large resurvey datasets because it collapses both arms
+to exact sufficient statistics before each inner solve (`control$aggregate.occ`
+and `control$aggregate.pos`, both on by default and byte-identical to the full
+per-plot fit); `vignette("cover-hurdle-motivate")` shows those controls.
 
 ```{r compare-inla, eval = FALSE}
 # Phase 1e: compare against the joint INLA hurdle fit on the MOTIVATE
