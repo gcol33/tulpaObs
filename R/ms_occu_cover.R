@@ -300,6 +300,79 @@
 # Laplace-EM fitter
 # ---------------------------------------------------------------------------
 
+# Gauss-Hermite nodes/weights (physicists', weight exp(-x^2)) by Golub-Welsch:
+# eigendecomposition of the symmetric Jacobi matrix of the Hermite recurrence.
+# Returns nodes `x` and weights `w` with sum(w) = sqrt(pi).
+.ms_gh_quad <- function(n) {
+  if (n <= 1L) return(list(x = 0, w = sqrt(pi)))
+  i <- seq_len(n - 1L)
+  b <- sqrt(i / 2)
+  J <- matrix(0, n, n)
+  J[cbind(i, i + 1L)] <- b
+  J[cbind(i + 1L, i)] <- b
+  e <- eigen(J, symmetric = TRUE)
+  ord <- order(e$values)
+  list(x = e$values[ord], w = (sqrt(pi) * e$vectors[1L, ]^2)[ord])
+}
+
+# AGHQ debias of the community covariance (tulpaObs#56, the single-arm #47 fix
+# generalised to the joint community RE). The EM covariance M-step uses the
+# Laplace second moment E[b b'] ~ b_hat b_hat' + Cov_Laplace(b|y); for a binary
+# RE at small per-species n that posterior is right-skewed / heavier-tailed than
+# the Gaussian mode approximation, so the Laplace second moment ATTENUATES the
+# variance. This recomputes E_post[b_s b_s'] by adaptive Gauss-Hermite quadrature
+# of the EXACT per-species marginal (centred at the mode, scaled by the Laplace
+# Cholesky), then sets Sigma_arm = mean_s of the arm block of E_post[b_s b_s'].
+# Only the variance components are debiased; the community means and their cov
+# are unbiased and untouched. Tensor-product AGHQ over the full P-dim b couples
+# the arms through the likelihood, so it is gated to small total RE dim.
+.ms_occu_cover_aghq_sigma <- function(sp_ll, mu, ld, b_list, Cinv_list,
+                                      Sinv, arm_idx, P, n_quad = 5L) {
+  S  <- length(b_list)
+  gh <- .ms_gh_quad(as.integer(n_quad))
+  # Tensor grid of z in R^P (P small): rows = nodes, plus the product GH weight.
+  grid <- as.matrix(do.call(expand.grid, rep(list(gh$x), P)))   # (n_quad^P) x P
+  lw   <- as.matrix(do.call(expand.grid, rep(list(log(gh$w)), P)))
+  log_w_gh <- rowSums(lw)                                        # product weight
+  sqrt2 <- sqrt(2)
+
+  Sigma_acc <- matrix(0, P, P)
+  for (s in seq_len(S)) {
+    bhat <- b_list[[s]]
+    C_s  <- (Cinv_list[[s]] + t(Cinv_list[[s]])) / 2
+    L_s  <- tryCatch(t(chol(C_s)),
+                     error = function(e) t(chol(C_s + diag(1e-8, P))))
+    # b_q = bhat + sqrt(2) L z_q ; AGHQ exp(+sum z^2) undoes the e^{-z^2} weight.
+    B_q  <- sweep(grid %*% (sqrt2 * t(L_s)), 2L, bhat, "+")      # n_node x P
+    logp <- numeric(nrow(B_q))
+    for (q in seq_len(nrow(B_q))) {
+      bq <- B_q[q, ]
+      logp[q] <- sp_ll(s, mu + bq, ld) -
+                 0.5 * as.numeric(crossprod(bq, Sinv %*% bq)) +
+                 sum(grid[q, ]^2) + log_w_gh[q]
+    }
+    logp <- logp - max(logp)
+    w <- exp(logp); w <- w / sum(w)
+    # Raw second moment about zero E[b b'] = sum_q w_q b_q b_q' (the EM M-step
+    # quantity, since b ~ N(0, Sigma)).
+    M <- matrix(0, P, P)
+    for (q in seq_len(nrow(B_q))) M <- M + w[q] * tcrossprod(B_q[q, ])
+    Sigma_acc <- Sigma_acc + M
+  }
+  Sigma_acc <- Sigma_acc / S
+
+  # Keep the per-arm block-diagonal structure of the community covariance.
+  pick <- function(arm) {
+    idx <- arm_idx[[arm]]
+    blk <- Sigma_acc[idx, idx, drop = FALSE]
+    blk <- (blk + t(blk)) / 2
+    ev  <- eigen(blk, symmetric = TRUE)
+    ev$values <- pmax(ev$values, 1e-4)
+    ev$vectors %*% diag(ev$values, length(idx)) %*% t(ev$vectors)
+  }
+  list(occ = pick("occ"), p = pick("p"), pos = pick("pos"))
+}
+
 # Fit the community joint occupancy-cover model. `model` is the bound
 # ms_occu_cover model. Returns a `tobs_fit` (via build_ms_occu_cover_fit).
 .tobs_fit_ms_occu_cover <- function(model,
@@ -539,9 +612,34 @@
   Vf <- (Vf + t(Vf)) / 2
   logML <- compute_logML(mu, ld, b_list, res$Cinv, Sigma, Sinv)
 
+  # AGHQ variance-component debias (tulpaObs#56). The community means and their
+  # covariance (mu, Vf) are unbiased; only the variance components Sigma carry
+  # the Laplace small-cluster attenuation, so debias Sigma by adaptive
+  # Gauss-Hermite quadrature of the exact per-species RE posterior. Gated to a
+  # small total RE dim (tensor AGHQ over the joint b couples the arms) and ON by
+  # default there; disable with control$re.aghq = FALSE, set nodes with
+  # control$n.quad. Larger RE dims keep the EM covariance + the attenuation flag.
+  re_aghq   <- !isFALSE(dots$re.aghq)
+  aghq_nq   <- as.integer(dots$n.quad %||% 5L)
+  aghq_cap  <- as.integer(dots$re.aghq.maxdim %||% 4L)
+  debias_method <- "none"
+  if (re_aghq && P <= aghq_cap) {
+    Sigma <- tryCatch({
+      Sd <- .ms_occu_cover_aghq_sigma(sp_ll, mu, ld, b_list, res$Cinv, Sinv,
+                                      arm_idx, P, n_quad = aghq_nq)
+      debias_method <- "aghq"
+      Sd
+    }, error = function(e) {
+      warning("ms_occu_cover AGHQ variance debias failed (", conditionMessage(e),
+              "); reporting the EM (Laplace) variance components.", call. = FALSE)
+      Sigma
+    })
+  }
+
   build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, res$Cinv, Vf,
                           arm_idx, F_val = logML,
-                          converged = converged, n_iter = n_iter)
+                          converged = converged, n_iter = n_iter,
+                          debias_method = debias_method)
 }
 
 # ---------------------------------------------------------------------------
@@ -549,7 +647,8 @@
 # ---------------------------------------------------------------------------
 
 build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
-                                    Vf, arm_idx, F_val, converged, n_iter) {
+                                    Vf, arm_idx, F_val, converged, n_iter,
+                                    debias_method = "none") {
   pi_list <- model$process_info
   P_occ <- pi_list[[1L]]$p
   P_p   <- pi_list[[2L]]$p
@@ -620,14 +719,23 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
       coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
       blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup,
-      # The community-MEAN estimates (coef / vcov / confint) are unbiased; the
+      # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
       # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
-      # sd_*) carry Laplace small-cluster attenuation at small per-species n, the
-      # same bias the single-arm AGHQ path corrects (tulpaObs#47; debias tracked
-      # in #56). Not yet debiased here, so the reported community variance is a
-      # lower bound on the
-      # true between-species spread; surfaced by print.tobs_fit and ?ms_occu_cover.
-      var_attenuation = list(
+      # sd_*) carry Laplace small-cluster attenuation at small per-species n.
+      # When `debias_method == "aghq"` they have been debiased by adaptive
+      # Gauss-Hermite quadrature of the exact per-species RE posterior
+      # (tulpaObs#56, generalising the single-arm #47 fix); otherwise (large RE
+      # dim / re.aghq = FALSE) they remain the attenuated EM lower bound.
+      var_attenuation = if (identical(debias_method, "aghq")) list(
+        affects = character(0),
+        means_affected = FALSE,
+        source = "laplace_small_cluster",
+        debias = "aghq",
+        note = paste0(
+          "Community variance components debiased by adaptive Gauss-Hermite ",
+          "quadrature of the exact per-species RE posterior (tulpaObs#56); ",
+          "community means are unaffected.")
+      ) else list(
         affects = c("Sigma_occ", "Sigma_p", "Sigma_pos",
                     "sd_occ", "sd_p", "sd_pos"),
         means_affected = FALSE,
@@ -636,7 +744,8 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
         note = paste0(
           "Community variance components carry Laplace small-cluster ",
           "attenuation (reported as a lower bound); community means are ",
-          "unaffected. AGHQ debias pending (tulpaObs#47).")
+          "unaffected. AGHQ debias applies for small RE dim (tulpaObs#56); ",
+          "this fit kept the EM variance (re.aghq = FALSE or RE dim too large).")
       )
     ),
     convergence  = list(converged = isTRUE(converged), n_iter = n_iter)

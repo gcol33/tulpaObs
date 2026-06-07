@@ -271,3 +271,51 @@ test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   expect_lt(abs(mean(pos_x, na.rm = TRUE) - 0.3),  0.25)
   expect_gt(mean(phi_e, na.rm = TRUE), 8)   # well above the boundary
 })
+
+test_that("ms_occu_cover() AGHQ debias reduces variance-component attenuation (#56)", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # Intercept-only per arm -> total RE dim P = 3, so the AGHQ debias is active by
+  # default. Small per-species n is the attenuation regime the debias targets.
+  sd_occ_t <- 0.7; sd_p_t <- 0.6
+  n_seeds <- 6L
+  em <- aghq <- matrix(NA_real_, n_seeds, 2L)   # cols: sd_occ, sd_p
+  for (s in seq_len(n_seeds)) {
+    sim <- simulate_ms_occu_cover(
+      n_species = 16, N = 40, J = 3, n_occ_covs = 0, n_det_covs = 0,
+      n_pos_covs = 0, sd_occ = sd_occ_t, sd_p = sd_p_t, sd_pos = 0.4,
+      positive = "lognormal", sigma_pos = 0.4, seed = 700 + s)
+    # Intercept-only arms carry no per-visit covariates, so no `visits` design.
+    common <- list(formula = ~ 1, data = sim$data,
+                   family = ms_occu_cover("lognormal"),
+                   detection = ~ 1, positive = ~ 1, y = sim$y, y_pos = sim$y_pos,
+                   species = sim$species, method = "laplace")
+    fit_em <- tryCatch(do.call(tobs, c(common, list(
+      control = list(verbose = FALSE, re.aghq = FALSE)))), error = function(e) NULL)
+    fit_ag <- tryCatch(do.call(tobs, c(common, list(
+      control = list(verbose = FALSE)))), error = function(e) NULL)
+    if (is.null(fit_em) || is.null(fit_ag)) next
+    em[s, ]   <- c(fit_em$ms_community$sd_occ[1], fit_em$ms_community$sd_p[1])
+    aghq[s, ] <- c(fit_ag$ms_community$sd_occ[1], fit_ag$ms_community$sd_p[1])
+    if (s == 1L) {
+      expect_identical(fit_ag$ms_community$var_attenuation$debias, "aghq")
+      expect_identical(fit_em$ms_community$var_attenuation$debias, "none")
+    }
+  }
+  ok <- stats::complete.cases(em) & stats::complete.cases(aghq)
+  expect_gte(sum(ok), 4L)
+
+  truth <- c(sd_occ_t, sd_p_t)
+  em_mean   <- colMeans(em[ok, , drop = FALSE])
+  aghq_mean <- colMeans(aghq[ok, , drop = FALSE])
+  # The EM (Laplace) variance components are attenuated (biased low); the AGHQ
+  # debias inflates them toward the truth. Check on both binary arms.
+  expect_true(all(aghq_mean > em_mean),
+              info = paste("em:", paste(round(em_mean, 3), collapse = " "),
+                           "aghq:", paste(round(aghq_mean, 3), collapse = " ")))
+  expect_true(all(abs(aghq_mean - truth) <= abs(em_mean - truth) + 1e-6),
+              info = paste("em:", paste(round(em_mean, 3), collapse = " "),
+                           "aghq:", paste(round(aghq_mean, 3), collapse = " "),
+                           "truth:", paste(truth, collapse = " ")))
+})
