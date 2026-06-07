@@ -50,7 +50,7 @@
   if (identical(engine, "nested_laplace")) {
     if (!is.null(.resolve_cover_priors(priors))) {
       stop("cover fixed-effect priors (cover_priors()) are not yet wired for ",
-           "method = 'nested_laplace' / 'nested_laplace_sla'. Use ",
+           "method = 'nested_laplace' / 'nested_laplace_sla' (#54). Use ",
            "method = 'laplace' / 'laplace_sla', or drop the prior.",
            call. = FALSE)
     }

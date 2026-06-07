@@ -55,7 +55,7 @@
   }
   if (!identical(mixture, "poisson")) {
     stop("dyn_abun() currently supports the Poisson initial abundance only; ",
-         "negative-binomial dynamics are not yet wired. (#37)", call. = FALSE)
+         "negative-binomial dynamics are not yet wired. (#52)", call. = FALSE)
   }
 
   bind <- .tobs_bind_formulas(list(lambda = occ_formula, p = det_formula,

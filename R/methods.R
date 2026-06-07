@@ -207,7 +207,7 @@ fitted.tobs_fit <- function(object, ...) {
     return(.tobs_fitted_ms_int_occu(object))
   }
   if (identical(model$model_type, "occu_multiscale_cover")) {
-    stop("fitted() is not yet implemented for occu_multiscale_cover(). Use ",
+    stop("fitted() is not yet implemented for occu_multiscale_cover() (#53). Use ",
          "coef() / summary() for the per-arm (psi / theta / p / cover) ",
          "coefficients and fit$spatial_field / fit$field_table for the cell ",
          "field.", call. = FALSE)
@@ -636,7 +636,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                draws = draws, time_col = time_col))
   }
   if (identical(object$model$model_type, "occu_multiscale_cover")) {
-    stop("predict() is not yet implemented for occu_multiscale_cover(). The ",
+    stop("predict() is not yet implemented for occu_multiscale_cover() (#53). The ",
          "fit carries the per-arm coefficients (coef() / summary()) and the ",
          "cell field (fit$spatial_field / fit$field_table).", call. = FALSE)
   }

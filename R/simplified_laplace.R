@@ -276,7 +276,7 @@
                                      prior_spec = NULL) {
   if (!is.null(spatial)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "SLA on spatial Sigma not yet implemented (Phase 3.5)"))
+                reason = "SLA on spatial Sigma not yet implemented (Phase 3.5, #55)"))
   }
   if (is.null(em_result$weights)) {
     return(list(gamma = NULL, valid = FALSE,

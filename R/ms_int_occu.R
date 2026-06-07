@@ -186,7 +186,7 @@
       stop(sprintf("source %d has %d sites but data has %d rows; partial site ",
                    d, dim(y_arr[[d]])[1L], n_sites),
            "overlap across sources is not yet supported for the community ",
-           "integrated family (full overlap only).", call. = FALSE)
+           "integrated family (full overlap only, #57).", call. = FALSE)
     }
     if (dim(y_arr[[d]])[3L] != n_species) {
       stop(sprintf("source %d has %d species but source 1 has %d.",

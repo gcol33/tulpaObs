@@ -166,7 +166,7 @@
                                   prior_spec = NULL) {
   if (!is.null(spatial)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "SLA on spatial Sigma not yet implemented for int_occu"))
+                reason = "SLA on spatial Sigma not yet implemented for int_occu (#55)"))
   }
   if (is.null(em_result$weights)) {
     return(list(gamma = NULL, valid = FALSE,

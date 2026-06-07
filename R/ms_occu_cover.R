@@ -623,8 +623,9 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       # The community-MEAN estimates (coef / vcov / confint) are unbiased; the
       # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
       # sd_*) carry Laplace small-cluster attenuation at small per-species n, the
-      # same bias the single-arm AGHQ path corrects (tulpaObs#47). Not yet
-      # debiased here, so the reported community variance is a lower bound on the
+      # same bias the single-arm AGHQ path corrects (tulpaObs#47; debias tracked
+      # in #56). Not yet debiased here, so the reported community variance is a
+      # lower bound on the
       # true between-species spread; surfaced by print.tobs_fit and ?ms_occu_cover.
       var_attenuation = list(
         affects = c("Sigma_occ", "Sigma_p", "Sigma_pos",

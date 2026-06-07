@@ -56,7 +56,7 @@
   if (identical(model$model_type, "nmix")) {
     # NUTS: sample the exact coefficient posterior of the non-spatial N-mixture
     # via the in-tree C++ FullGradFn over the closed-form marginal (R/abun_nuts.R).
-    # Spatial / RE / temporal terms are not yet wired on the sampler.
+    # Spatial / RE / temporal terms are not yet wired on the sampler (#51).
     if (identical(method, "nuts")) {
       if (!is.null(spatial)) {
         stop("method = \"nuts\" for abun() is the non-spatial N-mixture sampler; ",
@@ -65,7 +65,7 @@
       }
       if (!is.null(re) || !is.null(temporal)) {
         stop("method = \"nuts\" for abun() does not yet support random-effect or ",
-             "temporal terms; use method = \"laplace\".", call. = FALSE)
+             "temporal terms (#51); use method = \"laplace\".", call. = FALSE)
       }
       fit <- .tobs_fit_abun_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
@@ -95,11 +95,11 @@
 
   # Removal sampling: the sequential-depletion abundance marginal (its latent N
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
-  # only this round (gcol33/tulpaObs#39); "laplace" or "nuts".
+  # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "removal")) {
     if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
       stop("removal() currently supports non-spatial fixed effects only; a ",
-           "spatial / random-effect / temporal term is not yet wired. (#39)",
+           "spatial / random-effect / temporal term is not yet wired. (#51)",
            call. = FALSE)
     }
     if (identical(method, "nuts")) {
@@ -121,11 +121,11 @@
 
   # Distance sampling: the binned multinomial-over-N marginal (its latent N
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
-  # only this round (gcol33/tulpaObs#38); "laplace" or "nuts".
+  # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "distance")) {
     if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
       stop("distance() currently supports non-spatial fixed effects only; a ",
-           "spatial / random-effect / temporal term is not yet wired. (#38)",
+           "spatial / random-effect / temporal term is not yet wired. (#51)",
            call. = FALSE)
     }
     if (identical(method, "nuts")) {
@@ -147,11 +147,11 @@
 
   # Open-population (Dail-Madsen) N-mixture: the latent abundance sequence summed
   # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
-  # effects only this round (gcol33/tulpaObs#37); "laplace" or "nuts".
+  # effects only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "dyn_abun")) {
     if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
       stop("dyn_abun() currently supports non-spatial fixed effects only; a ",
-           "spatial / random-effect / temporal term is not yet wired. (#37)",
+           "spatial / random-effect / temporal term is not yet wired. (#51)",
            call. = FALSE)
     }
     if (identical(method, "nuts")) {
@@ -173,12 +173,12 @@
 
   # False-positive occupancy: the Miller et al. (2011) multistate marginal (its
   # latent occupancy z summed out in closed form). Non-spatial fixed effects only
-  # this round (gcol33/tulpaObs#40); "laplace" (analytic-gradient BFGS over the
+  # this round (gcol33/tulpaObs#51); "laplace" (analytic-gradient BFGS over the
   # exact marginal) or "nuts".
   if (identical(model$model_type, "fp_occu")) {
     if (!is.null(spatial) || !is.null(re) || !is.null(temporal)) {
       stop("fp_occu() currently supports non-spatial fixed effects only; a ",
-           "spatial / random-effect / temporal term is not yet wired. (#40)",
+           "spatial / random-effect / temporal term is not yet wired. (#51)",
            call. = FALSE)
     }
     if (identical(method, "nuts")) {
