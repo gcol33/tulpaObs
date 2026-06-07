@@ -100,10 +100,13 @@ a rare species borrows strength across the shared factors for a calibrated map.
 The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace
 / Laplace-EM. A shared coupled spatial field across all three arms with the
 per-species RE block layered on top (the community analogue of
-\code{\link[=occu_cover]{occu_cover()}}'s \code{nested_laplace} joint-coupled engine) needs upstream engine
-support that does not yet combine a per-group RE block with a shared latent
-field on one predictor; such a structured term on any arm errors from the
-dispatcher rather than being silently dropped.
+\code{\link[=occu_cover]{occu_cover()}}'s \code{nested_laplace} joint-coupled engine) is supported upstream:
+tulpa's cell-coupling joint engine now composes a shared latent field with
+per-group RE blocks (gcol33/tulpa#86). The remaining work is the community
+consumer path -- this family fits a bespoke per-species Laplace-EM rather than
+routing through the tulpa joint engine, so the spatial community model is a
+separate build (gcol33/tulpaObs#56); such a structured term on any arm errors
+from the dispatcher rather than being silently dropped until it exists.
 }
 
 \section{Community variance debias (tulpaObs#47, #56)}{

@@ -31,10 +31,13 @@
 # This is the family wiring + the in-tree fitter; it reuses the single-species
 # occu_cover() linear-predictor builder and per-cell marginal as the per-species
 # kernel (single source of truth). Non-spatial Laplace only. A shared coupled
-# field across the three arms with per-species RE layered on top would need
-# upstream tulpa engine support that does not yet combine a per-group RE block
-# with a shared latent field on one predictor; the dispatcher rejects a spatial
-# term with a pointer rather than silently dropping it.
+# field across the three arms with per-species RE layered on top routes through
+# tulpa's cell-coupling joint engine, which now composes a shared latent field
+# with per-group RE blocks (gcol33/tulpa#86); the remaining work is the community
+# consumer path (this fitter is a bespoke per-species Laplace-EM, not the tulpa
+# joint engine, so the spatial community model is a separate build). The
+# dispatcher rejects a spatial term with a pointer rather than silently dropping
+# it until that path exists.
 # =============================================================================
 
 
