@@ -6,11 +6,10 @@
 # this R target and is cross-checked against it.
 
 .tobs_dyn_abun_nuts_layout <- function(p_lam, p_p, p_om, p_gm) {
-  off <- cumsum(c(0L, p_lam, p_p, p_om))
-  list(p_lam = p_lam, p_p = p_p, p_om = p_om, p_gm = p_gm,
-       lambda = off[1] + seq_len(p_lam), p = off[2] + seq_len(p_p),
-       omega = off[3] + seq_len(p_om), gamma = off[4] + seq_len(p_gm),
-       total = p_lam + p_p + p_om + p_gm)
+  idx <- .tobs_nuts_arm_idx(c("lambda", "p", "omega", "gamma"),
+                            c(p_lam, p_p, p_om, p_gm))
+  c(list(p_lam = p_lam, p_p = p_p, p_om = p_om, p_gm = p_gm),
+    idx, list(total = p_lam + p_p + p_om + p_gm))
 }
 
 .tobs_dyn_abun_nuts_marginal <- function(model) {
@@ -31,16 +30,12 @@
 
 .tobs_dyn_abun_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10) {
   ev <- marg$eval_beta(theta[lay$lambda], theta[lay$p], theta[lay$omega], theta[lay$gamma])
-  lp <- ev$log_lik
-  grad <- numeric(lay$total)
-  grad[lay$lambda] <- as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda))
-  grad[lay$p]      <- as.numeric(crossprod(marg$X_p,      ev$grad_eta_p))
-  grad[lay$omega]  <- as.numeric(crossprod(marg$X_omega,  ev$grad_eta_omega))
-  grad[lay$gamma]  <- as.numeric(crossprod(marg$X_gamma,  ev$grad_eta_gamma))
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * sum(theta^2)
-  grad <- grad - ib2 * theta
-  list(lp = lp, grad = grad)
+  arms <- list(
+    list(idx = lay$lambda, X = marg$X_lambda, grad = "grad_eta_lambda"),
+    list(idx = lay$p,      X = marg$X_p,      grad = "grad_eta_p"),
+    list(idx = lay$omega,  X = marg$X_omega,  grad = "grad_eta_omega"),
+    list(idx = lay$gamma,  X = marg$X_gamma,  grad = "grad_eta_gamma"))
+  .tobs_nuts_logpost_k(theta, ev, arms, lay$total, sigma.beta)
 }
 
 

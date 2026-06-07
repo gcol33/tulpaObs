@@ -6,11 +6,10 @@
 # (src/fp_occu_nuts.cpp) mirrors this R target and is cross-checked against it.
 
 .tobs_fp_occu_nuts_layout <- function(p_psi, p_p11, p_p10, p_b) {
-  off <- cumsum(c(0L, p_psi, p_p11, p_p10))
-  list(p_psi = p_psi, p_p11 = p_p11, p_p10 = p_p10, p_b = p_b,
-       psi = off[1] + seq_len(p_psi), p11 = off[2] + seq_len(p_p11),
-       p10 = off[3] + seq_len(p_p10), b = off[4] + seq_len(p_b),
-       total = p_psi + p_p11 + p_p10 + p_b)
+  idx <- .tobs_nuts_arm_idx(c("psi", "p11", "p10", "b"),
+                            c(p_psi, p_p11, p_p10, p_b))
+  c(list(p_psi = p_psi, p_p11 = p_p11, p_p10 = p_p10, p_b = p_b),
+    idx, list(total = p_psi + p_p11 + p_p10 + p_b))
 }
 
 .tobs_fp_occu_nuts_marginal <- function(model) {
@@ -30,16 +29,12 @@
 
 .tobs_fp_occu_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10) {
   ev <- marg$eval_beta(theta[lay$psi], theta[lay$p11], theta[lay$p10], theta[lay$b])
-  lp <- ev$log_lik
-  grad <- numeric(lay$total)
-  grad[lay$psi] <- as.numeric(crossprod(marg$X_psi, ev$grad_eta_psi))
-  grad[lay$p11] <- as.numeric(crossprod(marg$X_p11, ev$grad_eta_p11))
-  grad[lay$p10] <- as.numeric(crossprod(marg$X_p10, ev$grad_eta_p10))
-  grad[lay$b]   <- as.numeric(crossprod(marg$X_b,   ev$grad_eta_b))
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * sum(theta^2)
-  grad <- grad - ib2 * theta
-  list(lp = lp, grad = grad)
+  arms <- list(
+    list(idx = lay$psi, X = marg$X_psi, grad = "grad_eta_psi"),
+    list(idx = lay$p11, X = marg$X_p11, grad = "grad_eta_p11"),
+    list(idx = lay$p10, X = marg$X_p10, grad = "grad_eta_p10"),
+    list(idx = lay$b,   X = marg$X_b,   grad = "grad_eta_b"))
+  .tobs_nuts_logpost_k(theta, ev, arms, lay$total, sigma.beta)
 }
 
 
