@@ -170,7 +170,11 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   identify it. Latent z summed (2-state); 4 site-level logit arms psi/p11/p10/b
   (`fp_formula`/`b_formula`, default `~1`). Laplace = analytic-grad BFGS, vcov =
   inv of -FD-Jacobian of analytic grad (`src/fp_occu_kernel.h`, gradient only).
-  NUTS `src/fp_occu_nuts.cpp`.
+  NUTS `src/fp_occu_nuts.cpp`. Laplace grouped RE on the psi arm (one grouping
+  factor, dim<=3): the false-positive arms held fixed make the 2-state marginal
+  `psi*A+(1-psi)*B` the occupancy occ-arm mixture, so it reuses the pure-R
+  `make_site` AGHQ path of occu() (`.tobs_fp_occu_re_aghq`, no native oracle);
+  detection (p11) RE gated, p10/b never carry structured terms.
 - `dyn_abun` (tulpaObs#37): Dail-Madsen open N-mixture, `N_1~Pois(lambda)`,
   `N_t=Binom(N_{t-1},omega)+Pois(gamma)`, `Binom(N_t,p)` obs. Latent N sequence
   summed by exact HMM forward over states 0..K_max; analytic gradient by
@@ -331,7 +335,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm (dim<=3, one grouping factor) via the shared count-model AGHQ path (`RemovalGroupedOracle` over `CountGroupedOracle`, `test-removal.R`); spatial pending |
 | Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated; spatial pending |
-| False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51); spatial + Laplace-RE pending |
+| False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51). Laplace fits a site-level grouped RE on the psi arm (dim<=3, one grouping factor) via the pure-R `make_site` AGHQ path (no native oracle); detection-arm RE gated; spatial pending |
 | Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51); spatial + Laplace-RE pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
