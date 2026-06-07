@@ -242,3 +242,59 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
   w <- tobs_waic(fit)
   expect_true(is.finite(w$waic))
 })
+
+
+# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+
+# Dail-Madsen data with a per-site intercept RE on the initial-abundance arm.
+sim_dyn_abun_lambda_re <- function(N, T, J, ngrp, beta_lambda, p, omega, gamma,
+                                   sigma_b, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  grp <- rep(seq_len(ngrp), length.out = N)
+  b   <- stats::rnorm(ngrp, sd = sigma_b)
+  data <- data.frame(x1 = stats::rnorm(N), g = factor(grp))
+  lambda <- exp(as.numeric(model.matrix(~ x1, data) %*% beta_lambda) + b[grp])
+  y <- array(0L, dim = c(N, J, T))
+  for (i in seq_len(N)) {
+    Ni <- stats::rpois(1L, lambda[i])
+    for (t in seq_len(T)) {
+      if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega) + stats::rpois(1L, gamma)
+      y[i, , t] <- stats::rbinom(J, Ni, p)
+    }
+  }
+  list(y = y, data = data, sigma_b = sigma_b, beta_lambda = beta_lambda)
+}
+
+test_that("dyn_abun() NUTS samples a single initial-abundance RE and recovers it", {
+  skip_on_cran()
+  skip_if_fast()
+  s <- sim_dyn_abun_lambda_re(N = 60, T = 3, J = 3, ngrp = 6,
+                              beta_lambda = c(log(6), 0.3), p = 0.5, omega = 0.6,
+                              gamma = 1, sigma_b = 0.5, seed = 9)
+  fit <- tobs(formula = ~ x1 + (1 | g), data = s$data,
+              family = dyn_abun(K_max = 28), detection = ~ 1, y = s$y,
+              method = "nuts", verbose = FALSE,
+              control = list(n.iter = 350L, n.warmup = 250L, seed = 1L))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$re$arm, "lambda")
+  expect_equal(fit$re$n_groups, 6L)
+  expect_lt(abs(fit$re$sigma - 0.5), 0.45)
+  expect_gt(fit$re$sigma_sd, 0)
+  expect_lt(abs(fit$means[["lambda_(Intercept)"]] - log(6)), 0.4)
+  expect_lt(mean(fit$nuts$divergent), 0.2)
+})
+
+test_that("dyn_abun() RE is NUTS + initial-abundance-arm only", {
+  s <- sim_dyn_abun_lambda_re(N = 25, T = 3, J = 2, ngrp = 4,
+                              beta_lambda = c(log(5), 0.2), p = 0.5, omega = 0.6,
+                              gamma = 1, sigma_b = 0.4, seed = 2)
+  expect_error(
+    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K_max = 25),
+         detection = ~ 1, y = s$y, method = "laplace"),
+    "method = \"nuts\"|nuts")
+  expect_error(
+    tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 25),
+         detection = ~ (1 | g), y = s$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "initial-abundance|lambda|single intercept")
+})

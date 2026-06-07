@@ -5,15 +5,27 @@
 # plus weak Gaussian priors. The C++ FullGradFn (src/dyn_abun_nuts.cpp) mirrors
 # this R target and is cross-checked against it.
 
-# `use_nb` appends a single trailing log r coordinate (NB initial abundance).
-.tobs_dyn_abun_nuts_layout <- function(p_lam, p_p, p_om, p_gm, use_nb = FALSE) {
+# `use_nb` appends a single trailing log r coordinate (NB initial abundance);
+# `re_groups` > 0 then appends [z_1..z_G, log_sigma_re] (a single intercept RE on
+# the initial-abundance arm, tulpaObs#51).
+.tobs_dyn_abun_nuts_layout <- function(p_lam, p_p, p_om, p_gm, use_nb = FALSE,
+                                       re_groups = 0L) {
   idx <- .tobs_nuts_arm_idx(c("lambda", "p", "omega", "gamma"),
                             c(p_lam, p_p, p_om, p_gm))
   base <- p_lam + p_p + p_om + p_gm
   out <- c(list(p_lam = p_lam, p_p = p_p, p_om = p_om, p_gm = p_gm),
            idx, list(use_nb = use_nb))
-  if (use_nb) out <- c(out, list(logr = base + 1L, total = base + 1L))
-  else        out <- c(out, list(logr = NA_integer_, total = base))
+  if (use_nb) { out <- c(out, list(logr = base + 1L)); base <- base + 1L }
+  else          out <- c(out, list(logr = NA_integer_))
+  if (re_groups > 0L) {
+    out <- c(out, list(re_groups = as.integer(re_groups),
+                       z = base + seq_len(re_groups),
+                       log_sigma = base + re_groups + 1L,
+                       total = base + re_groups + 1L))
+  } else {
+    out <- c(out, list(re_groups = 0L, z = integer(0), log_sigma = integer(0),
+                       total = base))
+  }
   out
 }
 
@@ -61,30 +73,45 @@
 # Front-door NUTS fitter for the open N-mixture family
 # ---------------------------------------------------------------------------
 
-.tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = 10,
+.tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = 10, re = NULL,
                                     n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
                                     max.treedepth = 10L, adapt.delta = 0.9,
                                     seed = 1L, verbose = FALSE) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
   use_nb <- identical(model$mixture %||% "poisson", "negbin")
+
+  # Single intercept RE on the initial-abundance (lambda) arm (tulpaObs#51), via
+  # the shared count-NUTS RE helpers. The open N-mixture's other arms (p / omega
+  # / gamma) keep fixed effects; a non-lambda RE is rejected with a pointer.
+  re_info <- .tobs_count_nuts_re_info(re, model)
+  if (!is.null(re_info) && re_info$arm != 0L)
+    stop("dyn_abun() NUTS supports a random effect on the initial-abundance ",
+         "(lambda) arm only; put the RE on the state formula.", call. = FALSE)
+  n_re_groups <- if (!is.null(re_info)) re_info$n_groups else 0L
   lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lambda), ncol(X_p), ncol(X_omega),
-                                    ncol(X_gamma), use_nb = use_nb)
+                                    ncol(X_gamma), use_nb = use_nb,
+                                    re_groups = n_re_groups)
 
   warm <- dyn_abun_laplace(
     y_flat = model$y_flat, n_sites = model$n_sites, T = model$n_seasons,
     J = model$max_visits, K_max = model$K_max,
     X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
     mixture = model$mixture %||% "poisson", verbose = FALSE)
-  theta0 <- warm$means
   V <- as.matrix(warm$vcov)
-  inv_metric <- if (!is.null(V) && all(dim(V) == lay$total) && all(is.finite(diag(V))))
-                  pmax(diag(V), 1e-6) else rep(1, lay$total)
+  n_base <- length(warm$means)
+  base_metric <- if (!is.null(V) && nrow(V) == n_base && all(is.finite(diag(V))))
+                   pmax(diag(V), 1e-6) else rep(1, n_base)
+  init <- .tobs_count_nuts_re_init(
+    list(theta0 = as.numeric(warm$means), inv_metric = base_metric), lay, re_info)
+  theta0 <- init$theta0; inv_metric <- init$inv_metric
 
-  spec <- list(y = as.integer(model$y_flat), n_sites = model$n_sites,
-               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
-               X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
-               use_nb = use_nb)
+  spec <- .tobs_count_nuts_re_spec(
+    list(y = as.integer(model$y_flat), n_sites = model$n_sites,
+         T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+         X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
+         use_nb = use_nb),
+    re_info, 1.5)
 
   run_chain <- function(ch) {
     cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
@@ -102,6 +129,7 @@
            paste0("omega_",  model$process_info[[3]]$coef_names),
            paste0("gamma_",  model$process_info[[4]]$coef_names))
   if (use_nb) nms <- c(nms, "log_r")
+  nms <- c(nms, .tobs_count_nuts_re_names(re_info))
   colnames(draws) <- nms
   accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
   divergent <- unlist(lapply(chains, `[[`, "divergent"))
@@ -124,6 +152,7 @@
 
   n_draws <- nrow(draws)
   fit$draws       <- draws
+  fit <- .tobs_count_nuts_re_finish(fit, draws, par, cov, nms, re_info)
   fit$n_samples   <- n_draws
   fit$log_prob    <- rep(ev_mean$log_lik, n_draws)
   fit$accept_prob <- accept
