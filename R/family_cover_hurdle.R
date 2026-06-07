@@ -48,15 +48,10 @@
   }
 
   if (identical(engine, "nested_laplace")) {
-    if (!is.null(.resolve_cover_priors(priors))) {
-      stop("cover fixed-effect priors (cover_priors()) are not yet wired for ",
-           "method = 'nested_laplace' / 'nested_laplace_sla' (#54). Use ",
-           "method = 'laplace' / 'laplace_sla', or drop the prior.",
-           call. = FALSE)
-    }
     return(decode_cover_hurdle_joint(
       fit_cover_hurdle_joint_nested(enc, data, positive, control,
-                                    temporal = temporal, re = re),
+                                    temporal = temporal, re = re,
+                                    priors = priors),
       enc, family, approx = approx
     ))
   }
@@ -1030,12 +1025,20 @@ print.summary.cover_fit <- function(x, ...) {
 #'   the prior on alpha directly regularizes the copy scalar at small
 #'   `n_pos`, replacing the per-arm `prior_sigma_pos` of the pre-reparam
 #'   API.
+#' @param temporal,re Structured `temporal()` / `re()` blocks from the formula,
+#'   stacked onto the shared spatial block via the multi-block joint engine.
+#' @param priors Optional [cover_priors()] object (or coercible list). When
+#'   supplied, the per-arm fixed-effect prior reaches the joint engine as a
+#'   `beta_prior_mean` / `beta_prior_prec` on the occurrence and positive
+#'   responses, mirroring the separate-Laplace path. `NULL` / `FALSE` /
+#'   `"none"` leave both arms unpenalised.
 #' @return List shaped like the single-Laplace fit output but with extra
 #'   `joint` field carrying the raw `tulpa_nested_laplace_joint` result.
 #' @keywords internal
 fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                           control = list(),
-                                          temporal = NULL, re = NULL) {
+                                          temporal = NULL, re = NULL,
+                                          priors = NULL) {
   if (!positive %in% c("lognormal", "beta")) {
     stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() supports positive = ",
          "'lognormal' or 'beta'. Got '", positive, "'.", call. = FALSE)
@@ -1146,6 +1149,35 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     family      = pos_family,
     phi         = phi_hat
   )
+
+  # Opt-in fixed-effect priors (cover_priors()). The joint engine reads a
+  # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replaces
+  # its uniform weak default with the quadratic penalty. Mirrors the separate-
+  # Laplace path (.cover_arm_prior -> tulpa_laplace beta_prior): the natural-
+  # scale numbers are applied at face value to the (autoscaled) design, where
+  # every predictor is O(1), so a weakly-informative sd is a sensible ridge.
+  # Attaching here lets the priors ride through the aggregation/scatter steps
+  # (they mutate rows, not the design columns the prior keys on). Precisions are
+  # floored at the engine's own weak default so an Inf-sd bucket reproduces the
+  # pre-existing weak ridge rather than dropping the diagonal. NULL / FALSE /
+  # "none" leave both arms unpenalised.
+  cprior <- .resolve_cover_priors(priors)
+  if (!is.null(cprior)) {
+    to_prec <- function(pr) {
+      if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
+      list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
+    }
+    occ_ap <- to_prec(.cover_arm_prior(cprior, "occ", colnames(arm_occ$X)))
+    pos_ap <- to_prec(.cover_arm_prior(cprior, "pos", colnames(arm_pos$X)))
+    if (!is.null(occ_ap)) {
+      arm_occ$beta_prior_mean <- occ_ap$mean
+      arm_occ$beta_prior_prec <- occ_ap$prec
+    }
+    if (!is.null(pos_ap)) {
+      arm_pos$beta_prior_mean <- pos_ap$mean
+      arm_pos$beta_prior_prec <- pos_ap$prec
+    }
+  }
 
   # Strip the per-obs spatial_idx (tulpa_nested_laplace_joint takes it per
   # arm) and the legacy rho_bounds field (joint car_proper uses rho_car_grid).

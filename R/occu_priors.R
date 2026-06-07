@@ -371,9 +371,12 @@ print.occu_priors <- function(x, ...) {
 #'   term. Both arms are penalised: the occurrence and lognormal-positive arms
 #'   through [tulpa::tulpa_laplace()], and the beta-positive arm through
 #'   [tulpa::tulpa_laplace_beta()]. The joint nested-Laplace path
-#'   (`method = "nested_laplace"`) does not yet thread fixed-effect priors and
-#'   errors if one is supplied; spatial cover formulas likewise reject the
-#'   prior (the spatial Laplace solver carries its own).
+#'   (`method = "nested_laplace"` / `"nested_laplace_sla"`, used for spatial
+#'   cover formulas) also threads the priors, as a per-arm `beta_prior_mean` /
+#'   `beta_prior_prec` on the joint engine's occurrence and positive responses.
+#'   The separate-Laplace path keeps rejecting a prior alongside a spatial term
+#'   (that solver carries its own); add the spatial term through the
+#'   nested-Laplace path to combine the two.
 #'
 #' @param occ_intercept Prior on the occurrence (presence) intercept, logit
 #'   scale. `list(mean, sd)`. Default `list(mean = 0, sd = 2)`.

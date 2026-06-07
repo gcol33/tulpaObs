@@ -11,7 +11,8 @@ fit_cover_hurdle_joint_nested(
   positive = enc$positive,
   control = list(),
   temporal = NULL,
-  re = NULL
+  re = NULL,
+  priors = NULL
 )
 }
 \arguments{
@@ -37,6 +38,15 @@ args. See gcol33/tulpa#22 for the (sigma, alpha) reparam rationale:
 the prior on alpha directly regularizes the copy scalar at small
 \code{n_pos}, replacing the per-arm \code{prior_sigma_pos} of the pre-reparam
 API.}
+
+\item{temporal, re}{Structured \code{temporal()} / \code{re()} blocks from the formula,
+stacked onto the shared spatial block via the multi-block joint engine.}
+
+\item{priors}{Optional \code{\link[=cover_priors]{cover_priors()}} object (or coercible list). When
+supplied, the per-arm fixed-effect prior reaches the joint engine as a
+\code{beta_prior_mean} / \code{beta_prior_prec} on the occurrence and positive
+responses, mirroring the separate-Laplace path. \code{NULL} / \code{FALSE} /
+\code{"none"} leave both arms unpenalised.}
 }
 \value{
 List shaped like the single-Laplace fit output but with extra

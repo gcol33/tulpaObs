@@ -46,9 +46,12 @@ main use is regularising perfect separation in the occurrence arm at small
 term. Both arms are penalised: the occurrence and lognormal-positive arms
 through \code{\link[tulpa:tulpa_laplace]{tulpa::tulpa_laplace()}}, and the beta-positive arm through
 \code{\link[tulpa:tulpa_laplace_beta]{tulpa::tulpa_laplace_beta()}}. The joint nested-Laplace path
-(\code{method = "nested_laplace"}) does not yet thread fixed-effect priors and
-errors if one is supplied; spatial cover formulas likewise reject the
-prior (the spatial Laplace solver carries its own).
+(\code{method = "nested_laplace"} / \code{"nested_laplace_sla"}, used for spatial
+cover formulas) also threads the priors, as a per-arm \code{beta_prior_mean} /
+\code{beta_prior_prec} on the joint engine's occurrence and positive responses.
+The separate-Laplace path keeps rejecting a prior alongside a spatial term
+(that solver carries its own); add the spatial term through the
+nested-Laplace path to combine the two.
 }
 
 \examples{
