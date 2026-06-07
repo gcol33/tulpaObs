@@ -17,6 +17,7 @@ Imports:
     methods,
     Rcpp (>= 1.0.12),
     tulpa (>= 0.0.16),
+    tulpaMesh (>= 0.1.2),
     parallel
 Suggests:
     testthat (>= 3.0.0),
@@ -30,7 +31,6 @@ Suggests:
     MASS,
     rmarkdown,
     spAbundance,
-    tulpaMesh,
     unmarked
 Additional_repositories: https://inla.r-inla-download.org/R/stable
 VignetteBuilder: knitr
