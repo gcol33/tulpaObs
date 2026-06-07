@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.22 (2026-06-07)
+
+* build: `tulpaMesh` moves from Suggests to Imports (the `spde()` term depends on
+  it for mesh construction). `tulpaMesh::fem_matrices()` is re-exported so the
+  mesh-assembly entry point is reachable directly from tulpaObs.
+* build: drop the precompiled-header mechanism; each translation unit parses
+  RcppEigen directly.
+* docs(vignettes): correctness pass against the current API, and new
+  documentation of the cover-hurdle row reductions (`control$aggregate.occ` and
+  `control$aggregate.pos`, both default ON and byte-identical to the full
+  per-plot fit). Corrected the spatial-occupancy WAIC interpretation (the areal
+  field is not folded into the WAIC score), the `ms_occu` `ranef()` description
+  (it returns the per-species deviations), and the `abun()` backend list (laplace,
+  nested_laplace, nuts).
+
 ## 0.0.21 (2026-06-07)
 
 * feat(cover): `control$aggregate.pos` now defaults ON for the beta positive
