@@ -170,9 +170,10 @@ test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
 }
 
 .aoc_fit_trend <- function(s, agg) suppressWarnings(tobs(
-  formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+  formula = ~ x + bym2(graph = s$adj, group_var = "region") +
+              bym2(graph = s$adj, weight = time, group_var = "region"),
   data = s$data, family = cover("lognormal"), y = s$y, method = "nested_laplace",
-  control = list(verbose = FALSE, trend = list(weight = "time"), aggregate.occ = agg,
+  control = list(verbose = FALSE, aggregate.occ = agg,
                  sigma.grid = c(0.5, 1.0), rho.grid = 0.5,
                  alpha.grid = c(0, 1.0), alpha.grid.trend = c(0, 1.0),
                  phi.grid = c(0.3, 0.5), adaptive.grid = FALSE)))

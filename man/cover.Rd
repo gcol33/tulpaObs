@@ -35,6 +35,29 @@ coverage of the \emph{population} truth collapses with alpha. See
 \code{\link[=simulate_cover_joint]{simulate_cover_joint()}} for a ready-made demeaned simulator.
 }
 
+\section{Spatially varying trend (a weighted areal term)}{
+
+A spatially varying trend is model structure, so it is declared in the
+formula as a SECOND, weighted areal term on the same graph as the intercept
+field, not through \code{control}:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{~ time.sc +
+  icar(graph = adj, group_var = "cell_idx") +
+  icar(graph = adj, weight = time.sc, group_var = "cell_idx")
+}\if{html}{\out{</div>}}
+
+The unweighted term is the shared intercept field; the weighted term
+\code{icar(..., weight = col)} is the trend field, whose contribution to each
+arm's predictor is \code{weight_i * z[cell_i]}, coupled onto the cover arm with
+its own scale (\code{alpha_trend}, reported in \code{fit$alpha_trend} /
+\code{fit$sigma_trend}) integrated over the outer grid. The umbrella spelling
+\code{spatial(graph = adj, model = "icar", weight = col)} resolves identically.
+The trend coupling grid defaults to \code{control$alpha.grid}; override it with
+\code{control$alpha.grid.trend}. Requires \code{method = "nested_laplace"}. A coupled
+trend cannot currently combine with \code{temporal()} / \code{re()} blocks in the same
+fit.
+}
+
 \section{Checkpoint / resume}{
 
 A spatial cover-hurdle fit integrates over a large outer hyperparameter grid

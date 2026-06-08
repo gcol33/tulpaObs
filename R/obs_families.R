@@ -808,6 +808,28 @@ fp_occu <- function() {
 #' coverage of the *population* truth collapses with alpha. See
 #' [simulate_cover_joint()] for a ready-made demeaned simulator.
 #'
+#' @section Spatially varying trend (a weighted areal term):
+#' A spatially varying trend is model structure, so it is declared in the
+#' formula as a SECOND, weighted areal term on the same graph as the intercept
+#' field, not through `control`:
+#'
+#' ```r
+#' ~ time.sc +
+#'   icar(graph = adj, group_var = "cell_idx") +
+#'   icar(graph = adj, weight = time.sc, group_var = "cell_idx")
+#' ```
+#'
+#' The unweighted term is the shared intercept field; the weighted term
+#' `icar(..., weight = col)` is the trend field, whose contribution to each
+#' arm's predictor is `weight_i * z[cell_i]`, coupled onto the cover arm with
+#' its own scale (`alpha_trend`, reported in `fit$alpha_trend` /
+#' `fit$sigma_trend`) integrated over the outer grid. The umbrella spelling
+#' `spatial(graph = adj, model = "icar", weight = col)` resolves identically.
+#' The trend coupling grid defaults to `control$alpha.grid`; override it with
+#' `control$alpha.grid.trend`. Requires `method = "nested_laplace"`. A coupled
+#' trend cannot currently combine with `temporal()` / `re()` blocks in the same
+#' fit.
+#'
 #' @section Checkpoint / resume:
 #' A spatial cover-hurdle fit integrates over a large outer hyperparameter grid
 #' and can run for hours. `control$checkpoint = list(path = "fit.ckpt", resume =
@@ -834,7 +856,10 @@ cover <- function(positive = c("beta", "lognormal")) {
     params         = list(positive = positive),
     # The cover hurdle has its own (.dispatch_cover) grid-based control surface,
     # separate from the occupancy fitter and named with underscores. Declaring
-    # the keys keeps tobs()'s control validation from rejecting them.
+    # the keys keeps tobs()'s control validation from rejecting them. `trend`
+    # is retained here only so a `control$trend` left over from the old API
+    # reaches .dispatch_cover's removal error (a weighted formula term now
+    # carries the trend), rather than a generic unknown-control-key rejection.
     control_keys   = c(
       "max.iter", "tol", "n.threads", "n.threads.outer", "prior.sigma", "prior.alpha",
       "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",

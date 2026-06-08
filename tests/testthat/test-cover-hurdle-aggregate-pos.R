@@ -49,14 +49,18 @@
   ctrl <- list(verbose = FALSE, sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L,
                aggregate.occ = agg.occ, aggregate.pos = agg.pos)
+  # The trend is a second weighted areal term in the formula (gcol33/tulpaObs#59),
+  # not a control knob; the unweighted bym2() is the shared intercept field.
   if (trend) {
-    ctrl$trend <- list(weight = "time")
     ctrl$alpha.grid <- c(0, 0.5, 1.0); ctrl$alpha.grid.trend <- c(0, 0.5, 1.0)
+    f <- ~ x + bym2(graph = s$adj, group_var = "region") +
+             bym2(graph = s$adj, weight = time, group_var = "region")
   } else {
     ctrl$sigma.pos.grid <- c(0.4, 0.8)
+    f <- ~ x + bym2(graph = s$adj, group_var = "region")
   }
   suppressWarnings(tobs(
-    formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+    formula = f,
     data = s$data, family = cover("beta"), y = s$y,
     method = "nested_laplace", control = ctrl))
 }

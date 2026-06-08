@@ -2,6 +2,16 @@
 
 ## 0.0.23 (2026-06-08)
 
+* **Breaking:** `control$trend` is removed. A spatially-varying trend is model
+  structure, so it is now declared in the formula as a second, weighted areal
+  term on the same graph as the intercept field --
+  `icar(graph, weight = time, group_var)` (equivalently
+  `spatial(graph, model = "icar", weight = time, group_var)`). The weighted
+  term's contribution to each arm's predictor is `weight_i * z[cell_i]`, coupled
+  onto the cover arm with its own scale (`fit$alpha_trend` / `fit$sigma_trend`)
+  integrated over the outer grid (`control$alpha.grid.trend`, defaulting to
+  `control$alpha.grid`). Requires `method = "nested_laplace"`; a leftover
+  `control$trend` now errors with a migration pointer (#59).
 * Require `tulpa (>= 0.0.18)` and update the Remotes pin. The committed s2z
   log-determinant guard test relies on the engine fix shipped in tulpa 0.0.18.
 * feat(spatial): areal fields (ICAR, proper-CAR, BYM2) are wired on the

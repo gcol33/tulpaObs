@@ -68,14 +68,18 @@
 }
 
 .acr_fit <- function(s, agg = NULL) {
-  ctrl <- list(verbose = FALSE, trend = list(weight = "time"),
+  ctrl <- list(verbose = FALSE,
                sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
                alpha.grid = c(0, 0.5, 1.0, 1.5),
                alpha.grid.trend = c(0, 0.5, 1.0, 1.5),
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)
   if (!is.null(agg)) { ctrl$aggregate.occ <- agg; ctrl$aggregate.pos <- agg }
+  # The spatially-varying trend is a second weighted areal term in the formula
+  # (gcol33/tulpaObs#59): unweighted bym2() = shared intercept field, weighted
+  # bym2(..., weight = time) = the coupled trend field.
   suppressWarnings(tobs(
-    formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+    formula = ~ x + bym2(graph = s$adj, group_var = "region") +
+                bym2(graph = s$adj, weight = time, group_var = "region"),
     data = s$data, family = cover("beta"), y = s$y,
     method = "nested_laplace", control = ctrl))
 }

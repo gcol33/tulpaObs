@@ -25,10 +25,11 @@ from both arms (treated as missing, not as zero cover).}
 }
 \value{
 A list with: \code{occ_data}, \code{pos_data}, \code{spatial_spec} (a
-\code{tulpa_spatial} built from an areal formula term, or NULL), \code{temporal}
-and \code{re} (structured terms from the formula, or NULL), \code{N}, \code{idx_pos}
-(row indices of the positive subset within \code{data}), \code{formula} (the
-fixed-effects formula), \code{positive}.
+\code{tulpa_spatial} built from the unweighted areal formula term, or NULL),
+\code{trend} (per-observation weight + label from a weighted areal term, or
+NULL), \code{temporal} and \code{re} (structured terms from the formula, or NULL),
+\code{N}, \code{idx_pos} (row indices of the positive subset within \code{data}),
+\code{formula} (the fixed-effects formula), \code{positive}.
 }
 \description{
 Splits \code{y} into a binomial occurrence indicator and a positive-cover

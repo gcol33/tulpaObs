@@ -10,6 +10,14 @@
 # at the same outer grid (tulpa_nl_joint_single). The fused path only
 # reorganises the work -- one design pass, B block-diagonal species solves --
 # so the statistics must match exactly.
+#
+# Field-size coverage (gcol33/tulpa#69): the ICAR sum-to-zero penalty has a
+# dense rank-1 (1 1') Hessian. The single-species sparse path stores it exactly
+# for a field up to S2Z_DENSIFY_MAX = 256 nodes (densified block) and folds it
+# in at solve time (Woodbury) above that. The per-species batched solve must be
+# bit-identical to the independent fit in BOTH regimes, so the gate runs at a
+# small densified field (N = 16) AND a large field that exercises the s2z rank-1
+# path on the single-species oracle (N = 300, n_x > 256).
 # =============================================================================
 
 # Build responses + an ICAR (multi-block) prior for one species of a tiny
@@ -43,12 +51,11 @@
        n_arms = length(responses))
 }
 
-
-test_that("fused batched driver is per-species bit-identical to independent fits", {
-  skip_on_cran()
-  skip_if_fast()
-
-  N <- 16L; J <- 4L
+# One full bit-identity check at field size N: two distinct species, each fit
+# independently (the oracle) and together through the batched driver; assert
+# per-species modes + log-marginals + the stored inner-precision Q match
+# cell-for-cell, and that the two species are genuinely distinct fits.
+.batch_fused_identity_at <- function(N, J = 4L) {
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) { if (s > 1L) adj[s, s-1L] <- 1L; if (s < N) adj[s, s+1L] <- 1L }
 
@@ -120,4 +127,24 @@ test_that("fused batched driver is per-species bit-identical to independent fits
   # Sanity: the two species are genuinely different fits.
   expect_gt(max(abs(as.numeric(bat$per_species[[1]]$modes) -
                     as.numeric(bat$per_species[[2]]$modes))), 0.1)
+}
+
+
+test_that("fused batched driver is per-species bit-identical to independent fits", {
+  skip_on_cran()
+  skip_if_fast()
+  .batch_fused_identity_at(N = 16L)
+})
+
+
+test_that("fused batched driver is bit-identical at a large field (s2z rank-1 regime)", {
+  # N = 300 > S2Z_DENSIFY_MAX (256), so the single-species sparse oracle folds
+  # the ICAR sum-to-zero rank-1 in at solve time (Woodbury) rather than storing
+  # the densified 1 1'. The batched per-species solve must still match the
+  # independent fit cell-for-cell -- this is the regime gcol33/tulpa#69 flags as
+  # the one a sparse-native batched driver must get right (the 2nd-species s2z
+  # correctness contract).
+  skip_on_cran()
+  skip_if_fast()
+  .batch_fused_identity_at(N = 300L)
 })

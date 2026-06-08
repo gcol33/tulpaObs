@@ -36,6 +36,17 @@
     stop("`cover()` requires `y` (a length-N numeric vector of cover ",
          "in [0, 1]).", call. = FALSE)
   }
+  # A spatially varying trend is model structure and so lives in the formula,
+  # as a second weighted areal term (gcol33/tulpaObs#59). `control$trend` is
+  # removed: control carries fitting behaviour only. `[[` (exact), never `$`.
+  if (!is.null(control[["trend"]])) {
+    stop("control$trend is no longer supported for cover hurdle models.\n",
+         "Declare spatially varying trends directly in the formula, e.g.\n\n",
+         "  ~ time.sc +\n",
+         "    icar(graph = adj, group_var = \"cell_idx\") +\n",
+         "    icar(graph = adj, weight = time.sc, group_var = \"cell_idx\")",
+         call. = FALSE)
+  }
   enc      <- encode_cover_hurdle(formula, data, y, positive = positive)
   temporal <- enc$temporal
   re       <- enc$re
@@ -45,6 +56,12 @@
          "method = 'nested_laplace' or 'nested_laplace_sla' (got engine '",
          engine, "'). The single-Laplace path is fixed-effects + spatial only.",
          call. = FALSE)
+  }
+  if (!is.null(enc$trend) && !identical(engine, "nested_laplace")) {
+    stop("a weighted areal trend term (icar(..., weight = )) in a cover() ",
+         "formula requires method = 'nested_laplace' or 'nested_laplace_sla' ",
+         "(got engine '", engine, "'). The single-Laplace path is ",
+         "fixed-effects + a single intercept field only.", call. = FALSE)
   }
 
   if (identical(engine, "nested_laplace")) {
@@ -86,10 +103,11 @@
 #'   from both arms (treated as missing, not as zero cover).
 #' @param positive One of `"lognormal"` or `"beta"`.
 #' @return A list with: `occ_data`, `pos_data`, `spatial_spec` (a
-#'   `tulpa_spatial` built from an areal formula term, or NULL), `temporal`
-#'   and `re` (structured terms from the formula, or NULL), `N`, `idx_pos`
-#'   (row indices of the positive subset within `data`), `formula` (the
-#'   fixed-effects formula), `positive`.
+#'   `tulpa_spatial` built from the unweighted areal formula term, or NULL),
+#'   `trend` (per-observation weight + label from a weighted areal term, or
+#'   NULL), `temporal` and `re` (structured terms from the formula, or NULL),
+#'   `N`, `idx_pos` (row indices of the positive subset within `data`),
+#'   `formula` (the fixed-effects formula), `positive`.
 #' @keywords internal
 encode_cover_hurdle <- function(formula, data, y,
                                 positive = c("lognormal", "beta"),
@@ -157,6 +175,7 @@ encode_cover_hurdle <- function(formula, data, y,
     occ_data = list(y = occur, n_trials = rep(1L, length(occur)), X = X_occ),
     pos_data = list(y = y_pos_resp, X = X_pos),
     spatial_spec = cover_struct$spatial,
+    trend        = cover_struct$trend,
     temporal     = cover_struct$temporal,
     re           = cover_struct$re,
     N            = length(occur),
@@ -171,18 +190,21 @@ encode_cover_hurdle <- function(formula, data, y,
 
 # Parse a cover() formula against the NA-dropped observations: return the
 # fixed-effects formula plus the structured terms it carried, split by kind.
-# An areal spatial term (icar/bym2) is converted to a tulpa_spatial spec;
+# The areal terms (icar/bym2/car/car_proper) split by their `weight`:
+#   * an unweighted areal term is the shared intercept field, converted to the
+#     tulpa_spatial spec the engine consumes (`spatial`);
+#   * a weighted areal term (`icar(graph = adj, weight = col, group_var = ...)`)
+#     is the spatially-varying TREND field -- the formula-DSL spelling of the
+#     coupled second besag block (gcol33/tulpaObs#59). Its per-observation weight
+#     `col` and label come back in `trend`.
 # svc()/latent() are not meaningful for the cover hurdle and are rejected.
 .encode_cover_terms <- function(formula, data_obs) {
   bind <- .tobs_bind_formulas(list(state = formula), data_obs)
-  spatial <- NULL; temporal <- NULL; re <- list()
+  spatial_specs <- list(); temporal <- NULL; re <- list()
   for (t in bind$terms) {
     spec <- t$spec
     if (inherits(spec, "tobs_spatial")) {
-      if (!is.null(spatial)) {
-        stop("cover(): only one spatial term is supported.", call. = FALSE)
-      }
-      spatial <- .tobs_term_to_tulpa_spatial(spec)
+      spatial_specs[[length(spatial_specs) + 1L]] <- spec
     } else if (inherits(spec, "tobs_temporal")) {
       if (!is.null(temporal)) {
         stop("cover(): only one temporal term is supported.", call. = FALSE)
@@ -195,8 +217,79 @@ encode_cover_hurdle <- function(formula, data, y,
                    spec$label %||% class(spec)[1]), call. = FALSE)
     }
   }
-  list(fe = bind$fe$state, spatial = spatial, temporal = temporal,
-       re = if (length(re)) re else NULL)
+  fields <- .cover_resolve_spatial_fields(spatial_specs, data_obs)
+  list(fe = bind$fe$state, spatial = fields$spatial, trend = fields$trend,
+       temporal = temporal, re = if (length(re)) re else NULL)
+}
+
+# Partition the cover() formula's areal terms into the shared intercept field
+# and the optional spatially-varying trend field (gcol33/tulpaObs#59). An
+# unweighted areal term is the intercept; a weighted areal term
+# (`icar(..., weight = col)`) is the trend -- the second coupled besag block
+# that `control$trend` used to introduce. Both spellings of the weighted term --
+# bare `icar(..., weight = )` and the umbrella `spatial(model = "icar",
+# weight = )` -- resolve to the same `tobs_spatial` term and so to the same
+# trend block.
+#
+# Returns list(spatial, trend):
+#   * spatial: the tulpa_spatial spec for the intercept field, or NULL.
+#   * trend:   list(w_occ [N], label) of the per-observation trend weight over
+#              `data_obs`, or NULL when no weighted term is present.
+.cover_resolve_spatial_fields <- function(specs, data_obs) {
+  if (length(specs) == 0L) return(list(spatial = NULL, trend = NULL))
+
+  weighted   <- vapply(specs, function(s) !is.null(s$weight), logical(1))
+  base_specs <- specs[!weighted]
+  wt_specs   <- specs[weighted]
+
+  if (length(base_specs) == 0L) {
+    stop("cover() spatial requires one unweighted intercept field ",
+         "(e.g. icar(graph = adj)); only weighted trend field(s) were given. ",
+         "Add the bare areal term first.", call. = FALSE)
+  }
+  if (length(base_specs) > 1L) {
+    stop("cover() supports exactly one unweighted intercept field; got ",
+         length(base_specs), ". A spatially-varying trend must be a weighted ",
+         "areal term, e.g. icar(graph = adj, weight = time.sc).", call. = FALSE)
+  }
+  if (length(wt_specs) > 1L) {
+    stop("cover() supports a single weighted trend field; got ",
+         length(wt_specs), ".", call. = FALSE)
+  }
+
+  base_spec <- base_specs[[1L]]
+  spatial   <- .tobs_term_to_tulpa_spatial(base_spec)
+
+  trend <- NULL
+  if (length(wt_specs) == 1L) {
+    ws <- wt_specs[[1L]]
+    # The trend field shares the intercept field's areal graph and group_var;
+    # the cell-coupling engine carries one node per cell, so the two blocks
+    # differ only in the per-observation weight.
+    if (!identical(dim(ws$graph), dim(base_spec$graph)) ||
+        !all(ws$graph == base_spec$graph)) {
+      stop("cover() trend field must share the same areal graph as the ",
+           "intercept field (same nodes / adjacency).", call. = FALSE)
+    }
+    if (!identical(ws$group_var, base_spec$group_var)) {
+      stop("cover() trend field must share the intercept field's group_var ",
+           "(or both name none).", call. = FALSE)
+    }
+    w_occ <- as.numeric(ws$weight)
+    if (length(w_occ) != nrow(data_obs)) {
+      stop(sprintf(paste0(
+        "cover() trend weight has length %d but the data has %d ",
+        "observations; supply it as a per-observation covariate."),
+        length(w_occ), nrow(data_obs)), call. = FALSE)
+    }
+    if (anyNA(w_occ) || !all(is.finite(w_occ))) {
+      stop("cover() trend weight must be a finite numeric covariate.",
+           call. = FALSE)
+    }
+    trend <- list(w_occ = w_occ, label = ws$weight_label %||% "trend")
+  }
+
+  list(spatial = spatial, trend = trend)
 }
 
 
@@ -1077,20 +1170,28 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
 
-  # Coupled spatially-varying trend (SVC) field on the cover hurdle. The base
-  # spatial term is the shared intercept field; `control$trend = list(weight =
-  # "<col>")` adds a SECOND shared areal field on the same graph, weighted per
-  # observation by the named covariate and copied onto the positive arm with its
-  # own alpha axis. This is the analogue of the INLA joint model's
+  # Coupled spatially-varying trend (SVC) field on the cover hurdle. The
+  # unweighted areal formula term is the shared intercept field; a SECOND,
+  # weighted areal term (`icar(graph = adj, weight = col, group_var = ...)`)
+  # adds a shared areal field on the same graph, weighted per observation by
+  # `col` and copied onto the positive arm with its own alpha axis
+  # (gcol33/tulpaObs#59). This is the analogue of the INLA joint model's
   # `f(cell.slope, time, model = "besag") + f(cell.slope.ab, time, copy =)`
   # spatially-varying time trend (two coupled besag fields, two copy
   # coefficients). The per-observation weight enters each arm's field
-  # contribution via the engine's per-block `svc_weight`.
-  trend_spec <- .cover_resolve_trend(control$trend, data_obs, enc$idx_pos)
+  # contribution via the engine's per-block `svc_weight`. `enc$trend` carries
+  # the per-observation weight over `data_obs`; subset it to the positive arm.
+  trend_spec <- if (!is.null(enc$trend)) {
+    list(w_occ = enc$trend$w_occ,
+         w_pos = enc$trend$w_occ[enc$idx_pos],
+         label = enc$trend$label)
+  } else {
+    NULL
+  }
   has_trend  <- !is.null(trend_spec)
   if (has_trend && has_multi) {
-    stop("cover(): a coupled trend field (control$trend) cannot yet be ",
-         "combined with temporal()/re() blocks in the same fit.", call. = FALSE)
+    stop("cover(): a coupled trend field (a weighted areal term) cannot yet ",
+         "be combined with temporal()/re() blocks in the same fit.", call. = FALSE)
   }
 
   arm_occ <- list(
@@ -1600,35 +1701,6 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     alpha_trend   = alpha_trend,
     joint        = fit
   )
-}
-
-# Resolve the optional coupled-trend spec for the cover hurdle.
-#   control$trend = NULL / FALSE          -> no trend field.
-#   control$trend = list(weight = "<col>") -> a second shared areal field,
-#     weighted per observation by `data_obs[[col]]` on the occurrence arm and
-#     by the same column subset to the positive obs on the cover arm.
-# Returns NULL when no trend, else list(w_occ [N], w_pos [N_pos], label).
-.cover_resolve_trend <- function(trend, data_obs, idx_pos) {
-  if (is.null(trend) || isFALSE(trend)) return(NULL)
-  if (!is.list(trend) || is.null(trend$weight)) {
-    stop("cover() trend spec must be a list naming the weighting covariate, ",
-         "e.g. control = list(trend = list(weight = \"time.sc\")).",
-         call. = FALSE)
-  }
-  wcol <- trend$weight
-  if (!is.character(wcol) || length(wcol) != 1L) {
-    stop("cover() trend$weight must be a single column name.", call. = FALSE)
-  }
-  if (!wcol %in% names(data_obs)) {
-    stop(sprintf("cover() trend$weight = '%s' is not a column of the data.", wcol),
-         call. = FALSE)
-  }
-  w_occ <- as.numeric(data_obs[[wcol]])
-  if (anyNA(w_occ) || !all(is.finite(w_occ))) {
-    stop(sprintf("cover() trend$weight = '%s' must be a finite numeric covariate.",
-                 wcol), call. = FALSE)
-  }
-  list(w_occ = w_occ, w_pos = w_occ[idx_pos], label = wcol)
 }
 
 # Pre-fit the lognormal residual SD on the positive subset before handing
