@@ -314,3 +314,121 @@
                    sigma_beta = sigma.beta, sigma_logr = sigma.logr)
   fit
 }
+
+
+# Areal-spatial N-mixture via NUTS (gcol33/tulpaObs#51): a FIXED-HYPER non-centered
+# PROPER-CAR field on the abundance arm. The field precision (tau, rho) is fixed at
+# the nested-Laplace posterior mean; the whitened field raw ~ N(0, I) with
+# z = Linv %*% raw (Linv = inverse Cholesky of tau Q(rho)) is sampled jointly with
+# the coefficients (the tulpa#87 fixed-hyper pattern -- avoids the field-
+# hyperparameter funnel and the log|Q(rho)| gradient). Proper-CAR only: its full-
+# rank precision gives a well-conditioned geometry, whereas an intrinsic ICAR field
+# has a flat field-mean direction that maxes treedepth without a sum-to-zero
+# reparameterisation (use nested_laplace for the icar/bym2 areal fit, which
+# constrains it). Spatial XOR RE. Poisson or NB.
+.tobs_fit_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
+                                        K_max = NULL, sigma.beta = 10, sigma.logr = 1.5,
+                                        n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
+                                        max.treedepth = 10L, adapt.delta = 0.9,
+                                        seed = 1L, verbose = FALSE) {
+  .tobs_reject_weighted_spatial(spatial, "abun NUTS abundance spatial")
+  if (!identical(spatial$type, "car_proper")) {
+    stop(sprintf(paste0("abun() NUTS + areal spatial supports the proper-CAR field ",
+                        "car_proper() (full-rank precision -> well-conditioned non-",
+                        "centered geometry); the intrinsic '%s' field has a flat ",
+                        "field-mean direction needing a sum-to-zero reparameterisation ",
+                        "for NUTS -- use method = \"nested_laplace\" for the ",
+                        "icar()/bym2() areal fit. (tulpaObs#51)"), spatial$type),
+         call. = FALSE)
+  }
+  n_sites <- model$n_sites
+  if (spatial$n_units != n_sites) {
+    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
+                 "spatial unit per site is required for abun NUTS.",
+                 spatial$n_units, n_sites), call. = FALSE)
+  }
+  is_nb <- identical(mixture, "negbin")
+  mix_code <- if (is_nb) "NB" else "P"
+  X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  y_long <- model$y_long; site_idx <- model$site_idx
+  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+  if (is.null(K_max)) K_max <- max(y_long) + 100L
+  K_max <- as.integer(K_max)
+  adj <- as.matrix(spatial$graph)
+  csr <- if (!is.null(spatial$adj_row_ptr))
+    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
+         n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
+
+  # Fixed hyper (tau[, rho]) + warm coefficients from the nested-Laplace areal fit.
+  common <- list(y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
+                 X_lambda = X_lambda, X_p = X_p, adj_row_ptr = csr$row_ptr,
+                 adj_col_idx = csr$col_idx, n_neighbors = csr$n_neighbors,
+                 n_spatial = n_sites, mixture = mix_code, K_max = K_max,
+                 max_iter = 100L, tol = 1e-6, verbose = FALSE)
+  nl <- if (identical(spatial$type, "icar")) do.call(nmix_laplace_icar, common)
+        else do.call(nmix_laplace_car_proper, common)
+  tau <- max(nl$tau_mean, 1e-3)
+  rho <- if (identical(spatial$type, "car_proper")) min(max(nl$rho_mean, 0.01), 0.99) else 1.0
+
+  # Fixed field precision tau Q(rho) (+ ridge to proper-ise ICAR) -> Linv = L^{-1}.
+  Q <- .areal_Q(adj, rho)
+  Qr <- tau * Q + diag(1e-4 * tau, n_sites)
+  L <- tryCatch(chol(Qr), error = function(e) NULL)        # upper: L'L = Qr
+  if (is.null(L)) stop("abun NUTS spatial: field precision not PD.", call. = FALSE)
+  Linv <- backsolve(L, diag(n_sites))                      # (L)^{-1}, z = Linv %*% raw ~ N(0, Qr^{-1})
+
+  spec <- list(y = as.integer(y_long), site_idx = as.integer(site_idx),
+               X_lambda = X_lambda, X_p = X_p, n_sites = n_sites, K_max = K_max,
+               is_nb = is_nb, n_field_units = n_sites,
+               field_map = seq_len(n_sites), field_Linv = Linv)
+
+  n_base <- p_lam + p_p + if (is_nb) 1L else 0L
+  beta0 <- c(nl$beta_lambda_mean, nl$beta_p_mean)
+  if (is_nb && is.finite(nl$r_mean %||% NA_real_)) beta0 <- c(beta0, log(nl$r_mean))
+  else if (is_nb) beta0 <- c(beta0, log(2))
+  theta0 <- c(beta0, numeric(n_sites))
+  inv_metric <- c(rep(0.1, n_base), rep(1, n_sites))
+
+  run_chain <- function(ch)
+    cpp_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta, sigma_logr = sigma.logr,
+                  inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+                  n_warmup = as.integer(n.warmup), max_treedepth = as.integer(max.treedepth),
+                  adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
+                  verbose = isTRUE(verbose))
+  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
+  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
+  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
+           paste0("p_",      model$process_info[[2]]$coef_names),
+           if (is_nb) "log_r", paste0("raw_", seq_len(n_sites)))
+  colnames(draws) <- nms
+  b_idx <- seq_len(n_base)
+  par <- colMeans(draws); cov <- stats::cov(draws[, b_idx, drop = FALSE])
+  # Posterior-mean field z = Linv %*% raw, averaged over draws.
+  raw_idx <- n_base + seq_len(n_sites)
+  z_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+
+  marg <- .tobs_abun_nuts_marginal(model, mixture = mix_code, K_max = K_max)
+  lay  <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb)
+  ll_mean <- marg$eval_beta(par[lay$lambda], par[lay$p],
+                            r = if (is_nb) exp(par[lay$log_r]) else Inf)$log_lik
+  raw_fit <- list(mixture = mix_code,
+                  beta_lambda = unname(par[lay$lambda]), beta_p = unname(par[lay$p]),
+                  log_r = if (is_nb) unname(par[lay$log_r]) else NA_real_,
+                  r = if (is_nb) exp(unname(par[lay$log_r])) else NA_real_,
+                  vcov = cov, log_lik = ll_mean, converged = TRUE, K_max = K_max)
+  fit <- build_nmix_fit(raw_fit, model, spatial = spatial)
+  fit$draws <- draws[, b_idx, drop = FALSE]
+  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
+  fit$vcov <- cov
+  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ll_mean, nrow(draws))
+  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
+  divergent <- unlist(lapply(chains, `[[`, "divergent"))
+  fit$accept_prob <- accept; fit$divergent <- divergent
+  fit$method <- "nuts"; fit$spatial_field <- z_mean
+  fit$nuts <- list(accept_prob = accept, divergent = divergent,
+                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
+                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
+                   divergent_total = sum(divergent), tau = tau, rho = rho,
+                   prior_type = spatial$type, fixed_hyper = TRUE)
+  fit
+}

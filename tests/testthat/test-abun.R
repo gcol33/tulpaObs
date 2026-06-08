@@ -396,9 +396,12 @@ test_that("cpp_abun_nuts_joint_logpost matches the R oracle (byte-exact)", {
   }
 })
 
-test_that("abun() declares nuts among its methods and gates spatial nuts", {
+test_that("abun() declares nuts among its methods and gates icar nuts", {
   expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$abun)
-  # a spatial term on the abundance arm + nuts errors with a pointer
+  # An intrinsic (icar) field + nuts errors with a pointer: its rank-deficient
+  # precision needs a sum-to-zero reparam for NUTS; proper-CAR + nuts IS wired
+  # (see the recovery test above), and the icar areal fit runs under
+  # nested_laplace.
   sim <- simulate_abun(N = 12, J = 3, n_abund_covs = 1, n_det_covs = 1, seed = 5)
   adj <- matrix(0L, 12, 12)
   for (i in 1:11) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
@@ -406,7 +409,7 @@ test_that("abun() declares nuts among its methods and gates spatial nuts", {
     tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
          family = abun(), detection = ~ det_cov1, method = "nuts",
          control = list(verbose = FALSE)),
-    "non-spatial")
+    "proper-CAR|sum-to-zero|nested_laplace")
 })
 
 test_that("tobs(abun(), method='nuts') recovers truth and scores WAIC", {
@@ -449,4 +452,43 @@ test_that("tobs(abun(mixture='negbin'), method='nuts') recovers dispersion", {
   expect_false(is.null(fit$nmix_dispersion))
   expect_lt(abs(log(fit$nmix_dispersion$r) - log(3)), log(2.5))
   expect_lt(mean(fit$divergent), 0.2)
+})
+
+
+# --- NUTS + areal proper-CAR field on the abundance arm (tulpaObs#51) ----------
+
+test_that("abun() NUTS + proper-CAR areal field recovers + calibrates to nested-Laplace", {
+  skip_on_cran()
+  skip_if_fast()
+  # Fixed-hyper non-centered field (precision fixed at the nested-Laplace estimate):
+  # the proper-CAR full-rank precision gives a clean non-centered geometry, so NUTS
+  # samples without divergences and the coefficient SDs match the nested-Laplace SEs.
+  adj <- .grid_adj(6L)
+  sim <- .sim_spatial_nmix(adj, c(log(6), 0.5), c(0.2, 0.4), J = 5L, seed = 42)
+  nl <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
+             family = abun(), detection = ~ det_cov1, y = sim$y,
+             method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
+  nu <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
+             family = abun(), detection = ~ det_cov1, y = sim$y, method = "nuts",
+             verbose = FALSE,
+             control = list(n.iter = 400L, n.warmup = 400L, seed = 7L, progress = FALSE))
+  expect_identical(nu$method, "nuts")
+  expect_false(is.null(nu$spatial_field))
+  expect_lt(mean(nu$nuts$divergent), 0.05)                          # clean geometry
+  expect_lt(abs(nu$means[["lambda_abund_cov1"]] - 0.5) /
+              nu$sds[["lambda_abund_cov1"]], 3)                     # slope recovered
+  expect_gt(cor(nu$spatial_field, nl$spatial_field), 0.8)           # field agrees with NL
+  # NUTS SDs calibrate to the nested-Laplace SEs (fixed-hyper, same field precision).
+  rr <- nu$sds[["lambda_abund_cov1"]] / nl$sds[["lambda_abund_cov1"]]
+  expect_gt(rr, 0.6); expect_lt(rr, 1.6)
+})
+
+test_that("abun() NUTS + icar is gated (rank-deficient field needs sum-to-zero)", {
+  adj <- .grid_adj(4L)
+  sim <- .sim_spatial_nmix(adj, c(log(6), 0.4), c(0.2, 0.3), J = 4L, seed = 5)
+  expect_error(
+    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data, family = abun(),
+         detection = ~ det_cov1, y = sim$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L, progress = FALSE)),
+    "proper-CAR|sum-to-zero|nested_laplace")
 })

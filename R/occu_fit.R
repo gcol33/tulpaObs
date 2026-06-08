@@ -58,15 +58,21 @@
     # via the in-tree C++ FullGradFn over the closed-form marginal (R/abun_nuts.R).
     # Spatial / RE / temporal terms are not yet wired on the sampler (#51).
     if (identical(method, "nuts")) {
-      if (!is.null(spatial)) {
-        stop("method = \"nuts\" for abun() is the non-spatial N-mixture sampler; ",
-             "a spatial term (icar()/bym2()/car_proper()) on the abundance arm ",
-             "fits under method = \"nested_laplace\".", call. = FALSE)
-      }
       if (!is.null(temporal)) {
         stop("method = \"nuts\" for abun() does not yet support temporal terms ",
              "(#51); use method = \"laplace\".", call. = FALSE)
       }
+      if (!is.null(spatial)) {
+        # Areal field on the abundance arm sampled by NUTS (tulpaObs#51): a
+        # fixed-hyper non-centered icar()/car_proper() field (the field precision
+        # fixed at the nested-Laplace estimate), jointly with the coefficients.
+        fit <- .tobs_fit_abun_nuts_spatial(
+          fit_model, spatial, mixture = mixture, K_max = K.max,
+          sigma.beta = sigma.beta, sigma.logr = 1.5,
+          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+          seed = seed, verbose = verbose)
+      } else {
       # Random effects (tulpaObs#51): a single intercept RE on one arm samples
       # under NUTS (non-centered per-site offset + log_sigma hyperparameter).
       # Slopes / multi-term / both-arm RE stay on the AGHQ Laplace path.
@@ -76,6 +82,7 @@
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
+      }
       fit <- .unscale_fit_per_process(fit, scales, process_info)
       fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
       fit$model  <- model
