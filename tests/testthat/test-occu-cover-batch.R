@@ -93,16 +93,18 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   y2 <- sim2$y;           yp2 <- sim2$y_pos; yp2[is.na(yp2)] <- 0
 
   # The fused batch integrates ONE shared fixed outer grid across species
-  # (per-species adaptive refinement is not shareable), so the comparison fixes
-  # both sides' grid: adaptive.grid = FALSE makes the independent single-species
-  # fits use the same base tensor grid the fused batch does.
-  # The fused batch integrates ONE shared fixed outer grid across species, so the
-  # comparison fixes both sides' grid (adaptive.grid = FALSE). The default batch
-  # backend is "looped" (correct + fastest); this gate opts into the FUSED
-  # backend (control$batch.backend = "fused") so it keeps validating the fused
-  # block-diagonal path bit-for-bit against independent fits.
+  # (per-species refinement is not shareable). For the bit-identity comparison
+  # both sides must integrate the same fixed tensor, which needs BOTH refinement
+  # passes off: adaptive.grid = FALSE turns off edge-driven refinement, and
+  # var.of.means.consistency = FALSE turns off the post-integration consistency
+  # pass (joint-path default ON, independent of adaptive.grid -- it otherwise
+  # refines a peaked axis on the single fits but not the fused batch; see
+  # gcol33/tulpaObs#58, gcol33/tulpa#69). The default batch backend is "looped"
+  # (correct + fastest); this gate opts into the FUSED backend
+  # (control$batch.backend = "fused") to validate it against independent fits.
   ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled",
-               adaptive.grid = FALSE, diagnose.k = FALSE)
+               adaptive.grid = FALSE, var.of.means.consistency = FALSE,
+               diagnose.k = FALSE)
   ctrl_fused <- c(ctrl, list(batch.backend = "fused"))
 
   fit_one <- function(yy, ypp) {

@@ -633,6 +633,14 @@
       adaptive_grid             = dots$adaptive.grid             %||% TRUE,
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
       adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
+      # Var-of-means consistency pass (tulpa engine, defaults ON in the joint
+      # path) refines a sharply peaked axis post-integration -- independent of
+      # adaptive_grid. Exposed so a fit can request a genuinely fixed outer grid
+      # (`adaptive.grid = FALSE` AND `var.of.means.consistency = FALSE`), which
+      # the fused batch driver requires for per-species bit-identity
+      # (gcol33/tulpa#69, gcol33/tulpaObs#58).
+      var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
+      var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
       # Outer Pareto-k accuracy diagnostic. The engine draws `k_samples`
       # hyperparameter points and re-solves the inner Laplace at each; on a large
       # field the Gaussian proposal lands many draws at extreme sigma where the
