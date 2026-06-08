@@ -452,3 +452,101 @@ test_that("distance() Laplace RE rejects the hazard key, detection arm, both arm
          control = list(n.iter = 20L, n.warmup = 10L)),
     "abundance arm only|single intercept")
 })
+
+
+# --- areal spatial (ICAR / proper-CAR) on the abundance arm (tulpaObs#51) -----
+
+.dist_grid_adj <- function(side) {
+  ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
+  adj <- matrix(0L, ng, ng)
+  for (i in seq_len(ng)) for (j in seq_len(ng))
+    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i,j] <- 1L
+  adj
+}
+
+# Binned distance data with a smoothed ICAR-like field on log lambda.
+.sim_dist_spatial <- function(adj, cuts, b_lambda, b_sigma, sd_phi = 0.5, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  ng <- nrow(adj); nb <- length(cuts) - 1L
+  phi <- as.numeric(scale(rnorm(ng)))
+  for (rep in 1:3) { pn <- phi; for (i in seq_len(ng)) { nbi <- which(adj[i,]==1L); pn[i] <- 0.5*phi[i]+0.5*mean(phi[nbi]) }; phi <- pn }
+  phi <- sd_phi * as.numeric(scale(phi)); phi <- phi - mean(phi)
+  x_ab <- rnorm(ng); x_sg <- rnorm(ng)
+  lam <- exp(b_lambda[1] + b_lambda[2]*x_ab + phi); sg <- exp(b_sigma[1] + b_sigma[2]*x_sg)
+  y <- matrix(0L, ng, nb)
+  for (i in seq_len(ng)) {
+    pib <- tulpaObs:::.distance_pi(sg[i], cuts, "halfnorm", "line")
+    probs <- c(pib, max(1 - sum(pib), 0)); N <- rpois(1, lam[i])
+    if (N > 0) { cc <- rmultinom(1, N, probs); y[i,] <- cc[seq_len(nb)] }
+  }
+  list(y = y, data = data.frame(abund_cov1 = x_ab, sigma_cov1 = x_sg), phi = phi)
+}
+
+test_that("distance() areal ICAR recovers the abundance slope + field, calibrated cov", {
+  skip_on_cran()
+  skip_if_fast()
+  # The abundance-arm field reuses the exact per-site distance moments
+  # (cpp_distance_site_sweep); the inner Newton assembles the marginal observed
+  # info diag(info_lam, info_sig) - var_N v v', v = (score_wt_lambda, vN_sigma).
+  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(7L)
+  b_lambda <- c(log(40), 0.5); b_sigma <- c(log(0.4), 0.2)
+  slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+  for (s in 1:3) {
+    sim <- .sim_dist_spatial(adj, cuts, b_lambda, b_sigma, seed = 400 + s)
+    fit <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+                family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+                detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_named(fit$means, c("lambda_(Intercept)", "lambda_abund_cov1",
+                                "sigma_(Intercept)", "sigma_sigma_cov1"))
+      V <- vcov(fit)
+      expect_true(all(is.finite(V)))
+      expect_true(all(eigen(V, only.values = TRUE)$values > 0))
+      expect_lt(fit$sds[["lambda_(Intercept)"]], 5)
+      expect_false(is.null(fit$spatial_field))
+    }
+    est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+    slopes <- c(slopes, est)
+    slope_ok <- c(slope_ok, abs(est - 0.5) / se < 3)
+    field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+  }
+  expect_true(all(slope_ok))
+  expect_lt(abs(mean(slopes) - 0.5), 0.15)
+  expect_gt(mean(field_cor), 0.6)
+})
+
+test_that("distance() areal spatial: proper-CAR fits; bym2 / hazard / nuts+spatial gated", {
+  skip_on_cran()
+  skip_if_fast()
+  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(6L)
+  sim <- .sim_dist_spatial(adj, cuts, c(log(35), 0.4), c(log(0.4), 0.2), seed = 7)
+  fit <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
+              family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+              detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
+              control = list(progress = FALSE, verbose = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_true(all(is.finite(vcov(fit))))
+  # bym2 not yet wired for distance.
+  expect_error(
+    tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = sim$data,
+         family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+         detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
+         control = list(progress = FALSE)),
+    "not yet wired for distance|car_proper")
+  # hazard key + spatial not yet wired.
+  expect_error(
+    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+         family = distance(key = "hazard", transect = "line", cutpoints = cuts),
+         detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
+         control = list(progress = FALSE)),
+    "half-normal key only")
+  # NUTS + spatial not wired.
+  expect_error(
+    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+         family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+         detection = ~ sigma_cov1, y = sim$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "nested_laplace|not yet wired")
+})

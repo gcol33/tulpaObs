@@ -309,6 +309,25 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_distance_site_sweep
+Rcpp::List cpp_distance_site_sweep(Rcpp::IntegerMatrix y_bins, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma, Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max, bool nb, double r);
+RcppExport SEXP _tulpaObs_cpp_distance_site_sweep(SEXP y_binsSEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP cutpointsSEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP rSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y_bins(y_binsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_lambda(eta_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_sigma(eta_sigmaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type cutpoints(cutpointsSEXP);
+    Rcpp::traits::input_parameter< int >::type transect(transectSEXP);
+    Rcpp::traits::input_parameter< int >::type quad_order(quad_orderSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
+    Rcpp::traits::input_parameter< double >::type r(rSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_site_sweep(y_bins, eta_lambda, eta_sigma, cutpoints, transect, quad_order, K_max, nb, r));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_distance_nuts_joint_logpost
 Rcpp::List cpp_distance_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_shape, double sigma_logr);
 RcppExport SEXP _tulpaObs_cpp_distance_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_shapeSEXP, SEXP sigma_logrSEXP) {
@@ -1263,6 +1282,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},
     {"_tulpaObs_cpp_distance_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_distance_laplace_fixed, 17},
     {"_tulpaObs_cpp_distance_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_distance_total_log_lik, 10},
+    {"_tulpaObs_cpp_distance_site_sweep", (DL_FUNC) &_tulpaObs_cpp_distance_site_sweep, 9},
     {"_tulpaObs_cpp_distance_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_distance_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
     {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 13},

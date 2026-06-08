@@ -1045,12 +1045,13 @@ tobs <- function(formula,
   # bym2 / spde / temporal not yet wired (R/removal.R, R/removal_spatial.R).
   removal  = c("laplace", "nested_laplace", "nuts"),
   # distance: binned distance sampling (half-normal / hazard-rate key, line /
-  # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin;
-  # the multinomial-over-N detection cells summed over latent N, detection
-  # integrals by quadrature) and the in-tree C++ FullGradFn NUTS over the same
-  # marginal (R/distance.R, R/distance_nuts.R, src/distance_*.cpp). Spatial / RE
-  # not yet wired (gcol33/tulpaObs#38).
-  distance = c("laplace", "nuts"),
+  # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin),
+  # grouped-RE AGHQ Laplace (abundance arm), the in-tree C++ FullGradFn NUTS, and
+  # an areal icar()/car_proper() field on the abundance arm via nested_laplace
+  # (half-normal key; the per-site var_N rank-1 cross-arm from distance_kernel.h,
+  # tulpaObs#51). bym2 / hazard-key spatial / temporal not yet wired
+  # (R/distance.R, R/distance_spatial.R, src/distance_*.cpp).
+  distance = c("laplace", "nested_laplace", "nuts"),
   # fp_occu: multistate false-positive occupancy (Miller et al. 2011). Latent
   # occupancy z summed out in closed form (two states); four site-level logit
   # arms (psi, true detection p11, false-positive p10, certain-classification b).
@@ -1233,7 +1234,7 @@ tobs <- function(formula,
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
     if (family %in% c("occu", "int_occu", "dyn_occu", "abun", "removal",
-                       "occu_cover", "occu_multiscale_cover")) {
+                       "distance", "occu_cover", "occu_multiscale_cover")) {
       return("nested_laplace")
     }
     stop(sprintf(

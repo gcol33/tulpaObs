@@ -375,3 +375,56 @@ Rcpp::List cpp_distance_total_log_lik(
         Rcpp::Named("n_K_inadmissible") = n_K_inadmissible
     );
 }
+
+
+// Per-site sweep for the areal-spatial distance fit (gcol33/tulpaObs#51): returns,
+// for each site, the abundance-arm marginal moments and the half-normal detection
+// arm's gradient / Fisher / N-coupling, all from compute_distance_site. The R
+// inner Newton assembles the joint (beta_lambda, beta_sigma, z) gradient and the
+// marginal observed-information Hessian (per-site eta-space block
+// diag(info_lam, info_sig) - var_N v v', v = (score_wt_lambda, vN_d), the form
+// distance_kernel.h documents) scattered through X_lambda / X_sigma + the field
+// loading, plus the CAR prior. Half-normal key only (the hazard shape is a global
+// coordinate, deferred); Poisson or NB (the NB size r is the outer-grid axis).
+// [[Rcpp::export]]
+Rcpp::List cpp_distance_site_sweep(
+    Rcpp::IntegerMatrix y_bins,
+    Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma,
+    Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max,
+    bool nb, double r
+) {
+    const int n_sites = y_bins.nrow(), n_bins = y_bins.ncol();
+    if (eta_lambda.size() != n_sites || eta_sigma.size() != n_sites)
+        Rcpp::stop("eta_lambda / eta_sigma must have length nrow(y_bins).");
+    std::vector<double> cut(cutpoints.begin(), cutpoints.end());
+    tulpaObs::DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
+    const double rr = nb ? r : std::numeric_limits<double>::infinity();
+
+    Rcpp::NumericVector logL(n_sites), grad_lam(n_sites), info_lam(n_sites),
+        var_N(n_sites), swl(n_sites), grad_sig(n_sites), info_sig_obs(n_sites),
+        info_sig_fs(n_sites), vN_sig(n_sites), boundary(n_sites), p_det(n_sites);
+    std::vector<int> yb(n_bins);
+    int n_inadmissible = 0;
+    for (int s = 0; s < n_sites; ++s) {
+        for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
+        tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
+            yb.data(), n_bins, eta_lambda[s], eta_sigma[s], 0.0,
+            tulpaObs::DIST_HALFNORMAL, quad, K_max, rr);
+        if (!R_finite(d.log_lik)) ++n_inadmissible;
+        logL[s] = d.log_lik;
+        grad_lam[s] = d.grad_eta_lambda; info_lam[s] = d.info_eta_lambda;
+        var_N[s] = d.var_N; swl[s] = d.score_wt_lambda;
+        grad_sig[s] = d.grad_eta_d[0];
+        info_sig_obs[s] = d.info_eta_d[0][0]; info_sig_fs[s] = d.info_eta_d_fs[0][0];
+        vN_sig[s] = d.vN_d[0]; boundary[s] = d.boundary_weight; p_det[s] = d.p_det;
+    }
+    return Rcpp::List::create(
+        Rcpp::Named("log_lik") = logL,
+        Rcpp::Named("grad_lam") = grad_lam, Rcpp::Named("info_lam") = info_lam,
+        Rcpp::Named("var_N") = var_N, Rcpp::Named("swl") = swl,
+        Rcpp::Named("grad_sig") = grad_sig,
+        Rcpp::Named("info_sig_obs") = info_sig_obs,
+        Rcpp::Named("info_sig_fs") = info_sig_fs,
+        Rcpp::Named("vN_sig") = vN_sig, Rcpp::Named("boundary") = boundary,
+        Rcpp::Named("p_det") = p_det, Rcpp::Named("n_inadmissible") = n_inadmissible);
+}

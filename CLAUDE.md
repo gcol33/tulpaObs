@@ -176,7 +176,15 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   one grouping factor, dim<=3) via the shared count AGHQ path
   (`DistanceGroupedOracle` over `CountGroupedOracle`; one sigma row/site, so the
   half-normal theta is the count layout `[beta_lambda|beta_sigma|log_r?]`);
-  hazard-key + detection-arm RE gated.
+  hazard-key + detection-arm RE gated. Areal icar()/car_proper() field on the
+  abundance arm via `nested_laplace` (tulpaObs#51): a DEDICATED fitter
+  (`R/distance_spatial.R`, not the count-spatial driver -- the distance marginal
+  is the bin-multinomial, not the binomial N-mixture), reusing the exact per-site
+  moments (`cpp_distance_site_sweep`) and the documented per-site observed-info
+  `diag(info_lam,info_sig)-var_N v v'`, `v=(score_wt_lambda,vN_sigma)`,
+  `vN_sigma=-p_sigma/(1-p)`. R inner-Newton over `(beta_lambda,beta_sigma,z)` +
+  CAR prior, outer grid over tau[,rho][,r]; half-normal key only, Pois+NB;
+  bym2/hazard-spatial/temporal + NUTS+spatial gated.
 - `fp_occu` (tulpaObs#40): Miller 2011 multistate false-positive occupancy, `y in
   {0,1,2}` (none/ambiguous/certain), certain detections only at occupied sites
   identify it. Latent z summed (2-state); 4 site-level logit arms psi/p11/p10/b
@@ -361,7 +369,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; #12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`); Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts,_spatial}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm via the shared count-model AGHQ path (`RemovalGroupedOracle`). Areal icar()/car_proper()/bym2() field on the abundance arm via `nested_laplace` (#51), reusing the templated count-spatial driver (`nmix_count_spatial_driver.h`); spde/temporal + NUTS+spatial gated |
-| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated; spatial pending |
+| Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated. Areal icar()/car_proper() field on the abundance arm via `nested_laplace` (#51, dedicated `R/distance_spatial.R` over `cpp_distance_site_sweep`); bym2/hazard-spatial + NUTS+spatial gated |
 | False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51). Laplace fits a site-level grouped RE on the psi OR p11 (detection) arm (dim<=3, one grouping factor) via the pure-R `make_site` AGHQ path (no native oracle, branches on arm); both-arms-at-once rejected; spatial pending |
 | Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51). Laplace fits a site-level grouped RE on the initial-abundance arm (one grouping factor, dim<=3) via the backward-`c` precompute + `make_site` AGHQ path; detection-arm RE gated, spatial pending |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |

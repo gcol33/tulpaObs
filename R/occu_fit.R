@@ -148,11 +148,23 @@
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
   # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "distance")) {
-    if (!is.null(spatial) || !is.null(temporal)) {
-      stop("distance() currently supports non-spatial fixed effects only; a ",
-           "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
+    if (!is.null(temporal)) {
+      stop("distance() does not yet support temporal terms; a spatial icar() / ",
+           "car_proper() field on the abundance arm fits under method = ",
+           "\"nested_laplace\". (#51)", call. = FALSE)
     }
-    if (identical(method, "nuts")) {
+    if (!is.null(spatial)) {
+      # Areal field on the abundance arm (tulpaObs#51); icar() / car_proper(),
+      # half-normal key, NUTS+spatial not wired.
+      if (identical(method, "nuts")) {
+        stop("distance() with a spatial term fits under method = ",
+             "\"nested_laplace\"; NUTS + spatial is not yet wired. (#51)",
+             call. = FALSE)
+      }
+      fit <- .tobs_fit_distance_spatial(fit_model, spatial, mixture = mixture,
+                                        K_max = K.max, max_iter = max.iter,
+                                        tol = tol, verbose = verbose)
+    } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_distance_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
         re = re,
