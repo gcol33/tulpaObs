@@ -222,6 +222,28 @@ sim_fp_psi_re <- function(n_groups = 25L, per_group = 8L, J = 6L,
        truth = list(beta0 = beta0, sigma_re = sigma_re, bg = bg))
 }
 
+# Per-group RE on the true-detection (p11) arm; occupancy psi held fixed.
+sim_fp_p11_re <- function(n_groups = 30L, per_group = 10L, J = 6L,
+                          beta0 = qlogis(0.55), p11_0 = qlogis(0.6),
+                          sigma_re = 0.8, p10 = 0.05, bcert = 0.5, seed = 1L) {
+  set.seed(seed)
+  N  <- n_groups * per_group
+  g  <- rep(seq_len(n_groups), each = per_group)
+  bg <- rnorm(n_groups, 0, sigma_re)
+  psi <- plogis(beta0)
+  p11 <- plogis(p11_0 + bg[g])
+  z <- rbinom(N, 1L, psi)
+  y <- matrix(0L, N, J)
+  for (i in seq_len(N)) {
+    if (z[i] == 1L) {
+      det <- rbinom(J, 1L, p11[i]); cert <- rbinom(J, 1L, bcert)
+      y[i, ] <- ifelse(det == 1L, ifelse(cert == 1L, 2L, 1L), 0L)
+    } else y[i, ] <- rbinom(J, 1L, p10)
+  }
+  list(y = y, data = data.frame(g = factor(g)),
+       truth = list(beta0 = beta0, p11_0 = p11_0, sigma_re = sigma_re, bg = bg))
+}
+
 test_that("fp_occu NUTS RE log-posterior gradient matches finite differences", {
   s <- sim_fp_psi_re(n_groups = 12L, per_group = 6L, J = 5L, seed = 4L)
   model <- tulpaObs:::.tobs_build_fp_occu(~ 1 + (1 | g), ~ 1, s$data, s$y)
@@ -299,17 +321,55 @@ test_that("fp_occu() Laplace AGHQ recovers a site-grouped psi-arm RE", {
   expect_lt(abs(mean(b0_est) - qlogis(0.45)), 0.25)
 })
 
-test_that("fp_occu RE is restricted to the psi arm (both engines)", {
+test_that("fp_occu() Laplace AGHQ recovers a site-grouped p11 (detection)-arm RE", {
+  skip_on_cran()
+  skip_if_fast()
+  # A site-level RE on the true-detection arm shifts eta_p11 uniformly across a
+  # site's visits, so the per-site two-state marginal stays a function of one
+  # scalar offset (occupancy held fixed) and goes through the same make_site AGHQ
+  # path. Only occupied sites inform p11, and the false-positive arm absorbs some
+  # of the y = 1 signal, so the variance component carries more small-cluster
+  # attenuation than the occupancy arm (hence the mean-of-seeds check and the
+  # wider intercept tolerance).
+  sig <- b0 <- p110 <- numeric(0)
+  for (sd in 1:5) {
+    s <- sim_fp_p11_re(n_groups = 30L, per_group = 10L, J = 6L,
+                       beta0 = qlogis(0.55), p11_0 = qlogis(0.6),
+                       sigma_re = 0.8, seed = sd)
+    fit <- tobs(formula = ~ 1, data = s$data, family = fp_occu(),
+                detection = ~ 1 + (1 | g), y = s$y, method = "laplace",
+                verbose = FALSE, control = list(progress = FALSE, n.quad = 7L))
+    if (sd == 1L) {
+      expect_identical(fit$method, "laplace")
+      expect_identical(fit$fp_re$arm, "p11")
+      expect_true("sigma_p1_(Intercept)" %in% names(fit$means))  # det-arm naming
+      re <- ranef(fit)
+      expect_true(is.data.frame(re))
+      expect_equal(nrow(re), 30L)
+    }
+    sig  <- c(sig,  fit$means[["sigma_p1_(Intercept)"]])
+    b0   <- c(b0,   fit$means[["psi_(Intercept)"]])
+    p110 <- c(p110, fit$means[["p11_(Intercept)"]])
+  }
+  expect_lt(abs(mean(sig) - 0.8), 0.25)
+  expect_gt(mean(sig), 0.4)                       # variance not collapsed
+  expect_lt(abs(mean(b0) - qlogis(0.55)), 0.25)   # occupancy intercept recovered
+  expect_lt(abs(mean(p110) - qlogis(0.6)), 0.3)   # detection intercept (attenuation)
+})
+
+test_that("fp_occu RE is on the psi OR p11 arm, never p10/b or both at once", {
   s <- sim_fp_psi_re(n_groups = 6L, per_group = 5L, J = 4L, seed = 2L)
-  # A detection-arm (p11) RE is rejected with a pointer, under NUTS ...
+  # NUTS samples a single intercept RE on the psi arm only; a detection-arm RE
+  # is rejected with a pointer.
   expect_error(
     tobs(formula = ~ 1, data = s$data, family = fp_occu(),
          detection = ~ 1 + (1 | g), y = s$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
     "occupancy \\(psi\\) arm only|state formula")
-  # ... and under Laplace (the make_site AGHQ path integrates the psi arm only).
+  # Laplace integrates ONE arm at a time: RE on both psi and p11 is rejected.
   expect_error(
-    tobs(formula = ~ 1, data = s$data, family = fp_occu(),
-         detection = ~ 1 + (1 | g), y = s$y, method = "laplace"),
-    "occupancy \\(psi\\) arm only|state formula")
+    tobs(formula = ~ 1 + (1 | g), data = s$data, family = fp_occu(),
+         detection = ~ 1 + (1 | g), y = s$y, method = "laplace",
+         control = list(progress = FALSE)),
+    "BOTH|one arm|psi OR p11")
 })

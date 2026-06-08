@@ -266,6 +266,8 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   i_psi <- off[1] + seq_len(p_psi); i_p11 <- off[2] + seq_len(p_p11)
   i_p10 <- off[3] + seq_len(p_p10); i_b   <- off[4] + seq_len(p_b)
 
+  arm <- design[[1]]$arm %||% "psi"
+
   # Per-site detection-state counts (fixed across the optimization).
   si <- as.integer(model$site_idx); yl <- as.integer(model$y_long)
   n0 <- tabulate(si[yl == 0L], nbins = N)
@@ -277,50 +279,107 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   cl <- function(e) pmin(pmax(e, -30), 30)
 
   # make_site(theta) closes over the current betas; the engine supplies the RE
-  # offset Z b through the eta passed to deriv / lmat (psi predictor only).
-  make_site <- function(theta) {
-    bp11 <- theta[i_p11]; bp10 <- theta[i_p10]; bb <- theta[i_b]
-    e11 <- cl(as.numeric(X_p11 %*% bp11))
-    e10 <- cl(as.numeric(X_p10 %*% bp10))
-    eb  <- cl(as.numeric(X_b   %*% bb))
-    lp11 <- stats::plogis(e11, log.p = TRUE); l1mp11 <- stats::plogis(-e11, log.p = TRUE)
-    lp10 <- stats::plogis(e10, log.p = TRUE); l1mp10 <- stats::plogis(-e10, log.p = TRUE)
-    lb   <- stats::plogis(eb,  log.p = TRUE); l1mb   <- stats::plogis(-eb,  log.p = TRUE)
-    logA <- (n1 + n2) * lp11 + n0 * l1mp11 + n1 * l1mb + n2 * lb
-    logB <- n0 * l1mp10 + n1 * lp10               # unoccupied; B = 0 where bzero
-    list(
-      eta_re = as.numeric(X_psi %*% theta[i_psi]),
-      deriv = function(rows, eta) {
-        s <- stats::plogis(eta)
-        lA <- logA[rows]; lB <- logB[rows]; bz <- bzero[rows]
-        logL <- d1 <- d2 <- numeric(length(rows))
-        # certain detection present -> L = psi * A  (occupancy-style branch)
-        logL[bz] <- log(s[bz]) + lA[bz]
-        d1[bz]   <- 1 - s[bz]
-        d2[bz]   <- -s[bz] * (1 - s[bz])
-        io <- !bz
-        cc <- pmax(lA[io], lB[io])
-        A_ <- exp(lA[io] - cc); B_ <- exp(lB[io] - cc)
-        sn <- s[io]; sp <- sn * (1 - sn); spp <- sp * (1 - 2 * sn)
-        g <- sn * A_ + (1 - sn) * B_; u <- A_ - B_
-        dd1 <- u * sp / g
-        logL[io] <- cc + log(g)
-        d1[io] <- dd1
-        d2[io] <- u * spp / g - dd1^2
-        list(logL = logL, d1 = d1, d2 = d2)
-      },
-      lmat = function(rows, ETA) {
-        S <- stats::plogis(ETA); lA <- logA[rows]; lB <- logB[rows]; bz <- bzero[rows]
-        out <- matrix(0, length(rows), ncol(ETA))
-        if (any(bz)) out[bz, ] <- log(S[bz, , drop = FALSE]) + lA[bz]
-        if (any(!bz)) {
-          lS   <- log(S[!bz, , drop = FALSE]); l1mS <- log1p(-S[!bz, , drop = FALSE])
-          t1 <- lS + lA[!bz]; t0 <- l1mS + lB[!bz]
-          mx <- pmax(t1, t0)
-          out[!bz, ] <- mx + log(exp(t1 - mx) + exp(t0 - mx))
-        }
-        out
-      })
+  # offset Z b through the eta passed to deriv / lmat. Two arms factorise into a
+  # per-site scalar offset: psi (the offset shifts the occupancy mixture weight)
+  # and p11 (the offset shifts the true-detection emission, held uniform across a
+  # site's visits). p10 / b never carry structured terms (rejected upstream).
+  if (arm == "psi") {
+    make_site <- function(theta) {
+      bp11 <- theta[i_p11]; bp10 <- theta[i_p10]; bb <- theta[i_b]
+      e11 <- cl(as.numeric(X_p11 %*% bp11))
+      e10 <- cl(as.numeric(X_p10 %*% bp10))
+      eb  <- cl(as.numeric(X_b   %*% bb))
+      lp11 <- stats::plogis(e11, log.p = TRUE); l1mp11 <- stats::plogis(-e11, log.p = TRUE)
+      lp10 <- stats::plogis(e10, log.p = TRUE); l1mp10 <- stats::plogis(-e10, log.p = TRUE)
+      lb   <- stats::plogis(eb,  log.p = TRUE); l1mb   <- stats::plogis(-eb,  log.p = TRUE)
+      logA <- (n1 + n2) * lp11 + n0 * l1mp11 + n1 * l1mb + n2 * lb
+      logB <- n0 * l1mp10 + n1 * lp10               # unoccupied; B = 0 where bzero
+      list(
+        eta_re = as.numeric(X_psi %*% theta[i_psi]),
+        deriv = function(rows, eta) {
+          s <- stats::plogis(eta)
+          lA <- logA[rows]; lB <- logB[rows]; bz <- bzero[rows]
+          logL <- d1 <- d2 <- numeric(length(rows))
+          # certain detection present -> L = psi * A  (occupancy-style branch)
+          logL[bz] <- log(s[bz]) + lA[bz]
+          d1[bz]   <- 1 - s[bz]
+          d2[bz]   <- -s[bz] * (1 - s[bz])
+          io <- !bz
+          cc <- pmax(lA[io], lB[io])
+          A_ <- exp(lA[io] - cc); B_ <- exp(lB[io] - cc)
+          sn <- s[io]; sp <- sn * (1 - sn); spp <- sp * (1 - 2 * sn)
+          g <- sn * A_ + (1 - sn) * B_; u <- A_ - B_
+          dd1 <- u * sp / g
+          logL[io] <- cc + log(g)
+          d1[io] <- dd1
+          d2[io] <- u * spp / g - dd1^2
+          list(logL = logL, d1 = d1, d2 = d2)
+        },
+        lmat = function(rows, ETA) {
+          S <- stats::plogis(ETA); lA <- logA[rows]; lB <- logB[rows]; bz <- bzero[rows]
+          out <- matrix(0, length(rows), ncol(ETA))
+          if (any(bz)) out[bz, ] <- log(S[bz, , drop = FALSE]) + lA[bz]
+          if (any(!bz)) {
+            lS   <- log(S[!bz, , drop = FALSE]); l1mS <- log1p(-S[!bz, , drop = FALSE])
+            t1 <- lS + lA[!bz]; t0 <- l1mS + lB[!bz]
+            mx <- pmax(t1, t0)
+            out[!bz, ] <- mx + log(exp(t1 - mx) + exp(t0 - mx))
+          }
+          out
+        })
+    }
+  } else {  # arm == "p11": the RE offset shifts the true-detection emission.
+    make_site <- function(theta) {
+      bpsi <- theta[i_psi]; bp10 <- theta[i_p10]; bb <- theta[i_b]
+      s   <- stats::plogis(cl(as.numeric(X_psi %*% bpsi)))   # occupancy, fixed
+      e10 <- cl(as.numeric(X_p10 %*% bp10)); eb <- cl(as.numeric(X_b %*% bb))
+      lp10 <- stats::plogis(e10, log.p = TRUE); l1mp10 <- stats::plogis(-e10, log.p = TRUE)
+      lb   <- stats::plogis(eb,  log.p = TRUE); l1mb   <- stats::plogis(-eb,  log.p = TRUE)
+      logB <- n0 * l1mp10 + n1 * lp10            # unoccupied; B = 0 where bzero
+      Cb   <- n1 * l1mb + n2 * lb                # p11-independent part of logA
+      list(
+        eta_re = as.numeric(X_p11 %*% theta[i_p11]),
+        deriv = function(rows, eta) {
+          p <- stats::plogis(eta)
+          lp11 <- stats::plogis(eta, log.p = TRUE); l1mp11 <- stats::plogis(-eta, log.p = TRUE)
+          n0r <- n0[rows]; n1r <- n1[rows]; n2r <- n2[rows]; nv <- n_valid[rows]
+          sr <- s[rows]; bz <- bzero[rows]
+          logA  <- (n1r + n2r) * lp11 + n0r * l1mp11 + Cb[rows]
+          dAlog <- (n1r + n2r) * (1 - p) - n0r * p          # d logA / d eta_p11
+          d2Alog <- -nv * p * (1 - p)                       # d2 logA / d eta_p11^2
+          lB <- logB[rows]
+          logL <- d1 <- d2 <- numeric(length(rows))
+          # certain detection present -> L = psi * A; only A depends on p11.
+          logL[bz] <- log(sr[bz]) + logA[bz]
+          d1[bz]   <- dAlog[bz]
+          d2[bz]   <- d2Alog[bz]
+          io <- !bz
+          cc <- pmax(logA[io], lB[io])
+          A_ <- exp(logA[io] - cc); B_ <- exp(lB[io] - cc)
+          sn <- sr[io]; LA <- sn * A_
+          g <- sn * A_ + (1 - sn) * B_
+          dd1 <- LA * dAlog[io] / g
+          logL[io] <- cc + log(g)
+          d1[io] <- dd1
+          d2[io] <- LA * (dAlog[io]^2 + d2Alog[io]) / g - dd1^2
+          list(logL = logL, d1 = d1, d2 = d2)
+        },
+        lmat = function(rows, ETA) {
+          LP11 <- stats::plogis(ETA, log.p = TRUE); L1MP11 <- stats::plogis(-ETA, log.p = TRUE)
+          n0r <- n0[rows]; n1r <- n1[rows]; n2r <- n2[rows]
+          sr <- s[rows]; bz <- bzero[rows]; lB <- logB[rows]; Cbr <- Cb[rows]
+          logA <- (n1r + n2r) * LP11 + n0r * L1MP11 + Cbr   # [rows x cols]
+          out <- matrix(0, length(rows), ncol(ETA))
+          if (any(bz)) out[bz, ] <- log(sr[bz]) + logA[bz, , drop = FALSE]
+          if (any(!bz)) {
+            t1 <- log(sr[!bz]) + logA[!bz, , drop = FALSE]
+            t0 <- log1p(-sr[!bz]) + lB[!bz]
+            mx <- pmax(t1, t0)
+            out[!bz, ] <- mx + log(exp(t1 - mx) + exp(t0 - mx))
+          }
+          out
+        })
+    }
   }
 
   re_terms <- lapply(design, function(d) list(
@@ -340,10 +399,12 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   b_out    <- unlist(lapply(ref$blup,     function(M) as.numeric(t(M))), use.names = FALSE)
   bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))), use.names = FALSE)
 
-  # Refreshed posterior occupancy w1 at the refined estimate (for fitted()).
-  eta_psi <- cl(as.numeric(X_psi %*% bpsi) + .tobs_re_offset(design, b_out))
-  e11 <- cl(as.numeric(X_p11 %*% bp11)); e10 <- cl(as.numeric(X_p10 %*% bp10))
-  eb  <- cl(as.numeric(X_b %*% bb))
+  # Refreshed posterior occupancy w1 at the refined estimate (for fitted()); the
+  # RE offset sits on whichever arm carries the term.
+  off_re  <- .tobs_re_offset(design, b_out)
+  eta_psi <- cl(as.numeric(X_psi %*% bpsi) + if (arm == "psi") off_re else 0)
+  e11 <- cl(as.numeric(X_p11 %*% bp11) + if (arm == "p11") off_re else 0)
+  e10 <- cl(as.numeric(X_p10 %*% bp10)); eb  <- cl(as.numeric(X_b %*% bb))
   lp11 <- stats::plogis(e11, log.p = TRUE); l1mp11 <- stats::plogis(-e11, log.p = TRUE)
   lp10 <- stats::plogis(e10, log.p = TRUE); l1mp10 <- stats::plogis(-e10, log.p = TRUE)
   lb   <- stats::plogis(eb,  log.p = TRUE); l1mb   <- stats::plogis(-eb,  log.p = TRUE)
@@ -369,7 +430,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   }
 
   list(
-    ok = TRUE, arm = "psi",
+    ok = TRUE, arm = arm,
     beta_psi = bpsi, beta_p11 = bp11, beta_p10 = bp10, beta_b = bb,
     Sigma_list = ref$Sigma_list, b = b_out, b_var = bvar_out,
     theta_se = ref$theta_se, vcov = vcov, w1 = w1,
@@ -378,11 +439,11 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
 }
 
 
-# Fit an fp_occu model with a site-level grouped RE on the occupancy (psi) arm
-# under the Laplace / AGHQ path (one grouping factor, RE dim <= 3; tulpaObs#51).
-# The false-positive (p10) and certain (b) arms never carry structured terms
-# (rejected upstream); a detection (p11) RE is not yet wired here, so this fits
-# only a psi-arm RE.
+# Fit an fp_occu model with a site-level grouped RE on the occupancy (psi) OR the
+# true-detection (p11) arm under the Laplace / AGHQ path (one grouping factor, RE
+# dim <= 3; tulpaObs#51). The false-positive (p10) and certain (b) arms never
+# carry structured terms (rejected upstream). A term shared across both arms, or
+# RE on both arms at once, is rejected (the AGHQ path integrates one arm).
 .tobs_fit_fp_occu_re <- function(model, re, max_iter = 200L, tol = 1e-8,
                                  verbose = TRUE, n_quad = 9L, lkj_eta = 1.5,
                                  sigma.beta = NULL) {
@@ -390,14 +451,15 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   arms <- .tobs_re_split_two_arms(
     re, model, "psi", "p11",
     "An fp_occu random effect shared across the occupancy and detection arms is not supported.")
-  if (length(arms$p11)) {
-    stop("fp_occu() random effects are supported on the occupancy (psi) arm ",
-         "only; a detection-arm random effect is not yet wired on either ",
-         "engine. (tulpaObs#51)", call. = FALSE)
+  if (length(arms$psi) && length(arms$p11)) {
+    stop("Random effects on BOTH the occupancy (psi) and detection (p11) arms in ",
+         "one fp_occu fit are not supported; the AGHQ path integrates one arm at ",
+         "a time. Put the RE on psi OR p11, not both. (tulpaObs#51)", call. = FALSE)
   }
-  design <- arms$psi
+  design <- if (length(arms$psi)) arms$psi else arms$p11
   if (!length(design)) {
-    stop("fp_occu() found no occupancy-arm random effect to fit.", call. = FALSE)
+    stop("fp_occu() found no occupancy- or detection-arm random effect to fit.",
+         call. = FALSE)
   }
 
   warm <- tryCatch(
