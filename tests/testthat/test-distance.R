@@ -517,24 +517,22 @@ test_that("distance() areal ICAR recovers the abundance slope + field, calibrate
   expect_gt(mean(field_cor), 0.6)
 })
 
-test_that("distance() areal spatial: proper-CAR fits; bym2 / hazard / nuts+spatial gated", {
+test_that("distance() areal spatial: proper-CAR + bym2 fit; hazard / nuts+spatial gated", {
   skip_on_cran()
   skip_if_fast()
   cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(6L)
   sim <- .sim_dist_spatial(adj, cuts, c(log(35), 0.4), c(log(0.4), 0.2), seed = 7)
-  fit <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
-              family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
-              detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
-              control = list(progress = FALSE, verbose = FALSE))
-  expect_identical(fit$method, "nested_laplace")
-  expect_true(all(is.finite(vcov(fit))))
-  # bym2 not yet wired for distance.
-  expect_error(
-    tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = sim$data,
-         family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
-         detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
-         control = list(progress = FALSE)),
-    "not yet wired for distance|car_proper")
+  for (term in c("car_proper", "bym2")) {
+    f <- if (term == "car_proper") (~ abund_cov1 + car_proper(graph = adj)) else
+                                   (~ abund_cov1 + bym2(graph = adj))
+    fit <- tobs(formula = f, data = sim$data,
+                family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+                detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    expect_identical(fit$method, "nested_laplace")
+    expect_true(all(is.finite(vcov(fit))))
+    expect_false(is.null(fit$spatial_field))
+  }
   # hazard key + spatial not yet wired.
   expect_error(
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,

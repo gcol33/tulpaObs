@@ -405,6 +405,7 @@ Rcpp::List cpp_distance_site_sweep(
         info_sig_fs(n_sites), vN_sig(n_sites), boundary(n_sites), p_det(n_sites);
     std::vector<int> yb(n_bins);
     int n_inadmissible = 0;
+    double grad_logr = 0.0;       // summed NB dispersion score (0 under Poisson)
     for (int s = 0; s < n_sites; ++s) {
         for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
         tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
@@ -417,6 +418,7 @@ Rcpp::List cpp_distance_site_sweep(
         grad_sig[s] = d.grad_eta_d[0];
         info_sig_obs[s] = d.info_eta_d[0][0]; info_sig_fs[s] = d.info_eta_d_fs[0][0];
         vN_sig[s] = d.vN_d[0]; boundary[s] = d.boundary_weight; p_det[s] = d.p_det;
+        if (nb) grad_logr += d.grad_theta;
     }
     return Rcpp::List::create(
         Rcpp::Named("log_lik") = logL,
@@ -426,5 +428,6 @@ Rcpp::List cpp_distance_site_sweep(
         Rcpp::Named("info_sig_obs") = info_sig_obs,
         Rcpp::Named("info_sig_fs") = info_sig_fs,
         Rcpp::Named("vN_sig") = vN_sig, Rcpp::Named("boundary") = boundary,
-        Rcpp::Named("p_det") = p_det, Rcpp::Named("n_inadmissible") = n_inadmissible);
+        Rcpp::Named("p_det") = p_det, Rcpp::Named("grad_logr") = grad_logr,
+        Rcpp::Named("n_inadmissible") = n_inadmissible);
 }
