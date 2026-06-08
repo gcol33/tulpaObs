@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.23 (2026-06-08)
+
+* Require `tulpa (>= 0.0.18)` and update the Remotes pin. The committed s2z
+  log-determinant guard test relies on the engine fix shipped in tulpa 0.0.18.
+* feat(spatial): areal fields (ICAR, proper-CAR, BYM2) are wired on the
+  abundance / occupancy arm across `removal()`, `distance()`, `dyn_abun()`,
+  `fp_occu()`, `abun()`, and `occu_cover()` (#51), with the spatial fitters
+  unified onto a shared field-spec areal driver.
+* feat(re): Laplace AGHQ grouped random effects on one arm across `removal()`,
+  `distance()`, `dyn_abun()`, and `fp_occu()` (occupancy and detection arms)
+  (#51), plus NUTS sampling of a single intercept random effect on each arm
+  including `abun()` (#51).
+* feat(occu_cover): a shared spatial field with a per-group random intercept on
+  the occupancy arm (#56).
+* feat(occu_multiscale_cover / ms_occu_cover): `fitted()` and `predict()`
+  (#53 part 1), a non-spatial Laplace path (#53 part 2), spatially-varying trend
+  fields (#53 part 3), and AGHQ debias of the community variance components
+  (#56).
+* feat(ms_int_occu): partial / overlapping per-source site maps (#57).
+* feat(dyn_abun): negative-binomial initial abundance (#52).
+* feat(cover): fixed-effect priors thread through the nested-Laplace cover fit
+  (#54).
+* refactor(nuts): extract a shared single-arm-vector NUTS target oracle.
+
 ## 0.0.22 (2026-06-07)
 
 * build: `tulpaMesh` moves from Suggests to Imports (the `spde()` term depends on
