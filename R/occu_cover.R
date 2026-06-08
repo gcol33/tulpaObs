@@ -708,6 +708,19 @@
     model$site_cell <- site_cell
     model$n_cells   <- n_cells_field
 
+    # Optional per-group random intercept on the occupancy arm, layered on the
+    # shared field (gcol33/tulpaObs#56). The grouping is per occupancy unit (one
+    # code per site / data row); validate its length and carry it to the fitter.
+    re_spec <- spatial_info$re
+    if (!is.null(re_spec)) {
+      if (length(re_spec$group_idx) != model$n_sites) {
+        stop(sprintf(paste0(
+          "occu_cover() spatial + RE: the random-effect grouping has %d codes ",
+          "but there are %d occupancy units (sites)."),
+          length(re_spec$group_idx), model$n_sites), call. = FALSE)
+      }
+    }
+
     # joint_coupled (3-arm nested-Laplace via tulpa's cell_coupling spec) is the
     # default: outer-grid integration over (sigma, alpha [, sigma_trend,
     # alpha_trend]) with inner Newton driven by the occu_cover_{lognormal,beta}
@@ -719,6 +732,12 @@
     engine_pick <- control[["engine"]] %||% "joint_coupled"
     control[["engine"]] <- NULL
     if (engine_pick %in% c("v2_joint", "v3_nested")) {
+      if (!is.null(re_spec)) {
+        stop(sprintf(paste0(
+          "occu_cover() per-group RE on the occupancy arm needs the default ",
+          "joint_coupled engine; the \"%s\" escape hatch has no RE block."),
+          engine_pick), call. = FALSE)
+      }
       # The v2/v3 escape hatches model per-visit cover only; cell-aggregated
       # cover is a joint_coupled feature. An explicit request errors; the bare
       # default falls back to per-visit on these engines.
@@ -750,7 +769,8 @@
                 else .tobs_fit_occu_cover_nested
       return(do.call(fitter, fit_args))
     }
-    fit_args <- c(list(model = model, fields = fields, priors = priors),
+    fit_args <- c(list(model = model, fields = fields, priors = priors,
+                       re_spec = re_spec),
                   control)
     return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
   }

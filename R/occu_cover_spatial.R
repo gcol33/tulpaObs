@@ -151,8 +151,34 @@
   }
   group_var <- if (length(gvs) == 1L) gvs[[1L]] else NULL
 
+  # An optional per-group random INTERCEPT on the occupancy arm, layered on the
+  # shared field (gcol33/tulpaObs#56, the consumer of tulpa#86's field + per-group
+  # RE composition in the joint cell-coupling engine). It joins the joint fit as a
+  # single `iid` prior block whose per-cell offset rides the occupancy predictor;
+  # its variance integrates on the outer grid alongside the field sigma / alpha.
+  # Scope: one random-intercept term -- a scalar per group -- maps onto the one
+  # iid block. A random slope or a correlated multi-coefficient block has no
+  # scalar-per-group form here and errors (the non-spatial cover-hurdle EM is the
+  # route for richer RE).
+  re_terms <- Filter(function(t) inherits(t$spec, "tobs_re"), bind$terms)
+  re_spec  <- NULL
+  if (length(re_terms) > 0L) {
+    if (length(re_terms) > 1L) {
+      stop("occu_cover() spatial + RE supports a single random-intercept term ",
+           "on the occupancy formula; got ", length(re_terms), ".", call. = FALSE)
+    }
+    rs <- re_terms[[1L]]$spec
+    if (!identical(rs$type, "intercept")) {
+      stop("occu_cover() spatial + RE supports a random INTERCEPT only ",
+           "(e.g. (1 | group) / re(group)); a random slope or correlated block ",
+           "is not wired on the shared-field joint engine.", call. = FALSE)
+    }
+    re_spec <- list(group_idx = as.integer(rs$group_idx),
+                    n_groups  = as.integer(rs$n_groups))
+  }
+
   list(fe = bind$fe$psi, fields = c(base, specs[weighted]),
-       group_var = group_var)
+       group_var = group_var, re = re_spec)
 }
 
 

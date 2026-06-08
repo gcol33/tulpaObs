@@ -28,16 +28,23 @@
 # Cov(b_s | y)]. Community-mean SEs are the marginal observed information (the
 # Schur complement of the b-block, Louis 1982), read at the natural scale.
 #
-# This is the family wiring + the in-tree fitter; it reuses the single-species
-# occu_cover() linear-predictor builder and per-cell marginal as the per-species
-# kernel (single source of truth). Non-spatial Laplace only. A shared coupled
-# field across the three arms with per-species RE layered on top routes through
-# tulpa's cell-coupling joint engine, which now composes a shared latent field
-# with per-group RE blocks (gcol33/tulpa#86); the remaining work is the community
-# consumer path (this fitter is a bespoke per-species Laplace-EM, not the tulpa
-# joint engine, so the spatial community model is a separate build). The
-# dispatcher rejects a spatial term with a pointer rather than silently dropping
-# it until that path exists.
+# This is the family wiring + the in-tree non-spatial fitter; it reuses the
+# single-species occu_cover() linear-predictor builder and per-cell marginal as
+# the per-species kernel (single source of truth). The community SPATIAL model --
+# a shared latent field coupled across the occupancy and cover arms with
+# per-species RE on all three arms -- is the reduced-rank spatial-factor fit
+# reached by a front-door icar()/car_proper()/bym2() term (gcol33/tulpa#67,
+# R/ms_occu_cover_spatial.R): per-species loadings on the shared field via
+# Laplace-EM / NUTS, with per-species community covariances on top. The free
+# per-species loading form generalises a single common field amplitude, so it
+# subsumes the common-amplitude coupling of occu_cover()'s joint-coupled engine.
+# Routing the community model through tulpa's joint cell-coupling engine instead
+# (per-arm RE blocks integrated on the outer grid) is not viable: the joint engine
+# integrates every variance component on its grid, so per-arm community RE
+# variances plus the field hyperparameters exceed the grid cap -- the closed-form
+# covariance M-step of the Laplace-EM is the scaling route for community variance
+# components (gcol33/tulpaObs#56). The non-spatial dispatcher below rejects a
+# residual structured term with a pointer rather than silently dropping it.
 # =============================================================================
 
 

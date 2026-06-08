@@ -113,6 +113,17 @@ ranef.tobs_fit <- function(object, ...) {
   if (identical(object$model$model_type, "ms_int_occu")) {
     return(.tobs_ranef_ms_int_occu(object))
   }
+  if (!is.null(object$re) && !is.null(object$re$blup)) {
+    # occu_cover() shared-field + per-group RE (gcol33/tulpaObs#56): one random
+    # intercept per group on the named arm, with per-group BLUP and its SD.
+    re <- object$re
+    return(data.frame(
+      arm   = re$arm,
+      group = seq_along(re$blup),
+      blup  = re$blup,
+      blup_sd = re$blup_sd,
+      stringsAsFactors = FALSE))
+  }
   if (!is.null(object$re_effects) && length(object$re_effects) > 0L) {
     out <- do.call(rbind, object$re_effects)
     rownames(out) <- NULL

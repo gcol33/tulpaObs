@@ -91,6 +91,25 @@ occupancy trend on a shared cell field. Supported on the default
 field 1:1 to sites and reject \code{group_var}.
 }
 
+\section{Per-group random intercept on the shared-field path (\code{re()} / \code{(1 | g)})}{
+
+On the spatial \code{nested_laplace} path a single random INTERCEPT term on the psi
+formula -- \code{re(g)} or the \code{(1 | g)} bar -- layers a per-group occupancy offset
+on top of the shared field. It joins the joint fit as one \code{iid} prior block
+whose latent rides the occupancy arm only; its variance integrates on the
+outer grid alongside the field sigma / alpha and is reported as the \code{sigma_re}
+hyperparameter, with the per-group BLUPs in \code{fit$re} and via \code{\link[=ranef]{ranef()}}. A
+default \code{re.sigma.grid} (log-spaced) sets the grid; pass \code{control$re.sigma.grid}
+to override. Scope: one random-intercept term (a scalar per group maps onto the
+one iid block); a random slope, a correlated multi-coefficient block, or an RE
+without a shared field is rejected (the joint engine integrates every variance
+component on its grid, so multiple variance components do not scale -- richer
+RE is the non-spatial cover-hurdle EM's route). This is the single-species
+analogue of the community spatial occu_cover (\code{\link[=ms_occu_cover]{ms_occu_cover()}}, gcol33/tulpa#67)
+and the tulpaObs consumer of tulpa's field + per-group RE engine composition
+(gcol33/tulpa#86, tulpaObs#56).
+}
+
 \section{Checkpoint / resume}{
 
 A full-field \code{occu_cover()} fit integrates over a large outer hyperparameter

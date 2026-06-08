@@ -323,6 +323,7 @@
 # pos arm.
 .tobs_fit_occu_cover_joint_coupled <- function(model, fields,
                                                 priors    = NULL,
+                                                re_spec   = NULL,
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
@@ -366,6 +367,22 @@
   }
 
   dots <- list(...)
+
+  # Per-group random intercept on the occupancy arm (gcol33/tulpaObs#56). It joins
+  # the joint fit as a single `iid` prior block, so it forces the multi-block
+  # driver (the field amplitude becomes an explicit copy spec). Not composed with
+  # the cover-latent RE (the latent spec carries its own per-unit cover RE) nor
+  # with the batched fused path (one species at a time).
+  has_re <- !is.null(re_spec)
+  if (has_re && is_latent) {
+    stop("occu_cover(): a per-group occupancy RE and cover_aggregate = ",
+         "\"latent\" cannot be combined (the latent path carries its own ",
+         "per-unit cover RE).", call. = FALSE)
+  }
+  if (has_re && isTRUE(.batch_collect)) {
+    stop("occu_cover(): the batched fused path does not carry a per-group RE ",
+         "block.", call. = FALSE)
+  }
 
   # Pre-fit the pos-arm dispersion(s). The non-latent paths carry a single
   # dispersion on the pos arm's phi slot; the latent path carries the integrated
@@ -474,7 +491,7 @@
     sigma_pos_init  = sigma_pos_init,
     alpha_grid      = alpha_grid,
     positive        = model$positive,
-    multi           = has_trend,
+    multi           = has_trend || has_re,
     n_cells         = n_cells,
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate
@@ -509,6 +526,22 @@
         n_neighbors     = csr$n_neighbors,
         sigma_grid      = sigma_grid
       ), extra)
+  }
+
+  # The per-group occupancy RE as one `iid` prior block (gcol33/tulpaObs#56). Its
+  # per-group latent rides the OCCUPANCY arm only: obs_idx maps each psi row
+  # (one per site) to its group and zeroes the detection / cover arms (0 = no RE
+  # for that row). Its SD integrates on the outer grid over `re.sigma.grid`.
+  iid_block <- NULL
+  if (has_re) {
+    re_grid <- dots$re.sigma.grid %||% exp(seq(log(0.05), log(2), length.out = 6L))
+    iid_block <- list(
+      type       = "iid",
+      n_units    = re_spec$n_groups,
+      sigma_grid = as.numeric(re_grid),
+      obs_idx    = list(as.integer(re_spec$group_idx),
+                        rep(0L, n_v), rep(0L, n_pos_rows))
+    )
   }
 
   # Pos-arm phi axis on the outer grid. For the latent path the pos arm's phi IS
@@ -576,6 +609,16 @@
       lapply(seq_len(n_trend), function(j)
         list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend))
     )
+    # The RE block trails the field blocks, so the copy indices above (which name
+    # field blocks only) stay valid. It carries no copy (it rides occupancy only).
+    if (has_re) prior_arg <- c(prior_arg, list(iid_block))
+  } else if (has_re) {
+    # Single shared field + a per-group occupancy RE: the multi-block driver with
+    # the field as block 1 (alpha copy onto cover) and the iid RE as block 2.
+    field_block <- icar_template(list(
+      spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
+    prior_arg <- list(field_block, iid_block)
+    copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
   } else if (isTRUE(.batch_collect)) {
     # Single-field, batched fused path: run the MULTI-block driver so the alpha
     # axis is an explicit copy spec and the per-arm field-node map is an explicit
@@ -683,7 +726,8 @@
               disp2_fixed   = if (is_latent) disp2_fixed   else NULL,
               n_quad_latent = if (is_latent) n_quad_latent else NULL,
               sigma_pos_init = sigma_pos_init, has_trend = has_trend,
-              n_trend = n_trend, coupled_trends = coupled_trends, model = model)
+              n_trend = n_trend, coupled_trends = coupled_trends, model = model,
+              re_spec = re_spec)
 
   # Batched fused path (gcol33/tulpa#66): return the assembled call + context
   # instead of fitting, so .tobs_fit_occu_cover_batch_fused can run B species
@@ -862,6 +906,27 @@
   }
   field_sd <- sqrt(pmax(field_var, 0))
 
+  # Per-group occupancy RE BLUPs (gcol33/tulpaObs#56). The iid block trails the
+  # field blocks, so it is block (n_fields + 1) in the multi-block layout; its
+  # latent values are a contiguous run in `modes`. The posterior-mean offset per
+  # group is the grid-weighted mean of those columns; the variance component is
+  # surfaced as the hyperparameter `sigma_re` below.
+  re_blup <- NULL
+  if (!is.null(ctx$re_spec)) {
+    bstart  <- layout$block_start
+    bsize   <- layout$block_size
+    re_bidx <- n_fields + 1L
+    if (!is.null(bstart) && length(bstart) >= re_bidx) {
+      ucol  <- bstart[re_bidx] + seq_len(bsize[re_bidx])
+      u_mod <- modes[, ucol, drop = FALSE]
+      u_hat <- as.numeric(crossprod(w, u_mod))
+      u_var <- as.numeric(crossprod(w, u_mod^2)) - u_hat^2
+      re_blup <- list(mean = u_hat - mean(u_hat),
+                      sd   = sqrt(pmax(u_var, 0)),
+                      n_groups = bsize[re_bidx])
+    }
+  }
+
   sd_psi <- sds_beta[seq_len(p_psi)]
   sd_p   <- sds_beta[p_psi + seq_len(p_p)]
   sd_pos <- sds_beta[p_psi + p_p + seq_len(p_pos)]
@@ -912,10 +977,14 @@
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
-  if (has_trend) {
-    # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields.
-    # A single trend field keeps the bare sigma_trend/alpha_trend names; several
-    # are indexed (sigma_trend1, alpha_trend1, ...).
+  # A per-group RE block also forces the multi-block driver (its iid block is a
+  # second prior block), so the field axes carry the `b<k>.` names even without a
+  # trend field. The RE variance is the iid block's `b<n_fields+1>.sigma`.
+  has_re <- !is.null(ctx$re_spec)
+  if (has_trend || has_re) {
+    # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
+    # then the RE block (if any). A single trend field keeps the bare
+    # sigma_trend/alpha_trend names; several are indexed (sigma_trend1, ...).
     pick2("sigma", "b1.sigma")
     pick2("alpha", "b1.alpha")
     for (j in seq_len(n_trend)) {
@@ -923,6 +992,7 @@
       pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
     }
+    if (has_re) pick2("sigma_re", sprintf("b%d.sigma", n_fields + 1L))
     pick("phi_pos", phi_pos_public)
   } else {
     pick("sigma"); pick("alpha"); pick("phi_pos", phi_pos_public)
@@ -1080,6 +1150,13 @@
     joint_vcov      = Vj,
     method       = "joint_coupled",
     positive     = model$positive,
+    re           = if (!is.null(re_blup)) list(
+                     arm      = "psi",
+                     sigma    = unname(hyper_means["sigma_re"]),
+                     sigma_sd = unname(hyper_sds["sigma_re"]),
+                     blup     = re_blup$mean,
+                     blup_sd  = re_blup$sd,
+                     n_groups = re_blup$n_groups) else NULL,
     joint_fit    = fit,
     convergence  = list(converged = TRUE, n_iter = NA_integer_)
   )), class = c("tobs_fit", "tulpa_fit"))

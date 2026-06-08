@@ -219,6 +219,23 @@ jsdm <- function() {
 #' `joint_coupled` engine; the `v2_joint` / `v3_nested` escape hatches bind the
 #' field 1:1 to sites and reject `group_var`.
 #'
+#' @section Per-group random intercept on the shared-field path (`re()` / `(1 | g)`):
+#' On the spatial `nested_laplace` path a single random INTERCEPT term on the psi
+#' formula -- `re(g)` or the `(1 | g)` bar -- layers a per-group occupancy offset
+#' on top of the shared field. It joins the joint fit as one `iid` prior block
+#' whose latent rides the occupancy arm only; its variance integrates on the
+#' outer grid alongside the field sigma / alpha and is reported as the `sigma_re`
+#' hyperparameter, with the per-group BLUPs in `fit$re` and via [ranef()]. A
+#' default `re.sigma.grid` (log-spaced) sets the grid; pass `control$re.sigma.grid`
+#' to override. Scope: one random-intercept term (a scalar per group maps onto the
+#' one iid block); a random slope, a correlated multi-coefficient block, or an RE
+#' without a shared field is rejected (the joint engine integrates every variance
+#' component on its grid, so multiple variance components do not scale -- richer
+#' RE is the non-spatial cover-hurdle EM's route). This is the single-species
+#' analogue of the community spatial occu_cover ([ms_occu_cover()], gcol33/tulpa#67)
+#' and the tulpaObs consumer of tulpa's field + per-group RE engine composition
+#' (gcol33/tulpa#86, tulpaObs#56).
+#'
 #' @section Checkpoint / resume:
 #' A full-field `occu_cover()` fit integrates over a large outer hyperparameter
 #' grid and can run for hours, so a reboot or OOM kill otherwise loses the whole
@@ -385,16 +402,23 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' a rare species borrows strength across the shared factors for a calibrated map.
 #'
 #' @section Scope (status `"experimental"`):
-#' The non-spatial fit and the occupancy-arm reduced-rank spatial fit are Laplace
-#' / Laplace-EM. A shared coupled spatial field across all three arms with the
-#' per-species RE block layered on top (the community analogue of
-#' [occu_cover()]'s `nested_laplace` joint-coupled engine) is supported upstream:
-#' tulpa's cell-coupling joint engine now composes a shared latent field with
-#' per-group RE blocks (gcol33/tulpa#86). The remaining work is the community
-#' consumer path -- this family fits a bespoke per-species Laplace-EM rather than
-#' routing through the tulpa joint engine, so the spatial community model is a
-#' separate build (gcol33/tulpaObs#56); such a structured term on any arm errors
-#' from the dispatcher rather than being silently dropped until it exists.
+#' The non-spatial fit is Laplace-EM. A community spatial occu_cover -- a shared
+#' latent field coupled across the occupancy and cover arms with per-species RE on
+#' all three arms -- is the reduced-rank spatial-factor fit: an `icar()` /
+#' `car_proper()` / `bym2()` term on the occupancy formula (and, with a matching
+#' term on the cover formula, a cover-arm factor) fits per-species loadings on the
+#' shared field via Laplace-EM and NUTS, with the per-species community covariances
+#' `Sigma_occ` / `Sigma_p` / `Sigma_pos` on top (gcol33/tulpa#67). The free
+#' per-species loading form generalises a single common field amplitude, so it
+#' subsumes the common-amplitude coupling of [occu_cover()]'s joint-coupled engine.
+#' A community model whose per-arm variance components are integrated on an outer
+#' grid (the engine route of [occu_cover()]'s joint-coupled path) is not used: the
+#' joint nested-Laplace engine integrates every variance component on its outer
+#' grid, so per-arm community RE variances plus the field hyperparameters exceed
+#' the engine's grid cap -- the closed-form covariance M-step of the Laplace-EM is
+#' the scaling route for community variance components (gcol33/tulpaObs#56).
+#' Structured terms beyond the shared field error from the dispatcher rather than
+#' being silently dropped.
 #'
 #' @section Community variance debias (tulpaObs#47, #56):
 #' The community-MEAN estimates (`coef()`, `vcov()`, `confint()`) are unbiased.
