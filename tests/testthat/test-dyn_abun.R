@@ -338,3 +338,79 @@ test_that("dyn_abun() RE is initial-abundance-arm only (both engines)", {
          control = list(n.iter = 20L, n.warmup = 10L)),
     "initial-abundance|lambda|single intercept")
 })
+
+
+# --- areal spatial (ICAR / proper-CAR) on the initial-abundance arm (#51) ------
+
+.da_grid_adj <- function(side) {
+  ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
+  adj <- matrix(0L, ng, ng)
+  for (i in seq_len(ng)) for (j in seq_len(ng))
+    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i,j] <- 1L
+  adj
+}
+
+.sim_da_spatial <- function(adj, Tn = 3L, J = 2L, sd_phi = 0.5, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  ng <- nrow(adj)
+  phi <- as.numeric(scale(rnorm(ng)))
+  for (rep in 1:3) { pn <- phi; for (i in seq_len(ng)) { nbi <- which(adj[i,]==1L); pn[i] <- 0.5*phi[i]+0.5*mean(phi[nbi]) }; phi <- pn }
+  phi <- sd_phi * as.numeric(scale(phi)); phi <- phi - mean(phi)
+  x <- rnorm(ng); lam <- exp(log(6) + 0.5*x + phi)
+  p <- 0.5; omega <- 0.5; gamma <- 0.6
+  y <- array(0L, c(ng, J, Tn))
+  for (i in seq_len(ng)) {
+    Ni <- rpois(1, lam[i])
+    for (t in seq_len(Tn)) {
+      if (t > 1L) Ni <- rbinom(1, Ni, omega) + rpois(1, gamma)
+      y[i, , t] <- rbinom(J, Ni, p)
+    }
+  }
+  list(y = y, data = data.frame(abund_cov1 = x), phi = phi)
+}
+
+test_that("dyn_abun() areal ICAR recovers the initial-abundance slope + field", {
+  skip_on_cran()
+  skip_if_fast()
+  # The field on log lambda_1 is fit by BFGS over the exact forward-HMM marginal
+  # (cpp_dyn_abun_total_log_lik gradient) + the ICAR prior, with an FD-Hessian
+  # observed-info Laplace marginal integrated over tau.
+  adj <- .da_grid_adj(5L)   # 25 sites
+  slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+  for (s in 1:2) {
+    sim <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 500 + s)
+    fit <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+                family = dyn_abun(K_max = 25), detection = ~ 1, y = sim$y,
+                method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_true("lambda_abund_cov1" %in% names(fit$means))
+      V <- vcov(fit)
+      expect_true(all(is.finite(V)))
+      expect_true(all(eigen(V, only.values = TRUE)$values > 0))
+      expect_false(is.null(fit$spatial_field))
+    }
+    est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+    slopes <- c(slopes, est)
+    slope_ok <- c(slope_ok, abs(est - 0.5) / se < 3.5)
+    field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+  }
+  expect_true(all(slope_ok))
+  expect_lt(abs(mean(slopes) - 0.5), 0.2)
+  expect_gt(mean(field_cor), 0.6)
+})
+
+test_that("dyn_abun() areal spatial: bym2 / nuts+spatial gated", {
+  s <- .sim_da_spatial(.da_grid_adj(4L), Tn = 3L, J = 2L, seed = 3)
+  adj <- .da_grid_adj(4L)
+  expect_error(
+    tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = s$data,
+         family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y,
+         method = "nested_laplace", control = list(progress = FALSE)),
+    "not yet wired for dyn_abun|car_proper")
+  expect_error(
+    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = s$data,
+         family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "nested_laplace|not yet wired")
+})

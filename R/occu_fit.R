@@ -194,11 +194,25 @@
   # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
   # effects only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "dyn_abun")) {
-    if (!is.null(spatial) || !is.null(temporal)) {
-      stop("dyn_abun() currently supports non-spatial fixed effects only; a ",
-           "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
+    if (!is.null(temporal)) {
+      stop("dyn_abun() does not yet support temporal terms; a spatial icar() / ",
+           "car_proper() field on the initial-abundance arm fits under method = ",
+           "\"nested_laplace\". (#51)", call. = FALSE)
     }
-    if (identical(method, "nuts")) {
+    if (!is.null(spatial)) {
+      # Areal field on the initial-abundance arm via BFGS over the exact
+      # forward-HMM marginal + CAR prior (tulpaObs#51); icar() / car_proper(),
+      # NUTS+spatial not wired.
+      if (identical(method, "nuts")) {
+        stop("dyn_abun() with a spatial term fits under method = ",
+             "\"nested_laplace\"; NUTS + spatial is not yet wired. (#51)",
+             call. = FALSE)
+      }
+      fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial,
+                                        mixture = model$mixture %||% "poisson",
+                                        K_max = K.max, max_iter = 300L, tol = 1e-8,
+                                        verbose = verbose)
+    } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_dyn_abun_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,

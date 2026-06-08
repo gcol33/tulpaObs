@@ -1065,10 +1065,12 @@ tobs <- function(formula,
   # abundance sequence is summed out by an exact HMM forward recursion (not closed
   # form); analytic gradients by forward-mode differentiation. Non-spatial
   # analytic-gradient BFGS over the forward marginal with an observed-information
-  # vcov (laplace) and the in-tree C++ FullGradFn NUTS over the same marginal
-  # (R/dyn_abun.R, R/dyn_abun_nuts.R, src/dyn_abun_*.cpp). Spatial / RE / negbin /
-  # season-varying dynamics not yet wired (gcol33/tulpaObs#37).
-  dyn_abun = c("laplace", "nuts"),
+  # vcov (laplace), grouped-RE AGHQ Laplace (initial-abundance arm), the in-tree
+  # C++ FullGradFn NUTS, and an areal icar()/car_proper() field on the initial-
+  # abundance arm via nested_laplace (BFGS over the forward marginal + CAR prior,
+  # FD-Hessian observed info; tulpaObs#51). bym2 / season-varying dynamics /
+  # temporal not yet wired (R/dyn_abun.R, R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
+  dyn_abun = c("laplace", "nested_laplace", "nuts"),
   cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla"),
   # occu_cover: non-spatial Laplace via direct optim on the exact two-state
   # marginal (v1); nested-Laplace adds a cell-level ICAR field shared across
@@ -1234,7 +1236,8 @@ tobs <- function(formula,
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
     if (family %in% c("occu", "int_occu", "dyn_occu", "abun", "removal",
-                       "distance", "occu_cover", "occu_multiscale_cover")) {
+                       "distance", "dyn_abun", "occu_cover",
+                       "occu_multiscale_cover")) {
       return("nested_laplace")
     }
     stop(sprintf(
