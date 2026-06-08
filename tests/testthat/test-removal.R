@@ -299,3 +299,99 @@ test_that("removal() NUTS RE rejects slopes / both-arm", {
          control = list(n.iter = 20L, n.warmup = 10L)),
     "single intercept random effect|laplace")
 })
+
+
+# --- areal spatial (ICAR / proper-CAR) on the abundance arm (tulpaObs#51) -----
+
+# Rook-adjacency on a side x side grid (one spatial unit per site).
+.rem_grid_adj <- function(side) {
+  ng <- side * side
+  co <- expand.grid(x = seq_len(side), y = seq_len(side))
+  adj <- matrix(0L, ng, ng)
+  for (i in seq_len(ng)) for (j in seq_len(ng))
+    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L) adj[i, j] <- 1L
+  adj
+}
+
+# Spatial removal-sampling data: log lambda_i = b0 + b1 x_i + phi_i with a
+# smoothed, demeaned ICAR-like field phi; N_i ~ Poisson(lambda_i) depleted over
+# K removal passes at detection p_i.
+.sim_spatial_removal <- function(adj, b_lambda, b_p, K = 5L, sd_phi = 0.6, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  ng <- nrow(adj)
+  phi <- as.numeric(scale(rnorm(ng)))
+  for (rep in 1:3) {
+    pn <- phi
+    for (i in seq_len(ng)) { nb <- which(adj[i, ] == 1L); pn[i] <- 0.5 * phi[i] + 0.5 * mean(phi[nb]) }
+    phi <- pn
+  }
+  phi <- sd_phi * as.numeric(scale(phi)); phi <- phi - mean(phi)
+  x_ab <- rnorm(ng); x_det <- rnorm(ng)
+  lambda <- exp(b_lambda[1] + b_lambda[2] * x_ab + phi)
+  p <- plogis(b_p[1] + b_p[2] * x_det)
+  N <- rpois(ng, lambda)
+  y <- matrix(0L, ng, K)
+  for (i in seq_len(ng)) {
+    rem <- N[i]
+    for (k in seq_len(K)) { d <- rbinom(1, rem, p[i]); y[i, k] <- d; rem <- rem - d }
+  }
+  list(y = y, data = data.frame(abund_cov1 = x_ab, det_cov1 = x_det),
+       truth = c(b_lambda, b_p), phi = phi)
+}
+
+test_that("removal() areal ICAR recovers the abundance slope + field, calibrated cov", {
+  skip_on_cran()
+  skip_if_fast()
+  # The abundance-arm field reuses the shared count-marginal nested-Laplace driver
+  # (the removal per-site marginal supplies the same moments as the N-mixture).
+  adj <- .rem_grid_adj(7L)             # 49 sites / spatial units
+  b_lambda <- c(log(8), 0.5); b_p <- c(0.2, 0.4)
+  slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+  for (s in 1:3) {
+    sim <- .sim_spatial_removal(adj, b_lambda, b_p, K = 5L, seed = 300 + s)
+    fit <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+                family = removal(), detection = ~ det_cov1, y = sim$y,
+                method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_named(fit$means, c("lambda_(Intercept)", "lambda_abund_cov1",
+                                "p_(Intercept)", "p_det_cov1"))
+      V <- vcov(fit)
+      expect_true(all(is.finite(V)))
+      expect_true(all(eigen(V, only.values = TRUE)$values > 0))      # PD
+      expect_lt(fit$sds[["lambda_(Intercept)"]], 5)                  # constrained intercept
+      expect_false(is.null(fit$spatial_field))
+    }
+    est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+    slopes <- c(slopes, est)
+    slope_ok <- c(slope_ok, abs(est - 0.5) / se < 3)
+    field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+  }
+  expect_true(all(slope_ok))                       # slope within 3 SE every seed
+  expect_lt(abs(mean(slopes) - 0.5), 0.15)         # unbiased on average
+  expect_gt(mean(field_cor), 0.6)                  # field tracks the truth
+})
+
+test_that("removal() areal spatial: proper-CAR fits; bym2 / nuts+spatial gated", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .rem_grid_adj(6L)
+  sim <- .sim_spatial_removal(adj, c(log(7), 0.4), c(0.2, 0.3), K = 4L, seed = 7)
+  fit <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
+              family = removal(), detection = ~ det_cov1, y = sim$y,
+              method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_true(all(is.finite(vcov(fit))))
+  # bym2 is not yet wired for removal -> rejected with a pointer.
+  expect_error(
+    tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = sim$data,
+         family = removal(), detection = ~ det_cov1, y = sim$y,
+         method = "nested_laplace", control = list(progress = FALSE)),
+    "not yet wired for removal|car_proper")
+  # NUTS + spatial is not wired -> rejected with a pointer.
+  expect_error(
+    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+         family = removal(), detection = ~ det_cov1, y = sim$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "nested_laplace|not yet wired")
+})

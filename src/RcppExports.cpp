@@ -1142,6 +1142,71 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_nested_laplace_removal_icar
+Rcpp::List cpp_nested_laplace_removal_icar(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector map_site_to_unit_R, Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, int n_spatial, Rcpp::NumericVector tau_grid, Rcpp::NumericVector r_grid, Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init, Rcpp::Nullable<Rcpp::NumericVector> z_init, int K_max, int max_iter, double tol, bool verbose, bool progress, int progress_every, double progress_throttle, std::string progress_file);
+RcppExport SEXP _tulpaObs_cpp_nested_laplace_removal_icar(SEXP ySEXP, SEXP site_idxSEXP, SEXP map_site_to_unit_RSEXP, SEXP X_lambda_RSEXP, SEXP X_p_RSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP n_spatialSEXP, SEXP tau_gridSEXP, SEXP r_gridSEXP, SEXP beta_lambda_initSEXP, SEXP beta_p_initSEXP, SEXP z_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP progressSEXP, SEXP progress_everySEXP, SEXP progress_throttleSEXP, SEXP progress_fileSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type map_site_to_unit_R(map_site_to_unit_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda_R(X_lambda_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p_R(X_p_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_row_ptr(adj_row_ptrSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_col_idx(adj_col_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_neighbors(n_neighborsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_spatial(n_spatialSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tau_grid(tau_gridSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type r_grid(r_gridSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_lambda_init(beta_lambda_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_p_init(beta_p_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type z_init(z_initSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type progress(progressSEXP);
+    Rcpp::traits::input_parameter< int >::type progress_every(progress_everySEXP);
+    Rcpp::traits::input_parameter< double >::type progress_throttle(progress_throttleSEXP);
+    Rcpp::traits::input_parameter< std::string >::type progress_file(progress_fileSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_nested_laplace_removal_icar(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_nested_laplace_removal_car_proper
+Rcpp::List cpp_nested_laplace_removal_car_proper(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector map_site_to_unit_R, Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, int n_spatial, Rcpp::NumericVector tau_grid, Rcpp::NumericVector rho_grid, Rcpp::NumericVector r_grid, Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init, Rcpp::Nullable<Rcpp::NumericVector> z_init, int K_max, int max_iter, double tol, bool verbose, bool progress, int progress_every, double progress_throttle, std::string progress_file);
+RcppExport SEXP _tulpaObs_cpp_nested_laplace_removal_car_proper(SEXP ySEXP, SEXP site_idxSEXP, SEXP map_site_to_unit_RSEXP, SEXP X_lambda_RSEXP, SEXP X_p_RSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP n_spatialSEXP, SEXP tau_gridSEXP, SEXP rho_gridSEXP, SEXP r_gridSEXP, SEXP beta_lambda_initSEXP, SEXP beta_p_initSEXP, SEXP z_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP progressSEXP, SEXP progress_everySEXP, SEXP progress_throttleSEXP, SEXP progress_fileSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type map_site_to_unit_R(map_site_to_unit_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda_R(X_lambda_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p_R(X_p_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_row_ptr(adj_row_ptrSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_col_idx(adj_col_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_neighbors(n_neighborsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_spatial(n_spatialSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tau_grid(tau_gridSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type rho_grid(rho_gridSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type r_grid(r_gridSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_lambda_init(beta_lambda_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_p_init(beta_p_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type z_init(z_initSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type progress(progressSEXP);
+    Rcpp::traits::input_parameter< int >::type progress_every(progress_everySEXP);
+    Rcpp::traits::input_parameter< double >::type progress_throttle(progress_throttleSEXP);
+    Rcpp::traits::input_parameter< std::string >::type progress_file(progress_fileSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_nested_laplace_removal_car_proper(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_abun_nuts_joint_logpost, 4},
@@ -1203,6 +1268,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_removal_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_removal_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_removal_nuts", (DL_FUNC) &_tulpaObs_cpp_removal_nuts, 11},
     {"_tulpaObs_cpp_removal_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_removal_grouped_oracle, 11},
+    {"_tulpaObs_cpp_nested_laplace_removal_icar", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_icar, 22},
+    {"_tulpaObs_cpp_nested_laplace_removal_car_proper", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_car_proper, 23},
     {NULL, NULL, 0}
 };
 

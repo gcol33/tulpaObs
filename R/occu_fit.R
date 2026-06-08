@@ -101,11 +101,24 @@
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
   # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "removal")) {
-    if (!is.null(spatial) || !is.null(temporal)) {
-      stop("removal() currently supports non-spatial fixed effects only; a ",
-           "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
+    if (!is.null(temporal)) {
+      stop("removal() does not yet support temporal terms; a spatial icar() / ",
+           "car_proper() field on the abundance arm fits under method = ",
+           "\"nested_laplace\". (#51)", call. = FALSE)
     }
-    if (identical(method, "nuts")) {
+    if (!is.null(spatial)) {
+      # Areal field on the abundance arm via the shared count-marginal nested-
+      # Laplace driver (tulpaObs#51); icar() / car_proper() only, NUTS+spatial
+      # not wired.
+      if (identical(method, "nuts")) {
+        stop("removal() with a spatial term fits under method = ",
+             "\"nested_laplace\" (the areal abundance field); NUTS + spatial is ",
+             "not yet wired. (#51)", call. = FALSE)
+      }
+      fit <- .tobs_fit_removal_spatial(fit_model, spatial, mixture = mixture,
+                                       K_max = K.max, max_iter = max.iter,
+                                       tol = tol, verbose = verbose)
+    } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_removal_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
         re = re,

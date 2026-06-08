@@ -1,21 +1,39 @@
-// nmix_spatial.cpp
-// Nested-Laplace entry points for the spatial Royle (2004) N-mixture model with
-// an ICAR or proper-CAR field on the abundance arm. The family-agnostic inner
-// Newton / Laplace machinery AND the outer-grid orchestration live in
-// nmix_count_spatial_driver.h (shared with removal / distance, #51); these two
-// [[Rcpp::export]] functions are thin wrappers that instantiate the shared
-// orchestration with the Royle per-site kernel.
+// removal_spatial.cpp
+// Nested-Laplace entry points for the areal-spatial removal-sampling abundance
+// model (gcol33/tulpaObs#51): an ICAR or proper-CAR field on the abundance arm
+// of the sequential-depletion removal marginal. The removal per-site marginal
+// (compute_removal_site) shares the NMixSiteResult moment interface with the
+// Royle N-mixture, so it reuses the family-agnostic nested-Laplace driver and
+// outer-grid orchestration in nmix_count_spatial_driver.h verbatim -- only the
+// per-site kernel differs. `y` is long-form per-pass removals in PASS ORDER per
+// site (pass 1 first); `site_idx` maps each pass-row to its site; `X_p` is the
+// per-pass detection design. The depletion offset (cumulative prior removals) is
+// internal to compute_removal_site, so the abundance-arm field machinery is
+// untouched. K_max must clear each site's removal TOTAL (set by the R wrapper).
 
 #include "nmix_count_spatial_driver.h"
+#include "removal_kernel.h"
 #include <Rcpp.h>
 
 // [[Rcpp::depends(RcppEigen)]]
 
+namespace {
+
+// The removal per-site marginal as a callable for the generic spatial driver.
+struct RemovalSiteKernel {
+    tulpaObs::NMixSiteResult operator()(const int* y, const double* eta_p, int J,
+                                        double eta_lambda, int K_max, double r) const {
+        return tulpaObs::compute_removal_site(y, eta_p, J, eta_lambda, K_max, r);
+    }
+};
+
+}  // namespace
+
 // [[Rcpp::export]]
-Rcpp::List cpp_nested_laplace_nmix_icar(
+Rcpp::List cpp_nested_laplace_removal_icar(
     Rcpp::IntegerVector y,
     Rcpp::IntegerVector site_idx,
-    Rcpp::IntegerVector map_site_to_unit_R,   // 1-based site -> unit map
+    Rcpp::IntegerVector map_site_to_unit_R,
     Rcpp::NumericMatrix X_lambda_R,
     Rcpp::NumericMatrix X_p_R,
     Rcpp::IntegerVector adj_row_ptr,
@@ -40,11 +58,11 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
         tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init,
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        tulpaObs::NmixSiteKernel{});
+        RemovalSiteKernel{});
 }
 
 // [[Rcpp::export]]
-Rcpp::List cpp_nested_laplace_nmix_car_proper(
+Rcpp::List cpp_nested_laplace_removal_car_proper(
     Rcpp::IntegerVector y,
     Rcpp::IntegerVector site_idx,
     Rcpp::IntegerVector map_site_to_unit_R,
@@ -73,5 +91,5 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
         tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init,
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        tulpaObs::NmixSiteKernel{});
+        RemovalSiteKernel{});
 }

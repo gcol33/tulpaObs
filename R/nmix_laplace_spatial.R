@@ -163,49 +163,10 @@ nmix_laplace_icar <- function(y,
     verbose            = isTRUE(verbose)
   )
 
-  # Normalise grid weights.
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal, "tau_grid / data")
-
-  # Per-grid hyperparameter values (theta_grid columns: tau, r).
-  tau_vec <- fit$theta_grid[, "tau"]
-  tau_mean <- sum(weights * tau_vec, na.rm = TRUE)
-  tau_sd   <- sqrt(max(0, sum(weights * tau_vec^2, na.rm = TRUE) - tau_mean^2))
-  disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
-
-  # Posterior-mean coefficients (weighted across grid points).
-  modes <- fit$modes
-  beta_lambda_mean <- as.numeric(crossprod(weights, modes[, seq_len(p_lam), drop = FALSE]))
-  beta_p_mean      <- as.numeric(crossprod(
-    weights, modes[, p_lam + seq_len(p_p), drop = FALSE]
-  ))
-  z_mean <- as.numeric(crossprod(
-    weights, modes[, p_lam + p_p + seq_len(n_spatial), drop = FALSE]
-  ))
-
-  nm_lam <- colnames(X_lambda)
-  nm_p   <- colnames(X_p)
-  if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lam))
-  if (is.null(nm_p))   nm_p   <- paste0("p_", seq_len(p_p))
-  names(beta_lambda_mean) <- nm_lam
-  names(beta_p_mean)      <- nm_p
-
-  out <- c(fit, list(
-    weights          = weights,
-    tau_mean         = tau_mean,
-    tau_sd           = tau_sd,
-    mixture          = mixture,
-    r_mean           = disp$r_mean,
-    r_sd             = disp$r_sd,
-    beta_lambda_mean = beta_lambda_mean,
-    beta_p_mean      = beta_p_mean,
-    vcov             = .nmix_grid_vcov(fit$cov_blocks, modes, weights,
-                                       p_lam, p_p, c(nm_lam, nm_p)),
-    z_mean           = z_mean,
-    n_sites          = n_sites,
-    n_obs            = n_obs,
-    prior_type       = "icar",
-    call             = match.call()
-  ))
+  out <- c(fit, .count_spatial_pack_common(fit, p_lam, p_p, n_spatial,
+                                           X_lambda, X_p, mixture),
+           list(n_sites = n_sites, n_obs = n_obs, prior_type = "icar",
+                call = match.call()))
   if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
     warning(sprintf(
       "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
@@ -356,52 +317,19 @@ nmix_laplace_car_proper <- function(y,
     verbose            = isTRUE(verbose)
   )
 
-  # Normalise grid weights (joint over the (tau, rho) grid).
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
-
-  tau_vec <- fit$theta_grid[, "tau"]
+  # rho summaries are proper-CAR-specific; the rest of the grid summarisation is
+  # shared with the ICAR path.
   rho_vec <- fit$theta_grid[, "rho"]
-  tau_mean <- sum(weights * tau_vec, na.rm = TRUE)
-  tau_sd   <- sqrt(max(0, sum(weights * tau_vec^2, na.rm = TRUE) - tau_mean^2))
-  rho_mean <- sum(weights * rho_vec, na.rm = TRUE)
-  rho_sd   <- sqrt(max(0, sum(weights * rho_vec^2, na.rm = TRUE) - rho_mean^2))
-  disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
+  common  <- .count_spatial_pack_common(fit, p_lam, p_p, n_spatial,
+                                        X_lambda, X_p, mixture)
+  w <- common$weights
+  rho_mean <- sum(w * rho_vec, na.rm = TRUE)
+  rho_sd   <- sqrt(max(0, sum(w * rho_vec^2, na.rm = TRUE) - rho_mean^2))
 
-  modes <- fit$modes
-  beta_lambda_mean <- as.numeric(crossprod(weights, modes[, seq_len(p_lam), drop = FALSE]))
-  beta_p_mean      <- as.numeric(crossprod(
-    weights, modes[, p_lam + seq_len(p_p), drop = FALSE]
-  ))
-  z_mean <- as.numeric(crossprod(
-    weights, modes[, p_lam + p_p + seq_len(n_spatial), drop = FALSE]
-  ))
-
-  nm_lam <- colnames(X_lambda)
-  nm_p   <- colnames(X_p)
-  if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lam))
-  if (is.null(nm_p))   nm_p   <- paste0("p_", seq_len(p_p))
-  names(beta_lambda_mean) <- nm_lam
-  names(beta_p_mean)      <- nm_p
-
-  out <- c(fit, list(
-    weights          = weights,
-    tau_mean         = tau_mean,
-    tau_sd           = tau_sd,
-    rho_mean         = rho_mean,
-    rho_sd           = rho_sd,
-    mixture          = mixture,
-    r_mean           = disp$r_mean,
-    r_sd             = disp$r_sd,
-    beta_lambda_mean = beta_lambda_mean,
-    beta_p_mean      = beta_p_mean,
-    vcov             = .nmix_grid_vcov(fit$cov_blocks, modes, weights,
-                                       p_lam, p_p, c(nm_lam, nm_p)),
-    z_mean           = z_mean,
-    n_sites          = n_sites,
-    n_obs            = n_obs,
-    prior_type       = "car_proper",
-    call             = match.call()
-  ))
+  out <- c(fit, common,
+           list(rho_mean = rho_mean, rho_sd = rho_sd,
+                n_sites = n_sites, n_obs = n_obs, prior_type = "car_proper",
+                call = match.call()))
   if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
     warning(sprintf(
       "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
@@ -722,6 +650,49 @@ print.nmix_spatial_fit <- function(x, ...) {
     stop("`r_grid` must be a vector of positive NB sizes.", call. = FALSE)
   }
   r_grid
+}
+
+# Shared grid-summarisation for the single-field areal count fits (ICAR /
+# proper-CAR, abundance-arm field on one spatial unit per site). The N-mixture
+# and removal nested-Laplace wrappers differ only in the C++ entry point and the
+# prior-specific hyperparameter summaries (tau here; rho added by the proper-CAR
+# wrapper); the weights, weighted-mean coefficients, weighted field, grid-
+# integrated coefficient covariance, and NB-size summary are identical. Single
+# source of truth. Returns the common block the wrappers splice into `out`.
+.count_spatial_pack_common <- function(fit, p_lam, p_p, n_spatial,
+                                       X_lambda, X_p, mixture) {
+  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal, "tau_grid / data")
+  tau_vec <- fit$theta_grid[, "tau"]
+  tau_mean <- sum(weights * tau_vec, na.rm = TRUE)
+  tau_sd   <- sqrt(max(0, sum(weights * tau_vec^2, na.rm = TRUE) - tau_mean^2))
+  disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
+
+  modes <- fit$modes
+  beta_lambda_mean <- as.numeric(crossprod(weights, modes[, seq_len(p_lam), drop = FALSE]))
+  beta_p_mean      <- as.numeric(crossprod(
+    weights, modes[, p_lam + seq_len(p_p), drop = FALSE]))
+  z_mean <- as.numeric(crossprod(
+    weights, modes[, p_lam + p_p + seq_len(n_spatial), drop = FALSE]))
+
+  nm_lam <- colnames(X_lambda); nm_p <- colnames(X_p)
+  if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lam))
+  if (is.null(nm_p))   nm_p   <- paste0("p_", seq_len(p_p))
+  names(beta_lambda_mean) <- nm_lam
+  names(beta_p_mean)      <- nm_p
+
+  list(
+    weights          = weights,
+    tau_mean         = tau_mean,
+    tau_sd           = tau_sd,
+    mixture          = mixture,
+    r_mean           = disp$r_mean,
+    r_sd             = disp$r_sd,
+    beta_lambda_mean = beta_lambda_mean,
+    beta_p_mean      = beta_p_mean,
+    vcov             = .nmix_grid_vcov(fit$cov_blocks, modes, weights,
+                                       p_lam, p_p, c(nm_lam, nm_p)),
+    z_mean           = z_mean
+  )
 }
 
 # Posterior mean / sd of the NB size r from the outer grid weights (the "r"

@@ -38,12 +38,18 @@
 
 namespace tulpaObs {
 
-// One per-site kernel pass at the current (beta_lambda, beta_p, z).
-// Returns total log-lik; fills per-site / per-visit grad and info vectors.
-// `r` is the NB size (pass +Inf for the Poisson kernel); `score_wt_lambda`
-// receives the N-coefficient of the lambda score (1 for Poisson, 1-q for NB),
-// used by the Hessian assembler's Var[N|y] rank-1 correction.
-inline double nmix_kernel_sweep_spatial(
+// Generic per-site kernel pass at the current (beta_lambda, beta_p, z), over an
+// arbitrary count-marginal site kernel `site_fn` with the
+// compute_nmix_site signature (const int* y, const double* eta_p, int J,
+// double eta_lambda, int K_max, double r) -> NMixSiteResult. The N-mixture,
+// removal, and distance families share this struct, so the spatial inner Newton
+// (gradient / observed-info Hessian / Var[N|y] rank-1 correction / CAR prior) is
+// family-agnostic -- only the per-site marginal differs. Returns total log-lik;
+// fills per-site / per-visit grad and info vectors. `r` is the NB size (+Inf for
+// Poisson); `score_wt_lambda` receives the N-coefficient of the lambda score
+// (1 for Poisson, 1-q for NB) for the Hessian assembler's rank-1 correction.
+template <class SiteFn>
+inline double count_kernel_sweep_spatial(
     const std::vector<std::vector<int>>& obs_by_site,
     const Rcpp::IntegerVector& y_R,
     const Eigen::VectorXd& eta_lambda,
@@ -56,7 +62,8 @@ inline double nmix_kernel_sweep_spatial(
     Eigen::VectorXd& mean_N,          // out [n_sites]
     Eigen::VectorXd& var_N,           // out [n_sites]
     Eigen::VectorXd& boundary_weight, // out [n_sites]
-    Eigen::VectorXd& score_wt_lambda  // out [n_sites]
+    Eigen::VectorXd& score_wt_lambda, // out [n_sites]
+    SiteFn site_fn
 ) {
     const int n_sites = static_cast<int>(obs_by_site.size());
     double log_lik = 0.0;
@@ -78,7 +85,7 @@ inline double nmix_kernel_sweep_spatial(
             y_site[j]     = y_R[idx[j]];
             eta_p_site[j] = eta_p_long(idx[j]);
         }
-        NMixSiteResult res = compute_nmix_site(
+        NMixSiteResult res = site_fn(
             y_site.data(), eta_p_site.data(), J,
             eta_lambda(s), K_max, r
         );
@@ -97,14 +104,15 @@ inline double nmix_kernel_sweep_spatial(
     return log_lik;
 }
 
-// Cheap log-lik-only sweep at trial points (line search). `r` is the NB size
-// (pass +Inf for Poisson).
-inline double nmix_kernel_log_lik_only_spatial(
+// Generic cheap log-lik-only sweep at trial points (line search).
+template <class SiteFn>
+inline double count_kernel_log_lik_only_spatial(
     const std::vector<std::vector<int>>& obs_by_site,
     const Rcpp::IntegerVector& y_R,
     const Eigen::VectorXd& eta_lambda,
     const Eigen::VectorXd& eta_p_long,
-    int K_max, double r
+    int K_max, double r,
+    SiteFn site_fn
 ) {
     double log_lik = 0.0;
     const int n_sites = static_cast<int>(obs_by_site.size());
@@ -118,7 +126,7 @@ inline double nmix_kernel_log_lik_only_spatial(
             y_site[j]     = y_R[idx[j]];
             eta_p_site[j] = eta_p_long(idx[j]);
         }
-        NMixSiteResult res = compute_nmix_site(
+        NMixSiteResult res = site_fn(
             y_site.data(), eta_p_site.data(), J,
             eta_lambda(s), K_max, r
         );
@@ -126,6 +134,49 @@ inline double nmix_kernel_log_lik_only_spatial(
         log_lik += res.log_lik;
     }
     return log_lik;
+}
+
+// The Royle N-mixture site kernel as a callable, for the generic sweeps above.
+struct NmixSiteKernel {
+    NMixSiteResult operator()(const int* y, const double* eta_p, int J,
+                              double eta_lambda, int K_max, double r) const {
+        return compute_nmix_site(y, eta_p, J, eta_lambda, K_max, r);
+    }
+};
+
+// N-mixture sweeps: the original entry points, now thin wrappers over the
+// generic sweeps with the Royle kernel (single source of truth). The bym2 /
+// SPDE drivers and the ICAR / proper-CAR driver all call these.
+inline double nmix_kernel_sweep_spatial(
+    const std::vector<std::vector<int>>& obs_by_site,
+    const Rcpp::IntegerVector& y_R,
+    const Eigen::VectorXd& eta_lambda,
+    const Eigen::VectorXd& eta_p_long,
+    int K_max, double r,
+    Eigen::VectorXd& grad_eta_lam,
+    Eigen::VectorXd& info_eta_lam,
+    Eigen::VectorXd& grad_eta_p,
+    Eigen::VectorXd& info_eta_p,
+    Eigen::VectorXd& mean_N,
+    Eigen::VectorXd& var_N,
+    Eigen::VectorXd& boundary_weight,
+    Eigen::VectorXd& score_wt_lambda
+) {
+    return count_kernel_sweep_spatial(
+        obs_by_site, y_R, eta_lambda, eta_p_long, K_max, r,
+        grad_eta_lam, info_eta_lam, grad_eta_p, info_eta_p,
+        mean_N, var_N, boundary_weight, score_wt_lambda, NmixSiteKernel{});
+}
+
+inline double nmix_kernel_log_lik_only_spatial(
+    const std::vector<std::vector<int>>& obs_by_site,
+    const Rcpp::IntegerVector& y_R,
+    const Eigen::VectorXd& eta_lambda,
+    const Eigen::VectorXd& eta_p_long,
+    int K_max, double r
+) {
+    return count_kernel_log_lik_only_spatial(
+        obs_by_site, y_R, eta_lambda, eta_p_long, K_max, r, NmixSiteKernel{});
 }
 
 // Compute eta_lambda[s] = X_lambda[s,] . beta_lambda + z[ map[s] ].

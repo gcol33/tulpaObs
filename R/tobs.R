@@ -1039,10 +1039,11 @@ tobs <- function(formula,
   ms_abun  = c("laplace", "nested_laplace", "nuts"),
   # removal: sequential-depletion removal sampling. Non-spatial closed-form
   # marginal Laplace (Poisson or negbin; the depleting-binomial product summed
-  # over latent N) and the in-tree C++ FullGradFn NUTS over the same marginal
-  # (R/removal.R, R/removal_nuts.R, src/removal_*.cpp). Spatial / RE not yet
-  # wired (gcol33/tulpaObs#39).
-  removal  = c("laplace", "nuts"),
+  # over latent N), grouped-RE AGHQ Laplace, the in-tree C++ FullGradFn NUTS over
+  # the same marginal, and an areal icar()/car_proper() field on the abundance arm
+  # via nested_laplace (the shared count-marginal spatial driver, tulpaObs#51).
+  # bym2 / spde / temporal not yet wired (R/removal.R, R/removal_spatial.R).
+  removal  = c("laplace", "nested_laplace", "nuts"),
   # distance: binned distance sampling (half-normal / hazard-rate key, line /
   # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin;
   # the multinomial-over-N detection cells summed over latent N, detection
@@ -1231,7 +1232,7 @@ tobs <- function(formula,
   # before dispatch, so reaching here with an unsupported family is an internal
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
-    if (family %in% c("occu", "int_occu", "dyn_occu", "abun",
+    if (family %in% c("occu", "int_occu", "dyn_occu", "abun", "removal",
                        "occu_cover", "occu_multiscale_cover")) {
       return("nested_laplace")
     }

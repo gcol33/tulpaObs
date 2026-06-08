@@ -237,3 +237,11 @@ cpp_removal_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, 
     .Call(`_tulpaObs_cpp_removal_grouped_oracle`, arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb)
 }
 
+cpp_nested_laplace_removal_icar <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nested_laplace_removal_icar`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+}
+
+cpp_nested_laplace_removal_car_proper <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nested_laplace_removal_car_proper`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+}
+

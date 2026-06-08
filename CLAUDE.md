@@ -153,6 +153,16 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   `K_max`. SHARES the count-marginal Laplace driver (`src/marginal_count_laplace.h`)
   + NUTS (`src/marginal_count_nuts.h`) with `abun`; per-site `src/removal_kernel.h`
   over shared `accumulate_count_moments`/`fill_nb_dispersion` (`src/nmix_kernel.h`).
+  Areal spatial (icar/car_proper) on the abundance arm via `nested_laplace`
+  (tulpaObs#51): the removal per-site marginal (`compute_removal_site`) returns the
+  same `NMixSiteResult` moments as the Royle kernel, so it reuses the family-
+  agnostic nested-Laplace inner Newton + outer-grid orchestration
+  (`src/nmix_count_spatial_driver.h`, templated on the site kernel; extracted from
+  `nmix_spatial.cpp`, byte-identical for nmix) via `cpp_nested_laplace_removal_{icar,
+  car_proper}` (`src/removal_spatial.cpp`) and the shared R packer
+  `.count_spatial_pack_common` (`R/removal_spatial.R`, `.tobs_fit_removal_spatial`);
+  one spatial unit per site, K_max = per-site removal total. bym2/spde/temporal +
+  NUTS+spatial gated.
 - `distance` (tulpaObs#38): latent N in covered region, per-bin detected counts
   multinomial over `(bin 1..B, undetected)`, `pi_b = int_bin g(x;sigma) f(x) dx`
   (half-normal / hazard-rate key, line/point transect density `f`), bin integrals
@@ -348,7 +358,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | Community N-mixture | Yes | Yes | `ms_abun()` (msNMix); per-species coef RE, in-tree C++ Laplace-EM (`nmix_laplace_re`) -> `NMixCommunityOracle` via AGHQ, Schur SEs; Pois + negbin. NUTS (#14, `src/ms_abun_nuts.cpp`). `test-ms-abun.R`/`-nuts.R`. See below |
 | Community N-mixture + areal spatial | n-L | — | `ms_abun()`+icar/bym2/car_proper, `nested_laplace` (sfMsNMix; #12); shared field on log lambda + per-species RE; nested Laplace-EM (`nmix_community_spatial.cpp`); Pois/NB; `test-ms-abun-spatial.R`. NUTS pending |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
-| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm (dim<=3, one grouping factor) via the shared count-model AGHQ path (`RemovalGroupedOracle` over `CountGroupedOracle`, `test-removal.R`); spatial pending |
+| Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts,_spatial}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm via the shared count-model AGHQ path (`RemovalGroupedOracle`). Areal icar()/car_proper() field on the abundance arm via `nested_laplace` (#51), reusing the templated count-spatial driver (`nmix_count_spatial_driver.h`); bym2/spde/temporal + NUTS+spatial gated |
 | Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated; spatial pending |
 | False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51). Laplace fits a site-level grouped RE on the psi OR p11 (detection) arm (dim<=3, one grouping factor) via the pure-R `make_site` AGHQ path (no native oracle, branches on arm); both-arms-at-once rejected; spatial pending |
 | Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51). Laplace fits a site-level grouped RE on the initial-abundance arm (one grouping factor, dim<=3) via the backward-`c` precompute + `make_site` AGHQ path; detection-arm RE gated, spatial pending |
