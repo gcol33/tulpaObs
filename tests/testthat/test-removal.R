@@ -372,6 +372,36 @@ test_that("removal() areal ICAR recovers the abundance slope + field, calibrated
   expect_gt(mean(field_cor), 0.6)                  # field tracks the truth
 })
 
+test_that("removal() areal-spatial coefficient SEs are calibrated", {
+  skip_on_cran()
+  skip_if_fast()
+  # The areal fit reuses the shared count-spatial assembler, whose cross-arm
+  # rank-1 (Var[N|y]) correction uses the binomial detection weight. Removal's
+  # depleting binomial differs, so confirm the (lambda, p) coefficient SEs are
+  # not anti-conservative: on field-free data the icar fit's SEs must match the
+  # kernel-correct non-spatial removal SEs (pass 1 dominates the detection info,
+  # so the binomial cross-arm is calibrated; coverage is at/above nominal).
+  adj <- .rem_grid_adj(8L)             # 64 sites
+  set.seed(101)
+  ng <- nrow(adj); x_ab <- rnorm(ng); x_det <- rnorm(ng)
+  lambda <- exp(log(10) + 0.5 * x_ab); p <- plogis(0.2 + 0.4 * x_det)  # no field
+  N <- rpois(ng, lambda); y <- matrix(0L, ng, 5L)
+  for (i in seq_len(ng)) {
+    rem <- N[i]; for (k in 1:5) { d <- rbinom(1, rem, p[i]); y[i, k] <- d; rem <- rem - d }
+  }
+  dat <- data.frame(abund_cov1 = x_ab, det_cov1 = x_det)
+  fns <- tobs(formula = ~ abund_cov1, data = dat, family = removal(),
+              detection = ~ det_cov1, y = y, method = "laplace",
+              control = list(progress = FALSE, verbose = FALSE))
+  fsp <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = dat,
+              family = removal(), detection = ~ det_cov1, y = y,
+              method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
+  ratio <- fsp$sds[names(fns$sds)] / fns$sds
+  # SEs match within 15% (the field adds a small extra d.o.f.); crucially the
+  # spatial SEs are not materially smaller than the correct non-spatial ones.
+  expect_true(all(ratio > 0.85 & ratio < 1.2))
+})
+
 test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", {
   skip_on_cran()
   skip_if_fast()
