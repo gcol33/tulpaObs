@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.24 (2026-06-08)
+
+* feat(spatial): opt-in mode-centred central-composite design (CCD) for the outer
+  field-hyperparameter integration of the in-package spatial / community fitters
+  (#60). `control$integration = "ccd"` mode-finds the field hyperparameters
+  (`tau`, `rho`, `sigma`, `range`) and places a CCD at the marginal-likelihood
+  mode, scaled by the outer posterior covariance, reusing the engine's exported
+  CCD primitives (`tulpa::ccd_grid()` / `ccd_to_theta()` / `ccd_weights()`) and
+  surfacing the outer PSIS Pareto-k (`fit$spatial_pareto_k`). It declines to the
+  fixed tensor grid when the outer curvature is ill-conditioned (a weakly-
+  identified axis) and for a single positive hyperparameter, where the 1D grid is
+  already cheap. The default `control$integration = "grid"` keeps the fixed tensor
+  grid: each outer node is a full inner Laplace/EM solve, so the mode-find adds
+  cost without a node-count saving on these already-coarse grids, and the CCD is
+  most useful when a multi-axis hyperparameter posterior is well identified.
+  Wired across the areal-BFGS families (`distance()`, `dyn_abun()`, `fp_occu()`),
+  the community N-mixture Newton areal path, and the SPDE community path.
+* Require `tulpa (>= 0.0.25)` and update the Remotes pin (the CCD primitives and
+  the mode-centred-CCD machinery ship in tulpa 0.0.25).
+
 ## 0.0.23 (2026-06-08)
 
 * **Breaking:** `control$trend` is removed. A spatially-varying trend is model
