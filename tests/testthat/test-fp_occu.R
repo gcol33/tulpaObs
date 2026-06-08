@@ -434,14 +434,17 @@ test_that("fp_occu() areal ICAR recovers the occupancy slope + field", {
   expect_gt(mean(field_cor), 0.3)
 })
 
-test_that("fp_occu() areal spatial: bym2 / nuts+spatial gated", {
-  adj <- .fp_grid_adj(4L)
-  s <- .sim_fp_spatial(adj, J = 6L, seed = 3)
-  expect_error(
-    tobs(formula = ~ x + bym2(graph = adj), data = s$data, family = fp_occu(),
-         detection = ~ 1, y = s$y, method = "nested_laplace",
-         control = list(progress = FALSE)),
-    "not yet wired for fp_occu|car_proper")
+test_that("fp_occu() areal spatial: bym2 fits; nuts+spatial gated", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .fp_grid_adj(5L)
+  s <- .sim_fp_spatial(adj, J = 10L, seed = 3)
+  fit <- tobs(formula = ~ x + bym2(graph = adj), data = s$data, family = fp_occu(),
+              detection = ~ 1, y = s$y, method = "nested_laplace",
+              control = list(progress = FALSE, verbose = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_true(all(is.finite(vcov(fit))))
+  expect_false(is.null(fit$spatial_field))
   expect_error(
     tobs(formula = ~ x + icar(graph = adj), data = s$data, family = fp_occu(),
          detection = ~ 1, y = s$y, method = "nuts",

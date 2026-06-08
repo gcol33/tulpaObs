@@ -16,35 +16,31 @@
 .tobs_fit_fp_occu_spatial <- function(model, spatial, max_iter = 200L,
                                       tol = 1e-8, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "fp_occu occupancy spatial")
-  sp <- .tobs_areal_setup(spatial, model$n_sites, "fp_occu")
   map <- seq_len(model$n_sites)
+  field <- .tobs_areal_field_spec(spatial, model$n_sites, "fp_occu", map)
 
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
   p_psi <- ncol(X_psi); p_p11 <- ncol(X_p11); p_p10 <- ncol(X_p10); p_b <- ncol(X_b)
   y_long <- as.integer(model$y_long); site_idx <- as.integer(model$site_idx)
-  N <- model$n_sites
 
   off <- cumsum(c(0L, p_psi, p_p11, p_p10, p_b))
   i_psi <- off[1] + seq_len(p_psi); i_p11 <- off[2] + seq_len(p_p11)
   i_p10 <- off[3] + seq_len(p_p10); i_b   <- off[4] + seq_len(p_b)
-  n_fixed <- off[5]; z_idx <- n_fixed + seq_len(sp$n_sp)
+  n_fixed <- off[5]
 
-  eval <- function(theta) {
-    eta_psi <- as.numeric(X_psi %*% theta[i_psi]) + theta[z_idx][map]
+  eval <- function(theta_fix, offset) {
+    eta_psi <- as.numeric(X_psi %*% theta_fix[i_psi]) + offset
     out <- cpp_fp_occu_total_log_lik(
       y_long, site_idx, eta_psi,
-      as.numeric(X_p11 %*% theta[i_p11]), as.numeric(X_p10 %*% theta[i_p10]),
-      as.numeric(X_b %*% theta[i_b]))
-    g <- numeric(n_fixed + sp$n_sp)
+      as.numeric(X_p11 %*% theta_fix[i_p11]), as.numeric(X_p10 %*% theta_fix[i_p10]),
+      as.numeric(X_b %*% theta_fix[i_b]))
+    g <- numeric(n_fixed)
     g[i_psi] <- as.numeric(crossprod(X_psi, out$grad_eta_psi))
     g[i_p11] <- as.numeric(crossprod(X_p11, out$grad_eta_p11))
     g[i_p10] <- as.numeric(crossprod(X_p10, out$grad_eta_p10))
     g[i_b]   <- as.numeric(crossprod(X_b,   out$grad_eta_b))
-    gz <- numeric(sp$n_sp)
-    for (s in seq_len(N)) gz[map[s]] <- gz[map[s]] + out$grad_eta_psi[s]
-    g[z_idx] <- gz
-    list(log_lik = out$log_lik, grad = g)
+    list(log_lik = out$log_lik, grad_fixed = g, grad_eta = out$grad_eta_psi)
   }
 
   warm <- tryCatch(
@@ -58,10 +54,8 @@
   else c(0, rep(0, p_psi - 1L), rep(0, p_p11),
          stats::qlogis(0.05), rep(0, p_p10 - 1L), rep(0, p_b))
 
-  res <- .tobs_areal_bfgs_fit(eval, n_fixed, sp$n_sp, sp$adj, sp$kind,
-                              sp$tau_grid, sp$rho_grid, theta0_fix,
-                              max_iter = max_iter, tol = tol,
-                              label = "fp-occu-spatial")
+  res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
+                              max_iter = max_iter, tol = tol, label = "fp-occu-spatial")
   if (!isTRUE(res$ok))
     stop("fp_occu() areal spatial fit produced no usable grid point.", call. = FALSE)
 

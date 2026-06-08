@@ -400,14 +400,17 @@ test_that("dyn_abun() areal ICAR recovers the initial-abundance slope + field", 
   expect_gt(mean(field_cor), 0.6)
 })
 
-test_that("dyn_abun() areal spatial: bym2 / nuts+spatial gated", {
-  s <- .sim_da_spatial(.da_grid_adj(4L), Tn = 3L, J = 2L, seed = 3)
+test_that("dyn_abun() areal spatial: bym2 fits; nuts+spatial gated", {
+  skip_on_cran()
+  skip_if_fast()
   adj <- .da_grid_adj(4L)
-  expect_error(
-    tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = s$data,
-         family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y,
-         method = "nested_laplace", control = list(progress = FALSE)),
-    "not yet wired for dyn_abun|car_proper")
+  s <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 3)
+  fit <- tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = s$data,
+              family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y,
+              method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_true(all(is.finite(vcov(fit))))
+  expect_false(is.null(fit$spatial_field))
   expect_error(
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = s$data,
          family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y, method = "nuts",
