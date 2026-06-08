@@ -519,65 +519,10 @@ nmix_laplace_bym2 <- function(y,
     verbose            = isTRUE(verbose)
   )
 
-  # Normalise grid weights (joint over (sigma, rho)).
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
-
-  sigma_vec <- fit$theta_grid[, "sigma"]
-  rho_vec   <- fit$theta_grid[, "rho"]
-  sigma_mean <- sum(weights * sigma_vec, na.rm = TRUE)
-  sigma_sd   <- sqrt(max(0, sum(weights * sigma_vec^2, na.rm = TRUE) - sigma_mean^2))
-  rho_mean   <- sum(weights * rho_vec, na.rm = TRUE)
-  rho_sd     <- sqrt(max(0, sum(weights * rho_vec^2, na.rm = TRUE) - rho_mean^2))
-  disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
-
-  modes <- fit$modes
-  beta_lambda_mean <- as.numeric(crossprod(weights, modes[, seq_len(p_lam), drop = FALSE]))
-  beta_p_mean      <- as.numeric(crossprod(
-    weights, modes[, p_lam + seq_len(p_p), drop = FALSE]
-  ))
-  v_idx <- p_lam + p_p + seq_len(n_spatial)
-  w_idx <- p_lam + p_p + n_spatial + seq_len(n_spatial)
-  v_mean <- as.numeric(crossprod(weights, modes[, v_idx, drop = FALSE]))
-  w_mean <- as.numeric(crossprod(weights, modes[, w_idx, drop = FALSE]))
-
-  # Weighted-mean total offset phi = sum_k w_k * sigma_k * (a_k v_k + b_k w_k).
-  phi_grid <- matrix(0, nrow = nrow(modes), ncol = n_spatial)
-  for (k in seq_len(nrow(modes))) {
-    sg <- sigma_vec[k]; rg <- rho_vec[k]
-    a_k <- sg * sqrt(rg / scale_factor)
-    b_k <- sg * sqrt(1 - rg)
-    phi_grid[k, ] <- a_k * modes[k, v_idx] + b_k * modes[k, w_idx]
-  }
-  phi_mean <- as.numeric(crossprod(weights, phi_grid))
-
-  nm_lam <- colnames(X_lambda)
-  nm_p   <- colnames(X_p)
-  if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lam))
-  if (is.null(nm_p))   nm_p   <- paste0("p_", seq_len(p_p))
-  names(beta_lambda_mean) <- nm_lam
-  names(beta_p_mean)      <- nm_p
-
-  out <- c(fit, list(
-    weights          = weights,
-    sigma_mean       = sigma_mean,
-    sigma_sd         = sigma_sd,
-    rho_mean         = rho_mean,
-    rho_sd           = rho_sd,
-    mixture          = mixture,
-    r_mean           = disp$r_mean,
-    r_sd             = disp$r_sd,
-    beta_lambda_mean = beta_lambda_mean,
-    beta_p_mean      = beta_p_mean,
-    vcov             = .nmix_grid_vcov(fit$cov_blocks, modes, weights,
-                                       p_lam, p_p, c(nm_lam, nm_p)),
-    v_mean           = v_mean,
-    w_mean           = w_mean,
-    phi_mean         = phi_mean,
-    n_sites          = n_sites,
-    n_obs            = n_obs,
-    prior_type       = "bym2",
-    call             = match.call()
-  ))
+  out <- c(fit, .count_spatial_pack_bym2_common(fit, p_lam, p_p, n_spatial,
+                                                X_lambda, X_p, mixture, scale_factor),
+           list(n_sites = n_sites, n_obs = n_obs, prior_type = "bym2",
+                call = match.call()))
   if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
     warning(sprintf(
       "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
@@ -693,6 +638,53 @@ print.nmix_spatial_fit <- function(x, ...) {
                                        p_lam, p_p, c(nm_lam, nm_p)),
     z_mean           = z_mean
   )
+}
+
+# Shared grid-summarisation for the BYM2 areal count fits (two-field v / w on the
+# abundance arm). Like .count_spatial_pack_common but with the BYM2-specific
+# sigma / rho summaries, the per-component (v, w) weighted means, and the total
+# offset phi = sigma (sqrt(rho/scale) v + sqrt(1-rho) w) integrated over the grid.
+# Single source of truth for the N-mixture and removal BYM2 wrappers.
+.count_spatial_pack_bym2_common <- function(fit, p_lam, p_p, n_spatial,
+                                            X_lambda, X_p, mixture, scale_factor) {
+  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
+  sigma_vec <- fit$theta_grid[, "sigma"]; rho_vec <- fit$theta_grid[, "rho"]
+  sigma_mean <- sum(weights * sigma_vec, na.rm = TRUE)
+  sigma_sd   <- sqrt(max(0, sum(weights * sigma_vec^2, na.rm = TRUE) - sigma_mean^2))
+  rho_mean   <- sum(weights * rho_vec, na.rm = TRUE)
+  rho_sd     <- sqrt(max(0, sum(weights * rho_vec^2, na.rm = TRUE) - rho_mean^2))
+  disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
+
+  modes <- fit$modes
+  beta_lambda_mean <- as.numeric(crossprod(weights, modes[, seq_len(p_lam), drop = FALSE]))
+  beta_p_mean      <- as.numeric(crossprod(
+    weights, modes[, p_lam + seq_len(p_p), drop = FALSE]))
+  v_idx <- p_lam + p_p + seq_len(n_spatial)
+  w_idx <- p_lam + p_p + n_spatial + seq_len(n_spatial)
+  v_mean <- as.numeric(crossprod(weights, modes[, v_idx, drop = FALSE]))
+  w_mean <- as.numeric(crossprod(weights, modes[, w_idx, drop = FALSE]))
+
+  phi_grid <- matrix(0, nrow = nrow(modes), ncol = n_spatial)
+  for (k in seq_len(nrow(modes))) {
+    sg <- sigma_vec[k]; rg <- rho_vec[k]
+    phi_grid[k, ] <- (sg * sqrt(rg / scale_factor)) * modes[k, v_idx] +
+                     (sg * sqrt(1 - rg)) * modes[k, w_idx]
+  }
+  phi_mean <- as.numeric(crossprod(weights, phi_grid))
+
+  nm_lam <- colnames(X_lambda); nm_p <- colnames(X_p)
+  if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lam))
+  if (is.null(nm_p))   nm_p   <- paste0("p_", seq_len(p_p))
+  names(beta_lambda_mean) <- nm_lam; names(beta_p_mean) <- nm_p
+
+  list(
+    weights = weights, sigma_mean = sigma_mean, sigma_sd = sigma_sd,
+    rho_mean = rho_mean, rho_sd = rho_sd, mixture = mixture,
+    r_mean = disp$r_mean, r_sd = disp$r_sd,
+    beta_lambda_mean = beta_lambda_mean, beta_p_mean = beta_p_mean,
+    vcov = .nmix_grid_vcov(fit$cov_blocks, modes, weights, p_lam, p_p,
+                           c(nm_lam, nm_p)),
+    v_mean = v_mean, w_mean = w_mean, phi_mean = phi_mean)
 }
 
 # Posterior mean / sd of the NB size r from the outer grid weights (the "r"

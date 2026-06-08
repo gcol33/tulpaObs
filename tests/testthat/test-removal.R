@@ -372,22 +372,21 @@ test_that("removal() areal ICAR recovers the abundance slope + field, calibrated
   expect_gt(mean(field_cor), 0.6)                  # field tracks the truth
 })
 
-test_that("removal() areal spatial: proper-CAR fits; bym2 / nuts+spatial gated", {
+test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", {
   skip_on_cran()
   skip_if_fast()
   adj <- .rem_grid_adj(6L)
   sim <- .sim_spatial_removal(adj, c(log(7), 0.4), c(0.2, 0.3), K = 4L, seed = 7)
-  fit <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
-              family = removal(), detection = ~ det_cov1, y = sim$y,
-              method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
-  expect_identical(fit$method, "nested_laplace")
-  expect_true(all(is.finite(vcov(fit))))
-  # bym2 is not yet wired for removal -> rejected with a pointer.
-  expect_error(
-    tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = sim$data,
-         family = removal(), detection = ~ det_cov1, y = sim$y,
-         method = "nested_laplace", control = list(progress = FALSE)),
-    "not yet wired for removal|car_proper")
+  for (term in c("car_proper", "bym2")) {
+    f <- if (term == "car_proper") (~ abund_cov1 + car_proper(graph = adj)) else
+                                   (~ abund_cov1 + bym2(graph = adj))
+    fit <- tobs(formula = f, data = sim$data, family = removal(),
+                detection = ~ det_cov1, y = sim$y, method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    expect_identical(fit$method, "nested_laplace")
+    expect_true(all(is.finite(vcov(fit))))
+    expect_false(is.null(fit$spatial_field))
+  }
   # NUTS + spatial is not wired -> rejected with a pointer.
   expect_error(
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,

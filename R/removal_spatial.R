@@ -154,22 +154,68 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
   out
 }
 
+#' Areal BYM2 removal-sampling abundance via nested Laplace (internal)
+#' @keywords internal
+#' @noRd
+removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
+                                 adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
+                                 sigma_grid = NULL, rho_grid = NULL,
+                                 scale_factor = 1, mixture = c("P", "NB"),
+                                 r_grid = NULL, beta_lambda_init = NULL,
+                                 beta_p_init = NULL, v_init = NULL, w_init = NULL,
+                                 K_max = NULL, max_iter = 100L, tol = 1e-6,
+                                 verbose = FALSE) {
+  mixture <- match.arg(mixture)
+  y <- as.integer(y); site_idx <- as.integer(site_idx)
+  map_site_to_unit <- as.integer(map_site_to_unit)
+  pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
+                              adj_row_ptr, n_neighbors, n_spatial, mixture,
+                              beta_lambda_init, beta_p_init, K_max, r_grid)
+  if (is.null(sigma_grid)) sigma_grid <- exp(seq(log(0.2), log(3), length.out = 5L))
+  if (is.null(rho_grid))   rho_grid <- c(0.05, 0.3, 0.5, 0.7, 0.95)
+  if (scale_factor <= 0) stop("scale_factor must be positive.", call. = FALSE)
+
+  fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_bym2,
+    y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
+    X_lambda_R = X_lambda, X_p_R = X_p,
+    adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
+    n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial),
+    sigma_grid = as.numeric(sigma_grid), rho_grid = as.numeric(rho_grid),
+    r_grid = as.numeric(pp$r_grid), scale_factor = as.numeric(scale_factor),
+    beta_lambda_init = as.numeric(pp$beta_lambda_init),
+    beta_p_init = as.numeric(pp$beta_p_init),
+    v_init = if (is.null(v_init)) NULL else as.numeric(v_init),
+    w_init = if (is.null(w_init)) NULL else as.numeric(w_init),
+    K_max = pp$K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
+    verbose = isTRUE(verbose))
+
+  out <- c(fit, .count_spatial_pack_bym2_common(fit, pp$p_lam, pp$p_p, n_spatial,
+                                                X_lambda, X_p, mixture, scale_factor),
+           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "bym2",
+                call = match.call()))
+  if (any(out$boundary_max > 1e-4, na.rm = TRUE))
+    warning(sprintf("Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
+                    max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
+  class(out) <- c("nmix_spatial_fit", "list")
+  out
+}
+
 # Dispatch an areal-spatial removal fit from .tobs_fit_model. icar() / car_proper()
-# only; bym2() and the continuous spde() field are not yet wired for removal, and
-# a weighted (SVC) field is rejected. One spatial unit per site (the field enters
-# log lambda). The packed fit reuses build_nmix_fit (the removal coefficient
+# / bym2() on one spatial unit per site (the field enters log lambda); the
+# continuous spde() field is not yet wired for removal, and a weighted (SVC) field
+# is rejected. The packed fit reuses build_nmix_fit (the removal coefficient
 # layout is the shared (lambda, p) block).
 .tobs_fit_removal_spatial <- function(model, spatial, mixture = "P", K_max = NULL,
                                       max_iter = 100L, tol = 1e-6, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "removal abundance spatial")
-  if (spatial$type %in% c("bym2", "spde", "gp", "multiscale_gp")) {
-    stop(sprintf(paste0("removal() areal spatial supports icar() and car_proper() ",
-                        "under method = \"nested_laplace\"; the '%s' field is not ",
-                        "yet wired for removal. (tulpaObs#51)"), spatial$type),
+  if (spatial$type %in% c("spde", "gp", "multiscale_gp")) {
+    stop(sprintf(paste0("removal() areal spatial supports icar() / car_proper() / ",
+                        "bym2() under method = \"nested_laplace\"; the '%s' field ",
+                        "is not yet wired for removal. (tulpaObs#51)"), spatial$type),
          call. = FALSE)
   }
-  if (!spatial$type %in% c("icar", "car_proper")) {
-    stop(sprintf("removal() areal spatial supports icar() / car_proper(); got '%s'.",
+  if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
+    stop(sprintf("removal() areal spatial supports icar() / car_proper() / bym2(); got '%s'.",
                  spatial$type), call. = FALSE)
   }
   n_sites <- model$n_sites
@@ -196,6 +242,9 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
     tol = as.numeric(tol), verbose = isTRUE(verbose))
   raw <- switch(spatial$type,
     icar       = do.call(removal_laplace_icar, common),
-    car_proper = do.call(removal_laplace_car_proper, common))
+    car_proper = do.call(removal_laplace_car_proper, common),
+    bym2       = do.call(removal_laplace_bym2, c(common,
+                   list(scale_factor = spatial$scale_factor %||%
+                          compute_bym2_scale(spatial$graph)))))
   build_nmix_fit(raw, model, spatial = spatial)
 }
