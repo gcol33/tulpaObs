@@ -15,7 +15,7 @@
 
 .tobs_fit_dyn_abun_spatial <- function(model, spatial, mixture = "poisson",
                                        K_max = NULL, max_iter = 300L, tol = 1e-8,
-                                       verbose = TRUE) {
+                                       verbose = TRUE, integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
   map <- seq_len(model$n_sites)
   field <- .tobs_areal_field_spec(spatial, model$n_sites, "dyn_abun", map)
@@ -58,7 +58,8 @@
                 else numeric(n_fixed)
 
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
-                              max_iter = max_iter, tol = tol, label = "dyn-abun-spatial")
+                              max_iter = max_iter, tol = tol, label = "dyn-abun-spatial",
+                              integration = integration)
   if (!isTRUE(res$ok))
     stop("dyn_abun() areal spatial fit produced no usable grid point.", call. = FALSE)
 
@@ -80,5 +81,7 @@
   fit <- build_dyn_abun_fit(raw, model)
   fit$method <- "nested_laplace"
   fit$spatial_field <- res$field_mean
+  fit$spatial_integration <- res$integration
+  fit$spatial_pareto_k <- res$pareto_k
   fit
 }

@@ -141,6 +141,17 @@
 #'     same fit object; `"newton"` is Poisson- and areal-only, and markedly
 #'     slower (an FD-gradient profile loop per grid node) -- an accuracy /
 #'     validation alternative, not the production default.
+#'   * `integration` — how the in-package spatial / community nested-Laplace
+#'     fitters integrate the outer field hyperparameters (`tau`, `rho`, `sigma`,
+#'     `range`): `"grid"` (default) a fixed tensor grid, or `"ccd"` a mode-centred
+#'     central-composite design placed at the marginal-likelihood mode and scaled
+#'     by the outer posterior covariance, with the outer PSIS Pareto-k reported on
+#'     `fit$spatial_pareto_k`. CCD declines to the grid when the outer curvature
+#'     is ill-conditioned (a weakly-identified axis) or for a single positive
+#'     hyperparameter; `fit$spatial_integration` records which ran. Each outer
+#'     node is a full inner solve, so `"ccd"` adds a mode-find without a node
+#'     saving on these coarse grids -- it is opt-in, most useful when a
+#'     multi-axis hyperparameter posterior is well identified.
 #'   Stochastic-correction controls (`"laplace_gibbs"` / `"laplace_mi"`):
 #'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
 #'   on `$seed`).
@@ -698,6 +709,7 @@ tobs <- function(formula,
       inner_solver = control[["inner_solver"]] %||% "em",
       n_quad       = as.integer(control[["n.quad"]] %||% 1L),
       lkj_eta      = control[["re.lkj"]] %||% 1.5,
+      integration  = control[["integration"]] %||% "grid",
       verbose      = isTRUE(control[["verbose"]])))
   }
 
@@ -1144,7 +1156,7 @@ tobs <- function(formula,
 .tobs_control_groups <- list(
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
                  "re.aghq", "n.quad", "re.lkj", "optimizer", "hessian",
-                 "inner_solver"),
+                 "inner_solver", "integration"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",

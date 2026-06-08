@@ -30,6 +30,7 @@
   re.lkj = 1.5,
   K.max = NULL,
   mixture = "poisson",
+  integration = c("grid", "ccd"),
   verbose = TRUE,
   ...
 )

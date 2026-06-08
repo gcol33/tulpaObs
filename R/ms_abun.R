@@ -218,7 +218,8 @@
 .tobs_fit_ms_nmix_spatial <- function(model, spatial, mixture = "poisson",
                                       K_max = NULL, max_iter = 100L,
                                       inner_solver = "em", n_quad = 1L,
-                                      lkj_eta = 1, verbose = TRUE) {
+                                      lkj_eta = 1, integration = "grid",
+                                      verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "ms_abun() spatial")
   # The areal shared field is integrated by one of two inner solvers (the field
   # hyperparameter is outer-grid integrated either way -- the nested-approx +
@@ -241,7 +242,8 @@
     }
     return(.tobs_fit_ms_nmix_spatial_newton(
       model, spatial, K_max = K_max, max_iter = max_iter,
-      n_quad = n_quad, lkj_eta = lkj_eta, verbose = isTRUE(verbose)))
+      n_quad = n_quad, lkj_eta = lkj_eta, integration = integration,
+      verbose = isTRUE(verbose)))
   }
   mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
   n_sites <- model$n_sites
@@ -254,7 +256,7 @@
       lf = lf, X_lambda = model$X_processes[[1]],
       n_sites = n_sites, n_species = model$n_species,
       spatial = spatial, mixture = mix_code, K_max = K_max,
-      max_iter = max_iter, verbose = isTRUE(verbose))
+      max_iter = max_iter, integration = integration, verbose = isTRUE(verbose))
     return(build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial))
   }
   if (identical(spatial$type, "gp") || identical(spatial$type, "multiscale_gp")) {
@@ -313,6 +315,7 @@
                                              max_iter = 100L, n_quad = 1L,
                                              lkj_eta = 1, verbose = FALSE,
                                              tau_grid = NULL, rho_grid = NULL,
+                                             integration = "grid",
                                              inner_iter = 3L, inner_tol = 3e-3,
                                              inner_maxit = 20L) {
   n_sites   <- model$n_sites
@@ -407,47 +410,91 @@
     list(comm = comm, field = field, z = z)
   }
 
-  n_tau <- length(tau_grid); n_rho <- length(rho_grid)
-  n_grid <- n_tau * n_rho
-  log_marg  <- numeric(n_grid)
-  z_modes   <- matrix(0, n_grid, n_sites)
-  theta_mat <- matrix(0, n_grid, d)
-  Sigma_l_list <- vector("list", n_grid); Sigma_p_list <- vector("list", n_grid)
-  blup_l_list  <- vector("list", n_grid); blup_p_list  <- vector("list", n_grid)
-  vcov_list    <- vector("list", n_grid)
-  tau_vec <- numeric(n_grid); rho_vec <- numeric(n_grid)
-  boundary <- numeric(n_grid)
+  is_car <- identical(spatial$type, "car_proper")
 
-  k <- 0L; z_prev <- NULL
-  for (ir in seq_len(n_rho)) {
-    rho_k <- rho_grid[ir]
-    ldQ   <- if (identical(spatial$type, "car_proper")) proper_car_logdet(rho_k) else 0.0
-    for (itau in seq_len(n_tau)) {
-      k <- k + 1L
-      tau_k <- tau_grid[itau]
-      tau_vec[k] <- tau_k; rho_vec[k] <- rho_k
-      node <- fit_node(tau_k, rho_k, ldQ, z_start = z_prev)
-      if (is.null(node) || !is.finite(node$field$field_marginal)) {
-        log_marg[k] <- -Inf; next
+  # One outer (tau, rho) node: derive the proper-CAR log|Q|, run the profile loop,
+  # pack the per-node community + field state into a record (NULL on failure).
+  eval_node <- function(tau, rho, z_start = NULL) {
+    ldQ  <- if (is_car) proper_car_logdet(rho) else 0.0
+    node <- fit_node(tau, rho, ldQ, z_start = z_start)
+    if (is.null(node) || !is.finite(node$field$field_marginal)) return(NULL)
+    list(log_marg = node$comm$log_marginal + node$field$field_marginal,
+         z = node$z, theta = node$comm$theta,
+         Sigma_l = node$comm$Sigma_list[[1L]], Sigma_p = node$comm$Sigma_list[[2L]],
+         blup_l = node$comm$blup[[1L]], blup_p = node$comm$blup[[2L]],
+         vcov = node$comm$theta_cov, boundary = node$field$boundary_max,
+         tau = tau, rho = rho)
+  }
+
+  # Pack a list of node records + weights into the per-node arrays the summary
+  # below consumes.
+  pack <- function(records, weights) {
+    ng <- length(records)
+    log_marg <- vapply(records, function(r) if (is.null(r)) -Inf else r$log_marg, 0.0)
+    z_modes  <- matrix(0, ng, n_sites); theta_mat <- matrix(0, ng, d)
+    Sigma_l_list <- vector("list", ng); Sigma_p_list <- vector("list", ng)
+    blup_l_list  <- vector("list", ng); blup_p_list  <- vector("list", ng)
+    vcov_list    <- vector("list", ng)
+    tau_vec <- numeric(ng); rho_vec <- numeric(ng); boundary <- numeric(ng)
+    for (k in seq_len(ng)) {
+      r <- records[[k]]; if (is.null(r)) next
+      z_modes[k, ] <- r$z; theta_mat[k, ] <- r$theta
+      Sigma_l_list[[k]] <- r$Sigma_l; Sigma_p_list[[k]] <- r$Sigma_p
+      blup_l_list[[k]]  <- r$blup_l;  blup_p_list[[k]]  <- r$blup_p
+      vcov_list[[k]]    <- r$vcov
+      tau_vec[k] <- r$tau; rho_vec[k] <- r$rho; boundary[k] <- r$boundary
+    }
+    list(log_marg = log_marg, weights = weights, z_modes = z_modes,
+         theta_mat = theta_mat, Sigma_l_list = Sigma_l_list,
+         Sigma_p_list = Sigma_p_list, blup_l_list = blup_l_list,
+         blup_p_list = blup_p_list, vcov_list = vcov_list,
+         tau_vec = tau_vec, rho_vec = rho_vec, boundary = boundary)
+  }
+
+  # ---- outer integration over (tau[, rho]): opt-in mode-centred CCD, silently
+  # declining to the fixed tensor grid (gcol33/tulpaObs#60).
+  packed <- NULL; integration_used <- "grid"; pareto_k <- NA_real_
+  if (identical(integration, "ccd")) {
+    axes <- c(list(.tobs_ccd_axis("tau", "log", lower = 0.3, upper = 30, start = 3.16)),
+              if (is_car)
+                list(.tobs_ccd_axis("rho", "identity", lower = 0.05, upper = 0.95, start = 0.5)))
+    eval_logm <- function(theta) {
+      r <- eval_node(theta[1L], if (is_car) theta[2L] else 1.0)
+      if (is.null(r) || !is.finite(r$log_marg)) NA_real_ else r$log_marg
+    }
+    cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, axes), error = function(e) NULL)
+    if (!is.null(cc)) {
+      nn <- nrow(cc$nodes); recs <- vector("list", nn); lm <- rep(-Inf, nn)
+      for (k in seq_len(nn)) {
+        r <- eval_node(cc$nodes[k, 1L], if (is_car) cc$nodes[k, 2L] else 1.0)
+        if (!is.null(r) && is.finite(r$log_marg)) { recs[[k]] <- r; lm[k] <- r$log_marg }
       }
-      log_marg[k]  <- node$comm$log_marginal + node$field$field_marginal
-      z_modes[k, ] <- node$z; z_prev <- node$z
-      theta_mat[k, ] <- node$comm$theta
-      Sigma_l_list[[k]] <- node$comm$Sigma_list[[1L]]
-      Sigma_p_list[[k]] <- node$comm$Sigma_list[[2L]]
-      blup_l_list[[k]]  <- node$comm$blup[[1L]]
-      blup_p_list[[k]]  <- node$comm$blup[[2L]]
-      vcov_list[[k]]    <- node$comm$theta_cov
-      boundary[k]       <- node$field$boundary_max
-      if (isTRUE(verbose)) {
-        message(sprintf(
-          "[ms_abun spatial newton node %d/%d] tau=%.3g rho=%.3g log_marg=%.4g",
-          k, n_grid, tau_k, rho_k, log_marg[k]))
+      okc <- is.finite(lm)
+      if (any(okc)) {
+        w <- cc$dnode * exp(lm - max(lm[okc])); w[!okc] <- 0; w <- w / sum(w)
+        packed <- pack(recs, w); integration_used <- "ccd"; pareto_k <- cc$pareto_k
       }
     }
   }
 
-  weights <- tulpa:::.nl_normalise_weights_safe(log_marg)
+  if (is.null(packed)) {
+    n_tau <- length(tau_grid); n_rho <- length(rho_grid)
+    recs <- vector("list", n_tau * n_rho); k <- 0L; z_prev <- NULL
+    for (rho_k in rho_grid) for (tau_k in tau_grid) {
+      k <- k + 1L
+      r <- eval_node(tau_k, rho_k, z_start = z_prev)
+      if (!is.null(r)) { recs[[k]] <- r; z_prev <- r$z }
+    }
+    lm <- vapply(recs, function(r) if (is.null(r)) -Inf else r$log_marg, 0.0)
+    packed <- pack(recs, tulpa:::.nl_normalise_weights_safe(lm))
+  }
+
+  log_marg <- packed$log_marg; weights <- packed$weights
+  z_modes <- packed$z_modes; theta_mat <- packed$theta_mat
+  Sigma_l_list <- packed$Sigma_l_list; Sigma_p_list <- packed$Sigma_p_list
+  blup_l_list <- packed$blup_l_list; blup_p_list <- packed$blup_p_list
+  vcov_list <- packed$vcov_list
+  tau_vec <- packed$tau_vec; rho_vec <- packed$rho_vec; boundary <- packed$boundary
   ok <- is.finite(weights) & weights > 0
   if (!any(ok)) {
     stop("Spatial community N-mixture (newton): every grid node produced a ",
@@ -496,7 +543,8 @@
     spatial_field = z_mean, hyper = hyper, prior_type = spatial$type,
     weights = weights, boundary_max = max(boundary, na.rm = TRUE),
     log_lik = max(log_marg[ok]), converged = TRUE, n_iter = NA_integer_,
-    optimizer = "newton", n_quad = n_quad, lkj_eta = lkj_eta)
+    optimizer = "newton", n_quad = n_quad, lkj_eta = lkj_eta,
+    spatial_integration = integration_used, spatial_pareto_k = pareto_k)
   build_ms_nmix_fit(raw, model, mixture = "poisson", spatial = spatial)
 }
 
@@ -591,6 +639,8 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     process_info = pi_list,
     model = model, spatial = spatial,
     spatial_field = raw$spatial_field,
+    spatial_integration = raw$spatial_integration,
+    spatial_pareto_k = raw$spatial_pareto_k,
     ms_hyper = raw$hyper,
     method = if (is.null(spatial)) "laplace" else "nested_laplace",
     mixture = mixture,

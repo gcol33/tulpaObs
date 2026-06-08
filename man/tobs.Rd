@@ -161,6 +161,17 @@ Both integrate the field hyperparameter on the outer grid and return the
 same fit object; \code{"newton"} is Poisson- and areal-only, and markedly
 slower (an FD-gradient profile loop per grid node) -- an accuracy /
 validation alternative, not the production default.
+\item \code{integration} — how the in-package spatial / community nested-Laplace
+fitters integrate the outer field hyperparameters (\code{tau}, \code{rho}, \code{sigma},
+\code{range}): \code{"grid"} (default) a fixed tensor grid, or \code{"ccd"} a mode-centred
+central-composite design placed at the marginal-likelihood mode and scaled
+by the outer posterior covariance, with the outer PSIS Pareto-k reported on
+\code{fit$spatial_pareto_k}. CCD declines to the grid when the outer curvature
+is ill-conditioned (a weakly-identified axis) or for a single positive
+hyperparameter; \code{fit$spatial_integration} records which ran. Each outer
+node is a full inner solve, so \code{"ccd"} adds a mode-find without a node
+saving on these coarse grids -- it is opt-in, most useful when a
+multi-axis hyperparameter posterior is well identified.
 Stochastic-correction controls (\code{"laplace_gibbs"} / \code{"laplace_mi"}):
 \code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count) and \code{seed} (stored
 on \verb{$seed}).

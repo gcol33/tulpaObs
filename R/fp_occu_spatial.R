@@ -14,7 +14,8 @@
 # =============================================================================
 
 .tobs_fit_fp_occu_spatial <- function(model, spatial, max_iter = 200L,
-                                      tol = 1e-8, verbose = TRUE) {
+                                      tol = 1e-8, verbose = TRUE,
+                                      integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "fp_occu occupancy spatial")
   map <- seq_len(model$n_sites)
   field <- .tobs_areal_field_spec(spatial, model$n_sites, "fp_occu", map)
@@ -55,7 +56,8 @@
          stats::qlogis(0.05), rep(0, p_p10 - 1L), rep(0, p_b))
 
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
-                              max_iter = max_iter, tol = tol, label = "fp-occu-spatial")
+                              max_iter = max_iter, tol = tol, label = "fp-occu-spatial",
+                              integration = integration)
   if (!isTRUE(res$ok))
     stop("fp_occu() areal spatial fit produced no usable grid point.", call. = FALSE)
 
@@ -80,5 +82,7 @@
   fit <- build_fp_occu_fit(raw, model)
   fit$method <- "nested_laplace"
   fit$spatial_field <- res$field_mean
+  fit$spatial_integration <- res$integration
+  fit$spatial_pareto_k <- res$pareto_k
   fit
 }

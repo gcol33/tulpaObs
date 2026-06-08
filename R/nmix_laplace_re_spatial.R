@@ -39,9 +39,12 @@
 # spatial-field posterior mean and hyperparameter moments.
 .nmix_community_spatial_post <- function(fit, p_lam, p_p, n_spatial,
                                          prior_type, mixture, theta_cols,
-                                         phi_loadings = NULL) {
+                                         phi_loadings = NULL, weights = NULL) {
   d <- p_lam + p_p
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
+  # Default: flat design weights over the fixed tensor grid. The mode-centred CCD
+  # path (gcol33/tulpaObs#60) passes its own corrected R-INLA design weights.
+  if (is.null(weights))
+    weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
   ok <- is.finite(weights) & weights > 0
   if (!any(ok)) {
     stop("Spatial community N-mixture: every grid point produced a non-finite ",
@@ -295,7 +298,8 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
                                         spatial, mixture = "P",
                                         range_grid = NULL, sigma_grid = NULL,
                                         r_grid = NULL, K_max = NULL,
-                                        max_iter = 100L, verbose = FALSE) {
+                                        max_iter = 100L, integration = "grid",
+                                        verbose = FALSE) {
   p_lam <- ncol(X_lambda); p_p <- ncol(lf$X_p)
   ts <- spatial$tulpa_spec
   if (is.null(ts) || !identical(ts$type, "spde")) {
@@ -325,6 +329,7 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
   if (any(range_grid <= 0)) stop("range_grid must be strictly positive.", call. = FALSE)
   if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
   r_grid_use <- .nmix_community_r_grid(mixture, r_grid)
+  is_nb <- identical(mixture, "NB")
 
   build_Q <- function(range_val, sigma_val) {
     kappa    <- sqrt(8 * ts$nu) / range_val
@@ -333,41 +338,77 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
     list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
   }
 
-  grid <- expand.grid(range = range_grid, sigma = sigma_grid,
-                      r = r_grid_use, KEEP.OUT.ATTRS = FALSE)
-  n_grid <- nrow(grid)
-  Q_list   <- vector("list", n_grid)
-  log_dets <- numeric(n_grid)
-  pc_lp    <- numeric(n_grid)
-  cache    <- list()
-  for (k in seq_len(n_grid)) {
-    key <- paste0(grid$range[k], "_", grid$sigma[k])
-    if (is.null(cache[[key]])) cache[[key]] <- build_Q(grid$range[k], grid$sigma[k])
-    Q_list[[k]] <- cache[[key]]$Q
-    log_dets[k] <- cache[[key]]$log_det
-    pc_lp[k]    <- tulpa:::pc_prior_log_density(grid$range[k], grid$sigma[k],
-                                                prior_range, prior_sigma)
-  }
-  theta_grid <- as.matrix(grid[, c("range", "sigma", "r"), drop = FALSE])
-
   ws  <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
-  raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_spde,
-    oracle = orc$ptr, X_lambda_R = X_lambda, A_R = A_dense,
-    Q_list = Q_list, log_det_Q = log_dets,
-    theta_grid_R = theta_grid, r_grid = as.numeric(grid$r),
-    mu_init = ws$mu, Sigma_lambda_init = ws$Sigma_lambda,
-    Sigma_p_init = ws$Sigma_p,
-    max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
 
-  # Fold the Matern PC prior on (range, sigma) into each grid log-marginal so the
-  # integrated posterior is proper (the areal fields fold their prior into the
-  # C++ marginal; the SPDE PC prior lives in R, as on the single-species path).
-  raw$log_marginal <- raw$log_marginal + pc_lp
+  # Run the batched community EM driver over an explicit (range, sigma, r) grid,
+  # folding the Matern PC prior on (range, sigma) into each log-marginal so the
+  # integrated posterior is proper (the SPDE PC prior lives in R, as on the
+  # single-species path). Returns the raw per-grid community fit.
+  run_driver <- function(theta_grid) {
+    n <- nrow(theta_grid)
+    Q_list <- vector("list", n); log_dets <- numeric(n); pc_lp <- numeric(n)
+    cache <- list()
+    for (k in seq_len(n)) {
+      key <- paste0(theta_grid[k, 1L], "_", theta_grid[k, 2L])
+      if (is.null(cache[[key]])) cache[[key]] <- build_Q(theta_grid[k, 1L], theta_grid[k, 2L])
+      Q_list[[k]] <- cache[[key]]$Q; log_dets[k] <- cache[[key]]$log_det
+      pc_lp[k] <- tulpa:::pc_prior_log_density(theta_grid[k, 1L], theta_grid[k, 2L],
+                                               prior_range, prior_sigma)
+    }
+    raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_spde,
+      oracle = orc$ptr, X_lambda_R = X_lambda, A_R = A_dense,
+      Q_list = Q_list, log_det_Q = log_dets,
+      theta_grid_R = theta_grid, r_grid = as.numeric(theta_grid[, 3L]),
+      mu_init = ws$mu, Sigma_lambda_init = ws$Sigma_lambda,
+      Sigma_p_init = ws$Sigma_p,
+      max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
+    raw$log_marginal <- raw$log_marginal + pc_lp
+    raw
+  }
 
-  out <- .nmix_community_spatial_post(raw, p_lam, p_p, n_mesh, "spde",
-                                      .nmix_mix_label(mixture),
-                                      c("range", "sigma", "r"))
+  post <- function(raw, weights = NULL)
+    .nmix_community_spatial_post(raw, p_lam, p_p, n_mesh, "spde",
+                                 .nmix_mix_label(mixture),
+                                 c("range", "sigma", "r"), weights = weights)
+
+  # ---- outer integration over (range, sigma [, r]): opt-in mode-centred CCD over
+  # the log hyperparameters, declining to the fixed tensor grid (gcol33/tulpaObs#60).
+  out <- NULL; integration_used <- "grid"; pareto_k <- NA_real_
+  if (identical(integration, "ccd")) {
+    rm0 <- prior_range[1]; sm0 <- prior_sigma[1]
+    axes <- list(
+      .tobs_ccd_axis("range", "log", lower = rm0 * 0.05, upper = rm0 * 20, start = rm0),
+      .tobs_ccd_axis("sigma", "log", lower = sm0 * 0.05, upper = sm0 * 20, start = sm0))
+    if (is_nb)
+      axes <- c(axes, list(.tobs_ccd_axis("r", "log", lower = 0.5, upper = 40,
+                                          start = exp(mean(log(c(0.5, 40)))))))
+    eval_logm <- function(theta) {
+      r_val <- if (is_nb) theta[3L] else Inf
+      lm <- run_driver(matrix(c(theta[1L], theta[2L], r_val), 1L, 3L))$log_marginal[1L]
+      if (is.finite(lm)) lm else NA_real_
+    }
+    cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, axes), error = function(e) NULL)
+    if (!is.null(cc)) {
+      r_col <- if (is_nb) cc$nodes[, "r"] else rep(Inf, nrow(cc$nodes))
+      node_grid <- cbind(cc$nodes[, "range"], cc$nodes[, "sigma"], r_col)
+      raw <- run_driver(node_grid)
+      lm  <- raw$log_marginal; okc <- is.finite(lm)
+      if (any(okc)) {
+        w <- cc$dnode * exp(lm - max(lm[okc])); w[!okc] <- 0; w <- w / sum(w)
+        out <- post(raw, weights = w); integration_used <- "ccd"; pareto_k <- cc$pareto_k
+      }
+    }
+  }
+
+  if (is.null(out)) {
+    grid <- expand.grid(range = range_grid, sigma = sigma_grid,
+                        r = r_grid_use, KEEP.OUT.ATTRS = FALSE)
+    out <- post(run_driver(as.matrix(grid[, c("range", "sigma", "r")])))
+  }
+
+  out$spatial_integration <- integration_used
+  out$spatial_pareto_k <- pareto_k
   class(out) <- c("nmix_community_spatial_fit", "list")
   out
 }

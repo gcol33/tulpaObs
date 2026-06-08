@@ -27,17 +27,24 @@
 .areal_field_car <- function(adj, kind, map, n_sp) {
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
   rho_grid <- if (kind == "car_proper") seq(0.1, 0.95, length.out = 6L) else 1.0
-  cells <- list()
-  for (rho in rho_grid) {
+  # One cell from physical hyperparameters: ICAR -> (tau); proper CAR -> (tau, rho).
+  make_cell <- function(theta) {
+    tau <- theta[1L]
+    rho <- if (kind == "car_proper") theta[2L] else 1.0
     ldQ <- if (kind == "icar") 0 else {
       ch <- tryCatch(chol(.areal_Q(adj, rho)), error = function(e) NULL)
       if (is.null(ch)) -Inf else 2 * sum(log(diag(ch)))
     }
-    Q <- .areal_Q(adj, rho)
-    for (tau in tau_grid) cells[[length(cells) + 1L]] <- list(tau = tau, rho = rho, ldQ = ldQ, Q = Q)
+    list(tau = tau, rho = rho, ldQ = ldQ, Q = .areal_Q(adj, rho))
   }
+  cells <- list()
+  for (rho in rho_grid) for (tau in tau_grid)
+    cells[[length(cells) + 1L]] <- make_cell(if (kind == "car_proper") c(tau, rho) else tau)
+  axes <- c(list(.tobs_ccd_axis("tau", "log", lower = 0.3, upper = 30, start = 3)),
+            if (kind == "car_proper")
+              list(.tobs_ccd_axis("rho", "identity", lower = 0.1, upper = 0.95, start = 0.5)))
   list(
-    n_field = n_sp, n_sp = n_sp, cells = cells,
+    n_field = n_sp, n_sp = n_sp, cells = cells, axes = axes, make_cell = make_cell,
     valid = function(cell) is.finite(cell$ldQ),
     offset = function(fp, cell) fp[map],
     scatter = function(grad_eta) {
@@ -63,16 +70,22 @@
   sigma_grid <- exp(seq(log(0.2), log(3), length.out = 5L))
   rho_grid   <- c(0.05, 0.3, 0.5, 0.7, 0.95)
   Q <- .areal_Q(adj, 1.0)                       # ICAR precision for v
-  cells <- list()
-  for (sg in sigma_grid) for (rho in rho_grid) {
-    a <- sg * sqrt(rho / scale_factor); b <- sg * sqrt(1 - rho)
-    cells[[length(cells) + 1L]] <- list(sigma = sg, rho = rho, a = a, b = b)
+  make_cell <- function(theta) {
+    sg <- theta[1L]; rho <- theta[2L]
+    list(sigma = sg, rho = rho,
+         a = sg * sqrt(rho / scale_factor), b = sg * sqrt(1 - rho))
   }
+  cells <- list()
+  for (sg in sigma_grid) for (rho in rho_grid)
+    cells[[length(cells) + 1L]] <- make_cell(c(sg, rho))
+  axes <- list(
+    .tobs_ccd_axis("sigma", "log",      lower = 0.2,  upper = 3,    start = 0.77),
+    .tobs_ccd_axis("rho",   "identity", lower = 0.05, upper = 0.95, start = 0.5))
   scat1 <- function(grad_eta) {
     g <- numeric(n_sp); for (s in seq_along(map)) g[map[s]] <- g[map[s]] + grad_eta[s]; g
   }
   list(
-    n_field = 2L * n_sp, n_sp = n_sp, cells = cells,
+    n_field = 2L * n_sp, n_sp = n_sp, cells = cells, axes = axes, make_cell = make_cell,
     valid = function(cell) cell$sigma > 0 && cell$rho >= 0 && cell$rho <= 1,
     offset = function(fp, cell) {
       v <- fp[seq_len(n_sp)]; w <- fp[n_sp + seq_len(n_sp)]
@@ -97,19 +110,18 @@
 }
 
 .tobs_areal_bfgs_fit <- function(eval, n_fixed, field, theta0_fix,
-                                 max_iter = 300L, tol = 1e-8, label = "areal-bfgs") {
-  nf <- field$n_field; fi <- n_fixed + seq_len(nf); n_x <- n_fixed + nf
+                                 max_iter = 300L, tol = 1e-8, label = "areal-bfgs",
+                                 integration = c("auto", "ccd", "grid")) {
+  integration <- match.arg(integration)
+  nf <- field$n_field; fi <- n_fixed + seq_len(nf)
   is_bym2 <- isTRUE(field$bym2)
-  cells <- field$cells; n_grid <- length(cells)
-  modes <- matrix(NA_real_, n_grid, n_fixed); phis <- matrix(NA_real_, n_grid, field$n_sp)
-  cov_blocks <- vector("list", n_grid); logm <- rep(-Inf, n_grid)
 
-  prog <- tulpa:::.tulpa_iter_progress(label, n_grid, unit = "cells")
-  for (k in seq_len(n_grid)) {
-    cell <- cells[[k]]
-    if (!field$valid(cell)) { prog$tick(); next }
-    # gradient of (log_lik + log_prior) over theta = (fixed, field).
-    grad_wp <- function(theta) {
+  # One Laplace fit at a fixed field-hyperparameter cell. Returns the joint
+  # marginal of (fixed params, field) plus the fixed-parameter mode / cov block /
+  # reported field, or NULL on an invalid or numerically failed cell.
+  solve_cell <- function(cell) {
+    if (!field$valid(cell)) return(NULL)
+    grad_wp <- function(theta) {              # grad of (log_lik + log_prior) over (fixed, field)
       fp <- theta[fi]; e <- eval(theta[seq_len(n_fixed)], field$offset(fp, cell))
       gf <- if (is_bym2) field$scatter(e$grad_eta, cell) else field$scatter(e$grad_eta)
       c(e$grad_fixed, gf - field$prior_grad(fp, cell))
@@ -122,12 +134,12 @@
     opt <- tryCatch(stats::optim(th0, function(t) -ll_fn(t), function(t) -grad_wp(t),
                    method = "BFGS", control = list(maxit = as.integer(max_iter), reltol = tol)),
                    error = function(e) NULL)
-    if (is.null(opt)) { prog$tick(); next }
+    if (is.null(opt)) return(NULL)
     th <- opt$par; th[fi] <- field$center(th[fi])
     H <- tryCatch(-.fp_fd_jacobian(grad_wp, th), error = function(e) NULL)
-    if (is.null(H)) { prog$tick(); next }
+    if (is.null(H)) return(NULL)
     H <- 0.5 * (H + t(H)); ridge <- max(1e-8 * mean(abs(diag(H))), 1e-10); diag(H) <- diag(H) + ridge
-    ch <- tryCatch(chol(H), error = function(e) NULL); if (is.null(ch)) { prog$tick(); next }
+    ch <- tryCatch(chol(H), error = function(e) NULL); if (is.null(ch)) return(NULL)
     ldH <- 2 * sum(log(diag(ch)))
     Hc <- H
     cc <- which(field$constrain)
@@ -136,25 +148,72 @@
       Hc[idx, idx] <- Hc[idx, idx] + pen
     }
     cov_full <- tryCatch(solve(Hc), error = function(e) NULL)
-    if (is.null(cov_full)) { prog$tick(); next }
-    modes[k, ] <- th[seq_len(n_fixed)]; phis[k, ] <- field$to_phi(th[fi], cell)
-    cov_blocks[[k]] <- cov_full[seq_len(n_fixed), seq_len(n_fixed), drop = FALSE]
-    logm[k] <- ll_fn(th) - 0.5 * ldH
+    if (is.null(cov_full)) return(NULL)
+    list(logm = ll_fn(th) - 0.5 * ldH,
+         mode = th[seq_len(n_fixed)],
+         phi  = field$to_phi(th[fi], cell),
+         cov  = cov_full[seq_len(n_fixed), seq_len(n_fixed), drop = FALSE])
+  }
+
+  # Weighted (marginalised) summaries from a set of evaluated cells + weights.
+  summarise <- function(res, w, method, pareto_k = NA_real_) {
+    ok  <- vapply(res, Negate(is.null), TRUE) & is.finite(w) & w > 0
+    if (!any(ok)) return(list(ok = FALSE))
+    w[!ok] <- 0; w <- w / sum(w)
+    modes <- t(vapply(which(ok), function(k) res[[k]]$mode, numeric(n_fixed)))
+    phis  <- t(vapply(which(ok), function(k) res[[k]]$phi,  numeric(field$n_sp)))
+    wk    <- w[ok]
+    beta_mean  <- as.numeric(crossprod(wk, modes))
+    field_mean <- as.numeric(crossprod(wk, phis))
+    V <- matrix(0, n_fixed, n_fixed)
+    for (j in seq_along(wk)) {
+      dk <- modes[j, ] - beta_mean
+      V <- V + wk[j] * (res[[which(ok)[j]]]$cov + outer(dk, dk))
+    }
+    logm <- vapply(which(ok), function(k) res[[k]]$logm, numeric(1))
+    list(ok = TRUE, beta_mean = beta_mean, field_mean = field_mean, vcov = V,
+         log_lik = sum(wk * logm), integration = method, pareto_k = pareto_k)
+  }
+
+  # ---- outer integration: opt-in mode-centred CCD (gcol33/tulpaObs#60), silently
+  # declining to the fixed tensor grid when the outer curvature is ill-conditioned.
+  if (identical(integration, "ccd") && !is.null(field$axes)) {
+    eval_logm <- function(theta_phys) {
+      r <- solve_cell(field$make_cell(theta_phys))
+      if (is.null(r) || !is.finite(r$logm)) NA_real_ else r$logm
+    }
+    cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, field$axes),
+                   error = function(e) NULL)
+    if (!is.null(cc)) {
+      nn  <- nrow(cc$nodes)
+      prog <- tulpa:::.tulpa_iter_progress(label, nn, unit = "cells")
+      res <- vector("list", nn); logm <- rep(-Inf, nn)
+      for (k in seq_len(nn)) {
+        r <- solve_cell(field$make_cell(cc$nodes[k, ]))
+        if (!is.null(r) && is.finite(r$logm)) { res[[k]] <- r; logm[k] <- r$logm }
+        prog$tick()
+      }
+      prog$finish()
+      if (any(is.finite(logm))) {
+        w <- cc$dnode * exp(logm - max(logm[is.finite(logm)]))
+        out <- summarise(res, w, "ccd", cc$pareto_k)
+        if (isTRUE(out$ok)) return(out)
+      }
+    }
+  }
+
+  cells <- field$cells; n_grid <- length(cells)
+  prog <- tulpa:::.tulpa_iter_progress(label, n_grid, unit = "cells")
+  res <- vector("list", n_grid); logm <- rep(-Inf, n_grid)
+  for (k in seq_len(n_grid)) {
+    r <- solve_cell(cells[[k]])
+    if (!is.null(r) && is.finite(r$logm)) { res[[k]] <- r; logm[k] <- r$logm }
     prog$tick()
   }
   prog$finish()
-  ok <- is.finite(logm)
-  if (!any(ok)) return(list(ok = FALSE))
-  w <- tulpa:::.nl_normalise_weights_safe(logm, "tau_grid / data"); w[!ok] <- 0; w <- w / sum(w)
-  beta_mean <- as.numeric(crossprod(w, ifelse(is.finite(modes), modes, 0)))
-  field_mean <- as.numeric(crossprod(w, ifelse(is.finite(phis), phis, 0)))
-  V <- matrix(0, n_fixed, n_fixed)
-  for (k in which(ok)) {
-    Vk <- cov_blocks[[k]]; if (is.null(Vk)) next
-    dk <- modes[k, ] - beta_mean; V <- V + w[k] * (Vk + outer(dk, dk))
-  }
-  list(ok = TRUE, beta_mean = beta_mean, field_mean = field_mean, vcov = V,
-       log_lik = sum(w * ifelse(ok, logm, 0)))
+  if (!any(is.finite(logm))) return(list(ok = FALSE))
+  w <- tulpa:::.nl_normalise_weights_safe(logm, "tau_grid / data")
+  summarise(res, w, "grid")
 }
 
 # Resolve the field spec for an areal-BFGS family from the spatial term.

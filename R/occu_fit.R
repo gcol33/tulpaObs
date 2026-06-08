@@ -20,10 +20,12 @@
                             n.gibbs = 10L, n.imputations = 20L,
                             re.aghq = TRUE, n.quad = 9L, re.lkj = 1.5,
                             K.max = NULL, mixture = "poisson",
+                            integration = c("grid", "ccd"),
                             verbose = TRUE, ...) {
 
   method <- match.arg(method)
   approx <- match.arg(approx)
+  integration <- match.arg(integration)
 
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object (from `.tobs_build_model()`)")
@@ -170,7 +172,8 @@
       }
       fit <- .tobs_fit_distance_spatial(fit_model, spatial, mixture = mixture,
                                         K_max = K.max, max_iter = max.iter,
-                                        tol = tol, verbose = verbose)
+                                        tol = tol, verbose = verbose,
+                                        integration = integration)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_distance_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
@@ -218,7 +221,7 @@
       fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial,
                                         mixture = model$mixture %||% "poisson",
                                         K_max = K.max, max_iter = 300L, tol = 1e-8,
-                                        verbose = verbose)
+                                        verbose = verbose, integration = integration)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_dyn_abun_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
@@ -265,7 +268,8 @@
              call. = FALSE)
       }
       fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, max_iter = max.iter,
-                                       tol = 1e-8, verbose = verbose)
+                                       tol = 1e-8, verbose = verbose,
+                                       integration = integration)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_fp_occu_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,

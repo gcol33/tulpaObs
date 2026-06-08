@@ -18,7 +18,7 @@
 
 .tobs_fit_distance_spatial <- function(model, spatial, mixture = "poisson",
                                        K_max = NULL, max_iter = 200L, tol = 1e-6,
-                                       verbose = TRUE) {
+                                       verbose = TRUE, integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "distance abundance spatial")
   if (!identical(model$key, "halfnorm")) {
     stop("distance() areal spatial supports the half-normal key only; the ",
@@ -73,7 +73,8 @@
   if (length(theta0_fix) != n_fixed) theta0_fix <- numeric(n_fixed)
 
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
-                              max_iter = max_iter, tol = tol, label = "distance-spatial")
+                              max_iter = max_iter, tol = tol, label = "distance-spatial",
+                              integration = integration)
   if (!isTRUE(res$ok))
     stop("distance() areal spatial fit produced no usable grid point.", call. = FALSE)
 
@@ -88,5 +89,7 @@
   fit <- build_distance_fit(raw, model)
   fit$method <- "nested_laplace"
   fit$spatial_field <- res$field_mean
+  fit$spatial_integration <- res$integration
+  fit$spatial_pareto_k <- res$pareto_k
   fit
 }
