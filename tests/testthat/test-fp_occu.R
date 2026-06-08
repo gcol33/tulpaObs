@@ -373,3 +373,78 @@ test_that("fp_occu RE is on the psi OR p11 arm, never p10/b or both at once", {
          control = list(progress = FALSE)),
     "BOTH|one arm|psi OR p11")
 })
+
+
+# --- areal spatial (ICAR / proper-CAR) on the occupancy (psi) arm (#51) --------
+
+.fp_grid_adj <- function(side) {
+  ng <- side*side; co <- expand.grid(x=seq_len(side), y=seq_len(side))
+  adj <- matrix(0L, ng, ng)
+  for (i in seq_len(ng)) for (j in seq_len(ng))
+    if (i!=j && abs(co$x[i]-co$x[j])+abs(co$y[i]-co$y[j])==1L) adj[i,j] <- 1L
+  adj
+}
+
+# Multistate false-positive data with a smoothed ICAR-like field on logit(psi).
+.sim_fp_spatial <- function(adj, J = 12L, p11 = 0.75, p10 = 0.05, bcert = 0.5,
+                            beta0 = qlogis(0.45), b1 = 0.6, sd_phi = 0.8, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  ng <- nrow(adj)
+  phi <- as.numeric(scale(rnorm(ng)))
+  for (rep in 1:3) { pn <- phi; for (i in seq_len(ng)) { nbi <- which(adj[i,]==1L); pn[i] <- 0.5*phi[i]+0.5*mean(phi[nbi]) }; phi <- pn }
+  phi <- sd_phi*as.numeric(scale(phi)); phi <- phi - mean(phi)
+  x <- rnorm(ng); psi <- plogis(beta0 + b1*x + phi); z <- rbinom(ng, 1L, psi)
+  y <- matrix(0L, ng, J)
+  for (i in seq_len(ng)) {
+    if (z[i]==1L) { det <- rbinom(J,1L,p11); cert <- rbinom(J,1L,bcert); y[i,] <- ifelse(det==1L, ifelse(cert==1L,2L,1L), 0L) }
+    else y[i,] <- rbinom(J,1L,p10)
+  }
+  list(y=y, data=data.frame(x=x), phi=phi)
+}
+
+test_that("fp_occu() areal ICAR recovers the occupancy slope + field", {
+  skip_on_cran()
+  skip_if_fast()
+  # The field on logit(psi) is fit by BFGS over the exact two-state marginal
+  # (cpp_fp_occu_total_log_lik gradient) + the ICAR prior, FD-Hessian Laplace.
+  # Occupancy fields are more weakly identified than count fields (one binary
+  # site per node), so the field correlation bar is lower than removal/distance.
+  adj <- .fp_grid_adj(7L)
+  slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+  for (s in 1:3) {
+    sim <- .sim_fp_spatial(adj, seed = 600 + s)
+    fit <- tobs(formula = ~ x + icar(graph = adj), data = sim$data, family = fp_occu(),
+                detection = ~ 1, y = sim$y, method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_true("psi_x" %in% names(fit$means))
+      V <- vcov(fit)
+      expect_true(all(is.finite(V)))
+      expect_true(all(eigen(V, only.values = TRUE)$values > 0))
+      expect_false(is.null(fit$spatial_field))
+    }
+    est <- fit$means[["psi_x"]]; se <- fit$sds[["psi_x"]]
+    slopes <- c(slopes, est)
+    slope_ok <- c(slope_ok, abs(est - 0.6) / se < 3.5)
+    field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+  }
+  expect_true(all(slope_ok))
+  expect_lt(abs(mean(slopes) - 0.6), 0.25)
+  expect_gt(mean(field_cor), 0.3)
+})
+
+test_that("fp_occu() areal spatial: bym2 / nuts+spatial gated", {
+  adj <- .fp_grid_adj(4L)
+  s <- .sim_fp_spatial(adj, J = 6L, seed = 3)
+  expect_error(
+    tobs(formula = ~ x + bym2(graph = adj), data = s$data, family = fp_occu(),
+         detection = ~ 1, y = s$y, method = "nested_laplace",
+         control = list(progress = FALSE)),
+    "not yet wired for fp_occu|car_proper")
+  expect_error(
+    tobs(formula = ~ x + icar(graph = adj), data = s$data, family = fp_occu(),
+         detection = ~ 1, y = s$y, method = "nuts",
+         control = list(n.iter = 20L, n.warmup = 10L)),
+    "nested_laplace|not yet wired")
+})

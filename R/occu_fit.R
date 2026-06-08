@@ -243,11 +243,23 @@
   # this round (gcol33/tulpaObs#51); "laplace" (analytic-gradient BFGS over the
   # exact marginal) or "nuts".
   if (identical(model$model_type, "fp_occu")) {
-    if (!is.null(spatial) || !is.null(temporal)) {
-      stop("fp_occu() currently supports non-spatial fixed effects only; a ",
-           "spatial / temporal term is not yet wired. (#51)", call. = FALSE)
+    if (!is.null(temporal)) {
+      stop("fp_occu() does not yet support temporal terms; a spatial icar() / ",
+           "car_proper() field on the occupancy arm fits under method = ",
+           "\"nested_laplace\". (#51)", call. = FALSE)
     }
-    if (identical(method, "nuts")) {
+    if (!is.null(spatial)) {
+      # Areal field on the occupancy (psi) arm via BFGS over the exact two-state
+      # marginal + CAR prior (tulpaObs#51); icar() / car_proper(), NUTS+spatial
+      # not wired.
+      if (identical(method, "nuts")) {
+        stop("fp_occu() with a spatial term fits under method = ",
+             "\"nested_laplace\"; NUTS + spatial is not yet wired. (#51)",
+             call. = FALSE)
+      }
+      fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, max_iter = max.iter,
+                                       tol = 1e-8, verbose = verbose)
+    } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_fp_occu_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,

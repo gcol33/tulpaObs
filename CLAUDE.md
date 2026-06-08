@@ -198,7 +198,13 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   emission `A` (uniform across a site's visits), both closed-form d1/d2. RE on
   BOTH arms at once rejected (one arm per AGHQ pass); p10/b never carry structured
   terms; NUTS samples the psi-arm intercept RE only. Det-arm RE params named
-  `sigma_p<t>_*` for the p11 process.
+  `sigma_p<t>_*` for the p11 process. Areal icar()/car_proper() field on the
+  occupancy (psi) arm via `nested_laplace` (tulpaObs#51, `R/fp_occu_spatial.R`):
+  the shared areal-BFGS driver (`R/areal_bfgs.R`, `.tobs_areal_bfgs_fit`, shared
+  with dyn_abun) -- BFGS over the two-state marginal (`cpp_fp_occu_total_log_lik`
+  analytic gradient) + CAR prior, FD-Hessian observed info; one unit/site.
+  Occupancy fields are more weakly identified than count fields (one binary site
+  per node); bym2/temporal + NUTS+spatial gated.
 - `dyn_abun` (tulpaObs#37): Dail-Madsen open N-mixture, `N_1~Pois(lambda)`,
   `N_t=Binom(N_{t-1},omega)+Pois(gamma)`, `Binom(N_t,p)` obs. Latent N sequence
   summed by exact HMM forward over states 0..K_max; analytic gradient by
@@ -218,10 +224,11 @@ NUTS engine (shared `src/nuts_engine.h`), draws -> WAIC/LOO; spatial/RE pending.
   Shared pmf helpers (`da_obs_season_pmf`/`da_recruit_pmf`/`da_binom_pmf_row`)
   back both the forward gradient kernel and the backward `c` pass. Areal
   icar()/car_proper() field on the initial-abundance arm via `nested_laplace`
-  (tulpaObs#51, `R/dyn_abun_spatial.R`): BFGS over the exact forward-HMM marginal
-  (`cpp_dyn_abun_total_log_lik` analytic gradient) + the CAR prior, FD-Hessian
-  observed-info Laplace marginal integrated over tau[,rho]; one unit/site,
-  Pois+NB; bym2/temporal + NUTS+spatial gated.
+  (tulpaObs#51, `R/dyn_abun_spatial.R` over the shared areal-BFGS driver
+  `R/areal_bfgs.R`, `.tobs_areal_bfgs_fit`, shared with fp_occu): BFGS over the
+  exact forward-HMM marginal (`cpp_dyn_abun_total_log_lik` analytic gradient) +
+  the CAR prior, FD-Hessian observed-info Laplace marginal integrated over
+  tau[,rho]; one unit/site, Pois+NB; bym2/temporal + NUTS+spatial gated.
 
 All filed observation-family issues shipped; no planned-status families remain.
 
@@ -375,7 +382,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (tulpaObs#13); non-species grouping; Pois/NB; AGHQ via `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Removal sampling (Pois/NB) | Yes | Yes | `removal()` (#39); `R/removal{,_nuts,_spatial}.R`. See Architecture. `test-removal.R`. NUTS samples a single intercept RE (abundance OR detection arm, #51). Laplace fits a site-level grouped RE on one arm via the shared count-model AGHQ path (`RemovalGroupedOracle`). Areal icar()/car_proper()/bym2() field on the abundance arm via `nested_laplace` (#51), reusing the templated count-spatial driver (`nmix_count_spatial_driver.h`); spde/temporal + NUTS+spatial gated |
 | Distance sampling (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins`. See Architecture. `test-distance.R`. NUTS samples a single abundance-arm intercept RE (#51). Laplace fits a site-level grouped RE on the abundance arm (half-normal key, dim<=3, one grouping factor) via the shared count-model AGHQ path (`DistanceGroupedOracle` over `CountGroupedOracle`); hazard-key/detection-arm RE gated. Areal icar()/car_proper() field on the abundance arm via `nested_laplace` (#51, dedicated `R/distance_spatial.R` over `cpp_distance_site_sweep`); bym2/hazard-spatial + NUTS+spatial gated |
-| False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51). Laplace fits a site-level grouped RE on the psi OR p11 (detection) arm (dim<=3, one grouping factor) via the pure-R `make_site` AGHQ path (no native oracle, branches on arm); both-arms-at-once rejected; spatial pending |
+| False-positive occupancy (multistate) | Yes | Yes | `fp_occu()` (#40); `R/fp_occu{,_nuts}.R`. See Architecture. `test-fp_occu.R`. NUTS samples a single occupancy (psi)-arm intercept RE (#51). Laplace fits a site-level grouped RE on the psi OR p11 (detection) arm via the pure-R `make_site` AGHQ path (branches on arm); both-arms-at-once rejected. Areal icar()/car_proper() field on the psi arm via `nested_laplace` (#51, `R/fp_occu_spatial.R` over the shared `R/areal_bfgs.R` driver); bym2 + NUTS+spatial gated |
 | Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y is 3D `[n_sites x J x T]`. See Architecture. `test-dyn_abun.R`. NUTS samples a single initial-abundance intercept RE (#51). Laplace fits a site-level grouped RE on the initial-abundance arm (one grouping factor, dim<=3) via the backward-`c` precompute + `make_site` AGHQ path; detection-arm RE gated. Areal icar()/car_proper() field on the initial-abundance arm via `nested_laplace` (#51, `R/dyn_abun_spatial.R`, BFGS + FD-Hessian); bym2 + NUTS+spatial gated |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |

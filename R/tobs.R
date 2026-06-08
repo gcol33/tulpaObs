@@ -1056,10 +1056,12 @@ tobs <- function(formula,
   # occupancy z summed out in closed form (two states); four site-level logit
   # arms (psi, true detection p11, false-positive p10, certain-classification b).
   # Non-spatial analytic-gradient BFGS over the exact marginal with an
-  # observed-information vcov (laplace) and the in-tree C++ FullGradFn NUTS over
-  # the same marginal (R/fp_occu.R, R/fp_occu_nuts.R, src/fp_occu_*.cpp). Spatial
-  # / RE not yet wired (gcol33/tulpaObs#40).
-  fp_occu  = c("laplace", "nuts"),
+  # observed-information vcov (laplace), grouped-RE AGHQ Laplace (psi or p11 arm),
+  # the in-tree C++ FullGradFn NUTS, and an areal icar()/car_proper() field on the
+  # occupancy arm via nested_laplace (BFGS over the marginal + CAR prior, FD-Hessian
+  # observed info; tulpaObs#51). bym2 / temporal not yet wired (R/fp_occu.R,
+  # R/fp_occu_spatial.R, src/fp_occu_*.cpp).
+  fp_occu  = c("laplace", "nested_laplace", "nuts"),
   # dyn_abun: Dail-Madsen open-population N-mixture (Poisson initial abundance,
   # binomial survival, Poisson recruitment, binomial detection). The latent
   # abundance sequence is summed out by an exact HMM forward recursion (not closed
@@ -1236,7 +1238,7 @@ tobs <- function(formula,
   # mis-wire rather than a user error to downgrade silently.
   if (engine == "nested_laplace") {
     if (family %in% c("occu", "int_occu", "dyn_occu", "abun", "removal",
-                       "distance", "dyn_abun", "occu_cover",
+                       "distance", "dyn_abun", "fp_occu", "occu_cover",
                        "occu_multiscale_cover")) {
       return("nested_laplace")
     }
