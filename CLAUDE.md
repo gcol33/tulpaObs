@@ -385,6 +385,7 @@ NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 | JSDM | Yes | — | no detection |
 | Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*`. `control$aggregate.occ` (ON, #48) collapses occurrence arm to exact Binomial suff-stat; `control$aggregate.pos` (ON for beta arm, #49) collapses beta positive arm to grouped `(n, sum log y, sum log(1-y))` (tulpa beta spec `slog_y`/`slog_1my`); explicit `aggregate.pos=TRUE` errors on non-beta arm. Both byte-identical to per-plot; `.cover_aggregate_occ`/`.cover_aggregate_pos`, scattered via `.cover_arm_keys_from_blocks`/`.cover_scatter_arm_keys` |
 | Joint occu + cover | Yes | — | `occu_cover()` — see below |
+| Joint occu + cover + areal field + per-group RE | n-L | — | `occu_cover()` + `icar()`/`bym2()` + `re(g)`/`(1\|g)` on psi; one iid RE block on the joint engine (tulpaObs#56, consumer of tulpa#86); `sigma_re` + BLUPs (`fit$re`/`ranef()`); intercept RE only — see below |
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
 | Spatial-factor community occu + cover (JSDM) | Yes | Yes | `ms_occu_cover()` + `icar()`/`car_proper()`/`bym2()` shared field, per-species loadings (tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`src/ms_occu_cover_spatial_nuts.cpp`). Cover-arm factor, auto-K, `tobs_associations()`, per-species `predict()` maps |
 | Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only — see below |
@@ -474,6 +475,20 @@ psi/p/cover run over `n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_m
 (occupancy unit) decouple. Motivating layout: site = cell x time-period. R-side only
 (`.dispatch_occu_cover`, `.occu_cover_build_joint_coupled_arms`); joint_coupled only.
 `test-occu-cover-group-var.R`.
+
+**Per-group RE on the shared-field path (tulpaObs#56)**: one random intercept on
+psi -- `re(g)`/`(1|g)` -- alongside the field joins the joint fit as one `iid`
+prior block (consumer of tulpa#86's field + per-group RE composition). Variance
+integrates on the outer grid (reported `sigma_re`); BLUPs in `fit$re` + `ranef()`.
+Forces multi-block (RE = 2nd prior block); `.occu_cover_spatial_fields` extracts
+the `tobs_re` term, fitter appends the iid block (`obs_idx` = group on psi rows, 0
+on p/pos), `.occu_cover_jc_postprocess` extracts `sigma_re` + BLUPs. Scope: ONE
+random intercept (scalar/group -> one iid block); slope/correlated/RE-without-field
+rejected; v2/v3 hatches carry no RE. Per-arm community variances don't scale on
+this route (joint engine grid-integrates every variance component), so the
+COMMUNITY spatial occu_cover (shared field across arms + per-species RE all arms)
+is the reduced-rank Laplace-EM `ms_occu_cover()` + `icar()` (tulpa#67, see below),
+not this path. `re.sigma.grid` knob. `test-occu-cover-field-re.R`.
 
 ### `ms_occu_cover()` detail
 
