@@ -266,8 +266,17 @@
 #' @param model A `tobs_model` (model_type = "single").
 #' @param em_result The EM-Laplace return list (with `$fits$occ`, `$fits$det`,
 #'   `$weights`).
-#' @param spatial Optional `tobs_spatial` (skewness disabled when set,
-#'   pending Phase 3.5 / spatial Sigma exposure).
+#' @param spatial Optional `tobs_spatial`. When set, the skewness correction is
+#'   intentionally NOT applied and the fit keeps Gaussian marginals -- this is the
+#'   correct conservative behaviour, not a stub (gcol33/tulpaObs#55): the
+#'   third-cumulant correction (Rue, Martino & Chopin 2009 sec.3.2) captures the
+#'   skewness of the fixed-effect (hyperparameter-free) marginals, but for a
+#'   spatial latent field the dominant marginal skewness comes from integrating
+#'   over the field-precision hyperparameter, which a correction conditioned on a
+#'   single hyperparameter value does not capture. Validated against NUTS: every
+#'   simplified-Laplace construction (modal-hyper, grid-mixture, mixture of
+#'   skew-normals) disagreed with the NUTS posterior skewness in sign and/or
+#'   magnitude, so applying one would be worse than the Gaussian fallback.
 #' @param prior_spec Optional prior spec; passed to `.louis_info_psi_single()`
 #'   so the penalty is included in I_obs.
 #' @return List(gamma, valid, reason).
@@ -276,7 +285,13 @@
                                      prior_spec = NULL) {
   if (!is.null(spatial)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "SLA on spatial Sigma not yet implemented (Phase 3.5, #55)"))
+                reason = paste0(
+                  "Gaussian marginals retained for spatial Sigma by design: the ",
+                  "simplified-Laplace third-cumulant correction is valid for ",
+                  "hyperparameter-free fixed-effect marginals only; for a spatial ",
+                  "field the dominant skewness is hyperparameter-marginalisation, ",
+                  "which it does not capture (validated against NUTS, ",
+                  "gcol33/tulpaObs#55).")))
   }
   if (is.null(em_result$weights)) {
     return(list(gamma = NULL, valid = FALSE,

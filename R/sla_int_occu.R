@@ -156,8 +156,14 @@
 #' @param model A `tobs_model` (model_type = "integrated").
 #' @param em_result EM-Laplace return list (with `$fits$occ`,
 #'   `$fits$det1`,...,`$fits$det<S>`, `$weights`).
-#' @param spatial Optional `tobs_spatial` (skewness disabled when set --
-#'   integrated + spatial Laplace is not yet plumbed in `.tobs_laplace`).
+#' @param spatial Optional `tobs_spatial`. When set, the skewness correction is
+#'   intentionally NOT applied (Gaussian marginals retained) for the same reason
+#'   as the single-season path (gcol33/tulpaObs#55): the simplified-Laplace
+#'   third-cumulant correction captures hyperparameter-free fixed-effect marginal
+#'   skewness, but a spatial field's marginal skewness is dominated by
+#'   hyperparameter-marginalisation, which the correction does not capture
+#'   (validated against NUTS). The Gaussian fallback is the correct conservative
+#'   behaviour, not a stub.
 #' @param prior_spec Optional prior spec; passed to `.louis_info_psi_single()`
 #'   so the penalty enters Louis I_obs.
 #' @return `list(gamma, valid, reason)`.
@@ -166,7 +172,12 @@
                                   prior_spec = NULL) {
   if (!is.null(spatial)) {
     return(list(gamma = NULL, valid = FALSE,
-                reason = "SLA on spatial Sigma not yet implemented for int_occu (#55)"))
+                reason = paste0(
+                  "Gaussian marginals retained for spatial Sigma by design ",
+                  "(int_occu): the simplified-Laplace skew correction does not ",
+                  "capture the hyperparameter-marginalisation skewness that ",
+                  "dominates a spatial field (validated against NUTS, ",
+                  "gcol33/tulpaObs#55).")))
   }
   if (is.null(em_result$weights)) {
     return(list(gamma = NULL, valid = FALSE,

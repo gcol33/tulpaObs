@@ -12,8 +12,14 @@
 \item{em_result}{EM-Laplace return list (with \verb{$fits$occ},
 \verb{$fits$det1},...,\verb{$fits$det<S>}, \verb{$weights}).}
 
-\item{spatial}{Optional \code{tobs_spatial} (skewness disabled when set --
-integrated + spatial Laplace is not yet plumbed in \code{.tobs_laplace}).}
+\item{spatial}{Optional \code{tobs_spatial}. When set, the skewness correction is
+intentionally NOT applied (Gaussian marginals retained) for the same reason
+as the single-season path (gcol33/tulpaObs#55): the simplified-Laplace
+third-cumulant correction captures hyperparameter-free fixed-effect marginal
+skewness, but a spatial field's marginal skewness is dominated by
+hyperparameter-marginalisation, which the correction does not capture
+(validated against NUTS). The Gaussian fallback is the correct conservative
+behaviour, not a stub.}
 
 \item{prior_spec}{Optional prior spec; passed to \code{.louis_info_psi_single()}
 so the penalty enters Louis I_obs.}

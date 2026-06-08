@@ -12,8 +12,17 @@
 \item{em_result}{The EM-Laplace return list (with \verb{$fits$occ}, \verb{$fits$det},
 \verb{$weights}).}
 
-\item{spatial}{Optional \code{tobs_spatial} (skewness disabled when set,
-pending Phase 3.5 / spatial Sigma exposure).}
+\item{spatial}{Optional \code{tobs_spatial}. When set, the skewness correction is
+intentionally NOT applied and the fit keeps Gaussian marginals -- this is the
+correct conservative behaviour, not a stub (gcol33/tulpaObs#55): the
+third-cumulant correction (Rue, Martino & Chopin 2009 sec.3.2) captures the
+skewness of the fixed-effect (hyperparameter-free) marginals, but for a
+spatial latent field the dominant marginal skewness comes from integrating
+over the field-precision hyperparameter, which a correction conditioned on a
+single hyperparameter value does not capture. Validated against NUTS: every
+simplified-Laplace construction (modal-hyper, grid-mixture, mixture of
+skew-normals) disagreed with the NUTS posterior skewness in sign and/or
+magnitude, so applying one would be worse than the Gaussian fallback.}
 
 \item{prior_spec}{Optional prior spec; passed to \code{.louis_info_psi_single()}
 so the penalty is included in I_obs.}
