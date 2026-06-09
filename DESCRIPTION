@@ -16,7 +16,7 @@ Imports:
     Matrix,
     methods,
     Rcpp (>= 1.0.12),
-    tulpa (>= 0.0.27),
+    tulpa (>= 0.0.28),
     tulpaMesh (>= 0.1.2),
     parallel
 Suggests:
@@ -40,7 +40,7 @@ LinkingTo:
     tulpa
 Remotes:
     gcol33/tulpaMesh@v0.1.2,
-    gcol33/tulpa@v0.0.27
+    gcol33/tulpa@v0.0.28
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, dyn_abun, distance, fp_occu, method-gibbs-recovery, re-laplace-recovery,

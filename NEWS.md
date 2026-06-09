@@ -32,6 +32,16 @@
   (`occu()`, `abun()`, the `ms_*` families, ...) keep `y =` and a two-sided
   formula for those errors. Supplying the response on both the LHS and `y =`
   errors.
+* feat(formula): a correlated spatial bar (single `|`) on the cover hurdle wires
+  the within-arm coefficient fields as a separable MCAR with a free 2x2 `Sigma`
+  (#64). `spatial(~ 1 + time | cell, graph = adj)` makes the intercept and slope
+  Besag fields correlated (free cross-covariance, integrated over the outer CCD
+  grid in log-Cholesky coords), then copies the whole correlated field onto the
+  positive arm with one estimated amplitude `alpha`. The fit reports `sigma_mcar`
+  (per-field SDs), `rho_mcar` (cross-correlation), and `alpha_mcar`. `||`
+  (independent fields) is unchanged. `nested_laplace` engine, intrinsic-CAR
+  (icar) only; the simplified-Laplace correction over a correlated MCAR field is
+  not yet wired (records `sla_status`). Requires tulpa >= 0.0.28.
 * The cover hurdle's two arms are now labelled `presence` (the `y > 0` Bernoulli
   arm) and `positive` (the `y | y > 0` arm) consistently across `summary()`,
   `print()`, and the `to =` argument (formula label == output label),

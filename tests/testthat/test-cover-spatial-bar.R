@@ -181,15 +181,48 @@ test_that("an unknown to= arm label errors listing the valid arms", {
     "presence.*positive|positive.*presence")
 })
 
-test_that("a correlated `|` bar errors pointing to the `||` spelling", {
+test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
+  d <- .bar_small_data()
+  # Tiny smoke data: the outer CCD over Sigma is weakly identified and declines
+  # to the tensor grid (a benign grid-size note); the assertion is plumbing
+  # (structure + summary shape), with parameter recovery in
+  # test-cover-spatial-bar-mcar.R.
+  fit <- suppressWarnings(tobs(
+              formula = ~ time +
+                          spatial(~ 1 + time | cell, graph = d$adj,
+                                  to = c("presence", "positive")),
+              data = d$df, family = cover(positive = "lognormal"), y = d$y,
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE, max.iter = 40L,
+                             integration = "grid")))
+  expect_s3_class(fit, "cover_fit")
+  expect_true(isTRUE(fit$mcar))
+  # The cross-covariance summary carries one SD per field and the cross-corr.
+  expect_length(fit$sigma_mcar, 2L)
+  expect_length(fit$rho_mcar, 1L)
+  expect_true(is.finite(fit$alpha_mcar))
+})
+
+test_that("a correlated `|` bar requires both cover arms on `to`", {
+  d <- .bar_small_data()
+  expect_error(
+    tobs(formula = ~ time +
+                     spatial(~ 1 + time | cell, graph = d$adj, to = "presence"),
+         data = d$df, family = cover(positive = "lognormal"), y = d$y,
+         method = "nested_laplace", control = list(verbose = FALSE)),
+    "both cover arms|arm-specific|separate latent")
+})
+
+test_that("a correlated `|` bar cannot co-exist with another areal term", {
   d <- .bar_small_data()
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time | cell, graph = d$adj,
-                             to = c("presence", "positive")),
+                             to = c("presence", "positive")) +
+                     icar(graph = d$adj, group_var = "cell"),
          data = d$df, family = cover(positive = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
-    "correlated|\\|\\|")
+    "whole spatial structure|other areal terms")
 })
 
 test_that("a single-arm to= errors pointing to the shared form", {
