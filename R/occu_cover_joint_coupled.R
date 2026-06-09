@@ -324,6 +324,7 @@
 .tobs_fit_occu_cover_joint_coupled <- function(model, fields,
                                                 priors    = NULL,
                                                 re_spec   = NULL,
+                                                correlated = FALSE,
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
@@ -382,6 +383,21 @@
   if (has_re && isTRUE(.batch_collect)) {
     stop("occu_cover(): the batched fused path does not carry a per-group RE ",
          "block.", call. = FALSE)
+  }
+
+  # Correlated (`|`) free-Sigma MCAR field (gcol33/tulpaObs#63): one coupled
+  # block over the bar's intercept + coefficient fields, copied onto the cover
+  # arm with one amplitude alpha. Scoped to the standard (non-latent, unbatched)
+  # path; the latent cover RE and the fused batch driver are not composed with it.
+  if (correlated) {
+    if (is_latent) {
+      stop("occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) does ",
+           "not compose with cover_aggregate = \"latent\".", call. = FALSE)
+    }
+    if (isTRUE(.batch_collect)) {
+      stop("occu_cover(): the batched fused path does not carry a correlated ",
+           "MCAR field.", call. = FALSE)
+    }
   }
 
   # Pre-fit the pos-arm dispersion(s). The non-latent paths carry a single
@@ -575,7 +591,41 @@
     }
   }
 
-  if (has_trend) {
+  if (correlated) {
+    # Correlated free-Sigma MCAR (gcol33/tulpaObs#63): ONE coupled block over the
+    # bar's intercept + coefficient fields, sharing a free cross-covariance
+    # Sigma (x) Q^-1 on the occupancy arm (the within-arm relationship among the
+    # fields, integrated over the outer CCD in log-Cholesky coords), copied onto
+    # the cover arm with one amplitude alpha (the cross-arm transfer). The p
+    # (detection) arm carries no field: its 0-sentinel cell index skips the block
+    # (mcar_block_factory's `cell < 1 => skip`). Per (field, arm) weights mirror
+    # the trend path -- the intercept is all-ones, each coefficient its per-site
+    # design column, and the cover arm slices both by `pos_site`.
+    field_weight_site <- c(
+      list(rep(1.0, n_sites)),
+      lapply(coupled_trends, function(tf) as.numeric(tf$weight))
+    )
+    p_mcar <- length(field_weight_site)
+    pos_field_node <- as.integer(site_cell[pos_site])
+    mcar_block <- list(
+      type            = "mcar",
+      n_spatial_units = csr$n_spatial_units,
+      n_fields        = as.integer(p_mcar),
+      adj_row_ptr     = csr$adj_row_ptr,
+      adj_col_idx     = csr$adj_col_idx,
+      n_neighbors     = csr$n_neighbors,
+      spatial_idx     = list(as.integer(site_cell), rep(0L, n_v),
+                             pos_field_node),
+      field_weight    = lapply(field_weight_site, function(w)
+        list(as.numeric(w), rep(1.0, n_v), as.numeric(w[pos_site])))
+    )
+    prior_arg <- list(mcar_block)
+    copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
+    # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky Sigma +
+    # alpha), so the outer grid uses the mode-centred CCD by default rather than
+    # a dense tensor (the same recipe the cover-hurdle MCAR path uses).
+    if (is.null(dots$integration)) dots$integration <- "ccd"
+  } else if (has_trend) {
     # Multi-block path: the intercept ICAR block plus one ICAR block per coupled
     # trend field, all on the same graph and each copied onto the pos arm with
     # its own alpha axis. The p arm is excluded from every field via its
@@ -727,7 +777,9 @@
               n_quad_latent = if (is_latent) n_quad_latent else NULL,
               sigma_pos_init = sigma_pos_init, has_trend = has_trend,
               n_trend = n_trend, coupled_trends = coupled_trends, model = model,
-              re_spec = re_spec)
+              re_spec = re_spec,
+              mcar = correlated,
+              n_fields_mcar = if (correlated) 1L + n_trend else NULL)
 
   # Batched fused path (gcol33/tulpa#66): return the assembled call + context
   # instead of fitting, so .tobs_fit_occu_cover_batch_fused can run B species
@@ -834,13 +886,23 @@
   # (family_cover_hurdle.R) -- the dense-block analogue of `.joint_inner_var()`,
   # same constraint correction, one source of truth across families.
   p_beta    <- p_psi + p_p + p_pos
+  mcar      <- isTRUE(ctx$mcar)
   # One latent field block per coupled spatial field. The multi-block layout
   # reports every ICAR/structured field's 0-based offset in `field_starts`;
   # the single-block joint layout reports the one field's offset in `phi_start`.
+  # The correlated MCAR field is a SINGLE block of p sub-fields laid out
+  # contiguously (slot a*n_cells + cell for sub-field a), so the decode treats it
+  # as p sub-fields over one contiguous run -- every per-field summary below
+  # (demeaning, z-tables, block slicing) is shared with the independent path.
   field_starts0 <- layout$field_starts %||% layout$phi_start
-  n_fields      <- length(field_starts0)
-  field_idx     <- as.integer(unlist(lapply(field_starts0,
-                                            function(s0) s0 + seq_len(n_cells))))
+  if (mcar) {
+    n_fields  <- as.integer(ctx$n_fields_mcar)
+    field_idx <- as.integer(field_starts0[[1L]] + seq_len(n_fields * n_cells))
+  } else {
+    n_fields  <- length(field_starts0)
+    field_idx <- as.integer(unlist(lapply(field_starts0,
+                                          function(s0) s0 + seq_len(n_cells))))
+  }
   idx_joint <- c(bpsi_idx, bp_idx, bpos_idx, field_idx)
   blocks    <- .joint_inner_vcov_block(fit, idx_joint)
 
@@ -981,7 +1043,51 @@
   # second prior block), so the field axes carry the `b<k>.` names even without a
   # trend field. The RE variance is the iid block's `b<n_fields+1>.sigma`.
   has_re <- !is.null(ctx$re_spec)
-  if (has_trend || has_re) {
+  if (mcar) {
+    # Free-Sigma MCAR hyperparameters (gcol33/tulpaObs#63). Reconstruct Sigma per
+    # outer-grid cell from the log-Cholesky axes b1.L<i><j>, derive each field SD
+    # (sigma_mcar<a>, a = 1 intercept .. p) and each cross-correlation
+    # (rho_mcar_<a><b>), and carry the per-cell values so their grid-weighted
+    # moments AND their between-cell covariance with the betas / other hypers are
+    # marginalized over the joint posterior, not plugged in at the mode (the
+    # marginalize-derived-quantities rule). The whole correlated field's copy
+    # amplitude onto the cover arm is the alpha_mcar grid axis.
+    p_f  <- n_fields
+    m_lc <- p_f * (p_f + 1L) / 2L
+    axis_nm <- character(m_lc); tt <- 1L
+    for (j in seq_len(p_f)) for (i in j:p_f) {
+      axis_nm[tt] <- sprintf("b1.L%d%d", i, j); tt <- tt + 1L
+    }
+    lc_cols <- match(axis_nm, tg_names)
+    n_ok    <- length(ok_cells)
+    sd_mat  <- matrix(NA_real_, n_ok, p_f)
+    n_rho   <- p_f * (p_f - 1L) / 2L
+    rho_mat <- matrix(NA_real_, n_ok, n_rho)
+    for (k in seq_len(n_ok)) {
+      L   <- .cover_mcar_logchol_to_L(as.numeric(tg_ok[k, lc_cols]), p_f)
+      Sig <- L %*% t(L)
+      sds_k <- sqrt(pmax(diag(Sig), 0))
+      sd_mat[k, ] <- sds_k
+      cc <- 1L
+      for (a in seq_len(p_f - 1L)) for (b in (a + 1L):p_f) {
+        rho_mat[k, cc] <- Sig[a, b] / max(sds_k[a] * sds_k[b], 1e-12); cc <- cc + 1L
+      }
+    }
+    put_derived <- function(public, vals) {
+      mn <- sum(w * vals); vv <- sum(w * vals^2) - mn^2
+      hyper_means[[public]] <<- mn
+      hyper_sds  [[public]] <<- sqrt(max(vv, 0))
+      hyper_vals [[public]] <<- as.numeric(vals)
+      hyper_names <<- c(hyper_names, public)
+    }
+    for (a in seq_len(p_f)) put_derived(sprintf("sigma_mcar%d", a), sd_mat[, a])
+    cc <- 1L
+    for (a in seq_len(p_f - 1L)) for (b in (a + 1L):p_f) {
+      put_derived(sprintf("rho_mcar_%d%d", a, b), rho_mat[, cc]); cc <- cc + 1L
+    }
+    pick2("alpha_mcar", "b1.alpha")
+    pick("phi_pos", phi_pos_public)
+  } else if (has_trend || has_re) {
     # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
     # then the RE block (if any). A single trend field keeps the bare
     # sigma_trend/alpha_trend names; several are indexed (sigma_trend1, ...).
@@ -1112,6 +1218,39 @@
   # rather than a bare unit default (gcol33/tulpaObs#34).
   if (!is_latent) model$cover_pos_disp <- sigma_pos_init
 
+  # Spatial summary. The correlated MCAR field reports its per-field SDs
+  # (sigma_mcar, intercept first) and cross-correlations (rho_mcar) alongside the
+  # single copy amplitude (alpha_mcar); sigma_mean / alpha_mean stay populated
+  # (intercept-field SD + copy) so the shared print / summary / predict layer
+  # reads it without branching on the field structure.
+  if (mcar) {
+    rho_nms <- grep("^rho_mcar_", names(hyper_means), value = TRUE)
+    spatial_summary <- list(
+      type = "mcar", graph = adj,
+      sigma_mean = unname(hyper_means["sigma_mcar1"]),
+      alpha_mean = unname(hyper_means["alpha_mcar"]),
+      sigma_trend_mean = if (n_fields >= 2L)
+        unname(hyper_means["sigma_mcar2"]) else NULL,
+      alpha_trend_mean = NULL,
+      sigma_mcar = vapply(seq_len(n_fields), function(a)
+        unname(hyper_means[[sprintf("sigma_mcar%d", a)]]), numeric(1)),
+      rho_mcar   = if (length(rho_nms))
+        unname(unlist(hyper_means[rho_nms])) else numeric(0),
+      rho_mcar_names = rho_nms,
+      alpha_mcar = unname(hyper_means["alpha_mcar"]))
+  } else {
+    spatial_summary <- list(
+      type = "icar", graph = adj,
+      sigma_mean = unname(hyper_means["sigma"]),
+      alpha_mean = unname(hyper_means["alpha"]),
+      sigma_trend_mean = if (has_trend)
+        unname(hyper_means[if (n_trend == 1L) "sigma_trend"
+                           else "sigma_trend1"]) else NULL,
+      alpha_trend_mean = if (has_trend)
+        unname(hyper_means[if (n_trend == 1L) "alpha_trend"
+                           else "alpha_trend1"]) else NULL)
+  }
+
   structure(c(list(
     draws        = draws,
     means        = means,
@@ -1128,15 +1267,7 @@
     param_names  = par_names,
     process_info = pi_list,
     model        = model,
-    spatial      = list(type = "icar", graph = adj,
-                        sigma_mean = unname(hyper_means["sigma"]),
-                        alpha_mean = unname(hyper_means["alpha"]),
-                        sigma_trend_mean = if (has_trend)
-                          unname(hyper_means[if (n_trend == 1L) "sigma_trend"
-                                             else "sigma_trend1"]) else NULL,
-                        alpha_trend_mean = if (has_trend)
-                          unname(hyper_means[if (n_trend == 1L) "alpha_trend"
-                                             else "alpha_trend1"]) else NULL),
+    spatial      = spatial_summary,
     spatial_field = field_intercept,
     trend_field   = field_trend,
     trend_fields  = if (length(trend_means))  trend_means  else NULL,

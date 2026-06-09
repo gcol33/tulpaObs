@@ -103,14 +103,34 @@
   # `.tobs_bind_formulas` returns terms wrapped in `list(spec = ..., process = ...)`.
   spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
   if (length(spatial) == 0L) return(NULL)
-  # A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`,
+  # A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj)`,
   # gcol33/tulpaObs#61) desugars in place to the intercept field + per-covariate
-  # trend fields, the same pair the two-term form produces. The `||` shared path
-  # is the only one wired; `|` / arm-specific `to` are gated in the desugarer.
+  # trend fields, the same pair the two-term form produces -- INDEPENDENT areal
+  # fields, each with its own precision. A correlated bar (single `|`, the
+  # free-Sigma separable MCAR of gcol33/tulpaObs#64) declares the SAME per-field
+  # design, but the intercept + coefficient fields share a free cross-covariance
+  # Sigma on the occupancy arm and are copied onto the cover arm together with one
+  # amplitude alpha (gcol33/tulpaObs#63). It is fitted as one coupled MCAR block
+  # rather than independent fields, so it must be the only spatial term (one field
+  # structure per fit); `correlated` flags it for the joint-coupled fitter.
   specs <- list()
+  correlated <- FALSE
   for (t in spatial) {
     if (isTRUE(t$spec$is_bar)) {
-      specs <- c(specs, .cover_desugar_spatial_bar(t$spec, data))
+      if (isTRUE(t$spec$correlated)) {
+        if (correlated || length(specs) > 0L || length(spatial) > 1L) {
+          stop(paste0(
+            "occu_cover(): a correlated spatial bar (`|`) must be the only ",
+            "spatial term in the psi formula (one MCAR field structure per ",
+            "fit). Drop the other areal term(s), or use the INDEPENDENT ",
+            "spelling `||` to combine separate per-coefficient fields."),
+            call. = FALSE)
+        }
+        specs <- .tobs_expand_spatial_bar(t$spec, data)
+        correlated <- TRUE
+      } else {
+        specs <- c(specs, .cover_desugar_spatial_bar(t$spec, data))
+      }
     } else {
       specs[[length(specs) + 1L]] <- t$spec
     }
@@ -195,8 +215,33 @@
                     n_groups  = as.integer(rs$n_groups))
   }
 
+  # Correlated (`|`) MCAR field requirements (gcol33/tulpaObs#63): at least one
+  # coefficient beyond the intercept (a single field has no cross-covariance),
+  # intrinsic CAR only, and no per-group RE (the MCAR block already spans the
+  # full coupled field structure; a layered iid block is not wired with it yet).
+  if (correlated) {
+    if (length(specs) < 2L) {
+      stop(paste0(
+        "occu_cover(): a correlated spatial bar (`|`) needs at least one ",
+        "coefficient beyond the intercept (e.g. spatial(~ 1 + x | cell, ",
+        "graph = adj)); a single field has no cross-covariance to estimate. ",
+        "Use icar()/`||` for an uncorrelated field."), call. = FALSE)
+    }
+    if (!all(vapply(specs, function(s) identical(s$type, "icar"), logical(1)))) {
+      stop(paste0(
+        "occu_cover(): a correlated spatial bar (`|`) uses the intrinsic CAR ",
+        "(icar); bym2 is not supported for the MCAR field."), call. = FALSE)
+    }
+    if (!is.null(re_spec)) {
+      stop(paste0(
+        "occu_cover(): a correlated spatial bar (`|`) does not compose with a ",
+        "per-group occupancy random effect; fit one or the other."),
+        call. = FALSE)
+    }
+  }
+
   list(fe = bind$fe$psi, fields = c(base, specs[weighted]),
-       group_var = group_var, re = re_spec)
+       group_var = group_var, re = re_spec, correlated = correlated)
 }
 
 

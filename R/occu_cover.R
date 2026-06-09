@@ -729,8 +729,15 @@
     # pure-R nested-Laplace and v2's joint Laplace stay reachable via
     # control$engine = "v3_nested" / "v2_joint" as debug escape hatches; both
     # take only the single intercept field.
+    correlated <- isTRUE(spatial_info$correlated)
     engine_pick <- control[["engine"]] %||% "joint_coupled"
     control[["engine"]] <- NULL
+    if (correlated && engine_pick %in% c("v2_joint", "v3_nested")) {
+      stop(sprintf(paste0(
+        "occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) needs ",
+        "the default joint_coupled engine; the \"%s\" escape hatch couples a ",
+        "single shared field only."), engine_pick), call. = FALSE)
+    }
     if (engine_pick %in% c("v2_joint", "v3_nested")) {
       if (!is.null(re_spec)) {
         stop(sprintf(paste0(
@@ -770,7 +777,7 @@
       return(do.call(fitter, fit_args))
     }
     fit_args <- c(list(model = model, fields = fields, priors = priors,
-                       re_spec = re_spec),
+                       re_spec = re_spec, correlated = correlated),
                   control)
     return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
   }

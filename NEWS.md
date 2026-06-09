@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.26 (2026-06-09)
+
+* feat(formula): correlated (`|`) free-Sigma MCAR spatial coefficient fields on
+  `occu_cover()` (#63). `spatial(~ 1 + x | cell, graph = adj)` on the occupancy
+  formula declares the intercept and x-slope Besag fields as a separable MCAR with
+  a free 2x2 cross-covariance `Sigma` (the within-arm covariance among the fields,
+  integrated over the outer mode-centred CCD in log-Cholesky coordinates), then
+  copies the whole correlated field onto the cover arm with one estimated
+  amplitude `alpha`. Reports `sigma_mcar` / `rho_mcar` / `alpha_mcar`, marginalized
+  over the grid. The independent `||` spelling (#61) is unchanged. Scoped to
+  `icar`, the standard (non-latent) cover path, and at least two coefficient
+  fields; correlated `|` does not compose with a per-group occupancy RE or the
+  v2/v3 escape engines, which error with a pointer. This required a tulpa engine
+  change (the coupled per-cell scatter now handles `INDEXED_MULTI` blocks);
+  requires tulpa >= 0.0.29. Recovery-tested in `test-occu-cover-spatial-mcar.R`.
+* A correlated `|` bar in an `occu_cover()` / `occu_multiscale_cover()` formula
+  previously fell through to the independent `||` expansion **silently** -- the
+  free cross-covariance was dropped with no warning. It now routes to the MCAR
+  field (`occu_cover()`) or errors with a pointer (`occu_multiscale_cover()`),
+  never a silent wrong model.
+
 ## 0.0.25 (2026-06-09)
 
 * feat(formula): single-term varying-coefficient spatial bar in `cover()` /

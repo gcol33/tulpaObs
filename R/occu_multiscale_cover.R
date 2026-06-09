@@ -444,6 +444,13 @@
          "method = \"nested_laplace\" and ignored under method = \"laplace\").",
          call. = FALSE)
   }
+  if (isTRUE(spatial_info$correlated)) {
+    stop(paste0(
+      "occu_multiscale_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) ",
+      "is wired on occu_cover()/cover(), not the multiscale path. Use the ",
+      "INDEPENDENT spelling `||` (or the two-term areal form) here."),
+      call. = FALSE)
+  }
   gv <- spatial_info$group_var
   if (is.null(gv)) {
     stop("occu_multiscale_cover() requires group_var on the icar()/bym2() ",
