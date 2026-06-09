@@ -1,6 +1,6 @@
 # tulpaObs NEWS
 
-## 0.0.25 (in development)
+## 0.0.25 (2026-06-09)
 
 * feat(formula): single-term varying-coefficient spatial bar in `cover()` /
   `occu_cover()` (#61). `spatial(~ 1 + time || cell, graph = adj, to =
@@ -14,8 +14,8 @@
   `weight =` forms are unchanged. `to =` validates against the family arm set,
   is order-free (presence anchor regardless of order), and defaults to both
   arms. Built on `tulpa::tulpa_is_spatial_bar()` / `tulpa::tulpa_bar_field_specs()`
-  (tulpa#93). A correlated `|` bar (#64) and arm-specific separate latents
-  (single-arm `to =`, #65) error with a pointer to the shared spelling.
+  (tulpa#93). The correlated `|` bar (#64) and the arm-specific single-arm `||`
+  bar (#65) have their own entries below.
 * `cover()` / `occu_cover()` now emit an informative message when a bare `|` / `||`
   formula bar groups by the same factor an areal term uses as its graph-node
   `group_var` (#62): the bar is a random effect, not a spatial field, so the
@@ -42,6 +42,23 @@
   (independent fields) is unchanged. `nested_laplace` engine, intrinsic-CAR
   (icar) only; the simplified-Laplace correction over a correlated MCAR field is
   not yet wired (records `sla_status`). Requires tulpa >= 0.0.28.
+* feat(formula): an INDEPENDENT (`||`) spatial bar with a single-arm `to =` fits
+  an arm-specific separate latent field -- on that arm only, with its own
+  precision and NO cross-arm copy (#65). `spatial(~ 1 + w || cell, graph = adj,
+  to = "positive")` (or `"presence"`) places a non-copied areal field on the named
+  arm; two separate single-arm calls give independent per-arm fields with no
+  coupling between them. This is the free counterpart to the shared, presence-
+  anchored, copied `to = c("presence", "positive")` field (#61): there one field
+  is copied across arms with an estimated `alpha`, here each arm carries its own
+  field, with that field's precision integrated on the outer nested-Laplace grid.
+  No engine change -- a per-arm `spatial_idx = 0` sentinel makes the other arm's
+  rows skip the block (the engine's `l_b > 0` scatter guard). `nested_laplace`
+  engine; intrinsic-CAR / proper-CAR (`icar` / `car` / `car_proper`) only (the
+  bym2 phi+theta mix is deferred). The fit reports `sigma_armspecific` (per-field
+  SDs). Arm-specific fields do not compose with a shared field, a correlated `|`
+  bar, a weighted trend, or `temporal()` / `re()` in the same formula (those
+  couple the arms), and at most one field targets each arm. A single-arm
+  correlated `|` bar stays copy-only and errors.
 * The cover hurdle's two arms are now labelled `presence` (the `y > 0` Bernoulli
   arm) and `positive` (the `y | y > 0` arm) consistently across `summary()`,
   `print()`, and the `to =` argument (formula label == output label),

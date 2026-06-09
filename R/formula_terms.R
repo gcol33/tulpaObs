@@ -511,19 +511,17 @@
 # group_var = node)` would produce, so the bar form desugars to exactly the
 # two-term coupled cover path with no engine change. Returns a list of
 # `tobs_spatial` terms in column order (intercept first).
-.tobs_expand_spatial_bar <- function(spec, data) {
-  specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data)
-  node  <- attr(specs, "node")
-  ctor  <- .tobs_terms[[spec$type]]
-
-  # Validate the node index against the graph dimension (the bar RHS is the
-  # graph node index, the old group_var).
+# Validate a bar's node-index column against the graph dimension (the bar RHS is
+# the graph node index, the old group_var). Shared by the independent expansion
+# (.tobs_expand_spatial_bar) and the arm-specific field builder
+# (.tobs_armspecific_bar_fields), so one source of truth for the check.
+.tobs_validate_bar_node <- function(node, graph, data) {
   if (is.null(data[[node]])) {
     stop(sprintf(paste0(
       "spatial(<bar>): node-index column \"%s\" not found in the data."), node),
       call. = FALSE)
   }
-  n_nodes <- nrow(spec$graph)
+  n_nodes <- nrow(graph)
   lv <- unique(stats::na.omit(data[[node]]))
   if (is.numeric(data[[node]]) && !is.factor(data[[node]])) {
     rng <- range(lv)
@@ -538,6 +536,17 @@
       "spatial(<bar>): node index \"%s\" has %d distinct levels but the graph ",
       "has %d node(s)."), node, length(lv), n_nodes), call. = FALSE)
   }
+  invisible(node)
+}
+
+.tobs_expand_spatial_bar <- function(spec, data) {
+  specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data)
+  node  <- attr(specs, "node")
+  ctor  <- .tobs_terms[[spec$type]]
+
+  # Validate the node index against the graph dimension (the bar RHS is the
+  # graph node index, the old group_var).
+  .tobs_validate_bar_node(node, spec$graph, data)
 
   out <- vector("list", length(specs))
   for (i in seq_along(specs)) {
@@ -552,6 +561,55 @@
     out[[i]] <- term
   }
   out
+}
+
+# Expand a captured arm-specific (single-arm `to`) spatial bar
+# (gcol33/tulpaObs#65) against the model data into the per-field design columns
+# the cover-hurdle joint driver places on ONE arm with no cross-arm copy. Unlike
+# `.tobs_expand_spatial_bar` (which desugars a shared field to the existing
+# copied two-block machinery), this keeps the bar as a single self-describing
+# spec: the areal `type`, `graph`, the node-index column and per-obs node codes,
+# the single target `arm`, and the per-field design weights (the intercept's are
+# all-ones, a covariate column's is its per-row value). The fitter builds one
+# non-copied areal block per field, restricted to `arm` via a 0-sentinel
+# spatial_idx on the other arm. `data_obs` is the NA-dropped data.
+.tobs_armspecific_bar_fields <- function(spec, data_obs) {
+  arm <- spec$to
+  if (length(arm) != 1L) {
+    stop("internal: .tobs_armspecific_bar_fields expects a single-arm `to`.",
+         call. = FALSE)
+  }
+  if (!spec$type %in% c("icar", "car", "car_proper")) {
+    stop(sprintf(paste0(
+      "spatial(<bar>, to = \"%s\"): an arm-specific field uses an intrinsic ",
+      "areal model (icar / car / car_proper); model = \"%s\" is not supported ",
+      "(the bym2 phi+theta mix is deferred for separate per-arm fields)."),
+      arm, spec$type), call. = FALSE)
+  }
+  specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data_obs)
+  node  <- attr(specs, "node")
+  .tobs_validate_bar_node(node, spec$graph, data_obs)
+
+  n_obs <- nrow(data_obs)
+  fields <- lapply(specs, function(col) {
+    weight <- if (isTRUE(col$is_intercept) || is.null(col$weight)) {
+      rep(1.0, n_obs)
+    } else {
+      as.numeric(col$weight)
+    }
+    list(is_intercept = isTRUE(col$is_intercept),
+         column_name  = col$column_name,
+         weight       = weight)
+  })
+
+  list(
+    arm     = arm,
+    type    = spec$type,
+    graph   = spec$graph,
+    node    = node,
+    idx_obs = as.integer(data_obs[[node]]),
+    fields  = fields
+  )
 }
 
 

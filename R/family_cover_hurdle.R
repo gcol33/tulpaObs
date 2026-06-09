@@ -69,6 +69,13 @@
          engine, "'). The correlated (MCAR) coefficient fields integrate their ",
          "cross-covariance on the outer nested-Laplace grid.", call. = FALSE)
   }
+  if (!is.null(enc$armspec) && !identical(engine, "nested_laplace")) {
+    stop("an arm-specific spatial bar (single-arm `to`) in a cover() formula ",
+         "requires method = 'nested_laplace' or 'nested_laplace_sla' (got ",
+         "engine '", engine, "'). The separate per-arm latent fields integrate ",
+         "each field's precision on the outer nested-Laplace grid ",
+         "(gcol33/tulpaObs#65).", call. = FALSE)
+  }
 
   if (identical(engine, "nested_laplace")) {
     return(decode_cover_hurdle_joint(
@@ -183,6 +190,7 @@ encode_cover_hurdle <- function(formula, data, y,
     spatial_spec = cover_struct$spatial,
     trend        = cover_struct$trend,
     mcar         = cover_struct$mcar,
+    armspec      = cover_struct$armspec,
     temporal     = cover_struct$temporal,
     re           = cover_struct$re,
     N            = length(occur),
@@ -195,24 +203,37 @@ encode_cover_hurdle <- function(formula, data, y,
   )
 }
 
-# Enforce the shared-latent `to` gate common to both bar spellings: a single
-# shared latent field requires BOTH cover arms on `to` (presence + positive). A
-# single-arm `to` selects an arm-specific separate latent, which needs a new
-# engine structure (#65) and is not wired here.
+# Enforce the shared-latent `to` gate: a single shared latent field copied across
+# arms requires BOTH cover arms on `to` (presence + positive). This still gates
+# the correlated (`|` / MCAR) bar, whose semantics are copy-only -- an
+# arm-specific correlated field is not defined (the cross-field Sigma lives within
+# one arm; without a copy there is no cross-arm transfer to estimate). The
+# INDEPENDENT (`||`) single-arm bar IS wired, as a separate per-arm latent
+# (gcol33/tulpaObs#65), and is routed past this gate in `.encode_cover_terms`.
 .cover_bar_check_to <- function(spec) {
   to <- spec$to %||% .tobs_cover_arms
   if (!setequal(to, .tobs_cover_arms)) {
     stop(sprintf(paste0(
-      "spatial(<bar>, to = %s): a single shared latent field requires both ",
-      "cover arms (to = c(\"presence\", \"positive\")). An arm-specific ",
-      "separate latent (single-arm `to`, or separate spatial() calls) needs a ",
-      "distinct engine structure and is not yet wired; use ",
-      "to = c(\"presence\", \"positive\") for the shared, presence-anchored ",
-      "field."),
+      "spatial(<bar> with `|`, to = %s): a correlated (MCAR) coefficient field ",
+      "is copy-only and requires both cover arms (to = c(\"presence\", ",
+      "\"positive\")). For an arm-specific separate latent use the INDEPENDENT ",
+      "spelling `||` with a single-arm `to` (gcol33/tulpaObs#65)."),
       paste0("c(", paste0("\"", to, "\"", collapse = ", "), ")")),
       call. = FALSE)
   }
   invisible(spec)
+}
+
+# Tag the cover-arm label a bar's `to` selects onto the joint-engine arm name:
+# presence -> "occ", positive -> "pos". The cover hurdle's two response arms are
+# named occ/pos internally (the binomial occurrence arm and the positive-cover
+# arm); the formula `to =` labels are presence/positive (gcol33/tulpaObs#61).
+.cover_arm_to_slot <- function(arm) {
+  switch(arm,
+         presence = "occ",
+         positive = "pos",
+         stop(sprintf("internal: unknown cover arm label '%s'.", arm),
+              call. = FALSE))
 }
 
 # Desugar a captured INDEPENDENT (`||`) varying-coefficient spatial bar
@@ -311,6 +332,7 @@ encode_cover_hurdle <- function(formula, data, y,
 .encode_cover_terms <- function(formula, data_obs) {
   bind <- .tobs_bind_formulas(list(state = formula), data_obs)
   spatial_specs <- list(); temporal <- NULL; re <- list(); mcar <- NULL
+  armspec <- list()
   for (t in bind$terms) {
     spec <- t$spec
     if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar) &&
@@ -323,6 +345,15 @@ encode_cover_hurdle <- function(formula, data, y,
              "supported.", call. = FALSE)
       }
       mcar <- .cover_build_mcar_spec(spec, data_obs)
+    } else if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar) &&
+               length(spec$to %||% .tobs_cover_arms) == 1L) {
+      # Arm-specific INDEPENDENT bar (single-arm `to`, gcol33/tulpaObs#65): a
+      # separate per-arm latent field on ONLY that arm, with its own precision
+      # and NO cross-arm copy. Distinct from the shared `||` (both-arm) desugar,
+      # which copies a presence-anchored field onto the positive arm. Each
+      # single-arm bar is collected as a self-describing field block; the fitter
+      # places each on its arm via a 0-sentinel spatial_idx on the other arm.
+      armspec[[length(armspec) + 1L]] <- .tobs_armspecific_bar_fields(spec, data_obs)
     } else if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar)) {
       expanded <- .cover_desugar_spatial_bar(spec, data_obs)
       spatial_specs <- c(spatial_specs, expanded)
@@ -352,9 +383,38 @@ encode_cover_hurdle <- function(formula, data, y,
          "formula. Put the intercept and slope fields in the one bar ",
          "(~ 1 + w | node).", call. = FALSE)
   }
+  if (length(armspec) > 0L) {
+    # Arm-specific separate latents (gcol33/tulpaObs#65) are an independent
+    # spatial structure: each is its own per-arm block with its own precision and
+    # no cross-arm copy. They do not compose with the shared/copied intercept +
+    # trend machinery, the correlated MCAR copy, or temporal()/re() blocks in the
+    # same fit (those are coupled structures; mixing would silently re-introduce a
+    # cross-arm transfer the user opted out of). Reject the combination with a
+    # pointer rather than ignoring one half.
+    if (length(spatial_specs) > 0L || !is.null(mcar)) {
+      stop("cover(): arm-specific spatial fields (single-arm `to`) are a ",
+           "separate per-arm structure with no cross-arm copy; they cannot be ",
+           "combined with a shared field (both-arm bar or icar()/bym2()), a ",
+           "correlated `|` bar, or a weighted trend term in the same formula. ",
+           "Use only single-arm spatial() bars, or only the shared form.",
+           call. = FALSE)
+    }
+    # At most one field per arm in the first ship: two presence-only (or two
+    # positive-only) bars would be two independent fields on the same arm, which
+    # the joint driver carries but the cover-arm field reconstruction does not yet
+    # disambiguate. Each arm takes one separate latent.
+    arms_used <- vapply(armspec, function(a) a$arm, character(1))
+    if (anyDuplicated(arms_used)) {
+      stop("cover(): each arm-specific spatial field must target a distinct arm ",
+           "(got two on the same arm). Combine multiple coefficient fields into ",
+           "one bar, e.g. spatial(~ 1 + w || cell, graph = adj, to = \"",
+           arms_used[anyDuplicated(arms_used)], "\").", call. = FALSE)
+    }
+  }
   fields <- .cover_resolve_spatial_fields(spatial_specs, data_obs)
   list(fe = bind$fe$state, spatial = fields$spatial, trend = fields$trend,
-       temporal = temporal, re = if (length(re)) re else NULL, mcar = mcar)
+       temporal = temporal, re = if (length(re)) re else NULL, mcar = mcar,
+       armspec = if (length(armspec)) armspec else NULL)
 }
 
 # Partition the cover() formula's areal terms into the shared intercept field
@@ -731,6 +791,18 @@ decode_cover_hurdle <- function(fits, enc, family,
   enc      <- object$encoding
   positive <- object$positive %||% "lognormal"
   if (!is.null(.tobs_joint_fit(object))) {
+    bundle  <- .tobs_joint_draws(object, n = n.draws)
+    if (isTRUE(object$armspecific)) {
+      # Arm-specific separate latents carry no single shared spatial index; each
+      # block holds its own per-arm node map (`units_occ`/`units_pos`) and weight,
+      # so the shared `units` argument is only a length-matching placeholder the
+      # per-block map overrides in .tobs_joint_arm_eta.
+      u_occ <- seq_len(nrow(enc$occ_data$X))
+      u_pos <- seq_len(nrow(enc$pos_data$X))
+      eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", u_occ))
+      eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", u_pos))
+      return(list(eta_occ = eta_occ, eta_pos = eta_pos, disp = bundle$disp))
+    }
     spi_full <- object$spi_full
     spi_pos  <- object$spi_pos
     if (is.null(spi_full) || is.null(spi_pos)) {
@@ -739,7 +811,6 @@ decode_cover_hurdle <- function(fits, enc, family,
            "with the current tulpaObs so they are stored on the fit.",
            call. = FALSE)
     }
-    bundle  <- .tobs_joint_draws(object, n = n.draws)
     # A coupled trend field carries a per-observation weight; resolve it per arm
     # via wfun (the engine's svc_weight replayed at predict time). NULL when the
     # fit has no trend field, in which case .tobs_joint_arm_eta never calls it.
@@ -1235,6 +1306,301 @@ print.summary.cover_fit <- function(x, ...) {
   L
 }
 
+# Build one areal latent block restricted to a SINGLE arm with NO cross-arm copy
+# (gcol33/tulpaObs#65). The block carries the field's own precision axis (tau for
+# icar/car/car_proper, sigma + rho for bym2) integrated on the outer grid; the
+# OTHER arm's per-arm spatial_idx is the all-zero sentinel, which the joint
+# multi-block scatter reads as "this arm's rows do not see this block" (the
+# `l_b > 0` guard in nested_laplace_joint_multi.h), so the field contributes to
+# exactly one arm. This is the no-copy assembler; the shared/copied intercept +
+# trend path uses the copy spec instead (one assembler, copy off here, copy on
+# there). `slot` is the active arm (1 = occ, 2 = pos); `n_occ` / `n_pos` size the
+# sentinel; `idx_active` is the per-obs node code on the active arm.
+# `svc_weight` (NULL for the intercept field) is the per-obs design column,
+# placed on the active arm with a zero sentinel weight on the inactive arm.
+.cover_armspecific_block <- function(type, graph, slot, idx_active,
+                                     n_occ, n_pos, svc_weight, control,
+                                     block_label) {
+  csr <- adjacency_to_csr(graph)
+  n_nodes <- nrow(graph)
+  if (anyNA(idx_active) || min(idx_active) < 1L || max(idx_active) > n_nodes) {
+    stop(sprintf(paste0(
+      "cover() arm-specific field (%s): node index must be a 1..%d code into ",
+      "the graph."), block_label, n_nodes), call. = FALSE)
+  }
+  n_active <- if (slot == 1L) n_occ else n_pos
+  if (length(idx_active) != n_active) {
+    stop(sprintf(paste0(
+      "internal: arm-specific field (%s) active-arm idx length %d != arm n %d."),
+      block_label, length(idx_active), n_active), call. = FALSE)
+  }
+  # Per-arm spatial_idx: active arm gets the node codes, the other arm all-zero.
+  idx_occ <- if (slot == 1L) as.integer(idx_active) else integer(n_occ)
+  idx_pos <- if (slot == 2L) as.integer(idx_active) else integer(n_pos)
+
+  # Field precision grid (own amplitude per field). icar/car/car_proper use the
+  # single-arm tau parameterization (sigma = 1/sqrt(tau)); bym2 adds rho. The
+  # sigma grid default mirrors the shared path's amplitude range. Override via
+  # control$sigma.grid (translated to tau for the intrinsic backends).
+  sigma_grid <- as.numeric(control$sigma.grid %||%
+                           exp(seq(log(0.2), log(2.5), length.out = 7)))
+
+  block <- list(
+    type            = if (tolower(type) == "car") "icar" else tolower(type),
+    n_spatial_units = as.integer(n_nodes),
+    adj_row_ptr     = as.integer(csr$row_ptr),
+    adj_col_idx     = as.integer(csr$col_idx),
+    n_neighbors     = as.integer(csr$n_neighbors),
+    spatial_idx     = list(idx_occ, idx_pos)
+  )
+  if (block$type %in% c("icar", "car_proper")) {
+    block$tau_grid <- sort(1.0 / sigma_grid^2)
+    if (block$type == "car_proper") {
+      block$rho_car_grid <- as.numeric(control$rho.car.grid %||%
+                                       c(0.5, 0.8, 0.95, 0.99))
+    }
+  } else {
+    # bym2 fits as a non-copied block, but its unit-variance field is the
+    # rho-mixed phi + theta pair; the arm-specific draw projection reads phi only
+    # (the per-arm field reconstruction for the bym2 mix is not wired), so a bym2
+    # arm-specific field would mis-project at predict / WAIC time. Restrict to the
+    # intrinsic ICAR / proper CAR backends, whose unit field IS phi.
+    stop(sprintf(paste0(
+      "cover() arm-specific field (%s): areal type '%s' is not supported. ",
+      "Arm-specific separate fields (single-arm `to`) use icar / car / ",
+      "car_proper (the bym2 phi+theta mix is deferred)."),
+      block_label, type), call. = FALSE)
+  }
+
+  # Per-arm per-row design weight (SVC column on a non-intercept field): the
+  # active arm carries the covariate column, the inactive arm a zero placeholder
+  # (its rows skip the block anyway via the 0 spatial_idx, so the weight is never
+  # read; the engine still validates per-arm length).
+  if (!is.null(svc_weight)) {
+    w_occ <- if (slot == 1L) as.numeric(svc_weight) else numeric(n_occ)
+    w_pos <- if (slot == 2L) as.numeric(svc_weight) else numeric(n_pos)
+    block$svc_weight <- list(w_occ, w_pos)
+  }
+  block
+}
+
+# Fit the cover hurdle with arm-specific separate spatial latent field(s)
+# (gcol33/tulpaObs#65): one or more single-arm `||` bars, each a per-arm areal
+# field with its own precision and NO cross-arm copy. Each bar's design columns
+# (intercept + covariates) become independent non-copied areal blocks placed on
+# that bar's single arm via the 0-sentinel spatial_idx on the other arm; each
+# field's precision is integrated on the outer nested-Laplace grid. Separate
+# single-arm bars (one to = "presence", one to = "positive") are independent
+# per-arm fields with no coupling between them. Same output contract as
+# fit_cover_hurdle_joint_nested so decode_cover_hurdle_joint consumes it
+# unchanged; the arm-specific block layout is recorded on the fit
+# (`armspec_blocks`) so the joint-draw projection scatters each block onto its
+# own arm only.
+.fit_cover_hurdle_joint_armspecific <- function(enc, data, positive = enc$positive,
+                                                control = list(), priors = NULL) {
+  arms <- enc$armspec
+  N     <- enc$N
+  N_pos <- length(enc$pos_data$y)
+  idx_pos <- enc$idx_pos
+
+  # Positive-arm dispersion grid (same regime as the single-field path).
+  if (positive == "lognormal") {
+    pos_family   <- "gaussian"
+    sigma_hat    <- .prefit_lognormal_sigma(enc, control)
+    phi_hat      <- sigma_hat
+    phi_grid_pos <- control$phi.grid %||%
+      exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7))
+  } else {
+    pos_family   <- "beta"
+    phi_hat      <- 1.0
+    phi_grid_pos <- control$phi.grid %||%
+      exp(seq(log(2), log(300), length.out = 7))
+  }
+
+  arm_occ <- list(
+    y = as.numeric(enc$occ_data$y), n_trials = enc$occ_data$n_trials,
+    X = enc$occ_data$X, re_idx = rep(0, N), n_re_groups = 0L,
+    sigma_re = 1.0, family = "binomial", phi = 1.0
+  )
+  arm_pos <- list(
+    y = as.numeric(enc$pos_data$y), n_trials = rep(1L, N_pos),
+    X = enc$pos_data$X, re_idx = rep(0, N_pos), n_re_groups = 0L,
+    sigma_re = 1.0, family = pos_family, phi = phi_hat
+  )
+
+  # Opt-in fixed-effect priors (cover_priors()), as on the single-field path.
+  cprior <- .resolve_cover_priors(priors)
+  if (!is.null(cprior)) {
+    to_prec <- function(pr) {
+      if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
+      list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
+    }
+    occ_ap <- to_prec(.cover_arm_prior(cprior, "occ", colnames(arm_occ$X)))
+    pos_ap <- to_prec(.cover_arm_prior(cprior, "pos", colnames(arm_pos$X)))
+    if (!is.null(occ_ap)) {
+      arm_occ$beta_prior_mean <- occ_ap$mean
+      arm_occ$beta_prior_prec <- occ_ap$prec
+    }
+    if (!is.null(pos_ap)) {
+      arm_pos$beta_prior_mean <- pos_ap$mean
+      arm_pos$beta_prior_prec <- pos_ap$prec
+    }
+  }
+
+  # Build one NON-copied block per field column, restricted to its arm. The
+  # positive arm's node codes are the occ codes subset by idx_pos. `armspec_meta`
+  # records each block's active arm and field role so the draw projection
+  # scatters the block onto its arm only.
+  blocks <- list(); armspec_meta <- list()
+  for (a in arms) {
+    slot <- if (a$arm == "presence") 1L else 2L
+    idx_active <- if (slot == 1L) a$idx_obs else a$idx_obs[idx_pos]
+    for (fi in seq_along(a$fields)) {
+      f <- a$fields[[fi]]
+      svc <- if (isTRUE(f$is_intercept)) NULL else {
+        if (slot == 1L) f$weight else f$weight[idx_pos]
+      }
+      label <- paste(a$arm, f$column_name, sep = ".")
+      blk <- .cover_armspecific_block(
+        type = a$type, graph = a$graph, slot = slot, idx_active = idx_active,
+        n_occ = N, n_pos = N_pos, svc_weight = svc, control = control,
+        block_label = label)
+      blocks[[length(blocks) + 1L]] <- blk
+      armspec_meta[[length(armspec_meta) + 1L]] <- list(
+        arm = a$arm, slot = slot, column_name = f$column_name,
+        is_intercept = isTRUE(f$is_intercept),
+        weight_occ = if (slot == 1L && !isTRUE(f$is_intercept)) as.numeric(f$weight) else NULL,
+        weight_pos = if (slot == 2L && !isTRUE(f$is_intercept)) as.numeric(f$weight[idx_pos]) else NULL,
+        idx_active = as.integer(idx_active),
+        n_nodes = as.integer(nrow(a$graph)),
+        label = label)
+    }
+  }
+
+  joint_control <- list(
+    max_iter  = control$max.iter  %||% 50L,
+    tol       = control$tol       %||% 1e-6,
+    n_threads = control$n.threads %||% 1L,
+    n_threads_outer = control$n.threads.outer %||% 1L,
+    store_Q   = TRUE,
+    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
+    adaptive_grid             = control$adaptive.grid             %||% TRUE,
+    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
+    progress          = control[["progress"]]      %||% TRUE,
+    progress.every    = control$progress.every    %||% 0L,
+    progress.throttle = control$progress.throttle %||% 2,
+    progress.file     = control$progress.file     %||% "",
+    checkpoint        = control$checkpoint,
+    # Each field carries 1 (icar/car) or 2 (bym2/car_proper) latent axes; with
+    # the pos-arm phi axis the dense outer tensor grows fast, so the mode-centred
+    # CCD is the default for >= 3 axes (forwarded; the engine declines back to
+    # the tensor grid on a ridge). Override via control$integration.
+    integration       = control$integration %||% "ccd"
+  )
+
+  fit <- tulpa::tulpa_nested_laplace_joint(
+    responses = list(occ = arm_occ, pos = arm_pos),
+    prior     = blocks,         # list-of-blocks -> multi-block path
+    copy      = NULL,           # NO copy: each field on one arm only
+    phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
+    prior_sigma = control$prior.sigma,
+    control = joint_control
+  )
+
+  # Shared per-arm beta post-processing (identical to the single-field path).
+  layout <- fit$arm_layout
+  p_occ  <- layout$p[1]; p_pos <- layout$p[2]
+  bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
+  bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
+
+  scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
+  scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
+  T_occ <- .scale_transform(scale_occ); T_pos <- .scale_transform(scale_pos)
+  modes_occ <- fit$modes[, bocc_idx, drop = FALSE] %*% t(T_occ)
+  modes_pos <- fit$modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
+  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
+  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
+  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
+  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
+
+  inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
+  if (is.null(inner_blocks)) {
+    mean_of_var_occ <- rep(0, p_occ); mean_of_var_pos <- rep(0, p_pos)
+  } else {
+    occ_rows <- seq_along(bocc_idx)
+    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
+    n_grid_eff <- length(inner_blocks)
+    diag_occ <- matrix(0, n_grid_eff, p_occ)
+    diag_pos <- matrix(0, n_grid_eff, p_pos)
+    for (k in seq_len(n_grid_eff)) {
+      V_block <- inner_blocks[[k]]
+      if (is.null(V_block)) next
+      V_occ_nat <- T_occ %*% V_block[occ_rows, occ_rows, drop = FALSE] %*% t(T_occ)
+      V_pos_nat <- T_pos %*% V_block[pos_rows, pos_rows, drop = FALSE] %*% t(T_pos)
+      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
+      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
+    }
+    w_eff <- fit$weights[seq_len(n_grid_eff)]
+    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
+    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
+  }
+  se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
+  se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
+
+  phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
+  phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
+  if (positive == "lognormal") {
+    sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
+    phi_pos <- NA_real_; phi_pos_sd <- NA_real_
+  } else {
+    sigma_pos <- NA_real_; sigma_pos_sd <- NA_real_
+    phi_pos <- phi_mu; phi_pos_sd <- phi_sd
+  }
+
+  # Per-field amplitude (sigma) posterior, marginalized over the outer grid. Each
+  # block b carries its own axis b<b>.tau (icar/car_proper) or b<b>.sigma (bym2);
+  # sigma = 1/sqrt(tau) for the intrinsic backends. Report the grid-weighted mean
+  # per field (the derived-quantity rule: marginalize, do not plug in a MAP).
+  tg <- fit$theta_grid; w <- fit$weights
+  fin <- is.finite(w) & w > 0
+  tg <- tg[fin, , drop = FALSE]; w <- w[fin]; w <- w / sum(w)
+  sigma_fields <- numeric(length(blocks))
+  field_names  <- character(length(blocks))
+  for (b in seq_along(blocks)) {
+    field_names[b] <- armspec_meta[[b]]$label
+    tau_col <- sprintf("b%d.tau", b)
+    sig_col <- sprintf("b%d.sigma", b)
+    if (tau_col %in% colnames(tg)) {
+      sigma_fields[b] <- sum(w * (1.0 / sqrt(as.numeric(tg[, tau_col]))))
+    } else if (sig_col %in% colnames(tg)) {
+      sigma_fields[b] <- sum(w * as.numeric(tg[, sig_col]))
+    } else {
+      sigma_fields[b] <- NA_real_
+    }
+  }
+  names(sigma_fields) <- field_names
+
+  m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
+                log_marginal = NA_real_)
+  m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
+                log_marginal = NA_real_)
+  attr(fit, "scale_factor") <- 1.0
+
+  list(
+    m_occ = m_occ, m_pos = m_pos, positive = positive,
+    sigma_pos = sigma_pos, sigma_pos_sd = sigma_pos_sd,
+    phi_pos = phi_pos, phi_pos_sd = phi_pos_sd,
+    pos_fit_n = N_pos, pos_fit_p = p_pos,
+    beta_occ = beta_occ, beta_pos = beta_pos, se_occ = se_occ, se_pos = se_pos,
+    n_fields = length(blocks),
+    armspecific = TRUE,
+    armspec_blocks = armspec_meta,
+    sigma_armspecific = sigma_fields,
+    joint = fit
+  )
+}
+
 # Fit the cover hurdle with a correlated separable-MCAR coefficient field shared
 # onto the positive arm (gcol33/tulpaObs#64). The p design columns of the bar
 # become p coupled areal fields with a free cross-covariance Sigma (x) Q^-1
@@ -1519,6 +1885,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     }
     return(.fit_cover_hurdle_joint_mcar(enc, data, positive, control,
                                         priors = priors))
+  }
+  if (!is.null(enc$armspec)) {
+    if (!is.null(temporal) || (!is.null(re) && length(re) > 0L)) {
+      stop("cover(): arm-specific spatial fields (single-arm `to`) cannot be ",
+           "combined with temporal()/re() blocks in the same fit.",
+           call. = FALSE)
+    }
+    return(.fit_cover_hurdle_joint_armspecific(enc, data, positive, control,
+                                               priors = priors))
   }
   if (is.null(enc$spatial_spec)) {
     stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() requires ",
@@ -2166,6 +2541,12 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     # Record the no-op status rather than mis-applying the single-field path
     # (gcol33/tulpaObs#64); the Gaussian-Laplace MCAR fit stands on its own.
     sla_status <- "mcar_unsupported"
+  } else if (identical(approx, "simplified_laplace") && isTRUE(fits$armspecific)) {
+    # The simplified-Laplace marginal skew correction over arm-specific separate
+    # latents is not wired (the per-arm field gather assumes a single shared
+    # copied field). Record the no-op; the Gaussian-Laplace fit stands on its own
+    # (gcol33/tulpaObs#65).
+    sla_status <- "armspecific_unsupported"
   } else if (identical(approx, "simplified_laplace")) {
     enc_sla <- enc
     enc_sla$..spi_full <- as.integer(fits$spi_full %||% integer(0))
@@ -2231,6 +2612,9 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       rho_mcar         = fits$rho_mcar,
       alpha_mcar       = fits$alpha_mcar,
       alpha_mcar_sd    = fits$alpha_mcar_sd,
+      armspecific       = isTRUE(fits$armspecific),
+      armspec_blocks    = fits$armspec_blocks,
+      sigma_armspecific = fits$sigma_armspecific,
       skew_occ     = skew_occ,
       skew_pos     = skew_pos,
       draws_occ    = draws_occ,

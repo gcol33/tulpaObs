@@ -62,9 +62,88 @@
   n_arms <- layout$n_arms %||% length(layout$p)
   if (n_arms == 3L) {
     .tobs_joint_draws_occu_cover(object, jf, layout, n)
+  } else if (isTRUE(object$armspecific)) {
+    .tobs_joint_draws_cover_armspecific(object, jf, layout, n)
   } else {
     .tobs_joint_draws_cover(object, jf, layout, n)
   }
+}
+
+# cover (2-arm occ/pos) with arm-specific separate latents (gcol33/tulpaObs#65):
+# one or more NON-copied areal blocks, each placed on exactly ONE arm. Block b is
+# stored as a unit-precision latent z; its amplitude on the active arm is sigma_b
+# (= 1/sqrt(tau_b) for icar/car_proper, the bym2 mixed amplitude otherwise), and
+# its amplitude on the OTHER arm is 0 (no cross-arm copy). The bundle's per-block
+# amp_occ / amp_pos encode this directly -- one is the field amplitude, the other
+# is 0 -- so the shared `.tobs_joint_arm_eta` accumulator scatters each block onto
+# its own arm only. A non-intercept (slope) field also carries its per-arm weight.
+.tobs_joint_draws_cover_armspecific <- function(object, jf, layout, n) {
+  tg       <- jf$theta_grid
+  cn       <- colnames(tg)
+  positive <- object$positive %||% "lognormal"
+  p        <- layout$p
+  bstart   <- layout$beta_start
+  meta     <- object$armspec_blocks
+
+  idx_occ <- bstart[1L] + seq_len(p[1L])
+  idx_pos <- bstart[2L] + seq_len(p[2L])
+
+  field_starts <- layout$field_starts
+  n_field <- length(field_starts %||% integer(0))
+  if (n_field != length(meta)) {
+    stop("internal: arm-specific cover fit has ", length(meta), " field block(s) ",
+         "but the joint layout reports ", n_field, ".", call. = FALSE)
+  }
+  # Every block spans n_nodes latent entries (the graph it sits on). Each block
+  # records its own n_nodes; on a single shared graph these are equal, but read
+  # per-block so a future multi-graph fit stays correct.
+  n_nodes <- vapply(meta, function(m) as.integer(m$n_nodes), integer(1))
+  field_idx <- lapply(seq_len(n_field), function(b)
+    field_starts[b] + seq_len(n_nodes[b]))
+
+  idx <- c(idx_occ, idx_pos, unlist(field_idx))
+  D   <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
+  cells <- attr(D, "cells")
+  off <- 0L
+  take <- function(k) { v <- D[, off + seq_len(k), drop = FALSE]; off <<- off + k; v }
+  b_occ <- take(p[1L]); b_pos <- take(p[2L])
+
+  blocks <- lapply(seq_len(n_field), function(b) {
+    z <- take(n_nodes[b])
+    # Field amplitude on the outer grid: b<b>.sigma (bym2) or 1/sqrt(b<b>.tau)
+    # (icar / car_proper), per draw cell. The active arm scales z by this; the
+    # inactive arm by 0 (no copy).
+    sig_col <- sprintf("b%d.sigma", b)
+    tau_col <- sprintf("b%d.tau", b)
+    if (sig_col %in% cn) {
+      amp <- as.numeric(tg[cells, sig_col])
+    } else if (tau_col %in% cn) {
+      amp <- 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
+    } else {
+      amp <- rep(1.0, length(cells))
+    }
+    slot <- meta[[b]]$slot
+    amp_occ <- if (slot == 1L) amp else rep(0, length(cells))
+    amp_pos <- if (slot == 2L) amp else rep(0, length(cells))
+    # Each arm-specific block sits on ONE arm with its own per-arm node map
+    # (idx_active) and, for a slope field, its own per-arm covariate weight. The
+    # active arm carries the map / weight; the inactive arm's amp is 0 so its map
+    # is never read (left NULL -> the shared `units` fallback is skipped by the
+    # length guard in .tobs_joint_arm_eta).
+    units_occ <- if (slot == 1L) meta[[b]]$idx_active else NULL
+    units_pos <- if (slot == 2L) meta[[b]]$idx_active else NULL
+    wt <- if (isTRUE(meta[[b]]$is_intercept)) NULL else meta[[b]]$column_name
+    wt_occ <- if (slot == 1L) meta[[b]]$weight_occ else NULL
+    wt_pos <- if (slot == 2L) meta[[b]]$weight_pos else NULL
+    list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = wt,
+         units_occ = units_occ, units_pos = units_pos,
+         wt_occ = wt_occ, wt_pos = wt_pos)
+  })
+
+  list(n = n, positive = positive, cells = cells,
+       disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = 1),
+       b = list(occ = b_occ, det = NULL, pos = b_pos),
+       blocks = blocks, n_cells = n_nodes[1L])
 }
 
 # occu_cover (3-arm psi/p/pos): one or more ICAR fields stored as unit-variance
@@ -215,6 +294,11 @@
 # vector (only consulted for weighted blocks). The detection arm sees no field.
 # This is the single source of truth for the field accumulation across both
 # families and both consumers (prediction and pointwise log-likelihood).
+#
+# Arm-specific separate fields (gcol33/tulpaObs#65) carry their own per-arm node
+# map and per-arm weight on the block (`units_occ`/`units_pos`, `wt_occ`/`wt_pos`),
+# since each block sits on one arm with its own graph index rather than the single
+# shared field's `units` / `wfun`; the block's per-arm map is preferred when set.
 .tobs_joint_arm_eta <- function(bundle, X, arm, units, wfun = NULL) {
   B <- bundle$b[[arm]]
   if (is.null(B)) {
@@ -222,16 +306,33 @@
   }
   eta <- tcrossprod(X, B)                       # [nrow x n]
   if (identical(arm, "det")) return(eta)        # detection arm carries no field
+  is_occ <- identical(arm, "occ")
   for (blk in bundle$blocks) {
-    amp    <- if (identical(arm, "occ")) blk$amp_occ else blk$amp_pos
-    z_unit <- blk$z[, units, drop = FALSE]      # [n x nrow]
+    amp <- if (is_occ) blk$amp_occ else blk$amp_pos
+    # A block with zero amplitude on this arm contributes nothing -- the
+    # structural signal that an arm-specific field is absent here (no cross-arm
+    # copy). Skip before any node indexing, so a block sized to its own graph is
+    # never over-indexed by the (length-matching but irrelevant) shared `units`.
+    if (all(amp == 0)) next
+    # Per-block per-arm node map (arm-specific fields) overrides the shared
+    # `units`; on the active arm the map is always set.
+    blk_units <- if (is_occ) blk$units_occ else blk$units_pos
+    u <- if (!is.null(blk_units)) blk_units else units
+    if (length(u) != nrow(X)) next             # block not on this arm -> skip
+    z_unit <- blk$z[, u, drop = FALSE]          # [n x nrow]
     contr  <- t(z_unit * amp)                   # [nrow x n], draw d scaled by amp[d]
     if (!is.null(blk$weight)) {
-      if (is.null(wfun)) {
-        stop("Weighted field block '", blk$weight,
-             "' needs a per-cell weight lookup.", call. = FALSE)
+      # Arm-specific block carries its own per-arm weight; shared trend block
+      # resolves via wfun (the engine's svc_weight replayed at predict time).
+      blk_w <- if (is_occ) blk$wt_occ else blk$wt_pos
+      w_vec <- if (!is.null(blk_w)) blk_w else {
+        if (is.null(wfun)) {
+          stop("Weighted field block '", blk$weight,
+               "' needs a per-cell weight lookup.", call. = FALSE)
+        }
+        wfun(blk$weight)
       }
-      contr <- contr * wfun(blk$weight)         # row c scaled by weight[c]
+      contr <- contr * w_vec                    # row c scaled by weight[c]
     }
     eta <- eta + contr
   }

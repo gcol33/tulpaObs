@@ -225,14 +225,21 @@ test_that("a correlated `|` bar cannot co-exist with another areal term", {
     "whole spatial structure|other areal terms")
 })
 
-test_that("a single-arm to= errors pointing to the shared form", {
+test_that("a single-arm || to= is wired as an arm-specific separate latent", {
+  # gcol33/tulpaObs#65: a single-arm `to` on the INDEPENDENT (`||`) bar is no
+  # longer an error -- it fits an arm-specific separate field on that arm only,
+  # with its own precision and no cross-arm copy. Recovery lives in
+  # test-cover-spatial-bar-armspecific.R; here the assertion is plumbing.
   d <- .bar_small_data()
-  expect_error(
-    tobs(formula = ~ time +
-                     spatial(~ 1 + time || cell, graph = d$adj, to = "presence"),
-         data = d$df, family = cover(positive = "lognormal"), y = d$y,
-         method = "nested_laplace", control = list(verbose = FALSE)),
-    "both cover arms|arm-specific|separate latent")
+  fit <- suppressWarnings(tobs(
+    formula = ~ time +
+                spatial(~ 1 + time || cell, graph = d$adj, to = "presence"),
+    data = d$df, family = cover(positive = "lognormal"), y = d$y,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
+  expect_s3_class(fit, "cover_fit")
+  expect_true(isTRUE(fit$armspecific))
+  expect_identical(fit$armspec_blocks[[1L]]$arm, "presence")
 })
 
 test_that("a node index not matching the graph dimension errors", {
