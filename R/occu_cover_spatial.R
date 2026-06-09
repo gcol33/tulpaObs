@@ -103,7 +103,18 @@
   # `.tobs_bind_formulas` returns terms wrapped in `list(spec = ..., process = ...)`.
   spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
   if (length(spatial) == 0L) return(NULL)
-  specs <- lapply(spatial, function(t) t$spec)
+  # A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`,
+  # gcol33/tulpaObs#61) desugars in place to the intercept field + per-covariate
+  # trend fields, the same pair the two-term form produces. The `||` shared path
+  # is the only one wired; `|` / arm-specific `to` are gated in the desugarer.
+  specs <- list()
+  for (t in spatial) {
+    if (isTRUE(t$spec$is_bar)) {
+      specs <- c(specs, .cover_desugar_spatial_bar(t$spec, data))
+    } else {
+      specs[[length(specs) + 1L]] <- t$spec
+    }
+  }
 
   bad <- Filter(function(s) !s$type %in% c("icar", "bym2"), specs)
   if (length(bad)) {

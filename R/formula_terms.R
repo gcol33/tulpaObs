@@ -370,6 +370,14 @@
 # `spde(lon, lat)`. Only spatial models dispatch here; re() / temporal() /
 # svc() / latent() keep their own verbs.
 #
+# A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`)
+# is a second surface: an lme4-style coefficient formula whose intercept column
+# is the unweighted shared field and whose covariate columns are weight-scaled
+# coefficient fields, all over the graph node index `node`, copied onto the arms
+# named by `to`. The bar is expanded later (where the model data is in scope),
+# so here it is captured into a `tobs_spatial_bar` spec; see
+# .tobs_spatial_bar_spec().
+#
 # Named arguments are validated against the target constructor's formals before
 # dispatch. The areal terms have no `...`, so R already rejects an unknown named
 # arg, but the continuous terms (gp / multiscale_gp / spde) take coords through
@@ -379,6 +387,20 @@
 # in the error. Positional arguments (the bare coordinate columns) carry no
 # name and pass through untouched.
 .tobs_term_spatial <- function(..., model = .tobs_spatial_models, id = NULL) {
+  dots <- list(...)
+
+  # Varying-coefficient bar form: the first positional argument is a one-sided
+  # coefficient formula carrying a `|` / `||` grouping bar. Capture it together
+  # with `graph`, `model`, `to` for later (data-aware) expansion; the bar's node
+  # index is the areal group_var. The first dot is positional when it is unnamed
+  # (no names at all, or an empty-string name in slot 1).
+  first_unnamed <- length(dots) >= 1L &&
+    (is.null(names(dots)) || !nzchar(names(dots)[[1L]]))
+  if (first_unnamed && inherits(dots[[1L]], "formula") &&
+      tulpa::tulpa_is_spatial_bar(dots[[1L]])) {
+    return(.tobs_spatial_bar_spec(dots[[1L]], dots[-1L], model = model, id = id))
+  }
+
   model <- match.arg(model)
   ctor  <- .tobs_terms[[model]]
 
@@ -398,6 +420,138 @@
   }
 
   ctor(..., id = id)
+}
+
+# Arm labels of the cover hurdle: presence (the y > 0 Bernoulli arm) and
+# positive (the y | y > 0 arm). `to =` validates against this set; summary() and
+# the coefficient output print the same labels (formula label == output label).
+.tobs_cover_arms <- c("presence", "positive")
+
+# Capture a `spatial(~ 1 + w || node, graph = adj, to = ...)` varying-coefficient
+# bar into a deferred spec. The bar's left-hand side (intercept + covariate
+# columns) and node index are stored verbatim; expansion against the model data
+# happens in .tobs_expand_spatial_bar(), where each design column becomes either
+# the unweighted intercept areal field (intercept column) or a weight-scaled
+# trend areal field (covariate column), all on the graph node index. `to` names
+# the arms that share this one latent field (presence-anchored, copied to the
+# other arm with an estimated coupling alpha); it defaults to all arms so the
+# common shared call can omit it. The areal `model` is inherited from the
+# umbrella's `model =` (defaults to icar, matching the bare spatial() default).
+.tobs_spatial_bar_spec <- function(bar_formula, rest, model = .tobs_spatial_models,
+                                   id = NULL) {
+  graph <- rest$graph
+  to    <- rest$to
+  # Only `graph`, `to`, and (optionally) `model` are accepted on the bar form;
+  # the node index is the bar RHS, weights are the bar LHS, so group_var/weight
+  # named args would be redundant. Reject anything else with a clear pointer.
+  known <- c("graph", "to")
+  extra <- setdiff(names(rest)[nzchar(names(rest))], known)
+  if (length(extra)) {
+    stop(sprintf(paste0(
+      "spatial(<bar>, ...): unexpected argument%s %s. The bar form takes ",
+      "`graph` and `to` only; the node index is the bar right-hand side and ",
+      "the per-coefficient weights are the bar left-hand side."),
+      if (length(extra) > 1L) "s" else "",
+      paste0("`", extra, "`", collapse = ", ")), call. = FALSE)
+  }
+  if (is.null(graph)) {
+    stop("spatial(<bar>, graph = ): a `graph` (adjacency matrix) is required.",
+         call. = FALSE)
+  }
+  .tobs_check_graph(graph, "spatial")
+
+  # `model` may arrive as the full default vector (umbrella default) or a single
+  # name; collapse to one areal model. Only areal models carry a graph.
+  model <- match.arg(model)
+  if (!model %in% c("icar", "bym2", "car", "car_proper")) {
+    stop(sprintf(paste0(
+      "spatial(<bar>, model = \"%s\"): a varying-coefficient bar needs an areal ",
+      "model (icar / bym2 / car / car_proper)."), model), call. = FALSE)
+  }
+
+  if (is.null(to)) {
+    to <- .tobs_cover_arms
+  }
+  if (!is.character(to) || length(to) < 1L) {
+    stop("spatial(<bar>, to = ): `to` must be a character vector of arm labels.",
+         call. = FALSE)
+  }
+  bad_to <- setdiff(to, .tobs_cover_arms)
+  if (length(bad_to)) {
+    stop(sprintf(paste0(
+      "spatial(<bar>, to = ): unknown arm label%s %s. Valid arms: %s."),
+      if (length(bad_to) > 1L) "s" else "",
+      paste0("\"", bad_to, "\"", collapse = ", "),
+      paste0("\"", .tobs_cover_arms, "\"", collapse = ", ")),
+      call. = FALSE)
+  }
+  to <- unique(to)
+
+  # `|` => correlated (MCAR) fields, `||` => independent fields. Read the bar's
+  # top operator off the AST (data-free), so the correlated path can be gated
+  # before the model data is in scope.
+  correlated <- identical(bar_formula[[2L]][[1L]], as.name("|"))
+
+  .tobs_term(list(
+    type        = model,
+    is_bar      = TRUE,
+    bar_formula = bar_formula,
+    correlated  = correlated,
+    graph       = graph,
+    to          = to
+  ), class = "tobs_spatial", id = id, label = model)
+}
+
+# Expand a captured varying-coefficient bar spec against the model data into the
+# pair the existing weighted-areal-term machinery (gcol33/tulpaObs#59) consumes:
+# one unweighted intercept areal field plus, per bar covariate column, a
+# weight-scaled trend areal field, all on the same graph keyed by the bar's node
+# index (the areal group_var). Each is a plain `tobs_spatial` term identical to
+# what `icar(graph, group_var = node)` / `icar(graph, weight = col,
+# group_var = node)` would produce, so the bar form desugars to exactly the
+# two-term coupled cover path with no engine change. Returns a list of
+# `tobs_spatial` terms in column order (intercept first).
+.tobs_expand_spatial_bar <- function(spec, data) {
+  specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data)
+  node  <- attr(specs, "node")
+  ctor  <- .tobs_terms[[spec$type]]
+
+  # Validate the node index against the graph dimension (the bar RHS is the
+  # graph node index, the old group_var).
+  if (is.null(data[[node]])) {
+    stop(sprintf(paste0(
+      "spatial(<bar>): node-index column \"%s\" not found in the data."), node),
+      call. = FALSE)
+  }
+  n_nodes <- nrow(spec$graph)
+  lv <- unique(stats::na.omit(data[[node]]))
+  if (is.numeric(data[[node]]) && !is.factor(data[[node]])) {
+    rng <- range(lv)
+    if (rng[1L] < 1L || rng[2L] > n_nodes) {
+      stop(sprintf(paste0(
+        "spatial(<bar>): node index \"%s\" has values in [%g, %g] but the graph ",
+        "has %d node(s); the node index must be a 1..%d code into the graph."),
+        node, rng[1L], rng[2L], n_nodes, n_nodes), call. = FALSE)
+    }
+  } else if (length(lv) > n_nodes) {
+    stop(sprintf(paste0(
+      "spatial(<bar>): node index \"%s\" has %d distinct levels but the graph ",
+      "has %d node(s)."), node, length(lv), n_nodes), call. = FALSE)
+  }
+
+  out <- vector("list", length(specs))
+  for (i in seq_along(specs)) {
+    col <- specs[[i]]
+    if (isTRUE(col$is_intercept)) {
+      term <- ctor(graph = spec$graph, group_var = node, id = spec$id)
+    } else {
+      term <- ctor(graph = spec$graph, group_var = node, id = spec$id)
+      term$weight       <- as.numeric(col$weight)
+      term$weight_label <- col$column_name
+    }
+    out[[i]] <- term
+  }
+  out
 }
 
 

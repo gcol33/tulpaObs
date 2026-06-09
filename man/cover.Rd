@@ -58,6 +58,44 @@ trend cannot currently combine with \code{temporal()} / \code{re()} blocks in th
 fit.
 }
 
+\section{Varying-coefficient spatial bar (the compact single-term form)}{
+
+The intercept field plus its weighted trend field can also be written as one
+\code{spatial()} term carrying an lme4-style coefficient formula and a \verb{to =}
+argument naming the arms that share the field:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{~ time.sc + habitat +
+  spatial(~ 1 + time.sc || cell_idx, graph = adj,
+          to = c("presence", "positive"))
+}\if{html}{\out{</div>}}
+
+The bar left-hand side spells the coefficient fields: the intercept column
+(\code{1}) is the unweighted shared field; each covariate column (\code{time.sc}) is a
+weight-scaled coefficient field (\code{weight_i * z[cell_i]}). The bar right-hand
+side (\code{cell_idx}) is the graph node index (the areal \code{group_var}); \code{||}
+requests independent fields. This desugars to exactly the two-term weighted-
+areal form above, so the two spellings give the same fit.
+
+The cover hurdle's two arms are \code{presence} (the \code{y > 0} Bernoulli arm) and
+\code{positive} (the \code{y | y > 0} arm); \code{summary()} and the coefficient output
+print these same labels. \verb{to =} validates against this arm set and may be
+omitted to mean both arms.
+
+\strong{Copy versus free.} One \code{spatial()} call with \verb{to =} naming both arms
+is a single latent field, presence-anchored, copied to the positive arm with
+an estimated coupling \code{alpha} (marginalized on the outer grid). This is the
+\emph{copy} / shared model, and the only form wired here (gcol33/tulpaObs#61):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# copy / shared: one latent, presence-anchored, alpha estimated
+spatial(~ 1 + time.sc || cell_idx, graph = adj, to = c("presence", "positive"))
+}\if{html}{\out{</div>}}
+
+Separate per-arm latent fields (the \emph{free} model: one \code{spatial()} per
+arm, or a single-arm \verb{to =}) and correlated coefficient fields (a single \code{|})
+need a different engine structure and are not yet wired; they error with a
+pointer to the shared spelling.
+}
+
 \section{Checkpoint / resume}{
 
 A spatial cover-hurdle fit integrates over a large outer hyperparameter grid

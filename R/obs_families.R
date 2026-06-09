@@ -830,6 +830,44 @@ fp_occu <- function() {
 #' trend cannot currently combine with `temporal()` / `re()` blocks in the same
 #' fit.
 #'
+#' @section Varying-coefficient spatial bar (the compact single-term form):
+#' The intercept field plus its weighted trend field can also be written as one
+#' `spatial()` term carrying an lme4-style coefficient formula and a `to =`
+#' argument naming the arms that share the field:
+#'
+#' ```r
+#' ~ time.sc + habitat +
+#'   spatial(~ 1 + time.sc || cell_idx, graph = adj,
+#'           to = c("presence", "positive"))
+#' ```
+#'
+#' The bar left-hand side spells the coefficient fields: the intercept column
+#' (`1`) is the unweighted shared field; each covariate column (`time.sc`) is a
+#' weight-scaled coefficient field (`weight_i * z[cell_i]`). The bar right-hand
+#' side (`cell_idx`) is the graph node index (the areal `group_var`); `||`
+#' requests independent fields. This desugars to exactly the two-term weighted-
+#' areal form above, so the two spellings give the same fit.
+#'
+#' The cover hurdle's two arms are `presence` (the `y > 0` Bernoulli arm) and
+#' `positive` (the `y | y > 0` arm); `summary()` and the coefficient output
+#' print these same labels. `to =` validates against this arm set and may be
+#' omitted to mean both arms.
+#'
+#' \strong{Copy versus free.} One `spatial()` call with `to =` naming both arms
+#' is a single latent field, presence-anchored, copied to the positive arm with
+#' an estimated coupling `alpha` (marginalized on the outer grid). This is the
+#' \emph{copy} / shared model, and the only form wired here (gcol33/tulpaObs#61):
+#'
+#' ```r
+#' # copy / shared: one latent, presence-anchored, alpha estimated
+#' spatial(~ 1 + time.sc || cell_idx, graph = adj, to = c("presence", "positive"))
+#' ```
+#'
+#' Separate per-arm latent fields (the \emph{free} model: one `spatial()` per
+#' arm, or a single-arm `to =`) and correlated coefficient fields (a single `|`)
+#' need a different engine structure and are not yet wired; they error with a
+#' pointer to the shared spelling.
+#'
 #' @section Checkpoint / resume:
 #' A spatial cover-hurdle fit integrates over a large outer hyperparameter grid
 #' and can run for hours. `control$checkpoint = list(path = "fit.ckpt", resume =

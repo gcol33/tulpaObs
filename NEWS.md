@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.25 (in development)
+
+* feat(formula): single-term varying-coefficient spatial bar in `cover()` /
+  `occu_cover()` (#61). `spatial(~ 1 + time || cell, graph = adj, to =
+  c("presence", "positive"))` is a compact spelling of the existing two
+  weighted-areal-term coupled trend: the intercept column is the unweighted
+  shared field, each covariate column a weight-scaled coefficient field, both on
+  the bar node index, presence-anchored and copied to the positive arm with an
+  estimated coupling `alpha`. It desugars to exactly the two-term form (`~ time +
+  icar(graph, group_var = "cell") + icar(graph, weight = time, group_var =
+  "cell")`), so the two spellings give the same fit; the bare `spatial()` /
+  `weight =` forms are unchanged. `to =` validates against the family arm set,
+  is order-free (presence anchor regardless of order), and defaults to both
+  arms. Built on `tulpa::tulpa_is_spatial_bar()` / `tulpa::tulpa_bar_field_specs()`
+  (tulpa#93). A correlated `|` bar (#64) and arm-specific separate latents
+  (single-arm `to =`, #65) error with a pointer to the shared spelling.
+* The cover hurdle's two arms are now labelled `presence` (the `y > 0` Bernoulli
+  arm) and `positive` (the `y | y > 0` arm) consistently across `summary()`,
+  `print()`, and the `to =` argument (formula label == output label),
+  replacing the earlier `occurrence` / `cover` headings.
+
 ## 0.0.24 (2026-06-08)
 
 * feat(spatial): opt-in mode-centred central-composite design (CCD) for the outer

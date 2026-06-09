@@ -188,6 +188,38 @@ encode_cover_hurdle <- function(formula, data, y,
   )
 }
 
+# Desugar a captured varying-coefficient spatial bar (gcol33/tulpaObs#61) into
+# the intercept + per-covariate trend `tobs_spatial` terms the cover machinery
+# already consumes, after enforcing the #61 scope gates:
+#   * `|` (correlated / MCAR coefficient fields) is not yet wired -> error,
+#     pointing to the `||` spelling (independent fields are #61; correlated #64);
+#   * a shared latent needs BOTH cover arms on `to` (presence + positive). A
+#     single-arm `to` selects an arm-specific separate latent, which needs a new
+#     engine structure (#65) and is not wired here.
+# The expanded terms are plain icar/bym2/car/car_proper specs identical to the
+# two-term form, so the bar desugars to exactly the existing #59 coupled path.
+.cover_desugar_spatial_bar <- function(spec, data_obs) {
+  if (isTRUE(spec$correlated)) {
+    stop("spatial(<bar>): a correlated bar (single `|`) requests correlated ",
+         "(MCAR) coefficient fields, which are not yet wired for cover(). Use ",
+         "the independent spelling `||` (e.g. ~ 1 + w || node) for the shared ",
+         "field, or wait for correlated-field support.", call. = FALSE)
+  }
+  to <- spec$to %||% .tobs_cover_arms
+  if (!setequal(to, .tobs_cover_arms)) {
+    stop(sprintf(paste0(
+      "spatial(<bar>, to = %s): a single shared latent field requires both ",
+      "cover arms (to = c(\"presence\", \"positive\")). An arm-specific ",
+      "separate latent (single-arm `to`, or separate spatial() calls) needs a ",
+      "distinct engine structure and is not yet wired; use ",
+      "to = c(\"presence\", \"positive\") for the shared, presence-anchored ",
+      "field."),
+      paste0("c(", paste0("\"", to, "\"", collapse = ", "), ")")),
+      call. = FALSE)
+  }
+  .tobs_expand_spatial_bar(spec, data_obs)
+}
+
 # Parse a cover() formula against the NA-dropped observations: return the
 # fixed-effects formula plus the structured terms it carried, split by kind.
 # The areal terms (icar/bym2/car/car_proper) split by their `weight`:
@@ -197,13 +229,22 @@ encode_cover_hurdle <- function(formula, data, y,
 #     is the spatially-varying TREND field -- the formula-DSL spelling of the
 #     coupled second besag block (gcol33/tulpaObs#59). Its per-observation weight
 #     `col` and label come back in `trend`.
+# A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`,
+# gcol33/tulpaObs#61) is the compact single-term spelling: it desugars in place
+# to the intercept field (its `1` column) plus a weight-scaled trend field per
+# covariate column, all on the bar's node index, so the two forms feed the same
+# machinery. The shared `to = c("presence", "positive")` path is the only one
+# wired here; `|` and arm-specific `to` are gated below.
 # svc()/latent() are not meaningful for the cover hurdle and are rejected.
 .encode_cover_terms <- function(formula, data_obs) {
   bind <- .tobs_bind_formulas(list(state = formula), data_obs)
   spatial_specs <- list(); temporal <- NULL; re <- list()
   for (t in bind$terms) {
     spec <- t$spec
-    if (inherits(spec, "tobs_spatial")) {
+    if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar)) {
+      expanded <- .cover_desugar_spatial_bar(spec, data_obs)
+      spatial_specs <- c(spatial_specs, expanded)
+    } else if (inherits(spec, "tobs_spatial")) {
       spatial_specs[[length(spatial_specs) + 1L]] <- spec
     } else if (inherits(spec, "tobs_temporal")) {
       if (!is.null(temporal)) {
@@ -892,12 +933,12 @@ print.cover_fit <- function(x, ...) {
   if (!is.null(x$sla_status) && !identical(x$sla_status, "off")) {
     cat(sprintf("  marginals    : %s\n", x$sla_status))
   }
-  cat("\nOccurrence (binomial logit):\n")
+  cat("\nPresence (binomial logit):\n")
   print(.coef_table(x$beta_occ, x$se_occ))
   pos_header <- if (positive == "beta") {
-    "Cover (beta, logit link, on y > 0):"
+    "Positive (beta, logit link, on y > 0):"
   } else {
-    "Log-cover (Gaussian on log y > 0):"
+    "Positive (Gaussian on log y > 0):"
   }
   cat("\n", pos_header, "\n", sep = "")
   print(.coef_table(x$beta_pos, x$se_pos))
@@ -906,6 +947,10 @@ print.cover_fit <- function(x, ...) {
 
 #' @export
 summary.cover_fit <- function(object, ...) {
+  # Arm labels (gcol33/tulpaObs#61): the two hurdle arms are `presence`
+  # (the y > 0 Bernoulli arm) and `positive` (the y | y > 0 arm). The `to =`
+  # argument of a spatial() bar validates against these labels, so summary()
+  # prints the same names (formula label == output label).
   out <- list(
     family       = object$family,
     positive     = object$positive %||% "lognormal",
@@ -914,7 +959,7 @@ summary.cover_fit <- function(object, ...) {
     sigma_pos    = object$sigma_pos,
     phi_pos      = object$phi_pos,
     converged    = object$converged,
-    occurrence   = .coef_table(object$beta_occ, object$se_occ),
+    presence     = .coef_table(object$beta_occ, object$se_occ),
     positive_arm = .coef_table(object$beta_pos, object$se_pos),
     log_marginal = object$log_marginal,
     hyperpar     = object$hyperpar
@@ -935,8 +980,8 @@ print.summary.cover_fit <- function(x, ...) {
   }
   cat(sprintf("  log marginal: occ = %.3f, pos = %.3f\n",
               x$log_marginal["occ"], x$log_marginal["pos"]))
-  cat("\nOccurrence:\n"); print(x$occurrence)
-  pos_header <- if (x$positive == "beta") "Cover (beta, logit):" else "Log-cover (Gaussian):"
+  cat("\nPresence:\n"); print(x$presence)
+  pos_header <- if (x$positive == "beta") "Positive (beta, logit):" else "Positive (Gaussian):"
   cat("\n", pos_header, "\n", sep = ""); print(x$positive_arm)
   invisible(x)
 }
