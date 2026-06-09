@@ -116,6 +116,13 @@
     }
   }
 
+  # Soft guard (gcol33/tulpaObs#62): a bare `| / ||` RE bar whose grouping factor
+  # is also an areal term's graph-node group_var is fitted as an IID random effect,
+  # not a spatial field (the engine-bar-idiom papercut). Informs (message) without
+  # rejecting -- RE bars are legitimate -- and is silent when the bar's factor is
+  # unrelated to any spatial term.
+  .tobs_cover_bar_re_guard(formula, specs)
+
   bad <- Filter(function(s) !s$type %in% c("icar", "bym2"), specs)
   if (length(bad)) {
     stop(sprintf(

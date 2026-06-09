@@ -236,6 +236,17 @@ jsdm <- function() {
 #' and the tulpaObs consumer of tulpa's field + per-group RE engine composition
 #' (gcol33/tulpa#86, tulpaObs#56).
 #'
+#' A bar is therefore always a random effect, never a spatial field, even when the
+#' grouping factor names the areal graph nodes. The engine's inline-MCAR call
+#' `tulpa::spatial(graph, ~ 1 + x | cell)` reads `| cell` as a separable spatial
+#' field, but the same spelling in an `occu_cover()` formula is an IID random
+#' effect on `cell`. For a spatial field on the cells use an areal term --
+#' `icar(graph = adj, group_var = "cell")` (plus
+#' `icar(graph = adj, weight = x, group_var = "cell")` for a spatially-varying
+#' trend) -- not a bar. When a formula carries a bar whose grouping factor is also
+#' an areal term's `group_var`, `occu_cover()` emits a one-time message noting the
+#' bar is fitted as a random effect; suppress it with [base::suppressMessages()].
+#'
 #' @section Checkpoint / resume:
 #' A full-field `occu_cover()` fit integrates over a large outer hyperparameter
 #' grid and can run for hours, so a reboot or OOM kill otherwise loses the whole
@@ -867,6 +878,21 @@ fp_occu <- function() {
 #' arm, or a single-arm `to =`) and correlated coefficient fields (a single `|`)
 #' need a different engine structure and are not yet wired; they error with a
 #' pointer to the shared spelling.
+#'
+#' @section A formula bar is a random effect, not a spatial field:
+#' A bare lme4 bar in the formula -- `(1 | cell)`, `(1 + x | cell)`,
+#' `(x || cell)` -- is a grouped random effect, not a spatial field, even when the
+#' grouping factor names the areal graph nodes. The engine's inline-MCAR call
+#' `tulpa::spatial(graph, ~ 1 + x | cell)` reads `| cell` as a separable spatial
+#' field, but the same spelling inside a `cover()` formula is parsed as an IID
+#' random effect on `cell`. For a spatial field on the cells write either the
+#' compact `spatial()` bar of the section above,
+#' `spatial(~ 1 + x || cell, graph = adj)`, or the two-term weighted-areal form,
+#' `icar(graph = adj, group_var = "cell") +`
+#' `icar(graph = adj, weight = x, group_var = "cell")`. When a formula carries a
+#' bar whose grouping factor is also an areal term's `group_var`, `cover()` emits
+#' a one-time message noting the bar is fitted as a random effect; suppress it
+#' with [base::suppressMessages()].
 #'
 #' @section Checkpoint / resume:
 #' A spatial cover-hurdle fit integrates over a large outer hyperparameter grid

@@ -258,6 +258,12 @@ encode_cover_hurdle <- function(formula, data, y,
                    spec$label %||% class(spec)[1]), call. = FALSE)
     }
   }
+  # Soft guard (gcol33/tulpaObs#62): a bare `| / ||` RE bar whose grouping factor
+  # is also an areal term's graph-node group_var is the engine-bar-idiom papercut
+  # -- the bar is fitted as an IID random effect, not a spatial field. RE bars are
+  # legitimate, so this informs (message) rather than rejecting; it is silent when
+  # the bar's factor is unrelated to any spatial term.
+  .tobs_cover_bar_re_guard(formula, spatial_specs)
   fields <- .cover_resolve_spatial_fields(spatial_specs, data_obs)
   list(fe = bind$fe$state, spatial = fields$spatial, trend = fields$trend,
        temporal = temporal, re = if (length(re)) re else NULL)

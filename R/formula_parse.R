@@ -159,6 +159,69 @@
   formula
 }
 
+# Collect the grouping-factor expressions of every lme4 bar in a formula's RHS,
+# deparsed to the strings they would index by. Walks the additive AST with the
+# same bar recogniser the desugarer uses (never a regex on the deparsed formula),
+# so `(1 + x | cell)` and `(x || g/h)` contribute the same grouping factors they
+# expand to (`cell`; `g`, `g:h`). A bar's RHS may name several factors (crossed /
+# nested), so each is returned separately. Used by the cover()/occu_cover() guard
+# (gcol33/tulpaObs#62) to flag a bar grouping factor that collides with an areal
+# term's graph-node `group_var`.
+.tobs_collect_bar_groups <- function(formula) {
+  out <- character(0)
+  walk <- function(e) {
+    if (is.call(e) && identical(e[[1L]], as.name("+")) && length(e) == 3L) {
+      walk(e[[2L]]); walk(e[[3L]]); return(invisible())
+    }
+    bar <- .tobs_bar_spec(e)
+    if (!is.null(bar)) {
+      for (g in .tobs_bar_group_terms(bar$rhs)) {
+        out[[length(out) + 1L]] <<- paste(deparse(g), collapse = "")
+      }
+    }
+  }
+  walk(formula[[length(formula)]])
+  out
+}
+
+# Soft guard for the cover() / occu_cover() formula papercut (gcol33/tulpaObs#62).
+# A user who learns the engine's inline-MCAR bar idiom (`tulpa::spatial(graph,
+# ~ 1 + x | cell)`) may carry the `| cell` spelling into a cover formula, where it
+# is legitimately parsed as a random effect, not a spatial field. RE bars are
+# supported and must not be rejected; but when a bar's grouping factor is ALSO the
+# graph-node `group_var` of an areal term in the same formula (the strong-signal
+# confusion case), emit an informative message() that the bar is being fitted as an
+# IID random effect, pointing to the spatial() bar / two-term form for a spatial
+# field. Suppressible (message, not warning/error) and a no-op when the bar's
+# factor is unrelated to any spatial term (an unambiguous, intended RE).
+#
+# `formula` is the original (pre-desugar) process formula; `spatial_specs` is the
+# list of parsed `tobs_spatial` specs from that formula (each carrying `group_var`
+# / `label`). Both inputs are parsed objects -- the formula AST is walked, never
+# the deparsed string.
+.tobs_cover_bar_re_guard <- function(formula, spatial_specs) {
+  if (is.null(formula) || length(spatial_specs) == 0L) return(invisible())
+  bar_groups <- .tobs_collect_bar_groups(formula)
+  if (length(bar_groups) == 0L) return(invisible())
+  gvs <- Filter(Negate(is.null),
+                lapply(spatial_specs, function(s) s$group_var))
+  gvs <- unique(unlist(gvs, use.names = FALSE))
+  hits <- intersect(bar_groups, gvs)
+  if (length(hits) == 0L) return(invisible())
+  field <- spatial_specs[[1L]]$label %||% spatial_specs[[1L]]$type %||% "icar"
+  for (g in hits) {
+    message(sprintf(paste0(
+      "cover()/occu_cover(): the bar `| %s` is being fitted as an IID random ",
+      "effect, not a spatial field, even though `%s` is also the graph-node ",
+      "group_var of an areal term. For a spatial field on `%s`, use ",
+      "spatial(~ ... || %s, graph = <adj>) or the two-term form ",
+      "%s(graph = <adj>, group_var = \"%s\") + %s(graph = <adj>, weight = ..., ",
+      "group_var = \"%s\"). Suppress with suppressMessages()."),
+      g, g, g, g, field, g, field, g))
+  }
+  invisible()
+}
+
 #' Parse a process formula into fixed effects and structured terms
 #'
 #' @param formula a one- or two-sided formula for a single process (e.g. the

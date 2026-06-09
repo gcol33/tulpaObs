@@ -16,6 +16,13 @@
   arms. Built on `tulpa::tulpa_is_spatial_bar()` / `tulpa::tulpa_bar_field_specs()`
   (tulpa#93). A correlated `|` bar (#64) and arm-specific separate latents
   (single-arm `to =`, #65) error with a pointer to the shared spelling.
+* `cover()` / `occu_cover()` now emit an informative message when a bare `|` / `||`
+  formula bar groups by the same factor an areal term uses as its graph-node
+  `group_var` (#62): the bar is a random effect, not a spatial field, so the
+  message points to `spatial(~ ... || cell, graph = adj)` (or the two-term
+  `icar(graph, group_var) + icar(graph, weight, group_var)` form) for a spatial
+  field. RE bars still fit as random effects; the message is suppressible and
+  silent when the bar's factor is unrelated to any spatial term.
 * The cover hurdle's two arms are now labelled `presence` (the `y > 0` Bernoulli
   arm) and `positive` (the `y | y > 0` arm) consistently across `summary()`,
   `print()`, and the `to =` argument (formula label == output label),

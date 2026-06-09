@@ -108,6 +108,17 @@ RE is the non-spatial cover-hurdle EM's route). This is the single-species
 analogue of the community spatial occu_cover (\code{\link[=ms_occu_cover]{ms_occu_cover()}}, gcol33/tulpa#67)
 and the tulpaObs consumer of tulpa's field + per-group RE engine composition
 (gcol33/tulpa#86, tulpaObs#56).
+
+A bar is therefore always a random effect, never a spatial field, even when the
+grouping factor names the areal graph nodes. The engine's inline-MCAR call
+\code{tulpa::spatial(graph, ~ 1 + x | cell)} reads \verb{| cell} as a separable spatial
+field, but the same spelling in an \code{occu_cover()} formula is an IID random
+effect on \code{cell}. For a spatial field on the cells use an areal term --
+\code{icar(graph = adj, group_var = "cell")} (plus
+\code{icar(graph = adj, weight = x, group_var = "cell")} for a spatially-varying
+trend) -- not a bar. When a formula carries a bar whose grouping factor is also
+an areal term's \code{group_var}, \code{occu_cover()} emits a one-time message noting the
+bar is fitted as a random effect; suppress it with \code{\link[base:suppressMessages]{base::suppressMessages()}}.
 }
 
 \section{Checkpoint / resume}{

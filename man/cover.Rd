@@ -96,6 +96,23 @@ need a different engine structure and are not yet wired; they error with a
 pointer to the shared spelling.
 }
 
+\section{A formula bar is a random effect, not a spatial field}{
+
+A bare lme4 bar in the formula -- \code{(1 | cell)}, \code{(1 + x | cell)},
+\code{(x || cell)} -- is a grouped random effect, not a spatial field, even when the
+grouping factor names the areal graph nodes. The engine's inline-MCAR call
+\code{tulpa::spatial(graph, ~ 1 + x | cell)} reads \verb{| cell} as a separable spatial
+field, but the same spelling inside a \code{cover()} formula is parsed as an IID
+random effect on \code{cell}. For a spatial field on the cells write either the
+compact \code{spatial()} bar of the section above,
+\code{spatial(~ 1 + x || cell, graph = adj)}, or the two-term weighted-areal form,
+\verb{icar(graph = adj, group_var = "cell") +}
+\code{icar(graph = adj, weight = x, group_var = "cell")}. When a formula carries a
+bar whose grouping factor is also an areal term's \code{group_var}, \code{cover()} emits
+a one-time message noting the bar is fitted as a random effect; suppress it
+with \code{\link[base:suppressMessages]{base::suppressMessages()}}.
+}
+
 \section{Checkpoint / resume}{
 
 A spatial cover-hurdle fit integrates over a large outer hyperparameter grid
