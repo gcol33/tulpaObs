@@ -23,6 +23,14 @@ tobs(
 this is the occupancy probability formula; for N-mixture the abundance
 formula; for the cover hurdle the latent-presence formula.
 
+Single-vector-response families (the cover hurdle, \code{\link[=cover]{cover()}}) also accept
+the response on the left-hand side, \code{response ~ predictors}, in which case
+\verb{y =} is omitted (e.g. \code{cover.flat ~ time + habitat}). The LHS is evaluated
+against \code{data} (then the calling environment), so it may be a bare column
+or an expression. Matrix / array / list response families (\code{\link[=occu]{occu()}},
+\code{\link[=abun]{abun()}}, the \verb{ms_*} families, ...) keep the one-sided form and supply the
+response via \verb{y =}; a two-sided formula for those errors.
+
 Structured effects are written as terms inside the formula, the way
 \code{lme4}, \code{mgcv}, and \code{INLA} do: spatial fields \code{icar(graph = adj)},
 \code{bym2(graph = adj)}, \code{gp(lon, lat)}, \code{spde(lon, lat)}; random effects
@@ -61,7 +69,13 @@ Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun
 \item \code{\link[=abun]{abun()}} — N x J integer count matrix.
 \item \verb{ms_*} — S x N x J array.
 \item \code{\link[=cover]{cover()}} — length-N vector of cover proportions in [0, 1].
-}}
+}
+
+For a single-vector-response family (\code{\link[=cover]{cover()}}) the response may instead
+be written on the \code{formula} left-hand side (\code{response ~ predictors}), in
+which case \verb{y =} is omitted. Supplying the response both on the LHS and via
+\verb{y =} errors. Matrix / array / list response families take the response
+via \verb{y =} only.}
 
 \item{visits}{optional visit-level detection covariates. Accepts
 either:

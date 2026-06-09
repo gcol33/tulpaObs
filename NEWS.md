@@ -23,6 +23,15 @@
   `icar(graph, group_var) + icar(graph, weight, group_var)` form) for a spatial
   field. RE bars still fit as random effects; the message is suppressible and
   silent when the bar's factor is unrelated to any spatial term.
+* feat(api): single-vector-response families accept the response on the top
+  formula left-hand side, dropping `y =` (#66). `cover()` is the first such
+  family: `tobs(cover.flat ~ predictors, data = dat, family = cover())` is
+  equivalent to the one-sided `~ predictors` form with `y = dat$cover.flat`.
+  A new `response` property on `obs_family()` (`"vector"` vs the default
+  `"matrix"`) declares eligibility; matrix / array / list response families
+  (`occu()`, `abun()`, the `ms_*` families, ...) keep `y =` and a two-sided
+  formula for those errors. Supplying the response on both the LHS and `y =`
+  errors.
 * The cover hurdle's two arms are now labelled `presence` (the `y > 0` Bernoulli
   arm) and `positive` (the `y | y > 0` arm) consistently across `summary()`,
   `print()`, and the `to =` argument (formula label == output label),

@@ -18,6 +18,34 @@ Latent presence (Bernoulli) plus conditional positive cover (beta or
 lognormal). Does not share the replicate-detection assumption of the other
 families — see \code{vignette("families")} for the conceptual caveat.
 }
+\section{Response on the formula left-hand side}{
+
+The cover response is a single length-N vector, so it may sit on the top
+formula left-hand side and \verb{y =} is dropped (gcol33/tulpaObs#66). The two
+calls are equivalent:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# response on the LHS (y = omitted)
+tobs(cover.flat ~ time.sc + habitat +
+       spatial(~ 1 + time.sc || cell_idx, graph = adj,
+               to = c("presence", "positive")),
+     data = dat, family = cover(positive = "beta"),
+     method = "nested_laplace")
+
+# the same fit with a one-sided formula and an explicit y =
+tobs(~ time.sc + habitat +
+       spatial(~ 1 + time.sc || cell_idx, graph = adj,
+               to = c("presence", "positive")),
+     y = dat$cover.flat, data = dat, family = cover(positive = "beta"),
+     method = "nested_laplace")
+}\if{html}{\out{</div>}}
+
+Naming the response makes the per-arm spatial labels read naturally: \code{cover()}
+splits \code{cover.flat} into a \code{presence} arm and a \code{positive} arm, so the
+\code{to = c("presence", "positive")} arm names are visible in the call. The LHS
+is evaluated against \code{data} (then the calling environment), so it may be a
+bare column or an expression.
+}
+
 \section{Joint nested-Laplace engine — spatial-prior parameterisation}{
 
 When fitted with \code{method = "nested_laplace"} and an areal spatial term in

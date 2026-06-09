@@ -18,6 +18,14 @@
 #'   this is the occupancy probability formula; for N-mixture the abundance
 #'   formula; for the cover hurdle the latent-presence formula.
 #'
+#'   Single-vector-response families (the cover hurdle, [cover()]) also accept
+#'   the response on the left-hand side, `response ~ predictors`, in which case
+#'   `y =` is omitted (e.g. `cover.flat ~ time + habitat`). The LHS is evaluated
+#'   against `data` (then the calling environment), so it may be a bare column
+#'   or an expression. Matrix / array / list response families ([occu()],
+#'   [abun()], the `ms_*` families, ...) keep the one-sided form and supply the
+#'   response via `y =`; a two-sided formula for those errors.
+#'
 #'   Structured effects are written as terms inside the formula, the way
 #'   `lme4`, `mgcv`, and `INLA` do: spatial fields `icar(graph = adj)`,
 #'   `bym2(graph = adj)`, `gp(lon, lat)`, `spde(lon, lat)`; random effects
@@ -53,6 +61,12 @@
 #'   * [abun()] — N x J integer count matrix.
 #'   * `ms_*` — S x N x J array.
 #'   * [cover()] — length-N vector of cover proportions in \[0, 1\].
+#'
+#'   For a single-vector-response family ([cover()]) the response may instead
+#'   be written on the `formula` left-hand side (`response ~ predictors`), in
+#'   which case `y =` is omitted. Supplying the response both on the LHS and via
+#'   `y =` errors. Matrix / array / list response families take the response
+#'   via `y =` only.
 #' @param visits optional visit-level detection covariates. Accepts
 #'   either:
 #'   * a named list of `[n_sites, max_visits]` matrices (the shape returned by
@@ -210,6 +224,17 @@ tobs <- function(formula,
       call. = FALSE
     )
   }
+
+  # Response on the top formula LHS (gcol33/tulpaObs#66). A single-vector-response
+  # family (cover hurdle; family$response == "vector") may carry its response on
+  # the formula LHS -- `cover.flat ~ predictors` -- and drop `y =`. Resolve the
+  # LHS to `y` and strip `formula` to one-sided here, so the rest of the pipeline
+  # (dispatchers, encoders, structured-term parser) sees the unchanged one-sided
+  # interface. Matrix / array / list families take their response via `y =` only;
+  # a two-sided formula for those errors with a pointer to `?tobs`.
+  resolved <- .tobs_resolve_response_lhs(formula, y, family, data)
+  formula  <- resolved$formula
+  y        <- resolved$y
 
   # Batched multi-response (gcol33/tulpa#66): occu_cover with `y` a list of >= 2
   # response matrices (or a 3D array [n_sites x max_visits x B]) fits B species,
@@ -947,6 +972,77 @@ tobs <- function(formula,
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# Resolve a response on the top formula LHS (gcol33/tulpaObs#66). When `formula`
+# is two-sided, the LHS is the response: it is the clean alternative to a
+# separate `y =` for a single-vector-response family (`family$response ==
+# "vector"`, the cover hurdle). The LHS expression is evaluated against `data`
+# first, then the calling environment, so it may be a bare column (`cover.flat`)
+# or an expression (`log(cover + 1)`). The formula is stripped to one-sided so
+# every downstream consumer (dispatchers, family encoders, the structured-term
+# parser, which all assume a one-sided process formula with the response in `y`)
+# is unchanged; the RHS -- spatial() / bars / other terms -- still flows through
+# the existing parser untouched.
+#
+# Returns list(formula =, y =). A one-sided formula passes through unchanged
+# (current interface). A two-sided formula errors for a matrix-response family
+# (its response is a matrix / array, not a formula LHS) or when `y =` is also
+# supplied (the response would be given twice).
+.tobs_resolve_response_lhs <- function(formula, y, family,
+                                       data, env = NULL) {
+  if (!inherits(formula, "formula")) {
+    stop("`formula` must be a formula.", call. = FALSE)
+  }
+  # The formula carries the user's calling environment; resolve LHS symbols not
+  # found in `data` against it (matching how model.matrix resolves the RHS).
+  if (is.null(env)) env <- environment(formula) %||% parent.frame()
+  # One-sided formula (length 2: `~ rhs`) is the current interface, unchanged.
+  if (length(formula) < 3L) {
+    return(list(formula = formula, y = y))
+  }
+
+  # Two-sided formula: the LHS is a response. Only single-vector-response
+  # families can take it there.
+  if (!identical(family$response %||% "matrix", "vector")) {
+    stop(
+      sprintf(
+        "%s()'s response is a matrix / array supplied via `y =`, not on the ",
+        family$name),
+      "formula left-hand side. Use a one-sided `formula = ~ predictors` and ",
+      "pass the response as `y =` (see `?tobs`, the `y` argument).",
+      call. = FALSE
+    )
+  }
+
+  if (!is.null(y)) {
+    stop(
+      "the response is given twice: once on the formula left-hand side ",
+      "(`", deparse(formula[[2L]]), " ~ ...`) and once via `y =`. Supply it ",
+      "one way only -- either move it to the LHS and drop `y =`, or keep ",
+      "`y =` and make `formula` one-sided.",
+      call. = FALSE
+    )
+  }
+
+  lhs <- formula[[2L]]
+  data_env <- if (!missing(data) && !is.null(data) &&
+                  (is.data.frame(data) || is.list(data))) {
+    list2env(as.list(data), parent = env)
+  } else env
+  y <- tryCatch(
+    eval(lhs, envir = data_env),
+    error = function(e) stop(sprintf(
+      "Could not evaluate the response `%s` on the formula left-hand side: %s",
+      deparse(lhs), conditionMessage(e)), call. = FALSE)
+  )
+
+  # Strip to one-sided so downstream code sees the unchanged interface. Build
+  # `~ rhs` from the RHS call object directly (not deparse-then-reparse), so a
+  # long multi-line RHS -- e.g. a wide spatial() term -- survives intact.
+  rhs_formula <- stats::as.formula(call("~", formula[[3L]]),
+                                   env = environment(formula))
+  list(formula = rhs_formula, y = y)
+}
 
 # Public `method` names are sugar over the orthogonal internal triple
 # (engine, approx, correction). Each method names one fully-specified route;

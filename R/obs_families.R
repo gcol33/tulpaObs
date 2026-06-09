@@ -26,6 +26,13 @@
 #' @param replicates one of `"required"`, `"optional"`, `"single"`.
 #' @param default_engine `"laplace"`, `"nested_laplace"`, or `"nuts"`.
 #' @param status `"working"`, `"planned"`, or `"experimental"`.
+#' @param response shape of the family's response: `"vector"` for a plain
+#'   length-N response vector (the cover hurdle), or `"matrix"` (the default)
+#'   for a detection-history / count matrix, 3D array, or list. A
+#'   single-vector-response family accepts the response on the top formula
+#'   left-hand side (`response ~ predictors`) so `y =` may be omitted; a
+#'   matrix-response family takes the response via `y =` only (a matrix does
+#'   not sit on a formula LHS). Consulted by [tobs()] (gcol33/tulpaObs#66).
 #' @param params named list of family-specific parameters carried with the
 #'   object (K_max, positive-part link, etc.).
 #' @param control_keys character vector of extra `control` names this family's
@@ -44,10 +51,12 @@ obs_family <- function(name,
                        default_engine = c("laplace", "nested_laplace", "nuts"),
                        status         = c("working", "planned", "experimental"),
                        params         = list(),
-                       control_keys   = character(0)) {
+                       control_keys   = character(0),
+                       response       = c("matrix", "vector")) {
   replicates     <- match.arg(replicates)
   default_engine <- match.arg(default_engine)
   status         <- match.arg(status)
+  response       <- match.arg(response)
 
   structure(
     list(
@@ -59,7 +68,8 @@ obs_family <- function(name,
       default_engine = default_engine,
       status         = status,
       params         = params,
-      control_keys   = control_keys
+      control_keys   = control_keys,
+      response       = response
     ),
     class = "tobs_family"
   )
@@ -804,6 +814,33 @@ fp_occu <- function() {
 #' lognormal). Does not share the replicate-detection assumption of the other
 #' families — see `vignette("families")` for the conceptual caveat.
 #'
+#' @section Response on the formula left-hand side:
+#' The cover response is a single length-N vector, so it may sit on the top
+#' formula left-hand side and `y =` is dropped (gcol33/tulpaObs#66). The two
+#' calls are equivalent:
+#'
+#' ```r
+#' # response on the LHS (y = omitted)
+#' tobs(cover.flat ~ time.sc + habitat +
+#'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
+#'                to = c("presence", "positive")),
+#'      data = dat, family = cover(positive = "beta"),
+#'      method = "nested_laplace")
+#'
+#' # the same fit with a one-sided formula and an explicit y =
+#' tobs(~ time.sc + habitat +
+#'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
+#'                to = c("presence", "positive")),
+#'      y = dat$cover.flat, data = dat, family = cover(positive = "beta"),
+#'      method = "nested_laplace")
+#' ```
+#'
+#' Naming the response makes the per-arm spatial labels read naturally: `cover()`
+#' splits `cover.flat` into a `presence` arm and a `positive` arm, so the
+#' `to = c("presence", "positive")` arm names are visible in the call. The LHS
+#' is evaluated against `data` (then the calling environment), so it may be a
+#' bare column or an expression.
+#'
 #' @section Joint nested-Laplace engine — spatial-prior parameterisation:
 #' When fitted with `method = "nested_laplace"` and an areal spatial term in
 #' the latent-presence formula (`bym2(graph = adj)`, or `car()` /
@@ -917,6 +954,9 @@ cover <- function(positive = c("beta", "lognormal")) {
     replicates     = "single",
     default_engine = "laplace",
     status         = "working",
+    # The cover response is a plain length-N cover vector, so it may sit on the
+    # top formula LHS (`cover.flat ~ ...`) and drop `y =` (gcol33/tulpaObs#66).
+    response       = "vector",
     params         = list(positive = positive),
     # The cover hurdle has its own (.dispatch_cover) grid-based control surface,
     # separate from the occupancy fitter and named with underscores. Declaring
@@ -954,6 +994,7 @@ print.tobs_family <- function(x, ...) {
   cat(sprintf("  latent state   : %s\n", x$latent))
   cat(sprintf("  observation    : %s\n", x$observation))
   cat(sprintf("  replicates     : %s\n", x$replicates))
+  cat(sprintf("  response       : %s\n", x$response %||% "matrix"))
   cat(sprintf("  default method : %s  (method = \"auto\")\n", x$default_engine))
   cat(sprintf("  status         : %s\n", x$status))
   if (length(x$params)) {

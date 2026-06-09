@@ -13,7 +13,8 @@ obs_family(
   default_engine = c("laplace", "nested_laplace", "nuts"),
   status = c("working", "planned", "experimental"),
   params = list(),
-  control_keys = character(0)
+  control_keys = character(0),
+  response = c("matrix", "vector")
 )
 }
 \arguments{
@@ -40,6 +41,14 @@ object (K_max, positive-part link, etc.).}
 dispatcher accepts beyond the engine/route controls. These are added to
 the allowlist \code{tobs()} validates \code{control} against, so a family with a
 bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.}
+
+\item{response}{shape of the family's response: \code{"vector"} for a plain
+length-N response vector (the cover hurdle), or \code{"matrix"} (the default)
+for a detection-history / count matrix, 3D array, or list. A
+single-vector-response family accepts the response on the top formula
+left-hand side (\code{response ~ predictors}) so \verb{y =} may be omitted; a
+matrix-response family takes the response via \verb{y =} only (a matrix does
+not sit on a formula LHS). Consulted by \code{\link[=tobs]{tobs()}} (gcol33/tulpaObs#66).}
 }
 \value{
 A \code{tobs_family} object.
