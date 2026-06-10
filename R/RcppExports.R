@@ -237,6 +237,14 @@ cpp_occu_fit <- function(spec_r) {
     .Call(`_tulpaObs_cpp_occu_fit`, spec_r)
 }
 
+cpp_occu_ms_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
+    .Call(`_tulpaObs_cpp_occu_ms_cover_nuts_joint_logpost`, spec, theta, sigma_beta)
+}
+
+cpp_occu_ms_cover_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_occu_ms_cover_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
 cpp_removal_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {
     .Call(`_tulpaObs_cpp_removal_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max)
 }

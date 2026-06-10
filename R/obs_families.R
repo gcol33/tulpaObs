@@ -525,18 +525,23 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
 #' estimable.
 #'
 #' @section Scope (status `"experimental"`):
-#' Two engines. `method = "nested_laplace"` carries a single shared areal field
-#' coupled across the occupancy (`sigma`) and cover (`alpha * sigma`) arms,
-#' integrated over the outer `(sigma, alpha)` grid. `method = "laplace"` is the
-#' non-spatial path (iid cells, no field): the exact three-level marginal
-#' optimised directly. Cells are declared the same way on both paths, via an
-#' `icar(graph = adj, group_var = "<cell>")` term (the graph drives the field
-#' under `"nested_laplace"` and is ignored under `"laplace"`). On the
-#' `"nested_laplace"` path additional weighted areal terms in the psi formula
+#' Three engines. `method = "nested_laplace"` carries a single shared areal
+#' field coupled across the occupancy (`sigma`) and cover (`alpha * sigma`)
+#' arms, integrated over the outer `(sigma, alpha)` grid. `method = "laplace"`
+#' and `method = "nuts"` are the non-spatial path (iid cells, no field): the
+#' exact three-level marginal (z over cells, a over plots both summed in closed
+#' form) optimised directly (`"laplace"`, a Gaussian observed-Fisher posterior)
+#' or sampled (`"nuts"`, the exact coefficient posterior with calibrated
+#' intervals and WAIC / LOO). Cells are declared the same way on every path, via
+#' an `icar(graph = adj, group_var = "<cell>")` term (the graph drives the field
+#' under `"nested_laplace"` and supplies only the plot -> cell map under
+#' `"laplace"` / `"nuts"`). On the `"nested_laplace"` path additional weighted
+#' areal terms in the psi formula
 #' (`icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)`) add
 #' spatially-varying-coefficient trend fields, each coupled onto the cover arm
 #' with its own `alpha_trend`; the fitted fields are in `fit$trend_field` /
-#' `fit$trend_fields`.
+#' `fit$trend_fields`. The coupled / trend field is not sampled, so
+#' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).

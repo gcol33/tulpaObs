@@ -229,7 +229,9 @@
 # Exact three-level marginal log-likelihood at the packed parameter vector
 # par = (beta_psi, beta_theta, beta_p[site,visit], beta_pos[site,visit], log_disp).
 # `idx` carries each block's coordinate indices and the per-arm site/visit split.
-.occu_ms_cover_nonspatial_ll <- function(par, model, idx) {
+# `per_cell = TRUE` returns the length-n_cells per-cell log-likelihood vector
+# (the pointwise unit WAIC / LOO score), otherwise their sum.
+.occu_ms_cover_nonspatial_ll <- function(par, model, idx, per_cell = FALSE) {
   J        <- model$max_visits
   n_plots  <- model$n_plots
   n_cells  <- model$n_cells
@@ -296,7 +298,30 @@
   lc_a <- log_psi + sum_logpj_cell; lc_b <- log_1mpsi
   m_c  <- pmax(lc_a, lc_b)
   ll_nodet <- m_c + log(exp(lc_a - m_c) + exp(lc_b - m_c))
-  sum(ifelse(det_cell, ll_det, ll_nodet))
+  ll_cell <- ifelse(det_cell, ll_det, ll_nodet)
+  if (per_cell) ll_cell else sum(ll_cell)
+}
+
+
+# Per-cell pointwise log-likelihood over a posterior draw matrix (the WAIC / LOO
+# unit is the cell, the top-level marginalised observation). Reuses the exact
+# three-level marginal LL with `per_cell = TRUE`, so the pointwise score and the
+# fitted log-likelihood share one source of truth. Returns an [n_draws x n_cells]
+# matrix. Used for both the NUTS draws (calibrated WAIC) and the Laplace
+# pseudo-draws.
+.tobs_ploglik_occu_multiscale_cover <- function(object, n.draws = 1000L) {
+  model <- object$model
+  draws <- object$draws
+  if (is.null(draws) || !is.matrix(draws)) {
+    stop("Pointwise log-likelihood needs a posterior draw matrix; ",
+         "`object$draws` is missing or not a matrix.", call. = FALSE)
+  }
+  if (!is.null(n.draws) && n.draws < nrow(draws)) {
+    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
+  }
+  idx <- .tobs_occu_ms_cover_nuts_layout(model)
+  t(apply(draws, 1L, function(par)
+    .occu_ms_cover_nonspatial_ll(par, model, idx, per_cell = TRUE)))
 }
 
 # Non-spatial Laplace fit: BFGS over the exact marginal (numeric gradient),
@@ -434,7 +459,8 @@
 
   theta_formula <- dots$availability %||% ~ 1
   pos_formula   <- dots$positive %||% detection
-  non_spatial   <- identical(engine, "laplace")
+  is_nuts       <- identical(engine, "nuts")
+  non_spatial   <- identical(engine, "laplace") || is_nuts
 
   spatial_info <- .occu_cover_spatial_fields(formula, data)
   if (is.null(spatial_info)) {
@@ -471,6 +497,19 @@
   n_cells <- nrow(fields[[1L]]$graph)
   plot_cell <- as.integer(data[[gv]])
 
+  # method = "nuts" samples the EXACT non-spatial three-level marginal (iid
+  # cells, field fixed at 0); the cell-declaring icar()/bym2() term supplies the
+  # plot -> cell map only, its graph is ignored. The shared areal field (and any
+  # coupled SVC / trend field) is grid-integrated under method = "nested_laplace"
+  # and has no sampled-field route here -- gate it with a pointer.
+  if (is_nuts && length(fields) > 1L) {
+    stop("occu_multiscale_cover() method = \"nuts\" is the non-spatial path ",
+         "(iid cells, no areal field); a coupled SVC / trend field is not ",
+         "sampled. Use method = \"nested_laplace\" for the shared / trend ",
+         "field, or keep a single cell-declaring icar()/bym2() term for the ",
+         "non-spatial NUTS fit.", call. = FALSE)
+  }
+
   vd_det <- .normalize_visits(visits, detection,
                               n_sites = nrow(y), max_visits = ncol(y))
   vd_pos <- .normalize_visits(visits, pos_formula,
@@ -494,6 +533,10 @@
   )
 
   control[["engine"]] <- NULL
+  if (is_nuts) {
+    fit_args <- c(list(model = model, priors = priors), control)
+    return(do.call(.tobs_fit_occu_multiscale_cover_nuts, fit_args))
+  }
   if (non_spatial) {
     fit_args <- c(list(model = model, priors = priors), control)
     return(do.call(.tobs_fit_occu_multiscale_cover_laplace, fit_args))

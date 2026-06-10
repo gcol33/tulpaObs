@@ -61,6 +61,12 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
     return(.tobs_ploglik_occu_cover(object, nd))
   }
+  # Three-level occupancy + cover: the WAIC / LOO unit is the cell (the top-level
+  # marginalised observation); scored over the draw matrix (calibrated under the
+  # NUTS path, pseudo-draws under Laplace).
+  if (identical(object$model$model_type %||% "NULL", "occu_multiscale_cover")) {
+    return(.tobs_ploglik_occu_multiscale_cover(object, nd))
+  }
   # Spatial-factor community occu_cover: the per-cell likelihood needs the latent
   # field, so it is scored over the NUTS draws (calibrated WAIC / LOO -- the point
   # of the NUTS path).
@@ -101,6 +107,11 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
     distance   = .tobs_ploglik_distance(model, draws),
     fp_occu    = .tobs_ploglik_fp_occu(model, draws),
     dyn_abun   = .tobs_ploglik_dyn_abun(model, draws),
+    occu_multiscale_cover = {
+      idx <- .tobs_occu_ms_cover_nuts_layout(model)
+      t(apply(draws, 1L, function(par)
+        .occu_ms_cover_nonspatial_ll(par, model, idx, per_cell = TRUE)))
+    },
     stop("Pointwise log-likelihood is not implemented for model_type = '",
          mt, "'.", call. = FALSE)
   )

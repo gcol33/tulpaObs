@@ -56,18 +56,23 @@ estimable.
 
 \section{Scope (status \code{"experimental"})}{
 
-Two engines. \code{method = "nested_laplace"} carries a single shared areal field
-coupled across the occupancy (\code{sigma}) and cover (\code{alpha * sigma}) arms,
-integrated over the outer \verb{(sigma, alpha)} grid. \code{method = "laplace"} is the
-non-spatial path (iid cells, no field): the exact three-level marginal
-optimised directly. Cells are declared the same way on both paths, via an
-\code{icar(graph = adj, group_var = "<cell>")} term (the graph drives the field
-under \code{"nested_laplace"} and is ignored under \code{"laplace"}). On the
-\code{"nested_laplace"} path additional weighted areal terms in the psi formula
+Three engines. \code{method = "nested_laplace"} carries a single shared areal
+field coupled across the occupancy (\code{sigma}) and cover (\code{alpha * sigma})
+arms, integrated over the outer \verb{(sigma, alpha)} grid. \code{method = "laplace"}
+and \code{method = "nuts"} are the non-spatial path (iid cells, no field): the
+exact three-level marginal (z over cells, a over plots both summed in closed
+form) optimised directly (\code{"laplace"}, a Gaussian observed-Fisher posterior)
+or sampled (\code{"nuts"}, the exact coefficient posterior with calibrated
+intervals and WAIC / LOO). Cells are declared the same way on every path, via
+an \code{icar(graph = adj, group_var = "<cell>")} term (the graph drives the field
+under \code{"nested_laplace"} and supplies only the plot -> cell map under
+\code{"laplace"} / \code{"nuts"}). On the \code{"nested_laplace"} path additional weighted
+areal terms in the psi formula
 (\verb{icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)}) add
 spatially-varying-coefficient trend fields, each coupled onto the cover arm
 with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field} /
-\code{fit$trend_fields}.
+\code{fit$trend_fields}. The coupled / trend field is not sampled, so
+\code{method = "nuts"} takes a single cell-declaring areal term only.
 }
 
 \seealso{
