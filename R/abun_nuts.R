@@ -316,31 +316,28 @@
 }
 
 
-# Areal-spatial N-mixture via NUTS (gcol33/tulpaObs#51): a FIXED-HYPER non-centered
-# PROPER-CAR field on the abundance arm. The field precision (tau, rho) is fixed at
+# Areal-spatial N-mixture via NUTS (gcol33/tulpaObs#51, #71): a FIXED-HYPER non-
+# centered field on the abundance arm. The field precision (tau, rho) is fixed at
 # the nested-Laplace posterior mean; the whitened field raw ~ N(0, I) with
-# z = Linv %*% raw (Linv = inverse Cholesky of tau Q(rho)) is sampled jointly with
-# the coefficients (the tulpa#87 fixed-hyper pattern -- avoids the field-
-# hyperparameter funnel and the log|Q(rho)| gradient). Proper-CAR only: its full-
-# rank precision gives a well-conditioned geometry, whereas an intrinsic ICAR field
-# has a flat field-mean direction that maxes treedepth without a sum-to-zero
-# reparameterisation (use nested_laplace for the icar/bym2 areal fit, which
-# constrains it). Spatial XOR RE. Poisson or NB.
+# z = L %*% raw is sampled jointly with the coefficients (the tulpa#87 fixed-hyper
+# pattern -- avoids the field-hyperparameter funnel and the log|Q(rho)| gradient).
+# car_proper uses the square inverse Cholesky of tau Q(rho); the intrinsic
+# icar / bym2 fields use the SUM-TO-ZERO reparameterisation (#71): L drops the
+# precision null-space (constant) direction, so z is automatically centred and
+# the geometry is well conditioned (no flat field-mean direction maxing the tree
+# depth). bym2 combines the structured (centred eigen-loading, scaled by
+# sigma sqrt(rho / scale)) and unstructured (iid, sigma sqrt(1 - rho)) blocks into
+# one loading. Spatial XOR RE. Poisson or NB.
 .tobs_fit_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                         K_max = NULL, sigma.beta = 10, sigma.logr = 1.5,
                                         n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
                                         max.treedepth = 10L, adapt.delta = 0.9,
                                         seed = 1L, verbose = FALSE) {
   .tobs_reject_weighted_spatial(spatial, "abun NUTS abundance spatial")
-  if (!identical(spatial$type, "car_proper")) {
-    stop(sprintf(paste0("abun() NUTS + areal spatial supports the proper-CAR field ",
-                        "car_proper() (full-rank precision -> well-conditioned non-",
-                        "centered geometry); the intrinsic '%s' field has a flat ",
-                        "field-mean direction needing a sum-to-zero reparameterisation ",
-                        "for NUTS -- use method = \"nested_laplace\" for the ",
-                        "icar()/bym2() areal fit. (tulpaObs#51)"), spatial$type),
-         call. = FALSE)
-  }
+  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+    stop(sprintf(paste0("abun() NUTS + areal spatial supports icar() / car_proper() / ",
+                        "bym2() on the abundance arm; got '%s'. (tulpaObs#71)"),
+                 spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites) {
     stop(sprintf("spatial term has %d units but the model has %d sites; one ",
@@ -359,31 +356,48 @@
     list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
          n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
 
-  # Fixed hyper (tau[, rho]) + warm coefficients from the nested-Laplace areal fit.
+  # Fixed hyper + warm coefficients from the nested-Laplace areal fit, and the
+  # whitened-field loading L (square for car_proper, sum-to-zero for icar / bym2).
   common <- list(y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
                  X_lambda = X_lambda, X_p = X_p, adj_row_ptr = csr$row_ptr,
                  adj_col_idx = csr$col_idx, n_neighbors = csr$n_neighbors,
                  n_spatial = n_sites, mixture = mix_code, K_max = K_max,
                  max_iter = 100L, tol = 1e-6, verbose = FALSE)
-  nl <- if (identical(spatial$type, "icar")) do.call(nmix_laplace_icar, common)
-        else do.call(nmix_laplace_car_proper, common)
-  tau <- max(nl$tau_mean, 1e-3)
-  rho <- if (identical(spatial$type, "car_proper")) min(max(nl$rho_mean, 0.01), 0.99) else 1.0
+  nl <- switch(spatial$type,
+    icar       = do.call(nmix_laplace_icar, common),
+    car_proper = do.call(nmix_laplace_car_proper, common),
+    bym2       = do.call(nmix_laplace_bym2, c(common,
+                   list(scale_factor = spatial$scale_factor %||%
+                          compute_bym2_scale(spatial$graph)))))
 
-  # Fixed field precision tau Q(rho) (+ ridge to proper-ise ICAR) -> Linv = L^{-1}.
-  Linv <- .tobs_field_linv(adj, tau, rho, n_sites)
+  if (identical(spatial$type, "bym2")) {
+    sigma <- max(nl$sigma_mean %||% sqrt(max(nl$tau_mean %||% 1, 1e-3)), 1e-3)
+    rho   <- min(max(nl$rho_mean %||% 0.5, 0.01), 0.99)
+    sf    <- spatial$scale_factor %||% compute_bym2_scale(spatial$graph)
+    Lstr  <- .tobs_field_load(adj, "icar", 1, 1, n_sites)            # centred ICAR basis
+    a <- sigma * sqrt(rho / sf); b <- sigma * sqrt(1 - rho)
+    # z = a * (centred structured) + b * (iid); stack the two loadings columnwise.
+    field_load <- cbind(a * Lstr, b * diag(n_sites))
+    tau <- NA_real_
+  } else {
+    tau <- max(nl$tau_mean, 1e-3)
+    rho <- if (identical(spatial$type, "car_proper"))
+      min(max(nl$rho_mean, 0.01), 0.99) else 1.0
+    field_load <- .tobs_field_load(adj, spatial$type, tau, rho, n_sites)
+  }
+  n_raw <- ncol(field_load)
 
   spec <- list(y = as.integer(y_long), site_idx = as.integer(site_idx),
                X_lambda = X_lambda, X_p = X_p, n_sites = n_sites, K_max = K_max,
                is_nb = is_nb, n_field_units = n_sites,
-               field_map = seq_len(n_sites), field_Linv = Linv)
+               field_map = seq_len(n_sites), field_load = field_load)
 
   n_base <- p_lam + p_p + if (is_nb) 1L else 0L
   beta0 <- c(nl$beta_lambda_mean, nl$beta_p_mean)
   if (is_nb && is.finite(nl$r_mean %||% NA_real_)) beta0 <- c(beta0, log(nl$r_mean))
   else if (is_nb) beta0 <- c(beta0, log(2))
-  theta0 <- c(beta0, numeric(n_sites))
-  inv_metric <- c(rep(0.1, n_base), rep(1, n_sites))
+  theta0 <- c(beta0, numeric(n_raw))
+  inv_metric <- c(rep(0.1, n_base), rep(1, n_raw))
 
   run_chain <- function(ch)
     cpp_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta, sigma_logr = sigma.logr,
@@ -395,13 +409,13 @@
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
-           if (is_nb) "log_r", paste0("raw_", seq_len(n_sites)))
+           if (is_nb) "log_r", paste0("raw_", seq_len(n_raw)))
   colnames(draws) <- nms
   b_idx <- seq_len(n_base)
   par <- colMeans(draws); cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  # Posterior-mean field z = Linv %*% raw, averaged over draws.
-  raw_idx <- n_base + seq_len(n_sites)
-  z_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  # Posterior-mean field z = L %*% raw (n_field_units long), averaged over draws.
+  raw_idx <- n_base + seq_len(n_raw)
+  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
   marg <- .tobs_abun_nuts_marginal(model, mixture = mix_code, K_max = K_max)
   lay  <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb)
@@ -425,6 +439,6 @@
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
                    divergent_total = sum(divergent), tau = tau, rho = rho,
-                   prior_type = spatial$type, fixed_hyper = TRUE)
+                   n_raw = n_raw, prior_type = spatial$type, fixed_hyper = TRUE)
   fit
 }

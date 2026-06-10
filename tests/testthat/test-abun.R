@@ -396,20 +396,24 @@ test_that("cpp_abun_nuts_joint_logpost matches the R oracle (byte-exact)", {
   }
 })
 
-test_that("abun() declares nuts among its methods and gates icar nuts", {
+test_that("abun() declares nuts among its methods and samples an icar field", {
+  skip_on_cran(); skip_if_fast()
   expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$abun)
-  # An intrinsic (icar) field + nuts errors with a pointer: its rank-deficient
-  # precision needs a sum-to-zero reparam for NUTS; proper-CAR + nuts IS wired
-  # (see the recovery test above), and the icar areal fit runs under
-  # nested_laplace.
+  # An intrinsic (icar) field + nuts now samples via the sum-to-zero
+  # reparameterisation (#71): its rank-deficient precision's constant direction is
+  # dropped, so the field is centred and the geometry is well conditioned (the
+  # recovery test above checks calibration + 0 divergences; here just confirm the
+  # public path returns a nuts fit with a centred field).
   sim <- simulate_abun(N = 12, J = 3, n_abund_covs = 1, n_det_covs = 1, seed = 5)
   adj <- matrix(0L, 12, 12)
   for (i in 1:11) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
-  expect_error(
-    tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
-         family = abun(), detection = ~ det_cov1, method = "nuts",
-         control = list(verbose = FALSE)),
-    "proper-CAR|sum-to-zero|nested_laplace")
+  fit <- tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
+              family = abun(), detection = ~ det_cov1, method = "nuts",
+              control = list(n.iter = 100L, n.warmup = 100L, seed = 1L,
+                             verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nuts")
+  expect_false(is.null(fit$spatial_field))
+  expect_lt(abs(sum(fit$spatial_field)), 1e-6)          # sum-to-zero centred
 })
 
 test_that("tobs(abun(), method='nuts') recovers truth and scores WAIC", {
@@ -483,12 +487,34 @@ test_that("abun() NUTS + proper-CAR areal field recovers + calibrates to nested-
   expect_gt(rr, 0.6); expect_lt(rr, 1.6)
 })
 
-test_that("abun() NUTS + icar is gated (rank-deficient field needs sum-to-zero)", {
-  adj <- .grid_adj(4L)
-  sim <- .sim_spatial_nmix(adj, c(log(6), 0.4), c(0.2, 0.3), J = 4L, seed = 5)
-  expect_error(
-    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data, family = abun(),
-         detection = ~ det_cov1, y = sim$y, method = "nuts",
-         control = list(n.iter = 20L, n.warmup = 10L, progress = FALSE)),
-    "proper-CAR|sum-to-zero|nested_laplace")
+test_that("abun() NUTS + icar/bym2 sum-to-zero field recovers, centred, 0 divergences (#71)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The intrinsic icar / bym2 fields are sampled via the sum-to-zero
+  # reparameterisation: the whitened loading drops the precision null-space
+  # (constant) direction, so the field-mean is removed and the NUTS geometry is
+  # well conditioned (no flat direction maxing the tree depth). icar -> n_raw =
+  # n - 1, automatically centred; bym2 -> structured (centred) + unstructured.
+  for (typ in c("icar", "bym2")) {
+    adj <- .grid_adj(6L)
+    sim <- .sim_spatial_nmix(adj, c(log(6), 0.5), c(0.2, 0.4), J = 5L,
+                             seed = if (typ == "icar") 21 else 22)
+    f <- if (typ == "icar") (~ abund_cov1 + icar(graph = adj)) else
+                            (~ abund_cov1 + bym2(graph = adj))
+    nl <- tobs(formula = f, data = sim$data, family = abun(), detection = ~ det_cov1,
+               y = sim$y, method = "nested_laplace",
+               control = list(verbose = FALSE, progress = FALSE))
+    nu <- tobs(formula = f, data = sim$data, family = abun(), detection = ~ det_cov1,
+               y = sim$y, method = "nuts", verbose = FALSE,
+               control = list(n.iter = 400L, n.warmup = 400L, seed = 3L, progress = FALSE))
+    expect_identical(nu$method, "nuts")
+    expect_equal(mean(nu$nuts$divergent), 0)                          # clean geometry
+    expect_lt(max(nu$nuts$treedepth), 9)                              # no flat-mean blowup
+    expect_gt(cor(nu$spatial_field, nl$spatial_field), 0.95)          # reproduces NL field
+    expect_lt(abs(nu$means[["lambda_abund_cov1"]] - 0.5) /
+                nu$sds[["lambda_abund_cov1"]], 3)                     # slope recovered
+    if (typ == "icar") expect_lt(abs(sum(nu$spatial_field)), 1e-6)    # sum-to-zero
+    rr <- nu$sds[["lambda_abund_cov1"]] / sqrt(diag(nl$vcov))[["lambda_abund_cov1"]]
+    expect_gt(rr, 0.6); expect_lt(rr, 1.6)                            # SD calibrated to NL
+  }
 })

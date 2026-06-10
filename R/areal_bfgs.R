@@ -40,6 +40,32 @@
   backsolve(L, diag(n))                                # (L)^{-1}; z = Linv %*% raw
 }
 
+# Whitened-field loading L for the non-centered areal-field NUTS path
+# (gcol33/tulpaObs#71): z = L %*% raw, raw ~ N(0, I), Cov(z) = (tau Q(rho))^{+}.
+# `type` selects the field. A proper-CAR field is full rank -> the square inverse
+# Cholesky (n x n; z covers the whole space). An intrinsic icar / bym2 field has
+# the constant vector in the precision null space, so a square whitening leaves a
+# flat field-mean direction that maxes the NUTS tree depth; the sum-to-zero
+# reparameterisation drops that direction by keeping only the non-null eigenpairs
+# of tau Q -> L is n x (n - 1), z is automatically centred (sum z = 0). The
+# eigen-loading L = U_+ diag(1 / sqrt(tau lambda_+)) satisfies L L' = (tau Q)^{+}
+# restricted to the sum-to-zero subspace. bym2 (Riebler 2016) scales its
+# structured ICAR block by sigma sqrt(rho / scale_factor) and adds an
+# unstructured iid block sigma sqrt(1 - rho) (full-rank, square); the structured
+# block is the same eigen-loading.
+.tobs_field_load <- function(adj, type, tau, rho, n, ridge = 1e-4, tol = 1e-8) {
+  if (identical(type, "car_proper"))
+    return(.tobs_field_linv(adj, tau, rho, n, ridge))
+  # Intrinsic ICAR precision tau Q (rho = 1); reduced eigen-loading on the
+  # non-null subspace (drop the constant direction).
+  Q  <- .areal_Q(adj, 1.0)
+  ev <- eigen(tau * Q, symmetric = TRUE)
+  keep <- ev$values > tol * max(ev$values)             # non-null eigenpairs
+  U <- ev$vectors[, keep, drop = FALSE]
+  d <- ev$values[keep]
+  U %*% diag(1 / sqrt(d), nrow = length(d))             # n x (n - 1)
+}
+
 # ICAR / proper-CAR single-block field (parameter z, length n_sp; eta += z[map]).
 .areal_field_car <- function(adj, kind, map, n_sp) {
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
