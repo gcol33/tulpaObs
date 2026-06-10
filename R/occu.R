@@ -317,7 +317,9 @@
   structure(list(
     model_type = "jsdm",
     y_jsdm = y_flat,
+    y_mat = y_mat,
     X_processes = list(X_occ_expanded),
+    X_occ = X_occ,
     formulas = list(occ = bind$fe$psi),
     structured_terms = bind$terms,
     n_sites = n_sites,

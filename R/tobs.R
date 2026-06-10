@@ -573,6 +573,38 @@ tobs <- function(formula,
     jsdm        = TRUE,
     species     = dots$species
   )
+
+  # A shared AREAL field (icar()/bym2()/car_proper()) on the occupancy formula
+  # routes to the nested-Laplace JSDM fitter (the JSDM analogue of the
+  # community-occupancy areal field; tulpaObs#76): one shared field on the latent
+  # occupancy, atop the shared fixed effects and the per-species random intercept.
+  # Continuous-mesh (spde()/gp()) terms fall through to the existing EM-Laplace
+  # state field; only areal terms have a `$graph`.
+  structs <- .tobs_structures_from_model(model)
+  spatial_areal <- !is.null(structs$spatial) &&
+    (structs$spatial$type %in% c("icar", "bym2", "car", "car_proper"))
+  if (spatial_areal) {
+    if (identical(engine, "nuts")) {
+      stop("method = \"nuts\" for jsdm() is the non-spatial / continuous-mesh ",
+           "sampler; a shared areal field (icar()/bym2()/car_proper()) uses ",
+           "method = \"nested_laplace\".", call. = FALSE)
+    }
+    if (!identical(engine, "nested_laplace")) {
+      stop("a shared areal field on the jsdm() formula needs ",
+           "method = \"nested_laplace\". For the non-spatial JSDM use ",
+           "method = \"laplace\".", call. = FALSE)
+    }
+    return(.tobs_fit_jsdm_spatial(
+      model, spatial = structs$spatial,
+      max.iter = control[["max.iter"]] %||% 100L,
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+  if (identical(engine, "nested_laplace")) {
+    stop("method = \"nested_laplace\" for jsdm() needs a shared areal field ",
+         "(icar()/bym2()/car_proper()) on the occupancy formula. For the ",
+         "non-spatial JSDM use method = \"laplace\".", call. = FALSE)
+  }
+
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "jsdm"), priors = priors,
@@ -1217,7 +1249,14 @@ tobs <- function(formula,
   ms_occu  = c("laplace", "nuts", "nested_laplace"),
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
-  jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),
+  # jsdm: the joint species distribution model observes presence/absence directly
+  # (no detection process), with shared fixed effects and a per-species random
+  # intercept. nested_laplace: a shared areal field (icar/bym2/car_proper) on the
+  # latent occupancy via the in-tree JSDM-spatial nested Laplace-EM
+  # (R/jsdm_spatial.R, src/jsdm_spatial.cpp) -- the JSDM analogue of the
+  # community-occupancy areal field (gcol33/tulpaObs#76).
+  jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts",
+               "nested_laplace"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so

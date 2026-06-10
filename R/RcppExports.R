@@ -133,6 +133,22 @@ cpp_fp_occu_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_war
     .Call(`_tulpaObs_cpp_fp_occu_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_jsdm_site_cell <- function(eta, y) {
+    .Call(`_tulpaObs_cpp_jsdm_site_cell`, eta, y)
+}
+
+cpp_jsdm_spatial_icar <- function(X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, beta_init, sigma_re2_init, max_iter_em, verbose) {
+    .Call(`_tulpaObs_cpp_jsdm_spatial_icar`, X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, beta_init, sigma_re2_init, max_iter_em, verbose)
+}
+
+cpp_jsdm_spatial_car_proper <- function(X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, rho_grid, log_det_Q_rho, beta_init, sigma_re2_init, max_iter_em, verbose) {
+    .Call(`_tulpaObs_cpp_jsdm_spatial_car_proper`, X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, rho_grid, log_det_Q_rho, beta_init, sigma_re2_init, max_iter_em, verbose)
+}
+
+cpp_jsdm_spatial_bym2 <- function(X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, sigma_grid, rho_grid, scale_factor, beta_init, sigma_re2_init, max_iter_em, verbose) {
+    .Call(`_tulpaObs_cpp_jsdm_spatial_bym2`, X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, sigma_grid, rho_grid, scale_factor, beta_init, sigma_re2_init, max_iter_em, verbose)
+}
+
 cpp_ms_abun_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta, sigma_logr) {
     .Call(`_tulpaObs_cpp_ms_abun_nuts_joint_logpost`, spec, theta, pri, sigma_beta, sigma_logr)
 }

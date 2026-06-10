@@ -18,11 +18,11 @@ test_that(".tobs_validate_family_method accepts every supported method", {
 })
 
 test_that(".tobs_validate_family_method rejects an unsupported method", {
-  # nested_laplace is wired for occu / int_occu / dyn_occu (the multi-block
-  # driver) and the cover joint path -- but NOT jsdm (no latent state to
-  # integrate; the response is observed directly).
-  expect_error(.tobs_validate_family_method("nested_laplace", jsdm()),
-               "not available for jsdm")
+  # nested_laplace is wired across the areal families but NOT the non-spatial
+  # community joint cover hurdle (the per-species RE layered on the shared
+  # coupled field needs upstream tulpa support; gcol33/tulpaObs#47).
+  expect_error(.tobs_validate_family_method("nested_laplace", ms_occu_cover()),
+               "not available for ms_occu_cover")
   # nested_laplace_sla (skew on the nested path) is occu + cover only.
   expect_error(.tobs_validate_family_method("nested_laplace_sla", dyn_occu()),
                "not available for dyn_occu")
@@ -37,6 +37,8 @@ test_that(".tobs_validate_family_method now accepts nested_laplace for the multi
   # gcol33/tulpaObs: nested-Laplace generalised beyond single-season occupancy.
   expect_silent(.tobs_validate_family_method("nested_laplace", int_occu()))
   expect_silent(.tobs_validate_family_method("nested_laplace", dyn_occu()))
+  # The shared areal field on the JSDM latent occupancy (gcol33/tulpaObs#76).
+  expect_silent(.tobs_validate_family_method("nested_laplace", jsdm()))
 })
 
 test_that("community occupancy families are laplace-only (gcol33/tulpaObs#30)", {
