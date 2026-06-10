@@ -187,13 +187,23 @@ latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shar
   marginal (`cpp_fp_occu_total_log_lik` analytic grad) + CAR prior, FD-Hessian
   observed info; one unit/site. Occupancy fields more weakly identified than count
   (one binary site/node). temporal + NUTS+spatial gated.
-- **`dyn_abun`** (#37): Dail-Madsen open N-mixture, `N_1~Pois(lambda)`,
-  `N_t=Binom(N_{t-1},omega)+Pois(gamma)`, `Binom(N_t,p)` obs. Latent N sequence summed
-  by exact HMM forward over 0..K_max; analytic grad by forward-mode diff
-  (`src/dyn_abun_kernel.h`). 4 arms lambda/p/omega/gamma (`omega_formula`/
+- **`dyn_abun`** (#37): Dail-Madsen open N-mixture, `N_1~Pois/NB(lambda)`,
+  `N_t=Binom(N_{t-1},omega_{t-1})+Pois(gamma_{t-1})`, `Binom(N_t,p)` obs. Latent N
+  sequence summed by exact HMM forward over 0..K_max; analytic grad by forward-mode
+  diff (`src/dyn_abun_kernel.h`). 4 arms lambda/p/omega/gamma (`omega_formula`/
   `gamma_formula`, default `~1`). NUTS `src/dyn_abun_nuts.cpp`. K_max default
-  `max(count)+40` (forward ~cubic in K). Pois init + constant recruitment v1
-  (negbin/season-varying pending). Laplace grouped RE on initial-abundance arm (one
+  `max(count)+40` (forward ~cubic in K). Pois OR negbin init (`mixture="negbin"`,
+  trailing `log_r`). **Season-varying omega/gamma (#80)**: the transition from
+  season t-1 to t uses interval-(t-1) vital rates, so a covariate on
+  `omega_formula`/`gamma_formula` carried as an `[n_sites x (T-1)]` matrix column of
+  `data` drives the dynamics. Kernel takes interval-indexed `eta_omega`/`eta_gamma`
+  (length T-1) with per-interval forward-mode gradients (direction iv born at its
+  own transition, propagated through later ones); scalar overload broadcasts ->
+  byte-identical constant-rate path. Binder `.tobs_dyn_abun_arm_design` unrolls to
+  long-form `[(site x interval) x p]` only when a covariate is a `[n_sites x (T-1)]`
+  matrix column; both laplace + NUTS scatter the per-interval score through the
+  long-form design. `simulate_dyn_abun(beta_omega=, beta_gamma=)` season-varying
+  truth. NUTS+temporal still gated. Laplace grouped RE on initial-abundance arm (one
   factor, dim<=3): RE shifts only eta_lambda -> per-site marginal factorises
   `L(eta_lambda)=sum_n1 pi_n1(eta_lambda) c(n1)`, conditional `c(n1)=P(all data|N_1=n1)`
   (O(K^2 T) HMM BACKWARD pass `compute_dyn_abun_init_weights`) precomputed ONCE per
@@ -367,7 +377,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm; NUTS+areal car_proper field on abundance arm (#72) |
 | Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal); areal field; NUTS+areal car_proper field on abundance arm (half-normal, #72) |
 | False-positive occupancy | Yes | Yes | `fp_occu()` (#40) — see Architecture. NUTS single psi intercept RE; Laplace grouped RE psi OR p11; areal psi arm; NUTS+areal car_proper field on psi arm (#72) |
-| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. NUTS single init-abundance intercept RE; Laplace grouped RE init arm; areal init arm; NUTS+areal car_proper field on init-abundance arm (#72) |
+| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. Pois/NB init; season-varying omega/gamma via `[n_sites x (T-1)]` covariate, interval-indexed forward kernel, all backends (#80). NUTS single init-abundance intercept RE; Laplace grouped RE init arm; areal init arm; NUTS+areal car_proper field on init-abundance arm (#72) |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |
