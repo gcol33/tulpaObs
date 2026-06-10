@@ -16,14 +16,19 @@
 #   .tobs_fit_distance_spatial()   dispatch from .tobs_fit_model
 # =============================================================================
 
-.tobs_fit_distance_spatial <- function(model, spatial, mixture = "poisson",
+.tobs_fit_distance_spatial <- function(model, spatial, temporal = NULL,
+                                       mixture = "poisson",
                                        K_max = NULL, max_iter = 200L, tol = 1e-6,
                                        verbose = TRUE, integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "distance abundance spatial")
   hazard <- identical(model$key, "hazard")
   key_code <- .dist_key_code(model$key)
   map <- seq_len(model$n_sites)
-  field <- .tobs_areal_field_spec(spatial, model$n_sites, "distance", map)
+  field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "distance", map)
+  field <- if (is.null(temporal)) field_sp else {
+    list(field_sp,
+         .tobs_temporal_field_spec(temporal, model$n_sites, "distance"))
+  }
 
   X_lam <- model$X_processes[[1]]; X_sig <- model$X_processes[[2]]
   p_lam <- ncol(X_lam); p_sig <- ncol(X_sig)
@@ -102,6 +107,11 @@
   fit$spatial_hyper <- res$hyper
   fit$spatial_integration <- res$integration
   fit$spatial_pareto_k <- res$pareto_k
+  if (!is.null(temporal)) {
+    fit$temporal <- temporal
+    fit$temporal_field <- res$temporal_field
+    fit$temporal_hyper <- res$temporal_hyper
+  }
   fit
 }
 

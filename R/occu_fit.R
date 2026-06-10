@@ -110,15 +110,14 @@
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
   # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "removal")) {
-    if (!is.null(temporal)) {
-      stop("removal() does not yet support temporal terms; a spatial icar() / ",
-           "car_proper() field on the abundance arm fits under method = ",
-           "\"nested_laplace\". (#51)", call. = FALSE)
-    }
+    if (!is.null(temporal))
+      .tobs_check_count_temporal(temporal, spatial, method, "removal", "abundance")
     if (!is.null(spatial)) {
       # Areal field on the abundance arm: icar() / car_proper() / bym2() under
-      # the nested-Laplace driver, or a fixed-hyper non-centered car_proper()
-      # field sampled jointly with the coefficients under NUTS.
+      # the nested-Laplace driver, optionally composed with a temporal() block
+      # via the shared areal-BFGS driver (gcol33/tulpaObs#78), or a fixed-hyper
+      # non-centered car_proper() field sampled jointly with the coefficients
+      # under NUTS.
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_removal_nuts_spatial(
           fit_model, spatial, mixture = mixture, K_max = K.max,
@@ -127,7 +126,8 @@
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
-        fit <- .tobs_fit_removal_spatial(fit_model, spatial, mixture = mixture,
+        fit <- .tobs_fit_removal_spatial(fit_model, spatial, temporal = temporal,
+                                         mixture = mixture,
                                          K_max = K.max, max_iter = max.iter,
                                          tol = tol, verbose = verbose)
       }
@@ -161,15 +161,14 @@
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
   # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "distance")) {
-    if (!is.null(temporal)) {
-      stop("distance() does not yet support temporal terms; a spatial icar() / ",
-           "car_proper() field on the abundance arm fits under method = ",
-           "\"nested_laplace\". (#51)", call. = FALSE)
-    }
+    if (!is.null(temporal))
+      .tobs_check_count_temporal(temporal, spatial, method, "distance", "abundance")
     if (!is.null(spatial)) {
       # Areal field on the abundance arm: icar() / car_proper() (half-normal or
-      # hazard key) under the nested-Laplace driver, or a fixed-hyper
-      # non-centered car_proper() field sampled under NUTS (half-normal key).
+      # hazard key) under the nested-Laplace driver, optionally composed with a
+      # temporal() block via the shared areal-BFGS driver (gcol33/tulpaObs#78),
+      # or a fixed-hyper non-centered car_proper() field sampled under NUTS
+      # (half-normal key).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_distance_nuts_spatial(
           fit_model, spatial, mixture = mixture, K_max = K.max,
@@ -178,7 +177,8 @@
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
-        fit <- .tobs_fit_distance_spatial(fit_model, spatial, mixture = mixture,
+        fit <- .tobs_fit_distance_spatial(fit_model, spatial, temporal = temporal,
+                                          mixture = mixture,
                                           K_max = K.max, max_iter = max.iter,
                                           tol = tol, verbose = verbose,
                                           integration = integration)
@@ -213,15 +213,15 @@
   # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
   # effects only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "dyn_abun")) {
-    if (!is.null(temporal)) {
-      stop("dyn_abun() does not yet support temporal terms; a spatial icar() / ",
-           "car_proper() field on the initial-abundance arm fits under method = ",
-           "\"nested_laplace\". (#51)", call. = FALSE)
-    }
+    if (!is.null(temporal))
+      .tobs_check_count_temporal(temporal, spatial, method, "dyn_abun",
+                                 "initial-abundance")
     if (!is.null(spatial)) {
       # Areal field on the initial-abundance arm: icar() / car_proper() under
-      # the nested-Laplace forward-HMM driver, or a fixed-hyper non-centered
-      # car_proper() field sampled jointly with the coefficients under NUTS.
+      # the nested-Laplace forward-HMM driver, optionally composed with a
+      # temporal() block via the shared areal-BFGS driver (gcol33/tulpaObs#78),
+      # or a fixed-hyper non-centered car_proper() field sampled jointly with the
+      # coefficients under NUTS.
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_dyn_abun_nuts_spatial(
           fit_model, spatial, mixture = model$mixture %||% "poisson",
@@ -230,7 +230,7 @@
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
-        fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial,
+        fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial, temporal = temporal,
                                           mixture = model$mixture %||% "poisson",
                                           K_max = K.max, max_iter = 300L, tol = 1e-8,
                                           verbose = verbose, integration = integration)
@@ -266,15 +266,14 @@
   # this round (gcol33/tulpaObs#51); "laplace" (analytic-gradient BFGS over the
   # exact marginal) or "nuts".
   if (identical(model$model_type, "fp_occu")) {
-    if (!is.null(temporal)) {
-      stop("fp_occu() does not yet support temporal terms; a spatial icar() / ",
-           "car_proper() field on the occupancy arm fits under method = ",
-           "\"nested_laplace\". (#51)", call. = FALSE)
-    }
+    if (!is.null(temporal))
+      .tobs_check_count_temporal(temporal, spatial, method, "fp_occu", "occupancy")
     if (!is.null(spatial)) {
       # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
-      # nested-Laplace two-state driver, or a fixed-hyper non-centered
-      # car_proper() field sampled jointly with the coefficients under NUTS.
+      # nested-Laplace two-state driver, optionally composed with a temporal()
+      # block via the shared areal-BFGS driver (gcol33/tulpaObs#78), or a
+      # fixed-hyper non-centered car_proper() field sampled jointly with the
+      # coefficients under NUTS.
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_fp_occu_nuts_spatial(
           fit_model, spatial, sigma.beta = sigma.beta,
@@ -282,7 +281,8 @@
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
-        fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, max_iter = max.iter,
+        fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, temporal = temporal,
+                                         max_iter = max.iter,
                                          tol = 1e-8, verbose = verbose,
                                          integration = integration)
       }

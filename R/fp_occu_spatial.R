@@ -13,12 +13,17 @@
 #   .tobs_fit_fp_occu_spatial()   dispatch from .tobs_fit_model (icar / car_proper)
 # =============================================================================
 
-.tobs_fit_fp_occu_spatial <- function(model, spatial, max_iter = 200L,
+.tobs_fit_fp_occu_spatial <- function(model, spatial, temporal = NULL,
+                                      max_iter = 200L,
                                       tol = 1e-8, verbose = TRUE,
                                       integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "fp_occu occupancy spatial")
   map <- seq_len(model$n_sites)
-  field <- .tobs_areal_field_spec(spatial, model$n_sites, "fp_occu", map)
+  field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "fp_occu", map)
+  field <- if (is.null(temporal)) field_sp else {
+    list(field_sp,
+         .tobs_temporal_field_spec(temporal, model$n_sites, "fp_occu"))
+  }
 
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
@@ -85,6 +90,11 @@
   fit$spatial_hyper <- res$hyper
   fit$spatial_integration <- res$integration
   fit$spatial_pareto_k <- res$pareto_k
+  if (!is.null(temporal)) {
+    fit$temporal <- temporal
+    fit$temporal_field <- res$temporal_field
+    fit$temporal_hyper <- res$temporal_hyper
+  }
   fit
 }
 

@@ -13,12 +13,17 @@
 #   .tobs_fit_dyn_abun_spatial()   dispatch from .tobs_fit_model
 # =============================================================================
 
-.tobs_fit_dyn_abun_spatial <- function(model, spatial, mixture = "poisson",
+.tobs_fit_dyn_abun_spatial <- function(model, spatial, temporal = NULL,
+                                       mixture = "poisson",
                                        K_max = NULL, max_iter = 300L, tol = 1e-8,
                                        verbose = TRUE, integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
   map <- seq_len(model$n_sites)
-  field <- .tobs_areal_field_spec(spatial, model$n_sites, "dyn_abun", map)
+  field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "dyn_abun", map)
+  field <- if (is.null(temporal)) field_sp else {
+    list(field_sp,
+         .tobs_temporal_field_spec(temporal, model$n_sites, "dyn_abun"))
+  }
 
   X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
@@ -84,6 +89,11 @@
   fit$spatial_hyper <- res$hyper
   fit$spatial_integration <- res$integration
   fit$spatial_pareto_k <- res$pareto_k
+  if (!is.null(temporal)) {
+    fit$temporal <- temporal
+    fit$temporal_field <- res$temporal_field
+    fit$temporal_hyper <- res$temporal_hyper
+  }
   fit
 }
 

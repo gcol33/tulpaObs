@@ -1286,8 +1286,11 @@ tobs <- function(formula,
   # marginal Laplace (Poisson or negbin; the depleting-binomial product summed
   # over latent N), grouped-RE AGHQ Laplace, the in-tree C++ FullGradFn NUTS over
   # the same marginal, and an areal icar()/car_proper() field on the abundance arm
-  # via nested_laplace (the shared count-marginal spatial driver, tulpaObs#51).
-  # bym2 / spde / temporal not yet wired (R/removal.R, R/removal_spatial.R).
+  # via nested_laplace (the shared count-marginal spatial driver, tulpaObs#51). A
+  # temporal() AR1/RW1/RW2/iid field composes WITH the areal field on the
+  # abundance arm under nested_laplace via the shared areal-BFGS driver (a second
+  # latent block, both grid-integrated; tulpaObs#78). spde / NUTS+temporal not yet
+  # wired (R/removal.R, R/removal_spatial.R).
   removal  = c("laplace", "nested_laplace", "nuts"),
   # distance: binned distance sampling (half-normal / hazard-rate key, line /
   # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin),
@@ -1296,8 +1299,11 @@ tobs <- function(formula,
   # nested_laplace (the per-site var_N rank-1 cross-arm from distance_kernel.h,
   # tulpaObs#51). The hazard-rate scalar log-shape is threaded into the areal-BFGS
   # fixed block (tulpaObs#79), so a hazard-key areal fit recovers both the
-  # abundance field and the shape. Grouped-RE hazard / temporal not yet wired
-  # (R/distance.R, R/distance_spatial.R, src/distance_*.cpp).
+  # abundance field and the shape. A temporal() AR1/RW1/RW2/iid field composes
+  # WITH the areal field on the abundance arm under nested_laplace via the shared
+  # areal-BFGS driver (a second latent block; tulpaObs#78). Grouped-RE hazard /
+  # NUTS+temporal not yet wired (R/distance.R, R/distance_spatial.R,
+  # src/distance_*.cpp).
   distance = c("laplace", "nested_laplace", "nuts"),
   # fp_occu: multistate false-positive occupancy (Miller et al. 2011). Latent
   # occupancy z summed out in closed form (two states); four site-level logit
@@ -1306,8 +1312,10 @@ tobs <- function(formula,
   # observed-information vcov (laplace), grouped-RE AGHQ Laplace (psi or p11 arm),
   # the in-tree C++ FullGradFn NUTS, and an areal icar()/car_proper() field on the
   # occupancy arm via nested_laplace (BFGS over the marginal + CAR prior, FD-Hessian
-  # observed info; tulpaObs#51). bym2 / temporal not yet wired (R/fp_occu.R,
-  # R/fp_occu_spatial.R, src/fp_occu_*.cpp).
+  # observed info; tulpaObs#51). A temporal() AR1/RW1/RW2/iid field composes WITH
+  # the areal field on the psi arm under nested_laplace via the shared areal-BFGS
+  # driver (a second latent block; tulpaObs#78). bym2 / NUTS+temporal not yet
+  # wired (R/fp_occu.R, R/fp_occu_spatial.R, src/fp_occu_*.cpp).
   fp_occu  = c("laplace", "nested_laplace", "nuts"),
   # dyn_abun: Dail-Madsen open-population N-mixture (Poisson initial abundance,
   # binomial survival, Poisson recruitment, binomial detection). The latent
@@ -1317,8 +1325,11 @@ tobs <- function(formula,
   # vcov (laplace), grouped-RE AGHQ Laplace (initial-abundance arm), the in-tree
   # C++ FullGradFn NUTS, and an areal icar()/car_proper() field on the initial-
   # abundance arm via nested_laplace (BFGS over the forward marginal + CAR prior,
-  # FD-Hessian observed info; tulpaObs#51). bym2 / season-varying dynamics /
-  # temporal not yet wired (R/dyn_abun.R, R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
+  # FD-Hessian observed info; tulpaObs#51). A temporal() AR1/RW1/RW2/iid field
+  # composes WITH the areal field on the initial-abundance arm under nested_laplace
+  # via the shared areal-BFGS driver (a second latent block; tulpaObs#78). bym2 /
+  # season-varying dynamics / NUTS+temporal not yet wired (R/dyn_abun.R,
+  # R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
   dyn_abun = c("laplace", "nested_laplace", "nuts"),
   # cover: standalone vegetation-cover hurdle (presence Bernoulli + beta /
   # lognormal positive arm). Non-spatial Laplace via two independent

@@ -205,7 +205,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 # continuous spde() field is not yet wired for removal, and a weighted (SVC) field
 # is rejected. The packed fit reuses build_nmix_fit (the removal coefficient
 # layout is the shared (lambda, p) block).
-.tobs_fit_removal_spatial <- function(model, spatial, mixture = "P", K_max = NULL,
+.tobs_fit_removal_spatial <- function(model, spatial, temporal = NULL,
+                                      mixture = "P", K_max = NULL,
                                       max_iter = 100L, tol = 1e-6, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "removal abundance spatial")
   if (spatial$type %in% c("spde", "gp", "multiscale_gp")) {
@@ -223,6 +224,17 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     stop(sprintf("spatial term has %d units but the model has %d sites; one ",
                  "spatial unit per site is required for removal.",
                  spatial$n_units, n_sites), call. = FALSE)
+  }
+  # Spatial + temporal: route through the shared areal-BFGS driver (a second
+  # latent block alongside the field), reusing the removal marginal's analytic
+  # per-site / per-pass gradient (cpp_removal_total_log_lik). The C++ count-
+  # spatial driver carries only the field, so the temporal block lives on the
+  # BFGS path (gcol33/tulpaObs#78). Spatial-only fits keep the C++ driver.
+  if (!is.null(temporal)) {
+    return(.tobs_fit_removal_spatial_bfgs(model, spatial, temporal,
+                                          mixture = mixture, K_max = K_max,
+                                          max_iter = max_iter, tol = tol,
+                                          verbose = verbose))
   }
   csr <- if (!is.null(spatial$adj_row_ptr)) {
     list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
@@ -247,6 +259,91 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                    list(scale_factor = spatial$scale_factor %||%
                           compute_bym2_scale(spatial$graph)))))
   build_nmix_fit(raw, model, spatial = spatial)
+}
+
+# Areal field + temporal block on the removal abundance arm via the shared areal-
+# BFGS driver (gcol33/tulpaObs#78). The removal marginal exposes an analytic
+# per-site abundance gradient + per-pass detection gradient + the NB dispersion
+# score (cpp_removal_total_log_lik), so the driver's eval() contract is met
+# directly: it runs BFGS over (beta_lambda, beta_p[, log_r], field_sp, field_tmp)
+# + both block priors, integrated over the product of the two blocks'
+# hyperparameter grids. The field + temporal block both load onto eta_lambda.
+.tobs_fit_removal_spatial_bfgs <- function(model, spatial, temporal,
+                                           mixture = "P", K_max = NULL,
+                                           max_iter = 200L, tol = 1e-8,
+                                           verbose = TRUE) {
+  n_sites <- model$n_sites
+  map <- seq_len(n_sites)
+  field_sp <- .tobs_areal_field_spec(spatial, n_sites, "removal", map)
+  field <- list(field_sp, .tobs_temporal_field_spec(temporal, n_sites, "removal"))
+
+  X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  p_lam <- ncol(X_lam); p_p <- ncol(X_p)
+  y_long   <- as.integer(model$y_long)
+  site_idx <- as.integer(model$site_idx)
+  is_nb <- mixture %in% c("negbin", "NB")
+  K_max <- .removal_spatial_K_max(y_long, site_idx, n_sites, K_max)
+
+  i_lam <- seq_len(p_lam); i_p <- p_lam + seq_len(p_p)
+  i_logr <- if (is_nb) p_lam + p_p + 1L else NA_integer_
+  n_fixed <- p_lam + p_p + if (is_nb) 1L else 0L
+
+  eval <- function(theta_fix, offset) {
+    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + offset
+    eta_p   <- as.numeric(X_p %*% theta_fix[i_p])
+    rr <- if (is_nb) exp(theta_fix[i_logr]) else Inf
+    out <- cpp_removal_total_log_lik(y_long, site_idx, eta_p, eta_lam, K_max, rr)
+    g <- numeric(n_fixed)
+    g[i_lam] <- as.numeric(crossprod(X_lam, out$grad_eta_lambda))
+    g[i_p]   <- as.numeric(crossprod(X_p,   out$grad_eta_p))
+    if (is_nb) g[i_logr] <- out$grad_theta
+    list(log_lik = out$log_lik, grad_fixed = g, grad_eta = out$grad_eta_lambda)
+  }
+
+  warm <- tryCatch(
+    removal_laplace(y = y_long, site_idx = site_idx, X_lambda = X_lam, X_p = X_p,
+                    mixture = if (is_nb) "NB" else "P", K_max = K_max,
+                    max_iter = as.integer(max_iter), tol = as.numeric(tol),
+                    verbose = FALSE),
+    error = function(e) NULL)
+  theta0_fix <- if (!is.null(warm)) {
+    th <- c(unname(warm$beta_lambda), unname(warm$beta_p))
+    if (is_nb) th <- c(th, log(if (is.finite(warm$r %||% NA_real_)) warm$r else 2))
+    th
+  } else {
+    th <- c(log(mean(y_long) + 0.1), rep(0, p_lam - 1L), rep(0, p_p))
+    if (is_nb) th <- c(th, log(2))
+    th
+  }
+  if (length(theta0_fix) != n_fixed) theta0_fix <- numeric(n_fixed)
+
+  res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
+                              max_iter = max_iter, tol = tol,
+                              label = "removal-spatial", integration = "grid")
+  if (!isTRUE(res$ok))
+    stop("removal() areal spatial + temporal fit produced no usable grid point.",
+         call. = FALSE)
+
+  means <- res$beta_mean; V <- res$vcov
+  raw <- list(
+    mixture = if (is_nb) "NB" else "P",
+    beta_lambda = means[i_lam], beta_p = means[i_p],
+    log_r = if (is_nb) means[i_logr] else NA_real_,
+    r = if (is_nb) exp(means[i_logr]) else NA_real_,
+    r_mean = if (is_nb) exp(means[i_logr]) else NA_real_,
+    r_sd = if (is_nb && is.finite(V[i_logr, i_logr]))
+             exp(means[i_logr]) * sqrt(V[i_logr, i_logr]) else NA_real_,
+    vcov = V[c(i_lam, i_p), c(i_lam, i_p), drop = FALSE],
+    log_lik = res$log_lik, converged = TRUE, K_max = K_max)
+  fit <- build_nmix_fit(raw, model, spatial = spatial)
+  fit$method <- "nested_laplace"
+  fit$spatial_field <- res$field_mean
+  fit$spatial_hyper <- res$hyper
+  fit$spatial_integration <- res$integration
+  fit$temporal <- temporal
+  fit$temporal_field <- res$temporal_field
+  fit$temporal_hyper <- res$temporal_hyper
+  fit
 }
 
 # Areal-spatial removal sampling via NUTS (gcol33/tulpaObs#72): a FIXED-HYPER

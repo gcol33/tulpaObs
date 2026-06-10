@@ -158,50 +158,241 @@
   )
 }
 
+# Areal-BFGS nested-Laplace fit over one OR several latent field blocks (#78).
+#
+# `field` is a single field spec (the historical single-block call) or a LIST of
+# field specs (e.g. spatial + temporal). Each block owns a contiguous slice of the
+# concatenated field-parameter vector and supplies the same closure interface
+# (offset / scatter / prior_logp / prior_grad / center / constrain / to_phi /
+# cells / to_hyper). The per-cell BFGS optimises (fixed params, field_1, ...,
+# field_K); a cell is a tuple of per-block cells; the outer grid is the Cartesian
+# product of the blocks' grids. A length-1 list is numerically identical to the
+# single-block kernel. CCD outer integration applies only to the single-block
+# case; multi-block uses the product grid.
+# Gate a temporal() term on a count family (removal / distance / fp_occu /
+# dyn_abun). A temporal AR1/RW1/RW2/iid field composes with the areal field on the
+# arm under method = "laplace" / "nested_laplace" via the shared areal-BFGS driver
+# (gcol33/tulpaObs#78). A temporal term WITHOUT a spatial field, or under NUTS, is
+# not wired; those raise a clear error here so the family dispatch can call the
+# spatial fitter unconditionally once the gate passes.
+.tobs_check_count_temporal <- function(temporal, spatial, method, family, arm) {
+  if (identical(method, "nuts"))
+    stop(sprintf(paste0("%s() does not support a temporal() term under method = ",
+                        "\"nuts\"; the temporal field composes with the areal ",
+                        "field on the %s arm under method = \"nested_laplace\". ",
+                        "(tulpaObs#78)"), family, arm), call. = FALSE)
+  if (is.null(spatial))
+    stop(sprintf(paste0("%s() supports a temporal() term composed WITH an areal ",
+                        "field on the %s arm (e.g. icar()/car_proper()/bym2() + ",
+                        "temporal()) under method = \"nested_laplace\"; a temporal ",
+                        "term on its own is not yet wired. (tulpaObs#78)"),
+                 family, arm), call. = FALSE)
+  invisible(TRUE)
+}
+
+# Structure precision matrix Q (tau = 1, marginal-precision scaled) of a temporal
+# block over T points: ar1(rho) tridiagonal full-rank; rw1 tridiagonal (rank T-1);
+# rw2 pentadiagonal (rank T-2); iid identity. Single source of truth for the
+# temporal-block prior used alongside the areal field on the count families (#78).
+.tobs_temporal_Q <- function(type, T, rho = NULL, cyclic = FALSE) {
+  if (type == "iid") return(diag(1, T))
+  if (type == "ar1") {
+    if (is.null(rho) || abs(rho) >= 1) stop("ar1 rho must be in (-1, 1).", call. = FALSE)
+    Q <- matrix(0, T, T)
+    Q[1, 1] <- 1; Q[T, T] <- 1
+    if (T > 2) for (t in 2:(T - 1)) Q[t, t] <- 1 + rho^2
+    for (t in seq_len(T - 1)) { Q[t, t + 1] <- -rho; Q[t + 1, t] <- -rho }
+    return(Q / (1 - rho^2))
+  }
+  if (type == "rw1") {
+    Q <- matrix(0, T, T)
+    if (cyclic) {
+      for (t in seq_len(T)) {
+        Q[t, t] <- 2
+        nt <- if (t == T) 1L else t + 1L; pt <- if (t == 1L) T else t - 1L
+        Q[t, nt] <- Q[t, nt] - 1; Q[t, pt] <- Q[t, pt] - 1
+      }
+    } else {
+      Q[1, 1] <- 1; Q[1, 2] <- -1; Q[T, T] <- 1; Q[T, T - 1] <- -1
+      if (T > 2) for (t in 2:(T - 1)) { Q[t, t] <- 2; Q[t, t - 1] <- -1; Q[t, t + 1] <- -1 }
+    }
+    return(Q)
+  }
+  if (type == "rw2") {
+    if (T < 4) stop("rw2 needs at least 4 time points.", call. = FALSE)
+    # Second-difference operator D (T-2 x T); Q = D' D, rank T - 2.
+    D <- matrix(0, T - 2L, T)
+    for (t in seq_len(T - 2L)) { D[t, t] <- 1; D[t, t + 1L] <- -2; D[t, t + 2L] <- 1 }
+    return(crossprod(D))
+  }
+  stop(sprintf("Unsupported temporal type '%s'.", type), call. = FALSE)
+}
+
+# Temporal latent-field block for the areal-BFGS driver (#78). Mirrors
+# `.areal_field_car`: a single block over `n_t` time points, eta += z[map] with
+# `map = time_idx` (the per-site time index), the prior `0.5 (rank) log tau -
+# 0.5 tau z' Q z` (rank-deficient rw1/rw2 use rank = T - deficiency and a
+# sum-to-zero constraint; ar1/iid are full rank, no constraint). The grid is
+# (tau) for rw1/rw2/iid and (tau, rho) for ar1.
+.tobs_temporal_field <- function(type, map, n_t, cyclic = FALSE,
+                                  tau_grid = NULL, rho_grid = NULL) {
+  type <- match.arg(type, c("ar1", "rw1", "rw2", "iid"))
+  # Narrow per-block grids keep the product with the spatial block's grid small
+  # (the count-family areal field already sweeps ~9 tau, or tau x rho for proper-
+  # CAR / BYM2). A 3-point tau (x 2 rho for AR1) mirrors the occupancy multi-block
+  # path's narrowed defaults; users can override via the temporal() term.
+  if (is.null(tau_grid)) tau_grid <- exp(seq(log(0.5), log(20), length.out = 3L))
+  is_ar1 <- identical(type, "ar1")
+  if (is_ar1 && is.null(rho_grid)) rho_grid <- c(0.4, 0.8)
+  deficiency <- switch(type, rw1 = 1L, rw2 = 2L, 0L)
+  rank_eff   <- n_t - deficiency
+  constrain  <- rep(deficiency > 0L, n_t)         # sum-to-zero on rw1 / rw2 only
+
+  make_cell <- function(theta) {
+    tau <- theta[1L]
+    rho <- if (is_ar1) theta[2L] else NA_real_
+    Q   <- .tobs_temporal_Q(type, n_t, rho = if (is_ar1) rho else NULL, cyclic = cyclic)
+    ldQ <- if (deficiency > 0L) 0 else {
+      ch <- tryCatch(chol(Q), error = function(e) NULL)
+      if (is.null(ch)) -Inf else 2 * sum(log(diag(ch)))
+    }
+    list(tau = tau, rho = rho, Q = Q, ldQ = ldQ)
+  }
+  cells <- list()
+  if (is_ar1) { for (rho in rho_grid) for (tau in tau_grid)
+                  cells[[length(cells) + 1L]] <- make_cell(c(tau, rho)) }
+  else        { for (tau in tau_grid)
+                  cells[[length(cells) + 1L]] <- make_cell(tau) }
+
+  scat1 <- function(grad_eta) {
+    g <- numeric(n_t)
+    for (s in seq_along(map)) g[map[s]] <- g[map[s]] + grad_eta[s]
+    g
+  }
+  list(
+    n_field = n_t, n_sp = n_t, cells = cells, axes = NULL, make_cell = make_cell,
+    valid = function(cell) is.finite(cell$ldQ) &&
+                           (!is_ar1 || (cell$rho > -1 && cell$rho < 1)),
+    offset = function(fp, cell) fp[map],
+    scatter = scat1,
+    prior_logp = function(fp, cell) {
+      quad <- as.numeric(t(fp) %*% cell$Q %*% fp)
+      0.5 * rank_eff * log(cell$tau) +
+        (if (deficiency > 0L) 0 else 0.5 * cell$ldQ) - 0.5 * cell$tau * quad
+    },
+    prior_grad = function(fp, cell) cell$tau * as.numeric(cell$Q %*% fp),
+    center = function(fp) if (deficiency > 0L) fp - mean(fp) else fp,
+    constrain = constrain,
+    to_phi = function(fp, cell) fp,
+    type = type,
+    to_hyper = function(cell) if (is_ar1) c(tau = cell$tau, rho = cell$rho)
+                              else c(tau = cell$tau)
+  )
+}
+
+# Resolve a temporal() term carried on a count family's arm into a temporal field
+# spec for the areal-BFGS driver (#78). `temporal$time_idx` is the per-site time
+# index (one entry per data row / site); it becomes the block's `map`.
+.tobs_temporal_field_spec <- function(temporal, n_sites, family) {
+  if (!inherits(temporal, "tobs_temporal"))
+    stop("`temporal` must be a tobs_temporal object.", call. = FALSE)
+  if (!is.null(temporal$group_idx))
+    stop(sprintf(paste0("%s() temporal + areal spatial supports a single temporal ",
+                        "field; grouped temporal( , group = ) is not wired on this ",
+                        "path. (tulpaObs#78)"), family), call. = FALSE)
+  ti <- as.integer(temporal$time_idx)
+  if (length(ti) != n_sites)
+    stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
+                        "sites; one time index per site is required for %s."),
+                 length(ti), n_sites, family), call. = FALSE)
+  n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+         else max(ti, na.rm = TRUE)
+  .tobs_temporal_field(temporal$type, map = ti, n_t = n_t,
+                       cyclic = isTRUE(temporal$cyclic))
+}
+
+# Areal-BFGS nested-Laplace fit over one OR several latent field blocks (#78).
 .tobs_areal_bfgs_fit <- function(eval, n_fixed, field, theta0_fix,
                                  max_iter = 300L, tol = 1e-8, label = "areal-bfgs",
                                  integration = c("auto", "ccd", "grid")) {
   integration <- match.arg(integration)
-  nf <- field$n_field; fi <- n_fixed + seq_len(nf)
-  is_bym2 <- isTRUE(field$bym2)
 
-  # One Laplace fit at a fixed field-hyperparameter cell. Returns the joint
-  # marginal of (fixed params, field) plus the fixed-parameter mode / cov block /
-  # reported field, or NULL on an invalid or numerically failed cell.
-  solve_cell <- function(cell) {
-    if (!field$valid(cell)) return(NULL)
+  blocks <- if (!is.null(field$n_field)) list(field) else field
+  n_blk  <- length(blocks)
+  nf_vec <- vapply(blocks, function(b) as.integer(b$n_field), 0L)
+  nf     <- sum(nf_vec)
+  blk_off <- cumsum(c(0L, nf_vec))            # field-slice starts within fi
+  fi     <- n_fixed + seq_len(nf)
+  # Per-block field index slice (into the global theta vector).
+  blk_fi <- lapply(seq_len(n_blk),
+                   function(b) n_fixed + blk_off[b] + seq_len(nf_vec[b]))
+  is_bym2 <- vapply(blocks, function(b) isTRUE(b$bym2), TRUE)
+
+  # One Laplace fit at a fixed field-hyperparameter cell (one per-block cell each).
+  # Returns the joint marginal of (fixed params, field) plus the fixed-parameter
+  # mode / cov block / per-block reported fields, or NULL on an invalid /
+  # numerically failed cell.
+  solve_cell <- function(cells_b) {
+    if (!all(vapply(seq_len(n_blk),
+                    function(b) blocks[[b]]$valid(cells_b[[b]]), TRUE)))
+      return(NULL)
+    block_offset <- function(theta) {
+      off <- numeric(0L)
+      for (b in seq_len(n_blk)) {
+        fpb <- theta[blk_fi[[b]]]
+        ob  <- blocks[[b]]$offset(fpb, cells_b[[b]])
+        off <- if (length(off)) off + ob else ob
+      }
+      off
+    }
     grad_wp <- function(theta) {              # grad of (log_lik + log_prior) over (fixed, field)
-      fp <- theta[fi]; e <- eval(theta[seq_len(n_fixed)], field$offset(fp, cell))
-      gf <- if (is_bym2) field$scatter(e$grad_eta, cell) else field$scatter(e$grad_eta)
-      c(e$grad_fixed, gf - field$prior_grad(fp, cell))
+      e  <- eval(theta[seq_len(n_fixed)], block_offset(theta))
+      gf <- numeric(nf)
+      for (b in seq_len(n_blk)) {
+        fpb <- theta[blk_fi[[b]]]
+        sc  <- if (is_bym2[b]) blocks[[b]]$scatter(e$grad_eta, cells_b[[b]])
+               else blocks[[b]]$scatter(e$grad_eta)
+        gf[blk_off[b] + seq_len(nf_vec[b])] <- sc - blocks[[b]]$prior_grad(fpb, cells_b[[b]])
+      }
+      c(e$grad_fixed, gf)
     }
     ll_fn <- function(theta) {
-      fp <- theta[fi]; e <- eval(theta[seq_len(n_fixed)], field$offset(fp, cell))
-      e$log_lik + field$prior_logp(fp, cell)
+      e  <- eval(theta[seq_len(n_fixed)], block_offset(theta))
+      lp <- 0
+      for (b in seq_len(n_blk))
+        lp <- lp + blocks[[b]]$prior_logp(theta[blk_fi[[b]]], cells_b[[b]])
+      e$log_lik + lp
     }
     th0 <- c(theta0_fix, numeric(nf))
     opt <- tryCatch(stats::optim(th0, function(t) -ll_fn(t), function(t) -grad_wp(t),
                    method = "BFGS", control = list(maxit = as.integer(max_iter), reltol = tol)),
                    error = function(e) NULL)
     if (is.null(opt)) return(NULL)
-    th <- opt$par; th[fi] <- field$center(th[fi])
+    th <- opt$par
+    for (b in seq_len(n_blk))
+      th[blk_fi[[b]]] <- blocks[[b]]$center(th[blk_fi[[b]]])
     H <- tryCatch(-.fp_fd_jacobian(grad_wp, th), error = function(e) NULL)
     if (is.null(H)) return(NULL)
     H <- 0.5 * (H + t(H)); ridge <- max(1e-8 * mean(abs(diag(H))), 1e-10); diag(H) <- diag(H) + ridge
     ch <- tryCatch(chol(H), error = function(e) NULL); if (is.null(ch)) return(NULL)
     ldH <- 2 * sum(log(diag(ch)))
     Hc <- H
-    cc <- which(field$constrain)
-    if (length(cc)) {                     # sum-to-zero penalty on the constrained field block
+    cc <- unlist(lapply(seq_len(n_blk),
+                        function(b) blk_off[b] + which(blocks[[b]]$constrain)))
+    if (length(cc)) {                     # sum-to-zero penalty on the constrained field block(s)
       pen <- 1e6 * mean(abs(diag(H))); idx <- n_fixed + cc
       Hc[idx, idx] <- Hc[idx, idx] + pen
     }
     cov_full <- tryCatch(solve(Hc), error = function(e) NULL)
     if (is.null(cov_full)) return(NULL)
+    phi_b   <- lapply(seq_len(n_blk),
+                      function(b) blocks[[b]]$to_phi(th[blk_fi[[b]]], cells_b[[b]]))
+    hyper_b <- lapply(seq_len(n_blk),
+                      function(b) if (is.function(blocks[[b]]$to_hyper))
+                                    blocks[[b]]$to_hyper(cells_b[[b]]) else NULL)
     list(logm = ll_fn(th) - 0.5 * ldH,
          mode = th[seq_len(n_fixed)],
-         phi  = field$to_phi(th[fi], cell),
-         hyper = if (is.function(field$to_hyper)) field$to_hyper(cell) else NULL,
+         phi  = phi_b, hyper = hyper_b,
          cov  = cov_full[seq_len(n_fixed), seq_len(n_fixed), drop = FALSE])
   }
 
@@ -210,35 +401,48 @@
     ok  <- vapply(res, Negate(is.null), TRUE) & is.finite(w) & w > 0
     if (!any(ok)) return(list(ok = FALSE))
     w[!ok] <- 0; w <- w / sum(w)
-    modes <- t(vapply(which(ok), function(k) res[[k]]$mode, numeric(n_fixed)))
-    phis  <- t(vapply(which(ok), function(k) res[[k]]$phi,  numeric(field$n_sp)))
-    wk    <- w[ok]
+    wk    <- w[ok]; ik <- which(ok)
+    modes <- t(vapply(ik, function(k) res[[k]]$mode, numeric(n_fixed)))
     beta_mean  <- as.numeric(crossprod(wk, modes))
-    field_mean <- as.numeric(crossprod(wk, phis))
     V <- matrix(0, n_fixed, n_fixed)
     for (j in seq_along(wk)) {
       dk <- modes[j, ] - beta_mean
-      V <- V + wk[j] * (res[[which(ok)[j]]]$cov + outer(dk, dk))
+      V <- V + wk[j] * (res[[ik[j]]]$cov + outer(dk, dk))
     }
-    logm <- vapply(which(ok), function(k) res[[k]]$logm, numeric(1))
-    # Posterior-mean field hyperparameters (tau / rho or sigma / rho), for fixing
-    # the field precision on the NUTS path (gcol33/tulpaObs#72).
-    hyper_mean <- NULL
-    h1 <- res[[which(ok)[1L]]]$hyper
-    if (!is.null(h1)) {
-      H <- t(vapply(which(ok), function(k) res[[k]]$hyper, numeric(length(h1))))
-      hyper_mean <- as.numeric(crossprod(wk, H)); names(hyper_mean) <- names(h1)
+    logm <- vapply(ik, function(k) res[[k]]$logm, numeric(1))
+    # Posterior-mean field + field hyperparameters, per block (tau / rho or
+    # sigma / rho), for reporting and for fixing the field precision on the NUTS
+    # path (gcol33/tulpaObs#72). Block 1 is the spatial field (kept on the legacy
+    # scalar slots `field_mean` / `hyper`); a temporal block 2 is reported under
+    # `temporal_field` / `temporal_hyper`.
+    n_sp_b <- vapply(blocks, function(b) as.integer(b$n_sp), 0L)
+    field_means <- lapply(seq_len(n_blk), function(b) {
+      phis <- t(vapply(ik, function(k) res[[k]]$phi[[b]], numeric(n_sp_b[b])))
+      as.numeric(crossprod(wk, phis))
+    })
+    hyper_means <- lapply(seq_len(n_blk), function(b) {
+      h1 <- res[[ik[1L]]]$hyper[[b]]
+      if (is.null(h1)) return(NULL)
+      Hm <- t(vapply(ik, function(k) res[[k]]$hyper[[b]], numeric(length(h1))))
+      hm <- as.numeric(crossprod(wk, Hm)); names(hm) <- names(h1); hm
+    })
+    out <- list(ok = TRUE, beta_mean = beta_mean,
+                field_mean = field_means[[1L]], hyper = hyper_means[[1L]],
+                vcov = V, log_lik = sum(wk * logm),
+                integration = method, pareto_k = pareto_k)
+    if (n_blk >= 2L) {
+      out$temporal_field <- field_means[[2L]]
+      out$temporal_hyper <- hyper_means[[2L]]
     }
-    list(ok = TRUE, beta_mean = beta_mean, field_mean = field_mean, vcov = V,
-         hyper = hyper_mean,
-         log_lik = sum(wk * logm), integration = method, pareto_k = pareto_k)
+    out
   }
 
-  # ---- outer integration: opt-in mode-centred CCD (gcol33/tulpaObs#60), silently
-  # declining to the fixed tensor grid when the outer curvature is ill-conditioned.
-  if (identical(integration, "ccd") && !is.null(field$axes)) {
+  # ---- outer integration: opt-in mode-centred CCD (single-block only,
+  # gcol33/tulpaObs#60), silently declining to the fixed tensor grid when the
+  # outer curvature is ill-conditioned. A multi-block fit uses the product grid.
+  if (n_blk == 1L && identical(integration, "ccd") && !is.null(field$axes)) {
     eval_logm <- function(theta_phys) {
-      r <- solve_cell(field$make_cell(theta_phys))
+      r <- solve_cell(list(field$make_cell(theta_phys)))
       if (is.null(r) || !is.finite(r$logm)) NA_real_ else r$logm
     }
     cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, field$axes),
@@ -248,7 +452,7 @@
       prog <- tulpa:::.tulpa_iter_progress(label, nn, unit = "cells")
       res <- vector("list", nn); logm <- rep(-Inf, nn)
       for (k in seq_len(nn)) {
-        r <- solve_cell(field$make_cell(cc$nodes[k, ]))
+        r <- solve_cell(list(field$make_cell(cc$nodes[k, ])))
         if (!is.null(r) && is.finite(r$logm)) { res[[k]] <- r; logm[k] <- r$logm }
         prog$tick()
       }
@@ -261,11 +465,13 @@
     }
   }
 
-  cells <- field$cells; n_grid <- length(cells)
+  # Product grid over the blocks' per-cell grids.
+  cell_grid <- .tobs_block_cell_product(blocks)
+  n_grid <- length(cell_grid)
   prog <- tulpa:::.tulpa_iter_progress(label, n_grid, unit = "cells")
   res <- vector("list", n_grid); logm <- rep(-Inf, n_grid)
   for (k in seq_len(n_grid)) {
-    r <- solve_cell(cells[[k]])
+    r <- solve_cell(cell_grid[[k]])
     if (!is.null(r) && is.finite(r$logm)) { res[[k]] <- r; logm[k] <- r$logm }
     prog$tick()
   }
@@ -273,6 +479,17 @@
   if (!any(is.finite(logm))) return(list(ok = FALSE))
   w <- tulpa:::.nl_normalise_weights_safe(logm, "tau_grid / data")
   summarise(res, w, "grid")
+}
+
+# Cartesian product of each block's `cells` list -> a list of per-block cell
+# tuples (each tuple a length-`n_blk` list, one cell per block). A single block
+# returns one cell per element (identical to iterating `field$cells`).
+.tobs_block_cell_product <- function(blocks) {
+  grids <- lapply(blocks, function(b) b$cells)
+  n_per <- vapply(grids, length, 0L)
+  idx <- expand.grid(lapply(n_per, seq_len), KEEP.OUT.ATTRS = FALSE)
+  lapply(seq_len(nrow(idx)), function(r)
+    lapply(seq_along(grids), function(b) grids[[b]][[idx[r, b]]]))
 }
 
 # Resolve the field spec for an areal-BFGS family from the spatial term.
