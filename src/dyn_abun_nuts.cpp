@@ -22,6 +22,11 @@ struct DynNutsModel {
     double sigma_beta = 10.0;
     std::vector<int> y;                          // site-major, season, visit; -1 = NA
     Rcpp::NumericMatrix X_lambda, X_p, X_omega, X_gamma;
+    // omega / gamma designs are per-site ([n_sites x p]) for constant rates or
+    // long-form ([n_sites*(T-1) x p], site-major interval-minor) when survival /
+    // recruitment vary by transition interval. The flags pick the row stride and
+    // whether the per-interval forward score is scattered over the interval rows.
+    bool om_sv = false, gm_sv = false;
     // Optional single intercept RE on the initial-abundance (lambda) arm
     // (tulpaObs#51): per-site offset sigma_re * z[group], non-centered, with one
     // log_sigma_re hyperparameter. re_arm = -1 none, 0 lambda. The RE block
@@ -49,6 +54,9 @@ inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
     if (spec.containsElementNamed("use_nb")) m.use_nb = Rcpp::as<bool>(spec["use_nb"]);
     m.p_lam = m.X_lambda.ncol(); m.p_p = m.X_p.ncol();
     m.p_om = m.X_omega.ncol(); m.p_gm = m.X_gamma.ncol();
+    const int nIv = m.T - 1;
+    m.om_sv = (nIv > 1 && (int) m.X_omega.nrow() == m.n_sites * nIv);
+    m.gm_sv = (nIv > 1 && (int) m.X_gamma.nrow() == m.n_sites * nIv);
     m.total = m.p_lam + m.p_p + m.p_om + m.p_gm;
     if (m.use_nb) { m.o_logr = m.total; m.total += 1; }   // log r after the betas
     m.n_pre_re = m.total;                                 // coords under the beta prior
@@ -73,6 +81,7 @@ inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
 inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* grad) {
     const int p_lam = m.p_lam, p_p = m.p_p, p_om = m.p_om, p_gm = m.p_gm;
     const int o_lam = 0, o_p = p_lam, o_om = p_lam + p_p, o_gm = p_lam + p_p + p_om;
+    const int nIv = m.T - 1;
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
     const double eta_logr = m.use_nb ? theta[m.o_logr] : 0.0;
     const bool has_re = m.re_arm == 0;
@@ -82,24 +91,38 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
     std::vector<double> zfield, grad_z;
     field_block_forward(m.field, theta, zfield);
     field_block_init_grad(m.field, grad_z);
+    std::vector<double> eo(nIv), eg(nIv);                 // per-interval omega/gamma eta
     double lp = 0.0;
     for (int i = 0; i < m.n_sites; ++i) {
-        double el = 0.0, ep = 0.0, eo = 0.0, eg = 0.0;
+        double el = 0.0, ep = 0.0;
         for (int k = 0; k < p_lam; ++k) el += m.X_lambda(i, k) * theta[o_lam + k];
         for (int k = 0; k < p_p;   ++k) ep += m.X_p(i, k)      * theta[o_p + k];
-        for (int k = 0; k < p_om;  ++k) eo += m.X_omega(i, k)  * theta[o_om + k];
-        for (int k = 0; k < p_gm;  ++k) eg += m.X_gamma(i, k)  * theta[o_gm + k];
+        for (int iv = 0; iv < nIv; ++iv) {
+            const int row_o = m.om_sv ? i * nIv + iv : i;
+            const int row_g = m.gm_sv ? i * nIv + iv : i;
+            double v_o = 0.0, v_g = 0.0;
+            for (int k = 0; k < p_om; ++k) v_o += m.X_omega(row_o, k) * theta[o_om + k];
+            for (int k = 0; k < p_gm; ++k) v_g += m.X_gamma(row_g, k) * theta[o_gm + k];
+            eo[iv] = v_o; eg[iv] = v_g;
+        }
         const double re_off = has_re ? sigma_re * theta[m.o_re_z + m.re_group[i]] : 0.0;
         if (has_re) el += re_off;
         if (has_field) el += zfield[m.field.field_map[i]];
         DynAbunSiteResult r = compute_dyn_abun_site(
-            m.y.data() + (std::size_t)i * m.T * m.J, m.T, m.J, m.K, el, ep, eo, eg,
-            m.use_nb, eta_logr);
+            m.y.data() + (std::size_t)i * m.T * m.J, m.T, m.J, m.K, el, ep,
+            eo.data(), eg.data(), m.use_nb, eta_logr);
         lp += r.log_lik;
         for (int k = 0; k < p_lam; ++k) grad[o_lam + k] += r.grad_eta_lambda * m.X_lambda(i, k);
         for (int k = 0; k < p_p;   ++k) grad[o_p + k]   += r.grad_eta_p      * m.X_p(i, k);
-        for (int k = 0; k < p_om;  ++k) grad[o_om + k]  += r.grad_eta_omega  * m.X_omega(i, k);
-        for (int k = 0; k < p_gm;  ++k) grad[o_gm + k]  += r.grad_eta_gamma  * m.X_gamma(i, k);
+        // omega / gamma: scatter the per-interval score through the (long-form or
+        // broadcast) design. For a per-site design every interval shares the row,
+        // so the sum reduces to the constant-rate scalar score.
+        for (int iv = 0; iv < nIv; ++iv) {
+            const int row_o = m.om_sv ? i * nIv + iv : i;
+            const int row_g = m.gm_sv ? i * nIv + iv : i;
+            for (int k = 0; k < p_om; ++k) grad[o_om + k] += r.grad_eta_omega_vec[iv] * m.X_omega(row_o, k);
+            for (int k = 0; k < p_gm; ++k) grad[o_gm + k] += r.grad_eta_gamma_vec[iv] * m.X_gamma(row_g, k);
+        }
         grad_logr += r.grad_eta_logr;
         if (has_re) {
             grad[m.o_re_z + m.re_group[i]] += sigma_re * r.grad_eta_lambda;

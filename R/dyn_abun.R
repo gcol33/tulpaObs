@@ -25,11 +25,59 @@
 # Data binder
 # ---------------------------------------------------------------------------
 
+# Build the survival / recruitment arm design. The arm spans the T-1 transition
+# intervals; a covariate that varies by interval is supplied as a matrix column
+# of `data` with one column per interval ([n_sites x (T-1)]). When the arm
+# references such a column the design is long-form [(site x interval) x p],
+# site-major interval-minor (row (i-1)*(T-1) + iv); otherwise it collapses to the
+# per-site design [n_sites x p] (the constant-rate path). `arm` names the arm for
+# error messages. Returns the model matrix and a season_varying flag.
+.tobs_dyn_abun_arm_design <- function(fe_formula, data, n_sites, n_intervals,
+                                      arm) {
+  vars <- all.vars(fe_formula)
+  vars <- vars[vars %in% names(data)]
+  is_sv <- vapply(vars, function(v) {
+    col <- data[[v]]
+    is.matrix(col) && ncol(col) == n_intervals
+  }, logical(1))
+  bad <- vapply(vars, function(v) {
+    col <- data[[v]]
+    is.matrix(col) && ncol(col) != n_intervals
+  }, logical(1))
+  if (any(bad)) {
+    stop(sprintf(paste0("dyn_abun() %s covariate '%s' is a matrix with %d ",
+                        "columns; a season-varying %s covariate must have one ",
+                        "column per transition interval (T-1 = %d)."),
+                 arm, vars[bad][1], ncol(data[[vars[bad][1]]]), arm, n_intervals),
+         call. = FALSE)
+  }
+  if (!any(is_sv)) {
+    return(list(X = model.matrix(fe_formula, data), season_varying = FALSE))
+  }
+  # Unroll to long form: season-varying matrix columns flatten site-major
+  # interval-minor; per-site columns repeat across the site's intervals.
+  rep_site <- rep(seq_len(n_sites), each = n_intervals)
+  iv_idx   <- rep(seq_len(n_intervals), times = n_sites)
+  long <- list()
+  for (v in names(data)) {
+    col <- data[[v]]
+    if (is.matrix(col) && ncol(col) == n_intervals) {
+      long[[v]] <- col[cbind(rep_site, iv_idx)]
+    } else if (!is.matrix(col)) {
+      long[[v]] <- col[rep_site]
+    }
+  }
+  data_long <- as.data.frame(long, stringsAsFactors = FALSE)
+  list(X = model.matrix(fe_formula, data_long), season_varying = TRUE)
+}
+
 # Bind a Dail-Madsen open N-mixture. `y` is a 3D array [n_sites x max_visits x
 # n_seasons] (or a list of n_sites x max_visits matrices, one per season); a
-# missing visit is NA (dropped from its season). All four arms are site-level:
-# initial abundance (occ_formula = the tobs formula), detection (det_formula),
-# survival (omega_formula), recruitment (gamma_formula).
+# missing visit is NA (dropped from its season). Initial abundance (occ_formula =
+# the tobs formula) and detection (det_formula) are site-level; survival
+# (omega_formula) and recruitment (gamma_formula) span the T-1 transition
+# intervals and may carry a season-varying covariate (a [n_sites x (T-1)] matrix
+# column of `data`), in which case their design is long-form over (site, interval).
 .tobs_build_dyn_abun <- function(occ_formula, det_formula, data, y,
                                  omega_formula = ~1, gamma_formula = ~1,
                                  mixture = "poisson", K_max = NULL) {
@@ -62,8 +110,10 @@
                                    omega = omega_formula, gamma = gamma_formula), data)
   X_lambda <- model.matrix(bind$fe$lambda, data)
   X_p      <- model.matrix(bind$fe$p, data)
-  X_omega  <- model.matrix(bind$fe$omega, data)
-  X_gamma  <- model.matrix(bind$fe$gamma, data)
+  n_intervals <- n_seasons - 1L
+  om <- .tobs_dyn_abun_arm_design(bind$fe$omega, data, n_sites, n_intervals, "omega")
+  gm <- .tobs_dyn_abun_arm_design(bind$fe$gamma, data, n_sites, n_intervals, "gamma")
+  X_omega <- om$X; X_gamma <- gm$X
 
   # Flat layout site-major then season then visit: j + J*t + J*T*i (0-based),
   # matching compute_dyn_abun_site (dyn_occu's aperm(y, c(2,3,1)) convention).
@@ -84,6 +134,9 @@
     structured_terms = bind$terms,
     data       = data,
     n_sites    = n_sites, n_seasons = n_seasons, max_visits = max_visits,
+    n_intervals = n_intervals,
+    omega_season_varying = om$season_varying,
+    gamma_season_varying = gm$season_varying,
     K_max      = K, mixture = mixture,
     process_info = list(
       list(name = "lambda", p = ncol(X_lambda), coef_names = colnames(X_lambda), link = "log"),
@@ -532,20 +585,37 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
 # S3 helpers (routed from methods.R by model_type == "dyn_abun")
 # ---------------------------------------------------------------------------
 
+# Reshape a survival / recruitment arm eta vector into a per-site [n_sites x
+# (T-1)] interval matrix: a long-form vector (season-varying) is row-major (site,
+# interval); a per-site vector is recycled across the site's intervals.
+.tobs_dyn_abun_arm_matrix <- function(eta, n_sites, n_intervals) {
+  if (length(eta) == n_sites * n_intervals) {
+    matrix(eta, n_sites, n_intervals, byrow = TRUE)
+  } else {
+    matrix(eta, n_sites, n_intervals)
+  }
+}
+
 # Per-site arm values and the marginal expected-abundance trajectory
-# E[N_t] = omega E[N_{t-1}] + gamma, E[N_1] = lambda.
+# E[N_t] = omega_{t-1} E[N_{t-1}] + gamma_{t-1}, E[N_1] = lambda. omega / gamma
+# are returned as per-site [n_sites x (T-1)] interval matrices (a single column
+# under constant rates).
 .tobs_fitted_dyn_abun <- function(object) {
   model <- object$model; means <- object$means
   p <- vapply(model$process_info, function(pp) pp$p, integer(1))
   off <- cumsum(c(0L, p))
+  T <- model$n_seasons; n_sites <- model$n_sites; nIv <- T - 1L
   lambda <- exp(as.vector(model$X_processes[[1]] %*% means[off[1] + seq_len(p[1])]))
   pdet   <- stats::plogis(as.vector(model$X_processes[[2]] %*% means[off[2] + seq_len(p[2])]))
-  omega  <- stats::plogis(as.vector(model$X_processes[[3]] %*% means[off[3] + seq_len(p[3])]))
-  gamma  <- exp(as.vector(model$X_processes[[4]] %*% means[off[4] + seq_len(p[4])]))
-  T <- model$n_seasons
-  EN <- matrix(0, model$n_sites, T)
+  omega  <- .tobs_dyn_abun_arm_matrix(
+    stats::plogis(as.vector(model$X_processes[[3]] %*% means[off[3] + seq_len(p[3])])),
+    n_sites, nIv)
+  gamma  <- .tobs_dyn_abun_arm_matrix(
+    exp(as.vector(model$X_processes[[4]] %*% means[off[4] + seq_len(p[4])])),
+    n_sites, nIv)
+  EN <- matrix(0, n_sites, T)
   EN[, 1] <- lambda
-  for (t in seq_len(T - 1L)) EN[, t + 1L] <- omega * EN[, t] + gamma
+  for (t in seq_len(nIv)) EN[, t + 1L] <- omega[, t] * EN[, t] + gamma[, t]
   list(lambda = lambda, p = pdet, omega = omega, gamma = gamma, EN = EN)
 }
 
@@ -557,19 +627,24 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
   n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
   is_nb <- identical(object$mixture %||% "poisson", "negbin")
   r_disp <- object$dispersion$r %||% NA_real_
+  nIv <- T - 1L
   result <- vector("list", nsim)
   for (s in seq_len(nsim)) {
     di <- sample.int(n_draws, 1L); th <- draws[di, ]
     lambda <- exp(as.vector(model$X_processes[[1]] %*% th[off[1] + seq_len(p[1])]))
     pdet   <- stats::plogis(as.vector(model$X_processes[[2]] %*% th[off[2] + seq_len(p[2])]))
-    omega  <- stats::plogis(as.vector(model$X_processes[[3]] %*% th[off[3] + seq_len(p[3])]))
-    gamma  <- exp(as.vector(model$X_processes[[4]] %*% th[off[4] + seq_len(p[4])]))
+    omega  <- .tobs_dyn_abun_arm_matrix(
+      stats::plogis(as.vector(model$X_processes[[3]] %*% th[off[3] + seq_len(p[3])])),
+      n_sites, nIv)
+    gamma  <- .tobs_dyn_abun_arm_matrix(
+      exp(as.vector(model$X_processes[[4]] %*% th[off[4] + seq_len(p[4])])),
+      n_sites, nIv)
     ya <- array(0L, dim = c(n_sites, J, T))
     for (i in seq_len(n_sites)) {
       N <- if (is_nb && is.finite(r_disp)) stats::rnbinom(1L, mu = lambda[i], size = r_disp)
            else stats::rpois(1L, lambda[i])
       for (t in seq_len(T)) {
-        if (t > 1L) N <- stats::rbinom(1L, N, omega[i]) + stats::rpois(1L, gamma[i])
+        if (t > 1L) N <- stats::rbinom(1L, N, omega[i, t - 1L]) + stats::rpois(1L, gamma[i, t - 1L])
         ya[i, , t] <- stats::rbinom(J, N, pdet[i])
       }
     }
@@ -620,10 +695,18 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
 
 #' Simulate Dail-Madsen open N-mixture data
 #'
-#' Latent `N_1 ~ Poisson(lambda)`; for `t >= 2`, `N_t = Binomial(N_(t-1), omega)
-#' + Poisson(gamma)`; observed via `Binomial(N_t, p)` over `J` secondary visits in
-#' each of `T` primary seasons. Returns a 3D array `N x J x T` suitable for
-#' [tobs()] with [dyn_abun()].
+#' Latent `N_1 ~ Poisson(lambda)`; for `t >= 2`, `N_t = Binomial(N_(t-1),
+#' omega_{t-1}) + Poisson(gamma_{t-1})`; observed via `Binomial(N_t, p)` over `J`
+#' secondary visits in each of `T` primary seasons. Returns a 3D array `N x J x T`
+#' suitable for [tobs()] with [dyn_abun()].
+#'
+#' Survival and recruitment are constant across seasons by default. Supplying
+#' `beta_omega` (logit-scale) or `beta_gamma` (log-scale) instead makes the rate
+#' depend on a per-(site, interval) season covariate `z`: `omega_{i,t} =
+#' plogis(beta_omega[1] + beta_omega[2] * z_{i,t})`, `gamma_{i,t} =
+#' exp(beta_gamma[1] + beta_gamma[2] * z_{i,t})`. The covariate is returned as a
+#' `[N x (T-1)]` matrix column `season_cov` of `data`, ready for
+#' `omega_formula = ~ season_cov`.
 #'
 #' @param N Number of sites (default 150).
 #' @param T Number of primary seasons (default 4).
@@ -632,18 +715,25 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
 #' @param beta_lambda Initial-abundance coefficients (log). Default
 #'   `c(log(5), runif(n_abund_covs, -0.4, 0.4))`.
 #' @param p,omega,gamma Detection, apparent-survival, and recruitment parameters
-#'   (scalars; defaults 0.5, 0.6, 1.0).
+#'   (scalars; defaults 0.5, 0.6, 1.0). `omega` / `gamma` set the constant rate
+#'   used when `beta_omega` / `beta_gamma` are `NULL`.
+#' @param beta_omega,beta_gamma Optional length-2 coefficients
+#'   `c(intercept, slope)` for a season-varying survival (logit link) or
+#'   recruitment (log link) rate driven by a per-(site, interval) season
+#'   covariate. `NULL` (default) keeps the constant `omega` / `gamma`.
 #' @param mixture Initial-abundance distribution: `"poisson"` (default) or
 #'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`).
 #' @param r Negative-binomial size for `mixture = "negbin"` (default 2).
 #' @param seed Optional random seed.
-#' @return A list with `y` (N x J x T count array), `data` (covariates), and
-#'   `truth` (coefficients, per-site `lambda`, scalar `p`/`omega`/`gamma`, and
-#'   `r` under `"negbin"`).
+#' @return A list with `y` (N x J x T count array), `data` (covariates, including
+#'   the `[N x (T-1)]` `season_cov` matrix column when a season-varying rate is
+#'   used), and `truth` (coefficients, per-site `lambda`, the realised
+#'   `omega` / `gamma` rates, and `r` under `"negbin"`).
 #' @export
 simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
                               beta_lambda = NULL, p = 0.5, omega = 0.6,
-                              gamma = 1.0, mixture = c("poisson", "negbin"),
+                              gamma = 1.0, beta_omega = NULL, beta_gamma = NULL,
+                              mixture = c("poisson", "negbin"),
                               r = 2, seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
@@ -653,19 +743,41 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   lambda <- exp(as.vector(X_lambda %*% beta_lambda))
   is_nb <- identical(mixture, "negbin")
+  nIv <- T - 1L
+
+  # Per-(site, interval) survival / recruitment. Constant rates broadcast the
+  # scalar; a supplied beta_omega / beta_gamma drives the rate off a shared
+  # season covariate carried as a [N x (T-1)] matrix column of `data`.
+  season_cov <- NULL
+  if (!is.null(beta_omega) || !is.null(beta_gamma)) {
+    season_cov <- matrix(stats::rnorm(N * nIv), N, nIv)
+  }
+  omega_mat <- if (!is.null(beta_omega))
+                 stats::plogis(beta_omega[1] + beta_omega[2] * season_cov)
+               else matrix(omega, N, nIv)
+  gamma_mat <- if (!is.null(beta_gamma))
+                 exp(beta_gamma[1] + beta_gamma[2] * season_cov)
+               else matrix(gamma, N, nIv)
+
   y <- array(0L, dim = c(N, J, T))
   Nmat <- matrix(0L, N, T)
   for (i in seq_len(N)) {
     Ni <- if (is_nb) stats::rnbinom(1L, mu = lambda[i], size = r)
           else stats::rpois(1L, lambda[i])
     for (t in seq_len(T)) {
-      if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega) + stats::rpois(1L, gamma)
+      if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega_mat[i, t - 1L]) +
+                        stats::rpois(1L, gamma_mat[i, t - 1L])
       Nmat[i, t] <- Ni
       y[i, , t] <- stats::rbinom(J, Ni, p)
     }
   }
-  list(y = y, data = abund_covs,
+  data <- abund_covs
+  if (!is.null(season_cov)) data$season_cov <- season_cov
+  list(y = y, data = data,
        truth = list(beta_lambda = beta_lambda, lambda = lambda, p = p,
-                    omega = omega, gamma = gamma, mixture = mixture,
+                    omega = omega, gamma = gamma,
+                    beta_omega = beta_omega, beta_gamma = beta_gamma,
+                    omega_mat = omega_mat, gamma_mat = gamma_mat,
+                    season_cov = season_cov, mixture = mixture,
                     r = if (is_nb) r else NA_real_, N = Nmat))
 }

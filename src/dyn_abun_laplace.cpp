@@ -14,6 +14,13 @@
 // `use_nb` switches the initial abundance to negative-binomial NB(mean=lambda,
 // size = exp(eta_logr)); `eta_logr` is a single shared dispersion coordinate.
 // `grad_eta_logr` is summed across sites (the score for the one log r parameter).
+//
+// eta_omega / eta_gamma are interval-indexed: each is length n_sites when survival
+// / recruitment are constant across a site's seasons (one rate per site), or
+// length n_sites*(T-1) in site-major interval-minor order (row (i*(T-1)+iv)) when
+// they vary by transition interval. grad_eta_omega / grad_eta_gamma are returned
+// with the same length / layout, so the caller's design sandwich (per-site or
+// per-(site, interval)) folds the score back to coefficients.
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_total_log_lik(
     Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
@@ -23,29 +30,43 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
 ) {
     if ((int)y.size() != n_sites * T * J)
         Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
-    if (eta_lambda.size() != n_sites || eta_p.size() != n_sites ||
-        eta_omega.size() != n_sites || eta_gamma.size() != n_sites)
-        Rcpp::stop("all eta vectors must have length n_sites.");
+    if (eta_lambda.size() != n_sites || eta_p.size() != n_sites)
+        Rcpp::stop("eta_lambda / eta_p must have length n_sites.");
+    const int nIv = T - 1;
+    const bool om_iv = (eta_omega.size() == n_sites * nIv);
+    const bool gm_iv = (eta_gamma.size() == n_sites * nIv);
+    if (!om_iv && eta_omega.size() != n_sites)
+        Rcpp::stop("eta_omega must have length n_sites or n_sites*(T-1).");
+    if (!gm_iv && eta_gamma.size() != n_sites)
+        Rcpp::stop("eta_gamma must have length n_sites or n_sites*(T-1).");
 
     double total = 0.0, grad_eta_logr = 0.0;
     Rcpp::NumericVector log_lik_site(n_sites), grad_eta_lambda(n_sites),
-        grad_eta_p(n_sites), grad_eta_omega(n_sites), grad_eta_gamma(n_sites),
-        mean_N1(n_sites);
+        grad_eta_p(n_sites), mean_N1(n_sites);
+    Rcpp::NumericVector grad_eta_omega(om_iv ? n_sites * nIv : n_sites),
+        grad_eta_gamma(gm_iv ? n_sites * nIv : n_sites);
     int n_inadmissible = 0;
     const int* yp = y.begin();
+    std::vector<double> eo(nIv), eg(nIv);
     for (int i = 0; i < n_sites; ++i) {
+        for (int iv = 0; iv < nIv; ++iv) {
+            eo[iv] = om_iv ? eta_omega[i * nIv + iv] : eta_omega[i];
+            eg[iv] = gm_iv ? eta_gamma[i * nIv + iv] : eta_gamma[i];
+        }
         tulpaObs::DynAbunSiteResult r = tulpaObs::compute_dyn_abun_site(
             yp + (std::size_t)i * T * J, T, J, K,
-            eta_lambda[i], eta_p[i], eta_omega[i], eta_gamma[i], use_nb, eta_logr);
+            eta_lambda[i], eta_p[i], eo.data(), eg.data(), use_nb, eta_logr);
         if (!R_finite(r.log_lik)) ++n_inadmissible;
         total += r.log_lik;
         log_lik_site[i]    = r.log_lik;
         grad_eta_lambda[i] = r.grad_eta_lambda;
         grad_eta_p[i]      = r.grad_eta_p;
-        grad_eta_omega[i]  = r.grad_eta_omega;
-        grad_eta_gamma[i]  = r.grad_eta_gamma;
         grad_eta_logr     += r.grad_eta_logr;
         mean_N1[i]         = r.mean_N1;
+        if (om_iv) for (int iv = 0; iv < nIv; ++iv) grad_eta_omega[i * nIv + iv] = r.grad_eta_omega_vec[iv];
+        else       grad_eta_omega[i] = r.grad_eta_omega;
+        if (gm_iv) for (int iv = 0; iv < nIv; ++iv) grad_eta_gamma[i * nIv + iv] = r.grad_eta_gamma_vec[iv];
+        else       grad_eta_gamma[i] = r.grad_eta_gamma;
     }
     return Rcpp::List::create(
         Rcpp::Named("log_lik")          = total,
@@ -61,11 +82,13 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
 
 // Per-site conditional-likelihood weights c(n1) = P(all data | N_1 = n1) for the
 // grouped random-effect AGHQ path on the initial-abundance arm (tulpaObs#51).
-// `site` are 0-based site indices into `y`; eta_p / eta_omega / eta_gamma are the
-// (RE-fixed) detection / survival / recruitment predictors aligned with `site`.
-// Returns an m x (K+1) matrix of c-weights, one row per requested site. The
-// engine precomputes this ONCE per make_site call; the O(K) per-node log marginal
-// then comes from cpp_dyn_abun_init_loglik below.
+// `site` are 0-based site indices into `y`; eta_p is the (RE-fixed) detection
+// predictor aligned with `site` (length m). eta_omega / eta_gamma are the
+// survival / recruitment predictors: length m (constant rate per site) or
+// length m*(T-1) in row-major (site k, interval iv) order for season-varying
+// rates. Returns an m x (K+1) matrix of c-weights, one row per requested site.
+// The engine precomputes this ONCE per make_site call; the O(K) per-node log
+// marginal then comes from cpp_dyn_abun_init_loglik below.
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(
     Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
@@ -75,19 +98,29 @@ Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(
     if ((int)y.size() != n_sites * T * J)
         Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
     const int m = site.size();
-    if (eta_p.size() != m || eta_omega.size() != m || eta_gamma.size() != m)
-        Rcpp::stop("eta vectors must be aligned with `site` (length %d).", m);
+    const int nIv = T - 1;
+    if (eta_p.size() != m) Rcpp::stop("eta_p must be aligned with `site` (length %d).", m);
+    const bool om_iv = (eta_omega.size() == m * nIv);
+    const bool gm_iv = (eta_gamma.size() == m * nIv);
+    if (!om_iv && eta_omega.size() != m)
+        Rcpp::stop("eta_omega must have length m or m*(T-1).");
+    if (!gm_iv && eta_gamma.size() != m)
+        Rcpp::stop("eta_gamma must have length m or m*(T-1).");
 
     const int S = K + 1;
     Rcpp::NumericMatrix C(m, S);
-    std::vector<double> c_row(S);
+    std::vector<double> c_row(S), eo(nIv), eg(nIv);
     const int* yp = y.begin();
     for (int k = 0; k < m; ++k) {
         const int i = site[k];
         if (i < 0 || i >= n_sites) Rcpp::stop("site index out of range.");
+        for (int iv = 0; iv < nIv; ++iv) {
+            eo[iv] = om_iv ? eta_omega[k * nIv + iv] : eta_omega[k];
+            eg[iv] = gm_iv ? eta_gamma[k * nIv + iv] : eta_gamma[k];
+        }
         tulpaObs::compute_dyn_abun_init_weights(
             yp + (std::size_t)i * T * J, T, J, K,
-            eta_p[k], eta_omega[k], eta_gamma[k], c_row.data());
+            eta_p[k], eo.data(), eg.data(), c_row.data());
         for (int n = 0; n < S; ++n) C(k, n) = c_row[n];
     }
     return C;

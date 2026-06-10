@@ -11,8 +11,8 @@ dyn_abun(K_max = NULL, mixture = c("poisson", "negbin"))
 \verb{0..K_max}). \code{NULL} (default) uses \code{max(count) + 40}; raise it if abundance
 may exceed that (the forward cost is roughly cubic in \code{K_max}).}
 
-\item{mixture}{initial-abundance distribution. Only \code{"poisson"} is wired this
-round; \code{"negbin"} errors.}
+\item{mixture}{initial-abundance distribution: \code{"poisson"} (default) or
+\code{"negbin"} (negative-binomial \code{N_1 ~ NB(mean = lambda, size = r)}).}
 }
 \value{
 A \code{tobs_family} object.
@@ -29,11 +29,15 @@ is a direct maximum-likelihood / Laplace fit with a NUTS path over the same
 marginal.
 }
 \details{
-Four site-level arms: initial abundance \code{lambda} (the \code{tobs()} \code{formula}),
-detection \code{p} (\code{detection}), apparent survival \code{omega} (\code{omega_formula},
-default \code{~ 1}), and recruitment \code{gamma} (\code{gamma_formula}, default \code{~ 1}). The
-response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or a list of
-per-season count matrices); missing visits are \code{NA}.
+Four arms: initial abundance \code{lambda} (the \code{tobs()} \code{formula}) and detection
+\code{p} (\code{detection}) are site-level; apparent survival \code{omega} (\code{omega_formula},
+default \code{~ 1}) and recruitment \code{gamma} (\code{gamma_formula}, default \code{~ 1}) span
+the \code{T - 1} transition intervals. A constant \code{omega} / \code{gamma} is shared across
+a site's seasons; supplying a season-varying covariate (a
+\verb{[n_sites x (T - 1)]} matrix column of \code{data}, one column per transition
+interval) on \code{omega_formula} / \code{gamma_formula} gives interval-specific vital
+rates. The response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or
+a list of per-season count matrices); missing visits are \code{NA}.
 }
 \references{
 Dail, D., Madsen, L. (2011). Models for estimating abundance from

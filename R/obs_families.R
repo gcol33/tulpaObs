@@ -656,17 +656,21 @@ ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' is a direct maximum-likelihood / Laplace fit with a NUTS path over the same
 #' marginal.
 #'
-#' Four site-level arms: initial abundance `lambda` (the `tobs()` `formula`),
-#' detection `p` (`detection`), apparent survival `omega` (`omega_formula`,
-#' default `~ 1`), and recruitment `gamma` (`gamma_formula`, default `~ 1`). The
-#' response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or a list of
-#' per-season count matrices); missing visits are `NA`.
+#' Four arms: initial abundance `lambda` (the `tobs()` `formula`) and detection
+#' `p` (`detection`) are site-level; apparent survival `omega` (`omega_formula`,
+#' default `~ 1`) and recruitment `gamma` (`gamma_formula`, default `~ 1`) span
+#' the `T - 1` transition intervals. A constant `omega` / `gamma` is shared across
+#' a site's seasons; supplying a season-varying covariate (a
+#' `[n_sites x (T - 1)]` matrix column of `data`, one column per transition
+#' interval) on `omega_formula` / `gamma_formula` gives interval-specific vital
+#' rates. The response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or
+#' a list of per-season count matrices); missing visits are `NA`.
 #'
 #' @param K_max abundance-state truncation for the forward recursion (states
 #'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
 #'   may exceed that (the forward cost is roughly cubic in `K_max`).
-#' @param mixture initial-abundance distribution. Only `"poisson"` is wired this
-#'   round; `"negbin"` errors.
+#' @param mixture initial-abundance distribution: `"poisson"` (default) or
+#'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`).
 #' @return A `tobs_family` object.
 #' @references Dail, D., Madsen, L. (2011). Models for estimating abundance from
 #'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.

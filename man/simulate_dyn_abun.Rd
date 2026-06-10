@@ -13,6 +13,8 @@ simulate_dyn_abun(
   p = 0.5,
   omega = 0.6,
   gamma = 1,
+  beta_omega = NULL,
+  beta_gamma = NULL,
   mixture = c("poisson", "negbin"),
   r = 2,
   seed = NULL
@@ -31,7 +33,13 @@ simulate_dyn_abun(
 \code{c(log(5), runif(n_abund_covs, -0.4, 0.4))}.}
 
 \item{p, omega, gamma}{Detection, apparent-survival, and recruitment parameters
-(scalars; defaults 0.5, 0.6, 1.0).}
+(scalars; defaults 0.5, 0.6, 1.0). \code{omega} / \code{gamma} set the constant rate
+used when \code{beta_omega} / \code{beta_gamma} are \code{NULL}.}
+
+\item{beta_omega, beta_gamma}{Optional length-2 coefficients
+\code{c(intercept, slope)} for a season-varying survival (logit link) or
+recruitment (log link) rate driven by a per-(site, interval) season
+covariate. \code{NULL} (default) keeps the constant \code{omega} / \code{gamma}.}
 
 \item{mixture}{Initial-abundance distribution: \code{"poisson"} (default) or
 \code{"negbin"} (negative-binomial \code{N_1 ~ NB(mean = lambda, size = r)}).}
@@ -41,14 +49,20 @@ simulate_dyn_abun(
 \item{seed}{Optional random seed.}
 }
 \value{
-A list with \code{y} (N x J x T count array), \code{data} (covariates), and
-\code{truth} (coefficients, per-site \code{lambda}, scalar \code{p}/\code{omega}/\code{gamma}, and
-\code{r} under \code{"negbin"}).
+A list with \code{y} (N x J x T count array), \code{data} (covariates, including
+the \verb{[N x (T-1)]} \code{season_cov} matrix column when a season-varying rate is
+used), and \code{truth} (coefficients, per-site \code{lambda}, the realised
+\code{omega} / \code{gamma} rates, and \code{r} under \code{"negbin"}).
 }
 \description{
-Latent \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2}, `N_t = Binomial(N_(t-1), omega)
-\itemize{
-\item Poisson(gamma)\verb{; observed via }Binomial(N_t, p)\code{over}J\verb{secondary visits in each of}T\verb{primary seasons. Returns a 3D array}N x J x T` suitable for
-\code{\link[=tobs]{tobs()}} with \code{\link[=dyn_abun]{dyn_abun()}}.
+Latent \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2}, \verb{N_t = Binomial(N_(t-1), omega_\{t-1\}) + Poisson(gamma_\{t-1\})}; observed via \code{Binomial(N_t, p)} over \code{J}
+secondary visits in each of \code{T} primary seasons. Returns a 3D array \verb{N x J x T}
+suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=dyn_abun]{dyn_abun()}}.
 }
+\details{
+Survival and recruitment are constant across seasons by default. Supplying
+\code{beta_omega} (logit-scale) or \code{beta_gamma} (log-scale) instead makes the rate
+depend on a per-(site, interval) season covariate \code{z}: \verb{omega_\{i,t\} = plogis(beta_omega[1] + beta_omega[2] * z_\{i,t\})}, \verb{gamma_\{i,t\} = exp(beta_gamma[1] + beta_gamma[2] * z_\{i,t\})}. The covariate is returned as a
+\verb{[N x (T-1)]} matrix column \code{season_cov} of \code{data}, ready for
+\code{omega_formula = ~ season_cov}.
 }

@@ -1327,8 +1327,12 @@ tobs <- function(formula,
   # abundance arm via nested_laplace (BFGS over the forward marginal + CAR prior,
   # FD-Hessian observed info; tulpaObs#51). A temporal() AR1/RW1/RW2/iid field
   # composes WITH the areal field on the initial-abundance arm under nested_laplace
-  # via the shared areal-BFGS driver (a second latent block; tulpaObs#78). bym2 /
-  # season-varying dynamics / NUTS+temporal not yet wired (R/dyn_abun.R,
+  # via the shared areal-BFGS driver (a second latent block; tulpaObs#78).
+  # Season-varying survival / recruitment: a covariate on omega_formula /
+  # gamma_formula carried as a [n_sites x (T-1)] matrix column gives interval-
+  # indexed vital rates in the forward kernel, on every backend (laplace, NUTS,
+  # nested_laplace areal on the initial-abundance arm; R/dyn_abun.R,
+  # src/dyn_abun_kernel.h). NUTS+temporal not yet wired (R/dyn_abun.R,
   # R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
   dyn_abun = c("laplace", "nested_laplace", "nuts"),
   # cover: standalone vegetation-cover hurdle (presence Bernoulli + beta /

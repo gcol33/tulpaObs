@@ -6,25 +6,33 @@
 // Per site i, primary seasons t = 1..T, secondary visits j:
 //   N_{i,1} ~ Poisson(lambda_i),          log lambda_i = X_lambda beta_lambda
 //   N_{i,t} = S_{i,t} + G_{i,t}  (t >= 2):
-//     S_{i,t} ~ Binomial(N_{i,t-1}, omega_i)   apparent survival, logit omega
-//     G_{i,t} ~ Poisson(gamma_i)               recruitment (constant), log gamma
+//     S_{i,t} ~ Binomial(N_{i,t-1}, omega_{i,t-1})  apparent survival, logit omega
+//     G_{i,t} ~ Poisson(gamma_{i,t-1})              recruitment, log gamma
 //   y_{i,t,j} | N_{i,t} ~ Binomial(N_{i,t}, p_i),  logit p_i = X_p beta_p
 //
-// The latent abundance sequence is summed out by the forward algorithm with a
-// per-season transition matrix Tr(n -> n') = sum_s Binom(s|n,omega)
-// Poisson(n'-s|gamma) (the survival-binomial convolved with the recruitment-
-// Poisson). The marginal is not closed form (unlike the static N-mixture), so the
-// gradient is obtained by propagating d alpha_t(n) / d eta_k alongside the scaled
-// forward state for each of the four arms (eta_lambda, eta_p, eta_omega,
-// eta_gamma). Only the transition depends on (eta_omega, eta_gamma); only the
-// observation on eta_p; only the initial on eta_lambda. Per-season scaling keeps
-// the recursion numerically stable, and log L = sum_t log c_t with
+// The transition from season t-1 to t uses the survival and recruitment rates
+// of the INTERVAL (t-1): there are T-1 interval-specific eta_omega / eta_gamma
+// per site, so a season covariate on omega / gamma drives the dynamics. The
+// latent abundance sequence is summed out by the forward algorithm with the
+// per-interval transition matrix
+// Tr_{t-1}(n -> n') = sum_s Binom(s | n, omega_{t-1}) Poisson(n'-s | gamma_{t-1})
+// (the survival-binomial convolved with the recruitment-Poisson). The marginal
+// is not closed form (unlike the static N-mixture), so the gradient is obtained
+// by propagating d alpha_t(n) / d eta_k alongside the scaled forward state.
+// Only the transition depends on (eta_omega, eta_gamma); only the observation on
+// eta_p; only the initial on eta_lambda. Per-season scaling keeps the recursion
+// numerically stable, and log L = sum_t log c_t with
 // d log L / d eta_k = sum_t (d c_t / d eta_k) / c_t.
 //
-// All four arms are site-level here (one logit/log predictor per arm per site;
-// constant across a site's seasons), so every gradient is a scalar per site.
-// Poisson initial abundance and constant recruitment (the pcountOpen
-// "constant" dynamics); a missing visit (y < 0) is dropped from its season.
+// The eta_lambda / eta_p / eta_logr arms are site-level (one predictor per site),
+// so their gradients are scalars per site. The eta_omega / eta_gamma arms are
+// interval-level: a length-(T-1) gradient vector each, since the t-th interval's
+// rate enters only its own transition. The forward-mode pass therefore carries
+// T-1 derivative directions for omega and for gamma -- direction iv is "born" at
+// the transition that uses interval iv (from an * d Tr_iv) and then propagates
+// through every later transition / observation unchanged (linear operators),
+// exactly as the initial-only lambda direction does. Poisson initial abundance
+// and a missing visit (y < 0) is dropped from its season.
 //
 // References:
 //   Dail, D., Madsen, L. (2011) Biometrics 67: 577-587.
@@ -43,6 +51,9 @@ namespace tulpaObs {
 struct DynAbunSiteResult {
     double log_lik;
     double grad_eta_lambda, grad_eta_p, grad_eta_omega, grad_eta_gamma;
+    // Per-interval survival / recruitment scores, length T-1. grad_eta_omega /
+    // grad_eta_gamma are their sums (the scalar constant-rate score).
+    std::vector<double> grad_eta_omega_vec, grad_eta_gamma_vec;
     double grad_eta_logr;      // d log L / d log r (negbin initial; 0 under Poisson)
     double mean_N1;            // E[N_1 | y] (diagnostic / fitted)
 };
@@ -98,36 +109,56 @@ inline void da_binom_pmf_row(int n, double logom, double log1mom,
     }
 }
 
-// `use_nb` switches the season-1 initial abundance from Poisson(lambda) to
-// negative-binomial NB(mean = lambda, size = r), r = exp(eta_logr) -- the
-// pcountOpen "NB" mixture. Only the initial distribution changes; survival,
-// recruitment and detection are identical. The dispersion enters the marginal
-// solely through season 1, so its derivative `da_r` propagates exactly like
-// `da_l` (lambda), which is also initial-only. With `use_nb = false` the
-// Poisson path is byte-identical to before (da_r stays 0, grad_eta_logr = 0).
+// Core forward recursion with interval-indexed survival / recruitment rates:
+// `eta_omega` / `eta_gamma` point to length-(T-1) arrays, eta[iv] the rate for
+// the transition from season iv to iv+1. `use_nb` switches the season-1 initial
+// abundance from Poisson(lambda) to negative-binomial NB(mean = lambda, size =
+// r), r = exp(eta_logr) -- the pcountOpen "NB" mixture. Only the initial
+// distribution changes; survival, recruitment and detection are identical. The
+// dispersion enters the marginal solely through season 1, so its derivative
+// `da_r` propagates exactly like `da_l` (lambda), which is also initial-only.
+//
+// The forward-mode derivative state for omega / gamma is per-interval: da_o[iv]
+// and da_g[iv] are the length-S derivative of the (normalised) forward state in
+// the direction eta_omega[iv] / eta_gamma[iv]. Direction iv is zero until the
+// transition that uses interval iv, where the survivor / recruitment pmf carries
+// the only eta[iv] dependence; from then on it propagates through later
+// transitions and observations like any other forward derivative. res grads:
+// grad_eta_lambda / grad_eta_p / grad_eta_logr are scalars; grad_eta_omega_vec /
+// grad_eta_gamma_vec are length T-1 (and grad_eta_omega / grad_eta_gamma their
+// sums, the constant-rate scalar score). With T-1 == 1 the constant-rate path is
+// recovered (the per-interval vectors hold one element).
 inline DynAbunSiteResult compute_dyn_abun_site(
     const int* y, int T, int J, int K,
-    double eta_lambda, double eta_p, double eta_omega, double eta_gamma,
+    double eta_lambda, double eta_p,
+    const double* eta_omega, const double* eta_gamma,
     bool use_nb = false, double eta_logr = 0.0
 ) {
     const int S = K + 1;                       // number of abundance states
+    const int nIv = T - 1;                      // number of transition intervals
     const double lambda = std::exp(eta_lambda);
     const double p      = da_inv_logit(eta_p);
-    const double omega  = da_inv_logit(eta_omega);
-    const double gamma  = std::exp(eta_gamma);
     const double logp = std::log(p), log1mp = std::log1p(-p);
-    const double logom = std::log(omega), log1mom = std::log1p(-omega);
-    const double loggam = std::log(gamma);
     const double rr = use_nb ? std::exp(eta_logr) : 0.0;  // NB size
+
+    // Per-interval survival omega_iv, recruitment gamma_iv and their pmfs.
+    std::vector<double> omega(nIv), gamma(nIv), logom(nIv), log1mom(nIv), loggam(nIv);
+    std::vector<std::vector<double> > pois(nIv), dpois_g(nIv);
+    for (int iv = 0; iv < nIv; ++iv) {
+        omega[iv]  = da_inv_logit(eta_omega[iv]);
+        gamma[iv]  = std::exp(eta_gamma[iv]);
+        logom[iv]  = std::log(omega[iv]); log1mom[iv] = std::log1p(-omega[iv]);
+        loggam[iv] = std::log(gamma[iv]);
+        pois[iv].resize(S); dpois_g[iv].resize(S);
+        da_recruit_pmf(S, gamma[iv], loggam[iv], pois[iv]);
+        for (int g = 0; g < S; ++g) dpois_g[iv][g] = pois[iv][g] * ((double)g - gamma[iv]);
+    }
 
     DynAbunSiteResult res;
     res.grad_eta_lambda = res.grad_eta_p = res.grad_eta_omega = res.grad_eta_gamma = 0.0;
     res.grad_eta_logr = 0.0;
-
-    // Recruitment pmf and its eta_gamma derivative dpois_g = pois * (g - gamma).
-    std::vector<double> pois(S), dpois_g(S);
-    da_recruit_pmf(S, gamma, loggam, pois);
-    for (int g = 0; g < S; ++g) dpois_g[g] = pois[g] * ((double)g - gamma);
+    res.grad_eta_omega_vec.assign(nIv, 0.0);
+    res.grad_eta_gamma_vec.assign(nIv, 0.0);
 
     // Observation obs_t(n) = prod_j Binom(y_tj | n, p) and d/d eta_p =
     // obs * sum_j (y_tj - n p). Precompute per season: max y, sum y, count.
@@ -144,8 +175,11 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     };
 
     // Forward state and its derivatives (alpha normalised after each season). da_r
-    // is the dispersion derivative, carried alongside da_l (both initial-only).
-    std::vector<double> a(S), da_l(S), da_p(S), da_o(S), da_g(S), da_r(S);
+    // is the dispersion derivative, carried alongside da_l (both initial-only). The
+    // omega / gamma derivatives are per-interval: da_o[iv], da_g[iv] each length S.
+    std::vector<double> a(S), da_l(S), da_p(S), da_r(S);
+    std::vector<std::vector<double> > da_o(nIv), da_g(nIv);
+    for (int iv = 0; iv < nIv; ++iv) { da_o[iv].assign(S, 0.0); da_g[iv].assign(S, 0.0); }
     std::vector<double> obs(S), dobs(S);
 
     // --- Season 1: initial Poisson / NB (lambda[, r]) x observation. ---
@@ -178,7 +212,6 @@ inline DynAbunSiteResult compute_dyn_abun_site(
         da_l[n] = dpi_l * obs[n];
         da_p[n] = pi_n * dobs[n];
         da_r[n] = dpi_r * obs[n];
-        da_o[n] = 0.0; da_g[n] = 0.0;
         c1 += a[n]; dc_l += da_l[n]; dc_p += da_p[n]; dc_r += da_r[n];
     }
     if (!(c1 > 0.0)) {           // impossible history (e.g. counts above K)
@@ -193,59 +226,71 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     double mN1 = 0.0;
     for (int n = 0; n < S; ++n) mN1 += (double)n * (a[n] / c1);
     res.mean_N1 = mN1;
-    // Normalise alpha and its derivatives.
+    // Normalise alpha and its derivatives (omega/gamma directions still zero).
     for (int n = 0; n < S; ++n) {
         a[n]   /= c1;
         da_l[n] = (da_l[n] - a[n] * dc_l) / c1;
         da_p[n] = (da_p[n] - a[n] * dc_p) / c1;
         da_r[n] = (da_r[n] - a[n] * dc_r) / c1;
-        da_o[n] = 0.0; da_g[n] = 0.0;       // no omega/gamma dependence yet
     }
 
-    // --- Seasons 2..T: transition then observation. ---
-    std::vector<double> pre(S), dpre_l(S), dpre_p(S), dpre_o(S), dpre_g(S), dpre_r(S);
+    // --- Seasons 2..T: transition (interval iv = t-1) then observation. ---
+    std::vector<double> pre(S), dpre_l(S), dpre_p(S), dpre_r(S);
+    std::vector<std::vector<double> > dpre_o(nIv), dpre_g(nIv);
+    for (int iv = 0; iv < nIv; ++iv) { dpre_o[iv].resize(S); dpre_g[iv].resize(S); }
     std::vector<double> binom(S), dbinom(S);   // survivor pmf for the current row n
     for (int t = 1; t < T; ++t) {
+        const int iv = t - 1;                       // active interval for this step
+        const double om = omega[iv];
+        const std::vector<double>& pois_iv    = pois[iv];
+        const std::vector<double>& dpois_g_iv = dpois_g[iv];
         for (int n2 = 0; n2 < S; ++n2) {
-            pre[n2] = dpre_l[n2] = dpre_p[n2] = dpre_o[n2] = dpre_g[n2] = dpre_r[n2] = 0.0;
+            pre[n2] = dpre_l[n2] = dpre_p[n2] = dpre_r[n2] = 0.0;
+            for (int jv = 0; jv < nIv; ++jv) { dpre_o[jv][n2] = 0.0; dpre_g[jv][n2] = 0.0; }
         }
         for (int n = 0; n < S; ++n) {
-            if (a[n] == 0.0 && da_l[n] == 0.0 && da_p[n] == 0.0 &&
-                da_o[n] == 0.0 && da_g[n] == 0.0 && da_r[n] == 0.0) continue;
-            // Survivor pmf Binom(s | n, omega) and d/d eta_omega = binom*(s - n omega).
-            da_binom_pmf_row(n, logom, log1mom, binom);
-            for (int s = 0; s <= n; ++s) dbinom[s] = binom[s] * ((double)s - (double)n * omega);
-            const double an = a[n], dl = da_l[n], dp = da_p[n], dom = da_o[n], dg = da_g[n];
-            const double dr = da_r[n];
-            // Tr(n -> n') = sum_s binom[s] pois[n'-s]; scatter into pre.
+            // Survivor pmf Binom(s | n, omega_iv) and d/d eta_omega = binom*(s - n omega).
+            da_binom_pmf_row(n, logom[iv], log1mom[iv], binom);
+            for (int s = 0; s <= n; ++s) dbinom[s] = binom[s] * ((double)s - (double)n * om);
+            const double an = a[n], dl = da_l[n], dp = da_p[n], dr = da_r[n];
+            // Tr(n -> n') = sum_s binom[s] pois_iv[n'-s]; scatter into pre.
             for (int s = 0; s <= n; ++s) {
                 const double bs = binom[s], dbs = dbinom[s];
                 for (int gn = 0; gn + s < S; ++gn) {
                     const int n2 = s + gn;
-                    const double tr = bs * pois[gn];
+                    const double tr = bs * pois_iv[gn];
                     pre[n2]   += an * tr;
-                    // chain rule: d(alpha_{t-1}(n) Tr)/d eta_k. The transition
+                    // chain rule: d(alpha_{t-1}(n) Tr_iv)/d eta_k. The transition
                     // carries no lambda/r dependence, so those propagate the
                     // upstream derivative alone (like lambda).
                     dpre_l[n2] += dl * tr;
                     dpre_p[n2] += dp * tr;
-                    dpre_o[n2] += dom * tr + an * (dbs * pois[gn]);
-                    dpre_g[n2] += dg * tr + an * (bs * dpois_g[gn]);
                     dpre_r[n2] += dr * tr;
+                    // omega / gamma interval iv is born here (an * d Tr_iv); every
+                    // other interval propagates its upstream derivative through Tr_iv.
+                    dpre_o[iv][n2] += an * (dbs * pois_iv[gn]);
+                    dpre_g[iv][n2] += an * (bs * dpois_g_iv[gn]);
+                    for (int jv = 0; jv < nIv; ++jv) {
+                        if (da_o[jv][n] != 0.0) dpre_o[jv][n2] += da_o[jv][n] * tr;
+                        if (da_g[jv][n] != 0.0) dpre_g[jv][n2] += da_g[jv][n] * tr;
+                    }
                 }
             }
         }
         obs_season(t, obs, dobs);
-        double ct = 0.0, dct_l = 0.0, dct_p = 0.0, dct_o = 0.0, dct_g = 0.0, dct_r = 0.0;
+        double ct = 0.0, dct_l = 0.0, dct_p = 0.0, dct_r = 0.0;
+        std::vector<double> dct_o(nIv, 0.0), dct_g(nIv, 0.0);
         for (int n2 = 0; n2 < S; ++n2) {
             a[n2]   = pre[n2] * obs[n2];
             da_l[n2] = dpre_l[n2] * obs[n2];
             da_p[n2] = dpre_p[n2] * obs[n2] + pre[n2] * dobs[n2];
-            da_o[n2] = dpre_o[n2] * obs[n2];
-            da_g[n2] = dpre_g[n2] * obs[n2];
             da_r[n2] = dpre_r[n2] * obs[n2];
-            ct += a[n2]; dct_l += da_l[n2]; dct_p += da_p[n2];
-            dct_o += da_o[n2]; dct_g += da_g[n2]; dct_r += da_r[n2];
+            ct += a[n2]; dct_l += da_l[n2]; dct_p += da_p[n2]; dct_r += da_r[n2];
+            for (int jv = 0; jv < nIv; ++jv) {
+                da_o[jv][n2] = dpre_o[jv][n2] * obs[n2];
+                da_g[jv][n2] = dpre_g[jv][n2] * obs[n2];
+                dct_o[jv] += da_o[jv][n2]; dct_g[jv] += da_g[jv][n2];
+            }
         }
         if (!(ct > 0.0)) {
             res.log_lik = -std::numeric_limits<double>::infinity();
@@ -254,21 +299,45 @@ inline DynAbunSiteResult compute_dyn_abun_site(
         log_lik += std::log(ct);
         res.grad_eta_lambda += dct_l / ct;
         res.grad_eta_p      += dct_p / ct;
-        res.grad_eta_omega  += dct_o / ct;
-        res.grad_eta_gamma  += dct_g / ct;
         res.grad_eta_logr   += dct_r / ct;
+        for (int jv = 0; jv < nIv; ++jv) {
+            res.grad_eta_omega_vec[jv] += dct_o[jv] / ct;
+            res.grad_eta_gamma_vec[jv] += dct_g[jv] / ct;
+        }
         for (int n2 = 0; n2 < S; ++n2) {
             a[n2]   /= ct;
             da_l[n2] = (da_l[n2] - a[n2] * dct_l) / ct;
             da_p[n2] = (da_p[n2] - a[n2] * dct_p) / ct;
-            da_o[n2] = (da_o[n2] - a[n2] * dct_o) / ct;
-            da_g[n2] = (da_g[n2] - a[n2] * dct_g) / ct;
             da_r[n2] = (da_r[n2] - a[n2] * dct_r) / ct;
+            for (int jv = 0; jv < nIv; ++jv) {
+                da_o[jv][n2] = (da_o[jv][n2] - a[n2] * dct_o[jv]) / ct;
+                da_g[jv][n2] = (da_g[jv][n2] - a[n2] * dct_g[jv]) / ct;
+            }
         }
     }
 
+    for (int iv = 0; iv < nIv; ++iv) {
+        res.grad_eta_omega += res.grad_eta_omega_vec[iv];
+        res.grad_eta_gamma += res.grad_eta_gamma_vec[iv];
+    }
     res.log_lik = log_lik;
     return res;
+}
+
+// Constant-rate overload: one survival omega and recruitment gamma shared across
+// a site's T-1 transitions. Broadcasts the scalar to every interval and calls the
+// interval-indexed core; the scalar grad_eta_omega / grad_eta_gamma (the sum over
+// intervals, which is exactly d log L / d eta for a shared rate) is what callers
+// read, so this is byte-identical to the original constant-rate kernel.
+inline DynAbunSiteResult compute_dyn_abun_site(
+    const int* y, int T, int J, int K,
+    double eta_lambda, double eta_p, double eta_omega, double eta_gamma,
+    bool use_nb = false, double eta_logr = 0.0
+) {
+    const int nIv = T - 1;
+    std::vector<double> eo(nIv, eta_omega), eg(nIv, eta_gamma);
+    return compute_dyn_abun_site(y, T, J, K, eta_lambda, eta_p,
+                                 eo.data(), eg.data(), use_nb, eta_logr);
 }
 
 // Per-site conditional likelihood c(n1) = P(y_1, ..., y_T | N_1 = n1), the data
@@ -285,35 +354,42 @@ inline DynAbunSiteResult compute_dyn_abun_site(
 // make_site call (the detection / survival / recruitment predictors are held
 // fixed during the RE integration); each quadrature-node / per-group-Newton
 // evaluation is then a cheap dot product. c is obtained by the HMM backward
-// recursion b_t(n) = sum_{n'} Tr(n -> n') obs_{t+1}(n') b_{t+1}(n'), with
-// c(n1) = obs_1(n1) b_1(n1). Writes c_out[0..K].
+// recursion b_t(n) = sum_{n'} Tr_t(n -> n') obs_{t+1}(n') b_{t+1}(n'), with
+// c(n1) = obs_1(n1) b_1(n1). Tr_t uses the interval-t survival / recruitment, so
+// eta_omega / eta_gamma point to length-(T-1) arrays. Writes c_out[0..K].
 inline void compute_dyn_abun_init_weights(
     const int* y, int T, int J, int K,
-    double eta_p, double eta_omega, double eta_gamma, double* c_out
+    double eta_p, const double* eta_omega, const double* eta_gamma, double* c_out
 ) {
     const int S = K + 1;
+    const int nIv = T - 1;
     const double p     = da_inv_logit(eta_p);
-    const double omega = da_inv_logit(eta_omega);
-    const double gamma = std::exp(eta_gamma);
     const double logp = std::log(p), log1mp = std::log1p(-p);
-    const double logom = std::log(omega), log1mom = std::log1p(-omega);
-    const double loggam = std::log(gamma);
 
-    std::vector<double> pois(S);
-    da_recruit_pmf(S, gamma, loggam, pois);
+    std::vector<std::vector<double> > pois(nIv);
+    std::vector<double> logom(nIv), log1mom(nIv);
+    for (int iv = 0; iv < nIv; ++iv) {
+        const double omega = da_inv_logit(eta_omega[iv]);
+        const double gamma = std::exp(eta_gamma[iv]);
+        logom[iv] = std::log(omega); log1mom[iv] = std::log1p(-omega);
+        pois[iv].resize(S);
+        da_recruit_pmf(S, gamma, std::log(gamma), pois[iv]);
+    }
 
     // backward: b_{T-1}(n) = 1 (no future observations); for t = T-2 .. 0,
-    // b_t(n) = sum_{n'} Tr(n -> n') obs_{t+1}(n') b_{t+1}(n').
+    // b_t(n) = sum_{n'} Tr_t(n -> n') obs_{t+1}(n') b_{t+1}(n'). The transition
+    // from season t to t+1 uses interval t.
     std::vector<double> b(S, 1.0), bprev(S), obs(S), w(S), binom(S);
     for (int t = T - 2; t >= 0; --t) {
+        const std::vector<double>& pois_t = pois[t];
         da_obs_season_pmf(y, t + 1, J, S, logp, log1mp, obs);
         for (int np = 0; np < S; ++np) w[np] = obs[np] * b[np];
         for (int n = 0; n < S; ++n) {
-            da_binom_pmf_row(n, logom, log1mom, binom);
+            da_binom_pmf_row(n, logom[t], log1mom[t], binom);
             double acc = 0.0;
             for (int s = 0; s <= n; ++s) {
                 const double bs = binom[s];
-                for (int gn = 0; gn + s < S; ++gn) acc += bs * pois[gn] * w[s + gn];
+                for (int gn = 0; gn + s < S; ++gn) acc += bs * pois_t[gn] * w[s + gn];
             }
             bprev[n] = acc;
         }
@@ -321,6 +397,17 @@ inline void compute_dyn_abun_init_weights(
     }
     da_obs_season_pmf(y, 0, J, S, logp, log1mp, obs);
     for (int n = 0; n < S; ++n) c_out[n] = obs[n] * b[n];
+}
+
+// Constant-rate overload: one survival / recruitment shared across the site's
+// T-1 transitions (broadcasts to the interval-indexed core).
+inline void compute_dyn_abun_init_weights(
+    const int* y, int T, int J, int K,
+    double eta_p, double eta_omega, double eta_gamma, double* c_out
+) {
+    const int nIv = T - 1;
+    std::vector<double> eo(nIv, eta_omega), eg(nIv, eta_gamma);
+    compute_dyn_abun_init_weights(y, T, J, K, eta_p, eo.data(), eg.data(), c_out);
 }
 
 }  // namespace tulpaObs
