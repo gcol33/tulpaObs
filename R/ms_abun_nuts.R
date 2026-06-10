@@ -505,3 +505,179 @@
   }
   fit
 }
+
+
+# ---------------------------------------------------------------------------
+# Spatial community N-mixture NUTS (shared fixed-hyper areal field; tulpaObs#73)
+# ---------------------------------------------------------------------------
+
+# Sample the exact joint posterior of a spatial community N-mixture: the
+# community means, per-species deviations, community covariances, AND a SHARED
+# fixed-hyper non-centered proper-CAR field on the abundance arm, jointly. The
+# field precision tau Q(rho) is fixed at the nested-Laplace (#12 sfMsNMix)
+# posterior mean; the whitened raw ~ N(0, I) with f = Linv %*% raw is sampled by
+# the in-tree C++ FullGradFn (the shared-field block in src/ms_abun_nuts.cpp).
+# proper-CAR only -- its full-rank precision gives a well-conditioned non-centered
+# geometry; intrinsic icar/bym2 have a flat field-mean direction needing a
+# sum-to-zero reparameterisation, so they stay on nested_laplace (the same gate
+# the single-species abun() NUTS+areal path uses).
+.tobs_fit_ms_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
+                                           K_max = NULL, sigma.beta = 10,
+                                           sigma.logr = 1.5, n.iter = 1000L,
+                                           n.warmup = 1000L, n.chains = 1L,
+                                           max.treedepth = 10L, adapt.delta = 0.9,
+                                           seed = 1L, max.iter = 100L,
+                                           verbose = FALSE) {
+  .tobs_reject_weighted_spatial(spatial, "ms_abun NUTS abundance spatial")
+  if (!identical(spatial$type, "car_proper")) {
+    stop(sprintf(paste0(
+      "ms_abun() NUTS + areal spatial supports the proper-CAR field ",
+      "car_proper() (full-rank precision -> well-conditioned non-centered ",
+      "geometry); the intrinsic '%s' field has a flat field-mean direction ",
+      "needing a sum-to-zero reparameterisation for NUTS -- use ",
+      "method = \"nested_laplace\" for the icar()/bym2() areal community fit. ",
+      "(gcol33/tulpaObs#73)"), spatial$type), call. = FALSE)
+  }
+  if (!identical(mixture, "poisson")) {
+    stop("ms_abun() NUTS + areal spatial is Poisson-only; negative-binomial ",
+         "areal community N-mixture uses method = \"nested_laplace\".",
+         call. = FALSE)
+  }
+  n_sites   <- model$n_sites
+  n_species <- model$n_species
+  if ((spatial$n_units %||% n_sites) != n_sites) {
+    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
+                 "spatial unit per site is required for ms_abun NUTS.",
+                 spatial$n_units, n_sites), call. = FALSE)
+  }
+  X_lambda <- model$X_processes[[1L]]
+  p_lam <- ncol(X_lambda); p_p <- model$process_info[[2L]]$p
+  lf <- .tobs_ms_nmix_longform(model)
+  K_warm <- if (is.null(K_max)) max(lf$y) + 100L else as.integer(K_max)
+  lay  <- .tobs_ms_abun_nuts_layout(p_lam, p_p, n_species, FALSE)
+  pri  <- .tobs_ms_abun_nuts_priors()
+  csr  <- .nmix_spatial_csr(spatial)
+
+  # Warm the field precision (tau, rho) + community means / covariances / field
+  # from the nested-Laplace community-spatial (sfMsNMix) fit (#12).
+  nl <- nmix_community_laplace_car_proper(
+    lf = lf, X_lambda = X_lambda, n_sites = n_sites, n_species = n_species,
+    csr = csr, n_spatial = n_sites, graph = spatial$graph, mixture = "P",
+    K_max = K_warm, max_iter = as.integer(max.iter), verbose = FALSE)
+  tau <- max(nl$hyper$tau[["mean"]], 1e-3)
+  rho <- min(max(nl$hyper$rho[["mean"]], 0.01), 0.99)
+
+  # Fixed field precision tau Q(rho) -> Linv = L^{-1} (f = Linv %*% raw).
+  Q  <- .areal_Q(as.matrix(spatial$graph), rho)
+  Qr <- tau * Q + diag(1e-4 * tau, n_sites)
+  L  <- tryCatch(chol(Qr), error = function(e) NULL)
+  if (is.null(L)) stop("ms_abun NUTS spatial: field precision not PD.",
+                       call. = FALSE)
+  Linv <- backsolve(L, diag(n_sites))
+
+  # K_max for the NUTS marginal (data-driven, as the non-spatial path).
+  if (!is.null(K_max)) {
+    K_max <- K_warm
+  } else {
+    bl <- as.matrix(nl$b_lambda)
+    lam_max <- 0
+    for (s in seq_len(n_species))
+      lam_max <- max(lam_max, exp(as.numeric(
+        X_lambda %*% (nl$mu_lambda + bl[s, ])) + max(nl$spatial_field)))
+    K_tail <- as.integer(ceiling(lam_max + 10 * sqrt(lam_max))) + 10L
+    K_max  <- min(K_warm, max(max(lf$y) + 5L, K_tail))
+  }
+  K_max <- as.integer(K_max)
+
+  # Warm the per-species block from the nested-Laplace community fit; pack raw0 so
+  # f = Linv %*% raw0 returns the warm field (raw0 = L %*% f_warm).
+  warm <- list(mu_lambda = nl$mu_lambda, mu_p = nl$mu_p,
+               Sigma_lambda = nl$Sigma_lambda, Sigma_p = nl$Sigma_p,
+               b_lambda = nl$b_lambda, b_p = nl$b_p)
+  theta0_base <- .tobs_ms_abun_nuts_pack_init(warm, lay)
+  raw0 <- as.numeric(L %*% nl$spatial_field)
+  theta0 <- c(theta0_base, raw0)
+
+  spec <- list(y = as.integer(lf$y), site_idx = as.integer(lf$site_idx),
+               species_idx = as.integer(lf$species_idx),
+               X_lambda = X_lambda, X_p = lf$X_p,
+               n_sites = n_sites, n_species = n_species, K_max = K_max,
+               is_nb = FALSE, n_field_units = n_sites,
+               field_map = seq_len(n_sites), field_Linv = Linv)
+  inv_metric <- .tobs_ms_abun_nuts_metric(spec, theta0, pri, sigma.beta,
+                                          sigma.logr)
+
+  run_chain <- function(ch) cpp_ms_abun_nuts(
+    spec, theta0 = theta0, pri = pri, sigma_beta = sigma.beta,
+    sigma_logr = sigma.logr, inv_metric = inv_metric,
+    n_iter = as.integer(n.iter + n.warmup), n_warmup = as.integer(n.warmup),
+    max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
+    seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
+
+  n_chains <- as.integer(n.chains); rhat_ess <- NULL
+  if (n_chains > 1L) {
+    rcs    <- lapply(seq_len(n_chains), run_chain)
+    chains <- lapply(rcs, `[[`, "draws")
+    rhat_ess <- .ms_ocs_rhat_ess(chains)
+    draws  <- do.call(rbind, chains)
+    accept <- unlist(lapply(rcs, `[[`, "accept_prob"))
+    divergent <- unlist(lapply(rcs, `[[`, "divergent"))
+    treedepth <- as.integer(unlist(lapply(rcs, `[[`, "treedepth")))
+    epsilon   <- mean(vapply(rcs, `[[`, 0, "epsilon"))
+  } else {
+    res <- run_chain(1L)
+    draws <- res$draws; accept <- res$accept_prob
+    divergent <- res$divergent; treedepth <- as.integer(res$treedepth)
+    epsilon <- res$epsilon
+  }
+
+  # Reconstruct the community block (drop the trailing raw columns).
+  par     <- colMeans(draws)
+  mu_hat  <- par[lay$mu]
+  vcov_mu <- stats::cov(draws[, lay$mu, drop = FALSE])
+  sig_mean <- function(cols, Pa) {
+    acc <- matrix(0, Pa, Pa)
+    for (i in seq_len(nrow(draws)))
+      acc <- acc + tcrossprod(.ms_ocs_chol_unpack(draws[i, cols], Pa))
+    acc <- acc / nrow(draws); (acc + t(acc)) / 2
+  }
+  Sigma_lambda <- sig_mean(lay$chol_lam, lay$p_lam)
+  Sigma_p      <- sig_mean(lay$chol_p,   lay$p_p)
+  B_bar <- matrix(0, n_species, lay$P)
+  for (i in seq_len(nrow(draws)))
+    B_bar <- B_bar + .tobs_ms_abun_nuts_b_from_z(draws[i, ], lay)
+  B_bar <- B_bar / nrow(draws)
+
+  # Field posterior mean f = Linv %*% mean(raw).
+  raw_idx  <- lay$total + seq_len(n_sites)
+  field_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+
+  margs   <- .tobs_ms_abun_nuts_marginals(lf, X_lambda, n_sites, "P", K_max)
+  ll_mean <- .tobs_ms_abun_nuts_data_loglik(par[seq_len(lay$total)], margs, lay)
+
+  raw <- list(
+    mu_lambda = mu_hat[lay$lambda], mu_p = mu_hat[lay$p],
+    vcov = vcov_mu, Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
+    b_lambda = B_bar[, lay$lambda, drop = FALSE],
+    b_p = B_bar[, lay$p, drop = FALSE],
+    log_lik = ll_mean, converged = TRUE, n_iter = NA_integer_,
+    optimizer = "nuts", n_quad = 1L, lkj_eta = 1.5)
+
+  fit <- build_ms_nmix_fit(raw, model, mixture = "poisson", spatial = spatial)
+  fit$method <- "nuts"
+  fit$log_prob <- rep(ll_mean, nrow(draws))
+  fit$spatial_field <- field_mean
+  fit$nuts <- list(
+    draws = draws, layout = lay, n_field_units = n_sites,
+    accept_prob = accept, divergent = divergent, treedepth = treedepth,
+    epsilon = epsilon, n_chains = n_chains, divergent_total = sum(divergent),
+    is_nb = FALSE, K_max = K_max, field_tau = tau, field_rho = rho,
+    sigma_beta = sigma.beta, sigma_logr = sigma.logr)
+  if (!is.null(rhat_ess)) {
+    fit$nuts$rhat     <- rhat_ess$rhat
+    fit$nuts$ess      <- rhat_ess$ess
+    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
+    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
+  }
+  fit
+}

@@ -132,7 +132,8 @@ single source of truth for which `method` each family supports; `tobs()` errors 
 pointer, no silent downgrade. `nested_laplace` = occu/int_occu/dyn_occu + cover;
 `*_sla` on nested = occu + cover only; cover hurdle has no
 NUTS/`laplace_gibbs`/`laplace_mi`. `abun` = laplace + nuts (non-spatial) +
-nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field).
+nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field) +
+nuts (non-spatial #14, and shared fixed-hyper proper-CAR field #73).
 `occu_multiscale_cover` = nested_laplace ONLY. Community occupancy
 `ms_occu`/`ms_dyn_occu`/`ms_int_occu` = laplace ONLY (shared community Laplace-EM,
 `R/community_em.R`; per-species coef RE, per-arm community covariance).
@@ -285,7 +286,15 @@ S3).
   reparam + OpenMP at S=6). In-tree C++ FullGradFn parallelises per-species loop (OpenMP,
   deterministic reduction -> byte-exact vs R oracle `.tobs_ms_abun_nuts_logpost`); chol
   grad `chol_data_grad_noncentered` (`community_chol.h`, shared w/ #67). Warm-started at
-  Laplace-EM mode + diagonal metric. Pois + NB, non-spatial. `test-ms-abun-nuts.R`.
+  Laplace-EM mode + diagonal metric. Pois + NB, non-spatial. NUTS + areal (#73,
+  car_proper only, Pois): the same per-species community sampler + a SHARED fixed-hyper
+  non-centered proper-CAR field on abundance via an OPTIONAL field block in the eval
+  (`n_field_units`/`field_map`/`field_Linv`; `f=Linv raw`, `raw~N(0,I)`, field precision
+  `tau Q(rho)` fixed at the #12 nested-Laplace estimate). Field is a shared `eta_lambda`
+  offset; its score sums `grad_eta_lambda` over species per unit -> `Linv' g_f - raw`.
+  Field-off path byte-identical to non-spatial; full grad FD-validated.
+  `.tobs_fit_ms_abun_nuts_spatial` warms from `nmix_community_laplace_car_proper` (#12).
+  `test-ms-abun-nuts.R`. Design note `dev_notes/design_73.md`.
 
 #### Areal-spatial community N-mixture (`ms_abun()` + shared field; sfMsNMix)
 
@@ -353,7 +362,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | N-mixture (Pois/NB) | Yes | Yes | `abun(mixture=)`; in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs. NUTS (#41); NUTS + areal proper-CAR (#51, fixed-hyper non-centered; icar/bym2 NUTS gated) |
 | N-mixture + areal | n-L | — | `abun()`+icar/bym2/car_proper; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
 | Community N-mixture | Yes | Yes | `ms_abun()` (msNMix); per-species coef RE, in-tree Laplace-EM (`nmix_laplace_re`) -> `NMixCommunityOracle` AGHQ, Schur SEs; Pois + negbin. NUTS (#14) |
-| Community N-mixture + areal | n-L | — | `ms_abun()`+icar/bym2/car_proper (sfMsNMix; #12); shared field + per-species RE; `nmix_community_spatial.cpp`; Pois/NB. NUTS pending |
+| Community N-mixture + areal | n-L | Yes | `ms_abun()`+icar/bym2/car_proper (sfMsNMix; #12); shared field + per-species RE; `nmix_community_spatial.cpp`; Pois/NB. NUTS (#73, car_proper only): the #14 non-centered community sampler + a SHARED fixed-hyper non-centered proper-CAR field on abundance (tau Q(rho) fixed at the #12 nested-Laplace estimate, raw ~ N(0,I), f=Linv raw; optional field block in `src/ms_abun_nuts.cpp`, FD-validated, field-off byte-identical to #14). 0 divergences, field cor ~0.97; Pois only. icar/bym2 NUTS gated to n-L |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (#13); non-species grouping; Pois/NB; `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm |
 | Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal); areal field |

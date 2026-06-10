@@ -755,13 +755,35 @@ tobs <- function(formula,
   # wired on the sampler.
   if (identical(engine, "nuts")) {
     structs <- .tobs_structures_from_model(model)
-    if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
-        !is.null(structs$re) || !is.null(structs$svc) || !is.null(structs$latent)) {
-      stop("method = \"nuts\" for ms_abun() is the non-spatial community ",
-           "N-mixture sampler; a spatial / temporal / random-effect term is not ",
-           "yet wired on the sampler. Use method = \"nested_laplace\" for a ",
-           "shared areal field (icar()/bym2()/car_proper()), or ",
-           "method = \"laplace\".", call. = FALSE)
+    if (!is.null(structs$temporal) || !is.null(structs$re) ||
+        !is.null(structs$svc) || !is.null(structs$latent)) {
+      stop("method = \"nuts\" for ms_abun() is the community N-mixture sampler ",
+           "(optionally with a shared areal field on the abundance arm); a ",
+           "temporal / random-effect / svc / latent term is not yet wired on the ",
+           "sampler. Use method = \"laplace\".", call. = FALSE)
+    }
+    # A shared areal field on the abundance formula joins the community sampler as
+    # a fixed-hyper non-centered field (proper-CAR only; tulpaObs#73). icar/bym2
+    # stay on nested_laplace (their intrinsic field needs a sum-to-zero reparam).
+    if (!is.null(structs$spatial)) {
+      if (isTRUE(structs$spatial$shared[2L])) {
+        stop("ms_abun() areal field sits on the abundance arm only; a field on ",
+             "the detection formula is not supported.", call. = FALSE)
+      }
+      return(.tobs_fit_ms_abun_nuts_spatial(
+        model, spatial = structs$spatial,
+        mixture       = family$params$mixture %||% "poisson",
+        K_max         = family$params$K_max,
+        sigma.beta    = control[["sigma.beta"]] %||% 10,
+        sigma.logr    = 1.5,
+        n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
+        n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
+        n.chains      = as.integer(control[["n.chains"]] %||% 1L),
+        max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+        adapt.delta   = control[["adapt.delta"]] %||% 0.9,
+        seed          = as.integer(control[["seed"]] %||% 1L),
+        max.iter      = as.integer(control[["max.iter"]] %||% 100L),
+        verbose       = isTRUE(control[["verbose"]])))
     }
     return(.tobs_fit_ms_abun_nuts(
       model, mixture = family$params$mixture %||% "poisson",
@@ -1213,8 +1235,10 @@ tobs <- function(formula,
   # site) marginal via the in-tree C++ FullGradFn (R/ms_abun_nuts.R,
   # src/ms_abun_nuts.cpp) -- samples the community means, per-species deviations,
   # AND community covariances jointly; Poisson or per-species negbin (log_r_s
-  # sampled), warm-started at the Laplace-EM mode (gcol33/tulpaObs#14). Spatial /
-  # RE NUTS not yet wired.
+  # sampled), warm-started at the Laplace-EM mode (gcol33/tulpaObs#14). nuts +
+  # a shared areal field (car_proper, Poisson) joins a fixed-hyper non-centered
+  # proper-CAR field on the abundance arm (gcol33/tulpaObs#73); icar/bym2 + temporal
+  # / RE NUTS not yet wired.
   ms_abun  = c("laplace", "nested_laplace", "nuts"),
   # removal: sequential-depletion removal sampling. Non-spatial closed-form
   # marginal Laplace (Poisson or negbin; the depleting-binomial product summed

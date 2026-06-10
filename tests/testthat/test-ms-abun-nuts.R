@@ -211,18 +211,112 @@ test_that("ms_abun NUTS S3 methods + WAIC work", {
 })
 
 
-# --- (7) gates -------------------------------------------------------------
+# --- (7) shared areal field (proper-CAR) recovery (tulpaObs#73) -------------
 
-test_that("ms_abun NUTS rejects a spatial term with a pointer", {
+.msan_grid_graph <- function(side) {
+  N <- side * side; A <- matrix(0L, N, N)
+  idx <- function(r, c) (r - 1L) * side + c
+  for (r in seq_len(side)) for (c in seq_len(side)) {
+    i <- idx(r, c)
+    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
+    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
+  }
+  A
+}
+
+# The shared-field block leaves the non-spatial eval byte-identical at raw = 0.
+test_that("ms_abun NUTS shared-field block is a no-op at raw = 0", {
+  skip_on_cran()
+  P <- .msan_pieces("poisson")
+  side <- 6L; A <- .msan_grid_graph(side)   # n_sites = 36 != the fixture's 30
+  # Build a matched-size field for the fixture's n_sites by mapping each site to
+  # its own unit and an identity Linv (so f = raw); at raw = 0 there is no field.
+  N <- P$spec$n_sites
+  spec_f <- P$spec
+  spec_f$n_field_units <- N
+  spec_f$field_map <- seq_len(N)
+  spec_f$field_Linv <- diag(N)
+  set.seed(9)
+  theta <- P$theta0 + stats::rnorm(length(P$theta0), 0, 0.03)
+  r_off <- cpp_ms_abun_nuts_joint_logpost(P$spec, theta, P$pri, 10, 1.5)
+  r_on  <- cpp_ms_abun_nuts_joint_logpost(spec_f, c(theta, numeric(N)), P$pri, 10, 1.5)
+  expect_lt(abs(r_off$lp - r_on$lp), 1e-9)
+  expect_lt(max(abs(r_off$grad - r_on$grad[seq_along(r_off$grad)])), 1e-9)
+})
+
+# Full-vector gradient (incl. the field raw block) vs finite differences.
+test_that("ms_abun NUTS shared-field gradient matches finite differences", {
+  skip_on_cran()
+  P <- .msan_pieces("poisson")
+  N <- P$spec$n_sites
+  side <- 6L
+  # a proper-CAR Linv on a path graph over the fixture's sites (full-rank).
+  A <- matrix(0L, N, N)
+  for (i in seq_len(N - 1L)) { A[i, i + 1L] <- 1L; A[i + 1L, i] <- 1L }
+  Q <- diag(rowSums(A)) - 0.7 * A
+  Qr <- 1.5 * Q + diag(1e-4 * 1.5, N)
+  Linv <- backsolve(chol(Qr), diag(N))
+  spec_f <- P$spec
+  spec_f$n_field_units <- N; spec_f$field_map <- seq_len(N); spec_f$field_Linv <- Linv
+  set.seed(4)
+  theta <- c(P$theta0, stats::rnorm(N, 0, 0.2)) +
+    c(stats::rnorm(length(P$theta0), 0, 0.02), rep(0, N))
+  res <- cpp_ms_abun_nuts_joint_logpost(spec_f, theta, P$pri, 10, 1.5)
+  f_lp <- function(th) cpp_ms_abun_nuts_joint_logpost(spec_f, th, P$pri, 10, 1.5)$lp
+  num <- .msan_fd_grad(f_lp, theta)
+  expect_lt(max(abs(res$grad - num)), 1e-5)
+})
+
+test_that("ms_abun NUTS + car_proper() recovers community means + the field", {
+  skip_on_cran()
+  skip_if_fast()
+  side <- 7L; N <- side * side; J <- 4L; nsp <- 8L
+  set.seed(7)
+  A <- .msan_grid_graph(side)
+  coord <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f_true <- 0.6 * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
+  f_true <- f_true - mean(f_true)
+  data <- data.frame(abund_cov1 = stats::rnorm(N), det_cov1 = stats::rnorm(N))
+  X_lam <- stats::model.matrix(~ abund_cov1, data)
+  X_p   <- stats::model.matrix(~ det_cov1, data)
+  mu_lam <- c(log(4), 0.4); mu_p <- c(0.3, -0.3)
+  beta_lam <- cbind(stats::rnorm(nsp, mu_lam[1], 0.4), stats::rnorm(nsp, mu_lam[2], 0.3))
+  beta_p   <- cbind(stats::rnorm(nsp, mu_p[1], 0.4), stats::rnorm(nsp, mu_p[2], 0.3))
+  y <- array(0L, dim = c(N, J, nsp))
+  for (s in seq_len(nsp)) {
+    lam <- exp(as.numeric(X_lam %*% beta_lam[s, ]) + f_true)
+    Ni <- stats::rpois(N, lam); p <- stats::plogis(as.numeric(X_p %*% beta_p[s, ]))
+    for (i in seq_len(N)) y[i, , s] <- stats::rbinom(J, Ni[i], p[i])
+  }
+  sp <- paste0("sp", seq_len(nsp))
+  fit <- tobs(~ abund_cov1 + car_proper(graph = A), data = data, y = y,
+              family = ms_abun(), detection = ~ det_cov1, species = sp,
+              method = "nuts",
+              control = list(n.iter = 300L, n.warmup = 300L, n.chains = 2L,
+                             seed = 1L, verbose = FALSE))
+  expect_equal(fit$method, "nuts")
+  expect_lt(fit$nuts$divergent_total, 0.05 * nrow(fit$nuts$draws))
+  expect_false(is.null(fit$spatial_field))
+
+  truth <- c(mu_lam, mu_p)
+  m <- fit$means[seq_along(truth)]; s <- fit$sds[seq_along(truth)]
+  expect_true(all(abs(m - truth) / s < 3.0))
+  expect_gt(cor(fit$spatial_field, f_true), 0.80)
+})
+
+
+# --- (8) gates -------------------------------------------------------------
+
+test_that("ms_abun NUTS gates: icar/bym2 field -> nested_laplace pointer", {
   skip_on_cran()
   set.seed(5)
-  N <- 16L
-  adj <- matrix(0L, N, N)
-  for (i in seq_len(N - 1L)) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
+  side <- 4L; N <- side * side
+  adj <- .msan_grid_graph(side)
   sim <- simulate_ms_abun(n_species = 4, N = N, J = 3, seed = 5)
+  # An intrinsic icar field on the abundance arm points to nested_laplace.
   expect_error(
     tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
          family = ms_abun(), detection = ~ det_cov1, species = sim$species,
          method = "nuts", control = list(verbose = FALSE)),
-    "non-spatial")
+    "proper-CAR")
 })

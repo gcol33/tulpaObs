@@ -81,6 +81,16 @@ struct MsNmixNutsData {
     // compute_nmix_site_cached with the precomputed cache.
     std::vector<std::vector<NMixSiteCache>> cache;      // [s][i]
 
+    // Optional fixed-hyper areal field SHARED across species on the abundance
+    // arm (tulpaObs#73): the non-centered Gaussian field f = Linv %*% raw,
+    // raw ~ N(0, I), with Linv the inverse Cholesky of the FIXED field precision
+    // tau Q(rho) (the nested-Laplace #12 estimate). eta_lambda_{s,i} += f[u(i)]
+    // for every species. The flat vector grows by `raw` (length n_field_units)
+    // appended after the chol blocks.
+    int n_field_units = 0, o_raw = 0;
+    std::vector<int> field_map;       // 0-based unit per site (length n_sites)
+    std::vector<double> Linv;         // row-major n_field_units x n_field_units
+
     // Packed-coordinate layout (mirrors .tobs_ms_abun_nuts_layout).
     int P_tot = 0, q_lam = 0, q_p = 0, q_logr = 0, total = 0;
     int mu_off = 0, b_off = 0, chol_lam_off = 0, chol_p_off = 0, chol_logr_off = 0;
@@ -96,7 +106,8 @@ inline void ms_abun_nuts_layout(MsNmixNutsData& d) {
     d.chol_lam_off  = d.P_tot + d.n_species * d.P_tot;
     d.chol_p_off    = d.chol_lam_off + d.q_lam;
     d.chol_logr_off = d.chol_p_off + d.q_p;
-    d.total   = d.chol_logr_off + d.q_logr;
+    d.o_raw   = d.chol_logr_off + d.q_logr;
+    d.total   = d.o_raw + d.n_field_units;
 }
 
 inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
@@ -114,6 +125,29 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
     d.p_lam     = d.X_lambda.ncol();
     d.p_p       = d.X_p.ncol();
     d.y.assign(y.begin(), y.end());
+    // Optional shared areal field block (tulpaObs#73).
+    if (spec.containsElementNamed("n_field_units")) {
+        d.n_field_units = Rcpp::as<int>(spec["n_field_units"]);
+        if (d.n_field_units > 0) {
+            IntegerVector fmap = spec["field_map"];     // 1-based unit per site
+            if ((int) fmap.size() != d.n_sites)
+                Rcpp::stop("field_map must have one entry per site.");
+            d.field_map.assign(d.n_sites, 0);
+            for (int i = 0; i < d.n_sites; ++i) {
+                const int u = fmap[i] - 1;
+                if (u < 0 || u >= d.n_field_units)
+                    Rcpp::stop("field_map out of range [1, n_field_units].");
+                d.field_map[i] = u;
+            }
+            NumericMatrix Li = Rcpp::as<NumericMatrix>(spec["field_Linv"]);
+            if (Li.nrow() != d.n_field_units || Li.ncol() != d.n_field_units)
+                Rcpp::stop("field_Linv must be n_field_units x n_field_units.");
+            d.Linv.assign((std::size_t) d.n_field_units * d.n_field_units, 0.0);
+            for (int a = 0; a < d.n_field_units; ++a)
+                for (int b = 0; b < d.n_field_units; ++b)
+                    d.Linv[(std::size_t) a * d.n_field_units + b] = Li(a, b);
+        }
+    }
     d.obs.assign(d.n_species,
                  std::vector<std::vector<int>>(d.n_sites, std::vector<int>()));
     for (int o = 0; o < d.n_obs; ++o) {
@@ -171,6 +205,23 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
                         A_p((std::size_t) p_p * p_p, 0.0);
     double A_lr = 0.0;
 
+    // Shared areal field (tulpaObs#73): reconstruct f = Linv %*% raw once. Every
+    // species' eta_lambda gains the per-site offset f[field_map[site]]; the field
+    // score accumulates grad_eta_lambda over species (and over the sites mapping
+    // to each unit), then maps back to raw via Linv'.
+    const int NF = d.n_field_units;
+    std::vector<double> f_field(NF, 0.0);
+    if (NF > 0) {
+        const double* raw = th + d.o_raw;
+        for (int a = 0; a < NF; ++a) {
+            double v = 0.0;
+            for (int b = 0; b < NF; ++b)
+                v += d.Linv[(std::size_t) a * NF + b] * raw[b];
+            f_field[a] = v;
+        }
+    }
+    std::vector<double> gf_s((std::size_t) (NF > 0 ? S : 0) * NF, 0.0);
+
     // ---- data log-lik + inner gradient (per species, per site) ----
     //
     // The per-species work is independent: each species reconstructs b = C z,
@@ -217,6 +268,7 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
             double eta_lambda = 0.0;
             for (int k = 0; k < p_lam; ++k)
                 eta_lambda += d.X_lambda(i, k) * (mu[k] + b_lam[k]);
+            if (NF > 0) eta_lambda += f_field[d.field_map[i]];
             eta_p_site.resize(J);
             for (int jj = 0; jj < J; ++jj) {
                 const int o = obs[jj];
@@ -234,6 +286,9 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
                 gmu_loc[k] += gx;
                 gbl[k]     += gx;
             }
+            // shared field: this site's grad_eta_lambda accumulates onto its unit.
+            if (NF > 0)
+                gf_s[(std::size_t) s * NF + d.field_map[i]] += res.grad_eta_lambda;
             // detection arm: mu_p and b_p_s share the per-visit grad_eta_p
             for (int jj = 0; jj < J; ++jj) {
                 const int o = obs[jj];
@@ -292,6 +347,25 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
         const double zz = z[j];
         g_z[j] -= zz;
         lp     += -0.5 * zz * zz;
+    }
+
+    // ---- shared field: reduce per-species field scores (unit order), map to raw
+    //      via Linv', add the whitened-raw N(0, I) prior. ----
+    if (NF > 0) {
+        std::vector<double> g_f(NF, 0.0);
+        for (int s = 0; s < S; ++s)
+            for (int u = 0; u < NF; ++u)
+                g_f[u] += gf_s[(std::size_t) s * NF + u];
+        const double* raw = th + d.o_raw;
+        double* g_raw = g + d.o_raw;
+        // d lp / d raw_b = sum_a Linv[a, b] g_f[a] - raw_b.
+        for (int b = 0; b < NF; ++b) {
+            double v = 0.0;
+            for (int a = 0; a < NF; ++a)
+                v += d.Linv[(std::size_t) a * NF + b] * g_f[a];
+            g_raw[b] += v - raw[b];
+            lp += -0.5 * raw[b] * raw[b];
+        }
     }
 
     // ---- chol coords: data gradient (via b = C z) + coordinate hyperprior ----
