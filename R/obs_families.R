@@ -339,6 +339,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
+      "rho.car.grid",
       "phi.grid.pos", "sigma.u.grid", "n.quad",
       "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse", "integration",

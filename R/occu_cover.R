@@ -571,6 +571,61 @@
   pos_formula <- dots$positive
   if (is.null(pos_formula)) pos_formula <- detection
 
+  # Spatial NUTS path (gcol33/tulpaObs#74): a car_proper() term on the psi formula
+  # under method = "nuts" samples a FIXED-HYPER non-centered coupled proper-CAR
+  # field jointly with the coefficient marginal (rather than grid-integrating it,
+  # as nested_laplace does). Detected separately from the grid-integrated
+  # icar/bym2 fields below, because the proper-CAR field is a NUTS-only structure.
+  if (identical(engine, "nuts")) {
+    nuts_sp <- .occu_cover_nuts_spatial_term(formula, data)
+    if (!is.null(nuts_sp)) {
+      .occu_cover_reject_structured(detection,   "detection")
+      .occu_cover_reject_structured(pos_formula, "positive cover")
+      vd_det  <- .normalize_visits(visits, detection,
+                                   n_sites = nrow(y), max_visits = ncol(y))
+      vd_pos  <- .normalize_visits(visits, pos_formula,
+                                   n_sites = nrow(y), max_visits = ncol(y))
+      model_sp <- .tobs_build_occu_cover(
+        occ_formula = nuts_sp$fe, det_formula = vd_det$det_formula,
+        pos_formula = vd_pos$det_formula, data = data, y = y,
+        y_pos = dots$y_pos, positive = family$params$positive,
+        det_visit_formula = vd_det$det_visit_formula,
+        det_visit_data    = vd_det$visits,
+        pos_visit_formula = vd_pos$det_visit_formula,
+        pos_visit_data    = vd_pos$visits)
+      model_sp$cover_aggregate <- "none"
+      # Resolve the site -> field-node map (group_var lets sites > cells).
+      sp_graph <- nuts_sp$spatial$graph
+      n_cells_f <- nrow(sp_graph)
+      gv <- nuts_sp$group_var
+      if (!is.null(gv)) {
+        if (!gv %in% names(data))
+          stop(sprintf("occu_cover() group_var '%s' is not a column of data.",
+                       gv), call. = FALSE)
+        site_cell <- as.integer(data[[gv]])
+        if (length(site_cell) != model_sp$n_sites || anyNA(site_cell) ||
+            min(site_cell) < 1L || max(site_cell) > n_cells_f)
+          stop(sprintf(paste0(
+            "occu_cover() group_var '%s' must be an integer cell index in ",
+            "1..%d, one per site (%d sites)."), gv, n_cells_f, model_sp$n_sites),
+            call. = FALSE)
+      } else {
+        if (model_sp$n_sites != n_cells_f)
+          stop(sprintf(paste0(
+            "occu_cover() NUTS spatial: %d sites but the graph has %d nodes. ",
+            "Map sites to cells with group_var on the car_proper() term, or ",
+            "match the site count to the graph."),
+            model_sp$n_sites, n_cells_f), call. = FALSE)
+        site_cell <- seq_len(model_sp$n_sites)
+      }
+      model_sp$site_cell <- site_cell
+      model_sp$n_cells   <- n_cells_f
+      return(do.call(.tobs_fit_occu_cover_nuts_spatial,
+                     c(list(model = model_sp, spatial = nuts_sp$spatial,
+                            priors = priors), control)))
+    }
+  }
+
   # Detect the coupled spatial field(s) on the psi formula. The spatial path is
   # the joint nested-Laplace engine (shared field(s) across the psi and cover
   # arms); the non-spatial path is plain Laplace on the exact two-state
@@ -627,11 +682,16 @@
          "\"nested_laplace\" for the spatial v2 path.", call. = FALSE)
   }
   if (has_spatial && engine == "nuts") {
-    stop("occu_cover() with method = \"nuts\" is the non-spatial sampler; a ",
-         "spatial term (icar/bym2) on the psi formula needs method = ",
-         "\"nested_laplace\" (the shared coupled field is grid-integrated). A ",
-         "spatial occu_cover NUTS path is not yet wired; for a sampled shared ",
-         "field use the spatial-factor community sampler ms_occu_cover() + icar().",
+    # A car_proper() term would already have routed to the spatial NUTS fitter
+    # above; reaching here means an intrinsic icar()/bym2() field, whose flat
+    # field-mean direction needs the grid-integrated nested-Laplace path (or the
+    # sampled-field community route) -- it is not the fixed-hyper NUTS structure.
+    stop("occu_cover() with method = \"nuts\" samples a FIXED-HYPER proper-CAR ",
+         "shared field; the intrinsic icar()/bym2() field on the psi formula ",
+         "has a flat field-mean direction needing a sum-to-zero reparameterisation ",
+         "for NUTS -- use method = \"nested_laplace\" (the shared coupled field is ",
+         "grid-integrated), car_proper() for the NUTS shared field, or ",
+         "ms_occu_cover() + icar() for a sampled shared field. (gcol33/tulpaObs#74)",
          call. = FALSE)
   }
   if (!has_spatial && engine == "nested_laplace") {

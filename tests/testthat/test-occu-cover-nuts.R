@@ -80,12 +80,15 @@ test_that("occu_cover NUTS C++ FullGradFn matches the R oracle (byte-exact)", {
 })
 
 
-test_that("occu_cover NUTS is gated off the spatial path; family advertises nuts", {
+test_that("occu_cover NUTS is gated off the icar/bym2 path; family advertises nuts", {
   expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$occu_cover)
 
   inp <- .ocn_inputs("lognormal", N = 30L, J = 3L, seed = 5L)
   adj <- matrix(0L, 30, 30)
   for (i in seq_len(29)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
+  # An intrinsic icar() field on the psi formula points NUTS to the proper-CAR
+  # shared field (car_proper) or the grid-integrated nested_laplace path; the
+  # fixed-hyper NUTS shared field is car_proper-only (gcol33/tulpaObs#74).
   expect_error(
     suppressWarnings(tobs(
       formula = ~ 1 + icar(graph = adj), data = inp$cell_dat,
@@ -93,7 +96,7 @@ test_that("occu_cover NUTS is gated off the spatial path; family advertises nuts
       positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
       visits = inp$od$det.covs, method = "nuts",
       control = list(verbose = FALSE))),
-    "not yet wired|non-spatial sampler")
+    "proper-CAR|nested_laplace")
 })
 
 
