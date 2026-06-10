@@ -116,17 +116,21 @@
            "\"nested_laplace\". (#51)", call. = FALSE)
     }
     if (!is.null(spatial)) {
-      # Areal field on the abundance arm via the shared count-marginal nested-
-      # Laplace driver (tulpaObs#51); icar() / car_proper() only, NUTS+spatial
-      # not wired.
+      # Areal field on the abundance arm: icar() / car_proper() / bym2() under
+      # the nested-Laplace driver, or a fixed-hyper non-centered car_proper()
+      # field sampled jointly with the coefficients under NUTS.
       if (identical(method, "nuts")) {
-        stop("removal() with a spatial term fits under method = ",
-             "\"nested_laplace\" (the areal abundance field); NUTS + spatial is ",
-             "not yet wired. (#51)", call. = FALSE)
+        fit <- .tobs_fit_removal_nuts_spatial(
+          fit_model, spatial, mixture = mixture, K_max = K.max,
+          sigma.beta = sigma.beta, sigma.logr = 1.5,
+          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+          seed = seed, verbose = verbose)
+      } else {
+        fit <- .tobs_fit_removal_spatial(fit_model, spatial, mixture = mixture,
+                                         K_max = K.max, max_iter = max.iter,
+                                         tol = tol, verbose = verbose)
       }
-      fit <- .tobs_fit_removal_spatial(fit_model, spatial, mixture = mixture,
-                                       K_max = K.max, max_iter = max.iter,
-                                       tol = tol, verbose = verbose)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_removal_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
@@ -163,17 +167,22 @@
            "\"nested_laplace\". (#51)", call. = FALSE)
     }
     if (!is.null(spatial)) {
-      # Areal field on the abundance arm (tulpaObs#51); icar() / car_proper(),
-      # half-normal key, NUTS+spatial not wired.
+      # Areal field on the abundance arm: icar() / car_proper() (half-normal or
+      # hazard key) under the nested-Laplace driver, or a fixed-hyper
+      # non-centered car_proper() field sampled under NUTS (half-normal key).
       if (identical(method, "nuts")) {
-        stop("distance() with a spatial term fits under method = ",
-             "\"nested_laplace\"; NUTS + spatial is not yet wired. (#51)",
-             call. = FALSE)
+        fit <- .tobs_fit_distance_nuts_spatial(
+          fit_model, spatial, mixture = mixture, K_max = K.max,
+          sigma.beta = sigma.beta,
+          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+          seed = seed, verbose = verbose)
+      } else {
+        fit <- .tobs_fit_distance_spatial(fit_model, spatial, mixture = mixture,
+                                          K_max = K.max, max_iter = max.iter,
+                                          tol = tol, verbose = verbose,
+                                          integration = integration)
       }
-      fit <- .tobs_fit_distance_spatial(fit_model, spatial, mixture = mixture,
-                                        K_max = K.max, max_iter = max.iter,
-                                        tol = tol, verbose = verbose,
-                                        integration = integration)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_distance_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
@@ -210,18 +219,22 @@
            "\"nested_laplace\". (#51)", call. = FALSE)
     }
     if (!is.null(spatial)) {
-      # Areal field on the initial-abundance arm via BFGS over the exact
-      # forward-HMM marginal + CAR prior (tulpaObs#51); icar() / car_proper(),
-      # NUTS+spatial not wired.
+      # Areal field on the initial-abundance arm: icar() / car_proper() under
+      # the nested-Laplace forward-HMM driver, or a fixed-hyper non-centered
+      # car_proper() field sampled jointly with the coefficients under NUTS.
       if (identical(method, "nuts")) {
-        stop("dyn_abun() with a spatial term fits under method = ",
-             "\"nested_laplace\"; NUTS + spatial is not yet wired. (#51)",
-             call. = FALSE)
+        fit <- .tobs_fit_dyn_abun_nuts_spatial(
+          fit_model, spatial, mixture = model$mixture %||% "poisson",
+          K_max = K.max, sigma.beta = sigma.beta,
+          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+          seed = seed, verbose = verbose)
+      } else {
+        fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial,
+                                          mixture = model$mixture %||% "poisson",
+                                          K_max = K.max, max_iter = 300L, tol = 1e-8,
+                                          verbose = verbose, integration = integration)
       }
-      fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial,
-                                        mixture = model$mixture %||% "poisson",
-                                        K_max = K.max, max_iter = 300L, tol = 1e-8,
-                                        verbose = verbose, integration = integration)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_dyn_abun_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
@@ -259,17 +272,20 @@
            "\"nested_laplace\". (#51)", call. = FALSE)
     }
     if (!is.null(spatial)) {
-      # Areal field on the occupancy (psi) arm via BFGS over the exact two-state
-      # marginal + CAR prior (tulpaObs#51); icar() / car_proper(), NUTS+spatial
-      # not wired.
+      # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
+      # nested-Laplace two-state driver, or a fixed-hyper non-centered
+      # car_proper() field sampled jointly with the coefficients under NUTS.
       if (identical(method, "nuts")) {
-        stop("fp_occu() with a spatial term fits under method = ",
-             "\"nested_laplace\"; NUTS + spatial is not yet wired. (#51)",
-             call. = FALSE)
+        fit <- .tobs_fit_fp_occu_nuts_spatial(
+          fit_model, spatial, sigma.beta = sigma.beta,
+          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
+          seed = seed, verbose = verbose)
+      } else {
+        fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, max_iter = max.iter,
+                                         tol = 1e-8, verbose = verbose,
+                                         integration = integration)
       }
-      fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, max_iter = max.iter,
-                                       tol = 1e-8, verbose = verbose,
-                                       integration = integration)
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_fp_occu_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,

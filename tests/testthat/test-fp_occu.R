@@ -449,5 +449,5 @@ test_that("fp_occu() areal spatial: bym2 fits; nuts+spatial gated", {
     tobs(formula = ~ x + icar(graph = adj), data = s$data, family = fp_occu(),
          detection = ~ 1, y = s$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
-    "nested_laplace|not yet wired")
+    "proper-CAR|car_proper")
 })

@@ -26,9 +26,7 @@ test_that(".tobs_validate_family_method rejects an unsupported method", {
   # nested_laplace_sla (skew on the nested path) is occu + cover only.
   expect_error(.tobs_validate_family_method("nested_laplace_sla", dyn_occu()),
                "not available for dyn_occu")
-  # cover has no HMC likelihood and no EM correction engine.
-  expect_error(.tobs_validate_family_method("nuts", cover()),
-               "not available for cover")
+  # cover has no EM correction engine (no gibbs/mi); it does have a NUTS path.
   expect_error(.tobs_validate_family_method("laplace_gibbs", cover()),
                "not available for cover")
 })
@@ -41,11 +39,13 @@ test_that(".tobs_validate_family_method now accepts nested_laplace for the multi
   expect_silent(.tobs_validate_family_method("nested_laplace", jsdm()))
 })
 
-test_that("community occupancy families are laplace-only (gcol33/tulpaObs#30)", {
-  # ms_occu / ms_dyn_occu / ms_int_occu fit by the dedicated community Laplace-EM
-  # (independent per-arm REs); the generic-engine nested_laplace / nuts community
-  # paths were removed with the mis-specified legacy RE path.
-  for (fam in list(ms_occu(), ms_dyn_occu(), ms_int_occu())) {
+test_that("ms_occu supports laplace/nuts/nested_laplace; ms_dyn_occu + ms_int_occu laplace-only", {
+  # ms_occu gained a community NUTS sampler (gcol33/tulpaObs#69) and a shared
+  # areal field (gcol33/tulpaObs#75); ms_dyn_occu / ms_int_occu remain on the
+  # dedicated community Laplace-EM only.
+  for (m in c("laplace", "nuts", "nested_laplace"))
+    expect_silent(.tobs_validate_family_method(m, ms_occu()))
+  for (fam in list(ms_dyn_occu(), ms_int_occu())) {
     expect_silent(.tobs_validate_family_method("laplace", fam))
     expect_error(.tobs_validate_family_method("nested_laplace", fam),
                  "not available")
@@ -54,10 +54,10 @@ test_that("community occupancy families are laplace-only (gcol33/tulpaObs#30)", 
 })
 
 test_that("the rejection lists the family's supported methods", {
-  err <- tryCatch(.tobs_validate_family_method("nuts", cover()),
+  err <- tryCatch(.tobs_validate_family_method("nuts", ms_dyn_occu()),
                   error = function(e) conditionMessage(e))
   expect_match(err, "Supported:")
-  expect_match(err, "nested_laplace", fixed = TRUE)
+  expect_match(err, "laplace", fixed = TRUE)
   expect_false(grepl("\"nuts\"[^.]*Supported", err))  # nuts is not in the set
 })
 
@@ -84,11 +84,11 @@ test_that("tobs() passes the method gate for dyn_occu + nested_laplace (now supp
   )
 })
 
-test_that("tobs() rejects nuts and gibbs/mi for the cover hurdle", {
+test_that("tobs() rejects gibbs/mi for the cover hurdle (no EM correction engine)", {
   df <- data.frame(x = c(0, 1, 0, 1))
   yc <- c(0, 0.3, 0, 0.7)
   expect_error(
-    tobs(~ x, data = df, family = cover(), y = yc, method = "nuts"),
+    tobs(~ x, data = df, family = cover(), y = yc, method = "laplace_gibbs"),
     "not available for cover"
   )
   expect_error(

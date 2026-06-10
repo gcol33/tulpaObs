@@ -537,13 +537,13 @@ test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated",
     expect_true(all(is.finite(vcov(fit))))
     expect_false(is.null(fit$spatial_field))
   }
-  # NUTS + spatial not wired.
+  # NUTS + areal is car_proper only; an intrinsic icar() field is rejected.
   expect_error(
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
          family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
          detection = ~ sigma_cov1, y = sim$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
-    "nested_laplace|not yet wired")
+    "proper-CAR|car_proper")
 })
 
 test_that("distance() hazard-rate key under areal spatial recovers slope, shape + field (#79)", {

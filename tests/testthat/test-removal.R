@@ -417,10 +417,11 @@ test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", 
     expect_true(all(is.finite(vcov(fit))))
     expect_false(is.null(fit$spatial_field))
   }
-  # NUTS + spatial is not wired -> rejected with a pointer.
+  # NUTS + areal is car_proper only; an intrinsic icar() field is rejected with a
+  # pointer (the car_proper recovery lives in test-count-spatial-nuts.R).
   expect_error(
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
          family = removal(), detection = ~ det_cov1, y = sim$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
-    "nested_laplace|not yet wired")
+    "proper-CAR|car_proper")
 })

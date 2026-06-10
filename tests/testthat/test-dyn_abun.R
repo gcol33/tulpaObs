@@ -415,5 +415,5 @@ test_that("dyn_abun() areal spatial: bym2 fits; nuts+spatial gated", {
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = s$data,
          family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
-    "nested_laplace|not yet wired")
+    "proper-CAR|car_proper")
 })
