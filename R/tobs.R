@@ -471,26 +471,53 @@ tobs <- function(formula,
          call. = FALSE)
   }
 
-  # ms_occu (both Laplace-EM and NUTS) is non-spatial: per-species coefficient RE
-  # with independent per-arm community covariances over the closed-form occupancy
-  # marginal. A structured term (icar()/bym2()/.../re()/temporal()) on either
-  # formula is not wired here, so strip + gate up front (before model.matrix sees
-  # the special), with a NUTS-specific pointer when the sampler was requested.
-  occ_p <- .tobs_parse_formula(formula,   data = data)
-  det_p <- .tobs_parse_formula(detection, data = data)
-  if (length(occ_p$terms) || length(det_p$terms)) {
-    if (identical(engine, "nuts")) {
-      stop("method = \"nuts\" for ms_occu() is the non-spatial community ",
-           "occupancy sampler; a spatial / temporal / random-effect term is not ",
-           "yet wired on the sampler. Use method = \"laplace\".", call. = FALSE)
-    }
-    stop("ms_occu() is non-spatial: a structured term (icar()/bym2()/re()/...) ",
-         "on the occupancy or detection formula is not supported.", call. = FALSE)
-  }
+  # Resolve structured terms on the occupancy / detection formulas (the spatial
+  # field on the occupancy arm routes to the areal community fitter; the FE part
+  # is what model.matrix sees). Bind precomputes the spatial spec (graph / CSR /
+  # n_units / type).
+  bind <- .tobs_bind_formulas(list(psi = formula, p = detection), data)
 
   model <- .tobs_build_ms_occu(
-    occ_formula = occ_p$fe_formula, det_formula = det_p$fe_formula,
-    data = data, y = y, species = dots$species)
+    occ_formula = bind$fe$psi, det_formula = bind$fe$p,
+    data = data, y = y, species = dots$species,
+    structured_terms = bind$terms)
+  structs <- .tobs_structures_from_model(model)
+
+  # A shared areal field (icar()/bym2()/car_proper()) on the occupancy formula
+  # routes to the nested-Laplace community-occupancy fitter (the occupancy
+  # analogue of sfMsNMix; tulpaObs#75). It must sit on the occupancy arm only.
+  if (!is.null(structs$spatial)) {
+    if (identical(engine, "nuts")) {
+      stop("method = \"nuts\" for ms_occu() is the non-spatial community ",
+           "occupancy sampler; a shared areal field uses ",
+           "method = \"nested_laplace\".", call. = FALSE)
+    }
+    if (!identical(engine, "nested_laplace")) {
+      stop("a shared areal field on the occupancy formula needs ",
+           "method = \"nested_laplace\" for ms_occu().", call. = FALSE)
+    }
+    if (isTRUE(structs$spatial$shared[2L])) {
+      stop("ms_occu() areal field sits on the occupancy arm only; a field on ",
+           "the detection formula is not supported.", call. = FALSE)
+    }
+    return(.tobs_fit_ms_occu_spatial(
+      model, spatial = structs$spatial,
+      max.iter = control[["max.iter"]] %||% 100L,
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+
+  # Any other structured term (temporal / re / svc / latent) is not wired.
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc) || !is.null(structs$latent)) {
+    stop("ms_occu() supports a shared areal field (icar()/bym2()/car_proper()) ",
+         "on the occupancy formula under method = \"nested_laplace\"; temporal / ",
+         "re / svc / latent terms are not wired.", call. = FALSE)
+  }
+  if (identical(engine, "nested_laplace")) {
+    stop("method = \"nested_laplace\" for ms_occu() needs a shared areal field ",
+         "(icar()/bym2()/car_proper()) on the occupancy formula. For the ",
+         "non-spatial community fit use method = \"laplace\".", call. = FALSE)
+  }
 
   # NUTS (method = "nuts", tulpaObs#69): sample the exact joint posterior of the
   # non-spatial community single-season occupancy (community means, per-species
@@ -1161,9 +1188,11 @@ tobs <- function(formula,
   # via the in-tree C++ FullGradFn (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp) --
   # samples the community means, per-species deviations, AND the two independent
   # per-arm community covariances jointly, non-centered, warm-started at the
-  # Laplace-EM mode (gcol33/tulpaObs#69). Spatial / temporal / RE NUTS not yet
-  # wired.
-  ms_occu  = c("laplace", "nuts"),
+  # Laplace-EM mode (gcol33/tulpaObs#69). nested_laplace: a shared areal field
+  # (icar/bym2/car_proper) on the occupancy arm via the in-tree community-spatial
+  # nested Laplace-EM (R/ms_occu_spatial.R, src/ms_occu_spatial.cpp) -- the
+  # occupancy analogue of sfMsNMix (gcol33/tulpaObs#75).
+  ms_occu  = c("laplace", "nuts", "nested_laplace"),
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),

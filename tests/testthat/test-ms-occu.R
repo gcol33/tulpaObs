@@ -117,13 +117,15 @@ test_that("ms_occu() S3 methods work, incl. richness", {
 })
 
 
-test_that("ms_occu() capability gates: laplace + nuts, species required", {
+test_that("ms_occu() capability gates: laplace + nuts + nested_laplace", {
   sim <- simulate_ms_occu(N = 30, J = 3, n_species = 4, seed = 1)
   # nuts is offered (independent per-arm community RE blocks in the sampler;
-  # gcol33/tulpaObs#69); nested_laplace is not.
+  # gcol33/tulpaObs#69); nested_laplace is offered, but only with a shared areal
+  # field on the occupancy formula (gcol33/tulpaObs#75) -- it errors with a
+  # pointer when requested without a field.
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(4)),
          method = "nested_laplace"),
-    "not available")
+    "shared areal field")
 })

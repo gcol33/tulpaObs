@@ -32,7 +32,8 @@
 # [n_sites x max_visits x n_species] or a named list of n_species matrices
 # [n_sites x max_visits]. The occupancy design X_occ and detection design X_det
 # are site-level. Detection is 0/1/NA.
-.tobs_build_ms_occu <- function(occ_formula, det_formula, data, y, species) {
+.tobs_build_ms_occu <- function(occ_formula, det_formula, data, y, species,
+                                structured_terms = list()) {
   to_array <- function(z) {
     if (is.list(z) && !is.array(z)) {
       n_sp <- length(z)
@@ -99,6 +100,7 @@
     X_occ         = X_occ,
     X_det         = X_det,
     summaries     = summaries,
+    structured_terms = structured_terms,
     formulas      = list(occ = occ_formula, det = det_formula),
     data          = data,
     process_info  = list(
@@ -266,7 +268,13 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 .tobs_fitted_ms_occu <- function(object) {
   model <- object$model
   cm    <- object$ms_community
-  psi <- stats::plogis(model$X_occ %*% t(cm$coef_psi))
+  eta_psi <- model$X_occ %*% t(cm$coef_psi)
+  # Shared areal field (nested_laplace path): add the per-site occupancy offset
+  # to every species' occupancy predictor.
+  if (!is.null(object$spatial_field)) {
+    eta_psi <- sweep(eta_psi, 1L, as.numeric(object$spatial_field), "+")
+  }
+  psi <- stats::plogis(eta_psi)
   p   <- stats::plogis(model$X_det %*% t(cm$coef_p))
 
   z <- matrix(0, model$n_sites, model$n_species)
