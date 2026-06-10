@@ -69,6 +69,14 @@ cpp_eval_occu_multiscale_cover_beta_cell <- function(eta_psi, eta_theta, eta_p, 
     .Call(`_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell`, eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, phi_pos, curvature)
 }
 
+cpp_cover_nuts_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
+    .Call(`_tulpaObs_cpp_cover_nuts_logpost`, spec, theta, sigma_beta, sigma_logdisp)
+}
+
+cpp_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
 cpp_distance_laplace_fixed <- function(y, X_lambda_R, X_sigma_R, cutpoints, transect, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, quad_order) {
     .Call(`_tulpaObs_cpp_distance_laplace_fixed`, y, X_lambda_R, X_sigma_R, cutpoints, transect, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, quad_order)
 }

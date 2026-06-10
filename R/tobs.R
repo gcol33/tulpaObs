@@ -1181,7 +1181,18 @@ tobs <- function(formula,
   # FD-Hessian observed info; tulpaObs#51). bym2 / season-varying dynamics /
   # temporal not yet wired (R/dyn_abun.R, R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
   dyn_abun = c("laplace", "nested_laplace", "nuts"),
-  cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla"),
+  # cover: standalone vegetation-cover hurdle (presence Bernoulli + beta /
+  # lognormal positive arm). Non-spatial Laplace via two independent
+  # tulpa_laplace() calls (laplace / laplace_sla); a shared areal field across
+  # the arms fits under nested_laplace / nested_laplace_sla. nuts: the
+  # non-spatial sampler over the exact two-arm coefficient marginal
+  # c(beta_presence, beta_positive, log_disp) via the in-tree C++ FullGradFn
+  # (R/cover_nuts.R, src/cover_nuts.cpp), warm-started at the Laplace mode --
+  # calibrated (non-Gaussian) intervals and a per-draw pointwise likelihood for
+  # WAIC / LOO, beta or lognormal cover. Structured-term NUTS is gated (the
+  # shared field is grid-integrated under nested_laplace).
+  cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla",
+               "nuts"),
   # occu_cover: non-spatial Laplace via direct optim on the exact two-state
   # marginal (v1); nested-Laplace adds a cell-level ICAR field shared across
   # psi and cover arms with scaling alpha (v2, the mod.joint analogue with

@@ -50,6 +50,24 @@
   enc      <- encode_cover_hurdle(formula, data, y, positive = positive)
   temporal <- enc$temporal
   re       <- enc$re
+
+  # NUTS: the non-spatial sampler over the exact two-arm coefficient marginal.
+  # Any structured term (areal field, weighted trend, correlated / arm-specific
+  # bar, temporal, re) is integrated on the nested-Laplace outer grid, not
+  # sampled here, so reject it with a pointer rather than dropping it silently.
+  if (identical(engine, "nuts")) {
+    has_struct <- !is.null(enc$spatial_spec) || !is.null(enc$trend) ||
+                  !is.null(enc$mcar) || !is.null(enc$armspec) ||
+                  !is.null(temporal) || (!is.null(re) && length(re) > 0L)
+    if (has_struct) {
+      stop("cover() NUTS is the non-spatial sampler: a spatial / temporal / re ",
+           "term in the formula is not yet wired for method = 'nuts'. Use ",
+           "method = 'nested_laplace' for structured terms.", call. = FALSE)
+    }
+    return(.tobs_fit_cover_nuts_dispatch(formula, data, y, positive, family,
+                                         priors, control))
+  }
+
   has_multi <- !is.null(temporal) || (!is.null(re) && length(re) > 0L)
   if (has_multi && !identical(engine, "nested_laplace")) {
     stop("temporal()/re() terms in a cover() formula require ",
@@ -824,6 +842,22 @@ decode_cover_hurdle <- function(fits, enc, family,
                                      wfun = w_pos_fun))
     return(list(eta_occ = eta_occ, eta_pos = eta_pos, disp = bundle$disp))
   }
+  if (!is.null(object$nuts) && is.matrix(object$draws)) {
+    # NUTS path: project the exact posterior coefficient draws through the
+    # natural-scale presence / positive designs. The dispersion is the per-draw
+    # exp(log_disp) trailing column, so the score marginalizes the calibrated
+    # NUTS posterior (the point of the sampler) rather than the Laplace mode.
+    draws  <- object$draws
+    if (!is.null(n.draws) && n.draws < nrow(draws)) {
+      draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
+    }
+    p_pres <- ncol(enc$occ_data$X); p_pos <- ncol(enc$pos_data$X)
+    B_occ <- draws[, seq_len(p_pres), drop = FALSE]
+    B_pos <- draws[, p_pres + seq_len(p_pos), drop = FALSE]
+    disp  <- exp(draws[, ncol(draws)])
+    return(list(eta_occ = B_occ %*% t(enc$occ_data$X),
+                eta_pos = B_pos %*% t(enc$pos_data$X), disp = disp))
+  }
   if (is.null(enc) || is.null(object$occ$mode) || is.null(object$occ$H_beta) ||
       is.null(object$pos$mode) || is.null(object$pos$H_beta)) {
     stop("Pointwise log-likelihood for cover() is implemented for the ",
@@ -1112,6 +1146,12 @@ print.cover_fit <- function(x, ...) {
 
 #' @export
 summary.cover_fit <- function(object, ...) {
+  # NUTS fit: return the per-parameter posterior table (mean / sd / quantiles
+  # plus the cross-chain Rhat / ESS the convergence list carries), matching the
+  # generic NUTS summary surface so the sampler diagnostics are visible.
+  if (!is.null(object$nuts) && !is.null(object$draws)) {
+    return(.tobs_cover_nuts_summary(object))
+  }
   # Arm labels (gcol33/tulpaObs#61): the two hurdle arms are `presence`
   # (the y > 0 Bernoulli arm) and `positive` (the y | y > 0 arm). The `to =`
   # argument of a spatial() bar validates against these labels, so summary()
