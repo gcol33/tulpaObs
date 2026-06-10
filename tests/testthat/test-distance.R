@@ -464,8 +464,11 @@ test_that("distance() Laplace RE rejects the hazard key, detection arm, both arm
   adj
 }
 
-# Binned distance data with a smoothed ICAR-like field on log lambda.
-.sim_dist_spatial <- function(adj, cuts, b_lambda, b_sigma, sd_phi = 0.5, seed = NULL) {
+# Binned distance data with a smoothed ICAR-like field on log lambda. `key` /
+# `shape` select the half-normal or hazard-rate detection function (the hazard
+# scalar log-shape is recovered by the spatial path, gcol33/tulpaObs#79).
+.sim_dist_spatial <- function(adj, cuts, b_lambda, b_sigma, sd_phi = 0.5,
+                              key = "halfnorm", shape = 3, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   ng <- nrow(adj); nb <- length(cuts) - 1L
   phi <- as.numeric(scale(rnorm(ng)))
@@ -473,9 +476,10 @@ test_that("distance() Laplace RE rejects the hazard key, detection arm, both arm
   phi <- sd_phi * as.numeric(scale(phi)); phi <- phi - mean(phi)
   x_ab <- rnorm(ng); x_sg <- rnorm(ng)
   lam <- exp(b_lambda[1] + b_lambda[2]*x_ab + phi); sg <- exp(b_sigma[1] + b_sigma[2]*x_sg)
+  sh <- if (identical(key, "hazard")) shape else NULL
   y <- matrix(0L, ng, nb)
   for (i in seq_len(ng)) {
-    pib <- tulpaObs:::.distance_pi(sg[i], cuts, "halfnorm", "line")
+    pib <- tulpaObs:::.distance_pi(sg[i], cuts, key, "line", sh)
     probs <- c(pib, max(1 - sum(pib), 0)); N <- rpois(1, lam[i])
     if (N > 0) { cc <- rmultinom(1, N, probs); y[i,] <- cc[seq_len(nb)] }
   }
@@ -517,7 +521,7 @@ test_that("distance() areal ICAR recovers the abundance slope + field, calibrate
   expect_gt(mean(field_cor), 0.6)
 })
 
-test_that("distance() areal spatial: proper-CAR + bym2 fit; hazard / nuts+spatial gated", {
+test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", {
   skip_on_cran()
   skip_if_fast()
   cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(6L)
@@ -533,13 +537,6 @@ test_that("distance() areal spatial: proper-CAR + bym2 fit; hazard / nuts+spatia
     expect_true(all(is.finite(vcov(fit))))
     expect_false(is.null(fit$spatial_field))
   }
-  # hazard key + spatial not yet wired.
-  expect_error(
-    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
-         family = distance(key = "hazard", transect = "line", cutpoints = cuts),
-         detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
-         control = list(progress = FALSE)),
-    "half-normal key only")
   # NUTS + spatial not wired.
   expect_error(
     tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
@@ -547,4 +544,38 @@ test_that("distance() areal spatial: proper-CAR + bym2 fit; hazard / nuts+spatia
          detection = ~ sigma_cov1, y = sim$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
     "nested_laplace|not yet wired")
+})
+
+test_that("distance() hazard-rate key under areal spatial recovers slope, shape + field (#79)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The hazard-rate scalar log-shape is a global coordinate threaded into the
+  # areal-BFGS fixed block (cpp_distance_site_sweep returns the summed shape
+  # score grad_b). The areal field still loads on log lambda exactly as for the
+  # half-normal key.
+  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(7L)
+  shape_true <- 3
+  slope_ok <- shape_ok <- field_cor <- logical(0)
+  for (s in 1:3) {
+    sim <- .sim_dist_spatial(adj, cuts, c(log(60), 0.5), c(log(0.35)),
+                             key = "hazard", shape = shape_true, seed = 500 + s)
+    fit <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
+                family = distance(key = "hazard", transect = "line", cutpoints = cuts),
+                detection = ~ 1, y = sim$y, method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_true("log_shape" %in% names(fit$means))
+      expect_true(all(is.finite(vcov(fit))))
+      expect_false(is.null(fit$spatial_field))
+    }
+    est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+    slope_ok <- c(slope_ok, abs(est - 0.5) / se < 3)
+    sh <- fit$means[["log_shape"]]; sh_se <- fit$sds[["log_shape"]]
+    shape_ok <- c(shape_ok, abs(sh - log(shape_true)) / sh_se < 3)
+    field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+  }
+  expect_true(all(slope_ok))                       # abundance slope within 3 SE
+  expect_true(all(shape_ok))                       # hazard log-shape within 3 SE
+  expect_gt(mean(field_cor), 0.6)                  # field tracks the truth
 })

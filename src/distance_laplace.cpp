@@ -384,14 +384,17 @@ Rcpp::List cpp_distance_total_log_lik(
 // marginal observed-information Hessian (per-site eta-space block
 // diag(info_lam, info_sig) - var_N v v', v = (score_wt_lambda, vN_d), the form
 // distance_kernel.h documents) scattered through X_lambda / X_sigma + the field
-// loading, plus the CAR prior. Half-normal key only (the hazard shape is a global
-// coordinate, deferred); Poisson or NB (the NB size r is the outer-grid axis).
+// loading, plus the CAR prior. `key` selects the detection key (0 half-normal,
+// 1 hazard-rate); under the hazard key the scalar log-shape `eta_b` is a global
+// coordinate and the sweep returns the summed shape score grad_eta_b (and its
+// summed Fisher information info_b) so the driver can fold it into the fixed
+// block. Poisson or NB (the NB size r is the outer-grid axis).
 // [[Rcpp::export]]
 Rcpp::List cpp_distance_site_sweep(
     Rcpp::IntegerMatrix y_bins,
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma,
     Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max,
-    bool nb, double r
+    bool nb, double r, int key = 0, double eta_b = 0.0
 ) {
     const int n_sites = y_bins.nrow(), n_bins = y_bins.ncol();
     if (eta_lambda.size() != n_sites || eta_sigma.size() != n_sites)
@@ -399,6 +402,8 @@ Rcpp::List cpp_distance_site_sweep(
     std::vector<double> cut(cutpoints.begin(), cutpoints.end());
     tulpaObs::DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
     const double rr = nb ? r : std::numeric_limits<double>::infinity();
+    const int key_code = (key == 1) ? tulpaObs::DIST_HAZARD : tulpaObs::DIST_HALFNORMAL;
+    const bool hazard = (key_code == tulpaObs::DIST_HAZARD);
 
     Rcpp::NumericVector logL(n_sites), grad_lam(n_sites), info_lam(n_sites),
         var_N(n_sites), swl(n_sites), grad_sig(n_sites), info_sig_obs(n_sites),
@@ -406,11 +411,12 @@ Rcpp::List cpp_distance_site_sweep(
     std::vector<int> yb(n_bins);
     int n_inadmissible = 0;
     double grad_logr = 0.0;       // summed NB dispersion score (0 under Poisson)
+    double grad_b = 0.0, info_b = 0.0;  // summed hazard log-shape score / Fisher info
     for (int s = 0; s < n_sites; ++s) {
         for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
         tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
-            yb.data(), n_bins, eta_lambda[s], eta_sigma[s], 0.0,
-            tulpaObs::DIST_HALFNORMAL, quad, K_max, rr);
+            yb.data(), n_bins, eta_lambda[s], eta_sigma[s], eta_b,
+            key_code, quad, K_max, rr);
         if (!R_finite(d.log_lik)) ++n_inadmissible;
         logL[s] = d.log_lik;
         grad_lam[s] = d.grad_eta_lambda; info_lam[s] = d.info_eta_lambda;
@@ -419,6 +425,7 @@ Rcpp::List cpp_distance_site_sweep(
         info_sig_obs[s] = d.info_eta_d[0][0]; info_sig_fs[s] = d.info_eta_d_fs[0][0];
         vN_sig[s] = d.vN_d[0]; boundary[s] = d.boundary_weight; p_det[s] = d.p_det;
         if (nb) grad_logr += d.grad_theta;
+        if (hazard) { grad_b += d.grad_eta_d[1]; info_b += d.info_eta_d[1][1]; }
     }
     return Rcpp::List::create(
         Rcpp::Named("log_lik") = logL,
@@ -429,5 +436,6 @@ Rcpp::List cpp_distance_site_sweep(
         Rcpp::Named("info_sig_fs") = info_sig_fs,
         Rcpp::Named("vN_sig") = vN_sig, Rcpp::Named("boundary") = boundary,
         Rcpp::Named("p_det") = p_det, Rcpp::Named("grad_logr") = grad_logr,
+        Rcpp::Named("grad_b") = grad_b, Rcpp::Named("info_b") = info_b,
         Rcpp::Named("n_inadmissible") = n_inadmissible);
 }

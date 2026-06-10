@@ -170,9 +170,13 @@
                                   n_quad = 1L, lkj_eta = 1.5,
                                   theta_prior_sd = 100) {
   if (!identical(model$key, "halfnorm")) {
-    stop("distance() random effects fit under the half-normal key only ",
-         "(key = \"halfnorm\"); the hazard-rate key's global shape parameter is ",
-         "not yet wired into the grouped-RE path. (tulpaObs#51)", call. = FALSE)
+    stop("distance() grouped random effects fit under the half-normal key only ",
+         "(key = \"halfnorm\"); the hazard-rate key's global log-shape coordinate ",
+         "is not a per-site design column in the shared count-family grouped-RE ",
+         "theta layout, so it is not yet wired into the grouped-RE path (the areal ",
+         "spatial path does carry it, tulpaObs#79). Use method = \"nested_laplace\" ",
+         "for a hazard-key areal fit, or key = \"halfnorm\" for a grouped RE.",
+         call. = FALSE)
   }
   re_list <- if (inherits(re, "tobs_re")) list(re) else re
   on_det <- vapply(re_list, function(r) {

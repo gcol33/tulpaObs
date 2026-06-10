@@ -1292,9 +1292,11 @@ tobs <- function(formula,
   # distance: binned distance sampling (half-normal / hazard-rate key, line /
   # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin),
   # grouped-RE AGHQ Laplace (abundance arm), the in-tree C++ FullGradFn NUTS, and
-  # an areal icar()/car_proper() field on the abundance arm via nested_laplace
-  # (half-normal key; the per-site var_N rank-1 cross-arm from distance_kernel.h,
-  # tulpaObs#51). bym2 / hazard-key spatial / temporal not yet wired
+  # an areal icar()/car_proper()/bym2() field on the abundance arm via
+  # nested_laplace (the per-site var_N rank-1 cross-arm from distance_kernel.h,
+  # tulpaObs#51). The hazard-rate scalar log-shape is threaded into the areal-BFGS
+  # fixed block (tulpaObs#79), so a hazard-key areal fit recovers both the
+  # abundance field and the shape. Grouped-RE hazard / temporal not yet wired
   # (R/distance.R, R/distance_spatial.R, src/distance_*.cpp).
   distance = c("laplace", "nested_laplace", "nuts"),
   # fp_occu: multistate false-positive occupancy (Miller et al. 2011). Latent

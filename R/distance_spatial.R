@@ -20,11 +20,8 @@
                                        K_max = NULL, max_iter = 200L, tol = 1e-6,
                                        verbose = TRUE, integration = "grid") {
   .tobs_reject_weighted_spatial(spatial, "distance abundance spatial")
-  if (!identical(model$key, "halfnorm")) {
-    stop("distance() areal spatial supports the half-normal key only; the ",
-         "hazard-rate shape is a global coordinate not yet wired into the ",
-         "spatial path. (tulpaObs#51)", call. = FALSE)
-  }
+  hazard <- identical(model$key, "hazard")
+  key_code <- .dist_key_code(model$key)
   map <- seq_len(model$n_sites)
   field <- .tobs_areal_field_spec(spatial, model$n_sites, "distance", map)
 
@@ -38,35 +35,46 @@
   K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
   is_nb <- mixture %in% c("negbin", "NB")
 
+  # Fixed coefficient layout: (beta_lambda, beta_sigma[, eta_b][, log_r]). Under
+  # the hazard-rate key the scalar log-shape eta_b is a global coordinate (#79),
+  # placed after the detection-scale block and before the NB dispersion.
   i_lam <- seq_len(p_lam); i_sig <- p_lam + seq_len(p_sig)
-  i_logr <- if (is_nb) p_lam + p_sig + 1L else NA_integer_
-  n_fixed <- p_lam + p_sig + if (is_nb) 1L else 0L
+  off <- p_lam + p_sig
+  i_b   <- if (hazard) { off <- off + 1L; off } else NA_integer_
+  i_logr <- if (is_nb) off + 1L else NA_integer_
+  n_fixed <- off + if (is_nb) 1L else 0L
 
   eval <- function(theta_fix, offset) {
     eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + offset
     eta_sig <- as.numeric(X_sig %*% theta_fix[i_sig])
+    eta_b <- if (hazard) theta_fix[i_b] else 0.0
     rr <- if (is_nb) exp(theta_fix[i_logr]) else Inf
     sw <- cpp_distance_site_sweep(y, eta_lam, eta_sig, cutpoints, transect_code,
-                                  quad_order, K_max, nb = is_nb, r = rr)
+                                  quad_order, K_max, nb = is_nb, r = rr,
+                                  key = key_code, eta_b = eta_b)
     g <- numeric(n_fixed)
     g[i_lam] <- as.numeric(crossprod(X_lam, sw$grad_lam))
     g[i_sig] <- as.numeric(crossprod(X_sig, sw$grad_sig))
+    if (hazard) g[i_b] <- sw$grad_b
     if (is_nb) g[i_logr] <- sw$grad_logr
     list(log_lik = sum(sw$log_lik), grad_fixed = g, grad_eta = sw$grad_lam)
   }
 
-  # Warm start from the non-spatial distance Laplace fit.
+  # Warm start from the non-spatial distance Laplace fit (carries the hazard
+  # log-shape when the key is hazard-rate).
   warm <- tryCatch(
     .tobs_distance_re_warm(model, mixture = if (is_nb) "NB" else "P",
                            K_max = K_max, max_iter = max_iter, tol = tol),
     error = function(e) NULL)
   theta0_fix <- if (!is.null(warm)) {
     th <- c(warm$beta_lambda, warm$beta_p)
+    if (hazard) th <- c(th, if (is.finite(warm$eta_b %||% NA_real_)) warm$eta_b else 0)
     if (is_nb) th <- c(th, log(if (is.finite(warm$r %||% NA_real_)) warm$r else 2))
     th
   } else {
     th <- c(log(max(mean(rowSums(y)), 0.5) + 0.5), rep(0, p_lam - 1L),
             log(stats::median(cutpoints[-1])), rep(0, p_sig - 1L))
+    if (hazard) th <- c(th, 0)
     if (is_nb) th <- c(th, log(2))
     th
   }
@@ -82,10 +90,12 @@
   raw <- list(
     mixture = if (is_nb) "negbin" else "poisson",
     beta_lambda = means[i_lam], beta_sigma = means[i_sig],
+    eta_b = if (hazard) means[i_b] else NA_real_,
+    shape = if (hazard) exp(means[i_b]) else NA_real_,
     log_r = if (is_nb) means[i_logr] else NA_real_,
     r = if (is_nb) exp(means[i_logr]) else NA_real_,
     vcov = res$vcov, log_lik = res$log_lik, converged = TRUE,
-    key = model$key, transect = model$transect, hazard = FALSE, K_max = K_max)
+    key = model$key, transect = model$transect, hazard = hazard, K_max = K_max)
   fit <- build_distance_fit(raw, model)
   fit$method <- "nested_laplace"
   fit$spatial_field <- res$field_mean

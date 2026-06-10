@@ -85,8 +85,8 @@ cpp_distance_total_log_lik <- function(y, eta_lambda, eta_sigma, eta_b, cutpoint
     .Call(`_tulpaObs_cpp_distance_total_log_lik`, y, eta_lambda, eta_sigma, eta_b, cutpoints, transect, key, K_max, r, quad_order)
 }
 
-cpp_distance_site_sweep <- function(y_bins, eta_lambda, eta_sigma, cutpoints, transect, quad_order, K_max, nb, r) {
-    .Call(`_tulpaObs_cpp_distance_site_sweep`, y_bins, eta_lambda, eta_sigma, cutpoints, transect, quad_order, K_max, nb, r)
+cpp_distance_site_sweep <- function(y_bins, eta_lambda, eta_sigma, cutpoints, transect, quad_order, K_max, nb, r, key = 0L, eta_b = 0.0) {
+    .Call(`_tulpaObs_cpp_distance_site_sweep`, y_bins, eta_lambda, eta_sigma, cutpoints, transect, quad_order, K_max, nb, r, key, eta_b)
 }
 
 cpp_distance_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_shape, sigma_logr) {

@@ -13,7 +13,10 @@
 // site carries the sigma gradient as grad_eta_p[0], and the abundance-arm RE
 // never touches the detection-curvature path. The hazard-rate key adds a global
 // scalar shape coordinate that is not a per-site design column, so it is not
-// expressible in this base; the R wrapper gates it (half-normal key only).
+// expressible in this base; the R wrapper gates it (half-normal key only). The
+// areal-spatial path DOES carry the hazard shape -- it folds the scalar log-shape
+// into the areal-BFGS fixed block (tulpaObs#79) rather than this per-site
+// grouped-RE theta layout.
 //
 // Detection-arm RE is likewise out of scope here: the latent N couples a site's
 // bins, so a detection RE would not factorize into the per-site scalar offset
