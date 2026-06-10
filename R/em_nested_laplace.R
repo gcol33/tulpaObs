@@ -782,6 +782,37 @@
 # response.
 # =============================================================================
 
+# Decide whether a standalone occu() nested-Laplace fit reroutes through the
+# joint direct-grid engine (.tobs_fit_occu_joint_coupled) instead of the EM
+# fixed-point path (.tobs_em_nested_laplace). The EM path oscillates / does not
+# converge on the varying-coefficient (SVC) occupancy bar at EVA scale
+# (gcol33/tulpaObs#81); the joint engine integrates the field hyperparameters on
+# a direct outer grid, so it cannot oscillate. The reroute is scoped to exactly
+# the SVC case the joint single-arm engine covers:
+#   * single-season occupancy (`single`),
+#   * an areal ICAR spatial term carrying a varying-coefficient structure -- an
+#     independent (`||`) varying-coefficient bar, the explicit intercept +
+#     weighted-trend form, or a weighted areal term,
+#   * with NO temporal / re block (those need the EM multi-block latent prior;
+#     the single-arm joint engine carries the areal field only).
+# Everything else -- a plain single intercept field, a correlated (`|`) MCAR
+# bar, bym2, temporal / re structure -- stays on the EM path unchanged.
+.tobs_occu_reroute_to_joint <- function(model, spatial, temporal, re) {
+  if (!identical(model$model_type, "single")) return(FALSE)
+  if (!is.null(temporal) || !is.null(re))      return(FALSE)
+  if (is.null(spatial) || !inherits(spatial, "tobs_spatial")) return(FALSE)
+  if (isTRUE(spatial$is_bar)) {
+    # The independent (`||`) bar desugars to intercept + per-coefficient trend
+    # fields -- the SVC case. A correlated (`|`) bar is a free-Sigma MCAR field
+    # fitted on the occu_cover joint engine, not the single-arm occu() path.
+    return(!isTRUE(spatial$correlated))
+  }
+  if (isTRUE(spatial$is_multifield)) return(TRUE)
+  # A lone weighted areal term (a single SVC slope field) is also covered.
+  isTRUE(!is.null(spatial$weight) && identical(spatial$type, "icar"))
+}
+
+
 #' Fit an occupancy tobs model via nested-Laplace
 #'
 #' Internal driver: assembles a multi-block latent prior from `spatial`,

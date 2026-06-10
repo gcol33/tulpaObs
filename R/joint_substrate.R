@@ -60,13 +60,64 @@
   }
   layout <- jf$arm_layout
   n_arms <- layout$n_arms %||% length(layout$p)
-  if (n_arms == 3L) {
+  if (isTRUE(object$occu_only_joint)) {
+    .tobs_joint_draws_occu(object, jf, layout, n)
+  } else if (n_arms == 3L) {
     .tobs_joint_draws_occu_cover(object, jf, layout, n)
   } else if (isTRUE(object$armspecific)) {
     .tobs_joint_draws_cover_armspecific(object, jf, layout, n)
   } else {
     .tobs_joint_draws_cover(object, jf, layout, n)
   }
+}
+
+# occu single-arm (2-arm psi/p): one or more independent ICAR fields on the
+# OCCUPANCY (psi) arm only -- no cover arm, no copy. Each block is a unit-variance
+# latent z scaled on the occupancy arm by its own amplitude (b<b>.sigma); the
+# detection (p) arm carries no field (amp_pos = 0). Block 1 is the unweighted
+# intercept field; blocks 2.. carry the per-cell trend weight. The bundle reuses
+# the cover roster slot names ("occ" for psi, "pos" empty) so the shared
+# `.tobs_joint_arm_eta` accumulator and the predict path read it unchanged: the
+# occupancy psi arm is "occ", and there is no positive arm. (gcol33/tulpaObs#81)
+.tobs_joint_draws_occu <- function(object, jf, layout, n) {
+  tg      <- jf$theta_grid
+  n_cells <- object$model$n_cells %||% object$model$n_sites
+  p       <- layout$p
+  bstart  <- layout$beta_start
+
+  idx_occ <- bstart[1L] + seq_len(p[1L])
+  idx_det <- bstart[2L] + seq_len(p[2L])
+  starts  <- layout$field_starts %||% layout$phi_start
+  n_field <- length(starts)
+  field_idx <- lapply(starts, function(s0) s0 + seq_len(n_cells))
+
+  idx   <- c(idx_occ, idx_det, unlist(field_idx))
+  D     <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
+  cells <- attr(D, "cells")
+
+  off  <- 0L
+  take <- function(k) { v <- D[, off + seq_len(k), drop = FALSE]; off <<- off + k; v }
+  b_occ <- take(p[1L]); b_det <- take(p[2L])
+
+  cn <- colnames(tg)
+  trend_cols <- object$trend_weights %||% object$trend_weight
+  blocks <- lapply(seq_len(n_field), function(b) {
+    z <- take(n_cells)
+    # Each ICAR block grids on precision tau (axis b<b>.tau); the occupancy-arm
+    # field amplitude is the SD sigma = 1 / sqrt(tau) per draw cell. The
+    # detection arm carries no field (amp_pos = 0, the 0-sentinel node index at
+    # fit time already excluded it).
+    tau_col <- sprintf("b%d.tau", b)
+    amp <- if (tau_col %in% cn) 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
+           else rep(1.0, length(cells))
+    list(z = z, amp_occ = amp, amp_pos = rep(0, length(cells)),
+         weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
+  })
+
+  list(n = n, positive = NA_character_, cells = cells,
+       disp = rep(1, length(cells)),
+       b = list(occ = b_occ, det = b_det, pos = NULL),
+       blocks = blocks, n_cells = n_cells)
 }
 
 # cover (2-arm occ/pos) with arm-specific separate latents (gcol33/tulpaObs#65):

@@ -262,6 +262,29 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_register_occu_only_coupling
+void cpp_register_occu_only_coupling();
+RcppExport SEXP _tulpaObs_cpp_register_occu_only_coupling() {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    cpp_register_occu_only_coupling();
+    return R_NilValue;
+END_RCPP
+}
+// cpp_eval_occu_only_cell
+Rcpp::List cpp_eval_occu_only_cell(double eta_psi, Rcpp::NumericVector eta_p, Rcpp::IntegerVector y_det, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_only_cell(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP y_detSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_only_cell(eta_psi, eta_p, y_det, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_cover_nuts_logpost
 Rcpp::List cpp_cover_nuts_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_logdisp);
 RcppExport SEXP _tulpaObs_cpp_cover_nuts_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_logdispSEXP) {
@@ -1596,6 +1619,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_register_occu_multiscale_cover_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_multiscale_cover_coupling, 3},
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell, 9},
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},
+    {"_tulpaObs_cpp_register_occu_only_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_only_coupling, 0},
+    {"_tulpaObs_cpp_eval_occu_only_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_only_cell, 4},
     {"_tulpaObs_cpp_cover_nuts_logpost", (DL_FUNC) &_tulpaObs_cpp_cover_nuts_logpost, 4},
     {"_tulpaObs_cpp_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_cover_nuts, 11},
     {"_tulpaObs_cpp_distance_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_distance_laplace_fixed, 17},

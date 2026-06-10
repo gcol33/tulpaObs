@@ -1412,6 +1412,17 @@ tobs <- function(formula,
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
                  "re.aghq", "n.quad", "re.lkj", "optimizer", "hessian",
                  "inner_solver", "integration"),
+  # Outer-grid knobs for the standalone occu() varying-coefficient (SVC) bar,
+  # which reroutes from the EM fixed-point path onto the joint direct-grid engine
+  # under method = "nested_laplace" (gcol33/tulpaObs#81). They are no-ops on the
+  # EM path (a plain intercept field, temporal / re structure), which the SVC
+  # reroute predicate skips; admitted on the nested_laplace route so a SVC fit can
+  # tune the grid / threading without a separate method name.
+  nested_laplace_joint = c("sigma.grid", "n.threads", "n.threads.outer",
+                           "adaptive.grid", "adaptive.grid.edge.thresh",
+                           "adaptive.grid.max.passes", "var.of.means.consistency",
+                           "var.of.means.tolerance", "diagnose.k", "k.samples",
+                           "force.sparse", "inner.refresh", "checkpoint"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",
@@ -1426,7 +1437,7 @@ tobs <- function(formula,
   switch(
     engine,
     laplace        = c("laplace_em", if (correction != "none") "correction"),
-    nested_laplace = "laplace_em",
+    nested_laplace = c("laplace_em", "nested_laplace_joint"),
     nuts           = "sampler",
     character(0)
   )

@@ -259,3 +259,166 @@
   class(tbl) <- c("tobs_prediction", "data.frame")
   tbl
 }
+
+
+# Occupancy ("occ") arm design at `newdata` for the rerouted standalone occu()
+# SVC joint fit. The single-season occu() model carries the occupancy formula at
+# `model$formulas$occ` (the fixed-effects psi formula the spatial term was
+# stripped from) and the fitted design at `model$X_processes[[1]]`; the field is
+# added separately by `.tobs_joint_arm_eta`, not by this design. Detection
+# ("det") uses the detection formula / `model$X_processes[[2]]`; visit-level
+# columns (if any) are held at the reference (0) for a per-cell prediction.
+.occu_joint_arm_design <- function(model, newdata, arm) {
+  if (identical(arm, "occ")) {
+    formula <- model$formulas$occ
+    p_arm   <- ncol(model$X_processes[[1L]])
+  } else {
+    formula <- model$formulas$det
+    p_arm   <- ncol(model$X_processes[[2L]]) +
+               (if (is.null(model$X_det_visit)) 0L else ncol(model$X_det_visit))
+  }
+  tt <- stats::delete.response(stats::terms(formula))
+  X_site <- stats::model.matrix(tt, newdata)
+  p_site <- if (identical(arm, "occ")) ncol(model$X_processes[[1L]])
+            else ncol(model$X_processes[[2L]])
+  if (ncol(X_site) != p_site) {
+    stop(sprintf(paste0(
+      "predict(occu): the %s design from `newdata` has %d columns but the ",
+      "fitted model has %d. Check that `newdata` carries every covariate in ",
+      "the %s formula with matching factor levels."),
+      arm, ncol(X_site), p_site, arm), call. = FALSE)
+  }
+  if (p_site == p_arm) return(X_site)
+  cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
+}
+
+# Core predict handler for the rerouted standalone occu() SVC joint fit
+# (gcol33/tulpaObs#81): the occupancy-only twin of `.tobs_predict_joint`. The
+# occupancy psi and detection p are computed PER DRAW from the grid-integrated
+# joint posterior (betas + shared field) and only then summarized -- the
+# marginalize-derived-quantities rule, so the per-cell psi carries the joint
+# posterior's correlation, including the spatial field at each cell. Supports
+# `type = "occupancy" | "detection" | "both" | "change"`; "change" reads the
+# occupancy difference between two values of the trend-field weight covariate.
+.tobs_predict_occu_joint <- function(object, newdata = NULL,
+                                     type = "occupancy", times = NULL,
+                                     level = 0.95, nsim = 1000L,
+                                     draws = TRUE, time_col = NULL) {
+  type <- match.arg(type, c("occupancy", "detection", "both", "change"))
+  if (is.null(.tobs_joint_fit(object))) {
+    stop("predict() requires a joint nested-Laplace fit; this occu() fit ",
+         "carries no joint object.", call. = FALSE)
+  }
+
+  bundle  <- .tobs_joint_draws(object, n = nsim)
+  n_cells <- bundle$n_cells
+  n_field <- length(bundle$blocks)
+
+  if (n_field > 1L) {
+    if (is.null(time_col)) time_col <- object$trend_weight
+    if (is.null(time_col)) {
+      stop("predict(): this fit has ", n_field - 1L,
+           " time-varying (trend) field(s); pass `time_col = \"<column>\"`, ",
+           "the per-cell covariate that weights the trend field(s).",
+           call. = FALSE)
+    }
+    for (b in 2:n_field) bundle$blocks[[b]]$weight <- time_col
+  }
+
+  if (is.null(newdata)) {
+    newdata <- object$model$data
+    if (is.null(newdata)) {
+      stop("predict(): `newdata` is required (one row per spatial unit, or a ",
+           "`cell` column indexing the field cells).", call. = FALSE)
+    }
+  }
+
+  if (!is.null(newdata$cell)) {
+    cell <- as.integer(newdata$cell)
+  } else {
+    cell <- seq_len(nrow(newdata))
+  }
+  if (anyNA(cell) || any(cell < 1L) || any(cell > n_cells)) {
+    stop("predict(): `cell` must index field cells 1..", n_cells,
+         " (add a `cell` column to `newdata`, or pass one row per field cell ",
+         "in cell order).", call. = FALSE)
+  }
+
+  occ_state <- function(nd) {
+    X_occ <- .occu_joint_arm_design(object$model, nd, "occ")
+    wf <- function(nm) {
+      if (!nm %in% names(nd)) {
+        stop("predict(): trend-field weight column '", nm,
+             "' is not in `newdata`.", call. = FALSE)
+      }
+      as.numeric(nd[[nm]])
+    }
+    eta_occ <- .tobs_joint_arm_eta(bundle, X_occ, "occ", cell, wf)
+    stats::plogis(eta_occ)
+  }
+  det_state <- function(nd) {
+    X_det <- .occu_joint_arm_design(object$model, nd, "det")
+    eta_det <- .tobs_joint_arm_eta(bundle, X_det, "det", cell)
+    stats::plogis(eta_det)
+  }
+
+  if (type %in% c("occupancy", "detection", "both")) {
+    out <- list()
+    if (type %in% c("occupancy", "both")) {
+      psi <- occ_state(newdata)
+      tbl <- .occu_cover_summ(psi, cell, level)
+      attr(tbl, "quantity") <- "occupancy"
+      if (isTRUE(draws)) attr(tbl, "draws") <- list(occupancy = psi)
+      class(tbl) <- c("tobs_prediction", "data.frame")
+      if (identical(type, "occupancy")) return(tbl)
+      out$occupancy <- tbl
+    }
+    if (type %in% c("detection", "both")) {
+      pp  <- det_state(newdata)
+      tbl <- .occu_cover_summ(pp, cell, level)
+      attr(tbl, "quantity") <- "detection"
+      if (isTRUE(draws)) attr(tbl, "draws") <- list(detection = pp)
+      class(tbl) <- c("tobs_prediction", "data.frame")
+      if (identical(type, "detection")) return(tbl)
+      out$detection <- tbl
+    }
+    return(out)
+  }
+
+  # type == "change": occupancy difference between two trend-weight values.
+  if (is.null(times) || length(times) != 2L) {
+    stop("predict(type = \"change\") needs `times = c(t1, t2)`.", call. = FALSE)
+  }
+  if (is.null(time_col)) time_col <- object$trend_weight
+  if (is.null(time_col)) {
+    stop("predict(type = \"change\") needs the name of the time covariate. ",
+         "Pass `time_col = \"<column>\"` (the covariate whose change between ",
+         "`times[1]` and `times[2]` drives the prediction).", call. = FALSE)
+  }
+  if (!time_col %in% names(newdata)) {
+    stop("predict(): `time_col = \"", time_col, "\"` is not a column of ",
+         "`newdata`.", call. = FALSE)
+  }
+  nd1 <- newdata; nd1[[time_col]] <- times[1L]
+  nd2 <- newdata; nd2[[time_col]] <- times[2L]
+  p1 <- occ_state(nd1)
+  p2 <- occ_state(nd2)
+  d_p <- p2 - p1
+  a <- (1 - level) / 2
+  qlo <- function(m) apply(m, 1L, stats::quantile, probs = a,     names = FALSE)
+  qhi <- function(m) apply(m, 1L, stats::quantile, probs = 1 - a, names = FALSE)
+  tbl <- data.frame(
+    cell      = cell,
+    psi_T1    = rowMeans(p1),
+    psi_T2    = rowMeans(p2),
+    delta_psi = rowMeans(d_p),
+    delta_psi.lwr = qlo(d_p),
+    delta_psi.upr = qhi(d_p))
+  attr(tbl, "quantity") <- "change"
+  attr(tbl, "times")    <- times
+  if (isTRUE(draws)) {
+    attr(tbl, "draws") <- list(psi_T1 = p1, psi_T2 = p2, delta_psi = d_p)
+  }
+  class(tbl) <- c("tobs_prediction", "data.frame")
+  tbl
+}

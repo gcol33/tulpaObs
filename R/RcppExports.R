@@ -69,6 +69,14 @@ cpp_eval_occu_multiscale_cover_beta_cell <- function(eta_psi, eta_theta, eta_p, 
     .Call(`_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell`, eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, phi_pos, curvature)
 }
 
+cpp_register_occu_only_coupling <- function() {
+    invisible(.Call(`_tulpaObs_cpp_register_occu_only_coupling`))
+}
+
+cpp_eval_occu_only_cell <- function(eta_psi, eta_p, y_det, curvature = "observed") {
+    .Call(`_tulpaObs_cpp_eval_occu_only_cell`, eta_psi, eta_p, y_det, curvature)
+}
+
 cpp_cover_nuts_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
     .Call(`_tulpaObs_cpp_cover_nuts_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }

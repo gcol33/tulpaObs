@@ -328,6 +328,32 @@
   }
 
   if (method == "nested_laplace") {
+    # Standalone occu() varying-coefficient (SVC) spatial bar: route through the
+    # joint direct-grid engine, single-arm (occupancy + detection, no cover arm),
+    # which integrates the field hyperparameters on a direct outer grid. The EM
+    # fixed-point path oscillates / does not converge on this case at EVA scale
+    # (gcol33/tulpaObs#81); the reroute is scoped to the SVC occupancy fit the
+    # single-arm joint engine covers (`.tobs_occu_reroute_to_joint`). The joint
+    # route consumes the autoscaled `fit_model`; the per-process betas / SEs /
+    # draws are transformed back to natural scale by the shared unscale below,
+    # exactly as the EM path's output is.
+    if (.tobs_occu_reroute_to_joint(fit_model, spatial, temporal, re)) {
+      fields <- .tobs_resolve_occu_spatial_fields(spatial, fit_model)
+      fit <- do.call(.tobs_fit_occu_joint_coupled, c(
+        list(model = fit_model, fields = fields, priors = priors,
+             max.iter = as.integer(max.iter), tol = tol, verbose = verbose),
+        list(...)
+      ))
+      fit <- .unscale_fit_per_process(fit, scales, process_info)
+      # Restore the natural-scale model for fitted()/predict()/diagnostics, but
+      # carry the field geometry (the graph -> cell-node count and site -> node
+      # map) the joint route resolved, which field-aware predict reads.
+      model$n_cells   <- fit$model$n_cells
+      model$site_cell <- fit$model$site_cell
+      fit$model       <- model
+      fit$intercepts  <- compute_intercepts(model, fit$means)
+      return(fit)
+    }
     # Nested-Laplace path: single-season, integrated, or dynamic
     # occupancy. The driver builds a multi-block latent prior from spatial +
     # temporal + re and attaches it to the state ("occ") M-step block, which

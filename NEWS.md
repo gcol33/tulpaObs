@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.28 (2026-06-10)
+
+* fix(occu): the standalone `occu()` varying-coefficient (SVC) spatial bar
+  `spatial(~ 1 + x || cell, graph = adj)` now fits through the joint direct-grid
+  engine, single-arm (occupancy + detection, no cover arm), instead of the EM
+  fixed-point nested-Laplace path (#81). The EM path oscillated and did not
+  converge on real EVA-scale occupancy data -- a large-amplitude field, sparse
+  detection, and a rich detection model drove the M-step to bounce and the fit
+  was truncated at the iteration cap with `converged = FALSE`. The joint engine
+  integrates the field hyperparameters on a direct outer grid with no
+  fixed-point iteration, so it cannot oscillate; it is the same engine
+  `occu_cover()` uses, with the cover arm removed. The occupancy mixture runs
+  through a new `occu_only` cell-coupling spec that reuses the occupancy /
+  detection derivatives of the `occu_cover` specs (single source of truth). The
+  reroute is scoped to the SVC case: a plain single intercept field, a correlated
+  MCAR bar, and temporal / random-effect structure stay on the EM path. `occu()`
+  still reports `sigma` / `sigma_trend` (the field SDs marginalized over the
+  grid), `spatial_field` / `trend_field`, and `predict(type = "occupancy" |
+  "change")` now reads the shared areal field at each cell. Requires
+  tulpa >= 0.0.30.
+
 ## 0.0.27 (2026-06-10)
 
 * feat(formula): the varying-coefficient spatial bar `spatial(~ 1 + x || cell,

@@ -675,6 +675,20 @@ predict.tobs_fit <- function(object, X.0 = NULL,
          "coef() / summary() for the community means, and ranef() for the ",
          "per-species deviations."), object$model$model_type), call. = FALSE)
   }
+  # Standalone occu() SVC fit rerouted through the joint direct-grid engine
+  # (gcol33/tulpaObs#81): the occupancy psi / detection p / per-cell change carry
+  # the shared areal field, so route field-aware prediction through the joint
+  # substrate (the occupancy-only twin of the occu_cover joint predict). `newdata`
+  # (or the positional `X.0` when a data.frame) carries the prediction units;
+  # `times` drives the change map.
+  if (isTRUE(object$occu_only_joint)) {
+    oc_type <- if (missing(type) || length(type) > 1L) "occupancy" else type
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_occu_joint(object, newdata = nd, type = oc_type,
+                                    times = times, level = level, nsim = nsim,
+                                    draws = draws, time_col = time_col))
+  }
   type <- match.arg(type)
 
   # State posterior / NA-response prediction (nested-Laplace only).
