@@ -81,13 +81,11 @@
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
   use_nb <- identical(model$mixture %||% "poisson", "negbin")
 
-  # Single intercept RE on the initial-abundance (lambda) arm (tulpaObs#51), via
-  # the shared count-NUTS RE helpers. The open N-mixture's other arms (p / omega
-  # / gamma) keep fixed effects; a non-lambda RE is rejected with a pointer.
+  # Single intercept RE on the initial-abundance (lambda, tulpaObs#51) OR the
+  # detection (p, tulpaObs#82) arm, via the shared count-NUTS RE helpers. The
+  # offset is non-centered and routed to eta_lambda or eta_p in the C++ eval; the
+  # survival / recruitment arms never carry structured terms (rejected upstream).
   re_info <- .tobs_count_nuts_re_info(re, model)
-  if (!is.null(re_info) && re_info$arm != 0L)
-    stop("dyn_abun() NUTS supports a random effect on the initial-abundance ",
-         "(lambda) arm only; put the RE on the state formula.", call. = FALSE)
   n_re_groups <- if (!is.null(re_info)) re_info$n_groups else 0L
   lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lambda), ncol(X_p), ncol(X_omega),
                                     ncol(X_gamma), use_nb = use_nb,

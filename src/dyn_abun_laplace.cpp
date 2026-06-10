@@ -180,3 +180,57 @@ Rcpp::List cpp_dyn_abun_init_loglik(
         Rcpp::Named("d1")   = d1,
         Rcpp::Named("d2")   = d2);
 }
+
+// Per-site detection-arm marginal for the grouped random-effect AGHQ path on the
+// detection (p) arm (tulpaObs#82). Returns the forward marginal logL(eta_p) and,
+// with `deriv`, its first and second derivatives in the site-level detection
+// offset eta_p, holding the initial-abundance / survival / recruitment predictors
+// and the dispersion fixed. Unlike the initial-abundance arm (cpp_dyn_abun_init_-
+// loglik, an O(K) dot over precomputed c-weights), the detection predictor enters
+// every season's observation pmf, so the full O(K^2 T) forward marginal is
+// re-evaluated per call (no across-node precompute) -- the make_site closes over
+// the fixed arms and supplies the varying eta_p per quadrature node / Newton step.
+// `site` are 0-based indices into `y`; eta_lambda / eta_p are aligned with `site`
+// (length m); eta_omega / eta_gamma are length m (constant rate per site) or
+// m*(T-1) in row-major (site k, interval iv) order for season-varying rates.
+// [[Rcpp::export]]
+Rcpp::List cpp_dyn_abun_p_loglik(
+    Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
+    Rcpp::IntegerVector site, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p,
+    Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma,
+    bool use_nb = false, double eta_logr = 0.0, bool deriv = true
+) {
+    if ((int)y.size() != n_sites * T * J)
+        Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
+    const int m = site.size();
+    const int nIv = T - 1;
+    if (eta_lambda.size() != m || eta_p.size() != m)
+        Rcpp::stop("eta_lambda / eta_p must be aligned with `site` (length %d).", m);
+    const bool om_iv = (eta_omega.size() == m * nIv);
+    const bool gm_iv = (eta_gamma.size() == m * nIv);
+    if (!om_iv && eta_omega.size() != m)
+        Rcpp::stop("eta_omega must have length m or m*(T-1).");
+    if (!gm_iv && eta_gamma.size() != m)
+        Rcpp::stop("eta_gamma must have length m or m*(T-1).");
+
+    Rcpp::NumericVector logL(m), d1(m), d2(m);
+    std::vector<double> eo(nIv), eg(nIv);
+    const int* yp = y.begin();
+    for (int k = 0; k < m; ++k) {
+        const int i = site[k];
+        if (i < 0 || i >= n_sites) Rcpp::stop("site index out of range.");
+        for (int iv = 0; iv < nIv; ++iv) {
+            eo[iv] = om_iv ? eta_omega[k * nIv + iv] : eta_omega[k];
+            eg[iv] = gm_iv ? eta_gamma[k * nIv + iv] : eta_gamma[k];
+        }
+        tulpaObs::DynAbunPCurv r = tulpaObs::compute_dyn_abun_p_curv(
+            yp + (std::size_t)i * T * J, T, J, K,
+            eta_lambda[k], eta_p[k], eo.data(), eg.data(), use_nb, eta_logr, deriv);
+        logL[k] = r.log_lik;
+        if (deriv) { d1[k] = r.d1; d2[k] = r.d2; }
+    }
+    return Rcpp::List::create(
+        Rcpp::Named("logL") = logL,
+        Rcpp::Named("d1")   = d1,
+        Rcpp::Named("d2")   = d2);
+}

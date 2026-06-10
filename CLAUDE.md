@@ -209,9 +209,18 @@ latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shar
   (O(K^2 T) HMM BACKWARD pass `compute_dyn_abun_init_weights`) precomputed ONCE per
   make_site (`cpp_dyn_abun_init_weights_mat`); each AGHQ node = O(K) dot
   (`cpp_dyn_abun_init_loglik`). Pure-R `make_site` AGHQ (`.tobs_dyn_abun_re_aghq`, no
-  native oracle), Pois+NB; det-arm RE gated, omega/gamma never structured. Shared pmf
-  helpers (`da_obs_season_pmf`/`da_recruit_pmf`/`da_binom_pmf_row`) back forward
-  gradient kernel + backward `c` pass. Areal icar/car_proper/bym2 on initial-abundance
+  native oracle), Pois+NB; omega/gamma never structured. **Detection-arm RE (#82)**:
+  `.tobs_dyn_abun_re_aghq` branches on arm; a p-arm RE shifts eta_p, which enters
+  EVERY season's obs pmf, so `c(n1)` cannot be precomputed -- each AGHQ node
+  re-evaluates the full O(K^2 T) forward marginal via a closed-form SECOND-ORDER
+  eta_p forward-mode pass (`compute_dyn_abun_p_curv` -> `cpp_dyn_abun_p_loglik`:
+  transition/initial are p-free, so `d obs`/`d2 obs` are the only source terms,
+  propagated + renormalised per season; logL/d1/d2 FD-validated). NUTS p-arm RE
+  (`src/dyn_abun_nuts.cpp` `re_arm` 0=lambda|1=p): non-centered offset to eta_p,
+  grad via `grad_eta_p`; both-arm RE rejected (AGHQ integrates one arm). Det-arm RE
+  params named `sigma_p<t>_*` / `log_sigma_p_*`. Shared pmf helpers
+  (`da_obs_season_pmf`/`da_recruit_pmf`/`da_binom_pmf_row`) back the forward
+  gradient kernel, the backward `c` pass, AND the eta_p second-order pass. Areal icar/car_proper/bym2 on initial-abundance
   arm via `nested_laplace` (#51, `R/dyn_abun_spatial.R` over shared areal-BFGS driver
   `R/areal_bfgs.R`): BFGS over exact forward-HMM marginal (`cpp_dyn_abun_total_log_lik`
   analytic grad) + CAR prior, FD-Hessian observed-info Laplace integrated over
@@ -377,7 +386,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm; NUTS+areal car_proper field on abundance arm (#72) |
 | Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal); areal field; NUTS+areal car_proper field on abundance arm (half-normal, #72) |
 | False-positive occupancy | Yes | Yes | `fp_occu()` (#40) — see Architecture. NUTS single psi intercept RE; Laplace grouped RE psi OR p11; areal psi arm; NUTS+areal car_proper field on psi arm (#72) |
-| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. Pois/NB init; season-varying omega/gamma via `[n_sites x (T-1)]` covariate, interval-indexed forward kernel, all backends (#80). NUTS single init-abundance intercept RE; Laplace grouped RE init arm; areal init arm; NUTS+areal car_proper field on init-abundance arm (#72) |
+| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. Pois/NB init; season-varying omega/gamma via `[n_sites x (T-1)]` covariate, interval-indexed forward kernel, all backends (#80). NUTS single intercept RE on init-abundance OR detection arm; Laplace grouped RE on init-abundance OR detection arm (#82, p-arm = per-node full-forward second-order eta_p pass); areal init arm; NUTS+areal car_proper field on init-abundance arm (#72) |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |

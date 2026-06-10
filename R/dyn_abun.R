@@ -170,25 +170,34 @@
 # ---------------------------------------------------------------------------
 
 # AGHQ refinement of a dyn_abun fit with a site-level grouped RE on the
-# initial-abundance (lambda) arm. The Dail-Madsen marginal is NOT a closed-form
-# per-site mixture (unlike the static N-mixture / fp_occu families), so it does
-# not factorise into the closed-form A / B weights the count oracle and the
-# fp_occu make_site path use. But the random effect shifts only eta_lambda, which
-# enters solely the season-1 initial distribution, and the transition /
-# observation operators are linear in the forward state -- so the per-site log
-# marginal (and its first and second derivatives in eta_lambda) propagate through
-# the exact HMM forward recursion (src/dyn_abun_kernel.h, Want2ndLambda). That
-# makes the per-site marginal a function of one scalar offset per site, exactly
-# the per-row separability the AGHQ engine's make_site contract needs. tulpaObs
-# supplies the forward-recursion derivatives via cpp_dyn_abun_site_curv; tulpa
-# owns the quadrature / per-group mode / log-Cholesky / LKJ / marginal Hessian.
-# The detection / survival / recruitment predictors are held fixed during the RE
-# integration (closed over per make_site call). `design` is the lambda-arm RE
-# design; `beta_*` / `log_r` the warm starts. Returns refined estimates or NULL
-# when the pass does not apply (caller keeps the no-RE fit).
+# initial-abundance (lambda) arm OR the detection (p) arm. The Dail-Madsen
+# marginal is NOT a closed-form per-site mixture (unlike the static N-mixture /
+# fp_occu families), so it does not factorise into the closed-form A / B weights
+# the count oracle and the fp_occu make_site path use. But a single grouping
+# factor's RE shifts a per-site SCALAR offset on one arm, and the per-site log
+# marginal (and its first and second derivatives in that offset) propagate through
+# the exact HMM forward recursion (src/dyn_abun_kernel.h) -- exactly the per-row
+# separability the AGHQ engine's make_site contract needs. tulpa owns the
+# quadrature / per-group mode / log-Cholesky / LKJ / marginal Hessian; tulpaObs
+# supplies the per-site marginal and its eta-derivatives.
+#
+# The two arms differ only in WHERE the offset enters and HOW cheaply the marginal
+# re-evaluates per quadrature node:
+#   - lambda (tulpaObs#51): eta_lambda enters ONLY the season-1 initial
+#     distribution, so the data-conditional weights c(n1) = P(all data | N_1 = n1)
+#     are eta-independent and precomputed ONCE (the O(K^2 T) HMM backward pass,
+#     cpp_dyn_abun_init_weights_mat); each node is an O(K) dot (cpp_dyn_abun_init_-
+#     loglik).
+#   - p (tulpaObs#82): eta_p enters every season's observation pmf, so c cannot be
+#     precomputed -- each node re-evaluates the full O(K^2 T) forward marginal with
+#     a closed-form second-order eta_p forward-mode pass (cpp_dyn_abun_p_loglik).
+# The non-offset arms and the dispersion are held fixed during the integration
+# (closed over per make_site call). `arm` is "lambda" or "p"; `design` the
+# corresponding RE design; `beta_*` / `log_r` the warm starts. Returns refined
+# estimates or NULL when the pass does not apply (caller keeps the no-RE fit).
 .tobs_dyn_abun_re_aghq <- function(model, design, beta_lambda, beta_p, beta_omega,
                                    beta_gamma, log_r = NA_real_, Sigma_list, b,
-                                   n_quad = 9L, lkj_eta = 1.5,
+                                   arm = "lambda", n_quad = 9L, lkj_eta = 1.5,
                                    theta_prior_sd = 100) {
   idx1 <- as.integer(design[[1]]$idx)
   ng   <- as.integer(design[[1]]$n_groups)
@@ -216,42 +225,79 @@
   i_lam <- off[1] + seq_len(p_lam); i_p  <- off[2] + seq_len(p_p)
   i_om  <- off[3] + seq_len(p_om);  i_gm <- off[4] + seq_len(p_gm)
   i_logr <- if (use_nb) off[5] + 1L else NA_integer_
+  nIv <- T - 1L
   cl <- function(e) pmin(pmax(e, -30), 30)
   keep <- seq_len(N)
 
-  # make_site(theta) closes over the current detection / survival / recruitment
-  # predictors (held fixed) and the dispersion. eta_lambda enters only the
-  # season-1 initial distribution, so the per-site conditional likelihood
-  # c(n1) = P(all data | N_1 = n1) is precomputed ONCE here (the O(K^2 T) HMM
-  # backward pass); each per-group-Newton / quadrature-node evaluation is then an
-  # O(K) dot product over c (cpp_dyn_abun_init_loglik). The engine supplies the
-  # RE offset Z b through the eta passed to deriv / lmat.
-  make_site <- function(theta) {
-    e_p  <- cl(as.numeric(X_p %*% theta[i_p]))
-    e_om <- cl(as.numeric(X_omega %*% theta[i_om]))
-    e_gm <- cl(as.numeric(X_gamma %*% theta[i_gm]))
-    elr  <- if (use_nb) as.numeric(theta[i_logr]) else 0
-    Cmat <- cpp_dyn_abun_init_weights_mat(
-      y_flat, N, T, J, K, site = as.integer(seq_len(N) - 1L),
-      eta_p = e_p, eta_omega = e_om, eta_gamma = e_gm)
-    list(
-      eta_re = as.numeric(X_lambda %*% theta[i_lam]),
-      deriv = function(rows, eta) {
-        r <- cpp_dyn_abun_init_loglik(
-          Cmat[rows, , drop = FALSE], as.numeric(eta),
-          use_nb = use_nb, eta_logr = elr, deriv = TRUE)
-        list(logL = r$logL, d1 = r$d1, d2 = r$d2)
-      },
-      lmat = function(rows, ETA) {
-        Csub <- Cmat[rows, , drop = FALSE]
-        out <- matrix(0, length(rows), ncol(ETA))
-        for (cc in seq_len(ncol(ETA))) {
-          out[, cc] <- cpp_dyn_abun_init_loglik(
-            Csub, as.numeric(ETA[, cc]), use_nb = use_nb, eta_logr = elr,
-            deriv = FALSE)$logL
-        }
-        out
-      })
+  # Subset a (possibly season-varying) survival / recruitment arm eta to a row
+  # subset, in the site-major interval-minor order cpp_dyn_abun_p_loglik expects.
+  sub_arm <- function(e, rows) {
+    if (length(e) == N) return(e[rows])
+    as.numeric(t(matrix(e, nrow = N, ncol = nIv, byrow = TRUE)[rows, , drop = FALSE]))
+  }
+
+  if (identical(arm, "lambda")) {
+    # eta_lambda enters only the season-1 initial distribution; c(n1) precomputed
+    # ONCE, each node an O(K) dot.
+    make_site <- function(theta) {
+      e_p  <- cl(as.numeric(X_p %*% theta[i_p]))
+      e_om <- cl(as.numeric(X_omega %*% theta[i_om]))
+      e_gm <- cl(as.numeric(X_gamma %*% theta[i_gm]))
+      elr  <- if (use_nb) as.numeric(theta[i_logr]) else 0
+      Cmat <- cpp_dyn_abun_init_weights_mat(
+        y_flat, N, T, J, K, site = as.integer(seq_len(N) - 1L),
+        eta_p = e_p, eta_omega = e_om, eta_gamma = e_gm)
+      list(
+        eta_re = as.numeric(X_lambda %*% theta[i_lam]),
+        deriv = function(rows, eta) {
+          r <- cpp_dyn_abun_init_loglik(
+            Cmat[rows, , drop = FALSE], as.numeric(eta),
+            use_nb = use_nb, eta_logr = elr, deriv = TRUE)
+          list(logL = r$logL, d1 = r$d1, d2 = r$d2)
+        },
+        lmat = function(rows, ETA) {
+          Csub <- Cmat[rows, , drop = FALSE]
+          out <- matrix(0, length(rows), ncol(ETA))
+          for (cc in seq_len(ncol(ETA))) {
+            out[, cc] <- cpp_dyn_abun_init_loglik(
+              Csub, as.numeric(ETA[, cc]), use_nb = use_nb, eta_logr = elr,
+              deriv = FALSE)$logL
+          }
+          out
+        })
+    }
+  } else {
+    # eta_p enters every season's observation pmf; the full forward marginal is
+    # re-evaluated per node (closed-form second-order eta_p forward-mode pass). The
+    # initial-abundance / survival / recruitment predictors are held fixed.
+    make_site <- function(theta) {
+      e_lam <- cl(as.numeric(X_lambda %*% theta[i_lam]))
+      e_om  <- cl(as.numeric(X_omega %*% theta[i_om]))
+      e_gm  <- cl(as.numeric(X_gamma %*% theta[i_gm]))
+      elr   <- if (use_nb) as.numeric(theta[i_logr]) else 0
+      list(
+        eta_re = as.numeric(X_p %*% theta[i_p]),
+        deriv = function(rows, eta) {
+          r <- cpp_dyn_abun_p_loglik(
+            y_flat, N, T, J, K, site = as.integer(rows - 1L),
+            eta_lambda = e_lam[rows], eta_p = as.numeric(eta),
+            eta_omega = sub_arm(e_om, rows), eta_gamma = sub_arm(e_gm, rows),
+            use_nb = use_nb, eta_logr = elr, deriv = TRUE)
+          list(logL = r$logL, d1 = r$d1, d2 = r$d2)
+        },
+        lmat = function(rows, ETA) {
+          el <- e_lam[rows]; eo <- sub_arm(e_om, rows); eg <- sub_arm(e_gm, rows)
+          si <- as.integer(rows - 1L)
+          out <- matrix(0, length(rows), ncol(ETA))
+          for (cc in seq_len(ncol(ETA))) {
+            out[, cc] <- cpp_dyn_abun_p_loglik(
+              y_flat, N, T, J, K, site = si, eta_lambda = el,
+              eta_p = as.numeric(ETA[, cc]), eta_omega = eo, eta_gamma = eg,
+              use_nb = use_nb, eta_logr = elr, deriv = FALSE)$logL
+          }
+          out
+        })
+    }
   }
 
   re_terms <- lapply(design, function(d) list(
@@ -288,16 +334,19 @@
   }
 
   # mean_N1 / log_lik at the refined estimate + posterior-mode RE offset (for
-  # fitted()); the reported marginal log-likelihood is the engine's integrated
-  # value.
-  eta_lambda <- cl(as.numeric(X_lambda %*% bl) + .tobs_re_offset(design, b_out))
+  # fitted()); the offset rides whichever arm carries the term. The reported
+  # marginal log-likelihood is the engine's integrated value.
+  off_re <- .tobs_re_offset(design, b_out)
+  eta_lambda <- cl(as.numeric(X_lambda %*% bl) +
+                     if (identical(arm, "lambda")) off_re else 0)
+  eta_p_vec  <- as.numeric(X_p %*% bp) + if (identical(arm, "p")) off_re else 0
   ev <- cpp_dyn_abun_total_log_lik(
-    y_flat, N, T, J, K, eta_lambda, as.numeric(X_p %*% bp),
+    y_flat, N, T, J, K, eta_lambda, eta_p_vec,
     as.numeric(X_omega %*% bo), as.numeric(X_gamma %*% bg),
     use_nb = use_nb, eta_logr = if (use_nb) log_r_ref else 0)
 
   list(
-    ok = TRUE, arm = "lambda",
+    ok = TRUE, arm = arm,
     beta_lambda = bl, beta_p = bp, beta_omega = bo, beta_gamma = bg,
     log_r = log_r_ref, r = if (use_nb) exp(log_r_ref) else NA_real_,
     mixture = model$mixture %||% "poisson",
@@ -309,11 +358,11 @@
 
 
 # Fit a Dail-Madsen open N-mixture with a site-level grouped RE on the
-# initial-abundance (lambda) arm under the Laplace / AGHQ path (one grouping
-# factor, RE dim <= 3; tulpaObs#51). The survival (omega) and recruitment (gamma)
-# arms never carry structured terms (rejected upstream -- they are processes > 2);
-# a detection (p) RE is not yet wired on either engine, so this fits only a
-# lambda-arm RE, mirroring the NUTS scope.
+# initial-abundance (lambda, tulpaObs#51) OR the detection (p, tulpaObs#82) arm
+# under the Laplace / AGHQ path (one grouping factor, RE dim <= 3). The survival
+# (omega) and recruitment (gamma) arms never carry structured terms (rejected
+# upstream -- they are processes > 2). RE on BOTH arms at once is rejected: the
+# AGHQ path integrates one arm at a time.
 .tobs_fit_dyn_abun_re <- function(model, re, max_iter = 300L, tol = 1e-8,
                                   verbose = TRUE, n_quad = 9L, lkj_eta = 1.5,
                                   theta_prior_sd = 100) {
@@ -321,15 +370,18 @@
   arms <- .tobs_re_split_two_arms(
     re, model, "lambda", "p",
     paste0("A dyn_abun random effect shared across the initial-abundance and ",
-           "detection arms is not supported."))
-  if (length(arms$p)) {
-    stop("dyn_abun() random effects are supported on the initial-abundance ",
-         "(lambda) arm only; a detection-arm random effect is not yet wired on ",
-         "either engine. (tulpaObs#51)", call. = FALSE)
+           "detection arms is not supported; fit a separate RE per arm."))
+  if (length(arms$lambda) && length(arms$p)) {
+    stop("Random effects on BOTH the initial-abundance (lambda) and detection ",
+         "(p) arms in one dyn_abun fit are not supported; the AGHQ path ",
+         "integrates one arm at a time. Put the RE on lambda OR p. (tulpaObs#82)",
+         call. = FALSE)
   }
-  design <- arms$lambda
+  arm    <- if (length(arms$lambda)) "lambda" else "p"
+  design <- if (length(arms$lambda)) arms$lambda else arms$p
   if (!length(design)) {
-    stop("dyn_abun() found no initial-abundance random effect to fit.", call. = FALSE)
+    stop("dyn_abun() found no initial-abundance or detection random effect to fit.",
+         call. = FALSE)
   }
 
   warm <- tryCatch(
@@ -357,7 +409,7 @@
   ref <- .tobs_dyn_abun_re_aghq(
     model, design, beta_lambda = beta_lambda_init, beta_p = beta_p_init,
     beta_omega = beta_omega_init, beta_gamma = beta_gamma_init, log_r = log_r_init,
-    Sigma_list = Sigma_init, b = b_init,
+    Sigma_list = Sigma_init, b = b_init, arm = arm,
     n_quad = as.integer(n_quad), lkj_eta = lkj_eta, theta_prior_sd = theta_prior_sd)
   if (is.null(ref) || !isTRUE(ref$ok)) {
     stop("dyn_abun() AGHQ random-effect refinement did not produce a usable fit ",
@@ -528,11 +580,12 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
 
-  # Grouped random effect on the initial-abundance arm (gcol33/tulpaObs#51):
-  # append the variance components (sigma_g_*, cor_g_*_* for a correlated block)
-  # and the per-group BLUPs after the fixed block, exactly as the other count
-  # families do. The fixed block (n_fixed leading coords) still governs coef() /
-  # vcov() / confint(); ranef() / summary() read the trailing RE columns by name.
+  # Grouped random effect on the initial-abundance (gcol33/tulpaObs#51) or the
+  # detection arm (gcol33/tulpaObs#82): append the variance components (sigma_g_*,
+  # cor_g_*_* for a correlated block) and the per-group BLUPs after the fixed
+  # block, exactly as the other count families do. The fixed block (n_fixed
+  # leading coords) still governs coef() / vcov() / confint(); ranef() / summary()
+  # read the trailing RE columns by name.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,

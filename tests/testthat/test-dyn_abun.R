@@ -321,22 +321,97 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE"
   expect_gt(mean(est_sigma), 0.3)   # not collapsed to zero
 })
 
-test_that("dyn_abun() RE is initial-abundance-arm only (both engines)", {
-  s <- sim_dyn_abun_lambda_re(N = 25, T = 3, J = 2, ngrp = 4,
-                              beta_lambda = c(log(5), 0.2), p = 0.5, omega = 0.6,
-                              gamma = 1, sigma_b = 0.4, seed = 2)
-  # Laplace: a detection-arm RE is not yet wired -> rejected with a pointer.
+# --- detection-arm random effect (tulpaObs#82) ----------------------------
+
+# Dail-Madsen data with a per-site intercept RE on the detection (p) arm.
+sim_dyn_abun_p_re <- function(N, T, J, ngrp, beta_lambda, beta_p, omega, gamma,
+                              sigma_b, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  grp <- rep(seq_len(ngrp), length.out = N)
+  b   <- stats::rnorm(ngrp, sd = sigma_b)
+  data <- data.frame(x1 = stats::rnorm(N), g = factor(grp))
+  lambda <- exp(as.numeric(model.matrix(~ x1, data) %*% beta_lambda))
+  pdet   <- stats::plogis(beta_p + b[grp])
+  y <- array(0L, dim = c(N, J, T))
+  for (i in seq_len(N)) {
+    Ni <- stats::rpois(1L, lambda[i])
+    for (t in seq_len(T)) {
+      if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega) + stats::rpois(1L, gamma)
+      y[i, , t] <- stats::rbinom(J, Ni, pdet[i])
+    }
+  }
+  list(y = y, data = data, sigma_b = sigma_b, beta_p = beta_p)
+}
+
+test_that("dyn_abun() Laplace AGHQ recovers a site-grouped detection RE", {
+  skip_on_cran()
+  skip_if_fast()
+  # The detection RE shifts only eta_p, which enters every season's observation
+  # pmf, so (unlike the initial-abundance arm) the per-site marginal is
+  # re-evaluated through the exact HMM forward recursion per quadrature node with a
+  # closed-form second-order eta_p forward-mode pass. Each site contributes T*J
+  # detection observations, so the detection RE is well identified and AGHQ debias
+  # recovers sigma_p with little attenuation.
+  est_sigma <- numeric(3); est_p0 <- numeric(3)
+  for (k in seq_len(3)) {
+    s <- sim_dyn_abun_p_re(N = 100, T = 3, J = 4, ngrp = 12,
+                           beta_lambda = c(log(8), 0.3), beta_p = stats::qlogis(0.5),
+                           omega = 0.6, gamma = 1, sigma_b = 0.6, seed = 40 + k)
+    fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 45),
+                detection = ~ (1 | g), y = s$y, method = "laplace", verbose = FALSE,
+                control = list(progress = FALSE, n.quad = 5L))
+    if (k == 1L) {
+      expect_identical(fit$method, "laplace")
+      expect_identical(fit$dyn_abun_re$arm, "p")
+      expect_true("sigma_p1_(Intercept)" %in% names(fit$means))
+      re <- ranef(fit)
+      expect_true(is.data.frame(re))
+      expect_equal(nrow(re), 12L)
+    }
+    est_p0[k]    <- fit$means[["p_(Intercept)"]]
+    est_sigma[k] <- fit$means[["sigma_p1_(Intercept)"]]
+  }
+  expect_lt(abs(mean(est_p0) - stats::qlogis(0.5)), 0.25)
+  expect_lt(abs(mean(est_sigma) - 0.6), 0.2)
+  expect_gt(mean(est_sigma), 0.35)   # not collapsed to zero
+})
+
+test_that("dyn_abun() NUTS samples a single detection RE and recovers it", {
+  skip_on_cran()
+  skip_if_fast()
+  s <- sim_dyn_abun_p_re(N = 60, T = 3, J = 3, ngrp = 6,
+                         beta_lambda = c(log(6), 0.3), beta_p = stats::qlogis(0.5),
+                         omega = 0.6, gamma = 1, sigma_b = 0.5, seed = 14)
+  fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 28),
+              detection = ~ (1 | g), y = s$y, method = "nuts", verbose = FALSE,
+              control = list(n.iter = 350L, n.warmup = 250L, n.chains = 1L,
+                             seed = 1L))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$re$arm, "p")
+  expect_equal(fit$re$n_groups, 6L)
+  expect_lt(abs(fit$re$sigma - 0.5), 0.45)
+  expect_gt(fit$re$sigma_sd, 0)
+  expect_true(any(grepl("^log_sigma_p_", colnames(fit$draws))))  # det-arm sigma
+  expect_lt(mean(fit$nuts$divergent), 0.2)
+})
+
+test_that("dyn_abun() RE is one arm at a time (lambda OR p, not both)", {
+  s <- sim_dyn_abun_p_re(N = 25, T = 3, J = 2, ngrp = 4,
+                         beta_lambda = c(log(5), 0.2), beta_p = stats::qlogis(0.5),
+                         omega = 0.6, gamma = 1, sigma_b = 0.4, seed = 2)
+  # A random effect on BOTH the initial-abundance and detection arms in one fit is
+  # rejected (the AGHQ path integrates one arm at a time).
   expect_error(
-    tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 25),
+    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K_max = 25),
          detection = ~ (1 | g), y = s$y, method = "laplace",
          control = list(progress = FALSE)),
-    "initial-abundance|lambda")
-  # NUTS: same arm restriction.
+    "BOTH|one arm")
+  # NUTS: a shared term across the two arms also routes to the one-arm error.
   expect_error(
-    tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 25),
+    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K_max = 25),
          detection = ~ (1 | g), y = s$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
-    "initial-abundance|lambda|single intercept")
+    "ONE arm|one arm|BOTH")
 })
 
 

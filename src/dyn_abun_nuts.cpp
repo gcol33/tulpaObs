@@ -28,8 +28,11 @@ struct DynNutsModel {
     // whether the per-interval forward score is scattered over the interval rows.
     bool om_sv = false, gm_sv = false;
     // Optional single intercept RE on the initial-abundance (lambda) arm
-    // (tulpaObs#51): per-site offset sigma_re * z[group], non-centered, with one
-    // log_sigma_re hyperparameter. re_arm = -1 none, 0 lambda. The RE block
+    // (tulpaObs#51) or the detection (p) arm (tulpaObs#82): per-site offset
+    // sigma_re * z[group], non-centered, with one log_sigma_re hyperparameter.
+    // re_arm = -1 none, 0 lambda, 1 detection. The offset shifts eta_lambda or
+    // eta_p accordingly; both reuse the per-site grad already returned by the
+    // forward kernel (grad_eta_lambda / grad_eta_p). The RE block
     // [z_1..z_G, log_sigma_re] follows the (optional) log r coord.
     int re_arm = -1, n_re_groups = 0, o_re_z = 0, o_re_logsig = 0, n_pre_re = 0;
     double sigma_re_lsd = 1.5;
@@ -61,7 +64,7 @@ inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
     if (m.use_nb) { m.o_logr = m.total; m.total += 1; }   // log r after the betas
     m.n_pre_re = m.total;                                 // coords under the beta prior
     if (spec.containsElementNamed("re_arm")) m.re_arm = Rcpp::as<int>(spec["re_arm"]);
-    if (m.re_arm == 0) {
+    if (m.re_arm == 0 || m.re_arm == 1) {
         Rcpp::IntegerVector rg = spec["re_group"];
         if ((int) rg.size() != m.n_sites) Rcpp::stop("re_group must have length n_sites");
         m.re_group.resize(m.n_sites);
@@ -84,7 +87,7 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
     const int nIv = m.T - 1;
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
     const double eta_logr = m.use_nb ? theta[m.o_logr] : 0.0;
-    const bool has_re = m.re_arm == 0;
+    const bool has_re = (m.re_arm == 0 || m.re_arm == 1);
     const double sigma_re = has_re ? std::exp(theta[m.o_re_logsig]) : 0.0;
     double grad_logr = 0.0, grad_re_logsig = 0.0;
     const bool has_field = m.field.active();
@@ -106,7 +109,8 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
             eo[iv] = v_o; eg[iv] = v_g;
         }
         const double re_off = has_re ? sigma_re * theta[m.o_re_z + m.re_group[i]] : 0.0;
-        if (has_re) el += re_off;
+        if (m.re_arm == 0) el += re_off;
+        else if (m.re_arm == 1) ep += re_off;
         if (has_field) el += zfield[m.field.field_map[i]];
         DynAbunSiteResult r = compute_dyn_abun_site(
             m.y.data() + (std::size_t)i * m.T * m.J, m.T, m.J, m.K, el, ep,
@@ -125,8 +129,9 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
         }
         grad_logr += r.grad_eta_logr;
         if (has_re) {
-            grad[m.o_re_z + m.re_group[i]] += sigma_re * r.grad_eta_lambda;
-            grad_re_logsig += r.grad_eta_lambda * re_off;
+            const double g_arm = (m.re_arm == 0) ? r.grad_eta_lambda : r.grad_eta_p;
+            grad[m.o_re_z + m.re_group[i]] += sigma_re * g_arm;
+            grad_re_logsig += g_arm * re_off;
         }
         if (has_field) grad_z[m.field.field_map[i]] += r.grad_eta_lambda;
     }

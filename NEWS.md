@@ -1,5 +1,39 @@
 # tulpaObs NEWS
 
+## 0.0.29 (2026-06-10)
+
+* test(refimpl): `removal_laplace` and `distance_laplace` now gate head-to-head
+  against `unmarked::multinomPois` and `unmarked::distsamp` (coefficients to
+  ~5e-3, byte-identical log-likelihoods), extending the N-mixture-vs-`pcount`
+  gold standard to the removal and distance families; plus a CI-runnable
+  community-mean recovery smoke gate for `ms_abun` (gcol33/tulpaObs#83).
+* test(recovery): multi-seed point recovery for `dyn_occu` (psi1, gamma, epsilon,
+  p) with an independent R forward-recursion anchor for the dynamic-occupancy HMM
+  marginal, and multi-seed recovery for single-source `int_occu` (gcol33/tulpaObs#84).
+  NOTE: both families' deterministic Laplace standard errors are overconfident
+  (the occupancy-intercept SE is ~an order of magnitude too small), so the gates
+  assert point recovery; the SE-calibration gap is a separate kernel issue.
+* docs: `DESCRIPTION` gains `URL` / `BugReports`; internal issue tokens stripped
+  from rendered help; two non-ASCII characters removed from code comments
+  (gcol33/tulpaObs#85).
+
+* feat(dyn_abun): a grouped random intercept on the **detection (`p`) arm** now
+  fits on both engines (#82), alongside the existing initial-abundance (`lambda`)
+  arm RE. Put the bar on the detection formula, e.g.
+  `tobs(~ x, detection = ~ (1 | site), family = dyn_abun(), y = y)`. Unlike the
+  initial-abundance arm -- where the predictor enters only the season-1 initial
+  distribution, so the data-conditional weights are precomputed once and each
+  quadrature node is an O(K) dot -- the detection predictor enters every season's
+  observation pmf, so each AGHQ node re-evaluates the full exact HMM-forward
+  marginal through a closed-form second-order `eta_p` forward-mode pass
+  (`compute_dyn_abun_p_curv` / `cpp_dyn_abun_p_loglik`); NUTS adds a non-centered
+  `p`-arm offset routed through the kernel's existing detection gradient. One
+  grouping factor, on `lambda` OR `p` (a random effect on both arms in one fit is
+  rejected; the AGHQ path integrates one arm at a time); survival / recruitment
+  never carry random effects. Poisson and negative-binomial initial abundance.
+  `ranef()` / `coef()` surface the detection RE as `sigma_p<t>_*` (AGHQ) and
+  `log_sigma_p_*` (NUTS), with AGHQ debias on `sigma_p`.
+
 ## 0.0.28 (2026-06-10)
 
 * fix(occu): the standalone `occu()` varying-coefficient (SVC) spatial bar

@@ -340,6 +340,197 @@ inline DynAbunSiteResult compute_dyn_abun_site(
                                  eo.data(), eg.data(), use_nb, eta_logr);
 }
 
+struct DynAbunPCurv {
+    double log_lik;
+    double d1;   // d log L / d eta_p
+    double d2;   // d^2 log L / d eta_p^2
+};
+
+// Per-site log marginal L(eta_p) and its first / second derivatives in the
+// site-level detection offset eta_p, by a SECOND-ORDER forward-mode pass through
+// the same exact HMM forward recursion as compute_dyn_abun_site. eta_p is a single
+// scalar per site (the detection intercept shifts eta_p uniformly across the
+// site's visits), so a grouped detection random effect adds a scalar offset to it
+// -- exactly the per-row separability the AGHQ make_site contract needs. Unlike
+// the initial-abundance arm (where eta_lambda enters ONLY the season-1 initial
+// distribution, so the data-conditional weights c(n1) are eta-independent and
+// precomputed once), eta_p enters the observation pmf at EVERY season, so the full
+// O(K^2 T) forward marginal is re-evaluated per call (the per-node-cost obstacle of
+// tulpaObs#82). Detection enters only the observation operator obs_t(n); the
+// survival / recruitment transition and the initial distribution are p-independent,
+// so the forward-mode first and second derivatives propagate through the linear
+// transition unchanged and the only source terms are d obs / d eta_p and
+// d^2 obs / d eta_p^2, both closed form:
+//   obs_t(n) = prod_j Binom(y_tj | n, p),  p = invlogit(eta_p)
+//   d  log obs_t(n) / d eta_p = sum_j (y_tj - n p) =: g_t(n)
+//   d2 log obs_t(n) / d eta_p^2 = - (#visits) n p(1-p)
+//   d  obs = obs g,  d2 obs = obs (g^2 + d2 log obs).
+// Per season log L += log c_t, with c_t the forward normaliser; the first
+// derivative is sum_t c_t' / c_t (= grad_eta_p of compute_dyn_abun_site) and the
+// second is sum_t [c_t'' / c_t - (c_t' / c_t)^2]. The forward state and its first
+// and second eta_p derivatives are renormalised each season exactly as the
+// likelihood is, keeping the recursion stable. With want_deriv = false only log L
+// is formed (the AGHQ lmat path needs the marginal alone). Poisson or NB initial
+// abundance; eta_omega / eta_gamma are interval-indexed (length T-1).
+inline DynAbunPCurv compute_dyn_abun_p_curv(
+    const int* y, int T, int J, int K,
+    double eta_lambda, double eta_p,
+    const double* eta_omega, const double* eta_gamma,
+    bool use_nb = false, double eta_logr = 0.0, bool want_deriv = true
+) {
+    const int S = K + 1;
+    const int nIv = T - 1;
+    const double lambda = std::exp(eta_lambda);
+    const double p      = da_inv_logit(eta_p);
+    const double logp = std::log(p), log1mp = std::log1p(-p);
+    const double pq = p * (1.0 - p);
+    const double rr = use_nb ? std::exp(eta_logr) : 0.0;
+
+    // Per-interval survival / recruitment pmfs (p-independent).
+    std::vector<double> logom(nIv), log1mom(nIv);
+    std::vector<std::vector<double> > pois(nIv);
+    for (int iv = 0; iv < nIv; ++iv) {
+        const double omega = da_inv_logit(eta_omega[iv]);
+        const double gamma = std::exp(eta_gamma[iv]);
+        logom[iv] = std::log(omega); log1mom[iv] = std::log1p(-omega);
+        pois[iv].resize(S);
+        da_recruit_pmf(S, gamma, std::log(gamma), pois[iv]);
+    }
+
+    DynAbunPCurv res; res.log_lik = 0.0; res.d1 = 0.0; res.d2 = 0.0;
+
+    // obs_t(n) and (want_deriv) its 1st / 2nd eta_p derivatives.
+    auto obs_season = [&](int t, std::vector<double>& obs,
+                          std::vector<double>& dobs, std::vector<double>& d2obs) {
+        int ysum = 0, nv = 0;
+        for (int j = 0; j < J; ++j) {
+            const int yy = y[t * J + j];
+            if (yy < 0) continue;
+            nv++; ysum += yy;
+        }
+        da_obs_season_pmf(y, t, J, S, logp, log1mp, obs);
+        if (want_deriv) {
+            for (int n = 0; n < S; ++n) {
+                const double g = (double)ysum - (double)nv * (double)n * p;
+                dobs[n]  = obs[n] * g;
+                d2obs[n] = obs[n] * (g * g - (double)nv * (double)n * pq);
+            }
+        }
+    };
+
+    std::vector<double> a(S), da(S), d2a(S), obs(S), dobs(S), d2obs(S);
+
+    // --- Season 1: initial (p-independent) x observation. ---
+    obs_season(0, obs, dobs, d2obs);
+    double c = 0.0, dc = 0.0, d2c = 0.0;
+    for (int n = 0; n < S; ++n) {
+        double pi_n;
+        if (use_nb) {
+            const double rpm = rr + lambda;
+            const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
+                - R::lgammafn((double)n + 1.0)
+                + rr * std::log(rr / rpm) + (double)n * std::log(lambda / rpm);
+            pi_n = std::exp(lpn);
+        } else {
+            const double lpn = -lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0);
+            pi_n = std::exp(lpn);
+        }
+        a[n] = pi_n * obs[n]; c += a[n];
+        if (want_deriv) {
+            da[n]  = pi_n * dobs[n];  d2a[n] = pi_n * d2obs[n];
+            dc += da[n]; d2c += d2a[n];
+        }
+    }
+    if (!(c > 0.0)) {
+        res.log_lik = -std::numeric_limits<double>::infinity();
+        return res;
+    }
+    res.log_lik = std::log(c);
+    if (want_deriv) {
+        const double r1 = dc / c, r2 = d2c / c;
+        res.d1 += r1; res.d2 += r2 - r1 * r1;
+        // Renormalise alpha and its first / second derivatives:
+        //   ahat = a/c,  ahat' = a'/c - ahat (c'/c),
+        //   ahat'' = a''/c - 2 ahat' (c'/c) - ahat (c''/c).
+        for (int n = 0; n < S; ++n) {
+            const double ah  = a[n] / c;
+            const double dah = da[n] / c - ah * r1;
+            const double d2ah = d2a[n] / c - 2.0 * dah * r1 - ah * r2;
+            a[n] = ah; da[n] = dah; d2a[n] = d2ah;
+        }
+    } else {
+        for (int n = 0; n < S; ++n) a[n] /= c;
+    }
+
+    // --- Seasons 2..T: transition (p-independent) then observation. ---
+    std::vector<double> pre(S), dpre(S), d2pre(S), binom(S);
+    for (int t = 1; t < T; ++t) {
+        const int iv = t - 1;
+        const std::vector<double>& pois_iv = pois[iv];
+        for (int n2 = 0; n2 < S; ++n2) {
+            pre[n2] = 0.0;
+            if (want_deriv) { dpre[n2] = 0.0; d2pre[n2] = 0.0; }
+        }
+        for (int n = 0; n < S; ++n) {
+            da_binom_pmf_row(n, logom[iv], log1mom[iv], binom);
+            const double an = a[n];
+            const double dan  = want_deriv ? da[n]  : 0.0;
+            const double d2an = want_deriv ? d2a[n] : 0.0;
+            for (int s = 0; s <= n; ++s) {
+                const double bs = binom[s];
+                for (int gn = 0; gn + s < S; ++gn) {
+                    const int n2 = s + gn;
+                    const double tr = bs * pois_iv[gn];
+                    pre[n2] += an * tr;
+                    if (want_deriv) { dpre[n2] += dan * tr; d2pre[n2] += d2an * tr; }
+                }
+            }
+        }
+        obs_season(t, obs, dobs, d2obs);
+        double ct = 0.0, dct = 0.0, d2ct = 0.0;
+        for (int n2 = 0; n2 < S; ++n2) {
+            a[n2] = pre[n2] * obs[n2]; ct += a[n2];
+            if (want_deriv) {
+                da[n2]  = dpre[n2] * obs[n2] + pre[n2] * dobs[n2];
+                d2a[n2] = d2pre[n2] * obs[n2] + 2.0 * dpre[n2] * dobs[n2]
+                          + pre[n2] * d2obs[n2];
+                dct += da[n2]; d2ct += d2a[n2];
+            }
+        }
+        if (!(ct > 0.0)) {
+            res.log_lik = -std::numeric_limits<double>::infinity();
+            res.d1 = 0.0; res.d2 = 0.0; return res;
+        }
+        res.log_lik += std::log(ct);
+        if (want_deriv) {
+            const double r1 = dct / ct, r2 = d2ct / ct;
+            res.d1 += r1; res.d2 += r2 - r1 * r1;
+            for (int n2 = 0; n2 < S; ++n2) {
+                const double ah  = a[n2] / ct;
+                const double dah = da[n2] / ct - ah * r1;
+                const double d2ah = d2a[n2] / ct - 2.0 * dah * r1 - ah * r2;
+                a[n2] = ah; da[n2] = dah; d2a[n2] = d2ah;
+            }
+        } else {
+            for (int n2 = 0; n2 < S; ++n2) a[n2] /= ct;
+        }
+    }
+    return res;
+}
+
+// Constant-rate overload: one survival / recruitment shared across the site's
+// T-1 transitions (broadcasts to the interval-indexed core above).
+inline DynAbunPCurv compute_dyn_abun_p_curv(
+    const int* y, int T, int J, int K,
+    double eta_lambda, double eta_p, double eta_omega, double eta_gamma,
+    bool use_nb = false, double eta_logr = 0.0, bool want_deriv = true
+) {
+    const int nIv = T - 1;
+    std::vector<double> eo(nIv, eta_omega), eg(nIv, eta_gamma);
+    return compute_dyn_abun_p_curv(y, T, J, K, eta_lambda, eta_p,
+                                   eo.data(), eg.data(), use_nb, eta_logr, want_deriv);
+}
+
 // Per-site conditional likelihood c(n1) = P(y_1, ..., y_T | N_1 = n1), the data
 // likelihood given the season-1 abundance, INDEPENDENT of the initial-abundance
 // predictor eta_lambda (it conditions on N_1). This is the workhorse of the
