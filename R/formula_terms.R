@@ -636,17 +636,24 @@
 .tobs_term_names <- function() names(.tobs_terms)
 
 
-# A per-node SVC weight (icar/bym2/car_proper `weight =`) is a weighted field
-# that only the occu_cover joint spatial path consumes. Every other areal
-# consumer treats the field as an unweighted intercept field; rather than
-# silently dropping the weighting, error with a pointer to the supported path.
+# A varying-coefficient areal field -- a per-node SVC weight
+# (icar/bym2/car_proper `weight =`), the multi-field intercept + SVC container,
+# or a `spatial(~ ... || node)` bar -- is supported on the occu_cover() joint
+# spatial path and on the standalone occu() nested-Laplace path. Every other
+# areal consumer treats the field as a plain intercept field; rather than
+# silently dropping the weighting, error with a pointer to the supported paths.
 .tobs_reject_weighted_spatial <- function(spec, context) {
-  if (inherits(spec, "tobs_spatial") && !is.null(spec$weight)) {
+  if (!inherits(spec, "tobs_spatial")) return(invisible(spec))
+  is_svc <- !is.null(spec$weight) || isTRUE(spec$is_multifield) ||
+            isTRUE(spec$is_bar)
+  if (is_svc) {
     stop(sprintf(paste0(
-      "%s: a weighted areal term (%s(..., weight = )) is a spatially-varying ",
-      "coefficient, supported only on the occu_cover() joint spatial path ",
-      "(method = \"nested_laplace\"). Drop `weight` here."),
-      context, spec$type), call. = FALSE)
+      "%s: a spatially-varying coefficient (a weighted areal term, a multi-",
+      "field intercept + trend structure, or a `spatial(~ ... || node)` bar) ",
+      "is supported on the occu_cover() joint spatial path and on the ",
+      "standalone occu() nested-Laplace path (method = \"nested_laplace\"). ",
+      "Drop the varying-coefficient field here."), context),
+      call. = FALSE)
   }
   invisible(spec)
 }

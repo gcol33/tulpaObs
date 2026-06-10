@@ -262,6 +262,113 @@
   # NA-response prediction targets.
   fit$state_posterior <- .tobs_nested_state_posterior(
     model, state_fit, latent_prior, heldout = heldout_state)
+
+  # Areal field summary: each areal block's field SD (sigma) integrated over the
+  # outer grid, and the per-cell field(s) read off the calibrated state fit. A
+  # single intercept field reports `sigma` + `spatial_field`; a varying-
+  # coefficient structure (intercept + trend field(s)) adds `sigma_trend` and
+  # `trend_field` so the occu() output mirrors what occu_cover() exposes.
+  fit <- .tobs_nested_attach_field_summary(fit, model, state_fit, latent_prior)
+  fit
+}
+
+
+# Surface the areal hyperparameters + per-cell field(s) of a nested-Laplace occu
+# fit. `latent_prior` is the list of latent blocks; the areal (icar / car_proper)
+# blocks each carry one field, in formula order (intercept field first, then any
+# varying-coefficient trend fields). `state_fit` is the calibrated occupancy-
+# marginal nested fit (theta_grid, weights, modes). Each areal block's SD is the
+# derived sigma = 1/sqrt(tau) marginalized over the outer grid (the marginalize-
+# derived-quantities rule: a weighted summary of sigma per cell, not a plug-in of
+# the tau posterior mean); each field is the grid-weighted posterior mean of the
+# block's latent slice, demeaned to the sum-to-zero convention the ICAR prior
+# sits under. Temporal / iid blocks are skipped (they surface elsewhere).
+.tobs_nested_attach_field_summary <- function(fit, model, state_fit,
+                                              latent_prior) {
+  blocks <- if (!is.null(latent_prior$type)) list(latent_prior) else latent_prior
+  is_areal <- vapply(blocks, function(b)
+    isTRUE(b$type %in% c("icar", "car_proper")), logical(1))
+  if (!any(is_areal)) return(fit)
+  if (is.null(state_fit$theta_grid) || is.null(state_fit$weights) ||
+      is.null(state_fit$modes)) {
+    return(fit)
+  }
+
+  w  <- state_fit$weights
+  w  <- w / sum(w)
+  tg <- state_fit$theta_grid
+  if (!is.matrix(tg)) tg <- matrix(tg, ncol = 1L,
+                                   dimnames = list(NULL, state_fit$theta_names))
+  tg_names <- colnames(tg)
+  modes <- state_fit$modes
+  p_occ <- ncol(model$X_processes[[1]])
+
+  # 0-based latent offset of each block's field slice in the mode tail. The
+  # areal blocks contribute n_spatial_units each; bym2 contributes 2x (phi +
+  # theta) but only the areal SVC path (icar / car_proper, d_fac = 1) is wired
+  # to a per-field summary here.
+  blk_len <- vapply(blocks, .nl_block_field_len, integer(1))
+  blk_off <- cumsum(c(0L, blk_len))[seq_along(blocks)]
+
+  sigma_means <- numeric(0); sigma_sds <- numeric(0); sigma_nms <- character(0)
+  field_list  <- list()
+  areal_idx   <- which(is_areal)
+  for (j in seq_along(areal_idx)) {
+    b <- areal_idx[j]
+    n_units <- as.integer(blocks[[b]]$n_spatial_units %||% blk_len[b])
+
+    # sigma = 1/sqrt(tau) marginalized over the grid. The ICAR axis is the
+    # precision tau (joint-grid column `b<b>.tau`); fall back to the single-axis
+    # grid when there is one block.
+    tau_col <- match(sprintf("b%d.tau", b), tg_names)
+    if (is.na(tau_col)) tau_col <- match("tau", tg_names)
+    if (!is.na(tau_col)) {
+      tau_vals <- as.numeric(tg[, tau_col])
+      sig_vals <- 1 / sqrt(pmax(tau_vals, 1e-12))
+      s_mean <- sum(w * sig_vals)
+      s_sd   <- sqrt(max(sum(w * sig_vals^2) - s_mean^2, 0))
+      nm <- if (j == 1L) "sigma"
+            else if (length(areal_idx) == 2L) "sigma_trend"
+            else sprintf("sigma_trend%d", j - 1L)
+      sigma_means[[nm]] <- s_mean
+      sigma_sds  [[nm]] <- s_sd
+      sigma_nms <- c(sigma_nms, nm)
+    }
+
+    # Grid-weighted posterior mean of this block's field slice, demeaned.
+    cols <- p_occ + blk_off[b] + seq_len(n_units)
+    if (max(cols) <= ncol(modes)) {
+      fld <- as.numeric(crossprod(modes[, cols, drop = FALSE], w))
+      fld <- fld - mean(fld)
+      field_list[[j]] <- fld
+    } else {
+      field_list[[j]] <- rep(NA_real_, n_units)
+    }
+  }
+
+  if (length(sigma_nms)) {
+    keep <- sigma_nms %in% names(sigma_means)
+    fit$means <- c(fit$means, unlist(sigma_means)[sigma_nms[keep]])
+    fit$sds   <- c(fit$sds,   unlist(sigma_sds)[sigma_nms[keep]])
+  }
+
+  field_z_table <- function(fld) {
+    n <- length(fld)
+    data.frame(cell = seq_len(n), z_mean = fld,
+               z_sd = rep(NA_real_, n),
+               z_lower = rep(NA_real_, n), z_upper = rep(NA_real_, n))
+  }
+  if (length(field_list) >= 1L) {
+    fit$spatial_field <- field_list[[1L]]
+    fit$field_table   <- field_z_table(field_list[[1L]])
+  }
+  if (length(field_list) >= 2L) {
+    trend_means <- field_list[-1L]
+    fit$trend_field   <- trend_means[[1L]]
+    fit$trend_fields  <- trend_means
+    fit$trend_field_table  <- field_z_table(trend_means[[1L]])
+    fit$trend_field_tables <- lapply(trend_means, field_z_table)
+  }
   fit
 }
 

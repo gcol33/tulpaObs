@@ -543,6 +543,7 @@
 
   proc_names <- vapply(model$process_info, function(pi) pi$name, character(1))
   re_list <- list()
+  spatial_list <- list()
 
   one <- function(slot, label) {
     if (!is.null(out[[slot]])) {
@@ -565,8 +566,17 @@
     shared <- c(1L %in% procs, 2L %in% procs)
 
     if (inherits(spec, "tobs_spatial")) {
-      .tobs_reject_weighted_spatial(spec, "occupancy/abundance spatial")
-      one("spatial", "spatial"); spec$shared <- shared; out$spatial <- spec
+      # A varying-coefficient bar (one `tobs_spatial` with `is_bar`) or several
+      # areal terms (an unweighted intercept field plus weighted SVC fields)
+      # describe one multi-field spatial structure. Collect every spatial spec;
+      # `.tobs_collect_spatial()` returns either the single plain spec (back-
+      # compat: laplace / abun / removal / etc. read `$type` / `$shared`
+      # directly) or a combined `is_multifield` container the occu() nested-
+      # Laplace path expands into one block per field. A weighted SVC field on a
+      # non-nested consumer is still rejected there via
+      # `.tobs_reject_weighted_spatial()`.
+      spec$shared <- shared
+      spatial_list[[length(spatial_list) + 1L]] <- spec
     } else if (inherits(spec, "tobs_temporal")) {
       one("temporal", "temporal"); spec$shared <- shared; out$temporal <- spec
     } else if (inherits(spec, "tobs_svc")) {
@@ -579,7 +589,33 @@
     }
   }
   if (length(re_list)) out$re <- re_list
+  if (length(spatial_list)) out$spatial <- .tobs_collect_spatial(spatial_list)
   out
+}
+
+# Collapse the spatial term(s) on a formula into the single `spatial` slot the
+# fitters read. One plain unweighted areal / continuous term passes through
+# unchanged (the common case; every fitter reads its `$type` / `$shared`). A
+# varying-coefficient bar (`is_bar`) or several areal terms (an intercept field
+# plus weighted SVC fields) describe one multi-field spatial structure: they are
+# wrapped in a combined `tobs_spatial` carrying `is_multifield = TRUE` and the
+# ordered `fields` list, with the intercept field's `type` / `shared` / graph at
+# the top level so a consumer that does not understand multi-field spatial still
+# dispatches on `$type` and rejects the SVC field through
+# `.tobs_reject_weighted_spatial()`. The occu() nested-Laplace path is the one
+# consumer that expands `fields` into one latent block each.
+.tobs_collect_spatial <- function(spatial_list) {
+  if (length(spatial_list) == 1L) {
+    s <- spatial_list[[1L]]
+    if (!isTRUE(s$is_bar)) return(s)
+  }
+  # Multiple terms must agree on which arms they enter (one shared field on a
+  # given arm); take the first field's sharing as the structure's sharing.
+  base <- spatial_list[[1L]]
+  combined <- base
+  combined$is_multifield <- TRUE
+  combined$fields <- spatial_list
+  combined
 }
 
 # Build multi-term RE spec for C++ from list of tobs_re objects
@@ -724,6 +760,12 @@ compute_intercepts <- function(model, means) {
 # Build spatial params list for C++ from spatial spec (or NULL)
 build_spatial_params <- function(spatial, n_sites) {
   if (is.null(spatial)) return(list(type = "none"))
+  if (isTRUE(spatial$is_multifield) || isTRUE(spatial$is_bar) ||
+      !is.null(spatial$weight)) {
+    stop("A spatially-varying coefficient (a `spatial(~ ... || node)` bar or a ",
+         "weighted areal term) is fitted on the nested-Laplace engine ",
+         "(method = \"nested_laplace\"), not the NUTS sampler.", call. = FALSE)
+  }
 
   params <- list(type = spatial$type)
 

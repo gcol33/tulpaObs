@@ -153,7 +153,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
   )), "not both")
 })
 
-test_that("a weighted areal term is rejected off the joint occu_cover path", {
+test_that("a weighted areal term fits standalone occu() on the nested-Laplace path", {
   skip_if_fast()
   N <- 12L
   adj <- .trend_chain_adj(N)
@@ -163,12 +163,28 @@ test_that("a weighted areal term is rejected off the joint occu_cover path", {
                      w = rnorm(2L * N))
   od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
                    det.covs = "w")
-  # An occupancy fit (not occu_cover) cannot consume a per-node field weight.
+  # An intercept field plus a weighted (varying-coefficient) areal field on a
+  # standalone occu() nested-Laplace fit (gcol33/tulpaObs#67): the occupancy-only
+  # analogue of the occu_cover() coupled trend, with no cover arm.
+  fit <- suppressWarnings(tobs(
+    formula = ~ icar(graph = adj, group_var = "site_id") +
+                icar(graph = adj, weight = x, group_var = "site_id"),
+    data = cell_dat, family = occu(), detection = ~ w,
+    y = od$y, visits = od$det.covs,
+    method = "nested_laplace", control = list(verbose = FALSE, max.iter = 5L)))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true(all(c("sigma", "sigma_trend") %in% names(fit$means)))
+  expect_length(fit$spatial_field, N)
+  expect_length(fit$trend_field, N)
+  expect_false(any(grepl("^pos_", names(fit$means))))
+
+  # A weighted areal term on a non-nested path (the NUTS sampler) is still
+  # rejected with a pointer to the supported engine.
   expect_error(
     suppressWarnings(tobs(
       formula = ~ x + icar(graph = adj, weight = x), data = cell_dat,
       family = occu(), detection = ~ w, y = od$y, visits = od$det.covs,
-      method = "nested_laplace", control = list(verbose = FALSE))),
+      method = "nuts", control = list(verbose = FALSE))),
     "spatially-varying coefficient")
 })
 

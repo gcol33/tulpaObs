@@ -57,8 +57,16 @@
 
   blocks <- list()
   if (!is.null(spatial)) {
-    blocks <- c(blocks,
-                list(.tobs_block_from_spatial(spatial, n_sites, site_of_row)))
+    # A spatial bar (or two-term intercept + weighted areal field) carries one
+    # OR several spatial specs (the intercept field first, then per-covariate
+    # varying-coefficient fields). `.tobs_resolve_occu_spatial_fields()` returns
+    # the ordered list; each becomes its own latent block (the weighted ones
+    # carry a per-site `svc_weight`). A single plain field stays a length-1 list.
+    sp_fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
+    for (sf in sp_fields) {
+      blocks <- c(blocks,
+                  list(.tobs_block_from_spatial(sf, n_sites, site_of_row, model)))
+    }
   }
   if (!is.null(temporal)) {
     blocks <- c(blocks,
@@ -141,9 +149,16 @@
       # added. A bym2 block's eta mixes its two components with hyperparameter-
       # dependent scales, so a first-n approximation would be wrong-scaled;
       # skipping it (but advancing past its length) keeps the predictor unbiased
-      # and leaves multi-block alignment intact.
+      # and leaves multi-block alignment intact. A varying-coefficient (SVC)
+      # areal block carries a per-row design weight (svc_weight); its eta
+      # contribution is weight[row] * x[idx[row]], so the reconstruction must
+      # apply the weight to match the inner Newton's compute_eta.
       if (.nl_block_exact_reconstruct(b) && length(idx) == n_rows) {
-        offset <- offset + block_field[idx]
+        contrib <- block_field[idx]
+        if (!is.null(b$svc_weight) && length(b$svc_weight) == n_rows) {
+          contrib <- contrib * as.numeric(b$svc_weight)
+        }
+        offset <- offset + contrib
       }
     }
     pos <- pos + nu
@@ -442,9 +457,66 @@
 }
 
 
+# Resolve the spatial term carried on the occupancy formula into the ordered
+# list of areal field specs the nested-Laplace path builds blocks from: the
+# unweighted intercept field first, then any varying-coefficient (weighted)
+# fields. Three shapes flow in:
+#   * a plain areal term -- icar()/bym2()/car_proper() -- one field, unweighted.
+#   * a weighted areal term -- icar(graph, weight = col, group_var = node) -- a
+#     single varying-coefficient field (the SVC slope on `col`); valid here on
+#     its own, but typically paired with an intercept term.
+#   * an independent varying-coefficient bar -- spatial(~ 1 + x || node,
+#     graph = adj) -- desugars to the intercept field plus one weighted field
+#     per covariate column, all on the same graph keyed by the bar's node index.
+# The correlated bar (single `|`, a free-Sigma MCAR field) is fitted as one
+# coupled cross-covariance block on the occu_cover() joint engine; it is not
+# wired on the single-arm occu() path, so it errors with a pointer there.
+.tobs_resolve_occu_spatial_fields <- function(spatial, model) {
+  if (!inherits(spatial, "tobs_spatial")) {
+    stop("`spatial` must be a tobs_spatial object", call. = FALSE)
+  }
+  if (isTRUE(spatial$is_bar)) {
+    if (isTRUE(spatial$correlated)) {
+      stop("occu(): a correlated spatial bar (`|`, free-Sigma MCAR) is fitted ",
+           "on the occu_cover() joint engine, not on the single-arm occu() ",
+           "nested-Laplace path. Use the independent bar `||` for separate ",
+           "per-coefficient fields, or move the model to occu_cover().",
+           call. = FALSE)
+    }
+    fields <- .tobs_expand_spatial_bar(spatial, model$data)
+  } else if (isTRUE(spatial$is_multifield)) {
+    # The explicit two-term form: an intercept field plus weighted SVC field(s),
+    # already separate `tobs_spatial` specs. Order them intercept-first so the
+    # field tables / sigma labels match the bar form.
+    fields <- spatial$fields
+    weighted <- vapply(fields, function(f) !is.null(f$weight), logical(1))
+    if (!any(!weighted)) {
+      stop("occu(): a varying-coefficient spatial field needs an unweighted ",
+           "intercept field (e.g. icar(graph = adj, group_var = \"cell\")) ",
+           "alongside the weighted term(s).", call. = FALSE)
+    }
+    fields <- c(fields[!weighted], fields[weighted])
+  } else {
+    fields <- list(spatial)
+  }
+  # The single-arm path builds one block per field; the weighted (SVC) fields
+  # ride the same graph as the intercept field. Order is intercept-first, which
+  # the bar expansion already guarantees; a lone weighted term is allowed.
+  fields
+}
+
+
 # Build a multi-block-shaped spatial block from a tobs_spatial spec. The
 # multi-block C++ entry reads spatial_idx as 1-based per the existing
 # .nl_block_spec_for_cpp() contract.
+#
+# `model` supplies the site -> field-node map: with an areal `group_var` the
+# occupancy units (sites, one per data row) map onto fewer field nodes (cells),
+# so spatial_idx[row] = data[[group_var]][site_of_row[row]] and the field has
+# one node per graph cell. Without group_var the field is one node per site
+# (identity), so spatial_idx = site_of_row. A weighted (varying-coefficient)
+# term carries a per-site `weight` column that becomes the block's per-row
+# `svc_weight`, expanded onto the state rows through the same site_of_row map.
 #
 # Per-block grids are narrower than `.NL_REGISTRY`'s single-block defaults
 # (which target ~20-25 cells per block). Three-block combinations
@@ -453,7 +525,8 @@
 # typical combos under ~250 cells. Users who need finer integration can
 # pass `*_grid` overrides directly via the tobs_* spec attributes (when
 # present) -- the helper passes them through if set.
-.tobs_block_from_spatial <- function(spatial, n_sites, site_of_row) {
+.tobs_block_from_spatial <- function(spatial, n_sites, site_of_row,
+                                     model = NULL) {
   if (!inherits(spatial, "tobs_spatial")) {
     stop("`spatial` must be a tobs_spatial object", call. = FALSE)
   }
@@ -509,20 +582,64 @@
          "Use `method = 'laplace'` or open an issue if you need this type.",
          call. = FALSE)
   }
-  if (as.integer(spatial$n_units) != n_sites) {
-    stop(sprintf(
-      "spatial has %d units but the model has %d sites; one spatial unit per ",
-      spatial$n_units, n_sites),
-      "site is required for the nested-Laplace latent field.", call. = FALSE)
+  # Site -> field-node map. With an areal `group_var` the field has one node per
+  # graph cell and many sites can share a node (e.g. cell-year sites sharing one
+  # cell); spatial_idx[site] = data[[group_var]][site]. Without group_var the
+  # field has one node per site (identity). Either way the per-state-row index is
+  # the per-site index expanded through site_of_row.
+  n_nodes <- as.integer(spatial$n_units)
+  gv      <- spatial$group_var
+  if (!is.null(gv)) {
+    if (is.null(model) || is.null(model$data) || !gv %in% names(model$data)) {
+      stop(sprintf("spatial group_var '%s' is not a column of the model data.",
+                   gv), call. = FALSE)
+    }
+    site_node <- as.integer(model$data[[gv]])
+    if (length(site_node) != n_sites || anyNA(site_node) ||
+        min(site_node) < 1L || max(site_node) > n_nodes) {
+      stop(sprintf(paste0(
+        "spatial group_var '%s' must be an integer cell index in 1..%d, one ",
+        "per site (%d sites)."), gv, n_nodes, n_sites), call. = FALSE)
+    }
+    spatial_idx <- site_node[site_of_row]
+  } else {
+    if (n_nodes != n_sites) {
+      stop(sprintf(paste0(
+        "spatial has %d units but the model has %d sites; one spatial unit per ",
+        "site is required for the nested-Laplace latent field, or map sites to ",
+        "cells with group_var = \"<col>\" on the areal term."),
+        n_nodes, n_sites), call. = FALSE)
+    }
+    spatial_idx <- site_of_row
   }
   out <- list(
     type            = type,
-    spatial_idx     = site_of_row,
-    n_spatial_units = as.integer(spatial$n_units),
+    spatial_idx     = spatial_idx,
+    n_spatial_units = n_nodes,
     adj_row_ptr     = as.integer(spatial$adj_row_ptr),
     adj_col_idx     = as.integer(spatial$adj_col_idx),
     n_neighbors     = as.integer(spatial$n_neighbors)
   )
+  # A weighted (varying-coefficient) areal term carries a per-site `weight`
+  # column; it becomes the block's per-state-row design weight so the field's
+  # contribution is weight[i] * z[cell_i] (the areal f(cell, weight, ...)). The
+  # weight is per observation (one per site), expanded onto state rows like the
+  # node index. Only icar carries the SVC weight on this path.
+  if (!is.null(spatial$weight)) {
+    if (!identical(type, "icar")) {
+      stop(sprintf(paste0(
+        "a varying-coefficient (weighted) areal field uses the intrinsic CAR ",
+        "(icar) on the occu() nested-Laplace path; model = \"%s\" is not ",
+        "supported."), type), call. = FALSE)
+    }
+    w_site <- as.numeric(spatial$weight)
+    if (length(w_site) != n_sites || any(!is.finite(w_site))) {
+      stop(sprintf(paste0(
+        "spatial weight must be a finite per-site numeric vector of length %d."),
+        n_sites), call. = FALSE)
+    }
+    out$svc_weight <- w_site[site_of_row]
+  }
   if (type == "bym2") {
     out$scale_factor <- as.numeric(spatial$scale_factor %||% 1.0)
     if (!is.null(spatial$sigma_grid)) out$sigma_grid <- spatial$sigma_grid

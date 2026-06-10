@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.27 (2026-06-10)
+
+* feat(formula): the varying-coefficient spatial bar `spatial(~ 1 + x || cell,
+  graph = adj)` (a cell-indexed spatial intercept field plus a spatial trend
+  field weighted by a per-site covariate) now fits on a standalone `occu()`
+  nested-Laplace model, not only on `occu_cover()` (#67). The two-term spelling
+  `icar(graph, group_var = "cell") + icar(graph, weight = x, group_var = "cell")`
+  fits the same structure. This is the occupancy-only analogue of the
+  `occu_cover()` coupled trend, with no cover arm and no coupling `alpha` -- the
+  apples-to-apples match for an occupancy-only spatially-varying-coefficient
+  model. Each field becomes one areal latent block on the existing multi-block
+  nested-Laplace path: the intercept field is a plain icar block, and the trend
+  field rides the same graph with a per-site `svc_weight` so its contribution is
+  `weight_i * z[cell_i]`. The areal blocks are cell-indexed (one field node per
+  graph cell, many sites per cell via `group_var`), so the field count can be far
+  smaller than the site count. `occu()` reports `sigma` for the intercept field
+  and `sigma_trend` for the trend field (the field SD marginalized over the outer
+  grid), alongside `spatial_field` and `trend_field`. Requires tulpa >= 0.0.30
+  (the single-arm driver gained the per-observation `svc_weight`). The correlated
+  `|` bar (a free-Sigma MCAR field) stays on `occu_cover()` and errors with a
+  pointer on `occu()`. Recovery-tested in `test-occu-spatial-svc-recovery.R`.
+* The guard that previously rejected a weighted areal term on `occu()` now points
+  to both the `occu_cover()` joint path and the standalone `occu()` nested-Laplace
+  path; the term is rejected only on the engines that cannot carry it (the NUTS
+  sampler and the single-Laplace path).
+
 ## 0.0.26 (2026-06-09)
 
 * feat(formula): correlated (`|`) free-Sigma MCAR spatial coefficient fields on
