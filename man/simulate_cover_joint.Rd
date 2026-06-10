@@ -63,7 +63,7 @@ Generates synthetic data matching the joint nested-Laplace cover-hurdle
 parameterisation (\code{sigma_occ * z} on the occurrence arm, \code{alpha * sigma * z} on the cover arm) where \code{z} is a BYM2 latent field on the
 supplied region adjacency. The cover-arm field amplitude
 \code{sigma_pos = alpha * sigma} is the derived ratio surfaced as the
-\code{"alpha"} column of \code{fit$joint$theta_grid} (\code{gcol33/tulpa#18}).
+\code{"alpha"} column of \code{fit$joint$theta_grid}.
 }
 \details{
 Both BYM2 sub-blocks (\code{phi}, \code{theta}) are drawn IID Normal \strong{and

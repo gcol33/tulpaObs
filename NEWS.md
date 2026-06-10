@@ -14,7 +14,9 @@
   (the occupancy-intercept SE is ~an order of magnitude too small), so the gates
   assert point recovery; the SE-calibration gap is a separate kernel issue.
 * docs: `DESCRIPTION` gains `URL` / `BugReports`; internal issue tokens stripped
-  from rendered help; two non-ASCII characters removed from code comments
+  from rendered help; two non-ASCII characters removed from code comments; and
+  the family front doors `abun()`, `cover()`, `distance()`, `ms_occu()`, and
+  `occu_cover()` gain runnable `\donttest{}` fit-and-summary examples
   (gcol33/tulpaObs#85).
 
 * feat(dyn_abun): a grouped random intercept on the **detection (`p`) arm** now

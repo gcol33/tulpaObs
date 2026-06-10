@@ -10,7 +10,7 @@
 #' [occu_priors()]). The prior is attached to each M-step block as a per-block
 #' `beta_prior` (see `.attach_priors_to_blocks()` in `R/occu_priors.R`), which
 #' tulpa threads through every phase -- the EM iterations and the MI / Gibbs
-#' correction refits alike (gcol33/tulpa#27). Supports all built-in model
+#' correction refits alike. Supports all built-in model
 #' types. Called from `.tobs_fit_model()`; not user-facing.
 #'
 #' @param model A `tobs_model` from `.tobs_build_model()`.
@@ -26,7 +26,7 @@
 #' @param correction Post-EM correction (`"none"`, `"mi"`, `"gibbs"`). MI /
 #'   Gibbs run tulpa's post-EM Rubin-pooled correction; the fixed-effect prior
 #'   (when active) threads into the correction refits, so the corrected fit is
-#'   penalised the same way as the EM point estimate (gcol33/tulpa#27).
+#'   penalised the same way as the EM point estimate.
 #' @param n_imputations Number of MI draws when `correction = "mi"`.
 #' @param verbose Print per-iteration progress.
 #' @keywords internal
@@ -738,7 +738,7 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
       for (t in 2:n_seasons) {
         p_prev_occ <- w[i, t - 1]
         p_curr_occ <- w[i, t]
-        # P(colonization event) ≈ (1-w_{t-1}) * w_t
+        # P(colonization event) ~= (1-w_{t-1}) * w_t
         col_y[i] <- col_y[i] + as.integer(round((1 - p_prev_occ) * p_curr_occ * M))
         col_n[i] <- col_n[i] + as.integer(round((1 - p_prev_occ) * M))
         ext_y[i] <- ext_y[i] + as.integer(round(p_prev_occ * (1 - p_curr_occ) * M))

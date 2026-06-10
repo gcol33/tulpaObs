@@ -89,7 +89,7 @@
 #'     marginals.
 #'   * `"laplace_gibbs"` / `"laplace_mi"` — Laplace with a post-EM Gibbs /
 #'     multiple-imputation correction. The fixed-effect prior threads into the
-#'     correction refits (gcol33/tulpa#27), so these use the same
+#'     correction refits, so these use the same
 #'     weakly-informative default prior as `"laplace"`; pass `priors = FALSE`
 #'     for the unpenalised correction.
 #'   * `"nested_laplace"` — multi-block nested Laplace (single-season
@@ -107,7 +107,7 @@
 #'   psi-p identifiability ridge at small `J`). Pass `priors = FALSE` to
 #'   disable the default prior and recover the unpenalised MAP. The
 #'   `"laplace_gibbs"` / `"laplace_mi"` routes apply the same default prior and
-#'   thread it through the correction refits (gcol33/tulpa#27). For NUTS, this
+#'   thread it through the correction refits. For NUTS, this
 #'   is forwarded to the underlying tulpa engine.
 #' @param control list of low-level engine controls. Names follow the
 #'   dotted-separator convention. Sampler controls (`method = "nuts"`):

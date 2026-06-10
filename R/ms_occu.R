@@ -371,6 +371,13 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 #'
 #' @return A `tobs_family` object.
 #' @seealso [occu()], [ms_dyn_occu()], [ms_int_occu()]
+#' @examples
+#' \donttest{
+#' sim <- simulate_ms_occu(N = 80, J = 4, n_species = 8, seed = 1)
+#' fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
+#'             y = sim$y, species = paste0("sp", seq_len(8)), method = "laplace")
+#' summary(fit)
+#' }
 #' @export
 ms_occu <- function() {
   obs_family(

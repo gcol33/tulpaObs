@@ -130,7 +130,7 @@ simulate_cover <- function(N             = 200L,
 #' sigma * z` on the cover arm) where `z` is a BYM2 latent field on the
 #' supplied region adjacency. The cover-arm field amplitude
 #' `sigma_pos = alpha * sigma` is the derived ratio surfaced as the
-#' `"alpha"` column of `fit$joint$theta_grid` (`gcol33/tulpa#18`).
+#' `"alpha"` column of `fit$joint$theta_grid`.
 #'
 #' Both BYM2 sub-blocks (`phi`, `theta`) are drawn IID Normal **and
 #' demeaned to mean zero** before scaling, matching the sum-to-zero

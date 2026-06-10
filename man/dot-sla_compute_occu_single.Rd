@@ -14,7 +14,7 @@
 
 \item{spatial}{Optional \code{tobs_spatial}. When set, the skewness correction is
 intentionally NOT applied and the fit keeps Gaussian marginals -- this is the
-correct conservative behaviour, not a stub (gcol33/tulpaObs#55): the
+correct conservative behaviour, not a stub: the
 third-cumulant correction (Rue, Martino & Chopin 2009 sec.3.2) captures the
 skewness of the fixed-effect (hyperparameter-free) marginals, but for a
 spatial latent field the dominant marginal skewness comes from integrating

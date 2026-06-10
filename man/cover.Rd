@@ -21,7 +21,7 @@ families — see \code{vignette("families")} for the conceptual caveat.
 \section{Response on the formula left-hand side}{
 
 The cover response is a single length-N vector, so it may sit on the top
-formula left-hand side and \verb{y =} is dropped (gcol33/tulpaObs#66). The two
+formula left-hand side and \verb{y =} is dropped. The two
 calls are equivalent:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{# response on the LHS (y = omitted)
@@ -112,7 +112,7 @@ omitted to mean both arms.
 \strong{Copy versus free.} One \code{spatial()} call with \verb{to =} naming both arms
 is a single latent field, presence-anchored, copied to the positive arm with
 an estimated coupling \code{alpha} (marginalized on the outer grid). This is the
-\emph{copy} / shared model, and the only form wired here (gcol33/tulpaObs#61):
+\emph{copy} / shared model, and the only form wired here:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{# copy / shared: one latent, presence-anchored, alpha estimated
 spatial(~ 1 + time.sc || cell_idx, graph = adj, to = c("presence", "positive"))
@@ -151,3 +151,10 @@ of restarting. \code{resume = FALSE} starts a fresh file. Forwarded to
 \code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}.
 }
 
+\examples{
+\donttest{
+sim <- simulate_cover(N = 200, seed = 1)
+fit <- tobs(~ x, data = sim$data, family = cover("beta"), y = sim$y)
+summary(fit)
+}
+}

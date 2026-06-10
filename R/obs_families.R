@@ -32,7 +32,7 @@
 #'   single-vector-response family accepts the response on the top formula
 #'   left-hand side (`response ~ predictors`) so `y =` may be omitted; a
 #'   matrix-response family takes the response via `y =` only (a matrix does
-#'   not sit on a formula LHS). Consulted by [tobs()] (gcol33/tulpaObs#66).
+#'   not sit on a formula LHS). Consulted by [tobs()].
 #' @param params named list of family-specific parameters carried with the
 #'   object (K_max, positive-part link, etc.).
 #' @param control_keys character vector of extra `control` names this family's
@@ -248,9 +248,8 @@ jsdm <- function() {
 #' without a shared field is rejected (the joint engine integrates every variance
 #' component on its grid, so multiple variance components do not scale -- richer
 #' RE is the non-spatial cover-hurdle EM's route). This is the single-species
-#' analogue of the community spatial occu_cover ([ms_occu_cover()], gcol33/tulpa#67)
-#' and the tulpaObs consumer of tulpa's field + per-group RE engine composition
-#' (gcol33/tulpa#86, tulpaObs#56).
+#' analogue of the community spatial occu_cover ([ms_occu_cover()])
+#' and the tulpaObs consumer of tulpa's field + per-group RE engine composition.
 #'
 #' A bar is therefore always a random effect, never a spatial field, even when the
 #' grouping factor names the areal graph nodes. The engine's inline-MCAR call
@@ -315,6 +314,25 @@ jsdm <- function() {
 #' @return A `tobs_family` object.
 #' @seealso [occu()] (no cover), [cover()] (plot-level hurdle, no detection),
 #'   [abun()] (counts not cover).
+#' @examples
+#' \donttest{
+#' N <- 120; J <- 4
+#' sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
+#'                            n_pos_covs = 1, positive = "beta", seed = 1)
+#' long <- data.frame(site_id = rep(seq_len(N), each = J),
+#'                    visit    = rep(seq_len(J), times = N),
+#'                    y        = as.vector(t(sim$y)),
+#'                    det_cov1 = sim$visit_data$det_cov1,
+#'                    pos_cov1 = sim$visit_data$pos_cov1)
+#' od  <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+#'                  det.covs = c("det_cov1", "pos_cov1"))
+#' cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
+#' y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+#' fit <- tobs(~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
+#'             detection = ~ det_cov1, positive = ~ pos_cov1,
+#'             y = od$y, y_pos = y_pos, visits = od$det.covs, method = "laplace")
+#' summary(fit)
+#' }
 #' @export
 occu_cover <- function(positive = c("beta", "lognormal"),
                        cover_aggregate = NULL) {
@@ -436,7 +454,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' `car_proper()` / `bym2()` term on the occupancy formula (and, with a matching
 #' term on the cover formula, a cover-arm factor) fits per-species loadings on the
 #' shared field via Laplace-EM and NUTS, with the per-species community covariances
-#' `Sigma_occ` / `Sigma_p` / `Sigma_pos` on top (gcol33/tulpa#67). The free
+#' `Sigma_occ` / `Sigma_p` / `Sigma_pos` on top. The free
 #' per-species loading form generalises a single common field amplitude, so it
 #' subsumes the common-amplitude coupling of [occu_cover()]'s joint-coupled engine.
 #' A community model whose per-arm variance components are integrated on an outer
@@ -444,11 +462,11 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' joint nested-Laplace engine integrates every variance component on its outer
 #' grid, so per-arm community RE variances plus the field hyperparameters exceed
 #' the engine's grid cap -- the closed-form covariance M-step of the Laplace-EM is
-#' the scaling route for community variance components (gcol33/tulpaObs#56).
+#' the scaling route for community variance components.
 #' Structured terms beyond the shared field error from the dispatcher rather than
 #' being silently dropped.
 #'
-#' @section Community variance debias (tulpaObs#47, #56):
+#' @section Community variance debias:
 #' The community-MEAN estimates (`coef()`, `vcov()`, `confint()`) are unbiased.
 #' The community-VARIANCE components -- the per-arm covariance matrices in
 #' `fit$ms_community$Sigma_occ` / `Sigma_p` / `Sigma_pos` and their `sd_*`, which
@@ -606,6 +624,13 @@ occu_multiscale_cover <- function(positive = c("beta", "lognormal")) {
 #' fit is a direct Laplace approximation (no EM): `method = "laplace"`
 #' (fixed effects) or `method = "nested_laplace"` (an areal `icar()` / `bym2()`
 #' / `car()` offset on the abundance arm).
+#' @examples
+#' \donttest{
+#' sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
+#' fit <- tobs(~ abund_cov1, data = sim$data, family = abun(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace")
+#' summary(fit)
+#' }
 #' @export
 abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
   mixture <- match.arg(mixture)
@@ -722,6 +747,16 @@ dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #'   D. L., Thomas, L. (2001). Introduction to Distance Sampling. Oxford.
 #' Royle, J. A., Dawson, D. K., Bates, S. (2004). Modeling abundance effects in
 #'   distance sampling. *Ecology* 85, 1591-1597.
+#' @examples
+#' \donttest{
+#' sim <- simulate_distance(N = 200, key = "halfnorm", transect = "line",
+#'                          n_abund_covs = 1, n_sigma_covs = 1, seed = 1)
+#' fit <- tobs(~ abund_cov1, data = sim$data,
+#'             family = distance(key = "halfnorm", transect = "line",
+#'                               cutpoints = sim$cutpoints),
+#'             detection = ~ sigma_cov1, y = sim$y, method = "laplace")
+#' summary(fit)
+#' }
 #' @export
 distance <- function(key = c("halfnorm", "hazard"),
                      transect = c("line", "point"),
@@ -832,7 +867,7 @@ fp_occu <- function() {
 #'
 #' @section Response on the formula left-hand side:
 #' The cover response is a single length-N vector, so it may sit on the top
-#' formula left-hand side and `y =` is dropped (gcol33/tulpaObs#66). The two
+#' formula left-hand side and `y =` is dropped. The two
 #' calls are equivalent:
 #'
 #' ```r
@@ -920,7 +955,7 @@ fp_occu <- function() {
 #' \strong{Copy versus free.} One `spatial()` call with `to =` naming both arms
 #' is a single latent field, presence-anchored, copied to the positive arm with
 #' an estimated coupling `alpha` (marginalized on the outer grid). This is the
-#' \emph{copy} / shared model, and the only form wired here (gcol33/tulpaObs#61):
+#' \emph{copy} / shared model, and the only form wired here:
 #'
 #' ```r
 #' # copy / shared: one latent, presence-anchored, alpha estimated
@@ -959,6 +994,12 @@ fp_occu <- function() {
 #' @param positive likelihood for the positive part. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
+#' @examples
+#' \donttest{
+#' sim <- simulate_cover(N = 200, seed = 1)
+#' fit <- tobs(~ x, data = sim$data, family = cover("beta"), y = sim$y)
+#' summary(fit)
+#' }
 #' @export
 cover <- function(positive = c("beta", "lognormal")) {
   positive <- match.arg(positive)

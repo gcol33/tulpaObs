@@ -39,3 +39,11 @@ fit is a direct Laplace approximation (no EM): \code{method = "laplace"}
 (fixed effects) or \code{method = "nested_laplace"} (an areal \code{icar()} / \code{bym2()}
 / \code{car()} offset on the abundance arm).
 }
+\examples{
+\donttest{
+sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
+fit <- tobs(~ abund_cov1, data = sim$data, family = abun(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace")
+summary(fit)
+}
+}

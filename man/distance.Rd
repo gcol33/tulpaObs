@@ -59,6 +59,17 @@ the site-level detection-scale (\verb{log sigma}) model. The response \code{y} i
 \verb{n_sites x n_bins} integer matrix of per-bin detected counts. The bin edges and
 transect geometry travel with the family: \code{distance(cutpoints = ...)}.
 }
+\examples{
+\donttest{
+sim <- simulate_distance(N = 200, key = "halfnorm", transect = "line",
+                         n_abund_covs = 1, n_sigma_covs = 1, seed = 1)
+fit <- tobs(~ abund_cov1, data = sim$data,
+            family = distance(key = "halfnorm", transect = "line",
+                              cutpoints = sim$cutpoints),
+            detection = ~ sigma_cov1, y = sim$y, method = "laplace")
+summary(fit)
+}
+}
 \references{
 Buckland, S. T., Anderson, D. R., Burnham, K. P., Laake, J. L., Borchers,
 D. L., Thomas, L. (2001). Introduction to Distance Sampling. Oxford.

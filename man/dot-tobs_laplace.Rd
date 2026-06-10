@@ -45,7 +45,7 @@ by the EM-Laplace path.}
 \item{correction}{Post-EM correction (\code{"none"}, \code{"mi"}, \code{"gibbs"}). MI /
 Gibbs run tulpa's post-EM Rubin-pooled correction; the fixed-effect prior
 (when active) threads into the correction refits, so the corrected fit is
-penalised the same way as the EM point estimate (gcol33/tulpa#27).}
+penalised the same way as the EM point estimate.}
 
 \item{n_imputations}{Number of MI draws when \code{correction = "mi"}.}
 
@@ -58,7 +58,7 @@ weakly-informative quadratic prior on the fixed-effect coefficients (see
 \code{\link[=occu_priors]{occu_priors()}}). The prior is attached to each M-step block as a per-block
 \code{beta_prior} (see \code{.attach_priors_to_blocks()} in \code{R/occu_priors.R}), which
 tulpa threads through every phase -- the EM iterations and the MI / Gibbs
-correction refits alike (gcol33/tulpa#27). Supports all built-in model
+correction refits alike. Supports all built-in model
 types. Called from \code{.tobs_fit_model()}; not user-facing.
 }
 \keyword{internal}

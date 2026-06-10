@@ -103,7 +103,7 @@ pair of orthogonal knobs:
 marginals.
 \item \code{"laplace_gibbs"} / \code{"laplace_mi"} — Laplace with a post-EM Gibbs /
 multiple-imputation correction. The fixed-effect prior threads into the
-correction refits (gcol33/tulpa#27), so these use the same
+correction refits, so these use the same
 weakly-informative default prior as \code{"laplace"}; pass \code{priors = FALSE}
 for the unpenalised correction.
 \item \code{"nested_laplace"} — multi-block nested Laplace (single-season
@@ -123,7 +123,7 @@ weakly-informative quadratic priors on the fixed-effect coefficients
 psi-p identifiability ridge at small \code{J}). Pass \code{priors = FALSE} to
 disable the default prior and recover the unpenalised MAP. The
 \code{"laplace_gibbs"} / \code{"laplace_mi"} routes apply the same default prior and
-thread it through the correction refits (gcol33/tulpa#27). For NUTS, this
+thread it through the correction refits. For NUTS, this
 is forwarded to the underlying tulpa engine.}
 
 \item{control}{list of low-level engine controls. Names follow the

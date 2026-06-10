@@ -13,8 +13,8 @@ skew-normal samples arranged in the same rank order as the incoming column.
 The incoming draws are the correlated Gaussian pseudo-draws, so the
 reordering is a Gaussian-copula transform: the skew-normal marginals are
 exact and the joint rank-correlation of the Laplace covariance is preserved
-(a derived quantity such as predicted psi keeps the coefficient dependence,
-per gcol33/tulpaObs#44). A column whose gamma is a no-op keeps its correlated
+(a derived quantity such as predicted psi keeps the coefficient dependence).
+A column whose gamma is a no-op keeps its correlated
 Gaussian draw unchanged.
 }
 \details{

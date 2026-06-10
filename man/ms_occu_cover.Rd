@@ -103,7 +103,7 @@ all three arms -- is the reduced-rank spatial-factor fit: an \code{icar()} /
 \code{car_proper()} / \code{bym2()} term on the occupancy formula (and, with a matching
 term on the cover formula, a cover-arm factor) fits per-species loadings on the
 shared field via Laplace-EM and NUTS, with the per-species community covariances
-\code{Sigma_occ} / \code{Sigma_p} / \code{Sigma_pos} on top (gcol33/tulpa#67). The free
+\code{Sigma_occ} / \code{Sigma_p} / \code{Sigma_pos} on top. The free
 per-species loading form generalises a single common field amplitude, so it
 subsumes the common-amplitude coupling of \code{\link[=occu_cover]{occu_cover()}}'s joint-coupled engine.
 A community model whose per-arm variance components are integrated on an outer
@@ -111,12 +111,12 @@ grid (the engine route of \code{\link[=occu_cover]{occu_cover()}}'s joint-couple
 joint nested-Laplace engine integrates every variance component on its outer
 grid, so per-arm community RE variances plus the field hyperparameters exceed
 the engine's grid cap -- the closed-form covariance M-step of the Laplace-EM is
-the scaling route for community variance components (gcol33/tulpaObs#56).
+the scaling route for community variance components.
 Structured terms beyond the shared field error from the dispatcher rather than
 being silently dropped.
 }
 
-\section{Community variance debias (tulpaObs#47, #56)}{
+\section{Community variance debias}{
 
 The community-MEAN estimates (\code{coef()}, \code{vcov()}, \code{confint()}) are unbiased.
 The community-VARIANCE components -- the per-arm covariance matrices in

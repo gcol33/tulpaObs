@@ -111,9 +111,8 @@ one iid block); a random slope, a correlated multi-coefficient block, or an RE
 without a shared field is rejected (the joint engine integrates every variance
 component on its grid, so multiple variance components do not scale -- richer
 RE is the non-spatial cover-hurdle EM's route). This is the single-species
-analogue of the community spatial occu_cover (\code{\link[=ms_occu_cover]{ms_occu_cover()}}, gcol33/tulpa#67)
-and the tulpaObs consumer of tulpa's field + per-group RE engine composition
-(gcol33/tulpa#86, tulpaObs#56).
+analogue of the community spatial occu_cover (\code{\link[=ms_occu_cover]{ms_occu_cover()}})
+and the tulpaObs consumer of tulpa's field + per-group RE engine composition.
 
 A bar is therefore always a random effect, never a spatial field, even when the
 grouping factor names the areal graph nodes. The engine's inline-MCAR call
@@ -173,6 +172,26 @@ spatial path only; requesting \code{"mean"} / \code{"median"} on the non-spatial
 \code{laplace} fit errors rather than silently using per-visit cover.
 }
 
+\examples{
+\donttest{
+N <- 120; J <- 4
+sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
+                           n_pos_covs = 1, positive = "beta", seed = 1)
+long <- data.frame(site_id = rep(seq_len(N), each = J),
+                   visit    = rep(seq_len(J), times = N),
+                   y        = as.vector(t(sim$y)),
+                   det_cov1 = sim$visit_data$det_cov1,
+                   pos_cov1 = sim$visit_data$pos_cov1)
+od  <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                 det.covs = c("det_cov1", "pos_cov1"))
+cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
+y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+fit <- tobs(~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
+            detection = ~ det_cov1, positive = ~ pos_cov1,
+            y = od$y, y_pos = y_pos, visits = od$det.covs, method = "laplace")
+summary(fit)
+}
+}
 \seealso{
 \code{\link[=occu]{occu()}} (no cover), \code{\link[=cover]{cover()}} (plot-level hurdle, no detection),
 \code{\link[=abun]{abun()}} (counts not cover).

@@ -138,7 +138,7 @@ ranef.tobs_fit <- function(object, ...) {
 #' (`psi`, `p`, `gamma`, `lambda`, ...), splitting the generic flat fixed-effect
 #' vector on the `<process>_<coef>` name prefix, and appends the visit-level
 #' detection coefficients (`p_visit_<cov>`) carried separately from the
-#' site-level detection design (gcol33/tulpaObs#11). Coordinates with no process
+#' site-level detection design. Coordinates with no process
 #' prefix (e.g. the `log_r` overdispersion nuisance) are not arm coefficients
 #' and are omitted from the list (they remain in `vcov()` / `confint()`).
 #'
@@ -245,7 +245,7 @@ fitted.tobs_fit <- function(object, ...) {
       yi <- y[i, ]
       valid <- yi >= 0
       if (any(yi[valid] == 1)) {
-        z[i] <- 1  # Detected → occupied
+        z[i] <- 1  # Detected -> occupied
       } else {
         # P(z=1|all zeros) = psi * prod(1-p) / [psi*prod(1-p) + (1-psi)]
         n_valid <- sum(valid)

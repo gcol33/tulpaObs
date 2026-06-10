@@ -8,6 +8,14 @@
 \description{
 Single-season and multi-season Bayesian occupancy models with spatial, temporal, and random effects. Plugs occupancy likelihoods into the tulpa engine for HMC/NUTS inference with automatic differentiation.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/gcol33/tulpaObs}
+  \item Report bugs at \url{https://github.com/gcol33/tulpaObs/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Gilles Colling \email{gilles.colling051@gmail.com} (\href{https://orcid.org/0000-0003-3070-6066}{ORCID})
 

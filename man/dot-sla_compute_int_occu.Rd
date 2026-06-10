@@ -14,7 +14,7 @@
 
 \item{spatial}{Optional \code{tobs_spatial}. When set, the skewness correction is
 intentionally NOT applied (Gaussian marginals retained) for the same reason
-as the single-season path (gcol33/tulpaObs#55): the simplified-Laplace
+as the single-season path: the simplified-Laplace
 third-cumulant correction captures hyperparameter-free fixed-effect marginal
 skewness, but a spatial field's marginal skewness is dominated by
 hyperparameter-marginalisation, which the correction does not capture

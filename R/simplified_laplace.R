@@ -268,7 +268,7 @@
 #'   `$weights`).
 #' @param spatial Optional `tobs_spatial`. When set, the skewness correction is
 #'   intentionally NOT applied and the fit keeps Gaussian marginals -- this is the
-#'   correct conservative behaviour, not a stub (gcol33/tulpaObs#55): the
+#'   correct conservative behaviour, not a stub: the
 #'   third-cumulant correction (Rue, Martino & Chopin 2009 sec.3.2) captures the
 #'   skewness of the fixed-effect (hyperparameter-free) marginals, but for a
 #'   spatial latent field the dominant marginal skewness comes from integrating
@@ -442,8 +442,8 @@
 #' The incoming draws are the correlated Gaussian pseudo-draws, so the
 #' reordering is a Gaussian-copula transform: the skew-normal marginals are
 #' exact and the joint rank-correlation of the Laplace covariance is preserved
-#' (a derived quantity such as predicted psi keeps the coefficient dependence,
-#' per gcol33/tulpaObs#44). A column whose gamma is a no-op keeps its correlated
+#' (a derived quantity such as predicted psi keeps the coefficient dependence).
+#' A column whose gamma is a no-op keeps its correlated
 #' Gaussian draw unchanged.
 #'
 #' Behaviour at large |gamma|:

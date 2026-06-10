@@ -56,7 +56,7 @@ occupancy, detection, and cover arms; each arm also has an intercept.}
 
 \item{cover_factor}{Logical; when \code{TRUE} the same shared fields \code{W} also load
 on the cover (positive) predictor through a free \verb{S x K} loading matrix
-\code{L_pos} (the cover-arm factor, gcol33/tulpa#67 Stage 3). The cover-factor
+\code{L_pos} (the cover-arm factor). The cover-factor
 draws are gated, so \code{FALSE} (the default) reproduces the no-factor RNG stream
 exactly. \code{truth$L_pos} carries the generating cover loadings.}
 
@@ -94,5 +94,5 @@ Generates occupancy / detection / cover data for \code{n_species} species sharin
 one latent ICAR spatial factor \code{w} on the cell graph, with per-species
 loadings \code{L_s} on the occupancy state predictor and Gaussian community priors
 on the per-species arm coefficients. This is the ground-truth generator for
-the Stage-1 reduced-rank spatial JSDM (gcol33/tulpa#67).
+the Stage-1 reduced-rank spatial JSDM.
 }

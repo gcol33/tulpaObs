@@ -44,7 +44,7 @@
 #' one latent ICAR spatial factor `w` on the cell graph, with per-species
 #' loadings `L_s` on the occupancy state predictor and Gaussian community priors
 #' on the per-species arm coefficients. This is the ground-truth generator for
-#' the Stage-1 reduced-rank spatial JSDM (gcol33/tulpa#67).
+#' the Stage-1 reduced-rank spatial JSDM.
 #'
 #' @param adj N x N 0/1 adjacency matrix of the cell graph (required); `N` cells.
 #' @param n_species Number of species.
@@ -62,7 +62,7 @@
 #' @param mean_load,sd_load Mean and SD of the per-species loadings `L_s`.
 #' @param cover_factor Logical; when `TRUE` the same shared fields `W` also load
 #'   on the cover (positive) predictor through a free `S x K` loading matrix
-#'   `L_pos` (the cover-arm factor, gcol33/tulpa#67 Stage 3). The cover-factor
+#'   `L_pos` (the cover-arm factor). The cover-factor
 #'   draws are gated, so `FALSE` (the default) reproduces the no-factor RNG stream
 #'   exactly. `truth$L_pos` carries the generating cover loadings.
 #' @param mean_load_pos,sd_load_pos Mean and SD of the cover-arm loadings `L_pos`

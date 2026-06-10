@@ -48,7 +48,7 @@ for a detection-history / count matrix, 3D array, or list. A
 single-vector-response family accepts the response on the top formula
 left-hand side (\code{response ~ predictors}) so \verb{y =} may be omitted; a
 matrix-response family takes the response via \verb{y =} only (a matrix does
-not sit on a formula LHS). Consulted by \code{\link[=tobs]{tobs()}} (gcol33/tulpaObs#66).}
+not sit on a formula LHS). Consulted by \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.

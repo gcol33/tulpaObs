@@ -15,6 +15,14 @@ per-species coefficients of each arm (the spOccupancy \code{msPGOcc} model). The
 occupancy and detection per-species deviations are independent, each with its
 own community covariance, fit by a community Laplace-EM.
 }
+\examples{
+\donttest{
+sim <- simulate_ms_occu(N = 80, J = 4, n_species = 8, seed = 1)
+fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
+            y = sim$y, species = paste0("sp", seq_len(8)), method = "laplace")
+summary(fit)
+}
+}
 \seealso{
 \code{\link[=occu]{occu()}}, \code{\link[=ms_dyn_occu]{ms_dyn_occu()}}, \code{\link[=ms_int_occu]{ms_int_occu()}}
 }

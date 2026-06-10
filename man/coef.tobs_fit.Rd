@@ -21,7 +21,7 @@ Returns a per-process coefficient list keyed by the model's process names
 (\code{psi}, \code{p}, \code{gamma}, \code{lambda}, ...), splitting the generic flat fixed-effect
 vector on the \verb{<process>_<coef>} name prefix, and appends the visit-level
 detection coefficients (\verb{p_visit_<cov>}) carried separately from the
-site-level detection design (gcol33/tulpaObs#11). Coordinates with no process
+site-level detection design. Coordinates with no process
 prefix (e.g. the \code{log_r} overdispersion nuisance) are not arm coefficients
 and are omitted from the list (they remain in \code{vcov()} / \code{confint()}).
 }
