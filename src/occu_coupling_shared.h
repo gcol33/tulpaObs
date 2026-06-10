@@ -79,6 +79,16 @@ struct LognormalPositive {
         grad = (log_safe_(y_pos) - eta_pos) * inv_s2;
         if (want_hess) neg_hess = inv_s2;
     }
+    // d log f / d log_sigma = (log y - eta)^2 / sigma^2 - 1 = rstd^2 - 1. The
+    // analytic dispersion score the NUTS targets need (the Laplace / coupling
+    // paths grid-integrate sigma and never differentiate it). Single source for
+    // the per-obs lognormal log-dispersion gradient (occu_cover_nuts.cpp and the
+    // spatial-factor community sampler ms_occu_cover_spatial_nuts.cpp).
+    static double grad_logdisp(double y_pos, double eta_pos, double phi) {
+        const double sigma = phi;
+        const double r     = (sigma > 0.0) ? (log_safe_(y_pos) - eta_pos) / sigma : 0.0;
+        return r * r - 1.0;
+    }
 };
 
 
@@ -137,6 +147,22 @@ struct BetaPositive {
             if (fisher) *fisher = fish;
             if (want_hess) neg_hess = fish - phi * m1m * g * (1.0 - 2.0 * mu);
         }
+    }
+    // d log f / d log_phi = phi [ digamma(phi) - mu digamma(mu phi)
+    //   - (1-mu) digamma((1-mu) phi) + mu log y + (1-mu) log(1-y) ]. The analytic
+    // dispersion (precision) score the NUTS targets need; single source for the
+    // per-obs beta log-precision gradient (occu_cover_nuts.cpp and
+    // ms_occu_cover_spatial_nuts.cpp).
+    static double grad_logdisp(double y_pos, double eta_pos, double phi) {
+        const double mu    = sigmoid_(eta_pos);
+        const double a     = mu * phi;
+        const double b     = (1.0 - mu) * phi;
+        const double ly    = log_safe_(y_pos);
+        const double l1my  = log_safe_(1.0 - y_pos);
+        return phi * (tulpa::math::portable_digamma(phi)
+                      - mu * tulpa::math::portable_digamma(a)
+                      - (1.0 - mu) * tulpa::math::portable_digamma(b)
+                      + mu * ly + (1.0 - mu) * l1my);
     }
 };
 

@@ -626,6 +626,14 @@
          "but method = \"laplace\" is non-spatial. Use method = ",
          "\"nested_laplace\" for the spatial v2 path.", call. = FALSE)
   }
+  if (has_spatial && engine == "nuts") {
+    stop("occu_cover() with method = \"nuts\" is the non-spatial sampler; a ",
+         "spatial term (icar/bym2) on the psi formula needs method = ",
+         "\"nested_laplace\" (the shared coupled field is grid-integrated). A ",
+         "spatial occu_cover NUTS path is not yet wired; for a sampled shared ",
+         "field use the spatial-factor community sampler ms_occu_cover() + icar().",
+         call. = FALSE)
+  }
   if (!has_spatial && engine == "nested_laplace") {
     stop("occu_cover() with method = \"nested_laplace\" requires a spatial ",
          "term (icar() or bym2()) on the psi formula.", call. = FALSE)
@@ -780,6 +788,14 @@
                        re_spec = re_spec, correlated = correlated),
                   control)
     return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
+  }
+
+  # Non-spatial NUTS: sample the exact two-state coefficient marginal (the
+  # in-tree FullGradFn), warm-started at the Laplace mode. Other non-spatial
+  # routes (only "laplace" here) fit the direct Laplace optim.
+  if (identical(engine, "nuts")) {
+    return(do.call(.tobs_fit_occu_cover_nuts,
+                   c(list(model = model, priors = priors), control)))
   }
 
   fit_args <- list(model = model, method = engine, priors = priors)

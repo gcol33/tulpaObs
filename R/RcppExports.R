@@ -217,6 +217,14 @@ occ_make_nested_likelihood <- function(y, det_prob) {
     .Call(`_tulpaObs_occ_make_nested_likelihood`, y, det_prob)
 }
 
+cpp_occu_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
+    .Call(`_tulpaObs_cpp_occu_cover_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logdisp)
+}
+
+cpp_occu_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_occu_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
 cpp_occu_fit <- function(spec_r) {
     .Call(`_tulpaObs_cpp_occu_fit`, spec_r)
 }

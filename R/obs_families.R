@@ -184,11 +184,17 @@ jsdm <- function() {
 #' Reduces to [occu()] when the cover arm is degenerate, and to the
 #' plot-level cover hurdle ([cover()]) when J = 1 and detection is perfect.
 #'
-#' @section v1 scope (status `"experimental"`):
-#' Laplace only; non-spatial. A shared spatial field across the three arms
-#' (the analogue of [cover()]'s nested-Laplace joint engine) is v2. Structured
-#' terms (`bym2()`, `icar()`, `re()`, ...) error from the dispatcher with a
-#' pointer to this note.
+#' @section Engines (status `"experimental"`):
+#' The non-spatial fit is a direct Laplace approximation (`method = "laplace"`)
+#' or a NUTS sampler over the same exact two-state marginal (`method = "nuts"`,
+#' beta or lognormal cover), giving calibrated intervals and a per-draw
+#' pointwise likelihood for WAIC / LOO. A shared areal field across the
+#' occupancy and cover arms is the `method = "nested_laplace"` path (a structured
+#' `icar()` / `bym2()` term on the psi formula); a structured term on a
+#' non-spatial route errors from the dispatcher with a pointer to it, and a
+#' spatial term under `method = "nuts"` is rejected (the shared coupled field is
+#' grid-integrated, not sampled; the sampled-field route is the spatial-factor
+#' community sampler [ms_occu_cover()]).
 #'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engine (`method = "nested_laplace"`, default

@@ -1187,7 +1187,14 @@ tobs <- function(formula,
   # psi and cover arms with scaling alpha (v2, the mod.joint analogue with
   # `copy = "cell.occ"`). v2 currently reads bym2() as ICAR (rho fixed to 1);
   # free-rho BYM2 + outer-grid integration of (sigma, alpha) is v3.
-  occu_cover = c("laplace", "nested_laplace"),
+  # nuts: the non-spatial sampler over the exact two-state coefficient marginal
+  # via the in-tree C++ FullGradFn (R/occu_cover_nuts.R, src/occu_cover_nuts.cpp),
+  # warm-started at the Laplace mode -- calibrated (non-Gaussian) intervals and a
+  # per-draw pointwise likelihood for WAIC / LOO, beta or lognormal cover. A
+  # spatial occu_cover NUTS path is not yet wired (the shared coupled field is
+  # grid-integrated under nested_laplace; the spatial-factor community sampler
+  # ms_occu_cover() + icar() samples a shared field).
+  occu_cover = c("laplace", "nested_laplace", "nuts"),
   # occu_multiscale_cover: three-level cell / plot / visit occupancy + cover.
   # "nested_laplace" carries the shared areal field (the four-arm cell-coupling
   # spec); "laplace" is the non-spatial path (iid cells, no field) -- the exact

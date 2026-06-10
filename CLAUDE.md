@@ -345,7 +345,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*`. `control$aggregate.occ` (ON, #48) collapses occ arm to Binomial suff-stat; `control$aggregate.pos` (ON beta arm, #49) collapses beta pos arm to grouped suff-stat (tulpa `slog_y`/`slog_1my`), errors on non-beta. Both byte-identical to per-plot |
 | Cover hurdle spatial coef fields (`\|\|` / `\|`) | n-L | — | `spatial(~ 1 + w \|\| node, graph, to=)` independent (#61, two coupled ICAR blocks, per-field alpha) OR `\| ` correlated (#64, one separable-MCAR block sharing free Sigma copied to pos arm w/ one alpha). `\|` -> `.cover_build_mcar_spec`/`.fit_cover_hurdle_joint_mcar` (tulpa `type="mcar"` copy block); reports `sigma_mcar`/`rho_mcar`/`alpha_mcar`. SLA on `\|` no-op. icar only |
 | Cover hurdle arm-specific fields (single-arm `to`) | n-L | — | `spatial(~ 1 + w \|\| cell, graph, to="positive")` (or `"presence"`); separate single-arm calls = independent per-arm fields, NO cross-arm copy (#65). NO engine change: per-arm `spatial_idx=0` makes the other arm's rows skip the block (tulpa `l_b>0` scatter guard), own precision grid-integrated. `.tobs_armspecific_bar_fields` (formula_terms.R) -> `enc$armspec` -> `.fit_cover_hurdle_joint_armspecific` (non-copied per-arm blocks, no `copy=`). `armspec_blocks` carries per-block arm/slot; `.tobs_joint_draws_cover_armspecific` scatters each block onto its arm only (amp 0 on other). `\|\|` only (`\|` arm-specific undefined: copy-only). No mix w/ shared field/trend/temporal/re; one field per arm. SLA no-op |
-| Joint occu + cover | Yes | — | `occu_cover()` — see below |
+| Joint occu + cover | Yes | Yes | `occu_cover()` — see below. NUTS = non-spatial only (in-tree FullGradFn over exact two-state marginal, beta/lognormal; `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`); spatial occu_cover NUTS gated (shared coupled field grid-integrated under n-L; sampled-field route = `ms_occu_cover()` factor) |
 | occu + cover + areal field + per-group RE | n-L | — | `occu_cover()` + icar/bym2 + `re(g)`/`(1\|g)` on psi; one iid RE block (#56); `sigma_re` + BLUPs; intercept RE only |
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
 | Spatial-factor community occu+cover (JSDM) | Yes | Yes | `ms_occu_cover()` + icar/car_proper/bym2 shared field, per-species loadings (tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`src/ms_occu_cover_spatial_nuts.cpp`). Cover-arm factor, `tobs_associations()`, per-species `predict()` maps |
@@ -377,7 +377,21 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 
 Joint occu-detection + cover hurdle. **Non-spatial** (`laplace`, `R/occu_cover.R`):
 cell psi + per-visit detection + per-visit cover (beta/lognormal) on exact two-state
-marginal. **Spatial default** (`nested_laplace`, `R/occu_cover_joint_coupled.R`):
+marginal. **Non-spatial NUTS** (`nuts`, `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`):
+samples that exact two-state coefficient marginal (no field/RE) via in-tree C++
+FullGradFn over shared `run_tulpa_nuts`, warm-started at Laplace mode w/ diagonal
+Laplace metric. Reuses `nodet_mixture_block` + `Lognormal/BetaPositive` (cover density
++ eta-grad + new `grad_logdisp` dispersion score, single-source in
+`occu_coupling_shared.h`); coef grad = design-sandwiched eta-grad. Layout
+`c(beta_psi, beta_p, beta_pos, log_disp)`, weak N(0,sigma.beta^2) coef + broad
+N(0,sigma.logdisp^2=25) log-disp priors. Byte-exact R oracle
+`.tobs_occu_cover_nuts_logpost` vs `cpp_occu_cover_nuts_joint_logpost`; calibrated
+WAIC/LOO + Rhat/ESS (shared `.tobs_nuts_rhat_ess` in `nuts_chains.R`). 0 divergences,
+NUTS==Laplace mode, recovery + 95% coverage (`test-occu-cover-nuts.R`). Spatial
+occu_cover NUTS gated (`.dispatch_occu_cover`): shared coupled field grid-integrated
+under n-L; sampled-field route = `ms_occu_cover()` factor (tulpa#67). predict() needs
+the joint object (non-spatial laplace AND nuts both error w/ pointer). **Spatial
+default** (`nested_laplace`, `R/occu_cover_joint_coupled.R`):
 `joint_coupled` engine via `tulpa_nested_laplace_joint()` w/
 `occu_cover_{lognormal,beta}` cell-coupling spec (tulpa#32) — 3-arm joint
 nested-Laplace, outer-grid over `(sigma, alpha)`, per-cell occupancy mixture
@@ -551,6 +565,8 @@ R/
   em_nested_laplace.R / simplified_laplace.R / sla_*.R — nested-Laplace EM; SLA wrapper + paths
   family_cover_hurdle.R    — .dispatch_cover() (two-Laplace hurdle), large
   occu_cover.R             — joint occu-det+cover wiring + .occu_cover_eta_from_par()
+  occu_cover_nuts.R        — non-spatial occu_cover NUTS: R oracle + .tobs_fit_occu_cover_nuts
+  nuts_chains.R            — multi-chain pooling + shared split-Rhat/bulk-ESS (.tobs_nuts_rhat_ess)
   ms_occu_cover.R / ms_occu_cover_spatial{,_nuts}.R — community joint; spatial-factor JSDM (tulpa#67) Laplace-EM + NUTS
   occu_multiscale_cover{,_joint_coupled}.R — 3-level occu+cover (#29) + 4-arm fitter
   occu_cover_spatial.R / occu_cover_nested.R — v2_joint / v3_nested escape hatches
@@ -561,7 +577,8 @@ src/
   occu_fit.cpp / populate_helpers.h  — unified C++ entry; populate_spatial/temporal/re/svc/latent
   occ_*.h / dyn_occ_*.h / integrated_occ_*.h / jsdm_likelihood.h — single/dynamic(HMC fwd)/integrated/JSDM
   cell_coupling_occu_cover.h / cell_coupling_occu_multiscale_cover.{cpp,h} / occu_coupling_shared.h — coupling specs + shared helpers
-  ms_occu_cover_spatial_nuts.cpp / abun_nuts.cpp / ms_abun_nuts.cpp — NUTS (#67/#41/#14)
+  ms_occu_cover_spatial_nuts.cpp / abun_nuts.cpp / ms_abun_nuts.cpp / occu_cover_nuts.cpp — NUTS (#67/#41/#14; occu_cover non-spatial)
+  nuts_engine.h            — shared run_tulpa_nuts driver for the in-tree FullGradFn targets
   community_chol.h         — shared log-Cholesky helpers (#14 non-centered, #67 centered)
   RcppExports.cpp          — generated, do not edit
   Makevars.win             — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-obj MinGW)
