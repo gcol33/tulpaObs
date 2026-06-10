@@ -117,14 +117,10 @@ test_that("ms_occu() S3 methods work, incl. richness", {
 })
 
 
-test_that("ms_occu() capability gates: laplace only, species required", {
+test_that("ms_occu() capability gates: laplace + nuts, species required", {
   sim <- simulate_ms_occu(N = 30, J = 3, n_species = 4, seed = 1)
-  # nested_laplace / nuts no longer offered (community NUTS needs independent
-  # per-arm RE blocks in the sampler; gcol33/tulpaObs#30).
-  expect_error(
-    tobs(~ 1, data = sim$data, family = ms_occu(), detection = ~ 1,
-         y = sim$y, species = paste0("sp", seq_len(4)), method = "nuts"),
-    "not available")
+  # nuts is offered (independent per-arm community RE blocks in the sampler;
+  # gcol33/tulpaObs#69); nested_laplace is not.
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(4)),

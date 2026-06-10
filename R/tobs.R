@@ -470,9 +470,47 @@ tobs <- function(formula,
          "n_species] or a named list of detection-history matrices).",
          call. = FALSE)
   }
+
+  # ms_occu (both Laplace-EM and NUTS) is non-spatial: per-species coefficient RE
+  # with independent per-arm community covariances over the closed-form occupancy
+  # marginal. A structured term (icar()/bym2()/.../re()/temporal()) on either
+  # formula is not wired here, so strip + gate up front (before model.matrix sees
+  # the special), with a NUTS-specific pointer when the sampler was requested.
+  occ_p <- .tobs_parse_formula(formula,   data = data)
+  det_p <- .tobs_parse_formula(detection, data = data)
+  if (length(occ_p$terms) || length(det_p$terms)) {
+    if (identical(engine, "nuts")) {
+      stop("method = \"nuts\" for ms_occu() is the non-spatial community ",
+           "occupancy sampler; a spatial / temporal / random-effect term is not ",
+           "yet wired on the sampler. Use method = \"laplace\".", call. = FALSE)
+    }
+    stop("ms_occu() is non-spatial: a structured term (icar()/bym2()/re()/...) ",
+         "on the occupancy or detection formula is not supported.", call. = FALSE)
+  }
+
   model <- .tobs_build_ms_occu(
-    occ_formula = formula, det_formula = detection,
+    occ_formula = occ_p$fe_formula, det_formula = det_p$fe_formula,
     data = data, y = y, species = dots$species)
+
+  # NUTS (method = "nuts", tulpaObs#69): sample the exact joint posterior of the
+  # non-spatial community single-season occupancy (community means, per-species
+  # deviations, and the two independent per-arm community covariances) via the
+  # in-tree C++ FullGradFn over the closed-form occupancy two-state per-(species,
+  # site) marginal (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp), warm-started at the
+  # community Laplace-EM mode.
+  if (identical(engine, "nuts")) {
+    return(.tobs_fit_ms_occu_nuts(
+      model,
+      sigma.beta    = control[["sigma.beta"]] %||% 5,
+      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
+      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
+      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
+      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
+      seed          = as.integer(control[["seed"]] %||% 1L),
+      verbose       = isTRUE(control[["verbose"]])))
+  }
+
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_occu, fit_args)
 }
@@ -1118,10 +1156,14 @@ tobs <- function(formula,
   # ms_occu: community single-season occupancy via the shared community
   # Laplace-EM (R/community_em.R) -- per-species occupancy / detection
   # coefficient RE with independent per-arm Gaussian community covariances. The
-  # latent state marginalizes in closed form. Non-spatial Laplace only; correct
-  # community NUTS needs independent per-arm RE blocks in the sampler
-  # (gcol33/tulpaObs#30).
-  ms_occu  = c("laplace"),
+  # latent state marginalizes in closed form. nuts: the non-spatial community
+  # sampler over the closed-form occupancy two-state per-(species, site) marginal
+  # via the in-tree C++ FullGradFn (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp) --
+  # samples the community means, per-species deviations, AND the two independent
+  # per-arm community covariances jointly, non-centered, warm-started at the
+  # Laplace-EM mode (gcol33/tulpaObs#69). Spatial / temporal / RE NUTS not yet
+  # wired.
+  ms_occu  = c("laplace", "nuts"),
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts"),
