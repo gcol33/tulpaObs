@@ -31,6 +31,13 @@ season, then visit; \code{-1} marks a missing visit).}
 
 \item{X_lambda, X_p, X_omega, X_gamma}{Numeric \verb{[n_sites x p_arm]} design matrices.}
 
+\item{mixture}{Initial-abundance distribution: \code{"poisson"} (default) or
+\code{"negbin"} (negative-binomial).}
+
+\item{log_r_init}{Optional starting value (log scale) for the
+negative-binomial size parameter \code{r}; used only when \code{mixture = "negbin"}.
+Default \code{NULL} starts from \code{log(2)}.}
+
 \item{max_iter}{BFGS iteration budget (default 300).}
 
 \item{tol}{Convergence tolerance (\code{optim} \code{reltol}, default 1e-8).}

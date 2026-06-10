@@ -353,6 +353,11 @@
 #' @param n_sites,T,J Sites, primary seasons, secondary visits per season.
 #' @param K_max Abundance-state truncation (states `0..K_max`).
 #' @param X_lambda,X_p,X_omega,X_gamma Numeric `[n_sites x p_arm]` design matrices.
+#' @param mixture Initial-abundance distribution: `"poisson"` (default) or
+#'   `"negbin"` (negative-binomial).
+#' @param log_r_init Optional starting value (log scale) for the
+#'   negative-binomial size parameter `r`; used only when `mixture = "negbin"`.
+#'   Default `NULL` starts from `log(2)`.
 #' @param max_iter BFGS iteration budget (default 300).
 #' @param tol Convergence tolerance (`optim` `reltol`, default 1e-8).
 #' @param verbose Print convergence status.
