@@ -371,11 +371,7 @@
   rho <- if (identical(spatial$type, "car_proper")) min(max(nl$rho_mean, 0.01), 0.99) else 1.0
 
   # Fixed field precision tau Q(rho) (+ ridge to proper-ise ICAR) -> Linv = L^{-1}.
-  Q <- .areal_Q(adj, rho)
-  Qr <- tau * Q + diag(1e-4 * tau, n_sites)
-  L <- tryCatch(chol(Qr), error = function(e) NULL)        # upper: L'L = Qr
-  if (is.null(L)) stop("abun NUTS spatial: field precision not PD.", call. = FALSE)
-  Linv <- backsolve(L, diag(n_sites))                      # (L)^{-1}, z = Linv %*% raw ~ N(0, Qr^{-1})
+  Linv <- .tobs_field_linv(adj, tau, rho, n_sites)
 
   spec <- list(y = as.integer(y_long), site_idx = as.integer(site_idx),
                X_lambda = X_lambda, X_p = X_p, n_sites = n_sites, K_max = K_max,

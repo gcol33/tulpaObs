@@ -89,7 +89,128 @@
   fit <- build_distance_fit(raw, model)
   fit$method <- "nested_laplace"
   fit$spatial_field <- res$field_mean
+  fit$spatial_hyper <- res$hyper
   fit$spatial_integration <- res$integration
   fit$spatial_pareto_k <- res$pareto_k
+  fit
+}
+
+# Areal-spatial binned distance sampling via NUTS (gcol33/tulpaObs#72): a FIXED-
+# HYPER non-centered PROPER-CAR field on the abundance arm (log lambda) of the
+# bin-multinomial distance marginal. The field precision (tau, rho) is fixed at the
+# nested-Laplace areal posterior mean (fit$spatial_hyper) and the whitened raw ~
+# N(0, I) (z = Linv %*% raw) is sampled jointly with the coefficients via the
+# distance NUTS field block (cpp_distance_nuts over nuts_field_block.h). The areal
+# Laplace fit supplies warm coefficients + the field hyper; NUTS then samples the
+# exact coefficient + whitened-field posterior. Half-normal key only (the spatial
+# Laplace path, gcol33/tulpaObs#79); car_proper only (intrinsic icar = #71).
+# Poisson or NB.
+.tobs_fit_distance_nuts_spatial <- function(model, spatial, mixture = "poisson",
+                                            K_max = NULL, sigma.beta = 10,
+                                            sigma.shape = 1.5, sigma.logr = 1.5,
+                                            n.iter = 1000L, n.warmup = 1000L,
+                                            n.chains = 1L, max.treedepth = 10L,
+                                            adapt.delta = 0.9, seed = 1L,
+                                            verbose = FALSE) {
+  .tobs_reject_weighted_spatial(spatial, "distance NUTS abundance spatial")
+  if (!identical(model$key, "halfnorm"))
+    stop("distance() NUTS + areal spatial supports the half-normal key only ",
+         "(the hazard-rate shape is not wired into the spatial path). ",
+         "(tulpaObs#72/#79)", call. = FALSE)
+  if (!identical(spatial$type, "car_proper"))
+    stop(sprintf(paste0("distance() NUTS + areal spatial supports the proper-CAR ",
+                        "field car_proper(); the intrinsic '%s' field needs a ",
+                        "sum-to-zero reparameterisation for NUTS -- use method = ",
+                        "\"nested_laplace\" for the icar()/bym2() areal fit. ",
+                        "(tulpaObs#72)"), spatial$type), call. = FALSE)
+  n_sites <- model$n_sites
+  if (spatial$n_units != n_sites)
+    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
+                 "spatial unit per site is required for distance NUTS.",
+                 spatial$n_units, n_sites), call. = FALSE)
+  is_nb <- mixture %in% c("negbin", "NB")
+  mix_code <- if (is_nb) "NB" else "P"
+  X_lambda <- model$X_processes[[1]]; X_sigma <- model$X_processes[[2]]
+  y <- matrix(as.integer(model$y), nrow(model$y), ncol(model$y))
+  p_lam <- ncol(X_lambda); p_sig <- ncol(X_sigma)
+  R_max <- if (length(y)) max(rowSums(y)) else 0L
+  K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
+  adj <- as.matrix(spatial$graph)
+
+  # Warm coefficients + fixed field hyper (tau, rho) from the nested-Laplace fit.
+  nl <- .tobs_fit_distance_spatial(model, spatial, mixture = mixture, K_max = K_max,
+                                   max_iter = 200L, tol = 1e-6, verbose = FALSE,
+                                   integration = "grid")
+  hyper <- nl$spatial_hyper
+  tau <- max(unname(hyper[["tau"]]), 1e-3)
+  rho <- min(max(unname(hyper[["rho"]]), 0.01), 0.99)
+  Linv <- .tobs_field_linv(adj, tau, rho, n_sites)
+
+  cm <- nl$means
+  beta0 <- c(unname(cm[paste0("lambda_", model$process_info[[1]]$coef_names)]),
+             unname(cm[paste0("sigma_",  model$process_info[[2]]$coef_names)]))
+  if (is_nb) beta0 <- c(beta0, log(if (is.finite(nl$r %||% NA_real_)) nl$r else 2))
+  n_base <- p_lam + p_sig + if (is_nb) 1L else 0L
+  # Warm-start raw from the Laplace field mean via the precision Cholesky:
+  # z = Linv %*% raw -> raw = L %*% z (raw0 = forward-solve), so the sampler starts
+  # near the integrated field.
+  L <- chol(.areal_Q(adj, rho) * tau + diag(1e-4 * tau, n_sites))   # upper L'L = Qr
+  raw0 <- as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
+  theta0 <- c(beta0, raw0)
+  inv_metric <- c(rep(0.1, n_base), rep(1, n_sites))
+
+  spec <- list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
+               cutpoints = as.numeric(model$cutpoints),
+               transect = .dist_transect_code(model$transect),
+               key = .dist_key_code(model$key), K_max = K_max, is_nb = is_nb,
+               quad_order = as.integer(model$quad_order %||% 64L),
+               n_field_units = n_sites, field_map = seq_len(n_sites),
+               field_Linv = Linv)
+
+  run_chain <- function(ch)
+    cpp_distance_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
+                      sigma_shape = sigma.shape, sigma_logr = sigma.logr,
+                      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+                      n_warmup = as.integer(n.warmup),
+                      max_treedepth = as.integer(max.treedepth),
+                      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
+                      verbose = isTRUE(verbose))
+  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
+  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
+  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
+           paste0("sigma_",  model$process_info[[2]]$coef_names),
+           if (is_nb) "log_r", paste0("raw_", seq_len(n_sites)))
+  colnames(draws) <- nms
+  b_idx <- seq_len(n_base)
+  par <- colMeans(draws); cov <- stats::cov(draws[, b_idx, drop = FALSE])
+  raw_idx <- n_base + seq_len(n_sites)
+  z_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+
+  lay <- .tobs_distance_nuts_layout(p_lam, p_sig, FALSE, is_nb)
+  marg <- .tobs_distance_nuts_marginal(model, mixture = mix_code, K_max = K_max)
+  ll_mean <- marg$eval_beta(par[lay$lambda], par[lay$sigma], eta_b = 0,
+                            r = if (is_nb) exp(par[lay$log_r]) else Inf)$log_lik
+  raw_fit <- list(
+    mixture = mix_code, key = model$key, transect = model$transect,
+    hazard = FALSE, nb = is_nb,
+    beta_lambda = unname(par[lay$lambda]), beta_sigma = unname(par[lay$sigma]),
+    eta_b = NA_real_, shape = NA_real_,
+    log_r = if (is_nb) unname(par[lay$log_r]) else NA_real_,
+    r = if (is_nb) exp(unname(par[lay$log_r])) else NA_real_,
+    vcov = cov, log_lik = ll_mean, converged = TRUE, K_max = K_max)
+  fit <- build_distance_fit(raw_fit, model)
+  fit$draws <- draws[, b_idx, drop = FALSE]
+  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
+  fit$vcov <- cov
+  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ll_mean, nrow(draws))
+  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
+  divergent <- unlist(lapply(chains, `[[`, "divergent"))
+  fit$accept_prob <- accept; fit$divergent <- divergent
+  fit$method <- "nuts"; fit$spatial_field <- z_mean
+  fit$nuts <- list(accept_prob = accept, divergent = divergent,
+                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
+                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
+                   divergent_total = sum(divergent), tau = tau, rho = rho,
+                   prior_type = spatial$type, fixed_hyper = TRUE)
   fit
 }

@@ -23,6 +23,23 @@
 
 .areal_Q <- function(adj, rho) { deg <- rowSums(adj != 0); diag(deg) - rho * adj }
 
+# Inverse Cholesky of the FIXED field precision tau Q(rho) for the non-centered
+# areal-field NUTS path (gcol33/tulpaObs#72): z = Linv %*% raw, raw ~ N(0, I) has
+# covariance (tau Q(rho))^{-1}. A small ridge proper-ises an intrinsic ICAR
+# (proper-CAR is already full rank). Returns the n x n inverse-Cholesky matrix
+# (the field block passes it to the C++ sampler as field_Linv); errors if the
+# precision is not positive definite. Single source of truth shared by every
+# count / occupancy family's areal NUTS fitter (abun, removal, distance, fp_occu,
+# dyn_abun).
+.tobs_field_linv <- function(adj, tau, rho, n, ridge = 1e-4) {
+  Q  <- .areal_Q(adj, rho)
+  Qr <- tau * Q + diag(ridge * tau, n)
+  L  <- tryCatch(chol(Qr), error = function(e) NULL)   # upper: L'L = Qr
+  if (is.null(L)) stop("areal NUTS: fixed field precision not positive definite.",
+                       call. = FALSE)
+  backsolve(L, diag(n))                                # (L)^{-1}; z = Linv %*% raw
+}
+
 # ICAR / proper-CAR single-block field (parameter z, length n_sp; eta += z[map]).
 .areal_field_car <- function(adj, kind, map, n_sp) {
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
@@ -58,7 +75,11 @@
     prior_grad = function(fp, cell) cell$tau * as.numeric(cell$Q %*% fp),  # d(-logp)/dfp
     center = function(fp) if (kind == "icar") fp - mean(fp) else fp,
     constrain = if (kind == "icar") rep(TRUE, n_sp) else rep(FALSE, n_sp),
-    to_phi = function(fp, cell) fp
+    to_phi = function(fp, cell) fp,
+    # Physical field hyperparameters per cell, for fixing the precision tau Q(rho)
+    # on the NUTS path (gcol33/tulpaObs#72). ICAR pins rho = 1.
+    type = if (kind == "icar") "icar" else "car_proper",
+    to_hyper = function(cell) c(tau = cell$tau, rho = cell$rho)
   )
 }
 
@@ -105,6 +126,8 @@
     center = function(fp) { fp[seq_len(n_sp)] <- fp[seq_len(n_sp)] - mean(fp[seq_len(n_sp)]); fp },
     constrain = c(rep(TRUE, n_sp), rep(FALSE, n_sp)),  # sum-to-zero on v only
     to_phi = function(fp, cell) cell$a * fp[seq_len(n_sp)] + cell$b * fp[n_sp + seq_len(n_sp)],
+    type = "bym2",
+    to_hyper = function(cell) c(sigma = cell$sigma, rho = cell$rho),
     bym2 = TRUE
   )
 }
@@ -152,6 +175,7 @@
     list(logm = ll_fn(th) - 0.5 * ldH,
          mode = th[seq_len(n_fixed)],
          phi  = field$to_phi(th[fi], cell),
+         hyper = if (is.function(field$to_hyper)) field$to_hyper(cell) else NULL,
          cov  = cov_full[seq_len(n_fixed), seq_len(n_fixed), drop = FALSE])
   }
 
@@ -171,7 +195,16 @@
       V <- V + wk[j] * (res[[which(ok)[j]]]$cov + outer(dk, dk))
     }
     logm <- vapply(which(ok), function(k) res[[k]]$logm, numeric(1))
+    # Posterior-mean field hyperparameters (tau / rho or sigma / rho), for fixing
+    # the field precision on the NUTS path (gcol33/tulpaObs#72).
+    hyper_mean <- NULL
+    h1 <- res[[which(ok)[1L]]]$hyper
+    if (!is.null(h1)) {
+      H <- t(vapply(which(ok), function(k) res[[k]]$hyper, numeric(length(h1))))
+      hyper_mean <- as.numeric(crossprod(wk, H)); names(hyper_mean) <- names(h1)
+    }
     list(ok = TRUE, beta_mean = beta_mean, field_mean = field_mean, vcov = V,
+         hyper = hyper_mean,
          log_lik = sum(wk * logm), integration = method, pareto_k = pareto_k)
   }
 

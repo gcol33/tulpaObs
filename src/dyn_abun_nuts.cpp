@@ -10,6 +10,7 @@
 #include <vector>
 #include "dyn_abun_kernel.h"
 #include "nuts_engine.h"
+#include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
 
 namespace tulpaObs {
 
@@ -28,6 +29,10 @@ struct DynNutsModel {
     int re_arm = -1, n_re_groups = 0, o_re_z = 0, o_re_logsig = 0, n_pre_re = 0;
     double sigma_re_lsd = 1.5;
     std::vector<int> re_group;        // 0-based group per site
+    // Optional fixed-hyper areal field on the initial-abundance (lambda) arm
+    // (tulpaObs#72): the shared non-centered field z = Linv %*% raw added to
+    // eta_lambda (nuts_field_block.h). Field XOR RE (gated upstream).
+    FieldBlock field;
 };
 
 inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
@@ -59,6 +64,8 @@ inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
         m.o_re_z = m.total; m.o_re_logsig = m.total + m.n_re_groups;
         m.total = m.o_re_logsig + 1;
     } else { m.re_arm = -1; }
+    m.field = field_block_build(spec, m.total, m.n_sites);
+    m.total += field_block_size(m.field);
     m.y.assign(y.begin(), y.end());
     return m;
 }
@@ -71,6 +78,10 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
     const bool has_re = m.re_arm == 0;
     const double sigma_re = has_re ? std::exp(theta[m.o_re_logsig]) : 0.0;
     double grad_logr = 0.0, grad_re_logsig = 0.0;
+    const bool has_field = m.field.active();
+    std::vector<double> zfield, grad_z;
+    field_block_forward(m.field, theta, zfield);
+    field_block_init_grad(m.field, grad_z);
     double lp = 0.0;
     for (int i = 0; i < m.n_sites; ++i) {
         double el = 0.0, ep = 0.0, eo = 0.0, eg = 0.0;
@@ -80,6 +91,7 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
         for (int k = 0; k < p_gm;  ++k) eg += m.X_gamma(i, k)  * theta[o_gm + k];
         const double re_off = has_re ? sigma_re * theta[m.o_re_z + m.re_group[i]] : 0.0;
         if (has_re) el += re_off;
+        if (has_field) el += zfield[m.field.field_map[i]];
         DynAbunSiteResult r = compute_dyn_abun_site(
             m.y.data() + (std::size_t)i * m.T * m.J, m.T, m.J, m.K, el, ep, eo, eg,
             m.use_nb, eta_logr);
@@ -93,6 +105,7 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
             grad[m.o_re_z + m.re_group[i]] += sigma_re * r.grad_eta_lambda;
             grad_re_logsig += r.grad_eta_lambda * re_off;
         }
+        if (has_field) grad_z[m.field.field_map[i]] += r.grad_eta_lambda;
     }
     if (m.use_nb) grad[m.o_logr] += grad_logr;
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
@@ -110,6 +123,7 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
         lp -= 0.5 * ils2 * ls * ls;
         grad[m.o_re_logsig] += grad_re_logsig - ils2 * ls;
     }
+    lp += field_block_backward(m.field, theta, grad_z, grad);
     return lp;
 }
 

@@ -15,6 +15,7 @@
 #include <limits>
 #include "distance_kernel.h"
 #include "nuts_engine.h"
+#include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
 
 namespace tulpaObs {
 
@@ -33,6 +34,10 @@ struct DistNutsModel {
     int re_arm = -1, n_re_groups = 0, o_z = 0, o_logsig = 0;
     double sigma_re_lsd = 1.5;
     std::vector<int> re_group;        // 0-based group per site
+    // Optional fixed-hyper areal field on the abundance (log lambda) arm
+    // (tulpaObs#72): the shared non-centered field z = Linv %*% raw added to
+    // eta_lambda (nuts_field_block.h). Field XOR RE (gated upstream).
+    FieldBlock field;
 };
 
 inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
@@ -67,6 +72,8 @@ inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
     } else {
         m.re_arm = -1;
     }
+    m.field = field_block_build(spec, base, m.n_sites);
+    base += field_block_size(m.field);
     m.total = base;
     return m;
 }
@@ -85,6 +92,10 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
     const bool has_re = m.re_arm == 0;
     const double sigma_re = has_re ? std::exp(theta[m.o_logsig]) : 0.0;
     double grad_logsig = 0.0;
+    const bool has_field = m.field.active();
+    std::vector<double> zfield, grad_z;
+    field_block_forward(m.field, theta, zfield);
+    field_block_init_grad(m.field, grad_z);
 
     std::vector<int> y_site(m.n_bins);
     double lp = 0.0;
@@ -94,6 +105,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         for (int k = 0; k < p_sig; ++k) eta_sigma  += m.X_sigma(s, k) * theta[p_lam + k];
         const double re_off = has_re ? sigma_re * theta[m.o_z + m.re_group[s]] : 0.0;
         if (has_re) eta_lambda += re_off;
+        if (has_field) eta_lambda += zfield[m.field.field_map[s]];
         for (int b = 0; b < m.n_bins; ++b) y_site[b] = m.y(s, b);
         const DistSiteResult res = compute_distance_site(
             y_site.data(), m.n_bins, eta_lambda, eta_sigma, eta_b, m.key,
@@ -107,6 +119,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
             grad[m.o_z + m.re_group[s]] += sigma_re * res.grad_eta_lambda;
             grad_logsig += res.grad_eta_lambda * re_off;
         }
+        if (has_field) grad_z[m.field.field_map[s]] += res.grad_eta_lambda;
     }
 
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
@@ -134,6 +147,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         lp -= 0.5 * il2 * lr * lr;
         grad[lr_idx] -= il2 * lr;
     }
+    lp += field_block_backward(m.field, theta, grad_z, grad);
     return lp;
 }
 

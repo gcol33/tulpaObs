@@ -23,8 +23,9 @@
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
 #include <tulpa/nuts_api.h>
-#include "nmix_kernel.h"   // NMixSiteResult
-#include "nuts_engine.h"   // run_tulpa_nuts (shared engine plumbing)
+#include "nmix_kernel.h"        // NMixSiteResult
+#include "nuts_engine.h"        // run_tulpa_nuts (shared engine plumbing)
+#include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
 
 namespace tulpaObs {
 
@@ -52,15 +53,12 @@ struct CountNutsData {
     std::vector<int> re_group;        // 0-based group per site (length n_sites)
     double sigma_re_lsd = 1.5;        // prior SD on log_sigma_re
     int o_z = 0, o_logsig = 0;        // offsets of the z block / log_sigma_re
-    // Optional fixed-hyper areal field on the abundance arm (tulpaObs#51): the
-    // non-centered Gaussian field z = Linv %*% raw, raw ~ N(0, I), with Linv the
-    // inverse Cholesky of the FIXED field precision tau Q(rho) (a small ridge
-    // proper-ises an intrinsic ICAR). The field covariance is fixed at the
-    // nested-Laplace estimate; NUTS samples only the whitened raw and the betas.
-    // eta_lambda[site] += z[field_map[site]]. Field XOR RE (gated upstream).
-    int n_field_units = 0, o_raw = 0;
-    std::vector<int> field_map;       // 0-based unit per site (length n_sites)
-    std::vector<double> Linv;         // row-major n_field_units x n_field_units
+    // Optional fixed-hyper areal field on the abundance arm (tulpaObs#51/#72): the
+    // shared non-centered Gaussian field z = Linv %*% raw added to eta_lambda
+    // (nuts_field_block.h). The field covariance is fixed at the nested-Laplace
+    // estimate; NUTS samples only the whitened raw and the betas. Field XOR RE
+    // (gated upstream).
+    FieldBlock field;
 };
 
 inline CountNutsData count_nuts_build_data(const Rcpp::List& spec) {
@@ -100,24 +98,8 @@ inline CountNutsData count_nuts_build_data(const Rcpp::List& spec) {
             base       = d.o_logsig + 1;
         }
     }
-    if (spec.containsElementNamed("n_field_units")) {
-        d.n_field_units = Rcpp::as<int>(spec["n_field_units"]);
-        if (d.n_field_units > 0) {
-            Rcpp::IntegerVector fm = spec["field_map"];   // 1-based site -> unit
-            if ((int) fm.size() != d.n_sites)
-                Rcpp::stop("field_map must have length n_sites");
-            d.field_map.resize(d.n_sites);
-            for (int i = 0; i < d.n_sites; ++i) d.field_map[i] = fm[i] - 1;
-            Rcpp::NumericMatrix Li = spec["field_Linv"];
-            if (Li.nrow() != d.n_field_units || Li.ncol() != d.n_field_units)
-                Rcpp::stop("field_Linv must be n_field_units x n_field_units");
-            d.Linv.resize((std::size_t) d.n_field_units * d.n_field_units);
-            for (int u = 0; u < d.n_field_units; ++u)
-                for (int v = 0; v < d.n_field_units; ++v)
-                    d.Linv[(std::size_t) u * d.n_field_units + v] = Li(u, v);
-            d.o_raw = base; base += d.n_field_units;
-        }
-    }
+    d.field = field_block_build(spec, base, d.n_sites);
+    base += field_block_size(d.field);
     d.total = base;
     return d;
 }
@@ -149,18 +131,10 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
     double grad_logsig = 0.0;
 
     // Fixed-hyper areal field: z = Linv %*% raw (per unit), added to eta_lambda.
-    const bool has_field = d.n_field_units > 0;
+    const bool has_field = d.field.active();
     std::vector<double> zfield, grad_z;
-    if (has_field) {
-        zfield.assign(d.n_field_units, 0.0);
-        grad_z.assign(d.n_field_units, 0.0);
-        for (int u = 0; u < d.n_field_units; ++u) {
-            double zz = 0.0;
-            const double* Lu = &d.Linv[(std::size_t) u * d.n_field_units];
-            for (int v = 0; v < d.n_field_units; ++v) zz += Lu[v] * theta[d.o_raw + v];
-            zfield[u] = zz;
-        }
-    }
+    field_block_forward(d.field, theta, zfield);
+    field_block_init_grad(d.field, grad_z);
 
     double lp = 0.0;
     std::vector<int>    y_site;
@@ -172,7 +146,7 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         double eta_lambda = 0.0;
         for (int k = 0; k < p_lam; ++k) eta_lambda += d.X_lambda(i, k) * theta[k];
         if (has_re && d.re_arm == 0) eta_lambda += re_off;
-        if (has_field) eta_lambda += zfield[d.field_map[i]];
+        if (has_field) eta_lambda += zfield[d.field.field_map[i]];
         y_site.resize(J); eta_p_site.resize(J);
         for (int jj = 0; jj < J; ++jj) {
             y_site[jj]     = d.y[obs[jj]];
@@ -183,7 +157,7 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         lp += res.log_lik;
         for (int k = 0; k < p_lam; ++k)
             grad[k] += res.grad_eta_lambda * d.X_lambda(i, k);
-        if (has_field) grad_z[d.field_map[i]] += res.grad_eta_lambda;
+        if (has_field) grad_z[d.field.field_map[i]] += res.grad_eta_lambda;
         double g_off = 0.0;
         for (int jj = 0; jj < J; ++jj) {
             const double ge = res.grad_eta_p[jj];
@@ -225,17 +199,8 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         lp -= 0.5 * ils2 * ls * ls;
         grad[d.o_logsig] += grad_logsig - ils2 * ls;
     }
-    if (has_field) {
-        // Whitened field prior raw ~ N(0, I); the chain grad_raw = Linv^T grad_z.
-        for (int v = 0; v < d.n_field_units; ++v) {
-            double gr = 0.0;
-            for (int u = 0; u < d.n_field_units; ++u)
-                gr += d.Linv[(std::size_t) u * d.n_field_units + v] * grad_z[u];
-            const double rv = theta[d.o_raw + v];
-            lp -= 0.5 * rv * rv;
-            grad[d.o_raw + v] += gr - rv;
-        }
-    }
+    // Whitened field prior raw ~ N(0, I); the chain grad_raw = Linv^T grad_z.
+    lp += field_block_backward(d.field, theta, grad_z, grad);
     return lp;
 }
 
