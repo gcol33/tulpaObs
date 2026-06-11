@@ -153,17 +153,21 @@
                            approx = approx)
   fit$priors <- prior_spec
 
-  # Debias step (gcol33/tulpaObs#7): for single-season occupancy the marginal
-  # likelihood is closed-form, so refine the EM mode with an exact-marginal
-  # Newton step and read calibrated SEs from its Hessian. The EM's M-inflated
-  # pseudo-binomial Laplace attenuates the detection coefficients and
-  # under-disperses their SEs at small J; the refinement restores unbiased,
-  # near-nominal-coverage fixed effects. Spatial / multi-season fits have no
-  # closed-form marginal and keep the EM result.
-  if (identical(model$model_type, "single") && is.null(spatial) &&
-      identical(approx, "gaussian_laplace") &&
+  # Debias step: the occupancy marginal is exact (single-season closed-form
+  # two-state mixture, gcol33/tulpaObs#7; dynamic HMM forward, gcol33/tulpaObs#86),
+  # so refine the EM mode with an exact-marginal Newton step and read calibrated
+  # SEs from its Hessian. The EM's pseudo-binomial Laplace M-steps leave a small
+  # discretisation residual below the marginal MLE and mis-scale the block SEs;
+  # the refinement restores unbiased, near-nominal-coverage fixed effects
+  # (matching unmarked::occu / colext). Spatial (nested-Laplace) fits carry a
+  # latent field, not a closed-form coefficient marginal, and keep the EM result.
+  if (is.null(spatial) && identical(approx, "gaussian_laplace") &&
       correction %in% c("auto", "none")) {
-    fit <- .tobs_occu_marginal_refine(fit, model, prior_spec)
+    if (identical(model$model_type, "single")) {
+      fit <- .tobs_occu_marginal_refine(fit, model, prior_spec)
+    } else if (identical(model$model_type, "dynamic")) {
+      fit <- .tobs_dyn_occu_marginal_refine(fit, model, prior_spec)
+    }
   }
 
   # Record the seed used for a stochastic correction so the run reproduces.
@@ -1801,11 +1805,27 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     }
   }
 
+  # Marginal log-likelihood at the fixed-effect mode, so logLik() / AIC() /
+  # BIC() / glance() surface a finite value (gcol33/tulpaObs#87). The EM tracks
+  # parameter deltas, not the marginal, so evaluate it here through the shared
+  # family pointwise kernel -- the same marginal the WAIC / LOO scoring uses.
+  # The single-season exact-marginal refine (.tobs_occu_marginal_refine) moves
+  # the mode afterwards and refreshes log_lik / log_prob from the refined means.
+  marg_ll <- .tobs_laplace_marginal_loglik(model, means)
+  # Free-parameter count for the AIC / BIC penalty (logLik()'s `df`): the fixed
+  # coefficients (the process betas plus any visit-level detection betas), which
+  # is `means` without the trailing random-effect sigma + BLUP block. Set
+  # explicitly because an empty `mode` would otherwise resolve df to 0.
+  n_re_block <- if (!is.null(re_block)) length(re_block$means) else 0L
   structure(c(list(
     draws = draws, means = means, sds = sds,
     skew = sla_gamma, sla_status = sla_status,
     n_samples = n_pseudo, n_params = n_params,
-    log_prob = rep(NA_real_, n_pseudo)),
+    n_fixed  = n_params - n_re_block,
+    log_prob = rep(marg_ll$loglik, n_pseudo),
+    log_lik  = marg_ll$loglik,
+    N        = marg_ll$nobs,
+    converged = em_result$convergence$converged %||% em_result$converged),
     .tobs_na_nuts_diagnostics(n_pseudo),
     list(
     col_names = nms, param_names = nms,

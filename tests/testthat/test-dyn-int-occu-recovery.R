@@ -128,9 +128,10 @@ test_that("dyn_occu marginal recursion matches unmarked::colext at its MLE", {
 
 # Head-to-head coefficient equivalence with unmarked::colext. The exact
 # forward-backward E-step (gcol33/tulpaObs#86) brings tulpaObs's dynamic-occupancy
-# EM to colext's MLE (before the fix the EM converged ~3.4 logLik below it, with
-# biased colonisation / extinction). The residual gap is the EM pseudo-count
-# discretisation, so the tolerance is looser than the N-mixture-vs-pcount gate.
+# EM close to colext's MLE; the exact-marginal Newton refinement on the EM mode
+# (gcol33/tulpaObs#86, .tobs_dyn_occu_marginal_refine) then closes the residual
+# EM pseudo-count discretisation gap, landing on colext's MLE. The tolerance is
+# therefore tight (the two optimisers maximise the same marginal).
 test_that("dyn_occu coefficients match unmarked::colext (tulpaObs#86)", {
   skip_on_cran()
   skip_if_fast()
@@ -156,10 +157,61 @@ test_that("dyn_occu coefficients match unmarked::colext (tulpaObs#86)", {
                          data = unmarked::unmarkedMultFrame(y = Y, numPrimary = T),
                          se = FALSE)
   uc <- unmarked::coef(fm)   # logit psi1, colonisation (gamma), extinction (eps), p
-  expect_lt(abs(fit$means[["psi1_(Intercept)"]]    - uc[1]), 0.1)
-  expect_lt(abs(fit$means[["gamma_(Intercept)"]]   - uc[2]), 0.1)
-  expect_lt(abs(fit$means[["epsilon_(Intercept)"]] - uc[3]), 0.1)
-  expect_lt(abs(fit$means[["p_(Intercept)"]]       - uc[4]), 0.1)
+  expect_lt(abs(fit$means[["psi1_(Intercept)"]]    - uc[1]), 0.02)
+  expect_lt(abs(fit$means[["gamma_(Intercept)"]]   - uc[2]), 0.02)
+  expect_lt(abs(fit$means[["epsilon_(Intercept)"]] - uc[3]), 0.02)
+  expect_lt(abs(fit$means[["p_(Intercept)"]]       - uc[4]), 0.02)
+})
+
+# Exact-marginal refinement: the EM mode is refined on the HMM-forward marginal
+# (.tobs_dyn_occu_marginal_refine), so the dynamic fit reaches colext's MLE AND
+# its Hessian-calibrated standard errors. This gate asserts both across seeds:
+# the marginal log-likelihood lands on colext's (the EM discretisation residual
+# is removed) and every block SE matches colext's observed-information SE (the
+# default EM pseudo-binomial M-step over-disperses them). priors = FALSE so the
+# refine targets the unpenalised MLE colext also maximises.
+test_that("dyn_occu exact-marginal refine reaches colext MLE and calibrated SEs", {
+  skip_on_cran()
+  skip_if_fast()
+  skip_if_not_installed("unmarked")
+  suppressPackageStartupMessages(library(unmarked))
+  psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
+  n_sites <- 120L; T <- 4L; J <- 3L
+  for (seed in c(101L, 7L, 22L)) {
+    set.seed(seed)
+    z <- matrix(NA_integer_, n_sites, T); z[, 1] <- rbinom(n_sites, 1, psi1)
+    for (t in 2:T)
+      z[, t] <- ifelse(z[, t - 1] == 1, rbinom(n_sites, 1, 1 - eps),
+                       rbinom(n_sites, 1, gam))
+    y <- array(0L, c(n_sites, J, T))
+    for (i in seq_len(n_sites)) for (t in seq_len(T))
+      y[i, , t] <- if (z[i, t]) rbinom(J, 1, p_true) else 0L
+
+    fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
+                detection = ~ 1, y = y, col_formula = ~ 1, ext_formula = ~ 1,
+                priors = FALSE, control = list(verbose = FALSE))
+    Y <- matrix(0L, n_sites, J * T)
+    for (t in seq_len(T)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
+    fm <- unmarked::colext(~ 1, ~ 1, ~ 1, ~ 1,
+                           data = unmarked::unmarkedMultFrame(y = Y, numPrimary = T),
+                           se = TRUE)
+    uc  <- unmarked::coef(fm)        # logit psi1, gamma, epsilon, p
+    use <- unmarked::SE(fm)
+    # tobs layout: psi1, p, gamma, epsilon
+    est <- c(fit$means[["psi1_(Intercept)"]], fit$means[["p_(Intercept)"]],
+             fit$means[["gamma_(Intercept)"]], fit$means[["epsilon_(Intercept)"]])
+    se  <- c(fit$sds[["psi1_(Intercept)"]], fit$sds[["p_(Intercept)"]],
+             fit$sds[["gamma_(Intercept)"]], fit$sds[["epsilon_(Intercept)"]])
+    cx_est <- c(uc[1], uc[4], uc[2], uc[3])
+    cx_se  <- c(use[1], use[4], use[2], use[3])
+
+    # Marginal log-likelihood lands on colext's MLE (refine removes the residual).
+    expect_equal(as.numeric(logLik(fit)), as.numeric(logLik(fm)), tolerance = 0.05,
+                 info = sprintf("seed %d logLik", seed))
+    # Point estimates and Hessian-calibrated SEs match colext.
+    expect_lt(max(abs(est - cx_est)), 0.02)
+    expect_lt(max(abs(se  - cx_se)),  0.02)
+  }
 })
 
 # --------------------------------------------------------------------------- #

@@ -4,6 +4,8 @@
 \name{reexports}
 \alias{reexports}
 \alias{ranef}
+\alias{tidy}
+\alias{glance}
 \alias{fem_matrices}
 \title{Objects exported from other packages}
 \keyword{internal}
@@ -12,7 +14,7 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{tulpa}{\code{\link[tulpa:ranef]{ranef()}}}
+  \item{tulpa}{\code{\link[tulpa:glance]{glance()}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:tidy]{tidy()}}}
 
   \item{tulpaMesh}{\code{\link[tulpaMesh:fem_matrices]{fem_matrices()}}}
 }}

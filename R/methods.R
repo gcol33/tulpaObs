@@ -82,6 +82,68 @@ nobs.tobs_fit <- function(object, ...) {
 #' @export
 tulpa::ranef
 
+# Re-export tulpa's tidy() / glance() generics for the same reason: a tobs_fit
+# inherits tulpa_fit, so tulpa's tidy.tulpa_fit / glance.tulpa_fit handle it, but
+# the generics must be reachable after library(tulpaObs) for tidy(fit) /
+# glance(fit) to resolve (gcol33/tulpaObs#87).
+#' @importFrom tulpa tidy
+#' @export
+tulpa::tidy
+
+#' @importFrom tulpa glance
+#' @export
+tulpa::glance
+
+#' Convergence record for a fitted model
+#'
+#' The public accessor for whether a fit converged, with one return shape across
+#' every `tobs()` family. Each family stores its optimiser / EM / sampler verdict
+#' under `fit$convergence`, but historically the cover hurdle (`cover()`) put the
+#' flag at `fit$converged` instead, so a consumer that read one location got `NA`
+#' for the other family (gcol33/tulpaObs#88). These accessors normalise both
+#' layouts: `convergence()` returns the full record (`converged`, `n_iter`, and
+#' `sla_status` when the simplified-Laplace marginals were used), and
+#' `converged()` returns the single logical.
+#'
+#' @param object A fitted `tobs_fit` (occupancy / abundance / cover / ...).
+#' @param ... Ignored.
+#' @return `convergence()`: a list with `converged` (logical), `n_iter`
+#'   (integer, `NA` for grid / closed-form fits with no iteration count), and
+#'   `sla_status` (character, when present). `converged()`: a single `TRUE` /
+#'   `FALSE`.
+#' @examples
+#' \dontrun{
+#' fit <- tobs(y ~ 1, data = d, family = occu(), detection = ~1)
+#' converged(fit)        # TRUE / FALSE, same call for every family
+#' convergence(fit)$n_iter
+#' }
+#' @export
+convergence <- function(object, ...) UseMethod("convergence")
+
+#' @rdname convergence
+#' @export
+convergence.tobs_fit <- function(object, ...) {
+  rec <- object$convergence
+  if (is.null(rec) || !is.list(rec)) rec <- list()
+  # Normalise: prefer the unified record, fall back to the legacy top-level
+  # `converged` / `n_iter` so old saved fits and any family still on the flat
+  # layout answer through the same accessor.
+  rec$converged <- rec$converged %||% object$converged %||% NA
+  rec$n_iter    <- rec$n_iter    %||% object$n_iter    %||% NA_integer_
+  if (is.null(rec$sla_status) && !is.null(object$sla_status)) {
+    rec$sla_status <- object$sla_status
+  }
+  rec
+}
+
+#' @rdname convergence
+#' @export
+converged <- function(object, ...) UseMethod("converged")
+
+#' @rdname convergence
+#' @export
+converged.tobs_fit <- function(object, ...) isTRUE(convergence(object)$converged)
+
 #' Random-effect estimates (BLUPs) for a tobs_fit
 #'
 #' Returns the per-group random-effect posterior summaries. Under NUTS the

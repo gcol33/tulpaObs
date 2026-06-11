@@ -54,12 +54,52 @@
   -ll + penalty
 }
 
+# Shared scaffold for an exact-marginal Newton refinement of an EM mode. Given
+# the fixed-effect names `all_nm` (the coefficients to refine, in fit$means /
+# draw-column order) and an exact-marginal negative-log-posterior closure `nlp`
+# of the packed parameter vector, optimise from the EM mode, read calibrated SEs
+# from the Hessian, and overwrite the fit's fixed-effect estimates, SEs, and the
+# matching pseudo-draws (drawn from the full joint covariance so derived
+# quantities carry the coefficient correlation; gcol33/tulpaObs#44). The
+# marginal log-likelihood logLik() reports is refreshed from the refined means
+# through the same family pointwise kernel WAIC / LOO use (gcol33/tulpaObs#87).
+# `refresh`, when supplied, is called as refresh(fit, par, V) to recompute any
+# family-specific stored quantities (e.g. the per-site occupancy weights) at the
+# refined mode. Falls back to the unmodified fit on any failure -- the refined
+# fit is never worse than the EM result.
+.tobs_marginal_refine_apply <- function(fit, model, all_nm, nlp, refresh = NULL) {
+  tryCatch({
+    if (!all(all_nm %in% names(fit$means))) return(fit)
+    start <- as.numeric(fit$means[all_nm])
+    if (any(!is.finite(start))) return(fit)
+
+    opt <- optim(start, nlp, method = "BFGS", hessian = TRUE)
+    V <- tryCatch(solve(opt$hessian), error = function(e) NULL)
+    if (is.null(V)) return(fit)
+    se <- sqrt(pmax(diag(V), 0))
+    if (any(!is.finite(c(opt$par, se)))) return(fit)
+
+    fit$means[all_nm] <- opt$par
+    fit$sds[all_nm]   <- se
+    if (!is.null(fit$draws) && all(all_nm %in% colnames(fit$draws))) {
+      Vsym <- (V + t(V)) / 2
+      fit$draws[, all_nm] <- .rmvn(nrow(fit$draws), opt$par, Vsym)
+    }
+    if (is.function(refresh)) fit <- refresh(fit, opt$par, V)
+
+    ml <- .tobs_laplace_marginal_loglik(model, fit$means)
+    fit$log_lik  <- ml$loglik
+    fit$log_prob <- rep(ml$loglik, length(fit$log_prob))
+    fit
+  }, error = function(e) fit)
+}
+
 # Refine a single-season occupancy `tobs_fit` on the exact marginal likelihood
 # and overwrite its fixed-effect estimates + SEs (and the per-site occupancy
 # weights / pseudo-draws) with the debiased, Hessian-calibrated values. Falls
 # back to the unmodified fit on any failure (never worse than the EM result).
 .tobs_occu_marginal_refine <- function(fit, model, prior_spec = NULL) {
-  out <- tryCatch({
+  tryCatch({
     X_occ <- model$X_processes[[1]]
     X_det <- model$X_processes[[2]]
     X_det_visit <- model$X_det_visit
@@ -78,10 +118,6 @@
     det_nm <- paste0(pi_list[[2]]$name, "_", pi_list[[2]]$coef_names)
     vis_nm <- if (p_visit > 0L) paste0("p_visit_", model$det_visit_names) else character(0)
     all_nm <- c(occ_nm, det_nm, vis_nm)
-    if (!all(all_nm %in% names(fit$means))) return(fit)
-
-    start <- as.numeric(fit$means[all_nm])
-    if (any(!is.finite(start))) return(fit)
 
     # Gaussian-prior mean / precision aligned with par (flat when prior_spec
     # is NULL, i.e. priors = FALSE).
@@ -92,46 +128,33 @@
     psd   <- c(pr_o$sd,   pr_d$sd)
     pprec <- ifelse(is.finite(psd) & psd > 0, 1 / psd^2, 0)
 
-    opt <- optim(start, .tobs_occu_marginal_nlp, method = "BFGS", hessian = TRUE,
-                 X_occ = X_occ, X_det = X_det, X_det_visit = X_det_visit,
-                 valid = valid, Y = Y, any_det = any_det, n_sites = n_sites,
-                 max_visits = max_visits, p_occ = p_occ, p_det = p_det,
-                 p_visit = p_visit, pmean = pmean, pprec = pprec)
-    V <- tryCatch(solve(opt$hessian), error = function(e) NULL)
-    if (is.null(V)) return(fit)
-    se <- sqrt(pmax(diag(V), 0))
-    if (any(!is.finite(c(opt$par, se)))) return(fit)
+    nlp <- function(par) .tobs_occu_marginal_nlp(
+      par, X_occ = X_occ, X_det = X_det, X_det_visit = X_det_visit,
+      valid = valid, Y = Y, any_det = any_det, n_sites = n_sites,
+      max_visits = max_visits, p_occ = p_occ, p_det = p_det,
+      p_visit = p_visit, pmean = pmean, pprec = pprec)
 
-    # Overwrite the fixed-effect estimates, SEs, and matching pseudo-draws.
-    # Draw from the full joint covariance V (not its diagonal) so predicted psi
-    # and other derived quantities carry the coefficient correlation the refine
-    # pass computed (gcol33/tulpaObs#44).
-    fit$means[all_nm] <- opt$par
-    fit$sds[all_nm]   <- se
-    if (!is.null(fit$draws) && all(all_nm %in% colnames(fit$draws))) {
-      n_pseudo <- nrow(fit$draws)
-      Vsym <- (V + t(V)) / 2
-      fit$draws[, all_nm] <- .rmvn(n_pseudo, opt$par, Vsym)
-    }
     # Refresh per-site occupancy weights P(z = 1 | y) at the refined estimate so
     # fitted / residuals stay consistent with the reported coefficients.
-    bo <- opt$par[seq_len(p_occ)]
-    bd <- opt$par[p_occ + seq_len(p_det)]
-    psi <- plogis(pmin(pmax(as.numeric(X_occ %*% bo), -30), 30))
-    eta_site <- as.numeric(X_det %*% bd)
-    if (p_visit > 0L) {
-      ev <- as.numeric(X_det_visit %*% opt$par[p_occ + p_det + seq_len(p_visit)])
-      logit_p <- matrix(eta_site, n_sites, max_visits) +
-                 matrix(ev, n_sites, max_visits, byrow = TRUE)
-    } else {
-      logit_p <- matrix(eta_site, n_sites, max_visits)
+    refresh <- function(fit, par, V) {
+      bo <- par[seq_len(p_occ)]
+      bd <- par[p_occ + seq_len(p_det)]
+      psi <- plogis(pmin(pmax(as.numeric(X_occ %*% bo), -30), 30))
+      eta_site <- as.numeric(X_det %*% bd)
+      if (p_visit > 0L) {
+        ev <- as.numeric(X_det_visit %*% par[p_occ + p_det + seq_len(p_visit)])
+        logit_p <- matrix(eta_site, n_sites, max_visits) +
+                   matrix(ev, n_sites, max_visits, byrow = TRUE)
+      } else {
+        logit_p <- matrix(eta_site, n_sites, max_visits)
+      }
+      p <- plogis(pmin(pmax(logit_p, -30), 30))
+      log1mp <- ifelse(valid, log(1 - p), 0)
+      prod0 <- exp(rowSums(log1mp))
+      fit$weights <- ifelse(any_det, 1, psi * prod0 / (psi * prod0 + (1 - psi)))
+      fit
     }
-    p <- plogis(pmin(pmax(logit_p, -30), 30))
-    log1mp <- ifelse(valid, log(1 - p), 0)
-    prod0 <- exp(rowSums(log1mp))
-    w <- ifelse(any_det, 1, psi * prod0 / (psi * prod0 + (1 - psi)))
-    fit$weights <- w
-    fit
+
+    .tobs_marginal_refine_apply(fit, model, all_nm, nlp, refresh)
   }, error = function(e) fit)
-  out
 }

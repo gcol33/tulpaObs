@@ -736,6 +736,15 @@ decode_cover_hurdle <- function(fits, enc, family,
       n_total      = enc$N,
       n_positive   = length(enc$idx_pos),
       converged    = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),
+      # Unified convergence record, the same list every other family stores
+      # (gcol33/tulpaObs#88), so a mixed-family QC pass reads one accessor
+      # (`convergence(fit)` / `fit$convergence$converged`) across occu /
+      # occu_cover / cover. The top-level `converged` is kept for glance() and
+      # back-compat; `sla_status` carries the simplified-Laplace marginal code.
+      convergence  = list(
+        converged  = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),
+        n_iter     = fits$m_occ$n_iter %||% NA_integer_,
+        sla_status = sla_status),
       log_marginal = c(occ = fits$m_occ$log_marginal,
                        pos = fits$m_pos$log_marginal),
       skew_occ     = skew_occ,
@@ -2634,6 +2643,11 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       n_total      = enc$N,
       n_positive   = length(enc$idx_pos),
       converged    = TRUE,
+      # Unified convergence record (gcol33/tulpaObs#88); see the non-spatial
+      # assembly above. The joint nested-Laplace outer grid has no iteration
+      # count, so n_iter is NA, matching the other joint_coupled paths.
+      convergence  = list(converged = TRUE, n_iter = NA_integer_,
+                          sla_status = sla_status),
       log_marginal = c(joint = max(fits$joint$log_marginal)),
       joint        = fits$joint,
       spi_full     = fits$spi_full,

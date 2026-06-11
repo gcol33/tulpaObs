@@ -62,6 +62,33 @@ test_that("S3 methods work on single-season fit", {
   expect_true(is.data.frame(re) || is.list(re))
 })
 
+test_that("convergence()/converged() read one record across families (tulpaObs#88)", {
+  # occu(): the verdict lives at fit$convergence (the package-wide convention).
+  occ <- .fit_simple()$fit
+  rec <- convergence(occ)
+  expect_type(rec, "list")
+  expect_true(is.logical(rec$converged))
+  expect_true("n_iter" %in% names(rec))
+  expect_identical(converged(occ), isTRUE(occ$convergence$converged))
+
+  # cover(): historically only fit$converged was set, so a consumer reading
+  # fit$convergence$converged got NULL/NA (the bug). It must now carry the same
+  # unified record, and the accessor must agree with the top-level flag.
+  sim <- simulate_cover(N = 200, seed = 7)
+  cov_fit <- tobs(formula = ~ x, data = sim$data, family = cover("beta"),
+                  y = sim$y)
+  expect_s3_class(cov_fit, "cover_fit")
+  expect_false(is.null(cov_fit$convergence))
+  expect_true(is.logical(cov_fit$convergence$converged))
+  expect_identical(cov_fit$convergence$converged, cov_fit$converged)
+  expect_true("sla_status" %in% names(cov_fit$convergence))
+
+  # One accessor, same shape and meaning for both families.
+  expect_identical(converged(cov_fit), isTRUE(cov_fit$converged))
+  expect_named(convergence(cov_fit)[c("converged", "n_iter")],
+               c("converged", "n_iter"))
+})
+
 test_that("non-NUTS fits report NA sampler diagnostics, NUTS reports numeric", {
   skip_if_fast()
   # tulpaObs#17: a Laplace / nested-Laplace fit ran no HMC trajectory, so the

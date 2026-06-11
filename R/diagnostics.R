@@ -138,6 +138,30 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
   as.numeric(.tobs_ploglik_from_draws(object$model, mean_draw))
 }
 
+# Total marginal log-likelihood at a fixed-effect point estimate -- the value
+# logLik() / AIC() / BIC() / glance() report for an EM+Laplace fit (single,
+# dynamic, integrated, jsdm). Reuses the family pointwise kernel
+# (.tobs_ploglik_from_draws) on a one-row draw matrix, so the reported marginal
+# is the same likelihood the WAIC / LOO scoring uses -- one source of truth. The
+# unit summed over is the model's marginal observation (the site, with its
+# visits / seasons pooled into the closed-form or HMM-forward marginal), so
+# `nobs` is the number of those units. `par` is the named fixed-effect vector in
+# the process-block layout the draw matrix uses (betas concatenated in process
+# order; any trailing visit / random-effect columns are ignored by the kernel,
+# matching WAIC). Returns NA when the model_type has no pointwise kernel or the
+# evaluation errors, so a fit never fails to assemble over a logLik plumbing
+# detail (gcol33/tulpaObs#87).
+.tobs_laplace_marginal_loglik <- function(model, par) {
+  tryCatch({
+    draw <- matrix(as.numeric(par), nrow = 1L)
+    colnames(draw) <- names(par)
+    ll  <- .tobs_ploglik_from_draws(model, draw)
+    val <- sum(ll[1L, ])
+    list(loglik = if (is.finite(val)) val else NA_real_,
+         nobs   = ncol(ll))
+  }, error = function(e) list(loglik = NA_real_, nobs = NA_integer_))
+}
+
 # --- shared numerics --------------------------------------------------------
 
 # log(inv_logit(eta)) = log(p) and log(1 - inv_logit(eta)) = log(1 - p),
