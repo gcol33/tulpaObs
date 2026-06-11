@@ -291,19 +291,16 @@ encode_cover_hurdle <- function(formula, data, y,
   }
   specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data_obs)
   node  <- attr(specs, "node")
-  if (is.null(data_obs[[node]])) {
-    stop(sprintf(
-      "spatial(<bar> with `|`): node-index column \"%s\" not found in the data.",
-      node), call. = FALSE)
-  }
-  graph   <- spec$graph
+  .tobs_validate_bar_node(node, spec$graph, data_obs)
+  # Replicate over the `by` levels (gcol33/tulpaObs#82): the separable-MCAR field
+  # is built over I_L (x) Q -- one disjoint correlated (intercept, slope) field
+  # per level -- with the cross-field Sigma (x) Q^-1 shared across levels (no
+  # `by` is the identity). The copy onto the positive arm carries the whole
+  # replicated field at the one estimated amplitude alpha, unchanged.
+  rg      <- .tobs_bar_resolve_graph(spec, data_obs, node)
+  graph   <- rg$graph
   n_nodes <- nrow(graph)
-  idx_occ <- as.integer(data_obs[[node]])
-  if (anyNA(idx_occ) || min(idx_occ) < 1L || max(idx_occ) > n_nodes) {
-    stop(sprintf(paste0(
-      "spatial(<bar> with `|`): node index \"%s\" must be a 1..%d code into the ",
-      "graph."), node, n_nodes), call. = FALSE)
-  }
+  idx_occ <- rg$idx
   csr <- adjacency_to_csr(graph)
 
   # tulpa_bar_field_specs() returns weight = NULL for the intercept column (it is
@@ -327,7 +324,8 @@ encode_cover_hurdle <- function(formula, data, y,
     n_neighbors     = as.integer(csr$n_neighbors),
     idx_occ         = as.integer(idx_occ),
     field_weight_occ = field_weight_occ,
-    field_names     = field_names
+    field_names     = field_names,
+    by              = rg$by
   )
 }
 
@@ -1897,14 +1895,12 @@ print.summary.cover_fit <- function(x, ...) {
 #'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta
 #'   pre-fit when `positive = "beta"`). For ICAR / CAR_proper backends
 #'   `tau_grid` is also accepted and translated to `sigma_grid` as
-#'   `sigma = 1 / sqrt(tau)` — see gcol33/tulpa#18 for the rationale
-#'   behind moving the cover-arm field amplitude onto its own
-#'   `sigma_pos_grid` axis. Regularizing hyperpriors on the joint
+#'   `sigma = 1 / sqrt(tau)`. The cover-arm field amplitude rides its
+#'   own `sigma_pos_grid` axis. Regularizing hyperpriors on the joint
 #'   (sigma, alpha) axes can be set via `prior_sigma` (donor amplitude)
 #'   and `prior_alpha` (copy coefficient) — each a length-2 list
 #'   `list(family, params)` matching tulpa's `prior_sigma` / `prior_alpha`
-#'   args. See gcol33/tulpa#22 for the (sigma, alpha) reparam rationale:
-#'   the prior on alpha directly regularizes the copy scalar at small
+#'   args. The prior on alpha directly regularizes the copy scalar at small
 #'   `n_pos`, replacing the per-arm `prior_sigma_pos` of the pre-reparam
 #'   API.
 #' @param temporal,re Structured `temporal()` / `re()` blocks from the formula,
@@ -1969,7 +1965,54 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # rows in encode_cover_hurdle (obs_keep) shrink the obs set; subset the
   # spatial_idx vector accordingly.
   data_obs <- data[enc$obs_keep, , drop = FALSE]
-  prior    <- tulpa::prior_from_spec(spec, data_obs)
+  # Replicated CAR (gcol33/tulpaObs#82): a `by` factor on the shared bar replicates
+  # the field across the factor's levels. Build I_L (x) Q and offset each
+  # observation's node into its level's copy (tulpa::tulpa_bar_field_replicate),
+  # then resolve the field over the replicated graph so its precision is the
+  # block-diagonal Kronecker and the field hyperparameters are shared across
+  # levels (one sigma[, rho_car]). The coupled trend block copies the same
+  # replicated structure and the copy onto the positive arm carries the whole
+  # replicated field at the one estimated alpha, so `by` composes with the shared
+  # field, the trend, and the cross-arm copy unchanged. No `by` is the identity.
+  # Injecting the offset index as the field's node column lets the SAME
+  # prior_from_spec build the precision and resolve the index over the replicated
+  # graph in one pass.
+  by_replicated <- FALSE
+  if (!is.null(spec$by_var)) {
+    if (is.null(data_obs[[spec$by_var]])) {
+      stop(sprintf(paste0(
+        "spatial(<bar>, by = \"%s\"): the replication-factor column was not ",
+        "found in the data."), spec$by_var), call. = FALSE)
+    }
+    base_idx <- tulpa::prior_from_spec(spec, data_obs)$spatial_idx
+    rep_info <- tulpa::tulpa_bar_field_replicate(spec$adjacency, base_idx,
+                                                 data_obs[[spec$by_var]])
+    spec$adjacency              <- rep_info$adjacency
+    # n_spatial is the spec's cached node count; validate_spatial() checks the
+    # replicated node index against it (not against nrow(adjacency)), so it must
+    # grow to L * n_nodes alongside the replicated graph or a 1..(L*n) index
+    # reads as out of range on the base graph.
+    spec$n_spatial              <- rep_info$n_levels * rep_info$n_nodes
+    data_obs[[".tobs_by_node"]] <- rep_info$index
+    spec$group_var              <- ".tobs_by_node"
+    by_replicated               <- rep_info$n_levels > 1L
+  }
+  # The replicated graph I_L (x) Q is L disjoint copies by construction, so the
+  # generic "graph not fully connected" identifiability warning is a false alarm
+  # for a `by` field (each level is its own connected component, sharing one
+  # precision). Muffle only that message, only when replication actually expanded
+  # the graph; any other warning passes through.
+  prior <- if (by_replicated) {
+    withCallingHandlers(
+      tulpa::prior_from_spec(spec, data_obs),
+      warning = function(w) {
+        if (grepl("not fully connected", conditionMessage(w), fixed = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
+      })
+  } else {
+    tulpa::prior_from_spec(spec, data_obs)
+  }
   spi_full <- prior$spatial_idx                 # length N (post-NA-drop)
   spi_pos  <- spi_full[enc$idx_pos]             # length N_pos
 

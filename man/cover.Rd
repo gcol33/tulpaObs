@@ -109,19 +109,65 @@ The cover hurdle's two arms are \code{presence} (the \code{y > 0} Bernoulli arm)
 print these same labels. \verb{to =} validates against this arm set and may be
 omitted to mean both arms.
 
-\strong{Copy versus free.} One \code{spatial()} call with \verb{to =} naming both arms
-is a single latent field, presence-anchored, copied to the positive arm with
-an estimated coupling \code{alpha} (marginalized on the outer grid). This is the
-\emph{copy} / shared model, and the only form wired here:
+\strong{Copy versus free: one call versus separate calls.} Whether the two
+arms share one latent field or each carry their own is set by how many
+\code{spatial()} calls you write, not by an option.
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{# copy / shared: one latent, presence-anchored, alpha estimated
+\emph{Copy / shared} -- one \code{spatial()} call naming both arms in \verb{to =} is a
+single latent field, presence-anchored, copied onto the positive arm with an
+estimated coupling per coefficient field (\code{alpha} for the intercept field,
+\code{alpha_trend} for the trend field), marginalized on the outer grid:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# one latent field, shared by both arms
 spatial(~ 1 + time.sc || cell_idx, graph = adj, to = c("presence", "positive"))
 }\if{html}{\out{</div>}}
 
-Separate per-arm latent fields (the \emph{free} model: one \code{spatial()} per
-arm, or a single-arm \verb{to =}) and correlated coefficient fields (a single \code{|})
-need a different engine structure and are not yet wired; they error with a
-pointer to the shared spelling.
+\if{html}{\out{<div class="sourceCode">}}\preformatted{presence: eta_presence = ... + u_cell + time.sc * s_cell
+positive: eta_positive = ... + alpha * u_cell + alpha_trend * time.sc * s_cell
+}\if{html}{\out{</div>}}
+
+The same \code{u_cell} (intercept field) and \code{s_cell} (time-slope field) appear in
+both arms; the positive arm sees them through the estimated multipliers.
+
+\emph{Free / separate} -- one single-arm \code{spatial()} call per arm declares a
+separate latent field on each arm, each with its own precision and no
+cross-arm coupling (gcol33/tulpaObs#65):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# two independent latent fields, one per arm
+spatial(~ 1 + time.sc || cell_idx, graph = adj, to = "presence") +
+spatial(~ 1 + time.sc || cell_idx, graph = adj, to = "positive")
+}\if{html}{\out{</div>}}
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{presence: eta_presence = ... + u_presence_cell + time.sc * s_presence_cell
+positive: eta_positive = ... + u_positive_cell + time.sc * s_positive_cell
+}\if{html}{\out{</div>}}
+
+A lone single-arm call (\code{to = "presence"}) puts a field on that arm only. The
+free fit reports \code{sigma_armspecific}. Arm-specific fields are their own
+spatial structure: they do not combine with a shared field, a weighted trend,
+a correlated \code{|} bar, or \code{temporal()} / \code{re()} in the same formula, and at most
+one targets each arm.
+
+The \code{||} and \code{|} axis is separate from copy / free: \code{||} makes the intercept
+and slope fields independent, while a single \code{|} makes them correlated (a free
+cross-covariance, MCAR). A correlated \code{|} bar is copy-only and requires both
+arms (gcol33/tulpaObs#64).
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{one spatial() call, to = both arms    one shared / copied latent (presence anchor, coupling estimated)
+separate single-arm spatial() calls   separate / free latents, no coupling
+||                                     independent intercept and slope coefficient fields
+|                                      correlated (MCAR) coefficient fields, copy-only
+}\if{html}{\out{</div>}}
+
+With the response on the formula left-hand side (gcol33/tulpaObs#66), the
+shared-field cover hurdle reads:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(cover.flat ~ time.sc + habitat +
+       spatial(~ 1 + time.sc || cell_idx, graph = adj,
+               to = c("presence", "positive")),
+     data = dat, family = cover(positive = "beta"),
+     method = "nested_laplace")
+}\if{html}{\out{</div>}}
 }
 
 \section{A formula bar is a random effect, not a spatial field}{

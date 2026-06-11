@@ -441,16 +441,18 @@
                                    id = NULL) {
   graph <- rest$graph
   to    <- rest$to
-  # Only `graph`, `to`, and (optionally) `model` are accepted on the bar form;
-  # the node index is the bar RHS, weights are the bar LHS, so group_var/weight
-  # named args would be redundant. Reject anything else with a clear pointer.
-  known <- c("graph", "to")
+  by    <- rest$by
+  # Only `graph`, `to`, `by`, and (optionally) `model` are accepted on the bar
+  # form; the node index is the bar RHS, weights are the bar LHS, so
+  # group_var/weight named args would be redundant. Reject anything else with a
+  # clear pointer.
+  known <- c("graph", "to", "by")
   extra <- setdiff(names(rest)[nzchar(names(rest))], known)
   if (length(extra)) {
     stop(sprintf(paste0(
       "spatial(<bar>, ...): unexpected argument%s %s. The bar form takes ",
-      "`graph` and `to` only; the node index is the bar right-hand side and ",
-      "the per-coefficient weights are the bar left-hand side."),
+      "`graph`, `to`, and `by` only; the node index is the bar right-hand side ",
+      "and the per-coefficient weights are the bar left-hand side."),
       if (length(extra) > 1L) "s" else "",
       paste0("`", extra, "`", collapse = ", ")), call. = FALSE)
   }
@@ -492,13 +494,27 @@
   # before the model data is in scope.
   correlated <- identical(bar_formula[[2L]][[1L]], as.name("|"))
 
+  # `by` (replicated CAR, gcol33/tulpaObs#82): a factor column name naming the
+  # replication grouping. With L levels the whole field is replicated L times
+  # over the block-diagonal Kronecker graph I_L (x) Q, sharing the
+  # hyperparameters across levels (tulpa::tulpa_bar_field_replicate). Orthogonal
+  # to the bar character and to `to`. The tobs term machinery evaluates the
+  # spatial() arguments, so a bare data column would not resolve in the formula
+  # environment; `by` is taken as a string column name (resolved at fit time
+  # against the model data, like the bar's node index).
+  if (!is.null(by) && (!is.character(by) || length(by) != 1L || !nzchar(by))) {
+    stop("spatial(<bar>, by = ): `by` must be a single replication-factor ",
+         "column name (a string), e.g. by = \"habitat\".", call. = FALSE)
+  }
+
   .tobs_term(list(
     type        = model,
     is_bar      = TRUE,
     bar_formula = bar_formula,
     correlated  = correlated,
     graph       = graph,
-    to          = to
+    to          = to,
+    by_var      = by
   ), class = "tobs_spatial", id = id, label = model)
 }
 
@@ -539,6 +555,36 @@
   invisible(node)
 }
 
+# Resolve a bar spec's areal graph + per-observation node index, applying the
+# `by` replication (gcol33/tulpaObs#82) when the spec carries one. With a `by`
+# factor of L levels the graph is replicated to the block-diagonal Kronecker
+# I_L (x) Q and each observation's node is offset into its level's copy
+# (tulpa::tulpa_bar_field_replicate), so the L per-level fields are independent
+# (disjoint graph) yet share one precision -- the outer integration grid stays
+# one axis. No `by` is the identity (base graph + raw node index). This is the
+# single source of the replication remap shared by all three cover bar paths
+# (shared `||`, correlated `|`, arm-specific), so they cannot drift. `node` is
+# the validated node-index column name; returns the (possibly replicated) graph,
+# the integer per-observation node index, and `by` metadata (NULL when absent).
+.tobs_bar_resolve_graph <- function(spec, data, node) {
+  idx <- as.integer(data[[node]])
+  if (is.null(spec$by_var)) {
+    return(list(graph = spec$graph, idx = idx, by = NULL))
+  }
+  if (is.null(data[[spec$by_var]])) {
+    stop(sprintf(paste0(
+      "spatial(<bar>, by = \"%s\"): the replication-factor column was not found ",
+      "in the data."), spec$by_var), call. = FALSE)
+  }
+  rep_info <- tulpa::tulpa_bar_field_replicate(spec$graph, idx, data[[spec$by_var]])
+  list(
+    graph = rep_info$adjacency,
+    idx   = rep_info$index,
+    by    = list(var = spec$by_var, n_levels = rep_info$n_levels,
+                 n_nodes = rep_info$n_nodes, levels = rep_info$levels)
+  )
+}
+
 .tobs_expand_spatial_bar <- function(spec, data) {
   specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data)
   node  <- attr(specs, "node")
@@ -558,6 +604,11 @@
       term$weight       <- as.numeric(col$weight)
       term$weight_label <- col$column_name
     }
+    # Carry the replication factor (gcol33/tulpaObs#82) onto each desugared term.
+    # The shared-field path keeps the BASE graph + node column here and replicates
+    # at fit time (where the data is in scope), so the intercept and trend blocks
+    # share one replicated graph + offset index; `by_var` is NULL without `by`.
+    term$by_var <- spec$by_var
     out[[i]] <- term
   }
   out
@@ -589,6 +640,9 @@
   specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data_obs)
   node  <- attr(specs, "node")
   .tobs_validate_bar_node(node, spec$graph, data_obs)
+  # Replicate the field across the `by` levels (no `by` is the identity): the
+  # graph becomes I_L (x) Q and idx_obs is offset into each observation's level.
+  rg <- .tobs_bar_resolve_graph(spec, data_obs, node)
 
   n_obs <- nrow(data_obs)
   fields <- lapply(specs, function(col) {
@@ -605,9 +659,10 @@
   list(
     arm     = arm,
     type    = spec$type,
-    graph   = spec$graph,
+    graph   = rg$graph,
     node    = node,
-    idx_obs = as.integer(data_obs[[node]]),
+    idx_obs = rg$idx,
+    by      = rg$by,
     fields  = fields
   )
 }
@@ -687,7 +742,13 @@
     stop(sprintf("cover() spatial does not support term type '%s'.", spec$type),
          call. = FALSE)
   )
-  do.call(ctor, c(list(spec$graph), level_args))
+  out <- do.call(ctor, c(list(spec$graph), level_args))
+  # Propagate the replication factor (gcol33/tulpaObs#82) onto the tulpa_spatial
+  # spec; the cover / occu_cover nested-Laplace fit reads it and replicates the
+  # graph (I_L (x) Q) + offsets the node index just before resolving the field.
+  # NULL (no `by`) leaves the spec unchanged.
+  out$by_var <- spec$by_var
+  out
 }
 
 

@@ -28,14 +28,12 @@ the spatial spec (group_var lookup, n_spatial_units check).}
 \code{phi_init}, \code{phi_bounds} (the last two are forwarded to the beta
 pre-fit when \code{positive = "beta"}). For ICAR / CAR_proper backends
 \code{tau_grid} is also accepted and translated to \code{sigma_grid} as
-\code{sigma = 1 / sqrt(tau)} — see gcol33/tulpa#18 for the rationale
-behind moving the cover-arm field amplitude onto its own
-\code{sigma_pos_grid} axis. Regularizing hyperpriors on the joint
+\code{sigma = 1 / sqrt(tau)}. The cover-arm field amplitude rides its
+own \code{sigma_pos_grid} axis. Regularizing hyperpriors on the joint
 (sigma, alpha) axes can be set via \code{prior_sigma} (donor amplitude)
 and \code{prior_alpha} (copy coefficient) — each a length-2 list
 \code{list(family, params)} matching tulpa's \code{prior_sigma} / \code{prior_alpha}
-args. See gcol33/tulpa#22 for the (sigma, alpha) reparam rationale:
-the prior on alpha directly regularizes the copy scalar at small
+args. The prior on alpha directly regularizes the copy scalar at small
 \code{n_pos}, replacing the per-arm \code{prior_sigma_pos} of the pre-reparam
 API.}
 
