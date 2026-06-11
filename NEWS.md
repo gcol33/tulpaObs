@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.31 (2026-06-12)
+
+* feat(cover): a `by = "factor"` argument on a cover spatial bar replicates the
+  areal field across the factor's levels -- the graph becomes the block-diagonal
+  `I_L (x) Q` (L disjoint copies) with each observation offset into its level's
+  copy, sharing one precision across levels (one outer-grid axis). It composes with
+  all three bar forms: shared (`||`), correlated (`|`, MCAR), and arm-specific, via
+  `tulpa::tulpa_bar_field_replicate()`. Fixes the shared-`||` path, where the
+  replication updated the adjacency but left the cached `n_spatial` at the base node
+  count, so the replicated index was rejected as out of range; `n_spatial` now
+  tracks the replicated graph, and the intentional L-component disconnection no
+  longer emits the generic connectivity warning. `test-cover-spatial-bar-by.R`
+  covers all three bar forms plus per-level field recovery.
+* fix(dyn_occu): `logLik()` (and `AIC()` / `BIC()` / `glance()`) now return a
+  finite value for `dyn_occu` fits (#87). The EM+Laplace packer left the
+  log-likelihood unpopulated; `build_laplace_fit` now evaluates the exact
+  HMM-forward marginal at the fixed-effect mode, and the dynamic exact-marginal
+  refine moves the EM mode onto `colext`'s MLE. `tidy()` / `glance()` are
+  re-exported so they resolve after `library(tulpaObs)`.
+* fix(methods): a single unified convergence record across all families (#88).
+  `cover()` stored its verdict at `fit$converged` while every other family uses
+  `fit$convergence = list(converged, n_iter)`, so a mixed-family QC pass read `NA`
+  for one location. `cover_fit` now carries the same record, and `convergence()` /
+  `converged()` are exported as the documented accessors that normalise both
+  layouts.
+
 ## 0.0.30 (2026-06-11)
 
 * fix(dyn_occu): the dynamic-occupancy EM now uses an exact forward-backward
