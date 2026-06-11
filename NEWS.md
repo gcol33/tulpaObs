@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.30 (2026-06-11)
+
+* fix(dyn_occu): the dynamic-occupancy EM now uses an exact forward-backward
+  (Baum-Welch) E-step. The colonization and extinction sufficient statistics are
+  the smoothed pairwise joints `P(z_{t-1}=0, z_t=1 | y)` / `P(z_{t-1}=1, z_t=0 | y)`,
+  and psi1 / detection use the smoothed marginals `P(z_t | y)`. Previously the
+  E-step used only forward-**filtered** occupancy and a marginal-**product**
+  approximation `(1 - w_{t-1}) w_t` for the transition events, which converged to a
+  biased fixed point about 3.4 log-likelihood below `unmarked::colext` on the same
+  data (inflated colonization / extinction). The fit now matches `colext`'s MLE to
+  within the EM pseudo-count discretisation; a `colext` coefficient-equivalence
+  gate is added to `test-dyn-int-occu-recovery.R` (#86). The shared single-species
+  dynamic E-step also feeds the nested-Laplace and simplified-Laplace dynamic
+  paths; the community dynamic family (`ms_dyn_occu`) has a separate E-step and is
+  unchanged.
+
 ## 0.0.29 (2026-06-10)
 
 * test(refimpl): `removal_laplace` and `distance_laplace` now gate head-to-head

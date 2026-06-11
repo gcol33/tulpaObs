@@ -687,32 +687,60 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
     gam <- plogis(as.vector(X_col %*% beta_col))
     eps <- plogis(as.vector(X_ext %*% beta_ext))
 
-    # HMM forward pass to get P(z_it = 1 | y)
-    w <- matrix(NA_real_, n_sites, n_seasons)
+    # Exact forward-backward (Baum-Welch) E-step over the 2-state occupancy chain
+    # of each site. The smoothed marginal gamma_t(z) =
+    # P(z_it = z | y_{1:T}) feeds the psi1 / detection sufficient statistics, and
+    # the smoothed pairwise joint xi_t(z, z') = P(z_it = z, z_{i,t+1} = z' | y_{1:T})
+    # feeds colonization (xi_t(0, 1)) and extinction (xi_t(1, 0)) -- the exact
+    # transition sufficient statistics, replacing the earlier forward-FILTERED
+    # marginal-PRODUCT approximation (1 - w_{t-1}) w_t, which converged to a biased
+    # non-ML fixed point. The reduced occupancy emission (a detected season forces
+    # z = 1) drops only a z-independent detection-likelihood factor that cancels in
+    # every smoothed ratio, so gamma and xi are exact. The detection-rate factors
+    # are fit separately from the per-visit counts in the M-step.
+    A00 <- 1 - gam; A01 <- gam; A10 <- eps; A11 <- 1 - eps   # transition rows
+    w <- matrix(NA_real_, n_sites, n_seasons)                # smoothed P(z = 1 | y)
+    col_y <- numeric(n_sites); col_n <- numeric(n_sites)
+    ext_y <- numeric(n_sites); ext_n <- numeric(n_sites)
+    a <- matrix(0, n_seasons, 2)                             # scaled forward ahat_t
+    b0v <- numeric(n_seasons); b1v <- numeric(n_seasons)     # emission b_t(0), b_t(1)
+    cs <- numeric(n_seasons)                                 # per-season normaliser
     for (i in seq_len(n_sites)) {
-      alpha_occ <- psi1[i]; alpha_unocc <- 1 - psi1[i]
       for (t in seq_len(n_seasons)) {
         idx <- (i - 1) * n_seasons + t
         nv_it <- nv[idx]; det_it <- ad[idx]
-        if (nv_it > 0) {
-          prob_y_occ <- if (det_it) 1 else (1 - p[i])^nv_it
-          prob_y_unocc <- if (det_it) 0 else 1
-          post_occ <- alpha_occ * prob_y_occ
-          post_unocc <- alpha_unocc * prob_y_unocc
-          total <- post_occ + post_unocc
-          w[i, t] <- post_occ / total
-          alpha_occ <- post_occ / total
-          alpha_unocc <- post_unocc / total
-        } else {
-          w[i, t] <- alpha_occ
-        }
-        if (t < n_seasons) {
-          new_occ <- alpha_occ * (1 - eps[i]) + alpha_unocc * gam[i]
-          new_unocc <- alpha_occ * eps[i] + alpha_unocc * (1 - gam[i])
-          alpha_occ <- new_occ; alpha_unocc <- new_unocc
-        }
+        if (nv_it == 0L)      { b0v[t] <- 1;  b1v[t] <- 1 }
+        else if (det_it)      { b0v[t] <- 0;  b1v[t] <- 1 }
+        else                  { b0v[t] <- 1;  b1v[t] <- (1 - p[i])^nv_it }
+      }
+      # forward (scaled): ahat_t(z) = b_t(z) sum_z' ahat_{t-1}(z') A(z',z) / c_t
+      u0 <- (1 - psi1[i]) * b0v[1]; u1 <- psi1[i] * b1v[1]
+      c1 <- u0 + u1; cs[1] <- c1; a[1, 1] <- u0 / c1; a[1, 2] <- u1 / c1
+      for (t in 2:n_seasons) {
+        pr0 <- a[t - 1, 1] * A00[i] + a[t - 1, 2] * A10[i]
+        pr1 <- a[t - 1, 1] * A01[i] + a[t - 1, 2] * A11[i]
+        v0 <- b0v[t] * pr0; v1 <- b1v[t] * pr1
+        ct <- v0 + v1; cs[t] <- ct; a[t, 1] <- v0 / ct; a[t, 2] <- v1 / ct
+      }
+      # backward (scaled) + smoothed marginals / pairwise joints, T-1 .. 1
+      bw0 <- 1; bw1 <- 1                                     # beta_T(z) = 1
+      w[i, n_seasons] <- a[n_seasons, 2]                     # gamma_T(1) = ahat_T(1)
+      for (t in (n_seasons - 1):1) {
+        bb0 <- b0v[t + 1] * bw0; bb1 <- b1v[t + 1] * bw1
+        inv_c <- 1 / cs[t + 1]
+        xi01 <- a[t, 1] * A01[i] * bb1 * inv_c               # colonization event
+        xi00 <- a[t, 1] * A00[i] * bb0 * inv_c
+        xi10 <- a[t, 2] * A10[i] * bb0 * inv_c               # extinction event
+        xi11 <- a[t, 2] * A11[i] * bb1 * inv_c
+        col_y[i] <- col_y[i] + xi01; col_n[i] <- col_n[i] + (xi00 + xi01)
+        ext_y[i] <- ext_y[i] + xi10; ext_n[i] <- ext_n[i] + (xi10 + xi11)
+        bw0 <- (A00[i] * bb0 + A01[i] * bb1) * inv_c         # beta_t(0)
+        bw1 <- (A10[i] * bb0 + A11[i] * bb1) * inv_c         # beta_t(1)
+        w[i, t] <- a[t, 2] * bw1                             # gamma_t(1)
       }
     }
+    attr(w, "col_y") <- col_y; attr(w, "col_n") <- col_n
+    attr(w, "ext_y") <- ext_y; attr(w, "ext_n") <- ext_n
     list(weights = w)
   }
 
@@ -729,22 +757,16 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
                     as.integer(round(w1 * M_occ)))
     y_occ <- pmin(pmax(y_occ, 0L), M_occ)
 
-    # Colonization: from transitions where z_{t-1}=0, z_t=1
-    # Extinction: from transitions where z_{t-1}=1, z_t=0
-    # Approximate: site-level average
-    col_y <- integer(n_sites); col_n <- integer(n_sites)
-    ext_y <- integer(n_sites); ext_n <- integer(n_sites)
-    for (i in seq_len(n_sites)) {
-      for (t in 2:n_seasons) {
-        p_prev_occ <- w[i, t - 1]
-        p_curr_occ <- w[i, t]
-        # P(colonization event) ~= (1-w_{t-1}) * w_t
-        col_y[i] <- col_y[i] + as.integer(round((1 - p_prev_occ) * p_curr_occ * M))
-        col_n[i] <- col_n[i] + as.integer(round((1 - p_prev_occ) * M))
-        ext_y[i] <- ext_y[i] + as.integer(round(p_prev_occ * (1 - p_curr_occ) * M))
-        ext_n[i] <- ext_n[i] + as.integer(round(p_prev_occ * M))
-      }
-    }
+    # Colonization (z_{t-1}=0 -> z_t=1) and extinction (z_{t-1}=1 -> z_t=0) from
+    # the EXACT smoothed pairwise joints the E-step accumulated: col_y / ext_y are
+    # the expected colonization / extinction events summed over a
+    # site's T-1 intervals, col_n / ext_n the expected counts of unoccupied /
+    # occupied origin seasons. The same M pseudo-binomial inflation encodes them as
+    # one logistic observation per site, as for the occupancy arm.
+    col_y <- as.integer(round(attr(w, "col_y") * M))
+    col_n <- as.integer(round(attr(w, "col_n") * M))
+    ext_y <- as.integer(round(attr(w, "ext_y") * M))
+    ext_n <- as.integer(round(attr(w, "ext_n") * M))
     col_n <- pmax(col_n, 1L); ext_n <- pmax(ext_n, 1L)
     col_y <- pmin(pmax(col_y, 0L), col_n)
     ext_y <- pmin(pmax(ext_y, 0L), ext_n)
