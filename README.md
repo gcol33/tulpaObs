@@ -1,5 +1,7 @@
 # tulpaObs
 
+> Small exact engines for scientific computing in R.
+
 *false zeros from imperfect detection*
 
 [![Lifecycle: experimental](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
