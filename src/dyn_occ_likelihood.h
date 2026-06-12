@@ -91,7 +91,7 @@ T dyn_occ_log_likelihood(
 
         if (nv > 0) {
             T sum_log1m_p = T(0.0);
-            for (int j = 0; j < nv; j++) {
+            for (int j = 0; j < K; j++) {
                 int y_ij = dyn->y[base_y + j];
                 if (y_ij < 0) continue;
 

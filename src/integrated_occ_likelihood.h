@@ -74,7 +74,7 @@ T integrated_occ_log_likelihood(
         T log_p_data = T(0.0);
 
         int y_offset = local_idx * intd->max_visits[s];
-        for (int j = 0; j < K; j++) {
+        for (int j = 0; j < intd->max_visits[s]; j++) {
             int y_ij = intd->y[s][y_offset + j];
             if (y_ij < 0) continue;
 

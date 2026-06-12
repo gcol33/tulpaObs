@@ -102,7 +102,7 @@ T occ_log_likelihood(
     T log_p_det_given_occ = T(0.0);  // sum_j [y_ij*log(p_ij) + (1-y_ij)*log(1-p_ij)]
     T sum_log1m_p = T(0.0);          // sum_j log(1 - p_ij)
 
-    for (int j = 0; j < K; j++) {
+    for (int j = 0; j < occ->max_visits; j++) {
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;  // Missing visit
 
@@ -177,7 +177,7 @@ inline void occ_residual(
     double prod_1m_p = 1.0;
     double d_logit_p_sum = 0.0;
 
-    for (int j = 0; j < K; j++) {
+    for (int j = 0; j < occ->max_visits; j++) {
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;
 
@@ -217,7 +217,7 @@ inline void occ_residual(
         // For uniform p: = psi / denom * K * (-p*(1-p)^{K-1})
         // General case: recalculate per-visit
         double d_prod_d_eta1 = 0.0;
-        for (int j = 0; j < K; j++) {
+        for (int j = 0; j < occ->max_visits; j++) {
             int y_ij = occ->y[i * occ->max_visits + j];
             if (y_ij < 0) continue;
 
