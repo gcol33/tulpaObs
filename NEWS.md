@@ -1,5 +1,35 @@
 # tulpaObs NEWS
 
+## 0.0.32 (2026-06-12)
+
+* fix(occu): the C++ NUTS occupancy likelihoods now read every observed visit
+  when a missing visit precedes a valid one (#92). The single / dynamic /
+  integrated occupancy kernels looped over `n_visits` (the count of valid visits)
+  while indexing a `max_visits`-strided response that stores missing visits in
+  place as a `-1` sentinel, so an interleaved or leading `NA` terminated the loop
+  early and silently dropped the trailing valid visits, corrupting the
+  likelihood, gradient, and posterior. The loops now stride the full
+  `max_visits` dimension and skip the sentinels via the existing guard;
+  `n_visits` is kept only for the "no surveys" early-out. Only `method = "nuts"`
+  with non-trailing missing visits was affected (`method = "laplace"` always
+  iterated the full dimension). `test-occu-interleaved-na.R` asserts that
+  leading-vs-trailing `NA` encodings of identical data give identical fits under
+  both methods (single and dynamic occupancy).
+* refactor: the linear-predictor stability clamp is now a single
+  `.tobs_clamp_eta()` helper over one `.TOBS_ETA_BOUND` constant, replacing ~20
+  identical local `cl <- function(e) pmin(pmax(e, -30), 30)` definitions and the
+  inline copies across the package; the C++ community-field kernel gains the
+  matching `clamp_eta()` / `kEtaBound` (#89).
+* refactor: the two-term no-detection log-likelihood in the occu_cover marginal
+  is now the shared `.tobs_logsumexp2()` (a max-shifted `log1p` form), replacing
+  the byte-identical block copied across the three occu_cover paths (#90).
+* refactor: the visit-level design-matrix builder is now the shared
+  `.tobs_build_visit_X()`. `occu()`, `abun()`, and `removal()` previously inlined
+  their own builders and kept the visit `(Intercept)` column, which duplicated
+  the site-level detection intercept; all four families now drop it through the
+  one helper, so an intercept-bearing visit formula no longer makes the stacked
+  detection design collinear (#91).
+
 ## 0.0.31 (2026-06-12)
 
 * feat(cover): a `by = "factor"` argument on a cover spatial bar replicates the
