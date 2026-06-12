@@ -110,10 +110,10 @@
   X_occ      <- stats::model.matrix(occ_formula, data)
   X_det_site <- stats::model.matrix(det_formula, data)
   X_pos_site <- stats::model.matrix(pos_formula, data)
-  X_det_visit <- .occu_cover_build_visit_X(det_visit_formula, det_visit_data,
-                                           n_sites, max_visits, arm = "detection")
-  X_pos_visit <- .occu_cover_build_visit_X(pos_visit_formula, pos_visit_data,
-                                           n_sites, max_visits, arm = "positive cover")
+  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
+                                     n_sites, max_visits, arm = "detection")
+  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
+                                     n_sites, max_visits, arm = "positive cover")
 
   det_coef_names <- colnames(X_det_site)
   pos_coef_names <- colnames(X_pos_site)
@@ -209,7 +209,7 @@
 # per-cell `g_psi` (length n_sites), the per-visit `g_p` / `g_pos`
 # [n_sites x max_visits], and the scalar `g_ld`.
 .occu_cover_eta_grad <- function(m, psi, p_mat, ep_mat, log_disp) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   valid <- m$valid; y <- m$y; y_pos <- m$y_pos
   n_sites <- m$n_sites; max_visits <- m$max_visits
 
@@ -807,7 +807,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   n_species <- model$n_species
   is_beta <- identical(model$positive, "beta")
   disp <- exp(object$means[[length(object$means)]])
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
 
   one <- function() {
     y_sim   <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),

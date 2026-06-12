@@ -87,10 +87,10 @@
   X_theta    <- stats::model.matrix(theta_formula, data)
   X_p_site   <- stats::model.matrix(det_formula, data)
   X_pos_site <- stats::model.matrix(pos_formula, data)
-  X_p_visit  <- .occu_cover_build_visit_X(det_visit_formula, det_visit_data,
-                                          n_plots, max_visits, arm = "detection")
-  X_pos_visit <- .occu_cover_build_visit_X(pos_visit_formula, pos_visit_data,
-                                           n_plots, max_visits, arm = "positive cover")
+  X_p_visit  <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
+                                    n_plots, max_visits, arm = "detection")
+  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
+                                     n_plots, max_visits, arm = "positive cover")
 
   det_coef_names <- colnames(X_p_site)
   pos_coef_names <- colnames(X_pos_site)
@@ -216,7 +216,7 @@
 
 # Per-arm visit-level eta matrix [n_plots x max_visits]: the site predictor
 # broadcast across a plot's visits, plus the optional visit-varying part (whose
-# rows are ordered (plot - 1) * max_visits + visit, matching .occu_cover_build_visit_X).
+# rows are ordered (plot - 1) * max_visits + visit, matching .tobs_build_visit_X).
 .occu_ms_eta_visit <- function(Xs, bs, Xv, bv, n_plots, J) {
   eta <- matrix(as.numeric(Xs %*% bs), n_plots, J)
   if (!is.null(Xv) && length(bv) > 0L) {

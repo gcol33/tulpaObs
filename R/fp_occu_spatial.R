@@ -73,7 +73,7 @@
   means <- res$beta_mean; names(means) <- nm
   V <- res$vcov; dimnames(V) <- list(nm, nm)
   # Posterior occupancy w1 at the integrated estimate + field (for fitted()).
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   eta_psi <- cl(as.numeric(X_psi %*% means[i_psi]) + res$field_mean[map])
   ev <- cpp_fp_occu_total_log_lik(
     y_long, site_idx, eta_psi, as.numeric(X_p11 %*% means[i_p11]),

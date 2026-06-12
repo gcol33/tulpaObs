@@ -323,7 +323,7 @@
     eta_visit <- as.vector(X_det_visit %*% beta_det[(p_det + 1L):length(beta_det)])
     logit_p   <- matrix(eta_site, n_sites, max_visits) +
                  matrix(eta_visit, n_sites, max_visits, byrow = TRUE)
-    logit_p   <- pmin(pmax(logit_p, -30), 30)
+    logit_p   <- .tobs_clamp_eta(logit_p)
     log_1mp   <- -(pmax(logit_p, 0) + log1p(exp(-abs(logit_p))))
     log_1mp[!valid_mat] <- 0
     q_i <- 1 - exp(rowSums(log_1mp))

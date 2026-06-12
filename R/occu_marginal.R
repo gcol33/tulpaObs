@@ -32,7 +32,7 @@
 .tobs_occu_marginal_nlp <- function(par, X_occ, X_det, X_det_visit,
                                      valid, Y, any_det, n_sites, max_visits,
                                      p_occ, p_det, p_visit, pmean, pprec) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   bo <- par[seq_len(p_occ)]
   bd_site <- par[p_occ + seq_len(p_det)]
   psi <- plogis(cl(as.numeric(X_occ %*% bo)))
@@ -139,7 +139,7 @@
     refresh <- function(fit, par, V) {
       bo <- par[seq_len(p_occ)]
       bd <- par[p_occ + seq_len(p_det)]
-      psi <- plogis(pmin(pmax(as.numeric(X_occ %*% bo), -30), 30))
+      psi <- plogis(.tobs_clamp_eta(as.numeric(X_occ %*% bo)))
       eta_site <- as.numeric(X_det %*% bd)
       if (p_visit > 0L) {
         ev <- as.numeric(X_det_visit %*% par[p_occ + p_det + seq_len(p_visit)])
@@ -148,7 +148,7 @@
       } else {
         logit_p <- matrix(eta_site, n_sites, max_visits)
       }
-      p <- plogis(pmin(pmax(logit_p, -30), 30))
+      p <- plogis(.tobs_clamp_eta(logit_p))
       log1mp <- ifelse(valid, log(1 - p), 0)
       prod0 <- exp(rowSums(log1mp))
       fit$weights <- ifelse(any_det, 1, psi * prod0 / (psi * prod0 + (1 - psi)))

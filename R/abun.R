@@ -51,18 +51,8 @@
   X_lambda   <- model.matrix(bind$fe$lambda, data)
   X_det_site <- model.matrix(bind$fe$p, data)
 
-  X_det_visit <- NULL
-  if (!is.null(det_visit_formula) && !is.null(det_visit_data)) {
-    mf <- stats::model.frame(det_visit_formula, det_visit_data,
-                             na.action = stats::na.pass)
-    X_det_visit <- stats::model.matrix(det_visit_formula, mf)
-    X_det_visit[is.na(X_det_visit)] <- 0
-    expected_rows <- n_sites * max_visits
-    if (nrow(X_det_visit) != expected_rows) {
-      stop(sprintf("det_visit_data must have %d rows (n_sites * max_visits), got %d",
-                   expected_rows, nrow(X_det_visit)), call. = FALSE)
-    }
-  }
+  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
+                                     n_sites, max_visits, arm = "detection")
 
   # Long form in site-major order (site varies slowest), dropping NA visits.
   valid_t    <- as.vector(t(!is.na(y_int)))                       # site-major

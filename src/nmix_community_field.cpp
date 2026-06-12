@@ -43,6 +43,13 @@ using tulpaObs::nmix_car_quadratic_form;
 
 namespace {
 
+// Linear-predictor clamp bound: holds a log-mean / logit within double range
+// before exp() / inv-logit (a logit at +-30 sits within ~1e-13 of {0, 1}).
+constexpr double kEtaBound = 30.0;
+inline double clamp_eta(double e) {
+    return std::max(-kEtaBound, std::min(kEtaBound, e));
+}
+
 // Per-(species, site) row grouping: for each species, the long-form row indices
 // at each site, in input order.
 struct SiteVisits {
@@ -159,7 +166,7 @@ Rcpp::List cpp_nmix_community_field_solve(
                 c.y_site[j] = y[r];
                 double ep = 0.0;
                 for (int k = 0; k < p_p; ++k) ep += Xp(r, k) * Cp(s, k);
-                c.eta_p[j] = std::max(-30.0, std::min(30.0, ep));
+                c.eta_p[j] = clamp_eta(ep);
             }
             cells[s].push_back(std::move(c));
         }
@@ -194,7 +201,7 @@ Rcpp::List cpp_nmix_community_field_solve(
                 const int u = map_site_to_unit[c.site];
                 const int J = (int)c.y_site.size();
                 double eta_lam = c.eta0_lambda + zz(u);
-                eta_lam = std::max(-30.0, std::min(30.0, eta_lam));
+                eta_lam = clamp_eta(eta_lam);
                 NMixSiteResult res = compute_nmix_site(
                     c.y_site.data(), c.eta_p.data(), J, eta_lam, K_max);
                 log_lik += res.log_lik;

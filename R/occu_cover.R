@@ -105,9 +105,9 @@
   X_det_site <- stats::model.matrix(det_formula, data)
   X_pos_site <- stats::model.matrix(pos_formula, data)
 
-  X_det_visit <- .occu_cover_build_visit_X(det_visit_formula, det_visit_data,
+  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
                                            n_sites, max_visits, arm = "detection")
-  X_pos_visit <- .occu_cover_build_visit_X(pos_visit_formula, pos_visit_data,
+  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
                                            n_sites, max_visits, arm = "positive cover")
 
   det_coef_names <- colnames(X_det_site)
@@ -165,29 +165,6 @@
   invisible(NULL)
 }
 
-# Build the visit-level design matrix from a long-form visit data frame.
-# Visit-level data frame is in site-major order (row k = site (k-1) %/% J + 1,
-# visit (k-1) %% J + 1). NA-pad cells with fewer than J visits with zero.
-.occu_cover_build_visit_X <- function(visit_formula, visit_data,
-                                       n_sites, max_visits, arm) {
-  if (is.null(visit_formula) || is.null(visit_data)) return(NULL)
-  expected_rows <- n_sites * max_visits
-  if (nrow(visit_data) != expected_rows) {
-    stop(sprintf("%s visit data must have %d rows (n_sites * max_visits), got %d",
-                 arm, expected_rows, nrow(visit_data)), call. = FALSE)
-  }
-  mf <- stats::model.frame(visit_formula, visit_data,
-                            na.action = stats::na.pass)
-  X <- stats::model.matrix(visit_formula, mf)
-  X[is.na(X)] <- 0
-  # Drop the intercept column: it would duplicate the site-level intercept.
-  int_col <- match("(Intercept)", colnames(X))
-  if (!is.na(int_col)) X <- X[, -int_col, drop = FALSE]
-  if (ncol(X) == 0L) return(NULL)
-  X
-}
-
-
 # ---------------------------------------------------------------------------
 # Likelihood
 # ---------------------------------------------------------------------------
@@ -223,7 +200,7 @@
 # response, so the single-species fit and the community per-species marginal
 # share one builder (single source of truth for the occu_cover predictors).
 .occu_cover_eta_from_par <- function(model, bo, bp, bpos) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
 
@@ -279,7 +256,7 @@
 # logistic; lognormal uses the raw predictor (matching the historical kernels).
 .occu_cover_pos_logdens <- function(y, eta, disp, is_beta) {
   if (is_beta) {
-    mu <- stats::plogis(pmin(pmax(eta, -30), 30))
+    mu <- stats::plogis(.tobs_clamp_eta(eta))
     a  <- mu * disp
     b  <- (1 - mu) * disp
     lgamma(disp) - lgamma(a) - lgamma(b) +
@@ -416,8 +393,7 @@
   # No detection: psi * prod(1-p) + (1-psi). Logsumexp form for stability.
   ln_a <- log_psi   + rowSums(log_1mp)
   ln_b <- log_1mpsi
-  m    <- pmax(ln_a, ln_b)
-  nodet_ll <- m + log(exp(ln_a - m) + exp(ln_b - m))
+  nodet_ll <- .tobs_logsumexp2(ln_a, ln_b)
 
   ifelse(any_det, det_ll, nodet_ll)
 }
@@ -1017,7 +993,7 @@
   S <- nrow(b_occ)
   comp <- .occu_cover_eta_components(model, b_occ, b_det, b_pos,
                                      field_occ, field_pos)
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   # Detected-unit cover values are draw-invariant, so resolve them once and feed
   # them to every draw's cover term (gcol33/tulpaObs#34).
   units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
@@ -1116,7 +1092,7 @@
   S <- nrow(c0$b_occ)
   n_sites <- model$n_sites; max_visits <- model$max_visits
   y <- model$y; valid <- model$valid
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   stat_fn <- if (fit.stat == "freeman-tukey") {
     function(o, e) sum((sqrt(o) - sqrt(e))^2, na.rm = TRUE)
   } else {
@@ -1167,7 +1143,7 @@
   S <- nrow(c0$b_occ)
   n_sites <- model$n_sites; max_visits <- model$max_visits
   y <- model$y; valid <- model$valid
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   any_det <- rowSums(y * valid, na.rm = TRUE) > 0
 
   Fl <- matrix(0, S, n_sites); Fu <- matrix(0, S, n_sites)

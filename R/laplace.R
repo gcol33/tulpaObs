@@ -475,7 +475,7 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
     # eta_visit_long is in site-major order: reshape so [i, j] = visit (i, j)
     eta_visit_mat <- matrix(eta_visit_long, n_sites, max_visits, byrow = TRUE)
     logit_p_ij <- matrix(eta_site, n_sites, max_visits) + eta_visit_mat
-    logit_p_ij <- pmin(pmax(logit_p_ij, -30), 30)
+    logit_p_ij <- .tobs_clamp_eta(logit_p_ij)
     # log(1 - plogis(eta)) = -log1pexp(eta) computed stably as -pmax(eta,0) - log1p(exp(-|eta|))
     log_1mp <- -(pmax(logit_p_ij, 0) + log1p(exp(-abs(logit_p_ij))))
     log_1mp[!valid_mat] <- 0
@@ -1371,7 +1371,7 @@ extract_beta <- function(sub, p) {
   eta <- as.numeric(X_occ %*% beta_psi)
   sp_off <- .spatial_eta_offset(spatial, spatial_fit, p_psi)
   if (length(sp_off) == nrow(X_occ)) eta <- eta + sp_off
-  eta <- pmin(pmax(eta, -30), 30)
+  eta <- .tobs_clamp_eta(eta)
   psi <- plogis(eta)
 
   d <- psi * (1 - psi) - weights * (1 - weights)
@@ -1424,7 +1424,7 @@ extract_beta <- function(sub, p) {
 
   w  <- weights
   nv <- as.numeric(n_valid)
-  p  <- plogis(pmin(pmax(as.numeric(X_det %*% beta_det), -30), 30))
+  p  <- plogis(.tobs_clamp_eta(as.numeric(X_det %*% beta_det)))
 
   add_prior <- function(I, arm, p_k, coef_names, Xcols) {
     if (is.null(prior_spec)) return(I)
@@ -1450,7 +1450,7 @@ extract_beta <- function(sub, p) {
     eta_o <- as.numeric(X_occ %*% beta_psi)
     sp_off <- .spatial_eta_offset(spatial, spatial_fit, p_psi)
     if (length(sp_off) == nrow(X_occ)) eta_o <- eta_o + sp_off
-    psi <- plogis(pmin(pmax(eta_o, -30), 30))
+    psi <- plogis(.tobs_clamp_eta(eta_o))
 
     d_pp <- psi * (1 - psi) - w * (1 - w)
     I_pp <- add_prior(as.matrix(crossprod(X_occ, d_pp * X_occ)),

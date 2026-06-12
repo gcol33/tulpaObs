@@ -363,3 +363,36 @@
   parsed <- .tobs_parse_processes(processes, data = data, env = env)
   list(fe = parsed$fe, terms = .tobs_resolve_terms(parsed$terms))
 }
+
+# Build a visit-level (long-form) detection / cover design matrix from a
+# per-visit data frame. The data frame is in unit-major order (row k belongs to
+# unit (k - 1) %/% max_per_unit + 1, visit (k - 1) %% max_per_unit + 1) and must
+# have exactly n_units * max_per_unit rows; cells past a unit's observed visits
+# are NA-padded and zero-filled here. `arm` labels the term in the row-count
+# error.
+#
+# The visit design is stacked onto a site-level arm that already carries an
+# intercept, so `drop_intercept = TRUE` removes the visit `(Intercept)` column to
+# keep the combined design full rank; every observation family uses this
+# convention. Returns NULL when the formula or data is absent, or when nothing
+# but the dropped intercept remains.
+.tobs_build_visit_X <- function(visit_formula, visit_data,
+                                n_units, max_per_unit, arm,
+                                drop_intercept = TRUE) {
+  if (is.null(visit_formula) || is.null(visit_data)) return(NULL)
+  expected_rows <- n_units * max_per_unit
+  if (nrow(visit_data) != expected_rows) {
+    stop(sprintf("%s visit data must have %d rows (one row per unit-visit), got %d",
+                 arm, expected_rows, nrow(visit_data)), call. = FALSE)
+  }
+  mf <- stats::model.frame(visit_formula, visit_data,
+                           na.action = stats::na.pass)
+  X <- stats::model.matrix(visit_formula, mf)
+  X[is.na(X)] <- 0
+  if (drop_intercept) {
+    int_col <- match("(Intercept)", colnames(X))
+    if (!is.na(int_col)) X <- X[, -int_col, drop = FALSE]
+  }
+  if (ncol(X) == 0L) return(NULL)
+  X
+}

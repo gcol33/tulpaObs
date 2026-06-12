@@ -226,7 +226,7 @@
   i_om  <- off[3] + seq_len(p_om);  i_gm <- off[4] + seq_len(p_gm)
   i_logr <- if (use_nb) off[5] + 1L else NA_integer_
   nIv <- T - 1L
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   keep <- seq_len(N)
 
   # Subset a (possibly season-varying) survival / recruitment arm eta to a row

@@ -576,7 +576,7 @@
   bpos <- par_means[p_occ + p_p + seq_len(p_pos)]
   eta  <- .occu_cover_eta_from_par(model, bo, bp, bpos)
   f_site <- field_mean[site_cell]
-  psi_f  <- stats::plogis(pmin(pmax(stats::qlogis(eta$psi) + f_site, -30), 30))
+  psi_f  <- stats::plogis(.tobs_clamp_eta(stats::qlogis(eta$psi) + f_site))
   ep_f   <- eta$ep_mat + alpha * f_site
   ll_mean <- sum(.occu_cover_site_ll(model, psi_f, eta$p_mat, ep_f, par_means[n_base]))
 

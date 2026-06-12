@@ -71,7 +71,7 @@
   eta_psi <- as.numeric(X_occ %*% beta_psi)
   # Clamp on logit scale to avoid 0/1 saturation (the C++ likelihood applies
   # the same kind of guard implicitly via log_inv_logit).
-  eta_psi <- pmin(pmax(eta_psi, -30), 30)
+  eta_psi <- .tobs_clamp_eta(eta_psi)
   log_psi   <- plogis(eta_psi, log.p = TRUE)
   log_1m_psi <- plogis(-eta_psi, log.p = TRUE)
 
@@ -88,7 +88,7 @@
     off <- off + p_det_s
     X_det_s <- model$X_processes[[1 + s]]
     eta_s <- as.numeric(X_det_s %*% beta_det_list[[s]])
-    eta_s <- pmin(pmax(eta_s, -30), 30)
+    eta_s <- .tobs_clamp_eta(eta_s)
     eta_det_full[[s]] <- eta_s
   }
 

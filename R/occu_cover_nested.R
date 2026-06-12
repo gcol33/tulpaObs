@@ -86,7 +86,7 @@
 .occu_cover_z_nlp <- function(z, model, Q, scale_q,
                                beta_psi, beta_p_vec, beta_pos_vec,
                                log_disp, alpha, log_sigma) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   n_cells    <- model$n_sites
   max_visits <- model$max_visits
 
@@ -147,8 +147,7 @@
   det_ll <- log_psi + rowSums(log_h)
   ln_a <- log_psi   + rowSums(log_1mp)
   ln_b <- log_1mpsi
-  m    <- pmax(ln_a, ln_b)
-  nodet_ll <- m + log(exp(ln_a - m) + exp(ln_b - m))
+  nodet_ll <- .tobs_logsumexp2(ln_a, ln_b)
 
   ll <- sum(ifelse(any_det, det_ll, nodet_ll))
 
@@ -166,7 +165,7 @@
 .occu_cover_z_grad <- function(z, model, Q, scale_q,
                                 beta_psi, beta_p_vec, beta_pos_vec,
                                 log_disp, alpha, log_sigma) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   n_cells    <- model$n_sites
   max_visits <- model$max_visits
 
@@ -247,7 +246,7 @@
 .occu_cover_data_hess_diag <- function(z, model, Q, scale_q,
                                         beta_psi, beta_p_vec, beta_pos_vec,
                                         log_disp, alpha, log_sigma) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   n_cells    <- model$n_sites
   max_visits <- model$max_visits
 

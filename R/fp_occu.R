@@ -276,7 +276,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   n_valid <- n0 + n1 + n2
   bzero   <- n2 > 0L
   keep    <- which(n_valid > 0L)
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
 
   # make_site(theta) closes over the current betas; the engine supplies the RE
   # offset Z b through the eta passed to deriv / lmat. Two arms factorise into a

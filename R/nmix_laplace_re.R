@@ -325,7 +325,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
 # coupling) -- the covariate generalization of the intercept-only assembly.
 .nmix_re_oracle <- function(y, site_idx, species_idx, X_lambda, X_p,
                             n_sites, n_species, p_lam, p_p, K_max) {
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   d  <- p_lam + p_p
   rows_by_sp <- split(seq_len(length(y)), species_idx)
   marg <- lapply(seq_len(n_species), function(s) {

@@ -560,7 +560,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
   # Q for every factor on the icar / fallback path -- byte-identical in value).
   Rk <- model$field_R %||% rep(list(model$icar_Q), d$K)
   tau_w <- rep_len(tau_w, d$K)
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
 
   ll <- 0
   g_mu <- numeric(d$P); g_b <- vector("list", d$S)
@@ -1178,7 +1178,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   unpack    <- if (isTRUE(fit$constrained)) .ms_ocs_unpack_c else .ms_ocs_unpack
   lognormal <- !identical(model$positive, "beta")
   X_occ <- model$X_occ; X_pos <- model$X_pos_site
-  cl  <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   psi <- cc <- ce <- array(0, dim = c(n_draws, d$N, d$S))
   for (i in seq_len(n_draws)) {
     up <- unpack(draws_par[i, ], d)
@@ -1281,7 +1281,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   n_species <- model$n_species
   is_beta <- identical(model$positive, "beta")
   disp <- exp(object$means[[length(object$means)]])
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
 
   one <- function() {
     y_sim  <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),

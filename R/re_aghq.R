@@ -91,7 +91,7 @@
   n_det   <- rowSums(Y)
   any_det <- n_det > 0
   keep    <- which(n_valid > 0)
-  cl <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
 
   # ---- family-specific site marginal (the only occupancy-aware part) ----
   # make_site(theta) closes over the current (beta_occ, beta_det); the engine

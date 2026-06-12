@@ -55,18 +55,8 @@
   X_lambda   <- model.matrix(bind$fe$lambda, data)
   X_det_site <- model.matrix(bind$fe$p, data)
 
-  X_det_visit <- NULL
-  if (!is.null(det_visit_formula) && !is.null(det_visit_data)) {
-    mf <- stats::model.frame(det_visit_formula, det_visit_data,
-                             na.action = stats::na.pass)
-    X_det_visit <- stats::model.matrix(det_visit_formula, mf)
-    X_det_visit[is.na(X_det_visit)] <- 0
-    expected_rows <- n_sites * n_passes
-    if (nrow(X_det_visit) != expected_rows) {
-      stop(sprintf("det_visit_data must have %d rows (n_sites * n_passes), got %d",
-                   expected_rows, nrow(X_det_visit)), call. = FALSE)
-    }
-  }
+  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
+                                     n_sites, n_passes, arm = "removal pass")
 
   # Long form in site-major order (site slowest, pass fastest, in column order)
   # so each site's passes reach the kernel in depletion order with no gaps.

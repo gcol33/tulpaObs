@@ -360,7 +360,7 @@
     draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
   }
   unpack <- if (constrain) .ms_ocs_unpack_c else .ms_ocs_unpack
-  cl  <- function(e) pmin(pmax(e, -30), 30)
+  cl <- .tobs_clamp_eta
   out <- matrix(0, M, d$N * d$S)
   for (i in seq_len(M)) {
     up <- unpack(draws[i, ], d)

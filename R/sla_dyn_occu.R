@@ -192,7 +192,7 @@
   if (is.null(w_t1) || length(w_t1) != nrow(X_psi))      return(NULL)
 
   eta <- as.numeric(X_psi %*% beta_psi)
-  eta <- pmin(pmax(eta, -30), 30)
+  eta <- .tobs_clamp_eta(eta)
   psi <- plogis(eta)
 
   d <- psi * (1 - psi) - w_t1 * (1 - w_t1)
