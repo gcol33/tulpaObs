@@ -16,6 +16,16 @@
   variances; its field x field off-diagonal now carries only the between-cell
   mode-dispersion term (the within-cell field cross-covariance, read by neither
   the summary nor the `Q_k`-direct `predict()` draws, is no longer formed).
+* fix(cover): the single-field `cover(engine = "nested_laplace")` hurdle path is
+  migrated off the `copy=` argument the joint single-block fitter dropped in the
+  `(sigma, alpha)` reparam (it now hard-errors). The positive arm declares
+  `field_coef = list(name = "alpha", grid = alpha_grid)` and the top-level `copy`
+  is removed, mirroring `occu_cover()`'s single-block path; the multi-block /
+  MCAR / trend branches (which still route through the copy-taking multi-block
+  dispatch) are unchanged. Restores the single-field `cover()` nested-Laplace
+  fits that errored at fit time (`test-cover-hurdle-nested-joint.R`).
+
+## 0.0.32 (2026-06-12)
 
 * fix(occu): the C++ NUTS occupancy likelihoods now read every observed visit
   when a missing visit precedes a valid one (#92). The single / dynamic /
