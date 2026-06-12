@@ -2165,17 +2165,17 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   if (!is.null(control$sigma.pos.grid)) {
     sigma_pos_grid <- as.numeric(control$sigma.pos.grid)
   } else {
-    # Default: mirror the donor sigma grid (gives alpha = sigma_pos /
-    # sigma_occ posterior centered on 1.0 under flat per-axis priors).
     sigma_donor <- prior_for_joint$sigma_grid %||%
       exp(seq(log(0.1), log(3), length.out = 5))
     sigma_pos_grid <- as.numeric(sigma_donor)
   }
 
-  copy_spec <- list(
-    arm            = "pos",
-    sigma_pos_grid = sigma_pos_grid
-  )
+  # Direct (sigma, alpha) copy axis: the cover arm sees the shared field at
+  # amplitude alpha * sigma_donor. The single-block path declares alpha on the
+  # pos arm via field_coef (the engine takes no single-block `copy`); the
+  # multi-block branches carry their own per-block alpha grids.
+  alpha_grid <- control$alpha.grid %||%
+    c(0, exp(seq(log(0.1), log(3), length.out = 5L)))
 
   # Outer joint-grid integration controls, shared by the multi-block and
   # single-block dispatch. The dense outer tensor (sigma_occ x [rho] x
@@ -2404,10 +2404,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
     # `control$adaptive.grid = FALSE` to recover the legacy fixed-grid
     # behaviour for reproducibility checks.
+    arm_pos$field_coef <- list(name = "alpha", grid = as.numeric(alpha_grid))
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),
       prior     = prior_for_joint,
-      copy      = copy_spec,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
       prior_alpha = control$prior.alpha,
