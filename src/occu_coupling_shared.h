@@ -195,6 +195,16 @@ struct BetaPositive {
 // (grad-only or Expected). The Observed compact forms use the identity
 // L + w(1 - P0) = 1 to collapse cross(w, p) -> w(1-w) P0 p_v / L^2 and
 // cross(p_v, p_w) -> -w(1-w) P0 p_v p_w / L^2 (see derivation note).
+//
+// Rank-1 (p, p) emission (gcol33/tulpaObs#94): the observed (p, p) off-diagonal
+// cross is exactly the rank-1 a * p p^T, a = -w(1-w) P0 / L^2. When
+// `rank1_coef_out` and `rank1_p_out` are both non-null (and the curvature is
+// Observed) the block writes (a, p) there for the engine's rank-1 self-cross
+// path INSTEAD of the dense `cross_p_p`, and folds the rank-1's own diagonal
+// a p_v^2 into `nh_p` (storing the true diagonal minus a p_v^2) so the engine
+// adds the full a p p^T. The two paths are mutually exclusive; pass
+// `cross_p_p = nullptr` when requesting rank-1. With both rank-1 pointers null
+// the dense `cross_p_p` path is byte-identical to before.
 // ---------------------------------------------------------------------------
 inline double nodet_mixture_block(
     double        w,
@@ -208,7 +218,9 @@ inline double nodet_mixture_block(
     double*       nh_p,
     double*       cross_w_p,
     double*       cross_p_p,
-    double*       p_out = nullptr)
+    double*       p_out = nullptr,
+    double*       rank1_coef_out = nullptr,
+    double*       rank1_p_out = nullptr)
 {
     double log_P0 = 0.0;
     // Reuse the caller's p_out as the p cache when supplied; otherwise a small
@@ -258,8 +270,17 @@ inline double nodet_mixture_block(
             cross_w_p[v] = P0 * p[v] * w_1mw * inv_L2;
         }
     }
-    if (cross_p_p) {
-        const double a = -w * P0 * (1.0 - w) * inv_L2;
+    // (p, p) off-diagonal cross = the rank-1 a p p^T (a per site).
+    const double a = -w * P0 * (1.0 - w) * inv_L2;
+    if (rank1_coef_out && rank1_p_out) {
+        // Rank-1 emission: hand the engine (a, p) and fold the rank-1's own
+        // diagonal a p_v^2 into nh_p so the engine adds the full a p p^T.
+        *rank1_coef_out = a;
+        for (int v = 0; v < nv; v++) {
+            rank1_p_out[v] = p[v];
+            nh_p[v] -= a * p[v] * p[v];
+        }
+    } else if (cross_p_p) {
         for (int v = 0; v < nv; v++) {
             for (int wv = v + 1; wv < nv; wv++) {
                 const double val = a * p[v] * p[wv];
@@ -345,16 +366,32 @@ inline double occu_nodet_block(double                     psi,
                          && out.arm_cross_hess[0] && out.arm_cross_hess[0][1])
                         ? out.arm_cross_hess[0][1] + (std::size_t) s * rc0 * rc1
                         : nullptr;
-    double* cross_p_p = (!expected && want_hess && out.arm_cross_hess
-                         && out.arm_cross_hess[1] && out.arm_cross_hess[1][1])
-                        ? out.arm_cross_hess[1][1] + (std::size_t) s * rc1 * rc1
-                        : nullptr;
+
+    // Detection (p, p) cross-Hessian: prefer the engine's rank-1 self-cross
+    // path (gcol33/tulpaObs#94) on the single-response path, where the dense
+    // V x V block is exactly rank-1; fall back to the dense cross_p_p buffer
+    // otherwise (batched, or an engine that did not supply the descriptor).
+    double* rank1_coef = nullptr;
+    double* rank1_p    = nullptr;
+    double* cross_p_p  = nullptr;
+    if (!expected && want_hess && out.n_batch() == 1
+        && out.arm_cross_rank1_coef && out.arm_cross_rank1_vec
+        && out.arm_cross_rank1_vec[1]) {
+        rank1_coef = &out.arm_cross_rank1_coef[1];
+        rank1_p    = out.arm_cross_rank1_vec[1];
+    } else {
+        cross_p_p = (!expected && want_hess && out.arm_cross_hess
+                     && out.arm_cross_hess[1] && out.arm_cross_hess[1][1])
+                    ? out.arm_cross_hess[1][1] + (std::size_t) s * rc1 * rc1
+                    : nullptr;
+    }
 
     double g_psi = 0.0, nh_psi = 0.0;
     const double cell_ll = nodet_mixture_block(
         psi, eta_p_buf.data(), Jc, want_hess, expected,
         g_psi, nh_psi, out.arm_grad[1] + base1, out.arm_neg_hess_diag[1] + base1,
-        cross_w_p, cross_p_p);
+        cross_w_p, cross_p_p, /*p_out=*/nullptr,
+        rank1_coef, rank1_p);
     out.arm_grad[0][base0] = g_psi;
     if (want_hess) out.arm_neg_hess_diag[0][base0] = nh_psi;
     return cell_ll;
