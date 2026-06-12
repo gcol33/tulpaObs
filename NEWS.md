@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.0.34 (2026-06-12)
+
+* perf(joint-coupled): the all-undetected occupancy-mixture detection (p, p)
+  cross-Hessian in `occu()` / `occu_cover()` joint_coupled is no longer
+  materialised as a dense V x V block per site (V = visits at that site). The
+  block is analytically the rank-1 `a p p^T` (the cell density depends on the
+  visits only through the scalar `P0 = prod_v (1 - p_v)`), so `nodet_mixture_block`
+  / `occu_nodet_block` (`src/occu_coupling_shared.h`) now emit the per-site
+  `(a, p)` into the engine's rank-1 self-cross descriptor (needs tulpa >= 0.0.34)
+  and fold the rank-1 diagonal into the stored detection diagonal. Occupancy data
+  is sparse, so nearly every site hits this branch; the per-iteration
+  Gauss-Newton scatter -- the profiled inner-solve bottleneck at EVA scale
+  (~99.9% of inner-solve wall time) -- drops from O(sum_s V_s^2) to O(sum_s V_s)
+  (gcol33/tulpaObs#94; measured ~17x faster scatter at 32 visits/site on an
+  occu_cover joint_coupled fit, the gap widening with visit count). The fit is
+  numerically unchanged: a deterministic
+  occu_cover joint_coupled fit (lognormal + beta arms) matches the former dense
+  path to <= 1.4e-14 on coefficients, SDs, the spatial field, and logLik. Shared
+  by the `occu_only`, `occu_cover`, and `occu_cover_latent` cell-coupling specs;
+  `occu_multiscale_cover` keeps the dense path (its no-detection (p, p) block is a
+  nested mixture, not a single rank-1).
+
 ## 0.0.33 (2026-06-12)
 
 * perf(joint-coupled): the post-grid per-cell inner-covariance extraction in
@@ -16,25 +38,6 @@
   variances; its field x field off-diagonal now carries only the between-cell
   mode-dispersion term (the within-cell field cross-covariance, read by neither
   the summary nor the `Q_k`-direct `predict()` draws, is no longer formed).
-* perf(joint-coupled): the all-undetected occupancy-mixture detection (p, p)
-  cross-Hessian in `occu()` / `occu_cover()` joint_coupled is no longer
-  materialised as a dense V x V block per site (V = visits at that site). The
-  block is analytically the rank-1 `a p p^T` (the cell density depends on the
-  visits only through the scalar `P0 = prod_v (1 - p_v)`), so `nodet_mixture_block`
-  / `occu_nodet_block` (`src/occu_coupling_shared.h`) now emit the per-site
-  `(a, p)` into the engine's rank-1 self-cross descriptor (needs tulpa >= 0.0.33)
-  and fold the rank-1 diagonal into the stored detection diagonal. Occupancy data
-  is sparse, so nearly every site hits this branch; the per-iteration
-  Gauss-Newton scatter -- the profiled inner-solve bottleneck at EVA scale
-  (~99.9% of inner-solve wall time) -- drops from O(sum_s V_s^2) to O(sum_s V_s)
-  (gcol33/tulpaObs#94; measured ~17x faster scatter at 32 visits/site on an
-  occu_cover joint_coupled fit, the gap widening with visit count). The fit is
-  numerically unchanged: a deterministic
-  occu_cover joint_coupled fit (lognormal + beta arms) matches the former dense
-  path to <= 1.4e-14 on coefficients, SDs, the spatial field, and logLik. Shared
-  by the `occu_only`, `occu_cover`, and `occu_cover_latent` cell-coupling specs;
-  `occu_multiscale_cover` keeps the dense path (its no-detection (p, p) block is a
-  nested mixture, not a single rank-1).
 * fix(cover): the single-field `cover(engine = "nested_laplace")` hurdle path is
   migrated off the `copy=` argument the joint single-block fitter dropped in the
   `(sigma, alpha)` reparam (it now hard-errors). The positive arm declares
