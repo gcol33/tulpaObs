@@ -346,7 +346,9 @@
   field_idx     <- as.integer(unlist(lapply(field_starts0,
                                             function(s) s + seq_len(n_cells))))
   idx_joint     <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx, field_idx)
-  blocks        <- .joint_inner_vcov_block(fit, idx_joint)
+  blocks        <- .joint_inner_vcov_block(
+    fit, idx_joint, n_dense = p_beta,
+    n_threads = as.integer(dots$n.threads.outer %||% 1L))
 
   if (is.null(blocks)) {
     # Older tulpa without stored per-grid Q: marginal-only diagonal fallback.

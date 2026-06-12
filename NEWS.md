@@ -1,6 +1,21 @@
 # tulpaObs NEWS
 
-## 0.0.32 (2026-06-12)
+## 0.0.33 (2026-06-12)
+
+* perf(joint-coupled): the post-grid per-cell inner-covariance extraction in
+  `occu()` / `occu_cover()` / `occu_multiscale_cover()` joint_coupled summaries
+  no longer runs a serial-R `solve(Qk, E)` over the full betas + field latent
+  per outer-grid cell. `.joint_inner_vcov_block()` now calls the engine's
+  parallel selected-inversion primitive (`tulpa:::cpp_joint_inner_vcov_blocks`,
+  needs tulpa >= 0.0.33): the betas block and betas x field cross are solved
+  directly, the field marginal variances come from one Takahashi pass, and the
+  cells run concurrently over `n.threads.outer` (gcol33/tulpaObs#93,
+  gcol33/tulpa#112, #113). The SD summary is numerically unchanged; the betas
+  block and field marginal variances match the former dense path to machine
+  precision. `fit$joint_vcov` keeps its betas covariance and field marginal
+  variances; its field x field off-diagonal now carries only the between-cell
+  mode-dispersion term (the within-cell field cross-covariance, read by neither
+  the summary nor the `Q_k`-direct `predict()` draws, is no longer formed).
 
 * fix(occu): the C++ NUTS occupancy likelihoods now read every observed visit
   when a missing visit precedes a valid one (#92). The single / dynamic /

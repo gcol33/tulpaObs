@@ -311,7 +311,9 @@
 
   ctx <- list(adj = adj, pi_list = model$process_info, n_cells = n_cells,
               has_trend = has_trend, n_trend = n_trend,
-              coupled_trends = coupled_trends, model = model)
+              coupled_trends = coupled_trends, model = model,
+              n_threads = as.integer(
+                dots$n.threads.outer %||% max(1L, parallel::detectCores() - 4L)))
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
   .occu_jc_postprocess(fit, ctx)
@@ -368,7 +370,8 @@
   field_idx     <- as.integer(unlist(lapply(field_starts0,
                                             function(s0) s0 + seq_len(n_cells))))
   idx_joint <- c(bpsi_idx, bp_idx, field_idx)
-  blocks    <- .joint_inner_vcov_block(fit, idx_joint)
+  blocks    <- .joint_inner_vcov_block(fit, idx_joint, n_dense = p_psi + p_p,
+                                       n_threads = ctx$n_threads)
 
   if (is.null(blocks)) {
     # Older tulpa without stored per-grid Q: marginal-only diagonal (var-of-means

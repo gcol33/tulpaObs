@@ -3007,70 +3007,51 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 }
 
 # Per-grid constrained covariance block for the selected latent
-# coordinates. Mirrors `.joint_inner_var()` (same constraint correction
-# on BYM2/ICAR/CAR_proper spatial blocks) but returns the full
-# `length(beta_idx) x length(beta_idx)` sub-block per grid cell, not just
-# the diagonal. Used by the joint-engine autoscale unscaling so the
-# intercept SE carries the correct cross-covariance contribution from the
-# centered+scaled slopes (gcol33/tulpaObs#9).
+# coordinates. Same conditioning-by-kriging constraint correction as
+# `.joint_inner_var()` on the BYM2/ICAR/CAR_proper spatial blocks, returning
+# the full `length(beta_idx) x length(beta_idx)` sub-block per grid cell. Used
+# by the joint-engine autoscale unscaling so the intercept SE carries the
+# correct cross-covariance contribution from the centered+scaled slopes
+# (gcol33/tulpaObs#9).
 #
-# Returns a list of length n_grid, each element either NULL (when the
-# per-cell sparse Cholesky failed) or a dense `p x p` matrix. Returns NULL
-# when no Q matrices were stored at all.
-.joint_inner_vcov_block <- function(fit, beta_idx) {
+# `beta_idx` stacks `n_dense` leading fixed-effect (betas) coordinates followed
+# by the latent field coordinates. With a field present (`n_dense <
+# length(beta_idx)`) the per-cell extraction takes the cheap selected-inversion
+# recipe (gcol33/tulpa#113): the dense betas block and the betas x field cross
+# are exact, the field marginal variances come from one Takahashi pass, and the
+# field x field off-diagonal -- never read by the SD summary (it consumes the
+# betas block + the diagonal) nor by predict (which draws each cell directly
+# from `Q_k`) -- is left at zero. The cells run concurrently in the engine over
+# `n_threads` (gcol33/tulpaObs#93). When `beta_idx` is betas-only
+# (`n_dense == length(beta_idx)`, the cover()-only callers) the full block is
+# formed. The whole loop is the single C++ source
+# `tulpa:::cpp_joint_inner_vcov_blocks`, replacing the former serial R
+# `solve(Qk, E)` over ~`length(beta_idx)` right-hand sides per cell.
+#
+# Returns a list of length n_grid, each element either NULL (when the per-cell
+# sparse Cholesky failed or the cell stored no Q) or a dense `p x p` matrix.
+# Returns NULL when no Q matrices were stored at all.
+.joint_inner_vcov_block <- function(fit, beta_idx, n_dense = length(beta_idx),
+                                    n_threads = 1L) {
   Qp <- fit$Q_csc_p_per_grid
   Qi <- fit$Q_csc_i_per_grid
   Qx <- fit$Q_csc_x_per_grid
   n_x <- fit$Q_csc_n
   if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
 
-  layout <- fit$arm_layout
-  A_cols <- .joint_field_constraint_cols(layout)
-  k_constr <- length(A_cols)
+  A_cols <- .joint_field_constraint_cols(fit$arm_layout)
+  field_marginal <- n_dense < length(beta_idx)
+  nthr <- max(1L, as.integer(n_threads %||% 1L))
 
-  n_grid <- length(Qp)
-  p <- length(beta_idx)
-  out <- vector("list", n_grid)
-
-  E <- Matrix::sparseMatrix(
-    i = beta_idx, j = seq_len(p), x = 1,
-    dims = c(n_x, p)
+  tulpa:::cpp_joint_inner_vcov_blocks(
+    Q_p_per_grid = Qp, Q_i_per_grid = Qi, Q_x_per_grid = Qx,
+    n_x          = as.integer(n_x),
+    idx          = as.integer(beta_idx),
+    n_dense      = as.integer(n_dense),
+    A_cols_list  = lapply(A_cols, as.integer),
+    field_marginal = field_marginal,
+    n_threads    = nthr
   )
-  A_t <- if (k_constr > 0L) {
-    ii <- unlist(A_cols)
-    jj <- rep(seq_len(k_constr), vapply(A_cols, length, integer(1)))
-    Matrix::sparseMatrix(i = ii, j = jj, x = 1,
-                         dims = c(n_x, k_constr))
-  } else NULL
-
-  for (k in seq_len(n_grid)) {
-    if (is.null(Qp[[k]]) || length(Qx[[k]]) == 0L) next
-    Qk_lt <- Matrix::sparseMatrix(
-      i = as.integer(Qi[[k]]) + 1L,
-      p = as.integer(Qp[[k]]),
-      x = as.numeric(Qx[[k]]),
-      dims = c(n_x, n_x),
-      symmetric = FALSE,
-      index1 = TRUE
-    )
-    Qk <- Matrix::forceSymmetric(Qk_lt, uplo = "L")
-    V <- tryCatch(Matrix::solve(Qk, E), error = function(e) NULL)
-    if (is.null(V)) next
-    V_block <- as.matrix(V[beta_idx, , drop = FALSE])
-
-    if (k_constr > 0L) {
-      W <- tryCatch(Matrix::solve(Qk, A_t), error = function(e) NULL)
-      if (!is.null(W)) {
-        AV <- as.matrix(Matrix::crossprod(A_t, V))   # k_constr x p
-        M  <- as.matrix(Matrix::crossprod(A_t, W))   # k_constr x k_constr
-        # corr_{ij} = AV[, i]' M^{-1} AV[, j]
-        corr <- crossprod(AV, solve(M, AV))
-        V_block <- V_block - as.matrix(corr)
-      }
-    }
-    out[[k]] <- V_block
-  }
-  out
 }
 
 .coef_table <- function(beta, se) {

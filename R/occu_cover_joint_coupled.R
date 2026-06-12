@@ -779,7 +779,8 @@
               n_trend = n_trend, coupled_trends = coupled_trends, model = model,
               re_spec = re_spec,
               mcar = correlated,
-              n_fields_mcar = if (correlated) 1L + n_trend else NULL)
+              n_fields_mcar = if (correlated) 1L + n_trend else NULL,
+              n_threads = as.integer(dots$n.threads.outer %||% 1L))
 
   # Batched fused path (gcol33/tulpa#66): return the assembled call + context
   # instead of fitting, so .tobs_fit_occu_cover_batch_fused can run B species
@@ -904,7 +905,8 @@
                                           function(s0) s0 + seq_len(n_cells))))
   }
   idx_joint <- c(bpsi_idx, bp_idx, bpos_idx, field_idx)
-  blocks    <- .joint_inner_vcov_block(fit, idx_joint)
+  blocks    <- .joint_inner_vcov_block(fit, idx_joint, n_dense = p_beta,
+                                       n_threads = ctx$n_threads)
 
   if (is.null(blocks)) {
     # Older tulpa without stored per-grid Q: fall back to the marginal-only
