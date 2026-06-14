@@ -1,6 +1,6 @@
 # tulpaObs NEWS
 
-## 0.0.34 (2026-06-12)
+## 0.0.35 (2026-06-14)
 
 * fix(cover): arm-specific spatial fields (single-arm `spatial(~ ... || node,
   to = "presence" / "positive")`, `method = "nested_laplace"`) are now projected
@@ -21,6 +21,9 @@
   `predict()` on an intercept-only arm-specific fit: the positional "blocks 2.."
   trend convention no longer applies to arm-specific fits, whose blocks each
   carry their own weight column name.
+
+## 0.0.34 (2026-06-12)
+
 * perf(joint-coupled): the all-undetected occupancy-mixture detection (p, p)
   cross-Hessian in `occu()` / `occu_cover()` joint_coupled is no longer
   materialised as a dense V x V block per site (V = visits at that site). The
