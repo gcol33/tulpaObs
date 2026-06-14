@@ -818,14 +818,17 @@ decode_cover_hurdle <- function(fits, enc, family,
   if (!is.null(.tobs_joint_fit(object))) {
     bundle  <- .tobs_joint_draws(object, n = n.draws)
     if (isTRUE(object$armspecific)) {
-      # Arm-specific separate latents carry no single shared spatial index; each
-      # block holds its own per-arm node map (`units_occ`/`units_pos`) and weight,
-      # so the shared `units` argument is only a length-matching placeholder the
-      # per-block map overrides in .tobs_joint_arm_eta.
-      u_occ <- seq_len(nrow(enc$occ_data$X))
-      u_pos <- seq_len(nrow(enc$pos_data$X))
-      eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", u_occ))
-      eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", u_pos))
+      # Arm-specific separate latents store no node map / weight on the bundle
+      # block (gcol33/tulpaObs#95); the pointwise-loglik consumer runs over the
+      # fit's observations, so it rebuilds the per-arm per-observation node map
+      # and covariate-weight lookup from `armspec_blocks` and hands them to
+      # .tobs_joint_arm_eta exactly as the shared-field path passes spi_* / wfun.
+      u_occ  <- .tobs_armspec_obs_units(object, 1L, nrow(enc$occ_data$X))
+      u_pos  <- .tobs_armspec_obs_units(object, 2L, nrow(enc$pos_data$X))
+      wf_occ <- .tobs_armspec_obs_wfun(object, 1L)
+      wf_pos <- .tobs_armspec_obs_wfun(object, 2L)
+      eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", u_occ, wf_occ))
+      eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", u_pos, wf_pos))
       return(list(eta_occ = eta_occ, eta_pos = eta_pos, disp = bundle$disp))
     }
     spi_full <- object$spi_full

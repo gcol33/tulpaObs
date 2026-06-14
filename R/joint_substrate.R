@@ -176,19 +176,14 @@
     slot <- meta[[b]]$slot
     amp_occ <- if (slot == 1L) amp else rep(0, length(cells))
     amp_pos <- if (slot == 2L) amp else rep(0, length(cells))
-    # Each arm-specific block sits on ONE arm with its own per-arm node map
-    # (idx_active) and, for a slope field, its own per-arm covariate weight. The
-    # active arm carries the map / weight; the inactive arm's amp is 0 so its map
-    # is never read (left NULL -> the shared `units` fallback is skipped by the
-    # length guard in .tobs_joint_arm_eta).
-    units_occ <- if (slot == 1L) meta[[b]]$idx_active else NULL
-    units_pos <- if (slot == 2L) meta[[b]]$idx_active else NULL
+    # The block sits on ONE arm, encoded by the zero amplitude on the other arm.
+    # Its node map and per-cell weight are NOT stored here: the consumer supplies
+    # them via `.tobs_joint_arm_eta`'s `units` / `wfun` -- predict() the newdata
+    # cell map and column, the pointwise-loglik consumer the per-observation map
+    # and weight built from the fit's armspec_blocks (gcol33/tulpaObs#95). A
+    # non-intercept (slope) field carries its covariate column name to look up.
     wt <- if (isTRUE(meta[[b]]$is_intercept)) NULL else meta[[b]]$column_name
-    wt_occ <- if (slot == 1L) meta[[b]]$weight_occ else NULL
-    wt_pos <- if (slot == 2L) meta[[b]]$weight_pos else NULL
-    list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = wt,
-         units_occ = units_occ, units_pos = units_pos,
-         wt_occ = wt_occ, wt_pos = wt_pos)
+    list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = wt)
   })
 
   list(n = n, positive = positive, cells = cells,
@@ -338,6 +333,44 @@
        blocks = list(block), n_cells = n_phi)
 }
 
+# Pointwise-log-likelihood consumer helpers for arm-specific cover() fits
+# (gcol33/tulpaObs#65): the per-arm fields store no node map / weight on their
+# bundle blocks (gcol33/tulpaObs#95), so the loglik consumer -- which runs over
+# the fit's observations -- rebuilds them from `object$armspec_blocks` and hands
+# them to `.tobs_joint_arm_eta` as `units` / `wfun`. The predict consumer instead
+# supplies the newdata cell map and a newdata-column lookup. Every block on an
+# arm shares one per-observation node map (they index the same graph), so the
+# first block on the arm carries it.
+#
+# Per-arm per-observation node map; `seq_len(n_rows)` when the arm has no field
+# (the amplitude check in `.tobs_joint_arm_eta` then never indexes it).
+.tobs_armspec_obs_units <- function(object, slot, n_rows) {
+  for (m in object$armspec_blocks) {
+    if (isTRUE(m$slot == slot)) return(as.integer(m$idx_active))
+  }
+  seq_len(n_rows)
+}
+
+# Per-arm weight lookup (column name -> per-observation weight) for the trend /
+# SVC blocks on this arm; NULL when the arm carries no weighted block.
+.tobs_armspec_obs_wfun <- function(object, slot) {
+  lut <- list()
+  for (m in object$armspec_blocks) {
+    if (!isTRUE(m$slot == slot) || isTRUE(m$is_intercept)) next
+    w <- if (slot == 1L) m$weight_occ else m$weight_pos
+    if (!is.null(w)) lut[[m$column_name]] <- as.numeric(w)
+  }
+  if (length(lut) == 0L) return(NULL)
+  function(nm) {
+    v <- lut[[nm]]
+    if (is.null(v)) {
+      stop("internal: arm-specific weight column '", nm,
+           "' is absent from the fit's armspec_blocks.", call. = FALSE)
+    }
+    v
+  }
+}
+
 # Per-arm linear predictor for every draw: [nrow(X) x n]. `X` is the arm's
 # design (scaled, when the family autoscales), `arm` is "occ" / "det" / "pos",
 # `units` maps each design row to its spatial unit (1..n_cells), and `wfun`
@@ -346,10 +379,14 @@
 # This is the single source of truth for the field accumulation across both
 # families and both consumers (prediction and pointwise log-likelihood).
 #
-# Arm-specific separate fields (gcol33/tulpaObs#65) carry their own per-arm node
-# map and per-arm weight on the block (`units_occ`/`units_pos`, `wt_occ`/`wt_pos`),
-# since each block sits on one arm with its own graph index rather than the single
-# shared field's `units` / `wfun`; the block's per-arm map is preferred when set.
+# A block's arm membership is carried entirely by its per-arm amplitude
+# (`amp_occ` / `amp_pos`): a shared field scales both arms, an arm-specific field
+# (gcol33/tulpaObs#65) has zero amplitude on the arm it does not sit on (no
+# cross-arm copy). Every block on an arm then reads the SAME consumer-supplied
+# `units` / `wfun` -- predict() passes the newdata cell map and a newdata-column
+# lookup; the pointwise-log-likelihood consumer passes the per-observation node
+# map and weight. Blocks store neither map nor weight themselves, so an
+# arm-specific field maps correctly at predict time (gcol33/tulpaObs#95).
 .tobs_joint_arm_eta <- function(bundle, X, arm, units, wfun = NULL) {
   B <- bundle$b[[arm]]
   if (is.null(B)) {
@@ -360,30 +397,19 @@
   is_occ <- identical(arm, "occ")
   for (blk in bundle$blocks) {
     amp <- if (is_occ) blk$amp_occ else blk$amp_pos
-    # A block with zero amplitude on this arm contributes nothing -- the
-    # structural signal that an arm-specific field is absent here (no cross-arm
-    # copy). Skip before any node indexing, so a block sized to its own graph is
-    # never over-indexed by the (length-matching but irrelevant) shared `units`.
+    # Zero amplitude on this arm = block not on this arm; skip before any node
+    # indexing, so a block sized to its own graph is never over-indexed.
     if (all(amp == 0)) next
-    # Per-block per-arm node map (arm-specific fields) overrides the shared
-    # `units`; on the active arm the map is always set.
-    blk_units <- if (is_occ) blk$units_occ else blk$units_pos
-    u <- if (!is.null(blk_units)) blk_units else units
-    if (length(u) != nrow(X)) next             # block not on this arm -> skip
-    z_unit <- blk$z[, u, drop = FALSE]          # [n x nrow]
-    contr  <- t(z_unit * amp)                   # [nrow x n], draw d scaled by amp[d]
+    z_unit <- blk$z[, units, drop = FALSE]      # [n x nrow]; `units` maps each
+    contr  <- t(z_unit * amp)                   # design row to its field cell
     if (!is.null(blk$weight)) {
-      # Arm-specific block carries its own per-arm weight; shared trend block
-      # resolves via wfun (the engine's svc_weight replayed at predict time).
-      blk_w <- if (is_occ) blk$wt_occ else blk$wt_pos
-      w_vec <- if (!is.null(blk_w)) blk_w else {
-        if (is.null(wfun)) {
-          stop("Weighted field block '", blk$weight,
-               "' needs a per-cell weight lookup.", call. = FALSE)
-        }
-        wfun(blk$weight)
+      # Weighted (trend / SVC) field: scale each row by its per-cell covariate,
+      # resolved by the consumer (predict: from newdata; loglik: per-observation).
+      if (is.null(wfun)) {
+        stop("Weighted field block '", blk$weight,
+             "' needs a per-cell weight lookup.", call. = FALSE)
       }
-      contr <- contr * w_vec                    # row c scaled by weight[c]
+      contr <- contr * wfun(blk$weight)         # row c scaled by weight[c]
     }
     eta <- eta + contr
   }

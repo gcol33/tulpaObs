@@ -130,8 +130,12 @@
 
   # Trend (time-varying field) fits weight blocks 2.. by a per-cell covariate.
   # A single `time_col` drives every trend block (and is set as the time column
-  # in the change map); require it when the fit has any trend field.
-  if (n_field > 1L) {
+  # in the change map); require it when the fit has any trend field. Arm-specific
+  # fits (gcol33/tulpaObs#65) instead carry their own per-block weight column name
+  # and may stack several intercept-only fields, so the positional 2.. convention
+  # does not apply -- their weights resolve directly from newdata via `wf`, and a
+  # purely intercept arm-specific fit needs no time_col (gcol33/tulpaObs#95).
+  if (n_field > 1L && !isTRUE(object$armspecific)) {
     if (is.null(time_col)) time_col <- object$trend_weight
     if (is.null(time_col)) {
       stop("predict(): this fit has ", n_field - 1L,

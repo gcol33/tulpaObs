@@ -229,6 +229,78 @@ test_that("arm-specific fit recovers an arm the shared copied fit must miss", {
 })
 
 
+# ---- (d) predict projects the per-arm fields, not flat maps (#95) -----------
+
+test_that("arm-specific predict() projects each per-arm field (not flat)", {
+  skip_if_fast()
+  skip_on_cran()
+  set.seed(7)
+  g <- 6L; n_cells <- g * g
+  adj <- .as_grid_adj(g)
+  z_pre <- .as_smooth_field(adj)
+  z_raw <- .as_smooth_field(adj)
+  z_pos <- z_raw - sum(z_raw * z_pre) / sum(z_pre * z_pre) * z_pre
+  z_pos <- z_pos - mean(z_pos); z_pos <- z_pos / stats::sd(z_pos)
+
+  N <- 4000L
+  cell <- sample.int(n_cells, N, replace = TRUE)
+  x    <- as.numeric(scale(rnorm(N)))
+  sig_pre <- 1.0; sig_pos <- 0.9
+  beta_occ <- c(0.2, 0.3); beta_pos <- c(-0.8, 0.2)
+
+  eta_occ <- beta_occ[1] + beta_occ[2] * x + sig_pre * z_pre[cell]
+  occur   <- rbinom(N, 1, plogis(eta_occ))
+  eta_pos <- beta_pos[1] + beta_pos[2] * x + sig_pos * z_pos[cell]
+  cover   <- ifelse(occur == 1L,
+                    pmin(exp(eta_pos + rnorm(N, 0, 0.35)), 1 - 1e-6), 0)
+  dat <- data.frame(cell = cell, x = x, cover = cover)
+
+  fit <- tobs(formula = ~ x +
+                spatial(~ 1 || cell, graph = adj, to = "presence") +
+                spatial(~ 1 || cell, graph = adj, to = "positive"),
+              data = dat, family = cover(positive = "lognormal"),
+              y = dat$cover, method = "nested_laplace", control = .as_control)
+
+  nd <- data.frame(cell = seq_len(n_cells), x = 0)
+  occ  <- as.data.frame(predict(fit, newdata = nd, type = "occurrence",
+                                nsim = 300L, draws = FALSE))$mean
+  cond <- as.data.frame(predict(fit, newdata = nd, type = "cover_cond",
+                                nsim = 300L, draws = FALSE))$mean
+
+  # Per-cell predictions vary (the bug projected a flat map: n_distinct == 1).
+  expect_gt(length(unique(round(occ, 6))), 1L)
+  expect_gt(length(unique(round(cond, 6))), 1L)
+  expect_gt(stats::sd(occ), 1e-4)
+  expect_gt(stats::sd(cond), 1e-4)
+
+  # The projected map tracks the arm's own field, not the other arm's: occurrence
+  # follows the presence field, conditional cover follows the positive field.
+  expect_gt(cor(qlogis(pmin(pmax(occ, 1e-6), 1 - 1e-6)), z_pre - mean(z_pre)), 0.8)
+  expect_gt(cor(log(cond), z_pos - mean(z_pos)), 0.7)
+})
+
+test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
+  skip_if_fast()
+  skip_on_cran()
+  set.seed(11)
+  adj <- .as_grid_adj(4L)
+  df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L), x = rnorm(64L))
+  y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
+  fit <- suppressWarnings(tobs(
+    formula = ~ x + spatial(~ 1 || cell, graph = adj, to = "presence") +
+                spatial(~ 1 || cell, graph = adj, to = "positive"),
+    data = df, family = cover(positive = "lognormal"), y = y,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
+  nd <- data.frame(cell = seq_len(16L), x = 0)
+  # No trend field is present, so predict must not demand a `time_col`.
+  expect_no_error(
+    occ <- as.data.frame(predict(fit, newdata = nd, type = "occurrence",
+                                 nsim = 100L, draws = FALSE))$mean)
+  expect_gt(length(unique(round(occ, 6))), 1L)
+})
+
+
 # ---- Scope gates (no fit, always run) --------------------------------------
 
 .as_small <- function() {

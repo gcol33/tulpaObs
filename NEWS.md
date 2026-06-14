@@ -2,6 +2,25 @@
 
 ## 0.0.34 (2026-06-12)
 
+* fix(cover): arm-specific spatial fields (single-arm `spatial(~ ... || node,
+  to = "presence" / "positive")`, `method = "nested_laplace"`) are now projected
+  at `predict()` time. The fields were estimated correctly (sigma > 0 on each
+  arm) but every per-cell prediction came back flat, because the per-arm field
+  block stored the fit-time per-observation node map and the accumulator skipped
+  it whenever its length did not match the design (always true at predict, where
+  the design has one row per cell). Arm-specific blocks now mirror the
+  shared-field path: a block carries only its per-arm amplitude (membership) and,
+  for a trend field, its covariate column name; the node map and per-cell weight
+  are supplied by the consumer through `.tobs_joint_arm_eta` -- `predict()` passes
+  the newdata cell map and column, the pointwise-log-likelihood consumer rebuilds
+  the per-observation map and weight from `armspec_blocks`
+  (`.tobs_armspec_obs_units` / `.tobs_armspec_obs_wfun`). The log-likelihood /
+  WAIC / PPC consumer is numerically unchanged; the shared-copy and standalone
+  paths are unaffected (gcol33/tulpaObs#95). Also fixes the spurious
+  "this fit has 1 time-varying (trend) field(s); pass time_col" error raised by
+  `predict()` on an intercept-only arm-specific fit: the positional "blocks 2.."
+  trend convention no longer applies to arm-specific fits, whose blocks each
+  carry their own weight column name.
 * perf(joint-coupled): the all-undetected occupancy-mixture detection (p, p)
   cross-Hessian in `occu()` / `occu_cover()` joint_coupled is no longer
   materialised as a dense V x V block per site (V = visits at that site). The
