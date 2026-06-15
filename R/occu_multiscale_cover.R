@@ -457,6 +457,20 @@
          "values used only where y == 1).", call. = FALSE)
   }
 
+  # Identifiability surfaced (gcol33/tulpaObs#97). The availability (theta) and
+  # detection (p) levels separate only with replicate visits WITHIN a plot. With
+  # at most one observed visit per plot (single releves) the fit identifies cell
+  # occupancy (psi) and the product theta * p, reducing to occu_cover(). Flag the
+  # reduction so the per-level theta / p coefficients are not over-interpreted.
+  if (is.matrix(y) && max(rowSums(!is.na(y)), 0L) < 2L) {
+    message("occu_multiscale_cover(): the data carry no within-plot ",
+            "replication (at most one visit per plot), so availability (theta) ",
+            "and detection (p) are not separately identified -- the fit ",
+            "identifies cell occupancy (psi) and the product theta * p. Add ",
+            "within-plot replicate visits to separate the two levels, or use ",
+            "occu_cover() if a two-level model is intended.")
+  }
+
   theta_formula <- dots$availability %||% ~ 1
   pos_formula   <- dots$positive %||% detection
   is_nuts       <- identical(engine, "nuts")

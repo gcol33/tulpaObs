@@ -54,7 +54,7 @@ a resurvey of the same plot in a later period) makes the third level
 estimable.
 }
 
-\section{Scope (status \code{"experimental"})}{
+\section{Scope}{
 
 Three engines. \code{method = "nested_laplace"} carries a single shared areal
 field coupled across the occupancy (\code{sigma}) and cover (\code{alpha * sigma})

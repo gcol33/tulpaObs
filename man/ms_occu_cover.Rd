@@ -95,7 +95,7 @@ the other JSDM output -- the per-species per-cell occupancy maps (\code{psi} wit
 a rare species borrows strength across the shared factors for a calibrated map.
 }
 
-\section{Scope (status \code{"experimental"})}{
+\section{Scope}{
 
 The non-spatial fit is Laplace-EM. A community spatial occu_cover -- a shared
 latent field coupled across the occupancy and cover arms with per-species RE on
@@ -126,10 +126,18 @@ attenuation at small per-species n under the EM M-step. They are debiased by
 default with an adaptive Gauss-Hermite quadrature of the exact per-species RE
 posterior (\code{control$re.aghq = TRUE}, the same correction the single-arm AGHQ
 path applies; disable with \code{re.aghq = FALSE}, set nodes with \code{control$n.quad}).
-The tensor-product AGHQ couples the arms, so it is gated to a small total RE
-dimension (\code{control$re.aghq.maxdim}, default 4); larger RE designs keep the EM
-(attenuated, lower-bound) variance. \code{fit$ms_community$var_attenuation$debias}
-records \code{"aghq"} or \code{"none"}, and \code{print()} flags the EM case.
+The cover hurdle ties a species' psi / p / cover coefficients through the data,
+so the per-species RE posterior is not separable across arms and the AGHQ is a
+tensor product over the joint RE vector -- \code{n.quad^P} nodes per species in the
+total RE dimension \code{P}. That cost is exponential in \code{P}, so the debias is a
+hard scope limit: it runs only up to a small total RE dimension
+(\code{control$re.aghq.maxdim}, default 4, e.g. intercept-only on all three arms),
+and larger RE designs keep the EM variance. The EM (Laplace) variance is a
+documented lower bound on the true component -- attenuated toward zero at small
+per-species n, monotonically less attenuated as n grows -- not a bias of
+unknown sign. \code{fit$ms_community$var_attenuation$debias} records \code{"aghq"} or
+\code{"none"}, \verb{$affects} names the lower-bounded components, and \code{print()} flags
+the EM case.
 }
 
 \seealso{

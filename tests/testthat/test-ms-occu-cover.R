@@ -14,11 +14,12 @@
 #   - the S3 method surface
 #   - a beta-arm recovery smoke
 #
-# The family is status = "experimental", so the coverage gate is the softer
-# >= 0.80 floor (per the recovery rubric in tulpaObs CLAUDE.md). The community
-# MEANS are at the natural scale and unbiased; the binary-detection community
-# VARIANCE component carries the documented Laplace small-cluster attenuation
-# (the EM n_quad = 1 regime), so its recovery is checked loosely.
+# The family is status = "working" (gcol33/tulpaObs#98): the community-MEAN 95%
+# CIs are gated at the 0.85 working floor of the recovery rubric (measured pooled
+# coverage ~0.92 at 24 seeds). The community MEANS are at the natural scale and
+# unbiased; the binary-detection community VARIANCE component carries the
+# documented Laplace small-cluster attenuation -- a lower bound debiased by AGHQ
+# up to the re.aghq.maxdim cap, and explicitly tested as a lower bound above it.
 # =============================================================================
 
 
@@ -41,7 +42,7 @@ test_that("ms_occu_cover() constructor returns a tobs_family", {
   f <- ms_occu_cover()
   expect_s3_class(f, "tobs_family")
   expect_equal(f$name, "ms_occu_cover")
-  expect_equal(f$status, "experimental")
+  expect_equal(f$status, "working")
   expect_equal(f$params$positive, "beta")
   expect_equal(ms_occu_cover("lognormal")$params$positive, "lognormal")
 })
@@ -140,7 +141,7 @@ test_that("ms_occu_cover() recovers community means + per-species coefs (lognorm
 test_that("ms_occu_cover() community-mean 95% CIs cover near the nominal rate", {
   skip_on_cran()
   skip_if_fast()
-  n_seed <- 15L
+  n_seed <- 20L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
     sim <- simulate_ms_occu_cover(
@@ -161,8 +162,9 @@ test_that("ms_occu_cover() community-mean 95% CIs cover near the nominal rate", 
     truth <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
     covered <- c(covered, abs(bm - truth) < 1.96 * bsd)
   }
-  # Nominal 95%; experimental floor at 0.80 with Monte-Carlo slack on 15 x 6.
-  expect_gt(mean(covered), 0.80)
+  # Working-family gate (gcol33/tulpaObs#98): pooled over the six community-mean
+  # coefficients x 20 seeds at the 0.85 floor. Measured pooled coverage ~0.92.
+  expect_gt(mean(covered), 0.85)
 })
 
 
@@ -317,5 +319,59 @@ test_that("ms_occu_cover() AGHQ debias reduces variance-component attenuation (#
   expect_true(all(abs(aghq_mean - truth) <= abs(em_mean - truth) + 1e-6),
               info = paste("em:", paste(round(em_mean, 3), collapse = " "),
                            "aghq:", paste(round(aghq_mean, 3), collapse = " "),
+                           "truth:", paste(truth, collapse = " ")))
+})
+
+
+test_that("ms_occu_cover() variance debias is a hard cap; EM is a tested lower bound (#98)", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # One covariate per arm -> total RE dim P = 6, above the re.aghq.maxdim cap (4).
+  # The tensor AGHQ debias is exponential in P, so it is a hard scope limit: above
+  # the cap the EM (Laplace) variance is reported as a documented lower bound,
+  # unchanged by re.aghq. This pins both halves of that contract.
+  sd_occ_t <- 0.7; sd_p_t <- 0.6; n_seeds <- 5L
+  sd_default <- sd_noaghq <- matrix(NA_real_, n_seeds, 2L)   # cols: sd_occ, sd_p
+  for (s in seq_len(n_seeds)) {
+    sim <- simulate_ms_occu_cover(
+      n_species = 16, N = 60, J = 4,
+      mu_occ = c(stats::qlogis(0.45), 0.5), mu_p = c(0.2, -0.4),
+      mu_pos = c(log(0.12), 0.3), sd_occ = sd_occ_t, sd_p = sd_p_t, sd_pos = 0.4,
+      positive = "lognormal", sigma_pos = 0.4, seed = 720 + s)
+    vis <- .msoc_visits(60, 4, sim$visit_data)
+    common <- list(formula = ~ occ_cov1, data = sim$data,
+                   family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+                   positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+                   visits = vis, species = sim$species, method = "laplace")
+    fd <- tryCatch(do.call(tobs, c(common, list(
+      control = list(verbose = FALSE)))), error = function(e) NULL)
+    fn <- tryCatch(do.call(tobs, c(common, list(
+      control = list(verbose = FALSE, re.aghq = FALSE)))), error = function(e) NULL)
+    if (is.null(fd) || is.null(fn)) next
+    if (s == 1L) {
+      # Above the cap the debias is out of scope, flagged "none" even though
+      # re.aghq is TRUE by default, and the affected components are named.
+      expect_identical(fd$ms_community$var_attenuation$debias, "none")
+      expect_true(all(c("Sigma_occ", "Sigma_p", "Sigma_pos") %in%
+                        fd$ms_community$var_attenuation$affects))
+    }
+    sd_default[s, ] <- c(fd$ms_community$sd_occ[1], fd$ms_community$sd_p[1])
+    sd_noaghq[s, ]  <- c(fn$ms_community$sd_occ[1], fn$ms_community$sd_p[1])
+  }
+  ok <- stats::complete.cases(sd_default) & stats::complete.cases(sd_noaghq)
+  expect_gte(sum(ok), 3L)
+
+  # Above the cap re.aghq has no effect: the EM variance is exactly what is
+  # reported (the debias never runs to inflate it).
+  expect_equal(sd_default[ok, , drop = FALSE], sd_noaghq[ok, , drop = FALSE],
+               tolerance = 1e-6)
+
+  # The reported community SD is a lower bound on the truth -- attenuated, never
+  # over-estimating -- the documented behaviour above the cap.
+  truth <- c(sd_occ_t, sd_p_t)
+  em_mean <- colMeans(sd_default[ok, , drop = FALSE])
+  expect_true(all(em_mean <= truth + 0.05),
+              info = paste("em:", paste(round(em_mean, 3), collapse = " "),
                            "truth:", paste(truth, collapse = " ")))
 })

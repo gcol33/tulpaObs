@@ -464,6 +464,15 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
 #' the per-species first-season occupancy and detection coefficients, and shared
 #' community-wide colonisation / extinction transition coefficients.
 #'
+#' @section Scope:
+#' The Laplace engine is the supported route: the shared colonisation /
+#' extinction dynamics and the per-species first-season occupancy / detection
+#' components recover across seeds (see `tests/testthat/test-ms-dyn-occu.R`,
+#' community-mean 95% CI coverage measured ~0.98). A NUTS sampler and an areal-
+#' field path are a deliberate follow-up, not part of this family's working
+#' surface; `method = "nuts"` / `"nested_laplace"` error from the dispatcher with
+#' a pointer rather than silently downgrading.
+#'
 #' @return A `tobs_family` object.
 #' @seealso [dyn_occu()], [ms_occu()]
 #' @export
@@ -475,6 +484,6 @@ ms_dyn_occu <- function() {
     observation    = "binomial_detection",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "experimental"
+    status         = "working"
   )
 }

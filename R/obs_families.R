@@ -184,7 +184,7 @@ jsdm <- function() {
 #' Reduces to [occu()] when the cover arm is degenerate, and to the
 #' plot-level cover hurdle ([cover()]) when J = 1 and detection is perfect.
 #'
-#' @section Engines (status `"experimental"`):
+#' @section Engines:
 #' The non-spatial fit is a direct Laplace approximation (`method = "laplace"`)
 #' or a NUTS sampler over the same exact two-state marginal (`method = "nuts"`,
 #' beta or lognormal cover), giving calibrated intervals and a per-draw
@@ -351,7 +351,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
                        "detection_plus_lognormal",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "experimental",
+    status         = "working",
     params         = list(positive = positive,
                           cover_aggregate = cover_aggregate),
     control_keys   = c(
@@ -447,7 +447,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' `psi_lower` / `psi_upper`), marginalised over the loading + field posterior so
 #' a rare species borrows strength across the shared factors for a calibrated map.
 #'
-#' @section Scope (status `"experimental"`):
+#' @section Scope:
 #' The non-spatial fit is Laplace-EM. A community spatial occu_cover -- a shared
 #' latent field coupled across the occupancy and cover arms with per-species RE on
 #' all three arms -- is the reduced-rank spatial-factor fit: an `icar()` /
@@ -475,10 +475,18 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' default with an adaptive Gauss-Hermite quadrature of the exact per-species RE
 #' posterior (`control$re.aghq = TRUE`, the same correction the single-arm AGHQ
 #' path applies; disable with `re.aghq = FALSE`, set nodes with `control$n.quad`).
-#' The tensor-product AGHQ couples the arms, so it is gated to a small total RE
-#' dimension (`control$re.aghq.maxdim`, default 4); larger RE designs keep the EM
-#' (attenuated, lower-bound) variance. `fit$ms_community$var_attenuation$debias`
-#' records `"aghq"` or `"none"`, and `print()` flags the EM case.
+#' The cover hurdle ties a species' psi / p / cover coefficients through the data,
+#' so the per-species RE posterior is not separable across arms and the AGHQ is a
+#' tensor product over the joint RE vector -- `n.quad^P` nodes per species in the
+#' total RE dimension `P`. That cost is exponential in `P`, so the debias is a
+#' hard scope limit: it runs only up to a small total RE dimension
+#' (`control$re.aghq.maxdim`, default 4, e.g. intercept-only on all three arms),
+#' and larger RE designs keep the EM variance. The EM (Laplace) variance is a
+#' documented lower bound on the true component -- attenuated toward zero at small
+#' per-species n, monotonically less attenuated as n grows -- not a bias of
+#' unknown sign. `fit$ms_community$var_attenuation$debias` records `"aghq"` or
+#' `"none"`, `$affects` names the lower-bounded components, and `print()` flags
+#' the EM case.
 #'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
@@ -498,7 +506,7 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
                        "detection_plus_lognormal",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "experimental",
+    status         = "working",
     params         = list(positive = positive),
     control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load",
                        "n.factors", "n.factors.max", "constrain")
@@ -543,7 +551,7 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
 #' a resurvey of the same plot in a later period) makes the third level
 #' estimable.
 #'
-#' @section Scope (status `"experimental"`):
+#' @section Scope:
 #' Three engines. `method = "nested_laplace"` carries a single shared areal
 #' field coupled across the occupancy (`sigma`) and cover (`alpha * sigma`)
 #' arms, integrated over the outer `(sigma, alpha)` grid. `method = "laplace"`
@@ -579,7 +587,7 @@ occu_multiscale_cover <- function(positive = c("beta", "lognormal")) {
                        "availability_detection_plus_lognormal",
     replicates     = "required",
     default_engine = "nested_laplace",
-    status         = "experimental",
+    status         = "working",
     params         = list(positive = positive),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta",

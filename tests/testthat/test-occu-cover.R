@@ -5,11 +5,14 @@
 # tests cover:
 #   - family constructor + tobs() smoke
 #   - input shape validation
-#   - point recovery and 80% CI coverage (>=0.80 floor at 20 seeds, per the
-#     recovery rubric in tulpaObs CLAUDE.md "Statistical Code Needs Recovery
-#     Tests" -- the family is `status = "experimental"`, so the gate is one
-#     step softer than the working-family >=0.85 gate; this gets raised to
-#     0.85 when the family graduates to "working".)
+#   - point recovery and 95% Wald CI coverage. The family is now
+#     `status = "working"` (gcol33/tulpaObs#96), so the gate is the working-family
+#     standard per the recovery rubric in tulpaObs CLAUDE.md "Statistical Code
+#     Needs Recovery Tests": pooled coverage (every coefficient x seed cell) at
+#     the 0.85 finite-sample floor for a nominal-95% interval, plus a 0.80
+#     per-coordinate floor for Monte-Carlo slack. Measured pooled coverage across
+#     the non-spatial laplace / nuts and shared-field nested-Laplace paths, beta
+#     and lognormal arms, is 0.92-0.96.
 # =============================================================================
 
 
@@ -143,28 +146,39 @@ test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
   expect_lt(abs(mean(est$pos_x[conv])   - beta_pos_truth[2L]), 0.20)
   expect_lt(abs(mean(est$sigma[conv])   - sigma_pos_truth),    0.10)
 
-  # 95% Wald CI coverage. Floor at 0.80 (n_seeds = 20 noise + experimental).
-  cover_psi_x <- abs(est$psi_x[conv] - beta_occ_truth[2L]) < 1.96 * se$psi_x[conv]
-  cover_p_x   <- abs(est$p_x[conv]   - beta_p_truth[2L])   < 1.96 * se$p_x[conv]
-  cover_pos_x <- abs(est$pos_x[conv] - beta_pos_truth[2L]) < 1.96 * se$pos_x[conv]
-  expect_gte(mean(cover_psi_x), 0.80)
-  expect_gte(mean(cover_p_x),   0.80)
-  expect_gte(mean(cover_pos_x), 0.80)
+  # 95% Wald CI coverage (working-family gate, gcol33/tulpaObs#96): pooled over
+  # every coefficient x seed cell at the 0.85 floor, with a 0.80 per-coordinate
+  # floor for Monte-Carlo slack. Measured pooled coverage ~0.95 at 30 seeds.
+  cov_cells <- list(
+    psi_int = abs(est$psi_int[conv] - beta_occ_truth[1L]) < 1.96 * se$psi_int[conv],
+    psi_x   = abs(est$psi_x[conv]   - beta_occ_truth[2L]) < 1.96 * se$psi_x[conv],
+    p_int   = abs(est$p_int[conv]   - beta_p_truth[1L])   < 1.96 * se$p_int[conv],
+    p_x     = abs(est$p_x[conv]     - beta_p_truth[2L])   < 1.96 * se$p_x[conv],
+    pos_int = abs(est$pos_int[conv] - beta_pos_truth[1L]) < 1.96 * se$pos_int[conv],
+    pos_x   = abs(est$pos_x[conv]   - beta_pos_truth[2L]) < 1.96 * se$pos_x[conv]
+  )
+  per_coord <- vapply(cov_cells, mean, numeric(1))
+  expect_gte(mean(unlist(cov_cells)), 0.85)   # pooled
+  expect_gte(min(per_coord),          0.80)   # no coordinate collapses
 })
 
 
-test_that("occu_cover() recovers parameters (beta positive, 10 seeds smoke)", {
+test_that("occu_cover() recovers parameters (beta positive, 20 seeds)", {
   skip_on_cran()
   skip_if_fast()
 
-  n_seeds <- 10L
-  N <- 200L; J <- 5L
+  n_seeds <- 20L
+  N <- 250L; J <- 5L
   beta_occ_truth <- c(stats::qlogis(0.5), 0.7)
   beta_p_truth   <- c(0.0, 0.5)
   beta_pos_truth <- c(stats::qlogis(0.3), -0.3)
   phi_truth      <- 30
 
-  psi_x_est <- p_x_est <- pos_x_est <- phi_est <- rep(NA_real_, n_seeds)
+  nm <- c("psi_(Intercept)", "psi_occ_cov1", "p_(Intercept)", "p_det_cov1",
+          "pos_(Intercept)", "pos_pos_cov1")
+  truth <- c(beta_occ_truth, beta_p_truth, beta_pos_truth)
+  est <- se <- matrix(NA_real_, n_seeds, 6L, dimnames = list(NULL, nm))
+  phi_est <- rep(NA_real_, n_seeds)
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
@@ -196,14 +210,23 @@ test_that("occu_cover() recovers parameters (beta positive, 10 seeds smoke)", {
     )
     if (is.null(fit)) next
 
-    psi_x_est[s] <- fit$means["psi_occ_cov1"]
-    p_x_est[s]   <- fit$means["p_det_cov1"]
-    pos_x_est[s] <- fit$means["pos_pos_cov1"]
-    phi_est[s]   <- exp(fit$means["log_phi"])
+    est[s, ] <- fit$means[nm]; se[s, ] <- fit$sds[nm]
+    phi_est[s] <- exp(fit$means["log_phi"])
   }
 
-  expect_lt(abs(mean(psi_x_est, na.rm = TRUE) - beta_occ_truth[2L]), 0.30)
-  expect_lt(abs(mean(p_x_est,   na.rm = TRUE) - beta_p_truth[2L]),   0.30)
-  expect_lt(abs(mean(pos_x_est, na.rm = TRUE) - beta_pos_truth[2L]), 0.30)
+  ok <- stats::complete.cases(est)
+  expect_gte(sum(ok), 16L)
+
+  # Point recovery of every coefficient (mean over seeds).
+  bias <- colMeans(est[ok, , drop = FALSE]) - truth
+  expect_true(all(abs(bias) < 0.30))
   expect_gt(mean(phi_est, na.rm = TRUE), 10)   # well above the 1 / 0 boundary
+
+  # 95% Wald CI coverage (working-family gate, gcol33/tulpaObs#96): pooled at the
+  # 0.85 floor, 0.80 per-coordinate floor. Measured pooled ~0.95 at 30 seeds.
+  cov_cells <- abs(est[ok, , drop = FALSE] -
+                   matrix(truth, sum(ok), 6L, byrow = TRUE)) <
+               1.96 * se[ok, , drop = FALSE]
+  expect_gte(mean(cov_cells),            0.85)   # pooled
+  expect_gte(min(colMeans(cov_cells)),   0.80)   # no coordinate collapses
 })

@@ -292,7 +292,7 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
   skip_on_cran()
   skip_if_fast()
 
-  n_seeds <- 10L
+  n_seeds <- 18L
   N <- 100L; J <- 6L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -308,7 +308,7 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
   alpha_truth   <- 1.0
 
   est_psi_x <- est_p_x <- est_pos_x <- est_alpha <- est_sigma <-
-    field_cor <- rep(NA_real_, n_seeds)
+    field_cor <- se_psi_x <- se_p_x <- se_pos_x <- rep(NA_real_, n_seeds)
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
@@ -344,6 +344,9 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
     est_psi_x[s] <- fit$means["psi_occ_cov1"]
     est_p_x[s]   <- fit$means["p_det_cov1"]
     est_pos_x[s] <- fit$means["pos_pos_cov1"]
+    se_psi_x[s]  <- fit$sds["psi_occ_cov1"]
+    se_p_x[s]    <- fit$sds["p_det_cov1"]
+    se_pos_x[s]  <- fit$sds["pos_pos_cov1"]
     est_alpha[s] <- fit$means[["alpha"]]
     est_sigma[s] <- fit$means[["sigma"]]
     field_cor[s] <- abs(cor(fit$spatial_field, sim$truth$f))
@@ -366,6 +369,19 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
   expect_lt(abs(mean(est_sigma[ok]) - sigma_truth), 0.90)
 
   expect_gt(mean(field_cor[ok]), 0.80)
+
+  # 95% Wald CI coverage on the shared-field path (working-family gate,
+  # gcol33/tulpaObs#96): pooled over the three slope coefficients x seeds at the
+  # 0.85 floor, with a loose 0.55 per-coordinate floor -- the field-coupled psi
+  # slope carries the mild Laplace nested under-dispersion, so the pooled measure
+  # (not any single coordinate) is the gate. Measured pooled coverage 0.94
+  # (lognormal) at 18 seeds.
+  cov_cells <- cbind(
+    abs(est_psi_x[ok] - beta_occ_truth[2L]) < 1.96 * se_psi_x[ok],
+    abs(est_p_x[ok]   - beta_p_truth[2L])   < 1.96 * se_p_x[ok],
+    abs(est_pos_x[ok] - beta_pos_truth[2L]) < 1.96 * se_pos_x[ok])
+  expect_gte(mean(cov_cells),          0.85)
+  expect_gte(min(colMeans(cov_cells)), 0.55)
 })
 
 
@@ -373,7 +389,7 @@ test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
   skip_on_cran()
   skip_if_fast()
 
-  n_seeds <- 10L
+  n_seeds <- 18L
   N <- 100L; J <- 6L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -389,7 +405,7 @@ test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
   alpha_truth    <- 1.0
 
   est_psi_x <- est_p_x <- est_pos_x <- est_alpha <- est_sigma <-
-    field_cor <- rep(NA_real_, n_seeds)
+    field_cor <- se_psi_x <- se_p_x <- se_pos_x <- rep(NA_real_, n_seeds)
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
@@ -425,6 +441,9 @@ test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
     est_psi_x[s] <- fit$means["psi_occ_cov1"]
     est_p_x[s]   <- fit$means["p_det_cov1"]
     est_pos_x[s] <- fit$means["pos_pos_cov1"]
+    se_psi_x[s]  <- fit$sds["psi_occ_cov1"]
+    se_p_x[s]    <- fit$sds["p_det_cov1"]
+    se_pos_x[s]  <- fit$sds["pos_pos_cov1"]
     est_alpha[s] <- fit$means[["alpha"]]
     est_sigma[s] <- fit$means[["sigma"]]
     field_cor[s] <- abs(cor(fit$spatial_field, sim$truth$f))
@@ -443,4 +462,13 @@ test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
   expect_lt(abs(mean(est_sigma[ok]) - sigma_truth), 0.90)
 
   expect_gt(mean(field_cor[ok]), 0.80)
+
+  # 95% Wald CI coverage on the shared-field path (beta arm; working-family gate,
+  # gcol33/tulpaObs#96). Measured pooled coverage 0.93 at 18 seeds.
+  cov_cells <- cbind(
+    abs(est_psi_x[ok] - beta_occ_truth[2L]) < 1.96 * se_psi_x[ok],
+    abs(est_p_x[ok]   - beta_p_truth[2L])   < 1.96 * se_p_x[ok],
+    abs(est_pos_x[ok] - beta_pos_truth[2L]) < 1.96 * se_pos_x[ok])
+  expect_gte(mean(cov_cells),          0.85)
+  expect_gte(min(colMeans(cov_cells)), 0.55)
 })

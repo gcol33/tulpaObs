@@ -41,7 +41,7 @@ h_ij = (1 - p_ij) * 1\{y_ij = 0\}
 Reduces to \code{\link[=occu]{occu()}} when the cover arm is degenerate, and to the
 plot-level cover hurdle (\code{\link[=cover]{cover()}}) when J = 1 and detection is perfect.
 }
-\section{Engines (status \code{"experimental"})}{
+\section{Engines}{
 
 The non-spatial fit is a direct Laplace approximation (\code{method = "laplace"})
 or a NUTS sampler over the same exact two-state marginal (\code{method = "nuts"},

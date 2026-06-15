@@ -1,5 +1,41 @@
 # tulpaObs NEWS
 
+## 0.0.36 (2026-06-15)
+
+* Five cover / community families graduate from `status = "experimental"` to
+  `"working"` after parameter-recovery and CI-coverage validation against
+  simulated truth across seeds (gcol33/tulpaObs#96-100):
+  * `occu_cover()` (#96): 95% Wald CI coverage holds near nominal on every path
+    -- non-spatial `laplace` / `nuts` and the shared-field `nested_laplace`
+    (`joint_coupled`) engine -- for both the beta and lognormal positive arms
+    (measured pooled coverage 0.92-0.96). The recovery gates move from the 0.80
+    experimental floor to the 0.85 working floor (pooled), and the beta arm and
+    the shared-field paths gain explicit coverage gates.
+  * `occu_multiscale_cover()` (#97): the four-arm recovery (cell psi, plot theta,
+    visit p, cover) is validated on the `nested_laplace` and non-spatial
+    `laplace` engines (pooled coverage ~0.95), and the coupled SVC-trend field
+    recovers its shape. The availability / detection identifiability reduction is
+    now surfaced: a fit with no within-plot replication (single releves) emits a
+    message that theta and p collapse to the identified product theta * p, and
+    the reduction is tested (psi and theta * p recover, the levels separately do
+    not).
+  * `ms_occu_cover()` (#98): community-mean 95% CIs are gated at the 0.85 working
+    floor (measured ~0.92). The community-variance AGHQ debias cap
+    (`re.aghq.maxdim`, default 4) is documented as a hard scope limit -- the
+    tensor AGHQ is exponential in the total RE dimension -- with the EM variance
+    above the cap explicitly tested as a lower bound. The reduced-rank
+    spatial-factor (JSDM) path's loading / association recovery and per-species
+    map calibration remain validated.
+  * `ms_dyn_occu()` (#99): community-mean coverage gated at 0.85 (measured ~0.98;
+    the shared colonisation / extinction dynamics cover at ~1.0) and the
+    per-species first-season occupancy / detection variance components recover
+    the realised spread.
+  * `ms_int_occu()` (#100): the shared occupancy mean and the per-source
+    detection components recover across seeds and more than one source; the
+    community-mean coverage gate is tightened (measured ~0.89). For both
+    `ms_dyn_occu()` and `ms_int_occu()`, a NUTS sampler and an areal-field path
+    are a deliberate follow-up, not part of the working surface.
+
 ## 0.0.35 (2026-06-15)
 
 * feat(tobs): `tobs()` gains a `by = "<species_col>"` argument for per-species

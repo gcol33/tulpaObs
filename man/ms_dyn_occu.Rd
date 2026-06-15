@@ -14,6 +14,17 @@ Per-species dynamic (HMM) occupancy with Gaussian community hyperpriors on
 the per-species first-season occupancy and detection coefficients, and shared
 community-wide colonisation / extinction transition coefficients.
 }
+\section{Scope}{
+
+The Laplace engine is the supported route: the shared colonisation /
+extinction dynamics and the per-species first-season occupancy / detection
+components recover across seeds (see \code{tests/testthat/test-ms-dyn-occu.R},
+community-mean 95\% CI coverage measured ~0.98). A NUTS sampler and an areal-
+field path are a deliberate follow-up, not part of this family's working
+surface; \code{method = "nuts"} / \code{"nested_laplace"} error from the dispatcher with
+a pointer rather than silently downgrading.
+}
+
 \seealso{
 \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=ms_occu]{ms_occu()}}
 }

@@ -5,8 +5,10 @@
 # Gaussian community covariances; shared community colonisation / extinction.
 # The latent occupancy path integrates out by an HMM forward filter and the
 # per-species deviations are integrated by the shared community Laplace-EM
-# (R/community_em.R). The family is status = "experimental", so coverage uses
-# the softer >= 0.80 floor (tulpaObs CLAUDE.md recovery rubric).
+# (R/community_em.R). The family is status = "working" (gcol33/tulpaObs#99):
+# community-mean 95% CI coverage is gated at the 0.85 working floor of the
+# recovery rubric (measured pooled coverage ~0.98 at 24 seeds; the shared
+# gamma / eps dynamics cover at ~1.0).
 # =============================================================================
 
 
@@ -14,7 +16,7 @@ test_that("ms_dyn_occu() constructor returns a tobs_family", {
   f <- ms_dyn_occu()
   expect_s3_class(f, "tobs_family")
   expect_equal(f$name, "ms_dyn_occu")
-  expect_equal(f$status, "experimental")
+  expect_equal(f$status, "working")
   expect_equal(f$default_engine, "laplace")
 })
 
@@ -48,8 +50,13 @@ test_that("ms_dyn_occu() recovers community means + per-species coefs", {
   expect_gt(cor(cm$coef_psi1[, 1], stats::qlogis(sim$truth$psi1_species)), 0.70)
   expect_gt(cor(cm$coef_p[, 1],    stats::qlogis(sim$truth$p_species)),    0.60)
 
-  # Community SDs positive and finite.
-  expect_true(all(cm$sd_psi1 > 0 & cm$sd_p > 0))
+  # Per-species variance components recover the realised spread (gcol33/tulpaObs
+  # #99): mild Laplace attenuation on the binary arms (measured est/realised
+  # ~0.91 psi1, ~0.95 p over seeds), so a band around the realised SD.
+  emp_psi1 <- stats::sd(stats::qlogis(sim$truth$psi1_species))
+  emp_p    <- stats::sd(stats::qlogis(sim$truth$p_species))
+  expect_true(cm$sd_psi1[1] > 0.4 * emp_psi1 && cm$sd_psi1[1] < 1.8 * emp_psi1)
+  expect_true(cm$sd_p[1]    > 0.4 * emp_p    && cm$sd_p[1]    < 1.8 * emp_p)
 })
 
 
@@ -75,7 +82,10 @@ test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
     m <- fit$means[names(truth)]; sd <- fit$sds[names(truth)]
     covered <- c(covered, abs(m - truth) < 1.96 * sd)
   }
-  expect_gt(mean(covered), 0.80)
+  # Working-family gate (gcol33/tulpaObs#99): pooled over the shared psi1 / p
+  # means and the shared gamma / eps dynamics x 12 seeds. Measured pooled ~0.98
+  # at 24 seeds, comfortably clearing the 0.85 working floor.
+  expect_gt(mean(covered), 0.85)
 })
 
 
