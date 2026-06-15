@@ -30,7 +30,7 @@ simulate_occu(
 \item{seed}{Random seed.}
 }
 \value{
-A list with \code{y}, \code{data}, \code{coords}, and \code{truth}.
+A list with \code{y}, \code{data}, and \code{truth}.
 }
 \description{
 Simulate single-species occupancy data

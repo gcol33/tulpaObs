@@ -86,7 +86,7 @@ test_that("held-out cell psi intervals are calibrated, including rare species", 
       occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
       data = sim$data, y = y, y_pos = y_pos, positive = "lognormal",
       species = sim$species, adj = adj)
-    psi <- tulpaObs:::.ms_ocs_psi_posterior(model, fit, n_draws = 400L)
+    psi <- tulpaObs:::.ms_ocs_joint_posterior(model, fit, n_draws = 400L)$psi
     tr  <- sim$truth$psi
     S   <- dim(psi)[3L]
 

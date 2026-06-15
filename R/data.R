@@ -341,7 +341,7 @@ plot.tobs_data <- function(x, ...) {
 #' @param beta_occ Occupancy coefficients (auto-generated if NULL).
 #' @param beta_det Detection coefficients (auto-generated if NULL).
 #' @param seed Random seed.
-#' @return A list with `y`, `data`, `coords`, and `truth`.
+#' @return A list with `y`, `data`, and `truth`.
 #' @export
 simulate_occu <- function(N = 100, J = 4,
                           n_occ_covs = 2, n_det_covs = 1,

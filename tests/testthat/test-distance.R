@@ -557,7 +557,7 @@ test_that("distance() hazard-rate key under areal spatial recovers slope, shape 
   shape_true <- 3
   slope_ok <- shape_ok <- field_cor <- logical(0)
   for (s in 1:3) {
-    sim <- .sim_dist_spatial(adj, cuts, c(log(60), 0.5), c(log(0.35)),
+    sim <- .sim_dist_spatial(adj, cuts, c(log(60), 0.5), c(log(0.35), 0),
                              key = "hazard", shape = shape_true, seed = 500 + s)
     fit <- tobs(formula = ~ abund_cov1 + car_proper(graph = adj), data = sim$data,
                 family = distance(key = "hazard", transect = "line", cutpoints = cuts),

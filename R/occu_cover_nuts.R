@@ -384,11 +384,13 @@
   sigma_grid <- sigma.grid %||% exp(seq(log(0.1), log(3), length.out = 5))
   rho_car_grid <- rho.car.grid %||% c(0.5, 0.8, 0.95, 0.99)
 
-  # multi = TRUE so the pos arm carries no `field_coef` shim (the explicit
-  # `copy` block below drives the alpha axis -- the engine rejects both at once).
+  # Single-block (multi = FALSE): the pos arm carries
+  # field_coef = list(name = "alpha", grid = alpha_grid), so the copy alpha axis
+  # rides the one shared field. The single-block joint path takes the copy
+  # coefficient on the arm, not a top-level `copy` block.
   arms_out <- .occu_cover_build_joint_coupled_arms(
     model = model, sigma_pos_init = sigma_pos_init, alpha_grid = alpha_grid,
-    positive = model$positive, multi = TRUE, n_cells = n_cells,
+    positive = model$positive, multi = FALSE, n_cells = n_cells,
     site_cell = site_cell, cover_aggregate = "none")
   responses <- arms_out$responses
 
@@ -411,10 +413,9 @@
     sigma_grid      = sigma_grid,
     rho_car_grid    = rho_car_grid,
     spatial_idx     = lapply(responses, function(a) as.integer(a$spatial_idx)))
-  copy_arg <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
 
   fit <- tulpa::tulpa_nested_laplace_joint(
-    responses = responses, prior = prior_arg, copy = copy_arg,
+    responses = responses, prior = prior_arg,
     cell_coupling = spec_name,
     control = list(max_iter = as.integer(max.iter), tol = as.numeric(tol),
                    n_threads = 1L, store_Q = FALSE, adaptive_grid = FALSE,

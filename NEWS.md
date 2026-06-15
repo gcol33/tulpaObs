@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.37 (2026-06-15)
+
+* `occu_cover()` spatial NUTS (`method = "nuts"` with a `car_proper()` field on
+  the occupancy arm, gcol33/tulpaObs#74) errored against `tulpa (>= 0.0.34)`. The
+  fixed-hyper warm start passed the single-block `copy=` argument to
+  `tulpa_nested_laplace_joint()`, which the single-block joint path no longer
+  accepts; the copy coefficient is now declared on the cover arm as
+  `field_coef = list(name = "alpha", grid = ...)`, the same convention the
+  nested-Laplace `joint_coupled` path uses. Recovery, 95% interval coverage, and
+  the calibration of the sampled coefficient SDs to the nested-Laplace SEs are
+  restored.
+* The "not yet supported" errors now name the supported route: a temporal term on
+  `abun()` points to `dyn_abun()`; random effects with visit-level detection
+  covariates on `abun()` name the two ways to proceed; and the multi-block
+  nested-Laplace random-effect path lists the supported models (`iid`, `ar1`,
+  `rw1`, `rw2`).
+* `simulate_occu()` documents its actual return value (`y`, `data`, `truth`); the
+  `coords` element it never produced is removed from the help.
+
 ## 0.0.36 (2026-06-15)
 
 * Five cover / community families graduate from `status = "experimental"` to

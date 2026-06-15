@@ -132,8 +132,9 @@
   # random effects on one arm; temporal is the open upstream extension. Error
   # with a pointer rather than silently dropping the requested structure.
   if (!is.null(temporal)) {
-    stop("A temporal term on N-mixture abundance is not yet supported.",
-         call. = FALSE)
+    stop("A temporal term on N-mixture abundance is not yet supported. ",
+         "For temporal (open-population) count dynamics use dyn_abun() ",
+         "(Dail-Madsen open N-mixture).", call. = FALSE)
   }
   if (!is.null(re) && !is.null(spatial)) {
     stop("Random effects together with an areal spatial term on N-mixture ",
@@ -143,7 +144,9 @@
   if (!is.null(re) && !is.null(model$X_det_visit)) {
     stop("Random effects with visit-level detection covariates ",
          "(det_visit_formula) are not yet supported; the site-level make_site ",
-         "path assumes a per-site detection design.", call. = FALSE)
+         "path assumes a per-site detection design. Either drop the random ",
+         "effect or move the detection covariates to the site level.",
+         call. = FALSE)
   }
   if (!is.null(priors) && !isFALSE(priors)) {
     message(".tobs_fit_nmix(): fixed-effect priors are not applied on the ",

@@ -759,7 +759,8 @@
     out
   } else {
     stop("RE model '", model_name, "' is not supported by the multi-block ",
-         "nested-Laplace path.", call. = FALSE)
+         "nested-Laplace path. Supported RE models: 'iid', 'ar1', 'rw1', 'rw2'.",
+         call. = FALSE)
   }
 }
 
