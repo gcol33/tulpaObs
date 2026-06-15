@@ -196,6 +196,12 @@ jsdm <- function() {
 #' grid-integrated, not sampled; the sampled-field route is the spatial-factor
 #' community sampler [ms_occu_cover()]).
 #'
+#' On the shared-field `nested_laplace` path the field-coupled occupancy slope
+#' Wald interval is mildly anti-conservative at small N (the grid-integrated
+#' Laplace under-disperses that coefficient; the pooled coverage across the three
+#' arms stays near nominal). The non-spatial `nuts` path gives fully calibrated
+#' occupancy intervals.
+#'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engine (`method = "nested_laplace"`, default
 #' `control$engine = "joint_coupled"`) couples one shared areal field (the

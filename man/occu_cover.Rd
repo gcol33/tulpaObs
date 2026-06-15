@@ -53,6 +53,12 @@ non-spatial route errors from the dispatcher with a pointer to it, and a
 spatial term under \code{method = "nuts"} is rejected (the shared coupled field is
 grid-integrated, not sampled; the sampled-field route is the spatial-factor
 community sampler \code{\link[=ms_occu_cover]{ms_occu_cover()}}).
+
+On the shared-field \code{nested_laplace} path the field-coupled occupancy slope
+Wald interval is mildly anti-conservative at small N (the grid-integrated
+Laplace under-disperses that coefficient; the pooled coverage across the three
+arms stays near nominal). The non-spatial \code{nuts} path gives fully calibrated
+occupancy intervals.
 }
 
 \section{Coupled fields and spatially-varying trends}{

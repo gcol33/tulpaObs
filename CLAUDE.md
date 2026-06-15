@@ -435,8 +435,10 @@ default** (`nested_laplace`, `R/occu_cover_joint_coupled.R`):
 `occu_cover_{lognormal,beta}` cell-coupling spec (tulpa#32) — 3-arm joint
 nested-Laplace, outer-grid over `(sigma, alpha)`, per-cell occupancy mixture
 closed-form derivs drive inner Newton. ~150-300x faster than v3_nested at N=100,
-completes N=200+. 10-seed lognormal + beta recovery
-(`test-occu-cover-joint-coupled.R`); status `"experimental"`.
+completes N=200+. 18-seed lognormal + beta recovery
+(`test-occu-cover-joint-coupled.R`); status `"working"` (#96). Shared-field occ
+SLOPE Wald CI mildly anti-conservative small-N (pooled ~0.94; NUTS non-spatial
+calibrated).
 
 **Cover-arm intercept prior (#32)**: on shared-field path cover intercept confounds
 w/ field level over detected cells. `.occu_cover_coupled_arm_priors()` hands pos arm
@@ -504,11 +506,13 @@ closed-form per species-cell (reuses `.occu_cover_site_ll`); per-species deviati
 in-tree pure-R Laplace-EM — arrowhead joint Newton (RE Schur-folded, analytic grads
 `.occu_cover_eta_grad`) + closed-form community-cov M-step. Community-mean SEs =
 marginal observed info (Louis 1982). Beta+lognormal. Non-spatial Laplace only
-(structured term any arm errors+pointer). Recovery + 15-seed coverage
-(`test-ms-occu-cover.R`); status `"experimental"`. Community VARIANCE carries Laplace
-small-cluster attenuation (means do not); flagged via `print.tobs_fit` +
+(structured term any arm errors+pointer). Recovery + 20-seed coverage
+(`test-ms-occu-cover.R`); status `"working"` (#98). Community VARIANCE carries Laplace
+small-cluster attenuation (means do not); AGHQ-debiased BY DEFAULT below
+`re.aghq.maxdim` (4), above the cap EM variance = tested lower bound (tensor AGHQ
+exp in total RE dim). Flagged via `print.tobs_fit` +
 `fit$ms_community$var_attenuation` marker + `?ms_occu_cover` (#47). NUTS/negbin/
-dispersion RE/AGHQ debias pending.
+dispersion RE pending.
 
 ### `occu_multiscale_cover()` detail
 
@@ -540,10 +544,13 @@ psi `field_coef=1`; theta/p `0`; pos `list(name="alpha")`. Cell spec
 (`src/occu_coupling_shared.h`).
 
 **Identifiability**: theta + p separate only with replication WITHIN a plot. Single
-releves -> identifies psi (cell) + product theta*p, reduces to occu_cover. **Scope**
-(`"experimental"`): spatial joint nested-Laplace only (SVC trend + non-spatial not
-wired; `.dispatch_occu_multiscale_cover` rejects laplace + non-spatial state formula).
-`test-occu-multiscale-cover-recovery.R`, `-coupling.R`. `simulate_occu_multiscale_cover()`.
+releves -> identifies psi (cell) + product theta*p, reduces to occu_cover; surfaced
+via `message()` in `.dispatch_occu_multiscale_cover` on single-releve data (#97).
+**Scope** (`"working"`, #97): three engines — `nested_laplace` (shared + SVC-trend
+coupled field), `laplace` + `nuts` (both non-spatial: iid cells, field fixed at 0;
+cell-declaring areal term supplies plot->cell map only, graph ignored). NUTS rejects
+a coupled SVC/trend field (single cell-declaring term only).
+`test-occu-multiscale-cover-{recovery,coupling,nuts}.R`. `simulate_occu_multiscale_cover()`.
 
 ## NUTS coverage status
 
