@@ -281,6 +281,203 @@
 
 
 # ---------------------------------------------------------------------------
+# by = "<species_col>": per-species batched fit from a long plot-level frame
+# ---------------------------------------------------------------------------
+
+# Build each species' response from a long / plot-level `data` and route the
+# per-species responses through the batched-independent driver, returning a
+# `tobs_batch`. The species share the design (cell-level covariates, the spatial
+# graph, the detection / cover formulas, the visit grid); only the per-species
+# response differs -- exactly the batched-independent contract.
+#
+# REUSE: the long -> response pivot is `tobs_data()`'s, called once per species
+# onto ONE shared site x visit grid (sites = first-appearance order over the FULL
+# frame, visits = sorted unique). The site-level covariate frame the dispatchers
+# need is the first row per site, taken the way tobs_data(occ.covs = ) does. The
+# fitting itself is the existing batch driver (occu_cover) or per-species
+# single-species tobs() calls (cover) -- no model-building logic is duplicated.
+#
+# `dots` carries the originating tobs() `...`. The long -> matrix column names
+# are read from it: `site`, `visit`, `response` (the detection 0/1 column for
+# occu_cover, the cover column for cover), `y_pos` (the cover column, occu_cover
+# only), and `det.covs` (visit-level covariate columns carried to `visits`).
+.tobs_fit_by_species <- function(formula, data, family, detection, visits,
+                                 method, priors, control, by, dots) {
+  fam <- family$name
+  if (!fam %in% c("occu_cover", "cover")) {
+    stop(sprintf(paste0(
+      "tobs(by = ): per-species batched fitting is wired for occu_cover() and ",
+      "cover() (a per-plot response a species column splits), not %s(). ",
+      "Fit %s() one species at a time, or for a community model that pools ",
+      "across species use ms_occu_cover()."), fam, fam), call. = FALSE)
+  }
+  if (!is.data.frame(data)) {
+    stop("tobs(by = ): `data` must be a long / plot-level data frame.",
+         call. = FALSE)
+  }
+  if (length(by) != 1L || !is.character(by) || !by %in% names(data)) {
+    stop(sprintf("tobs(by = '%s'): `by` must name a single column of `data`.",
+                 by), call. = FALSE)
+  }
+  # `visits` (the tobs() formal) carries the long-format VISIT column name in
+  # by = mode for occu_cover: the user writes `visit = "<col>"`, which partial-
+  # matches the `visits` formal, so it arrives here as a length-1 string. (The
+  # visit-level covariate matrices are built internally from the long `data` via
+  # `det.covs = `, not handed in pre-pivoted.) A non-string `visits` here is a
+  # mis-supplied pre-built visit grid.
+  visit <- NULL
+  if (!is.null(visits)) {
+    if (is.character(visits) && length(visits) == 1L) {
+      visit <- visits
+    } else {
+      stop("tobs(by = ): pass the long-format visit column as `visit = ",
+           "\"<col>\"` (a column name); visit-level covariates are built from ",
+           "`data` via `det.covs = `, not handed in as a pre-pivoted grid.",
+           call. = FALSE)
+    }
+  }
+
+  site     <- dots$site
+  response <- dots$response
+  det.covs <- dots$det.covs
+  if (is.null(site) || is.null(response)) {
+    stop("tobs(by = ): supply `site = ` and `response = ` (the long-format ",
+         "site identifier and response column names).", call. = FALSE)
+  }
+  for (col in c(site, response, det.covs)) {
+    if (!col %in% names(data))
+      stop(sprintf("tobs(by = ): column '%s' not found in `data`.", col),
+           call. = FALSE)
+  }
+
+  sp_raw <- data[[by]]
+  labels <- as.character(unique(sp_raw))
+  B <- length(labels)
+  if (B < 1L) stop("tobs(by = ): no species found in `data`.", call. = FALSE)
+
+  if (identical(fam, "cover")) {
+    return(.tobs_fit_cover_by(
+      formula = formula, data = data, family = family, method = method,
+      priors = priors, control = control,
+      by = by, site = site, response = response, labels = labels,
+      sp_raw = sp_raw, dots = dots))
+  }
+
+  # occu_cover: a site x visit response. Detection arm = `response` (0/1), cover
+  # arm = `y_pos` (continuous), both pivoted onto the shared grid. Visit-level
+  # covariates flow to `visits` as the det.covs matrices tobs_data() returns.
+  y_pos <- dots$y_pos
+  if (is.null(visit) || is.null(y_pos)) {
+    stop("tobs(by = ) for occu_cover(): supply `visit = ` (the long-format ",
+         "visit/replicate column) and `y_pos = ` (the cover column).",
+         call. = FALSE)
+  }
+  for (col in c(visit, y_pos)) {
+    if (!col %in% names(data))
+      stop(sprintf("tobs(by = ): column '%s' not found in `data`.", col),
+           call. = FALSE)
+  }
+
+  # One canonical site x visit grid over the FULL frame, so every species'
+  # response rows align with each other AND with the shared cell-level design.
+  sites_lvl  <- unique(data[[site]])
+  visits_lvl <- sort(unique(data[[visit]]))
+
+  # Shared cell-level covariate frame: first row per site over the full frame.
+  # The dispatchers read X_occ / X_det / X_pos from this; it is species-invariant
+  # because the design covariates do not vary by species (only the response does).
+  cell_rows <- match(sites_lvl, data[[site]])
+  cell_data <- data[cell_rows, , drop = FALSE]
+  rownames(cell_data) <- NULL
+
+  # Shared visit-level covariate grid (the det.covs matrices). The visit-level
+  # covariates are plot attributes (one value per site x visit cell), shared
+  # across the species observed at that plot, so the grid is built from the FULL
+  # frame -- one record per (site, visit) cell -- NOT from a single species,
+  # which would leave a species' unvisited cells NA in the shared design.
+  visits_sp <- NULL
+  if (!is.null(det.covs)) {
+    cell_first <- !duplicated(data[c(site, visit)])
+    vdf <- data[cell_first, , drop = FALSE]
+    visits_sp <- tobs_data(vdf, y = response, site = site, visit = visit,
+                           type = "occurrence", det.covs = det.covs,
+                           sites = sites_lvl, visits = visits_lvl)$det.covs
+  }
+
+  y_list    <- vector("list", B)
+  ypos_list <- vector("list", B)
+  for (b in seq_len(B)) {
+    sp_df <- data[sp_raw == labels[b], , drop = FALSE]
+    od <- tobs_data(sp_df, y = response, site = site, visit = visit,
+                    type = "occurrence",
+                    sites = sites_lvl, visits = visits_lvl)
+    op <- tobs_data(sp_df, y = y_pos, site = site, visit = visit,
+                    type = "cover",
+                    sites = sites_lvl, visits = visits_lvl)
+    yp <- op$y
+    yp[is.na(yp)] <- 0                 # cover meaningful only where y == 1
+    y_list[[b]]    <- od$y
+    ypos_list[[b]] <- yp
+  }
+  names(y_list) <- labels
+
+  # The detection / cover formulas reference visit-level covariates by name; the
+  # batch driver consumes `visits` (the det.covs matrices) the same way the
+  # single-species path does. dots$y_pos is replaced by the per-species list;
+  # site / visit / response / det.covs are batch-build keys, not fitter args.
+  fit_dots <- dots
+  fit_dots$site <- NULL; fit_dots$visit <- NULL
+  fit_dots$response <- NULL; fit_dots$det.covs <- NULL
+  fit_dots$y_pos <- ypos_list
+
+  .tobs_fit_occu_cover_batch(
+    tobs_args = list(formula = formula, data = cell_data, family = family,
+                     detection = detection, visits = visits_sp,
+                     method = method, priors = priors, control = control,
+                     dots = fit_dots),
+    y = y_list, B = B)
+}
+
+# Per-species cover() batch: each species is an independent single-species
+# cover() fit on the shared cell-level design, looped through tobs() itself (so
+# each fit is byte-identical to a separate cover() call). Returns a `tobs_batch`
+# with the same shape as the occu_cover looped backend.
+.tobs_fit_cover_by <- function(formula, data, family, method, priors, control,
+                               by, site, response, labels, sp_raw, dots) {
+  B <- length(labels)
+  sites_lvl <- unique(data[[site]])
+  cell_rows <- match(sites_lvl, data[[site]])
+  cell_data <- data[cell_rows, , drop = FALSE]
+  rownames(cell_data) <- NULL
+
+  # Cover is single-replicate: one response value per site. Align each species'
+  # cover vector to the shared site set; a site the species never reports is NA
+  # (dropped from both arms by the cover encoder, i.e. not observed there).
+  fit_dots <- dots
+  fit_dots$site <- NULL; fit_dots$response <- NULL
+  fit_dots$visit <- NULL; fit_dots$det.covs <- NULL; fit_dots$y_pos <- NULL
+
+  fits <- vector("list", B)
+  for (b in seq_len(B)) {
+    sp_df <- data[sp_raw == labels[b], , drop = FALSE]
+    yv <- sp_df[[response]][match(sites_lvl, sp_df[[site]])]
+    call_args <- c(
+      list(formula = formula, data = cell_data, family = family,
+           y = as.numeric(yv), method = method, priors = priors,
+           control = control),
+      fit_dots)
+    fits[[b]] <- do.call(tobs, call_args)
+  }
+  names(fits) <- labels
+
+  structure(
+    list(fits = fits, species = labels, n_species = B,
+         family = family, method = method, backend = "looped"),
+    class = "tobs_batch")
+}
+
+
+# ---------------------------------------------------------------------------
 # S3 surface for tobs_batch
 # ---------------------------------------------------------------------------
 
@@ -315,9 +512,9 @@ coef.tobs_batch <- function(object, ...) {
 #' @param species Species label (character) or index (integer).
 #' @return The single-species `tobs_fit` for that species.
 #' @export
-tobs_batch_fit <- function(x, species) {
+tobs_get <- function(x, species) {
   if (!inherits(x, "tobs_batch")) {
-    stop("tobs_batch_fit(): `x` must be a tobs_batch.", call. = FALSE)
+    stop("tobs_get(): `x` must be a tobs_batch.", call. = FALSE)
   }
   x$fits[[species]]
 }

@@ -1,6 +1,17 @@
 # tulpaObs NEWS
 
-## 0.0.35 (2026-06-14)
+## 0.0.35 (2026-06-15)
+
+* feat(tobs): `tobs()` gains a `by = "<species_col>"` argument for per-species
+  batched fitting. Given a long / plot-level `data` frame and a species column,
+  `tobs()` splits by species, builds each species' response onto one shared
+  site x visit grid (via `tobs_data()`), and routes the per-species responses
+  through the batched-independent driver, returning a `tobs_batch`. Scoped to
+  `occu_cover()` and `cover()`. The split only reorganises the input: each
+  species' fit is identical to the hand-built multi-response batch and to an
+  independent single-species fit (equivalence tested to 1e-10).
+* `tobs_batch_fit()` renamed to `tobs_get()`: it extracts one species' fit from a
+  `tobs_batch`, and the old name read like a fitter.
 
 * fix(cover): arm-specific spatial fields (single-arm `spatial(~ ... || node,
   to = "presence" / "positive")`, `method = "nested_laplace"`) are now projected

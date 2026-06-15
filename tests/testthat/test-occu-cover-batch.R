@@ -169,5 +169,5 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   # S3 surface.
   expect_type(coef(batch), "list")
   expect_named(coef(batch), c("a", "b"))
-  expect_identical(tobs_batch_fit(batch, "b"), batch$fits[["b"]])
+  expect_identical(tobs_get(batch, "b"), batch$fits[["b"]])
 })

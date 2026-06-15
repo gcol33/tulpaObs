@@ -12,7 +12,9 @@ tobs_data(
   type = c("occurrence", "abundance", "cover"),
   occ.covs = NULL,
   det.covs = NULL,
-  coords = NULL
+  coords = NULL,
+  sites = NULL,
+  visits = NULL
 )
 }
 \arguments{
@@ -35,6 +37,14 @@ preserves continuous values (it does not coerce the response to integer).}
 \item{det.covs}{Character vector of visit-level covariate names.}
 
 \item{coords}{Character vector of length 2 for coordinate columns.}
+
+\item{sites}{Optional site level set. When supplied, the site x visit grid
+uses these site identifiers in this order (rather than \code{df}'s
+first-appearance order), so a subset of \code{df} pivots onto a fixed,
+externally-defined site grid; site values in \code{df} outside the set error.}
+
+\item{visits}{Optional visit level set, analogous to \code{sites} for the visit
+axis (default the sorted unique visits in \code{df}).}
 }
 \value{
 An \code{tobs_data} object.

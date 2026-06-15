@@ -41,44 +41,48 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #' @param occ.covs Character vector of site-level covariate names.
 #' @param det.covs Character vector of visit-level covariate names.
 #' @param coords Character vector of length 2 for coordinate columns.
+#' @param sites Optional site level set. When supplied, the site x visit grid
+#'   uses these site identifiers in this order (rather than `df`'s
+#'   first-appearance order), so a subset of `df` pivots onto a fixed,
+#'   externally-defined site grid; site values in `df` outside the set error.
+#' @param visits Optional visit level set, analogous to `sites` for the visit
+#'   axis (default the sorted unique visits in `df`).
 #' @return An `tobs_data` object.
 #' @export
 tobs_data <- function(df, y, site, visit,
                       type = c("occurrence", "abundance", "cover"),
                       occ.covs = NULL, det.covs = NULL,
-                      coords = NULL) {
+                      coords = NULL,
+                      sites = NULL, visits = NULL) {
   type <- match.arg(type)
   if (!is.data.frame(df)) stop("df must be a data.frame")
   for (col in c(y, site, visit)) {
     if (!col %in% names(df)) stop(sprintf("column '%s' not found in df", col))
   }
 
-  sites <- unique(df[[site]])
+  # Site / visit level sets. By default they are read from `df` (first-appearance
+  # order for sites, sorted for visits). An external set (`sites` / `visits`) is
+  # supplied by the per-species batch builder so every species pivots onto ONE
+  # canonical site x visit grid (a species absent at a site must still occupy
+  # that site's row, aligned with the shared cell-level design); rows / columns
+  # the species never visits stay NA and are validated against the level set.
+  if (is.null(sites)) sites <- unique(df[[site]])
+  if (is.null(visits)) visits <- sort(unique(df[[visit]]))
   n_sites <- length(sites)
-  visits <- sort(unique(df[[visit]]))
   max_visits <- length(visits)
 
-  # Site x visit response matrix. The response type drives both the storage
-  # type and the validation: occurrence / abundance are integer (counts), cover
-  # is a continuous proportion kept as double -- coercing it to integer would
-  # silently truncate every value < 1 to zero.
   si <- match(df[[site]], sites)
   vi <- match(df[[visit]], visits)
-  yv <- df[[y]]
-  if (type == "cover") {
-    if (any(yv < 0 | yv > 1, na.rm = TRUE))
-      stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
-    y_mat <- matrix(NA_real_, n_sites, max_visits)
-    y_mat[cbind(si, vi)] <- as.numeric(yv)
-  } else {
-    yi <- as.integer(yv)
-    if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
-      stop("tobs_data(type = 'occurrence'): y must be 0/1")
-    if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
-      stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
-    y_mat <- matrix(NA_integer_, n_sites, max_visits)
-    y_mat[cbind(si, vi)] <- yi
+  if (anyNA(si)) {
+    stop("tobs_data(): site value(s) in df are not in the supplied `sites` set.",
+         call. = FALSE)
   }
+  if (anyNA(vi)) {
+    stop("tobs_data(): visit value(s) in df are not in the supplied `visits` set.",
+         call. = FALSE)
+  }
+
+  y_mat <- .tobs_long_response_matrix(df[[y]], si, vi, n_sites, max_visits, type)
   rownames(y_mat) <- sites
 
   # Extract site-level covariates
@@ -110,6 +114,31 @@ tobs_data <- function(df, y, site, visit,
 
   tobs_format(y = y_mat, occ.covs = occ_df, det.covs = det_list,
               coords = coord_mat)
+}
+
+# Fill a site x visit response matrix from a long response vector at 2D indices
+# (`si`, `vi`). The single source of truth for the long -> matrix pivot used by
+# `tobs_data()` and the per-species `by=` batch builder. The response `type`
+# drives both storage and validation: occurrence / abundance are integer
+# (counts), cover is a continuous proportion kept as double -- coercing it to
+# integer would truncate every value < 1 to zero. Cells not addressed by
+# (`si`, `vi`) stay NA (column-major-safe: 2D indexing, never a linear slot).
+.tobs_long_response_matrix <- function(yv, si, vi, n_sites, max_visits, type) {
+  if (type == "cover") {
+    if (any(yv < 0 | yv > 1, na.rm = TRUE))
+      stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
+    y_mat <- matrix(NA_real_, n_sites, max_visits)
+    y_mat[cbind(si, vi)] <- as.numeric(yv)
+  } else {
+    yi <- as.integer(yv)
+    if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
+      stop("tobs_data(type = 'occurrence'): y must be 0/1")
+    if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
+      stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
+    y_mat <- matrix(NA_integer_, n_sites, max_visits)
+    y_mat[cbind(si, vi)] <- yi
+  }
+  y_mat
 }
 
 #' Format multi-species occupancy data

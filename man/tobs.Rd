@@ -15,6 +15,7 @@ tobs(
     "nested_laplace", "nested_laplace_sla", "nuts"),
   priors = NULL,
   control = list(),
+  by = NULL,
   ...
 )
 }
@@ -196,13 +197,31 @@ sampler control (e.g. \code{n.chains}) to a Laplace method, a Laplace control
 (e.g. \code{max.iter}) to \code{"nuts"}, \code{seed} to a deterministic route, or an
 unrecognized name raises an error rather than being silently ignored.}
 
+\item{by}{optional name of a species column for a per-species batched fit
+(\code{occu_cover()} / \code{cover()} only). When supplied, \code{data} is a long,
+plot-level frame: one row per site-visit (\code{occu_cover()}) or per site
+(\code{cover()}), with \code{by} giving the species. \code{tobs()} splits \code{data} by that
+column, builds each species' response onto one shared site x visit grid
+(via \code{\link[=tobs_data]{tobs_data()}}), fits the B species independently, and returns a
+\code{tobs_batch}. Per-species fits are statistically independent (no pooling) --
+identical to fitting each species with a separate single-species \code{tobs()}
+call; for a community model that borrows strength across species use
+\code{\link[=ms_occu_cover]{ms_occu_cover()}}. The long -> response pivot needs the column names: pass
+\verb{site = } and \verb{response = } (the detection 0/1 column for \code{occu_cover()},
+the cover column for \code{cover()}), plus, for \code{occu_cover()}, \verb{visit = } (the
+replicate column) and \verb{y_pos = } (the cover column) and any visit-level
+\verb{det.covs = }. Site-level covariates (those the \code{formula} / \code{detection}
+reference at the cell level) are read as the first row per site, the way
+\code{\link[=tobs_data]{tobs_data()}}\verb{(occ.covs = )} does.}
+
 \item{...}{family-specific named arguments forwarded to the underlying
 engine builder.}
 }
 \value{
 An object of class \code{c("tobs_fit", "<family>_fit", "tulpa_fit")}.
 When \code{control$n.seeds > 1}, a \code{tobs_stack} ensemble of the seed-offset
-refits is returned instead (see \code{\link[=tobs_stack]{tobs_stack()}}).
+refits is returned instead (see \code{\link[=tobs_stack]{tobs_stack()}}). When \code{by} is supplied, a
+\code{tobs_batch} of per-species fits is returned (see \code{\link[=tobs_get]{tobs_get()}}).
 }
 \description{
 Unified entry point for occupancy, abundance, distance, removal, and related

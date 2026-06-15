@@ -174,12 +174,29 @@
 #'   sampler control (e.g. `n.chains`) to a Laplace method, a Laplace control
 #'   (e.g. `max.iter`) to `"nuts"`, `seed` to a deterministic route, or an
 #'   unrecognized name raises an error rather than being silently ignored.
+#' @param by optional name of a species column for a per-species batched fit
+#'   (`occu_cover()` / `cover()` only). When supplied, `data` is a long,
+#'   plot-level frame: one row per site-visit (`occu_cover()`) or per site
+#'   (`cover()`), with `by` giving the species. `tobs()` splits `data` by that
+#'   column, builds each species' response onto one shared site x visit grid
+#'   (via [tobs_data()]), fits the B species independently, and returns a
+#'   `tobs_batch`. Per-species fits are statistically independent (no pooling) --
+#'   identical to fitting each species with a separate single-species `tobs()`
+#'   call; for a community model that borrows strength across species use
+#'   [ms_occu_cover()]. The long -> response pivot needs the column names: pass
+#'   `site = ` and `response = ` (the detection 0/1 column for `occu_cover()`,
+#'   the cover column for `cover()`), plus, for `occu_cover()`, `visit = ` (the
+#'   replicate column) and `y_pos = ` (the cover column) and any visit-level
+#'   `det.covs = `. Site-level covariates (those the `formula` / `detection`
+#'   reference at the cell level) are read as the first row per site, the way
+#'   [tobs_data()]`(occ.covs = )` does.
 #' @param ... family-specific named arguments forwarded to the underlying
 #'   engine builder.
 #'
 #' @return An object of class `c("tobs_fit", "<family>_fit", "tulpa_fit")`.
 #'   When `control$n.seeds > 1`, a `tobs_stack` ensemble of the seed-offset
-#'   refits is returned instead (see [tobs_stack()]).
+#'   refits is returned instead (see [tobs_stack()]). When `by` is supplied, a
+#'   `tobs_batch` of per-species fits is returned (see [tobs_get()]).
 #'
 #' @examples
 #' \dontrun{
@@ -205,6 +222,7 @@ tobs <- function(formula,
                                 "nested_laplace", "nested_laplace_sla", "nuts"),
                  priors     = NULL,
                  control    = list(),
+                 by         = NULL,
                  ...) {
 
   method <- match.arg(method)
@@ -223,6 +241,20 @@ tobs <- function(formula,
       "not a ", paste(class(family), collapse = "/"), ".",
       call. = FALSE
     )
+  }
+
+  # Per-species batched fit (`by = "<species_col>"`). `data` is long / plot-level
+  # here; split it by species, build each species' response onto one shared
+  # site x visit grid by REUSING the single-species long -> matrix construction
+  # (tobs_data()), then route the per-species responses through the same batched-
+  # independent driver as the hand-built multi-response `y` list below. Returns a
+  # `tobs_batch`. Scoped to occu_cover() / cover() (the families with a per-plot
+  # response that a species column splits); errors for any other family.
+  if (!is.null(by)) {
+    return(.tobs_fit_by_species(
+      formula = formula, data = data, family = family, detection = detection,
+      visits = visits, method = method, priors = priors, control = control,
+      by = by, dots = list(...)))
   }
 
   # Response on the top formula LHS (gcol33/tulpaObs#66). A single-vector-response
