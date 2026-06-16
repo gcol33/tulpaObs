@@ -1,5 +1,12 @@
 # tulpaObs NEWS
 
+## 0.0.42 (2026-06-16)
+
+* build: the `tulpa` dependency floor is raised to `tulpa (>= 0.0.36)`, locking
+  tulpaObs to the matching tulpa release (the two are ABI-coupled via
+  `LinkingTo: tulpa`). The `Remotes` install reference stays at
+  `gcol33/tulpa@v0.0.36`.
+
 ## 0.0.41 (2026-06-16)
 
 * build: the `Remotes` install reference for `tulpa` is updated to
