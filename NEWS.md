@@ -1,5 +1,11 @@
 # tulpaObs NEWS
 
+## 0.0.41 (2026-06-16)
+
+* build: the `Remotes` install reference for `tulpa` is updated to
+  `gcol33/tulpa@v0.0.36` (the current tulpa release). The `Imports` floor stays at
+  `tulpa (>= 0.0.34)`, the minimum API tulpaObs requires.
+
 ## 0.0.40 (2026-06-16)
 
 * `predict()` on an `occu_cover()` joint fit now propagates the visit-level
