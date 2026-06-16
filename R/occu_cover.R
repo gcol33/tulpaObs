@@ -128,7 +128,8 @@
     X_pos_site  = X_pos_site,
     X_det_visit = X_det_visit,
     X_pos_visit = X_pos_visit,
-    formulas    = list(occ = occ_formula, det = det_formula, pos = pos_formula),
+    formulas    = list(occ = occ_formula, det = det_formula, pos = pos_formula,
+                       det_visit = det_visit_formula, pos_visit = pos_visit_formula),
     data        = data,
     process_info = list(
       list(name = "psi", p = ncol(X_occ),

@@ -188,6 +188,40 @@ test_that("a weighted areal term fits standalone occu() on the nested-Laplace pa
     "spatially-varying coefficient")
 })
 
+test_that("predict propagates a positive-arm covariate from newdata (gcol33/tulpaObs#95)", {
+  skip_if_fast()
+  N <- 30L; J <- 4L
+  adj <- .trend_chain_adj(N)
+  sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", adj = adj,
+                             sigma = 0.8, alpha = 1.0, seed = 31337L)
+  d <- .trend_data(sim, N, J)
+  fit <- suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
+    family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled")))
+
+  b_pos <- fit$means[["pos_pos_cov1"]]
+  expect_true(is.finite(b_pos) && abs(b_pos) > 0.05)   # a real positive-arm slope
+
+  # Conditional cover must MOVE with the positive covariate. Before the fix the
+  # visit-level positive covariate was held at the reference, so these were equal.
+  nd0 <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 0)
+  nd1 <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 1)
+  c0 <- as.data.frame(predict(fit, newdata = nd0, type = "cover_cond", nsim = 300, draws = FALSE))
+  c1 <- as.data.frame(predict(fit, newdata = nd1, type = "cover_cond", nsim = 300, draws = FALSE))
+  expect_false(isTRUE(all.equal(c0$mean, c1$mean)))
+  # lognormal conditional cover: log ratio tracks the positive slope.
+  expect_equal(mean(log(c1$mean) - log(c0$mean)), b_pos, tolerance = 0.1)
+
+  # type = "change" over the positive covariate gives a non-zero conditional change.
+  ch <- as.data.frame(predict(fit, newdata = nd0, type = "change",
+                              times = c(0, 1), time_col = "pos_cov1",
+                              nsim = 300, draws = FALSE))
+  expect_true(all(abs(ch$delta_cover_cond) > 1e-8))
+  expect_equal(mean(log(ch$cover_cond_T2) - log(ch$cover_cond_T1)), b_pos, tolerance = 0.1)
+})
+
 test_that("occu_cover trend recovers slopes, both couplings, both fields (10 seeds)", {
   skip_on_cran()
   skip_if_fast()

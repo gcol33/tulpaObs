@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.40 (2026-06-16)
+
+* `predict()` on an `occu_cover()` joint fit now propagates the visit-level
+  positive-arm covariates from `newdata` into the conditional cover, instead of
+  holding them at the reference (gcol33/tulpaObs#95). The positive arm splits a
+  site design (intercept) from its visit-level covariate design at fit time; the
+  predict handler rebuilt only the site design and zero-padded the visit columns,
+  so a positive covariate supplied in `newdata` (e.g. the time axis of a
+  `type = "change"` map) never entered the cover linear predictor and
+  `delta_cover_cond` came out flat at zero. The handler now rebuilds the
+  visit-level positive design from `newdata` with the same builder and column
+  order as the fit. The model retains its visit-level formulas
+  (`formulas$pos_visit`, `formulas$det_visit`) to support this. The occupancy /
+  occurrence arm and the `cover()` hurdle were unaffected.
+
 ## 0.0.38 (2026-06-16)
 
 * `tobs_data()` now preserves factor / character visit-level detection

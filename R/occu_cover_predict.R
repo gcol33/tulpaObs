@@ -58,6 +58,23 @@
       arm, ncol(X_site), p_site, arm), call. = FALSE)
   }
   if (p_site == p_arm) return(X_site)
+  # The remaining coefficients are visit-level positive covariates (e.g. the time
+  # axis, habitat). Rebuild their design from `newdata` -- one prediction row per
+  # cell -- with the same builder, reference (k - 1) coding, and column order as
+  # the fit, so a covariate supplied in `newdata` enters the cover linear
+  # predictor (the change map varies the time covariate this way). A positive
+  # covariate ABSENT from `newdata` is held at its reference (numeric 0 / factor
+  # base level via the zero columns), the long-standing per-cell default.
+  vf <- if (arm == "pos") model$formulas$pos_visit else NULL
+  if (!is.null(vf)) {
+    nd <- newdata
+    for (v in setdiff(all.vars(vf), names(nd))) nd[[v]] <- 0
+    X_visit <- tryCatch(
+      .tobs_build_visit_X(vf, nd, nrow(nd), 1L, arm = "positive cover"),
+      error = function(e) NULL)
+    if (!is.null(X_visit) && ncol(X_site) + ncol(X_visit) == p_arm)
+      return(cbind(X_site, X_visit))
+  }
   cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
 }
 
