@@ -1,5 +1,11 @@
 # tulpaObs NEWS
 
+## 0.0.44 (2026-06-16)
+
+* build: the `tulpa` dependency floor is raised to `tulpa (>= 0.0.37)` and the
+  `Remotes` install reference to `gcol33/tulpa@v0.0.37`, version-matching tulpaObs
+  to the current tulpa release.
+
 ## 0.0.43 (2026-06-16)
 
 * build: the `tulpaMesh` dependency floor is raised to `tulpaMesh (>= 0.1.3)` and
