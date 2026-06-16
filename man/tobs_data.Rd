@@ -34,7 +34,12 @@ preserves continuous values (it does not coerce the response to integer).}
 
 \item{occ.covs}{Character vector of site-level covariate names.}
 
-\item{det.covs}{Character vector of visit-level covariate names.}
+\item{det.covs}{Character vector of visit-level covariate names. A named
+column that is a factor or character is preserved as categorical: the
+downstream detection / positive design expands it to k - 1 dummies for a
+k-level factor, with the factor's first level (for a character column, the
+first level after sorting the unique values) as the reference. Numeric
+columns are kept as a continuous covariate.}
 
 \item{coords}{Character vector of length 2 for coordinate columns.}
 

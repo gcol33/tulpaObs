@@ -385,9 +385,18 @@
     stop(sprintf("%s visit data must have %d rows (one row per unit-visit), got %d",
                  arm, expected_rows, nrow(visit_data)), call. = FALSE)
   }
-  mf <- stats::model.frame(visit_formula, visit_data,
+  # Build with the intercept present so a factor term gets reference (k - 1)
+  # contrast coding; the intercept column is then dropped below when stacking
+  # onto the site arm. Building under a no-intercept formula would expand a
+  # factor to full (k) dummy coding, collinear with the site-level intercept.
+  build_formula <- if (drop_intercept) {
+    stats::update(visit_formula, ~ . + 1)
+  } else {
+    visit_formula
+  }
+  mf <- stats::model.frame(build_formula, visit_data,
                            na.action = stats::na.pass)
-  X <- stats::model.matrix(visit_formula, mf)
+  X <- stats::model.matrix(build_formula, mf)
   X[is.na(X)] <- 0
   if (drop_intercept) {
     int_col <- match("(Intercept)", colnames(X))

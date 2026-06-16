@@ -39,7 +39,12 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #'   an integer site x visit matrix; `"cover"` builds a double matrix and
 #'   preserves continuous values (it does not coerce the response to integer).
 #' @param occ.covs Character vector of site-level covariate names.
-#' @param det.covs Character vector of visit-level covariate names.
+#' @param det.covs Character vector of visit-level covariate names. A named
+#'   column that is a factor or character is preserved as categorical: the
+#'   downstream detection / positive design expands it to k - 1 dummies for a
+#'   k-level factor, with the factor's first level (for a character column, the
+#'   first level after sorting the unique values) as the reference. Numeric
+#'   columns are kept as a continuous covariate.
 #' @param coords Character vector of length 2 for coordinate columns.
 #' @param sites Optional site level set. When supplied, the site x visit grid
 #'   uses these site identifiers in this order (rather than `df`'s
@@ -94,13 +99,27 @@ tobs_data <- function(df, y, site, visit,
     rownames(occ_df) <- NULL
   }
 
-  # Extract visit-level detection covariates (same site x visit layout as y_mat)
+  # Extract visit-level detection covariates (same site x visit layout as y_mat).
+  # Numeric columns become a double matrix; factor / character columns become a
+  # character matrix tagged with their level set so the downstream design keeps
+  # them categorical (k - 1 dummies, first level the reference). Both share the
+  # 2D-index fill (column-major-safe: `cbind(si, vi)`, never a linear slot).
   det_list <- NULL
   if (!is.null(det.covs)) {
     det_list <- lapply(det.covs, function(dc) {
-      mat <- matrix(NA_real_, n_sites, max_visits)
-      mat[cbind(si, vi)] <- as.numeric(df[[dc]])
-      mat
+      col <- df[[dc]]
+      if (is.factor(col) || is.character(col)) {
+        levs <- if (is.factor(col)) levels(col) else sort(unique(col))
+        mat <- matrix(NA_character_, n_sites, max_visits)
+        mat[cbind(si, vi)] <- as.character(col)
+        attr(mat, "tobs_factor") <- TRUE
+        attr(mat, "tobs_levels") <- levs
+        mat
+      } else {
+        mat <- matrix(NA_real_, n_sites, max_visits)
+        mat[cbind(si, vi)] <- as.numeric(col)
+        mat
+      }
     })
     names(det_list) <- det.covs
   }

@@ -1632,7 +1632,14 @@ tobs <- function(formula,
         call. = FALSE)
     }
     flat <- as.data.frame(
-      lapply(visits, function(m) as.vector(t(m))),
+      lapply(visits, function(m) {
+        col <- as.vector(t(m))
+        if (isTRUE(attr(m, "tobs_factor"))) {
+          factor(col, levels = attr(m, "tobs_levels"))
+        } else {
+          col
+        }
+      }),
       stringsAsFactors = FALSE
     )
     return(list(

@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.38 (2026-06-16)
+
+* `tobs_data()` now preserves factor / character visit-level detection
+  covariates as categorical. A column named in `det.covs` that is a factor or
+  character is reshaped into a tagged character site x visit matrix (carrying its
+  level set) instead of being coerced to numeric, and the detection / positive
+  visit design expands it to k - 1 dummies for a k-level factor, with the first
+  level (sorted-unique first value for a character column) the reference. Numeric
+  `det.covs` follow the existing double-matrix path unchanged. The visit design
+  builder now adds k - 1 contrast coding for any visit-level factor (previously a
+  no-intercept visit formula expanded a factor to full k-dummy coding, collinear
+  with the site-level intercept).
+
 ## 0.0.37 (2026-06-15)
 
 * `occu_cover()` spatial NUTS (`method = "nuts"` with a `car_proper()` field on
