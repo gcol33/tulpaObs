@@ -79,12 +79,18 @@ levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_p^2)} and centred. \code
 \item{sigma_re_p}{SD of the \code{re_det_groups} random intercept (default 0.7).}
 
 \item{re_det}{Optional named list of FURTHER per-visit detection random
-intercepts, for crossed or nested designs. Each element
-\code{list(K =, sigma =, prefix =, nested_in =)} adds a factor column (levels
-\verb{<prefix>1..K}) with a centred \code{N(0, sigma^2)} intercept; \code{nested_in = "<name>"} nests its codes within a previously listed grouping (matching
-\code{(1 | parent/child)}), otherwise the grouping is crossed. Truth BLUPs are
-returned (named by the level label a fit reconstructs) in
-\code{truth$re_det[[name]]}.}
+effects, for crossed / nested / slope designs. Each element
+\code{list(K =, sigma =, prefix =, nested_in =, slope_cov =, sigma_slope =, rho =)}
+adds a factor column (levels \verb{<prefix>1..K}). Without \code{slope_cov} it is a
+centred \code{N(0, sigma^2)} random intercept; \code{nested_in = "<name>"} nests its
+codes within a previously listed grouping (matching \code{(1 | parent/child)}),
+otherwise crossed. With \code{slope_cov = "<column>"} (a per-visit covariate,
+generated \code{N(0, 1)} if absent) it is a random slope: a slope-only
+uncorrelated block when \code{rho} is unset, or a correlated intercept + slope
+block (covariance from \code{sigma} / \code{sigma_slope} / \code{rho}) when \code{rho} is given.
+Truth is returned in \code{truth$re_det[[name]]} (named by the level label a fit
+reconstructs): \code{b} / \code{b_slope} BLUP vectors, or the \code{B} BLUP matrix plus
+\code{s0} / \code{s1} / \code{rho} for a correlated slope.}
 
 \item{seed}{Optional integer seed.}
 }

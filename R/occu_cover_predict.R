@@ -99,8 +99,25 @@
     if (is.null(re$var) || !(re$var %in% names(nd))) next
     codes <- match(as.character(nd[[re$var]]), re$levels)
     seen  <- which(!is.na(codes))
-    if (length(seen) > 0L) {
+    if (!length(seen)) next
+    nc <- re$n_coefs %||% 1L
+    if (nc == 1L) {
+      # Random intercept: add the group's per-draw offset (draws is [n x n_groups]).
       off[seen, ] <- off[seen, ] + t(re$draws[, codes[seen], drop = FALSE])
+    } else {
+      # Random slope: draws is coefficient-major [n x (n_coefs * n_groups)]; the
+      # row offset is sum_c w_c[row] * b_draw[group, c], the intercept weight 1 and
+      # each slope weight the covariate value from `newdata` (0 / absent column ->
+      # that coefficient drops out, the same shrink as an unseen level).
+      ng <- re$n_groups
+      for (cc in seq_len(nc)) {
+        nm <- re$coef_names[cc]
+        w  <- if (identical(nm, "(Intercept)")) rep(1, length(seen))
+              else if (nm %in% names(nd)) as.numeric(nd[[nm]][seen])
+              else next
+        cols <- (cc - 1L) * ng + codes[seen]
+        off[seen, ] <- off[seen, ] + w * t(re$draws[, cols, drop = FALSE])
+      }
     }
   }
   off

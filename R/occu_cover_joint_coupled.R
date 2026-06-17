@@ -227,16 +227,19 @@
   }
   n_pos_rows <- length(pos_site)
 
-  # Observation-arm RE codes (gcol33/tulpaObs#102, #103), aligned to the arm rows
+  # Observation-arm RE terms (gcol33/tulpaObs#102, #103), aligned to the arm rows
   # by the same `keep` the detection arm uses. model$re_det / model$re_pos are
-  # per-term LISTS (one entry per crossed / nested term); each term's site-major
-  # code vector is subset by `keep`. The detection arm is one row per valid
-  # visit; per-visit cover (the only mode an obs-arm RE supports) is the same row
-  # set, so both subset by `keep`. Returns a per-term list of code vectors.
-  re_det_codes <- if (!is.null(model$re_det))
-    lapply(model$re_det, function(d) as.integer(d$codes_flat[keep])) else NULL
-  re_pos_codes <- if (!is.null(model$re_pos) && identical(cover_aggregate, "none"))
-    lapply(model$re_pos, function(d) as.integer(d$codes_flat[keep])) else NULL
+  # per-term LISTS (one entry per crossed / nested / slope term); each term's
+  # site-major group codes -- and, for a random slope, its per-row design `Z`
+  # (intercept + covariate columns) -- are subset by `keep`. The detection arm is
+  # one row per valid visit; per-visit cover (the only mode an obs-arm RE
+  # supports) is the same row set, so both subset by `keep`.
+  keep_re_term <- function(d) c(d, list(codes = as.integer(d$codes_flat[keep]),
+    Z = if (!is.null(d$Z)) d$Z[keep, , drop = FALSE] else NULL))
+  re_det_terms <- if (!is.null(model$re_det)) lapply(model$re_det, keep_re_term)
+                  else NULL
+  re_pos_terms <- if (!is.null(model$re_pos) && identical(cover_aggregate, "none"))
+                  lapply(model$re_pos, keep_re_term) else NULL
 
   # `phi` is the pos-arm dispersion -- the lognormal SD on the log scale for
   # `positive = "lognormal"` and the beta precision for `positive = "beta"`
@@ -272,8 +275,8 @@
        pos_site       = as.integer(pos_site),
        n_pos_rows     = n_pos_rows,
        pos_cover_values = pos_cover_values,
-       re_det_codes   = re_det_codes,
-       re_pos_codes   = re_pos_codes)
+       re_det_terms   = re_det_terms,
+       re_pos_terms   = re_pos_terms)
 }
 
 
@@ -551,8 +554,8 @@
   pos_site       <- arms_out$pos_site
   n_pos_rows     <- arms_out$n_pos_rows
   pos_cover_values <- arms_out$pos_cover_values
-  re_det_codes   <- arms_out$re_det_codes
-  re_pos_codes   <- arms_out$re_pos_codes
+  re_det_terms   <- arms_out$re_det_terms
+  re_pos_terms   <- arms_out$re_pos_terms
 
   # Attach the per-arm fixed-effect priors. These reach tulpa's joint engine as
   # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replace
@@ -590,60 +593,82 @@
   # postprocess maps each block back to its `b<k>.sigma` axis and BLUP columns.
   re_grid_default <- exp(seq(log(0.05), log(2), length.out = 6L))
   re_blocks <- list()
-  re_descs  <- list()   # one descriptor per emitted prior block (block order)
+  re_descs  <- list()   # one descriptor per RE TERM (may span several blocks)
   zero_psi <- rep(0L, n_sites)
   zero_p   <- rep(0L, n_v)
   zero_pos <- rep(0L, n_pos_rows)
-  # Emit one iid prior block for an obs/occupancy random intercept term. obs_idx
-  # is the 3-arm (psi, p, pos) per-row group codes with only the targeted arm
-  # carrying codes (the other two zeroed: 0 = no RE for that row, the engine's
-  # scatter skip). Random slopes (n_coefs > 1 / correlated) are gated upstream on
-  # gcol33/tulpa#114, so every term reaching here is a scalar-per-group intercept.
-  add_re_block <- function(arm, codes, grid, desc) {
-    # Random slopes (multi-coefficient / correlated terms) need the weighted-iid
-    # and multivariate free-Sigma blocks tracked in gcol33/tulpa#114; they are
-    # gated at parse in occu_cover(). This guard keeps the invariant explicit so
-    # a slope design can never silently emit a scalar iid block.
-    if (isTRUE(desc$n_coefs > 1L) || isTRUE(desc$correlated)) {
-      stop("occu_cover(): random slopes on a joint-engine RE arm are blocked on ",
-           "gcol33/tulpa#114 (weighted-iid + multivariate free-Sigma blocks).",
-           call. = FALSE)
+  # obs_idx: per-row group codes with only the targeted arm carrying codes (the
+  # other two zeroed: 0 = no RE for that row, the engine's scatter skip).
+  obs_for <- function(arm, codes) switch(arm,
+    psi = list(as.integer(codes), zero_p, zero_pos),
+    p   = list(zero_psi, as.integer(codes), zero_pos),
+    pos = list(zero_psi, zero_p, as.integer(codes)))
+  # Per-arm design-weight list: the targeted arm gets `w` (a coefficient's design
+  # column); the other two get unit weights of the right length (unused under
+  # their 0 obs_idx, but length-matched for the engine's per-arm validation).
+  wt_for <- function(arm, w) {
+    base <- list(rep(1.0, n_sites), rep(1.0, n_v), rep(1.0, n_pos_rows))
+    base[[match(arm, c("psi", "p", "pos"))]] <- as.numeric(w)
+    base
+  }
+  # Emit the prior block(s) for one RE term and record ONE descriptor spanning
+  # them (gcol33/tulpaObs#102, #103):
+  #   * intercept (n_coefs == 1, !correlated): one scalar `iid` block.
+  #   * uncorrelated slope (!correlated, Z present): one weighted `iid` block per
+  #     coefficient -- svc_weight = that coefficient's design column (the
+  #     intercept column is all-ones, so its block is the scalar iid; tulpa#114).
+  #   * correlated slope: one multivariate `miid` block over a free cross-coef
+  #     Sigma -- field_weight = the design columns (tulpa#114).
+  # The descriptor records the [block_start, n_blocks] run, in emission order, so
+  # the postprocess pulls the right latent columns; the blocks trail the field
+  # block(s), so the field copy indices stay valid.
+  add_re_term <- function(arm, codes, grid, Z, n_groups, var, levels,
+                          n_coefs, coef_names, correlated, logchol_grid = NULL) {
+    obs_idx <- obs_for(arm, codes)
+    b0 <- length(re_blocks)
+    if (!isTRUE(correlated)) {
+      for (cc in seq_len(n_coefs)) {
+        blk <- list(type = "iid", n_units = as.integer(n_groups),
+                    sigma_grid = as.numeric(grid), obs_idx = obs_idx)
+        if (!is.null(Z)) blk$svc_weight <- wt_for(arm, Z[, cc])
+        re_blocks[[length(re_blocks) + 1L]] <<- blk
+      }
+    } else {
+      field_weight <- lapply(seq_len(n_coefs),
+                             function(cc) wt_for(arm, Z[, cc]))
+      blk <- list(type = "miid", n_groups = as.integer(n_groups),
+                  n_fields = as.integer(n_coefs), obs_idx = obs_idx,
+                  field_weight = field_weight)
+      # A coarse free-Sigma grid (or the user's) so the block composes with the
+      # shared field + copy under the engine's outer-grid cap (gcol33/tulpa#114).
+      lc <- logchol_grid %||% .occu_cover_miid_logchol_grid(n_coefs)
+      if (!is.null(lc)) blk$logchol_grid <- as.matrix(lc)
+      re_blocks[[length(re_blocks) + 1L]] <<- blk
     }
-    obs_idx <- switch(arm,
-      psi = list(as.integer(codes), zero_p, zero_pos),
-      p   = list(zero_psi, as.integer(codes), zero_pos),
-      pos = list(zero_psi, zero_p, as.integer(codes)))
-    re_blocks[[length(re_blocks) + 1L]] <<- list(
-      type = "iid", n_units = as.integer(desc$n_groups),
-      sigma_grid = as.numeric(grid), obs_idx = obs_idx)
-    re_descs[[length(re_descs) + 1L]] <<- desc
+    re_descs[[length(re_descs) + 1L]] <<- list(
+      arm = arm, var = var, levels = levels,
+      n_groups = as.integer(n_groups), n_coefs = as.integer(n_coefs),
+      coef_names = coef_names, correlated = isTRUE(correlated),
+      has_intercept = identical(coef_names[[1L]], "(Intercept)"),
+      block_start = b0 + 1L, n_blocks = length(re_blocks) - b0)
   }
   if (has_re) {
-    add_re_block("psi", re_spec$group_idx,
-                 dots$re.sigma.grid %||% re_grid_default,
-                 list(arm = "psi", var = re_spec$var %||% NA_character_,
-                      levels = re_spec$levels, n_groups = re_spec$n_groups,
-                      n_coefs = 1L, coef_names = "(Intercept)",
-                      correlated = FALSE))
+    add_re_term("psi", re_spec$group_idx, dots$re.sigma.grid %||% re_grid_default,
+                NULL, re_spec$n_groups, re_spec$var %||% NA_character_,
+                re_spec$levels, 1L, "(Intercept)", FALSE)
   }
   if (has_re_det) {
-    for (t in seq_along(model$re_det)) {
-      d <- model$re_det[[t]]
-      add_re_block("p", re_det_codes[[t]],
-                   dots$re.sigma.grid.p %||% re_grid_default,
-                   list(arm = "p", var = d$var, levels = d$levels,
-                        n_groups = d$n_groups, n_coefs = d$n_coefs,
-                        coef_names = d$coef_names, correlated = d$correlated))
+    for (d in re_det_terms) {
+      add_re_term("p", d$codes, dots$re.sigma.grid.p %||% re_grid_default,
+                  d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
+                  d$correlated, logchol_grid = dots$re.logchol.grid.p)
     }
   }
   if (has_re_pos) {
-    for (t in seq_along(model$re_pos)) {
-      d <- model$re_pos[[t]]
-      add_re_block("pos", re_pos_codes[[t]],
-                   dots$re.sigma.grid.pos %||% re_grid_default,
-                   list(arm = "pos", var = d$var, levels = d$levels,
-                        n_groups = d$n_groups, n_coefs = d$n_coefs,
-                        coef_names = d$coef_names, correlated = d$correlated))
+    for (d in re_pos_terms) {
+      add_re_term("pos", d$codes, dots$re.sigma.grid.pos %||% re_grid_default,
+                  d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
+                  d$correlated, logchol_grid = dots$re.logchol.grid.pos)
     }
   }
 
@@ -906,6 +931,27 @@
   .occu_cover_jc_postprocess(fit, ctx)
 }
 
+# Coarse outer-grid for a correlated-slope `miid` block's free Sigma, in the
+# engine's column-major lower-triangular log-Cholesky coordinates (gcol33/tulpa
+# #114). A p = 2 (intercept + one slope) block -- the common `(1 + x | g)` -- gets
+# a compact (sigma_0, sigma_1, rho) tensor so the block composes with the shared
+# field + copy amplitude under the engine's outer-grid cap; users widen it via
+# `control$re.logchol.grid.p` / `re.logchol.grid.pos`. For p != 2 (multi-slope
+# correlated, rare) we return NULL so the engine fills its own default; such a
+# design is grid-heavy and usually needs an explicit coarse grid.
+.occu_cover_miid_logchol_grid <- function(p, sig_grid = NULL, rho_grid = NULL) {
+  if (!identical(as.integer(p), 2L)) return(NULL)
+  sig_grid <- sig_grid %||% c(0.4, 0.8, 1.4)
+  rho_grid <- rho_grid %||% c(-0.3, 0.3, 0.7)
+  g <- expand.grid(s1 = sig_grid, s2 = sig_grid, rho = rho_grid,
+                   KEEP.OUT.ATTRS = FALSE)
+  out <- cbind(L11 = log(g$s1),
+               L21 = g$rho * g$s2,
+               L22 = log(g$s2 * sqrt(1 - g$rho^2)))
+  colnames(out) <- c("L11", "L21", "L22")
+  as.matrix(out)
+}
+
 # Public hyperparameter name for each RE block, aligned with the descriptor
 # list (gcol33/tulpaObs#103). A lone term on an arm keeps the legacy bare name
 # (sigma_re / sigma_re_p / sigma_re_pos for psi / detection / positive cover);
@@ -1098,13 +1144,17 @@
   }
   field_sd <- sqrt(pmax(field_var, 0))
 
-  # Per-group RE BLUPs (gcol33/tulpaObs#56, #102, #103). The iid blocks trail the
-  # field blocks, so the i-th RE block (in prior / descriptor order `ctx$re_descs`)
-  # is block (n_fields + i) in the multi-block layout; its latent values are a
-  # contiguous run in `modes`. The posterior-mean offset per group is the
-  # grid-weighted mean of those columns (centred), the SD their grid-weighted
-  # posterior SD; the variance component is the block's `b<k>.sigma` axis, named
-  # below. One flat term entry per block (crossed / nested arms carry several).
+  # Per-group RE BLUPs (gcol33/tulpaObs#56, #102, #103). The RE blocks trail the
+  # n_fields field blocks, so term i's blocks sit at layout positions
+  # n_fields + block_start .. (+ n_blocks - 1); each block's latent is a
+  # contiguous run in `modes`. The per-(group, coefficient) posterior-mean offset
+  # is the grid-weighted mean of those columns (centred per coefficient), the SD
+  # their grid-weighted posterior SD. A random intercept / uncorrelated slope has
+  # one `iid` block per coefficient (`block c` -> column `c`); a correlated slope
+  # is one `miid` block whose latent is coefficient-major (field a, group g at
+  # (a-1)*n_groups + g), reshaped to [n_groups x n_coefs]. `latent_idx` is the
+  # coefficient-major column run (the predict draws reshape it identically). The
+  # per-coefficient variance / correlation is filled from the hyper axes below.
   re_descs <- ctx$re_descs %||% list()
   re_sig_names <- .occu_cover_re_sigma_names(re_descs)
   re_terms <- vector("list", length(re_descs))
@@ -1112,17 +1162,34 @@
     bstart <- layout$block_start
     bsize  <- layout$block_size
     for (i in seq_along(re_descs)) {
-      re_bidx <- n_fields + i
-      if (is.null(bstart) || length(bstart) < re_bidx) next
-      ucol  <- bstart[re_bidx] + seq_len(bsize[re_bidx])
-      u_mod <- modes[, ucol, drop = FALSE]
-      u_hat <- as.numeric(crossprod(w, u_mod))
-      u_var <- as.numeric(crossprod(w, u_mod^2)) - u_hat^2
-      re_terms[[i]] <- c(ctx$re_descs[[i]],
-                         list(mean = u_hat - mean(u_hat),
-                              sd   = sqrt(pmax(u_var, 0)),
-                              sigma_name = re_sig_names[i],
-                              latent_idx = as.integer(ucol)))
+      d   <- re_descs[[i]]
+      nc  <- d$n_coefs; ng <- d$n_groups
+      lay <- n_fields + d$block_start + seq_len(d$n_blocks) - 1L
+      if (is.null(bstart) || length(bstart) < max(lay)) next
+      B_mean <- matrix(0, ng, nc); B_sd <- matrix(0, ng, nc); lat <- integer(0)
+      grid_moments <- function(cols) {
+        u_mod <- modes[, cols, drop = FALSE]
+        u_hat <- as.numeric(crossprod(w, u_mod))
+        list(mean = u_hat, var = as.numeric(crossprod(w, u_mod^2)) - u_hat^2)
+      }
+      if (!isTRUE(d$correlated)) {
+        for (cc in seq_len(nc)) {
+          cols <- bstart[lay[cc]] + seq_len(bsize[lay[cc]])   # length n_groups
+          mom  <- grid_moments(cols)
+          B_mean[, cc] <- mom$mean - mean(mom$mean)
+          B_sd[, cc]   <- sqrt(pmax(mom$var, 0))
+          lat <- c(lat, cols)
+        }
+      } else {
+        cols <- bstart[lay[1L]] + seq_len(bsize[lay[1L]])     # n_coefs*n_groups
+        mom  <- grid_moments(cols)
+        Hm <- matrix(mom$mean, ng, nc); Hs <- matrix(sqrt(pmax(mom$var, 0)), ng, nc)
+        for (cc in seq_len(nc)) B_mean[, cc] <- Hm[, cc] - mean(Hm[, cc])
+        B_sd[] <- Hs
+        lat <- cols
+      }
+      re_terms[[i]] <- c(d, list(blup_mat = B_mean, blup_sd_mat = B_sd,
+                                 prior_pos = lay, latent_idx = as.integer(lat)))
     }
     re_terms <- Filter(Negate(is.null), re_terms)
   }
@@ -1177,6 +1244,23 @@
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
+  # put_derived stores the grid-weighted moments of a DERIVED per-cell quantity
+  # (e.g. a sigma / correlation reconstructed from log-Cholesky axes), so it is
+  # marginalized over the joint posterior rather than plugged in at the mode.
+  put_derived <- function(public, vals) {
+    vals <- as.numeric(vals)
+    mn <- sum(w * vals); vv <- sum(w * vals^2) - mn^2
+    hyper_means[[public]] <<- mn
+    hyper_sds  [[public]] <<- sqrt(max(vv, 0))
+    hyper_vals [[public]] <<- vals
+    hyper_names <<- c(hyper_names, public)
+  }
+  # Clean a coefficient name for use in a hyperparameter name: `(Intercept)` ->
+  # `intercept`, other punctuation collapsed to `_`.
+  .re_coef_tag <- function(x) {
+    x <- gsub("\\(Intercept\\)", "intercept", x)
+    gsub("(^_|_$)", "", gsub("[^A-Za-z0-9]+", "_", x))
+  }
   # A per-group RE block also forces the multi-block driver (its iid block is an
   # extra prior block), so the field axes carry the `b<k>.` names even without a
   # trend field. Each RE block's variance is its `b<n_fields+i>.sigma` axis.
@@ -1212,13 +1296,6 @@
         rho_mat[k, cc] <- Sig[a, b] / max(sds_k[a] * sds_k[b], 1e-12); cc <- cc + 1L
       }
     }
-    put_derived <- function(public, vals) {
-      mn <- sum(w * vals); vv <- sum(w * vals^2) - mn^2
-      hyper_means[[public]] <<- mn
-      hyper_sds  [[public]] <<- sqrt(max(vv, 0))
-      hyper_vals [[public]] <<- as.numeric(vals)
-      hyper_names <<- c(hyper_names, public)
-    }
     for (a in seq_len(p_f)) put_derived(sprintf("sigma_mcar%d", a), sd_mat[, a])
     cc <- 1L
     for (a in seq_len(p_f - 1L)) for (b in (a + 1L):p_f) {
@@ -1240,8 +1317,57 @@
       pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
     }
-    for (i in seq_along(re_descs)) {
-      pick2(re_sig_names[i], sprintf("b%d.sigma", n_fields + i))
+    # Per-term RE variance components. An intercept / uncorrelated-slope term
+    # has one `b<P>.sigma` axis per coefficient; a correlated-slope term has one
+    # `miid` block whose log-Cholesky axes b<P>.L<ij> reconstruct a free Sigma,
+    # marginalized to per-coefficient SDs + cross-correlations over the grid. The
+    # per-coefficient SD (and correlation) are stored back on `re_terms` so the
+    # fit summary keeps the structured covariance, not just the scalar names.
+    for (i in seq_along(re_terms)) {
+      trm  <- re_terms[[i]]
+      base <- re_sig_names[i]
+      nc   <- trm$n_coefs; cn <- trm$coef_names; PP <- trm$prior_pos
+      tags <- vapply(cn, .re_coef_tag, character(1))
+      sigma_vec <- stats::setNames(rep(NA_real_, nc), cn)
+      cor_mat   <- NULL
+      if (!isTRUE(trm$correlated)) {
+        for (cc in seq_len(nc)) {
+          nm <- if (nc == 1L) base else paste0(base, "_", tags[cc])
+          pick2(nm, sprintf("b%d.sigma", PP[cc]))
+          sigma_vec[cc] <- hyper_means[[nm]] %||% NA_real_
+        }
+      } else {
+        p_f <- nc; P1 <- PP[1L]
+        axis_nm <- character(p_f * (p_f + 1L) / 2L); tt <- 1L
+        for (jj in seq_len(p_f)) for (ii in jj:p_f) {
+          axis_nm[tt] <- sprintf("b%d.L%d%d", P1, ii, jj); tt <- tt + 1L
+        }
+        lc_cols <- match(axis_nm, tg_names)
+        n_ok2 <- length(ok_cells)
+        sd_mat2 <- matrix(NA_real_, n_ok2, p_f)
+        n_rho2  <- p_f * (p_f - 1L) / 2L
+        rho_mat2 <- matrix(NA_real_, n_ok2, max(n_rho2, 1L))
+        for (k in seq_len(n_ok2)) {
+          L   <- .cover_mcar_logchol_to_L(as.numeric(tg_ok[k, lc_cols]), p_f)
+          Sig <- L %*% t(L); sds_k <- sqrt(pmax(diag(Sig), 0))
+          sd_mat2[k, ] <- sds_k; rr <- 1L
+          for (a in seq_len(p_f - 1L)) for (b in (a + 1L):p_f) {
+            rho_mat2[k, rr] <- Sig[a, b] / max(sds_k[a] * sds_k[b], 1e-12); rr <- rr + 1L
+          }
+        }
+        cor_mat <- diag(nc)
+        for (cc in seq_len(nc)) {
+          nm <- paste0(base, "_", tags[cc]); put_derived(nm, sd_mat2[, cc])
+          sigma_vec[cc] <- hyper_means[[nm]]
+        }
+        cbase <- sub("^sigma", "cor", base); rr <- 1L
+        for (a in seq_len(nc - 1L)) for (b in (a + 1L):nc) {
+          nm <- paste0(cbase, "_", tags[a], "_", tags[b]); put_derived(nm, rho_mat2[, rr])
+          cor_mat[a, b] <- cor_mat[b, a] <- hyper_means[[nm]]; rr <- rr + 1L
+        }
+      }
+      re_terms[[i]]$sigma <- sigma_vec
+      re_terms[[i]]$cor   <- cor_mat
     }
     pick("phi_pos", phi_pos_public)
   } else {
@@ -1438,18 +1564,34 @@
                      keys <- vapply(re_terms, function(t)
                        if (counts[[t$arm]] > 1L) paste0(t$arm, ":", t$var)
                        else t$arm, character(1))
-                     stats::setNames(lapply(re_terms, function(t)
+                     stats::setNames(lapply(re_terms, function(t) {
+                       # Intercept term -> per-group BLUP vector (back-compat);
+                       # slope term -> [n_groups x n_coefs] matrix with coef-named
+                       # columns, plus the slope covariate names predict() weights
+                       # rows by. `sigma` is the per-coefficient SD; `cor` the free
+                       # cross-coefficient correlation matrix (NULL when scalar).
+                       nc <- t$n_coefs
+                       blup <- if (nc == 1L) as.numeric(t$blup_mat[, 1L]) else {
+                         m <- t$blup_mat; colnames(m) <- t$coef_names; m }
+                       blup_sd <- if (nc == 1L) as.numeric(t$blup_sd_mat[, 1L]) else {
+                         m <- t$blup_sd_mat; colnames(m) <- t$coef_names; m }
+                       covnms <- if (isTRUE(t$has_intercept)) t$coef_names[-1L]
+                                 else t$coef_names
                        list(arm        = t$arm,
                             var        = if (is.na(t$var)) NULL else t$var,
-                            sigma      = unname(hyper_means[t$sigma_name]),
-                            sigma_sd   = unname(hyper_sds[t$sigma_name]),
-                            blup       = t$mean,
-                            blup_sd    = t$sd,
+                            sigma      = t$sigma,
+                            cor        = t$cor,
+                            blup       = blup,
+                            blup_sd    = blup_sd,
                             n_groups   = t$n_groups,
+                            n_coefs    = nc,
                             coef_names = t$coef_names,
+                            covariate_names = covnms,
+                            has_intercept   = isTRUE(t$has_intercept),
                             correlated = t$correlated,
                             levels     = t$levels,
-                            latent_idx = t$latent_idx)), keys)
+                            latent_idx = t$latent_idx)
+                     }), keys)
                    } else NULL,
     joint_fit    = fit,
     convergence  = list(converged = TRUE, n_iter = NA_integer_)

@@ -332,14 +332,22 @@ jsdm <- function() {
 #' to the population mean. Several crossed terms multiply the outer grid, so set
 #' `control$integration = "ccd"` (and/or coarsen the RE grids) at scale.
 #'
-#' Scope: random **intercepts** (including crossed and nested). A random
-#' **slope** or correlated block (`(x | g)`, `(x || g)`, `(0 + x | g)`) needs the
-#' joint engine's per-row weighted-`iid` and multivariate free-Sigma blocks,
-#' tracked in gcol33/tulpa#114, and is gated with a pointer until that lands; an
-#' RE without a spatial field on the psi arm uses the non-spatial path's RE
+#' Random **slopes** are also supported (tulpa engine >= 0.0.39): an uncorrelated
+#' slope (`(x || g)`, `(0 + x | g)`) is one per-row weighted `iid` block per
+#' coefficient, and a correlated slope (`(1 + x | g)`) one multivariate
+#' free-Sigma `miid` block. A slope term's `fit$re` entry carries an
+#' `[n_groups x n_coefs]` BLUP matrix, a per-coefficient `sigma`, and (correlated)
+#' a `cor` matrix; the hyperparameters are `sigma_re_p_<coef>` and
+#' `cor_re_p_<ci>_<cj>`, marginalized over the grid. `predict()` weights each
+#' coefficient by its covariate column in `newdata` (intercept = 1). A correlated
+#' slope adds `p(p+1)/2` Sigma axes to the outer grid, so its free-Sigma grid uses
+#' a compact default; widen it with `control$re.logchol.grid.p` /
+#' `re.logchol.grid.pos`.
+#'
+#' An RE without a spatial field on the psi arm uses the non-spatial path's RE
 #' instead. The positive-cover RE needs per-visit cover
 #' (`cover_aggregate = "none"`). As with the occupancy-arm RE, each
-#' grid-integrated `sigma_re` carries the binary / small-cluster inner-Laplace
+#' grid-integrated variance carries the binary / small-cluster inner-Laplace
 #' attenuation and is a lower bound on the truth; the BLUPs recover the per-group
 #' structure.
 #'

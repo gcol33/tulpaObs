@@ -183,14 +183,32 @@ ranef.tobs_fit <- function(object, ...) {
     # arms carry their grouping `level` labels (the occupancy arm reports
     # 1..n_groups).
     rows <- lapply(object$re, function(re) {
-      lev <- re$levels %||% as.character(seq_along(re$blup))
-      data.frame(arm     = re$arm,
-                 var     = re$var %||% NA_character_,
-                 group   = lev,
-                 level   = seq_along(re$blup),
-                 blup    = re$blup,
-                 blup_sd = re$blup_sd,
-                 stringsAsFactors = FALSE)
+      bl <- re$blup; bsd <- re$blup_sd
+      if (is.matrix(bl)) {
+        # Random slope: one (group, coefficient) row per cell of the
+        # [n_groups x n_coefs] BLUP matrix, tagged by the coefficient `term`.
+        cn  <- colnames(bl) %||% re$coef_names %||%
+               paste0("coef", seq_len(ncol(bl)))
+        lev <- re$levels %||% as.character(seq_len(nrow(bl)))
+        data.frame(arm     = re$arm,
+                   var     = re$var %||% NA_character_,
+                   group   = rep(lev, times = ncol(bl)),
+                   term    = rep(cn, each = nrow(bl)),
+                   level   = rep(seq_len(nrow(bl)), times = ncol(bl)),
+                   blup    = as.numeric(bl),
+                   blup_sd = as.numeric(bsd),
+                   stringsAsFactors = FALSE)
+      } else {
+        lev <- re$levels %||% as.character(seq_along(bl))
+        data.frame(arm     = re$arm,
+                   var     = re$var %||% NA_character_,
+                   group   = lev,
+                   term    = "(Intercept)",
+                   level   = seq_along(bl),
+                   blup    = bl,
+                   blup_sd = bsd,
+                   stringsAsFactors = FALSE)
+      }
     })
     out <- do.call(rbind, rows)
     rownames(out) <- NULL

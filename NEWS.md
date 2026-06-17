@@ -1,31 +1,35 @@
 # tulpaObs NEWS
 
-## 0.0.48 (2026-06-17)
+## 0.0.49 (2026-06-17)
 
-* `occu_cover()` now accepts a random intercept on the **detection** and
-  **positive-cover** arms on the shared-field nested-Laplace path, e.g.
-  `detection = ~ effort + (1 | habitat)` or `positive = ~ x + re(habitat)`
-  (gcol33/tulpaObs#102). The grouping is per visit (one code per site-visit),
-  distinct from the per-site occupancy-arm random intercept (#56), so a
-  many-level categorical visit covariate (EUNIS habitat, observer) is partially
-  pooled. Each arm's RE joins the joint fit as one `iid` latent block whose
-  variance integrates on the outer grid (`sigma_re_p`, `sigma_re_pos`; tune with
-  `control$re.sigma.grid.p` / `re.sigma.grid.pos`); BLUPs are reported in
-  `fit$re` (a per-term list) and via `ranef()`. `predict()` gains
-  `type = "detection"` and adds each term's BLUP offset when `newdata` carries the
-  grouping column, shrinking unseen / held-out levels to the population mean.
-  **Crossed** (`(1 | habitat) + (1 | observer)`) and **nested**
-  (`(1 | region/site)`) random intercepts are supported: each term joins the fit
-  as its own `iid` block, named `sigma_re_p_<var>` when several share an arm, and
-  `ranef()` / `predict()` handle every term on the arm (gcol33/tulpaObs#103).
-  Several crossed terms multiply the outer grid, so set
-  `control$integration = "ccd"` at scale. A random slope or correlated block
-  (`(x | g)`, `(x || g)`) needs the joint engine's per-row weighted-`iid` and
-  multivariate free-Sigma blocks (gcol33/tulpa#114) and is gated with a pointer
-  until that lands; the non-spatial / NUTS engines are also gated. As with the
-  occupancy-arm RE the grid-integrated variance carries the binary /
-  small-cluster inner-Laplace attenuation (a lower bound); the BLUPs recover the
-  per-group structure.
+* `occu_cover()` supports random effects -- intercepts AND slopes -- on the
+  **detection** and **positive-cover** arms on the shared-field nested-Laplace
+  path, with the usual `lme4` bar or `re()` spelling
+  (gcol33/tulpaObs#102, #103). The grouping is per visit (one code per
+  site-visit), distinct from the per-site occupancy-arm random intercept (#56),
+  so a many-level categorical visit covariate (EUNIS habitat, observer) is
+  partially pooled.
+    - **Intercepts**, including **crossed** (`(1 | habitat) + (1 | observer)`)
+      and **nested** (`(1 | region/site)`): each term is one `iid` latent block,
+      named `sigma_re_p` / `sigma_re_pos` (suffixed by the grouping variable when
+      several share an arm).
+    - **Slopes** (needs the tulpa engine >= 0.0.39, gcol33/tulpa#114): an
+      uncorrelated slope (`(x || g)`, `(0 + x | g)`) is one per-row weighted `iid`
+      block per coefficient; a correlated slope (`(1 + x | g)`) one multivariate
+      free-Sigma `miid` block. A slope term reports an `[n_groups x n_coefs]`
+      BLUP matrix, a per-coefficient `sigma`, and (correlated) a `cor` matrix, all
+      marginalized over the grid.
+  BLUPs are in `fit$re` (a per-term list keyed by arm or `"<arm>:<var>"`) and via
+  `ranef()`. `predict()` gains `type = "detection"` and sums each term's offset
+  (weighting a slope by its covariate column in `newdata`), shrinking unseen /
+  held-out levels to the population mean. Several crossed terms or a correlated
+  slope grow the outer grid, so set `control$integration = "ccd"`; the free-Sigma
+  grid uses a compact default, widened with `control$re.logchol.grid.p` /
+  `re.logchol.grid.pos`. `simulate_occu_cover()` gains a `re_det` argument for
+  crossed / nested / slope detection random-effect truth. As with the
+  occupancy-arm RE the grid-integrated variances carry the binary / small-cluster
+  inner-Laplace attenuation (a lower bound); the BLUPs recover the per-group
+  structure. Needs `tulpa >= 0.0.39`.
 
 ## 0.0.47 (2026-06-17)
 

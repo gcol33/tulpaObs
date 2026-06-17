@@ -201,14 +201,22 @@ arm when \code{newdata} carries the grouping columns and \code{type = "detection
 to the population mean. Several crossed terms multiply the outer grid, so set
 \code{control$integration = "ccd"} (and/or coarsen the RE grids) at scale.
 
-Scope: random \strong{intercepts} (including crossed and nested). A random
-\strong{slope} or correlated block (\code{(x | g)}, \code{(x || g)}, \code{(0 + x | g)}) needs the
-joint engine's per-row weighted-\code{iid} and multivariate free-Sigma blocks,
-tracked in gcol33/tulpa#114, and is gated with a pointer until that lands; an
-RE without a spatial field on the psi arm uses the non-spatial path's RE
+Random \strong{slopes} are also supported (tulpa engine >= 0.0.39): an uncorrelated
+slope (\code{(x || g)}, \code{(0 + x | g)}) is one per-row weighted \code{iid} block per
+coefficient, and a correlated slope (\code{(1 + x | g)}) one multivariate
+free-Sigma \code{miid} block. A slope term's \code{fit$re} entry carries an
+\verb{[n_groups x n_coefs]} BLUP matrix, a per-coefficient \code{sigma}, and (correlated)
+a \code{cor} matrix; the hyperparameters are \verb{sigma_re_p_<coef>} and
+\verb{cor_re_p_<ci>_<cj>}, marginalized over the grid. \code{predict()} weights each
+coefficient by its covariate column in \code{newdata} (intercept = 1). A correlated
+slope adds \code{p(p+1)/2} Sigma axes to the outer grid, so its free-Sigma grid uses
+a compact default; widen it with \code{control$re.logchol.grid.p} /
+\code{re.logchol.grid.pos}.
+
+An RE without a spatial field on the psi arm uses the non-spatial path's RE
 instead. The positive-cover RE needs per-visit cover
 (\code{cover_aggregate = "none"}). As with the occupancy-arm RE, each
-grid-integrated \code{sigma_re} carries the binary / small-cluster inner-Laplace
+grid-integrated variance carries the binary / small-cluster inner-Laplace
 attenuation and is a lower bound on the truth; the BLUPs recover the per-group
 structure.
 }

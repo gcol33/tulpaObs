@@ -141,13 +141,6 @@ test_that("occu_cover() observation RE gates the unsupported configurations", {
   base <- list(data = sim$data, family = occu_cover("lognormal"),
                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
                control = list(progress = FALSE))
-  # A random slope on the detection arm needs the joint-engine weighted-iid /
-  # multivariate free-Sigma blocks tracked in gcol33/tulpa#114; gated until then.
-  expect_error(
-    do.call(tobs, c(list(occurrence = ~ occ_cov1 + icar(graph = adj),
-                         detection = ~ (det_cov1 | habitat), positive = ~ pos_cov1,
-                         method = "nested_laplace"), base)),
-    "tulpa#114")
   # An observation-arm RE needs the joint nested-Laplace engine.
   expect_error(
     do.call(tobs, c(list(occurrence = ~ occ_cov1,
@@ -320,4 +313,164 @@ test_that("occu_cover() crossed detection RE recovers both variances + BLUPs", {
   expect_gt(mn[["cor_o"]], 0.6)
   expect_gt(mn[["sd_h"]], 0.25)
   expect_gt(mn[["sd_o"]], 0.2)
+})
+
+test_that("occu_cover() nested detection RE recovers both levels' BLUPs", {
+  skip_on_cran()
+  skip_if_fast()
+  seeds <- 1:5
+  res <- t(vapply(seeds, function(s) {
+    adj <- .ocor_grid_adj(9L)
+    sim <- simulate_occu_cover(
+      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+      re_det = list(region = list(K = 6L, sigma = 0.7, prefix = "region"),
+                    site   = list(K = 3L, sigma = 0.5, prefix = "s",
+                                  nested_in = "region")),
+      seed = s)
+    fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+                family = occu_cover("lognormal"),
+                detection = ~ det_cov1 + (1 | region/site),
+                positive  = ~ pos_cov1 + copy(spatial()),
+                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+                method = "nested_laplace",
+                control = list(verbose = FALSE, progress = FALSE,
+                               integration = "ccd"))
+    re_r <- fit$re[["p:region"]]; re_s <- fit$re[["p:region:site"]]
+    th_r <- sim$truth$re_det$region$b[re_r$levels]   # align by level label
+    th_s <- sim$truth$re_det$site$b[re_s$levels]     # interaction labels
+    c(cor_r = stats::cor(re_r$blup, th_r),
+      cor_s = stats::cor(re_s$blup, th_s))
+  }, numeric(2)))
+  mn <- colMeans(res)
+  # Both the parent (region) and the nested (region:site) intercepts recover
+  # their per-group structure -- the interaction grouping the desugarer expands.
+  expect_gt(mn[["cor_r"]], 0.55)
+  expect_gt(mn[["cor_s"]], 0.6)
+})
+
+# --- random slopes on the detection arm (#103, consuming tulpa#114) -----------
+
+test_that("occu_cover() uncorrelated random slope: weighted iid block fits + reports", {
+  skip_on_cran()
+  adj <- .ocor_grid_adj(6L)
+  sim <- simulate_occu_cover(
+    N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+    re_det = list(habitat = list(K = 6L, sigma = 0.7, prefix = "hab",
+                                 slope_cov = "area")),
+    seed = 21L)
+  fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+              family = occu_cover("lognormal"),
+              detection = ~ det_cov1 + (0 + area | habitat), positive = ~ pos_cov1,
+              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE,
+                             integration = "ccd"))
+  re <- fit$re[["p"]]
+  expect_false(is.null(re))
+  expect_equal(re$n_coefs, 1L)              # slope-only: one coefficient
+  expect_identical(re$coef_names, "area")
+  expect_false(isTRUE(re$correlated))
+  expect_length(re$blup, 6L)
+  expect_true("sigma_re_p" %in% names(fit$means))
+})
+
+test_that("occu_cover() correlated random slope: miid block fits + reports Sigma", {
+  skip_on_cran()
+  adj <- .ocor_grid_adj(6L)
+  sim <- simulate_occu_cover(
+    N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+    re_det = list(habitat = list(K = 6L, sigma = 0.8, sigma_slope = 0.6,
+                                 rho = 0.5, prefix = "hab", slope_cov = "area")),
+    seed = 22L)
+  # A correlated slope's miid block adds p(p+1)/2 log-Cholesky axes, so the outer
+  # grid trips the engine's >50-cell advisory; expected for a free-Sigma block.
+  fit <- suppressWarnings(tobs(
+    occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
+  re <- fit$re[["p"]]
+  expect_false(is.null(re))
+  expect_equal(re$n_coefs, 2L)
+  expect_true(isTRUE(re$correlated))
+  expect_identical(re$coef_names, c("(Intercept)", "area"))
+  # BLUP is a [n_groups x n_coefs] matrix; sigma a per-coef vector; cor a 2x2.
+  expect_equal(dim(re$blup), c(6L, 2L))
+  expect_length(re$sigma, 2L)
+  expect_equal(dim(re$cor), c(2L, 2L))
+  # The free cross-coefficient correlation is reported on the hyper vector.
+  expect_true(any(grepl("^cor_re_p", names(fit$means))))
+})
+
+test_that("occu_cover() random slope: predict weights the slope covariate", {
+  skip_on_cran()
+  adj <- .ocor_grid_adj(6L); N <- nrow(adj)
+  sim <- simulate_occu_cover(
+    N = N, J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+    re_det = list(habitat = list(K = 6L, sigma = 0.8, sigma_slope = 0.6,
+                                 rho = 0.4, prefix = "hab", slope_cov = "area")),
+    seed = 23L)
+  fit <- suppressWarnings(tobs(
+    occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
+    y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
+  nd <- data.frame(occ_cov1 = sim$data$occ_cov1,
+                   det_cov1 = 0,
+                   area     = 0.8,
+                   habitat  = factor(rep(paste0("hab", 1:6), length.out = N)))
+  pd <- predict(fit, newdata = nd, type = "detection", draws = FALSE)
+  expect_s3_class(pd, "tobs_prediction")
+  expect_true(all(pd$mean > 0 & pd$mean < 1))
+  # An unseen habitat shrinks both coefficients to 0 (population-mean detection).
+  nd$habitat <- factor(rep("newHab", N))
+  pd0 <- predict(fit, newdata = nd, type = "detection", draws = FALSE)
+  p_pop <- stats::plogis(fit$means[["p_(Intercept)"]])
+  expect_equal(pd0$mean, rep(p_pop, N), tolerance = 0.02)
+})
+
+test_that("occu_cover() correlated random slope recovers Sigma + BLUPs", {
+  skip_on_cran()
+  skip_if_fast()
+  seeds <- 1:5
+  res <- t(vapply(seeds, function(s) {
+    adj <- .ocor_grid_adj(9L)
+    sim <- simulate_occu_cover(
+      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+      re_det = list(habitat = list(K = 8L, sigma = 0.8, sigma_slope = 0.6,
+                                   rho = 0.5, prefix = "hab", slope_cov = "area")),
+      seed = s)
+    fit <- suppressWarnings(tobs(
+      occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+      family = occu_cover("lognormal"),
+      detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
+      y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+      method = "nested_laplace",
+      control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
+    re <- fit$re[["p"]]
+    th <- sim$truth$re_det$habitat            # B (groups x 2), s0, s1, rho
+    B  <- th$B[re$levels, , drop = FALSE]
+    c(cor0 = stats::cor(re$blup[, 1L], B[, 1L]),
+      cor1 = stats::cor(re$blup[, 2L], B[, 2L]),
+      s0   = unname(re$sigma[[1L]]),
+      s1   = unname(re$sigma[[2L]]),
+      rho  = unname(re$cor[1L, 2L]))
+  }, numeric(5)))
+  mn <- colMeans(res)
+  # Both coefficient BLUPs recover, both variances are detected (lower bound under
+  # the binary inner-Laplace attenuation), and the cross-correlation is positive.
+  expect_gt(mn[["cor0"]], 0.55)
+  expect_gt(mn[["cor1"]], 0.5)
+  expect_gt(mn[["s0"]], 0.25)
+  expect_gt(mn[["s1"]], 0.2)
+  expect_gt(mn[["rho"]], 0.1)
 })

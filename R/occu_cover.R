@@ -912,23 +912,12 @@
          "carries the RE as a latent block); got method = \"", engine, "\".",
          call. = FALSE)
   }
-  # Random INTERCEPTS (crossed, nested) ride one iid latent block per term and
-  # are supported. A random SLOPE / correlated block needs a per-row weighted-iid
-  # block (uncorrelated) or a multivariate free-Sigma block (correlated) that the
-  # joint multi-block driver does not yet carry; that engine work is tracked in
-  # gcol33/tulpa#114, so gate it here with a clear pointer rather than emit a
-  # block the engine cannot fit (gcol33/tulpaObs#103).
-  obs_has_slope <- (!is.null(det_re_parse) && isTRUE(det_re_parse$has_slope)) ||
-                   (!is.null(pos_re_parse) && isTRUE(pos_re_parse$has_slope))
-  if (obs_has_slope) {
-    stop("occu_cover(): a random SLOPE / correlated random effect on the ",
-         "detection or positive-cover arm (e.g. `(x | g)`, `(x || g)`, ",
-         "`(0 + x | g)`) is not yet wired on the joint nested-Laplace engine; ",
-         "it needs the per-row weighted-iid and multivariate free-Sigma blocks ",
-         "tracked in gcol33/tulpa#114. Random intercepts -- including crossed ",
-         "`(1 | g) + (1 | h)` and nested `(1 | g/h)` -- are supported today.",
-         call. = FALSE)
-  }
+  # Random intercepts (crossed, nested) AND random slopes are supported on the
+  # detection / positive-cover arms (gcol33/tulpaObs#103): an intercept rides one
+  # `iid` block per term, an uncorrelated slope one weighted `iid` block per
+  # coefficient, a correlated slope one multivariate free-Sigma `miid` block.
+  # The slope blocks need tulpa's joint engine >= 0.0.39 (gcol33/tulpa#114), which
+  # the DESCRIPTION Imports floor enforces.
   if (!is.null(det_re_parse)) detection   <- det_re_parse$fe
   if (!is.null(pos_re_parse)) pos_formula <- pos_re_parse$fe
 
@@ -1753,13 +1742,18 @@
 #'   `detection = ~ ... + (1 | habitat)`.
 #' @param sigma_re_p SD of the `re_det_groups` random intercept (default 0.7).
 #' @param re_det Optional named list of FURTHER per-visit detection random
-#'   intercepts, for crossed or nested designs. Each element
-#'   `list(K =, sigma =, prefix =, nested_in =)` adds a factor column (levels
-#'   `<prefix>1..K`) with a centred `N(0, sigma^2)` intercept; `nested_in =
-#'   "<name>"` nests its codes within a previously listed grouping (matching
-#'   `(1 | parent/child)`), otherwise the grouping is crossed. Truth BLUPs are
-#'   returned (named by the level label a fit reconstructs) in
-#'   `truth$re_det[[name]]`.
+#'   effects, for crossed / nested / slope designs. Each element
+#'   `list(K =, sigma =, prefix =, nested_in =, slope_cov =, sigma_slope =, rho =)`
+#'   adds a factor column (levels `<prefix>1..K`). Without `slope_cov` it is a
+#'   centred `N(0, sigma^2)` random intercept; `nested_in = "<name>"` nests its
+#'   codes within a previously listed grouping (matching `(1 | parent/child)`),
+#'   otherwise crossed. With `slope_cov = "<column>"` (a per-visit covariate,
+#'   generated `N(0, 1)` if absent) it is a random slope: a slope-only
+#'   uncorrelated block when `rho` is unset, or a correlated intercept + slope
+#'   block (covariance from `sigma` / `sigma_slope` / `rho`) when `rho` is given.
+#'   Truth is returned in `truth$re_det[[name]]` (named by the level label a fit
+#'   reconstructs): `b` / `b_slope` BLUP vectors, or the `B` BLUP matrix plus
+#'   `s0` / `s1` / `rho` for a correlated slope.
 #' @param seed Optional integer seed.
 #' @return A list with `y` (N x J detection matrix), `y_pos` (N x J cover
 #'   matrix, NA where not detected), `data` (per-site covariate frame, gaining
@@ -1877,7 +1871,15 @@ simulate_occu_cover <- function(N             = 200L,
     for (nm in names(re_det)) {
       s <- re_det[[nm]]
       grp_specs[[nm]] <- list(K = as.integer(s$K), sigma = s$sigma %||% 0.7,
-                              prefix = s$prefix %||% nm, nested_in = s$nested_in)
+                              prefix = s$prefix %||% nm, nested_in = s$nested_in,
+                              # Random-slope fields: `slope_cov` names a per-visit
+                              # covariate column (generated N(0, 1) if absent). With
+                              # `rho` set it is a correlated intercept + slope block
+                              # (Sigma from sigma / sigma_slope / rho); without, a
+                              # slope-only uncorrelated block.
+                              slope_cov = s$slope_cov,
+                              sigma_slope = s$sigma_slope,
+                              rho = s$rho)
     }
   }
   re_codes  <- list()    # within-grouping per-visit code (for nesting)
@@ -1902,12 +1904,40 @@ simulate_occu_cover <- function(N             = 200L,
       sc     <- rep(seq_len(s$K),      times = parent$K)
       labels <- paste0(parent$prefix, pc, ".", s$prefix, sc)  # interaction label
     }
-    b <- stats::rnorm(length(labels), 0, s$sigma); b <- b - mean(b)
-    names(b) <- labels
-    eta_p <- eta_p + b[code]
-    re_truth[[nm]] <- list(b = b, sigma = s$sigma, levels = labels)
-    if (identical(nm, "habitat")) {                      # back-compat truth slots
-      b_p_re <- unname(b); re_det_levels <- labels
+    if (is.null(s$slope_cov)) {
+      # Random intercept.
+      b <- stats::rnorm(length(labels), 0, s$sigma); b <- b - mean(b)
+      names(b) <- labels
+      eta_p <- eta_p + b[code]
+      re_truth[[nm]] <- list(b = b, sigma = s$sigma, levels = labels,
+                             kind = "intercept")
+      if (identical(nm, "habitat")) {                    # back-compat truth slots
+        b_p_re <- unname(b); re_det_levels <- labels
+      }
+    } else {
+      # Random slope on a per-visit covariate (generated if absent).
+      if (is.null(visit_data[[s$slope_cov]]))
+        visit_data[[s$slope_cov]] <- stats::rnorm(N * J)
+      xv <- as.numeric(visit_data[[s$slope_cov]])
+      if (is.null(s$rho)) {
+        # Slope-only uncorrelated block (0 + x | g).
+        b1 <- stats::rnorm(length(labels), 0, s$sigma); b1 <- b1 - mean(b1)
+        names(b1) <- labels
+        eta_p <- eta_p + xv * b1[code]
+        re_truth[[nm]] <- list(b_slope = b1, sigma = s$sigma, levels = labels,
+                               cov = s$slope_cov, kind = "slope")
+      } else {
+        # Correlated intercept + slope block (1 + x | g): (b0, b1) ~ N(0, Sigma).
+        s0 <- s$sigma; s1 <- s$sigma_slope %||% s$sigma; rho <- s$rho
+        Sig <- matrix(c(s0^2, rho * s0 * s1, rho * s0 * s1, s1^2), 2L, 2L)
+        L   <- t(chol(Sig))
+        B2  <- matrix(stats::rnorm(2L * length(labels)), length(labels), 2L) %*% t(L)
+        B2  <- sweep(B2, 2L, colMeans(B2))               # centre each coef
+        rownames(B2) <- labels; colnames(B2) <- c("(Intercept)", s$slope_cov)
+        eta_p <- eta_p + B2[code, 1L] + xv * B2[code, 2L]
+        re_truth[[nm]] <- list(B = B2, s0 = s0, s1 = s1, rho = rho,
+                               levels = labels, cov = s$slope_cov, kind = "corr")
+      }
     }
   }
 

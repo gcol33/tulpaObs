@@ -242,8 +242,15 @@
   re_draws <- NULL
   if (length(re_meta) > 0L) {
     re_draws <- lapply(re_meta, function(r) {
+      # [n_draws x (n_coefs * n_groups)] coefficient-major latent draws; predict
+      # reshapes to per-coefficient per-group and weights by the slope covariate
+      # (a random intercept is the n_coefs = 1 case, [n_draws x n_groups]).
       list(arm = r$arm, var = r$var, levels = r$levels,
-           draws = take(length(r$latent_idx)))   # [n x n_groups]
+           n_coefs = r$n_coefs %||% 1L, n_groups = r$n_groups,
+           coef_names = r$coef_names,
+           covariate_names = r$covariate_names,
+           has_intercept = r$has_intercept %||% TRUE,
+           draws = take(length(r$latent_idx)))
     })
     names(re_draws) <- names(re_meta)
   }
