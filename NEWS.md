@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.51 (2026-06-17)
+
+* `occu_cover()` (and every other) nested-Laplace joint fit gets a usable
+  outer-grid progress signal on a detached / redirected run, via the tulpa
+  0.0.40 reporter fix (gcol33/tulpa#115, now the dependency floor):
+    * the console line advances cell by cell instead of freezing at the serial
+      pilot (`1/N`) -- the master thread emits from inside the parallel region;
+    * the ETA rests on the realised per-cell throughput of completed cells
+      rather than the cheap warm pilot (which projected ~10x optimistic), and is
+      shown as a lower bound (`ETA >=`) until a parallel cell has finished.
+  The detached-run heartbeat file (`control$progress.file`, gcol33/tulpaObs#43)
+  is unchanged and remains the robust signal where a console flush is buffered
+  away.
+* Crossed / nested / correlated and uncorrelated random slopes on the
+  detection / positive-cover arms of `occu_cover()` are verified end to end
+  against simulated truth (crossed-intercept, nested, and correlated-slope
+  parameter recovery; predict() shrink-to-mean for unseen levels), closing
+  gcol33/tulpaObs#103.
+
 ## 0.0.50 (2026-06-17)
 
 * `occu_cover()` random **slopes** on the detection / positive-cover arms now
