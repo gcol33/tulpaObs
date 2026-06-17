@@ -22,6 +22,37 @@
   object$joint_fit %||% object$joint
 }
 
+# Promote the outer Pareto-k diagnostic from a joint nested-Laplace result to the
+# tobs_fit top level (gcol33/tulpaObs#104). The joint engine attaches `pareto_k`,
+# `pareto_k_is_ess`, `pareto_k_scope`, and `pareto_k_proposal_source` (the
+# mode-Hessian-vs-grid-moment proposal source, gcol33/tulpa#116) to the raw
+# result the postprocess wrappers nest at `$joint_fit`. A user diagnostic should
+# read `fit$pareto_k` / `fit$pareto_k_proposal_source` directly rather than reach
+# into `$joint_fit`, so each joint-coupled family splices the result of this into
+# its return list. Returns a named list of the fields actually present (so
+# `c(list(...), .tobs_promote_pareto_k(jf), list(...))` adds exactly those), or
+# NULL when the joint result carries none -- diagnose.k defaults OFF
+# (gcol33/tulpaObs#101), so the fields are NA-or-absent and this is inert unless
+# the diagnostic was requested.
+.tobs_promote_pareto_k <- function(jf) {
+  if (!is.list(jf)) return(NULL)
+  keys <- c("pareto_k", "pareto_k_is_ess", "pareto_k_scope",
+            "pareto_k_proposal_source")
+  present <- keys[keys %in% names(jf)]
+  if (length(present) == 0L) return(NULL)
+  # Inert unless the diagnostic actually ran (gcol33/tulpaObs#101): with
+  # diagnose.k OFF the engine sets every field to NA and returns, so there is
+  # nothing to surface. A diagnostic that ran reports either a finite k-hat or a
+  # finite quad-ESS fallback (flagged by pareto_k_is_ess), so gate on a usable
+  # number rather than mirroring the always-present NA placeholders.
+  k    <- jf$pareto_k
+  ess  <- jf$pareto_k_is_ess
+  ran  <- (length(k) == 1L && is.finite(k)) ||
+          (length(ess) == 1L && !is.na(ess))
+  if (!ran) return(NULL)
+  jf[present]
+}
+
 # Resolve a grid amplitude axis to a per-draw vector. A multi-block fit prefixes
 # the axis with its block (`b<k>.sigma`); a single-block fit uses the bare name.
 # `cells` is the outer-grid cell each draw came from, so the returned length-n

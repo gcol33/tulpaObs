@@ -192,6 +192,20 @@
 #'     node is a full inner solve, so `"ccd"` adds a mode-find without a node
 #'     saving on these coarse grids -- it is opt-in, most useful when a
 #'     multi-axis hyperparameter posterior is well identified.
+#'   * `diagnose.k` — for the joint-coupled spatial families (`occu_cover()`,
+#'     `occu()` spatial, `occu_multiscale_cover()`), whether to score the outer
+#'     hyperparameter Gaussian summary with an importance-sampling Pareto-k.
+#'     Defaults `FALSE` (it re-solves the inner Laplace on the full field
+#'     `k.samples` times; gcol33/tulpaObs#101). When `TRUE`, the fit carries
+#'     `pareto_k` (`< 0.7` = reliable summary), `pareto_k_is_ess` (`TRUE` when the
+#'     k-hat fit declined and the value is the quad-ESS fallback), and
+#'     `pareto_k_proposal_source` at the top level (and in [glance()]).
+#'     `pareto_k_proposal_source` (gcol33/tulpa#116) is `"mode_hessian"` when the
+#'     importance proposal came from the Laplace curvature at the hyperparameter
+#'     mode -- curvature-backed, so the k-hat stays trustworthy even when a sharp
+#'     posterior collapses the integration grid -- or `"grid_moment"` when it came
+#'     from the grid-weighted node covariance, the regime to watch as the grid
+#'     concentrates.
 #'   Stochastic-correction controls (`"laplace_gibbs"` / `"laplace_mi"`):
 #'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
 #'   on `$seed`).

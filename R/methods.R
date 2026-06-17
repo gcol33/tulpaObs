@@ -94,6 +94,46 @@ tulpa::tidy
 #' @export
 tulpa::glance
 
+#' One-row model summary for a tobs_fit
+#'
+#' Extends the generic `tulpa_fit` glance with the joint nested-Laplace outer
+#' Pareto-k diagnostic when present. The joint-coupled families (`occu_cover()`,
+#' `occu()` spatial, `occu_multiscale_cover()`) carry the diagnostic at the fit
+#' top level (gcol33/tulpaObs#104); every other family glances exactly as before.
+#'
+#' @param x A fitted `tobs_fit`.
+#' @param ... Ignored.
+#' @return The base one-row `glance` data frame, with three extra columns on a
+#'   joint-coupled fit that requested the diagnostic (`control$diagnose.k = TRUE`,
+#'   off by default per gcol33/tulpaObs#101):
+#'   \describe{
+#'     \item{`pareto_k`}{The outer importance-sampling \eqn{\hat{k}} for the
+#'       hyperparameter Gaussian summary; `< 0.7` indicates a reliable summary.
+#'       When `pareto_k_is_ess` is `TRUE` this column instead holds the quad-ESS
+#'       fallback (the \eqn{\hat{k}} fit declined).}
+#'     \item{`pareto_k_is_ess`}{`TRUE` when the `pareto_k` column is the quad-ESS
+#'       fallback rather than a fitted \eqn{\hat{k}}.}
+#'     \item{`pareto_k_proposal_source`}{How the importance proposal was built
+#'       (gcol33/tulpa#116): `"mode_hessian"` from the Laplace curvature at the
+#'       hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
+#'       trustworthy even when a sharp posterior collapses the integration grid
+#'       to ~1 cell; `"grid_moment"` from the grid-weighted covariance of the
+#'       integration nodes -- the regime to watch, since it under-disperses (and
+#'       can flag a spurious high \eqn{\hat{k}}) when the grid concentrates.}
+#'   }
+#' @export
+glance.tobs_fit <- function(x, ...) {
+  g <- NextMethod()
+  # Prefer the promoted top-level fields; fall back to the nested joint object so
+  # a fit saved before the promotion (gcol33/tulpaObs#104) still glances its k-hat.
+  pk <- .tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
+  if (is.null(pk)) return(g)
+  if (!is.null(pk$pareto_k))        g$pareto_k <- pk$pareto_k
+  if (!is.null(pk$pareto_k_is_ess)) g$pareto_k_is_ess <- as.logical(pk$pareto_k_is_ess)
+  g$pareto_k_proposal_source <- pk$pareto_k_proposal_source %||% NA_character_
+  g
+}
+
 #' Convergence record for a fitted model
 #'
 #' The public accessor for whether a fit converged, with one return shape across

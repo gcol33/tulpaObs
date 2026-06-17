@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.52 (2026-06-18)
+
+* The joint nested-Laplace outer Pareto-k diagnostic is now reachable on the
+  `tobs_fit` itself (gcol33/tulpaObs#104). It was only at
+  `fit$joint_fit$pareto_k`, so a diagnostic script reading `fit$pareto_k`
+  directly got `NULL`.
+    * `occu_cover()`, `occu()` spatial, and `occu_multiscale_cover()` joint-coupled
+      fits promote `pareto_k`, `pareto_k_is_ess`, `pareto_k_scope`, and
+      `pareto_k_proposal_source` to the fit top level (shared
+      `.tobs_promote_pareto_k()`), and `glance.tobs_fit()` surfaces `pareto_k`,
+      `pareto_k_is_ess`, and `pareto_k_proposal_source`.
+    * `pareto_k_proposal_source` (the tulpa 0.0.41 mode-Hessian proposal,
+      gcol33/tulpa#116, now the dependency floor) reads `"mode_hessian"` -- the
+      importance proposal is curvature-backed, so the k-hat stays trustworthy
+      even when a sharp posterior collapses the integration grid to ~1 cell -- or
+      `"grid_moment"`, the regime to watch, when it comes from the grid-weighted
+      node covariance as the grid concentrates.
+    * Inert when the diagnostic was not requested: `control$diagnose.k` defaults
+      OFF (gcol33/tulpaObs#101), so with it off no field or `glance()` column is
+      added.
+
 ## 0.0.51 (2026-06-17)
 
 * `occu_cover()` (and every other) nested-Laplace joint fit gets a usable

@@ -582,6 +582,7 @@
     log_lik      = log_lik_val,
     N            = sum(model$y >= 0)),
     .tobs_na_nuts_diagnostics(n_draws),
+    .tobs_promote_pareto_k(fit),
     list(
     col_names    = par_names,
     param_names  = par_names,
