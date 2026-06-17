@@ -438,7 +438,12 @@ closed-form derivs drive inner Newton. ~150-300x faster than v3_nested at N=100,
 completes N=200+. 18-seed lognormal + beta recovery
 (`test-occu-cover-joint-coupled.R`); status `"working"` (#96). Shared-field occ
 SLOPE Wald CI mildly anti-conservative small-N (pooled ~0.94; NUTS non-spatial
-calibrated).
+calibrated). Outer Pareto-k diagnostic (`control$diagnose.k`) defaults OFF
+(#101): profiled at 84-90% of joint-fit wall time (it re-solves the inner Laplace
+`k.samples`=200x on the full field, each a super-linear factorization) and only
+reports k-hat — fit byte-identical with it on/off, so opt-in not default; matches
+`occu_joint_coupled` / `occu_multiscale_cover`. `control$diagnose.k = TRUE`
+re-enables. Same default flip on `occu_multiscale_cover_joint_coupled.R`.
 
 **Cover-arm intercept prior (#32)**: on shared-field path cover intercept confounds
 w/ field level over detected cells. `.occu_cover_coupled_arm_priors()` hands pos arm

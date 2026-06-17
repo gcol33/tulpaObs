@@ -1,5 +1,19 @@
 # tulpaObs NEWS
 
+## 0.0.47 (2026-06-17)
+
+* `occu_cover()` and `occu_multiscale_cover()` joint nested-Laplace fits
+  (`method = "nested_laplace"`) now default the outer Pareto-k accuracy
+  diagnostic OFF (`control$diagnose.k = FALSE`), matching `occu_joint_coupled()`.
+  Profiling traced the joint-fit runtime to this diagnostic: it re-solves the
+  inner Laplace `k.samples` (200) times on the full areal field, each a
+  super-linear sparse factorization, and accounted for 84-90% of wall time
+  across field sizes -- the binding limit on per-species fits at fine spatial
+  resolution (gcol33/tulpaObs#101). The diagnostic only reports the k-hat value;
+  the fitted coefficients, SEs, and spatial field are byte-identical with it on
+  or off. Re-enable it with `control$diagnose.k = TRUE` (and size the importance
+  batch with `control$k.samples`).
+
 ## 0.0.46 (2026-06-17)
 
 * `tobs_data(type = "cover")` gains `cover.floor` (default `0`): a cover value at

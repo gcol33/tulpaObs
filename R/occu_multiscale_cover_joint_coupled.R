@@ -301,7 +301,13 @@
       adaptive_grid             = dots$adaptive.grid             %||% TRUE,
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
       adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
-      diagnose_k = dots$diagnose.k %||% TRUE,
+      # Outer Pareto-k-hat accuracy diagnostic defaults OFF (gcol33/tulpaObs#101),
+      # matching the occu_cover_joint_coupled and occu_joint_coupled paths: the
+      # `k_samples` extra inner re-solves on the full areal field dominate the
+      # runtime and scale with the field, while the diagnostic only reports k-hat
+      # (it does not move the betas / SDs / field). Opt in with control$diagnose.k
+      # = TRUE.
+      diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
       checkpoint = dots$checkpoint
     )

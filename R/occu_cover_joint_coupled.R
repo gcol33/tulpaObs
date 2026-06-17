@@ -734,14 +734,18 @@
       # (gcol33/tulpa#69, gcol33/tulpaObs#58).
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
       var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
-      # Outer Pareto-k accuracy diagnostic. The engine draws `k_samples`
-      # hyperparameter points and re-solves the inner Laplace at each; on a large
-      # field the Gaussian proposal lands many draws at extreme sigma where the
-      # inner Newton stalls to max.iter, so the diagnostic can cost far more than
-      # the grid integration itself (~50x at EVA scale). Forward the knobs so a
-      # production fit can disable it (`control$diagnose.k = FALSE`) or shrink the
-      # sample; small fits keep the engine default.
-      diagnose_k = dots$diagnose.k %||% TRUE,
+      # Outer Pareto-k-hat accuracy diagnostic defaults OFF (gcol33/tulpaObs#101).
+      # It draws `k_samples` extra hyperparameter points and re-solves the inner
+      # Laplace at each on the full areal field. Profiling the joint-coupled fit
+      # (dev_notes/_profile_101.R) found this dominates the runtime -- 84-90% of
+      # wall time across field sizes, 6-8x the grid integration -- and each re-solve
+      # carries the same super-linear sparse-factorization cost as a grid cell, so
+      # it is the binding limit on per-species fits at fine spatial resolution. The
+      # diagnostic reports k-hat only; it does not move the betas / SDs / field, so
+      # it is an opt-in validation pass rather than a default cost, matching the
+      # occu_joint_coupled path. Set control$diagnose.k = TRUE to compute it
+      # (control$k.samples sizes the importance batch).
+      diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
       # Grid-cell checkpoint/resume (gcol33/tulpa#50). An EVA-scale occu_cover
       # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
