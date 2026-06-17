@@ -43,6 +43,8 @@
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter,
                    engine = "joint_coupled",
+                   alpha.grid = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
+                   alpha.grid.trend = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    trend = list(weight = "time"))
   ))
 }
@@ -54,7 +56,7 @@
     formula = ~ occ_cov1 + icar(graph = sim$adj) +
                 icar(graph = sim$adj, weight = time),
     data = d$cell_dat, family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1,
+    detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint_coupled")
@@ -134,6 +136,8 @@ test_that("trend field via a weighted formula term matches the control$trend rou
     family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+                   alpha.grid = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
+                   alpha.grid.trend = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    trend = list(weight = "time"))
   ))
   keys <- c("psi_occ_cov1", "p_det_cov1", "pos_pos_cov1", "alpha", "alpha_trend")

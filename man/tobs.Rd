@@ -73,18 +73,23 @@ Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun
 \code{\link[=jsdm]{jsdm()}} and (currently) \code{\link[=cover]{cover()}}.}
 
 \item{positive}{positive-arm (cover) formula for \code{\link[=occu_cover]{occu_cover()}}, e.g.
-\code{~ time.sc + habitat}. The shared occupancy field is carried onto this arm
-by naming it on its \code{spatial(..., name = "occ_space")} term and declaring
-\code{copy("occ_space", alpha = grid(c(0.25, 0.5, 1)))} here:
+\code{~ time.sc + habitat}. The occurrence spatial field is carried onto this arm
+with a \code{copy()} selector, the INLA-style cross-arm edge written in the
+formula. The selector is a constructor, so no field name is needed in the
+common case:
 \itemize{
-\item \code{copy("occ_space", alpha = grid(g))} marginalizes the cross-arm coupling
-amplitude over the grid \code{g}; \verb{alpha = <scalar>} fixes it.
-\item a dotted component reference, \code{copy("occ_space.trend", alpha = ...)},
-scales a single field component (the intercept block is \code{"intercept"},
-a \code{||}-declared trend block is \code{"trend"}), so per-component amplitudes
-stay expressible; the whole-field \code{copy("occ_space")} uses one amplitude
-for every block.
-\item omitting \code{copy()} decouples the arms (the field rides occupancy only).
+\item \code{copy(spatial(), alpha = grid(g))} copies the occurrence arm's spatial
+effect and marginalizes the coupling amplitude over the grid \code{g};
+\verb{alpha = <scalar>} fixes it.
+\item \code{copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))}
+gives a per-component amplitude, keyed by the field's own block names (the
+intercept block and a \code{||}-declared trend column, or its alias \code{trend});
+\verb{terms =} must address every block.
+\item \code{copy(spatial(cell_idx), ...)} disambiguates by grouping variable when the
+occurrence arm carries several spatial effects.
+\item decoupling is structural: omit \code{copy()} so the field rides occupancy only
+(a block with no \code{copy()} is pinned at zero coupling), or write a
+\code{spatial()} term for the cover arm's own field.
 }
 
 Defaults to \code{detection} when unset (a per-visit cover design matching the

@@ -20,6 +20,8 @@ src/*.gch
 # Temp
 test_*.R
 run_*.R
+_*.R
+_*.txt
 
 # dev_notes/ contains math derivations and probe scripts referenced from
 # R/, man/, vignettes, and tests — override the global gitignore rule

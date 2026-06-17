@@ -19,18 +19,23 @@
 #'   `detection` and `positive`. The front-door name for `formula`; supply one
 #'   of the two.
 #' @param positive positive-arm (cover) formula for [occu_cover()], e.g.
-#'   `~ time.sc + habitat`. The shared occupancy field is carried onto this arm
-#'   by naming it on its `spatial(..., name = "occ_space")` term and declaring
-#'   `copy("occ_space", alpha = grid(c(0.25, 0.5, 1)))` here:
+#'   `~ time.sc + habitat`. The occurrence spatial field is carried onto this arm
+#'   with a `copy()` selector, the INLA-style cross-arm edge written in the
+#'   formula. The selector is a constructor, so no field name is needed in the
+#'   common case:
 #'
-#'   * `copy("occ_space", alpha = grid(g))` marginalizes the cross-arm coupling
-#'     amplitude over the grid `g`; `alpha = <scalar>` fixes it.
-#'   * a dotted component reference, `copy("occ_space.trend", alpha = ...)`,
-#'     scales a single field component (the intercept block is `"intercept"`,
-#'     a `||`-declared trend block is `"trend"`), so per-component amplitudes
-#'     stay expressible; the whole-field `copy("occ_space")` uses one amplitude
-#'     for every block.
-#'   * omitting `copy()` decouples the arms (the field rides occupancy only).
+#'   * `copy(spatial(), alpha = grid(g))` copies the occurrence arm's spatial
+#'     effect and marginalizes the coupling amplitude over the grid `g`;
+#'     `alpha = <scalar>` fixes it.
+#'   * `copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))`
+#'     gives a per-component amplitude, keyed by the field's own block names (the
+#'     intercept block and a `||`-declared trend column, or its alias `trend`);
+#'     `terms =` must address every block.
+#'   * `copy(spatial(cell_idx), ...)` disambiguates by grouping variable when the
+#'     occurrence arm carries several spatial effects.
+#'   * decoupling is structural: omit `copy()` so the field rides occupancy only
+#'     (a block with no `copy()` is pinned at zero coupling), or write a
+#'     `spatial()` term for the cover arm's own field.
 #'
 #'   Defaults to `detection` when unset (a per-visit cover design matching the
 #'   detection design).

@@ -526,23 +526,32 @@
 # ---------------------------------------------------------------------------
 # Formula-native cross-arm coupling (INLA-style copy())
 #
-# The occupancy field is named on its `spatial(..., name = "occ_space")` term;
-# the positive (cover) arm declares it carries a scaled copy of that field with
-# `copy("occ_space", alpha = grid(c(...)))`. This is the DAG edge u_occ -> cover
-# placed in the formula. The engine still reads the coupling amplitude axes off
-# `control$alpha.grid` / `control$alpha.grid.trend`, so the formula copy() is
+# The occurrence arm carries a spatial field; the positive (cover) arm declares
+# it carries a scaled copy of that field with a copy() selector, the DAG edge
+# u_occ -> cover placed in the formula:
+#
+#   copy(spatial(), alpha = grid(g))   the unique occurrence spatial effect,
+#                                      one amplitude g over every block
+#   copy(spatial(cell_idx), ...)       disambiguate by grouping variable when
+#                                      the occurrence arm has several spatials
+#   copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))
+#                                      a per-block amplitude
+#   copy("occ_space", ...)             explicit-name reference (lower-level),
+#                                      requires spatial(..., name = "occ_space")
+#
+# No name is needed in the common case: spatial() selects the occurrence arm's
+# spatial effect structurally. The engine still reads the coupling amplitude axes
+# off `control$alpha.grid` / `control$alpha.grid.trend`, so the formula copy() is
 # translated into those axes here and the downstream fit is unchanged:
 #
-#   copy("occ_space", alpha = grid(g)) -> control$alpha.grid       = g
-#                                         control$alpha.grid.trend = g  (if trend)
-#   copy("occ_space.trend", alpha = .) -> control$alpha.grid.trend = .
-#   omitting copy() on the new path     -> alpha pinned at 0 (decoupled)
+#   whole-field amplitude g            -> alpha.grid = g, alpha.grid.trend = g
+#   terms = list(intercept=, time.sc=) -> alpha.grid = ., alpha.grid.trend = .
 #
 # `alpha = grid(g)` integrates over g; a scalar fixes it (a length-1 grid). The
 # block layout follows .occu_cover_spatial_fields(): the unweighted intercept
-# field is block 1, weighted trend field(s) block 2+. The whole-field reference
-# scales every block by one amplitude; a dotted component reference ("<name>.
-# trend" or "<name>.<column>") scales one block.
+# field is block 1, weighted trend field(s) block 2+. Decoupling an arm is
+# structural -- write spatial() (an own field) or omit copy() -- not a magic
+# alpha of 0; 0 is only ever one value you could place in a grid.
 # ---------------------------------------------------------------------------
 
 # Parse copy() terms off the positive formula, returning the stripped
@@ -567,78 +576,119 @@
 # pinned at alpha = 0 (decoupled). On the back-compat path (no name, no copy())
 # control$alpha.grid / .trend are left untouched, so old fits are byte-identical.
 .occu_cover_apply_copy_coupling <- function(copies, spatial_info, control) {
-  field_name <- if (!is.null(spatial_info)) {
-    fn <- Filter(Negate(is.null),
-                 lapply(spatial_info$fields, function(f) f$field_name))
-    if (length(fn)) fn[[1L]] else NULL
-  } else NULL
-
-  new_api <- length(copies) > 0L || !is.null(field_name)
-  if (!new_api) return(control)
+  has_control_alpha <- any(c("alpha.grid", "alpha.grid.trend") %in% names(control))
+  if (has_control_alpha && length(copies) > 0L) {
+    stop("occu_cover(): set the cross-arm coupling with copy() in the positive ",
+         "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
+  }
+  # control$alpha.grid is the low-level amplitude knob: when set (and no copy())
+  # the engine reads the grids as given.
+  if (has_control_alpha) return(control)
 
   if (is.null(spatial_info)) {
-    stop("occu_cover(): copy() on the positive arm needs a named spatial field ",
-         "on the occurrence formula, e.g. ",
-         "spatial(~ 1 || cell, graph = adj, name = \"occ_space\").",
-         call. = FALSE)
-  }
-  if (any(c("alpha.grid", "alpha.grid.trend") %in% names(control))) {
-    stop("occu_cover(): set the cross-arm coupling with copy() in the positive ",
-         "formula OR control$alpha.grid[.trend], not both. The named-field ",
-         "copy() path supersedes the control grids.", call. = FALSE)
-  }
-  if (length(copies) > 0L && is.null(field_name)) {
-    stop("occu_cover(): copy() in the positive formula needs a named occupancy ",
-         "field. Name it on its spatial() term, e.g. ",
-         "spatial(~ 1 || cell, graph = adj, name = \"occ_space\"), then ",
-         "copy(\"occ_space\", alpha = ...).", call. = FALSE)
+    if (length(copies) > 0L) {
+      stop("occu_cover(): copy() needs a spatial field on the occurrence ",
+           "formula, e.g. spatial(~ 1 || cell, graph = adj).", call. = FALSE)
+    }
+    return(control)
   }
 
+  # Coupling is formula-native and explicit: a copy() carries the occurrence
+  # spatial field onto the cover arm with the amplitude it names; a block with no
+  # copy() is decoupled (alpha pinned 0), the field rides occupancy only. There
+  # is no implicit default coupling.
+  #
   # Component labels of the resolved field blocks. Block 1 is the intercept
   # field; blocks 2+ are weighted trend fields. "trend" is an alias for the
-  # single trend block.
-  has_trend <- length(spatial_info$fields) > 1L
+  # single trend block, the column name (e.g. "time.sc") names it explicitly.
+  has_trend  <- length(spatial_info$fields) > 1L
   components <- vapply(spatial_info$fields,
                        function(f) f$component %||% NA_character_, character(1))
+  node       <- spatial_info$group_var
 
-  # Default to decoupled: every block pinned at alpha = 0. A copy() then sets
-  # the amplitude axis on the block(s) it names.
+  # Default to decoupled: every block pinned at alpha = 0. A copy() then sets the
+  # amplitude axis on the block(s) it names.
   alpha_int   <- 0
   alpha_trend <- if (has_trend) 0 else NULL
 
-  for (cp in copies) {
-    if (!is.null(field_name) && !identical(cp$ref, field_name)) {
-      stop(sprintf(paste0(
-        "copy(\"%s\"): no spatial field named \"%s\" on the occurrence formula. ",
-        "The named field is \"%s\" -- reference it as copy(\"%s\")."),
-        cp$id, cp$ref, field_name, field_name), call. = FALSE)
-    }
-    g <- if (is.na(cp$alpha_integrate)) {
-      # copy() with no alpha = : default integrating grid (back-compat default).
-      NULL
-    } else cp$alpha_grid
-
-    comp <- cp$component
+  # Apply one (component, amplitude) assignment, returning the canonical block
+  # role ("intercept" / "trend") it resolved to. `comp = NULL` is the whole
+  # field. `cp_label` names the copy() in any error.
+  apply_component <- function(comp, g, cp_label) {
     if (is.null(comp)) {
-      # Whole-field copy: one amplitude for every block.
-      alpha_int <- g %||% .occu_cover_default_alpha_grid()
-      if (has_trend) alpha_trend <- g %||% .occu_cover_default_alpha_grid()
-    } else if (identical(comp, "intercept")) {
-      alpha_int <- g %||% .occu_cover_default_alpha_grid()
-    } else if (identical(comp, "trend") ||
-               (has_trend && comp %in% stats::na.omit(components[-1L]))) {
+      alpha_int <<- g %||% .occu_cover_default_alpha_grid()
+      if (has_trend) alpha_trend <<- g %||% .occu_cover_default_alpha_grid()
+      return(c("intercept", if (has_trend) "trend"))
+    }
+    if (identical(comp, "intercept")) {
+      alpha_int <<- g %||% .occu_cover_default_alpha_grid()
+      return("intercept")
+    }
+    if (identical(comp, "trend") ||
+        (has_trend && comp %in% stats::na.omit(components[-1L]))) {
       if (!has_trend) {
         stop(sprintf(paste0(
-          "copy(\"%s.%s\"): the field \"%s\" has no trend component (it is a ",
-          "single intercept field)."), cp$ref, comp, cp$ref), call. = FALSE)
+          "%s: the spatial field has no trend component (it is a single ",
+          "intercept field)."), cp_label), call. = FALSE)
       }
-      alpha_trend <- g %||% .occu_cover_default_alpha_grid()
-    } else {
-      avail <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
+      alpha_trend <<- g %||% .occu_cover_default_alpha_grid()
+      return("trend")
+    }
+    avail <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
+    stop(sprintf(paste0(
+      "%s: unknown field component \"%s\". Available component(s): %s, or the ",
+      "whole field."), cp_label, comp, avail), call. = FALSE)
+  }
+
+  for (cp in copies) {
+    cp_label <- sprintf("copy(%s)", cp$id)
+
+    # The positive arm couples the occurrence spatial field through a selector
+    # (spatial() / spatial(<grouping_var>)); a string reference is not a coupling
+    # selector here.
+    if (is.null(cp$selector_type)) {
       stop(sprintf(paste0(
-        "copy(\"%s.%s\"): unknown field component \"%s\". Available ",
-        "component(s): %s, or the whole field copy(\"%s\")."),
-        cp$ref, comp, comp, avail, cp$ref), call. = FALSE)
+        "%s: select the occurrence spatial field with copy(spatial()) or ",
+        "copy(spatial(%s)), not a string."), cp_label, node %||% "<grouping_var>"),
+        call. = FALSE)
+    }
+    if (!is.null(cp$selector_group)) {
+      if (is.null(node)) {
+        stop(sprintf(paste0(
+          "%s: the occurrence spatial field has no named grouping variable; ",
+          "use copy(spatial())."), cp_label), call. = FALSE)
+      }
+      if (!identical(cp$selector_group, node)) {
+        stop(sprintf(paste0(
+          "%s: no spatial effect grouped on \"%s\"; the occurrence spatial ",
+          "field is on \"%s\". Use copy(spatial(%s)) or copy(spatial())."),
+          cp_label, cp$selector_group, node, node), call. = FALSE)
+      }
+    }
+
+    # Per-component grids (terms = list(...)) must address every field block, so
+    # no block is silently left at alpha = 0. The whole-field / single-component
+    # forms set the blocks they name; any unnamed block stays decoupled.
+    if (!is.null(cp$copy_terms)) {
+      covered <- character(0)
+      for (k in names(cp$copy_terms)) {
+        res <- cp$copy_terms[[k]]
+        g   <- if (isTRUE(is.na(res$integrate))) NULL else res$grid
+        covered <- union(covered, apply_component(k, g, cp_label))
+      }
+      required <- c("intercept", if (has_trend) "trend")
+      missing_blocks <- setdiff(required, covered)
+      if (length(missing_blocks)) {
+        blocks <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
+        stop(sprintf(paste0(
+          "%s: terms = must give an amplitude for every field block; %s left ",
+          "unaddressed. Field blocks: %s."), cp_label,
+          paste0("\"", missing_blocks, "\"", collapse = ", "), blocks),
+          call. = FALSE)
+      }
+    } else {
+      g <- if (is.na(cp$alpha_integrate)) NULL else cp$alpha_grid
+      apply_component(cp$component, g, cp_label)
     }
   }
 

@@ -69,7 +69,8 @@ test_that("occu_cover() spatial + RE recovers the means, field, and RE variance"
   res <- t(vapply(seeds, function(s) {
     sim <- .ocfr_sim(s, side = 8L, J = 5L, n_g = 10L)
     fit <- tobs(~ x + icar(graph = sim$adj) + re(g), data = sim$data,
-                family = occu_cover("lognormal"), detection = ~ 1, positive = ~ 1,
+                family = occu_cover("lognormal"), detection = ~ 1,
+                positive = ~ 1 + copy(spatial()),
                 y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     c(psi_x = unname(fit$means[["psi_x"]]),

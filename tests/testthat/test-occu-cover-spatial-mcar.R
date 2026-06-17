@@ -56,7 +56,7 @@
   suppressWarnings(tobs(
     formula = ~ spatial(~ 1 + x | site_id, graph = d$adj),
     data = d$cell_dat, family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1,
+    detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(max.iter = max.iter, progress = FALSE, verbose = FALSE)))

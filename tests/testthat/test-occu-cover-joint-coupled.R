@@ -187,7 +187,7 @@ test_that("joint_coupled parameter-surface vcov carries beta x hyper cross-cov (
   fit <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1,
+    detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint_coupled")
@@ -331,7 +331,7 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
       suppressWarnings(tobs(
         formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
         family = occu_cover("lognormal"),
-        detection = ~ det_cov1, positive = ~ pos_cov1,
+        detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 80L,
@@ -428,7 +428,7 @@ test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
       suppressWarnings(tobs(
         formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
         family = occu_cover("beta"),
-        detection = ~ det_cov1, positive = ~ pos_cov1,
+        detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 80L,

@@ -383,29 +383,101 @@
        "grid(c(...)) (integrated).", call. = FALSE)
 }
 
-# copy(id)                 — share one realization of a named term across
-#                            another process's linear predictor.
+# copy(selector)           — carry a scaled copy of a latent effect from the
+#                            occurrence arm onto another arm's linear predictor.
 #
-# `scale` is the generic cross-process amplitude (occu / jsdm field sharing).
-# `alpha` is the cover-hurdle cross-arm coupling amplitude on the named
-# occupancy field (occu_cover positive arm): a scalar fixes it, grid(c(...))
-# marginalizes it on the outer grid. `id` may address the whole field
-# ("occ_space") or a single component of a multi-component field via a dotted
-# sub-name ("occ_space.trend"), so per-component coupling amplitudes stay
-# expressible. The two amplitude arguments are distinct knobs; only one applies
-# per consuming family.
-.tobs_term_copy <- function(id, scale = NULL, alpha = NULL) {
-  if (!is.character(id) || length(id) != 1L) {
-    stop("copy(): `id` must be a single string naming a term's `name =`/`id =`.",
+# The selector is a constructor call, not a string, so it is type-carrying and
+# needs no user-assigned name in the common case:
+#   copy(spatial())            the unique spatial effect on the occurrence arm
+#   copy(spatial(cell_idx))    the spatial effect grouped on `cell_idx`, when
+#                              several spatial effects make the bare form ambiguous
+# The selector argument is captured UNEVALUATED (it is a reference, not a term to
+# build): `spatial()` here selects, it does not construct a field. An integer
+# position (`spatial(1)`) is rejected -- reordering the formula would retarget it
+# silently -- in favour of the reorder-stable grouping variable. A bare string
+# (`copy("occ_space")`, optionally dotted `"occ_space.trend"`) is still accepted
+# as an explicit-name reference, the lower-level form.
+#
+# Coupling amplitude: `alpha =` sets one amplitude for the whole field (a scalar
+# fixes it, grid(c(...)) marginalizes it on the outer nested-Laplace grid);
+# `terms = list(<component> = grid(...))` sets a per-component amplitude, keyed by
+# the field's own block names (`intercept`, and a `||`-declared trend column such
+# as `time.sc`, or its alias `trend`). `alpha =` and `terms =` are mutually
+# exclusive. `scale` stays the generic cross-process amplitude for the non-hurdle
+# field-sharing path (occu / jsdm), keyed by the explicit-name reference.
+.tobs_term_copy <- function(selector, scale = NULL, alpha = NULL, terms = NULL) {
+  if (missing(selector)) {
+    stop("copy(): give an effect selector as the first argument, e.g. ",
+         "copy(spatial(), alpha = grid(c(0.25, 0.5, 1))).", call. = FALSE)
+  }
+  sel <- substitute(selector)
+
+  ref <- NULL; component <- NULL
+  selector_type <- NULL; selector_group <- NULL
+
+  if (is.character(sel) && length(sel) == 1L) {
+    # Explicit-name reference (lower-level), optionally dotted "<name>.<component>".
+    parts     <- strsplit(sel, ".", fixed = TRUE)[[1L]]
+    ref       <- parts[[1L]]
+    component <- if (length(parts) > 1L) paste(parts[-1L], collapse = ".") else NULL
+  } else if (is.call(sel) || is.name(sel)) {
+    head <- if (is.call(sel)) as.character(sel[[1L]]) else as.character(sel)
+    if (!identical(head, "spatial")) {
+      stop(sprintf(paste0(
+        "copy(): the copyable latent effect is spatial(); got `%s`. Write ",
+        "copy(spatial(), ...) or copy(spatial(<grouping_var>), ...)."), head),
+        call. = FALSE)
+    }
+    selector_type <- "spatial"
+    if (is.call(sel) && length(sel) >= 2L) {
+      disc <- sel[[2L]]
+      if (is.numeric(disc)) {
+        stop("copy(spatial(<n>)): an integer position is not a stable selector ",
+             "(reordering the formula would retarget it). Name the grouping ",
+             "variable instead, e.g. copy(spatial(cell_idx)).", call. = FALSE)
+      }
+      selector_group <- as.character(disc)
+    }
+  } else {
+    stop("copy(): the selector must be spatial(), spatial(<grouping_var>), or a ",
+         "field name string.", call. = FALSE)
+  }
+
+  if (!is.null(alpha) && !is.null(terms)) {
+    stop("copy(): set the amplitude with `alpha =` (one value for the whole ",
+         "field) OR `terms = list(<component> = ...)` (per component), not both.",
          call. = FALSE)
   }
-  parts     <- strsplit(id, ".", fixed = TRUE)[[1L]]
-  ref       <- parts[[1L]]
-  component <- if (length(parts) > 1L) paste(parts[-1L], collapse = ".") else NULL
-  alpha_res <- .tobs_resolve_copy_alpha(alpha)
+  if (!is.null(component) && !is.null(terms)) {
+    stop("copy(): a dotted component name and `terms =` are two ways to write the ",
+         "same thing; use terms = list(...).", call. = FALSE)
+  }
+
+  copy_terms <- NULL
+  if (!is.null(terms)) {
+    if (!is.list(terms) || is.null(names(terms)) || any(!nzchar(names(terms)))) {
+      stop("copy(terms = ): a named list keyed by field component, e.g. ",
+           "terms = list(intercept = grid(g0), time.sc = grid(g1)).",
+           call. = FALSE)
+    }
+    copy_terms <- lapply(terms, .tobs_resolve_copy_alpha)
+  }
+  alpha_res <- if (is.null(terms)) .tobs_resolve_copy_alpha(alpha)
+               else list(grid = NULL, integrate = NA)
+
+  id <- if (!is.null(ref)) {
+    if (!is.null(component)) paste(ref, component, sep = ".") else ref
+  } else if (!is.null(selector_group)) {
+    sprintf("spatial(%s)", selector_group)
+  } else {
+    "spatial()"
+  }
+
   .tobs_term(list(ref = ref, component = component, scale = scale,
+                  selector_type = selector_type, selector_group = selector_group,
                   alpha_grid = alpha_res$grid,
-                  alpha_integrate = alpha_res$integrate),
+                  alpha_integrate = alpha_res$integrate,
+                  copy_terms = copy_terms),
              class = "tobs_copy", id = id, label = "copy")
 }
 

@@ -1,5 +1,36 @@
 # tulpaObs NEWS
 
+## 0.0.45 (2026-06-17)
+
+* Formula-native cross-arm coupling for `occu_cover()`. The cover (positive) arm
+  carries a scaled copy of the occurrence arm's spatial effect, selected
+  structurally with a constructor and no required name:
+  `copy(spatial(), alpha = grid(c(0.25, 0.5, 1.0, 1.5)))`. The selector is
+  type-carrying and reorder-stable: `copy(spatial(cell_idx))` disambiguates by
+  grouping variable when several spatial effects are present, and an integer
+  position is rejected. A per-component amplitude is
+  `copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))`,
+  keyed by the field's own block names and required to address every block. The
+  coupling coefficient `alpha` (= sigma_pos / sigma_occ, the INLA `copy=`
+  analogue) is marginalised over the grid; a scalar fixes it. Coupling is
+  formula-native and explicit: a block with no `copy()` is decoupled (the field
+  rides occupancy only), and decoupling is structural rather than a magic
+  `alpha` of 0. `engine = "joint"` replaces `engine = "joint_coupled"`, and
+  `occurrence =` / `positive =` read symmetrically with `detection =`
+  (`formula =` stays as a deprecated alias). The fit is byte-identical to the old
+  control-driven path (max abs difference 0).
+
+* Full-model field-folded information criteria for `occu_cover()`. `tobs_waic()`,
+  `tobs_dic()` and `tobs_cpo()` now fold the spatial intercept and trend fields and
+  the per-visit detection process into the pointwise log-likelihood, so WAIC / DIC /
+  CPO / LOO are numerically comparable to the INLA and spOccupancy criteria.
+  `tobs_cpo()` additionally returns a LOO-PIT (`$pit`) for calibration checking and
+  a per-observation LOO Pareto-k (`$failure`). Cross-checked against a brute-force
+  pointwise evaluation (max abs difference < 1e-8).
+
+* build: the `tulpa` dependency floor is raised to `tulpa (>= 0.0.38)` and the
+  `Remotes` install reference to `gcol33/tulpa@v0.0.38`.
+
 ## 0.0.44 (2026-06-16)
 
 * build: the `tulpa` dependency floor is raised to `tulpa (>= 0.0.37)` and the
