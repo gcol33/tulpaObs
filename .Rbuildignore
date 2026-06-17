@@ -17,10 +17,7 @@
 ^.*\.tar\.gz$
 ^src/.*\.gch$
 ^tests/benchmark.*\.R$
-^127$
 ^API\.md$
 ^api\.md$
 ^PLAN_tulpaObs\.md$
 ^deliverables\.md$
-^Rplots\.pdf$
-^figure$

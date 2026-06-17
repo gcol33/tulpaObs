@@ -8,6 +8,8 @@ src/*.gch
 # R package build
 *.Rcheck/
 *.tar.gz
+Rplots.pdf
+figure/
 
 # IDE
 .Rhistory
