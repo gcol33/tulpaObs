@@ -14,7 +14,8 @@ tobs_data(
   det.covs = NULL,
   coords = NULL,
   sites = NULL,
-  visits = NULL
+  visits = NULL,
+  cover.floor = 0
 )
 }
 \arguments{
@@ -50,6 +51,15 @@ externally-defined site grid; site values in \code{df} outside the set error.}
 
 \item{visits}{Optional visit level set, analogous to \code{sites} for the visit
 axis (default the sorted unique visits in \code{df}).}
+
+\item{cover.floor}{For \code{type = "cover"}, the threshold at or below which a
+cover value is stored as \code{NA} rather than as a positive observation
+(default \code{0}). The cover (positive) arm of a hurdle is positive-only, so a
+cover of \code{0} is an absence handled by the occurrence arm, not a cover
+observation; sending it to \code{NA} keeps a sampled-absent or unsampled cell
+from entering the positive arm as a fabricated zero (which, padded across a
+grid, flattens the spatial field). Set \code{cover.floor = -Inf} to keep every
+value verbatim.}
 }
 \value{
 An \code{tobs_data} object.

@@ -38,6 +38,14 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #' @param type Response kind. `"occurrence"` (default) and `"abundance"` build
 #'   an integer site x visit matrix; `"cover"` builds a double matrix and
 #'   preserves continuous values (it does not coerce the response to integer).
+#' @param cover.floor For `type = "cover"`, the threshold at or below which a
+#'   cover value is stored as `NA` rather than as a positive observation
+#'   (default `0`). The cover (positive) arm of a hurdle is positive-only, so a
+#'   cover of `0` is an absence handled by the occurrence arm, not a cover
+#'   observation; sending it to `NA` keeps a sampled-absent or unsampled cell
+#'   from entering the positive arm as a fabricated zero (which, padded across a
+#'   grid, flattens the spatial field). Set `cover.floor = -Inf` to keep every
+#'   value verbatim.
 #' @param occ.covs Character vector of site-level covariate names.
 #' @param det.covs Character vector of visit-level covariate names. A named
 #'   column that is a factor or character is preserved as categorical: the
@@ -58,7 +66,8 @@ tobs_data <- function(df, y, site, visit,
                       type = c("occurrence", "abundance", "cover"),
                       occ.covs = NULL, det.covs = NULL,
                       coords = NULL,
-                      sites = NULL, visits = NULL) {
+                      sites = NULL, visits = NULL,
+                      cover.floor = 0) {
   type <- match.arg(type)
   if (!is.data.frame(df)) stop("df must be a data.frame")
   for (col in c(y, site, visit)) {
@@ -87,7 +96,8 @@ tobs_data <- function(df, y, site, visit,
          call. = FALSE)
   }
 
-  y_mat <- .tobs_long_response_matrix(df[[y]], si, vi, n_sites, max_visits, type)
+  y_mat <- .tobs_long_response_matrix(df[[y]], si, vi, n_sites, max_visits, type,
+                                      cover.floor = cover.floor)
   rownames(y_mat) <- sites
 
   # Extract site-level covariates
@@ -142,10 +152,24 @@ tobs_data <- function(df, y, site, visit,
 # (counts), cover is a continuous proportion kept as double -- coercing it to
 # integer would truncate every value < 1 to zero. Cells not addressed by
 # (`si`, `vi`) stay NA (column-major-safe: 2D indexing, never a linear slot).
-.tobs_long_response_matrix <- function(yv, si, vi, n_sites, max_visits, type) {
+.tobs_long_response_matrix <- function(yv, si, vi, n_sites, max_visits, type,
+                                       cover.floor = 0) {
   if (type == "cover") {
     if (any(yv < 0 | yv > 1, na.rm = TRUE))
       stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
+    # A cover at or below the floor is an absence (positive-only arm), not a
+    # positive observation: store NA so a 0 padded across unsampled cells cannot
+    # enter the cover arm as a fabricated zero (which flattens the spatial field).
+    floored <- !is.na(yv) & yv <= cover.floor
+    n_floor <- sum(floored)
+    if (n_floor > 0L) {
+      yv[floored] <- NA_real_
+      message(sprintf(paste0(
+        "tobs_data(type = 'cover'): %d cover value%s <= %g treated as absent ",
+        "(NA); the positive arm sees only positive cover, so a 0 is an absence ",
+        "for the occurrence arm, not a fabricated zero. Set cover.floor = -Inf ",
+        "to keep them."), n_floor, if (n_floor == 1L) "" else "s", cover.floor))
+    }
     y_mat <- matrix(NA_real_, n_sites, max_visits)
     y_mat[cbind(si, vi)] <- as.numeric(yv)
   } else {

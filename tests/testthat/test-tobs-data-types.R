@@ -18,8 +18,10 @@ make_long <- function(yvals) {
 
 test_that("type = 'cover' preserves continuous values (no integer truncation)", {
   cov <- c(0.02, 0.63, 0.001, 0.5, 0.0, 0.31)
+  # cover.floor = -Inf keeps every value verbatim (incl. the 0.0), so this guards
+  # only the integer-truncation regression, not the absence-to-NA default.
   od <- tobs_data(make_long(cov), y = "y", site = "site", visit = "visit",
-                  type = "cover")
+                  type = "cover", cover.floor = -Inf)
   expect_true(is.double(od$y))
   # row 1 = site 3 (first appearance), values land by site/visit match
   expect_equal(unname(od$y[1, 1]), 0.02)
@@ -72,4 +74,27 @@ test_that("occurrence and cover reshapes align position-for-position", {
                       type = "cover")
   detected <- od$y == 1 & !is.na(od$y)
   expect_true(all(od_cov$y[detected] > 0))
+})
+
+test_that("cover.floor sends non-positive cover to NA (absence), keeps positives", {
+  cov <- c(0.02, 0.0, 0.63, 0.0, 0.0, 0.31)   # 3 zeros (absences), 3 positives
+  df  <- make_long(cov)
+
+  # Default cover.floor = 0: zeros become NA, never a fabricated zero in the arm.
+  od <- suppressMessages(
+    tobs_data(df, y = "y", site = "site", visit = "visit", type = "cover"))
+  expect_equal(sum(od$y == 0, na.rm = TRUE), 0L)
+  expect_equal(sum(od$y > 0, na.rm = TRUE), 3L)
+  expect_setequal(stats::na.omit(as.vector(od$y)), c(0.02, 0.63, 0.31))
+
+  # It reports what it did.
+  expect_message(
+    tobs_data(df, y = "y", site = "site", visit = "visit", type = "cover"),
+    "3 cover values <= 0 treated as absent")
+
+  # Opt out: -Inf keeps the zeros verbatim (and stays silent).
+  od2 <- expect_silent(
+    tobs_data(df, y = "y", site = "site", visit = "visit",
+              type = "cover", cover.floor = -Inf))
+  expect_equal(sum(od2$y == 0, na.rm = TRUE), 3L)
 })

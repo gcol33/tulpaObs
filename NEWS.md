@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.46 (2026-06-17)
+
+* `tobs_data(type = "cover")` gains `cover.floor` (default `0`): a cover value at
+  or below the floor is stored as `NA` rather than as a positive observation,
+  because the cover hurdle's positive arm is positive-only and a cover of `0` is
+  an absence handled by the occurrence arm. This stops a `0` padded across
+  unsampled cells (instead of left `NA`) from entering the positive arm as a
+  fabricated zero, which, spread over a grid, flattens the spatial field. The
+  conversion is reported with a one-line message; `cover.floor = -Inf` keeps
+  every value verbatim.
+
 ## 0.0.45 (2026-06-17)
 
 * Formula-native cross-arm coupling for `occu_cover()`. The cover (positive) arm
