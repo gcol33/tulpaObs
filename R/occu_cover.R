@@ -524,6 +524,138 @@
 
 
 # ---------------------------------------------------------------------------
+# Formula-native cross-arm coupling (INLA-style copy())
+#
+# The occupancy field is named on its `spatial(..., name = "occ_space")` term;
+# the positive (cover) arm declares it carries a scaled copy of that field with
+# `copy("occ_space", alpha = grid(c(...)))`. This is the DAG edge u_occ -> cover
+# placed in the formula. The engine still reads the coupling amplitude axes off
+# `control$alpha.grid` / `control$alpha.grid.trend`, so the formula copy() is
+# translated into those axes here and the downstream fit is unchanged:
+#
+#   copy("occ_space", alpha = grid(g)) -> control$alpha.grid       = g
+#                                         control$alpha.grid.trend = g  (if trend)
+#   copy("occ_space.trend", alpha = .) -> control$alpha.grid.trend = .
+#   omitting copy() on the new path     -> alpha pinned at 0 (decoupled)
+#
+# `alpha = grid(g)` integrates over g; a scalar fixes it (a length-1 grid). The
+# block layout follows .occu_cover_spatial_fields(): the unweighted intercept
+# field is block 1, weighted trend field(s) block 2+. The whole-field reference
+# scales every block by one amplitude; a dotted component reference ("<name>.
+# trend" or "<name>.<column>") scales one block.
+# ---------------------------------------------------------------------------
+
+# Parse copy() terms off the positive formula, returning the stripped
+# fixed-effects positive formula plus the list of tobs_copy specs. The copy
+# special is the only structured term allowed on the positive arm; any other is
+# left in place for .occu_cover_reject_structured() to reject.
+.occu_cover_extract_pos_copies <- function(pos_formula) {
+  if (is.null(pos_formula)) return(list(formula = pos_formula, copies = list()))
+  parsed <- .tobs_parse_formula(pos_formula, data = NULL)
+  copies <- Filter(function(t) inherits(t, "tobs_copy"), parsed$terms)
+  list(formula = parsed$fe_formula, copies = copies)
+}
+
+# Map the positive arm's copy() specs onto the coupling-amplitude grids the
+# joint_coupled fitter reads (control$alpha.grid for the intercept block,
+# control$alpha.grid.trend for the trend block). `spatial_info` carries the
+# resolved fields (block 1 = intercept, block 2+ = weighted trend), each with a
+# `field_name` and a `component` label. Returns the updated control list.
+#
+# On the formula-native path (a named occupancy field, or any copy() present)
+# the amplitude axes come ENTIRELY from copy(): a field block with no copy() is
+# pinned at alpha = 0 (decoupled). On the back-compat path (no name, no copy())
+# control$alpha.grid / .trend are left untouched, so old fits are byte-identical.
+.occu_cover_apply_copy_coupling <- function(copies, spatial_info, control) {
+  field_name <- if (!is.null(spatial_info)) {
+    fn <- Filter(Negate(is.null),
+                 lapply(spatial_info$fields, function(f) f$field_name))
+    if (length(fn)) fn[[1L]] else NULL
+  } else NULL
+
+  new_api <- length(copies) > 0L || !is.null(field_name)
+  if (!new_api) return(control)
+
+  if (is.null(spatial_info)) {
+    stop("occu_cover(): copy() on the positive arm needs a named spatial field ",
+         "on the occurrence formula, e.g. ",
+         "spatial(~ 1 || cell, graph = adj, name = \"occ_space\").",
+         call. = FALSE)
+  }
+  if (any(c("alpha.grid", "alpha.grid.trend") %in% names(control))) {
+    stop("occu_cover(): set the cross-arm coupling with copy() in the positive ",
+         "formula OR control$alpha.grid[.trend], not both. The named-field ",
+         "copy() path supersedes the control grids.", call. = FALSE)
+  }
+  if (length(copies) > 0L && is.null(field_name)) {
+    stop("occu_cover(): copy() in the positive formula needs a named occupancy ",
+         "field. Name it on its spatial() term, e.g. ",
+         "spatial(~ 1 || cell, graph = adj, name = \"occ_space\"), then ",
+         "copy(\"occ_space\", alpha = ...).", call. = FALSE)
+  }
+
+  # Component labels of the resolved field blocks. Block 1 is the intercept
+  # field; blocks 2+ are weighted trend fields. "trend" is an alias for the
+  # single trend block.
+  has_trend <- length(spatial_info$fields) > 1L
+  components <- vapply(spatial_info$fields,
+                       function(f) f$component %||% NA_character_, character(1))
+
+  # Default to decoupled: every block pinned at alpha = 0. A copy() then sets
+  # the amplitude axis on the block(s) it names.
+  alpha_int   <- 0
+  alpha_trend <- if (has_trend) 0 else NULL
+
+  for (cp in copies) {
+    if (!is.null(field_name) && !identical(cp$ref, field_name)) {
+      stop(sprintf(paste0(
+        "copy(\"%s\"): no spatial field named \"%s\" on the occurrence formula. ",
+        "The named field is \"%s\" -- reference it as copy(\"%s\")."),
+        cp$id, cp$ref, field_name, field_name), call. = FALSE)
+    }
+    g <- if (is.na(cp$alpha_integrate)) {
+      # copy() with no alpha = : default integrating grid (back-compat default).
+      NULL
+    } else cp$alpha_grid
+
+    comp <- cp$component
+    if (is.null(comp)) {
+      # Whole-field copy: one amplitude for every block.
+      alpha_int <- g %||% .occu_cover_default_alpha_grid()
+      if (has_trend) alpha_trend <- g %||% .occu_cover_default_alpha_grid()
+    } else if (identical(comp, "intercept")) {
+      alpha_int <- g %||% .occu_cover_default_alpha_grid()
+    } else if (identical(comp, "trend") ||
+               (has_trend && comp %in% stats::na.omit(components[-1L]))) {
+      if (!has_trend) {
+        stop(sprintf(paste0(
+          "copy(\"%s.%s\"): the field \"%s\" has no trend component (it is a ",
+          "single intercept field)."), cp$ref, comp, cp$ref), call. = FALSE)
+      }
+      alpha_trend <- g %||% .occu_cover_default_alpha_grid()
+    } else {
+      avail <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
+      stop(sprintf(paste0(
+        "copy(\"%s.%s\"): unknown field component \"%s\". Available ",
+        "component(s): %s, or the whole field copy(\"%s\")."),
+        cp$ref, comp, comp, avail, cp$ref), call. = FALSE)
+    }
+  }
+
+  control[["alpha.grid"]] <- alpha_int
+  if (has_trend) control[["alpha.grid.trend"]] <- alpha_trend
+  control
+}
+
+# The engine's default coupling grid (a copy() with no alpha = falls back to it,
+# matching the joint_coupled fitter's own default). Single source of truth with
+# .tobs_fit_occu_cover_joint_coupled().
+.occu_cover_default_alpha_grid <- function() {
+  c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+}
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher (wired into tobs.R's switch)
 # ---------------------------------------------------------------------------
 
@@ -547,6 +679,16 @@
 
   pos_formula <- dots$positive
   if (is.null(pos_formula)) pos_formula <- detection
+
+  # Formula-native cross-arm coupling: pull any copy() term off the positive
+  # formula and keep the stripped fixed-effects design. The copy() specs are
+  # translated into the engine's coupling-amplitude grids once the occupancy
+  # field blocks are resolved (below). Stripping here lets every downstream
+  # consumer (NUTS branch, design build, structured-term rejection) see a clean
+  # fixed-effects positive formula.
+  pos_copy   <- .occu_cover_extract_pos_copies(pos_formula)
+  pos_copies <- pos_copy$copies
+  pos_formula <- pos_copy$formula
 
   # Spatial NUTS path (gcol33/tulpaObs#74): a car_proper() term on the psi formula
   # under method = "nuts" samples a FIXED-HYPER non-centered coupled proper-CAR
@@ -609,6 +751,19 @@
   # marginal. A weighted areal term adds a second coupled (SVC) field.
   spatial_info <- .occu_cover_spatial_fields(formula, data)
   has_spatial  <- !is.null(spatial_info)
+
+  # Translate the positive arm's copy() spec(s) into the engine coupling grids
+  # now that the occupancy field blocks are resolved. On the formula-native path
+  # (named field and/or copy()) this sets control$alpha.grid[.trend]; on the
+  # back-compat path it is a no-op, so control-driven fits are unchanged. A
+  # copy() with no named field, or a named field outside the spatial path, is an
+  # error surfaced here.
+  if (length(pos_copies) > 0L && !has_spatial) {
+    stop("occu_cover(): copy() on the positive arm needs a spatial field on the ",
+         "occurrence formula (e.g. spatial(~ 1 || cell, graph = adj, name = ",
+         "\"occ_space\")) under method = \"nested_laplace\".", call. = FALSE)
+  }
+  control <- .occu_cover_apply_copy_coupling(pos_copies, spatial_info, control)
 
   # Resolve cover aggregation (tulpaObs#33). NULL (unset) -> "mean" on the
   # shared-field spatial path (so the cover arm contributes at the cell scale and
@@ -775,8 +930,16 @@
     # control$engine = "v3_nested" / "v2_joint" as debug escape hatches; both
     # take only the single intercept field.
     correlated <- isTRUE(spatial_info$correlated)
-    engine_pick <- control[["engine"]] %||% "joint_coupled"
+    engine_pick <- control[["engine"]] %||% "joint"
     control[["engine"]] <- NULL
+    # The coupling now lives in the formula (copy()), so the default engine is
+    # "joint"; "joint_coupled" is the deprecated alias for the same fitter.
+    if (identical(engine_pick, "joint_coupled")) {
+      message("occu_cover(): control$engine = \"joint_coupled\" is deprecated; ",
+              "use \"joint\" (the cross-arm coupling now lives in the positive ",
+              "formula via copy()).")
+      engine_pick <- "joint"
+    }
     if (correlated && engine_pick %in% c("v2_joint", "v3_nested")) {
       stop(sprintf(paste0(
         "occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) needs ",

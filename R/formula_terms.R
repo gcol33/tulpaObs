@@ -338,14 +338,74 @@
   ), class = "tobs_latent", id = id, label = "latent")
 }
 
+# grid(values)             — mark a coupling-amplitude axis for integration.
+#
+# Inside a copy() the `alpha =` argument is either a scalar (a FIXED coupling
+# amplitude, pinned) or a grid() of values to MARGINALIZE over on the outer
+# nested-Laplace integration. grid() tags the values so the intent is explicit
+# at the call site (alpha = grid(c(...)) integrates, alpha = 0.5 fixes) rather
+# than inferred from length. It is a formula special, parsed not evaluated: the
+# parser resolves the bare `grid` against the term registry before R's global
+# environment, so it does not collide with graphics::grid().
+.tobs_term_grid <- function(...) {
+  vals <- tryCatch(as.numeric(c(...)),
+                   error = function(e) stop(
+                     "grid(): values must be numeric.", call. = FALSE))
+  if (length(vals) < 1L || any(!is.finite(vals))) {
+    stop("grid(): give one or more finite numeric values, e.g. ",
+         "grid(c(0.25, 0.5, 1)).", call. = FALSE)
+  }
+  structure(list(values = vals), class = "tobs_alpha_grid")
+}
+
+# Resolve a copy()'s `alpha =` argument to an integration grid plus an
+# integrate/fixed flag. A grid() marker integrates over its values; a bare
+# scalar fixes the amplitude (a length-1 grid, pinned); NULL defers to the
+# default coupling grid (the back-compat default). A bare numeric vector of
+# length > 1 is rejected with a pointer to grid(), so integration is never
+# inferred from length silently.
+.tobs_resolve_copy_alpha <- function(alpha) {
+  if (is.null(alpha)) {
+    return(list(grid = NULL, integrate = NA))
+  }
+  if (inherits(alpha, "tobs_alpha_grid")) {
+    return(list(grid = alpha$values, integrate = TRUE))
+  }
+  if (is.numeric(alpha) && length(alpha) == 1L && is.finite(alpha)) {
+    return(list(grid = as.numeric(alpha), integrate = FALSE))
+  }
+  if (is.numeric(alpha) && length(alpha) > 1L) {
+    stop("copy(alpha = ): a numeric vector marginalizes only when wrapped in ",
+         "grid(), e.g. alpha = grid(c(0.25, 0.5, 1)). A bare scalar fixes the ",
+         "amplitude.", call. = FALSE)
+  }
+  stop("copy(alpha = ): `alpha` must be a single finite number (fixed) or ",
+       "grid(c(...)) (integrated).", call. = FALSE)
+}
+
 # copy(id)                 — share one realization of a named term across
-#                            another process's linear predictor
-.tobs_term_copy <- function(id, scale = NULL) {
+#                            another process's linear predictor.
+#
+# `scale` is the generic cross-process amplitude (occu / jsdm field sharing).
+# `alpha` is the cover-hurdle cross-arm coupling amplitude on the named
+# occupancy field (occu_cover positive arm): a scalar fixes it, grid(c(...))
+# marginalizes it on the outer grid. `id` may address the whole field
+# ("occ_space") or a single component of a multi-component field via a dotted
+# sub-name ("occ_space.trend"), so per-component coupling amplitudes stay
+# expressible. The two amplitude arguments are distinct knobs; only one applies
+# per consuming family.
+.tobs_term_copy <- function(id, scale = NULL, alpha = NULL) {
   if (!is.character(id) || length(id) != 1L) {
-    stop("copy(): `id` must be a single string naming a term's `id =`.",
+    stop("copy(): `id` must be a single string naming a term's `name =`/`id =`.",
          call. = FALSE)
   }
-  .tobs_term(list(ref = id, scale = scale),
+  parts     <- strsplit(id, ".", fixed = TRUE)[[1L]]
+  ref       <- parts[[1L]]
+  component <- if (length(parts) > 1L) paste(parts[-1L], collapse = ".") else NULL
+  alpha_res <- .tobs_resolve_copy_alpha(alpha)
+  .tobs_term(list(ref = ref, component = component, scale = scale,
+                  alpha_grid = alpha_res$grid,
+                  alpha_integrate = alpha_res$integrate),
              class = "tobs_copy", id = id, label = "copy")
 }
 
@@ -386,8 +446,20 @@
 # coordinate. Checking names here closes that gap and names `spatial()`/`model`
 # in the error. Positional arguments (the bare coordinate columns) carry no
 # name and pass through untouched.
-.tobs_term_spatial <- function(..., model = .tobs_spatial_models, id = NULL) {
+.tobs_term_spatial <- function(..., model = .tobs_spatial_models, id = NULL,
+                               name = NULL) {
   dots <- list(...)
+
+  # `name =` labels the field so a copy() in another arm/process can reference
+  # it ("occ_space"), the INLA-style cross-arm edge. It is the field's reference
+  # label; when `id` is not given it doubles as the term id (the resolver keys
+  # on id), so the common case sets only `name`.
+  if (!is.null(name) && (!is.character(name) || length(name) != 1L ||
+                         !nzchar(name))) {
+    stop("spatial(name = ): `name` must be a single non-empty string.",
+         call. = FALSE)
+  }
+  if (is.null(id) && !is.null(name)) id <- name
 
   # Varying-coefficient bar form: the first positional argument is a one-sided
   # coefficient formula carrying a `|` / `||` grouping bar. Capture it together
@@ -398,7 +470,8 @@
     (is.null(names(dots)) || !nzchar(names(dots)[[1L]]))
   if (first_unnamed && inherits(dots[[1L]], "formula") &&
       tulpa::tulpa_is_spatial_bar(dots[[1L]])) {
-    return(.tobs_spatial_bar_spec(dots[[1L]], dots[-1L], model = model, id = id))
+    return(.tobs_spatial_bar_spec(dots[[1L]], dots[-1L], model = model, id = id,
+                                  name = name))
   }
 
   model <- match.arg(model)
@@ -419,7 +492,9 @@
     }
   }
 
-  ctor(..., id = id)
+  spec <- ctor(..., id = id)
+  spec$field_name <- name
+  spec
 }
 
 # Arm labels of the cover hurdle: presence (the y > 0 Bernoulli arm) and
@@ -438,7 +513,7 @@
 # common shared call can omit it. The areal `model` is inherited from the
 # umbrella's `model =` (defaults to icar, matching the bare spatial() default).
 .tobs_spatial_bar_spec <- function(bar_formula, rest, model = .tobs_spatial_models,
-                                   id = NULL) {
+                                   id = NULL, name = NULL) {
   graph <- rest$graph
   to    <- rest$to
   by    <- rest$by
@@ -514,7 +589,8 @@
     correlated  = correlated,
     graph       = graph,
     to          = to,
-    by_var      = by
+    by_var      = by,
+    field_name  = name
   ), class = "tobs_spatial", id = id, label = model)
 }
 
@@ -599,11 +675,19 @@
     col <- specs[[i]]
     if (isTRUE(col$is_intercept)) {
       term <- ctor(graph = spec$graph, group_var = node, id = spec$id)
+      term$component <- "intercept"
     } else {
       term <- ctor(graph = spec$graph, group_var = node, id = spec$id)
       term$weight       <- as.numeric(col$weight)
       term$weight_label <- col$column_name
+      # The coefficient (trend) column is addressable as "<field>.<column>" and,
+      # for the single-trend common case, as "<field>.trend"; both resolve to
+      # this block so a per-component copy() amplitude stays expressible.
+      term$component <- col$column_name
     }
+    # Carry the field name onto each desugared block so a copy() in the positive
+    # arm can resolve "<name>" (whole field) or "<name>.<component>" (one block).
+    term$field_name <- spec$field_name
     # Carry the replication factor (gcol33/tulpaObs#82) onto each desugared term.
     # The shared-field path keeps the BASE graph + node column here and replicates
     # at fit time (where the data is in scope), so the intercept and trend blocks
@@ -684,7 +768,8 @@
   temporal      = .tobs_term_temporal,
   svc           = .tobs_term_svc,
   latent        = .tobs_term_latent,
-  copy          = .tobs_term_copy
+  copy          = .tobs_term_copy,
+  grid          = .tobs_term_grid
 )
 
 # Names of the registered special terms (used by the parser to detect them).
