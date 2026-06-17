@@ -904,11 +904,56 @@
     b_pos <- draws[, p_occ + p_det + seq_len(p_pos), drop = FALSE]
     disp  <- exp(draws[, ncol(draws)])         # trailing log-dispersion column
     S     <- nrow(draws)
-    field_occ <- matrix(0, n_sites, S)
-    field_pos <- matrix(0, n_sites, S)
+    fld <- .tobs_occu_cover_v3_field(object, n_sites, S)
+    field_occ <- fld$field_occ
+    field_pos <- fld$field_pos
   }
   list(b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
        field_occ = field_occ, field_pos = field_pos)
+}
+
+# Per-cell field draws for the v3 nested-Laplace occu_cover spatial path, which
+# stores no joint object to sample but DOES carry the per-cell field posterior in
+# `field_table` (z_mean / z_sd) plus the copy coefficient `alpha` (and, for a
+# spatially-varying trend, `trend_field_table` / `alpha_trend` weighted by the
+# trend covariate). The per-site pointwise log-likelihood for site i depends only
+# on the field at that site's own cell, so per-cell marginal Gaussian draws
+# N(z_mean, z_sd) give the exact per-observation marginal -- the cross-cell
+# covariance never enters a single site's term. Returns the [n_sites x S]
+# occupancy / cover field contributions (zero matrices when no field table is
+# present, recovering the non-spatial behaviour).
+.tobs_occu_cover_v3_field <- function(object, n_sites, S) {
+  zero <- matrix(0, n_sites, S)
+  ft <- object$field_table
+  if (is.null(ft) || is.null(ft$z_mean)) {
+    return(list(field_occ = zero, field_pos = zero))
+  }
+  model    <- object$model
+  site_cell <- model$site_cell %||% seq_len(n_sites)
+  # Per-cell field draws (one column per draw), mapped to sites by site_cell.
+  draw_cell_field <- function(tab) {
+    n_cell <- nrow(tab)
+    z <- matrix(stats::rnorm(n_cell * S, tab$z_mean, tab$z_sd), n_cell, S)
+    z[site_cell, , drop = FALSE]                # [n_sites x S]
+  }
+  alpha <- object$means[["alpha"]] %||% object$spatial$alpha_mean %||% 0
+  f_occ <- draw_cell_field(ft)
+  field_occ <- f_occ
+  field_pos <- alpha * f_occ
+
+  # Spatially-varying trend field, weighted per cell by its trend covariate.
+  tt <- object$trend_field_table
+  if (!is.null(tt) && !is.null(tt$z_mean)) {
+    alpha_tr <- object$means[["alpha_trend"]] %||% 0
+    wname <- object$trend_weight %||% object$trend_weights[[1L]]
+    w <- if (!is.null(wname) && wname %in% names(model$data)) {
+      as.numeric(model$data[[wname]])
+    } else rep(1, n_sites)
+    f_tr <- draw_cell_field(tt) * w             # [n_sites x S], row-scaled
+    field_occ <- field_occ + f_tr
+    field_pos <- field_pos + alpha_tr * f_tr
+  }
+  list(field_occ = field_occ, field_pos = field_pos)
 }
 
 .tobs_ploglik_occu_cover <- function(object, n.draws = 1000L) {
@@ -1132,11 +1177,12 @@
        bayesian.p = mean(fit_rep > fit_y))
 }
 
-# Randomized PIT for an occu_cover() fit, on the per-site detection summary
-# (any-detection vs all-zero) marginalized over the latent occupancy state, with
-# the shared field projected per site. The detected / non-detected outcome is the
-# ordered event; the left and right CDF limits feed the engine's randomized PIT.
-.tobs_pit_occu_cover <- function(object, n.samples = 250) {
+# Per-draw CDF limits for the occu_cover() per-site detection summary
+# (any-detection vs all-zero), marginalized over the latent occupancy state with
+# the shared field folded in per site. Returns the [S x n_sites] lower / upper
+# CDF limits of the ordered detected / non-detected outcome -- the randomized-PIT
+# building block shared by the posterior PIT and the LOO-PIT.
+.occu_cover_pit_cdf_limits <- function(object, n.samples) {
   model <- object$model
   c0    <- .tobs_occu_cover_components(object, n.samples)
   comp  <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
@@ -1159,7 +1205,55 @@
     Fl[s, any_det] <- pdet0[any_det]           # detected observed: above the mass
     Fu[s, any_det] <- 1
   }
-  tulpa::tulpa_pit(Fu, cdf_lower = Fl)
+  list(cdf_lower = Fl, cdf_upper = Fu)
+}
+
+# Randomized PIT for an occu_cover() fit, on the per-site detection summary
+# (any-detection vs all-zero) marginalized over the latent occupancy state, with
+# the shared field projected per site. The detected / non-detected outcome is the
+# ordered event; the left and right CDF limits feed the engine's randomized PIT.
+.tobs_pit_occu_cover <- function(object, n.samples = 250) {
+  lim <- .occu_cover_pit_cdf_limits(object, n.samples)
+  tulpa::tulpa_pit(lim$cdf_upper, cdf_lower = lim$cdf_lower)
+}
+
+# Leave-one-out randomized PIT for an occu_cover() fit -- the INLA `cpo$pit`
+# analogue. Per site, the draws are reweighted by their PSIS leave-one-out
+# importance weights (so the predictive distribution excludes that site's own
+# contribution), then the LOO-weighted CDF limits feed the randomized PIT. The
+# loglik matrix supplying the weights is the field-folded pointwise log-
+# likelihood, so the LOO-PIT inherits the full-model predictor. A site whose PSIS
+# weights are degenerate (k unavailable) falls back to the equal-weight posterior
+# CDF for that site.
+.tobs_loo_pit_occu_cover <- function(object, n.samples = 1000L, ll = NULL) {
+  lim <- .occu_cover_pit_cdf_limits(object, n.samples)
+  if (is.null(ll)) ll <- .tobs_ploglik_occu_cover(object, n.samples)
+  .tobs_loo_pit_from_limits(ll, lim$cdf_lower, lim$cdf_upper)
+}
+
+# LOO-weighted randomized PIT from a pointwise log-likelihood matrix `ll`
+# [S x N] and the per-draw CDF limits `Fl` / `Fu` [S x N] of the ordered outcome.
+# For each observation the PSIS leave-one-out weights w_is (from tulpa_psis on
+# -ll[, i]) reweight the per-draw CDF limits to the LOO predictive limits
+# Fl_loo_i = sum_s w_is Fl[s, i], Fu_loo_i likewise, then a single uniform draw
+# placed between them gives the randomized LOO-PIT. The single source of truth
+# behind every family's LOO-PIT so the construction matches INLA's cpo$pit.
+.tobs_loo_pit_from_limits <- function(ll, Fl, Fu) {
+  N <- ncol(ll); S <- nrow(ll)
+  fl_loo <- numeric(N); fu_loo <- numeric(N)
+  for (i in seq_len(N)) {
+    ps <- tulpa::tulpa_psis(-ll[, i])
+    lw <- ps$log_weights
+    if (length(lw) == S) {
+      w <- exp(lw)
+    } else {
+      w <- rep(1 / S, S)   # degenerate PSIS: fall back to equal weights
+    }
+    fl_loo[i] <- sum(w * Fl[, i])
+    fu_loo[i] <- sum(w * Fu[, i])
+  }
+  u <- stats::runif(N)
+  pmin(1, pmax(0, fl_loo + u * (fu_loo - fl_loo)))
 }
 
 

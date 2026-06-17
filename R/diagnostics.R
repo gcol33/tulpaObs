@@ -40,8 +40,16 @@ tobs_dic <- function(object, n.draws = 1000L, ...) {
 #' @export
 tobs_cpo <- function(object, n.draws = 1000L, ...) {
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
-  tulpa::tulpa_criteria(ll_mat, criteria = c("loo", "cpo", "lpml"),
-                        pointwise = TRUE, ...)
+  cr <- tulpa::tulpa_criteria(ll_mat, criteria = c("loo", "cpo", "lpml"),
+                              pointwise = TRUE, ...)
+  # LOO-PIT (the INLA cpo$pit analogue): tulpa_criteria does not return it, so
+  # add the per-observation leave-one-out PIT for the families that expose the
+  # per-draw predictive CDF limits. occu_cover builds them from the field-folded
+  # detection-summary marginal, so its LOO-PIT is full-model.
+  if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
+    cr$pit <- .tobs_loo_pit_occu_cover(object, n.draws, ll = ll_mat)
+  }
+  cr
 }
 
 # Pointwise log-likelihood matrix [n_draws x n_obs], marginalized over the
@@ -49,12 +57,22 @@ tobs_cpo <- function(object, n.draws = 1000L, ...) {
 # stacking all consume, so it lives in one place (tobs_stack reuses it). The
 # per-family marginal likelihoods mirror the C++ kernels in src/*_likelihood.h.
 #
-# Fidelity note: the linear predictors are evaluated from the *process fixed-
-# effect* coefficient draws (the leading columns of `draws`), exactly as
-# `fitted()` and the historical WAIC do. Structured-term contributions
-# (spatial / temporal / random-effect fields) are not added to the predictor,
-# and dynamic visit-level detection covariates are not folded in. For models
-# with those components the score is conditional on the fixed-effect predictor.
+# Fidelity note: the cover() / occu_cover() spatial fits score a *full-model*
+# pointwise log-likelihood -- the shared spatial / temporal field is folded into
+# the occupancy (and, when copied, cover) predictor per cell and the per-visit
+# detection / cover covariates are folded in site-major, so WAIC / DIC / LOO /
+# CPO match the INLA / spOccupancy full-model criteria. The joint_coupled engine
+# samples the grid-integrated field jointly with the arm coefficients
+# (.tobs_occu_cover_components -> .tobs_joint_draws), giving the exact integrated
+# field uncertainty. The v3 nested-Laplace path stores no joint object, so it
+# folds the field from the per-cell marginal posterior (field_table z_mean /
+# z_sd, .tobs_occu_cover_v3_field); a single site's pointwise term depends only on
+# its own cell's field, so the per-observation marginal is exact, but the joint
+# field-coefficient covariance is not reconstructed. The draw-matrix families
+# routed through .tobs_eta_draws (single, dynamic, integrated, jsdm, ...) evaluate
+# the predictor from the process fixed-effect coefficient draws only; for those
+# models any structured field is not added and the score is conditional on the
+# fixed-effect predictor.
 .tobs_pointwise_loglik <- function(object, n.draws = NULL) {
   nd <- n.draws %||% 1000L
   if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object, nd))
