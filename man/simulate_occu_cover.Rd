@@ -85,9 +85,10 @@ adds a factor column (levels \verb{<prefix>1..K}). Without \code{slope_cov} it i
 centred \code{N(0, sigma^2)} random intercept; \code{nested_in = "<name>"} nests its
 codes within a previously listed grouping (matching \code{(1 | parent/child)}),
 otherwise crossed. With \code{slope_cov = "<column>"} (a per-visit covariate,
-generated \code{N(0, 1)} if absent) it is a random slope: a slope-only
-uncorrelated block when \code{rho} is unset, or a correlated intercept + slope
-block (covariance from \code{sigma} / \code{sigma_slope} / \code{rho}) when \code{rho} is given.
+generated \code{N(0, slope_sd)} if absent, \code{slope_sd} default 1) it is a random
+slope: a slope-only uncorrelated block when \code{rho} is unset, or a correlated
+intercept + slope block (covariance from \code{sigma} / \code{sigma_slope} / \code{rho})
+when \code{rho} is given.
 Truth is returned in \code{truth$re_det[[name]]} (named by the level label a fit
 reconstructs): \code{b} / \code{b_slope} BLUP vectors, or the \code{B} BLUP matrix plus
 \code{s0} / \code{s1} / \code{rho} for a correlated slope.}

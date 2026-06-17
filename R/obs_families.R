@@ -339,10 +339,14 @@ jsdm <- function() {
 #' `[n_groups x n_coefs]` BLUP matrix, a per-coefficient `sigma`, and (correlated)
 #' a `cor` matrix; the hyperparameters are `sigma_re_p_<coef>` and
 #' `cor_re_p_<ci>_<cj>`, marginalized over the grid. `predict()` weights each
-#' coefficient by its covariate column in `newdata` (intercept = 1). A correlated
-#' slope adds `p(p+1)/2` Sigma axes to the outer grid, so its free-Sigma grid uses
-#' a compact default; widen it with `control$re.logchol.grid.p` /
-#' `re.logchol.grid.pos`.
+#' coefficient by its covariate column in `newdata` (intercept = 1). Each slope
+#' covariate is **standardized** to unit SD before fitting (mirroring the
+#' fixed-effect design), so the variance grid is scale-invariant -- the reported
+#' slope BLUPs and `sigma` are back-transformed to the covariate's natural units
+#' (correlation is scale-free). A correlated slope adds `p(p+1)/2` Sigma axes to
+#' the outer grid, so its free-Sigma grid uses a compact principled default
+#' (symmetric correlation nodes including 0); widen it with
+#' `control$re.logchol.grid.p` / `re.logchol.grid.pos`.
 #'
 #' An RE without a spatial field on the psi arm uses the non-spatial path's RE
 #' instead. The positive-cover RE needs per-visit cover

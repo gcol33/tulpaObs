@@ -474,3 +474,41 @@ test_that("occu_cover() correlated random slope recovers Sigma + BLUPs", {
   expect_gt(mn[["s1"]], 0.2)
   expect_gt(mn[["rho"]], 0.1)
 })
+
+test_that("occu_cover() random slope recovers on a NON-unit covariate scale", {
+  skip_on_cran()
+  skip_if_fast()
+  # The slope covariate has SD ~ 8 and a small raw slope SD (0.08), so the slope
+  # EFFECT (sigma_slope * sd(covariate)) is O(1). Without standardizing the
+  # covariate, the fixed free-Sigma grid (~0.35..1.6) cannot reach a 0.08 raw
+  # slope SD and the modal Sigma cell pins -- nonsense. With standardization the
+  # block is fit on the O(1) effect scale and the reported slope SD is
+  # back-transformed to the natural (raw) units, recovering ~0.08.
+  seeds <- 1:5
+  res <- t(vapply(seeds, function(s) {
+    adj <- .ocor_grid_adj(9L)
+    sim <- simulate_occu_cover(
+      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+      re_det = list(habitat = list(K = 8L, sigma = 0.7, sigma_slope = 0.08,
+                                   rho = 0.4, prefix = "hab",
+                                   slope_cov = "area", slope_sd = 8)),
+      seed = s)
+    fit <- suppressWarnings(tobs(
+      occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+      family = occu_cover("lognormal"),
+      detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
+      y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+      method = "nested_laplace",
+      control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
+    re <- fit$re[["p"]]
+    B  <- sim$truth$re_det$habitat$B[re$levels, , drop = FALSE]
+    c(cor1 = stats::cor(re$blup[, 2L], B[, 2L]),       # slope BLUP (raw scale)
+      s1   = unname(re$sigma[[2L]]))                   # slope SD (raw scale)
+  }, numeric(2)))
+  mn <- colMeans(res)
+  # The slope BLUP recovers its per-group structure, and the back-transformed
+  # slope SD lands on the natural (tiny) scale -- NOT pinned at the grid range.
+  expect_gt(mn[["cor1"]], 0.4)
+  expect_lt(mn[["s1"]], 0.3)        # natural-scale slope SD (truth 0.08), not ~1
+})

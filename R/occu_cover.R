@@ -314,19 +314,32 @@
       Xs <- as.matrix(Xs); storage.mode(Xs) <- "double"
       if (is.null(colnames(Xs)))
         colnames(Xs) <- paste0("slope", seq_len(ncol(Xs)))
+      # Standardize each slope covariate to unit SD (over the observed visits), so
+      # the per-coefficient RE variance is on an O(1) scale the fixed Sigma grid
+      # brackets regardless of the covariate's raw scale; a constant column (sd 0)
+      # keeps scale 1. The fit runs on the scaled column and the reported slope
+      # BLUP / SD are divided back by the scale, so the random slope is on the
+      # covariate's natural units (correlation is scale-free). Mirrors the
+      # fixed-effect design autoscaling.
+      slope_scale <- apply(Xs, 2L, function(col) {
+        s <- stats::sd(col[valid_flat]); if (!is.finite(s) || s <= 0) 1 else s
+      })
+      Xs <- sweep(Xs, 2L, slope_scale, "/")
       has_int <- isTRUE(spec$intercept)
       Z <- if (has_int) cbind(`(Intercept)` = 1, Xs) else Xs
-      coef_names <- colnames(Z)
-      n_coefs    <- ncol(Z)
-      correlated <- isTRUE(spec$correlated) && n_coefs > 1L
+      coef_names  <- colnames(Z)
+      n_coefs     <- ncol(Z)
+      correlated  <- isTRUE(spec$correlated) && n_coefs > 1L
+      coef_scales <- if (has_int) c(1, slope_scale) else slope_scale
     } else {
       Z <- NULL; coef_names <- "(Intercept)"; n_coefs <- 1L
-      correlated <- FALSE; has_int <- TRUE
+      correlated <- FALSE; has_int <- TRUE; coef_scales <- 1
     }
     list(codes_flat = as.integer(codes), levels = lev, n_groups = length(lev),
          var = var, type = spec$type, n_coefs = n_coefs,
          coef_names = coef_names, correlated = correlated,
-         has_intercept = has_int, Z = Z, term_label = spec$term_label)
+         has_intercept = has_int, Z = Z, coef_scales = as.numeric(coef_scales),
+         term_label = spec$term_label)
   })
 }
 
@@ -1748,9 +1761,10 @@
 #'   centred `N(0, sigma^2)` random intercept; `nested_in = "<name>"` nests its
 #'   codes within a previously listed grouping (matching `(1 | parent/child)`),
 #'   otherwise crossed. With `slope_cov = "<column>"` (a per-visit covariate,
-#'   generated `N(0, 1)` if absent) it is a random slope: a slope-only
-#'   uncorrelated block when `rho` is unset, or a correlated intercept + slope
-#'   block (covariance from `sigma` / `sigma_slope` / `rho`) when `rho` is given.
+#'   generated `N(0, slope_sd)` if absent, `slope_sd` default 1) it is a random
+#'   slope: a slope-only uncorrelated block when `rho` is unset, or a correlated
+#'   intercept + slope block (covariance from `sigma` / `sigma_slope` / `rho`)
+#'   when `rho` is given.
 #'   Truth is returned in `truth$re_det[[name]]` (named by the level label a fit
 #'   reconstructs): `b` / `b_slope` BLUP vectors, or the `B` BLUP matrix plus
 #'   `s0` / `s1` / `rho` for a correlated slope.
@@ -1879,7 +1893,7 @@ simulate_occu_cover <- function(N             = 200L,
                               # slope-only uncorrelated block.
                               slope_cov = s$slope_cov,
                               sigma_slope = s$sigma_slope,
-                              rho = s$rho)
+                              rho = s$rho, slope_sd = s$slope_sd)
     }
   }
   re_codes  <- list()    # within-grouping per-visit code (for nesting)
@@ -1915,9 +1929,10 @@ simulate_occu_cover <- function(N             = 200L,
         b_p_re <- unname(b); re_det_levels <- labels
       }
     } else {
-      # Random slope on a per-visit covariate (generated if absent).
+      # Random slope on a per-visit covariate (generated N(0, slope_sd) if
+      # absent; `slope_sd` != 1 exercises the slope-covariate standardization).
       if (is.null(visit_data[[s$slope_cov]]))
-        visit_data[[s$slope_cov]] <- stats::rnorm(N * J)
+        visit_data[[s$slope_cov]] <- stats::rnorm(N * J, 0, s$slope_sd %||% 1)
       xv <- as.numeric(visit_data[[s$slope_cov]])
       if (is.null(s$rho)) {
         # Slope-only uncorrelated block (0 + x | g).

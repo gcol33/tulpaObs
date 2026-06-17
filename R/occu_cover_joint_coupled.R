@@ -623,7 +623,8 @@
   # the postprocess pulls the right latent columns; the blocks trail the field
   # block(s), so the field copy indices stay valid.
   add_re_term <- function(arm, codes, grid, Z, n_groups, var, levels,
-                          n_coefs, coef_names, correlated, logchol_grid = NULL) {
+                          n_coefs, coef_names, correlated, logchol_grid = NULL,
+                          coef_scales = NULL) {
     obs_idx <- obs_for(arm, codes)
     b0 <- length(re_blocks)
     if (!isTRUE(correlated)) {
@@ -650,6 +651,8 @@
       n_groups = as.integer(n_groups), n_coefs = as.integer(n_coefs),
       coef_names = coef_names, correlated = isTRUE(correlated),
       has_intercept = identical(coef_names[[1L]], "(Intercept)"),
+      coef_scales = if (is.null(coef_scales)) rep(1, n_coefs)
+                    else as.numeric(coef_scales),
       block_start = b0 + 1L, n_blocks = length(re_blocks) - b0)
   }
   if (has_re) {
@@ -661,14 +664,16 @@
     for (d in re_det_terms) {
       add_re_term("p", d$codes, dots$re.sigma.grid.p %||% re_grid_default,
                   d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
-                  d$correlated, logchol_grid = dots$re.logchol.grid.p)
+                  d$correlated, logchol_grid = dots$re.logchol.grid.p,
+                  coef_scales = d$coef_scales)
     }
   }
   if (has_re_pos) {
     for (d in re_pos_terms) {
       add_re_term("pos", d$codes, dots$re.sigma.grid.pos %||% re_grid_default,
                   d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
-                  d$correlated, logchol_grid = dots$re.logchol.grid.pos)
+                  d$correlated, logchol_grid = dots$re.logchol.grid.pos,
+                  coef_scales = d$coef_scales)
     }
   }
 
@@ -931,18 +936,24 @@
   .occu_cover_jc_postprocess(fit, ctx)
 }
 
-# Coarse outer-grid for a correlated-slope `miid` block's free Sigma, in the
-# engine's column-major lower-triangular log-Cholesky coordinates (gcol33/tulpa
-# #114). A p = 2 (intercept + one slope) block -- the common `(1 + x | g)` -- gets
-# a compact (sigma_0, sigma_1, rho) tensor so the block composes with the shared
-# field + copy amplitude under the engine's outer-grid cap; users widen it via
-# `control$re.logchol.grid.p` / `re.logchol.grid.pos`. For p != 2 (multi-slope
-# correlated, rare) we return NULL so the engine fills its own default; such a
-# design is grid-heavy and usually needs an explicit coarse grid.
+# Compact-but-PRINCIPLED outer-grid for a correlated-slope `miid` block's free
+# Sigma, in the engine's column-major lower-triangular log-Cholesky coordinates
+# (gcol33/tulpa#114). A p = 2 (intercept + one slope) block -- the common
+# `(1 + x | g)` -- gets a (sigma_0, sigma_1, rho) tensor sized to compose with the
+# shared field + copy amplitude under the engine's outer-grid cap. The grid is a
+# coarsened version of the engine's `.mcar_default_logchol_grid`: SYMMETRIC
+# correlation nodes that include 0 and reach strong +/- (so the marginal
+# correlation is not forced into a lop-sided range), and log-spaced SD nodes
+# spanning small to large. The slope covariate is standardized
+# (.occu_cover_obs_re_design), so a fixed SD bracket is meaningful for any
+# covariate scale. Users widen it via `control$re.logchol.grid.p` /
+# `re.logchol.grid.pos`. For p != 2 (multi-slope correlated, rare) return NULL so
+# the engine fills its own default; that design is grid-heavy and usually needs
+# an explicit coarse grid.
 .occu_cover_miid_logchol_grid <- function(p, sig_grid = NULL, rho_grid = NULL) {
   if (!identical(as.integer(p), 2L)) return(NULL)
-  sig_grid <- sig_grid %||% c(0.4, 0.8, 1.4)
-  rho_grid <- rho_grid %||% c(-0.3, 0.3, 0.7)
+  sig_grid <- sig_grid %||% c(0.35, 0.8, 1.6)
+  rho_grid <- rho_grid %||% c(-0.7, -0.3, 0, 0.3, 0.7)
   g <- expand.grid(s1 = sig_grid, s2 = sig_grid, rho = rho_grid,
                    KEEP.OUT.ATTRS = FALSE)
   out <- cbind(L11 = log(g$s1),
@@ -1188,6 +1199,15 @@
         B_sd[] <- Hs
         lat <- cols
       }
+      # Back-transform a slope coefficient's BLUP from the standardized covariate
+      # the fit ran on to its natural units (`b_raw = b_std / scale`); the
+      # intercept's scale is 1. The per-coefficient SD is rescaled below the same
+      # way; correlation is scale-free.
+      sc <- d$coef_scales %||% rep(1, nc)
+      if (any(sc != 1)) {
+        B_mean <- sweep(B_mean, 2L, sc, "/")
+        B_sd   <- sweep(B_sd,   2L, sc, "/")
+      }
       re_terms[[i]] <- c(d, list(blup_mat = B_mean, blup_sd_mat = B_sd,
                                  prior_pos = lay, latent_idx = as.integer(lat)))
     }
@@ -1323,10 +1343,21 @@
     # marginalized to per-coefficient SDs + cross-correlations over the grid. The
     # per-coefficient SD (and correlation) are stored back on `re_terms` so the
     # fit summary keeps the structured covariance, not just the scalar names.
+    # Back-transform a slope coefficient's reported SD from the standardized
+    # covariate the fit ran on to its natural units (`sigma_raw = sigma_std /
+    # scale`); the intercept scale is 1. Divides the stored hyper mean / SD / per-
+    # cell values so the fit summary AND its vcov are on the natural scale.
+    rescale_hyper <- function(nm, s) {
+      if (s == 1 || is.null(hyper_means[[nm]])) return(invisible())
+      hyper_means[[nm]] <<- hyper_means[[nm]] / s
+      hyper_sds  [[nm]] <<- hyper_sds  [[nm]] / s
+      hyper_vals [[nm]] <<- hyper_vals [[nm]] / s
+    }
     for (i in seq_along(re_terms)) {
       trm  <- re_terms[[i]]
       base <- re_sig_names[i]
       nc   <- trm$n_coefs; cn <- trm$coef_names; PP <- trm$prior_pos
+      sc   <- trm$coef_scales %||% rep(1, nc)
       tags <- vapply(cn, .re_coef_tag, character(1))
       sigma_vec <- stats::setNames(rep(NA_real_, nc), cn)
       cor_mat   <- NULL
@@ -1334,6 +1365,7 @@
         for (cc in seq_len(nc)) {
           nm <- if (nc == 1L) base else paste0(base, "_", tags[cc])
           pick2(nm, sprintf("b%d.sigma", PP[cc]))
+          rescale_hyper(nm, sc[cc])
           sigma_vec[cc] <- hyper_means[[nm]] %||% NA_real_
         }
       } else {
@@ -1357,7 +1389,8 @@
         }
         cor_mat <- diag(nc)
         for (cc in seq_len(nc)) {
-          nm <- paste0(base, "_", tags[cc]); put_derived(nm, sd_mat2[, cc])
+          nm <- paste0(base, "_", tags[cc])
+          put_derived(nm, sd_mat2[, cc] / sc[cc])   # natural-scale slope SD
           sigma_vec[cc] <- hyper_means[[nm]]
         }
         cbase <- sub("^sigma", "cor", base); rr <- 1L
@@ -1587,6 +1620,7 @@
                             n_coefs    = nc,
                             coef_names = t$coef_names,
                             covariate_names = covnms,
+                            coef_scales = t$coef_scales %||% rep(1, nc),
                             has_intercept   = isTRUE(t$has_intercept),
                             correlated = t$correlated,
                             levels     = t$levels,

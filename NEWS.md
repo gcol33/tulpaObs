@@ -1,5 +1,19 @@
 # tulpaObs NEWS
 
+## 0.0.50 (2026-06-17)
+
+* `occu_cover()` random **slopes** on the detection / positive-cover arms now
+  fit on a meaningful Sigma grid regardless of the covariate's scale. Each slope
+  covariate is standardized to unit SD before fitting (mirroring the
+  fixed-effect design autoscaling), and the reported slope BLUPs and SDs are
+  back-transformed to the covariate's natural units (correlation is scale-free).
+  The correlated-slope free-Sigma (`miid`) grid now uses a principled compact
+  default -- symmetric correlation nodes including 0 and reaching strong +/-, and
+  log-spaced SD nodes -- so the marginal correlation is no longer forced into a
+  lop-sided range; widen it with `control$re.logchol.grid.p` /
+  `re.logchol.grid.pos`. `simulate_occu_cover()` gains `re_det` slope-covariate
+  scale control (`slope_sd`) for non-unit-scale recovery tests.
+
 ## 0.0.49 (2026-06-17)
 
 * `occu_cover()` supports random effects -- intercepts AND slopes -- on the

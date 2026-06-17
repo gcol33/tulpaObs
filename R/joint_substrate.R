@@ -245,12 +245,24 @@
       # [n_draws x (n_coefs * n_groups)] coefficient-major latent draws; predict
       # reshapes to per-coefficient per-group and weights by the slope covariate
       # (a random intercept is the n_coefs = 1 case, [n_draws x n_groups]).
+      nc <- r$n_coefs %||% 1L; ng <- r$n_groups
+      d  <- take(length(r$latent_idx))
+      # Back-transform a slope coefficient's draws from the standardized covariate
+      # the fit ran on to its natural units (divide coefficient block c by its
+      # scale), so predict() weights by the raw covariate column in `newdata`.
+      sc <- r$coef_scales %||% rep(1, nc)
+      if (nc > 1L && any(sc != 1)) {
+        for (cc in seq_len(nc)) {
+          cols <- (cc - 1L) * ng + seq_len(ng)
+          if (sc[cc] != 1) d[, cols] <- d[, cols] / sc[cc]
+        }
+      }
       list(arm = r$arm, var = r$var, levels = r$levels,
-           n_coefs = r$n_coefs %||% 1L, n_groups = r$n_groups,
+           n_coefs = nc, n_groups = ng,
            coef_names = r$coef_names,
            covariate_names = r$covariate_names,
            has_intercept = r$has_intercept %||% TRUE,
-           draws = take(length(r$latent_idx)))
+           draws = d)
     })
     names(re_draws) <- names(re_meta)
   }

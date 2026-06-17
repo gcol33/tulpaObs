@@ -208,10 +208,14 @@ free-Sigma \code{miid} block. A slope term's \code{fit$re} entry carries an
 \verb{[n_groups x n_coefs]} BLUP matrix, a per-coefficient \code{sigma}, and (correlated)
 a \code{cor} matrix; the hyperparameters are \verb{sigma_re_p_<coef>} and
 \verb{cor_re_p_<ci>_<cj>}, marginalized over the grid. \code{predict()} weights each
-coefficient by its covariate column in \code{newdata} (intercept = 1). A correlated
-slope adds \code{p(p+1)/2} Sigma axes to the outer grid, so its free-Sigma grid uses
-a compact default; widen it with \code{control$re.logchol.grid.p} /
-\code{re.logchol.grid.pos}.
+coefficient by its covariate column in \code{newdata} (intercept = 1). Each slope
+covariate is \strong{standardized} to unit SD before fitting (mirroring the
+fixed-effect design), so the variance grid is scale-invariant -- the reported
+slope BLUPs and \code{sigma} are back-transformed to the covariate's natural units
+(correlation is scale-free). A correlated slope adds \code{p(p+1)/2} Sigma axes to
+the outer grid, so its free-Sigma grid uses a compact principled default
+(symmetric correlation nodes including 0); widen it with
+\code{control$re.logchol.grid.p} / \code{re.logchol.grid.pos}.
 
 An RE without a spatial field on the psi arm uses the non-spatial path's RE
 instead. The positive-cover RE needs per-visit cover

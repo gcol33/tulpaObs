@@ -522,9 +522,13 @@ keep-subset `Z` via `re_det_terms`/`re_pos_terms`) per term: intercept -> one
 scalar iid block; uncorr slope (`!correlated`) -> one weighted iid block per coef
 (tulpa `svc_weight` = `Z[,c]`, intercept col all-ones = scalar iid); corr slope
 (`(1+x|g)`) -> one `miid` block (tulpa#114: `Q=I` mcar, `n_fields`=n_coefs,
-`field_weight`=Z cols, free Sigma log-Cholesky; coarse default grid
-`.occu_cover_miid_logchol_grid` for p=2 to stay under the engine's 2048 outer-grid
-cap, knob `control$re.logchol.grid.p`/`.pos`). `re_descs` = ONE desc per TERM
+`field_weight`=Z cols, free Sigma log-Cholesky). **Slope covariate STANDARDIZED**
+to unit SD in `.occu_cover_obs_re_design` (`coef_scales`, intercept scale 1) so the
+fixed Sigma grid is scale-invariant; BLUP/sigma + the predict draws (joint_substrate)
+back-transformed `/scale` to natural units (cor scale-free). miid grid =
+`.occu_cover_miid_logchol_grid` (p=2 principled compact: SYMMETRIC rho incl 0 +
+strong +/-, log-spaced SD) to stay under the engine's 2048 outer-grid cap, knob
+`control$re.logchol.grid.p`/`.pos`. `re_descs` = ONE desc per TERM
 (block_start/n_blocks span). **Key fix (#102)**: det arm's `field_coef`=1 when
 `model$re_det` present so the iid block scatters; field skipped by `spatial_idx=0`.
 Postprocess: per term gather its blocks' latent cols (uncorr = n_coefs iid blocks;
