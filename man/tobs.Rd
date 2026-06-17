@@ -8,7 +8,9 @@ tobs(
   formula,
   data,
   family,
+  occurrence = NULL,
   detection = NULL,
+  positive = NULL,
   y = NULL,
   visits = NULL,
   method = c("auto", "laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
@@ -22,7 +24,8 @@ tobs(
 \arguments{
 \item{formula}{state-process formula, e.g. \code{~ elev + forest}. For occupancy
 this is the occupancy probability formula; for N-mixture the abundance
-formula; for the cover hurdle the latent-presence formula.
+formula; for the cover hurdle the latent-presence formula (the deprecated
+alias of \code{occurrence} there).
 
 Single-vector-response families (the cover hurdle, \code{\link[=cover]{cover()}}) also accept
 the response on the left-hand side, \code{response ~ predictors}, in which case
@@ -60,9 +63,32 @@ structures or other options.}
 \item{family}{a \code{tobs_family} object (see \code{\link[=obs_family]{obs_family()}} and the concrete
 constructors \code{\link[=occu]{occu()}}, \code{\link[=abun]{abun()}}, \code{\link[=cover]{cover()}}, ...).}
 
+\item{occurrence}{state-process (occupancy / latent-presence) formula for the
+cover hurdle (\code{\link[=occu_cover]{occu_cover()}} / \code{\link[=cover]{cover()}}), reading symmetrically with
+\code{detection} and \code{positive}. The front-door name for \code{formula}; supply one
+of the two.}
+
 \item{detection}{detection-process formula, e.g. \code{~ observer + effort}.
 Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun]{abun()}}, ignored for
 \code{\link[=jsdm]{jsdm()}} and (currently) \code{\link[=cover]{cover()}}.}
+
+\item{positive}{positive-arm (cover) formula for \code{\link[=occu_cover]{occu_cover()}}, e.g.
+\code{~ time.sc + habitat}. The shared occupancy field is carried onto this arm
+by naming it on its \code{spatial(..., name = "occ_space")} term and declaring
+\code{copy("occ_space", alpha = grid(c(0.25, 0.5, 1)))} here:
+\itemize{
+\item \code{copy("occ_space", alpha = grid(g))} marginalizes the cross-arm coupling
+amplitude over the grid \code{g}; \verb{alpha = <scalar>} fixes it.
+\item a dotted component reference, \code{copy("occ_space.trend", alpha = ...)},
+scales a single field component (the intercept block is \code{"intercept"},
+a \code{||}-declared trend block is \code{"trend"}), so per-component amplitudes
+stay expressible; the whole-field \code{copy("occ_space")} uses one amplitude
+for every block.
+\item omitting \code{copy()} decouples the arms (the field rides occupancy only).
+}
+
+Defaults to \code{detection} when unset (a per-visit cover design matching the
+detection design).}
 
 \item{y}{response. Shape depends on family:
 \itemize{

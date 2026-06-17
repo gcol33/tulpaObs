@@ -14,9 +14,30 @@
 #' template. The specific model is chosen via the `family` argument; the engine
 #' (Laplace / nested Laplace / NUTS) via `engine`.
 #'
+#' @param occurrence state-process (occupancy / latent-presence) formula for the
+#'   cover hurdle ([occu_cover()] / [cover()]), reading symmetrically with
+#'   `detection` and `positive`. The front-door name for `formula`; supply one
+#'   of the two.
+#' @param positive positive-arm (cover) formula for [occu_cover()], e.g.
+#'   `~ time.sc + habitat`. The shared occupancy field is carried onto this arm
+#'   by naming it on its `spatial(..., name = "occ_space")` term and declaring
+#'   `copy("occ_space", alpha = grid(c(0.25, 0.5, 1)))` here:
+#'
+#'   * `copy("occ_space", alpha = grid(g))` marginalizes the cross-arm coupling
+#'     amplitude over the grid `g`; `alpha = <scalar>` fixes it.
+#'   * a dotted component reference, `copy("occ_space.trend", alpha = ...)`,
+#'     scales a single field component (the intercept block is `"intercept"`,
+#'     a `||`-declared trend block is `"trend"`), so per-component amplitudes
+#'     stay expressible; the whole-field `copy("occ_space")` uses one amplitude
+#'     for every block.
+#'   * omitting `copy()` decouples the arms (the field rides occupancy only).
+#'
+#'   Defaults to `detection` when unset (a per-visit cover design matching the
+#'   detection design).
 #' @param formula state-process formula, e.g. `~ elev + forest`. For occupancy
 #'   this is the occupancy probability formula; for N-mixture the abundance
-#'   formula; for the cover hurdle the latent-presence formula.
+#'   formula; for the cover hurdle the latent-presence formula (the deprecated
+#'   alias of `occurrence` there).
 #'
 #'   Single-vector-response families (the cover hurdle, [cover()]) also accept
 #'   the response on the left-hand side, `response ~ predictors`, in which case
@@ -214,7 +235,9 @@
 tobs <- function(formula,
                  data,
                  family,
+                 occurrence = NULL,
                  detection  = NULL,
+                 positive   = NULL,
                  y          = NULL,
                  visits     = NULL,
                  method     = c("auto", "laplace", "laplace_sla",
@@ -226,6 +249,30 @@ tobs <- function(formula,
                  ...) {
 
   method <- match.arg(method)
+
+  # `occurrence` is the state-process formula's name for the occu_cover() /
+  # cover() hurdle, reading symmetrically with `detection` and `positive`. It is
+  # the front door; `formula` is the deprecated alias. Exactly one is given.
+  if (!is.null(occurrence)) {
+    if (!missing(formula) && !is.null(formula)) {
+      stop("Give the state-process formula as `occurrence`, not both ",
+           "`occurrence` and `formula`.", call. = FALSE)
+    }
+    formula <- occurrence
+  } else if (!missing(formula) && inherits(family, "tobs_family") &&
+             identical(family$name, "occu_cover")) {
+    # occu_cover() is the three-arm hurdle whose state formula reads
+    # symmetrically with `detection` / `positive` as `occurrence`. cover() is a
+    # single-formula family (response on the LHS), where `formula` is not an
+    # alias and stays the primary surface.
+    message("tobs(): `formula =` is deprecated for occu_cover(); use ",
+            "`occurrence =` (it reads symmetrically with `detection` and ",
+            "`positive`).")
+  }
+  if (missing(formula) || is.null(formula)) {
+    stop("A state-process formula is required (`occurrence =` for the cover ",
+         "hurdle, `formula =` otherwise).", call. = FALSE)
+  }
 
   if (missing(family)) {
     stop(
@@ -250,11 +297,17 @@ tobs <- function(formula,
   # independent driver as the hand-built multi-response `y` list below. Returns a
   # `tobs_batch`. Scoped to occu_cover() / cover() (the families with a per-plot
   # response that a species column splits); errors for any other family.
+  # `positive` is a formal of tobs() but the per-species / batch / ensemble
+  # sub-fits below thread the cover positive-arm formula through their `dots`
+  # (the old `...` spelling). Fold it back in so those paths still receive it.
+  fwd_dots <- list(...)
+  if (!is.null(positive)) fwd_dots$positive <- positive
+
   if (!is.null(by)) {
     return(.tobs_fit_by_species(
       formula = formula, data = data, family = family, detection = detection,
       visits = visits, method = method, priors = priors, control = control,
-      by = by, dots = list(...)))
+      by = by, dots = fwd_dots))
   }
 
   # Response on the top formula LHS (gcol33/tulpaObs#66). A single-vector-response
@@ -282,7 +335,7 @@ tobs <- function(formula,
         tobs_args = list(formula = formula, data = data, family = family,
                          detection = detection, visits = visits,
                          method = method, priors = priors, control = control,
-                         dots = list(...)),
+                         dots = fwd_dots),
         y = y, B = B
       ))
     }
@@ -332,7 +385,7 @@ tobs <- function(formula,
       ci <- member_ctrl
       ci[["seed"]] <- base_seed + i - 1L
       tobs(formula = formula, data = data, family = family,
-           detection = detection, y = y, visits = visits,
+           detection = detection, positive = positive, y = y, visits = visits,
            method = method, priors = priors, control = ci, ...)
     })
     names(members) <- paste0("seed", base_seed + seq_len(K) - 1L)
@@ -365,20 +418,23 @@ tobs <- function(formula,
     ), call. = FALSE)
   )
 
-  fit <- dispatch(
-    formula    = formula,
-    data       = data,
-    family     = family,
-    detection  = detection,
-    y          = y,
-    visits     = visits,
-    engine     = engine,
-    approx     = approx,
-    correction = route$correction,
-    priors     = priors,
-    control    = control,
-    ...
-  )
+  # `positive` (the cover-hurdle positive-arm formula) is a formal argument that
+  # the cover dispatchers consume as `dots$positive`; `fwd_dots` folded it back
+  # into the splat above.
+  fit <- do.call(dispatch, c(
+    list(formula    = formula,
+         data       = data,
+         family     = family,
+         detection  = detection,
+         y          = y,
+         visits     = visits,
+         engine     = engine,
+         approx     = approx,
+         correction = route$correction,
+         priors     = priors,
+         control    = control),
+    fwd_dots
+  ))
 
   if (!inherits(fit, "tobs_fit")) {
     class(fit) <- c("tobs_fit", class(fit))
