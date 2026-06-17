@@ -309,6 +309,11 @@
       # = TRUE.
       diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
+      # Diagnostic parallelism (gcol33/tulpa#117): the independent k.samples
+      # re-solves run after the grid (cores free), so widening their outer pool
+      # is a bit-identical speedup. NULL follows the fit's thread grant; "auto"
+      # grabs the performance cores; an integer pins it. Forwarded verbatim.
+      k_threads  = dots$k.threads,
       checkpoint = dots$checkpoint
     )
   )

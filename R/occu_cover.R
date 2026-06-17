@@ -166,6 +166,170 @@
   invisible(NULL)
 }
 
+# Parse an observation-arm (detection / positive-cover) formula for random
+# effects (gcol33/tulpaObs#102, #103). lme4 bars are desugared to re() first, so
+# `(1 | g)`, `(x | g)`, `(x || g)`, `(0 + x | g)`, crossed `(1 | g) + (1 | h)`,
+# and nested `(1 | g/h)` (-> re(g) + re(g:h)) all arrive as a list of re() terms.
+# Returns NULL when the arm carries no random effect (the formula is then used
+# unchanged downstream); otherwise a list with the fixed-effects formula (every
+# re() term stripped, for the design build), the parsed term specs (one per re()
+# term, in formula order), and `has_slope` (TRUE if any term is a random slope --
+# the joint-engine slope blocks are gated on gcol33/tulpa#114). Each spec keeps
+# its grouping expression, slope covariate, and intercept / correlated flags;
+# group codes and the per-row design are resolved later against `data` / `visits`
+# once the model's `valid` mask is built. Other structured terms (icar(), gp(),
+# temporal(), ...) error; copy() is stripped separately.
+.occu_cover_obs_re_term_spec <- function(label) {
+  e    <- str2lang(label)
+  args <- as.list(e)[-1L]
+  group_expr <- if (!is.null(args$group)) args$group else args[[1L]]
+  flag <- function(nm, default) {
+    if (is.null(args[[nm]])) return(default)
+    tryCatch(isTRUE(eval(args[[nm]])), error = function(...) default)
+  }
+  type <- tryCatch(if (!is.null(args$type)) eval(args$type) else "intercept",
+                   error = function(...) "intercept")
+  list(group_expr = group_expr, vars = all.vars(group_expr),
+       type = type, covariate = args$covariate,
+       intercept = flag("intercept", TRUE), correlated = flag("correlated", TRUE),
+       term_label = label)
+}
+
+.occu_cover_obs_re_parse <- function(formula, arm) {
+  if (is.null(formula)) return(NULL)
+  f    <- .tobs_desugar_bars(formula)
+  tt   <- stats::terms(f, keep.order = TRUE)
+  labs <- attr(tt, "term.labels")
+  # `re` is extracted here; `copy` is the cross-arm coupling, stripped separately
+  # by .occu_cover_extract_pos_copies(); every other structured term is rejected.
+  reg  <- setdiff(.tobs_term_names(), c("re", "copy"))
+  re_labels <- character(0)
+  for (lab in labs) {
+    e    <- tryCatch(str2lang(lab), error = function(...) NULL)
+    head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]])
+            else NA_character_
+    if (identical(head, "re")) {
+      re_labels <- c(re_labels, lab)
+    } else if (!is.na(head) && head %in% reg) {
+      stop(sprintf(paste0(
+        "occu_cover(): structured term `%s()` is not supported on the %s arm; ",
+        "random effects (`(1 | g)`, `(x | g)`, crossed / nested) are ",
+        "(gcol33/tulpaObs#102, #103)."), head, arm), call. = FALSE)
+    }
+  }
+  if (length(re_labels) == 0L) return(NULL)
+  specs     <- lapply(re_labels, .occu_cover_obs_re_term_spec)
+  fe_labels <- setdiff(labs, re_labels)
+  fe <- stats::reformulate(
+    termlabels = if (length(fe_labels)) fe_labels else "1",
+    intercept  = as.logical(attr(tt, "intercept")))
+  environment(fe) <- environment(formula)
+  list(fe = fe, terms = specs,
+       has_slope = any(vapply(specs, function(s) identical(s$type, "slope"),
+                              logical(1))))
+}
+
+# Evaluate an obs-arm RE expression (a grouping factor or a slope covariate) to
+# a flat value in site-major order (site 1 visits 1..max_visits, site 2, ...),
+# matching `as.logical(t(model$valid))`. When all the expression's variables live
+# in `data` (one row per site) the result is broadcast across each site's visits;
+# when they live in `visits` (one row per site-visit) it is taken as-is. A
+# matrix-valued expression (a cbind() of slope covariates) keeps its columns.
+.occu_cover_obs_flat_eval <- function(expr, data, visit_df, n_sites, max_visits,
+                                      arm) {
+  vars   <- all.vars(expr)
+  n_flat <- n_sites * max_visits
+  if (length(vars) && all(vars %in% names(data))) {
+    val <- eval(expr, envir = data)
+    if (is.matrix(val)) {
+      if (nrow(val) != n_sites)
+        stop(sprintf("occu_cover(): a %s RE expression resolved to %d rows but there are %d sites.",
+                     arm, nrow(val), n_sites), call. = FALSE)
+      return(val[rep(seq_len(n_sites), each = max_visits), , drop = FALSE])
+    }
+    if (length(val) != n_sites)
+      stop(sprintf("occu_cover(): a %s RE expression resolved to %d values but there are %d sites.",
+                   arm, length(val), n_sites), call. = FALSE)
+    return(rep(val, each = max_visits))
+  }
+  if (!is.null(visit_df) && length(vars) && all(vars %in% names(visit_df))) {
+    val <- eval(expr, envir = visit_df)
+    if (is.matrix(val)) {
+      if (nrow(val) != n_flat)
+        stop(sprintf("occu_cover(): a %s RE expression resolved to %d rows but expected %d (n_sites x max_visits).",
+                     arm, nrow(val), n_flat), call. = FALSE)
+      return(val)
+    }
+    if (length(val) != n_flat)
+      stop(sprintf("occu_cover(): a %s RE expression resolved to %d values but expected %d (one per site-visit).",
+                   arm, length(val), n_flat), call. = FALSE)
+    return(val)
+  }
+  stop(sprintf(paste0(
+    "occu_cover(): the %s random-effect variable(s) %s were not found in `data` ",
+    "(one value per site) or `visits` (one per site-visit)."),
+    arm, paste(vars, collapse = ", ")), call. = FALSE)
+}
+
+# Resolve the parsed obs-arm RE term specs to a per-term design list. Each term:
+#   codes_flat : per-(site, visit) integer group codes, site-major, 0 for a
+#                padded / dropped / unseen-level row (the engine's no-RE sentinel);
+#                those rows fall out under the joint builder's `keep` subset.
+#   levels     : sorted observed factor levels (BLUP naming + predict matching).
+#   n_groups   : number of levels.
+#   var        : grouping-variable label (predict matches newdata[[var]]).
+#   type / correlated / has_intercept / n_coefs / coef_names : block shape.
+#   Z          : per-row design weights [n_flat x n_coefs] for a slope term
+#                (intercept column all-ones, slope columns the covariate values);
+#                NULL for a plain random intercept (weight 1, the iid block).
+# Factor levels are taken from the OBSERVED visits only, so an NA-padded or
+# never-observed level adds no group.
+.occu_cover_obs_re_design <- function(re_parse, data, visit_df, valid,
+                                      n_sites, max_visits, arm) {
+  valid_flat <- as.logical(t(valid))
+  lapply(re_parse$terms, function(spec) {
+    g_flat <- .occu_cover_obs_flat_eval(spec$group_expr, data, visit_df,
+                                        n_sites, max_visits, arm)
+    var <- paste(spec$vars, collapse = ":")
+    lev <- sort(unique(as.character(g_flat[valid_flat])))
+    if (length(lev) < 2L) {
+      stop(sprintf(paste0(
+        "occu_cover(): the %s random-effect grouping `%s` has %d level(s) among ",
+        "the observed visits; a random effect needs at least 2 groups."),
+        arm, var, length(lev)), call. = FALSE)
+    }
+    codes <- match(as.character(g_flat), lev)
+    codes[is.na(codes)] <- 0L
+
+    if (identical(spec$type, "slope")) {
+      cov_expr <- spec$covariate
+      # A bare-string covariate (`re(g, covariate = "x")`) names columns; wrap it
+      # as cbind(<symbols>) so the same flat evaluator builds the slope matrix.
+      cov_chr <- tryCatch(eval(cov_expr), error = function(...) NULL)
+      if (is.character(cov_chr)) {
+        cov_expr <- as.call(c(list(as.name("cbind")), lapply(cov_chr, as.name)))
+      }
+      Xs <- .occu_cover_obs_flat_eval(cov_expr, data, visit_df,
+                                      n_sites, max_visits, arm)
+      Xs <- as.matrix(Xs); storage.mode(Xs) <- "double"
+      if (is.null(colnames(Xs)))
+        colnames(Xs) <- paste0("slope", seq_len(ncol(Xs)))
+      has_int <- isTRUE(spec$intercept)
+      Z <- if (has_int) cbind(`(Intercept)` = 1, Xs) else Xs
+      coef_names <- colnames(Z)
+      n_coefs    <- ncol(Z)
+      correlated <- isTRUE(spec$correlated) && n_coefs > 1L
+    } else {
+      Z <- NULL; coef_names <- "(Intercept)"; n_coefs <- 1L
+      correlated <- FALSE; has_int <- TRUE
+    }
+    list(codes_flat = as.integer(codes), levels = lev, n_groups = length(lev),
+         var = var, type = spec$type, n_coefs = n_coefs,
+         coef_names = coef_names, correlated = correlated,
+         has_intercept = has_int, Z = Z, term_label = spec$term_label)
+  })
+}
+
 # ---------------------------------------------------------------------------
 # Likelihood
 # ---------------------------------------------------------------------------
@@ -730,6 +894,44 @@
   pos_formula <- dots$positive
   if (is.null(pos_formula)) pos_formula <- detection
 
+  # Observation-arm random intercept (gcol33/tulpaObs#102): a `(1 | g)` / `re(g)`
+  # on the detection or positive-cover formula adds an iid RE latent block on
+  # that arm of the joint nested-Laplace fit. Parse it off FIRST -- before the
+  # copy() extraction and every design build -- so each downstream consumer sees
+  # a clean fixed-effects formula; the grouping is resolved to per-visit codes
+  # once the model (and its `valid` mask) is built. The block rides the joint
+  # engine, so it needs method = "nested_laplace" (the non-spatial laplace / nuts
+  # paths are coefficient-marginal fits with no latent block) -- error early
+  # rather than silently drop the RE under another engine.
+  det_re_parse <- .occu_cover_obs_re_parse(detection,   "detection")
+  pos_re_parse <- .occu_cover_obs_re_parse(pos_formula, "positive cover")
+  has_obs_re   <- !is.null(det_re_parse) || !is.null(pos_re_parse)
+  if (has_obs_re && !identical(engine, "nested_laplace")) {
+    stop("occu_cover(): a random effect on the detection / positive-cover arm ",
+         "needs method = \"nested_laplace\" (the joint nested-Laplace engine ",
+         "carries the RE as a latent block); got method = \"", engine, "\".",
+         call. = FALSE)
+  }
+  # Random INTERCEPTS (crossed, nested) ride one iid latent block per term and
+  # are supported. A random SLOPE / correlated block needs a per-row weighted-iid
+  # block (uncorrelated) or a multivariate free-Sigma block (correlated) that the
+  # joint multi-block driver does not yet carry; that engine work is tracked in
+  # gcol33/tulpa#114, so gate it here with a clear pointer rather than emit a
+  # block the engine cannot fit (gcol33/tulpaObs#103).
+  obs_has_slope <- (!is.null(det_re_parse) && isTRUE(det_re_parse$has_slope)) ||
+                   (!is.null(pos_re_parse) && isTRUE(pos_re_parse$has_slope))
+  if (obs_has_slope) {
+    stop("occu_cover(): a random SLOPE / correlated random effect on the ",
+         "detection or positive-cover arm (e.g. `(x | g)`, `(x || g)`, ",
+         "`(0 + x | g)`) is not yet wired on the joint nested-Laplace engine; ",
+         "it needs the per-row weighted-iid and multivariate free-Sigma blocks ",
+         "tracked in gcol33/tulpa#114. Random intercepts -- including crossed ",
+         "`(1 | g) + (1 | h)` and nested `(1 | g/h)` -- are supported today.",
+         call. = FALSE)
+  }
+  if (!is.null(det_re_parse)) detection   <- det_re_parse$fe
+  if (!is.null(pos_re_parse)) pos_formula <- pos_re_parse$fe
+
   # Formula-native cross-arm coupling: pull any copy() term off the positive
   # formula and keep the stripped fixed-effects design. The copy() specs are
   # translated into the engine's coupling-amplitude grids once the occupancy
@@ -971,6 +1173,31 @@
       }
     }
 
+    # Observation-arm random effects (gcol33/tulpaObs#102, #103): resolve each
+    # detection / positive-cover RE term to its per-(site, visit) design (group
+    # codes + slope weights) now that the model carries its `valid` mask, and
+    # attach the per-term LIST to the model. The fitter reads model$re_det /
+    # model$re_pos (one entry per crossed / nested term) and the joint-coupled
+    # builder subsets each term's codes by the same `keep` used for the arm rows.
+    # The positive-cover RE is per visit, so it needs per-visit cover
+    # (cover_aggregate = "none"); a cell-aggregated cover arm has one row per unit
+    # and no per-visit grouping.
+    if (!is.null(det_re_parse)) {
+      model$re_det <- .occu_cover_obs_re_design(
+        det_re_parse, data, vd_det$visits, model$valid,
+        model$n_sites, model$max_visits, "detection")
+    }
+    if (!is.null(pos_re_parse)) {
+      if (cover_aggregate != "none") {
+        stop("occu_cover(): a random effect on the positive-cover arm needs ",
+             "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
+             "cell-aggregated cover rows (one per unit).", call. = FALSE)
+      }
+      model$re_pos <- .occu_cover_obs_re_design(
+        pos_re_parse, data, vd_pos$visits, model$valid,
+        model$n_sites, model$max_visits, "positive cover")
+    }
+
     # joint_coupled (3-arm nested-Laplace via tulpa's cell_coupling spec) is the
     # default: outer-grid integration over (sigma, alpha [, sigma_trend,
     # alpha_trend]) with inner Newton driven by the occu_cover_{lognormal,beta}
@@ -997,10 +1224,10 @@
         "single shared field only."), engine_pick), call. = FALSE)
     }
     if (engine_pick %in% c("v2_joint", "v3_nested")) {
-      if (!is.null(re_spec)) {
+      if (!is.null(re_spec) || !is.null(model$re_det) || !is.null(model$re_pos)) {
         stop(sprintf(paste0(
-          "occu_cover() per-group RE on the occupancy arm needs the default ",
-          "joint_coupled engine; the \"%s\" escape hatch has no RE block."),
+          "occu_cover() per-group RE needs the default joint_coupled engine; ",
+          "the \"%s\" escape hatch has no RE block."),
           engine_pick), call. = FALSE)
       }
       # The v2/v3 escape hatches model per-visit cover only; cell-aggregated
@@ -1519,6 +1746,20 @@
 #' @param sigma_trend Trend-field amplitude (used only when `trend = TRUE`).
 #' @param alpha_trend Cover-arm scaling on the trend field (used only when
 #'   `trend = TRUE`).
+#' @param re_det_groups Optional integer `>= 2`: the number of levels of a
+#'   per-visit detection random intercept (a `habitat` factor on `visit_data`,
+#'   levels `hab1..K`), drawn `b_g ~ N(0, sigma_re_p^2)` and centred. `NULL`
+#'   (default) adds no detection RE. Recover it with
+#'   `detection = ~ ... + (1 | habitat)`.
+#' @param sigma_re_p SD of the `re_det_groups` random intercept (default 0.7).
+#' @param re_det Optional named list of FURTHER per-visit detection random
+#'   intercepts, for crossed or nested designs. Each element
+#'   `list(K =, sigma =, prefix =, nested_in =)` adds a factor column (levels
+#'   `<prefix>1..K`) with a centred `N(0, sigma^2)` intercept; `nested_in =
+#'   "<name>"` nests its codes within a previously listed grouping (matching
+#'   `(1 | parent/child)`), otherwise the grouping is crossed. Truth BLUPs are
+#'   returned (named by the level label a fit reconstructs) in
+#'   `truth$re_det[[name]]`.
 #' @param seed Optional integer seed.
 #' @return A list with `y` (N x J detection matrix), `y_pos` (N x J cover
 #'   matrix, NA where not detected), `data` (per-site covariate frame, gaining
@@ -1544,6 +1785,9 @@ simulate_occu_cover <- function(N             = 200L,
                                  trend         = FALSE,
                                  sigma_trend   = 0.6,
                                  alpha_trend   = 1.0,
+                                 re_det_groups = NULL,
+                                 sigma_re_p    = 0.7,
+                                 re_det        = NULL,
                                  seed          = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
@@ -1611,6 +1855,62 @@ simulate_occu_cover <- function(N             = 200L,
   eta_p   <- as.vector(X_p   %*% beta_p)
   eta_pos_base <- as.vector(X_pos %*% beta_pos)
 
+  # Optional per-visit detection random effects (gcol33/tulpaObs#102, #103). Each
+  # grouping is a categorical visit-level factor (e.g. an EUNIS habitat class)
+  # with a random intercept b_g ~ N(0, sigma^2) on the detection linear
+  # predictor; the factor rides `visit_data`, so a fit reads it via `visits` and
+  # `detection = ~ ... + (1 | <factor>)`. `re_det_groups` / `sigma_re_p` set the
+  # first ("habitat") grouping (back-compat); `re_det` is a named list of further
+  # groupings, each `list(K =, sigma =, prefix =, nested_in =)`, for CROSSED
+  # (`nested_in = NULL`) or NESTED (`nested_in = "<parent>"`, sub-codes nested
+  # within the parent factor's codes -- matching `(1 | parent/child)`) designs.
+  # BLUPs are centred so the detection intercept stays identified. Truth BLUPs are
+  # stored NAMED by the level label a fit reconstructs (the interaction label for
+  # a nested grouping), so recovery checks align by name, not factor sort order.
+  grp_specs <- list()
+  if (!is.null(re_det_groups)) {
+    grp_specs[["habitat"]] <- list(K = as.integer(re_det_groups),
+                                   sigma = sigma_re_p, prefix = "hab",
+                                   nested_in = NULL)
+  }
+  if (!is.null(re_det)) {
+    for (nm in names(re_det)) {
+      s <- re_det[[nm]]
+      grp_specs[[nm]] <- list(K = as.integer(s$K), sigma = s$sigma %||% 0.7,
+                              prefix = s$prefix %||% nm, nested_in = s$nested_in)
+    }
+  }
+  re_codes  <- list()    # within-grouping per-visit code (for nesting)
+  re_truth  <- list()
+  b_p_re <- NULL; re_det_levels <- NULL
+  for (nm in names(grp_specs)) {
+    s <- grp_specs[[nm]]
+    if (s$K < 2L)
+      stop(sprintf("re_det grouping '%s' needs K >= 2.", nm), call. = FALSE)
+    sub <- sample.int(s$K, N * J, replace = TRUE)
+    re_codes[[nm]] <- sub
+    visit_data[[nm]] <- factor(paste0(s$prefix, sub),
+                               levels = paste0(s$prefix, seq_len(s$K)))
+    if (is.null(s$nested_in)) {
+      code   <- sub
+      labels <- paste0(s$prefix, seq_len(s$K))
+    } else {
+      parent <- grp_specs[[s$nested_in]]
+      pcode  <- re_codes[[s$nested_in]]
+      code   <- (pcode - 1L) * s$K + sub                 # unique (parent, sub)
+      pc     <- rep(seq_len(parent$K), each = s$K)
+      sc     <- rep(seq_len(s$K),      times = parent$K)
+      labels <- paste0(parent$prefix, pc, ".", s$prefix, sc)  # interaction label
+    }
+    b <- stats::rnorm(length(labels), 0, s$sigma); b <- b - mean(b)
+    names(b) <- labels
+    eta_p <- eta_p + b[code]
+    re_truth[[nm]] <- list(b = b, sigma = s$sigma, levels = labels)
+    if (identical(nm, "habitat")) {                      # back-compat truth slots
+      b_p_re <- unname(b); re_det_levels <- labels
+    }
+  }
+
   y     <- matrix(0L, N, J)
   y_pos <- matrix(NA_real_, N, J)
 
@@ -1662,7 +1962,11 @@ simulate_occu_cover <- function(N             = 200L,
       f2          = if (has_trend) f2          else NULL,
       time        = if (has_trend) time_cov    else NULL,
       sigma_trend = if (has_trend) sigma_trend else NA_real_,
-      alpha_trend = if (has_trend) alpha_trend else NA_real_
+      alpha_trend = if (has_trend) alpha_trend else NA_real_,
+      sigma_re_p  = if (!is.null(re_det_groups)) sigma_re_p else NA_real_,
+      b_p_re      = b_p_re,
+      re_det_levels = re_det_levels,
+      re_det      = if (length(re_truth)) re_truth else NULL
     )
   )
 }

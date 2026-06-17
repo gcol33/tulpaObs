@@ -178,6 +178,41 @@ spatial path only; requesting \code{"mean"} / \code{"median"} on the non-spatial
 \code{laplace} fit errors rather than silently using per-visit cover.
 }
 
+\section{Random effects on the observation arms}{
+
+On the shared-field spatial path (\code{method = "nested_laplace"}) random
+intercepts may be written on the \strong{detection} or \strong{positive-cover} formula
+with the usual \code{lme4} bar or \code{re()} spelling, e.g.
+\code{detection = ~ effort + (1 | habitat)}. The grouping is per visit -- one code
+per \verb{(site, visit)} entry, distinct from the per-site occupancy-arm grouping
+(gcol33/tulpaObs#56) -- so a many-level categorical visit covariate (an EUNIS
+habitat class, an observer) enters as a partially pooled random intercept.
+\strong{Crossed} (\code{(1 | habitat) + (1 | observer)}) and \strong{nested}
+(\code{(1 | region/site)}, which expands to \code{re(region) + re(region:site)})
+groupings are supported: each term joins the joint fit as its own \code{iid} latent
+block. Each block's variance integrates on the outer grid (\code{sigma_re_p} /
+\code{sigma_re_pos} for a lone term on the detection / cover arm, suffixed by the
+grouping variable -- \code{sigma_re_p_habitat} -- when several terms share an arm;
+tune with \code{control$re.sigma.grid.p} / \code{re.sigma.grid.pos}). The per-group BLUPs
+are reported in \code{fit$re} (one entry per term, keyed by arm or \code{"<arm>:<var>"})
+and via \code{\link[=ranef]{ranef()}}. \code{predict()} sums every term's BLUP offset on the predicted
+arm when \code{newdata} carries the grouping columns and \code{type = "detection"} (or
+\code{"occurrence"} / \code{"cover_cond"}); an unseen / held-out level shrinks that term
+to the population mean. Several crossed terms multiply the outer grid, so set
+\code{control$integration = "ccd"} (and/or coarsen the RE grids) at scale.
+
+Scope: random \strong{intercepts} (including crossed and nested). A random
+\strong{slope} or correlated block (\code{(x | g)}, \code{(x || g)}, \code{(0 + x | g)}) needs the
+joint engine's per-row weighted-\code{iid} and multivariate free-Sigma blocks,
+tracked in gcol33/tulpa#114, and is gated with a pointer until that lands; an
+RE without a spatial field on the psi arm uses the non-spatial path's RE
+instead. The positive-cover RE needs per-visit cover
+(\code{cover_aggregate = "none"}). As with the occupancy-arm RE, each
+grid-integrated \code{sigma_re} carries the binary / small-cluster inner-Laplace
+attenuation and is a lower bound on the truth; the BLUPs recover the per-group
+structure.
+}
+
 \examples{
 \donttest{
 N <- 120; J <- 4

@@ -45,10 +45,14 @@
 # when the fit carried visit covariates, trailing visit-level columns held at the
 # reference (0) for a per-cell prediction.
 .occu_cover_arm_design <- function(model, newdata, arm, p_arm) {
-  formula <- if (arm == "occ") model$formulas$occ else model$formulas$pos
+  formula <- switch(arm, occ = model$formulas$occ,
+                         det = model$formulas$det,
+                         pos = model$formulas$pos)
   tt <- stats::delete.response(stats::terms(formula))
   X_site <- stats::model.matrix(tt, newdata)
-  p_site <- if (arm == "occ") ncol(model$X_occ) else ncol(model$X_pos_site)
+  p_site <- switch(arm, occ = ncol(model$X_occ),
+                        det = ncol(model$X_det_site),
+                        pos = ncol(model$X_pos_site))
   if (ncol(X_site) != p_site) {
     stop(sprintf(paste0(
       "predict(occu_cover): the %s site design from `newdata` has %d ",
@@ -58,24 +62,48 @@
       arm, ncol(X_site), p_site, arm), call. = FALSE)
   }
   if (p_site == p_arm) return(X_site)
-  # The remaining coefficients are visit-level positive covariates (e.g. the time
-  # axis, habitat). Rebuild their design from `newdata` -- one prediction row per
-  # cell -- with the same builder, reference (k - 1) coding, and column order as
-  # the fit, so a covariate supplied in `newdata` enters the cover linear
-  # predictor (the change map varies the time covariate this way). A positive
-  # covariate ABSENT from `newdata` is held at its reference (numeric 0 / factor
-  # base level via the zero columns), the long-standing per-cell default.
-  vf <- if (arm == "pos") model$formulas$pos_visit else NULL
+  # The remaining coefficients are visit-level detection / positive covariates
+  # (e.g. the time axis). Rebuild their design from `newdata` -- one prediction
+  # row per cell -- with the same builder, reference (k - 1) coding, and column
+  # order as the fit, so a covariate supplied in `newdata` enters the linear
+  # predictor (the change map varies the time covariate this way). A covariate
+  # ABSENT from `newdata` is held at its reference (numeric 0 / factor base level
+  # via the zero columns), the long-standing per-cell default.
+  vf <- switch(arm, det = model$formulas$det_visit,
+                    pos = model$formulas$pos_visit, NULL)
   if (!is.null(vf)) {
     nd <- newdata
     for (v in setdiff(all.vars(vf), names(nd))) nd[[v]] <- 0
     X_visit <- tryCatch(
-      .tobs_build_visit_X(vf, nd, nrow(nd), 1L, arm = "positive cover"),
+      .tobs_build_visit_X(vf, nd, nrow(nd), 1L, arm = arm),
       error = function(e) NULL)
     if (!is.null(X_visit) && ncol(X_site) + ncol(X_visit) == p_arm)
       return(cbind(X_site, X_visit))
   }
   cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
+}
+
+# Per-arm RE BLUP offset at `newdata` (gcol33/tulpaObs#102, #103): an
+# [n_rows x n_draws] matrix added to the arm's linear predictor, SUMMED over
+# every RE term on that arm (crossed / nested groupings each contribute). For
+# each term, a row's grouping level (the term's grouping variable, e.g.
+# `habitat`) is matched against the fitted levels and the matching group's latent
+# draws are added; an UNSEEN level (no match) or a `newdata` without the grouping
+# column shrinks that term to the population mean (offset 0). The draws come from
+# the grid-integrated posterior so the offset is marginalised over the joint, not
+# a plug-in of the BLUP mean.
+.occu_cover_re_offset <- function(bundle, arm, nd, n_rows, n_draws) {
+  off   <- matrix(0, n_rows, n_draws)
+  terms <- Filter(function(r) identical(r$arm, arm), bundle$re %||% list())
+  for (re in terms) {
+    if (is.null(re$var) || !(re$var %in% names(nd))) next
+    codes <- match(as.character(nd[[re$var]]), re$levels)
+    seen  <- which(!is.na(codes))
+    if (length(seen) > 0L) {
+      off[seen, ] <- off[seen, ] + t(re$draws[, codes[seen], drop = FALSE])
+    }
+  }
+  off
 }
 
 # Cover mean on the natural scale from the cover linear predictor `eta_pos`
@@ -134,7 +162,8 @@
                                 type = "occurrence", times = NULL,
                                 level = 0.95, nsim = 1000L,
                                 draws = TRUE, time_col = NULL) {
-  type <- match.arg(type, c("occurrence", "cover_cond", "cover_exp", "change"))
+  type <- match.arg(type, c("occurrence", "detection", "cover_cond",
+                            "cover_exp", "change"))
   if (is.null(.tobs_joint_fit(object))) {
     stop("predict() requires a joint nested-Laplace fit (method = ",
          "\"nested_laplace\"); this fit carries no joint object.",
@@ -193,18 +222,36 @@
       }
       as.numeric(nd[[nm]])
     }
-    eta_occ <- .tobs_joint_arm_eta(bundle, X_occ, "occ", cell, wf)
-    eta_pos <- .tobs_joint_arm_eta(bundle, X_pos, "pos", cell, wf)
+    # Per-arm RE BLUP offset (gcol33/tulpaObs#102): added when the fit carries an
+    # RE on that arm AND `newdata` supplies the grouping column; otherwise the
+    # prediction is at the population mean (offset 0), the field-only behaviour.
+    eta_occ <- .tobs_joint_arm_eta(bundle, X_occ, "occ", cell, wf) +
+               .occu_cover_re_offset(bundle, "psi", nd, nrow(X_occ), bundle$n)
+    eta_pos <- .tobs_joint_arm_eta(bundle, X_pos, "pos", cell, wf) +
+               .occu_cover_re_offset(bundle, "pos", nd, nrow(X_pos), bundle$n)
     p <- stats::plogis(eta_occ)
     mu <- .tobs_cover_mu(eta_pos, bundle, object)
-    list(p = p, mu = mu, E = p * mu)
+    out <- list(p = p, mu = mu, E = p * mu)
+    if (!is.null(bundle$b$det)) {
+      X_det   <- .tobs_joint_arm_design(object, nd, "det", ncol(bundle$b$det))
+      eta_det <- .tobs_joint_arm_eta(bundle, X_det, "det", cell) +
+                 .occu_cover_re_offset(bundle, "p", nd, nrow(X_det), bundle$n)
+      out$p_det <- stats::plogis(eta_det)
+    }
+    out
   }
 
   # --- single-time quantities ---------------------------------------------
   if (type != "change") {
     st <- state(newdata)
+    if (identical(type, "detection") && is.null(st$p_det)) {
+      stop("predict(type = \"detection\") needs a detection arm; this is a ",
+           "cover() hurdle fit (occupancy + cover only). Use occu_cover() for a ",
+           "detection prediction.", call. = FALSE)
+    }
     mat <- switch(type,
                   occurrence = st$p,
+                  detection  = st$p_det,
                   cover_cond = st$mu,
                   cover_exp  = st$E)
     tbl <- .occu_cover_summ(mat, cell, level)

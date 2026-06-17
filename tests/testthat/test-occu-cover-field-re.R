@@ -52,8 +52,8 @@ test_that("occu_cover() shared field + per-group RE: fit runs and reports the RE
   expect_true(is.finite(fit$means[["sigma_re"]]))
   expect_gt(fit$means[["sigma_re"]], 0)
   expect_false(is.null(fit$re))
-  expect_identical(fit$re$arm, "psi")
-  expect_length(fit$re$blup, 6L)
+  expect_identical(fit$re$psi$arm, "psi")
+  expect_length(fit$re$psi$blup, 6L)
   # ranef() surfaces the BLUP table.
   rf <- ranef(fit)
   expect_s3_class(rf, "data.frame")

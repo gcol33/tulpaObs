@@ -310,6 +310,39 @@ jsdm <- function() {
 #' spatial path only; requesting `"mean"` / `"median"` on the non-spatial
 #' `laplace` fit errors rather than silently using per-visit cover.
 #'
+#' @section Random effects on the observation arms:
+#' On the shared-field spatial path (`method = "nested_laplace"`) random
+#' intercepts may be written on the **detection** or **positive-cover** formula
+#' with the usual `lme4` bar or `re()` spelling, e.g.
+#' `detection = ~ effort + (1 | habitat)`. The grouping is per visit -- one code
+#' per `(site, visit)` entry, distinct from the per-site occupancy-arm grouping
+#' (gcol33/tulpaObs#56) -- so a many-level categorical visit covariate (an EUNIS
+#' habitat class, an observer) enters as a partially pooled random intercept.
+#' **Crossed** (`(1 | habitat) + (1 | observer)`) and **nested**
+#' (`(1 | region/site)`, which expands to `re(region) + re(region:site)`)
+#' groupings are supported: each term joins the joint fit as its own `iid` latent
+#' block. Each block's variance integrates on the outer grid (`sigma_re_p` /
+#' `sigma_re_pos` for a lone term on the detection / cover arm, suffixed by the
+#' grouping variable -- `sigma_re_p_habitat` -- when several terms share an arm;
+#' tune with `control$re.sigma.grid.p` / `re.sigma.grid.pos`). The per-group BLUPs
+#' are reported in `fit$re` (one entry per term, keyed by arm or `"<arm>:<var>"`)
+#' and via [ranef()]. `predict()` sums every term's BLUP offset on the predicted
+#' arm when `newdata` carries the grouping columns and `type = "detection"` (or
+#' `"occurrence"` / `"cover_cond"`); an unseen / held-out level shrinks that term
+#' to the population mean. Several crossed terms multiply the outer grid, so set
+#' `control$integration = "ccd"` (and/or coarsen the RE grids) at scale.
+#'
+#' Scope: random **intercepts** (including crossed and nested). A random
+#' **slope** or correlated block (`(x | g)`, `(x || g)`, `(0 + x | g)`) needs the
+#' joint engine's per-row weighted-`iid` and multivariate free-Sigma blocks,
+#' tracked in gcol33/tulpa#114, and is gated with a pointer until that lands; an
+#' RE without a spatial field on the psi arm uses the non-spatial path's RE
+#' instead. The positive-cover RE needs per-visit cover
+#' (`cover_aggregate = "none"`). As with the occupancy-arm RE, each
+#' grid-integrated `sigma_re` carries the binary / small-cluster inner-Laplace
+#' attenuation and is a lower bound on the truth; the BLUPs recover the per-group
+#' structure.
+#'
 #' @param positive likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @param cover_aggregate how the cover arm collapses per occupancy unit on the
@@ -370,6 +403,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "var.of.means.consistency", "var.of.means.tolerance",
       "diagnose.k", "k.samples",
+      "re.sigma.grid", "re.sigma.grid.p", "re.sigma.grid.pos",
       "checkpoint"
     )
   )

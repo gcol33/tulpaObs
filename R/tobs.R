@@ -264,7 +264,8 @@ tobs <- function(formula,
            "`occurrence` and `formula`.", call. = FALSE)
     }
     formula <- occurrence
-  } else if (!missing(formula) && inherits(family, "tobs_family") &&
+  } else if (!missing(formula) && !missing(family) &&
+             inherits(family, "tobs_family") &&
              identical(family$name, "occu_cover")) {
     # occu_cover() is the three-arm hurdle whose state formula reads
     # symmetrically with `detection` / `positive` as `occurrence`. cover() is a

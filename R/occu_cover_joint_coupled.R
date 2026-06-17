@@ -165,6 +165,15 @@
   # field amplitude on EVERY block, so one scalar decouples the p arm from
   # both the intercept field and the trend field). spatial_idx is then a
   # placeholder.
+  # field_coef gates EVERY latent block on this arm (it is the per-arm arm_scale
+  # multiplier), so it stays 0 to decouple the detection predictor from the
+  # shared field -- UNLESS the detection arm carries its own RE block
+  # (gcol33/tulpaObs#102). The field is decoupled from detection by its
+  # `spatial_idx = 0` sentinel either way (the engine skips a 0 node before any
+  # field indexing), so when a detection RE is present field_coef is 1 so the iid
+  # RE block scatters onto the detection rows; the trend branch then forces the
+  # field's detection `spatial_idx` to the same sentinel.
+  det_field_coef <- if (!is.null(model$re_det)) 1.0 else 0
   arm_p <- list(
     y            = as.numeric(y_det_visit),
     n_trials     = rep(1L, n_visits_valid),
@@ -172,7 +181,7 @@
     spatial_idx  = rep(0L, n_visits_valid),
     family       = "binomial",
     phi          = 1.0,
-    field_coef   = 0,
+    field_coef   = det_field_coef,
     coupled      = TRUE,
     cell_obs_map = site_of_visit
   )
@@ -218,6 +227,17 @@
   }
   n_pos_rows <- length(pos_site)
 
+  # Observation-arm RE codes (gcol33/tulpaObs#102, #103), aligned to the arm rows
+  # by the same `keep` the detection arm uses. model$re_det / model$re_pos are
+  # per-term LISTS (one entry per crossed / nested term); each term's site-major
+  # code vector is subset by `keep`. The detection arm is one row per valid
+  # visit; per-visit cover (the only mode an obs-arm RE supports) is the same row
+  # set, so both subset by `keep`. Returns a per-term list of code vectors.
+  re_det_codes <- if (!is.null(model$re_det))
+    lapply(model$re_det, function(d) as.integer(d$codes_flat[keep])) else NULL
+  re_pos_codes <- if (!is.null(model$re_pos) && identical(cover_aggregate, "none"))
+    lapply(model$re_pos, function(d) as.integer(d$codes_flat[keep])) else NULL
+
   # `phi` is the pos-arm dispersion -- the lognormal SD on the log scale for
   # `positive = "lognormal"` and the beta precision for `positive = "beta"`
   # (the spec reads y_cell.phi(2) and interprets it per its policy). `family`
@@ -251,7 +271,9 @@
        n_visits_valid = n_visits_valid,
        pos_site       = as.integer(pos_site),
        n_pos_rows     = n_pos_rows,
-       pos_cover_values = pos_cover_values)
+       pos_cover_values = pos_cover_values,
+       re_det_codes   = re_det_codes,
+       re_pos_codes   = re_pos_codes)
 }
 
 
@@ -369,18 +391,23 @@
 
   dots <- list(...)
 
-  # Per-group random intercept on the occupancy arm (gcol33/tulpaObs#56). It joins
-  # the joint fit as a single `iid` prior block, so it forces the multi-block
-  # driver (the field amplitude becomes an explicit copy spec). Not composed with
-  # the cover-latent RE (the latent spec carries its own per-unit cover RE) nor
-  # with the batched fused path (one species at a time).
-  has_re <- !is.null(re_spec)
-  if (has_re && is_latent) {
-    stop("occu_cover(): a per-group occupancy RE and cover_aggregate = ",
-         "\"latent\" cannot be combined (the latent path carries its own ",
-         "per-unit cover RE).", call. = FALSE)
+  # Per-group random intercepts (gcol33/tulpaObs#56, #102). The occupancy-arm RE
+  # (`re_spec`, one code per site) and the observation-arm REs (model$re_det /
+  # model$re_pos, one code per detection / positive-cover row) each join the fit
+  # as an `iid` prior block whose per-group latent rides ONE arm. Any RE block
+  # forces the multi-block driver (the field amplitude becomes an explicit copy
+  # spec). Not composed with the cover-latent RE (the latent spec carries its own
+  # per-unit cover RE) nor with the batched fused path (one species at a time).
+  has_re     <- !is.null(re_spec)            # occupancy (psi) arm
+  has_re_det <- !is.null(model$re_det)       # detection (p) arm
+  has_re_pos <- !is.null(model$re_pos)       # positive-cover arm
+  has_any_re <- has_re || has_re_det || has_re_pos
+  if (has_any_re && is_latent) {
+    stop("occu_cover(): a per-group RE and cover_aggregate = \"latent\" cannot ",
+         "be combined (the latent path carries its own per-unit cover RE).",
+         call. = FALSE)
   }
-  if (has_re && isTRUE(.batch_collect)) {
+  if (has_any_re && isTRUE(.batch_collect)) {
     stop("occu_cover(): the batched fused path does not carry a per-group RE ",
          "block.", call. = FALSE)
   }
@@ -397,6 +424,11 @@
     if (isTRUE(.batch_collect)) {
       stop("occu_cover(): the batched fused path does not carry a correlated ",
            "MCAR field.", call. = FALSE)
+    }
+    if (has_any_re) {
+      stop("occu_cover(): a per-group RE does not compose with a correlated ",
+           "spatial bar (`|`, free-Sigma MCAR) on the joint engine.",
+           call. = FALSE)
     }
   }
 
@@ -507,7 +539,7 @@
     sigma_pos_init  = sigma_pos_init,
     alpha_grid      = alpha_grid,
     positive        = model$positive,
-    multi           = has_trend || has_re,
+    multi           = has_trend || has_any_re,
     n_cells         = n_cells,
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate
@@ -519,6 +551,8 @@
   pos_site       <- arms_out$pos_site
   n_pos_rows     <- arms_out$n_pos_rows
   pos_cover_values <- arms_out$pos_cover_values
+  re_det_codes   <- arms_out$re_det_codes
+  re_pos_codes   <- arms_out$re_pos_codes
 
   # Attach the per-arm fixed-effect priors. These reach tulpa's joint engine as
   # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replace
@@ -544,20 +578,73 @@
       ), extra)
   }
 
-  # The per-group occupancy RE as one `iid` prior block (gcol33/tulpaObs#56). Its
-  # per-group latent rides the OCCUPANCY arm only: obs_idx maps each psi row
-  # (one per site) to its group and zeroes the detection / cover arms (0 = no RE
-  # for that row). Its SD integrates on the outer grid over `re.sigma.grid`.
-  iid_block <- NULL
+  # Per-group RE blocks (gcol33/tulpaObs#56, #102, #103). Each random-intercept
+  # term (one per arm for #56/#102; several per arm for crossed / nested #103)
+  # contributes one `iid` prior block whose per-group latent rides THAT arm only:
+  # obs_idx is the 3-element (psi, p, pos) list of per-row group codes, with the
+  # targeted arm carrying the codes and the other two zeroed (0 = no RE for that
+  # row, the engine's scatter skip). Each block's SD integrates on the outer grid
+  # over its `sigma_grid`. They trail the field block(s), so the field copy
+  # indices stay valid; the blocks carry no copy (each rides its own arm).
+  # `re_descs` records each block's arm + grouping metadata in prior order so the
+  # postprocess maps each block back to its `b<k>.sigma` axis and BLUP columns.
+  re_grid_default <- exp(seq(log(0.05), log(2), length.out = 6L))
+  re_blocks <- list()
+  re_descs  <- list()   # one descriptor per emitted prior block (block order)
+  zero_psi <- rep(0L, n_sites)
+  zero_p   <- rep(0L, n_v)
+  zero_pos <- rep(0L, n_pos_rows)
+  # Emit one iid prior block for an obs/occupancy random intercept term. obs_idx
+  # is the 3-arm (psi, p, pos) per-row group codes with only the targeted arm
+  # carrying codes (the other two zeroed: 0 = no RE for that row, the engine's
+  # scatter skip). Random slopes (n_coefs > 1 / correlated) are gated upstream on
+  # gcol33/tulpa#114, so every term reaching here is a scalar-per-group intercept.
+  add_re_block <- function(arm, codes, grid, desc) {
+    # Random slopes (multi-coefficient / correlated terms) need the weighted-iid
+    # and multivariate free-Sigma blocks tracked in gcol33/tulpa#114; they are
+    # gated at parse in occu_cover(). This guard keeps the invariant explicit so
+    # a slope design can never silently emit a scalar iid block.
+    if (isTRUE(desc$n_coefs > 1L) || isTRUE(desc$correlated)) {
+      stop("occu_cover(): random slopes on a joint-engine RE arm are blocked on ",
+           "gcol33/tulpa#114 (weighted-iid + multivariate free-Sigma blocks).",
+           call. = FALSE)
+    }
+    obs_idx <- switch(arm,
+      psi = list(as.integer(codes), zero_p, zero_pos),
+      p   = list(zero_psi, as.integer(codes), zero_pos),
+      pos = list(zero_psi, zero_p, as.integer(codes)))
+    re_blocks[[length(re_blocks) + 1L]] <<- list(
+      type = "iid", n_units = as.integer(desc$n_groups),
+      sigma_grid = as.numeric(grid), obs_idx = obs_idx)
+    re_descs[[length(re_descs) + 1L]] <<- desc
+  }
   if (has_re) {
-    re_grid <- dots$re.sigma.grid %||% exp(seq(log(0.05), log(2), length.out = 6L))
-    iid_block <- list(
-      type       = "iid",
-      n_units    = re_spec$n_groups,
-      sigma_grid = as.numeric(re_grid),
-      obs_idx    = list(as.integer(re_spec$group_idx),
-                        rep(0L, n_v), rep(0L, n_pos_rows))
-    )
+    add_re_block("psi", re_spec$group_idx,
+                 dots$re.sigma.grid %||% re_grid_default,
+                 list(arm = "psi", var = re_spec$var %||% NA_character_,
+                      levels = re_spec$levels, n_groups = re_spec$n_groups,
+                      n_coefs = 1L, coef_names = "(Intercept)",
+                      correlated = FALSE))
+  }
+  if (has_re_det) {
+    for (t in seq_along(model$re_det)) {
+      d <- model$re_det[[t]]
+      add_re_block("p", re_det_codes[[t]],
+                   dots$re.sigma.grid.p %||% re_grid_default,
+                   list(arm = "p", var = d$var, levels = d$levels,
+                        n_groups = d$n_groups, n_coefs = d$n_coefs,
+                        coef_names = d$coef_names, correlated = d$correlated))
+    }
+  }
+  if (has_re_pos) {
+    for (t in seq_along(model$re_pos)) {
+      d <- model$re_pos[[t]]
+      add_re_block("pos", re_pos_codes[[t]],
+                   dots$re.sigma.grid.pos %||% re_grid_default,
+                   list(arm = "pos", var = d$var, levels = d$levels,
+                        n_groups = d$n_groups, n_coefs = d$n_coefs,
+                        coef_names = d$coef_names, correlated = d$correlated))
+    }
   }
 
   # Pos-arm phi axis on the outer grid. For the latent path the pos arm's phi IS
@@ -639,7 +726,11 @@
     # and its SVC weight is w_psi[pos_site]. Under per-visit cover pos_site ==
     # site_of_visit, so this reduces to the previous cell_of_visit / w_visit.
     pos_field_node <- as.integer(site_cell[pos_site])
-    spatial_idx_arms <- list(as.integer(site_cell), cell_of_visit, pos_field_node)
+    # When the detection arm carries an RE its field_coef is 1 (so the iid RE
+    # scatters), so the field must be skipped on detection by the 0-node sentinel
+    # rather than by field_coef = 0 (gcol33/tulpaObs#102).
+    det_field_node <- if (has_re_det) rep(0L, n_v) else cell_of_visit
+    spatial_idx_arms <- list(as.integer(site_cell), det_field_node, pos_field_node)
     make_block <- function(weight_site) {
       w_psi <- if (is.null(weight_site)) rep(1.0, n_sites)
                else as.numeric(weight_site)
@@ -659,15 +750,15 @@
       lapply(seq_len(n_trend), function(j)
         list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend))
     )
-    # The RE block trails the field blocks, so the copy indices above (which name
-    # field blocks only) stay valid. It carries no copy (it rides occupancy only).
-    if (has_re) prior_arg <- c(prior_arg, list(iid_block))
-  } else if (has_re) {
-    # Single shared field + a per-group occupancy RE: the multi-block driver with
-    # the field as block 1 (alpha copy onto cover) and the iid RE as block 2.
+    # The RE blocks trail the field blocks, so the copy indices above (which name
+    # field blocks only) stay valid. They carry no copy (each rides its own arm).
+    if (length(re_blocks)) prior_arg <- c(prior_arg, re_blocks)
+  } else if (has_any_re) {
+    # Single shared field + one or more per-group REs: the multi-block driver with
+    # the field as block 1 (alpha copy onto cover) and the iid RE block(s) after.
     field_block <- icar_template(list(
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
-    prior_arg <- list(field_block, iid_block)
+    prior_arg <- c(list(field_block), re_blocks)
     copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
   } else if (isTRUE(.batch_collect)) {
     # Single-field, batched fused path: run the MULTI-block driver so the alpha
@@ -747,6 +838,13 @@
       # (control$k.samples sizes the importance batch).
       diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
+      # Diagnostic parallelism (gcol33/tulpa#117). When `diagnose.k = TRUE` the
+      # `k.samples` importance re-solves are independent and run after the grid
+      # (every core free), each solved single-threaded, so widening their outer
+      # pool is a bit-identical wall-clock speedup. NULL (default) follows the
+      # fit's own thread grant (`n.threads.outer` / inner `n.threads`); "auto"
+      # grabs the performance cores; an integer pins the width. Forwarded verbatim.
+      k_threads  = dots$k.threads,
       # Grid-cell checkpoint/resume (gcol33/tulpa#50). An EVA-scale occu_cover
       # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
       # the outer grid append each completed cell to `path` and a resume run
@@ -782,6 +880,11 @@
               sigma_pos_init = sigma_pos_init, has_trend = has_trend,
               n_trend = n_trend, coupled_trends = coupled_trends, model = model,
               re_spec = re_spec,
+              # Per-block RE descriptors in emitted (prior) order: each carries
+              # the arm, grouping var + levels, group count, and coefficient
+              # shape, so the postprocess maps each block back to its BLUP
+              # columns, sigma axis, and per-arm summary (gcol33/tulpaObs#103).
+              re_descs = re_descs,
               mcar = correlated,
               n_fields_mcar = if (correlated) 1L + n_trend else NULL,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
@@ -801,6 +904,27 @@
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
 
   .occu_cover_jc_postprocess(fit, ctx)
+}
+
+# Public hyperparameter name for each RE block, aligned with the descriptor
+# list (gcol33/tulpaObs#103). A lone term on an arm keeps the legacy bare name
+# (sigma_re / sigma_re_p / sigma_re_pos for psi / detection / positive cover);
+# crossed / nested terms sharing an arm are disambiguated by the grouping var
+# (sigma_re_p_<var>), so every block's variance gets a distinct, stable name.
+.occu_cover_re_sigma_names <- function(re_descs) {
+  if (!length(re_descs)) return(character(0))
+  base <- c(psi = "sigma_re", p = "sigma_re_p", pos = "sigma_re_pos")
+  arms <- vapply(re_descs, `[[`, character(1), "arm")
+  counts <- table(arms)
+  vapply(seq_along(re_descs), function(i) {
+    arm <- re_descs[[i]]$arm
+    nm  <- base[[arm]]
+    if (counts[[arm]] > 1L) {
+      var <- re_descs[[i]]$var
+      nm  <- paste0(nm, "_", make.names(if (is.na(var)) as.character(i) else var))
+    }
+    nm
+  }, character(1))
 }
 
 # Post-process an occu_cover joint-coupled engine fit into a tobs_fit. `fit` is
@@ -974,25 +1098,33 @@
   }
   field_sd <- sqrt(pmax(field_var, 0))
 
-  # Per-group occupancy RE BLUPs (gcol33/tulpaObs#56). The iid block trails the
-  # field blocks, so it is block (n_fields + 1) in the multi-block layout; its
-  # latent values are a contiguous run in `modes`. The posterior-mean offset per
-  # group is the grid-weighted mean of those columns; the variance component is
-  # surfaced as the hyperparameter `sigma_re` below.
-  re_blup <- NULL
-  if (!is.null(ctx$re_spec)) {
-    bstart  <- layout$block_start
-    bsize   <- layout$block_size
-    re_bidx <- n_fields + 1L
-    if (!is.null(bstart) && length(bstart) >= re_bidx) {
+  # Per-group RE BLUPs (gcol33/tulpaObs#56, #102, #103). The iid blocks trail the
+  # field blocks, so the i-th RE block (in prior / descriptor order `ctx$re_descs`)
+  # is block (n_fields + i) in the multi-block layout; its latent values are a
+  # contiguous run in `modes`. The posterior-mean offset per group is the
+  # grid-weighted mean of those columns (centred), the SD their grid-weighted
+  # posterior SD; the variance component is the block's `b<k>.sigma` axis, named
+  # below. One flat term entry per block (crossed / nested arms carry several).
+  re_descs <- ctx$re_descs %||% list()
+  re_sig_names <- .occu_cover_re_sigma_names(re_descs)
+  re_terms <- vector("list", length(re_descs))
+  if (length(re_descs) > 0L) {
+    bstart <- layout$block_start
+    bsize  <- layout$block_size
+    for (i in seq_along(re_descs)) {
+      re_bidx <- n_fields + i
+      if (is.null(bstart) || length(bstart) < re_bidx) next
       ucol  <- bstart[re_bidx] + seq_len(bsize[re_bidx])
       u_mod <- modes[, ucol, drop = FALSE]
       u_hat <- as.numeric(crossprod(w, u_mod))
       u_var <- as.numeric(crossprod(w, u_mod^2)) - u_hat^2
-      re_blup <- list(mean = u_hat - mean(u_hat),
-                      sd   = sqrt(pmax(u_var, 0)),
-                      n_groups = bsize[re_bidx])
+      re_terms[[i]] <- c(ctx$re_descs[[i]],
+                         list(mean = u_hat - mean(u_hat),
+                              sd   = sqrt(pmax(u_var, 0)),
+                              sigma_name = re_sig_names[i],
+                              latent_idx = as.integer(ucol)))
     }
+    re_terms <- Filter(Negate(is.null), re_terms)
   }
 
   sd_psi <- sds_beta[seq_len(p_psi)]
@@ -1045,10 +1177,11 @@
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
-  # A per-group RE block also forces the multi-block driver (its iid block is a
-  # second prior block), so the field axes carry the `b<k>.` names even without a
-  # trend field. The RE variance is the iid block's `b<n_fields+1>.sigma`.
-  has_re <- !is.null(ctx$re_spec)
+  # A per-group RE block also forces the multi-block driver (its iid block is an
+  # extra prior block), so the field axes carry the `b<k>.` names even without a
+  # trend field. Each RE block's variance is its `b<n_fields+i>.sigma` axis.
+  has_re     <- !is.null(ctx$re_spec)
+  has_any_re <- length(re_descs) > 0L
   if (mcar) {
     # Free-Sigma MCAR hyperparameters (gcol33/tulpaObs#63). Reconstruct Sigma per
     # outer-grid cell from the log-Cholesky axes b1.L<i><j>, derive each field SD
@@ -1093,10 +1226,13 @@
     }
     pick2("alpha_mcar", "b1.alpha")
     pick("phi_pos", phi_pos_public)
-  } else if (has_trend || has_re) {
+  } else if (has_trend || has_any_re) {
     # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
-    # then the RE block (if any). A single trend field keeps the bare
+    # then the RE block(s). A single trend field keeps the bare
     # sigma_trend/alpha_trend names; several are indexed (sigma_trend1, ...).
+    # Each RE block's SD is reported by `re_sig_names[i]` (sigma_re / sigma_re_p /
+    # sigma_re_pos for a lone term on an arm; suffixed by grouping var for crossed
+    # / nested terms sharing an arm).
     pick2("sigma", "b1.sigma")
     pick2("alpha", "b1.alpha")
     for (j in seq_len(n_trend)) {
@@ -1104,7 +1240,9 @@
       pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
     }
-    if (has_re) pick2("sigma_re", sprintf("b%d.sigma", n_fields + 1L))
+    for (i in seq_along(re_descs)) {
+      pick2(re_sig_names[i], sprintf("b%d.sigma", n_fields + i))
+    }
     pick("phi_pos", phi_pos_public)
   } else {
     pick("sigma"); pick("alpha"); pick("phi_pos", phi_pos_public)
@@ -1287,13 +1425,32 @@
     joint_vcov      = Vj,
     method       = "joint_coupled",
     positive     = model$positive,
-    re           = if (!is.null(re_blup)) list(
-                     arm      = "psi",
-                     sigma    = unname(hyper_means["sigma_re"]),
-                     sigma_sd = unname(hyper_sds["sigma_re"]),
-                     blup     = re_blup$mean,
-                     blup_sd  = re_blup$sd,
-                     n_groups = re_blup$n_groups) else NULL,
+    # Per-term RE summaries (gcol33/tulpaObs#56, #102, #103): a flat list, one
+    # entry per RE block, each carrying its arm, grouping var + observed levels,
+    # variance component, centred per-group BLUPs + SDs, group count, and latent
+    # column indices (for the marginalized predict draws). A lone term on an arm
+    # is keyed by the arm ("psi" / "p" / "pos"); crossed / nested terms sharing an
+    # arm are keyed "<arm>:<var>". ranef() stacks them; predict() sums every term
+    # on the predicted arm.
+    re           = if (length(re_terms)) {
+                     arms <- vapply(re_terms, `[[`, character(1), "arm")
+                     counts <- table(arms)
+                     keys <- vapply(re_terms, function(t)
+                       if (counts[[t$arm]] > 1L) paste0(t$arm, ":", t$var)
+                       else t$arm, character(1))
+                     stats::setNames(lapply(re_terms, function(t)
+                       list(arm        = t$arm,
+                            var        = if (is.na(t$var)) NULL else t$var,
+                            sigma      = unname(hyper_means[t$sigma_name]),
+                            sigma_sd   = unname(hyper_sds[t$sigma_name]),
+                            blup       = t$mean,
+                            blup_sd    = t$sd,
+                            n_groups   = t$n_groups,
+                            coef_names = t$coef_names,
+                            correlated = t$correlated,
+                            levels     = t$levels,
+                            latent_idx = t$latent_idx)), keys)
+                   } else NULL,
     joint_fit    = fit,
     convergence  = list(converged = TRUE, n_iter = NA_integer_)
   )), class = c("tobs_fit", "tulpa_fit"))

@@ -375,6 +375,8 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Cover hurdle arm-specific fields (single-arm `to`) | n-L | — | `spatial(~ 1 + w \|\| cell, graph, to="positive")` (or `"presence"`); separate single-arm calls = independent per-arm fields, NO cross-arm copy (#65). NO engine change: per-arm `spatial_idx=0` makes the other arm's rows skip the block (tulpa `l_b>0` scatter guard), own precision grid-integrated. `.tobs_armspecific_bar_fields` (formula_terms.R) -> `enc$armspec` -> `.fit_cover_hurdle_joint_armspecific` (non-copied per-arm blocks, no `copy=`). `armspec_blocks` carries per-block arm/slot; `.tobs_joint_draws_cover_armspecific` scatters each block onto its arm only (amp 0 on other). `\|\|` only (`\|` arm-specific undefined: copy-only). No mix w/ shared field/trend/temporal/re; one field per arm. SLA no-op |
 | Joint occu + cover | Yes | Yes | `occu_cover()` — see below. NUTS non-spatial (in-tree FullGradFn over exact two-state marginal, beta/lognormal; `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`) AND spatial fixed-hyper coupled proper-CAR field (#74, `car_proper()` only; icar/bym2 NUTS gated -> n-L). Sampled-field (estimated-variance) route = `ms_occu_cover()` factor |
 | occu + cover + areal field + per-group RE | n-L | — | `occu_cover()` + icar/bym2 + `re(g)`/`(1\|g)` on psi; one iid RE block (#56); `sigma_re` + BLUPs; intercept RE only |
+| occu + cover obs-arm RE (detection / pos) | n-L | — | `occu_cover()` + `(1\|g)` on `detection=`/`positive=`; per-visit grouping; crossed `(1\|g)+(1\|h)` + nested `(1\|g/h)` = N iid blocks (#102 single, #103 crossed/nested); `sigma_re_p`/`sigma_re_pos` (`_<var>` suffix when crossed) + BLUPs; slope/correlated gated on tulpa#114 |
+| occu + cover + detection / cover-arm RE | n-L | — | `occu_cover()` + `(1\|g)`/`re(g)` on `detection=` or `positive=` (#102); per-VISIT grouping iid block on that arm, composes w/ psi field; `sigma_re_p`/`sigma_re_pos` + BLUPs; `fit$re` per-arm list; `predict(type="detection")` adds BLUP offset, unseen->pop mean. Detection arm `field_coef=1` (not 0) so the iid block scatters, field still skipped via `spatial_idx=0` sentinel. pos RE needs `cover_aggregate="none"`. Intercept only; slope/correlated/non-spatial/NUTS gated |
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
 | Spatial-factor community occu+cover (JSDM) | Yes | Yes | `ms_occu_cover()` + icar/car_proper/bym2 shared field, per-species loadings (tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`src/ms_occu_cover_spatial_nuts.cpp`). Cover-arm factor, `tobs_associations()`, per-species `predict()` maps |
 | Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only |
@@ -501,7 +503,41 @@ tulpa#86). Variance integrates on outer grid (reported `sigma_re`); BLUPs in `fi
 rejected; v2/v3 hatches carry no RE. Per-arm community variances don't scale here (joint
 engine grid-integrates every variance component), so COMMUNITY spatial occu_cover =
 reduced-rank Laplace-EM `ms_occu_cover()` + `icar()` (tulpa#67, below), NOT this path.
-`re.sigma.grid` knob. `test-occu-cover-field-re.R`.
+`re.sigma.grid` knob. `test-occu-cover-field-re.R`. `fit$re` is a per-TERM flat
+list keyed by arm (lone term) or `"<arm>:<var>"` (crossed); psi entry `fit$re$psi`.
+
+**Per-group RE on detection / cover arm (#102 intercept, #103 crossed/nested)**:
+random intercept(s) on `detection=`/`positive=` (`(1|g)`/`re(g)`), per-VISIT
+grouping (one code per (site,visit)), composes w/ the required psi field on the
+nested_laplace joint path. `.occu_cover_obs_re_parse` (occu_cover.R) strips ALL re
+terms off the obs formula BEFORE copy-extraction + design build (rejects other
+structured terms; copy/re allowed), returns `$terms` (LIST of specs, crossed/nested)
++ `$has_slope`; `.occu_cover_obs_re_design` resolves each term's per-(site,visit)
+codes site-major from `data` (site-level, broadcast) or `visits` (visit-level) via
+`.occu_cover_obs_flat_eval`, levels from observed visits only, builds slope `Z`
+(intercept + covariate cols) for slope terms, attaches per-term LIST
+`model$re_det`/`re_pos`. **Slope gate**: a slope/correlated term (`(x|g)`,`(x||g)`,
+`(0+x|g)`) errors w/ pointer to tulpa#114 (joint engine lacks per-row weighted-iid
++ multivariate free-Sigma blocks); intercepts (crossed/nested) proceed. Builder
+subsets each term's codes by `keep` (`re_det_codes`/`re_pos_codes` = per-term
+lists), loops terms emitting one iid block each via `add_re_block` (obs_idx targets
+that arm slot, 0 elsewhere; defensive stop if n_coefs>1), appended after field
+blocks; `re_descs` records per-block {arm,var,levels,n_groups,n_coefs,...}. **Key
+fix (#102)**: detection arm's `field_coef` gates EVERY latent block on the arm, set
+to 1 when `model$re_det` present so the iid block scatters onto det rows; the shared
+field still skipped on detection by `spatial_idx=0` sentinel. Postprocess loops
+`ctx$re_descs`, block i at `n_fields+i`, sigma names via
+`.occu_cover_re_sigma_names` (`sigma_re`/`sigma_re_p`/`sigma_re_pos`; `_<var>`
+suffix when >1 term/arm), flat `re_terms` list w/ BLUPs + `latent_idx`. `fit$re` =
+flat list (arm/var/sigma/blup/blup_sd/n_groups/coef_names/correlated/levels/
+latent_idx). predict: `.tobs_joint_draws` draws the RE latents (latent_idx) from the
+same grid posterior; `.occu_cover_re_offset` SUMS over all terms on the arm,
+matching `newdata[[re$var]]` to fit levels (unseen -> 0 = pop mean). Gates: intercepts
+(crossed/nested) only, slope/correlated -> tulpa#114; obs RE needs `nested_laplace`;
+pos RE needs `cover_aggregate="none"`; not composed w/ correlated MCAR / latent cover
+/ batch. Crossed multiplies the outer grid -> `control$integration="ccd"` at scale.
+sigma carries binary small-cluster attenuation (lower bound); BLUPs recover (cor>0.6).
+`re.sigma.grid.p`/`re.sigma.grid.pos` knobs. `test-occu-cover-obs-re.R`.
 
 ### `ms_occu_cover()` detail
 

@@ -213,7 +213,14 @@
   n_field <- length(starts)
   field_idx <- lapply(starts, function(s0) s0 + seq_len(n_cells))
 
-  idx   <- c(idx_occ, idx_det, idx_pos, unlist(field_idx))
+  # Per-arm RE latent draws (gcol33/tulpaObs#102): each RE block stored its
+  # latent column indices in fit$re[[arm]]$latent_idx; draw them from the SAME
+  # grid-integrated posterior so the BLUP offset is marginalized over the joint,
+  # not plugged in at the mode. They trail the fields in the latent vector.
+  re_meta <- Filter(function(r) !is.null(r$latent_idx), object$re %||% list())
+  re_idx  <- lapply(re_meta, function(r) as.integer(r$latent_idx))
+
+  idx   <- c(idx_occ, idx_det, idx_pos, unlist(field_idx), unlist(re_idx))
   D     <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
   cells <- attr(D, "cells")
 
@@ -232,6 +239,15 @@
          weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
   })
 
+  re_draws <- NULL
+  if (length(re_meta) > 0L) {
+    re_draws <- lapply(re_meta, function(r) {
+      list(arm = r$arm, var = r$var, levels = r$levels,
+           draws = take(length(r$latent_idx)))   # [n x n_groups]
+    })
+    names(re_draws) <- names(re_meta)
+  }
+
   # Pos-arm dispersion: the `phi_pos` axis when it is integrated on the outer
   # grid (control$phi.grid.pos, or the latent path's sigma_u); otherwise the
   # dispersion the fit held FIXED in the cell-coupling spec. Falling back to a
@@ -241,7 +257,7 @@
   list(n = n, positive = positive, cells = cells,
        disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = fixed_disp),
        b = list(occ = b_occ, det = b_det, pos = b_pos),
-       blocks = blocks, n_cells = n_cells)
+       blocks = blocks, n_cells = n_cells, re = re_draws)
 }
 
 # cover (2-arm occ/pos): a single shared field. Under the (sigma_occ, sigma_pos)

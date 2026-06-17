@@ -22,6 +22,9 @@ simulate_occu_cover(
   trend = FALSE,
   sigma_trend = 0.6,
   alpha_trend = 1,
+  re_det_groups = NULL,
+  sigma_re_p = 0.7,
+  re_det = NULL,
   seed = NULL
 )
 }
@@ -66,6 +69,22 @@ to every visit of that cell.}
 
 \item{alpha_trend}{Cover-arm scaling on the trend field (used only when
 \code{trend = TRUE}).}
+
+\item{re_det_groups}{Optional integer \verb{>= 2}: the number of levels of a
+per-visit detection random intercept (a \code{habitat} factor on \code{visit_data},
+levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_p^2)} and centred. \code{NULL}
+(default) adds no detection RE. Recover it with
+\code{detection = ~ ... + (1 | habitat)}.}
+
+\item{sigma_re_p}{SD of the \code{re_det_groups} random intercept (default 0.7).}
+
+\item{re_det}{Optional named list of FURTHER per-visit detection random
+intercepts, for crossed or nested designs. Each element
+\code{list(K =, sigma =, prefix =, nested_in =)} adds a factor column (levels
+\verb{<prefix>1..K}) with a centred \code{N(0, sigma^2)} intercept; \code{nested_in = "<name>"} nests its codes within a previously listed grouping (matching
+\code{(1 | parent/child)}), otherwise the grouping is crossed. Truth BLUPs are
+returned (named by the level label a fit reconstructs) in
+\code{truth$re_det[[name]]}.}
 
 \item{seed}{Optional integer seed.}
 }

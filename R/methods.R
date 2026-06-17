@@ -175,9 +175,30 @@ ranef.tobs_fit <- function(object, ...) {
   if (identical(object$model$model_type, "ms_int_occu")) {
     return(.tobs_ranef_ms_int_occu(object))
   }
+  if (identical(object$model$model_type, "occu_cover") && !is.null(object$re)) {
+    # occu_cover() shared-field + per-group RE (gcol33/tulpaObs#56, #102, #103):
+    # `fit$re` is a flat list of random-intercept terms, one per arm for a lone
+    # term, several for crossed / nested groupings sharing an arm. Stack them into
+    # one table with `arm` + `var` (grouping variable) columns; the observation
+    # arms carry their grouping `level` labels (the occupancy arm reports
+    # 1..n_groups).
+    rows <- lapply(object$re, function(re) {
+      lev <- re$levels %||% as.character(seq_along(re$blup))
+      data.frame(arm     = re$arm,
+                 var     = re$var %||% NA_character_,
+                 group   = lev,
+                 level   = seq_along(re$blup),
+                 blup    = re$blup,
+                 blup_sd = re$blup_sd,
+                 stringsAsFactors = FALSE)
+    })
+    out <- do.call(rbind, rows)
+    rownames(out) <- NULL
+    return(out)
+  }
   if (!is.null(object$re) && !is.null(object$re$blup)) {
-    # occu_cover() shared-field + per-group RE (gcol33/tulpaObs#56): one random
-    # intercept per group on the named arm, with per-group BLUP and its SD.
+    # Single-block per-group RE on a non-occu_cover fit (e.g. abun NUTS): one
+    # random intercept per group on the named arm, with per-group BLUP and its SD.
     re <- object$re
     return(data.frame(
       arm   = re$arm,
