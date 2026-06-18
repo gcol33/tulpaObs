@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.53 (2026-06-18)
+
+* The `occu_cover()` outer Pareto-k diagnostic re-solves are validated against
+  the faster tulpa 0.0.43 path (gcol33/tulpa#118, now the dependency floor):
+    * `test-occu-cover-pareto-k.R` pins that the fast default (Shamanskii reuse,
+      loosened inner tol, near-neighbour batch order, per-cell nearest-grid-mode
+      warm start) reports the SAME k-hat as the byte-for-byte exact diagnostic
+      (`tulpa.kdiag.refresh = 1`, `tol = 0`, no reorder, no per-cell warm), to a
+      few 1e-4, and that the k-hat agrees with `loo::psis` on the diagnostic's
+      actual importance ratios.
+    * Measured speedup of the diagnostic re-solves is 2.6-2.8x at 144-256 cells
+      with the k-hat byte-stable; the diagnostic still stays OFF by default
+      (`control$diagnose.k`), since it reports k-hat only and does not move the
+      betas, SDs, or field.
+* Profiling note corrected in `occu_cover_joint_coupled.R` / `CLAUDE.md`: the
+  binding per-solve cost is the per-Newton-iteration Hessian/gradient SCATTER
+  (the beta arm's per-observation digamma/trigamma fill, 73-83%), NOT the sparse
+  Cholesky factorize (a flat ~0.5 ms, 8-12%, not super-linear up to ~1100 cells).
+
 ## 0.0.52 (2026-06-18)
 
 * The joint nested-Laplace outer Pareto-k diagnostic is now reachable on the

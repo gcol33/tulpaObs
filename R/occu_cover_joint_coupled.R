@@ -826,9 +826,14 @@
       # the path to the mode. The lognormal arm is exactly quadratic (one inner
       # step), so observed curvature is already optimal -> keep "lm".
       hessian   = dots$hessian %||% (if (is_beta) "fisher" else "lm"),
-      # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off:
-      # at realistic field sizes the sparse factorization is milliseconds, so
-      # reuse buys nothing once the iteration count is fixed by the curvature.
+      # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off
+      # for the grid fit. Reuse also makes the off-factor scatter `grad_only`
+      # (skipping the beta Hessian fill, the dominant per-iteration cost --
+      # dev_notes/_profile_pareto_k.R), so it is NOT just a factorize saving; the
+      # tulpa#118 diagnostic re-solves enable it (refresh 4) because they need only
+      # the converged log-marginal. The grid fit keeps refresh 1 by default since
+      # its SEs/log-det use the true per-iteration curvature; raise via
+      # `control$inner.refresh` if a grid fit is scatter-bound and SEs allow it.
       inner_refresh = as.integer(dots$inner.refresh %||% 1L),
       # Outer-grid parallelism (gcol33/tulpa#46, lever 2). The cover hurdle's
       # large spatial field takes the sparse inner-solve path, whose outer grid
@@ -857,13 +862,16 @@
       var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF (gcol33/tulpaObs#101).
       # It draws `k_samples` extra hyperparameter points and re-solves the inner
-      # Laplace at each on the full areal field. Profiling the joint-coupled fit
-      # (dev_notes/_profile_101.R) found this dominates the runtime -- 84-90% of
-      # wall time across field sizes, 6-8x the grid integration -- and each re-solve
-      # carries the same super-linear sparse-factorization cost as a grid cell, so
-      # it is the binding limit on per-species fits at fine spatial resolution. The
-      # diagnostic reports k-hat only; it does not move the betas / SDs / field, so
-      # it is an opt-in validation pass rather than a default cost, matching the
+      # Laplace at each on the full areal field, so it dominates the runtime --
+      # ~200 re-solves vs the grid's ~30-70 (measured 84-98% of wall time across
+      # field sizes). Per-phase profiling (dev_notes/_profile_pareto_k.R) shows the
+      # binding per-solve cost is the per-Newton-iteration Hessian/gradient SCATTER
+      # (the beta arm's per-observation digamma/trigamma fill, 73-83%), NOT the
+      # sparse Cholesky factorize (a flat ~0.5 ms, 8-12%, not super-linear up to
+      # ~1100 cells). tulpa#118 cut the diagnostic 2-4x (Shamanskii reuse + loosened
+      # inner tol + near-neighbour batch order) with the k-hat byte-stable, but it
+      # stays OFF by default: it reports k-hat only -- it does not move the betas /
+      # SDs / field -- so it is an opt-in validation pass, matching the
       # occu_joint_coupled path. Set control$diagnose.k = TRUE to compute it
       # (control$k.samples sizes the importance batch).
       diagnose_k = dots$diagnose.k %||% FALSE,

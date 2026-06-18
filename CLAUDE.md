@@ -441,11 +441,18 @@ completes N=200+. 18-seed lognormal + beta recovery
 (`test-occu-cover-joint-coupled.R`); status `"working"` (#96). Shared-field occ
 SLOPE Wald CI mildly anti-conservative small-N (pooled ~0.94; NUTS non-spatial
 calibrated). Outer Pareto-k diagnostic (`control$diagnose.k`) defaults OFF
-(#101): profiled at 84-90% of joint-fit wall time (it re-solves the inner Laplace
-`k.samples`=200x on the full field, each a super-linear factorization) and only
-reports k-hat — fit byte-identical with it on/off, so opt-in not default; matches
-`occu_joint_coupled` / `occu_multiscale_cover`. `control$diagnose.k = TRUE`
-re-enables. Same default flip on `occu_multiscale_cover_joint_coupled.R`.
+(#101): 84-98% of joint-fit wall time (re-solves the inner Laplace `k.samples`=200x
+on the full field vs the grid's ~30-70). Per-phase profiling
+(`dev_notes/_profile_pareto_k.R`) corrected the cause: the binding per-solve cost
+is the per-Newton-iter Hessian/grad SCATTER (beta arm digamma/trigamma fill, 73-83%),
+NOT the factorize (flat ~0.5ms, 8-12%, not super-linear <=1100 cells). tulpa#118 sped
+the diagnostic 2-4x (Shamanskii reuse `.K_DIAG_REFRESH` -> grad-only scatter; loosened
+inner tol `.K_DIAG_TOL`=1e-4; near-neighbour batch order) with the k-hat byte-stable
+(externally validated == `loo::psis`/`posterior::pareto_khat` on real EVA ratios; knobs
+`tulpa.kdiag.{refresh,tol,reorder,capture}`). Still OFF by default: reports k-hat only,
+fit byte-identical on/off, opt-in; matches `occu_joint_coupled` /
+`occu_multiscale_cover`. `control$diagnose.k = TRUE` re-enables. Same default flip on
+`occu_multiscale_cover_joint_coupled.R`.
 
 **Cover-arm intercept prior (#32)**: on shared-field path cover intercept confounds
 w/ field level over detected cells. `.occu_cover_coupled_arm_priors()` hands pos arm
