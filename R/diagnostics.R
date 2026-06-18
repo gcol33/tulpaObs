@@ -16,14 +16,30 @@
 #' @param n.draws Posterior draws used to build the pointwise log-likelihood
 #'   (the cover / occu_cover paths sample this many; the draw-matrix families use
 #'   the first `n.draws` stored draws). Default 1000.
-#' @param ... Forwarded to [tulpa::tulpa_criteria()] (e.g. `chunk_size`).
+#' @param loo.unit The cross-validation unit for `tobs_waic()` / `tobs_cpo()`.
+#'   `"obs"` (default) is the family's pointwise unit -- one column of the
+#'   log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
+#'   to the call without the argument. `"cell"` switches to leave-one-group-out
+#'   cross-validation (LOGO-CV): the fit's own per-observation cell map is
+#'   supplied to [tulpa::tulpa_criteria()] as `group`, so each spatial cell is one
+#'   fold instead of each plot / site. Implemented for `cover()` (the areal field
+#'   node, when sites are grouped via `group_var`) and `occu_cover()` (the
+#'   `site_cell` map); a non-spatial fit has no cells, so `"cell"` errors there.
+#'   Equivalent to passing `group =` the cell map directly, without hand-building
+#'   it.
+#' @param ... Forwarded to [tulpa::tulpa_criteria()] (e.g. `chunk_size`, or an
+#'   explicit `group =` for a custom leave-one-group-out unit).
 #' @return A `tulpa_criteria` object. `tobs_waic()` also carries `$elpd`
 #'   (an alias for `elpd_waic`) for back-compatibility.
 #' @seealso [tulpa::tulpa_criteria()]
 #' @export
-tobs_waic <- function(object, n.draws = 1000L, ...) {
+tobs_waic <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
+                      ...) {
+  loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
-  cr <- tulpa::tulpa_criteria(ll_mat, criteria = "waic", ...)
+  dots <- .tobs_criteria_group(object, loo.unit, list(...))
+  cr <- do.call(tulpa::tulpa_criteria,
+                c(list(ll_mat, criteria = "waic"), dots))
   cr$elpd <- cr$elpd_waic
   cr
 }
@@ -38,18 +54,68 @@ tobs_dic <- function(object, n.draws = 1000L, ...) {
 
 #' @rdname tobs_waic
 #' @export
-tobs_cpo <- function(object, n.draws = 1000L, ...) {
+tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
+                     ...) {
+  loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
-  cr <- tulpa::tulpa_criteria(ll_mat, criteria = c("loo", "cpo", "lpml"),
-                              pointwise = TRUE, ...)
+  dots <- .tobs_criteria_group(object, loo.unit, list(...))
+  cr <- do.call(tulpa::tulpa_criteria,
+                c(list(ll_mat, criteria = c("loo", "cpo", "lpml"),
+                       pointwise = TRUE), dots))
   # LOO-PIT (the INLA cpo$pit analogue): tulpa_criteria does not return it, so
   # add the per-observation leave-one-out PIT for the families that expose the
   # per-draw predictive CDF limits. occu_cover builds them from the field-folded
-  # detection-summary marginal, so its LOO-PIT is full-model.
+  # detection-summary marginal, so its LOO-PIT is full-model. The PIT is a
+  # per-observation diagnostic, unchanged by the cell-level LOO unit.
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
     cr$pit <- .tobs_loo_pit_occu_cover(object, n.draws, ll = ll_mat)
   }
   cr
+}
+
+# loo.unit = "cell" -> a leave-one-group-out (LOGO-CV) criteria call: aggregate
+# each cell's pointwise log-likelihood columns into one fold. The cell map is
+# auto-supplied from the fit, so the caller need not hand-build it. The
+# loo.unit -> group plumbing and the explicit-`group` conflict check live here so
+# tobs_waic() / tobs_cpo() share one path; "obs" leaves `...` untouched (so an
+# explicit `group =` still flows through, byte-identical to the ungrouped call).
+.tobs_criteria_group <- function(object, loo.unit, dots) {
+  if (identical(loo.unit, "obs")) return(dots)
+  if ("group" %in% names(dots)) {
+    stop("Pass either `loo.unit = \"cell\"` or an explicit `group = `, ",
+         "not both.", call. = FALSE)
+  }
+  grp <- .tobs_loo_cell_map(object)
+  if (is.null(grp)) {
+    stop("`loo.unit = \"cell\"` needs a per-observation cell map, but this fit ",
+         "carries none. Cell-level (leave-one-group-out) LOO is implemented for ",
+         "cover() and occu_cover() with a spatial field; a non-spatial fit has ",
+         "no cells, so use the default `loo.unit = \"obs\"`.", call. = FALSE)
+  }
+  dots$group <- grp
+  dots
+}
+
+# Per-observation -> cell map matching the column order of the family's pointwise
+# log-likelihood (.tobs_pointwise_loglik). tobs_cpo() / tobs_waic() pass it as
+# tulpa_criteria(group =) for cell-level LOGO-CV. Each .tobs_ploglik_* builder
+# fixes its own column order, so the map is family-specific:
+#   * cover()      -- columns are the occupancy-arm rows (enc$occ_data$y order);
+#                     spi_full is the per-row spatial node (cell) in that order.
+#   * occu_cover() -- columns are the sites (1..n_sites); site_cell maps each
+#                     site to its field cell (identity when no group_var).
+# Returns NULL when the fit carries no cell structure (a non-spatial cover() fit,
+# or a family without a cell-level unit), letting the caller raise a clear error.
+.tobs_loo_cell_map <- function(object) {
+  if (inherits(object, "cover_fit")) {
+    sc <- object$spi_full
+    return(if (is.null(sc)) NULL else as.integer(sc))
+  }
+  if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
+    n_sites <- object$model$n_sites
+    return(as.integer(object$model$site_cell %||% seq_len(n_sites)))
+  }
+  NULL
 }
 
 # Pointwise log-likelihood matrix [n_draws x n_obs], marginalized over the

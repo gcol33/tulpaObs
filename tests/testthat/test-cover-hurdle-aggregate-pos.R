@@ -221,3 +221,84 @@ test_that("aggregate.pos errors for the lognormal positive arm", {
     "aggregate.pos"
   )
 })
+
+
+# Cell-level (leave-one-group-out) LOO on a cover() fit whose plots are grouped
+# into spatial cells via group_var = "region" (tulpaObs#105). The group_var maps
+# the 16 cells' worth of plots onto 16 field nodes, so the per-row spatial index
+# (spi_full) genuinely aggregates many columns into each cell and exercises the
+# real LOGO-CV path, not a degenerate identity map.
+test_that("cover(): loo.unit = 'cell' is the auto cell map == explicit group == hand-aggregated", {
+  skip_on_cran()
+  skip_if_fast()
+  s  <- .aop_sim(303L, trend = FALSE)
+  ff <- .aop_fit(s, trend = FALSE)
+
+  # The per-row -> cell map matches the pointwise-loglik column count and is a
+  # genuine many-to-one grouping (16 cells, far fewer than the plots).
+  ll  <- tulpaObs:::.tobs_pointwise_loglik(ff, n.draws = 200L)
+  map <- tulpaObs:::.tobs_loo_cell_map(ff)
+  expect_equal(length(map), ncol(ll))
+  expect_equal(length(unique(map)), 16L)
+  expect_lt(length(unique(map)), ncol(ll))
+
+  crit <- c("loo", "cpo", "lpml")
+  cr_obs  <- tulpa::tulpa_criteria(ll, criteria = crit, pointwise = TRUE)
+  cr_cell <- tulpa::tulpa_criteria(ll, criteria = crit, pointwise = TRUE,
+                                   group = map)
+  # Hand-aggregate each cell's per-draw log-likelihoods (the group's joint
+  # conditional log-lik per draw) and score the [S x n_cells] matrix directly.
+  cells  <- sort(unique(map))
+  ll_agg <- vapply(cells, function(g) rowSums(ll[, map == g, drop = FALSE]),
+                   numeric(nrow(ll)))
+  cr_hand <- tulpa::tulpa_criteria(ll_agg, criteria = crit, pointwise = TRUE)
+
+  # The grouped engine call reproduces the hand-aggregated LOGO-CV exactly
+  # (scalars are fold-order invariant).
+  expect_equal(cr_cell$elpd_loo, cr_hand$elpd_loo)
+  expect_equal(cr_cell$looic,    cr_hand$looic)
+  expect_equal(cr_cell$lpml,     cr_hand$lpml)
+  expect_equal(cr_cell$p_loo,    cr_hand$p_loo)
+  expect_equal(cr_cell$n_groups, 16L)
+  expect_equal(cr_cell$n_obs,    ncol(ll))
+
+  # Cell-level is a coarser estimand than the per-plot default -- the numbers move.
+  expect_false(isTRUE(all.equal(cr_cell$elpd_loo, cr_obs$elpd_loo)))
+})
+
+test_that("cover() front door: loo.unit routes to tulpa_criteria(group =), obs is byte-identical", {
+  skip_on_cran()
+  skip_if_fast()
+  s   <- .aop_sim(303L, trend = FALSE)
+  ff  <- .aop_fit(s, trend = FALSE)
+  map <- tulpaObs:::.tobs_loo_cell_map(ff)
+
+  # loo.unit = "cell" == passing the auto cell map as group (RNG fixed so the
+  # sampled pointwise log-likelihood is identical between the two calls).
+  set.seed(11L); a <- tobs_cpo(ff, n.draws = 200L, loo.unit = "cell")
+  set.seed(11L); b <- tobs_cpo(ff, n.draws = 200L, group = map)
+  expect_equal(a$elpd_loo,  b$elpd_loo)
+  expect_equal(a$looic,     b$looic)
+  expect_equal(a$pareto_k,  b$pareto_k)
+  expect_equal(a$n_groups,  16L)
+
+  # loo.unit = "obs" (and the default) is byte-identical to the ungrouped call.
+  set.seed(11L); d <- tobs_cpo(ff, n.draws = 200L)
+  set.seed(11L); e <- tobs_cpo(ff, n.draws = 200L, loo.unit = "obs")
+  expect_identical(d$elpd_loo, e$elpd_loo)
+  expect_identical(d$pareto_k, e$pareto_k)
+  expect_null(d$n_groups)
+  # The cell unit genuinely differs from the per-plot default.
+  expect_false(isTRUE(all.equal(a$elpd_loo, d$elpd_loo)))
+
+  # tobs_waic() carries the same loo.unit plumbing.
+  set.seed(12L); wa <- tobs_waic(ff, n.draws = 200L, loo.unit = "cell")
+  set.seed(12L); wb <- tobs_waic(ff, n.draws = 200L, group = map)
+  expect_equal(wa$waic,      wb$waic)
+  expect_equal(wa$elpd_waic, wb$elpd_waic)
+  expect_equal(wa$n_groups,  16L)
+
+  # Passing both an explicit group and loo.unit = "cell" is an error.
+  expect_error(tobs_cpo(ff, n.draws = 50L, loo.unit = "cell", group = map),
+               "either")
+})

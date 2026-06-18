@@ -6,11 +6,11 @@
 \alias{tobs_cpo}
 \title{Model criteria for occupancy / cover models}
 \usage{
-tobs_waic(object, n.draws = 1000L, ...)
+tobs_waic(object, n.draws = 1000L, loo.unit = c("obs", "cell"), ...)
 
 tobs_dic(object, n.draws = 1000L, ...)
 
-tobs_cpo(object, n.draws = 1000L, ...)
+tobs_cpo(object, n.draws = 1000L, loo.unit = c("obs", "cell"), ...)
 }
 \arguments{
 \item{object}{A \code{tobs_fit} object.}
@@ -19,7 +19,20 @@ tobs_cpo(object, n.draws = 1000L, ...)
 (the cover / occu_cover paths sample this many; the draw-matrix families use
 the first \code{n.draws} stored draws). Default 1000.}
 
-\item{...}{Forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} (e.g. \code{chunk_size}).}
+\item{loo.unit}{The cross-validation unit for \code{tobs_waic()} / \code{tobs_cpo()}.
+\code{"obs"} (default) is the family's pointwise unit -- one column of the
+log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
+to the call without the argument. \code{"cell"} switches to leave-one-group-out
+cross-validation (LOGO-CV): the fit's own per-observation cell map is
+supplied to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} as \code{group}, so each spatial cell is one
+fold instead of each plot / site. Implemented for \code{cover()} (the areal field
+node, when sites are grouped via \code{group_var}) and \code{occu_cover()} (the
+\code{site_cell} map); a non-spatial fit has no cells, so \code{"cell"} errors there.
+Equivalent to passing \verb{group =} the cell map directly, without hand-building
+it.}
+
+\item{...}{Forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} (e.g. \code{chunk_size}, or an
+explicit \verb{group =} for a custom leave-one-group-out unit).}
 }
 \value{
 A \code{tulpa_criteria} object. \code{tobs_waic()} also carries \verb{$elpd}

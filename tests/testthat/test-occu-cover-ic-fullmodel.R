@@ -191,3 +191,31 @@ test_that("occu_cover() LOO-PIT is returned, calibrated, with good Pareto-k", {
   expect_true(all(is.finite(cpo$pareto_k)))
   expect_gt(mean(cpo$pareto_k < 0.7), 0.8)
 })
+
+test_that("occu_cover(): loo.unit = 'cell' routes through the site_cell map (tulpaObs#105)", {
+  skip_on_cran()
+  skip_if_fast()
+  o   <- .icfm_sim_and_fit(seed = 4501L)
+  fit <- o$fit_field
+  n_sites <- fit$model$n_sites
+
+  # occu_cover's cell map is site_cell (the per-site field cell); this fit has no
+  # group_var, so it is the identity (each site its own cell) and the pointwise
+  # column order is the site order.
+  map <- tulpaObs:::.tobs_loo_cell_map(fit)
+  expect_equal(map, fit$model$site_cell %||% seq_len(n_sites))
+  expect_equal(length(map), n_sites)
+
+  # loo.unit = "cell" == passing that map as group (RNG fixed so the sampled
+  # joint draws are identical between the two calls).
+  set.seed(7L); a <- tobs_cpo(fit, n.draws = 200L, loo.unit = "cell")
+  set.seed(7L); b <- tobs_cpo(fit, n.draws = 200L, group = map)
+  expect_equal(a$elpd_loo, b$elpd_loo)
+  expect_equal(a$pareto_k, b$pareto_k)
+  expect_equal(a$n_groups, n_sites)
+
+  # With the identity cell map cell-level LOO equals the per-site default exactly
+  # (each fold is a single site).
+  set.seed(7L); d <- tobs_cpo(fit, n.draws = 200L)
+  expect_equal(a$elpd_loo, d$elpd_loo)
+})

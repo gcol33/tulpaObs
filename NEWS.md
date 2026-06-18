@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.55 (2026-06-18)
+
+* `tobs_waic()` / `tobs_cpo()` gain `loo.unit = c("obs", "cell")`: the
+  cross-validation unit. The default `"obs"` is the family's pointwise unit (one
+  plot for `cover()`, one site for `occu_cover()`) and is byte-identical to the
+  previous call. `"cell"` switches to leave-one-group-out cross-validation
+  (LOGO-CV): the fit's own per-observation cell map is supplied to
+  `tulpa::tulpa_criteria(group = )`, so each spatial cell is one fold instead of
+  each plot / site, without the caller hand-building the map. Implemented for
+  `cover()` (the areal field node via `spi_full`, when plots are grouped with
+  `group_var`) and `occu_cover()` (the `site_cell` map); a non-spatial fit has no
+  cells and errors with a pointer to `loo.unit = "obs"`. The per-family
+  column -> cell map is the single `.tobs_loo_cell_map()` (each family's
+  pointwise builder fixes its own column order). Equivalent to passing
+  `group = ` the cell map directly. Requires tulpa (>= 0.0.45). (tulpaObs#105)
+
 ## 0.0.54 (2026-06-18)
 
 * New `cover(positive = "ordinal", breaks = ...)`: an interval-censored Gaussian
