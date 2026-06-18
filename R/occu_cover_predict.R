@@ -128,8 +128,9 @@
 # the `phi_pos` grid axis: the residual SD (lognormal) / precision (beta) for the
 # non-latent paths, the integrated cover-latent SD sigma_u for the latent path.
 #
-# Non-latent: the per-visit cover mean. Lognormal log-normal mean exp(eta +
-# sigma^2/2); beta mean plogis(eta) (the beta mean given the linear predictor).
+# Non-latent: the per-visit cover mean. Lognormal (and ordinal interval-censored
+# Gaussian, its log-cover sibling) log-normal mean exp(eta + sigma^2/2); beta
+# mean plogis(eta) (the beta mean given the linear predictor).
 #
 # Latent (cover_aggregate == "latent"): the cover mean marginalized over the
 # per-unit cover latent u ~ N(0, sigma_u^2), with the within-unit dispersion

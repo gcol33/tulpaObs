@@ -93,10 +93,7 @@
          "per-season matrices.", call. = FALSE)
   }
   n_sites <- dim(y)[1]; max_visits <- dim(y)[2]; n_seasons <- dim(y)[3]
-  if (n_sites != nrow(data)) {
-    stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(n_sites, nrow(data), "sites")
   if (n_seasons < 2L) {
     stop("dyn_abun() needs >= 2 primary seasons; for a single season use abun().",
          call. = FALSE)

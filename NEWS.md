@@ -1,5 +1,47 @@
 # tulpaObs NEWS
 
+## 0.0.54 (2026-06-18)
+
+* New `cover(positive = "ordinal", breaks = ...)`: an interval-censored Gaussian
+  positive arm for Braun-Blanquet (ordinal cover-class) data, the
+  measure-invariant counterpart of the `lognormal` / `beta` arms. The cover is
+  recorded only as the ordinal class it falls in, so the latent log-cover is
+  `Normal(eta, sigma^2)` censored to the observed class band and the likelihood
+  is the class probability MASS -- an ordered probit with KNOWN thresholds, no
+  free cutpoints and no change-of-variable Jacobian. `breaks` are the interior
+  class boundaries on the (0, 1) cover-fraction scale (open outer classes added
+  automatically); class bands are lower-closed so a representative sitting on its
+  own boundary (the myscale class `a` rep at 0.03) maps to its own class. Wired
+  on the joint nested-Laplace engine only (the per-observation `(lower, upper)`
+  bounds are consumed by tulpa 0.0.44's built-in `interval_gaussian` family); the
+  single-Laplace and NUTS paths error with a pointer, and the simplified-Laplace
+  skew correction no-ops (`sla_status = "ordinal_unsupported"`). `sigma_pos`
+  carries the latent log-cover SD, integrated on the same outer phi grid as the
+  lognormal sigma. WAIC / PIT / PPC are the genuine discrete-class diagnostics.
+  Recovery-tested from censored class data (`test-cover-ordinal.R`); shared
+  positive-arm family / phi-grid logic extracted to `.cover_pos_family_grid()`.
+  Requires tulpa (>= 0.0.44).
+
+* Response / site / visit input handling now has a single source of truth in
+  `R/inputs.R`, replacing the near-identical site-count cross-check each family
+  binder hand-rolled (`occu`, `abun`, `removal`, `distance`, `fp_occu`,
+  `dyn_abun`, `dyn_occu`, `jsdm`, the `ms_*` community families, and the cover /
+  `occu_cover` / multiscale families):
+    * `.tobs_check_site_count()` is the one check that the site dimension of `y`
+      matches `nrow(data)`. The historical messages are preserved -- a 2D
+      response counts "rows", a 3D / per-source response "sites", and the cover
+      hurdle's response vector "values". (The integrated families' deliberate
+      partial-coverage site maps are unchanged: they are not a mismatch.)
+    * `tobs()` accepts a `tobs_data` frame in place of the `(data, y, visits)`
+      triple. The frame's `occ.covs` / `y` / `det.covs` are unpacked through the
+      same pipeline raw arguments take (`det.covs` is already the named-matrix
+      shape `visits` consumes), so a frame fit is byte-identical to the
+      equivalent raw fit. Passing `y =` / `visits =` alongside a frame errors.
+    * `tobs()` records canonical response totals on the fit (`fit$dims`:
+      `n_sites`, `max_visits`, `n_sources`) and, under `control$verbose`, reports
+      them once before dispatch.
+    * `test-inputs-frame.R`.
+
 ## 0.0.53 (2026-06-18)
 
 * The `occu_cover()` outer Pareto-k diagnostic re-solves are validated against

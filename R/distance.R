@@ -41,10 +41,7 @@
     stop("y must be a matrix (n_sites x n_bins) of integer distance-bin counts.",
          call. = FALSE)
   }
-  if (nrow(y) != nrow(data)) {
-    stop(sprintf("y has %d rows but data has %d rows", nrow(y), nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(nrow(y), nrow(data), "rows")
   if (anyNA(y)) {
     stop("distance() needs complete bin counts: y must not contain NA.",
          call. = FALSE)

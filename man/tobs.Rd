@@ -58,7 +58,9 @@ slope \code{re(g, type = "slope", covariate = x)}, and \code{(x || g)} drops the
 correlation (\code{correlated = FALSE}). Use \code{re()} directly for AR1/RW
 structures or other options.}
 
-\item{data}{data frame of site-level covariates with \code{nrow(data) == nrow(y)}.}
+\item{data}{data frame of site-level covariates with \code{nrow(data) == nrow(y)}, or a \code{tobs_data} frame (from \code{\link[=tobs_data]{tobs_data()}} / \code{\link[=tobs_format]{tobs_format()}})
+bundling the response, site covariates, and visit covariates. When a frame
+is passed, \code{y} and \code{visits} are taken from it and must not also be supplied.}
 
 \item{family}{a \code{tobs_family} object (see \code{\link[=obs_family]{obs_family()}} and the concrete
 constructors \code{\link[=occu]{occu()}}, \code{\link[=abun]{abun()}}, \code{\link[=cover]{cover()}}, ...).}

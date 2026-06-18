@@ -4,7 +4,7 @@
 \alias{cover}
 \title{Cover hurdle family (vegetation cover, MOTIVATE pattern)}
 \usage{
-cover(positive = c("beta", "lognormal"))
+cover(positive = c("beta", "lognormal", "ordinal"), breaks = NULL)
 }
 \arguments{
 \item{positive}{likelihood for the positive part. \code{"beta"} (cover in

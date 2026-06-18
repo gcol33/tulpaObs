@@ -82,10 +82,7 @@
     stop(sprintf("species has %d names but y has %d species",
                  length(species_names), n_species), call. = FALSE)
   }
-  if (nrow(data) != n_sites) {
-    stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(n_sites, nrow(data), "sites")
 
   if (is.null(col_formula)) col_formula <- ~ 1
   if (is.null(ext_formula)) ext_formula <- ~ 1

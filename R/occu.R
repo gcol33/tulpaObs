@@ -56,9 +56,7 @@
   if (!is.matrix(y)) {
     stop("y must be a matrix (n_sites x max_visits)")
   }
-  if (nrow(y) != nrow(data)) {
-    stop(sprintf("y has %d rows but data has %d rows", nrow(y), nrow(data)))
-  }
+  .tobs_check_site_count(nrow(y), nrow(data), "rows")
 
   bind  <- .tobs_bind_formulas(list(psi = occ_formula, p = det_formula), data)
   X_occ <- model.matrix(bind$fe$psi, data)
@@ -115,9 +113,7 @@
   max_visits <- dim(y)[2]
   n_seasons <- dim(y)[3]
 
-  if (nrow(data) != n_sites) {
-    stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)))
-  }
+  .tobs_check_site_count(n_sites, nrow(data), "sites")
 
   bind  <- .tobs_bind_formulas(
     list(psi1 = occ_formula, p = det_formula,
@@ -283,9 +279,7 @@
     stop("For JSDM, y must be a matrix (n_sites x n_species) or named list")
   }
 
-  if (nrow(data) != n_sites) {
-    stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)))
-  }
+  .tobs_check_site_count(n_sites, nrow(data), "sites")
 
   bind  <- .tobs_bind_formulas(list(psi = occ_formula), data)
   X_occ <- model.matrix(bind$fe$psi, data)

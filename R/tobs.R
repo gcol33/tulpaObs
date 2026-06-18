@@ -76,7 +76,9 @@
 #'   correlation (`correlated = FALSE`). Use `re()` directly for AR1/RW
 #'   structures or other options.
 #' @param data data frame of site-level covariates with `nrow(data) ==
-#'   nrow(y)`.
+#'   nrow(y)`, or a `tobs_data` frame (from [tobs_data()] / [tobs_format()])
+#'   bundling the response, site covariates, and visit covariates. When a frame
+#'   is passed, `y` and `visits` are taken from it and must not also be supplied.
 #' @param family a `tobs_family` object (see [obs_family()] and the concrete
 #'   constructors [occu()], [abun()], [cover()], ...).
 #' @param detection detection-process formula, e.g. `~ observer + effort`.
@@ -269,6 +271,17 @@ tobs <- function(formula,
 
   method <- match.arg(method)
 
+  # A pre-built `tobs_data` frame stands in for the (data, y, visits) triple:
+  # unpack it into the same arguments raw inputs use, so a frame routes through
+  # one validated entry rather than a parallel pipeline. The frame's site-level
+  # `occ.covs` becomes `data`, its response `y`, and its `det.covs` the `visits`.
+  if (inherits(data, "tobs_data")) {
+    unpacked <- .tobs_unpack_frame(data, y = y, visits = visits)
+    data   <- unpacked$data
+    y      <- unpacked$y
+    visits <- unpacked$visits
+  }
+
   # `occurrence` is the state-process formula's name for the occu_cover() /
   # cover() hurdle, reading symmetrically with `detection` and `positive`. It is
   # the front door; `formula` is the deprecated alias. Exactly one is given.
@@ -413,6 +426,19 @@ tobs <- function(formula,
   }
   control[["n.seeds"]] <- NULL   # orchestration knob, not a fitter argument
 
+  # Canonical response totals (sites x visits, plus sources for the integrated
+  # families), reported once before dispatch under control$verbose and stored on
+  # the returned fit. n_sites is anchored to the site-level data the design binds
+  # to. Computed only on the single-fit path; the n.seeds / by / multi-response
+  # branches above each return their own container, and every leaf fit reports
+  # itself when it reaches here.
+  dims <- .tobs_input_dims(y)
+  if (is.data.frame(data)) dims$n_sites <- nrow(data)
+  if (isTRUE(control[["verbose"]])) {
+    message(.tobs_input_message(family$name, dims$n_sites,
+                                dims$max_visits, dims$n_sources))
+  }
+
   dispatch <- switch(
     family$name,
     occu     = .dispatch_occu,
@@ -462,6 +488,7 @@ tobs <- function(formula,
   attr(fit, "tobs_family") <- family
   # Record the resolved public route for provenance / reproducibility.
   fit$method <- method
+  fit$dims   <- dims
   fit
 }
 

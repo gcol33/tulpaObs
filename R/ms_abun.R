@@ -68,10 +68,7 @@
   n_sites    <- dim(y)[1]
   max_visits <- dim(y)[2]
   n_species  <- dim(y)[3]
-  if (nrow(data) != n_sites) {
-    stop(sprintf("y has %d sites but data has %d rows", n_sites, nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(n_sites, nrow(data), "sites")
   if (length(species_names) != n_species) {
     stop(sprintf("species has %d names but y has %d species",
                  length(species_names), n_species), call. = FALSE)

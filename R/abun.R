@@ -30,10 +30,7 @@
     stop("y must be a matrix (n_sites x max_visits) of integer counts.",
          call. = FALSE)
   }
-  if (nrow(y) != nrow(data)) {
-    stop(sprintf("y has %d rows but data has %d rows", nrow(y), nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(nrow(y), nrow(data), "rows")
   y_int <- matrix(as.integer(round(y)), nrow(y), ncol(y))
   if (any(y_int < 0L, na.rm = TRUE)) {
     stop("y must contain nonnegative integer counts (or NA for unobserved ",

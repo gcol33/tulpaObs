@@ -52,10 +52,7 @@
   if (!all(dim(y) == dim(y_pos))) {
     stop("y and y_pos must have identical dimensions.", call. = FALSE)
   }
-  if (nrow(y) != nrow(data)) {
-    stop(sprintf("y has %d rows but data has %d rows.", nrow(y), nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(nrow(y), nrow(data), "rows")
 
   n_sites    <- nrow(y)
   max_visits <- ncol(y)

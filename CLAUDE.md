@@ -674,6 +674,7 @@ R/
   occu_multiscale_cover{,_joint_coupled}.R — 3-level occu+cover (#29) + 4-arm fitter
   occu_cover_spatial.R / occu_cover_nested.R — v2_joint / v3_nested escape hatches
   formula_terms.R / formula_parse.R  — term registry+ctors; AST parser
+  inputs.R                 — single source of truth for response/site/visit input: .tobs_check_site_count() (site-count cross-check every binder used to hand-roll), .tobs_input_dims()/fit$dims canonical totals, .tobs_unpack_frame() (tobs_data -> data/y/visits)
   spatial.R / methods.R / diagnostics.R / data.R / within_between.R — precompute; S3; diags; data+sims; decomposition
   RcppExports.R            — generated, do not edit
 src/

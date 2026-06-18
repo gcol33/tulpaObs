@@ -1112,20 +1112,44 @@ fp_occu <- function() {
 #' summary(fit)
 #' }
 #' @export
-cover <- function(positive = c("beta", "lognormal")) {
+cover <- function(positive = c("beta", "lognormal", "ordinal"), breaks = NULL) {
   positive <- match.arg(positive)
+  # The ordinal positive arm is an interval-censored Gaussian on log-cover with
+  # KNOWN class thresholds (an ordered probit, not free cutpoints): the cover is
+  # recorded only as the ordinal class it falls in, so the likelihood is the
+  # class probability MASS -- a genuine PMF with no change-of-variable Jacobian,
+  # the measure-invariant counterpart of beta / lognormal for Braun-Blanquet
+  # data. `breaks` are the interior class boundaries on the (0, 1) cover-fraction
+  # scale; the open outer classes are added automatically.
+  if (positive == "ordinal") {
+    if (is.null(breaks) || !is.numeric(breaks) || length(breaks) < 1L ||
+        anyNA(breaks) || is.unsorted(breaks, strictly = TRUE) ||
+        any(breaks <= 0) || any(breaks >= 1)) {
+      stop("cover(positive = \"ordinal\") requires `breaks`: the interior ",
+           "cover-class boundaries on the (0, 1) cover-fraction scale, strictly ",
+           "ascending and all in (0, 1). For the MOTIVATE Braun-Blanquet scheme ",
+           "(myscale): c(0.002, 0.015, 0.03, 0.05, 0.25, 0.50, 0.75). The open ",
+           "outer classes (0, breaks[1]] and (breaks[K], 1) are added ",
+           "automatically.", call. = FALSE)
+    }
+  } else if (!is.null(breaks)) {
+    stop("`breaks` is only used for cover(positive = \"ordinal\").", call. = FALSE)
+  }
   obs_family(
     name           = "cover",
     class_long     = "vegetation cover hurdle",
     latent         = "hurdle",
-    observation    = if (positive == "beta") "binomial_plus_beta" else "binomial_plus_lognormal",
+    observation    = switch(positive,
+                            beta      = "binomial_plus_beta",
+                            lognormal = "binomial_plus_lognormal",
+                            ordinal   = "binomial_plus_ordinal"),
     replicates     = "single",
     default_engine = "laplace",
     status         = "working",
     # The cover response is a plain length-N cover vector, so it may sit on the
     # top formula LHS (`cover.flat ~ ...`) and drop `y =` (gcol33/tulpaObs#66).
     response       = "vector",
-    params         = list(positive = positive),
+    params         = list(positive = positive, breaks = breaks),
     # The cover hurdle has its own (.dispatch_cover) grid-based control surface,
     # separate from the occupancy fitter and named with underscores. Declaring
     # the keys keeps tobs()'s control validation from rejecting them. `trend`

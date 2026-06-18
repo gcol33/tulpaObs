@@ -34,10 +34,7 @@
     stop("y must be a matrix (n_sites x J) of detection states in {0, 1, 2}.",
          call. = FALSE)
   }
-  if (nrow(y) != nrow(data)) {
-    stop(sprintf("y has %d rows but data has %d rows", nrow(y), nrow(data)),
-         call. = FALSE)
-  }
+  .tobs_check_site_count(nrow(y), nrow(data), "rows")
   y_int <- matrix(as.integer(round(y)), nrow(y), ncol(y))
   ok <- is.na(y_int) | (y_int %in% 0:2)
   if (!all(ok)) {

@@ -34,10 +34,7 @@
   if (!all(dim(y) == dim(y_pos))) {
     stop("y and y_pos must have identical dimensions.", call. = FALSE)
   }
-  if (nrow(y) != nrow(data)) {
-    stop(sprintf("y has %d rows (plots) but data has %d rows.",
-                 nrow(y), nrow(data)), call. = FALSE)
-  }
+  .tobs_check_site_count(nrow(y), nrow(data), "rows (plots)")
   n_plots    <- nrow(y)
   max_visits <- ncol(y)
   plot_cell  <- as.integer(plot_cell)
