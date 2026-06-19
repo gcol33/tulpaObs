@@ -4,11 +4,29 @@
 \alias{cover}
 \title{Cover hurdle family (vegetation cover, MOTIVATE pattern)}
 \usage{
-cover(positive = c("beta", "lognormal", "ordinal"), breaks = NULL)
+cover(
+  positive = c("beta", "lognormal", "lognormal_trunc", "ordinal"),
+  breaks = NULL
+)
 }
 \arguments{
-\item{positive}{likelihood for the positive part. \code{"beta"} (cover in
-(0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
+\item{positive}{likelihood for the positive cover part:
+\itemize{
+\item \code{"beta"} -- cover in (0, 1) with a logit link;
+\item \code{"lognormal"} -- a Gaussian on log-cover (unbounded above);
+\item \code{"lognormal_trunc"} -- a Gaussian on log-cover upper-truncated at
+\code{log(1) = 0}, the bounded-support form for cover in (0, 1] (it cannot
+place mass above cover = 1 the way \code{"lognormal"} can). Requires
+\code{method = "nested_laplace"};
+\item \code{"ordinal"} -- an interval-censored Gaussian on log-cover with KNOWN
+class thresholds (an ordered probit for Braun-Blanquet-style class data),
+set with \code{breaks}. Requires \code{method = "nested_laplace"}.
+}}
+
+\item{breaks}{for \code{positive = "ordinal"} only, the interior cover-class
+boundaries on the (0, 1) cover-fraction scale (strictly ascending, all in
+(0, 1)); the open outer classes are added automatically. \code{NULL} for the
+other families.}
 }
 \value{
 A \code{tobs_family} object.

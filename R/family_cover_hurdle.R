@@ -21,19 +21,23 @@
                             approx = "gaussian_laplace",
                             correction = "none", ...) {
   positive <- family$params$positive
-  if (!positive %in% c("lognormal", "beta", "ordinal")) {
+  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "ordinal")) {
     stop("cover(positive = '", positive, "') is not supported. ",
-         "Use 'lognormal', 'beta', or 'ordinal'.", call. = FALSE)
+         "Use 'lognormal', 'lognormal_trunc', 'beta', or 'ordinal'.", call. = FALSE)
   }
-  # The ordinal (interval-censored Gaussian) positive arm is wired only on the
-  # joint nested-Laplace engine: its per-observation (lower, upper) bounds are
-  # consumed by the joint solver's built-in interval_gaussian family, which the
-  # single-Laplace / NUTS paths do not carry.
-  if (positive == "ordinal" && !identical(engine, "nested_laplace")) {
-    stop("cover(positive = \"ordinal\") requires method = 'nested_laplace' / ",
-         "'nested_laplace_sla' (got engine '", engine, "'). The ordinal arm is ",
-         "an interval-censored Gaussian integrated on the joint outer grid; the ",
-         "single-Laplace and NUTS paths are not wired for it.", call. = FALSE)
+  # The ordinal (interval-censored Gaussian) and truncated-lognormal
+  # (upper-truncated Gaussian) positive arms are wired only on the joint
+  # nested-Laplace engine: their extra per-observation bound (interval
+  # (lower, upper] for ordinal, the truncation ceiling for lognormal_trunc) is
+  # consumed by the joint solver's built-in family, which the single-Laplace /
+  # NUTS paths do not carry.
+  if (positive %in% c("ordinal", "lognormal_trunc") &&
+      !identical(engine, "nested_laplace")) {
+    stop("cover(positive = \"", positive, "\") requires method = ",
+         "'nested_laplace' / 'nested_laplace_sla' (got engine '", engine, "'). ",
+         "The ", positive, " arm carries a per-observation bound integrated on ",
+         "the joint outer grid; the single-Laplace and NUTS paths are not wired ",
+         "for it.", call. = FALSE)
   }
   # gibbs/mi are rejected centrally by the per-family method registry
   # (.tobs_family_methods), so `correction` is always "none" here.
@@ -152,7 +156,8 @@
 #'   `formula` (the fixed-effects formula), `positive`.
 #' @keywords internal
 encode_cover_hurdle <- function(formula, data, y,
-                                positive = c("lognormal", "beta", "ordinal"),
+                                positive = c("lognormal", "lognormal_trunc",
+                                             "beta", "ordinal"),
                                 breaks = NULL,
                                 autoscale = TRUE) {
   positive <- match.arg(positive)
@@ -183,7 +188,10 @@ encode_cover_hurdle <- function(formula, data, y,
   pos_lower <- NULL
   pos_upper <- NULL
   pos_class <- NULL
-  if (positive == "lognormal") {
+  if (positive %in% c("lognormal", "lognormal_trunc")) {
+    # Both fit a Gaussian on log-cover; lognormal_trunc additionally truncates the
+    # latent log-cover at log(1) = 0 (cover <= 1), the truncation ceiling carried
+    # in pos_data$trunc_upper below.
     y_pos_resp <- log(y_pos)
   } else if (positive == "ordinal") {
     # Interval-censored Gaussian on log-cover with fixed Braun-Blanquet
@@ -247,6 +255,10 @@ encode_cover_hurdle <- function(formula, data, y,
     pos_data$lower <- as.numeric(pos_lower)
     pos_data$upper <- as.numeric(pos_upper)
     pos_data$class <- as.integer(pos_class)
+  } else if (positive == "lognormal_trunc") {
+    # Upper-truncate the latent log-cover at log(1) = 0 (cover in (0, 1]); one
+    # ceiling per positive plot, on the same log-cover (predictor) scale as eta.
+    pos_data$trunc_upper <- rep(0, length(y_pos_resp))
   }
 
   list(
@@ -845,6 +857,14 @@ decode_cover_hurdle <- function(fits, enc, family,
       # times the Jacobian 1/y, i.e. dnorm(log y, eta, sigma, log) - log(y).
       dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
                            log = TRUE) - y_pos[j]
+    } else if (positive == "lognormal_trunc") {
+      # Upper-truncated lognormal: the lognormal density divided by the retained
+      # mass Phi((u - eta)/sigma), u the log-cover ceiling (log(1) = 0). Adds
+      # -log Phi((u - eta)/sigma) to the lognormal log-density above.
+      u <- bounds$trunc_upper[j]
+      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
+                           log = TRUE) - y_pos[j] -
+              stats::pnorm((u - eta_pos[, j]) / sd_disp, log.p = TRUE)
     } else if (positive == "ordinal") {
       # Interval-censored Gaussian: the observed class is a probability MASS,
       # P(latent log-cover in (lower, upper]) = Phi((upper - eta)/sigma) -
@@ -864,12 +884,20 @@ decode_cover_hurdle <- function(fits, enc, family,
   ll
 }
 
-# The per-plot ordinal interval bounds, or NULL for beta / lognormal -- the
-# pointwise-loglik and PIT consumers pass this to .tobs_cover_hurdle_ll.
+# The per-plot positive-arm bounds, or NULL for beta / lognormal -- the
+# pointwise-loglik and PIT consumers pass this to .tobs_cover_hurdle_ll. Ordinal
+# carries the interval (lower, upper]; lognormal_trunc carries the truncation
+# ceiling on the log-cover scale.
 .tobs_cover_bounds <- function(object) {
-  if (!identical(object$positive %||% "lognormal", "ordinal")) return(NULL)
+  positive <- object$positive %||% "lognormal"
   enc <- object$encoding
-  list(lower = enc$pos_data$lower, upper = enc$pos_data$upper)
+  if (identical(positive, "ordinal")) {
+    return(list(lower = enc$pos_data$lower, upper = enc$pos_data$upper))
+  }
+  if (identical(positive, "lognormal_trunc")) {
+    return(list(trunc_upper = enc$pos_data$trunc_upper))
+  }
+  NULL
 }
 
 # Per-draw cover linear predictors [S x N] / [S x N_pos]. Separate-Laplace path:
@@ -1022,6 +1050,11 @@ decode_cover_hurdle <- function(fits, enc, family,
     } else {
       if (positive == "lognormal") {
         Fpos <- stats::pnorm((y_pos[j] - eta_pos[, j]) / sd_disp)
+      } else if (positive == "lognormal_trunc") {
+        # Truncated-lognormal CDF: the Gaussian CDF on log-cover renormalised by
+        # the retained mass Phi((u - eta)/sigma), u the log-cover ceiling.
+        za   <- (bounds$trunc_upper[j] - eta_pos[, j]) / sd_disp
+        Fpos <- stats::pnorm((y_pos[j] - eta_pos[, j]) / sd_disp) / stats::pnorm(za)
       } else {
         mu   <- stats::plogis(eta_pos[, j])
         Fpos <- stats::pbeta(y_pos[j], mu * sd_disp, (1 - mu) * sd_disp)
@@ -1053,8 +1086,11 @@ decode_cover_hurdle <- function(fits, enc, family,
   # Observed cover on the natural scale at occupied sites (positive subset). The
   # ordinal arm stores the per-plot log-cover (class midpoint) like lognormal, so
   # the latent back-transform exp() recovers the natural-scale cover.
-  y_pos_nat <- if (positive %in% c("lognormal", "ordinal")) exp(y_pos) else y_pos
+  y_pos_nat <- if (positive %in% c("lognormal", "lognormal_trunc", "ordinal"))
+                 exp(y_pos) else y_pos
   n_pos <- length(y_pos_nat)
+  # Per-plot log-cover ceiling for the truncated arm (log(1) = 0); NULL otherwise.
+  trunc_u <- if (positive == "lognormal_trunc") enc$pos_data$trunc_upper else NULL
 
   stat_fn <- if (fit.stat == "freeman-tukey") {
     function(o, ex) sum((sqrt(o) - sqrt(ex))^2, na.rm = TRUE)
@@ -1072,7 +1108,17 @@ decode_cover_hurdle <- function(fits, enc, family,
 
     pos_obs <- pos_rp <- 0
     if (n_pos > 0L) {
-      if (positive %in% c("lognormal", "ordinal")) {
+      if (positive == "lognormal_trunc") {
+        # Truncated-lognormal: latent log-cover ~ N(mu, sg^2) truncated at u, then
+        # exp(). Mean E[exp(t)|t<=u] = exp(mu+sg^2/2) Phi(za-sg)/Phi(za); replicate
+        # by inverse-CDF truncated-normal draw, za = (u - mu)/sg.
+        mu_log <- eta_pos[s, ]; sg <- sd_disp[s]
+        za       <- (trunc_u - mu_log) / sg
+        Phi_za   <- stats::pnorm(za)
+        Epos     <- exp(mu_log + sg^2 / 2) * stats::pnorm(za - sg) / Phi_za
+        t_rep    <- mu_log + sg * stats::qnorm(stats::runif(n_pos) * Phi_za)
+        ypos_rep <- exp(t_rep)
+      } else if (positive %in% c("lognormal", "ordinal")) {
         mu_log <- eta_pos[s, ]; sg <- sd_disp[s]
         Epos     <- exp(mu_log + sg^2 / 2)
         ypos_rep <- exp(stats::rnorm(n_pos, mu_log, sg))
@@ -1212,7 +1258,7 @@ print.cover_fit <- function(x, ...) {
   cat(sprintf("  N total      : %d\n", x$n_total))
   cat(sprintf("  N positive   : %d (%.1f%%)\n",
               x$n_positive, 100 * x$n_positive / x$n_total))
-  if (positive %in% c("lognormal", "ordinal")) {
+  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
     cat(sprintf("  sigma_pos    : %.4f\n", x$sigma_pos))
   } else {
     cat(sprintf("  phi_pos      : %.4f\n", x$phi_pos))
@@ -1267,7 +1313,7 @@ print.summary.cover_fit <- function(x, ...) {
   cat("Cover hurdle fit summary\n")
   cat(sprintf("  positive part: %s\n", x$positive))
   cat(sprintf("  N total = %d, N positive = %d\n", x$n_total, x$n_positive))
-  if (x$positive %in% c("lognormal", "ordinal")) {
+  if (x$positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
     cat(sprintf("  sigma_pos = %.4f\n", x$sigma_pos))
   } else {
     cat(sprintf("  phi_pos   = %.4f\n", x$phi_pos))
@@ -1675,7 +1721,7 @@ print.summary.cover_fit <- function(x, ...) {
 
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
-  if (positive == "lognormal") {
+  if (positive %in% c("lognormal", "lognormal_trunc")) {
     sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
     phi_pos <- NA_real_; phi_pos_sd <- NA_real_
   } else {
@@ -1875,7 +1921,7 @@ print.summary.cover_fit <- function(x, ...) {
 
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
-  if (positive == "lognormal") {
+  if (positive %in% c("lognormal", "lognormal_trunc")) {
     sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
     phi_pos <- NA_real_; phi_pos_sd <- NA_real_
   } else {
@@ -1988,9 +2034,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                           control = list(),
                                           temporal = NULL, re = NULL,
                                           priors = NULL) {
-  if (!positive %in% c("lognormal", "beta", "ordinal")) {
+  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "ordinal")) {
     stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() supports positive = ",
-         "'lognormal', 'beta', or 'ordinal'. Got '", positive, "'.", call. = FALSE)
+         "'lognormal', 'lognormal_trunc', 'beta', or 'ordinal'. Got '", positive,
+         "'.", call. = FALSE)
   }
   has_mcar <- !is.null(enc$mcar)
   if (has_mcar) {
@@ -2543,7 +2590,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # sigma_pos -- and the beta precision otherwise (phi_pos).
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
-  if (positive %in% c("lognormal", "ordinal")) {
+  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
     sigma_pos    <- phi_mu
     sigma_pos_sd <- phi_sd
     phi_pos      <- NA_real_
@@ -2645,6 +2692,14 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     list(pos_family = "gaussian", phi_hat = sigma_hat,
          phi_grid_pos = control$phi.grid %||%
            exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7)))
+  } else if (positive == "lognormal_trunc") {
+    # Upper-truncated Gaussian on log-cover (cover <= 1). The midpoint prefit SD
+    # ignores truncation and so over-disperses a touch; the grid runs a little
+    # wider on the low side, as for the ordinal censored latent.
+    sigma_hat <- .prefit_lognormal_sigma(enc, control)
+    list(pos_family = "truncated_gaussian", phi_hat = sigma_hat,
+         phi_grid_pos = control$phi.grid %||%
+           exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)))
   } else if (positive == "ordinal") {
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "interval_gaussian", phi_hat = sigma_hat,
@@ -2657,13 +2712,17 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   }
 }
 
-# Append the per-plot interval bounds to the positive arm for the ordinal
-# (interval-censored Gaussian) family; a no-op for beta / lognormal. The bounds
-# in `enc$pos_data` already run over the positive subset, matching the arm rows.
+# Append the per-plot positive-arm bound(s) for families that carry them: the
+# interval (lower, upper] for ordinal, the truncation ceiling for lognormal_trunc.
+# A no-op for beta / lognormal. The bounds in `enc$pos_data` already run over the
+# positive subset, matching the arm rows.
 .cover_arm_pos_bounds <- function(arm_pos, enc, positive) {
-  if (positive != "ordinal") return(arm_pos)
-  arm_pos$lower <- as.numeric(enc$pos_data$lower)
-  arm_pos$upper <- as.numeric(enc$pos_data$upper)
+  if (identical(positive, "ordinal")) {
+    arm_pos$lower <- as.numeric(enc$pos_data$lower)
+    arm_pos$upper <- as.numeric(enc$pos_data$upper)
+  } else if (identical(positive, "lognormal_trunc")) {
+    arm_pos$trunc_upper <- as.numeric(enc$pos_data$trunc_upper)
+  }
   arm_pos
 }
 
@@ -2698,7 +2757,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     spatial = fits$joint$theta_mean,
     engine  = "nested_laplace"
   )
-  if (fits$positive %in% c("lognormal", "ordinal")) {
+  if (fits$positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
     hyperpar$sigma_pos    <- fits$sigma_pos
     hyperpar$sigma_pos_sd <- fits$sigma_pos_sd
   } else {

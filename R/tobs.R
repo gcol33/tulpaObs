@@ -456,6 +456,7 @@ tobs <- function(formula,
     occu_cover = .dispatch_occu_cover,
     occu_multiscale_cover = .dispatch_occu_multiscale_cover,
     ms_occu_cover = .dispatch_ms_occu_cover,
+    occu_categorical = .dispatch_occu_categorical,
     ms_dyn_occu = .dispatch_ms_dyn_occu,
     ms_int_occu = .dispatch_ms_int_occu,
     stop(sprintf(
@@ -1523,7 +1524,15 @@ tobs <- function(formula,
   # in closed form. Non-spatial Laplace only; correct community NUTS needs
   # independent per-arm RE blocks in the sampler (gcol33/tulpaObs#30).
   ms_dyn_occu = c("laplace"),
-  ms_int_occu = c("laplace")
+  ms_int_occu = c("laplace"),
+  # occu_categorical: presence + nominal K-class hurdle (gcol33/tulpaObs#106).
+  # A Bernoulli presence arm and a baseline-category multinomial logit on the
+  # class given present (the FD-validated tulpa multinomial kernel; the
+  # non-spatial fit is the vectorised R Newton over the same closed forms).
+  # Non-spatial Laplace only for the first ship; the native multi-process
+  # LikelihoodSpec path (spatial fields / NUTS) and the latent-class confusion
+  # variant (the K-class generalisation of fp_occu) are the documented follow-ups.
+  occu_categorical = c("laplace")
 )
 
 # Validate a resolved public method name against the family's supported set.

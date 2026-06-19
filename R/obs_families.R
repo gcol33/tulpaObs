@@ -919,6 +919,64 @@ fp_occu <- function() {
 }
 
 
+#' Presence + nominal class hurdle family
+#'
+#' A hurdle for a response that is either absent or, when present, one of `K`
+#' **nominal (unordered)** classes -- a colour morph, microhabitat / substrate
+#' use, or a cryptic-species / classifier label observed given the organism is
+#' present. The presence/absence part is a Bernoulli arm; the class given present
+#' is a baseline-category multinomial logit (the last class is the baseline). The
+#' two arms factorise the likelihood exactly:
+#' \deqn{P(y = 0) = 1 - \psi, \qquad P(y = k) = \psi \, p_k,}
+#' with \eqn{p = \mathrm{softmax}(X \beta_{class})}.
+#'
+#' This is the categorical counterpart of [cover()] (presence + a magnitude):
+#' here the positive part is an unordered class, so it uses a multinomial logit
+#' rather than beta / lognormal. For an *ordered* class response (Braun-Blanquet
+#' cover bands) use `cover(positive = "ordinal")`, which exploits the ordering;
+#' this family is for classes with no ordering.
+#'
+#' @section Response:
+#' `y` is a length-N integer vector in `0..K`: `0` is absent, `k` is class `k`.
+#' It may sit on the formula left-hand side (`y ~ ...`), so `y =` can be dropped.
+#' The `formula` predictors are shared by both arms.
+#'
+#' @section Scope:
+#' Non-spatial Laplace (`method = "laplace"`). The multinomial math is the
+#' FD-validated tulpa kernel (`multinomial_logit.h`); the non-spatial fit is the
+#' vectorised R Newton over the same closed forms. Spatial fields / NUTS (the
+#' native multi-process likelihood) and the latent-class *misclassification*
+#' variant (the K-class generalisation of [fp_occu()], a confusion matrix on the
+#' observed label) are documented follow-ups (gcol33/tulpaObs#106).
+#'
+#' @param classes optional character vector of class labels (length `K`), used
+#'   only to name the coefficient blocks; when `NULL`, `K` is taken from
+#'   `max(y)` and the classes are labelled `1..K`.
+#' @return A `tobs_family` object.
+#' @seealso [cover()] (presence + magnitude), [fp_occu()] (two-state
+#'   false-positive detection).
+#' @export
+occu_categorical <- function(classes = NULL) {
+  if (!is.null(classes) &&
+      (!is.character(classes) || length(classes) < 2L || anyNA(classes))) {
+    stop("`classes` must be a character vector of at least two class labels, ",
+         "or NULL to infer them from the data.", call. = FALSE)
+  }
+  obs_family(
+    name           = "occu_categorical",
+    class_long     = "presence + nominal class hurdle",
+    latent         = "hurdle",
+    observation    = "binomial_plus_multinomial",
+    replicates     = "single",
+    default_engine = "laplace",
+    status         = "working",
+    response       = "vector",
+    params         = list(classes = classes),
+    control_keys   = c("max.iter", "tol", "prior.prec", "sigma.beta")
+  )
+}
+
+
 #' Cover hurdle family (vegetation cover, MOTIVATE pattern)
 #'
 #' Latent presence (Bernoulli) plus conditional positive cover (beta or
@@ -1102,8 +1160,20 @@ fp_occu <- function() {
 #' of restarting. `resume = FALSE` starts a fresh file. Forwarded to
 #' [tulpa::tulpa_nested_laplace_joint()].
 #'
-#' @param positive likelihood for the positive part. `"beta"` (cover in
-#'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#' @param positive likelihood for the positive cover part:
+#'   * `"beta"` -- cover in (0, 1) with a logit link;
+#'   * `"lognormal"` -- a Gaussian on log-cover (unbounded above);
+#'   * `"lognormal_trunc"` -- a Gaussian on log-cover upper-truncated at
+#'     `log(1) = 0`, the bounded-support form for cover in (0, 1] (it cannot
+#'     place mass above cover = 1 the way `"lognormal"` can). Requires
+#'     `method = "nested_laplace"`;
+#'   * `"ordinal"` -- an interval-censored Gaussian on log-cover with KNOWN
+#'     class thresholds (an ordered probit for Braun-Blanquet-style class data),
+#'     set with `breaks`. Requires `method = "nested_laplace"`.
+#' @param breaks for `positive = "ordinal"` only, the interior cover-class
+#'   boundaries on the (0, 1) cover-fraction scale (strictly ascending, all in
+#'   (0, 1)); the open outer classes are added automatically. `NULL` for the
+#'   other families.
 #' @return A `tobs_family` object.
 #' @examples
 #' \donttest{
@@ -1112,7 +1182,8 @@ fp_occu <- function() {
 #' summary(fit)
 #' }
 #' @export
-cover <- function(positive = c("beta", "lognormal", "ordinal"), breaks = NULL) {
+cover <- function(positive = c("beta", "lognormal", "lognormal_trunc", "ordinal"),
+                  breaks = NULL) {
   positive <- match.arg(positive)
   # The ordinal positive arm is an interval-censored Gaussian on log-cover with
   # KNOWN class thresholds (an ordered probit, not free cutpoints): the cover is
@@ -1140,9 +1211,10 @@ cover <- function(positive = c("beta", "lognormal", "ordinal"), breaks = NULL) {
     class_long     = "vegetation cover hurdle",
     latent         = "hurdle",
     observation    = switch(positive,
-                            beta      = "binomial_plus_beta",
-                            lognormal = "binomial_plus_lognormal",
-                            ordinal   = "binomial_plus_ordinal"),
+                            beta            = "binomial_plus_beta",
+                            lognormal       = "binomial_plus_lognormal",
+                            lognormal_trunc = "binomial_plus_lognormal_trunc",
+                            ordinal         = "binomial_plus_ordinal"),
     replicates     = "single",
     default_engine = "laplace",
     status         = "working",

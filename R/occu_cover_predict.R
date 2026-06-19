@@ -156,6 +156,17 @@
     }
     return(mu)
   }
+  if (identical(bundle$positive, "lognormal_trunc")) {
+    # Truncated-lognormal conditional cover mean: E[exp(t) | t <= u] with
+    # t ~ N(eta, sg^2) and u = log(1) = 0 (cover <= 1) =
+    # exp(eta + sg^2/2) * Phi((u - eta - sg^2)/sg) / Phi((u - eta)/sg). Per-draw sg
+    # sweeps over columns. lognormal_trunc has no `latent` cover-aggregate variant.
+    sg <- bundle$disp
+    za <- sweep(0 - eta_pos, 2L, sg, "/")           # (u - eta)/sg, u = 0
+    za_m <- sweep(za, 2L, sg, "-")                  # za - sg
+    mean_log <- exp(sweep(eta_pos, 2L, sg^2 / 2, "+"))
+    return(mean_log * stats::pnorm(za_m) / stats::pnorm(za))
+  }
   if (!latent) return(exp(sweep(eta_pos, 2L, bundle$disp^2 / 2, "+")))
   sigma_eps <- as.numeric(object$model$cover_latent_disp2)
   log_var   <- sigma_eps^2 + bundle$disp^2               # per-draw total variance

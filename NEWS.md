@@ -1,5 +1,36 @@
 # tulpaObs NEWS
 
+## 0.0.56 (2026-06-19)
+
+* New `occu_categorical()` family (gcol33/tulpaObs#106): a presence + nominal
+  (unordered) K-class hurdle. Each unit is absent (`y = 0`) or present in one of
+  K classes (`y` in `1..K`); presence is a Bernoulli arm and the class given
+  present is a baseline-category multinomial logit (the last class the baseline),
+  the two arms factorising the likelihood exactly. This is the categorical
+  counterpart of `cover()` (presence + magnitude) and the K-class generalisation
+  of `fp_occu()` (its K = 2 confusion case): for an *ordered* class response use
+  `cover(positive = "ordinal")`; this family is for classes with no ordering
+  (colour morph, microhabitat use, classifier label). The multinomial math is
+  the FD-validated tulpa kernel (`multinomial_logit.h`); the non-spatial Laplace
+  fit is the vectorised R Newton over the same closed forms. Ships with
+  `simulate_occu_categorical()`, a `predict()` method (presence, conditional, and
+  joint class probabilities), and parameter-recovery tests. Non-spatial Laplace
+  for this first ship; spatial fields / NUTS (the native multi-process
+  likelihood) and the latent-class misclassification variant are documented
+  follow-ups. Requires tulpa (>= 0.0.47).
+
+* New `cover(positive = "lognormal_trunc")` positive arm (consumer of
+  gcol33/tulpa#122): an upper-truncated lognormal for bounded cover -- a Gaussian
+  on log-cover upper-truncated at `log(1) = 0`, so it cannot place mass above
+  cover = 1 the way `"lognormal"` can. It rides the joint nested-Laplace path on
+  the engine's new `truncated_gaussian` family via a per-plot truncation ceiling,
+  threaded through encode / decode, the pointwise log-likelihood, the PIT CDF,
+  and posterior-predictive replication (inverse-CDF truncated-normal draws), with
+  the truncated-lognormal conditional cover mean in prediction. Requires
+  `method = "nested_laplace"`. Recovery-tested against bounded cover data, and
+  verified close to the plain lognormal fit under negligible truncation.
+  Requires tulpa (>= 0.0.47).
+
 ## 0.0.55 (2026-06-18)
 
 * `tobs_waic()` / `tobs_cpo()` gain `loo.unit = c("obs", "cell")`: the
