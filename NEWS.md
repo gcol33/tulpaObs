@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.57 (2026-06-19)
+
+* `tobs()` exposes `control$k.batches` for the joint-coupled families
+  (`occu_cover()`, `cover()`, `occu()`, multiscale), forwarding it to the engine's
+  batched outer Pareto-k (gcol33/tulpa#123). With `k.batches > 1` the fit reports
+  the median outer k-hat over that many independent importance batches plus the
+  observed `pareto_k_lo` / `pareto_k_hi` range (the diagnostic's Monte Carlo
+  spread, not a posterior CI); the band is classified off the median. Default
+  `1L` (single batch), so existing fits are unchanged. Requires tulpa >= 0.0.48.
+
 ## 0.0.56 (2026-06-19)
 
 * New `occu_categorical()` family (gcol33/tulpaObs#106): a presence + nominal

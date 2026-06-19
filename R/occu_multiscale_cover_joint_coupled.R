@@ -309,6 +309,9 @@
       # = TRUE.
       diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
+      # Batched outer Pareto-k median + Monte Carlo range (gcol33/tulpa#123);
+      # default 1L (single batch, unchanged).
+      k_batches  = as.integer(dots$k.batches %||% 1L),
       # Diagnostic parallelism (gcol33/tulpa#117): the independent k.samples
       # re-solves run after the grid (cores free), so widening their outer pool
       # is a bit-identical speedup. NULL follows the fit's thread grant; "auto"

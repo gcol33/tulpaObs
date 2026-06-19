@@ -876,6 +876,11 @@
       # (control$k.samples sizes the importance batch).
       diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
+      # Batched outer Pareto-k (gcol33/tulpa#123). `control$k.batches > 1` reports
+      # the MEDIAN k-hat over that many independent importance batches plus the
+      # observed range (pareto_k_lo / pareto_k_hi) -- the diagnostic's Monte Carlo
+      # spread, not a posterior CI. Default 1L (single batch, unchanged).
+      k_batches  = as.integer(dots$k.batches %||% 1L),
       # Diagnostic parallelism (gcol33/tulpa#117). When `diagnose.k = TRUE` the
       # `k.samples` importance re-solves are independent and run after the grid
       # (every core free), each solved single-threaded, so widening their outer

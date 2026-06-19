@@ -300,6 +300,9 @@
       # not a default cost. Set control$diagnose.k = TRUE to compute it.
       diagnose_k = dots$diagnose.k %||% FALSE,
       k_samples  = as.integer(dots$k.samples %||% 200L),
+      # Batched outer Pareto-k median + Monte Carlo range (gcol33/tulpa#123);
+      # default 1L (single batch, unchanged).
+      k_batches  = as.integer(dots$k.batches %||% 1L),
       checkpoint = dots$checkpoint,
       integration = dots$integration,
       progress          = dots[["progress"]] %||% TRUE,
