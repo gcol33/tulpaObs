@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.58 (2026-06-19)
+
+* `tobs()` exposes `control$k.adapt` + `control$k.batches.max` for the
+  joint-coupled families (`occu_cover()`, `cover()`, `occu()`, multiscale),
+  forwarding them to the engine's adaptive batched outer Pareto-k
+  (gcol33/tulpa#124). With `k.adapt = TRUE` the batch count grows from
+  `k.batches` until the reliability band resolves (the k-hat band lands in one
+  band) or the `k.batches.max` cap is reached; default off (`k.adapt = FALSE`).
+  Requires tulpa >= 0.0.49.
+
 ## 0.0.57 (2026-06-19)
 
 * `tobs()` exposes `control$k.batches` for the joint-coupled families

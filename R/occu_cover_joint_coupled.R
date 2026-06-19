@@ -881,6 +881,11 @@
       # observed range (pareto_k_lo / pareto_k_hi) -- the diagnostic's Monte Carlo
       # spread, not a posterior CI. Default 1L (single batch, unchanged).
       k_batches  = as.integer(dots$k.batches %||% 1L),
+      # Adaptive batch count (gcol33/tulpa#124). `control$k.adapt = TRUE` grows the
+      # batch count from `k.batches` until the reliability band resolves (the k-hat
+      # +/- 2 MCSE lands in one band) or `k.batches.max` caps it; default OFF.
+      k_adapt       = isTRUE(dots$k.adapt),
+      k_batches_max = if (is.null(dots$k.batches.max)) NULL else as.integer(dots$k.batches.max),
       # Diagnostic parallelism (gcol33/tulpa#117). When `diagnose.k = TRUE` the
       # `k.samples` importance re-solves are independent and run after the grid
       # (every core free), each solved single-threaded, so widening their outer
