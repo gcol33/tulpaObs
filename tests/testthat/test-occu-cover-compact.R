@@ -167,6 +167,32 @@ test_that("compact == dense with an observation-arm random effect (reHab)", {
 })
 
 
+test_that("WAIC draw-chunking is exact (chunk size does not change the result)", {
+  skip_on_cran()
+  nc  <- 10L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 9)
+  fit <- .fit_occu_cover(dd, adj, compact = TRUE)
+
+  set.seed(3)
+  c0 <- .tobs_occu_cover_components(fit, 200L)
+  core <- function(ch) .occu_cover_ploglik_core(
+    fit$model, c0$b_occ, c0$b_det, c0$b_pos, c0$disp,
+    c0$field_occ, c0$field_pos, chunk = ch)
+  ll1 <- core(1L)                       # one draw per block
+  llh <- core(37L)                      # an awkward block size that does not divide S
+  llS <- core(nrow(c0$b_occ))           # a single block (the old, unchunked path)
+  llA <- core(NULL)                     # the memory-adaptive default
+  expect_identical(ll1, llS)
+  expect_identical(llh, llS)
+  expect_identical(llA, llS)
+
+  # And the criterion built on it is unchanged.
+  set.seed(11); wa <- tobs_waic(fit)
+  expect_true(is.finite(wa$waic) && is.finite(wa$se_waic))
+})
+
+
 test_that("compact input is gated to the joint nested-Laplace path", {
   dd <- .mk_occu_cover_long(6L, 2L, function(cell, ti) 4L, seed = 5)
   od  <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",

@@ -1789,36 +1789,81 @@
   ifelse(n_det > 0, det_ll, nodet_ll)
 }
 
+# Available system RAM in bytes, or NA if it cannot be read without a hard
+# dependency. Linux (the LiSC server) exposes /proc/meminfo MemAvailable; the
+# optional `ps` package covers the other platforms. NA -> the caller falls back
+# to a fixed default budget.
+.occu_cover_free_ram <- function() {
+  v <- tryCatch({
+    if (file.exists("/proc/meminfo")) {
+      ln <- grep("^MemAvailable:", readLines("/proc/meminfo", n = 60L), value = TRUE)
+      if (length(ln)) as.numeric(sub("\\D+(\\d+).*", "\\1", ln[1L])) * 1024 else NA_real_
+    } else if (requireNamespace("ps", quietly = TRUE)) {
+      as.numeric(ps::ps_system_memory()[["avail"]])
+    } else NA_real_
+  }, error = function(e) NA_real_)
+  if (length(v) != 1L || !is.finite(v)) NA_real_ else v
+}
+
+# Draw-chunk size for the WAIC pointwise log-likelihood. The heavy transient is
+# the two [n_plots x chunk] per-visit eta matrices (detection + cover), so bound
+# `2 * n_plots * chunk * 8` bytes to a fraction of free RAM (a 4 GB default when
+# RAM cannot be probed). WAIC is a sum over draws, so chunking is exact. Returns
+# a chunk in 1..n_draws.
+.occu_cover_waic_chunk <- function(n_plots, n_draws, frac = 0.4) {
+  free   <- .occu_cover_free_ram()
+  budget <- if (is.finite(free)) frac * free else 4e9
+  per_draw <- 2 * max(as.numeric(n_plots), 1) * 8
+  max(1L, min(as.integer(n_draws), as.integer(budget / per_draw)))
+}
+
+# `chunk` (draws per block) defaults to a memory-adaptive size; the [n_plots x
+# chunk] eta matrices are the WAIC's memory peak, and processing draws in blocks
+# keeps that bounded while the returned [S x n_sites] pointwise log-likelihood is
+# byte-identical to the unchunked result (each draw's row depends only on that
+# draw).
 .occu_cover_ploglik_core <- function(model, b_occ, b_det, b_pos, disp,
-                                     field_occ, field_pos) {
+                                     field_occ, field_pos, chunk = NULL) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
-  S <- nrow(b_occ)
-  comp <- .occu_cover_eta_components(model, b_occ, b_det, b_pos,
-                                     field_occ, field_pos)
+  S  <- nrow(b_occ)
   cl <- .tobs_clamp_eta
   # Detected-unit cover values are draw-invariant, so resolve them once and feed
   # them to every draw's cover term (gcol33/tulpaObs#34).
   units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
            else .occu_cover_unit_cover(model)
+  is_ragged <- isTRUE(model$ragged)
+  sov <- if (is_ragged) model$site_of_visit else NULL
+
+  n_plots <- max(
+    if (!is.null(model$X_det_visit)) nrow(model$X_det_visit) else 0L,
+    if (!is.null(model$X_pos_visit)) nrow(model$X_pos_visit) else 0L,
+    n_sites)
+  if (is.null(chunk)) chunk <- .occu_cover_waic_chunk(n_plots, S)
+
   ll <- matrix(0, S, n_sites)
-  if (isTRUE(model$ragged)) {
-    sov <- model$site_of_visit
-    for (d in seq_len(S)) {
-      de    <- .occu_cover_draw_eta_ragged(comp, d, sov)
-      psi   <- stats::plogis(cl(de$psi_eta))
-      p_vec <- stats::plogis(cl(de$p_eta))
-      ll[d, ] <- .occu_cover_site_ll_ragged(model, psi, p_vec, de$ep,
-                                            log(disp[d]))
+  for (st in seq.int(1L, S, by = chunk)) {
+    idx  <- st:min(st + chunk - 1L, S)
+    comp <- .occu_cover_eta_components(model,
+              b_occ[idx, , drop = FALSE], b_det[idx, , drop = FALSE],
+              b_pos[idx, , drop = FALSE],
+              field_occ[, idx, drop = FALSE], field_pos[, idx, drop = FALSE])
+    for (j in seq_along(idx)) {
+      d <- idx[j]
+      if (is_ragged) {
+        de    <- .occu_cover_draw_eta_ragged(comp, j, sov)
+        psi   <- stats::plogis(cl(de$psi_eta))
+        p_vec <- stats::plogis(cl(de$p_eta))
+        ll[d, ] <- .occu_cover_site_ll_ragged(model, psi, p_vec, de$ep,
+                                              log(disp[d]))
+      } else {
+        de    <- .occu_cover_draw_eta(comp, j, n_sites, max_visits)
+        psi   <- stats::plogis(cl(de$psi_eta))
+        p_mat <- stats::plogis(cl(de$p_eta))
+        ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat,
+                                       log(disp[d]), units = units)
+      }
     }
-    return(ll)
-  }
-  for (d in seq_len(S)) {
-    de    <- .occu_cover_draw_eta(comp, d, n_sites, max_visits)
-    psi   <- stats::plogis(cl(de$psi_eta))
-    p_mat <- stats::plogis(cl(de$p_eta))
-    ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat,
-                                   log(disp[d]), units = units)
   }
   ll
 }

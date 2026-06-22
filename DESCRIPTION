@@ -1,6 +1,6 @@
 Package: tulpaObs
 Title: Bayesian Occupancy Models via 'tulpa'
-Version: 0.0.62
+Version: 0.0.63
 Authors@R: person("Gilles", "Colling", email = "gilles.colling051@gmail.com",
     role = c("aut", "cre"), comment = c(ORCID = "0000-0003-3070-6066"))
 Description: Single-season and multi-season Bayesian occupancy models with
@@ -31,6 +31,7 @@ Suggests:
     knitr,
     loo (>= 2.7.0),
     MASS,
+    ps,
     rmarkdown,
     spAbundance,
     unmarked

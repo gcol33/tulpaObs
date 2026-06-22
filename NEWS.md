@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.63 (2026-06-22)
+
+* `tobs_waic()` / `tobs_dic()` for `occu_cover()` now build the pointwise
+  log-likelihood in memory-adaptive draw-chunks. The heavy transient was the two
+  `[n_plots x n_draws]` per-visit predictor matrices (about 15 GB at 1000 draws on
+  the full no-cap EVA data); `.occu_cover_ploglik_core()` now processes the draws
+  in blocks sized to a fraction of free RAM (`/proc/meminfo` on Linux, the
+  optional `ps` package elsewhere, a 4 GB default otherwise), so the peak stays
+  bounded on a memory-tight node. WAIC is a sum over draws, so the result is
+  byte-identical to the unchunked computation regardless of chunk size (asserted
+  in `test-occu-cover-compact.R`). The full draw count is kept, so WAIC precision
+  is unchanged -- callers no longer need to trade draws for memory.
+
 ## 0.0.62 (2026-06-22)
 
 * The compact (ragged) `occu_cover()` path now carries an observation-arm random
