@@ -414,7 +414,8 @@ occu_cover <- function(positive = c("beta", "lognormal"),
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "var.of.means.consistency", "var.of.means.tolerance",
-      "diagnose.k", "k.samples", "k.batches", "k.adapt", "k.batches.max",
+      "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
+      "k.tail.points", "k.conf.bands",
       "re.sigma.grid", "re.sigma.grid.p", "re.sigma.grid.pos",
       "checkpoint"
     )
@@ -646,7 +647,8 @@ occu_multiscale_cover <- function(positive = c("beta", "lognormal")) {
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "phi.grid.pos", "n.threads",
       "inner.refresh", "hessian", "n.threads.outer", "force.sparse",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
-      "diagnose.k", "k.samples", "k.batches", "k.adapt", "k.batches.max",
+      "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
+      "k.tail.points", "k.conf.bands",
       "checkpoint"
     )
   )

@@ -299,15 +299,16 @@
       # occupancy field posterior is well-behaved, so the diagnostic is an opt-in,
       # not a default cost. Set control$diagnose.k = TRUE to compute it.
       diagnose_k = dots$diagnose.k %||% FALSE,
-      k_samples  = as.integer(dots$k.samples %||% 200L),
-      # Batched outer Pareto-k median + Monte Carlo range (gcol33/tulpa#123);
-      # default 1L (single batch, unchanged).
-      k_batches  = as.integer(dots$k.batches %||% 1L),
-      # Adaptive batch count (gcol33/tulpa#124). `control$k.adapt = TRUE` grows the
-      # batch count from `k.batches` until the reliability band resolves (the k-hat
-      # +/- 2 MCSE lands in one band) or `k.batches.max` caps it; default OFF.
-      k_adapt       = isTRUE(dots$k.adapt),
-      k_batches_max = if (is.null(dots$k.batches.max)) NULL else as.integer(dots$k.batches.max),
+      # diagnose.draws is the precision knob (k.samples is the legacy alias); the
+      # outer Pareto-k is scored ONCE over this many importance draws.
+      diagnose_draws = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
+      # Bootstrap outer Pareto-k uncertainty (gcol33/tulpa#127): SE / 95% CI /
+      # band_confident from resampling the raw log-ratios (NO new solves). Raise
+      # diagnose.draws, not k.bootstrap, for a tighter k. k.tail.points (NULL =
+      # automatic PSIS rule) is an expert control; k.conf.bands the band boundaries.
+      k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
+      k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
+      k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),
       checkpoint = dots$checkpoint,
       integration = dots$integration,
       progress          = dots[["progress"]] %||% TRUE,
