@@ -112,20 +112,36 @@
   if (is.null(site_cell)) site_cell <- seq_len(n_sites)
   if (is.null(n_cells))   n_cells   <- max(site_cell)
 
-  valid_flat  <- as.logical(t(model$valid))   # site-major: site 1 visits 1..J, ...
-  y_flat      <- as.numeric(t(model$y))
-  y_pos_flat  <- as.numeric(t(model$y_pos))
-  site_flat   <- rep(seq_len(n_sites), each = max_visits)
+  # Compact the visit-level data to one row per VALID visit, site-major (site 1's
+  # visits in increasing visit index, then site 2's, ...). The compact (ragged)
+  # model already carries exactly these rows in that order, so it is read
+  # directly; the dense model flattens its [n_sites x max_visits] grid and keeps
+  # the valid cells. Both yield identical `(y_det_visit, y_pos_visit,
+  # site_of_visit)`, so the arms below are identical -- the only difference is
+  # whether the padded grid was ever materialised.
+  if (isTRUE(model$ragged)) {
+    site_of_visit  <- model$site_of_visit
+    y_det_visit    <- model$y_det_visit
+    y_pos_visit    <- model$y_pos_visit
+    n_visits_valid <- length(site_of_visit)
+    keep           <- seq_len(n_visits_valid)   # X_*_visit already compacted
+    cell_of_visit  <- as.integer(site_cell[site_of_visit])
+  } else {
+    valid_flat  <- as.logical(t(model$valid))   # site-major: site 1 visits 1..J, ...
+    y_flat      <- as.numeric(t(model$y))
+    y_pos_flat  <- as.numeric(t(model$y_pos))
+    site_flat   <- rep(seq_len(n_sites), each = max_visits)
 
-  keep             <- which(valid_flat)
-  n_visits_valid   <- length(keep)
-  y_det_visit      <- as.integer(y_flat[keep])
-  y_pos_visit      <- y_pos_flat[keep]
-  # Each valid visit carries its occupancy unit (site, for the mixture grouping
-  # via cell_obs_map) and its field node (cell, for the shared field via
-  # spatial_idx). The two coincide when site_cell is the identity.
-  site_of_visit    <- as.integer(site_flat[keep])
-  cell_of_visit    <- as.integer(site_cell[site_of_visit])
+    keep             <- which(valid_flat)
+    n_visits_valid   <- length(keep)
+    y_det_visit      <- as.integer(y_flat[keep])
+    y_pos_visit      <- y_pos_flat[keep]
+    # Each valid visit carries its occupancy unit (site, for the mixture grouping
+    # via cell_obs_map) and its field node (cell, for the shared field via
+    # spatial_idx). The two coincide when site_cell is the identity.
+    site_of_visit    <- as.integer(site_flat[keep])
+    cell_of_visit    <- as.integer(site_cell[site_of_visit])
+  }
 
   if (n_visits_valid == 0L) {
     stop("occu_cover joint_coupled: no valid visits in the data.",
@@ -873,19 +889,21 @@
       # stays OFF by default: it reports k-hat only -- it does not move the betas /
       # SDs / field -- so it is an opt-in validation pass, matching the
       # occu_joint_coupled path. Set control$diagnose.k = TRUE to compute it
-      # (control$k.samples sizes the importance batch).
+      # (control$diagnose.draws sizes the importance batch).
       diagnose_k = dots$diagnose.k %||% FALSE,
-      k_samples  = as.integer(dots$k.samples %||% 200L),
-      # Batched outer Pareto-k (gcol33/tulpa#123). `control$k.batches > 1` reports
-      # the MEDIAN k-hat over that many independent importance batches plus the
-      # observed range (pareto_k_lo / pareto_k_hi) -- the diagnostic's Monte Carlo
-      # spread, not a posterior CI. Default 1L (single batch, unchanged).
-      k_batches  = as.integer(dots$k.batches %||% 1L),
-      # Adaptive batch count (gcol33/tulpa#124). `control$k.adapt = TRUE` grows the
-      # batch count from `k.batches` until the reliability band resolves (the k-hat
-      # +/- 2 MCSE lands in one band) or `k.batches.max` caps it; default OFF.
-      k_adapt       = isTRUE(dots$k.adapt),
-      k_batches_max = if (is.null(dots$k.batches.max)) NULL else as.integer(dots$k.batches.max),
+      # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy
+      # alias). The outer Pareto-k is scored ONCE over this many importance draws.
+      diagnose_draws = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
+      # Bootstrap outer Pareto-k uncertainty (gcol33/tulpa#127). The k-hat's
+      # sampling uncertainty is bootstrapped from its raw importance log-ratios
+      # (k.bootstrap replicates, NO new solves): reports the SE, 95% CI and the
+      # band_confident flag. A tighter k needs more actual tail ratios -- raise
+      # diagnose.draws, NOT k.bootstrap. k.tail.points (NULL = automatic PSIS rule)
+      # is an expert tail-threshold control; k.conf.bands the reliability-band
+      # boundaries.
+      k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
+      k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
+      k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),
       # Diagnostic parallelism (gcol33/tulpa#117). When `diagnose.k = TRUE` the
       # `k.samples` importance re-solves are independent and run after the grid
       # (every core free), each solved single-threaded, so widening their outer
@@ -1581,7 +1599,7 @@
     n_params     = length(means),
     log_prob     = rep(log_lik_val, n_draws),
     log_lik      = log_lik_val,
-    N            = sum(model$valid)),
+    N            = if (isTRUE(model$ragged)) model$n_visits_valid else sum(model$valid)),
     .tobs_na_nuts_diagnostics(n_draws),
     .tobs_promote_pareto_k(fit),
     list(

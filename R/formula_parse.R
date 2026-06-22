@@ -380,10 +380,15 @@
                                 n_units, max_per_unit, arm,
                                 drop_intercept = TRUE) {
   if (is.null(visit_formula) || is.null(visit_data)) return(NULL)
-  expected_rows <- n_units * max_per_unit
-  if (nrow(visit_data) != expected_rows) {
-    stop(sprintf("%s visit data must have %d rows (one row per unit-visit), got %d",
-                 arm, expected_rows, nrow(visit_data)), call. = FALSE)
+  # Compact (ragged) input passes one row per VALID visit and signals it with
+  # max_per_unit = NULL: there is no padded grid to size against, so skip the
+  # n_units * max_per_unit row check. The dense path keeps the exact-grid check.
+  if (!is.null(max_per_unit)) {
+    expected_rows <- n_units * max_per_unit
+    if (nrow(visit_data) != expected_rows) {
+      stop(sprintf("%s visit data must have %d rows (one row per unit-visit), got %d",
+                   arm, expected_rows, nrow(visit_data)), call. = FALSE)
+    }
   }
   # Build with the intercept present so a factor term gets reference (k - 1)
   # contrast coding; the intercept column is then dropped below when stacking

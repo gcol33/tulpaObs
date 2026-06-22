@@ -55,6 +55,7 @@
 #include "occu_coupling_shared.h"  // sigmoid_ / log_safe_ / PosPolicy / nodet_mixture_block
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tulpaObs {
@@ -63,6 +64,21 @@ template <class PosPolicy, bool Aggregated = false>
 class OccuCoverCoupling final : public tulpa::CellCouplingSpec {
 public:
     std::vector<int> arm_ids() const override { return {0, 1, 2}; }
+
+    // Dense cross-Hessian slabs this spec writes (arms: psi = 0, p = 1, pos = 2).
+    // The det branch factorises -- every cross is zero -- and the nodet branch
+    // writes only the (psi, p) cross (1 x J) plus the (p, p) block. The (p, p)
+    // block rides the rank-1 self-cross when the engine supplies it (single
+    // response); batched has no rank-1 path and needs it dense. The (p, pos),
+    // (pos, pos) and (psi, pos) blocks are always zero. Omitting them is what
+    // bounds a cell with J visits to O(J) instead of O(J^2) dense slabs -- the
+    // all-undetected cells in a large grid would otherwise allocate a J x J
+    // (p, p) block per cell.
+    std::vector<std::pair<int, int>> dense_cross_pairs(
+            int /*n_coupled*/, bool rank1_self_supported) const override {
+        if (rank1_self_supported) return {{0, 1}};
+        return {{0, 1}, {1, 1}};
+    }
 
     double evaluate_cell(int                       /*cell_idx*/,
                          const tulpa::CellEtas&     etas,

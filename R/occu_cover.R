@@ -140,6 +140,125 @@
   ), class = "tobs_model")
 }
 
+# ---------------------------------------------------------------------------
+# Compact (ragged) data binder
+# ---------------------------------------------------------------------------
+
+# Bind the joint occupancy-cover model from compact (ragged) inputs: one row per
+# VALID visit instead of a padded [n_sites x max_visits] grid. Produces the same
+# `tobs_model` the dense binder does, except the visit-level fields are already
+# compacted -- `y_det_visit` / `y_pos_visit` / `site_of_visit` are length-V and
+# `X_det_visit` / `X_pos_visit` are V-row designs -- and it carries `ragged =
+# TRUE`. The joint-coupled arm builder reads these directly (it would otherwise
+# flatten the dense grid to exactly this), so the engine sees an identical
+# `responses` list. No dense `y` / `valid` matrices are built, so there is no
+# per-site visit cap: memory is O(V) = total observations, not O(n_sites x
+# max_visits). Scoped to the joint nested-Laplace path (the only consumer of the
+# compacted arms); other engines / the cell-aggregated cover path read the dense
+# fields and are gated off in .dispatch_occu_cover.
+.tobs_build_occu_cover_ragged <- function(occ_formula, det_formula, pos_formula,
+                                          data, y_ragged, y_pos_values, positive,
+                                          det_visit_formula = NULL,
+                                          det_visit_data   = NULL,
+                                          pos_visit_formula = NULL,
+                                          pos_visit_data    = NULL) {
+  if (!inherits(y_ragged, "tobs_ragged")) {
+    stop("ragged occu_cover binder expects a tobs_ragged `y`.", call. = FALSE)
+  }
+  n_sites        <- y_ragged$n_sites
+  max_visits     <- y_ragged$max_visits
+  site_of_visit  <- y_ragged$site
+  n_visits_valid <- length(site_of_visit)
+  .tobs_check_site_count(n_sites, nrow(data), "rows")
+
+  # Detection arm carries 0/1 per valid visit.
+  y_det_visit <- as.integer(y_ragged$values)
+  if (anyNA(y_det_visit) || any(!(y_det_visit %in% c(0L, 1L)))) {
+    stop("compact occu_cover: detection `y` must be 0/1 at every valid visit ",
+         "(no NA -- a compact row is, by construction, a sampled visit).",
+         call. = FALSE)
+  }
+  if (length(y_pos_values) != n_visits_valid) {
+    stop(sprintf(paste0(
+      "compact occu_cover: y_pos has %d rows but the detection response has %d ",
+      "valid visits. The occurrence and cover tobs_data(compact = TRUE) calls ",
+      "must use the same df / site / visit so they align."),
+      length(y_pos_values), n_visits_valid), call. = FALSE)
+  }
+
+  # Cover meaningful only where detected; zero-fill the rest (the spec gates the
+  # positive density on y_det == 1, exactly as the dense binder does).
+  pos_mask  <- y_det_visit == 1L
+  y_pos_num <- as.numeric(y_pos_values)
+  if (any(!is.finite(y_pos_num[pos_mask]))) {
+    stop("y_pos must be finite at every detected visit (y == 1).", call. = FALSE)
+  }
+  if (identical(positive, "beta")) {
+    bad <- pos_mask & (y_pos_num <= 0 | y_pos_num >= 1)
+    if (any(bad)) {
+      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit; ",
+           "clip with pmin(pmax(y_pos, eps), 1 - eps).", call. = FALSE)
+    }
+  } else {
+    bad <- pos_mask & (y_pos_num <= 0)
+    if (any(bad)) {
+      stop("Lognormal positive arm requires y_pos > 0 at every detected visit.",
+           call. = FALSE)
+    }
+  }
+  y_pos_num[!pos_mask] <- 0
+
+  .occu_cover_reject_structured(occ_formula, "occupancy")
+  .occu_cover_reject_structured(det_formula, "detection")
+  .occu_cover_reject_structured(pos_formula, "positive cover")
+
+  # Site-level designs (n_sites rows) -- identical to the dense path.
+  X_occ      <- stats::model.matrix(occ_formula, data)
+  X_det_site <- stats::model.matrix(det_formula, data)
+  X_pos_site <- stats::model.matrix(pos_formula, data)
+
+  # Visit-level designs built directly on the V valid rows (max_per_unit = NULL
+  # -> the compact signal that skips the padded-grid row check).
+  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
+                                     n_sites, NULL, arm = "detection")
+  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
+                                     n_sites, NULL, arm = "positive cover")
+
+  det_coef_names <- colnames(X_det_site)
+  pos_coef_names <- colnames(X_pos_site)
+  if (!is.null(X_det_visit)) det_coef_names <- c(det_coef_names, colnames(X_det_visit))
+  if (!is.null(X_pos_visit)) pos_coef_names <- c(pos_coef_names, colnames(X_pos_visit))
+
+  structure(list(
+    model_type     = "occu_cover",
+    positive       = positive,
+    ragged         = TRUE,
+    site_of_visit  = site_of_visit,
+    y_det_visit    = y_det_visit,
+    y_pos_visit    = y_pos_num,
+    n_visits_valid = n_visits_valid,
+    n_sites        = n_sites,
+    max_visits     = max_visits,
+    X_occ          = X_occ,
+    X_det_site     = X_det_site,
+    X_pos_site     = X_pos_site,
+    X_det_visit    = X_det_visit,
+    X_pos_visit    = X_pos_visit,
+    formulas       = list(occ = occ_formula, det = det_formula, pos = pos_formula,
+                          det_visit = det_visit_formula, pos_visit = pos_visit_formula),
+    data           = data,
+    process_info = list(
+      list(name = "psi", p = ncol(X_occ),
+           coef_names = colnames(X_occ), link = "logit"),
+      list(name = "p",   p = length(det_coef_names),
+           coef_names = det_coef_names, link = "logit"),
+      list(name = "pos", p = length(pos_coef_names),
+           coef_names = pos_coef_names,
+           link = if (positive == "beta") "logit" else "identity")
+    )
+  ), class = "tobs_model")
+}
+
 # Reject formulas containing structured terms (bym2, icar, car, gp, etc.).
 # v1 of occu_cover is non-spatial; spatial sharing across the three arms is v2.
 .occu_cover_reject_structured <- function(formula, arm) {
@@ -901,6 +1020,27 @@
          "values used only where y == 1).", call. = FALSE)
   }
 
+  # Compact (ragged) input: `y` is a tobs_ragged carrier (tobs_data(compact =
+  # TRUE)). It feeds the joint nested-Laplace engine one valid visit at a time,
+  # with no padded grid and so no per-site visit cap. `y_pos` may be the paired
+  # ragged carrier or a bare length-V vector aligned to `y`. Scoped to the
+  # spatial joint path (the only consumer of the compacted arms); every other
+  # configuration that would read the dense `y` / `valid` grid is gated off below
+  # with a clear error rather than a silent dense rebuild.
+  ragged <- inherits(y, "tobs_ragged")
+  if (ragged) {
+    y_pos_arg <- dots$y_pos
+    if (inherits(y_pos_arg, "tobs_ragged")) {
+      if (!identical(y_pos_arg$site, y$site) || !identical(y_pos_arg$visit, y$visit))
+        stop("occu_cover(): compact `y` and `y_pos` are not aligned (different ",
+             "site / visit order). Build both with tobs_data(compact = TRUE) on ",
+             "the same df / site / visit.", call. = FALSE)
+      y_pos_values <- y_pos_arg$values
+    } else {
+      y_pos_values <- y_pos_arg
+    }
+  }
+
   pos_formula <- dots$positive
   if (is.null(pos_formula)) pos_formula <- detection
 
@@ -920,6 +1060,18 @@
     stop("occu_cover(): a random effect on the detection / positive-cover arm ",
          "needs method = \"nested_laplace\" (the joint nested-Laplace engine ",
          "carries the RE as a latent block); got method = \"", engine, "\".",
+         call. = FALSE)
+  }
+  if (ragged && has_obs_re) {
+    stop("occu_cover(): compact (ragged) input does not yet carry an ",
+         "observation-arm random effect. Build the data densely ",
+         "(tobs_data() without compact = TRUE) for the RE fit, or drop the RE.",
+         call. = FALSE)
+  }
+  if (ragged && identical(engine, "nuts")) {
+    stop("occu_cover(): compact (ragged) input feeds the joint nested-Laplace ",
+         "engine; method = \"nuts\" reads the dense detection grid. Use ",
+         "method = \"nested_laplace\", or build the data densely for NUTS.",
          call. = FALSE)
   }
   # Random intercepts (crossed, nested) AND random slopes are supported on the
@@ -1081,6 +1233,18 @@
     stop("occu_cover() with method = \"nested_laplace\" requires a spatial ",
          "term (icar() or bym2()) on the psi formula.", call. = FALSE)
   }
+  if (ragged && !has_spatial) {
+    stop("occu_cover(): compact (ragged) input is implemented for the joint ",
+         "nested-Laplace path (a spatial term on the occurrence formula). For a ",
+         "non-spatial fit, build the data densely (tobs_data() without ",
+         "compact = TRUE).", call. = FALSE)
+  }
+  if (ragged && cover_aggregate != "none") {
+    stop("occu_cover(): compact (ragged) input uses per-visit cover ",
+         "(cover_aggregate = \"none\"); the cell-aggregated cover path reads the ",
+         "dense detection grid. Pass cover_aggregate = \"none\", or build densely.",
+         call. = FALSE)
+  }
 
   fe_formula <- if (has_spatial) spatial_info$fe else formula
 
@@ -1090,36 +1254,59 @@
   .occu_cover_reject_structured(detection,   "detection")
   .occu_cover_reject_structured(pos_formula, "positive cover")
 
-  vd_det <- .normalize_visits(visits, detection,
-                              n_sites = nrow(y), max_visits = ncol(y))
-  # Positive design. Per-visit cover reads the visit-level positive formula from
-  # `visits`; cell-aggregated cover reads a cell-level positive design directly
-  # from `data` (one value per occupancy unit) and carries no visit-level term.
-  if (cover_aggregate == "none") {
-    vd_pos            <- .normalize_visits(visits, pos_formula,
-                                           n_sites = nrow(y), max_visits = ncol(y))
-    pos_site_formula  <- vd_pos$det_formula
-    pos_visit_formula <- vd_pos$det_visit_formula
-    pos_visit_data    <- vd_pos$visits
+  # Visit-design normalization + model build. The compact (ragged) path builds
+  # the visit designs on the V valid rows directly (no padded grid); the dense
+  # path flattens the [n_sites x max_visits] grid. Both converge to the same
+  # `tobs_model` shape (the compact one carries `ragged = TRUE` and pre-compacted
+  # visit-level fields), so the joint-coupled arm builder downstream is the same.
+  if (ragged) {
+    n_v    <- y$n_visits
+    vd_det <- .normalize_visits_ragged(visits, detection, n_visits_valid = n_v)
+    vd_pos <- .normalize_visits_ragged(visits, pos_formula, n_visits_valid = n_v)
+    model  <- .tobs_build_occu_cover_ragged(
+      occ_formula       = fe_formula,
+      det_formula       = vd_det$det_formula,
+      pos_formula       = vd_pos$det_formula,
+      data              = data,
+      y_ragged          = y,
+      y_pos_values      = y_pos_values,
+      positive          = family$params$positive,
+      det_visit_formula = vd_det$det_visit_formula,
+      det_visit_data    = vd_det$visits,
+      pos_visit_formula = vd_pos$det_visit_formula,
+      pos_visit_data    = vd_pos$visits)
   } else {
-    pos_site_formula  <- pos_formula
-    pos_visit_formula <- NULL
-    pos_visit_data    <- NULL
-  }
+    vd_det <- .normalize_visits(visits, detection,
+                                n_sites = nrow(y), max_visits = ncol(y))
+    # Positive design. Per-visit cover reads the visit-level positive formula from
+    # `visits`; cell-aggregated cover reads a cell-level positive design directly
+    # from `data` (one value per occupancy unit) and carries no visit-level term.
+    if (cover_aggregate == "none") {
+      vd_pos            <- .normalize_visits(visits, pos_formula,
+                                             n_sites = nrow(y), max_visits = ncol(y))
+      pos_site_formula  <- vd_pos$det_formula
+      pos_visit_formula <- vd_pos$det_visit_formula
+      pos_visit_data    <- vd_pos$visits
+    } else {
+      pos_site_formula  <- pos_formula
+      pos_visit_formula <- NULL
+      pos_visit_data    <- NULL
+    }
 
-  model <- .tobs_build_occu_cover(
-    occ_formula      = fe_formula,
-    det_formula      = vd_det$det_formula,
-    pos_formula      = pos_site_formula,
-    data             = data,
-    y                = y,
-    y_pos            = dots$y_pos,
-    positive         = family$params$positive,
-    det_visit_formula = vd_det$det_visit_formula,
-    det_visit_data    = vd_det$visits,
-    pos_visit_formula = pos_visit_formula,
-    pos_visit_data    = pos_visit_data
-  )
+    model <- .tobs_build_occu_cover(
+      occ_formula      = fe_formula,
+      det_formula      = vd_det$det_formula,
+      pos_formula      = pos_site_formula,
+      data             = data,
+      y                = y,
+      y_pos            = dots$y_pos,
+      positive         = family$params$positive,
+      det_visit_formula = vd_det$det_visit_formula,
+      det_visit_data    = vd_det$visits,
+      pos_visit_formula = pos_visit_formula,
+      pos_visit_data    = pos_visit_data
+    )
+  }
 
   model$cover_aggregate <- cover_aggregate
 
@@ -1471,6 +1658,54 @@
   list(psi_eta = comp$eta_psi_all[, d], p_eta = p_eta, ep_mat = ep_mat)
 }
 
+# Compact (ragged) counterpart of .occu_cover_draw_eta: the detection / cover
+# predictors are length-V (one per valid visit), built by broadcasting the
+# site-level block onto each visit's site and adding the per-visit block --
+# never a padded [n_sites x max_visits] matrix.
+.occu_cover_draw_eta_ragged <- function(comp, d, site_of_visit) {
+  p_eta <- comp$eta_p_site_all[site_of_visit, d]
+  if (comp$has_det_visit) p_eta <- p_eta + comp$eta_p_visit_all[, d]
+  ep <- comp$eta_pos_site_all[site_of_visit, d]
+  if (comp$has_pos_visit) ep <- ep + comp$eta_pos_visit_all[, d]
+  list(psi_eta = comp$eta_psi_all[, d], p_eta = p_eta, ep = ep)
+}
+
+# Compact (ragged) counterpart of .occu_cover_site_ll: the per-site occu-cover
+# marginal from length-V per-visit predictors grouped by `model$site_of_visit`,
+# returned as a length-n_sites vector. Algebraically identical to the dense
+# version (same MacKenzie mixture, same per-visit Beta/lognormal cover term);
+# rowsum() accumulates each site's visits instead of a matrix rowSums. Scoped to
+# cover_aggregate = "none" (the only mode the ragged path builds).
+.occu_cover_site_ll_ragged <- function(model, psi, p_vec, ep_vec, log_disp) {
+  site    <- model$site_of_visit
+  y       <- model$y_det_visit
+  n_sites <- model$n_sites
+  g       <- factor(site, levels = seq_len(n_sites))
+
+  log_p   <- log(p_vec)
+  log_1mp <- log(1 - p_vec)
+  log_h_det <- ifelse(y == 1L, log_p, log_1mp)
+
+  is_beta <- identical(model$positive %||% "lognormal", "beta")
+  pos_ld  <- numeric(length(y))
+  det     <- y == 1L
+  if (any(det)) {
+    pos_ld[det] <- .occu_cover_pos_logdens(model$y_pos_visit[det], ep_vec[det],
+                                           exp(log_disp), is_beta)
+  }
+
+  sum_log_h  <- as.numeric(rowsum(log_h_det, g))
+  sum_log1mp <- as.numeric(rowsum(log_1mp,   g))
+  cover_term <- as.numeric(rowsum(pos_ld,    g))
+  n_det      <- as.numeric(rowsum(as.numeric(y), g))
+
+  log_psi   <- log(pmax(psi, 1e-300))
+  log_1mpsi <- log(pmax(1 - psi, 1e-300))
+  det_ll    <- log_psi + sum_log_h + cover_term
+  nodet_ll  <- .tobs_logsumexp2(log_psi + sum_log1mp, log_1mpsi)
+  ifelse(n_det > 0, det_ll, nodet_ll)
+}
+
 .occu_cover_ploglik_core <- function(model, b_occ, b_det, b_pos, disp,
                                      field_occ, field_pos) {
   n_sites    <- model$n_sites
@@ -1484,6 +1719,17 @@
   units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
            else .occu_cover_unit_cover(model)
   ll <- matrix(0, S, n_sites)
+  if (isTRUE(model$ragged)) {
+    sov <- model$site_of_visit
+    for (d in seq_len(S)) {
+      de    <- .occu_cover_draw_eta_ragged(comp, d, sov)
+      psi   <- stats::plogis(cl(de$psi_eta))
+      p_vec <- stats::plogis(cl(de$p_eta))
+      ll[d, ] <- .occu_cover_site_ll_ragged(model, psi, p_vec, de$ep,
+                                            log(disp[d]))
+    }
+    return(ll)
+  }
   for (d in seq_len(S)) {
     de    <- .occu_cover_draw_eta(comp, d, n_sites, max_visits)
     psi   <- stats::plogis(cl(de$psi_eta))

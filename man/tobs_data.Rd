@@ -15,7 +15,8 @@ tobs_data(
   coords = NULL,
   sites = NULL,
   visits = NULL,
-  cover.floor = 0
+  cover.floor = 0,
+  compact = FALSE
 )
 }
 \arguments{
@@ -60,9 +61,21 @@ observation; sending it to \code{NA} keeps a sampled-absent or unsampled cell
 from entering the positive arm as a fabricated zero (which, padded across a
 grid, flattens the spatial field). Set \code{cover.floor = -Inf} to keep every
 value verbatim.}
+
+\item{compact}{Logical (default \code{FALSE}). When \code{TRUE}, return a compact
+(ragged) \code{tobs_data}: the response is stored as one row per valid
+site-visit (a \code{tobs_ragged} carrier) rather than as a padded
+\verb{[n_sites x max_visits]} matrix, and each detection covariate as a
+length-V vector in the same canonical \code{order(site, visit)}. The compact
+layout has no per-site visit cap (its memory is the number of observations,
+not the padded grid) and is consumed by the joint nested-Laplace
+\code{occu_cover()} engine, which works one valid visit at a time. Two compact
+calls on the same \code{df} / \code{site} / \code{visit} align row-for-row, so an
+occurrence response and a cover response can be paired directly.}
 }
 \value{
-An \code{tobs_data} object.
+An \code{tobs_data} object. With \code{compact = TRUE} its \verb{$y} is a
+\code{tobs_ragged} carrier and its \verb{$det.covs} are length-V vectors.
 }
 \description{
 Convert long-format data to a site x visit observation object

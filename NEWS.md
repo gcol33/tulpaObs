@@ -1,5 +1,42 @@
 # tulpaObs NEWS
 
+## 0.0.60 (2026-06-22)
+
+* `tobs_data(compact = TRUE)` builds a compact (ragged) `tobs_data`: the response
+  is stored as one row per valid site-visit (a `tobs_ragged` carrier) and each
+  detection covariate as a length-V vector, instead of a padded
+  `[n_sites x max_visits]` matrix. The joint nested-Laplace `occu_cover()` engine
+  consumes the valid visits directly (it compacts the dense grid to exactly these
+  rows anyway), so a fit on compact input is byte-identical to the dense fit on
+  the same data -- now asserted in `tests/testthat/test-occu-cover-compact.R`
+  (means, sds, `predict()`, and WAIC all match). Because the compact layout never
+  materialises the padded grid, its memory is the number of observations rather
+  than `n_sites x max_visits`, so a site with tens of thousands of visits no
+  longer needs a per-site visit cap before the data can be built. Scoped to the
+  joint nested-Laplace path; other engines, an observation-arm random effect, and
+  cell-aggregated cover read the dense grid and error clearly on compact input.
+* The `occu_cover` cell-coupling spec declares its dense cross-Hessian pairs
+  (`dense_cross_pairs()`), so the joint engine (tulpa >= 0.0.57) no longer
+  reserves a `J x J` slab for the all-undetected `(p, p)` block (it is the rank-1
+  self-cross) or the always-zero `(p, pos)` / `(pos, pos)` blocks. A cell with `J`
+  visits is now `O(J)`, not `O(J^2)`, which is what lets the uncapped compact path
+  fit a grid with a cell holding tens of thousands of plots without running out of
+  memory. The DESCRIPTION `tulpa` floor moves to `>= 0.0.57`.
+
+## 0.0.59 (2026-06-19)
+
+* `tobs()` exposes the single-batch + bootstrap outer Pareto-k controls for the
+  joint-coupled families (`occu_cover()`, `cover()`, `occu()`, multiscale),
+  forwarding them to the engine (tulpa >= 0.0.50, gcol33/tulpa#127):
+  `control$diagnose.draws` (the precision knob; legacy `k.samples` accepted as an
+  alias), `control$k.bootstrap`, `control$k.tail.points`, `control$k.conf.bands`.
+  Replaces the removed `k.batches` / `k.adapt` / `k.batches.max` (#123/#124). The
+  fit's `$joint_fit` carries `pareto_k_se_boot`, `pareto_k_ci_low` /
+  `pareto_k_ci_high`, `pareto_k_se_formula`, `pareto_k_tail_points` /
+  `pareto_k_tail_points_requested`, `pareto_k_band_confident`, and the top-level
+  `diagnose_draws` / `diagnose_cost_ratio`. For a tighter k raise `diagnose.draws`,
+  not `k.bootstrap`.
+
 ## 0.0.58 (2026-06-19)
 
 * `tobs()` exposes `control$k.adapt` + `control$k.batches.max` for the

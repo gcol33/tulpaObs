@@ -1580,7 +1580,8 @@ tobs <- function(formula,
   nested_laplace_joint = c("sigma.grid", "n.threads", "n.threads.outer",
                            "adaptive.grid", "adaptive.grid.edge.thresh",
                            "adaptive.grid.max.passes", "var.of.means.consistency",
-                           "var.of.means.tolerance", "diagnose.k", "k.samples",
+                           "var.of.means.tolerance", "diagnose.k", "diagnose.draws",
+                           "k.samples", "k.bootstrap", "k.tail.points", "k.conf.bands",
                            "force.sparse", "inner.refresh", "checkpoint"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
@@ -1790,6 +1791,45 @@ tobs <- function(formula,
        "matrices, or a long data frame with n_sites * max_visits rows; ",
        "got ", paste(class(visits), collapse = "/"), ".",
        call. = FALSE)
+}
+
+# Compact (ragged) counterpart of .normalize_visits Case 1: the visit covariates
+# arrive as a named list of length-V vectors (one entry per VALID visit, in the
+# canonical order(site, visit)), not [n_sites x max_visits] matrices. Build the
+# V-row visit frame directly -- no padding, no flatten -- and return the same
+# (visits, det_visit_formula, det_formula) shape the dense path returns, so the
+# downstream design build and arm assembly are identical. The visit-level design
+# is then built with max_per_unit = NULL (the compact signal in
+# .tobs_build_visit_X).
+.normalize_visits_ragged <- function(visits, detection, n_visits_valid) {
+  if (is.null(visits)) {
+    return(list(visits = NULL, det_visit_formula = NULL, det_formula = detection))
+  }
+  if (!is.list(visits) || is.data.frame(visits)) {
+    stop("compact `visits` must be a named list of length-V vectors ",
+         "(tobs_data(compact = TRUE) output).", call. = FALSE)
+  }
+  nms <- names(visits)
+  if (is.null(nms) || any(!nzchar(nms))) {
+    stop("compact `visits` must be a named list; names become column names.",
+         call. = FALSE)
+  }
+  bad <- vapply(visits, function(v) length(v) != n_visits_valid, logical(1))
+  if (any(bad)) {
+    stop(sprintf("compact `visits` element(s) %s have length != %d valid visits.",
+                 paste(nms[bad], collapse = ", "), n_visits_valid), call. = FALSE)
+  }
+  flat <- as.data.frame(
+    lapply(visits, function(v) {
+      if (isTRUE(attr(v, "tobs_factor"))) factor(as.character(v),
+                                                 levels = attr(v, "tobs_levels"))
+      else as.numeric(v)
+    }),
+    stringsAsFactors = FALSE)
+  names(flat) <- nms
+  list(visits = flat,
+       det_visit_formula = .drop_intercept(detection),
+       det_formula = ~ 1)
 }
 
 # Drop the intercept term from a formula (returns `~ . - 1`-style update).

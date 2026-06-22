@@ -60,14 +60,26 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #'   externally-defined site grid; site values in `df` outside the set error.
 #' @param visits Optional visit level set, analogous to `sites` for the visit
 #'   axis (default the sorted unique visits in `df`).
-#' @return An `tobs_data` object.
+#' @param compact Logical (default `FALSE`). When `TRUE`, return a compact
+#'   (ragged) `tobs_data`: the response is stored as one row per valid
+#'   site-visit (a `tobs_ragged` carrier) rather than as a padded
+#'   `[n_sites x max_visits]` matrix, and each detection covariate as a
+#'   length-V vector in the same canonical `order(site, visit)`. The compact
+#'   layout has no per-site visit cap (its memory is the number of observations,
+#'   not the padded grid) and is consumed by the joint nested-Laplace
+#'   `occu_cover()` engine, which works one valid visit at a time. Two compact
+#'   calls on the same `df` / `site` / `visit` align row-for-row, so an
+#'   occurrence response and a cover response can be paired directly.
+#' @return An `tobs_data` object. With `compact = TRUE` its `$y` is a
+#'   `tobs_ragged` carrier and its `$det.covs` are length-V vectors.
 #' @export
 tobs_data <- function(df, y, site, visit,
                       type = c("occurrence", "abundance", "cover"),
                       occ.covs = NULL, det.covs = NULL,
                       coords = NULL,
                       sites = NULL, visits = NULL,
-                      cover.floor = 0) {
+                      cover.floor = 0,
+                      compact = FALSE) {
   type <- match.arg(type)
   if (!is.data.frame(df)) stop("df must be a data.frame")
   for (col in c(y, site, visit)) {
@@ -94,6 +106,87 @@ tobs_data <- function(df, y, site, visit,
   if (anyNA(vi)) {
     stop("tobs_data(): visit value(s) in df are not in the supplied `visits` set.",
          call. = FALSE)
+  }
+
+  # Compact (ragged) layout. The dense pivot below stores a [n_sites x max_visits]
+  # matrix per response / detection covariate, so its memory is the PADDED grid
+  # (NA at every unsampled site x visit). When one site holds tens of thousands of
+  # visits, that grid forces a per-site visit cap before the data can be built.
+  # The joint nested-Laplace occu_cover engine consumes one row per VALID visit
+  # (it compacts the dense grid right back to `which(valid)` rows), so the padding
+  # is pure waste there. `compact = TRUE` keeps the valid rows directly: the
+  # response is a `tobs_ragged` carrier (value + site + visit, in canonical
+  # order(site, visit)) and each detection covariate a length-V vector in the same
+  # order. Two compact calls on the same `df` / `site` / `visit` share the order,
+  # so an occurrence response and a cover response align row-for-row.
+  if (compact) {
+    ord  <- order(si, vi)
+    si_o <- si[ord]; vi_o <- vi[ord]
+    yv   <- df[[y]][ord]
+    if (type == "cover") {
+      if (any(yv < 0 | yv > 1, na.rm = TRUE))
+        stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
+      floored <- !is.na(yv) & yv <= cover.floor
+      n_floor <- sum(floored)
+      if (n_floor > 0L) {
+        yv[floored] <- NA_real_
+        message(sprintf(paste0(
+          "tobs_data(type = 'cover'): %d cover value%s <= %g treated as absent ",
+          "(NA); the positive arm sees only positive cover, so a 0 is an absence ",
+          "for the occurrence arm, not a fabricated zero. Set cover.floor = -Inf ",
+          "to keep them."), n_floor, if (n_floor == 1L) "" else "s", cover.floor))
+      }
+      values <- as.numeric(yv)
+    } else {
+      yi <- as.integer(yv)
+      if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
+        stop("tobs_data(type = 'occurrence'): y must be 0/1")
+      if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
+        stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
+      values <- yi
+    }
+
+    occ_df <- NULL
+    if (!is.null(occ.covs)) {
+      site_rows <- match(sites, df[[site]])
+      occ_df <- df[site_rows, occ.covs, drop = FALSE]
+      rownames(occ_df) <- NULL
+    }
+
+    det_list <- NULL
+    if (!is.null(det.covs)) {
+      det_list <- lapply(det.covs, function(dc) {
+        col <- df[[dc]][ord]
+        if (is.factor(col) || is.character(col)) {
+          levs <- if (is.factor(df[[dc]])) levels(df[[dc]]) else sort(unique(df[[dc]]))
+          v <- as.character(col)
+          attr(v, "tobs_factor") <- TRUE
+          attr(v, "tobs_levels") <- levs
+          v
+        } else {
+          as.numeric(col)
+        }
+      })
+      names(det_list) <- det.covs
+    }
+
+    coord_mat <- NULL
+    if (!is.null(coords)) {
+      site_rows <- match(sites, df[[site]])
+      coord_mat <- as.matrix(df[site_rows, coords])
+    }
+
+    y_ragged <- structure(
+      list(values = values, site = si_o, visit = vi_o,
+           n_sites = n_sites, max_visits = max_visits,
+           n_visits = length(values), sites = sites, visits = visits,
+           type = type),
+      class = "tobs_ragged")
+
+    return(structure(
+      list(y = y_ragged, occ.covs = occ_df, det.covs = det_list,
+           coords = coord_mat, compact = TRUE),
+      class = "tobs_data"))
   }
 
   y_mat <- .tobs_long_response_matrix(df[[y]], si, vi, n_sites, max_visits, type,
@@ -224,7 +317,24 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
 }
 
 #' @export
+print.tobs_ragged <- function(x, ...) {
+  cat(sprintf("tobs_ragged (%s): %d sites, %d valid visits (max %d / site)\n",
+              x$type, x$n_sites, x$n_visits, x$max_visits))
+  invisible(x)
+}
+
+#' @export
 print.tobs_data <- function(x, ...) {
+  if (inherits(x$y, "tobs_ragged")) {
+    cat(sprintf("tobs_data (compact): %d sites, %d valid visits (max %d / site)\n",
+                x$y$n_sites, x$y$n_visits, x$y$max_visits))
+    if (!is.null(x$occ.covs))
+      cat(sprintf("  Occupancy covariates: %s\n", paste(names(x$occ.covs), collapse = ", ")))
+    if (!is.null(x$det.covs))
+      cat(sprintf("  Detection covariates: %s\n", paste(names(x$det.covs), collapse = ", ")))
+    if (!is.null(x$coords)) cat("  Coordinates: yes\n")
+    return(invisible(x))
+  }
   n_sites <- nrow(x$y)
   max_visits <- if (is.matrix(x$y)) ncol(x$y) else dim(x$y)[2]
   cat(sprintf("tobs_data: %d sites, %d visits\n", n_sites, max_visits))
