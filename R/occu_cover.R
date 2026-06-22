@@ -459,6 +459,89 @@
   })
 }
 
+# Compact (ragged) counterpart of .occu_cover_obs_flat_eval: evaluate an RE
+# expression to one value per VALID visit (length V, in site_of_visit order). A
+# site-level variable (found in `data`) is broadcast to its visits via
+# site_of_visit; a visit-level variable is read from the V-row `visit_df`
+# directly. No padded grid, so no n_sites * max_visits layout.
+.occu_cover_obs_flat_eval_ragged <- function(expr, data, visit_df, site_of_visit,
+                                             arm) {
+  vars <- all.vars(expr)
+  n_sites <- if (is.null(data)) 0L else nrow(data)
+  if (length(vars) && !is.null(data) && all(vars %in% names(data))) {
+    val <- eval(expr, envir = data)
+    if (is.matrix(val)) {
+      if (nrow(val) != n_sites)
+        stop(sprintf("occu_cover(): a %s RE expression resolved to %d rows but there are %d sites.",
+                     arm, nrow(val), n_sites), call. = FALSE)
+      return(val[site_of_visit, , drop = FALSE])
+    }
+    if (length(val) != n_sites)
+      stop(sprintf("occu_cover(): a %s RE expression resolved to %d values but there are %d sites.",
+                   arm, length(val), n_sites), call. = FALSE)
+    return(val[site_of_visit])
+  }
+  if (!is.null(visit_df) && length(vars) && all(vars %in% names(visit_df))) {
+    return(eval(expr, envir = visit_df))            # already one row per valid visit
+  }
+  stop(sprintf(paste0(
+    "occu_cover(): the %s random-effect variable(s) %s were not found in `data` ",
+    "(one value per site) or `visits` (one per site-visit)."),
+    arm, paste(vars, collapse = ", ")), call. = FALSE)
+}
+
+# Compact (ragged) counterpart of .occu_cover_obs_re_design: the per-term design
+# built over the V valid visits directly (every row observed, so no valid mask
+# and no 0-padding). `codes_flat` is length V in site_of_visit order, which is
+# exactly the order the joint-coupled arm builder reads under the ragged branch
+# (keep = 1..V), so the identical list shape feeds the same engine path.
+.occu_cover_obs_re_design_ragged <- function(re_parse, data, visit_df,
+                                             site_of_visit, arm) {
+  lapply(re_parse$terms, function(spec) {
+    g <- .occu_cover_obs_flat_eval_ragged(spec$group_expr, data, visit_df,
+                                          site_of_visit, arm)
+    var <- paste(spec$vars, collapse = ":")
+    lev <- sort(unique(as.character(g)))
+    if (length(lev) < 2L) {
+      stop(sprintf(paste0(
+        "occu_cover(): the %s random-effect grouping `%s` has %d level(s) among ",
+        "the observed visits; a random effect needs at least 2 groups."),
+        arm, var, length(lev)), call. = FALSE)
+    }
+    codes <- match(as.character(g), lev)
+    codes[is.na(codes)] <- 0L
+
+    if (identical(spec$type, "slope")) {
+      cov_expr <- spec$covariate
+      cov_chr <- tryCatch(eval(cov_expr), error = function(...) NULL)
+      if (is.character(cov_chr))
+        cov_expr <- as.call(c(list(as.name("cbind")), lapply(cov_chr, as.name)))
+      Xs <- .occu_cover_obs_flat_eval_ragged(cov_expr, data, visit_df,
+                                             site_of_visit, arm)
+      Xs <- as.matrix(Xs); storage.mode(Xs) <- "double"
+      if (is.null(colnames(Xs)))
+        colnames(Xs) <- paste0("slope", seq_len(ncol(Xs)))
+      slope_scale <- apply(Xs, 2L, function(col) {
+        s <- stats::sd(col); if (!is.finite(s) || s <= 0) 1 else s
+      })
+      Xs <- sweep(Xs, 2L, slope_scale, "/")
+      has_int <- isTRUE(spec$intercept)
+      Z <- if (has_int) cbind(`(Intercept)` = 1, Xs) else Xs
+      coef_names  <- colnames(Z); n_coefs <- ncol(Z)
+      correlated  <- isTRUE(spec$correlated) && n_coefs > 1L
+      coef_scales <- if (has_int) c(1, slope_scale) else slope_scale
+    } else {
+      Z <- NULL; coef_names <- "(Intercept)"; n_coefs <- 1L
+      correlated <- FALSE; has_int <- TRUE; coef_scales <- 1
+    }
+    list(codes_flat = as.integer(codes), levels = lev, n_groups = length(lev),
+         var = var, type = spec$type, n_coefs = n_coefs,
+         coef_names = coef_names, correlated = correlated,
+         has_intercept = has_int, Z = Z, coef_scales = as.numeric(coef_scales),
+         term_label = spec$term_label)
+  })
+}
+
 # ---------------------------------------------------------------------------
 # Likelihood
 # ---------------------------------------------------------------------------
@@ -1062,12 +1145,6 @@
          "carries the RE as a latent block); got method = \"", engine, "\".",
          call. = FALSE)
   }
-  if (ragged && has_obs_re) {
-    stop("occu_cover(): compact (ragged) input does not yet carry an ",
-         "observation-arm random effect. Build the data densely ",
-         "(tobs_data() without compact = TRUE) for the RE fit, or drop the RE.",
-         call. = FALSE)
-  }
   if (ragged && identical(engine, "nuts")) {
     stop("occu_cover(): compact (ragged) input feeds the joint nested-Laplace ",
          "engine; method = \"nuts\" reads the dense detection grid. Use ",
@@ -1369,9 +1446,12 @@
     # (cover_aggregate = "none"); a cell-aggregated cover arm has one row per unit
     # and no per-visit grouping.
     if (!is.null(det_re_parse)) {
-      model$re_det <- .occu_cover_obs_re_design(
-        det_re_parse, data, vd_det$visits, model$valid,
-        model$n_sites, model$max_visits, "detection")
+      model$re_det <- if (isTRUE(model$ragged))
+        .occu_cover_obs_re_design_ragged(det_re_parse, data, vd_det$visits,
+                                         model$site_of_visit, "detection")
+      else
+        .occu_cover_obs_re_design(det_re_parse, data, vd_det$visits, model$valid,
+                                  model$n_sites, model$max_visits, "detection")
     }
     if (!is.null(pos_re_parse)) {
       if (cover_aggregate != "none") {
@@ -1379,9 +1459,12 @@
              "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
              "cell-aggregated cover rows (one per unit).", call. = FALSE)
       }
-      model$re_pos <- .occu_cover_obs_re_design(
-        pos_re_parse, data, vd_pos$visits, model$valid,
-        model$n_sites, model$max_visits, "positive cover")
+      model$re_pos <- if (isTRUE(model$ragged))
+        .occu_cover_obs_re_design_ragged(pos_re_parse, data, vd_pos$visits,
+                                         model$site_of_visit, "positive cover")
+      else
+        .occu_cover_obs_re_design(pos_re_parse, data, vd_pos$visits, model$valid,
+                                  model$n_sites, model$max_visits, "positive cover")
     }
 
     # joint_coupled (3-arm nested-Laplace via tulpa's cell_coupling spec) is the

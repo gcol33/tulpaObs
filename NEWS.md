@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.62 (2026-06-22)
+
+* The compact (ragged) `occu_cover()` path now carries an observation-arm random
+  effect (`(1 | g)` on the detection or positive-cover formula), so a
+  random-habitat detection fit runs uncapped like the fixed-effects spec. The RE
+  group codes (and any random-slope design) are resolved over the V valid visits
+  directly -- site-level groupings broadcast via the visit's site -- so the
+  compact fit is byte-identical to the dense fit, BLUPs included (asserted in
+  `test-occu-cover-compact.R`). Removes the earlier guard that errored on
+  compact + observation RE.
+
 ## 0.0.61 (2026-06-22)
 
 * DESCRIPTION `Remotes:` no longer pins `gcol33/tulpa@v0.0.50`. That tag predates

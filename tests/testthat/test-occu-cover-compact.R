@@ -127,6 +127,46 @@ test_that("compact removes the per-site visit cap", {
 })
 
 
+test_that("compact == dense with an observation-arm random effect (reHab)", {
+  skip_on_cran()
+  nc  <- 12L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 8)
+
+  fit_re <- function(compact) {
+    od <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",
+                    type = "occurrence", occ.covs = c("cell_idx", "time.sc"),
+                    det.covs = c("x1", "hab"), compact = compact)
+    ocv <- suppressMessages(tobs_data(dd, y = "cover.flat", site = "site_key",
+                    visit = "visit", type = "cover", compact = compact))
+    ctrl <- list(engine = "joint", n.threads = 1L, n.threads.outer = 1L,
+                 max.iter = 200L, sigma.grid = c(0.5, 1.5), phi.grid.pos = c(2, 10),
+                 re.sigma.grid.p = c(0.2, 0.6, 1.5),
+                 integration = "grid", adaptive.grid = FALSE, verbose = FALSE,
+                 progress = FALSE)
+    # habitat as a random detection intercept (the reHab variant); cover arm keeps
+    # the fixed habitat term.
+    tobs(occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+         data = od$occ.covs,
+         family = occu_cover(positive = "beta", cover_aggregate = "none"),
+         detection = ~ x1 + (1 | hab), positive = ~ hab,
+         y = od$y, y_pos = ocv$y, visits = od$det.covs,
+         method = "nested_laplace", control = ctrl)
+  }
+
+  fit_d <- fit_re(FALSE)
+  fit_c <- fit_re(TRUE)
+  # The detection RE rides the compacted visit rows exactly as it rides the dense
+  # grid's valid cells, so the fit is the same.
+  expect_equal(fit_c$means, fit_d$means, tolerance = 1e-8)
+  expect_equal(fit_c$sds,   fit_d$sds,   tolerance = 1e-8)
+  rd <- as.data.frame(ranef(fit_d)); rc <- as.data.frame(ranef(fit_c))
+  expect_equal(dim(rc), dim(rd))
+  num <- vapply(rd, is.numeric, logical(1))
+  expect_equal(unname(as.matrix(rc[num])), unname(as.matrix(rd[num])), tolerance = 1e-8)
+})
+
+
 test_that("compact input is gated to the joint nested-Laplace path", {
   dd <- .mk_occu_cover_long(6L, 2L, function(cell, ti) 4L, seed = 5)
   od  <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",
