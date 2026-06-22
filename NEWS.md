@@ -1,5 +1,14 @@
 # tulpaObs NEWS
 
+## 0.0.61 (2026-06-22)
+
+* DESCRIPTION `Remotes:` no longer pins `gcol33/tulpa@v0.0.50`. That tag predates
+  the `tulpa (>= 0.0.57)` import floor (added in 0.0.60), so a fresh
+  `pak::pak("gcol33/tulpaObs")` resolved tulpa to v0.0.50 and failed the version
+  constraint. The GitHub remotes now track the default branch
+  (`gcol33/tulpaMesh`, `gcol33/tulpa`), which is where tulpa and tulpaObs are
+  released together, so the pin cannot go stale against the import floor again.
+
 ## 0.0.60 (2026-06-22)
 
 * `tobs_data(compact = TRUE)` builds a compact (ragged) `tobs_data`: the response
