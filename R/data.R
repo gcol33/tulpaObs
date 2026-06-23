@@ -36,16 +36,20 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #' @param site Character, name of site identifier column.
 #' @param visit Character, name of visit/replicate column.
 #' @param type Response kind. `"occurrence"` (default) and `"abundance"` build
-#'   an integer site x visit matrix; `"cover"` builds a double matrix and
-#'   preserves continuous values (it does not coerce the response to integer).
-#' @param cover.floor For `type = "cover"`, the threshold at or below which a
-#'   cover value is stored as `NA` rather than as a positive observation
-#'   (default `0`). The cover (positive) arm of a hurdle is positive-only, so a
-#'   cover of `0` is an absence handled by the occurrence arm, not a cover
-#'   observation; sending it to `NA` keeps a sampled-absent or unsampled cell
-#'   from entering the positive arm as a fabricated zero (which, padded across a
-#'   grid, flattens the spatial field). Set `cover.floor = -Inf` to keep every
-#'   value verbatim.
+#'   an integer site x visit matrix; `"cover"` and `"positive"` build a double
+#'   matrix and preserve continuous values (no coercion to integer). `"cover"`
+#'   is a proportion in `[0, 1]` (the beta cover arm); `"positive"` is a
+#'   positive real `(0, Inf)` (the lognormal / gamma cover arm), validated as
+#'   non-negative with no upper bound. Both apply the `cover.floor` absence
+#'   policy below.
+#' @param cover.floor For `type = "cover"` / `"positive"`, the threshold at or
+#'   below which a value is stored as `NA` rather than as a positive observation
+#'   (default `0`). The positive arm of a hurdle is positive-only, so a `0` is
+#'   an absence handled by the occurrence arm, not a positive observation;
+#'   sending it to `NA` keeps a sampled-absent or unsampled cell from entering
+#'   the positive arm as a fabricated zero (which, padded across a grid,
+#'   flattens the spatial field). Set `cover.floor = -Inf` to keep every value
+#'   verbatim.
 #' @param occ.covs Character vector of site-level covariate names.
 #' @param det.covs Character vector of visit-level covariate names. A named
 #'   column that is a factor or character is preserved as categorical: the
@@ -74,7 +78,7 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #'   `tobs_ragged` carrier and its `$det.covs` are length-V vectors.
 #' @export
 tobs_data <- function(df, y, site, visit,
-                      type = c("occurrence", "abundance", "cover"),
+                      type = c("occurrence", "abundance", "cover", "positive"),
                       occ.covs = NULL, det.covs = NULL,
                       coords = NULL,
                       sites = NULL, visits = NULL,
@@ -123,20 +127,8 @@ tobs_data <- function(df, y, site, visit,
     ord  <- order(si, vi)
     si_o <- si[ord]; vi_o <- vi[ord]
     yv   <- df[[y]][ord]
-    if (type == "cover") {
-      if (any(yv < 0 | yv > 1, na.rm = TRUE))
-        stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
-      floored <- !is.na(yv) & yv <= cover.floor
-      n_floor <- sum(floored)
-      if (n_floor > 0L) {
-        yv[floored] <- NA_real_
-        message(sprintf(paste0(
-          "tobs_data(type = 'cover'): %d cover value%s <= %g treated as absent ",
-          "(NA); the positive arm sees only positive cover, so a 0 is an absence ",
-          "for the occurrence arm, not a fabricated zero. Set cover.floor = -Inf ",
-          "to keep them."), n_floor, if (n_floor == 1L) "" else "s", cover.floor))
-      }
-      values <- as.numeric(yv)
+    if (type %in% c("cover", "positive")) {
+      values <- .tobs_floor_continuous(yv, type, cover.floor)
     } else {
       yi <- as.integer(yv)
       if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
@@ -247,24 +239,9 @@ tobs_data <- function(df, y, site, visit,
 # (`si`, `vi`) stay NA (column-major-safe: 2D indexing, never a linear slot).
 .tobs_long_response_matrix <- function(yv, si, vi, n_sites, max_visits, type,
                                        cover.floor = 0) {
-  if (type == "cover") {
-    if (any(yv < 0 | yv > 1, na.rm = TRUE))
-      stop("tobs_data(type = 'cover'): y must lie in [0, 1]")
-    # A cover at or below the floor is an absence (positive-only arm), not a
-    # positive observation: store NA so a 0 padded across unsampled cells cannot
-    # enter the cover arm as a fabricated zero (which flattens the spatial field).
-    floored <- !is.na(yv) & yv <= cover.floor
-    n_floor <- sum(floored)
-    if (n_floor > 0L) {
-      yv[floored] <- NA_real_
-      message(sprintf(paste0(
-        "tobs_data(type = 'cover'): %d cover value%s <= %g treated as absent ",
-        "(NA); the positive arm sees only positive cover, so a 0 is an absence ",
-        "for the occurrence arm, not a fabricated zero. Set cover.floor = -Inf ",
-        "to keep them."), n_floor, if (n_floor == 1L) "" else "s", cover.floor))
-    }
+  if (type %in% c("cover", "positive")) {
     y_mat <- matrix(NA_real_, n_sites, max_visits)
-    y_mat[cbind(si, vi)] <- as.numeric(yv)
+    y_mat[cbind(si, vi)] <- .tobs_floor_continuous(yv, type, cover.floor)
   } else {
     yi <- as.integer(yv)
     if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
@@ -275,6 +252,38 @@ tobs_data <- function(df, y, site, visit,
     y_mat[cbind(si, vi)] <- yi
   }
   y_mat
+}
+
+# Validate + floor a continuous positive-arm response, the single source for the
+# dense and compact `tobs_data()` paths. `type = "cover"` is a proportion in
+# `[0, 1]` (beta); `type = "positive"` is a positive real `(0, Inf)` (lognormal
+# / gamma), validated non-negative with no upper bound. A value at or below
+# `cover.floor` (default 0) is an absence handled by the occurrence arm, so it
+# becomes NA rather than a fabricated zero (which, padded across a grid, flattens
+# the spatial field). Returns the floored numeric vector.
+.tobs_floor_continuous <- function(yv, type, cover.floor) {
+  if (type == "cover") {
+    if (any(yv < 0 | yv > 1, na.rm = TRUE))
+      stop("tobs_data(type = 'cover'): y must lie in [0, 1]", call. = FALSE)
+  } else {
+    if (any(yv < 0, na.rm = TRUE))
+      stop("tobs_data(type = 'positive'): y must be non-negative (a 0 is an ",
+           "absence floored to NA; a negative value is invalid).",
+           call. = FALSE)
+  }
+  noun <- if (type == "cover") "cover value" else "positive value"
+  floored <- !is.na(yv) & yv <= cover.floor
+  n_floor <- sum(floored)
+  if (n_floor > 0L) {
+    yv[floored] <- NA_real_
+    message(sprintf(paste0(
+      "tobs_data(type = '%s'): %d %s%s <= %g treated as absent (NA); the ",
+      "positive arm sees only positive values, so a 0 is an absence for the ",
+      "occurrence arm, not a fabricated zero. Set cover.floor = -Inf to keep ",
+      "them."), type, n_floor, noun, if (n_floor == 1L) "" else "s",
+      cover.floor))
+  }
+  as.numeric(yv)
 }
 
 #' Format multi-species occupancy data

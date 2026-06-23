@@ -188,3 +188,129 @@ test_that("by = (cover) equals independent single-species cover() fits", {
   expect_false(isTRUE(all.equal(fit_by$fits[["a"]]$beta_occ,
                                 fit_by$fits[["b"]]$beta_occ)))
 })
+
+
+# ---- the by= looped backend is COMPACT on the nested-Laplace route ----------
+#
+# gcol33/tulpaObs#107: the default looped by= backend builds each species' arms
+# (and the shared visit grid) compactly when the route is nested_laplace, so it
+# no longer allocates B dense [n_sites x max_visits] response matrices plus a
+# dense visit grid -- the padded-grid memory the single-fit compact path already
+# avoids. The fit must still equal an independent dense single-species fit to the
+# compact-vs-dense tolerance (the same invariant as test-occu-cover-compact.R).
+
+test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fits", {
+  skip_on_cran()
+  skip_if_fast()
+
+  N <- 20L; J <- 4L
+  adj <- matrix(0L, N, N)
+  for (s in seq_len(N)) {
+    if (s > 1L) adj[s, s - 1L] <- 1L
+    if (s < N)  adj[s, s + 1L] <- 1L
+  }
+
+  # Beta cover (a [0, 1] proportion -- the type = "cover" arm), the production
+  # family. Each site is one graph cell (site_id == cell == graph node).
+  sim1 <- simulate_occu_cover(N = N, J = J, positive = "beta", adj = adj,
+                              sigma = 0.8, seed = 101L)
+  sim2 <- simulate_occu_cover(N = N, J = J, positive = "beta", adj = adj,
+                              sigma = 0.8, seed = 202L)
+
+  # The by= contract: visit covariates are plot attributes shared across species
+  # (here from sim1), so the species differ only in occur / cover. Long records
+  # on the common site x visit grid.
+  base <- data.frame(
+    site_id  = rep(seq_len(N), each = J),
+    visit    = rep(seq_len(J), times = N),
+    occ_cov1 = rep(sim1$data$occ_cov1, each = J),
+    det_cov1 = sim1$visit_data$det_cov1)
+  mk <- function(sim, lab) {
+    d <- base; d$sp <- lab
+    d$occur <- as.vector(t(sim$y))
+    d$cover <- as.vector(t(ifelse(is.na(sim$y_pos), 0, sim$y_pos)))
+    d
+  }
+  long <- rbind(mk(sim1, "a"), mk(sim2, "b"))
+
+  ctrl <- list(engine = "joint", n.threads = 1L, n.threads.outer = 1L,
+               max.iter = 200L, sigma.grid = c(0.5, 1.5), phi.grid.pos = c(2, 10),
+               integration = "grid", adaptive.grid = FALSE, verbose = FALSE,
+               progress = FALSE)
+
+  fit_by <- suppressWarnings(suppressMessages(tobs(
+    occurrence = ~ occ_cov1 + spatial(~ 1 || site_id, graph = adj), data = long,
+    family = occu_cover(positive = "beta", cover_aggregate = "none"),
+    detection = ~ det_cov1, positive = ~ 1,
+    method = "nested_laplace", control = ctrl, by = "sp",
+    site = "site_id", visit = "visit", response = "occur", y_pos = "cover",
+    det.covs = "det_cov1")))
+
+  expect_s3_class(fit_by, "tobs_batch")
+  expect_identical(fit_by$backend, "looped")
+  # Compact build: the per-species observation count is the full plot set
+  # (n_sites x J), the same N the single-fit compact path reports.
+  expect_equal(fit_by$fits[["a"]]$N, N * J)
+
+  # Independent dense single-species fits at the same shared design = the oracle.
+  od1 <- tobs_data(mk(sim1, "a"), y = "occur", site = "site_id", visit = "visit",
+                   occ.covs = "occ_cov1", det.covs = "det_cov1")
+  cell_dat <- data.frame(site_id = seq_len(N), occ_cov1 = sim1$data$occ_cov1)
+  yp1 <- ifelse(is.na(sim1$y_pos), 0, sim1$y_pos)
+  yp2 <- ifelse(is.na(sim2$y_pos), 0, sim2$y_pos)
+  fit_one <- function(yy, ypp) suppressWarnings(suppressMessages(tobs(
+    occurrence = ~ occ_cov1 + spatial(~ 1 || site_id, graph = adj), data = cell_dat,
+    family = occu_cover(positive = "beta", cover_aggregate = "none"),
+    detection = ~ det_cov1, positive = ~ 1,
+    y = yy, y_pos = ypp, visits = od1$det.covs,
+    method = "nested_laplace", control = ctrl)))
+  ind_a <- fit_one(sim1$y, yp1)
+  ind_b <- fit_one(sim2$y, yp2)
+
+  # Compact looped by= == dense independent fit, per species (float-summation
+  # tolerance, the compact-vs-dense invariant).
+  expect_equal(fit_by$fits[["a"]]$means, ind_a$means, tolerance = 1e-7)
+  expect_equal(fit_by$fits[["b"]]$means, ind_b$means, tolerance = 1e-7)
+  expect_equal(fit_by$fits[["a"]]$sds,   ind_a$sds,   tolerance = 1e-7)
+  expect_false(isTRUE(all.equal(fit_by$fits[["a"]]$means,
+                                fit_by$fits[["b"]]$means)))
+})
+
+
+# ---- by= with a positive (unbounded) cover arm ------------------------------
+#
+# gcol33/tulpaObs#107: the by= cover arm picks its tobs_data() storage type from
+# the family's positive distribution, so a lognormal cover that exceeds 1 routes
+# through type = "positive" instead of being rejected by the [0, 1] check that
+# type = "cover" enforces (the regime the old by= path could not handle).
+
+test_that("by = (occu_cover, lognormal) accepts cover > 1 via the positive type", {
+  skip_on_cran()
+
+  N <- 20L; J <- 4L
+  sim1 <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+                              sigma = 0, alpha = 0, seed = 11L)
+  sim2 <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+                              sigma = 0, alpha = 0, seed = 22L)
+  cell_cov <- sim1$data$occ_cov1
+  mk_long <- function(sim, lab) data.frame(
+    site = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
+    sp = lab, occur = as.vector(t(sim$y)),
+    cover = as.vector(t(ifelse(is.na(sim$y_pos), 0, sim$y_pos))),
+    det_cov1 = sim$visit_data$det_cov1, occ_cov1 = rep(cell_cov, each = J))
+  long <- rbind(mk_long(sim1, "a"), mk_long(sim2, "b"))
+  long$cover[long$occur == 1L] <- long$cover[long$occur == 1L] + 1.5
+  expect_gt(max(long$cover), 1)   # type = "cover" would reject this
+
+  fit_by <- tobs(
+    formula = ~ occ_cov1, data = long, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ 1, method = "laplace",
+    control = list(verbose = FALSE, max.iter = 200L), by = "sp",
+    site = "site", visit = "visit", response = "occur", y_pos = "cover",
+    det.covs = "det_cov1")
+
+  expect_s3_class(fit_by, "tobs_batch")
+  expect_identical(fit_by$species, c("a", "b"))
+  expect_true(all(is.finite(fit_by$fits[["a"]]$means)))
+  expect_true(all(is.finite(fit_by$fits[["b"]]$means)))
+})

@@ -98,3 +98,44 @@ test_that("cover.floor sends non-positive cover to NA (absence), keeps positives
               type = "cover", cover.floor = -Inf))
   expect_equal(sum(od2$y == 0, na.rm = TRUE), 3L)
 })
+
+test_that("type = 'positive' keeps a positive real (no upper bound), floors 0", {
+  # A positive-arm response (lognormal / gamma cover) can exceed 1; type = "cover"
+  # would reject it, type = "positive" keeps it and applies the same floor policy.
+  pos <- c(0.5, 2.4, 0.0, 7.1, 0.0, 1.3)
+
+  od <- suppressMessages(
+    tobs_data(make_long(pos), y = "y", site = "site", visit = "visit",
+              type = "positive"))
+  expect_true(is.double(od$y))
+  expect_setequal(stats::na.omit(as.vector(od$y)), c(0.5, 2.4, 7.1, 1.3))  # > 1 kept
+  expect_equal(sum(is.na(as.vector(od$y))), 2L)                            # zeros -> NA
+
+  # cover.floor = -Inf keeps the zeros verbatim.
+  od2 <- tobs_data(make_long(pos), y = "y", site = "site", visit = "visit",
+                   type = "positive", cover.floor = -Inf)
+  expect_equal(sum(as.vector(od2$y) == 0, na.rm = TRUE), 2L)
+
+  # A negative is invalid (not an absence).
+  expect_error(
+    tobs_data(make_long(c(0.1, -0.2, 1.5, 0, 2, 0)), y = "y", site = "site",
+              visit = "visit", type = "positive"), "non-negative")
+
+  # The floor message names the positive arm.
+  expect_message(
+    tobs_data(make_long(pos), y = "y", site = "site", visit = "visit",
+              type = "positive"), "2 positive values <= 0 treated as absent")
+})
+
+test_that("type = 'positive' compact carrier matches the dense build", {
+  pos <- c(0.5, 2.4, 0.0, 7.1, 0.0, 1.3)
+  dense <- suppressMessages(
+    tobs_data(make_long(pos), y = "y", site = "site", visit = "visit",
+              type = "positive"))
+  ragged <- suppressMessages(
+    tobs_data(make_long(pos), y = "y", site = "site", visit = "visit",
+              type = "positive", compact = TRUE))
+  expect_s3_class(ragged$y, "tobs_ragged")
+  expect_setequal(stats::na.omit(as.vector(dense$y)),
+                  stats::na.omit(ragged$y$values))
+})

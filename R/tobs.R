@@ -232,6 +232,17 @@
 #'   `det.covs = `. Site-level covariates (those the `formula` / `detection`
 #'   reference at the cell level) are read as the first row per site, the way
 #'   [tobs_data()]`(occ.covs = )` does.
+#'
+#'   The same long-frame contract drives a SINGLE `occu_cover()` fit when `by`
+#'   is omitted: pass `site = `, `visit = `, `response = ` (the 0/1 detection
+#'   column) and `y_pos = ` (the cover column), plus any visit-level
+#'   `det.covs = `, with a long, plot-level `data`, and `tobs()` builds the
+#'   paired occurrence / cover arms and the site-level design for you -- the
+#'   by= batch reduced to one species, so you no longer hand-build the two
+#'   responses and align them. The arms default to the compact (ragged) layout
+#'   on the nested-Laplace route (no per-site visit cap); set
+#'   `control$compact = FALSE` for the dense grid. See [occu_cover_inputs()] to
+#'   build and inspect the arms without fitting.
 #' @param ... family-specific named arguments forwarded to the underlying
 #'   engine builder.
 #'
@@ -341,6 +352,38 @@ tobs <- function(formula,
       formula = formula, data = data, family = family, detection = detection,
       visits = visits, method = method, priors = priors, control = control,
       by = by, dots = fwd_dots))
+  }
+
+  # Single occu_cover() fit from a long / plot-level frame (gcol33/tulpaObs#107):
+  # the same long-frame contract the by= batch path accepts, minus the species
+  # split. The signal is `response = "<col>"` (a column name) on an occu_cover()
+  # family handed a data-frame `data`; build the paired occurrence / cover arms
+  # and the shared site / visit design with the SAME builder the by= loop uses,
+  # then fall through to the normal single-fit dispatch -- so a user no longer
+  # hand-rolls tobs_data() twice plus the alignment check. `compact` defaults on
+  # for the nested-Laplace route (the joint engine reads the ragged arms with no
+  # per-site visit cap) and is overridable via control$compact.
+  if (is.null(by) && identical(family$name, "occu_cover") &&
+      is.data.frame(data) && !is.null(fwd_dots$response)) {
+    if (!is.null(y)) {
+      stop("occu_cover(): supply the long-frame `response = ` OR a pre-built ",
+           "`y = `, not both.", call. = FALSE)
+    }
+    eng     <- .tobs_resolve_method(method, family)$engine
+    compact <- control[["compact"]] %||% identical(eng, "nested_laplace")
+    control[["compact"]] <- NULL        # long-frame build knob, not a fitter control
+    pos_type <- .occu_cover_pos_type(family$params$positive)
+    arms <- .occu_cover_arms_from_long_call(data, visits, fwd_dots, compact,
+                                            pos_type = pos_type)
+    data   <- arms$site_data
+    y      <- arms$y
+    visits <- arms$visits
+    fwd_dots$y_pos    <- arms$y_pos
+    fwd_dots$response <- NULL
+    fwd_dots$site     <- NULL
+    fwd_dots$det.covs <- NULL
+    fwd_dots$occ.covs <- NULL
+    fwd_dots$coords   <- NULL
   }
 
   # Response on the top formula LHS (gcol33/tulpaObs#66). A single-vector-response

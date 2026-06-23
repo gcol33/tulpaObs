@@ -1,5 +1,43 @@
 # tulpaObs NEWS
 
+## 0.0.64 (2026-06-22)
+
+* `tobs_data()` gains `type = "positive"`: a positive-real `(0, Inf)` response
+  for the lognormal / gamma cover arm, alongside `type = "cover"` (a `[0, 1]`
+  proportion, the beta arm). Both share the floor-to-`NA` absence policy; only
+  `"cover"` enforces the upper bound (the shared validation lives in one
+  `.tobs_floor_continuous()` helper). The long-frame builders pick the storage
+  type from the family's positive distribution, so a lognormal / gamma cover
+  that exceeds 1 now round-trips through `occu_cover_inputs()`, the single-fit
+  long-frame path, and `by=` instead of being rejected by the `[0, 1]` check.
+  `occu_cover_inputs()` exposes this as `positive = ` (default `"beta"`).
+* A single `occu_cover()` fit now accepts a long / plot-level frame directly,
+  the same contract the `by=` batch path already supported for many species:
+  pass `site = `, `visit = `, `response = ` (the 0/1 detection column) and
+  `y_pos = ` (the cover column), plus any visit-level `det.covs = `, with a long
+  `data`, and `tobs()` builds the paired occurrence / cover arms and the
+  site-level design internally. This removes the hand-built `tobs_data()` x2 plus
+  the manual occurrence/cover alignment check from user scripts. The arms default
+  to the compact (ragged) layout on the nested-Laplace route (no per-site visit
+  cap); set `control$compact = FALSE` for the dense grid. The fit is byte-
+  identical to the hand-built route (asserted in `test-occu-cover-long.R`).
+* New `occu_cover_inputs()` exposes that builder: it returns the `y` / `y_pos` /
+  `visits` / `site_data` bundle from a long frame so the arms can be inspected
+  before fitting. The long -> arms construction (`.occu_cover_response_pair()`)
+  is now single-sourced and shared by the `by=` batch loop and the single-fit
+  path, rather than re-implemented per call site.
+* `tobs(by = )` for `occu_cover()` now builds its per-species response arms and
+  the shared visit grid compactly on the nested-Laplace route (its default
+  looped backend), instead of allocating B dense `[n_sites x max_visits]`
+  response matrices plus a dense visit grid. The padded-grid memory was the
+  reason the batch could not run on the uncapped EVA data the single-fit path
+  handles; the looped batch now scales the same way (memory is O(observations),
+  not the padded grid). Each species' fit is unchanged to the compact-vs-dense
+  tolerance (asserted in `test-occu-cover-by.R`). The non-joint `laplace` route
+  stays dense (its engine reads the padded grid), as does the opt-in fused
+  backend (`control$batch.backend = "fused"`), which stacks dense per-species
+  columns by design; `control$compact` overrides the default.
+
 ## 0.0.63 (2026-06-22)
 
 * `tobs_waic()` / `tobs_dic()` for `occu_cover()` now build the pointwise

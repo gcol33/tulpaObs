@@ -390,41 +390,106 @@
   cell_data <- data[cell_rows, , drop = FALSE]
   rownames(cell_data) <- NULL
 
-  # Shared visit-level covariate grid (the det.covs matrices). The visit-level
+  backend <- control[["batch.backend"]] %||% "looped"
+  fused   <- identical(backend, "fused")
+
+  # Compact (ragged) arms drop the padded [n_sites x max_visits] grid, so the
+  # default looped backend scales to the uncapped EVA data instead of allocating
+  # B dense [n_sites x max_visits] response matrices plus a dense visit grid. It
+  # is the default on the nested-Laplace route (whose joint engine reads one
+  # valid visit at a time), overridable via control$compact. The non-joint
+  # laplace route reads the dense grid, and the fused backend stacks dense
+  # per-species columns, so both stay dense.
+  eng     <- .tobs_resolve_method(method, family)$engine
+  compact <- !fused && (isTRUE(control[["compact"]]) ||
+    (is.null(control[["compact"]]) && identical(eng, "nested_laplace")))
+
+  # The cover arm's storage type follows the positive distribution: a beta arm is
+  # a [0, 1] proportion ("cover"), a lognormal / gamma arm a positive real
+  # ("positive", validated non-negative, no upper bound).
+  pos_type <- .occu_cover_pos_type(family$params$positive)
+
+  # Shared visit-level covariate grid (the det.covs carrier). The visit-level
   # covariates are plot attributes (one value per site x visit cell), shared
   # across the species observed at that plot, so the grid is built from the FULL
-  # frame -- one record per (site, visit) cell -- NOT from a single species,
-  # which would leave a species' unvisited cells NA in the shared design.
+  # frame -- one record per (site, visit) cell, first occurrence -- NOT from a
+  # single species, which would leave a species' unvisited cells NA. `compact`
+  # selects the ragged length-V carrier vs the padded matrix; either way the
+  # row order is canonical order(site, visit), shared across the species.
   visits_sp <- NULL
+  shared_sv <- NULL
   if (!is.null(det.covs)) {
     cell_first <- !duplicated(data[c(site, visit)])
     vdf <- data[cell_first, , drop = FALSE]
-    visits_sp <- tobs_data(vdf, y = response, site = site, visit = visit,
+    shared_od <- tobs_data(vdf, y = response, site = site, visit = visit,
                            type = "occurrence", det.covs = det.covs,
-                           sites = sites_lvl, visits = visits_lvl)$det.covs
+                           sites = sites_lvl, visits = visits_lvl,
+                           compact = compact)
+    visits_sp <- shared_od$det.covs
+    if (compact) {
+      shared_sv <- list(site = shared_od$y$site, visit = shared_od$y$visit)
+    }
   }
 
-  y_list    <- vector("list", B)
-  ypos_list <- vector("list", B)
-  for (b in seq_len(B)) {
-    sp_df <- data[sp_raw == labels[b], , drop = FALSE]
-    od <- tobs_data(sp_df, y = response, site = site, visit = visit,
-                    type = "occurrence",
-                    sites = sites_lvl, visits = visits_lvl)
-    op <- tobs_data(sp_df, y = y_pos, site = site, visit = visit,
-                    type = "cover",
-                    sites = sites_lvl, visits = visits_lvl)
-    yp <- op$y
-    yp[is.na(yp)] <- 0                 # cover meaningful only where y == 1
-    y_list[[b]]    <- od$y
-    ypos_list[[b]] <- yp
+  # Per-species response arms on the shared grid. In the compact case the ragged
+  # carrier carries only this species' valid visits, so it must cover the full
+  # shared (site, visit) set to align with the shared visit grid (a dense grid
+  # NA-pads instead); error clearly if a species skips plots.
+  arms <- lapply(labels, function(lab) {
+    sp_df <- data[sp_raw == lab, , drop = FALSE]
+    pair  <- .occu_cover_response_pair(sp_df, site = site, visit = visit,
+                                       response = response, y_pos = y_pos,
+                                       sites = sites_lvl, visits = visits_lvl,
+                                       compact = compact, pos_type = pos_type)
+    if (compact && !is.null(shared_sv) &&
+        !(identical(pair$y$site, shared_sv$site) &&
+          identical(pair$y$visit, shared_sv$visit))) {
+      stop(sprintf(paste0(
+        "tobs(by = ): species '%s' does not report the full (site, visit) set, ",
+        "so it cannot share the compact visit grid. Every species must report ",
+        "every plot (a non-detection is response = 0, not a missing row); or ",
+        "set control$compact = FALSE for the NA-padded dense grid."), lab),
+        call. = FALSE)
+    }
+    pair
+  })
+  names(arms) <- labels
+
+  # Looped backend (default): B independent per-species fits, each routed through
+  # the single-species dispatch with the shared cell-level design and visit grid
+  # -- identical to fitting that species alone (the same independence the dense
+  # looped path guaranteed), now without ever materializing the padded grid on
+  # the nested-Laplace route. site / visit / response / det.covs are batch-build
+  # keys, not fitter args.
+  if (!fused) {
+    sp_control <- control
+    sp_control[["batch.backend"]] <- NULL
+    sp_control[["compact"]]       <- NULL
+    fwd <- dots[setdiff(names(dots),
+                        c("species", "site", "response", "y_pos", "det.covs"))]
+    fits <- vector("list", B)
+    for (b in seq_len(B)) {
+      fits[[b]] <- do.call(tobs, c(
+        list(formula = formula, data = cell_data, family = family,
+             detection = detection, y = arms[[b]]$y, visits = visits_sp,
+             method = method, priors = priors, control = sp_control,
+             y_pos = arms[[b]]$y_pos),
+        fwd))
+    }
+    names(fits) <- labels
+    return(structure(
+      list(fits = fits, species = labels, n_species = B, family = family,
+           method = method, backend = "looped"),
+      class = "tobs_batch"))
   }
+
+  # Fused backend (opt-in): one shared block-diagonal C++ solve. The fused driver
+  # loads each shared design row once and loops species inner, so it needs the
+  # aligned dense grid -- it is for moderate fields, not the uncapped data (use
+  # the default looped backend there).
+  y_list    <- lapply(arms, `[[`, "y")
+  ypos_list <- lapply(arms, `[[`, "y_pos")
   names(y_list) <- labels
-
-  # The detection / cover formulas reference visit-level covariates by name; the
-  # batch driver consumes `visits` (the det.covs matrices) the same way the
-  # single-species path does. dots$y_pos is replaced by the per-species list;
-  # site / visit / response / det.covs are batch-build keys, not fitter args.
   fit_dots <- dots
   fit_dots$site <- NULL; fit_dots$visit <- NULL
   fit_dots$response <- NULL; fit_dots$det.covs <- NULL
@@ -436,6 +501,196 @@
                      method = method, priors = priors, control = control,
                      dots = fit_dots),
     y = y_list, B = B)
+}
+
+
+# ---------------------------------------------------------------------------
+# Long / plot-level frame -> occu_cover model inputs (shared by the by= batch
+# loop above and the single-fit long-frame path in tobs()).
+# ---------------------------------------------------------------------------
+
+# Map a positive distribution to the tobs_data() storage type for the cover arm:
+# a beta arm is a [0, 1] proportion ("cover"); a lognormal / gamma arm is a
+# positive real ("positive", validated non-negative, no upper bound).
+.occu_cover_pos_type <- function(positive) {
+  if (identical(positive, "beta")) "cover" else "positive"
+}
+
+# Build the paired occurrence / cover response arms from a long / plot-level
+# frame onto a shared (sites, visits) grid -- the per-frame atom both the by=
+# batch loop (one frame per species, det.covs built separately from the full
+# frame) and the single-fit long-frame path call, so the two tobs_data() pivots
+# and the cover-where-present policy live in ONE place. `compact` selects ragged
+# (one row per valid visit, the joint nested-Laplace input with no per-site cap)
+# vs the dense [n_sites x max_visits] grid. `pos_type` is the cover-arm storage
+# type ("cover" for a beta proportion, "positive" for a lognormal / gamma
+# positive real). occ.covs / det.covs / coords are optional and thread to the
+# occurrence-arm tobs_data() so a single frame can also yield the visit-level
+# design; the batch passes none (it builds the shared design from the full frame).
+.occu_cover_response_pair <- function(frame, site, visit, response, y_pos,
+                                      sites, visits, compact,
+                                      occ.covs = NULL, det.covs = NULL,
+                                      coords = NULL, pos_type = "cover") {
+  od <- tobs_data(frame, y = response, site = site, visit = visit,
+                  type = "occurrence", occ.covs = occ.covs, det.covs = det.covs,
+                  coords = coords, sites = sites, visits = visits,
+                  compact = compact)
+  op <- suppressMessages(
+    tobs_data(frame, y = y_pos, site = site, visit = visit, type = pos_type,
+              sites = sites, visits = visits, compact = compact))
+
+  # Cover is meaningful only where occurrence == 1. In the dense grid the unused
+  # / absent cover cells are filled to 0 (matching the historical by= build); in
+  # the ragged carrier a floored absence is already NA in `values` and is never
+  # read by the joint engine, and the two carriers share order(site, visit) so
+  # they pair row-for-row (asserted in test-occu-cover-compact.R) -- so the
+  # carrier is passed through unchanged.
+  y_pos_out <- op$y
+  if (!compact) y_pos_out[is.na(y_pos_out)] <- 0
+
+  list(y = od$y, y_pos = y_pos_out, visits = od$det.covs, coords = od$coords)
+}
+
+
+# Build the full single-fit occu_cover model-input bundle from a long /
+# plot-level frame: the paired response arms (via the shared atom above), the
+# visit-level covariate grid, and the site-level design frame (first row per
+# site). This is the single-species counterpart of the by= batch builder; tobs()
+# calls it when one occu_cover() fit is handed a long frame, and it is exported
+# as occu_cover_inputs() for users who want to inspect the arms before fitting.
+.occu_cover_arms_from_long <- function(data, site, visit, response, y_pos,
+                                       occ.covs = NULL, det.covs = NULL,
+                                       coords = NULL, compact = TRUE,
+                                       pos_type = "cover") {
+  if (!is.data.frame(data)) {
+    stop("occu_cover() long-frame input: `data` must be a data.frame.",
+         call. = FALSE)
+  }
+  keys <- list(site = site, visit = visit, response = response, y_pos = y_pos)
+  for (nm in names(keys)) {
+    col <- keys[[nm]]
+    if (is.null(col) || !is.character(col) || length(col) != 1L) {
+      stop(sprintf(
+        "occu_cover() long-frame input: `%s` must be a single column name.",
+        nm), call. = FALSE)
+    }
+  }
+  for (col in c(unlist(keys, use.names = FALSE), det.covs, occ.covs, coords)) {
+    if (!col %in% names(data)) {
+      stop(sprintf(
+        "occu_cover() long-frame input: column '%s' not found in `data`.",
+        col), call. = FALSE)
+    }
+  }
+
+  sites_lvl  <- unique(data[[site]])
+  visits_lvl <- sort(unique(data[[visit]]))
+
+  pair <- .occu_cover_response_pair(
+    data, site = site, visit = visit, response = response, y_pos = y_pos,
+    sites = sites_lvl, visits = visits_lvl, compact = compact,
+    det.covs = det.covs, coords = coords, pos_type = pos_type)
+
+  # Site-level design: first row per site (the canonical site order). All columns
+  # by default -- the occurrence / detection / positive formulas select what they
+  # reference -- or the explicit occ.covs subset, matching tobs_data(occ.covs = ).
+  cell_rows <- match(sites_lvl, data[[site]])
+  site_data <- data[cell_rows, occ.covs %||% names(data), drop = FALSE]
+  rownames(site_data) <- NULL
+
+  list(y          = pair$y,
+       y_pos      = pair$y_pos,
+       visits     = pair$visits,
+       site_data  = site_data,
+       coords     = pair$coords,
+       n_sites    = length(sites_lvl),
+       max_visits = length(visits_lvl),
+       n_visits   = if (compact) pair$y$n_visits else sum(!is.na(pair$y)),
+       compact    = compact)
+}
+
+
+# Resolve the long-frame build arguments out of a single occu_cover() tobs()
+# call and build the input bundle. `visit` arrives as the `visits` formal (it
+# partial-matches), the same convention the by= path uses; the remaining pivot
+# keys ride `...` (here `dots`). `compact` is decided by the caller (method-aware
+# default), overridable via control$compact.
+.occu_cover_arms_from_long_call <- function(data, visits, dots, compact,
+                                            pos_type = "cover") {
+  visit <- NULL
+  if (!is.null(visits)) {
+    if (is.character(visits) && length(visits) == 1L) {
+      visit <- visits
+    } else {
+      stop("occu_cover() from a long frame: pass the visit column as ",
+           "`visit = \"<col>\"`; visit-level covariates are built from `data` ",
+           "via `det.covs = `, not handed in as a pre-pivoted grid.",
+           call. = FALSE)
+    }
+  }
+  if (is.null(dots$site) || is.null(visit) || is.null(dots$response) ||
+      is.null(dots$y_pos)) {
+    stop("occu_cover() from a long frame needs `site = `, `visit = `, ",
+         "`response = ` (the 0/1 detection column) and `y_pos = ` (the cover ",
+         "column).", call. = FALSE)
+  }
+  .occu_cover_arms_from_long(
+    data, site = dots$site, visit = visit, response = dots$response,
+    y_pos = dots$y_pos, occ.covs = dots$occ.covs, det.covs = dots$det.covs,
+    coords = dots$coords, compact = compact, pos_type = pos_type)
+}
+
+
+#' Build occu_cover() model inputs from a long, plot-level frame
+#'
+#' @description
+#' Assemble the paired occurrence / cover response arms, the visit-level
+#' covariate grid, and the site-level design frame that an [occu_cover()] fit
+#' consumes, from one long (one row per site-visit / plot) data frame. This is
+#' the same construction [tobs()] runs internally when a single `occu_cover()`
+#' fit is handed a long frame; call it directly when you want to inspect the
+#' arms before fitting, or pass them on as `y = `, `y_pos = `, `visits = `,
+#' `data = ` to [tobs()].
+#'
+#' The occurrence and cover arms are pivoted onto one shared `(sites, visits)`
+#' grid, so they align row-for-row, and the site-level design is the first row
+#' per site. The cover arm is positive-only (meaningful where the species is
+#' detected): in the dense grid absent / unsampled cover cells are set to `0`,
+#' and in the compact (ragged) carrier they are `NA` in the values and never
+#' read by the joint engine.
+#'
+#' @param data A long / plot-level data frame: one row per site-visit.
+#' @param site,visit,response,y_pos Column names: the site identifier, the
+#'   visit / replicate, the 0/1 detection response, and the continuous cover
+#'   response (used only where `response == 1`). The accepted range of `y_pos`
+#'   follows `positive`.
+#' @param occ.covs Optional character vector of site-level covariate columns.
+#'   The default (`NULL`) keeps the full first-row-per-site frame and lets the
+#'   occurrence / detection / positive formulas select what they reference.
+#' @param det.covs Optional character vector of visit-level covariate columns.
+#' @param coords Optional length-2 character vector of coordinate columns.
+#' @param compact Logical (default `TRUE`). Build the compact (ragged) arms the
+#'   joint nested-Laplace `occu_cover()` engine consumes (no per-site visit
+#'   cap), or the dense `[n_sites x max_visits]` grid.
+#' @param positive The cover-arm distribution, matching [occu_cover()]: `"beta"`
+#'   (default) stores `y_pos` as a proportion in `[0, 1]` (`tobs_data()` type
+#'   `"cover"`); `"lognormal"` / `"gamma"` store it as a positive real `(0, Inf)`
+#'   (type `"positive"`, validated non-negative with no upper bound). Pick the
+#'   value you pass to `occu_cover(positive = )`.
+#'
+#' @return A list with `y`, `y_pos`, `visits`, `site_data`, `coords`,
+#'   `n_sites`, `max_visits`, `n_visits`, and `compact`.
+#'
+#' @seealso [tobs()], [tobs_data()].
+#' @export
+occu_cover_inputs <- function(data, site, visit, response, y_pos,
+                              occ.covs = NULL, det.covs = NULL,
+                              coords = NULL, compact = TRUE,
+                              positive = "beta") {
+  .occu_cover_arms_from_long(
+    data, site = site, visit = visit, response = response, y_pos = y_pos,
+    occ.covs = occ.covs, det.covs = det.covs, coords = coords,
+    compact = compact, pos_type = .occu_cover_pos_type(positive))
 }
 
 # Per-species cover() batch: each species is an independent single-species

@@ -259,7 +259,18 @@ the cover column for \code{cover()}), plus, for \code{occu_cover()}, \verb{visit
 replicate column) and \verb{y_pos = } (the cover column) and any visit-level
 \verb{det.covs = }. Site-level covariates (those the \code{formula} / \code{detection}
 reference at the cell level) are read as the first row per site, the way
-\code{\link[=tobs_data]{tobs_data()}}\verb{(occ.covs = )} does.}
+\code{\link[=tobs_data]{tobs_data()}}\verb{(occ.covs = )} does.
+
+The same long-frame contract drives a SINGLE \code{occu_cover()} fit when \code{by}
+is omitted: pass \verb{site = }, \verb{visit = }, \verb{response = } (the 0/1 detection
+column) and \verb{y_pos = } (the cover column), plus any visit-level
+\verb{det.covs = }, with a long, plot-level \code{data}, and \code{tobs()} builds the
+paired occurrence / cover arms and the site-level design for you -- the
+by= batch reduced to one species, so you no longer hand-build the two
+responses and align them. The arms default to the compact (ragged) layout
+on the nested-Laplace route (no per-site visit cap); set
+\code{control$compact = FALSE} for the dense grid. See \code{\link[=occu_cover_inputs]{occu_cover_inputs()}} to
+build and inspect the arms without fitting.}
 
 \item{...}{family-specific named arguments forwarded to the underlying
 engine builder.}

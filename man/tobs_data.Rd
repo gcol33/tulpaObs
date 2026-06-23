@@ -9,7 +9,7 @@ tobs_data(
   y,
   site,
   visit,
-  type = c("occurrence", "abundance", "cover"),
+  type = c("occurrence", "abundance", "cover", "positive"),
   occ.covs = NULL,
   det.covs = NULL,
   coords = NULL,
@@ -31,8 +31,12 @@ tobs_data(
 \item{visit}{Character, name of visit/replicate column.}
 
 \item{type}{Response kind. \code{"occurrence"} (default) and \code{"abundance"} build
-an integer site x visit matrix; \code{"cover"} builds a double matrix and
-preserves continuous values (it does not coerce the response to integer).}
+an integer site x visit matrix; \code{"cover"} and \code{"positive"} build a double
+matrix and preserve continuous values (no coercion to integer). \code{"cover"}
+is a proportion in \verb{[0, 1]} (the beta cover arm); \code{"positive"} is a
+positive real \verb{(0, Inf)} (the lognormal / gamma cover arm), validated as
+non-negative with no upper bound. Both apply the \code{cover.floor} absence
+policy below.}
 
 \item{occ.covs}{Character vector of site-level covariate names.}
 
@@ -53,14 +57,14 @@ externally-defined site grid; site values in \code{df} outside the set error.}
 \item{visits}{Optional visit level set, analogous to \code{sites} for the visit
 axis (default the sorted unique visits in \code{df}).}
 
-\item{cover.floor}{For \code{type = "cover"}, the threshold at or below which a
-cover value is stored as \code{NA} rather than as a positive observation
-(default \code{0}). The cover (positive) arm of a hurdle is positive-only, so a
-cover of \code{0} is an absence handled by the occurrence arm, not a cover
-observation; sending it to \code{NA} keeps a sampled-absent or unsampled cell
-from entering the positive arm as a fabricated zero (which, padded across a
-grid, flattens the spatial field). Set \code{cover.floor = -Inf} to keep every
-value verbatim.}
+\item{cover.floor}{For \code{type = "cover"} / \code{"positive"}, the threshold at or
+below which a value is stored as \code{NA} rather than as a positive observation
+(default \code{0}). The positive arm of a hurdle is positive-only, so a \code{0} is
+an absence handled by the occurrence arm, not a positive observation;
+sending it to \code{NA} keeps a sampled-absent or unsampled cell from entering
+the positive arm as a fabricated zero (which, padded across a grid,
+flattens the spatial field). Set \code{cover.floor = -Inf} to keep every value
+verbatim.}
 
 \item{compact}{Logical (default \code{FALSE}). When \code{TRUE}, return a compact
 (ragged) \code{tobs_data}: the response is stored as one row per valid
