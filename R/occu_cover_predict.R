@@ -343,6 +343,19 @@
   tbl$delta_cover_from_occ.lwr <- qlo(d_occ); tbl$delta_cover_from_occ.upr <- qhi(d_occ)
   tbl$delta_cover_from_ab.lwr  <- qlo(d_ab);  tbl$delta_cover_from_ab.upr  <- qhi(d_ab)
 
+  # Start / end occupancy uncertainty (sd + CI at `level`) and the directional
+  # posterior probability P(delta > 0) per cell -- the certainty that the quantity
+  # increased. Both are taken over draws, so they carry the joint posterior rather
+  # than a plug-in of the means (the marginalize-derived-quantities rule). These
+  # are the per-cell change-certainty quantities a spatially-varying-trend
+  # occupancy fit reports; they are pure additions to the table.
+  qsd <- function(m) apply(m, 1L, stats::sd)
+  tbl$p_T1.sd <- qsd(s1$p); tbl$p_T1.lwr <- qlo(s1$p); tbl$p_T1.upr <- qhi(s1$p)
+  tbl$p_T2.sd <- qsd(s2$p); tbl$p_T2.lwr <- qlo(s2$p); tbl$p_T2.upr <- qhi(s2$p)
+  tbl$delta_p.prob_pos          <- rowMeans(d_p    > 0)
+  tbl$delta_cover_cond.prob_pos <- rowMeans(d_cond > 0)
+  tbl$delta_cover_exp.prob_pos  <- rowMeans(d_exp  > 0)
+
   attr(tbl, "quantity") <- "change"
   attr(tbl, "times")    <- times
   if (isTRUE(draws)) {
@@ -504,13 +517,20 @@
   a <- (1 - level) / 2
   qlo <- function(m) apply(m, 1L, stats::quantile, probs = a,     names = FALSE)
   qhi <- function(m) apply(m, 1L, stats::quantile, probs = 1 - a, names = FALSE)
+  qsd <- function(m) apply(m, 1L, stats::sd)
+  # Start / end occupancy uncertainty and the directional posterior probability
+  # P(delta > 0), both over draws (marginalize-derived-quantities); pure additions
+  # alongside delta_psi.
   tbl <- data.frame(
     cell      = cell,
     psi_T1    = rowMeans(p1),
+    psi_T1.sd = qsd(p1), psi_T1.lwr = qlo(p1), psi_T1.upr = qhi(p1),
     psi_T2    = rowMeans(p2),
+    psi_T2.sd = qsd(p2), psi_T2.lwr = qlo(p2), psi_T2.upr = qhi(p2),
     delta_psi = rowMeans(d_p),
     delta_psi.lwr = qlo(d_p),
-    delta_psi.upr = qhi(d_p))
+    delta_psi.upr = qhi(d_p),
+    delta_psi.prob_pos = rowMeans(d_p > 0))
   attr(tbl, "quantity") <- "change"
   attr(tbl, "times")    <- times
   if (isTRUE(draws)) {

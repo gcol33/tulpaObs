@@ -87,7 +87,10 @@ than informed by detections.
 marginalises every derived quantity per draw. \code{type = "change"} with
 \code{times = c(t1, t2)} returns a per-cell change table (\code{delta_p},
 \code{delta_cover_cond}, \code{delta_cover_exp}, the occupancy / abundance
-decomposition, and \code{.lwr} / \code{.upr} at \code{level}). The result is a
+decomposition, and \code{.lwr} / \code{.upr} at \code{level}), plus the start / end
+occupancy \code{p_T1} / \code{p_T2} with their own \code{.sd} / \code{.lwr} / \code{.upr}, and a
+\code{.prob_pos} column per headline delta giving the directional posterior
+probability \code{P(delta > 0)} per cell. The result is a
 \code{tobs_prediction} table (one row per cell) carrying per-unit \verb{[cell x nsim]}
 draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then

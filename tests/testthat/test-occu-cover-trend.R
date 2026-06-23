@@ -284,3 +284,104 @@ test_that("occu_cover trend recovers slopes, both couplings, both fields (10 see
   expect_gt(mean(cor1[ok]), 0.70)
   expect_gt(mean(cor2[ok]), 0.70)
 })
+
+
+# -----------------------------------------------------------------------------
+# predict(type = "change") reports the per-cell change CERTAINTY, not just the
+# change: start / end occupancy with their own CI, and a directional posterior
+# probability P(delta > 0) per headline delta. Both are taken over the grid-
+# integrated draws. Two checks: (a) recovery against a known positive occupancy
+# slope, (b) self-consistency between the summary columns and the draw matrices.
+# -----------------------------------------------------------------------------
+
+test_that("occu_cover change reports start/end CI + directional P(delta>0)", {
+  skip_on_cran()
+  skip_if_fast()
+  N <- 60L; J <- 5L
+  adj <- .trend_chain_adj(N)
+  # Strong positive occupancy slope on occ_cov1 -> raising it lifts psi in every
+  # cell, so the change is positive and its direction is near-certain everywhere.
+  sim <- simulate_occu_cover(
+    N = N, J = J, positive = "lognormal", adj = adj,
+    beta_occ = c(stats::qlogis(0.3), 1.5), sigma = 0.6, alpha = 1.0,
+    seed = 4242L)
+  d <- .trend_data(sim, N, J)
+  fit <- suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
+    family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled")))
+
+  nd <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 0)
+  ch <- predict(fit, newdata = nd, type = "change",
+                times = c(-1.5, 1.5), time_col = "occ_cov1",
+                nsim = 400, draws = TRUE)
+  chd <- as.data.frame(ch)
+
+  # The new columns exist.
+  expect_true(all(c("p_T1.sd", "p_T1.lwr", "p_T1.upr",
+                    "p_T2.sd", "p_T2.lwr", "p_T2.upr",
+                    "delta_p.prob_pos", "delta_cover_cond.prob_pos",
+                    "delta_cover_exp.prob_pos") %in% names(chd)))
+
+  # Recovery: raising occ_cov1 raises psi in every cell, so the change is positive
+  # and its direction is near-certain.
+  expect_true(all(chd$p_T2 > chd$p_T1))
+  expect_gt(mean(chd$delta_p), 0)
+  expect_gt(mean(chd$delta_p.prob_pos), 0.9)
+  expect_gt(mean(chd$delta_cover_exp.prob_pos), 0.9)   # expected cover = psi x cond
+
+  # Probabilities are valid; intervals are ordered and bracket the mean.
+  expect_true(all(chd$delta_p.prob_pos >= 0 & chd$delta_p.prob_pos <= 1))
+  expect_true(all(chd$p_T1.lwr <= chd$p_T1 & chd$p_T1 <= chd$p_T1.upr))
+  expect_true(all(chd$p_T2.lwr <= chd$p_T2 & chd$p_T2 <= chd$p_T2.upr))
+  expect_true(all(chd$p_T1.sd > 0))
+
+  # Self-consistency: every summary column is the exact per-draw reduction of the
+  # draw matrices in attr(, "draws") -- the marginalization, not a plug-in.
+  dr <- attr(ch, "draws")
+  expect_equal(chd$delta_p.prob_pos, rowMeans(dr$delta_p > 0), ignore_attr = TRUE)
+  expect_equal(chd$delta_cover_exp.prob_pos, rowMeans(dr$delta_cover_exp > 0),
+               ignore_attr = TRUE)
+  expect_equal(chd$p_T1, rowMeans(dr$p_T1), ignore_attr = TRUE)
+  expect_equal(chd$p_T1.lwr,
+               apply(dr$p_T1, 1L, stats::quantile, probs = 0.025, names = FALSE),
+               ignore_attr = TRUE)
+  expect_equal(chd$p_T2.upr,
+               apply(dr$p_T2, 1L, stats::quantile, probs = 0.975, names = FALSE),
+               ignore_attr = TRUE)
+})
+
+
+test_that("standalone occu() change reports psi start/end CI + P(delta>0)", {
+  skip_on_cran()
+  skip_if_fast()
+  N <- 20L
+  adj <- .trend_chain_adj(N)
+  cell_dat <- data.frame(site_id = seq_len(N), x = rnorm(N))
+  long <- data.frame(site_id = rep(seq_len(N), each = 3L),
+                     visit = rep(1:3, N), y = rbinom(3L * N, 1L, 0.4),
+                     w = rnorm(3L * N))
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit", det.covs = "w")
+  fit <- suppressWarnings(tobs(
+    formula = ~ x + icar(graph = adj, group_var = "site_id") +
+                icar(graph = adj, weight = x, group_var = "site_id"),
+    data = cell_dat, family = occu(), detection = ~ w,
+    y = od$y, visits = od$det.covs,
+    method = "nested_laplace", control = list(verbose = FALSE, max.iter = 50L)))
+
+  nd <- data.frame(cell = seq_len(N), x = 0)
+  ch <- predict(fit, newdata = nd, type = "change",
+                times = c(-1, 1), time_col = "x", nsim = 300, draws = TRUE)
+  chd <- as.data.frame(ch)
+
+  expect_true(all(c("psi_T1.sd", "psi_T1.lwr", "psi_T1.upr",
+                    "psi_T2.sd", "psi_T2.lwr", "psi_T2.upr",
+                    "delta_psi.prob_pos") %in% names(chd)))
+  expect_true(all(chd$delta_psi.prob_pos >= 0 & chd$delta_psi.prob_pos <= 1))
+  expect_true(all(chd$psi_T1.lwr <= chd$psi_T1 & chd$psi_T1 <= chd$psi_T1.upr))
+
+  dr <- attr(ch, "draws")
+  expect_equal(chd$delta_psi.prob_pos, rowMeans(dr$delta_psi > 0), ignore_attr = TRUE)
+  expect_equal(chd$psi_T1, rowMeans(dr$psi_T1), ignore_attr = TRUE)
+})

@@ -688,7 +688,10 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   marginalises every derived quantity per draw. `type = "change"` with
 #'   `times = c(t1, t2)` returns a per-cell change table (`delta_p`,
 #'   `delta_cover_cond`, `delta_cover_exp`, the occupancy / abundance
-#'   decomposition, and `.lwr` / `.upr` at `level`). The result is a
+#'   decomposition, and `.lwr` / `.upr` at `level`), plus the start / end
+#'   occupancy `p_T1` / `p_T2` with their own `.sd` / `.lwr` / `.upr`, and a
+#'   `.prob_pos` column per headline delta giving the directional posterior
+#'   probability `P(delta > 0)` per cell. The result is a
 #'   `tobs_prediction` table (one row per cell) carrying per-unit `[cell x nsim]`
 #'   draw matrices in `attr(, "draws")`; map it yourself, e.g.
 #'   `left_join(cents, pr, by = "cell")` then

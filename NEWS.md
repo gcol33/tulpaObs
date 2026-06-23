@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.65 (2026-06-23)
+
+* `predict(type = "change")` for the joint cover-family (`occu_cover()`) and the
+  rerouted standalone `occu()` SVC fit now reports the per-cell change certainty,
+  not just the change. The change table gains, per cell: the start / end
+  occupancy (`p_T1` / `p_T2`, or `psi_T1` / `psi_T2` for `occu()`) with their own
+  `.sd` / `.lwr` / `.upr` interval, and a `.prob_pos` column per headline delta
+  (`delta_p`, `delta_cover_cond`, `delta_cover_exp`; `delta_psi` for `occu()`)
+  giving the directional posterior probability `P(delta > 0)`. All are taken over
+  the grid-integrated draws, so they carry the joint posterior rather than a
+  plug-in of the means, and they are pure additions (existing columns unchanged).
+  This makes the two-point change prediction a complete drop-in for a per-cell
+  occupancy-trend summary (start, end, change, direction certainty) without a
+  hand-rolled trend pass downstream.
+
 ## 0.0.64 (2026-06-22)
 
 * `tobs_data()` gains `type = "positive"`: a positive-real `(0, Inf)` response
