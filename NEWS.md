@@ -1,5 +1,13 @@
 # tulpaObs NEWS
 
+## 0.0.66 (2026-06-23)
+
+* `tulpa` import floor raised to `>= 0.0.61`, the version the engine is built and
+  tested against (the CCD outer-integration path and the `adjacency()` graph
+  front door). The previous `>= 0.0.57` floor could pair this release with a
+  tulpa too old for those, so an install that did not also upgrade tulpa would
+  resolve to a broken combination. Metadata only; no code change.
+
 ## 0.0.65 (2026-06-23)
 
 * `predict(type = "change")` for the joint cover-family (`occu_cover()`) and the
