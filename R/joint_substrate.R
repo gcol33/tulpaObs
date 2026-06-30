@@ -176,12 +176,14 @@
     stop("internal: arm-specific cover fit has ", length(meta), " field block(s) ",
          "but the joint layout reports ", n_field, ".", call. = FALSE)
   }
-  # Every block spans n_nodes latent entries (the graph it sits on). Each block
-  # records its own n_nodes; on a single shared graph these are equal, but read
-  # per-block so a future multi-graph fit stays correct.
+  # Each block records its own n_nodes (the graph it sits on). The latent SPAN
+  # is n_nodes for an intrinsic (icar / car_proper) block but 2 * n_nodes for a
+  # BYM2 block, which stores the structured phi followed by the iid theta.
   n_nodes <- vapply(meta, function(m) as.integer(m$n_nodes), integer(1))
+  is_bym2 <- vapply(meta, function(m) identical(m$type, "bym2"), logical(1))
+  field_span <- ifelse(is_bym2, 2L * n_nodes, n_nodes)
   field_idx <- lapply(seq_len(n_field), function(b)
-    field_starts[b] + seq_len(n_nodes[b]))
+    field_starts[b] + seq_len(field_span[b]))
 
   idx <- c(idx_occ, idx_pos, unlist(field_idx))
   D   <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
@@ -191,7 +193,7 @@
   b_occ <- take(p[1L]); b_pos <- take(p[2L])
 
   blocks <- lapply(seq_len(n_field), function(b) {
-    z <- take(n_nodes[b])
+    nn <- n_nodes[b]
     # Field amplitude on the outer grid: b<b>.sigma (bym2) or 1/sqrt(b<b>.tau)
     # (icar / car_proper), per draw cell. The active arm scales z by this; the
     # inactive arm by 0 (no copy).
@@ -203,6 +205,19 @@
       amp <- 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
     } else {
       amp <- rep(1.0, length(cells))
+    }
+    if (is_bym2[b]) {
+      # Reconstruct the rho-mixed unit field from the two sub-blocks, the way
+      # the shared-field path does: z = sqrt(rho) * sf * phi + sqrt(1-rho) * theta.
+      raw   <- take(2L * nn)
+      phi   <- raw[, seq_len(nn), drop = FALSE]
+      theta <- raw[, nn + seq_len(nn), drop = FALSE]
+      rho   <- as.numeric(tg[cells, sprintf("b%d.rho", b)])
+      sf    <- meta[[b]]$scale_factor %||% 1.0
+      z <- sweep(phi, 1L, sqrt(pmax(rho, 0) + 1e-10) * sf, "*") +
+           sweep(theta, 1L, sqrt(pmax(1 - rho, 0) + 1e-10), "*")
+    } else {
+      z <- take(nn)
     }
     slot <- meta[[b]]$slot
     amp_occ <- if (slot == 1L) amp else rep(0, length(cells))

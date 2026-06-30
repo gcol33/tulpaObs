@@ -360,3 +360,59 @@ test_that("a presence-only single-arm bar is accepted and fits", {
   expect_true(isTRUE(fit$armspecific))
   expect_identical(fit$armspec_blocks[[1L]]$arm, "presence")
 })
+
+
+# ---- (e) BYM2 arm-specific field on the cover arm (gcol33/tulpaObs#107) ------
+
+test_that("a positive-only BYM2 single-arm field recovers the rho-mixed field", {
+  skip_if_fast()
+  skip_on_cran()
+  set.seed(7)
+  g <- 6L; n_cells <- g * g
+  adj <- .as_grid_adj(g)
+  z_pos <- .as_smooth_field(adj)          # mostly structured -> high rho
+  N <- 4000L
+  cell <- sample.int(n_cells, N, replace = TRUE)
+  x    <- as.numeric(scale(rnorm(N)))
+  sigma_field <- 0.9; beta_occ <- c(0.3, 0.4); beta_pos <- c(-1.0, 0.25)
+
+  eta_occ <- beta_occ[1] + beta_occ[2] * x                 # presence: NO field
+  occur   <- rbinom(N, 1, plogis(eta_occ))
+  eta_pos <- beta_pos[1] + beta_pos[2] * x + sigma_field * z_pos[cell]
+  cover   <- ifelse(occur == 1L,
+                    pmin(exp(eta_pos + rnorm(N, 0, 0.4)), 1 - 1e-6), 0)
+  dat <- data.frame(cell = cell, x = x, cover = cover)
+
+  fit <- tobs(
+    formula = ~ x + spatial(~ 1 || cell, graph = adj, to = "positive", model = "bym2"),
+    data = dat, family = cover(positive = "lognormal"), y = dat$cover,
+    method = "nested_laplace",
+    control = utils::modifyList(.as_control,
+                                list(rho.grid = c(0.2, 0.5, 0.8, 0.95))))
+
+  expect_s3_class(fit, "cover_fit")
+  expect_true(isTRUE(fit$armspecific))
+  expect_identical(fit$n_fields, 1L)
+  expect_identical(fit$armspec_blocks[[1L]]$arm, "positive")
+  expect_identical(fit$armspec_blocks[[1L]]$type, "bym2")
+
+  expect_equal(unname(fit$beta_occ), beta_occ, tolerance = 0.1)
+  expect_equal(unname(fit$beta_pos), beta_pos, tolerance = 0.15)
+
+  # The reconstructed rho-mixed unit field (phi + theta) recovers the truth, and
+  # the presence arm carries none. This exercises the BYM2 projection.
+  fld <- .as_block_field(fit, 1L)
+  truth <- sigma_field * (z_pos - mean(z_pos))
+  expect_gt(cor(fld$z, truth), 0.85)
+  expect_gt(fld$amp_pos, 0.1)
+  expect_equal(fld$amp_occ, 0)
+  expect_true(is.finite(fit$sigma_armspecific[["positive.Intercept"]]))
+  expect_gt(fit$sigma_armspecific[["positive.Intercept"]], 0)
+
+  # Structured fraction: a smooth field is mostly structured, so the grid-weighted
+  # posterior rho sits in the upper half of the grid.
+  tg <- fit$joint$theta_grid; w <- fit$joint$weights
+  fin <- is.finite(w) & w > 0; w <- w[fin] / sum(w[fin]); tg <- tg[fin, , drop = FALSE]
+  rho_post <- sum(w * as.numeric(tg[, "b1.rho"]))
+  expect_gt(rho_post, 0.5)
+})

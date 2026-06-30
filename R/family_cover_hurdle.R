@@ -1537,16 +1537,25 @@ print.summary.cover_fit <- function(x, ...) {
       block$rho_car_grid <- as.numeric(control$rho.car.grid %||%
                                        c(0.5, 0.8, 0.95, 0.99))
     }
+  } else if (block$type == "bym2") {
+    # BYM2 fits as a non-copied length-2 block (structured phi ICAR + iid theta
+    # on n_nodes), parameterized by (sigma, rho) on the outer grid. The
+    # arm-specific draw projection reconstructs the rho-mixed unit field
+    # z = sqrt(rho) * scale_factor * phi + sqrt(1 - rho) * theta from the two
+    # sub-blocks (gcol33/tulpaObs#107), so predict / WAIC see the full mix. The
+    # block's bym2 grid is the PAIRED (cartesian-expanded) (sigma, rho) vectors
+    # the registry consumes, not two separate axes.
+    rho_vals <- as.numeric(control$rho.grid %||% c(0.2, 0.5, 0.8, 0.95))
+    gr <- expand.grid(sigma = sort(sigma_grid), rho = rho_vals,
+                      KEEP.OUT.ATTRS = FALSE)
+    block$sigma_grid   <- gr$sigma
+    block$rho_grid     <- gr$rho
+    block$scale_factor <- compute_bym2_scale(graph)
   } else {
-    # bym2 fits as a non-copied block, but its unit-variance field is the
-    # rho-mixed phi + theta pair; the arm-specific draw projection reads phi only
-    # (the per-arm field reconstruction for the bym2 mix is not wired), so a bym2
-    # arm-specific field would mis-project at predict / WAIC time. Restrict to the
-    # intrinsic ICAR / proper CAR backends, whose unit field IS phi.
     stop(sprintf(paste0(
       "cover() arm-specific field (%s): areal type '%s' is not supported. ",
       "Arm-specific separate fields (single-arm `to`) use icar / car / ",
-      "car_proper (the bym2 phi+theta mix is deferred)."),
+      "car_proper / bym2."),
       block_label, type), call. = FALSE)
   }
 
@@ -1644,6 +1653,8 @@ print.summary.cover_fit <- function(x, ...) {
         weight_pos = if (slot == 2L && !isTRUE(f$is_intercept)) as.numeric(f$weight[idx_pos]) else NULL,
         idx_active = as.integer(idx_active),
         n_nodes = as.integer(nrow(a$graph)),
+        type = blk$type,
+        scale_factor = blk$scale_factor %||% 1.0,
         label = label)
     }
   }

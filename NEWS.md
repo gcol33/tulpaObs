@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.68 (2026-06-30)
+
+* Arm-specific cover-arm spatial fields accept `model = "bym2"`:
+  `spatial(~ 1 || cell, graph = adj, to = "positive", model = "bym2")` now puts a
+  BYM2 (structured ICAR + iid) field on the cover arm, previously restricted to
+  icar / car / car_proper. The block fits as a non-copied length-2 latent over
+  the paired (sigma, rho) grid, and the joint-draw projection reconstructs the
+  rho-mixed unit field so `predict()` / WAIC see the full mix. Recovers the
+  field and the structured fraction (gcol33/tulpaObs#107).
+
 ## 0.0.67 (2026-06-30)
 
 * `cover()` / `occu_cover()` spatial fits accept `control$prior.phi`, a

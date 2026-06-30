@@ -786,11 +786,10 @@
     stop("internal: .tobs_armspecific_bar_fields expects a single-arm `to`.",
          call. = FALSE)
   }
-  if (!spec$type %in% c("icar", "car", "car_proper")) {
+  if (!spec$type %in% c("icar", "car", "car_proper", "bym2")) {
     stop(sprintf(paste0(
-      "spatial(<bar>, to = \"%s\"): an arm-specific field uses an intrinsic ",
-      "areal model (icar / car / car_proper); model = \"%s\" is not supported ",
-      "(the bym2 phi+theta mix is deferred for separate per-arm fields)."),
+      "spatial(<bar>, to = \"%s\"): an arm-specific field uses an areal model ",
+      "(icar / car / car_proper / bym2); model = \"%s\" is not supported."),
       arm, spec$type), call. = FALSE)
   }
   specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data_obs)
