@@ -1,5 +1,14 @@
 # tulpaObs NEWS
 
+## 0.0.67 (2026-06-30)
+
+* `cover()` / `occu_cover()` spatial fits accept `control$prior.phi`, a
+  regularizing hyperprior on the cover-arm dispersion grid (the Beta precision
+  under `positive = "beta"`, the log-scale SD under `lognormal`). Forwarded to
+  tulpa's new `prior_phi`, it re-weights the `phi.grid` axis by the chosen
+  density (`list("pc.prec", c(U, alpha))` / `list("half_normal", scale)`)
+  instead of an implicit flat prior (gcol33/tulpa#139). Requires tulpa >= 0.0.62.
+
 ## 0.0.66 (2026-06-23)
 
 * `tulpa` import floor raised to `>= 0.0.61`, the version the engine is built and

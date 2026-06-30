@@ -35,7 +35,11 @@ and \code{prior_alpha} (copy coefficient) — each a length-2 list
 \code{list(family, params)} matching tulpa's \code{prior_sigma} / \code{prior_alpha}
 args. The prior on alpha directly regularizes the copy scalar at small
 \code{n_pos}, replacing the per-arm \code{prior_sigma_pos} of the pre-reparam
-API.}
+API. \code{prior.phi} puts the same kind of regularizing hyperprior on the
+cover-arm dispersion grid (the beta precision under \code{positive = "beta"},
+the log-scale SD under \code{lognormal}), re-weighting the \code{phi.grid} axis by
+the chosen density instead of an implicit flat prior; same
+\code{list(family, params)} form, forwarded to tulpa's \code{prior_phi}.}
 
 \item{temporal, re}{Structured \code{temporal()} / \code{re()} blocks from the formula,
 stacked onto the shared spatial block via the multi-block joint engine.}

@@ -1233,6 +1233,7 @@ cover <- function(positive = c("beta", "lognormal", "lognormal_trunc", "ordinal"
     # carries the trend), rather than a generic unknown-control-key rejection.
     control_keys   = c(
       "max.iter", "tol", "n.threads", "n.threads.outer", "prior.sigma", "prior.alpha",
+      "prior.phi",
       "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",
       "rho.car.grid", "tau.temporal.grid", "rho.temporal.grid",
       "sigma.temporal.grid", "sigma.re.grid",

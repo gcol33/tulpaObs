@@ -1676,6 +1676,7 @@ print.summary.cover_fit <- function(x, ...) {
     copy      = NULL,           # NO copy: each field on one arm only
     phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
     prior_sigma = control$prior.sigma,
+    prior_phi = control$prior.phi,
     control = joint_control
   )
 
@@ -1875,6 +1876,7 @@ print.summary.cover_fit <- function(x, ...) {
     copy      = copy_spec,
     phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
     prior_sigma = control$prior.sigma,
+    prior_phi = control$prior.phi,
     prior_alpha = control$prior.alpha,
     control = joint_control
   )
@@ -2019,7 +2021,11 @@ print.summary.cover_fit <- function(x, ...) {
 #'   `list(family, params)` matching tulpa's `prior_sigma` / `prior_alpha`
 #'   args. The prior on alpha directly regularizes the copy scalar at small
 #'   `n_pos`, replacing the per-arm `prior_sigma_pos` of the pre-reparam
-#'   API.
+#'   API. `prior.phi` puts the same kind of regularizing hyperprior on the
+#'   cover-arm dispersion grid (the beta precision under `positive = "beta"`,
+#'   the log-scale SD under `lognormal`), re-weighting the `phi.grid` axis by
+#'   the chosen density instead of an implicit flat prior; same
+#'   `list(family, params)` form, forwarded to tulpa's `prior_phi`.
 #' @param temporal,re Structured `temporal()` / `re()` blocks from the formula,
 #'   stacked onto the shared spatial block via the multi-block joint engine.
 #' @param priors Optional [cover_priors()] object (or coercible list). When
@@ -2441,6 +2447,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       copy      = copy_coupled,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
+      prior_phi = control$prior.phi,
       prior_alpha = control$prior.alpha,
       control = joint_control
     )
@@ -2479,6 +2486,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       copy      = multi$copy,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
+      prior_phi = control$prior.phi,
       prior_alpha = control$prior.alpha,
       control = joint_control
     )
@@ -2507,6 +2515,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       prior     = prior_for_joint,
       phi_grid  = if (!is.null(phi_grid_pos)) list(pos = phi_grid_pos) else NULL,
       prior_sigma = control$prior.sigma,
+      prior_phi = control$prior.phi,
       prior_alpha = control$prior.alpha,
       control = joint_control
     )
