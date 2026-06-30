@@ -143,6 +143,14 @@
 # posterior-mean sigma_u.
 .tobs_cover_mu <- function(eta_pos, bundle, object) {
   latent <- identical(object$model$cover_aggregate, "latent")
+  if (identical(bundle$positive, "beta_oi")) {
+    # One-inflated Beta (gcol33/tulpaObs#108): the conditional cover mixes the
+    # constant ceiling mass (cover = 1) with the interior Beta mean,
+    # E[cover | y > 0] = pi + (1 - pi) * plogis(eta_pos). cover()-only, so no
+    # latent cover-aggregate variant.
+    pi1 <- object$pi_one %||% 0
+    return(pi1 + (1 - pi1) * stats::plogis(eta_pos))
+  }
   if (identical(bundle$positive, "beta")) {
     if (!latent) return(stats::plogis(eta_pos))
     sigma_u <- bundle$disp

@@ -21,9 +21,10 @@
                             approx = "gaussian_laplace",
                             correction = "none", ...) {
   positive <- family$params$positive
-  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "ordinal")) {
+  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal")) {
     stop("cover(positive = '", positive, "') is not supported. ",
-         "Use 'lognormal', 'lognormal_trunc', 'beta', or 'ordinal'.", call. = FALSE)
+         "Use 'lognormal', 'lognormal_trunc', 'beta', 'beta_oi', or 'ordinal'.",
+         call. = FALSE)
   }
   # The ordinal (interval-censored Gaussian) and truncated-lognormal
   # (upper-truncated Gaussian) positive arms are wired only on the joint
@@ -157,7 +158,7 @@
 #' @keywords internal
 encode_cover_hurdle <- function(formula, data, y,
                                 positive = c("lognormal", "lognormal_trunc",
-                                             "beta", "ordinal"),
+                                             "beta", "beta_oi", "ordinal"),
                                 breaks = NULL,
                                 autoscale = TRUE) {
   positive <- match.arg(positive)
@@ -182,7 +183,30 @@ encode_cover_hurdle <- function(formula, data, y,
 
   X_occ_natural <- stats::model.matrix(fe_formula, data_obs)
 
+  # One-inflated Beta (gcol33/tulpaObs#108): the presence arm still models y > 0,
+  # but plots recorded at full cover (y = 1) are a genuine point mass, not a near-1
+  # continuous value. With a constant inflation probability the likelihood
+  # factorizes -- pi is the share of positive plots at the ceiling, and the
+  # interior Beta is fit on the (0, 1) plots only -- so the Beta arm drops the
+  # ceiling rows and `oi` carries pi for the decode / predict.
+  oi <- NULL
   is_pos <- occur == 1L
+  if (positive == "beta_oi") {
+    tol         <- 1e-6
+    at_ceiling  <- is_pos & (y_obs >= 1 - tol)
+    n_pos_total <- sum(is_pos)
+    n_ceiling   <- sum(at_ceiling)
+    is_pos      <- is_pos & (y_obs < 1 - tol)   # Beta arm = interior positives
+    if (sum(is_pos) < 2L) {
+      stop("cover(positive = \"beta_oi\"): fewer than 2 interior (0 < cover < 1) ",
+           "plots after setting the ceiling (cover = 1) aside. The interior Beta ",
+           "is not identifiable; use positive = \"beta\" or check the response ",
+           "scale.", call. = FALSE)
+    }
+    pi_hat <- n_ceiling / n_pos_total
+    oi <- list(n_ceiling = n_ceiling, n_positive = n_pos_total, pi_one = pi_hat,
+               pi_one_sd = sqrt(pi_hat * (1 - pi_hat) / n_pos_total))
+  }
   data_pos <- data_obs[is_pos, , drop = FALSE]
   y_pos    <- y_obs[is_pos]
   pos_lower <- NULL
@@ -275,6 +299,7 @@ encode_cover_hurdle <- function(formula, data, y,
     formula      = fe_formula,
     positive     = positive,
     breaks       = if (positive == "ordinal") as.numeric(breaks) else NULL,
+    oi           = oi,
     obs_keep     = obs_keep,
     scale_occ    = scale_occ,
     scale_pos    = scale_pos
@@ -675,7 +700,7 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
   list(
     m_occ     = m_occ,
     m_pos     = m_pos,
-    positive  = "beta",
+    positive  = positive,           # "beta" or "beta_oi" (interior Beta)
     phi_pos   = m_pos$phi,
     pos_fit_n = n_pos,
     pos_fit_p = p_pos
@@ -786,13 +811,16 @@ decode_cover_hurdle <- function(fits, enc, family,
       positive     = fits$positive,
       sigma_pos    = if (fits$positive == "lognormal") fits$sigma_pos else NA_real_,
       sigma_pos_sd = NA_real_,
-      phi_pos      = if (fits$positive == "beta")      fits$phi_pos    else NA_real_,
+      phi_pos      = if (fits$positive %in% c("beta", "beta_oi")) fits$phi_pos else NA_real_,
       phi_pos_sd   = NA_real_,
+      pi_one       = enc$oi$pi_one    %||% NA_real_,
+      pi_one_sd    = enc$oi$pi_one_sd %||% NA_real_,
+      n_ceiling    = enc$oi$n_ceiling %||% NA_integer_,
       hyperpar     = hyperpar,
       encoding     = enc,
       family       = family,
       n_total      = enc$N,
-      n_positive   = length(enc$idx_pos),
+      n_positive   = enc$oi$n_positive %||% length(enc$idx_pos),
       converged    = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),
       # Unified convergence record, the same list every other family stores
       # (gcol33/tulpaObs#88), so a mixed-family QC pass reads one accessor
@@ -1232,17 +1260,21 @@ predict.cover_fit <- function(object, newdata = NULL,
   eta_pos <- as.numeric(X %*% object$beta_pos)
   p  <- stats::plogis(eta_occ)
   positive <- object$positive %||% "lognormal"
-  mu <- if (positive == "beta") {
+  mu <- if (positive %in% c("beta", "beta_oi")) {
     stats::plogis(eta_pos)
   } else {
     exp(eta_pos + object$sigma_pos^2 / 2)
   }
+  # One-inflated Beta: conditional cover mixes the ceiling mass (cover = 1) with
+  # the interior Beta mean, E[cover | y > 0] = pi + (1 - pi) * mu.
+  pi1  <- if (identical(positive, "beta_oi")) (object$pi_one %||% 0) else 0
+  cond <- pi1 + (1 - pi1) * mu
 
   switch(
     type,
-    expected    = p * mu,
+    expected    = p * cond,
     occupancy   = p,
-    conditional = mu
+    conditional = cond
   )
 }
 
@@ -1263,6 +1295,11 @@ print.cover_fit <- function(x, ...) {
   } else {
     cat(sprintf("  phi_pos      : %.4f\n", x$phi_pos))
   }
+  if (identical(positive, "beta_oi") && !is.null(x$pi_one) && is.finite(x$pi_one)) {
+    cat(sprintf("  pi_one       : %.4f (SE %.4f; %d of %d positive plots at cover = 1)\n",
+                x$pi_one, x$pi_one_sd %||% NA_real_, x$n_ceiling %||% NA_integer_,
+                x$n_positive %||% NA_integer_))
+  }
   cat(sprintf("  converged    : %s\n",
               if (isTRUE(x$converged)) "yes" else "no"))
   if (!is.null(x$sla_status) && !identical(x$sla_status, "off")) {
@@ -1272,6 +1309,7 @@ print.cover_fit <- function(x, ...) {
   print(.coef_table(x$beta_occ, x$se_occ))
   pos_header <- switch(positive,
     beta    = "Positive (beta, logit link, on y > 0):",
+    beta_oi = "Positive interior (one-inflated beta, logit link, on 0 < y < 1):",
     ordinal = "Positive (ordinal interval-censored Gaussian on log y > 0):",
     "Positive (Gaussian on log y > 0):")
   cat("\n", pos_header, "\n", sep = "")
@@ -2051,10 +2089,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                           control = list(),
                                           temporal = NULL, re = NULL,
                                           priors = NULL) {
-  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "ordinal")) {
+  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal")) {
     stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() supports positive = ",
-         "'lognormal', 'lognormal_trunc', 'beta', or 'ordinal'. Got '", positive,
-         "'.", call. = FALSE)
+         "'lognormal', 'lognormal_trunc', 'beta', 'beta_oi', or 'ordinal'. Got '",
+         positive, "'.", call. = FALSE)
   }
   has_mcar <- !is.null(enc$mcar)
   if (has_mcar) {
@@ -2854,11 +2892,14 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       sigma_pos_sd = fits$sigma_pos_sd,
       phi_pos      = fits$phi_pos,
       phi_pos_sd   = fits$phi_pos_sd,
+      pi_one       = enc$oi$pi_one    %||% NA_real_,
+      pi_one_sd    = enc$oi$pi_one_sd %||% NA_real_,
+      n_ceiling    = enc$oi$n_ceiling %||% NA_integer_,
       hyperpar     = hyperpar,
       encoding     = enc,
       family       = family,
       n_total      = enc$N,
-      n_positive   = length(enc$idx_pos),
+      n_positive   = enc$oi$n_positive %||% length(enc$idx_pos),
       converged    = TRUE,
       # Unified convergence record (gcol33/tulpaObs#88); see the non-spatial
       # assembly above. The joint nested-Laplace outer grid has no iteration

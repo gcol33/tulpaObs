@@ -5,7 +5,7 @@
 \title{Cover hurdle family (vegetation cover, MOTIVATE pattern)}
 \usage{
 cover(
-  positive = c("beta", "lognormal", "lognormal_trunc", "ordinal"),
+  positive = c("beta", "beta_oi", "lognormal", "lognormal_trunc", "ordinal"),
   breaks = NULL
 )
 }
@@ -13,6 +13,12 @@ cover(
 \item{positive}{likelihood for the positive cover part:
 \itemize{
 \item \code{"beta"} -- cover in (0, 1) with a logit link;
+\item \code{"beta_oi"} -- a one-inflated Beta: a point mass at cover = 1 (plots
+recorded at full cover, a genuine boundary mass rather than a near-1
+continuous value) plus a Beta on the interior (0, 1). The inflation
+probability is a constant, estimated as the share of positive plots at
+the ceiling; the interior Beta is fit on the (0, 1) plots. Reported as
+\code{pi_one}. (With the zero hurdle this is the zero-one-inflated Beta.);
 \item \code{"lognormal"} -- a Gaussian on log-cover (unbounded above);
 \item \code{"lognormal_trunc"} -- a Gaussian on log-cover upper-truncated at
 \code{log(1) = 0}, the bounded-support form for cover in (0, 1] (it cannot

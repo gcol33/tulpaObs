@@ -1165,6 +1165,12 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' @param positive likelihood for the positive cover part:
 #'   * `"beta"` -- cover in (0, 1) with a logit link;
+#'   * `"beta_oi"` -- a one-inflated Beta: a point mass at cover = 1 (plots
+#'     recorded at full cover, a genuine boundary mass rather than a near-1
+#'     continuous value) plus a Beta on the interior (0, 1). The inflation
+#'     probability is a constant, estimated as the share of positive plots at
+#'     the ceiling; the interior Beta is fit on the (0, 1) plots. Reported as
+#'     `pi_one`. (With the zero hurdle this is the zero-one-inflated Beta.);
 #'   * `"lognormal"` -- a Gaussian on log-cover (unbounded above);
 #'   * `"lognormal_trunc"` -- a Gaussian on log-cover upper-truncated at
 #'     `log(1) = 0`, the bounded-support form for cover in (0, 1] (it cannot
@@ -1185,7 +1191,8 @@ occu_categorical <- function(classes = NULL) {
 #' summary(fit)
 #' }
 #' @export
-cover <- function(positive = c("beta", "lognormal", "lognormal_trunc", "ordinal"),
+cover <- function(positive = c("beta", "beta_oi", "lognormal", "lognormal_trunc",
+                               "ordinal"),
                   breaks = NULL) {
   positive <- match.arg(positive)
   # The ordinal positive arm is an interval-censored Gaussian on log-cover with
@@ -1215,6 +1222,7 @@ cover <- function(positive = c("beta", "lognormal", "lognormal_trunc", "ordinal"
     latent         = "hurdle",
     observation    = switch(positive,
                             beta            = "binomial_plus_beta",
+                            beta_oi         = "binomial_plus_beta_one_inflated",
                             lognormal       = "binomial_plus_lognormal",
                             lognormal_trunc = "binomial_plus_lognormal_trunc",
                             ordinal         = "binomial_plus_ordinal"),

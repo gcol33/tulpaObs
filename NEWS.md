@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.69 (2026-06-30)
+
+* `cover(positive = "beta_oi")` -- a one-inflated Beta cover family. Plots
+  recorded at exactly full cover (`y = 1`) are modelled as a genuine point mass
+  instead of being clamped to `1 - 1e-6` (which biases the interior precision).
+  With a constant inflation probability the likelihood factorizes: `pi` is the
+  share of positive plots at the ceiling (a binomial proportion, reported as
+  `pi_one` with its SE), and the interior Beta is fit on the `(0, 1)` plots.
+  `predict()` returns the one-inflated conditional cover `pi + (1 - pi) * mu`.
+  Works on the non-spatial and nested-Laplace (areal) paths
+  (gcol33/tulpaObs#108).
+
 ## 0.0.68 (2026-06-30)
 
 * Arm-specific cover-arm spatial fields accept `model = "bym2"`:
