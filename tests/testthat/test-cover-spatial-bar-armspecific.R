@@ -319,13 +319,17 @@ test_that("a single-arm || bar requires the nested-Laplace method", {
     "arm-specific spatial bar|nested_laplace")
 })
 
-test_that("a single-arm correlated `|` bar is still copy-only (errors)", {
+test_that("a single-arm correlated `|` bar fits on that arm alone (no copy, #109)", {
   d <- .as_small()
-  expect_error(
-    tobs(formula = ~ x + spatial(~ 1 + x | cell, graph = d$adj, to = "positive"),
-         data = d$df, family = cover(positive = "lognormal"), y = d$y,
-         method = "nested_laplace", control = list(verbose = FALSE)),
-    "copy-only|both cover arms")
+  fit <- suppressWarnings(tobs(
+    formula = ~ x + spatial(~ 1 + x | cell, graph = d$adj, to = "positive"),
+    data = d$df, family = cover(positive = "lognormal"), y = d$y,
+    method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE)))
+  expect_s3_class(fit, "cover_fit")
+  expect_true(isTRUE(fit$mcar))
+  expect_length(fit$sigma_mcar, 2L)
+  expect_length(fit$rho_mcar, 1L)
+  expect_true(is.na(fit$alpha_mcar))   # single arm: no cross-arm copy
 })
 
 test_that("an arm-specific bar cannot be mixed with a shared field", {

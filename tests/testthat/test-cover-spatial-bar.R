@@ -203,14 +203,17 @@ test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
   expect_true(is.finite(fit$alpha_mcar))
 })
 
-test_that("a correlated `|` bar requires both cover arms on `to`", {
+test_that("a single-arm correlated `|` bar fits on the occurrence arm alone (#109)", {
   d <- .bar_small_data()
-  expect_error(
-    tobs(formula = ~ time +
-                     spatial(~ 1 + time | cell, graph = d$adj, to = "presence"),
-         data = d$df, family = cover(positive = "lognormal"), y = d$y,
-         method = "nested_laplace", control = list(verbose = FALSE)),
-    "both cover arms|arm-specific|separate latent")
+  fit <- suppressWarnings(tobs(
+    formula = ~ time + spatial(~ 1 + time | cell, graph = d$adj, to = "presence"),
+    data = d$df, family = cover(positive = "lognormal"), y = d$y,
+    method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE)))
+  expect_s3_class(fit, "cover_fit")
+  expect_true(isTRUE(fit$mcar))
+  expect_length(fit$sigma_mcar, 2L)
+  expect_length(fit$rho_mcar, 1L)
+  expect_true(is.na(fit$alpha_mcar))   # single arm: no cross-arm copy
 })
 
 test_that("a correlated `|` bar cannot co-exist with another areal term", {
