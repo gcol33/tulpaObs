@@ -314,16 +314,18 @@ encode_cover_hurdle <- function(formula, data, y,
 # INDEPENDENT (`||`) single-arm bar IS wired, as a separate per-arm latent
 # (gcol33/tulpaObs#65), and is routed past this gate in `.encode_cover_terms`.
 .cover_bar_check_to <- function(spec) {
-  to <- spec$to %||% .tobs_cover_arms
-  if (!setequal(to, .tobs_cover_arms)) {
+  to  <- spec$to %||% .tobs_cover_arms
+  bad <- setdiff(to, .tobs_cover_arms)
+  if (length(bad) > 0L || length(to) < 1L) {
     stop(sprintf(paste0(
-      "spatial(<bar> with `|`, to = %s): a correlated (MCAR) coefficient field ",
-      "is copy-only and requires both cover arms (to = c(\"presence\", ",
-      "\"positive\")). For an arm-specific separate latent use the INDEPENDENT ",
-      "spelling `||` with a single-arm `to` (gcol33/tulpaObs#65)."),
+      "spatial(<bar> with `|`, to = %s): `to` must be \"presence\", \"positive\", ",
+      "or both."),
       paste0("c(", paste0("\"", to, "\"", collapse = ", "), ")")),
       call. = FALSE)
   }
+  # Both cover arms (the copy-only correlated field, gcol33/tulpaObs#64) OR a
+  # single arm (a free-Sigma correlated field on that arm alone, no cross-arm
+  # copy, gcol33/tulpaObs#109) are both supported.
   invisible(spec)
 }
 
@@ -410,6 +412,7 @@ encode_cover_hurdle <- function(formula, data, y,
     idx_occ         = as.integer(idx_occ),
     field_weight_occ = field_weight_occ,
     field_names     = field_names,
+    to              = spec$to %||% .tobs_cover_arms,
     by              = rg$by
   )
 }
@@ -1877,11 +1880,21 @@ print.summary.cover_fit <- function(x, ...) {
 
   # MCAR block: per-arm cell index (occ, pos) and per-field per-arm design
   # weight (occ, pos). The positive arm slices the occ weights / cell index by
-  # `idx_pos`, exactly as the `||` trend weight is subset.
-  idx_occ <- mc$idx_occ
+  # `idx_pos`, exactly as the `||` trend weight is subset. With both cover arms
+  # on `to` the field is anchored on occ and COPIED to pos with one estimated
+  # amplitude alpha (#64); with a single arm it sits on that arm alone via the
+  # 0-sentinel cell index on the other arm (no cross-arm copy, #109).
+  to_arms  <- mc$to %||% .tobs_cover_arms
+  both_arm <- setequal(to_arms, .tobs_cover_arms)
+  on_occ   <- "presence" %in% to_arms
+  on_pos   <- "positive" %in% to_arms
+  idx_occ      <- mc$idx_occ
   idx_pos_cell <- idx_occ[idx_pos]
-  field_weight <- lapply(mc$field_weight_occ, function(w_occ)
-    list(as.numeric(w_occ), as.numeric(w_occ[idx_pos])))
+  mcar_spi_occ <- if (on_occ) as.integer(idx_occ)      else integer(N)
+  mcar_spi_pos <- if (on_pos) as.integer(idx_pos_cell) else integer(N_pos)
+  field_weight <- lapply(mc$field_weight_occ, function(w_occ) list(
+    if (on_occ) as.numeric(w_occ)          else numeric(N),
+    if (on_pos) as.numeric(w_occ[idx_pos]) else numeric(N_pos)))
 
   mcar_block <- list(
     type            = "mcar",
@@ -1890,13 +1903,15 @@ print.summary.cover_fit <- function(x, ...) {
     adj_row_ptr     = mc$adj_row_ptr,
     adj_col_idx     = mc$adj_col_idx,
     n_neighbors     = mc$n_neighbors,
-    spatial_idx     = list(as.integer(idx_occ), as.integer(idx_pos_cell)),
+    spatial_idx     = list(mcar_spi_occ, mcar_spi_pos),
     field_weight    = field_weight
   )
 
-  alpha_grid <- control$alpha.grid %||%
-    c(0, exp(seq(log(0.1), log(3), length.out = 5)))
-  copy_spec <- list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid))
+  copy_spec <- if (both_arm) {
+    alpha_grid <- control$alpha.grid %||%
+      c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+    list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid))
+  } else NULL
 
   joint_control <- list(
     max_iter  = control$max.iter  %||% 50L,
@@ -2013,8 +2028,11 @@ print.summary.cover_fit <- function(x, ...) {
   names(sigma_mcar) <- mc$field_names
   names(rho_mcar)   <- rho_names
   # Multi-block axis names carry the block prefix: the copy amplitude is b1.alpha.
-  alpha_mu <- as.numeric(fit$theta_mean[["b1.alpha"]] %||% NA_real_)
-  alpha_sd <- as.numeric(fit$theta_sd[["b1.alpha"]]   %||% NA_real_)
+  # A single-arm correlated field (gcol33/tulpaObs#109) has no copy, so no alpha
+  # axis -- report NA rather than indexing a missing name (which errors).
+  has_alpha <- "b1.alpha" %in% names(fit$theta_mean)
+  alpha_mu <- if (has_alpha) as.numeric(fit$theta_mean[["b1.alpha"]]) else NA_real_
+  alpha_sd <- if (has_alpha) as.numeric(fit$theta_sd[["b1.alpha"]])   else NA_real_
 
   m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
                 log_marginal = NA_real_)

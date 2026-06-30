@@ -174,8 +174,11 @@ one targets each arm.
 
 The \code{||} and \code{|} axis is separate from copy / free: \code{||} makes the intercept
 and slope fields independent, while a single \code{|} makes them correlated (a free
-cross-covariance, MCAR). A correlated \code{|} bar is copy-only and requires both
-arms (gcol33/tulpaObs#64).
+cross-covariance, MCAR). A correlated \code{|} bar on both arms (\code{to = c("presence", "positive")}) anchors the field on the occurrence arm and copies
+it to the positive arm with one estimated amplitude (gcol33/tulpaObs#64); on a
+single arm (\code{to = "presence"} or \code{to = "positive"}) it is a free-Sigma
+correlated field on that arm alone, with no cross-arm copy
+(gcol33/tulpaObs#109).
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{one spatial() call, to = both arms    one shared / copied latent (presence anchor, coupling estimated)
 separate single-arm spatial() calls   separate / free latents, no coupling

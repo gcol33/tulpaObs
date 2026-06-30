@@ -1118,8 +1118,12 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' The `||` and `|` axis is separate from copy / free: `||` makes the intercept
 #' and slope fields independent, while a single `|` makes them correlated (a free
-#' cross-covariance, MCAR). A correlated `|` bar is copy-only and requires both
-#' arms (gcol33/tulpaObs#64).
+#' cross-covariance, MCAR). A correlated `|` bar on both arms (`to =
+#' c("presence", "positive")`) anchors the field on the occurrence arm and copies
+#' it to the positive arm with one estimated amplitude (gcol33/tulpaObs#64); on a
+#' single arm (`to = "presence"` or `to = "positive"`) it is a free-Sigma
+#' correlated field on that arm alone, with no cross-arm copy
+#' (gcol33/tulpaObs#109).
 #'
 #' ```
 #' one spatial() call, to = both arms    one shared / copied latent (presence anchor, coupling estimated)

@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.70 (2026-06-30)
+
+* A correlated (`|`, free-Sigma MCAR) intercept + slope spatial field can now sit
+  on a single cover arm: `spatial(~ 1 + time.sc | cell, graph = adj, to =
+  "presence")` puts a free 2x2 cross-coefficient Sigma on the occurrence arm
+  alone (the occupancy intercept and time-slope fields covary), with no
+  cross-arm copy. Previously the `|` form was copy-only and required both arms.
+  The single-arm field uses the 0-sentinel `spatial_idx` on the other arm and
+  carries no `alpha` (reported as NA); `sigma_mcar` / `rho_mcar` recover the
+  field SDs and their correlation (gcol33/tulpaObs#109).
+
 ## 0.0.69 (2026-06-30)
 
 * `cover(positive = "beta_oi")` -- a one-inflated Beta cover family. Plots

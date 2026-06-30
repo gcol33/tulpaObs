@@ -141,3 +141,72 @@ test_that("independent `||` bar does not recover a spurious cross-correlation", 
   # amplitudes -- the `||` deliverable.
   expect_false(is.null(fit$sigma_trend) || is.na(fit$sigma_trend))
 })
+
+
+# ---- single-arm correlated `|` field on the occurrence arm alone (#109) ------
+#
+# A correlated intercept + slope field on `to = "presence"` only: a free 2x2
+# cross-coefficient Sigma on the occupancy arm with NO cross-arm copy (no alpha).
+# The occupancy intercept and time-slope fields covary; the positive arm carries
+# none. This is the single-arm counterpart of the both-arm copy path above.
+
+# One dataset with the correlated field on the OCCUPANCY arm only (the positive
+# arm's cover has no spatial structure).
+.mcar_sim_cover_occ <- function(adj, Sigma, seed,
+                                n_per = 25L, psi0 = 1.2, pos0 = -0.3, sd_pos = 0.4) {
+  set.seed(seed)
+  n_s <- nrow(adj)
+  fld <- .mcar_sim_fields(adj, Sigma)
+  cell <- rep(seq_len(n_s), each = n_per)
+  N    <- length(cell)
+  time.sc <- stats::rnorm(N)
+  eta_psi <- psi0 + fld$u[cell] + time.sc * fld$s[cell]
+  z <- stats::rbinom(N, 1, stats::plogis(eta_psi))
+  cover <- numeric(N); pos <- z == 1L
+  cover[pos] <- pmin(exp(stats::rnorm(sum(pos), pos0, sd_pos)), 0.999)  # no field
+  list(data = data.frame(cover = cover, time.sc = time.sc, cell = cell), y = cover)
+}
+
+test_that("single-arm `|` (to = 'presence') recovers Sigma, no cross-arm copy", {
+  skip_on_cran()
+  skip_if_fast()
+
+  nx <- ny <- 10L
+  adj <- .mcar_grid_adj(nx, ny)
+  sig_u <- 1.0; sig_s <- 0.7; rho_true <- 0.5
+  Sigma <- matrix(c(sig_u^2,                 rho_true * sig_u * sig_s,
+                    rho_true * sig_u * sig_s, sig_s^2), 2, 2)
+
+  n_seeds <- 4L
+  sd_u <- sd_s <- rho_hat <- numeric(n_seeds)
+  for (r in seq_len(n_seeds)) {
+    sim <- .mcar_sim_cover_occ(adj, Sigma, seed = r)
+    fit <- suppressWarnings(tobs(
+      formula = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj,
+                                    to = "presence"),
+      data = sim$data, y = sim$y, family = cover(positive = "lognormal"),
+      method = "nested_laplace",
+      control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))
+
+    expect_s3_class(fit, "cover_fit")
+    expect_true(isTRUE(fit$mcar))
+    expect_length(fit$sigma_mcar, 2L)
+    expect_length(fit$rho_mcar, 1L)
+    # Single arm: no copy, so no alpha amplitude.
+    expect_true(is.na(fit$alpha_mcar))
+
+    sd_u[r]    <- fit$sigma_mcar[[1L]]
+    sd_s[r]    <- fit$sigma_mcar[[2L]]
+    rho_hat[r] <- fit$rho_mcar[[1L]]
+  }
+
+  # Field SDs recover with low bias (the diagonal of Sigma is best identified).
+  expect_lt(abs(mean(sd_u) - sig_u) / sig_u, 0.20)
+  expect_lt(abs(mean(sd_s) - sig_s) / sig_s, 0.25)
+  # The free cross-correlation -- the quantity the single `|` adds over `||` --
+  # recovers a clearly positive value (true 0.5), positive in the majority of
+  # seeds and never pinned to the boundary.
+  expect_gt(mean(rho_hat), 0.30)
+  expect_gte(sum(rho_hat > 0.15), 3L)
+  expect_true(all(rho_hat > -0.9 & rho_hat < 0.99))
+})
