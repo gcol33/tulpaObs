@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.72 (2026-07-01)
+
+* WAIC / DIC / LOO for the compact (ragged) `occu_cover()` fit now build the
+  pointwise log-likelihood in a C++ OpenMP kernel that parallelises over
+  posterior draws (`cpp_occu_cover_ploglik_ragged`). This was the dominant
+  serial cost on large single-species fits: the draw loop scales with
+  `n.draws x total plots` and previously ran single-threaded in R. `tobs_waic()`,
+  `tobs_dic()`, and `tobs_cpo()` gain an `n.threads` argument (default: all but
+  four logical cores, matching the occu_cover fit's own outer-grid default). The
+  kernel mirrors `.occu_cover_site_ll_ragged` draw for draw and accumulates each
+  site's visit sums in visit order, so it agrees with the R path to libm rounding
+  (~1e-13) and is thread-count invariant. On ~200k visits x 200 draws the pointwise
+  build drops from 17.9 s (R) to 0.76 s (16 threads); the dense and aggregated
+  (mean / median / latent) cover paths are unchanged.
+
 ## 0.0.71 (2026-07-01)
 
 * `occu_cover()` can now give the cover (positive) arm its OWN independent

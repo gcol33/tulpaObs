@@ -4,6 +4,17 @@
 # modelAverage) are in tulpa — inherited via tulpa_fit class.
 # ============================================================================
 
+# Thread count for the parallel occu_cover pointwise-loglik kernel. An explicit
+# n.threads wins; NULL falls back to the occu_cover fit's own outer-grid default
+# (all but four logical cores), so WAIC / LOO reuse the machine budget the fit
+# used. detectCores() can return NA on exotic platforms, so guard it.
+.tobs_ploglik_threads <- function(n.threads = NULL) {
+  if (!is.null(n.threads)) return(max(1L, as.integer(n.threads)))
+  nc <- parallel::detectCores()
+  if (is.na(nc)) nc <- 1L
+  max(1L, as.integer(nc) - 4L)
+}
+
 #' Model criteria for occupancy / cover models
 #'
 #' `tobs_waic()`, `tobs_dic()`, and `tobs_cpo()` build the family pointwise
@@ -16,6 +27,11 @@
 #' @param n.draws Posterior draws used to build the pointwise log-likelihood
 #'   (the cover / occu_cover paths sample this many; the draw-matrix families use
 #'   the first `n.draws` stored draws). Default 1000.
+#' @param n.threads Threads for the parallel `occu_cover()` pointwise
+#'   log-likelihood (the compact / ragged path). The draw loop is embarrassingly
+#'   parallel, so this is the WAIC / LOO analogue of the fit's `n.threads.outer`.
+#'   `NULL` (default) uses all but four logical cores, matching the occu_cover
+#'   fit's own outer-grid default; other families ignore it.
 #' @param loo.unit The cross-validation unit for `tobs_waic()` / `tobs_cpo()`.
 #'   `"obs"` (default) is the family's pointwise unit -- one column of the
 #'   log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
@@ -34,9 +50,10 @@
 #' @seealso [tulpa::tulpa_criteria()]
 #' @export
 tobs_waic <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
-                      ...) {
+                      n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
-  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
+  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
+                                   n.threads = .tobs_ploglik_threads(n.threads))
   dots <- .tobs_criteria_group(object, loo.unit, list(...))
   cr <- do.call(tulpa::tulpa_criteria,
                 c(list(ll_mat, criteria = "waic"), dots))
@@ -46,8 +63,9 @@ tobs_waic <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 
 #' @rdname tobs_waic
 #' @export
-tobs_dic <- function(object, n.draws = 1000L, ...) {
-  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
+tobs_dic <- function(object, n.draws = 1000L, n.threads = NULL, ...) {
+  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
+                                   n.threads = .tobs_ploglik_threads(n.threads))
   lam <- .tobs_loglik_at_mean(object, n.draws = n.draws)
   tulpa::tulpa_criteria(ll_mat, criteria = "dic", loglik_at_mean = lam, ...)
 }
@@ -55,9 +73,10 @@ tobs_dic <- function(object, n.draws = 1000L, ...) {
 #' @rdname tobs_waic
 #' @export
 tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
-                     ...) {
+                     n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
-  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws)
+  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
+                                   n.threads = .tobs_ploglik_threads(n.threads))
   dots <- .tobs_criteria_group(object, loo.unit, list(...))
   cr <- do.call(tulpa::tulpa_criteria,
                 c(list(ll_mat, criteria = c("loo", "cpo", "lpml"),
@@ -139,11 +158,11 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # the predictor from the process fixed-effect coefficient draws only; for those
 # models any structured field is not added and the score is conditional on the
 # fixed-effect predictor.
-.tobs_pointwise_loglik <- function(object, n.draws = NULL) {
+.tobs_pointwise_loglik <- function(object, n.draws = NULL, n.threads = 1L) {
   nd <- n.draws %||% 1000L
   if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object, nd))
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
-    return(.tobs_ploglik_occu_cover(object, nd))
+    return(.tobs_ploglik_occu_cover(object, nd, n.threads = n.threads))
   }
   # Three-level occupancy + cover: the WAIC / LOO unit is the cell (the top-level
   # marginalised observation); scored over the draw matrix (calibrated under the

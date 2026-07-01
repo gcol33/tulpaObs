@@ -1686,10 +1686,11 @@
   list(field_occ = field_occ, field_pos = field_pos)
 }
 
-.tobs_ploglik_occu_cover <- function(object, n.draws = 1000L) {
+.tobs_ploglik_occu_cover <- function(object, n.draws = 1000L, n.threads = 1L) {
   c0 <- .tobs_occu_cover_components(object, n.draws)
   .occu_cover_ploglik_core(object$model, c0$b_occ, c0$b_det, c0$b_pos,
-                           c0$disp, c0$field_occ, c0$field_pos)
+                           c0$disp, c0$field_occ, c0$field_pos,
+                           n_threads = n.threads)
 }
 
 # Pointwise log-likelihood at the posterior mean (length n_sites): the per-site
@@ -1844,17 +1845,43 @@
 # byte-identical to the unchunked result (each draw's row depends only on that
 # draw).
 .occu_cover_ploglik_core <- function(model, b_occ, b_det, b_pos, disp,
-                                     field_occ, field_pos, chunk = NULL) {
+                                     field_occ, field_pos, chunk = NULL,
+                                     n_threads = 1L) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
   S  <- nrow(b_occ)
   cl <- .tobs_clamp_eta
-  # Detected-unit cover values are draw-invariant, so resolve them once and feed
-  # them to every draw's cover term (gcol33/tulpaObs#34).
-  units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
-           else .occu_cover_unit_cover(model)
   is_ragged <- isTRUE(model$ragged)
-  sov <- if (is_ragged) model$site_of_visit else NULL
+  mode <- model$cover_aggregate %||% "none"
+
+  # Compact (ragged) no-aggregation path: the WAIC cost on real data
+  # (n.draws x all plots). The C++ kernel mirrors .occu_cover_site_ll_ragged
+  # draw for draw and parallelises over draws, with no draw-chunking (each
+  # draw's per-visit predictors live in thread-private scratch, not the
+  # [V x n_draws] transient .occu_cover_waic_chunk bounds). The ragged binder
+  # only ever builds cover_aggregate = "none", so this covers every ragged fit.
+  if (is_ragged && identical(mode, "none")) {
+    V <- length(model$site_of_visit)
+    empty_v <- function(m) if (is.null(m)) matrix(0, V, 0L) else m
+    return(cpp_occu_cover_ploglik_ragged(
+      X_occ = model$X_occ, X_det_site = model$X_det_site,
+      X_pos_site = model$X_pos_site,
+      X_det_visit = empty_v(model$X_det_visit),
+      X_pos_visit = empty_v(model$X_pos_visit),
+      site_of_visit = as.integer(model$site_of_visit),
+      y_det_visit   = as.integer(model$y_det_visit),
+      y_pos_visit   = as.numeric(model$y_pos_visit),
+      b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
+      field_occ = field_occ, field_pos = field_pos,
+      is_beta   = identical(model$positive %||% "lognormal", "beta"),
+      eta_bound = .TOBS_ETA_BOUND,
+      n_threads = max(1L, as.integer(n_threads))))
+  }
+
+  # Dense / aggregated (mean / median / latent) paths stay in R, draw-chunked
+  # to bound the [n_plots x chunk] per-visit eta transient. Detected-unit cover
+  # values are draw-invariant, so resolve them once (gcol33/tulpaObs#34).
+  units <- if (identical(mode, "none")) NULL else .occu_cover_unit_cover(model)
 
   n_plots <- max(
     if (!is.null(model$X_det_visit)) nrow(model$X_det_visit) else 0L,
@@ -1871,19 +1898,11 @@
               field_occ[, idx, drop = FALSE], field_pos[, idx, drop = FALSE])
     for (j in seq_along(idx)) {
       d <- idx[j]
-      if (is_ragged) {
-        de    <- .occu_cover_draw_eta_ragged(comp, j, sov)
-        psi   <- stats::plogis(cl(de$psi_eta))
-        p_vec <- stats::plogis(cl(de$p_eta))
-        ll[d, ] <- .occu_cover_site_ll_ragged(model, psi, p_vec, de$ep,
-                                              log(disp[d]))
-      } else {
-        de    <- .occu_cover_draw_eta(comp, j, n_sites, max_visits)
-        psi   <- stats::plogis(cl(de$psi_eta))
-        p_mat <- stats::plogis(cl(de$p_eta))
-        ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat,
-                                       log(disp[d]), units = units)
-      }
+      de    <- .occu_cover_draw_eta(comp, j, n_sites, max_visits)
+      psi   <- stats::plogis(cl(de$psi_eta))
+      p_mat <- stats::plogis(cl(de$p_eta))
+      ll[d, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat,
+                                     log(disp[d]), units = units)
     }
   }
   ll

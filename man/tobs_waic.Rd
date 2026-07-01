@@ -6,11 +6,23 @@
 \alias{tobs_cpo}
 \title{Model criteria for occupancy / cover models}
 \usage{
-tobs_waic(object, n.draws = 1000L, loo.unit = c("obs", "cell"), ...)
+tobs_waic(
+  object,
+  n.draws = 1000L,
+  loo.unit = c("obs", "cell"),
+  n.threads = NULL,
+  ...
+)
 
-tobs_dic(object, n.draws = 1000L, ...)
+tobs_dic(object, n.draws = 1000L, n.threads = NULL, ...)
 
-tobs_cpo(object, n.draws = 1000L, loo.unit = c("obs", "cell"), ...)
+tobs_cpo(
+  object,
+  n.draws = 1000L,
+  loo.unit = c("obs", "cell"),
+  n.threads = NULL,
+  ...
+)
 }
 \arguments{
 \item{object}{A \code{tobs_fit} object.}
@@ -30,6 +42,12 @@ node, when sites are grouped via \code{group_var}) and \code{occu_cover()} (the
 \code{site_cell} map); a non-spatial fit has no cells, so \code{"cell"} errors there.
 Equivalent to passing \verb{group =} the cell map directly, without hand-building
 it.}
+
+\item{n.threads}{Threads for the parallel \code{occu_cover()} pointwise
+log-likelihood (the compact / ragged path). The draw loop is embarrassingly
+parallel, so this is the WAIC / LOO analogue of the fit's \code{n.threads.outer}.
+\code{NULL} (default) uses all but four logical cores, matching the occu_cover
+fit's own outer-grid default; other families ignore it.}
 
 \item{...}{Forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} (e.g. \code{chunk_size}, or an
 explicit \verb{group =} for a custom leave-one-group-out unit).}

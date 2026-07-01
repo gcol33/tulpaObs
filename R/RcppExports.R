@@ -285,6 +285,10 @@ cpp_occu_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_met
     .Call(`_tulpaObs_cpp_occu_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_occu_cover_ploglik_ragged <- function(X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, is_beta, eta_bound, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_cover_ploglik_ragged`, X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, is_beta, eta_bound, n_threads)
+}
+
 cpp_occu_fit <- function(spec_r) {
     .Call(`_tulpaObs_cpp_occu_fit`, spec_r)
 }

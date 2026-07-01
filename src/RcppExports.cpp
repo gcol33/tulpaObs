@@ -1384,6 +1384,33 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_occu_cover_ploglik_ragged
+Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det_site, Rcpp::NumericMatrix X_pos_site, Rcpp::NumericMatrix X_det_visit, Rcpp::NumericMatrix X_pos_visit, Rcpp::IntegerVector site_of_visit, Rcpp::IntegerVector y_det_visit, Rcpp::NumericVector y_pos_visit, Rcpp::NumericMatrix b_occ, Rcpp::NumericMatrix b_det, Rcpp::NumericMatrix b_pos, Rcpp::NumericVector disp, Rcpp::NumericMatrix field_occ, Rcpp::NumericMatrix field_pos, bool is_beta, double eta_bound, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_occu_cover_ploglik_ragged(SEXP X_occSEXP, SEXP X_det_siteSEXP, SEXP X_pos_siteSEXP, SEXP X_det_visitSEXP, SEXP X_pos_visitSEXP, SEXP site_of_visitSEXP, SEXP y_det_visitSEXP, SEXP y_pos_visitSEXP, SEXP b_occSEXP, SEXP b_detSEXP, SEXP b_posSEXP, SEXP dispSEXP, SEXP field_occSEXP, SEXP field_posSEXP, SEXP is_betaSEXP, SEXP eta_boundSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_occ(X_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det_site(X_det_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_pos_site(X_pos_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det_visit(X_det_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_pos_visit(X_pos_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_of_visit(site_of_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det_visit(y_det_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos_visit(y_pos_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type b_occ(b_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type b_det(b_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type b_pos(b_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type disp(dispSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type field_occ(field_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type field_pos(field_posSEXP);
+    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< double >::type eta_bound(eta_boundSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_cover_ploglik_ragged(X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, is_beta, eta_bound, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_occu_fit
 Rcpp::List cpp_occu_fit(Rcpp::List spec_r);
 RcppExport SEXP _tulpaObs_cpp_occu_fit(SEXP spec_rSEXP) {
@@ -1696,6 +1723,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_occ_make_nested_likelihood", (DL_FUNC) &_tulpaObs_occ_make_nested_likelihood, 2},
     {"_tulpaObs_cpp_occu_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_occu_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts, 11},
+    {"_tulpaObs_cpp_occu_cover_ploglik_ragged", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ploglik_ragged, 17},
     {"_tulpaObs_cpp_occu_fit", (DL_FUNC) &_tulpaObs_cpp_occu_fit, 1},
     {"_tulpaObs_cpp_occu_ms_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_ms_cover_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_occu_ms_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_ms_cover_nuts, 10},
