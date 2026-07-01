@@ -98,6 +98,51 @@ Rcpp::List cpp_simulate_removal(
   return out;
 }
 
+// Open N-mixture (dyn_abun): per site, initial abundance then a survival +
+// recruitment HMM across seasons, observed by binomial detection. Arms are
+// per-site (constant across intervals). RNG order is site-major (draw N, then
+// per season the transition draws + the J detections), matching the R loop.
+// [[Rcpp::export]]
+Rcpp::IntegerVector cpp_simulate_dyn_abun(
+    Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p,
+    Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma,
+    Rcpp::NumericMatrix draws, int n_sites, int T, int J,
+    int p_lam, int p_p, int p_om, int p_gm,
+    bool is_nb, double r_disp, int nsim
+) {
+  const int ndr = draws.nrow();
+  const int o_p = p_lam, o_om = p_lam + p_p, o_gm = p_lam + p_p + p_om;
+  Rcpp::RNGScope scope;
+  // Output: nsim arrays [n_sites x J x T]; return one flat vector when nsim == 1
+  // (dim set by R), else the caller reshapes. Here we always return nsim == 1's
+  // array (R wraps multi-sim in a list via repeated calls upstream).
+  Rcpp::IntegerVector out((std::size_t) n_sites * J * T * (nsim < 1 ? 1 : nsim));
+  const double* pXl = X_lambda.begin(); const double* pXp = X_p.begin();
+  const double* pXo = X_omega.begin(); const double* pXg = X_gamma.begin();
+  const double* pd = draws.begin();
+  const std::size_t sim_stride = (std::size_t) n_sites * J * T;
+  for (int s = 0; s < nsim; ++s) {
+    int idx = (int) R_unif_index((double) ndr);
+    int* base = out.begin() + (std::size_t) s * sim_stride;
+    for (int i = 0; i < n_sites; ++i) {
+      double lambda = std::exp(rowdot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam));
+      double pdet = plg(rowdot(pXp, n_sites, i, pd, ndr, idx, o_p, p_p));
+      double omega = plg(rowdot(pXo, n_sites, i, pd, ndr, idx, o_om, p_om));
+      double gamma = std::exp(rowdot(pXg, n_sites, i, pd, ndr, idx, o_gm, p_gm));
+      int N = draw_N(lambda, is_nb, r_disp);
+      for (int t = 0; t < T; ++t) {
+        if (t > 0) N = (int) R::rbinom((double) N, omega) + (int) R::rpois(gamma);
+        for (int j = 0; j < J; ++j)
+          base[(std::size_t) i + (std::size_t) j * n_sites + (std::size_t) t * n_sites * J] =
+            (int) R::rbinom((double) N, pdet);
+      }
+    }
+  }
+  if (nsim >= 1) out.attr("dim") = Rcpp::IntegerVector::create(n_sites, J, T,
+                                                              nsim == 1 ? 1 : nsim);
+  return out;
+}
+
 // [[Rcpp::export]]
 Rcpp::List cpp_simulate_fp_occu(
     Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_p11, Rcpp::NumericMatrix X_p10,

@@ -677,30 +677,18 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
   n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
   is_nb <- identical(object$mixture %||% "poisson", "negbin")
   r_disp <- object$dispersion$r %||% NA_real_
-  nIv <- T - 1L
-  result <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    di <- sample.int(n_draws, 1L); th <- draws[di, ]
-    lambda <- exp(as.vector(model$X_processes[[1]] %*% th[off[1] + seq_len(p[1])]))
-    pdet   <- stats::plogis(as.vector(model$X_processes[[2]] %*% th[off[2] + seq_len(p[2])]))
-    omega  <- .tobs_dyn_abun_arm_matrix(
-      stats::plogis(as.vector(model$X_processes[[3]] %*% th[off[3] + seq_len(p[3])])),
-      n_sites, nIv)
-    gamma  <- .tobs_dyn_abun_arm_matrix(
-      exp(as.vector(model$X_processes[[4]] %*% th[off[4] + seq_len(p[4])])),
-      n_sites, nIv)
-    ya <- array(0L, dim = c(n_sites, J, T))
-    for (i in seq_len(n_sites)) {
-      N <- if (is_nb && is.finite(r_disp)) stats::rnbinom(1L, mu = lambda[i], size = r_disp)
-           else stats::rpois(1L, lambda[i])
-      for (t in seq_len(T)) {
-        if (t > 1L) N <- stats::rbinom(1L, N, omega[i, t - 1L]) + stats::rpois(1L, gamma[i, t - 1L])
-        ya[i, , t] <- stats::rbinom(J, N, pdet[i])
-      }
-    }
-    result[[s]] <- ya
-  }
-  if (nsim == 1L) result[[1]] else result
+  # Per-site arms (omega / gamma constant across intervals); the draw selection
+  # (R_unif_index), latent N (rpois; NB via rpois(rgamma)), and the survival /
+  # recruitment / detection draws run in cpp_simulate_dyn_abun from R's RNG stream
+  # in the former site-major order (byte-identical).
+  res <- cpp_simulate_dyn_abun(model$X_processes[[1]], model$X_processes[[2]],
+    model$X_processes[[3]], model$X_processes[[4]],
+    draws[, seq_len(sum(p)), drop = FALSE], n_sites, T, J,
+    p[1], p[2], p[3], p[4], is_nb,
+    if (is_nb && is.finite(r_disp)) as.numeric(r_disp) else NA_real_,
+    as.integer(nsim))
+  if (nsim == 1L) { dim(res) <- c(n_sites, J, T); return(res) }
+  lapply(seq_len(nsim), function(s) res[, , , s])
 }
 
 # residuals() for dyn_abun, on the marginal expected count mu_itj = E[N_t] * p.

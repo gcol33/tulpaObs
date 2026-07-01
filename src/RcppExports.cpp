@@ -2059,6 +2059,31 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_simulate_dyn_abun
+Rcpp::IntegerVector cpp_simulate_dyn_abun(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma, Rcpp::NumericMatrix draws, int n_sites, int T, int J, int p_lam, int p_p, int p_om, int p_gm, bool is_nb, double r_disp, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_dyn_abun(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP X_omegaSEXP, SEXP X_gammaSEXP, SEXP drawsSEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP p_omSEXP, SEXP p_gmSEXP, SEXP is_nbSEXP, SEXP r_dispSEXP, SEXP nsimSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_omega(X_omegaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_gamma(X_gammaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type J(JSEXP);
+    Rcpp::traits::input_parameter< int >::type p_lam(p_lamSEXP);
+    Rcpp::traits::input_parameter< int >::type p_p(p_pSEXP);
+    Rcpp::traits::input_parameter< int >::type p_om(p_omSEXP);
+    Rcpp::traits::input_parameter< int >::type p_gm(p_gmSEXP);
+    Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
+    Rcpp::traits::input_parameter< double >::type r_disp(r_dispSEXP);
+    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_dyn_abun(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, T, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_simulate_fp_occu
 Rcpp::List cpp_simulate_fp_occu(Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_p11, Rcpp::NumericMatrix X_p10, Rcpp::NumericMatrix X_b, Rcpp::NumericMatrix draws, int n_sites, int J, int p_psi, int p_p11, int p_p10, int p_b, int nsim);
 RcppExport SEXP _tulpaObs_cpp_simulate_fp_occu(SEXP X_psiSEXP, SEXP X_p11SEXP, SEXP X_p10SEXP, SEXP X_bSEXP, SEXP drawsSEXP, SEXP n_sitesSEXP, SEXP JSEXP, SEXP p_psiSEXP, SEXP p_p11SEXP, SEXP p_p10SEXP, SEXP p_bSEXP, SEXP nsimSEXP) {
@@ -2235,6 +2260,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nested_laplace_removal_car_proper", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_car_proper, 23},
     {"_tulpaObs_cpp_simulate_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_nmix, 12},
     {"_tulpaObs_cpp_simulate_removal", (DL_FUNC) &_tulpaObs_cpp_simulate_removal, 12},
+    {"_tulpaObs_cpp_simulate_dyn_abun", (DL_FUNC) &_tulpaObs_cpp_simulate_dyn_abun, 15},
     {"_tulpaObs_cpp_simulate_fp_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_fp_occu, 12},
     {"_tulpaObs_cpp_simulate_single", (DL_FUNC) &_tulpaObs_cpp_simulate_single, 7},
     {"_tulpaObs_cpp_single_ppc", (DL_FUNC) &_tulpaObs_cpp_single_ppc, 8},

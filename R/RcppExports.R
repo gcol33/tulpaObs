@@ -409,6 +409,10 @@ cpp_simulate_removal <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_si
     .Call(`_tulpaObs_cpp_simulate_removal`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim)
 }
 
+cpp_simulate_dyn_abun <- function(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, T, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_dyn_abun`, X_lambda, X_p, X_omega, X_gamma, draws, n_sites, T, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim)
+}
+
 cpp_simulate_fp_occu <- function(X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim) {
     .Call(`_tulpaObs_cpp_simulate_fp_occu`, X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim)
 }
