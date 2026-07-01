@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.73 (2026-07-01)
+
+* The `cover()` hurdle pointwise log-likelihood (the WAIC / DIC / LOO input) now
+  runs in a C++ OpenMP kernel parallel over posterior draws
+  (`cpp_cover_hurdle_ploglik`), covering all four positive families (lognormal,
+  lognormal_trunc, ordinal, beta). Same treatment as the `occu_cover()` ragged
+  path in 0.0.72: `tobs_waic()` / `tobs_dic()` / `tobs_cpo()` on a `cover_fit`
+  honour `n.threads`. The kernel mirrors the R reference `.tobs_cover_hurdle_ll`
+  (retained for the posterior-mean plug-in and the tests), agreeing to libm
+  rounding (~1e-14) and thread-count invariant.
+
 ## 0.0.72 (2026-07-01)
 
 * WAIC / DIC / LOO for the compact (ragged) `occu_cover()` fit now build the

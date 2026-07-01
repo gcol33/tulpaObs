@@ -160,7 +160,8 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # fixed-effect predictor.
 .tobs_pointwise_loglik <- function(object, n.draws = NULL, n.threads = 1L) {
   nd <- n.draws %||% 1000L
-  if (inherits(object, "cover_fit")) return(.tobs_ploglik_cover(object, nd))
+  if (inherits(object, "cover_fit"))
+    return(.tobs_ploglik_cover(object, nd, n.threads = n.threads))
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
     return(.tobs_ploglik_occu_cover(object, nd, n.threads = n.threads))
   }

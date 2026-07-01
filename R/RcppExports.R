@@ -77,6 +77,10 @@ cpp_eval_occu_only_cell <- function(eta_psi, eta_p, y_det, curvature = "observed
     .Call(`_tulpaObs_cpp_eval_occu_only_cell`, eta_psi, eta_p, y_det, curvature)
 }
 
+cpp_cover_hurdle_ploglik <- function(eta_occ, eta_pos, disp, occur, y_pos, pos_col, positive, lower, upper, trunc_upper, n_threads) {
+    .Call(`_tulpaObs_cpp_cover_hurdle_ploglik`, eta_occ, eta_pos, disp, occur, y_pos, pos_col, positive, lower, upper, trunc_upper, n_threads)
+}
+
 cpp_cover_nuts_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
     .Call(`_tulpaObs_cpp_cover_nuts_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }

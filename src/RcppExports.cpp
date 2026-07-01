@@ -285,6 +285,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_cover_hurdle_ploglik
+Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(Rcpp::NumericMatrix eta_occ, Rcpp::NumericMatrix eta_pos, Rcpp::NumericVector disp, Rcpp::IntegerVector occur, Rcpp::NumericVector y_pos, Rcpp::IntegerVector pos_col, int positive, Rcpp::NumericVector lower, Rcpp::NumericVector upper, Rcpp::NumericVector trunc_upper, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_cover_hurdle_ploglik(SEXP eta_occSEXP, SEXP eta_posSEXP, SEXP dispSEXP, SEXP occurSEXP, SEXP y_posSEXP, SEXP pos_colSEXP, SEXP positiveSEXP, SEXP lowerSEXP, SEXP upperSEXP, SEXP trunc_upperSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_occ(eta_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type disp(dispSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type occur(occurSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type pos_col(pos_colSEXP);
+    Rcpp::traits::input_parameter< int >::type positive(positiveSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type lower(lowerSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type upper(upperSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type trunc_upper(trunc_upperSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_cover_hurdle_ploglik(eta_occ, eta_pos, disp, occur, y_pos, pos_col, positive, lower, upper, trunc_upper, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_cover_nuts_logpost
 Rcpp::List cpp_cover_nuts_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_logdisp);
 RcppExport SEXP _tulpaObs_cpp_cover_nuts_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_logdispSEXP) {
@@ -1671,6 +1692,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},
     {"_tulpaObs_cpp_register_occu_only_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_only_coupling, 0},
     {"_tulpaObs_cpp_eval_occu_only_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_only_cell, 4},
+    {"_tulpaObs_cpp_cover_hurdle_ploglik", (DL_FUNC) &_tulpaObs_cpp_cover_hurdle_ploglik, 11},
     {"_tulpaObs_cpp_cover_nuts_logpost", (DL_FUNC) &_tulpaObs_cpp_cover_nuts_logpost, 4},
     {"_tulpaObs_cpp_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_cover_nuts, 11},
     {"_tulpaObs_cpp_distance_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_distance_laplace_fixed, 17},

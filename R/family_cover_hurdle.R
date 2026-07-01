@@ -1018,13 +1018,38 @@ decode_cover_hurdle <- function(fits, enc, family,
 # Pointwise log-likelihood [n_draws x N] for a cover hurdle fit (separate-Laplace
 # or nested-joint shared-field), assembled from the per-draw linear predictors
 # through the shared hurdle kernel.
-.tobs_ploglik_cover <- function(object, n.draws = 1000L) {
+.tobs_ploglik_cover <- function(object, n.draws = 1000L, n.threads = 1L) {
   enc <- object$encoding
   e   <- .tobs_cover_eta_draws(object, n.draws)
-  .tobs_cover_hurdle_ll(e$eta_occ, e$eta_pos, e$disp, enc$occ_data$y,
-                        enc$pos_data$y, enc$idx_pos,
-                        object$positive %||% "lognormal",
-                        bounds = .tobs_cover_bounds(object))
+  .cover_hurdle_ploglik_core(e$eta_occ, e$eta_pos, e$disp, enc$occ_data$y,
+                             enc$pos_data$y, enc$idx_pos,
+                             object$positive %||% "lognormal",
+                             bounds = .tobs_cover_bounds(object),
+                             n_threads = n.threads)
+}
+
+# Parallel C++ pointwise log-likelihood for the cover() hurdle, over draws
+# (cpp_cover_hurdle_ploglik). Mirrors .tobs_cover_hurdle_ll (the R oracle, kept
+# for the posterior-mean plug-in and the tests); every positive family routes
+# through the one kernel. The absent/present split and the four family densities
+# match the R kernel, so the two agree to libm rounding.
+.cover_hurdle_ploglik_core <- function(eta_occ, eta_pos, disp, occur, y_pos,
+                                       idx_pos, positive, bounds = NULL,
+                                       n_threads = 1L) {
+  S <- nrow(eta_occ); N <- ncol(eta_occ)
+  disp_full <- if (length(disp) == 1L) rep(as.numeric(disp), S) else as.numeric(disp)
+  pos_col <- match(seq_len(N), idx_pos)
+  pos_col[is.na(pos_col)] <- 0L
+  code <- switch(positive,
+                 lognormal = 0L, lognormal_trunc = 1L, ordinal = 2L, beta = 3L,
+                 stop("cover pointwise loglik: unknown positive family '",
+                      positive, "'.", call. = FALSE))
+  num <- function(x) if (is.null(x)) numeric(0) else as.numeric(x)
+  cpp_cover_hurdle_ploglik(
+    eta_occ, eta_pos, disp_full, as.integer(occur), as.numeric(y_pos),
+    as.integer(pos_col), code,
+    num(bounds$lower), num(bounds$upper), num(bounds$trunc_upper),
+    max(1L, as.integer(n_threads)))
 }
 
 # Pointwise log-likelihood at the posterior mean of the parameters (length N):
