@@ -635,34 +635,15 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
     stop("simulate() currently only supports single-season models")
   }
 
-  X_occ <- model$X_processes[[1]]
-  X_det <- model$X_processes[[2]]
-  n_sites <- model$n_sites
-  max_visits <- model$max_visits
-
-  result <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    # Sample a posterior draw
-    draw_idx <- sample.int(n_samples, 1)
-    beta_occ <- draws[draw_idx, seq_len(pi_list[[1]]$p)]
-    beta_det <- draws[draw_idx, pi_list[[1]]$p + seq_len(pi_list[[2]]$p)]
-
-    psi <- plogis(as.vector(X_occ %*% beta_occ))
-    p <- plogis(as.vector(X_det %*% beta_det))
-    z <- rbinom(n_sites, 1, psi)
-
-    y_sim <- matrix(NA_integer_, n_sites, max_visits)
-    for (i in seq_len(n_sites)) {
-      # Respect original visit structure (NA pattern)
-      for (j in seq_len(max_visits)) {
-        if (model$y[i, j] >= 0) {
-          y_sim[i, j] <- rbinom(1, 1, z[i] * p[i])
-        }
-      }
-    }
-    result[[s]] <- y_sim
-  }
-  if (nsim == 1) result[[1]] else result
+  # The posterior-draw selection (R_unif_index, the sample.int primitive) and the
+  # z / y_rep Bernoulli draws run in cpp_simulate_single from R's RNG stream in
+  # the same order, so the simulation is byte-identical under a fixed seed.
+  p_occ <- pi_list[[1]]$p; p_det <- pi_list[[2]]$p
+  yint <- model$y; storage.mode(yint) <- "integer"
+  res <- cpp_simulate_single(model$X_processes[[1]], model$X_processes[[2]],
+                             draws[, seq_len(p_occ + p_det), drop = FALSE],
+                             yint, p_occ, p_det, as.integer(nsim))
+  if (nsim == 1) res[[1]] else res
 }
 
 #' Predict from occupancy model
