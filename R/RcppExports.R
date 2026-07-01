@@ -401,6 +401,18 @@ cpp_nested_laplace_removal_car_proper <- function(y, site_idx, map_site_to_unit_
     .Call(`_tulpaObs_cpp_nested_laplace_removal_car_proper`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
+cpp_simulate_nmix <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_nmix`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim)
+}
+
+cpp_simulate_removal <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_removal`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim)
+}
+
+cpp_simulate_fp_occu <- function(X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_fp_occu`, X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim)
+}
+
 cpp_simulate_single <- function(X_occ, X_det, draws, y, p_occ, p_det, nsim) {
     .Call(`_tulpaObs_cpp_simulate_single`, X_occ, X_det, draws, y, p_occ, p_det, nsim)
 }

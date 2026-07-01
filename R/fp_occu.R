@@ -583,28 +583,12 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   p <- vapply(model$process_info, function(pp) pp$p, integer(1))
   off <- cumsum(c(0L, p))
   n_sites <- model$n_sites; J <- model$max_visits
-  result <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    di <- sample.int(n_draws, 1L)
-    th <- draws[di, ]
-    psi <- stats::plogis(as.vector(model$X_processes[[1]] %*% th[off[1] + seq_len(p[1])]))
-    p11 <- stats::plogis(as.vector(model$X_processes[[2]] %*% th[off[2] + seq_len(p[2])]))
-    p10 <- stats::plogis(as.vector(model$X_processes[[3]] %*% th[off[3] + seq_len(p[3])]))
-    b   <- stats::plogis(as.vector(model$X_processes[[4]] %*% th[off[4] + seq_len(p[4])]))
-    z <- stats::rbinom(n_sites, 1L, psi)
-    y_sim <- matrix(0L, n_sites, J)
-    for (i in seq_len(n_sites)) {
-      if (z[i] == 1L) {
-        det <- stats::rbinom(J, 1L, p11[i])
-        cert <- stats::rbinom(J, 1L, b[i])
-        y_sim[i, ] <- ifelse(det == 1L, ifelse(cert == 1L, 2L, 1L), 0L)
-      } else {
-        y_sim[i, ] <- stats::rbinom(J, 1L, p10[i])    # false positives -> state 1
-      }
-    }
-    result[[s]] <- y_sim
-  }
-  if (nsim == 1L) result[[1]] else result
+  # Draw selection + z + per-site multistate detection replicate run in
+  # cpp_simulate_fp_occu from R's RNG stream in the former order (byte-identical).
+  res <- cpp_simulate_fp_occu(model$X_processes[[1]], model$X_processes[[2]],
+    model$X_processes[[3]], model$X_processes[[4]], draws[, seq_len(sum(p)), drop = FALSE],
+    n_sites, J, p[1], p[2], p[3], p[4], as.integer(nsim))
+  if (nsim == 1L) res[[1]] else res
 }
 
 # residuals() for fp_occu, on the marginal probability of any detection

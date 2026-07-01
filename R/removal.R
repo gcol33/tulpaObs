@@ -320,31 +320,13 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   visit_idx <- model$visit_idx
   r_size   <- object$nmix_dispersion$r
 
-  result <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    di <- sample.int(n_draws, 1L)
-    beta_lambda <- draws[di, seq_len(p_lam)]
-    beta_p      <- draws[di, p_lam + seq_len(p_p)]
-    lambda <- exp(as.vector(X_lambda %*% beta_lambda))
-    p_long <- plogis(as.vector(X_p %*% beta_p))
-    N <- if (!is.null(r_size) && is.finite(r_size)) {
-      stats::rnbinom(n_sites, size = r_size, mu = lambda)
-    } else stats::rpois(n_sites, lambda)
-    # Per-site per-pass detection in pass order.
-    p_mat <- matrix(NA_real_, n_sites, n_pass)
-    p_mat[cbind(site_idx, visit_idx)] <- p_long
-    y_sim <- matrix(0L, n_sites, n_pass)
-    for (i in seq_len(n_sites)) {
-      remaining <- N[i]
-      for (k in seq_len(n_pass)) {
-        yk <- stats::rbinom(1L, remaining, p_mat[i, k])
-        y_sim[i, k] <- yk
-        remaining <- remaining - yk
-      }
-    }
-    result[[s]] <- y_sim
-  }
-  if (nsim == 1L) result[[1]] else result
+  is_nb <- !is.null(r_size) && is.finite(r_size)
+  # Draw selection + latent N + depleting-binomial pass removals run in
+  # cpp_simulate_removal from R's RNG stream in the former order (byte-identical).
+  res <- cpp_simulate_removal(X_lambda, X_p, draws[, seq_len(p_lam + p_p), drop = FALSE],
+    as.integer(site_idx), as.integer(visit_idx), n_sites, n_pass, p_lam, p_p,
+    is_nb, if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
+  if (nsim == 1L) res[[1]] else res
 }
 
 # residuals() for removal. Under Poisson abundance the pass-k removal is

@@ -595,39 +595,19 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 # (Poisson, or NegBin(mu = lambda_i, size = r) under mixture = "negbin"), then
 # y_ij ~ Binomial(N_i, p_ij) at the observed visits, respecting the NA pattern.
 .tobs_simulate_nmix <- function(object, nsim = 1) {
-  model   <- object$model
-  draws   <- object$draws
-  n_draws <- nrow(draws)
-  p_lam   <- model$process_info[[1]]$p
-  p_p     <- model$process_info[[2]]$p
-  X_lambda <- model$X_processes[[1]]
-  X_p      <- model$X_processes[[2]]
-  n_sites    <- model$n_sites
-  max_visits <- model$max_visits
-  site_idx   <- model$site_idx
-  visit_idx  <- model$visit_idx
-  r_size     <- object$nmix_dispersion$r   # NULL under Poisson
-
-  result <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    di <- sample.int(n_draws, 1L)
-    beta_lambda <- draws[di, seq_len(p_lam)]
-    beta_p      <- draws[di, p_lam + seq_len(p_p)]
-    lambda <- exp(as.vector(X_lambda %*% beta_lambda))
-    p_obs  <- plogis(as.vector(X_p %*% beta_p))
-    N <- if (!is.null(r_size) && is.finite(r_size)) {
-      stats::rnbinom(n_sites, size = r_size, mu = lambda)
-    } else {
-      stats::rpois(n_sites, lambda)
-    }
-    y_sim <- matrix(NA_integer_, n_sites, max_visits)
-    for (k in seq_along(site_idx)) {
-      i <- site_idx[k]; j <- visit_idx[k]
-      y_sim[i, j] <- stats::rbinom(1L, N[i], p_obs[k])
-    }
-    result[[s]] <- y_sim
-  }
-  if (nsim == 1L) result[[1]] else result
+  model  <- object$model; draws <- object$draws
+  p_lam  <- model$process_info[[1]]$p; p_p <- model$process_info[[2]]$p
+  r_size <- object$nmix_dispersion$r
+  is_nb  <- !is.null(r_size) && is.finite(r_size)
+  # Draw selection (R_unif_index) + latent N (rpois / rnbinom) + per-visit
+  # binomial detections run in cpp_simulate_nmix from R's RNG stream in the same
+  # order as the former loop, so the simulation is byte-identical under a seed.
+  res <- cpp_simulate_nmix(model$X_processes[[1]], model$X_processes[[2]],
+    draws[, seq_len(p_lam + p_p), drop = FALSE],
+    as.integer(model$site_idx), as.integer(model$visit_idx),
+    model$n_sites, model$max_visits, p_lam, p_p, is_nb,
+    if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
+  if (nsim == 1L) res[[1]] else res
 }
 
 # residuals() for N-mixture. A single visit of a Poisson-thinned count is
