@@ -1287,6 +1287,20 @@
     }
     cover_aggregate <- "none"
   }
+  # An arm-specific cover field (gcol33/tulpaObs#110) is scored per detected visit
+  # (its node/weight index the pos-arm visit rows), so it needs per-visit cover;
+  # an explicit aggregation errors, the bare default falls back to per-visit.
+  if (has_spatial && !is.null(spatial_info$pos_armspec) &&
+      cover_aggregate != "none") {
+    if (agg_explicit) {
+      stop(sprintf(paste0(
+        "occu_cover(): an arm-specific cover field (to = \"positive\") uses ",
+        "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
+        "cell-aggregated cover rows. Got cover_aggregate = \"%s\"."),
+        cover_aggregate), call. = FALSE)
+    }
+    cover_aggregate <- "none"
+  }
 
   if (has_spatial && engine == "laplace") {
     stop("occu_cover() found a spatial term (icar/bym2) in the psi formula ",
@@ -1493,6 +1507,12 @@
         "single shared field only."), engine_pick), call. = FALSE)
     }
     if (engine_pick %in% c("v2_joint", "v3_nested")) {
+      if (!is.null(spatial_info$pos_armspec)) {
+        stop(sprintf(paste0(
+          "occu_cover() an arm-specific cover field (to = \"positive\") needs ",
+          "the default joint_coupled engine; the \"%s\" escape hatch couples a ",
+          "single shared field only."), engine_pick), call. = FALSE)
+      }
       if (!is.null(re_spec) || !is.null(model$re_det) || !is.null(model$re_pos)) {
         stop(sprintf(paste0(
           "occu_cover() per-group RE needs the default joint_coupled engine; ",
@@ -1531,7 +1551,8 @@
       return(do.call(fitter, fit_args))
     }
     fit_args <- c(list(model = model, fields = fields, priors = priors,
-                       re_spec = re_spec, correlated = correlated),
+                       re_spec = re_spec, correlated = correlated,
+                       pos_armspec = spatial_info$pos_armspec),
                   control)
     return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
   }
@@ -2119,6 +2140,16 @@
 #' @param sigma_trend Trend-field amplitude (used only when `trend = TRUE`).
 #' @param alpha_trend Cover-arm scaling on the trend field (used only when
 #'   `trend = TRUE`).
+#' @param pos_field Logical; when `TRUE` (and `adj` is supplied) draw an
+#'   INDEPENDENT areal field on the cover (positive) arm only -- an intercept
+#'   field plus a time-weighted trend field, each unrelated to the occupancy
+#'   field and with no alpha copy (gcol33/tulpaObs#110). Adds a `time` column to
+#'   the returned `data` and reports `g0` / `g1` (the two fields) and their SDs in
+#'   `truth`. Fit with `spatial(~ 1 + time || cell, graph = adj, to = "positive")`.
+#' @param sigma_pos_int Cover-arm intercept-field SD (used only when
+#'   `pos_field = TRUE`).
+#' @param sigma_pos_trend Cover-arm trend-field SD (used only when
+#'   `pos_field = TRUE`).
 #' @param re_det_groups Optional integer `>= 2`: the number of levels of a
 #'   per-visit detection random intercept (a `habitat` factor on `visit_data`,
 #'   levels `hab1..K`), drawn `b_g ~ N(0, sigma_re_p^2)` and centred. `NULL`
@@ -2164,6 +2195,9 @@ simulate_occu_cover <- function(N             = 200L,
                                  trend         = FALSE,
                                  sigma_trend   = 0.6,
                                  alpha_trend   = 1.0,
+                                 pos_field       = FALSE,
+                                 sigma_pos_int   = 0.5,
+                                 sigma_pos_trend = 0.6,
                                  re_det_groups = NULL,
                                  sigma_re_p    = 0.7,
                                  re_det        = NULL,
@@ -2187,6 +2221,8 @@ simulate_occu_cover <- function(N             = 200L,
   # and the fitter's parameterisation).
   f  <- numeric(N)
   f2 <- numeric(N)
+  g0 <- numeric(N)   # arm-specific cover intercept field (gcol33/tulpaObs#110)
+  g1 <- numeric(N)   # arm-specific cover trend field
   time_cov <- numeric(N)
   if (!is.null(adj)) {
     if (!is.matrix(adj) || nrow(adj) != N || ncol(adj) != N) {
@@ -2204,9 +2240,20 @@ simulate_occu_cover <- function(N             = 200L,
       fk / sqrt(scale_q)
     }
     f <- draw_field()
-    if (isTRUE(trend)) {
-      f2       <- draw_field()
+    # A time covariate is needed by either the shared trend field or the
+    # arm-specific cover trend field.
+    if (isTRUE(trend) || isTRUE(pos_field)) {
       time_cov <- as.numeric(scale(stats::rnorm(N)))
+    }
+    if (isTRUE(trend)) f2 <- draw_field()
+    # Arm-specific cover field(s) (gcol33/tulpaObs#110): an INDEPENDENT cover-arm
+    # intercept field g0 and time-weighted trend field g1, each unrelated to the
+    # occupancy field f. They enter the cover linear predictor only (no psi
+    # contribution, no alpha copy), so delta_cover_cond carries a spatial
+    # structure the occupancy field's alpha copy cannot express.
+    if (isTRUE(pos_field)) {
+      g0 <- draw_field()
+      g1 <- draw_field()
     }
   }
 
@@ -2342,6 +2389,10 @@ simulate_occu_cover <- function(N             = 200L,
           if (!is.null(adj) && isTRUE(trend)) {
             eta_pos_ij <- eta_pos_ij + alpha_trend * sigma_trend * time_cov[i] * f2[i]
           }
+          if (!is.null(adj) && isTRUE(pos_field)) {
+            eta_pos_ij <- eta_pos_ij +
+              sigma_pos_int * g0[i] + sigma_pos_trend * time_cov[i] * g1[i]
+          }
           if (positive == "beta") {
             mu <- stats::plogis(eta_pos_ij)
             y_pos[i, j] <- stats::rbeta(1L, mu * phi, (1 - mu) * phi)
@@ -2354,8 +2405,11 @@ simulate_occu_cover <- function(N             = 200L,
   }
 
   occ_out <- occ_covs
-  has_trend <- !is.null(adj) && isTRUE(trend)
-  if (has_trend) occ_out$time <- time_cov
+  has_trend    <- !is.null(adj) && isTRUE(trend)
+  has_posfield <- !is.null(adj) && isTRUE(pos_field)
+  if (has_trend || has_posfield) occ_out$time <- time_cov
+  # The arm-specific cover field bar indexes its graph node by a `cell` column.
+  if (has_posfield) occ_out$cell <- seq_len(N)
 
   list(
     y          = y,
@@ -2376,9 +2430,13 @@ simulate_occu_cover <- function(N             = 200L,
       sigma       = if (!is.null(adj)) sigma else NA_real_,
       alpha       = if (!is.null(adj)) alpha else NA_real_,
       f2          = if (has_trend) f2          else NULL,
-      time        = if (has_trend) time_cov    else NULL,
+      time        = if (has_trend || has_posfield) time_cov else NULL,
       sigma_trend = if (has_trend) sigma_trend else NA_real_,
       alpha_trend = if (has_trend) alpha_trend else NA_real_,
+      g0              = if (has_posfield) g0              else NULL,
+      g1              = if (has_posfield) g1              else NULL,
+      sigma_pos_int   = if (has_posfield) sigma_pos_int   else NA_real_,
+      sigma_pos_trend = if (has_posfield) sigma_pos_trend else NA_real_,
       sigma_re_p  = if (!is.null(re_det_groups)) sigma_re_p else NA_real_,
       b_p_re      = b_p_re,
       re_det_levels = re_det_levels,

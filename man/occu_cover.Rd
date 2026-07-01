@@ -132,6 +132,40 @@ an areal term's \code{group_var}, \code{occu_cover()} emits a one-time message n
 bar is fitted as a random effect; suppress it with \code{\link[base:suppressMessages]{base::suppressMessages()}}.
 }
 
+\section{Independent field on the cover arm (\code{to = "positive"})}{
+
+By default the occupancy field is shared: the cover arm sees it as
+\verb{alpha * (occupancy field)}, the coregionalization copy on the outer
+\verb{(sigma, alpha)} grid. When the cover trend is spatially structured but is not
+a scalar multiple of the occupancy field, \code{alpha} collapses toward 0 and the
+cover arm inherits no field, so per-cell conditional cover (and its change over
+time, \code{delta_cover_cond}) comes out flat. An arm-specific \code{spatial()} bar with
+a single \code{to = "positive"} on the occurrence formula adds an INDEPENDENT,
+non-copied areal field on the cover arm alone (gcol33/tulpaObs#110):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(~ x + icar(graph = adj, group_var = "cell") +
+       spatial(~ 1 + time || cell, graph = adj, to = "positive"),
+     detection = ~ 1, positive = ~ time,
+     data = cell_dat, y = y, y_pos = y_pos,
+     family = occu_cover("lognormal"), method = "nested_laplace")
+}\if{html}{\out{</div>}}
+
+The occupancy field still drives psi and, via the alpha copy, \code{delta_cover_exp};
+the independent cover field carries a cover-specific structure the alpha copy
+cannot express. Its intercept + coefficient columns become separate ICAR blocks
+on the cover arm, each with its own precision integrated on the outer grid and
+reported as \code{sigma_pos_field} (intercept) / \verb{sigma_pos_field_<col>} (a covariate
+column). The per-cell field posterior is in \code{fit$pos_field} / \code{fit$pos_field_table}
+(and \code{fit$pos_field_tables} per column). Scope: it composes with the shared
+occupancy field but uses per-visit cover (\code{cover_aggregate = "none"}) and does
+not combine with the correlated \code{|} MCAR field, the latent cover RE, or the
+batched fused path; like the shared field it is fitted as ICAR (bym2/car read as
+ICAR). A static intercept cover field is only weakly identified against the
+occupancy field's alpha copy (both are per-cell cover offsets); a time-weighted
+trend cover field is identified separately and is what makes \code{delta_cover_cond}
+spatially varying.
+}
+
 \section{Checkpoint / resume}{
 
 A full-field \code{occu_cover()} fit integrates over a large outer hyperparameter

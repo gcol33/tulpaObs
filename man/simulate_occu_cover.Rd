@@ -22,6 +22,9 @@ simulate_occu_cover(
   trend = FALSE,
   sigma_trend = 0.6,
   alpha_trend = 1,
+  pos_field = FALSE,
+  sigma_pos_int = 0.5,
+  sigma_pos_trend = 0.6,
   re_det_groups = NULL,
   sigma_re_p = 0.7,
   re_det = NULL,
@@ -69,6 +72,19 @@ to every visit of that cell.}
 
 \item{alpha_trend}{Cover-arm scaling on the trend field (used only when
 \code{trend = TRUE}).}
+
+\item{pos_field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
+INDEPENDENT areal field on the cover (positive) arm only -- an intercept
+field plus a time-weighted trend field, each unrelated to the occupancy
+field and with no alpha copy (gcol33/tulpaObs#110). Adds a \code{time} column to
+the returned \code{data} and reports \code{g0} / \code{g1} (the two fields) and their SDs in
+\code{truth}. Fit with \code{spatial(~ 1 + time || cell, graph = adj, to = "positive")}.}
+
+\item{sigma_pos_int}{Cover-arm intercept-field SD (used only when
+\code{pos_field = TRUE}).}
+
+\item{sigma_pos_trend}{Cover-arm trend-field SD (used only when
+\code{pos_field = TRUE}).}
 
 \item{re_det_groups}{Optional integer \verb{>= 2}: the number of levels of a
 per-visit detection random intercept (a \code{habitat} factor on \code{visit_data},

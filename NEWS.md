@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.71 (2026-07-01)
+
+* `occu_cover()` can now give the cover (positive) arm its OWN independent
+  spatial field, decoupled from the occupancy field's alpha copy
+  (gcol33/tulpaObs#110). An arm-specific `spatial()` bar with a single
+  `to = "positive"` on the occurrence formula --
+  `spatial(~ 1 + time || cell, graph = adj, to = "positive")` -- adds a
+  non-copied ICAR block on the cover arm (intercept + per-covariate trend
+  fields, each with its own precision integrated on the outer grid). It composes
+  with the shared occupancy field: occupancy still drives psi and, via the alpha
+  copy, `delta_cover_exp`, while the independent cover field carries a
+  cover-specific structure the alpha copy cannot express -- so `delta_cover_cond`
+  is spatially varying instead of collapsing to a global slope when `alpha -> 0`.
+  Reported as `sigma_pos_field` / `sigma_pos_field_<col>` with the per-cell
+  posterior in `fit$pos_field` / `fit$pos_field_table`. `simulate_occu_cover()`
+  gains `pos_field` / `sigma_pos_int` / `sigma_pos_trend` to simulate it. Scope:
+  per-visit cover (`cover_aggregate = "none"`); ICAR only (bym2/car read as
+  ICAR); not composed with the correlated `|` MCAR field, the latent cover RE,
+  or the batched fused path.
+
 ## 0.0.70 (2026-06-30)
 
 * A correlated (`|`, free-Sigma MCAR) intercept + slope spatial field can now sit

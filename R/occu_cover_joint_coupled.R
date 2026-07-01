@@ -366,6 +366,7 @@
                                                 priors    = NULL,
                                                 re_spec   = NULL,
                                                 correlated = FALSE,
+                                                pos_armspec = NULL,
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
@@ -421,6 +422,12 @@
   has_re_det <- !is.null(model$re_det)       # detection (p) arm
   has_re_pos <- !is.null(model$re_pos)       # positive-cover arm
   has_any_re <- has_re || has_re_det || has_re_pos
+  # Arm-specific cover field (gcol33/tulpaObs#110): an independent, non-copied
+  # ICAR block on the cover (pos) arm alone, composed with the shared occupancy
+  # field. Forces the multi-block driver (like a trend field / RE block). Not
+  # composed with the latent cover RE, the correlated MCAR (gated at parse), or
+  # the batched fused path (one species at a time, no extra block).
+  has_pos_armspec <- !is.null(pos_armspec)
   if (has_any_re && is_latent) {
     stop("occu_cover(): a per-group RE and cover_aggregate = \"latent\" cannot ",
          "be combined (the latent path carries its own per-unit cover RE).",
@@ -429,6 +436,14 @@
   if (has_any_re && isTRUE(.batch_collect)) {
     stop("occu_cover(): the batched fused path does not carry a per-group RE ",
          "block.", call. = FALSE)
+  }
+  if (has_pos_armspec && is_latent) {
+    stop("occu_cover(): an arm-specific cover field (to = \"positive\") does not ",
+         "compose with cover_aggregate = \"latent\".", call. = FALSE)
+  }
+  if (has_pos_armspec && isTRUE(.batch_collect)) {
+    stop("occu_cover(): the batched fused path does not carry an arm-specific ",
+         "cover field.", call. = FALSE)
   }
 
   # Correlated (`|`) free-Sigma MCAR field (gcol33/tulpaObs#63): one coupled
@@ -558,7 +573,7 @@
     sigma_pos_init  = sigma_pos_init,
     alpha_grid      = alpha_grid,
     positive        = model$positive,
-    multi           = has_trend || has_any_re,
+    multi           = has_trend || has_any_re || has_pos_armspec,
     n_cells         = n_cells,
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate
@@ -693,6 +708,65 @@
     }
   }
 
+  # Arm-specific cover field blocks (gcol33/tulpaObs#110). Each field column of the
+  # `to = "positive"` bar becomes ONE non-copied ICAR block scattering on the
+  # cover (pos) arm alone: the psi + detection rows carry the 0-sentinel node so
+  # they skip it (nested_laplace_joint_multi.h's `l_b > 0` guard), and it has no
+  # copy entry -- its amplitude is its OWN sigma (b<k>.sigma), decoupled from the
+  # occupancy field's alpha copy. A trend (non-intercept) column carries its
+  # per-cell weight on the pos rows. These trail the occupancy field blocks so the
+  # copy indices (which name occupancy blocks only) stay valid; the RE blocks
+  # trail them. `pos_field_specs` records each field block's arm + weight column so
+  # the postprocess and the draw substrate map the blocks back to (occ vs pos)
+  # amplitudes without re-deriving the layout.
+  # The non-copied ICAR block uses the single-arm precision parameterization
+  # (axis b<k>.tau, sigma = 1/sqrt(tau)), like the cover() arm-specific path -- the
+  # copy reparameterization (b<k>.sigma + b<k>.alpha) applies only to a copied
+  # field. So the amplitude grid is passed as tau = 1 / sigma^2.
+  pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||% sigma_grid
+  pos_armspec_tau_grid   <- sort(1.0 / as.numeric(pos_armspec_sigma_grid)^2)
+  pos_armspec_blocks <- list()
+  pos_field_specs    <- list()
+  if (has_pos_armspec) {
+    idx_site <- as.integer(pos_armspec$idx_obs)
+    if (length(idx_site) != n_sites)
+      stop(sprintf(paste0(
+        "occu_cover(): the arm-specific cover field node index has %d values ",
+        "but there are %d sites."), length(idx_site), n_sites), call. = FALSE)
+    pos_node <- idx_site[pos_site]
+    for (f in pos_armspec$fields) {
+      blk <- list(
+        type            = "icar",
+        n_spatial_units = csr$n_spatial_units,
+        adj_row_ptr     = csr$adj_row_ptr,
+        adj_col_idx     = csr$adj_col_idx,
+        n_neighbors     = csr$n_neighbors,
+        tau_grid        = pos_armspec_tau_grid,
+        spatial_idx     = list(rep(0L, n_sites), rep(0L, n_v),
+                               as.integer(pos_node)))
+      if (!isTRUE(f$is_intercept)) {
+        w_pos <- as.numeric(f$weight)[pos_site]
+        blk$svc_weight <- list(rep(0.0, n_sites), rep(0.0, n_v), w_pos)
+      }
+      pos_armspec_blocks[[length(pos_armspec_blocks) + 1L]] <- blk
+      pos_field_specs[[length(pos_field_specs) + 1L]] <- list(
+        arm = "pos",
+        weight = if (isTRUE(f$is_intercept)) NULL else f$column_name,
+        is_intercept = isTRUE(f$is_intercept),
+        column_name = f$column_name)
+    }
+  }
+
+  # Field-block descriptors in emitted (prior) order: the shared occupancy
+  # intercept field, its coupled trend fields, then the arm-specific cover fields.
+  # Consumed by the postprocess (per-block sigma naming, occ-vs-pos partition) and
+  # the draw substrate (per-block occ / pos amplitude).
+  field_specs <- c(
+    list(list(arm = "shared", weight = NULL, is_intercept = TRUE)),
+    lapply(coupled_trends, function(tf) list(
+      arm = "shared", weight = tf$weight_label, is_intercept = FALSE)),
+    pos_field_specs)
+
   # Pos-arm phi axis on the outer grid. For the latent path the pos arm's phi IS
   # sigma_u (the cover-latent SD), integrated over `sigma.u.grid` (default a
   # log-spaced grid around the between-unit init); the within-unit dispersion is
@@ -796,15 +870,18 @@
       lapply(seq_len(n_trend), function(j)
         list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend))
     )
-    # The RE blocks trail the field blocks, so the copy indices above (which name
-    # field blocks only) stay valid. They carry no copy (each rides its own arm).
-    if (length(re_blocks)) prior_arg <- c(prior_arg, re_blocks)
-  } else if (has_any_re) {
-    # Single shared field + one or more per-group REs: the multi-block driver with
-    # the field as block 1 (alpha copy onto cover) and the iid RE block(s) after.
+    # The arm-specific cover fields (non-copied, pos arm only) trail the occupancy
+    # field blocks, then the RE blocks; the copy indices above name occupancy
+    # blocks only, so they stay valid (gcol33/tulpaObs#110).
+    prior_arg <- c(prior_arg, pos_armspec_blocks, re_blocks)
+  } else if (has_any_re || has_pos_armspec) {
+    # Single shared occupancy field + per-group REs and/or arm-specific cover
+    # fields: the multi-block driver with the occupancy field as block 1 (alpha
+    # copy onto cover), then the non-copied arm-specific cover block(s), then the
+    # iid RE block(s) -- each rides its own arm with no copy (gcol33/tulpaObs#110).
     field_block <- icar_template(list(
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
-    prior_arg <- c(list(field_block), re_blocks)
+    prior_arg <- c(list(field_block), pos_armspec_blocks, re_blocks)
     copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
   } else if (isTRUE(.batch_collect)) {
     # Single-field, batched fused path: run the MULTI-block driver so the alpha
@@ -953,6 +1030,15 @@
               re_descs = re_descs,
               mcar = correlated,
               n_fields_mcar = if (correlated) 1L + n_trend else NULL,
+              # Arm-specific cover field (gcol33/tulpaObs#110): `field_specs` labels
+              # every field block (shared occupancy vs pos-arm), `n_occ_fields` is
+              # the occupancy field count (intercept + trends) so the postprocess
+              # partitions the trailing pos-arm blocks; `pos_field_specs` carries
+              # each pos block's weight column for reporting.
+              field_specs = field_specs,
+              n_occ_fields = 1L + n_trend,
+              has_pos_armspec = has_pos_armspec,
+              pos_field_specs = pos_field_specs,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
 
   # Batched fused path (gcol33/tulpa#66): return the assembled call + context
@@ -1322,6 +1408,13 @@
   # trend field. Each RE block's variance is its `b<n_fields+i>.sigma` axis.
   has_re     <- !is.null(ctx$re_spec)
   has_any_re <- length(re_descs) > 0L
+  # Arm-specific cover field blocks (gcol33/tulpaObs#110) trail the occupancy
+  # field blocks: fields 1..n_occ_fields are the shared occupancy intercept +
+  # trends (copied to cover with alpha), the rest are the non-copied pos-arm
+  # fields. Each reports its own sigma (b<k>.sigma) with no alpha copy axis.
+  has_pos_armspec <- isTRUE(ctx$has_pos_armspec)
+  n_occ_fields    <- ctx$n_occ_fields %||% n_fields
+  pos_field_specs <- ctx$pos_field_specs %||% list()
   if (mcar) {
     # Free-Sigma MCAR hyperparameters (gcol33/tulpaObs#63). Reconstruct Sigma per
     # outer-grid cell from the log-Cholesky axes b1.L<i><j>, derive each field SD
@@ -1359,7 +1452,7 @@
     }
     pick2("alpha_mcar", "b1.alpha")
     pick("phi_pos", phi_pos_public)
-  } else if (has_trend || has_any_re) {
+  } else if (has_trend || has_any_re || has_pos_armspec) {
     # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
     # then the RE block(s). A single trend field keeps the bare
     # sigma_trend/alpha_trend names; several are indexed (sigma_trend1, ...).
@@ -1372,6 +1465,24 @@
       suffix <- if (n_trend == 1L) "" else as.character(j)
       pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
+    }
+    # Arm-specific cover fields (gcol33/tulpaObs#110): blocks n_occ_fields+1 ..
+    # n_fields, each a NON-copied ICAR with its own precision axis (b<k>.tau,
+    # sigma = 1/sqrt(tau)) and NO alpha copy. Report the grid-weighted marginal SD
+    # (marginalize-derived-quantities). A lone intercept field keeps the bare
+    # `sigma_pos_field`; a covariate column is suffixed by its name.
+    for (j in seq_along(pos_field_specs)) {
+      spec  <- pos_field_specs[[j]]
+      blk_k <- n_occ_fields + j
+      nm <- if (isTRUE(spec$is_intercept)) "sigma_pos_field"
+            else paste0("sigma_pos_field_", .re_coef_tag(spec$column_name))
+      tau_col <- sprintf("b%d.tau", blk_k)
+      sig_col <- sprintf("b%d.sigma", blk_k)
+      if (sig_col %in% tg_names) {
+        pick2(nm, sig_col)
+      } else if (tau_col %in% tg_names) {
+        put_derived(nm, 1.0 / sqrt(as.numeric(tg_ok[, match(tau_col, tg_names)])))
+      }
     }
     # Per-term RE variance components. An intercept / uncorrelated-slope term
     # has one `b<P>.sigma` axis per coefficient; a correlated-slope term has one
@@ -1503,10 +1614,12 @@
   }
   fblocks <- lapply(seq_len(n_fields), field_block)
 
+  # Occupancy fields are blocks 1..n_occ_fields (intercept then coupled trends);
+  # the arm-specific cover fields (gcol33/tulpaObs#110) are the trailing blocks.
   field_intercept <- fblocks[[1L]]$mean
   field_table     <- field_z_table(fblocks[[1L]])
 
-  trend_blocks <- if (n_fields >= 2L) fblocks[-1L] else list()
+  trend_blocks <- if (n_occ_fields >= 2L) fblocks[2:n_occ_fields] else list()
   trend_means  <- lapply(trend_blocks, function(b) b$mean)
   trend_tables <- lapply(trend_blocks, field_z_table)
   trend_labels <- vapply(coupled_trends, function(tf) tf$weight_label,
@@ -1519,17 +1632,40 @@
   field_trend       <- if (length(trend_means))  trend_means[[1L]]  else NULL
   trend_field_table <- if (length(trend_tables)) trend_tables[[1L]] else NULL
 
+  # Arm-specific cover field posteriors (gcol33/tulpaObs#110): the per-cell z
+  # tables for the independent cover-arm field(s), surfaced separately from the
+  # occupancy fields so the user can inspect the cover trend map. The first is the
+  # intercept field (bare `pos_field` / `pos_field_table`); a covariate column is
+  # keyed by its name.
+  pos_field_blocks <- if (has_pos_armspec && n_fields > n_occ_fields)
+                        fblocks[(n_occ_fields + 1L):n_fields] else list()
+  pos_field_means  <- lapply(pos_field_blocks, function(b) b$mean)
+  pos_field_tables <- lapply(pos_field_blocks, field_z_table)
+  if (length(pos_field_specs) == length(pos_field_means)) {
+    pos_field_labels <- vapply(pos_field_specs, function(s)
+      if (isTRUE(s$is_intercept)) "(Intercept)" else s$column_name, character(1))
+    names(pos_field_means)  <- pos_field_labels
+    names(pos_field_tables) <- pos_field_labels
+  }
+  pos_field       <- if (length(pos_field_means))  pos_field_means[[1L]]  else NULL
+  pos_field_table <- if (length(pos_field_tables)) pos_field_tables[[1L]] else NULL
+
   # Joint betas+field posterior for downstream derived-quantity prediction
   # (delta_p / delta_cover marginalized over the full correlated posterior).
   # `joint_means` carries every field in the same demeaned convention as
   # `spatial_field`; `joint_vcov` is the law-of-total-covariance Vj (NULL on
   # the older-tulpa diagonal fallback). Fields are stacked in block order
-  # (intercept then trend fields).
+  # (occupancy intercept, occupancy trends, then arm-specific cover fields).
+  n_occ_trend <- max(n_occ_fields - 1L, 0L)
   field_par_names <- unlist(c(
     list(paste0("field_", seq_len(n_cells))),
-    lapply(seq_len(n_fields - 1L), function(j) {
-      suffix <- if (n_fields - 1L == 1L) "" else as.character(j)
+    lapply(seq_len(n_occ_trend), function(j) {
+      suffix <- if (n_occ_trend == 1L) "" else as.character(j)
       paste0("trend_field", suffix, "_", seq_len(n_cells))
+    }),
+    lapply(seq_len(n_fields - n_occ_fields), function(j) {
+      suffix <- if (n_fields - n_occ_fields == 1L) "" else as.character(j)
+      paste0("pos_field", suffix, "_", seq_len(n_cells))
     })
   ))
   joint_par_names <- c(
@@ -1614,8 +1750,25 @@
     field_table  = field_table,
     trend_field_table  = trend_field_table,
     trend_field_tables = if (length(trend_tables)) trend_tables else NULL,
-    trend_weight  = if (has_trend) trend_labels[[1L]] else NULL,
+    trend_weight  = if (has_trend) trend_labels[[1L]]
+                    else if (length(pos_field_specs)) {
+                      cols <- Filter(Negate(is.null),
+                                     lapply(pos_field_specs, `[[`, "column_name"))
+                      nonint <- Filter(function(s) !isTRUE(s$is_intercept),
+                                       pos_field_specs)
+                      if (length(nonint)) nonint[[1L]]$column_name else NULL
+                    } else NULL,
     trend_weights = if (has_trend) trend_labels        else NULL,
+    # Arm-specific cover field (gcol33/tulpaObs#110): `field_specs` labels every
+    # field block (shared occupancy vs pos arm) + its weight column so the draw
+    # substrate maps each block to (occ, pos) amplitudes; the pos-field tables are
+    # the independent cover field posterior for user inspection.
+    field_specs      = ctx$field_specs,
+    has_pos_armspec  = has_pos_armspec,
+    pos_field        = pos_field,
+    pos_field_table  = pos_field_table,
+    pos_fields       = if (length(pos_field_means))  pos_field_means  else NULL,
+    pos_field_tables = if (length(pos_field_tables)) pos_field_tables else NULL,
     joint_par_names = joint_par_names,
     joint_means     = joint_means,
     joint_vcov      = Vj,

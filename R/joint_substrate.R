@@ -276,13 +276,33 @@
   }
   b_occ <- take(p[1L]); b_det <- take(p[2L]); b_pos <- take(p[3L])
 
-  trend_cols <- object$trend_weights %||% object$trend_weight
+  trend_cols  <- object$trend_weights %||% object$trend_weight
+  # Per-block arm + weight labels (gcol33/tulpaObs#110). A shared occupancy field
+  # scales occ by b<k>.sigma and cover by b<k>.alpha * b<k>.sigma; an arm-specific
+  # cover field (arm == "pos") scales cover by its OWN b<k>.sigma and occ by 0 (no
+  # copy). `field_specs` labels every block; older fits (no field_specs) fall back
+  # to the all-shared convention.
+  field_specs <- object$field_specs
+  cn <- colnames(tg)
   blocks <- lapply(seq_len(n_field), function(b) {
     z     <- take(n_cells)
-    sigma <- .tobs_joint_amp(tg, cells, b, "sigma")
-    alpha <- .tobs_joint_amp(tg, cells, b, "alpha")
-    list(z = z, amp_occ = sigma, amp_pos = alpha * sigma,
-         weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
+    spec  <- if (!is.null(field_specs) && b <= length(field_specs))
+               field_specs[[b]] else NULL
+    if (!is.null(spec) && identical(spec$arm, "pos")) {
+      # Non-copied ICAR: amplitude is its own SD, from b<k>.sigma or 1/sqrt(b<k>.tau).
+      sig_col <- sprintf("b%d.sigma", b); tau_col <- sprintf("b%d.tau", b)
+      amp <- if (sig_col %in% cn) as.numeric(tg[cells, sig_col])
+             else if (tau_col %in% cn) 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
+             else rep(1.0, length(cells))
+      list(z = z, amp_occ = rep(0, length(cells)), amp_pos = amp,
+           weight = spec$weight)
+    } else {
+      sigma <- .tobs_joint_amp(tg, cells, b, "sigma")
+      alpha <- .tobs_joint_amp(tg, cells, b, "alpha")
+      wt <- if (!is.null(spec)) spec$weight
+            else if (b == 1L) NULL else trend_cols[[b - 1L]]
+      list(z = z, amp_occ = sigma, amp_pos = alpha * sigma, weight = wt)
+    }
   })
 
   re_draws <- NULL

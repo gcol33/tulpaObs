@@ -211,22 +211,32 @@
   n_cells <- bundle$n_cells
   n_field <- length(bundle$blocks)
 
-  # Trend (time-varying field) fits weight blocks 2.. by a per-cell covariate.
-  # A single `time_col` drives every trend block (and is set as the time column
-  # in the change map); require it when the fit has any trend field. Arm-specific
-  # fits (gcol33/tulpaObs#65) instead carry their own per-block weight column name
-  # and may stack several intercept-only fields, so the positional 2.. convention
-  # does not apply -- their weights resolve directly from newdata via `wf`, and a
-  # purely intercept arm-specific fit needs no time_col (gcol33/tulpaObs#95).
+  # Trend (time-varying field) fits weight the SHARED occupancy trend blocks by a
+  # per-cell covariate. A single `time_col` drives those blocks (and is the change
+  # map's time column); require it when the fit has a shared trend field. cover()
+  # arm-specific fits (gcol33/tulpaObs#65) and occu_cover() arm-specific cover
+  # fields (gcol33/tulpaObs#110) carry their own per-block weight column and keep
+  # it -- an intercept-only arm-specific field needs no time_col
+  # (gcol33/tulpaObs#95); a pos-arm trend field resolves its weight from newdata.
   if (n_field > 1L && !isTRUE(object$armspecific)) {
-    if (is.null(time_col)) time_col <- object$trend_weight
-    if (is.null(time_col)) {
-      stop("predict(): this fit has ", n_field - 1L,
-           " time-varying (trend) field(s); pass `time_col = \"<column>\"`, ",
-           "the per-cell covariate that weights the trend field(s) (the same ",
-           "column used at fit time via control$trend).", call. = FALSE)
+    specs <- object$field_specs
+    shared_trend <- if (!is.null(specs) && length(specs) >= n_field) {
+      vapply(seq_len(n_field), function(b)
+        identical(specs[[b]]$arm, "shared") && !is.null(specs[[b]]$weight),
+        logical(1))
+    } else {
+      c(FALSE, rep(TRUE, n_field - 1L))   # legacy: blocks 2.. are shared trends
     }
-    for (b in 2:n_field) bundle$blocks[[b]]$weight <- time_col
+    if (any(shared_trend)) {
+      if (is.null(time_col)) time_col <- object$trend_weight
+      if (is.null(time_col)) {
+        stop("predict(): this fit has ", sum(shared_trend),
+             " shared time-varying (trend) field(s); pass `time_col = ",
+             "\"<column>\"`, the per-cell covariate that weights the trend ",
+             "field(s) (the same column used at fit time).", call. = FALSE)
+      }
+      for (b in which(shared_trend)) bundle$blocks[[b]]$weight <- time_col
+    }
   }
 
   if (is.null(newdata)) {

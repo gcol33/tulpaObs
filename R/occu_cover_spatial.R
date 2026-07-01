@@ -115,8 +115,18 @@
   # structure per fit); `correlated` flags it for the joint-coupled fitter.
   specs <- list()
   correlated <- FALSE
+  pos_armspec <- NULL
   for (t in spatial) {
     if (isTRUE(t$spec$is_bar)) {
+      # Arm-specific INDEPENDENT bar on the cover arm alone (single-arm `to =
+      # "positive"`, gcol33/tulpaObs#110): its intercept + covariate columns become
+      # a separate latent field on the cover (positive) arm ONLY, with its own
+      # precision and NO cross-arm copy of the occupancy field's alpha. This is the
+      # opt-in for a spatially-structured cover trend that is not a scalar multiple
+      # of the occupancy field (the alpha copy collapses to a global slope when the
+      # two shapes differ, flattening delta_cover_cond). Distinct from the shared
+      # `||` desugar (which copies a psi-anchored field onto cover with alpha).
+      to <- t$spec$to %||% .tobs_cover_arms
       if (isTRUE(t$spec$correlated)) {
         if (correlated || length(specs) > 0L || length(spatial) > 1L) {
           stop(paste0(
@@ -128,6 +138,22 @@
         }
         specs <- .tobs_expand_spatial_bar(t$spec, data)
         correlated <- TRUE
+      } else if (length(to) == 1L) {
+        if (!identical(to, "positive")) {
+          stop(sprintf(paste0(
+            "occu_cover(): an arm-specific spatial bar (single-arm `to`) is ",
+            "supported only for the cover arm (to = \"positive\"); got to = ",
+            "\"%s\". The occupancy field is the shared psi-arm term ",
+            "(icar()/bym2() or a both-arm `||` bar)."), to), call. = FALSE)
+        }
+        if (!is.null(pos_armspec)) {
+          stop("occu_cover(): at most one arm-specific cover field ",
+               "(to = \"positive\") is supported; combine multiple ",
+               "coefficient fields into one bar, e.g. ",
+               "spatial(~ 1 + w || cell, graph = adj, to = \"positive\").",
+               call. = FALSE)
+        }
+        pos_armspec <- .tobs_armspecific_bar_fields(t$spec, data)
       } else {
         specs <- c(specs, .cover_desugar_spatial_bar(t$spec, data))
       }
@@ -240,7 +266,37 @@
     }
   }
 
+  # Arm-specific cover field (gcol33/tulpaObs#110): the independent per-arm
+  # structure is a separate, non-copied block on the cover arm; it composes with
+  # the shared occupancy field (which still drives psi and, via the alpha copy,
+  # delta_cover_exp) but NOT with the correlated `|` MCAR field (that already spans
+  # the whole coupled structure with its own copy). Like the occu_cover shared
+  # field, the cover-arm field is fitted as ICAR (rho fixed to 1); bym2/car on the
+  # bar is read as ICAR.
+  if (!is.null(pos_armspec)) {
+    if (correlated) {
+      stop(paste0(
+        "occu_cover(): an arm-specific cover field (to = \"positive\") does not ",
+        "compose with a correlated `|` MCAR field; use one spatial structure."),
+        call. = FALSE)
+    }
+    if (!identical(pos_armspec$type, "icar")) {
+      warning("occu_cover() reads the arm-specific cover field as ICAR ",
+              "(rho fixed to 1); bym2/car with free mixing on the cover arm is ",
+              "not yet wired.", call. = FALSE)
+      pos_armspec$type <- "icar"
+    }
+    # The cover field must share the occupancy field's areal graph (one node set).
+    if (!identical(dim(pos_armspec$graph), dim(base_graph)) ||
+        !all(pos_armspec$graph == base_graph)) {
+      stop("occu_cover(): the arm-specific cover field (to = \"positive\") must ",
+           "share the same areal graph as the occupancy field (same nodes / ",
+           "adjacency).", call. = FALSE)
+    }
+  }
+
   list(fe = bind$fe$psi, fields = c(base, specs[weighted]),
+       pos_armspec = pos_armspec,
        group_var = group_var, re = re_spec, correlated = correlated)
 }
 
