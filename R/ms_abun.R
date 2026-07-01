@@ -721,23 +721,15 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     size_s <- if (!is.null(rs) && length(rs) == n_species) as.numeric(rs)
               else rep(as.numeric(object$ms_dispersion$r %||% NA_real_), n_species)
   }
-  draws <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    y_sim <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),
-                   dimnames = list(NULL, NULL, model$species_names))
-    for (sp in seq_len(n_species)) {
-      N <- if (is.finite(size_s[sp]))
-             stats::rnbinom(n_sites, size = size_s[sp], mu = fit$lambda[, sp])
-           else stats::rpois(n_sites, fit$lambda[, sp])
-      for (i in seq_len(n_sites)) {
-        vis <- which(obs_mask[i, , sp])
-        if (length(vis))
-          y_sim[i, vis, sp] <- stats::rbinom(length(vis), N[i], fit$p[i, sp])
-      }
-    }
-    draws[[s]] <- y_sim
-  }
-  if (nsim == 1L) draws[[1]] else draws
+  # The community simulator draws from the posterior-MEAN fitted values (no draw
+  # selection), so the per-species latent N and detection draws run in
+  # cpp_simulate_ms_nmix from R's RNG stream in the former order (byte-identical).
+  res <- cpp_simulate_ms_nmix(fit$lambda, fit$p, size_s, as.integer(obs_mask),
+                              n_sites, max_visits, n_species, as.integer(nsim))
+  res <- lapply(res, function(a) {
+    dimnames(a) <- list(NULL, NULL, model$species_names); a
+  })
+  if (nsim == 1L) res[[1]] else res
 }
 
 
