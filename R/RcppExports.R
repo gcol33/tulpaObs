@@ -325,6 +325,10 @@ cpp_occu_cover_ppc <- function(psi_all, p_all, ep_all, y, y_pos, valid, any_det,
     .Call(`_tulpaObs_cpp_occu_cover_ppc`, psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, is_beta, freeman)
 }
 
+cpp_occu_cover_ppc_agg <- function(psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, is_beta, freeman) {
+    .Call(`_tulpaObs_cpp_occu_cover_ppc_agg`, psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, is_beta, freeman)
+}
+
 cpp_occu_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
     .Call(`_tulpaObs_cpp_occu_cover_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }

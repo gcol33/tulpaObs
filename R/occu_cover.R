@@ -2058,33 +2058,41 @@
                 bayesian.p = mean(r$fit.y.rep > r$fit.y)))
   }
 
-  # Aggregated (mean / median / latent) cover discrepancy stays in R.
+  # Aggregated (mean / median / latent) cover discrepancy: the detection
+  # replicate plus the aggregated / latent cover replicate run in
+  # cpp_occu_cover_ppc_agg with matched RNG order (byte-identical). The observed
+  # aggregates / detected covers are draw-invariant and gathered once.
   units <- .occu_cover_unit_cover(model)
-
-  fit_y <- fit_rep <- numeric(S)
+  psi_all <- matrix(0, n_sites, S)
+  p_all   <- matrix(0, n_sites, S * max_visits)
+  ep_all  <- matrix(0, n_sites, S * max_visits)
   for (s in seq_len(S)) {
-    de    <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
-    psi   <- stats::plogis(cl(de$psi_eta))
-    p_mat <- stats::plogis(cl(de$p_eta))
-    prod1mp <- exp(rowSums(ifelse(valid, log(1 - p_mat), 0)))
-    z_prob <- ifelse(any_det, 1, psi * prod1mp / (psi * prod1mp + (1 - psi)))
-    z_prob[n_valid == 0L] <- psi[n_valid == 0L]
-    z <- stats::rbinom(n_sites, 1, z_prob)
-
-    exp_det <- z * p_mat
-    yrep <- matrix(stats::rbinom(n_sites * max_visits, 1, as.vector(exp_det)),
-                   n_sites, max_visits)
-    det_obs <- stat_fn(y[valid], exp_det[valid])
-    det_rep <- stat_fn(yrep[valid], exp_det[valid])
-
-    cov_term <- .occu_cover_ppc_cover(model, de$ep_mat, disp[s], units,
-                                      is_beta, stat_fn, cl)
-
-    fit_y[s]   <- det_obs + cov_term[["obs"]]
-    fit_rep[s] <- det_rep + cov_term[["rep"]]
+    de   <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
+    cols <- (s - 1L) * max_visits + seq_len(max_visits)
+    psi_all[, s]   <- stats::plogis(cl(de$psi_eta))
+    p_all[, cols]  <- stats::plogis(cl(de$p_eta))
+    ep_all[, cols] <- de$ep_mat
   }
-  list(fit.y = fit_y, fit.y.rep = fit_rep,
-       bayesian.p = mean(fit_rep > fit_y))
+  vint <- valid; storage.mode(vint) <- "integer"
+  yint <- y;     storage.mode(yint) <- "integer"
+  ps0  <- as.integer(units$pos_site - 1L)
+  if (identical(mode, "latent")) {
+    mode_code <- 2L
+    vals_flat <- as.numeric(unlist(units$vals, use.names = FALSE))
+    unit_off  <- as.integer(c(0L, cumsum(lengths(units$vals))))
+    yv <- numeric(0); disp2 <- model$cover_latent_disp2 %||% 0
+  } else {
+    mode_code <- 1L
+    aggfun <- if (identical(mode, "median")) stats::median else mean
+    yv <- vapply(units$vals, function(v) as.numeric(aggfun(v)), numeric(1))
+    vals_flat <- numeric(0); unit_off <- 0L; disp2 <- 0
+  }
+  r <- cpp_occu_cover_ppc_agg(psi_all, p_all, ep_all, yint, vint,
+    as.integer(any_det), as.integer(n_valid), disp, mode_code, ps0,
+    as.numeric(yv), vals_flat, unit_off, disp2, is_beta,
+    identical(fit.stat, "freeman-tukey"))
+  list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
+       bayesian.p = mean(r$fit.y.rep > r$fit.y))
 }
 
 # Per-draw CDF limits for the occu_cover() per-site detection summary

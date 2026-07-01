@@ -203,3 +203,107 @@ Rcpp::List cpp_occu_cover_ppc(
   return Rcpp::List::create(Rcpp::Named("fit.y") = fit_y,
                             Rcpp::Named("fit.y.rep") = fit_rep);
 }
+
+namespace {
+inline double mean_pos(double eta, double d, bool is_beta) {
+  return is_beta ? plg(clampe(eta)) : std::exp(clampe(eta) + d * d / 2.0);
+}
+inline double draw_pos(double eta, double d, bool is_beta) {
+  if (is_beta) { double mu = plg(clampe(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
+  return std::exp(R::rnorm(eta, d));
+}
+}  // namespace
+
+// Aggregated / latent-mode PPC for occu_cover() (cover_aggregate = "mean" /
+// "median" / "latent"). The detection replicate is identical to the none-mode
+// path; the cover replicate is one aggregated cover per detected unit (mode 1,
+// against the precomputed observed aggregate `yv`) or the shared cover-RE
+// marginal (mode 2: a per-unit RE u ~ N(0, disp) then a per-visit draw at
+// dispersion `disp2`). Units are CSR: `pos_site[u]` the cell, `vals_flat` /
+// `unit_off` the detected covers. RNG order matches the R loop, so byte-identical.
+// [[Rcpp::export]]
+Rcpp::List cpp_occu_cover_ppc_agg(
+    Rcpp::NumericMatrix psi_all, Rcpp::NumericMatrix p_all,
+    Rcpp::NumericMatrix ep_all, Rcpp::IntegerMatrix y, Rcpp::IntegerMatrix valid,
+    Rcpp::IntegerVector any_det, Rcpp::IntegerVector n_valid,
+    Rcpp::NumericVector disp, int mode_code, Rcpp::IntegerVector pos_site,
+    Rcpp::NumericVector yv, Rcpp::NumericVector vals_flat,
+    Rcpp::IntegerVector unit_off, double disp2, bool is_beta, bool freeman
+) {
+  const int S = psi_all.ncol(), n_sites = psi_all.nrow(), max_v = valid.ncol();
+  const int n_units = pos_site.size();
+  Rcpp::RNGScope scope;
+  Rcpp::NumericVector fit_y(S), fit_rep(S);
+  const int* pv = valid.begin(); const int* py = y.begin();
+  const int* pad = any_det.begin(); const int* pnv = n_valid.begin();
+  const int* pps = pos_site.begin();
+  auto stat = [&](double o, double e) {
+    if (freeman) { double t = std::sqrt(o) - std::sqrt(e); return t * t; }
+    double t = o - e; return t * t / (e + 1e-10);
+  };
+  std::vector<double> zmass(n_sites);
+
+  for (int s = 0; s < S; ++s) {
+    const double* psi = &psi_all[(std::size_t) s * n_sites];
+    const double* pmat = &p_all[(std::size_t) s * max_v * n_sites];
+    const double* epmat = &ep_all[(std::size_t) s * max_v * n_sites];
+    double d = disp[s];
+    // Detection replicate (identical to the none-mode path).
+    for (int i = 0; i < n_sites; ++i) {
+      double lp = 0.0;
+      for (int j = 0; j < max_v; ++j)
+        if (pv[(std::size_t) j * n_sites + i]) lp += std::log(1.0 - pmat[(std::size_t) j * n_sites + i]);
+      double pr = std::exp(lp), zp;
+      if (pnv[i] == 0) zp = psi[i];
+      else if (pad[i]) zp = 1.0;
+      else zp = psi[i] * pr / (psi[i] * pr + (1.0 - psi[i]));
+      zmass[i] = zp;
+    }
+    std::vector<int> z(n_sites);
+    for (int i = 0; i < n_sites; ++i) z[i] = (int) R::rbinom(1.0, zmass[i]);
+    std::vector<double> exp_det((std::size_t) n_sites * max_v);
+    for (int j = 0; j < max_v; ++j)
+      for (int i = 0; i < n_sites; ++i)
+        exp_det[(std::size_t) j * n_sites + i] = z[i] * pmat[(std::size_t) j * n_sites + i];
+    std::vector<int> yrep((std::size_t) n_sites * max_v);
+    for (std::size_t k = 0; k < (std::size_t) n_sites * max_v; ++k)
+      yrep[k] = (int) R::rbinom(1.0, exp_det[k]);
+    double det_obs = 0.0, det_rep = 0.0;
+    for (int j = 0; j < max_v; ++j)
+      for (int i = 0; i < n_sites; ++i) {
+        std::size_t k = (std::size_t) j * n_sites + i;
+        if (!pv[k]) continue;
+        det_obs += stat((double) py[k], exp_det[k]);
+        det_rep += stat((double) yrep[k], exp_det[k]);
+      }
+
+    // Aggregated / latent cover replicate.
+    double cov_obs = 0.0, cov_rep = 0.0;
+    if (n_units > 0) {
+      if (mode_code == 1) {                        // mean / median
+        for (int u = 0; u < n_units; ++u) {
+          double eta = epmat[pps[u]];              // ep_mat[pos_site, 1]
+          double Ep = mean_pos(eta, d, is_beta);
+          double rp = draw_pos(eta, d, is_beta);
+          cov_obs += stat(yv[u], Ep);
+          cov_rep += stat(rp, Ep);
+        }
+      } else {                                     // latent
+        std::vector<double> ure(n_units);
+        for (int u = 0; u < n_units; ++u) ure[u] = R::rnorm(0.0, d);
+        for (int u = 0; u < n_units; ++u) {
+          double eta = epmat[pps[u]];
+          for (int t = unit_off[u]; t < unit_off[u + 1]; ++t) {
+            double e = mean_pos(eta, disp2, is_beta);
+            cov_obs += stat(vals_flat[t], e);
+            cov_rep += stat(draw_pos(eta + ure[u], disp2, is_beta), e);
+          }
+        }
+      }
+    }
+    fit_y[s] = det_obs + cov_obs;
+    fit_rep[s] = det_rep + cov_rep;
+  }
+  return Rcpp::List::create(Rcpp::Named("fit.y") = fit_y,
+                            Rcpp::Named("fit.y.rep") = fit_rep);
+}

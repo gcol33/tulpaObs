@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.82 (2026-07-01)
+
+* The aggregated / latent-mode occu_cover() posterior predictive check moved its
+  per-draw loop into C++ (`cpp_occu_cover_ppc_agg`): the detection replicate plus
+  the aggregated (mean / median) or shared cover-RE (latent) cover replicate,
+  drawing from R's RNG stream in the former order (byte-identical). With this,
+  every posterior-predictive / PIT diagnostic that draws from posterior
+  components -- occu_cover (all cover modes), cover, single-season -- is a C++
+  kernel. The remaining R generators (`simulate()`) are left in R by design: they
+  select a posterior draw with `sample.int`, whose index sampler is not
+  byte-reproducible in C++, so porting them would change results for no runtime
+  gain -- the same boundary the package already draws for Monte Carlo generation.
+
 ## 0.0.81 (2026-07-01)
 
 * The leave-one-out PIT weighting (`.tobs_loo_pit_from_limits`) moved its

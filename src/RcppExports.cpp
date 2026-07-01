@@ -1601,6 +1601,32 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_occu_cover_ppc_agg
+Rcpp::List cpp_occu_cover_ppc_agg(Rcpp::NumericMatrix psi_all, Rcpp::NumericMatrix p_all, Rcpp::NumericMatrix ep_all, Rcpp::IntegerMatrix y, Rcpp::IntegerMatrix valid, Rcpp::IntegerVector any_det, Rcpp::IntegerVector n_valid, Rcpp::NumericVector disp, int mode_code, Rcpp::IntegerVector pos_site, Rcpp::NumericVector yv, Rcpp::NumericVector vals_flat, Rcpp::IntegerVector unit_off, double disp2, bool is_beta, bool freeman);
+RcppExport SEXP _tulpaObs_cpp_occu_cover_ppc_agg(SEXP psi_allSEXP, SEXP p_allSEXP, SEXP ep_allSEXP, SEXP ySEXP, SEXP validSEXP, SEXP any_detSEXP, SEXP n_validSEXP, SEXP dispSEXP, SEXP mode_codeSEXP, SEXP pos_siteSEXP, SEXP yvSEXP, SEXP vals_flatSEXP, SEXP unit_offSEXP, SEXP disp2SEXP, SEXP is_betaSEXP, SEXP freemanSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type psi_all(psi_allSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type p_all(p_allSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type ep_all(ep_allSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type any_det(any_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_valid(n_validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type disp(dispSEXP);
+    Rcpp::traits::input_parameter< int >::type mode_code(mode_codeSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type pos_site(pos_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type yv(yvSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type vals_flat(vals_flatSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type unit_off(unit_offSEXP);
+    Rcpp::traits::input_parameter< double >::type disp2(disp2SEXP);
+    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< bool >::type freeman(freemanSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_cover_ppc_agg(psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, is_beta, freeman));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_occu_cover_nuts_joint_logpost
 Rcpp::List cpp_occu_cover_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_logdisp);
 RcppExport SEXP _tulpaObs_cpp_occu_cover_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_logdispSEXP) {
@@ -2105,6 +2131,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_occ_make_nested_likelihood", (DL_FUNC) &_tulpaObs_occ_make_nested_likelihood, 2},
     {"_tulpaObs_cpp_occu_cover_cdf_limits", (DL_FUNC) &_tulpaObs_cpp_occu_cover_cdf_limits, 9},
     {"_tulpaObs_cpp_occu_cover_ppc", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ppc, 11},
+    {"_tulpaObs_cpp_occu_cover_ppc_agg", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ppc_agg, 16},
     {"_tulpaObs_cpp_occu_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_occu_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts, 11},
     {"_tulpaObs_cpp_occu_cover_ploglik_ragged", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ploglik_ragged, 17},
