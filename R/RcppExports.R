@@ -109,6 +109,10 @@ cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr,
     .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_distance_ploglik_batch <- function(y, cutpoints, transect, key, quad_order, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads) {
+    .Call(`_tulpaObs_cpp_distance_ploglik_batch`, y, cutpoints, transect, key, quad_order, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads)
+}
+
 cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb = FALSE) {
     .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb)
 }
@@ -135,6 +139,10 @@ cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
 
 cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
     .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
+cpp_dyn_abun_ploglik_batch <- function(y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads) {
+    .Call(`_tulpaObs_cpp_dyn_abun_ploglik_batch`, y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads)
 }
 
 cpp_fp_occu_total_log_lik <- function(y, site_idx, eta_psi, eta_p11, eta_p10, eta_b) {
@@ -255,6 +263,18 @@ cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_i
 
 cpp_nmix_total_log_lik <- function(y, site_idx, eta_p, eta_lambda, K_max, r) {
     .Call(`_tulpaObs_cpp_nmix_total_log_lik`, y, site_idx, eta_p, eta_lambda, K_max, r)
+}
+
+cpp_nmix_ploglik_batch <- function(y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads) {
+    .Call(`_tulpaObs_cpp_nmix_ploglik_batch`, y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads)
+}
+
+cpp_removal_ploglik_batch <- function(y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads) {
+    .Call(`_tulpaObs_cpp_removal_ploglik_batch`, y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads)
+}
+
+cpp_fp_occu_ploglik_batch <- function(y, site_idx, eta_psi, eta_p11, eta_p10, eta_b, n_threads) {
+    .Call(`_tulpaObs_cpp_fp_occu_ploglik_batch`, y, site_idx, eta_psi, eta_p11, eta_p10, eta_b, n_threads)
 }
 
 cpp_nmix_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb = FALSE) {

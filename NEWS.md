@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.75 (2026-07-01)
+
+* The count / multistate families' WAIC / DIC / LOO pointwise log-likelihood
+  moved its per-draw loop from R into C++: N-mixture (`cpp_nmix_ploglik_batch`),
+  removal (`cpp_removal_ploglik_batch`), false-positive occupancy
+  (`cpp_fp_occu_ploglik_batch`), binned distance sampling
+  (`cpp_distance_ploglik_batch`), and open N-mixture / dyn_abun
+  (`cpp_dyn_abun_ploglik_batch`). The per-site marginal was already C++
+  (`compute_*_site`); each kernel now loops draws over it directly, parallel over
+  draws, so the result is byte-identical to the former R loop (0 difference,
+  same kernel) and thread-count invariant. `n.threads` reaches these through
+  `.tobs_ploglik_from_draws`.
+
 ## 0.0.74 (2026-07-01)
 
 * The remaining pure-R pointwise log-likelihood loops now run in C++ OpenMP

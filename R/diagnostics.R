@@ -206,11 +206,11 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
     dynamic    = .tobs_ploglik_dynamic(model, draws, n.threads),
     integrated = .tobs_ploglik_integrated(model, draws, n.threads),
     jsdm       = .tobs_ploglik_jsdm(model, draws),
-    nmix       = .tobs_ploglik_nmix(model, draws),
-    removal    = .tobs_ploglik_removal(model, draws),
-    distance   = .tobs_ploglik_distance(model, draws),
-    fp_occu    = .tobs_ploglik_fp_occu(model, draws),
-    dyn_abun   = .tobs_ploglik_dyn_abun(model, draws),
+    nmix       = .tobs_ploglik_nmix(model, draws, n.threads),
+    removal    = .tobs_ploglik_removal(model, draws, n.threads),
+    distance   = .tobs_ploglik_distance(model, draws, n.threads),
+    fp_occu    = .tobs_ploglik_fp_occu(model, draws, n.threads),
+    dyn_abun   = .tobs_ploglik_dyn_abun(model, draws, n.threads),
     occu_multiscale_cover = {
       idx <- .tobs_occu_ms_cover_nuts_layout(model)
       t(apply(draws, 1L, function(par)
@@ -329,23 +329,19 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # WAIC / LOO scoring is on one source of truth. (For NUTS fits the draws are the
 # exact posterior; the laplace path's Gaussian draws also score, the N-mixture
 # coefficient marginal being well-behaved.)
-.tobs_ploglik_nmix <- function(model, draws) {
+.tobs_ploglik_nmix <- function(model, draws, n.threads = 1L) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
   is_nb <- ("log_r" %in% colnames(draws)) || (ncol(draws) > p_lam + p_p)
   K_max <- as.integer(max(model$y_long) + 100L)
-  marg  <- nmix_site_marginal(y = model$y_long, site_idx = model$site_idx,
-                              X_lambda = X_lambda, X_p = X_p,
-                              mixture = if (is_nb) "NB" else "P", K_max = K_max)
-  S <- nrow(draws); n_sites <- model$n_sites
-  ll <- matrix(0, S, n_sites)
-  for (s in seq_len(S)) {
-    bl <- draws[s, seq_len(p_lam)]
-    bp <- draws[s, p_lam + seq_len(p_p)]
-    r  <- if (is_nb) exp(draws[s, p_lam + p_p + 1L]) else Inf
-    ll[s, ] <- marg$eval_beta(bl, bp, r = r)$log_lik_site
-  }
-  ll
+  # Per-draw linear predictors by BLAS; the per-site Royle marginal (the former
+  # R loop, still via compute_nmix_site) is batched over draws in the kernel.
+  eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
+  eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p) # [S x n_obs]
+  r_vec <- if (is_nb) exp(draws[, p_lam + p_p + 1L]) else rep(Inf, nrow(draws))
+  cpp_nmix_ploglik_batch(as.integer(model$y_long), as.integer(model$site_idx),
+                         eta_p, eta_lambda, K_max, as.numeric(r_vec),
+                         max(1L, as.integer(n.threads)))
 }
 
 # Removal sampling: per site, the latent abundance N integrated out in closed
@@ -353,20 +349,21 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # used). The observation unit is the site (its passes are pooled), so the
 # pointwise log-likelihood is [n_draws x n_sites]. NB is detected by the trailing
 # log_r draw column.
-.tobs_ploglik_removal <- function(model, draws) {
+.tobs_ploglik_removal <- function(model, draws, n.threads = 1L) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
   is_nb <- ("log_r" %in% colnames(draws)) || (ncol(draws) > p_lam + p_p)
-  marg  <- .tobs_removal_nuts_marginal(model, mixture = if (is_nb) "NB" else "P")
-  S <- nrow(draws); n_sites <- model$n_sites
-  ll <- matrix(0, S, n_sites)
-  for (s in seq_len(S)) {
-    bl <- draws[s, seq_len(p_lam)]
-    bp <- draws[s, p_lam + seq_len(p_p)]
-    r  <- if (is_nb) exp(draws[s, p_lam + p_p + 1L]) else Inf
-    ll[s, ] <- marg$eval_beta(bl, bp, r = r)$log_lik_site
-  }
-  ll
+  y <- as.integer(model$y_long); site_idx <- as.integer(model$site_idx)
+  n_sites <- model$n_sites
+  # K_max from per-site removal totals, matching .tobs_removal_nuts_marginal.
+  site_tot <- tapply(y, factor(site_idx, levels = seq_len(n_sites)), sum)
+  site_tot[is.na(site_tot)] <- 0L
+  K_max <- as.integer(max(as.integer(site_tot)) + 100L)
+  eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)
+  eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p)
+  r_vec <- if (is_nb) exp(draws[, p_lam + p_p + 1L]) else rep(Inf, nrow(draws))
+  cpp_removal_ploglik_batch(y, site_idx, eta_p, eta_lambda, K_max,
+                            as.numeric(r_vec), max(1L, as.integer(n.threads)))
 }
 
 # Distance sampling: per site, the latent abundance N integrated out in closed
@@ -374,62 +371,68 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # the fit used). The observation unit is the site (its bins are pooled), so the
 # pointwise log-likelihood is [n_draws x n_sites]. The hazard-rate shape is read
 # from the model key; NB is detected by the trailing log_r draw column.
-.tobs_ploglik_distance <- function(model, draws) {
+.tobs_ploglik_distance <- function(model, draws, n.threads = 1L) {
   p_lam <- model$process_info[[1]]$p; p_sig <- model$process_info[[2]]$p
   hazard <- identical(model$key, "hazard")
   is_nb  <- "log_r" %in% colnames(draws)
-  marg   <- .tobs_distance_nuts_marginal(model, mixture = if (is_nb) "NB" else "P")
-  S <- nrow(draws); n_sites <- model$n_sites
+  X_lambda <- model$X_processes[[1]]; X_sigma <- model$X_processes[[2]]
+  y <- model$y; storage.mode(y) <- "integer"
+  K_max <- as.integer(3L * max(rowSums(y)) + 100L)
   off <- p_lam + p_sig
-  ll <- matrix(0, S, n_sites)
-  for (s in seq_len(S)) {
-    bl <- draws[s, seq_len(p_lam)]
-    bs <- draws[s, p_lam + seq_len(p_sig)]
-    eb <- if (hazard) draws[s, off + 1L] else 0
-    r  <- if (is_nb) exp(draws[s, off + (if (hazard) 2L else 1L)]) else Inf
-    ll[s, ] <- marg$eval_beta(bl, bs, eta_b = eb, r = r)$log_lik_site
-  }
-  ll
+  eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)      # [S x n_sites]
+  eta_sigma  <- draws[, p_lam + seq_len(p_sig), drop = FALSE] %*% t(X_sigma)
+  eta_b <- if (hazard) draws[, off + 1L] else rep(0, nrow(draws))
+  r_vec <- if (is_nb) exp(draws[, off + (if (hazard) 2L else 1L)])
+           else rep(Inf, nrow(draws))
+  cpp_distance_ploglik_batch(
+    y, as.numeric(model$cutpoints), .dist_transect_code(model$transect),
+    .dist_key_code(model$key), as.integer(model$quad_order), K_max,
+    eta_lambda, eta_sigma, as.numeric(eta_b), as.numeric(r_vec),
+    max(1L, as.integer(n.threads)))
 }
 
 # False-positive occupancy: per site, the latent occupancy z integrated out in
 # closed form over the Miller et al. (2011) multistate marginal. The observation
 # unit is the site (its visits are pooled), so the pointwise log-likelihood is
 # [n_draws x n_sites]. Coefficient layout: (psi, p11, p10, b) site-level arms.
-.tobs_ploglik_fp_occu <- function(model, draws) {
+.tobs_ploglik_fp_occu <- function(model, draws, n.threads = 1L) {
   lay <- .tobs_fp_occu_nuts_layout(model$process_info[[1]]$p,
                                    model$process_info[[2]]$p,
                                    model$process_info[[3]]$p,
                                    model$process_info[[4]]$p)
-  marg <- .tobs_fp_occu_nuts_marginal(model)
-  S <- nrow(draws); n_sites <- model$n_sites
-  ll <- matrix(0, S, n_sites)
-  for (s in seq_len(S)) {
-    ev <- marg$eval_beta(draws[s, lay$psi], draws[s, lay$p11],
-                         draws[s, lay$p10], draws[s, lay$b])
-    ll[s, ] <- ev$log_lik_site
-  }
-  ll
+  X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
+  X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
+  eta_psi <- draws[, lay$psi, drop = FALSE] %*% t(X_psi)
+  eta_p11 <- draws[, lay$p11, drop = FALSE] %*% t(X_p11)
+  eta_p10 <- draws[, lay$p10, drop = FALSE] %*% t(X_p10)
+  eta_b   <- draws[, lay$b,   drop = FALSE] %*% t(X_b)
+  cpp_fp_occu_ploglik_batch(as.integer(model$y_long), as.integer(model$site_idx),
+                            eta_psi, eta_p11, eta_p10, eta_b,
+                            max(1L, as.integer(n.threads)))
 }
 
 # Open N-mixture (dyn_abun): per site, the latent abundance sequence integrated
 # out by the HMM forward recursion (the same marginal the fit used). The
 # observation unit is the site (its seasons / visits are pooled), so the pointwise
 # log-likelihood is [n_draws x n_sites]. Layout: (lambda, p, omega, gamma) arms.
-.tobs_ploglik_dyn_abun <- function(model, draws) {
+.tobs_ploglik_dyn_abun <- function(model, draws, n.threads = 1L) {
   lay <- .tobs_dyn_abun_nuts_layout(model$process_info[[1]]$p,
                                     model$process_info[[2]]$p,
                                     model$process_info[[3]]$p,
                                     model$process_info[[4]]$p)
-  marg <- .tobs_dyn_abun_nuts_marginal(model)
-  S <- nrow(draws); n_sites <- model$n_sites
-  ll <- matrix(0, S, n_sites)
-  for (s in seq_len(S)) {
-    ev <- marg$eval_beta(draws[s, lay$lambda], draws[s, lay$p],
-                         draws[s, lay$omega], draws[s, lay$gamma])
-    ll[s, ] <- ev$log_lik_site
-  }
-  ll
+  X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
+  eta_lambda <- draws[, lay$lambda, drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
+  eta_p      <- draws[, lay$p,      drop = FALSE] %*% t(X_p)
+  eta_omega  <- draws[, lay$omega,  drop = FALSE] %*% t(X_omega)
+  eta_gamma  <- draws[, lay$gamma,  drop = FALSE] %*% t(X_gamma)
+  use_nb <- identical(model$mixture %||% "poisson", "negbin")
+  # eta_logr = 0 mirrors the former loop, which called eval_beta without the log
+  # r argument (default 0); the per-site HMM marginal is otherwise unchanged.
+  cpp_dyn_abun_ploglik_batch(as.integer(model$y_flat), model$n_sites,
+                             model$n_seasons, model$max_visits, model$K_max,
+                             eta_lambda, eta_p, eta_omega, eta_gamma, use_nb,
+                             rep(0, nrow(draws)), max(1L, as.integer(n.threads)))
 }
 
 # Community N-mixture (ms_abun): per (species, site), the latent abundance N

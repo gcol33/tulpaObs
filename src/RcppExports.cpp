@@ -446,6 +446,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_distance_ploglik_batch
+Rcpp::NumericMatrix cpp_distance_ploglik_batch(Rcpp::IntegerMatrix y, Rcpp::NumericVector cutpoints, int transect, int key, int quad_order, int K_max, Rcpp::NumericMatrix eta_lambda, Rcpp::NumericMatrix eta_sigma, Rcpp::NumericVector eta_b, Rcpp::NumericVector r_vec, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_distance_ploglik_batch(SEXP ySEXP, SEXP cutpointsSEXP, SEXP transectSEXP, SEXP keySEXP, SEXP quad_orderSEXP, SEXP K_maxSEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP eta_bSEXP, SEXP r_vecSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type cutpoints(cutpointsSEXP);
+    Rcpp::traits::input_parameter< int >::type transect(transectSEXP);
+    Rcpp::traits::input_parameter< int >::type key(keySEXP);
+    Rcpp::traits::input_parameter< int >::type quad_order(quad_orderSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_lambda(eta_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_sigma(eta_sigmaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_b(eta_bSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type r_vec(r_vecSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_ploglik_batch(y, cutpoints, transect, key, quad_order, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_distance_grouped_oracle
 SEXP cpp_distance_grouped_oracle(int arm, Rcpp::IntegerMatrix y_bins, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max, bool nb);
 RcppExport SEXP _tulpaObs_cpp_distance_grouped_oracle(SEXP armSEXP, SEXP y_binsSEXP, SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP cutpointsSEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
@@ -577,6 +598,28 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_nuts(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_dyn_abun_ploglik_batch
+Rcpp::NumericMatrix cpp_dyn_abun_ploglik_batch(Rcpp::IntegerVector y_flat, int n_sites, int T, int J, int K, Rcpp::NumericMatrix eta_lambda, Rcpp::NumericMatrix eta_p, Rcpp::NumericMatrix eta_omega, Rcpp::NumericMatrix eta_gamma, bool use_nb, Rcpp::NumericVector eta_logr, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_ploglik_batch(SEXP y_flatSEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_flat(y_flatSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type J(JSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_lambda(eta_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_omega(eta_omegaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_gamma(eta_gammaSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_logr(eta_logrSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_ploglik_batch(y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1207,6 +1250,57 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_nmix_ploglik_batch
+Rcpp::NumericMatrix cpp_nmix_ploglik_batch(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix eta_p, Rcpp::NumericMatrix eta_lambda, int K_max, Rcpp::NumericVector r_vec, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_nmix_ploglik_batch(SEXP ySEXP, SEXP site_idxSEXP, SEXP eta_pSEXP, SEXP eta_lambdaSEXP, SEXP K_maxSEXP, SEXP r_vecSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_lambda(eta_lambdaSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type r_vec(r_vecSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_nmix_ploglik_batch(y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_removal_ploglik_batch
+Rcpp::NumericMatrix cpp_removal_ploglik_batch(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix eta_p, Rcpp::NumericMatrix eta_lambda, int K_max, Rcpp::NumericVector r_vec, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_removal_ploglik_batch(SEXP ySEXP, SEXP site_idxSEXP, SEXP eta_pSEXP, SEXP eta_lambdaSEXP, SEXP K_maxSEXP, SEXP r_vecSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_lambda(eta_lambdaSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type r_vec(r_vecSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_removal_ploglik_batch(y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_fp_occu_ploglik_batch
+Rcpp::NumericMatrix cpp_fp_occu_ploglik_batch(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix eta_psi, Rcpp::NumericMatrix eta_p11, Rcpp::NumericMatrix eta_p10, Rcpp::NumericMatrix eta_b, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_fp_occu_ploglik_batch(SEXP ySEXP, SEXP site_idxSEXP, SEXP eta_psiSEXP, SEXP eta_p11SEXP, SEXP eta_p10SEXP, SEXP eta_bSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p11(eta_p11SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p10(eta_p10SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_b(eta_bSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_fp_occu_ploglik_batch(y, site_idx, eta_psi, eta_p11, eta_p10, eta_b, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_nmix_grouped_oracle
 SEXP cpp_nmix_grouped_oracle(int arm, Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, int K_max, bool nb);
 RcppExport SEXP _tulpaObs_cpp_nmix_grouped_oracle(SEXP armSEXP, SEXP ySEXP, SEXP site_idxSEXP, SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
@@ -1751,6 +1845,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_distance_site_sweep", (DL_FUNC) &_tulpaObs_cpp_distance_site_sweep, 11},
     {"_tulpaObs_cpp_distance_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_distance_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
+    {"_tulpaObs_cpp_distance_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_distance_ploglik_batch, 11},
     {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 13},
     {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 11},
     {"_tulpaObs_cpp_dyn_abun_init_weights_mat", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_init_weights_mat, 9},
@@ -1758,6 +1853,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_dyn_abun_p_loglik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_p_loglik, 13},
     {"_tulpaObs_cpp_dyn_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_dyn_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_nuts, 10},
+    {"_tulpaObs_cpp_dyn_abun_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_ploglik_batch, 12},
     {"_tulpaObs_cpp_fp_occu_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_fp_occu_total_log_lik, 6},
     {"_tulpaObs_cpp_fp_occu_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_fp_occu_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_fp_occu_nuts", (DL_FUNC) &_tulpaObs_cpp_fp_occu_nuts, 10},
@@ -1788,6 +1884,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nmix_spatial_community_set_offset", (DL_FUNC) &_tulpaObs_cpp_nmix_spatial_community_set_offset, 2},
     {"_tulpaObs_cpp_nmix_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_nmix_laplace_fixed, 13},
     {"_tulpaObs_cpp_nmix_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_nmix_total_log_lik, 6},
+    {"_tulpaObs_cpp_nmix_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_nmix_ploglik_batch, 7},
+    {"_tulpaObs_cpp_removal_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_removal_ploglik_batch, 7},
+    {"_tulpaObs_cpp_fp_occu_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_fp_occu_ploglik_batch, 7},
     {"_tulpaObs_cpp_nmix_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_grouped_oracle, 11},
     {"_tulpaObs_cpp_nested_laplace_nmix_icar", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_icar, 22},
     {"_tulpaObs_cpp_nested_laplace_nmix_car_proper", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_car_proper, 23},
