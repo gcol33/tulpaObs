@@ -2138,21 +2138,12 @@
 # placed between them gives the randomized LOO-PIT. The single source of truth
 # behind every family's LOO-PIT so the construction matches INLA's cpo$pit.
 .tobs_loo_pit_from_limits <- function(ll, Fl, Fu) {
-  N <- ncol(ll); S <- nrow(ll)
-  fl_loo <- numeric(N); fu_loo <- numeric(N)
-  for (i in seq_len(N)) {
-    ps <- tulpa::tulpa_psis(-ll[, i])
-    lw <- ps$log_weights
-    if (length(lw) == S) {
-      w <- exp(lw)
-    } else {
-      w <- rep(1 / S, S)   # degenerate PSIS: fall back to equal weights
-    }
-    fl_loo[i] <- sum(w * Fl[, i])
-    fu_loo[i] <- sum(w * Fu[, i])
-  }
-  u <- stats::runif(N)
-  pmin(1, pmax(0, fl_loo + u * (fu_loo - fl_loo)))
+  # Per-observation PSIS leave-one-out weighting of the CDF limits + a uniform
+  # jitter, batched in tulpa's cpp_psis_loo_pit (PSIS columns parallel, the runif
+  # in index order), so it is byte-identical to the former per-column R loop.
+  tail_len <- getFromNamespace(".psis_tail_len", "tulpa")(nrow(ll), NULL)
+  getFromNamespace("cpp_psis_loo_pit", "tulpa")(
+    ll, Fl, Fu, as.integer(tail_len), 1L)
 }
 
 

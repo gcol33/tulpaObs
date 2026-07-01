@@ -1,5 +1,12 @@
 # tulpaObs NEWS
 
+## 0.0.81 (2026-07-01)
+
+* The leave-one-out PIT weighting (`.tobs_loo_pit_from_limits`) moved its
+  per-observation PSIS loop into tulpa's C++ `cpp_psis_loo_pit` (PSIS columns
+  parallel, the jitter in index order), byte-identical to the former R loop.
+  Requires tulpa >= 0.0.64.
+
 ## 0.0.80 (2026-07-01)
 
 * The cover() hurdle and single-season occupancy posterior diagnostics moved
