@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.78 (2026-07-01)
+
+* The spatial-factor community occupancy + cover family
+  (`ms_occu_cover_spatial`) WAIC / DIC / LOO pointwise log-likelihood moved its
+  per-draw loop into C++ (`cpp_ms_ocs_ploglik`). The former R loop unpacked the
+  NUTS draw (community mean, per-species deviation, shared fields `W`, occupancy
+  loadings `L`, optional cover loadings `Lpos`, log-dispersion), assembled each
+  species' predictors with the shared-factor offset `W L[s,]` on occupancy (and
+  `W Lpos[s,]` on cover), and evaluated the dense occu_cover per-cell marginal;
+  the kernel does all of that, parallel over draws. Both constrained and
+  unconstrained loading parameterisations canonicalise to one packed layout.
+  Byte-close (~1e-15) to the R oracle, thread-count invariant. With this, **every
+  family's pointwise log-likelihood in the WAIC / DIC / LOO path is a C++
+  kernel.**
+
 ## 0.0.77 (2026-07-01)
 
 * The community N-mixture (`ms_abun`) WAIC / DIC / LOO pointwise log-likelihood

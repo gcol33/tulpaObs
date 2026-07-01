@@ -341,7 +341,8 @@
 # actual NUTS draws of the inner latent -- the exact posterior, so the resulting
 # WAIC / LOO are calibrated (the motivation for the NUTS path; the Laplace
 # community-mean draws omit the field and over-disperse, so they are not used).
-.tobs_ploglik_ms_occu_cover_spatial <- function(object, n.draws = 1000L) {
+.tobs_ploglik_ms_occu_cover_spatial <- function(object, n.draws = 1000L,
+                                                n.threads = 1L) {
   nd_info <- object$nuts
   if (is.null(nd_info) || is.null(nd_info$draws)) {
     stop("WAIC / LOO for the spatial-factor community occu_cover() needs a NUTS ",
@@ -359,25 +360,29 @@
     idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
     draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
   }
+  # Canonicalise each draw (constrained lfree -> full L, or a straight unpack) to
+  # the unconstrained packed layout the kernel reads. This per-draw slicing is
+  # cheap; the per-(cell, species) marginal (formerly the R inner loop over
+  # .occu_cover_site_ll) is batched over draws in the kernel.
   unpack <- if (constrain) .ms_ocs_unpack_c else .ms_ocs_unpack
-  cl <- .tobs_clamp_eta
-  out <- matrix(0, M, d$N * d$S)
+  total_u <- d$P + d$S * d$P + d$S * d$K +
+             (if (d$cover_factor) d$S * d$K else 0L) + d$N * d$K + 1L
+  cdraws <- matrix(0, M, total_u)
   for (i in seq_len(M)) {
     up <- unpack(draws[i, ], d)
-    LL <- matrix(0, d$N, d$S)
-    for (s in seq_len(d$S)) {
-      v   <- .ms_occu_cover_species_view(model, s)
-      th  <- up$mu + up$b[[s]]
-      eta <- .occu_cover_eta_from_par(v, th[d$occ_idx], th[d$p_idx], th[d$pos_idx])
-      eta$psi <- stats::plogis(cl(as.numeric(v$X_occ %*% th[d$occ_idx]) +
-                                    as.numeric(up$W %*% up$L[s, ])))
-      if (d$cover_factor)
-        eta$ep_mat <- eta$ep_mat + as.numeric(up$W %*% up$Lpos[s, ])
-      LL[, s] <- .occu_cover_site_ll(v, eta$psi, eta$p_mat, eta$ep_mat, up$ld)
-    }
-    out[i, ] <- as.numeric(LL)
+    cdraws[i, ] <- c(up$mu, unlist(up$b, use.names = FALSE), as.numeric(up$L),
+                     if (d$cover_factor) as.numeric(up$Lpos) else numeric(0),
+                     as.numeric(up$W), up$ld)
   }
-  out
+  empty_v <- function(m) if (is.null(m)) matrix(0, d$N * model$max_visits, 0L) else m
+  cpp_ms_ocs_ploglik(
+    cdraws, model$X_occ, model$X_det_site, empty_v(model$X_det_visit),
+    model$X_pos_site, empty_v(model$X_pos_visit),
+    as.integer(model$y), as.numeric(model$y_pos), as.integer(model$valid),
+    d$N, model$max_visits, d$S, d$K, d$P_occ, d$P_p, d$P_pos,
+    ncol(model$X_det_site), ncol(model$X_pos_site),
+    d$cover_factor, identical(model$positive, "beta"),
+    max(1L, as.integer(n.threads)))
 }
 
 

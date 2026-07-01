@@ -175,7 +175,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   # field, so it is scored over the NUTS draws (calibrated WAIC / LOO -- the point
   # of the NUTS path).
   if (identical(object$model$model_type %||% "NULL", "ms_occu_cover_spatial")) {
-    return(.tobs_ploglik_ms_occu_cover_spatial(object, nd))
+    return(.tobs_ploglik_ms_occu_cover_spatial(object, nd, n.threads = n.threads))
   }
   # Community N-mixture (ms_abun): the per-(species, site) likelihood needs the
   # per-species deviations, so it is scored over the NUTS draws (the calibrated

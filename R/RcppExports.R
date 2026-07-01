@@ -225,6 +225,10 @@ cpp_ms_occu_spatial_bym2 <- function(X_psi, X_p, n_valid, n_det, map_site_to_uni
     .Call(`_tulpaObs_cpp_ms_occu_spatial_bym2`, X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, sigma_grid, rho_grid, scale_factor, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose)
 }
 
+cpp_ms_ocs_ploglik <- function(draws, X_occ, X_det_site, X_det_visit, X_pos_site, X_pos_visit, y, y_pos, valid, N, J, S, K, P_occ, P_p, P_pos, P_p_site, P_pos_site, cover_factor, is_beta, n_threads) {
+    .Call(`_tulpaObs_cpp_ms_ocs_ploglik`, draws, X_occ, X_det_site, X_det_visit, X_pos_site, X_pos_visit, y, y_pos, valid, N, J, S, K, P_occ, P_p, P_pos, P_p_site, P_pos_site, cover_factor, is_beta, n_threads)
+}
+
 cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter = 100L, tol = 1e-6, inner_max = 50L, inner_tol = 1e-8, sigma_beta = 100.0, verbose = FALSE) {
     .Call(`_tulpaObs_cpp_nmix_community_em`, oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter, tol, inner_max, inner_tol, sigma_beta, verbose)
 }

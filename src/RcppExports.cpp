@@ -1011,6 +1011,37 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_ms_ocs_ploglik
+Rcpp::NumericMatrix cpp_ms_ocs_ploglik(Rcpp::NumericMatrix draws, Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det_site, Rcpp::NumericMatrix X_det_visit, Rcpp::NumericMatrix X_pos_site, Rcpp::NumericMatrix X_pos_visit, Rcpp::IntegerVector y, Rcpp::NumericVector y_pos, Rcpp::IntegerVector valid, int N, int J, int S, int K, int P_occ, int P_p, int P_pos, int P_p_site, int P_pos_site, bool cover_factor, bool is_beta, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_ms_ocs_ploglik(SEXP drawsSEXP, SEXP X_occSEXP, SEXP X_det_siteSEXP, SEXP X_det_visitSEXP, SEXP X_pos_siteSEXP, SEXP X_pos_visitSEXP, SEXP ySEXP, SEXP y_posSEXP, SEXP validSEXP, SEXP NSEXP, SEXP JSEXP, SEXP SSEXP, SEXP KSEXP, SEXP P_occSEXP, SEXP P_pSEXP, SEXP P_posSEXP, SEXP P_p_siteSEXP, SEXP P_pos_siteSEXP, SEXP cover_factorSEXP, SEXP is_betaSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_occ(X_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det_site(X_det_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det_visit(X_det_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_pos_site(X_pos_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_pos_visit(X_pos_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< int >::type N(NSEXP);
+    Rcpp::traits::input_parameter< int >::type J(JSEXP);
+    Rcpp::traits::input_parameter< int >::type S(SSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< int >::type P_occ(P_occSEXP);
+    Rcpp::traits::input_parameter< int >::type P_p(P_pSEXP);
+    Rcpp::traits::input_parameter< int >::type P_pos(P_posSEXP);
+    Rcpp::traits::input_parameter< int >::type P_p_site(P_p_siteSEXP);
+    Rcpp::traits::input_parameter< int >::type P_pos_site(P_pos_siteSEXP);
+    Rcpp::traits::input_parameter< bool >::type cover_factor(cover_factorSEXP);
+    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_ocs_ploglik(draws, X_occ, X_det_site, X_det_visit, X_pos_site, X_pos_visit, y, y_pos, valid, N, J, S, K, P_occ, P_p, P_pos, P_p_site, P_pos_site, cover_factor, is_beta, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_nmix_community_em
 List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init, NumericMatrix Sigma_lambda_init, NumericMatrix Sigma_p_init, int max_iter, double tol, int inner_max, double inner_tol, double sigma_beta, bool verbose);
 RcppExport SEXP _tulpaObs_cpp_nmix_community_em(SEXP oracleSEXP, SEXP mu_initSEXP, SEXP Sigma_lambda_initSEXP, SEXP Sigma_p_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP inner_maxSEXP, SEXP inner_tolSEXP, SEXP sigma_betaSEXP, SEXP verboseSEXP) {
@@ -1938,6 +1969,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_ms_occu_spatial_icar", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_icar, 15},
     {"_tulpaObs_cpp_ms_occu_spatial_car_proper", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_car_proper, 17},
     {"_tulpaObs_cpp_ms_occu_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_bym2, 17},
+    {"_tulpaObs_cpp_ms_ocs_ploglik", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_ploglik, 21},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 20},
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},
