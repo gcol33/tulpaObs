@@ -1523,6 +1523,46 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_occu_cover_cdf_limits
+Rcpp::List cpp_occu_cover_cdf_limits(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det_site, Rcpp::NumericMatrix X_det_visit, Rcpp::NumericMatrix b_occ, Rcpp::NumericMatrix b_det, Rcpp::NumericMatrix field_occ, Rcpp::IntegerMatrix valid, Rcpp::IntegerVector any_det, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_occu_cover_cdf_limits(SEXP X_occSEXP, SEXP X_det_siteSEXP, SEXP X_det_visitSEXP, SEXP b_occSEXP, SEXP b_detSEXP, SEXP field_occSEXP, SEXP validSEXP, SEXP any_detSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_occ(X_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det_site(X_det_siteSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det_visit(X_det_visitSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type b_occ(b_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type b_det(b_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type field_occ(field_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type any_det(any_detSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_cover_cdf_limits(X_occ, X_det_site, X_det_visit, b_occ, b_det, field_occ, valid, any_det, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_occu_cover_ppc
+Rcpp::List cpp_occu_cover_ppc(Rcpp::NumericMatrix psi_all, Rcpp::NumericMatrix p_all, Rcpp::NumericMatrix ep_all, Rcpp::IntegerMatrix y, Rcpp::NumericMatrix y_pos, Rcpp::IntegerMatrix valid, Rcpp::IntegerVector any_det, Rcpp::IntegerVector n_valid, Rcpp::NumericVector disp, bool is_beta, bool freeman);
+RcppExport SEXP _tulpaObs_cpp_occu_cover_ppc(SEXP psi_allSEXP, SEXP p_allSEXP, SEXP ep_allSEXP, SEXP ySEXP, SEXP y_posSEXP, SEXP validSEXP, SEXP any_detSEXP, SEXP n_validSEXP, SEXP dispSEXP, SEXP is_betaSEXP, SEXP freemanSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type psi_all(psi_allSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type p_all(p_allSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type ep_all(ep_allSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type any_det(any_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_valid(n_validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type disp(dispSEXP);
+    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< bool >::type freeman(freemanSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_cover_ppc(psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, is_beta, freeman));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_occu_cover_nuts_joint_logpost
 Rcpp::List cpp_occu_cover_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_logdisp);
 RcppExport SEXP _tulpaObs_cpp_occu_cover_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_logdispSEXP) {
@@ -1990,6 +2030,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nested_laplace_nmix_bym2", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_bym2, 25},
     {"_tulpaObs_cpp_nested_laplace_nmix_spde", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_spde, 20},
     {"_tulpaObs_occ_make_nested_likelihood", (DL_FUNC) &_tulpaObs_occ_make_nested_likelihood, 2},
+    {"_tulpaObs_cpp_occu_cover_cdf_limits", (DL_FUNC) &_tulpaObs_cpp_occu_cover_cdf_limits, 9},
+    {"_tulpaObs_cpp_occu_cover_ppc", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ppc, 11},
     {"_tulpaObs_cpp_occu_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_occu_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts, 11},
     {"_tulpaObs_cpp_occu_cover_ploglik_ragged", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ploglik_ragged, 17},

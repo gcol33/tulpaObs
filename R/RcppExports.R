@@ -309,6 +309,14 @@ occ_make_nested_likelihood <- function(y, det_prob) {
     .Call(`_tulpaObs_occ_make_nested_likelihood`, y, det_prob)
 }
 
+cpp_occu_cover_cdf_limits <- function(X_occ, X_det_site, X_det_visit, b_occ, b_det, field_occ, valid, any_det, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_cover_cdf_limits`, X_occ, X_det_site, X_det_visit, b_occ, b_det, field_occ, valid, any_det, n_threads)
+}
+
+cpp_occu_cover_ppc <- function(psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, is_beta, freeman) {
+    .Call(`_tulpaObs_cpp_occu_cover_ppc`, psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, is_beta, freeman)
+}
+
 cpp_occu_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
     .Call(`_tulpaObs_cpp_occu_cover_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }

@@ -2032,10 +2032,34 @@
   }
   any_det <- rowSums(y * valid, na.rm = TRUE) > 0
   n_valid <- rowSums(valid)
-  # Detected-unit cover values are draw-invariant; resolve once for the
-  # aggregated / latent cover discrepancy (gcol33/tulpaObs#34).
-  units <- if (identical(model$cover_aggregate %||% "none", "none")) NULL
-           else .occu_cover_unit_cover(model)
+  mode <- model$cover_aggregate %||% "none"
+
+  # No-aggregation path: the per-draw simulation (latent z, detection replicate,
+  # cover replicate) runs in cpp_occu_cover_ppc, which draws from R's RNG stream
+  # in the SAME order as the former R loop, so under a fixed seed the discrepancy
+  # is byte-identical. Build the per-draw predictors (deterministic) here.
+  if (identical(mode, "none")) {
+    psi_all <- matrix(0, n_sites, S)
+    p_all   <- matrix(0, n_sites, S * max_visits)
+    ep_all  <- matrix(0, n_sites, S * max_visits)
+    for (s in seq_len(S)) {
+      de   <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
+      cols <- (s - 1L) * max_visits + seq_len(max_visits)
+      psi_all[, s]   <- stats::plogis(cl(de$psi_eta))
+      p_all[, cols]  <- stats::plogis(cl(de$p_eta))
+      ep_all[, cols] <- de$ep_mat
+    }
+    vint <- valid; storage.mode(vint) <- "integer"
+    yint <- y;     storage.mode(yint) <- "integer"
+    r <- cpp_occu_cover_ppc(psi_all, p_all, ep_all, yint, model$y_pos, vint,
+                            as.integer(any_det), as.integer(n_valid), disp,
+                            is_beta, identical(fit.stat, "freeman-tukey"))
+    return(list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
+                bayesian.p = mean(r$fit.y.rep > r$fit.y)))
+  }
+
+  # Aggregated (mean / median / latent) cover discrepancy stays in R.
+  units <- .occu_cover_unit_cover(model)
 
   fit_y <- fit_rep <- numeric(S)
   for (s in seq_len(S)) {
@@ -2071,27 +2095,16 @@
 .occu_cover_pit_cdf_limits <- function(object, n.samples) {
   model <- object$model
   c0    <- .tobs_occu_cover_components(object, n.samples)
-  comp  <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
-                                      c0$field_occ, c0$field_pos)
-  S <- nrow(c0$b_occ)
-  n_sites <- model$n_sites; max_visits <- model$max_visits
-  y <- model$y; valid <- model$valid
-  cl <- .tobs_clamp_eta
-  any_det <- rowSums(y * valid, na.rm = TRUE) > 0
-
-  Fl <- matrix(0, S, n_sites); Fu <- matrix(0, S, n_sites)
-  for (s in seq_len(S)) {
-    de    <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
-    psi   <- stats::plogis(cl(de$psi_eta))
-    p_mat <- stats::plogis(cl(de$p_eta))
-    prod1mp <- exp(rowSums(ifelse(valid, log(1 - p_mat), 0)))
-    pdet0 <- psi * prod1mp + (1 - psi)        # P(all-zero detection outcome)
-    nd <- !any_det
-    Fu[s, nd]      <- pdet0[nd]                # all-zero observed: below the mass
-    Fl[s, any_det] <- pdet0[any_det]           # detected observed: above the mass
-    Fu[s, any_det] <- 1
-  }
-  list(cdf_lower = Fl, cdf_upper = Fu)
+  valid <- model$valid; y <- model$y
+  any_det <- as.integer(rowSums(y * valid, na.rm = TRUE) > 0)
+  vint <- valid; storage.mode(vint) <- "integer"
+  empty_v <- function(m) if (is.null(m))
+    matrix(0, model$n_sites * model$max_visits, 0L) else m
+  # The per-draw detection-summary CDF limits are deterministic; the former R
+  # loop now runs in cpp_occu_cover_cdf_limits, parallel over draws.
+  cpp_occu_cover_cdf_limits(model$X_occ, model$X_det_site,
+                            empty_v(model$X_det_visit), c0$b_occ, c0$b_det,
+                            c0$field_occ, vint, any_det, 1L)
 }
 
 # Randomized PIT for an occu_cover() fit, on the per-site detection summary

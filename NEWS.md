@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.79 (2026-07-01)
+
+* The `occu_cover()` posterior diagnostics moved their per-draw loops into C++:
+  the deterministic detection-summary CDF limits (the randomized-PIT / LOO-PIT
+  building block, `cpp_occu_cover_cdf_limits`, parallel over draws) and the
+  posterior predictive check (`cpp_occu_cover_ppc`, cover_aggregate = "none").
+  The PPC draws the latent state, detection replicate, and cover replicate from
+  R's RNG stream via the R:: samplers in the SAME order as the former R loop, so
+  under a fixed seed the discrepancy is byte-identical; the aggregated cover
+  modes keep their R path.
+
 ## 0.0.78 (2026-07-01)
 
 * The spatial-factor community occupancy + cover family
