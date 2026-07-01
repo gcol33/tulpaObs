@@ -181,7 +181,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   # per-species deviations, so it is scored over the NUTS draws (the calibrated
   # WAIC / LOO the NUTS path enables; the Laplace community-mean draws omit them).
   if (identical(object$model$model_type %||% "NULL", "ms_nmix")) {
-    return(.tobs_ploglik_ms_nmix(object, nd))
+    return(.tobs_ploglik_ms_nmix(object, nd, n.threads = n.threads))
   }
 
   draws <- object$draws
@@ -440,7 +440,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # NUTS fit (object$nuts): the Laplace community-mean draws omit the per-species
 # deviations, so the per-(species, site) likelihood is not identified from them
 # (the same constraint as the spatial-factor community occu_cover path).
-.tobs_ploglik_ms_nmix <- function(object, n.draws = 1000L) {
+.tobs_ploglik_ms_nmix <- function(object, n.draws = 1000L, n.threads = 1L) {
   nd <- object$nuts
   if (is.null(nd) || is.null(nd$draws)) {
     stop("WAIC / LOO for the community N-mixture ms_abun() needs a NUTS fit ",
@@ -453,30 +453,24 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   is_nb <- isTRUE(lay$is_nb)
   lf    <- .tobs_ms_nmix_longform(model)
   K_max <- nd$K_max %||% as.integer(max(lf$y) + 100L)
-  margs <- .tobs_ms_abun_nuts_marginals(lf, model$X_processes[[1]],
-                                        model$n_sites,
-                                        if (is_nb) "NB" else "P", K_max)
   draws <- nd$draws
   M <- nrow(draws)
   if (!is.null(n.draws) && as.integer(n.draws) < M) {
     idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
     draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
   }
-  S <- lay$n_species; n_sites <- model$n_sites
-  out <- matrix(0, M, S * n_sites)
-  for (m in seq_len(M)) {
-    mu <- draws[m, lay$mu]
-    # Non-centered draws store the whitened z; reconstruct b = C z per draw.
-    B <- .tobs_ms_abun_nuts_b_from_z(draws[m, ], lay)
-    for (s in seq_len(S)) {
-      b_s <- B[s, ]
-      r   <- if (is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
-      ev  <- margs[[s]]$eval_beta(mu[lay$lambda] + b_s[lay$lambda],
-                                  mu[lay$p]      + b_s[lay$p], r = r)
-      out[m, (s - 1L) * n_sites + seq_len(n_sites)] <- ev$log_lik_site
-    }
-  }
-  out
+  # The non-centered reconstruction (b = C z per species) and the per-(species,
+  # site) Royle marginal (still compute_nmix_site) are batched over draws in the
+  # kernel; mirrors the former R loop (via .tobs_ms_abun_nuts_b_from_z) exactly.
+  clogr <- if (is_nb) as.integer(lay$chol_logr[1L]) - 1L else 0L
+  cpp_ms_nmix_ploglik_batch(
+    as.integer(lf$y), as.integer(lf$species_idx), as.integer(lf$site_idx),
+    lf$X_p, model$X_processes[[1]], draws,
+    as.integer(lay$mu[1L]) - 1L, as.integer(lay$b_off),
+    as.integer(lay$chol_lam[1L]) - 1L, as.integer(lay$chol_p[1L]) - 1L, clogr,
+    as.integer(lay$p_lam), as.integer(lay$p_p), as.integer(lay$n_species),
+    as.integer(model$n_sites), is_nb, as.integer(K_max),
+    max(1L, as.integer(n.threads)))
 }
 
 # Integrated multi-source: per site, shared psi, detection summed over the

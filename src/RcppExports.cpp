@@ -791,6 +791,34 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_ms_nmix_ploglik_batch
+Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(Rcpp::IntegerVector y, Rcpp::IntegerVector species_idx, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix draws, int mu_off, int b_off, int chol_lam_off, int chol_p_off, int chol_logr_off, int p_lam, int p_p, int n_species, int n_sites, bool is_nb, int K_max, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_ms_nmix_ploglik_batch(SEXP ySEXP, SEXP species_idxSEXP, SEXP site_idxSEXP, SEXP X_pSEXP, SEXP X_lambdaSEXP, SEXP drawsSEXP, SEXP mu_offSEXP, SEXP b_offSEXP, SEXP chol_lam_offSEXP, SEXP chol_p_offSEXP, SEXP chol_logr_offSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP n_speciesSEXP, SEXP n_sitesSEXP, SEXP is_nbSEXP, SEXP K_maxSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type species_idx(species_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< int >::type mu_off(mu_offSEXP);
+    Rcpp::traits::input_parameter< int >::type b_off(b_offSEXP);
+    Rcpp::traits::input_parameter< int >::type chol_lam_off(chol_lam_offSEXP);
+    Rcpp::traits::input_parameter< int >::type chol_p_off(chol_p_offSEXP);
+    Rcpp::traits::input_parameter< int >::type chol_logr_off(chol_logr_offSEXP);
+    Rcpp::traits::input_parameter< int >::type p_lam(p_lamSEXP);
+    Rcpp::traits::input_parameter< int >::type p_p(p_pSEXP);
+    Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
+    Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_nmix_ploglik_batch(y, species_idx, site_idx, X_p, X_lambda, draws, mu_off, b_off, chol_lam_off, chol_p_off, chol_logr_off, p_lam, p_p, n_species, n_sites, is_nb, K_max, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_ms_ocs_marginal_grad
 Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec, Rcpp::NumericVector theta_inner);
 RcppExport SEXP _tulpaObs_cpp_ms_ocs_marginal_grad(SEXP specSEXP, SEXP theta_innerSEXP) {
@@ -1899,6 +1927,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_jsdm_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_jsdm_spatial_bym2, 14},
     {"_tulpaObs_cpp_ms_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_abun_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_ms_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_abun_nuts, 12},
+    {"_tulpaObs_cpp_ms_nmix_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_ms_nmix_ploglik_batch, 18},
     {"_tulpaObs_cpp_ms_ocs_marginal_grad", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_grad, 2},
     {"_tulpaObs_cpp_ms_ocs_marginal_ll", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_ll, 2},
     {"_tulpaObs_cpp_ms_ocs_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_joint_logpost, 6},

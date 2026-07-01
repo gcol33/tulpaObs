@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.77 (2026-07-01)
+
+* The community N-mixture (`ms_abun`) WAIC / DIC / LOO pointwise log-likelihood
+  moved its per-draw loop into C++ (`cpp_ms_nmix_ploglik_batch`). The former R
+  loop reconstructed each species' deviation `b = C z` from the non-centered
+  NUTS draw (a log-Cholesky factor per arm) and called the per-species Royle
+  marginal in R; the kernel now does the log-Cholesky reconstruction and the
+  per-(species, site) marginal (`compute_nmix_site`) internally, parallel over
+  draws. Byte-identical to the former loop (same kernel), thread-count invariant.
+
 ## 0.0.76 (2026-07-01)
 
 * The three-level multiscale occupancy + cover family
