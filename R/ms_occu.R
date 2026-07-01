@@ -295,23 +295,20 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   n_sites <- model$n_sites; max_visits <- model$max_visits
   n_species <- model$n_species
 
-  one <- function() {
-    y_sim <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),
-                   dimnames = list(NULL, NULL, model$species_names))
-    for (s in seq_len(n_species)) {
-      psi <- stats::plogis(as.numeric(model$X_occ %*% cm$coef_psi[s, ]))
-      p   <- stats::plogis(as.numeric(model$X_det %*% cm$coef_p[s, ]))
-      z   <- stats::rbinom(n_sites, 1L, psi)
-      vs  <- model$valid[, , s]
-      for (i in seq_len(n_sites)) {
-        vis <- which(vs[i, ])
-        if (!length(vis)) next
-        y_sim[i, vis, s] <- stats::rbinom(length(vis), 1L, z[i] * p[i])
-      }
-    }
-    y_sim
-  }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  # Per-species fitted psi / p (community means, deterministic); the z + detection
+  # draws run in cpp_simulate_ms_occu from R's RNG stream in the former order.
+  psi <- vapply(seq_len(n_species),
+                function(s) stats::plogis(as.numeric(model$X_occ %*% cm$coef_psi[s, ])),
+                numeric(n_sites))
+  p <- vapply(seq_len(n_species),
+              function(s) stats::plogis(as.numeric(model$X_det %*% cm$coef_p[s, ])),
+              numeric(n_sites))
+  res <- cpp_simulate_ms_occu(psi, p, as.integer(model$valid),
+                              n_sites, max_visits, n_species, as.integer(nsim))
+  res <- lapply(res, function(a) {
+    dimnames(a) <- list(NULL, NULL, model$species_names); a
+  })
+  if (nsim == 1L) res[[1]] else res
 }
 
 

@@ -421,6 +421,10 @@ cpp_simulate_ms_nmix <- function(lambda, p, size_s, obs_mask, n_sites, max_v, n_
     .Call(`_tulpaObs_cpp_simulate_ms_nmix`, lambda, p, size_s, obs_mask, n_sites, max_v, n_species, nsim)
 }
 
+cpp_simulate_ms_occu <- function(psi, p, valid, n_sites, max_v, n_species, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_ms_occu`, psi, p, valid, n_sites, max_v, n_species, nsim)
+}
+
 cpp_simulate_single <- function(X_occ, X_det, draws, y, p_occ, p_det, nsim) {
     .Call(`_tulpaObs_cpp_simulate_single`, X_occ, X_det, draws, y, p_occ, p_det, nsim)
 }

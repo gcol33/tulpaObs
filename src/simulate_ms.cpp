@@ -54,3 +54,34 @@ Rcpp::List cpp_simulate_ms_nmix(
   }
   return out;
 }
+
+// Community single-season occupancy (ms_occu). psi / p are [n_sites x n_species]
+// fitted values; per species draw z ~ Bernoulli(psi) (all sites first), then the
+// observed visits' detections y ~ Bernoulli(z p). RNG order matches the R loop.
+// [[Rcpp::export]]
+Rcpp::List cpp_simulate_ms_occu(
+    Rcpp::NumericMatrix psi, Rcpp::NumericMatrix p, Rcpp::IntegerVector valid,
+    int n_sites, int max_v, int n_species, int nsim
+) {
+  Rcpp::RNGScope scope;
+  Rcpp::List out(nsim);
+  const int* pvv = valid.begin();
+  const std::size_t sp_stride = (std::size_t) n_sites * max_v;
+  for (int s = 0; s < nsim; ++s) {
+    Rcpp::IntegerVector ys((std::size_t) n_sites * max_v * n_species);
+    std::fill(ys.begin(), ys.end(), NA_INTEGER);
+    int* base = ys.begin();
+    for (int sp = 0; sp < n_species; ++sp) {
+      std::vector<int> z(n_sites);
+      for (int i = 0; i < n_sites; ++i) z[i] = (int) R::rbinom(1.0, psi(i, sp));
+      for (int i = 0; i < n_sites; ++i)
+        for (int j = 0; j < max_v; ++j) {
+          std::size_t off = (std::size_t) sp * sp_stride + (std::size_t) j * n_sites + i;
+          if (pvv[off] != 0) base[off] = (int) R::rbinom(1.0, z[i] * p(i, sp));
+        }
+    }
+    ys.attr("dim") = Rcpp::IntegerVector::create(n_sites, max_v, n_species);
+    out[s] = ys;
+  }
+  return out;
+}

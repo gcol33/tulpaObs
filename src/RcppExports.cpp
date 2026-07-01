@@ -2124,6 +2124,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_simulate_ms_occu
+Rcpp::List cpp_simulate_ms_occu(Rcpp::NumericMatrix psi, Rcpp::NumericMatrix p, Rcpp::IntegerVector valid, int n_sites, int max_v, int n_species, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu(SEXP psiSEXP, SEXP pSEXP, SEXP validSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type psi(psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type p(pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
+    Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
+    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu(psi, p, valid, n_sites, max_v, n_species, nsim));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_simulate_single
 Rcpp::List cpp_simulate_single(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det, Rcpp::NumericMatrix draws, Rcpp::IntegerMatrix y, int p_occ, int p_det, int nsim);
 RcppExport SEXP _tulpaObs_cpp_simulate_single(SEXP X_occSEXP, SEXP X_detSEXP, SEXP drawsSEXP, SEXP ySEXP, SEXP p_occSEXP, SEXP p_detSEXP, SEXP nsimSEXP) {
@@ -2281,6 +2298,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_simulate_dyn_abun", (DL_FUNC) &_tulpaObs_cpp_simulate_dyn_abun, 15},
     {"_tulpaObs_cpp_simulate_fp_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_fp_occu, 12},
     {"_tulpaObs_cpp_simulate_ms_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_nmix, 8},
+    {"_tulpaObs_cpp_simulate_ms_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu, 7},
     {"_tulpaObs_cpp_simulate_single", (DL_FUNC) &_tulpaObs_cpp_simulate_single, 7},
     {"_tulpaObs_cpp_single_ppc", (DL_FUNC) &_tulpaObs_cpp_single_ppc, 8},
     {"_tulpaObs_cpp_single_pit", (DL_FUNC) &_tulpaObs_cpp_single_pit, 5},
