@@ -306,7 +306,32 @@
 # fitted log-likelihood share one source of truth. Returns an [n_draws x n_cells]
 # matrix. Used for both the NUTS draws (calibrated WAIC) and the Laplace
 # pseudo-draws.
-.tobs_ploglik_occu_multiscale_cover <- function(object, n.draws = 1000L) {
+# Batched [n_draws x n_cells] per-cell pointwise log-likelihood via the C++
+# kernel (cpp_occu_ms_cover_ploglik), parallel over draws. Mirrors
+# .occu_ms_cover_nonspatial_ll (the R oracle) draw for draw. `draws` is the
+# [S x total] parameter matrix.
+.occu_ms_cover_ploglik_core <- function(model, draws, n_threads = 1L) {
+  idx <- .tobs_occu_ms_cover_nuts_layout(model)
+  off_w <- function(v) if (length(v) == 0L) c(0L, 0L)
+                       else c(as.integer(v[1L]) - 1L, length(v))
+  pw <- off_w(idx$psi); tw <- off_w(idx$theta)
+  psw <- off_w(idx$p_site); pvw <- off_w(idx$p_visit)
+  posw <- off_w(idx$pos_site); posvw <- off_w(idx$pos_visit)
+  np <- model$n_plots; J <- model$max_visits
+  empty_v <- function(m) if (is.null(m)) matrix(0, np * J, 0L) else m
+  y <- model$y; storage.mode(y) <- "integer"
+  cpp_occu_ms_cover_ploglik(
+    draws, model$X_psi, model$X_theta, model$X_p_site, empty_v(model$X_p_visit),
+    model$X_pos_site, empty_v(model$X_pos_visit),
+    y, model$y_pos, model$valid, as.integer(model$plot_cell),
+    identical(model$positive, "beta"),
+    pw[1], pw[2], tw[1], tw[2], psw[1], psw[2], pvw[1], pvw[2],
+    posw[1], posw[2], posvw[1], posvw[2], as.integer(idx$disp) - 1L,
+    max(1L, as.integer(n_threads)))
+}
+
+.tobs_ploglik_occu_multiscale_cover <- function(object, n.draws = 1000L,
+                                                n.threads = 1L) {
   model <- object$model
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {
@@ -316,9 +341,7 @@
   if (!is.null(n.draws) && n.draws < nrow(draws)) {
     draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
   }
-  idx <- .tobs_occu_ms_cover_nuts_layout(model)
-  t(apply(draws, 1L, function(par)
-    .occu_ms_cover_nonspatial_ll(par, model, idx, per_cell = TRUE)))
+  .occu_ms_cover_ploglik_core(model, draws, n.threads)
 }
 
 # Non-spatial Laplace fit: BFGS over the exact marginal (numeric gradient),

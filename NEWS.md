@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.76 (2026-07-01)
+
+* The three-level multiscale occupancy + cover family
+  (`occu_multiscale_cover`) builds its per-cell pointwise log-likelihood in a
+  C++ OpenMP kernel (`cpp_occu_ms_cover_ploglik`), parallel over draws. This was
+  the last pure-R marginal in the criteria path (the cell -> plot -> visit
+  three-level mixture plus the per-detected-visit cover density, formerly an
+  `apply()` over draws). The kernel mirrors the R reference
+  `.occu_ms_cover_nonspatial_ll` draw for draw (~1e-14) and is thread-count
+  invariant; both cover families and both visit-block layouts. WAIC / DIC / LOO
+  for this family now honour `n.threads`.
+
 ## 0.0.75 (2026-07-01)
 
 * The count / multistate families' WAIC / DIC / LOO pointwise log-likelihood
