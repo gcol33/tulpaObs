@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.80 (2026-07-01)
+
+* The cover() hurdle and single-season occupancy posterior diagnostics moved
+  their per-draw / per-site loops into C++: cover PIT (`cpp_cover_pit_cdf`,
+  deterministic) and PPC (`cpp_cover_ppc`); single-season PPC (`cpp_single_ppc`)
+  and randomized PIT residuals (`cpp_single_pit`). The replicate draws come from
+  R's RNG stream via the R:: samplers in the SAME order as the former R loops
+  (the posterior-draw selection `sample.int` stays in R), so under a fixed seed
+  every result is byte-identical. All four positive families for the cover PIT.
+
 ## 0.0.79 (2026-07-01)
 
 * The `occu_cover()` posterior diagnostics moved their per-draw loops into C++:

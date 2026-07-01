@@ -1,0 +1,129 @@
+// single_diag.cpp
+// C++ kernels for the single-season occupancy posterior diagnostics whose
+// per-draw / per-site loops were pure R:
+//   * cpp_single_ppc -- posterior predictive check (tobs_ppc, single). Per
+//     selected draw: latent z ~ Bernoulli(full conditional), detection replicate
+//     y_rep ~ Bernoulli(z p), Freeman-Tukey / chi-squared discrepancy.
+//   * cpp_single_pit -- randomized PIT residuals (tobs_pit_residuals). Per site:
+//     the posterior-mean predictive CDF plus a uniform jitter.
+// The posterior draw SELECTION (sample.int) stays in R and its indices are
+// passed in; the per-draw RNG (z, y_rep, the PIT jitter) is drawn here from R's
+// stream via the R:: samplers, in the SAME order as the former R loops, so under
+// a fixed seed the results are byte-identical.
+
+#include <Rcpp.h>
+#include <vector>
+#include <cmath>
+using namespace Rcpp;
+
+namespace {
+inline double plg(double x) {
+  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
+  double z = std::exp(x); return z / (1.0 + z);
+}
+// Row-i design . coefficient slice draws[idx, off + 0..p-1] (draws column-major).
+inline double dot(const double* X, int n_sites, int i, const double* dr,
+                  int ndr, int idx, int off, int p) {
+  double a = 0.0;
+  for (int k = 0; k < p; ++k)
+    a += X[(std::size_t) k * n_sites + i] * dr[(std::size_t) (off + k) * ndr + idx];
+  return a;
+}
+}  // namespace
+
+// [[Rcpp::export]]
+Rcpp::List cpp_single_ppc(
+    Rcpp::NumericMatrix X_occ,    // [n_sites x p_occ]
+    Rcpp::NumericMatrix X_det,    // [n_sites x p_det]
+    Rcpp::NumericMatrix draws,    // [ndraws x (p_occ + p_det)]
+    Rcpp::IntegerVector draw_idx, // [n.samples] 1-based, from sample.int in R
+    Rcpp::IntegerMatrix y,        // [n_sites x max_visits], < 0 = NA
+    Rcpp::IntegerVector n_valid,  // [n_sites]
+    Rcpp::IntegerVector any_det,  // [n_sites] 0/1
+    bool freeman
+) {
+  const int n_sites = X_occ.nrow();
+  const int p_occ = X_occ.ncol(), p_det = X_det.ncol();
+  const int max_v = y.ncol();
+  const int ndr = draws.nrow();
+  const int nsamp = draw_idx.size();
+  Rcpp::RNGScope scope;
+  Rcpp::NumericVector fit_y(nsamp), fit_rep(nsamp);
+  const double* pXo = X_occ.begin(); const double* pXd = X_det.begin();
+  const double* pdr = draws.begin(); const int* py = y.begin();
+  auto stat = [&](double o, double e) {
+    if (freeman) { double t = std::sqrt(o) - std::sqrt(e); return t * t; }
+    double t = o - e; return t * t / (e + 1e-10);
+  };
+  std::vector<double> psi(n_sites), p(n_sites);
+  std::vector<int> z(n_sites);
+
+  for (int s = 0; s < nsamp; ++s) {
+    int idx = draw_idx[s] - 1;
+    for (int i = 0; i < n_sites; ++i) {
+      psi[i] = plg(dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
+      p[i]   = plg(dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
+    }
+    // z_prob (deterministic), then z ~ Bernoulli in site order.
+    for (int i = 0; i < n_sites; ++i) {
+      double zp;
+      if (n_valid[i] == 0) zp = psi[i];
+      else if (any_det[i]) zp = 1.0;
+      else {
+        double a = psi[i] * std::pow(1.0 - p[i], (double) n_valid[i]);
+        zp = a / (a + (1.0 - psi[i]));
+      }
+      z[i] = (int) R::rbinom(1.0, zp);
+    }
+    // y_rep ~ Bernoulli(z p) in (i outer, j inner) order, matching the R loop.
+    double f_obs = 0.0, f_rep = 0.0;
+    for (int i = 0; i < n_sites; ++i)
+      for (int j = 0; j < max_v; ++j) {
+        int yij = py[(std::size_t) j * n_sites + i];
+        if (yij < 0) continue;
+        double e = z[i] * p[i];
+        int yr = (int) R::rbinom(1.0, e);
+        f_obs += stat((double) yij, e);
+        f_rep += stat((double) yr, e);
+      }
+    fit_y[s] = f_obs; fit_rep[s] = f_rep;
+  }
+  return Rcpp::List::create(Rcpp::Named("fit.y") = fit_y,
+                            Rcpp::Named("fit.y.rep") = fit_rep);
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector cpp_single_pit(
+    Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det,
+    Rcpp::NumericMatrix draws, Rcpp::IntegerVector draw_idx,
+    Rcpp::IntegerMatrix y
+) {
+  const int n_sites = X_occ.nrow();
+  const int p_occ = X_occ.ncol(), p_det = X_det.ncol();
+  const int max_v = y.ncol(); const int ndr = draws.nrow();
+  const int n_draws = draw_idx.size();
+  Rcpp::RNGScope scope;
+  Rcpp::NumericVector pit(n_sites);
+  const double* pXo = X_occ.begin(); const double* pXd = X_det.begin();
+  const double* pdr = draws.begin(); const int* py = y.begin();
+
+  for (int i = 0; i < n_sites; ++i) {
+    int n_valid = 0, n_det = 0;
+    for (int j = 0; j < max_v; ++j) {
+      int yij = py[(std::size_t) j * n_sites + i];
+      if (yij >= 0) { ++n_valid; if (yij == 1) ++n_det; }
+    }
+    if (n_valid == 0) { pit[i] = R::unif_rand(); continue; }
+    double acc = 0.0;
+    for (int s = 0; s < n_draws; ++s) {
+      int idx = draw_idx[s] - 1;
+      if (n_det > 0) { acc += 1.0; continue; }
+      double psi = plg(dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
+      double p   = plg(dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
+      acc += psi * std::pow(1.0 - p, (double) n_valid) + (1.0 - psi);
+    }
+    double v = acc / n_draws + R::runif(0.0, 1.0 / n_draws);
+    pit[i] = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
+  }
+  return pit;
+}

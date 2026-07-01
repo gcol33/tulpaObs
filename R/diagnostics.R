@@ -545,42 +545,21 @@ tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
   n.samples <- min(n.samples, nrow(draws))
   draw_idx <- sample.int(nrow(draws), n.samples)
 
-  stat_fn <- if (fit.stat == "freeman-tukey") {
-    function(obs, exp) sum((sqrt(obs) - sqrt(exp))^2, na.rm = TRUE)
-  } else {
-    function(obs, exp) sum((obs - exp)^2 / (exp + 1e-10), na.rm = TRUE)
-  }
-
-  # Per-site valid mask, visit count, and whether the species was ever
-  # detected. The latent z is sampled from its full conditional given this
-  # detection history (the spOccupancy ppcOcc construction), not from the
-  # prior psi: a site with any detection is occupied with probability 1, an
-  # all-zero history occupied with probability
-  #   psi (1-p)^J / [psi (1-p)^J + (1-psi)].
+  # Per-site valid mask, visit count, and whether the species was ever detected.
+  # The latent z is sampled from its full conditional given the detection history
+  # (the spOccupancy ppcOcc construction), then the detection replicate y_rep ~
+  # Bernoulli(z p). The per-draw simulation (the former R loop) runs in
+  # cpp_single_ppc, drawing from R's RNG stream in the same order (the draw
+  # selection sample.int stays in R), so under a fixed seed it is byte-identical.
   valid_mat <- y >= 0
   n_valid   <- rowSums(valid_mat)
   any_det   <- rowSums(y * valid_mat) > 0
-
-  fit_y <- fit_y_rep <- numeric(n.samples)
-  for (s in seq_len(n.samples)) {
-    idx <- draw_idx[s]
-    psi <- plogis(as.vector(X_occ %*% draws[idx, seq_len(p_occ)]))
-    p   <- plogis(as.vector(X_det %*% draws[idx, p_occ + seq_len(p_det)]))
-    z_prob <- ifelse(
-      any_det, 1,
-      psi * (1 - p)^n_valid / (psi * (1 - p)^n_valid + (1 - psi))
-    )
-    z_prob[n_valid == 0L] <- psi[n_valid == 0L]   # no data -> prior
-    z <- rbinom(n_sites, 1, z_prob)
-    expected <- y_rep <- matrix(NA, n_sites, max_visits)
-    for (i in seq_len(n_sites)) for (j in seq_len(max_visits)) if (y[i,j] >= 0) {
-      expected[i,j] <- z[i] * p[i]; y_rep[i,j] <- rbinom(1, 1, z[i] * p[i])
-    }
-    valid <- !is.na(expected)
-    fit_y[s] <- stat_fn(y[valid], expected[valid])
-    fit_y_rep[s] <- stat_fn(y_rep[valid], expected[valid])
-  }
-  list(fit.y = fit_y, fit.y.rep = fit_y_rep, bayesian.p = mean(fit_y_rep > fit_y))
+  yint <- y; storage.mode(yint) <- "integer"
+  r <- cpp_single_ppc(X_occ, X_det, draws[, seq_len(p_occ + p_det), drop = FALSE],
+                      as.integer(draw_idx), yint, as.integer(n_valid),
+                      as.integer(any_det), identical(fit.stat, "freeman-tukey"))
+  list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
+       bayesian.p = mean(r$fit.y.rep > r$fit.y))
 }
 
 #' PIT residuals
@@ -602,24 +581,15 @@ tobs_pit_residuals <- function(object, n.samples = 250) {
   }
   draws <- object$draws; pi_list <- model$process_info
   X_occ <- model$X_processes[[1]]; X_det <- model$X_processes[[2]]
-  y <- model$y; n_sites <- model$n_sites
+  y <- model$y
   p_occ <- pi_list[[1]]$p; p_det <- pi_list[[2]]$p
   n_draws <- min(n.samples, nrow(draws))
-  draw_idx <- sample.int(nrow(draws), n_draws)
-
-  pit <- numeric(n_sites)
-  for (i in seq_len(n_sites)) {
-    yi <- y[i, ]; valid <- yi >= 0; n_det <- sum(yi[valid] == 1); n_valid <- sum(valid)
-    if (n_valid == 0) { pit[i] <- runif(1); next }
-    cdf_vals <- numeric(n_draws)
-    for (s in seq_len(n_draws)) {
-      psi <- plogis(sum(X_occ[i, ] * draws[draw_idx[s], seq_len(p_occ)]))
-      p <- plogis(sum(X_det[i, ] * draws[draw_idx[s], p_occ + seq_len(p_det)]))
-      cdf_vals[s] <- if (n_det > 0) 1 else psi * (1 - p)^n_valid + (1 - psi)
-    }
-    pit[i] <- min(1, max(0, mean(cdf_vals) + runif(1, 0, 1/n_draws)))
-  }
-  pit
+  draw_idx <- sample.int(nrow(draws), n_draws)   # draw selection stays in R
+  yint <- y; storage.mode(yint) <- "integer"
+  # Per-site posterior-mean predictive CDF plus a uniform jitter (the former R
+  # loop) in cpp_single_pit; the jitter draws from R's stream in the same order.
+  cpp_single_pit(X_occ, X_det, draws[, seq_len(p_occ + p_det), drop = FALSE],
+                 as.integer(draw_idx), yint)
 }
 
 #' Goodness-of-fit tests for a tobs fit

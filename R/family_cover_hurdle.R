@@ -1082,45 +1082,21 @@ decode_cover_hurdle <- function(fits, enc, family,
   positive <- object$positive %||% "lognormal"
   bounds   <- .tobs_cover_bounds(object)
   e <- .tobs_cover_eta_draws(object, n.draws = n.samples)
-  eta_occ <- e$eta_occ; eta_pos <- e$eta_pos
-  S <- nrow(eta_occ); N <- ncol(eta_occ)
-  occur <- enc$occ_data$y; y_pos <- enc$pos_data$y; idx_pos <- enc$idx_pos
+  S <- nrow(e$eta_occ); N <- ncol(e$eta_occ)
   sd_disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
-
-  p      <- stats::plogis(eta_occ)            # [S x N]
-  one_mp <- 1 - p
-  Fl <- matrix(0, S, N)
-  Fu <- one_mp                                # absent: F in [0, 1 - p]
-
-  pos_col <- match(seq_len(N), idx_pos)
-  for (i in which(occur == 1L)) {
-    j <- pos_col[i]
-    if (positive == "ordinal") {
-      # The ordinal class is a discrete jump: the predictive CDF steps from
-      # (1 - p) + p F(lower) to (1 - p) + p F(upper), so the randomized PIT is
-      # NON-degenerate here (the genuine discrete diagnostic for class data).
-      Fl_pos <- stats::pnorm((bounds$lower[j] - eta_pos[, j]) / sd_disp)
-      Fu_pos <- stats::pnorm((bounds$upper[j] - eta_pos[, j]) / sd_disp)
-      Fl[, i] <- one_mp[, i] + p[, i] * Fl_pos
-      Fu[, i] <- one_mp[, i] + p[, i] * Fu_pos
-    } else {
-      if (positive == "lognormal") {
-        Fpos <- stats::pnorm((y_pos[j] - eta_pos[, j]) / sd_disp)
-      } else if (positive == "lognormal_trunc") {
-        # Truncated-lognormal CDF: the Gaussian CDF on log-cover renormalised by
-        # the retained mass Phi((u - eta)/sigma), u the log-cover ceiling.
-        za   <- (bounds$trunc_upper[j] - eta_pos[, j]) / sd_disp
-        Fpos <- stats::pnorm((y_pos[j] - eta_pos[, j]) / sd_disp) / stats::pnorm(za)
-      } else {
-        mu   <- stats::plogis(eta_pos[, j])
-        Fpos <- stats::pbeta(y_pos[j], mu * sd_disp, (1 - mu) * sd_disp)
-      }
-      val <- one_mp[, i] + p[, i] * Fpos      # continuous -> no randomization
-      Fu[, i] <- val
-      Fl[, i] <- val
-    }
-  }
-  tulpa::tulpa_pit(Fu, cdf_lower = Fl)
+  pos_col <- match(seq_len(N), enc$idx_pos); pos_col[is.na(pos_col)] <- 0L
+  code <- switch(positive, lognormal = 0L, lognormal_trunc = 1L, ordinal = 2L,
+                 beta = 3L,
+                 stop("cover PIT: unknown positive family '", positive, "'.",
+                      call. = FALSE))
+  num <- function(x) if (is.null(x)) numeric(0) else as.numeric(x)
+  # The per-observation predictive-CDF limits are deterministic; the former R
+  # loop over occupied plots now runs in cpp_cover_pit_cdf.
+  lim <- cpp_cover_pit_cdf(e$eta_occ, e$eta_pos, as.integer(enc$occ_data$y),
+                           as.numeric(enc$pos_data$y), as.integer(pos_col),
+                           sd_disp, code, num(bounds$lower), num(bounds$upper),
+                           num(bounds$trunc_upper))
+  tulpa::tulpa_pit(lim$cdf_upper, cdf_lower = lim$cdf_lower)
 }
 
 # Posterior predictive check for a cover() hurdle fit. Per draw, occurrence
@@ -1135,62 +1111,25 @@ decode_cover_hurdle <- function(fits, enc, family,
   enc      <- object$encoding
   positive <- object$positive %||% "lognormal"
   e <- .tobs_cover_eta_draws(object, n.draws = n.samples)
-  eta_occ <- e$eta_occ; eta_pos <- e$eta_pos
-  S <- nrow(eta_occ); N <- ncol(eta_occ)
-  occur <- enc$occ_data$y; y_pos <- enc$pos_data$y
+  S <- nrow(e$eta_occ)
+  y_pos <- enc$pos_data$y
   sd_disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
-  # Observed cover on the natural scale at occupied sites (positive subset). The
-  # ordinal arm stores the per-plot log-cover (class midpoint) like lognormal, so
-  # the latent back-transform exp() recovers the natural-scale cover.
+  # Ordinal / lognormal store per-plot log-cover; exp() recovers natural scale.
   y_pos_nat <- if (positive %in% c("lognormal", "lognormal_trunc", "ordinal"))
                  exp(y_pos) else y_pos
-  n_pos <- length(y_pos_nat)
-  # Per-plot log-cover ceiling for the truncated arm (log(1) = 0); NULL otherwise.
-  trunc_u <- if (positive == "lognormal_trunc") enc$pos_data$trunc_upper else NULL
-
-  stat_fn <- if (fit.stat == "freeman-tukey") {
-    function(o, ex) sum((sqrt(o) - sqrt(ex))^2, na.rm = TRUE)
-  } else {
-    function(o, ex) sum((o - ex)^2 / (ex + 1e-10), na.rm = TRUE)
-  }
-  p_all <- stats::plogis(eta_occ)
-
-  fit_y <- fit_rep <- numeric(S)
-  for (s in seq_len(S)) {
-    p_s     <- p_all[s, ]
-    occ_rep <- stats::rbinom(N, 1, p_s)
-    occ_obs <- stat_fn(occur, p_s)
-    occ_rp  <- stat_fn(occ_rep, p_s)
-
-    pos_obs <- pos_rp <- 0
-    if (n_pos > 0L) {
-      if (positive == "lognormal_trunc") {
-        # Truncated-lognormal: latent log-cover ~ N(mu, sg^2) truncated at u, then
-        # exp(). Mean E[exp(t)|t<=u] = exp(mu+sg^2/2) Phi(za-sg)/Phi(za); replicate
-        # by inverse-CDF truncated-normal draw, za = (u - mu)/sg.
-        mu_log <- eta_pos[s, ]; sg <- sd_disp[s]
-        za       <- (trunc_u - mu_log) / sg
-        Phi_za   <- stats::pnorm(za)
-        Epos     <- exp(mu_log + sg^2 / 2) * stats::pnorm(za - sg) / Phi_za
-        t_rep    <- mu_log + sg * stats::qnorm(stats::runif(n_pos) * Phi_za)
-        ypos_rep <- exp(t_rep)
-      } else if (positive %in% c("lognormal", "ordinal")) {
-        mu_log <- eta_pos[s, ]; sg <- sd_disp[s]
-        Epos     <- exp(mu_log + sg^2 / 2)
-        ypos_rep <- exp(stats::rnorm(n_pos, mu_log, sg))
-      } else {
-        mu   <- stats::plogis(eta_pos[s, ]); phi <- sd_disp[s]
-        Epos <- mu
-        ypos_rep <- stats::rbeta(n_pos, mu * phi, (1 - mu) * phi)
-      }
-      pos_obs <- stat_fn(y_pos_nat, Epos)
-      pos_rp  <- stat_fn(ypos_rep, Epos)
-    }
-    fit_y[s]   <- occ_obs + pos_obs
-    fit_rep[s] <- occ_rp + pos_rp
-  }
-  list(fit.y = fit_y, fit.y.rep = fit_rep,
-       bayesian.p = mean(fit_rep > fit_y))
+  trunc_u <- if (positive == "lognormal_trunc") enc$pos_data$trunc_upper else numeric(0)
+  code <- switch(positive, lognormal = 0L, lognormal_trunc = 1L, ordinal = 2L,
+                 beta = 3L,
+                 stop("cover PPC: unknown positive family '", positive, "'.",
+                      call. = FALSE))
+  # The occurrence + cover replicates draw from R's RNG stream in the C++ kernel
+  # in the same order as the former R loop, so under a fixed seed the discrepancy
+  # is byte-identical.
+  r <- cpp_cover_ppc(e$eta_occ, e$eta_pos, as.integer(enc$occ_data$y),
+                     as.numeric(y_pos_nat), sd_disp, as.numeric(trunc_u), code,
+                     identical(fit.stat, "freeman-tukey"))
+  list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
+       bayesian.p = mean(r$fit.y.rep > r$fit.y))
 }
 # mode (point mass) if V is unavailable, and jitters a near-singular V.
 .tobs_mvn_draws <- function(mu, V, S) {

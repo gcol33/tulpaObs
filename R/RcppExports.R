@@ -77,6 +77,14 @@ cpp_eval_occu_only_cell <- function(eta_psi, eta_p, y_det, curvature = "observed
     .Call(`_tulpaObs_cpp_eval_occu_only_cell`, eta_psi, eta_p, y_det, curvature)
 }
 
+cpp_cover_pit_cdf <- function(eta_occ, eta_pos, occur, y_pos, pos_col, disp, positive, lower, upper, trunc_upper) {
+    .Call(`_tulpaObs_cpp_cover_pit_cdf`, eta_occ, eta_pos, occur, y_pos, pos_col, disp, positive, lower, upper, trunc_upper)
+}
+
+cpp_cover_ppc <- function(eta_occ, eta_pos, occur, y_pos_nat, disp, trunc_upper, positive, freeman) {
+    .Call(`_tulpaObs_cpp_cover_ppc`, eta_occ, eta_pos, occur, y_pos_nat, disp, trunc_upper, positive, freeman)
+}
+
 cpp_cover_hurdle_ploglik <- function(eta_occ, eta_pos, disp, occur, y_pos, pos_col, positive, lower, upper, trunc_upper, n_threads) {
     .Call(`_tulpaObs_cpp_cover_hurdle_ploglik`, eta_occ, eta_pos, disp, occur, y_pos, pos_col, positive, lower, upper, trunc_upper, n_threads)
 }
@@ -387,5 +395,13 @@ cpp_nested_laplace_removal_bym2 <- function(y, site_idx, map_site_to_unit_R, X_l
 
 cpp_nested_laplace_removal_car_proper <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
     .Call(`_tulpaObs_cpp_nested_laplace_removal_car_proper`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+}
+
+cpp_single_ppc <- function(X_occ, X_det, draws, draw_idx, y, n_valid, any_det, freeman) {
+    .Call(`_tulpaObs_cpp_single_ppc`, X_occ, X_det, draws, draw_idx, y, n_valid, any_det, freeman)
+}
+
+cpp_single_pit <- function(X_occ, X_det, draws, draw_idx, y) {
+    .Call(`_tulpaObs_cpp_single_pit`, X_occ, X_det, draws, draw_idx, y)
 }
 
