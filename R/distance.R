@@ -499,27 +499,22 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   r_size  <- object$nmix_dispersion$r
   shape   <- object$distance_shape$shape
 
-  result <- vector("list", nsim)
-  for (s in seq_len(nsim)) {
-    di <- sample.int(n_draws, 1L)
-    beta_lambda <- draws[di, seq_len(p_lam)]
-    beta_sigma  <- draws[di, p_lam + seq_len(p_sig)]
-    lambda <- exp(as.vector(model$X_processes[[1]] %*% beta_lambda))
-    sigma  <- exp(as.vector(model$X_processes[[2]] %*% beta_sigma))
-    N <- if (!is.null(r_size) && is.finite(r_size))
-      stats::rnbinom(n_sites, size = r_size, mu = lambda) else stats::rpois(n_sites, lambda)
-    y_sim <- matrix(0L, n_sites, n_bins)
-    for (i in seq_len(n_sites)) {
-      pi_b <- .distance_pi(sigma[i], model$cutpoints, model$key, model$transect, shape)
-      probs <- c(pi_b, max(1 - sum(pi_b), 0))
-      if (N[i] > 0) {
-        counts <- stats::rmultinom(1L, N[i], probs)
-        y_sim[i, ] <- counts[seq_len(n_bins)]
-      }
-    }
-    result[[s]] <- y_sim
-  }
-  if (nsim == 1L) result[[1]] else result
+  # The draw selection (R_unif_index), latent N (rpois / rnbinom), and the
+  # multinomial bin counts run in cpp_simulate_distance. The per-bin detection
+  # probabilities reuse the SAME Gauss-Legendre quadrature the distance
+  # likelihood integrates against (src/distance_quad.h), not a separate
+  # stats::integrate path, so the simulator draws from exactly the pi the model
+  # was fit against (one source of truth). The former .distance_pi (integrate)
+  # path is no longer used here.
+  is_nb <- !is.null(r_size) && is.finite(r_size)
+  transect_code <- if (identical(model$transect, "point")) 1L else 0L
+  res <- cpp_simulate_distance(model$X_processes[[1]], model$X_processes[[2]],
+    draws[, seq_len(p_lam + p_sig), drop = FALSE], as.numeric(model$cutpoints),
+    .dist_key_code(model$key), transect_code,
+    if (is.null(shape)) 0 else as.numeric(shape),
+    n_sites, n_bins, p_lam, p_sig, is_nb,
+    if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
+  if (nsim == 1L) res[[1]] else res
 }
 
 # residuals() for distance. The bin-b count is marginally
