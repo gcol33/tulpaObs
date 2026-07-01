@@ -2141,6 +2141,64 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_simulate_ms_occu_cover
+Rcpp::List cpp_simulate_ms_occu_cover(Rcpp::NumericMatrix psi, Rcpp::NumericVector p_mat, Rcpp::NumericVector ep_mat, Rcpp::IntegerVector valid, Rcpp::NumericVector disp, bool is_beta, int n_sites, int max_v, int n_species, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu_cover(SEXP psiSEXP, SEXP p_matSEXP, SEXP ep_matSEXP, SEXP validSEXP, SEXP dispSEXP, SEXP is_betaSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type psi(psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type p_mat(p_matSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type ep_mat(ep_matSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type disp(dispSEXP);
+    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
+    Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
+    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu_cover(psi, p_mat, ep_mat, valid, disp, is_beta, n_sites, max_v, n_species, nsim));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_simulate_ms_dyn_occu
+Rcpp::IntegerVector cpp_simulate_ms_dyn_occu(Rcpp::NumericMatrix psi1, Rcpp::NumericMatrix p, Rcpp::NumericVector gamma, Rcpp::NumericVector eps, Rcpp::IntegerVector valid, int n_sites, int max_v, int n_seasons, int n_species, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_dyn_occu(SEXP psi1SEXP, SEXP pSEXP, SEXP gammaSEXP, SEXP epsSEXP, SEXP validSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_seasonsSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type psi1(psi1SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type p(pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type gamma(gammaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eps(epsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
+    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_dyn_occu(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_simulate_ms_int_occu
+Rcpp::List cpp_simulate_ms_int_occu(Rcpp::NumericMatrix psi, Rcpp::List pd, Rcpp::List valid, Rcpp::IntegerVector J_d, int n_sites, int n_species, int D, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_int_occu(SEXP psiSEXP, SEXP pdSEXP, SEXP validSEXP, SEXP J_dSEXP, SEXP n_sitesSEXP, SEXP n_speciesSEXP, SEXP DSEXP, SEXP nsimSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type psi(psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type pd(pdSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type valid(validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type J_d(J_dSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
+    Rcpp::traits::input_parameter< int >::type D(DSEXP);
+    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_int_occu(psi, pd, valid, J_d, n_sites, n_species, D, nsim));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_simulate_single
 Rcpp::List cpp_simulate_single(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det, Rcpp::NumericMatrix draws, Rcpp::IntegerMatrix y, int p_occ, int p_det, int nsim);
 RcppExport SEXP _tulpaObs_cpp_simulate_single(SEXP X_occSEXP, SEXP X_detSEXP, SEXP drawsSEXP, SEXP ySEXP, SEXP p_occSEXP, SEXP p_detSEXP, SEXP nsimSEXP) {
@@ -2299,6 +2357,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_simulate_fp_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_fp_occu, 12},
     {"_tulpaObs_cpp_simulate_ms_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_nmix, 8},
     {"_tulpaObs_cpp_simulate_ms_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu, 7},
+    {"_tulpaObs_cpp_simulate_ms_occu_cover", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu_cover, 10},
+    {"_tulpaObs_cpp_simulate_ms_dyn_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_dyn_occu, 10},
+    {"_tulpaObs_cpp_simulate_ms_int_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_int_occu, 8},
     {"_tulpaObs_cpp_simulate_single", (DL_FUNC) &_tulpaObs_cpp_simulate_single, 7},
     {"_tulpaObs_cpp_single_ppc", (DL_FUNC) &_tulpaObs_cpp_single_ppc, 8},
     {"_tulpaObs_cpp_single_pit", (DL_FUNC) &_tulpaObs_cpp_single_pit, 5},

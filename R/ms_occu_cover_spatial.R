@@ -1283,38 +1283,28 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   disp <- exp(object$means[[length(object$means)]])
   cl <- .tobs_clamp_eta
 
-  one <- function() {
-    y_sim  <- array(NA_integer_, dim = c(n_sites, max_visits, n_species),
-                    dimnames = list(NULL, NULL, model$species_names))
-    yp_sim <- array(NA_real_,    dim = c(n_sites, max_visits, n_species),
-                    dimnames = list(NULL, NULL, model$species_names))
-    for (s in seq_len(n_species)) {
-      eta <- .occu_cover_eta_from_par(model, cm$coef_occ[s, ], cm$coef_p[s, ],
-                                      cm$coef_pos[s, ])
-      eta$psi <- stats::plogis(cl(as.numeric(model$X_occ %*% cm$coef_occ[s, ]) +
-                                    as.numeric(W %*% L[s, ])))
-      if (!is.null(Lpos)) eta$ep_mat <- eta$ep_mat + as.numeric(W %*% Lpos[s, ])
-      z <- stats::rbinom(n_sites, 1L, eta$psi)
-      valid_s <- model$valid[, , s]
-      for (i in seq_len(n_sites)) {
-        vis <- which(valid_s[i, ])
-        if (!length(vis)) next
-        if (z[i] == 0L) { y_sim[i, vis, s] <- 0L; next }
-        dd <- stats::rbinom(length(vis), 1L, eta$p_mat[i, vis])
-        y_sim[i, vis, s] <- dd
-        det <- vis[dd == 1L]
-        if (length(det)) {
-          ep <- eta$ep_mat[i, det]
-          yp_sim[i, det, s] <- if (is_beta) {
-            mu <- stats::plogis(cl(ep))
-            stats::rbeta(length(det), mu * disp, (1 - mu) * disp)
-          } else exp(stats::rnorm(length(det), ep, disp))
-        }
-      }
-    }
-    list(y = y_sim, y_pos = yp_sim)
+  # Per-species predictors with the shared-factor field offset (W L[s,] on psi,
+  # W Lpos[s,] on cover) computed here; the z + detection + cover draws run in
+  # cpp_simulate_ms_occu_cover from R's RNG stream in the former order.
+  psi <- matrix(0, n_sites, n_species)
+  p_mat <- array(0, c(n_sites, max_visits, n_species))
+  ep_mat <- array(0, c(n_sites, max_visits, n_species))
+  for (s in seq_len(n_species)) {
+    eta <- .occu_cover_eta_from_par(model, cm$coef_occ[s, ], cm$coef_p[s, ],
+                                    cm$coef_pos[s, ])
+    psi[, s] <- stats::plogis(cl(as.numeric(model$X_occ %*% cm$coef_occ[s, ]) +
+                                   as.numeric(W %*% L[s, ])))
+    if (!is.null(Lpos)) eta$ep_mat <- eta$ep_mat + as.numeric(W %*% Lpos[s, ])
+    p_mat[, , s] <- eta$p_mat; ep_mat[, , s] <- eta$ep_mat
   }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  res <- cpp_simulate_ms_occu_cover(psi, as.numeric(p_mat), as.numeric(ep_mat),
+    as.integer(model$valid), as.numeric(disp), is_beta,
+    n_sites, max_visits, n_species, as.integer(nsim))
+  res <- lapply(res, function(r) {
+    dn <- list(NULL, NULL, model$species_names)
+    dimnames(r$y) <- dn; dimnames(r$y_pos) <- dn; r
+  })
+  if (nsim == 1L) res[[1]] else res
 }
 
 

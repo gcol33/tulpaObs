@@ -425,6 +425,18 @@ cpp_simulate_ms_occu <- function(psi, p, valid, n_sites, max_v, n_species, nsim)
     .Call(`_tulpaObs_cpp_simulate_ms_occu`, psi, p, valid, n_sites, max_v, n_species, nsim)
 }
 
+cpp_simulate_ms_occu_cover <- function(psi, p_mat, ep_mat, valid, disp, is_beta, n_sites, max_v, n_species, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_ms_occu_cover`, psi, p_mat, ep_mat, valid, disp, is_beta, n_sites, max_v, n_species, nsim)
+}
+
+cpp_simulate_ms_dyn_occu <- function(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_ms_dyn_occu`, psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim)
+}
+
+cpp_simulate_ms_int_occu <- function(psi, pd, valid, J_d, n_sites, n_species, D, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_ms_int_occu`, psi, pd, valid, J_d, n_sites, n_species, D, nsim)
+}
+
 cpp_simulate_single <- function(X_occ, X_det, draws, y, p_occ, p_det, nsim) {
     .Call(`_tulpaObs_cpp_simulate_single`, X_occ, X_det, draws, y, p_occ, p_det, nsim)
 }

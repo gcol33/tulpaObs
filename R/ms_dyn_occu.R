@@ -422,32 +422,20 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
   gamma <- as.numeric(stats::plogis(model$X_gamma %*% beta_gam))
   eps   <- as.numeric(stats::plogis(model$X_eps   %*% beta_eps))
 
-  one <- function() {
-    y_sim <- array(NA_integer_, dim = c(n_sites, max_visits, n_seasons, n_species),
-                   dimnames = list(NULL, NULL, NULL, model$species_names))
-    for (s in seq_len(n_species)) {
-      psi1 <- as.numeric(stats::plogis(model$X_psi1 %*% cm$coef_psi1[s, ]))
-      p    <- as.numeric(stats::plogis(model$X_p    %*% cm$coef_p[s, ]))
-      vs   <- model$valid[, , , s]
-      for (i in seq_len(n_sites)) {
-        z <- integer(n_seasons)
-        z[1L] <- stats::rbinom(1L, 1L, psi1[i])
-        if (n_seasons > 1L) {
-          for (t in 2L:n_seasons) {
-            z[t] <- z[t - 1L] * (1L - stats::rbinom(1L, 1L, eps[i])) +
-                    (1L - z[t - 1L]) * stats::rbinom(1L, 1L, gamma[i])
-          }
-        }
-        for (t in seq_len(n_seasons)) {
-          vis <- which(vs[i, , t])
-          if (!length(vis)) next
-          y_sim[i, vis, t, s] <- stats::rbinom(length(vis), 1L, z[t] * p[i])
-        }
-      }
-    }
-    y_sim
-  }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  # Per-species psi1 / p (community means) + per-site gamma / eps (above); the
+  # season-1 state, transitions, and detections run in cpp_simulate_ms_dyn_occu
+  # from R's RNG stream in the former order (byte-identical).
+  psi1 <- vapply(seq_len(n_species),
+                 function(s) as.numeric(stats::plogis(model$X_psi1 %*% cm$coef_psi1[s, ])),
+                 numeric(n_sites))
+  p <- vapply(seq_len(n_species),
+              function(s) as.numeric(stats::plogis(model$X_p %*% cm$coef_p[s, ])),
+              numeric(n_sites))
+  res <- cpp_simulate_ms_dyn_occu(psi1, p, gamma, eps, as.integer(model$valid),
+    n_sites, max_visits, n_seasons, n_species, as.integer(nsim))
+  dn <- list(NULL, NULL, NULL, model$species_names)
+  if (nsim == 1L) { a <- array(res[, , , , 1], dim = dim(res)[1:4]); dimnames(a) <- dn; return(a) }
+  lapply(seq_len(nsim), function(s) { a <- array(res[, , , , s], dim = dim(res)[1:4]); dimnames(a) <- dn; a })
 }
 
 

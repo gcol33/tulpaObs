@@ -529,30 +529,27 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   n_species <- model$n_species
   J_d <- model$n_visits
 
-  one <- function() {
-    out <- lapply(seq_len(D), function(d) {
-      array(NA_integer_, dim = c(n_sites, J_d[d], n_species),
-            dimnames = list(NULL, NULL, model$species_names))
-    })
-    names(out) <- model$process_names
-    for (s in seq_len(n_species)) {
-      psi <- stats::plogis(as.numeric(model$X_psi %*% cm$coef_psi[s, ]))
-      z <- stats::rbinom(n_sites, 1L, psi)
-      for (d in seq_len(D)) {
-        arm <- model$process_names[d]
-        pd  <- stats::plogis(as.numeric(model$X_p[[d]] %*% cm[[paste0("coef_", arm)]][s, ]))
-        valid_d <- model$valid[[d]][, , s]
-        for (i in seq_len(n_sites)) {
-          vis <- which(valid_d[i, ])
-          if (!length(vis)) next
-          out[[d]][i, vis, s] <- if (z[i] == 0L) 0L
-                                 else stats::rbinom(length(vis), 1L, pd[i])
-        }
-      }
-    }
-    out
+  # Per-species psi + per-source detection (community means, deterministic); the
+  # z + per-source detections run in cpp_simulate_ms_int_occu from R's RNG stream
+  # in the former order (byte-identical).
+  psi <- vapply(seq_len(n_species),
+                function(s) stats::plogis(as.numeric(model$X_psi %*% cm$coef_psi[s, ])),
+                numeric(n_sites))
+  pd_list <- lapply(seq_len(D), function(d) {
+    arm <- model$process_names[d]
+    vapply(seq_len(n_species),
+           function(s) stats::plogis(as.numeric(model$X_p[[d]] %*% cm[[paste0("coef_", arm)]][s, ])),
+           numeric(n_sites))
+  })
+  valid_list <- lapply(seq_len(D), function(d) as.integer(model$valid[[d]]))
+  res <- cpp_simulate_ms_int_occu(psi, pd_list, valid_list, as.integer(J_d),
+                                  n_sites, n_species, D, as.integer(nsim))
+  add_names <- function(srcs) {
+    names(srcs) <- model$process_names
+    lapply(srcs, function(a) { dimnames(a) <- list(NULL, NULL, model$species_names); a })
   }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  res <- lapply(res, add_names)
+  if (nsim == 1L) res[[1]] else res
 }
 
 
