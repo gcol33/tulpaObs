@@ -1839,6 +1839,32 @@
   max(1L, min(as.integer(n_draws), as.integer(budget / per_draw)))
 }
 
+# Flatten a dense (padded [n_sites x max_visits]) no-aggregation occu_cover model
+# to the ragged one-row-per-valid-visit form the C++ pointwise kernel consumes.
+# The dense visit designs are site-major with n_sites * max_visits rows (cell
+# (i, v) at row (i - 1) * max_visits + v), which is exactly the column-major
+# position of that cell in t(valid); so the valid-cell selector indexes both the
+# response and the visit designs. Cells are enumerated site-major, visit
+# ascending -- the same order the dense rowSums accumulates -- so the kernel's
+# per-site sums are byte-identical to .occu_cover_site_ll on the dense grid.
+.occu_cover_dense_ragged <- function(model) {
+  mv  <- model$max_visits
+  sel <- which(t(model$valid))               # site-major, visit-ascending
+  v_idx <- ((sel - 1L) %% mv) + 1L
+  s_idx <- ((sel - 1L) %/% mv) + 1L
+  cell  <- cbind(s_idx, v_idx)
+  list(
+    site_of_visit = as.integer(s_idx),
+    y_det_visit   = as.integer(model$y[cell]),
+    y_pos_visit   = as.numeric(model$y_pos[cell]),
+    X_det_visit   = if (!is.null(model$X_det_visit))
+                      model$X_det_visit[sel, , drop = FALSE] else NULL,
+    X_pos_visit   = if (!is.null(model$X_pos_visit))
+                      model$X_pos_visit[sel, , drop = FALSE] else NULL,
+    V = length(sel)
+  )
+}
+
 # `chunk` (draws per block) defaults to a memory-adaptive size; the [n_plots x
 # chunk] eta matrices are the WAIC's memory peak, and processing draws in blocks
 # keeps that bounded while the returned [S x n_sites] pointwise log-likelihood is
@@ -1854,23 +1880,30 @@
   is_ragged <- isTRUE(model$ragged)
   mode <- model$cover_aggregate %||% "none"
 
-  # Compact (ragged) no-aggregation path: the WAIC cost on real data
-  # (n.draws x all plots). The C++ kernel mirrors .occu_cover_site_ll_ragged
-  # draw for draw and parallelises over draws, with no draw-chunking (each
-  # draw's per-visit predictors live in thread-private scratch, not the
-  # [V x n_draws] transient .occu_cover_waic_chunk bounds). The ragged binder
-  # only ever builds cover_aggregate = "none", so this covers every ragged fit.
-  if (is_ragged && identical(mode, "none")) {
-    V <- length(model$site_of_visit)
-    empty_v <- function(m) if (is.null(m)) matrix(0, V, 0L) else m
+  # No-aggregation path (every ragged fit, and the dense grid without cover
+  # aggregation): the C++ kernel mirrors .occu_cover_site_ll_ragged draw for
+  # draw and parallelises over draws, with no draw-chunking (each draw's
+  # per-visit predictors live in thread-private scratch, not the [V x n_draws]
+  # transient .occu_cover_waic_chunk bounds). A dense grid is flattened to the
+  # same one-row-per-valid-visit form (.occu_cover_dense_ragged), summed in the
+  # same visit order as the dense rowSums, so both feed one kernel.
+  if (identical(mode, "none")) {
+    rg <- if (is_ragged) {
+      list(site_of_visit = as.integer(model$site_of_visit),
+           y_det_visit   = as.integer(model$y_det_visit),
+           y_pos_visit   = as.numeric(model$y_pos_visit),
+           X_det_visit   = model$X_det_visit, X_pos_visit = model$X_pos_visit,
+           V = length(model$site_of_visit))
+    } else .occu_cover_dense_ragged(model)
+    empty_v <- function(m) if (is.null(m)) matrix(0, rg$V, 0L) else m
     return(cpp_occu_cover_ploglik_ragged(
       X_occ = model$X_occ, X_det_site = model$X_det_site,
       X_pos_site = model$X_pos_site,
-      X_det_visit = empty_v(model$X_det_visit),
-      X_pos_visit = empty_v(model$X_pos_visit),
-      site_of_visit = as.integer(model$site_of_visit),
-      y_det_visit   = as.integer(model$y_det_visit),
-      y_pos_visit   = as.numeric(model$y_pos_visit),
+      X_det_visit = empty_v(rg$X_det_visit),
+      X_pos_visit = empty_v(rg$X_pos_visit),
+      site_of_visit = rg$site_of_visit,
+      y_det_visit   = rg$y_det_visit,
+      y_pos_visit   = rg$y_pos_visit,
       b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
       field_occ = field_occ, field_pos = field_pos,
       is_beta   = identical(model$positive %||% "lognormal", "beta"),
@@ -1878,7 +1911,7 @@
       n_threads = max(1L, as.integer(n_threads))))
   }
 
-  # Dense / aggregated (mean / median / latent) paths stay in R, draw-chunked
+  # Aggregated (mean / median / latent) paths stay in R, draw-chunked
   # to bound the [n_plots x chunk] per-visit eta transient. Detected-unit cover
   # values are draw-invariant, so resolve them once (gcol33/tulpaObs#34).
   units <- if (identical(mode, "none")) NULL else .occu_cover_unit_cover(model)

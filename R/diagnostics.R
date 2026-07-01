@@ -192,19 +192,19 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (!is.null(n.draws) && n.draws < nrow(draws)) {
     draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
   }
-  .tobs_ploglik_from_draws(object$model, draws)
+  .tobs_ploglik_from_draws(object$model, draws, n.threads = n.threads)
 }
 
 # Per-family pointwise log-likelihood given an explicit [n_draws x p] draw
 # matrix. Split out from the dispatcher so the posterior-mean evaluation
 # (.tobs_loglik_at_mean) drives the same per-family kernels with a one-row mean.
-.tobs_ploglik_from_draws <- function(model, draws) {
+.tobs_ploglik_from_draws <- function(model, draws, n.threads = 1L) {
   mt <- model$model_type %||% "NULL"
   switch(
     mt,
-    single     = .tobs_ploglik_replicated(model, draws),
-    dynamic    = .tobs_ploglik_dynamic(model, draws),
-    integrated = .tobs_ploglik_integrated(model, draws),
+    single     = .tobs_ploglik_replicated(model, draws, n.threads),
+    dynamic    = .tobs_ploglik_dynamic(model, draws, n.threads),
+    integrated = .tobs_ploglik_integrated(model, draws, n.threads),
     jsdm       = .tobs_ploglik_jsdm(model, draws),
     nmix       = .tobs_ploglik_nmix(model, draws),
     removal    = .tobs_ploglik_removal(model, draws),
@@ -301,26 +301,16 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 
 # --- per-family marginal likelihoods ---------------------------------------
 
-# Single-season occupancy: per replicate row, marginalized over z.
-.tobs_ploglik_replicated <- function(model, draws) {
+# Single-season occupancy: per replicate row, marginalized over z. The per-draw
+# linear predictors are built by BLAS here; the per-observation marginal (the
+# former R loop, now the C++ oracle in test-occu-family-ploglik-cpp.R) runs in
+# cpp_occu_single_ploglik, parallel over observations.
+.tobs_ploglik_replicated <- function(model, draws, n.threads = 1L) {
   eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_obs]
   eta_p   <- .tobs_eta_draws(model, draws, 2L)
-  y       <- model$y                             # [n_obs x max_visits], <0 = NA
-  S <- nrow(eta_psi); n_obs <- nrow(y)
-  ll <- matrix(0, S, n_obs)
-  for (i in seq_len(n_obs)) {
-    yi <- y[i, ]; valid <- yi >= 0; nv <- sum(valid)
-    if (nv == 0L) next                           # no data -> 0 contribution
-    log_p   <- .tobs_log_p(eta_p[, i]);   log_1mp <- .tobs_log_1mp(eta_p[, i])
-    log_psi <- .tobs_log_p(eta_psi[, i]); log1m_psi <- .tobs_log_1mp(eta_psi[, i])
-    k1 <- sum(yi[valid] == 1); k0 <- nv - k1
-    if (k1 > 0L) {
-      ll[, i] <- log_psi + k1 * log_p + k0 * log_1mp
-    } else {
-      ll[, i] <- .tobs_logaddexp(log_psi + nv * log_1mp, log1m_psi)
-    }
-  }
-  ll
+  y <- model$y                                   # [n_obs x max_visits], <0 = NA
+  storage.mode(y) <- "integer"
+  cpp_occu_single_ploglik(eta_psi, eta_p, y, max(1L, as.integer(n.threads)))
 }
 
 # JSDM: per site x species, y ~ Bernoulli(psi). No detection, no marginalization.
@@ -491,92 +481,47 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 }
 
 # Integrated multi-source: per site, shared psi, detection summed over the
-# sources that observed it (src/integrated_occ_likelihood.h).
-.tobs_ploglik_integrated <- function(model, draws) {
+# sources that observed it (src/integrated_occ_likelihood.h). The per-(site,
+# source) detection counts are draw-invariant, so they are gathered here and the
+# per-site z-marginal (the former R loop, now the C++ oracle in the tests) runs
+# in cpp_occu_integrated_ploglik, parallel over sites.
+.tobs_ploglik_integrated <- function(model, draws, n.threads = 1L) {
   eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_sites]
   S <- nrow(eta_psi); n_sites <- model$n_sites
-  n_sources <- model$n_sources
-  log_psi   <- .tobs_log_p(eta_psi); log1m_psi <- .tobs_log_1mp(eta_psi)
-  # per-source log(p) / log(1-p) at every site (valid only where observed)
-  log_p_src   <- vector("list", n_sources)
-  log_1mp_src <- vector("list", n_sources)
-  for (s in seq_len(n_sources)) {
-    eta_s <- .tobs_eta_draws(model, draws, 1L + s)
-    log_p_src[[s]]   <- .tobs_log_p(eta_s)
-    log_1mp_src[[s]] <- .tobs_log_1mp(eta_s)
-  }
-
-  ll <- matrix(0, S, n_sites)
-  for (i in seq_len(n_sites)) {
-    log_det_occ <- numeric(S)   # sum_s log P(y_is | occupied)
-    any_det <- FALSE
-    for (s in seq_len(n_sources)) {
+  n_src <- model$n_sources
+  K1 <- matrix(0L, n_sites, n_src); K0 <- matrix(0L, n_sites, n_src)
+  eta_src <- array(0, dim = c(S, n_sites, n_src))
+  for (s in seq_len(n_src)) {
+    eta_src[, , s] <- .tobs_eta_draws(model, draws, 1L + s)   # [S x n_sites]
+    for (i in seq_len(n_sites)) {
       local <- which(model$site_maps[[s]] + 1L == i)
       if (!length(local)) next
-      yvec <- model$y_sources[[s]][local[1L], ]
-      valid <- yvec >= 0; nv <- sum(valid)
-      if (nv == 0L) next
-      k1 <- sum(yvec[valid] == 1); k0 <- nv - k1
-      log_det_occ <- log_det_occ + k1 * log_p_src[[s]][, i] +
-                                   k0 * log_1mp_src[[s]][, i]
-      if (k1 > 0L) any_det <- TRUE
-    }
-    if (any_det) {
-      ll[, i] <- log_psi[, i] + log_det_occ
-    } else {
-      # log_det_occ here is sum_s nv_s * log(1-p_s) (all-zero across sources)
-      ll[, i] <- .tobs_logaddexp(log_psi[, i] + log_det_occ, log1m_psi[, i])
+      yvec  <- model$y_sources[[s]][local[1L], ]
+      valid <- yvec >= 0
+      if (!any(valid)) next
+      K1[i, s] <- sum(yvec[valid] == 1)
+      K0[i, s] <- sum(valid) - K1[i, s]
     }
   }
-  ll
+  cpp_occu_integrated_ploglik(eta_psi, as.numeric(eta_src), K1, K0, n_src,
+                              max(1L, as.integer(n.threads)))
 }
 
 # Dynamic (multi-season HMM): per-site forward recursion in log space,
-# mirroring src/dyn_occ_likelihood.h. Site-level detection only.
-.tobs_ploglik_dynamic <- function(model, draws) {
+# mirroring src/dyn_occ_likelihood.h. Site-level detection only. The recursion
+# (the former R loop, now the C++ oracle in the tests) runs in
+# cpp_occu_dynamic_ploglik, parallel over sites.
+.tobs_ploglik_dynamic <- function(model, draws, n.threads = 1L) {
   eta_psi1 <- .tobs_eta_draws(model, draws, 1L)
   eta_p    <- .tobs_eta_draws(model, draws, 2L)
   eta_gam  <- .tobs_eta_draws(model, draws, 3L)
   eta_eps  <- .tobs_eta_draws(model, draws, 4L)
-  S <- nrow(eta_psi1); n_sites <- model$n_sites; Tn <- model$n_seasons
-  n_visits <- model$n_visits; any_det <- model$any_detected
-  NEG <- -1e10
-
-  out <- matrix(0, S, n_sites)
-  for (i in seq_len(n_sites)) {
-    lp    <- .tobs_log_p(eta_p[, i]);    l1mp   <- .tobs_log_1mp(eta_p[, i])
-    lgam  <- .tobs_log_p(eta_gam[, i]);  l1mgam <- .tobs_log_1mp(eta_gam[, i])
-    leps  <- .tobs_log_p(eta_eps[, i]);  l1meps <- .tobs_log_1mp(eta_eps[, i])
-    a_occ <- .tobs_log_p(eta_psi1[, i]); a_un   <- .tobs_log_1mp(eta_psi1[, i])
-    site_ll <- numeric(S)
-    for (t in seq_len(Tn)) {
-      idx <- (i - 1L) * Tn + (t - 1L) + 1L
-      nv  <- n_visits[idx]
-      if (nv > 0L) {
-        yvec <- model$y[i, , t]; yvec[is.na(yvec)] <- -1L
-        valid <- yvec >= 0
-        k1 <- sum(yvec[valid] == 1); k0 <- sum(yvec[valid] == 0)
-        if (any_det[idx]) {
-          site_ll <- site_ll + a_occ + (k1 * lp + k0 * l1mp)
-          a_occ <- numeric(S); a_un <- rep(NEG, S)   # z_t = 1 known
-        } else {
-          term1 <- a_occ + nv * l1mp                 # occupied, all non-detections
-          term2 <- a_un                              # unoccupied
-          lnorm <- .tobs_logaddexp(term1, term2)
-          site_ll <- site_ll + lnorm
-          a_occ <- term1 - lnorm
-          a_un  <- term2 - lnorm
-        }
-      }
-      if (t < Tn) {
-        new_occ <- .tobs_logaddexp(a_occ + l1meps, a_un + lgam)
-        new_un  <- .tobs_logaddexp(a_occ + leps,   a_un + l1mgam)
-        a_occ <- new_occ; a_un <- new_un
-      }
-    }
-    out[, i] <- site_ll
-  }
-  out
+  y <- model$y; y[is.na(y)] <- -1L                  # 3D [n_sites x mv x Tn]
+  cpp_occu_dynamic_ploglik(
+    eta_psi1, eta_p, eta_gam, eta_eps,
+    as.integer(y), as.integer(model$n_visits), as.integer(model$any_detected),
+    model$n_sites, dim(model$y)[2L], model$n_seasons,
+    max(1L, as.integer(n.threads)))
 }
 
 #' Posterior predictive check

@@ -84,6 +84,66 @@ test_that("C++ ragged pointwise loglik matches the R oracle (both families, visi
   }
 })
 
+# A dense (padded [n_sites x max_visits]) no-aggregation occu_cover model, flat
+# enough to drive .occu_cover_ploglik_core through the dense->ragged adaptor.
+.mk_dense_model <- function(positive, has_dv, has_pv, n_sites = 30L, mv = 8L,
+                            seed = 21) {
+  set.seed(seed)
+  nv <- sample(2:mv, n_sites, replace = TRUE)
+  valid <- matrix(FALSE, n_sites, mv)
+  for (i in seq_len(n_sites)) valid[i, seq_len(nv[i])] <- TRUE
+  y <- matrix(-1L, n_sites, mv); ypos <- matrix(0, n_sites, mv)
+  for (i in seq_len(n_sites)) for (v in seq_len(nv[i])) {
+    y[i, v] <- rbinom(1L, 1L, 0.35)
+    if (y[i, v] == 1L)
+      ypos[i, v] <- if (positive == "beta") runif(1, 1e-3, 1 - 1e-3) else rlnorm(1)
+  }
+  R <- n_sites * mv
+  structure(list(
+    model_type = "occu_cover", positive = positive, cover_aggregate = "none",
+    n_sites = n_sites, max_visits = mv, valid = valid, y = y, y_pos = ypos,
+    X_occ = cbind(1, rnorm(n_sites), rnorm(n_sites)),
+    X_det_site = cbind(1, rnorm(n_sites)),
+    X_pos_site = cbind(1, rnorm(n_sites), rnorm(n_sites)),
+    X_det_visit = if (has_dv) cbind(rnorm(R), rnorm(R)) else NULL,
+    X_pos_visit = if (has_pv) cbind(rnorm(R)) else NULL
+  ), class = "tobs_model")
+}
+
+# Dense R oracle: loop draws through .occu_cover_site_ll (the padded-grid path).
+.ploglik_oracle_dense <- function(model, b_occ, b_det, b_pos, disp,
+                                  field_occ, field_pos) {
+  S  <- nrow(b_occ); cl <- .tobs_clamp_eta
+  comp <- .occu_cover_eta_components(model, b_occ, b_det, b_pos,
+                                     field_occ, field_pos)
+  ll <- matrix(0, S, model$n_sites)
+  for (j in seq_len(S)) {
+    de    <- .occu_cover_draw_eta(comp, j, model$n_sites, model$max_visits)
+    psi   <- stats::plogis(cl(de$psi_eta))
+    p_mat <- stats::plogis(cl(de$p_eta))
+    ll[j, ] <- .occu_cover_site_ll(model, psi, p_mat, de$ep_mat, log(disp[j]),
+                                   units = NULL)
+  }
+  ll
+}
+
+test_that("C++ dense (padded) occu_cover pointwise loglik matches the R oracle", {
+  grid <- expand.grid(positive = c("beta", "lognormal"),
+                      has_dv = c(FALSE, TRUE), has_pv = c(FALSE, TRUE),
+                      stringsAsFactors = FALSE)
+  for (r in seq_len(nrow(grid))) {
+    m  <- .mk_dense_model(grid$positive[r], grid$has_dv[r], grid$has_pv[r])
+    dr <- .mk_draws(m)
+    R  <- .ploglik_oracle_dense(m, dr$b_occ, dr$b_det, dr$b_pos, dr$disp,
+                                dr$field_occ, dr$field_pos)
+    C  <- .occu_cover_ploglik_core(m, dr$b_occ, dr$b_det, dr$b_pos, dr$disp,
+                                   dr$field_occ, dr$field_pos, n_threads = 1L)
+    expect_equal(C, R, tolerance = 1e-8,
+                 info = sprintf("%s dv=%s pv=%s", grid$positive[r],
+                                grid$has_dv[r], grid$has_pv[r]))
+  }
+})
+
 test_that("C++ ragged pointwise loglik is thread-count invariant", {
   m  <- .mk_ragged_model("beta", TRUE, TRUE, n_sites = 60L, mean_visits = 10)
   dr <- .mk_draws(m, S = 64L)

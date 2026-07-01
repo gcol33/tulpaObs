@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.74 (2026-07-01)
+
+* The remaining pure-R pointwise log-likelihood loops now run in C++ OpenMP
+  kernels, parallel over the observation index, completing the WAIC / DIC / LOO
+  compute port:
+  - The dense (padded `[n_sites x max_visits]`) `occu_cover()` no-aggregation
+    path is flattened to the ragged form and shares the 0.0.72 kernel, so every
+    `occu_cover()` fit (compact or dense) builds its pointwise log-likelihood in
+    parallel.
+  - The draw-matrix occupancy families -- single-season (`cpp_occu_single_ploglik`),
+    multi-season dynamic HMM (`cpp_occu_dynamic_ploglik`), and multi-source
+    integrated (`cpp_occu_integrated_ploglik`) -- moved their per-observation
+    marginal out of R. The R functions keep the (BLAS) linear-predictor
+    assembly and the draw-invariant count gathering; the marginal runs in the
+    kernel. `n.threads` is plumbed through `.tobs_ploglik_from_draws`.
+  Each kernel mirrors its former R loop (reproduced as the test oracle),
+  agreeing to libm rounding (~1e-15) and thread-count invariant.
+
 ## 0.0.73 (2026-07-01)
 
 * The `cover()` hurdle pointwise log-likelihood (the WAIC / DIC / LOO input) now

@@ -1432,6 +1432,57 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_occu_single_ploglik
+Rcpp::NumericMatrix cpp_occu_single_ploglik(Rcpp::NumericMatrix eta_psi, Rcpp::NumericMatrix eta_p, Rcpp::IntegerMatrix y, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_occu_single_ploglik(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP ySEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_single_ploglik(eta_psi, eta_p, y, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_occu_dynamic_ploglik
+Rcpp::NumericMatrix cpp_occu_dynamic_ploglik(Rcpp::NumericMatrix eta_psi1, Rcpp::NumericMatrix eta_p, Rcpp::NumericMatrix eta_gam, Rcpp::NumericMatrix eta_eps, Rcpp::IntegerVector y, Rcpp::IntegerVector n_visits, Rcpp::IntegerVector any_detected, int n_sites, int max_visits, int n_seasons, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_occu_dynamic_ploglik(SEXP eta_psi1SEXP, SEXP eta_pSEXP, SEXP eta_gamSEXP, SEXP eta_epsSEXP, SEXP ySEXP, SEXP n_visitsSEXP, SEXP any_detectedSEXP, SEXP n_sitesSEXP, SEXP max_visitsSEXP, SEXP n_seasonsSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_psi1(eta_psi1SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_gam(eta_gamSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_eps(eta_epsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_visits(n_visitsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type any_detected(any_detectedSEXP);
+    Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
+    Rcpp::traits::input_parameter< int >::type max_visits(max_visitsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_dynamic_ploglik(eta_psi1, eta_p, eta_gam, eta_eps, y, n_visits, any_detected, n_sites, max_visits, n_seasons, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_occu_integrated_ploglik
+Rcpp::NumericMatrix cpp_occu_integrated_ploglik(Rcpp::NumericMatrix eta_psi, Rcpp::NumericVector eta_src, Rcpp::IntegerMatrix K1, Rcpp::IntegerMatrix K0, int n_sources, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_occu_integrated_ploglik(SEXP eta_psiSEXP, SEXP eta_srcSEXP, SEXP K1SEXP, SEXP K0SEXP, SEXP n_sourcesSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_src(eta_srcSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type K1(K1SEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type K0(K0SEXP);
+    Rcpp::traits::input_parameter< int >::type n_sources(n_sourcesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_integrated_ploglik(eta_psi, eta_src, K1, K0, n_sources, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_occu_fit
 Rcpp::List cpp_occu_fit(Rcpp::List spec_r);
 RcppExport SEXP _tulpaObs_cpp_occu_fit(SEXP spec_rSEXP) {
@@ -1746,6 +1797,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_occu_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_occu_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_cover_nuts, 11},
     {"_tulpaObs_cpp_occu_cover_ploglik_ragged", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ploglik_ragged, 17},
+    {"_tulpaObs_cpp_occu_single_ploglik", (DL_FUNC) &_tulpaObs_cpp_occu_single_ploglik, 4},
+    {"_tulpaObs_cpp_occu_dynamic_ploglik", (DL_FUNC) &_tulpaObs_cpp_occu_dynamic_ploglik, 11},
+    {"_tulpaObs_cpp_occu_integrated_ploglik", (DL_FUNC) &_tulpaObs_cpp_occu_integrated_ploglik, 6},
     {"_tulpaObs_cpp_occu_fit", (DL_FUNC) &_tulpaObs_cpp_occu_fit, 1},
     {"_tulpaObs_cpp_occu_ms_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_ms_cover_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_occu_ms_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_ms_cover_nuts, 10},

@@ -293,6 +293,18 @@ cpp_occu_cover_ploglik_ragged <- function(X_occ, X_det_site, X_pos_site, X_det_v
     .Call(`_tulpaObs_cpp_occu_cover_ploglik_ragged`, X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, is_beta, eta_bound, n_threads)
 }
 
+cpp_occu_single_ploglik <- function(eta_psi, eta_p, y, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_single_ploglik`, eta_psi, eta_p, y, n_threads)
+}
+
+cpp_occu_dynamic_ploglik <- function(eta_psi1, eta_p, eta_gam, eta_eps, y, n_visits, any_detected, n_sites, max_visits, n_seasons, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_dynamic_ploglik`, eta_psi1, eta_p, eta_gam, eta_eps, y, n_visits, any_detected, n_sites, max_visits, n_seasons, n_threads)
+}
+
+cpp_occu_integrated_ploglik <- function(eta_psi, eta_src, K1, K0, n_sources, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_integrated_ploglik`, eta_psi, eta_src, K1, K0, n_sources, n_threads)
+}
+
 cpp_occu_fit <- function(spec_r) {
     .Call(`_tulpaObs_cpp_occu_fit`, spec_r)
 }
