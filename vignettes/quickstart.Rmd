@@ -649,7 +649,7 @@ values.
 ```{r taste-cover}
 sc <- simulate_cover(N = 400, beta_occ = c(-0.4, 0.7),
                      beta_pos = c(-1.0, 0.3), sigma_pos = 0.4, seed = 7)
-fc <- tobs(~ x, data = sc$data, family = cover(positive = "lognormal"),
+fc <- tobs(~ x, data = sc$data, family = cover(response = "lognormal"),
            y = sc$y)
 nd <- data.frame(x = seq(-2, 2, length.out = 50))
 nd$expected <- predict(fc, nd, type = "expected")

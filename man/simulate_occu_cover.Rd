@@ -46,8 +46,6 @@ simulate_occu_cover(
 Defaults pick weakly-informative values: psi intercept at logit(0.4),
 p intercept at logit(0.5), cover intercept on the appropriate link.}
 
-\item{positive}{\code{"beta"} or \code{"lognormal"}.}
-
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
 \item{sigma_pos}{Lognormal residual SD when \code{positive = "lognormal"}
@@ -113,6 +111,8 @@ reconstructs): \code{b} / \code{b_slope} BLUP vectors, or the \code{B} BLUP matr
 \code{s0} / \code{s1} / \code{rho} for a correlated slope.}
 
 \item{seed}{Optional integer seed.}
+
+\item{response}{\code{"beta"} or \code{"lognormal"}.}
 }
 \value{
 A list with \code{y} (N x J detection matrix), \code{y_pos} (N x J cover

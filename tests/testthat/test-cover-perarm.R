@@ -22,7 +22,7 @@ test_that("per-arm formulas give each arm its own fixed effects and recover", {
   skip_on_cran()
   s <- .cp_sim()
   fit <- tobs(presence = ~ x1, positive = ~ x2,
-              family = cover(positive = "beta"), data = s$data, y = s$y,
+              family = cover(response = "beta"), data = s$data, y = s$y,
               method = "laplace")
 
   # Each arm carries ONLY its own covariate.
@@ -36,7 +36,7 @@ test_that("per-arm formulas give each arm its own fixed effects and recover", {
 test_that("the shared single formula stays back-compat (both arms share the FE)", {
   skip_on_cran()
   s <- .cp_sim()
-  fit <- tobs(~ x1 + x2, family = cover(positive = "beta"),
+  fit <- tobs(~ x1 + x2, family = cover(response = "beta"),
               data = s$data, y = s$y, method = "laplace")
   expect_true(all(c("x1", "x2") %in% names(fit$beta_occ)))
   expect_true(all(c("x1", "x2") %in% names(fit$beta_pos)))
@@ -64,11 +64,11 @@ test_that("a spatial field placed in an arm formula == the to= spelling", {
 
   fit_pa <- suppressWarnings(tobs(
     presence = ~ x + t, positive = ~ x + t + spatial(~ 1 || cell, graph = adj),
-    family = cover(positive = "beta"), data = dat, y = y,
+    family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
   fit_to <- suppressWarnings(tobs(
     ~ x + t + spatial(~ 1 || cell, graph = adj, to = "positive"),
-    family = cover(positive = "beta"), data = dat, y = y,
+    family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
 
   expect_equal(unname(fit_pa$beta_occ), unname(fit_to$beta_occ), tolerance = 1e-8)
@@ -79,7 +79,7 @@ test_that("a temporal() / re() term in a per-arm formula is rejected with a poin
   s <- .cp_sim(N = 200L)
   expect_error(
     tobs(presence = ~ x1 + (1 | x2), positive = ~ x2,
-         family = cover(positive = "beta"), data = s$data, y = s$y,
+         family = cover(response = "beta"), data = s$data, y = s$y,
          method = "laplace"),
     "not routed per-arm")
 })
@@ -87,7 +87,7 @@ test_that("a temporal() / re() term in a per-arm formula is rejected with a poin
 test_that("only one per-arm formula errors (need both, or the shared one)", {
   s <- .cp_sim(N = 200L)
   expect_error(
-    tobs(presence = ~ x1, family = cover(positive = "beta"),
+    tobs(presence = ~ x1, family = cover(response = "beta"),
          data = s$data, y = s$y, method = "laplace"),
     "BOTH")
 })

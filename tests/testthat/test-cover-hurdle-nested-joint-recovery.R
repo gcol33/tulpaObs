@@ -127,7 +127,7 @@ test_that("separate-hurdle beta recovers phi_pos across 10 seeds", {
     fit <- tobs(
       formula = ~ x,
       data    = sim$data,
-      family  = cover(positive = "beta"),
+      family  = cover(response = "beta"),
       y       = sim$y
     )
     expect_s3_class(fit, "cover_fit")
@@ -251,7 +251,7 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
   fit_sep <- tobs(
     formula = ~ x,
     data    = sim$data,
-    family  = cover(positive = "beta"),
+    family  = cover(response = "beta"),
     y       = sim$y
   )
   expect_true(is.na(fit_sep$phi_pos_sd))

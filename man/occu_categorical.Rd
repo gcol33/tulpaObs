@@ -28,7 +28,7 @@ with \eqn{p = \mathrm{softmax}(X \beta_{class})}.
 This is the categorical counterpart of \code{\link[=cover]{cover()}} (presence + a magnitude):
 here the positive part is an unordered class, so it uses a multinomial logit
 rather than beta / lognormal. For an \emph{ordered} class response (Braun-Blanquet
-cover bands) use \code{cover(positive = "ordinal")}, which exploits the ordering;
+cover bands) use \code{cover(response = "ordinal")}, which exploits the ordering;
 this family is for classes with no ordering.
 }
 \section{Response}{

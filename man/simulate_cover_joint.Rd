@@ -36,14 +36,14 @@ occurrence-arm linear predictor adds \code{sigma * z[region]}.}
 \item{alpha}{Cover-arm scaling: cover-arm linear predictor adds
 \code{alpha * sigma * z[region]} (so \code{sigma_pos = alpha * sigma}).}
 
-\item{positive}{Likelihood for the positive arm: \code{"beta"} or
-\code{"lognormal"}.}
-
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
 \item{sigma_pos_resid}{Lognormal residual SD when \code{positive = "lognormal"} (default 0.4); independent of the spatial \code{sigma}.}
 
 \item{seed}{Optional integer seed.}
+
+\item{response}{Likelihood for the positive arm: \code{"beta"} or
+\code{"lognormal"}.}
 }
 \value{
 A list with:

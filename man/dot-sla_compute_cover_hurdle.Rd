@@ -12,7 +12,7 @@
 
 \item{enc}{The encoded data from \code{\link[=encode_cover_hurdle]{encode_cover_hurdle()}}.}
 
-\item{positive}{One of \code{"beta"}, \code{"lognormal"}.}
+\item{response}{One of \code{"beta"}, \code{"lognormal"}.}
 }
 \value{
 List(gamma_occ, gamma_pos, valid, reason).

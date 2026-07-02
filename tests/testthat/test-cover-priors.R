@@ -20,9 +20,9 @@ test_that("a tight occurrence-slope prior shrinks the occ slope (lognormal)", {
                         sigma_pos = 0.4, seed = 11)
   d <- sim$data
 
-  f_unpen <- tobs(~ x, data = d, family = cover(positive = "lognormal"),
+  f_unpen <- tobs(~ x, data = d, family = cover(response = "lognormal"),
                   y = sim$y, method = "laplace")
-  f_pen   <- tobs(~ x, data = d, family = cover(positive = "lognormal"),
+  f_pen   <- tobs(~ x, data = d, family = cover(response = "lognormal"),
                   y = sim$y, method = "laplace",
                   priors = cover_priors(occ_slope = list(mean = 0, sd = 0.05)))
 
@@ -37,9 +37,9 @@ test_that("a tight occurrence-slope prior shrinks the occ slope (lognormal)", {
 test_that("priors = NULL fits unpenalised (cover priors are opt-in)", {
   sim <- simulate_cover(N = 120L, beta_occ = c(0, 1.0), beta_pos = c(-1, 0.3),
                         sigma_pos = 0.4, seed = 7)
-  a <- tobs(~ x, data = sim$data, family = cover(positive = "lognormal"),
+  a <- tobs(~ x, data = sim$data, family = cover(response = "lognormal"),
             y = sim$y, method = "laplace")
-  b <- tobs(~ x, data = sim$data, family = cover(positive = "lognormal"),
+  b <- tobs(~ x, data = sim$data, family = cover(response = "lognormal"),
             y = sim$y, method = "laplace", priors = NULL)
   expect_equal(unname(a$beta_occ["x"]), unname(b$beta_occ["x"]), tolerance = 1e-8)
 })
@@ -47,7 +47,7 @@ test_that("priors = NULL fits unpenalised (cover priors are opt-in)", {
 test_that("occu_priors() is rejected for cover() with a pointer to cover_priors()", {
   sim <- simulate_cover(N = 80L, seed = 3)
   expect_error(
-    tobs(~ x, data = sim$data, family = cover(positive = "lognormal"),
+    tobs(~ x, data = sim$data, family = cover(response = "lognormal"),
          y = sim$y, method = "laplace", priors = occu_priors()),
     "cover_priors"
   )
@@ -58,10 +58,10 @@ test_that("beta arm: a tight positive-slope prior shrinks the pos slope", {
                         sigma_pos = 0.4, seed = 5)
   d <- sim$data
 
-  f_unpen <- tobs(~ x, data = d, family = cover(positive = "beta"),
+  f_unpen <- tobs(~ x, data = d, family = cover(response = "beta"),
                   y = sim$y, method = "laplace")
   # beta-arm prior now threads through tulpa_laplace_beta(beta_prior=)
-  f_pen   <- tobs(~ x, data = d, family = cover(positive = "beta"),
+  f_pen   <- tobs(~ x, data = d, family = cover(response = "beta"),
                   y = sim$y, method = "laplace",
                   priors = cover_priors(pos_slope = list(mean = 0, sd = 0.02)))
   expect_s3_class(f_pen, "tobs_fit")

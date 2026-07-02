@@ -28,7 +28,7 @@
   suppressWarnings(tobs(
     occurrence = occurrence,
     detection  = ~ 1,
-    family     = occu_cover(positive = "lognormal"),
+    family     = occu_cover(response = "lognormal"),
     data       = sim$data, y = sim$y, y_pos = sim$y_pos,
     method     = "nested_laplace",
     control    = list(progress = FALSE, integration = integration)))
@@ -95,7 +95,7 @@ test_that("detection-arm field recovers once the substrate scatters onto p", {
     fit <- suppressWarnings(tobs(
       occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
       detection  = ~ 1 + spatial(~ 0 + time || cell, graph = adj),
-      positive   = ~ 1, family = occu_cover(positive = "lognormal"),
+      positive   = ~ 1, family = occu_cover(response = "lognormal"),
       data = sim$data, y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
       control = list(progress = FALSE, integration = "ccd")))
     nm <- grep("^sigma_p_field", names(fit$means), value = TRUE)[1L]
@@ -211,13 +211,13 @@ test_that("a spatial field in the positive formula equals the to = \"positive\" 
     occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
                    spatial(~ 0 + time || cell, graph = adj, to = "positive"),
     detection = ~ 1, positive = ~ time,
-    family = occu_cover(positive = "lognormal"),
+    family = occu_cover(response = "lognormal"),
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
     method = "nested_laplace", control = ctrl))
   fit_place <- suppressWarnings(tobs(
     occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
     detection = ~ 1, positive = ~ time + spatial(~ 0 + time || cell, graph = adj),
-    family = occu_cover(positive = "lognormal"),
+    family = occu_cover(response = "lognormal"),
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
     method = "nested_laplace", control = ctrl))
 
@@ -249,7 +249,7 @@ test_that("control$sigma.grid.pos.field is accepted and sets the cover-field gri
     occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
                    spatial(~ 0 + time || cell, graph = adj, to = "positive"),
     detection  = ~ 1, positive = ~ time,
-    family     = occu_cover(positive = "lognormal"),
+    family     = occu_cover(response = "lognormal"),
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
     method  = "nested_laplace",
     control = list(progress = FALSE, integration = "ccd",

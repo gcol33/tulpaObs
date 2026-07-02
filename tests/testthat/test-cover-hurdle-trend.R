@@ -72,7 +72,7 @@ test_that("cover() recovers a trend declared as a weighted areal formula term", 
   fit <- tobs(
     formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
                 icar(graph = sim$adj, weight = time, group_var = "cell"),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
   expect_s3_class(fit, "cover_fit")
@@ -100,7 +100,7 @@ test_that("spatial(model='icar', weight=) resolves identically to icar(weight=)"
   fit_bare <- tobs(
     formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
                 icar(graph = sim$adj, weight = time, group_var = "cell"),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
   fit_umb <- tobs(
@@ -108,7 +108,7 @@ test_that("spatial(model='icar', weight=) resolves identically to icar(weight=)"
                 spatial(graph = sim$adj, model = "icar", group_var = "cell") +
                 spatial(graph = sim$adj, model = "icar", weight = time,
                         group_var = "cell"),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
   expect_equal(fit_bare$beta_occ,    fit_umb$beta_occ)
@@ -127,7 +127,7 @@ test_that("control$trend errors with a migration pointer", {
 
   expect_error(
     tobs(formula = ~ time + icar(graph = adj, group_var = "cell"),
-         data = df, family = cover(positive = "lognormal"), y = y,
+         data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace",
          control = list(trend = list(weight = "time"))),
     "control\\$trend is no longer supported")
@@ -143,7 +143,7 @@ test_that("a weighted areal term without an intercept field errors", {
 
   expect_error(
     tobs(formula = ~ time + icar(graph = adj, weight = time, group_var = "cell"),
-         data = df, family = cover(positive = "lognormal"), y = y,
+         data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "unweighted intercept field")
 })
@@ -157,7 +157,7 @@ test_that("a weighted trend term requires method = 'nested_laplace'", {
   expect_error(
     tobs(formula = ~ time + icar(graph = adj, group_var = "cell") +
                      icar(graph = adj, weight = time, group_var = "cell"),
-         data = df, family = cover(positive = "lognormal"), y = y,
+         data = df, family = cover(response = "lognormal"), y = y,
          method = "laplace", control = list(verbose = FALSE)),
     "requires method = 'nested_laplace'")
 })
@@ -171,7 +171,7 @@ test_that("two unweighted areal terms error (one intercept field only)", {
   expect_error(
     tobs(formula = ~ time + icar(graph = adj, group_var = "cell") +
                      bym2(graph = adj, group_var = "cell"),
-         data = df, family = cover(positive = "lognormal"), y = y,
+         data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "exactly one unweighted intercept field")
 })

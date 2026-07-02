@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 have_inla <- requireNamespace("INLA", quietly = TRUE)
 ```
 
-`tulpaObs::cover(positive = "lognormal")` fits a two-arm hurdle model: a
+`tulpaObs::cover(response = "lognormal")` fits a two-arm hurdle model: a
 binomial GLM on the occurrence indicator $\mathbf{1}\{y_i > 0\}$, and a
 Gaussian GLM on $\log y_i$ over the positive subset, with the lognormal
 back-transform
@@ -100,7 +100,7 @@ the recovery table is approximation error rather than model misspecification.
 fit_tulpa <- tobs(
   formula = ~ x,
   data    = dat,
-  family  = cover(positive = "lognormal"),
+  family  = cover(response = "lognormal"),
   y       = dat$cover
 )
 fit_tulpa

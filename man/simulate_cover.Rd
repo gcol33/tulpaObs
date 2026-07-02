@@ -41,7 +41,7 @@ A list with:
 }
 }
 \description{
-Generates synthetic data matching the \code{cover(positive = "lognormal")}
+Generates synthetic data matching the \code{cover(response = "lognormal")}
 generative model used in Phase 1a:
 }
 \details{

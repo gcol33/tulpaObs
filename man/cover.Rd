@@ -5,12 +5,12 @@
 \title{Cover hurdle family (vegetation cover, MOTIVATE pattern)}
 \usage{
 cover(
-  positive = c("beta", "beta_oi", "lognormal", "lognormal_trunc", "ordinal"),
+  response = c("beta", "beta_oi", "lognormal", "lognormal_trunc", "ordinal"),
   breaks = NULL
 )
 }
 \arguments{
-\item{positive}{likelihood for the positive cover part:
+\item{response}{likelihood for the positive cover part:
 \itemize{
 \item \code{"beta"} -- cover in (0, 1) with a logit link;
 \item \code{"beta_oi"} -- a one-inflated Beta: a point mass at cover = 1 (plots
@@ -52,14 +52,14 @@ calls are equivalent:
 tobs(cover.flat ~ time.sc + habitat +
        spatial(~ 1 + time.sc || cell_idx, graph = adj,
                to = c("presence", "positive")),
-     data = dat, family = cover(positive = "beta"),
+     data = dat, family = cover(response = "beta"),
      method = "nested_laplace")
 
 # the same fit with a one-sided formula and an explicit y =
 tobs(~ time.sc + habitat +
        spatial(~ 1 + time.sc || cell_idx, graph = adj,
                to = c("presence", "positive")),
-     y = dat$cover.flat, data = dat, family = cover(positive = "beta"),
+     y = dat$cover.flat, data = dat, family = cover(response = "beta"),
      method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
@@ -192,7 +192,7 @@ shared-field cover hurdle reads:
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(cover.flat ~ time.sc + habitat +
        spatial(~ 1 + time.sc || cell_idx, graph = adj,
                to = c("presence", "positive")),
-     data = dat, family = cover(positive = "beta"),
+     data = dat, family = cover(response = "beta"),
      method = "nested_laplace")
 }\if{html}{\out{</div>}}
 }

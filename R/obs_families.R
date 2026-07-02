@@ -400,7 +400,7 @@ jsdm <- function() {
 #' attenuation and is a lower bound on the truth; the BLUPs recover the per-group
 #' structure.
 #'
-#' @param positive likelihood for the positive cover arm. `"beta"` (cover
+#' @param response likelihood for the positive cover arm. `"beta"` (cover
 #'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @param cover_aggregate how the cover arm collapses per occupancy unit on the
 #'   shared-field spatial path: `"mean"`, `"median"`, `"latent"` (a per-unit
@@ -430,9 +430,9 @@ jsdm <- function() {
 #' summary(fit)
 #' }
 #' @export
-occu_cover <- function(positive = c("beta", "lognormal"),
+occu_cover <- function(response = c("beta", "lognormal"),
                        cover_aggregate = NULL) {
-  positive <- match.arg(positive)
+  positive <- match.arg(response)
   if (!is.null(cover_aggregate)) {
     cover_aggregate <- match.arg(cover_aggregate,
                                  c("mean", "median", "latent", "none"))
@@ -586,14 +586,14 @@ occu_cover <- function(positive = c("beta", "lognormal"),
 #' `"none"`, `$affects` names the lower-bounded components, and `print()` flags
 #' the EM case.
 #'
-#' @param positive likelihood for the positive cover arm. `"beta"` (cover in
+#' @param response likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
 #' @seealso [occu_cover()] (single species), [ms_occu()] (community occupancy,
 #'   no cover), [ms_abun()] (community N-mixture).
 #' @export
-ms_occu_cover <- function(positive = c("beta", "lognormal")) {
-  positive <- match.arg(positive)
+ms_occu_cover <- function(response = c("beta", "lognormal")) {
+  positive <- match.arg(response)
   obs_family(
     name           = "ms_occu_cover",
     class_long     = "community joint occupancy-detection + cover hurdle",
@@ -668,13 +668,13 @@ ms_occu_cover <- function(positive = c("beta", "lognormal")) {
 #' `fit$trend_fields`. The coupled / trend field is not sampled, so
 #' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
-#' @param positive likelihood for the positive cover arm. `"beta"` (cover in
+#' @param response likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
 #' @return A `tobs_family` object.
 #' @seealso [occu_cover()] (two-level), [cover()] (plot hurdle, no detection).
 #' @export
-occu_multiscale_cover <- function(positive = c("beta", "lognormal")) {
-  positive <- match.arg(positive)
+occu_multiscale_cover <- function(response = c("beta", "lognormal")) {
+  positive <- match.arg(response)
   obs_family(
     name           = "occu_multiscale_cover",
     class_long     = "three-level occupancy + cover hurdle",
@@ -981,7 +981,7 @@ fp_occu <- function() {
 #' This is the categorical counterpart of [cover()] (presence + a magnitude):
 #' here the positive part is an unordered class, so it uses a multinomial logit
 #' rather than beta / lognormal. For an *ordered* class response (Braun-Blanquet
-#' cover bands) use `cover(positive = "ordinal")`, which exploits the ordering;
+#' cover bands) use `cover(response = "ordinal")`, which exploits the ordering;
 #' this family is for classes with no ordering.
 #'
 #' @section Response:
@@ -1041,14 +1041,14 @@ occu_categorical <- function(classes = NULL) {
 #' tobs(cover.flat ~ time.sc + habitat +
 #'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
 #'                to = c("presence", "positive")),
-#'      data = dat, family = cover(positive = "beta"),
+#'      data = dat, family = cover(response = "beta"),
 #'      method = "nested_laplace")
 #'
 #' # the same fit with a one-sided formula and an explicit y =
 #' tobs(~ time.sc + habitat +
 #'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
 #'                to = c("presence", "positive")),
-#'      y = dat$cover.flat, data = dat, family = cover(positive = "beta"),
+#'      y = dat$cover.flat, data = dat, family = cover(response = "beta"),
 #'      method = "nested_laplace")
 #' ```
 #'
@@ -1184,7 +1184,7 @@ occu_categorical <- function(classes = NULL) {
 #' tobs(cover.flat ~ time.sc + habitat +
 #'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
 #'                to = c("presence", "positive")),
-#'      data = dat, family = cover(positive = "beta"),
+#'      data = dat, family = cover(response = "beta"),
 #'      method = "nested_laplace")
 #' ```
 #'
@@ -1212,7 +1212,7 @@ occu_categorical <- function(classes = NULL) {
 #' of restarting. `resume = FALSE` starts a fresh file. Forwarded to
 #' [tulpa::tulpa_nested_laplace_joint()].
 #'
-#' @param positive likelihood for the positive cover part:
+#' @param response likelihood for the positive cover part:
 #'   * `"beta"` -- cover in (0, 1) with a logit link;
 #'   * `"beta_oi"` -- a one-inflated Beta: a point mass at cover = 1 (plots
 #'     recorded at full cover, a genuine boundary mass rather than a near-1
@@ -1240,10 +1240,10 @@ occu_categorical <- function(classes = NULL) {
 #' summary(fit)
 #' }
 #' @export
-cover <- function(positive = c("beta", "beta_oi", "lognormal", "lognormal_trunc",
+cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc",
                                "ordinal"),
                   breaks = NULL) {
-  positive <- match.arg(positive)
+  positive <- match.arg(response)
   # The ordinal positive arm is an interval-censored Gaussian on log-cover with
   # KNOWN class thresholds (an ordered probit, not free cutpoints): the cover is
   # recorded only as the ordinal class it falls in, so the likelihood is the
@@ -1255,7 +1255,7 @@ cover <- function(positive = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
     if (is.null(breaks) || !is.numeric(breaks) || length(breaks) < 1L ||
         anyNA(breaks) || is.unsorted(breaks, strictly = TRUE) ||
         any(breaks <= 0) || any(breaks >= 1)) {
-      stop("cover(positive = \"ordinal\") requires `breaks`: the interior ",
+      stop("cover(response = \"ordinal\") requires `breaks`: the interior ",
            "cover-class boundaries on the (0, 1) cover-fraction scale, strictly ",
            "ascending and all in (0, 1). For the MOTIVATE Braun-Blanquet scheme ",
            "(myscale): c(0.002, 0.015, 0.03, 0.05, 0.25, 0.50, 0.75). The open ",
@@ -1263,7 +1263,7 @@ cover <- function(positive = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
            "automatically.", call. = FALSE)
     }
   } else if (!is.null(breaks)) {
-    stop("`breaks` is only used for cover(positive = \"ordinal\").", call. = FALSE)
+    stop("`breaks` is only used for cover(response = \"ordinal\").", call. = FALSE)
   }
   obs_family(
     name           = "cover",

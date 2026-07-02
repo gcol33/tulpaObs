@@ -97,7 +97,7 @@ test_that("occu_cover_inputs() / long-frame tobs() reject bad keys", {
   adj <- .line_graph_eq(4L)
   expect_error(
     tobs(occurrence = ~ time.sc + spatial(~ 1 || cell_idx, graph = adj),
-         data = dd, family = occu_cover(positive = "beta", cover_aggregate = "none"),
+         data = dd, family = occu_cover(response = "beta", cover_aggregate = "none"),
          detection = ~ x1, response = "occur", y_pos = "cover.flat",
          site = "site_key", visit = "visit", y = matrix(0, 1, 1)),
     "OR a pre-built")
@@ -126,7 +126,7 @@ test_that("single long-frame occu_cover fit == the hand-built tobs_data route", 
   fit_mi <- tobs(
     occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
     data = od$occ.covs,
-    family = occu_cover(positive = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover_aggregate = "none"),
     detection = ~ x1 + hab, positive = ~ hab,
     y = od$y, y_pos = ocv$y, visits = od$det.covs,
     method = "nested_laplace", control = ctrl)
@@ -135,7 +135,7 @@ test_that("single long-frame occu_cover fit == the hand-built tobs_data route", 
   fit_long <- tobs(
     occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
     data = dd,
-    family = occu_cover(positive = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover_aggregate = "none"),
     detection = ~ x1 + hab, positive = ~ hab,
     site = "site_key", visit = "visit", response = "occur", y_pos = "cover.flat",
     det.covs = c("x1", "hab"),

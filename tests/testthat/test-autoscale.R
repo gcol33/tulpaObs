@@ -47,7 +47,7 @@ test_that("unscale / scale round-trip is exact", {
                tolerance = 1e-10)
 })
 
-test_that("cover(positive='beta') with year ~ 2000 column reaches the well-conditioned MAP", {
+test_that("cover(response='beta') with year ~ 2000 column reaches the well-conditioned MAP", {
   # Issue-#9 repro: a raw calendar-year column on the additive scale ~ 2000
   # forms a near-singular pair with the intercept in the natural-scale
   # Hessian. Autoscale internally so the optimizer converges to the true
@@ -81,14 +81,14 @@ test_that("cover(positive='beta') with year ~ 2000 column reaches the well-condi
   dat <- within_between(dat, group = "group_id", vars = "year")
 
   fit_raw <- tobs(~ year_btw + year_wtn, data = dat,
-                  family = cover(positive = "beta"), y = dat$y,
+                  family = cover(response = "beta"), y = dat$y,
                   method = "laplace")
 
   dat_sc <- dat %>%
     dplyr::mutate(year_btw_sc = as.numeric(scale(year_btw)),
                   year_wtn_sc = as.numeric(scale(year_wtn)))
   fit_sc <- tobs(~ year_btw_sc + year_wtn_sc, data = dat_sc,
-                 family = cover(positive = "beta"), y = dat_sc$y,
+                 family = cover(response = "beta"), y = dat_sc$y,
                  method = "laplace")
 
   # Predictions on the training data must match between the two fits

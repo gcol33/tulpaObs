@@ -151,7 +151,7 @@ test_that("shared `||` + by recovers independent per-level fields", {
   ctrl <- list(verbose = FALSE, progress = FALSE, integration = "grid",
                sigma.grid = exp(seq(log(0.3), log(2.5), length.out = 6)))
   fit <- tobs(formula = ~ x + spatial(~ 1 || cell, graph = adj, by = "grp"),
-              data = dat, family = cover(positive = "lognormal"),
+              data = dat, family = cover(response = "lognormal"),
               y = dat$cover, method = "nested_laplace", control = ctrl)
 
   expect_s3_class(fit, "cover_fit")

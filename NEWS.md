@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.95 (2026-07-02)
+
+* The positive-arm distribution argument of the cover families is renamed
+  `positive` -> `response`: `cover(response = "beta")`,
+  `occu_cover(response = "beta")`, `ms_occu_cover()`, `occu_multiscale_cover()`.
+  This removes the name clash with the `positive = ~ x` arm formula on a
+  `tobs()` call, where `positive` otherwise meant both the positive-cover arm
+  formula and the positive-arm response distribution. Positional calls
+  (`cover("beta")`) are unchanged; a named `positive =` now errors. The stored
+  family field and the whole fitting engine are unchanged, so fits are
+  byte-identical.
+
 ## 0.0.94 (2026-07-02)
 
 * `cover()` per-arm formulas now carry spatial fields by placement, completing

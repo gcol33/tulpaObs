@@ -22,7 +22,7 @@
                             correction = "none", ...) {
   positive <- family$params$positive
   if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal")) {
-    stop("cover(positive = '", positive, "') is not supported. ",
+    stop("cover(response = '", positive, "') is not supported. ",
          "Use 'lognormal', 'lognormal_trunc', 'beta', 'beta_oi', or 'ordinal'.",
          call. = FALSE)
   }
@@ -34,7 +34,7 @@
   # NUTS paths do not carry.
   if (positive %in% c("ordinal", "lognormal_trunc") &&
       !identical(engine, "nested_laplace")) {
-    stop("cover(positive = \"", positive, "\") requires method = ",
+    stop("cover(response = \"", positive, "\") requires method = ",
          "'nested_laplace' / 'nested_laplace_sla' (got engine '", engine, "'). ",
          "The ", positive, " arm carries a per-observation bound integrated on ",
          "the joint outer grid; the single-Laplace and NUTS paths are not wired ",
@@ -155,7 +155,7 @@
 #' @param data Data frame with `nrow(data) == length(y)`.
 #' @param y Length-N numeric vector of cover in `[0, 1]`. NAs are dropped
 #'   from both arms (treated as missing, not as zero cover).
-#' @param positive One of `"lognormal"` or `"beta"`.
+#' @param response One of `"lognormal"` or `"beta"`.
 #' @return A list with: `occ_data`, `pos_data`, `spatial_spec` (a
 #'   `tulpa_spatial` built from the unweighted areal formula term, or NULL),
 #'   `trend` (per-observation weight + label from a weighted areal term, or
@@ -243,7 +243,7 @@ encode_cover_hurdle <- function(formula, data, y,
     n_ceiling   <- sum(at_ceiling)
     is_pos      <- is_pos & (y_obs < 1 - tol)   # Beta arm = interior positives
     if (sum(is_pos) < 2L) {
-      stop("cover(positive = \"beta_oi\"): fewer than 2 interior (0 < cover < 1) ",
+      stop("cover(response = \"beta_oi\"): fewer than 2 interior (0 < cover < 1) ",
            "plots after setting the ceiling (cover = 1) aside. The interior Beta ",
            "is not identifiable; use positive = \"beta\" or check the response ",
            "scale.", call. = FALSE)
@@ -698,7 +698,7 @@ encode_cover_hurdle <- function(formula, data, y,
 #' an outer 1-D optimisation and weights the Hessian accordingly.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
-#' @param positive `"lognormal"` or `"beta"` (taken from `enc$positive`).
+#' @param response `"lognormal"` or `"beta"` (taken from `enc$positive`).
 #' @param engine `"laplace"` (default) or `"nested_laplace"`. The latter is
 #'   routed through [fit_cover_hurdle_joint_nested()].
 #' @param priors Optional [cover_priors()] object (or a coercible list /
@@ -2131,7 +2131,7 @@ print.summary.cover_fit <- function(x, ...) {
 #' @param enc Output of [encode_cover_hurdle()].
 #' @param data The original (un-subsetted) data frame — required to resolve
 #'   the spatial spec (group_var lookup, n_spatial_units check).
-#' @param positive `"lognormal"` or `"beta"`.
+#' @param response `"lognormal"` or `"beta"`.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
 #'   `sigma_grid`, `rho_grid`, `rho_car_grid`, `sigma_pos_grid`,
 #'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta

@@ -9,7 +9,7 @@
 
 #' Simulate cover-hurdle data (lognormal positive part)
 #'
-#' Generates synthetic data matching the `cover(positive = "lognormal")`
+#' Generates synthetic data matching the `cover(response = "lognormal")`
 #' generative model used in Phase 1a:
 #'
 #' \describe{
@@ -154,7 +154,7 @@ simulate_cover <- function(N             = 200L,
 #'   `rho = 1` is pure ICAR; `rho = 0` is pure IID.
 #' @param alpha Cover-arm scaling: cover-arm linear predictor adds
 #'   `alpha * sigma * z[region]` (so `sigma_pos = alpha * sigma`).
-#' @param positive Likelihood for the positive arm: `"beta"` or
+#' @param response Likelihood for the positive arm: `"beta"` or
 #'   `"lognormal"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
 #' @param sigma_pos_resid Lognormal residual SD when `positive =

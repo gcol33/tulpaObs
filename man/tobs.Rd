@@ -74,29 +74,6 @@ of the two.}
 Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun]{abun()}}, ignored for
 \code{\link[=jsdm]{jsdm()}} and (currently) \code{\link[=cover]{cover()}}.}
 
-\item{positive}{positive-arm (cover) formula for \code{\link[=occu_cover]{occu_cover()}}, e.g.
-\code{~ time.sc + habitat}. The occurrence spatial field is carried onto this arm
-with a \code{copy()} selector, the INLA-style cross-arm edge written in the
-formula. The selector is a constructor, so no field name is needed in the
-common case:
-\itemize{
-\item \code{copy(spatial(), alpha = grid(g))} copies the occurrence arm's spatial
-effect and marginalizes the coupling amplitude over the grid \code{g};
-\verb{alpha = <scalar>} fixes it.
-\item \code{copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))}
-gives a per-component amplitude, keyed by the field's own block names (the
-intercept block and a \code{||}-declared trend column, or its alias \code{trend});
-\verb{terms =} must address every block.
-\item \code{copy(spatial(cell_idx), ...)} disambiguates by grouping variable when the
-occurrence arm carries several spatial effects.
-\item decoupling is structural: omit \code{copy()} so the field rides occupancy only
-(a block with no \code{copy()} is pinned at zero coupling), or write a
-\code{spatial()} term for the cover arm's own field.
-}
-
-Defaults to \code{detection} when unset (a per-visit cover design matching the
-detection design).}
-
 \item{y}{response. Shape depends on family:
 \itemize{
 \item \code{\link[=occu]{occu()}} — N x J detection-history matrix.
@@ -274,6 +251,29 @@ build and inspect the arms without fitting.}
 
 \item{...}{family-specific named arguments forwarded to the underlying
 engine builder.}
+
+\item{response}{positive-arm (cover) formula for \code{\link[=occu_cover]{occu_cover()}}, e.g.
+\code{~ time.sc + habitat}. The occurrence spatial field is carried onto this arm
+with a \code{copy()} selector, the INLA-style cross-arm edge written in the
+formula. The selector is a constructor, so no field name is needed in the
+common case:
+\itemize{
+\item \code{copy(spatial(), alpha = grid(g))} copies the occurrence arm's spatial
+effect and marginalizes the coupling amplitude over the grid \code{g};
+\verb{alpha = <scalar>} fixes it.
+\item \code{copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))}
+gives a per-component amplitude, keyed by the field's own block names (the
+intercept block and a \code{||}-declared trend column, or its alias \code{trend});
+\verb{terms =} must address every block.
+\item \code{copy(spatial(cell_idx), ...)} disambiguates by grouping variable when the
+occurrence arm carries several spatial effects.
+\item decoupling is structural: omit \code{copy()} so the field rides occupancy only
+(a block with no \code{copy()} is pinned at zero coupling), or write a
+\code{spatial()} term for the cover arm's own field.
+}
+
+Defaults to \code{detection} when unset (a per-visit cover design matching the
+detection design).}
 }
 \value{
 An object of class \code{c("tobs_fit", "<family>_fit", "tulpa_fit")}.

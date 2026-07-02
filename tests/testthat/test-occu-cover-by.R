@@ -240,7 +240,7 @@ test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fi
 
   fit_by <- suppressWarnings(suppressMessages(tobs(
     occurrence = ~ occ_cov1 + spatial(~ 1 || site_id, graph = adj), data = long,
-    family = occu_cover(positive = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover_aggregate = "none"),
     detection = ~ det_cov1, positive = ~ 1,
     method = "nested_laplace", control = ctrl, by = "sp",
     site = "site_id", visit = "visit", response = "occur", y_pos = "cover",
@@ -260,7 +260,7 @@ test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fi
   yp2 <- ifelse(is.na(sim2$y_pos), 0, sim2$y_pos)
   fit_one <- function(yy, ypp) suppressWarnings(suppressMessages(tobs(
     occurrence = ~ occ_cov1 + spatial(~ 1 || site_id, graph = adj), data = cell_dat,
-    family = occu_cover(positive = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover_aggregate = "none"),
     detection = ~ det_cov1, positive = ~ 1,
     y = yy, y_pos = ypp, visits = od1$det.covs,
     method = "nested_laplace", control = ctrl)))

@@ -1,18 +1,18 @@
-# Tests for cover(positive = "ordinal") -- the interval-censored Gaussian
+# Tests for cover(response = "ordinal") -- the interval-censored Gaussian
 # (ordered-probit with KNOWN Braun-Blanquet thresholds) positive arm on the
 # joint nested-Laplace path.
 
-test_that("cover(positive = 'ordinal') constructs and validates breaks", {
-  fam <- cover(positive = "ordinal", breaks = c(0.05, 0.25, 0.5))
+test_that("cover(response = 'ordinal') constructs and validates breaks", {
+  fam <- cover(response = "ordinal", breaks = c(0.05, 0.25, 0.5))
   expect_s3_class(fam, "tobs_family")
   expect_equal(fam$params$positive, "ordinal")
   expect_equal(fam$params$breaks, c(0.05, 0.25, 0.5))
   expect_equal(fam$status, "working")
 
-  expect_error(cover(positive = "ordinal"), "requires `breaks`")
-  expect_error(cover(positive = "ordinal", breaks = c(0.5, 0.2)), "ascending")
-  expect_error(cover(positive = "ordinal", breaks = c(0.2, 1.5)), "in \\(0, 1\\)")
-  expect_error(cover(positive = "lognormal", breaks = 0.3), "only used for")
+  expect_error(cover(response = "ordinal"), "requires `breaks`")
+  expect_error(cover(response = "ordinal", breaks = c(0.5, 0.2)), "ascending")
+  expect_error(cover(response = "ordinal", breaks = c(0.2, 1.5)), "in \\(0, 1\\)")
+  expect_error(cover(response = "lognormal", breaks = 0.3), "only used for")
 })
 
 test_that("encode assigns each Braun-Blanquet representative to its own class", {
@@ -37,7 +37,7 @@ test_that("ordinal requires method = 'nested_laplace'", {
                     y = ifelse(runif(40) < 0.5, 0,
                                sample(c(0.02, 0.155, 0.38), 40, TRUE)))
   expect_error(
-    tobs(y ~ x, data = dat, family = cover(positive = "ordinal",
+    tobs(y ~ x, data = dat, family = cover(response = "ordinal",
          breaks = c(0.05, 0.25, 0.5)), method = "laplace"),
     "requires method = 'nested_laplace'"
   )
@@ -74,7 +74,7 @@ test_that("ordinal cover recovers truth from censored class data", {
   skip_if_fast()
   s <- .sim_ordinal(2026L)
   fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
-              data = s$data, family = cover(positive = "ordinal", breaks = s$brks),
+              data = s$data, family = cover(response = "ordinal", breaks = s$brks),
               method = "nested_laplace", control = list(progress = FALSE))
   expect_s3_class(fit, "cover_fit")
   expect_equal(fit$positive, "ordinal")

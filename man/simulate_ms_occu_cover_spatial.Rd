@@ -78,9 +78,9 @@ reproduces the Stage 1-2 RNG stream byte for byte; \code{truth$field} / \code{tr
 
 \item{sigma_pos}{Lognormal cover residual SD (on the log scale).}
 
-\item{positive}{Cover family; only \code{"lognormal"} in Stage 1.}
-
 \item{seed}{Optional RNG seed.}
+
+\item{response}{Cover family; only \code{"lognormal"} in Stage 1.}
 }
 \value{
 A list with \code{y} (N x J x n_species 0/1 detections), \code{y_pos}

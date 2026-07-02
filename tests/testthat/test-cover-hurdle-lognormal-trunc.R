@@ -1,14 +1,14 @@
-# Tests for cover(positive = "lognormal_trunc") -- the upper-truncated lognormal
+# Tests for cover(response = "lognormal_trunc") -- the upper-truncated lognormal
 # (Gaussian on log-cover truncated at log(1) = 0, so cover <= 1) positive arm on
 # the joint nested-Laplace path (tulpa truncated_gaussian family, gcol33/tulpa#122).
 
-test_that("cover(positive = 'lognormal_trunc') constructs", {
-  fam <- cover(positive = "lognormal_trunc")
+test_that("cover(response = 'lognormal_trunc') constructs", {
+  fam <- cover(response = "lognormal_trunc")
   expect_s3_class(fam, "tobs_family")
   expect_equal(fam$params$positive, "lognormal_trunc")
   expect_equal(fam$observation, "binomial_plus_lognormal_trunc")
   expect_equal(fam$status, "working")
-  expect_error(cover(positive = "lognormal_trunc", breaks = 0.3), "only used for")
+  expect_error(cover(response = "lognormal_trunc", breaks = 0.3), "only used for")
 })
 
 test_that("encode stores the log-cover truncation ceiling (log 1 = 0)", {
@@ -25,7 +25,7 @@ test_that("lognormal_trunc requires method = 'nested_laplace'", {
   dat <- data.frame(x = rnorm(40), cell = sample.int(4, 40, replace = TRUE),
                     y = ifelse(runif(40) < 0.5, 0, runif(40)^2))
   expect_error(
-    tobs(y ~ x, data = dat, family = cover(positive = "lognormal_trunc"),
+    tobs(y ~ x, data = dat, family = cover(response = "lognormal_trunc"),
          method = "laplace"),
     "requires method = 'nested_laplace'"
   )
@@ -63,7 +63,7 @@ test_that("lognormal_trunc cover recovers truth from bounded cover data", {
   s <- .sim_trunc(2026L)
   expect_true(all(s$data$y >= 0 & s$data$y <= 1))
   fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
-              data = s$data, family = cover(positive = "lognormal_trunc"),
+              data = s$data, family = cover(response = "lognormal_trunc"),
               method = "nested_laplace", control = list(progress = FALSE))
   expect_s3_class(fit, "cover_fit")
   expect_equal(fit$positive, "lognormal_trunc")
@@ -96,9 +96,9 @@ test_that("negligible truncation reduces to the lognormal fit", {
   fml <- y ~ x + spatial(~ 1 || cell_idx, graph = s$adj)
   ctl <- list(progress = FALSE,
               phi.grid = exp(seq(log(0.15), log(1.1), length.out = 9)))
-  fit_ln <- tobs(fml, data = s$data, family = cover(positive = "lognormal"),
+  fit_ln <- tobs(fml, data = s$data, family = cover(response = "lognormal"),
                  method = "nested_laplace", control = ctl)
-  fit_tr <- tobs(fml, data = s$data, family = cover(positive = "lognormal_trunc"),
+  fit_tr <- tobs(fml, data = s$data, family = cover(response = "lognormal_trunc"),
                  method = "nested_laplace", control = ctl)
   expect_lt(max(abs(fit_tr$beta_occ - fit_ln$beta_occ)), 0.03)
   expect_lt(max(abs(fit_tr$beta_pos - fit_ln$beta_pos)), 0.03)

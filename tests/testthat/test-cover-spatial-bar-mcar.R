@@ -75,7 +75,7 @@ test_that("correlated `|` bar recovers Sigma (SDs + cross-correlation) and alpha
     fit <- suppressWarnings(tobs(
       formula = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj,
                                     to = c("presence", "positive")),
-      data = sim$data, y = sim$y, family = cover(positive = "lognormal"),
+      data = sim$data, y = sim$y, family = cover(response = "lognormal"),
       method = "nested_laplace",
       control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))
 
@@ -128,7 +128,7 @@ test_that("independent `||` bar does not recover a spurious cross-correlation", 
   fit <- suppressWarnings(tobs(
     formula = ~ time.sc + spatial(~ 1 + time.sc || cell, graph = adj,
                                   to = c("presence", "positive")),
-    data = sim$data, y = sim$y, family = cover(positive = "lognormal"),
+    data = sim$data, y = sim$y, family = cover(response = "lognormal"),
     method = "nested_laplace",
     control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))
 
@@ -184,7 +184,7 @@ test_that("single-arm `|` (to = 'presence') recovers Sigma, no cross-arm copy", 
     fit <- suppressWarnings(tobs(
       formula = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj,
                                     to = "presence"),
-      data = sim$data, y = sim$y, family = cover(positive = "lognormal"),
+      data = sim$data, y = sim$y, family = cover(response = "lognormal"),
       method = "nested_laplace",
       control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))
 

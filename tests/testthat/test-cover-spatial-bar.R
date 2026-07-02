@@ -76,14 +76,14 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
   fit_two <- tobs(
     formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
                 icar(graph = sim$adj, weight = time, group_var = "cell"),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   fit_bar <- tobs(
     formula = ~ time +
                 spatial(~ 1 + time || cell, graph = sim$adj,
                         to = c("presence", "positive")),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   # Core correctness proof: the desugaring must reproduce the existing
@@ -113,14 +113,14 @@ test_that("to= is unordered: c('positive','presence') == c('presence','positive'
     formula = ~ time +
                 spatial(~ 1 + time || cell, graph = sim$adj,
                         to = c("presence", "positive")),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   fit_ba <- tobs(
     formula = ~ time +
                 spatial(~ 1 + time || cell, graph = sim$adj,
                         to = c("positive", "presence")),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   expect_equal(fit_ab$beta_occ,    fit_ba$beta_occ)
@@ -140,12 +140,12 @@ test_that("to= omitted defaults to both cover arms (same fit)", {
     formula = ~ time +
                 spatial(~ 1 + time || cell, graph = sim$adj,
                         to = c("presence", "positive")),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   fit_default <- tobs(
     formula = ~ time + spatial(~ 1 + time || cell, graph = sim$adj),
-    data = sim$data, family = cover(positive = "lognormal"), y = sim$y,
+    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   expect_equal(fit_default$beta_occ,    fit_explicit$beta_occ)
@@ -170,13 +170,13 @@ test_that("an unknown to= arm label errors listing the valid arms", {
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = d$adj,
                              to = c("occ", "cover")),
-         data = d$df, family = cover(positive = "lognormal"), y = d$y,
+         data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "unknown arm label")
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = d$adj, to = "occurrence"),
-         data = d$df, family = cover(positive = "lognormal"), y = d$y,
+         data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "presence.*positive|positive.*presence")
 })
@@ -191,7 +191,7 @@ test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
               formula = ~ time +
                           spatial(~ 1 + time | cell, graph = d$adj,
                                   to = c("presence", "positive")),
-              data = d$df, family = cover(positive = "lognormal"), y = d$y,
+              data = d$df, family = cover(response = "lognormal"), y = d$y,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE, max.iter = 40L,
                              integration = "grid")))
@@ -207,7 +207,7 @@ test_that("a single-arm correlated `|` bar fits on the occurrence arm alone (#10
   d <- .bar_small_data()
   fit <- suppressWarnings(tobs(
     formula = ~ time + spatial(~ 1 + time | cell, graph = d$adj, to = "presence"),
-    data = d$df, family = cover(positive = "lognormal"), y = d$y,
+    data = d$df, family = cover(response = "lognormal"), y = d$y,
     method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE)))
   expect_s3_class(fit, "cover_fit")
   expect_true(isTRUE(fit$mcar))
@@ -223,7 +223,7 @@ test_that("a correlated `|` bar cannot co-exist with another areal term", {
                      spatial(~ 1 + time | cell, graph = d$adj,
                              to = c("presence", "positive")) +
                      icar(graph = d$adj, group_var = "cell"),
-         data = d$df, family = cover(positive = "lognormal"), y = d$y,
+         data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "whole spatial structure|other areal terms")
 })
@@ -237,7 +237,7 @@ test_that("a single-arm || to= is wired as an arm-specific separate latent", {
   fit <- suppressWarnings(tobs(
     formula = ~ time +
                 spatial(~ 1 + time || cell, graph = d$adj, to = "presence"),
-    data = d$df, family = cover(positive = "lognormal"), y = d$y,
+    data = d$df, family = cover(response = "lognormal"), y = d$y,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
   expect_s3_class(fit, "cover_fit")
@@ -255,7 +255,7 @@ test_that("a node index not matching the graph dimension errors", {
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = adj,
                              to = c("presence", "positive")),
-         data = df, family = cover(positive = "lognormal"), y = y,
+         data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "node")
 })

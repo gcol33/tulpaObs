@@ -24,7 +24,7 @@ and positive-cover arms.}
 \item{y}{Length-N numeric vector of cover in \verb{[0, 1]}. NAs are dropped
 from both arms (treated as missing, not as zero cover).}
 
-\item{positive}{One of \code{"lognormal"} or \code{"beta"}.}
+\item{response}{One of \code{"lognormal"} or \code{"beta"}.}
 }
 \value{
 A list with: \code{occ_data}, \code{pos_data}, \code{spatial_spec} (a

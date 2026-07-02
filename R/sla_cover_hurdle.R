@@ -116,7 +116,7 @@
 #' @param fits The list returned by [`fit_cover_hurdle()`] (with `m_occ`,
 #'   `m_pos`, `positive`, and one of `phi_pos` / `sigma_pos`).
 #' @param enc The encoded data from [`encode_cover_hurdle()`].
-#' @param positive One of `"beta"`, `"lognormal"`.
+#' @param response One of `"beta"`, `"lognormal"`.
 #' @return List(gamma_occ, gamma_pos, valid, reason).
 #' @keywords internal
 .sla_compute_cover_hurdle <- function(fits, enc, positive) {

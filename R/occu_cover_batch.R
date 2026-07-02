@@ -672,11 +672,11 @@
 #' @param compact Logical (default `TRUE`). Build the compact (ragged) arms the
 #'   joint nested-Laplace `occu_cover()` engine consumes (no per-site visit
 #'   cap), or the dense `[n_sites x max_visits]` grid.
-#' @param positive The cover-arm distribution, matching [occu_cover()]: `"beta"`
+#' @param response The cover-arm distribution, matching [occu_cover()]: `"beta"`
 #'   (default) stores `y_pos` as a proportion in `[0, 1]` (`tobs_data()` type
 #'   `"cover"`); `"lognormal"` / `"gamma"` store it as a positive real `(0, Inf)`
 #'   (type `"positive"`, validated non-negative with no upper bound). Pick the
-#'   value you pass to `occu_cover(positive = )`.
+#'   value you pass to `occu_cover(response = )`.
 #'
 #' @return A list with `y`, `y_pos`, `visits`, `site_data`, `coords`,
 #'   `n_sites`, `max_visits`, `n_visits`, and `compact`.

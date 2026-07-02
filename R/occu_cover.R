@@ -25,7 +25,7 @@
 # cover()'s nested-Laplace joint engine) is v2.
 #
 # Files this touches:
-#   R/obs_families.R    - occu_cover(positive = ) constructor
+#   R/obs_families.R    - occu_cover(response = ) constructor
 #   R/tobs.R            - dispatch switch + .tobs_family_methods entry
 #   tests/testthat/     - test-occu-cover.R recovery test
 # =============================================================================
@@ -2266,7 +2266,7 @@
 #' @param beta_occ,beta_p,beta_pos Coefficient vectors c(intercept, slopes).
 #'   Defaults pick weakly-informative values: psi intercept at logit(0.4),
 #'   p intercept at logit(0.5), cover intercept on the appropriate link.
-#' @param positive `"beta"` or `"lognormal"`.
+#' @param response `"beta"` or `"lognormal"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
 #' @param sigma_pos Lognormal residual SD when `positive = "lognormal"`
 #'   (default 0.4).

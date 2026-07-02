@@ -4,10 +4,10 @@
 \alias{occu_cover}
 \title{Joint occupancy-detection + cover hurdle family}
 \usage{
-occu_cover(positive = c("beta", "lognormal"), cover_aggregate = NULL)
+occu_cover(response = c("beta", "lognormal"), cover_aggregate = NULL)
 }
 \arguments{
-\item{positive}{likelihood for the positive cover arm. \code{"beta"} (cover
+\item{response}{likelihood for the positive cover arm. \code{"beta"} (cover
 in (0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
 
 \item{cover_aggregate}{how the cover arm collapses per occupancy unit on the

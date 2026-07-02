@@ -33,8 +33,6 @@ simulate_occu_multiscale_cover(
 \item{beta_psi, beta_theta, beta_p, beta_pos}{length-2 \code{c(intercept, slope)}
 coefficients for the four arms (one covariate each).}
 
-\item{positive}{\code{"lognormal"} or \code{"beta"} cover arm.}
-
 \item{phi}{cover dispersion (lognormal log-scale SD, or beta precision).}
 
 \item{adj}{\verb{n_cells x n_cells} adjacency; default a 1-D chain.}
@@ -52,6 +50,8 @@ weighted per cell by a cell-level covariate \code{tcov} (added to \code{data}):
 scaling (used only when \code{trend = TRUE}).}
 
 \item{seed}{optional RNG seed.}
+
+\item{response}{\code{"lognormal"} or \code{"beta"} cover arm.}
 }
 \value{
 A list with \code{y}, \code{y_pos} (\verb{[n_plots x visits_per_plot]}), the

@@ -1,7 +1,7 @@
-# Tests for cover(positive = "lognormal") -- Phase 1a.
+# Tests for cover(response = "lognormal") -- Phase 1a.
 
-test_that("cover(positive = 'lognormal') flips to working", {
-  fam <- cover(positive = "lognormal")
+test_that("cover(response = 'lognormal') flips to working", {
+  fam <- cover(response = "lognormal")
   expect_s3_class(fam, "tobs_family")
   expect_equal(fam$name, "cover")
   expect_equal(fam$status, "working")
@@ -9,7 +9,7 @@ test_that("cover(positive = 'lognormal') flips to working", {
   expect_equal(fam$params$positive, "lognormal")
 })
 
-test_that("cover(positive = 'beta') is wired through to the beta Laplace engine", {
+test_that("cover(response = 'beta') is wired through to the beta Laplace engine", {
   fam <- cover("beta")
   expect_equal(fam$status, "working")
   expect_equal(fam$params$positive, "beta")
@@ -48,7 +48,7 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
   fit <- tobs(
     formula = ~ x,
     data    = sim$data,
-    family  = cover(positive = "lognormal"),
+    family  = cover(response = "lognormal"),
     y       = sim$y
   )
   expect_s3_class(fit, "cover_fit")
@@ -77,7 +77,7 @@ test_that("Gaussian arm uses only positive-cover rows", {
   fit <- tobs(
     formula = ~ x,
     data    = sim$data,
-    family  = cover(positive = "lognormal"),
+    family  = cover(response = "lognormal"),
     y       = sim$y
   )
   n_pos_obs <- sum(sim$y > 0)

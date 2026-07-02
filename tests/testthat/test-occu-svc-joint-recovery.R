@@ -186,7 +186,7 @@ test_that("occu() SVC occupancy arm matches occu_cover(alpha = 0) within toleran
   fit_oc <- tryCatch(suppressWarnings(tobs(
     formula   = ~ xocc + spatial(~ 1 + time || cell, graph = sim$adj),
     data      = sim$site_data,
-    family    = occu_cover(positive = "beta", cover_aggregate = "none"),
+    family    = occu_cover(response = "beta", cover_aggregate = "none"),
     detection = ~ d1 + d2,
     positive  = ~ 1,
     y = sim$y, y_pos = y_pos,

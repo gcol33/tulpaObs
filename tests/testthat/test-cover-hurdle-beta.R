@@ -1,4 +1,4 @@
-## Tests for cover(positive = "beta") via tulpa_laplace_beta.
+## Tests for cover(response = "beta") via tulpa_laplace_beta.
 
 simulate_beta_cover <- function(N = 500, beta_occ = c(-0.4, 0.8),
                                 beta_pos = c(0.5, -1.2), phi = 30,
@@ -22,7 +22,7 @@ simulate_beta_cover <- function(N = 500, beta_occ = c(-0.4, 0.8),
   )
 }
 
-test_that("cover(positive='beta') recovers betas and phi on simulated data", {
+test_that("cover(response='beta') recovers betas and phi on simulated data", {
   sim <- simulate_beta_cover(N = 800, seed = 11)
   fit <- tobs(
     formula = ~ x,
@@ -61,7 +61,7 @@ test_that("predict() respects the beta back-transform", {
                expected_p * expected_mu)
 })
 
-test_that("cover(positive='beta') matches a separate-fit pipeline that mirrors Michael Glaser's INLA hurdle", {
+test_that("cover(response='beta') matches a separate-fit pipeline that mirrors Michael Glaser's INLA hurdle", {
   skip_if_not_installed("betareg")
 
   sim <- simulate_beta_cover(N = 800, seed = 19)

@@ -19,7 +19,7 @@
 test_that("occu_multiscale_cover() requires a cell-declaring areal term", {
   sim <- simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
                                         visits_per_plot = 2L, seed = 1L)
-  fam <- occu_multiscale_cover(positive = "lognormal")
+  fam <- occu_multiscale_cover(response = "lognormal")
 
   # No areal term -> cells are undeclared, on either method.
   expect_error(
@@ -73,7 +73,7 @@ test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplac
 
     fit <- tryCatch(suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-      data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+      data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
       control = list(sigma.grid = c(0.3, 0.6, 1.0),
@@ -126,7 +126,7 @@ test_that("occu_multiscale_cover() beta positive arm fits end-to-end", {
     sigma = 0.6, alpha = 1.0, seed = 909L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-    data = sim$data, family = occu_multiscale_cover(positive = "beta"),
+    data = sim$data, family = occu_multiscale_cover(response = "beta"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
     y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
     control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
@@ -145,7 +145,7 @@ test_that("occu_multiscale_cover() fitted() / predict() (#53)", {
     sigma = 0.6, alpha = 1.0, positive = "lognormal", seed = 77L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-    data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+    data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
     y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
     control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
@@ -190,7 +190,7 @@ test_that("occu_multiscale_cover() non-spatial Laplace recovers truth (#53)", {
       positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 300L + s)
     fit <- suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-      data = sim$data, family = occu_multiscale_cover(positive = "beta"),
+      data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y_pos = sim$y_pos, method = "laplace",
       control = list(verbose = FALSE)))
@@ -222,7 +222,7 @@ test_that("occu_multiscale_cover() coupled trend field recovers its shape (#53)"
     fit <- tryCatch(suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell") +
                   icar(graph = sim$adj, group_var = "cell", weight = tcov),
-      data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+      data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
       control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),

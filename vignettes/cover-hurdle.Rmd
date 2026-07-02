@@ -187,7 +187,7 @@ be before fitting the real thing.
 
 The fit is one `tobs()` call. The formula carries the fixed effects shared by
 both arms (here a single covariate `x`), the data frame supplies the design, the
-family is `cover(positive = "lognormal")`, and the cover values pass through
+family is `cover(response = "lognormal")`, and the cover values pass through
 `y`. The default `method = "auto"` resolves to `"laplace"` for the cover family,
 which is the two-independent-Laplace path; nothing else needs setting for the
 non-spatial fit.
@@ -196,7 +196,7 @@ non-spatial fit.
 fit <- tobs(
   formula = ~ x,
   data    = sim$data,
-  family  = cover(positive = "lognormal"),
+  family  = cover(response = "lognormal"),
   y       = sim$y
 )
 fit

@@ -4,10 +4,10 @@
 \alias{ms_occu_cover}
 \title{Community (multispecies) joint occupancy-detection + cover family}
 \usage{
-ms_occu_cover(positive = c("beta", "lognormal"))
+ms_occu_cover(response = c("beta", "lognormal"))
 }
 \arguments{
-\item{positive}{likelihood for the positive cover arm. \code{"beta"} (cover in
+\item{response}{likelihood for the positive cover arm. \code{"beta"} (cover in
 (0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
 }
 \value{

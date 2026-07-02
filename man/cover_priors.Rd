@@ -57,7 +57,7 @@ nested-Laplace path to combine the two.
 \examples{
 \dontrun{
 # regularise the occurrence arm, leave the positive arm unpenalised
-fit <- tobs(~ x, data = d, family = cover(positive = "lognormal"),
+fit <- tobs(~ x, data = d, family = cover(response = "lognormal"),
             y = cov, method = "laplace",
             priors = cover_priors(pos_intercept = list(mean = 0, sd = Inf),
                                   pos_slope     = list(mean = 0, sd = Inf)))

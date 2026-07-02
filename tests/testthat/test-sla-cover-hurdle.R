@@ -1,5 +1,5 @@
-# Phase 3.5 SLA regression tests for cover(positive = "beta") and
-# cover(positive = "lognormal").
+# Phase 3.5 SLA regression tests for cover(response = "beta") and
+# cover(response = "lognormal").
 #
 # See R/sla_cover_hurdle.R and R/simplified_laplace.R.
 
@@ -45,7 +45,7 @@ simulate_lognormal_cover_local <- function(N = 400, beta_occ = c(-0.3, 0.6),
 
 # ---- smoke tests (beta) ----------------------------------------------------
 
-test_that("cover(positive='beta') with simplified_laplace attaches skew + status", {
+test_that("cover(response='beta') with simplified_laplace attaches skew + status", {
   sim <- simulate_beta_cover_local(N = 400, seed = 11)
   fit <- tobs(
     formula = ~ x,
@@ -74,7 +74,7 @@ test_that("cover(positive='beta') with simplified_laplace attaches skew + status
 
 # ---- smoke tests (lognormal) ----------------------------------------------
 
-test_that("cover(positive='lognormal') with simplified_laplace attaches skew + status", {
+test_that("cover(response='lognormal') with simplified_laplace attaches skew + status", {
   sim <- simulate_lognormal_cover_local(N = 400, seed = 12)
   fit <- tobs(
     formula = ~ x,

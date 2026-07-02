@@ -93,7 +93,7 @@ test_that("occu_multiscale_cover NUTS rejects a coupled trend field", {
   expect_error(
     tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell") +
                      icar(graph = sim$adj, group_var = "cell", weight = tcov),
-         data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+         data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
          detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
          y = sim$y, y_pos = sim$y_pos, method = "nuts"),
     "non-spatial")
@@ -129,7 +129,7 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
 
     fit <- tryCatch(suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-      data = sim$data, family = occu_multiscale_cover(positive = "beta"),
+      data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y_pos = sim$y_pos, method = "nuts",
       control = list(n.iter = 600L, n.warmup = 600L, n.chains = 2L,
@@ -142,7 +142,7 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
 
     fl <- suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-      data = sim$data, family = occu_multiscale_cover(positive = "beta"),
+      data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y_pos = sim$y_pos, method = "laplace",
       control = list(verbose = FALSE)))
@@ -184,7 +184,7 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
     positive = "lognormal", phi = 0.35, sigma = 0, alpha = 0, seed = 909L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
-    data = sim$data, family = occu_multiscale_cover(positive = "lognormal"),
+    data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
     y = sim$y, y_pos = sim$y_pos, method = "nuts",
     control = list(n.iter = 500L, n.warmup = 500L, n.chains = 2L,

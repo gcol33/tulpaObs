@@ -4,10 +4,10 @@
 \alias{occu_multiscale_cover}
 \title{Three-level (multiscale) occupancy + cover hurdle family}
 \usage{
-occu_multiscale_cover(positive = c("beta", "lognormal"))
+occu_multiscale_cover(response = c("beta", "lognormal"))
 }
 \arguments{
-\item{positive}{likelihood for the positive cover arm. \code{"beta"} (cover in
+\item{response}{likelihood for the positive cover arm. \code{"beta"} (cover in
 (0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
 }
 \value{
