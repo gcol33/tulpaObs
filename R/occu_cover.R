@@ -976,6 +976,12 @@
         }
         e$to <- arm
         arm_extra[[length(arm_extra) + 1L]] <<- e
+      } else if (!is.na(head) && head %in% c("|", "||")) {
+        # An lme4 RE bar. terms() strips the parentheses off `(1 | g)` down to the
+        # label `1 | g`; reformulate() would rebuild it as `... + 1 | g`, which R
+        # re-parses as `(... + 1) | g` -- no longer an RE bar. Restore the parens
+        # so the downstream RE parse (.occu_cover_obs_re_parse) still sees a bar.
+        keep <- c(keep, sprintf("(%s)", lab))
       } else {
         keep <- c(keep, lab)
       }

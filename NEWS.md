@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.93 (2026-07-02)
+
+* Bugfix: an lme4 random-effect bar on the `occu_cover()` detection or
+  positive-cover formula (`detection = ~ det_cov1 + (1 | habitat)`, and the
+  `(x | g)` / `(0 + x | g)` slope spellings) is fitted again. The arm-field
+  lifting introduced in 0.0.90 round-tripped each arm formula through
+  `terms()` / `reformulate()`, which dropped the parentheses off a bar
+  (`(1 | g)` -> `1 | g`); R then re-parsed `~ det_cov1 + 1 | g` as
+  `(det_cov1 + 1) | g`, so the downstream RE parse saw no bar and silently
+  dropped the random effect. The lift now re-parenthesizes bar terms it keeps.
+  The `re(g)` spelling was unaffected. Restores gcol33/tulpaObs#102, #103.
+
 ## 0.0.92 (2026-07-02)
 
 * `occu_cover()` detection-arm spatial field: a spatial-field term on the
