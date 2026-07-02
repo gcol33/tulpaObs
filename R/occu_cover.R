@@ -947,13 +947,15 @@
 .occu_cover_field_ctors <- c("spatial", "icar", "bym2", "car", "car_proper")
 
 # Placement is the canonical way to put a field on an arm: a spatial-field term
-# written in the detection or positive formula declares a field ON that arm. Lift
-# such terms onto the occurrence formula, tagged with their arm via `to`, so the
-# arm-generic resolver (.occu_cover_spatial_fields) sees every arm's fields in one
-# place. copy() and RE terms are handled separately and left untouched. Returns the
-# augmented occurrence formula and the stripped detection / positive formulas.
+# written in the detection or positive formula declares a field ON that arm. Pull
+# such terms off their arm formula and carry them as (call, arm) pairs, so the
+# arm-generic resolver (.occu_cover_spatial_fields) can evaluate each field spec
+# and tag it with its arm alongside the occurrence formula's own fields. copy()
+# and RE terms are handled separately and left untouched. Returns the unchanged
+# occurrence formula, the stripped detection / positive formulas, and the lifted
+# arm-field calls.
 .occu_cover_lift_arm_fields <- function(occ_formula, det_formula, pos_formula) {
-  arm_extra <- list()
+  arm_fields <- list()
 
   strip_arm <- function(arm_formula, arm) {
     if (is.null(arm_formula)) return(arm_formula)
@@ -964,18 +966,9 @@
       e    <- tryCatch(str2lang(lab), error = function(...) NULL)
       head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
       if (!is.na(head) && head %in% .occu_cover_field_ctors) {
-        # The arm is fixed by placement. An explicit `to` that disagrees is an
-        # error; a matching one is redundant but allowed.
-        if (!is.null(e$to)) {
-          to_val <- tryCatch(as.character(eval(e$to)), error = function(...) NULL)
-          if (length(to_val) && !all(to_val == arm))
-            stop(sprintf(paste0(
-              "occu_cover(): a spatial field written in the %s formula is on the ",
-              "%s arm by placement; drop the conflicting `to =`."), arm, arm),
-              call. = FALSE)
-        }
-        e$to <- arm
-        arm_extra[[length(arm_extra) + 1L]] <<- e
+        # The arm is fixed by placement; keep the field call unevaluated and
+        # carry its arm, to tag the evaluated spec later.
+        arm_fields[[length(arm_fields) + 1L]] <<- list(call = e, arm = arm)
       } else if (!is.na(head) && head %in% c("|", "||")) {
         # An lme4 RE bar. terms() strips the parentheses off `(1 | g)` down to the
         # label `1 | g`; reformulate() would rebuild it as `... + 1 | g`, which R
@@ -995,19 +988,7 @@
 
   det2 <- strip_arm(det_formula, "detection")
   pos2 <- strip_arm(pos_formula, "positive")
-
-  if (length(arm_extra)) {
-    occ_tt   <- stats::terms(occ_formula)
-    occ_labs <- attr(occ_tt, "term.labels")
-    extra    <- vapply(arm_extra, function(e) paste(deparse(e), collapse = ""),
-                       character(1))
-    occ2 <- stats::reformulate(termlabels = c(occ_labs, extra),
-                               intercept  = as.logical(attr(occ_tt, "intercept")))
-    environment(occ2) <- environment(occ_formula)
-  } else {
-    occ2 <- occ_formula
-  }
-  list(occ = occ2, det = det2, pos = pos2)
+  list(occ = occ_formula, det = det2, pos = pos2, arm_fields = arm_fields)
 }
 
 # Map the positive arm's copy() specs onto the coupling-amplitude grids the
@@ -1196,24 +1177,18 @@
   pos_formula <- dots$positive
 
   # Placement -> arm: a spatial-field term written in the positive (or detection)
-  # formula is lifted onto the occurrence formula tagged with its arm, so the
-  # arm-generic spatial resolver sees every arm's fields together. Done before the
-  # RE parse and the positive-defaults-to-detection fallback, so each downstream
-  # step sees a field-free arm formula and a shared formula is not lifted twice.
-  # copy() stays on its arm's formula (it is a reference, not a new field).
-  #
-  # `to =` is retired: an arm is chosen by placement (write the field in that
-  # arm's formula) and a field is shared across arms with copy(). Reject an
-  # explicit user `to =` on the raw arm formulas, before placement sets the
-  # internal `to` on the lifted calls.
-  .tobs_reject_user_to(formula,   "occurrence")
-  .tobs_reject_user_to(detection, "detection")
-  .tobs_reject_user_to(pos_formula, "positive")
-
-  lifted      <- .occu_cover_lift_arm_fields(formula, detection, pos_formula)
-  formula     <- lifted$occ
-  detection   <- lifted$det
-  pos_formula <- lifted$pos
+  # formula is pulled off that arm formula and carried as a (call, arm) pair, so
+  # the arm-generic spatial resolver evaluates and tags every arm's fields
+  # together. Done before the RE parse and the positive-defaults-to-detection
+  # fallback, so each downstream step sees a field-free arm formula. copy() stays
+  # on its arm's formula (it is a reference, not a new field). An arm is chosen by
+  # placement (write the field in that arm's formula); a field is shared across
+  # arms with copy().
+  lifted         <- .occu_cover_lift_arm_fields(formula, detection, pos_formula)
+  formula        <- lifted$occ
+  detection      <- lifted$det
+  pos_formula    <- lifted$pos
+  arm_fields     <- lifted$arm_fields
 
   if (is.null(pos_formula)) pos_formula <- detection
 
@@ -1319,7 +1294,7 @@
   # the joint nested-Laplace engine (shared field(s) across the psi and cover
   # arms); the non-spatial path is plain Laplace on the exact two-state
   # marginal. A weighted areal term adds a second coupled (SVC) field.
-  spatial_info <- .occu_cover_spatial_fields(formula, data)
+  spatial_info <- .occu_cover_spatial_fields(formula, data, arm_fields)
   has_spatial  <- !is.null(spatial_info)
 
   # Translate the positive arm's copy() spec(s) into the engine coupling grids

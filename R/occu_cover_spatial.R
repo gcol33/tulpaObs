@@ -97,11 +97,30 @@
 # also produces (gcol33/tulpaObs#15). The joint_coupled engine couples N such
 # fields; the legacy single-field v2/v3 engines take only the intercept field.
 # ---------------------------------------------------------------------------
-.occu_cover_spatial_fields <- function(formula, data) {
+.occu_cover_spatial_fields <- function(formula, data, arm_fields = list()) {
   bind <- .tobs_bind_formulas(list(psi = formula), data)
-  if (length(bind$terms) == 0L) return(NULL)
+  if (length(bind$terms) == 0L && length(arm_fields) == 0L) return(NULL)
   # `.tobs_bind_formulas` returns terms wrapped in `list(spec = ..., process = ...)`.
   spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
+  # Placed arm fields (detection / positive): evaluate each lifted field call and
+  # tag its spec with the arm, in the occurrence formula's environment (where the
+  # occurrence field's own graph symbol resolves), then route alongside the
+  # occurrence formula's own fields.
+  if (length(arm_fields)) {
+    extra <- lapply(arm_fields, function(af) {
+      spec <- .tobs_eval_arm_field(af$call, af$arm, data, environment(formula))
+      # Only the bar form carries an arm-specific field; a plain areal
+      # constructor placed in an arm formula has no such spelling.
+      if (!isTRUE(spec$is_bar)) {
+        stop(sprintf(paste0(
+          "occu_cover(): a field placed in the %s formula must use the bar form ",
+          "spatial(~ 1 + w || cell, graph = adj); got %s()."),
+          af$arm, spec$type %||% class(spec)[1L]), call. = FALSE)
+      }
+      list(spec = spec)
+    })
+    spatial <- c(spatial, extra)
+  }
   if (length(spatial) == 0L) return(NULL)
   # A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj)`,
   # gcol33/tulpaObs#61) desugars in place to the intercept field + per-covariate
@@ -143,23 +162,22 @@
         if (identical(to, "presence")) {
           stop(paste0(
             "occu_cover(): there is no separate presence arm; the occupancy ",
-            "field is the untagged occurrence spatial() term. Write the field ",
-            "in `occurrence`, or use to = \"positive\" (cover) / \"detection\"."),
-            call. = FALSE)
+            "field is the occurrence spatial() term. Write the field in the ",
+            "`occurrence` formula, or place it in `positive` (cover) / ",
+            "`detection`."), call. = FALSE)
         }
         if (!to %in% names(arm_slot)) {
           stop(sprintf(paste0(
-            "occu_cover(): an arm-specific field targets the cover arm ",
-            "(to = \"positive\") or the detection arm (to = \"detection\"); ",
-            "got to = \"%s\"."), to), call. = FALSE)
+            "occu_cover(): an arm-specific field belongs in the positive (cover) ",
+            "or detection formula; got arm \"%s\"."), to), call. = FALSE)
         }
         slot <- arm_slot[[to]]
         if (!is.null(armspec[[slot]])) {
           stop(sprintf(paste0(
             "occu_cover(): at most one arm-specific field per arm (%s); ",
-            "combine coefficient fields into one bar, e.g. ",
-            "spatial(~ 1 + w || cell, graph = adj, to = \"%s\")."), to, to),
-            call. = FALSE)
+            "combine the coefficient fields into one bar in that arm's formula, ",
+            "e.g. %s = ~ x + spatial(~ 1 + w || cell, graph = adj)."),
+            to, to), call. = FALSE)
         }
         armspec[[slot]] <- .tobs_armspecific_bar_fields(t$spec, data)
       } else {

@@ -112,21 +112,24 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
   list(adj = adj, df = df, y = y)
 }
 
-test_that("`to =` is retired with a pointer to placement / copy()", {
+test_that("`to =` is not a bar argument (retired: arm chosen by placement)", {
   d <- .bar_small_data()
+  # `to =` is gone from the call surface: the bar form takes only `graph`/`by`,
+  # so an explicit arm argument is an unknown argument. The arm is chosen by
+  # placement (write the field in that arm's formula) and shared with copy().
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = d$adj,
                              to = c("presence", "positive")),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
-    "`to =` is retired")
+    "unexpected argument `to`")
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = d$adj, to = "positive"),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
-    "placement|copy")
+    "unexpected argument `to`")
 })
 
 test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {

@@ -502,13 +502,12 @@
 # `spde(lon, lat)`. Only spatial models dispatch here; re() / temporal() /
 # svc() / latent() keep their own verbs.
 #
-# A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`)
-# is a second surface: an lme4-style coefficient formula whose intercept column
-# is the unweighted shared field and whose covariate columns are weight-scaled
-# coefficient fields, all over the graph node index `node`, copied onto the arms
-# named by `to`. The bar is expanded later (where the model data is in scope),
-# so here it is captured into a `tobs_spatial_bar` spec; see
-# .tobs_spatial_bar_spec().
+# A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj)`) is a second
+# surface: an lme4-style coefficient formula whose intercept column is the
+# unweighted shared field and whose covariate columns are weight-scaled
+# coefficient fields, all over the graph node index `node`. The bar is expanded
+# later (where the model data is in scope), so here it is captured into a
+# `tobs_spatial_bar` spec; see .tobs_spatial_bar_spec().
 #
 # Named arguments are validated against the target constructor's formals before
 # dispatch. The areal terms have no `...`, so R already rejects an unknown named
@@ -575,39 +574,29 @@
 # the same labels (formula label == output label).
 .tobs_cover_arms <- c("presence", "positive")
 
-# Every arm label a `to =` may name across the families that share this term
-# machinery: the cover-hurdle presence / positive arms plus the occupancy-cover
-# detection arm (occu_cover's per-visit p arm can carry its own field). `to =`
-# validates against this UNION; each family rejects the arms it does not have
-# (cover() has no detection arm; occu_cover's occupancy field is the untagged
-# occurrence term, so it rejects to = "presence").
-.tobs_cover_arms_valid <- c("presence", "positive", "detection")
-
-# Capture a `spatial(~ 1 + w || node, graph = adj, to = ...)` varying-coefficient
-# bar into a deferred spec. The bar's left-hand side (intercept + covariate
-# columns) and node index are stored verbatim; expansion against the model data
-# happens in .tobs_expand_spatial_bar(), where each design column becomes either
-# the unweighted intercept areal field (intercept column) or a weight-scaled
-# trend areal field (covariate column), all on the graph node index. `to` names
-# the arms that share this one latent field (presence-anchored, copied to the
-# other arm with an estimated coupling alpha); it defaults to all arms so the
-# common shared call can omit it. The areal `model` is inherited from the
-# umbrella's `model =` (defaults to icar, matching the bare spatial() default).
+# Capture a `spatial(~ 1 + w || node, graph = adj)` varying-coefficient bar into
+# a deferred spec. The bar's left-hand side (intercept + covariate columns) and
+# node index are stored verbatim; expansion against the model data happens in
+# .tobs_expand_spatial_bar(), where each design column becomes either the
+# unweighted intercept areal field (intercept column) or a weight-scaled trend
+# areal field (covariate column), all on the graph node index. The captured spec
+# defaults to both cover arms (`spec$to`); which arm a placed field lands on is
+# set later by the lift (placement), so the arm is not an argument on this call.
+# The areal `model` is inherited from the umbrella's `model =` (defaults to icar,
+# matching the bare spatial() default).
 .tobs_spatial_bar_spec <- function(bar_formula, rest, model = .tobs_spatial_models,
                                    id = NULL, name = NULL) {
   graph <- rest$graph
-  to    <- rest$to
   by    <- rest$by
-  # Only `graph`, `to`, `by`, and (optionally) `model` are accepted on the bar
-  # form; the node index is the bar RHS, weights are the bar LHS, so
-  # group_var/weight named args would be redundant. Reject anything else with a
-  # clear pointer.
-  known <- c("graph", "to", "by")
+  # Only `graph`, `by`, and (optionally) `model` are accepted on the bar form;
+  # the node index is the bar RHS, weights are the bar LHS, so group_var/weight
+  # named args would be redundant. Reject anything else with a clear pointer.
+  known <- c("graph", "by")
   extra <- setdiff(names(rest)[nzchar(names(rest))], known)
   if (length(extra)) {
     stop(sprintf(paste0(
       "spatial(<bar>, ...): unexpected argument%s %s. The bar form takes ",
-      "`graph`, `to`, and `by` only; the node index is the bar right-hand side ",
+      "`graph` and `by` only; the node index is the bar right-hand side ",
       "and the per-coefficient weights are the bar left-hand side."),
       if (length(extra) > 1L) "s" else "",
       paste0("`", extra, "`", collapse = ", ")), call. = FALSE)
@@ -627,23 +616,9 @@
       "model (icar / bym2 / car / car_proper)."), model), call. = FALSE)
   }
 
-  if (is.null(to)) {
-    to <- .tobs_cover_arms
-  }
-  if (!is.character(to) || length(to) < 1L) {
-    stop("spatial(<bar>, to = ): `to` must be a character vector of arm labels.",
-         call. = FALSE)
-  }
-  bad_to <- setdiff(to, .tobs_cover_arms_valid)
-  if (length(bad_to)) {
-    stop(sprintf(paste0(
-      "spatial(<bar>, to = ): unknown arm label%s %s. Valid arms: %s."),
-      if (length(bad_to) > 1L) "s" else "",
-      paste0("\"", bad_to, "\"", collapse = ", "),
-      paste0("\"", .tobs_cover_arms_valid, "\"", collapse = ", ")),
-      call. = FALSE)
-  }
-  to <- unique(to)
+  # Every captured field defaults to both cover arms; the arm is chosen later by
+  # placement (the lift sets `spec$to` on the evaluated spec), not on this call.
+  to <- .tobs_cover_arms
 
   # `|` => correlated (MCAR) fields, `||` => independent fields. Read the bar's
   # top operator off the AST (data-free), so the correlated path can be gated
@@ -854,41 +829,6 @@
 
 # Names of the registered special terms (used by the parser to detect them).
 .tobs_term_names <- function() names(.tobs_terms)
-
-# Areal field constructors that a `to =` could once have routed across arms.
-.tobs_field_ctor_names <- c("spatial", "icar", "bym2", "car", "car_proper")
-
-# Walk a formula's RHS expression tree for a spatial-field call carrying an
-# explicit `to =` argument. `to =` is retired from the public API: an arm is
-# chosen by placement (write the field in that arm's formula) and a field is
-# shared across arms with copy(). The internal spec `to` is still set by the
-# placement / copy machinery on reconstructed calls, so this scans the RAW user
-# formula only (before any lifting), never the reconstructed one.
-.tobs_expr_has_user_to <- function(expr) {
-  if (is.call(expr)) {
-    head <- if (is.symbol(expr[[1L]])) as.character(expr[[1L]]) else ""
-    if (head %in% .tobs_field_ctor_names && "to" %in% names(expr)) return(TRUE)
-    for (i in seq_along(expr)) if (.tobs_expr_has_user_to(expr[[i]])) return(TRUE)
-  }
-  FALSE
-}
-
-.tobs_reject_user_to <- function(formula, arg_label) {
-  if (is.null(formula) || !inherits(formula, "formula")) return(invisible())
-  rhs <- formula[[length(formula)]]
-  if (.tobs_expr_has_user_to(rhs)) {
-    stop(sprintf(paste0(
-      "`to =` is retired (in the %s formula). Choose a field's arm by ",
-      "placement -- write the field in that arm's formula -- and share a field ",
-      "across arms with copy(). For example, instead of ",
-      "spatial(..., to = c(\"presence\", \"positive\")) on a shared formula, ",
-      "write presence = ~ ... spatial(...) and positive = ~ ... copy(spatial()); ",
-      "for a single arm, place the field in that arm's formula only."),
-      arg_label), call. = FALSE)
-  }
-  invisible()
-}
-
 
 # A varying-coefficient areal field -- a per-node SVC weight
 # (icar/bym2/car_proper `weight =`), the multi-field intercept + SVC container,

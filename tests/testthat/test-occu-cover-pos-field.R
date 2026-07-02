@@ -36,16 +36,20 @@
 }
 
 
-# --- parse-time: the to = "positive" bar splits out as an arm-specific field ---
+# --- parse-time: a placed positive-arm bar splits out as an arm-specific field -
 
-test_that("to = \"positive\" bar resolves to an arm-specific cover field", {
+# Placement now passes lifted field calls as (call, arm) pairs (arm_fields); the
+# arm is set on the evaluated spec, not on the spatial() call.
+.pf_arm <- function(call, arm) list(list(call = call, arm = arm))
+
+test_that("a positive-arm placed bar resolves to an arm-specific cover field", {
   adj  <- .pf_grid_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n),
                      time = as.numeric(scale(rnorm(n))))
-  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
-       spatial(~ 1 + time || cell, graph = adj, to = "positive")
-  si <- .occu_cover_spatial_fields(f, data)
+  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
+  si <- .occu_cover_spatial_fields(f, data, .pf_arm(
+    quote(spatial(~ 1 + time || cell, graph = adj)), "positive"))
 
   expect_length(si$fields, 1L)                       # the occupancy field only
   expect_false(is.null(si$pos_armspec))
@@ -57,23 +61,24 @@ test_that("to = \"positive\" bar resolves to an arm-specific cover field", {
                          function(x) isTRUE(x$is_intercept), logical(1))))
 })
 
-test_that("a single-arm to = \"presence\" spatial bar is rejected", {
+test_that("a single-arm \"presence\" placement is rejected", {
   adj  <- .pf_grid_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
-  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
-       spatial(~ 1 || cell, graph = adj, to = "presence")
-  expect_error(.occu_cover_spatial_fields(f, data),
-               "no separate presence arm")
+  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
+  expect_error(
+    .occu_cover_spatial_fields(f, data,
+      .pf_arm(quote(spatial(~ 1 || cell, graph = adj)), "presence")),
+    "no separate presence arm")
 })
 
 test_that("a detection-arm spatial bar resolves onto the detection (p) arm", {
   adj  <- .pf_grid_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
-  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
-       spatial(~ 1 || cell, graph = adj, to = "detection")
-  si <- .occu_cover_spatial_fields(f, data)
+  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
+  si <- .occu_cover_spatial_fields(f, data,
+    .pf_arm(quote(spatial(~ 1 || cell, graph = adj)), "detection"))
   expect_false(is.null(si$armspec[["p"]]))
   expect_true(is.null(si$armspec[["pos"]]))
 })
@@ -110,11 +115,11 @@ test_that("an arm-specific cover field does not compose with the `|` MCAR field"
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n),
                      time = as.numeric(scale(rnorm(n))))
-  # A correlated `|` bar must be the only spatial term, so an extra to="positive"
-  # bar alongside it errors at parse.
-  f <- psi ~ occ_cov1 + spatial(~ 1 + time | cell, graph = adj) +
-       spatial(~ 1 || cell, graph = adj, to = "positive")
-  expect_error(.occu_cover_spatial_fields(f, data))
+  # A correlated `|` bar must be the only spatial term, so an extra positive-arm
+  # placed bar alongside it errors at parse.
+  f <- psi ~ occ_cov1 + spatial(~ 1 + time | cell, graph = adj)
+  expect_error(.occu_cover_spatial_fields(f, data,
+    .pf_arm(quote(spatial(~ 1 || cell, graph = adj)), "positive")))
 })
 
 

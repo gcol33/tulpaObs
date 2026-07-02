@@ -222,6 +222,45 @@
   invisible()
 }
 
+# The environment structured-term calls are evaluated in: the term-constructor
+# registry (spatial(), icar(), re(), ...) with the data columns layered on top,
+# so a bare column name resolves and non-data symbols (an adjacency `graph = adj`)
+# fall through to `env`. One source of truth for both the formula parser and the
+# placement path, which evaluates lifted field calls directly.
+.tobs_term_eval_env <- function(data, env) {
+  reg_env <- list2env(.tobs_terms, parent = env)
+  if (!is.null(data)) list2env(as.list(data), parent = reg_env) else reg_env
+}
+
+# Evaluate one structured-term call into its `tobs_*` spec, in a `data_env` built
+# by .tobs_term_eval_env(). `label` is the call's source text for error messages
+# and the stored `term_call`; it defaults to the deparsed call.
+.tobs_eval_term_spec <- function(call, data_env, label = NULL) {
+  if (is.null(label)) label <- paste(deparse(call), collapse = "")
+  spec <- tryCatch(
+    eval(call, envir = data_env),
+    error = function(e) stop(sprintf(
+      "Could not evaluate formula term `%s`: %s",
+      label, conditionMessage(e)), call. = FALSE)
+  )
+  if (!inherits(spec, .tobs_spec_classes)) {
+    stop(sprintf("Formula term `%s` did not produce a tobs term spec.",
+                 label), call. = FALSE)
+  }
+  spec$term_call <- label
+  spec
+}
+
+# Evaluate a placed field call and tag the resulting spec with its arm
+# (`spec$to`). The per-arm placement path uses this to route a field written in
+# an arm formula onto that arm, without deparsing the arm tag back into a formula
+# for the encoder to re-parse.
+.tobs_eval_arm_field <- function(call, arm, data, env) {
+  spec    <- .tobs_eval_term_spec(call, .tobs_term_eval_env(data, env))
+  spec$to <- arm
+  spec
+}
+
 #' Parse a process formula into fixed effects and structured terms
 #'
 #' @param formula a one- or two-sided formula for a single process (e.g. the
@@ -264,22 +303,9 @@
 
   terms_list <- list()
   if (any(is_spec)) {
-    reg_env  <- list2env(.tobs_terms, parent = env)
-    data_env <- if (!is.null(data)) list2env(as.list(data), parent = reg_env)
-                else reg_env
+    data_env <- .tobs_term_eval_env(data, env)
     for (label in labels[is_spec]) {
-      call <- str2lang(label)
-      spec <- tryCatch(
-        eval(call, envir = data_env),
-        error = function(e) stop(sprintf(
-          "Could not evaluate formula term `%s`: %s",
-          label, conditionMessage(e)), call. = FALSE)
-      )
-      if (!inherits(spec, .tobs_spec_classes)) {
-        stop(sprintf("Formula term `%s` did not produce a tobs term spec.",
-                     label), call. = FALSE)
-      }
-      spec$term_call <- label
+      spec <- .tobs_eval_term_spec(str2lang(label), data_env, label = label)
       terms_list[[length(terms_list) + 1L]] <- spec
     }
   }

@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.97 (2026-07-03)
+
+* `to =` is fully decoupled from the spatial-field call surface in both cover
+  families. Placement now tags each field's arm on the evaluated spec directly,
+  instead of round-tripping the arm through a deparsed formula, so `to =` is no
+  longer an argument the bar form reads: the `spatial(~ ... || node)` bar takes
+  only `graph` and `by`, and an explicit `to =` is an unknown argument. The arm
+  is chosen by placement (write the field in that arm's formula) and shared
+  across arms with `copy()`, exactly as in 0.0.96; fits are byte-identical (the
+  cover placement-equals-shared and `occu_cover()` recovery suites are
+  unchanged). The bespoke `to =` deprecation guard is removed.
+
 ## 0.0.96 (2026-07-02)
 
 * `copy()` is now wired into the `cover()` hurdle engine, so a shared spatial

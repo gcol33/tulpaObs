@@ -200,16 +200,10 @@ encode_cover_hurdle <- function(formula, data, y,
 
   # Per-arm formulas (arm = formula): `presence` and `positive` carry their own
   # fixed effects, so the two arms get independent designs. The single `formula`
-  # (shared across arms) remains the back-compat spelling. Structured terms in a
-  # per-arm formula are not yet routed here (the field node index has to align to
-  # the arm's row subset); declare fields on the shared `formula` with `to =` for
-  # now. When per-arm formulas are absent this branch is skipped, so the shared
-  # path is byte-identical.
-  # `to =` is retired: an arm is chosen by placement, a shared field by copy().
-  .tobs_reject_user_to(formula, "shared")
-  .tobs_reject_user_to(presence_formula, "presence")
-  .tobs_reject_user_to(positive_formula, "positive")
-
+  # (shared across arms) remains the back-compat spelling. An arm is chosen by
+  # placement -- write a field in that arm's formula -- and shared across arms
+  # with copy(). When per-arm formulas are absent this branch is skipped, so the
+  # shared path is untouched.
   copy_alpha <- NULL
   per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
   if (per_arm) {
@@ -218,10 +212,10 @@ encode_cover_hurdle <- function(formula, data, y,
            "single shared formula (not one arm only).", call. = FALSE)
     }
     # Placement -> arm: split each arm formula into its fixed effects and its
-    # spatial-field terms; the fields are tagged with the arm and routed through
-    # the same `to =` machinery the shared formula uses (a field in `positive`
-    # becomes an arm-specific positive field, indexed onto the positive rows by
-    # the fitter). Fixed effects give each arm its own design.
+    # spatial-field calls. Each field call is evaluated into its spec and tagged
+    # with the arm (spec$to) directly; the tagged specs feed .encode_cover_specs
+    # (a field in `positive` becomes an arm-specific positive field, indexed onto
+    # the positive rows by the fitter). Fixed effects give each arm its design.
     #
     # copy() is the canonical shared-field spelling: it lives in the `positive`
     # formula and couples the presence field onto the positive arm. Each arm's
@@ -235,21 +229,35 @@ encode_cover_hurdle <- function(formula, data, y,
       stop("cover(): copy() belongs in the `positive` formula; it copies the ",
            "presence field onto the positive arm.", call. = FALSE)
     }
+    occ_arm <- "presence"
     if (length(lift_pos$copies)) {
       reg_env    <- list2env(.tobs_terms, parent = environment(positive_formula))
       pos_copies <- lapply(lift_pos$copies, function(cl) eval(cl, envir = reg_env))
       promo <- .cover_promote_copied_fields(pos_copies, lift_occ$fields)
       lift_occ$fields <- promo$fields
+      occ_arm          <- promo$arm
       copy_alpha       <- promo$alpha
     }
     fe_occ_formula <- lift_occ$fe
     fe_pos_formula <- lift_pos$fe
-    arm_fields <- c(lift_occ$fields, lift_pos$fields)
-    if (length(arm_fields)) {
-      struct_formula <- stats::reformulate(c("1",
-        vapply(arm_fields, function(e) paste(deparse(e), collapse = ""), "")))
-      environment(struct_formula) <- environment(presence_formula)
-      cover_struct <- .encode_cover_terms(struct_formula, data_obs)
+    arm_specs <- c(
+      lapply(lift_occ$fields, function(e) .tobs_eval_arm_field(
+        e, occ_arm, data_obs, environment(presence_formula))),
+      lapply(lift_pos$fields, function(e) .tobs_eval_arm_field(
+        e, "positive", data_obs, environment(positive_formula)))
+    )
+    # Only the bar form carries an arm-specific / copied field; a plain areal
+    # constructor placed in an arm formula has no such spelling.
+    for (s in arm_specs) {
+      if (!isTRUE(s$is_bar)) {
+        stop(sprintf(paste0(
+          "cover(): a field placed in a per-arm formula must use the bar form ",
+          "spatial(~ 1 + w || cell, graph = adj); got %s()."),
+          s$type %||% class(s)[1L]), call. = FALSE)
+      }
+    }
+    if (length(arm_specs)) {
+      cover_struct <- .encode_cover_specs(arm_specs, data_obs)
     } else {
       cover_struct <- list(fe = NULL, spatial = NULL, trend = NULL,
                            temporal = NULL, re = NULL, mcar = NULL, armspec = NULL)
@@ -539,14 +547,8 @@ encode_cover_hurdle <- function(formula, data, y,
     e    <- tryCatch(str2lang(lab), error = function(...) NULL)
     head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
     if (!is.na(head) && head %in% field_ctors) {
-      if (!is.null(e$to)) {
-        tov <- tryCatch(as.character(eval(e$to)), error = function(...) NULL)
-        if (length(tov) && !all(tov == arm))
-          stop(sprintf(paste0(
-            "cover(): a spatial field in the %s formula is on the %s arm by ",
-            "placement; drop the conflicting `to =`."), arm, arm), call. = FALSE)
-      }
-      e$to <- arm
+      # The arm is fixed by placement (this formula's arm); the field call is
+      # kept unevaluated and tagged with the arm later, on its evaluated spec.
       fields[[length(fields) + 1L]] <- e
     } else if (!is.na(head) && identical(head, "copy")) {
       # copy() is not a fixed effect and not a placed field: it references the
@@ -570,14 +572,13 @@ encode_cover_hurdle <- function(formula, data, y,
 }
 
 # Promote the presence-arm spatial field(s) that a copy() selects to the shared
-# (both-arm) spec, so encode routes them through the presence-anchored,
-# positive-coupled machinery -- byte-identical to writing
-# to = c("presence", "positive") on the field. copy() is the canonical
-# shared-field spelling for per-arm cover formulas: the field is placed on the
-# `presence` formula and copy(spatial()) in the `positive` formula couples it
-# across, mirroring occu_cover(). Returns the retagged presence fields and the
-# coupling amplitude grid (NULL = the fitter's default, estimated on the
-# standard alpha grid, identical to the to = both default).
+# (both-arm) arm tag, so encode routes them through the presence-anchored,
+# positive-coupled machinery. copy() is the canonical shared-field spelling for
+# per-arm cover formulas: the field is placed on the `presence` formula and
+# copy(spatial()) in the `positive` formula couples it across, mirroring
+# occu_cover(). Returns the presence field calls, the both-arm tag to set on
+# their specs, and the coupling amplitude grid (NULL = the fitter's default,
+# estimated on the standard alpha grid).
 .cover_promote_copied_fields <- function(copies, occ_fields) {
   if (length(copies) > 1L) {
     stop("cover(): one copy() per fit is supported (it couples the whole ",
@@ -600,20 +601,29 @@ encode_cover_hurdle <- function(formula, data, y,
          "copy onto the positive arm, e.g. ",
          "presence = ~ x + spatial(~ 1 || cell, graph = adj).", call. = FALSE)
   }
-  occ_fields <- lapply(occ_fields, function(e) {
-    e$to <- c("presence", "positive"); e
-  })
   alpha_grid <- if (is.na(cp$alpha_integrate)) NULL else cp$alpha_grid
-  list(fields = occ_fields, alpha = alpha_grid)
+  list(fields = occ_fields, arm = c("presence", "positive"), alpha = alpha_grid)
 }
 
 # Parse a cover() formula against the NA-dropped observations.
 .encode_cover_terms <- function(formula, data_obs) {
-  bind <- .tobs_bind_formulas(list(state = formula), data_obs)
+  bind   <- .tobs_bind_formulas(list(state = formula), data_obs)
+  specs  <- lapply(bind$terms, function(t) t$spec)
+  enc    <- .encode_cover_specs(specs, data_obs, re_guard_formula = formula)
+  enc$fe <- bind$fe$state
+  enc
+}
+
+# Route a list of parsed cover structured-term specs into the encoded field
+# blocks. Split out from .encode_cover_terms() so the per-arm placement path can
+# feed specs it has already evaluated and tagged with `spec$to` (the arm),
+# instead of round-tripping them through a deparsed formula. `re_guard_formula`
+# is the source formula for the bare-bar RE soft guard; the placement path passes
+# NULL (its per-arm formulas reject re() upstream, so there is nothing to guard).
+.encode_cover_specs <- function(specs, data_obs, re_guard_formula = NULL) {
   spatial_specs <- list(); temporal <- NULL; re <- list(); mcar <- NULL
   armspec <- list()
-  for (t in bind$terms) {
-    spec <- t$spec
+  for (spec in specs) {
     if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar) &&
         isTRUE(spec$correlated)) {
       # Correlated bar (single `|`): one separable-MCAR block over the bar's
@@ -655,7 +665,9 @@ encode_cover_hurdle <- function(formula, data, y,
   # -- the bar is fitted as an IID random effect, not a spatial field. RE bars are
   # legitimate, so this informs (message) rather than rejecting; it is silent when
   # the bar's factor is unrelated to any spatial term.
-  .tobs_cover_bar_re_guard(formula, spatial_specs)
+  if (!is.null(re_guard_formula)) {
+    .tobs_cover_bar_re_guard(re_guard_formula, spatial_specs)
+  }
   if (!is.null(mcar) && length(spatial_specs) > 0L) {
     stop("cover(): a correlated spatial bar (single `|`) is the whole spatial ",
          "structure; it cannot be combined with other areal terms in the same ",
@@ -685,13 +697,14 @@ encode_cover_hurdle <- function(formula, data, y,
     arms_used <- vapply(armspec, function(a) a$arm, character(1))
     if (anyDuplicated(arms_used)) {
       stop("cover(): each arm-specific spatial field must target a distinct arm ",
-           "(got two on the same arm). Combine multiple coefficient fields into ",
-           "one bar, e.g. spatial(~ 1 + w || cell, graph = adj, to = \"",
-           arms_used[anyDuplicated(arms_used)], "\").", call. = FALSE)
+           "(got two on the same arm). Combine the coefficient fields into one ",
+           "bar in that arm's formula, e.g. ",
+           "positive = ~ x + spatial(~ 1 + w || cell, graph = adj).",
+           call. = FALSE)
     }
   }
   fields <- .cover_resolve_spatial_fields(spatial_specs, data_obs)
-  list(fe = bind$fe$state, spatial = fields$spatial, trend = fields$trend,
+  list(fe = NULL, spatial = fields$spatial, trend = fields$trend,
        temporal = temporal, re = if (length(re)) re else NULL, mcar = mcar,
        armspec = if (length(armspec)) armspec else NULL)
 }

@@ -23,12 +23,16 @@
   adj
 }
 
-# A captured bar spec, exactly as the tobs formula machinery builds it.
+# A captured bar spec, exactly as the tobs formula machinery builds it: the bar
+# defaults to both arms, and the arm tag (spec$to) is set afterwards the way
+# placement does.
 .by_spec <- function(bar, adj, to = c("presence", "positive"), by = NULL,
                      model = "icar") {
-  rest <- list(graph = adj, to = to)
+  rest <- list(graph = adj)
   if (!is.null(by)) rest$by <- by
-  .tobs_spatial_bar_spec(bar, rest, model = model)
+  spec <- .tobs_spatial_bar_spec(bar, rest, model = model)
+  spec$to <- to
+  spec
 }
 
 
