@@ -153,6 +153,42 @@ test_that("occu_cover cover-arm trend field SD recovers across seeds", {
 })
 
 
+# --- placement: a field in the positive formula == to = "positive" -----------
+
+test_that("a spatial field in the positive formula equals the to = \"positive\" spelling", {
+  skip_if_fast()
+  skip_on_cran()
+
+  adj <- .pf_grid_adj(8L)
+  N   <- nrow(adj)
+  sim <- simulate_occu_cover(
+    N = N, J = 5L, positive = "lognormal",
+    beta_occ = c(qlogis(0.6), 0.3), beta_p = c(qlogis(0.65), 0.1),
+    beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3,
+    adj = adj, sigma = 0.5, alpha = 0.0,
+    pos_field = TRUE, sigma_pos_int = 0.0, sigma_pos_trend = 0.7, seed = 42L)
+  ctrl <- list(progress = FALSE, integration = "ccd")
+
+  fit_to <- suppressWarnings(tobs(
+    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
+                   spatial(~ 0 + time || cell, graph = adj, to = "positive"),
+    detection = ~ 1, positive = ~ time,
+    family = occu_cover(positive = "lognormal"),
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    method = "nested_laplace", control = ctrl))
+  fit_place <- suppressWarnings(tobs(
+    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    detection = ~ 1, positive = ~ time + spatial(~ 0 + time || cell, graph = adj),
+    family = occu_cover(positive = "lognormal"),
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    method = "nested_laplace", control = ctrl))
+
+  expect_identical(names(fit_place$means), names(fit_to$means))
+  expect_equal(unname(unlist(fit_place$means)), unname(unlist(fit_to$means)),
+               tolerance = 1e-10)
+})
+
+
 # --- control: the cover-field SD rides its own grid --------------------------
 
 test_that("control$sigma.grid.pos.field is accepted and sets the cover-field grid", {
