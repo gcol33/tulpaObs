@@ -62,8 +62,15 @@
          "    icar(graph = adj, weight = time.sc, group_var = \"cell_idx\")",
          call. = FALSE)
   }
+  # Per-arm formulas (arm = formula): tobs()'s `presence` and `positive` formula
+  # args (folded into `...`) give each hurdle arm its own fixed effects. `positive`
+  # here is the formula, distinct from the family's positive-arm likelihood
+  # (family$params$positive). Absent both, the single `formula` is shared.
+  .cover_dots <- list(...)
   enc      <- encode_cover_hurdle(formula, data, y, positive = positive,
-                                  breaks = family$params$breaks)
+                                  breaks = family$params$breaks,
+                                  presence_formula = .cover_dots$presence,
+                                  positive_formula = .cover_dots$positive)
   temporal <- enc$temporal
   re       <- enc$re
 
@@ -160,7 +167,9 @@ encode_cover_hurdle <- function(formula, data, y,
                                 positive = c("lognormal", "lognormal_trunc",
                                              "beta", "beta_oi", "ordinal"),
                                 breaks = NULL,
-                                autoscale = TRUE) {
+                                autoscale = TRUE,
+                                presence_formula = NULL,
+                                positive_formula = NULL) {
   positive <- match.arg(positive)
   if (!is.numeric(y)) stop("`y` must be numeric.", call. = FALSE)
   .tobs_check_site_count(length(y), nrow(data), "values")
@@ -175,13 +184,36 @@ encode_cover_hurdle <- function(formula, data, y,
   data_obs <- data[obs_keep, , drop = FALSE]
   occur    <- as.integer(y_obs > 0)
 
-  # Parse structured terms against the NA-dropped observations so re()/
-  # temporal() index codes align with both hurdle arms. An areal spatial
-  # term is converted to the tulpa_spatial spec the cover engine consumes.
-  cover_struct <- .encode_cover_terms(formula, data_obs)
-  fe_formula    <- cover_struct$fe
+  # Per-arm formulas (arm = formula): `presence` and `positive` carry their own
+  # fixed effects, so the two arms get independent designs. The single `formula`
+  # (shared across arms) remains the back-compat spelling. Structured terms in a
+  # per-arm formula are not yet routed here (the field node index has to align to
+  # the arm's row subset); declare fields on the shared `formula` with `to =` for
+  # now. When per-arm formulas are absent this branch is skipped, so the shared
+  # path is byte-identical.
+  per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
+  if (per_arm) {
+    if (is.null(presence_formula) || is.null(positive_formula)) {
+      stop("cover(): give BOTH `presence` and `positive` per-arm formulas, or a ",
+           "single shared formula (not one arm only).", call. = FALSE)
+    }
+    .cover_reject_structured(presence_formula, "presence")
+    .cover_reject_structured(positive_formula, "positive")
+    cover_struct   <- list(fe = presence_formula, spatial = NULL, trend = NULL,
+                           temporal = NULL, re = NULL, mcar = NULL, armspec = NULL)
+    fe_occ_formula <- presence_formula
+    fe_pos_formula <- positive_formula
+  } else {
+    # Parse structured terms against the NA-dropped observations so re()/
+    # temporal() index codes align with both hurdle arms. An areal spatial
+    # term is converted to the tulpa_spatial spec the cover engine consumes.
+    cover_struct   <- .encode_cover_terms(formula, data_obs)
+    fe_occ_formula <- cover_struct$fe
+    fe_pos_formula <- cover_struct$fe
+  }
+  fe_formula    <- fe_occ_formula
 
-  X_occ_natural <- stats::model.matrix(fe_formula, data_obs)
+  X_occ_natural <- stats::model.matrix(fe_occ_formula, data_obs)
 
   # One-inflated Beta (gcol33/tulpaObs#108): the presence arm still models y > 0,
   # but plots recorded at full cover (y = 1) are a genuine point mass, not a near-1
@@ -250,7 +282,7 @@ encode_cover_hurdle <- function(formula, data, y,
     # already guaranteed by occur == 1 + the range check above.
     y_pos_resp <- pmin(y_pos, 1 - 1e-6)
   }
-  X_pos_natural <- stats::model.matrix(fe_formula, data_pos)
+  X_pos_natural <- stats::model.matrix(fe_pos_formula, data_pos)
 
   # Autoscale numeric columns of each arm's design matrix so the optimizer
   # sees well-conditioned predictors (gcol33/tulpaObs#9). Each arm gets its
@@ -297,6 +329,9 @@ encode_cover_hurdle <- function(formula, data, y,
     N            = length(occur),
     idx_pos      = which(is_pos),
     formula      = fe_formula,
+    fe_occ       = fe_occ_formula,
+    fe_pos       = fe_pos_formula,
+    per_arm      = per_arm,
     positive     = positive,
     breaks       = if (positive == "ordinal") as.numeric(breaks) else NULL,
     oi           = oi,
@@ -436,6 +471,25 @@ encode_cover_hurdle <- function(formula, data, y,
 # machinery. The shared `to = c("presence", "positive")` path is the only one
 # wired here; `|` and arm-specific `to` are gated below.
 # svc()/latent() are not meaningful for the cover hurdle and are rejected.
+.cover_reject_structured <- function(formula, arm) {
+  if (is.null(formula)) return(invisible(NULL))
+  # Desugar lme4 bars first so `(1 | g)` is seen as re() and rejected too.
+  labs <- attr(stats::terms(.tobs_desugar_bars(formula)), "term.labels")
+  reg  <- .tobs_term_names()
+  for (lab in labs) {
+    e    <- tryCatch(str2lang(lab), error = function(...) NULL)
+    head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
+    if (!is.na(head) && head %in% reg) {
+      stop(sprintf(paste0(
+        "cover(): the per-arm `%s` formula carries a structured term (`%s()`); ",
+        "per-arm formulas take fixed effects only for now. Declare fields on the ",
+        "shared `formula` with `to = \"%s\"`."), arm, head, arm), call. = FALSE)
+    }
+  }
+  invisible(NULL)
+}
+
+# Parse a cover() formula against the NA-dropped observations.
 .encode_cover_terms <- function(formula, data_obs) {
   bind <- .tobs_bind_formulas(list(state = formula), data_obs)
   spatial_specs <- list(); temporal <- NULL; re <- list(); mcar <- NULL

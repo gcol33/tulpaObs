@@ -2,6 +2,14 @@
 
 ## 0.0.93 (2026-07-02)
 
+* `cover()` per-arm formulas (arm = formula): `cover(presence = ~ x, positive =
+  ~ t)` gives the presence and positive hurdle arms their own fixed effects (two
+  independent designs), matching `occu_cover()`'s per-arm formulas. The single
+  shared `formula` stays the back-compat spelling (byte-identical; the full cover
+  test suite is unchanged). First cut: per-arm formulas carry fixed effects only;
+  declare fields on the shared `formula` with `to =` (per-arm field placement is
+  gcol33/tulpaObs#111).
+
 * Bugfix: an lme4 random-effect bar on the `occu_cover()` detection or
   positive-cover formula (`detection = ~ det_cov1 + (1 | habitat)`, and the
   `(x | g)` / `(0 + x | g)` slope spellings) is fitted again. The arm-field

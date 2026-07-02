@@ -314,8 +314,17 @@ tobs <- function(formula,
             "`positive`).")
   }
   if (missing(formula) || is.null(formula)) {
-    stop("A state-process formula is required (`occurrence =` for the cover ",
-         "hurdle, `formula =` otherwise).", call. = FALSE)
+    # cover() per-arm mode: `presence =` / `positive =` formulas stand in for a
+    # shared state formula (arm = formula). The presence formula seeds the
+    # pipeline; the cover encoder reads both per-arm formulas.
+    .tobs_dots <- list(...)
+    if (inherits(family, "tobs_family") && identical(family$name, "cover") &&
+        !is.null(.tobs_dots$presence)) {
+      formula <- .tobs_dots$presence
+    } else {
+      stop("A state-process formula is required (`occurrence =` for the cover ",
+           "hurdle, `formula =` otherwise).", call. = FALSE)
+    }
   }
 
   if (missing(family)) {

@@ -10,7 +10,9 @@ encode_cover_hurdle(
   y,
   positive = c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal"),
   breaks = NULL,
-  autoscale = TRUE
+  autoscale = TRUE,
+  presence_formula = NULL,
+  positive_formula = NULL
 )
 }
 \arguments{
