@@ -197,12 +197,25 @@ encode_cover_hurdle <- function(formula, data, y,
       stop("cover(): give BOTH `presence` and `positive` per-arm formulas, or a ",
            "single shared formula (not one arm only).", call. = FALSE)
     }
-    .cover_reject_structured(presence_formula, "presence")
-    .cover_reject_structured(positive_formula, "positive")
-    cover_struct   <- list(fe = presence_formula, spatial = NULL, trend = NULL,
+    # Placement -> arm: split each arm formula into its fixed effects and its
+    # spatial-field terms; the fields are tagged with the arm and routed through
+    # the same `to =` machinery the shared formula uses (a field in `positive`
+    # becomes an arm-specific positive field, indexed onto the positive rows by
+    # the fitter). Fixed effects give each arm its own design.
+    lift_occ <- .cover_lift_arm_fields(presence_formula, "presence")
+    lift_pos <- .cover_lift_arm_fields(positive_formula, "positive")
+    fe_occ_formula <- lift_occ$fe
+    fe_pos_formula <- lift_pos$fe
+    arm_fields <- c(lift_occ$fields, lift_pos$fields)
+    if (length(arm_fields)) {
+      struct_formula <- stats::reformulate(c("1",
+        vapply(arm_fields, function(e) paste(deparse(e), collapse = ""), "")))
+      environment(struct_formula) <- environment(presence_formula)
+      cover_struct <- .encode_cover_terms(struct_formula, data_obs)
+    } else {
+      cover_struct <- list(fe = NULL, spatial = NULL, trend = NULL,
                            temporal = NULL, re = NULL, mcar = NULL, armspec = NULL)
-    fe_occ_formula <- presence_formula
-    fe_pos_formula <- positive_formula
+    }
   } else {
     # Parse structured terms against the NA-dropped observations so re()/
     # temporal() index codes align with both hurdle arms. An areal spatial
@@ -471,22 +484,44 @@ encode_cover_hurdle <- function(formula, data, y,
 # machinery. The shared `to = c("presence", "positive")` path is the only one
 # wired here; `|` and arm-specific `to` are gated below.
 # svc()/latent() are not meaningful for the cover hurdle and are rejected.
-.cover_reject_structured <- function(formula, arm) {
-  if (is.null(formula)) return(invisible(NULL))
-  # Desugar lme4 bars first so `(1 | g)` is seen as re() and rejected too.
-  labs <- attr(stats::terms(.tobs_desugar_bars(formula)), "term.labels")
-  reg  <- .tobs_term_names()
+# Split a per-arm cover formula into its fixed-effects formula and its spatial-
+# field terms (tagged with the arm via `to =`, so a field placed in `presence` /
+# `positive` lands on that arm through the same machinery a shared `to =` bar
+# uses). lme4 bars are desugared first so `(1 | g)` reads as re(); temporal() /
+# re() / other structured terms are not routed per-arm yet (declare them on the
+# shared `formula`).
+.cover_lift_arm_fields <- function(formula, arm) {
+  if (is.null(formula)) return(list(fe = NULL, fields = list()))
+  tt   <- stats::terms(.tobs_desugar_bars(formula), keep.order = TRUE)
+  labs <- attr(tt, "term.labels")
+  field_ctors <- c("spatial", "icar", "bym2", "car", "car_proper")
+  keep <- character(0); fields <- list()
   for (lab in labs) {
     e    <- tryCatch(str2lang(lab), error = function(...) NULL)
     head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
-    if (!is.na(head) && head %in% reg) {
+    if (!is.na(head) && head %in% field_ctors) {
+      if (!is.null(e$to)) {
+        tov <- tryCatch(as.character(eval(e$to)), error = function(...) NULL)
+        if (length(tov) && !all(tov == arm))
+          stop(sprintf(paste0(
+            "cover(): a spatial field in the %s formula is on the %s arm by ",
+            "placement; drop the conflicting `to =`."), arm, arm), call. = FALSE)
+      }
+      e$to <- arm
+      fields[[length(fields) + 1L]] <- e
+    } else if (!is.na(head) && head %in% .tobs_term_names()) {
       stop(sprintf(paste0(
-        "cover(): the per-arm `%s` formula carries a structured term (`%s()`); ",
-        "per-arm formulas take fixed effects only for now. Declare fields on the ",
-        "shared `formula` with `to = \"%s\"`."), arm, head, arm), call. = FALSE)
+        "cover(): the per-arm `%s` formula supports fixed effects and spatial() ",
+        "fields; `%s()` is not routed per-arm. Declare it on the shared `formula`."),
+        arm, head), call. = FALSE)
+    } else {
+      keep <- c(keep, lab)
     }
   }
-  invisible(NULL)
+  fe <- stats::reformulate(if (length(keep)) keep else "1",
+                           intercept = as.logical(attr(tt, "intercept")))
+  environment(fe) <- environment(formula)
+  list(fe = fe, fields = fields)
 }
 
 # Parse a cover() formula against the NA-dropped observations.

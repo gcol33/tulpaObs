@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.94 (2026-07-02)
+
+* `cover()` per-arm formulas now carry spatial fields by placement, completing
+  "arm = formula" for both hurdle families: a `spatial()` term in `presence` or
+  `positive` becomes an arm-specific field on that arm, byte-identical to the
+  shared-formula `to =` spelling (the field is routed through the same machinery
+  and indexed onto the arm's rows by the fitter). Fixed effects and fields both
+  follow placement; `copy()` reuses a named field across arms. `temporal()` /
+  `re()` in a per-arm formula are still declared on the shared `formula`. Closes
+  gcol33/tulpaObs#111.
+
 ## 0.0.93 (2026-07-02)
 
 * `cover()` per-arm formulas (arm = formula): `cover(presence = ~ x, positive =
