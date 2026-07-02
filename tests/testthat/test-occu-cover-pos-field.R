@@ -63,7 +63,43 @@ test_that("a single-arm to = \"presence\" spatial bar is rejected", {
   f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
        spatial(~ 1 || cell, graph = adj, to = "presence")
   expect_error(.occu_cover_spatial_fields(f, data),
-               "only for the cover arm")
+               "no separate presence arm")
+})
+
+test_that("a detection-arm spatial bar is rejected as not-yet-wired", {
+  adj  <- .pf_grid_adj(4L)
+  n    <- nrow(adj)
+  data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
+  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
+       spatial(~ 1 || cell, graph = adj, to = "detection")
+  expect_error(.occu_cover_spatial_fields(f, data),
+               "not yet wired")
+})
+
+test_that("detection-arm field recovers once the substrate scatters onto p", {
+  # The parse -> block -> per-arm-sigma plumbing is arm-generic and the simulator
+  # injects a known detection field (det_field = TRUE); enabling this test needs
+  # the joint substrate to scatter a non-copied block onto the detection predictor
+  # (gcol33/tulpa#140). Until then the SD is unidentified (returns the prior).
+  skip("detection-arm field scatter pending gcol33/tulpa#140")
+  adj <- .pf_grid_adj(8L); N <- nrow(adj); truth <- 0.7
+  rec <- vapply(1:6, function(s) {
+    sim <- simulate_occu_cover(
+      N = N, J = 8L, positive = "lognormal",
+      beta_occ = c(qlogis(0.7), 0.3), beta_p = c(qlogis(0.6), 0.1),
+      beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3, adj = adj, sigma = 0.5,
+      alpha = 0.0, det_field = TRUE, sigma_p_int = 0.0, sigma_p_trend = truth,
+      seed = s)
+    fit <- suppressWarnings(tobs(
+      occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+      detection  = ~ 1 + spatial(~ 0 + time || cell, graph = adj),
+      positive   = ~ 1, family = occu_cover(positive = "lognormal"),
+      data = sim$data, y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+      control = list(progress = FALSE, integration = "ccd")))
+    nm <- grep("^sigma_p_field", names(fit$means), value = TRUE)[1L]
+    fit$means[[nm]]
+  }, numeric(1))
+  expect_lt(abs(stats::median(rec) - truth), 0.25)
 })
 
 test_that("an arm-specific cover field does not compose with the `|` MCAR field", {

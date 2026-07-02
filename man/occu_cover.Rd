@@ -141,7 +141,10 @@ a scalar multiple of the occupancy field, \code{alpha} collapses toward 0 and th
 cover arm inherits no field, so per-cell conditional cover (and its change over
 time, \code{delta_cover_cond}) comes out flat. An arm-specific \code{spatial()} bar with
 a single \code{to = "positive"} on the occurrence formula adds an INDEPENDENT,
-non-copied areal field on the cover arm alone (gcol33/tulpaObs#110):
+non-copied areal field on the cover arm alone (gcol33/tulpaObs#110). The
+canonical spelling writes the field in the \code{positive} formula by placement
+(\code{positive = ~ t + spatial(~ 0 + time || cell, graph = adj)}), byte-identical
+to the \verb{to =} form:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(~ x + icar(graph = adj, group_var = "cell") +
        spatial(~ 1 + time || cell, graph = adj, to = "positive"),

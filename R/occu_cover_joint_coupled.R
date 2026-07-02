@@ -367,6 +367,7 @@
                                                 re_spec   = NULL,
                                                 correlated = FALSE,
                                                 pos_armspec = NULL,
+                                                det_armspec = NULL,
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
@@ -427,7 +428,12 @@
   # field. Forces the multi-block driver (like a trend field / RE block). Not
   # composed with the latent cover RE, the correlated MCAR (gated at parse), or
   # the batched fused path (one species at a time, no extra block).
+  # Arm-specific fields carry the detection (p) arm as well as the cover (pos) arm
+  # (each an independent, non-copied ICAR block on that arm alone). Both force the
+  # multi-block driver.
   has_pos_armspec <- !is.null(pos_armspec)
+  has_det_armspec <- !is.null(det_armspec)
+  has_armspec     <- has_pos_armspec || has_det_armspec
   if (has_any_re && is_latent) {
     stop("occu_cover(): a per-group RE and cover_aggregate = \"latent\" cannot ",
          "be combined (the latent path carries its own per-unit cover RE).",
@@ -437,13 +443,13 @@
     stop("occu_cover(): the batched fused path does not carry a per-group RE ",
          "block.", call. = FALSE)
   }
-  if (has_pos_armspec && is_latent) {
-    stop("occu_cover(): an arm-specific cover field (to = \"positive\") does not ",
-         "compose with cover_aggregate = \"latent\".", call. = FALSE)
+  if (has_armspec && is_latent) {
+    stop("occu_cover(): an arm-specific field (to = \"positive\" / \"detection\") ",
+         "does not compose with cover_aggregate = \"latent\".", call. = FALSE)
   }
-  if (has_pos_armspec && isTRUE(.batch_collect)) {
+  if (has_armspec && isTRUE(.batch_collect)) {
     stop("occu_cover(): the batched fused path does not carry an arm-specific ",
-         "cover field.", call. = FALSE)
+         "field.", call. = FALSE)
   }
 
   # Correlated (`|`) free-Sigma MCAR field (gcol33/tulpaObs#63): one coupled
@@ -573,7 +579,7 @@
     sigma_pos_init  = sigma_pos_init,
     alpha_grid      = alpha_grid,
     positive        = model$positive,
-    multi           = has_trend || has_any_re || has_pos_armspec,
+    multi           = has_trend || has_any_re || has_armspec,
     n_cells         = n_cells,
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate
@@ -725,16 +731,29 @@
   # field. So the amplitude grid is passed as tau = 1 / sigma^2.
   pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||% sigma_grid
   pos_armspec_tau_grid   <- sort(1.0 / as.numeric(pos_armspec_sigma_grid)^2)
-  pos_armspec_blocks <- list()
-  pos_field_specs    <- list()
-  if (has_pos_armspec) {
-    idx_site <- as.integer(pos_armspec$idx_obs)
+
+  # One arm-specific field -> ICAR block(s) that scatter on ONE arm's rows: the
+  # node index lands in that arm's slot of the 3-slot spatial_idx (psi = site rows
+  # [1], detection = visit rows [2], cover = pos rows [3]) and the other two carry
+  # the 0-sentinel node so they skip it. Same shape for the cover (pos) and
+  # detection (p) arms; only the target slot and the row->site map differ, so both
+  # go through one builder (no per-arm copy of the block logic).
+  arm_field_blocks <- function(af, arm) {
+    idx_site <- as.integer(af$idx_obs)
     if (length(idx_site) != n_sites)
       stop(sprintf(paste0(
-        "occu_cover(): the arm-specific cover field node index has %d values ",
-        "but there are %d sites."), length(idx_site), n_sites), call. = FALSE)
-    pos_node <- idx_site[pos_site]
-    for (f in pos_armspec$fields) {
+        "occu_cover(): the arm-specific %s field node index has %d values but ",
+        "there are %d sites."),
+        if (identical(arm, "pos")) "cover" else "detection",
+        length(idx_site), n_sites), call. = FALSE)
+    slot    <- if (identical(arm, "pos")) 3L else 2L
+    row_map <- if (identical(arm, "pos")) pos_site else site_of_visit
+    node    <- idx_site[row_map]
+    zeros_i <- list(rep(0L, n_sites), rep(0L, n_v), rep(0L, n_pos_rows))
+    zeros_w <- list(rep(0.0, n_sites), rep(0.0, n_v), rep(0.0, n_pos_rows))
+    blocks <- list(); specs <- list()
+    for (f in af$fields) {
+      sidx <- zeros_i; sidx[[slot]] <- as.integer(node)
       blk <- list(
         type            = "icar",
         n_spatial_units = csr$n_spatial_units,
@@ -742,19 +761,29 @@
         adj_col_idx     = csr$adj_col_idx,
         n_neighbors     = csr$n_neighbors,
         tau_grid        = pos_armspec_tau_grid,
-        spatial_idx     = list(rep(0L, n_sites), rep(0L, n_v),
-                               as.integer(pos_node)))
+        spatial_idx     = sidx)
       if (!isTRUE(f$is_intercept)) {
-        w_pos <- as.numeric(f$weight)[pos_site]
-        blk$svc_weight <- list(rep(0.0, n_sites), rep(0.0, n_v), w_pos)
+        wt <- zeros_w; wt[[slot]] <- as.numeric(f$weight)[row_map]
+        blk$svc_weight <- wt
       }
-      pos_armspec_blocks[[length(pos_armspec_blocks) + 1L]] <- blk
-      pos_field_specs[[length(pos_field_specs) + 1L]] <- list(
-        arm = "pos",
+      blocks[[length(blocks) + 1L]] <- blk
+      specs[[length(specs) + 1L]] <- list(
+        arm = arm,
         weight = if (isTRUE(f$is_intercept)) NULL else f$column_name,
         is_intercept = isTRUE(f$is_intercept),
         column_name = f$column_name)
     }
+    list(blocks = blocks, specs = specs)
+  }
+
+  pos_armspec_blocks <- list()
+  pos_field_specs    <- list()
+  for (as_arm in list(list(af = pos_armspec, arm = "pos"),
+                      list(af = det_armspec, arm = "p"))) {
+    if (is.null(as_arm$af)) next
+    built <- arm_field_blocks(as_arm$af, as_arm$arm)
+    pos_armspec_blocks <- c(pos_armspec_blocks, built$blocks)
+    pos_field_specs    <- c(pos_field_specs, built$specs)
   }
 
   # Field-block descriptors in emitted (prior) order: the shared occupancy
@@ -874,7 +903,7 @@
     # field blocks, then the RE blocks; the copy indices above name occupancy
     # blocks only, so they stay valid (gcol33/tulpaObs#110).
     prior_arg <- c(prior_arg, pos_armspec_blocks, re_blocks)
-  } else if (has_any_re || has_pos_armspec) {
+  } else if (has_any_re || has_armspec) {
     # Single shared occupancy field + per-group REs and/or arm-specific cover
     # fields: the multi-block driver with the occupancy field as block 1 (alpha
     # copy onto cover), then the non-copied arm-specific cover block(s), then the
@@ -1037,7 +1066,7 @@
               # each pos block's weight column for reporting.
               field_specs = field_specs,
               n_occ_fields = 1L + n_trend,
-              has_pos_armspec = has_pos_armspec,
+              has_pos_armspec = has_armspec,
               pos_field_specs = pos_field_specs,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
 
@@ -1474,8 +1503,11 @@
     for (j in seq_along(pos_field_specs)) {
       spec  <- pos_field_specs[[j]]
       blk_k <- n_occ_fields + j
-      nm <- if (isTRUE(spec$is_intercept)) "sigma_pos_field"
-            else paste0("sigma_pos_field_", .re_coef_tag(spec$column_name))
+      # sigma_pos_field for the cover arm, sigma_p_field for the detection arm.
+      base_nm <- paste0("sigma_", if (identical(spec$arm, "p")) "p" else "pos",
+                        "_field")
+      nm <- if (isTRUE(spec$is_intercept)) base_nm
+            else paste0(base_nm, "_", .re_coef_tag(spec$column_name))
       tau_col <- sprintf("b%d.tau", blk_k)
       sig_col <- sprintf("b%d.sigma", blk_k)
       if (sig_col %in% tg_names) {

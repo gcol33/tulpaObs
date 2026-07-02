@@ -1,5 +1,19 @@
 # tulpaObs NEWS
 
+## 0.0.91 (2026-07-02)
+
+* `occu_cover()` field placement: a spatial-field term written in the `positive`
+  formula (`positive = ~ t + spatial(~ 0 + time || cell, graph = adj)`) declares
+  an independent cover-arm field by placement, byte-identical to the explicit
+  `to = "positive"` spelling (which is retained). The intake lifts the term onto
+  the occurrence formula with the arm tag; `copy()` stays on its arm's formula.
+* The arm-specific field machinery (parse, block build, per-arm sigma naming) is
+  now arm-generic, and `simulate_occu_cover(det_field = TRUE)` injects a known
+  detection field. A detection-arm field (`to = "detection"`) is reserved but
+  rejected at parse: the joint C++ substrate scatters fields onto the occupancy
+  and cover arms only, so a detection field is unidentified until the substrate
+  is wired (gcol33/tulpa#140).
+
 ## 0.0.90 (2026-07-02)
 
 * `occu_cover()` now accepts `control$sigma.grid.pos.field`, the SD grid for the

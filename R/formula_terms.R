@@ -570,9 +570,18 @@
 }
 
 # Arm labels of the cover hurdle: presence (the y > 0 Bernoulli arm) and
-# positive (the y | y > 0 arm). `to =` validates against this set; summary() and
-# the coefficient output print the same labels (formula label == output label).
+# positive (the y | y > 0 arm). This is the DEFAULT-both-arms set: an untagged
+# `||` bar in cover() lands on both. summary() and the coefficient output print
+# the same labels (formula label == output label).
 .tobs_cover_arms <- c("presence", "positive")
+
+# Every arm label a `to =` may name across the families that share this term
+# machinery: the cover-hurdle presence / positive arms plus the occupancy-cover
+# detection arm (occu_cover's per-visit p arm can carry its own field). `to =`
+# validates against this UNION; each family rejects the arms it does not have
+# (cover() has no detection arm; occu_cover's occupancy field is the untagged
+# occurrence term, so it rejects to = "presence").
+.tobs_cover_arms_valid <- c("presence", "positive", "detection")
 
 # Capture a `spatial(~ 1 + w || node, graph = adj, to = ...)` varying-coefficient
 # bar into a deferred spec. The bar's left-hand side (intercept + covariate
@@ -625,13 +634,13 @@
     stop("spatial(<bar>, to = ): `to` must be a character vector of arm labels.",
          call. = FALSE)
   }
-  bad_to <- setdiff(to, .tobs_cover_arms)
+  bad_to <- setdiff(to, .tobs_cover_arms_valid)
   if (length(bad_to)) {
     stop(sprintf(paste0(
       "spatial(<bar>, to = ): unknown arm label%s %s. Valid arms: %s."),
       if (length(bad_to) > 1L) "s" else "",
       paste0("\"", bad_to, "\"", collapse = ", "),
-      paste0("\"", .tobs_cover_arms, "\"", collapse = ", ")),
+      paste0("\"", .tobs_cover_arms_valid, "\"", collapse = ", ")),
       call. = FALSE)
   }
   to <- unique(to)

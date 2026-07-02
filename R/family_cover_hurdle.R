@@ -337,6 +337,9 @@ encode_cover_hurdle <- function(formula, data, y,
   switch(arm,
          presence = "occ",
          positive = "pos",
+         detection = stop(
+           "cover() has no detection arm; a detection-arm field belongs to ",
+           "occu_cover(). Use \"presence\" or \"positive\".", call. = FALSE),
          stop(sprintf("internal: unknown cover arm label '%s'.", arm),
               call. = FALSE))
 }

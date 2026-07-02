@@ -276,7 +276,10 @@ jsdm <- function() {
 #' cover arm inherits no field, so per-cell conditional cover (and its change over
 #' time, `delta_cover_cond`) comes out flat. An arm-specific `spatial()` bar with
 #' a single `to = "positive"` on the occurrence formula adds an INDEPENDENT,
-#' non-copied areal field on the cover arm alone (gcol33/tulpaObs#110):
+#' non-copied areal field on the cover arm alone (gcol33/tulpaObs#110). The
+#' canonical spelling writes the field in the `positive` formula by placement
+#' (`positive = ~ t + spatial(~ 0 + time || cell, graph = adj)`), byte-identical
+#' to the `to =` form:
 #'
 #' ```r
 #' tobs(~ x + icar(graph = adj, group_var = "cell") +

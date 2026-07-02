@@ -1582,11 +1582,12 @@
         "single shared field only."), engine_pick), call. = FALSE)
     }
     if (engine_pick %in% c("v2_joint", "v3_nested")) {
-      if (!is.null(spatial_info$pos_armspec)) {
+      if (length(spatial_info$armspec)) {
         stop(sprintf(paste0(
-          "occu_cover() an arm-specific cover field (to = \"positive\") needs ",
-          "the default joint_coupled engine; the \"%s\" escape hatch couples a ",
-          "single shared field only."), engine_pick), call. = FALSE)
+          "occu_cover() an arm-specific field (to = \"positive\" / ",
+          "\"detection\") needs the default joint_coupled engine; the \"%s\" ",
+          "escape hatch couples a single shared field only."), engine_pick),
+          call. = FALSE)
       }
       if (!is.null(re_spec) || !is.null(model$re_det) || !is.null(model$re_pos)) {
         stop(sprintf(paste0(
@@ -1627,7 +1628,8 @@
     }
     fit_args <- c(list(model = model, fields = fields, priors = priors,
                        re_spec = re_spec, correlated = correlated,
-                       pos_armspec = spatial_info$pos_armspec),
+                       pos_armspec = spatial_info$armspec[["pos"]],
+                       det_armspec = spatial_info$armspec[["p"]]),
                   control)
     return(do.call(.tobs_fit_occu_cover_joint_coupled, fit_args))
   }
@@ -2337,6 +2339,9 @@ simulate_occu_cover <- function(N             = 200L,
                                  pos_field       = FALSE,
                                  sigma_pos_int   = 0.5,
                                  sigma_pos_trend = 0.6,
+                                 det_field       = FALSE,
+                                 sigma_p_int     = 0.5,
+                                 sigma_p_trend   = 0.6,
                                  re_det_groups = NULL,
                                  sigma_re_p    = 0.7,
                                  re_det        = NULL,
@@ -2362,6 +2367,8 @@ simulate_occu_cover <- function(N             = 200L,
   f2 <- numeric(N)
   g0 <- numeric(N)   # arm-specific cover intercept field (gcol33/tulpaObs#110)
   g1 <- numeric(N)   # arm-specific cover trend field
+  h0 <- numeric(N)   # arm-specific detection intercept field
+  h1 <- numeric(N)   # arm-specific detection trend field
   time_cov <- numeric(N)
   if (!is.null(adj)) {
     if (!is.matrix(adj) || nrow(adj) != N || ncol(adj) != N) {
@@ -2381,7 +2388,7 @@ simulate_occu_cover <- function(N             = 200L,
     f <- draw_field()
     # A time covariate is needed by either the shared trend field or the
     # arm-specific cover trend field.
-    if (isTRUE(trend) || isTRUE(pos_field)) {
+    if (isTRUE(trend) || isTRUE(pos_field) || isTRUE(det_field)) {
       time_cov <- as.numeric(scale(stats::rnorm(N)))
     }
     if (isTRUE(trend)) f2 <- draw_field()
@@ -2393,6 +2400,14 @@ simulate_occu_cover <- function(N             = 200L,
     if (isTRUE(pos_field)) {
       g0 <- draw_field()
       g1 <- draw_field()
+    }
+    # Arm-specific detection field(s): an INDEPENDENT detection-arm intercept field
+    # h0 and time-weighted trend field h1, unrelated to the occupancy and cover
+    # fields. They enter the detection linear predictor only (no psi / cover
+    # contribution, no copy), so p varies spatially on its own.
+    if (isTRUE(det_field)) {
+      h0 <- draw_field()
+      h1 <- draw_field()
     }
   }
 
@@ -2520,7 +2535,12 @@ simulate_occu_cover <- function(N             = 200L,
     for (j in seq_len(J)) {
       idx <- (i - 1L) * J + j
       if (z_state[i] == 1L) {
-        p_ij <- stats::plogis(eta_p[idx])
+        eta_p_ij <- eta_p[idx]
+        if (!is.null(adj) && isTRUE(det_field)) {
+          eta_p_ij <- eta_p_ij + sigma_p_int * h0[i] +
+                      sigma_p_trend * time_cov[i] * h1[i]
+        }
+        p_ij <- stats::plogis(eta_p_ij)
         d <- stats::rbinom(1L, 1L, p_ij)
         y[i, j] <- d
         if (d == 1L) {
@@ -2546,9 +2566,10 @@ simulate_occu_cover <- function(N             = 200L,
   occ_out <- occ_covs
   has_trend    <- !is.null(adj) && isTRUE(trend)
   has_posfield <- !is.null(adj) && isTRUE(pos_field)
-  if (has_trend || has_posfield) occ_out$time <- time_cov
-  # The arm-specific cover field bar indexes its graph node by a `cell` column.
-  if (has_posfield) occ_out$cell <- seq_len(N)
+  has_detfield <- !is.null(adj) && isTRUE(det_field)
+  if (has_trend || has_posfield || has_detfield) occ_out$time <- time_cov
+  # The arm-specific field bars index their graph node by a `cell` column.
+  if (has_posfield || has_detfield) occ_out$cell <- seq_len(N)
 
   list(
     y          = y,
@@ -2576,6 +2597,10 @@ simulate_occu_cover <- function(N             = 200L,
       g1              = if (has_posfield) g1              else NULL,
       sigma_pos_int   = if (has_posfield) sigma_pos_int   else NA_real_,
       sigma_pos_trend = if (has_posfield) sigma_pos_trend else NA_real_,
+      h0              = if (has_detfield) h0              else NULL,
+      h1              = if (has_detfield) h1              else NULL,
+      sigma_p_int     = if (has_detfield) sigma_p_int     else NA_real_,
+      sigma_p_trend   = if (has_detfield) sigma_p_trend   else NA_real_,
       sigma_re_p  = if (!is.null(re_det_groups)) sigma_re_p else NA_real_,
       b_p_re      = b_p_re,
       re_det_levels = re_det_levels,
