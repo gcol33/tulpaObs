@@ -73,8 +73,7 @@ test_that("correlated `|` bar recovers Sigma (SDs + cross-correlation) and alpha
   for (r in seq_len(n_seeds)) {
     sim <- .mcar_sim_cover(adj, Sigma, alpha_true, seed = r)
     fit <- suppressWarnings(tobs(
-      formula = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj,
-                                    to = c("presence", "positive")),
+      formula = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj),
       data = sim$data, y = sim$y, family = cover(response = "lognormal"),
       method = "nested_laplace",
       control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))
@@ -126,8 +125,7 @@ test_that("independent `||` bar does not recover a spurious cross-correlation", 
   sim <- .mcar_sim_cover(adj, Sigma, alpha_true, seed = 1L)
 
   fit <- suppressWarnings(tobs(
-    formula = ~ time.sc + spatial(~ 1 + time.sc || cell, graph = adj,
-                                  to = c("presence", "positive")),
+    formula = ~ time.sc + spatial(~ 1 + time.sc || cell, graph = adj),
     data = sim$data, y = sim$y, family = cover(response = "lognormal"),
     method = "nested_laplace",
     control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))
@@ -167,7 +165,7 @@ test_that("independent `||` bar does not recover a spurious cross-correlation", 
   list(data = data.frame(cover = cover, time.sc = time.sc, cell = cell), y = cover)
 }
 
-test_that("single-arm `|` (to = 'presence') recovers Sigma, no cross-arm copy", {
+test_that("single-arm `|` (presence placement) recovers Sigma, no cross-arm copy", {
   skip_on_cran()
   skip_if_fast()
 
@@ -182,8 +180,8 @@ test_that("single-arm `|` (to = 'presence') recovers Sigma, no cross-arm copy", 
   for (r in seq_len(n_seeds)) {
     sim <- .mcar_sim_cover_occ(adj, Sigma, seed = r)
     fit <- suppressWarnings(tobs(
-      formula = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj,
-                                    to = "presence"),
+      presence = ~ time.sc + spatial(~ 1 + time.sc | cell, graph = adj),
+      positive = ~ time.sc,
       data = sim$data, y = sim$y, family = cover(response = "lognormal"),
       method = "nested_laplace",
       control = list(max.iter = 60L, progress = FALSE, verbose = FALSE)))

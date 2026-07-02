@@ -79,7 +79,8 @@ INDEPENDENT areal field on the cover (positive) arm only -- an intercept
 field plus a time-weighted trend field, each unrelated to the occupancy
 field and with no alpha copy (gcol33/tulpaObs#110). Adds a \code{time} column to
 the returned \code{data} and reports \code{g0} / \code{g1} (the two fields) and their SDs in
-\code{truth}. Fit with \code{spatial(~ 1 + time || cell, graph = adj, to = "positive")}.}
+\code{truth}. Fit by placing \code{spatial(~ 1 + time || cell, graph = adj)} in the
+\code{positive} formula.}
 
 \item{sigma_pos_int}{Cover-arm intercept-field SD (used only when
 \code{pos_field = TRUE}).}

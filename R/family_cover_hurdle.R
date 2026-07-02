@@ -205,6 +205,11 @@ encode_cover_hurdle <- function(formula, data, y,
   # the arm's row subset); declare fields on the shared `formula` with `to =` for
   # now. When per-arm formulas are absent this branch is skipped, so the shared
   # path is byte-identical.
+  # `to =` is retired: an arm is chosen by placement, a shared field by copy().
+  .tobs_reject_user_to(formula, "shared")
+  .tobs_reject_user_to(presence_formula, "presence")
+  .tobs_reject_user_to(positive_formula, "positive")
+
   copy_alpha <- NULL
   per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
   if (per_arm) {

@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.96 (2026-07-02)
+
+* `copy()` is now wired into the `cover()` hurdle engine, so a shared spatial
+  field across the two cover arms is written the same way as in `occu_cover()`:
+  place the field in the `presence` formula and `copy(spatial())` in the
+  `positive` formula. `copy(spatial())` estimates the coupling amplitude on the
+  default grid (byte-identical to the previous both-arm spelling);
+  `copy(spatial(), alpha = grid(c(...)))` integrates it over a supplied grid and
+  `copy(spatial(), alpha = 0.5)` fixes it.
+
+* `to =` on a spatial field is retired from both cover families. An arm is now
+  chosen by placement (write the field in that arm's formula) and a field is
+  shared across arms with `copy()`; a field in the single shared `formula`
+  reaches both arms. The `||` / `|` (independent / correlated MCAR) axis is
+  unchanged. Every routing `to =` expressed is byte-identical under the new
+  spelling: shared intercept/trend via a shared-formula field or `copy()`,
+  arm-specific and correlated single-arm fields via placement, MCAR both-arm via
+  a shared-formula `|` bar or `copy()`. A user-supplied `to =` now errors with a
+  pointer to placement / `copy()`.
+
 ## 0.0.95 (2026-07-02)
 
 * The positive-arm distribution argument of the cover families is renamed

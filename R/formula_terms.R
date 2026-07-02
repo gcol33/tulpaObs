@@ -855,6 +855,40 @@
 # Names of the registered special terms (used by the parser to detect them).
 .tobs_term_names <- function() names(.tobs_terms)
 
+# Areal field constructors that a `to =` could once have routed across arms.
+.tobs_field_ctor_names <- c("spatial", "icar", "bym2", "car", "car_proper")
+
+# Walk a formula's RHS expression tree for a spatial-field call carrying an
+# explicit `to =` argument. `to =` is retired from the public API: an arm is
+# chosen by placement (write the field in that arm's formula) and a field is
+# shared across arms with copy(). The internal spec `to` is still set by the
+# placement / copy machinery on reconstructed calls, so this scans the RAW user
+# formula only (before any lifting), never the reconstructed one.
+.tobs_expr_has_user_to <- function(expr) {
+  if (is.call(expr)) {
+    head <- if (is.symbol(expr[[1L]])) as.character(expr[[1L]]) else ""
+    if (head %in% .tobs_field_ctor_names && "to" %in% names(expr)) return(TRUE)
+    for (i in seq_along(expr)) if (.tobs_expr_has_user_to(expr[[i]])) return(TRUE)
+  }
+  FALSE
+}
+
+.tobs_reject_user_to <- function(formula, arg_label) {
+  if (is.null(formula) || !inherits(formula, "formula")) return(invisible())
+  rhs <- formula[[length(formula)]]
+  if (.tobs_expr_has_user_to(rhs)) {
+    stop(sprintf(paste0(
+      "`to =` is retired (in the %s formula). Choose a field's arm by ",
+      "placement -- write the field in that arm's formula -- and share a field ",
+      "across arms with copy(). For example, instead of ",
+      "spatial(..., to = c(\"presence\", \"positive\")) on a shared formula, ",
+      "write presence = ~ ... spatial(...) and positive = ~ ... copy(spatial()); ",
+      "for a single arm, place the field in that arm's formula only."),
+      arg_label), call. = FALSE)
+  }
+  invisible()
+}
+
 
 # A varying-coefficient areal field -- a per-node SVC weight
 # (icar/bym2/car_proper `weight =`), the multi-field intercept + SVC container,

@@ -132,23 +132,20 @@ an areal term's \code{group_var}, \code{occu_cover()} emits a one-time message n
 bar is fitted as a random effect; suppress it with \code{\link[base:suppressMessages]{base::suppressMessages()}}.
 }
 
-\section{Independent field on the cover arm (\code{to = "positive"})}{
+\section{Independent field on the cover arm (placement)}{
 
 By default the occupancy field is shared: the cover arm sees it as
 \verb{alpha * (occupancy field)}, the coregionalization copy on the outer
 \verb{(sigma, alpha)} grid. When the cover trend is spatially structured but is not
 a scalar multiple of the occupancy field, \code{alpha} collapses toward 0 and the
 cover arm inherits no field, so per-cell conditional cover (and its change over
-time, \code{delta_cover_cond}) comes out flat. An arm-specific \code{spatial()} bar with
-a single \code{to = "positive"} on the occurrence formula adds an INDEPENDENT,
-non-copied areal field on the cover arm alone (gcol33/tulpaObs#110). The
-canonical spelling writes the field in the \code{positive} formula by placement
-(\code{positive = ~ t + spatial(~ 0 + time || cell, graph = adj)}), byte-identical
-to the \verb{to =} form:
+time, \code{delta_cover_cond}) comes out flat. A \code{spatial()} bar placed in the
+\code{positive} formula adds an INDEPENDENT, non-copied areal field on the cover arm
+alone (gcol33/tulpaObs#110):
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(~ x + icar(graph = adj, group_var = "cell") +
-       spatial(~ 1 + time || cell, graph = adj, to = "positive"),
-     detection = ~ 1, positive = ~ time,
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
+     detection  = ~ 1,
+     positive   = ~ time + spatial(~ 1 + time || cell, graph = adj),
      data = cell_dat, y = y, y_pos = y_pos,
      family = occu_cover("lognormal"), method = "nested_laplace")
 }\if{html}{\out{</div>}}

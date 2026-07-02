@@ -1201,6 +1201,15 @@
   # RE parse and the positive-defaults-to-detection fallback, so each downstream
   # step sees a field-free arm formula and a shared formula is not lifted twice.
   # copy() stays on its arm's formula (it is a reference, not a new field).
+  #
+  # `to =` is retired: an arm is chosen by placement (write the field in that
+  # arm's formula) and a field is shared across arms with copy(). Reject an
+  # explicit user `to =` on the raw arm formulas, before placement sets the
+  # internal `to` on the lifted calls.
+  .tobs_reject_user_to(formula,   "occurrence")
+  .tobs_reject_user_to(detection, "detection")
+  .tobs_reject_user_to(pos_formula, "positive")
+
   lifted      <- .occu_cover_lift_arm_fields(formula, detection, pos_formula)
   formula     <- lifted$occ
   detection   <- lifted$det
@@ -2292,7 +2301,8 @@
 #'   field plus a time-weighted trend field, each unrelated to the occupancy
 #'   field and with no alpha copy (gcol33/tulpaObs#110). Adds a `time` column to
 #'   the returned `data` and reports `g0` / `g1` (the two fields) and their SDs in
-#'   `truth`. Fit with `spatial(~ 1 + time || cell, graph = adj, to = "positive")`.
+#'   `truth`. Fit by placing `spatial(~ 1 + time || cell, graph = adj)` in the
+#'   `positive` formula.
 #' @param sigma_pos_int Cover-arm intercept-field SD (used only when
 #'   `pos_field = TRUE`).
 #' @param sigma_pos_trend Cover-arm trend-field SD (used only when

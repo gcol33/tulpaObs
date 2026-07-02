@@ -268,23 +268,20 @@ jsdm <- function() {
 #' an areal term's `group_var`, `occu_cover()` emits a one-time message noting the
 #' bar is fitted as a random effect; suppress it with [base::suppressMessages()].
 #'
-#' @section Independent field on the cover arm (`to = "positive"`):
+#' @section Independent field on the cover arm (placement):
 #' By default the occupancy field is shared: the cover arm sees it as
 #' `alpha * (occupancy field)`, the coregionalization copy on the outer
 #' `(sigma, alpha)` grid. When the cover trend is spatially structured but is not
 #' a scalar multiple of the occupancy field, `alpha` collapses toward 0 and the
 #' cover arm inherits no field, so per-cell conditional cover (and its change over
-#' time, `delta_cover_cond`) comes out flat. An arm-specific `spatial()` bar with
-#' a single `to = "positive"` on the occurrence formula adds an INDEPENDENT,
-#' non-copied areal field on the cover arm alone (gcol33/tulpaObs#110). The
-#' canonical spelling writes the field in the `positive` formula by placement
-#' (`positive = ~ t + spatial(~ 0 + time || cell, graph = adj)`), byte-identical
-#' to the `to =` form:
+#' time, `delta_cover_cond`) comes out flat. A `spatial()` bar placed in the
+#' `positive` formula adds an INDEPENDENT, non-copied areal field on the cover arm
+#' alone (gcol33/tulpaObs#110):
 #'
 #' ```r
-#' tobs(~ x + icar(graph = adj, group_var = "cell") +
-#'        spatial(~ 1 + time || cell, graph = adj, to = "positive"),
-#'      detection = ~ 1, positive = ~ time,
+#' tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
+#'      detection  = ~ 1,
+#'      positive   = ~ time + spatial(~ 1 + time || cell, graph = adj),
 #'      data = cell_dat, y = y, y_pos = y_pos,
 #'      family = occu_cover("lognormal"), method = "nested_laplace")
 #' ```
@@ -1039,24 +1036,21 @@ occu_categorical <- function(classes = NULL) {
 #' ```r
 #' # response on the LHS (y = omitted)
 #' tobs(cover.flat ~ time.sc + habitat +
-#'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
-#'                to = c("presence", "positive")),
+#'        spatial(~ 1 + time.sc || cell_idx, graph = adj),
 #'      data = dat, family = cover(response = "beta"),
 #'      method = "nested_laplace")
 #'
 #' # the same fit with a one-sided formula and an explicit y =
 #' tobs(~ time.sc + habitat +
-#'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
-#'                to = c("presence", "positive")),
+#'        spatial(~ 1 + time.sc || cell_idx, graph = adj),
 #'      y = dat$cover.flat, data = dat, family = cover(response = "beta"),
 #'      method = "nested_laplace")
 #' ```
 #'
 #' Naming the response makes the per-arm spatial labels read naturally: `cover()`
-#' splits `cover.flat` into a `presence` arm and a `positive` arm, so the
-#' `to = c("presence", "positive")` arm names are visible in the call. The LHS
-#' is evaluated against `data` (then the calling environment), so it may be a
-#' bare column or an expression.
+#' splits `cover.flat` into a `presence` arm and a `positive` arm, the arm names
+#' that per-arm formulas and copy() address. The LHS is evaluated against `data`
+#' (then the calling environment), so it may be a bare column or an expression.
 #'
 #' @section Joint nested-Laplace engine — spatial-prior parameterisation:
 #' When fitted with `method = "nested_laplace"` and an areal spatial term in
@@ -1097,39 +1091,38 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' @section Varying-coefficient spatial bar (the compact single-term form):
 #' The intercept field plus its weighted trend field can also be written as one
-#' `spatial()` term carrying an lme4-style coefficient formula and a `to =`
-#' argument naming the arms that share the field:
+#' `spatial()` term carrying an lme4-style coefficient formula:
 #'
 #' ```r
 #' ~ time.sc + habitat +
-#'   spatial(~ 1 + time.sc || cell_idx, graph = adj,
-#'           to = c("presence", "positive"))
+#'   spatial(~ 1 + time.sc || cell_idx, graph = adj)
 #' ```
 #'
 #' The bar left-hand side spells the coefficient fields: the intercept column
-#' (`1`) is the unweighted shared field; each covariate column (`time.sc`) is a
+#' (`1`) is the unweighted field; each covariate column (`time.sc`) is a
 #' weight-scaled coefficient field (`weight_i * z[cell_i]`). The bar right-hand
 #' side (`cell_idx`) is the graph node index (the areal `group_var`); `||`
-#' requests independent fields. This desugars to exactly the two-term weighted-
-#' areal form above, so the two spellings give the same fit.
+#' requests independent intercept and slope fields, a single `|` makes them
+#' correlated. This desugars to exactly the two-term weighted-areal form above,
+#' so the two spellings give the same fit.
 #'
+#' @section Choosing a field's arm: placement and copy():
 #' The cover hurdle's two arms are `presence` (the `y > 0` Bernoulli arm) and
-#' `positive` (the `y | y > 0` arm); `summary()` and the coefficient output
-#' print these same labels. `to =` validates against this arm set and may be
-#' omitted to mean both arms.
+#' `positive` (the `y | y > 0` arm); `summary()` and the coefficient output print
+#' these same labels. A field is placed on an arm by writing it in that arm's
+#' per-arm formula (`presence = ~ ...`, `positive = ~ ...`), and shared across
+#' arms with copy(). A field in the single shared `formula` reaches both arms.
 #'
-#' \strong{Copy versus free: one call versus separate calls.} Whether the two
-#' arms share one latent field or each carry their own is set by how many
-#' `spatial()` calls you write, not by an option.
-#'
-#' \emph{Copy / shared} -- one `spatial()` call naming both arms in `to =` is a
-#' single latent field, presence-anchored, copied onto the positive arm with an
-#' estimated coupling per coefficient field (`alpha` for the intercept field,
-#' `alpha_trend` for the trend field), marginalized on the outer grid:
+#' \emph{Both arms (shared / copied).} A field in the shared `formula` is one
+#' presence-anchored latent copied onto the positive arm with an estimated
+#' coupling per coefficient field (`alpha` for the intercept field, `alpha_trend`
+#' for the trend field), marginalized on the outer grid:
 #'
 #' ```r
 #' # one latent field, shared by both arms
-#' spatial(~ 1 + time.sc || cell_idx, graph = adj, to = c("presence", "positive"))
+#' tobs(cover.flat ~ time.sc + habitat +
+#'        spatial(~ 1 + time.sc || cell_idx, graph = adj),
+#'      data = dat, family = cover(response = "beta"), method = "nested_laplace")
 #' ```
 #'
 #' ```
@@ -1137,17 +1130,27 @@ occu_categorical <- function(classes = NULL) {
 #' positive: eta_positive = ... + alpha * u_cell + alpha_trend * time.sc * s_cell
 #' ```
 #'
-#' The same `u_cell` (intercept field) and `s_cell` (time-slope field) appear in
-#' both arms; the positive arm sees them through the estimated multipliers.
-#'
-#' \emph{Free / separate} -- one single-arm `spatial()` call per arm declares a
-#' separate latent field on each arm, each with its own precision and no
-#' cross-arm coupling (gcol33/tulpaObs#65):
+#' Per-arm formulas make the shared field explicit: place it on `presence` and
+#' copy it onto `positive`. `copy(spatial())` estimates the coupling on the
+#' default grid; `copy(spatial(), alpha = grid(c(...)))` integrates it over a
+#' supplied grid, `copy(spatial(), alpha = 0.5)` fixes it.
 #'
 #' ```r
-#' # two independent latent fields, one per arm
-#' spatial(~ 1 + time.sc || cell_idx, graph = adj, to = "presence") +
-#' spatial(~ 1 + time.sc || cell_idx, graph = adj, to = "positive")
+#' tobs(presence = ~ time.sc + habitat +
+#'                   spatial(~ 1 + time.sc || cell_idx, graph = adj),
+#'      positive = ~ time.sc + habitat + copy(spatial()),
+#'      data = dat, family = cover(response = "beta"), method = "nested_laplace")
+#' ```
+#'
+#' \emph{One arm only (free / separate).} A field written in one arm's formula is
+#' a separate latent on that arm alone, with its own precision and no cross-arm
+#' coupling (gcol33/tulpaObs#65). A field in each arm's formula gives two
+#' independent latents:
+#'
+#' ```r
+#' tobs(presence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+#'      positive = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+#'      data = dat, family = cover(response = "beta"), method = "nested_laplace")
 #' ```
 #'
 #' ```
@@ -1155,37 +1158,23 @@ occu_categorical <- function(classes = NULL) {
 #' positive: eta_positive = ... + u_positive_cell + time.sc * s_positive_cell
 #' ```
 #'
-#' A lone single-arm call (`to = "presence"`) puts a field on that arm only. The
-#' free fit reports `sigma_armspecific`. Arm-specific fields are their own
+#' The free fit reports `sigma_armspecific`. Arm-specific fields are their own
 #' spatial structure: they do not combine with a shared field, a weighted trend,
-#' a correlated `|` bar, or `temporal()` / `re()` in the same formula, and at most
-#' one targets each arm.
+#' or `temporal()` / `re()` in the same formula, and at most one targets each arm.
 #'
-#' The `||` and `|` axis is separate from copy / free: `||` makes the intercept
+#' The `||` and `|` axis is separate from shared / free: `||` makes the intercept
 #' and slope fields independent, while a single `|` makes them correlated (a free
-#' cross-covariance, MCAR). A correlated `|` bar on both arms (`to =
-#' c("presence", "positive")`) anchors the field on the occurrence arm and copies
-#' it to the positive arm with one estimated amplitude (gcol33/tulpaObs#64); on a
-#' single arm (`to = "presence"` or `to = "positive"`) it is a free-Sigma
-#' correlated field on that arm alone, with no cross-arm copy
+#' cross-covariance, MCAR). A correlated `|` bar shared across both arms (in the
+#' shared `formula`, or on `presence` with `copy()` on `positive`) is copied with
+#' one estimated amplitude (gcol33/tulpaObs#64); placed on one arm's formula it is
+#' a free-Sigma correlated field on that arm alone, no cross-arm copy
 #' (gcol33/tulpaObs#109).
 #'
 #' ```
-#' one spatial() call, to = both arms    one shared / copied latent (presence anchor, coupling estimated)
-#' separate single-arm spatial() calls   separate / free latents, no coupling
-#' ||                                     independent intercept and slope coefficient fields
-#' |                                      correlated (MCAR) coefficient fields, copy-only
-#' ```
-#'
-#' With the response on the formula left-hand side (gcol33/tulpaObs#66), the
-#' shared-field cover hurdle reads:
-#'
-#' ```r
-#' tobs(cover.flat ~ time.sc + habitat +
-#'        spatial(~ 1 + time.sc || cell_idx, graph = adj,
-#'                to = c("presence", "positive")),
-#'      data = dat, family = cover(response = "beta"),
-#'      method = "nested_laplace")
+#' field in the shared formula (or copy())   one shared / copied latent (presence anchor, coupling estimated)
+#' a field in each arm's formula             separate / free latents, no coupling
+#' ||                                        independent intercept and slope coefficient fields
+#' |                                         correlated (MCAR) coefficient fields, copy-only
 #' ```
 #'
 #' @section A formula bar is a random effect, not a spatial field:

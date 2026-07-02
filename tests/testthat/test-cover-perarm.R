@@ -42,7 +42,7 @@ test_that("the shared single formula stays back-compat (both arms share the FE)"
   expect_true(all(c("x1", "x2") %in% names(fit$beta_pos)))
 })
 
-test_that("a spatial field placed in an arm formula == the to= spelling", {
+test_that("a spatial field placed in the positive formula is an arm-specific field", {
   skip_on_cran()
   side <- 6L; nc <- side * side
   adj <- matrix(0L, nc, nc)
@@ -66,16 +66,13 @@ test_that("a spatial field placed in an arm formula == the to= spelling", {
     presence = ~ x + t, positive = ~ x + t + spatial(~ 1 || cell, graph = adj),
     family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
-  fit_to <- suppressWarnings(tobs(
-    ~ x + t + spatial(~ 1 || cell, graph = adj, to = "positive"),
-    family = cover(response = "beta"), data = dat, y = y,
-    method = "nested_laplace", control = ctrl))
 
-  expect_equal(unname(fit_pa$beta_occ), unname(fit_to$beta_occ), tolerance = 1e-8)
-  expect_equal(unname(fit_pa$beta_pos), unname(fit_to$beta_pos), tolerance = 1e-8)
+  expect_s3_class(fit_pa, "cover_fit")
+  expect_true(isTRUE(fit_pa$armspecific))
+  expect_identical(fit_pa$armspec_blocks[[1L]]$arm, "positive")
 })
 
-test_that("copy(spatial()) in the positive formula == the shared to = both spelling", {
+test_that("copy(spatial()) in the positive formula == the shared-formula field (both arms)", {
   skip_on_cran()
   side <- 6L; nc <- side * side
   adj <- matrix(0L, nc, nc)
@@ -102,9 +99,9 @@ test_that("copy(spatial()) in the positive formula == the shared to = both spell
     positive = ~ x + t + copy(spatial()),
     family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
-  # Legacy shared spelling: one bar, to = both arms.
+  # Shared-formula spelling: one bar in the shared formula reaches both arms.
   fit_to <- suppressWarnings(tobs(
-    ~ x + t + spatial(~ 1 || cell, graph = adj, to = c("presence", "positive")),
+    ~ x + t + spatial(~ 1 || cell, graph = adj),
     family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
 

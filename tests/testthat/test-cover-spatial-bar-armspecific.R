@@ -1,11 +1,12 @@
 # Arm-specific separate spatial latents in cover() (gcol33/tulpaObs#65).
 #
-# A single-arm `to =` on an INDEPENDENT (`||`) spatial bar puts an areal field on
-# ONLY that arm, with its own precision and NO cross-arm copy. Separate single-arm
-# calls = independent per-arm fields, each its own precision, no coupling. This is
-# the FREE counterpart to #61's shared (copied) `to = c("presence", "positive")`
-# path: there the engine anchors one field on presence and copies it to positive
-# with an estimated alpha; here each arm carries its own field.
+# An INDEPENDENT (`||`) spatial bar placed in ONE arm's formula puts an areal
+# field on that arm only, with its own precision and NO cross-arm copy. A field in
+# each arm's formula = independent per-arm fields, each its own precision, no
+# coupling. This is the FREE counterpart to #61's shared (copied) field (a field
+# in the shared formula, or copy()): there the engine anchors one field on
+# presence and copies it to positive with an estimated alpha; here each arm
+# carries its own field.
 #
 # Engine mechanism (no engine change needed): the joint multi-block driver reads a
 # per-arm `spatial_idx` of 0 as "this arm's rows do not see this block" (the
@@ -81,7 +82,7 @@ test_that("a positive-only single-arm field recovers, presence shows none", {
                     pmin(exp(eta_pos + rnorm(N, 0, 0.4)), 1 - 1e-6), 0)
   dat <- data.frame(cell = cell, x = x, cover = cover)
 
-  fit <- tobs(formula = ~ x + spatial(~ 1 || cell, graph = adj, to = "positive"),
+  fit <- tobs(presence = ~ x, positive = ~ x + spatial(~ 1 || cell, graph = adj),
               data = dat, family = cover(response = "lognormal"), y = dat$cover,
               method = "nested_laplace", control = .as_control)
 
@@ -135,9 +136,8 @@ test_that("two independent single-arm fields both recover, no cross-arm copy", {
                     pmin(exp(eta_pos + rnorm(N, 0, 0.35)), 1 - 1e-6), 0)
   dat <- data.frame(cell = cell, x = x, cover = cover)
 
-  fit <- tobs(formula = ~ x +
-                spatial(~ 1 || cell, graph = adj, to = "presence") +
-                spatial(~ 1 || cell, graph = adj, to = "positive"),
+  fit <- tobs(presence = ~ x + spatial(~ 1 || cell, graph = adj),
+              positive = ~ x + spatial(~ 1 || cell, graph = adj),
               data = dat, family = cover(response = "lognormal"), y = dat$cover,
               method = "nested_laplace", control = .as_control)
 
@@ -190,15 +190,13 @@ test_that("arm-specific fit recovers an arm the shared copied fit must miss", {
                     pmin(exp(eta_pos + rnorm(N, 0, 0.35)), 1 - 1e-6), 0)
   dat <- data.frame(cell = cell, x = x, cover = cover)
 
-  fit_arm <- tobs(formula = ~ x +
-                    spatial(~ 1 || cell, graph = adj, to = "presence") +
-                    spatial(~ 1 || cell, graph = adj, to = "positive"),
+  fit_arm <- tobs(presence = ~ x + spatial(~ 1 || cell, graph = adj),
+                  positive = ~ x + spatial(~ 1 || cell, graph = adj),
                   data = dat, family = cover(response = "lognormal"),
                   y = dat$cover, method = "nested_laplace", control = .as_control)
 
   fit_shared <- tobs(formula = ~ x +
-                       spatial(~ 1 || cell, graph = adj,
-                               to = c("presence", "positive")),
+                       spatial(~ 1 || cell, graph = adj),
                      data = dat, family = cover(response = "lognormal"),
                      y = dat$cover, method = "nested_laplace",
                      control = .as_control)
@@ -255,9 +253,8 @@ test_that("arm-specific predict() projects each per-arm field (not flat)", {
                     pmin(exp(eta_pos + rnorm(N, 0, 0.35)), 1 - 1e-6), 0)
   dat <- data.frame(cell = cell, x = x, cover = cover)
 
-  fit <- tobs(formula = ~ x +
-                spatial(~ 1 || cell, graph = adj, to = "presence") +
-                spatial(~ 1 || cell, graph = adj, to = "positive"),
+  fit <- tobs(presence = ~ x + spatial(~ 1 || cell, graph = adj),
+              positive = ~ x + spatial(~ 1 || cell, graph = adj),
               data = dat, family = cover(response = "lognormal"),
               y = dat$cover, method = "nested_laplace", control = .as_control)
 
@@ -287,8 +284,8 @@ test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L), x = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
   fit <- suppressWarnings(tobs(
-    formula = ~ x + spatial(~ 1 || cell, graph = adj, to = "presence") +
-                spatial(~ 1 || cell, graph = adj, to = "positive"),
+    presence = ~ x + spatial(~ 1 || cell, graph = adj),
+    positive = ~ x + spatial(~ 1 || cell, graph = adj),
     data = df, family = cover(response = "lognormal"), y = y,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
@@ -313,7 +310,7 @@ test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
 test_that("a single-arm || bar requires the nested-Laplace method", {
   d <- .as_small()
   expect_error(
-    tobs(formula = ~ x + spatial(~ 1 || cell, graph = d$adj, to = "positive"),
+    tobs(presence = ~ x, positive = ~ x + spatial(~ 1 || cell, graph = d$adj),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "laplace", control = list(verbose = FALSE)),
     "arm-specific spatial bar|nested_laplace")
@@ -322,7 +319,7 @@ test_that("a single-arm || bar requires the nested-Laplace method", {
 test_that("a single-arm correlated `|` bar fits on that arm alone (no copy, #109)", {
   d <- .as_small()
   fit <- suppressWarnings(tobs(
-    formula = ~ x + spatial(~ 1 + x | cell, graph = d$adj, to = "positive"),
+    presence = ~ x, positive = ~ x + spatial(~ 1 + x | cell, graph = d$adj),
     data = d$df, family = cover(response = "lognormal"), y = d$y,
     method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE)))
   expect_s3_class(fit, "cover_fit")
@@ -334,9 +331,12 @@ test_that("a single-arm correlated `|` bar fits on that arm alone (no copy, #109
 
 test_that("an arm-specific bar cannot be mixed with a shared field", {
   d <- .as_small()
+  # A shared field (presence field copied onto positive) plus an arm-specific
+  # positive field in the same fit is the disallowed mix.
   expect_error(
-    tobs(formula = ~ x + spatial(~ 1 || cell, graph = d$adj, to = "positive") +
-                     icar(graph = d$adj, group_var = "cell"),
+    tobs(presence = ~ x + spatial(~ 1 || cell, graph = d$adj),
+         positive = ~ x + copy(spatial()) +
+                    spatial(~ 0 + x || cell, graph = d$adj),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "separate per-arm structure|cannot be combined")
@@ -346,8 +346,9 @@ test_that("two arm-specific fields on the SAME arm error", {
   d <- .as_small()
   expect_error(
     suppressWarnings(tobs(
-      formula = ~ spatial(~ 1 || cell, graph = d$adj, to = "positive") +
-                  spatial(~ 0 + x || cell, graph = d$adj, to = "positive"),
+      presence = ~ 1,
+      positive = ~ spatial(~ 1 || cell, graph = d$adj) +
+                   spatial(~ 0 + x || cell, graph = d$adj),
       data = d$df, family = cover(response = "lognormal"), y = d$y,
       method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))),
     "distinct arm")
@@ -356,7 +357,7 @@ test_that("two arm-specific fields on the SAME arm error", {
 test_that("a presence-only single-arm bar is accepted and fits", {
   d <- .as_small()
   fit <- suppressWarnings(tobs(
-    formula = ~ x + spatial(~ 1 || cell, graph = d$adj, to = "presence"),
+    presence = ~ x + spatial(~ 1 || cell, graph = d$adj), positive = ~ x,
     data = d$df, family = cover(response = "lognormal"), y = d$y,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
@@ -388,7 +389,8 @@ test_that("a positive-only BYM2 single-arm field recovers the rho-mixed field", 
   dat <- data.frame(cell = cell, x = x, cover = cover)
 
   fit <- tobs(
-    formula = ~ x + spatial(~ 1 || cell, graph = adj, to = "positive", model = "bym2"),
+    presence = ~ x,
+    positive = ~ x + spatial(~ 1 || cell, graph = adj, model = "bym2"),
     data = dat, family = cover(response = "lognormal"), y = dat$cover,
     method = "nested_laplace",
     control = utils::modifyList(.as_control,

@@ -1,13 +1,14 @@
 # Single-term varying-coefficient spatial bar in cover() (gcol33/tulpaObs#61).
 #
-# The shared `spatial(~ 1 + time || cell, graph = adj, to = c("presence",
-# "positive"))` form is sugar: it desugars to the existing two weighted-areal-
-# term coupled trend path (#59) -- the intercept column -> the unweighted
-# intercept field, the covariate column -> the weight-scaled trend field, both on
-# the bar node index, presence-anchored and copied to the positive arm with an
-# estimated coupling alpha. These tests prove the sugar produces the SAME fit as
-# the two-term form (byte-identical), that `to =` is order-free and defaults to
-# both arms, and that the #61 scope gates fire.
+# A `spatial(~ 1 + time || cell, graph = adj)` bar in a shared cover() formula is
+# sugar: it desugars to the existing two weighted-areal-term coupled trend path
+# (#59) -- the intercept column -> the unweighted intercept field, the covariate
+# column -> the weight-scaled trend field, both on the bar node index,
+# presence-anchored and copied to the positive arm with an estimated coupling
+# alpha. A bar in a shared formula reaches both cover arms; an arm-specific field
+# is written in that arm's per-arm formula (placement). These tests prove the
+# sugar produces the SAME fit as the two-term form (byte-identical) and that the
+# #61 scope gates fire.
 
 # Rook-adjacency on a g x g grid (self-contained so the file runs in isolation).
 .bar_grid_adj <- function(g) {
@@ -81,8 +82,7 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
 
   fit_bar <- tobs(
     formula = ~ time +
-                spatial(~ 1 + time || cell, graph = sim$adj,
-                        to = c("presence", "positive")),
+                spatial(~ 1 + time || cell, graph = sim$adj),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
@@ -102,58 +102,6 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
   expect_identical(fit_bar$trend_weight, "time")
 })
 
-# ---- to= is order-free (presence anchor regardless of order) ---------------
-
-test_that("to= is unordered: c('positive','presence') == c('presence','positive')", {
-  skip_if_fast()
-  skip_on_cran()
-  sim <- .bar_sim_cover_trend(seed = 7)
-
-  fit_ab <- tobs(
-    formula = ~ time +
-                spatial(~ 1 + time || cell, graph = sim$adj,
-                        to = c("presence", "positive")),
-    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
-    method = "nested_laplace", control = .bar_trend_control)
-
-  fit_ba <- tobs(
-    formula = ~ time +
-                spatial(~ 1 + time || cell, graph = sim$adj,
-                        to = c("positive", "presence")),
-    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
-    method = "nested_laplace", control = .bar_trend_control)
-
-  expect_equal(fit_ab$beta_occ,    fit_ba$beta_occ)
-  expect_equal(fit_ab$beta_pos,    fit_ba$beta_pos)
-  expect_equal(fit_ab$sigma_trend, fit_ba$sigma_trend)
-  expect_equal(fit_ab$alpha_trend, fit_ba$alpha_trend)
-})
-
-# ---- to= omitted defaults to both arms -------------------------------------
-
-test_that("to= omitted defaults to both cover arms (same fit)", {
-  skip_if_fast()
-  skip_on_cran()
-  sim <- .bar_sim_cover_trend(seed = 7)
-
-  fit_explicit <- tobs(
-    formula = ~ time +
-                spatial(~ 1 + time || cell, graph = sim$adj,
-                        to = c("presence", "positive")),
-    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
-    method = "nested_laplace", control = .bar_trend_control)
-
-  fit_default <- tobs(
-    formula = ~ time + spatial(~ 1 + time || cell, graph = sim$adj),
-    data = sim$data, family = cover(response = "lognormal"), y = sim$y,
-    method = "nested_laplace", control = .bar_trend_control)
-
-  expect_equal(fit_default$beta_occ,    fit_explicit$beta_occ)
-  expect_equal(fit_default$beta_pos,    fit_explicit$beta_pos)
-  expect_equal(fit_default$sigma_trend, fit_explicit$sigma_trend)
-  expect_equal(fit_default$alpha_trend, fit_explicit$alpha_trend)
-})
-
 # ---- Validation / scope gates (no fit, always run) -------------------------
 
 .bar_small_data <- function(n_cells = 16L) {
@@ -164,21 +112,21 @@ test_that("to= omitted defaults to both cover arms (same fit)", {
   list(adj = adj, df = df, y = y)
 }
 
-test_that("an unknown to= arm label errors listing the valid arms", {
+test_that("`to =` is retired with a pointer to placement / copy()", {
   d <- .bar_small_data()
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = d$adj,
-                             to = c("occ", "cover")),
+                             to = c("presence", "positive")),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
-    "unknown arm label")
+    "`to =` is retired")
   expect_error(
     tobs(formula = ~ time +
-                     spatial(~ 1 + time || cell, graph = d$adj, to = "occurrence"),
+                     spatial(~ 1 + time || cell, graph = d$adj, to = "positive"),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
-    "presence.*positive|positive.*presence")
+    "placement|copy")
 })
 
 test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
@@ -189,8 +137,7 @@ test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
   # test-cover-spatial-bar-mcar.R.
   fit <- suppressWarnings(tobs(
               formula = ~ time +
-                          spatial(~ 1 + time | cell, graph = d$adj,
-                                  to = c("presence", "positive")),
+                          spatial(~ 1 + time | cell, graph = d$adj),
               data = d$df, family = cover(response = "lognormal"), y = d$y,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE, max.iter = 40L,
@@ -205,8 +152,11 @@ test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
 
 test_that("a single-arm correlated `|` bar fits on the occurrence arm alone (#109)", {
   d <- .bar_small_data()
+  # Placement: the correlated bar written in the presence formula only is the
+  # free-Sigma field on that arm, with no cross-arm copy.
   fit <- suppressWarnings(tobs(
-    formula = ~ time + spatial(~ 1 + time | cell, graph = d$adj, to = "presence"),
+    presence = ~ time + spatial(~ 1 + time | cell, graph = d$adj),
+    positive = ~ time,
     data = d$df, family = cover(response = "lognormal"), y = d$y,
     method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE)))
   expect_s3_class(fit, "cover_fit")
@@ -220,23 +170,23 @@ test_that("a correlated `|` bar cannot co-exist with another areal term", {
   d <- .bar_small_data()
   expect_error(
     tobs(formula = ~ time +
-                     spatial(~ 1 + time | cell, graph = d$adj,
-                             to = c("presence", "positive")) +
+                     spatial(~ 1 + time | cell, graph = d$adj) +
                      icar(graph = d$adj, group_var = "cell"),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "whole spatial structure|other areal terms")
 })
 
-test_that("a single-arm || to= is wired as an arm-specific separate latent", {
-  # gcol33/tulpaObs#65: a single-arm `to` on the INDEPENDENT (`||`) bar is no
-  # longer an error -- it fits an arm-specific separate field on that arm only,
-  # with its own precision and no cross-arm copy. Recovery lives in
+test_that("a single-arm || placement is wired as an arm-specific separate latent", {
+  # gcol33/tulpaObs#65: an INDEPENDENT (`||`) bar placed in one arm's formula
+  # fits an arm-specific separate field on that arm only, with its own precision
+  # and no cross-arm copy. Recovery lives in
   # test-cover-spatial-bar-armspecific.R; here the assertion is plumbing.
   d <- .bar_small_data()
   fit <- suppressWarnings(tobs(
-    formula = ~ time +
-                spatial(~ 1 + time || cell, graph = d$adj, to = "presence"),
+    presence = ~ time +
+                spatial(~ 1 + time || cell, graph = d$adj),
+    positive = ~ time,
     data = d$df, family = cover(response = "lognormal"), y = d$y,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
@@ -253,8 +203,7 @@ test_that("a node index not matching the graph dimension errors", {
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
   expect_error(
     tobs(formula = ~ time +
-                     spatial(~ 1 + time || cell, graph = adj,
-                             to = c("presence", "positive")),
+                     spatial(~ 1 + time || cell, graph = adj),
          data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "node")

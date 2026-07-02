@@ -50,24 +50,21 @@ calls are equivalent:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{# response on the LHS (y = omitted)
 tobs(cover.flat ~ time.sc + habitat +
-       spatial(~ 1 + time.sc || cell_idx, graph = adj,
-               to = c("presence", "positive")),
+       spatial(~ 1 + time.sc || cell_idx, graph = adj),
      data = dat, family = cover(response = "beta"),
      method = "nested_laplace")
 
 # the same fit with a one-sided formula and an explicit y =
 tobs(~ time.sc + habitat +
-       spatial(~ 1 + time.sc || cell_idx, graph = adj,
-               to = c("presence", "positive")),
+       spatial(~ 1 + time.sc || cell_idx, graph = adj),
      y = dat$cover.flat, data = dat, family = cover(response = "beta"),
      method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
 Naming the response makes the per-arm spatial labels read naturally: \code{cover()}
-splits \code{cover.flat} into a \code{presence} arm and a \code{positive} arm, so the
-\code{to = c("presence", "positive")} arm names are visible in the call. The LHS
-is evaluated against \code{data} (then the calling environment), so it may be a
-bare column or an expression.
+splits \code{cover.flat} into a \code{presence} arm and a \code{positive} arm, the arm names
+that per-arm formulas and copy() address. The LHS is evaluated against \code{data}
+(then the calling environment), so it may be a bare column or an expression.
 }
 
 \section{Joint nested-Laplace engine — spatial-prior parameterisation}{
@@ -113,87 +110,85 @@ fit.
 \section{Varying-coefficient spatial bar (the compact single-term form)}{
 
 The intercept field plus its weighted trend field can also be written as one
-\code{spatial()} term carrying an lme4-style coefficient formula and a \verb{to =}
-argument naming the arms that share the field:
+\code{spatial()} term carrying an lme4-style coefficient formula:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{~ time.sc + habitat +
-  spatial(~ 1 + time.sc || cell_idx, graph = adj,
-          to = c("presence", "positive"))
+  spatial(~ 1 + time.sc || cell_idx, graph = adj)
 }\if{html}{\out{</div>}}
 
 The bar left-hand side spells the coefficient fields: the intercept column
-(\code{1}) is the unweighted shared field; each covariate column (\code{time.sc}) is a
+(\code{1}) is the unweighted field; each covariate column (\code{time.sc}) is a
 weight-scaled coefficient field (\code{weight_i * z[cell_i]}). The bar right-hand
 side (\code{cell_idx}) is the graph node index (the areal \code{group_var}); \code{||}
-requests independent fields. This desugars to exactly the two-term weighted-
-areal form above, so the two spellings give the same fit.
+requests independent intercept and slope fields, a single \code{|} makes them
+correlated. This desugars to exactly the two-term weighted-areal form above,
+so the two spellings give the same fit.
+}
 
+\section{Choosing a field's arm}{
+ placement and copy():
 The cover hurdle's two arms are \code{presence} (the \code{y > 0} Bernoulli arm) and
-\code{positive} (the \code{y | y > 0} arm); \code{summary()} and the coefficient output
-print these same labels. \verb{to =} validates against this arm set and may be
-omitted to mean both arms.
+\code{positive} (the \code{y | y > 0} arm); \code{summary()} and the coefficient output print
+these same labels. A field is placed on an arm by writing it in that arm's
+per-arm formula (\code{presence = ~ ...}, \code{positive = ~ ...}), and shared across
+arms with copy(). A field in the single shared \code{formula} reaches both arms.
 
-\strong{Copy versus free: one call versus separate calls.} Whether the two
-arms share one latent field or each carry their own is set by how many
-\code{spatial()} calls you write, not by an option.
-
-\emph{Copy / shared} -- one \code{spatial()} call naming both arms in \verb{to =} is a
-single latent field, presence-anchored, copied onto the positive arm with an
-estimated coupling per coefficient field (\code{alpha} for the intercept field,
-\code{alpha_trend} for the trend field), marginalized on the outer grid:
+\emph{Both arms (shared / copied).} A field in the shared \code{formula} is one
+presence-anchored latent copied onto the positive arm with an estimated
+coupling per coefficient field (\code{alpha} for the intercept field, \code{alpha_trend}
+for the trend field), marginalized on the outer grid:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{# one latent field, shared by both arms
-spatial(~ 1 + time.sc || cell_idx, graph = adj, to = c("presence", "positive"))
+tobs(cover.flat ~ time.sc + habitat +
+       spatial(~ 1 + time.sc || cell_idx, graph = adj),
+     data = dat, family = cover(response = "beta"), method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{presence: eta_presence = ... + u_cell + time.sc * s_cell
 positive: eta_positive = ... + alpha * u_cell + alpha_trend * time.sc * s_cell
 }\if{html}{\out{</div>}}
 
-The same \code{u_cell} (intercept field) and \code{s_cell} (time-slope field) appear in
-both arms; the positive arm sees them through the estimated multipliers.
+Per-arm formulas make the shared field explicit: place it on \code{presence} and
+copy it onto \code{positive}. \code{copy(spatial())} estimates the coupling on the
+default grid; \code{copy(spatial(), alpha = grid(c(...)))} integrates it over a
+supplied grid, \code{copy(spatial(), alpha = 0.5)} fixes it.
 
-\emph{Free / separate} -- one single-arm \code{spatial()} call per arm declares a
-separate latent field on each arm, each with its own precision and no
-cross-arm coupling (gcol33/tulpaObs#65):
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(presence = ~ time.sc + habitat +
+                  spatial(~ 1 + time.sc || cell_idx, graph = adj),
+     positive = ~ time.sc + habitat + copy(spatial()),
+     data = dat, family = cover(response = "beta"), method = "nested_laplace")
+}\if{html}{\out{</div>}}
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{# two independent latent fields, one per arm
-spatial(~ 1 + time.sc || cell_idx, graph = adj, to = "presence") +
-spatial(~ 1 + time.sc || cell_idx, graph = adj, to = "positive")
+\emph{One arm only (free / separate).} A field written in one arm's formula is
+a separate latent on that arm alone, with its own precision and no cross-arm
+coupling (gcol33/tulpaObs#65). A field in each arm's formula gives two
+independent latents:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(presence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+     positive = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+     data = dat, family = cover(response = "beta"), method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{presence: eta_presence = ... + u_presence_cell + time.sc * s_presence_cell
 positive: eta_positive = ... + u_positive_cell + time.sc * s_positive_cell
 }\if{html}{\out{</div>}}
 
-A lone single-arm call (\code{to = "presence"}) puts a field on that arm only. The
-free fit reports \code{sigma_armspecific}. Arm-specific fields are their own
+The free fit reports \code{sigma_armspecific}. Arm-specific fields are their own
 spatial structure: they do not combine with a shared field, a weighted trend,
-a correlated \code{|} bar, or \code{temporal()} / \code{re()} in the same formula, and at most
-one targets each arm.
+or \code{temporal()} / \code{re()} in the same formula, and at most one targets each arm.
 
-The \code{||} and \code{|} axis is separate from copy / free: \code{||} makes the intercept
+The \code{||} and \code{|} axis is separate from shared / free: \code{||} makes the intercept
 and slope fields independent, while a single \code{|} makes them correlated (a free
-cross-covariance, MCAR). A correlated \code{|} bar on both arms (\code{to = c("presence", "positive")}) anchors the field on the occurrence arm and copies
-it to the positive arm with one estimated amplitude (gcol33/tulpaObs#64); on a
-single arm (\code{to = "presence"} or \code{to = "positive"}) it is a free-Sigma
-correlated field on that arm alone, with no cross-arm copy
+cross-covariance, MCAR). A correlated \code{|} bar shared across both arms (in the
+shared \code{formula}, or on \code{presence} with \code{copy()} on \code{positive}) is copied with
+one estimated amplitude (gcol33/tulpaObs#64); placed on one arm's formula it is
+a free-Sigma correlated field on that arm alone, no cross-arm copy
 (gcol33/tulpaObs#109).
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{one spatial() call, to = both arms    one shared / copied latent (presence anchor, coupling estimated)
-separate single-arm spatial() calls   separate / free latents, no coupling
-||                                     independent intercept and slope coefficient fields
-|                                      correlated (MCAR) coefficient fields, copy-only
-}\if{html}{\out{</div>}}
-
-With the response on the formula left-hand side (gcol33/tulpaObs#66), the
-shared-field cover hurdle reads:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(cover.flat ~ time.sc + habitat +
-       spatial(~ 1 + time.sc || cell_idx, graph = adj,
-               to = c("presence", "positive")),
-     data = dat, family = cover(response = "beta"),
-     method = "nested_laplace")
+\if{html}{\out{<div class="sourceCode">}}\preformatted{field in the shared formula (or copy())   one shared / copied latent (presence anchor, coupling estimated)
+a field in each arm's formula             separate / free latents, no coupling
+||                                        independent intercept and slope coefficient fields
+|                                         correlated (MCAR) coefficient fields, copy-only
 }\if{html}{\out{</div>}}
 }
 
