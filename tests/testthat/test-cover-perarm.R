@@ -75,6 +75,69 @@ test_that("a spatial field placed in an arm formula == the to= spelling", {
   expect_equal(unname(fit_pa$beta_pos), unname(fit_to$beta_pos), tolerance = 1e-8)
 })
 
+test_that("copy(spatial()) in the positive formula == the shared to = both spelling", {
+  skip_on_cran()
+  side <- 6L; nc <- side * side
+  adj <- matrix(0L, nc, nc)
+  idx <- function(r, c) (r - 1L) * side + c
+  for (r in seq_len(side)) for (c in seq_len(side)) {
+    if (r > 1L)   adj[idx(r, c), idx(r - 1L, c)] <- 1L
+    if (r < side) adj[idx(r, c), idx(r + 1L, c)] <- 1L
+    if (c > 1L)   adj[idx(r, c), idx(r, c - 1L)] <- 1L
+    if (c < side) adj[idx(r, c), idx(r, c + 1L)] <- 1L
+  }
+  set.seed(7); reps <- 10L; cell <- rep(seq_len(nc), each = reps); N <- length(cell)
+  x <- stats::rnorm(N); tt <- stats::rnorm(N)
+  u <- stats::rnorm(nc, sd = 0.6)[cell]          # a genuine shared cell field
+  pres <- stats::rbinom(N, 1L, stats::plogis(0.2 + 0.5 * x + u))
+  mu <- stats::plogis(0.3 * tt + 0.7 * u)        # same field drives the cover arm
+  y <- numeric(N); pos <- pres == 1L
+  y[pos] <- stats::rbeta(sum(pos), mu[pos] * 15, (1 - mu[pos]) * 15); y[y >= 1] <- 1 - 1e-6
+  dat <- data.frame(x = x, t = tt, cell = cell)
+  ctrl <- list(progress = FALSE, integration = "ccd")
+
+  # Canonical shared-field spelling: field on the presence arm, copy() couples it.
+  fit_copy <- suppressWarnings(tobs(
+    presence = ~ x + t + spatial(~ 1 || cell, graph = adj),
+    positive = ~ x + t + copy(spatial()),
+    family = cover(response = "beta"), data = dat, y = y,
+    method = "nested_laplace", control = ctrl))
+  # Legacy shared spelling: one bar, to = both arms.
+  fit_to <- suppressWarnings(tobs(
+    ~ x + t + spatial(~ 1 || cell, graph = adj, to = c("presence", "positive")),
+    family = cover(response = "beta"), data = dat, y = y,
+    method = "nested_laplace", control = ctrl))
+
+  # Byte-identical across every numeric fit field (timings excluded).
+  common <- intersect(names(fit_copy), names(fit_to))
+  varying <- grepl("time|elapsed|second|runtime", common, ignore.case = TRUE)
+  checked <- 0L
+  for (nm in common[!varying]) {
+    a <- fit_copy[[nm]]; b <- fit_to[[nm]]
+    if (is.numeric(a) && is.numeric(b) && length(a) == length(b) && length(a) > 0L) {
+      expect_equal(unname(a), unname(b), tolerance = 1e-8, info = nm)
+      checked <- checked + 1L
+    }
+  }
+  expect_gt(checked, 3L)   # guard: the loop actually compared coefficients + field
+})
+
+test_that("copy() on the presence formula, or without a presence field, errors", {
+  s <- .cp_sim(N = 200L)
+  # copy() on presence (wrong arm)
+  expect_error(
+    tobs(presence = ~ x1 + copy(spatial()), positive = ~ x2,
+         family = cover(response = "beta"), data = s$data, y = s$y,
+         method = "nested_laplace"),
+    "positive")
+  # copy() with no presence field to copy
+  expect_error(
+    tobs(presence = ~ x1, positive = ~ x2 + copy(spatial()),
+         family = cover(response = "beta"), data = s$data, y = s$y,
+         method = "nested_laplace"),
+    "needs a spatial field")
+})
+
 test_that("a temporal() / re() term in a per-arm formula is rejected with a pointer", {
   s <- .cp_sim(N = 200L)
   expect_error(

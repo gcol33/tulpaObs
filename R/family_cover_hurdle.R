@@ -74,6 +74,20 @@
   temporal <- enc$temporal
   re       <- enc$re
 
+  # A copy() in a per-arm positive formula sets the cross-arm coupling-amplitude
+  # grid the presence field is transferred onto the positive arm with. NULL (the
+  # copy(spatial()) default) leaves control untouched, so the fitter's default
+  # alpha grid applies -- byte-identical to the shared to = both spelling.
+  if (!is.null(enc$copy_alpha)) {
+    if (any(c("alpha.grid", "alpha.grid.trend") %in% names(control))) {
+      stop("cover(): set the cross-arm coupling with copy(alpha = ) in the ",
+           "positive formula OR control$alpha.grid[.trend], not both.",
+           call. = FALSE)
+    }
+    control$alpha.grid       <- as.numeric(enc$copy_alpha)
+    control$alpha.grid.trend <- as.numeric(enc$copy_alpha)
+  }
+
   # NUTS: the non-spatial sampler over the exact two-arm coefficient marginal.
   # Any structured term (areal field, weighted trend, correlated / arm-specific
   # bar, temporal, re) is integrated on the nested-Laplace outer grid, not
@@ -191,6 +205,7 @@ encode_cover_hurdle <- function(formula, data, y,
   # the arm's row subset); declare fields on the shared `formula` with `to =` for
   # now. When per-arm formulas are absent this branch is skipped, so the shared
   # path is byte-identical.
+  copy_alpha <- NULL
   per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
   if (per_arm) {
     if (is.null(presence_formula) || is.null(positive_formula)) {
@@ -202,8 +217,26 @@ encode_cover_hurdle <- function(formula, data, y,
     # the same `to =` machinery the shared formula uses (a field in `positive`
     # becomes an arm-specific positive field, indexed onto the positive rows by
     # the fitter). Fixed effects give each arm its own design.
+    #
+    # copy() is the canonical shared-field spelling: it lives in the `positive`
+    # formula and couples the presence field onto the positive arm. Each arm's
+    # copy() calls come back from .cover_lift_arm_fields as unevaluated language
+    # objects (so a data-dependent term elsewhere in the arm formula is never
+    # forced); a copy() on the `presence` formula is rejected -- the anchor arm
+    # needs no copy.
     lift_occ <- .cover_lift_arm_fields(presence_formula, "presence")
     lift_pos <- .cover_lift_arm_fields(positive_formula, "positive")
+    if (length(lift_occ$copies)) {
+      stop("cover(): copy() belongs in the `positive` formula; it copies the ",
+           "presence field onto the positive arm.", call. = FALSE)
+    }
+    if (length(lift_pos$copies)) {
+      reg_env    <- list2env(.tobs_terms, parent = environment(positive_formula))
+      pos_copies <- lapply(lift_pos$copies, function(cl) eval(cl, envir = reg_env))
+      promo <- .cover_promote_copied_fields(pos_copies, lift_occ$fields)
+      lift_occ$fields <- promo$fields
+      copy_alpha       <- promo$alpha
+    }
     fe_occ_formula <- lift_occ$fe
     fe_pos_formula <- lift_pos$fe
     arm_fields <- c(lift_occ$fields, lift_pos$fields)
@@ -345,6 +378,7 @@ encode_cover_hurdle <- function(formula, data, y,
     fe_occ       = fe_occ_formula,
     fe_pos       = fe_pos_formula,
     per_arm      = per_arm,
+    copy_alpha   = copy_alpha,
     positive     = positive,
     breaks       = if (positive == "ordinal") as.numeric(breaks) else NULL,
     oi           = oi,
@@ -495,7 +529,7 @@ encode_cover_hurdle <- function(formula, data, y,
   tt   <- stats::terms(.tobs_desugar_bars(formula), keep.order = TRUE)
   labs <- attr(tt, "term.labels")
   field_ctors <- c("spatial", "icar", "bym2", "car", "car_proper")
-  keep <- character(0); fields <- list()
+  keep <- character(0); fields <- list(); copies <- list()
   for (lab in labs) {
     e    <- tryCatch(str2lang(lab), error = function(...) NULL)
     head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
@@ -509,6 +543,12 @@ encode_cover_hurdle <- function(formula, data, y,
       }
       e$to <- arm
       fields[[length(fields) + 1L]] <- e
+    } else if (!is.na(head) && identical(head, "copy")) {
+      # copy() is not a fixed effect and not a placed field: it references the
+      # presence field and couples it onto this arm. Collect the call (evaluated
+      # into a tobs_copy spec by the caller) and keep it out of the
+      # fixed-effects formula.
+      copies[[length(copies) + 1L]] <- e
     } else if (!is.na(head) && head %in% .tobs_term_names()) {
       stop(sprintf(paste0(
         "cover(): the per-arm `%s` formula supports fixed effects and spatial() ",
@@ -521,7 +561,45 @@ encode_cover_hurdle <- function(formula, data, y,
   fe <- stats::reformulate(if (length(keep)) keep else "1",
                            intercept = as.logical(attr(tt, "intercept")))
   environment(fe) <- environment(formula)
-  list(fe = fe, fields = fields)
+  list(fe = fe, fields = fields, copies = copies)
+}
+
+# Promote the presence-arm spatial field(s) that a copy() selects to the shared
+# (both-arm) spec, so encode routes them through the presence-anchored,
+# positive-coupled machinery -- byte-identical to writing
+# to = c("presence", "positive") on the field. copy() is the canonical
+# shared-field spelling for per-arm cover formulas: the field is placed on the
+# `presence` formula and copy(spatial()) in the `positive` formula couples it
+# across, mirroring occu_cover(). Returns the retagged presence fields and the
+# coupling amplitude grid (NULL = the fitter's default, estimated on the
+# standard alpha grid, identical to the to = both default).
+.cover_promote_copied_fields <- function(copies, occ_fields) {
+  if (length(copies) > 1L) {
+    stop("cover(): one copy() per fit is supported (it couples the whole ",
+         "presence field onto the positive arm). Per-component coupling is not ",
+         "yet wired for cover().", call. = FALSE)
+  }
+  cp <- copies[[1L]]
+  if (!is.null(cp$copy_terms)) {
+    stop("cover(): copy(terms = ) per-component coupling is not yet wired for ",
+         "cover(); use copy(spatial()) or copy(spatial(), alpha = grid(...)) to ",
+         "couple the whole presence field.", call. = FALSE)
+  }
+  if (is.null(cp$selector_type)) {
+    stop("cover(): copy() must select the presence spatial field, e.g. ",
+         "copy(spatial()); a field-name string is not a coupling selector here.",
+         call. = FALSE)
+  }
+  if (length(occ_fields) == 0L) {
+    stop("cover(): copy() needs a spatial field on the `presence` formula to ",
+         "copy onto the positive arm, e.g. ",
+         "presence = ~ x + spatial(~ 1 || cell, graph = adj).", call. = FALSE)
+  }
+  occ_fields <- lapply(occ_fields, function(e) {
+    e$to <- c("presence", "positive"); e
+  })
+  alpha_grid <- if (is.na(cp$alpha_integrate)) NULL else cp$alpha_grid
+  list(fields = occ_fields, alpha = alpha_grid)
 }
 
 # Parse a cover() formula against the NA-dropped observations.
