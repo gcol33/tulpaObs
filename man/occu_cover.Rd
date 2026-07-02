@@ -155,7 +155,10 @@ the independent cover field carries a cover-specific structure the alpha copy
 cannot express. Its intercept + coefficient columns become separate ICAR blocks
 on the cover arm, each with its own precision integrated on the outer grid and
 reported as \code{sigma_pos_field} (intercept) / \verb{sigma_pos_field_<col>} (a covariate
-column). The per-cell field posterior is in \code{fit$pos_field} / \code{fit$pos_field_table}
+column). The field SD grid defaults to \code{control$sigma.grid}; set
+\code{control$sigma.grid.pos.field} to integrate it over its own (usually coarser)
+grid, which keeps the added axis from multiplying the outer-grid cost.
+The per-cell field posterior is in \code{fit$pos_field} / \code{fit$pos_field_table}
 (and \code{fit$pos_field_tables} per column). Scope: it composes with the shared
 occupancy field but uses per-visit cover (\code{cover_aggregate = "none"}) and does
 not combine with the correlated \code{|} MCAR field, the latent cover RE, or the

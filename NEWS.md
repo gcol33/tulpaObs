@@ -1,5 +1,13 @@
 # tulpaObs NEWS
 
+## 0.0.90 (2026-07-02)
+
+* `occu_cover()` now accepts `control$sigma.grid.pos.field`, the SD grid for the
+  independent cover-arm field (`to = "positive"`, #110). The joint engine already
+  read it and defaulted it to `control$sigma.grid`; it was missing from the
+  family's control whitelist, so passing it errored. Setting a coarse field grid
+  now keeps the added axis from multiplying the outer-grid cost.
+
 ## 0.0.82 (2026-07-01)
 
 * The aggregated / latent-mode occu_cover() posterior predictive check moved its

@@ -151,3 +151,36 @@ test_that("occu_cover cover-arm trend field SD recovers across seeds", {
   # No collapse to zero and no runaway.
   expect_true(all(rec > 0.2 & rec < 1.5))
 })
+
+
+# --- control: the cover-field SD rides its own grid --------------------------
+
+test_that("control$sigma.grid.pos.field is accepted and sets the cover-field grid", {
+  skip_if_fast()
+  skip_on_cran()
+
+  adj <- .pf_grid_adj(8L)
+  N   <- nrow(adj)
+  sim <- simulate_occu_cover(
+    N = N, J = 5L, positive = "lognormal",
+    beta_occ = c(qlogis(0.6), 0.3), beta_p = c(qlogis(0.65), 0.1),
+    beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3,
+    adj = adj, sigma = 0.5, alpha = 0.0,
+    pos_field = TRUE, sigma_pos_int = 0.0, sigma_pos_trend = 0.7, seed = 7L)
+
+  # A one-point field grid pins the cover-field SD at that value (the marginal is
+  # the weighted mean over a single grid node). Reaching the fit at all confirms
+  # the control passes validation; the exact value confirms the grid was applied.
+  fit <- suppressWarnings(tobs(
+    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
+                   spatial(~ 0 + time || cell, graph = adj, to = "positive"),
+    detection  = ~ 1, positive = ~ time,
+    family     = occu_cover(positive = "lognormal"),
+    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    method  = "nested_laplace",
+    control = list(progress = FALSE, integration = "ccd",
+                   sigma.grid.pos.field = 0.5)))
+
+  nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)[1L]
+  expect_equal(unname(fit$means[[nm]]), 0.5, tolerance = 1e-6)
+})

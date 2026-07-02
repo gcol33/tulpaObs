@@ -291,7 +291,10 @@ jsdm <- function() {
 #' cannot express. Its intercept + coefficient columns become separate ICAR blocks
 #' on the cover arm, each with its own precision integrated on the outer grid and
 #' reported as `sigma_pos_field` (intercept) / `sigma_pos_field_<col>` (a covariate
-#' column). The per-cell field posterior is in `fit$pos_field` / `fit$pos_field_table`
+#' column). The field SD grid defaults to `control$sigma.grid`; set
+#' `control$sigma.grid.pos.field` to integrate it over its own (usually coarser)
+#' grid, which keeps the added axis from multiplying the outer-grid cost.
+#' The per-cell field posterior is in `fit$pos_field` / `fit$pos_field_table`
 #' (and `fit$pos_field_tables` per column). Scope: it composes with the shared
 #' occupancy field but uses per-visit cover (`cover_aggregate = "none"`) and does
 #' not combine with the correlated `|` MCAR field, the latent cover RE, or the
@@ -442,7 +445,7 @@ occu_cover <- function(positive = c("beta", "lognormal"),
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
       "rho.car.grid",
-      "phi.grid.pos", "sigma.u.grid", "n.quad",
+      "phi.grid.pos", "sigma.grid.pos.field", "sigma.u.grid", "n.quad",
       "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
