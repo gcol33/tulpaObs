@@ -147,22 +147,11 @@
             "in `occurrence`, or use to = \"positive\" (cover) / \"detection\"."),
             call. = FALSE)
         }
-        if (identical(to, "detection")) {
-          # The R plumbing (parse -> block -> summary) is arm-generic, but the
-          # joint C++ substrate only scatters a field block onto the occupancy and
-          # cover linear predictors; the detection predictor is not yet a
-          # field-carrying arm (tulpa nested_laplace_joint_multi arm_scale). A
-          # detection field therefore does not enter the likelihood and its SD is
-          # unidentified, so it is rejected until the substrate is wired.
-          stop(paste0(
-            "occu_cover(): a detection-arm spatial field (to = \"detection\") is ",
-            "not yet wired: the joint engine scatters fields onto the occupancy ",
-            "and cover arms only (gcol33/tulpa#140)."), call. = FALSE)
-        }
         if (!to %in% names(arm_slot)) {
           stop(sprintf(paste0(
             "occu_cover(): an arm-specific field targets the cover arm ",
-            "(to = \"positive\"); got to = \"%s\"."), to), call. = FALSE)
+            "(to = \"positive\") or the detection arm (to = \"detection\"); ",
+            "got to = \"%s\"."), to), call. = FALSE)
         }
         slot <- arm_slot[[to]]
         if (!is.null(armspec[[slot]])) {

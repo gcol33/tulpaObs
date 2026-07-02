@@ -66,22 +66,24 @@ test_that("a single-arm to = \"presence\" spatial bar is rejected", {
                "no separate presence arm")
 })
 
-test_that("a detection-arm spatial bar is rejected as not-yet-wired", {
+test_that("a detection-arm spatial bar resolves onto the detection (p) arm", {
   adj  <- .pf_grid_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
   f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell") +
        spatial(~ 1 || cell, graph = adj, to = "detection")
-  expect_error(.occu_cover_spatial_fields(f, data),
-               "not yet wired")
+  si <- .occu_cover_spatial_fields(f, data)
+  expect_false(is.null(si$armspec[["p"]]))
+  expect_true(is.null(si$armspec[["pos"]]))
 })
 
 test_that("detection-arm field recovers once the substrate scatters onto p", {
-  # The parse -> block -> per-arm-sigma plumbing is arm-generic and the simulator
-  # injects a known detection field (det_field = TRUE); enabling this test needs
-  # the joint substrate to scatter a non-copied block onto the detection predictor
-  # (gcol33/tulpa#140). Until then the SD is unidentified (returns the prior).
-  skip("detection-arm field scatter pending gcol33/tulpa#140")
+  # The parse -> block -> per-arm-sigma plumbing is arm-generic; the detection arm
+  # carries the non-copied field block with field_coef = 1 (the shared field is
+  # kept off detection by the spatial_idx = 0 sentinel), the same mechanism the
+  # detection RE uses (gcol33/tulpa#140, gcol33/tulpaObs#102).
+  skip_if_fast()
+  skip_on_cran()
   adj <- .pf_grid_adj(8L); N <- nrow(adj); truth <- 0.7
   rec <- vapply(1:6, function(s) {
     sim <- simulate_occu_cover(

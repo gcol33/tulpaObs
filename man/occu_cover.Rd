@@ -170,6 +170,11 @@ ICAR). A static intercept cover field is only weakly identified against the
 occupancy field's alpha copy (both are per-cell cover offsets); a time-weighted
 trend cover field is identified separately and is what makes \code{delta_cover_cond}
 spatially varying.
+
+The same placement works on the detection arm: a spatial-field term in the
+\code{detection} formula (\code{detection = ~ 1 + spatial(~ 0 + time || cell, graph = adj)}) fits an independent field on the detection predictor, for a
+spatially-structured detection probability. Its SD is reported as
+\code{sigma_p_field} / \verb{sigma_p_field_<col>}.
 }
 
 \section{Checkpoint / resume}{

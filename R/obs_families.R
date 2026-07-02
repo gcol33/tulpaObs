@@ -307,6 +307,12 @@ jsdm <- function() {
 #' trend cover field is identified separately and is what makes `delta_cover_cond`
 #' spatially varying.
 #'
+#' The same placement works on the detection arm: a spatial-field term in the
+#' `detection` formula (`detection = ~ 1 + spatial(~ 0 + time || cell, graph =
+#' adj)`) fits an independent field on the detection predictor, for a
+#' spatially-structured detection probability. Its SD is reported as
+#' `sigma_p_field` / `sigma_p_field_<col>`.
+#'
 #' @section Checkpoint / resume:
 #' A full-field `occu_cover()` fit integrates over a large outer hyperparameter
 #' grid and can run for hours, so a reboot or OOM kill otherwise loses the whole

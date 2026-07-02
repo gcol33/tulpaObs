@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.92 (2026-07-02)
+
+* `occu_cover()` detection-arm spatial field: a spatial-field term on the
+  `detection` formula (`detection = ~ 1 + spatial(~ 0 + time || cell, graph =
+  adj)`, or the explicit `to = "detection"` spelling) now fits a
+  spatially-structured detection probability. The non-copied field block scatters
+  onto the detection predictor by riding the detection arm with `field_coef = 1`
+  while the shared occupancy field is kept off detection by the `spatial_idx = 0`
+  sentinel -- the same mechanism the detection random effect uses
+  (gcol33/tulpaObs#102), so no engine change was needed (closes gcol33/tulpa#140).
+  Recovery of the detection field SD is tested across seeds.
+
 ## 0.0.91 (2026-07-02)
 
 * `occu_cover()` field placement: a spatial-field term written in the `positive`

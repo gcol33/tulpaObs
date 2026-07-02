@@ -106,7 +106,8 @@
                                                   multi = FALSE,
                                                   n_cells = NULL,
                                                   site_cell = NULL,
-                                                  cover_aggregate = "none") {
+                                                  cover_aggregate = "none",
+                                                  det_field = FALSE) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
   if (is.null(site_cell)) site_cell <- seq_len(n_sites)
@@ -183,13 +184,14 @@
   # placeholder.
   # field_coef gates EVERY latent block on this arm (it is the per-arm arm_scale
   # multiplier), so it stays 0 to decouple the detection predictor from the
-  # shared field -- UNLESS the detection arm carries its own RE block
-  # (gcol33/tulpaObs#102). The field is decoupled from detection by its
+  # shared field -- UNLESS the detection arm carries its own non-copied block: a
+  # random effect (gcol33/tulpaObs#102) or an arm-specific spatial field
+  # (gcol33/tulpa#140). The shared field is decoupled from detection by its
   # `spatial_idx = 0` sentinel either way (the engine skips a 0 node before any
-  # field indexing), so when a detection RE is present field_coef is 1 so the iid
-  # RE block scatters onto the detection rows; the trend branch then forces the
-  # field's detection `spatial_idx` to the same sentinel.
-  det_field_coef <- if (!is.null(model$re_det)) 1.0 else 0
+  # field indexing), so when the detection arm carries its own block field_coef
+  # is 1 so that block scatters onto the detection rows; the shared field's
+  # detection `spatial_idx` is forced to the same sentinel.
+  det_field_coef <- if (!is.null(model$re_det) || isTRUE(det_field)) 1.0 else 0
   arm_p <- list(
     y            = as.numeric(y_det_visit),
     n_trials     = rep(1L, n_visits_valid),
@@ -582,7 +584,8 @@
     multi           = has_trend || has_any_re || has_armspec,
     n_cells         = n_cells,
     site_cell       = site_cell,
-    cover_aggregate = cover_aggregate
+    cover_aggregate = cover_aggregate,
+    det_field       = has_det_armspec
   )
   responses      <- arms_out$responses
   site_of_visit  <- arms_out$site_of_visit
@@ -875,10 +878,12 @@
     # and its SVC weight is w_psi[pos_site]. Under per-visit cover pos_site ==
     # site_of_visit, so this reduces to the previous cell_of_visit / w_visit.
     pos_field_node <- as.integer(site_cell[pos_site])
-    # When the detection arm carries an RE its field_coef is 1 (so the iid RE
-    # scatters), so the field must be skipped on detection by the 0-node sentinel
-    # rather than by field_coef = 0 (gcol33/tulpaObs#102).
-    det_field_node <- if (has_re_det) rep(0L, n_v) else cell_of_visit
+    # When the detection arm carries its own non-copied block -- an RE
+    # (gcol33/tulpaObs#102) or an arm-specific field (gcol33/tulpa#140) -- its
+    # field_coef is 1 so that block scatters, so the shared field must be skipped
+    # on detection by the 0-node sentinel rather than by field_coef = 0.
+    det_field_node <- if (has_re_det || has_det_armspec) rep(0L, n_v)
+                      else cell_of_visit
     spatial_idx_arms <- list(as.integer(site_cell), det_field_node, pos_field_node)
     make_block <- function(weight_site) {
       w_psi <- if (is.null(weight_site)) rep(1.0, n_sites)
