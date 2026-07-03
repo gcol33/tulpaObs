@@ -9,25 +9,28 @@
 # Extractor: surface a ran diagnostic, stay inert when diagnose.k was off       #
 # --------------------------------------------------------------------------- #
 
-.pkp_jf <- function(k = 0.42, is_ess = FALSE, src = "mode_hessian") {
+# pareto_k_is_ess is the importance-sampling ESS on the PSIS-smoothed weights
+# (numeric; the engine prints it as "IS-ESS = ..."), NOT a boolean flag.
+.pkp_jf <- function(k = 0.42, is_ess = 180, src = "mode_hessian") {
   list(pareto_k = k, pareto_k_is_ess = is_ess,
        pareto_k_scope = "outer (hyperparameter) Gaussian proposal",
        pareto_k_proposal_source = src)
 }
 
 test_that(".tobs_promote_pareto_k surfaces a diagnostic that ran", {
-  pk <- tulpaObs:::.tobs_promote_pareto_k(.pkp_jf(0.51, FALSE, "mode_hessian"))
+  pk <- tulpaObs:::.tobs_promote_pareto_k(.pkp_jf(0.51, 182, "mode_hessian"))
   expect_equal(pk$pareto_k, 0.51)
-  expect_false(pk$pareto_k_is_ess)
+  expect_equal(pk$pareto_k_is_ess, 182)          # numeric IS-ESS, carried as-is
   expect_identical(pk$pareto_k_proposal_source, "mode_hessian")
   expect_identical(pk$pareto_k_scope, "outer (hyperparameter) Gaussian proposal")
 })
 
-test_that(".tobs_promote_pareto_k surfaces a quad-ESS fallback (k declined)", {
-  # The k-hat fit declined: pareto_k carries the quad-ESS, flagged by is_ess.
-  pk <- tulpaObs:::.tobs_promote_pareto_k(.pkp_jf(35.0, TRUE, NA_character_))
-  expect_equal(pk$pareto_k, 35.0)
-  expect_true(pk$pareto_k_is_ess)
+test_that(".tobs_promote_pareto_k surfaces on a finite IS-ESS alone (gate OR branch)", {
+  # The `ran` gate accepts a usable number from either field: a finite IS-ESS
+  # surfaces the diagnostic even if the k-hat itself came back NA.
+  pk <- tulpaObs:::.tobs_promote_pareto_k(.pkp_jf(NA_real_, 41, NA_character_))
+  expect_true(is.na(pk$pareto_k))
+  expect_equal(pk$pareto_k_is_ess, 41)
 })
 
 test_that(".tobs_promote_pareto_k is inert when diagnose.k was off (all NA)", {
@@ -53,13 +56,13 @@ test_that(".tobs_promote_pareto_k is inert when diagnose.k was off (all NA)", {
 }
 
 test_that("glance.tobs_fit adds pareto-k columns for a joint-coupled fit", {
-  g <- glance(.pkp_fit(.pkp_jf(0.33, FALSE, "mode_hessian")))
+  g <- glance(.pkp_fit(.pkp_jf(0.33, 176, "mode_hessian")))
   expect_s3_class(g, "data.frame")
   expect_equal(nrow(g), 1L)
   expect_true(all(c("pareto_k", "pareto_k_is_ess",
                     "pareto_k_proposal_source") %in% names(g)))
   expect_equal(g$pareto_k, 0.33)
-  expect_false(g$pareto_k_is_ess)
+  expect_equal(g$pareto_k_is_ess, 176)           # carried numeric, not coerced to logical
   expect_identical(g$pareto_k_proposal_source, "mode_hessian")
 })
 
@@ -67,10 +70,11 @@ test_that("glance.tobs_fit reads the promoted top-level fields too", {
   # A fit whose postprocess already promoted the fields to the top level (the
   # production path) glances identically to one that only carries $joint_fit.
   fit <- .pkp_fit(NULL)
-  fit$pareto_k <- 0.61; fit$pareto_k_is_ess <- FALSE
+  fit$pareto_k <- 0.61; fit$pareto_k_is_ess <- 158
   fit$pareto_k_proposal_source <- "grid_moment"
   g <- glance(fit)
   expect_equal(g$pareto_k, 0.61)
+  expect_equal(g$pareto_k_is_ess, 158)
   expect_identical(g$pareto_k_proposal_source, "grid_moment")
 })
 
@@ -126,6 +130,8 @@ test_that("occu_cover() spatial fit surfaces pareto_k at the top level + glance"
   # Promoted to the top level: a user reading fit$pareto_k directly works.
   expect_true("pareto_k" %in% names(fit))
   expect_true(is.numeric(fit$pareto_k) && is.finite(fit$pareto_k))
+  # The IS-ESS surfaces as a finite number, not a boolean flag.
+  expect_true(is.numeric(fit$pareto_k_is_ess) && is.finite(fit$pareto_k_is_ess))
   expect_true("pareto_k_proposal_source" %in% names(fit))
   # The full set of outer-proposal sources the joint engine reports: the
   # single-Gaussian grid-moment proposal, its moment-matching refinement, the
@@ -140,10 +146,12 @@ test_that("occu_cover() spatial fit surfaces pareto_k at the top level + glance"
   expect_identical(fit$pareto_k_proposal_source,
                    fit$joint_fit$pareto_k_proposal_source)
 
-  # glance() surfaces them.
+  # glance() surfaces them, carrying the IS-ESS as the same finite number as the
+  # top-level field (not coerced to logical).
   g <- glance(fit)
   expect_true(all(c("pareto_k", "pareto_k_proposal_source") %in% names(g)))
   expect_equal(g$pareto_k, fit$pareto_k)
+  expect_equal(g$pareto_k_is_ess, fit$pareto_k_is_ess)
 
   # diagnose.k OFF (the default): inert -- no top-level field, no glance column.
   fit0 <- fit_args(FALSE)

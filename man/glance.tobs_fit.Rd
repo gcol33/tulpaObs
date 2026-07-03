@@ -17,18 +17,19 @@ joint-coupled fit that requested the diagnostic (\code{control$diagnose.k = TRUE
 off by default per gcol33/tulpaObs#101):
 \describe{
 \item{\code{pareto_k}}{The outer importance-sampling \eqn{\hat{k}} for the
-hyperparameter Gaussian summary; \verb{< 0.7} indicates a reliable summary.
-When \code{pareto_k_is_ess} is \code{TRUE} this column instead holds the quad-ESS
-fallback (the \eqn{\hat{k}} fit declined).}
-\item{\code{pareto_k_is_ess}}{\code{TRUE} when the \code{pareto_k} column is the quad-ESS
-fallback rather than a fitted \eqn{\hat{k}}.}
+hyperparameter Gaussian summary; \verb{< 0.7} indicates a reliable summary,
+\code{NA} when the diagnostic did not run or the proposal was degenerate.}
+\item{\code{pareto_k_is_ess}}{The importance-sampling effective sample size on
+the PSIS-smoothed weights (numeric); \code{pareto_k_is_ess / control$k.samples}
+is the relative IS efficiency.}
 \item{\code{pareto_k_proposal_source}}{How the importance proposal was built
-(gcol33/tulpa#116): \code{"mode_hessian"} from the Laplace curvature at the
-hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
-trustworthy even when a sharp posterior collapses the integration grid
-to ~1 cell; \code{"grid_moment"} from the grid-weighted covariance of the
-integration nodes -- the regime to watch, since it under-disperses (and
-can flag a spurious high \eqn{\hat{k}}) when the grid concentrates.}
+(gcol33/tulpa#116, #121): \code{"mode_hessian"} from the Laplace curvature at
+the hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
+trustworthy even when a sharp posterior collapses the integration grid to
+~1 cell; \code{"grid_moment"} from the grid-weighted covariance of the
+integration nodes (with \code{"moment_matched"} its refinement); or
+\code{"grid_mixture"}, the local-bump-per-cell mixture matching what the engine
+samples on a spread grid.}
 }
 }
 \description{

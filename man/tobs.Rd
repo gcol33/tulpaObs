@@ -202,8 +202,9 @@ multi-axis hyperparameter posterior is well identified.
 hyperparameter Gaussian summary with an importance-sampling Pareto-k.
 Defaults \code{FALSE} (it re-solves the inner Laplace on the full field
 \code{k.samples} times; gcol33/tulpaObs#101). When \code{TRUE}, the fit carries
-\code{pareto_k} (\verb{< 0.7} = reliable summary), \code{pareto_k_is_ess} (\code{TRUE} when the
-k-hat fit declined and the value is the quad-ESS fallback), and
+\code{pareto_k} (\verb{< 0.7} = reliable summary), \code{pareto_k_is_ess} (the
+importance-sampling ESS on the PSIS-smoothed weights; \verb{/ k.samples} is the
+relative IS efficiency), and
 \code{pareto_k_proposal_source} at the top level (and in \code{\link[=glance]{glance()}}).
 \code{pareto_k_proposal_source} (gcol33/tulpa#116) is \code{"mode_hessian"} when the
 importance proposal came from the Laplace curvature at the hyperparameter

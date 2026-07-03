@@ -108,18 +108,19 @@ tulpa::glance
 #'   off by default per gcol33/tulpaObs#101):
 #'   \describe{
 #'     \item{`pareto_k`}{The outer importance-sampling \eqn{\hat{k}} for the
-#'       hyperparameter Gaussian summary; `< 0.7` indicates a reliable summary.
-#'       When `pareto_k_is_ess` is `TRUE` this column instead holds the quad-ESS
-#'       fallback (the \eqn{\hat{k}} fit declined).}
-#'     \item{`pareto_k_is_ess`}{`TRUE` when the `pareto_k` column is the quad-ESS
-#'       fallback rather than a fitted \eqn{\hat{k}}.}
+#'       hyperparameter Gaussian summary; `< 0.7` indicates a reliable summary,
+#'       `NA` when the diagnostic did not run or the proposal was degenerate.}
+#'     \item{`pareto_k_is_ess`}{The importance-sampling effective sample size on
+#'       the PSIS-smoothed weights (numeric); `pareto_k_is_ess / control$k.samples`
+#'       is the relative IS efficiency.}
 #'     \item{`pareto_k_proposal_source`}{How the importance proposal was built
-#'       (gcol33/tulpa#116): `"mode_hessian"` from the Laplace curvature at the
-#'       hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
-#'       trustworthy even when a sharp posterior collapses the integration grid
-#'       to ~1 cell; `"grid_moment"` from the grid-weighted covariance of the
-#'       integration nodes -- the regime to watch, since it under-disperses (and
-#'       can flag a spurious high \eqn{\hat{k}}) when the grid concentrates.}
+#'       (gcol33/tulpa#116, #121): `"mode_hessian"` from the Laplace curvature at
+#'       the hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
+#'       trustworthy even when a sharp posterior collapses the integration grid to
+#'       ~1 cell; `"grid_moment"` from the grid-weighted covariance of the
+#'       integration nodes (with `"moment_matched"` its refinement); or
+#'       `"grid_mixture"`, the local-bump-per-cell mixture matching what the engine
+#'       samples on a spread grid.}
 #'   }
 #' @export
 glance.tobs_fit <- function(x, ...) {
@@ -129,7 +130,7 @@ glance.tobs_fit <- function(x, ...) {
   pk <- .tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
   if (is.null(pk)) return(g)
   if (!is.null(pk$pareto_k))        g$pareto_k <- pk$pareto_k
-  if (!is.null(pk$pareto_k_is_ess)) g$pareto_k_is_ess <- as.logical(pk$pareto_k_is_ess)
+  if (!is.null(pk$pareto_k_is_ess)) g$pareto_k_is_ess <- pk$pareto_k_is_ess
   g$pareto_k_proposal_source <- pk$pareto_k_proposal_source %||% NA_character_
   g
 }

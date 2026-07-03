@@ -42,9 +42,9 @@
   if (length(present) == 0L) return(NULL)
   # Inert unless the diagnostic actually ran (gcol33/tulpaObs#101): with
   # diagnose.k OFF the engine sets every field to NA and returns, so there is
-  # nothing to surface. A diagnostic that ran reports either a finite k-hat or a
-  # finite quad-ESS fallback (flagged by pareto_k_is_ess), so gate on a usable
-  # number rather than mirroring the always-present NA placeholders.
+  # nothing to surface. A diagnostic that ran reports a finite k-hat and its
+  # finite IS-ESS (pareto_k_is_ess), so gate on a usable number rather than
+  # mirroring the always-present NA placeholders.
   k    <- jf$pareto_k
   ess  <- jf$pareto_k_is_ess
   ran  <- (length(k) == 1L && is.finite(k)) ||

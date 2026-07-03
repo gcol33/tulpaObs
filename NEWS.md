@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.98 (2026-07-03)
+
+* `glance()` now reports `pareto_k_is_ess` as the numeric importance-sampling
+  effective sample size the engine computes (matching `fit$pareto_k_is_ess` at
+  the top level), instead of coercing it to a logical. The field was documented
+  and consumed as a boolean "the k-hat column is a quad-ESS fallback" flag, but
+  the engine has no such fallback: `pareto_k` is always the outer k-hat (or `NA`)
+  and `pareto_k_is_ess` is always the IS-ESS on the PSIS-smoothed weights, so
+  `as.logical()` discarded the number (a healthy IS-ESS of, e.g., 110 became
+  `TRUE`). `pareto_k_is_ess / control$k.samples` is the relative IS efficiency.
+
 ## 0.0.97 (2026-07-03)
 
 * `to =` is fully decoupled from the spatial-field call surface in both cover
