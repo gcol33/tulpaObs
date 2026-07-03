@@ -127,8 +127,13 @@ test_that("occu_cover() spatial fit surfaces pareto_k at the top level + glance"
   expect_true("pareto_k" %in% names(fit))
   expect_true(is.numeric(fit$pareto_k) && is.finite(fit$pareto_k))
   expect_true("pareto_k_proposal_source" %in% names(fit))
+  # The full set of outer-proposal sources the joint engine reports: the
+  # single-Gaussian grid-moment proposal, its moment-matching refinement, the
+  # grid-mixture proposal (gcol33/tulpa#121), the FD mode-Hessian delta-collapse
+  # fallback, or NA when diagnose.k stayed off.
   expect_true(fit$pareto_k_proposal_source %in%
-                c("mode_hessian", "grid_moment", NA_character_))
+                c("mode_hessian", "grid_moment", "moment_matched",
+                  "grid_mixture", NA_character_))
   expect_identical(fit$pareto_k_scope, "outer (hyperparameter) Gaussian proposal")
   # Same values as the nested raw object it was promoted from.
   expect_equal(fit$pareto_k, fit$joint_fit$pareto_k)
