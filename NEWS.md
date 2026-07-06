@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.101 (2026-07-07)
+
+* Adds three packaged example datasets (`foray_counts`, `meadow_cover`,
+  `peatland_occu`) with a `data-raw/make_datasets.R` builder and `LazyData`,
+  so the family help pages and vignettes can run on shipped data.
+* Splits the large family and dispatch sources (`family_cover_hurdle.R`,
+  `laplace.R`, `occu_cover.R`, `occu_cover_joint_coupled.R`, `tobs.R`,
+  `ms_occu_cover_spatial.R`) into focused modules (dispatch, arms,
+  postprocess, decode, diagnostics, helpers, callbacks, simulate). No
+  user-facing behaviour change; the fast smoke suite is unchanged.
+* Pins `LinkingTo: gcol33/tulpa@v0.0.70`.
+
 ## 0.0.100 (2026-07-06)
 
 * `cover()` gains per-component `copy(spatial(), terms = list(intercept = ,
