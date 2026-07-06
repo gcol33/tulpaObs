@@ -698,7 +698,7 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal")) {
 
 
 # ---------------------------------------------------------------------------
-# Planned families — error informatively when used until implemented
+# Abundance, distance, removal, and specialised occupancy families
 # ---------------------------------------------------------------------------
 
 #' N-mixture abundance family

@@ -1,0 +1,744 @@
+# ============================================================================
+# Single-season callbacks
+# ============================================================================
+build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
+  y <- model$y
+  X_occ <- model$X_processes[[1]]
+  X_det <- model$X_processes[[2]]
+  X_det_visit <- model$X_det_visit  # NULL when no visit-level covariates
+  max_visits <- ncol(y)
+  n_sites <- model$n_sites
+  p_occ <- ncol(X_occ)
+  p_det <- ncol(X_det)
+  p_det_visit <- if (is.null(X_det_visit)) 0L else ncol(X_det_visit)
+  p_det_total <- p_det + p_det_visit
+
+  # An SPDE term may enter the state arm, the detection arm, or both (its
+  # `$shared = c(occ, det)` membership). Resolve the per-arm field once: the
+  # state field attaches to the occ block, the detection field to the det
+  # block. A detection field with visit-level detection covariates is not yet
+  # wired (the field is site-indexed; the det block is per (site, visit) and
+  # would need a row-expanded mesh projection).
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  spatial_det <- .spatial_for_arm(spatial, 2L)
+  if (!is.null(spatial_det) && p_det_visit > 0L) {
+    stop("SPDE on the detection process with visit-level detection covariates ",
+         "is not yet plumbed in .tobs_laplace; use shared occupancy-arm SPDE ",
+         "or method = 'nuts'.", call. = FALSE)
+  }
+
+  # A continuous Matern (SPDE) block on the nested-Laplace latent prior needs
+  # the same modest pseudo-binomial inflation the single-Laplace SPDE path uses
+  # (M = 4): at M = 1000 the data signal swamps the SPDE prior precision, the
+  # mesh field over-fits, and the occupancy slope inflates (the field absorbs
+  # the covariate signal). The areal icar/bym2/car_proper blocks are strongly
+  # informative at the grid scale and tolerate the sharp M = 1000 encoding, so
+  # the modest M is gated on a continuous-field block only.
+  nested_has_spde <- .tobs_latent_prior_has_spde(latent_prior)
+
+  n_valid <- integer(n_sites)
+  n_det <- integer(n_sites)
+  any_det <- logical(n_sites)
+  valid_mat <- matrix(FALSE, n_sites, max_visits)
+  for (i in seq_len(n_sites)) {
+    v <- y[i, ] >= 0
+    valid_mat[i, ] <- v
+    n_valid[i] <- sum(v)
+    n_det[i] <- sum(y[i, v] == 1)
+    any_det[i] <- n_det[i] > 0
+  }
+  keep <- n_valid > 0
+
+  # Per-visit indexing for the X_det_visit path. Row r of X_det_visit
+  # corresponds to (site = (r-1) %/% max_visits + 1, visit = (r-1) %% max_visits + 1).
+  if (p_det_visit > 0L) {
+    site_idx_all <- rep(seq_len(n_sites), each = max_visits)
+    visit_idx_all <- rep(seq_len(max_visits), times = n_sites)
+  }
+
+  e_step <- function(fits, ...) {
+    beta_occ <- extract_beta(fits$occ, p_occ)
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
+    if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
+    # Nested-Laplace: make the E-step weight P(z_i = 1 | y_i) field-aware (the
+    # field informs which undetected sites are occupied; without this the EM
+    # converges to the fixed-effect-only fixed point and the field cannot track
+    # the data). Prefer the engine's exact per-cell fitted eta, marginalised
+    # over the hyperparameter grid -- correct for every prior including bym2.
+    # Fall back to the grid-weighted mode field offset (exact for d_fac = 1
+    # priors; skips bym2) when the engine did not return fitted_eta.
+    if (!is.null(latent_prior)) {
+      eta_marg <- .nested_eta_marginal(fits$occ, n_sites)
+      if (!is.null(eta_marg)) {
+        eta_occ <- eta_marg
+      } else {
+        lat_off <- .nested_eta_offset(latent_prior, fits$occ, p_occ, n_sites)
+        if (length(lat_off) == n_sites) eta_occ <- eta_occ + lat_off
+      }
+    }
+    psi <- plogis(eta_occ)
+
+    if (p_det_visit == 0L) {
+      beta_det <- extract_beta(fits$det, p_det)
+      eta_det <- as.vector(X_det %*% beta_det)
+      det_off <- .spatial_eta_offset(spatial_det, fits$det, p_det)
+      if (length(det_off) == n_sites) eta_det <- eta_det + det_off
+      p_site <- plogis(eta_det)
+      return(list(weights = occ_weights(psi, p_site, n_sites,
+                                        n_valid, n_det, any_det)))
+    }
+
+    # Visit-level path: logit(p_ij) = X_det[i,] beta_site + X_det_visit[(i-1)*J + j,] beta_visit
+    beta_det <- extract_beta(fits$det, p_det_total)
+    eta_site <- as.vector(X_det %*% beta_det[seq_len(p_det)])
+    eta_visit_long <- as.vector(X_det_visit %*%
+                                  beta_det[(p_det + 1L):p_det_total])
+    # eta_visit_long is in site-major order: reshape so [i, j] = visit (i, j)
+    eta_visit_mat <- matrix(eta_visit_long, n_sites, max_visits, byrow = TRUE)
+    logit_p_ij <- matrix(eta_site, n_sites, max_visits) + eta_visit_mat
+    logit_p_ij <- .tobs_clamp_eta(logit_p_ij)
+    # log(1 - plogis(eta)) = -log1pexp(eta) computed stably as -pmax(eta,0) - log1p(exp(-|eta|))
+    log_1mp <- -(pmax(logit_p_ij, 0) + log1p(exp(-abs(logit_p_ij))))
+    log_1mp[!valid_mat] <- 0
+    log_prod_1mp <- rowSums(log_1mp)
+    weights <- numeric(n_sites)
+    for (i in seq_len(n_sites)) {
+      if (any_det[i]) {
+        weights[i] <- 1
+      } else if (n_valid[i] == 0L) {
+        weights[i] <- psi[i]
+      } else {
+        num <- psi[i] * exp(log_prod_1mp[i])
+        weights[i] <- num / (num + (1 - psi[i]))
+      }
+    }
+    list(weights = weights)
+  }
+
+  m_step_encode <- function(weights, ...) {
+    if (is.null(spatial_occ) && !nested_has_spde) {
+      # Pseudo-binomial encoding: y = round(M*w), n_trials = M. The
+      # M-inflation makes the M-step into a sharp binomial whose mode
+      # equals the weighted mean, and is the historical encoding used
+      # everywhere else in the package (areal nested-Laplace blocks too --
+      # their intrinsic-field prior is strong at the grid scale).
+      M <- 1000L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+    } else if (is.null(spatial_occ) && nested_has_spde) {
+      # Nested-Laplace continuous SPDE block: modest M (= 4) so the mesh-field
+      # prior is not swamped, mirroring the single-Laplace SPDE encoding. The
+      # block prior is attached to occ$prior upstream (.tobs_laplace_nested),
+      # so no .attach_spatial_spde() here.
+      M <- 4L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+    } else {
+      # Modest pseudo-binomial encoding for SPDE: M = 4 gives some
+      # fractional resolution on the weights while keeping the per-site
+      # effective sample size O(1), so the SPDE prior precision is not
+      # swamped by the data signal as it would be at M = 1000.
+      M <- 4L
+      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    }
+    # Detection block: weight by w_i = P(z_i = 1 | y_i, theta). Sites that
+    # the E-step thinks are likely empty (w_i ~ 0) must drop out of the
+    # detection fit, otherwise they bias p_hat downward by feeding their
+    # all-zero detection history as evidence about (1 - p)^J. Sites with
+    # any detection have w_i = 1 (the E-step sets this).
+    w_det <- weights
+    w_det[any_det] <- 1
+
+    if (!is.null(spatial_det)) {
+      # SPDE detection field: the single-Laplace spatial solver consumes no
+      # per-observation `weights`, so the occupancy weight is folded into the
+      # binomial response by scaling both successes and trials by w_i
+      # (y = round(w_i n_det_i), n = round(w_i n_valid_i)). This is the
+      # frequency-weight-as-counts identity for a binomial mode/Hessian, and it
+      # keeps ALL n_sites rows so the per-site rows stay aligned with the full
+      # mesh projection A (n_sites x n_mesh). A near-empty site (w_i ~ 0)
+      # collapses to a (0, 0) row that contributes nothing to the likelihood,
+      # score, or Hessian -- the analogue of dropping it under the explicit
+      # weight on the non-spatial path.
+      y_det_w <- as.integer(round(w_det * n_det))
+      n_det_w <- as.integer(round(w_det * n_valid))
+      y_det_w <- pmin(pmax(y_det_w, 0L), n_det_w)
+      det_block <- list(y = y_det_w, n_trials = n_det_w, X = X_det,
+                        family = "binomial")
+      det_block <- .attach_spatial_spde(det_block, spatial_det)
+    } else if (p_det_visit == 0L) {
+      keep_det <- keep & (w_det > 1e-6)
+      det_block <- list(y = n_det[keep_det], n_trials = n_valid[keep_det],
+                        X = X_det[keep_det, , drop = FALSE],
+                        weights = w_det[keep_det], family = "binomial")
+    } else {
+      # Per-visit detection block: one Bernoulli row per (site, valid visit)
+      # whose weight is the site's posterior occupancy w_i. Combined design
+      # matrix stacks site-level X_det (replicated across visits) and
+      # visit-level X_det_visit (already in site-major order).
+      keep_visit <- valid_mat & (w_det >= 1e-6)
+      site_kept <- site_idx_all[as.vector(t(keep_visit))]
+      visit_kept <- visit_idx_all[as.vector(t(keep_visit))]
+      n_kept <- length(site_kept)
+      if (n_kept > 0L) {
+        visit_row_idx <- (site_kept - 1L) * max_visits + visit_kept
+        X_combined <- cbind(
+          X_det[site_kept, , drop = FALSE],
+          X_det_visit[visit_row_idx, , drop = FALSE]
+        )
+        y_kept <- y[cbind(site_kept, visit_kept)]
+        det_block <- list(y = as.integer(y_kept),
+                          n_trials = rep(1L, n_kept),
+                          X = X_combined,
+                          weights = w_det[site_kept],
+                          family = "binomial")
+      } else {
+        det_block <- list(y = integer(0),
+                          n_trials = integer(0),
+                          X = matrix(0, 0, p_det_total),
+                          weights = numeric(0),
+                          family = "binomial")
+      }
+    }
+    list(occ = occ_block, det = det_block)
+  }
+
+  z_draw <- function(weights, ...) {
+    z <- as.integer(any_det)
+    z[!any_det] <- rbinom(sum(!any_det), 1, clamp_w(weights[!any_det]))
+    z
+  }
+
+  hard_encode <- function(z, ...) {
+    occ_sites <- which(z == 1L)
+    det_keep <- occ_sites[n_valid[occ_sites] > 0]
+    occ_block <- list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    if (!is.null(spatial_det)) {
+      # Hard-z detection field: keep ALL n_sites rows aligned with the mesh
+      # projection by zeroing the trials of sites that contribute no detection
+      # evidence (z = 0 or no valid visits); a (0, 0) row drops out cleanly.
+      keep_det_mask <- (z == 1L) & (n_valid > 0L)
+      n_det_h <- ifelse(keep_det_mask, n_valid, 0L)
+      y_det_h <- ifelse(keep_det_mask, n_det, 0L)
+      det_block <- list(y = as.integer(y_det_h), n_trials = as.integer(n_det_h),
+                        X = X_det, family = "binomial")
+      det_block <- .attach_spatial_spde(det_block, spatial_det)
+    } else if (p_det_visit == 0L) {
+      det_block <- if (length(det_keep) > 0)
+        list(y = n_det[det_keep], n_trials = n_valid[det_keep],
+             X = X_det[det_keep, , drop = FALSE], family = "binomial")
+      else NULL
+    } else {
+      keep_visit <- valid_mat & matrix(z == 1L, n_sites, max_visits)
+      site_kept <- site_idx_all[as.vector(t(keep_visit))]
+      visit_kept <- visit_idx_all[as.vector(t(keep_visit))]
+      n_kept <- length(site_kept)
+      det_block <- if (n_kept > 0L) {
+        visit_row_idx <- (site_kept - 1L) * max_visits + visit_kept
+        X_combined <- cbind(
+          X_det[site_kept, , drop = FALSE],
+          X_det_visit[visit_row_idx, , drop = FALSE]
+        )
+        y_kept <- y[cbind(site_kept, visit_kept)]
+        list(y = as.integer(y_kept), n_trials = rep(1L, n_kept),
+             X = X_combined, family = "binomial")
+      } else NULL
+    }
+    list(occ = occ_block, det = det_block)
+  }
+
+  init <- glm_init(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det)
+  if (p_det_visit > 0L) {
+    # Pad det init with zeros for visit-level cols so warm-start shapes
+    # match the combined design when the penalized driver pulls beta_init
+    # from the previous EM iteration.
+    init$det$beta <- c(init$det$beta, rep(0, p_det_visit))
+    init$det$se   <- c(init$det$se,   rep(1, p_det_visit))
+  }
+
+  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
+       hard_encode = hard_encode, init = init,
+       p_per_submodel = c(occ = p_occ, det = p_det_total))
+}
+
+# ============================================================================
+# Dynamic occupancy callbacks
+# ============================================================================
+build_dynamic_callbacks <- function(model, spatial = NULL) {
+  y_flat <- model$y_flat
+  n_sites <- model$n_sites
+  n_seasons <- model$n_seasons
+  max_visits <- model$max_visits
+  X_occ <- model$X_processes[[1]]  # psi1
+  X_det <- model$X_processes[[2]]  # p
+  X_col <- model$X_processes[[3]]  # gamma
+  X_ext <- model$X_processes[[4]]  # epsilon
+  p_occ <- ncol(X_occ); p_det <- ncol(X_det)
+  p_col <- ncol(X_col); p_ext <- ncol(X_ext)
+
+  # The state field enters season-1 occupancy psi1 only (one psi1 row per
+  # site, the identity map). The colonization (gamma) and extinction
+  # (epsilon) transition predictors are separate latent processes whose own
+  # mesh fields are not wired here; `.validate_spatial_laplace` only routes a
+  # state-arm (shared[1]) SPDE term to the dynamic path, and the term
+  # constructor maps it to the psi1 predictor.
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+
+  # Precompute per site-season
+  nv <- model$n_visits
+  ad <- model$any_detected
+
+  e_step <- function(fits, ...) {
+    beta_occ <- extract_beta(fits$occ, p_occ)
+    beta_det <- extract_beta(fits$det, p_det)
+    beta_col <- extract_beta(fits$col, p_col)
+    beta_ext <- extract_beta(fits$ext, p_ext)
+
+    eta_psi1 <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
+    if (length(sp_off) == n_sites) eta_psi1 <- eta_psi1 + sp_off
+    psi1 <- plogis(eta_psi1)
+    p <- plogis(as.vector(X_det %*% beta_det))
+    gam <- plogis(as.vector(X_col %*% beta_col))
+    eps <- plogis(as.vector(X_ext %*% beta_ext))
+
+    # Exact forward-backward (Baum-Welch) E-step over the 2-state occupancy chain
+    # of each site. The smoothed marginal gamma_t(z) =
+    # P(z_it = z | y_{1:T}) feeds the psi1 / detection sufficient statistics, and
+    # the smoothed pairwise joint xi_t(z, z') = P(z_it = z, z_{i,t+1} = z' | y_{1:T})
+    # feeds colonization (xi_t(0, 1)) and extinction (xi_t(1, 0)) -- the exact
+    # transition sufficient statistics, replacing the earlier forward-FILTERED
+    # marginal-PRODUCT approximation (1 - w_{t-1}) w_t, which converged to a biased
+    # non-ML fixed point. The reduced occupancy emission (a detected season forces
+    # z = 1) drops only a z-independent detection-likelihood factor that cancels in
+    # every smoothed ratio, so gamma and xi are exact. The detection-rate factors
+    # are fit separately from the per-visit counts in the M-step.
+    A00 <- 1 - gam; A01 <- gam; A10 <- eps; A11 <- 1 - eps   # transition rows
+    w <- matrix(NA_real_, n_sites, n_seasons)                # smoothed P(z = 1 | y)
+    col_y <- numeric(n_sites); col_n <- numeric(n_sites)
+    ext_y <- numeric(n_sites); ext_n <- numeric(n_sites)
+    a <- matrix(0, n_seasons, 2)                             # scaled forward ahat_t
+    b0v <- numeric(n_seasons); b1v <- numeric(n_seasons)     # emission b_t(0), b_t(1)
+    cs <- numeric(n_seasons)                                 # per-season normaliser
+    for (i in seq_len(n_sites)) {
+      for (t in seq_len(n_seasons)) {
+        idx <- (i - 1) * n_seasons + t
+        nv_it <- nv[idx]; det_it <- ad[idx]
+        if (nv_it == 0L)      { b0v[t] <- 1;  b1v[t] <- 1 }
+        else if (det_it)      { b0v[t] <- 0;  b1v[t] <- 1 }
+        else                  { b0v[t] <- 1;  b1v[t] <- (1 - p[i])^nv_it }
+      }
+      # forward (scaled): ahat_t(z) = b_t(z) sum_z' ahat_{t-1}(z') A(z',z) / c_t
+      u0 <- (1 - psi1[i]) * b0v[1]; u1 <- psi1[i] * b1v[1]
+      c1 <- u0 + u1; cs[1] <- c1; a[1, 1] <- u0 / c1; a[1, 2] <- u1 / c1
+      for (t in 2:n_seasons) {
+        pr0 <- a[t - 1, 1] * A00[i] + a[t - 1, 2] * A10[i]
+        pr1 <- a[t - 1, 1] * A01[i] + a[t - 1, 2] * A11[i]
+        v0 <- b0v[t] * pr0; v1 <- b1v[t] * pr1
+        ct <- v0 + v1; cs[t] <- ct; a[t, 1] <- v0 / ct; a[t, 2] <- v1 / ct
+      }
+      # backward (scaled) + smoothed marginals / pairwise joints, T-1 .. 1
+      bw0 <- 1; bw1 <- 1                                     # beta_T(z) = 1
+      w[i, n_seasons] <- a[n_seasons, 2]                     # gamma_T(1) = ahat_T(1)
+      for (t in (n_seasons - 1):1) {
+        bb0 <- b0v[t + 1] * bw0; bb1 <- b1v[t + 1] * bw1
+        inv_c <- 1 / cs[t + 1]
+        xi01 <- a[t, 1] * A01[i] * bb1 * inv_c               # colonization event
+        xi00 <- a[t, 1] * A00[i] * bb0 * inv_c
+        xi10 <- a[t, 2] * A10[i] * bb0 * inv_c               # extinction event
+        xi11 <- a[t, 2] * A11[i] * bb1 * inv_c
+        col_y[i] <- col_y[i] + xi01; col_n[i] <- col_n[i] + (xi00 + xi01)
+        ext_y[i] <- ext_y[i] + xi10; ext_n[i] <- ext_n[i] + (xi10 + xi11)
+        bw0 <- (A00[i] * bb0 + A01[i] * bb1) * inv_c         # beta_t(0)
+        bw1 <- (A10[i] * bb0 + A11[i] * bb1) * inv_c         # beta_t(1)
+        w[i, t] <- a[t, 2] * bw1                             # gamma_t(1)
+      }
+    }
+    attr(w, "col_y") <- col_y; attr(w, "col_n") <- col_n
+    attr(w, "ext_y") <- ext_y; attr(w, "ext_n") <- ext_n
+    list(weights = w)
+  }
+
+  m_step_encode <- function(weights, ...) {
+    w <- weights  # n_sites x n_seasons matrix
+    # Occupancy: psi1 from season 1 weights. The pseudo-binomial inflation is
+    # M = 1000 without a field; with the psi1 SPDE field it drops to M = 4 so
+    # the field prior precision is not swamped by the data signal (the same
+    # modest-M encoding the single-season state arm uses).
+    M <- 1000L
+    M_occ <- if (is.null(spatial_occ)) 1000L else 4L
+    w1 <- w[, 1]
+    y_occ <- ifelse(ad[seq(1, by = n_seasons, length.out = n_sites)], M_occ,
+                    as.integer(round(w1 * M_occ)))
+    y_occ <- pmin(pmax(y_occ, 0L), M_occ)
+
+    # Colonization (z_{t-1}=0 -> z_t=1) and extinction (z_{t-1}=1 -> z_t=0) from
+    # the EXACT smoothed pairwise joints the E-step accumulated: col_y / ext_y are
+    # the expected colonization / extinction events summed over a
+    # site's T-1 intervals, col_n / ext_n the expected counts of unoccupied /
+    # occupied origin seasons. The same M pseudo-binomial inflation encodes them as
+    # one logistic observation per site, as for the occupancy arm.
+    col_y <- as.integer(round(attr(w, "col_y") * M))
+    col_n <- as.integer(round(attr(w, "col_n") * M))
+    ext_y <- as.integer(round(attr(w, "ext_y") * M))
+    ext_n <- as.integer(round(attr(w, "ext_n") * M))
+    col_n <- pmax(col_n, 1L); ext_n <- pmax(ext_n, 1L)
+    col_y <- pmin(pmax(col_y, 0L), col_n)
+    ext_y <- pmin(pmax(ext_y, 0L), ext_n)
+
+    # Detection: per-(site, season) rows weighted by w[i, t] = P(z_it = 1 | y).
+    # Replaces the legacy hard threshold (w > 0.5) which silently dropped
+    # site-seasons in the boundary regime and double-counted detection
+    # evidence for site-seasons in the high-confidence regime. X_det is
+    # site-indexed in this model, so per-season rows just replicate the
+    # site's covariates.
+    rows_i <- integer(n_sites * n_seasons)
+    det_count <- integer(n_sites * n_seasons)
+    vis_count <- integer(n_sites * n_seasons)
+    w_it <- numeric(n_sites * n_seasons)
+    n_rows <- 0L
+    for (i in seq_len(n_sites)) {
+      for (t in seq_len(n_seasons)) {
+        idx <- (i - 1) * n_seasons + t
+        if (nv[idx] <= 0) next
+        base <- (i - 1) * n_seasons * max_visits + (t - 1) * max_visits
+        dc <- 0L; vc <- 0L
+        for (j in seq_len(nv[idx])) {
+          v <- y_flat[base + j]
+          if (v >= 0) { vc <- vc + 1L; if (v == 1) dc <- dc + 1L }
+        }
+        if (vc == 0L) next
+        w_eff <- if (dc > 0L) 1 else w[i, t]
+        if (w_eff <= 1e-6) next
+        n_rows <- n_rows + 1L
+        rows_i[n_rows] <- i
+        det_count[n_rows] <- dc
+        vis_count[n_rows] <- vc
+        w_it[n_rows] <- w_eff
+      }
+    }
+    if (n_rows > 0L) {
+      rows_i <- rows_i[seq_len(n_rows)]
+      det_count <- det_count[seq_len(n_rows)]
+      vis_count <- vis_count[seq_len(n_rows)]
+      w_it <- w_it[seq_len(n_rows)]
+      det_block <- list(y = det_count, n_trials = vis_count,
+                        X = X_det[rows_i, , drop = FALSE],
+                        weights = w_it, family = "binomial")
+    } else {
+      det_block <- list(y = integer(0), n_trials = integer(0),
+                        X = X_det[integer(0), , drop = FALSE],
+                        weights = numeric(0), family = "binomial")
+    }
+
+    occ_block <- list(y = y_occ, n_trials = rep(M_occ, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+
+    list(
+      occ = occ_block,
+      det = det_block,
+      col = list(y = col_y, n_trials = col_n, X = X_col,
+                 family = "binomial"),
+      ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
+                 family = "binomial")
+    )
+  }
+
+  z_draw <- function(weights, ...) {
+    w <- weights
+    z <- matrix(0L, n_sites, n_seasons)
+    for (i in seq_len(n_sites)) {
+      for (t in seq_len(n_seasons)) {
+        idx <- (i - 1) * n_seasons + t
+        if (ad[idx]) z[i, t] <- 1L
+        else z[i, t] <- rbinom(1, 1, clamp_w(w[i, t]))
+      }
+    }
+    z
+  }
+
+  hard_encode <- function(z, ...) {
+    z1 <- z[, 1]
+    # Colonization/extinction from hard transitions
+    col_y <- integer(n_sites); col_n <- integer(n_sites)
+    ext_y <- integer(n_sites); ext_n <- integer(n_sites)
+    for (i in seq_len(n_sites)) {
+      for (t in 2:n_seasons) {
+        if (z[i, t - 1] == 0) { col_n[i] <- col_n[i] + 1L; if (z[i, t] == 1) col_y[i] <- col_y[i] + 1L }
+        if (z[i, t - 1] == 1) { ext_n[i] <- ext_n[i] + 1L; if (z[i, t] == 0) ext_y[i] <- ext_y[i] + 1L }
+      }
+    }
+    col_n <- pmax(col_n, 1L); ext_n <- pmax(ext_n, 1L)
+
+    total_det <- integer(n_sites); total_vis <- integer(n_sites)
+    for (i in seq_len(n_sites)) {
+      for (t in seq_len(n_seasons)) {
+        if (z[i, t] == 1 && nv[(i-1)*n_seasons+t] > 0) {
+          base <- (i-1)*n_seasons*max_visits + (t-1)*max_visits
+          for (j in seq_len(nv[(i-1)*n_seasons+t])) {
+            v <- y_flat[base + j]
+            if (v >= 0) { total_vis[i] <- total_vis[i]+1L; if (v==1) total_det[i] <- total_det[i]+1L }
+          }
+        }
+      }
+    }
+    dk <- total_vis > 0
+
+    occ_block <- list(y = z1, n_trials = rep(1L, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    list(
+      occ = occ_block,
+      det = if (sum(dk) > 0)
+        list(y = total_det[dk], n_trials = total_vis[dk],
+             X = X_det[dk,,drop=FALSE], family = "binomial")
+      else NULL,
+      col = list(y = col_y, n_trials = col_n, X = X_col,
+                 family = "binomial"),
+      ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
+                 family = "binomial")
+    )
+  }
+
+  init <- list(
+    occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)),
+    det = list(beta = rep(0, p_det), se = rep(1, p_det)),
+    col = list(beta = rep(0, p_col), se = rep(1, p_col)),
+    ext = list(beta = rep(0, p_ext), se = rep(1, p_ext))
+  )
+
+  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
+       hard_encode = hard_encode, init = init,
+       p_per_submodel = c(occ = p_occ, det = p_det, col = p_col, ext = p_ext))
+}
+
+# ============================================================================
+# Integrated occupancy callbacks
+# ============================================================================
+build_integrated_callbacks <- function(model, spatial = NULL) {
+  y_sources <- model$y_sources
+  site_maps <- model$site_maps
+  X_occ <- model$X_processes[[1]]
+  n_sites <- model$n_sites
+  n_sources <- model$n_sources
+  p_occ <- ncol(X_occ)
+
+  # The shared psi field enters the state arm (one state row per site, the
+  # identity map -- the proven single-season path). A field on the detection
+  # arm enters every source's per-source detection block, broadcast onto that
+  # source's sites (`src_rows`) and folded into the response by count-scaling,
+  # exactly as the single-season detection arm does. The field is fit
+  # independently per source block (one realization per submodel block; a
+  # genuinely shared realization across sources needs the copy() path).
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  spatial_det <- .spatial_for_arm(spatial, 2L)
+
+  # Per-source detection info
+  src_info <- lapply(seq_len(n_sources), function(s) {
+    ys <- y_sources[[s]]; ns <- nrow(ys); mv <- ncol(ys)
+    nv <- integer(ns); nd <- integer(ns); ad <- logical(ns)
+    for (i in seq_len(ns)) {
+      valid <- ys[i, ] >= 0; nv[i] <- sum(valid)
+      nd[i] <- sum(ys[i, valid] == 1); ad[i] <- nd[i] > 0
+    }
+    X_det <- model$X_processes[[1 + s]]
+    src_rows <- site_maps[[s]] + 1L
+    # Detection-arm field projection broadcast onto this source's sites.
+    spatial_det_s <- if (!is.null(spatial_det))
+      .tobs_spde_broadcast_spec(spatial_det, src_rows) else NULL
+    list(nv = nv, nd = nd, ad = ad, X_det = X_det[src_rows, , drop = FALSE],
+         p_det = ncol(X_det), keep = nv > 0, src_rows = src_rows,
+         spatial_det = spatial_det_s)
+  })
+
+  # Global detection status per site
+  any_det_global <- logical(n_sites)
+  for (s in seq_len(n_sources)) {
+    for (j in seq_along(src_info[[s]]$src_rows)) {
+      if (src_info[[s]]$ad[j]) any_det_global[src_info[[s]]$src_rows[j]] <- TRUE
+    }
+  }
+
+  e_step <- function(fits, ...) {
+    beta_occ <- extract_beta(fits$occ, p_occ)
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
+    if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
+    psi <- plogis(eta_occ)
+    weights <- psi  # Prior occupancy
+    for (s in seq_len(n_sources)) {
+      si <- src_info[[s]]
+      beta_det <- extract_beta(fits[[paste0("det", s)]], si$p_det)
+      eta_det <- as.vector(si$X_det %*% beta_det)
+      det_off <- .spatial_eta_offset(si$spatial_det, fits[[paste0("det", s)]],
+                                     si$p_det)
+      if (length(det_off) == length(si$src_rows)) eta_det <- eta_det + det_off
+      p_s <- plogis(eta_det)
+      for (j in seq_along(si$src_rows)) {
+        i <- si$src_rows[j]
+        if (si$ad[j]) { weights[i] <- 1 }
+        else if (si$nv[j] > 0) {
+          prod_1mp <- (1 - p_s[j])^si$nv[j]
+          num <- weights[i] * prod_1mp
+          weights[i] <- num / (num + (1 - weights[i]) + 1e-10)
+        }
+      }
+    }
+    list(weights = weights)
+  }
+
+  m_step_encode <- function(weights, ...) {
+    if (is.null(spatial_occ)) {
+      M <- 1000L
+      y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+    } else {
+      M <- 4L
+      y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
+      y_occ <- pmin(pmax(y_occ, 0L), M)
+      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
+                        family = "binomial")
+      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    }
+    specs <- list(occ = occ_block)
+    # Per-source detection blocks: weight each row by w_i at the global
+    # site mapped through src_rows. Sites where the E-step says "almost
+    # certainly empty" drop out of every source's detection fit.
+    for (s in seq_len(n_sources)) {
+      si <- src_info[[s]]
+      w_src <- weights[si$src_rows]
+      w_src[si$ad] <- 1
+      if (!is.null(si$spatial_det)) {
+        # SPDE detection field on this source: fold the occupancy weight into
+        # the binomial response by count-scaling (y = round(w nd), n =
+        # round(w nv)) so every source row stays aligned with the broadcast
+        # mesh projection A; a near-empty site collapses to a (0, 0) row.
+        y_det_w <- as.integer(round(w_src * si$nd))
+        n_det_w <- as.integer(round(w_src * si$nv))
+        y_det_w <- pmin(pmax(y_det_w, 0L), n_det_w)
+        det_block <- list(y = y_det_w, n_trials = n_det_w, X = si$X_det,
+                          family = "binomial")
+        specs[[paste0("det", s)]] <- .attach_spatial_spde(det_block,
+                                                          si$spatial_det)
+      } else {
+        dk <- si$keep & (w_src > 1e-6)
+        specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk],
+                                          X = si$X_det[dk,,drop=FALSE],
+                                          weights = w_src[dk],
+                                          family = "binomial")
+      }
+    }
+    specs
+  }
+
+  z_draw <- function(weights, ...) {
+    z <- as.integer(any_det_global)
+    undet <- !any_det_global
+    z[undet] <- rbinom(sum(undet), 1, clamp_w(weights[undet]))
+    z
+  }
+
+  hard_encode <- function(z, ...) {
+    occ_block <- list(y = z, n_trials = rep(1L, n_sites), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    specs <- list(occ = occ_block)
+    for (s in seq_len(n_sources)) {
+      si <- src_info[[s]]
+      if (!is.null(si$spatial_det)) {
+        keep_det_mask <- (z[si$src_rows] == 1L) & (si$nv > 0L)
+        n_det_h <- ifelse(keep_det_mask, si$nv, 0L)
+        y_det_h <- ifelse(keep_det_mask, si$nd, 0L)
+        det_block <- list(y = as.integer(y_det_h),
+                          n_trials = as.integer(n_det_h),
+                          X = si$X_det, family = "binomial")
+        specs[[paste0("det", s)]] <- .attach_spatial_spde(det_block,
+                                                          si$spatial_det)
+      } else {
+        occ_local <- z[si$src_rows] == 1L & si$nv > 0
+        if (any(occ_local)) {
+          specs[[paste0("det", s)]] <- list(y = si$nd[occ_local],
+                                            n_trials = si$nv[occ_local],
+                                            X = si$X_det[occ_local,,drop=FALSE],
+                                            family = "binomial")
+        }
+      }
+    }
+    specs
+  }
+
+  init <- list(occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)))
+  p_sub <- c(occ = p_occ)
+  for (s in seq_len(n_sources)) {
+    nm <- paste0("det", s)
+    init[[nm]] <- list(beta = rep(0, src_info[[s]]$p_det), se = rep(1, src_info[[s]]$p_det))
+    p_sub[nm] <- src_info[[s]]$p_det
+  }
+
+  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
+       hard_encode = hard_encode, init = init, p_per_submodel = p_sub)
+}
+
+# ============================================================================
+# JSDM callbacks (no detection — simple Bernoulli)
+# ============================================================================
+build_jsdm_callbacks <- function(model, spatial = NULL) {
+  y_jsdm <- model$y_jsdm
+  X_occ <- model$X_processes[[1]]
+  N <- model$N
+  p_occ <- ncol(X_occ)
+
+  # JSDM has no detection process: y is observed directly, so the state arm is
+  # a plain Bernoulli on the observed presence/absence. A site-level field is
+  # shared across the species at a site -- the state block carries
+  # N = n_sites * n_species rows in site-major order, so the site-indexed mesh
+  # projection A is broadcast onto those rows via `site_of_row`. No occupancy
+  # weight to fold in (no latent state), so the response is the observed y at
+  # unit trials with the broadcast field attached directly.
+  spatial_occ <- .spatial_for_arm(spatial, 1L)
+  if (!is.null(spatial_occ)) {
+    site_of_row <- .tobs_state_block_dims(model)$site_of_row
+    spatial_occ <- .tobs_spde_broadcast_spec(spatial_occ, site_of_row)
+  }
+
+  # No E-step needed — no latent variable (y is observed directly)
+  # But we still use EM framework for consistency with species RE
+  e_step <- function(fits, ...) {
+    list(weights = as.numeric(y_jsdm))
+  }
+
+  m_step_encode <- function(weights, ...) {
+    occ_block <- list(y = as.integer(y_jsdm), n_trials = rep(1L, N), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    list(occ = occ_block)
+  }
+
+  z_draw <- function(weights, ...) as.integer(y_jsdm)
+  hard_encode <- function(z, ...) {
+    occ_block <- list(y = z, n_trials = rep(1L, N), X = X_occ,
+                      family = "binomial")
+    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
+    list(occ = occ_block)
+  }
+
+  init <- list(occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)))
+
+  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
+       hard_encode = hard_encode, init = init, p_per_submodel = c(occ = p_occ))
+}
+

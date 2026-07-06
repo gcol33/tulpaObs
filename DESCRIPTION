@@ -12,6 +12,7 @@ SystemRequirements: C++17
 Roxygen: list(markdown = TRUE)
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
 Depends:
     R (>= 4.1.0)
 Imports:
@@ -43,7 +44,7 @@ LinkingTo:
     tulpa
 Remotes:
     gcol33/tulpaMesh@v0.1.3,
-    gcol33/tulpa
+    gcol33/tulpa@v0.0.70
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, dyn_abun, distance, fp_occu, method-gibbs-recovery, re-laplace-recovery,

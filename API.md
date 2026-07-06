@@ -63,23 +63,47 @@ A family object carries the latent-state type, observation likelihood,
 replicate requirement, default engine, and status. Families do not fit —
 `tobs()` reads the object and dispatches.
 
-### Working
+All families below carry `status = "working"` and are recovery-tested.
+
+### Occupancy
 
 | Constructor       | Model                          | Response `y`                       | Default engine |
 |-------------------|--------------------------------|------------------------------------|----------------|
 | `occu()`          | Single-season occupancy        | `N x J` detection matrix (0/1/NA)  | laplace |
 | `dyn_occu()`      | Dynamic (multi-season) HMM     | `N x J x T` array                  | laplace |
 | `ms_occu()`       | Multispecies / community       | `S x N x J` array                  | laplace |
+| `ms_dyn_occu()`   | Dynamic multispecies           | `S x N x J x T` array              | laplace |
 | `int_occu()`      | Integrated multi-source        | list of `N_s x J_s` matrices       | laplace |
+| `ms_int_occu()`   | Integrated multispecies        | list of `S x N_s x J_s` arrays     | laplace |
 | `jsdm()`          | Joint species distribution     | `N x S` presence matrix (no detection) | nuts |
-| `cover(positive)` | Vegetation cover hurdle        | length-`N` cover in `[0, 1]`       | laplace |
+| `fp_occu()`       | False-positive occupancy (Miller 2011) | `N x J` in `{0,1,2}`      | laplace |
+| `occu_categorical(classes)` | Multi-state categorical detection | `N x J` class matrix    | laplace |
 
-`cover(positive = c("beta", "lognormal"))` chooses the positive-part likelihood.
+### Abundance
 
-### Planned (error informatively until implemented)
+| Constructor                     | Model                        | Response `y`                | Default engine |
+|---------------------------------|------------------------------|-----------------------------|----------------|
+| `abun(K_max, mixture)`          | N-mixture (Royle 2004)       | `N x J` counts              | laplace |
+| `ms_abun(K_max, mixture)`       | Community N-mixture (`msNMix`) | `S x N x J` counts        | laplace |
+| `dyn_abun(K_max, mixture)`      | Open N-mixture (Dail-Madsen) | `N x J x T` counts          | laplace |
+| `distance(key, transect, cutpoints, ...)` | Binned distance sampling | `N x B` bin counts   | laplace |
+| `removal(K_max, mixture)`       | Sequential removal           | `N x K` removal-pass counts | laplace |
 
-`abun(K_max, mixture)`, `ms_abun(...)`, `dyn_abun(...)` (Dail-Madsen),
-`distance(key)`, `removal()`, `fp_occu()` (false-positive occupancy).
+`mixture = c("poisson", "negbin")` on the count families; `distance(key = c("halfnorm", "hazard"))`.
+
+### Cover
+
+| Constructor                | Model                              | Response `y`                | Default engine |
+|----------------------------|------------------------------------|-----------------------------|----------------|
+| `cover(response, breaks)`  | Vegetation cover hurdle            | length-`N` cover in `[0, 1]`| laplace |
+| `occu_cover(response)`     | Joint occupancy + cover hurdle     | detection matrix + cover    | laplace |
+| `ms_occu_cover(response)`  | Community joint occu + cover       | per-species                 | laplace |
+| `occu_multiscale_cover(response)` | Three-level (cell/plot/visit) + cover | plot detection + cover | nested_laplace |
+
+`cover(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc", "ordinal"))`
+chooses the positive-part likelihood; `"ordinal"` also needs `breaks =` (interior
+Braun-Blanquet class boundaries). The joint cover families take
+`response = c("beta", "lognormal")`.
 
 `obs_family()` is the low-level constructor behind all of these (exported but
 `@keywords internal`; use the concrete constructors).
@@ -175,7 +199,7 @@ is silently ignored (e.g. there is no NUTS-with-SLA-marginal combination).
 | `"laplace_sla"`        | Laplace | skew (SLA) | none | Skew-corrected marginals; `summary()` gains a `skew` column. |
 | `"laplace_gibbs"`      | Laplace | Gaussian | Gibbs | Post-EM Gibbs chain, Rubin-pooled. Runs unpenalised (prior auto-disabled, gcol33/tulpa#27); seedable + reproducible. |
 | `"laplace_mi"`         | Laplace | Gaussian | MI | Post-EM multiple imputation, Rubin-pooled. Same prior/seed behaviour. |
-| `"nested_laplace"`     | nested Laplace | Gaussian | none | Multi-block (non-conjugate hyperpriors / cover-hurdle joint). Wired for single-season `occu()` and `cover()`; other families fall back with a message. |
+| `"nested_laplace"`     | nested Laplace | Gaussian | none | Multi-block (non-conjugate hyperpriors, areal spatial fields, cover-hurdle joint). Supported by most families (`occu`, `dyn_occu`, `int_occu`, `ms_occu`, `jsdm`, `abun`, `ms_abun`, `removal`, `distance`, `fp_occu`, `dyn_abun`, `cover`, `occu_cover`, `ms_occu_cover`, `occu_multiscale_cover`). The per-family support set is `.tobs_family_methods`; an unsupported `method` errors with a pointer rather than silently downgrading. |
 | `"nested_laplace_sla"` | nested Laplace | skew (SLA) | none | Nested Laplace with skew-corrected marginals. |
 | `"nuts"`               | NUTS | — | — | HMC via tulpa. Fits every structure, incl. correlated slopes and stacked spatial+RE. Reports split-Rhat / bulk / tail ESS on `$convergence`. |
 | `"auto"`               | — | — | — | Resolves to the family's `default_engine`. |
@@ -228,8 +252,10 @@ occu_priors(p_intercept        = list(mean = 0, sd = 1.5),
 ```
 
 Set any `sd = Inf` to disable that component. Pass `priors = FALSE` to `tobs()`
-to recover the unpenalised MAP. For NUTS, the occupancy path does not currently
-apply a user `priors` argument.
+to recover the unpenalised MAP. For NUTS, the occupancy path does not apply a
+user `priors` argument — the sampler uses the weakly-informative
+`N(0, sigma.beta)` coefficient prior, and a supplied `priors` now raises a
+warning rather than being silently ignored.
 
 `cover_priors()` is the opt-in fixed-effect prior for the cover hurdle, with one
 intercept/slope bucket per arm:
@@ -243,12 +269,15 @@ cover_priors(occ_intercept = list(mean = 0, sd = 2),
 
 Cover has no psi-p-style ridge, so priors are off by default (a cover fit with
 `priors = NULL` is unpenalised); the main use is taming perfect separation in
-the occurrence arm at small `N`. Applied on the separate-Laplace path
-(`method = "laplace"`/`"laplace_sla"`, no spatial term): both arms are penalised
-— occurrence and lognormal-positive through `tulpa_laplace()`, beta-positive
-through `tulpa_laplace_beta()`. The joint nested-Laplace path does not yet
-thread fixed-effect priors and errors on a supplied prior; spatial cover
-formulas likewise reject it (the spatial solver carries its own). Each prior
+the occurrence arm at small `N`. Both fit paths thread the prior. On the
+separate-Laplace path (`method = "laplace"`/`"laplace_sla"`, no spatial term)
+both arms are penalised — occurrence and lognormal-positive through
+`tulpa_laplace()`, beta-positive through `tulpa_laplace_beta()`. On the joint
+nested-Laplace / spatial path the per-arm `cover_priors()` buckets are passed to
+`tulpa_nested_laplace_joint()` as per-response `beta_prior_mean` /
+`beta_prior_prec` (natural scale, applied to the autoscaled O(1) design), with
+`priors = NULL`/`FALSE`/`"none"` leaving both arms unpenalised (gcol33/tulpaObs#54).
+The `occu_cover()` joint path threads the prior the same way. Each prior
 constructor (`occu_priors`, `cover_priors`) carries the natural parameters of
 its family group — there is no generic prior object.
 
@@ -265,6 +294,19 @@ its family group — there is no generic prior object.
 `summary()` / `plot()` / `print()` methods on `tobs_data` report naive
 occupancy/detection, per-visit rates, completeness, and (with coordinates) a
 detection map.
+
+### Bundled example datasets
+
+Three synthetic datasets (fixed-seed generative models with a known `truth`,
+built by `data-raw/make_datasets.R`) ship for load-and-run examples:
+
+| Dataset          | Family it feeds       | Shape |
+|------------------|-----------------------|-------|
+| `peatland_occu`  | `occu()`              | list: `y` (120 x 4), `occ.covs`, `det.covs`, `coords`, `truth` |
+| `foray_counts`   | `abun()`              | list: `y` (100 x 3 counts), `occ.covs`, `det.covs`, `truth` |
+| `meadow_cover`   | `cover()` / `within_between()` | data frame, 150 plots x (plot, year, year_c, moisture, grazing, cover) |
+
+Load with `data(peatland_occu)`; see `?peatland_occu` for the generative model.
 
 ---
 
@@ -289,7 +331,13 @@ parameter-recovery tests).
 ## 9. S3 methods on `tobs_fit`
 
 Generic methods (`coef`, `confint`, `vcov`, `logLik`, `tidy`, `glance`) are
-inherited from `tulpa::tulpa_fit`. tulpaObs overrides or adds:
+inherited from `tulpa::tulpa_fit`. `logLik(fit)` carries `df` (the fixed-effect
+count) and `nobs` attributes, so `AIC(fit)` / `BIC(fit)` resolve through the
+`stats` defaults. Note the two caveats: `df` counts only fixed effects (variance
+components and spatial-field hyperparameters are not penalised), and under
+`method = "nuts"` the log-likelihood is the mean posterior log-density (prior
+included), not a maximised likelihood — so for hierarchical model comparison
+prefer `tobs_waic()` / `tobs_dic()` / `tobs_cpo()`. tulpaObs overrides or adds:
 
 | Method                          | Notes |
 |---------------------------------|-------|
@@ -303,6 +351,7 @@ inherited from `tulpa::tulpa_fit`. tulpaObs overrides or adds:
 | `simulate(nsim, seed)`          | Posterior replicate datasets (single-season) |
 | `update(...)`                   | Refit with overridden controls; structured terms travel with the model |
 | `nobs()`                        | Non-missing detection-history count |
+| `converged()` / `convergence()` | Convergence flag / full convergence diagnostics (split-Rhat, ESS under NUTS) |
 | `$`                             | spOccupancy-compatible accessors: `beta.samples`, `alpha.samples`, `psi.samples`, `p.samples`, `z.samples`, `run.time` |
 
 `tobs_marginal_effect(object, covariate, process, n_points)` and
@@ -324,6 +373,8 @@ directly from seed-offset refits (§5).
 | Function                       | Returns |
 |--------------------------------|---------|
 | `tobs_waic()`                  | `waic`, `elpd`, `p_waic`, `lppd` |
+| `tobs_dic()`                   | DIC, effective parameter count `p_D` |
+| `tobs_cpo()`                   | Conditional predictive ordinate / LOO log-score (`loo.unit = "obs"`/`"cell"`) |
 | `tobs_ppc(fit.stat, n.samples)`| Posterior predictive check + Bayesian p-value |
 | `tobs_pit_residuals(n.samples)`| PIT residual vector |
 | `tobs_test_uniformity(pit)`    | KS test of PIT residuals against uniform |
@@ -351,19 +402,47 @@ support single-season models only.
 
 ---
 
+## 12. Batch fits (multi-response)
+
+Passing a multi-response `y` (e.g. a per-species list) to `tobs()` with a cover
+family fits each response independently on the shared design and returns a
+`tobs_batch` — a container of per-response `tobs_fit` objects, each byte-identical
+to a separate single-response call.
+
+| Function / method       | Purpose |
+|-------------------------|---------|
+| `occu_cover_inputs(data, site, visit, response, y_pos, ...)` | Build the ragged / dense occupancy + cover arms from a long (one row per site-visit) plot-level data frame, ready to hand to `tobs(family = occu_cover())`. |
+| `tobs_get(x, species)`  | Extract one response's `tobs_fit` from a `tobs_batch` (by label or index). |
+| `coef(<tobs_batch>)`    | Named list of per-response coefficient vectors. |
+| `print(<tobs_batch>)`   | Species count, family, and where the per-response fits live (`$fits`). |
+
+`tobs_associations(object)` returns the residual species-association matrix from
+a JSDM / community-factor fit (the spatial-factor `ms_occu_cover()` loadings).
+`occu_aggregation_scan()` sweeps cover-arm aggregation choices for a joint fit.
+
+---
+
 ## Quick reference: full export list
 
-**Fitter** `tobs` · **Families** `occu` `dyn_occu` `ms_occu` `int_occu` `jsdm`
-`cover` `abun` `ms_abun` `dyn_abun` `distance` `removal` `fp_occu` `obs_family`
-· **Priors** `occu_priors` `cover_priors` · **Data** `tobs_format` `tobs_data`
-`tobs_format_ms` · **Simulators** `simulate_occu` `simulate_ms_occu`
-`simulate_dyn_occu` `simulate_int_occu` `simulate_dyn_ms_occu`
-`simulate_int_ms_occu` `simulate_cover` `simulate_cover_joint` · **Diagnostics**
-`tobs_waic` `tobs_ppc` `tobs_pit_residuals` `tobs_test_uniformity`
+**Fitter** `tobs` · **Families** `occu` `dyn_occu` `ms_occu` `ms_dyn_occu`
+`int_occu` `ms_int_occu` `jsdm` `fp_occu` `occu_categorical` `abun` `ms_abun`
+`dyn_abun` `distance` `removal` `cover` `occu_cover` `ms_occu_cover`
+`occu_multiscale_cover` `obs_family` · **Priors** `occu_priors` `cover_priors` ·
+**Data** `tobs_format` `tobs_data` `tobs_format_ms` `occu_cover_inputs` `tobs_get`
+· **Simulators** `simulate_occu` `simulate_ms_occu` `simulate_dyn_occu`
+`simulate_dyn_ms_occu` `simulate_int_occu` `simulate_int_ms_occu`
+`simulate_occu_categorical` `simulate_abun` `simulate_ms_abun`
+`simulate_dyn_abun` `simulate_distance` `simulate_removal` `simulate_fp_occu`
+`simulate_cover` `simulate_cover_joint` `simulate_occu_cover`
+`simulate_ms_occu_cover` `simulate_ms_occu_cover_spatial`
+`simulate_occu_multiscale_cover` · **Diagnostics** `tobs_waic` `tobs_cpo`
+`tobs_dic` `tobs_ppc` `tobs_pit_residuals` `tobs_test_uniformity`
 `tobs_test_dispersion` `tobs_test_zero_inflation` `tobs_test_outliers`
 `tobs_check` `tobs_check_id` · **Prediction / effects** `tobs_predict_spatial`
-`tobs_marginal_effect` `tobs_richness` `within_between` · **Ensembles**
-`tobs_stack` · **Generic re-export** `ranef`
+`tobs_marginal_effect` `tobs_richness` `tobs_associations`
+`occu_aggregation_scan` `within_between` · **Ensembles** `tobs_stack` ·
+**Convergence** `converged` `convergence` · **Generic re-exports** `ranef`
+`tidy` `glance`
 
 > Structured terms (`icar`, `bym2`, `car`, `car_proper`, `gp`, `multiscale_gp`,
 > `spde`, `re`, `temporal`, `svc`, `latent`, `copy`) are **not exported** — they

@@ -1,13 +1,14 @@
 # =============================================================================
-# test-cover-perarm.R - cover() per-arm formulas (arm = formula).
+# test-cover-perarm.R - cover() per-arm formulas and copy() placement.
 #
 # `cover(presence = ~ ..., positive = ~ ...)` gives each hurdle arm its own fixed
-# effects (two independent designs), while the single shared `formula` stays the
-# back-compat spelling. A spatial field placed in a per-arm formula is that arm's
-# field; copy(spatial()) in the `positive` formula couples the presence field
-# onto the positive arm. The coupling amplitude is one grid for the whole field
-# (copy(spatial(), alpha = )) or per-component (copy(spatial(), terms = list(
-# intercept = , trend = ))) so the intercept and trend blocks can decouple.
+# effects (two independent designs); the single shared `formula` stays the
+# back-compat spelling. A bare spatial() in one per-arm formula is that arm's own
+# field. copy(spatial()) in the positive formula reuses the presence field: with
+# the default amplitude it reproduces the shared (both-arm) field byte-for-byte,
+# while copy(spatial(), alpha = ) sets one amplitude grid for the whole field and
+# copy(spatial(), terms = list(intercept = , trend = )) sets per-component grids
+# so the intercept and trend blocks can decouple.
 # =============================================================================
 
 .cp_sim <- function(seed = 1L, N = 3000L) {

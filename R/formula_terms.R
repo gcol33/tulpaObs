@@ -772,9 +772,9 @@
   }
   if (!spec$type %in% c("icar", "car", "car_proper", "bym2")) {
     stop(sprintf(paste0(
-      "spatial(<bar>, to = \"%s\"): an arm-specific field uses an areal model ",
-      "(icar / car / car_proper / bym2); model = \"%s\" is not supported."),
-      arm, spec$type), call. = FALSE)
+      "internal: an arm-specific bar field requires an areal model ",
+      "(icar / car / car_proper / bym2); got model = \"%s\"."),
+      spec$type), call. = FALSE)
   }
   specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data_obs)
   node  <- attr(specs, "node")

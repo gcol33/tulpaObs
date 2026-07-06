@@ -1,4 +1,24 @@
-# tulpaObs — Roadmap
+# tulpaObs — Roadmap (historical)
+
+> **Status: historical roadmap, superseded.** This file records the original
+> phased plan and is kept for provenance. Almost everything it lists as
+> "planned" / "not yet" has since shipped: every family in the roster below is
+> now `status = "working"` (occupancy, abundance, distance, removal,
+> false-positive, cover, and their community / dynamic / integrated / spatial
+> variants), and the entry point is `tobs()` (not the `tulpa_obs()` sketch
+> here). Do **not** read the engine matrices in sections 5 and 7 as the current
+> state.
+>
+> **Live references:**
+> - `API.md` — the current public surface (fitter, families, methods, S3).
+> - `CLAUDE.md` — the current family roster, engine-support matrix, and
+>   architecture.
+> - `R/tobs.R` `.tobs_family_methods` — the authoritative per-family method map.
+> - `NEWS.md` — the shipped-change log.
+>
+> What remains genuinely open is tracked in `todo.md` (community NUTS, the
+> intrinsic-field spatial-NUTS corners, cover-priors threading, diagnostic
+> generalization).
 
 `tulpaOcc` has been renamed to **tulpaObs**: a unified framework for
 hierarchical latent-state observation models on the `tulpa` backend. The
@@ -6,8 +26,7 @@ rename (Phase 5 in the rollout below) was completed ahead of schedule to
 keep the rename diff mechanical before further families ship.
 
 This document captures the target architecture, the family roster, the
-engine matrix, and the phased rollout. Nothing in this file ships in v0.1
-beyond the new `tulpa_obs()` dispatcher and the family-object stubs.
+engine matrix, and the phased rollout as originally planned.
 
 ---
 

@@ -1,7 +1,7 @@
 # ============================================================================
 # Occupancy-specific diagnostics
 # Generic diagnostics (moran_i, durbin_watson, variogram, compare_models,
-# modelAverage) are in tulpa — inherited via tulpa_fit class.
+# model_average) are in tulpa — inherited via tulpa_fit class.
 # ============================================================================
 
 # Thread count for the parallel occu_cover pointwise-loglik kernel. An explicit
@@ -623,9 +623,31 @@ tobs_test_uniformity <- function(pit) {
   )
 }
 
+# The dispersion / zero-inflation / outlier GOF tests use single-season
+# detection-history semantics (per-site totals over an N x J 0/1/NA matrix, and
+# `== 1` detection counts for the outlier envelope). They mis-compute silently on
+# a 3D / long-form / cover response, so require the single-season occupancy
+# model_type and point elsewhere for the shapes that have a dedicated path.
+.tobs_gof_require_single <- function(object, fn) {
+  mt <- object$model$model_type %||% "NULL"
+  if (!identical(mt, "single")) {
+    hint <- if (inherits(object, "cover_fit") ||
+                identical(mt, "occu_cover")) {
+      " Use tobs_ppc() for cover() / occu_cover() fits."
+    } else {
+      paste0(" Multi-season, community, and count (abundance) goodness-of-fit ",
+             "tests are not implemented; use tobs_waic() for those families.")
+    }
+    stop(sprintf("%s supports single-season occupancy fits only (model_type = %s).%s",
+                 fn, mt, hint), call. = FALSE)
+  }
+  invisible(object)
+}
+
 #' @rdname tobs_gof_tests
 #' @export
 tobs_test_dispersion <- function(object, n.samples = 250) {
+  .tobs_gof_require_single(object, "tobs_test_dispersion")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   obs_var <- var(rowSums(y_obs * (y_obs >= 0), na.rm = TRUE))
   sim_vars <- vapply(sims, function(ys) var(rowSums(ys * (ys >= 0), na.rm = TRUE)), double(1))
@@ -636,6 +658,7 @@ tobs_test_dispersion <- function(object, n.samples = 250) {
 #' @rdname tobs_gof_tests
 #' @export
 tobs_test_zero_inflation <- function(object, n.samples = 250) {
+  .tobs_gof_require_single(object, "tobs_test_zero_inflation")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   count_zeros <- function(y) sum(apply(y, 1, function(r) { v <- r >= 0; all(r[v] == 0) }))
   obs <- count_zeros(y_obs); sim <- vapply(sims, count_zeros, integer(1))
@@ -646,6 +669,7 @@ tobs_test_zero_inflation <- function(object, n.samples = 250) {
 #' @rdname tobs_gof_tests
 #' @export
 tobs_test_outliers <- function(object, n.samples = 250) {
+  .tobs_gof_require_single(object, "tobs_test_outliers")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   n_sites <- nrow(y_obs)
   obs_det <- apply(y_obs, 1, function(r) sum(r[r >= 0] == 1))

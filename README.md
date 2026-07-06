@@ -79,7 +79,7 @@ A term enters whichever process it is written in (occupancy or detection); `copy
 
 ## Diagnostics
 
-WAIC, posterior predictive checks, PIT residuals, over-dispersion and zero-inflation tests, Moran's I, Durbin-Watson, variograms, and `spatialRange` / `temporalCorr` for the latent structure.
+WAIC, posterior predictive checks, PIT residuals, over-dispersion and zero-inflation tests, Moran's I, Durbin-Watson, variograms, and `spatial_range` / `temporal_corr` for the latent structure.
 
 ## Installation
 

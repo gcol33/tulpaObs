@@ -383,6 +383,18 @@
     return(fit)
   }
 
+  # Only the NUTS path reaches here (laplace / nested_laplace returned above).
+  # The occupancy NUTS spec threads `sigma_beta` but not a user `priors` object,
+  # so warn instead of silently ignoring a supplied prior. `priors = FALSE`
+  # ("disable the penalty") and the default `NULL` are not user priors.
+  if (!is.null(priors) && !isFALSE(priors)) {
+    warning("`priors` is not applied on the occupancy NUTS path and was ",
+            "ignored; the sampler uses the weakly-informative N(0, sigma.beta) ",
+            "coefficient prior (set via control$sigma.beta). Use ",
+            "method = \"laplace\" to apply an occu_priors() penalty.",
+            call. = FALSE)
+  }
+
   # spatial / temporal / re / svc / latent are produced by
   # .tobs_structures_from_model(), which guarantees their classes; no
   # user-input validation is needed here.
