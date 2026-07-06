@@ -13,6 +13,17 @@
 # The default (variable unset) runs everything, so CRAN and CI always see the
 # full recovery suite. Place skip_if_fast() as the first line of any test_that()
 # block whose cost is a multi-seed fitting loop or a NUTS sample.
+#
+# RELEASE GATE. The recovery loops carry the calibration evidence (estimators
+# recover simulated truth; intervals cover at the nominal rate). They are also
+# behind skip_on_cran(), so R CMD check runs plumbing only. devtools::test()
+# sets NOT_CRAN=true and, with TULPAOBS_FAST unset, runs the full recovery suite
+# -- running it green is a HARD pre-release gate:
+#
+#   Sys.unsetenv("TULPAOBS_FAST"); Sys.setenv(NOT_CRAN = "true"); devtools::test()
+#
+# (The recovery paths call the tulpa engine, so verify the shared tulpa
+# dep / Remotes pin from a clean library before release.)
 skip_if_fast <- function() {
   if (identical(Sys.getenv("TULPAOBS_FAST"), "1")) {
     testthat::skip("TULPAOBS_FAST set: skipping slow recovery/coverage loop")
