@@ -271,7 +271,14 @@ by= batch reduced to one species, so you no longer hand-build the two
 responses and align them. The arms default to the compact (ragged) layout
 on the nested-Laplace route (no per-site visit cap); set
 \code{control$compact = FALSE} for the dense grid. See \code{\link[=occu_cover_inputs]{occu_cover_inputs()}} to
-build and inspect the arms without fitting.}
+build and inspect the arms without fitting.
+
+The long-frame \verb{response =} here names a COLUMN of \code{data} (the pivot key
+holding the detection / cover values). It is a separate argument from the
+positive-part distribution the family constructor takes
+(\code{cover(response = "beta")}, \code{occu_cover(response = "lognormal")}), which
+selects the cover-arm likelihood rather than a data column. Both may appear
+in one call -- \code{tobs(long, family = cover(response = "beta"), site = , response = "cover.flat", ...)} -- and do not interact.}
 
 \item{...}{family-specific named arguments forwarded to the underlying
 engine builder.}

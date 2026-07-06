@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.0.100 (2026-07-06)
+
+* `cover()` gains per-component `copy(spatial(), terms = list(intercept = ,
+  trend = ))`, matching `occu_cover()`'s grammar: the presence field's intercept
+  and weighted-trend blocks can now couple onto the positive arm with
+  independent amplitude grids (`control$alpha.grid` / `control$alpha.grid.trend`)
+  instead of one shared amplitude. The whole-field forms
+  (`copy(spatial())`, `copy(spatial(), alpha = )`) are unchanged and stay
+  byte-identical. Per-component `terms =` must address every field block, and a
+  `trend` component named against an intercept-only field errors.
+* Tests: the `cover()` copy-coupling amplitude handoff (the alpha ->
+  `control$alpha.grid[.trend]` path) is now covered end-to-end -- whole-field
+  `copy(alpha = )` byte-matches the shared-formula + control spelling,
+  per-component `terms =` with equal grids byte-matches the whole-field form,
+  and a decoupled `terms =` byte-matches the explicit control grids while
+  differing from the coupled fit. The occu_cover cover-arm INTERCEPT field SD
+  (the base per-cell cover-arm map, the direct deliverable) now has a
+  parameter-recovery test, alongside the existing trend-field recovery.
+* Docs: `?tobs` disambiguates the two `response` arguments -- the long-frame
+  pivot `response =` (a column of `data`) versus the family constructor's
+  `response =` (the positive-part distribution), which can coexist in one call.
+
 ## 0.0.99 (2026-07-06)
 
 * `tobs()` documents the `positive` argument (the cover-hurdle positive-arm

@@ -196,6 +196,45 @@ test_that("occu_cover cover-arm trend field SD recovers across seeds", {
 })
 
 
+# --- recovery: the cover-arm INTERCEPT field SD is recovered ------------------
+# The trend-field amplitude above is recovered, but the arm-specific cover
+# INTERCEPT field SD -- the base per-cell cover-arm map that is the direct
+# deliverable (Michael's cover-arm field estimates) -- was only ever bounded
+# (finite, positive), never checked against truth. The field is drawn from the
+# proper ICAR generative model with the engine's own scaling
+# (simulate_occu_cover -> draw_field()), so sigma_pos_int is truth in the
+# engine's parameterization and the estimate recovers apples-to-apples (a mild
+# Laplace variance-component shrinkage aside).
+
+test_that("occu_cover cover-arm intercept field SD recovers across seeds", {
+  skip_if_fast()
+  skip_on_cran()
+
+  adj <- .pf_grid_adj(8L)
+  N   <- nrow(adj)
+  truth <- 0.6
+  seeds <- 1:6
+  rec <- vapply(seeds, function(s) {
+    sim <- simulate_occu_cover(
+      N = N, J = 6L, positive = "lognormal",
+      beta_occ = c(qlogis(0.6), 0.3), beta_p = c(qlogis(0.65), 0.1),
+      beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3,
+      adj = adj, sigma = 0.5, alpha = 0.0,
+      pos_field = TRUE, sigma_pos_int = truth, sigma_pos_trend = 0.0, seed = s)
+    fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+                   positive = ~ 1 + spatial(~ 1 || cell, graph = adj))
+    nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)[1L]
+    fit$means[[nm]]
+  }, numeric(1))
+
+  expect_true(all(is.finite(rec)))
+  # Median tracks truth to within 20% (measured ~8% downward shrinkage).
+  expect_lt(abs(stats::median(rec) - truth) / truth, 0.20)
+  # No collapse to zero and no runaway -- the amplitude, not just the shape.
+  expect_true(all(rec > 0.4 & rec < 0.85))
+})
+
+
 # --- placement: a field in the positive formula is the arm-specific cover field --
 
 test_that("a spatial field in the positive formula is the arm-specific cover field", {

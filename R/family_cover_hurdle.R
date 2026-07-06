@@ -75,15 +75,23 @@
   re       <- enc$re
 
   # A copy() in a per-arm positive formula sets the cross-arm coupling-amplitude
-  # grid the presence field is transferred onto the positive arm with. NULL (the
-  # copy(spatial()) default) leaves control untouched, so the fitter's default
-  # alpha grid applies -- byte-identical to the shared to = both spelling.
-  if (!is.null(enc$copy_alpha)) {
+  # grid(s) the presence field is transferred onto the positive arm with. The
+  # whole-field form (copy(spatial()) / copy(spatial(), alpha = )) sets one grid
+  # on both the intercept (alpha.grid) and trend (alpha.grid.trend) blocks; a
+  # bare copy(spatial()) with no alpha leaves control untouched so the fitter's
+  # default grid applies (byte-identical to the shared to = both spelling). The
+  # per-component form copy(spatial(), terms = list(intercept = , trend = ))
+  # sets each block's grid independently, so the intercept and trend decouple --
+  # mirroring occu_cover()'s per-component copy grammar.
+  if (!is.null(enc$copy_alpha) || !is.null(enc$copy_terms)) {
     if (any(c("alpha.grid", "alpha.grid.trend") %in% names(control))) {
-      stop("cover(): set the cross-arm coupling with copy(alpha = ) in the ",
-           "positive formula OR control$alpha.grid[.trend], not both.",
-           call. = FALSE)
+      stop("cover(): set the cross-arm coupling with copy() in the positive ",
+           "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
     }
+  }
+  if (!is.null(enc$copy_terms)) {
+    control <- .cover_apply_copy_terms(enc$copy_terms, enc$trend, control)
+  } else if (!is.null(enc$copy_alpha)) {
     control$alpha.grid       <- as.numeric(enc$copy_alpha)
     control$alpha.grid.trend <- as.numeric(enc$copy_alpha)
   }
@@ -205,6 +213,7 @@ encode_cover_hurdle <- function(formula, data, y,
   # with copy(). When per-arm formulas are absent this branch is skipped, so the
   # shared path is untouched.
   copy_alpha <- NULL
+  copy_terms_alpha <- NULL
   per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
   if (per_arm) {
     if (is.null(presence_formula) || is.null(positive_formula)) {
@@ -237,6 +246,7 @@ encode_cover_hurdle <- function(formula, data, y,
       lift_occ$fields <- promo$fields
       occ_arm          <- promo$arm
       copy_alpha       <- promo$alpha
+      copy_terms_alpha <- promo$alpha_terms
     }
     fe_occ_formula <- lift_occ$fe
     fe_pos_formula <- lift_pos$fe
@@ -392,6 +402,7 @@ encode_cover_hurdle <- function(formula, data, y,
     fe_pos       = fe_pos_formula,
     per_arm      = per_arm,
     copy_alpha   = copy_alpha,
+    copy_terms   = copy_terms_alpha,
     positive     = positive,
     breaks       = if (positive == "ordinal") as.numeric(breaks) else NULL,
     oi           = oi,
@@ -586,11 +597,6 @@ encode_cover_hurdle <- function(formula, data, y,
          "yet wired for cover().", call. = FALSE)
   }
   cp <- copies[[1L]]
-  if (!is.null(cp$copy_terms)) {
-    stop("cover(): copy(terms = ) per-component coupling is not yet wired for ",
-         "cover(); use copy(spatial()) or copy(spatial(), alpha = grid(...)) to ",
-         "couple the whole presence field.", call. = FALSE)
-  }
   if (is.null(cp$selector_type)) {
     stop("cover(): copy() must select the presence spatial field, e.g. ",
          "copy(spatial()); a field-name string is not a coupling selector here.",
@@ -601,8 +607,80 @@ encode_cover_hurdle <- function(formula, data, y,
          "copy onto the positive arm, e.g. ",
          "presence = ~ x + spatial(~ 1 || cell, graph = adj).", call. = FALSE)
   }
-  alpha_grid <- if (is.na(cp$alpha_integrate)) NULL else cp$alpha_grid
-  list(fields = occ_fields, arm = c("presence", "positive"), alpha = alpha_grid)
+  # Per-component coupling: copy(terms = list(<component> = ...)) couples each
+  # field block (intercept, weighted trend) with its own amplitude grid, so the
+  # two can decouple. Resolved here into a named list of grids (NULL = the
+  # fitter's default grid); the trend-block-existence check runs downstream in
+  # .dispatch_cover, where the encoded field is known. The whole-field form
+  # (no terms) keeps its single amplitude, applied to both blocks.
+  alpha_terms <- if (!is.null(cp$copy_terms)) {
+    lapply(cp$copy_terms, function(res)
+      if (isTRUE(is.na(res$integrate))) NULL else res$grid)
+  } else NULL
+  alpha_grid <- if (!is.null(cp$copy_terms)) NULL
+                else if (is.na(cp$alpha_integrate)) NULL
+                else cp$alpha_grid
+  list(fields = occ_fields, arm = c("presence", "positive"),
+       alpha = alpha_grid, alpha_terms = alpha_terms)
+}
+
+# Map a copy(terms = list(...)) per-component amplitude spec onto the fitter's
+# per-block coupling grids: the presence field's intercept block reads
+# control$alpha.grid, the weighted-trend block reads control$alpha.grid.trend
+# (see the joint-coupled cover fitter: base_block = block 1, trend_block =
+# block 2). `trend` is the resolved weighted-trend field (NULL when the presence
+# field is a single intercept). Every existing block must be named, so no block
+# is silently left at the default -- mirroring .occu_cover_apply_copy_coupling().
+.cover_apply_copy_terms <- function(copy_terms, trend, control) {
+  has_trend   <- !is.null(trend)
+  trend_label <- if (has_trend) trend$label else NULL
+
+  grids <- list()   # canonical role ("intercept" / "trend") -> amplitude grid
+  for (k in names(copy_terms)) {
+    role <- if (identical(k, "intercept")) {
+      "intercept"
+    } else if (identical(k, "trend") ||
+               (!is.null(trend_label) && identical(k, trend_label))) {
+      "trend"
+    } else {
+      NA_character_
+    }
+    if (is.na(role)) {
+      avail <- if (has_trend) {
+        sprintf("\"intercept\", \"trend\" (or \"%s\")", trend_label)
+      } else "\"intercept\""
+      stop(sprintf(paste0(
+        "cover(): copy(terms = ): unknown field component \"%s\". ",
+        "Name %s."), k, avail), call. = FALSE)
+    }
+    if (identical(role, "trend") && !has_trend) {
+      stop("cover(): copy(terms = ) names a \"trend\" component, but the ",
+           "presence field has no weighted trend block (it is a single ",
+           "intercept field). Drop the trend component or add a weighted areal ",
+           "term, e.g. spatial(~ 1 + time.sc || cell, graph = adj).",
+           call. = FALSE)
+    }
+    grids[[role]] <- copy_terms[[k]]
+  }
+
+  required <- c("intercept", if (has_trend) "trend")
+  missing_roles <- setdiff(required, names(grids))
+  if (length(missing_roles)) {
+    stop(sprintf(paste0(
+      "cover(): copy(terms = ) must give an amplitude for every field block; ",
+      "%s left unaddressed. Field blocks: %s."),
+      paste0("\"", missing_roles, "\"", collapse = ", "),
+      paste0("\"", required, "\"", collapse = ", ")), call. = FALSE)
+  }
+
+  # NULL grid = the fitter's default (assigning NULL drops the control element).
+  control$alpha.grid <- if (is.null(grids$intercept)) NULL
+                        else as.numeric(grids$intercept)
+  if (has_trend) {
+    control$alpha.grid.trend <- if (is.null(grids$trend)) NULL
+                                else as.numeric(grids$trend)
+  }
+  control
 }
 
 # Parse a cover() formula against the NA-dropped observations.

@@ -3,8 +3,11 @@
 #
 # `cover(presence = ~ ..., positive = ~ ...)` gives each hurdle arm its own fixed
 # effects (two independent designs), while the single shared `formula` stays the
-# back-compat spelling. Structured terms in a per-arm formula are rejected in this
-# first cut (fields go on the shared formula with `to =`).
+# back-compat spelling. A spatial field placed in a per-arm formula is that arm's
+# field; copy(spatial()) in the `positive` formula couples the presence field
+# onto the positive arm. The coupling amplitude is one grid for the whole field
+# (copy(spatial(), alpha = )) or per-component (copy(spatial(), terms = list(
+# intercept = , trend = ))) so the intercept and trend blocks can decouple.
 # =============================================================================
 
 .cp_sim <- function(seed = 1L, N = 3000L) {
@@ -150,4 +153,153 @@ test_that("only one per-arm formula errors (need both, or the shared one)", {
     tobs(presence = ~ x1, family = cover(response = "beta"),
          data = s$data, y = s$y, method = "laplace"),
     "BOTH")
+})
+
+
+# ---------------------------------------------------------------------------
+# copy() coupling-amplitude handoff (whole-field + per-component decoupling).
+# Guards the alpha -> control$alpha.grid[.trend] handoff the roadmap flagged as
+# untested, and the per-component grammar that lets cover()'s intercept and
+# trend blocks decouple (parity with occu_cover()).
+# ---------------------------------------------------------------------------
+
+# 6x6 grid with a shared intercept field u0 and a shared trend field u1
+# (weighted by t), both driving occupancy and cover. The presence formula's
+# `spatial(~ 1 + t || cell)` bar carries both blocks; copy() transfers them.
+.cov_trend_sim <- function(seed = 11L, side = 6L, reps = 12L) {
+  nc <- side * side
+  adj <- matrix(0L, nc, nc)
+  idx <- function(r, c) (r - 1L) * side + c
+  for (r in seq_len(side)) for (c in seq_len(side)) {
+    if (r > 1L)   adj[idx(r, c), idx(r - 1L, c)] <- 1L
+    if (r < side) adj[idx(r, c), idx(r + 1L, c)] <- 1L
+    if (c > 1L)   adj[idx(r, c), idx(r, c - 1L)] <- 1L
+    if (c < side) adj[idx(r, c), idx(r, c + 1L)] <- 1L
+  }
+  set.seed(seed); cell <- rep(seq_len(nc), each = reps); N <- length(cell)
+  x <- stats::rnorm(N); tt <- stats::rnorm(N)
+  u0 <- stats::rnorm(nc, sd = 0.6)[cell]; u1 <- stats::rnorm(nc, sd = 0.4)[cell]
+  pres <- stats::rbinom(N, 1L, stats::plogis(0.2 + 0.5 * x + u0 + tt * u1))
+  mu   <- stats::plogis(0.3 * x + 0.7 * u0 + 0.5 * tt * u1)
+  y <- numeric(N); pos <- pres == 1L
+  y[pos] <- stats::rbeta(sum(pos), mu[pos] * 15, (1 - mu[pos]) * 15); y[y >= 1] <- 1 - 1e-6
+  list(data = data.frame(x = x, t = tt, cell = cell), y = y, adj = adj)
+}
+
+# Byte-equality across every numeric fit field (NA-in-both and timings excluded).
+.cover_fit_equal <- function(a, b, tol = 1e-8) {
+  common  <- intersect(names(a), names(b))
+  varying <- grepl("time|elapsed|second|runtime", common, ignore.case = TRUE)
+  checked <- 0L
+  for (nm in common[!varying]) {
+    av <- a[[nm]]; bv <- b[[nm]]
+    if (is.numeric(av) && is.numeric(bv) && length(av) == length(bv) && length(av) > 0L) {
+      keep <- !(is.na(av) & is.na(bv))
+      if (any(keep)) {
+        expect_equal(unname(av[keep]), unname(bv[keep]), tolerance = tol, info = nm)
+        checked <- checked + 1L
+      }
+    }
+  }
+  checked
+}
+
+test_that("cover() whole-field copy(alpha = grid()) == the shared-formula + control handoff", {
+  skip_on_cran()
+  s <- .cov_trend_sim(); g <- c(0, 0.5, 1)
+  ctrl <- list(progress = FALSE, integration = "ccd")
+
+  fit_copy <- suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), alpha = grid(g)),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl))
+  fit_ctrl <- suppressWarnings(tobs(
+    ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace",
+    control = c(ctrl, list(alpha.grid = g, alpha.grid.trend = g))))
+
+  expect_s3_class(fit_copy, "cover_fit")
+  expect_gt(.cover_fit_equal(fit_copy, fit_ctrl), 3L)
+})
+
+test_that("cover() per-component copy(terms=) with equal grids == the whole-field copy(alpha=)", {
+  skip_on_cran()
+  s <- .cov_trend_sim(); g <- c(0, 0.5, 1)
+  ctrl <- list(progress = FALSE, integration = "ccd")
+
+  fit_terms <- suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), terms = list(intercept = grid(g), trend = grid(g))),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl))
+  fit_whole <- suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), alpha = grid(g)),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl))
+
+  expect_gt(.cover_fit_equal(fit_terms, fit_whole), 3L)
+})
+
+test_that("cover() per-component copy(terms=) decouples the intercept and trend blocks", {
+  skip_on_cran()
+  s <- .cov_trend_sim(); g <- c(0, 0.5, 1)
+  ctrl <- list(progress = FALSE, integration = "ccd")
+
+  # intercept coupled on grid g, trend pinned at alpha = 0 (decoupled).
+  fit_dec <- suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), terms = list(intercept = grid(g), trend = 0)),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl))
+  # The low-level control spelling of the same coupling.
+  fit_ctrl <- suppressWarnings(tobs(
+    ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace",
+    control = c(ctrl, list(alpha.grid = g, alpha.grid.trend = 0))))
+  # Whole-field coupling of BOTH blocks -- must differ from the decoupled fit.
+  fit_whole <- suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), alpha = grid(g)),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl))
+
+  # Per-component grids map exactly onto control$alpha.grid[.trend].
+  expect_gt(.cover_fit_equal(fit_dec, fit_ctrl), 3L)
+  # Decoupling the trend genuinely changes the fit.
+  lm_dec   <- fit_dec$log_marginal   %||% fit_dec$logLik
+  lm_whole <- fit_whole$log_marginal %||% fit_whole$logLik
+  if (!is.null(lm_dec) && !is.null(lm_whole)) expect_false(isTRUE(all.equal(lm_dec, lm_whole)))
+})
+
+test_that("cover() copy(terms=) rejects unknown, incomplete, and no-trend component specs", {
+  s <- .cov_trend_sim(reps = 4L)
+  ctrl <- list(progress = FALSE, integration = "ccd")
+
+  # Unknown component name.
+  expect_error(suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), terms = list(intercept = grid(c(0, 1)), slope = 0)),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl)),
+    "unknown field component")
+
+  # Incomplete: trend block left unaddressed.
+  expect_error(suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), terms = list(intercept = grid(c(0, 1)))),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl)),
+    "every field block")
+
+  # A "trend" component named when the presence field is intercept-only.
+  expect_error(suppressWarnings(tobs(
+    presence = ~ x + spatial(~ 1 || cell, graph = s$adj),
+    positive = ~ x + copy(spatial(), terms = list(intercept = grid(c(0, 1)), trend = 0)),
+    family = cover(response = "beta"), data = s$data, y = s$y,
+    method = "nested_laplace", control = ctrl)),
+    "no weighted trend block")
 })

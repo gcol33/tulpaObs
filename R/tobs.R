@@ -244,6 +244,14 @@
 #'   on the nested-Laplace route (no per-site visit cap); set
 #'   `control$compact = FALSE` for the dense grid. See [occu_cover_inputs()] to
 #'   build and inspect the arms without fitting.
+#'
+#'   The long-frame `response =` here names a COLUMN of `data` (the pivot key
+#'   holding the detection / cover values). It is a separate argument from the
+#'   positive-part distribution the family constructor takes
+#'   (`cover(response = "beta")`, `occu_cover(response = "lognormal")`), which
+#'   selects the cover-arm likelihood rather than a data column. Both may appear
+#'   in one call -- `tobs(long, family = cover(response = "beta"), site = ,
+#'   response = "cover.flat", ...)` -- and do not interact.
 #' @param ... family-specific named arguments forwarded to the underlying
 #'   engine builder.
 #'
