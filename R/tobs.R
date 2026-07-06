@@ -18,7 +18,7 @@
 #'   cover hurdle ([occu_cover()] / [cover()]), reading symmetrically with
 #'   `detection` and `positive`. The front-door name for `formula`; supply one
 #'   of the two.
-#' @param response positive-arm (cover) formula for [occu_cover()], e.g.
+#' @param positive positive-arm (cover) formula for [occu_cover()], e.g.
 #'   `~ time.sc + habitat`. The occurrence spatial field is carried onto this arm
 #'   with a `copy()` selector, the INLA-style cross-arm edge written in the
 #'   formula. The selector is a constructor, so no field name is needed in the

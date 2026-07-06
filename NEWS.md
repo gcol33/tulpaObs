@@ -1,5 +1,13 @@
 # tulpaObs NEWS
 
+## 0.0.99 (2026-07-06)
+
+* `tobs()` documents the `positive` argument (the cover-hurdle positive-arm
+  formula) under its own name. The roxygen entry carried the stale `response`
+  label left over from the 0.0.95 family-constructor rename, so the generated
+  help documented a `response` argument absent from the signature and left the
+  real `positive` formal undocumented. Documentation only; no change to fitting.
+
 ## 0.0.98 (2026-07-03)
 
 * `glance()` now reports `pareto_k_is_ess` as the numeric importance-sampling
