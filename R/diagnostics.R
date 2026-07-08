@@ -183,6 +183,18 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "ms_nmix")) {
     return(.tobs_ploglik_ms_nmix(object, nd, n.threads = n.threads))
   }
+  # Royle-Nichols: the exact per-site Poisson-marginal over the posterior draws
+  # (R/royle_nichols.R).
+  if (identical(object$model$model_type %||% "NULL", "royle_nichols")) {
+    return(.tobs_ploglik_royle_nichols(object, nd, n.threads = n.threads))
+  }
+  # Community occupancy (ms_occu / ms_dyn_occu / ms_int_occu): per-(species,
+  # site) marginal scored over the community-mean pseudo-draws with per-species
+  # BLUP deviations plugged in (R/community_ploglik.R).
+  if ((object$model$model_type %||% "NULL") %in%
+      c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
+    return(.tobs_ploglik_ms_community(object, nd, n.threads = n.threads))
+  }
 
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {
@@ -227,6 +239,16 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   }
   if (identical(object$model$model_type %||% "NULL", "occu_cover")) {
     return(.tobs_occu_cover_loglik_at_mean(object, n.draws))
+  }
+  if ((object$model$model_type %||% "NULL") %in%
+      c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
+    return(.tobs_community_loglik_at_mean(object))
+  }
+  if (identical(object$model$model_type %||% "NULL", "royle_nichols")) {
+    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
+                        dimnames = list(NULL, colnames(object$draws)))
+    obj_mean  <- object; obj_mean$draws <- mean_draw
+    return(as.numeric(.tobs_ploglik_royle_nichols(obj_mean, n.draws = 1L)))
   }
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {
@@ -635,8 +657,10 @@ tobs_test_uniformity <- function(pit) {
                 identical(mt, "occu_cover")) {
       " Use tobs_ppc() for cover() / occu_cover() fits."
     } else {
-      paste0(" Multi-season, community, and count (abundance) goodness-of-fit ",
-             "tests are not implemented; use tobs_waic() for those families.")
+      paste0(" Multi-season and community goodness-of-fit tests are not ",
+             "implemented; use tobs_waic() for those families. (The count ",
+             "families abun / removal / distance / dyn_abun have per-site-total ",
+             "dispersion / zero-inflation / outlier tests.)")
     }
     stop(sprintf("%s supports single-season occupancy fits only (model_type = %s).%s",
                  fn, mt, hint), call. = FALSE)
@@ -647,6 +671,9 @@ tobs_test_uniformity <- function(pit) {
 #' @rdname tobs_gof_tests
 #' @export
 tobs_test_dispersion <- function(object, n.samples = 250) {
+  if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
+    return(.tobs_test_dispersion_count(object, n.samples))
+  }
   .tobs_gof_require_single(object, "tobs_test_dispersion")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   obs_var <- var(rowSums(y_obs * (y_obs >= 0), na.rm = TRUE))
@@ -658,6 +685,9 @@ tobs_test_dispersion <- function(object, n.samples = 250) {
 #' @rdname tobs_gof_tests
 #' @export
 tobs_test_zero_inflation <- function(object, n.samples = 250) {
+  if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
+    return(.tobs_test_zero_inflation_count(object, n.samples))
+  }
   .tobs_gof_require_single(object, "tobs_test_zero_inflation")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   count_zeros <- function(y) sum(apply(y, 1, function(r) { v <- r >= 0; all(r[v] == 0) }))
@@ -669,6 +699,9 @@ tobs_test_zero_inflation <- function(object, n.samples = 250) {
 #' @rdname tobs_gof_tests
 #' @export
 tobs_test_outliers <- function(object, n.samples = 250) {
+  if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
+    return(.tobs_test_outliers_count(object, n.samples))
+  }
   .tobs_gof_require_single(object, "tobs_test_outliers")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   n_sites <- nrow(y_obs)

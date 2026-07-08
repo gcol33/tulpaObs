@@ -7,12 +7,12 @@
 \format{
 A data frame with 150 rows (one per plot) and columns:
 \describe{
-  \item{plot}{Plot identifier (factor).}
-  \item{year}{Survey year (2018-2020).}
-  \item{year_c}{Survey year centred on its mean.}
-  \item{moisture}{Standardised soil-moisture index.}
-  \item{grazing}{Standardised grazing-pressure index.}
-  \item{cover}{Recorded cover as a proportion in \code{[0, 1]} (0 where absent).}
+\item{plot}{Plot identifier (factor).}
+\item{year}{Survey year (2018-2020).}
+\item{year_c}{Survey year centred on its mean.}
+\item{moisture}{Standardised soil-moisture index.}
+\item{grazing}{Standardised grazing-pressure index.}
+\item{cover}{Recorded cover as a proportion in \verb{[0, 1]} (0 where absent).}
 }
 }
 \usage{
@@ -22,7 +22,7 @@ meadow_cover
 A vegetation cover-hurdle dataset for 150 grassland plots surveyed across
 three years, drawn from a known generative model: the species occurs with a
 probability driven by \code{moisture}, and where it occurs, its conditional cover
-(a Beta-distributed proportion in \code{(0, 1)}) increases with \code{moisture} and
+(a Beta-distributed proportion in \verb{(0, 1)}) increases with \code{moisture} and
 decreases with \code{grazing}. Roughly half the plots record zero cover. \code{year_c}
 is the centred survey year, so \code{\link[=within_between]{within_between()}} can split the cross-plot
 baseline from the within-plot temporal deviation. Synthetic, not field data;

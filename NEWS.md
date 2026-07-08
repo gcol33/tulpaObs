@@ -1,5 +1,66 @@
 # tulpaObs NEWS
 
+## 0.0.103 (2026-07-08)
+
+Performance (occu_cover joint fit):
+
+  Detection-pattern compression on the coupled nested-Laplace fit. Within a
+  site, all-undetected visits that share a detection design row enter the
+  occupancy mixture only through prod_v (1 - p_v) = prod_u (1 - p_u)^{w_u}, so
+  they collapse to one row of multiplicity w_u carried in the p arm's existing
+  n_trials slot; detected visits stay individual (each keeps its own per-visit
+  cover, so the cover arm and its alignment are untouched). This is exact
+  sufficient statistics, not an approximation: the compressed fit matches the
+  uncompressed fit to floating point (equivalence test in
+  test-occu-cover-compact.R; on the MOT-scale detection design the 923k plots
+  reduce to ~298k unique rows, and the large all-undetected cells collapse
+  30-65x). On by default for the single-species path; off for the batched fused
+  solve (per-species detection differs, so nodet rows are not exchangeable
+  across species). getOption("tulpaObs.compress_nodet", TRUE) forces the
+  uncompressed build for an equivalence check. No tulpa engine change (the
+  weight rides the coupled arm's n_trials, already plumbed to CellResponse).
+
+## 0.0.102 (2026-07-07)
+
+New family:
+
+* **`royle_nichols()`** -- Royle-Nichols occupancy (Royle & Nichols 2003;
+  `unmarked::occuRN`): occupancy with abundance-induced detection heterogeneity,
+  `N_i ~ Poisson(lambda_i)`, `detect ~ Bernoulli(1 - (1 - r_i)^{N_i})`. The latent
+  `N` marginalises in closed form (a Poisson sum), so the exact marginal is
+  maximised with an observed-information vcov. Site-level detection, `laplace`
+  only for this first ship (`R/royle_nichols.R`). Parameter recovery validated
+  over seeds (< 5% bias, ~0.92-1.00 CI coverage); full `fitted()` / `predict()` /
+  `residuals()` / `tobs_waic()` / `tobs_dic()` / `tobs_cpo()` and a
+  `simulate_royle_nichols()` generator.
+
+Post-fit coverage: the S3 and diagnostic surface now spans the family set, closing
+the gaps where whole family clusters had no prediction or goodness-of-fit.
+
+* `tobs_waic()` / `tobs_dic()` / `tobs_cpo()` now work on the community-occupancy
+  families (`ms_occu()`, `ms_dyn_occu()`, `ms_int_occu()`), which previously
+  errored. The per-(species, site) marginal is scored over the community-mean
+  pseudo-draws with the per-species BLUP deviations plugged in; the two-state
+  marginal reproduces the C++ single-season kernel column-for-column
+  (`R/community_ploglik.R`).
+* `predict()` and `residuals()` now work on the community-occupancy families
+  (per-species occupancy / detection, and per-species occupancy residuals)
+  instead of raising a "not implemented" error.
+* `jsdm()` gains `fitted()` / `predict()` / `residuals()` (per-species occupancy
+  probability and presence residuals); previously `fitted()` errored.
+* The count families (`abun()`, `removal()`, `distance()`, `dyn_abun()`) gain
+  `tobs_test_dispersion()` / `tobs_test_zero_inflation()` / `tobs_test_outliers()`,
+  scored on the per-site total count -- the natural overdispersion / excess-zero
+  unit for an N-mixture-type model. They were previously gated to single-season
+  occupancy.
+* `tobs_predict_spatial()`, `predict(terms = )`, and `tobs_marginal_effect()` now
+  apply the state process's inverse link, so a count fit returns the abundance
+  intensity instead of a silently mis-linked logit-of-log-lambda.
+  `tobs_marginal_effect(process = "abundance")` is now available.
+* `tobs_richness()` now accepts all three community-occupancy families (not only
+  `ms_occu()`); for the dynamic family it reports first-season richness.
+* New simulator `simulate_jsdm()`, completing the per-family simulator set.
+
 ## 0.0.101 (2026-07-07)
 
 * Adds three packaged example datasets (`foray_counts`, `meadow_cover`,

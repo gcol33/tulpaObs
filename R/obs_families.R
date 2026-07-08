@@ -752,6 +752,41 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 }
 
 
+#' Royle-Nichols occupancy family
+#'
+#' Occupancy with abundance-induced detection heterogeneity (Royle & Nichols
+#' 2003; \pkg{unmarked} `occuRN`). Latent abundance `N_i ~ Poisson(lambda_i)`
+#' drives the per-visit detection probability `1 - (1 - r_i)^{N_i}`, where `r_i`
+#' is the per-individual detection probability. The state `formula` models
+#' `log lambda` (abundance); `detection` models `logit r` at the site level. The
+#' latent `N` marginalises in closed form (a Poisson sum to `K_max`), so the fit
+#' maximises the exact marginal with an observed-information vcov.
+#'
+#' @param K_max Upper summation bound for the latent abundance (default: a
+#'   data-driven Poisson-tail guess).
+#' @return A `tobs_family` object for [tobs()].
+#' @examples
+#' \donttest{
+#' sim <- simulate_royle_nichols(N = 150, J = 5, seed = 1)
+#' fit <- tobs(~ x, data = sim$data, family = royle_nichols(),
+#'             detection = ~ 1, y = sim$y, control = list(verbose = FALSE))
+#' coef(fit)
+#' }
+#' @export
+royle_nichols <- function(K_max = NULL) {
+  obs_family(
+    name           = "royle_nichols",
+    class_long     = "Royle-Nichols occupancy",
+    latent         = "poisson",
+    observation    = "bernoulli_N",
+    replicates     = "required",
+    default_engine = "laplace",
+    status         = "working",
+    params         = list(K_max = K_max)
+  )
+}
+
+
 #' Multispecies N-mixture family
 #'
 #' Per-species N-mixture with shared community-level hyperparameters.

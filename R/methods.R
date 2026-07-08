@@ -344,6 +344,9 @@ fitted.tobs_fit <- function(object, ...) {
   if (identical(model$model_type, "fp_occu")) return(.tobs_fitted_fp_occu(object))
   if (identical(model$model_type, "dyn_abun")) return(.tobs_fitted_dyn_abun(object))
   if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
+  if (identical(model$model_type, "royle_nichols"))
+    return(.tobs_fitted_royle_nichols(object))
+  if (identical(model$model_type, "jsdm")) return(.tobs_fitted_jsdm(object))
   if (identical(model$model_type, "ms_occu")) {
     return(.tobs_fitted_ms_occu(object))
   }
@@ -517,10 +520,14 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   if (identical(object$model$model_type, "dyn_abun")) {
     return(.tobs_residuals_dyn_abun(object, type))
   }
+  if (identical(object$model$model_type, "royle_nichols")) {
+    return(.tobs_residuals_royle_nichols(object, type))
+  }
   if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
-    stop(sprintf(paste0("residuals() is not defined for %s() community fits; ",
-         "use fitted() / ranef() / coef()."), object$model$model_type),
-         call. = FALSE)
+    return(.tobs_residuals_ms_community(object, type))
+  }
+  if (identical(object$model$model_type, "jsdm")) {
+    return(.tobs_residuals_jsdm(object, type))
   }
   fit_vals <- fitted(object)
   model <- object$model
@@ -609,6 +616,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   }
   if (identical(model$model_type, "dyn_abun")) {
     return(.tobs_simulate_dyn_abun(object, nsim))
+  }
+  if (identical(model$model_type, "royle_nichols")) {
+    return(.tobs_simulate_royle_nichols(object, nsim))
   }
   if (identical(model$model_type, "ms_nmix")) {
     return(.tobs_simulate_ms_nmix(object, nsim))
@@ -757,6 +767,12 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (identical(da_type, "abundance")) da_type <- "lambda"
     return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type))
   }
+  if (identical(object$model$model_type, "royle_nichols")) {
+    rn_type <- if (missing(type) || length(type) > 1L) "abundance" else type
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_royle_nichols(object, newdata = nd, type = rn_type))
+  }
   # occu_cover joint fit: the response types are occurrence / cover_cond /
   # cover_exp / change, so route before the occupancy match.arg(type) rejects
   # them. `newdata` (or the positional `X.0` when a data.frame) carries the
@@ -796,10 +812,15 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     return(.tobs_ms_ocs_predict_state(object, oc_type))
   }
   if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
-    stop(sprintf(paste0("predict() is not yet implemented for %s(). Use ",
-         "fitted() for per-species occupancy / detection probabilities, ",
-         "coef() / summary() for the community means, and ranef() for the ",
-         "per-species deviations."), object$model$model_type), call. = FALSE)
+    ms_type <- if (missing(type) || length(type) > 1L) "occupancy" else type
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_ms_community(object, newdata = nd, type = ms_type))
+  }
+  if (identical(object$model$model_type, "jsdm")) {
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_jsdm(object, newdata = nd))
   }
   # Standalone occu() SVC fit rerouted through the joint direct-grid engine
   # (gcol33/tulpaObs#81): the occupancy psi / detection p / per-cell change carry
@@ -896,12 +917,17 @@ predict_terms <- function(object, terms, type, quantiles, n_points) {
   X_pred <- matrix(colMeans(X_orig), nrow = n_points, ncol = p_proc, byrow = TRUE)
   X_pred[, col_idx] <- x_grid
 
-  # Predict from each draw
+  # Predict from each draw, on the process's response scale (logit -> probability
+  # for occupancy / detection, log -> intensity for abundance).
+  link <- pi_list[[proc_idx]]$link %||% "logit"
+  inv_link <- switch(link, logit = plogis, log = exp, identity = identity,
+                     stop("predict_terms: unsupported link '", link, "'.",
+                          call. = FALSE))
   n_draws <- nrow(draws)
   pred_draws <- matrix(NA_real_, n_draws, n_points)
   for (s in seq_len(n_draws)) {
     beta <- draws[s, beta_offset + seq_len(p_proc)]
-    pred_draws[s, ] <- plogis(as.vector(X_pred %*% beta))
+    pred_draws[s, ] <- inv_link(as.vector(X_pred %*% beta))
   }
 
   result <- data.frame(
@@ -946,30 +972,64 @@ plot.tobs_prediction <- function(x, ...) {
 }
 
 #' Compute marginal effect of a covariate
+#'
+#' Returns the fitted response over the range of one covariate, holding the
+#' others at their means, on the process's response scale (occupancy /
+#' detection probability, or abundance intensity).
 #' @param object A `tobs_fit` object.
 #' @param covariate Name of covariate.
-#' @param process `"occupancy"` (default) or `"detection"`.
+#' @param process `"occupancy"` (default), `"detection"`, or `"abundance"` (the
+#'   state process of a count family, on the intensity scale).
 #' @param n_points Number of prediction points (default 100).
-#' @return A data.frame with covariate values and predicted probabilities.
+#' @return A data.frame with covariate values and the predicted response.
+#' @examples
+#' \donttest{
+#' sim <- simulate_abun(N = 100, J = 4, n_abund_covs = 2, n_det_covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data,
+#'             family = abun(K_max = 50), detection = ~ det_cov1, y = sim$y,
+#'             control = list(verbose = FALSE))
+#' me <- tobs_marginal_effect(fit, "abund_cov1", process = "abundance")
+#' head(me)   # estimate is on the abundance (lambda) scale, not a probability
+#' }
 #' @export
 tobs_marginal_effect <- function(object, covariate,
-                                 process = c("occupancy", "detection"),
+                                 process = c("occupancy", "detection",
+                                             "abundance"),
                                  n_points = 100L) {
   process <- match.arg(process)
-  type <- if (process == "detection") "detection" else "occupancy"
+  type <- switch(process,
+                 detection = "detection",
+                 abundance = "abundance",   # state process 1 on the log scale
+                 "occupancy")
   predict_terms(object, terms = covariate, type = type,
                 quantiles = c(0.025, 0.5, 0.975), n_points = n_points)
 }
 
 #' Estimate species richness from community model
-#' @param object A `tobs_fit` object from a community model.
+#'
+#' Per-site expected species richness `sum_s psi_{s,i}` with a posterior
+#' credible interval propagated from the community-mean occupancy draws. For the
+#' dynamic community family this is the first-season richness (from `psi1`).
+#' @param object A `tobs_fit` object from a community occupancy model
+#'   (`ms_occu()`, `ms_dyn_occu()`, or `ms_int_occu()`).
 #' @return A data.frame with site-level richness estimates.
+#' @examples
+#' \donttest{
+#' sim <- simulate_ms_occu(N = 40, J = 3, n_species = 5, seed = 1)
+#' fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
+#'             y = sim$y, species = paste0("sp", 1:5),
+#'             control = list(verbose = FALSE))
+#' head(tobs_richness(fit))
+#' }
 #' @export
 tobs_richness <- function(object) {
-  if (!identical(object$model$model_type, "ms_occu")) {
-    stop("tobs_richness() requires an ms_occu() community fit.", call. = FALSE)
+  if (!(object$model$model_type %in%
+        c("ms_occu", "ms_dyn_occu", "ms_int_occu"))) {
+    stop("tobs_richness() requires a community occupancy fit (ms_occu(), ",
+         "ms_dyn_occu(), or ms_int_occu()).", call. = FALSE)
   }
-  .tobs_richness_ms_occu(object)
+  .tobs_richness_community(object)
 }
 
 # tidy, glance, ranef inherited from tulpa::tulpa_fit
@@ -1162,16 +1222,20 @@ tobs_check_id <- function(model, fit = NULL) {
 # Spatial prediction at new locations
 # ============================================================================
 
-#' Predict occupancy at new spatial locations
+#' Predict the state process at new spatial locations
 #'
-#' Generates occupancy predictions at new coordinates, including the
-#' spatial random effect interpolated from the fitted field.
+#' Generates state-process predictions at new coordinates, including the
+#' spatial random effect interpolated from the fitted continuous field (IDW,
+#' k = 5). The returned scale follows the family's state-process link:
+#' occupancy probability for occupancy families, abundance intensity (lambda)
+#' for the count families.
 #'
 #' @param object A `tobs_fit` object fitted with a spatial component.
 #' @param newcoords Matrix of new coordinates (n_new x 2).
 #' @param newocc.covs Optional data.frame of covariates at new locations.
 #' @param quantiles Quantiles for credible intervals (default 0.025, 0.5, 0.975).
-#' @return A data.frame with `mean`, `sd`, and quantile columns.
+#' @return A data.frame with `mean`, `sd`, and quantile columns (on the response
+#'   scale: occupancy probability or abundance intensity).
 #' @export
 tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
                                  quantiles = c(0.025, 0.5, 0.975)) {
@@ -1234,7 +1298,17 @@ tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
     }
   }
 
-  psi_draws <- plogis(eta_draws)
+  # Apply the state process's inverse link so the returned scale is correct for
+  # the family: occupancy (logit -> probability), abundance (log -> intensity).
+  # Otherwise a count fit would silently report logit-of-log-lambda.
+  link <- object$model$process_info[[1]]$link %||% "logit"
+  inv_link <- switch(link,
+    logit    = plogis,
+    log      = exp,
+    identity = identity,
+    stop("tobs_predict_spatial: unsupported state-process link '", link, "'.",
+         call. = FALSE))
+  psi_draws <- inv_link(eta_draws)
 
   result <- data.frame(
     mean = colMeans(psi_draws),

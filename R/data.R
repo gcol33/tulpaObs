@@ -604,6 +604,96 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
   )
 }
 
+#' Simulate joint species distribution (presence/absence) data
+#'
+#' Presence `y_{i,s} ~ Bernoulli(psi_{i,s})` with `logit psi = X beta_s`, the
+#' per-species occupancy coefficients drawn from Gaussian community hyperpriors.
+#' Matches the [jsdm()] family, which observes presence directly (no detection
+#' process), so the response is an `N x n_species` presence matrix.
+#'
+#' @param N Number of sites (default 100).
+#' @param n_species Number of species (default 10).
+#' @param beta_comm_mean Community-mean occupancy coefficients, length
+#'   `1 + n_occ_covs` (intercept first).
+#' @param beta_comm_sd Between-species SD of each occupancy coefficient (same
+#'   length as `beta_comm_mean`).
+#' @param seed Random seed.
+#' @return A list with `y` (an `N x n_species` 0/1 presence matrix), `data`, and
+#'   `truth` (per-species coefficients and the community hyperparameters).
+#' @examples
+#' sim <- simulate_jsdm(N = 60, n_species = 5, seed = 1)
+#' dim(sim$y)   # 60 sites x 5 species presence matrix
+#' @export
+simulate_jsdm <- function(N = 100, n_species = 10,
+                          beta_comm_mean = c(0, 0.5),
+                          beta_comm_sd = c(0.5, 0.3),
+                          seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  n_occ_covs <- length(beta_comm_mean) - 1
+
+  data <- data.frame(x = rnorm(N))
+  if (n_occ_covs > 1) {
+    for (k in 2:n_occ_covs) data[[paste0("occ_cov", k)]] <- rnorm(N)
+  }
+  X_occ <- model.matrix(~ .,
+    data[, seq_len(n_occ_covs + (n_occ_covs == 0)), drop = FALSE])
+
+  beta_species <- matrix(NA_real_, n_species, length(beta_comm_mean))
+  for (j in seq_along(beta_comm_mean)) {
+    beta_species[, j] <- rnorm(n_species, beta_comm_mean[j], beta_comm_sd[j])
+  }
+
+  y <- matrix(NA_integer_, N, n_species)
+  for (s in seq_len(n_species)) {
+    y[, s] <- rbinom(N, 1, plogis(as.vector(X_occ %*% beta_species[s, ])))
+  }
+  colnames(y) <- paste0("sp", seq_len(n_species))
+
+  list(y = y, data = data,
+       truth = list(beta_species   = beta_species,
+                    beta_comm_mean = beta_comm_mean,
+                    beta_comm_sd   = beta_comm_sd))
+}
+
+#' Simulate Royle-Nichols occupancy data
+#'
+#' Latent abundance `N_i ~ Poisson(lambda_i)`, `log lambda = X beta_lambda`, and
+#' per-visit detection `y_ij ~ Bernoulli(1 - (1 - r_i)^{N_i})` with per-individual
+#' detection `logit r_i = beta_r` (site-level). Matches the [royle_nichols()]
+#' family; the response is an `N x J` 0/1 detection-history matrix.
+#'
+#' @param N Number of sites (default 200).
+#' @param J Number of visits per site (default 5).
+#' @param beta_lambda Log-abundance coefficients `c(intercept, slope_on_x)`.
+#' @param beta_r Per-individual detection logit (a scalar intercept).
+#' @param seed Random seed.
+#' @return A list with `y` (`N x J` 0/1 matrix), `data`, and `truth`
+#'   (`beta_lambda`, `beta_r`, realised abundance `N`, per-site `lambda` / `r`).
+#' @examples
+#' sim <- simulate_royle_nichols(N = 100, J = 4, seed = 1)
+#' dim(sim$y)
+#' @export
+simulate_royle_nichols <- function(N = 200, J = 5,
+                                   beta_lambda = c(0.3, 0.5),
+                                   beta_r = -0.8,
+                                   seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  data   <- data.frame(x = rnorm(N))
+  X_l    <- model.matrix(~ x, data)
+  lambda <- exp(as.vector(X_l %*% beta_lambda))
+  r      <- plogis(rep(beta_r[1], N))
+
+  Ni <- rpois(N, lambda)
+  y  <- matrix(0L, N, J)
+  for (i in seq_len(N)) {
+    p_i <- 1 - (1 - r[i])^Ni[i]
+    y[i, ] <- rbinom(J, 1, p_i)
+  }
+  list(y = y, data = data,
+       truth = list(beta_lambda = beta_lambda, beta_r = beta_r,
+                    N = Ni, lambda = lambda, r = r))
+}
+
 #' Simulate temporal (multi-season) occupancy data
 #'
 #' @param N Number of sites (default 100).

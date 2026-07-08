@@ -100,6 +100,43 @@
 # visit index, so the p and pos arms see identical (cell, visit) pairings
 # in identical row order -- the spec reads them positionally inside each
 # cell.
+# Detection-pattern compression (exact sufficient statistics). The all-undetected
+# visits within a site enter the occupancy mixture only through
+# prod_v (1 - p_v) = prod_u (1 - p_u)^{w_u}, so visits that share a detection
+# design row (identical eta) collapse to one row of multiplicity w_u carried in
+# the arm's n_trials slot; the cell-coupling kernel honours the weight exactly.
+# Detected visits stay individual -- each carries its own per-visit cover, so the
+# cover arm and its alignment with the detection arm are untouched. Returns the
+# representative-visit indices (`sel`, one per compressed row, site-major) and the
+# integer weight per row. Base R only (no data.table dependency); the grouping key
+# is (site, full detection design row) compared bitwise, so it is exact.
+.occu_cover_compress_nodet_visits <- function(site_of_visit, X_p, y_det) {
+  n   <- length(site_of_visit)
+  det <- y_det > 0.5
+  ndi <- which(!det)                                   # non-detected visit rows
+  if (length(ndi) == 0L)
+    return(list(sel = seq_len(n), weight = rep(1L, n)))
+
+  key <- cbind(site_of_visit[ndi], X_p[ndi, , drop = FALSE])   # (site, det design)
+  o   <- do.call(order, lapply(seq_len(ncol(key)), function(j) key[, j]))
+  ks  <- key[o, , drop = FALSE]
+  if (nrow(ks) == 1L) {
+    newgrp <- TRUE
+  } else {
+    diff_prev <- ks[-1L, , drop = FALSE] != ks[-nrow(ks), , drop = FALSE]
+    newgrp    <- c(TRUE, rowSums(diff_prev) > 0L)       # exact bitwise change
+  }
+  grp      <- cumsum(newgrp)                            # group id in sorted order
+  rep_sort <- which(!duplicated(grp))                  # first sorted row per group
+  rep_orig <- ndi[o[rep_sort]]                          # representative, original index
+  wt_grp   <- as.integer(tabulate(grp))                # group multiplicities
+
+  sel    <- c(which(det), rep_orig)                    # detected (w=1) + nodet groups
+  weight <- c(rep(1L, sum(det)), wt_grp)
+  ord    <- order(site_of_visit[sel], sel)             # site-major, stable
+  list(sel = sel[ord], weight = weight[ord])
+}
+
 .occu_cover_build_joint_coupled_arms <- function(model, sigma_pos_init,
                                                   alpha_grid,
                                                   positive = "lognormal",
@@ -107,7 +144,8 @@
                                                   n_cells = NULL,
                                                   site_cell = NULL,
                                                   cover_aggregate = "none",
-                                                  det_field = FALSE) {
+                                                  det_field = FALSE,
+                                                  compress_nodet = FALSE) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
   if (is.null(site_cell)) site_cell <- seq_len(n_sites)
@@ -161,6 +199,32 @@
     X_pos <- cbind(X_pos, model$X_pos_visit[keep, , drop = FALSE])
   }
 
+  # Detection-pattern compression: collapse each site's all-undetected visits that
+  # share a detection design row to one weighted row (weight in the p arm's
+  # n_trials). Gated to the plain single-species per-visit path -- an obs-arm RE or
+  # an arm-specific detection field makes eta depend on more than X_p (so identical
+  # X_p rows are no longer exchangeable), and per-visit cover ("none") is required
+  # so detected visits stay individual. Off (compress_nodet = FALSE) leaves every
+  # arm byte-identical to the uncompressed build.
+  do_compress <- isTRUE(compress_nodet) && is.null(model$re_det) &&
+    is.null(model$re_pos) && !isTRUE(det_field) &&
+    identical(cover_aggregate, "none")
+  if (do_compress) {
+    cmp           <- .occu_cover_compress_nodet_visits(site_of_visit, X_p,
+                                                       y_det_visit)
+    sel           <- cmp$sel
+    visit_weight  <- cmp$weight
+    site_of_visit <- site_of_visit[sel]
+    cell_of_visit <- cell_of_visit[sel]
+    X_p           <- X_p[sel, , drop = FALSE]
+    X_pos         <- X_pos[sel, , drop = FALSE]
+    y_det_visit   <- y_det_visit[sel]
+    y_pos_visit   <- y_pos_visit[sel]
+    n_visits_valid <- length(sel)
+  } else {
+    visit_weight  <- rep(1L, n_visits_valid)
+  }
+
   # psi arm: one row per site (occupancy unit). spatial_idx maps the site to its
   # field node (cell); cell_obs_map indexes the occupancy unit itself. y /
   # n_trials / family are placeholders -- the per-obs scatter is skipped for
@@ -194,7 +258,7 @@
   det_field_coef <- if (!is.null(model$re_det) || isTRUE(det_field)) 1.0 else 0
   arm_p <- list(
     y            = as.numeric(y_det_visit),
-    n_trials     = rep(1L, n_visits_valid),
+    n_trials     = as.integer(visit_weight),
     X            = X_p,
     spatial_idx  = rep(0L, n_visits_valid),
     family       = "binomial",

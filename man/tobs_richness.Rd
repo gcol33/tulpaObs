@@ -7,11 +7,23 @@
 tobs_richness(object)
 }
 \arguments{
-\item{object}{A \code{tobs_fit} object from a community model.}
+\item{object}{A \code{tobs_fit} object from a community occupancy model
+(\code{ms_occu()}, \code{ms_dyn_occu()}, or \code{ms_int_occu()}).}
 }
 \value{
 A data.frame with site-level richness estimates.
 }
 \description{
-Estimate species richness from community model
+Per-site expected species richness \verb{sum_s psi_\{s,i\}} with a posterior
+credible interval propagated from the community-mean occupancy draws. For the
+dynamic community family this is the first-season richness (from \code{psi1}).
+}
+\examples{
+\donttest{
+sim <- simulate_ms_occu(N = 40, J = 3, n_species = 5, seed = 1)
+fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
+            y = sim$y, species = paste0("sp", 1:5),
+            control = list(verbose = FALSE))
+head(tobs_richness(fit))
+}
 }

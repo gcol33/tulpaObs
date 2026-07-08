@@ -35,6 +35,15 @@ inline double sigmoid_(double eta) {
     return 1.0 / (1.0 + std::exp(-eta));
 }
 
+// Per-row detection multiplicity (n_trials) for the detection arm (index 1),
+// with a safe fallback of 1 when the arm carries no trial-count buffer (e.g. the
+// batched fused path, whose response list may leave arm_n_trials null). Weight 1
+// is the uncompressed path and is byte-identical to the pre-compression kernel.
+inline double occu_det_weight_(const tulpa::CellResponse& y_cell, int j) {
+    return (y_cell.arm_n_trials && y_cell.arm_n_trials[1])
+           ? static_cast<double>(y_cell.n_trials(1, j)) : 1.0;
+}
+
 inline double log_safe_(double x) {
     return (x > 0.0) ? std::log(x) : -1e300;
 }
@@ -206,6 +215,17 @@ struct BetaPositive {
 // `cross_p_p = nullptr` when requesting rank-1. With both rank-1 pointers null
 // the dense `cross_p_p` path is byte-identical to before.
 // ---------------------------------------------------------------------------
+// `wt` (gcol33/tulpaObs detection-pattern compression) is an optional per-visit
+// integer multiplicity: row v stands for wt[v] exchangeable non-detected visits
+// that share this detection row (identical eta_p[v]). Passing nullptr (or all
+// ones) is the uncompressed path and is byte-identical to before. The reduction
+// is exact: P0 = prod_v (1 - p_v)^{wt_v}, and the mixture's score / observed
+// Hessian in the compressed (unique-row) basis is S^T H S with S the row->pattern
+// selection, which collapses to per-row weight factors on g_p / cross_w_p and to
+// the rank-1 vector wt_v * p_v (see the derivation below and
+// dev_notes/occu_multiscale_cover_derivation.md). Only all-undetected rows are
+// ever compressed (the caller keeps detected visits individual for their cover),
+// so wt applies uniformly across this block's rows.
 inline double nodet_mixture_block(
     double        w,
     const double* eta_p,
@@ -220,7 +240,8 @@ inline double nodet_mixture_block(
     double*       cross_p_p,
     double*       p_out = nullptr,
     double*       rank1_coef_out = nullptr,
-    double*       rank1_p_out = nullptr)
+    double*       rank1_p_out = nullptr,
+    const double* wt = nullptr)
 {
     double log_P0 = 0.0;
     // Reuse the caller's p_out as the p cache when supplied; otherwise a small
@@ -233,7 +254,8 @@ inline double nodet_mixture_block(
 
     for (int v = 0; v < nv; v++) {
         p[v]    = sigmoid_(eta_p[v]);
-        log_P0 += log_safe_(1.0 - p[v]);
+        const double wv = wt ? wt[v] : 1.0;
+        log_P0 += wv * log_safe_(1.0 - p[v]);
     }
     const double P0     = std::exp(log_P0);
     const double L      = w * P0 + (1.0 - w);
@@ -242,50 +264,73 @@ inline double nodet_mixture_block(
     const double one_m_P0 = 1.0 - P0;
     const double w_1mw  = w * (1.0 - w);
 
-    // Scores (identical in both curvature modes).
+    // Scores. Per-visit score scales linearly with the row multiplicity wt_v:
+    // d log L / d eta_v aggregates the wt_v identical visits' contributions.
     g_w = -w_1mw * one_m_P0 * inv_L;
     for (int v = 0; v < nv; v++) {
-        g_p[v] = -w * P0 * p[v] * inv_L;
+        const double wv = wt ? wt[v] : 1.0;
+        g_p[v] = wv * (-w * P0 * p[v] * inv_L);
     }
     if (!want_hess) return log_safe_(L);
 
     if (expected) {
-        // Complete-data Fisher: block-diagonal, responsibility-weighted.
+        // Complete-data Fisher: block-diagonal, responsibility-weighted; the
+        // wt_v identical visits contribute wt_v times the single-visit Fisher.
         const double gamma = (L > 0.0) ? (w * P0 * inv_L) : 0.0;
         nh_w = w_1mw;
         for (int v = 0; v < nv; v++) {
-            nh_p[v] = gamma * p[v] * (1.0 - p[v]);
+            const double wv = wt ? wt[v] : 1.0;
+            nh_p[v] = wv * gamma * p[v] * (1.0 - p[v]);
         }
         return log_safe_(L);
     }
 
-    // Observed (true mixture) Hessian.
+    // Observed (true mixture) Hessian. The reduced block is S^T H S with H the
+    // full expanded V x V observed Hessian = diag(Hs_v) + a p p^T. For a unique
+    // row v of multiplicity wt_v: the diagonal own-term aggregates to wt_v * Hs_v
+    // and the rank-1 vector entry aggregates to wt_v * p_v (so the engine's
+    // a (wt.p)(wt.p)^T reproduces both the wt_v(wt_v-1) intra-row and the
+    // inter-row cross pairs). `Hs_v` is the single-visit observed diagonal and
+    // `s` the single-visit score (NOT the wt-scaled g_p[v]).
     nh_w = w_1mw * (1.0 - 2.0 * w) * one_m_P0 * inv_L + g_w * g_w;
+    const double a = -w * P0 * (1.0 - w) * inv_L2;
+    const bool use_rank1 = (rank1_coef_out && rank1_p_out);
     for (int v = 0; v < nv; v++) {
-        const double w_P0_p = w * P0 * p[v];
-        nh_p[v] = w_P0_p * (1.0 - 2.0 * p[v]) * inv_L + g_p[v] * g_p[v];
+        const double wv     = wt ? wt[v] : 1.0;
+        const double s      = -w * P0 * p[v] * inv_L;
+        const double Hs     = w * P0 * p[v] * (1.0 - 2.0 * p[v]) * inv_L + s * s;
+        if (use_rank1) {
+            // Rank-1 path: engine adds a * (wt.p)(wt.p)^T; fold the row's own
+            // rank-1 diagonal out of nh_p (wv * (Hs - a p^2), so nh_p + a(wt p)^2
+            // reconstructs the full reduced (v, v) entry wv*Hs + wv(wv-1) a p^2).
+            nh_p[v] = wv * (Hs - a * p[v] * p[v]);
+        } else {
+            // Dense path: full reduced diagonal here, off-diagonal in cross_p_p.
+            nh_p[v] = wv * Hs + wv * (wv - 1.0) * a * p[v] * p[v];
+        }
     }
     if (cross_w_p) {
         for (int v = 0; v < nv; v++) {
-            cross_w_p[v] = P0 * p[v] * w_1mw * inv_L2;
+            const double wv = wt ? wt[v] : 1.0;
+            cross_w_p[v] = wv * P0 * p[v] * w_1mw * inv_L2;
         }
     }
-    // (p, p) off-diagonal cross = the rank-1 a p p^T (a per site).
-    const double a = -w * P0 * (1.0 - w) * inv_L2;
-    if (rank1_coef_out && rank1_p_out) {
-        // Rank-1 emission: hand the engine (a, p) and fold the rank-1's own
-        // diagonal a p_v^2 into nh_p so the engine adds the full a p p^T.
+    if (use_rank1) {
+        // Rank-1 emission: hand the engine (a, wt.p); the fold above already
+        // removed each row's own rank-1 diagonal from nh_p.
         *rank1_coef_out = a;
         for (int v = 0; v < nv; v++) {
-            rank1_p_out[v] = p[v];
-            nh_p[v] -= a * p[v] * p[v];
+            const double wv = wt ? wt[v] : 1.0;
+            rank1_p_out[v] = wv * p[v];
         }
     } else if (cross_p_p) {
         for (int v = 0; v < nv; v++) {
-            for (int wv = v + 1; wv < nv; wv++) {
-                const double val = a * p[v] * p[wv];
-                cross_p_p[(std::size_t)v * nv + wv] = val;
-                cross_p_p[(std::size_t)wv * nv + v] = val;
+            const double wv = wt ? wt[v] : 1.0;
+            for (int wvv = v + 1; wvv < nv; wvv++) {
+                const double ww  = wt ? wt[wvv] : 1.0;
+                const double val = a * (wv * p[v]) * (ww * p[wvv]);
+                cross_p_p[(std::size_t)v * nv + wvv] = val;
+                cross_p_p[(std::size_t)wvv * nv + v] = val;
             }
         }
     }
@@ -322,14 +367,19 @@ inline double occu_det_psi_p_block(double                     psi,
     for (int v = 0; v < Jc; ++v) {
         const double p_v   = sigmoid_(etas.eta(1, v, s));
         const double y_det = y_cell.y(1, v, s);
+        // Detection-pattern compression: a non-detected row can stand for wv
+        // exchangeable visits sharing this detection row (n_trials = wv). Detected
+        // rows are always individual (wv = 1) so their per-visit cover stays
+        // aligned. wv = 1 (the uncompressed path) is byte-identical to before.
+        const double wv    = occu_det_weight_(y_cell, v);
         if (y_det > 0.5) {
             cell_ll += log_safe_(p_v);
             out.arm_grad[1][base1 + v] = 1.0 - p_v;
         } else {
-            cell_ll += log_safe_(1.0 - p_v);
-            out.arm_grad[1][base1 + v] = -p_v;
+            cell_ll += wv * log_safe_(1.0 - p_v);
+            out.arm_grad[1][base1 + v] = -wv * p_v;
         }
-        if (want_hess) out.arm_neg_hess_diag[1][base1 + v] = p_v * (1.0 - p_v);
+        if (want_hess) out.arm_neg_hess_diag[1][base1 + v] = wv * p_v * (1.0 - p_v);
     }
     return cell_ll;
 }
@@ -350,6 +400,7 @@ inline double occu_det_psi_p_block(double                     psi,
 // offset the kernel uses to lay them out.
 inline double occu_nodet_block(double                     psi,
                                const tulpa::CellEtas&     etas,
+                               const tulpa::CellResponse& y_cell,
                                int                        Jc,
                                bool                       want_hess,
                                tulpa::CellDerivs&         out,
@@ -359,8 +410,14 @@ inline double occu_nodet_block(double                     psi,
     const int rc1   = out.n_rows_in_arm(1);
     const int base0 = s * rc0;
     const int base1 = s * rc1;
+    // eta and the per-row detection multiplicity (n_trials) for this cell's
+    // rows. wt_v = 1 (the uncompressed path) leaves the mixture byte-identical.
     std::vector<double> eta_p_buf(Jc);
-    for (int v = 0; v < Jc; v++) eta_p_buf[v] = etas.eta(1, v, s);
+    std::vector<double> wt_buf(Jc);
+    for (int v = 0; v < Jc; v++) {
+        eta_p_buf[v] = etas.eta(1, v, s);
+        wt_buf[v]    = occu_det_weight_(y_cell, v);
+    }
 
     double* cross_w_p = (!expected && want_hess && out.arm_cross_hess
                          && out.arm_cross_hess[0] && out.arm_cross_hess[0][1])
@@ -391,7 +448,7 @@ inline double occu_nodet_block(double                     psi,
         psi, eta_p_buf.data(), Jc, want_hess, expected,
         g_psi, nh_psi, out.arm_grad[1] + base1, out.arm_neg_hess_diag[1] + base1,
         cross_w_p, cross_p_p, /*p_out=*/nullptr,
-        rank1_coef, rank1_p);
+        rank1_coef, rank1_p, wt_buf.data());
     out.arm_grad[0][base0] = g_psi;
     if (want_hess) out.arm_neg_hess_diag[0][base0] = nh_psi;
     return cell_ll;

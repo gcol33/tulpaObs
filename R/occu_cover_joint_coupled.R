@@ -231,7 +231,13 @@
     n_cells         = n_cells,
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate,
-    det_field       = has_det_armspec
+    det_field       = has_det_armspec,
+    # Detection-pattern compression (exact): on for the single-species path,
+    # off for the batched fused solve (per-species detection differs, so the
+    # nodet rows are not exchangeable across species). getOption escape hatch
+    # (default on) lets a fit force the uncompressed build for an equivalence check.
+    compress_nodet  = !isTRUE(.batch_collect) &&
+      isTRUE(getOption("tulpaObs.compress_nodet", TRUE))
   )
   responses      <- arms_out$responses
   site_of_visit  <- arms_out$site_of_visit
@@ -695,6 +701,17 @@
     )
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
+  # Regularizing hyperpriors on the outer grid, forwarded from control to the
+  # joint driver's `prior_sigma` / `prior_alpha` / `prior_phi`. Each is a
+  # list(<family>, <params>), e.g. list("pc.prec", c(U, alpha)) for a Penalized
+  # Complexity prior (Simpson et al. 2017) on the spatial field SD, or
+  # list("half_normal", scale). NULL (default) leaves the flat hyperprior. The
+  # PC prior shrinks the field-SD upper tail toward the no-spatial base model
+  # unless the data identifies a larger amplitude, so a weakly-identified field
+  # is not driven to an inflated SD that widens every per-cell interval.
+  if (!is.null(dots[["prior.sigma"]])) fit_call$prior_sigma <- dots[["prior.sigma"]]
+  if (!is.null(dots[["prior.alpha"]])) fit_call$prior_alpha <- dots[["prior.alpha"]]
+  if (!is.null(dots[["prior.phi"]]))   fit_call$prior_phi   <- dots[["prior.phi"]]
 
   ctx <- list(adj = adj, is_latent = is_latent, pi_list = pi_list,
               n_cells = n_cells,

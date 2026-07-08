@@ -76,6 +76,7 @@ All families below carry `status = "working"` and are recovery-tested.
 | `int_occu()`      | Integrated multi-source        | list of `N_s x J_s` matrices       | laplace |
 | `ms_int_occu()`   | Integrated multispecies        | list of `S x N_s x J_s` arrays     | laplace |
 | `jsdm()`          | Joint species distribution     | `N x S` presence matrix (no detection) | nuts |
+| `royle_nichols()` | Royle-Nichols (abundance-induced detection) | `N x J` detection matrix (0/1/NA) | laplace |
 | `fp_occu()`       | False-positive occupancy (Miller 2011) | `N x J` in `{0,1,2}`      | laplace |
 | `occu_categorical(classes)` | Multi-state categorical detection | `N x J` class matrix    | laplace |
 

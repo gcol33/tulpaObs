@@ -2,7 +2,7 @@
 % Please edit documentation in R/methods.R
 \name{tobs_predict_spatial}
 \alias{tobs_predict_spatial}
-\title{Predict occupancy at new spatial locations}
+\title{Predict the state process at new spatial locations}
 \usage{
 tobs_predict_spatial(
   object,
@@ -21,9 +21,13 @@ tobs_predict_spatial(
 \item{quantiles}{Quantiles for credible intervals (default 0.025, 0.5, 0.975).}
 }
 \value{
-A data.frame with \code{mean}, \code{sd}, and quantile columns.
+A data.frame with \code{mean}, \code{sd}, and quantile columns (on the response
+scale: occupancy probability or abundance intensity).
 }
 \description{
-Generates occupancy predictions at new coordinates, including the
-spatial random effect interpolated from the fitted field.
+Generates state-process predictions at new coordinates, including the
+spatial random effect interpolated from the fitted continuous field (IDW,
+k = 5). The returned scale follows the family's state-process link:
+occupancy probability for occupancy families, abundance intensity (lambda)
+for the count families.
 }

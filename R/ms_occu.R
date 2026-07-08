@@ -319,11 +319,16 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 # Per-site expected species richness sum_s psi_{s,i} under the fitted per-species
 # occupancy coefficients, with a posterior credible interval propagated from the
 # community-mean coefficient draws (per-species deviations held at their BLUPs).
-.tobs_richness_ms_occu <- function(object) {
+# Shared by ms_occu / ms_int_occu (occupancy design + blup_psi) and ms_dyn_occu
+# (first-season psi1 design + blup_psi1); psi is always process 1.
+.tobs_richness_community <- function(object) {
   model <- object$model
   cm    <- object$ms_community
   draws <- object$draws
-  X_occ <- model$X_occ
+  mt    <- model$model_type
+  X_occ <- switch(mt, ms_occu = model$X_occ, ms_int_occu = model$X_psi,
+                  ms_dyn_occu = model$X_psi1)
+  blup  <- if (identical(mt, "ms_dyn_occu")) cm$blup_psi1 else cm$blup_psi
   P_occ <- model$process_info[[1L]]$p
   n_sites   <- model$n_sites
   n_species <- model$n_species
@@ -332,7 +337,6 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   # Per-draw community-mean occupancy coefficient; add each species' BLUP
   # deviation to get the per-species occupancy linear predictor.
   beta_occ_draws <- draws[, seq_len(P_occ), drop = FALSE]
-  blup <- cm$blup_psi                                # S x P_occ
   richness <- matrix(0, n_draws, n_sites)
   for (d in seq_len(n_draws)) {
     mu_occ <- beta_occ_draws[d, ]

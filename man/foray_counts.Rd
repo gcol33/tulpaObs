@@ -7,13 +7,13 @@
 \format{
 A list with components:
 \describe{
-  \item{y}{100 x 3 integer matrix of counts.}
-  \item{occ.covs}{Data frame of site covariates: \code{elevation}, \code{shrub} (both
-    standardised).}
-  \item{det.covs}{Named list with one 100 x 3 visit covariate matrix,
-    \code{effort} (standardised).}
-  \item{truth}{List of generative quantities: \code{beta_lambda}, \code{beta_p}, the
-    realised latent abundance \code{N}, and per-site \code{lambda}.}
+\item{y}{100 x 3 integer matrix of counts.}
+\item{occ.covs}{Data frame of site covariates: \code{elevation}, \code{shrub} (both
+standardised).}
+\item{det.covs}{Named list with one 100 x 3 visit covariate matrix,
+\code{effort} (standardised).}
+\item{truth}{List of generative quantities: \code{beta_lambda}, \code{beta_p}, the
+realised latent abundance \code{N}, and per-site \code{lambda}.}
 }
 }
 \usage{

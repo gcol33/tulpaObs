@@ -112,7 +112,7 @@ public:
 
             if (!any_det) {
                 // nodet case (family-independent: pos arm doesn't contribute).
-                total_ll += occu_nodet_block(psi, etas, Jc, want_hess, out, s);
+                total_ll += occu_nodet_block(psi, etas, y_cell, Jc, want_hess, out, s);
                 continue;
             }
 

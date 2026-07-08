@@ -88,7 +88,7 @@ public:
             return cell_ll;
         }
 
-        return occu_nodet_block(psi, etas, Jc, want_hess, out);
+        return occu_nodet_block(psi, etas, y_cell, Jc, want_hess, out);
     }
 
     std::string name() const override {

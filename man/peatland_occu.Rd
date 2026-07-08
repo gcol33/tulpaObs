@@ -7,14 +7,14 @@
 \format{
 A list with components:
 \describe{
-  \item{y}{120 x 4 integer matrix of detections (0/1/\code{NA}).}
-  \item{occ.covs}{Data frame of site covariates: \code{elevation}, \code{wetness}
-    (both standardised).}
-  \item{det.covs}{Named list with one 120 x 4 visit covariate matrix,
-    \code{effort} (standardised).}
-  \item{coords}{120 x 2 matrix of \code{x} / \code{y} coordinates in the unit square.}
-  \item{truth}{List of generative quantities: \code{beta_psi}, \code{beta_p}, the
-    realised latent occupancy \code{z}, and per-site \code{psi}.}
+\item{y}{120 x 4 integer matrix of detections (0/1/\code{NA}).}
+\item{occ.covs}{Data frame of site covariates: \code{elevation}, \code{wetness}
+(both standardised).}
+\item{det.covs}{Named list with one 120 x 4 visit covariate matrix,
+\code{effort} (standardised).}
+\item{coords}{120 x 2 matrix of \code{x} / \code{y} coordinates in the unit square.}
+\item{truth}{List of generative quantities: \code{beta_psi}, \code{beta_p}, the
+realised latent occupancy \code{z}, and per-site \code{psi}.}
 }
 }
 \usage{

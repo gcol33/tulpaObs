@@ -69,7 +69,7 @@ public:
             }
 
             if (!any_det) {
-                total_ll += occu_nodet_block(psi, etas, Jc, want_hess, out, s);
+                total_ll += occu_nodet_block(psi, etas, y_cell, Jc, want_hess, out, s);
             } else {
                 total_ll += occu_det_psi_p_block(psi, etas, y_cell, Jc,
                                                  want_hess, out, s);

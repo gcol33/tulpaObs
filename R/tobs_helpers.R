@@ -179,6 +179,12 @@
   # (the intrinsic field's null-space direction dropped, tulpaObs#71). A single
   # intercept RE samples non-spatially; spatial XOR RE.
   abun     = c("laplace", "nested_laplace", "nuts"),
+  # royle_nichols: Royle-Nichols occupancy (abundance-induced detection
+  # heterogeneity). Latent N ~ Poisson marginalised in closed form; the exact
+  # marginal is maximised (optim BFGS) with an observed-information vcov. Site-
+  # level detection; non-spatial laplace only for the first ship (visit-level
+  # detection, areal fields, and NUTS are the documented follow-ups, #116).
+  royle_nichols = c("laplace"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under
@@ -356,7 +362,11 @@
                            "adaptive.grid.max.passes", "var.of.means.consistency",
                            "var.of.means.tolerance", "diagnose.k", "diagnose.draws",
                            "k.samples", "k.bootstrap", "k.tail.points", "k.conf.bands",
-                           "force.sparse", "inner.refresh", "checkpoint"),
+                           "force.sparse", "inner.refresh", "checkpoint",
+                           # Regularizing hyperpriors on the outer grid axes,
+                           # forwarded to the joint driver's prior_sigma / _alpha
+                           # / _phi (e.g. a PC prior on the spatial field SD).
+                           "prior.sigma", "prior.alpha", "prior.phi"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",

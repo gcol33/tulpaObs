@@ -210,3 +210,55 @@ test_that("compact input is gated to the joint nested-Laplace path", {
          method = "laplace", control = list(verbose = FALSE)),
     "compact")
 })
+
+
+# Detection-pattern compression: within a site, all-undetected visits that share
+# a detection design row enter the occupancy mixture only through
+# prod (1 - p)^weight, so they collapse to one weighted row (carried in the p
+# arm's n_trials). Detected visits stay individual (each has its own cover). The
+# reduction is exact sufficient statistics, so a compressed fit must match the
+# uncompressed fit to floating-point (option tulpaObs.compress_nodet toggles it).
+
+test_that(".occu_cover_compress_nodet_visits groups exchangeable nodet visits", {
+  site <- c(1, 1, 1, 1, 1, 2, 2, 2)
+  Xp   <- rbind(c(0, 0), c(0, 0), c(1, 0), c(0, 0), c(1, 0),   # site 1
+                c(2, 1), c(2, 1), c(3, 0))                     # site 2
+  ydet <- c(0, 0, 0, 1, 0, 0, 0, 1)                            # detected: rows 4, 8
+  cmp  <- tulpaObs:::.occu_cover_compress_nodet_visits(site, Xp, ydet)
+  expect_equal(sum(cmp$weight), length(site))          # weights partition all visits
+  expect_true(all(c(4L, 8L) %in% cmp$sel[cmp$weight == 1L]))  # detected stay individual
+  expect_lt(length(cmp$sel), length(site))             # some nodet rows collapsed
+  # every compressed row's design equals its group members' (exact grouping)
+  expect_false(any(duplicated(cmp$sel)))
+})
+
+
+test_that("detection-pattern compression == uncompressed fit (exact)", {
+  skip_on_cran()
+  nc  <- 10L
+  adj <- .line_graph(nc)
+  # Low-cardinality detection design (rounded x1 + 3-level hab) so many
+  # all-undetected visits within a site share a detection row and compress.
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(8:16, 1), seed = 3)
+  dd$x1 <- round(dd$x1)
+
+  old <- options(tulpaObs.compress_nodet = TRUE)
+  fit_on  <- .fit_occu_cover(dd, adj, compact = TRUE)
+  options(tulpaObs.compress_nodet = FALSE)
+  fit_off <- .fit_occu_cover(dd, adj, compact = TRUE)
+  options(old)
+
+  # Exact sufficient statistics: identical up to floating-point reassociation.
+  expect_equal(fit_on$means, fit_off$means, tolerance = 1e-8)
+  expect_equal(fit_on$sds,   fit_off$sds,   tolerance = 1e-8)
+  expect_identical(fit_on$N, fit_off$N)
+
+  # Predictions and WAIC also match (seed the draws so it is algebra, not MC).
+  nd <- data.frame(cell = seq_len(nc), time.sc = 0,
+                   hab = factor("A", levels = c("A", "B", "C")))
+  set.seed(7); po_on  <- as.data.frame(predict(fit_on,  newdata = nd,
+                   type = "occurrence", nsim = 100, draws = FALSE))
+  set.seed(7); po_off <- as.data.frame(predict(fit_off, newdata = nd,
+                   type = "occurrence", nsim = 100, draws = FALSE))
+  expect_equal(po_on$mean, po_off$mean, tolerance = 1e-8)
+})
