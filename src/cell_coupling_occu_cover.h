@@ -125,10 +125,14 @@ public:
 
             if (!Aggregated) {
                 // Per-visit cover: one log f_pos per detected visit, the pos
-                // arm row aligned with the detection visit.
+                // arm row aligned with the detection visit. A detected visit
+                // whose cover is missing (y_pos = NA -> non-finite) drops out of
+                // the cover factor (missing-at-random cover); its pos-arm grad /
+                // Hessian slots stay at their pre-zeroed 0.
                 for (int v = 0; v < Jc; v++) {
                     if (y_cell.y(1, v, s) <= 0.5) continue;
-                    const double y_pos   = y_cell.y(2, v, s);
+                    const double y_pos = y_cell.y(2, v, s);
+                    if (!std::isfinite(y_pos)) continue;
                     const double eta_pos = etas.eta(2, v, s);
                     cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
                     double g_pos = 0.0, h_pos = 0.0;
@@ -140,15 +144,18 @@ public:
             } else {
                 // Cell-aggregated cover: a single log f_pos at the occupancy
                 // unit's one pos row (the mean / median cover over its detected
-                // visits), evaluated once because any_det holds here.
-                const double y_pos   = y_cell.y(2, 0, s);
-                const double eta_pos = etas.eta(2, 0, s);
-                cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
-                double g_pos = 0.0, h_pos = 0.0;
-                PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
-                                         want_hess, g_pos, h_pos);
-                out.arm_grad[2][base2] = g_pos;
-                if (want_hess) out.arm_neg_hess_diag[2][base2] = h_pos;
+                // visits), evaluated once because any_det holds here. A unit with
+                // no observed cover carries a non-finite aggregate and drops out.
+                const double y_pos = y_cell.y(2, 0, s);
+                if (std::isfinite(y_pos)) {
+                    const double eta_pos = etas.eta(2, 0, s);
+                    cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi_pos);
+                    double g_pos = 0.0, h_pos = 0.0;
+                    PosPolicy::grad_hess_eta(y_pos, eta_pos, phi_pos,
+                                             want_hess, g_pos, h_pos);
+                    out.arm_grad[2][base2] = g_pos;
+                    if (want_hess) out.arm_neg_hess_diag[2][base2] = h_pos;
+                }
             }
             total_ll += cell_ll;
         }

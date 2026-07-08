@@ -66,28 +66,32 @@
   }
   y_int[!valid] <- 0L
 
-  # Cover arm: meaningful only where y == 1. Zero-fill the rest so matrix
-  # algebra stays defined; the likelihood gates evaluation by `y == 1`.
+  # Cover arm: meaningful only where detected AND the cover value is observed.
+  # A detected visit with a missing cover (y_pos = NA) stays in the detection /
+  # occupancy arms but drops out of the Beta/lognormal cover factor
+  # (missing-at-random cover): the likelihood gates the cover density on
+  # `y == 1 & is.finite(cover)`, the same semantic as the C++ std::isfinite gate.
   y_pos_num <- matrix(as.numeric(y_pos), n_sites, max_visits)
-  pos_mask  <- valid & (y_int == 1L)
-  if (any(!is.finite(y_pos_num[pos_mask]))) {
-    stop("y_pos must be finite at every detected visit (y == 1).",
-         call. = FALSE)
-  }
+  pos_mask  <- valid & (y_int == 1L)                 # detected
+  cover_obs <- pos_mask & is.finite(y_pos_num)       # detected AND cover observed
   if (identical(positive, "beta")) {
-    bad <- pos_mask & (y_pos_num <= 0 | y_pos_num >= 1)
+    bad <- cover_obs & (y_pos_num <= 0 | y_pos_num >= 1)
     if (any(bad)) {
-      stop("Beta positive arm requires 0 < y_pos < 1 at every detected ",
-           "visit; clip with pmin(pmax(y_pos, eps), 1 - eps).", call. = FALSE)
+      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
+           "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
+           call. = FALSE)
     }
   } else {
-    bad <- pos_mask & (y_pos_num <= 0)
+    bad <- cover_obs & (y_pos_num <= 0)
     if (any(bad)) {
-      stop("Lognormal positive arm requires y_pos > 0 at every detected ",
-           "visit.", call. = FALSE)
+      stop("Lognormal positive arm requires y_pos > 0 at every detected visit ",
+           "with an observed cover.", call. = FALSE)
     }
   }
-  y_pos_num[!pos_mask] <- 0
+  # Detected-but-unobserved cover -> NA sentinel; undetected -> 0. Both are gated
+  # out of the cover density, so with no missing cover no NA is introduced.
+  y_pos_num[pos_mask & !cover_obs] <- NA_real_
+  y_pos_num[!pos_mask]             <- 0
 
   # Reject structured terms in v1 (spatial sharing across arms is v2).
   .occu_cover_reject_structured(occ_formula, "occupancy")
@@ -186,27 +190,29 @@
       length(y_pos_values), n_visits_valid), call. = FALSE)
   }
 
-  # Cover meaningful only where detected; zero-fill the rest (the spec gates the
-  # positive density on y_det == 1, exactly as the dense binder does).
+  # Cover meaningful only where detected AND observed. A detected visit with a
+  # missing cover (NA) stays in the detection / occupancy arms but drops out of
+  # the cover density (missing-at-random cover); the spec gates the cover term on
+  # y_det == 1 & is.finite(cover), the same semantic as the C++ std::isfinite gate.
   pos_mask  <- y_det_visit == 1L
   y_pos_num <- as.numeric(y_pos_values)
-  if (any(!is.finite(y_pos_num[pos_mask]))) {
-    stop("y_pos must be finite at every detected visit (y == 1).", call. = FALSE)
-  }
+  cover_obs <- pos_mask & is.finite(y_pos_num)
   if (identical(positive, "beta")) {
-    bad <- pos_mask & (y_pos_num <= 0 | y_pos_num >= 1)
+    bad <- cover_obs & (y_pos_num <= 0 | y_pos_num >= 1)
     if (any(bad)) {
-      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit; ",
-           "clip with pmin(pmax(y_pos, eps), 1 - eps).", call. = FALSE)
-    }
-  } else {
-    bad <- pos_mask & (y_pos_num <= 0)
-    if (any(bad)) {
-      stop("Lognormal positive arm requires y_pos > 0 at every detected visit.",
+      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
+           "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
            call. = FALSE)
     }
+  } else {
+    bad <- cover_obs & (y_pos_num <= 0)
+    if (any(bad)) {
+      stop("Lognormal positive arm requires y_pos > 0 at every detected visit ",
+           "with an observed cover.", call. = FALSE)
+    }
   }
-  y_pos_num[!pos_mask] <- 0
+  y_pos_num[pos_mask & !cover_obs] <- NA_real_
+  y_pos_num[!pos_mask]             <- 0
 
   .occu_cover_reject_structured(occ_formula, "occupancy")
   .occu_cover_reject_structured(det_formula, "detection")
@@ -620,9 +626,12 @@
 # fitter optimised, gcol33/tulpaObs#34). `pos_site` indexes the occupancy units
 # with at least one detection; `vals[[k]]` is that unit's detected covers.
 .occu_cover_unit_cover <- function(model) {
-  det_mat  <- model$valid & (model$y == 1L)
-  pos_site <- which(rowSums(det_mat) > 0L)
-  vals <- lapply(pos_site, function(i) as.numeric(model$y_pos[i, det_mat[i, ]]))
+  # Cover-observed visits (detected AND finite cover); a detected visit with a
+  # missing cover (NA) contributes no cover term. A unit enters `pos_site` only
+  # if it has at least one observed cover.
+  obs_mat  <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
+  pos_site <- which(rowSums(obs_mat) > 0L)
+  vals <- lapply(pos_site, function(i) as.numeric(model$y_pos[i, obs_mat[i, ]]))
   list(pos_site = pos_site, vals = vals)
 }
 
@@ -711,10 +720,14 @@
   mode    <- model$cover_aggregate %||% "none"
 
   if (identical(mode, "none")) {
-    pos_mask <- model$valid & (model$y == 1L)
-    dens <- .occu_cover_pos_logdens(model$y_pos, ep_mat, exp(log_disp), is_beta)
+    # Cover density at detected visits with an observed cover (missing-at-random
+    # cover drops out); the NA-cover cells score 0.
+    pos_mask <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
     log_f_pos <- matrix(0, n_sites, model$max_visits)
-    log_f_pos[pos_mask] <- dens[pos_mask]
+    if (any(pos_mask)) {
+      log_f_pos[pos_mask] <- .occu_cover_pos_logdens(
+        model$y_pos[pos_mask], ep_mat[pos_mask], exp(log_disp), is_beta)
+    }
     return(rowSums(log_f_pos))
   }
 
@@ -815,6 +828,7 @@
   start[1L] <- stats::qlogis(min(max(det_rate, 1e-3), 1 - 1e-3))
 
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  pos_vals <- pos_vals[is.finite(pos_vals)]
   if (length(pos_vals) > 0L) {
     if (identical(model$positive, "beta")) {
       start[p_occ + p_p + 1L] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))

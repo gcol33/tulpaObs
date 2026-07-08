@@ -98,7 +98,10 @@
         if (y[i, v] == 1L) { lp_data <- lp_data + log(pv);     g_eta_p[i, v] <- 1 - pv }
         else               { lp_data <- lp_data + log(1 - pv); g_eta_p[i, v] <- -pv }
       }
-      for (v in vv[y[i, vv] == 1L]) {
+      # Cover factor at detected visits with an observed cover; a missing (NA)
+      # cover drops out (missing-at-random cover), the detection loop above still
+      # counts the visit.
+      for (v in vv[y[i, vv] == 1L & is.finite(y_pos[i, vv])]) {
         ev <- eta_pos[i, v]; yy <- y_pos[i, v]
         if (is_beta) {
           mu <- sgm(ev); a <- mu * disp; b <- (1 - mu) * disp
@@ -370,7 +373,9 @@
 
   # Pre-fit the pos-arm dispersion at the empirical cover spread (matching the
   # joint_coupled non-latent path); it rides the spec's phi slot, fixed here.
+  # Observed covers only (a detected visit may carry a missing cover).
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  pos_vals <- pos_vals[is.finite(pos_vals)]
   sigma_pos_init <- if (is_beta) {
     if (length(pos_vals) >= 2L) {
       mu_hat <- mean(pos_vals); var_hat <- max(stats::var(pos_vals), 1e-6)

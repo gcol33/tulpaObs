@@ -182,7 +182,10 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
         slh[s]   += (y == 1) ? std::log(p) : l1mp;
         sl1mp[s] += l1mp;
         ndet[s]  += y;
-        if (y == 1) {
+        // Cover term at detected visits with an observed cover; a missing (NA ->
+        // non-finite) cover drops out (missing-at-random cover), the detection
+        // mixture above still counts it.
+        if (y == 1 && std::isfinite(ypos[v])) {
           double ep = ep_site[s];
           if (has_pos_visit) {
             ep += row_dot(pXpv, V, v, pBpos, S, d, p_pos_site, p_pos_vis);

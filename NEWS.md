@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.104 (2026-07-08)
+
+Missing-at-random cover on `occu_cover()`:
+
+  A detected visit may now carry a missing cover value (`y_pos = NA`). The
+  detection and occupancy arms keep the visit; only the Beta / lognormal cover
+  factor drops out, so a species recorded as present but with the cover not
+  measured contributes its detection without fabricating a cover. Missingness is
+  taken as at-random given the model covariates: the cover likelihood is the
+  product of the cover density over the observed detected visits only.
+
+  The cover density gates on `detected & is.finite(cover)` uniformly across the
+  builders (dense and compact), the joint nested-Laplace cell coupling, the
+  non-spatial Laplace / NUTS fits, the aggregated and latent cover arms, and the
+  WAIC / PSIS-LOO pointwise log-likelihood. With no missing cover the build and
+  fit are byte-identical to before (the NA sentinel is never introduced).
+
 ## 0.0.103 (2026-07-08)
 
 Performance (occu_cover joint fit):

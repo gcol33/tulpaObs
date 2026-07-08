@@ -38,6 +38,10 @@ h_ij = (1 - p_ij) * 1\{y_ij = 0\}
      + p_ij       * f_pos(y_pos_ij; eta_pos_ij, ...) * 1\{y_ij = 1\}
 }\if{html}{\out{</div>}}
 
+A detected visit (\code{y_ij = 1}) with a missing cover (\code{y_pos_ij = NA}) keeps its
+detection term but drops the \code{f_pos} factor: cover is taken missing-at-random,
+so the cover likelihood runs over the detected visits with an observed cover.
+
 Reduces to \code{\link[=occu]{occu()}} when the cover arm is degenerate, and to the
 plot-level cover hurdle (\code{\link[=cover]{cover()}}) when J = 1 and detection is perfect.
 }

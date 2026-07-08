@@ -448,6 +448,7 @@
   start[1L] <- stats::qlogis(min(max(det_rate, 1e-3), 1 - 1e-3))
 
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  pos_vals <- pos_vals[is.finite(pos_vals)]
   disp_idx <- p_psi + p_p + p_pos + 1L
   pos_int_idx <- p_psi + p_p + 1L
   if (length(pos_vals) > 0L) {

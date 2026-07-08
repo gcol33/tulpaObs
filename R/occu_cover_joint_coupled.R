@@ -131,7 +131,7 @@
     # Pre-fit disp2 from the WITHIN-unit spread and seed sigma_u from the
     # BETWEEN-unit spread: Var(log y) = sigma_eps^2 + sigma_u^2, so pre-fitting
     # disp2 at the total spread would swallow sigma_u and leave it unidentified.
-    det_mat   <- model$valid & (model$y == 1L)
+    det_mat   <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
     det_sites <- which(rowSums(det_mat) > 0L)
     site_vals <- lapply(det_sites, function(i)
                         as.numeric(model$y_pos[i, det_mat[i, ]]))
@@ -168,12 +168,13 @@
     # dispersion is pre-fit on those aggregated values.
     pos_vals <- if (aggregated) {
       aggfun  <- if (identical(cover_aggregate, "median")) stats::median else mean
-      det_mat <- model$valid & (model$y == 1L)
+      det_mat <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
       sw      <- which(rowSums(det_mat) > 0L)
       vapply(sw, function(i) as.numeric(aggfun(model$y_pos[i, det_mat[i, ]])),
              numeric(1))
     } else {
-      model$y_pos[model$valid & model$y == 1L]
+      pv <- model$y_pos[model$valid & model$y == 1L]
+      pv[is.finite(pv)]
     }
     phi_pos_init <- if (is_beta) {
       if (length(pos_vals) >= 2L) {

@@ -219,13 +219,17 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
             // Cover arm at detected visits (+ the shared field scaled by alpha).
             for (int v = 0; v < J; ++v) {
                 if (d.valid(i, v) == 0 || d.y(i, v) != 1) continue;
+                const double yp = d.y_pos(i, v);
+                // Missing-at-random cover: a detected visit with no cover value
+                // (NA -> non-finite) drops out of the cover factor; its cover-arm
+                // score stays 0.
+                if (!std::isfinite(yp)) continue;
                 double eta_pos = field_alpha * f_i;
                 for (int k = 0; k < p_pos_site; ++k) eta_pos += d.X_pos_site(i, k) * bpos_site[k];
                 if (p_pos_visit > 0) {
                     const int row = i * J + v;
                     for (int k = 0; k < p_pos_visit; ++k) eta_pos += d.X_pos_visit(row, k) * bpos_visit[k];
                 }
-                const double yp = d.y_pos(i, v);
                 if (d.is_beta) {
                     lp += BetaPositive::log_density(yp, eta_pos, disp);
                     g_eta_pos[v] = BetaPositive::grad_eta(yp, eta_pos, disp);

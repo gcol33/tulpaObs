@@ -220,10 +220,13 @@
 
   is_beta <- identical(model$positive %||% "lognormal", "beta")
   pos_ld  <- numeric(length(y))
-  det     <- y == 1L
-  if (any(det)) {
-    pos_ld[det] <- .occu_cover_pos_logdens(model$y_pos_visit[det], ep_vec[det],
-                                           exp(log_disp), is_beta)
+  # Cover term at detected visits with an observed cover; a missing (NA) cover
+  # at a detected visit drops out (missing-at-random cover), the detection term
+  # above still counts.
+  cobs    <- (y == 1L) & is.finite(model$y_pos_visit)
+  if (any(cobs)) {
+    pos_ld[cobs] <- .occu_cover_pos_logdens(model$y_pos_visit[cobs], ep_vec[cobs],
+                                            exp(log_disp), is_beta)
   }
 
   sum_log_h  <- as.numeric(rowsum(log_h_det, g))
@@ -399,7 +402,7 @@
   mode <- model$cover_aggregate %||% "none"
 
   if (identical(mode, "none")) {
-    pos_mask <- model$valid & (model$y == 1L)
+    pos_mask <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
     if (!any(pos_mask)) return(c(obs = 0, rep = 0))
     Epos <- mean_pos(ep_mat, disp)
     yrep <- matrix(draw_pos(as.vector(ep_mat), disp), nrow(ep_mat), ncol(ep_mat))

@@ -181,6 +181,10 @@ jsdm <- function() {
 #'     h_ij = (1 - p_ij) * 1{y_ij = 0}
 #'          + p_ij       * f_pos(y_pos_ij; eta_pos_ij, ...) * 1{y_ij = 1}
 #'
+#' A detected visit (`y_ij = 1`) with a missing cover (`y_pos_ij = NA`) keeps its
+#' detection term but drops the `f_pos` factor: cover is taken missing-at-random,
+#' so the cover likelihood runs over the detected visits with an observed cover.
+#'
 #' Reduces to [occu()] when the cover arm is degenerate, and to the
 #' plot-level cover hurdle ([cover()]) when J = 1 and detection is perfect.
 #'
