@@ -1,5 +1,14 @@
 # tulpaObs NEWS
 
+## 0.0.105 (2026-07-10)
+
+* Pin the `tulpa` dependency to the memory-safe `v0.0.77` (the Imports floor and
+  the Remotes ref), which sizes the joint outer-grid thread budget from the
+  measured CHOLMOD factor rather than a fixed per-thread guess. The earlier
+  Remotes pin (`@v0.0.70`) conflicted with installing `gcol33/tulpa` at HEAD, so
+  a fresh `pak::pak(c("gcol33/tulpa", "gcol33/tulpaObs"))` could not solve the
+  dependency graph; the two refs are consistent again.
+
 ## 0.0.104 (2026-07-08)
 
 Missing-at-random cover on `occu_cover()`:
