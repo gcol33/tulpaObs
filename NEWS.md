@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.106 (2026-07-12)
+
+* Pin tulpa `>= 0.0.78` (Remotes `gcol33/tulpa@v0.0.78`), which adds the
+  `integration = "grid_adaptive"` outer-grid integrator. Occupancy / cover joint
+  fits (`occu_cover()`, `cover()`) forward `control$integration` unchanged, so
+  `"grid_adaptive"` reaches the joint driver: on a sharply-peaked hyperparameter
+  posterior (a strongly-identified field SD / Beta precision, the fine-grid
+  regime) it evaluates only the mass-concentrated outer cells for a posterior
+  that matches the dense tensor, and declines back to the tensor otherwise.
+
 ## 0.0.105 (2026-07-10)
 
 * Pin the `tulpa` dependency to the memory-safe `v0.0.77` (the Imports floor and
