@@ -1,5 +1,13 @@
 # tulpaObs NEWS
 
+## 0.0.107 (2026-07-12)
+
+* Pin tulpa `>= 0.0.79`, which makes `integration = "grid_adaptive"` decline to
+  the dense tensor before any inner solve on a small outer grid (default
+  `control$adaptive_grid_min_cells = 48`), so the adaptive integrator is never
+  slower than dense on the small hyperparameter grids typical of shared-trend
+  occupancy fits.
+
 ## 0.0.106 (2026-07-12)
 
 * Pin tulpa `>= 0.0.78` (Remotes `gcol33/tulpa@v0.0.78`), which adds the
