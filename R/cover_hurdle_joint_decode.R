@@ -220,7 +220,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       draws_pos    = draws_pos,
       sla_status   = sla_status
     ),
-    class = c("cover_fit", "tobs_fit", "tulpa_fit")
+    class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit")
   )
   out
 }

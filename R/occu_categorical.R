@@ -158,6 +158,7 @@ fit_occu_categorical <- function(enc, class_labels, priors, control, family) {
     list(
       beta_occ    = beta_occ,
       se_occ      = se_occ,
+      vcov_occ    = V_occ,
       beta_class  = Beta,
       se_class    = se_class,
       vcov_class  = mc$vcov,
@@ -174,7 +175,7 @@ fit_occu_categorical <- function(enc, class_labels, priors, control, family) {
       encoding    = enc,
       family      = family
     ),
-    class = c("occu_categorical_fit", "tobs_fit", "tulpa_fit"))
+    class = c("occu_categorical_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit"))
 }
 
 

@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.108 (2026-07-13)
+
+* Fix the inherited S3 method surface on the multi-arm fit classes `cover_fit`
+  (all `cover()` Laplace / nested-Laplace joint paths) and
+  `occu_categorical_fit`. These fits carry independent per-arm coefficient blocks
+  rather than a flat `$model` / `$draws` layout, so the inherited `tobs_fit`
+  methods that branch on `object$model$model_type` errored (`nobs`, `residuals`,
+  `simulate` crashed with "argument is of length zero"; `vcov`, `confint`,
+  `logLik`, `tidy` errored in the tulpa summarizer; `fitted` returned
+  silently-wrong values). A new intermediate class `tobs_multiarm_fit` supplies
+  arm-aware `coef`, `vcov` (exact block-diagonal, since arms are fit
+  independently), `confint`, `logLik`, `nobs`, `glance`, `tidy`, and `summary`,
+  and turns `fitted` / `residuals` / `simulate` into informative refusals
+  pointing at `predict()` / `simulate_<family>()`. The NUTS `cover()` path (which
+  does carry `$draws`) defers to the tulpa draw-based methods unchanged.
+
 ## 0.0.107 (2026-07-12)
 
 * Pin tulpa `>= 0.0.79`, which makes `integration = "grid_adaptive"` decline to

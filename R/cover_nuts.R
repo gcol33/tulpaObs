@@ -305,7 +305,7 @@
     convergence  = list(converged = TRUE, n_iter = as.integer(n.iter),
                         parameter = par_names, rhat = rhat,
                         ess_bulk = ess, ess_tail = rep(NA_real_, n_par))
-  ), class = c("cover_fit", "tobs_fit", "tulpa_fit"))
+  ), class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit"))
 }
 
 
