@@ -24,7 +24,7 @@ test_that("ms_dyn_occu() constructor returns a tobs_family", {
 test_that("ms_dyn_occu() recovers community means + per-species coefs", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_dyn_ms_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
+  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
                               beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = 31)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
@@ -70,7 +70,7 @@ test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
              "gamma_(Intercept)" = stats::qlogis(0.2),
              "eps_(Intercept)"   = stats::qlogis(0.1))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_ms_occu(N = 80, J = 3, n_species = 12, n_seasons = 4,
+    sim <- simulate_ms_dyn_occu(N = 80, J = 3, n_species = 12, n_seasons = 4,
                                 beta_comm_mean = c(0.3), beta_comm_sd = c(0.6),
                                 gamma = 0.2, epsilon = 0.1, seed = 400 + s)
     fit <- tryCatch(
@@ -92,7 +92,7 @@ test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
 test_that("ms_dyn_occu() S3 methods work", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_dyn_ms_occu(N = 50, J = 3, n_species = 8, n_seasons = 4,
+  sim <- simulate_ms_dyn_occu(N = 50, J = 3, n_species = 8, n_seasons = 4,
                               seed = 5)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
               detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(8)),
@@ -131,7 +131,7 @@ test_that("ms_dyn_occu() S3 methods work", {
 
 
 test_that("ms_dyn_occu() capability gates", {
-  sim <- simulate_dyn_ms_occu(N = 30, J = 3, n_species = 4, n_seasons = 3,
+  sim <- simulate_ms_dyn_occu(N = 30, J = 3, n_species = 4, n_seasons = 3,
                               seed = 1)
   # nested_laplace / nuts not offered.
   expect_error(

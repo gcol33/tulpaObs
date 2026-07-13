@@ -22,8 +22,8 @@ test_that("dynamic occupancy model runs", {
     family      = dyn_occu(),
     detection   = ~ 1,
     y           = y_array,
-    col_formula = ~ 1,
-    ext_formula = ~ 1,
+    colonization = ~ 1,
+    extinction = ~ 1,
     method      = "laplace",
     control     = list(verbose = FALSE)
   )
@@ -37,7 +37,7 @@ test_that("dynamic tobs validates inputs", {
   expect_error(
     tobs(~ 1, data.frame(x = 1:5), family = dyn_occu(),
          detection = ~ 1, y = matrix(0, 3, 2),
-         col_formula = ~ 1, ext_formula = ~ 1),
+         colonization = ~ 1, extinction = ~ 1),
     "3D array"
   )
 })
@@ -76,8 +76,8 @@ test_that("dyn_occu recovers (psi1, gamma, epsilon, p) within bias tolerance", {
     family      = dyn_occu(),
     detection   = ~ 1,
     y           = y,
-    col_formula = ~ 1,
-    ext_formula = ~ 1,
+    colonization = ~ 1,
+    extinction = ~ 1,
     control     = list(verbose = FALSE)
   )
 
@@ -114,7 +114,7 @@ test_that("fitted()$z is the forward-backward smoothed state for dynamic models"
     y[i, , t] <- if (ztrue[i, t]) rbinom(n_visits, 1, p_true) else 0L
 
   fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
-              detection = ~ 1, y = y, col_formula = ~ 1, ext_formula = ~ 1,
+              detection = ~ 1, y = y, colonization = ~ 1, extinction = ~ 1,
               method = "laplace", control = list(verbose = FALSE))
   z <- fitted(fit)$z
   expect_true(is.matrix(z))

@@ -227,7 +227,7 @@ single-season one.
 
 The call mirrors the single-season one with two extra formulas. The first
 argument is the first-season occupancy formula $\psi_1$, `detection` is the
-per-visit detection formula $p$, and `col_formula` and `ext_formula` are the
+per-visit detection formula $p$, and `colonization` and `extinction` are the
 colonisation $\gamma$ and extinction $\epsilon$ formulas. All four are
 intercept-only here. The response is the three-dimensional array, and
 `method = "laplace"` is the default.
@@ -239,8 +239,8 @@ fit <- tobs(
   family      = dyn_occu(),
   detection   = ~ 1,                   # p: per-visit detection
   y           = sim$y,
-  col_formula = ~ 1,                   # gamma: colonisation
-  ext_formula = ~ 1,                   # epsilon: extinction
+  colonization = ~ 1,                   # gamma: colonisation
+  extinction = ~ 1,                   # epsilon: extinction
   method      = "laplace",
   control     = list(verbose = FALSE)  # the EM prints its iterations otherwise
 )
@@ -254,7 +254,7 @@ than fitting the wrong model silently.
 ```{r dim-error, error = TRUE}
 tobs(~ 1, data = sim$data, family = dyn_occu(), detection = ~ 1,
      y = sim$y[, , 1],                 # a single season: 2D matrix
-     col_formula = ~ 1, ext_formula = ~ 1,
+     colonization = ~ 1, extinction = ~ 1,
      control = list(verbose = FALSE))
 ```
 
@@ -543,7 +543,7 @@ story.
 
 Colonisation and extinction need not be constant across sites. A patch near an
 occupied source colonises faster; a small or exposed patch goes extinct more
-often. `col_formula` and `ext_formula` take covariate formulas exactly as the
+often. `colonization` and `extinction` take covariate formulas exactly as the
 occupancy and detection formulas do, so a site-level predictor enters the rate on
 its logit scale. Add a covariate to the data and put it on the colonisation
 formula.
@@ -558,8 +558,8 @@ fit_cov <- tobs(
   family      = dyn_occu(),
   detection   = ~ 1,
   y           = sim$y,
-  col_formula = ~ connectivity,                # colonisation varies by site
-  ext_formula = ~ 1,
+  colonization = ~ connectivity,                # colonisation varies by site
+  extinction = ~ 1,
   method      = "laplace",
   control     = list(verbose = FALSE)
 )
@@ -570,7 +570,7 @@ The colonisation process now has an intercept and a `connectivity` slope on the
 logit scale. The slope is near zero here because `connectivity` was drawn
 independently of the simulated trajectory; in a real dataset it would carry the
 effect of the predictor on the colonisation rate. Extinction takes a formula the
-same way through `ext_formula`, and the two can carry different covariates. To
+same way through `extinction`, and the two can carry different covariates. To
 read a fitted rate at a given covariate value, push the logit-scale linear
 predictor through `plogis()`; the intercept-only `$intercepts` shortcut applies
 only when the formula is `~ 1`.
@@ -609,8 +609,8 @@ fit_pred <- tobs(
   family      = dyn_occu(),
   detection   = ~ 1,
   y           = sim$y,
-  col_formula = ~ 1,
-  ext_formula = ~ 1,
+  colonization = ~ 1,
+  extinction = ~ 1,
   method      = "laplace",
   control     = list(verbose = FALSE)
 )
@@ -686,7 +686,7 @@ of the histories you have.
 ```{r waic-table}
 fit_cov_e <- tobs(
   ~ 1, data = dat_cov, family = dyn_occu(), detection = ~ 1, y = sim$y,
-  col_formula = ~ connectivity, ext_formula = ~ connectivity,
+  colonization = ~ connectivity, extinction = ~ connectivity,
   method = "laplace", control = list(verbose = FALSE)
 )
 
@@ -719,7 +719,7 @@ correctly specified, and it will happily hand you the less wrong of two wrong
 models. Pair it with the smoothed-state and residual checks above before
 trusting the ranking. The comparison also guides model building one decision at
 a time: a covariate that belongs on colonisation should lower WAIC when added to
-`col_formula` and do little when forced onto `ext_formula`, the same way a
+`colonization` and do little when forced onto `extinction`, the same way a
 single-season covariate sorts into the occupancy or the detection arm.
 
 ## Full posterior with NUTS
@@ -737,8 +737,8 @@ fit_nuts <- tobs(
   family      = dyn_occu(),
   detection   = ~ 1,
   y           = sim$y,
-  col_formula = ~ 1,
-  ext_formula = ~ 1,
+  colonization = ~ 1,
+  extinction = ~ 1,
   method      = "nuts",
   control     = list(n.iter = 600, n.warmup = 300, seed = 1, verbose = FALSE)
 )

@@ -47,7 +47,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_occu", {
 test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_int_occu", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_int_ms_occu(N = 80, J = c(3, 4), n_species = 6, seed = 22)
+  sim <- simulate_ms_int_occu(N = 80, J = c(3, 4), n_species = 6, seed = 22)
   fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
@@ -60,7 +60,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_int_occu", {
 test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_dyn_occu", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_dyn_ms_occu(N = 50, J = 3, n_species = 6, n_seasons = 4,
+  sim <- simulate_ms_dyn_occu(N = 50, J = 3, n_species = 6, n_seasons = 4,
                               gamma = 0.2, epsilon = 0.1, seed = 23)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),

@@ -78,7 +78,7 @@ test_that("tobs() passes the method gate for dyn_occu + nested_laplace (now supp
   df <- data.frame(x = rnorm(4))
   expect_error(
     tobs(~ x, data = df, family = dyn_occu(), detection = ~ 1, y = y,
-         col_formula = ~ 1, ext_formula = ~ 1, method = "nested_laplace",
+         colonization = ~ 1, extinction = ~ 1, method = "nested_laplace",
          control = list(verbose = FALSE)),
     "at least one latent block"
   )

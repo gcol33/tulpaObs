@@ -744,7 +744,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
 #' plogis(beta_omega[1] + beta_omega[2] * z_{i,t})`, `gamma_{i,t} =
 #' exp(beta_gamma[1] + beta_gamma[2] * z_{i,t})`. The covariate is returned as a
 #' `[N x (T-1)]` matrix column `season_cov` of `data`, ready for
-#' `omega_formula = ~ season_cov`.
+#' `omega = ~ season_cov`.
 #'
 #' @param N Number of sites (default 150).
 #' @param T Number of primary seasons (default 4).

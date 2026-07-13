@@ -172,7 +172,7 @@ test_that("tobs() + dyn_occu() psi1 spde() Laplace recovers beta and the field",
 
   sim <- .sim_spde_dynamic(seed = 1)
   fit <- tobs(.spde_field_term(), data = sim$data, family = dyn_occu(),
-              detection = ~ 1, y = sim$y, col_formula = ~ 1, ext_formula = ~ 1,
+              detection = ~ 1, y = sim$y, colonization = ~ 1, extinction = ~ 1,
               method = "laplace", control = list(verbose = FALSE))
 
   expect_lt(abs(fit$means["psi1_occ_cov"] - 0.7), 0.25)
@@ -190,7 +190,7 @@ test_that("dyn_occu() psi1 spde() recovery holds across seeds", {
   cors <- vapply(seeds, function(s) {
     sim <- .sim_spde_dynamic(seed = s)
     fit <- tobs(.spde_field_term(), data = sim$data, family = dyn_occu(),
-                detection = ~ 1, y = sim$y, col_formula = ~ 1, ext_formula = ~ 1,
+                detection = ~ 1, y = sim$y, colonization = ~ 1, extinction = ~ 1,
                 method = "laplace", control = list(verbose = FALSE))
     .spde_field_cor(fit, sim$u_true)
   }, numeric(1))

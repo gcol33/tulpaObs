@@ -64,5 +64,5 @@ Survival and recruitment are constant across seasons by default. Supplying
 \code{beta_omega} (logit-scale) or \code{beta_gamma} (log-scale) instead makes the rate
 depend on a per-(site, interval) season covariate \code{z}: \verb{omega_\{i,t\} = plogis(beta_omega[1] + beta_omega[2] * z_\{i,t\})}, \verb{gamma_\{i,t\} = exp(beta_gamma[1] + beta_gamma[2] * z_\{i,t\})}. The covariate is returned as a
 \verb{[N x (T-1)]} matrix column \code{season_cov} of \code{data}, ready for
-\code{omega_formula = ~ season_cov}.
+\code{omega = ~ season_cov}.
 }

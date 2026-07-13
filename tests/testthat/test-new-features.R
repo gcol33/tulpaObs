@@ -48,10 +48,10 @@ test_that("simulation functions produce correct dimensions", {
   expect_equal(ncol(sim_int$y[[1]]), 3)
   expect_equal(ncol(sim_int$y[[2]]), 4)
 
-  sim_tms <- simulate_dyn_ms_occu(N = 10, J = 3, n_species = 3, n_seasons = 4, seed = 42)
+  sim_tms <- simulate_ms_dyn_occu(N = 10, J = 3, n_species = 3, n_seasons = 4, seed = 42)
   expect_equal(dim(sim_tms$y), c(10, 3, 4, 3))
 
-  sim_ims <- simulate_int_ms_occu(N = 10, J = c(3, 4), n_species = 3, seed = 42)
+  sim_ims <- simulate_ms_int_occu(N = 10, J = c(3, 4), n_species = 3, seed = 42)
   expect_length(sim_ims$y, 2)
 })
 

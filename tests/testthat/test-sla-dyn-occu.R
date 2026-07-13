@@ -74,8 +74,8 @@ test_that("dyn_occu with simplified_laplace attaches a numeric skew vector", {
     family      = dyn_occu(),
     detection   = ~ 1,
     y           = y,
-    col_formula = ~ 1,
-    ext_formula = ~ 1,
+    colonization = ~ 1,
+    extinction = ~ 1,
     method      = "laplace_sla",
     control     = list(verbose = FALSE)
   )
@@ -222,8 +222,8 @@ test_that("SLA gamma is finite on N=80, T=3, J=4 dyn_occu", {
     family      = dyn_occu(),
     detection   = ~ 1,
     y           = y,
-    col_formula = ~ 1,
-    ext_formula = ~ 1,
+    colonization = ~ 1,
+    extinction = ~ 1,
     method      = "laplace_sla",
     control     = list(verbose = FALSE)
   )
@@ -271,8 +271,8 @@ test_that(".loglik_dyn_occu returns a reasonable number at the EM mode", {
     family      = dyn_occu(),
     detection   = ~ 1,
     y           = y,
-    col_formula = ~ 1,
-    ext_formula = ~ 1,
+    colonization = ~ 1,
+    extinction = ~ 1,
     method      = "laplace",
     control     = list(verbose = FALSE)
   )

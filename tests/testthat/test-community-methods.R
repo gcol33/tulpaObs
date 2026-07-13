@@ -26,7 +26,7 @@ test_that("predict() / residuals() work on ms_occu", {
 test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
   skip_on_cran()
   skip_if_fast()
-  sd_ <- simulate_dyn_ms_occu(N = 40, J = 3, n_species = 5, n_seasons = 3,
+  sd_ <- simulate_ms_dyn_occu(N = 40, J = 3, n_species = 5, n_seasons = 3,
                               gamma = 0.2, epsilon = 0.1, seed = 2)
   fd <- tobs(~ 1, data = sd_$data, family = ms_dyn_occu(), detection = ~ 1,
              y = sd_$y, species = paste0("sp", 1:5), method = "laplace",
@@ -34,7 +34,7 @@ test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
   expect_equal(dim(predict(fd)), c(40L, 5L))
   expect_true(all(is.finite(residuals(fd)$occ)))
 
-  si <- simulate_int_ms_occu(N = 60, J = c(3, 4), n_species = 5, seed = 3)
+  si <- simulate_ms_int_occu(N = 60, J = c(3, 4), n_species = 5, seed = 3)
   fi <- tobs(~ 1, data = si$data, family = ms_int_occu(), detection = ~ 1,
              y = si$y, species = paste0("sp", 1:5), method = "laplace",
              control = list(verbose = FALSE))

@@ -55,7 +55,7 @@ test_that("dynamic occupancy fits nested_laplace with a spatial field on psi1", 
 
   fit <- tobs(~ elev + icar(graph = adj), data = data.frame(elev = elev),
               family = dyn_occu(), detection = ~ 1, y = y,
-              col_formula = ~ 1, ext_formula = ~ 1, method = "nested_laplace",
+              colonization = ~ 1, extinction = ~ 1, method = "nested_laplace",
               control = list(max.iter = 6L, verbose = FALSE))
 
   expect_s3_class(fit, "tobs_fit")

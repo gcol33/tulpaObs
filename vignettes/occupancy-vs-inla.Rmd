@@ -73,7 +73,7 @@ structure, choose the inference, and pull summaries off the result.
 |---|---|---|---|
 | Format data | `inla.stack()`, hand-built long frame | `tobs_data()`, `tobs_format()`, or pass `data` + `y` directly to `tobs()` | tulpaObs keeps the N x J detection matrix as `y`; no row-stacking |
 | Single-season occupancy | none (needs `inla.rgeneric` for the mixture) | `tobs(family = occu())` | the mixture likelihood is built in, not user-coded |
-| Multi-season / dynamic | none direct | `tobs(family = dyn_occu())` with `col_formula` / `ext_formula` | colonisation + extinction HMM |
+| Multi-season / dynamic | none direct | `tobs(family = dyn_occu())` with `colonization` / `extinction` | colonisation + extinction HMM |
 | Multispecies / community | per-species `f(species, model = "iid")` hyperpriors | `tobs(family = ms_occu(), species = ...)` | community random effects over species coefficients |
 | Integrated (multi-source) | shared latent field across stacks | `tobs(family = int_occu())` | one occupancy state, per-source detection |
 | Joint species distribution | latent-factor `f(..., model = "iid")` | `tobs(family = jsdm(), species = ...)` | shared latent factors, probit link |

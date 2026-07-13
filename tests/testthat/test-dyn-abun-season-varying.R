@@ -1,7 +1,7 @@
 # Season-varying survival (omega) and recruitment (gamma) for the Dail-Madsen
 # open N-mixture (dyn_abun(), gcol33/tulpaObs#80 part b). The transition from
 # season t-1 to t uses interval-(t-1) vital rates, so a season covariate on
-# omega_formula / gamma_formula drives the dynamics. The forward HMM kernel
+# omega / gamma drives the dynamics. The forward HMM kernel
 # carries length-(T-1) interval-indexed eta with per-interval forward-mode
 # gradients; the constant-rate (scalar) path is the broadcast special case.
 #
@@ -94,7 +94,7 @@ test_that("dyn_abun recovers a season-varying survival slope", {
                              beta_omega = beta_omega, seed = 200 + k)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data,
                 family = dyn_abun(K_max = 35), detection = ~ 1, y = sim$y,
-                omega_formula = ~ season_cov, method = "laplace",
+                omega = ~ season_cov, method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     if (k == 1L) {
       expect_s3_class(fit, "tobs_fit")
@@ -123,7 +123,7 @@ test_that("dyn_abun recovers a season-varying recruitment slope", {
                              beta_gamma = beta_gamma, seed = 300 + k)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data,
                 family = dyn_abun(K_max = 35), detection = ~ 1, y = sim$y,
-                gamma_formula = ~ season_cov, method = "laplace",
+                gamma = ~ season_cov, method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     if (k == 1L) {
       expect_true("gamma_season_cov" %in% names(fit$means))

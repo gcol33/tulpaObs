@@ -130,7 +130,7 @@ test_that("fp_occu supports a covariate on the false-positive arm", {
   }
   dat <- data.frame(x = x)
   fit <- tobs(formula = ~ x, data = dat, family = fp_occu(), detection = ~ 1,
-              y = y, fp_formula = ~ x, method = "laplace",
+              y = y, p10 = ~ x, method = "laplace",
               control = list(verbose = FALSE))
   est <- fit$means
   expect_true("p10_x" %in% names(est))

@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.109 (2026-07-14)
+
+* Unify the extra-arm formula arguments of `tobs()` on bare process / symbol
+  names, matching `detection`, `positive`, and `availability`: `col_formula` ->
+  `colonization`, `ext_formula` -> `extinction` (dynamic occupancy),
+  `omega_formula` -> `omega`, `gamma_formula` -> `gamma` (open N-mixture), and
+  `fp_formula` -> `p10`, `b_formula` -> `certainty` (false-positive occupancy;
+  `certainty` is the `b` arm, renamed off `b` to avoid clashing with the `by`
+  argument). The old spellings still work but emit a one-time deprecation warning.
+* Rename the community simulators to match their family constructors:
+  `simulate_dyn_ms_occu()` -> `simulate_ms_dyn_occu()` and
+  `simulate_int_ms_occu()` -> `simulate_ms_int_occu()` (matching `ms_dyn_occu()`
+  / `ms_int_occu()`). The old names remain as deprecated pass-throughs.
+* Refresh the README: the model menu now lists all 19 family constructors, the
+  install snippet no longer pins a stale tag, the documentation section links the
+  full vignette set, and the lifecycle badge reflects the stable public API.
+
 ## 0.0.108 (2026-07-13)
 
 * Fix the inherited S3 method surface on the multi-arm fit classes `cover_fit`

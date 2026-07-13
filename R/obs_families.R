@@ -826,14 +826,16 @@ ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' marginal.
 #'
 #' Four arms: initial abundance `lambda` (the `tobs()` `formula`) and detection
-#' `p` (`detection`) are site-level; apparent survival `omega` (`omega_formula`,
-#' default `~ 1`) and recruitment `gamma` (`gamma_formula`, default `~ 1`) span
-#' the `T - 1` transition intervals. A constant `omega` / `gamma` is shared across
-#' a site's seasons; supplying a season-varying covariate (a
-#' `[n_sites x (T - 1)]` matrix column of `data`, one column per transition
-#' interval) on `omega_formula` / `gamma_formula` gives interval-specific vital
+#' `p` (`detection`) are site-level; apparent survival `omega` (the `omega`
+#' argument, default `~ 1`) and recruitment `gamma` (the `gamma` argument,
+#' default `~ 1`) span the `T - 1` transition intervals. A constant `omega` /
+#' `gamma` is shared across a site's seasons; supplying a season-varying
+#' covariate (a `[n_sites x (T - 1)]` matrix column of `data`, one column per
+#' transition interval) on `omega` / `gamma` gives interval-specific vital
 #' rates. The response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or
-#' a list of per-season count matrices); missing visits are `NA`.
+#' a list of per-season count matrices); missing visits are `NA`. The `omega` and
+#' `gamma` arm arguments were previously named `omega_formula` / `gamma_formula`;
+#' those spellings are deprecated but still accepted.
 #'
 #' @param K_max abundance-state truncation for the forward recursion (states
 #'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
@@ -978,9 +980,11 @@ removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' Four site-level logit arms: occupancy `psi` (the `tobs()` `formula`), true
 #' detection `p11` (`detection`), false-positive rate `p10`, and the probability a
 #' true detection is certain `b`. The `p10` and `b` predictors default to
-#' intercept-only and are set with the `fp_formula = ~ ...` and `b_formula =
-#' ~ ...` arguments to [tobs()]. The response `y` is an `n_sites x J` integer
-#' matrix in `{0, 1, 2}` (NA visits dropped).
+#' intercept-only and are set with the `p10 = ~ ...` and `certainty = ~ ...`
+#' arguments to [tobs()] (`certainty` is the `b` arm). Those two arguments were
+#' previously named `fp_formula` / `b_formula`; the old spellings are deprecated
+#' but still accepted. The response `y` is an `n_sites x J` integer matrix in
+#' `{0, 1, 2}` (NA visits dropped).
 #'
 #' @return A `tobs_family` object.
 #' @references

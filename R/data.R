@@ -809,8 +809,9 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #' @param epsilon Extinction probability (default 0.1).
 #' @param seed Random seed.
 #' @return A list with `y` (4D array), `data`, and `truth`.
+#' @seealso [ms_dyn_occu()], the family this simulates for.
 #' @export
-simulate_dyn_ms_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
+simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
                       beta_comm_mean = c(0), beta_comm_sd = c(0.5),
                       gamma = 0.15, epsilon = 0.1,
                       seed = NULL) {
@@ -854,8 +855,9 @@ simulate_dyn_ms_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
 #' @param n_data Number of data sources (default 2).
 #' @param seed Random seed.
 #' @return A list with `y` (list of 3D arrays), `data`, and `truth`.
+#' @seealso [ms_int_occu()], the family this simulates for.
 #' @export
-simulate_int_ms_occu <- function(N = 100, J = c(3, 4), n_species = 5,
+simulate_ms_int_occu <- function(N = 100, J = c(3, 4), n_species = 5,
                         n_data = 2, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   if (length(J) != n_data) J <- rep(J[1], n_data)
@@ -884,4 +886,29 @@ simulate_int_ms_occu <- function(N = 100, J = c(3, 4), n_species = 5,
     data = data,
     truth = list(psi_species = psi_species, p_det = p_det, z = z)
   )
+}
+
+#' Deprecated community-simulator aliases
+#'
+#' `simulate_dyn_ms_occu()` and `simulate_int_ms_occu()` were renamed to
+#' [simulate_ms_dyn_occu()] and [simulate_ms_int_occu()] so the simulator names
+#' match the `ms_dyn_occu()` / `ms_int_occu()` family constructors. The old names
+#' still work as deprecated pass-throughs and will be removed in a future
+#' release.
+#'
+#' @param ... passed to the renamed simulator.
+#' @return See [simulate_ms_dyn_occu()] / [simulate_ms_int_occu()].
+#' @name tulpaObs-deprecated
+#' @keywords internal
+#' @export
+simulate_dyn_ms_occu <- function(...) {
+  .Deprecated("simulate_ms_dyn_occu")
+  simulate_ms_dyn_occu(...)
+}
+
+#' @rdname tulpaObs-deprecated
+#' @export
+simulate_int_ms_occu <- function(...) {
+  .Deprecated("simulate_ms_int_occu")
+  simulate_ms_int_occu(...)
 }

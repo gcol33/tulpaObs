@@ -41,7 +41,7 @@ tobs(formula, data, family,
 | `method`    | Inference route — one fully-specified path, not orthogonal knobs (see §4). |
 | `priors`    | `occu_priors()` / list for the Laplace methods; `FALSE` disables the default penalty; forwarded to tulpa under NUTS. The `laplace_gibbs`/`laplace_mi` routes disable it automatically. |
 | `control`   | Low-level engine controls (see §5). |
-| `...`       | Family-specific args, e.g. `species=` (`ms_occu`), `col_formula=`/`ext_formula=` (`dyn_occu`). |
+| `...`       | Family-specific args, e.g. `species=` (`ms_occu`), `colonization=`/`extinction=` (`dyn_occu`). |
 
 The resolved route is recorded on `fit$method` for provenance.
 
@@ -51,7 +51,7 @@ Returns an object of class `c("tobs_fit", "<family>_fit", "tulpa_fit")`.
 
 | Family       | Extra required `...` |
 |--------------|----------------------|
-| `dyn_occu()` | `col_formula = ~ ...`, `ext_formula = ~ ...` (colonisation / extinction) |
+| `dyn_occu()` | `colonization = ~ ...`, `extinction = ~ ...` (colonisation / extinction) |
 | `ms_occu()`  | `species = <id>` |
 | `jsdm()`     | `species = <id>` (optional) |
 
@@ -322,8 +322,8 @@ parameter-recovery tests).
 | `simulate_ms_occu()`      | Multispecies occupancy (3D array) |
 | `simulate_dyn_occu()`     | Dynamic occupancy (colonisation / extinction) |
 | `simulate_int_occu()`     | Integrated multi-source (list of matrices + `site_maps`) |
-| `simulate_dyn_ms_occu()`  | Dynamic multispecies (4D array) |
-| `simulate_int_ms_occu()`  | Integrated multispecies (list of 3D arrays) |
+| `simulate_ms_dyn_occu()`  | Dynamic multispecies (4D array) |
+| `simulate_ms_int_occu()`  | Integrated multispecies (list of 3D arrays) |
 | `simulate_cover()`        | Cover hurdle (optional exponential-kernel spatial field) |
 | `simulate_cover_joint()`  | Cover hurdle with a **shared demeaned BYM2 field** (matches the joint nested-Laplace parameterisation) |
 
@@ -431,7 +431,7 @@ a JSDM / community-factor fit (the spatial-factor `ms_occu_cover()` loadings).
 `occu_multiscale_cover` `obs_family` · **Priors** `occu_priors` `cover_priors` ·
 **Data** `tobs_format` `tobs_data` `tobs_format_ms` `occu_cover_inputs` `tobs_get`
 · **Simulators** `simulate_occu` `simulate_ms_occu` `simulate_dyn_occu`
-`simulate_dyn_ms_occu` `simulate_int_occu` `simulate_int_ms_occu`
+`simulate_ms_dyn_occu` `simulate_int_occu` `simulate_ms_int_occu`
 `simulate_occu_categorical` `simulate_abun` `simulate_ms_abun`
 `simulate_dyn_abun` `simulate_distance` `simulate_removal` `simulate_fp_occu`
 `simulate_cover` `simulate_cover_joint` `simulate_occu_cover`

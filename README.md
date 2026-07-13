@@ -2,7 +2,7 @@
 
 *false zeros from imperfect detection*
 
-[![Lifecycle: experimental](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![Lifecycle: stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Latent-state observation models (occupancy, N-mixture abundance, distance, removal, cover) on the [tulpa](https://github.com/gcol33/tulpa) engine.**
@@ -46,20 +46,27 @@ The random-effect variance components carry the Laplace small-cluster bias for b
 
 `tobs()` is the single dispatcher; the family object chooses the model.
 
-| Constructor    | Model                                          | Reference                  |
-|----------------|------------------------------------------------|----------------------------|
-| `occu()`       | Single-season occupancy                        | MacKenzie et al. (2002)    |
-| `dyn_occu()`   | Dynamic occupancy (colonization / extinction)  |                            |
-| `ms_occu()`    | Multi-species / community occupancy            |                            |
-| `int_occu()`   | Integrated multi-source occupancy              |                            |
-| `jsdm()`       | Joint species distribution                     |                            |
-| `abun()`       | N-mixture abundance (Poisson / negbin)         | Royle (2004)               |
-| `ms_abun()`    | Community N-mixture                            | spAbundance `msNMix`       |
-| `dyn_abun()`   | Dynamic N-mixture                              |                            |
-| `distance()`   | Distance sampling                              |                            |
-| `removal()`    | Removal sampling                               |                            |
-| `fp_occu()`    | False-positive occupancy                       |                            |
-| `cover()`      | Hurdle-Beta / lognormal cover                  |                            |
+| Constructor               | Model                                          | Reference                  |
+|---------------------------|------------------------------------------------|----------------------------|
+| `occu()`                  | Single-season occupancy                        | MacKenzie et al. (2002)    |
+| `dyn_occu()`              | Dynamic occupancy (colonization / extinction)  |                            |
+| `int_occu()`              | Integrated multi-source occupancy              |                            |
+| `fp_occu()`               | False-positive occupancy                       | Miller et al. (2011)       |
+| `royle_nichols()`         | Abundance-induced detection heterogeneity      | Royle & Nichols (2003)     |
+| `jsdm()`                  | Joint species distribution (no detection)      |                            |
+| `abun()`                  | N-mixture abundance (Poisson / negbin)         | Royle (2004)               |
+| `dyn_abun()`              | Open (Dail-Madsen) N-mixture                   | Dail & Madsen (2011)       |
+| `distance()`              | Binned distance sampling                       | Buckland et al. (2001)     |
+| `removal()`               | Removal sampling                               | Dorazio et al. (2005)      |
+| `cover()`                 | Cover hurdle (beta / lognormal / ordinal)      |                            |
+| `occu_categorical()`      | Presence + nominal-class hurdle                |                            |
+| `occu_cover()`            | Joint occupancy + cover hurdle                 |                            |
+| `occu_multiscale_cover()` | Three-level (cell / plot / visit) + cover      | Nichols et al. (2008)      |
+| `ms_occu()`               | Community occupancy                            | spOccupancy `msPGOcc`      |
+| `ms_dyn_occu()`           | Community dynamic occupancy                    |                            |
+| `ms_int_occu()`           | Community integrated occupancy                 |                            |
+| `ms_abun()`               | Community N-mixture                            | spAbundance `msNMix`       |
+| `ms_occu_cover()`         | Community joint occupancy + cover              |                            |
 
 `unmarked`, `spOccupancy`, and `spAbundance` cover these models with a fixed per-model menu of structure. Here the same likelihoods sit on the tulpa engine, so any of them composes with the engine's latent structure.
 
@@ -85,22 +92,44 @@ WAIC, posterior predictive checks, PIT residuals, over-dispersion and zero-infla
 
 ```r
 install.packages("pak")
-pak::pak("gcol33/tulpaObs@v0.0.1")     # tagged release
-pak::pak("gcol33/tulpaObs")            # development version
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.0.109")  # a specific tagged release
 ```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
 
 pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from GitHub (declared in `Remotes:`). A C++17 toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS, `r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their backends on first install.
 
 ## Documentation
 
+Getting started
+
+- [Quickstart](https://github.com/gcol33/tulpaObs/blob/main/vignettes/quickstart.Rmd)
+- [Data formatting](https://github.com/gcol33/tulpaObs/blob/main/vignettes/data-formatting.Rmd)
+- [Occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy.Rmd)
 - [Occupancy vs INLA](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd)
-- [Cover hurdle vs INLA](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-vs-inla.Rmd)
-- [Spatial occupancy with SPDE](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-spatial-spde.Rmd)
+
+Model families
+
+- [Abundance (N-mixture)](https://github.com/gcol33/tulpaObs/blob/main/vignettes/abundance.Rmd)
+- [Dynamic occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/dynamic-occupancy.Rmd)
+- [Integrated occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/integrated-occupancy.Rmd)
+- [Community models](https://github.com/gcol33/tulpaObs/blob/main/vignettes/community-models.Rmd)
+- [Cover hurdle](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle.Rmd)
 - [Cover hurdle, motivated](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-motivate.Rmd)
+- [Cover hurdle vs INLA](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-vs-inla.Rmd)
+
+Structure
+
+- [Spatial occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/spatial-occupancy.Rmd)
+- [Spatial occupancy with SPDE](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-spatial-spde.Rmd)
+- [Random effects](https://github.com/gcol33/tulpaObs/blob/main/vignettes/random-effects.Rmd)
+- [Diagnostics](https://github.com/gcol33/tulpaObs/blob/main/vignettes/diagnostics.Rmd)
 
 ## Status
 
-Experimental. The public API (`tobs()` plus the family constructors and `tobs_*` S3 classes) is stable. Internal entry points (`.tobs_build_model()`, `.tobs_fit_model()`, `.tobs_laplace()`) and the C++ surface follow tulpa's ABI version and may change between releases.
+The public API -- `tobs()`, the family constructors, and the `tobs_*` S3 classes -- is stable. Internal entry points (`.tobs_build_model()`, `.tobs_fit_model()`, `.tobs_laplace()`) and the C++ surface follow tulpa's ABI version and may change between releases.
 
 ## License
 

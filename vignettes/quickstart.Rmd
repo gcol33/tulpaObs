@@ -760,7 +760,7 @@ sd_dyn <- simulate_dyn_occu(N = 200, J = 4, n_seasons = 6,
                             gamma = 0.3, epsilon = 0.2, seed = 2026)
 fit_dyn <- tobs(~ 1, data = sd_dyn$data, family = dyn_occu(),
                 detection = ~ 1, y = sd_dyn$y,
-                col_formula = ~ 1, ext_formula = ~ 1,
+                colonization = ~ 1, extinction = ~ 1,
                 method = "laplace", control = list(verbose = FALSE))
 fit_dyn$intercepts                          # psi1, p, gamma, epsilon
 ```

@@ -31,13 +31,13 @@ test_that("tobs_richness works on all three community occupancy families", {
   expect_true(all(ro$mean >= 0 & ro$mean <= 6))
 
   skip_if_fast()
-  si <- simulate_int_ms_occu(N = 50, J = c(3, 4), n_species = 6, seed = 3)
+  si <- simulate_ms_int_occu(N = 50, J = c(3, 4), n_species = 6, seed = 3)
   fi <- tobs(~ 1, data = si$data, family = ms_int_occu(), detection = ~ 1,
              y = si$y, species = paste0("sp", 1:6), method = "laplace",
              control = list(verbose = FALSE))
   expect_equal(nrow(tobs_richness(fi)), 50L)
 
-  sd_ <- simulate_dyn_ms_occu(N = 40, J = 3, n_species = 6, n_seasons = 3,
+  sd_ <- simulate_ms_dyn_occu(N = 40, J = 3, n_species = 6, n_seasons = 3,
                               gamma = 0.2, epsilon = 0.1, seed = 2)
   fd <- tobs(~ 1, data = sd_$data, family = ms_dyn_occu(), detection = ~ 1,
              y = sd_$y, species = paste0("sp", 1:6), method = "laplace",

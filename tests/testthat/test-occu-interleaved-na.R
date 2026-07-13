@@ -95,7 +95,7 @@ test_that("dynamic occu: leading vs trailing NA give identical fits", {
 
   fit_one <- function(y, method) {
     f <- tobs(formula = ~ 1, data = dat, family = dyn_occu(),
-              detection = ~ 1, y = y, col_formula = ~ 1, ext_formula = ~ 1,
+              detection = ~ 1, y = y, colonization = ~ 1, extinction = ~ 1,
               method = method, control = .na_test_ctrl(method))
     plogis(unname(f$means[["p_(Intercept)"]]))
   }

@@ -358,7 +358,7 @@ handing it a 2D matrix reports the array requirement directly.
 
 ```{r err-array, error = TRUE}
 tobs(~ 1, data = dat, family = dyn_occu(), detection = ~ 1, y = y,
-     col_formula = ~ 1, ext_formula = ~ 1,
+     colonization = ~ 1, extinction = ~ 1,
      method = "laplace", control = list(verbose = FALSE))
 ```
 
@@ -399,7 +399,7 @@ vapply(si$y, dim, integer(2))   # each source: sites x its own visit count
 
 A dynamic model adds the season as a third dimension.
 `simulate_dyn_occu()` returns an `N x J x season` array, and the fit needs
-`col_formula` and `ext_formula` for the colonisation and extinction
+`colonization` and `extinction` for the colonisation and extinction
 processes.
 
 ```{r dyn-shape}

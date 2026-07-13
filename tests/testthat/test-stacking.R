@@ -43,7 +43,7 @@ test_that(".tobs_pointwise_loglik covers every family (shape + finite)", {
   for (t in 2:Tn) z[, t] <- z[, t-1]*(1-rbinom(ns,1,0.1)) + (1-z[, t-1])*rbinom(ns,1,0.2)
   for (i in seq_len(ns)) for (t in seq_len(Tn)) if (z[i, t]) ya[i, , t] <- rbinom(mv, 1, 0.5)
   fd <- tobs(~ 1, data = data.frame(x = rnorm(ns)), family = dyn_occu(),
-             detection = ~ 1, y = ya, col_formula = ~ 1, ext_formula = ~ 1,
+             detection = ~ 1, y = ya, colonization = ~ 1, extinction = ~ 1,
              method = "laplace", control = list(verbose = FALSE))
   lld <- tulpaObs:::.tobs_pointwise_loglik(fd)
   expect_equal(ncol(lld), ns)

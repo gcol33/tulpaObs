@@ -30,14 +30,16 @@ marginal.
 }
 \details{
 Four arms: initial abundance \code{lambda} (the \code{tobs()} \code{formula}) and detection
-\code{p} (\code{detection}) are site-level; apparent survival \code{omega} (\code{omega_formula},
-default \code{~ 1}) and recruitment \code{gamma} (\code{gamma_formula}, default \code{~ 1}) span
-the \code{T - 1} transition intervals. A constant \code{omega} / \code{gamma} is shared across
-a site's seasons; supplying a season-varying covariate (a
-\verb{[n_sites x (T - 1)]} matrix column of \code{data}, one column per transition
-interval) on \code{omega_formula} / \code{gamma_formula} gives interval-specific vital
+\code{p} (\code{detection}) are site-level; apparent survival \code{omega} (the \code{omega}
+argument, default \code{~ 1}) and recruitment \code{gamma} (the \code{gamma} argument,
+default \code{~ 1}) span the \code{T - 1} transition intervals. A constant \code{omega} /
+\code{gamma} is shared across a site's seasons; supplying a season-varying
+covariate (a \verb{[n_sites x (T - 1)]} matrix column of \code{data}, one column per
+transition interval) on \code{omega} / \code{gamma} gives interval-specific vital
 rates. The response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or
-a list of per-season count matrices); missing visits are \code{NA}.
+a list of per-season count matrices); missing visits are \code{NA}. The \code{omega} and
+\code{gamma} arm arguments were previously named \code{omega_formula} / \code{gamma_formula};
+those spellings are deprecated but still accepted.
 }
 \references{
 Dail, D., Madsen, L. (2011). Models for estimating abundance from

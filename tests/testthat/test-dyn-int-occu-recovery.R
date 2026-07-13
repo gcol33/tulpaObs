@@ -36,7 +36,7 @@ test_that("dyn_occu recovers (psi1, gamma, epsilon, p) across seeds", {
     }
     fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)),
                 family = dyn_occu(), detection = ~ 1, y = y,
-                col_formula = ~ 1, ext_formula = ~ 1,
+                colonization = ~ 1, extinction = ~ 1,
                 control = list(verbose = FALSE))
     rec[s, ] <- c(
       plogis(fit$means[["psi1_(Intercept)"]]),
@@ -149,7 +149,7 @@ test_that("dyn_occu coefficients match unmarked::colext (tulpaObs#86)", {
     y[i, , t] <- if (z[i, t]) rbinom(J, 1, p_true) else 0L
 
   fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
-              detection = ~ 1, y = y, col_formula = ~ 1, ext_formula = ~ 1,
+              detection = ~ 1, y = y, colonization = ~ 1, extinction = ~ 1,
               priors = FALSE, control = list(verbose = FALSE))
   Y <- matrix(0L, n_sites, J * T)
   for (t in seq_len(T)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
@@ -188,7 +188,7 @@ test_that("dyn_occu exact-marginal refine reaches colext MLE and calibrated SEs"
       y[i, , t] <- if (z[i, t]) rbinom(J, 1, p_true) else 0L
 
     fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
-                detection = ~ 1, y = y, col_formula = ~ 1, ext_formula = ~ 1,
+                detection = ~ 1, y = y, colonization = ~ 1, extinction = ~ 1,
                 priors = FALSE, control = list(verbose = FALSE))
     Y <- matrix(0L, n_sites, J * T)
     for (t in seq_len(T)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
