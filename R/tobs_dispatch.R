@@ -3,22 +3,6 @@
 # model builder + fitter for that family's structure.
 # ---------------------------------------------------------------------------
 
-# Resolve an extra-arm formula from `...`, accepting the current bare
-# process/symbol name and the deprecated `<name>_formula` spelling. The old
-# name still works but emits a one-time deprecation warning pointing to the new
-# one. Returns `default` when neither is supplied.
-.tobs_arm_formula <- function(dots, new, old, default = ~1) {
-  if (!is.null(dots[[new]])) return(dots[[new]])
-  if (!is.null(dots[[old]])) {
-    .Deprecated(new = new, old = old,
-                msg = sprintf(
-                  "The `%s` argument of tobs() is deprecated; use `%s` instead.",
-                  old, new))
-    return(dots[[old]])
-  }
-  default
-}
-
 .dispatch_occu <- function(formula, data, family, detection, y, visits,
                            engine, priors, control,
                            approx = "gaussian_laplace",
@@ -52,12 +36,10 @@
                                approx = "gaussian_laplace",
                                correction = "none", ...) {
   dots <- list(...)
-  col_f <- .tobs_arm_formula(dots, "colonization", "col_formula", default = NULL)
-  ext_f <- .tobs_arm_formula(dots, "extinction", "ext_formula", default = NULL)
-  if (is.null(col_f)) {
+  if (is.null(dots$colonization)) {
     stop("dyn_occu() requires a `colonization = ~ ...` argument.", call. = FALSE)
   }
-  if (is.null(ext_f)) {
+  if (is.null(dots$extinction)) {
     stop("dyn_occu() requires an `extinction = ~ ...` argument.", call. = FALSE)
   }
   model <- .tobs_build_model(
@@ -65,8 +47,8 @@
     det_formula  = detection,
     data         = data,
     y            = y,
-    col_formula  = col_f,
-    ext_formula  = ext_f
+    col_formula  = dots$colonization,
+    ext_formula  = dots$extinction
   )
   do.call(.tobs_fit_model, c(
     list(model = model,
@@ -340,8 +322,8 @@
   }
   model <- .tobs_build_dyn_abun(
     occ_formula = formula, det_formula = detection, data = data, y = y,
-    omega_formula = .tobs_arm_formula(dots, "omega", "omega_formula"),
-    gamma_formula = .tobs_arm_formula(dots, "gamma", "gamma_formula"),
+    omega_formula = dots$omega %||% ~1,
+    gamma_formula = dots$gamma %||% ~1,
     mixture = family$params$mixture %||% "poisson", K_max = family$params$K_max)
   do.call(.tobs_fit_model, c(
     list(model = model,
@@ -367,8 +349,7 @@
   }
   model <- .tobs_build_fp_occu(
     occ_formula = formula, det_formula = detection, data = data, y = y,
-    fp_formula = .tobs_arm_formula(dots, "p10", "fp_formula"),
-    b_formula = .tobs_arm_formula(dots, "certainty", "b_formula"))
+    fp_formula = dots$p10 %||% ~1, b_formula = dots$certainty %||% ~1)
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "fp_occu"), priors = priors,
@@ -680,8 +661,7 @@
   }
   model <- .tobs_build_ms_dyn_occu(
     occ_formula = formula, det_formula = detection,
-    col_formula = .tobs_arm_formula(dots, "colonization", "col_formula", NULL),
-    ext_formula = .tobs_arm_formula(dots, "extinction", "ext_formula", NULL),
+    col_formula = dots$colonization, ext_formula = dots$extinction,
     data = data, y = y, species = dots$species)
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_dyn_occu, fit_args)

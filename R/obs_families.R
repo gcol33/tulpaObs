@@ -833,9 +833,7 @@ ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' covariate (a `[n_sites x (T - 1)]` matrix column of `data`, one column per
 #' transition interval) on `omega` / `gamma` gives interval-specific vital
 #' rates. The response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or
-#' a list of per-season count matrices); missing visits are `NA`. The `omega` and
-#' `gamma` arm arguments were previously named `omega_formula` / `gamma_formula`;
-#' those spellings are deprecated but still accepted.
+#' a list of per-season count matrices); missing visits are `NA`.
 #'
 #' @param K_max abundance-state truncation for the forward recursion (states
 #'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
@@ -981,10 +979,8 @@ removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' detection `p11` (`detection`), false-positive rate `p10`, and the probability a
 #' true detection is certain `b`. The `p10` and `b` predictors default to
 #' intercept-only and are set with the `p10 = ~ ...` and `certainty = ~ ...`
-#' arguments to [tobs()] (`certainty` is the `b` arm). Those two arguments were
-#' previously named `fp_formula` / `b_formula`; the old spellings are deprecated
-#' but still accepted. The response `y` is an `n_sites x J` integer matrix in
-#' `{0, 1, 2}` (NA visits dropped).
+#' arguments to [tobs()] (`certainty` is the `b` arm). The response `y` is an
+#' `n_sites x J` integer matrix in `{0, 1, 2}` (NA visits dropped).
 #'
 #' @return A `tobs_family` object.
 #' @references

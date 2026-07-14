@@ -26,10 +26,8 @@ Four site-level logit arms: occupancy \code{psi} (the \code{tobs()} \code{formul
 detection \code{p11} (\code{detection}), false-positive rate \code{p10}, and the probability a
 true detection is certain \code{b}. The \code{p10} and \code{b} predictors default to
 intercept-only and are set with the \code{p10 = ~ ...} and \code{certainty = ~ ...}
-arguments to \code{\link[=tobs]{tobs()}} (\code{certainty} is the \code{b} arm). Those two arguments were
-previously named \code{fp_formula} / \code{b_formula}; the old spellings are deprecated
-but still accepted. The response \code{y} is an \verb{n_sites x J} integer matrix in
-\verb{\{0, 1, 2\}} (NA visits dropped).
+arguments to \code{\link[=tobs]{tobs()}} (\code{certainty} is the \code{b} arm). The response \code{y} is an
+\verb{n_sites x J} integer matrix in \verb{\{0, 1, 2\}} (NA visits dropped).
 }
 \references{
 Miller, D. A. W., Nichols, J. D., McClintock, B. T., Grant, E. H. C., Bailey,

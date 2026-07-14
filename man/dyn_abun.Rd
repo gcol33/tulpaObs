@@ -37,9 +37,7 @@ default \code{~ 1}) span the \code{T - 1} transition intervals. A constant \code
 covariate (a \verb{[n_sites x (T - 1)]} matrix column of \code{data}, one column per
 transition interval) on \code{omega} / \code{gamma} gives interval-specific vital
 rates. The response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or
-a list of per-season count matrices); missing visits are \code{NA}. The \code{omega} and
-\code{gamma} arm arguments were previously named \code{omega_formula} / \code{gamma_formula};
-those spellings are deprecated but still accepted.
+a list of per-season count matrices); missing visits are \code{NA}.
 }
 \references{
 Dail, D., Madsen, L. (2011). Models for estimating abundance from

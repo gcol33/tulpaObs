@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.110 (2026-07-14)
+
+* Drop the backward-compatibility shims added in 0.0.109. The extra-arm formula
+  arguments of `tobs()` are the bare names only (`colonization` / `extinction`,
+  `omega` / `gamma`, `p10` / `certainty`); the `<x>_formula` spellings and the
+  `simulate_dyn_ms_occu()` / `simulate_int_ms_occu()` simulator aliases are gone,
+  along with the deprecation-warning helper and the `tulpaObs-deprecated` page.
+  There is no public release depending on the old names, so this is a clean hard
+  rename rather than a deprecation cycle.
+
 ## 0.0.109 (2026-07-14)
 
 * Unify the extra-arm formula arguments of `tobs()` on bare process / symbol

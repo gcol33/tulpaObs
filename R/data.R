@@ -887,28 +887,3 @@ simulate_ms_int_occu <- function(N = 100, J = c(3, 4), n_species = 5,
     truth = list(psi_species = psi_species, p_det = p_det, z = z)
   )
 }
-
-#' Deprecated community-simulator aliases
-#'
-#' `simulate_dyn_ms_occu()` and `simulate_int_ms_occu()` were renamed to
-#' [simulate_ms_dyn_occu()] and [simulate_ms_int_occu()] so the simulator names
-#' match the `ms_dyn_occu()` / `ms_int_occu()` family constructors. The old names
-#' still work as deprecated pass-throughs and will be removed in a future
-#' release.
-#'
-#' @param ... passed to the renamed simulator.
-#' @return See [simulate_ms_dyn_occu()] / [simulate_ms_int_occu()].
-#' @name tulpaObs-deprecated
-#' @keywords internal
-#' @export
-simulate_dyn_ms_occu <- function(...) {
-  .Deprecated("simulate_ms_dyn_occu")
-  simulate_ms_dyn_occu(...)
-}
-
-#' @rdname tulpaObs-deprecated
-#' @export
-simulate_int_ms_occu <- function(...) {
-  .Deprecated("simulate_ms_int_occu")
-  simulate_ms_int_occu(...)
-}
