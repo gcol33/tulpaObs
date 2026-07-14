@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.118 (2026-07-14)
+
+* Community SVC for `ms_count()` (the spAbundance `svcMsAbund` analogue, Poisson;
+  gcol33/tulpaObs#117, #118): a varying-coefficient areal bar
+  `spatial(~ 1 + w || cell, graph)` on the abundance formula now fits an
+  intercept field plus one shared spatially-varying-coefficient field per
+  covariate, `log mu_{s,i} = X_i (mu + b_s) + f0_{u(i)} + w_i f1_{u(i)}`. The
+  block-coordinate field step (`R/ms_count_spatial.R`) generalises to K
+  covariate-weighted ICAR fields solved jointly (a K x K sparse block system with
+  a per-field tau M-step); the intercept field is `fit$spatial_field`, the
+  varying-coefficient field(s) `fit$trend_field(s)`. Both recover cleanly (field
+  correlations ~0.98). Recovery-tested in `test-ms-count-spatial.R`. Together with
+  the shared-field (`sfMsAbund`) case this closes the actionable community-SVC
+  item of #118 for the abundance branch.
+
 ## 0.0.117 (2026-07-14)
 
 * Community-spatial `ms_count()`: a shared areal field `icar()` on the abundance

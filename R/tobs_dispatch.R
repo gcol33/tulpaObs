@@ -89,21 +89,18 @@
          "structured term supported (gcol33/tulpaObs#117).", call. = FALSE)
   }
   if (!is.null(structs$spatial)) {
-    sp <- structs$spatial
-    if (isTRUE(sp$is_bar) || isTRUE(sp$is_multifield) || !is.null(sp$weight) ||
-        !is.null(sp$group_var) || !isTRUE(sp$type %in% "icar")) {
-      stop("ms_count(): the shared areal field supports a plain icar() only; ",
-           "bym2()/car_proper(), varying-coefficient bars, and group_var are ",
-           "not yet wired for the community count field (gcol33/tulpaObs#117).",
-           call. = FALSE)
-    }
+    # A shared icar() field (the sfMsAbund analogue) or an icar() intercept +
+    # varying-coefficient bar spatial(~ 1 + w || cell, graph) (the svcMsAbund
+    # analogue) on the abundance formula. The community-spatial fitter validates
+    # the field kind (icar only), the one-node-per-site map, and a complete y;
+    # here we only enforce the engine.
     if (!identical(engine, "nested_laplace")) {
       stop("ms_count(): a shared areal field needs method = \"nested_laplace\". ",
            "For the non-spatial community fit drop the icar() term (or use ",
            "method = \"laplace\").", call. = FALSE)
     }
     return(.tobs_fit_ms_count_spatial(
-      model, spatial = sp,
+      model, spatial = structs$spatial,
       max.iter    = control[["max.iter"]] %||% 200L,
       tol         = control[["tol"]] %||% 1e-4,
       sigma.beta  = control[["sigma.beta"]] %||% 5,

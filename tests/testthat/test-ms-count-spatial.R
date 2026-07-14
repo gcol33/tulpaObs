@@ -103,3 +103,56 @@ test_that("community-spatial count recovers community means + field over seeds",
   expect_gte(mean(cover), 0.85)
   expect_gt(stats::median(fcor), 0.9)
 })
+
+
+# --- community SVC (svcMsAbund): intercept + varying-coefficient field ---------
+
+# log mu_{s,i} = X_i (mu + b_s) + f0_i + w_i * f1_i, two independent ICAR fields.
+.msc_svc_sim <- function(side = 10L, S = 14L, seed = 1L) {
+  set.seed(seed)
+  A <- .msc_grid_graph(side); Ns <- nrow(A)
+  co <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f0 <- 0.6 * scale(sin(co$r/side*pi) + cos(co$c/side*pi))[, 1]; f0 <- f0 - mean(f0)
+  f1 <- 0.6 * scale(cos(co$r/side*pi*1.3) + sin(co$c/side*pi*0.7))[, 1]; f1 <- f1 - mean(f1)
+  d <- data.frame(x = stats::rnorm(Ns), w = stats::rnorm(Ns), cell = seq_len(Ns))
+  X <- stats::model.matrix(~ x, d)
+  bs <- vapply(1:2, function(j) stats::rnorm(S, c(1, 0.5)[j], c(0.4, 0.3)[j]),
+               numeric(S))
+  y <- matrix(NA_real_, Ns, S, dimnames = list(NULL, paste0("sp", seq_len(S))))
+  for (s in seq_len(S))
+    y[, s] <- stats::rpois(Ns, exp(as.numeric(X %*% bs[s, ]) + f0 + d$w * f1))
+  list(y = y, data = d, graph = A, f0 = f0, f1 = f1, Ns = Ns, S = S)
+}
+
+test_that("community SVC (svcMsAbund) recovers the intercept + trend fields", {
+  skip_on_cran()
+  d <- .msc_svc_sim(side = 10L, S = 14L, seed = 7L)
+  fit <- tobs(~ x + spatial(~ 1 + w || cell, graph = d$graph), data = d$data,
+              family = ms_count(), y = d$y, species = colnames(d$y),
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  # both fields recover
+  expect_gt(stats::cor(fit$spatial_field, d$f0), 0.8)    # intercept field
+  expect_gt(stats::cor(fit$trend_field,   d$f1), 0.8)    # varying-coefficient field
+  expect_equal(fit$spatial_hyper$field_labels, c("intercept", "w"))
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
+test_that("community SVC recovers both fields across seeds", {
+  skip_if_fast()
+  skip_on_cran()
+  n_seed <- 12L
+  c0 <- numeric(n_seed); c1 <- numeric(n_seed)
+  for (s in seq_len(n_seed)) {
+    d <- .msc_svc_sim(side = 10L, S = 14L, seed = 100 + s)
+    fit <- tobs(~ x + spatial(~ 1 + w || cell, graph = d$graph), data = d$data,
+                family = ms_count(), y = d$y, species = colnames(d$y),
+                method = "nested_laplace",
+                control = list(verbose = FALSE, progress = FALSE))
+    c0[s] <- stats::cor(fit$spatial_field, d$f0)
+    c1[s] <- stats::cor(fit$trend_field,   d$f1)
+  }
+  expect_gt(stats::median(c0), 0.85)
+  expect_gt(stats::median(c1), 0.85)
+})
