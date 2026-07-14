@@ -12,8 +12,8 @@ Bayesian occupancy / abundance / distance / removal / cover. Built on
 
 **Public API:** `tobs()` + family ctors: `occu()`, `dyn_occu()`, `ms_occu()`,
 `ms_dyn_occu()`, `ms_int_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`,
-`dyn_abun()`, `count()`, `distance()`, `removal()`, `fp_occu()`, `cover()`,
-`occu_cover()`, `ms_occu_cover()`, `occu_multiscale_cover()`. S3 classes all `tobs_*`
+`dyn_abun()`, `count()`, `ms_count()`, `distance()`, `removal()`, `fp_occu()`,
+`cover()`, `occu_cover()`, `ms_occu_cover()`, `occu_multiscale_cover()`. S3 classes all `tobs_*`
 (`tobs_fit/model/family/spatial/temporal/re/svc/latent/priors_spec`).
 
 **Structured terms live in formula** (lme4/mgcv/INLA style), NOT `tobs()` args.
@@ -385,6 +385,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Spatial-factor community occu+cover (JSDM) | Yes | Yes | `ms_occu_cover()` + icar/car_proper/bym2 shared field, per-species loadings (tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`src/ms_occu_cover_spatial_nuts.cpp`). Cover-arm factor, `tobs_associations()`, per-species `predict()` maps |
 | Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only |
 | Count / relative-abundance GLMM | Yes | — | `count(response=)` (spAbundance `abund`): GLMM on the observed response directly, NO detection, NO latent state -- the abundance analogue of `jsdm()`. Pois/negbin (log link) + gaussian (identity). One tulpa GLMM block (`build_count_callbacks`, `R/laplace_callbacks.R`); negbin size / gaussian variance by an outer dispersion loop in `.dispatch_count` (tulpa_laplace takes fixed phi), reported `fit$count_dispersion`. `simulate_count()`, `.tobs_ploglik_count` (WAIC), `count_methods.R` (fitted/predict/residuals mu). Community (msAbund) / NUTS pending. `test-count.R` (3x 20-seed recovery) |
+| Community count (`ms_count`) | Yes | — | `ms_count(response=)` (spAbundance `msAbund`; #117): community relative-abundance GLMM -- per-species GLMM on the observed response w/ Gaussian community hyperpriors on the coefficients, NO detection/latent state. The community analogue of `count()`, abundance analogue of `ms_occu()`. Pois/negbin (per-species dispersion RE = second arm)/gaussian (per-species resid var, outer loop). Reuses shared community Laplace-EM (`.tobs_community_em`, `R/community_em.R`) -- PURE R, no C++ -- w/ count `sp_ll`/`sp_grad` (`R/ms_count.R`). `y` = `[n_sites x n_species]` or named list. `coef`=community means, `ranef`=per-species deviations, `simulate_ms_count()`, `.tobs_ploglik_ms_count` (WAIC). Gaussian/Pois community means unbiased; negbin slope carries mild first-order-Laplace attenuation (~10%, documented). Community-spatial (sfMsAbund)/NUTS pending. `test-ms-count.R` (community-mean recovery + pooled 0.85 coverage 20 seeds, 3 responses) |
 | Count + areal | n-L | — | `count()` + `icar()`/`car_proper()` (spAbund; #117): a plain areal field on the abundance formula. Response is observed (no latent state), so the fit is ONE `tulpa_nested_laplace()` call over the count block with the areal field as its GMRF prior -- NOT the occupancy EM. Grid-integrated FE (law of total cov via per-cell `keep_grid_hessians`) + field/sigma via shared `.tobs_nested_attach_field_summary`; dedicated `.tobs_fit_count_spatial` (`R/count_spatial.R`), reuses `.tobs_to_multi_block_prior`. `fitted()` field-aware in-sample. **Poisson only** -- one field node/site -> negbin size / gaussian residual variance NOT jointly identified with the field under the fixed-phi loop (degenerate: size->Inf, resid var->0), gated w/ pointer; bym2 (mixed structured/unstructured field, not R-reconstructable on the generic path) + improper car() gated to icar/car_proper. `test-count-spatial.R` (20-seed FE coverage + field recovery, car_proper, gates) |
 | N-mixture + areal | n-L | — | `abun()`+icar/bym2/car_proper; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
 | Community N-mixture | Yes | Yes | `ms_abun()` (msNMix); per-species coef RE, in-tree Laplace-EM (`nmix_laplace_re`) -> `NMixCommunityOracle` AGHQ, Schur SEs; Pois + negbin. NUTS (#14) |
@@ -683,6 +684,7 @@ R/
   ms_{occu,dyn_occu,int_occu}.R      — community single/dynamic/integrated
   abun.R / abun_nuts.R               — nmix family + non-spatial NUTS (#41)
   count_spatial.R / count_methods.R  — areal count fitter .tobs_fit_count_spatial (#117); fitted/predict/residuals
+  ms_count.R                — community count / relative-abundance GLMM (msAbund, #117); .tobs_fit_ms_count over shared community_em.R
   ms_abun.R / ms_abun_nuts.R         — community nmix + NUTS (#14)
   nmix_laplace{,_re,_re_spatial,_spatial}.R — non-spatial / community / sfMsNMix / areal fitters
   nmix_re_aghq.R / nmix_site_marginal.R — grouped RE -> NMixGroupedOracle; per-site AGHQ callback

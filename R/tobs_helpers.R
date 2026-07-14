@@ -178,6 +178,11 @@
   # hyperparameters via the shared nested-Laplace EM machinery. Community
   # (msAbund) / NUTS are the documented follow-ups (gcol33/tulpaObs#117).
   count    = c("laplace", "nested_laplace"),
+  # ms_count: community relative-abundance GLMM (msAbund) via the shared community
+  # Laplace-EM (R/community_em.R) -- per-species coefficient RE with a Gaussian
+  # community covariance; Poisson / negbin (per-species dispersion RE) / gaussian.
+  # Non-spatial only; areal (spAbund community) / NUTS are #117 follow-ups.
+  ms_count = c("laplace"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so

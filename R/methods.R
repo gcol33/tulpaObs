@@ -73,6 +73,8 @@ nobs.tobs_fit <- function(object, ...) {
     sum(vapply(model$valid, sum, integer(1)))
   } else if (model$model_type == "count") {
     length(model$y_count)
+  } else if (model$model_type == "ms_count") {
+    sum(model$valid)
   } else {
     NA_integer_
   }
@@ -205,6 +207,9 @@ converged.tobs_fit <- function(object, ...) isTRUE(convergence(object)$converged
 ranef.tobs_fit <- function(object, ...) {
   if (identical(object$model$model_type, "ms_nmix")) {
     return(.tobs_ranef_ms_nmix(object))
+  }
+  if (identical(object$model$model_type, "ms_count")) {
+    return(.tobs_ranef_ms_count(object))
   }
   if (identical(object$model$model_type, "ms_occu")) {
     return(.tobs_ranef_ms_occu(object))
@@ -350,6 +355,9 @@ fitted.tobs_fit <- function(object, ...) {
     return(.tobs_fitted_royle_nichols(object))
   if (identical(model$model_type, "jsdm")) return(.tobs_fitted_jsdm(object))
   if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))
+  if (identical(model$model_type, "ms_count")) {
+    return(.tobs_fitted_ms_count(object))
+  }
   if (identical(model$model_type, "ms_occu")) {
     return(.tobs_fitted_ms_occu(object))
   }
@@ -628,6 +636,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   }
   if (identical(model$model_type, "ms_nmix")) {
     return(.tobs_simulate_ms_nmix(object, nsim))
+  }
+  if (identical(model$model_type, "ms_count")) {
+    return(.tobs_simulate_ms_count(object, nsim))
   }
   if (identical(model$model_type, "ms_occu")) {
     return(.tobs_simulate_ms_occu(object, nsim))

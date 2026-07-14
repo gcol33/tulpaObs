@@ -34,7 +34,7 @@ site covariates), and \code{truth} (the coefficients, response, and dispersion).
 }
 \description{
 One observed value per site from a GLMM with no detection process, matching
-the \code{\link[dplyr:count]{count()}} family: \code{log}-link Poisson / negative-binomial counts, or an
+the \code{\link[=count]{count()}} family: \code{log}-link Poisson / negative-binomial counts, or an
 identity-link Gaussian response. The mean predictor is \verb{X beta} with \code{beta}
 the fixed-effect coefficients (intercept first).
 }

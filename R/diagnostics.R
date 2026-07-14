@@ -183,6 +183,12 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "ms_nmix")) {
     return(.tobs_ploglik_ms_nmix(object, nd, n.threads = n.threads))
   }
+  # Community count / relative-abundance GLMM: per-(species, site) GLMM density
+  # over the community-mean draws with per-species BLUP deviations plugged in
+  # (R/ms_count.R).
+  if (identical(object$model$model_type %||% "NULL", "ms_count")) {
+    return(.tobs_ploglik_ms_count(object, nd))
+  }
   # Royle-Nichols: the exact per-site Poisson-marginal over the posterior draws
   # (R/royle_nichols.R).
   if (identical(object$model$model_type %||% "NULL", "royle_nichols")) {

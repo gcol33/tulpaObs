@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.115 (2026-07-14)
+
+* New `ms_count()` family: the community / multispecies relative-abundance GLMM
+  (the spAbundance `msAbund` model, gcol33/tulpaObs#117). Per-species GLMM on an
+  observed count / continuous response with Gaussian community hyperpriors on the
+  coefficients -- no detection, no latent state -- the abundance analogue of
+  `ms_occu()` without the occupancy layer, and the community version of
+  `count()`. Poisson / negative-binomial (per-species dispersion RE) / Gaussian.
+  `y` is an `n_sites x n_species` matrix (or a named list of count vectors);
+  `species` names the columns. Reuses the shared community Laplace-EM
+  (`R/community_em.R`) -- pure R, no new C++ -- with a count `sp_ll` / `sp_grad`.
+  Full S3 (`coef` / `vcov` / `confint` / `ranef` / `fitted` / `simulate` / WAIC)
+  plus `simulate_ms_count()`. Recovery-tested in `test-ms-count.R`: community-mean
+  recovery + pooled 95% coverage over 20 seeds (Gaussian and Poisson unbiased;
+  the negbin slope carries a mild first-order-Laplace attenuation) + dispersion
+  recovery. Non-spatial Laplace; the community-spatial (`sfMsAbund`) and NUTS
+  variants are documented follow-ups.
+
 ## 0.0.114 (2026-07-14)
 
 * Areal `count()`: a plain areal field -- `icar()` or `car_proper()` -- on the

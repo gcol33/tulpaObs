@@ -604,6 +604,66 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
   )
 }
 
+#' Simulate community relative-abundance (count / continuous) data
+#'
+#' Per-species GLMM with Gaussian community hyperpriors on the coefficients (the
+#' `ms_count()` / spAbundance `msAbund` model): `g(mu_{s,i}) = X_i beta_s`,
+#' `beta_s ~ N(beta_comm_mean, diag(beta_comm_sd^2))`, `y_{s,i}` drawn Poisson /
+#' negative-binomial (log link) or Gaussian (identity). No detection.
+#'
+#' @param N Number of sites.
+#' @param n_species Number of species.
+#' @param beta_comm_mean,beta_comm_sd Community mean and SD of the per-species
+#'   coefficients (intercept first). Length sets the number of covariates.
+#' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`.
+#' @param size Negative-binomial community size (mean of the per-species
+#'   `log_r`); `size.log.sd` is its across-species SD.
+#' @param size.log.sd Across-species SD of `log(size)` (negbin only).
+#' @param sd Gaussian residual SD.
+#' @param seed Optional RNG seed.
+#' @return A list with `y` (an `N x n_species` matrix), `data`, and `truth`.
+#' @export
+simulate_ms_count <- function(N = 120, n_species = 10,
+                              beta_comm_mean = c(1, 0.5),
+                              beta_comm_sd = c(0.4, 0.3),
+                              response = c("poisson", "negbin", "gaussian"),
+                              size = 2, size.log.sd = 0.3, sd = 1,
+                              seed = NULL) {
+  response <- match.arg(response)
+  if (!is.null(seed)) set.seed(seed)
+  n_cov <- length(beta_comm_mean) - 1L
+
+  data <- data.frame(x = stats::rnorm(N))
+  if (n_cov > 1L) for (k in 2:n_cov) data[[paste0("cov", k)]] <- stats::rnorm(N)
+  X <- stats::model.matrix(~ ., data[, seq_len(max(n_cov, 1L)), drop = FALSE])
+
+  beta_species <- matrix(NA_real_, n_species, length(beta_comm_mean))
+  for (j in seq_along(beta_comm_mean)) {
+    beta_species[, j] <- stats::rnorm(n_species, beta_comm_mean[j],
+                                      beta_comm_sd[j])
+  }
+  r_s <- if (identical(response, "negbin"))
+    exp(stats::rnorm(n_species, log(size), size.log.sd)) else rep(NA_real_, n_species)
+
+  is_log <- !identical(response, "gaussian")
+  y <- matrix(NA_real_, N, n_species,
+              dimnames = list(NULL, paste0("sp", seq_len(n_species))))
+  for (s in seq_len(n_species)) {
+    eta <- as.numeric(X %*% beta_species[s, ])
+    mu  <- if (is_log) exp(eta) else eta
+    y[, s] <- switch(response,
+      poisson  = stats::rpois(N, mu),
+      negbin   = stats::rnbinom(N, size = r_s[s], mu = mu),
+      gaussian = stats::rnorm(N, mu, sd))
+  }
+
+  list(y = y, data = data,
+       truth = list(beta_species = beta_species,
+                    beta_comm_mean = beta_comm_mean,
+                    beta_comm_sd = beta_comm_sd,
+                    response = response, r_s = r_s, sd = sd))
+}
+
 #' Simulate joint species distribution (presence/absence) data
 #'
 #' Presence `y_{i,s} ~ Bernoulli(psi_{i,s})` with `logit psi = X beta_s`, the

@@ -58,6 +58,46 @@
   ))
 }
 
+.dispatch_ms_count <- function(formula, data, family, detection, y, visits,
+                               engine, priors, control,
+                               approx = "gaussian_laplace",
+                               correction = "none", ...) {
+  dots <- list(...)
+  if (!is.null(detection)) {
+    stop("ms_count() has no detection process; drop the `detection` formula.",
+         call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("ms_count() requires `y` (an n_sites x n_species matrix, or a named ",
+         "list of n_species count vectors).", call. = FALSE)
+  }
+  response <- family$params$response %||% "poisson"
+  bind  <- .tobs_bind_formulas(list(mu = formula), data)
+  model <- .tobs_build_ms_count(
+    formula = bind$fe$mu, data = data, y = y, species = dots$species,
+    response = response, structured_terms = bind$terms)
+
+  # Non-spatial community GLMM only in this release. A structured term (the
+  # community-shared areal field etc.) is the msAbund-spatial follow-up; error
+  # rather than silently drop it (gcol33/tulpaObs#117).
+  structs <- .tobs_structures_from_model(model)
+  if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
+      !is.null(structs$re) || !is.null(structs$svc) || !is.null(structs$latent)) {
+    stop("ms_count(): structured terms (spatial / temporal / re / svc / latent) ",
+         "are not yet wired for the community count family; only fixed effects ",
+         "are supported in this release (gcol33/tulpaObs#117).", call. = FALSE)
+  }
+  if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
+    stop(sprintf(paste0(
+      "ms_count() supports method = \"laplace\" (the community Laplace-EM); ",
+      "method = \"%s\" is not wired for the community count family ",
+      "(gcol33/tulpaObs#117)."), engine), call. = FALSE)
+  }
+
+  fit_args <- c(list(model = model, priors = priors), control)
+  do.call(.tobs_fit_ms_count, fit_args)
+}
+
 .dispatch_ms_occu <- function(formula, data, family, detection, y, visits,
                               engine, priors, control,
                               approx = "gaussian_laplace",
