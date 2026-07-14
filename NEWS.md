@@ -1,5 +1,39 @@
 # tulpaObs NEWS
 
+## 0.0.126 (2026-07-15)
+
+* Community count NUTS now covers every response (`ms_count()` +
+  `method = "nuts"`; gcol33/tulpaObs#117): the Poisson sampler generalises to
+  negative-binomial and Gaussian. The negative binomial adds a per-species
+  dispersion random effect `log_r_s ~ N(mu_log_r, sigma_log_r^2)` as a second
+  community arm (the same structure the negbin Laplace-EM fits); the Gaussian
+  adds S free per-species residual variances `log_phi_s` (matching the Laplace
+  outer loop, which estimates each `phi_s` with no community prior), each with a
+  weakly-informative prior. One family-aware in-tree C++ FullGradFn
+  (`src/ms_count_nuts.cpp`) drives all three, byte-exact against the R oracle
+  `.tobs_ms_count_nuts_logpost`; warm-started at the community Laplace-EM mode,
+  0 divergences, NUTS == Laplace on the means, and the dispersion recovered
+  (`fit$ms_dispersion` carries `r_s` / `variance`). This removes the Laplace-EM's
+  mild negbin slope attenuation and returns calibrated non-Gaussian community
+  intervals. `test-ms-count-nuts.R` adds the negbin / Gaussian oracle
+  cross-check and recovery.
+* Fixed a latent bug in the community count NUTS fitter that had gone unnoticed
+  because its recovery test is `skip_if_fast`: the tulpa NUTS engine takes
+  `n_iter` as the total (warmup + sampling) count, so passing `n.iter` alone
+  returned zero post-warmup draws; the fitter now passes `n.iter + n.warmup` and
+  surfaces the real per-draw diagnostics (`divergent` / `treedepth` / `epsilon`)
+  instead of NA placeholders, and calls `.tobs_nuts_rhat_ess()` with its correct
+  single argument.
+* Community count NUTS now accepts missing (`NA`) site x species entries
+  (`ms_count()` + `method = "nuts"`), matching the Laplace-EM path. An `NA` in the
+  response matrix marks that (species, site) as unobserved and drops it from the
+  per-(species, site) data sum, so a species keeps only its observed sites (ragged
+  coverage). The C++ FullGradFn and the R oracle mask the missing entries
+  identically, so the joint log-posterior + gradient stay byte-exact with `NA`
+  present; the reported `N` counts only observed entries. `test-ms-count-nuts.R`
+  adds the byte-exact NA cross-check (all three responses) and a NUTS-with-NA run
+  that agrees with the Laplace-EM fit on the same ragged data.
+
 ## 0.0.125 (2026-07-14)
 
 * Community count NUTS (`msAbund` NUTS; gcol33/tulpaObs#117): `ms_count()` +

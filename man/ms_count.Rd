@@ -28,7 +28,16 @@ the community means are recovered essentially unbiased for the Gaussian
 slope carries a mild first-order-Laplace (PQL) attenuation of order the
 community variance (a few percent, shrinking with the number of species and
 observations per species). The community-mean Wald intervals are calibrated to
-the package rubric (pooled coverage at least 0.85). Non-spatial Laplace only.
+the package rubric (pooled coverage at least 0.85).
+
+\code{method = "nuts"} samples the exact joint posterior (community means,
+per-species deviations, and the community covariance) for all three responses
+-- the negative binomial carrying a per-species dispersion random effect, the
+Gaussian a per-species free residual variance -- which removes the
+Laplace-EM's negative-binomial attenuation and returns calibrated,
+non-Gaussian community intervals. A shared areal field or latent factors are
+available through \code{method = "nested_laplace"} / the \code{latent()} term; see the
+package overview for the spatial and factor variants.
 }
 \examples{
 \donttest{

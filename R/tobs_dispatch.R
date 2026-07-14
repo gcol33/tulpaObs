@@ -127,6 +127,7 @@
     return(.tobs_fit_ms_count_nuts(
       model,
       sigma.beta    = control[["sigma.beta"]] %||% 10,
+      sigma.logr    = control[["sigma.logr"]] %||% 1.5,
       n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
       n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
       n.chains      = as.integer(control[["n.chains"]] %||% 1L),

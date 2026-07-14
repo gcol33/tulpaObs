@@ -147,25 +147,25 @@
 # Laplace-EM fitter (shared community engine)
 # ---------------------------------------------------------------------------
 
-.tobs_fit_ms_count <- function(model,
-                               priors     = NULL,
-                               max.iter   = 200L,
-                               tol        = 1e-4,
-                               sigma.beta = 5,
-                               verbose    = TRUE,
-                               ...) {
-  dots       <- list(...)
-  newton.max <- as.integer(dots$newton.max %||% 30L)
-  response   <- model$response %||% "poisson"
-  su         <- model$summaries
-  S          <- model$n_species
-  P_beta     <- model$process_info[[1L]]$p
-  is_log     <- identical(model$link, "log")
+# Run the shared community Laplace-EM for the response family and return the raw
+# EM output alongside the arm layout / dispersion summary. The single source of
+# the EM setup for both the Laplace front door (.tobs_fit_ms_count) and the NUTS
+# warm start (.tobs_fit_ms_count_nuts): the NUTS path needs the raw fit (the
+# per-species deviations, including the negbin log_r arm the Laplace summary
+# drops) to pack its initial position.
+.tobs_ms_count_run_em <- function(model, priors = NULL, max.iter = 200L,
+                                  tol = 1e-4, sigma.beta = 5, verbose = TRUE,
+                                  newton.max = 30L) {
+  response <- model$response %||% "poisson"
+  su       <- model$summaries
+  S        <- model$n_species
+  P_beta   <- model$process_info[[1L]]$p
+  is_log   <- identical(model$link, "log")
 
   # Warm start: intercept at the pooled mean on the link scale, slopes 0.
-  yv    <- model$y[model$valid]
-  mbar  <- mean(yv)
-  mu0   <- numeric(P_beta)
+  yv      <- model$y[model$valid]
+  mbar    <- mean(yv)
+  mu0     <- numeric(P_beta)
   mu0[1L] <- if (is_log) log(max(mbar, 0.1)) else mbar
 
   run_em <- function(P, arm_idx, sp_ll, sp_grad, init_mu) {
@@ -174,7 +174,7 @@
       init_mu = init_mu, init_global = numeric(0),
       penalize_global = FALSE, sigma_beta = sigma.beta, priors = priors,
       sigma_init = 0.3, max_iter = as.integer(max.iter), tol = as.numeric(tol),
-      newton_max = newton.max, verbose = isTRUE(verbose))
+      newton_max = as.integer(newton.max), verbose = isTRUE(verbose))
   }
 
   if (identical(response, "poisson")) {
@@ -219,7 +219,24 @@
                                   numeric(1))))
   }
 
-  build_ms_count_fit(model, fit, arm_idx, disp)
+  list(fit = fit, arm_idx = arm_idx, disp = disp, response = response,
+       P_beta = P_beta)
+}
+
+
+.tobs_fit_ms_count <- function(model,
+                               priors     = NULL,
+                               max.iter   = 200L,
+                               tol        = 1e-4,
+                               sigma.beta = 5,
+                               verbose    = TRUE,
+                               ...) {
+  dots <- list(...)
+  em   <- .tobs_ms_count_run_em(
+    model, priors = priors, max.iter = max.iter, tol = tol,
+    sigma.beta = sigma.beta, verbose = verbose,
+    newton.max = as.integer(dots$newton.max %||% 30L))
+  build_ms_count_fit(model, em$fit, em$arm_idx, em$disp)
 }
 
 
@@ -400,7 +417,16 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 #' slope carries a mild first-order-Laplace (PQL) attenuation of order the
 #' community variance (a few percent, shrinking with the number of species and
 #' observations per species). The community-mean Wald intervals are calibrated to
-#' the package rubric (pooled coverage at least 0.85). Non-spatial Laplace only.
+#' the package rubric (pooled coverage at least 0.85).
+#'
+#' `method = "nuts"` samples the exact joint posterior (community means,
+#' per-species deviations, and the community covariance) for all three responses
+#' -- the negative binomial carrying a per-species dispersion random effect, the
+#' Gaussian a per-species free residual variance -- which removes the
+#' Laplace-EM's negative-binomial attenuation and returns calibrated,
+#' non-Gaussian community intervals. A shared areal field or latent factors are
+#' available through `method = "nested_laplace"` / the `latent()` term; see the
+#' package overview for the spatial and factor variants.
 #'
 #' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`.
 #' @return A `tobs_family` object.

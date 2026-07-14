@@ -36,11 +36,11 @@ test_that("ms_count() dispatch guards reject unsupported inputs", {
          family = ms_count(), y = sim$y, species = colnames(sim$y)),
     "not yet wired")
 
-  # nested_laplace / nuts are not wired for the community count family
+  # nested_laplace on the community count family needs a shared areal field
   expect_error(
     tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
          species = colnames(sim$y), method = "nested_laplace"),
-    "not available|not wired")
+    "shared areal field")
 
   # Poisson / negbin require non-negative integer counts
   bad <- sim; bad$y[1, 1] <- 0.5
@@ -70,6 +70,23 @@ test_that("ms_count() S3 surface works (coef / ranef / fitted / simulate / WAIC)
   expect_equal(dim(sm), c(120L, 8L))
   w <- tobs_waic(fit)
   expect_true(is.finite(w$waic))
+})
+
+test_that("ms_count() Laplace fit accepts missing (NA) site x species entries", {
+  skip_on_cran()
+  sim <- simulate_ms_count(N = 120, n_species = 8, response = "poisson", seed = 3)
+  y <- sim$y
+  set.seed(3)
+  y[sample(length(y), floor(0.15 * length(y)))] <- NA   # ~15% missing at random
+  y[10:110, 2] <- NA                                     # ragged: species 2 sparse
+  fit <- tobs(~ x, data = sim$data, family = ms_count(), y = y,
+              species = colnames(y), method = "laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_equal(fit$N, sum(!is.na(y)))                    # N counts observed entries
+  expect_true(all(is.finite(unlist(coef(fit)))))
+  expect_true(all(is.finite(diag(vcov(fit)))))
+  expect_true(is.finite(tobs_waic(fit)$waic))
 })
 
 test_that("Poisson community count recovers community means with ~95% coverage", {
