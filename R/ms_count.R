@@ -304,6 +304,9 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   if (!is.null(fld) && length(fld) == nrow(eta)) {
     eta <- sweep(eta, 1L, as.numeric(fld), "+")
   }
+  # Latent factors add a per-(species, site) residual offset (eta lambda').
+  fo <- model$count_factor_offset
+  if (!is.null(fo) && all(dim(fo) == dim(eta))) eta <- eta + fo
   mu    <- if (identical(model$link, "log")) exp(eta) else eta
   dimnames(mu) <- list(NULL, model$species_names)
   list(mu = mu)
@@ -348,7 +351,9 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   disp     <- object$ms_dispersion
   # Shared areal field: a per-site offset added to every species' predictor. The
   # field per-species valid rows follow su$valid (all TRUE on the spatial path).
+  # Latent factors add a per-(species, site) offset (eta lambda').
   fld_full <- object$spatial_field
+  fac_off  <- object$model$count_factor_offset
   cols <- lapply(seq_len(model$n_species), function(s) {
     su <- model$summaries[[s]]
     if (su$n == 0L) return(NULL)
@@ -356,6 +361,10 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
                                       nrow(draws), su$n, byrow = TRUE)
     if (!is.null(fld_full) && length(fld_full) == length(su$valid)) {
       eta <- eta + matrix(as.numeric(fld_full[su$valid]),
+                          nrow(draws), su$n, byrow = TRUE)
+    }
+    if (!is.null(fac_off) && nrow(fac_off) == length(su$valid)) {
+      eta <- eta + matrix(as.numeric(fac_off[su$valid, s]),
                           nrow(draws), su$n, byrow = TRUE)
     }
     mu  <- if (is_log) pmin(pmax(exp(eta), 1e-300), 1e8) else eta

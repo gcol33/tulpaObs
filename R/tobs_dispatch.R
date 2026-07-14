@@ -83,10 +83,33 @@
   # is not yet wired -- error rather than silently drop (gcol33/tulpaObs#117).
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
-      !is.null(structs$svc) || !is.null(structs$latent)) {
-    stop("ms_count(): temporal / re / svc / latent terms are not yet wired for ",
-         "the community count family; a shared areal field icar() is the only ",
-         "structured term supported (gcol33/tulpaObs#117).", call. = FALSE)
+      !is.null(structs$svc)) {
+    stop("ms_count(): temporal / re / svc terms are not yet wired for the ",
+         "community count family; a shared areal field icar() or a latent() ",
+         "factor term are the structured terms supported (gcol33/tulpaObs#117).",
+         call. = FALSE)
+  }
+  # A latent() factor term (residual species co-occurrence, the lfMsAbund
+  # analogue) routes to the community latent-factor fitter under laplace. Not
+  # composed with a shared areal field in this release.
+  if (!is.null(structs$latent)) {
+    if (!is.null(structs$spatial)) {
+      stop("ms_count(): a latent() factor term composed with a shared areal ",
+           "field (the spatial-factor sfMsAbund) is not yet wired; use one or ",
+           "the other (gcol33/tulpaObs#117).", call. = FALSE)
+    }
+    if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
+      stop("ms_count(): a latent() factor model uses method = \"laplace\" ",
+           "(the block-coordinate community Laplace-EM).", call. = FALSE)
+    }
+    return(.tobs_fit_ms_count_factor(
+      model, latent = structs$latent,
+      max.iter   = control[["max.iter"]] %||% 200L,
+      tol        = control[["tol"]] %||% 1e-4,
+      sigma.beta = control[["sigma.beta"]] %||% 5,
+      priors     = priors,
+      max.outer  = control[["max.outer"]] %||% 25L,
+      verbose    = isTRUE(control[["verbose"]])))
   }
   if (!is.null(structs$spatial)) {
     # A shared icar() field (the sfMsAbund analogue) or an icar() intercept +

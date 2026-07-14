@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.0.119 (2026-07-14)
+
+* Community latent-factor `ms_count()` (the spAbundance `lfMsAbund` analogue,
+  Poisson; gcol33/tulpaObs#117): a `latent(n_factors)` term on the abundance
+  formula models residual species co-occurrence with Q per-site latent factors +
+  per-species loadings, `log mu_{s,i} = X_i (mu + b_s) + sum_q lambda_{s,q}
+  eta_{q,i}`. Fit by block coordinate ascent (`R/ms_count_factor.R`): the
+  community Laplace-EM with the factor term as a per-observation offset,
+  alternated with a Poisson factor update (alternating Newton on the factors and
+  the loadings, with a unit-variance anchor). The loadings / factors are
+  identified only up to rotation, so the recoverable target is the residual
+  species covariance `Sigma_res = lambda lambda'` (reported as
+  `fit$ms_factor$residual_cov` / `residual_cor`, with `loadings` and `factors`);
+  the residual correlation recovers cleanly (correlation with truth ~0.95).
+  `fitted()` / WAIC are factor-aware. Poisson; not composed with a shared areal
+  field yet. Recovery-tested in `test-ms-count-factor.R`.
+
+  With this, every tier of the spAbundance relative-abundance branch is covered:
+  `abund` (`count()`), `spAbund` (`count()` + areal), `msAbund` (`ms_count()`),
+  `sfMsAbund` (`ms_count()` + `icar()`), `svcMsAbund` (`ms_count()` + SVC bar),
+  and `lfMsAbund` (`ms_count()` + `latent()`).
+
 ## 0.0.118 (2026-07-14)
 
 * Community SVC for `ms_count()` (the spAbundance `svcMsAbund` analogue, Poisson;
