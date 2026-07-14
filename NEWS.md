@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.116 (2026-07-14)
+
+* Areal `count()` (negbin / Gaussian): the gate now states, and its error points
+  out, that an overdispersed areal count with one field node per site is
+  *fundamentally not identified* -- the latent field absorbs all extra-Poisson
+  variation, so the field-integrated marginal likelihood is monotone in the
+  dispersion toward the Poisson limit (verified over a dispersion grid). No
+  estimator recovers the dispersion in this design; the message points to
+  `abun()` (an N-mixture on replicated counts) for overdispersion with a spatial
+  signal, or a Poisson areal `count()`.
+
 ## 0.0.115 (2026-07-14)
 
 * New `ms_count()` family: the community / multispecies relative-abundance GLMM

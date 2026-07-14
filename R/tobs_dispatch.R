@@ -313,21 +313,24 @@
            "node) is not yet wired for the count family; one field node per ",
            "site is required (gcol33/tulpaObs#117).", call. = FALSE)
     }
-    # Areal count is Poisson-only in this release. With one field node per site
-    # the negbin size / gaussian residual variance and the latent field compete
-    # for the same residual variation: the fixed-phi outer dispersion loop and
-    # the field then feed back (size -> Inf, residual variance -> 0), so the
-    # dispersion is not identified. Poisson has no dispersion parameter and is
-    # cleanly identified. The overdispersed areal fits need a joint field-and-
-    # dispersion posterior (a hyperprior on phi or a 2-D outer grid), a #117
-    # follow-up; error rather than return a degenerate fit.
+    # Areal count is Poisson-only. With one field node per site the negbin size /
+    # gaussian residual variance and the latent field are FUNDAMENTALLY not
+    # identified together, not merely awkward to fit: the field (one free value
+    # per site) absorbs all extra-Poisson variation, so the field-integrated
+    # marginal likelihood is monotone in the dispersion toward the Poisson limit
+    # (verified: size -> Inf, residual variance -> 0). No estimator -- outer loop
+    # OR a joint dispersion grid -- recovers the dispersion in this design.
+    # Identification needs replication within a site (an N-mixture, abun()) or
+    # more sites than field nodes (a group_var areal term, not yet wired for
+    # count). Poisson has no dispersion parameter and is cleanly identified.
     if (!identical(response, "poisson")) {
       stop(sprintf(paste0(
-        "count(response = \"%s\") with an areal field is not yet supported: ",
-        "with one field node per site the %s and the latent field are not ",
-        "jointly identified under the fixed-dispersion nested-Laplace loop. ",
-        "Use a Poisson areal count -- count() -- or drop the areal term for a ",
-        "non-spatial %s fit (gcol33/tulpaObs#117)."),
+        "count(response = \"%s\") with an areal field is not identifiable: with ",
+        "one field node per site the %s and the latent field are confounded ",
+        "(the field absorbs all overdispersion). Use a Poisson areal count -- ",
+        "count() -- or drop the areal term for a non-spatial %s fit; for ",
+        "overdispersion with a spatial signal use abun() (N-mixture, replicated ",
+        "counts) instead (gcol33/tulpaObs#117)."),
         response,
         if (identical(response, "negbin")) "negbin size"
         else "gaussian residual variance",
