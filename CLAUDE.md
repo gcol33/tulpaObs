@@ -327,7 +327,9 @@ block `(mu_lambda, mu_p, f)` shares single-species spatial layout
 EM iterates joint `(mu,f,{b_s})` mode-find (block-elim Newton, `b_s` Schur-folded) +
 closed-form `Sigma` M-step; R grid-integrates. Community means FLAT (no ridge). NB `r`
 grid-integrated. `fit$spatial_field` = posterior-mean field. `test-ms-abun-spatial.R`.
-NUTS pending.
+NUTS + shared field: #73 wires the #14 community sampler + an optional fixed-hyper
+non-centered car_proper field block on the abundance arm (Poisson; 0 divergences,
+field cor ~0.97); icar/bym2 + temporal/RE NUTS gated to n-L.
 
 ### Boundary: tulpaObs vs tulpa
 
@@ -365,11 +367,11 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 |---|---|---|---|
 | Single-season occupancy | Yes | Yes | parity w/ inlaocc |
 | Dynamic (HMM) | Yes | Yes | colonization/extinction |
-| Community single-season (`ms_occu`) | Yes | — | per-arm community RE, shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); msPGOcc. NUTS/spatial deferred |
+| Community single-season (`ms_occu`) | Yes | Yes | per-arm community RE, shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); msPGOcc. NUTS non-spatial samples community means/deviations/covariances jointly (#69, `R/ms_occu_nuts.R`); shared areal field icar/bym2/car_proper on occ arm via n-L (#75, `R/ms_occu_spatial.R`, sfMsNMix analogue). NUTS+field -> n-L |
 | Community dynamic (`ms_dyn_occu`) | Yes | — | per-species psi1/p RE + shared gamma/eps; HMM-forward; `R/ms_dyn_occu.R` |
 | Community integrated (`ms_int_occu`) | Yes | — | per-species psi + per-source det RE; multi-source two-state marginal; `R/ms_int_occu.R` |
 | Integrated multi-source | Yes | Yes | shared psi |
-| JSDM | Yes | — | no detection |
+| JSDM (`jsdm`) | Yes | Yes | no detection; shared FE + per-species intercept RE. NUTS non-spatial (shares single-process sampler); shared areal field icar/bym2/car_proper via n-L (#76, `R/jsdm_spatial.R`). NUTS+field -> n-L |
 | Cover hurdle (joint) | Yes | — | `family_cover_hurdle.R`, `sla_cover_*`. positive = beta/lognormal/lognormal_trunc/ordinal/`beta_oi`. `beta_oi` (#108) = one-inflated Beta: ceiling (cover=1) plots = a point mass (constant pi = ceiling share, binomial SE), interior Beta on (0,1); encode splits `is_pos` to interior, `enc$oi` carries pi, decode reports `pi_one`, predict conditional cover = `pi + (1-pi)*mu` (`.tobs_cover_mu`). `control$aggregate.occ` (ON, #48) collapses occ arm to Binomial suff-stat; `control$aggregate.pos` (ON beta arm, #49) collapses beta pos arm to grouped suff-stat (tulpa `slog_y`/`slog_1my`), errors on non-beta. Both byte-identical to per-plot |
 | Cover hurdle spatial coef fields (`\|\|` / `\|`) | n-L | — | `spatial(~ 1 + w \|\| node, graph, to=)` independent (#61, two coupled ICAR blocks, per-field alpha) OR `\| ` correlated (#64, one separable-MCAR block sharing free Sigma). `\|` both-arm `to=c("presence","positive")` = copied to pos arm w/ one alpha (#64); `\|` single-arm `to="presence"`/`"positive"` = free-Sigma field on that arm alone, NO copy (#109, 0-sentinel `spatial_idx` on the other arm via `mc$to`, `copy=NULL`, `alpha_mcar`=NA). `\|` -> `.cover_build_mcar_spec`/`.fit_cover_hurdle_joint_mcar` (tulpa `type="mcar"` block, copy only when both-arm); reports `sigma_mcar`/`rho_mcar`/`alpha_mcar`. SLA on `\|` no-op. icar only |
 | Cover hurdle arm-specific fields (single-arm `to`) | n-L | — | `spatial(~ 1 + w \|\| cell, graph, to="positive")` (or `"presence"`); separate single-arm calls = independent per-arm fields, NO cross-arm copy (#65). NO engine change: per-arm `spatial_idx=0` makes the other arm's rows skip the block (tulpa `l_b>0` scatter guard), own precision grid-integrated. `.tobs_armspecific_bar_fields` (formula_terms.R) -> `enc$armspec` -> `.fit_cover_hurdle_joint_armspecific` (non-copied per-arm blocks, no `copy=`). `armspec_blocks` carries per-block arm/slot/type; `.tobs_joint_draws_cover_armspecific` scatters each block onto its arm only (amp 0 on other). icar/car/car_proper AND bym2 (#107): a bym2 block is the non-copied length-2 (phi ICAR + iid theta) block, paired (sigma,rho) grid; the draw projection reconstructs the rho-mixed unit field `z = sqrt(rho)*sf*phi + sqrt(1-rho)*theta` so predict/WAIC see the full mix. `\|\|` only (`\|` arm-specific undefined: copy-only). No mix w/ shared field/trend/temporal/re; one field per arm. SLA no-op |
