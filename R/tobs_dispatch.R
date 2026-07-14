@@ -172,6 +172,20 @@
       stop("ms_occu() areal field sits on the occupancy arm only; a field on ",
            "the detection formula is not supported.", call. = FALSE)
     }
+    # A varying-coefficient bar spatial(~ 1 + w || cell, graph) (the svcMsPGOcc
+    # analogue) routes to the block-coordinate occupancy field fitter (intercept
+    # + SVC field(s) via the two-state field solve, gcol33/tulpaObs#118). A plain
+    # intercept field keeps the in-tree C++ community-spatial nested Laplace-EM.
+    if (isTRUE(structs$spatial$is_bar) || isTRUE(structs$spatial$is_multifield)) {
+      return(.tobs_fit_ms_occu_field(
+        model, spatial = structs$spatial,
+        max.iter  = control[["max.iter"]] %||% 200L,
+        tol       = control[["tol"]] %||% 1e-4,
+        sigma.beta = control[["sigma.beta"]] %||% 5,
+        priors    = priors,
+        max.outer = control[["max.outer"]] %||% 20L,
+        verbose   = isTRUE(control[["verbose"]])))
+    }
     return(.tobs_fit_ms_occu_spatial(
       model, spatial = structs$spatial,
       max.iter = control[["max.iter"]] %||% 100L,

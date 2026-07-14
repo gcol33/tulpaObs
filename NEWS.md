@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.124 (2026-07-14)
+
+* Occupancy community SVC (`svcMsPGOcc` analogue; gcol33/tulpaObs#118): a
+  varying-coefficient bar `spatial(~ 1 + w || cell, graph)` on the `ms_occu()`
+  occupancy formula now fits an intercept field plus one spatially-varying-
+  coefficient field per covariate,
+  `logit psi_{s,i} = X_i (mu + b_s) + f0_{u(i)} + w_i f1_{u(i)}`. Fit by block
+  coordinate ascent (`R/ms_occu_field.R`): the community occupancy Laplace-EM
+  with the shared field as a psi offset, alternated with a two-state-marginal
+  occupancy field update (`.ms_occu_field_solve`, a Newton over the per-(species,
+  site) occupancy marginal + the ICAR prior). Both fields recover cleanly (field
+  correlations ~0.96). `icar()` only; the plain single intercept field keeps the
+  in-tree C++ community-spatial path (`sfMsPGOcc`), so that route is unchanged.
+  Recovery-tested in `test-ms-occu-field.R`.
+
 ## 0.0.123 (2026-07-14)
 
 * Community count field: `bym2()` (the Riebler scaled BYM2) now joins `icar()` and

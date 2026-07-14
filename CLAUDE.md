@@ -367,7 +367,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 |---|---|---|---|
 | Single-season occupancy | Yes | Yes | parity w/ inlaocc |
 | Dynamic (HMM) | Yes | Yes | colonization/extinction |
-| Community single-season (`ms_occu`) | Yes | Yes | per-arm community RE, shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); msPGOcc. NUTS non-spatial samples community means/deviations/covariances jointly (#69, `R/ms_occu_nuts.R`); shared areal field icar/bym2/car_proper on occ arm via n-L (#75, `R/ms_occu_spatial.R`, sfMsNMix analogue). NUTS+field -> n-L |
+| Community single-season (`ms_occu`) | Yes | Yes | per-arm community RE, shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); msPGOcc. NUTS non-spatial samples community means/deviations/covariances jointly (#69, `R/ms_occu_nuts.R`); shared areal field icar/bym2/car_proper on occ arm via n-L (#75, `R/ms_occu_spatial.R`, sfMsNMix analogue). NUTS+field -> n-L. **SVC (`svcMsPGOcc`, #118)**: a varying-coefficient bar `spatial(~ 1 + w \|\| cell, graph)` on the occ arm -> intercept + SVC field(s) via BLOCK COORDINATE ascent (`R/ms_occu_field.R`, `.ms_occu_field_solve` = two-state-marginal occupancy field Newton + ICAR prior; community occ EM w/ field as psi offset). Both fields recover ~0.96. icar only; plain intercept field stays on the C++ path (no regression). `test-ms-occu-field.R` |
 | Community dynamic (`ms_dyn_occu`) | Yes | — | per-species psi1/p RE + shared gamma/eps; HMM-forward; `R/ms_dyn_occu.R` |
 | Community integrated (`ms_int_occu`) | Yes | — | per-species psi + per-source det RE; multi-source two-state marginal; `R/ms_int_occu.R` |
 | Integrated multi-source | Yes | Yes | shared psi |
@@ -691,6 +691,7 @@ R/
   ms_count.R                — community count / relative-abundance GLMM (msAbund, #117); .tobs_fit_ms_count over shared community_em.R
   ms_count_spatial.R        — community count + shared areal field (sfMsAbund) + SVC bar (svcMsAbund, #117/#118); block coordinate ascent (community EM offset <-> multi-field Poisson-ICAR), pure R
   ms_count_factor.R         — community count + latent factors (lfMsAbund, #117); block coordinate ascent (community EM offset <-> Poisson factor update), residual co-occurrence, pure R
+  ms_occu_field.R           — community occupancy SVC (svcMsPGOcc, #118); block coordinate ascent (community occ EM psi offset <-> two-state-marginal occupancy field solve), intercept + SVC field(s), pure R; plain intercept -> C++ ms_occu_spatial.R
   ms_abun.R / ms_abun_nuts.R         — community nmix + NUTS (#14)
   nmix_laplace{,_re,_re_spatial,_spatial}.R — non-spatial / community / sfMsNMix / areal fitters
   nmix_re_aghq.R / nmix_site_marginal.R — grouped RE -> NMixGroupedOracle; per-site AGHQ callback
