@@ -89,47 +89,31 @@
          "factor term are the structured terms supported (gcol33/tulpaObs#117).",
          call. = FALSE)
   }
-  # A latent() factor term (residual species co-occurrence, the lfMsAbund
-  # analogue) routes to the community latent-factor fitter under laplace. Not
-  # composed with a shared areal field in this release.
-  if (!is.null(structs$latent)) {
+  # A shared latent structure -- a shared areal field icar()/SVC bar (the
+  # sfMsAbund / svcMsAbund analogue), latent() factors (lfMsAbund), or BOTH (the
+  # spatial-factor case) -- routes to the unified community latent fitter. A
+  # shared areal field needs method = "nested_laplace"; a factor-only model uses
+  # method = "laplace". The fitter validates the field kind (icar only), the
+  # one-node-per-site map, and a complete y.
+  if (!is.null(structs$spatial) || !is.null(structs$latent)) {
     if (!is.null(structs$spatial)) {
-      stop("ms_count(): a latent() factor term composed with a shared areal ",
-           "field (the spatial-factor sfMsAbund) is not yet wired; use one or ",
-           "the other (gcol33/tulpaObs#117).", call. = FALSE)
-    }
-    if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
+      if (!identical(engine, "nested_laplace")) {
+        stop("ms_count(): a shared areal field needs method = ",
+             "\"nested_laplace\" (drop the icar() term for the non-spatial ",
+             "community fit).", call. = FALSE)
+      }
+    } else if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
       stop("ms_count(): a latent() factor model uses method = \"laplace\" ",
            "(the block-coordinate community Laplace-EM).", call. = FALSE)
     }
-    return(.tobs_fit_ms_count_factor(
-      model, latent = structs$latent,
+    return(.tobs_fit_ms_count_latent(
+      model, spatial = structs$spatial, latent = structs$latent,
       max.iter   = control[["max.iter"]] %||% 200L,
       tol        = control[["tol"]] %||% 1e-4,
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
       max.outer  = control[["max.outer"]] %||% 25L,
       verbose    = isTRUE(control[["verbose"]])))
-  }
-  if (!is.null(structs$spatial)) {
-    # A shared icar() field (the sfMsAbund analogue) or an icar() intercept +
-    # varying-coefficient bar spatial(~ 1 + w || cell, graph) (the svcMsAbund
-    # analogue) on the abundance formula. The community-spatial fitter validates
-    # the field kind (icar only), the one-node-per-site map, and a complete y;
-    # here we only enforce the engine.
-    if (!identical(engine, "nested_laplace")) {
-      stop("ms_count(): a shared areal field needs method = \"nested_laplace\". ",
-           "For the non-spatial community fit drop the icar() term (or use ",
-           "method = \"laplace\").", call. = FALSE)
-    }
-    return(.tobs_fit_ms_count_spatial(
-      model, spatial = structs$spatial,
-      max.iter    = control[["max.iter"]] %||% 200L,
-      tol         = control[["tol"]] %||% 1e-4,
-      sigma.beta  = control[["sigma.beta"]] %||% 5,
-      priors      = priors,
-      max.outer   = control[["max.outer"]] %||% 20L,
-      verbose     = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
     stop("ms_count(): method = \"nested_laplace\" needs a shared areal field ",

@@ -67,90 +67,95 @@
 }
 
 
-# Fit the community-spatial count model. `model` is the (natural-scale) ms_count
-# model; `spatial` the resolved icar term. Block coordinate ascent between the
-# community EM (field as offset) and the Poisson-ICAR field update.
-.tobs_fit_ms_count_spatial <- function(model, spatial,
-                                       max.iter = 200L, tol = 1e-4,
-                                       sigma.beta = 5, priors = NULL,
-                                       max.outer = 20L, verbose = FALSE, ...) {
+# Fit a community count model with a shared latent structure: a shared areal
+# field (`spatial`, the sfMsAbund / svcMsAbund case), latent factors (`latent`,
+# the lfMsAbund case), or BOTH (the spatial-factor case). One block coordinate
+# ascent over: (a) the community EM with the combined latent as a per-species
+# offset; (b) the multi-field Poisson-ICAR field update (if `spatial`); (c) the
+# Poisson factor update (if `latent`, with centred loadings when a field is also
+# present so the field owns the shared spatial mean). Single source of truth for
+# every latent-count route; the field-only / factor-only fitters are the
+# spatial-only / latent-only special cases.
+.tobs_fit_ms_count_latent <- function(model, spatial = NULL, latent = NULL,
+                                      max.iter = 200L, tol = 1e-4,
+                                      sigma.beta = 5, priors = NULL,
+                                      max.outer = 25L, verbose = FALSE, ...) {
   if (!identical(model$response %||% "poisson", "poisson")) {
-    stop("Community-spatial count (ms_count + areal field) is Poisson-only: ",
-         "with one field node per site an overdispersed community count is not ",
-         "identified against the shared field (gcol33/tulpaObs#117).",
+    stop("Community-spatial / latent-factor count (ms_count + a shared field or ",
+         "latent()) is Poisson-only in this release (gcol33/tulpaObs#117).",
          call. = FALSE)
   }
-  X   <- model$X
-  P   <- ncol(X)
-  S   <- model$n_species
-  Ns  <- model$n_sites
-  su  <- model$summaries
-  # Every species must be observed at every site for the shared-field row
-  # aggregation (one field node per site). Missing species-site cells are not
-  # yet wired.
+  X <- model$X; P <- ncol(X); S <- model$n_species; Ns <- model$n_sites
+  su <- model$summaries
   if (any(!model$valid)) {
-    stop("ms_count() areal field needs a complete y (no NA species-site cells); ",
-         "missing cells with a shared field are not yet wired ",
-         "(gcol33/tulpaObs#117).", call. = FALSE)
+    stop("ms_count() shared field / latent factors need a complete y (no NA ",
+         "species-site cells) (gcol33/tulpaObs#117).", call. = FALSE)
   }
   y_mat    <- matrix(as.numeric(model$y), Ns, S)
   y_rowsum <- rowSums(y_mat)
+  has_field  <- !is.null(spatial)
+  has_factor <- !is.null(latent)
 
-  # Resolve the field(s): a plain icar() is one intercept field; the bar
-  # spatial(~ 1 + w || cell, graph) is an intercept field + one varying-
-  # coefficient (SVC) field per covariate (the svcMsAbund case). All share one
-  # graph; each contributes a column to the per-site weight matrix W (all-ones
-  # for the intercept, the covariate values for a trend field). One field node
-  # per site (identity map).
-  fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
-  A <- fields[[1L]]$graph
-  if (is.null(A)) {
-    stop("ms_count() areal field needs the adjacency graph on the icar() term.",
-         call. = FALSE)
-  }
-  if (nrow(A) != Ns) {
-    stop(sprintf("icar graph has %d nodes but the model has %d sites; one field ",
-                 "node per site is required for the community field.",
-                 nrow(A), Ns), call. = FALSE)
-  }
-  if (!all(vapply(fields, function(fd) identical(fd$type %||% "icar", "icar"),
-                  logical(1)))) {
-    stop("ms_count() community field supports icar() only (bym2()/car_proper() ",
-         "are follow-ups, gcol33/tulpaObs#117).", call. = FALSE)
-  }
-  K <- length(fields)
-  W <- matrix(1, Ns, K)
-  field_labels <- character(K)
-  for (k in seq_len(K)) {
-    wk <- fields[[k]]$weight
-    if (!is.null(wk)) {
-      if (length(wk) != Ns) {
-        stop("ms_count() varying-coefficient field weight must be one value ",
-             "per site.", call. = FALSE)
-      }
-      W[, k] <- as.numeric(wk)
-      field_labels[k] <- fields[[k]]$weight_label %||% paste0("trend", k - 1L)
-    } else {
-      field_labels[k] <- "intercept"
+  # ---- field setup (if a shared areal field) ----
+  W <- Q <- NULL; K <- 0L; field_labels <- character(0); Ffield <- NULL; tau <- NULL
+  if (has_field) {
+    fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
+    A <- fields[[1L]]$graph
+    if (is.null(A)) {
+      stop("ms_count() areal field needs the adjacency graph on the icar() term.",
+           call. = FALSE)
     }
+    if (nrow(A) != Ns) {
+      stop(sprintf("icar graph has %d nodes but the model has %d sites; one ",
+                   "field node per site is required.", nrow(A), Ns), call. = FALSE)
+    }
+    if (!all(vapply(fields, function(fd) identical(fd$type %||% "icar", "icar"),
+                    logical(1)))) {
+      stop("ms_count() community field supports icar() only (bym2()/car_proper() ",
+           "are follow-ups, gcol33/tulpaObs#117).", call. = FALSE)
+    }
+    K <- length(fields); W <- matrix(1, Ns, K); field_labels <- character(K)
+    for (k in seq_len(K)) {
+      wk <- fields[[k]]$weight
+      if (!is.null(wk)) {
+        if (length(wk) != Ns)
+          stop("ms_count() varying-coefficient field weight must be one value ",
+               "per site.", call. = FALSE)
+        W[, k] <- as.numeric(wk)
+        field_labels[k] <- fields[[k]]$weight_label %||% paste0("trend", k - 1L)
+      } else field_labels[k] <- "intercept"
+    }
+    Q <- Matrix::Diagonal(x = rowSums(A)) - methods::as(A, "CsparseMatrix")
+    Ffield <- matrix(0, Ns, K); tau <- rep(1, K)
   }
-  Q <- Matrix::Diagonal(x = rowSums(A)) - methods::as(A, "CsparseMatrix")
+
+  # ---- factor setup (if latent factors) ----
+  Qk <- 0L; eta <- lambda <- NULL
+  if (has_factor) {
+    Qk <- as.integer(latent$n_factors %||% 1L)
+    if (Qk < 1L) stop("latent(): n_factors must be >= 1.", call. = FALSE)
+    if (Qk > S - 1L)
+      stop(sprintf("latent(): n_factors (%d) must be < n_species (%d).", Qk, S),
+           call. = FALSE)
+    eta <- matrix(0, Ns, Qk)
+    for (q in seq_len(Qk)) eta[, q] <- scale(cos(seq_len(Ns) * q))[, 1]
+    lambda <- matrix(0.1, S, Qk)
+  }
 
   arm_idx <- list(mu = seq_len(P))
-  Ffield  <- matrix(0, Ns, K)
-  tau     <- rep(1, K)
   mu0 <- numeric(P); mu0[1L] <- log(max(mean(y_rowsum / S), 0.1))
   em  <- NULL
 
   for (outer in seq_len(max.outer)) {
-    field_off <- rowSums(W * Ffield)                   # per-site eta offset
-    # (a) community EM given the current field offset.
+    site_off <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
+    fac_off  <- if (has_factor) tcrossprod(eta, lambda) else matrix(0, Ns, S)
+    # (a) community EM given the combined latent offset.
     sp_ll <- function(s, theta, global) {
-      eta <- as.numeric(su[[s]]$X %*% theta) + field_off
-      sum(stats::dpois(su[[s]]$y, exp(pmin(eta, 700)), log = TRUE))
+      e <- as.numeric(su[[s]]$X %*% theta) + site_off + fac_off[, s]
+      sum(stats::dpois(su[[s]]$y, exp(pmin(e, 700)), log = TRUE))
     }
     sp_grad <- function(s, theta, global) {
-      mu_s <- exp(pmin(as.numeric(su[[s]]$X %*% theta) + field_off, 700))
+      mu_s <- exp(pmin(as.numeric(su[[s]]$X %*% theta) + site_off + fac_off[, s], 700))
       as.numeric(crossprod(su[[s]]$X, su[[s]]$y - mu_s))
     }
     em <- .tobs_community_em(
@@ -160,38 +165,62 @@
       sigma_init = 0.3, max_iter = min(as.integer(max.iter), 60L),
       tol = as.numeric(tol), newton_max = 30L, verbose = FALSE)
 
-    # (b) field update given the coefficients.
     offset_mat <- vapply(seq_len(S),
                          function(s) as.numeric(X %*% (em$mu + em$b_list[[s]])),
                          numeric(Ns))
-    fu <- .ms_count_field_solve(offset_mat, Q, Ffield, tau, W, y_rowsum)
-    delta <- max(abs(fu$F - Ffield))
-    Ffield <- fu$F; tau <- fu$tau
-    if (isTRUE(verbose)) {
-      message(sprintf("[ms_count spatial %d] field delta=%.2e tau=%s",
-                      outer, delta, paste(round(tau, 3), collapse = ",")))
+    delta <- 0
+    # (b) field update (its "offset" holds the coefficients + the factor part).
+    if (has_field) {
+      fu <- .ms_count_field_solve(offset_mat + fac_off, Q, Ffield, tau, W, y_rowsum)
+      delta <- max(delta, max(abs(fu$F - Ffield))); Ffield <- fu$F; tau <- fu$tau
     }
+    # (c) factor update (its "offset" holds the coefficients + the field part).
+    if (has_factor) {
+      site_off2 <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
+      gu <- .ms_count_factor_update(offset_mat + matrix(site_off2, Ns, S), y_mat,
+                                    eta, lambda, center = has_field)
+      delta <- max(delta, max(abs(tcrossprod(gu$eta, gu$lambda) - fac_off)))
+      eta <- gu$eta; lambda <- gu$lambda
+    }
+    if (isTRUE(verbose))
+      message(sprintf("[ms_count latent %d] delta=%.2e", outer, delta))
     if (outer > 2L && delta < tol) break
   }
 
   fit <- build_ms_count_fit(model, em, arm_idx, disp = NULL)
-  fit$method  <- "nested_laplace"
-  fit$spatial <- spatial
-  # The intercept field is the headline spatial_field; any varying-coefficient
-  # (SVC) fields are the trend field(s). fitted() / WAIC use the combined
-  # per-site offset sum_k W[,k] F[,k].
-  fit$spatial_field <- as.numeric(Ffield[, 1L])
-  fit$model$count_field_offset <- rowSums(W * Ffield)
-  sigma_field <- 1 / sqrt(tau)
-  fit$spatial_hyper <- list(type = "icar", tau = tau, sigma = sigma_field,
-                            field_labels = field_labels)
-  fit$means <- c(fit$means,
-                 stats::setNames(sigma_field,
-                                 paste0("sigma_field_", field_labels)))
-  if (K > 1L) {
-    fit$trend_fields <- lapply(2:K, function(k) as.numeric(Ffield[, k]))
-    names(fit$trend_fields) <- field_labels[-1L]
-    fit$trend_field <- fit$trend_fields[[1L]]
+  fit$method <- if (has_field) "nested_laplace" else "laplace"
+  site_off <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
+  if (has_field) {
+    fit$spatial <- spatial
+    fit$spatial_field <- as.numeric(Ffield[, 1L])
+    fit$model$count_field_offset <- site_off
+    sigma_field <- 1 / sqrt(tau)
+    fit$spatial_hyper <- list(type = "icar", tau = tau, sigma = sigma_field,
+                              field_labels = field_labels)
+    fit$means <- c(fit$means, stats::setNames(sigma_field,
+                              paste0("sigma_field_", field_labels)))
+    if (K > 1L) {
+      fit$trend_fields <- lapply(2:K, function(k) as.numeric(Ffield[, k]))
+      names(fit$trend_fields) <- field_labels[-1L]
+      fit$trend_field <- fit$trend_fields[[1L]]
+    }
+  }
+  if (has_factor) {
+    fit$latent <- latent
+    Sigma_res <- tcrossprod(lambda); dimnames(Sigma_res) <-
+      list(model$species_names, model$species_names)
+    rownames(lambda) <- model$species_names
+    colnames(lambda) <- paste0("factor", seq_len(Qk))
+    fit$ms_factor <- list(
+      n_factors = Qk, loadings = lambda, factors = eta,
+      residual_cov = Sigma_res,
+      residual_cor = stats::cov2cor(Sigma_res + diag(1e-10, S)))
+    fit$model$count_factor_offset <- tcrossprod(eta, lambda)
   }
   fit
+}
+
+# Back-compat thin wrappers -> the unified latent fitter.
+.tobs_fit_ms_count_spatial <- function(model, spatial, ...) {
+  .tobs_fit_ms_count_latent(model, spatial = spatial, latent = NULL, ...)
 }

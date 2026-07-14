@@ -72,3 +72,56 @@ test_that("latent-factor count recovers the residual correlation over seeds", {
   }
   expect_gt(stats::median(rc), 0.85)
 })
+
+
+# --- spatial-factor composition: a shared field AND latent factors together ----
+
+.mscsf_grid_graph <- function(side) {
+  N <- side * side; A <- matrix(0L, N, N)
+  idx <- function(r, c) (r - 1L) * side + c
+  for (r in seq_len(side)) for (c in seq_len(side)) {
+    i <- idx(r, c)
+    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
+    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
+  }
+  A
+}
+
+# log mu_{s,i} = X_i (mu + b_s) + f_i + sum_q lambda_{s,q} eta_{q,i}, with a shared
+# ICAR field f AND Q centred-loading factors (residual co-occurrence).
+.mscsf_sim <- function(side = 11L, S = 16L, Q = 2L, seed = 1L) {
+  set.seed(seed)
+  A <- .mscsf_grid_graph(side); Ns <- nrow(A)
+  co <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f <- 0.6 * scale(sin(co$r/side*pi) + cos(co$c/side*pi))[, 1]; f <- f - mean(f)
+  d <- data.frame(x = stats::rnorm(Ns))
+  X <- stats::model.matrix(~ x, d)
+  bs  <- vapply(1:2, function(j) stats::rnorm(S, c(1, 0.5)[j], c(0.4, 0.3)[j]),
+                numeric(S))
+  lam <- scale(matrix(stats::rnorm(S * Q, 0, 0.5), S, Q), scale = FALSE)
+  eta <- matrix(stats::rnorm(Ns * Q), Ns, Q)
+  lin <- X %*% t(bs) + matrix(f, Ns, S) + eta %*% t(lam)
+  y <- matrix(stats::rpois(Ns * S, exp(pmin(lin, 700))), Ns, S,
+              dimnames = list(NULL, paste0("sp", seq_len(S))))
+  cor_res <- stats::cov2cor(tcrossprod(lam) + diag(1e-8, S))
+  list(y = y, data = d, graph = A, f = f, cor_res = cor_res, Ns = Ns)
+}
+
+test_that("spatial-factor count recovers BOTH the shared field and the factors", {
+  skip_on_cran()
+  d <- .mscsf_sim(side = 11L, S = 16L, Q = 2L, seed = 6L)
+  fit <- tobs(~ x + icar(graph = d$graph) + latent(2), data = d$data,
+              family = ms_count(), y = d$y, species = colnames(d$y),
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  # both latents present + recovered (the centred loadings separate them)
+  expect_false(is.null(fit$spatial_field))
+  expect_false(is.null(fit$ms_factor))
+  expect_gt(stats::cor(fit$spatial_field, d$f), 0.8)
+  off <- upper.tri(d$cor_res)
+  expect_gt(stats::cor(fit$ms_factor$residual_cor[off], d$cor_res[off]), 0.8)
+  # fitted() adds both offsets
+  expect_gt(stats::cor(as.numeric(fitted(fit)$mu), as.numeric(d$y)), 0.7)
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})

@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.120 (2026-07-14)
+
+* Spatial-factor `ms_count()`: a shared areal field `icar()` and latent factors
+  `latent(n)` now compose on one formula (the spatial-factor `sfMsAbund`;
+  gcol33/tulpaObs#117), `log mu_{s,i} = X_i (mu + b_s) + f_{u(i)} + sum_q
+  lambda_{s,q} eta_{q,i}`. The block coordinate ascent runs the field update and
+  the factor update in the same loop; when both are present the factor loadings
+  are centred across species (`sum_s lambda_{s,q} = 0`) so the shared field owns
+  the spatial mean and the factors own the between-species residual co-occurrence
+  -- both recover cleanly (field correlation ~0.99, residual correlation ~0.99).
+  The shared-field-only, factor-only, and combined routes are now one fitter
+  (`.tobs_fit_ms_count_latent`, `R/ms_count_spatial.R`): single source of truth,
+  with the previous fitters as thin special cases. Recovery-tested in
+  `test-ms-count-factor.R`.
+
 ## 0.0.119 (2026-07-14)
 
 * Community latent-factor `ms_count()` (the spAbundance `lfMsAbund` analogue,
