@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.123 (2026-07-14)
+
+* Community count field: `bym2()` (the Riebler scaled BYM2) now joins `icar()` and
+  `car_proper()` as a shared-field kind for `ms_count()` (gcol33/tulpaObs#117). The
+  field is the combined `phi = a v + b u` of a structured ICAR part `v` and an
+  unstructured iid part `u`, with `a = sigma sqrt(rho/scale)`,
+  `b = sigma sqrt(1 - rho)` and the Riebler scale factor; `(sigma, rho)` are chosen
+  over a small grid by the field marginal (reported as `fit$spatial_hyper$sigma`
+  / `rho`). Fit by a two-component joint Newton in the block-coordinate field step
+  (`.ms_count_bym2_solve`). The single shared intercept field only (no
+  varying-coefficient bar / group_var; use `icar()`/`car_proper()` there).
+  Recovery-tested in `test-ms-count-spatial.R`. With this, the community count
+  field supports the intrinsic (`icar`), proper (`car_proper`), and scaled BYM2
+  (`bym2`) areal priors.
+
 ## 0.0.122 (2026-07-14)
 
 * Community count field: `group_var` (sites > field cells) now works for

@@ -78,6 +78,61 @@
 }
 
 
+# Riebler BYM2 scale factor: the geometric mean of the marginal variances of the
+# intrinsic ICAR field (its generalised-inverse diagonal), so a unit-scale
+# structured component v has geometric-mean marginal variance 1 and rho is
+# interpretable as the structured share.
+.ms_count_bym2_scale <- function(Qic) {
+  e   <- eigen(as.matrix(Qic), symmetric = TRUE)
+  pos <- e$values > max(e$values) * 1e-10
+  vdiag <- rowSums((e$vectors[, pos, drop = FALSE]^2) %*%
+                   diag(1 / e$values[pos], sum(pos)))
+  exp(mean(log(pmax(vdiag, 1e-12))))
+}
+
+# BYM2 field update (one shared field). The combined field phi = a v + b u enters
+# eta, with v ~ ICAR (unit precision, sum-to-zero) the structured part and
+# u ~ N(0, I) the unstructured part; a = sigma sqrt(rho/scale),
+# b = sigma sqrt(1 - rho). Joint Newton over (v, u) at fixed (sigma, rho); the
+# hyperparameters are chosen over a grid by the field marginal (below).
+.ms_count_bym2_solve <- function(offset_mat, Qic, v, u, a, b, y_rowsum,
+                                 max_iter = 50L, tol = 1e-8) {
+  Ns <- nrow(offset_mat); Imat <- Matrix::Diagonal(Ns)
+  # A tiny ridge regularises the ICAR null direction (a rank-n-1 Qic makes the
+  # v block singular when the structured weight a is small); v is demeaned each
+  # step, so the ridged constant direction is removed anyway.
+  ridge <- Matrix::Diagonal(2L * Ns, 1e-6)
+  for (it in seq_len(max_iter)) {
+    phi   <- a * v + b * u
+    w     <- rowSums(exp(pmin(offset_mat + phi, 700)))
+    resid <- y_rowsum - w
+    gv <- a * resid - as.numeric(Qic %*% v)
+    gu <- b * resid - u
+    Dw <- Matrix::Diagonal(x = w)
+    H  <- rbind(cbind(a * a * Dw + Qic, a * b * Dw),
+                cbind(a * b * Dw,       b * b * Dw + Imat)) + ridge
+    step <- tryCatch(as.numeric(Matrix::solve(H, c(gv, gu))),
+                     error = function(e)
+                       as.numeric(Matrix::solve(H + Matrix::Diagonal(2L * Ns, 1e-3),
+                                                c(gv, gu))))
+    v <- v + step[seq_len(Ns)]; u <- u + step[Ns + seq_len(Ns)]
+    v <- v - mean(v)
+    if (max(abs(step)) < tol) break
+  }
+  # Laplace marginal at the mode (drop constant normalisers): data ll in phi,
+  # the (v, u) prior quadratics, and -0.5 log|H|.
+  phi <- a * v + b * u
+  w   <- rowSums(exp(pmin(offset_mat + phi, 700)))
+  H   <- rbind(cbind(a * a * Matrix::Diagonal(x = w) + Qic, a * b * Matrix::Diagonal(x = w)),
+               cbind(a * b * Matrix::Diagonal(x = w), b * b * Matrix::Diagonal(x = w) + Imat)) +
+         ridge
+  ll  <- sum(y_rowsum * phi) - sum(exp(pmin(offset_mat + phi, 700)))
+  m   <- ll - 0.5 * as.numeric(t(v) %*% (Qic %*% v)) - 0.5 * sum(u * u) -
+         0.5 * as.numeric(Matrix::determinant(H, logarithm = TRUE)$modulus)
+  list(v = v, u = u, m = m)
+}
+
+
 # log pseudo-determinant of the CAR precision on the sum-to-zero subspace: the
 # sum of log of the n-1 largest eigenvalues (the smallest eigenvalue's
 # eigenvector is ~ the constant, which the sum-to-zero constraint removes). Used
@@ -150,7 +205,7 @@
 
   # ---- field setup (if a shared areal field) ----
   W <- Q <- NULL; K <- 0L; field_labels <- character(0); Ffield <- NULL; tau <- NULL
-  Mmap <- NULL; n_nodes <- Ns
+  Mmap <- NULL; n_nodes <- Ns; is_bym2 <- FALSE
   if (has_field) {
     fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
     A <- fields[[1L]]$graph
@@ -183,10 +238,16 @@
     }
     ptype <- fields[[1L]]$type %||% "icar"
     if (!all(vapply(fields, function(fd) identical(fd$type %||% "icar", ptype),
-                    logical(1))) || !ptype %in% c("icar", "car_proper")) {
-      stop("ms_count() community field supports icar() or car_proper() (one ",
-           "field kind per formula; bym2() is a follow-up, gcol33/tulpaObs#117).",
-           call. = FALSE)
+                    logical(1))) || !ptype %in% c("icar", "car_proper", "bym2")) {
+      stop("ms_count() community field supports icar(), car_proper(), or bym2() ",
+           "(one field kind per formula, gcol33/tulpaObs#117).", call. = FALSE)
+    }
+    is_bym2 <- identical(ptype, "bym2")
+    if (is_bym2 && (length(fields) > 1L || !is.null(fields[[1L]]$weight) ||
+                    !is.null(Mmap))) {
+      stop("ms_count() bym2() field is the single shared intercept field only ",
+           "(no varying-coefficient bar / group_var); use icar()/car_proper() ",
+           "for those (gcol33/tulpaObs#117).", call. = FALSE)
     }
     K <- length(fields); W <- matrix(1, Ns, K); field_labels <- character(K)
     for (k in seq_len(K)) {
@@ -213,6 +274,16 @@
     rho <- if (is_car) 0.95 else NA_real_
     Q <- if (is_car) Dg - rho * Wadj else Dg - Wadj
     Ffield <- matrix(0, n_nodes, K); tau <- rep(1, K)
+    # BYM2 state: structured v (ICAR) + unstructured u (iid), combined field
+    # phi = a v + b u, hyperparameters (sigma, rho) chosen over a grid.
+    if (is_bym2) {
+      Qic <- Dg - Wadj
+      bym_scale  <- .ms_count_bym2_scale(Qic)
+      bym_v <- numeric(Ns); bym_u <- numeric(Ns)
+      bym_sigma_grid <- c(0.3, 0.6, 1.0, 1.6)
+      bym_rho_grid   <- c(0.25, 0.5, 0.75, 0.9)
+      bym_sigma <- 0.6; bym_rho <- 0.5; bym_phi <- numeric(Ns)
+    }
   }
   Mt_field <- if (!is.null(Mmap)) Matrix::t(Mmap) else NULL
   # Per-site field offset from the (possibly aggregated) node field.
@@ -239,7 +310,8 @@
   em  <- NULL
 
   for (outer in seq_len(max.outer)) {
-    site_off <- if (has_field) site_field_off(Ffield) else numeric(Ns)
+    site_off <- if (!has_field) numeric(Ns)
+                else if (is_bym2) bym_phi else site_field_off(Ffield)
     fac_off  <- if (has_factor) tcrossprod(eta, lambda) else matrix(0, Ns, S)
     # (a) community EM given the combined latent offset.
     sp_ll <- function(s, theta, global) {
@@ -262,7 +334,15 @@
                          numeric(Ns))
     delta <- 0
     # (b) field update (its "offset" holds the coefficients + the factor part).
-    if (has_field) {
+    if (has_field && is_bym2) {
+      # One field solve at the current (sigma, rho); the hyperparameters are
+      # grid-selected once after the block coordinate converges (below).
+      a <- bym_sigma * sqrt(bym_rho / bym_scale); b <- bym_sigma * sqrt(1 - bym_rho)
+      br <- .ms_count_bym2_solve(offset_mat + fac_off, Qic, bym_v, bym_u, a, b, y_rowsum)
+      phi_new <- a * br$v + b * br$u
+      delta <- max(delta, max(abs(phi_new - bym_phi)))
+      bym_v <- br$v; bym_u <- br$u; bym_phi <- phi_new
+    } else if (has_field) {
       fu <- .ms_count_field_solve(offset_mat + fac_off, Q, Ffield, tau, W, y_rowsum,
                                   constrain_mean = constrain_mean, rankdef = rankdef,
                                   M = Mmap)
@@ -270,7 +350,8 @@
     }
     # (c) factor update (its "offset" holds the coefficients + the field part).
     if (has_factor) {
-      site_off2 <- if (has_field) site_field_off(Ffield) else numeric(Ns)
+      site_off2 <- if (!has_field) numeric(Ns)
+                   else if (is_bym2) bym_phi else site_field_off(Ffield)
       gu <- .ms_count_factor_update(offset_mat + matrix(site_off2, Ns, S), y_mat,
                                     eta, lambda, center = has_field)
       delta <- max(delta, max(abs(tcrossprod(gu$eta, gu$lambda) - fac_off)))
@@ -303,10 +384,38 @@
     }
     if (is.finite(best$m)) { rho <- best$rho; Ffield <- best$F; tau <- best$tau }
   }
+  # BYM2 (sigma, rho) selection: at the converged coefficients, grid over the
+  # hyperparameters and keep the (sigma, rho) maximising the field marginal.
+  if (has_field && is_bym2) {
+    offset_mat <- vapply(seq_len(S),
+                         function(s) as.numeric(X %*% (em$mu + em$b_list[[s]])),
+                         numeric(Ns))
+    off_f <- offset_mat + (if (has_factor) tcrossprod(eta, lambda) else 0)
+    best <- list(m = -Inf)
+    for (sg in bym_sigma_grid) for (rr in bym_rho_grid) {
+      a <- sg * sqrt(rr / bym_scale); b <- sg * sqrt(1 - rr)
+      br <- tryCatch(.ms_count_bym2_solve(off_f, Qic, bym_v, bym_u, a, b, y_rowsum),
+                     error = function(e) NULL)
+      if (!is.null(br) && is.finite(br$m) && br$m > best$m)
+        best <- c(br, list(sigma = sg, rho = rr, a = a, b = b))
+    }
+    if (is.finite(best$m)) {
+      bym_v <- best$v; bym_u <- best$u; bym_sigma <- best$sigma; bym_rho <- best$rho
+      bym_phi <- best$a * best$v + best$b * best$u
+    }
+  }
 
   fit <- build_ms_count_fit(model, em, arm_idx, disp = NULL)
   fit$method <- if (has_field) "nested_laplace" else "laplace"
-  if (has_field) {
+  if (has_field && is_bym2) {
+    fit$spatial <- spatial
+    # The reported field is the combined BYM2 field phi = a v + b u.
+    fit$spatial_field <- as.numeric(bym_phi)
+    fit$model$count_field_offset <- as.numeric(bym_phi)
+    fit$spatial_hyper <- list(type = "bym2", sigma = bym_sigma, rho = bym_rho,
+                              scale = bym_scale, field_labels = "intercept")
+    fit$means <- c(fit$means, sigma_field_intercept = bym_sigma)
+  } else if (has_field) {
     fit$spatial <- spatial
     # spatial_field is the per-node intercept field; count_field_offset is the
     # per-site eta contribution (node field mapped through the site -> cell map).

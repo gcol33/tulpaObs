@@ -48,11 +48,7 @@ test_that("ms_count() reports nested_laplace and gates the areal field", {
     tobs(~ x + icar(graph = d$graph), data = d$data, family = ms_count(),
          y = d$y, species = colnames(d$y), method = "laplace"),
     "needs method = .nested_laplace.")
-  # bym2 / negbin + areal are gated
-  expect_error(
-    tobs(~ x + bym2(graph = d$graph), data = d$data, family = ms_count(),
-         y = d$y, species = colnames(d$y), method = "nested_laplace"),
-    "icar")
+  # negbin + areal is gated (Poisson-only: field vs dispersion not identified)
   expect_error(
     tobs(~ x + icar(graph = d$graph), data = d$data, family = ms_count("negbin"),
          y = d$y, species = colnames(d$y), method = "nested_laplace"),
@@ -123,6 +119,29 @@ test_that("community-spatial count recovers community means + field over seeds",
     y[, s] <- stats::rpois(Ns, exp(as.numeric(X %*% bs[s, ]) + f0 + d$w * f1))
   list(y = y, data = d, graph = A, f0 = f0, f1 = f1, Ns = Ns, S = S)
 }
+
+test_that("community field recovers under bym2 (scaled structured + iid)", {
+  skip_on_cran()
+  d <- .msc_sim(side = 9L, S = 12L, seed = 5L)
+  fit <- tobs(~ x + bym2(graph = d$graph), data = d$data,
+              family = ms_count(), y = d$y, species = colnames(d$y),
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_identical(fit$spatial_hyper$type, "bym2")
+  expect_true(fit$spatial_hyper$rho > 0 && fit$spatial_hyper$rho <= 1)
+  expect_true(fit$spatial_hyper$sigma > 0)
+  # the combined field recovers a smooth structured truth
+  expect_gt(stats::cor(fit$spatial_field, d$field), 0.8)
+  expect_equal(unname(unlist(coef(fit))), c(1, 0.5), tolerance = 0.15)
+  # bym2 is the single shared intercept field only: an SVC bar errors
+  expect_error(
+    tobs(~ x + bym2(graph = d$graph, weight = x, group_var = "cell"),
+         data = cbind(d$data, cell = seq_len(d$Ns)), family = ms_count(),
+         y = d$y, species = colnames(d$y), method = "nested_laplace",
+         control = list(progress = FALSE)),
+    "single shared intercept|bym2")
+})
 
 test_that("community field recovers under group_var (sites > cells)", {
   skip_on_cran()
