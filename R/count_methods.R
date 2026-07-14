@@ -4,10 +4,18 @@
 # response scale (exp(X beta) for the log-link Poisson / negbin, X beta for the
 # identity-link Gaussian). The residual is the response residual y - mu.
 
-# Per-site linear predictor eta at a design X [n x p].
-.tobs_count_eta <- function(object, X) {
+# Per-site linear predictor eta at a design X [n x p]. `add_field = TRUE` adds
+# the areal latent field (one node per site) for an in-sample nested-Laplace
+# fit; the log-mean per site is then X beta + f_site. It is skipped for newdata
+# (a new site has no field node -- field interpolation is a separate concern).
+.tobs_count_eta <- function(object, X, add_field = FALSE) {
   beta <- object$means[seq_len(object$model$process_info[[1L]]$p)]
-  as.numeric(X %*% beta)
+  eta  <- as.numeric(X %*% beta)
+  if (isTRUE(add_field)) {
+    fld <- object$spatial_field
+    if (!is.null(fld) && length(fld) == length(eta)) eta <- eta + fld
+  }
+  eta
 }
 
 # Response-scale mean from eta, per the family link.
@@ -16,11 +24,13 @@
 }
 
 .tobs_fitted_count <- function(object) {
-  mu <- .tobs_count_mu(object, .tobs_count_eta(object, object$model$X_occ))
+  mu <- .tobs_count_mu(object, .tobs_count_eta(object, object$model$X_occ,
+                                               add_field = TRUE))
   list(mu = mu)
 }
 
-# predict(): in-sample returns fitted()$mu; newdata recomputes mu from the design.
+# predict(): in-sample returns fitted()$mu (field-aware); newdata recomputes mu
+# from the design at the fixed effects only (no field node at a new site).
 .tobs_predict_count <- function(object, newdata = NULL) {
   if (is.null(newdata)) return(fitted(object)$mu)
   X <- stats::model.matrix(object$model$formulas$occ, newdata)

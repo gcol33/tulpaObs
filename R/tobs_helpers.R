@@ -172,9 +172,12 @@
   # (abund). Non-spatial Laplace only for the first ship: a single tulpa GLMM
   # block (Poisson / neg_binomial_2 / gaussian). The negbin size / gaussian
   # residual variance is estimated by an outer dispersion loop in .dispatch_count
-  # (tulpa_laplace takes a fixed phi). Areal (spAbund) / community (msAbund) /
-  # NUTS are the documented follow-ups (gcol33/tulpaObs#117).
-  count    = c("laplace"),
+  # (tulpa_laplace takes a fixed phi). nested_laplace: a plain areal field
+  # (icar / bym2 / car_proper) on the abundance formula (the spAbund analogue) --
+  # the field is a latent GMRF prior on the count block, integrated over its
+  # hyperparameters via the shared nested-Laplace EM machinery. Community
+  # (msAbund) / NUTS are the documented follow-ups (gcol33/tulpaObs#117).
+  count    = c("laplace", "nested_laplace"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so

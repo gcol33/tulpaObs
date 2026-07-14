@@ -230,16 +230,84 @@
   model <- .tobs_build_model(occ_formula = formula, data = data, y = y,
                              count = TRUE, count_response = response)
 
-  # First ship: fixed effects only. A structured term (spatial / temporal / re /
-  # svc / latent) on the formula is not yet wired for the count family -- error
-  # with a pointer rather than silently drop it.
+  # A plain areal field -- icar()/car_proper() -- on the abundance formula routes
+  # to nested-Laplace (the spAbund analogue): the field is a latent GMRF prior on
+  # the count GLMM block, integrated over its hyperparameters. Every other
+  # structured term (temporal / re / svc / latent) and the varying-coefficient /
+  # bar, bym2, or group_var areal forms are not yet wired for the count family --
+  # error with a pointer rather than silently drop them (gcol33/tulpaObs#117).
   structs <- .tobs_structures_from_model(model)
-  if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
-      !is.null(structs$re) || !is.null(structs$svc) ||
-      !is.null(structs$latent)) {
-    stop("count(): structured terms (spatial / temporal / re / svc / latent) ",
-         "are not yet wired for the count family; only fixed effects are ",
-         "supported in this release (gcol33/tulpaObs#117).", call. = FALSE)
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc) || !is.null(structs$latent)) {
+    stop("count(): temporal / re / svc / latent terms are not yet wired for ",
+         "the count family; a plain areal field (icar()/car_proper()) ",
+         "is the only structured term supported (gcol33/tulpaObs#117).",
+         call. = FALSE)
+  }
+  spatial_areal <- FALSE
+  if (!is.null(structs$spatial)) {
+    sp <- structs$spatial
+    if (isTRUE(sp$is_bar) || isTRUE(sp$is_multifield) || !is.null(sp$weight)) {
+      stop("count(): a varying-coefficient / bar areal field (spatial(~ 1 + w ",
+           "|| cell, graph), or a weighted areal term) is not yet wired for ",
+           "the count family; use a plain intercept field icar() or ",
+           "car_proper() (gcol33/tulpaObs#117).", call. = FALSE)
+    }
+    # icar / car_proper only: their eta contribution is exactly f[cell] (d_fac =
+    # 1), so the demeaned per-cell field reconstructs exactly from the grid modes
+    # (the shared nested field summary). A bym2 field mixes a structured (phi)
+    # and an unstructured (theta) component with hyperparameter-dependent scales,
+    # so its per-cell field is not reconstructed on this generic path; the
+    # improper non-intrinsic car() is likewise not wired. Both are #117 follow-
+    # ups -- point to the supported fields rather than return a fit with no field.
+    if (!isTRUE(sp$type %in% c("icar", "car_proper"))) {
+      stop(sprintf(paste0(
+        "count(): an areal field on the count formula supports icar() or ",
+        "car_proper(); got '%s'. bym2() (mixed structured/unstructured field) ",
+        "and the improper car(), plus continuous-mesh spde()/gp(), are not yet ",
+        "wired for the count family (gcol33/tulpaObs#117)."),
+        sp$type %||% "unknown"), call. = FALSE)
+    }
+    if (!is.null(sp$group_var)) {
+      stop("count(): spatial group_var (mapping several sites to one field ",
+           "node) is not yet wired for the count family; one field node per ",
+           "site is required (gcol33/tulpaObs#117).", call. = FALSE)
+    }
+    # Areal count is Poisson-only in this release. With one field node per site
+    # the negbin size / gaussian residual variance and the latent field compete
+    # for the same residual variation: the fixed-phi outer dispersion loop and
+    # the field then feed back (size -> Inf, residual variance -> 0), so the
+    # dispersion is not identified. Poisson has no dispersion parameter and is
+    # cleanly identified. The overdispersed areal fits need a joint field-and-
+    # dispersion posterior (a hyperprior on phi or a 2-D outer grid), a #117
+    # follow-up; error rather than return a degenerate fit.
+    if (!identical(response, "poisson")) {
+      stop(sprintf(paste0(
+        "count(response = \"%s\") with an areal field is not yet supported: ",
+        "with one field node per site the %s and the latent field are not ",
+        "jointly identified under the fixed-dispersion nested-Laplace loop. ",
+        "Use a Poisson areal count -- count() -- or drop the areal term for a ",
+        "non-spatial %s fit (gcol33/tulpaObs#117)."),
+        response,
+        if (identical(response, "negbin")) "negbin size"
+        else "gaussian residual variance",
+        response), call. = FALSE)
+    }
+    spatial_areal <- TRUE
+  }
+
+  # Engine resolution mirrors jsdm(): an areal field needs nested_laplace; the
+  # non-spatial GLMM needs laplace. Reject the mismatched pairing loudly.
+  if (spatial_areal) {
+    if (!identical(engine, "nested_laplace")) {
+      stop("count(): a plain areal field on the formula needs ",
+           "method = \"nested_laplace\". For a non-spatial count GLMM drop the ",
+           "areal term (or use method = \"laplace\").", call. = FALSE)
+    }
+  } else if (identical(engine, "nested_laplace")) {
+    stop("count(): method = \"nested_laplace\" needs a plain areal field ",
+         "(icar()/car_proper()) on the formula. For a non-spatial count ",
+         "GLMM use method = \"laplace\".", call. = FALSE)
   }
 
   fit_once <- function(phi) {
@@ -259,6 +327,9 @@
   is_log <- identical(model$link, "log")
   yv     <- as.numeric(model$y_count)
   mu_of  <- function(fit) {
+    # The dispersion loop (negbin size / gaussian variance) runs on the
+    # non-spatial path only -- an areal count is Poisson-only, so there is never
+    # a latent field to fold into the fitted mean here.
     beta <- fit$means[seq_len(p_mu)]
     eta  <- as.vector(model$X_occ %*% beta)
     if (is_log) exp(eta) else eta

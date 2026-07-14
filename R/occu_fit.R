@@ -351,6 +351,22 @@
   }
 
   if (method == "nested_laplace") {
+    # Areal count / relative-abundance GLMM: the response is observed directly
+    # (no latent state), so a count areal fit is a single tulpa_nested_laplace()
+    # call over the count block with the areal field as its prior -- not the
+    # occupancy EM (gcol33/tulpaObs#117). Grid-integrated fixed effects + field.
+    if (identical(model$model_type, "count")) {
+      fit <- .tobs_fit_count_spatial(fit_model, spatial,
+                                     max_iter = as.integer(max.iter), tol = tol,
+                                     verbose = verbose)
+      fit <- .unscale_fit_per_process(fit, scales, process_info)
+      fit$model      <- model
+      # The latent field is a per-site eta offset (scale-invariant), carried on
+      # the model so the field-aware fitted() / WAIC read it (gcol33/tulpaObs#117).
+      fit$model$count_field_offset <- fit$spatial_field
+      fit$intercepts <- compute_intercepts(model, fit$means)
+      return(fit)
+    }
     # Standalone occu() varying-coefficient (SVC) spatial bar: route through the
     # joint direct-grid engine, single-arm (occupancy + detection, no cover arm),
     # which integrates the field hyperparameters on a direct outer grid. The EM

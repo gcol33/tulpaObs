@@ -38,10 +38,11 @@
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object", call. = FALSE)
   }
-  supported <- c("single", "integrated", "dynamic")
+  supported <- c("single", "integrated", "dynamic", "count")
   if (!model$model_type %in% supported) {
     stop("Nested Laplace is wired for single-season, integrated, ",
-         "and dynamic occupancy; got model_type = '", model$model_type, "'.",
+         "dynamic occupancy, and the count / relative-abundance GLMM; got ",
+         "model_type = '", model$model_type, "'.",
          call. = FALSE)
   }
 

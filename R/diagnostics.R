@@ -346,6 +346,14 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # Gaussian variance) is the fixed `count_phi` estimated by the outer loop.
 .tobs_ploglik_count <- function(model, draws) {
   eta <- .tobs_eta_draws(model, draws, 1L)       # [S x N]
+  # Areal fit: the per-site latent field is part of the log-mean (eta = X beta +
+  # f_site), so it must enter the pointwise log-likelihood or WAIC / LOO would
+  # score the fixed-effect-only model. The field is a fixed per-site offset (its
+  # posterior draws are not sampled on this path), broadcast across the draws.
+  fld <- model$count_field_offset
+  if (!is.null(fld) && length(fld) == ncol(eta)) {
+    eta <- eta + matrix(as.numeric(fld), nrow(eta), length(fld), byrow = TRUE)
+  }
   y   <- as.numeric(model$y_count)
   Y   <- matrix(y, nrow(eta), length(y), byrow = TRUE)
   response <- model$response %||% "poisson"

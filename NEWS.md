@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.114 (2026-07-14)
+
+* Areal `count()`: a plain areal field -- `icar()` or `car_proper()` -- on the
+  abundance formula now fits under `method = "nested_laplace"` (the `spAbundance`
+  `spAbund` analogue, gcol33/tulpaObs#117). The count response is observed
+  directly, so the fit is a single `tulpa::tulpa_nested_laplace()` call over the
+  count block with the areal field as its latent GMRF prior: the field
+  hyperparameters integrate on the nested outer grid, and the fixed effects plus
+  their covariance are grid-integrated (law of total covariance). `fitted()` is
+  field-aware in-sample. Poisson only -- with one field node per site a negbin
+  size / gaussian residual variance is not jointly identified with the field
+  under the fixed-dispersion loop, so those error with a pointer; `bym2()` (mixed
+  structured/unstructured field) and the improper `car()` are likewise gated to
+  `icar()` / `car_proper()`. Recovery-tested (fixed-effect coverage + field
+  recovery over 20 seeds) in `test-count-spatial.R`.
+
 ## 0.0.113 (2026-07-14)
 
 * New `count()` family: a GLMM on an observed count / continuous response

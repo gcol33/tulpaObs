@@ -377,6 +377,7 @@
     X_occ = X_occ,
     formulas = list(occ = bind$fe$psi),
     structured_terms = bind$terms,
+    data = if (is.data.frame(data)) data[keep, , drop = FALSE] else data,
     n_sites = n_sites,
     N = n_sites,
     process_info = list(
