@@ -102,7 +102,7 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   # gcol33/tulpaObs#58, gcol33/tulpa#69). The default batch backend is "looped"
   # (correct + fastest); this gate opts into the FUSED backend
   # (control$batch.backend = "fused") to validate it against independent fits.
-  ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled",
+  ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint",
                adaptive.grid = FALSE, var.of.means.consistency = FALSE,
                diagnose.k = FALSE)
   ctrl_fused <- c(ctrl, list(batch.backend = "fused"))

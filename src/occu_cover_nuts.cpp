@@ -68,7 +68,7 @@ struct OccuCoverNutsData {
     // gcol33/tulpaObs#74 spatial NUTS path). The non-centered field f = Linv %*%
     // raw, raw ~ N(0, I), with Linv the inverse Cholesky of the FIXED proper-CAR
     // precision tau Q(rho); the field covariance is fixed at the nested-Laplace
-    // joint_coupled estimate, so NUTS samples only the whitened raw (appended to
+    // joint estimate, so NUTS samples only the whitened raw (appended to
     // the coefficient vector). The field couples both arms with the FIXED scaling
     // alpha (also from the nested-Laplace estimate): eta_psi_c += f[cell(c)] and
     // eta_pos_cv += alpha * f[cell(c)]. n_field_units = 0 -> the non-spatial

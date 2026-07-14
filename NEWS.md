@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.112 (2026-07-14)
+
+* Canonicalize the cover-hurdle direct-grid engine on the name `joint`
+  everywhere, completing the rename the 0.0.111 message removal left partway.
+  `control$engine = "joint"` is the documented value for the `occu_cover()` /
+  `occu_multiscale_cover()` and standalone-occupancy spatial fits (the old
+  `"joint_coupled"` string still routes to the same fitter), and the internal
+  fitters, helpers, source files (`occu_cover_joint.R`, `occu_joint.R`,
+  `occu_multiscale_cover_joint.R`), and the stored engine label all read `joint`
+  now. No fitting behaviour changes.
+
 ## 0.0.111 (2026-07-14)
 
 * Remove the last two deprecation nudges, completing the 0.0.110 clean-rename

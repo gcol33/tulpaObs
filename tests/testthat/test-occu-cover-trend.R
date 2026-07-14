@@ -1,5 +1,5 @@
 # =============================================================================
-# test-occu-cover-trend.R - the joint_coupled engine with a SECOND coupled
+# test-occu-cover-trend.R - the joint engine with a SECOND coupled
 # field: a spatially-varying temporal trend weighted by a per-cell covariate
 # (gcol33/tulpaObs#15). The intercept field PLUS the trend field both couple
 # onto the cover arm, each with its own scale (alpha, alpha_trend), via the
@@ -42,7 +42,7 @@
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter,
-                   engine = "joint_coupled",
+                   engine = "joint",
                    alpha.grid = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    alpha.grid.trend = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    trend = list(weight = "time"))
@@ -59,7 +59,7 @@
     detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint_coupled")
+    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint")
   ))
 }
 
@@ -135,7 +135,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = 300L, engine = "joint",
                    alpha.grid = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    alpha.grid.trend = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    trend = list(weight = "time"))
@@ -152,7 +152,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
     data = d$cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
-    control = list(verbose = FALSE, engine = "joint_coupled",
+    control = list(verbose = FALSE, engine = "joint",
                    trend = list(weight = "time"))
   )), "not both")
 })
@@ -203,7 +203,7 @@ test_that("predict propagates a positive-arm covariate from newdata (gcol33/tulp
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled")))
+    control = list(verbose = FALSE, max.iter = 200L, engine = "joint")))
 
   b_pos <- fit$means[["pos_pos_cov1"]]
   expect_true(is.finite(b_pos) && abs(b_pos) > 0.05)   # a real positive-arm slope
@@ -310,7 +310,7 @@ test_that("occu_cover change reports start/end CI + directional P(delta>0)", {
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled")))
+    control = list(verbose = FALSE, max.iter = 200L, engine = "joint")))
 
   nd <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 0)
   ch <- predict(fit, newdata = nd, type = "change",

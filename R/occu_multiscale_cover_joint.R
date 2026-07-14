@@ -1,8 +1,8 @@
 # =============================================================================
-# occu_multiscale_cover_joint_coupled.R - joint nested-Laplace path for the
+# occu_multiscale_cover_joint.R - joint nested-Laplace path for the
 # three-level occupancy + cover hurdle (gcol33/tulpaObs#29).
 #
-# Four-arm generalisation of occu_cover's joint_coupled path: a cell-level
+# Four-arm generalisation of occu_cover's joint path: a cell-level
 # occupancy gate (psi), a plot-level availability gate (theta), per-visit
 # detection (p) and the cover hurdle (pos). Drives
 # tulpa_nested_laplace_joint(cell_coupling = "occu_multiscale_cover_*") with:
@@ -159,7 +159,7 @@
 # multiscale cell-coupling spec carrying this fit's per-cell plot structure,
 # calls tulpa_nested_laplace_joint() with the four arms, then unpacks the
 # integrated posterior into a tobs_fit shaped like the occu_cover joint fit.
-.tobs_fit_occu_multiscale_cover_joint_coupled <- function(model, fields,
+.tobs_fit_occu_multiscale_cover_joint <- function(model, fields,
                                                           priors    = NULL,
                                                           max.iter  = 200L,
                                                           tol       = 1e-6,
@@ -302,7 +302,7 @@
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
       adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF (gcol33/tulpaObs#101),
-      # matching the occu_cover_joint_coupled and occu_joint_coupled paths: the
+      # matching the occu_cover_joint and occu_joint paths: the
       # `k_samples` extra inner re-solves on the full areal field dominate the
       # runtime and scale with the field, while the diagnostic only reports k-hat
       # (it does not move the betas / SDs / field). Opt in with control$diagnose.k
@@ -536,7 +536,7 @@
     trend_fields       = if (length(trend_means))  trend_means  else NULL,
     trend_field_table  = trend_field_table,
     trend_field_tables = if (length(trend_tables)) trend_tables else NULL,
-    method       = "joint_coupled",
+    method       = "joint",
     positive     = model$positive,
     joint_fit    = fit,
     convergence  = list(converged = TRUE, n_iter = NA_integer_)

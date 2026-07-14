@@ -1,6 +1,6 @@
 # predict() for the joint occu_cover fit (gcol33/tulpaObs#22).
 #
-# The joint_coupled engine builds an ICAR shared field internally, couples it
+# The joint engine builds an ICAR shared field internally, couples it
 # onto the cover arm with the alpha axis, and integrates (sigma, alpha) on the
 # outer grid. predict() samples the joint latent via tulpa::tulpa_posterior_draws
 # and marginalizes every derived quantity per draw.
@@ -17,7 +17,7 @@
     adj
 }
 
-# Build + fit a spatial occu_cover through the joint_coupled engine. A cell-level
+# Build + fit a spatial occu_cover through the joint engine. A cell-level
 # `year` covariate is added to the occupancy arm so type = "change" between two
 # years moves occupancy (and, through the shared field, expected cover).
 .ocp_build_fit <- function(N = 40L, J = 5L, seed = 202L) {
@@ -45,14 +45,14 @@
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 300L,
-                       engine = "joint_coupled",
+                       engine = "joint",
                        sigma.grid = c(0.5, 1.0),
                        alpha.grid = c(0, 0.5, 1.0))
     ))
     list(fit = fit, cell_dat = cell_dat, adj = adj, N = N, f = sim$truth$f)
 }
 
-test_that("the joint_coupled occu_cover fit carries a sampleable joint_fit", {
+test_that("the joint occu_cover fit carries a sampleable joint_fit", {
     skip_on_cran()
     skip_if_fast()
     f <- .ocp_build_fit()
@@ -163,7 +163,7 @@ test_that("in-sample occurrence tracks the plug-in predictor", {
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 250L,
-                       engine = "joint_coupled",
+                       engine = "joint",
                        trend = list(weight = "time"),
                        sigma.grid = c(0.5, 1.0),
                        alpha.grid = c(0, 0.5))
@@ -239,7 +239,7 @@ test_that("trend fit errors clearly when time_col is unavailable", {
         detection = ~ det_cov1, positive = ~ pos_cov1,
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
-        control = list(verbose = FALSE, max.iter = 250L, engine = "joint_coupled",
+        control = list(verbose = FALSE, max.iter = 250L, engine = "joint",
                        trend = list(weight = "time"),
                        sigma.grid = c(0.5, 1.0), alpha.grid = c(0, 0.5))
     ))

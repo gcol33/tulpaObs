@@ -83,13 +83,13 @@
   # we just route around them when computing posterior moments.
   ok_cells <- which(is.finite(fit$log_marginal))
   if (length(ok_cells) == 0L) {
-    stop("occu_cover joint_coupled: inner Newton failed at every grid cell. ",
+    stop("occu_cover joint: inner Newton failed at every grid cell. ",
          "Bump control$max.iter or tighten control$tol.", call. = FALSE)
   }
   if (length(ok_cells) < length(fit$log_marginal)) {
     n_bad <- length(fit$log_marginal) - length(ok_cells)
     warning(sprintf(
-      "occu_cover joint_coupled: dropping %d / %d outer-grid cell(s) ",
+      "occu_cover joint: dropping %d / %d outer-grid cell(s) ",
       n_bad, length(fit$log_marginal)),
       "whose inner Newton did not converge.", call. = FALSE)
   }
@@ -715,7 +715,7 @@
     joint_par_names = joint_par_names,
     joint_means     = joint_means,
     joint_vcov      = Vj,
-    method       = "joint_coupled",
+    method       = "joint",
     positive     = model$positive,
     # Per-term RE summaries (gcol33/tulpaObs#56, #102, #103): a flat list, one
     # entry per RE block, each carrying its arm, grouping var + observed levels,

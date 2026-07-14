@@ -68,7 +68,7 @@ occupancy intervals.
 \section{Coupled fields and spatially-varying trends}{
 
 The spatial engine (\code{method = "nested_laplace"}, default
-\code{control$engine = "joint_coupled"}) couples one shared areal field (the
+\code{control$engine = "joint"}) couples one shared areal field (the
 cell intercept, an unweighted \code{icar()} / \code{bym2()} term) across the occupancy
 and cover arms. ADDITIONAL coupled fields - spatially-varying coefficients,
 e.g. a temporal trend - are added as \emph{weighted} areal terms in the formula:
@@ -103,7 +103,7 @@ time-period: plots in a cell-period are the detection replicates, occupancy is
 per cell-period, and a per-site time weight on a coupled trend field
 (\code{icar(graph, weight = time, group_var = "cell")}) gives a detection-corrected
 occupancy trend on a shared cell field. Supported on the default
-\code{joint_coupled} engine; the \code{v2_joint} / \code{v3_nested} escape hatches bind the
+\code{joint} engine; the \code{v2_joint} / \code{v3_nested} escape hatches bind the
 field 1:1 to sites and reject \code{group_var}.
 }
 

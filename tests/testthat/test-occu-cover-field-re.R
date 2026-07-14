@@ -108,5 +108,5 @@ test_that("occu_cover() spatial + RE gates the unsupported configurations", {
          family = occu_cover("lognormal"), detection = ~ 1, positive = ~ 1,
          y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
          control = list(engine = "v3_nested", progress = FALSE)),
-    "joint_coupled engine")
+    "joint engine")
 })

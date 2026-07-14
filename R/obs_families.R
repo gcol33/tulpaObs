@@ -208,7 +208,7 @@ jsdm <- function() {
 #'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engine (`method = "nested_laplace"`, default
-#' `control$engine = "joint_coupled"`) couples one shared areal field (the
+#' `control$engine = "joint"`) couples one shared areal field (the
 #' cell intercept, an unweighted `icar()` / `bym2()` term) across the occupancy
 #' and cover arms. ADDITIONAL coupled fields - spatially-varying coefficients,
 #' e.g. a temporal trend - are added as *weighted* areal terms in the formula:
@@ -242,7 +242,7 @@ jsdm <- function() {
 #' per cell-period, and a per-site time weight on a coupled trend field
 #' (`icar(graph, weight = time, group_var = "cell")`) gives a detection-corrected
 #' occupancy trend on a shared cell field. Supported on the default
-#' `joint_coupled` engine; the `v2_joint` / `v3_nested` escape hatches bind the
+#' `joint` engine; the `v2_joint` / `v3_nested` escape hatches bind the
 #' field 1:1 to sites and reject `group_var`.
 #'
 #' @section Per-group random intercept on the shared-field path (`re()` / `(1 | g)`):

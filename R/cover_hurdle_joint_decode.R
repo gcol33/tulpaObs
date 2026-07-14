@@ -190,7 +190,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       converged    = TRUE,
       # Unified convergence record (gcol33/tulpaObs#88); see the non-spatial
       # assembly above. The joint nested-Laplace outer grid has no iteration
-      # count, so n_iter is NA, matching the other joint_coupled paths.
+      # count, so n_iter is NA, matching the other joint paths.
       convergence  = list(converged = TRUE, n_iter = NA_integer_,
                           sla_status = sla_status),
       log_marginal = c(joint = max(fits$joint$log_marginal)),

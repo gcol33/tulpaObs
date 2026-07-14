@@ -376,7 +376,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Joint occu + cover | Yes | Yes | `occu_cover()` — see below. NUTS non-spatial (in-tree FullGradFn over exact two-state marginal, beta/lognormal; `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`) AND spatial fixed-hyper coupled proper-CAR field (#74, `car_proper()` only; icar/bym2 NUTS gated -> n-L). Sampled-field (estimated-variance) route = `ms_occu_cover()` factor |
 | occu + cover + areal field + per-group RE | n-L | — | `occu_cover()` + icar/bym2 + `re(g)`/`(1\|g)` on psi; one iid RE block (#56); `sigma_re` + BLUPs; intercept RE only |
 | occu + cover independent cover-arm field (single-arm `to="positive"`) | n-L | — | `occu_cover()` + `spatial(~ 1 + w \|\| cell, graph, to="positive")` on occurrence formula (#110): NON-copied ICAR block(s) on the cover arm alone, decoupled from the occupancy field's alpha copy. Composes w/ the shared occupancy field (psi + `delta_cover_exp` keep it) so `delta_cover_cond` varies instead of collapsing when `alpha->0`. Parse: `.occu_cover_spatial_fields` splits single-arm `to="positive"` bar -> `spatial_info$pos_armspec` via `.tobs_armspecific_bar_fields`. Fitter appends non-copied ICAR blocks (`spatial_idx` psi=0/p=0/pos=cell, `tau_grid`, svc_weight for trend) after occ fields, before RE blocks; `ctx$field_specs` labels each field block shared-vs-pos. Postprocess partitions occ (1..n_occ_fields) vs pos blocks; reports `sigma_pos_field`/`sigma_pos_field_<col>` from `b<k>.tau`; surfaces `fit$pos_field`/`pos_field_table(s)`. Draw substrate (`.tobs_joint_draws_occu_cover`) reads `field_specs`: pos block amp_occ=0, amp_pos=1/sqrt(tau); predict/WAIC add it to `field_pos` automatically. Predict weight override skips pos blocks. Per-visit cover (`cover_aggregate="none"`); icar only (bym2/car->icar); NOT w/ MCAR `\|`, latent cover RE, or batch. Static intercept field weakly ID'd vs alpha copy; time-weighted trend cleanly ID'd. `test-occu-cover-pos-field.R` |
-| occu + cover independent detection-arm field (single-arm `to="detection"`) | n-L | — | `occu_cover()` + `spatial(~ 0 + time \|\| cell, graph, to="detection")` on the `detection` formula (or lifted `to="detection"`) (tulpa#140): spatially-structured detection prob. Same non-copied arm-specific block machinery as the cover-arm field (#110) -- builder `arm_field_blocks(af, "p")` sets slot 2 (`spatial_idx` psi=0/p=cell/pos=0). Enters via detection arm `field_coef=1` (set when `det_armspec` present, `.occu_cover_build_joint_coupled_arms(det_field=)`) so the block scatters onto the p rows; shared occ field kept off detection by its `spatial_idx=0` sentinel -- identical to the #102 detection-RE mechanism, so NO tulpa engine change. Reports `sigma_p_field`/`sigma_p_field_<col>`. icar only; per-visit cover. `test-occu-cover-pos-field.R` |
+| occu + cover independent detection-arm field (single-arm `to="detection"`) | n-L | — | `occu_cover()` + `spatial(~ 0 + time \|\| cell, graph, to="detection")` on the `detection` formula (or lifted `to="detection"`) (tulpa#140): spatially-structured detection prob. Same non-copied arm-specific block machinery as the cover-arm field (#110) -- builder `arm_field_blocks(af, "p")` sets slot 2 (`spatial_idx` psi=0/p=cell/pos=0). Enters via detection arm `field_coef=1` (set when `det_armspec` present, `.occu_cover_build_joint_arms(det_field=)`) so the block scatters onto the p rows; shared occ field kept off detection by its `spatial_idx=0` sentinel -- identical to the #102 detection-RE mechanism, so NO tulpa engine change. Reports `sigma_p_field`/`sigma_p_field_<col>`. icar only; per-visit cover. `test-occu-cover-pos-field.R` |
 | occu + cover obs-arm RE (detection / pos) | n-L | — | `occu_cover()` + RE on `detection=`/`positive=`; per-visit grouping. Intercepts: `(1\|g)`, crossed `(1\|g)+(1\|h)`, nested `(1\|g/h)` = N iid blocks (#102 single, #103 crossed/nested). Slopes (#103, tulpa>=0.0.39): uncorr `(x\|\|g)`/`(0+x\|g)` = weighted iid per coef; corr `(1+x\|g)` = miid free-Sigma block. `sigma_re_p`/`sigma_re_pos` (+`_<coef>`, `cor_re_p_*`) + BLUPs |
 | occu + cover + detection / cover-arm RE | n-L | — | `occu_cover()` + `(1\|g)`/`re(g)` on `detection=` or `positive=` (#102); per-VISIT grouping iid block on that arm, composes w/ psi field; `sigma_re_p`/`sigma_re_pos` + BLUPs; `fit$re` per-arm list; `predict(type="detection")` adds BLUP offset, unseen->pop mean. Detection arm `field_coef=1` (not 0) so the iid block scatters, field still skipped via `spatial_idx=0` sentinel. pos RE needs `cover_aggregate="none"`. Intercept only; slope/correlated/non-spatial/NUTS gated |
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
@@ -423,7 +423,7 @@ NUTS==Laplace mode, recovery + 95% coverage (`test-occu-cover-nuts.R`). **Spatia
 (`nuts` + `car_proper()` on psi, #74, `R/occu_cover_nuts.R::.tobs_fit_occu_cover_nuts_spatial`):
 FIXED-HYPER non-centered coupled PROPER-CAR field — psi-arm field `f` (one/cell) enters psi
 linearly, copied to pos arm w/ scaling `alpha`; field precision `tau Q(rho)` + `alpha` FIXED
-at the nested-Laplace joint_coupled proper-CAR estimate (`.tobs_occu_cover_nuts_carproper_warm`:
+at the nested-Laplace joint proper-CAR estimate (`.tobs_occu_cover_nuts_carproper_warm`:
 one warm `tulpa_nested_laplace_joint(type="car_proper")` fit), whitened `raw ~ N(0,I)` (`f =
 Linv %*% raw`) sampled jointly. Param vector `c(beta_psi, beta_p, beta_pos, log_disp,
 raw_field)`. Reuses the abun#51 field-block recipe (tulpa#87): the optional field block in
@@ -434,8 +434,8 @@ n-L. group_var maps sites>cells. 0 divergences, field cor ~0.78, 95% slope cover
 SD calibrates to n-L SEs (`test-occu-cover-spatial-nuts.R`). predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67). **Spatial
-default** (`nested_laplace`, `R/occu_cover_joint_coupled.R`):
-`joint_coupled` engine via `tulpa_nested_laplace_joint()` w/
+default** (`nested_laplace`, `R/occu_cover_joint.R`):
+`joint` engine via `tulpa_nested_laplace_joint()` w/
 `occu_cover_{lognormal,beta}` cell-coupling spec (tulpa#32) — 3-arm joint
 nested-Laplace, outer-grid over `(sigma, alpha)`, per-cell occupancy mixture
 closed-form derivs drive inner Newton. ~150-300x faster than v3_nested at N=100,
@@ -452,9 +452,9 @@ the diagnostic 2-4x (Shamanskii reuse `.K_DIAG_REFRESH` -> grad-only scatter; lo
 inner tol `.K_DIAG_TOL`=1e-4; near-neighbour batch order) with the k-hat byte-stable
 (externally validated == `loo::psis`/`posterior::pareto_khat` on real EVA ratios; knobs
 `tulpa.kdiag.{refresh,tol,reorder,capture}`). Still OFF by default: reports k-hat only,
-fit byte-identical on/off, opt-in; matches `occu_joint_coupled` /
+fit byte-identical on/off, opt-in; matches `occu_joint` /
 `occu_multiscale_cover`. `control$diagnose.k = TRUE` re-enables. Same default flip on
-`occu_multiscale_cover_joint_coupled.R`.
+`occu_multiscale_cover_joint.R`.
 
 **Cover-arm intercept prior (#32)**: on shared-field path cover intercept confounds
 w/ field level over detected cells. `.occu_cover_coupled_arm_priors()` hands pos arm
@@ -465,11 +465,11 @@ via Jensen. `priors = FALSE`/`"none"` disables all three arms.
 **Cell-aggregated cover (`cover_aggregate`, #33)**: per-visit cover gives cover arm one
 row/visit, so a cell w/ many detected plots drives field more than its single occupancy
 obs. `cover_aggregate = "mean"` (default spatial) / `"median"` collapses cover arm to
-ONE row/occupancy unit; `"none"` keeps per-visit. ONLY on spatial `joint_coupled`.
+ONE row/occupancy unit; `"none"` keeps per-visit. ONLY on spatial `joint`.
 Needs cell-level positive design (from `data`); visit-level `positive` keeps per-visit.
 C++ compile-time `Aggregated` flag on `OccuCoverCoupling`
 (`src/cell_coupling_occu_cover.h`), registered `occu_cover_{lognormal,beta}_agg`; R
-`.occu_cover_build_joint_coupled_arms(cover_aggregate=)`. `test-occu-cover-coupling.R`,
+`.occu_cover_build_joint_arms(cover_aggregate=)`. `test-occu-cover-coupling.R`,
 `test-occu-cover-aggregate.R`.
 
 **Latent cover-per-unit (`cover_aggregate = "latent"`)**: principled mean/median
@@ -501,7 +501,7 @@ p arm excluded via `field_coef=0` (NOT `svc_weight=0`). Resolved by
 field node, so `n_sites` > `n_cells`. Field length `n_cells` while psi/p/cover run over
 `n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_map` (occupancy unit)
 decouple. Layout: site = cell x time-period. R-side only (`.dispatch_occu_cover`,
-`.occu_cover_build_joint_coupled_arms`); joint_coupled only. `test-occu-cover-group-var.R`.
+`.occu_cover_build_joint_arms`); joint only. `test-occu-cover-group-var.R`.
 
 **Per-group RE on shared-field path (#56)**: one random intercept on psi —
 `re(g)`/`(1|g)` — alongside field joins joint fit as one `iid` prior block (consumer of
@@ -576,7 +576,7 @@ dispersion RE pending.
 ### `occu_multiscale_cover()` detail
 
 Three-level occupancy + cover hurdle (#29; `R/occu_multiscale_cover.R`, fitter
-`R/occu_multiscale_cover_joint_coupled.R`). For data where "visits" are spatially
+`R/occu_multiscale_cover_joint.R`). For data where "visits" are spatially
 distinct PLOTS aggregated into `(cell, period)`, not temporal revisits (EVA/MOTIVATE
 vegetation; Nichols 2008, Mordecai 2011). `occu_cover()` treats plots as detection
 replicates -> conflates within-cell prevalence into detection (Kendall & White 2009);
@@ -596,7 +596,7 @@ marginal LL, reuses occu_cover nested-Laplace cell-coupling machinery.
 MUST carry areal field naming per-plot cell col: `icar(graph=adj, group_var="cell")`.
 `availability=~...` = plot-level theta (default `~1`); `detection` = per-visit p;
 `positive=~...` = cover. **Engine** (`method="nested_laplace"` only): 4-arm
-generalization of occu_cover joint_coupled via
+generalization of occu_cover joint via
 `tulpa_nested_laplace_joint(cell_coupling="occu_multiscale_cover_*")`. Field coupling:
 psi `field_coef=1`; theta/p `0`; pos `list(name="alpha")`. Cell spec
 (`src/cell_coupling_occu_multiscale_cover.{cpp,h}`, per-fit) reuses occu_cover helpers
@@ -673,7 +673,7 @@ R/
   occu_cover_nuts.R        — non-spatial occu_cover NUTS: R oracle + .tobs_fit_occu_cover_nuts
   nuts_chains.R            — multi-chain pooling + shared split-Rhat/bulk-ESS (.tobs_nuts_rhat_ess)
   ms_occu_cover.R / ms_occu_cover_spatial{,_nuts}.R — community joint; spatial-factor JSDM (tulpa#67) Laplace-EM + NUTS
-  occu_multiscale_cover{,_joint_coupled}.R — 3-level occu+cover (#29) + 4-arm fitter
+  occu_multiscale_cover{,_joint}.R — 3-level occu+cover (#29) + 4-arm fitter
   occu_cover_spatial.R / occu_cover_nested.R — v2_joint / v3_nested escape hatches
   formula_terms.R / formula_parse.R  — term registry+ctors; AST parser
   inputs.R                 — single source of truth for response/site/visit input: .tobs_check_site_count() (site-count cross-check every binder used to hand-roll), .tobs_input_dims()/fit$dims canonical totals, .tobs_unpack_frame() (tobs_data -> data/y/visits)

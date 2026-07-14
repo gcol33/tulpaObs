@@ -58,7 +58,7 @@
     detection = ~ det_cov, positive = ~ xpos,
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(1.6), length.out = 4)),
                    alpha.grid = c(0, 0.8, 1.5), adaptive.grid = FALSE,
                    diagnose.k = FALSE)))
@@ -93,7 +93,7 @@ test_that("aggregation resolution, fall-back, and error gates", {
     detection = ~ det_cov, positive = ~ pcov,         # visit-level pos covariate
     y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = 200L, engine = "joint",
                    sigma.grid = exp(seq(log(0.5), log(1.5), length.out = 3)),
                    alpha.grid = c(0, 1.0), adaptive.grid = FALSE, diagnose.k = FALSE)))
   expect_identical(fit_fallback$model$cover_aggregate, "none")
@@ -105,7 +105,7 @@ test_that("aggregation resolution, fall-back, and error gates", {
          detection = ~ det_cov, positive = ~ pcov,
          y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
          method = "nested_laplace",
-         control = list(verbose = FALSE, engine = "joint_coupled")),
+         control = list(verbose = FALSE, engine = "joint")),
     "cell-level positive design")
 
   # Explicit aggregation on the non-spatial laplace path -> error.
@@ -123,7 +123,7 @@ test_that("aggregation resolution, fall-back, and error gates", {
          detection = ~ det_cov, positive = ~ xpos,
          y = sim$Y, y_pos = sim$Ypos, visits = sim$vd, method = "nested_laplace",
          control = list(engine = "v3_nested")),
-    "joint_coupled engine")
+    "joint engine")
 })
 
 
@@ -141,11 +141,11 @@ test_that("aggregated cover arm holds one row per detected occupancy unit", {
     data = sim$site, y = sim$Y, y_pos = sim$Ypos, positive = "beta")
   site_cell <- as.integer(sim$site$cell_idx)
 
-  arms_mean <- tulpaObs:::.occu_cover_build_joint_coupled_arms(
+  arms_mean <- tulpaObs:::.occu_cover_build_joint_arms(
     model, sigma_pos_init = 10, alpha_grid = c(0, 1), positive = "beta",
     multi = FALSE, n_cells = sim$n_cells, site_cell = site_cell,
     cover_aggregate = "mean")
-  arms_none <- tulpaObs:::.occu_cover_build_joint_coupled_arms(
+  arms_none <- tulpaObs:::.occu_cover_build_joint_arms(
     model, sigma_pos_init = 10, alpha_grid = c(0, 1), positive = "beta",
     multi = FALSE, n_cells = sim$n_cells, site_cell = site_cell,
     cover_aggregate = "none")

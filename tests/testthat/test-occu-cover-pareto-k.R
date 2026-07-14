@@ -33,7 +33,7 @@ grid_adj_sq <- function(side) {
                   det.covs = c("det_cov1", "pos_cov1"))
   cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
-  ctrl <- list(verbose = FALSE, engine = "joint_coupled",
+  ctrl <- list(verbose = FALSE, engine = "joint",
                diagnose.k = TRUE, k.samples = 200L,
                n.threads.outer = 1L, progress = FALSE)
   set.seed(seed)

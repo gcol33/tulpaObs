@@ -110,7 +110,7 @@ The latent $z_i$ marginalises out of the likelihood in closed form (two states
 per observation), so the fit is a nested Laplace approximation, with the
 hyperparameters $(\sigma, \alpha, \theta)$ integrated on an outer grid and the
 field plus coefficients solved by an inner Newton step at each grid point. That
-is the `joint_coupled` engine, the default for `method = "nested_laplace"` on
+is the `joint` engine, the default for `method = "nested_laplace"` on
 `occu_cover()`. Because the hyperparameters are integrated rather than
 optimized, the SEs on $\alpha$ and $\sigma$ reflect the full posterior over the
 grid, not a curvature approximation at a single mode, and the coefficient SEs

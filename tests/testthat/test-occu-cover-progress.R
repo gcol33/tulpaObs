@@ -100,7 +100,7 @@ test_that("occu_cover() writes its heartbeat file under verbose = FALSE", {
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
-                   engine = "joint_coupled", progress.file = path)
+                   engine = "joint", progress.file = path)
   ))
 
   hb <- .read_heartbeat(path)

@@ -168,7 +168,7 @@
 #
 # Returns a `tobs_batch` (backend = "fused"), or NULL when the configuration is
 # not fused-eligible -- the caller then falls back to the looped path. Eligible:
-# spatial nested-Laplace on the default joint_coupled engine with a FIXED pos-arm
+# spatial nested-Laplace on the default joint engine with a FIXED pos-arm
 # dispersion (no latent cover RE, no phi.grid.pos), i.e. the common occu_cover
 # spatial fit. The fused driver integrates a single shared FIXED outer grid
 # across species (per-species adaptive refinement is inherently not shareable),
@@ -176,13 +176,13 @@
 # off; the equivalence gate fixes both sides' grid.
 .tobs_fit_occu_cover_batch_fused <- function(tobs_args, y, y_pos, B, labels) {
   if (!identical(tobs_args$method, "nested_laplace")) return(NULL)
-  engine_pick <- tobs_args$control[["engine"]] %||% "joint_coupled"
-  if (!identical(engine_pick, "joint_coupled")) return(NULL)
+  engine_pick <- tobs_args$control[["engine"]] %||% "joint"
+  if (!identical(engine_pick, "joint")) return(NULL)
 
   dots <- tobs_args$dots
 
   # Collect per-species prep by replaying the dispatch in collect mode. This
-  # reuses ALL of .dispatch_occu_cover + the joint_coupled Part-A builder (model
+  # reuses ALL of .dispatch_occu_cover + the joint Part-A builder (model
   # construction, field resolution, arm priors, sigma_pos pre-fit, grids); no
   # model-building logic is duplicated here. A species whose dispatch does not
   # return an `occu_cover_jc_prep` (non-spatial, v2/v3, an error) is ineligible.

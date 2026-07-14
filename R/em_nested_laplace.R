@@ -784,7 +784,7 @@
 # =============================================================================
 
 # Decide whether a standalone occu() nested-Laplace fit reroutes through the
-# joint direct-grid engine (.tobs_fit_occu_joint_coupled) instead of the EM
+# joint direct-grid engine (.tobs_fit_occu_joint) instead of the EM
 # fixed-point path (.tobs_em_nested_laplace). The EM path oscillates / does not
 # converge on the varying-coefficient (SVC) occupancy bar at EVA scale
 # (gcol33/tulpaObs#81); the joint engine integrates the field hyperparameters on

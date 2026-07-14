@@ -4,12 +4,12 @@
 # (gcol33/tulpa#32 Layer B.2 consumer + R-facing fit wiring).
 #
 # Routed via `tobs(method = "nested_laplace", control = list(engine =
-# "joint_coupled"))`. Compares against the v3 nested-Laplace path that
+# "joint"))`. Compares against the v3 nested-Laplace path that
 # profiles z out per outer (alpha, sigma) candidate.
 # =============================================================================
 
 
-test_that("joint_coupled smoke fit runs end-to-end and returns finite betas", {
+test_that("joint smoke fit runs end-to-end and returns finite betas", {
   N <- 30L; J <- 4L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -37,7 +37,7 @@ test_that("joint_coupled smoke fit runs end-to-end and returns finite betas", {
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
-                   engine = "joint_coupled")
+                   engine = "joint")
   ))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(attr(fit, "tobs_family")$name, "occu_cover")
@@ -61,7 +61,7 @@ test_that("joint_coupled smoke fit runs end-to-end and returns finite betas", {
 })
 
 
-test_that("joint_coupled smoke fit runs end-to-end under beta positive arm", {
+test_that("joint smoke fit runs end-to-end under beta positive arm", {
   N <- 30L; J <- 4L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -89,7 +89,7 @@ test_that("joint_coupled smoke fit runs end-to-end under beta positive arm", {
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
-                   engine = "joint_coupled")
+                   engine = "joint")
   ))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(attr(fit, "tobs_family")$name, "occu_cover")
@@ -106,7 +106,7 @@ test_that("joint_coupled smoke fit runs end-to-end under beta positive arm", {
 })
 
 
-test_that("joint_coupled returns the joint betas+field posterior covariance", {
+test_that("joint returns the joint betas+field posterior covariance", {
   N <- 30L; J <- 4L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -134,7 +134,7 @@ test_that("joint_coupled returns the joint betas+field posterior covariance", {
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
-                   engine = "joint_coupled")
+                   engine = "joint")
   ))
 
   pi_list <- fit$process_info
@@ -163,7 +163,7 @@ test_that("joint_coupled returns the joint betas+field posterior covariance", {
 })
 
 
-test_that("joint_coupled parameter-surface vcov carries beta x hyper cross-cov (tulpaObs#46)", {
+test_that("joint parameter-surface vcov carries beta x hyper cross-cov (tulpaObs#46)", {
   N <- 40L; J <- 4L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -190,7 +190,7 @@ test_that("joint_coupled parameter-surface vcov carries beta x hyper cross-cov (
     detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 500L, engine = "joint_coupled")
+    control = list(verbose = FALSE, max.iter = 500L, engine = "joint")
   ))
 
   V  <- fit$vcov
@@ -218,7 +218,7 @@ test_that("joint_coupled parameter-surface vcov carries beta x hyper cross-cov (
 })
 
 
-test_that("joint_coupled errors on non-spatial occu_cover", {
+test_that("joint errors on non-spatial occu_cover", {
   N <- 30L; J <- 4L
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", seed = 1L)
   long <- data.frame(
@@ -239,13 +239,13 @@ test_that("joint_coupled errors on non-spatial occu_cover", {
          detection = ~ det_cov1, positive = ~ pos_cov1,
          y = od$y, y_pos = y_pos, visits = od$det.covs,
          method = "nested_laplace",
-         control = list(verbose = FALSE, engine = "joint_coupled")),
+         control = list(verbose = FALSE, engine = "joint")),
     "spatial term"
   )
 })
 
 
-test_that("joint_coupled regularises the cover (pos) intercept by default (tulpaObs#32)", {
+test_that("joint regularises the cover (pos) intercept by default (tulpaObs#32)", {
   # The pos arm sees the shared field only at detected visits, so its intercept
   # confounds with the field level over those cells -- a direction the
   # sum-to-zero field constraint does not pin when low-occupancy regions carry
@@ -288,7 +288,7 @@ test_that("joint_coupled regularises the cover (pos) intercept by default (tulpa
 })
 
 
-test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
+test_that("joint recovers slopes, hypers, field shape (10 seeds)", {
   skip_on_cran()
   skip_if_fast()
 
@@ -335,7 +335,7 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 80L,
-                       engine = "joint_coupled")
+                       engine = "joint")
       )),
       error = function(e) NULL
     )
@@ -364,7 +364,7 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
   # underestimation of variance components together pull sigma's posterior
   # mean below truth. The wider tolerance here matches the v3 nested-Laplace
   # gate's reasoning (truth recovery within ~half a unit on a scale-like
-  # axis) -- joint_coupled with a finer grid via control$sigma.grid
+  # axis) -- joint with a finer grid via control$sigma.grid
   # tightens this.
   expect_lt(abs(mean(est_sigma[ok]) - sigma_truth), 0.90)
 
@@ -385,7 +385,7 @@ test_that("joint_coupled recovers slopes, hypers, field shape (10 seeds)", {
 })
 
 
-test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
+test_that("joint (beta arm) recovers slopes + field shape (10 seeds)", {
   skip_on_cran()
   skip_if_fast()
 
@@ -432,7 +432,7 @@ test_that("joint_coupled (beta arm) recovers slopes + field shape (10 seeds)", {
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 80L,
-                       engine = "joint_coupled")
+                       engine = "joint")
       )),
       error = function(e) NULL
     )

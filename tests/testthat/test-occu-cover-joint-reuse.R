@@ -28,7 +28,7 @@
         detection = ~ det_cov1, positive = ~ pos_cov1,
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
-        control = list(verbose = FALSE, max.iter = 500L, engine = "joint_coupled",
+        control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
                        force.sparse = TRUE, adaptive.grid = FALSE,
                        inner.refresh = inner.refresh,
                        n.threads.outer = n.threads.outer)))

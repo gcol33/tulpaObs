@@ -10,7 +10,7 @@
 #   - byte-exact field-block gradient: C++ FullGradFn == R oracle (closed form)
 #   - field-off path stays byte-identical to the non-spatial occu_cover NUTS
 #   - field recovery cor(est, truth), beta/cover recovery + 95% coverage,
-#     beta SD calibration vs the nested-Laplace joint_coupled SEs, 0 divergences
+#     beta SD calibration vs the nested-Laplace joint SEs, 0 divergences
 #   - dispatch gating (icar/bym2/SVC/RE + nuts rejected with a pointer)
 # =============================================================================
 
@@ -221,7 +221,7 @@ test_that("occu_cover spatial NUTS beta SDs calibrate to nested-Laplace SEs", {
     family = occu_cover("lognormal"), detection = ~ det_cov1,
     positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
     visits = inp$od$det.covs, method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 400L, engine = "joint_coupled")))
+    control = list(verbose = FALSE, max.iter = 400L, engine = "joint")))
 
   expect_equal(nut$method, "nuts")
   expect_lte(nut$nuts$divergent_total, 5L)

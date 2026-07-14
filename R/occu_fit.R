@@ -339,7 +339,7 @@
     # exactly as the EM path's output is.
     if (.tobs_occu_reroute_to_joint(fit_model, spatial, temporal, re)) {
       fields <- .tobs_resolve_occu_spatial_fields(spatial, fit_model)
-      fit <- do.call(.tobs_fit_occu_joint_coupled, c(
+      fit <- do.call(.tobs_fit_occu_joint, c(
         list(model = fit_model, fields = fields, priors = priors,
              max.iter = as.integer(max.iter), tol = tol, verbose = verbose),
         list(...)

@@ -36,7 +36,7 @@ skip_if_fast()
 }
 
 .cc_fit <- function(d, checkpoint = NULL) {
-  ctrl <- list(verbose = FALSE, max.iter = 500L, engine = "joint_coupled")
+  ctrl <- list(verbose = FALSE, max.iter = 500L, engine = "joint")
   if (!is.null(checkpoint)) ctrl$checkpoint <- checkpoint
   suppressWarnings(tobs(
     formula = ~ occ_cov1 + bym2(graph = d$adj), data = d$cell_dat,

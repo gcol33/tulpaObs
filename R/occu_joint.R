@@ -1,8 +1,8 @@
 # =============================================================================
-# occu_joint_coupled.R - single-arm occupancy nested-Laplace path for the
+# occu_joint.R - single-arm occupancy nested-Laplace path for the
 # standalone occu() varying-coefficient (SVC) spatial bar (gcol33/tulpaObs#81).
 #
-# This is occu_cover()'s joint direct-grid engine (occu_cover_joint_coupled.R)
+# This is occu_cover()'s joint direct-grid engine (occu_cover_joint.R)
 # with the cover (positive) arm removed: the occupancy (psi) + detection (p)
 # arms only, the shared cell-indexed intercept + trend areal field on the
 # occupancy arm, no coupling alpha. The field hyperparameters integrate on a
@@ -23,7 +23,7 @@
 #
 # Field assembly (CSR, demeaning, multi-block trend copy), the law-of-total-
 # covariance posterior moments, the rmvn draws and the hyperparameter
-# marginalisation reuse the occu_cover_joint_coupled helpers; only the arm
+# marginalisation reuse the occu_cover_joint helpers; only the arm
 # roster (2 arms, no pos / no alpha) and the per-arm coefficient unpacking
 # differ.
 # =============================================================================
@@ -37,7 +37,7 @@
 # joint engine reads as "no field on this row" (l_b > 0 gate in
 # nested_laplace_joint_multi.h's INDEXED_SINGLE scatter), the occupancy-only
 # analogue of the occu_cover p arm's field_coef = 0.
-.occu_joint_coupled_arms <- function(model, n_cells, site_cell) {
+.occu_joint_arms <- function(model, n_cells, site_cell) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
 
@@ -57,7 +57,7 @@
   keep           <- which(valid_flat)
   n_visits_valid <- length(keep)
   if (n_visits_valid == 0L) {
-    stop("occu joint_coupled: no valid visits in the data.", call. = FALSE)
+    stop("occu joint: no valid visits in the data.", call. = FALSE)
   }
   y_det_visit   <- as.integer(y_flat[keep])
   site_of_visit <- as.integer(site_flat[keep])
@@ -105,7 +105,7 @@
 # default the occu_cover coupled arms carry (the logit-scale score vanishes as
 # psi -> 1, so an unpenalised intercept runs away). `priors = FALSE` / "none"
 # disables both. A supplied occu_priors() / list overrides the matching arm(s).
-.occu_joint_coupled_arm_priors <- function(priors, responses) {
+.occu_joint_arm_priors <- function(priors, responses) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
     return(list(psi = NULL, p = NULL))
   }
@@ -132,7 +132,7 @@
 # .tobs_fit_model). `fields` is the intercept-first ordered list of `tobs_spatial`
 # specs from .tobs_resolve_occu_spatial_fields(): the unweighted intercept field
 # first, then any weighted SVC (trend) fields, all on one areal graph.
-.tobs_fit_occu_joint_coupled <- function(model, fields,
+.tobs_fit_occu_joint <- function(model, fields,
                                          priors  = NULL,
                                          max.iter = 200L,
                                          tol      = 1e-6,
@@ -140,7 +140,7 @@
                                          ...) {
   if (!inherits(model, "tobs_model") ||
       !identical(model$model_type, "single")) {
-    stop("occu joint_coupled engine fits a single-season occu() model.",
+    stop("occu joint engine fits a single-season occu() model.",
          call. = FALSE)
   }
   adj <- fields[[1L]]$graph
@@ -154,21 +154,21 @@
   gv <- fields[[1L]]$group_var
   if (!is.null(gv)) {
     if (is.null(model$data) || !gv %in% names(model$data)) {
-      stop(sprintf("occu joint_coupled: group_var '%s' is not a column of the ",
+      stop(sprintf("occu joint: group_var '%s' is not a column of the ",
                    "model data.", gv), call. = FALSE)
     }
     site_cell <- as.integer(model$data[[gv]])
     if (length(site_cell) != n_sites || anyNA(site_cell) ||
         min(site_cell) < 1L || max(site_cell) > n_cells) {
       stop(sprintf(paste0(
-        "occu joint_coupled: group_var '%s' must be an integer cell index in ",
+        "occu joint: group_var '%s' must be an integer cell index in ",
         "1..%d, one per site (%d sites)."), gv, n_cells, n_sites),
         call. = FALSE)
     }
   } else {
     if (n_cells != n_sites) {
       stop(sprintf(paste0(
-        "occu joint_coupled: the areal field has %d nodes but the model has %d ",
+        "occu joint: the areal field has %d nodes but the model has %d ",
         "sites; map sites to cells with group_var on the spatial term, or pass ",
         "one node per site."), n_cells, n_sites), call. = FALSE)
     }
@@ -189,7 +189,7 @@
     w <- as.numeric(f$weight)
     if (length(w) != n_sites || any(!is.finite(w))) {
       stop(sprintf(paste0(
-        "occu joint_coupled: trend field weight must be a finite per-site ",
+        "occu joint: trend field weight must be a finite per-site ",
         "numeric vector of length %d."), n_sites), call. = FALSE)
     }
     list(weight = w, weight_label = f$weight_label %||% "trend")
@@ -209,12 +209,12 @@
   sigma_grid <- dots$sigma.grid %||% exp(seq(log(0.15), log(3), length.out = 4))
   tau_grid   <- 1.0 / (as.numeric(sigma_grid)^2)
 
-  arms_out      <- .occu_joint_coupled_arms(model, n_cells, site_cell)
+  arms_out      <- .occu_joint_arms(model, n_cells, site_cell)
   responses     <- arms_out$responses
   cell_of_visit <- arms_out$cell_of_visit
   n_v           <- arms_out$n_visits_valid
 
-  arm_priors <- .occu_joint_coupled_arm_priors(priors, responses)
+  arm_priors <- .occu_joint_arm_priors(priors, responses)
   for (nm in c("psi", "p")) {
     ap <- arm_priors[[nm]]
     if (!is.null(ap)) {
@@ -350,13 +350,13 @@
 
   ok_cells <- which(is.finite(fit$log_marginal))
   if (length(ok_cells) == 0L) {
-    stop("occu joint_coupled: inner Newton failed at every grid cell. ",
+    stop("occu joint: inner Newton failed at every grid cell. ",
          "Bump control$max.iter or tighten control$tol.", call. = FALSE)
   }
   if (length(ok_cells) < length(fit$log_marginal)) {
     n_bad <- length(fit$log_marginal) - length(ok_cells)
     warning(sprintf(
-      "occu joint_coupled: dropping %d / %d outer-grid cell(s) ",
+      "occu joint: dropping %d / %d outer-grid cell(s) ",
       n_bad, length(fit$log_marginal)),
       "whose inner Newton did not converge.", call. = FALSE)
   }
@@ -609,7 +609,7 @@
     joint_par_names = joint_par_names,
     joint_means     = joint_means,
     joint_vcov      = Vj,
-    method       = "joint_coupled",
+    method       = "joint",
     occu_only_joint = TRUE,
     joint_fit    = fit,
     convergence  = list(converged = TRUE, n_iter = NA_integer_)

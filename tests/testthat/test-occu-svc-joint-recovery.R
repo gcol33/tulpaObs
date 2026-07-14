@@ -192,7 +192,7 @@ test_that("occu() SVC occupancy arm matches occu_cover(alpha = 0) within toleran
     y = sim$y, y_pos = y_pos,
     method    = "nested_laplace",
     control   = list(verbose = FALSE, progress = FALSE,
-                     engine = "joint_coupled", n.threads = 1L,
+                     engine = "joint", n.threads = 1L,
                      sigma.grid = sigma_grid, alpha.grid = 0,
                      alpha.grid.trend = 0, integration = "grid",
                      adaptive.grid = FALSE, var.of.means.consistency = FALSE,

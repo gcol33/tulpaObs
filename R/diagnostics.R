@@ -146,7 +146,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # pointwise log-likelihood -- the shared spatial / temporal field is folded into
 # the occupancy (and, when copied, cover) predictor per cell and the per-visit
 # detection / cover covariates are folded in site-major, so WAIC / DIC / LOO /
-# CPO match the INLA / spOccupancy full-model criteria. The joint_coupled engine
+# CPO match the INLA / spOccupancy full-model criteria. The joint engine
 # samples the grid-integrated field jointly with the arm coefficients
 # (.tobs_occu_cover_components -> .tobs_joint_draws), giving the exact integrated
 # field uncertainty. The v3 nested-Laplace path stores no joint object, so it

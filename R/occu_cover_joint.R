@@ -10,7 +10,7 @@
 # empirical SD of log(y_pos) at detected visits; pass
 # control$phi.grid.pos to integrate over it as a phi_grid axis on the
 # pos arm.
-.tobs_fit_occu_cover_joint_coupled <- function(model, fields,
+.tobs_fit_occu_cover_joint <- function(model, fields,
                                                 priors    = NULL,
                                                 re_spec   = NULL,
                                                 correlated = FALSE,
@@ -29,7 +29,7 @@
   is_beta <- identical(model$positive, "beta")
   is_lnrm <- identical(model$positive, "lognormal")
   if (!is_beta && !is_lnrm) {
-    stop("occu_cover() joint_coupled engine supports positive = ",
+    stop("occu_cover() joint engine supports positive = ",
          "\"lognormal\" or \"beta\".", call. = FALSE)
   }
   # Cover-arm granularity. "mean" / "median" (tulpaObs#33) route through the
@@ -54,7 +54,7 @@
   if (length(site_cell) != n_sites || max(site_cell) > n_cells ||
       min(site_cell) < 1L) {
     stop(sprintf(paste0(
-      "occu_cover joint_coupled: site_cell must map %d sites into 1..%d ",
+      "occu_cover joint: site_cell must map %d sites into 1..%d ",
       "graph nodes."), n_sites, n_cells), call. = FALSE)
   }
 
@@ -223,7 +223,7 @@
   n_trend   <- length(coupled_trends)
   has_trend <- n_trend > 0L
 
-  arms_out <- .occu_cover_build_joint_coupled_arms(
+  arms_out <- .occu_cover_build_joint_arms(
     model           = model,
     sigma_pos_init  = sigma_pos_init,
     alpha_grid      = alpha_grid,
@@ -652,7 +652,7 @@
       # inner tol + near-neighbour batch order) with the k-hat byte-stable, but it
       # stays OFF by default: it reports k-hat only -- it does not move the betas /
       # SDs / field -- so it is an opt-in validation pass, matching the
-      # occu_joint_coupled path. Set control$diagnose.k = TRUE to compute it
+      # occu_joint path. Set control$diagnose.k = TRUE to compute it
       # (control$diagnose.draws sizes the importance batch).
       diagnose_k = dots$diagnose.k %||% FALSE,
       # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy

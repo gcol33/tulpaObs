@@ -21,7 +21,7 @@
 # =============================================================================
 
 # Build responses + an ICAR (multi-block) prior for one species of a tiny
-# occu_cover problem, replicating the joint_coupled fitter's setup slice. Fixed
+# occu_cover problem, replicating the joint fitter's setup slice. Fixed
 # sigma_pos (no phi grid); the batched path supplies it via phi_batch.
 .batch_build_one <- function(cell_dat, adj, N, J, det_covs, y_det, y_pos) {
   vd_det <- tulpaObs:::.normalize_visits(det_covs, ~ det_cov1,
@@ -37,7 +37,7 @@
   model$site_cell <- seq_len(N); model$n_cells <- N
   pos_vals  <- model$y_pos[model$valid & model$y == 1L]
   sigma_pos <- max(stats::sd(log(pos_vals)), 0.05) + 0.05
-  arms_out  <- tulpaObs:::.occu_cover_build_joint_coupled_arms(
+  arms_out  <- tulpaObs:::.occu_cover_build_joint_arms(
     model = model, sigma_pos_init = sigma_pos, alpha_grid = c(0, 1.0),
     positive = "lognormal", multi = FALSE, n_cells = N,
     site_cell = seq_len(N), cover_aggregate = "none")

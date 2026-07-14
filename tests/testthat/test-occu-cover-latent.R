@@ -86,7 +86,7 @@
     detection = ~ det_cov, positive = ~ xpos,
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(1.6), length.out = 4)),
                    alpha.grid = c(0, 0.8, 1.5), adaptive.grid = FALSE,
                    diagnose.k = FALSE, n.quad = 15L)))
@@ -259,7 +259,7 @@ test_that("family carries the latent choice and dispatcher gates it", {
          detection = ~ det_cov, positive = ~ pcov,
          y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
          method = "nested_laplace",
-         control = list(verbose = FALSE, engine = "joint_coupled")),
+         control = list(verbose = FALSE, engine = "joint")),
     "cell-level positive design")
 })
 

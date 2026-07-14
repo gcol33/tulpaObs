@@ -86,7 +86,7 @@ test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
     detection = ~ det_cov1, positive = ~ pos_cov1,
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 200L, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = 200L, engine = "joint",
                    sigma.grid = c(0.5, 1.0), alpha.grid = c(0, 0.5))
   ))
 

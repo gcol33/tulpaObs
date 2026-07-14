@@ -94,7 +94,7 @@
 # A weighted areal term (`icar(graph = adj, weight = col)`) is a second coupled
 # field -- a spatially-varying coefficient on `col` sharing the same areal
 # graph -- the formula-DSL spelling of the trend field that `control$trend`
-# also produces (gcol33/tulpaObs#15). The joint_coupled engine couples N such
+# also produces (gcol33/tulpaObs#15). The joint engine couples N such
 # fields; the legacy single-field v2/v3 engines take only the intercept field.
 # ---------------------------------------------------------------------------
 .occu_cover_spatial_fields <- function(formula, data, arm_fields = list()) {

@@ -1,5 +1,5 @@
 # =============================================================================
-# occu_cover_joint_coupled.R - joint nested-Laplace path for occu_cover()
+# occu_cover_joint.R - joint nested-Laplace path for occu_cover()
 # driven by the cell-coupling registry (gcol33/tulpa#32 Layer B.2 consumer).
 #
 # Routes through tulpa_nested_laplace_joint(cell_coupling =
@@ -19,7 +19,7 @@
 # Spatial path only. Non-spatial occu_cover stays on method = "laplace";
 # the spatial v3 nested-Laplace path (.tobs_fit_occu_cover_nested) stays
 # as the default under method = "nested_laplace". This file is reached
-# via control$engine = "joint_coupled" -- same pattern as v2_joint.
+# via control$engine = "joint" -- same pattern as v2_joint.
 # =============================================================================
 
 
@@ -137,7 +137,7 @@
   list(sel = sel[ord], weight = weight[ord])
 }
 
-.occu_cover_build_joint_coupled_arms <- function(model, sigma_pos_init,
+.occu_cover_build_joint_arms <- function(model, sigma_pos_init,
                                                   alpha_grid,
                                                   positive = "lognormal",
                                                   multi = FALSE,
@@ -183,7 +183,7 @@
   }
 
   if (n_visits_valid == 0L) {
-    stop("occu_cover joint_coupled: no valid visits in the data.",
+    stop("occu_cover joint: no valid visits in the data.",
          call. = FALSE)
   }
 
@@ -293,7 +293,7 @@
     units    <- .occu_cover_unit_cover(model)
     pos_site <- units$pos_site
     if (length(pos_site) == 0L) {
-      stop("occu_cover joint_coupled: no detected visits to aggregate cover ",
+      stop("occu_cover joint: no detected visits to aggregate cover ",
            "over.", call. = FALSE)
     }
     if (identical(cover_aggregate, "latent")) {
@@ -363,7 +363,7 @@
 
 
 # Per-arm coef names for unpacking joint modes into a (means, sds) table.
-.occu_cover_joint_coupled_coef_names <- function(model) {
+.occu_cover_joint_coef_names <- function(model) {
   pi_list <- model$process_info
   list(
     psi = pi_list[[1L]]$coef_names,

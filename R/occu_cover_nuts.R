@@ -350,7 +350,7 @@
 }
 
 
-# Run the nested-Laplace joint_coupled engine once with a proper-CAR copy block
+# Run the nested-Laplace joint engine once with a proper-CAR copy block
 # to obtain the FIXED field hyperparameters (sigma, rho_car) and the copy
 # amplitude (alpha), plus the grid-weighted posterior-mean coupled field. This is
 # the occu_cover analogue of the warm fit .tobs_fit_abun_nuts_spatial reads from
@@ -372,7 +372,7 @@
   n_cells   <- nrow(adj)
 
   # Pre-fit the pos-arm dispersion at the empirical cover spread (matching the
-  # joint_coupled non-latent path); it rides the spec's phi slot, fixed here.
+  # joint non-latent path); it rides the spec's phi slot, fixed here.
   # Observed covers only (a detected visit may carry a missing cover).
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
   pos_vals <- pos_vals[is.finite(pos_vals)]
@@ -393,7 +393,7 @@
   # field_coef = list(name = "alpha", grid = alpha_grid), so the copy alpha axis
   # rides the one shared field. The single-block joint path takes the copy
   # coefficient on the arm, not a top-level `copy` block.
-  arms_out <- .occu_cover_build_joint_coupled_arms(
+  arms_out <- .occu_cover_build_joint_arms(
     model = model, sigma_pos_init = sigma_pos_init, alpha_grid = alpha_grid,
     positive = model$positive, multi = FALSE, n_cells = n_cells,
     site_cell = site_cell, cover_aggregate = "none")
@@ -466,7 +466,7 @@
 # non-centered coupled PROPER-CAR field on the latent state z (gcol33/tulpaObs#74):
 # the psi-arm field f (one value per cell) enters psi linearly and is copied to the
 # cover (positive) arm with the FIXED scaling alpha; the field precision tau Q(rho)
-# and alpha are fixed at the nested-Laplace joint_coupled estimate, and the
+# and alpha are fixed at the nested-Laplace joint estimate, and the
 # whitened raw ~ N(0, I) (f = Linv %*% raw) is sampled alongside the coefficient
 # marginal. Parameter vector: c(beta_psi, beta_p, beta_pos, log_disp, raw_field).
 # This is the occu_cover analogue of .tobs_fit_abun_nuts_spatial (tulpa#87): a
@@ -512,7 +512,7 @@
   }
 
   # Fixed hyper (sigma -> tau, rho_car) + copy amplitude alpha + warm betas / field
-  # from the nested-Laplace joint_coupled proper-CAR fit.
+  # from the nested-Laplace joint proper-CAR fit.
   warm <- .tobs_occu_cover_nuts_carproper_warm(
     model, adj, priors, max.iter = max.iter, tol = tol,
     sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid)

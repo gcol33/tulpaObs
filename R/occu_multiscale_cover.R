@@ -11,7 +11,7 @@
 # joint nested-Laplace cell-coupling path (.tobs_fit_occu_multiscale_cover_*).
 #
 # Builder, dispatcher, and simulator. The joint fitter lives in
-# occu_multiscale_cover_joint_coupled.R.
+# occu_multiscale_cover_joint.R.
 # =============================================================================
 
 
@@ -576,7 +576,7 @@
     return(do.call(.tobs_fit_occu_multiscale_cover_laplace, fit_args))
   }
   fit_args <- c(list(model = model, fields = fields, priors = priors), control)
-  do.call(.tobs_fit_occu_multiscale_cover_joint_coupled, fit_args)
+  do.call(.tobs_fit_occu_multiscale_cover_joint, fit_args)
 }
 
 

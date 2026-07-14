@@ -23,7 +23,7 @@
 }
 
 # Simulate a strong-field occu_cover dataset with the package's own generator
-# (matched field parameterisation) and fit it with the joint_coupled engine.
+# (matched field parameterisation) and fit it with the joint engine.
 .icfm_sim_and_fit <- function(seed, N = 100L, J = 6L, sigma_true = 2.0,
                               alpha_true = 1.0, positive = "lognormal") {
   adj <- .icfm_chain_adj(N)
@@ -47,7 +47,7 @@
     detection = ~ det_cov1, positive = ~ pos_cov1,
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
-    control = list(engine = "joint_coupled", verbose = FALSE, max.iter = 400L,
+    control = list(engine = "joint", verbose = FALSE, max.iter = 400L,
                    sigma.grid = c(0.5, 1.0, 1.5, 2.0),
                    alpha.grid = c(0, 0.5, 1.0))))
   fit_nofield <- tobs(

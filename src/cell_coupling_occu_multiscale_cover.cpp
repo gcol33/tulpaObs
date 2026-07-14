@@ -9,7 +9,7 @@
 // the multiscale spec carries the fit's per-cell plot structure, so the R
 // driver re-registers it under a fixed name immediately before each joint fit
 // (last-writer-wins; the previous fit's spec is released). See
-// R/occu_multiscale_cover_joint_coupled.R.
+// R/occu_multiscale_cover_joint.R.
 
 #include "cell_coupling_occu_multiscale_cover.h"
 

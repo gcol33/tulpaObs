@@ -72,7 +72,7 @@
     detection = ~ det_cov, positive = ~ pos_cov,
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(2.0), length.out = 4)),
                    alpha.grid = c(0, 0.6, 1.5),
                    alpha.grid.trend = c(0, 0.6, 1.5),
@@ -182,7 +182,7 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
     detection = ~ det_cov, positive = ~ pos_cov,
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
-    control = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+    control = list(verbose = FALSE, max.iter = 300L, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(2.0), length.out = 4)),
                    alpha.grid = c(0, 0.6, 1.5), adaptive.grid = TRUE)))
 

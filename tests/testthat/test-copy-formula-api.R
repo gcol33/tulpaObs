@@ -9,7 +9,7 @@
 #   control    = list(engine = "joint")
 #
 # replacing the control-based path (formula =, control$alpha.grid[.trend],
-# engine = "joint_coupled"). A pure API change moves no number: the equivalence
+# engine = "joint"). A pure API change moves no number: the equivalence
 # tests below fit the SAME model both ways and assert byte-identical results.
 # =============================================================================
 
@@ -24,7 +24,7 @@
 }
 
 # Build a small occu_cover dataset (optionally with a per-cell trend covariate)
-# in the shape the joint_coupled path consumes.
+# in the shape the joint path consumes.
 .cfa_data <- function(N = 30L, J = 4L, trend = FALSE, seed = 12345L) {
   adj <- .cfa_adj(N)
   sim <- simulate_occu_cover(
@@ -180,7 +180,7 @@ test_that("OLD (control alpha.grid) == NEW (copy(spatial()) grid) intercept fiel
     formula  = ~ occ_cov1 + icar(graph = adj),
     positive = ~ pos_cov1,
     control  = list(verbose = FALSE, max.iter = 500L,
-                    engine = "joint_coupled", alpha.grid = g))))
+                    engine = "joint", alpha.grid = g))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
     positive   = ~ pos_cov1 + copy(spatial(), alpha = grid(g)),
@@ -202,7 +202,7 @@ test_that("decouple: OLD alpha.grid = 0 == NEW omitting copy()", {
     formula  = ~ occ_cov1 + icar(graph = adj),
     positive = ~ pos_cov1,
     control  = list(verbose = FALSE, max.iter = 500L,
-                    engine = "joint_coupled", alpha.grid = 0))))
+                    engine = "joint", alpha.grid = 0))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
     positive   = ~ pos_cov1,   # no copy() => decoupled
@@ -223,7 +223,7 @@ test_that("scalar alpha fixes the amplitude (OLD alpha.grid = 0.5 == NEW copy(sp
     formula  = ~ occ_cov1 + icar(graph = adj),
     positive = ~ pos_cov1,
     control  = list(verbose = FALSE, max.iter = 500L,
-                    engine = "joint_coupled", alpha.grid = 0.5))))
+                    engine = "joint", alpha.grid = 0.5))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
     positive   = ~ pos_cov1 + copy(spatial(), alpha = 0.5),
@@ -245,7 +245,7 @@ test_that("per-component: OLD alpha.grid vs alpha.grid.trend == NEW copy(spatial
   old <- .cfa_fit(c(base, list(
     formula  = ~ occ_cov1 + icar(graph = adj) + icar(graph = adj, weight = time),
     positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+    control  = list(verbose = FALSE, max.iter = 300L, engine = "joint",
                     alpha.grid = gi, alpha.grid.trend = gt))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
@@ -268,7 +268,7 @@ test_that("whole-field copy(spatial()) scales every block with one amplitude", {
   old <- .cfa_fit(c(base, list(
     formula  = ~ occ_cov1 + icar(graph = adj) + icar(graph = adj, weight = time),
     positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 300L, engine = "joint_coupled",
+    control  = list(verbose = FALSE, max.iter = 300L, engine = "joint",
                     alpha.grid = gw))))   # alpha.grid.trend defaults to alpha.grid
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
