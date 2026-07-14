@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.111 (2026-07-14)
+
+* Remove the last two deprecation nudges, completing the 0.0.110 clean-rename
+  pass. `tobs()` no longer messages when the cover-hurdle state formula is given
+  as `formula =` rather than `occurrence =` (both are accepted; `occurrence`
+  reads symmetrically with `detection` / `positive`), and `occu_cover()` no
+  longer messages on `control$engine = "joint_coupled"` (the documented engine
+  name; the internal `"joint"` default routes to the same fitter). Nothing
+  changes beyond dropping the two messages.
+
 ## 0.0.110 (2026-07-14)
 
 * Drop the backward-compatibility shims added in 0.0.109. The extra-arm formula

@@ -41,8 +41,8 @@
 #'   detection design).
 #' @param formula state-process formula, e.g. `~ elev + forest`. For occupancy
 #'   this is the occupancy probability formula; for N-mixture the abundance
-#'   formula; for the cover hurdle the latent-presence formula (the deprecated
-#'   alias of `occurrence` there).
+#'   formula; for the cover hurdle the latent-presence formula (also given as
+#'   `occurrence`, which reads symmetrically with `detection` and `positive`).
 #'
 #'   Single-vector-response families (the cover hurdle, [cover()]) also accept
 #'   the response on the left-hand side, `response ~ predictors`, in which case
@@ -304,23 +304,13 @@ tobs <- function(formula,
 
   # `occurrence` is the state-process formula's name for the occu_cover() /
   # cover() hurdle, reading symmetrically with `detection` and `positive`. It is
-  # the front door; `formula` is the deprecated alias. Exactly one is given.
+  # the front-door name for `formula`; give one of the two.
   if (!is.null(occurrence)) {
     if (!missing(formula) && !is.null(formula)) {
       stop("Give the state-process formula as `occurrence`, not both ",
            "`occurrence` and `formula`.", call. = FALSE)
     }
     formula <- occurrence
-  } else if (!missing(formula) && !missing(family) &&
-             inherits(family, "tobs_family") &&
-             identical(family$name, "occu_cover")) {
-    # occu_cover() is the three-arm hurdle whose state formula reads
-    # symmetrically with `detection` / `positive` as `occurrence`. cover() is a
-    # single-formula family (response on the LHS), where `formula` is not an
-    # alias and stays the primary surface.
-    message("tobs(): `formula =` is deprecated for occu_cover(); use ",
-            "`occurrence =` (it reads symmetrically with `detection` and ",
-            "`positive`).")
   }
   if (missing(formula) || is.null(formula)) {
     # cover() per-arm mode: `presence =` / `positive =` formulas stand in for a

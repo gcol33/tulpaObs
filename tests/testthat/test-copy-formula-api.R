@@ -280,43 +280,6 @@ test_that("whole-field copy(spatial()) scales every block with one amplitude", {
 
 
 # ---------------------------------------------------------------------------
-# Deprecated aliases emit one informative message and fit identically.
-# ---------------------------------------------------------------------------
-
-test_that("engine = 'joint_coupled' is a deprecated alias for 'joint'", {
-  skip_if_fast()
-  d   <- .cfa_data()
-  adj <- d$adj
-  base <- list(data = d$cell_dat, family = occu_cover("lognormal"),
-               detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
-               visits = d$od$det.covs, method = "nested_laplace")
-
-  expect_message(
-    suppressWarnings(do.call(tobs, c(base, list(
-      occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
-      positive   = ~ pos_cov1 + copy(spatial(), alpha = grid(c(0.5, 1))),
-      control    = list(verbose = FALSE, max.iter = 200L,
-                        engine = "joint_coupled"))))),
-    "joint_coupled.*deprecated")
-})
-
-test_that("formula = is a deprecated alias for occurrence =", {
-  skip_if_fast()
-  d   <- .cfa_data()
-  adj <- d$adj
-  expect_message(
-    suppressWarnings(tobs(
-      formula = ~ occ_cov1 + icar(graph = adj), data = d$cell_dat,
-      family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1, y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
-      method = "nested_laplace",
-      control = list(verbose = FALSE, max.iter = 200L,
-                     engine = "joint", alpha.grid = 0.5))),
-    "`formula =` is deprecated")
-})
-
-
-# ---------------------------------------------------------------------------
 # Guard rails.
 # ---------------------------------------------------------------------------
 

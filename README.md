@@ -93,7 +93,7 @@ WAIC, posterior predictive checks, PIT residuals, over-dispersion and zero-infla
 ```r
 install.packages("pak")
 pak::pak("gcol33/tulpaObs")            # latest from GitHub
-pak::pak("gcol33/tulpaObs@v0.0.110")  # a specific tagged release
+pak::pak("gcol33/tulpaObs@v0.0.111")  # a specific tagged release
 ```
 
 Tagged releases are listed at

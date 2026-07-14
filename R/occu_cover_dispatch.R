@@ -654,16 +654,11 @@
     # control$engine = "v3_nested" / "v2_joint" as debug escape hatches; both
     # take only the single intercept field.
     correlated <- isTRUE(spatial_info$correlated)
-    engine_pick <- control[["engine"]] %||% "joint"
+    # Default 3-arm nested-Laplace fitter (coupling lives in the positive
+    # formula via copy()); "v2_joint" / "v3_nested" are the single-field escape
+    # hatches handled below.
+    engine_pick <- control[["engine"]] %||% "joint_coupled"
     control[["engine"]] <- NULL
-    # The coupling now lives in the formula (copy()), so the default engine is
-    # "joint"; "joint_coupled" is the deprecated alias for the same fitter.
-    if (identical(engine_pick, "joint_coupled")) {
-      message("occu_cover(): control$engine = \"joint_coupled\" is deprecated; ",
-              "use \"joint\" (the cross-arm coupling now lives in the positive ",
-              "formula via copy()).")
-      engine_pick <- "joint"
-    }
     if (correlated && engine_pick %in% c("v2_joint", "v3_nested")) {
       stop(sprintf(paste0(
         "occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) needs ",

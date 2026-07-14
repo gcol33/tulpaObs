@@ -24,8 +24,8 @@ tobs(
 \arguments{
 \item{formula}{state-process formula, e.g. \code{~ elev + forest}. For occupancy
 this is the occupancy probability formula; for N-mixture the abundance
-formula; for the cover hurdle the latent-presence formula (the deprecated
-alias of \code{occurrence} there).
+formula; for the cover hurdle the latent-presence formula (also given as
+\code{occurrence}, which reads symmetrically with \code{detection} and \code{positive}).
 
 Single-vector-response families (the cover hurdle, \code{\link[=cover]{cover()}}) also accept
 the response on the left-hand side, \code{response ~ predictors}, in which case
