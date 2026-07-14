@@ -124,6 +124,21 @@ test_that("community-spatial count recovers community means + field over seeds",
   list(y = y, data = d, graph = A, f0 = f0, f1 = f1, Ns = Ns, S = S)
 }
 
+test_that("community field recovers under car_proper (proper CAR)", {
+  skip_on_cran()
+  d <- .msc_sim(side = 10L, S = 12L, seed = 5L)
+  fit <- tobs(~ x + car_proper(graph = d$graph), data = d$data,
+              family = ms_count(), y = d$y, species = colnames(d$y),
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_identical(fit$spatial_hyper$type, "car_proper")
+  expect_true(fit$spatial_hyper$rho > 0 && fit$spatial_hyper$rho < 1)
+  expect_gt(stats::cor(fit$spatial_field, d$field), 0.8)
+  # the intercept stays identified (the field is sum-to-zero deviations)
+  expect_equal(unname(unlist(coef(fit))), c(1, 0.5), tolerance = 0.15)
+})
+
 test_that("community SVC (svcMsAbund) recovers the intercept + trend fields", {
   skip_on_cran()
   d <- .msc_svc_sim(side = 10L, S = 14L, seed = 7L)

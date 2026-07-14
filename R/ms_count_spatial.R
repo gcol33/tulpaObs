@@ -30,7 +30,8 @@
 # per-field closed-form tau M-step (ICAR rank = n - 1). Each field is demeaned
 # (the ICAR null space is the constant; the fixed effects absorb the level).
 .ms_count_field_solve <- function(offset_mat, Q, F, tau, W, y_rowsum,
-                                  max_iter = 50L, tol = 1e-8) {
+                                  max_iter = 50L, tol = 1e-8,
+                                  constrain_mean = TRUE, rankdef = 1L) {
   Ns <- nrow(offset_mat); K <- ncol(W)
   ywt <- vapply(seq_len(K), function(k) as.numeric(W[, k] * y_rowsum), numeric(Ns))
   build_H <- function(w) {
@@ -50,20 +51,62 @@
     H   <- build_H(w)
     step <- as.numeric(Matrix::solve(H, g))
     F   <- F + matrix(step, Ns, K)
-    for (k in seq_len(K)) F[, k] <- F[, k] - mean(F[, k])
+    # icar's null space is the constant (demean; the fixed effects absorb the
+    # level). A proper CAR (car_proper) is full rank -> keep the field mean.
+    if (isTRUE(constrain_mean)) for (k in seq_len(K)) F[, k] <- F[, k] - mean(F[, k])
     if (max(abs(step)) < tol) break
   }
   field_off <- rowSums(W * F)
   w    <- rowSums(exp(pmin(offset_mat + field_off, 700)))
   Cov  <- Matrix::solve(build_H(w))
   tau_new <- numeric(K)
+  df <- Ns - as.integer(rankdef)                         # icar: n-1, car_proper: n
   for (k in seq_len(K)) {
     idx  <- (k - 1L) * Ns + seq_len(Ns)
     quad <- as.numeric(t(F[, k]) %*% (Q %*% F[, k])) +
             sum(Matrix::diag(Q %*% Cov[idx, idx, drop = FALSE]))
-    tau_new[k] <- (Ns - 1) / max(quad, 1e-8)
+    tau_new[k] <- df / max(quad, 1e-8)
   }
   list(F = F, tau = tau_new)
+}
+
+
+# log pseudo-determinant of the CAR precision on the sum-to-zero subspace: the
+# sum of log of the n-1 largest eigenvalues (the smallest eigenvalue's
+# eigenvector is ~ the constant, which the sum-to-zero constraint removes). Used
+# to compare the field marginal across a proper-CAR rho grid.
+.ms_count_car_logdet <- function(Qr) {
+  ev <- sort(eigen(as.matrix(Qr), symmetric = TRUE, only.values = TRUE)$values,
+             decreasing = TRUE)
+  sum(log(pmax(ev[-length(ev)], 1e-10)))
+}
+
+# Marginal (Laplace) objective of the field solve at its converged mode, used to
+# pick the proper-CAR rho over a small grid: the Poisson data log-likelihood plus
+# the field GMRF prior (0.5 (df log tau + log|Q|) - 0.5 tau f'Q f) minus the
+# Laplace normaliser 0.5 log|H|. `logdetQ` is log|Q(rho)| (per unit tau).
+.ms_count_field_marginal <- function(offset_mat, Q, F, tau, W, y_rowsum, logdetQ,
+                                     rankdef = 0L) {
+  Ns <- nrow(offset_mat); K <- ncol(W)
+  field_off <- rowSums(W * F)
+  eta <- offset_mat + field_off
+  ll  <- sum(y_rowsum * field_off) - sum(exp(pmin(eta, 700))) # data terms in f
+  w   <- rowSums(exp(pmin(eta, 700)))
+  build_H <- function() {
+    blocks <- vector("list", K * K)
+    for (k in seq_len(K)) for (l in seq_len(K)) {
+      D <- Matrix::Diagonal(x = W[, k] * W[, l] * w)
+      blocks[[(k - 1L) * K + l]] <- if (k == l) D + tau[k] * Q else D
+    }
+    do.call(rbind, lapply(seq_len(K), function(k)
+      do.call(cbind, blocks[((k - 1L) * K + 1L):(k * K)])))
+  }
+  H <- build_H()
+  df <- Ns - as.integer(rankdef)
+  prior <- 0; for (k in seq_len(K))
+    prior <- prior + 0.5 * (df * log(tau[k]) + logdetQ) -
+             0.5 * tau[k] * as.numeric(t(F[, k]) %*% (Q %*% F[, k]))
+  ll + prior - 0.5 * as.numeric(Matrix::determinant(H, logarithm = TRUE)$modulus)
 }
 
 
@@ -109,10 +152,12 @@
       stop(sprintf("icar graph has %d nodes but the model has %d sites; one ",
                    "field node per site is required.", nrow(A), Ns), call. = FALSE)
     }
-    if (!all(vapply(fields, function(fd) identical(fd$type %||% "icar", "icar"),
-                    logical(1)))) {
-      stop("ms_count() community field supports icar() only (bym2()/car_proper() ",
-           "are follow-ups, gcol33/tulpaObs#117).", call. = FALSE)
+    ptype <- fields[[1L]]$type %||% "icar"
+    if (!all(vapply(fields, function(fd) identical(fd$type %||% "icar", ptype),
+                    logical(1))) || !ptype %in% c("icar", "car_proper")) {
+      stop("ms_count() community field supports icar() or car_proper() (one ",
+           "field kind per formula; bym2() is a follow-up, gcol33/tulpaObs#117).",
+           call. = FALSE)
     }
     K <- length(fields); W <- matrix(1, Ns, K); field_labels <- character(K)
     for (k in seq_len(K)) {
@@ -125,7 +170,19 @@
         field_labels[k] <- fields[[k]]$weight_label %||% paste0("trend", k - 1L)
       } else field_labels[k] <- "intercept"
     }
-    Q <- Matrix::Diagonal(x = rowSums(A)) - methods::as(A, "CsparseMatrix")
+    # The field is sum-to-zero (it captures spatial DEVIATIONS; the intercept in X
+    # owns the level -- so both are constrained/demeaned, rank n-1). icar fixes
+    # the dependence at the intrinsic limit (Q = D - W); car_proper estimates the
+    # dependence strength rho over a small grid (Q(rho) = D - rho W) by the field
+    # marginal likelihood.
+    Dg   <- Matrix::Diagonal(x = rowSums(A))
+    Wadj <- methods::as(A, "CsparseMatrix")
+    is_car <- identical(ptype, "car_proper")
+    constrain_mean <- TRUE
+    rankdef  <- 1L
+    rho_grid <- if (is_car) c(0.5, 0.8, 0.95, 0.99) else NA_real_
+    rho <- if (is_car) 0.95 else NA_real_
+    Q <- if (is_car) Dg - rho * Wadj else Dg - Wadj
     Ffield <- matrix(0, Ns, K); tau <- rep(1, K)
   }
 
@@ -171,7 +228,8 @@
     delta <- 0
     # (b) field update (its "offset" holds the coefficients + the factor part).
     if (has_field) {
-      fu <- .ms_count_field_solve(offset_mat + fac_off, Q, Ffield, tau, W, y_rowsum)
+      fu <- .ms_count_field_solve(offset_mat + fac_off, Q, Ffield, tau, W, y_rowsum,
+                                  constrain_mean = constrain_mean, rankdef = rankdef)
       delta <- max(delta, max(abs(fu$F - Ffield))); Ffield <- fu$F; tau <- fu$tau
     }
     # (c) factor update (its "offset" holds the coefficients + the field part).
@@ -187,6 +245,29 @@
     if (outer > 2L && delta < tol) break
   }
 
+  # Proper-CAR rho selection: at the converged coefficients, re-solve the field
+  # over a small rho grid and keep the rho maximising the field marginal.
+  if (has_field && is_car) {
+    offset_mat <- vapply(seq_len(S),
+                         function(s) as.numeric(X %*% (em$mu + em$b_list[[s]])),
+                         numeric(Ns))
+    off_f <- offset_mat + (if (has_factor) tcrossprod(eta, lambda) else 0)
+    best <- list(m = -Inf)
+    for (rr in rho_grid) {
+      Qr  <- Dg - rr * Wadj
+      # log|Q(rho)| on the sum-to-zero subspace: drop the smallest eigenvalue
+      # (the constrained constant direction) via the pseudo-determinant.
+      ld  <- .ms_count_car_logdet(Qr)
+      fr  <- .ms_count_field_solve(off_f, Qr, Ffield, tau, W, y_rowsum,
+                                   constrain_mean = TRUE, rankdef = 1L)
+      mm  <- .ms_count_field_marginal(off_f, Qr, fr$F, fr$tau, W, y_rowsum, ld,
+                                      rankdef = 1L)
+      if (is.finite(mm) && mm > best$m)
+        best <- list(m = mm, rho = rr, F = fr$F, tau = fr$tau)
+    }
+    if (is.finite(best$m)) { rho <- best$rho; Ffield <- best$F; tau <- best$tau }
+  }
+
   fit <- build_ms_count_fit(model, em, arm_idx, disp = NULL)
   fit$method <- if (has_field) "nested_laplace" else "laplace"
   site_off <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
@@ -195,7 +276,8 @@
     fit$spatial_field <- as.numeric(Ffield[, 1L])
     fit$model$count_field_offset <- site_off
     sigma_field <- 1 / sqrt(tau)
-    fit$spatial_hyper <- list(type = "icar", tau = tau, sigma = sigma_field,
+    fit$spatial_hyper <- list(type = ptype, tau = tau, sigma = sigma_field,
+                              rho = if (is_car) rho else NA_real_,
                               field_labels = field_labels)
     fit$means <- c(fit$means, stats::setNames(sigma_field,
                               paste0("sigma_field_", field_labels)))

@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.121 (2026-07-14)
+
+* Community count field: `car_proper()` (a proper CAR) now joins `icar()` as a
+  shared-field kind for `ms_count()` (gcol33/tulpaObs#117). The field is
+  sum-to-zero deviations (the intercept owns the level); `icar()` fixes the
+  dependence at the intrinsic limit, `car_proper()` estimates the dependence
+  strength `rho` over a small grid by the field marginal likelihood (reported as
+  `fit$spatial_hyper$rho`). Recovery-tested in `test-ms-count-spatial.R`. The
+  field solve is shared with the shared-field / SVC / spatial-factor routes.
+
 ## 0.0.120 (2026-07-14)
 
 * Spatial-factor `ms_count()`: a shared areal field `icar()` and latent factors
