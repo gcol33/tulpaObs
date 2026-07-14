@@ -23,19 +23,22 @@
 .tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
                               col_formula = NULL, ext_formula = NULL,
                               species = NULL, integrated = FALSE, jsdm = FALSE,
-                              abundance = FALSE,
+                              abundance = FALSE, count = FALSE,
+                              count_response = "poisson",
                               det_visit_formula = NULL, det_visit_data = NULL) {
 
   is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
   is_integrated <- isTRUE(integrated)
   is_jsdm      <- isTRUE(jsdm)
   is_abundance <- isTRUE(abundance)
+  is_count     <- isTRUE(count)
 
   if (is_abundance) {
     if (is.null(det_formula)) stop("det_formula required for N-mixture models")
     return(.tobs_build_abun(occ_formula, det_formula, data, y,
                             det_visit_formula, det_visit_data))
   }
+  if (is_count)      return(.tobs_build_count(occ_formula, data, y, count_response))
   if (is_jsdm)       return(.tobs_build_jsdm(occ_formula, data, y, species))
   if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
   if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,
@@ -313,6 +316,72 @@
     species_names = species_names,
     process_info = list(
       list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ))
+    )
+  ), class = "tobs_model")
+}
+
+
+# ---------------------------------------------------------------------------
+# count() -- a GLMM on the observed count / continuous response directly (no
+# detection, no latent state; the abundance analogue of the JSDM). One value per
+# site; a log-link Poisson / negative-binomial or an identity-link Gaussian. The
+# response family travels on the model as `response`; the negbin size / Gaussian
+# residual variance is estimated by an outer dispersion loop in .dispatch_count
+# (tulpa_laplace takes a fixed phi per fit).
+# ---------------------------------------------------------------------------
+.tobs_build_count <- function(occ_formula, data, y, response = "poisson") {
+  response <- match.arg(response, c("poisson", "negbin", "gaussian"))
+  if (is.matrix(y)) {
+    if (ncol(y) != 1L) {
+      stop("count(): y must be a vector or a one-column matrix (one value ",
+           "per site).", call. = FALSE)
+    }
+    y <- as.vector(y)
+  }
+  if (!is.numeric(y)) {
+    stop("count(): y must be a numeric vector (one value per site).",
+         call. = FALSE)
+  }
+  n_data <- if (is.data.frame(data)) nrow(data) else length(y)
+  .tobs_check_site_count(length(y), n_data, "sites")
+
+  is_count_fam <- response %in% c("poisson", "negbin")
+
+  # Complete-case: drop sites with a missing response (and their design rows).
+  # For a count response NA is genuinely missing (0 is a real count), so it is
+  # dropped rather than coerced.
+  bind  <- .tobs_bind_formulas(list(psi = occ_formula), data)
+  X_occ <- model.matrix(bind$fe$psi, data)
+  keep  <- !is.na(y)
+  if (!all(keep)) {
+    y     <- y[keep]
+    X_occ <- X_occ[keep, , drop = FALSE]
+  }
+  n_sites <- length(y)
+
+  if (is_count_fam &&
+      (any(y < 0) || any(abs(y - round(y)) > 1e-8))) {
+    stop(sprintf(paste0("count(response = \"%s\"): y must be non-negative ",
+                        "integer counts."), response), call. = FALSE)
+  }
+
+  link    <- if (identical(response, "gaussian")) "identity" else "log"
+  y_store <- if (is_count_fam) as.integer(round(y)) else as.numeric(y)
+
+  structure(list(
+    model_type = "count",
+    y_count = y_store,
+    response = response,
+    link = link,
+    X_processes = list(X_occ),
+    X_occ = X_occ,
+    formulas = list(occ = bind$fe$psi),
+    structured_terms = bind$terms,
+    n_sites = n_sites,
+    N = n_sites,
+    process_info = list(
+      list(name = "mu", p = ncol(X_occ), coef_names = colnames(X_occ),
+           link = link)
     )
   ), class = "tobs_model")
 }

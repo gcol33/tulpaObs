@@ -167,6 +167,14 @@
   # community-occupancy areal field (gcol33/tulpaObs#76).
   jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts",
                "nested_laplace"),
+  # count: GLMM on the observed count / continuous response directly (no
+  # detection, no latent state) -- the relative-abundance model of spAbundance
+  # (abund). Non-spatial Laplace only for the first ship: a single tulpa GLMM
+  # block (Poisson / neg_binomial_2 / gaussian). The negbin size / gaussian
+  # residual variance is estimated by an outer dispersion loop in .dispatch_count
+  # (tulpa_laplace takes a fixed phi). Areal (spAbund) / community (msAbund) /
+  # NUTS are the documented follow-ups (gcol33/tulpaObs#117).
+  count    = c("laplace"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so

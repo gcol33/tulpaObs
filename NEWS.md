@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.113 (2026-07-14)
+
+* New `count()` family: a GLMM on an observed count / continuous response
+  directly, with no detection process and no latent state -- the abundance
+  analogue of `jsdm()`, and the relative-abundance model of `spAbundance`
+  (`abund`). Poisson / negative-binomial (log link) or Gaussian (identity), one
+  value per site, supplied via `y =` or a two-sided `formula` left-hand side. The
+  negative-binomial size and the Gaussian residual variance are estimated by an
+  outer dispersion loop (reported in `fit$count_dispersion`). Full S3 surface
+  (`coef` / `vcov` / `confint` / `fitted` / `predict` / `residuals` / `summary` /
+  WAIC) plus `simulate_count()`. Non-spatial Laplace for this release; areal
+  (`spAbund`), community (`msAbund`), and NUTS are the documented follow-ups
+  (gcol33/tulpaObs#117). Recovery-tested (coefficient coverage + dispersion
+  recovery over 20 seeds) in `test-count.R`.
+
+* `svc()` on a family that does not consume it now errors with a pointer instead
+  of silently dropping the term (gcol33/tulpaObs#118). The continuous NNGP `svc()`
+  spatially-varying coefficient is wired only for single-season `occu()` under
+  `method = "nuts"`; on the count families (and `occu()` under laplace /
+  nested_laplace) it was extracted and discarded, fitting a model missing the term
+  the user asked for. The recovery-tested route for a spatially-varying
+  coefficient -- a weighted areal bar, `spatial(~ 1 + w || cell, graph)` with
+  `method = "nested_laplace"` -- is unchanged.
+
 ## 0.0.112 (2026-07-14)
 
 * Canonicalize the cover-hurdle direct-grid engine on the name `joint`

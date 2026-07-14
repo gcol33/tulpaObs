@@ -100,6 +100,7 @@
     dynamic    = build_dynamic_callbacks(model, spatial),
     integrated = build_integrated_callbacks(model, spatial),
     jsdm       = build_jsdm_callbacks(model, spatial),
+    count      = build_count_callbacks(model, spatial),
     stop(sprintf("Laplace not supported for model_type '%s'", model$model_type))
   )
 

@@ -742,3 +742,45 @@ build_jsdm_callbacks <- function(model, spatial = NULL) {
        hard_encode = hard_encode, init = init, p_per_submodel = c(occ = p_occ))
 }
 
+
+# ============================================================================
+# Count / relative-abundance GLMM callbacks (no detection, no latent state)
+# ============================================================================
+# The observed count is the response of a single GLMM block -- structurally the
+# JSDM callbacks with a count family instead of Bernoulli. There is no latent
+# variable, so the "E-step" just returns the observed y and the M-step fits the
+# block; the EM loop converges immediately (each M-step block fit IS the MLE for
+# the given dispersion). The negbin size / Gaussian residual variance is a fixed
+# `phi` supplied on the model (`model$count_phi`); .dispatch_count updates it in
+# an outer loop and refits.
+build_count_callbacks <- function(model, spatial = NULL) {
+  X        <- model$X_processes[[1]]
+  N        <- model$N
+  p        <- ncol(X)
+  response <- model$response %||% "poisson"
+  fam <- switch(response,
+    poisson  = "poisson",
+    negbin   = "neg_binomial_2",
+    gaussian = "gaussian",
+    stop(sprintf("count(): unsupported response '%s'.", response),
+         call. = FALSE))
+  phi    <- model$count_phi %||% 1.0
+  is_int <- response %in% c("poisson", "negbin")
+  yv     <- if (is_int) as.integer(model$y_count) else as.numeric(model$y_count)
+
+  mk_block <- function() {
+    blk <- list(y = yv, X = X, family = fam)
+    if (fam != "poisson") blk$phi <- phi
+    blk
+  }
+
+  e_step        <- function(fits, ...) list(weights = as.numeric(yv))
+  m_step_encode <- function(weights, ...) list(occ = mk_block())
+  z_draw        <- function(weights, ...) yv
+  hard_encode   <- function(z, ...) list(occ = mk_block())
+  init          <- list(occ = list(beta = rep(0, p), se = rep(1, p)))
+
+  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
+       hard_encode = hard_encode, init = init, p_per_submodel = c(occ = p))
+}
+

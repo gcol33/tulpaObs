@@ -218,6 +218,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
     dynamic    = .tobs_ploglik_dynamic(model, draws, n.threads),
     integrated = .tobs_ploglik_integrated(model, draws, n.threads),
     jsdm       = .tobs_ploglik_jsdm(model, draws),
+    count      = .tobs_ploglik_count(model, draws),
     nmix       = .tobs_ploglik_nmix(model, draws, n.threads),
     removal    = .tobs_ploglik_removal(model, draws, n.threads),
     distance   = .tobs_ploglik_distance(model, draws, n.threads),
@@ -337,6 +338,31 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   y   <- model$y_jsdm
   Y   <- matrix(y, nrow(eta), length(y), byrow = TRUE)
   Y * .tobs_log_p(eta) + (1 - Y) * .tobs_log_1mp(eta)
+}
+
+# count(): a plain GLMM on the observed response. The per-site pointwise
+# log-density is Poisson / negative-binomial (log link) or Gaussian (identity),
+# evaluated at each draw's linear predictor. The dispersion (negbin size /
+# Gaussian variance) is the fixed `count_phi` estimated by the outer loop.
+.tobs_ploglik_count <- function(model, draws) {
+  eta <- .tobs_eta_draws(model, draws, 1L)       # [S x N]
+  y   <- as.numeric(model$y_count)
+  Y   <- matrix(y, nrow(eta), length(y), byrow = TRUE)
+  response <- model$response %||% "poisson"
+  # Cap the mean to a finite range: an extreme Gaussian-Laplace draw can send
+  # exp(eta) to Inf, and dpois(y, Inf) / dnbinom(y, mu = Inf) is NaN. Capping
+  # keeps the per-draw density finite (a very negative log-density), so that
+  # draw is correctly down-weighted in the WAIC log-mean-exp rather than
+  # poisoning the whole column.
+  mu  <- if (identical(model$link %||% "log", "log")) exp(eta) else eta
+  mu  <- pmin(pmax(mu, 1e-300), 1e8)
+  phi <- model$count_phi %||% 1
+  switch(response,
+    poisson  = stats::dpois(Y, pmax(mu, 1e-300), log = TRUE),
+    negbin   = stats::dnbinom(Y, size = phi, mu = pmax(mu, 1e-8), log = TRUE),
+    gaussian = stats::dnorm(Y, mu, sqrt(max(phi, 1e-8)), log = TRUE),
+    stop("Pointwise log-likelihood: unsupported count response '", response,
+         "'.", call. = FALSE))
 }
 
 # N-mixture: per site, the latent abundance N integrated out in closed form (the

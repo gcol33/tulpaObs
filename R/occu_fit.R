@@ -39,6 +39,29 @@
   svc      <- structs$svc
   latent   <- structs$latent
 
+  # svc() (the continuous NNGP spatially-varying coefficient) is consumed only by
+  # the single-season occupancy NUTS path (populate_svc, src/occu_fit.cpp). Every
+  # other fitter -- the count families (nmix / removal / distance / fp_occu /
+  # dyn_abun) and even occu() under laplace / nested_laplace -- would silently
+  # drop it and fit a model missing the term the user asked for. Error with a
+  # pointer instead (gcol33/tulpaObs#118). The recovery-tested route for a
+  # spatially-varying coefficient is the weighted areal bar
+  # (spatial(~ 1 + w || cell, graph), method = "nested_laplace"), which arrives as
+  # a `spatial` term, not `svc`.
+  if (!is.null(svc) &&
+      !(identical(model$model_type, "single") && identical(method, "nuts"))) {
+    stop(sprintf(paste0(
+      "svc() (a spatially-varying coefficient) is only wired for single-season ",
+      "occu() under method = \"nuts\"; it is silently unsupported for ",
+      "model_type = \"%s\"%s. For an areal spatially-varying coefficient use a ",
+      "weighted areal bar -- spatial(~ 1 + w || cell, graph = adj) with ",
+      "method = \"nested_laplace\" -- which is recovery-tested (tulpaObs#118)."),
+      model$model_type,
+      if (!identical(method, "nuts")) sprintf(" under method = \"%s\"", method)
+      else ""),
+      call. = FALSE)
+  }
+
   # Autoscale every per-process design matrix before the engine sees it
   # (gcol33/tulpaObs#9). The engine optimizes on the centered+scaled
   # design; per-process betas / SEs / draws are transformed back to the
@@ -781,7 +804,9 @@ compute_intercepts <- function(model, means) {
   for (pi in model$process_info) {
     b0 <- means[offset + 1]
     link <- pi$link %||% "logit"
-    result[[pi$name]] <- if (identical(link, "log")) exp(b0) else plogis(b0)
+    result[[pi$name]] <- if (identical(link, "log")) exp(b0)
+                         else if (identical(link, "identity")) b0
+                         else plogis(b0)
     offset <- offset + pi$p
   }
   result

@@ -71,6 +71,8 @@ nobs.tobs_fit <- function(object, ...) {
     sum(model$valid)
   } else if (model$model_type == "ms_int_occu") {
     sum(vapply(model$valid, sum, integer(1)))
+  } else if (model$model_type == "count") {
+    length(model$y_count)
   } else {
     NA_integer_
   }
@@ -347,6 +349,7 @@ fitted.tobs_fit <- function(object, ...) {
   if (identical(model$model_type, "royle_nichols"))
     return(.tobs_fitted_royle_nichols(object))
   if (identical(model$model_type, "jsdm")) return(.tobs_fitted_jsdm(object))
+  if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))
   if (identical(model$model_type, "ms_occu")) {
     return(.tobs_fitted_ms_occu(object))
   }
@@ -528,6 +531,9 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   }
   if (identical(object$model$model_type, "jsdm")) {
     return(.tobs_residuals_jsdm(object, type))
+  }
+  if (identical(object$model$model_type, "count")) {
+    return(.tobs_residuals_count(object, type))
   }
   fit_vals <- fitted(object)
   model <- object$model
@@ -821,6 +827,11 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     nd <- newdata
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
     return(.tobs_predict_jsdm(object, newdata = nd))
+  }
+  if (identical(object$model$model_type, "count")) {
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_count(object, newdata = nd))
   }
   # Standalone occu() SVC fit rerouted through the joint direct-grid engine
   # (gcol33/tulpaObs#81): the occupancy psi / detection p / per-cell change carry

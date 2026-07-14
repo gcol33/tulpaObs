@@ -55,6 +55,7 @@ The random-effect variance components carry the Laplace small-cluster bias for b
 | `royle_nichols()`         | Abundance-induced detection heterogeneity      | Royle & Nichols (2003)     |
 | `jsdm()`                  | Joint species distribution (no detection)      |                            |
 | `abun()`                  | N-mixture abundance (Poisson / negbin)         | Royle (2004)               |
+| `count()`                 | Count / relative-abundance GLMM (no detection) | spAbundance `abund`        |
 | `dyn_abun()`              | Open (Dail-Madsen) N-mixture                   | Dail & Madsen (2011)       |
 | `distance()`              | Binned distance sampling                       | Buckland et al. (2001)     |
 | `removal()`               | Removal sampling                               | Dorazio et al. (2005)      |

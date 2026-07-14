@@ -163,6 +163,45 @@ jsdm <- function() {
 }
 
 
+#' Count / relative-abundance GLMM family (no detection process)
+#'
+#' A generalized linear model on an observed count (or continuous) response
+#' directly, with no detection sub-model and no latent abundance to marginalize.
+#' The abundance analogue of [jsdm()]: where [abun()] fits Royle's N-mixture
+#' (latent `N` plus imperfect detection), `count()` fits the observed response
+#' as a plain GLMM. This is the "relative abundance" model of `spAbundance`
+#' (`abund`): one value per site, `log`-link Poisson / negative-binomial counts
+#' or an identity-link Gaussian response.
+#'
+#' The response is a numeric vector (one value per site), supplied via `y =` or
+#' on a two-sided `formula` left-hand side (`count.value ~ predictors`).
+#'
+#' @param response The response distribution: `"poisson"` (log link),
+#'   `"negbin"` (negative binomial, log link, an estimated size / dispersion),
+#'   or `"gaussian"` (identity link, an estimated residual variance).
+#' @return A `tobs_family` object.
+#' @seealso [abun()] (N-mixture: latent abundance + detection), [jsdm()]
+#'   (occurrence GLMM, no detection).
+#' @export
+#' @examples
+#' f <- count("poisson")
+#' f
+count <- function(response = c("poisson", "negbin", "gaussian")) {
+  response <- match.arg(response)
+  obs_family(
+    name           = "count",
+    class_long     = "count / relative-abundance GLMM",
+    latent         = "none",
+    observation    = response,
+    replicates     = "single",
+    default_engine = "laplace",
+    status         = "working",
+    params         = list(response = response),
+    response       = "vector"
+  )
+}
+
+
 #' Joint occupancy-detection + cover hurdle family
 #'
 #' Cell-level latent presence `psi`, per-visit binomial detection `p`, and

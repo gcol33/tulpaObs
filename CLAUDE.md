@@ -12,8 +12,8 @@ Bayesian occupancy / abundance / distance / removal / cover. Built on
 
 **Public API:** `tobs()` + family ctors: `occu()`, `dyn_occu()`, `ms_occu()`,
 `ms_dyn_occu()`, `ms_int_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`,
-`dyn_abun()`, `distance()`, `removal()`, `fp_occu()`, `cover()`, `occu_cover()`,
-`ms_occu_cover()`, `occu_multiscale_cover()`. S3 classes all `tobs_*`
+`dyn_abun()`, `count()`, `distance()`, `removal()`, `fp_occu()`, `cover()`,
+`occu_cover()`, `ms_occu_cover()`, `occu_multiscale_cover()`. S3 classes all `tobs_*`
 (`tobs_fit/model/family/spatial/temporal/re/svc/latent/priors_spec`).
 
 **Structured terms live in formula** (lme4/mgcv/INLA style), NOT `tobs()` args.
@@ -384,7 +384,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Community joint occu + cover | Yes | — | `ms_occu_cover()` — see below |
 | Spatial-factor community occu+cover (JSDM) | Yes | Yes | `ms_occu_cover()` + icar/car_proper/bym2 shared field, per-species loadings (tulpa#67). Laplace-EM (`R/ms_occu_cover_spatial.R`) + NUTS (`src/ms_occu_cover_spatial_nuts.cpp`). Cover-arm factor, `tobs_associations()`, per-species `predict()` maps |
 | Multiscale occu + cover | n-L | — | `occu_multiscale_cover()` — 3-level cell/plot/visit + cover; spatial joint only |
-| N-mixture (Pois/NB) | Yes | Yes | `abun(mixture=)`; in-tree `nmix_laplace`, joint-vcov draws, calibrated CIs. NUTS (#41); NUTS + areal car_proper (#51) / icar / bym2 (#71, sum-to-zero reparam) fixed-hyper non-centered field |
+| Count / relative-abundance GLMM | Yes | — | `count(response=)` (spAbundance `abund`): GLMM on the observed response directly, NO detection, NO latent state -- the abundance analogue of `jsdm()`. Pois/negbin (log link) + gaussian (identity). One tulpa GLMM block (`build_count_callbacks`, `R/laplace_callbacks.R`); negbin size / gaussian variance by an outer dispersion loop in `.dispatch_count` (tulpa_laplace takes fixed phi), reported `fit$count_dispersion`. `simulate_count()`, `.tobs_ploglik_count` (WAIC), `count_methods.R` (fitted/predict/residuals mu). Non-spatial only (#117); areal (spAbund) / community (msAbund) / NUTS pending. `test-count.R` (3x 20-seed recovery) |
 | N-mixture + areal | n-L | — | `abun()`+icar/bym2/car_proper; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
 | Community N-mixture | Yes | Yes | `ms_abun()` (msNMix); per-species coef RE, in-tree Laplace-EM (`nmix_laplace_re`) -> `NMixCommunityOracle` AGHQ, Schur SEs; Pois + negbin. NUTS (#14) |
 | Community N-mixture + areal | n-L | Yes | `ms_abun()`+icar/bym2/car_proper (sfMsNMix; #12); shared field + per-species RE; `nmix_community_spatial.cpp`; Pois/NB. NUTS (#73, car_proper only): the #14 non-centered community sampler + a SHARED fixed-hyper non-centered proper-CAR field on abundance (tau Q(rho) fixed at the #12 nested-Laplace estimate, raw ~ N(0,I), f=Linv raw; optional field block in `src/ms_abun_nuts.cpp`, FD-validated, field-off byte-identical to #14). 0 divergences, field cor ~0.97; Pois only. icar/bym2 NUTS gated to n-L |
@@ -615,11 +615,27 @@ a coupled SVC/trend field (single cell-declaring term only).
 
 ## NUTS coverage status
 
-`temporal`, multi-term `re`, `svc`, `latent` smoke-tested 2026-05-20
+`temporal`, multi-term `re`, `latent` smoke-tested 2026-05-20
 (`dev_notes/probe_blocked_nuts.R`, single-season occ) -> return `tobs_fit` w/o crash,
 but gradient correctness / calibration / convergence NOT verified. Treat as "not
 blocked", not "validated". Family NUTS paths (#37/#38/#39/#40/#41/#14/#67) ARE
 recovery-tested.
+
+**SVC = two distinct flavors, do NOT conflate (#118):**
+- **Areal spatially-varying coefficient** (the `svcPGOcc` analogue): a WEIGHTED
+  areal bar `spatial(~ 1 + w || cell, graph)` on `occu()` via `nested_laplace`,
+  rerouted through the joint direct-grid engine (`.tobs_fit_occu_joint`, #81).
+  RECOVERY-TESTED: `test-occu-spatial-svc-recovery.R` +
+  `test-occu-svc-joint-recovery.R` recover the known intercept + trend surfaces
+  (`fit$spatial_field`/`fit$trend_field`, `cor > 0.75`), the SD hyperparameters,
+  and the coefficients. This arm arrives as a `spatial` term, not `svc`.
+- **Continuous NNGP `svc()` term** (`svc(lon, lat, indices=)`): wired to
+  single-season `occu()` NUTS ONLY (`populate_svc`, `src/populate_helpers.h` ->
+  `data.svc_data`). The eta-assembly + NNGP prior + gradient live in the compiled
+  UPSTREAM tulpa engine (not tulpaObs), so it is smoke-only (no recovery test; the
+  estimated surface is unnamed in the fit). On any OTHER family, or `occu()` under
+  laplace/nested_laplace, `svc()` now ERRORS with a pointer to the areal bar
+  (`.tobs_fit_model` guard, #118) rather than silently dropping. `test-svc-guard.R`.
 
 ## Performance
 

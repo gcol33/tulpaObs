@@ -15,6 +15,8 @@
   integrated = FALSE,
   jsdm = FALSE,
   abundance = FALSE,
+  count = FALSE,
+  count_response = "poisson",
   det_visit_formula = NULL,
   det_visit_data = NULL
 )

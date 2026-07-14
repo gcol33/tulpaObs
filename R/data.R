@@ -655,6 +655,54 @@ simulate_jsdm <- function(N = 100, n_species = 10,
                     beta_comm_sd   = beta_comm_sd))
 }
 
+#' Simulate count / relative-abundance GLMM data
+#'
+#' One observed value per site from a GLMM with no detection process, matching
+#' the [count()] family: `log`-link Poisson / negative-binomial counts, or an
+#' identity-link Gaussian response. The mean predictor is `X beta` with `beta`
+#' the fixed-effect coefficients (intercept first).
+#'
+#' @param N Number of sites (default 200).
+#' @param beta Fixed-effect coefficients, length `1 + n_covs` (intercept first).
+#' @param response The response distribution: `"poisson"`, `"negbin"`, or
+#'   `"gaussian"`.
+#' @param size Negative-binomial size (dispersion); larger is closer to Poisson.
+#'   Used only for `response = "negbin"`.
+#' @param sd Gaussian residual SD. Used only for `response = "gaussian"`.
+#' @param seed Random seed.
+#' @return A list with `y` (a length-`N` numeric response vector), `data` (the
+#'   site covariates), and `truth` (the coefficients, response, and dispersion).
+#' @examples
+#' sim <- simulate_count(N = 100, beta = c(1, 0.5), seed = 1)
+#' length(sim$y)
+#' @export
+simulate_count <- function(N = 200, beta = c(1, 0.5),
+                           response = c("poisson", "negbin", "gaussian"),
+                           size = 2, sd = 1, seed = NULL) {
+  response <- match.arg(response)
+  if (!is.null(seed)) set.seed(seed)
+  n_cov <- length(beta) - 1L
+
+  data <- data.frame(x = rnorm(N))
+  if (n_cov > 1L) {
+    for (k in 2:n_cov) data[[paste0("x", k)]] <- rnorm(N)
+  }
+  X   <- model.matrix(~ ., data)
+  eta <- as.vector(X %*% beta)
+  mu  <- if (identical(response, "gaussian")) eta else exp(eta)
+
+  y <- switch(response,
+    poisson  = stats::rpois(N, mu),
+    negbin   = stats::rnbinom(N, size = size, mu = mu),
+    gaussian = stats::rnorm(N, mu, sd))
+
+  list(y = y, data = data,
+       truth = list(beta = beta, response = response,
+                    size = size, sd = sd,
+                    link = if (identical(response, "gaussian")) "identity"
+                           else "log"))
+}
+
 #' Simulate Royle-Nichols occupancy data
 #'
 #' Latent abundance `N_i ~ Poisson(lambda_i)`, `log lambda = X beta_lambda`, and

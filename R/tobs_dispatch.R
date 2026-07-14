@@ -214,6 +214,88 @@
   ))
 }
 
+.dispatch_count <- function(formula, data, family, detection, y, visits,
+                            engine, priors, control,
+                            approx = "gaussian_laplace",
+                            correction = "none", ...) {
+  if (!is.null(detection)) {
+    stop("count() has no detection process; drop the `detection` formula.",
+         call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("count() requires `y` (a numeric vector, one value per site), or the ",
+         "response on a two-sided `formula` left-hand side.", call. = FALSE)
+  }
+  response <- family$params$response %||% "poisson"
+  model <- .tobs_build_model(occ_formula = formula, data = data, y = y,
+                             count = TRUE, count_response = response)
+
+  # First ship: fixed effects only. A structured term (spatial / temporal / re /
+  # svc / latent) on the formula is not yet wired for the count family -- error
+  # with a pointer rather than silently drop it.
+  structs <- .tobs_structures_from_model(model)
+  if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
+      !is.null(structs$re) || !is.null(structs$svc) ||
+      !is.null(structs$latent)) {
+    stop("count(): structured terms (spatial / temporal / re / svc / latent) ",
+         "are not yet wired for the count family; only fixed effects are ",
+         "supported in this release (gcol33/tulpaObs#117).", call. = FALSE)
+  }
+
+  fit_once <- function(phi) {
+    model$count_phi <- phi
+    do.call(.tobs_fit_model, c(
+      list(model = model, method = engine, priors = priors,
+           approx = approx, correction = correction),
+      control))
+  }
+
+  # Poisson has no dispersion. For negbin (size) / gaussian (residual variance)
+  # tulpa_laplace takes a FIXED phi per fit, so estimate it in an outer loop:
+  # fit beta given phi, update phi from the fitted mean, refit, until log(phi)
+  # converges. Gaussian with an identity link converges in one update (beta is
+  # phi-free); negbin iterates (the NB weights depend on the size).
+  p_mu   <- model$process_info[[1]]$p
+  is_log <- identical(model$link, "log")
+  yv     <- as.numeric(model$y_count)
+  mu_of  <- function(fit) {
+    beta <- fit$means[seq_len(p_mu)]
+    eta  <- as.vector(model$X_occ %*% beta)
+    if (is_log) exp(eta) else eta
+  }
+  update_phi <- function(fit) {
+    mu <- mu_of(fit)
+    if (identical(response, "gaussian")) {
+      max(mean((yv - mu)^2), 1e-8)
+    } else { # negbin size by profile MLE given the fitted mean
+      nll <- function(r) -sum(stats::dnbinom(yv, size = r,
+                                             mu = pmax(mu, 1e-8), log = TRUE))
+      stats::optimize(nll, interval = c(1e-3, 1e4))$minimum
+    }
+  }
+
+  if (identical(response, "poisson")) {
+    fit <- fit_once(1.0)
+  } else {
+    phi <- 1.0
+    fit <- fit_once(phi)
+    for (it in seq_len(25L)) {
+      phi_new <- update_phi(fit)
+      if (abs(log(phi_new) - log(phi)) < 1e-4) { phi <- phi_new; break }
+      phi <- phi_new
+      fit <- fit_once(phi)
+    }
+    fit <- fit_once(phi)
+    disp_name <- if (identical(response, "negbin")) "size" else "variance"
+    fit$count_dispersion <- stats::setNames(list(response, phi),
+                                            c("response", disp_name))
+    fit$count_dispersion$phi <- phi
+  }
+  fit$model$response <- response
+  fit$model$link     <- model$link
+  fit
+}
+
 .dispatch_abun <- function(formula, data, family, detection, y, visits,
                            engine, priors, control,
                            approx = "gaussian_laplace",
