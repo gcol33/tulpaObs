@@ -184,8 +184,10 @@
   # nested_laplace: a shared areal field icar() on the abundance formula (the
   # sfMsAbund analogue, Poisson) via block coordinate ascent -- the community EM
   # (field as a per-site offset) alternated with a self-contained Poisson-ICAR
-  # field update (R/ms_count_spatial.R), no C++. NUTS is a #117 follow-up.
-  ms_count = c("laplace", "nested_laplace"),
+  # field update (R/ms_count_spatial.R), no C++. nuts: the exact joint community
+  # count posterior via the in-tree C++ FullGradFn (R/ms_count_nuts.R,
+  # src/ms_count_nuts.cpp), warm-started at the Laplace-EM mode; Poisson.
+  ms_count = c("laplace", "nested_laplace", "nuts"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so

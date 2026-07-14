@@ -189,6 +189,14 @@ cpp_ms_abun_nuts <- function(spec, theta0, pri, sigma_beta, sigma_logr, inv_metr
     .Call(`_tulpaObs_cpp_ms_abun_nuts`, spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_ms_count_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta) {
+    .Call(`_tulpaObs_cpp_ms_count_nuts_joint_logpost`, spec, theta, pri, sigma_beta)
+}
+
+cpp_ms_count_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_ms_count_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+}
+
 cpp_ms_nmix_ploglik_batch <- function(y, species_idx, site_idx, X_p, X_lambda, draws, mu_off, b_off, chol_lam_off, chol_p_off, chol_logr_off, p_lam, p_p, n_species, n_sites, is_nb, K_max, n_threads) {
     .Call(`_tulpaObs_cpp_ms_nmix_ploglik_batch`, y, species_idx, site_idx, X_p, X_lambda, draws, mu_off, b_off, chol_lam_off, chol_p_off, chol_logr_off, p_lam, p_p, n_species, n_sites, is_nb, K_max, n_threads)
 }

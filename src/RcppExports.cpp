@@ -829,6 +829,41 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_ms_count_nuts_joint_logpost
+Rcpp::List cpp_ms_count_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, Rcpp::List pri, double sigma_beta);
+RcppExport SEXP _tulpaObs_cpp_ms_count_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP priSEXP, SEXP sigma_betaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type pri(priSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_count_nuts_joint_logpost(spec, theta, pri, sigma_beta));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_ms_count_nuts
+Rcpp::List cpp_ms_count_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, Rcpp::List pri, double sigma_beta, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose);
+RcppExport SEXP _tulpaObs_cpp_ms_count_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta0(theta0SEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type pri(priSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type inv_metric(inv_metricSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type n_warmup(n_warmupSEXP);
+    Rcpp::traits::input_parameter< int >::type max_treedepth(max_treedepthSEXP);
+    Rcpp::traits::input_parameter< double >::type adapt_delta(adapt_deltaSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_count_nuts(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_ms_nmix_ploglik_batch
 Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(Rcpp::IntegerVector y, Rcpp::IntegerVector species_idx, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix draws, int mu_off, int b_off, int chol_lam_off, int chol_p_off, int chol_logr_off, int p_lam, int p_p, int n_species, int n_sites, bool is_nb, int K_max, int n_threads);
 RcppExport SEXP _tulpaObs_cpp_ms_nmix_ploglik_batch(SEXP ySEXP, SEXP species_idxSEXP, SEXP site_idxSEXP, SEXP X_pSEXP, SEXP X_lambdaSEXP, SEXP drawsSEXP, SEXP mu_offSEXP, SEXP b_offSEXP, SEXP chol_lam_offSEXP, SEXP chol_p_offSEXP, SEXP chol_logr_offSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP n_speciesSEXP, SEXP n_sitesSEXP, SEXP is_nbSEXP, SEXP K_maxSEXP, SEXP n_threadsSEXP) {
@@ -2322,6 +2357,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_jsdm_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_jsdm_spatial_bym2, 14},
     {"_tulpaObs_cpp_ms_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_abun_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_ms_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_abun_nuts, 12},
+    {"_tulpaObs_cpp_ms_count_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_count_nuts_joint_logpost, 4},
+    {"_tulpaObs_cpp_ms_count_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_count_nuts, 11},
     {"_tulpaObs_cpp_ms_nmix_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_ms_nmix_ploglik_batch, 18},
     {"_tulpaObs_cpp_ms_ocs_marginal_grad", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_grad, 2},
     {"_tulpaObs_cpp_ms_ocs_marginal_ll", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_marginal_ll, 2},

@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.125 (2026-07-14)
+
+* Community count NUTS (`msAbund` NUTS; gcol33/tulpaObs#117): `ms_count()` +
+  `method = "nuts"` samples the exact joint posterior of the non-spatial
+  community Poisson GLMM -- the community means, the per-species coefficient
+  deviations, and the community covariance -- via a new in-tree C++ FullGradFn
+  (`src/ms_count_nuts.cpp`) over tulpa's NUTS engine, warm-started at the
+  community Laplace-EM mode. The reduced counterpart of the `ms_abun` NUTS: no
+  detection arm, no latent-N marginalisation, so the per-(species, site)
+  contribution is a plain Poisson log-likelihood. NON-CENTERED (`b_s = C z_s`,
+  `z_s ~ N(0, I)`) so the community covariance enters only the data term. The
+  joint log-posterior + gradient are byte-exact vs the R oracle
+  (`.tobs_ms_count_nuts_logpost`, checked to 1e-7); NUTS recovers the community
+  means and agrees with the Laplace-EM mode with 0 divergences. Poisson;
+  negbin / gaussian community NUTS are follow-ups.
+
 ## 0.0.124 (2026-07-14)
 
 * Occupancy community SVC (`svcMsPGOcc` analogue; gcol33/tulpaObs#118): a

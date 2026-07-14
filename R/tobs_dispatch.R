@@ -121,8 +121,19 @@
          "method = \"laplace\".", call. = FALSE)
   }
   if (identical(engine, "nuts")) {
-    stop("ms_count(): method = \"nuts\" is not wired for the community count ",
-         "family; use method = \"laplace\" (gcol33/tulpaObs#117).", call. = FALSE)
+    # NUTS over the exact joint community count posterior (community means,
+    # per-species deviations, community covariance) via the in-tree C++
+    # FullGradFn, warm-started at the Laplace-EM mode (gcol33/tulpaObs#117).
+    return(.tobs_fit_ms_count_nuts(
+      model,
+      sigma.beta    = control[["sigma.beta"]] %||% 10,
+      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
+      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
+      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
+      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
+      seed          = as.integer(control[["seed"]] %||% 1L),
+      verbose       = isTRUE(control[["verbose"]])))
   }
 
   fit_args <- c(list(model = model, priors = priors), control)
