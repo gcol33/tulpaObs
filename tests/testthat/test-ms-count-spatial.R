@@ -124,6 +124,30 @@ test_that("community-spatial count recovers community means + field over seeds",
   list(y = y, data = d, graph = A, f0 = f0, f1 = f1, Ns = Ns, S = S)
 }
 
+test_that("community field recovers under group_var (sites > cells)", {
+  skip_on_cran()
+  set.seed(8)
+  side <- 8L; Acell <- .msc_grid_graph(side); Ncell <- nrow(Acell)
+  R <- 2L; Ns <- Ncell * R; S <- 12L
+  co <- expand.grid(r = seq_len(side), c = seq_len(side))
+  fcell <- 0.7 * scale(sin(co$r/side*pi) + cos(co$c/side*pi))[, 1]; fcell <- fcell - mean(fcell)
+  cell_of_site <- rep(seq_len(Ncell), each = R)
+  d <- data.frame(x = stats::rnorm(Ns), cell = cell_of_site)
+  X <- stats::model.matrix(~ x, d)
+  bs <- vapply(1:2, function(j) stats::rnorm(S, c(1, 0.5)[j], c(0.4, 0.3)[j]), numeric(S))
+  y <- matrix(NA_real_, Ns, S, dimnames = list(NULL, paste0("sp", seq_len(S))))
+  for (s in seq_len(S))
+    y[, s] <- stats::rpois(Ns, exp(as.numeric(X %*% bs[s, ]) + fcell[cell_of_site]))
+  fit <- tobs(~ x + icar(graph = Acell, group_var = "cell"), data = d,
+              family = ms_count(), y = y, species = colnames(y),
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  # the field has one node per CELL (fewer than sites) and recovers the cell field
+  expect_equal(length(fit$spatial_field), Ncell)
+  expect_gt(stats::cor(fit$spatial_field, fcell), 0.85)
+  expect_equal(unname(unlist(coef(fit))), c(1, 0.5), tolerance = 0.15)
+})
+
 test_that("community field recovers under car_proper (proper CAR)", {
   skip_on_cran()
   d <- .msc_sim(side = 10L, S = 12L, seed = 5L)

@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.122 (2026-07-14)
+
+* Community count field: `group_var` (sites > field cells) now works for
+  `ms_count()` shared fields (gcol33/tulpaObs#117). When several sites share a
+  spatial cell -- `icar(graph = cell_adj, group_var = "cell")` -- the field has
+  one node per graph cell and a site->cell incidence aggregates the per-site
+  working residuals; `fit$spatial_field` is the per-cell field. The shared field
+  solve carries an optional incidence map `M` (identity when one node per site,
+  so the one-node-per-site routes are byte-compatible). Recovery-tested in
+  `test-ms-count-spatial.R`.
+
 ## 0.0.121 (2026-07-14)
 
 * Community count field: `car_proper()` (a proper CAR) now joins `icar()` as a

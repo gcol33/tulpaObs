@@ -31,38 +31,45 @@
 # (the ICAR null space is the constant; the fixed effects absorb the level).
 .ms_count_field_solve <- function(offset_mat, Q, F, tau, W, y_rowsum,
                                   max_iter = 50L, tol = 1e-8,
-                                  constrain_mean = TRUE, rankdef = 1L) {
-  Ns <- nrow(offset_mat); K <- ncol(W)
-  ywt <- vapply(seq_len(K), function(k) as.numeric(W[, k] * y_rowsum), numeric(Ns))
+                                  constrain_mean = TRUE, rankdef = 1L, M = NULL) {
+  Ns <- nrow(offset_mat); K <- ncol(W); Nn <- nrow(F)
+  # `M` (n_nodes x n_sites incidence) maps sites to field nodes when several
+  # sites share a node (a group_var / sites > cells design). Identity when the
+  # field has one node per site.
+  if (is.null(M)) M <- Matrix::Diagonal(Ns)
+  Mt <- Matrix::t(M)
   build_H <- function(w) {
     blocks <- vector("list", K * K)
     for (k in seq_len(K)) for (l in seq_len(K)) {
-      D <- Matrix::Diagonal(x = W[, k] * W[, l] * w)
-      blocks[[(k - 1L) * K + l]] <- if (k == l) D + tau[k] * Q else D
+      Dw <- M %*% Matrix::Diagonal(x = W[, k] * W[, l] * w) %*% Mt   # n_nodes^2
+      blocks[[(k - 1L) * K + l]] <- if (k == l) Dw + tau[k] * Q else Dw
     }
     do.call(rbind, lapply(seq_len(K), function(k)
       do.call(cbind, blocks[((k - 1L) * K + 1L):(k * K)])))
   }
   for (it in seq_len(max_iter)) {
-    field_off <- rowSums(W * F)                          # per-site field eta
+    F_site    <- as.matrix(Mt %*% F)                     # n_sites x K (node -> site)
+    field_off <- rowSums(W * F_site)                     # per-site field eta
     w   <- rowSums(exp(pmin(offset_mat + field_off, 700)))
     g   <- unlist(lapply(seq_len(K), function(k)
-      ywt[, k] - W[, k] * w - tau[k] * as.numeric(Q %*% F[, k])))
+      as.numeric(M %*% (W[, k] * (y_rowsum - w))) - tau[k] * as.numeric(Q %*% F[, k])))
     H   <- build_H(w)
     step <- as.numeric(Matrix::solve(H, g))
-    F   <- F + matrix(step, Ns, K)
+    F   <- F + matrix(step, Nn, K)
     # icar's null space is the constant (demean; the fixed effects absorb the
-    # level). A proper CAR (car_proper) is full rank -> keep the field mean.
+    # level). car_proper keeps the same sum-to-zero convention (rho only sets the
+    # dependence strength of the deviations).
     if (isTRUE(constrain_mean)) for (k in seq_len(K)) F[, k] <- F[, k] - mean(F[, k])
     if (max(abs(step)) < tol) break
   }
-  field_off <- rowSums(W * F)
+  F_site    <- as.matrix(Mt %*% F)
+  field_off <- rowSums(W * F_site)
   w    <- rowSums(exp(pmin(offset_mat + field_off, 700)))
   Cov  <- Matrix::solve(build_H(w))
   tau_new <- numeric(K)
-  df <- Ns - as.integer(rankdef)                         # icar: n-1, car_proper: n
+  df <- Nn - as.integer(rankdef)                         # icar: nodes-1, car: nodes
   for (k in seq_len(K)) {
-    idx  <- (k - 1L) * Ns + seq_len(Ns)
+    idx  <- (k - 1L) * Nn + seq_len(Nn)
     quad <- as.numeric(t(F[, k]) %*% (Q %*% F[, k])) +
             sum(Matrix::diag(Q %*% Cov[idx, idx, drop = FALSE]))
     tau_new[k] <- df / max(quad, 1e-8)
@@ -86,23 +93,25 @@
 # the field GMRF prior (0.5 (df log tau + log|Q|) - 0.5 tau f'Q f) minus the
 # Laplace normaliser 0.5 log|H|. `logdetQ` is log|Q(rho)| (per unit tau).
 .ms_count_field_marginal <- function(offset_mat, Q, F, tau, W, y_rowsum, logdetQ,
-                                     rankdef = 0L) {
-  Ns <- nrow(offset_mat); K <- ncol(W)
-  field_off <- rowSums(W * F)
+                                     rankdef = 0L, M = NULL) {
+  Ns <- nrow(offset_mat); K <- ncol(W); Nn <- nrow(F)
+  if (is.null(M)) M <- Matrix::Diagonal(Ns)
+  Mt <- Matrix::t(M)
+  field_off <- rowSums(W * as.matrix(Mt %*% F))
   eta <- offset_mat + field_off
   ll  <- sum(y_rowsum * field_off) - sum(exp(pmin(eta, 700))) # data terms in f
   w   <- rowSums(exp(pmin(eta, 700)))
   build_H <- function() {
     blocks <- vector("list", K * K)
     for (k in seq_len(K)) for (l in seq_len(K)) {
-      D <- Matrix::Diagonal(x = W[, k] * W[, l] * w)
-      blocks[[(k - 1L) * K + l]] <- if (k == l) D + tau[k] * Q else D
+      Dw <- M %*% Matrix::Diagonal(x = W[, k] * W[, l] * w) %*% Mt
+      blocks[[(k - 1L) * K + l]] <- if (k == l) Dw + tau[k] * Q else Dw
     }
     do.call(rbind, lapply(seq_len(K), function(k)
       do.call(cbind, blocks[((k - 1L) * K + 1L):(k * K)])))
   }
   H <- build_H()
-  df <- Ns - as.integer(rankdef)
+  df <- Nn - as.integer(rankdef)
   prior <- 0; for (k in seq_len(K))
     prior <- prior + 0.5 * (df * log(tau[k]) + logdetQ) -
              0.5 * tau[k] * as.numeric(t(F[, k]) %*% (Q %*% F[, k]))
@@ -141,6 +150,7 @@
 
   # ---- field setup (if a shared areal field) ----
   W <- Q <- NULL; K <- 0L; field_labels <- character(0); Ffield <- NULL; tau <- NULL
+  Mmap <- NULL; n_nodes <- Ns
   if (has_field) {
     fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
     A <- fields[[1L]]$graph
@@ -148,9 +158,28 @@
       stop("ms_count() areal field needs the adjacency graph on the icar() term.",
            call. = FALSE)
     }
-    if (nrow(A) != Ns) {
-      stop(sprintf("icar graph has %d nodes but the model has %d sites; one ",
-                   "field node per site is required.", nrow(A), Ns), call. = FALSE)
+    # group_var maps several sites to one field cell (sites > cells); the field
+    # has one node per graph cell and the site -> cell incidence M aggregates.
+    # Without group_var the field is one node per site (identity).
+    n_nodes <- nrow(A)
+    gv <- fields[[1L]]$group_var
+    if (!is.null(gv)) {
+      if (is.null(model$data) || !gv %in% names(model$data))
+        stop(sprintf("spatial group_var '%s' is not a column of the data.", gv),
+             call. = FALSE)
+      node_of_site <- as.integer(model$data[[gv]])
+      if (length(node_of_site) != Ns || anyNA(node_of_site) ||
+          min(node_of_site) < 1L || max(node_of_site) > n_nodes)
+        stop(sprintf("spatial group_var '%s' must be an integer cell index in ",
+                     "1..%d, one per site (%d sites).", gv, n_nodes, Ns),
+             call. = FALSE)
+      if (n_nodes != Ns)                                 # only build M when it aggregates
+        Mmap <- Matrix::sparseMatrix(i = node_of_site, j = seq_len(Ns),
+                                     x = 1, dims = c(n_nodes, Ns))
+    } else if (n_nodes != Ns) {
+      stop(sprintf("icar graph has %d nodes but the model has %d sites; add ",
+                   "group_var = \"<cell>\" to map sites to cells, or use one ",
+                   "node per site.", n_nodes, Ns), call. = FALSE)
     }
     ptype <- fields[[1L]]$type %||% "icar"
     if (!all(vapply(fields, function(fd) identical(fd$type %||% "icar", ptype),
@@ -183,7 +212,13 @@
     rho_grid <- if (is_car) c(0.5, 0.8, 0.95, 0.99) else NA_real_
     rho <- if (is_car) 0.95 else NA_real_
     Q <- if (is_car) Dg - rho * Wadj else Dg - Wadj
-    Ffield <- matrix(0, Ns, K); tau <- rep(1, K)
+    Ffield <- matrix(0, n_nodes, K); tau <- rep(1, K)
+  }
+  Mt_field <- if (!is.null(Mmap)) Matrix::t(Mmap) else NULL
+  # Per-site field offset from the (possibly aggregated) node field.
+  site_field_off <- function(Ff) {
+    Fs <- if (is.null(Mt_field)) Ff else as.matrix(Mt_field %*% Ff)
+    rowSums(W * Fs)
   }
 
   # ---- factor setup (if latent factors) ----
@@ -204,7 +239,7 @@
   em  <- NULL
 
   for (outer in seq_len(max.outer)) {
-    site_off <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
+    site_off <- if (has_field) site_field_off(Ffield) else numeric(Ns)
     fac_off  <- if (has_factor) tcrossprod(eta, lambda) else matrix(0, Ns, S)
     # (a) community EM given the combined latent offset.
     sp_ll <- function(s, theta, global) {
@@ -229,12 +264,13 @@
     # (b) field update (its "offset" holds the coefficients + the factor part).
     if (has_field) {
       fu <- .ms_count_field_solve(offset_mat + fac_off, Q, Ffield, tau, W, y_rowsum,
-                                  constrain_mean = constrain_mean, rankdef = rankdef)
+                                  constrain_mean = constrain_mean, rankdef = rankdef,
+                                  M = Mmap)
       delta <- max(delta, max(abs(fu$F - Ffield))); Ffield <- fu$F; tau <- fu$tau
     }
     # (c) factor update (its "offset" holds the coefficients + the field part).
     if (has_factor) {
-      site_off2 <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
+      site_off2 <- if (has_field) site_field_off(Ffield) else numeric(Ns)
       gu <- .ms_count_factor_update(offset_mat + matrix(site_off2, Ns, S), y_mat,
                                     eta, lambda, center = has_field)
       delta <- max(delta, max(abs(tcrossprod(gu$eta, gu$lambda) - fac_off)))
@@ -259,9 +295,9 @@
       # (the constrained constant direction) via the pseudo-determinant.
       ld  <- .ms_count_car_logdet(Qr)
       fr  <- .ms_count_field_solve(off_f, Qr, Ffield, tau, W, y_rowsum,
-                                   constrain_mean = TRUE, rankdef = 1L)
+                                   constrain_mean = TRUE, rankdef = 1L, M = Mmap)
       mm  <- .ms_count_field_marginal(off_f, Qr, fr$F, fr$tau, W, y_rowsum, ld,
-                                      rankdef = 1L)
+                                      rankdef = 1L, M = Mmap)
       if (is.finite(mm) && mm > best$m)
         best <- list(m = mm, rho = rr, F = fr$F, tau = fr$tau)
     }
@@ -270,11 +306,12 @@
 
   fit <- build_ms_count_fit(model, em, arm_idx, disp = NULL)
   fit$method <- if (has_field) "nested_laplace" else "laplace"
-  site_off <- if (has_field) rowSums(W * Ffield) else numeric(Ns)
   if (has_field) {
     fit$spatial <- spatial
+    # spatial_field is the per-node intercept field; count_field_offset is the
+    # per-site eta contribution (node field mapped through the site -> cell map).
     fit$spatial_field <- as.numeric(Ffield[, 1L])
-    fit$model$count_field_offset <- site_off
+    fit$model$count_field_offset <- site_field_off(Ffield)
     sigma_field <- 1 / sqrt(tau)
     fit$spatial_hyper <- list(type = ptype, tau = tau, sigma = sigma_field,
                               rho = if (is_car) rho else NA_real_,
