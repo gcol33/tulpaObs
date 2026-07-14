@@ -293,11 +293,17 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   .tobs_ranef_ms_long(object$ms_community, c(mu = "blup_mu"))
 }
 
-# Per-species fitted mean mu [n_sites x n_species] on the response scale.
+# Per-species fitted mean mu [n_sites x n_species] on the response scale. A
+# shared areal field (nested_laplace path) adds its per-site offset to every
+# species' predictor.
 .tobs_fitted_ms_count <- function(object) {
   model <- object$model
   cm    <- object$ms_community
   eta   <- model$X %*% t(cm$coef_mu)            # n_sites x n_species
+  fld   <- object$spatial_field
+  if (!is.null(fld) && length(fld) == nrow(eta)) {
+    eta <- sweep(eta, 1L, as.numeric(fld), "+")
+  }
   mu    <- if (identical(model$link, "log")) exp(eta) else eta
   dimnames(mu) <- list(NULL, model$species_names)
   list(mu = mu)
@@ -340,11 +346,18 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   response <- model$response %||% "poisson"
   is_log   <- identical(model$link, "log")
   disp     <- object$ms_dispersion
+  # Shared areal field: a per-site offset added to every species' predictor. The
+  # field per-species valid rows follow su$valid (all TRUE on the spatial path).
+  fld_full <- object$spatial_field
   cols <- lapply(seq_len(model$n_species), function(s) {
     su <- model$summaries[[s]]
     if (su$n == 0L) return(NULL)
     eta <- draws %*% t(su$X) + matrix(as.numeric(su$X %*% cm$blup_mu[s, ]),
                                       nrow(draws), su$n, byrow = TRUE)
+    if (!is.null(fld_full) && length(fld_full) == length(su$valid)) {
+      eta <- eta + matrix(as.numeric(fld_full[su$valid]),
+                          nrow(draws), su$n, byrow = TRUE)
+    }
     mu  <- if (is_log) pmin(pmax(exp(eta), 1e-300), 1e8) else eta
     Y   <- matrix(su$y, nrow(draws), su$n, byrow = TRUE)
     switch(response,

@@ -77,21 +77,48 @@
     formula = bind$fe$mu, data = data, y = y, species = dots$species,
     response = response, structured_terms = bind$terms)
 
-  # Non-spatial community GLMM only in this release. A structured term (the
-  # community-shared areal field etc.) is the msAbund-spatial follow-up; error
-  # rather than silently drop it (gcol33/tulpaObs#117).
+  # A shared areal field (icar()) on the abundance formula routes to the
+  # community-spatial fitter (the sfMsAbund analogue) under nested_laplace; a
+  # non-areal structured term (temporal / re / svc / latent) or a non-icar field
+  # is not yet wired -- error rather than silently drop (gcol33/tulpaObs#117).
   structs <- .tobs_structures_from_model(model)
-  if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
-      !is.null(structs$re) || !is.null(structs$svc) || !is.null(structs$latent)) {
-    stop("ms_count(): structured terms (spatial / temporal / re / svc / latent) ",
-         "are not yet wired for the community count family; only fixed effects ",
-         "are supported in this release (gcol33/tulpaObs#117).", call. = FALSE)
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc) || !is.null(structs$latent)) {
+    stop("ms_count(): temporal / re / svc / latent terms are not yet wired for ",
+         "the community count family; a shared areal field icar() is the only ",
+         "structured term supported (gcol33/tulpaObs#117).", call. = FALSE)
   }
-  if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
-    stop(sprintf(paste0(
-      "ms_count() supports method = \"laplace\" (the community Laplace-EM); ",
-      "method = \"%s\" is not wired for the community count family ",
-      "(gcol33/tulpaObs#117)."), engine), call. = FALSE)
+  if (!is.null(structs$spatial)) {
+    sp <- structs$spatial
+    if (isTRUE(sp$is_bar) || isTRUE(sp$is_multifield) || !is.null(sp$weight) ||
+        !is.null(sp$group_var) || !isTRUE(sp$type %in% "icar")) {
+      stop("ms_count(): the shared areal field supports a plain icar() only; ",
+           "bym2()/car_proper(), varying-coefficient bars, and group_var are ",
+           "not yet wired for the community count field (gcol33/tulpaObs#117).",
+           call. = FALSE)
+    }
+    if (!identical(engine, "nested_laplace")) {
+      stop("ms_count(): a shared areal field needs method = \"nested_laplace\". ",
+           "For the non-spatial community fit drop the icar() term (or use ",
+           "method = \"laplace\").", call. = FALSE)
+    }
+    return(.tobs_fit_ms_count_spatial(
+      model, spatial = sp,
+      max.iter    = control[["max.iter"]] %||% 200L,
+      tol         = control[["tol"]] %||% 1e-4,
+      sigma.beta  = control[["sigma.beta"]] %||% 5,
+      priors      = priors,
+      max.outer   = control[["max.outer"]] %||% 20L,
+      verbose     = isTRUE(control[["verbose"]])))
+  }
+  if (identical(engine, "nested_laplace")) {
+    stop("ms_count(): method = \"nested_laplace\" needs a shared areal field ",
+         "icar() on the formula. For the non-spatial community fit use ",
+         "method = \"laplace\".", call. = FALSE)
+  }
+  if (identical(engine, "nuts")) {
+    stop("ms_count(): method = \"nuts\" is not wired for the community count ",
+         "family; use method = \"laplace\" (gcol33/tulpaObs#117).", call. = FALSE)
   }
 
   fit_args <- c(list(model = model, priors = priors), control)

@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.117 (2026-07-14)
+
+* Community-spatial `ms_count()`: a shared areal field `icar()` on the abundance
+  formula now fits under `method = "nested_laplace"` (the spAbundance `sfMsAbund`
+  analogue, Poisson; gcol33/tulpaObs#117). One shared field across all species,
+  `log mu_{s,i} = X_i (mu + b_s) + f_{u(i)}`. Fit by block coordinate ascent
+  (`R/ms_count_spatial.R`): the community Laplace-EM with the field as a per-site
+  offset, alternated with a self-contained Poisson-ICAR field update (an analytic
+  sparse Newton + a closed-form tau M-step) -- pure R, no new C++. The field is
+  informed by every species at each site, so it recovers cleanly (field
+  correlation ~0.98) alongside the community means; `fitted()` and WAIC are
+  field-aware. Poisson + `icar()` only (an overdispersed community count is not
+  identified against a per-site field; `bym2()`/`car_proper()`, group_var, and
+  the varying-coefficient bar are follow-ups). Recovery-tested in
+  `test-ms-count-spatial.R` (community-mean recovery + pooled coverage + field
+  recovery over 20 seeds).
+
 ## 0.0.116 (2026-07-14)
 
 * Areal `count()` (negbin / Gaussian): the gate now states, and its error points

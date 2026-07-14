@@ -181,8 +181,11 @@
   # ms_count: community relative-abundance GLMM (msAbund) via the shared community
   # Laplace-EM (R/community_em.R) -- per-species coefficient RE with a Gaussian
   # community covariance; Poisson / negbin (per-species dispersion RE) / gaussian.
-  # Non-spatial only; areal (spAbund community) / NUTS are #117 follow-ups.
-  ms_count = c("laplace"),
+  # nested_laplace: a shared areal field icar() on the abundance formula (the
+  # sfMsAbund analogue, Poisson) via block coordinate ascent -- the community EM
+  # (field as a per-site offset) alternated with a self-contained Poisson-ICAR
+  # field update (R/ms_count_spatial.R), no C++. NUTS is a #117 follow-up.
+  ms_count = c("laplace", "nested_laplace"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so
