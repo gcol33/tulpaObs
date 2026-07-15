@@ -710,88 +710,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// cpp_jsdm_site_cell
-Rcpp::List cpp_jsdm_site_cell(double eta, int y);
-RcppExport SEXP _tulpaObs_cpp_jsdm_site_cell(SEXP etaSEXP, SEXP ySEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< double >::type eta(etaSEXP);
-    Rcpp::traits::input_parameter< int >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_jsdm_site_cell(eta, y));
-    return rcpp_result_gen;
-END_RCPP
-}
-// cpp_jsdm_spatial_icar
-Rcpp::List cpp_jsdm_spatial_icar(Rcpp::NumericMatrix X, Rcpp::IntegerMatrix y, Rcpp::IntegerVector map_site_to_unit, int n_spatial, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, Rcpp::NumericVector tau_grid, Rcpp::NumericVector beta_init, double sigma_re2_init, int max_iter_em, bool verbose);
-RcppExport SEXP _tulpaObs_cpp_jsdm_spatial_icar(SEXP XSEXP, SEXP ySEXP, SEXP map_site_to_unitSEXP, SEXP n_spatialSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP tau_gridSEXP, SEXP beta_initSEXP, SEXP sigma_re2_initSEXP, SEXP max_iter_emSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X(XSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type map_site_to_unit(map_site_to_unitSEXP);
-    Rcpp::traits::input_parameter< int >::type n_spatial(n_spatialSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_row_ptr(adj_row_ptrSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_col_idx(adj_col_idxSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_neighbors(n_neighborsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tau_grid(tau_gridSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_init(beta_initSEXP);
-    Rcpp::traits::input_parameter< double >::type sigma_re2_init(sigma_re2_initSEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter_em(max_iter_emSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_jsdm_spatial_icar(X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, beta_init, sigma_re2_init, max_iter_em, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
-// cpp_jsdm_spatial_car_proper
-Rcpp::List cpp_jsdm_spatial_car_proper(Rcpp::NumericMatrix X, Rcpp::IntegerMatrix y, Rcpp::IntegerVector map_site_to_unit, int n_spatial, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, Rcpp::NumericVector tau_grid, Rcpp::NumericVector rho_grid, Rcpp::NumericVector log_det_Q_rho, Rcpp::NumericVector beta_init, double sigma_re2_init, int max_iter_em, bool verbose);
-RcppExport SEXP _tulpaObs_cpp_jsdm_spatial_car_proper(SEXP XSEXP, SEXP ySEXP, SEXP map_site_to_unitSEXP, SEXP n_spatialSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP tau_gridSEXP, SEXP rho_gridSEXP, SEXP log_det_Q_rhoSEXP, SEXP beta_initSEXP, SEXP sigma_re2_initSEXP, SEXP max_iter_emSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X(XSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type map_site_to_unit(map_site_to_unitSEXP);
-    Rcpp::traits::input_parameter< int >::type n_spatial(n_spatialSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_row_ptr(adj_row_ptrSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_col_idx(adj_col_idxSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_neighbors(n_neighborsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tau_grid(tau_gridSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type rho_grid(rho_gridSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type log_det_Q_rho(log_det_Q_rhoSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_init(beta_initSEXP);
-    Rcpp::traits::input_parameter< double >::type sigma_re2_init(sigma_re2_initSEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter_em(max_iter_emSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_jsdm_spatial_car_proper(X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, rho_grid, log_det_Q_rho, beta_init, sigma_re2_init, max_iter_em, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
-// cpp_jsdm_spatial_bym2
-Rcpp::List cpp_jsdm_spatial_bym2(Rcpp::NumericMatrix X, Rcpp::IntegerMatrix y, Rcpp::IntegerVector map_site_to_unit, int n_spatial, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, Rcpp::NumericVector sigma_grid, Rcpp::NumericVector rho_grid, double scale_factor, Rcpp::NumericVector beta_init, double sigma_re2_init, int max_iter_em, bool verbose);
-RcppExport SEXP _tulpaObs_cpp_jsdm_spatial_bym2(SEXP XSEXP, SEXP ySEXP, SEXP map_site_to_unitSEXP, SEXP n_spatialSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP sigma_gridSEXP, SEXP rho_gridSEXP, SEXP scale_factorSEXP, SEXP beta_initSEXP, SEXP sigma_re2_initSEXP, SEXP max_iter_emSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X(XSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type map_site_to_unit(map_site_to_unitSEXP);
-    Rcpp::traits::input_parameter< int >::type n_spatial(n_spatialSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_row_ptr(adj_row_ptrSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type adj_col_idx(adj_col_idxSEXP);
-    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type n_neighbors(n_neighborsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type sigma_grid(sigma_gridSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type rho_grid(rho_gridSEXP);
-    Rcpp::traits::input_parameter< double >::type scale_factor(scale_factorSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta_init(beta_initSEXP);
-    Rcpp::traits::input_parameter< double >::type sigma_re2_init(sigma_re2_initSEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter_em(max_iter_emSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_jsdm_spatial_bym2(X, y, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, sigma_grid, rho_grid, scale_factor, beta_init, sigma_re2_init, max_iter_em, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
 // cpp_ms_abun_nuts_joint_logpost
 Rcpp::List cpp_ms_abun_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, Rcpp::List pri, double sigma_beta, double sigma_logr);
 RcppExport SEXP _tulpaObs_cpp_ms_abun_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP priSEXP, SEXP sigma_betaSEXP, SEXP sigma_logrSEXP) {
@@ -2353,10 +2271,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_fp_occu_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_fp_occu_total_log_lik, 6},
     {"_tulpaObs_cpp_fp_occu_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_fp_occu_nuts_joint_logpost, 3},
     {"_tulpaObs_cpp_fp_occu_nuts", (DL_FUNC) &_tulpaObs_cpp_fp_occu_nuts, 10},
-    {"_tulpaObs_cpp_jsdm_site_cell", (DL_FUNC) &_tulpaObs_cpp_jsdm_site_cell, 2},
-    {"_tulpaObs_cpp_jsdm_spatial_icar", (DL_FUNC) &_tulpaObs_cpp_jsdm_spatial_icar, 12},
-    {"_tulpaObs_cpp_jsdm_spatial_car_proper", (DL_FUNC) &_tulpaObs_cpp_jsdm_spatial_car_proper, 14},
-    {"_tulpaObs_cpp_jsdm_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_jsdm_spatial_bym2, 14},
     {"_tulpaObs_cpp_ms_abun_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_abun_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_ms_abun_nuts", (DL_FUNC) &_tulpaObs_cpp_ms_abun_nuts, 12},
     {"_tulpaObs_cpp_ms_count_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_ms_count_nuts_joint_logpost, 5},

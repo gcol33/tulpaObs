@@ -266,10 +266,17 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   model <- object$model
   cm    <- object$ms_community
   eta_psi <- model$X_occ %*% t(cm$coef_psi)
-  # Shared areal field (nested_laplace path): add the per-site occupancy offset
-  # to every species' occupancy predictor.
-  if (!is.null(object$spatial_field)) {
-    eta_psi <- sweep(eta_psi, 1L, as.numeric(object$spatial_field), "+")
+  # Shared areal field: the per-site occupancy eta contribution. The block
+  # coordinate path records it directly -- a varying-coefficient field
+  # contributes sum_k W[i,k] F[u(i),k], not the intercept field alone -- while
+  # the in-tree C++ plain-field path carries the one-node-per-site field itself.
+  field_off <- model$occu_field_offset %||% object$spatial_field
+  if (!is.null(field_off)) {
+    eta_psi <- sweep(eta_psi, 1L, as.numeric(field_off), "+")
+  }
+  # Latent factors enter as a per-(site, species) occupancy offset.
+  if (!is.null(model$occu_factor_offset)) {
+    eta_psi <- eta_psi + model$occu_factor_offset
   }
   psi <- stats::plogis(eta_psi)
   p   <- stats::plogis(model$X_det %*% t(cm$coef_p))

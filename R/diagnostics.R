@@ -223,7 +223,6 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
     single     = .tobs_ploglik_replicated(model, draws, n.threads),
     dynamic    = .tobs_ploglik_dynamic(model, draws, n.threads),
     integrated = .tobs_ploglik_integrated(model, draws, n.threads),
-    jsdm       = .tobs_ploglik_jsdm(model, draws),
     count      = .tobs_ploglik_count(model, draws),
     nmix       = .tobs_ploglik_nmix(model, draws, n.threads),
     removal    = .tobs_ploglik_removal(model, draws, n.threads),
@@ -336,14 +335,6 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   y <- model$y                                   # [n_obs x max_visits], <0 = NA
   storage.mode(y) <- "integer"
   cpp_occu_single_ploglik(eta_psi, eta_p, y, max(1L, as.integer(n.threads)))
-}
-
-# JSDM: per site x species, y ~ Bernoulli(psi). No detection, no marginalization.
-.tobs_ploglik_jsdm <- function(model, draws) {
-  eta <- .tobs_eta_draws(model, draws, 1L)       # [S x N]
-  y   <- model$y_jsdm
-  Y   <- matrix(y, nrow(eta), length(y), byrow = TRUE)
-  Y * .tobs_log_p(eta) + (1 - Y) * .tobs_log_1mp(eta)
 }
 
 # count(): a plain GLMM on the observed response. The per-site pointwise

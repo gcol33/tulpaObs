@@ -363,7 +363,13 @@
       fit$model      <- model
       # The latent field is a per-site eta offset (scale-invariant), carried on
       # the model so the field-aware fitted() / WAIC read it (gcol33/tulpaObs#117).
-      fit$model$count_field_offset <- fit$spatial_field
+      # Swapping in the unscaled model drops any slot the fitter attached, so the
+      # offset is (re)built here against that model. With a varying-coefficient
+      # bar the contribution is the WEIGHTED sum over the intercept and trend
+      # fields, sum_k W[i,k] f_k[i] -- not the intercept field alone
+      # (gcol33/tulpaObs#120); a plain intercept field reduces to spatial_field.
+      fit$model$count_field_offset <-
+        .count_spatial_field_offset(fit, spatial, model)
       fit$intercepts <- compute_intercepts(model, fit$means)
       return(fit)
     }
@@ -481,13 +487,6 @@
     spec$n_sources <- model$n_sources
     spec$n_sites <- model$n_sites
 
-  } else if (model_type == "jsdm") {
-    spec$y_jsdm <- model$y_jsdm
-    # Species RE for JSDM (like community)
-    spec$re_group <- model$species_group
-    spec$n_re_groups <- model$n_species
-    spec$sigma_re_scale <- sigma.re.scale
-    spec$re_shared_occ <- TRUE
   }
 
   # ---- Spatial ----

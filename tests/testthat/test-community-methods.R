@@ -44,19 +44,23 @@ test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
 
 test_that("fitted() / predict() / residuals() work on jsdm", {
   skip_on_cran()
+  # Since gcol33/tulpaObs#121 jsdm() IS the community GLMM with a logit link, so
+  # it shares the ms_count() post-fit surface: fitted()/predict() return the
+  # per-(site, species) mean on the response scale (a probability here) under
+  # `$mu`, and residuals() returns `$mu`.
   sim <- simulate_ms_occu(N = 40, J = 1, n_species = 5, seed = 4)
   yj  <- apply(sim$y, c(1, 3),
                function(v) as.integer(any(v[!is.na(v)] == 1)))
   fit <- tobs(~ x, data = sim$data, family = jsdm(), y = yj,
               species = paste0("sp", 1:5), method = "laplace",
-              control = list(verbose = FALSE))
+              control = list(verbose = FALSE, progress = FALSE))
   f <- fitted(fit)
-  expect_equal(dim(f$psi), c(40L, 5L))
-  expect_true(all(f$psi >= 0 & f$psi <= 1))
+  expect_equal(dim(f$mu), c(40L, 5L))
+  expect_true(all(f$mu >= 0 & f$mu <= 1))
   expect_equal(dim(predict(fit)), c(40L, 5L))
   expect_equal(dim(predict(fit, newdata = data.frame(x = c(-1, 0, 1)))),
                c(3L, 5L))
   rr <- residuals(fit)
-  expect_equal(dim(rr$occ), c(40L, 5L))
-  expect_true(all(is.finite(rr$occ)))
+  expect_equal(dim(rr$mu), c(40L, 5L))
+  expect_true(all(is.finite(rr$mu)))
 })

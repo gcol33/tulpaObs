@@ -693,61 +693,11 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
        hard_encode = hard_encode, init = init, p_per_submodel = p_sub)
 }
 
-# ============================================================================
-# JSDM callbacks (no detection — simple Bernoulli)
-# ============================================================================
-build_jsdm_callbacks <- function(model, spatial = NULL) {
-  y_jsdm <- model$y_jsdm
-  X_occ <- model$X_processes[[1]]
-  N <- model$N
-  p_occ <- ncol(X_occ)
-
-  # JSDM has no detection process: y is observed directly, so the state arm is
-  # a plain Bernoulli on the observed presence/absence. A site-level field is
-  # shared across the species at a site -- the state block carries
-  # N = n_sites * n_species rows in site-major order, so the site-indexed mesh
-  # projection A is broadcast onto those rows via `site_of_row`. No occupancy
-  # weight to fold in (no latent state), so the response is the observed y at
-  # unit trials with the broadcast field attached directly.
-  spatial_occ <- .spatial_for_arm(spatial, 1L)
-  if (!is.null(spatial_occ)) {
-    site_of_row <- .tobs_state_block_dims(model)$site_of_row
-    spatial_occ <- .tobs_spde_broadcast_spec(spatial_occ, site_of_row)
-  }
-
-  # No E-step needed — no latent variable (y is observed directly)
-  # But we still use EM framework for consistency with species RE
-  e_step <- function(fits, ...) {
-    list(weights = as.numeric(y_jsdm))
-  }
-
-  m_step_encode <- function(weights, ...) {
-    occ_block <- list(y = as.integer(y_jsdm), n_trials = rep(1L, N), X = X_occ,
-                      family = "binomial")
-    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
-    list(occ = occ_block)
-  }
-
-  z_draw <- function(weights, ...) as.integer(y_jsdm)
-  hard_encode <- function(z, ...) {
-    occ_block <- list(y = z, n_trials = rep(1L, N), X = X_occ,
-                      family = "binomial")
-    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
-    list(occ = occ_block)
-  }
-
-  init <- list(occ = list(beta = rep(0, p_occ), se = rep(1, p_occ)))
-
-  list(e_step = e_step, m_step_encode = m_step_encode, z_draw = z_draw,
-       hard_encode = hard_encode, init = init, p_per_submodel = c(occ = p_occ))
-}
-
 
 # ============================================================================
 # Count / relative-abundance GLMM callbacks (no detection, no latent state)
 # ============================================================================
-# The observed count is the response of a single GLMM block -- structurally the
-# JSDM callbacks with a count family instead of Bernoulli. There is no latent
+# The observed count is the response of a single GLMM block. There is no latent
 # variable, so the "E-step" just returns the observed y and the M-step fits the
 # block; the EM loop converges immediately (each M-step block fit IS the MLE for
 # the given dispersion). The negbin size / Gaussian residual variance is a fixed

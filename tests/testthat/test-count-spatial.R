@@ -62,19 +62,23 @@ test_that("areal count() gates the unsupported forms", {
          family = count("gaussian"), method = "nested_laplace"),
     "not yet supported|not.*jointly identified|areal")
 
-  # a varying-coefficient / bar field is not wired
-  expect_error(
+  # A varying-coefficient / weighted field IS wired (the svcAbund analogue,
+  # gcol33/tulpaObs#120); its recovery lives in test-count-svc.R. A group_var
+  # naming the field node is the identity map when the graph has one node per
+  # site, so it fits rather than erroring.
+  expect_s3_class(
     tobs(~ x + icar(graph = d$graph, weight = x, group_var = "cell"),
          data = cbind(d$data, cell = seq_len(d$N)), y = d$y,
-         family = count(), method = "nested_laplace"),
-    "varying-coefficient|bar|group_var")
+         family = count(), method = "nested_laplace",
+         control = list(verbose = FALSE, progress = FALSE)),
+    "tobs_fit")
 
-  # group_var (sites > cells) is not wired
+  # An AGGREGATING group_var (sites > cells) is not yet reconstructed here.
   expect_error(
-    tobs(~ x + icar(graph = d$graph, group_var = "cell"),
-         data = cbind(d$data, cell = seq_len(d$N)), y = d$y,
-         family = count(), method = "nested_laplace"),
-    "group_var")
+    tobs(~ x + icar(graph = .count_grid_graph(3L), group_var = "cell"),
+         data = cbind(d$data, cell = rep(seq_len(9L), length.out = d$N)),
+         y = d$y, family = count(), method = "nested_laplace"),
+    "group_var|sites > cells|one field node per site")
 
   # bym2 (mixed structured/unstructured field) is not reconstructed on the
   # generic nested path -> pointer to icar()/car_proper()

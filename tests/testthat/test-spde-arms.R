@@ -35,7 +35,17 @@
 # --- JSDM: shared site-level field across species, no detection -------------
 # Calibration over 6 seeds (dev_notes/probe_spde_calib.R, N = 600, 6 species,
 # field amp 0.9): x-slope 0.535-0.629 (truth 0.6), field_cor min 0.765, mean
-# 0.806. The field is shared across species via the site-major row broadcast.
+# 0.806. The field is shared across species.
+#
+# Since gcol33/tulpaObs#121 jsdm() is the COMMUNITY GLMM (per-species
+# coefficients under a Gaussian community covariance), so its spde() field is
+# fit by the shared block-coordinate driver (R/community_latent.R) rather than
+# the single-block SPDE-Laplace EM: mesh nodes carry the field, the barycentric
+# projector A maps them onto sites, the precision is
+# Q(kappa) = kappa^4 C0 + 2 kappa^2 G1 + G1 C0^-1 G1 scaled by the driver's tau,
+# and kappa (the Matern range) is gridded by the field marginal. That makes it
+# method = "nested_laplace", alongside the areal community fields, and the
+# community-mean coefficient is `mu_*`.
 .sim_spde_jsdm <- function(seed, n_sites = 600, n_species = 6) {
   set.seed(seed)
   coords <- cbind(runif(n_sites), runif(n_sites))
@@ -58,13 +68,15 @@ test_that("tobs() + jsdm() state-arm spde() Laplace recovers beta and the field"
 
   sim <- .sim_spde_jsdm(seed = 1)
   fit <- tobs(.spde_field_term(), data = sim$data, family = jsdm(),
-              y = sim$y, species = TRUE, method = "laplace",
-              control = list(verbose = FALSE))
+              y = sim$y, species = TRUE, method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
 
-  expect_lt(abs(fit$means["psi_occ_cov"] - 0.6), 0.20)
+  expect_lt(abs(fit$means["mu_occ_cov"] - 0.6), 0.20)
   expect_false(is.null(fit$spatial_field))
   expect_equal(length(fit$spatial_field), fit$spatial$n_units)
   expect_gt(.spde_field_cor(fit, sim$u_true), 0.7)
+  # the Matern range is estimated on the kappa grid
+  expect_true(is.finite(fit$spatial_hyper$range))
 })
 
 test_that("jsdm() state-arm spde() recovery holds across seeds", {
@@ -76,8 +88,8 @@ test_that("jsdm() state-arm spde() recovery holds across seeds", {
   cors <- vapply(seeds, function(s) {
     sim <- .sim_spde_jsdm(seed = s)
     fit <- tobs(.spde_field_term(), data = sim$data, family = jsdm(),
-                y = sim$y, species = TRUE, method = "laplace",
-                control = list(verbose = FALSE))
+                y = sim$y, species = TRUE, method = "nested_laplace",
+                control = list(verbose = FALSE, progress = FALSE))
     .spde_field_cor(fit, sim$u_true)
   }, numeric(1))
   for (c_k in cors) expect_gt(c_k, 0.7)

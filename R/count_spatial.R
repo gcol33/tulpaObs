@@ -123,9 +123,38 @@
     correction = "none"
   )), class = c("tobs_fit", "tulpa_fit"))
 
-  # Shared field summary: the areal block's SD (sigma = 1/sqrt(tau) marginalized
-  # over the outer grid) and the demeaned per-cell field, read off `res`. Reuses
-  # the occu nested field summary so `fit$spatial_field` / `fit$field_table` /
-  # `sigma` match what occu() / occu_cover() expose.
+  # Shared field summary: each areal block's SD (sigma = 1/sqrt(tau) marginalized
+  # over the outer grid) and its demeaned per-cell field, read off `res`. Reuses
+  # the occu nested field summary so `fit$spatial_field` / `fit$trend_fields` /
+  # `fit$field_table` / `sigma` match what occu() / occu_cover() expose. A
+  # varying-coefficient bar contributes an intercept field plus one field per
+  # covariate (svcAbund), all summarized by the same loop.
+  # The per-site field offset (sum_k W[i,k] f_k[i]) is attached by the caller
+  # (.tobs_fit_model), which swaps in the unscaled model afterwards -- attaching
+  # it here would be dropped by that swap.
   .tobs_nested_attach_field_summary(fit, model, res, prior)
+}
+
+
+# Per-site field contribution to eta: sum_k W[i,k] F_k[u(i)]. The intercept field
+# carries weight 1; a varying-coefficient (SVC) field carries its covariate
+# column. Recorded on the model so fitted() / predict() add the FULL field
+# contribution rather than the intercept field alone -- which is the whole
+# contribution only when there is no SVC field. Returns NULL when the fit carries
+# no reconstructed field.
+.count_spatial_field_offset <- function(fit, spatial, model) {
+  flds <- c(list(fit$spatial_field), as.list(fit$trend_fields %||% list()))
+  flds <- Filter(function(z) !is.null(z) && !all(is.na(z)), flds)
+  if (!length(flds)) return(NULL)
+  sp_fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
+  if (length(sp_fields) < length(flds)) return(NULL)
+  n   <- length(as.numeric(flds[[1L]]))
+  off <- numeric(n)
+  for (k in seq_along(flds)) {
+    wk <- sp_fields[[k]]$weight
+    w  <- if (is.null(wk)) rep(1, n) else as.numeric(wk)
+    if (length(w) != n) return(NULL)
+    off <- off + w * as.numeric(flds[[k]])
+  }
+  off
 }

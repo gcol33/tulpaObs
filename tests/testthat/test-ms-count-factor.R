@@ -30,11 +30,13 @@ test_that("ms_count() + latent() gates unsupported combinations", {
     tobs(~ x + latent(2), data = d$data, family = ms_count(), y = d$y,
          species = colnames(d$y), method = "nested_laplace"),
     "block-coordinate|laplace")
-  # negbin factor is Poisson-only in this release
+  # A per-site latent structure supports the responses with no dispersion
+  # parameter -- Poisson (ms_count) and Bernoulli (jsdm). A negbin size /
+  # Gaussian residual variance is not identified against it.
   expect_error(
     tobs(~ x + latent(2), data = d$data, family = ms_count("negbin"), y = d$y,
          species = colnames(d$y), method = "laplace"),
-    "Poisson-only")
+    "not identified|Poisson")
 })
 
 test_that("a latent-factor count fit recovers residual co-occurrence + S3", {

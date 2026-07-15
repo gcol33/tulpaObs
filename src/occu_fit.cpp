@@ -17,7 +17,6 @@
 #include "occ_likelihood.h"
 #include "dyn_occ_likelihood.h"
 #include "integrated_occ_likelihood.h"
-#include "jsdm_likelihood.h"
 #include "populate_helpers.h"
 
 using namespace Rcpp;
@@ -47,7 +46,6 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     tulpaObs::OccResponseData occ_response;
     tulpaObs::DynOccResponseData dyn_response;
     tulpaObs::IntegratedOccResponseData int_response;
-    tulpaObs::JSDMResponseData jsdm_response;
     void* response_ptr = nullptr;
 
     // LikelihoodSpec
@@ -149,20 +147,6 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         spec.ll_fwd    = tulpaObs::integrated_occ_log_likelihood<fwd::Dual>;
         spec.n_extra_params = 0;
         response_ptr = &int_response;
-
-    } else if (model_type == "jsdm") {
-        n_processes = 1;  // Occupancy only, no detection
-        Rcpp::IntegerVector y_vec = Rcpp::as<Rcpp::IntegerVector>(spec_r["y_jsdm"]);
-        N = y_vec.size();
-        jsdm_response.n_obs = N;
-        jsdm_response.y = Rcpp::as<std::vector<int>>(y_vec);
-
-        spec.name = "jsdm";
-        spec.ll_double = tulpaObs::jsdm_log_likelihood<double>;
-        spec.ll_arena  = tulpaObs::jsdm_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaObs::jsdm_log_likelihood<fwd::Dual>;
-        spec.n_extra_params = 0;
-        response_ptr = &jsdm_response;
 
     } else {
         Rcpp::stop("Unknown model_type: %s", model_type.c_str());

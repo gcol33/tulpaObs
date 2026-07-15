@@ -160,12 +160,18 @@
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   # jsdm: the joint species distribution model observes presence/absence directly
-  # (no detection process), with shared fixed effects and a per-species random
-  # intercept. nested_laplace: a shared areal field (icar/bym2/car_proper) on the
-  # latent occupancy via the in-tree JSDM-spatial nested Laplace-EM
-  # (R/jsdm_spatial.R, src/jsdm_spatial.cpp) -- the JSDM analogue of the
-  # community-occupancy areal field (gcol33/tulpaObs#76).
-  jsdm     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "nuts",
+  # (no detection process), with per-species coefficients under a Gaussian
+  # community covariance -- the spOccupancy lfJSDM / sfJSDM model class, i.e. the
+  # community GLMM of ms_count() with a logit link, so it shares that binder,
+  # community Laplace-EM, latent driver and NUTS target (gcol33/tulpaObs#121).
+  # nested_laplace: a shared areal field (icar/car_proper/bym2), optionally with
+  # latent() factors (sfJSDM), via block coordinate ascent. laplace: the
+  # non-spatial community EM, or latent() factors alone (lfJSDM). nuts: the exact
+  # joint community posterior over the Bernoulli response.
+  # The single-block correction routes (laplace_sla / laplace_gibbs / laplace_mi)
+  # belonged to the former shared-FE + scalar-species-intercept model and do not
+  # apply to the community EM.
+  jsdm     = c("laplace", "nuts",
                "nested_laplace"),
   # count: GLMM on the observed count / continuous response directly (no
   # detection, no latent state) -- the relative-abundance model of spAbundance
@@ -372,6 +378,12 @@
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
                  "re.aghq", "n.quad", "re.lkj", "optimizer", "hessian",
                  "inner_solver", "integration"),
+  # The community latent routes -- a shared areal field and/or latent() factors
+  # on a community family -- fit by block coordinate ascent between the
+  # community Laplace-EM and the field / factor updates (R/community_latent.R).
+  # `max.outer` caps that outer alternation. Admitted on both Laplace routes:
+  # a factor-only model is method = "laplace", a shared field "nested_laplace".
+  block_coordinate = c("max.outer"),
   # Outer-grid knobs for the standalone occu() varying-coefficient (SVC) bar,
   # which reroutes from the EM fixed-point path onto the joint direct-grid engine
   # under method = "nested_laplace" (gcol33/tulpaObs#81). They are no-ops on the
@@ -401,8 +413,9 @@
 .tobs_control_allow <- function(engine, correction) {
   switch(
     engine,
-    laplace        = c("laplace_em", if (correction != "none") "correction"),
-    nested_laplace = c("laplace_em", "nested_laplace_joint"),
+    laplace        = c("laplace_em", "block_coordinate",
+                       if (correction != "none") "correction"),
+    nested_laplace = c("laplace_em", "block_coordinate", "nested_laplace_joint"),
     nuts           = "sampler",
     character(0)
   )

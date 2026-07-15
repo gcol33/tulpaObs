@@ -167,6 +167,16 @@
     structured_terms = bind$terms)
   structs <- .tobs_structures_from_model(model)
 
+  # Any structured term other than a shared areal field or latent() factors is
+  # not wired for the community occupancy family.
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc)) {
+    stop("ms_occu(): temporal / re / svc terms are not wired for the community ",
+         "occupancy family; a shared areal field (icar()/bym2()/car_proper()) ",
+         "on the occupancy formula and latent() factors are the structured ",
+         "terms supported.", call. = FALSE)
+  }
+
   # A shared areal field (icar()/bym2()/car_proper()) on the occupancy formula
   # routes to the nested-Laplace community-occupancy fitter (the occupancy
   # analogue of sfMsNMix; tulpaObs#75). It must sit on the occupancy arm only.
@@ -185,12 +195,15 @@
            "the detection formula is not supported.", call. = FALSE)
     }
     # A varying-coefficient bar spatial(~ 1 + w || cell, graph) (the svcMsPGOcc
-    # analogue) routes to the block-coordinate occupancy field fitter (intercept
-    # + SVC field(s) via the two-state field solve, gcol33/tulpaObs#118). A plain
-    # intercept field keeps the in-tree C++ community-spatial nested Laplace-EM.
-    if (isTRUE(structs$spatial$is_bar) || isTRUE(structs$spatial$is_multifield)) {
+    # analogue, gcol33/tulpaObs#118), or latent() factors alongside the field
+    # (the sfMsPGOcc analogue: a shared field plus per-species factor loadings,
+    # gcol33/tulpaObs#119), route to the block-coordinate latent fitter. A plain
+    # intercept field alone keeps the in-tree C++ community-spatial nested
+    # Laplace-EM.
+    if (isTRUE(structs$spatial$is_bar) || isTRUE(structs$spatial$is_multifield) ||
+        !is.null(structs$latent)) {
       return(.tobs_fit_ms_occu_field(
-        model, spatial = structs$spatial,
+        model, spatial = structs$spatial, latent = structs$latent,
         max.iter  = control[["max.iter"]] %||% 200L,
         tol       = control[["tol"]] %||% 1e-4,
         sigma.beta = control[["sigma.beta"]] %||% 5,
@@ -204,12 +217,23 @@
       verbose  = isTRUE(control[["verbose"]])))
   }
 
-  # Any other structured term (temporal / re / svc / latent) is not wired.
-  if (!is.null(structs$temporal) || !is.null(structs$re) ||
-      !is.null(structs$svc) || !is.null(structs$latent)) {
-    stop("ms_occu() supports a shared areal field (icar()/bym2()/car_proper()) ",
-         "on the occupancy formula under method = \"nested_laplace\"; temporal / ",
-         "re / svc / latent terms are not wired.", call. = FALSE)
+  # latent() factors with no shared field: the lfMsPGOcc analogue -- residual
+  # species co-occurrence on the occupancy arm via Q per-site latent factors with
+  # per-species loadings, by the block-coordinate community Laplace-EM
+  # (gcol33/tulpaObs#119).
+  if (!is.null(structs$latent)) {
+    if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
+      stop("ms_occu(): a latent() factor model uses method = \"laplace\" (the ",
+           "block-coordinate community Laplace-EM).", call. = FALSE)
+    }
+    return(.tobs_fit_ms_occu_field(
+      model, spatial = NULL, latent = structs$latent,
+      max.iter  = control[["max.iter"]] %||% 200L,
+      tol       = control[["tol"]] %||% 1e-4,
+      sigma.beta = control[["sigma.beta"]] %||% 5,
+      priors    = priors,
+      max.outer = control[["max.outer"]] %||% 20L,
+      verbose   = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
     stop("method = \"nested_laplace\" for ms_occu() needs a shared areal field ",
@@ -264,51 +288,80 @@
                            approx = "gaussian_laplace",
                            correction = "none", ...) {
   dots <- list(...)
-  model <- .tobs_build_model(
-    occ_formula = formula,
-    data        = data,
-    y           = y,
-    jsdm        = TRUE,
-    species     = dots$species
-  )
+  if (!is.null(detection)) {
+    stop("jsdm() has no detection process; drop the `detection` formula.",
+         call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("jsdm() requires `y` (an n_sites x n_species presence/absence matrix, ",
+         "or a named list of n_species 0/1 vectors).", call. = FALSE)
+  }
+  # A JSDM is the community GLMM on an observed presence/absence response: the
+  # same model class as ms_count() (per-species coefficients with a Gaussian
+  # community covariance, no detection, no latent state) with a logit link. It
+  # therefore shares the binder, the community Laplace-EM, the latent-structure
+  # driver, the NUTS target, and every S3 method (gcol33/tulpaObs#121), which is
+  # what makes latent() factors (lfJSDM) and a shared field + factors (sfJSDM)
+  # fall out with no separate fitter.
+  bind  <- .tobs_bind_formulas(list(mu = formula), data)
+  model <- .tobs_build_ms_count(
+    formula = bind$fe$mu, data = data, y = y, species = dots$species,
+    response = "bernoulli", structured_terms = bind$terms)
 
-  # A shared AREAL field (icar()/bym2()/car_proper()) on the occupancy formula
-  # routes to the nested-Laplace JSDM fitter (the JSDM analogue of the
-  # community-occupancy areal field; tulpaObs#76): one shared field on the latent
-  # occupancy, atop the shared fixed effects and the per-species random intercept.
-  # Continuous-mesh (spde()/gp()) terms fall through to the existing EM-Laplace
-  # state field; only areal terms have a `$graph`.
   structs <- .tobs_structures_from_model(model)
-  spatial_areal <- !is.null(structs$spatial) &&
-    (structs$spatial$type %in% c("icar", "bym2", "car", "car_proper"))
-  if (spatial_areal) {
-    if (identical(engine, "nuts")) {
-      stop("method = \"nuts\" for jsdm() is the non-spatial / continuous-mesh ",
-           "sampler; a shared areal field (icar()/bym2()/car_proper()) uses ",
-           "method = \"nested_laplace\".", call. = FALSE)
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc)) {
+    stop("jsdm(): temporal / re / svc terms are not wired for the JSDM family; ",
+         "a shared areal field (icar()/car_proper()/bym2()) and latent() ",
+         "factors are the structured terms supported.", call. = FALSE)
+  }
+
+  # A shared areal field (sfJSDM), latent() factors (lfJSDM), or BOTH route to
+  # the community latent driver. A field needs nested_laplace; a factor-only
+  # model is the block-coordinate laplace.
+  if (!is.null(structs$spatial) || !is.null(structs$latent)) {
+    if (!is.null(structs$spatial)) {
+      if (!identical(engine, "nested_laplace")) {
+        stop("jsdm(): a shared areal field needs method = \"nested_laplace\" ",
+             "(drop the areal term for the non-spatial JSDM).", call. = FALSE)
+      }
+    } else if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
+      stop("jsdm(): a latent() factor model uses method = \"laplace\" (the ",
+           "block-coordinate community Laplace-EM).", call. = FALSE)
     }
-    if (!identical(engine, "nested_laplace")) {
-      stop("a shared areal field on the jsdm() formula needs ",
-           "method = \"nested_laplace\". For the non-spatial JSDM use ",
-           "method = \"laplace\".", call. = FALSE)
-    }
-    return(.tobs_fit_jsdm_spatial(
-      model, spatial = structs$spatial,
-      max.iter = control[["max.iter"]] %||% 100L,
-      verbose  = isTRUE(control[["verbose"]])))
+    return(.tobs_fit_ms_count_latent(
+      model, spatial = structs$spatial, latent = structs$latent,
+      max.iter   = control[["max.iter"]] %||% 200L,
+      tol        = control[["tol"]] %||% 1e-4,
+      sigma.beta = control[["sigma.beta"]] %||% 5,
+      priors     = priors,
+      max.outer  = control[["max.outer"]] %||% 25L,
+      verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
-    stop("method = \"nested_laplace\" for jsdm() needs a shared areal field ",
-         "(icar()/bym2()/car_proper()) on the occupancy formula. For the ",
-         "non-spatial JSDM use method = \"laplace\".", call. = FALSE)
+    stop("jsdm(): method = \"nested_laplace\" needs a shared areal field ",
+         "(icar()/car_proper()/bym2()) on the formula. For the non-spatial ",
+         "JSDM use method = \"laplace\".", call. = FALSE)
+  }
+  if (identical(engine, "nuts")) {
+    # Samples the exact joint community posterior (community means, per-species
+    # deviations, community covariance) over the Bernoulli response via the
+    # family-aware in-tree C++ FullGradFn, warm-started at the Laplace-EM mode.
+    return(.tobs_fit_ms_count_nuts(
+      model,
+      sigma.beta    = control[["sigma.beta"]] %||% 10,
+      sigma.logr    = control[["sigma.logr"]] %||% 1.5,
+      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
+      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
+      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
+      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
+      seed          = as.integer(control[["seed"]] %||% 1L),
+      verbose       = isTRUE(control[["verbose"]])))
   }
 
-  do.call(.tobs_fit_model, c(
-    list(model = model,
-         method = .map_engine(engine, family = "jsdm"), priors = priors,
-         approx = approx, correction = correction),
-    control
-  ))
+  fit_args <- c(list(model = model, priors = priors), control)
+  do.call(.tobs_fit_ms_count, fit_args)
 }
 
 .dispatch_count <- function(formula, data, family, detection, y, visits,
@@ -344,31 +397,42 @@
   spatial_areal <- FALSE
   if (!is.null(structs$spatial)) {
     sp <- structs$spatial
-    if (isTRUE(sp$is_bar) || isTRUE(sp$is_multifield) || !is.null(sp$weight)) {
-      stop("count(): a varying-coefficient / bar areal field (spatial(~ 1 + w ",
-           "|| cell, graph), or a weighted areal term) is not yet wired for ",
-           "the count family; use a plain intercept field icar() or ",
-           "car_proper() (gcol33/tulpaObs#117).", call. = FALSE)
-    }
-    # icar / car_proper only: their eta contribution is exactly f[cell] (d_fac =
-    # 1), so the demeaned per-cell field reconstructs exactly from the grid modes
-    # (the shared nested field summary). A bym2 field mixes a structured (phi)
-    # and an unstructured (theta) component with hyperparameter-dependent scales,
-    # so its per-cell field is not reconstructed on this generic path; the
-    # improper non-intrinsic car() is likewise not wired. Both are #117 follow-
-    # ups -- point to the supported fields rather than return a fit with no field.
-    if (!isTRUE(sp$type %in% c("icar", "car_proper"))) {
+    # A bar spatial(~ 1 + w || cell, graph) -- or the explicit two-term form --
+    # carries an intercept field plus one varying-coefficient field per covariate
+    # (the spAbundance svcAbund analogue, gcol33/tulpaObs#120). Resolve the
+    # ordered field list and validate each field's OWN kind: the bar's `type` is
+    # not the per-field kind. A plain intercept field resolves to a length-1 list,
+    # so both forms share one validation path.
+    sp_fields <- .tobs_resolve_occu_spatial_fields(sp, model)
+    ftypes <- vapply(sp_fields, function(f) f$type %||% "unknown", character(1))
+    # icar / car_proper only: their eta contribution is exactly w * f[cell]
+    # (d_fac = 1), so the demeaned per-cell field reconstructs exactly from the
+    # grid modes (the shared nested field summary). A bym2 field mixes a
+    # structured (phi) and an unstructured (theta) component with
+    # hyperparameter-dependent scales, so its per-cell field is not reconstructed
+    # on this generic path; the improper non-intrinsic car() is likewise not
+    # wired. Both are #117 follow-ups -- point to the supported fields rather
+    # than return a fit with no field.
+    if (!all(ftypes %in% c("icar", "car_proper"))) {
       stop(sprintf(paste0(
         "count(): an areal field on the count formula supports icar() or ",
         "car_proper(); got '%s'. bym2() (mixed structured/unstructured field) ",
         "and the improper car(), plus continuous-mesh spde()/gp(), are not yet ",
         "wired for the count family (gcol33/tulpaObs#117)."),
-        sp$type %||% "unknown"), call. = FALSE)
+        paste(unique(setdiff(ftypes, c("icar", "car_proper"))),
+              collapse = "' / '")), call. = FALSE)
     }
-    if (!is.null(sp$group_var)) {
-      stop("count(): spatial group_var (mapping several sites to one field ",
-           "node) is not yet wired for the count family; one field node per ",
-           "site is required (gcol33/tulpaObs#117).", call. = FALSE)
+    # A bar spells its grouping as `|| cell`, so group_var is set even when the
+    # field has one node per site (the identity map). Reject it only when it
+    # actually AGGREGATES -- fewer field nodes than sites -- which the count
+    # nested path does not yet reconstruct.
+    n_nodes <- vapply(sp_fields, function(f)
+      if (is.null(f$graph)) NA_integer_ else nrow(f$graph), integer(1))
+    if (any(!is.na(n_nodes) & n_nodes < nrow(data))) {
+      stop("count(): a spatial group_var mapping several sites to one field ",
+           "node (sites > cells) is not yet wired for the count family; one ",
+           "field node per site is required (gcol33/tulpaObs#117).",
+           call. = FALSE)
     }
     # Areal count is Poisson-only. With one field node per site the negbin size /
     # gaussian residual variance and the latent field are FUNDAMENTALLY not

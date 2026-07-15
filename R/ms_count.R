@@ -25,7 +25,13 @@
 
 .tobs_build_ms_count <- function(formula, data, y, species, response = "poisson",
                                  structured_terms = list()) {
-  response <- match.arg(response, c("poisson", "negbin", "gaussian"))
+  # "bernoulli" is the jsdm() front door: an observed presence/absence community
+  # GLMM (the spOccupancy lfJSDM / sfJSDM model class). It is the same community
+  # model as msAbund -- per-species coefficients with a Gaussian community
+  # covariance, no detection, no latent state -- with a logit link, so it shares
+  # this binder, the community EM, the latent driver, and every S3 method rather
+  # than carrying a parallel implementation (gcol33/tulpaObs#121).
+  response <- match.arg(response, c("poisson", "negbin", "gaussian", "bernoulli"))
 
   # y -> [n_sites x n_species] matrix. A named list of vectors becomes columns.
   to_mat <- function(z) {
@@ -59,6 +65,7 @@
   }
 
   is_count_fam <- response %in% c("poisson", "negbin")
+  is_binary    <- identical(response, "bernoulli")
   valid <- !is.na(y)
   if (is_count_fam) {
     yv <- y[valid]
@@ -67,12 +74,20 @@
                           "integer counts."), response), call. = FALSE)
     }
   }
-  link <- if (identical(response, "gaussian")) "identity" else "log"
+  if (is_binary) {
+    yv <- y[valid]
+    if (any(yv != 0 & yv != 1)) {
+      stop("jsdm(): y must contain only 0, 1, or NA (observed presence / ",
+           "absence).", call. = FALSE)
+    }
+  }
+  link <- switch(response, gaussian = "identity", bernoulli = "logit", "log")
 
   # Per-species valid rows + design + response, so each sp_ll skips NA sites.
   summaries <- lapply(seq_len(n_species), function(s) {
     v  <- valid[, s]
-    ys <- if (is_count_fam) as.numeric(round(y[v, s])) else as.numeric(y[v, s])
+    ys <- if (is_count_fam || is_binary) as.numeric(round(y[v, s]))
+          else as.numeric(y[v, s])
     list(y = ys, X = X[v, , drop = FALSE], valid = v, n = sum(v))
   })
 
@@ -110,6 +125,19 @@
 .ms_count_grad_pois <- function(su, beta) {
   mu <- exp(pmin(as.numeric(su$X %*% beta), 700))
   as.numeric(crossprod(su$X, su$y - mu))
+}
+
+# Bernoulli (logit): theta = beta_s. logit psi = X beta. The jsdm() response --
+# presence/absence observed directly, so this is a plain Bernoulli GLMM
+# log-likelihood with no latent state to marginalise.
+.ms_count_ll_bern <- function(su, beta) {
+  eta <- as.numeric(su$X %*% beta)
+  sum(ifelse(su$y > 0, stats::plogis(eta, log.p = TRUE),
+                       stats::plogis(-eta, log.p = TRUE)))
+}
+.ms_count_grad_bern <- function(su, beta) {
+  psi <- stats::plogis(as.numeric(su$X %*% beta))
+  as.numeric(crossprod(su$X, su$y - psi))
 }
 
 # Gaussian (identity): theta = beta_s, per-species residual variance phi.
@@ -166,7 +194,10 @@
   yv      <- model$y[model$valid]
   mbar    <- mean(yv)
   mu0     <- numeric(P_beta)
-  mu0[1L] <- if (is_log) log(max(mbar, 0.1)) else mbar
+  mu0[1L] <- switch(model$link %||% "log",
+                    log      = log(max(mbar, 0.1)),
+                    logit    = stats::qlogis(min(max(mbar, 1e-3), 1 - 1e-3)),
+                    identity = mbar)
 
   run_em <- function(P, arm_idx, sp_ll, sp_grad, init_mu) {
     .tobs_community_em(
@@ -181,6 +212,14 @@
     arm_idx <- list(mu = seq_len(P_beta))
     sp_ll   <- function(s, theta, global) .ms_count_ll_pois(su[[s]], theta)
     sp_grad <- function(s, theta, global) .ms_count_grad_pois(su[[s]], theta)
+    fit <- run_em(P_beta, arm_idx, sp_ll, sp_grad, mu0)
+    disp <- NULL
+
+  } else if (identical(response, "bernoulli")) {
+    # jsdm(): observed presence/absence, no dispersion parameter.
+    arm_idx <- list(mu = seq_len(P_beta))
+    sp_ll   <- function(s, theta, global) .ms_count_ll_bern(su[[s]], theta)
+    sp_grad <- function(s, theta, global) .ms_count_grad_bern(su[[s]], theta)
     fit <- run_em(P_beta, arm_idx, sp_ll, sp_grad, mu0)
     disp <- NULL
 
@@ -306,6 +345,15 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 # S3 helpers (routed from methods.R by model_type == "ms_count")
 # ---------------------------------------------------------------------------
 
+# Response-scale mean from the linear predictor, per the family link. logit is
+# the jsdm() (bernoulli) response; log the count responses; identity Gaussian.
+.ms_count_linkinv <- function(model, eta) {
+  switch(model$link %||% "log",
+         log      = exp(eta),
+         logit    = stats::plogis(eta),
+         identity = eta)
+}
+
 .tobs_ranef_ms_count <- function(object) {
   .tobs_ranef_ms_long(object$ms_community, c(mu = "blup_mu"))
 }
@@ -324,9 +372,70 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   # Latent factors add a per-(species, site) residual offset (eta lambda').
   fo <- model$count_factor_offset
   if (!is.null(fo) && all(dim(fo) == dim(eta))) eta <- eta + fo
-  mu    <- if (identical(model$link, "log")) exp(eta) else eta
+  mu    <- .ms_count_linkinv(model, eta)
   dimnames(mu) <- list(NULL, model$species_names)
   list(mu = mu)
+}
+
+# predict(): per-species mean [n_sites x n_species] on the response scale --
+# probabilities for the jsdm() (bernoulli) response, counts for the others. In
+# sample this is fitted()$mu, which carries the shared field / latent factor
+# offsets. For newdata the design is rebuilt at the per-species coefficients; a
+# new site has no field node and no factor score, so those offsets are dropped
+# (field interpolation is a separate concern, as on the single-species count).
+.tobs_predict_ms_count <- function(object, newdata = NULL) {
+  if (is.null(newdata)) return(fitted(object)$mu)
+  model <- object$model
+  X   <- stats::model.matrix(model$formulas$mu, newdata)
+  eta <- X %*% t(object$ms_community$coef_mu)
+  mu  <- .ms_count_linkinv(model, eta)
+  dimnames(mu) <- list(NULL, model$species_names)
+  mu
+}
+
+# residuals(): per-(site, species) residuals against the fitted mean. Deviance
+# (the default) uses each family's saturated-model form; Pearson scales by the
+# family SD (bernoulli mu(1-mu), Poisson mu, negbin mu + mu^2/r, gaussian the
+# per-species residual variance); response is the raw y - mu. NA cells of y stay
+# NA. Mirrors the single-species .tobs_residuals_count.
+.tobs_residuals_ms_count <- function(object,
+                                     type = c("deviance", "pearson",
+                                              "response")) {
+  type     <- match.arg(type)
+  model    <- object$model
+  response <- model$response %||% "poisson"
+  disp     <- object$ms_dispersion
+  mu  <- fitted(object)$mu
+  y   <- matrix(as.numeric(model$y), model$n_sites, model$n_species)
+  mup <- pmax(mu, 1e-8)
+  rs  <- if (identical(response, "negbin"))
+           matrix(disp$r_s, nrow(mu), ncol(mu), byrow = TRUE) else NULL
+
+  r <- switch(type,
+    response = y - mu,
+    pearson  = (y - mu) / sqrt(switch(response,
+                 bernoulli = pmax(mu * (1 - mu), 1e-8),
+                 poisson   = mup,
+                 negbin    = pmax(mu + mu^2 / rs, 1e-8),
+                 gaussian  = matrix(pmax(disp$variance, 1e-8), nrow(mu),
+                                    ncol(mu), byrow = TRUE))),
+    deviance = switch(response,
+      bernoulli = {
+        p <- pmin(pmax(mu, 1e-10), 1 - 1e-10)
+        sign(y - mu) * sqrt(pmax(-2 * (y * log(p) + (1 - y) * log1p(-p)), 0))
+      },
+      poisson  = {
+        term <- ifelse(y > 0, y * log(y / mup), 0)
+        sign(y - mu) * sqrt(pmax(2 * (term - (y - mu)), 0))
+      },
+      negbin   = {
+        term <- ifelse(y > 0, y * log(y / mup), 0)
+        d <- 2 * (term - (y + rs) * log((y + rs) / (mup + rs)))
+        sign(y - mu) * sqrt(pmax(d, 0))
+      },
+      gaussian = y - mu))
+  dimnames(r) <- list(NULL, model$species_names)
+  list(mu = r)
 }
 
 # Draw community count data under the fitted per-species coefficients.
@@ -341,11 +450,12 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
                   dimnames = list(NULL, model$species_names))
     for (s in seq_len(n_species)) {
       eta <- as.numeric(model$X %*% cm$coef_mu[s, ])
-      mu  <- if (identical(model$link, "log")) exp(eta) else eta
+      mu  <- .ms_count_linkinv(model, eta)
       out[, s] <- switch(response,
-        poisson  = stats::rpois(n_sites, mu),
-        negbin   = stats::rnbinom(n_sites, size = disp$r_s[s], mu = mu),
-        gaussian = stats::rnorm(n_sites, mu, sqrt(disp$variance[s])))
+        poisson   = stats::rpois(n_sites, mu),
+        bernoulli = stats::rbinom(n_sites, 1L, mu),
+        negbin    = stats::rnbinom(n_sites, size = disp$r_s[s], mu = mu),
+        gaussian  = stats::rnorm(n_sites, mu, sqrt(disp$variance[s])))
     }
     out
   }
@@ -384,14 +494,19 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
       eta <- eta + matrix(as.numeric(fac_off[su$valid, s]),
                           nrow(draws), su$n, byrow = TRUE)
     }
-    mu  <- if (is_log) pmin(pmax(exp(eta), 1e-300), 1e8) else eta
+    mu  <- if (is_log) pmin(pmax(exp(eta), 1e-300), 1e8)
+           else .ms_count_linkinv(model, eta)
     Y   <- matrix(su$y, nrow(draws), su$n, byrow = TRUE)
     switch(response,
-      poisson  = stats::dpois(Y, pmax(mu, 1e-300), log = TRUE),
-      negbin   = stats::dnbinom(Y, size = disp$r_s[s], mu = pmax(mu, 1e-8),
-                                log = TRUE),
-      gaussian = stats::dnorm(Y, mu, sqrt(max(disp$variance[s], 1e-8)),
-                              log = TRUE))
+      poisson   = stats::dpois(Y, pmax(mu, 1e-300), log = TRUE),
+      # Bernoulli scored on the log scale from eta directly (plogis(log.p) is
+      # stable where mu saturates at 0 / 1).
+      bernoulli = ifelse(Y > 0, stats::plogis(eta, log.p = TRUE),
+                                stats::plogis(-eta, log.p = TRUE)),
+      negbin    = stats::dnbinom(Y, size = disp$r_s[s], mu = pmax(mu, 1e-8),
+                                 log = TRUE),
+      gaussian  = stats::dnorm(Y, mu, sqrt(max(disp$variance[s], 1e-8)),
+                               log = TRUE))
   })
   do.call(cbind, cols)
 }

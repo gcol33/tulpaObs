@@ -1,5 +1,76 @@
 # tulpaObs NEWS
 
+## 0.0.127 (2026-07-15)
+
+* One shared latent-structure engine for the community families
+  (`R/community_latent.R`). The block coordinate ascent, the areal Newton, the
+  latent-factor update and the field hyperparameter grids used to be duplicated
+  across `ms_count_spatial.R`, `ms_count_factor.R` and `ms_occu_field.R`; they
+  differed only in the per-(site, species) working score and curvature with
+  respect to an additive offset on the structured arm. A family now supplies one
+  callback -- `working(eta) -> list(score, curv)` (Poisson gives `(y - mu, mu)`,
+  the occupancy two-state marginal its own pair, Bernoulli `(y - psi,
+  psi (1 - psi))`) -- and gets the field, the factors and the SVC generalisation
+  from the shared driver. The refactor is behaviour-preserving: every existing
+  recovery test passes unchanged (the inner factor loops are exactly, not
+  approximately, equivalent, since site `i`'s working weights depend only on
+  `zeta[i, ]` and species `s`'s only on `lambda[s, ]`).
+
+* Community latent-factor and spatial-factor occupancy (`ms_occu()` +
+  `latent(n)`, with or without a shared field; the spOccupancy `lfMsPGOcc` /
+  `sfMsPGOcc` analogues, gcol33/tulpaObs#119). Residual species co-occurrence on
+  the occupancy arm via Q per-site factors with per-species loadings. Composed
+  with a shared field the loadings are centred across species, so the field owns
+  the shared spatial mean and the factors the between-species residual. The
+  loadings / factors are identified only up to rotation, so the reported target
+  is the residual species covariance `lambda lambda'`.
+
+* `jsdm()` is now the community GLMM (gcol33/tulpaObs#121): per-species
+  coefficients under a Gaussian community covariance -- the spOccupancy `lfJSDM`
+  / `sfJSDM` model class -- rather than shared fixed effects with a scalar
+  per-species intercept. A JSDM is exactly the `ms_count()` community model with
+  a logit link, so it now shares that binder, community Laplace-EM, latent
+  driver, NUTS target and S3 surface. `latent(n)` gives lfJSDM; a shared areal
+  field alongside it gives sfJSDM. `method = "nuts"` samples the exact joint
+  community posterior over the Bernoulli response through the family-aware
+  in-tree C++ target (byte-exact against the R oracle). The former single-block
+  correction routes (`laplace_sla` / `laplace_gibbs` / `laplace_mi`) do not apply
+  to the community EM and are no longer offered.
+
+* Continuous Matern (`spde()`) fields on the community latent driver. The mesh
+  nodes carry the field and the barycentric projector `A` maps them onto sites,
+  which is the same linear-map slot the areal `group_var` incidence uses, so the
+  driver's `t(A) diag(w) A + tau Q` solve applies unchanged. The precision is
+  `Q(kappa) = kappa^4 C0 + 2 kappa^2 G1 + G1 C0^-1 G1` scaled by the driver's
+  `tau`, with `kappa` (the Matern range) chosen on a grid by the field marginal
+  exactly as proper-CAR's `rho` is; it is proper, so the field carries no
+  sum-to-zero constraint. `ms_occu()` and `ms_count()` gain continuous fields
+  alongside `jsdm()`.
+
+* Single-species spatially-varying-coefficient abundance (`count()` +
+  `spatial(~ 1 + w || cell, graph)`; the spAbundance `svcAbund` analogue,
+  gcol33/tulpaObs#120). No new engine: the multi-block prior already emitted one
+  weighted latent block per resolved field for the count model, and the nested
+  field summary already looped them into `spatial_field` + `trend_fields`. The
+  fit records the per-site contribution `sum_k W[i,k] f_k[i]` so `fitted()` adds
+  the full weighted field rather than the intercept field alone.
+
+* `ms_count()` gains `predict()` and `residuals()`, which it never had (only
+  `coef` / `ranef` / `fitted` / `simulate`).
+
+* Bug fix: `tobs_waic()` / `tobs_loo()` / `tobs_cpo()` scored the community
+  occupancy families **without a shared areal field**. `community_ploglik.R`
+  built the occupancy predictor from the coefficients alone, so the shipped
+  `ms_occu()` + `icar()` path was compared as a fixed-effect-only model. The
+  field (and now the factor) offsets enter the pointwise log-likelihood.
+
+* Bug fix: `control = list(max.outer = ...)` was read by the `ms_count()` /
+  `ms_occu()` dispatchers but rejected by control validation, so the block
+  coordinate outer cap was unreachable.
+
+* Bug fix: the areal count fit recorded the intercept field as its per-site
+  offset, which is the whole contribution only when there is no SVC field.
+
 ## 0.0.126 (2026-07-15)
 
 * Community count NUTS now covers every response (`ms_count()` +

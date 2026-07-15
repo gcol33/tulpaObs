@@ -353,7 +353,6 @@ fitted.tobs_fit <- function(object, ...) {
   if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
   if (identical(model$model_type, "royle_nichols"))
     return(.tobs_fitted_royle_nichols(object))
-  if (identical(model$model_type, "jsdm")) return(.tobs_fitted_jsdm(object))
   if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))
   if (identical(model$model_type, "ms_count")) {
     return(.tobs_fitted_ms_count(object))
@@ -537,8 +536,9 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
     return(.tobs_residuals_ms_community(object, type))
   }
-  if (identical(object$model$model_type, "jsdm")) {
-    return(.tobs_residuals_jsdm(object, type))
+  # The community GLMM: ms_count() and jsdm() (bernoulli) share one model class.
+  if (identical(object$model$model_type, "ms_count")) {
+    return(.tobs_residuals_ms_count(object, type))
   }
   if (identical(object$model$model_type, "count")) {
     return(.tobs_residuals_count(object, type))
@@ -834,10 +834,11 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
     return(.tobs_predict_ms_community(object, newdata = nd, type = ms_type))
   }
-  if (identical(object$model$model_type, "jsdm")) {
+  # The community GLMM: ms_count() and jsdm() (bernoulli) share one model class.
+  if (identical(object$model$model_type, "ms_count")) {
     nd <- newdata
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_jsdm(object, newdata = nd))
+    return(.tobs_predict_ms_count(object, newdata = nd))
   }
   if (identical(object$model$model_type, "count")) {
     nd <- newdata

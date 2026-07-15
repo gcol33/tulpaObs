@@ -56,7 +56,7 @@
     stop("A single SPDE field shared across the occupancy and detection arms is not plumbed in .tobs_laplace; attach the field to one arm, or use method = 'nuts'.",
          call. = FALSE)
   }
-  if (on_det && model_type %in% c("jsdm", "community", "dynamic")) {
+  if (on_det && model_type %in% c("community", "dynamic")) {
     stop(sprintf(
       "SPDE on the detection process is plumbed for single-season and integrated occupancy only in .tobs_laplace (got model_type = '%s'). Attach the field to the state arm, or use method = 'nuts'.",
       model_type), call. = FALSE)

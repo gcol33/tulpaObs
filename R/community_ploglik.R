@@ -63,9 +63,25 @@
   cm    <- object$ms_community
   mt    <- model$model_type
 
+  # A shared areal field and/or latent factors on the occupancy arm enter every
+  # species' psi predictor as a fixed offset: per-site for the field, per-(site,
+  # species) for the factors. Both are point estimates from the block-coordinate
+  # / nested-Laplace fit, so they shift each draw's eta rather than varying with
+  # it. The block-coordinate path records the per-site field contribution
+  # directly (a varying-coefficient field is sum_k W[i,k] F[u(i),k], not the
+  # intercept field alone); the in-tree C++ plain-field path carries the
+  # one-node-per-site field itself. Scoring without them would omit the model's
+  # spatial / co-occurrence structure from WAIC / LOO / CPO.
+  field_off  <- model$occu_field_offset %||% object$spatial_field
+  factor_off <- model$occu_factor_offset
   psi <- list(cols = .tobs_community_proc_cols(object, 1L),
               X    = model$X_psi %||% model$X_occ,
-              blup = cm$blup_psi)
+              blup = cm$blup_psi,
+              offset = function(s) {
+                o <- if (is.null(field_off)) NULL else as.numeric(field_off)
+                if (!is.null(factor_off)) o <- (o %||% 0) + factor_off[, s]
+                o
+              })
 
   if (identical(mt, "ms_occu")) {
     src <- list(list(cols = .tobs_community_proc_cols(object, 2L),
@@ -94,6 +110,8 @@
   cols <- vector("list", sp$n_species)
   for (s in seq_len(sp$n_species)) {
     eta_psi  <- .tobs_community_eta(draws, sp$psi$cols, sp$psi$X, sp$psi$blup[s, ])
+    psi_off  <- sp$psi$offset(s)
+    if (!is.null(psi_off)) eta_psi <- sweep(eta_psi, 2L, psi_off, "+")
     log_psi  <- stats::plogis(eta_psi,  log.p = TRUE)   # [M x n_sites]
     log_1mps <- stats::plogis(-eta_psi, log.p = TRUE)
 

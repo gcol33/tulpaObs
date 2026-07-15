@@ -6,14 +6,19 @@
 
 # Per-site linear predictor eta at a design X [n x p]. `add_field = TRUE` adds
 # the areal latent field (one node per site) for an in-sample nested-Laplace
-# fit; the log-mean per site is then X beta + f_site. It is skipped for newdata
-# (a new site has no field node -- field interpolation is a separate concern).
+# fit; the log-mean per site is then X beta + sum_k W[i,k] f_k[i]. The fit
+# records that per-site sum as `count_field_offset` -- for a varying-coefficient
+# (SVC) field the contribution is the weighted sum over the intercept and trend
+# fields, not the intercept field alone. `spatial_field` is the fallback for a
+# fit made before the offset was recorded (a plain intercept field, weight 1).
+# The field is skipped for newdata (a new site has no field node -- field
+# interpolation is a separate concern).
 .tobs_count_eta <- function(object, X, add_field = FALSE) {
   beta <- object$means[seq_len(object$model$process_info[[1L]]$p)]
   eta  <- as.numeric(X %*% beta)
   if (isTRUE(add_field)) {
-    fld <- object$spatial_field
-    if (!is.null(fld) && length(fld) == length(eta)) eta <- eta + fld
+    fld <- object$model$count_field_offset %||% object$spatial_field
+    if (!is.null(fld) && length(fld) == length(eta)) eta <- eta + as.numeric(fld)
   }
   eta
 }

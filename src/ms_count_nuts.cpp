@@ -38,7 +38,10 @@ using namespace Rcpp;
 namespace tulpaObs {
 
 // Response family codes.
-enum MsCountFamily { MSC_POIS = 0, MSC_NB = 1, MSC_GAUSS = 2 };
+// MSC_BERN is the jsdm() response: presence/absence observed directly, logit
+// link. It carries no dispersion parameter, so it shares the Poisson parameter
+// layout (community means + per-species deviations only).
+enum MsCountFamily { MSC_POIS = 0, MSC_NB = 1, MSC_GAUSS = 2, MSC_BERN = 3 };
 
 struct MsCountPri { double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0; };
 
@@ -78,7 +81,10 @@ inline MsCountNutsData ms_count_nuts_build_data(const Rcpp::List& spec) {
     if (ym.nrow() != d.n_sites) Rcpp::stop("y must have n_sites rows.");
     std::string fam = spec.containsElementNamed("family")
                     ? Rcpp::as<std::string>(spec["family"]) : "poisson";
-    d.family = (fam == "negbin") ? MSC_NB : (fam == "gaussian" ? MSC_GAUSS : MSC_POIS);
+    d.family = (fam == "negbin")    ? MSC_NB
+             : (fam == "gaussian")  ? MSC_GAUSS
+             : (fam == "bernoulli") ? MSC_BERN
+                                    : MSC_POIS;
     if (d.family == MSC_GAUSS) {
         if (spec.containsElementNamed("logphi_mean"))
             d.logphi_mean = Rcpp::as<double>(spec["logphi_mean"]);
@@ -107,6 +113,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
                                  const MsCountPri& pr, double* g) {
     const int pb = d.p_beta, S = d.n_species, N = d.n_sites, P = d.P;
     const bool nb = (d.family == MSC_NB), gauss = (d.family == MSC_GAUSS);
+    const bool bern = (d.family == MSC_BERN);
     for (int j = 0; j < d.total; ++j) g[j] = 0.0;
     const double* mu     = th + d.mu_off;
     const double* z      = th + d.b_off;
@@ -164,6 +171,13 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
                 lp_loc += R::dnorm(ys[i], eta, std::sqrt(phi), 1);
                 ge  = resid / phi;
                 glp += -0.5 + resid * resid / (2.0 * phi);   // d log p / d log_phi
+            } else if (bern) {                 // Bernoulli (logit), jsdm()
+                // log p = y eta - log(1 + exp(eta)), the log-sum-exp computed in
+                // the numerically stable branch; d log p / d eta = y - plogis(eta).
+                const double lse = (eta > 0.0) ? eta + std::log1p(std::exp(-eta))
+                                               : std::log1p(std::exp(eta));
+                lp_loc += ys[i] * eta - lse;
+                ge = ys[i] - 1.0 / (1.0 + std::exp(-eta));
             } else {                           // Poisson
                 const double lam = std::exp(eta < 700.0 ? eta : 700.0);
                 lp_loc += ys[i] * eta - lam - lg[i];

@@ -67,6 +67,7 @@
                                         grad = TRUE) {
   pb <- lay$p_beta; S <- lay$n_species; P <- lay$P
   is_nb <- lay$is_nb; is_gauss <- lay$is_gauss
+  is_bern <- identical(lay$family, "bernoulli")
   mu     <- theta[lay$mu]
   C_beta <- .ms_ocs_chol_unpack(theta[lay$chol_beta], pb)
   C_lr   <- if (is_nb) exp(theta[lay$chol_logr]) else NULL
@@ -110,6 +111,17 @@
         g_mu[lay$beta] <- g_mu[lay$beta] + gl
         g[bidx[lay$beta]] <- g[bidx[lay$beta]] + as.numeric(crossprod(C_beta, gl))
         g[lay$logphi[s]]  <- g[lay$logphi[s]] + sum(-0.5 + (ys - eta)^2 / (2 * phi_s))
+        A_beta <- A_beta + outer(gl, zb)
+      }
+    } else if (is_bern) {
+      # jsdm(): log p = y eta - log(1 + exp(eta)); d log p / d eta = y - plogis(eta).
+      # Written via plogis(log.p) to match the C++ stable log-sum-exp branch.
+      lp <- lp + sum(ifelse(ys > 0, stats::plogis(eta,  log.p = TRUE),
+                                    stats::plogis(-eta, log.p = TRUE)))
+      if (grad) {
+        gl <- as.numeric(crossprod(Xs, ys - stats::plogis(eta)))
+        g_mu[lay$beta] <- g_mu[lay$beta] + gl
+        g[bidx[lay$beta]] <- g[bidx[lay$beta]] + as.numeric(crossprod(C_beta, gl))
         A_beta <- A_beta + outer(gl, zb)
       }
     } else {

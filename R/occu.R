@@ -14,22 +14,21 @@
 #' - **Single-season**: no `col_formula`, no `species`
 #' - **Dynamic**: `col_formula` and/or `ext_formula` provided
 #' - **Integrated**: `integrated = TRUE`, `y` a list of matrices
-#' - **JSDM**: `jsdm = TRUE`
 #'
-#' Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover) have
-#' their own in-tree binders + Laplace-EM fitter and do not pass through here.
+#' Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover /
+#' ms_count / jsdm) have their own in-tree binders + Laplace-EM fitter and do not
+#' pass through here.
 #'
 #' @keywords internal
 .tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
                               col_formula = NULL, ext_formula = NULL,
-                              species = NULL, integrated = FALSE, jsdm = FALSE,
+                              species = NULL, integrated = FALSE,
                               abundance = FALSE, count = FALSE,
                               count_response = "poisson",
                               det_visit_formula = NULL, det_visit_data = NULL) {
 
   is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
   is_integrated <- isTRUE(integrated)
-  is_jsdm      <- isTRUE(jsdm)
   is_abundance <- isTRUE(abundance)
   is_count     <- isTRUE(count)
 
@@ -39,12 +38,11 @@
                             det_visit_formula, det_visit_data))
   }
   if (is_count)      return(.tobs_build_count(occ_formula, data, y, count_response))
-  if (is_jsdm)       return(.tobs_build_jsdm(occ_formula, data, y, species))
   if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
   if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,
                                                 col_formula, ext_formula))
 
-  if (is.null(det_formula)) stop("det_formula required for non-JSDM models")
+  if (is.null(det_formula)) stop("det_formula required for occupancy models")
   .tobs_build_single(occ_formula, det_formula, data, y,
                      det_visit_formula, det_visit_data)
 }
@@ -260,66 +258,6 @@
   ), class = "tobs_model")
 }
 
-.tobs_build_jsdm <- function(occ_formula, data, y, species) {
-  if (is.list(y) && !is.array(y)) {
-    n_species <- length(y)
-    n_sites <- length(y[[1]])
-    species_names <- if (is.character(species)) species
-                     else if (!is.null(names(y))) names(y)
-                     else paste0("sp", seq_len(n_species))
-    y_mat <- matrix(NA_integer_, n_sites, n_species)
-    for (s in seq_len(n_species)) {
-      y_mat[, s] <- as.integer(if (is.matrix(y[[s]])) y[[s]][, 1] else y[[s]])
-    }
-  } else if (is.matrix(y)) {
-    n_sites <- nrow(y)
-    n_species <- ncol(y)
-    species_names <- if (is.character(species)) species
-                     else if (!is.null(colnames(y))) colnames(y)
-                     else paste0("sp", seq_len(n_species))
-    y_mat <- matrix(as.integer(y), n_sites, n_species)
-  } else {
-    stop("For JSDM, y must be a matrix (n_sites x n_species) or named list")
-  }
-
-  .tobs_check_site_count(n_sites, nrow(data), "sites")
-
-  bind  <- .tobs_bind_formulas(list(psi = occ_formula), data)
-  X_occ <- model.matrix(bind$fe$psi, data)
-
-  N <- n_sites * n_species
-  X_occ_expanded <- X_occ[rep(seq_len(n_sites), each = n_species), , drop = FALSE]
-
-  y_flat <- integer(N)
-  for (i in seq_len(n_sites)) {
-    for (s in seq_len(n_species)) {
-      obs <- (i - 1) * n_species + s
-      y_flat[obs] <- y_mat[i, s]
-    }
-  }
-  y_flat[is.na(y_flat)] <- 0L
-
-  species_group <- rep(seq_len(n_species), times = n_sites)
-
-  structure(list(
-    model_type = "jsdm",
-    y_jsdm = y_flat,
-    y_mat = y_mat,
-    X_processes = list(X_occ_expanded),
-    X_occ = X_occ,
-    formulas = list(occ = bind$fe$psi),
-    structured_terms = bind$terms,
-    n_sites = n_sites,
-    n_species = n_species,
-    N = N,
-    species_group = as.integer(species_group),
-    species_names = species_names,
-    process_info = list(
-      list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ))
-    )
-  ), class = "tobs_model")
-}
-
 
 # ---------------------------------------------------------------------------
 # count() -- a GLMM on the observed count / continuous response directly (no
@@ -397,8 +335,7 @@ print.tobs_model <- function(x, ...) {
   type_label <- switch(x$model_type,
     single = "Single-season occupancy model",
     dynamic = "Multi-season dynamic occupancy model",
-    integrated = sprintf("Integrated occupancy model (%d sources)", x$n_sources),
-    jsdm = sprintf("Joint species distribution model (%d species)", x$n_species)
+    integrated = sprintf("Integrated occupancy model (%d sources)", x$n_sources)
   )
   cat(type_label, "\n")
 
@@ -409,8 +346,6 @@ print.tobs_model <- function(x, ...) {
                 x$n_sites, x$n_seasons, x$max_visits))
   } else if (x$model_type == "integrated") {
     cat(sprintf("  Sites: %d, Sources: %d\n", x$n_sites, x$n_sources))
-  } else if (x$model_type == "jsdm") {
-    cat(sprintf("  Sites: %d, Species: %d\n", x$n_sites, x$n_species))
   }
 
   for (pi in x$process_info) {
