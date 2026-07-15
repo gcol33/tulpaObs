@@ -638,10 +638,21 @@ recovery-tested.
 - **Continuous NNGP `svc()` term** (`svc(lon, lat, indices=)`): wired to
   single-season `occu()` NUTS ONLY (`populate_svc`, `src/populate_helpers.h` ->
   `data.svc_data`). The eta-assembly + NNGP prior + gradient live in the compiled
-  UPSTREAM tulpa engine (not tulpaObs), so it is smoke-only (no recovery test; the
-  estimated surface is unnamed in the fit). On any OTHER family, or `occu()` under
-  laplace/nested_laplace, `svc()` now ERRORS with a pointer to the areal bar
-  (`.tobs_fit_model` guard, #118) rather than silently dropping. `test-svc-guard.R`.
+  UPSTREAM tulpa engine (not tulpaObs). The fitted surface IS now exposed as
+  `fit$svc_field` (an n_obs vector / n_obs x n_svc matrix of posterior means,
+  per-draw surface on `attr(., "draws")`), sliced by position from the layout the
+  engine reports as `fit$svc_layout`; the block is named (`svc_w[i,j]`,
+  `log_sigma2_svc[j]`, `log_phi_svc[j]`) instead of falling through to
+  `param[k]`. `test-occu-svc-nngp-recovery.R` scores it: the surface tracks a
+  known truth (cor 0.49-0.78 over seeds), so the gradient is broadly right.
+  **Still NOT calibrated**: ~75% of post-warmup draws diverge and the range phi
+  collapses onto its prior mean (~4 vs a truth of 0.25), because tulpa priors phi
+  as Uniform(lower, upper) behind a hard `-INFINITY` rejection -- gcol33/tulpa#144.
+  The calibration assertions are `skip()`ped against that issue rather than
+  loosened to pass. Treat as "surface exposed + shape-validated", NOT "validated".
+  On any OTHER family, or `occu()` under laplace/nested_laplace, `svc()` ERRORS
+  with a pointer to the areal bar (`.tobs_fit_model` guard, #118) rather than
+  silently dropping. `test-svc-guard.R`.
 
 ## Performance
 

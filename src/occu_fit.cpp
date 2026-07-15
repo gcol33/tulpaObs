@@ -279,6 +279,42 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     for (; idx < n_params; idx++)
         col_names[idx] = "param[" + std::to_string(idx + 1) + "]";
 
+    // ---- Name the SVC block (gcol33/tulpaObs#118) ----
+    // The engine exports the SVC offsets on ParamLayout, so the block can be
+    // named instead of falling through to "param[k]" above -- which is why the
+    // fitted surface was previously unreadable from the fit. The offsets are
+    // absolute positions in the parameter vector, so they are written directly
+    // rather than through the running cursor, and after the fallback loop so
+    // they are not overwritten by it.
+    if (layout.has_svc && data.svc_data.n_svc > 0) {
+        const int n_svc = data.svc_data.n_svc;
+        const int n_loc = data.svc_data.n_obs;
+        for (int j = 0; j < n_svc; j++) {
+            const int a = layout.log_sigma2_svc_start + j;
+            if (a >= 0 && a < n_params)
+                col_names[a] = "log_sigma2_svc[" + std::to_string(j + 1) + "]";
+            const int b = layout.log_phi_svc_start + j;
+            if (b >= 0 && b < n_params)
+                col_names[b] = "log_phi_svc[" + std::to_string(j + 1) + "]";
+        }
+        // Per-location weights, w_flat[j * n_obs + i] (engine stride: j indexes
+        // the SVC term, i the location). Only name per-location when the block
+        // really is one weight per location -- the HSGP flavour stores
+        // n_svc * m_total basis coefficients instead, and those are not a
+        // per-location surface.
+        const int w_len = layout.svc_w_end - layout.svc_w_start;
+        if (w_len == n_svc * n_loc) {
+            for (int j = 0; j < n_svc; j++) {
+                for (int i = 0; i < n_loc; i++) {
+                    const int c = layout.svc_w_start + j * n_loc + i;
+                    if (c >= 0 && c < n_params)
+                        col_names[c] = "svc_w[" + std::to_string(i + 1) + "," +
+                                       std::to_string(j + 1) + "]";
+                }
+            }
+        }
+    }
+
     NumericMatrix draws = Rcpp::as<NumericMatrix>(result["draws"]);
     Rcpp::colnames(draws) = col_names;
 
@@ -288,6 +324,18 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     result["draws"] = draws;
     result["means"] = means;
     result["col_names"] = col_names;
+
+    // The SVC block's layout, so R can slice the surface off the draws without
+    // re-deriving offsets or parsing column names. 1-based for R.
+    if (layout.has_svc && data.svc_data.n_svc > 0) {
+        result["svc_layout"] = Rcpp::List::create(
+            Rcpp::Named("n_svc")            = data.svc_data.n_svc,
+            Rcpp::Named("n_obs")            = data.svc_data.n_obs,
+            Rcpp::Named("w_start")          = layout.svc_w_start + 1,
+            Rcpp::Named("w_end")            = layout.svc_w_end,
+            Rcpp::Named("log_sigma2_start") = layout.log_sigma2_svc_start + 1,
+            Rcpp::Named("log_phi_start")    = layout.log_phi_svc_start + 1);
+    }
 
     return result;
 }

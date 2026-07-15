@@ -603,6 +603,11 @@
   fit$temporal <- temporal
   fit$re <- re
   fit$svc <- svc
+  # The fitted per-location SVC surface (gcol33/tulpaObs#118). `fit$svc` is the
+  # term the user passed in; `fit$svc_field` is what was estimated, mirroring
+  # `fit$spatial_field` on the areal path. Without it the surface was in the
+  # draws but unreadable, so the term could only ever be smoke-tested.
+  fit$svc_field <- .tobs_svc_field(fit)
   fit$latent <- latent
   # Resolved per-chain seeds (chain c used seed + c - 1) for reproducibility.
   fit$seeds <- as.integer(seed) + seq_len(as.integer(n.chains)) - 1L
@@ -615,6 +620,40 @@
                               error = function(e) NULL)
   class(fit) <- c("tobs_fit", "tulpa_fit")
   fit
+}
+
+# Fitted per-location SVC surface from a NUTS fit (gcol33/tulpaObs#118).
+#
+# The engine exports the SVC block's offsets on `ParamLayout` and the fitter
+# returns them as `svc_layout`, so the surface is sliced by position rather than
+# by parsing column names. Weights are stored `w_flat[j * n_obs + i]` (j indexes
+# the SVC term, i the location), which is the transpose of the `X_svc` stride --
+# hence the byrow = FALSE fill below.
+#
+# Returns an `n_obs x n_svc` matrix of posterior means (a bare vector when a
+# single coefficient varies, matching `fit$spatial_field` on the areal path),
+# carrying the per-draw surface as attribute "draws" for interval work. NULL
+# when the fit has no SVC term or the backend did not report a layout (only the
+# single-season occu NUTS path does).
+.tobs_svc_field <- function(fit) {
+  lay <- fit$svc_layout
+  if (is.null(lay) || is.null(fit$means)) return(NULL)
+  n_svc <- as.integer(lay$n_svc)
+  n_obs <- as.integer(lay$n_obs)
+  cols  <- seq.int(as.integer(lay$w_start), as.integer(lay$w_end))
+  if (length(cols) != n_svc * n_obs) return(NULL)   # HSGP basis, not a surface
+  if (length(fit$means) < max(cols)) return(NULL)
+
+  surf <- matrix(as.numeric(fit$means[cols]), nrow = n_obs, ncol = n_svc)
+  if (!is.null(fit$draws) && ncol(fit$draws) >= max(cols)) {
+    attr(surf, "draws") <- fit$draws[, cols, drop = FALSE]
+  }
+  if (n_svc == 1L) {
+    out <- as.numeric(surf)
+    attr(out, "draws") <- attr(surf, "draws")
+    return(out)
+  }
+  surf
 }
 
 # Translate the structured terms a formula carried (`model$structured_terms`)
