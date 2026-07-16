@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # test-int-occu-areal-recovery.R - int_occu() + an areal field under
 # nested_laplace: RECOVERY, not plumbing.
 #
@@ -102,8 +102,14 @@ test_that("int_occu() + icar() shrinks a field that is not there", {
   skip_if_fast()
 
   # Truth: no field. The between-cell variation is pure binomial noise (6
-  # sites/cell) and the ICAR must shrink it. Measured median 0.1783. At M = 1000
-  # this is ~1.35 and at M = 4 ~0.67, so the guard catches either revert.
+  # sites/cell) and the ICAR must shrink it. Measured median 0.1783.
+  #
+  # The 0.6 guard is set from that median with margin. This fixture's pre-fix
+  # value was never measured -- the M-step branch was missing rather than
+  # mis-set, so the fix landed before a pre-fix sweep -- so the threshold is NOT
+  # calibrated against a known broken value here. The analogous dynamic arm on
+  # its own fixture returned 1.35 at M = 1000 and 0.67 at M = 4 against the same
+  # truth of 0, which is the order of magnitude 0.6 is chosen to exclude.
   #
   # This asserts shrinkage, NOT identification: sigma = 0 is outside the outer
   # grid (see test-occu-areal-recovery.R), so the marginal can only pile onto the

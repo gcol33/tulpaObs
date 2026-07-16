@@ -1,10 +1,25 @@
-## Smoke tests for the single-season occupancy nested-Laplace path. These
-## exercise tobs(method = "nested_laplace") end-to-end with the multi-block
-## prior built from spatial + temporal + re. Recovery thresholds for the
-## underlying multi-block engine are still relaxed (per
-## `dev_notes/plan_multi_block.md` Phase D), so these tests only assert that
-## the pipeline runs and returns a sensibly-shaped `tobs_fit`. Recovery is
-## tracked under a follow-up.
+## Smoke tests for the single-season occupancy nested-Laplace path: that
+## tobs(method = "nested_laplace") runs end-to-end with the multi-block prior
+## built from spatial + temporal + re, routes the right engine, and returns a
+## sensibly-shaped `tobs_fit`. Shape and wiring only -- these assert a class, a
+## block type and a length, and no test here inspects an estimate.
+##
+## That is deliberate, but it is NOT sufficient on its own, and the failure mode
+## is on record: this file's areal fixtures contain no field, and the analogous
+## shape test in test-nested-laplace-families.R -- same bar, also field-free --
+## passed for the entire time the dynamic and integrated paths were inventing a
+## field of sd 1.35 against a truth of 0 and reporting no standard errors
+## (dev_notes/finding_dyn_nested_laplace_field.md). Single-season was not the
+## broken arm, but nothing here would have caught it if it had been.
+##
+## Recovery for the areal path lives in test-occu-areal-recovery.R, which fits a
+## field the outer grid can represent in its interior and asserts the surface,
+## the slope, the SEs and the grid mode. Recovery for the other families is in
+## test-int-occu-areal-recovery.R, test-dyn-occu-areal-recovery.R and
+## test-dyn-occu-svc-recovery.R.
+##
+## Adding a case here tests that a combination is plumbed. It does not test that
+## the combination works.
 
 simulate_panel_occu <- function(n_sites = 20, n_visits = 4, n_times = 5,
                                 psi_intercept = 0, p = 0.4, seed = 1) {

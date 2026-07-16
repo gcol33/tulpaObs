@@ -1,4 +1,4 @@
-﻿# Probe: int_occu() + icar() under nested_laplace.
+# Probe: int_occu() + icar() under nested_laplace.
 #
 # The finding note recorded int_occu as "inherits the M fix, untested". It did
 # not inherit it: build_integrated_callbacks' m_step_encode had no latent_prior

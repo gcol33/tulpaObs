@@ -1,4 +1,4 @@
-﻿# dyn_occu + areal / SVC field under nested_laplace: field over-fit, no SEs
+# dyn_occu + areal / SVC field under nested_laplace: field over-fit, no SEs
 
 Status: FIXED. Two root causes, both resolved, both recovery-tested. dyn_occu +
 icar and dyn_occu + an SVC bar (svcTPGOcc) now recover at nominal coverage, and

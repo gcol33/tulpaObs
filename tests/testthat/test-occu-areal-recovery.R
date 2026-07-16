@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # test-occu-areal-recovery.R - single-season occu() + an areal field under
 # nested_laplace: RECOVERY, not plumbing.
 #

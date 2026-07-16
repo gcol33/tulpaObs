@@ -1,4 +1,4 @@
-﻿# Probe: single-season occu() + icar() under nested_laplace, INTERIOR field.
+# Probe: single-season occu() + icar() under nested_laplace, INTERIOR field.
 #
 # The finding note's "a separate finding worth acting on regardless": every
 # "single-season is healthy" claim rested on null-field fixtures (truth

@@ -1,11 +1,21 @@
 # Nested-Laplace generalised beyond single-season occupancy: the multi-block
 # latent prior is attached to the state ("occ") M-step block of the integrated,
 # community, and dynamic callbacks (the same builders the single-Laplace path
-# uses -- there is no `build_*_callbacks_nested` duplicate). These are
-# smoke/shape tests matching the bar of test-nested-laplace-occu.R: the
-# underlying multi-block engine's calibrated recovery is the same Phase D
-# follow-up tracked for single-season occupancy. They assert the pipeline runs,
-# attaches the prior, and recovers a site-length latent field.
+# uses -- there is no `build_*_callbacks_nested` duplicate). Smoke/shape tests
+# at the bar of test-nested-laplace-occu.R: they assert the pipeline runs,
+# attaches the prior, and returns a latent field of the right LENGTH.
+#
+# A length is not a recovery. Every fixture below carries NO field, and these
+# assertions passed throughout the period when the dynamic path was inventing a
+# field of sd 1.35 against a truth of 0 and reporting no standard errors at all
+# -- the integrated path carried the same M = 1000 encoding and the same missing
+# SE gate (dev_notes/finding_dyn_nested_laplace_field.md). Do not read a pass
+# here as evidence a combination estimates anything.
+#
+# Recovery for the areal path is asserted per family, on fixtures carrying a
+# field the outer grid can represent in its interior:
+#   test-occu-areal-recovery.R, test-int-occu-areal-recovery.R,
+#   test-dyn-occu-areal-recovery.R, test-dyn-occu-svc-recovery.R
 
 chain_adj <- function(n) {
   adj <- matrix(0, n, n)

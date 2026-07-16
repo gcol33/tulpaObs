@@ -1,4 +1,4 @@
-﻿# Dumps the outer hyperparameter grid for the single-season areal path so the
+# Dumps the outer hyperparameter grid for the single-season areal path so the
 # recovery test's comments quote the real axis instead of assuming its
 # direction. The note recorded tau in [0.3, 30] over 9 cells; this reads the
 # axis, its ordering, and where the weight lands for a null vs an interior field.
