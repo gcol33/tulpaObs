@@ -941,6 +941,44 @@ occu_multi <- function() {
 }
 
 
+#' Double-observer abundance family
+#'
+#' Abundance from an independent double-observer protocol (\pkg{unmarked}
+#' `multinomPois` with the double-observer pi-function). Site abundance
+#' `N ~ Poisson(lambda)` is surveyed by two independent observers with detection
+#' `p1` / `p2`; each individual is recorded by observer 1 only, observer 2 only,
+#' or both. By Poisson-multinomial thinning the three observable cell counts are
+#' independent Poissons (`n_c ~ Poisson(lambda * pi_c)`), so the marginal is
+#' closed form with no latent-abundance summation. The state `formula` models
+#' `log lambda`; `detection` the shared site-level per-observer detection design
+#' (observers 1 and 2 carry separate coefficients).
+#'
+#' `y` is an `N x 3` matrix of cell counts in column order (observer-1-only,
+#' observer-2-only, both).
+#'
+#' @return A `tobs_family` object for [tobs()].
+#' @examples
+#' \donttest{
+#' sim <- simulate_double_observer(N = 200, seed = 1)
+#' fit <- tobs(~ abund_cov1, data = sim$data, family = double_observer(),
+#'             detection = ~ det_cov1, y = sim$y, control = list(verbose = FALSE))
+#' coef(fit)
+#' }
+#' @export
+double_observer <- function() {
+  obs_family(
+    name           = "double_observer",
+    class_long     = "double-observer abundance",
+    latent         = "poisson",
+    observation    = "multinomial_cells",
+    replicates     = "required",
+    default_engine = "laplace",
+    status         = "working",
+    params         = list()
+  )
+}
+
+
 #' Multispecies N-mixture family
 #'
 #' Per-species N-mixture with shared community-level hyperparameters.

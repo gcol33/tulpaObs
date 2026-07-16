@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.140 (2026-07-17)
+
+* Double-observer abundance: `double_observer()` (#116, \pkg{unmarked}
+  `multinomPois` with the independent double-observer pi-function). Site
+  abundance `N ~ Poisson(lambda)` surveyed by two independent observers with
+  detection `p1` / `p2`; each individual is recorded by observer 1 only, 2 only,
+  or both. By Poisson-multinomial thinning the three observable cell counts are
+  independent Poissons (`n_c ~ Poisson(lambda * pi_c)`), so the marginal is
+  closed form with NO latent-abundance summation -- the simplest of the
+  self-contained pure-R families. `y` is an `N x 3` cell-count matrix
+  (observer-1-only, observer-2-only, both); the state `formula` models
+  `log lambda`, `detection` the shared per-observer design (observers carry
+  separate coefficients). `optim` BFGS mode-find with observed-information vcov
+  (`R/double_observer.R`); full `fitted` / `predict` / `residuals` / `simulate` /
+  WAIC surface; `simulate_double_observer()`. Recovers abundance + both detection
+  probabilities with calibrated slope coverage. Site-level detection, non-spatial
+  laplace in v1. `test-double-observer.R`.
+
 ## 0.0.139 (2026-07-17)
 
 * Multi-species co-occurrence occupancy: `occu_multi()` (#116, \pkg{unmarked}
