@@ -218,6 +218,13 @@
   # Site-level rate; non-spatial laplace only for the first ship (Weibull shape,
   # visit-varying rate, areal fields, NUTS are the documented follow-ups, #116).
   occu_ttd = c("laplace"),
+  # occu_multi: multi-species co-occurrence occupancy (Rota 2016, unmarked
+  # occuMulti). Joint 2^S-state log-linear occupancy with first + second order
+  # natural parameters; the exact marginal is enumerated and maximised (optim
+  # BFGS) with an observed-information vcov. Shared covariate design, site-level
+  # detection, non-spatial laplace only for the first ship (per-parameter
+  # formulas, higher-order terms, visit-level detection are follow-ups, #116).
+  occu_multi = c("laplace"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under

@@ -1,5 +1,28 @@
 # tulpaObs NEWS
 
+## 0.0.139 (2026-07-17)
+
+* Multi-species co-occurrence occupancy: `occu_multi()` (#116, \pkg{unmarked}
+  `occuMulti`; Rota et al. 2016). The joint occupancy state of `S` species at a
+  site, `z in {0,1}^S`, follows a log-linear model whose natural parameters are
+  first-order (per species) and second-order (per species pair -- the
+  interaction: positive = co-occur more than independent, negative = avoid); each
+  species is then detected conditional on presence. The latent state integrates
+  out by enumerating the `2^S` states, so -- like `royle_nichols()` / `occu_ttd()`
+  -- the exact marginal is maximised by `optim` with an observed-information vcov
+  (`R/occu_multi.R`, no new C++). `y` is a list of `S` `N x J` detection matrices
+  (or a 3D array) with `species =`; the state `formula` is the shared occupancy
+  covariate design (each natural parameter carries its own coefficients),
+  `detection` the shared site-level per-species design. Full `fitted`
+  (`$psi` = marginal per-species occupancy) / `predict` / `residuals` / `simulate`
+  / WAIC surface; `simulate_occu_multi()`. The log-linear natural-parameter
+  covariate slopes are only weakly identified individually (they trade off), but
+  the marginal occupancy and the interaction recover cleanly -- the recovery test
+  targets those (interaction sign + magnitude over 15 seeds, positive and
+  negative). Shared design, first + second order, site-level detection, laplace
+  in v1 (per-parameter formulas, higher-order terms, visit-level detection, areal
+  fields are follow-ups). `test-occu-multi.R`.
+
 ## 0.0.138 (2026-07-17)
 
 * Time-to-detection occupancy: `occu_ttd()` (#116, \pkg{unmarked} `occuTTD`). A

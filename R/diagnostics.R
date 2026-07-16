@@ -197,6 +197,9 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "occu_ttd")) {
     return(.tobs_ploglik_occu_ttd(object, nd, n.threads = n.threads))
   }
+  if (identical(object$model$model_type %||% "NULL", "occu_multi")) {
+    return(.tobs_ploglik_occu_multi(object, nd, n.threads = n.threads))
+  }
   # Community occupancy (ms_occu / ms_dyn_occu / ms_int_occu): per-(species,
   # site) marginal scored over the community-mean pseudo-draws with per-species
   # BLUP deviations plugged in (R/community_ploglik.R).
@@ -264,6 +267,12 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
                         dimnames = list(NULL, colnames(object$draws)))
     obj_mean  <- object; obj_mean$draws <- mean_draw
     return(as.numeric(.tobs_ploglik_occu_ttd(obj_mean, n.draws = 1L)))
+  }
+  if (identical(object$model$model_type %||% "NULL", "occu_multi")) {
+    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
+                        dimnames = list(NULL, colnames(object$draws)))
+    obj_mean  <- object; obj_mean$draws <- mean_draw
+    return(as.numeric(.tobs_ploglik_occu_multi(obj_mean, n.draws = 1L)))
   }
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {
