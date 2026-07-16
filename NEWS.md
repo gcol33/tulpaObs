@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.138 (2026-07-17)
+
+* Time-to-detection occupancy: `occu_ttd()` (#116, \pkg{unmarked} `occuTTD`). A
+  survey records the TIME to first detection rather than a 0/1 outcome; at an
+  occupied site the time-to-detection is exponential with rate `lambda` (constant
+  hazard) over a survey of length `surveyLength`, censored if it reaches the end.
+  The state `formula` models `logit psi`, `detection` the `log lambda` rate. The
+  latent occupancy state integrates out in closed form (two states), so -- like
+  `royle_nichols()` -- the exact marginal is maximised by `optim` with an
+  observed-information vcov (`R/occu_ttd.R`, `.ttd_site_loglik` over per-site
+  sufficient statistics). `y` is an `N x J` matrix of detection times (a value
+  `>= surveyLength` is a non-detection, `NA` a survey not conducted).
+  `simulate_occu_ttd()`, full `fitted` / `predict` / `residuals` / `simulate` /
+  WAIC surface. Site-level rate, exponential TTD, non-spatial laplace in v1
+  (Weibull shape, visit-varying rate, areal fields, NUTS are follow-ups).
+  `test-occu-ttd.R` (constructor + gates, S3, 15-seed recovery with calibrated
+  rate-slope coverage).
+
 ## 0.0.137 (2026-07-17)
 
 * Zero-inflated N-mixture abundance: `abun(mixture = "zip")` / `"zinb"` (#116).

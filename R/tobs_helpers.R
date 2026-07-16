@@ -212,6 +212,12 @@
   # level detection; non-spatial laplace only for the first ship (visit-level
   # detection, areal fields, and NUTS are the documented follow-ups, #116).
   royle_nichols = c("laplace"),
+  # occu_ttd: time-to-detection occupancy (exponential TTD, unmarked occuTTD).
+  # Two-state occupancy marginal with a continuous censored-exponential emission,
+  # maximised in closed form (optim BFGS) with an observed-information vcov.
+  # Site-level rate; non-spatial laplace only for the first ship (Weibull shape,
+  # visit-varying rate, areal fields, NUTS are the documented follow-ups, #116).
+  occu_ttd = c("laplace"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under
