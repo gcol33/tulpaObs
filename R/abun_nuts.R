@@ -370,22 +370,12 @@
                    list(scale_factor = spatial$scale_factor %||%
                           compute_bym2_scale(spatial$graph)))))
 
-  if (identical(spatial$type, "bym2")) {
-    sigma <- max(nl$sigma_mean %||% sqrt(max(nl$tau_mean %||% 1, 1e-3)), 1e-3)
-    rho   <- min(max(nl$rho_mean %||% 0.5, 0.01), 0.99)
-    sf    <- spatial$scale_factor %||% compute_bym2_scale(spatial$graph)
-    Lstr  <- .tobs_field_load(adj, "icar", 1, 1, n_sites)            # centred ICAR basis
-    a <- sigma * sqrt(rho / sf); b <- sigma * sqrt(1 - rho)
-    # z = a * (centred structured) + b * (iid); stack the two loadings columnwise.
-    field_load <- cbind(a * Lstr, b * diag(n_sites))
-    tau <- NA_real_
-  } else {
-    tau <- max(nl$tau_mean, 1e-3)
-    rho <- if (identical(spatial$type, "car_proper"))
-      min(max(nl$rho_mean, 0.01), 0.99) else 1.0
-    field_load <- .tobs_field_load(adj, spatial$type, tau, rho, n_sites)
-  }
-  n_raw <- ncol(field_load)
+  # Whitened-field loading + fixed hyper (shared single source of truth, #71/#113).
+  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                 tau = nl$tau_mean, rho = nl$rho_mean,
+                                 sigma = nl$sigma_mean,
+                                 scale_factor = spatial$scale_factor)
+  field_load <- fl$field_load; n_raw <- fl$n_raw
 
   spec <- list(y = as.integer(y_long), site_idx = as.integer(site_idx),
                X_lambda = X_lambda, X_p = X_p, n_sites = n_sites, K_max = K_max,
@@ -438,7 +428,7 @@
   fit$nuts <- list(accept_prob = accept, divergent = divergent,
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = tau, rho = rho,
+                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
                    n_raw = n_raw, prior_type = spatial$type, fixed_hyper = TRUE)
   fit
 }

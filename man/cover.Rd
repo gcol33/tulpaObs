@@ -5,7 +5,7 @@
 \title{Cover hurdle family (vegetation cover, MOTIVATE pattern)}
 \usage{
 cover(
-  response = c("beta", "beta_oi", "lognormal", "lognormal_trunc", "ordinal"),
+  response = c("beta", "beta_oi", "lognormal", "lognormal_trunc", "ordinal", "gaussian"),
   breaks = NULL
 )
 }
@@ -26,7 +26,13 @@ place mass above cover = 1 the way \code{"lognormal"} can). Requires
 \code{method = "nested_laplace"};
 \item \code{"ordinal"} -- an interval-censored Gaussian on log-cover with KNOWN
 class thresholds (an ordered probit for Braun-Blanquet-style class data),
-set with \code{breaks}. Requires \code{method = "nested_laplace"}.
+set with \code{breaks}. Requires \code{method = "nested_laplace"};
+\item \code{"gaussian"} -- an identity-Gaussian magnitude (the delta-normal hurdle):
+Bernoulli presence times a Gaussian on the raw response. For a
+pre-transformed or otherwise unbounded response on a real scale (it
+permits negative fitted values), NOT for cover fractions in (0, 1); those
+stay on \code{"beta"} / \code{"lognormal"} / \code{"ordinal"}. Presence is the nonzero
+sentinel (\code{y != 0}) rather than \code{y > 0}.
 }}
 
 \item{breaks}{for \code{positive = "ordinal"} only, the interior cover-class

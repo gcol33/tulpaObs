@@ -32,7 +32,10 @@
 # precision. The ordinal grid runs a touch wider on the low side because the
 # midpoint-residual prefit over-disperses the censored latent.
 .cover_pos_family_grid <- function(positive, enc, control) {
-  if (positive == "lognormal") {
+  if (positive %in% c("lognormal", "gaussian")) {
+    # Both fit the tulpa "gaussian" family; they differ only in the response the
+    # encoder stored (log-cover for lognormal, raw for gaussian, #112), so the
+    # residual-SD prefit yields the correct dispersion on either scale.
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "gaussian", phi_hat = sigma_hat,
          phi_grid_pos = control$phi.grid %||%
@@ -102,7 +105,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     spatial = fits$joint$theta_mean,
     engine  = "nested_laplace"
   )
-  if (fits$positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
+  if (fits$positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
     hyperpar$sigma_pos    <- fits$sigma_pos
     hyperpar$sigma_pos_sd <- fits$sigma_pos_sd
   } else {

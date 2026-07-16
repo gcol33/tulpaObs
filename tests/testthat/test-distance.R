@@ -521,7 +521,7 @@ test_that("distance() areal ICAR recovers the abundance slope + field, calibrate
   expect_gt(mean(field_cor), 0.6)
 })
 
-test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", {
+test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
   cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(6L)
@@ -537,13 +537,14 @@ test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated",
     expect_true(all(is.finite(vcov(fit))))
     expect_false(is.null(fit$spatial_field))
   }
-  # NUTS + areal is car_proper only; an intrinsic icar() field is rejected.
-  expect_error(
-    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
-         family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
-         detection = ~ sigma_cov1, y = sim$y, method = "nuts",
-         control = list(n.iter = 20L, n.warmup = 10L)),
-    "proper-CAR|car_proper")
+  # NUTS + areal now samples an intrinsic icar() field via the #71 sum-to-zero
+  # reparameterisation (full recovery lives in test-count-spatial-nuts.R).
+  fit_icar <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+    family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+    detection = ~ sigma_cov1, y = sim$y, method = "nuts",
+    control = list(n.iter = 60L, n.warmup = 60L, verbose = FALSE, progress = FALSE))
+  expect_identical(fit_icar$method, "nuts")
+  expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
 })
 
 test_that("distance() hazard-rate key under areal spatial recovers slope, shape + field (#79)", {
@@ -578,4 +579,110 @@ test_that("distance() hazard-rate key under areal spatial recovers slope, shape 
   expect_true(all(slope_ok))                       # abundance slope within 3 SE
   expect_true(all(shape_ok))                       # hazard log-shape within 3 SE
   expect_gt(mean(field_cor), 0.6)                  # field tracks the truth
+})
+
+test_that("distance() temporal()-only field recovers the AR1 field + slope (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
+  # driver with a single temporal block on the abundance arm (gcol33/tulpaObs#114).
+  cut <- c(0, 10, 20, 30, 40)
+  pi_b <- tulpaObs:::.distance_pi(18, cut, "halfnorm", "line")
+  Tt <- 8L; per_t <- 20L; N <- Tt * per_t
+  fcor <- slope <- rep(NA_real_, 8L)
+  for (s in seq_len(8L)) {
+    set.seed(200L + s)
+    period <- rep(seq_len(Tt), each = per_t)
+    rho <- 0.7; sig <- 0.6; u <- numeric(Tt)
+    u[1] <- stats::rnorm(1, 0, sig / sqrt(1 - rho^2))
+    for (t in 2:Tt) u[t] <- rho * u[t - 1] + stats::rnorm(1, 0, sig)
+    u <- u - mean(u)
+    x <- stats::rnorm(N)
+    lam <- exp(log(25) + 0.4 * x + u[period])
+    Nd <- stats::rpois(N, lam); y <- matrix(0L, N, length(pi_b))
+    for (i in seq_len(N)) y[i, ] <- stats::rbinom(length(pi_b), Nd[i], pi_b)
+    fit <- tryCatch(tobs(~ x + temporal(period, type = "ar1"),
+                         data = data.frame(x = x, period = period),
+                         family = distance(key = "halfnorm", transect = "line",
+                                           cutpoints = cut),
+                         detection = ~ 1, y = y, method = "nested_laplace",
+                         control = list(verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_null(fit$spatial_field)                 # temporal-only: no areal field
+      expect_length(fit$temporal_field, Tt)
+    }
+    slope[s] <- fit$means[["lambda_x"]]
+    if (length(fit$temporal_field) == Tt) fcor[s] <- abs(stats::cor(fit$temporal_field, u))
+  }
+  ok <- is.finite(slope)
+  expect_gte(mean(ok), 0.75)
+  expect_lt(abs(mean(slope[ok]) - 0.4), 0.10)        # abundance slope recovered
+  expect_gt(mean(fcor[ok], na.rm = TRUE), 0.85)      # AR1 temporal field recovered
+})
+
+test_that("distance() DETECTION-arm areal field recovers the log-sigma field (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A field in the detection= formula loads on the per-site detection scale
+  # (log sigma) instead of the abundance arm; the distance kernel exposes the
+  # per-site sigma gradient (sw$grad_sig), so the areal-BFGS driver recovers a
+  # spatially-varying detection scale. Half-normal key (tulpaObs#114).
+  gadj <- function(side) {
+    ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
+    a <- matrix(0L, ng, ng)
+    for (i in seq_len(ng)) for (j in seq_len(ng))
+      if (i != j && abs(co$x[i]-co$x[j])+abs(co$y[i]-co$y[j])==1L) a[i,j] <- 1L
+    a
+  }
+  ifield <- function(a, sdp, seed) {
+    set.seed(seed); ng <- nrow(a); p <- as.numeric(scale(stats::rnorm(ng)))
+    for (r in 1:4) { pn <- p; for (i in seq_len(ng)) {
+      nb <- which(a[i,]==1L); pn[i] <- 0.5*p[i]+0.5*mean(p[nb]) }; p <- pn }
+    p <- sdp * as.numeric(scale(p)); p - mean(p)
+  }
+  side <- 7L; adj <- gadj(side); ng <- nrow(adj); cut <- c(0,10,20,30,40,50)
+  fcor <- sig0 <- logical(0); fc <- s0 <- numeric(0)
+  for (sd in 1:4) {
+    phi <- ifield(adj, 0.5, 30L + sd); set.seed(30L + sd)
+    Nd <- stats::rpois(ng, 60); log_sig <- log(22) + phi
+    y <- matrix(0L, ng, length(cut) - 1L)
+    for (i in seq_len(ng)) {
+      pib <- tulpaObs:::.distance_pi(exp(log_sig[i]), cut, "halfnorm", "line")
+      y[i, ] <- stats::rbinom(length(pib), Nd[i], pib)
+    }
+    fit <- tryCatch(tobs(~ 1, data = data.frame(row = seq_len(ng)),
+                         detection = ~ icar(graph = adj),
+                         family = distance(key = "halfnorm", transect = "line",
+                                           cutpoints = cut),
+                         y = y, method = "nested_laplace",
+                         control = list(verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    if (sd == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_identical(fit$spatial_field_arm, "detection")
+      expect_length(fit$spatial_field, ng)
+    }
+    fc <- c(fc, abs(stats::cor(fit$spatial_field, phi)))
+    s0 <- c(s0, coef(fit)$sigma[["(Intercept)"]])
+  }
+  expect_gte(length(fc), 3L)
+  expect_gt(mean(fc), 0.6)                            # detection field tracks truth
+  expect_lt(abs(mean(s0) - log(22)), 0.15)            # detection-scale intercept
+})
+
+test_that("distance() detection-arm areal field rejects the hazard key (#114)", {
+  cut <- c(0, 10, 20, 30); adj <- diag(0, 4L); adj[1,2] <- adj[2,1] <- 1L
+  adj[3,4] <- adj[4,3] <- 1L; adj[2,3] <- adj[3,2] <- 1L
+  y <- matrix(2L, 4L, length(cut) - 1L)
+  expect_error(
+    tobs(~ 1, data = data.frame(row = 1:4), detection = ~ icar(graph = adj),
+         family = distance(key = "hazard", transect = "line", cutpoints = cut),
+         y = y, method = "nested_laplace",
+         control = list(verbose = FALSE, progress = FALSE)),
+    "half-normal"
+  )
 })

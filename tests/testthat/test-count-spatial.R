@@ -180,3 +180,84 @@ test_that("areal count recovers the field under car_proper", {
   expect_equal(length(fit_cp$spatial_field), d$N)
   expect_gt(stats::cor(fit_cp$spatial_field, d$field), 0.7)
 })
+
+
+# --- (6) binomial areal field (spOccupancy svcPGBinom) ---------------------
+# Unlike negbin / gaussian, a binomial areal count IS identified against a
+# per-node field: the variance is pinned by the trial count n, so there is no
+# free dispersion for the field to absorb (gcol33/tulpaObs#125).
+
+# Binomial successes with a smooth sum-to-zero areal field:
+# logit p_i = X_i beta + f_i, y_i ~ Binom(n_i, p_i).
+.count_sim_areal_binom <- function(side = 12L, beta = c(0.2, 0.6),
+                                    field_sd = 0.8, trials = 10L, seed = 1L) {
+  set.seed(seed)
+  A <- .count_grid_graph(side); N <- nrow(A)
+  coord <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f <- field_sd * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
+  f <- f - mean(f)
+  data <- data.frame(x = stats::rnorm(N))
+  X <- stats::model.matrix(~ x, data)
+  p <- stats::plogis(as.numeric(X %*% beta) + f)
+  y <- stats::rbinom(N, size = trials, prob = p)
+  list(y = y, data = data, graph = A, field = f, beta = beta, N = N,
+       trials = trials)
+}
+
+test_that("count('binomial') is identified against an areal field (not gated)", {
+  d <- .count_sim_areal_binom(side = 8L, seed = 11L)
+  # binomial does NOT hit the non-Poisson dispersion gate
+  fit <- tobs(~ x + icar(graph = d$graph), data = d$data, y = d$y,
+              family = count("binomial"), trials = d$trials,
+              method = "nested_laplace",
+              control = list(progress = FALSE, verbose = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$method, "nested_laplace")
+  expect_equal(length(fit$spatial_field), d$N)
+})
+
+test_that("binomial areal count recovers the field + coefficients (trials>1)", {
+  skip_if_fast()
+  skip_on_cran()
+  beta   <- c(0.2, 0.6)
+  n_seed <- 20L
+  cover  <- matrix(FALSE, n_seed, length(beta))
+  est    <- matrix(NA_real_, n_seed, length(beta))
+  fcor   <- numeric(n_seed)
+  for (s in seq_len(n_seed)) {
+    d   <- .count_sim_areal_binom(side = 12L, beta = beta, trials = 10L,
+                                  seed = 600 + s)
+    fit <- tobs(~ x + icar(graph = d$graph), data = d$data, y = d$y,
+                family = count("binomial"), trials = d$trials,
+                method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    b  <- unname(unlist(coef(fit)))
+    se <- sqrt(diag(vcov(fit)))
+    est[s, ]   <- b
+    cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
+    fcor[s]    <- stats::cor(fit$spatial_field, d$field)
+  }
+  expect_equal(colMeans(est), beta, tolerance = 0.08)
+  expect_true(all(colMeans(cover) >= 0.85))
+  # interior field: assert on field cor, never on sigma (the null-field trap)
+  expect_gt(stats::median(fcor), 0.8)
+})
+
+test_that("Bernoulli areal count recovers the field (trials = 1, svcPGBinom)", {
+  skip_if_fast()
+  skip_on_cran()
+  # One Bernoulli per node identifies the field but the fixed effects are weakly
+  # identified against it (as in spOccupancy's svcPGBinom); assert field
+  # recovery, which is the point of the family.
+  fcor <- numeric(12L)
+  for (s in seq_len(12L)) {
+    d   <- .count_sim_areal_binom(side = 14L, trials = 1L, field_sd = 0.6,
+                                  seed = 700 + s)
+    fit <- tobs(~ x + icar(graph = d$graph), data = d$data, y = d$y,
+                family = count("binomial"), trials = 1L,
+                method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    fcor[s] <- stats::cor(fit$spatial_field, d$field)
+  }
+  expect_gt(stats::median(fcor), 0.6)
+})

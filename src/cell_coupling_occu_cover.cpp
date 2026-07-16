@@ -203,6 +203,14 @@ void cpp_register_occu_cover_beta_coupling() {
        std::make_shared<tulpaObs::OccuCoverBetaCoupling>());
 }
 
+// Identity-Gaussian positive arm (gcol33/tulpaObs#112).
+// [[Rcpp::export]]
+void cpp_register_occu_cover_gaussian_coupling() {
+    auto fp = lookup_registrar();
+    fp("occu_cover_gaussian",
+       std::make_shared<tulpaObs::OccuCoverGaussianCoupling>());
+}
+
 // Cell-aggregated cover variants (tulpaObs#33): the pos arm carries one row per
 // detected occupancy unit (the mean / median cover), evaluated once per cell.
 // [[Rcpp::export]]
@@ -217,6 +225,13 @@ void cpp_register_occu_cover_beta_agg_coupling() {
     auto fp = lookup_registrar();
     fp("occu_cover_beta_agg",
        std::make_shared<tulpaObs::OccuCoverBetaAggCoupling>());
+}
+
+// [[Rcpp::export]]
+void cpp_register_occu_cover_gaussian_agg_coupling() {
+    auto fp = lookup_registrar();
+    fp("occu_cover_gaussian_agg",
+       std::make_shared<tulpaObs::OccuCoverGaussianAggCoupling>());
 }
 
 
@@ -266,6 +281,25 @@ Rcpp::List cpp_eval_occu_cover_beta_cell(
 ) {
     return eval_one_cell_<tulpaObs::OccuCoverBetaCoupling>(
         eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta",
+        parse_curvature_(curvature)
+    );
+}
+
+// Identity-Gaussian twin of `cpp_eval_occu_cover_lognormal_cell` (#112).
+// `y_pos` is the raw response at detected visits; `sigma_pos` is the Gaussian
+// SD (mean is eta_pos, no log transform).
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_cover_gaussian_cell(
+    double                     eta_psi,
+    Rcpp::NumericVector        eta_p,
+    Rcpp::NumericVector        eta_pos,
+    Rcpp::IntegerVector        y_det,
+    Rcpp::NumericVector        y_pos,
+    double                     sigma_pos,
+    std::string                curvature = "observed"
+) {
+    return eval_one_cell_<tulpaObs::OccuCoverGaussianCoupling>(
+        eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, "gaussian",
         parse_curvature_(curvature)
     );
 }

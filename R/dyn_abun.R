@@ -32,8 +32,17 @@
 # site-major interval-minor (row (i-1)*(T-1) + iv); otherwise it collapses to the
 # per-site design [n_sites x p] (the constant-rate path). `arm` names the arm for
 # error messages. Returns the model matrix and a season_varying flag.
-.tobs_dyn_abun_arm_design <- function(fe_formula, data, n_sites, n_intervals,
-                                      arm) {
+# Interval-indexed transition-arm design. Shared by the open-population families
+# whose transition rates span the T-1 primary-season intervals -- dyn_abun()
+# (survival omega / recruitment gamma) and dyn_occu() (colonization gamma /
+# extinction epsilon). A rate that varies by interval is supplied as a matrix
+# column of `data` with one column per interval ([n_sites x (T-1)]); when the arm
+# references such a column the design is long-form [(site x interval) x p],
+# site-major interval-minor (row (i-1)*(T-1) + iv), otherwise it collapses to the
+# site-level [n_sites x p] design (byte-identical to the constant-rate path).
+# `fam` names the calling family for the error message only.
+.tobs_interval_arm_design <- function(fe_formula, data, n_sites, n_intervals,
+                                      arm, fam = "dyn_abun") {
   vars <- all.vars(fe_formula)
   vars <- vars[vars %in% names(data)]
   is_sv <- vapply(vars, function(v) {
@@ -45,10 +54,11 @@
     is.matrix(col) && ncol(col) != n_intervals
   }, logical(1))
   if (any(bad)) {
-    stop(sprintf(paste0("dyn_abun() %s covariate '%s' is a matrix with %d ",
+    stop(sprintf(paste0("%s() %s covariate '%s' is a matrix with %d ",
                         "columns; a season-varying %s covariate must have one ",
                         "column per transition interval (T-1 = %d)."),
-                 arm, vars[bad][1], ncol(data[[vars[bad][1]]]), arm, n_intervals),
+                 fam, arm, vars[bad][1], ncol(data[[vars[bad][1]]]), arm,
+                 n_intervals),
          call. = FALSE)
   }
   if (!any(is_sv)) {
@@ -69,6 +79,13 @@
   }
   data_long <- as.data.frame(long, stringsAsFactors = FALSE)
   list(X = model.matrix(fe_formula, data_long), season_varying = TRUE)
+}
+
+# Back-compat alias for the dyn_abun call sites.
+.tobs_dyn_abun_arm_design <- function(fe_formula, data, n_sites, n_intervals,
+                                      arm) {
+  .tobs_interval_arm_design(fe_formula, data, n_sites, n_intervals, arm,
+                            fam = "dyn_abun")
 }
 
 # Bind a Dail-Madsen open N-mixture. `y` is a 3D array [n_sites x max_visits x

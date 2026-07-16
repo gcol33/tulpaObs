@@ -164,6 +164,12 @@
     }
     return(mu)
   }
+  if (identical(bundle$positive, "gaussian")) {
+    # Identity-Gaussian arm (gcol33/tulpaObs#112): the response IS the mean, so the
+    # conditional cover mean is the linear predictor itself, mu = eta. No latent
+    # cover-aggregate variant (the latent path is lognormal / beta only).
+    return(eta_pos)
+  }
   if (identical(bundle$positive, "lognormal_trunc")) {
     # Truncated-lognormal conditional cover mean: E[exp(t) | t <= u] with
     # t ~ N(eta, sg^2) and u = log(1) = 0 (cover <= 1) =

@@ -12,6 +12,8 @@ simulate_dyn_occu(
   beta_det = c(0),
   gamma = 0.2,
   epsilon = 0.1,
+  beta_gamma = NULL,
+  beta_epsilon = NULL,
   seed = NULL
 )
 }
@@ -26,9 +28,17 @@ simulate_dyn_occu(
 
 \item{beta_det}{Detection coefficients.}
 
-\item{gamma}{Colonization probability (default 0.2).}
+\item{gamma}{Colonization probability (default 0.2); ignored when
+\code{beta_gamma} is given.}
 
-\item{epsilon}{Extinction probability (default 0.1).}
+\item{epsilon}{Extinction probability (default 0.1); ignored when
+\code{beta_epsilon} is given.}
+
+\item{beta_gamma}{Optional \code{c(intercept, slope)} for a season-varying
+colonization logit driven by a drawn per-\verb{(site, interval)} covariate.}
+
+\item{beta_epsilon}{Optional \code{c(intercept, slope)} for a season-varying
+extinction logit driven by a drawn per-\verb{(site, interval)} covariate.}
 
 \item{seed}{Random seed.}
 }
@@ -36,5 +46,11 @@ simulate_dyn_occu(
 A list with \code{y} (3D array), \code{data}, and \code{truth}.
 }
 \description{
-Simulate temporal (multi-season) occupancy data
+Colonization and extinction are constant across the \code{n_seasons - 1} transition
+intervals by default. Supplying \code{beta_gamma} and/or \code{beta_epsilon} makes the
+corresponding rate SEASON-VARYING: a per-\verb{(site, interval)} covariate is drawn
+into an \verb{[N x (n_seasons - 1)]} matrix column (\code{gamma_cov} / \code{eps_cov}) of the
+returned \code{data}, and the rate is \code{plogis(beta[1] + beta[2] * cov)}. Fit these
+with \code{colonization = ~ gamma_cov} / \code{extinction = ~ eps_cov} (the matrix
+column drives the interval-indexed rate, gcol33/tulpaObs#124).
 }

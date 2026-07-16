@@ -50,6 +50,17 @@
     col_formula  = dots$colonization,
     ext_formula  = dots$extinction
   )
+  # Season-varying colonization / extinction (a [n_sites x (T-1)] matrix column;
+  # gcol33/tulpaObs#124) is wired for the Laplace-EM engines only. The C++ NUTS
+  # forward reads one gamma / epsilon linear predictor per site, so an
+  # interval-indexed rate is gated there with a pointer.
+  if ((isTRUE(model$col_season_varying) || isTRUE(model$ext_season_varying)) &&
+      identical(engine, "nuts")) {
+    stop("dyn_occu(): season-varying colonization / extinction (a ",
+         "[n_sites x (T-1)] matrix covariate) is not yet wired for ",
+         "method = \"nuts\"; use method = \"laplace\" ",
+         "(gcol33/tulpaObs#124).", call. = FALSE)
+  }
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "dyn_occu"), priors = priors,
@@ -72,10 +83,35 @@
          "list of n_species count vectors).", call. = FALSE)
   }
   response <- family$params$response %||% "poisson"
+  if (!is.null(dots$trials) && !identical(response, "binomial")) {
+    stop("ms_count(): `trials` applies only to ms_count(response = ",
+         "\"binomial\"); drop it for the ", response, " response.",
+         call. = FALSE)
+  }
   bind  <- .tobs_bind_formulas(list(mu = formula), data)
   model <- .tobs_build_ms_count(
     formula = bind$fe$mu, data = data, y = y, species = dots$species,
-    response = response, structured_terms = bind$terms)
+    response = response, trials = dots$trials, structured_terms = bind$terms)
+
+  # The binomial community response is wired for the non-spatial Laplace-EM only
+  # (community svcPGBinom, gcol33/tulpaObs#125). NUTS needs a binomial family in
+  # the in-tree C++ FullGradFn, and a shared field / latent factor needs the
+  # binomial working callback in the block-coordinate driver -- both follow-ups.
+  if (identical(response, "binomial")) {
+    if (identical(engine, "nuts")) {
+      stop("ms_count(response = \"binomial\"): NUTS is not yet wired for the ",
+           "binomial community response; use method = \"laplace\" ",
+           "(gcol33/tulpaObs#125).", call. = FALSE)
+    }
+    structs_b <- .tobs_structures_from_model(model)
+    if (!is.null(structs_b$spatial) || !is.null(structs_b$latent)) {
+      stop("ms_count(response = \"binomial\"): a shared areal field / latent ",
+           "factor is not yet wired for the binomial community response; use ",
+           "method = \"laplace\" without a structured term. The single-species ",
+           "binomial areal field (svcPGBinom) is count(response = ",
+           "\"binomial\") + icar() (gcol33/tulpaObs#125).", call. = FALSE)
+    }
+  }
 
   # A shared areal field (icar()) on the abundance formula routes to the
   # community-spatial fitter (the sfMsAbund analogue) under nested_laplace; a
@@ -365,7 +401,7 @@
 }
 
 .dispatch_count <- function(formula, data, family, detection, y, visits,
-                            engine, priors, control,
+                            engine, priors, control, trials = NULL,
                             approx = "gaussian_laplace",
                             correction = "none", ...) {
   if (!is.null(detection)) {
@@ -377,8 +413,13 @@
          "response on a two-sided `formula` left-hand side.", call. = FALSE)
   }
   response <- family$params$response %||% "poisson"
+  if (!is.null(trials) && !identical(response, "binomial")) {
+    stop("count(): `trials` applies only to count(response = \"binomial\"); ",
+         "drop it for the ", response, " response.", call. = FALSE)
+  }
   model <- .tobs_build_model(occ_formula = formula, data = data, y = y,
-                             count = TRUE, count_response = response)
+                             count = TRUE, count_response = response,
+                             count_trials = trials)
 
   # A plain areal field -- icar()/car_proper() -- on the abundance formula routes
   # to nested-Laplace (the spAbund analogue): the field is a latent GMRF prior on
@@ -434,17 +475,21 @@
            "field node per site is required (gcol33/tulpaObs#117).",
            call. = FALSE)
     }
-    # Areal count is Poisson-only. With one field node per site the negbin size /
-    # gaussian residual variance and the latent field are FUNDAMENTALLY not
-    # identified together, not merely awkward to fit: the field (one free value
-    # per site) absorbs all extra-Poisson variation, so the field-integrated
-    # marginal likelihood is monotone in the dispersion toward the Poisson limit
-    # (verified: size -> Inf, residual variance -> 0). No estimator -- outer loop
-    # OR a joint dispersion grid -- recovers the dispersion in this design.
-    # Identification needs replication within a site (an N-mixture, abun()) or
-    # more sites than field nodes (a group_var areal term, not yet wired for
-    # count). Poisson has no dispersion parameter and is cleanly identified.
-    if (!identical(response, "poisson")) {
+    # Areal count is Poisson- OR binomial-only. With one field node per site the
+    # negbin size / gaussian residual variance and the latent field are
+    # FUNDAMENTALLY not identified together, not merely awkward to fit: the field
+    # (one free value per site) absorbs all extra-Poisson variation, so the
+    # field-integrated marginal likelihood is monotone in the dispersion toward
+    # the Poisson limit (verified: size -> Inf, residual variance -> 0). No
+    # estimator -- outer loop OR a joint dispersion grid -- recovers the
+    # dispersion in this design. Identification needs replication within a site
+    # (an N-mixture, abun()) or more sites than field nodes (a group_var areal
+    # term, not yet wired for count). Poisson has no dispersion parameter and is
+    # cleanly identified. The BINOMIAL response is also cleanly identified: its
+    # variance is pinned by the trial count n, so there is no free dispersion for
+    # the field to absorb -- this is exactly spOccupancy's svcPGBinom, which fits
+    # a per-node field even at trials = 1 (gcol33/tulpaObs#125).
+    if (!response %in% c("poisson", "binomial")) {
       stop(sprintf(paste0(
         "count(response = \"%s\") with an areal field is not identifiable: with ",
         "one field node per site the %s and the latent field are confounded ",
@@ -509,7 +554,8 @@
     }
   }
 
-  if (identical(response, "poisson")) {
+  if (response %in% c("poisson", "binomial")) {
+    # No free dispersion (binomial variance is pinned by the trial count).
     fit <- fit_once(1.0)
   } else {
     phi <- 1.0
@@ -1085,10 +1131,53 @@
     stop("ms_dyn_occu() requires `y` (a 4D array [n_sites x max_visits x ",
          "n_seasons x n_species] or a named list of 3D arrays).", call. = FALSE)
   }
+  # Resolve structured terms: a shared areal field on the first-season occupancy
+  # formula routes to the community dynamic-spatial fitter (stMsPGOcc /
+  # svcTMsPGOcc; gcol33/tulpaObs#123). Bind the occupancy AND detection formulas
+  # so a field on either arm is parsed (the FE part is what model.matrix sees);
+  # `shared[2]` then identifies a detection-arm field to reject.
+  bind <- .tobs_bind_formulas(list(psi1 = formula, p = detection), data)
   model <- .tobs_build_ms_dyn_occu(
-    occ_formula = formula, det_formula = detection,
+    occ_formula = bind$fe$psi1, det_formula = bind$fe$p,
     col_formula = dots$colonization, ext_formula = dots$extinction,
-    data = data, y = y, species = dots$species)
+    data = data, y = y, species = dots$species,
+    structured_terms = bind$terms)
+  structs <- .tobs_structures_from_model(model)
+
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc) || !is.null(structs$latent)) {
+    stop("ms_dyn_occu(): temporal / re / svc / latent terms are not wired for ",
+         "the community dynamic occupancy family; a shared areal field ",
+         "(icar()) on the first-season occupancy formula is the structured ",
+         "term supported (gcol33/tulpaObs#123).", call. = FALSE)
+  }
+
+  if (!is.null(structs$spatial)) {
+    if (!identical(engine, "nested_laplace")) {
+      stop("a shared areal field on the ms_dyn_occu() occupancy formula needs ",
+           "method = \"nested_laplace\" (drop the icar() term for the ",
+           "non-spatial community dynamic fit).", call. = FALSE)
+    }
+    if (isTRUE(structs$spatial$shared[2L])) {
+      stop("ms_dyn_occu() areal field sits on the first-season occupancy arm ",
+           "only; a field on the detection formula is not supported.",
+           call. = FALSE)
+    }
+    return(.tobs_fit_ms_dyn_occu_field(
+      model, spatial = structs$spatial,
+      max.iter   = control[["max.iter"]] %||% 200L,
+      tol        = control[["tol"]] %||% 1e-4,
+      sigma.beta = control[["sigma.beta"]] %||% 5,
+      priors     = priors,
+      max.outer  = control[["max.outer"]] %||% 25L,
+      verbose    = isTRUE(control[["verbose"]])))
+  }
+  if (identical(engine, "nested_laplace")) {
+    stop("ms_dyn_occu(): method = \"nested_laplace\" needs a shared areal field ",
+         "icar() on the first-season occupancy formula. For the non-spatial ",
+         "community dynamic fit use method = \"laplace\".", call. = FALSE)
+  }
+
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_dyn_occu, fit_args)
 }

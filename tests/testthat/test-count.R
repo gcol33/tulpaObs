@@ -16,7 +16,7 @@ test_that("count() family is wired and reports its supported methods", {
   expect_identical(f$response, "vector")
   expect_identical(count("negbin")$params$response, "negbin")
   expect_identical(count("gaussian")$params$response, "gaussian")
-  expect_error(count("binomial"))
+  expect_identical(count("binomial")$params$response, "binomial")
 
   # the method registry is the single source of truth for supported backends
   expect_true("laplace" %in% tulpaObs:::.tobs_family_methods$count)
@@ -148,4 +148,104 @@ test_that("Gaussian count fit recovers coefficients + residual variance", {
   }
   expect_equal(colMeans(est), beta, tolerance = 0.05)
   expect_equal(mean(vr), sd_true^2, tolerance = 0.3)
+})
+
+
+# --- binomial GLMM (spOccupancy svcPGBinom family, no replicates) ----------
+
+test_that("count(response = 'binomial') validates trials and the response", {
+  sim <- simulate_count(N = 60, beta = c(0.3, 0.5), response = "binomial",
+                        trials = 8, seed = 1)
+
+  # `trials` only applies to the binomial response
+  expect_error(
+    tobs(~ x, data = sim$data, family = count("poisson"),
+         y = round(exp(sim$data$x)), trials = 3),
+    "trials.*only.*binomial|binomial")
+
+  # successes cannot exceed trials
+  expect_error(
+    tobs(~ x, data = sim$data, family = count("binomial"),
+         y = sim$y, trials = 1),
+    "<=|exceed|k <= n")
+
+  # trials length must be scalar or one per site
+  expect_error(
+    tobs(~ x, data = sim$data, family = count("binomial"),
+         y = sim$y, trials = c(8, 8)),
+    "scalar or one value per site|length")
+
+  # default trials = 1 gives a Bernoulli response
+  s2 <- simulate_count(N = 60, beta = c(0, 0.5), response = "binomial",
+                       trials = 1, seed = 2)
+  fit <- tobs(~ x, data = s2$data, family = count("binomial"), y = s2$y,
+              control = list(progress = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+})
+
+test_that("count() S3 surface works for the binomial response", {
+  skip_if_fast()
+  sim <- simulate_count(N = 250, beta = c(0.4, 0.7), response = "binomial",
+                        trials = 12, seed = 5)
+  fit <- tobs(~ x, data = sim$data, family = count("binomial"), y = sim$y,
+              trials = 12, control = list(progress = FALSE))
+  # fitted = expected successes n * p, in [0, n]
+  fv <- fitted(fit)$mu
+  expect_length(fv, 250)
+  expect_true(all(fv >= 0 & fv <= 12))
+  for (ty in c("deviance", "pearson", "response")) {
+    r <- residuals(fit, type = ty)$mu
+    expect_length(r, 250)
+    expect_true(all(is.finite(r)))
+  }
+  # predict(newdata) returns the per-trial probability in (0, 1)
+  pr <- predict(fit, newdata = data.frame(x = c(-1, 0, 1)))
+  expect_true(all(pr > 0 & pr < 1))
+  expect_true(all(diff(pr) > 0))              # monotone in x (positive slope)
+  w <- tobs_waic(fit)
+  expect_true(is.finite(w$waic))
+})
+
+test_that("binomial count fit recovers truth + 95% CI coverage (trials > 1)", {
+  skip_if_fast()
+  skip_on_cran()
+  beta <- c(0.3, 0.8, -0.5)
+  n_seed <- 20L
+  cover <- matrix(FALSE, n_seed, length(beta))
+  est   <- matrix(NA_real_, n_seed, length(beta))
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_count(N = 400, beta = beta, response = "binomial",
+                          trials = 10, seed = 400 + s)
+    fit <- tobs(~ x + x2, data = sim$data, family = count("binomial"),
+                y = sim$y, trials = 10, control = list(progress = FALSE))
+    b  <- unname(unlist(coef(fit)))
+    se <- sqrt(diag(vcov(fit)))
+    est[s, ]   <- b
+    cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
+  }
+  expect_equal(colMeans(est), beta, tolerance = 0.05)
+  expect_true(all(colMeans(cover) >= 0.85))
+})
+
+test_that("Bernoulli count fit recovers truth + coverage (trials = 1)", {
+  skip_if_fast()
+  skip_on_cran()
+  # trials = 1 is svcPGBinom's setting; a single Bernoulli per site needs more
+  # sites than the trials > 1 case for the same precision.
+  beta <- c(-0.2, 0.9)
+  n_seed <- 20L
+  cover <- matrix(FALSE, n_seed, length(beta))
+  est   <- matrix(NA_real_, n_seed, length(beta))
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_count(N = 800, beta = beta, response = "binomial",
+                          trials = 1, seed = 500 + s)
+    fit <- tobs(~ x, data = sim$data, family = count("binomial"),
+                y = sim$y, trials = 1, control = list(progress = FALSE))
+    b  <- unname(unlist(coef(fit)))
+    se <- sqrt(diag(vcov(fit)))
+    est[s, ]   <- b
+    cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
+  }
+  expect_equal(colMeans(est), beta, tolerance = 0.06)
+  expect_true(all(colMeans(cover) >= 0.85))
 })

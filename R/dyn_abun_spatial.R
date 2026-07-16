@@ -17,12 +17,19 @@
                                        mixture = "poisson",
                                        K_max = NULL, max_iter = 300L, tol = 1e-8,
                                        verbose = TRUE, integration = "grid") {
-  .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
+  temporal_only <- is.null(spatial)
+  if (!temporal_only)
+    .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
   map <- seq_len(model$n_sites)
-  field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "dyn_abun", map)
-  field <- if (is.null(temporal)) field_sp else {
-    list(field_sp,
-         .tobs_temporal_field_spec(temporal, model$n_sites, "dyn_abun"))
+  # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
+  # temporal block; otherwise the areal field is block 1 and the temporal block 2.
+  field <- if (temporal_only) {
+    list(.tobs_temporal_field_spec(temporal, model$n_sites, "dyn_abun"))
+  } else {
+    field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "dyn_abun", map)
+    if (is.null(temporal)) field_sp
+    else list(field_sp,
+              .tobs_temporal_field_spec(temporal, model$n_sites, "dyn_abun"))
   }
 
   X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
@@ -85,14 +92,22 @@
     K_max = K, converged = TRUE, n_iter = NA_integer_, coef_names = nm)
   fit <- build_dyn_abun_fit(raw, model)
   fit$method <- "nested_laplace"
-  fit$spatial_field <- res$field_mean
-  fit$spatial_hyper <- res$hyper
   fit$spatial_integration <- res$integration
   fit$spatial_pareto_k <- res$pareto_k
-  if (!is.null(temporal)) {
+  if (temporal_only) {
+    # The single temporal block is reported by the driver as block 1
+    # (field_mean / hyper); relabel it as the temporal field (#114).
     fit$temporal <- temporal
-    fit$temporal_field <- res$temporal_field
-    fit$temporal_hyper <- res$temporal_hyper
+    fit$temporal_field <- res$field_mean
+    fit$temporal_hyper <- res$hyper
+  } else {
+    fit$spatial_field <- res$field_mean
+    fit$spatial_hyper <- res$hyper
+    if (!is.null(temporal)) {
+      fit$temporal <- temporal
+      fit$temporal_field <- res$temporal_field
+      fit$temporal_hyper <- res$temporal_hyper
+    }
   }
   fit
 }
@@ -112,12 +127,10 @@
                                             adapt.delta = 0.9, seed = 1L,
                                             verbose = FALSE) {
   .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
-  if (!identical(spatial$type, "car_proper"))
-    stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports the proper-CAR ",
-                        "field car_proper(); the intrinsic '%s' field needs a ",
-                        "sum-to-zero reparameterisation for NUTS -- use method = ",
-                        "\"nested_laplace\" for the icar()/bym2() areal fit. ",
-                        "(tulpaObs#72)"), spatial$type), call. = FALSE)
+  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+    stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports icar() / ",
+                        "car_proper() / bym2() on the initial-abundance arm; got ",
+                        "'%s'. (tulpaObs#72, #113)"), spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites)
     stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
@@ -135,22 +148,29 @@
                                    K_max = K_max, max_iter = 300L, tol = 1e-8,
                                    verbose = FALSE, integration = "grid")
   hyper <- nl$spatial_hyper
-  tau <- max(unname(hyper[["tau"]]), 1e-3)
-  rho <- min(max(unname(hyper[["rho"]]), 0.01), 0.99)
-  Linv <- .tobs_field_linv(adj, tau, rho, n_sites)
+  hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
+  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                 tau = hv("tau"), rho = hv("rho"),
+                                 sigma = hv("sigma"),
+                                 scale_factor = spatial$scale_factor)
+  field_load <- fl$field_load; n_raw <- fl$n_raw
 
   cm <- as.numeric(nl$means)
   n_base <- length(cm)
-  L <- chol(.areal_Q(adj, rho) * tau + diag(1e-4 * tau, n_sites))
-  raw0 <- as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
+  # car_proper warm-starts raw near the integrated field; icar / bym2 (non-square
+  # sum-to-zero loadings) start raw at 0 (#71/#113).
+  raw0 <- if (identical(spatial$type, "car_proper")) {
+    L <- chol(.areal_Q(adj, fl$rho) * fl$tau + diag(1e-4 * fl$tau, n_sites))
+    as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
+  } else numeric(n_raw)
   theta0 <- c(cm, raw0)
-  inv_metric <- c(rep(0.2, n_base), rep(1, n_sites))
+  inv_metric <- c(rep(0.2, n_base), rep(1, n_raw))
 
   spec <- list(y = as.integer(model$y_flat), n_sites = n_sites,
                T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                X_lambda = X_lam, X_p = X_p, X_omega = X_om, X_gamma = X_gm,
                use_nb = use_nb, n_field_units = n_sites,
-               field_map = seq_len(n_sites), field_Linv = Linv)
+               field_map = seq_len(n_sites), field_load = field_load)
 
   run_chain <- function(ch)
     cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
@@ -166,13 +186,13 @@
            paste0("omega_",  model$process_info[[3]]$coef_names),
            paste0("gamma_",  model$process_info[[4]]$coef_names))
   if (use_nb) nms <- c(nms, "log_r")
-  nms <- c(nms, paste0("raw_", seq_len(n_sites)))
+  nms <- c(nms, paste0("raw_", seq_len(n_raw)))
   colnames(draws) <- nms
   b_idx <- seq_len(n_base)
   par <- colMeans(draws); names(par) <- nms
   cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_sites)
-  z_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  raw_idx <- n_base + seq_len(n_raw)
+  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
   lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lam), ncol(X_p), ncol(X_om), ncol(X_gm),
                                     use_nb = use_nb)
@@ -197,7 +217,108 @@
   fit$nuts <- list(accept_prob = accept, divergent = divergent,
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = tau, rho = rho,
+                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
                    prior_type = spatial$type, fixed_hyper = TRUE)
+  fit
+}
+
+# Temporal-field Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#114): a
+# FIXED-HYPER non-centered ar1 / rw1 / rw2 / iid field on the initial-abundance
+# (log lambda_1) arm of the forward-HMM marginal. Structurally identical to the
+# areal NUTS path -- the temporal field is a GMRF whose whitened loading is fixed
+# at the nested-Laplace temporal-only posterior mean and whose per-site field_map
+# is the period index (many sites share a period), so it rides the SAME dyn_abun
+# NUTS field block (cpp_dyn_abun_nuts over nuts_field_block.h) with no engine
+# change. Poisson or NB initial abundance; temporal-only (no simultaneous areal
+# field on this path).
+.tobs_fit_dyn_abun_nuts_temporal <- function(model, temporal, mixture = "poisson",
+                                             K_max = NULL, sigma.beta = 10,
+                                             n.iter = 1000L, n.warmup = 1000L,
+                                             n.chains = 1L, max.treedepth = 10L,
+                                             adapt.delta = 0.9, seed = 1L,
+                                             verbose = FALSE) {
+  n_sites <- model$n_sites
+  ti <- as.integer(temporal$time_idx)
+  if (length(ti) != n_sites)
+    stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
+                        "sites; one time index per site is required for dyn_abun ",
+                        "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
+  n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+         else max(ti, na.rm = TRUE)
+  use_nb <- identical(model$mixture %||% mixture, "negbin") ||
+            mixture %in% c("negbin", "NB")
+  X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
+
+  # Warm coefficients + fixed temporal field hyper (tau[, rho]) from the
+  # nested-Laplace temporal-only fit (spatial = NULL).
+  nl <- .tobs_fit_dyn_abun_spatial(model, spatial = NULL, temporal = temporal,
+                                   mixture = if (use_nb) "negbin" else "poisson",
+                                   K_max = K_max, max_iter = 300L, tol = 1e-8,
+                                   verbose = FALSE, integration = "grid")
+  hyper <- nl$temporal_hyper
+  hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
+  fl <- .tobs_nuts_temporal_loading(temporal$type, n_t,
+                                    tau = hv("tau"), rho = hv("rho"))
+  field_load <- fl$field_load; n_raw <- fl$n_raw
+
+  cm <- as.numeric(nl$means)
+  n_base <- length(cm)
+  theta0 <- c(cm, numeric(n_raw))                 # raw starts flat (sum-to-zero safe)
+  inv_metric <- c(rep(0.2, n_base), rep(1, n_raw))
+
+  spec <- list(y = as.integer(model$y_flat), n_sites = n_sites,
+               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+               X_lambda = X_lam, X_p = X_p, X_omega = X_om, X_gamma = X_gm,
+               use_nb = use_nb, n_field_units = n_t,
+               field_map = ti, field_load = field_load)
+
+  run_chain <- function(ch)
+    cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
+                      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+                      n_warmup = as.integer(n.warmup),
+                      max_treedepth = as.integer(max.treedepth),
+                      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
+                      verbose = isTRUE(verbose))
+  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
+  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
+  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
+           paste0("p_",      model$process_info[[2]]$coef_names),
+           paste0("omega_",  model$process_info[[3]]$coef_names),
+           paste0("gamma_",  model$process_info[[4]]$coef_names))
+  if (use_nb) nms <- c(nms, "log_r")
+  nms <- c(nms, paste0("raw_", seq_len(n_raw)))
+  colnames(draws) <- nms
+  b_idx <- seq_len(n_base)
+  par <- colMeans(draws); names(par) <- nms
+  cov <- stats::cov(draws[, b_idx, drop = FALSE])
+  raw_idx <- n_base + seq_len(n_raw)
+  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
+
+  lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lam), ncol(X_p), ncol(X_om), ncol(X_gm),
+                                    use_nb = use_nb)
+  marg <- .tobs_dyn_abun_nuts_marginal(model)
+  log_r <- if (use_nb) as.numeric(par[lay$logr]) else NA_real_
+  ev_mean <- marg$eval_beta(par[lay$lambda], par[lay$p], par[lay$omega],
+                            par[lay$gamma], if (use_nb) log_r else 0)
+  raw_fit <- list(means = unname(par[b_idx]), vcov = cov, coef_names = nms[b_idx],
+                  log_lik = ev_mean$log_lik, log_lik_site = ev_mean$log_lik_site,
+                  mean_N1 = ev_mean$mean_N1, K_max = model$K_max, converged = TRUE,
+                  mixture = if (use_nb) "negbin" else "poisson",
+                  log_r = log_r, r = if (use_nb) exp(log_r) else NA_real_)
+  fit <- build_dyn_abun_fit(raw_fit, model)
+  fit$draws <- draws[, b_idx, drop = FALSE]
+  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
+  fit$vcov <- cov
+  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ev_mean$log_lik, nrow(draws))
+  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
+  divergent <- unlist(lapply(chains, `[[`, "divergent"))
+  fit$accept_prob <- accept; fit$divergent <- divergent
+  fit$method <- "nuts"; fit$temporal <- temporal; fit$temporal_field <- z_mean
+  fit$nuts <- list(accept_prob = accept, divergent = divergent,
+                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
+                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
+                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
+                   prior_type = temporal$type, fixed_hyper = TRUE)
   fit
 }

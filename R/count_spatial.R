@@ -83,11 +83,16 @@
     poisson  = "poisson",
     negbin   = "neg_binomial_2",
     gaussian = "gaussian",
+    binomial = "binomial",
     stop(sprintf("Areal count: unsupported response '%s'.", model$response),
          call. = FALSE))
+  # Binomial carries a per-site trial count; every other areal response is one
+  # trial per site (the identity used by the Poisson / Gaussian field fit).
+  n_trials <- if (identical(fam, "binomial"))
+                as.integer(model$n_trials %||% rep(1L, N)) else rep(1L, N)
 
   res <- tulpa::tulpa_nested_laplace(
-    y = y, n_trials = rep(1L, N), X = X, prior = prior,
+    y = y, n_trials = n_trials, X = X, prior = prior,
     family = fam, phi = as.numeric(model$count_phi %||% 1.0),
     # `verbose` is not a tulpa_nested_laplace() knob (it validates its control
     # names); the driver's own reporting is the `progress` option tobs() scopes.

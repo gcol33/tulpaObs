@@ -4,10 +4,18 @@
 \alias{ms_count}
 \title{Multispecies (community) relative-abundance GLMM family}
 \usage{
-ms_count(response = c("poisson", "negbin", "gaussian"))
+ms_count(response = c("poisson", "negbin", "gaussian", "binomial"))
 }
 \arguments{
-\item{response}{One of \code{"poisson"}, \code{"negbin"}, \code{"gaussian"}.}
+\item{response}{One of \code{"poisson"}, \code{"negbin"}, \code{"gaussian"}, or
+\code{"binomial"}. The binomial response is the community \code{k}-of-\code{n} GLMM
+(community \code{svcPGBinom}): supply the per-site (or per-\verb{site x species})
+trial count as \verb{trials =} on \code{\link[=tobs]{tobs()}} (default 1, i.e. Bernoulli, which is
+the \code{\link[=jsdm]{jsdm()}} response). With \code{trials > 1} the community-mean intercept
+carries a small first-order-Laplace bias of order \code{1 / n_species} (a few
+hundredths on the logit scale at 20 species, shrinking with more species;
+the slope and the \code{trials = 1} case are unbiased) -- the same character as
+the negative-binomial slope attenuation noted above.}
 }
 \value{
 A \code{tobs_family} object.

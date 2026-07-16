@@ -13,6 +13,7 @@ simulate_ms_dyn_occu(
   beta_comm_sd = c(0.5),
   gamma = 0.15,
   epsilon = 0.1,
+  field = NULL,
   seed = NULL
 )
 }
@@ -32,6 +33,10 @@ simulate_ms_dyn_occu(
 \item{gamma}{Colonization probability (default 0.15).}
 
 \item{epsilon}{Extinction probability (default 0.1).}
+
+\item{field}{Optional per-site shared areal field (length \code{N}) added to the
+first-season occupancy logit of every species -- the shared field of the
+community dynamic-spatial model (stMsPGOcc). Default \code{NULL} (no field).}
 
 \item{seed}{Random seed.}
 }

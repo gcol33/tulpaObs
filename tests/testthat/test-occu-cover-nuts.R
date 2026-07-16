@@ -80,23 +80,24 @@ test_that("occu_cover NUTS C++ FullGradFn matches the R oracle (byte-exact)", {
 })
 
 
-test_that("occu_cover NUTS is gated off the icar/bym2 path; family advertises nuts", {
+test_that("occu_cover NUTS now samples the coupled icar field; family advertises nuts", {
+  skip_if_fast()
   expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$occu_cover)
 
-  inp <- .ocn_inputs("lognormal", N = 30L, J = 3L, seed = 5L)
-  adj <- matrix(0L, 30, 30)
-  for (i in seq_len(29)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
-  # An intrinsic icar() field on the psi formula points NUTS to the proper-CAR
-  # shared field (car_proper) or the grid-integrated nested_laplace path; the
-  # fixed-hyper NUTS shared field is car_proper-only (gcol33/tulpaObs#74).
-  expect_error(
-    suppressWarnings(tobs(
-      formula = ~ 1 + icar(graph = adj), data = inp$cell_dat,
-      family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
-      visits = inp$od$det.covs, method = "nuts",
-      control = list(verbose = FALSE))),
-    "proper-CAR|nested_laplace")
+  inp <- .ocn_inputs("lognormal", N = 36L, J = 4L, seed = 5L)
+  adj <- matrix(0L, 36, 36)
+  for (i in seq_len(35)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
+  # An intrinsic icar() field on the psi formula now samples via the coupled
+  # sum-to-zero field (gcol33/tulpaObs#113); confirm it runs + centres the field
+  # (full recovery lives in test-occu-cover-spatial-nuts.R).
+  fit_icar <- suppressWarnings(tobs(
+    formula = ~ 1 + icar(graph = adj), data = inp$cell_dat,
+    family = occu_cover("lognormal"), detection = ~ det_cov1,
+    positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+    visits = inp$od$det.covs, method = "nuts",
+    control = list(verbose = FALSE, n.iter = 400L, n.warmup = 250L)))
+  expect_identical(fit_icar$method, "nuts")
+  expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
 })
 
 

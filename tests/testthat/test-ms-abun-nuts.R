@@ -307,16 +307,42 @@ test_that("ms_abun NUTS + car_proper() recovers community means + the field", {
 
 # --- (8) gates -------------------------------------------------------------
 
-test_that("ms_abun NUTS gates: icar/bym2 field -> nested_laplace pointer", {
+test_that("ms_abun NUTS + icar() shared field recovers community means + field (#113)", {
   skip_on_cran()
-  set.seed(5)
-  side <- 4L; N <- side * side
-  adj <- .msan_grid_graph(side)
-  sim <- simulate_ms_abun(n_species = 4, N = N, J = 3, seed = 5)
-  # An intrinsic icar field on the abundance arm points to nested_laplace.
-  expect_error(
-    tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
-         family = ms_abun(), detection = ~ det_cov1, species = sim$species,
-         method = "nuts", control = list(verbose = FALSE)),
-    "proper-CAR")
+  skip_if_fast()
+  # The #71 sum-to-zero reparameterisation samples the shared intrinsic icar field
+  # (whitened raw ~ N(0, I_{n-1})) jointly with the per-species community block;
+  # the non-square loading flows through the generalized in-tree field block.
+  side <- 7L; N <- side * side; J <- 4L; nsp <- 8L
+  set.seed(13)
+  A <- .msan_grid_graph(side)
+  coord <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f_true <- 0.6 * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
+  f_true <- f_true - mean(f_true)
+  data <- data.frame(abund_cov1 = stats::rnorm(N), det_cov1 = stats::rnorm(N))
+  X_lam <- stats::model.matrix(~ abund_cov1, data)
+  X_p   <- stats::model.matrix(~ det_cov1, data)
+  mu_lam <- c(log(4), 0.4); mu_p <- c(0.3, -0.3)
+  beta_lam <- cbind(stats::rnorm(nsp, mu_lam[1], 0.4), stats::rnorm(nsp, mu_lam[2], 0.3))
+  beta_p   <- cbind(stats::rnorm(nsp, mu_p[1], 0.4), stats::rnorm(nsp, mu_p[2], 0.3))
+  y <- array(0L, dim = c(N, J, nsp))
+  for (s in seq_len(nsp)) {
+    lam <- exp(as.numeric(X_lam %*% beta_lam[s, ]) + f_true)
+    Ni <- stats::rpois(N, lam); p <- stats::plogis(as.numeric(X_p %*% beta_p[s, ]))
+    for (i in seq_len(N)) y[i, , s] <- stats::rbinom(J, Ni[i], p[i])
+  }
+  sp <- paste0("sp", seq_len(nsp))
+  fit <- tobs(~ abund_cov1 + icar(graph = A), data = data, y = y,
+              family = ms_abun(), detection = ~ det_cov1, species = sp,
+              method = "nuts",
+              control = list(n.iter = 300L, n.warmup = 300L, n.chains = 2L,
+                             seed = 1L, verbose = FALSE))
+  expect_equal(fit$method, "nuts")
+  expect_lt(fit$nuts$divergent_total, 0.05 * nrow(fit$nuts$draws))
+  expect_false(is.null(fit$spatial_field))
+  expect_lt(abs(mean(fit$spatial_field)), 1e-6)                     # sum-to-zero centred
+  truth <- c(mu_lam, mu_p)
+  m <- fit$means[seq_along(truth)]; s <- fit$sds[seq_along(truth)]
+  expect_true(all(abs(m - truth) / s < 3.0))
+  expect_gt(cor(fit$spatial_field, f_true), 0.80)
 })

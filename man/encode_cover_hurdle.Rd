@@ -8,7 +8,7 @@ encode_cover_hurdle(
   formula,
   data,
   y,
-  positive = c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal"),
+  positive = c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal", "gaussian"),
   breaks = NULL,
   autoscale = TRUE,
   presence_formula = NULL,

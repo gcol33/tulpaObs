@@ -615,20 +615,24 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
 #' @param n_species Number of species.
 #' @param beta_comm_mean,beta_comm_sd Community mean and SD of the per-species
 #'   coefficients (intercept first). Length sets the number of covariates.
-#' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`.
+#' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`, `"binomial"`.
 #' @param size Negative-binomial community size (mean of the per-species
 #'   `log_r`); `size.log.sd` is its across-species SD.
 #' @param size.log.sd Across-species SD of `log(size)` (negbin only).
 #' @param sd Gaussian residual SD.
+#' @param trials Binomial trial count (`response = "binomial"`): a scalar
+#'   (shared across sites and species) or a length-`N` per-site vector. Default
+#'   10.
 #' @param seed Optional RNG seed.
 #' @return A list with `y` (an `N x n_species` matrix), `data`, and `truth`.
 #' @export
 simulate_ms_count <- function(N = 120, n_species = 10,
                               beta_comm_mean = c(1, 0.5),
                               beta_comm_sd = c(0.4, 0.3),
-                              response = c("poisson", "negbin", "gaussian"),
+                              response = c("poisson", "negbin", "gaussian",
+                                           "binomial"),
                               size = 2, size.log.sd = 0.3, sd = 1,
-                              seed = NULL) {
+                              trials = 10, seed = NULL) {
   response <- match.arg(response)
   if (!is.null(seed)) set.seed(seed)
   n_cov <- length(beta_comm_mean) - 1L
@@ -645,23 +649,36 @@ simulate_ms_count <- function(N = 120, n_species = 10,
   r_s <- if (identical(response, "negbin"))
     exp(stats::rnorm(n_species, log(size), size.log.sd)) else rep(NA_real_, n_species)
 
-  is_log <- !identical(response, "gaussian")
+  is_binom <- identical(response, "binomial")
+  n_trials <- NULL
+  if (is_binom) {
+    nt <- if (length(trials) == 1L) rep(as.integer(trials), N)
+          else as.integer(trials)
+    if (length(nt) != N) stop("simulate_ms_count(): `trials` must be a scalar ",
+                              "or length N.", call. = FALSE)
+    n_trials <- matrix(nt, N, n_species)
+  }
+
+  is_gauss <- identical(response, "gaussian")
   y <- matrix(NA_real_, N, n_species,
               dimnames = list(NULL, paste0("sp", seq_len(n_species))))
   for (s in seq_len(n_species)) {
     eta <- as.numeric(X %*% beta_species[s, ])
-    mu  <- if (is_log) exp(eta) else eta
+    mu  <- switch(response, gaussian = eta, binomial = stats::plogis(eta),
+                  exp(eta))
     y[, s] <- switch(response,
       poisson  = stats::rpois(N, mu),
       negbin   = stats::rnbinom(N, size = r_s[s], mu = mu),
-      gaussian = stats::rnorm(N, mu, sd))
+      gaussian = stats::rnorm(N, mu, sd),
+      binomial = stats::rbinom(N, size = n_trials[, s], prob = mu))
   }
 
   list(y = y, data = data,
        truth = list(beta_species = beta_species,
                     beta_comm_mean = beta_comm_mean,
                     beta_comm_sd = beta_comm_sd,
-                    response = response, r_s = r_s, sd = sd))
+                    response = response, r_s = r_s, sd = sd,
+                    trials = n_trials))
 }
 
 #' Simulate joint species distribution (presence/absence) data
@@ -718,27 +735,33 @@ simulate_jsdm <- function(N = 100, n_species = 10,
 #' Simulate count / relative-abundance GLMM data
 #'
 #' One observed value per site from a GLMM with no detection process, matching
-#' the [count()] family: `log`-link Poisson / negative-binomial counts, or an
-#' identity-link Gaussian response. The mean predictor is `X beta` with `beta`
-#' the fixed-effect coefficients (intercept first).
+#' the [count()] family: `log`-link Poisson / negative-binomial counts, an
+#' identity-link Gaussian response, or a logit-link binomial response (`k`
+#' successes out of `n` trials per site). The mean predictor is `X beta` with
+#' `beta` the fixed-effect coefficients (intercept first).
 #'
 #' @param N Number of sites (default 200).
 #' @param beta Fixed-effect coefficients, length `1 + n_covs` (intercept first).
-#' @param response The response distribution: `"poisson"`, `"negbin"`, or
-#'   `"gaussian"`.
+#' @param response The response distribution: `"poisson"`, `"negbin"`,
+#'   `"gaussian"`, or `"binomial"`.
 #' @param size Negative-binomial size (dispersion); larger is closer to Poisson.
 #'   Used only for `response = "negbin"`.
 #' @param sd Gaussian residual SD. Used only for `response = "gaussian"`.
+#' @param trials Per-site trial count for `response = "binomial"`: a scalar
+#'   (recycled) or a length-`N` vector. Default 10 (a scalar 1 gives Bernoulli
+#'   data, the `svcPGBinom` `trials = 1` setting).
 #' @param seed Random seed.
-#' @return A list with `y` (a length-`N` numeric response vector), `data` (the
-#'   site covariates), and `truth` (the coefficients, response, and dispersion).
+#' @return A list with `y` (a length-`N` numeric response vector; success counts
+#'   for the binomial response), `data` (the site covariates), and `truth` (the
+#'   coefficients, response, dispersion, and the binomial `trials`).
 #' @examples
 #' sim <- simulate_count(N = 100, beta = c(1, 0.5), seed = 1)
 #' length(sim$y)
 #' @export
 simulate_count <- function(N = 200, beta = c(1, 0.5),
-                           response = c("poisson", "negbin", "gaussian"),
-                           size = 2, sd = 1, seed = NULL) {
+                           response = c("poisson", "negbin", "gaussian",
+                                        "binomial"),
+                           size = 2, sd = 1, trials = 10, seed = NULL) {
   response <- match.arg(response)
   if (!is.null(seed)) set.seed(seed)
   n_cov <- length(beta) - 1L
@@ -749,18 +772,32 @@ simulate_count <- function(N = 200, beta = c(1, 0.5),
   }
   X   <- model.matrix(~ ., data)
   eta <- as.vector(X %*% beta)
-  mu  <- if (identical(response, "gaussian")) eta else exp(eta)
+  mu  <- switch(response,
+    gaussian = eta,
+    binomial = stats::plogis(eta),
+    exp(eta))
+
+  n_trials <- NULL
+  if (identical(response, "binomial")) {
+    n_trials <- if (length(trials) == 1L) rep(as.integer(trials), N)
+                else as.integer(trials)
+    if (length(n_trials) != N) {
+      stop("simulate_count(): `trials` must be a scalar or length N.",
+           call. = FALSE)
+    }
+  }
 
   y <- switch(response,
     poisson  = stats::rpois(N, mu),
     negbin   = stats::rnbinom(N, size = size, mu = mu),
-    gaussian = stats::rnorm(N, mu, sd))
+    gaussian = stats::rnorm(N, mu, sd),
+    binomial = stats::rbinom(N, size = n_trials, prob = mu))
 
   list(y = y, data = data,
        truth = list(beta = beta, response = response,
-                    size = size, sd = sd,
-                    link = if (identical(response, "gaussian")) "identity"
-                           else "log"))
+                    size = size, sd = sd, trials = n_trials,
+                    link = switch(response, gaussian = "identity",
+                                  binomial = "logit", "log")))
 }
 
 #' Simulate Royle-Nichols occupancy data
@@ -804,31 +841,66 @@ simulate_royle_nichols <- function(N = 200, J = 5,
 
 #' Simulate temporal (multi-season) occupancy data
 #'
+#' Colonization and extinction are constant across the `n_seasons - 1` transition
+#' intervals by default. Supplying `beta_gamma` and/or `beta_epsilon` makes the
+#' corresponding rate SEASON-VARYING: a per-`(site, interval)` covariate is drawn
+#' into an `[N x (n_seasons - 1)]` matrix column (`gamma_cov` / `eps_cov`) of the
+#' returned `data`, and the rate is `plogis(beta[1] + beta[2] * cov)`. Fit these
+#' with `colonization = ~ gamma_cov` / `extinction = ~ eps_cov` (the matrix
+#' column drives the interval-indexed rate, gcol33/tulpaObs#124).
+#'
 #' @param N Number of sites (default 100).
 #' @param J Number of visits per season (default 4).
 #' @param n_seasons Number of seasons (default 5).
 #' @param beta_occ Initial occupancy coefficients.
 #' @param beta_det Detection coefficients.
-#' @param gamma Colonization probability (default 0.2).
-#' @param epsilon Extinction probability (default 0.1).
+#' @param gamma Colonization probability (default 0.2); ignored when
+#'   `beta_gamma` is given.
+#' @param epsilon Extinction probability (default 0.1); ignored when
+#'   `beta_epsilon` is given.
+#' @param beta_gamma Optional `c(intercept, slope)` for a season-varying
+#'   colonization logit driven by a drawn per-`(site, interval)` covariate.
+#' @param beta_epsilon Optional `c(intercept, slope)` for a season-varying
+#'   extinction logit driven by a drawn per-`(site, interval)` covariate.
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
 #' @export
 simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
                     beta_occ = c(0.5), beta_det = c(0),
                     gamma = 0.2, epsilon = 0.1,
+                    beta_gamma = NULL, beta_epsilon = NULL,
                     seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   data <- data.frame(x = rnorm(N))
   psi1 <- plogis(beta_occ[1])
   p <- plogis(beta_det[1])
+  n_int <- n_seasons - 1L
+
+  # Season-varying rate matrices [N x (T-1)] when covariate coefficients are
+  # given; otherwise the scalar rate broadcast over intervals. The covariate
+  # draws happen only in the season-varying branch, so the constant-rate RNG
+  # stream (and its output) is unchanged.
+  gamma_cov <- eps_cov <- NULL
+  gam_it <- matrix(gamma,   N, n_int)
+  eps_it <- matrix(epsilon, N, n_int)
+  if (!is.null(beta_gamma)) {
+    gamma_cov <- matrix(rnorm(N * n_int), N, n_int)
+    gam_it <- plogis(beta_gamma[1] + beta_gamma[2] * gamma_cov)
+    data$gamma_cov <- gamma_cov
+  }
+  if (!is.null(beta_epsilon)) {
+    eps_cov <- matrix(rnorm(N * n_int), N, n_int)
+    eps_it <- plogis(beta_epsilon[1] + beta_epsilon[2] * eps_cov)
+    data$eps_cov <- eps_cov
+  }
 
   z <- matrix(NA_integer_, N, n_seasons)
   z[, 1] <- rbinom(N, 1, psi1)
   for (t in 2:n_seasons) {
-    z[, t] <- z[, t-1] * (1 - rbinom(N, 1, epsilon)) +
-              (1 - z[, t-1]) * rbinom(N, 1, gamma)
+    iv <- t - 1L
+    z[, t] <- z[, t-1] * (1 - rbinom(N, 1, eps_it[, iv])) +
+              (1 - z[, t-1]) * rbinom(N, 1, gam_it[, iv])
   }
 
   y <- array(NA_integer_, dim = c(N, J, n_seasons))
@@ -843,6 +915,7 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
     data = data,
     truth = list(
       psi1 = psi1, p = p, gamma = gamma, epsilon = epsilon,
+      beta_gamma = beta_gamma, beta_epsilon = beta_epsilon,
       z = z, beta_occ = beta_occ, beta_det = beta_det
     )
   )
@@ -915,6 +988,9 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #' @param beta_comm_sd Community SD for occupancy (default c(0.5)).
 #' @param gamma Colonization probability (default 0.15).
 #' @param epsilon Extinction probability (default 0.1).
+#' @param field Optional per-site shared areal field (length `N`) added to the
+#'   first-season occupancy logit of every species -- the shared field of the
+#'   community dynamic-spatial model (stMsPGOcc). Default `NULL` (no field).
 #' @param seed Random seed.
 #' @return A list with `y` (4D array), `data`, and `truth`.
 #' @seealso [ms_dyn_occu()], the family this simulates for.
@@ -922,18 +998,26 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
                       beta_comm_mean = c(0), beta_comm_sd = c(0.5),
                       gamma = 0.15, epsilon = 0.1,
-                      seed = NULL) {
+                      field = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   data <- data.frame(x = rnorm(N))
-  psi1_species <- plogis(rnorm(n_species, beta_comm_mean[1], beta_comm_sd[1]))
+  # Draw the per-species first-season occupancy logits (same RNG draw as before;
+  # plogis of an rnorm), then apply the optional shared field on the logit scale.
+  logit_psi1_species <- rnorm(n_species, beta_comm_mean[1], beta_comm_sd[1])
+  psi1_species <- plogis(logit_psi1_species)
   p_species <- plogis(rnorm(n_species, 0, 0.5))
+  if (!is.null(field) && length(field) != N) {
+    stop("simulate_ms_dyn_occu(): `field` must have length N.", call. = FALSE)
+  }
 
   z <- array(NA_integer_, dim = c(N, n_seasons, n_species))
   y <- array(NA_integer_, dim = c(N, J, n_seasons, n_species))
 
   for (sp in seq_len(n_species)) {
-    z[, 1, sp] <- rbinom(N, 1, psi1_species[sp])
+    psi1_i <- if (is.null(field)) rep(psi1_species[sp], N)
+              else plogis(logit_psi1_species[sp] + field)
+    z[, 1, sp] <- rbinom(N, 1, psi1_i)
     for (t in 2:n_seasons) {
       z[, t, sp] <- z[, t-1, sp] * (1 - rbinom(N, 1, epsilon)) +
                     (1 - z[, t-1, sp]) * rbinom(N, 1, gamma)
@@ -950,7 +1034,7 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
     data = data,
     truth = list(
       psi1_species = psi1_species, p_species = p_species,
-      gamma = gamma, epsilon = epsilon, z = z
+      gamma = gamma, epsilon = epsilon, z = z, field = field
     )
   )
 }

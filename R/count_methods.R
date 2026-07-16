@@ -23,19 +23,34 @@
   eta
 }
 
-# Response-scale mean from eta, per the family link.
+# Response-scale mean from eta, per the family link. For the log link this is the
+# expected count exp(eta); for the identity link eta; for the binomial logit link
+# it is the per-trial success PROBABILITY plogis(eta) (the fitted / residual code
+# scales it by the trial count to expected successes where the trials are known).
 .tobs_count_mu <- function(object, eta) {
-  if (identical(object$model$link %||% "log", "log")) exp(eta) else eta
+  link <- object$model$link %||% "log"
+  if (identical(link, "log")) exp(eta)
+  else if (identical(link, "logit")) stats::plogis(eta)
+  else eta
 }
 
 .tobs_fitted_count <- function(object) {
-  mu <- .tobs_count_mu(object, .tobs_count_eta(object, object$model$X_occ,
-                                               add_field = TRUE))
+  eta <- .tobs_count_eta(object, object$model$X_occ, add_field = TRUE)
+  mu  <- .tobs_count_mu(object, eta)
+  # Binomial: the fitted quantity on the y-scale is the expected number of
+  # successes n_i * p_i, so residuals compare the observed successes to it.
+  if (identical(object$model$link %||% "log", "logit")) {
+    nt <- as.numeric(object$model$n_trials %||% rep(1, length(mu)))
+    mu <- mu * nt
+  }
   list(mu = mu)
 }
 
 # predict(): in-sample returns fitted()$mu (field-aware); newdata recomputes mu
-# from the design at the fixed effects only (no field node at a new site).
+# from the design at the fixed effects only (no field node at a new site). For a
+# binomial fit a new site has no trial count, so predict returns the per-trial
+# success probability plogis(eta) (multiply by your own trials for expected
+# successes); the in-sample fitted()$mu is expected successes.
 .tobs_predict_count <- function(object, newdata = NULL) {
   if (is.null(newdata)) return(fitted(object)$mu)
   X <- stats::model.matrix(object$model$formulas$occ, newdata)
@@ -54,13 +69,17 @@
   size <- object$count_dispersion$phi %||% Inf   # negbin size
   phi  <- object$count_dispersion$phi %||% 1      # gaussian variance
   mup  <- pmax(mu, 1e-8)
+  # Binomial trial counts (expected successes mu = n * p, so p = mu / n).
+  nt   <- as.numeric(object$model$n_trials %||% rep(1, length(mu)))
+  ntp  <- pmax(nt, 1)
 
   r <- switch(type,
     response = y - mu,
     pearson  = (y - mu) / sqrt(switch(response,
                  poisson  = mup,
                  negbin   = mup + mup^2 / size,
-                 gaussian = rep(max(phi, 1e-8), length(mu)))),
+                 gaussian = rep(max(phi, 1e-8), length(mu)),
+                 binomial = pmax(mu * (1 - mu / ntp), 1e-8))),
     deviance = switch(response,
       poisson  = {
         term <- ifelse(y > 0, y * log(y / mup), 0)
@@ -71,6 +90,14 @@
         d <- 2 * (term - (y + size) * log((y + size) / (mup + size)))
         sign(y - mu) * sqrt(pmax(d, 0))
       },
-      gaussian = y - mu))
+      gaussian = y - mu,
+      binomial = {
+        # Standard binomial deviance residual with n - y failures; the
+        # 0 * log(0/.) terms are taken as 0.
+        t1 <- ifelse(y > 0, y * log(y / mup), 0)
+        fy <- nt - y; fmu <- pmax(nt - mu, 1e-8)
+        t2 <- ifelse(fy > 0, fy * log(fy / fmu), 0)
+        sign(y - mu) * sqrt(pmax(2 * (t1 + t2), 0))
+      }))
   list(mu = r, det = NULL)
 }

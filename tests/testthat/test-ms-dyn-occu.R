@@ -133,12 +133,14 @@ test_that("ms_dyn_occu() S3 methods work", {
 test_that("ms_dyn_occu() capability gates", {
   sim <- simulate_ms_dyn_occu(N = 30, J = 3, n_species = 4, n_seasons = 3,
                               seed = 1)
-  # nested_laplace / nuts not offered.
+  # nested_laplace needs a shared areal field on the occupancy formula (#123);
+  # without one it errors with a pointer rather than silently downgrading.
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(4)),
          method = "nested_laplace"),
-    "not available")
+    "areal field")
+  # nuts is not offered.
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(4)), method = "nuts"),
@@ -148,4 +150,78 @@ test_that("ms_dyn_occu() capability gates", {
     tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
          species = paste0("sp", seq_len(4)), method = "laplace"),
     "y")
+})
+
+
+# --- shared areal field on the first-season occupancy arm (stMsPGOcc, #123) ---
+
+.msdyn_grid_graph <- function(side) {
+  N <- side * side; A <- matrix(0L, N, N)
+  idx <- function(r, c) (r - 1L) * side + c
+  for (r in seq_len(side)) for (c in seq_len(side)) {
+    i <- idx(r, c)
+    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
+    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
+  }
+  A
+}
+.msdyn_field <- function(side, sd = 0.9) {
+  co <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f  <- sd * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
+  f - mean(f)
+}
+
+test_that("ms_dyn_occu() nested_laplace is registered and gated", {
+  expect_true("nested_laplace" %in% tulpaObs:::.tobs_family_methods$ms_dyn_occu)
+  side <- 5L; A <- .msdyn_grid_graph(side)
+  sim <- simulate_ms_dyn_occu(N = side * side, J = 3, n_species = 4,
+                              n_seasons = 3, field = .msdyn_field(side), seed = 1)
+  # a field needs nested_laplace; plain laplace with a field errors with a pointer
+  expect_error(
+    tobs(~ 1 + icar(graph = A), data = sim$data, family = ms_dyn_occu(),
+         detection = ~ 1, y = sim$y, species = paste0("sp", 1:4),
+         method = "laplace"),
+    "nested_laplace")
+  # a field on the detection arm is rejected
+  expect_error(
+    tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
+         detection = ~ 1 + icar(graph = A), y = sim$y,
+         species = paste0("sp", 1:4), method = "nested_laplace"),
+    "occupancy|detection")
+})
+
+test_that("ms_dyn_occu() + icar recovers the shared field + community means", {
+  skip_if_fast()
+  skip_on_cran()
+  # stMsPGOcc: a shared areal field on the first-season occupancy arm. The field
+  # is the new object; assert field recovery by cor on an INTERIOR field (the
+  # null-field trap: never assert on sigma), plus community-mean coverage.
+  side <- 8L; N <- side * side; A <- .msdyn_grid_graph(side)
+  ftrue <- .msdyn_field(side, sd = 0.9)
+  n_seed <- 12L
+  fcor <- numeric(n_seed)
+  truth <- c("gamma_(Intercept)" = stats::qlogis(0.2),
+             "eps_(Intercept)"   = stats::qlogis(0.12))
+  covered <- logical(0)
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_ms_dyn_occu(N = N, J = 4, n_species = 8, n_seasons = 4,
+                                beta_comm_mean = 0.2, beta_comm_sd = 0.5,
+                                gamma = 0.2, epsilon = 0.12, field = ftrue,
+                                seed = 500 + s)
+    fit <- tryCatch(
+      tobs(~ 1 + icar(graph = A), data = sim$data, family = ms_dyn_occu(),
+           detection = ~ 1, colonization = ~ 1, extinction = ~ 1, y = sim$y,
+           species = paste0("sp", seq_len(8)), method = "nested_laplace",
+           control = list(progress = FALSE, verbose = FALSE)),
+      error = function(e) NULL)
+    if (is.null(fit)) next
+    fcor[s] <- stats::cor(fit$spatial_field, ftrue)
+    m <- fit$means[names(truth)]; sd <- fit$sds[names(truth)]
+    covered <- c(covered, abs(m - truth) < 1.96 * sd)
+  }
+  # interior field recovery (cor), not sigma; the shared field pools all species
+  # so it recovers cleanly.
+  expect_gt(stats::median(fcor[fcor != 0]), 0.8)
+  # shared transition-dynamics coverage at the 0.85 working floor.
+  expect_gt(mean(covered), 0.85)
 })

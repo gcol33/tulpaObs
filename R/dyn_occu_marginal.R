@@ -43,6 +43,89 @@
 }
 
 
+# Per-(site, season) detection sufficient statistics for the R HMM-forward
+# marginal: n_valid (visits with an observed y), n_det (sum of detections), and
+# any-detected. Cached on first use; a season with no valid visit contributes a
+# neutral emission (both states 1).
+.tobs_dyn_occu_emit_stats <- function(model) {
+  if (!is.null(model$.emit_stats)) return(model$.emit_stats)
+  y <- model$y                                  # [n_sites x mv x T]
+  n_sites <- dim(y)[1]; T_s <- dim(y)[3]
+  nvalid <- matrix(0L, n_sites, T_s); ndet <- matrix(0L, n_sites, T_s)
+  for (t in seq_len(T_s)) {
+    yt <- y[, , t]
+    v  <- !is.na(yt)
+    nvalid[, t] <- rowSums(v)
+    yt0 <- yt; yt0[!v] <- 0L
+    ndet[, t] <- rowSums(yt0)
+  }
+  list(nvalid = nvalid, ndet = ndet)
+}
+
+
+# Exact HMM-forward marginal log-likelihood for dynamic occupancy with
+# SEASON-VARYING colonization / extinction (gcol33/tulpaObs#124). The compiled
+# cpp_occu_dynamic_ploglik reads one gamma / epsilon per site, so the
+# interval-indexed refine needs its own forward pass. Per site the latent
+# occupancy sequence integrates out by the 2-state forward recursion whose
+# transition at interval t uses interval-t rates; the emission is the per-season
+# detection likelihood (occupied: prod p^y (1-p)^(1-y); empty: 1 if no detection,
+# 0 otherwise). Returns the total penalised negative log-posterior. `par` is the
+# packed c(beta_psi1, beta_p, beta_gamma, beta_epsilon).
+.tobs_dyn_occu_marginal_nlp_sv <- function(par, model, pmean, pprec, p_sizes) {
+  n_sites <- model$n_sites; T_s <- model$n_seasons; n_int <- T_s - 1L
+  o <- 0L
+  b_psi <- par[(o + 1L):(o + p_sizes[1])]; o <- o + p_sizes[1]
+  b_p   <- par[(o + 1L):(o + p_sizes[2])]; o <- o + p_sizes[2]
+  b_gam <- par[(o + 1L):(o + p_sizes[3])]; o <- o + p_sizes[3]
+  b_eps <- par[(o + 1L):(o + p_sizes[4])]
+
+  eta_psi <- as.numeric(model$X_processes[[1]] %*% b_psi)     # [n_sites]
+  eta_p   <- as.numeric(model$X_processes[[2]] %*% b_p)       # [n_sites]
+  # gamma / epsilon per interval: long-form design -> [n_sites x n_int] byrow;
+  # a constant arm's site-level eta recycles across the intervals.
+  eg <- as.numeric(model$X_processes[[3]] %*% b_gam)
+  ee <- as.numeric(model$X_processes[[4]] %*% b_eps)
+  gam_mat <- if (isTRUE(model$col_season_varying))
+    matrix(eg, n_sites, n_int, byrow = TRUE) else matrix(eg, n_sites, n_int)
+  eps_mat <- if (isTRUE(model$ext_season_varying))
+    matrix(ee, n_sites, n_int, byrow = TRUE) else matrix(ee, n_sites, n_int)
+
+  lg  <- plogis(eta_psi, log.p = TRUE)          # log psi1
+  l1g <- plogis(-eta_psi, log.p = TRUE)         # log(1 - psi1)
+  lp  <- plogis(eta_p, log.p = TRUE)            # log p
+  l1p <- plogis(-eta_p, log.p = TRUE)           # log(1 - p)
+  # Transition log-probs per interval [n_sites x n_int]
+  lgam  <- plogis(gam_mat, log.p = TRUE);  l1gam <- plogis(-gam_mat, log.p = TRUE)
+  leps  <- plogis(eps_mat, log.p = TRUE);  l1eps <- plogis(-eps_mat, log.p = TRUE)
+
+  st <- .tobs_dyn_occu_emit_stats(model)
+  nvalid <- st$nvalid; ndet <- st$ndet
+  lse2 <- function(a, b) {                       # log_sum_exp of two vectors
+    m <- pmax(a, b); m + log(exp(a - m) + exp(b - m))
+  }
+  # Emission log-prob per (site, season): occupied uses the per-visit detection
+  # likelihood; empty is 0 (log 1) when no visit detected, -Inf otherwise.
+  emit1 <- ndet * matrix(lp, n_sites, T_s) +
+           (nvalid - ndet) * matrix(l1p, n_sites, T_s)          # [n_sites x T]
+  emit0 <- ifelse(ndet > 0, -Inf, 0)                            # [n_sites x T]
+
+  # Forward recursion, vectorised over sites.
+  la1 <- lg  + emit1[, 1]
+  la0 <- l1g + emit0[, 1]
+  for (t in 2:T_s) {
+    iv <- t - 1L
+    n1 <- lse2(la1 + l1eps[, iv], la0 + lgam[, iv]) + emit1[, t]
+    n0 <- lse2(la1 + leps[, iv],  la0 + l1gam[, iv]) + emit0[, t]
+    la1 <- n1; la0 <- n0
+  }
+  ll_site <- lse2(la1, la0)
+  val <- sum(ll_site[is.finite(ll_site)])
+  if (!is.finite(val)) return(1e10)
+  -val + 0.5 * sum(pprec * (par - pmean)^2)
+}
+
+
 # Refine a dynamic-occupancy `tobs_fit` on the exact HMM-forward marginal and
 # overwrite its fixed-effect estimates + SEs + pseudo-draws with the debiased,
 # Hessian-calibrated values. Falls back to the unmodified fit on any failure
@@ -51,6 +134,9 @@
   tryCatch({
     pi_list <- model$process_info
     if (length(pi_list) < 4L) return(fit)
+
+    sv_dyn <- isTRUE(model$col_season_varying) ||
+              isTRUE(model$ext_season_varying)
 
     # Fixed-effect names in process-block order (psi1, p, gamma, epsilon), the
     # layout fit$means / the draw matrix already carry.
@@ -67,7 +153,19 @@
     psd   <- unlist(lapply(pr, `[[`, "sd"),   use.names = FALSE)
     pprec <- ifelse(is.finite(psd) & psd > 0, 1 / psd^2, 0)
 
-    nlp <- function(par) .tobs_dyn_occu_marginal_nlp(par, model, pmean, pprec)
+    # Season-varying transitions need the R HMM-forward marginal (the compiled
+    # cpp kernel reads one gamma / epsilon per site); the constant-rate path uses
+    # the fast cpp marginal. Either way the exact-marginal Newton refine moves the
+    # fixed effects onto the marginal MLE (escaping any EM local optimum) and
+    # reads calibrated SEs from the Hessian.
+    if (sv_dyn) {
+      p_sizes <- vapply(pi_list, function(p) as.integer(p$p), integer(1))
+      model$.emit_stats <- .tobs_dyn_occu_emit_stats(model)  # cache once
+      nlp <- function(par)
+        .tobs_dyn_occu_marginal_nlp_sv(par, model, pmean, pprec, p_sizes)
+    } else {
+      nlp <- function(par) .tobs_dyn_occu_marginal_nlp(par, model, pmean, pprec)
+    }
     .tobs_marginal_refine_apply(fit, model, all_nm, nlp)
   }, error = function(e) fit)
 }

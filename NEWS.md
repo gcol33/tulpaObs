@@ -1,5 +1,106 @@
 # tulpaObs NEWS
 
+## 0.0.134 (2026-07-16)
+
+* Shared areal field on community dynamic occupancy (#123), the `spOccupancy`
+  `stMsPGOcc` model. A shared `icar()` field on the first-season occupancy
+  formula of `ms_dyn_occu()` -- `~ 1 + icar(graph = adj)` under
+  `method = "nested_laplace"` -- fits a spatial multi-season community occupancy
+  model. Because the first-season occupancy only sets the initial mixing weight
+  of each species' HMM, the per-(species, site) marginal is linear in it, the
+  same two-component mixture the single-season community field uses, so the field
+  routes through the shared block-coordinate driver with the HMM-forward
+  conditional likelihoods in place of the single-season emission. The forward-
+  backward kernels are vectorised over sites and the community EM is driven by an
+  analytic Fisher-identity gradient (validated against finite differences), so
+  the fit is fast. The shared field recovers cleanly (`cor` ~0.94 on an interior
+  field) and the community transition-dynamics coverage clears the 0.85 floor.
+  `simulate_ms_dyn_occu()` gained a `field =` argument. `icar()` only; a NUTS
+  sampler and `bym2()` / `car_proper()` fields remain follow-ups (gated with a
+  pointer).
+
+## 0.0.133 (2026-07-16)
+
+* Season-varying colonization / extinction on `dyn_occu()` (#124). A covariate
+  supplied as an `[n_sites x (T-1)]` matrix column of `data` now drives an
+  interval-indexed colonization or extinction rate --
+  `colonization = ~ season_cov` / `extinction = ~ season_cov` -- the recipe
+  `dyn_abun()` already uses for season-varying survival / recruitment (#80),
+  ported to the colonization-extinction HMM forward. The forward-backward E-step
+  uses a per-interval transition matrix (constant rates broadcast, so an existing
+  site-level or constant fit is byte-identical to before), the transition M-step
+  becomes a weighted logistic on the smoothed per-interval transitions, and the
+  exact-marginal refine gains a season-varying HMM-forward marginal that
+  calibrates the standard errors. `simulate_dyn_occu()` gained `beta_gamma` /
+  `beta_epsilon` to draw season-varying truth. Recovery and ~95% Wald coverage
+  hold across 20 seeds; the season-varying rate is gated under `method = "nuts"`
+  (the compiled forward reads one rate per site) with a pointer to `laplace`.
+
+## 0.0.132 (2026-07-16)
+
+* Binomial `k`-of-`n` count GLMM without replicates (#125), the spOccupancy
+  `svcPGBinom` family. `count(response = "binomial")` with a per-site `trials =`
+  argument (default 1, i.e. Bernoulli) fits detection-free binomial data through
+  the same `count()` front door as the Poisson / negbin / Gaussian responses --
+  logit link, no dispersion (the variance is pinned by `n`). A plain areal field
+  (`icar()` / `car_proper()`) is supported (`svcPGBinom`): unlike the negbin /
+  Gaussian responses, the binomial is identified against a per-node field, at
+  `trials = 1` too. `ms_count(response = "binomial")` extends the community
+  Laplace-EM the same way (community `svcPGBinom`; NUTS and a shared field /
+  latent factor are gated to laplace non-spatial for now). `simulate_count()` /
+  `simulate_ms_count()` gained a binomial draw with `trials =`; fitted values are
+  expected successes `n * p`, `predict(newdata=)` the per-trial probability, and
+  WAIC / residuals score the binomial pmf. The non-spatial fit matches
+  `glm(..., family = binomial)` to ~1e-3 and runs ~100x faster than
+  `spOccupancy::svcPGBinom()`. `jsdm()` stays the Bernoulli (`trials = 1`) alias.
+
+## 0.0.131 (2026-07-16)
+
+* Identity-Gaussian positive arm for the cover hurdle (#112). `cover(response =
+  "gaussian")` and `occu_cover(response = "gaussian")` fit the delta-normal
+  hurdle -- a Bernoulli presence process times a Gaussian magnitude on the
+  positive scale -- the lognormal arm without the log transform or its Jacobian
+  (residual `y - eta`, mean `mu = eta`, draw `y = eta + sigma z`). This is for a
+  signed / unbounded positive magnitude, NOT cover fractions on `(0, 1)` (use
+  `beta` / `beta_oi` for those). Recovery and 95% interval coverage hold at the
+  lognormal bar (20 seeds, pooled coverage 0.94-0.95). WAIC/LOO carry through; the
+  Freeman-Tukey PPC (non-negativity assumed) and NUTS on the joint path are gated
+  with a pointer. `simulate_cover()` / `simulate_cover_joint()` /
+  `simulate_occu_cover()` gained the Gaussian draw.
+
+* Intrinsic ICAR / BYM2 areal fields now sample under NUTS for the observation
+  families and `ms_abun` (#113), via the #71 sum-to-zero reparameterisation
+  (whitened loading drops the precision null-space, so `z` is auto-centred and
+  `n_raw = n_units - 1` for ICAR / `2n - 1` for BYM2). Previously
+  car_proper-only. The shared field-block C++ (`nuts_field_block.h`) generalised
+  to a non-square loading byte-identically to the square path; a single R helper
+  `.tobs_nuts_field_loading()` is the one source of the whitened loading. Per
+  family the field posterior mean is sum-to-zero centred and correlates with
+  truth at 0 divergences (recovery in `test-count-spatial-nuts.R`).
+
+* Observation-family spatial/temporal breadth (#114). Four structured-term
+  corners on the observation families:
+  - Temporal-only fields under `nested_laplace` on `removal()`, `distance()`,
+    `fp_occu()`, `dyn_abun()`: a `temporal()` term on its own (no companion areal
+    field) runs the shared areal-BFGS driver with a single AR1/RW1/RW2/iid block
+    on the family's structured arm. Recovers a known AR1 truth (cor 0.90-0.99),
+    slope on truth; per-family multi-seed recovery tests.
+  - `dyn_abun()` NUTS + `temporal()`: a fixed-hyper non-centered AR1/RW1/RW2/iid
+    field on the initial-abundance arm rides the SAME NUTS field block as the
+    areal field (`nuts_field_block.h`), with `field_map` = period index and a
+    temporal whitened loading fixed at the nested-Laplace temporal-only estimate.
+    0 divergences, temporal field cor ~1.0. Areal + temporal under NUTS stays
+    gated to `nested_laplace`.
+  - `distance()` detection-arm areal field: a field in the `detection=` formula
+    (`detection = ~ icar(graph)`) loads on the per-site detection scale (log
+    sigma) instead of the abundance arm -- a spatially-varying detection scale,
+    via the per-site sigma gradient the kernel already exposes. Half-normal key;
+    field recovers (cor ~0.97); recovery + gate tests.
+  - `distance()` hazard-key areal field on the abundance arm was already wired and
+    recovery-tested (`test-distance.R`), confirming that corner.
+  A temporal term under `nuts` on the other observation families, and a temporal
+  term on the `count()` family, remain gated with a pointer.
+
 ## 0.0.130 (2026-07-16)
 
 * `temporal()` now errors on the Laplace engine instead of being dropped.

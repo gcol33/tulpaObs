@@ -66,6 +66,62 @@
   U %*% diag(1 / sqrt(d), nrow = length(d))             # n x (n - 1)
 }
 
+# Whitened-field loading + fixed hyper for a non-centered areal-field NUTS path
+# (gcol33/tulpaObs#71, #113). Single source of truth shared by every observation-
+# family spatial NUTS fitter (abun / ms_abun / removal / distance / fp_occu /
+# dyn_abun), so the intrinsic icar / bym2 sum-to-zero reparameterisation is
+# derived once. The fixed precision (tau, rho) and, for bym2, the marginal SD
+# sigma are supplied by the caller from its own nested-Laplace warm-start (the
+# families carry them under different names). Returns:
+#   * field_load: the n x n_raw loading L (z = L %*% raw, raw ~ N(0, I_{n_raw}))
+#   * tau, rho:   the fixed precision hyperparameters (tau = NA for bym2, whose
+#                 amplitude rides sigma inside the two-block loading)
+#   * n_raw:      ncol(field_load) -- n for car_proper, n - 1 for icar,
+#                 2n - 1 for bym2.
+# car_proper is the square inverse Cholesky; icar is the sum-to-zero eigen-loading
+# (drops the constant null direction); bym2 stacks the structured (centred ICAR,
+# scaled by sigma sqrt(rho / scale_factor)) and unstructured (iid sigma
+# sqrt(1 - rho)) blocks columnwise (Riebler 2016).
+.tobs_nuts_field_loading <- function(adj, type, n, tau = NA_real_, rho = NA_real_,
+                                     sigma = NA_real_, scale_factor = NULL) {
+  if (identical(type, "bym2")) {
+    sigma <- max(if (is.finite(sigma)) sigma else sqrt(max(tau, 1e-3, na.rm = TRUE)),
+                 1e-3)
+    rho   <- min(max(if (is.finite(rho)) rho else 0.5, 0.01), 0.99)
+    sf    <- scale_factor %||% compute_bym2_scale(adj)
+    Lstr  <- .tobs_field_load(adj, "icar", 1, 1, n)      # centred ICAR basis
+    a <- sigma * sqrt(rho / sf); b <- sigma * sqrt(1 - rho)
+    L <- cbind(a * Lstr, b * diag(n))                    # [structured | iid]
+    return(list(field_load = L, tau = NA_real_, rho = rho, n_raw = ncol(L)))
+  }
+  tau <- max(tau, 1e-3)
+  rho <- if (identical(type, "car_proper")) min(max(rho, 0.01), 0.99) else 1.0
+  L   <- .tobs_field_load(adj, type, tau, rho, n)
+  list(field_load = L, tau = tau, rho = rho, n_raw = ncol(L))
+}
+
+# Whitened-field loading + fixed hyper for a non-centered TEMPORAL-field NUTS path
+# (gcol33/tulpaObs#114). The temporal analogue of `.tobs_nuts_field_loading`: the
+# fixed precision is tau Q(rho) with Q the ar1 / rw1 / rw2 / iid structure matrix
+# (`.tobs_temporal_Q`), and the whitened loading is the reduced eigen-loading over
+# the non-null eigenpairs of tau Q (z = L %*% raw, raw ~ N(0, I), Cov(z) =
+# (tau Q)^{+}). Full-rank ar1 / iid keep all T eigenpairs (square L, n_raw = T);
+# rank-deficient rw1 / rw2 drop the 1 / 2 null directions (sum-to-zero, n_raw =
+# T - 1 / T - 2) exactly like the intrinsic-icar areal case. Uniform across all
+# four types, so the C++ field block (which only sees an n_field_units x n_raw
+# loading + a per-site field_map) needs no temporal-specific branch.
+.tobs_nuts_temporal_loading <- function(type, T, tau = NA_real_, rho = NA_real_,
+                                        tol = 1e-8) {
+  tau <- max(tau, 1e-3)
+  Q  <- .tobs_temporal_Q(type, T, rho = if (identical(type, "ar1")) rho else NULL)
+  ev <- eigen(tau * Q, symmetric = TRUE)
+  keep <- ev$values > tol * max(ev$values)              # non-null eigenpairs
+  U <- ev$vectors[, keep, drop = FALSE]
+  d <- ev$values[keep]
+  L <- U %*% diag(1 / sqrt(d), nrow = length(d))         # T x n_raw
+  list(field_load = L, tau = tau, rho = rho, n_raw = ncol(L))
+}
+
 # ICAR / proper-CAR single-block field (parameter z, length n_sp; eta += z[map]).
 .areal_field_car <- function(adj, kind, map, n_sp) {
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
@@ -175,13 +231,28 @@
 # (gcol33/tulpaObs#78). A temporal term WITHOUT a spatial field, or under NUTS, is
 # not wired; those raise a clear error here so the family dispatch can call the
 # spatial fitter unconditionally once the gate passes.
-.tobs_check_count_temporal <- function(temporal, spatial, method, family, arm) {
+.tobs_check_count_temporal <- function(temporal, spatial, method, family, arm,
+                                       allow_temporal_only = FALSE,
+                                       allow_nuts_temporal = FALSE) {
+  # NUTS + temporal is wired only where a fixed-hyper non-centered temporal field
+  # rides the family's NUTS field block (dyn_abun; gcol33/tulpaObs#114). It runs
+  # temporal-only (no simultaneous areal field) on that path.
+  if (identical(method, "nuts") && isTRUE(allow_nuts_temporal)) {
+    if (!is.null(spatial))
+      stop(sprintf(paste0("%s() NUTS supports a temporal() field on its own (no ",
+                          "simultaneous areal field); combine areal + temporal ",
+                          "under method = \"nested_laplace\". (tulpaObs#114)"),
+                   family), call. = FALSE)
+    return(invisible(TRUE))
+  }
   if (identical(method, "nuts"))
     stop(sprintf(paste0("%s() does not support a temporal() term under method = ",
                         "\"nuts\"; the temporal field composes with the areal ",
                         "field on the %s arm under method = \"nested_laplace\". ",
                         "(tulpaObs#78)"), family, arm), call. = FALSE)
-  if (is.null(spatial))
+  # A temporal-only field (no areal term) is wired on families whose spatial
+  # fitter builds the areal-BFGS block list from either term (gcol33/tulpaObs#114).
+  if (is.null(spatial) && !isTRUE(allow_temporal_only))
     stop(sprintf(paste0("%s() supports a temporal() term composed WITH an areal ",
                         "field on the %s arm (e.g. icar()/car_proper()/bym2() + ",
                         "temporal()) under method = \"nested_laplace\"; a temporal ",

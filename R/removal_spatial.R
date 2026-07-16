@@ -274,8 +274,13 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                            verbose = TRUE) {
   n_sites <- model$n_sites
   map <- seq_len(n_sites)
-  field_sp <- .tobs_areal_field_spec(spatial, n_sites, "removal", map)
-  field <- list(field_sp, .tobs_temporal_field_spec(temporal, n_sites, "removal"))
+  temporal_only <- is.null(spatial)
+  temporal_spec <- .tobs_temporal_field_spec(temporal, n_sites, "removal")
+  # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
+  # temporal block; otherwise the areal field is block 1 and the temporal block 2.
+  field <- if (temporal_only) list(temporal_spec)
+           else list(.tobs_areal_field_spec(spatial, n_sites, "removal", map),
+                     temporal_spec)
 
   X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lam); p_p <- ncol(X_p)
@@ -337,12 +342,19 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     log_lik = res$log_lik, converged = TRUE, K_max = K_max)
   fit <- build_nmix_fit(raw, model, spatial = spatial)
   fit$method <- "nested_laplace"
-  fit$spatial_field <- res$field_mean
-  fit$spatial_hyper <- res$hyper
-  fit$spatial_integration <- res$integration
   fit$temporal <- temporal
-  fit$temporal_field <- res$temporal_field
-  fit$temporal_hyper <- res$temporal_hyper
+  fit$spatial_integration <- res$integration
+  if (temporal_only) {
+    # The single temporal block is reported by the driver as block 1
+    # (field_mean / hyper); relabel it as the temporal field (#114).
+    fit$temporal_field <- res$field_mean
+    fit$temporal_hyper <- res$hyper
+  } else {
+    fit$spatial_field  <- res$field_mean
+    fit$spatial_hyper  <- res$hyper
+    fit$temporal_field <- res$temporal_field
+    fit$temporal_hyper <- res$temporal_hyper
+  }
   fit
 }
 
@@ -361,13 +373,10 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                            max.treedepth = 10L, adapt.delta = 0.9,
                                            seed = 1L, verbose = FALSE) {
   .tobs_reject_weighted_spatial(spatial, "removal NUTS abundance spatial")
-  if (!identical(spatial$type, "car_proper"))
-    stop(sprintf(paste0("removal() NUTS + areal spatial supports the proper-CAR ",
-                        "field car_proper() (full-rank precision -> well-conditioned ",
-                        "non-centered geometry); the intrinsic '%s' field needs a ",
-                        "sum-to-zero reparameterisation for NUTS -- use method = ",
-                        "\"nested_laplace\" for the icar()/bym2() areal fit. ",
-                        "(tulpaObs#72)"), spatial$type), call. = FALSE)
+  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+    stop(sprintf(paste0("removal() NUTS + areal spatial supports icar() / ",
+                        "car_proper() / bym2() on the abundance arm; got '%s'. ",
+                        "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites)
     stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
@@ -384,27 +393,37 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
          n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
 
-  # Fixed hyper (tau, rho) + warm coefficients from the nested-Laplace areal fit.
-  nl <- removal_laplace_car_proper(
+  # Fixed hyper + warm coefficients from the matching nested-Laplace areal fit,
+  # and the whitened-field loading L (square for car_proper, sum-to-zero for
+  # icar / bym2, gcol33/tulpaObs#71/#113).
+  common <- list(
     y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
     X_lambda = X_lambda, X_p = X_p, adj_row_ptr = csr$row_ptr,
     adj_col_idx = csr$col_idx, n_neighbors = csr$n_neighbors, n_spatial = n_sites,
     mixture = mix_code, K_max = K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE)
-  tau <- max(nl$tau_mean, 1e-3)
-  rho <- min(max(nl$rho_mean, 0.01), 0.99)
-  Linv <- .tobs_field_linv(adj, tau, rho, n_sites)
+  nl <- switch(spatial$type,
+    icar       = do.call(removal_laplace_icar, common),
+    car_proper = do.call(removal_laplace_car_proper, common),
+    bym2       = do.call(removal_laplace_bym2, c(common,
+                   list(scale_factor = spatial$scale_factor %||%
+                          compute_bym2_scale(spatial$graph)))))
+  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                 tau = nl$tau_mean, rho = nl$rho_mean,
+                                 sigma = nl$sigma_mean,
+                                 scale_factor = spatial$scale_factor)
+  field_load <- fl$field_load; n_raw <- fl$n_raw
 
   spec <- list(y = y_long, site_idx = site_idx, X_lambda = X_lambda, X_p = X_p,
                n_sites = n_sites, K_max = K_max, is_nb = is_nb,
                n_field_units = n_sites, field_map = seq_len(n_sites),
-               field_Linv = Linv)
+               field_load = field_load)
 
   n_base <- p_lam + p_p + if (is_nb) 1L else 0L
   beta0 <- c(nl$beta_lambda_mean, nl$beta_p_mean)
   if (is_nb && is.finite(nl$r_mean %||% NA_real_)) beta0 <- c(beta0, log(nl$r_mean))
   else if (is_nb) beta0 <- c(beta0, log(2))
-  theta0 <- c(beta0, numeric(n_sites))
-  inv_metric <- c(rep(0.1, n_base), rep(1, n_sites))
+  theta0 <- c(beta0, numeric(n_raw))
+  inv_metric <- c(rep(0.1, n_base), rep(1, n_raw))
 
   run_chain <- function(ch)
     cpp_removal_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
@@ -418,12 +437,12 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
-           if (is_nb) "log_r", paste0("raw_", seq_len(n_sites)))
+           if (is_nb) "log_r", paste0("raw_", seq_len(n_raw)))
   colnames(draws) <- nms
   b_idx <- seq_len(n_base)
   par <- colMeans(draws); cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_sites)
-  z_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  raw_idx <- n_base + seq_len(n_raw)
+  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
   lay  <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb)
   marg <- .tobs_removal_nuts_marginal(model, mixture = mix_code, K_max = K_max)
@@ -446,7 +465,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   fit$nuts <- list(accept_prob = accept, divergent = divergent,
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = tau, rho = rho,
+                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
                    prior_type = spatial$type, fixed_hyper = TRUE)
   fit
 }

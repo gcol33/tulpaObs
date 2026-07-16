@@ -17,7 +17,7 @@ test_that("ms_count() family is wired and reports its supported methods", {
   expect_identical(f$params$response, "poisson")
   expect_identical(ms_count("negbin")$params$response, "negbin")
   expect_identical(ms_count("gaussian")$params$response, "gaussian")
-  expect_error(ms_count("binomial"))
+  expect_identical(ms_count("binomial")$params$response, "binomial")
   expect_true("laplace" %in% tulpaObs:::.tobs_family_methods$ms_count)
 })
 
@@ -112,6 +112,37 @@ test_that("Poisson community count recovers community means with ~95% coverage",
   expect_equal(colMeans(est), beta, tolerance = 0.05)
   # pooled coverage of the POPULATION community mean (Vf propagates the
   # between-species variance); the package rubric floor is 0.85 pooled.
+  expect_gte(mean(cover), 0.85)
+})
+
+test_that("binomial community count recovers means with ~95% coverage (#125)", {
+  skip_if_fast()
+  skip_on_cran()
+  # The binomial (trials > 1) community MEAN carries a small O(1/n_species)
+  # first-order-Laplace intercept bias (measured: ~0.06 at S = 20, ~0.036 at
+  # S = 40, absent at trials = 1 / the jsdm bernoulli case); the slope is
+  # unbiased. Same order and character as the documented negbin-slope
+  # attenuation in this family. Recover at S = 30 (bias ~0.04) and assert the
+  # coverage, which is the calibration that matters.
+  beta <- c(0.2, 0.6)
+  n_seed <- 20L
+  cover <- matrix(FALSE, n_seed, length(beta))
+  est   <- matrix(NA_real_, n_seed, length(beta))
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_ms_count(N = 150, n_species = 30, beta_comm_mean = beta,
+                             beta_comm_sd = c(0.4, 0.3), response = "binomial",
+                             trials = 10, seed = 800 + s)
+    fit <- tobs(~ x, data = sim$data, family = ms_count("binomial"), y = sim$y,
+                species = colnames(sim$y), trials = 10, method = "laplace",
+                control = list(verbose = FALSE, progress = FALSE))
+    b  <- unname(unlist(coef(fit)))
+    se <- sqrt(diag(vcov(fit)))
+    est[s, ]   <- b
+    cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
+  }
+  # Absolute bias bound (the logit-scale intercept sits near 0, so a relative
+  # tolerance would be far tighter than the documented O(1/S) bias warrants).
+  expect_lt(max(abs(colMeans(est) - beta)), 0.07)
   expect_gte(mean(cover), 0.85)
 })
 

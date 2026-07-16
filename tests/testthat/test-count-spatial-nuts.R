@@ -161,3 +161,114 @@ test_that("dyn_abun() NUTS + car_proper field reproduces the nested-Laplace fiel
   expect_lt(abs(nu$means[["lambda_abund_cov1"]] - nl$means[["lambda_abund_cov1"]]) /
               nu$sds[["lambda_abund_cov1"]], 1)
 })
+
+
+# ---------------------------------------------------------------------------
+# Intrinsic ICAR fields under NUTS (gcol33/tulpaObs#113). The #71 sum-to-zero
+# reparameterisation drops the constant precision null direction, so the icar
+# field's whitened raw ~ N(0, I_{n-1}) samples with the same well-conditioned
+# geometry as the full-rank proper-CAR field (0 divergences, reproduces the
+# nested-Laplace icar field). Same invariants as the car_proper tests above.
+# ---------------------------------------------------------------------------
+
+test_that("removal() NUTS + icar field recovers + reproduces the nested-Laplace field (#113)", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
+  set.seed(11); xab <- .csn_orth_cov(phi)
+  lambda <- exp(log(8) + 0.6 * xab + phi); p <- 0.45; K <- 4L
+  N <- rpois(ng, lambda); y <- matrix(0L, ng, K); rem <- N
+  for (k in 1:K) { y[, k] <- rbinom(ng, rem, p); rem <- rem - y[, k] }
+  nl <- tobs(~ abund_cov1 + icar(graph = adj), data = data.frame(abund_cov1 = xab),
+             family = removal(), detection = ~ 1, y = y, method = "nested_laplace",
+             control = list(verbose = FALSE, progress = FALSE))
+  nu <- tulpaObs:::.tobs_fit_removal_nuts_spatial(
+    nl$model, .csn_spatial(nl), mixture = "poisson",
+    n.iter = 500L, n.warmup = 500L, seed = 3L)
+  expect_identical(nu$method, "nuts")
+  expect_equal(mean(nu$divergent), 0)                                  # sum-to-zero geometry
+  expect_length(nu$spatial_field, ng)                                  # centred field, length n
+  expect_lt(abs(mean(nu$spatial_field)), 1e-6)                         # sum z = 0
+  expect_gt(cor(nu$spatial_field, nl$spatial_field), 0.9)             # reproduces NL field
+  expect_gt(cor(nu$spatial_field, phi), 0.6)                          # tracks truth
+  expect_lt(abs(nu$means[["lambda_abund_cov1"]] - 0.6) /
+              nu$sds[["lambda_abund_cov1"]], 3)                       # slope recovered
+})
+
+
+test_that("distance() NUTS + icar field recovers + reproduces the nested-Laplace field (#113)", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
+  set.seed(22); xab <- .csn_orth_cov(phi); cut <- c(0, 10, 20, 30, 40); B <- 4L
+  sig <- exp(3.0); lamd <- exp(log(40) + 0.5 * xab + phi)
+  g_mid <- exp(-((head(cut, -1) + tail(cut, -1)) / 2)^2 / (2 * sig^2))
+  pi_b <- g_mid * diff(cut) / 40 * 0.6
+  Nd <- rpois(ng, lamd); y <- matrix(0L, ng, B)
+  for (i in seq_len(ng)) y[i, ] <- rbinom(B, Nd[i], pi_b)
+  nl <- tobs(~ abund_cov1 + icar(graph = adj), data = data.frame(abund_cov1 = xab),
+             family = distance(key = "halfnorm", transect = "line", cutpoints = cut),
+             detection = ~ 1, y = y, method = "nested_laplace",
+             control = list(verbose = FALSE, progress = FALSE))
+  nu <- tulpaObs:::.tobs_fit_distance_nuts_spatial(
+    nl$model, .csn_spatial(nl), mixture = "poisson",
+    n.iter = 500L, n.warmup = 500L, seed = 4L)
+  expect_identical(nu$method, "nuts")
+  expect_equal(mean(nu$divergent), 0)
+  expect_lt(abs(mean(nu$spatial_field)), 1e-6)
+  expect_gt(cor(nu$spatial_field, nl$spatial_field), 0.9)
+  expect_gt(cor(nu$spatial_field, phi), 0.6)
+  expect_lt(abs(nu$means[["lambda_abund_cov1"]] - 0.5) /
+              nu$sds[["lambda_abund_cov1"]], 3)
+})
+
+
+test_that("fp_occu() NUTS + icar field reproduces the nested-Laplace field, 0 divergences (#113)", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .csn_grid_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
+  set.seed(33); xab <- .csn_orth_cov(phi); psi <- plogis(0.3 + 0.7 * xab + phi)
+  z <- rbinom(ng, 1, psi); J <- 6L; yf <- integer(ng * J); idx <- 1L
+  for (i in seq_len(ng)) for (j in 1:J) {
+    yf[idx] <- if (z[i] == 1) sample(0:2, 1, prob = c(0.45, 0.25, 0.30))
+               else sample(0:1, 1, prob = c(0.92, 0.08))
+    idx <- idx + 1L
+  }
+  nl <- tobs(~ abund_cov1 + icar(graph = adj), data = data.frame(abund_cov1 = xab),
+             family = fp_occu(), detection = ~ 1, y = matrix(yf, ng, J, byrow = TRUE),
+             method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
+  nu <- tulpaObs:::.tobs_fit_fp_occu_nuts_spatial(
+    nl$model, .csn_spatial(nl), n.iter = 600L, n.warmup = 600L,
+    adapt.delta = 0.95, seed = 5L)
+  expect_identical(nu$method, "nuts")
+  expect_equal(mean(nu$divergent), 0)
+  expect_lt(abs(mean(nu$spatial_field)), 1e-6)
+  expect_gt(cor(nu$spatial_field, nl$spatial_field), 0.7)
+  expect_lt(abs(nu$means[["psi_abund_cov1"]] - nl$means[["psi_abund_cov1"]]) /
+              nu$sds[["psi_abund_cov1"]], 1)
+})
+
+
+test_that("dyn_abun() NUTS + icar field reproduces the nested-Laplace field, 0 divergences (#113)", {
+  skip_on_cran()
+  skip_if_fast()
+  adj <- .csn_grid_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
+  set.seed(44); xab <- .csn_orth_cov(phi); Td <- 3L; Jd <- 3L
+  N1 <- rpois(ng, exp(log(7) + 0.5 * xab + phi)); ya <- array(0L, c(ng, Jd, Td)); Ncur <- N1
+  for (t in 1:Td) {
+    for (j in 1:Jd) ya[, j, t] <- rbinom(ng, Ncur, 0.5)
+    if (t < Td) Ncur <- rbinom(ng, Ncur, 0.6) + rpois(ng, 2)
+  }
+  nl <- tobs(~ abund_cov1 + icar(graph = adj), data = data.frame(abund_cov1 = xab),
+             family = dyn_abun(K_max = 20L), detection = ~ 1, y = ya,
+             method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
+  nu <- tulpaObs:::.tobs_fit_dyn_abun_nuts_spatial(
+    nl$model, .csn_spatial(nl), mixture = "poisson",
+    n.iter = 200L, n.warmup = 200L, max.treedepth = 8L, seed = 6L)
+  expect_identical(nu$method, "nuts")
+  expect_equal(mean(nu$divergent), 0)
+  expect_lt(abs(mean(nu$spatial_field)), 1e-6)
+  expect_gt(cor(nu$spatial_field, nl$spatial_field), 0.7)
+  expect_lt(abs(nu$means[["lambda_abund_cov1"]] - nl$means[["lambda_abund_cov1"]]) /
+              nu$sds[["lambda_abund_cov1"]], 1)
+})

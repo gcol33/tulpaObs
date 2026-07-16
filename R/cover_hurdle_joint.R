@@ -401,7 +401,7 @@
 
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
-  if (positive %in% c("lognormal", "lognormal_trunc")) {
+  if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
     sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
     phi_pos <- NA_real_; phi_pos_sd <- NA_real_
   } else {
@@ -614,7 +614,7 @@
 
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
-  if (positive %in% c("lognormal", "lognormal_trunc")) {
+  if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
     sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
     phi_pos <- NA_real_; phi_pos_sd <- NA_real_
   } else {
@@ -734,7 +734,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
                                           control = list(),
                                           temporal = NULL, re = NULL,
                                           priors = NULL) {
-  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal")) {
+  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal", "gaussian")) {
     stop("method = 'nested_laplace'/'nested_laplace_sla' for cover() supports positive = ",
          "'lognormal', 'lognormal_trunc', 'beta', 'beta_oi', or 'ordinal'. Got '",
          positive, "'.", call. = FALSE)
@@ -1293,7 +1293,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # sigma_pos -- and the beta precision otherwise (phi_pos).
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
-  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
+  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
     sigma_pos    <- phi_mu
     sigma_pos_sd <- phi_sd
     phi_pos      <- NA_real_

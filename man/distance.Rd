@@ -22,21 +22,6 @@ distance(
 
 \item{cutpoints}{numeric distance-bin edges, length \code{n_bins + 1}
 (\verb{0 = c_0 < c_1 < ... < c_B}). Required.}
-
-\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
-integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
-engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
-fit warns that the posterior over \code{N} puts mass on the boundary.}
-
-\item{mixture}{latent-abundance distribution, both fitted via tulpa's
-closed-form marginal Laplace engine. \code{"poisson"} is the default;
-\code{"negbin"} (negative binomial, \code{Var(N) = lambda + lambda^2 / r}) adds an
-overdispersion parameter \code{r}. Non-spatially the log size \code{log_r} is
-estimated jointly with the coefficients and reported with an SE; on the
-areal-spatial path (\code{method = "nested_laplace"}) \code{r} is integrated over the
-outer hyperparameter grid and reported as a posterior mean / sd. Named
-\code{mixture} (after \code{unmarked::pcount()}) to avoid collision with the
-model-type \code{family} argument of \code{\link[=tobs]{tobs()}}.}
 }
 \value{
 A \code{tobs_family} object.

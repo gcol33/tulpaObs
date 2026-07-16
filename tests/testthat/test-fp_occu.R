@@ -434,7 +434,7 @@ test_that("fp_occu() areal ICAR recovers the occupancy slope + field", {
   expect_gt(mean(field_cor), 0.3)
 })
 
-test_that("fp_occu() areal spatial: bym2 fits; nuts+spatial gated", {
+test_that("fp_occu() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
   adj <- .fp_grid_adj(5L)
@@ -445,9 +445,56 @@ test_that("fp_occu() areal spatial: bym2 fits; nuts+spatial gated", {
   expect_identical(fit$method, "nested_laplace")
   expect_true(all(is.finite(vcov(fit))))
   expect_false(is.null(fit$spatial_field))
-  expect_error(
-    tobs(formula = ~ x + icar(graph = adj), data = s$data, family = fp_occu(),
-         detection = ~ 1, y = s$y, method = "nuts",
-         control = list(n.iter = 20L, n.warmup = 10L)),
-    "proper-CAR|car_proper")
+  # NUTS + areal now samples an intrinsic icar() field via the #71 sum-to-zero
+  # reparameterisation (full recovery lives in test-count-spatial-nuts.R).
+  fit_icar <- tobs(formula = ~ x + icar(graph = adj), data = s$data,
+    family = fp_occu(), detection = ~ 1, y = s$y, method = "nuts",
+    control = list(n.iter = 60L, n.warmup = 60L, verbose = FALSE, progress = FALSE))
+  expect_identical(fit_icar$method, "nuts")
+  expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
+})
+
+test_that("fp_occu() temporal()-only field recovers the AR1 field + slope (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
+  # driver with a single temporal block on the occupancy arm (gcol33/tulpaObs#114).
+  # Occupancy fields are weakly identified (one binary site per node), so the
+  # temporal-field bar is lower than the count families.
+  Tt <- 8L; per_t <- 30L; N <- Tt * per_t; J <- 4L
+  fcor <- slope <- rep(NA_real_, 8L)
+  for (s in seq_len(8L)) {
+    set.seed(700L + s)
+    period <- rep(seq_len(Tt), each = per_t)
+    rho <- 0.7; sig <- 0.8; u <- numeric(Tt)
+    u[1] <- stats::rnorm(1, 0, sig / sqrt(1 - rho^2))
+    for (t in 2:Tt) u[t] <- rho * u[t - 1] + stats::rnorm(1, 0, sig)
+    u <- u - mean(u)
+    x <- stats::rnorm(N)
+    psi <- stats::plogis(0.2 + 0.8 * x + u[period]); z <- stats::rbinom(N, 1, psi)
+    p11 <- 0.6; p10 <- 0.05; b <- 0.4; y <- matrix(0L, N, J)
+    for (i in seq_len(N)) for (j in seq_len(J)) {
+      y[i, j] <- if (z[i] == 1)
+        sample(0:2, 1, prob = c(1 - p11, p11 * (1 - b), p11 * b))
+      else sample(0:1, 1, prob = c(1 - p10, p10))
+    }
+    fit <- tryCatch(tobs(~ x + temporal(period, type = "ar1"),
+                         data = data.frame(x = x, period = period),
+                         family = fp_occu(), detection = ~ 1, y = y,
+                         method = "nested_laplace",
+                         control = list(verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_null(fit$spatial_field)                 # temporal-only: no areal field
+      expect_length(fit$temporal_field, Tt)
+    }
+    slope[s] <- fit$means[["psi_x"]]
+    if (length(fit$temporal_field) == Tt) fcor[s] <- abs(stats::cor(fit$temporal_field, u))
+  }
+  ok <- is.finite(slope)
+  expect_gte(mean(ok), 0.75)
+  expect_lt(abs(mean(slope[ok]) - 0.8), 0.30)        # occupancy slope recovered
+  expect_gt(mean(fcor[ok], na.rm = TRUE), 0.6)       # AR1 temporal field recovered
 })

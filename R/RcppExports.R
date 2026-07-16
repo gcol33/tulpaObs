@@ -17,6 +17,10 @@ cpp_register_occu_cover_beta_coupling <- function() {
     invisible(.Call(`_tulpaObs_cpp_register_occu_cover_beta_coupling`))
 }
 
+cpp_register_occu_cover_gaussian_coupling <- function() {
+    invisible(.Call(`_tulpaObs_cpp_register_occu_cover_gaussian_coupling`))
+}
+
 cpp_register_occu_cover_lognormal_agg_coupling <- function() {
     invisible(.Call(`_tulpaObs_cpp_register_occu_cover_lognormal_agg_coupling`))
 }
@@ -25,12 +29,20 @@ cpp_register_occu_cover_beta_agg_coupling <- function() {
     invisible(.Call(`_tulpaObs_cpp_register_occu_cover_beta_agg_coupling`))
 }
 
+cpp_register_occu_cover_gaussian_agg_coupling <- function() {
+    invisible(.Call(`_tulpaObs_cpp_register_occu_cover_gaussian_agg_coupling`))
+}
+
 cpp_eval_occu_cover_lognormal_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature = "observed") {
     .Call(`_tulpaObs_cpp_eval_occu_cover_lognormal_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature)
 }
 
 cpp_eval_occu_cover_beta_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature = "observed") {
     .Call(`_tulpaObs_cpp_eval_occu_cover_beta_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, curvature)
+}
+
+cpp_eval_occu_cover_gaussian_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature = "observed") {
+    .Call(`_tulpaObs_cpp_eval_occu_cover_gaussian_cell`, eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature)
 }
 
 cpp_eval_occu_cover_lognormal_agg_cell <- function(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature = "observed") {
@@ -313,12 +325,12 @@ cpp_occu_cover_cdf_limits <- function(X_occ, X_det_site, X_det_visit, b_occ, b_d
     .Call(`_tulpaObs_cpp_occu_cover_cdf_limits`, X_occ, X_det_site, X_det_visit, b_occ, b_det, field_occ, valid, any_det, n_threads)
 }
 
-cpp_occu_cover_ppc <- function(psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, is_beta, freeman) {
-    .Call(`_tulpaObs_cpp_occu_cover_ppc`, psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, is_beta, freeman)
+cpp_occu_cover_ppc <- function(psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, positive, freeman) {
+    .Call(`_tulpaObs_cpp_occu_cover_ppc`, psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, positive, freeman)
 }
 
-cpp_occu_cover_ppc_agg <- function(psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, is_beta, freeman) {
-    .Call(`_tulpaObs_cpp_occu_cover_ppc_agg`, psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, is_beta, freeman)
+cpp_occu_cover_ppc_agg <- function(psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, positive, freeman) {
+    .Call(`_tulpaObs_cpp_occu_cover_ppc_agg`, psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, positive, freeman)
 }
 
 cpp_occu_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
@@ -329,8 +341,8 @@ cpp_occu_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_met
     .Call(`_tulpaObs_cpp_occu_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
-cpp_occu_cover_ploglik_ragged <- function(X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, is_beta, eta_bound, n_threads) {
-    .Call(`_tulpaObs_cpp_occu_cover_ploglik_ragged`, X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, is_beta, eta_bound, n_threads)
+cpp_occu_cover_ploglik_ragged <- function(X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, positive, eta_bound, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_cover_ploglik_ragged`, X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, positive, eta_bound, n_threads)
 }
 
 cpp_occu_single_ploglik <- function(eta_psi, eta_p, y, n_threads) {

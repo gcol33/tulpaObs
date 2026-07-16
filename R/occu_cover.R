@@ -81,6 +81,14 @@
            "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
            call. = FALSE)
     }
+  } else if (identical(positive, "gaussian")) {
+    # Identity-Gaussian arm (gcol33/tulpaObs#112): the response lives on a real,
+    # unbounded scale, so any finite value is admissible (only NaN/Inf rejected).
+    bad <- cover_obs & !is.finite(y_pos_num)
+    if (any(bad)) {
+      stop("Gaussian positive arm requires a finite y_pos at every detected ",
+           "visit with an observed cover.", call. = FALSE)
+    }
   } else {
     bad <- cover_obs & (y_pos_num <= 0)
     if (any(bad)) {
@@ -203,6 +211,12 @@
       stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
            "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
            call. = FALSE)
+    }
+  } else if (identical(positive, "gaussian")) {
+    bad <- cover_obs & !is.finite(y_pos_num)
+    if (any(bad)) {
+      stop("Gaussian positive arm requires a finite y_pos at every detected ",
+           "visit with an observed cover.", call. = FALSE)
     }
   } else {
     bad <- cover_obs & (y_pos_num <= 0)
@@ -640,14 +654,20 @@
 # Vectorised over y / eta (and matrices), so the per-visit and the per-unit
 # aggregated cover terms read one formula. Beta clamps the predictor before the
 # logistic; lognormal uses the raw predictor (matching the historical kernels).
-.occu_cover_pos_logdens <- function(y, eta, disp, is_beta) {
-  if (is_beta) {
+.occu_cover_pos_logdens <- function(y, eta, disp, positive) {
+  if (identical(positive, "beta")) {
     mu <- stats::plogis(.tobs_clamp_eta(eta))
     a  <- mu * disp
     b  <- (1 - mu) * disp
     lgamma(disp) - lgamma(a) - lgamma(b) +
       (a - 1) * log(y) + (b - 1) * log(1 - y)
+  } else if (identical(positive, "gaussian")) {
+    # Identity-Gaussian arm (gcol33/tulpaObs#112): residual on the raw response,
+    # no change-of-variable Jacobian. mu = eta.
+    -log(disp) - 0.5 * log(2 * pi) -
+      0.5 * ((y - eta) / disp)^2
   } else {
+    # lognormal: residual on log-cover, with the -log(y) Jacobian.
     -log(y) - log(disp) - 0.5 * log(2 * pi) -
       0.5 * ((log(y) - eta) / disp)^2
   }
@@ -699,7 +719,7 @@
   vapply(seq_along(vals), function(i) {
     v  <- vals[[i]]
     lt <- vapply(seq_along(z), function(k) {
-      ell <- sum(.occu_cover_pos_logdens(v, eta[i] + sigma_u * z[k], phi, TRUE))
+      ell <- sum(.occu_cover_pos_logdens(v, eta[i] + sigma_u * z[k], phi, "beta"))
       lw[k] + ell
     }, numeric(1))
     mx <- max(lt)
@@ -715,9 +735,9 @@
 # predictor; under aggregation the cover design is unit-level so the predictor is
 # constant across a unit's visits (column 1 is the unit value).
 .occu_cover_cover_term <- function(model, ep_mat, log_disp, units = NULL) {
-  n_sites <- model$n_sites
-  is_beta <- identical(model$positive, "beta")
-  mode    <- model$cover_aggregate %||% "none"
+  n_sites  <- model$n_sites
+  positive <- model$positive %||% "lognormal"
+  mode     <- model$cover_aggregate %||% "none"
 
   if (identical(mode, "none")) {
     # Cover density at detected visits with an observed cover (missing-at-random
@@ -726,7 +746,7 @@
     log_f_pos <- matrix(0, n_sites, model$max_visits)
     if (any(pos_mask)) {
       log_f_pos[pos_mask] <- .occu_cover_pos_logdens(
-        model$y_pos[pos_mask], ep_mat[pos_mask], exp(log_disp), is_beta)
+        model$y_pos[pos_mask], ep_mat[pos_mask], exp(log_disp), positive)
     }
     return(rowSums(log_f_pos))
   }
@@ -739,16 +759,18 @@
   if (identical(mode, "latent")) {
     sigma_u <- exp(log_disp)
     disp2   <- model$cover_latent_disp2
-    out[ps] <- if (is_beta) {
+    out[ps] <- if (identical(positive, "beta")) {
       .occu_cover_latent_beta_logm(units$vals, eta, disp2, sigma_u,
                                    model$cover_latent_nquad %||% 15L)
     } else {
+      # gaussian has no latent cover-aggregate variant; the dispatcher rejects
+      # cover_aggregate = "latent" with a gaussian arm before reaching here.
       .occu_cover_latent_lognormal_logm(units$vals, eta, disp2, sigma_u)
     }
   } else {
     aggfun <- if (identical(mode, "median")) stats::median else mean
     yv  <- vapply(units$vals, function(v) as.numeric(aggfun(v)), numeric(1))
-    out[ps] <- .occu_cover_pos_logdens(yv, eta, exp(log_disp), is_beta)
+    out[ps] <- .occu_cover_pos_logdens(yv, eta, exp(log_disp), positive)
   }
   out
 }
@@ -833,6 +855,11 @@
     if (identical(model$positive, "beta")) {
       start[p_occ + p_p + 1L] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))
       start[n_par]            <- log(10)   # phi ~ 10 = moderate beta concentration
+    } else if (identical(model$positive, "gaussian")) {
+      # Identity-Gaussian arm (gcol33/tulpaObs#112): the response is raw (may be
+      # negative), so seed the intercept / sigma on the natural scale, not log.
+      start[p_occ + p_p + 1L] <- mean(pos_vals)
+      start[n_par]            <- log(stats::sd(pos_vals) + 0.1)
     } else {
       start[p_occ + p_p + 1L] <- mean(log(pos_vals))
       start[n_par]            <- log(stats::sd(log(pos_vals)) + 0.1)

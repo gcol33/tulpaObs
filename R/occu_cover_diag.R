@@ -2,6 +2,15 @@
 # Pointwise log-likelihood (WAIC / PSIS-LOO) -- gcol33/tulpaObs#26
 # ---------------------------------------------------------------------------
 
+# Positive-arm family code shared by the occu_cover C++ WAIC / PPC kernels,
+# following the cover scheme (lognormal 0, beta 3, gaussian 4). Only these three
+# reach the joint occu_cover engine (gcol33/tulpaObs#112).
+.occu_cover_pos_code <- function(positive) {
+  switch(positive, lognormal = 0L, beta = 3L, gaussian = 4L,
+         stop("occu_cover pointwise loglik/PPC: unsupported positive family '",
+              positive, "'.", call. = FALSE))
+}
+
 # Pointwise log-likelihood [n_draws x n_sites] for an occu_cover() fit: the
 # per-site marginal log-likelihood (latent occupancy state integrated out)
 # evaluated at each posterior draw. The spatial nested-Laplace fit samples the
@@ -218,15 +227,15 @@
   log_1mp <- log(1 - p_vec)
   log_h_det <- ifelse(y == 1L, log_p, log_1mp)
 
-  is_beta <- identical(model$positive %||% "lognormal", "beta")
-  pos_ld  <- numeric(length(y))
+  positive <- model$positive %||% "lognormal"
+  pos_ld   <- numeric(length(y))
   # Cover term at detected visits with an observed cover; a missing (NA) cover
   # at a detected visit drops out (missing-at-random cover), the detection term
   # above still counts.
   cobs    <- (y == 1L) & is.finite(model$y_pos_visit)
   if (any(cobs)) {
     pos_ld[cobs] <- .occu_cover_pos_logdens(model$y_pos_visit[cobs], ep_vec[cobs],
-                                            exp(log_disp), is_beta)
+                                            exp(log_disp), positive)
   }
 
   sum_log_h  <- as.numeric(rowsum(log_h_det, g))
@@ -336,7 +345,7 @@
       y_pos_visit   = rg$y_pos_visit,
       b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
       field_occ = field_occ, field_pos = field_pos,
-      is_beta   = identical(model$positive %||% "lognormal", "beta"),
+      positive  = .occu_cover_pos_code(model$positive %||% "lognormal"),
       eta_bound = .TOBS_ETA_BOUND,
       n_threads = max(1L, as.integer(n_threads))))
   }
@@ -386,18 +395,22 @@
 # "mean" / "median" one aggregated cover per detected unit at the unit predictor
 # and dispersion the fit held; "latent" the per-unit covers replicated through
 # the shared cover RE (u_i ~ N(0, sigma_u^2)) at the within-unit residual disp2.
-.occu_cover_ppc_cover <- function(model, ep_mat, disp, units, is_beta, stat_fn,
+.occu_cover_ppc_cover <- function(model, ep_mat, disp, units, positive, stat_fn,
                                   cl) {
   draw_pos <- function(eta, d) {
-    if (is_beta) {
+    if (identical(positive, "beta")) {
       mu <- stats::plogis(cl(eta))
       stats::rbeta(length(eta), mu * d, (1 - mu) * d)
+    } else if (identical(positive, "gaussian")) {
+      stats::rnorm(length(eta), eta, d)               # identity-Gaussian (#112)
     } else {
       exp(stats::rnorm(length(eta), eta, d))
     }
   }
   mean_pos <- function(eta, d) {
-    if (is_beta) stats::plogis(cl(eta)) else exp(cl(eta) + d^2 / 2)
+    if (identical(positive, "beta")) stats::plogis(cl(eta))
+    else if (identical(positive, "gaussian")) eta       # mu = eta
+    else exp(cl(eta) + d^2 / 2)
   }
   mode <- model$cover_aggregate %||% "none"
 
@@ -446,7 +459,13 @@
   fit.stat <- match.arg(fit.stat)
   model    <- object$model
   positive <- model$positive %||% "lognormal"
-  is_beta  <- identical(positive, "beta")
+  if (identical(positive, "gaussian")) {
+    stop("tobs_ppc() is not defined for occu_cover(response = \"gaussian\"): the ",
+         "Freeman-Tukey and chi-squared discrepancies assume a non-negative ",
+         "response, but the identity-Gaussian arm is unbounded. Use tobs_waic() ",
+         "/ tobs_loo() for model comparison.", call. = FALSE)
+  }
+  pos_code <- .occu_cover_pos_code(positive)
   c0   <- .tobs_occu_cover_components(object, n.samples)
   comp <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
                                      c0$field_occ, c0$field_pos)
@@ -483,7 +502,7 @@
     yint <- y;     storage.mode(yint) <- "integer"
     r <- cpp_occu_cover_ppc(psi_all, p_all, ep_all, yint, model$y_pos, vint,
                             as.integer(any_det), as.integer(n_valid), disp,
-                            is_beta, identical(fit.stat, "freeman-tukey"))
+                            pos_code, identical(fit.stat, "freeman-tukey"))
     return(list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
                 bayesian.p = mean(r$fit.y.rep > r$fit.y)))
   }
@@ -519,7 +538,7 @@
   }
   r <- cpp_occu_cover_ppc_agg(psi_all, p_all, ep_all, yint, vint,
     as.integer(any_det), as.integer(n_valid), disp, mode_code, ps0,
-    as.numeric(yv), vals_flat, unit_off, disp2, is_beta,
+    as.numeric(yv), vals_flat, unit_off, disp2, pos_code,
     identical(fit.stat, "freeman-tukey"))
   list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
        bayesian.p = mean(r$fit.y.rep > r$fit.y))

@@ -87,9 +87,14 @@ struct MsNmixNutsData {
     // tau Q(rho) (the nested-Laplace #12 estimate). eta_lambda_{s,i} += f[u(i)]
     // for every species. The flat vector grows by `raw` (length n_field_units)
     // appended after the chol blocks.
-    int n_field_units = 0, o_raw = 0;
+    // The field is f = L %*% raw, raw ~ N(0, I_{n_raw}), with L a (possibly non-
+    // square) n_field_units x n_raw loading (gcol33/tulpaObs#71/#113): the square
+    // inverse Cholesky for a full-rank proper-CAR field (n_raw == n_field_units),
+    // or the sum-to-zero eigen-loading for an intrinsic icar (n_raw =
+    // n_field_units - 1) / bym2 (n_raw = 2 n_field_units - 1) field.
+    int n_field_units = 0, n_raw = 0, o_raw = 0;
     std::vector<int> field_map;       // 0-based unit per site (length n_sites)
-    std::vector<double> Linv;         // row-major n_field_units x n_field_units
+    std::vector<double> Linv;         // row-major n_field_units x n_raw loading
 
     // Packed-coordinate layout (mirrors .tobs_ms_abun_nuts_layout).
     int P_tot = 0, q_lam = 0, q_p = 0, q_logr = 0, total = 0;
@@ -107,7 +112,7 @@ inline void ms_abun_nuts_layout(MsNmixNutsData& d) {
     d.chol_p_off    = d.chol_lam_off + d.q_lam;
     d.chol_logr_off = d.chol_p_off + d.q_p;
     d.o_raw   = d.chol_logr_off + d.q_logr;
-    d.total   = d.o_raw + d.n_field_units;
+    d.total   = d.o_raw + d.n_raw;
 }
 
 inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
@@ -139,13 +144,18 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
                     Rcpp::stop("field_map out of range [1, n_field_units].");
                 d.field_map[i] = u;
             }
-            NumericMatrix Li = Rcpp::as<NumericMatrix>(spec["field_Linv"]);
-            if (Li.nrow() != d.n_field_units || Li.ncol() != d.n_field_units)
-                Rcpp::stop("field_Linv must be n_field_units x n_field_units.");
-            d.Linv.assign((std::size_t) d.n_field_units * d.n_field_units, 0.0);
+            // Accept a general n_field_units x n_raw loading (field_load, #113);
+            // the legacy square inverse Cholesky (field_Linv) is n_raw == NF.
+            NumericMatrix Li = spec.containsElementNamed("field_load")
+                ? Rcpp::as<NumericMatrix>(spec["field_load"])
+                : Rcpp::as<NumericMatrix>(spec["field_Linv"]);
+            if (Li.nrow() != d.n_field_units)
+                Rcpp::stop("field loading must have n_field_units rows.");
+            d.n_raw = Li.ncol();
+            d.Linv.assign((std::size_t) d.n_field_units * d.n_raw, 0.0);
             for (int a = 0; a < d.n_field_units; ++a)
-                for (int b = 0; b < d.n_field_units; ++b)
-                    d.Linv[(std::size_t) a * d.n_field_units + b] = Li(a, b);
+                for (int b = 0; b < d.n_raw; ++b)
+                    d.Linv[(std::size_t) a * d.n_raw + b] = Li(a, b);
         }
     }
     d.obs.assign(d.n_species,
@@ -210,13 +220,14 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
     // score accumulates grad_eta_lambda over species (and over the sites mapping
     // to each unit), then maps back to raw via Linv'.
     const int NF = d.n_field_units;
+    const int NR = d.n_raw;
     std::vector<double> f_field(NF, 0.0);
     if (NF > 0) {
         const double* raw = th + d.o_raw;
         for (int a = 0; a < NF; ++a) {
             double v = 0.0;
-            for (int b = 0; b < NF; ++b)
-                v += d.Linv[(std::size_t) a * NF + b] * raw[b];
+            for (int b = 0; b < NR; ++b)
+                v += d.Linv[(std::size_t) a * NR + b] * raw[b];
             f_field[a] = v;
         }
     }
@@ -358,11 +369,11 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
                 g_f[u] += gf_s[(std::size_t) s * NF + u];
         const double* raw = th + d.o_raw;
         double* g_raw = g + d.o_raw;
-        // d lp / d raw_b = sum_a Linv[a, b] g_f[a] - raw_b.
-        for (int b = 0; b < NF; ++b) {
+        // d lp / d raw_b = sum_a L[a, b] g_f[a] - raw_b  (raw ~ N(0, I_{n_raw})).
+        for (int b = 0; b < NR; ++b) {
             double v = 0.0;
             for (int a = 0; a < NF; ++a)
-                v += d.Linv[(std::size_t) a * NF + b] * g_f[a];
+                v += d.Linv[(std::size_t) a * NR + b] * g_f[a];
             g_raw[b] += v - raw[b];
             lp += -0.5 * raw[b] * raw[b];
         }

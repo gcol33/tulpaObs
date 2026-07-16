@@ -28,6 +28,18 @@ inline double plg(double x) {
   if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
   double z = std::exp(x); return z / (1.0 + z);
 }
+// Positive-arm response-scale mean / replicate draw. `positive` follows the
+// shared cover scheme (lognormal 0, beta 3, gaussian 4, gcol33/tulpaObs#112).
+inline double mean_pos(double eta, double d, int positive) {
+  if (positive == 3) return plg(clampe(eta));                 // beta mean
+  if (positive == 4) return eta;                              // gaussian: mu = eta
+  return std::exp(clampe(eta) + d * d / 2.0);                 // lognormal mean
+}
+inline double draw_pos(double eta, double d, int positive) {
+  if (positive == 3) { double mu = plg(clampe(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
+  if (positive == 4) return R::rnorm(eta, d);                 // gaussian draw
+  return std::exp(R::rnorm(eta, d));                          // lognormal draw
+}
 // Draw-d detection predictor at (site i, visit j): site block + visit block.
 inline double eta_p_ij(const double* Xds, int n_sites, int i,
                        const double* bdet, int S, int d, int p_det_site,
@@ -118,7 +130,7 @@ Rcpp::List cpp_occu_cover_ppc(
     Rcpp::IntegerVector any_det,      // [n_sites]
     Rcpp::IntegerVector n_valid,      // [n_sites]
     Rcpp::NumericVector disp,         // [S]
-    bool is_beta, bool freeman
+    int positive, bool freeman        // positive: 0 lognormal, 3 beta, 4 gaussian
 ) {
   const int S = psi_all.ncol();
   const int n_sites = psi_all.nrow();
@@ -180,12 +192,7 @@ Rcpp::List cpp_occu_cover_ppc(
     std::vector<double> yrep_cov((std::size_t) n_sites * max_v);
     for (std::size_t idx = 0; idx < (std::size_t) n_sites * max_v; ++idx) {
       double eta = epmat[idx];
-      if (is_beta) {
-        double mu = plg(clampe(eta));
-        yrep_cov[idx] = R::rbeta(mu * d, (1.0 - mu) * d);
-      } else {
-        yrep_cov[idx] = std::exp(R::rnorm(eta, d));
-      }
+      yrep_cov[idx] = draw_pos(eta, d, positive);
     }
     double cov_obs = 0.0, cov_rep = 0.0;
     for (int j = 0; j < max_v; ++j)
@@ -193,7 +200,7 @@ Rcpp::List cpp_occu_cover_ppc(
         std::size_t idx = (std::size_t) j * n_sites + i;
         if (!(pv[idx] && py[idx] == 1)) continue;
         double eta = epmat[idx];
-        double Epos = is_beta ? plg(clampe(eta)) : std::exp(clampe(eta) + d * d / 2.0);
+        double Epos = mean_pos(eta, d, positive);
         cov_obs += stat(pyp[idx], Epos);
         cov_rep += stat(yrep_cov[idx], Epos);
       }
@@ -203,16 +210,6 @@ Rcpp::List cpp_occu_cover_ppc(
   return Rcpp::List::create(Rcpp::Named("fit.y") = fit_y,
                             Rcpp::Named("fit.y.rep") = fit_rep);
 }
-
-namespace {
-inline double mean_pos(double eta, double d, bool is_beta) {
-  return is_beta ? plg(clampe(eta)) : std::exp(clampe(eta) + d * d / 2.0);
-}
-inline double draw_pos(double eta, double d, bool is_beta) {
-  if (is_beta) { double mu = plg(clampe(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
-  return std::exp(R::rnorm(eta, d));
-}
-}  // namespace
 
 // Aggregated / latent-mode PPC for occu_cover() (cover_aggregate = "mean" /
 // "median" / "latent"). The detection replicate is identical to the none-mode
@@ -228,7 +225,7 @@ Rcpp::List cpp_occu_cover_ppc_agg(
     Rcpp::IntegerVector any_det, Rcpp::IntegerVector n_valid,
     Rcpp::NumericVector disp, int mode_code, Rcpp::IntegerVector pos_site,
     Rcpp::NumericVector yv, Rcpp::NumericVector vals_flat,
-    Rcpp::IntegerVector unit_off, double disp2, bool is_beta, bool freeman
+    Rcpp::IntegerVector unit_off, double disp2, int positive, bool freeman
 ) {
   const int S = psi_all.ncol(), n_sites = psi_all.nrow(), max_v = valid.ncol();
   const int n_units = pos_site.size();
@@ -283,8 +280,8 @@ Rcpp::List cpp_occu_cover_ppc_agg(
       if (mode_code == 1) {                        // mean / median
         for (int u = 0; u < n_units; ++u) {
           double eta = epmat[pps[u]];              // ep_mat[pos_site, 1]
-          double Ep = mean_pos(eta, d, is_beta);
-          double rp = draw_pos(eta, d, is_beta);
+          double Ep = mean_pos(eta, d, positive);
+          double rp = draw_pos(eta, d, positive);
           cov_obs += stat(yv[u], Ep);
           cov_rep += stat(rp, Ep);
         }
@@ -294,9 +291,9 @@ Rcpp::List cpp_occu_cover_ppc_agg(
         for (int u = 0; u < n_units; ++u) {
           double eta = epmat[pps[u]];
           for (int t = unit_off[u]; t < unit_off[u + 1]; ++t) {
-            double e = mean_pos(eta, disp2, is_beta);
+            double e = mean_pos(eta, disp2, positive);
             cov_obs += stat(vals_flat[t], e);
-            cov_rep += stat(draw_pos(eta + ure[u], disp2, is_beta), e);
+            cov_rep += stat(draw_pos(eta + ure[u], disp2, positive), e);
           }
         }
       }

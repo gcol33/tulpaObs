@@ -59,8 +59,10 @@
                  if (positive == "beta") log(phi) else log(sigma_pos)))
 }
 
-.ocsn_fit <- function(inp, method = "nuts", spatial = TRUE, control = list()) {
-  f <- if (spatial) ~ occ_cov1 + car_proper(graph = inp$adj) else ~ occ_cov1
+.ocsn_fit <- function(inp, method = "nuts", spatial = TRUE, control = list(),
+                      field = "car_proper") {
+  f <- if (!spatial) ~ occ_cov1
+       else stats::as.formula(sprintf("~ occ_cov1 + %s(graph = inp$adj)", field))
   tobs(formula = f, data = inp$cell_dat, family = occu_cover(inp$positive),
        detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
        y_pos = inp$y_pos, visits = inp$od$det.covs, method = method,
@@ -134,19 +136,21 @@ test_that("occu_cover spatial NUTS field-off path is byte-identical to non-spati
 })
 
 
-test_that("occu_cover NUTS rejects icar/bym2/SVC/RE spatial; advertises nuts", {
+test_that("occu_cover NUTS samples icar; rejects SVC/RE spatial; advertises nuts", {
   expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$occu_cover)
 
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 5L)
-  # Intrinsic icar() on the psi formula -> nested_laplace pointer (flat field-mean).
-  expect_error(
-    suppressWarnings(tobs(
-      formula = ~ occ_cov1 + icar(graph = inp$adj), data = inp$cell_dat,
-      family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
-      visits = inp$od$det.covs, method = "nuts",
-      control = list(verbose = FALSE))),
-    "proper-CAR|nested_laplace")
+  # Intrinsic icar() on the psi formula now samples via the coupled sum-to-zero
+  # field (gcol33/tulpaObs#113); confirm the path runs and centres the field.
+  fit_icar <- suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = inp$adj), data = inp$cell_dat,
+    family = occu_cover("lognormal"), detection = ~ det_cov1,
+    positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+    visits = inp$od$det.covs, method = "nuts",
+    control = list(verbose = FALSE, n.iter = 300L, n.warmup = 200L)))
+  expect_identical(fit_icar$method, "nuts")
+  expect_false(is.null(fit_icar$spatial_field))
+  expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)   # sum-to-zero centred
   # A weighted SVC car_proper field is a grid-integrated structure.
   expect_error(
     suppressWarnings(tobs(
@@ -204,6 +208,46 @@ test_that("occu_cover spatial NUTS recovers betas, field, coverage (lognormal)",
                matrix(truth[c(2, 4, 6)], sum(ok), 3, byrow = TRUE)) <
            1.96 * se[ok, c(2, 4, 6), drop = FALSE]
   expect_gte(mean(cover), 0.75)
+})
+
+
+test_that("occu_cover spatial NUTS + icar coupled field recovers betas + field (#113)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The #71 sum-to-zero reparameterisation samples the coupled INTRINSIC icar
+  # field (shared psi + alpha-copied cover arm) with the same in-tree field block,
+  # via the non-square loading. Occupancy fields are weakly identified (one binary
+  # site per node), so the field-cor gate is looser than the count families.
+  n_seeds <- 5L; side <- 8L; J <- 5L
+  est <- se <- matrix(NA_real_, n_seeds, 7L)
+  fcor <- div <- zmean <- rep(NA_real_, n_seeds)
+  truth <- NULL
+  for (s in seq_len(n_seeds)) {
+    inp <- .ocsn_inputs(side = side, J = J, seed = 3000L + s, positive = "lognormal")
+    truth <- inp$truth
+    nut <- tryCatch(.ocsn_fit(inp, "nuts", field = "icar",
+                    control = list(verbose = FALSE, n.iter = 1200L,
+                                   n.warmup = 800L, n.chains = 2L, seed = 1L)),
+                    error = function(e) NULL)
+    if (is.null(nut)) next
+    est[s, ]  <- as.numeric(nut$means)
+    se[s, ]   <- as.numeric(nut$sds)
+    fcor[s]   <- abs(stats::cor(nut$spatial_field, inp$sim$truth$f))
+    div[s]    <- nut$nuts$divergent_total
+    zmean[s]  <- mean(nut$spatial_field)
+  }
+  ok <- stats::complete.cases(est)
+  expect_gte(mean(ok), 0.75)
+  expect_lte(max(div[ok]), 5L)                       # sum-to-zero geometry, clean
+  expect_lt(max(abs(zmean[ok])), 1e-6)               # field is centred (sum z = 0)
+  expect_gt(mean(fcor[ok]), 0.55)                    # weak occupancy-field identification
+  bias <- abs(colMeans(est[ok, , drop = FALSE]) - truth)
+  expect_lt(bias[7], 0.15)                           # dispersion recovered
+  # 95% Wald coverage on the slope coefficients.
+  cover <- abs(est[ok, c(2, 4, 6), drop = FALSE] -
+               matrix(truth[c(2, 4, 6)], sum(ok), 3, byrow = TRUE)) <
+           1.96 * se[ok, c(2, 4, 6), drop = FALSE]
+  expect_gte(mean(cover), 0.70)
 })
 
 

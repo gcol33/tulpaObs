@@ -94,7 +94,7 @@ simulate_occu_cover <- function(N             = 200L,
                                  beta_occ      = NULL,
                                  beta_p        = NULL,
                                  beta_pos      = NULL,
-                                 positive      = c("lognormal", "beta"),
+                                 positive      = c("lognormal", "beta", "gaussian"),
                                  phi           = 30,
                                  sigma_pos     = 0.4,
                                  adj           = NULL,
@@ -120,7 +120,10 @@ simulate_occu_cover <- function(N             = 200L,
   if (is.null(beta_occ)) beta_occ <- c(stats::qlogis(0.4), stats::runif(n_occ_covs, -0.5, 0.5))
   if (is.null(beta_p))   beta_p   <- c(0, stats::runif(n_det_covs, -0.5, 0.5))
   if (is.null(beta_pos)) {
-    pos_int <- if (positive == "beta") stats::qlogis(0.3) else log(0.1)
+    pos_int <- switch(positive,
+                      beta     = stats::qlogis(0.3),
+                      gaussian = 2.0,
+                      log(0.1))
     beta_pos <- c(pos_int, stats::runif(n_pos_covs, -0.5, 0.5))
   }
 
@@ -322,6 +325,10 @@ simulate_occu_cover <- function(N             = 200L,
           if (positive == "beta") {
             mu <- stats::plogis(eta_pos_ij)
             y_pos[i, j] <- stats::rbeta(1L, mu * phi, (1 - mu) * phi)
+          } else if (positive == "gaussian") {
+            # Identity-Gaussian arm (gcol33/tulpaObs#112): the cover magnitude is
+            # a plain Gaussian on the raw response (no log transform).
+            y_pos[i, j] <- stats::rnorm(1L, eta_pos_ij, sigma_pos)
           } else {
             y_pos[i, j] <- exp(stats::rnorm(1L, eta_pos_ij, sigma_pos))
           }

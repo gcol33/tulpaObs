@@ -340,6 +340,12 @@
   # as nested_laplace does). Detected separately from the grid-integrated
   # icar/bym2 fields below, because the proper-CAR field is a NUTS-only structure.
   if (identical(engine, "nuts")) {
+    if (identical(family$params$positive, "gaussian")) {
+      stop("occu_cover(response = \"gaussian\") is not yet wired for method = ",
+           "'nuts' (the NUTS positive-arm dispatch is beta/lognormal only). ",
+           "Use method = 'laplace' (non-spatial) or 'nested_laplace' (coupled ",
+           "areal field); both recover the identity-Gaussian arm.", call. = FALSE)
+    }
     nuts_sp <- .occu_cover_nuts_spatial_term(formula, data)
     if (!is.null(nuts_sp)) {
       .occu_cover_reject_structured(detection,   "detection")

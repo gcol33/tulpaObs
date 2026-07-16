@@ -359,7 +359,17 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   # keeps the per-draw density finite (a very negative log-density), so that
   # draw is correctly down-weighted in the WAIC log-mean-exp rather than
   # poisoning the whole column.
-  mu  <- if (identical(model$link %||% "log", "log")) exp(eta) else eta
+  link <- model$link %||% "log"
+  # Binomial (logit link): the per-site success probability p = plogis(eta) and
+  # the density is the binomial pmf at the site's trial count, not a count mean.
+  if (identical(response, "binomial")) {
+    p  <- stats::plogis(eta)                       # [S x N]
+    nt <- as.numeric(model$n_trials %||% rep(1L, length(y)))
+    NT <- matrix(nt, nrow(eta), length(nt), byrow = TRUE)
+    return(stats::dbinom(Y, size = NT, prob = pmin(pmax(p, 1e-12), 1 - 1e-12),
+                         log = TRUE))
+  }
+  mu  <- if (identical(link, "log")) exp(eta) else eta
   mu  <- pmin(pmax(mu, 1e-300), 1e8)
   phi <- model$count_phi %||% 1
   switch(response,

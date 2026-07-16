@@ -118,6 +118,9 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
           dens = std::log(m > 1e-300 ? m : 1e-300);
           break;
         }
+        case 4:  // identity-Gaussian (y is the raw response, no Jacobian)
+          dens = dnorm_log(y, e, sd);
+          break;
         default: { // beta
           double mu = plogis(e);
           double a  = mu * sd;

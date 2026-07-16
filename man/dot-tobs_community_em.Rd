@@ -19,8 +19,29 @@
   max_iter = 200L,
   tol = 1e-04,
   newton_max = 30L,
-  verbose = TRUE
+  verbose = TRUE,
+  sp_info = NULL,
+  init_b = NULL,
+  init_Sigma = NULL
 )
+}
+\arguments{
+\item{sp_info}{Optional \verb{function(s, theta, global)} returning species \code{s}'s
+\verb{(P + G) x (P + G)} marginal observed information at \code{c(theta, global)}.
+Defaults to \code{NULL}, which finite-differences \code{sp_grad} -- passing neither
+leaves a fit byte-identical. Supply it when the family's kernel already
+exposes the per-site marginal observed information (the N-mixture / distance
+Louis block): the FD path spends \code{2 (P + G)} full marginal sweeps per species
+per Newton step to rediscover it.}
+
+\item{init_b, init_Sigma}{Optional warm starts for the per-species deviations
+and the per-arm community covariances. Both default to \code{NULL}, which is the
+cold start (\code{b_s = 0}, \verb{Sigma = sigma_init^2 I}) -- passing neither leaves a
+fit byte-identical. A block-coordinate caller that re-enters this EM once per
+outer pass (R/community_latent.R) passes the previous pass's state, so the
+EM resumes from a near-converged point instead of rediscovering it; it is the
+dominant cost when the per-species likelihood is expensive (an N-mixture /
+distance marginal sums over the latent count).}
 }
 \description{
 Generic community Laplace-EM engine

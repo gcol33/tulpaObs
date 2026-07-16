@@ -7,9 +7,10 @@
 simulate_count(
   N = 200,
   beta = c(1, 0.5),
-  response = c("poisson", "negbin", "gaussian"),
+  response = c("poisson", "negbin", "gaussian", "binomial"),
   size = 2,
   sd = 1,
+  trials = 10,
   seed = NULL
 )
 }
@@ -18,25 +19,31 @@ simulate_count(
 
 \item{beta}{Fixed-effect coefficients, length \code{1 + n_covs} (intercept first).}
 
-\item{response}{The response distribution: \code{"poisson"}, \code{"negbin"}, or
-\code{"gaussian"}.}
+\item{response}{The response distribution: \code{"poisson"}, \code{"negbin"},
+\code{"gaussian"}, or \code{"binomial"}.}
 
 \item{size}{Negative-binomial size (dispersion); larger is closer to Poisson.
 Used only for \code{response = "negbin"}.}
 
 \item{sd}{Gaussian residual SD. Used only for \code{response = "gaussian"}.}
 
+\item{trials}{Per-site trial count for \code{response = "binomial"}: a scalar
+(recycled) or a length-\code{N} vector. Default 10 (a scalar 1 gives Bernoulli
+data, the \code{svcPGBinom} \code{trials = 1} setting).}
+
 \item{seed}{Random seed.}
 }
 \value{
-A list with \code{y} (a length-\code{N} numeric response vector), \code{data} (the
-site covariates), and \code{truth} (the coefficients, response, and dispersion).
+A list with \code{y} (a length-\code{N} numeric response vector; success counts
+for the binomial response), \code{data} (the site covariates), and \code{truth} (the
+coefficients, response, dispersion, and the binomial \code{trials}).
 }
 \description{
 One observed value per site from a GLMM with no detection process, matching
-the \code{\link[=count]{count()}} family: \code{log}-link Poisson / negative-binomial counts, or an
-identity-link Gaussian response. The mean predictor is \verb{X beta} with \code{beta}
-the fixed-effect coefficients (intercept first).
+the \code{\link[=count]{count()}} family: \code{log}-link Poisson / negative-binomial counts, an
+identity-link Gaussian response, or a logit-link binomial response (\code{k}
+successes out of \code{n} trials per site). The mean predictor is \verb{X beta} with
+\code{beta} the fixed-effect coefficients (intercept first).
 }
 \examples{
 sim <- simulate_count(N = 100, beta = c(1, 0.5), seed = 1)

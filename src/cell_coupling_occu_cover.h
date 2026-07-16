@@ -171,8 +171,10 @@ public:
 
 typedef OccuCoverCoupling<LognormalPositive, false> OccuCoverLognormalCoupling;
 typedef OccuCoverCoupling<BetaPositive,      false> OccuCoverBetaCoupling;
+typedef OccuCoverCoupling<GaussianPositive,  false> OccuCoverGaussianCoupling;
 typedef OccuCoverCoupling<LognormalPositive, true>  OccuCoverLognormalAggCoupling;
 typedef OccuCoverCoupling<BetaPositive,      true>  OccuCoverBetaAggCoupling;
+typedef OccuCoverCoupling<GaussianPositive,  true>  OccuCoverGaussianAggCoupling;
 
 } // namespace tulpaObs
 

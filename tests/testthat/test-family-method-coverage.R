@@ -39,18 +39,26 @@ test_that(".tobs_validate_family_method now accepts nested_laplace for the multi
   expect_silent(.tobs_validate_family_method("nested_laplace", jsdm()))
 })
 
-test_that("ms_occu supports laplace/nuts/nested_laplace; ms_dyn_occu + ms_int_occu laplace-only", {
+test_that("ms_occu supports laplace/nuts/nested_laplace; ms_int_occu laplace-only", {
   # ms_occu gained a community NUTS sampler (gcol33/tulpaObs#69) and a shared
-  # areal field (gcol33/tulpaObs#75); ms_dyn_occu / ms_int_occu remain on the
-  # dedicated community Laplace-EM only.
+  # areal field (gcol33/tulpaObs#75); ms_int_occu remains on the dedicated
+  # community Laplace-EM only.
   for (m in c("laplace", "nuts", "nested_laplace"))
     expect_silent(.tobs_validate_family_method(m, ms_occu()))
-  for (fam in list(ms_dyn_occu(), ms_int_occu())) {
-    expect_silent(.tobs_validate_family_method("laplace", fam))
-    expect_error(.tobs_validate_family_method("nested_laplace", fam),
-                 "not available")
-    expect_error(.tobs_validate_family_method("nuts", fam), "not available")
-  }
+  expect_silent(.tobs_validate_family_method("laplace", ms_int_occu()))
+  expect_error(.tobs_validate_family_method("nested_laplace", ms_int_occu()),
+               "not available")
+  expect_error(.tobs_validate_family_method("nuts", ms_int_occu()),
+               "not available")
+})
+
+test_that("ms_dyn_occu supports laplace + nested_laplace (stMsPGOcc, #123)", {
+  # A shared areal field on the first-season occupancy arm added the
+  # nested_laplace route (gcol33/tulpaObs#123); NUTS remains a follow-up.
+  expect_silent(.tobs_validate_family_method("laplace", ms_dyn_occu()))
+  expect_silent(.tobs_validate_family_method("nested_laplace", ms_dyn_occu()))
+  expect_error(.tobs_validate_family_method("nuts", ms_dyn_occu()),
+               "not available")
 })
 
 test_that("the rejection lists the family's supported methods", {

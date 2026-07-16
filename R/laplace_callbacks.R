@@ -295,10 +295,21 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
   max_visits <- model$max_visits
   X_occ <- model$X_processes[[1]]  # psi1
   X_det <- model$X_processes[[2]]  # p
-  X_col <- model$X_processes[[3]]  # gamma
+  X_col <- model$X_processes[[3]]  # gamma  (site-level, OR long-form when SV)
   X_ext <- model$X_processes[[4]]  # epsilon
   p_occ <- ncol(X_occ); p_det <- ncol(X_det)
   p_col <- ncol(X_col); p_ext <- ncol(X_ext)
+
+  # Season-varying colonization / extinction (gcol33/tulpaObs#124): a rate that
+  # varies by interval carries a long-form [(n_sites x (T-1)) x p] design (built
+  # by .tobs_interval_arm_design, site-major interval-minor). The E-step then
+  # uses a per-interval transition matrix and the M-step encodes one logistic
+  # row per (site, interval); constant rates keep the site-level design, the
+  # per-interval transition collapses to a constant one, and the M-step
+  # aggregates over a site's intervals -- byte-identical to the pre-#124 path.
+  n_int  <- model$n_intervals %||% (n_seasons - 1L)
+  col_sv <- isTRUE(model$col_season_varying)
+  ext_sv <- isTRUE(model$ext_season_varying)
 
   # The state field enters season-1 occupancy psi1 only (one psi1 row per
   # site, the identity map). The colonization (gamma) and extinction
@@ -323,8 +334,22 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     if (length(sp_off) == n_sites) eta_psi1 <- eta_psi1 + sp_off
     psi1 <- plogis(eta_psi1)
     p <- plogis(as.vector(X_det %*% beta_det))
-    gam <- plogis(as.vector(X_col %*% beta_col))
-    eps <- plogis(as.vector(X_ext %*% beta_ext))
+    # gamma / epsilon as [n_sites x n_int] per-interval rate matrices. Constant
+    # rates recycle a length-n_sites vector down every column (each row constant),
+    # so the per-interval transition below is byte-identical to the scalar path;
+    # a season-varying arm reads its long-form eta site-major interval-minor.
+    if (col_sv) {
+      gam_mat <- matrix(plogis(as.vector(X_col %*% beta_col)), n_sites, n_int,
+                        byrow = TRUE)
+    } else {
+      gam_mat <- matrix(plogis(as.vector(X_col %*% beta_col)), n_sites, n_int)
+    }
+    if (ext_sv) {
+      eps_mat <- matrix(plogis(as.vector(X_ext %*% beta_ext)), n_sites, n_int,
+                        byrow = TRUE)
+    } else {
+      eps_mat <- matrix(plogis(as.vector(X_ext %*% beta_ext)), n_sites, n_int)
+    }
 
     # Exact forward-backward (Baum-Welch) E-step over the 2-state occupancy chain
     # of each site. The smoothed marginal gamma_t(z) =
@@ -337,10 +362,17 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     # z = 1) drops only a z-independent detection-likelihood factor that cancels in
     # every smoothed ratio, so gamma and xi are exact. The detection-rate factors
     # are fit separately from the per-visit counts in the M-step.
-    A00 <- 1 - gam; A01 <- gam; A10 <- eps; A11 <- 1 - eps   # transition rows
+    A00 <- 1 - gam_mat; A01 <- gam_mat                       # transition rows,
+    A10 <- eps_mat;     A11 <- 1 - eps_mat                   #   [n_sites x n_int]
     w <- matrix(NA_real_, n_sites, n_seasons)                # smoothed P(z = 1 | y)
     col_y <- numeric(n_sites); col_n <- numeric(n_sites)
     ext_y <- numeric(n_sites); ext_n <- numeric(n_sites)
+    # Per-interval expected transition counts, kept only when an arm is
+    # season-varying (the M-step encodes one logistic row per (site, interval)).
+    col_y_mat <- if (col_sv) matrix(0, n_sites, n_int) else NULL
+    col_n_mat <- if (col_sv) matrix(0, n_sites, n_int) else NULL
+    ext_y_mat <- if (ext_sv) matrix(0, n_sites, n_int) else NULL
+    ext_n_mat <- if (ext_sv) matrix(0, n_sites, n_int) else NULL
     a <- matrix(0, n_seasons, 2)                             # scaled forward ahat_t
     b0v <- numeric(n_seasons); b1v <- numeric(n_seasons)     # emission b_t(0), b_t(1)
     cs <- numeric(n_seasons)                                 # per-season normaliser
@@ -352,34 +384,41 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         else if (det_it)      { b0v[t] <- 0;  b1v[t] <- 1 }
         else                  { b0v[t] <- 1;  b1v[t] <- (1 - p[i])^nv_it }
       }
-      # forward (scaled): ahat_t(z) = b_t(z) sum_z' ahat_{t-1}(z') A(z',z) / c_t
+      # forward (scaled): ahat_t(z) = b_t(z) sum_z' ahat_{t-1}(z') A(z',z) / c_t.
+      # The step t-1 -> t uses interval (t - 1)'s transition rates.
       u0 <- (1 - psi1[i]) * b0v[1]; u1 <- psi1[i] * b1v[1]
       c1 <- u0 + u1; cs[1] <- c1; a[1, 1] <- u0 / c1; a[1, 2] <- u1 / c1
       for (t in 2:n_seasons) {
-        pr0 <- a[t - 1, 1] * A00[i] + a[t - 1, 2] * A10[i]
-        pr1 <- a[t - 1, 1] * A01[i] + a[t - 1, 2] * A11[i]
+        iv <- t - 1L
+        pr0 <- a[t - 1, 1] * A00[i, iv] + a[t - 1, 2] * A10[i, iv]
+        pr1 <- a[t - 1, 1] * A01[i, iv] + a[t - 1, 2] * A11[i, iv]
         v0 <- b0v[t] * pr0; v1 <- b1v[t] * pr1
         ct <- v0 + v1; cs[t] <- ct; a[t, 1] <- v0 / ct; a[t, 2] <- v1 / ct
       }
-      # backward (scaled) + smoothed marginals / pairwise joints, T-1 .. 1
+      # backward (scaled) + smoothed marginals / pairwise joints, T-1 .. 1. The
+      # joint at backward step t is over seasons (t, t+1) = interval t.
       bw0 <- 1; bw1 <- 1                                     # beta_T(z) = 1
       w[i, n_seasons] <- a[n_seasons, 2]                     # gamma_T(1) = ahat_T(1)
       for (t in (n_seasons - 1):1) {
         bb0 <- b0v[t + 1] * bw0; bb1 <- b1v[t + 1] * bw1
         inv_c <- 1 / cs[t + 1]
-        xi01 <- a[t, 1] * A01[i] * bb1 * inv_c               # colonization event
-        xi00 <- a[t, 1] * A00[i] * bb0 * inv_c
-        xi10 <- a[t, 2] * A10[i] * bb0 * inv_c               # extinction event
-        xi11 <- a[t, 2] * A11[i] * bb1 * inv_c
+        xi01 <- a[t, 1] * A01[i, t] * bb1 * inv_c            # colonization event
+        xi00 <- a[t, 1] * A00[i, t] * bb0 * inv_c
+        xi10 <- a[t, 2] * A10[i, t] * bb0 * inv_c            # extinction event
+        xi11 <- a[t, 2] * A11[i, t] * bb1 * inv_c
         col_y[i] <- col_y[i] + xi01; col_n[i] <- col_n[i] + (xi00 + xi01)
         ext_y[i] <- ext_y[i] + xi10; ext_n[i] <- ext_n[i] + (xi10 + xi11)
-        bw0 <- (A00[i] * bb0 + A01[i] * bb1) * inv_c         # beta_t(0)
-        bw1 <- (A10[i] * bb0 + A11[i] * bb1) * inv_c         # beta_t(1)
+        if (col_sv) { col_y_mat[i, t] <- xi01; col_n_mat[i, t] <- xi00 + xi01 }
+        if (ext_sv) { ext_y_mat[i, t] <- xi10; ext_n_mat[i, t] <- xi10 + xi11 }
+        bw0 <- (A00[i, t] * bb0 + A01[i, t] * bb1) * inv_c   # beta_t(0)
+        bw1 <- (A10[i, t] * bb0 + A11[i, t] * bb1) * inv_c   # beta_t(1)
         w[i, t] <- a[t, 2] * bw1                             # gamma_t(1)
       }
     }
     attr(w, "col_y") <- col_y; attr(w, "col_n") <- col_n
     attr(w, "ext_y") <- ext_y; attr(w, "ext_n") <- ext_n
+    attr(w, "col_y_mat") <- col_y_mat; attr(w, "col_n_mat") <- col_n_mat
+    attr(w, "ext_y_mat") <- ext_y_mat; attr(w, "ext_n_mat") <- ext_n_mat
     list(weights = w)
   }
 
@@ -398,18 +437,43 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     )
 
     # Colonization (z_{t-1}=0 -> z_t=1) and extinction (z_{t-1}=1 -> z_t=0) from
-    # the EXACT smoothed pairwise joints the E-step accumulated: col_y / ext_y are
-    # the expected colonization / extinction events summed over a
-    # site's T-1 intervals, col_n / ext_n the expected counts of unoccupied /
-    # occupied origin seasons. The same M pseudo-binomial inflation encodes them as
-    # one logistic observation per site, as for the occupancy arm.
-    col_y <- as.integer(round(attr(w, "col_y") * M))
-    col_n <- as.integer(round(attr(w, "col_n") * M))
-    ext_y <- as.integer(round(attr(w, "ext_y") * M))
-    ext_n <- as.integer(round(attr(w, "ext_n") * M))
-    col_n <- pmax(col_n, 1L); ext_n <- pmax(ext_n, 1L)
-    col_y <- pmin(pmax(col_y, 0L), col_n)
-    ext_y <- pmin(pmax(ext_y, 0L), ext_n)
+    # the EXACT smoothed pairwise joints the E-step accumulated. For a
+    # constant-rate arm col_y / ext_y are the expected colonization / extinction
+    # events summed over a site's T-1 intervals, and the same M pseudo-binomial
+    # inflation encodes ONE logistic observation per site (as for the occupancy
+    # arm). For a SEASON-VARYING arm (gcol33/tulpaObs#124) the per-interval joints
+    # are kept and encode ONE logistic row per (site, interval), site-major
+    # interval-minor to match the long-form design; a covariate on that interval
+    # then drives the rate. `t(mat)` flattens site-major interval-minor.
+    trans_block <- function(sv, y_agg, n_agg, y_mat, n_mat, Xarm) {
+      if (sv) {
+        # Per-interval M-step = a WEIGHTED logistic regression: for interval
+        # (i, t) the response is the transition probability given the origin
+        # state, r = E[event] / P(origin state) = y_mat / n_mat, and the weight is
+        # P(origin state | y) = n_mat. This is the exact conditional-expectation
+        # M-step for a per-interval covariate. It replaces the aggregated arm's
+        # M-pseudo-binomial inflation, which -- applied per interval -- makes each
+        # row individually near-separable (a confident interval has r ~ 0 or 1),
+        # so the inner Newton hits numerical separation and returns ~the initial
+        # zero slope. A fractional response with a fractional weight is exactly a
+        # soft-label logistic and is well conditioned.
+        nn <- as.vector(t(n_mat))
+        r  <- as.vector(t(y_mat)) / pmax(nn, 1e-12)
+        r  <- pmin(pmax(r, 0), 1)
+        list(y = r, n_trials = rep(1, length(r)), weights = nn,
+             X = Xarm, family = "binomial")
+      } else {
+        # Aggregated per-site: guard against an all-other-origin site (no rows).
+        yv2 <- as.integer(round(y_agg * M))
+        nv2 <- pmax(as.integer(round(n_agg * M)), 1L)
+        yv2 <- pmin(pmax(yv2, 0L), nv2)
+        list(y = yv2, n_trials = nv2, X = Xarm, family = "binomial")
+      }
+    }
+    col_block <- trans_block(col_sv, attr(w, "col_y"), attr(w, "col_n"),
+                             attr(w, "col_y_mat"), attr(w, "col_n_mat"), X_col)
+    ext_block <- trans_block(ext_sv, attr(w, "ext_y"), attr(w, "ext_n"),
+                             attr(w, "ext_y_mat"), attr(w, "ext_n_mat"), X_ext)
 
     # Detection: per-(site, season) rows weighted by w[i, t] = P(z_it = 1 | y).
     # Replaces the legacy hard threshold (w > 0.5) which silently dropped
@@ -459,10 +523,8 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     list(
       occ = occ_block,
       det = det_block,
-      col = list(y = col_y, n_trials = col_n, X = X_col,
-                 family = "binomial"),
-      ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
-                 family = "binomial")
+      col = col_block,
+      ext = ext_block
     )
   }
 
@@ -481,16 +543,42 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
 
   hard_encode <- function(z, ...) {
     z1 <- z[, 1]
-    # Colonization/extinction from hard transitions
+    # Colonization/extinction from hard transitions. For a constant-rate arm the
+    # per-site transition counts encode one logistic row per site; a
+    # season-varying arm (gcol33/tulpaObs#124) keeps each interval separate (one
+    # row per (site, interval), n_trials = 1 at the matching origin state and 0
+    # elsewhere so the engine drops the non-matching rows), site-major
+    # interval-minor to match the long-form design.
     col_y <- integer(n_sites); col_n <- integer(n_sites)
     ext_y <- integer(n_sites); ext_n <- integer(n_sites)
+    cym <- if (col_sv) matrix(0L, n_sites, n_int) else NULL
+    cnm <- if (col_sv) matrix(0L, n_sites, n_int) else NULL
+    eym <- if (ext_sv) matrix(0L, n_sites, n_int) else NULL
+    enm <- if (ext_sv) matrix(0L, n_sites, n_int) else NULL
     for (i in seq_len(n_sites)) {
       for (t in 2:n_seasons) {
-        if (z[i, t - 1] == 0) { col_n[i] <- col_n[i] + 1L; if (z[i, t] == 1) col_y[i] <- col_y[i] + 1L }
-        if (z[i, t - 1] == 1) { ext_n[i] <- ext_n[i] + 1L; if (z[i, t] == 0) ext_y[i] <- ext_y[i] + 1L }
+        iv <- t - 1L
+        if (z[i, t - 1] == 0) {
+          col_n[i] <- col_n[i] + 1L; if (z[i, t] == 1) col_y[i] <- col_y[i] + 1L
+          if (col_sv) { cnm[i, iv] <- 1L; if (z[i, t] == 1) cym[i, iv] <- 1L }
+        }
+        if (z[i, t - 1] == 1) {
+          ext_n[i] <- ext_n[i] + 1L; if (z[i, t] == 0) ext_y[i] <- ext_y[i] + 1L
+          if (ext_sv) { enm[i, iv] <- 1L; if (z[i, t] == 0) eym[i, iv] <- 1L }
+        }
       }
     }
     col_n <- pmax(col_n, 1L); ext_n <- pmax(ext_n, 1L)
+    col_hard <- if (col_sv)
+      list(y = as.integer(as.vector(t(cym))),
+           n_trials = as.integer(as.vector(t(cnm))), X = X_col,
+           family = "binomial")
+      else list(y = col_y, n_trials = col_n, X = X_col, family = "binomial")
+    ext_hard <- if (ext_sv)
+      list(y = as.integer(as.vector(t(eym))),
+           n_trials = as.integer(as.vector(t(enm))), X = X_ext,
+           family = "binomial")
+      else list(y = ext_y, n_trials = ext_n, X = X_ext, family = "binomial")
 
     total_det <- integer(n_sites); total_vis <- integer(n_sites)
     for (i in seq_len(n_sites)) {
@@ -515,10 +603,8 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         list(y = total_det[dk], n_trials = total_vis[dk],
              X = X_det[dk,,drop=FALSE], family = "binomial")
       else NULL,
-      col = list(y = col_y, n_trials = col_n, X = X_col,
-                 family = "binomial"),
-      ext = list(y = ext_y, n_trials = ext_n, X = X_ext,
-                 family = "binomial")
+      col = col_hard,
+      ext = ext_hard
     )
   }
 
@@ -714,15 +800,21 @@ build_count_callbacks <- function(model, spatial = NULL) {
     poisson  = "poisson",
     negbin   = "neg_binomial_2",
     gaussian = "gaussian",
+    binomial = "binomial",
     stop(sprintf("count(): unsupported response '%s'.", response),
          call. = FALSE))
   phi    <- model$count_phi %||% 1.0
-  is_int <- response %in% c("poisson", "negbin")
+  is_int <- response %in% c("poisson", "negbin", "binomial")
   yv     <- if (is_int) as.integer(model$y_count) else as.numeric(model$y_count)
+  # Binomial carries a per-site trial count; every other response is a plain
+  # single-value GLMM block.
+  n_trials <- if (identical(response, "binomial"))
+                as.integer(model$n_trials %||% rep(1L, N)) else NULL
 
   mk_block <- function() {
     blk <- list(y = yv, X = X, family = fam)
-    if (fam != "poisson") blk$phi <- phi
+    if (identical(fam, "binomial")) blk$n_trials <- n_trials
+    else if (fam != "poisson") blk$phi <- phi
     blk
   }
 

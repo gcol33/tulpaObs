@@ -4,11 +4,16 @@
 \alias{occu_cover}
 \title{Joint occupancy-detection + cover hurdle family}
 \usage{
-occu_cover(response = c("beta", "lognormal"), cover_aggregate = NULL)
+occu_cover(
+  response = c("beta", "lognormal", "gaussian"),
+  cover_aggregate = NULL
+)
 }
 \arguments{
 \item{response}{likelihood for the positive cover arm. \code{"beta"} (cover
-in (0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
+in (0, 1)), \code{"lognormal"} (log-cover Gaussian), or \code{"gaussian"} (an
+identity-Gaussian magnitude on a real, unbounded scale -- the delta-normal
+hurdle; not for cover fractions, which stay on \code{"beta"}/\code{"lognormal"}).}
 
 \item{cover_aggregate}{how the cover arm collapses per occupancy unit on the
 shared-field spatial path: \code{"mean"}, \code{"median"}, \code{"latent"} (a per-unit

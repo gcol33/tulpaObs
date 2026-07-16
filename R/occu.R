@@ -24,7 +24,7 @@
                               col_formula = NULL, ext_formula = NULL,
                               species = NULL, integrated = FALSE,
                               abundance = FALSE, count = FALSE,
-                              count_response = "poisson",
+                              count_response = "poisson", count_trials = NULL,
                               det_visit_formula = NULL, det_visit_data = NULL) {
 
   is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
@@ -37,7 +37,8 @@
     return(.tobs_build_abun(occ_formula, det_formula, data, y,
                             det_visit_formula, det_visit_data))
   }
-  if (is_count)      return(.tobs_build_count(occ_formula, data, y, count_response))
+  if (is_count)      return(.tobs_build_count(occ_formula, data, y, count_response,
+                                              trials = count_trials))
   if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
   if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,
                                                 col_formula, ext_formula))
@@ -121,8 +122,20 @@
          gamma = col_formula, epsilon = ext_formula), data)
   X_occ <- model.matrix(bind$fe$psi1, data)
   X_det <- model.matrix(bind$fe$p, data)
-  X_col <- model.matrix(bind$fe$gamma, data)
-  X_ext <- model.matrix(bind$fe$epsilon, data)
+
+  # Colonization (gamma) and extinction (epsilon) span the T-1 transition
+  # intervals. A rate that varies by interval is supplied as a [n_sites x (T-1)]
+  # matrix column of `data`; the arm design is then long-form over
+  # (site, interval), otherwise it is the site-level design and the fit is
+  # byte-identical to the constant-rate path (gcol33/tulpaObs#124, the dyn_abun
+  # #80 recipe). One transition interval per pair of adjacent seasons.
+  n_intervals <- n_seasons - 1L
+  col_ad <- .tobs_interval_arm_design(bind$fe$gamma, data, n_sites, n_intervals,
+                                      "colonization", fam = "dyn_occu")
+  ext_ad <- .tobs_interval_arm_design(bind$fe$epsilon, data, n_sites, n_intervals,
+                                      "extinction", fam = "dyn_occu")
+  X_col <- col_ad$X
+  X_ext <- ext_ad$X
 
   # y_flat layout is site-major: y_flat[i*T*K + t*K + j] (0-indexed)
   # = y_flat[(i-1)*T*K + (t-1)*K + j] (1-indexed). This matches what
@@ -164,6 +177,9 @@
     structured_terms = bind$terms,
     n_sites = n_sites,
     n_seasons = n_seasons,
+    n_intervals = n_intervals,
+    col_season_varying = col_ad$season_varying,
+    ext_season_varying = ext_ad$season_varying,
     max_visits = max_visits,
     process_info = list(
       list(name = "psi1",    p = ncol(X_occ), coef_names = colnames(X_occ)),
@@ -275,8 +291,9 @@
 # residual variance is estimated by an outer dispersion loop in .dispatch_count
 # (tulpa_laplace takes a fixed phi per fit).
 # ---------------------------------------------------------------------------
-.tobs_build_count <- function(occ_formula, data, y, response = "poisson") {
-  response <- match.arg(response, c("poisson", "negbin", "gaussian"))
+.tobs_build_count <- function(occ_formula, data, y, response = "poisson",
+                              trials = NULL) {
+  response <- match.arg(response, c("poisson", "negbin", "gaussian", "binomial"))
   if (is.matrix(y)) {
     if (ncol(y) != 1L) {
       stop("count(): y must be a vector or a one-column matrix (one value ",
@@ -292,6 +309,25 @@
   .tobs_check_site_count(length(y), n_data, "sites")
 
   is_count_fam <- response %in% c("poisson", "negbin")
+  is_binom     <- identical(response, "binomial")
+
+  # Per-site trial count for the binomial response. A scalar recycles; a vector
+  # is one trial count per site (before NA dropping). trials is meaningless for
+  # the other responses -- ignore it there rather than error, so a stray default
+  # never blocks a Poisson fit.
+  if (is_binom) {
+    n_trials <- if (is.null(trials)) rep(1L, length(y)) else as.numeric(trials)
+    if (length(n_trials) == 1L) n_trials <- rep(n_trials, length(y))
+    if (length(n_trials) != length(y)) {
+      stop("count(response = \"binomial\"): `trials` must be a scalar or one ",
+           "value per site (length ", length(y), ").", call. = FALSE)
+    }
+    if (any(!is.na(n_trials) & (n_trials < 1 | abs(n_trials - round(n_trials)) >
+                                1e-8))) {
+      stop("count(response = \"binomial\"): `trials` must be positive integers.",
+           call. = FALSE)
+    }
+  }
 
   # Complete-case: drop sites with a missing response (and their design rows).
   # For a count response NA is genuinely missing (0 is a real count), so it is
@@ -299,9 +335,11 @@
   bind  <- .tobs_bind_formulas(list(psi = occ_formula), data)
   X_occ <- model.matrix(bind$fe$psi, data)
   keep  <- !is.na(y)
+  if (is_binom) keep <- keep & !is.na(n_trials)
   if (!all(keep)) {
     y     <- y[keep]
     X_occ <- X_occ[keep, , drop = FALSE]
+    if (is_binom) n_trials <- n_trials[keep]
   }
   n_sites <- length(y)
 
@@ -310,13 +348,26 @@
     stop(sprintf(paste0("count(response = \"%s\"): y must be non-negative ",
                         "integer counts."), response), call. = FALSE)
   }
+  if (is_binom) {
+    if (any(y < 0) || any(abs(y - round(y)) > 1e-8)) {
+      stop("count(response = \"binomial\"): y must be non-negative integer ",
+           "success counts.", call. = FALSE)
+    }
+    if (any(y > n_trials)) {
+      stop("count(response = \"binomial\"): every success count y must be <= ",
+           "its trial count (0 <= k <= n).", call. = FALSE)
+    }
+  }
 
-  link    <- if (identical(response, "gaussian")) "identity" else "log"
-  y_store <- if (is_count_fam) as.integer(round(y)) else as.numeric(y)
+  link    <- if (identical(response, "gaussian")) "identity"
+             else if (is_binom) "logit" else "log"
+  y_store <- if (identical(response, "gaussian")) as.numeric(y)
+             else as.integer(round(y))
 
   structure(list(
     model_type = "count",
     y_count = y_store,
+    n_trials = if (is_binom) as.integer(round(n_trials)) else NULL,
     response = response,
     link = link,
     X_processes = list(X_occ),

@@ -12,7 +12,7 @@ simulate_cover_joint(
   sigma = 0.6,
   rho = 0.7,
   alpha = 1,
-  positive = c("beta", "lognormal"),
+  positive = c("beta", "lognormal", "gaussian"),
   phi = 30,
   sigma_pos_resid = 0.4,
   seed = NULL

@@ -101,6 +101,53 @@ struct LognormalPositive {
 };
 
 
+// Identity-link Gaussian positive arm (gcol33/tulpaObs#112): the delta-normal
+// hurdle's magnitude part, for a positive response already on a real,
+// unbounded scale. It is LognormalPositive with the response taken as-is (no
+// log transform) and no change-of-variable Jacobian: residual is (y - eta),
+// mean on the response scale is mu = eta. Dispersion is the SD sigma (= phi),
+// shared handling with the lognormal arm everywhere outside the density.
+struct GaussianPositive {
+    static constexpr const char* spec_name()            { return "occu_cover_gaussian"; }
+    static constexpr const char* multiscale_spec_name() { return "occu_multiscale_cover_gaussian"; }
+
+    // log f(y; mu = eta_pos, sigma = phi) on the natural scale:
+    //   -log sigma - 0.5 log(2 pi) - 0.5 ((y - eta) / sigma)^2
+    static double log_density(double y_pos, double eta_pos, double phi) {
+        const double sigma     = phi;
+        const double log_sigma = log_safe_(sigma);
+        const double inv_s2    = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
+        const double r         = y_pos - eta_pos;
+        return -log_sigma - 0.5 * std::log(2.0 * M_PI)
+               - 0.5 * r * r * inv_s2;
+    }
+    static double grad_eta(double y_pos, double eta_pos, double phi) {
+        double g = 0.0, h = 0.0;
+        grad_hess_eta(y_pos, eta_pos, phi, false, g, h);
+        return g;
+    }
+    static double neg_hess_eta(double y_pos, double eta_pos, double phi) {
+        double g = 0.0, h = 0.0;
+        grad_hess_eta(y_pos, eta_pos, phi, true, g, h);
+        return h;
+    }
+    // d log f / d eta_pos = (y - eta) / sigma^2; -d^2 = 1 / sigma^2.
+    static void grad_hess_eta(double y_pos, double eta_pos, double phi,
+                              bool want_hess, double& grad, double& neg_hess) {
+        const double sigma  = phi;
+        const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
+        grad = (y_pos - eta_pos) * inv_s2;
+        if (want_hess) neg_hess = inv_s2;
+    }
+    // d log f / d log_sigma = ((y - eta) / sigma)^2 - 1 = rstd^2 - 1.
+    static double grad_logdisp(double y_pos, double eta_pos, double phi) {
+        const double sigma = phi;
+        const double r     = (sigma > 0.0) ? (y_pos - eta_pos) / sigma : 0.0;
+        return r * r - 1.0;
+    }
+};
+
+
 struct BetaPositive {
     static constexpr const char* spec_name()            { return "occu_cover_beta"; }
     static constexpr const char* multiscale_spec_name() { return "occu_multiscale_cover_beta"; }

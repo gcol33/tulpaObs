@@ -362,6 +362,7 @@
 # posterior mean.
 .tobs_occu_cover_nuts_carproper_warm <- function(model, adj, priors,
                                                  max.iter = 200L, tol = 1e-6,
+                                                 type = "car_proper",
                                                  sigma.grid = NULL,
                                                  rho.car.grid = NULL,
                                                  alpha.grid = NULL) {
@@ -410,14 +411,17 @@
 
   csr <- .occu_cover_adj_to_csr(adj)
   prior_arg <- list(
-    type            = "car_proper",
+    type            = type,
     n_spatial_units = csr$n_spatial_units,
     adj_row_ptr     = csr$adj_row_ptr,
     adj_col_idx     = csr$adj_col_idx,
     n_neighbors     = csr$n_neighbors,
     sigma_grid      = sigma_grid,
-    rho_car_grid    = rho_car_grid,
     spatial_idx     = lapply(responses, function(a) as.integer(a$spatial_idx)))
+  # Only the proper-CAR field carries a spatial-correlation rho grid; the
+  # intrinsic icar / bym2 fields fix rho (icar rho = 1, bym2 mixing gridded by the
+  # engine's own bym2 axis).
+  if (identical(type, "car_proper")) prior_arg$rho_car_grid <- rho_car_grid
 
   fit <- tulpa::tulpa_nested_laplace_joint(
     responses = responses, prior = prior_arg,
@@ -454,10 +458,12 @@
     j <- match(nm, colnames(fit$theta_grid)); if (is.na(j)) return(NA_real_)
     sum(w * as.numeric(tg[, j]))
   }
-  sigma <- pick("sigma"); rho <- pick("rho_car"); alpha <- pick("alpha")
+  sigma <- pick("sigma"); alpha <- pick("alpha")
+  rho   <- if (identical(type, "car_proper")) pick("rho_car")
+           else if (identical(type, "bym2")) pick("rho") else 1.0
 
   list(beta_psi = beta_psi, beta_p = beta_p, beta_pos = beta_pos,
-       log_disp = log(sigma_pos_init), field = field,
+       log_disp = log(sigma_pos_init), field = field, type = type,
        sigma = sigma, rho = rho, alpha = alpha, joint_fit = fit)
 }
 
@@ -485,14 +491,11 @@
                                               sigma.grid = NULL, rho.car.grid = NULL,
                                               alpha.grid = NULL, ...) {
   .tobs_reject_weighted_spatial(spatial, "occu_cover NUTS psi spatial")
-  if (!identical(spatial$type, "car_proper")) {
+  if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(
-      "occu_cover() NUTS + areal spatial supports the proper-CAR field ",
-      "car_proper() (full-rank precision -> well-conditioned non-centered ",
-      "geometry); the intrinsic '%s' field has a flat field-mean direction ",
-      "needing a sum-to-zero reparameterisation for NUTS -- use ",
-      "method = \"nested_laplace\" for the icar()/bym2() shared-field fit, or ",
-      "ms_occu_cover() + icar() for a sampled shared field. (gcol33/tulpaObs#74)"),
+      "occu_cover() NUTS + areal spatial supports icar() / car_proper() / ",
+      "bym2() on the psi arm (coupled to the cover arm); got '%s'. Use ",
+      "method = \"nested_laplace\" for other field kinds. (gcol33/tulpaObs#74, #113)"),
       spatial$type), call. = FALSE)
   }
   pin   <- model$process_info
@@ -514,29 +517,37 @@
   # Fixed hyper (sigma -> tau, rho_car) + copy amplitude alpha + warm betas / field
   # from the nested-Laplace joint proper-CAR fit.
   warm <- .tobs_occu_cover_nuts_carproper_warm(
-    model, adj, priors, max.iter = max.iter, tol = tol,
+    model, adj, priors, type = spatial$type, max.iter = max.iter, tol = tol,
     sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid)
-  tau   <- 1 / max(warm$sigma, 1e-3)^2
-  rho   <- min(max(warm$rho, 0.01), 0.999)
   alpha <- warm$alpha
 
-  # Fixed field precision tau Q(rho) (+ ridge to keep it well-conditioned) ->
-  # Linv = L^{-1}, f = Linv %*% raw ~ N(0, (tau Q)^{-1}).
-  Q  <- .areal_Q(adj, rho)
-  Qr <- tau * Q + diag(1e-4 * tau, n_cells)
-  L  <- tryCatch(chol(Qr), error = function(e) NULL)   # upper: L'L = Qr
-  if (is.null(L)) stop("occu_cover NUTS spatial: field precision not PD.",
-                       call. = FALSE)
-  Linv <- backsolve(L, diag(n_cells))                  # z = Linv %*% raw
+  # Whitened coupled-field loading L (f = L %*% raw): the square inverse Cholesky
+  # of the fixed precision for car_proper, the sum-to-zero eigen-loading for the
+  # intrinsic icar / bym2 fields (gcol33/tulpaObs#71/#113). The joint warm fit
+  # reports the field marginal SD sigma; tau = 1 / sigma^2 pins the icar/car
+  # precision.
+  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_cells,
+                                 tau = 1 / max(warm$sigma, 1e-3)^2, rho = warm$rho,
+                                 sigma = warm$sigma,
+                                 scale_factor = spatial$scale_factor)
+  field_load <- fl$field_load; n_raw <- fl$n_raw
 
-  # Warm-start raw so f = Linv %*% raw0 returns the warm field (raw0 = L %*% f).
-  raw0   <- as.numeric(L %*% warm$field)
+  # car_proper warm-starts raw near the integrated field (raw0 = L %*% f_warm);
+  # the non-square icar / bym2 loadings start raw at 0.
+  raw0 <- if (identical(spatial$type, "car_proper")) {
+    Q <- .areal_Q(adj, fl$rho)
+    L <- tryCatch(chol(fl$tau * Q + diag(1e-4 * fl$tau, n_cells)),
+                  error = function(e) NULL)
+    if (is.null(L)) stop("occu_cover NUTS spatial: field precision not PD.",
+                         call. = FALSE)
+    as.numeric(L %*% warm$field)
+  } else numeric(n_raw)
   theta0 <- c(warm$beta_psi, warm$beta_p, warm$beta_pos, warm$log_disp, raw0)
 
   spec <- .tobs_occu_cover_nuts_spec(model)
   spec$n_field_units <- n_cells
   spec$field_map     <- as.integer(site_cell)
-  spec$field_Linv    <- Linv
+  spec$field_load    <- field_load
   spec$field_alpha   <- as.numeric(alpha)
 
   inv_metric <- c(rep(0.1, n_base), rep(1, n_cells))
@@ -546,7 +557,7 @@
     paste0("p_",   pin[[2L]]$coef_names),
     paste0("pos_", pin[[3L]]$coef_names),
     if (identical(model$positive, "beta")) "log_phi" else "log_sigma_pos")
-  raw_names <- paste0("raw_", seq_len(n_cells))
+  raw_names <- paste0("raw_", seq_len(n_raw))
   all_names <- c(par_names, raw_names)
 
   run_chain <- function(ch) {
@@ -571,9 +582,9 @@
   sds <- sqrt(pmax(diag(V_post), 0)); names(sds) <- par_names
   par_means <- means[b_idx]; names(par_means) <- par_names
 
-  # Posterior-mean coupled field f = Linv %*% mean(raw).
-  raw_idx <- n_base + seq_len(n_cells)
-  field_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  # Posterior-mean coupled field f = L %*% mean(raw) (n_raw whitened coords).
+  raw_idx <- n_base + seq_len(n_raw)
+  field_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
   # Data log-likelihood at the posterior mean (field on psi + alpha*field on
   # cover), so logLik() matches the laplace convention.
@@ -605,7 +616,7 @@
                epsilon = epsilon, n_chains = n_chains,
                divergent_total = sum(divergent),
                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp,
-               field_tau = tau, field_rho = rho, field_alpha = alpha,
+               field_tau = fl$tau, field_rho = fl$rho, field_alpha = alpha,
                field_sigma = warm$sigma, fixed_hyper = TRUE,
                n_field_units = n_cells,
                rhat = rhat, ess = ess)
@@ -628,9 +639,9 @@
     param_names  = par_names,
     process_info = pin,
     model        = model,
-    spatial      = list(type = "car_proper", graph = adj,
+    spatial      = list(type = spatial$type, graph = adj,
                         sigma_mean = warm$sigma, alpha_mean = alpha,
-                        rho_mean = rho),
+                        rho_mean = fl$rho),
     spatial_field = field_mean,
     method       = "nuts",
     positive     = model$positive,

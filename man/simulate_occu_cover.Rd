@@ -13,7 +13,7 @@ simulate_occu_cover(
   beta_occ = NULL,
   beta_p = NULL,
   beta_pos = NULL,
-  positive = c("lognormal", "beta"),
+  positive = c("lognormal", "beta", "gaussian"),
   phi = 30,
   sigma_pos = 0.4,
   adj = NULL,

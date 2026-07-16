@@ -21,9 +21,11 @@
                             approx = "gaussian_laplace",
                             correction = "none", ...) {
   positive <- family$params$positive
-  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi", "ordinal")) {
+  if (!positive %in% c("lognormal", "lognormal_trunc", "beta", "beta_oi",
+                       "ordinal", "gaussian")) {
     stop("cover(response = '", positive, "') is not supported. ",
-         "Use 'lognormal', 'lognormal_trunc', 'beta', 'beta_oi', or 'ordinal'.",
+         "Use 'lognormal', 'lognormal_trunc', 'beta', 'beta_oi', 'ordinal', ",
+         "or 'gaussian'.",
          call. = FALSE)
   }
   # The ordinal (interval-censored Gaussian) and truncated-lognormal
@@ -101,6 +103,12 @@
   # bar, temporal, re) is integrated on the nested-Laplace outer grid, not
   # sampled here, so reject it with a pointer rather than dropping it silently.
   if (identical(engine, "nuts")) {
+    if (identical(positive, "gaussian")) {
+      stop("cover(response = \"gaussian\") is not yet wired for method = ",
+           "'nuts' (the NUTS positive-arm dispatch is beta/lognormal only). ",
+           "Use method = 'laplace' (non-spatial) or 'nested_laplace' (areal ",
+           "field); both recover the identity-Gaussian arm.", call. = FALSE)
+    }
     has_struct <- !is.null(enc$spatial_spec) || !is.null(enc$trend) ||
                   !is.null(enc$mcar) || !is.null(enc$armspec) ||
                   !is.null(temporal) || (!is.null(re) && length(re) > 0L)
@@ -187,7 +195,8 @@
 #' @keywords internal
 encode_cover_hurdle <- function(formula, data, y,
                                 positive = c("lognormal", "lognormal_trunc",
-                                             "beta", "beta_oi", "ordinal"),
+                                             "beta", "beta_oi", "ordinal",
+                                             "gaussian"),
                                 breaks = NULL,
                                 autoscale = TRUE,
                                 presence_formula = NULL,
@@ -195,16 +204,24 @@ encode_cover_hurdle <- function(formula, data, y,
   positive <- match.arg(positive)
   if (!is.numeric(y)) stop("`y` must be numeric.", call. = FALSE)
   .tobs_check_site_count(length(y), nrow(data), "values")
-  rng <- range(y, na.rm = TRUE)
-  if (rng[1] < 0 || rng[2] > 1) {
-    stop("`y` must be in [0, 1] (got range [", rng[1], ", ", rng[2], "]).",
-         call. = FALSE)
+  # The identity-Gaussian arm (gcol33/tulpaObs#112) is the delta-normal hurdle
+  # for a response on a real, unbounded scale: absence is the exact 0 sentinel,
+  # presence is any nonzero magnitude (which may be negative). The bounded-cover
+  # arms (beta / lognormal / ordinal) keep the [0, 1] cover-fraction contract and
+  # the y > 0 presence rule.
+  if (!identical(positive, "gaussian")) {
+    rng <- range(y, na.rm = TRUE)
+    if (rng[1] < 0 || rng[2] > 1) {
+      stop("`y` must be in [0, 1] (got range [", rng[1], ", ", rng[2], "]).",
+           call. = FALSE)
+    }
   }
 
   obs_keep <- !is.na(y)
   y_obs    <- y[obs_keep]
   data_obs <- data[obs_keep, , drop = FALSE]
-  occur    <- as.integer(y_obs > 0)
+  occur    <- if (identical(positive, "gaussian")) as.integer(y_obs != 0)
+              else                                 as.integer(y_obs > 0)
 
   # Per-arm formulas (arm = formula): `presence` and `positive` carry their own
   # fixed effects, so the two arms get independent designs. The single `formula`
@@ -318,6 +335,11 @@ encode_cover_hurdle <- function(formula, data, y,
     # latent log-cover at log(1) = 0 (cover <= 1), the truncation ceiling carried
     # in pos_data$trunc_upper below.
     y_pos_resp <- log(y_pos)
+  } else if (positive == "gaussian") {
+    # Identity-Gaussian arm (gcol33/tulpaObs#112): a plain Gaussian on the raw
+    # positive response (already on a real, unbounded scale), with no log
+    # transform and no change-of-variable Jacobian.
+    y_pos_resp <- y_pos
   } else if (positive == "ordinal") {
     # Interval-censored Gaussian on log-cover with fixed Braun-Blanquet
     # thresholds. Each positive plot's cover (a class midpoint, or an
@@ -932,7 +954,11 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
   n_pos <- length(enc$pos_data$y)
   p_pos <- ncol(enc$pos_data$X)
 
-  if (positive == "lognormal") {
+  if (positive %in% c("lognormal", "gaussian")) {
+    # Both are location-Gaussian arms with dispersion sigma_pos; they differ only
+    # in whether the response was log-transformed in encode_cover_hurdle()
+    # (lognormal on log-cover, gaussian on the raw response, #112). From here the
+    # fit machinery is identical.
     m_pos <- tulpa::tulpa_laplace(
       y        = enc$pos_data$y,
       n_trials = rep(1L, n_pos),
@@ -950,7 +976,7 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
     return(list(
       m_occ     = m_occ,
       m_pos     = m_pos,
-      positive  = "lognormal",
+      positive  = positive,
       sigma_pos = sigma_pos,
       pos_fit_n = n_pos,
       pos_fit_p = p_pos
@@ -1020,7 +1046,8 @@ decode_cover_hurdle <- function(fits, enc, family,
   V_occ_sc <- if (!is.null(fits$m_occ$H_beta)) {
     tryCatch(solve(fits$m_occ$H_beta), error = function(e) NULL)
   } else NULL
-  pos_vcov_scale <- if (fits$positive == "lognormal") fits$sigma_pos^2 else 1
+  pos_vcov_scale <- if (fits$positive %in% c("lognormal", "gaussian"))
+                      fits$sigma_pos^2 else 1
   V_pos_sc <- if (!is.null(fits$m_pos$H_beta)) {
     tryCatch(pos_vcov_scale * solve(fits$m_pos$H_beta), error = function(e) NULL)
   } else NULL
@@ -1043,7 +1070,7 @@ decode_cover_hurdle <- function(fits, enc, family,
     occ = .extract_spatial_hyperpar(fits$m_occ, enc$spatial_spec),
     pos = .extract_spatial_hyperpar(fits$m_pos, enc$spatial_spec)
   )
-  if (fits$positive == "lognormal") {
+  if (fits$positive %in% c("lognormal", "gaussian")) {
     hyperpar$sigma_pos <- fits$sigma_pos
   } else {
     hyperpar$phi_pos <- fits$phi_pos
@@ -1079,7 +1106,8 @@ decode_cover_hurdle <- function(fits, enc, family,
       se_occ       = se_occ,
       se_pos       = se_pos,
       positive     = fits$positive,
-      sigma_pos    = if (fits$positive == "lognormal") fits$sigma_pos else NA_real_,
+      sigma_pos    = if (fits$positive %in% c("lognormal", "gaussian"))
+                       fits$sigma_pos else NA_real_,
       sigma_pos_sd = NA_real_,
       phi_pos      = if (fits$positive %in% c("beta", "beta_oi")) fits$phi_pos else NA_real_,
       phi_pos_sd   = NA_real_,

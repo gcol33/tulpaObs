@@ -14,7 +14,7 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{tulpa}{\code{\link[tulpa:glance]{glance()}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:tidy]{tidy()}}}
+  \item{tulpa}{\code{\link[tulpa:glance]{glance}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:tidy]{tidy}}}
 
   \item{tulpaMesh}{\code{\link[tulpaMesh:fem_matrices]{fem_matrices()}}}
 }}

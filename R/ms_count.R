@@ -24,14 +24,19 @@
 # ---------------------------------------------------------------------------
 
 .tobs_build_ms_count <- function(formula, data, y, species, response = "poisson",
-                                 structured_terms = list()) {
+                                 trials = NULL, structured_terms = list()) {
   # "bernoulli" is the jsdm() front door: an observed presence/absence community
   # GLMM (the spOccupancy lfJSDM / sfJSDM model class). It is the same community
   # model as msAbund -- per-species coefficients with a Gaussian community
   # covariance, no detection, no latent state -- with a logit link, so it shares
   # this binder, the community EM, the latent driver, and every S3 method rather
-  # than carrying a parallel implementation (gcol33/tulpaObs#121).
-  response <- match.arg(response, c("poisson", "negbin", "gaussian", "bernoulli"))
+  # than carrying a parallel implementation (gcol33/tulpaObs#121). "binomial" is
+  # the k-of-n generalization (community svcPGBinom, gcol33/tulpaObs#125): the
+  # same logit-link path with a per-(site, species) trial count; "bernoulli" is
+  # its trials = 1 special case (and stays the jsdm() alias).
+  response <- match.arg(response,
+                        c("poisson", "negbin", "gaussian", "bernoulli",
+                          "binomial"))
 
   # y -> [n_sites x n_species] matrix. A named list of vectors becomes columns.
   to_mat <- function(z) {
@@ -66,6 +71,7 @@
 
   is_count_fam <- response %in% c("poisson", "negbin")
   is_binary    <- identical(response, "bernoulli")
+  is_binom     <- identical(response, "binomial")
   valid <- !is.na(y)
   if (is_count_fam) {
     yv <- y[valid]
@@ -81,19 +87,63 @@
            "absence).", call. = FALSE)
     }
   }
-  link <- switch(response, gaussian = "identity", bernoulli = "logit", "log")
 
-  # Per-species valid rows + design + response, so each sp_ll skips NA sites.
+  # Per-(site, species) trial count for the binomial response. A scalar recycles;
+  # a length-n_sites vector is per-site (shared across species); a matrix is
+  # per-(site, species). Bernoulli is trials = 1 (never carries a trial count).
+  n_trials_mat <- NULL
+  if (is_binom) {
+    if (is.null(trials)) trials <- 1L
+    if (is.matrix(trials)) {
+      n_trials_mat <- trials
+    } else if (length(trials) == 1L) {
+      n_trials_mat <- matrix(as.numeric(trials), n_sites, n_species)
+    } else if (length(trials) == n_sites) {
+      n_trials_mat <- matrix(as.numeric(trials), n_sites, n_species)
+    } else {
+      stop("ms_count(response = \"binomial\"): `trials` must be a scalar, a ",
+           "length-n_sites vector, or an n_sites x n_species matrix.",
+           call. = FALSE)
+    }
+    if (nrow(n_trials_mat) != n_sites || ncol(n_trials_mat) != n_species) {
+      stop("ms_count(response = \"binomial\"): the `trials` matrix must be ",
+           "n_sites x n_species.", call. = FALSE)
+    }
+    storage.mode(n_trials_mat) <- "double"
+    ntv <- n_trials_mat[valid]
+    if (any(ntv < 1 | abs(ntv - round(ntv)) > 1e-8)) {
+      stop("ms_count(response = \"binomial\"): `trials` must be positive ",
+           "integers.", call. = FALSE)
+    }
+    yv <- y[valid]
+    if (any(yv < 0) || any(abs(yv - round(yv)) > 1e-8)) {
+      stop("ms_count(response = \"binomial\"): y must be non-negative integer ",
+           "success counts.", call. = FALSE)
+    }
+    if (any(yv > ntv)) {
+      stop("ms_count(response = \"binomial\"): every success count must be <= ",
+           "its trial count (0 <= k <= n).", call. = FALSE)
+    }
+  }
+
+  link <- switch(response, gaussian = "identity",
+                 bernoulli = , binomial = "logit", "log")
+
+  # Per-species valid rows + design + response, so each sp_ll skips NA sites. The
+  # binomial arm also carries that species' per-site trial counts.
   summaries <- lapply(seq_len(n_species), function(s) {
     v  <- valid[, s]
-    ys <- if (is_count_fam || is_binary) as.numeric(round(y[v, s]))
+    ys <- if (is_count_fam || is_binary || is_binom) as.numeric(round(y[v, s]))
           else as.numeric(y[v, s])
-    list(y = ys, X = X[v, , drop = FALSE], valid = v, n = sum(v))
+    su <- list(y = ys, X = X[v, , drop = FALSE], valid = v, n = sum(v))
+    if (is_binom) su$n_trials <- as.numeric(round(n_trials_mat[v, s]))
+    su
   })
 
   structure(list(
     model_type    = "ms_count",
     y             = y,
+    n_trials      = n_trials_mat,
     valid         = valid,
     response      = response,
     link          = link,
@@ -138,6 +188,18 @@
 .ms_count_grad_bern <- function(su, beta) {
   psi <- stats::plogis(as.numeric(su$X %*% beta))
   as.numeric(crossprod(su$X, su$y - psi))
+}
+
+# Binomial (logit): theta = beta_s, per-site trial count n_i in su$n_trials.
+# y_i successes out of n_i; the Bernoulli kernel is n_i == 1. score = X'(y - n*p).
+.ms_count_ll_binom <- function(su, beta) {
+  p <- stats::plogis(as.numeric(su$X %*% beta))
+  sum(stats::dbinom(su$y, size = su$n_trials,
+                    prob = pmin(pmax(p, 1e-12), 1 - 1e-12), log = TRUE))
+}
+.ms_count_grad_binom <- function(su, beta) {
+  p <- stats::plogis(as.numeric(su$X %*% beta))
+  as.numeric(crossprod(su$X, su$y - su$n_trials * p))
 }
 
 # Gaussian (identity): theta = beta_s, per-species residual variance phi.
@@ -190,9 +252,12 @@
   P_beta   <- model$process_info[[1L]]$p
   is_log   <- identical(model$link, "log")
 
-  # Warm start: intercept at the pooled mean on the link scale, slopes 0.
+  # Warm start: intercept at the pooled mean on the link scale, slopes 0. For the
+  # binomial response the pooled mean is a PROPORTION (successes / trials), not a
+  # raw count, so the logit intercept starts sensibly.
   yv      <- model$y[model$valid]
-  mbar    <- mean(yv)
+  mbar    <- if (identical(response, "binomial"))
+               mean(yv / pmax(model$n_trials[model$valid], 1)) else mean(yv)
   mu0     <- numeric(P_beta)
   mu0[1L] <- switch(model$link %||% "log",
                     log      = log(max(mbar, 0.1)),
@@ -220,6 +285,15 @@
     arm_idx <- list(mu = seq_len(P_beta))
     sp_ll   <- function(s, theta, global) .ms_count_ll_bern(su[[s]], theta)
     sp_grad <- function(s, theta, global) .ms_count_grad_bern(su[[s]], theta)
+    fit <- run_em(P_beta, arm_idx, sp_ll, sp_grad, mu0)
+    disp <- NULL
+
+  } else if (identical(response, "binomial")) {
+    # k-of-n binomial community GLMM (community svcPGBinom): logit link, the
+    # trial count pins the variance, so no dispersion parameter.
+    arm_idx <- list(mu = seq_len(P_beta))
+    sp_ll   <- function(s, theta, global) .ms_count_ll_binom(su[[s]], theta)
+    sp_grad <- function(s, theta, global) .ms_count_grad_binom(su[[s]], theta)
     fit <- run_em(P_beta, arm_idx, sp_ll, sp_grad, mu0)
     disp <- NULL
 
@@ -373,6 +447,11 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   fo <- model$count_factor_offset
   if (!is.null(fo) && all(dim(fo) == dim(eta))) eta <- eta + fo
   mu    <- .ms_count_linkinv(model, eta)
+  # Binomial: the fitted quantity on the y-scale is expected successes n * p.
+  if (identical(model$response %||% "poisson", "binomial") &&
+      !is.null(model$n_trials)) {
+    mu <- mu * model$n_trials
+  }
   dimnames(mu) <- list(NULL, model$species_names)
   list(mu = mu)
 }
@@ -410,11 +489,14 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   mup <- pmax(mu, 1e-8)
   rs  <- if (identical(response, "negbin"))
            matrix(disp$r_s, nrow(mu), ncol(mu), byrow = TRUE) else NULL
+  nt  <- if (identical(response, "binomial") && !is.null(model$n_trials))
+           pmax(model$n_trials, 1) else NULL
 
   r <- switch(type,
     response = y - mu,
     pearson  = (y - mu) / sqrt(switch(response,
                  bernoulli = pmax(mu * (1 - mu), 1e-8),
+                 binomial  = pmax(mu * (1 - mu / nt), 1e-8),
                  poisson   = mup,
                  negbin    = pmax(mu + mu^2 / rs, 1e-8),
                  gaussian  = matrix(pmax(disp$variance, 1e-8), nrow(mu),
@@ -423,6 +505,12 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
       bernoulli = {
         p <- pmin(pmax(mu, 1e-10), 1 - 1e-10)
         sign(y - mu) * sqrt(pmax(-2 * (y * log(p) + (1 - y) * log1p(-p)), 0))
+      },
+      binomial = {
+        t1  <- ifelse(y > 0, y * log(y / mup), 0)
+        fy  <- nt - y; fmu <- pmax(nt - mu, 1e-8)
+        t2  <- ifelse(fy > 0, fy * log(fy / fmu), 0)
+        sign(y - mu) * sqrt(pmax(2 * (t1 + t2), 0))
       },
       poisson  = {
         term <- ifelse(y > 0, y * log(y / mup), 0)
@@ -451,9 +539,12 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
     for (s in seq_len(n_species)) {
       eta <- as.numeric(model$X %*% cm$coef_mu[s, ])
       mu  <- .ms_count_linkinv(model, eta)
+      nts <- if (identical(response, "binomial") && !is.null(model$n_trials))
+               as.integer(round(model$n_trials[, s])) else NULL
       out[, s] <- switch(response,
         poisson   = stats::rpois(n_sites, mu),
         bernoulli = stats::rbinom(n_sites, 1L, mu),
+        binomial  = stats::rbinom(n_sites, size = nts, prob = mu),
         negbin    = stats::rnbinom(n_sites, size = disp$r_s[s], mu = mu),
         gaussian  = stats::rnorm(n_sites, mu, sqrt(disp$variance[s])))
     }
@@ -503,6 +594,11 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
       # stable where mu saturates at 0 / 1).
       bernoulli = ifelse(Y > 0, stats::plogis(eta, log.p = TRUE),
                                 stats::plogis(-eta, log.p = TRUE)),
+      binomial  = {
+        NT <- matrix(su$n_trials, nrow(draws), su$n, byrow = TRUE)
+        stats::dbinom(Y, size = NT,
+                      prob = pmin(pmax(mu, 1e-12), 1 - 1e-12), log = TRUE)
+      },
       negbin    = stats::dnbinom(Y, size = disp$r_s[s], mu = pmax(mu, 1e-8),
                                  log = TRUE),
       gaussian  = stats::dnorm(Y, mu, sqrt(max(disp$variance[s], 1e-8)),
@@ -543,7 +639,15 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 #' available through `method = "nested_laplace"` / the `latent()` term; see the
 #' package overview for the spatial and factor variants.
 #'
-#' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`.
+#' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`, or
+#'   `"binomial"`. The binomial response is the community `k`-of-`n` GLMM
+#'   (community `svcPGBinom`): supply the per-site (or per-`site x species`)
+#'   trial count as `trials =` on [tobs()] (default 1, i.e. Bernoulli, which is
+#'   the [jsdm()] response). With `trials > 1` the community-mean intercept
+#'   carries a small first-order-Laplace bias of order `1 / n_species` (a few
+#'   hundredths on the logit scale at 20 species, shrinking with more species;
+#'   the slope and the `trials = 1` case are unbiased) -- the same character as
+#'   the negative-binomial slope attenuation noted above.
 #' @return A `tobs_family` object.
 #' @seealso [count()] (single species), [ms_occu()], [ms_abun()]
 #' @examples
@@ -554,7 +658,8 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 #' summary(fit)
 #' }
 #' @export
-ms_count <- function(response = c("poisson", "negbin", "gaussian")) {
+ms_count <- function(response = c("poisson", "negbin", "gaussian",
+                                  "binomial")) {
   response <- match.arg(response)
   obs_family(
     name           = "ms_count",

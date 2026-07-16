@@ -175,14 +175,18 @@ test_that("dyn_abun() areal field + AR1 temporal composes and recovers the lambd
 })
 
 
-test_that("count temporal() without a spatial field errors with a pointer", {
-  side <- 4L; adj <- .cts_grid_adj(side); nsite <- nrow(adj)
+test_that("count() temporal() term errors with a pointer", {
+  # The observation families (removal / distance / fp_occu / dyn_abun) all support
+  # a temporal-only field now (tulpaObs#114). The count() relative-abundance GLMM
+  # still gates every non-areal structured term (temporal / re / svc / latent),
+  # so it carries the not-yet-wired temporal pointer here (tulpaObs#117).
+  nsite <- 40L
   set.seed(1); seas <- sample(rep(1:3, length.out = nsite))
   dat <- data.frame(abund_cov1 = rnorm(nsite), season = seas)
-  y <- matrix(rpois(nsite * 4L, 3), nsite, 4L)
+  y <- rpois(nsite, 3)
   expect_error(
     tobs(~ abund_cov1 + temporal(season, type = "ar1"), data = dat,
-         family = removal(), detection = ~ 1, y = y, method = "nested_laplace",
+         family = count(), y = y,
          control = list(verbose = FALSE, progress = FALSE)),
     "temporal"
   )

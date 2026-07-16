@@ -139,3 +139,78 @@ test_that("fitted()$z is the forward-backward smoothed state for dynamic models"
   expect_lt(brier_sm, brier_marg)              # strictly better calibration
   expect_gt(mean((z > 0.5) == (ztrue == 1)), 0.9)  # high classification acc
 })
+
+
+# --- season-varying colonization / extinction (gcol33/tulpaObs#124) ----------
+
+test_that("a season-varying rate covariate routes to the interval path", {
+  # A [n_sites x (T-1)] matrix covariate on colonization / extinction triggers
+  # the interval-indexed design; a plain site-level covariate does NOT (it stays
+  # on the byte-identical constant-rate path).
+  sv <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 5,
+                          beta_gamma = c(-1, 0.8), seed = 1)
+  m_sv <- tulpaObs:::.tobs_build_model(
+    occ_formula = ~ 1, det_formula = ~ 1, data = sv$data, y = sv$y,
+    col_formula = ~ gamma_cov, ext_formula = ~ 1)
+  expect_true(m_sv$col_season_varying)
+  expect_false(m_sv$ext_season_varying)
+  # long-form design: (n_sites * (T-1)) rows
+  expect_equal(nrow(m_sv$X_processes[[3]]), 40 * 4)
+  expect_equal(nrow(m_sv$X_processes[[4]]), 40)          # extinction site-level
+
+  # a site-level covariate is NOT season-varying
+  d2 <- sv$data; d2$sitecov <- rnorm(40)
+  m_c <- tulpaObs:::.tobs_build_model(
+    occ_formula = ~ 1, det_formula = ~ 1, data = d2, y = sv$y,
+    col_formula = ~ sitecov, ext_formula = ~ 1)
+  expect_false(m_c$col_season_varying)
+  expect_equal(nrow(m_c$X_processes[[3]]), 40)
+
+  # a matrix covariate with the wrong number of columns errors
+  d3 <- sv$data; d3$bad <- matrix(rnorm(40 * 2), 40, 2)
+  expect_error(
+    tulpaObs:::.tobs_build_model(occ_formula = ~ 1, det_formula = ~ 1,
+      data = d3, y = sv$y, col_formula = ~ bad, ext_formula = ~ 1),
+    "one column per transition interval")
+
+  # season-varying rates are gated under NUTS (the C++ forward reads one rate
+  # per site)
+  expect_error(
+    tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y, detection = ~ 1,
+         colonization = ~ gamma_cov, extinction = ~ 1, method = "nuts"),
+    "season-varying")
+})
+
+test_that("dyn_occu recovers season-varying gamma/epsilon + ~95% coverage", {
+  skip_if_fast()
+  skip_on_cran()
+  # Interval-indexed colonization / extinction driven by a per-(site, interval)
+  # covariate (the dyn_abun #80 recipe ported to the colext forward). The
+  # weighted-logistic transition M-step plus the season-varying exact HMM-forward
+  # marginal refine recover the four transition coefficients with calibrated
+  # Wald coverage.
+  truth  <- c(-1.0, 0.9, -1.5, -0.7)   # gamma0, gamma1, eps0, eps1
+  n_seed <- 20L
+  est   <- matrix(NA_real_, n_seed, 4)
+  cover <- matrix(FALSE, n_seed, 4)
+  for (s in seq_len(n_seed)) {
+    sv <- simulate_dyn_occu(N = 400, J = 5, n_seasons = 7,
+                            beta_occ = 0.3, beta_det = 0.4,
+                            beta_gamma = c(-1.0, 0.9),
+                            beta_epsilon = c(-1.5, -0.7), seed = 300 + s)
+    fit <- tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y,
+                detection = ~ 1, colonization = ~ gamma_cov,
+                extinction = ~ eps_cov, method = "laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    cc <- unlist(coef(fit)); se <- sqrt(diag(vcov(fit)))
+    idx <- c(which(names(cc) == "gamma.(Intercept)"),
+             which(names(cc) == "gamma.gamma_cov"),
+             which(names(cc) == "epsilon.(Intercept)"),
+             which(names(cc) == "epsilon.eps_cov"))
+    b <- cc[idx]; s_e <- se[idx]
+    est[s, ]   <- b
+    cover[s, ] <- (truth >= b - 1.96 * s_e) & (truth <= b + 1.96 * s_e)
+  }
+  expect_equal(colMeans(est), truth, tolerance = 0.08)
+  expect_true(all(colMeans(cover) >= 0.85))
+})

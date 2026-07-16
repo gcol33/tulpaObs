@@ -9,10 +9,11 @@ simulate_ms_count(
   n_species = 10,
   beta_comm_mean = c(1, 0.5),
   beta_comm_sd = c(0.4, 0.3),
-  response = c("poisson", "negbin", "gaussian"),
+  response = c("poisson", "negbin", "gaussian", "binomial"),
   size = 2,
   size.log.sd = 0.3,
   sd = 1,
+  trials = 10,
   seed = NULL
 )
 }
@@ -24,7 +25,7 @@ simulate_ms_count(
 \item{beta_comm_mean, beta_comm_sd}{Community mean and SD of the per-species
 coefficients (intercept first). Length sets the number of covariates.}
 
-\item{response}{One of \code{"poisson"}, \code{"negbin"}, \code{"gaussian"}.}
+\item{response}{One of \code{"poisson"}, \code{"negbin"}, \code{"gaussian"}, \code{"binomial"}.}
 
 \item{size}{Negative-binomial community size (mean of the per-species
 \code{log_r}); \code{size.log.sd} is its across-species SD.}
@@ -32,6 +33,10 @@ coefficients (intercept first). Length sets the number of covariates.}
 \item{size.log.sd}{Across-species SD of \code{log(size)} (negbin only).}
 
 \item{sd}{Gaussian residual SD.}
+
+\item{trials}{Binomial trial count (\code{response = "binomial"}): a scalar
+(shared across sites and species) or a length-\code{N} per-site vector. Default
+10.}
 
 \item{seed}{Optional RNG seed.}
 }

@@ -402,7 +402,7 @@ test_that("removal() areal-spatial coefficient SEs are calibrated", {
   expect_true(all(ratio > 0.85 & ratio < 1.2))
 })
 
-test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", {
+test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
   adj <- .rem_grid_adj(6L)
@@ -417,11 +417,53 @@ test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+spatial gated", 
     expect_true(all(is.finite(vcov(fit))))
     expect_false(is.null(fit$spatial_field))
   }
-  # NUTS + areal is car_proper only; an intrinsic icar() field is rejected with a
-  # pointer (the car_proper recovery lives in test-count-spatial-nuts.R).
-  expect_error(
-    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
-         family = removal(), detection = ~ det_cov1, y = sim$y, method = "nuts",
-         control = list(n.iter = 20L, n.warmup = 10L)),
-    "proper-CAR|car_proper")
+  # NUTS + areal now samples an intrinsic icar() field via the #71 sum-to-zero
+  # reparameterisation (full recovery lives in test-count-spatial-nuts.R). Here
+  # confirm the dispatch path runs end-to-end and centres the field.
+  fit_icar <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
+    family = removal(), detection = ~ det_cov1, y = sim$y, method = "nuts",
+    control = list(n.iter = 60L, n.warmup = 60L, verbose = FALSE, progress = FALSE))
+  expect_identical(fit_icar$method, "nuts")
+  expect_false(is.null(fit_icar$spatial_field))
+  expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)   # sum-to-zero centred
+})
+
+
+test_that("removal() temporal()-only field recovers the AR1 field + slope (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
+  # driver with a single temporal block on the abundance arm (gcol33/tulpaObs#114).
+  Tt <- 8L; per_t <- 30L; N <- Tt * per_t
+  fcor <- slope <- rep(NA_real_, 8L)
+  for (s in seq_len(8L)) {
+    set.seed(100L + s)
+    period <- rep(seq_len(Tt), each = per_t)
+    rho <- 0.7; sig <- 0.5; u <- numeric(Tt)
+    u[1] <- stats::rnorm(1, 0, sig / sqrt(1 - rho^2))
+    for (t in 2:Tt) u[t] <- rho * u[t - 1] + stats::rnorm(1, 0, sig)
+    u <- u - mean(u)
+    x <- stats::rnorm(N)
+    lambda <- exp(log(8) + 0.5 * x + u[period])
+    K <- 4L; Nn <- stats::rpois(N, lambda); y <- matrix(0L, N, K); rem <- Nn
+    for (k in 1:K) { y[, k] <- stats::rbinom(N, rem, 0.45); rem <- rem - y[, k] }
+    fit <- tryCatch(tobs(~ x + temporal(period, type = "ar1"),
+                         data = data.frame(x = x, period = period),
+                         family = removal(), detection = ~ 1, y = y,
+                         method = "nested_laplace",
+                         control = list(verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_null(fit$spatial_field)                 # temporal-only: no areal field
+      expect_length(fit$temporal_field, Tt)
+    }
+    slope[s] <- fit$means[["lambda_x"]]
+    if (length(fit$temporal_field) == Tt) fcor[s] <- abs(stats::cor(fit$temporal_field, u))
+  }
+  ok <- is.finite(slope)
+  expect_gte(mean(ok), 0.75)
+  expect_lt(abs(mean(slope[ok]) - 0.5), 0.10)        # abundance slope recovered
+  expect_gt(mean(fcor[ok], na.rm = TRUE), 0.85)      # AR1 temporal field recovered
 })

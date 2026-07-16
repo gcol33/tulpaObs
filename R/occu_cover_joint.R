@@ -26,11 +26,12 @@
   # unweighted intercept field first, then any weighted SVC fields. They share
   # one areal graph, so the base graph drives the (single) CSR.
   adj <- fields[[1L]]$graph
-  is_beta <- identical(model$positive, "beta")
-  is_lnrm <- identical(model$positive, "lognormal")
-  if (!is_beta && !is_lnrm) {
+  is_beta  <- identical(model$positive, "beta")
+  is_lnrm  <- identical(model$positive, "lognormal")
+  is_gauss <- identical(model$positive, "gaussian")
+  if (!is_beta && !is_lnrm && !is_gauss) {
     stop("occu_cover() joint engine supports positive = ",
-         "\"lognormal\" or \"beta\".", call. = FALSE)
+         "\"lognormal\", \"beta\", or \"gaussian\".", call. = FALSE)
   }
   # Cover-arm granularity. "mean" / "median" (tulpaObs#33) route through the
   # `_agg` spec (one log f_pos at the per-unit mean / median); "latent" routes
@@ -38,8 +39,15 @@
   # marginal per unit); "none" is the per-visit spec.
   cover_aggregate <- model$cover_aggregate %||% "none"
   is_latent  <- identical(cover_aggregate, "latent")
+  if (is_latent && is_gauss) {
+    stop("occu_cover(response = \"gaussian\") has no latent cover-aggregate ",
+         "variant; use cover_aggregate = \"none\" / \"mean\" / \"median\".",
+         call. = FALSE)
+  }
   aggregated <- !identical(cover_aggregate, "none") && !is_latent
-  spec_base  <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
+  spec_base  <- if (is_beta) "occu_cover_beta"
+                else if (is_gauss) "occu_cover_gaussian"
+                else "occu_cover_lognormal"
   spec_name  <- if (is_latent) paste0(spec_base, "_latent")
                 else if (aggregated) paste0(spec_base, "_agg")
                 else spec_base
@@ -184,6 +192,10 @@
       } else {
         10
       }
+    } else if (is_gauss) {
+      # Identity-Gaussian arm (gcol33/tulpaObs#112): sigma_pos is the SD of the
+      # raw response (which may be negative), not of log(y_pos).
+      if (length(pos_vals) > 0L) max(stats::sd(pos_vals), 0.05) + 0.05 else 0.4
     } else {
       if (length(pos_vals) > 0L) {
         max(stats::sd(log(pos_vals)), 0.05) + 0.05

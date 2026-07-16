@@ -529,14 +529,11 @@
                                            seed = 1L, max.iter = 100L,
                                            verbose = FALSE) {
   .tobs_reject_weighted_spatial(spatial, "ms_abun NUTS abundance spatial")
-  if (!identical(spatial$type, "car_proper")) {
+  if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(
-      "ms_abun() NUTS + areal spatial supports the proper-CAR field ",
-      "car_proper() (full-rank precision -> well-conditioned non-centered ",
-      "geometry); the intrinsic '%s' field has a flat field-mean direction ",
-      "needing a sum-to-zero reparameterisation for NUTS -- use ",
-      "method = \"nested_laplace\" for the icar()/bym2() areal community fit. ",
-      "(gcol33/tulpaObs#73)"), spatial$type), call. = FALSE)
+      "ms_abun() NUTS + areal spatial supports icar() / car_proper() / bym2() ",
+      "on the shared abundance field; got '%s'. (gcol33/tulpaObs#73, #113)"),
+      spatial$type), call. = FALSE)
   }
   if (!identical(mixture, "poisson")) {
     stop("ms_abun() NUTS + areal spatial is Poisson-only; negative-binomial ",
@@ -558,22 +555,26 @@
   pri  <- .tobs_ms_abun_nuts_priors()
   csr  <- .nmix_spatial_csr(spatial)
 
-  # Warm the field precision (tau, rho) + community means / covariances / field
-  # from the nested-Laplace community-spatial (sfMsNMix) fit (#12).
-  nl <- nmix_community_laplace_car_proper(
+  # Warm the field precision + community means / covariances / field from the
+  # matching nested-Laplace community-spatial (sfMsNMix) fit (#12), then build the
+  # whitened-field loading (square inverse Cholesky for car_proper, sum-to-zero
+  # for the intrinsic icar / bym2 fields, gcol33/tulpaObs#71/#113).
+  warm_common <- list(
     lf = lf, X_lambda = X_lambda, n_sites = n_sites, n_species = n_species,
-    csr = csr, n_spatial = n_sites, graph = spatial$graph, mixture = "P",
-    K_max = K_warm, max_iter = as.integer(max.iter), verbose = FALSE)
-  tau <- max(nl$hyper$tau[["mean"]], 1e-3)
-  rho <- min(max(nl$hyper$rho[["mean"]], 0.01), 0.99)
-
-  # Fixed field precision tau Q(rho) -> Linv = L^{-1} (f = Linv %*% raw).
-  Q  <- .areal_Q(as.matrix(spatial$graph), rho)
-  Qr <- tau * Q + diag(1e-4 * tau, n_sites)
-  L  <- tryCatch(chol(Qr), error = function(e) NULL)
-  if (is.null(L)) stop("ms_abun NUTS spatial: field precision not PD.",
-                       call. = FALSE)
-  Linv <- backsolve(L, diag(n_sites))
+    csr = csr, n_spatial = n_sites, mixture = "P", K_max = K_warm,
+    max_iter = as.integer(max.iter), verbose = FALSE)
+  nl <- switch(spatial$type,
+    icar       = do.call(nmix_community_laplace_icar, warm_common),
+    car_proper = do.call(nmix_community_laplace_car_proper,
+                         c(warm_common, list(graph = spatial$graph))),
+    bym2       = do.call(nmix_community_laplace_bym2,
+                         c(warm_common, list(scale_factor = spatial$scale_factor %||%
+                             compute_bym2_scale(spatial$graph)))))
+  hg <- function(k) { h <- nl$hyper[[k]]; if (is.null(h)) NA_real_ else as.numeric(h[["mean"]]) }
+  fl <- .tobs_nuts_field_loading(as.matrix(spatial$graph), spatial$type, n_sites,
+                                 tau = hg("tau"), rho = hg("rho"), sigma = hg("sigma"),
+                                 scale_factor = spatial$scale_factor)
+  field_load <- fl$field_load; n_raw <- fl$n_raw
 
   # K_max for the NUTS marginal (data-driven, as the non-spatial path).
   if (!is.null(K_max)) {
@@ -595,7 +596,13 @@
                Sigma_lambda = nl$Sigma_lambda, Sigma_p = nl$Sigma_p,
                b_lambda = nl$b_lambda, b_p = nl$b_p)
   theta0_base <- .tobs_ms_abun_nuts_pack_init(warm, lay)
-  raw0 <- as.numeric(L %*% nl$spatial_field)
+  # car_proper warm-starts raw near the integrated field (raw0 = L %*% f_warm);
+  # icar / bym2 (non-square sum-to-zero loadings) start raw at 0 (#71/#113).
+  raw0 <- if (identical(spatial$type, "car_proper")) {
+    Q  <- .areal_Q(as.matrix(spatial$graph), fl$rho)
+    L  <- chol(fl$tau * Q + diag(1e-4 * fl$tau, n_sites))
+    as.numeric(L %*% nl$spatial_field)
+  } else numeric(n_raw)
   theta0 <- c(theta0_base, raw0)
 
   spec <- list(y = as.integer(lf$y), site_idx = as.integer(lf$site_idx),
@@ -603,7 +610,7 @@
                X_lambda = X_lambda, X_p = lf$X_p,
                n_sites = n_sites, n_species = n_species, K_max = K_max,
                is_nb = FALSE, n_field_units = n_sites,
-               field_map = seq_len(n_sites), field_Linv = Linv)
+               field_map = seq_len(n_sites), field_load = field_load)
   inv_metric <- .tobs_ms_abun_nuts_metric(spec, theta0, pri, sigma.beta,
                                           sigma.logr)
 
@@ -648,9 +655,9 @@
     B_bar <- B_bar + .tobs_ms_abun_nuts_b_from_z(draws[i, ], lay)
   B_bar <- B_bar / nrow(draws)
 
-  # Field posterior mean f = Linv %*% mean(raw).
-  raw_idx  <- lay$total + seq_len(n_sites)
-  field_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  # Field posterior mean f = L %*% mean(raw) (n_raw whitened coordinates).
+  raw_idx  <- lay$total + seq_len(n_raw)
+  field_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
   margs   <- .tobs_ms_abun_nuts_marginals(lf, X_lambda, n_sites, "P", K_max)
   ll_mean <- .tobs_ms_abun_nuts_data_loglik(par[seq_len(lay$total)], margs, lay)
@@ -671,7 +678,7 @@
     draws = draws, layout = lay, n_field_units = n_sites,
     accept_prob = accept, divergent = divergent, treedepth = treedepth,
     epsilon = epsilon, n_chains = n_chains, divergent_total = sum(divergent),
-    is_nb = FALSE, K_max = K_max, field_tau = tau, field_rho = rho,
+    is_nb = FALSE, K_max = K_max, field_tau = fl$tau, field_rho = fl$rho,
     sigma_beta = sigma.beta, sigma_logr = sigma.logr)
   if (!is.null(rhat_ess)) {
     fit$nuts$rhat     <- rhat_ess$rhat

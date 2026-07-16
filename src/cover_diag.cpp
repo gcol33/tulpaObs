@@ -55,7 +55,9 @@ Rcpp::List cpp_cover_pit_cdf(
         Fl(s, i) = one_mp + p * Flp; Fu(s, i) = one_mp + p * Fup;
       } else {
         double Fpos;
-        if (positive == 0) Fpos = pnorm1((y_pos[j] - e) / sd);
+        // codes 0 (lognormal, y on log-scale) and 4 (identity-Gaussian, y raw)
+        // both reduce to the Gaussian CDF at the stored y (#112).
+        if (positive == 0 || positive == 4) Fpos = pnorm1((y_pos[j] - e) / sd);
         else if (positive == 1)
           Fpos = pnorm1((y_pos[j] - e) / sd) / pnorm1((trunc_upper[j] - e) / sd);
         else { double mu = plg(e); Fpos = R::pbeta(y_pos[j], mu * sd, (1.0 - mu) * sd, 1, 0); }
@@ -113,6 +115,9 @@ Rcpp::List cpp_cover_ppc(
         } else if (positive == 0 || positive == 2) { // lognormal / ordinal
           Epos[j] = std::exp(e + sd * sd / 2.0);
           yrep[j] = std::exp(R::rnorm(e, sd));
+        } else if (positive == 4) {                  // identity-Gaussian (#112)
+          Epos[j] = e;                               // mu = eta, response scale
+          yrep[j] = R::rnorm(e, sd);
         } else {                                     // beta
           double mu = plg(e); Epos[j] = mu;
           yrep[j] = R::rbeta(mu * sd, (1.0 - mu) * sd);

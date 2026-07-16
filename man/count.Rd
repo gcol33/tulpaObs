@@ -4,12 +4,18 @@
 \alias{count}
 \title{Count / relative-abundance GLMM family (no detection process)}
 \usage{
-count(response = c("poisson", "negbin", "gaussian"))
+count(response = c("poisson", "negbin", "gaussian", "binomial"))
 }
 \arguments{
 \item{response}{The response distribution: \code{"poisson"} (log link),
 \code{"negbin"} (negative binomial, log link, an estimated size / dispersion),
-or \code{"gaussian"} (identity link, an estimated residual variance).}
+\code{"gaussian"} (identity link, an estimated residual variance), or
+\code{"binomial"} (logit link, \code{k} successes out of \code{n} trials per site). The
+binomial response is the detection-free binomial GLMM of \code{spOccupancy}
+(\code{svcPGBinom}): supply the per-site trial count as \verb{trials =} on \code{\link[=tobs]{tobs()}}
+(default 1, i.e. a Bernoulli response). Unlike the count / Gaussian areal
+fit, a binomial areal field is identified (the variance is pinned by \code{n}),
+so an \code{icar()} / \code{car_proper()} term composes with any \code{trials}.}
 }
 \value{
 A \code{tobs_family} object.

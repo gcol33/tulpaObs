@@ -73,10 +73,14 @@ struct OccuCoverNutsData {
     // alpha (also from the nested-Laplace estimate): eta_psi_c += f[cell(c)] and
     // eta_pos_cv += alpha * f[cell(c)]. n_field_units = 0 -> the non-spatial
     // sampler (byte-identical: every field branch is guarded by has_field).
-    int n_field_units = 0, o_raw = 0;
+    // The field is f = L %*% raw, raw ~ N(0, I_{n_raw}), with L a (possibly non-
+    // square) n_field_units x n_raw loading (gcol33/tulpaObs#71/#113): square
+    // inverse Cholesky for a full-rank proper-CAR field, or the sum-to-zero
+    // eigen-loading for an intrinsic icar / bym2 field (n_raw < n_field_units).
+    int n_field_units = 0, n_raw = 0, o_raw = 0;
     double field_alpha = 0.0;
     std::vector<int> field_map;   // 0-based field node (cell) per site (length n_sites)
-    std::vector<double> Linv;     // row-major n_field_units x n_field_units
+    std::vector<double> Linv;     // row-major n_field_units x n_raw loading
 };
 
 inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
@@ -109,15 +113,20 @@ inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
                 Rcpp::stop("field_map must have length n_sites");
             d.field_map.resize(d.n_sites);
             for (int i = 0; i < d.n_sites; ++i) d.field_map[i] = fm[i] - 1;
-            Rcpp::NumericMatrix Li = spec["field_Linv"];
-            if (Li.nrow() != d.n_field_units || Li.ncol() != d.n_field_units)
-                Rcpp::stop("field_Linv must be n_field_units x n_field_units");
-            d.Linv.resize((std::size_t) d.n_field_units * d.n_field_units);
+            // Accept a general n_field_units x n_raw loading (field_load, #113);
+            // the legacy square inverse Cholesky (field_Linv) is n_raw == NF.
+            Rcpp::NumericMatrix Li = spec.containsElementNamed("field_load")
+                ? Rcpp::as<Rcpp::NumericMatrix>(spec["field_load"])
+                : Rcpp::as<Rcpp::NumericMatrix>(spec["field_Linv"]);
+            if (Li.nrow() != d.n_field_units)
+                Rcpp::stop("field loading must have n_field_units rows");
+            d.n_raw = Li.ncol();
+            d.Linv.resize((std::size_t) d.n_field_units * d.n_raw);
             for (int u = 0; u < d.n_field_units; ++u)
-                for (int v = 0; v < d.n_field_units; ++v)
-                    d.Linv[(std::size_t) u * d.n_field_units + v] = Li(u, v);
+                for (int v = 0; v < d.n_raw; ++v)
+                    d.Linv[(std::size_t) u * d.n_raw + v] = Li(u, v);
             d.field_alpha = Rcpp::as<double>(spec["field_alpha"]);
-            d.o_raw = base; base += d.n_field_units;
+            d.o_raw = base; base += d.n_raw;
         }
     }
     d.total = base;
@@ -172,8 +181,8 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
         g_f.assign(d.n_field_units, 0.0);
         for (int u = 0; u < d.n_field_units; ++u) {
             double zz = 0.0;
-            const double* Lu = &d.Linv[(std::size_t) u * d.n_field_units];
-            for (int v = 0; v < d.n_field_units; ++v) zz += Lu[v] * theta[d.o_raw + v];
+            const double* Lu = &d.Linv[(std::size_t) u * d.n_raw];
+            for (int v = 0; v < d.n_raw; ++v) zz += Lu[v] * theta[d.o_raw + v];
             ffield[u] = zz;
         }
     }
@@ -309,12 +318,12 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     grad[g_ld]   -= ild2 * log_disp;
 
     if (has_field) {
-        // Whitened field prior raw ~ N(0, I); the chain grad_raw = Linv^T g_f
-        // (f = Linv %*% raw, so d lp / d raw_v = sum_u Linv[u,v] g_f[u]).
-        for (int v = 0; v < d.n_field_units; ++v) {
+        // Whitened field prior raw ~ N(0, I_{n_raw}); the chain grad_raw = L^T g_f
+        // (f = L %*% raw, so d lp / d raw_v = sum_u L[u,v] g_f[u]).
+        for (int v = 0; v < d.n_raw; ++v) {
             double gr = 0.0;
             for (int u = 0; u < d.n_field_units; ++u)
-                gr += d.Linv[(std::size_t) u * d.n_field_units + v] * g_f[u];
+                gr += d.Linv[(std::size_t) u * d.n_raw + v] * g_f[u];
             const double rv = theta[d.o_raw + v];
             lp -= 0.5 * rv * rv;
             grad[d.o_raw + v] += gr - rv;

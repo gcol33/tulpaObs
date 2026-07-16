@@ -13,10 +13,10 @@
   ext_formula = NULL,
   species = NULL,
   integrated = FALSE,
-  jsdm = FALSE,
   abundance = FALSE,
   count = FALSE,
   count_response = "poisson",
+  count_trials = NULL,
   det_visit_formula = NULL,
   det_visit_data = NULL
 )
@@ -27,11 +27,11 @@ Inferred model type from arguments:
 \item \strong{Single-season}: no \code{col_formula}, no \code{species}
 \item \strong{Dynamic}: \code{col_formula} and/or \code{ext_formula} provided
 \item \strong{Integrated}: \code{integrated = TRUE}, \code{y} a list of matrices
-\item \strong{JSDM}: \code{jsdm = TRUE}
 }
 }
 \details{
-Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover) have
-their own in-tree binders + Laplace-EM fitter and do not pass through here.
+Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover /
+ms_count / jsdm) have their own in-tree binders + Laplace-EM fitter and do not
+pass through here.
 }
 \keyword{internal}

@@ -52,9 +52,11 @@ simulate_cover <- function(N             = 200L,
                                   beta_occ      = c(-0.5, 0.8),
                                   beta_pos      = c(-1.0, 0.3),
                                   sigma_pos     = 0.4,
+                                  response      = c("lognormal", "gaussian"),
                                   spatial_range = NULL,
                                   spatial_var   = 1,
                                   seed          = NULL) {
+  response <- match.arg(response)
   if (!is.null(seed)) set.seed(seed)
   N <- as.integer(N)
   if (length(beta_occ) != 2L || length(beta_pos) != 2L) {
@@ -81,9 +83,19 @@ simulate_cover <- function(N             = 200L,
   p     <- stats::plogis(eta_occ)
   occur <- stats::rbinom(N, 1L, p)
 
-  log_cover <- stats::rnorm(N, eta_pos, sigma_pos)
-  cover     <- ifelse(occur == 1L, exp(log_cover), 0)
-  cover     <- pmin(cover, 1)
+  if (identical(response, "gaussian")) {
+    # Delta-normal hurdle (gcol33/tulpaObs#112): the positive magnitude is a plain
+    # Gaussian on the raw response (no log, no [0, 1] clamp); absence is the 0
+    # sentinel. mu on the response scale is eta_pos.
+    mag   <- stats::rnorm(N, eta_pos, sigma_pos)
+    cover <- ifelse(occur == 1L, mag, 0)
+    mu_truth <- eta_pos
+  } else {
+    log_cover <- stats::rnorm(N, eta_pos, sigma_pos)
+    cover     <- ifelse(occur == 1L, exp(log_cover), 0)
+    cover     <- pmin(cover, 1)
+    mu_truth  <- exp(eta_pos + sigma_pos^2 / 2)
+  }
 
   data <- data.frame(
     cover = cover,
@@ -100,8 +112,9 @@ simulate_cover <- function(N             = 200L,
       beta_occ    = beta_occ,
       beta_pos    = beta_pos,
       sigma_pos   = sigma_pos,
+      response    = response,
       p           = p,
-      mu          = exp(eta_pos + sigma_pos^2 / 2),
+      mu          = mu_truth,
       occur       = occur,
       spatial_occ = spatial_occ,
       spatial_pos = spatial_pos
@@ -185,7 +198,8 @@ simulate_cover_joint <- function(N               = 300L,
                                  sigma           = 0.6,
                                  rho             = 0.7,
                                  alpha           = 1.0,
-                                 positive        = c("beta", "lognormal"),
+                                 positive        = c("beta", "lognormal",
+                                                     "gaussian"),
                                  phi             = 30,
                                  sigma_pos_resid = 0.4,
                                  seed            = NULL) {
@@ -227,6 +241,10 @@ simulate_cover_joint <- function(N               = 300L,
                               mu_pos[is_pos] * phi,
                               (1 - mu_pos[is_pos]) * phi)
     y <- pmin(pmax(y, 0), 1 - 1e-6)
+  } else if (positive == "gaussian") {
+    # Identity-Gaussian arm (gcol33/tulpaObs#112): raw magnitude, no log, no clamp.
+    mag       <- stats::rnorm(N, eta_pos, sigma_pos_resid)
+    y[is_pos] <- mag[is_pos]
   } else {
     log_y     <- stats::rnorm(N, eta_pos, sigma_pos_resid)
     y[is_pos] <- exp(log_y[is_pos])
@@ -246,8 +264,8 @@ simulate_cover_joint <- function(N               = 300L,
       sigma_pos       = alpha * sigma,
       positive        = positive,
       phi             = if (positive == "beta") phi else NA_real_,
-      sigma_pos_resid = if (positive == "lognormal") sigma_pos_resid
-                        else NA_real_,
+      sigma_pos_resid = if (positive %in% c("lognormal", "gaussian"))
+                        sigma_pos_resid else NA_real_,
       phi_f           = phi_f,
       theta_f         = theta_f,
       w_s             = w_s,

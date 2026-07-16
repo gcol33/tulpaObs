@@ -9,6 +9,7 @@ simulate_cover(
   beta_occ = c(-0.5, 0.8),
   beta_pos = c(-1, 0.3),
   sigma_pos = 0.4,
+  response = c("lognormal", "gaussian"),
   spatial_range = NULL,
   spatial_var = 1,
   seed = NULL

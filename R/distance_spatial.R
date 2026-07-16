@@ -20,14 +20,32 @@
                                        mixture = "poisson",
                                        K_max = NULL, max_iter = 200L, tol = 1e-6,
                                        verbose = TRUE, integration = "grid") {
-  .tobs_reject_weighted_spatial(spatial, "distance abundance spatial")
+  temporal_only <- is.null(spatial)
+  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
+  # carries shared = c(state, detection) = c(FALSE, TRUE). It loads on the per-site
+  # detection scale eta_sigma (a spatially-varying detection scale) instead of the
+  # abundance arm; the distance kernel exposes the per-site sigma gradient
+  # (sw$grad_sig), so the areal-BFGS driver needs only the arm-routed offset +
+  # gradient. Half-normal key (the shape global belongs to the hazard-key path).
+  det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
+  if (!temporal_only)
+    .tobs_reject_weighted_spatial(spatial, "distance abundance spatial")
+  if (det_arm && identical(model$key, "hazard"))
+    stop(paste0("distance() detection-arm areal field (a field on the detection ",
+                "scale) is wired for the half-normal key only; the hazard-key ",
+                "log-shape is a separate global. (tulpaObs#114)"), call. = FALSE)
   hazard <- identical(model$key, "hazard")
   key_code <- .dist_key_code(model$key)
   map <- seq_len(model$n_sites)
-  field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "distance", map)
-  field <- if (is.null(temporal)) field_sp else {
-    list(field_sp,
-         .tobs_temporal_field_spec(temporal, model$n_sites, "distance"))
+  # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
+  # temporal block; otherwise the areal field is block 1 and the temporal block 2.
+  field <- if (temporal_only) {
+    list(.tobs_temporal_field_spec(temporal, model$n_sites, "distance"))
+  } else {
+    field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "distance", map)
+    if (is.null(temporal)) field_sp
+    else list(field_sp,
+              .tobs_temporal_field_spec(temporal, model$n_sites, "distance"))
   }
 
   X_lam <- model$X_processes[[1]]; X_sig <- model$X_processes[[2]]
@@ -50,8 +68,8 @@
   n_fixed <- off + if (is_nb) 1L else 0L
 
   eval <- function(theta_fix, offset) {
-    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + offset
-    eta_sig <- as.numeric(X_sig %*% theta_fix[i_sig])
+    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + (if (det_arm) 0 else offset)
+    eta_sig <- as.numeric(X_sig %*% theta_fix[i_sig]) + (if (det_arm) offset else 0)
     eta_b <- if (hazard) theta_fix[i_b] else 0.0
     rr <- if (is_nb) exp(theta_fix[i_logr]) else Inf
     sw <- cpp_distance_site_sweep(y, eta_lam, eta_sig, cutpoints, transect_code,
@@ -62,7 +80,8 @@
     g[i_sig] <- as.numeric(crossprod(X_sig, sw$grad_sig))
     if (hazard) g[i_b] <- sw$grad_b
     if (is_nb) g[i_logr] <- sw$grad_logr
-    list(log_lik = sum(sw$log_lik), grad_fixed = g, grad_eta = sw$grad_lam)
+    list(log_lik = sum(sw$log_lik), grad_fixed = g,
+         grad_eta = if (det_arm) sw$grad_sig else sw$grad_lam)
   }
 
   # Warm start from the non-spatial distance Laplace fit (carries the hazard
@@ -103,14 +122,25 @@
     key = model$key, transect = model$transect, hazard = hazard, K_max = K_max)
   fit <- build_distance_fit(raw, model)
   fit$method <- "nested_laplace"
-  fit$spatial_field <- res$field_mean
-  fit$spatial_hyper <- res$hyper
   fit$spatial_integration <- res$integration
   fit$spatial_pareto_k <- res$pareto_k
-  if (!is.null(temporal)) {
+  if (temporal_only) {
+    # The single temporal block is reported by the driver as block 1
+    # (field_mean / hyper); relabel it as the temporal field (#114).
     fit$temporal <- temporal
-    fit$temporal_field <- res$temporal_field
-    fit$temporal_hyper <- res$temporal_hyper
+    fit$temporal_field <- res$field_mean
+    fit$temporal_hyper <- res$hyper
+  } else {
+    fit$spatial_field <- res$field_mean
+    fit$spatial_hyper <- res$hyper
+    # The field loads on the abundance (log lambda) arm by default, or on the
+    # detection scale (log sigma) arm when the term sits in the detection formula.
+    fit$spatial_field_arm <- if (det_arm) "detection" else "abundance"
+    if (!is.null(temporal)) {
+      fit$temporal <- temporal
+      fit$temporal_field <- res$temporal_field
+      fit$temporal_hyper <- res$temporal_hyper
+    }
   }
   fit
 }
@@ -137,12 +167,10 @@
     stop("distance() NUTS + areal spatial supports the half-normal key only ",
          "(the hazard-rate shape is not wired into the spatial path). ",
          "(tulpaObs#72/#79)", call. = FALSE)
-  if (!identical(spatial$type, "car_proper"))
-    stop(sprintf(paste0("distance() NUTS + areal spatial supports the proper-CAR ",
-                        "field car_proper(); the intrinsic '%s' field needs a ",
-                        "sum-to-zero reparameterisation for NUTS -- use method = ",
-                        "\"nested_laplace\" for the icar()/bym2() areal fit. ",
-                        "(tulpaObs#72)"), spatial$type), call. = FALSE)
+  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+    stop(sprintf(paste0("distance() NUTS + areal spatial supports icar() / ",
+                        "car_proper() / bym2() on the abundance arm; got '%s'. ",
+                        "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites)
     stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
@@ -162,22 +190,28 @@
                                    max_iter = 200L, tol = 1e-6, verbose = FALSE,
                                    integration = "grid")
   hyper <- nl$spatial_hyper
-  tau <- max(unname(hyper[["tau"]]), 1e-3)
-  rho <- min(max(unname(hyper[["rho"]]), 0.01), 0.99)
-  Linv <- .tobs_field_linv(adj, tau, rho, n_sites)
+  hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
+  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                 tau = hv("tau"), rho = hv("rho"),
+                                 sigma = hv("sigma"),
+                                 scale_factor = spatial$scale_factor)
+  field_load <- fl$field_load; n_raw <- fl$n_raw
 
   cm <- nl$means
   beta0 <- c(unname(cm[paste0("lambda_", model$process_info[[1]]$coef_names)]),
              unname(cm[paste0("sigma_",  model$process_info[[2]]$coef_names)]))
   if (is_nb) beta0 <- c(beta0, log(if (is.finite(nl$r %||% NA_real_)) nl$r else 2))
   n_base <- p_lam + p_sig + if (is_nb) 1L else 0L
-  # Warm-start raw from the Laplace field mean via the precision Cholesky:
-  # z = Linv %*% raw -> raw = L %*% z (raw0 = forward-solve), so the sampler starts
-  # near the integrated field.
-  L <- chol(.areal_Q(adj, rho) * tau + diag(1e-4 * tau, n_sites))   # upper L'L = Qr
-  raw0 <- as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
+  # Warm-start raw: a full-rank car_proper field starts near the integrated field
+  # via the precision Cholesky (z = Linv %*% raw -> raw = L %*% z); the intrinsic
+  # icar / bym2 sum-to-zero loadings are non-square, so their whitened raw starts
+  # at 0 (the well-conditioned fixed-hyper geometry adapts in warmup, #71/#113).
+  raw0 <- if (identical(spatial$type, "car_proper")) {
+    L <- chol(.areal_Q(adj, fl$rho) * fl$tau + diag(1e-4 * fl$tau, n_sites))
+    as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
+  } else numeric(n_raw)
   theta0 <- c(beta0, raw0)
-  inv_metric <- c(rep(0.1, n_base), rep(1, n_sites))
+  inv_metric <- c(rep(0.1, n_base), rep(1, n_raw))
 
   spec <- list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
                cutpoints = as.numeric(model$cutpoints),
@@ -185,7 +219,7 @@
                key = .dist_key_code(model$key), K_max = K_max, is_nb = is_nb,
                quad_order = as.integer(model$quad_order %||% 64L),
                n_field_units = n_sites, field_map = seq_len(n_sites),
-               field_Linv = Linv)
+               field_load = field_load)
 
   run_chain <- function(ch)
     cpp_distance_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
@@ -199,12 +233,12 @@
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("sigma_",  model$process_info[[2]]$coef_names),
-           if (is_nb) "log_r", paste0("raw_", seq_len(n_sites)))
+           if (is_nb) "log_r", paste0("raw_", seq_len(n_raw)))
   colnames(draws) <- nms
   b_idx <- seq_len(n_base)
   par <- colMeans(draws); cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_sites)
-  z_mean <- as.numeric(Linv %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  raw_idx <- n_base + seq_len(n_raw)
+  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
   lay <- .tobs_distance_nuts_layout(p_lam, p_sig, FALSE, is_nb)
   marg <- .tobs_distance_nuts_marginal(model, mixture = mix_code, K_max = K_max)
@@ -230,7 +264,7 @@
   fit$nuts <- list(accept_prob = accept, divergent = divergent,
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = tau, rho = rho,
+                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
                    prior_type = spatial$type, fixed_hyper = TRUE)
   fit
 }

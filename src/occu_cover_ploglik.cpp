@@ -53,18 +53,24 @@ inline double logsumexp2(double a, double b) {
   return m + std::log1p(std::exp(s - m));
 }
 
-// Positive-arm log-density, mirroring .occu_cover_pos_logdens. Beta clamps the
-// predictor before the logistic; lognormal uses the raw predictor.
-inline double pos_logdens(double y, double eta, double disp, bool is_beta,
+// Positive-arm log-density, mirroring .occu_cover_pos_logdens. The `positive`
+// code follows the shared cover scheme (lognormal 0, beta 3, gaussian 4). Beta
+// clamps the predictor before the logistic; lognormal uses the raw predictor on
+// log-cover; gaussian (gcol33/tulpaObs#112) uses the raw response, no Jacobian.
+inline double pos_logdens(double y, double eta, double disp, int positive,
                           double bound) {
-  if (is_beta) {
+  if (positive == 3) {  // beta
     double mu = stable_plogis(clamp_eta(eta, bound));
     double a  = mu * disp;
     double b  = (1.0 - mu) * disp;
     return std::lgamma(disp) - std::lgamma(a) - std::lgamma(b) +
            (a - 1.0) * std::log(y) + (b - 1.0) * std::log(1.0 - y);
   }
-  double ly = std::log(y);
+  if (positive == 4) {  // identity-Gaussian (raw response, no log Jacobian)
+    double r = (y - eta) / disp;
+    return -std::log(disp) - 0.5 * std::log(2.0 * M_PI) - 0.5 * r * r;
+  }
+  double ly = std::log(y);   // lognormal (y on log scale via the -ly Jacobian)
   double r  = (ly - eta) / disp;
   return -ly - std::log(disp) - 0.5 * std::log(2.0 * M_PI) - 0.5 * r * r;
 }
@@ -99,7 +105,7 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
     Rcpp::NumericVector disp,         // [S]
     Rcpp::NumericMatrix field_occ,    // [n_sites x S]
     Rcpp::NumericMatrix field_pos,    // [n_sites x S]
-    bool is_beta,
+    int positive,                     // 0 lognormal, 3 beta, 4 gaussian (#112)
     double eta_bound,
     int n_threads
 ) {
@@ -190,7 +196,7 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
           if (has_pos_visit) {
             ep += row_dot(pXpv, V, v, pBpos, S, d, p_pos_site, p_pos_vis);
           }
-          cov[s] += pos_logdens(ypos[v], ep, disp_d, is_beta, eta_bound);
+          cov[s] += pos_logdens(ypos[v], ep, disp_d, positive, eta_bound);
         }
       }
 

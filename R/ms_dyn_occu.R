@@ -47,7 +47,8 @@
 # is 0/1/NA; values that are NA or negative are missing visits.
 .tobs_build_ms_dyn_occu <- function(occ_formula, det_formula,
                                     col_formula = NULL, ext_formula = NULL,
-                                    data, y, species = NULL) {
+                                    data, y, species = NULL,
+                                    structured_terms = list()) {
   to_array <- function(z) {
     if (is.list(z) && !is.array(z)) {
       n_sp <- length(z)
@@ -122,8 +123,10 @@
     X_p           = X_p,
     X_gamma       = X_gamma,
     X_eps         = X_eps,
+    X_occ         = X_psi1,      # alias for the shared field-setup helpers
     formulas      = list(occ = occ_formula, det = det_formula,
                          col = col_formula, ext = ext_formula),
+    structured_terms = structured_terms,
     data          = data,
     process_info  = list(
       list(name = "psi1",  p = ncol(X_psi1),
@@ -453,10 +456,16 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
 #' The Laplace engine is the supported route: the shared colonisation /
 #' extinction dynamics and the per-species first-season occupancy / detection
 #' components recover across seeds (see `tests/testthat/test-ms-dyn-occu.R`,
-#' community-mean 95% CI coverage measured ~0.98). A NUTS sampler and an areal-
-#' field path are a deliberate follow-up, not part of this family's working
-#' surface; `method = "nuts"` / `"nested_laplace"` error from the dispatcher with
-#' a pointer rather than silently downgrading.
+#' community-mean 95% CI coverage measured ~0.98). A shared areal field on the
+#' first-season occupancy formula (`~ 1 + icar(graph = adj)`) fits the
+#' `spOccupancy` `stMsPGOcc` model under `method = "nested_laplace"`: the field
+#' is shared across species, and because the first-season occupancy `psi1` only
+#' sets the initial mixing weight of each species' HMM, the block-coordinate
+#' driver alternates the community EM (field as a `psi1` offset) with an areal
+#' field Newton, the field recovering cleanly (`cor` ~0.94). `icar()` only; a
+#' NUTS sampler and `bym2()` / `car_proper()` fields are a deliberate follow-up;
+#' `method = "nuts"` errors from the dispatcher with a pointer rather than
+#' silently downgrading.
 #'
 #' @return A `tobs_family` object.
 #' @seealso [dyn_occu()], [ms_occu()]

@@ -38,6 +38,11 @@
       # times the Jacobian 1/y, i.e. dnorm(log y, eta, sigma, log) - log(y).
       dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
                            log = TRUE) - y_pos[j]
+    } else if (positive == "gaussian") {
+      # Identity-Gaussian arm (gcol33/tulpaObs#112): y_pos is the raw response,
+      # so the density is the plain Gaussian with no change-of-variable Jacobian.
+      dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
+                           log = TRUE)
     } else if (positive == "lognormal_trunc") {
       # Upper-truncated lognormal: the lognormal density divided by the retained
       # mass Phi((u - eta)/sigma), u the log-cover ceiling (log(1) = 0). Adds
@@ -155,13 +160,15 @@
   p_occ <- ncol(X_occ); p_pos <- ncol(X_pos)
   mode_occ   <- object$occ$mode[seq_len(p_occ)]
   mode_pos   <- object$pos$mode[seq_len(p_pos)]
-  pos_vscale <- if (positive == "lognormal") (object$sigma_pos %||% 1)^2 else 1
+  pos_vscale <- if (positive %in% c("lognormal", "gaussian"))
+                  (object$sigma_pos %||% 1)^2 else 1
   V_occ <- tryCatch(solve(object$occ$H_beta), error = function(e) NULL)
   V_pos <- tryCatch(pos_vscale * solve(object$pos$H_beta), error = function(e) NULL)
   S <- as.integer(n.draws)
   B_occ <- .tobs_mvn_draws(mode_occ, V_occ, S)   # [S x p_occ]
   B_pos <- .tobs_mvn_draws(mode_pos, V_pos, S)   # [S x p_pos]
-  disp  <- if (positive == "lognormal") object$sigma_pos else object$phi_pos
+  disp  <- if (positive %in% c("lognormal", "gaussian")) object$sigma_pos
+           else object$phi_pos
   list(eta_occ = B_occ %*% t(X_occ), eta_pos = B_pos %*% t(X_pos), disp = disp)
 }
 
@@ -192,6 +199,7 @@
   pos_col[is.na(pos_col)] <- 0L
   code <- switch(positive,
                  lognormal = 0L, lognormal_trunc = 1L, ordinal = 2L, beta = 3L,
+                 gaussian = 4L,
                  stop("cover pointwise loglik: unknown positive family '",
                       positive, "'.", call. = FALSE))
   num <- function(x) if (is.null(x)) numeric(0) else as.numeric(x)
@@ -236,7 +244,7 @@
   sd_disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
   pos_col <- match(seq_len(N), enc$idx_pos); pos_col[is.na(pos_col)] <- 0L
   code <- switch(positive, lognormal = 0L, lognormal_trunc = 1L, ordinal = 2L,
-                 beta = 3L,
+                 beta = 3L, gaussian = 4L,
                  stop("cover PIT: unknown positive family '", positive, "'.",
                       call. = FALSE))
   num <- function(x) if (is.null(x)) numeric(0) else as.numeric(x)
@@ -260,6 +268,12 @@
   fit.stat <- match.arg(fit.stat)
   enc      <- object$encoding
   positive <- object$positive %||% "lognormal"
+  if (identical(positive, "gaussian")) {
+    stop("tobs_ppc() is not defined for cover(response = \"gaussian\"): the ",
+         "Freeman-Tukey and chi-squared discrepancies assume a non-negative ",
+         "response, but the identity-Gaussian arm is unbounded. Use tobs_waic() ",
+         "/ tobs_loo() for model comparison.", call. = FALSE)
+  }
   e <- .tobs_cover_eta_draws(object, n.draws = n.samples)
   S <- nrow(e$eta_occ)
   y_pos <- enc$pos_data$y
@@ -269,7 +283,7 @@
                  exp(y_pos) else y_pos
   trunc_u <- if (positive == "lognormal_trunc") enc$pos_data$trunc_upper else numeric(0)
   code <- switch(positive, lognormal = 0L, lognormal_trunc = 1L, ordinal = 2L,
-                 beta = 3L,
+                 beta = 3L, gaussian = 4L,
                  stop("cover PPC: unknown positive family '", positive, "'.",
                       call. = FALSE))
   # The occurrence + cover replicates draw from R's RNG stream in the C++ kernel
@@ -379,6 +393,9 @@ predict.cover_fit <- function(object, newdata = NULL,
   positive <- object$positive %||% "lognormal"
   mu <- if (positive %in% c("beta", "beta_oi")) {
     stats::plogis(eta_pos)
+  } else if (identical(positive, "gaussian")) {
+    # Identity-Gaussian arm (gcol33/tulpaObs#112): mu = eta on the response scale.
+    eta_pos
   } else {
     exp(eta_pos + object$sigma_pos^2 / 2)
   }
@@ -407,7 +424,7 @@ print.cover_fit <- function(x, ...) {
   cat(sprintf("  N total      : %d\n", x$n_total))
   cat(sprintf("  N positive   : %d (%.1f%%)\n",
               x$n_positive, 100 * x$n_positive / x$n_total))
-  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
+  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
     cat(sprintf("  sigma_pos    : %.4f\n", x$sigma_pos))
   } else {
     cat(sprintf("  phi_pos      : %.4f\n", x$phi_pos))
@@ -425,9 +442,10 @@ print.cover_fit <- function(x, ...) {
   cat("\nPresence (binomial logit):\n")
   print(.coef_table(x$beta_occ, x$se_occ))
   pos_header <- switch(positive,
-    beta    = "Positive (beta, logit link, on y > 0):",
-    beta_oi = "Positive interior (one-inflated beta, logit link, on 0 < y < 1):",
-    ordinal = "Positive (ordinal interval-censored Gaussian on log y > 0):",
+    beta     = "Positive (beta, logit link, on y > 0):",
+    beta_oi  = "Positive interior (one-inflated beta, logit link, on 0 < y < 1):",
+    ordinal  = "Positive (ordinal interval-censored Gaussian on log y > 0):",
+    gaussian = "Positive (identity-Gaussian on y != 0):",
     "Positive (Gaussian on log y > 0):")
   cat("\n", pos_header, "\n", sep = "")
   print(.coef_table(x$beta_pos, x$se_pos))
@@ -468,7 +486,7 @@ print.summary.cover_fit <- function(x, ...) {
   cat("Cover hurdle fit summary\n")
   cat(sprintf("  positive part: %s\n", x$positive))
   cat(sprintf("  N total = %d, N positive = %d\n", x$n_total, x$n_positive))
-  if (x$positive %in% c("lognormal", "lognormal_trunc", "ordinal")) {
+  if (x$positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
     cat(sprintf("  sigma_pos = %.4f\n", x$sigma_pos))
   } else {
     cat(sprintf("  phi_pos   = %.4f\n", x$phi_pos))

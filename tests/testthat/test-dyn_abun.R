@@ -475,7 +475,7 @@ test_that("dyn_abun() areal ICAR recovers the initial-abundance slope + field", 
   expect_gt(mean(field_cor), 0.6)
 })
 
-test_that("dyn_abun() areal spatial: bym2 fits; nuts+spatial gated", {
+test_that("dyn_abun() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
   adj <- .da_grid_adj(4L)
@@ -486,9 +486,106 @@ test_that("dyn_abun() areal spatial: bym2 fits; nuts+spatial gated", {
   expect_identical(fit$method, "nested_laplace")
   expect_true(all(is.finite(vcov(fit))))
   expect_false(is.null(fit$spatial_field))
+  # NUTS + areal now samples an intrinsic icar() field via the #71 sum-to-zero
+  # reparameterisation (full recovery lives in test-count-spatial-nuts.R).
+  fit_icar <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = s$data,
+    family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y, method = "nuts",
+    control = list(n.iter = 40L, n.warmup = 40L, max.treedepth = 8L,
+                   verbose = FALSE, progress = FALSE))
+  expect_identical(fit_icar$method, "nuts")
+  expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
+})
+
+test_that("dyn_abun() temporal()-only field recovers the AR1 field + slope (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
+  # driver with a single temporal block on the initial-abundance arm (#114).
+  Tt <- 6L; per_t <- 20L; N <- Tt * per_t; Tocc <- 3L; J <- 2L
+  fcor <- slope <- rep(NA_real_, 6L)
+  for (s in seq_len(6L)) {
+    set.seed(800L + s)
+    period <- rep(seq_len(Tt), each = per_t)
+    rho <- 0.7; sig <- 0.6; u <- numeric(Tt)
+    u[1] <- stats::rnorm(1, 0, sig / sqrt(1 - rho^2))
+    for (t in 2:Tt) u[t] <- rho * u[t - 1] + stats::rnorm(1, 0, sig)
+    u <- u - mean(u)
+    x <- stats::rnorm(N)
+    lam1 <- exp(log(6) + 0.5 * x + u[period])
+    y <- array(0L, c(N, J, Tocc)); Ncur <- stats::rpois(N, lam1)
+    for (t in 1:Tocc) {
+      for (j in 1:J) y[, j, t] <- stats::rbinom(N, Ncur, 0.5)
+      if (t < Tocc) Ncur <- stats::rbinom(N, Ncur, 0.6) + stats::rpois(N, 2)
+    }
+    fit <- tryCatch(tobs(~ x + temporal(period, type = "ar1"),
+                         data = data.frame(x = x, period = period),
+                         family = dyn_abun(K_max = 30L), detection = ~ 1, y = y,
+                         method = "nested_laplace",
+                         control = list(verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_null(fit$spatial_field)                 # temporal-only: no areal field
+      expect_length(fit$temporal_field, Tt)
+    }
+    slope[s] <- fit$means[["lambda_x"]]
+    if (length(fit$temporal_field) == Tt) fcor[s] <- abs(stats::cor(fit$temporal_field, u))
+  }
+  ok <- is.finite(slope)
+  expect_gte(mean(ok), 0.66)
+  expect_lt(abs(mean(slope[ok]) - 0.5), 0.12)        # initial-abundance slope recovered
+  expect_gt(mean(fcor[ok], na.rm = TRUE), 0.8)       # AR1 temporal field recovered
+})
+
+test_that("dyn_abun() NUTS + temporal field samples the AR1 field, 0 divergences (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A fixed-hyper non-centered temporal field rides the SAME dyn_abun NUTS field
+  # block as the areal field (nuts_field_block.h), with field_map = period index
+  # and a temporal whitened loading fixed at the nested-Laplace temporal-only
+  # posterior mean. Structurally identical to the recovery-tested NUTS + areal
+  # path (test-count-spatial-nuts.R); the forward-HMM makes long chains costly, so
+  # this asserts it samples cleanly (0 divergences) and recovers the AR1 field --
+  # a fuller recovery lives in the probe (dev_notes; cor 0.999). ar1 is full rank,
+  # so the field is NOT sum-to-zero constrained (unlike the intrinsic areal case).
+  Tt <- 6L; per_t <- 20L; N <- Tt * per_t; Tocc <- 3L; J <- 2L
+  set.seed(801L)
+  period <- rep(seq_len(Tt), each = per_t)
+  rho <- 0.7; sig <- 0.6; u <- numeric(Tt)
+  u[1] <- stats::rnorm(1, 0, sig / sqrt(1 - rho^2))
+  for (t in 2:Tt) u[t] <- rho * u[t - 1] + stats::rnorm(1, 0, sig)
+  u <- u - mean(u)
+  x <- stats::rnorm(N)
+  lam1 <- exp(log(6) + 0.5 * x + u[period])
+  y <- array(0L, c(N, J, Tocc)); Ncur <- stats::rpois(N, lam1)
+  for (t in 1:Tocc) {
+    for (j in 1:J) y[, j, t] <- stats::rbinom(N, Ncur, 0.5)
+    if (t < Tocc) Ncur <- stats::rbinom(N, Ncur, 0.6) + stats::rpois(N, 2)
+  }
+  fit <- tobs(~ x + temporal(period, type = "ar1"),
+              data = data.frame(x = x, period = period),
+              family = dyn_abun(K_max = 30L), detection = ~ 1, y = y, method = "nuts",
+              control = list(n.iter = 40L, n.warmup = 40L, max.treedepth = 6L,
+                             verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nuts")
+  expect_equal(fit$nuts$divergent_total, 0)
+  expect_length(fit$temporal_field, Tt)
+  expect_null(fit$spatial_field)
+  expect_gt(abs(stats::cor(fit$temporal_field, u)), 0.6)
+})
+
+test_that("dyn_abun() NUTS + temporal + areal errors (temporal-only under NUTS, #114)", {
+  # NUTS + temporal runs the fixed-hyper temporal field ON ITS OWN; a simultaneous
+  # areal field composes with temporal only under nested_laplace.
+  adj <- .da_grid_adj(4L); ng <- nrow(adj)
+  set.seed(9); period <- rep(1:4, length.out = ng)
+  y <- array(rpois(ng * 2L * 3L, 3), c(ng, 2L, 3L))
   expect_error(
-    tobs(formula = ~ abund_cov1 + icar(graph = adj), data = s$data,
-         family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y, method = "nuts",
-         control = list(n.iter = 20L, n.warmup = 10L)),
-    "proper-CAR|car_proper")
+    tobs(~ abund_cov1 + icar(graph = adj) + temporal(period, type = "ar1"),
+         data = data.frame(abund_cov1 = rnorm(ng), period = period),
+         family = dyn_abun(K_max = 20L), detection = ~ 1, y = y, method = "nuts",
+         control = list(verbose = FALSE, progress = FALSE)),
+    "temporal"
+  )
 })

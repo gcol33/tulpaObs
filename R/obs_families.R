@@ -178,7 +178,13 @@ jsdm <- function() {
 #'
 #' @param response The response distribution: `"poisson"` (log link),
 #'   `"negbin"` (negative binomial, log link, an estimated size / dispersion),
-#'   or `"gaussian"` (identity link, an estimated residual variance).
+#'   `"gaussian"` (identity link, an estimated residual variance), or
+#'   `"binomial"` (logit link, `k` successes out of `n` trials per site). The
+#'   binomial response is the detection-free binomial GLMM of `spOccupancy`
+#'   (`svcPGBinom`): supply the per-site trial count as `trials =` on [tobs()]
+#'   (default 1, i.e. a Bernoulli response). Unlike the count / Gaussian areal
+#'   fit, a binomial areal field is identified (the variance is pinned by `n`),
+#'   so an `icar()` / `car_proper()` term composes with any `trials`.
 #' @return A `tobs_family` object.
 #' @seealso [abun()] (N-mixture: latent abundance + detection), [jsdm()]
 #'   (occurrence GLMM, no detection).
@@ -186,7 +192,7 @@ jsdm <- function() {
 #' @examples
 #' f <- count("poisson")
 #' f
-count <- function(response = c("poisson", "negbin", "gaussian")) {
+count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
   response <- match.arg(response)
   obs_family(
     name           = "count",
@@ -441,7 +447,9 @@ count <- function(response = c("poisson", "negbin", "gaussian")) {
 #' structure.
 #'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover
-#'   in (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#'   in (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
+#'   identity-Gaussian magnitude on a real, unbounded scale -- the delta-normal
+#'   hurdle; not for cover fractions, which stay on `"beta"`/`"lognormal"`).
 #' @param cover_aggregate how the cover arm collapses per occupancy unit on the
 #'   shared-field spatial path: `"mean"`, `"median"`, `"latent"` (a per-unit
 #'   cover random effect integrated out), or `"none"` (per-visit). `NULL`
@@ -470,7 +478,7 @@ count <- function(response = c("poisson", "negbin", "gaussian")) {
 #' summary(fit)
 #' }
 #' @export
-occu_cover <- function(response = c("beta", "lognormal"),
+occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
                        cover_aggregate = NULL) {
   positive <- match.arg(response)
   if (!is.null(cover_aggregate)) {
@@ -481,10 +489,10 @@ occu_cover <- function(response = c("beta", "lognormal"),
     name           = "occu_cover",
     class_long     = "joint occupancy-detection + cover hurdle",
     latent         = "bernoulli",
-    observation    = if (positive == "beta")
-                       "detection_plus_beta"
-                     else
-                       "detection_plus_lognormal",
+    observation    = switch(positive,
+                            beta      = "detection_plus_beta",
+                            gaussian  = "detection_plus_gaussian",
+                            "detection_plus_lognormal"),
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
@@ -1385,7 +1393,13 @@ occu_categorical <- function(classes = NULL) {
 #'     `method = "nested_laplace"`;
 #'   * `"ordinal"` -- an interval-censored Gaussian on log-cover with KNOWN
 #'     class thresholds (an ordered probit for Braun-Blanquet-style class data),
-#'     set with `breaks`. Requires `method = "nested_laplace"`.
+#'     set with `breaks`. Requires `method = "nested_laplace"`;
+#'   * `"gaussian"` -- an identity-Gaussian magnitude (the delta-normal hurdle):
+#'     Bernoulli presence times a Gaussian on the raw response. For a
+#'     pre-transformed or otherwise unbounded response on a real scale (it
+#'     permits negative fitted values), NOT for cover fractions in (0, 1); those
+#'     stay on `"beta"` / `"lognormal"` / `"ordinal"`. Presence is the nonzero
+#'     sentinel (`y != 0`) rather than `y > 0`.
 #' @param breaks for `positive = "ordinal"` only, the interior cover-class
 #'   boundaries on the (0, 1) cover-fraction scale (strictly ascending, all in
 #'   (0, 1)); the open outer classes are added automatically. `NULL` for the
@@ -1399,7 +1413,7 @@ occu_categorical <- function(classes = NULL) {
 #' }
 #' @export
 cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc",
-                               "ordinal"),
+                               "ordinal", "gaussian"),
                   breaks = NULL) {
   positive <- match.arg(response)
   # The ordinal positive arm is an interval-censored Gaussian on log-cover with
@@ -1432,7 +1446,8 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
                             beta_oi         = "binomial_plus_beta_one_inflated",
                             lognormal       = "binomial_plus_lognormal",
                             lognormal_trunc = "binomial_plus_lognormal_trunc",
-                            ordinal         = "binomial_plus_ordinal"),
+                            ordinal         = "binomial_plus_ordinal",
+                            gaussian        = "binomial_plus_gaussian"),
     replicates     = "single",
     default_engine = "laplace",
     status         = "working",
