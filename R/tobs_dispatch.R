@@ -589,6 +589,16 @@
   }
   vd <- .normalize_visits(visits, detection, n_sites = nrow(y),
                           max_visits = ncol(y))
+  # Zero-inflated N-mixture (zip / zinb, gcol33/tulpaObs#116) is the non-spatial
+  # laplace path only in v1; gate here (before engine routing) so a nuts /
+  # nested_laplace request errors with a pointer instead of silently dropping the
+  # structural-zero component down a non-ZI sampler.
+  if ((family$params$mixture %||% "poisson") %in% c("zip", "zinb") &&
+      !identical(engine %||% "laplace", "laplace")) {
+    stop(sprintf(paste0("abun(mixture = \"%s\") supports method = \"laplace\" ",
+                        "only; got \"%s\"."), family$params$mixture, engine),
+         call. = FALSE)
+  }
   model <- .tobs_build_model(
     occ_formula        = formula,
     det_formula        = vd$det_formula,

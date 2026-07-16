@@ -810,7 +810,7 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
   invisible(NULL)
 }
 
-abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
   .tobs_check_K_max(K_max, "abun")
   obs_family(

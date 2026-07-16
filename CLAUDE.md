@@ -275,6 +275,23 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   (`Var=lambda+lambda^2/r`). Non-spatial: `log_r` jointly estimated, trailing vcov
   coord (`nmix_dispersion`, delta `r_sd`). Spatial: `r` grid-integrated
   (`r_mean`/`r_sd` in `nmix_hyper$r`). Matches `unmarked::pcount(mixture="NB")`.
+- **Zero-inflated** (`abun(mixture="zip"/"zinb")`, #116): structural-zero mixture
+  `L_i = omega*1{all y_i=0} + (1-omega)*L_royle_i`. PURE-R additive layer over
+  `nmix_site_marginal()` (no kernel change; plain P/NB paths byte-identical),
+  `.tobs_fit_nmix_zip` (`R/nmix_zip.R`) L-BFGS-B over theta
+  `[beta_lambda|beta_p|logit_omega|(log_r)]`, vcov = inv numeric Hessian. omega
+  intercept-only; `logit_omega` a model coord (in `means`/`vcov`/`sds`, surfaced
+  by `summary` like `log_r`, NOT the per-process `coef()` list); `fit$zi_omega`
+  = omega, `fit$zero_inflated`. Box-bounds only the pathological corners
+  (`logit_omega`, `log_r`) so a degenerate seed can't diverge on the ZINB
+  zero-source ridge; betas unbounded (no interior bias). ZIP recovers cleanly
+  (betas/omega, 95% slope coverage >=0.85, 15 seeds); ZINB weakly identified
+  (structural omega vs NB overdispersion both absorb zeros), recovers in a
+  higher-count regime (median over 12 seeds). Gated at `.dispatch_abun`
+  (non-spatial laplace only; nuts/nested_laplace/structured-term -> pointer, no
+  silent drop). `simulate_abun(mixture=, omega=)`. `test-abun-zip.R`. NUTS +
+  areal + zero-inflation covariate design = follow-ups (the marginal is the
+  additive layer they share).
 - **Grouped RE** (`abun()` + `(1|g)`/random slope, either arm; #13): site-level RE on
   abundance OR detection. Grouping = non-species; RE = subset of coefs on ONE arm.
   `.tobs_fit_nmix_re()` warm-starts no-RE betas, refines via `.tobs_nmix_re_aghq()`

@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.137 (2026-07-17)
+
+* Zero-inflated N-mixture abundance: `abun(mixture = "zip")` / `"zinb"` (#116).
+  A structural-zero share `omega` of sites have `N = 0` regardless of `lambda`
+  (`L_i = omega * 1{all y_i = 0} + (1 - omega) * L_royle_i`). Implemented as a
+  pure-R additive layer over the shared per-site Royle marginal
+  (`nmix_site_marginal()`), so no marginal-kernel change and the plain
+  Poisson / negbin paths are byte-identical; `.tobs_fit_nmix_zip`
+  (`R/nmix_zip.R`) mode-finds by L-BFGS-B over
+  `[beta_lambda | beta_p | logit_omega | (log_r)]` with box bounds only on the
+  pathological `logit_omega` / `log_r` corners (betas unbounded, no interior
+  bias). `logit_omega` is a model coordinate in `coef`/`vcov`/`summary` (like the
+  negbin `log_r`); `fit$zi_omega` reports the structural-zero probability. ZIP
+  recovers betas + omega cleanly with calibrated slope coverage; ZINB is weakly
+  identified (structural zeros vs NB overdispersion both absorb zeros) and
+  recovers in a higher-count regime. Non-spatial laplace only in v1 -- a
+  nuts / nested_laplace / structured-term request errors at the dispatcher with a
+  pointer rather than silently dropping the zero-inflation. `simulate_abun(mixture
+  = "zip"/"zinb", omega =)`. `test-abun-zip.R`.
+
 ## 0.0.136 (2026-07-16)
 
 * Identity-Gaussian positive arm on the community and multiscale cover-hurdle

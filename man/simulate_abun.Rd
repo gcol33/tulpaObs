@@ -11,8 +11,9 @@ simulate_abun(
   n_det_covs = 1,
   beta_lambda = NULL,
   beta_p = NULL,
-  mixture = c("poisson", "negbin"),
+  mixture = c("poisson", "negbin", "zip", "zinb"),
   size = 2,
+  omega = 0.3,
   seed = NULL
 )
 }
@@ -31,13 +32,18 @@ log scale. Default \code{c(log(3), runif(n_abund_covs, -0.5, 0.5))}.}
 \item{beta_p}{Detection coefficients \code{c(intercept, slopes...)} on the logit
 scale. Default \code{c(0, runif(n_det_covs, -0.5, 0.5))} (intercept 0 = p 0.5).}
 
-\item{mixture}{Abundance mixing distribution: \code{"poisson"} (default) or
-\code{"negbin"} (negative binomial, overdispersed).}
+\item{mixture}{Abundance mixing distribution: \code{"poisson"} (default),
+\code{"negbin"} (negative binomial, overdispersed), or their zero-inflated
+counterparts \code{"zip"} / \code{"zinb"} (a structural-zero share \code{omega} of sites
+have \code{N = 0} regardless of \code{lambda}).}
 
-\item{size}{Negative-binomial size \code{r} (the \code{mixture = "negbin"} dispersion;
+\item{size}{Negative-binomial size \code{r} (the \code{"negbin"} / \code{"zinb"} dispersion;
 variance \code{lambda + lambda^2 / r}). Smaller \code{r} means more overdispersion;
 as \code{r} grows large the model approaches Poisson. Default 2. Ignored under
 Poisson.}
+
+\item{omega}{Structural-zero probability for \code{"zip"} / \code{"zinb"} (the share of
+sites with \code{N = 0} independent of \code{lambda}). Default 0.3. Ignored otherwise.}
 
 \item{seed}{Optional random seed.}
 }

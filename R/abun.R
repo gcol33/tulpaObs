@@ -115,6 +115,25 @@
                            verbose = TRUE) {
   method <- match.arg(method)
 
+  # Zero-inflated N-mixture (ZIP / ZINB, gcol33/tulpaObs#116): a structural-zero
+  # mixture over the Royle marginal, fit by a pure-R additive layer. v1 is the
+  # non-spatial laplace path with an intercept-only structural-zero probability;
+  # a spatial field / RE / NUTS on the ZI path are follow-ups (error rather than
+  # silently dropping the requested structure).
+  if (mixture %in% c("zip", "zinb")) {
+    if (!identical(method, "laplace")) {
+      stop(sprintf(paste0("abun(mixture = \"%s\") supports method = \"laplace\" ",
+                          "only; got \"%s\"."), mixture, method), call. = FALSE)
+    }
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(re)) {
+      stop("Zero-inflated N-mixture (zip / zinb) does not yet compose with a ",
+           "spatial / temporal / random-effect term; use mixture = \"poisson\" ",
+           "/ \"negbin\" for those, or drop the structured term.", call. = FALSE)
+    }
+    return(.tobs_fit_nmix_zip(model, mixture = mixture, K_max = K_max,
+                              verbose = verbose))
+  }
+
   # tulpaObs vocabulary ("poisson" / "negbin") -> tulpa's mixing-distribution
   # code ("P" / "NB"). The NB marginal sum and its analytic dispersion score
   # live in tulpa's N-mixture kernel; both the non-spatial and the areal
@@ -313,6 +332,16 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   beta_p      <- if (!is.null(raw$beta_p))      raw$beta_p      else raw$beta_p_mean
   means <- c(as.numeric(beta_lambda), as.numeric(beta_p))
 
+  # Zero-inflation structural-zero logit (gcol33/tulpaObs#116). Present only on
+  # the ZIP / ZINB path; the guard keeps the Poisson / NB layout byte-identical.
+  # It sits between the (lambda, p) block and the trailing log_r, matching the
+  # ZIP fitter's theta order [beta_lambda | beta_p | logit_omega | log_r].
+  has_omega <- is.finite(raw$logit_omega %||% NA_real_)
+  if (has_omega) {
+    nms   <- c(nms, "logit_omega")
+    means <- c(means, as.numeric(raw$logit_omega))
+  }
+
   # NB dispersion. The non-spatial fit estimates log_r jointly with the betas
   # and returns it as the last vcov coordinate, so it is carried as a model
   # coefficient (reported by coef() / vcov() / confint() with an SE). The
@@ -334,7 +363,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   # `.nmix_grid_vcov()`). Both carry the cross-arm (lambda, p) covariance, so
   # derived quantities that combine the two arms (expected counts lambda * p,
   # detection-corrected abundance) propagate the correlation.
-  vcov <- .nmix_vcov(raw, p_lam, p_p, p_extra = if (has_logr) 1L else 0L)
+  vcov <- .nmix_vcov(raw, p_lam, p_p,
+                     p_extra = (if (has_omega) 1L else 0L) + (if (has_logr) 1L else 0L))
   rownames(vcov) <- colnames(vcov) <- nms
   sds <- sqrt(pmax(diag(vcov), 0))
   names(sds) <- nms
@@ -433,7 +463,10 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
     mean_N = raw$mean_N, var_N = raw$var_N,
     boundary_weight = raw$boundary_weight,
     nmix_hyper = hyper,
-    mixture = if (is_nb) "negbin" else "poisson",
+    mixture = if (has_omega) (if (is_nb) "zinb" else "zip")
+              else if (is_nb) "negbin" else "poisson",
+    zero_inflated = has_omega,
+    zi_omega = if (has_omega) stats::plogis(as.numeric(raw$logit_omega)) else NULL,
     nmix_dispersion = dispersion,
     re_effects = re_block$re_effects,
     nmix_re = if (!is.null(re_post))
@@ -661,12 +694,16 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 #'   log scale. Default `c(log(3), runif(n_abund_covs, -0.5, 0.5))`.
 #' @param beta_p Detection coefficients `c(intercept, slopes...)` on the logit
 #'   scale. Default `c(0, runif(n_det_covs, -0.5, 0.5))` (intercept 0 = p 0.5).
-#' @param mixture Abundance mixing distribution: `"poisson"` (default) or
-#'   `"negbin"` (negative binomial, overdispersed).
-#' @param size Negative-binomial size `r` (the `mixture = "negbin"` dispersion;
+#' @param mixture Abundance mixing distribution: `"poisson"` (default),
+#'   `"negbin"` (negative binomial, overdispersed), or their zero-inflated
+#'   counterparts `"zip"` / `"zinb"` (a structural-zero share `omega` of sites
+#'   have `N = 0` regardless of `lambda`).
+#' @param size Negative-binomial size `r` (the `"negbin"` / `"zinb"` dispersion;
 #'   variance `lambda + lambda^2 / r`). Smaller `r` means more overdispersion;
 #'   as `r` grows large the model approaches Poisson. Default 2. Ignored under
 #'   Poisson.
+#' @param omega Structural-zero probability for `"zip"` / `"zinb"` (the share of
+#'   sites with `N = 0` independent of `lambda`). Default 0.3. Ignored otherwise.
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J count matrix), `data` (covariate data frame),
 #'   and `truth` (the coefficients, per-site `lambda`, `p`, latent `N`, and the
@@ -675,8 +712,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 simulate_abun <- function(N = 100, J = 4,
                           n_abund_covs = 2, n_det_covs = 1,
                           beta_lambda = NULL, beta_p = NULL,
-                          mixture = c("poisson", "negbin"), size = 2,
-                          seed = NULL) {
+                          mixture = c("poisson", "negbin", "zip", "zinb"),
+                          size = 2, omega = 0.3, seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
   if (is.null(beta_lambda)) beta_lambda <- c(log(3), stats::runif(n_abund_covs, -0.5, 0.5))
@@ -693,11 +730,14 @@ simulate_abun <- function(N = 100, J = 4,
 
   lambda <- exp(as.vector(X_lambda %*% beta_lambda))
   p      <- plogis(as.vector(X_det %*% beta_p))
-  Nlat   <- if (identical(mixture, "negbin")) {
-    stats::rnbinom(N, size = size, mu = lambda)
-  } else {
-    stats::rpois(N, lambda)
-  }
+  is_nb  <- mixture %in% c("negbin", "zinb")
+  is_zi  <- mixture %in% c("zip", "zinb")
+  Nlat   <- if (is_nb) stats::rnbinom(N, size = size, mu = lambda)
+            else       stats::rpois(N, lambda)
+  # Structural zeros: with probability omega the site is a structural zero
+  # (N = 0), independent of lambda.
+  struct0 <- if (is_zi) stats::rbinom(N, 1L, omega) == 1L else rep(FALSE, N)
+  Nlat[struct0] <- 0L
 
   y <- matrix(NA_integer_, N, J)
   for (i in seq_len(N)) {
@@ -710,6 +750,8 @@ simulate_abun <- function(N = 100, J = 4,
     truth = list(beta_lambda = beta_lambda, beta_p = beta_p,
                  lambda = lambda, p = p, N = Nlat,
                  mixture = mixture,
-                 size = if (identical(mixture, "negbin")) size else NA_real_)
+                 size  = if (is_nb) size else NA_real_,
+                 omega = if (is_zi) omega else NA_real_,
+                 struct0 = struct0)
   )
 }
