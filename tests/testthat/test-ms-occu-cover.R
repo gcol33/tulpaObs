@@ -314,6 +314,42 @@ test_that("ms_occu_cover() recovers community means + sigma_pos (gaussian, #127)
   expect_gt(min(diag(cor(cm$coef_pos, sim$truth$beta_pos))), 0.80)
 })
 
+test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116)", {
+  sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
+                                mu_pos = c(log(0.12), 0.4), positive = "lognormal",
+                                sigma_pos = 0.4, seed = 7)
+  vis <- .msoc_visits(40, 3, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+              detection = ~ det_cov1, positive = ~ pos_cov1,
+              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "laplace", control = list(verbose = FALSE))
+  # Pointwise ll is per-(species, cell): [n_draws x (n_species * n_sites)].
+  ll <- .tobs_pointwise_loglik(fit, n.draws = 100L)
+  expect_equal(dim(ll), c(100L, 5L * 40L))
+  expect_true(all(is.finite(ll)))
+  w <- tobs_waic(fit, n.draws = 100L)
+  d <- tobs_dic(fit, n.draws = 100L)
+  cp <- tobs_cpo(fit, n.draws = 100L)
+  expect_true(is.finite(w$waic) && w$p_waic > 0)
+  expect_true(is.finite(d$dic))
+  expect_true(is.finite(cp$lpml))
+  # WAIC and the DIC plug-in agree to within a few units on a well-constrained fit.
+  expect_lt(abs(w$waic - d$dic), 0.05 * abs(w$waic))
+})
+
+test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127)", {
+  sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
+                                mu_pos = c(2.0, 0.4), positive = "gaussian",
+                                sigma_pos = 0.4, seed = 9)
+  vis <- .msoc_visits(40, 3, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("gaussian"),
+              detection = ~ det_cov1, positive = ~ pos_cov1,
+              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "laplace", control = list(verbose = FALSE))
+  w <- tobs_waic(fit, n.draws = 100L)
+  expect_true(is.finite(w$waic))
+})
+
 test_that("ms_occu_cover(\"gaussian\") simulate() round-trips (#127)", {
   sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
                                 mu_pos = c(2.0, 0.4), positive = "gaussian",

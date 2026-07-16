@@ -612,8 +612,12 @@ Non-spatial Laplace only
 small-cluster attenuation (means do not); AGHQ-debiased BY DEFAULT below
 `re.aghq.maxdim` (4), above the cap EM variance = tested lower bound (tensor AGHQ
 exp in total RE dim). Flagged via `print.tobs_fit` +
-`fit$ms_community$var_attenuation` marker + `?ms_occu_cover` (#47). NUTS/negbin/
-dispersion RE pending.
+`fit$ms_community$var_attenuation` marker + `?ms_occu_cover` (#47). WAIC/DIC/CPO
+via `.tobs_ploglik_community_occu_cover` (`R/community_ploglik.R`, #116): the exact
+per-(species,cell) two-state occu_cover marginal (`.occu_cover_site_ll`, beta/
+lognormal/gaussian) scored over the community-mean pseudo-draws w/ per-species BLUP
+plugged in; routed via `.tobs_ploglik_ms_community`. NUTS/negbin/dispersion RE
+pending.
 
 ### `occu_multiscale_cover()` detail
 

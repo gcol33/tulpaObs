@@ -198,7 +198,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   # site) marginal scored over the community-mean pseudo-draws with per-species
   # BLUP deviations plugged in (R/community_ploglik.R).
   if ((object$model$model_type %||% "NULL") %in%
-      c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
+      c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover")) {
     return(.tobs_ploglik_ms_community(object, nd, n.threads = n.threads))
   }
 
@@ -247,7 +247,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
     return(.tobs_occu_cover_loglik_at_mean(object, n.draws))
   }
   if ((object$model$model_type %||% "NULL") %in%
-      c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
+      c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover")) {
     return(.tobs_community_loglik_at_mean(object))
   }
   if (identical(object$model$model_type %||% "NULL", "royle_nichols")) {

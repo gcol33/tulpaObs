@@ -180,12 +180,52 @@
   do.call(cbind, cols)
 }
 
+# Community joint occupancy + cover pointwise log-likelihood, columns
+# species-major: [n_draws x (n_species * n_sites)]. Per species the exact
+# two-state occu_cover marginal (.occu_cover_site_ll, the same source of truth
+# the fit's negative-log-posterior uses) is scored over the community-mean
+# pseudo-draws with the per-species BLUP deviation plugged into each arm; the
+# shared positive density handles beta / lognormal / gaussian (gcol33/tulpaObs#116).
+.tobs_ploglik_community_occu_cover <- function(object, draws) {
+  model <- object$model
+  cm    <- object$ms_community
+  n_sites <- model$n_sites; n_species <- model$n_species
+  mv      <- model$max_visits
+  pil <- model$process_info
+  p_occ <- pil[[1L]]$p; p_p <- pil[[2L]]$p; p_pos <- pil[[3L]]$p
+  occ_cols <- seq_len(p_occ)
+  p_cols   <- p_occ + seq_len(p_p)
+  pos_cols <- p_occ + p_p + seq_len(p_pos)
+  disp_col <- p_occ + p_p + p_pos + 1L
+  M <- nrow(draws)
+  cols <- vector("list", n_species)
+  for (s in seq_len(n_species)) {
+    # Per-species response slice; the shared community designs stay on model_s.
+    model_s <- model
+    model_s$y     <- matrix(model$y[, , s],     n_sites, mv)
+    model_s$valid <- matrix(model$valid[, , s], n_sites, mv)
+    model_s$y_pos <- matrix(model$y_pos[, , s], n_sites, mv)
+    ll_s <- matrix(0, M, n_sites)
+    for (m in seq_len(M)) {
+      bo   <- draws[m, occ_cols] + cm$blup_occ[s, ]
+      bp   <- draws[m, p_cols]   + cm$blup_p[s, ]
+      bpos <- draws[m, pos_cols] + cm$blup_pos[s, ]
+      eta  <- .occu_cover_eta_from_par(model_s, bo, bp, bpos)
+      ll_s[m, ] <- .occu_cover_site_ll(model_s, eta$psi, eta$p_mat, eta$ep_mat,
+                                       draws[m, disp_col])
+    }
+    cols[[s]] <- ll_s
+  }
+  do.call(cbind, cols)
+}
+
 # Dispatch: community pointwise log-likelihood given an explicit draw matrix.
 .tobs_ploglik_community <- function(object, draws, n.threads = 1L) {
   switch(object$model$model_type,
-    ms_occu     = .tobs_ploglik_community_twostate(object, draws),
-    ms_int_occu = .tobs_ploglik_community_twostate(object, draws),
-    ms_dyn_occu = .tobs_ploglik_community_dynamic(object, draws, n.threads),
+    ms_occu       = .tobs_ploglik_community_twostate(object, draws),
+    ms_int_occu   = .tobs_ploglik_community_twostate(object, draws),
+    ms_dyn_occu   = .tobs_ploglik_community_dynamic(object, draws, n.threads),
+    ms_occu_cover = .tobs_ploglik_community_occu_cover(object, draws),
     stop("No community pointwise log-likelihood for model_type = '",
          object$model$model_type, "'.", call. = FALSE))
 }
