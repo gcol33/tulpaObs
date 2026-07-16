@@ -108,8 +108,8 @@
     else              as.matrix(d$Z)
   }))
   if (ncol(Z_site) != dtot) {
-    stop(sprintf(".tobs_nmix_re_aghq: assembled Z_site has %d columns, ",
-                 "expected dtot = %d.", ncol(Z_site), dtot), call. = FALSE)
+    stop(sprintf(paste0(".tobs_nmix_re_aghq: assembled Z_site has %d columns, ",
+                        "expected dtot = %d."), ncol(Z_site), dtot), call. = FALSE)
   }
 
   orc <- make_oracle(if (arm == "lambda") 0L else 1L, Z_site, K_max)

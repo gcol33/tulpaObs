@@ -47,8 +47,8 @@
          call. = FALSE)
   }
   if (is.null(cutpoints) || length(cutpoints) != ncol(y) + 1L) {
-    stop(sprintf("cutpoints must have length ncol(y) + 1 = %d (the bin edges, ",
-                 "0 = c_0 < c_1 < ... < c_B).", ncol(y) + 1L), call. = FALSE)
+    stop(sprintf(paste0("cutpoints must have length ncol(y) + 1 = %d (the bin edges, ",
+                        "0 = c_0 < c_1 < ... < c_B)."), ncol(y) + 1L), call. = FALSE)
   }
   cutpoints <- as.numeric(cutpoints)
   if (any(diff(cutpoints) <= 0) || cutpoints[1] < 0) {

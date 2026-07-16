@@ -265,9 +265,9 @@
   n_spatial <- spatial$n_units %||%
     (if (!is.null(spatial$graph)) nrow(spatial$graph) else length(csr$n_neighbors))
   if (n_spatial != model$n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for the community ",
-                 "occupancy field.", n_spatial, model$n_sites), call. = FALSE)
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for the community ",
+                        "occupancy field."), n_spatial, model$n_sites), call. = FALSE)
   }
 
   # site -> spatial unit map: one unit per site (the areal occupancy field has

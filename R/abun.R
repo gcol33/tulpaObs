@@ -244,24 +244,24 @@
       max_iter = max_iter, tol = tol, verbose = verbose))
   }
   if (identical(spatial$type, "gp") || identical(spatial$type, "multiscale_gp")) {
-    stop(sprintf(
+    stop(sprintf(paste0(
       "N-mixture abundance supports the continuous field via spde(); the dense ",
       "GP term '%s' is not wired. Use spde() for a mesh-based continuous Matern ",
-      "field, or icar() / bym2() / car_proper() for an areal field.",
+      "field, or icar() / bym2() / car_proper() for an areal field."),
       spatial$type), call. = FALSE)
   }
   if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
-    stop(sprintf(
-      "N-mixture abundance supports the areal spatial terms icar() / bym2() / %s",
+    stop(sprintf(paste0(
+      "N-mixture abundance supports the areal spatial terms icar() / bym2() / ",
       "car_proper() and the continuous mesh field spde() under method = ",
       "\"nested_laplace\"; got '%s'. (car() is the improper non-intrinsic CAR; ",
       "use icar() for the intrinsic field.)"),
-      spatial$type, call. = FALSE)
+      spatial$type), call. = FALSE)
   }
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for N-mixture.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for N-mixture."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
   # icar/bym2/car_proper precompute the CSR adjacency; fall back to deriving

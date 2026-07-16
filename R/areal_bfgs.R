@@ -503,8 +503,8 @@
     stop(sprintf("%s() areal spatial supports icar() / car_proper() / bym2(); got '%s'.",
                  family, spatial$type), call. = FALSE)
   if (spatial$n_units != n_sites)
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for %s.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for %s."),
                  spatial$n_units, n_sites, family), call. = FALSE)
   adj <- if (!is.null(spatial$graph)) as.matrix(spatial$graph) else
     stop(sprintf("%s() spatial term must carry an adjacency graph.", family), call. = FALSE)

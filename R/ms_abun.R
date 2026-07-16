@@ -257,23 +257,24 @@
     return(build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial))
   }
   if (identical(spatial$type, "gp") || identical(spatial$type, "multiscale_gp")) {
-    stop(sprintf(
+    stop(sprintf(paste0(
       "ms_abun() spatial supports the continuous field via spde(); the dense ",
       "GP term '%s' is not wired. Use spde() for a mesh-based continuous Matern ",
-      "field, or icar() / bym2() / car_proper() for an areal field.",
+      "field, or icar() / bym2() / car_proper() for an areal field."),
       spatial$type), call. = FALSE)
   }
   if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
-    stop(sprintf(
+    stop(sprintf(paste0(
       "ms_abun() spatial supports the areal terms icar() / bym2() / car_proper() ",
       "and the continuous mesh field spde() under method = \"nested_laplace\"; ",
       "got '%s'. (car() is the improper non-intrinsic CAR; use icar() for the ",
-      "intrinsic field.)"), spatial$type, call. = FALSE)
+      "intrinsic field.)"), spatial$type), call. = FALSE)
   }
   if ((spatial$n_units %||% n_sites) != n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for the community N-mixture.",
-                 spatial$n_units, n_sites), call. = FALSE)
+    stop(sprintf(paste0(
+      "spatial term has %d units but the model has %d sites; one ",
+      "spatial unit per site is required for the community N-mixture."),
+      spatial$n_units, n_sites), call. = FALSE)
   }
   lf  <- .tobs_ms_nmix_longform(model)
   csr <- .nmix_spatial_csr(spatial)
@@ -318,9 +319,9 @@
   n_sites   <- model$n_sites
   n_species <- model$n_species
   if ((spatial$n_units %||% n_sites) != n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required.", spatial$n_units, n_sites),
-         call. = FALSE)
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required."),
+                 spatial$n_units, n_sites), call. = FALSE)
   }
   csr <- .nmix_spatial_csr(spatial)
 
@@ -523,9 +524,9 @@
     hyper$rho <- c(mean = rho_mean, sd = rho_sd)
   }
   if (any(boundary > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(
+    warning(sprintf(paste0(
       "Max posterior weight on N = K_max is %.2e at one or more grid nodes; ",
-      "raise K_max.", max(boundary, na.rm = TRUE)), call. = FALSE)
+      "raise K_max."), max(boundary, na.rm = TRUE)), call. = FALSE)
   }
 
   # main-convention `raw` -> the SAME assembler the EM path uses, so the fit

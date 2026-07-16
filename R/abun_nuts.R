@@ -340,8 +340,8 @@
                  spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for abun NUTS.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for abun NUTS."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
   is_nb <- identical(mixture, "negbin")

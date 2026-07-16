@@ -546,8 +546,8 @@
   n_sites   <- model$n_sites
   n_species <- model$n_species
   if ((spatial$n_units %||% n_sites) != n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for ms_abun NUTS.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for ms_abun NUTS."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
   X_lambda <- model$X_processes[[1L]]

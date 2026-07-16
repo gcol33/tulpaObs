@@ -221,8 +221,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   }
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites) {
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for removal.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for removal."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
   # Spatial + temporal: route through the shared areal-BFGS driver (a second
@@ -370,8 +370,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                         "(tulpaObs#72)"), spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites)
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for removal NUTS.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for removal NUTS."),
                  spatial$n_units, n_sites), call. = FALSE)
   is_nb <- mixture %in% c("negbin", "NB")
   mix_code <- if (is_nb) "NB" else "P"

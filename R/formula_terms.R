@@ -907,9 +907,9 @@
   .tobs_reject_weighted_spatial(spec, "cover() spatial")
   if (identical(spec$type, "spde")) return(spec$tulpa_spec)
   if (is.null(spec$graph)) {
-    stop(sprintf(
+    stop(sprintf(paste0(
       "cover() spatial supports areal terms icar()/bym2()/car()/car_proper() ",
-      "(got '%s').", spec$type), call. = FALSE)
+      "(got '%s')."), spec$type), call. = FALSE)
   }
   level_args <- if (!is.null(spec$group_var)) {
     list(level = "group", group_var = spec$group_var)

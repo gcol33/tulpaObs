@@ -527,7 +527,7 @@ tobs <- function(formula,
     ms_dyn_occu = .dispatch_ms_dyn_occu,
     ms_int_occu = .dispatch_ms_int_occu,
     stop(sprintf(
-      "Internal error: family %q has status 'working' but no dispatcher.",
+      "Internal error: family '%s' has status 'working' but no dispatcher.",
       family$name
     ), call. = FALSE)
   )

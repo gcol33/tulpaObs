@@ -122,8 +122,8 @@
                         "(tulpaObs#72)"), spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites)
-    stop(sprintf("spatial term has %d units but the model has %d sites; one ",
-                 "spatial unit per site is required for fp_occu NUTS.",
+    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                        "spatial unit per site is required for fp_occu NUTS."),
                  spatial$n_units, n_sites), call. = FALSE)
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]

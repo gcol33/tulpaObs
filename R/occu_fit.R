@@ -334,6 +334,22 @@
   }
 
   if (method == "laplace") {
+    # .tobs_laplace() consumes the spatial and re terms; it has no temporal
+    # channel, so a temporal() term reaching here would be dropped and the fit
+    # would silently omit the field the user asked for. The temporal field is
+    # assembled as a latent block by the nested-Laplace path
+    # (.tobs_block_from_temporal, R/em_nested_laplace.R), where it composes with
+    # the areal field and the iid blocks, and is populated directly on the
+    # sampler (populate_temporal, src/occu_fit.cpp).
+    if (!is.null(temporal)) {
+      stop(paste0(
+        "temporal() is not consumed by the Laplace engine (method = \"laplace\" ",
+        "/ \"laplace_sla\" / \"laplace_gibbs\" / \"laplace_mi\"); the temporal ",
+        "field is grid-integrated under method = \"nested_laplace\" (where it ",
+        "composes with an areal field and re() blocks) and sampled under ",
+        "method = \"nuts\". Re-fit with one of those, or drop the term."),
+        call. = FALSE)
+    }
     fit <- .tobs_laplace(fit_model, spatial = spatial, re = re,
                          priors = priors,
                          sigma_beta = sigma.beta,

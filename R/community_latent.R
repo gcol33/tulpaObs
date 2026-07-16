@@ -147,8 +147,8 @@
     node_of_site <- as.integer(model$data[[gv]])
     if (length(node_of_site) != Ns || anyNA(node_of_site) ||
         min(node_of_site) < 1L || max(node_of_site) > n_nodes) {
-      stop(sprintf("spatial group_var '%s' must be an integer cell index in ",
-                   "1..%d, one per site (%d sites).", gv, n_nodes, Ns),
+      stop(sprintf(paste0("spatial group_var '%s' must be an integer cell index in ",
+                          "1..%d, one per site (%d sites)."), gv, n_nodes, Ns),
            call. = FALSE)
     }
     if (n_nodes != Ns) {
@@ -156,9 +156,9 @@
                                    dims = c(n_nodes, Ns))
     }
   } else if (n_nodes != Ns) {
-    stop(sprintf("icar graph has %d nodes but the model has %d sites; add ",
-                 "group_var = \"<cell>\" to map sites to cells, or use one ",
-                 "node per site.", n_nodes, Ns), call. = FALSE)
+    stop(sprintf(paste0("icar graph has %d nodes but the model has %d sites; add ",
+                        "group_var = \"<cell>\" to map sites to cells, or use one ",
+                        "node per site."), n_nodes, Ns), call. = FALSE)
   }
 
   if (identical(ptype, "bym2") &&

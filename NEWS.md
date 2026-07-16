@@ -1,5 +1,39 @@
 # tulpaObs NEWS
 
+## 0.0.130 (2026-07-16)
+
+* `temporal()` now errors on the Laplace engine instead of being dropped.
+  `.tobs_laplace()` consumes the `spatial` and `re` terms but has no temporal
+  channel, and `.tobs_fit_model()` never passed one, so
+  `tobs(~ x + temporal(year), family = occu(), method = "laplace")` -- the
+  DEFAULT method for `occu()` / `dyn_occu()` / `int_occu()` -- silently fitted a
+  model without the field the formula asked for, with no warning. The term is
+  carried by `nested_laplace` (grid-integrated, composing with an areal field and
+  `re()` blocks) and by `nuts` (`populate_temporal`); the gate points at both.
+  This is the failure the `svc()` gate directly above it already guarded against.
+
+* Repaired 25 malformed `sprintf()` gate messages across 15 files. A multi-line
+  message written as comma-separated literals inside `sprintf()` without a
+  `paste0()` wrapper leaves only the FIRST literal as the format string; the rest
+  silently become `...` arguments. 17 of the 25 errored at call time rather than
+  reporting anything: where a string literal landed on a `%d` (every
+  "spatial term has %d units but the model has %d sites" gate -- `abun`,
+  `ms_abun`, `removal`, `distance`, `fp_occu`, `dyn_abun`, `ms_occu`, and the
+  shared `areal_bfgs` driver -- plus the `distance()` / `ms_distance()`
+  `cutpoints` length check and the community `icar` node-count check), and one
+  invalid `%q` directive in the `.tobs_family_methods` dispatcher fallback. The
+  remaining 8 truncated mid-sentence, dropping the value the user needed: the
+  `abun()` / `ms_abun()` continuous-field gates stopped before naming `spde()`,
+  the package's only continuous-field escape hatch for that family, and the
+  unsupported-areal-type gate never interpolated the type it had rejected.
+  Every gate now emits its full message with the offending value interpolated.
+
+* `tests/testthat/test-gate-messages.R` covers both: the message text on the
+  repaired gates, and a package-wide AST scan asserting no `sprintf()` call in
+  `R/` has a format/argument arity mismatch or an invalid directive. Gates fire
+  from error paths, so no fitting test exercised any of them -- which is how 25
+  broken messages accumulated unnoticed.
+
 ## 0.0.129 (2026-07-16)
 
 Requires tulpa >= 0.0.82 (ABI 34) and rebuilds against it.

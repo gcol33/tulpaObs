@@ -154,8 +154,8 @@
   gv <- fields[[1L]]$group_var
   if (!is.null(gv)) {
     if (is.null(model$data) || !gv %in% names(model$data)) {
-      stop(sprintf("occu joint: group_var '%s' is not a column of the ",
-                   "model data.", gv), call. = FALSE)
+      stop(sprintf(paste0("occu joint: group_var '%s' is not a column of the ",
+                          "model data."), gv), call. = FALSE)
     }
     site_cell <- as.integer(model$data[[gv]])
     if (length(site_cell) != n_sites || anyNA(site_cell) ||
@@ -355,10 +355,10 @@
   }
   if (length(ok_cells) < length(fit$log_marginal)) {
     n_bad <- length(fit$log_marginal) - length(ok_cells)
-    warning(sprintf(
+    warning(sprintf(paste0(
       "occu joint: dropping %d / %d outer-grid cell(s) ",
-      n_bad, length(fit$log_marginal)),
-      "whose inner Newton did not converge.", call. = FALSE)
+      "whose inner Newton did not converge."),
+      n_bad, length(fit$log_marginal)), call. = FALSE)
   }
   w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
   w     <- w_raw / sum(w_raw)
