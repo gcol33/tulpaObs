@@ -394,6 +394,7 @@ private:
 
 typedef OccuMultiscaleCoverCoupling<LognormalPositive> OccuMultiscaleCoverLognormalCoupling;
 typedef OccuMultiscaleCoverCoupling<BetaPositive>      OccuMultiscaleCoverBetaCoupling;
+typedef OccuMultiscaleCoverCoupling<GaussianPositive>  OccuMultiscaleCoverGaussianCoupling;
 
 } // namespace tulpaObs
 

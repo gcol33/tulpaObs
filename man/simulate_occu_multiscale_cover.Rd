@@ -12,7 +12,7 @@ simulate_occu_multiscale_cover(
   beta_theta = c(0.2, 0.5),
   beta_p = c(0, 0.5),
   beta_pos = c(log(0.1), -0.4),
-  positive = c("lognormal", "beta"),
+  positive = c("lognormal", "beta", "gaussian"),
   phi = 0.35,
   adj = NULL,
   sigma = 0.7,

@@ -33,7 +33,7 @@ struct MsCoverNutsModel {
     int p_psi = 0, p_theta = 0, p_p_site = 0, p_p_visit = 0,
         p_pos_site = 0, p_pos_visit = 0;
     int o_psi = 0, o_theta = 0, o_p = 0, o_pos = 0, o_disp = 0, total = 0;
-    bool is_beta = false;
+    int positive = 0;   // 0 = lognormal, 3 = beta, 4 = gaussian
     double sigma_beta = 5.0;
 
     Rcpp::NumericMatrix X_psi;        // n_cells   x p_psi
@@ -57,7 +57,7 @@ inline MsCoverNutsModel ms_cover_nuts_build(const Rcpp::List& spec) {
     m.X_pos_site = Rcpp::as<Rcpp::NumericMatrix>(spec["X_pos_site"]);
     m.n_cells    = Rcpp::as<int>(spec["n_cells"]);
     m.max_visits = Rcpp::as<int>(spec["max_visits"]);
-    m.is_beta    = Rcpp::as<bool>(spec["is_beta"]);
+    m.positive   = Rcpp::as<int>(spec["positive"]);
 
     m.n_plots    = m.X_theta.nrow();
     m.p_psi      = m.X_psi.ncol();
@@ -109,19 +109,13 @@ inline MsCoverNutsModel ms_cover_nuts_build(const Rcpp::List& spec) {
 // log f_pos at a detected visit (mirrors the policy dispatch). `disp` is the
 // raw dispersion parameter on the natural scale: phi (beta precision) or sigma
 // (lognormal SD), both = exp(log_disp).
-inline double ms_cover_pos_logdens(bool is_beta, double y_pos, double eta, double disp) {
-    return is_beta ? BetaPositive::log_density(y_pos, eta, disp)
-                   : LognormalPositive::log_density(y_pos, eta, disp);
+inline double ms_cover_pos_logdens(int positive, double y_pos, double eta, double disp) {
+    return pos_log_density(positive, y_pos, eta, disp);
 }
-inline void ms_cover_pos_grad(bool is_beta, double y_pos, double eta, double disp,
+inline void ms_cover_pos_grad(int positive, double y_pos, double eta, double disp,
                               double& g_eta, double& g_logdisp) {
-    if (is_beta) {
-        g_eta     = BetaPositive::grad_eta(y_pos, eta, disp);
-        g_logdisp = BetaPositive::grad_logdisp(y_pos, eta, disp);
-    } else {
-        g_eta     = LognormalPositive::grad_eta(y_pos, eta, disp);
-        g_logdisp = LognormalPositive::grad_logdisp(y_pos, eta, disp);
-    }
+    g_eta     = pos_grad_eta(positive, y_pos, eta, disp);
+    g_logdisp = pos_grad_logdisp(positive, y_pos, eta, disp);
 }
 
 // Build the [n_plots x J] eta matrices (site predictor broadcast across a
@@ -222,9 +216,9 @@ inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
                             ge_p[row] += 1.0 - p_v;
                             const double eta_po = eta_pos[row];
                             const double ypos   = m.y_pos[row];
-                            lp += ms_cover_pos_logdens(m.is_beta, ypos, eta_po, disp);
+                            lp += ms_cover_pos_logdens(m.positive, ypos, eta_po, disp);
                             double g_eta = 0.0, g_ld = 0.0;
-                            ms_cover_pos_grad(m.is_beta, ypos, eta_po, disp, g_eta, g_ld);
+                            ms_cover_pos_grad(m.positive, ypos, eta_po, disp, g_eta, g_ld);
                             ge_pos[row] += g_eta;
                             ge_logdisp  += g_ld;
                         } else {

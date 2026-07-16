@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.136 (2026-07-16)
+
+* Identity-Gaussian positive arm on the community and multiscale cover-hurdle
+  families (#127): `ms_occu_cover(response = "gaussian")` and
+  `occu_multiscale_cover(response = "gaussian")`, the delta-normal magnitude
+  (`mu = eta`, shared residual SD `sigma_pos`, no log Jacobian) for a
+  pre-transformed / unbounded positive response. The density
+  (`GaussianPositive`) already shipped for the single-species arms (#112); this
+  threads the `response` enum, the `OccuMultiscaleCoverGaussianCoupling` typedef,
+  and a shared positive-code (`0` lognormal / `3` beta / `4` gaussian) through
+  the community Laplace-EM, the multiscale nested-Laplace coupling, the
+  non-spatial Laplace / NUTS marginal, the WAIC ploglik kernel, and the simulate
+  draws (`.occu_cover_pos_code`, replacing the binary `is_beta` branches). The
+  gaussian residual SD recovers to lognormal parity (0.392 vs 0.392 at a matched
+  config); the shared-field spatial-factor `ms_occu_cover()` variant stays
+  lognormal-only and now rejects the new arm explicitly.
+
 ## 0.0.135 (2026-07-16)
 
 * Detection-arm areal fields on the observation families (#114). A

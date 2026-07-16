@@ -240,9 +240,14 @@ std::string cpp_register_occu_multiscale_cover_coupling(
         fp(nm.c_str(),
            std::make_shared<tulpaObs::OccuMultiscaleCoverLognormalCoupling>(std::move(cps)));
         return nm;
+    } else if (positive == "gaussian") {
+        std::string nm = tulpaObs::GaussianPositive::multiscale_spec_name();
+        fp(nm.c_str(),
+           std::make_shared<tulpaObs::OccuMultiscaleCoverGaussianCoupling>(std::move(cps)));
+        return nm;
     }
     Rcpp::stop("cpp_register_occu_multiscale_cover_coupling: positive must be "
-               "\"lognormal\" or \"beta\".");
+               "\"lognormal\", \"beta\" or \"gaussian\".");
 }
 
 

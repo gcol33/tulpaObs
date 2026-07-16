@@ -1744,8 +1744,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_occu_ms_cover_ploglik
-Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(Rcpp::NumericMatrix draws, Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_theta, Rcpp::NumericMatrix X_p_site, Rcpp::NumericMatrix X_p_visit, Rcpp::NumericMatrix X_pos_site, Rcpp::NumericMatrix X_pos_visit, Rcpp::IntegerMatrix y, Rcpp::NumericMatrix y_pos, Rcpp::LogicalMatrix valid, Rcpp::IntegerVector plot_cell, bool is_beta, int idx_psi, int p_psi, int idx_theta, int p_theta, int idx_p_site, int p_p_site, int idx_p_visit, int p_p_visit, int idx_pos_site, int p_pos_site, int idx_pos_visit, int p_pos_visit, int idx_disp, int n_threads);
-RcppExport SEXP _tulpaObs_cpp_occu_ms_cover_ploglik(SEXP drawsSEXP, SEXP X_psiSEXP, SEXP X_thetaSEXP, SEXP X_p_siteSEXP, SEXP X_p_visitSEXP, SEXP X_pos_siteSEXP, SEXP X_pos_visitSEXP, SEXP ySEXP, SEXP y_posSEXP, SEXP validSEXP, SEXP plot_cellSEXP, SEXP is_betaSEXP, SEXP idx_psiSEXP, SEXP p_psiSEXP, SEXP idx_thetaSEXP, SEXP p_thetaSEXP, SEXP idx_p_siteSEXP, SEXP p_p_siteSEXP, SEXP idx_p_visitSEXP, SEXP p_p_visitSEXP, SEXP idx_pos_siteSEXP, SEXP p_pos_siteSEXP, SEXP idx_pos_visitSEXP, SEXP p_pos_visitSEXP, SEXP idx_dispSEXP, SEXP n_threadsSEXP) {
+Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(Rcpp::NumericMatrix draws, Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_theta, Rcpp::NumericMatrix X_p_site, Rcpp::NumericMatrix X_p_visit, Rcpp::NumericMatrix X_pos_site, Rcpp::NumericMatrix X_pos_visit, Rcpp::IntegerMatrix y, Rcpp::NumericMatrix y_pos, Rcpp::LogicalMatrix valid, Rcpp::IntegerVector plot_cell, int positive, int idx_psi, int p_psi, int idx_theta, int p_theta, int idx_p_site, int p_p_site, int idx_p_visit, int p_p_visit, int idx_pos_site, int p_pos_site, int idx_pos_visit, int p_pos_visit, int idx_disp, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_occu_ms_cover_ploglik(SEXP drawsSEXP, SEXP X_psiSEXP, SEXP X_thetaSEXP, SEXP X_p_siteSEXP, SEXP X_p_visitSEXP, SEXP X_pos_siteSEXP, SEXP X_pos_visitSEXP, SEXP ySEXP, SEXP y_posSEXP, SEXP validSEXP, SEXP plot_cellSEXP, SEXP positiveSEXP, SEXP idx_psiSEXP, SEXP p_psiSEXP, SEXP idx_thetaSEXP, SEXP p_thetaSEXP, SEXP idx_p_siteSEXP, SEXP p_p_siteSEXP, SEXP idx_p_visitSEXP, SEXP p_p_visitSEXP, SEXP idx_pos_siteSEXP, SEXP p_pos_siteSEXP, SEXP idx_pos_visitSEXP, SEXP p_pos_visitSEXP, SEXP idx_dispSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1760,7 +1760,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type y_pos(y_posSEXP);
     Rcpp::traits::input_parameter< Rcpp::LogicalMatrix >::type valid(validSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type plot_cell(plot_cellSEXP);
-    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< int >::type positive(positiveSEXP);
     Rcpp::traits::input_parameter< int >::type idx_psi(idx_psiSEXP);
     Rcpp::traits::input_parameter< int >::type p_psi(p_psiSEXP);
     Rcpp::traits::input_parameter< int >::type idx_theta(idx_thetaSEXP);
@@ -1775,7 +1775,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type p_pos_visit(p_pos_visitSEXP);
     Rcpp::traits::input_parameter< int >::type idx_disp(idx_dispSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_occu_ms_cover_ploglik(draws, X_psi, X_theta, X_p_site, X_p_visit, X_pos_site, X_pos_visit, y, y_pos, valid, plot_cell, is_beta, idx_psi, p_psi, idx_theta, p_theta, idx_p_site, p_p_site, idx_p_visit, p_p_visit, idx_pos_site, p_pos_site, idx_pos_visit, p_pos_visit, idx_disp, n_threads));
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_ms_cover_ploglik(draws, X_psi, X_theta, X_p_site, X_p_visit, X_pos_site, X_pos_visit, y, y_pos, valid, plot_cell, positive, idx_psi, p_psi, idx_theta, p_theta, idx_p_site, p_p_site, idx_p_visit, p_p_visit, idx_pos_site, p_pos_site, idx_pos_visit, p_pos_visit, idx_disp, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2158,8 +2158,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_simulate_ms_occu_cover
-Rcpp::List cpp_simulate_ms_occu_cover(Rcpp::NumericMatrix psi, Rcpp::NumericVector p_mat, Rcpp::NumericVector ep_mat, Rcpp::IntegerVector valid, Rcpp::NumericVector disp, bool is_beta, int n_sites, int max_v, int n_species, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu_cover(SEXP psiSEXP, SEXP p_matSEXP, SEXP ep_matSEXP, SEXP validSEXP, SEXP dispSEXP, SEXP is_betaSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+Rcpp::List cpp_simulate_ms_occu_cover(Rcpp::NumericMatrix psi, Rcpp::NumericVector p_mat, Rcpp::NumericVector ep_mat, Rcpp::IntegerVector valid, Rcpp::NumericVector disp, int positive, int n_sites, int max_v, int n_species, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu_cover(SEXP psiSEXP, SEXP p_matSEXP, SEXP ep_matSEXP, SEXP validSEXP, SEXP dispSEXP, SEXP positiveSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2168,12 +2168,12 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type ep_mat(ep_matSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type valid(validSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type disp(dispSEXP);
-    Rcpp::traits::input_parameter< bool >::type is_beta(is_betaSEXP);
+    Rcpp::traits::input_parameter< int >::type positive(positiveSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
     Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu_cover(psi, p_mat, ep_mat, valid, disp, is_beta, n_sites, max_v, n_species, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu_cover(psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species, nsim));
     return rcpp_result_gen;
 END_RCPP
 }

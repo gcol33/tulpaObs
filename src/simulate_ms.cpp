@@ -100,9 +100,11 @@ Rcpp::List cpp_simulate_ms_occu(
 // [[Rcpp::export]]
 Rcpp::List cpp_simulate_ms_occu_cover(
     Rcpp::NumericMatrix psi, Rcpp::NumericVector p_mat, Rcpp::NumericVector ep_mat,
-    Rcpp::IntegerVector valid, Rcpp::NumericVector disp, bool is_beta,
+    Rcpp::IntegerVector valid, Rcpp::NumericVector disp, int positive,
     int n_sites, int max_v, int n_species, int nsim
 ) {
+  // positive: 0 = lognormal, 3 = beta, 4 = gaussian (see .occu_cover_pos_code /
+  // src/occu_coupling_shared.h).
   Rcpp::RNGScope scope;
   Rcpp::List out(nsim);
   const int* pvv = valid.begin();
@@ -135,8 +137,11 @@ Rcpp::List cpp_simulate_ms_occu_cover(
         for (int j : det) {
           std::size_t off = (std::size_t) sp * sp_stride + (std::size_t) j * n_sites + i;
           double eta = pe[off];
-          byp[off] = is_beta ? (R::rbeta(plg(clampe(eta)) * d, (1.0 - plg(clampe(eta))) * d))
-                             : std::exp(R::rnorm(eta, d));
+          byp[off] = (positive == 3)
+                       ? (R::rbeta(plg(clampe(eta)) * d, (1.0 - plg(clampe(eta))) * d))
+                       : (positive == 4)
+                         ? R::rnorm(eta, d)
+                         : std::exp(R::rnorm(eta, d));
         }
       }
     }

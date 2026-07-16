@@ -654,6 +654,13 @@
 # Vectorised over y / eta (and matrices), so the per-visit and the per-unit
 # aggregated cover terms read one formula. Beta clamps the predictor before the
 # logistic; lognormal uses the raw predictor (matching the historical kernels).
+# Integer code for the positive-arm policy, shared with the C++ dispatch in
+# src/occu_coupling_shared.h (pos_log_density / pos_grad_eta / pos_grad_logdisp)
+# and the simulate draws: 0 = lognormal, 3 = beta, 4 = gaussian.
+.occu_cover_pos_code <- function(positive) {
+  switch(positive, beta = 3L, gaussian = 4L, lognormal = 0L, 0L)
+}
+
 .occu_cover_pos_logdens <- function(y, eta, disp, positive) {
   if (identical(positive, "beta")) {
     mu <- stats::plogis(.tobs_clamp_eta(eta))

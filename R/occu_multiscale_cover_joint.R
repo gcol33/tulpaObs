@@ -166,11 +166,12 @@
                                                           verbose   = TRUE,
                                                           ...) {
   adj <- fields[[1L]]$graph
-  is_beta <- identical(model$positive, "beta")
-  is_lnrm <- identical(model$positive, "lognormal")
-  if (!is_beta && !is_lnrm) {
-    stop("occu_multiscale_cover() supports positive = \"lognormal\" or ",
-         "\"beta\".", call. = FALSE)
+  is_beta  <- identical(model$positive, "beta")
+  is_lnrm  <- identical(model$positive, "lognormal")
+  is_gauss <- identical(model$positive, "gaussian")
+  if (!is_beta && !is_lnrm && !is_gauss) {
+    stop("occu_multiscale_cover() supports positive = \"lognormal\", ",
+         "\"beta\" or \"gaussian\".", call. = FALSE)
   }
   pi_list <- model$process_info
   n_cells <- nrow(adj)
@@ -190,6 +191,8 @@
       mu_hat  <- mean(pos_vals); var_hat <- max(stats::var(pos_vals), 1e-6)
       max((mu_hat * (1 - mu_hat)) / var_hat - 1, 1)
     } else 10
+  } else if (is_gauss) {
+    if (length(pos_vals) > 0L) max(stats::sd(pos_vals), 0.05) + 0.05 else 0.4
   } else {
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }

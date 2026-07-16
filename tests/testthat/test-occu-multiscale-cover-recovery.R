@@ -137,6 +137,53 @@ test_that("occu_multiscale_cover() beta positive arm fits end-to-end", {
                     "p_(Intercept)", "pos_(Intercept)") %in% names(fit$means)))
 })
 
+test_that("occu_multiscale_cover(\"gaussian\") fits + recovers (nested_laplace, #127)", {
+  skip_on_cran()
+  skip_if_fast()
+  # Identity-Gaussian cover arm on the shared-field joint engine: mu = eta.
+  sim <- simulate_occu_multiscale_cover(
+    n_cells = 60L, plots_per_cell = 4L, visits_per_plot = 2L,
+    beta_psi = c(0.4, 0.6), beta_theta = c(0.4, 0.5), beta_p = c(0.3, 0.5),
+    beta_pos = c(2.0, -0.4), positive = "gaussian", phi = 0.35,
+    sigma = 0.6, alpha = 1.0, seed = 3L)
+  fit <- suppressWarnings(tobs(
+    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    data = sim$data, family = occu_multiscale_cover(response = "gaussian"),
+    detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
+                   diagnose.k = FALSE, max.iter = 500L)))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true(all(is.finite(fit$means)))
+  expect_lt(abs(fit$means[["pos_(Intercept)"]] - 2.0), 0.3)
+  expect_lt(abs(fit$means[["pos_x_cov"]] - (-0.4)),    0.25)
+})
+
+test_that("occu_multiscale_cover(\"gaussian\") non-spatial Laplace recovers (#127)", {
+  skip_on_cran()
+  skip_if_fast()
+  n_seed <- 8L
+  int_e <- slope_e <- rep(NA_real_, n_seed)
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_occu_multiscale_cover(
+      n_cells = 80L, plots_per_cell = 4L, visits_per_plot = 4L,
+      beta_psi = c(0.2, 0.6), beta_theta = c(0.5, 0.4), beta_p = c(0.3, -0.4),
+      beta_pos = c(2.0, -0.4), positive = "gaussian", phi = 0.35,
+      sigma = 0, alpha = 0, seed = 400L + s)
+    fit <- tryCatch(suppressWarnings(tobs(
+      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+      data = sim$data, family = occu_multiscale_cover(response = "gaussian"),
+      detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+      y = sim$y, y_pos = sim$y_pos, method = "laplace",
+      control = list(verbose = FALSE))), error = function(e) NULL)
+    if (is.null(fit)) next
+    int_e[s]   <- fit$means[["pos_(Intercept)"]]
+    slope_e[s] <- fit$means[["pos_x_cov"]]
+  }
+  expect_lt(abs(mean(int_e,   na.rm = TRUE) - 2.0),    0.15)
+  expect_lt(abs(mean(slope_e, na.rm = TRUE) - (-0.4)), 0.15)
+})
+
 test_that("occu_multiscale_cover() fitted() / predict() (#53)", {
   skip_on_cran()
   skip_if_fast()

@@ -361,8 +361,8 @@ cpp_occu_fit <- function(spec_r) {
     .Call(`_tulpaObs_cpp_occu_fit`, spec_r)
 }
 
-cpp_occu_ms_cover_ploglik <- function(draws, X_psi, X_theta, X_p_site, X_p_visit, X_pos_site, X_pos_visit, y, y_pos, valid, plot_cell, is_beta, idx_psi, p_psi, idx_theta, p_theta, idx_p_site, p_p_site, idx_p_visit, p_p_visit, idx_pos_site, p_pos_site, idx_pos_visit, p_pos_visit, idx_disp, n_threads) {
-    .Call(`_tulpaObs_cpp_occu_ms_cover_ploglik`, draws, X_psi, X_theta, X_p_site, X_p_visit, X_pos_site, X_pos_visit, y, y_pos, valid, plot_cell, is_beta, idx_psi, p_psi, idx_theta, p_theta, idx_p_site, p_p_site, idx_p_visit, p_p_visit, idx_pos_site, p_pos_site, idx_pos_visit, p_pos_visit, idx_disp, n_threads)
+cpp_occu_ms_cover_ploglik <- function(draws, X_psi, X_theta, X_p_site, X_p_visit, X_pos_site, X_pos_visit, y, y_pos, valid, plot_cell, positive, idx_psi, p_psi, idx_theta, p_theta, idx_p_site, p_p_site, idx_p_visit, p_p_visit, idx_pos_site, p_pos_site, idx_pos_visit, p_pos_visit, idx_disp, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_ms_cover_ploglik`, draws, X_psi, X_theta, X_p_site, X_p_visit, X_pos_site, X_pos_visit, y, y_pos, valid, plot_cell, positive, idx_psi, p_psi, idx_theta, p_theta, idx_p_site, p_p_site, idx_p_visit, p_p_visit, idx_pos_site, p_pos_site, idx_pos_visit, p_pos_visit, idx_disp, n_threads)
 }
 
 cpp_occu_ms_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
@@ -433,8 +433,8 @@ cpp_simulate_ms_occu <- function(psi, p, valid, n_sites, max_v, n_species, nsim)
     .Call(`_tulpaObs_cpp_simulate_ms_occu`, psi, p, valid, n_sites, max_v, n_species, nsim)
 }
 
-cpp_simulate_ms_occu_cover <- function(psi, p_mat, ep_mat, valid, disp, is_beta, n_sites, max_v, n_species, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_ms_occu_cover`, psi, p_mat, ep_mat, valid, disp, is_beta, n_sites, max_v, n_species, nsim)
+cpp_simulate_ms_occu_cover <- function(psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_ms_occu_cover`, psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species, nsim)
 }
 
 cpp_simulate_ms_dyn_occu <- function(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim) {

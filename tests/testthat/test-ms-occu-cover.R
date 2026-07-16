@@ -274,6 +274,56 @@ test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   expect_gt(mean(phi_e, na.rm = TRUE), 8)   # well above the boundary
 })
 
+test_that("ms_occu_cover() recovers community means + sigma_pos (gaussian, #127)", {
+  skip_on_cran()
+  skip_if_fast()
+  # Identity-Gaussian positive arm (the delta-normal hurdle): mu = eta, an
+  # unbounded magnitude, residual SD sigma_pos. Same community Laplace-EM as the
+  # lognormal arm (only the positive density differs), so the SAME recovery
+  # config and bar as the lognormal test; the gaussian residual SD recovers to
+  # ~0.39 (matched to lognormal at 0.392 in dev_notes/_diag_127_sigma.R). The
+  # per-species pos deviation only inflates the residual under a sparser-than-
+  # this cover design, exactly as it would on the log scale.
+  set.seed(31)
+  sim <- simulate_ms_occu_cover(
+    n_species = 14, N = 90, J = 4,
+    mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
+    mu_pos = c(2.0, 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
+    positive = "gaussian", sigma_pos = 0.4, seed = 31)
+  vis <- .msoc_visits(90, 4, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("gaussian"),
+              detection = ~ det_cov1, positive = ~ pos_cov1,
+              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "laplace", control = list(verbose = FALSE))
+  expect_true(isTRUE(fit$convergence$converged))
+
+  # Community means within ~2.5 SE (beta arms), same bar as lognormal.
+  beta_means <- fit$means[seq_len(6)]
+  truth <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  expect_true(all(abs(beta_means - truth) / fit$sds[seq_len(6)] < 2.5))
+
+  # Shared residual SD recovered (identity-Gaussian sigma).
+  expect_lt(abs(exp(fit$means[["log_sigma_pos"]]) - 0.4), 0.1)
+
+  # Per-species coefficients correlate with truth. The cover arm (what this
+  # gaussian test validates) recovers sharply; the occupancy BLUPs are
+  # detection-filtered and shrunk, so a looser, seed-robust floor (as the family
+  # note documents -- they recover less sharply than count-informed coefs).
+  cm <- fit$ms_community
+  expect_gt(min(diag(cor(cm$coef_occ, sim$truth$beta_occ))), 0.70)
+  expect_gt(min(diag(cor(cm$coef_pos, sim$truth$beta_pos))), 0.80)
+})
+
+test_that("ms_occu_cover(\"gaussian\") simulate() round-trips (#127)", {
+  sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
+                                mu_pos = c(2.0, 0.4), positive = "gaussian",
+                                sigma_pos = 0.4, seed = 11)
+  expect_true(any(sim$y_pos[!is.na(sim$y_pos)] < 0) ||
+              min(sim$y_pos, na.rm = TRUE) < 1)   # gaussian admits low / negative
+  expect_true(all(is.na(sim$y_pos[!is.na(sim$y) & sim$y == 0L])))
+  expect_equal(sim$truth$positive, "gaussian")
+})
+
 test_that("ms_occu_cover() AGHQ debias reduces variance-component attenuation (#56)", {
   skip_on_cran()
   skip_if_fast()

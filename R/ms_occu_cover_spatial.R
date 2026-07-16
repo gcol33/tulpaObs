@@ -114,7 +114,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                            seed       = NULL) {
   positive <- match.arg(positive)
   field    <- match.arg(field)
-  if (identical(positive, "beta")) {
+  if (!identical(positive, "lognormal")) {
     stop("Stage 1 of the spatial community occu_cover supports ",
          "positive = 'lognormal' only.", call. = FALSE)
   }
@@ -472,7 +472,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                               det_visit_data    = NULL,
                                               pos_visit_formula = NULL,
                                               pos_visit_data    = NULL) {
-  if (identical(positive, "beta")) {
+  if (!identical(positive, "lognormal")) {
     stop("Stage 1 of the spatial community occu_cover supports ",
          "positive = 'lognormal' only.", call. = FALSE)
   }

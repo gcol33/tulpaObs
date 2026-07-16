@@ -4,11 +4,13 @@
 \alias{occu_multiscale_cover}
 \title{Three-level (multiscale) occupancy + cover hurdle family}
 \usage{
-occu_multiscale_cover(response = c("beta", "lognormal"))
+occu_multiscale_cover(response = c("beta", "lognormal", "gaussian"))
 }
 \arguments{
 \item{response}{likelihood for the positive cover arm. \code{"beta"} (cover in
-(0, 1)) or \code{"lognormal"} (log-cover Gaussian).}
+(0, 1)), \code{"lognormal"} (log-cover Gaussian), or \code{"gaussian"} (an
+identity-link Gaussian magnitude, the delta-normal hurdle; for a
+pre-transformed / unbounded positive response, not raw cover fractions).}
 }
 \value{
 A \code{tobs_family} object.

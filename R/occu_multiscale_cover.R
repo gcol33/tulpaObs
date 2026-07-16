@@ -63,10 +63,13 @@
       stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit.",
            call. = FALSE)
     }
-  } else if (any(pos_mask & (y_pos_num <= 0))) {
-    stop("Lognormal positive arm requires y_pos > 0 at every detected visit.",
-         call. = FALSE)
+  } else if (identical(positive, "lognormal")) {
+    if (any(pos_mask & (y_pos_num <= 0))) {
+      stop("Lognormal positive arm requires y_pos > 0 at every detected visit.",
+           call. = FALSE)
+    }
   }
+  # gaussian: any finite real is in support (checked finite above).
   y_pos_num[!pos_mask] <- 0
 
   # The state-process formula's FE part is cell-level. Build it over plots, then
@@ -166,6 +169,8 @@
   eta_pos   <- as.numeric(model$X_pos_site %*% b$pos) + alpha * field[pc] # per plot
   if (identical(model$positive, "beta")) {
     cover <- stats::plogis(eta_pos)
+  } else if (identical(model$positive, "gaussian")) {
+    cover <- eta_pos
   } else {
     sigma_pos <- .occu_ms_cover_sigma_pos(object)
     cover <- exp(eta_pos + 0.5 * sigma_pos^2)
@@ -237,6 +242,7 @@
   y        <- model$y
   ypos     <- model$y_pos
   is_beta  <- identical(model$positive, "beta")
+  is_gauss <- identical(model$positive, "gaussian")
 
   eta_psi   <- as.numeric(model$X_psi %*% par[idx$psi])           # n_cells
   eta_theta <- as.numeric(model$X_theta %*% par[idx$theta])       # n_plots
@@ -263,6 +269,9 @@
       phi <- exp(par[idx$disp]); mu <- clp(stats::plogis(ep))
       cvc <- pmin(pmax(cv, 1e-9), 1 - 1e-9)
       cover_lf[det_v] <- stats::dbeta(cvc, mu * phi, (1 - mu) * phi, log = TRUE)
+    } else if (is_gauss) {
+      sigma <- exp(par[idx$disp])
+      cover_lf[det_v] <- stats::dnorm(cv, ep, sigma, log = TRUE)
     } else {
       sigma <- exp(par[idx$disp])
       cover_lf[det_v] <- stats::dnorm(log(cv), ep, sigma, log = TRUE) - log(cv)
@@ -324,7 +333,7 @@
     draws, model$X_psi, model$X_theta, model$X_p_site, empty_v(model$X_p_visit),
     model$X_pos_site, empty_v(model$X_pos_visit),
     y, model$y_pos, model$valid, as.integer(model$plot_cell),
-    identical(model$positive, "beta"),
+    .occu_cover_pos_code(model$positive),
     pw[1], pw[2], tw[1], tw[2], psw[1], psw[2], pvw[1], pvw[2],
     posw[1], posw[2], posvw[1], posvw[2], as.integer(idx$disp) - 1L,
     max(1L, as.integer(n_threads)))
@@ -385,11 +394,15 @@
   start[idx$psi[1]]   <- stats::qlogis(rate)
   start[idx$theta[1]] <- stats::qlogis(0.7)
   start[idx$p[1]]     <- 0
+  is_gauss <- identical(model$positive, "gaussian")
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
   if (length(pos_vals) > 0L) {
     if (is_beta) {
       start[idx$pos[1]] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))
       start[idx$disp]   <- log(10)
+    } else if (is_gauss) {
+      start[idx$pos[1]] <- mean(pos_vals)
+      start[idx$disp]   <- log(stats::sd(pos_vals) + 0.1)
     } else {
       start[idx$pos[1]] <- mean(log(pos_vals))
       start[idx$disp]   <- log(stats::sd(log(pos_vals)) + 0.1)
@@ -620,7 +633,8 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
                                            beta_theta = c(0.2, 0.5),
                                            beta_p     = c(0.0, 0.5),
                                            beta_pos   = c(log(0.10), -0.4),
-                                           positive   = c("lognormal", "beta"),
+                                           positive   = c("lognormal", "beta",
+                                                           "gaussian"),
                                            phi        = 0.35,
                                            adj        = NULL,
                                            sigma      = 0.7,
@@ -700,6 +714,8 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
         if (positive == "beta") {
           mu <- stats::plogis(eta_pos[i])
           y_pos[i, det] <- stats::rbeta(length(det), mu * phi, (1 - mu) * phi)
+        } else if (positive == "gaussian") {
+          y_pos[i, det] <- stats::rnorm(length(det), eta_pos[i], phi)
         } else {
           y_pos[i, det] <- stats::rlnorm(length(det), eta_pos[i], phi)
         }

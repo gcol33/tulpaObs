@@ -635,21 +635,23 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
 #' the EM case.
 #'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover in
-#'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#'   (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
+#'   identity-link Gaussian magnitude, the delta-normal hurdle; for a
+#'   pre-transformed / unbounded positive response, not raw cover fractions).
 #' @return A `tobs_family` object.
 #' @seealso [occu_cover()] (single species), [ms_occu()] (community occupancy,
 #'   no cover), [ms_abun()] (community N-mixture).
 #' @export
-ms_occu_cover <- function(response = c("beta", "lognormal")) {
+ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
   positive <- match.arg(response)
   obs_family(
     name           = "ms_occu_cover",
     class_long     = "community joint occupancy-detection + cover hurdle",
     latent         = "bernoulli",
-    observation    = if (positive == "beta")
-                       "detection_plus_beta"
-                     else
-                       "detection_plus_lognormal",
+    observation    = switch(positive,
+                            beta      = "detection_plus_beta",
+                            gaussian  = "detection_plus_gaussian",
+                            "detection_plus_lognormal"),
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
@@ -717,20 +719,22 @@ ms_occu_cover <- function(response = c("beta", "lognormal")) {
 #' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover in
-#'   (0, 1)) or `"lognormal"` (log-cover Gaussian).
+#'   (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
+#'   identity-link Gaussian magnitude, the delta-normal hurdle; for a
+#'   pre-transformed / unbounded positive response, not raw cover fractions).
 #' @return A `tobs_family` object.
 #' @seealso [occu_cover()] (two-level), [cover()] (plot hurdle, no detection).
 #' @export
-occu_multiscale_cover <- function(response = c("beta", "lognormal")) {
+occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian")) {
   positive <- match.arg(response)
   obs_family(
     name           = "occu_multiscale_cover",
     class_long     = "three-level occupancy + cover hurdle",
     latent         = "bernoulli",
-    observation    = if (positive == "beta")
-                       "availability_detection_plus_beta"
-                     else
-                       "availability_detection_plus_lognormal",
+    observation    = switch(positive,
+                            beta      = "availability_detection_plus_beta",
+                            gaussian  = "availability_detection_plus_gaussian",
+                            "availability_detection_plus_lognormal"),
     replicates     = "required",
     default_engine = "nested_laplace",
     status         = "working",

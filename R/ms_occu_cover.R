@@ -142,10 +142,13 @@
         stop(sprintf("species '%s': beta cover requires 0 < y_pos < 1 at every ",
                      species_names[s]), "detected visit.", call. = FALSE)
       }
-    } else if (any(pmsk & (yp <= 0))) {
-      stop(sprintf("species '%s': lognormal cover requires y_pos > 0 at every ",
-                   species_names[s]), "detected visit.", call. = FALSE)
+    } else if (identical(positive, "lognormal")) {
+      if (any(pmsk & (yp <= 0))) {
+        stop(sprintf("species '%s': lognormal cover requires y_pos > 0 at every ",
+                     species_names[s]), "detected visit.", call. = FALSE)
+      }
     }
+    # gaussian: any finite real is in support (checked finite above).
     yp[!pmsk] <- 0
     y_int[, , s]  <- ys
     y_posn[, , s] <- yp
@@ -260,6 +263,15 @@
       dld <- phi * (digamma(phi) - digamma(a) * mu - digamma(b) * (1 - mu) +
                     mu * log(yp_safe) + (1 - mu) * log(1 - yp_safe))
       g_ld <- sum(dld[pos_mask])
+    } else if (identical(m$positive, "gaussian")) {
+      # Identity-Gaussian arm (gcol33/tulpaObs#127): mu = eta, residual on the
+      # raw response, no log Jacobian.
+      sigma <- exp(log_disp)
+      r   <- (yp_safe - ep_mat) / sigma
+      gpe <- r / sigma                            # (c - eta) / sigma^2
+      gpe[!pos_mask] <- 0
+      g_pos <- gpe
+      g_ld <- sum((r^2 - 1)[pos_mask])
     } else {
       sigma <- exp(log_disp)
       r   <- (log(yp_safe) - ep_mat) / sigma
@@ -435,7 +447,8 @@
   }
 
   # ---- warm start ----
-  is_beta <- identical(model$positive, "beta")
+  is_beta  <- identical(model$positive, "beta")
+  is_gauss <- identical(model$positive, "gaussian")
   any_det_all <- mean(vapply(views, function(v) mean(rowSums(v$y * v$valid) > 0),
                              numeric(1)))
   pos_vals <- unlist(lapply(views, function(v) v$y_pos[v$valid & v$y == 1L]))
@@ -445,6 +458,9 @@
   if (length(pos_vals) > 0L) {
     if (is_beta) {
       mu[pos_idx][1L] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))
+    } else if (is_gauss) {
+      mu[pos_idx][1L] <- mean(pos_vals)
+      ld <- log(stats::sd(pos_vals) + 0.1)
     } else {
       mu[pos_idx][1L] <- mean(log(pos_vals))
       ld <- log(stats::sd(log(pos_vals)) + 0.1)
@@ -782,13 +798,16 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   p_det_site <- ncol(X_det_site)
   p_pos_site <- ncol(X_pos_site)
   is_beta    <- identical(model$positive, "beta")
+  is_gauss   <- identical(model$positive, "gaussian")
   disp       <- exp(object$means[[length(object$means)]])
 
   psi <- stats::plogis(X_occ %*% t(cm$coef_occ))
   p   <- stats::plogis(X_det_site %*%
                        t(cm$coef_p[, seq_len(p_det_site), drop = FALSE]))
   eta_pos <- X_pos_site %*% t(cm$coef_pos[, seq_len(p_pos_site), drop = FALSE])
-  cover <- if (is_beta) stats::plogis(eta_pos) else exp(eta_pos + disp^2 / 2)
+  cover <- if (is_beta) stats::plogis(eta_pos)
+           else if (is_gauss) eta_pos
+           else exp(eta_pos + disp^2 / 2)
   dimnames(psi) <- dimnames(p) <- dimnames(cover) <-
     list(NULL, model$species_names)
   list(psi = psi, p = p, cover = cover)
@@ -802,7 +821,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   cm    <- object$ms_community
   n_sites <- model$n_sites; max_visits <- model$max_visits
   n_species <- model$n_species
-  is_beta <- identical(model$positive, "beta")
+  pos_code <- .occu_cover_pos_code(model$positive)
   disp <- exp(object$means[[length(object$means)]])
   cl <- .tobs_clamp_eta
 
@@ -818,7 +837,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
     psi[, s] <- eta$psi; p_mat[, , s] <- eta$p_mat; ep_mat[, , s] <- eta$ep_mat
   }
   res <- cpp_simulate_ms_occu_cover(psi, as.numeric(p_mat), as.numeric(ep_mat),
-    as.integer(model$valid), as.numeric(disp), is_beta,
+    as.integer(model$valid), as.numeric(disp), pos_code,
     n_sites, max_visits, n_species, as.integer(nsim))
   res <- lapply(res, function(r) {
     dn <- list(NULL, NULL, model$species_names)
@@ -871,17 +890,18 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
                                    n_occ_covs = 1, n_det_covs = 1, n_pos_covs = 1,
                                    mu_occ = NULL, mu_p = NULL, mu_pos = NULL,
                                    sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-                                   positive = c("lognormal", "beta"),
+                                   positive = c("lognormal", "beta", "gaussian"),
                                    phi = 30, sigma_pos = 0.4, seed = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
   N <- as.integer(N); J <- as.integer(J)
-  is_beta <- identical(positive, "beta")
+  is_beta  <- identical(positive, "beta")
+  is_gauss <- identical(positive, "gaussian")
 
   if (is.null(mu_occ)) mu_occ <- c(stats::qlogis(0.4), rep(0.6, n_occ_covs))
   if (is.null(mu_p))   mu_p   <- c(0.0, rep(-0.3, n_det_covs))
   if (is.null(mu_pos)) {
-    pos_int <- if (is_beta) stats::qlogis(0.3) else log(0.1)
+    pos_int <- if (is_beta) stats::qlogis(0.3) else if (is_gauss) 2 else log(0.1)
     mu_pos <- c(pos_int, rep(0.4, n_pos_covs))
   }
   P_occ <- length(mu_occ); P_p <- length(mu_p); P_pos <- length(mu_pos)
@@ -945,6 +965,8 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
         if (d == 1L) {
           y_pos[i, j, s] <- if (is_beta) {
             mu <- stats::plogis(eta_pos[idx]); stats::rbeta(1L, mu * phi, (1 - mu) * phi)
+          } else if (is_gauss) {
+            stats::rnorm(1L, eta_pos[idx], sigma_pos)
           } else exp(stats::rnorm(1L, eta_pos[idx], sigma_pos))
         }
       }
@@ -960,7 +982,8 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
       beta_occ = beta_occ, beta_p = beta_p, beta_pos = beta_pos,
       z = z_all, positive = positive,
       phi       = if (is_beta) phi else NA_real_,
-      sigma_pos = if (is_beta) NA_real_ else sigma_pos
+      sigma_pos = if (is_beta) NA_real_ else sigma_pos,
+      disp      = if (is_beta) phi else sigma_pos
     )
   )
 }

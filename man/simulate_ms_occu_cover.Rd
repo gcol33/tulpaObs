@@ -17,7 +17,7 @@ simulate_ms_occu_cover(
   sd_occ = 0.5,
   sd_p = 0.4,
   sd_pos = 0.4,
-  positive = c("lognormal", "beta"),
+  positive = c("lognormal", "beta", "gaussian"),
   phi = 30,
   sigma_pos = 0.4,
   seed = NULL

@@ -72,7 +72,7 @@
     plot_cell   = as.integer(model$plot_cell),
     n_cells     = as.integer(model$n_cells),
     max_visits  = as.integer(J),
-    is_beta     = identical(model$positive, "beta"))
+    positive    = .occu_cover_pos_code(model$positive))
 }
 
 

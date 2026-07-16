@@ -48,7 +48,8 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
     Rcpp::NumericMatrix y_pos,        // [n_plots x J] cover at detected visits
     Rcpp::LogicalMatrix valid,        // [n_plots x J]
     Rcpp::IntegerVector plot_cell,    // [n_plots], 1-based cell of each plot
-    bool is_beta,
+    int positive,                     // 0 = lognormal, 3 = beta, 4 = gaussian
+
     int idx_psi, int p_psi, int idx_theta, int p_theta,
     int idx_p_site, int p_p_site, int idx_p_visit, int p_p_visit,
     int idx_pos_site, int p_pos_site, int idx_pos_visit, int p_pos_visit,
@@ -124,12 +125,16 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
             }
             double cv = y_pos((std::size_t) i, j);
             double dens;
-            if (is_beta) {
+            if (positive == 3) {
               double mu = clp(plogis(eta_pos));
               double cvc = cv < 1e-9 ? 1e-9 : (cv > 1.0 - 1e-9 ? 1.0 - 1e-9 : cv);
               double a = mu * disp, b = (1.0 - mu) * disp;
               dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
                      (a - 1.0) * std::log(cvc) + (b - 1.0) * std::log(1.0 - cvc);
+            } else if (positive == 4) {
+              // identity-Gaussian: mu = eta, residual on the raw response.
+              double r = (cv - eta_pos) / disp;
+              dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r;
             } else {
               double ly = std::log(cv), r = (ly - eta_pos) / disp;
               dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r - ly;
