@@ -151,7 +151,8 @@
 # distance NUTS field block (cpp_distance_nuts over nuts_field_block.h). The areal
 # Laplace fit supplies warm coefficients + the field hyper; NUTS then samples the
 # exact coefficient + whitened-field posterior. Half-normal key only (the spatial
-# Laplace path, gcol33/tulpaObs#79); car_proper only (intrinsic icar = #71).
+# Laplace path, gcol33/tulpaObs#79); icar / car_proper / bym2 -- the intrinsic
+# icar / bym2 fields sample via the #71 sum-to-zero reparameterisation (#113).
 # Poisson or NB.
 .tobs_fit_distance_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                             mixture = "poisson",

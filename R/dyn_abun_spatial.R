@@ -133,8 +133,9 @@
 # Laplace areal posterior mean (fit$spatial_hyper) and the whitened raw ~ N(0, I)
 # (z = Linv %*% raw) is sampled jointly with the four arms' coefficients via the
 # dyn_abun NUTS field block (cpp_dyn_abun_nuts over nuts_field_block.h). The areal
-# Laplace fit supplies warm coefficients + the field hyper. car_proper only
-# (intrinsic icar = #71); Poisson or NB initial abundance.
+# Laplace fit supplies warm coefficients + the field hyper. icar / car_proper /
+# bym2 -- the intrinsic icar / bym2 fields sample via the #71 sum-to-zero
+# reparameterisation (#113); Poisson or NB initial abundance.
 .tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                             K_max = NULL, sigma.beta = 10,
                                             n.iter = 1000L, n.warmup = 1000L,

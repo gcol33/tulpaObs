@@ -140,7 +140,8 @@
 # effects via the fp_occu NUTS field block (cpp_fp_occu_nuts over
 # nuts_field_block.h). The areal Laplace fit supplies warm coefficients + the field
 # hyper. The false-positive arms (p11 / p10 / b) carry fixed effects only;
-# car_proper only (intrinsic icar = #71). Occupancy fields are more weakly
+# icar / car_proper / bym2 -- the intrinsic icar / bym2 fields sample via the #71
+# sum-to-zero reparameterisation (#113). Occupancy fields are more weakly
 # identified than count fields (one binary site per node).
 .tobs_fit_fp_occu_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                            sigma.beta = 10,
