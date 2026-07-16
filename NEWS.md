@@ -2,11 +2,11 @@
 
 ## 0.0.129 (2026-07-16)
 
-Requires tulpa >= 0.1.2 (ABI 34) and rebuilds against it.
+Requires tulpa >= 0.0.82 (ABI 34) and rebuilds against it.
 
 * BREAKING: the continuous NNGP fields `gp()` and `svc()` now require
   `prior_range = c(r0, alpha)`, a PC prior on the spatial range encoding
-  `P(range < r0) = alpha` -- the contract `spde()` has always had. tulpa 0.1.2
+  `P(range < r0) = alpha` -- the contract `spde()` has always had. tulpa 0.0.82
   ships the range anchors unset and refuses a NNGP block without them
   (gcol33/tulpa#144), and neither package invents a default: the range is in
   coordinate units, so no value suits every dataset, and the range is weakly

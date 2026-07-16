@@ -651,7 +651,7 @@ recovery-tested.
   `param[k]`. Requires `prior_range = c(r0, alpha)` (PC prior on the range,
   `P(range < r0) = alpha`); tulpa ships the anchors unset and refuses without
   them, and neither package defaults them.
-  **RECOVERY-VALIDATED** (#119, tulpa 0.1.2): `test-occu-svc-nngp-recovery.R`
+  **RECOVERY-VALIDATED** (#119, tulpa 0.0.82): `test-occu-svc-nngp-recovery.R`
   measures seeds 1/2/3/11 at N=150, J=6, p=0.6, truth phi=0.25 / sigma=1.3 ->
   divergences 72-83% -> **0 on every seed**, phi ~4 -> 0.14-0.23, sigma
   1.06-2.31. Two upstream causes: the Uniform-behind-a-wall range prior
