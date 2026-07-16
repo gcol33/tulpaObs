@@ -657,7 +657,7 @@
       diagnose_k = dots$diagnose.k %||% FALSE,
       # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy
       # alias). The outer Pareto-k is scored ONCE over this many importance draws.
-      diagnose_draws = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
+      k_samples = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
       # Bootstrap outer Pareto-k uncertainty (gcol33/tulpa#127). The k-hat's
       # sampling uncertainty is bootstrapped from its raw importance log-ratios
       # (k.bootstrap replicates, NO new solves): reports the SE, 95% CI and the

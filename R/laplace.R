@@ -207,8 +207,10 @@
   callbacks <- switch(model$model_type,
     single     = build_single_callbacks(model, spatial = NULL,
                                         latent_prior = latent_prior),
-    dynamic    = build_dynamic_callbacks(model, spatial = NULL),
-    integrated = build_integrated_callbacks(model, spatial = NULL),
+    dynamic    = build_dynamic_callbacks(model, spatial = NULL,
+                                         latent_prior = latent_prior),
+    integrated = build_integrated_callbacks(model, spatial = NULL,
+                                            latent_prior = latent_prior),
     stop(sprintf("nested Laplace not supported for model_type '%s'",
                  model$model_type), call. = FALSE)
   )

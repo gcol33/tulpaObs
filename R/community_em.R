@@ -53,12 +53,29 @@
 #' Generic community Laplace-EM engine
 #'
 #' @keywords internal
+#' @param sp_info Optional `function(s, theta, global)` returning species `s`'s
+#'   `(P + G) x (P + G)` marginal observed information at `c(theta, global)`.
+#'   Defaults to `NULL`, which finite-differences `sp_grad` -- passing neither
+#'   leaves a fit byte-identical. Supply it when the family's kernel already
+#'   exposes the per-site marginal observed information (the N-mixture / distance
+#'   Louis block): the FD path spends `2 (P + G)` full marginal sweeps per species
+#'   per Newton step to rediscover it.
+#' @param init_b,init_Sigma Optional warm starts for the per-species deviations
+#'   and the per-arm community covariances. Both default to `NULL`, which is the
+#'   cold start (`b_s = 0`, `Sigma = sigma_init^2 I`) -- passing neither leaves a
+#'   fit byte-identical. A block-coordinate caller that re-enters this EM once per
+#'   outer pass (R/community_latent.R) passes the previous pass's state, so the
+#'   EM resumes from a near-converged point instead of rediscovering it; it is the
+#'   dominant cost when the per-species likelihood is expensive (an N-mixture /
+#'   distance marginal sums over the latent count).
 .tobs_community_em <- function(S, P, arm_idx, sp_ll, sp_grad = NULL,
                                init_mu, init_global = numeric(0),
                                penalize_global = FALSE, sigma_beta = 5,
                                priors = NULL,
                                sigma_init = 0.3, max_iter = 200L, tol = 1e-4,
-                               newton_max = 30L, verbose = TRUE) {
+                               newton_max = 30L, verbose = TRUE,
+                               sp_info = NULL,
+                               init_b = NULL, init_Sigma = NULL) {
   S          <- as.integer(S)
   P          <- as.integer(P)
   G          <- length(init_global)
@@ -114,19 +131,28 @@
     }
   }
 
-  # Per-species observed information (U x U) by central finite difference of the
-  # gradient (step h = 1e-4), symmetrized: -0.5 (J + J').
-  sp_info_fn <- function(s, theta, global) {
-    u <- c(theta, global); h <- 1e-4
-    J <- matrix(0, U, U)
-    for (k in seq_len(U)) {
-      up <- u; up[k] <- up[k] + h
-      dn <- u; dn[k] <- dn[k] - h
-      gp <- sp_grad_fn(s, up[seq_len(P)], up[P + glob_seq])
-      gm <- sp_grad_fn(s, dn[seq_len(P)], dn[P + glob_seq])
-      J[, k] <- (gp - gm) / (2 * h)
+  # Per-species observed information (U x U). Supplied analytically, or by
+  # central finite difference of the gradient (step h = 1e-4), symmetrized:
+  # -0.5 (J + J'). The FD path costs 2U gradient evaluations per species per
+  # Newton step, which dominates when the per-species marginal is expensive (an
+  # N-mixture / distance marginal sums over the latent count); a family whose
+  # kernel already exposes the per-site marginal observed information should pass
+  # `sp_info` and skip it.
+  sp_info_fn <- if (!is.null(sp_info)) {
+    function(s, theta, global) sp_info(s, theta, global)
+  } else {
+    function(s, theta, global) {
+      u <- c(theta, global); h <- 1e-4
+      J <- matrix(0, U, U)
+      for (k in seq_len(U)) {
+        up <- u; up[k] <- up[k] + h
+        dn <- u; dn[k] <- dn[k] - h
+        gp <- sp_grad_fn(s, up[seq_len(P)], up[P + glob_seq])
+        gm <- sp_grad_fn(s, dn[seq_len(P)], dn[P + glob_seq])
+        J[, k] <- (gp - gm) / (2 * h)
+      }
+      -0.5 * (J + t(J))
     }
-    -0.5 * (J + t(J))
   }
 
   # Penalized objective: sum of per-species log-likelihoods minus the RE and
@@ -237,14 +263,21 @@
   }
 
   # ---- initialization ----
+  # A warm start (init_b / init_Sigma) resumes a block-coordinate caller's
+  # previous outer pass; absent, the cold start below is unchanged.
   mu     <- as.numeric(init_mu)
   global <- as.numeric(init_global)
-  b_list <- replicate(S, numeric(P), simplify = FALSE)
-  Sigma  <- vector("list", length(arm_idx))
-  names(Sigma) <- arm_names
-  for (arm in arm_names) {
-    k <- length(arm_idx[[arm]])
-    Sigma[[arm]] <- diag(sigma_init^2, k)
+  b_list <- if (is.null(init_b)) replicate(S, numeric(P), simplify = FALSE)
+            else init_b
+  if (is.null(init_Sigma)) {
+    Sigma <- vector("list", length(arm_idx))
+    names(Sigma) <- arm_names
+    for (arm in arm_names) {
+      k <- length(arm_idx[[arm]])
+      Sigma[[arm]] <- diag(sigma_init^2, k)
+    }
+  } else {
+    Sigma <- init_Sigma[arm_names]
   }
 
   # ---- EM loop ----

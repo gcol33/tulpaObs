@@ -149,6 +149,11 @@
 
   structure(list(
     model_type = "dynamic",
+    # Site-level frame, kept for the same reason the single-season binder keeps
+    # it: a structured term resolves its node index / group_var against it (an
+    # areal `group_var`, a spatial bar's grouping factor), and those columns
+    # need not appear in any arm's fixed-effect formula.
+    data = data,
     y = y,
     y_flat = y_int,
     n_visits = n_visits,
@@ -247,6 +252,9 @@
 
   structure(list(
     model_type = "integrated",
+    # Site-level frame: a structured term resolves its node index / group_var
+    # against it, and those columns need not appear in any arm's formula.
+    data = data,
     y_sources = y_sources,
     site_maps = site_maps,
     X_processes = X_processes,

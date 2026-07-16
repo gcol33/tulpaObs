@@ -12,7 +12,8 @@ Bayesian occupancy / abundance / distance / removal / cover. Built on
 
 **Public API:** `tobs()` + family ctors: `occu()`, `dyn_occu()`, `ms_occu()`,
 `ms_dyn_occu()`, `ms_int_occu()`, `int_occu()`, `jsdm()`, `abun()`, `ms_abun()`,
-`dyn_abun()`, `count()`, `ms_count()`, `distance()`, `removal()`, `fp_occu()`,
+`dyn_abun()`, `count()`, `ms_count()`, `distance()`, `ms_distance()`, `removal()`,
+`fp_occu()`,
 `cover()`, `occu_cover()`, `ms_occu_cover()`, `occu_multiscale_cover()`. S3 classes all `tobs_*`
 (`tobs_fit/model/family/spatial/temporal/re/svc/latent/priors_spec`).
 
@@ -394,14 +395,18 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | N-mixture + areal | n-L | — | `abun()`+icar/bym2/car_proper; Pois/NB (r grid-int); grid-int cov (constrained intercept) |
 | Community N-mixture | Yes | Yes | `ms_abun()` (msNMix); per-species coef RE, in-tree Laplace-EM (`nmix_laplace_re`) -> `NMixCommunityOracle` AGHQ, Schur SEs; Pois + negbin. NUTS (#14) |
 | Community N-mixture + areal | n-L | Yes | `ms_abun()`+icar/bym2/car_proper (sfMsNMix; #12); shared field + per-species RE; `nmix_community_spatial.cpp`; Pois/NB. NUTS (#73, car_proper only): the #14 non-centered community sampler + a SHARED fixed-hyper non-centered proper-CAR field on abundance (tau Q(rho) fixed at the #12 nested-Laplace estimate, raw ~ N(0,I), f=Linv raw; optional field block in `src/ms_abun_nuts.cpp`, FD-validated, field-off byte-identical to #14). 0 divergences, field cor ~0.97; Pois only. icar/bym2 NUTS gated to n-L |
+| Community N-mixture latent factor (`ms_abun`) | Yes | — | `ms_abun()` + `latent(n)` (spAbundance `lfMsNMix`; #117): residual species co-occurrence on the ABUNDANCE arm via Q per-site factors + per-species loadings. The latent N still marginalises closed-form per species-site, so the whole latent structure sits on `eta_lambda` and the family reduces to ONE working oracle over the Royle marginal (`R/ms_abun_latent.R`) driving the shared block-coordinate engine: `score = grad_eta_lambda`, `curv = info_eta_lambda - var_N * score_wt_lambda^2` = the Louis (1982) (1,1) block (abundance curvature, detection arm profiled out), which `nmix_site_marginal()` ALREADY exposes -- no new kernel. Oracle FD-validated (score 2.6e-9; curv diff = FD truncation; cor 1.000000 both). Residual cor recovers ~0.99 at N=120/S=12 (counts are information-rich -- cleanly better than occupancy's ~0.9). Poisson only (a negbin size is a second per-site dispersion, not identified vs a per-site latent). `test-ms-abun-factor.R` |
+| Community N-mixture spatial-factor (`ms_abun`) | n-L | — | `ms_abun()` + `icar()`/`car_proper()`/`bym2()`/`spde()` + `latent(n)` (#117): shared field AND factors on the abundance arm; the centred loadings separate them (field cor ~0.98, residual cor ~0.94). Same block-coordinate driver. A plain field with NO factors KEEPS the dedicated C++ path (#12) -- faster + already recovery-tested, deliberately not replaced |
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (#13); non-species grouping; Pois/NB; `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
+| Community distance (`ms_distance`) | Yes | — | `ms_distance(key=, transect=, cutpoints=)` (spAbundance `msDS`; #117): per-species binned distance sampling w/ Gaussian community hyperpriors on the abundance (`log lambda`) + detection-scale (`log sigma`) coefs. `y` = `[n_sites x n_bins x n_species]` or named list. NO new C++ — the latent N marginalises closed-form per species-site, and `cpp_distance_site_sweep` already returns `log_lik`/`grad_lam`/`info_lam`/`var_N`/`swl`, so the shared community Laplace-EM (`R/ms_distance.R`) reads its per-species score straight off it. Hazard-key log-shape = a community `global` (shared across species) via the EM's `global` slot. Community means UNBIASED over 10 seeds (z of bias 1.07/1.68/-0.66), 95% Wald coverage 1.0/0.8/0.9; single-species `distance()` control agrees (bias 0.02/-0.01). NB: a single seed shows a ~0.18 paired lambda-down/sigma-up shift that looks like bias and is NOT — it is one draw on the lambda/sigma ridge. Poisson only (negbin size not yet a per-species RE); NUTS not wired. `simulate_ms_distance()` draws through `cpp_simulate_distance` (a separate R-side quadrature would simulate from a pi the model is not fit against). `test-ms-distance.R` |
+| Community distance latent factor / spatial-factor | Yes | — | `ms_distance()` + `latent(n)` (`lfMsDS`) and + `icar()`/`car_proper()`/`bym2()`/`spde()` (`sfMsDS`), #117: the SAME shared block-coordinate driver, whose working oracle is the SAME Louis formula as `ms_abun` — `score = grad_lam`, `curv = info_lam - var_N * swl^2` (both are count marginals with `B_i = diag(info) - var_N v v'`; only the kernel supplying the pieces differs). Oracle FD-validated (score 1.6e-9, curv = FD truncation, cor 1.000000). Poisson only. Slower than `ms_abun`'s latent path: the distance kernel exposes the per-site Louis pieces but no assembled block, so this family does not yet pass `sp_info` and the EM finite-differences its per-species Hessian |
 | Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm; NUTS+areal car_proper field on abundance arm (#72) |
 | Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal); areal field; NUTS+areal car_proper field on abundance arm (half-normal, #72) |
 | False-positive occupancy | Yes | Yes | `fp_occu()` (#40) — see Architecture. NUTS single psi intercept RE; Laplace grouped RE psi OR p11; areal psi arm; NUTS+areal car_proper field on psi arm (#72) |
 | Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. Pois/NB init; season-varying omega/gamma via `[n_sites x (T-1)]` covariate, interval-indexed forward kernel, all backends (#80). NUTS single intercept RE on init-abundance OR detection arm; Laplace grouped RE on init-abundance OR detection arm (#82, p-arm = per-node full-forward second-order eta_p pass); areal init arm; NUTS+areal car_proper field on init-abundance arm (#72) |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
-| Nested-Laplace (areal) | n-L | — | icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu |
+| Nested-Laplace (areal) | n-L | — | icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu. RECOVERY-TESTED on icar for all three (`test-{occu,int-occu,dyn-occu}-areal-recovery.R`) + SVC bar (`test-dyn-occu-svc-recovery.R`). State arm encodes at **M = 1** for ANY nested latent block (`nested_block <- !is.null(latent_prior)` in all three `build_*_callbacks`): a state row = ONE binary occupancy obs, so the old M=1000 (areal) / M=4 (spde) overstated its info M-fold, swamped the field prior, read between-cell noise as field, inflated the slope via `sqrt(1+0.346 sigma^2)`. Monotone in M, no arm regresses at M=1. `use_louis` (laplace_helpers.R) covers single/dynamic/integrated — state score `x_i(z_i-psi_i)` is family-generic; without it the state block falls to `.se_from_laplace_fit()` -> **NA SEs** (dynamic + integrated both shipped that way). dynamic needs `weights[,1]` (season-1 col), integrated's is already per-site. **A null-field fixture CANNOT test this path**: grid = `b1.tau` 9 log cells [0.3,30] (sigma [1.83,0.18]), so truth sigma=0 is OFF-grid and the marginal pins on the last cell (weight 0.60) — "shrunk" and "pinned" read identical. Test with an INTERIOR field + assert peak cell off both boundaries. `tau` = ICAR CONDITIONAL precision, NOT 1/sd^2: marginal field sd 1.0 -> sigma~0.40, peak cell 6/9 — assert on field sd/cor, never on `sigma`. `dev_notes/finding_dyn_nested_laplace_field.md` |
 | NA-response prediction | n-L | — | `predict(type="state")`: all-NA single-season sites field-interpolated, calibrated 95% from exact-marginal bernoulli pass (coverage ~1.0) |
 | Formula RE (intercept) | Yes | Yes | `(1\|g)`; variance-component EM, occ OR det arm (#11) |
 | Formula RE (uncorr slope) | Yes | Yes | `(x\|\|g)`, `(0+x\|g)`, `(1+x\|\|g)`; either arm |
@@ -643,13 +648,21 @@ recovery-tested.
   per-draw surface on `attr(., "draws")`), sliced by position from the layout the
   engine reports as `fit$svc_layout`; the block is named (`svc_w[i,j]`,
   `log_sigma2_svc[j]`, `log_phi_svc[j]`) instead of falling through to
-  `param[k]`. `test-occu-svc-nngp-recovery.R` scores it: the surface tracks a
-  known truth (cor 0.49-0.78 over seeds), so the gradient is broadly right.
-  **Still NOT calibrated**: ~75% of post-warmup draws diverge and the range phi
-  collapses onto its prior mean (~4 vs a truth of 0.25), because tulpa priors phi
-  as Uniform(lower, upper) behind a hard `-INFINITY` rejection -- gcol33/tulpa#144.
-  The calibration assertions are `skip()`ped against that issue rather than
-  loosened to pass. Treat as "surface exposed + shape-validated", NOT "validated".
+  `param[k]`. Requires `prior_range = c(r0, alpha)` (PC prior on the range,
+  `P(range < r0) = alpha`); tulpa ships the anchors unset and refuses without
+  them, and neither package defaults them.
+  **RECOVERY-VALIDATED** (#119, tulpa 0.1.2): `test-occu-svc-nngp-recovery.R`
+  measures seeds 1/2/3/11 at N=150, J=6, p=0.6, truth phi=0.25 / sigma=1.3 ->
+  divergences 72-83% -> **0 on every seed**, phi ~4 -> 0.14-0.23, sigma
+  1.06-2.31. Two upstream causes: the Uniform-behind-a-wall range prior
+  (gcol33/tulpa#144) and the SVC marginal-SD half-Cauchy being improper on its
+  sampled coordinate (nothing bounded sigma above); fixing the SD prior is what
+  pulled phi onto truth, the two being ends of the GP ridge. Surface cor did NOT
+  move (0.73 mean vs 0.66) -- it is information-bounded at these settings, not
+  sampler-bounded, so the calibration test asserts divergences + phi + sigma and
+  deliberately does NOT assert on cor. tulpa cannot make this measurement:
+  `svc()` is a tulpaObs term and `cpp_tulpa_fit_generic` is a plain LM, so no
+  tulpa-side fit reaches the NNGP SVC path -- which is how #144 survived there.
   On any OTHER family, or `occu()` under laplace/nested_laplace, `svc()` ERRORS
   with a pointer to the areal bar (`.tobs_fit_model` guard, #118) rather than
   silently dropping. `test-svc-guard.R`.
@@ -695,16 +708,18 @@ Most files named inline above; non-obvious ones:
 ```
 R/
   tobs.R / obs_families.R / occu.R   — dispatcher+print; family ctors; .tobs_build_model()
-  community_em.R            — shared community Laplace-EM .tobs_community_em() (ms_occu/ms_dyn_occu/ms_int_occu)
+  community_em.R            — shared community Laplace-EM .tobs_community_em() (ms_occu/ms_dyn_occu/ms_int_occu/ms_count/jsdm/ms_abun-latent/ms_distance). Three OPTIONAL args, each defaulting to the previous behaviour byte-identically: `sp_info` (analytic per-species observed info; the FD fallback costs 2(P+G) marginal sweeps per species per Newton step -- supply it when the kernel exposes the Louis block), `init_b`/`init_Sigma` (warm start; a block-coordinate caller re-enters the EM once per outer pass, so a cold restart each time dominates)
   ms_{occu,dyn_occu,int_occu}.R      — community single/dynamic/integrated
   abun.R / abun_nuts.R               — nmix family + non-spatial NUTS (#41)
   count_spatial.R / count_methods.R  — areal count fitter .tobs_fit_count_spatial (#117); fitted/predict/residuals
   ms_count.R                — community count / relative-abundance GLMM (msAbund, #117); .tobs_fit_ms_count over shared community_em.R
   ms_count_nuts.R / src/ms_count_nuts.cpp — community count NUTS (msAbund NUTS, #117); in-tree C++ FullGradFn (reduced ms_abun_nuts: no detection/latent-N), R oracle .tobs_ms_count_nuts_logpost, warm-start from Laplace-EM
   ms_count_spatial.R        — community count + shared areal field (sfMsAbund) + SVC bar (svcMsAbund, #117/#118); block coordinate ascent (community EM offset <-> multi-field Poisson-ICAR), pure R
-  community_latent.R        — SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group_var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter
+  community_latent.R        — the factor Newton (`.tobs_latent_factor_update`) is a RAW Newton (no line search, unlike `.tobs_community_em` which backtracks); `safe_step()` rejects a non-finite/singular step + holds the previous iterate (byte-identical when finite). A latent-count marginal (nmix/distance) can return non-finite curvature far from the mode; the NaN used to surface only later as a non-finite `sd()` in the rescale. Found by a 6-SEED loop, never by a single fit. SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group_var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter
   ms_occu_field.R           — community occupancy SVC (svcMsPGOcc, #118); block coordinate ascent (community occ EM psi offset <-> two-state-marginal occupancy field solve), intercept + SVC field(s), pure R; plain intercept -> C++ ms_occu_spatial.R
   ms_abun.R / ms_abun_nuts.R         — community nmix + NUTS (#14)
+  ms_abun_latent.R          — community nmix + latent() factors (lfMsNMix) / + shared field (spatial-factor); the ONLY new piece is the working oracle over the Royle marginal: score=grad_eta_lambda, curv=info_eta_lambda-var_N*score_wt_lambda^2 (the Louis (1982) (1,1) block = abundance curvature w/ the detection arm profiled out), which nmix_site_marginal() already exposes. Supplies `sp_info` (the design-sandwiched per-site Louis block) so the community EM skips its FD Hessian: 387s -> see table. Plain field w/o factors KEEPS the C++ #12 path
+  ms_distance.R             — community binned distance sampling (msDS, #117) + latent() factors (lfMsDS) + shared field (sfMsDS). NO new C++: cpp_distance_site_sweep already returns log_lik/grad_lam/info_lam/var_N/swl, so the community EM reads its per-species score from it and the driver oracle is the SAME Louis formula as ms_abun (curv = info_lam - var_N*swl^2). Hazard-key log-shape = a community `global` (shared across species). simulate_ms_distance() draws through cpp_simulate_distance (the kernel the likelihood integrates against) -- a separate R-side quadrature simulates from a pi the model is not fit against and biases recovery. Poisson only; NUTS not wired
   nmix_laplace{,_re,_re_spatial,_spatial}.R — non-spatial / community / sfMsNMix / areal fitters
   nmix_re_aghq.R / nmix_site_marginal.R — grouped RE -> NMixGroupedOracle; per-site AGHQ callback
   occu_fit.R / occu_priors.R / laplace.R — .tobs_fit_model(); occu_priors()+beta_prior; .tobs_laplace()+EM cbs

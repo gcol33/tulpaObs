@@ -1,5 +1,140 @@
 # tulpaObs NEWS
 
+## 0.0.129 (2026-07-16)
+
+Requires tulpa >= 0.1.2 (ABI 34) and rebuilds against it.
+
+* BREAKING: the continuous NNGP fields `gp()` and `svc()` now require
+  `prior_range = c(r0, alpha)`, a PC prior on the spatial range encoding
+  `P(range < r0) = alpha` -- the contract `spde()` has always had. tulpa 0.1.2
+  ships the range anchors unset and refuses a NNGP block without them
+  (gcol33/tulpa#144), and neither package invents a default: the range is in
+  coordinate units, so no value suits every dataset, and the range is weakly
+  identified by the likelihood, so a default would be a prior doing real work
+  on the posterior rather than a convenience. `phi_prior_lower` /
+  `phi_prior_upper` are gone (they parameterized the Uniform-behind-a-wall
+  prior that #144 removed). On unit-square coordinates
+  `prior_range = c(0.1, 0.05)` reads as "a 5% chance the range is under 0.1".
+
+* `svc()` on single-season `occu()` under NUTS is now recovery-validated rather
+  than shape-validated (gcol33/tulpaObs#118, #119). This is the measurement the
+  engine fixes could not make upstream: `svc()` is a tulpaObs term, so no fit
+  reachable from tulpa's own R side exercises the NNGP SVC path. Over seeds
+  1/2/3/11 at N = 150, J = 6, p = 0.6, truth `phi = 0.25`, `sigma = 1.3`:
+  divergences fell from 72-83% of post-warmup draws to **0 on every seed**, and
+  `phi` from ~4 (the old Uniform prior's mean) to 0.14-0.23. Two upstream causes
+  contributed -- the range prior (tulpa#144) and the SVC marginal-SD prior,
+  which was improper on the coordinate it is sampled on and left `sigma`
+  unbounded above; fixing the latter is also what pulled `phi` onto its truth,
+  the two being the two ends of the GP ridge.
+
+  Surface correlation with the known truth did **not** improve (0.73 mean over
+  seeds, against 0.66 before). The calibration test used to predict it would,
+  and no longer asserts on it: sampler health and surface accuracy are separate
+  axes, and the latter is bounded by the information at these settings. The
+  `skip()`ped calibration assertions are enabled.
+
+## 0.0.128 (2026-07-15)
+
+* Occupancy with an areal field under `method = "nested_laplace"` estimates the
+  field precision. The state block was encoded at `M = 1000` pseudo-trials per
+  site whenever the latent block was areal, but a state row carries one binary
+  occupancy observation, so this overstated its information roughly 1000-fold.
+  The field prior was swamped, between-cell binomial noise was read as a real
+  field, and the state slope inflated with the field through the logistic
+  conditional-to-marginal factor. Any nested latent block now encodes the state
+  arm at `M = 1`, the site's actual information content. On `dyn_occu()` +
+  `icar()` this moves the fitted field from sd 1.35 to 0.164 where the truth is
+  0, and from 2.46 to 0.917 where the truth is 1.0; the season-1 slope moves from
+  0.64 to 0.53 against a truth of 0.5, and interval coverage from 0.83 to 0.95.
+  The encoding is monotone in `M` and no arm regresses, single-season included.
+
+* `dyn_occu()` and `int_occu()` under `method = "nested_laplace"` report state
+  standard errors. Both fell through to a path that finds no `H_beta` on a
+  nested-Laplace fit and returns `NA`, so every such fit reported `NA` state SEs
+  (and therefore no intervals) while the detection, colonization and extinction
+  arms were finite. The Louis identity that the single-season arm already used is
+  not family-specific -- the state arm's complete-data score is
+  `x_i (z_i - psi_i)` in all three -- so it now covers them, reading the season-1
+  smoothed weight column for dynamic and the shared per-site weight for
+  integrated.
+
+* `int_occu()` + an areal field additionally reached neither of the two fixes
+  above: its M-step had no latent-block branch (so a nested areal block, which
+  arrives with an empty spatial slot, took the `M = 1000` path), and the driver
+  never handed it the latent prior, leaving its field-aware E-step unreachable.
+  Its field now recovers at 0.976 against a truth of 1.0 and shrinks to 0.178
+  against a truth of 0, with finite SEs on every seed.
+
+* These combinations are now recovery-tested rather than smoke-tested
+  (`test-occu-areal-recovery.R`, `test-int-occu-areal-recovery.R`,
+  `test-dyn-occu-areal-recovery.R`, `test-dyn-occu-svc-recovery.R`). The previous
+  tests asserted a class, a type string and a field length on fixtures containing
+  no field, and passed throughout. Note that a null-field fixture cannot test this
+  path at all: the outer grid runs over `tau` in [0.3, 30], so a true field sd of
+  0 lies outside it and the marginal can only report the smallest field the grid
+  expresses -- "correctly shrunk" and "pinned at the grid edge" give the same
+  number. The new tests use a field the grid represents in its interior and assert
+  the grid mode is off both boundaries.
+
+* Community N-mixture latent factors: `ms_abun()` now takes `latent(n)` on the
+  abundance formula (the spAbundance `lfMsNMix` analogue), giving residual
+  species co-occurrence through per-site factors with per-species loadings, and
+  composes with a shared field (`icar()` / `car_proper()` / `bym2()` / `spde()`)
+  for the spatial-factor case. The latent abundance still marginalises in closed
+  form per species-site, so the whole latent structure sits on `log lambda` and
+  the family reduces to one working oracle over the Royle marginal, driving the
+  shared block-coordinate engine added in 0.0.127. That oracle is the Louis
+  (1982) block `nmix_site_marginal()` already exposes -- no new kernel. The
+  residual species correlation recovers at ~0.99, and with a shared field the
+  field and factors separate cleanly (field ~0.98, residual ~0.94). Poisson only:
+  a negative-binomial size is a second per-site dispersion and is not identified
+  against a per-site latent structure. A plain shared field with no factors keeps
+  its existing C++ path.
+
+* Community distance sampling: new `ms_distance()` family (the spAbundance `msDS`
+  analogue) -- per-species binned distance sampling with Gaussian community
+  hyperpriors on the abundance and detection-scale coefficients, with `latent(n)`
+  factors (`lfMsDS`) and a shared field (`sfMsDS`). `y` is a
+  `[n_sites x n_bins x n_species]` array or a named list of per-bin count
+  matrices. The latent abundance marginalises per species-site exactly as for
+  `distance()`, so the family adds no C++: the existing distance kernel already
+  returns the per-site marginal pieces the community EM and the latent driver
+  need, and the driver's oracle is the same Louis formula the community N-mixture
+  uses. Under the hazard-rate key the log-shape is shared across species. The
+  community means are unbiased over seeds with ~0.9 Wald coverage, and the
+  residual species correlation recovers at ~0.99. Poisson only; no NUTS path yet.
+  `simulate_ms_distance()` draws through the same quadrature the likelihood
+  integrates against, so simulated data come from the `pi` the model is fit
+  against.
+
+* `abun()` and `ms_abun()` now reject a non-numeric `K_max`. `K_max` is the first
+  argument, so `abun("negbin")` -- reaching for the mixing distribution -- bound
+  the string to `K_max`, coerced it to `NA`, and surfaced much later as an
+  unrelated comparison error inside a kernel. Write `abun(mixture = "negbin")`.
+
+* The shared community factor update now rejects a non-finite Newton step,
+  holding the previous iterate instead. A marginal that sums over a latent count
+  can return a non-finite curvature once an iterate wanders far enough out, and
+  the resulting `NaN` propagated into the factors and surfaced only later, as a
+  non-finite standard deviation in the rescale. The guard is a no-op when every
+  step is finite, so existing factor fits are unchanged.
+
+* Caught up with the current `tulpa`: the nested-Laplace fitters no longer pass
+  the removed `verbose` control, the joint paths pass `k_samples` (renamed from
+  `diagnose_draws`), and the AGHQ calls pass `max_iter` (renamed from `maxit`).
+  Against the current `tulpa` these had broken the areal `count()` path, the
+  varying-coefficient abundance fit, and every `occu_cover()` nested-Laplace
+  joint fit. The user-facing `control` names are unchanged.
+
+* The shared community Laplace-EM gained two optional arguments, both defaulting
+  to the previous behaviour byte-identically: `sp_info` (an analytic per-species
+  observed information, for families whose kernel already exposes it -- the
+  finite-difference fallback spends `2(P + G)` full marginal sweeps per species
+  per Newton step rediscovering it) and `init_b` / `init_Sigma` (a warm start, so
+  a block-coordinate caller re-entering the EM once per outer pass resumes
+  instead of restarting cold).
+
 ## 0.0.127 (2026-07-15)
 
 * One shared latent-structure engine for the community families

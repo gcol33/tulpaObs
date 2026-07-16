@@ -395,23 +395,81 @@
 .tobs_latent_factor_update <- function(oracle, eta_base, zeta, lambda,
                                        inner = 15L, center = FALSE) {
   Ns <- nrow(eta_base); S <- ncol(eta_base); Qk <- ncol(zeta)
+  ridge <- 1e-3
+
+  # The penalised objective both half-passes ascend: the data log-likelihood, the
+  # N(0, I) factor prior, and the loading ridge. An eta far enough out to overflow
+  # an exp link reads as -Inf, so the line search below rejects it.
+  obj <- function(z, l) {
+    v <- oracle$data_ll(eta_base + tcrossprod(z, l)) -
+      0.5 * sum(z * z) - ridge / 2 * sum(l * l)
+    if (is.finite(v)) v else -Inf
+  }
+
+  # Newton step against the curvature the family supplies, bumped by a small
+  # ridge when that curvature is singular.
+  nstep <- function(H, g) {
+    tryCatch(as.numeric(solve(H, g)), error = function(e)
+      tryCatch(as.numeric(solve(H + diag(1e-6, nrow(H)), g)),
+               error = function(e2) rep(NA_real_, length(g))))
+  }
+
+  # A Newton step is not guaranteed to ascend: the count marginals (N-mixture,
+  # distance) are exp-linked, so an overshoot drives exp(eta) past overflow and
+  # the family returns a non-finite score, which then propagates into the next
+  # solve. Halve the step until it ascends; hold the previous iterate if it never
+  # does. Within a half-pass the updates are mutually independent, so one shared
+  # scale is exact for whichever step it accepts. A full-length step ascends in
+  # the well-behaved case and is applied unchanged.
+  ascend <- function(f0, build) {
+    t <- 1
+    while (t > 1e-4) {
+      cand <- build(t)
+      f <- obj(cand$zeta, cand$lambda)
+      if (f > f0) return(c(cand, list(f = f)))
+      t <- t / 2
+    }
+    NULL
+  }
+
   for (it in seq_len(inner)) {
+    # Recomputed per pass: the rescale and the loading centring below both move
+    # the objective, so a value carried over from the previous pass is stale.
+    f0 <- obj(zeta, lambda)
+    if (!is.finite(f0)) break
+
     wk <- oracle$working(eta_base + tcrossprod(zeta, lambda))
+    if (any(!is.finite(wk$score)) || any(!is.finite(wk$curv))) break
+    Dz <- matrix(0, Ns, Qk)
     for (i in seq_len(Ns)) {
       g <- as.numeric(crossprod(lambda, wk$score[i, ])) - zeta[i, ]
       H <- crossprod(lambda * sqrt(wk$curv[i, ])) + diag(Qk)
-      zeta[i, ] <- zeta[i, ] + solve(H, g)
+      Dz[i, ] <- nstep(H, g)
     }
+    if (all(is.finite(Dz))) {
+      cand <- ascend(f0, function(t) list(zeta = zeta + t * Dz, lambda = lambda))
+      if (!is.null(cand)) { zeta <- cand$zeta; f0 <- cand$f }
+    }
+
     wk <- oracle$working(eta_base + tcrossprod(zeta, lambda))
+    if (any(!is.finite(wk$score)) || any(!is.finite(wk$curv))) break
+    Dl <- matrix(0, S, Qk)
     for (s in seq_len(S)) {
-      g <- as.numeric(crossprod(zeta, wk$score[, s])) - 1e-3 * lambda[s, ]
-      H <- crossprod(zeta * sqrt(wk$curv[, s])) + 1e-3 * diag(Qk)
-      lambda[s, ] <- lambda[s, ] + solve(H, g)
+      g <- as.numeric(crossprod(zeta, wk$score[, s])) - ridge * lambda[s, ]
+      H <- crossprod(zeta * sqrt(wk$curv[, s])) + ridge * diag(Qk)
+      Dl[s, ] <- nstep(H, g)
     }
+    if (all(is.finite(Dl))) {
+      cand <- ascend(f0, function(t) list(zeta = zeta, lambda = lambda + t * Dl))
+      if (!is.null(cand)) { lambda <- cand$lambda; f0 <- cand$f }
+    }
+
     for (q in seq_len(Qk)) {
       zeta[, q] <- zeta[, q] - mean(zeta[, q])
       sdq <- stats::sd(zeta[, q])
-      if (sdq > 1e-6) { zeta[, q] <- zeta[, q] / sdq; lambda[, q] <- lambda[, q] * sdq }
+      if (is.finite(sdq) && sdq > 1e-6) {
+        zeta[, q] <- zeta[, q] / sdq; lambda[, q] <- lambda[, q] * sdq
+      }
     }
     # When composed with a shared areal field, centre the loadings across species
     # so the field owns the shared spatial mean and the factors own the between-

@@ -248,6 +248,18 @@
   # NUTS+temporal not yet wired (R/distance.R, R/distance_spatial.R,
   # src/distance_*.cpp).
   distance = c("laplace", "nested_laplace", "nuts"),
+  # ms_distance: community binned distance sampling (the spAbundance msDS
+  # analogue) -- per-species distance sampling with Gaussian community
+  # hyperpriors on the abundance / detection-scale coefficients, over the shared
+  # community Laplace-EM (R/ms_distance.R). The latent N still integrates out in
+  # closed form per species-site, so every fit is driven by the existing distance
+  # kernel (cpp_distance_site_sweep); no new C++. laplace: the plain community
+  # fit, or latent() factors alone (lfMsDS). nested_laplace: a shared field
+  # (icar/car_proper/bym2/spde) with or without factors (sfMsDS), via the same
+  # block coordinate ascent as every other community family
+  # (R/community_latent.R). Poisson only (the negbin size is not yet a
+  # per-species RE); NUTS not wired (gcol33/tulpaObs#117).
+  ms_distance = c("laplace", "nested_laplace"),
   # fp_occu: multistate false-positive occupancy (Miller et al. 2011). Latent
   # occupancy z summed out in closed form (two states); four site-level logit
   # arms (psi, true detection p11, false-positive p10, certain-classification b).

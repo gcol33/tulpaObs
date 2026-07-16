@@ -544,8 +544,8 @@
       nn_order = svc$nn_order, nn_order_inv = svc$nn_order_inv,
       cov_type = svc$cov_type, shared = svc$shared,
       sigma2_prior_scale = svc$sigma2_prior_scale,
-      phi_prior_lower = svc$phi_prior_lower,
-      phi_prior_upper = svc$phi_prior_upper
+      phi_prior_U = svc$prior_range[1],
+      phi_prior_alpha = svc$prior_range[2]
     )
   }
 
@@ -934,8 +934,8 @@ build_spatial_params <- function(spatial, n_sites) {
     params$spatial_shared_det <- spatial$shared[2]
     params$sigma2_prior_U <- spatial$sigma2_prior_U
     params$sigma2_prior_alpha <- spatial$sigma2_prior_alpha
-    params$phi_prior_lower <- spatial$phi_prior_lower
-    params$phi_prior_upper <- spatial$phi_prior_upper
+    params$phi_prior_U <- spatial$prior_range[1]
+    params$phi_prior_alpha <- spatial$prior_range[2]
 
   } else if (spatial$type == "multiscale_gp") {
     if (spatial$n_obs != n_sites) {

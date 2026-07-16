@@ -99,8 +99,8 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
 
         data.gp_sigma2_prior_U = Rcpp::as<double>(sp["sigma2_prior_U"]);
         data.gp_sigma2_prior_alpha = Rcpp::as<double>(sp["sigma2_prior_alpha"]);
-        data.gp_phi_prior_lower = Rcpp::as<double>(sp["phi_prior_lower"]);
-        data.gp_phi_prior_upper = Rcpp::as<double>(sp["phi_prior_upper"]);
+        data.gp_phi_prior_U = Rcpp::as<double>(sp["phi_prior_U"]);
+        data.gp_phi_prior_alpha = Rcpp::as<double>(sp["phi_prior_alpha"]);
         data.gp_parameterization = 1;  // Non-centered
 
     } else if (type == "multiscale_gp") {
@@ -382,10 +382,11 @@ inline void populate_svc(tulpa::ModelData& data, Rcpp::List svc_spec) {
     // Priors
     if (svc_spec.containsElementNamed("sigma2_prior_scale"))
         data.svc_sigma2_prior_scale = Rcpp::as<double>(svc_spec["sigma2_prior_scale"]);
-    if (svc_spec.containsElementNamed("phi_prior_lower"))
-        data.svc_phi_prior_lower = Rcpp::as<double>(svc_spec["phi_prior_lower"]);
-    if (svc_spec.containsElementNamed("phi_prior_upper"))
-        data.svc_phi_prior_upper = Rcpp::as<double>(svc_spec["phi_prior_upper"]);
+    // Unconditional: svc() requires prior_range, so the spec always carries the
+    // anchors. Leaving them at the -1.0 sentinel instead would defer the failure
+    // to tulpa's layout gate, which cannot name the term argument.
+    data.svc_phi_prior_U = Rcpp::as<double>(svc_spec["phi_prior_U"]);
+    data.svc_phi_prior_alpha = Rcpp::as<double>(svc_spec["phi_prior_alpha"]);
 
     // Sharing: which processes get SVC
     Rcpp::LogicalVector shared = Rcpp::as<Rcpp::LogicalVector>(svc_spec["shared"]);

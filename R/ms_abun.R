@@ -383,7 +383,7 @@
       comm <- tulpa::tulpa_re_aghq(
         theta0 = theta_cur, re_terms = re_terms, Sigma0 = Sigma_cur,
         oracle = orc, gradient = "fd", n_quad = as.integer(n_quad),
-        lkj_eta = lkj_eta, theta_prior_sd = 100, maxit = as.integer(inner_maxit))
+        lkj_eta = lkj_eta, theta_prior_sd = 100, max_iter = as.integer(inner_maxit))
       if (is.null(comm)) return(NULL)
       theta_cur <- comm$theta; Sigma_cur <- comm$Sigma_list
       mu_lambda <- comm$theta[seq_len(p_lam)]
@@ -688,10 +688,18 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   X_det_site <- model$X_processes[[2]]
   p_p_site   <- ncol(X_det_site)
   # Abundance log-linear predictor; on the spatial path add the shared field
-  # offset f_i (one spatial unit per site) to every species' log lambda.
+  # offset f_i to every species' log lambda, and on the latent path the
+  # per-(site, species) factor contribution. The block-coordinate latent fitter
+  # records the per-site eta contribution in `nmix_field_offset` (the node field
+  # mapped through the site -> cell map, which need not be the identity); the C++
+  # spatial path has one unit per site, so its field IS the offset.
   eta_lambda <- X_lambda %*% t(cm$coef_lambda)
-  if (!is.null(object$spatial_field)) {
-    eta_lambda <- sweep(eta_lambda, 1, as.numeric(object$spatial_field), "+")
+  fld <- model$nmix_field_offset %||% object$spatial_field
+  if (!is.null(fld)) {
+    eta_lambda <- sweep(eta_lambda, 1, as.numeric(fld), "+")
+  }
+  if (!is.null(model$nmix_factor_offset)) {
+    eta_lambda <- eta_lambda + model$nmix_factor_offset
   }
   lambda <- exp(eta_lambda)
   # Detection arm: use only the site-level columns of the coefficient vector

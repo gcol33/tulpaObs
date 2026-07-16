@@ -113,6 +113,47 @@
   }
 }
 
+# The PC prior anchor on a continuous field's range, `c(r0, alpha)` encoding
+# P(range < r0) = alpha (Fuglstad et al. 2019). Shared by the NNGP terms gp()
+# and svc(); spde() carries the same argument straight into tulpa::spatial_spde(),
+# which validates it engine-side.
+#
+# There is deliberately no default. The range is in coordinate units, so no
+# value is right for every dataset, and a default would be an invented prior:
+# tulpa's own NNGP anchors ship unset and its layout gate errors without them
+# (gcol33/tulpa#144). Failing here names the term and the coordinate scale
+# instead of surfacing as a ModelData field name.
+.tobs_check_prior_range <- function(prior_range, term) {
+  if (is.null(prior_range)) {
+    stop(sprintf(paste0(
+      "%s(): `prior_range` is required. Give `c(r0, alpha)`, a PC prior on the\n",
+      "  spatial range encoding P(range < r0) = alpha. The range is in the units\n",
+      "  of the coordinates (the kernel is exp(-d / range)), so pick r0 as a\n",
+      "  distance below which you would be surprised to find the field's\n",
+      "  correlation gone -- e.g. prior_range = c(0.1, 0.05) on unit-square\n",
+      "  coordinates reads as \"5%% chance the range is under 0.1\"."), term),
+      call. = FALSE)
+  }
+  pr <- tryCatch(as.numeric(prior_range),
+                 error = function(e) stop(sprintf(
+                   "%s(): `prior_range` must be numeric.", term), call. = FALSE),
+                 warning = function(w) stop(sprintf(
+                   "%s(): `prior_range` must be numeric.", term), call. = FALSE))
+  if (length(pr) != 2L || anyNA(pr)) {
+    stop(sprintf("%s(): `prior_range` must be a length-2 numeric c(r0, alpha).",
+                 term), call. = FALSE)
+  }
+  if (!(pr[1] > 0)) {
+    stop(sprintf("%s(): `prior_range[1]` (r0) must be > 0, not %g.",
+                 term, pr[1]), call. = FALSE)
+  }
+  if (!(pr[2] > 0) || !(pr[2] < 1)) {
+    stop(sprintf("%s(): `prior_range[2]` (alpha) must be in (0, 1), not %g.",
+                 term, pr[2]), call. = FALSE)
+  }
+  pr
+}
+
 # icar(graph)              — intrinsic CAR over an adjacency graph
 #
 # `weight` (optional) is a per-node numeric column that makes this a
@@ -184,9 +225,10 @@
 .tobs_term_gp <- function(..., coords = NULL, cov = "exponential", nu = 1.5,
                           nn = 15, id = NULL,
                           sigma2_prior_U = 1.0, sigma2_prior_alpha = 0.01,
-                          phi_prior_lower = 0.01, phi_prior_upper = 10.0) {
+                          prior_range = NULL) {
   coords <- .tobs_collect_coords(list(...), coords, "gp")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian", "spherical"))
+  prior_range <- .tobs_check_prior_range(prior_range, "gp")
   n <- nrow(coords); nn <- min(nn, n - 1L)
   nngp <- compute_nngp_neighbors(coords, nn)
   .tobs_term(list(
@@ -198,7 +240,7 @@
     nn_order = nngp$nn_order, nn_order_inv = nngp$nn_order_inv,
     cov_type = cov, nu = nu,
     sigma2_prior_U = sigma2_prior_U, sigma2_prior_alpha = sigma2_prior_alpha,
-    phi_prior_lower = phi_prior_lower, phi_prior_upper = phi_prior_upper
+    prior_range = prior_range
   ), class = "tobs_spatial", id = id, label = "gp")
 }
 
@@ -314,9 +356,10 @@
 # svc(lon, lat, indices)   — spatially varying coefficients on design columns
 .tobs_term_svc <- function(..., indices, coords = NULL, cov = "exponential",
                            nn = 15, id = NULL, sigma2_prior_scale = 1,
-                           phi_prior_lower = 0.01, phi_prior_upper = 10) {
+                           prior_range = NULL) {
   coords <- .tobs_collect_coords(list(...), coords, "svc")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian"))
+  prior_range <- .tobs_check_prior_range(prior_range, "svc")
   n <- nrow(coords); nn <- min(nn, n - 1L)
   nngp <- compute_nngp_neighbors(coords, nn)
   .tobs_term(list(
@@ -325,7 +368,7 @@
     nn_idx = as.vector(t(nngp$nn_idx)), nn_dist = as.vector(t(nngp$nn_dist)),
     nn_order = nngp$nn_order, nn_order_inv = nngp$nn_order_inv,
     cov_type = cov, sigma2_prior_scale = sigma2_prior_scale,
-    phi_prior_lower = phi_prior_lower, phi_prior_upper = phi_prior_upper
+    prior_range = prior_range
   ), class = "tobs_svc", id = id, label = "svc")
 }
 

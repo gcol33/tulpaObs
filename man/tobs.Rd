@@ -37,9 +37,9 @@ response via \verb{y =}; a two-sided formula for those errors.
 
 Structured effects are written as terms inside the formula, the way
 \code{lme4}, \code{mgcv}, and \code{INLA} do: spatial fields \code{icar(graph = adj)},
-\code{bym2(graph = adj)}, \code{gp(lon, lat)}, \code{spde(lon, lat)}; random effects
-\code{re(group)}; temporal fields \code{temporal(time)}; spatially varying
-coefficients \code{svc(lon, lat, indices = ...)}; community latent factors
+\code{bym2(graph = adj)}, \code{gp(lon, lat, prior_range = c(r0, alpha))},
+\code{spde(lon, lat)}; random effects \code{re(group)}; temporal fields
+\code{temporal(time)}; spatially varying coefficients \code{svc(lon, lat, indices = ..., prior_range = c(r0, alpha))}; community latent factors
 \code{latent(k)}. A term enters whichever linear predictor it is written in
 (occupancy \code{formula} or \code{detection}). To share one realization across
 both predictors, tag the term with \code{id = "u"} and write \code{copy("u")} in
@@ -51,6 +51,16 @@ The spatial fields also have a single-verb umbrella \code{spatial(..., model = .
 \code{spatial(lon, lat, model = "spde")} is \code{spde(lon, lat)}. \code{model} is one
 of \code{"icar"}, \code{"bym2"}, \code{"car"}, \code{"car_proper"}, \code{"gp"}, \code{"multiscale_gp"},
 \code{"spde"}; per-model arguments pass through unchanged.
+
+The continuous fields (\code{gp()}, \code{svc()}, \code{spde()}) require \code{prior_range = c(r0, alpha)}, a penalized-complexity prior on the spatial range encoding
+\code{P(range < r0) = alpha} (Fuglstad et al. 2019). The range is in the units
+of the coordinates -- the kernel is \code{exp(-d / range)} -- so choose \code{r0} as
+a distance below which the field's correlation would be surprisingly short:
+on unit-square coordinates \code{prior_range = c(0.1, 0.05)} reads as "a 5\%
+chance the range is under 0.1". There is no default, deliberately. The
+range is weakly identified by the likelihood alone, so a default would be
+an invented prior doing real work on the posterior rather than a
+convenience.
 
 Random effects also accept \code{lme4} bar syntax as shorthand for \code{re()}:
 \code{(1 | g)} is \code{re(g)}, \code{(x | g)} is a correlated random intercept and

@@ -89,8 +89,10 @@
   res <- tulpa::tulpa_nested_laplace(
     y = y, n_trials = rep(1L, N), X = X, prior = prior,
     family = fam, phi = as.numeric(model$count_phi %||% 1.0),
+    # `verbose` is not a tulpa_nested_laplace() knob (it validates its control
+    # names); the driver's own reporting is the `progress` option tobs() scopes.
     control = list(max_iter = as.integer(max_iter), tol = as.numeric(tol),
-                   keep_grid_hessians = TRUE, verbose = isTRUE(verbose))
+                   keep_grid_hessians = TRUE)
   )
 
   fe <- .count_spatial_fe_moments(res, p)

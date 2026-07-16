@@ -1,4 +1,71 @@
 # ============================================================================
+# Shared state-arm encoding
+#
+# The occupancy state arm is encoded for the M-step as a pseudo-binomial:
+# y = round(M * w), n_trials = M, where w = E[z_i | y] from the E-step. M is the
+# pseudo-trial count that encoding pretends each site carries, and all three
+# families (single / dynamic / integrated) pick it by the same rule:
+#
+#   latent_prior  -> M = 1. A nested-Laplace latent block. A state row carries
+#     exactly ONE binary occupancy observation, so M = 1 is the site's real
+#     information content. Anything larger overstates it M-fold and swamps the
+#     field prior: between-cell binomial noise reads as a real field, the field
+#     inflates, and the state slope inflates with it through the logistic
+#     conditional-vs-marginal factor sqrt(1 + 0.346 sigma^2).
+#   spatial_occ   -> M = 4. A single-Laplace SPDE mesh field, which needs the
+#     same protection; M = 4 keeps the per-site effective sample size O(1) while
+#     leaving some fractional resolution on the weights.
+#   neither       -> M = 1000. The inflation makes the M-step a sharp binomial
+#     whose mode equals the weighted mean, and there is no prior for it to swamp.
+#
+# The two arguments are mutually exclusive by construction --
+# .tobs_laplace_nested() always passes spatial = NULL -- so the order of the
+# first two branches is not reachable-input-sensitive.
+#
+# Measured on a 40-cell chain, 6 sites/cell, 12-20 seeds (dev_notes/_run_m_final.R,
+# _run_m_single.R), truth slope 0.5 / f0 sd 1.0 / f1 sd 0.8:
+#
+#                      slope    coverage   f0 sd    f1 sd
+#   dyn + icar  M=4    0.6232   0.83       1.3750   -
+#   dyn + icar  M=1    0.5253   1.00       0.8618   -
+#   dyn + SVC   M=4    0.7413   0.58       1.8212   1.8877
+#   dyn + SVC   M=1    0.4872   0.92       0.9231   0.8601
+#   single      M=4    0.5669   0.95       0.9295   -
+#   single      M=1    0.5207   0.95       0.9294   -
+#
+# Monotone in M in every arm, and M = 1 is uniformly best: no arm regresses. The
+# apparent downside -- round(w * 1) is 0/1, so the fractional resolution the
+# inflation exists for is lost -- does not materialise: the slope IMPROVES,
+# because the information-content error dominates the rounding loss.
+#
+# An areal icar/bym2/car_proper block is strongly informative at the grid scale,
+# which does NOT let it tolerate a sharp encoding: the rows it is being fit
+# against still carry one bit each, and that is what M has to match.
+# ============================================================================
+.tobs_state_M <- function(spatial_occ, latent_prior) {
+  if (!is.null(latent_prior)) 1L
+  else if (!is.null(spatial_occ)) 4L
+  else 1000L
+}
+
+# Pseudo-binomial state block at the M above. `any_det` sites are pinned to w = 1
+# (a detection proves occupancy). The SPDE mesh projection attaches only on the
+# single-Laplace spatial path; a nested latent block's prior is attached to
+# occ$prior upstream by .tobs_laplace_nested().
+.tobs_encode_state_block <- function(weights, any_det, X_occ, spatial_occ,
+                                     latent_prior) {
+  M <- .tobs_state_M(spatial_occ, latent_prior)
+  y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
+  y_occ <- pmin(pmax(y_occ, 0L), M)
+  occ_block <- list(y = y_occ, n_trials = rep(M, length(y_occ)), X = X_occ,
+                    family = "binomial")
+  # A no-op unless spatial_occ is an SPDE term; a nested latent block never
+  # reaches here with a non-NULL spatial_occ.
+  .attach_spatial_spde(occ_block, spatial_occ)
+}
+
+
+# ============================================================================
 # Single-season callbacks
 # ============================================================================
 build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
@@ -27,15 +94,6 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
          "or method = 'nuts'.", call. = FALSE)
   }
 
-  # A continuous Matern (SPDE) block on the nested-Laplace latent prior needs
-  # the same modest pseudo-binomial inflation the single-Laplace SPDE path uses
-  # (M = 4): at M = 1000 the data signal swamps the SPDE prior precision, the
-  # mesh field over-fits, and the occupancy slope inflates (the field absorbs
-  # the covariate signal). The areal icar/bym2/car_proper blocks are strongly
-  # informative at the grid scale and tolerate the sharp M = 1000 encoding, so
-  # the modest M is gated on a continuous-field block only.
-  nested_has_spde <- .tobs_latent_prior_has_spde(latent_prior)
-
   n_valid <- integer(n_sites)
   n_det <- integer(n_sites)
   any_det <- logical(n_sites)
@@ -61,22 +119,8 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
     eta_occ <- as.vector(X_occ %*% beta_occ)
     sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
     if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
-    # Nested-Laplace: make the E-step weight P(z_i = 1 | y_i) field-aware (the
-    # field informs which undetected sites are occupied; without this the EM
-    # converges to the fixed-effect-only fixed point and the field cannot track
-    # the data). Prefer the engine's exact per-cell fitted eta, marginalised
-    # over the hyperparameter grid -- correct for every prior including bym2.
-    # Fall back to the grid-weighted mode field offset (exact for d_fac = 1
-    # priors; skips bym2) when the engine did not return fitted_eta.
-    if (!is.null(latent_prior)) {
-      eta_marg <- .nested_eta_marginal(fits$occ, n_sites)
-      if (!is.null(eta_marg)) {
-        eta_occ <- eta_marg
-      } else {
-        lat_off <- .nested_eta_offset(latent_prior, fits$occ, p_occ, n_sites)
-        if (length(lat_off) == n_sites) eta_occ <- eta_occ + lat_off
-      }
-    }
+    # Nested-Laplace: make the E-step weight P(z_i = 1 | y_i) field-aware.
+    eta_occ <- .nested_state_eta(eta_occ, latent_prior, fits$occ, p_occ, n_sites)
     psi <- plogis(eta_occ)
 
     if (p_det_visit == 0L) {
@@ -117,39 +161,8 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   }
 
   m_step_encode <- function(weights, ...) {
-    if (is.null(spatial_occ) && !nested_has_spde) {
-      # Pseudo-binomial encoding: y = round(M*w), n_trials = M. The
-      # M-inflation makes the M-step into a sharp binomial whose mode
-      # equals the weighted mean, and is the historical encoding used
-      # everywhere else in the package (areal nested-Laplace blocks too --
-      # their intrinsic-field prior is strong at the grid scale).
-      M <- 1000L
-      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                        family = "binomial")
-    } else if (is.null(spatial_occ) && nested_has_spde) {
-      # Nested-Laplace continuous SPDE block: modest M (= 4) so the mesh-field
-      # prior is not swamped, mirroring the single-Laplace SPDE encoding. The
-      # block prior is attached to occ$prior upstream (.tobs_laplace_nested),
-      # so no .attach_spatial_spde() here.
-      M <- 4L
-      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                        family = "binomial")
-    } else {
-      # Modest pseudo-binomial encoding for SPDE: M = 4 gives some
-      # fractional resolution on the weights while keeping the per-site
-      # effective sample size O(1), so the SPDE prior precision is not
-      # swamped by the data signal as it would be at M = 1000.
-      M <- 4L
-      y_occ <- ifelse(any_det, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                        family = "binomial")
-      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
-    }
+    occ_block <- .tobs_encode_state_block(weights, any_det, X_occ, spatial_occ,
+                                          latent_prior)
     # Detection block: weight by w_i = P(z_i = 1 | y_i, theta). Sites that
     # the E-step thinks are likely empty (w_i ~ 0) must drop out of the
     # detection fit, otherwise they bias p_hat downward by feeding their
@@ -275,7 +288,7 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
 # ============================================================================
 # Dynamic occupancy callbacks
 # ============================================================================
-build_dynamic_callbacks <- function(model, spatial = NULL) {
+build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   y_flat <- model$y_flat
   n_sites <- model$n_sites
   n_seasons <- model$n_seasons
@@ -372,16 +385,17 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
 
   m_step_encode <- function(weights, ...) {
     w <- weights  # n_sites x n_seasons matrix
-    # Occupancy: psi1 from season 1 weights. The pseudo-binomial inflation is
-    # M = 1000 without a field; with the psi1 SPDE field it drops to M = 4 so
-    # the field prior precision is not swamped by the data signal (the same
-    # modest-M encoding the single-season state arm uses).
+    # Occupancy: psi1 from the season-1 weights, at the shared state-arm
+    # encoding. The colonization / extinction arms carry no field and keep the
+    # plain M = 1000 inflation.
     M <- 1000L
-    M_occ <- if (is.null(spatial_occ)) 1000L else 4L
-    w1 <- w[, 1]
-    y_occ <- ifelse(ad[seq(1, by = n_seasons, length.out = n_sites)], M_occ,
-                    as.integer(round(w1 * M_occ)))
-    y_occ <- pmin(pmax(y_occ, 0L), M_occ)
+    occ_block <- .tobs_encode_state_block(
+      weights      = w[, 1],
+      any_det      = ad[seq(1, by = n_seasons, length.out = n_sites)],
+      X_occ        = X_occ,
+      spatial_occ  = spatial_occ,
+      latent_prior = latent_prior
+    )
 
     # Colonization (z_{t-1}=0 -> z_t=1) and extinction (z_{t-1}=1 -> z_t=0) from
     # the EXACT smoothed pairwise joints the E-step accumulated: col_y / ext_y are
@@ -441,10 +455,6 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
                         X = X_det[integer(0), , drop = FALSE],
                         weights = numeric(0), family = "binomial")
     }
-
-    occ_block <- list(y = y_occ, n_trials = rep(M_occ, n_sites), X = X_occ,
-                      family = "binomial")
-    occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
 
     list(
       occ = occ_block,
@@ -527,7 +537,8 @@ build_dynamic_callbacks <- function(model, spatial = NULL) {
 # ============================================================================
 # Integrated occupancy callbacks
 # ============================================================================
-build_integrated_callbacks <- function(model, spatial = NULL) {
+build_integrated_callbacks <- function(model, spatial = NULL,
+                                       latent_prior = NULL) {
   y_sources <- model$y_sources
   site_maps <- model$site_maps
   X_occ <- model$X_processes[[1]]
@@ -576,6 +587,9 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
     eta_occ <- as.vector(X_occ %*% beta_occ)
     sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
     if (length(sp_off) == n_sites) eta_occ <- eta_occ + sp_off
+    # Nested-Laplace: the shared psi field informs which undetected sites are
+    # occupied, so the E-step weight must see it (as the single-season arm does).
+    eta_occ <- .nested_state_eta(eta_occ, latent_prior, fits$occ, p_occ, n_sites)
     psi <- plogis(eta_occ)
     weights <- psi  # Prior occupancy
     for (s in seq_len(n_sources)) {
@@ -600,20 +614,8 @@ build_integrated_callbacks <- function(model, spatial = NULL) {
   }
 
   m_step_encode <- function(weights, ...) {
-    if (is.null(spatial_occ)) {
-      M <- 1000L
-      y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                        family = "binomial")
-    } else {
-      M <- 4L
-      y_occ <- ifelse(any_det_global, M, as.integer(round(weights * M)))
-      y_occ <- pmin(pmax(y_occ, 0L), M)
-      occ_block <- list(y = y_occ, n_trials = rep(M, n_sites), X = X_occ,
-                        family = "binomial")
-      occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
-    }
+    occ_block <- .tobs_encode_state_block(weights, any_det_global, X_occ,
+                                          spatial_occ, latent_prior)
     specs <- list(occ = occ_block)
     # Per-source detection blocks: weight each row by w_i at the global
     # site mapped through src_rows. Sites where the E-step says "almost

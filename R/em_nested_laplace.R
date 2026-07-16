@@ -122,6 +122,33 @@
   as.numeric(crossprod(fe, w / sum(w)))
 }
 
+# Field-aware state linear predictor for a nested-Laplace E-step.
+#
+# The E-step weight P(z = 1 | y) must see the latent block: the field informs
+# which undetected units are occupied. Without it the EM converges to the
+# fixed-effect-only fixed point, the field cannot track the data, and the inner
+# nested-Laplace then fits an unconstrained field to the residual -- which shows
+# up as a field invented where the truth is zero, a real field roughly doubled,
+# and (through the logistic conditional-vs-marginal factor
+# sqrt(1 + 0.346 sigma^2)) a state slope inflated by exactly that factor.
+#
+# Prefer the engine's exact per-cell fitted eta marginalised over the
+# hyperparameter grid -- correct for every prior including bym2. Fall back to the
+# grid-weighted mode reconstruction (exact for d_fac = 1 priors; skips bym2) when
+# the engine did not return fitted_eta, and to the fixed-effect eta before the
+# first M-step has produced a mode.
+#
+# `eta_fixed` is the state arm's X %*% beta (plus any SPDE offset the caller
+# already added); `n_rows` is the state block's row count -- one per site for
+# single / integrated / dynamic (psi1).
+.nested_state_eta <- function(eta_fixed, latent_prior, occ_fit, p_occ, n_rows) {
+  if (is.null(latent_prior)) return(eta_fixed)
+  eta_marg <- .nested_eta_marginal(occ_fit, n_rows)
+  if (!is.null(eta_marg)) return(eta_marg)
+  lat_off <- .nested_eta_offset(latent_prior, occ_fit, p_occ, n_rows)
+  if (length(lat_off) == n_rows) eta_fixed + lat_off else eta_fixed
+}
+
 # Core: latent-field eta contribution at each state row from one latent vector
 # `mode_vec` = c(beta (p_occ), field...). Used both for the EM E-step offset
 # (with the grid-weighted mode) and for per-grid-cell marginalised prediction

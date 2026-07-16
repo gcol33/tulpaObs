@@ -757,10 +757,48 @@
   # AGHQ community debias; areal Poisson only).
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
-      !is.null(structs$svc) || !is.null(structs$latent)) {
-    stop("ms_abun() supports a spatial term (icar()/bym2()/car_proper()) on the ",
-         "abundance formula; temporal / re / svc / latent terms are not yet ",
-         "wired for the community N-mixture.", call. = FALSE)
+      !is.null(structs$svc)) {
+    stop("ms_abun() supports a spatial term (icar()/bym2()/car_proper()/spde()) ",
+         "and latent() factors on the abundance formula; temporal / re / svc ",
+         "terms are not yet wired for the community N-mixture.", call. = FALSE)
+  }
+  # latent() factors -- residual species co-occurrence on the abundance arm via
+  # Q per-site factors with per-species loadings (the lfMsNMix analogue), on
+  # their own or alongside a shared field (the spatial-factor case) -- route to
+  # the shared block-coordinate latent fitter (R/ms_abun_latent.R, over the
+  # generic driver in R/community_latent.R). A plain shared field with NO factors
+  # keeps its dedicated in-tree C++ nested Laplace-EM (tulpaObs#12) below: that
+  # route is faster and already recovery-tested.
+  if (!is.null(structs$latent)) {
+    if (isTRUE(structs$latent$shared[2L])) {
+      stop("ms_abun() latent() factors sit on the abundance arm only; a latent ",
+           "term on the detection formula is not supported.", call. = FALSE)
+    }
+    if (!is.null(structs$spatial)) {
+      if (!identical(engine, "nested_laplace")) {
+        stop("ms_abun(): a shared field alongside latent() factors needs ",
+             "method = \"nested_laplace\" (drop the field for the factor-only ",
+             "community fit).", call. = FALSE)
+      }
+      if (isTRUE(structs$spatial$shared[2L])) {
+        stop("ms_abun() areal field sits on the abundance arm only; a field on ",
+             "the detection formula is not supported.", call. = FALSE)
+      }
+    } else if (identical(engine, "nested_laplace")) {
+      stop("ms_abun(): a latent()-factor model with no shared field uses ",
+           "method = \"laplace\" (the block-coordinate community Laplace-EM).",
+           call. = FALSE)
+    }
+    return(.tobs_fit_ms_abun_latent(
+      model, spatial = structs$spatial, latent = structs$latent,
+      mixture    = family$params$mixture %||% "poisson",
+      K_max      = family$params$K_max,
+      max.iter   = control[["max.iter"]] %||% 100L,
+      tol        = control[["tol"]] %||% 1e-4,
+      sigma.beta = control[["sigma.beta"]] %||% 5,
+      priors     = priors,
+      max.outer  = as.integer(control[["max.outer"]] %||% 25L),
+      verbose    = isTRUE(control[["verbose"]])))
   }
   if (!is.null(structs$spatial)) {
     return(.tobs_fit_ms_nmix_spatial(
@@ -800,6 +838,77 @@
     n_quad    = n_quad,
     lkj_eta   = control[["re.lkj"]] %||% 1.5,
     verbose   = isTRUE(control[["verbose"]]))
+}
+
+
+.dispatch_ms_distance <- function(formula, data, family, detection, y, visits,
+                                  engine, priors, control,
+                                  approx = "gaussian_laplace",
+                                  correction = "none", ...) {
+  dots <- list(...)
+  if (is.null(detection)) {
+    stop("ms_distance() requires a `detection` formula (the log detection-scale ",
+         "predictor).", call. = FALSE)
+  }
+  if (is.null(y)) {
+    stop("ms_distance() requires `y` (a 3D array [n_sites x n_bins x ",
+         "n_species] or a named list of per-bin count matrices).", call. = FALSE)
+  }
+  if (is.null(dots$species)) {
+    stop("ms_distance() requires a `species` argument (the species labels).",
+         call. = FALSE)
+  }
+  if (is.null(family$params$cutpoints)) {
+    stop("ms_distance() requires `cutpoints` (the distance-bin edges) on the ",
+         "family, e.g. family = ms_distance(cutpoints = c(0, 25, 50, 100)).",
+         call. = FALSE)
+  }
+  model <- .tobs_build_ms_distance(
+    abund_formula = formula, det_formula = detection,
+    data = data, y = y, species = dots$species,
+    cutpoints  = family$params$cutpoints,
+    key        = family$params$key      %||% "halfnorm",
+    transect   = family$params$transect %||% "line",
+    mixture    = family$params$mixture  %||% "poisson",
+    quad_order = as.integer(control[["quad.order"]] %||% 64L))
+
+  structs <- .tobs_structures_from_model(model)
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc)) {
+    stop("ms_distance() supports a spatial term ",
+         "(icar()/car_proper()/bym2()/spde()) and latent() factors on the ",
+         "abundance formula; temporal / re / svc terms are not yet wired for ",
+         "the community distance family.", call. = FALSE)
+  }
+  for (nm in c("spatial", "latent")) {
+    if (!is.null(structs[[nm]]) && isTRUE(structs[[nm]]$shared[2L])) {
+      stop(sprintf(paste0("ms_distance() %s() sits on the abundance arm only; ",
+                          "a %s term on the detection formula is not ",
+                          "supported."), nm, nm), call. = FALSE)
+    }
+  }
+  # A shared field needs nested_laplace; factors alone are the plain
+  # block-coordinate Laplace-EM, as for every other community family.
+  if (!is.null(structs$spatial)) {
+    if (!identical(engine, "nested_laplace")) {
+      stop("ms_distance(): a shared field needs method = \"nested_laplace\" ",
+           "(drop the field for the non-spatial community fit).", call. = FALSE)
+    }
+  } else if (identical(engine, "nested_laplace")) {
+    stop("ms_distance(): method = \"nested_laplace\" needs a shared field ",
+         "(icar()/car_proper()/bym2()/spde()) on the abundance formula. For the ",
+         "non-spatial community fit use method = \"laplace\".", call. = FALSE)
+  }
+  .tobs_fit_ms_distance(
+    model, spatial = structs$spatial, latent = structs$latent,
+    mixture    = family$params$mixture %||% "poisson",
+    K_max      = family$params$K_max,
+    max.iter   = control[["max.iter"]] %||% 100L,
+    tol        = control[["tol"]] %||% 1e-4,
+    sigma.beta = control[["sigma.beta"]] %||% 5,
+    priors     = priors,
+    max.outer  = as.integer(control[["max.outer"]] %||% 25L),
+    verbose    = isTRUE(control[["verbose"]]))
 }
 
 

@@ -160,15 +160,6 @@
   if (length(sh) >= arm && isTRUE(sh[arm])) spatial else NULL
 }
 
-# TRUE when a nested-Laplace multi-block latent prior carries a continuous
-# Matern (SPDE) field block. Used to switch the occupancy M-step to the modest
-# pseudo-binomial inflation that keeps the mesh-field prior from being swamped.
-.tobs_latent_prior_has_spde <- function(latent_prior) {
-  if (is.null(latent_prior)) return(FALSE)
-  blocks <- if (!is.null(latent_prior$type)) list(latent_prior) else latent_prior
-  any(vapply(blocks, function(b) identical(b$type, "spde"), logical(1)))
-}
-
 # NUTS sampler-health diagnostics for a non-sampled (Laplace / nested-Laplace)
 # fit. No HMC trajectory exists, so acceptance, divergence, tree depth and the
 # integrator step size are unavailable; they are NA rather than 0/1 so a user
@@ -475,7 +466,16 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
       # random effects are present the occupancy block's fixed-effect SE comes
       # from the GLMM marginal precision (`H_beta`, Schur over the RE block)
       # that tulpa_laplace returns, so skip Louis on the RE path.
-      use_louis <- identical(model$model_type, "single") &&
+      # The Louis identity for the state arm is not single-season-specific. The
+      # arm's complete-data score is x_i (z_i - psi_i) in every one of these
+      # families, so I_obs = X' diag(psi(1-psi) - w(1-w)) X with w = E[z_i | y].
+      # For a dynamic fit the state arm is psi1 and its latent is z_1, whose
+      # smoothed posterior mean is the first season's weight column; integrated
+      # shares one psi across sources and carries a single weight per site.
+      # A state arm left out of this list falls through to
+      # .se_from_laplace_fit(), which finds no H_beta on a nested-Laplace fit and
+      # returns NA, so that family reports no state SEs and no intervals.
+      use_louis <- model$model_type %in% c("single", "dynamic", "integrated") &&
                    identical(sub_name, "occ") &&
                    !is.null(em_result$weights) &&
                    is.null(re_block)
@@ -485,10 +485,15 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
         # M-inflated). Computed in .tobs_re_occ_fixed_se().
         sds_k <- re_block$occ_se
       } else if (use_louis) {
+        # Dynamic carries an [n_sites x n_seasons] weight matrix; the state arm
+        # needs the season-1 column, and the helper length-checks against
+        # nrow(X_occ).
+        w_occ <- if (identical(model$model_type, "dynamic"))
+                   em_result$weights[, 1L] else em_result$weights
         I_obs <- .louis_info_psi_single(
           X_occ       = model$X_processes[[1]],
           beta_psi    = beta,
-          weights     = em_result$weights,
+          weights     = w_occ,
           spatial     = spatial_occ,
           spatial_fit = fi,
           prior_spec  = prior_spec,

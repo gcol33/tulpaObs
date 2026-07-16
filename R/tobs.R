@@ -54,9 +54,10 @@
 #'
 #'   Structured effects are written as terms inside the formula, the way
 #'   `lme4`, `mgcv`, and `INLA` do: spatial fields `icar(graph = adj)`,
-#'   `bym2(graph = adj)`, `gp(lon, lat)`, `spde(lon, lat)`; random effects
-#'   `re(group)`; temporal fields `temporal(time)`; spatially varying
-#'   coefficients `svc(lon, lat, indices = ...)`; community latent factors
+#'   `bym2(graph = adj)`, `gp(lon, lat, prior_range = c(r0, alpha))`,
+#'   `spde(lon, lat)`; random effects `re(group)`; temporal fields
+#'   `temporal(time)`; spatially varying coefficients `svc(lon, lat,
+#'   indices = ..., prior_range = c(r0, alpha))`; community latent factors
 #'   `latent(k)`. A term enters whichever linear predictor it is written in
 #'   (occupancy `formula` or `detection`). To share one realization across
 #'   both predictors, tag the term with `id = "u"` and write `copy("u")` in
@@ -69,6 +70,17 @@
 #'   `spatial(lon, lat, model = "spde")` is `spde(lon, lat)`. `model` is one
 #'   of `"icar"`, `"bym2"`, `"car"`, `"car_proper"`, `"gp"`, `"multiscale_gp"`,
 #'   `"spde"`; per-model arguments pass through unchanged.
+#'
+#'   The continuous fields (`gp()`, `svc()`, `spde()`) require `prior_range =
+#'   c(r0, alpha)`, a penalized-complexity prior on the spatial range encoding
+#'   `P(range < r0) = alpha` (Fuglstad et al. 2019). The range is in the units
+#'   of the coordinates -- the kernel is `exp(-d / range)` -- so choose `r0` as
+#'   a distance below which the field's correlation would be surprisingly short:
+#'   on unit-square coordinates `prior_range = c(0.1, 0.05)` reads as "a 5%
+#'   chance the range is under 0.1". There is no default, deliberately. The
+#'   range is weakly identified by the likelihood alone, so a default would be
+#'   an invented prior doing real work on the posterior rather than a
+#'   convenience.
 #'
 #'   Random effects also accept `lme4` bar syntax as shorthand for `re()`:
 #'   `(1 | g)` is `re(g)`, `(x | g)` is a correlated random intercept and
@@ -504,6 +516,7 @@ tobs <- function(formula,
     ms_abun  = .dispatch_ms_abun,
     removal  = .dispatch_removal,
     distance = .dispatch_distance,
+    ms_distance = .dispatch_ms_distance,
     fp_occu  = .dispatch_fp_occu,
     dyn_abun = .dispatch_dyn_abun,
     cover    = .dispatch_cover,

@@ -7,13 +7,25 @@
 # recovery test writable for the first time.
 #
 # What that test then found: the surface DOES track a known truth (cor 0.49-0.78
-# over seeds), so the eta-assembly and the NNGP gradient are broadly right -- but
-# the sampler is not healthy. ~75% of post-warmup draws diverge and the NNGP
-# range phi lands at ~4 against a truth of 0.25, because tulpa priors phi as
-# Uniform(lower, upper) (mean ~5 at the defaults) behind a hard -INFINITY
-# rejection. See gcol33/tulpa#144. The calibration assertions below are
-# skip()ped against that issue rather than loosened until they pass: a threshold
-# tuned to a diverging sampler would record the bug as the expected behaviour.
+# over seeds), so the eta-assembly and the NNGP gradient were broadly right --
+# but the sampler was not healthy. ~75% of post-warmup draws diverged and the
+# NNGP range phi landed at ~4 against a truth of 0.25. The calibration
+# assertions were skip()ped against gcol33/tulpa#144 rather than loosened until
+# they passed, because a threshold tuned to a diverging sampler records the bug
+# as the expected behaviour.
+#
+# Both causes are now fixed upstream and measured here (gcol33/tulpaObs#119):
+# the range prior (tulpa#144, a Uniform behind a hard -INFINITY rejection, which
+# gives NUTS no gradient to recover from) and the marginal-SD prior (the SVC
+# half-Cauchy was improper on the coordinate it is sampled on, so nothing
+# bounded sigma from above). Over seeds 1/2/3/11 at these settings:
+# divergences 72-83% -> 0%, phi ~4 -> 0.14-0.23 against a truth of 0.25.
+# Surface correlation did NOT move (0.73 mean, vs 0.66 before) -- it is bounded
+# by the information in the data, not by sampler health, which is why the
+# calibration test no longer asserts on it.
+#
+# svc() now requires prior_range = c(r0, alpha): tulpa ships the PC range
+# anchors unset and refuses rather than inventing a default.
 #
 # This is the continuous-NNGP flavour, NOT the areal weighted-bar SVC -- that
 # arm arrives as a `spatial` term and is recovery-tested in
@@ -46,7 +58,8 @@
 # the scaled-column scale and truth would need rescaling before scoring.
 .svc_fit <- function(sim, seed, n_iter = 600L, n_warmup = 300L) {
   suppressWarnings(tobs(
-    ~ svc(lon, lat, indices = 1L, nn = 12), data = sim$data,
+    ~ svc(lon, lat, indices = 1L, nn = 12, prior_range = c(0.1, 0.05)),
+    data = sim$data,
     family = occu(), detection = ~ 1, y = sim$y,
     method = "nuts",
     control = list(n.iter = n_iter, n.warmup = n_warmup, seed = seed,
@@ -103,36 +116,45 @@ test_that("occu() + svc() recovers the shape of a known varying-intercept surfac
   ok <- !is.na(cr)
   expect_gt(sum(ok), 1L)
 
-  # A deliberately loose floor: this asserts the surface carries real spatial
-  # signal (the gradient is not wrong), NOT that the fit is calibrated. Measured
-  # 0.49 / 0.72 / 0.78 at these settings, against a sampler that diverges ~75%
-  # of the time (gcol33/tulpa#144). Tighten this once #144 lands -- do not
-  # tighten it by tuning the simulation.
-  expect_gt(mean(cr[ok]), 0.4)
+  # This asserts the surface carries real spatial signal, NOT that the fit is
+  # calibrated -- the hyperparameters are scored in the test below. Measured
+  # 0.76 / 0.60 / 0.81 (mean 0.73) with the range and marginal-SD priors fixed,
+  # against 0.49 / 0.72 / 0.78 beforehand. The floor is raised off the old 0.4
+  # on those numbers rather than by tuning the simulation, and stays clear of
+  # the 0.60 seed: what moved was the sampler, and the surface correlation is
+  # bounded by the information at N = 150, J = 6, p = 0.6 either way.
+  expect_gt(mean(cr[ok]), 0.55)
 })
 
 test_that("occu() + svc() is calibrated and identifies its NNGP hyperparameters", {
   skip_on_cran()
   skip_if_fast()
-  skip(paste0("blocked on gcol33/tulpa#144: svc() priors phi as Uniform(lower, ",
-              "upper) behind a hard -INFINITY rejection, so NUTS diverges on ",
-              "~75% of post-warmup draws and phi collapses onto the prior mean ",
-              "(~4 vs a truth of 0.25). Enable once the range is ",
-              "reparameterized."))
 
   sim <- .svc_sim(N = 150L, J = 6L, seed = 11L, sigma_f = 1.3, phi_f = 0.25)
   fit <- .svc_fit(sim, seed = 11L)
 
-  # Divergences should be rare, not the norm.
+  # Divergences are now rare rather than the norm: 0 of 300 post-warmup draws
+  # on every seed measured (1, 2, 3, 11), against 72-83% before tulpa#144.
   expect_lt(mean(fit$divergent), 0.05)
 
-  # The marginal SD and the range should both find their truth.
-  sigma_hat <- exp(0.5 * as.numeric(fit$means[["log_sigma2_svc[1]"]]))
-  expect_gt(sigma_hat, 0.7); expect_lt(sigma_hat, 2.2)
-
+  # The range finds its truth instead of the old Uniform prior's mean.
+  # Measured 0.14-0.23 over those seeds against a truth of 0.25; it sat at ~4.
   phi_hat <- exp(as.numeric(fit$means[["log_phi_svc[1]"]]))
   expect_gt(phi_hat, 0.1); expect_lt(phi_hat, 0.8)
 
-  # And the surface should track the truth tightly once the geometry is sane.
-  expect_gt(stats::cor(as.numeric(fit$svc_field), sim$f), 0.75)
+  # The marginal SD is the weakly identified end of the GP ridge -- it trades
+  # off against the range, and spreads 1.06-2.31 over seeds against a truth of
+  # 1.3. The band is wide because that spread belongs to the model at N = 150,
+  # not to the sampler.
+  sigma_hat <- exp(0.5 * as.numeric(fit$means[["log_sigma2_svc[1]"]]))
+  expect_gt(sigma_hat, 0.7); expect_lt(sigma_hat, 2.2)
+
+  # No assertion on cor(surface, truth) here. This test used to close with
+  # `expect_gt(cor, 0.75)` on the reasoning that the surface would track the
+  # truth tightly "once the geometry is sane". Measuring it once the geometry
+  # WAS sane refuted that: correlation barely moved across either fix (seeds
+  # 1/2/3 went 0.49/0.72/0.78 -> 0.76/0.60/0.81, and seed 11 sits at 0.73), so
+  # sampler health and surface accuracy are separate axes -- the latter is set
+  # by how much the data says at N = 150, J = 6, p = 0.6. The surface is scored
+  # by the recovery test above, which is where that claim belongs.
 })

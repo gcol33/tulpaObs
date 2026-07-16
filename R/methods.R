@@ -62,6 +62,7 @@ nobs.tobs_fit <- function(object, ...) {
   } else if (model$model_type == "dyn_abun") {
     sum(!is.na(model$y))
   } else if (model$model_type == "ms_nmix" ||
+             model$model_type == "ms_distance" ||
              model$model_type == "ms_occu_cover" ||
              model$model_type == "ms_occu_cover_spatial" ||
              model$model_type == "occu_multiscale_cover") {
@@ -208,6 +209,9 @@ ranef.tobs_fit <- function(object, ...) {
   if (identical(object$model$model_type, "ms_nmix")) {
     return(.tobs_ranef_ms_nmix(object))
   }
+  if (identical(object$model$model_type, "ms_distance")) {
+    return(.tobs_ranef_ms_distance(object))
+  }
   if (identical(object$model$model_type, "ms_count")) {
     return(.tobs_ranef_ms_count(object))
   }
@@ -351,6 +355,8 @@ fitted.tobs_fit <- function(object, ...) {
   if (identical(model$model_type, "fp_occu")) return(.tobs_fitted_fp_occu(object))
   if (identical(model$model_type, "dyn_abun")) return(.tobs_fitted_dyn_abun(object))
   if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
+  if (identical(model$model_type, "ms_distance"))
+    return(.tobs_fitted_ms_distance(object))
   if (identical(model$model_type, "royle_nichols"))
     return(.tobs_fitted_royle_nichols(object))
   if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))

@@ -277,7 +277,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     Sigma0  = Sigma0,
     oracle  = orc, gradient = grad_mode,
     n_quad = n_quad, lkj_eta = lkj_eta,
-    theta_prior_sd = sigma_beta, maxit = as.integer(max_iter))
+    theta_prior_sd = sigma_beta, max_iter = as.integer(max_iter))
 
   if (is.null(fit)) {
     stop("Community N-mixture optimization failed (singular marginal Hessian ",

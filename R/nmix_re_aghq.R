@@ -121,7 +121,7 @@
     theta0 = theta0, re_terms = re_terms, Sigma0 = Sigma_list,
     oracle = orc,
     n_quad = as.integer(n_quad), lkj_eta = lkj_eta,
-    theta_prior_sd = theta_prior_sd, maxit = as.integer(max_iter))
+    theta_prior_sd = theta_prior_sd, max_iter = as.integer(max_iter))
   if (is.null(ref)) return(NULL)
 
   beta_lambda_ref <- ref$theta[seq_len(p_lam)]
