@@ -226,6 +226,21 @@
 # detection arm couples a site's bins through the shared latent N, so it does not
 # factorize into the per-site scalar offset the base assumes. Both are gated in
 # .tobs_fit_distance_re; this wrapper assumes them.
+# Insert a log_shape row/col into a [lambda | sigma | log_r?] AGHQ vcov at the
+# position build_distance_fit expects (after the sigma block, before log_r), with
+# the profile variance on its diagonal and zero off-diagonals (the profile-
+# likelihood approximation: the shape uncertainty is treated as independent of the
+# beta block, which the outer profile does not couple). Keeps the vcov dimension
+# in step with the coefficient vector so build_distance_fit does not blank it.
+.tobs_distance_insert_shape_vcov <- function(V, p_lam, p_sig, is_nb, var_shape) {
+  V <- as.matrix(V); n <- nrow(V); pos <- p_lam + p_sig; ins <- pos + 1L
+  old_to_new <- c(seq_len(pos), if (n > pos) (pos + 2L):(n + 1L))
+  Vn <- matrix(0, n + 1L, n + 1L)
+  Vn[old_to_new, old_to_new] <- V
+  Vn[ins, ins] <- if (is.finite(var_shape)) var_shape else NA_real_
+  Vn
+}
+
 .tobs_distance_re_aghq <- function(model, design, beta_lambda, beta_p,
                                    Sigma_list, b, mixture = "P", r_init = 10,
                                    K_max = NULL, n_quad = 1L, lkj_eta = 1.5,
@@ -235,10 +250,16 @@
     R_max <- if (length(model$y)) max(rowSums(model$y)) else 0L
     K_max <- as.integer(3L * R_max + 100L)
   }
-  is_nb <- identical(mixture, "NB")
-  idx1  <- as.integer(design[[1]]$idx)
-  y_bins <- matrix(as.integer(model$y), nrow(model$y), ncol(model$y))
-  make_oracle <- function(arm_code, Z_site, K_max)
+  is_nb    <- identical(mixture, "NB")
+  idx1     <- as.integer(design[[1]]$idx)
+  y_bins   <- matrix(as.integer(model$y), nrow(model$y), ncol(model$y))
+  hazard   <- identical(model$key, "hazard")
+  key_code <- .dist_key_code(model$key)
+  p_lam    <- ncol(model$X_processes[[1]]); p_sig <- ncol(model$X_processes[[2]])
+
+  # A make_oracle closure at a FIXED hazard shape eta_b (0 for the half-normal
+  # key). Profiling rebuilds the closure per candidate eta_b (gcol33/tulpaObs#114).
+  make_oracle_eb <- function(eta_b) function(arm_code, Z_site, K_max)
     cpp_distance_grouped_oracle(
       arm = arm_code, y_bins = y_bins,
       X_lambda = model$X_processes[[1]], X_sigma = model$X_processes[[2]],
@@ -247,10 +268,41 @@
       cutpoints = as.numeric(model$cutpoints),
       transect = .dist_transect_code(model$transect),
       quad_order = as.integer(model$quad_order),
-      K_max = as.integer(K_max), nb = is_nb)
-  .tobs_count_re_aghq(make_oracle, model, design,
-                      beta_lambda, beta_p, Sigma_list, b, mixture, r_init,
-                      K_max, n_quad, lkj_eta, theta_prior_sd, max_iter, verbose)
+      K_max = as.integer(K_max), nb = is_nb, key = key_code, eta_b = eta_b)
+  fit_at <- function(eta_b)
+    .tobs_count_re_aghq(make_oracle_eb(eta_b), model, design,
+                        beta_lambda, beta_p, Sigma_list, b, mixture, r_init,
+                        K_max, n_quad, lkj_eta, theta_prior_sd, max_iter, verbose)
+
+  if (!hazard) return(fit_at(0))
+
+  # Hazard-rate key: the scalar log-shape eta_b is not a per-site design column, so
+  # rather than a second global theta slot it is PROFILED over the AGHQ log-
+  # marginal (each candidate is a full AGHQ fit at a fixed shape). Warm the shape
+  # from a no-RE hazard Laplace fit, then optimise it in a window around that.
+  warm_hz <- tryCatch(
+    distance_laplace(y = model$y, X_lambda = model$X_processes[[1]],
+                     X_sigma = model$X_processes[[2]], cutpoints = model$cutpoints,
+                     key = "hazard", transect = model$transect, mixture = mixture,
+                     K_max = K_max, quad_order = model$quad_order,
+                     max_iter = as.integer(max_iter), tol = 1e-6, verbose = FALSE),
+    error = function(e) NULL)
+  eb0 <- if (!is.null(warm_hz) && is.finite(warm_hz$eta_b %||% NA_real_))
+    as.numeric(warm_hz$eta_b) else log(2)
+  prof <- function(eta_b) { r <- tryCatch(fit_at(eta_b), error = function(e) NULL)
+                            if (is.null(r) || !is.finite(r$log_marginal)) -Inf
+                            else r$log_marginal }
+  opt <- stats::optimize(function(eb) -prof(eb), interval = eb0 + c(-1.2, 1.2))
+  eb_hat <- opt$minimum
+  ref <- fit_at(eb_hat)
+  if (is.null(ref)) return(NULL)
+  # Profile SE for the log-shape: FD curvature of the profile log-marginal.
+  h <- 0.06; lp0 <- -opt$objective
+  curv <- -(prof(eb_hat + h) - 2 * lp0 + prof(eb_hat - h)) / h^2
+  var_eb <- if (is.finite(curv) && curv > 0) 1 / curv else NA_real_
+  ref$vcov  <- .tobs_distance_insert_shape_vcov(ref$vcov, p_lam, p_sig, is_nb, var_eb)
+  ref$eta_b <- eb_hat; ref$shape <- exp(eb_hat)
+  ref
 }
 
 

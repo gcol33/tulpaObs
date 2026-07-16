@@ -61,7 +61,7 @@
   bpos_visit <- if (p_pos_visit > 0L) theta[p_occ + p_p + p_pos_site + seq_len(p_pos_visit)] else numeric(0)
   log_disp   <- theta[total]
   disp       <- exp(log_disp)
-  is_beta    <- identical(model$positive, "beta")
+  pos_code   <- .tobs_cover_pos_code(model$positive)
 
   N <- model$n_sites; J <- model$max_visits
   sgm <- function(e) 1 / (1 + exp(-e))
@@ -103,7 +103,7 @@
       # counts the visit.
       for (v in vv[y[i, vv] == 1L & is.finite(y_pos[i, vv])]) {
         ev <- eta_pos[i, v]; yy <- y_pos[i, v]
-        if (is_beta) {
+        if (pos_code == 3L) {            # beta
           mu <- sgm(ev); a <- mu * disp; b <- (1 - mu) * disp
           ly <- log(yy); l1my <- log(1 - yy)
           lp_data <- lp_data + lgamma(disp) - lgamma(a) - lgamma(b) +
@@ -112,7 +112,12 @@
                              (-digamma(a) + digamma(b) + ly - l1my)
           g_logdisp <- g_logdisp + disp * (digamma(disp) - mu * digamma(a) -
                        (1 - mu) * digamma(b) + mu * ly + (1 - mu) * l1my)
-        } else {
+        } else if (pos_code == 4L) {     # identity-Gaussian (#112): raw response
+          sig <- disp; r <- (yy - ev) / sig
+          lp_data <- lp_data - log(sig) - 0.5 * log(2 * pi) - 0.5 * r * r
+          g_eta_pos[i, v] <- r / sig
+          g_logdisp <- g_logdisp + (r * r - 1)
+        } else {                         # lognormal: Gaussian on log(cover)
           sig <- disp; r <- (log(yy) - ev) / sig
           lp_data <- lp_data - log(yy) - log(sig) - 0.5 * log(2 * pi) - 0.5 * r * r
           g_eta_pos[i, v] <- r / sig
@@ -181,7 +186,7 @@
   list(
     n_sites     = as.integer(N),
     max_visits  = as.integer(J),
-    is_beta     = identical(model$positive, "beta"),
+    pos_code    = .tobs_cover_pos_code(model$positive),
     y           = matrix(as.integer(model$y), N, J),
     y_pos       = matrix(as.numeric(model$y_pos), N, J),
     valid       = matrix(as.integer(model$valid), N, J),
@@ -367,7 +372,10 @@
                                                  rho.car.grid = NULL,
                                                  alpha.grid = NULL) {
   is_beta   <- identical(model$positive, "beta")
-  spec_name <- if (is_beta) "occu_cover_beta" else "occu_cover_lognormal"
+  spec_name <- switch(model$positive,
+                      beta     = "occu_cover_beta",
+                      gaussian = "occu_cover_gaussian",
+                      "occu_cover_lognormal")
   n_sites   <- model$n_sites
   site_cell <- model$site_cell %||% seq_len(n_sites)
   n_cells   <- nrow(adj)
@@ -382,6 +390,9 @@
       mu_hat <- mean(pos_vals); var_hat <- max(stats::var(pos_vals), 1e-6)
       max((mu_hat * (1 - mu_hat)) / var_hat - 1, 1)
     } else 10
+  } else if (identical(model$positive, "gaussian")) {
+    # Residual SD on the raw response scale (no log; the response may be negative).
+    if (length(pos_vals) >= 2L) max(stats::sd(pos_vals), 0.05) else 1
   } else {
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }
@@ -478,9 +489,10 @@
 # This is the occu_cover analogue of .tobs_fit_abun_nuts_spatial (tulpa#87): a
 # full-rank proper-CAR precision gives a well-conditioned non-centered geometry, so
 # the field block reuses the abun#51 field machinery (the optional field block in
-# src/occu_cover_nuts.cpp, byte-exact vs the R oracle's field branch). icar/bym2
-# stay on nested_laplace (their flat field-mean needs a sum-to-zero reparam),
-# matching the abun NUTS+areal gate. `...` absorbs unused sampler controls.
+# src/occu_cover_nuts.cpp, byte-exact vs the R oracle's field branch). Intrinsic
+# icar / bym2 fields also sample here via the sum-to-zero eigen-loading that drops
+# the precision null-space (constant) direction (gcol33/tulpaObs#71/#113), the same
+# reparam abun NUTS+areal uses. `...` absorbs unused sampler controls.
 .tobs_fit_occu_cover_nuts_spatial <- function(model, spatial, priors = NULL,
                                               sigma.beta = 5, sigma.logdisp = 5,
                                               n.iter = 2000L, n.warmup = 1000L,

@@ -133,8 +133,8 @@ cpp_distance_ploglik_batch <- function(y, cutpoints, transect, key, quad_order, 
     .Call(`_tulpaObs_cpp_distance_ploglik_batch`, y, cutpoints, transect, key, quad_order, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads)
 }
 
-cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb = FALSE) {
-    .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb)
+cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb = FALSE, key = 0L, eta_b = 0.0) {
+    .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb, key, eta_b)
 }
 
 cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0) {

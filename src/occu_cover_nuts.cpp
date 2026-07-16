@@ -50,7 +50,7 @@ namespace tulpaObs {
 struct OccuCoverNutsData {
     int n_sites = 0;
     int max_visits = 0;
-    bool is_beta = false;
+    int pos_code = 0;       // 0 lognormal, 3 beta, 4 gaussian (#112)
 
     Rcpp::IntegerMatrix y;        // [n_sites x max_visits] detection 0/1 (NA -> 0)
     Rcpp::NumericMatrix y_pos;    // [n_sites x max_visits] cover (0 where y != 1)
@@ -87,7 +87,7 @@ inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
     OccuCoverNutsData d;
     d.n_sites    = Rcpp::as<int>(spec["n_sites"]);
     d.max_visits = Rcpp::as<int>(spec["max_visits"]);
-    d.is_beta    = Rcpp::as<bool>(spec["is_beta"]);
+    d.pos_code   = Rcpp::as<int>(spec["pos_code"]);
     d.y          = Rcpp::as<Rcpp::IntegerMatrix>(spec["y"]);
     d.y_pos      = Rcpp::as<Rcpp::NumericMatrix>(spec["y_pos"]);
     d.valid      = Rcpp::as<Rcpp::IntegerMatrix>(spec["valid"]);
@@ -239,15 +239,9 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
                     const int row = i * J + v;
                     for (int k = 0; k < p_pos_visit; ++k) eta_pos += d.X_pos_visit(row, k) * bpos_visit[k];
                 }
-                if (d.is_beta) {
-                    lp += BetaPositive::log_density(yp, eta_pos, disp);
-                    g_eta_pos[v] = BetaPositive::grad_eta(yp, eta_pos, disp);
-                    g_logdisp   += BetaPositive::grad_logdisp(yp, eta_pos, disp);
-                } else {
-                    lp += LognormalPositive::log_density(yp, eta_pos, disp);
-                    g_eta_pos[v] = LognormalPositive::grad_eta(yp, eta_pos, disp);
-                    g_logdisp   += LognormalPositive::grad_logdisp(yp, eta_pos, disp);
-                }
+                lp += pos_log_density(d.pos_code, yp, eta_pos, disp);
+                g_eta_pos[v] = pos_grad_eta(d.pos_code, yp, eta_pos, disp);
+                g_logdisp   += pos_grad_logdisp(d.pos_code, yp, eta_pos, disp);
             }
         } else {
             // No-detection mixture L = psi * prod_v(1-p_v) + (1-psi). Reuse the

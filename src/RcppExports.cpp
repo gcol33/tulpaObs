@@ -541,8 +541,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_distance_grouped_oracle
-SEXP cpp_distance_grouped_oracle(int arm, Rcpp::IntegerMatrix y_bins, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max, bool nb);
-RcppExport SEXP _tulpaObs_cpp_distance_grouped_oracle(SEXP armSEXP, SEXP y_binsSEXP, SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP cutpointsSEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
+SEXP cpp_distance_grouped_oracle(int arm, Rcpp::IntegerMatrix y_bins, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max, bool nb, int key, double eta_b);
+RcppExport SEXP _tulpaObs_cpp_distance_grouped_oracle(SEXP armSEXP, SEXP y_binsSEXP, SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP cutpointsSEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP keySEXP, SEXP eta_bSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -559,7 +559,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type quad_order(quad_orderSEXP);
     Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
     Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_distance_grouped_oracle(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb));
+    Rcpp::traits::input_parameter< int >::type key(keySEXP);
+    Rcpp::traits::input_parameter< double >::type eta_b(eta_bSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_grouped_oracle(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, cutpoints, transect, quad_order, K_max, nb, key, eta_b));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2298,7 +2300,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_distance_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_distance_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
     {"_tulpaObs_cpp_distance_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_distance_ploglik_batch, 11},
-    {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 13},
+    {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 15},
     {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 11},
     {"_tulpaObs_cpp_dyn_abun_init_weights_mat", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_init_weights_mat, 9},
     {"_tulpaObs_cpp_dyn_abun_init_loglik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_init_loglik, 5},

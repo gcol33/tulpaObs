@@ -78,7 +78,7 @@ test_that("gaussian presence is y != 0 (negative magnitudes are present)", {
   expect_true(is.finite(fit$sigma_pos))
 })
 
-test_that("cover(gaussian): WAIC works, PPC and NUTS are gated", {
+test_that("cover(gaussian): WAIC works, PPC gated, NUTS available", {
   sim <- simulate_cover(N = 400, beta_pos = c(2.0, 0.4), sigma_pos = 0.5,
                         response = "gaussian", seed = 21)
   fit <- tobs(formula = ~ x, data = sim$data,
@@ -86,10 +86,13 @@ test_that("cover(gaussian): WAIC works, PPC and NUTS are gated", {
   w <- tobs_waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$p_waic))
   expect_error(tobs_ppc(fit), "not defined for cover.*gaussian")
-  expect_error(
-    tobs(formula = ~ x, data = sim$data, family = cover(response = "gaussian"),
-         y = sim$y, method = "nuts"),
-    "not yet wired for method = 'nuts'")
+  # NUTS is wired for the identity-Gaussian arm (gcol33/tulpaObs#112); a short
+  # sample returns a cover_fit rather than erroring.
+  nut <- tobs(formula = ~ x, data = sim$data,
+              family = cover(response = "gaussian"), y = sim$y, method = "nuts",
+              control = list(n.iter = 400L, n.warmup = 300L, verbose = FALSE))
+  expect_s3_class(nut, "cover_fit")
+  expect_equal(nut$method, "nuts")
 })
 
 

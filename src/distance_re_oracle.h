@@ -18,6 +18,14 @@
 // into the areal-BFGS fixed block (tulpaObs#79) rather than this per-site
 // grouped-RE theta layout.
 //
+// The hazard-rate key is supported by PROFILING (gcol33/tulpaObs#114): the scalar
+// log-shape eta_b is held FIXED at a value the R wrapper supplies and the AGHQ
+// fit runs over the count-family theta layout unchanged; the R wrapper optimises
+// eta_b in an outer loop over the profile log-marginal (so the single global
+// theta slot stays the NB dispersion log_r, no second global coordinate is
+// needed). key_code selects DIST_HALFNORMAL / DIST_HAZARD and eta_b is the fixed
+// hazard shape (0 for the half-normal key).
+//
 // Detection-arm RE is likewise out of scope here: the latent N couples a site's
 // bins, so a detection RE would not factorize into the per-site scalar offset
 // the base assumes. The R wrapper routes only an abundance-arm RE through this
@@ -38,6 +46,8 @@ struct DistanceGroupedOracle : CountGroupedOracle {
     std::vector<std::vector<int>> y_bins_site;  // per-site bin counts
     int n_bins = 0;
     int K_max  = 0;
+    int key_code = DIST_HALFNORMAL;             // half-normal / hazard detection key
+    double eta_b = 0.0;                         // fixed hazard log-shape (profiled in R)
     DistQuad quad;                              // per-fit detection quadrature
 
     DistanceGroupedOracle(int arm_,
@@ -49,18 +59,21 @@ struct DistanceGroupedOracle : CountGroupedOracle {
                           int n_sites_, int n_groups_,
                           const Rcpp::NumericVector& cutpoints,
                           int transect, int quad_order, int K_max_,
-                          bool nb);
+                          bool nb, int key_code_, double eta_b_);
 
     // The RE arm is the abundance arm; eta_p_ptr[0] is the site's log-sigma.
     // Pack the distance marginal's abundance + NB-dispersion fields into the
     // NMixSiteResult the base consumes, with the lone detection row carrying the
     // sigma gradient (grad_eta_p[0]) and its PSD Fisher block (info_eta_p[0]).
+    // Under the hazard key the shape eta_b is held fixed (the R wrapper profiles
+    // it); the sigma gradient / curvature the base reads are the conditional
+    // (fixed-shape) values, exactly as for the half-normal key.
     NMixSiteResult eval_site(int i, const double* eta_p_ptr,
                              double eta_lam) const override {
         const double eta_sigma = (eta_p_ptr != nullptr) ? eta_p_ptr[0] : 0.0;
         const DistSiteResult d = compute_distance_site(
-            y_bins_site[i].data(), n_bins, eta_lam, eta_sigma, /*eta_b=*/0.0,
-            DIST_HALFNORMAL, quad, K_max, r);
+            y_bins_site[i].data(), n_bins, eta_lam, eta_sigma, eta_b,
+            static_cast<DistKey>(key_code), quad, K_max, r);
         NMixSiteResult res;
         res.log_lik         = d.log_lik;
         res.grad_eta_lambda = d.grad_eta_lambda;

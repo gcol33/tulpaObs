@@ -103,12 +103,6 @@
   # bar, temporal, re) is integrated on the nested-Laplace outer grid, not
   # sampled here, so reject it with a pointer rather than dropping it silently.
   if (identical(engine, "nuts")) {
-    if (identical(positive, "gaussian")) {
-      stop("cover(response = \"gaussian\") is not yet wired for method = ",
-           "'nuts' (the NUTS positive-arm dispatch is beta/lognormal only). ",
-           "Use method = 'laplace' (non-spatial) or 'nested_laplace' (areal ",
-           "field); both recover the identity-Gaussian arm.", call. = FALSE)
-    }
     has_struct <- !is.null(enc$spatial_spec) || !is.null(enc$trend) ||
                   !is.null(enc$mcar) || !is.null(enc$armspec) ||
                   !is.null(temporal) || (!is.null(re) && length(re) > 0L)

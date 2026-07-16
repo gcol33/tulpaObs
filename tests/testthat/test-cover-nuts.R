@@ -43,6 +43,15 @@
                  sigma_pos = sigma_pos, seed = seed)
 }
 
+# Identity-Gaussian (delta-normal) cover: the exported simulator draws the raw
+# unbounded magnitude at present sites (gcol33/tulpaObs#112).
+.cn_sim_gaussian <- function(N = 500L, beta_occ = c(-0.4, 0.8),
+                             beta_pos = c(2.0, 0.4), sigma_pos = 0.5,
+                             seed = 1L) {
+  simulate_cover(N = N, beta_occ = beta_occ, beta_pos = beta_pos,
+                 sigma_pos = sigma_pos, response = "gaussian", seed = seed)
+}
+
 .cn_fit <- function(sim, positive, method = "laplace", control = list()) {
   tobs(formula = ~ x, data = sim$data, family = cover(positive),
        y = sim$y, method = method, control = control)
@@ -50,9 +59,11 @@
 
 
 test_that("cover NUTS C++ FullGradFn matches the R oracle (byte-exact)", {
-  for (pos in c("lognormal", "beta")) {
-    sim <- if (pos == "beta") .cn_sim_beta(N = 200L, seed = 11L)
-           else .cn_sim_lognormal(N = 200L, seed = 11L)
+  for (pos in c("lognormal", "beta", "gaussian")) {
+    sim <- switch(pos,
+                  beta     = .cn_sim_beta(N = 200L, seed = 11L),
+                  gaussian = .cn_sim_gaussian(N = 200L, seed = 11L),
+                  .cn_sim_lognormal(N = 200L, seed = 11L))
     enc <- tulpaObs:::encode_cover_hurdle(~ x, sim$data, sim$y,
                                           positive = pos, autoscale = FALSE)
     spec <- tulpaObs:::.tobs_cover_nuts_spec(enc)
@@ -199,6 +210,45 @@ test_that("cover NUTS recovers parameters + coverage (beta positive)", {
                 matrix(truth[cover_idx], sum(ok), length(cover_idx), byrow = TRUE)) <
             1.96 * se[ok, cover_idx, drop = FALSE]
   expect_gte(mean(cov_ok), 0.6)
+})
+
+
+test_that("cover NUTS recovers parameters + coverage (gaussian positive)", {
+  skip_on_cran()
+  skip_if_fast()
+
+  n_seeds   <- 8L
+  N         <- 400L
+  beta_occ  <- c(stats::qlogis(0.55), 0.9)
+  beta_pos  <- c(2.0, 0.4)
+  sigma_pos <- 0.5
+  # The identity-Gaussian log-dispersion is log(sigma) on the raw response scale.
+  truth <- c(beta_occ, beta_pos, log(sigma_pos))
+
+  est <- se <- matrix(NA_real_, n_seeds, length(truth))
+  for (s in seq_len(n_seeds)) {
+    sim <- .cn_sim_gaussian(N = N, beta_occ = beta_occ, beta_pos = beta_pos,
+                            sigma_pos = sigma_pos, seed = 6000L + s)
+    nut <- tryCatch(.cn_fit(sim, "gaussian", "nuts",
+                    list(verbose = FALSE, n.iter = 1200L, n.warmup = 800L,
+                         n.chains = 1L, seed = 1L)),
+                    error = function(e) NULL)
+    if (is.null(nut)) next
+    est[s, ] <- as.numeric(nut$means)
+    se[s, ]  <- as.numeric(nut$sds)
+  }
+  ok <- stats::complete.cases(est)
+  expect_gte(mean(ok), 0.75)
+
+  bias <- abs(colMeans(est[ok, , drop = FALSE]) - truth)
+  expect_true(all(bias[1:4] < 0.25))   # the four regression coefficients
+  expect_lt(bias[5], 0.10)             # log_sigma_pos
+
+  cover_idx <- c(2, 4)
+  cov_ok <- abs(est[ok, cover_idx, drop = FALSE] -
+                matrix(truth[cover_idx], sum(ok), length(cover_idx), byrow = TRUE)) <
+            1.96 * se[ok, cover_idx, drop = FALSE]
+  expect_gte(mean(cov_ok), 0.75)
 })
 
 

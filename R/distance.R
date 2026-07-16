@@ -135,18 +135,23 @@
 # Pack the AGHQ-refined distance RE fit. The shared count-RE helper returns the
 # refined detection block as `beta_p`; distance carries it as the sigma arm.
 .tobs_distance_re_build <- function(ref, model, design, K_max, mixture) {
+  hazard <- identical(model$key, "hazard")
   raw <- list(
     mixture     = mixture,
     beta_lambda = ref$beta_lambda,
     beta_sigma  = ref$beta_p,
     log_r       = ref$log_r,
     r           = ref$r,
+    # Hazard-rate key: the profiled log-shape (gcol33/tulpaObs#114); the AGHQ vcov
+    # already carries its row/col (inserted by .tobs_distance_re_aghq).
+    eta_b       = if (hazard) ref$eta_b %||% NA_real_ else NA_real_,
+    shape       = if (hazard) ref$shape %||% NA_real_ else NA_real_,
     vcov        = ref$vcov,
     log_lik     = ref$log_marginal,
     converged   = ref$converged,
     key         = model$key,
     transect    = model$transect,
-    hazard      = identical(model$key, "hazard"),
+    hazard      = hazard,
     K_max       = ref$K_max %||% K_max)
   re_post <- list(arm = ref$arm, design = design,
                   Sigma_list = ref$Sigma_list,
@@ -157,24 +162,17 @@
 
 # Fit a binned distance-sampling model with a site-level grouped random effect on
 # the abundance arm under the Laplace / AGHQ path (one grouping factor, RE dim
-# <= 3; tulpaObs#51). Half-normal key only -- the hazard-rate key carries a
-# global scalar shape coordinate not expressible in the count-family theta layout
-# -- and abundance-arm only -- a detection RE couples a site's distance bins
-# through the shared latent N, so it does not factorize into the per-site scalar
-# offset the AGHQ engine assumes. Both are rejected here with a pointer.
+# <= 3; tulpaObs#51). Abundance-arm only -- a detection RE couples a site's
+# distance bins through the shared latent N, so it does not factorize into the
+# per-site scalar offset the AGHQ engine assumes, and is rejected here with a
+# pointer. Half-normal AND hazard-rate keys: the hazard shape is a global scalar
+# not expressible in the count-family theta layout, so it is PROFILED over the
+# AGHQ log-marginal in .tobs_distance_re_aghq (gcol33/tulpaObs#114) rather than
+# gated.
 .tobs_fit_distance_re <- function(model, re, mixture = "poisson", K_max = NULL,
                                   max_iter = 100L, tol = 1e-6, verbose = TRUE,
                                   n_quad = 1L, lkj_eta = 1.5,
                                   theta_prior_sd = 100) {
-  if (!identical(model$key, "halfnorm")) {
-    stop("distance() grouped random effects fit under the half-normal key only ",
-         "(key = \"halfnorm\"); the hazard-rate key's global log-shape coordinate ",
-         "is not a per-site design column in the shared count-family grouped-RE ",
-         "theta layout, so it is not yet wired into the grouped-RE path (the areal ",
-         "spatial path does carry it, tulpaObs#79). Use method = \"nested_laplace\" ",
-         "for a hazard-key areal fit, or key = \"halfnorm\" for a grouped RE.",
-         call. = FALSE)
-  }
   re_list <- if (inherits(re, "tobs_re")) list(re) else re
   on_det <- vapply(re_list, function(r) {
     sh <- r$shared

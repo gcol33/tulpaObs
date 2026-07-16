@@ -209,6 +209,20 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                       mixture = "P", K_max = NULL,
                                       max_iter = 100L, tol = 1e-6, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "removal abundance spatial")
+  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
+  # carries shared = c(abundance, detection) = c(FALSE, TRUE). It loads on the
+  # per-pass detection logit (a spatially-varying capture probability) instead of
+  # the abundance arm. The C++ nested-Laplace removal kernels carry the field on
+  # the abundance arm only, so a detection-arm field routes through the shared
+  # areal-BFGS driver (the removal marginal exposes the per-pass detection
+  # gradient cpp_removal_total_log_lik$grad_eta_p, summed to a per-site field
+  # gradient inside the fitter).
+  det_arm <- isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
+  if (det_arm)
+    return(.tobs_fit_removal_spatial_bfgs(model, spatial, temporal, det_arm = TRUE,
+                                          mixture = mixture, K_max = K_max,
+                                          max_iter = max_iter, tol = tol,
+                                          verbose = verbose))
   if (spatial$type %in% c("spde", "gp", "multiscale_gp")) {
     stop(sprintf(paste0("removal() areal spatial supports icar() / car_proper() / ",
                         "bym2() under method = \"nested_laplace\"; the '%s' field ",
@@ -269,16 +283,22 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 # + both block priors, integrated over the product of the two blocks'
 # hyperparameter grids. The field + temporal block both load onto eta_lambda.
 .tobs_fit_removal_spatial_bfgs <- function(model, spatial, temporal,
+                                           det_arm = FALSE,
                                            mixture = "P", K_max = NULL,
                                            max_iter = 200L, tol = 1e-8,
                                            verbose = TRUE) {
   n_sites <- model$n_sites
   map <- seq_len(n_sites)
   temporal_only <- is.null(spatial)
-  temporal_spec <- .tobs_temporal_field_spec(temporal, n_sites, "removal")
+  temporal_spec <- if (!is.null(temporal))
+    .tobs_temporal_field_spec(temporal, n_sites, "removal") else NULL
   # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
   # temporal block; otherwise the areal field is block 1 and the temporal block 2.
+  # A detection-arm areal field (det_arm, #114) is a single areal block that loads
+  # on eta_p; temporal does not compose with the detection-arm field on this path.
   field <- if (temporal_only) list(temporal_spec)
+           else if (is.null(temporal))
+             .tobs_areal_field_spec(spatial, n_sites, "removal", map)
            else list(.tobs_areal_field_spec(spatial, n_sites, "removal", map),
                      temporal_spec)
 
@@ -294,15 +314,26 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   n_fixed <- p_lam + p_p + if (is_nb) 1L else 0L
 
   eval <- function(theta_fix, offset) {
-    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + offset
-    eta_p   <- as.numeric(X_p %*% theta_fix[i_p])
+    # `offset` is per-SITE (length n_sites). On the abundance arm it enters eta_lam
+    # directly; on the detection arm (det_arm) it is a spatially-varying capture
+    # logit shared across a site's passes, so it is expanded to per-pass via
+    # site_idx and the per-pass detection gradient is summed back to per-site.
+    off_lam <- if (det_arm) numeric(n_sites) else offset
+    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + off_lam
+    eta_p   <- as.numeric(X_p %*% theta_fix[i_p]) + (if (det_arm) offset[site_idx] else 0)
     rr <- if (is_nb) exp(theta_fix[i_logr]) else Inf
     out <- cpp_removal_total_log_lik(y_long, site_idx, eta_p, eta_lam, K_max, rr)
     g <- numeric(n_fixed)
     g[i_lam] <- as.numeric(crossprod(X_lam, out$grad_eta_lambda))
     g[i_p]   <- as.numeric(crossprod(X_p,   out$grad_eta_p))
     if (is_nb) g[i_logr] <- out$grad_theta
-    list(log_lik = out$log_lik, grad_fixed = g, grad_eta = out$grad_eta_lambda)
+    grad_eta <- if (det_arm) {           # sum per-pass det gradient into per-site
+      gs  <- numeric(n_sites)
+      agg <- rowsum(out$grad_eta_p, site_idx, reorder = FALSE)
+      gs[as.integer(rownames(agg))] <- agg[, 1L]
+      gs
+    } else out$grad_eta_lambda
+    list(log_lik = out$log_lik, grad_fixed = g, grad_eta = grad_eta)
   }
 
   warm <- tryCatch(
@@ -352,8 +383,13 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   } else {
     fit$spatial_field  <- res$field_mean
     fit$spatial_hyper  <- res$hyper
-    fit$temporal_field <- res$temporal_field
-    fit$temporal_hyper <- res$temporal_hyper
+    # The field loads on the abundance (log lambda) arm by default, or on the
+    # per-pass capture logit when the term sits in the detection formula (#114).
+    fit$spatial_field_arm <- if (det_arm) "detection" else "abundance"
+    if (!is.null(temporal)) {
+      fit$temporal_field <- res$temporal_field
+      fit$temporal_hyper <- res$temporal_hyper
+    }
   }
   fit
 }
@@ -366,19 +402,33 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 # over marginal_count_nuts.h / nuts_field_block.h, byte-identical to abun's). Same
 # car_proper-only restriction (the intrinsic ICAR's flat field-mean needs a
 # sum-to-zero reparameterisation, gcol33/tulpaObs#71). Poisson or NB.
-.tobs_fit_removal_nuts_spatial <- function(model, spatial, mixture = "poisson",
+.tobs_fit_removal_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
+                                           mixture = "poisson",
                                            K_max = NULL, sigma.beta = 10,
                                            sigma.logr = 1.5, n.iter = 1000L,
                                            n.warmup = 1000L, n.chains = 1L,
                                            max.treedepth = 10L, adapt.delta = 0.9,
                                            seed = 1L, verbose = FALSE) {
-  .tobs_reject_weighted_spatial(spatial, "removal NUTS abundance spatial")
-  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
-    stop(sprintf(paste0("removal() NUTS + areal spatial supports icar() / ",
-                        "car_proper() / bym2() on the abundance arm; got '%s'. ",
-                        "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+  # This fitter carries the FIXED-HYPER non-centered field on the abundance arm
+  # under NUTS from EITHER an areal term (icar/car_proper/bym2; #72/#113) OR a
+  # temporal() term (ar1/rw1/rw2/iid; #114). Both reduce to a whitened raw ~ N(0,I)
+  # sampled through the shared count-marginal field block; only the loading L, the
+  # per-site field map, and the warm-start source differ, so the sampling tail is
+  # shared (no duplicate sampler).
+  temporal_only <- is.null(spatial) && !is.null(temporal)
+  if (!temporal_only) {
+    .tobs_reject_weighted_spatial(spatial, "removal NUTS abundance spatial")
+    if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
+      stop(paste0("removal() NUTS carries the areal field on the abundance arm; a ",
+                  "detection-arm field (a spatially-varying capture logit) is wired ",
+                  "under method = \"nested_laplace\". (tulpaObs#114)"), call. = FALSE)
+    if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+      stop(sprintf(paste0("removal() NUTS + areal spatial supports icar() / ",
+                          "car_proper() / bym2() on the abundance arm; got '%s'. ",
+                          "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+  }
   n_sites <- model$n_sites
-  if (spatial$n_units != n_sites)
+  if (!temporal_only && spatial$n_units != n_sites)
     stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
                         "spatial unit per site is required for removal NUTS."),
                  spatial$n_units, n_sites), call. = FALSE)
@@ -388,40 +438,67 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   y_long <- as.integer(model$y_long); site_idx <- as.integer(model$site_idx)
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
   K_max <- .removal_spatial_K_max(y_long, site_idx, n_sites, K_max)
-  adj <- as.matrix(spatial$graph)
-  csr <- if (!is.null(spatial$adj_row_ptr))
-    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-         n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
 
-  # Fixed hyper + warm coefficients from the matching nested-Laplace areal fit,
-  # and the whitened-field loading L (square for car_proper, sum-to-zero for
-  # icar / bym2, gcol33/tulpaObs#71/#113).
-  common <- list(
-    y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
-    X_lambda = X_lambda, X_p = X_p, adj_row_ptr = csr$row_ptr,
-    adj_col_idx = csr$col_idx, n_neighbors = csr$n_neighbors, n_spatial = n_sites,
-    mixture = mix_code, K_max = K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE)
-  nl <- switch(spatial$type,
-    icar       = do.call(removal_laplace_icar, common),
-    car_proper = do.call(removal_laplace_car_proper, common),
-    bym2       = do.call(removal_laplace_bym2, c(common,
-                   list(scale_factor = spatial$scale_factor %||%
-                          compute_bym2_scale(spatial$graph)))))
-  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
-                                 tau = nl$tau_mean, rho = nl$rho_mean,
-                                 sigma = nl$sigma_mean,
-                                 scale_factor = spatial$scale_factor)
+  if (temporal_only) {
+    # Warm coefficients + fixed temporal hyper (tau, rho) from the temporal-only
+    # nested-Laplace areal-BFGS fit; the whitened temporal-field loading is the
+    # eigen-decomposition of tau Q_temporal (rank-deficient for rw1/rw2, so
+    # n_raw < n_t, the same sum-to-zero geometry as an intrinsic areal field).
+    ti <- as.integer(temporal$time_idx)
+    if (length(ti) != n_sites)
+      stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
+                          "sites; one time index per site is required for removal ",
+                          "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
+    n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+           else max(ti, na.rm = TRUE)
+    nlfit <- .tobs_fit_removal_spatial_bfgs(model, spatial = NULL, temporal = temporal,
+                                            mixture = mix_code, K_max = K_max,
+                                            max_iter = 100L, tol = 1e-6, verbose = FALSE)
+    hyper <- nlfit$temporal_hyper
+    hv <- function(k) suppressWarnings(as.numeric(hyper[[k]]))
+    fl <- .tobs_nuts_temporal_loading(temporal$type, n_t, tau = hv("tau"), rho = hv("rho"))
+    field_map <- ti
+    n_field_units <- n_t
+    beta0 <- as.numeric(nlfit$means[seq_len(p_lam + p_p)])
+    if (is_nb) beta0 <- c(beta0, log(if (is.finite(nlfit$r %||% NA_real_)) nlfit$r else 2))
+  } else {
+    adj <- as.matrix(spatial$graph)
+    csr <- if (!is.null(spatial$adj_row_ptr))
+      list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
+           n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
+
+    # Fixed hyper + warm coefficients from the matching nested-Laplace areal fit,
+    # and the whitened-field loading L (square for car_proper, sum-to-zero for
+    # icar / bym2, gcol33/tulpaObs#71/#113).
+    common <- list(
+      y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
+      X_lambda = X_lambda, X_p = X_p, adj_row_ptr = csr$row_ptr,
+      adj_col_idx = csr$col_idx, n_neighbors = csr$n_neighbors, n_spatial = n_sites,
+      mixture = mix_code, K_max = K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE)
+    nl <- switch(spatial$type,
+      icar       = do.call(removal_laplace_icar, common),
+      car_proper = do.call(removal_laplace_car_proper, common),
+      bym2       = do.call(removal_laplace_bym2, c(common,
+                     list(scale_factor = spatial$scale_factor %||%
+                            compute_bym2_scale(spatial$graph)))))
+    fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                   tau = nl$tau_mean, rho = nl$rho_mean,
+                                   sigma = nl$sigma_mean,
+                                   scale_factor = spatial$scale_factor)
+    field_map <- seq_len(n_sites)
+    n_field_units <- n_sites
+    beta0 <- c(nl$beta_lambda_mean, nl$beta_p_mean)
+    if (is_nb && is.finite(nl$r_mean %||% NA_real_)) beta0 <- c(beta0, log(nl$r_mean))
+    else if (is_nb) beta0 <- c(beta0, log(2))
+  }
   field_load <- fl$field_load; n_raw <- fl$n_raw
 
   spec <- list(y = y_long, site_idx = site_idx, X_lambda = X_lambda, X_p = X_p,
                n_sites = n_sites, K_max = K_max, is_nb = is_nb,
-               n_field_units = n_sites, field_map = seq_len(n_sites),
+               n_field_units = n_field_units, field_map = field_map,
                field_load = field_load)
 
   n_base <- p_lam + p_p + if (is_nb) 1L else 0L
-  beta0 <- c(nl$beta_lambda_mean, nl$beta_p_mean)
-  if (is_nb && is.finite(nl$r_mean %||% NA_real_)) beta0 <- c(beta0, log(nl$r_mean))
-  else if (is_nb) beta0 <- c(beta0, log(2))
   theta0 <- c(beta0, numeric(n_raw))
   inv_metric <- c(rep(0.1, n_base), rep(1, n_raw))
 
@@ -453,7 +530,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                   log_r = if (is_nb) unname(par[lay$log_r]) else NA_real_,
                   r = if (is_nb) exp(unname(par[lay$log_r])) else NA_real_,
                   vcov = cov, log_lik = ll_mean, converged = TRUE, K_max = K_max)
-  fit <- build_nmix_fit(raw_fit, model, spatial = spatial)
+  fit <- build_nmix_fit(raw_fit, model, spatial = if (temporal_only) NULL else spatial)
   fit$draws <- draws[, b_idx, drop = FALSE]
   fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
   fit$vcov <- cov
@@ -461,11 +538,14 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   accept <- unlist(lapply(chains, `[[`, "accept_prob"))
   divergent <- unlist(lapply(chains, `[[`, "divergent"))
   fit$accept_prob <- accept; fit$divergent <- divergent
-  fit$method <- "nuts"; fit$spatial_field <- z_mean
+  fit$method <- "nuts"
+  if (temporal_only) { fit$temporal <- temporal; fit$temporal_field <- z_mean }
+  else               fit$spatial_field <- z_mean
   fit$nuts <- list(accept_prob = accept, divergent = divergent,
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
                    divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
-                   prior_type = spatial$type, fixed_hyper = TRUE)
+                   prior_type = if (temporal_only) temporal$type else spatial$type,
+                   fixed_hyper = TRUE)
   fit
 }

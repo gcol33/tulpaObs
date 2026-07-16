@@ -224,6 +224,37 @@ struct BetaPositive {
 
 
 // ---------------------------------------------------------------------------
+// Positive-arm code dispatch. The cover positive arm is selected at runtime by
+// an integer code shared with the coupling / ploglik layers:
+//   0 = lognormal, 3 = beta, 4 = gaussian (gcol33/tulpaObs#112).
+// Single source for the NUTS targets (cover_nuts, occu_cover_nuts, the
+// community spatial-factor sampler, multiscale) so no positive-density branch
+// is copy-pasted across the samplers -- each calls these and the compiler
+// inlines the switch.
+inline double pos_log_density(int code, double y, double eta, double phi) {
+    switch (code) {
+        case 3:  return BetaPositive::log_density(y, eta, phi);
+        case 4:  return GaussianPositive::log_density(y, eta, phi);
+        default: return LognormalPositive::log_density(y, eta, phi);
+    }
+}
+inline double pos_grad_eta(int code, double y, double eta, double phi) {
+    switch (code) {
+        case 3:  return BetaPositive::grad_eta(y, eta, phi);
+        case 4:  return GaussianPositive::grad_eta(y, eta, phi);
+        default: return LognormalPositive::grad_eta(y, eta, phi);
+    }
+}
+inline double pos_grad_logdisp(int code, double y, double eta, double phi) {
+    switch (code) {
+        case 3:  return BetaPositive::grad_logdisp(y, eta, phi);
+        case 4:  return GaussianPositive::grad_logdisp(y, eta, phi);
+        default: return LognormalPositive::grad_logdisp(y, eta, phi);
+    }
+}
+
+
+// ---------------------------------------------------------------------------
 // nodet_mixture_block -- closed-form score + curvature of one all-undetected
 // occupancy/availability mixture over `nv` visits:
 //

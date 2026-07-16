@@ -42,7 +42,7 @@
 
 
 test_that("occu_cover NUTS C++ FullGradFn matches the R oracle (byte-exact)", {
-  for (pos in c("lognormal", "beta")) {
+  for (pos in c("lognormal", "beta", "gaussian")) {
     inp   <- .ocn_inputs(pos, N = 60L, J = 4L, seed = 11L)
     lap   <- .ocn_fit(inp, "laplace", list(verbose = FALSE, max.iter = 60L))
     model <- lap$model

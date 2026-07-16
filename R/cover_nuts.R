@@ -39,7 +39,7 @@
   p_pres <- ncol(X_pres)
   p_pos  <- ncol(X_pos)
   total  <- p_pres + p_pos + 1L
-  is_beta <- identical(enc$positive, "beta")
+  pos_code <- .tobs_cover_pos_code(enc$positive)
 
   b_pres   <- theta[seq_len(p_pres)]
   b_pos    <- theta[p_pres + seq_len(p_pos)]
@@ -61,7 +61,7 @@
   eta_pos    <- as.numeric(X_pos %*% b_pos)
   g_eta_pos  <- numeric(length(eta_pos))
   g_logdisp  <- 0
-  if (is_beta) {
+  if (pos_code == 3L) {              # beta
     mu   <- sgm(eta_pos)
     a    <- mu * disp; b <- (1 - mu) * disp
     ly   <- log(y_pos); l1my <- log(1 - y_pos)
@@ -70,7 +70,12 @@
     g_eta_pos <- disp * mu * (1 - mu) * (-digamma(a) + digamma(b) + ly - l1my)
     g_logdisp <- sum(disp * (digamma(disp) - mu * digamma(a) -
                              (1 - mu) * digamma(b) + mu * ly + (1 - mu) * l1my))
-  } else {
+  } else if (pos_code == 4L) {       # identity-Gaussian (#112): raw response
+    sig <- disp; r <- (y_pos - eta_pos) / sig
+    lp  <- lp + sum(-log(sig) - 0.5 * log(2 * pi) - 0.5 * r * r)
+    g_eta_pos <- r / sig
+    g_logdisp <- sum(r * r - 1)
+  } else {                           # lognormal: Gaussian on log(cover)
     sig <- disp; r <- (log(y_pos) - eta_pos) / sig
     lp  <- lp + sum(-log(y_pos) - log(sig) - 0.5 * log(2 * pi) - 0.5 * r * r)
     g_eta_pos <- r / sig
@@ -98,7 +103,16 @@
 # to the natural cover scale here. Single source for both the R oracle and the
 # C++ spec builder.
 .tobs_cover_pos_response <- function(enc) {
-  if (identical(enc$positive, "beta")) enc$pos_data$y else exp(enc$pos_data$y)
+  # beta stores the raw cover in (0, 1); gaussian stores the raw unbounded
+  # response (#112); lognormal stores log(cover), so exponentiate it back.
+  if (enc$positive %in% c("beta", "gaussian")) enc$pos_data$y
+  else exp(enc$pos_data$y)
+}
+
+# Positive-arm density code shared with the C++ NUTS spec (0 lognormal, 3 beta,
+# 4 gaussian; the ordinal / truncated arms are nested-Laplace only, not sampled).
+.tobs_cover_pos_code <- function(positive) {
+  switch(positive, beta = 3L, gaussian = 4L, 0L)
 }
 
 # Build the C++ NUTS spec list from a natural-scale cover encoding. The presence
@@ -106,7 +120,7 @@
 # draws land on the natural coefficient scale.
 .tobs_cover_nuts_spec <- function(enc) {
   list(
-    is_beta = identical(enc$positive, "beta"),
+    pos_code = .tobs_cover_pos_code(enc$positive),
     present = as.integer(enc$occ_data$y),
     y_pos   = as.numeric(.tobs_cover_pos_response(enc)),
     X_pres  = enc$occ_data$X,

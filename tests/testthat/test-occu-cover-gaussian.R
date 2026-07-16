@@ -12,7 +12,7 @@ test_that("occu_cover(response = 'gaussian') constructor is wired through", {
   expect_equal(f$observation, "detection_plus_gaussian")
 })
 
-test_that("occu_cover(gaussian): WAIC works, PPC is gated, NUTS is gated", {
+test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
   N <- 120L; J <- 5L
   sim <- simulate_occu_cover(N = N, J = J, positive = "gaussian",
     beta_pos = c(2.0, -0.4), sigma_pos = 0.5, seed = 11L)
@@ -29,13 +29,13 @@ test_that("occu_cover(gaussian): WAIC works, PPC is gated, NUTS is gated", {
   w <- tobs_waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$p_waic))
   expect_error(tobs_ppc(fit), "not defined for occu_cover.*gaussian")
-  # NUTS is not yet wired for the gaussian arm; it errors rather than silently
-  # routing gaussian through the lognormal positive-arm dispatch.
-  expect_error(
-    tobs(formula = ~ occ_cov1, data = cell, family = occu_cover("gaussian"),
-      detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y_pos = yp,
-      visits = od$det.covs, method = "nuts", control = list(verbose = FALSE)),
-    "not yet wired for method = 'nuts'")
+  # NUTS is wired for the gaussian arm (gcol33/tulpaObs#112); a short sample
+  # returns a fit rather than routing gaussian through the lognormal dispatch.
+  nut <- tobs(formula = ~ occ_cov1, data = cell, family = occu_cover("gaussian"),
+    detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y_pos = yp,
+    visits = od$det.covs, method = "nuts",
+    control = list(n.iter = 400L, n.warmup = 300L, verbose = FALSE))
+  expect_equal(nut$method, "nuts")
 })
 
 

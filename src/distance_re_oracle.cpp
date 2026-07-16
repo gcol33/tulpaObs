@@ -19,9 +19,12 @@ DistanceGroupedOracle::DistanceGroupedOracle(
         const Rcpp::IntegerVector& site_group,
         int n_sites_, int n_groups_,
         const Rcpp::NumericVector& cutpoints,
-        int transect, int quad_order, int K_max_, bool nb) {
-    K_max  = K_max_;
-    n_bins = y_bins.ncol();
+        int transect, int quad_order, int K_max_, bool nb,
+        int key_code_, double eta_b_) {
+    K_max    = K_max_;
+    key_code = key_code_;
+    eta_b    = eta_b_;
+    n_bins   = y_bins.ncol();
 
     // The detection design is per-site log-sigma: one "row" per site. Feed a
     // one-row-per-site long form (a dummy count vector + site_idx = 1..n_sites)
@@ -48,7 +51,8 @@ DistanceGroupedOracle::DistanceGroupedOracle(
 // Rcpp factory: build the native single-species grouped-RE distance oracle and
 // return it as an XPtr<tulpa::REGroupOracle>, consumed by tulpa::tulpa_re_aghq()
 // exactly like the N-mixture / removal grouped oracles. Abundance-arm RE only
-// (arm = 0); half-normal key only (gated in R).
+// (arm = 0). key = DIST_HALFNORMAL (0) or DIST_HAZARD (1); under the hazard key
+// the shape eta_b is FIXED (the R wrapper profiles it over the outer log-marginal).
 // [[Rcpp::export]]
 SEXP cpp_distance_grouped_oracle(int arm,
                                  Rcpp::IntegerMatrix y_bins,
@@ -59,11 +63,12 @@ SEXP cpp_distance_grouped_oracle(int arm,
                                  int n_sites, int n_groups,
                                  Rcpp::NumericVector cutpoints,
                                  int transect, int quad_order, int K_max,
-                                 bool nb = false) {
+                                 bool nb = false, int key = 0, double eta_b = 0.0) {
     return Rcpp::XPtr<tulpa::REGroupOracle>(
         new tulpaObs::DistanceGroupedOracle(arm, y_bins, X_lambda, X_sigma,
                                             Z_site, site_group,
                                             n_sites, n_groups, cutpoints,
-                                            transect, quad_order, K_max, nb),
+                                            transect, quad_order, K_max, nb,
+                                            key, eta_b),
         true);
 }

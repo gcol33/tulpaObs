@@ -424,17 +424,11 @@ test_that("distance() Laplace AGHQ recovers a site-grouped abundance RE", {
   expect_equal(nrow(re), 12L)
 })
 
-test_that("distance() Laplace RE rejects the hazard key, detection arm, both arms", {
+test_that("distance() Laplace RE rejects the detection arm and both arms", {
   cuts <- seq(0, 1, length.out = 5)
   s <- sim_distance_lambda_re(N = 30, ngrp = 5, cutpoints = cuts,
                               beta_lambda = c(log(20), 0.2), sigma = 0.4,
                               sigma_b = 0.4, seed = 2)
-  # Hazard-rate key carries a global shape coordinate the count-family theta
-  # layout cannot express, so the grouped-RE path is half-normal only.
-  expect_error(
-    tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
-         family = distance(cutpoints = cuts, key = "hazard"), method = "laplace"),
-    "half-normal")
   # A detection-scale (sigma-arm) RE couples a site's bins through the latent N.
   expect_error(
     tobs(formula = ~ x1, detection = ~ (1 | g), data = s$data, y = s$y,
@@ -451,6 +445,46 @@ test_that("distance() Laplace RE rejects the hazard key, detection arm, both arm
          family = distance(cutpoints = cuts), method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
     "abundance arm only|single intercept")
+})
+
+test_that("distance() Laplace AGHQ recovers a hazard-key grouped RE + shape (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The hazard-rate key's global log-shape is not a per-site design column in the
+  # count-family theta layout, so it is PROFILED over the AGHQ log-marginal (each
+  # candidate shape is a full AGHQ fit at a fixed shape). The fit recovers the
+  # abundance RE variance, the abundance slope, AND the profiled shape.
+  cuts <- c(0, 10, 20, 30, 40); W <- 40; B <- 4L; sigma <- 18; shape <- 3.5
+  mid <- (utils::head(cuts, -1) + utils::tail(cuts, -1)) / 2
+  pib <- (1 - exp(-(mid / sigma)^(-shape))) * diff(cuts) / W
+  n_seeds <- 3L; lam_x <- shp <- sig_re <- rep(NA_real_, n_seeds)
+  for (sd_i in seq_len(n_seeds)) {
+    set.seed(50L + sd_i); ng <- 110L; G <- 11L; grp <- rep(seq_len(G), length.out = ng)
+    u <- stats::rnorm(G, 0, 0.5); x <- as.numeric(scale(stats::rnorm(ng)))
+    lam <- exp(log(30) + 0.5 * x + u[grp]); ya <- matrix(0L, ng, B)
+    Nd <- stats::rpois(ng, lam)
+    for (i in seq_len(ng)) ya[i, ] <- stats::rbinom(B, Nd[i], pib)
+    fit <- tryCatch(
+      tobs(formula = ~ x + (1 | g), detection = ~ 1,
+           data = data.frame(x = x, g = factor(grp)), y = ya,
+           family = distance(cutpoints = cuts, key = "hazard", transect = "line"),
+           method = "laplace", verbose = FALSE, control = list(n.quad = 1L)),
+      error = function(e) NULL)
+    if (is.null(fit)) next
+    if (sd_i == 1L) {
+      expect_true("log_shape" %in% names(fit$means))
+      expect_true("sigma_g1_(Intercept)" %in% names(fit$means))
+      expect_identical(fit$nmix_re$arm, "lambda")
+    }
+    lam_x[sd_i]  <- fit$means[["lambda_x"]]
+    shp[sd_i]    <- fit$means[["log_shape"]]
+    sig_re[sd_i] <- fit$means[["sigma_g1_(Intercept)"]]
+  }
+  ok <- is.finite(lam_x)
+  expect_gte(mean(ok), 0.65)
+  expect_lt(abs(mean(lam_x[ok]) - 0.5), 0.2)          # abundance slope recovered
+  expect_lt(abs(mean(shp[ok]) - log(shape)), 0.4)     # profiled log-shape recovered
+  expect_gt(mean(sig_re[ok]), 0.2)                    # RE variance component present
 })
 
 
@@ -674,15 +708,52 @@ test_that("distance() DETECTION-arm areal field recovers the log-sigma field (#1
   expect_lt(abs(mean(s0) - log(22)), 0.15)            # detection-scale intercept
 })
 
-test_that("distance() detection-arm areal field rejects the hazard key (#114)", {
-  cut <- c(0, 10, 20, 30); adj <- diag(0, 4L); adj[1,2] <- adj[2,1] <- 1L
-  adj[3,4] <- adj[4,3] <- 1L; adj[2,3] <- adj[3,2] <- 1L
-  y <- matrix(2L, 4L, length(cut) - 1L)
-  expect_error(
-    tobs(~ 1, data = data.frame(row = 1:4), detection = ~ icar(graph = adj),
-         family = distance(key = "hazard", transect = "line", cutpoints = cut),
-         y = y, method = "nested_laplace",
-         control = list(verbose = FALSE, progress = FALSE)),
-    "half-normal"
-  )
+test_that("distance() DETECTION-arm areal field recovers under the hazard key (#114)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The hazard-rate key carries the field on the detection scale (log sigma) while
+  # the log-shape stays a single global coordinate: the eval threads both (the
+  # field on eta_sigma, eta_b as a fixed parameter). The fit recovers the
+  # spatially-varying detection scale AND the global shape.
+  gadj <- function(side) {
+    ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
+    a <- matrix(0L, ng, ng)
+    for (i in seq_len(ng)) for (j in seq_len(ng))
+      if (i != j && abs(co$x[i]-co$x[j])+abs(co$y[i]-co$y[j])==1L) a[i,j] <- 1L
+    a
+  }
+  ifield <- function(a, sdp, seed) {
+    set.seed(seed); ng <- nrow(a); p <- as.numeric(scale(stats::rnorm(ng)))
+    for (r in 1:4) { pn <- p; for (i in seq_len(ng)) {
+      nb <- which(a[i,]==1L); pn[i] <- 0.5*p[i]+0.5*mean(p[nb]) }; p <- pn }
+    p <- sdp * as.numeric(scale(p)); p - mean(p)
+  }
+  side <- 7L; adj <- gadj(side); ng <- nrow(adj); cut <- c(0,10,20,30,40)
+  shape <- 3.5; fc <- shp <- numeric(0)
+  for (sd in 1:4) {
+    phi <- ifield(adj, 0.4, 60L + sd); set.seed(60L + sd)
+    Nd <- stats::rpois(ng, 60); log_sig <- log(18) + phi
+    y <- matrix(0L, ng, length(cut) - 1L)
+    for (i in seq_len(ng)) {
+      pib <- tulpaObs:::.distance_pi(exp(log_sig[i]), cut, "hazard", "line", shape)
+      y[i, ] <- stats::rbinom(length(pib), Nd[i], pib)
+    }
+    fit <- tryCatch(tobs(~ 1, data = data.frame(row = seq_len(ng)),
+                         detection = ~ icar(graph = adj),
+                         family = distance(key = "hazard", transect = "line",
+                                           cutpoints = cut),
+                         y = y, method = "nested_laplace",
+                         control = list(verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    if (sd == 1L) {
+      expect_identical(fit$spatial_field_arm, "detection")
+      expect_true("log_shape" %in% names(fit$means))
+    }
+    fc  <- c(fc,  abs(stats::cor(fit$spatial_field, phi)))
+    shp <- c(shp, fit$means[["log_shape"]])
+  }
+  expect_gte(length(fc), 3L)
+  expect_gt(mean(fc), 0.7)                             # detection-scale field recovered
+  expect_lt(abs(mean(shp) - log(shape)), 0.4)          # global shape recovered
 })

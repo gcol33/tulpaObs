@@ -135,7 +135,8 @@
   if (identical(model$model_type, "removal")) {
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "removal", "abundance",
-                                 allow_temporal_only = TRUE)
+                                 allow_temporal_only = TRUE,
+                                 allow_nuts_temporal = TRUE)
     if (!is.null(spatial) || !is.null(temporal)) {
       # Areal field on the abundance arm: icar() / car_proper() / bym2() under
       # the nested-Laplace driver, optionally composed with a temporal() block
@@ -145,7 +146,8 @@
       # areal-BFGS driver with a single temporal block (gcol33/tulpaObs#114).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_removal_nuts_spatial(
-          fit_model, spatial, mixture = mixture, K_max = K.max,
+          fit_model, spatial = spatial, temporal = temporal,
+          mixture = mixture, K_max = K.max,
           sigma.beta = sigma.beta, sigma.logr = 1.5,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
@@ -193,7 +195,8 @@
   if (identical(model$model_type, "distance")) {
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "distance", "abundance",
-                                 allow_temporal_only = TRUE)
+                                 allow_temporal_only = TRUE,
+                                 allow_nuts_temporal = TRUE)
     if (!is.null(spatial) || !is.null(temporal)) {
       # Areal field on the abundance arm: icar() / car_proper() (half-normal or
       # hazard key) under the nested-Laplace driver, optionally composed with a
@@ -203,7 +206,8 @@
       # same areal-BFGS driver with a single temporal block (gcol33/tulpaObs#114).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_distance_nuts_spatial(
-          fit_model, spatial, mixture = mixture, K_max = K.max,
+          fit_model, spatial = spatial, temporal = temporal,
+          mixture = mixture, K_max = K.max,
           sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
@@ -310,7 +314,8 @@
   if (identical(model$model_type, "fp_occu")) {
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "fp_occu", "occupancy",
-                                 allow_temporal_only = TRUE)
+                                 allow_temporal_only = TRUE,
+                                 allow_nuts_temporal = TRUE)
     if (!is.null(spatial) || !is.null(temporal)) {
       # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
       # nested-Laplace two-state driver, optionally composed with a temporal()
@@ -320,7 +325,7 @@
       # runs the same areal-BFGS driver with a single temporal block (#114).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_fp_occu_nuts_spatial(
-          fit_model, spatial, sigma.beta = sigma.beta,
+          fit_model, spatial = spatial, temporal = temporal, sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)

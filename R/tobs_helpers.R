@@ -232,8 +232,9 @@
   # via nested_laplace (the shared count-marginal spatial driver, tulpaObs#51). A
   # temporal() AR1/RW1/RW2/iid field composes WITH the areal field on the
   # abundance arm under nested_laplace via the shared areal-BFGS driver (a second
-  # latent block, both grid-integrated; tulpaObs#78). spde / NUTS+temporal not yet
-  # wired (R/removal.R, R/removal_spatial.R).
+  # latent block, both grid-integrated; tulpaObs#78), OR rides the family NUTS field
+  # block on its own (temporal-only, no simultaneous areal field; tulpaObs#114).
+  # spde not yet wired (R/removal.R, R/removal_spatial.R).
   removal  = c("laplace", "nested_laplace", "nuts"),
   # distance: binned distance sampling (half-normal / hazard-rate key, line /
   # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin),
@@ -244,9 +245,12 @@
   # fixed block (tulpaObs#79), so a hazard-key areal fit recovers both the
   # abundance field and the shape. A temporal() AR1/RW1/RW2/iid field composes
   # WITH the areal field on the abundance arm under nested_laplace via the shared
-  # areal-BFGS driver (a second latent block; tulpaObs#78). Grouped-RE hazard /
-  # NUTS+temporal not yet wired (R/distance.R, R/distance_spatial.R,
-  # src/distance_*.cpp).
+  # areal-BFGS driver (a second latent block; tulpaObs#78), OR rides the family NUTS
+  # field block on its own (temporal-only; tulpaObs#114). The hazard-rate key's
+  # global log-shape rides alongside the NUTS field block (areal or temporal), so a
+  # hazard-key NUTS+field fit recovers both the abundance field and the shape
+  # (tulpaObs#114). Grouped-RE hazard and hazard-key DETECTION-arm areal not yet
+  # wired (R/distance.R, R/distance_spatial.R, src/distance_*.cpp).
   distance = c("laplace", "nested_laplace", "nuts"),
   # ms_distance: community binned distance sampling (the spAbundance msDS
   # analogue) -- per-species distance sampling with Gaussian community
@@ -269,8 +273,9 @@
   # occupancy arm via nested_laplace (BFGS over the marginal + CAR prior, FD-Hessian
   # observed info; tulpaObs#51). A temporal() AR1/RW1/RW2/iid field composes WITH
   # the areal field on the psi arm under nested_laplace via the shared areal-BFGS
-  # driver (a second latent block; tulpaObs#78). bym2 / NUTS+temporal not yet
-  # wired (R/fp_occu.R, R/fp_occu_spatial.R, src/fp_occu_*.cpp).
+  # driver (a second latent block; tulpaObs#78), OR rides the family NUTS field block
+  # on its own (temporal-only, no simultaneous areal field; tulpaObs#114).
+  # (R/fp_occu.R, R/fp_occu_spatial.R, src/fp_occu_*.cpp).
   fp_occu  = c("laplace", "nested_laplace", "nuts"),
   # dyn_abun: Dail-Madsen open-population N-mixture (Poisson initial abundance,
   # binomial survival, Poisson recruitment, binomial detection). The latent

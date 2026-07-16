@@ -42,7 +42,7 @@ namespace tulpaObs {
 struct CoverNutsData {
     int n_obs = 0;          // presence-arm rows
     int n_pos = 0;          // positive-arm rows (present observations)
-    bool is_beta = false;
+    int pos_code = 0;       // 0 lognormal, 3 beta, 4 gaussian (#112)
 
     Rcpp::IntegerVector present;   // [n_obs] 1{cover > 0}
     Rcpp::NumericVector y_pos;     // [n_pos] cover at present rows
@@ -54,7 +54,7 @@ struct CoverNutsData {
 
 inline CoverNutsData cover_nuts_build_data(const Rcpp::List& spec) {
     CoverNutsData d;
-    d.is_beta  = Rcpp::as<bool>(spec["is_beta"]);
+    d.pos_code = Rcpp::as<int>(spec["pos_code"]);
     d.present  = Rcpp::as<Rcpp::IntegerVector>(spec["present"]);
     d.y_pos    = Rcpp::as<Rcpp::NumericVector>(spec["y_pos"]);
     d.X_pres   = Rcpp::as<Rcpp::NumericMatrix>(spec["X_pres"]);
@@ -106,16 +106,9 @@ inline double cover_nuts_eval(const CoverNutsData& d, const double* theta,
         double eta = 0.0;
         for (int k = 0; k < p_pos; ++k) eta += d.X_pos(j, k) * b_pos[k];
         const double yp = d.y_pos[j];
-        double g_eta;
-        if (d.is_beta) {
-            lp        += BetaPositive::log_density(yp, eta, disp);
-            g_eta      = BetaPositive::grad_eta(yp, eta, disp);
-            g_logdisp += BetaPositive::grad_logdisp(yp, eta, disp);
-        } else {
-            lp        += LognormalPositive::log_density(yp, eta, disp);
-            g_eta      = LognormalPositive::grad_eta(yp, eta, disp);
-            g_logdisp += LognormalPositive::grad_logdisp(yp, eta, disp);
-        }
+        lp        += pos_log_density(d.pos_code, yp, eta, disp);
+        double g_eta = pos_grad_eta(d.pos_code, yp, eta, disp);
+        g_logdisp += pos_grad_logdisp(d.pos_code, yp, eta, disp);
         for (int k = 0; k < p_pos; ++k) grad[g_bpos + k] += g_eta * d.X_pos(j, k);
     }
     grad[g_ld] = g_logdisp;

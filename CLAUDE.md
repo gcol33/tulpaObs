@@ -154,7 +154,13 @@ latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shar
   templated count-spatial driver (`src/nmix_count_spatial_driver.h`, byte-identical to
   nmix) via `cpp_nested_laplace_removal_*` (`src/removal_spatial.cpp`) + R packers
   (`R/removal_spatial.R`, `.tobs_fit_removal_spatial`); one unit/site, K_max=per-site
-  total. spde/temporal + NUTS+spatial gated.
+  total. **Detection-arm areal field (#114)**: `detection=~icar()/car_proper()/bym2()`
+  loads a spatially-varying capture logit on eta_p via the shared areal-BFGS driver
+  (`.tobs_fit_removal_spatial_bfgs(det_arm=TRUE)`); removal's detection design is
+  per-PASS, so the per-pass grad_eta_p is `rowsum`-summed to a per-site field
+  gradient + the per-site offset expanded via site_idx. `fit$spatial_field_arm`
+  labels it. NUTS carries the field on the abundance arm only (detection-arm ->
+  nested_laplace). spde + NUTS+detection-arm gated.
 - **`distance`** (#38): latent N in covered region, per-bin counts multinomial over
   `(bin 1..B, undetected)`, `pi_b = int_bin g(x;sigma) f(x) dx` (half-normal/hazard
   key, line/point transect density `f`); bin integrals + 1st/2nd eta-derivs by
@@ -162,15 +168,25 @@ latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shar
   site-level `log sigma` + optional scalar hazard shape (`src/distance_quad.h`/
   `src/distance_kernel.h`), own Laplace driver (`src/distance_laplace.cpp`) + NUTS
   (`src/distance_nuts.cpp`). K_max default `3*max(rowSums)+100`. Laplace grouped RE on
-  abundance arm (half-normal key, one grouping factor, dim<=3) via shared count AGHQ
+  abundance arm (one grouping factor, dim<=3) via shared count AGHQ
   (`DistanceGroupedOracle` over `CountGroupedOracle`; theta = count layout
-  `[beta_lambda|beta_sigma|log_r?]`); hazard-key + det-arm RE gated. Areal
-  icar/car_proper/bym2 on abundance arm via `nested_laplace` (#51,
+  `[beta_lambda|beta_sigma|log_r?]`). **hazard-key grouped RE (#114)**: the scalar
+  log-shape eta_b is not a per-site design column, so rather than a second global
+  theta slot it is PROFILED over the AGHQ log-marginal (`.tobs_distance_re_aghq`
+  optimises eta_b in an outer loop, each candidate a full AGHQ fit at a FIXED shape
+  the `DistanceGroupedOracle` carries via `key_code`/`eta_b`); the profile log-shape
+  row/col is inserted into the AGHQ vcov (`.tobs_distance_insert_shape_vcov`, profile
+  SE, off-diag 0). Pois + NB; det-arm RE gated (couples a site's bins through the
+  latent N). Areal icar/car_proper/bym2 on abundance arm via `nested_laplace` (#51,
   `R/distance_spatial.R` over shared areal-BFGS driver `R/areal_bfgs.R`): distance
   marginal = bin-multinomial (NOT N-mixture, so not the count-spatial driver) but
   exposes analytic per-site gradient (`cpp_distance_site_sweep` over
-  `compute_distance_site`), so BFGS + FD-Hessian recovers observed info. Half-normal
-  only; Pois + NB; hazard-spatial/temporal + NUTS+spatial gated.
+  `compute_distance_site`), so BFGS + FD-Hessian recovers observed info. **DETECTION-arm
+  areal field (#114)**: `detection=~icar()` loads on the per-site detection scale
+  eta_sigma (spatially-varying detection scale, `det_arm` in `.tobs_fit_distance_spatial`
+  routes offset->eta_sigma, grad_eta=sw$grad_sig); works under BOTH the half-normal key
+  AND the hazard key (the field on eta_sigma, the log-shape eta_b threaded as a global
+  in the same eval). Pois + NB; NUTS+spatial gated.
 - **`fp_occu`** (#40): Miller 2011 multistate false-positive occupancy, `y in {0,1,2}`
   (none/ambiguous/certain); certain detections only at occupied sites identify it.
   Latent z summed (2-state); 4 logit arms psi/p11/p10/b (`fp_formula`/`b_formula`,
@@ -187,7 +203,11 @@ latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shar
   `R/areal_bfgs.R`, `.tobs_areal_bfgs_fit`, shared w/ dyn_abun): BFGS over two-state
   marginal (`cpp_fp_occu_total_log_lik` analytic grad) + CAR prior, FD-Hessian
   observed info; one unit/site. Occupancy fields more weakly identified than count
-  (one binary site/node). temporal + NUTS+spatial gated.
+  (one binary site/node). **Detection-arm areal field (#114)**: `detection=~icar()`
+  loads a spatially-varying true-positive logit on the per-site eta_p11 (per-site
+  detection design, so no aggregation -- `det_arm` routes offset->eta_p11,
+  grad_eta=grad_eta_p11); p10/b never structured. NUTS carries the field on the psi
+  arm only (detection-arm -> nested_laplace).
 - **`dyn_abun`** (#37): Dail-Madsen open N-mixture, `N_1~Pois/NB(lambda)`,
   `N_t=Binom(N_{t-1},omega_{t-1})+Pois(gamma_{t-1})`, `Binom(N_t,p)` obs. Latent N
   sequence summed by exact HMM forward over 0..K_max; analytic grad by forward-mode
@@ -225,7 +245,12 @@ latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shar
   arm via `nested_laplace` (#51, `R/dyn_abun_spatial.R` over shared areal-BFGS driver
   `R/areal_bfgs.R`): BFGS over exact forward-HMM marginal (`cpp_dyn_abun_total_log_lik`
   analytic grad) + CAR prior, FD-Hessian observed-info Laplace integrated over
-  tau[,rho]; one unit/site, Pois+NB; temporal + NUTS+spatial gated.
+  tau[,rho]; one unit/site, Pois+NB. **Detection-arm areal field (#114)**:
+  `detection=~icar()` loads a spatially-varying detection logit on the per-site eta_p
+  (per-site detection design applied across every season, so no aggregation --
+  `det_arm` routes offset->eta_p, grad_eta=grad_eta_p); omega/gamma never structured.
+  NUTS carries the field on the initial-abundance arm only (detection-arm ->
+  nested_laplace).
 
 ### N-mixture abundance (`abun()`)
 
@@ -400,10 +425,10 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (#13); non-species grouping; Pois/NB; `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Community distance (`ms_distance`) | Yes | — | `ms_distance(key=, transect=, cutpoints=)` (spAbundance `msDS`; #117): per-species binned distance sampling w/ Gaussian community hyperpriors on the abundance (`log lambda`) + detection-scale (`log sigma`) coefs. `y` = `[n_sites x n_bins x n_species]` or named list. NO new C++ — the latent N marginalises closed-form per species-site, and `cpp_distance_site_sweep` already returns `log_lik`/`grad_lam`/`info_lam`/`var_N`/`swl`, so the shared community Laplace-EM (`R/ms_distance.R`) reads its per-species score straight off it. Hazard-key log-shape = a community `global` (shared across species) via the EM's `global` slot. Community means UNBIASED over 10 seeds (z of bias 1.07/1.68/-0.66), 95% Wald coverage 1.0/0.8/0.9; single-species `distance()` control agrees (bias 0.02/-0.01). NB: a single seed shows a ~0.18 paired lambda-down/sigma-up shift that looks like bias and is NOT — it is one draw on the lambda/sigma ridge. Poisson only (negbin size not yet a per-species RE); NUTS not wired. `simulate_ms_distance()` draws through `cpp_simulate_distance` (a separate R-side quadrature would simulate from a pi the model is not fit against). `test-ms-distance.R` |
 | Community distance latent factor / spatial-factor | Yes | — | `ms_distance()` + `latent(n)` (`lfMsDS`) and + `icar()`/`car_proper()`/`bym2()`/`spde()` (`sfMsDS`), #117: the SAME shared block-coordinate driver, whose working oracle is the SAME Louis formula as `ms_abun` — `score = grad_lam`, `curv = info_lam - var_N * swl^2` (both are count marginals with `B_i = diag(info) - var_N v v'`; only the kernel supplying the pieces differs). Oracle FD-validated (score 1.6e-9, curv = FD truncation, cor 1.000000). Poisson only. Slower than `ms_abun`'s latent path: the distance kernel exposes the per-site Louis pieces but no assembled block, so this family does not yet pass `sp_info` and the EM finite-differences its per-species Hessian |
-| Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm; areal+temporal AND temporal-only AR1/RW1/RW2/iid on abundance arm via shared areal-BFGS (#78/#114); NUTS+areal car_proper field on abundance arm (#72) |
-| Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal); areal field (half-normal + hazard key); areal+temporal AND temporal-only on abundance arm (#78/#114); DETECTION-arm areal field on log sigma (`detection=~icar()`, spatially-varying detection scale, half-normal, #114); NUTS+areal car_proper field on abundance arm (half-normal, #72) |
-| False-positive occupancy | Yes | Yes | `fp_occu()` (#40) — see Architecture. NUTS single psi intercept RE; Laplace grouped RE psi OR p11; areal psi arm; areal+temporal AND temporal-only on psi arm (#78/#114); NUTS+areal car_proper field on psi arm (#72) |
-| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. Pois/NB init; season-varying omega/gamma via `[n_sites x (T-1)]` covariate, interval-indexed forward kernel, all backends (#80). NUTS single intercept RE on init-abundance OR detection arm; Laplace grouped RE on init-abundance OR detection arm (#82, p-arm = per-node full-forward second-order eta_p pass); areal init arm; areal+temporal AND temporal-only on init-abundance arm (#78/#114); NUTS+areal car_proper field on init-abundance arm (#72); NUTS+temporal-only fixed-hyper ar1/rw1/rw2/iid field on init-abundance arm (#114, same field block as areal, `field_map`=period, temporal whitened loading; areal+temporal under NUTS gated to n-L) |
+| Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm; **detection-arm areal field on the capture logit (`detection=~icar()`, #114)**; areal+temporal AND temporal-only AR1/RW1/RW2/iid on abundance arm via shared areal-BFGS (#78/#114); NUTS+areal car_proper field on abundance arm (#72) |
+| Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal AND hazard key -- hazard log-shape profiled over the AGHQ log-marginal, #114); areal field (half-normal + hazard key); areal+temporal AND temporal-only on abundance arm (#78/#114); DETECTION-arm areal field on log sigma (`detection=~icar()`, spatially-varying detection scale, half-normal AND hazard key, #114); NUTS+areal car_proper field on abundance arm (half-normal, #72) |
+| False-positive occupancy | Yes | Yes | `fp_occu()` (#40) — see Architecture. NUTS single psi intercept RE; Laplace grouped RE psi OR p11; areal psi arm; **detection-arm areal field on the p11 logit (`detection=~icar()`, #114)**; areal+temporal AND temporal-only on psi arm (#78/#114); NUTS+areal car_proper field on psi arm (#72) |
+| Open N-mixture (Dail-Madsen) | Yes | Yes | `dyn_abun()` (#37); y 3D `[n_sites x J x T]` — see Architecture. Pois/NB init; season-varying omega/gamma via `[n_sites x (T-1)]` covariate, interval-indexed forward kernel, all backends (#80). NUTS single intercept RE on init-abundance OR detection arm; Laplace grouped RE on init-abundance OR detection arm (#82, p-arm = per-node full-forward second-order eta_p pass); areal init arm; **detection-arm areal field on the detection logit (`detection=~icar()`, #114)**; areal+temporal AND temporal-only on init-abundance arm (#78/#114); NUTS+areal car_proper field on init-abundance arm (#72); NUTS+temporal-only fixed-hyper ar1/rw1/rw2/iid field on init-abundance arm (#114, same field block as areal, `field_map`=period, temporal whitened loading; areal+temporal under NUTS gated to n-L) |
 | Spatial ICAR/BYM2/NNGP | — | Yes | |
 | Spatial + dynamic | — | Yes | |
 | Nested-Laplace (areal) | n-L | — | icar/bym2/car (+temporal/iid) on occu/int_occu/dyn_occu. RECOVERY-TESTED on icar for all three (`test-{occu,int-occu,dyn-occu}-areal-recovery.R`) + SVC bar (`test-dyn-occu-svc-recovery.R`). State arm encodes at **M = 1** for ANY nested latent block (`nested_block <- !is.null(latent_prior)` in all three `build_*_callbacks`): a state row = ONE binary occupancy obs, so the old M=1000 (areal) / M=4 (spde) overstated its info M-fold, swamped the field prior, read between-cell noise as field, inflated the slope via `sqrt(1+0.346 sigma^2)`. Monotone in M, no arm regresses at M=1. `use_louis` (laplace_helpers.R) covers single/dynamic/integrated — state score `x_i(z_i-psi_i)` is family-generic; without it the state block falls to `.se_from_laplace_fit()` -> **NA SEs** (dynamic + integrated both shipped that way). dynamic needs `weights[,1]` (season-1 col), integrated's is already per-site. **A null-field fixture CANNOT test this path**: grid = `b1.tau` 9 log cells [0.3,30] (sigma [1.83,0.18]), so truth sigma=0 is OFF-grid and the marginal pins on the last cell (weight 0.60) — "shrunk" and "pinned" read identical. Test with an INTERIOR field + assert peak cell off both boundaries. `tau` = ICAR CONDITIONAL precision, NOT 1/sd^2: marginal field sd 1.0 -> sigma~0.40, peak cell 6/9 — assert on field sd/cor, never on `sigma`. `dev_notes/finding_dyn_nested_laplace_field.md` |

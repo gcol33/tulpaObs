@@ -517,10 +517,10 @@
 # field precision tau Q(rho) is fixed at the nested-Laplace (#12 sfMsNMix)
 # posterior mean; the whitened raw ~ N(0, I) with f = Linv %*% raw is sampled by
 # the in-tree C++ FullGradFn (the shared-field block in src/ms_abun_nuts.cpp).
-# proper-CAR only -- its full-rank precision gives a well-conditioned non-centered
-# geometry; intrinsic icar/bym2 have a flat field-mean direction needing a
-# sum-to-zero reparameterisation, so they stay on nested_laplace (the same gate
-# the single-species abun() NUTS+areal path uses).
+# proper-CAR uses its full-rank inverse-Cholesky loading; intrinsic icar / bym2
+# fields sample via the sum-to-zero eigen-loading that drops the precision
+# null-space (constant) direction (gcol33/tulpaObs#71/#113), the same reparam the
+# single-species abun() NUTS+areal path uses.
 .tobs_fit_ms_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                            K_max = NULL, sigma.beta = 10,
                                            sigma.logr = 1.5, n.iter = 1000L,

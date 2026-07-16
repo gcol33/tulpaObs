@@ -1,5 +1,40 @@
 # tulpaObs NEWS
 
+## 0.0.135 (2026-07-16)
+
+* Detection-arm areal fields on the observation families (#114). A
+  `detection = ~ icar()` (or `car_proper()` / `bym2()`) term now loads a
+  spatially-varying detection surface on the detection arm of `removal()`,
+  `distance()`, `fp_occu()`, and `dyn_abun()`, alongside the existing
+  abundance/occupancy-arm areal fields. Each routes through the shared areal-BFGS
+  driver with a `det_arm` flag that sends the field offset to the detection scale
+  and reads the detection-arm gradient: the capture logit for `removal()` (per-
+  pass design, so the per-pass score is `rowsum`-summed to a per-site field
+  gradient), the true-positive logit `eta_p11` for `fp_occu()`, the per-site
+  detection logit applied across every season for `dyn_abun()`, and the detection
+  scale `eta_sigma` for `distance()` (working under both the half-normal and the
+  hazard key, with the log-shape threaded as a global in the same evaluation).
+  `fit$spatial_field_arm` labels which arm carries the field. Poisson and negbin;
+  the detection-arm field is `nested_laplace` only (NUTS carries a field on the
+  abundance/occupancy arm alone). Recovery-tested in `test-obs-det-field.R`.
+* Distance-sampling grouped random effects under the hazard key (#114).
+  `distance()` with a grouped random effect on the abundance arm now fits under
+  the hazard-rate key as well as the half-normal. The scalar log-shape is not a
+  per-site design column, so instead of a second global parameter it is profiled
+  over the AGHQ log-marginal -- an outer optimisation over the shape, each
+  candidate a full AGHQ fit at a fixed shape the `DistanceGroupedOracle` carries
+  -- and the profile log-shape row/column is inserted into the AGHQ variance-
+  covariance matrix (profile standard error, zero off-diagonal). Poisson and
+  negbin.
+* Temporal-only fixed-hyper fields under NUTS for the observation families
+  (#114). A `temporal()` term (AR1 / RW1 / RW2 / iid) on the
+  abundance/occupancy arm of `removal()`, `distance()`, `fp_occu()`, and
+  `dyn_abun()` now samples under `method = "nuts"` via the same non-centered
+  fixed-hyper field block the areal NUTS path uses, with the field map keyed by
+  period and a temporal whitened loading. Recovery-tested (AR1 field + slope, 0
+  divergences) in `test-obs-nuts-temporal.R`; a simultaneous areal-and-temporal
+  field under NUTS remains gated to `nested_laplace` with a pointer.
+
 ## 0.0.134 (2026-07-16)
 
 * Shared areal field on community dynamic occupancy (#123), the `spOccupancy`

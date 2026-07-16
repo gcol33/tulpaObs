@@ -20,6 +20,13 @@
   temporal_only <- is.null(spatial)
   if (!temporal_only)
     .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
+  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
+  # carries shared = c(abundance, detection) = c(FALSE, TRUE). The dyn_abun
+  # detection design is per-site ([n_sites x p]), so a site-level detection field
+  # (a spatially-varying detection probability applied across every season's obs
+  # pmf) loads on eta_p directly and the marginal's per-site grad_eta_p scatters
+  # back with no aggregation. omega / gamma never carry a structured field.
+  det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
   map <- seq_len(model$n_sites)
   # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
   # temporal block; otherwise the areal field is block 1 and the temporal block 2.
@@ -46,10 +53,14 @@
   n_fixed <- off[5] + if (is_nb) 1L else 0L
 
   eval <- function(theta_fix, offset) {
-    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + offset
+    # `offset` is per-site (length N). On the abundance arm it enters eta_lambda;
+    # on the detection arm (det_arm) it enters the per-site eta_p directly (both
+    # arms are per-site here, so no per-observation aggregation is needed).
+    eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + (if (det_arm) 0 else offset)
+    eta_p   <- as.numeric(X_p %*% theta_fix[i_p]) + (if (det_arm) offset else 0)
     out <- cpp_dyn_abun_total_log_lik(
-      y_flat, N, T, J, K, eta_lam,
-      as.numeric(X_p %*% theta_fix[i_p]), as.numeric(X_om %*% theta_fix[i_om]),
+      y_flat, N, T, J, K, eta_lam, eta_p,
+      as.numeric(X_om %*% theta_fix[i_om]),
       as.numeric(X_gm %*% theta_fix[i_gm]),
       use_nb = is_nb, eta_logr = if (is_nb) theta_fix[i_logr] else 0.0)
     g <- numeric(n_fixed)
@@ -58,7 +69,8 @@
     g[i_om]  <- as.numeric(crossprod(X_om,  out$grad_eta_omega))
     g[i_gm]  <- as.numeric(crossprod(X_gm,  out$grad_eta_gamma))
     if (is_nb) g[i_logr] <- as.numeric(out$grad_eta_logr)
-    list(log_lik = out$log_lik, grad_fixed = g, grad_eta = out$grad_eta_lambda)
+    list(log_lik = out$log_lik, grad_fixed = g,
+         grad_eta = if (det_arm) out$grad_eta_p else out$grad_eta_lambda)
   }
 
   warm <- tryCatch(dyn_abun_laplace(
@@ -103,6 +115,9 @@
   } else {
     fit$spatial_field <- res$field_mean
     fit$spatial_hyper <- res$hyper
+    # The field loads on the initial-abundance (log lambda_1) arm by default, or on
+    # the per-site detection logit eta_p when the term sits in `detection=` (#114).
+    fit$spatial_field_arm <- if (det_arm) "detection" else "abundance"
     if (!is.null(temporal)) {
       fit$temporal <- temporal
       fit$temporal_field <- res$temporal_field
@@ -127,6 +142,11 @@
                                             adapt.delta = 0.9, seed = 1L,
                                             verbose = FALSE) {
   .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
+  if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
+    stop(paste0("dyn_abun() NUTS carries the areal field on the initial-abundance ",
+                "arm; a detection-arm field (a spatially-varying detection logit) ",
+                "is wired under method = \"nested_laplace\". (tulpaObs#114)"),
+         call. = FALSE)
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports icar() / ",
                         "car_proper() / bym2() on the initial-abundance arm; got ",

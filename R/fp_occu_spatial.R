@@ -20,6 +20,14 @@
   temporal_only <- is.null(spatial)
   if (!temporal_only)
     .tobs_reject_weighted_spatial(spatial, "fp_occu occupancy spatial")
+  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
+  # carries shared = c(occupancy, detection) = c(FALSE, TRUE). It loads on the
+  # per-visit true-positive detection logit eta_p11 (a spatially-varying detection
+  # probability) instead of the psi arm; the marginal exposes the per-visit p11
+  # gradient (cpp_fp_occu_total_log_lik$grad_eta_p11), summed to a per-site field
+  # gradient. The false-positive arms (p10, b) never carry a structured field.
+  det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
+  n_sites <- model$n_sites
   map <- seq_len(model$n_sites)
   # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
   # temporal block; otherwise the areal field is block 1 and the temporal block 2.
@@ -43,17 +51,22 @@
   n_fixed <- off[5]
 
   eval <- function(theta_fix, offset) {
-    eta_psi <- as.numeric(X_psi %*% theta_fix[i_psi]) + offset
+    # `offset` is per-site (length n_sites). The fp_occu detection design is
+    # per-site (one true-positive logit per site, applied across every visit), so
+    # a p11-arm field enters eta_p11 directly and its per-site gradient scatters
+    # back with no aggregation (as on the psi arm).
+    eta_psi <- as.numeric(X_psi %*% theta_fix[i_psi]) + (if (det_arm) 0 else offset)
+    eta_p11 <- as.numeric(X_p11 %*% theta_fix[i_p11]) + (if (det_arm) offset else 0)
     out <- cpp_fp_occu_total_log_lik(
-      y_long, site_idx, eta_psi,
-      as.numeric(X_p11 %*% theta_fix[i_p11]), as.numeric(X_p10 %*% theta_fix[i_p10]),
-      as.numeric(X_b %*% theta_fix[i_b]))
+      y_long, site_idx, eta_psi, eta_p11,
+      as.numeric(X_p10 %*% theta_fix[i_p10]), as.numeric(X_b %*% theta_fix[i_b]))
     g <- numeric(n_fixed)
     g[i_psi] <- as.numeric(crossprod(X_psi, out$grad_eta_psi))
     g[i_p11] <- as.numeric(crossprod(X_p11, out$grad_eta_p11))
     g[i_p10] <- as.numeric(crossprod(X_p10, out$grad_eta_p10))
     g[i_b]   <- as.numeric(crossprod(X_b,   out$grad_eta_b))
-    list(log_lik = out$log_lik, grad_fixed = g, grad_eta = out$grad_eta_psi)
+    list(log_lik = out$log_lik, grad_fixed = g,
+         grad_eta = if (det_arm) out$grad_eta_p11 else out$grad_eta_psi)
   }
 
   warm <- tryCatch(
@@ -79,11 +92,14 @@
           paste0("b_",   model$process_info[[4]]$coef_names))
   means <- res$beta_mean; names(means) <- nm
   V <- res$vcov; dimnames(V) <- list(nm, nm)
-  # Posterior occupancy w1 at the integrated estimate + field (for fitted()).
+  # Posterior occupancy w1 at the integrated estimate + field (for fitted()). The
+  # field enters the psi arm, or the p11 detection arm when det_arm (#114).
   cl <- .tobs_clamp_eta
-  eta_psi <- cl(as.numeric(X_psi %*% means[i_psi]) + res$field_mean[map])
+  fld <- res$field_mean
+  eta_psi <- cl(as.numeric(X_psi %*% means[i_psi]) + (if (det_arm) 0 else fld[map]))
+  eta_p11 <- as.numeric(X_p11 %*% means[i_p11]) + (if (det_arm) fld[map] else 0)
   ev <- cpp_fp_occu_total_log_lik(
-    y_long, site_idx, eta_psi, as.numeric(X_p11 %*% means[i_p11]),
+    y_long, site_idx, eta_psi, eta_p11,
     as.numeric(X_p10 %*% means[i_p10]), as.numeric(X_b %*% means[i_b]))
   raw <- list(
     beta_psi = means[i_psi], beta_p11 = means[i_p11],
@@ -104,6 +120,9 @@
   } else {
     fit$spatial_field <- res$field_mean
     fit$spatial_hyper <- res$hyper
+    # The field loads on the occupancy (psi) arm by default, or on the per-visit
+    # true-positive detection logit p11 when the term sits in `detection=` (#114).
+    fit$spatial_field_arm <- if (det_arm) "detection" else "occupancy"
     if (!is.null(temporal)) {
       fit$temporal <- temporal
       fit$temporal_field <- res$temporal_field
@@ -123,42 +142,76 @@
 # hyper. The false-positive arms (p11 / p10 / b) carry fixed effects only;
 # car_proper only (intrinsic icar = #71). Occupancy fields are more weakly
 # identified than count fields (one binary site per node).
-.tobs_fit_fp_occu_nuts_spatial <- function(model, spatial, sigma.beta = 10,
+.tobs_fit_fp_occu_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
+                                           sigma.beta = 10,
                                            n.iter = 1000L, n.warmup = 1000L,
                                            n.chains = 1L, max.treedepth = 10L,
                                            adapt.delta = 0.9, seed = 1L,
                                            verbose = FALSE) {
-  .tobs_reject_weighted_spatial(spatial, "fp_occu NUTS occupancy spatial")
-  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
-    stop(sprintf(paste0("fp_occu() NUTS + areal spatial supports icar() / ",
-                        "car_proper() / bym2() on the psi arm; got '%s'. ",
-                        "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+  # FIXED-HYPER non-centered field on the occupancy (psi) arm from EITHER an areal
+  # term (#72/#113) OR a temporal() term (#114); both share the sampling tail,
+  # differing only in the loading / field map / warm source.
+  temporal_only <- is.null(spatial) && !is.null(temporal)
+  if (!temporal_only) {
+    .tobs_reject_weighted_spatial(spatial, "fp_occu NUTS occupancy spatial")
+    if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
+      stop(paste0("fp_occu() NUTS carries the areal field on the occupancy (psi) ",
+                  "arm; a detection-arm field (a spatially-varying p11 logit) is ",
+                  "wired under method = \"nested_laplace\". (tulpaObs#114)"),
+           call. = FALSE)
+    if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+      stop(sprintf(paste0("fp_occu() NUTS + areal spatial supports icar() / ",
+                          "car_proper() / bym2() on the psi arm; got '%s'. ",
+                          "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+  }
   n_sites <- model$n_sites
-  if (spatial$n_units != n_sites)
+  if (!temporal_only && spatial$n_units != n_sites)
     stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
                         "spatial unit per site is required for fp_occu NUTS."),
                  spatial$n_units, n_sites), call. = FALSE)
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
-  adj <- as.matrix(spatial$graph)
 
-  # Warm coefficients + fixed field hyper (tau, rho) from the nested-Laplace fit.
-  nl <- .tobs_fit_fp_occu_spatial(model, spatial, max_iter = 200L, tol = 1e-8,
-                                  verbose = FALSE, integration = "grid")
-  hyper <- nl$spatial_hyper
-  hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
-  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
-                                 tau = hv("tau"), rho = hv("rho"),
-                                 sigma = hv("sigma"),
-                                 scale_factor = spatial$scale_factor)
+  if (temporal_only) {
+    ti <- as.integer(temporal$time_idx)
+    if (length(ti) != n_sites)
+      stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
+                          "sites; one time index per site is required for fp_occu ",
+                          "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
+    n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+           else max(ti, na.rm = TRUE)
+    nl <- .tobs_fit_fp_occu_spatial(model, spatial = NULL, temporal = temporal,
+                                    max_iter = 200L, tol = 1e-8, verbose = FALSE,
+                                    integration = "grid")
+    hyper <- nl$temporal_hyper
+    hv <- function(k) suppressWarnings(as.numeric(hyper[[k]]))
+    fl <- .tobs_nuts_temporal_loading(temporal$type, n_t, tau = hv("tau"), rho = hv("rho"))
+    field_map <- ti
+    n_field_units <- n_t
+  } else {
+    adj <- as.matrix(spatial$graph)
+    # Warm coefficients + fixed field hyper (tau, rho) from the nested-Laplace fit.
+    nl <- .tobs_fit_fp_occu_spatial(model, spatial, max_iter = 200L, tol = 1e-8,
+                                    verbose = FALSE, integration = "grid")
+    hyper <- nl$spatial_hyper
+    hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
+    fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                   tau = hv("tau"), rho = hv("rho"),
+                                   sigma = hv("sigma"),
+                                   scale_factor = spatial$scale_factor)
+    field_map <- seq_len(n_sites)
+    n_field_units <- n_sites
+  }
   field_load <- fl$field_load; n_raw <- fl$n_raw
 
   cm <- as.numeric(nl$means)
   n_base <- length(cm)
-  # car_proper warm-starts raw near the integrated field; icar / bym2 (non-square
-  # sum-to-zero loadings) start raw at 0 (#71/#113).
-  raw0 <- if (identical(spatial$type, "car_proper")) {
-    L <- chol(.areal_Q(adj, fl$rho) * fl$tau + diag(1e-4 * fl$tau, n_sites))
+  # car_proper warm-starts raw near the integrated field; the intrinsic icar / bym2
+  # sum-to-zero loadings and the (rank-deficient) temporal loadings are non-square,
+  # so their whitened raw starts at 0 (#71/#113/#114).
+  raw0 <- if (!temporal_only && identical(spatial$type, "car_proper")) {
+    L <- chol(.areal_Q(as.matrix(spatial$graph), fl$rho) * fl$tau +
+              diag(1e-4 * fl$tau, n_sites))
     as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
   } else numeric(n_raw)
   theta0 <- c(cm, raw0)
@@ -166,8 +219,8 @@
 
   spec <- list(y = as.integer(model$y_long), site_idx = as.integer(model$site_idx),
                X_psi = X_psi, X_p11 = X_p11, X_p10 = X_p10, X_b = X_b,
-               n_sites = n_sites, n_field_units = n_sites,
-               field_map = seq_len(n_sites), field_load = field_load)
+               n_sites = n_sites, n_field_units = n_field_units,
+               field_map = field_map, field_load = field_load)
 
   run_chain <- function(ch)
     cpp_fp_occu_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
@@ -204,11 +257,14 @@
   accept <- unlist(lapply(chains, `[[`, "accept_prob"))
   divergent <- unlist(lapply(chains, `[[`, "divergent"))
   fit$accept_prob <- accept; fit$divergent <- divergent
-  fit$method <- "nuts"; fit$spatial_field <- z_mean
+  fit$method <- "nuts"
+  if (temporal_only) { fit$temporal <- temporal; fit$temporal_field <- z_mean }
+  else               fit$spatial_field <- z_mean
   fit$nuts <- list(accept_prob = accept, divergent = divergent,
                    treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
                    epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
                    divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
-                   prior_type = spatial$type, fixed_hyper = TRUE)
+                   prior_type = if (temporal_only) temporal$type else spatial$type,
+                   fixed_hyper = TRUE)
   fit
 }
