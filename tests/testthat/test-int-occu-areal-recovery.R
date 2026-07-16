@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # test-int-occu-areal-recovery.R - int_occu() + an areal field under
 # nested_laplace: RECOVERY, not plumbing.
 #
@@ -28,7 +28,7 @@
 # em_result$weights is already the per-site w = E[z_i | y] the identity needs (no
 # column slice, unlike dynamic's [n_sites x n_seasons] matrix).
 #
-# Measured after the fixes (8 seeds, medians, dev_notes/_probe_int_occu_areal.R;
+# Measured after the fixes (8 seeds, medians, dev_notes/probe_int_occu_areal.R;
 # truth slope 0.5, two sources at J = 4 / 3, 40 cells x 6 sites):
 #
 #                     slope    SEs    field sd (truth)   coverage

@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # test-occu-areal-recovery.R - single-season occu() + an areal field under
 # nested_laplace: RECOVERY, not plumbing.
 #
@@ -12,7 +12,7 @@
 # Every "single-season is healthy" claim in the dynamic-field investigation
 # (dev_notes/finding_dyn_nested_laplace_field.md) rested on null-field fixtures,
 # and a null-field fixture CANNOT test this path. The outer grid is one axis,
-# b1.tau, 9 log-spaced cells (dev_notes/_probe_grid_dump.R):
+# b1.tau, 9 log-spaced cells (dev_notes/probe_grid_dump.R):
 #
 #   tau  : 0.3000 0.5335 0.9487 1.6870 3.0000 5.3348 9.4868 16.8702 30.0000
 #   sigma: 1.8257 1.3691 1.0267 0.7699 0.5774 0.4330 0.3247  0.2435  0.1826
@@ -35,7 +35,7 @@
 # sigma ~= 0.40. So recovery is asserted on the field surface (its sd and its
 # correlation with the truth), never on the reported `sigma` hyperparameter.
 #
-# Measured (8 seeds, medians, dev_notes/_probe_single_areal_interior.R; truth
+# Measured (8 seeds, medians, dev_notes/probe_single_areal_interior.R; truth
 # slope 0.5, 40 cells x 6 sites, J = 4):
 #
 #                    slope    SEs    field sd (truth)   field cor   coverage
