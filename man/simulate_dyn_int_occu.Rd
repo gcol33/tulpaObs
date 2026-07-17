@@ -13,6 +13,7 @@ simulate_dyn_int_occu(
   gamma = 0.3,
   eps = 0.2,
   p = c(0.4, 0.6),
+  field = NULL,
   seed = NULL
 )
 }
@@ -29,6 +30,10 @@ simulate_dyn_int_occu(
 0.5 / 0.3 / 0.2).}
 
 \item{p}{Per-source detection probabilities (length-\code{S}; default 0.4 / 0.6).}
+
+\item{field}{Optional per-site shared areal field (length \code{N}) added to the
+first-season occupancy logit -- the shared field of the multi-season
+integrated spatial model (stIntPGOcc). Default \code{NULL} (no field).}
 
 \item{seed}{Optional random seed.}
 }

@@ -127,41 +127,103 @@
 # Fitter
 # ---------------------------------------------------------------------------
 
+# Vectorised scaled forward-backward for the multi-source colext HMM. Returns the
+# per-site log marginal AND the exact (Fisher-identity) per-site eta gradients on
+# every arm -- the smoothed season-1 occupancy w1[,1] gives the psi1 (and areal
+# field) gradient w1 - psi1, the pairwise transition joints give the colonization
+# / extinction score, and the per-season smoothed occupancy weights the per-source
+# detection binomial score. Emission stays on the probability scale (e1 <= 1,
+# e0 in {0, 1}, so at least one state is O(1) per season -- the per-season
+# normaliser cs keeps it stable without log-space). psi1 / gamma / eps / detection
+# are all constant across a site's seasons here, so the transition is a single
+# per-site 2x2.
+.dio_fb <- function(up, model, offset_psi1 = NULL) {
+  S <- model$S; T_s <- model$n_seasons; n <- model$n_sites
+  nvalid <- model$nvalid; ndet <- model$ndet
+  psi1 <- up$psi1
+  if (!is.null(offset_psi1))
+    psi1 <- stats::plogis(stats::qlogis(pmin(pmax(psi1, 1e-12), 1 - 1e-12)) + offset_psi1)
+  gamma <- up$gamma; eps <- up$eps
+
+  emit1_log <- matrix(0, n, T_s); det_any <- matrix(0L, n, T_s)
+  for (s in seq_len(S)) {
+    lp  <- log(pmax(up$p_site[[s]], 1e-12))
+    l1p <- log(pmax(1 - up$p_site[[s]], 1e-12))
+    emit1_log <- emit1_log + ndet[[s]] * lp + (nvalid[[s]] - ndet[[s]]) * l1p
+    det_any <- det_any + ndet[[s]]
+  }
+  e1 <- exp(emit1_log)                        # [n x T], <= 1
+  e0 <- ifelse(det_any > 0L, 0, 1)            # [n x T]
+
+  # Scaled forward.
+  a0 <- matrix(0, n, T_s); a1 <- matrix(0, n, T_s); cs <- matrix(0, n, T_s)
+  u0 <- (1 - psi1) * e0[, 1]; u1 <- psi1 * e1[, 1]; c1 <- u0 + u1
+  a0[, 1] <- u0 / c1; a1[, 1] <- u1 / c1; cs[, 1] <- c1
+  if (T_s > 1L) for (t in 2:T_s) {
+    pr0 <- a0[, t - 1] * (1 - gamma) + a1[, t - 1] * eps
+    pr1 <- a0[, t - 1] * gamma       + a1[, t - 1] * (1 - eps)
+    v0 <- e0[, t] * pr0; v1 <- e1[, t] * pr1; ct <- v0 + v1
+    a0[, t] <- v0 / ct; a1[, t] <- v1 / ct; cs[, t] <- ct
+  }
+  loglik <- rowSums(log(pmax(cs, 1e-300)))
+
+  # Scaled backward + smoothed marginals / pairwise joints.
+  b0 <- matrix(0, n, T_s); b1 <- matrix(0, n, T_s)
+  b0[, T_s] <- 1; b1[, T_s] <- 1
+  w0 <- matrix(0, n, T_s); w1 <- matrix(0, n, T_s)
+  w0[, T_s] <- a0[, T_s]; w1[, T_s] <- a1[, T_s]
+  col_y <- numeric(n); ext_y <- numeric(n)
+  if (T_s > 1L) for (t in (T_s - 1):1) {
+    bb0 <- e0[, t + 1] * b0[, t + 1]; bb1 <- e1[, t + 1] * b1[, t + 1]
+    inv_c <- 1 / cs[, t + 1]
+    xi01 <- a0[, t] * gamma * bb1 * inv_c        # colonization event
+    xi10 <- a1[, t] * eps   * bb0 * inv_c        # extinction event
+    col_y <- col_y + xi01; ext_y <- ext_y + xi10
+    b0[, t] <- ((1 - gamma) * bb0 + gamma * bb1) * inv_c
+    b1[, t] <- (eps * bb0 + (1 - eps) * bb1) * inv_c
+    w0[, t] <- a0[, t] * b0[, t]; w1[, t] <- a1[, t] * b1[, t]
+  }
+
+  # Per-site eta gradients (Fisher identity). Transition origin sums run over the
+  # T-1 intervals (seasons 1..T-1); detection over occupied season weights.
+  g_eta_psi1 <- w1[, 1] - psi1
+  keep <- if (T_s > 1L) seq_len(T_s - 1L) else integer(0)
+  g_eta_gam <- col_y - gamma * rowSums(w0[, keep, drop = FALSE])
+  g_eta_eps <- ext_y - eps   * rowSums(w1[, keep, drop = FALSE])
+  g_eta_p <- lapply(seq_len(S), function(s)
+    rowSums(w1 * (ndet[[s]] - nvalid[[s]] * matrix(up$p_site[[s]], n, T_s))))
+
+  list(loglik = loglik, g_eta_psi1 = g_eta_psi1, g_eta_gam = g_eta_gam,
+       g_eta_eps = g_eta_eps, g_eta_p = g_eta_p, w1 = w1)
+}
+
 .tobs_fit_dyn_int_occu <- function(model, verbose = TRUE, ...) {
   S <- model$S; T_s <- model$n_seasons; n_sites <- model$n_sites
   p_psi <- ncol(model$X_psi); p_gam <- ncol(model$X_gam)
   p_eps <- ncol(model$X_eps); p_det <- ncol(model$X_det)
   n_theta <- p_psi + p_gam + p_eps + S * p_det
   nvalid <- model$nvalid; ndet <- model$ndet
-
-  # Per-site HMM-forward marginal with per-source (per-site) detection.
-  site_ll <- function(up) {
-    lg  <- log(pmax(up$psi1, 1e-12));  l1g <- log(pmax(1 - up$psi1, 1e-12))
-    lgam <- log(pmax(up$gamma, 1e-12)); l1gam <- log(pmax(1 - up$gamma, 1e-12))
-    leps <- log(pmax(up$eps, 1e-12));   l1eps <- log(pmax(1 - up$eps, 1e-12))
-    emit1 <- matrix(0, n_sites, T_s); det_any <- matrix(0L, n_sites, T_s)
-    for (s in seq_len(S)) {
-      lp  <- log(pmax(up$p_site[[s]], 1e-12))
-      l1p <- log(pmax(1 - up$p_site[[s]], 1e-12))
-      emit1 <- emit1 + ndet[[s]] * lp + (nvalid[[s]] - ndet[[s]]) * l1p
-      det_any <- det_any + ndet[[s]]
-    }
-    emit0 <- ifelse(det_any > 0L, -Inf, 0)
-    lse2 <- function(a, b) { m <- pmax(a, b); m + log(exp(a - m) + exp(b - m)) }
-    la1 <- lg + emit1[, 1L]; la0 <- l1g + emit0[, 1L]
-    for (t in 2:T_s) {
-      n1 <- lse2(la1 + l1eps, la0 + lgam) + emit1[, t]
-      n0 <- lse2(la1 + leps,  la0 + l1gam) + emit0[, t]
-      la1 <- n1; la0 <- n0
-    }
-    lse2(la1, la0)
-  }
+  X_psi <- model$X_psi; X_gam <- model$X_gam; X_eps <- model$X_eps
+  X_det <- model$X_det
 
   nll <- function(theta) {
     up  <- .dio_unpack(theta, model)
-    ll  <- site_ll(up)
+    ll  <- .dio_fb(up, model)$loglik
     val <- -sum(ll[is.finite(ll)])
     if (is.finite(val)) val else 1e10
+  }
+  # Analytic gradient over the exact forward-backward smoothing (no finite diff).
+  ngr <- function(theta) {
+    up <- .dio_unpack(theta, model)
+    fb <- .dio_fb(up, model)
+    g <- numeric(n_theta); o <- 0L
+    g[o + seq_len(p_psi)] <- crossprod(X_psi, fb$g_eta_psi1); o <- o + p_psi
+    g[o + seq_len(p_gam)] <- crossprod(X_gam, fb$g_eta_gam); o <- o + p_gam
+    g[o + seq_len(p_eps)] <- crossprod(X_eps, fb$g_eta_eps); o <- o + p_eps
+    for (s in seq_len(S)) {
+      g[o + seq_len(p_det)] <- crossprod(X_det, fb$g_eta_p[[s]]); o <- o + p_det
+    }
+    -g
   }
 
   # Init: psi1 / detection from the pooled first-season detection; gamma / eps
@@ -177,9 +239,12 @@
     init[o + 1L] <- stats::qlogis(min(max(ph, 0.05), 0.95)); o <- o + p_det
   }
 
-  opt <- stats::optim(init, nll, method = "BFGS", hessian = TRUE,
+  opt <- stats::optim(init, nll, ngr, method = "BFGS",
                       control = list(maxit = 800L))
   converged <- opt$convergence == 0L
+  # Observed-information vcov from the FD-Jacobian of the analytic gradient
+  # (O(p) marginal evals; no numeric Hessian over the forward-backward).
+  opt$hessian <- .fp_fd_jacobian(function(th) -ngr(th), opt$par)
 
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
@@ -209,6 +274,91 @@
 }
 
 # ---------------------------------------------------------------------------
+# Areal field on the first-season occupancy arm (stIntPGOcc, gcol33/tulpaObs#122)
+# ---------------------------------------------------------------------------
+
+# An ICAR field on the initial-occupancy (psi1) arm of the multi-season
+# integrated model. psi1 sets ONLY the initial mixing weight of each site's HMM,
+# so the per-site marginal is linear in psi1 and the exact per-site field gradient
+# is the Fisher-identity score w1[,1] - psi1 (the smoothed season-1 occupancy),
+# which .dio_fb already returns. The shared areal-BFGS driver (R/areal_bfgs.R)
+# runs BFGS over (all fixed coefficients, field) + the CAR prior and forms the
+# Laplace marginal from an FD-Hessian at the mode -- the same recipe as fp_occu /
+# dyn_abun, differing only in the family's eval. One field unit per site; the
+# colonization / extinction / per-source detection arms carry fixed effects only.
+.tobs_fit_dyn_int_occu_spatial <- function(model, spatial, max_iter = 200L,
+                                           tol = 1e-8, verbose = TRUE,
+                                           integration = "grid") {
+  if (!identical(spatial$type, "icar"))
+    stop("dyn_int_occu() + a spatial field supports icar() only in v1 ",
+         "(bym2 / car_proper are follow-ups; gcol33/tulpaObs#122).", call. = FALSE)
+  .tobs_reject_weighted_spatial(spatial, "dyn_int_occu occupancy spatial")
+  S <- model$S; n_sites <- model$n_sites
+  X_psi <- model$X_psi; X_gam <- model$X_gam; X_eps <- model$X_eps
+  X_det <- model$X_det
+  p_psi <- ncol(X_psi); p_gam <- ncol(X_gam); p_eps <- ncol(X_eps); p_det <- ncol(X_det)
+  off <- cumsum(c(0L, p_psi, p_gam, p_eps, rep(p_det, S)))
+  i_psi <- off[1] + seq_len(p_psi); i_gam <- off[2] + seq_len(p_gam)
+  i_eps <- off[3] + seq_len(p_eps)
+  i_p   <- lapply(seq_len(S), function(s) off[3 + s] + seq_len(p_det))
+  n_fixed <- off[length(off)]
+  map <- seq_len(n_sites)
+  field <- .tobs_areal_field_spec(spatial, n_sites, "dyn_int_occu", map)
+
+  unpack_fix <- function(theta_fix) list(
+    psi1  = stats::plogis(as.numeric(X_psi %*% theta_fix[i_psi])),
+    gamma = stats::plogis(as.numeric(X_gam %*% theta_fix[i_gam])),
+    eps   = stats::plogis(as.numeric(X_eps %*% theta_fix[i_eps])),
+    p_site = lapply(seq_len(S), function(s)
+      stats::plogis(as.numeric(X_det %*% theta_fix[i_p[[s]]]))))
+
+  eval <- function(theta_fix, offset) {
+    fb <- .dio_fb(unpack_fix(theta_fix), model, offset_psi1 = offset)
+    g <- numeric(n_fixed)
+    g[i_psi] <- crossprod(X_psi, fb$g_eta_psi1)
+    g[i_gam] <- crossprod(X_gam, fb$g_eta_gam)
+    g[i_eps] <- crossprod(X_eps, fb$g_eta_eps)
+    for (s in seq_len(S)) g[i_p[[s]]] <- crossprod(X_det, fb$g_eta_p[[s]])
+    ll <- fb$loglik
+    list(log_lik = sum(ll[is.finite(ll)]), grad_fixed = g,
+         grad_eta = fb$g_eta_psi1)
+  }
+
+  warm <- tryCatch(.tobs_fit_dyn_int_occu(model, verbose = FALSE),
+                   error = function(e) NULL)
+  theta0_fix <- if (!is.null(warm)) as.numeric(warm$means) else numeric(n_fixed)
+
+  res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
+                              max_iter = max_iter, tol = tol,
+                              label = "dyn-int-occu-spatial", integration = integration)
+  if (!isTRUE(res$ok))
+    stop("dyn_int_occu() areal spatial fit produced no usable grid point.",
+         call. = FALSE)
+
+  nm <- unlist(lapply(model$process_info, function(pp)
+    paste0(pp$name, "_", pp$coef_names)))
+  means <- res$beta_mean; names(means) <- nm
+  V <- res$vcov; dimnames(V) <- list(nm, nm)
+  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nm
+  n_draws <- 1000L
+  draws <- .occu_cover_rmvn(n_draws, means, V); colnames(draws) <- nm
+
+  structure(c(list(
+    draws = draws, means = means, sds = sds, vcov = V,
+    n_samples = n_draws, n_params = length(means),
+    log_prob = rep(res$log_lik, n_draws), log_lik = res$log_lik, N = n_sites),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names = nm, param_names = nm, n_fixed = length(means), fixed_names = nm,
+    process_info = model$process_info, model = model,
+    spatial = spatial, spatial_field = res$field_mean, spatial_hyper = res$hyper,
+    spatial_integration = res$integration, spatial_pareto_k = res$pareto_k,
+    method = "nested_laplace",
+    convergence = list(converged = TRUE, n_iter = NA_integer_)
+  )), class = c("tobs_fit", "tulpa_fit"))
+}
+
+# ---------------------------------------------------------------------------
 # tobs() dispatcher
 # ---------------------------------------------------------------------------
 
@@ -229,12 +379,40 @@
   if (!is.null(visits))
     stop("dyn_int_occu() detection is site-level; visit-level detection ",
          "covariates (`visits`) are not yet supported.", call. = FALSE)
-  if (!identical(.map_engine(engine, family = "dyn_int_occu"), "laplace"))
-    stop("dyn_int_occu() supports method = \"laplace\" only.", call. = FALSE)
   model <- .tobs_build_dyn_int_occu(
     state_formula = formula, col_formula = colonization,
     ext_formula = extinction, det_formula = detection, data = data, y = y,
     sources = sources)
+
+  # A shared areal field on the first-season occupancy formula routes to the
+  # stIntPGOcc fitter under nested_laplace (gcol33/tulpaObs#122); otherwise the
+  # non-spatial Laplace fit. Only a psi1-arm icar() field is supported.
+  structs <- .tobs_structures_from_model(model)
+  if (!is.null(structs$temporal) || !is.null(structs$re) ||
+      !is.null(structs$svc) || !is.null(structs$latent))
+    stop("dyn_int_occu(): temporal / re / svc / latent terms are not wired; a ",
+         "shared areal field icar() on the first-season occupancy formula is the ",
+         "structured term supported (gcol33/tulpaObs#122).", call. = FALSE)
+  if (!is.null(structs$spatial)) {
+    if (!isTRUE(structs$spatial$shared[1L]))
+      stop("dyn_int_occu() areal field sits on the first-season occupancy arm ",
+           "only (a field on colonization / extinction / detection is not ",
+           "supported).", call. = FALSE)
+    if (!identical(engine, "nested_laplace"))
+      stop("a shared areal field on the dyn_int_occu() occupancy formula needs ",
+           "method = \"nested_laplace\" (drop the icar() term for the ",
+           "non-spatial fit).", call. = FALSE)
+    return(.tobs_fit_dyn_int_occu_spatial(
+      model, spatial = structs$spatial,
+      max_iter = control[["max.iter"]] %||% 200L,
+      tol = control[["tol"]] %||% 1e-8,
+      verbose = isTRUE(control$verbose),
+      integration = control[["integration"]] %||% "grid"))
+  }
+  if (!identical(.map_engine(engine, family = "dyn_int_occu"), "laplace"))
+    stop("dyn_int_occu() supports method = \"laplace\" (non-spatial) or ",
+         "\"nested_laplace\" (with an icar() field on the occupancy formula).",
+         call. = FALSE)
   .tobs_fit_dyn_int_occu(model, verbose = isTRUE(control$verbose))
 }
 
@@ -365,19 +543,27 @@
 #' @param psi1,gamma,eps Season-1 occupancy, colonization, extinction (defaults
 #'   0.5 / 0.3 / 0.2).
 #' @param p Per-source detection probabilities (length-`S`; default 0.4 / 0.6).
+#' @param field Optional per-site shared areal field (length `N`) added to the
+#'   first-season occupancy logit -- the shared field of the multi-season
+#'   integrated spatial model (stIntPGOcc). Default `NULL` (no field).
 #' @param seed Optional random seed.
 #' @return A list with `y` (a length-`S` list of `[N x J x T]` arrays), `data`,
 #'   `sources`, and `truth`.
 #' @export
 simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
                                   psi1 = 0.5, gamma = 0.3, eps = 0.2,
-                                  p = c(0.4, 0.6), seed = NULL) {
+                                  p = c(0.4, 0.6), field = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   if (length(J) != S) J <- rep(J[1L], S)
   if (length(p) != S) p <- rep(p[1L], S)
+  if (!is.null(field) && length(field) != N)
+    stop("simulate_dyn_int_occu(): `field` must have length N.", call. = FALSE)
   data <- data.frame(row.names = seq_len(N))
   z <- matrix(0L, N, T_seasons)
-  z[, 1L] <- stats::rbinom(N, 1L, psi1)
+  # Season-1 occupancy carries the optional shared field on the logit scale.
+  psi1_i <- if (is.null(field)) rep(psi1, N)
+            else stats::plogis(stats::qlogis(psi1) + field)
+  z[, 1L] <- stats::rbinom(N, 1L, psi1_i)
   for (t in 2:T_seasons) {
     surv <- stats::rbinom(N, 1L, 1 - eps); col <- stats::rbinom(N, 1L, gamma)
     z[, t] <- ifelse(z[, t - 1L] == 1L, surv, col)
@@ -390,5 +576,6 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
   })
   names(y) <- paste0("src", seq_len(S))
   list(y = y, data = data, sources = names(y),
-       truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p, z = z))
+       truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p, z = z,
+                    field = field))
 }

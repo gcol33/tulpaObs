@@ -235,11 +235,14 @@
   # dyn_int_occu: multi-season integrated occupancy (spOccupancy tIntPGOcc). A
   # dynamic-occupancy HMM whose per-season emission pools multiple detection
   # sources; the latent state integrates out by the two-state forward recursion,
-  # maximised (optim BFGS) with an observed-information vcov. v1 = full site /
-  # season overlap, constant transitions, site-level detection, non-spatial
-  # laplace (partial overlap, season-varying rates, areal psi1 field, NUTS are
+  # maximised with analytic (forward-backward Fisher-identity) gradients + an
+  # observed-information vcov. A shared areal icar() field on the first-season
+  # occupancy formula fits stIntPGOcc under nested_laplace via the shared
+  # areal-BFGS driver (the field gradient is the psi1 score w1 - psi1, #122).
+  # v1 = full site / season overlap, constant transitions, site-level detection
+  # (partial overlap, season-varying rates, bym2 / car_proper, NUTS are
   # documented follow-ups, #122).
-  dyn_int_occu = c("laplace"),
+  dyn_int_occu = c("laplace", "nested_laplace"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under
@@ -541,7 +544,7 @@
   if (engine == "nested_laplace") {
     if (family %in% c("occu", "int_occu", "dyn_occu", "abun", "removal",
                        "distance", "dyn_abun", "fp_occu", "occu_cover",
-                       "occu_multiscale_cover")) {
+                       "occu_multiscale_cover", "dyn_int_occu")) {
       return("nested_laplace")
     }
     stop(sprintf(

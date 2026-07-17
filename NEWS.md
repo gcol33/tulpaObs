@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.149 (2026-07-17)
+
+* Shared areal field on multi-season integrated occupancy: `dyn_int_occu()` +
+  `~ 1 + icar(graph = adj)` under `method = "nested_laplace"` (the `spOccupancy`
+  `stIntPGOcc` model, #122). The field sits on the first-season occupancy (`psi1`)
+  arm; because `psi1` only sets the initial mixing weight of each site's HMM, the
+  exact per-site field gradient is the Fisher-identity score `w1 - psi1` (the
+  smoothed season-1 occupancy). Fit through the shared areal-BFGS nested-Laplace
+  driver (the same recipe as `fp_occu` / `dyn_abun`), one field unit per site; the
+  colonization / extinction / per-source detection arms carry fixed effects only.
+  The interior field recovers (`cor` ~0.8), transition rates recover.
+  `simulate_dyn_int_occu(field =)`; `test-dyn-int-occu-areal-recovery.R`. `icar()`
+  only in v1 (bym2 / car_proper, a varying-coefficient bar, and NUTS are
+  follow-ups).
+
+* `dyn_int_occu()` now fits with analytic forward-backward gradients (the
+  Fisher-identity score of the multi-source colext HMM: `w1 - psi1` on occupancy,
+  smoothed pairwise transition joints on colonization / extinction, occupancy-
+  weighted binomial score per detection source) instead of a finite-difference
+  BFGS with a numeric Hessian. Faster (a fit that took seconds of numeric
+  differencing now completes in well under a second) and the observed-information
+  vcov comes from the FD-Jacobian of the analytic gradient; the non-spatial fit is
+  otherwise unchanged (recovery regression tests pass).
+
 ## 0.0.148 (2026-07-17)
 
 * Season-varying detection on `dyn_occu()` (#124): a detection covariate supplied
