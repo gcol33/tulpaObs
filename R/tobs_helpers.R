@@ -379,7 +379,7 @@
   # in closed form. Non-spatial Laplace only; correct community NUTS needs
   # independent per-arm RE blocks in the sampler (gcol33/tulpaObs#30).
   ms_dyn_occu = c("laplace", "pg_gibbs", "nested_laplace"),
-  ms_int_occu = c("laplace"),
+  ms_int_occu = c("laplace", "pg_gibbs"),
   # occu_categorical: presence + nominal K-class hurdle (gcol33/tulpaObs#106).
   # A Bernoulli presence arm and a baseline-category multinomial logit on the
   # class given present (the FD-validated tulpa multinomial kernel; the

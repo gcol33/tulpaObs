@@ -1286,6 +1286,23 @@
   model <- .tobs_build_ms_int_occu(
     occ_formula = formula, det_formula = detection,
     data = data, y = y, species = dots$species, site_map = dots$site_map)
+
+  # Polya-Gamma Gibbs (method = "pg_gibbs"; tulpaObs#115, #126): the community
+  # integrated PG sampler, giving a calibrated community-variance posterior (vs
+  # the attenuated Laplace-EM). Site-level per-source detection, no structured
+  # terms.
+  if (identical(engine, "pg_gibbs")) {
+    return(.tobs_fit_ms_int_occu_pg_gibbs(
+      model, priors = priors,
+      sigma.beta = control[["sigma.beta"]] %||% 2.5,
+      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
+      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
+      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
+      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
+      seed     = as.integer(control[["seed"]]     %||% 1L),
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_int_occu, fit_args)
 }

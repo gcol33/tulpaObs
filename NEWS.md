@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.150 (2026-07-17)
+
+* Polya-Gamma Gibbs for community multi-source integrated occupancy:
+  `ms_int_occu(method = "pg_gibbs")` (#115, #126). The community integrated
+  extension of msPGOcc: one latent occupancy state per (species, site) observed by
+  D detection sources, with per-species occupancy and per-source detection
+  coefficients under Gaussian community hyperpriors. Conditional on the
+  Polya-Gamma auxiliaries each sweep samples, per species, the single latent z
+  (occupied if any source detects, else Bernoulli on the pooled
+  occupied-undetected mass across sources), the PG-conjugate `beta_psi_s`, and the
+  D per-source `beta_pd_s` (each at that species' occupied, covered sites), then
+  the conjugate community mean and Inverse-Gamma community variance per coordinate
+  per arm. This gives a calibrated community-variance posterior (`sd_psi` ~0.53 vs
+  a 0.5 truth) where the community Laplace-EM attenuates it; the community means
+  recover and split-Rhat ~ 1.0. `ms_community` matches the Laplace fit's layout
+  (`Sigma_`/`sd_`/`coef_`/`blup_<arm>`), so `coef()` / `ranef()` / `fitted()`
+  work unchanged. `test-ms-int-occu-pg-gibbs.R`. Completes the community-occupancy
+  Polya-Gamma trio (`ms_occu` / `ms_dyn_occu` / `ms_int_occu`).
+
 ## 0.0.149 (2026-07-17)
 
 * Shared areal field on multi-season integrated occupancy: `dyn_int_occu()` +
