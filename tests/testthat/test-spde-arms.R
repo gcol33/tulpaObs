@@ -64,7 +64,7 @@
 test_that("tobs() + jsdm() state-arm spde() Laplace recovers beta and the field", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   sim <- .sim_spde_jsdm(seed = 1)
   fit <- tobs(.spde_field_term(), data = sim$data, family = jsdm(),
@@ -82,7 +82,7 @@ test_that("tobs() + jsdm() state-arm spde() Laplace recovers beta and the field"
 test_that("jsdm() state-arm spde() recovery holds across seeds", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   seeds <- c(2L, 3L, 4L)
   cors <- vapply(seeds, function(s) {
@@ -119,7 +119,7 @@ test_that("jsdm() state-arm spde() recovery holds across seeds", {
 test_that("tobs() + int_occu() state-arm spde() Laplace recovers beta and the field", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   sim <- .sim_spde_integrated(seed = 1)
   fit <- tobs(.spde_field_term(), data = sim$data, family = int_occu(),
@@ -135,7 +135,7 @@ test_that("tobs() + int_occu() state-arm spde() Laplace recovers beta and the fi
 test_that("int_occu() state-arm spde() recovery holds across seeds", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   seeds <- c(2L, 3L, 4L)
   cors <- vapply(seeds, function(s) {
@@ -180,7 +180,7 @@ test_that("int_occu() state-arm spde() recovery holds across seeds", {
 test_that("tobs() + dyn_occu() psi1 spde() Laplace recovers beta and the field", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   sim <- .sim_spde_dynamic(seed = 1)
   fit <- tobs(.spde_field_term(), data = sim$data, family = dyn_occu(),
@@ -196,7 +196,7 @@ test_that("tobs() + dyn_occu() psi1 spde() Laplace recovers beta and the field",
 test_that("dyn_occu() psi1 spde() recovery holds across seeds", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   seeds <- c(2L, 3L, 4L)
   cors <- vapply(seeds, function(s) {

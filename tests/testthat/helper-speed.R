@@ -29,3 +29,20 @@ skip_if_fast <- function() {
     testthat::skip("TULPAOBS_FAST set: skipping slow recovery/coverage loop")
   }
 }
+
+# Gate the SPDE recovery suite on tulpaMesh (GitHub-only, Additional_repositories).
+# tulpaMesh present -> proceed. Absent -> skip, EXCEPT when TULPAOBS_REQUIRE_SPDE
+# is "1": then the whole SPDE surface is expected to run and a missing tulpaMesh
+# is a loud failure, not an invisible skip. Set the flag on any CI runner that is
+# supposed to exercise SPDE so a mesh-install regression cannot green-wash the
+# suite by silently skipping every SPDE recovery block.
+skip_if_no_tulpamesh <- function() {
+  if (requireNamespace("tulpaMesh", quietly = TRUE)) return(invisible())
+  if (identical(Sys.getenv("TULPAOBS_REQUIRE_SPDE"), "1")) {
+    testthat::fail(paste0(
+      "TULPAOBS_REQUIRE_SPDE=1 but tulpaMesh is not installed: the SPDE recovery ",
+      "suite would silently skip. Install tulpaMesh (Additional_repositories) or ",
+      "unset TULPAOBS_REQUIRE_SPDE."))
+  }
+  testthat::skip("tulpaMesh not installed: skipping SPDE recovery block")
+}

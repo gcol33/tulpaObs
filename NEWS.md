@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.159 (2026-07-18)
+
+* **Maintenance: dead-helper removal and test-suite hygiene (#129, #132).**
+  Removed four internal helpers with no call sites (`.cover_arm_to_slot`,
+  `.occu_cover_joint_coef_names`, `.occu_cover_ppc_cover`, `.se_from_hessian`);
+  the `.tobs_ppc_occu_cover()` PPC computes its cover discrepancy inline, so the
+  extracted twin was orphaned. Kept the third-derivative helper `.l3_poisson_log`
+  for family symmetry with its exercised `.l3_binomial_logit` /
+  `.l3_gaussian_identity` siblings and added its unit test (#129).
+  `test-sla-int-occu.R` gained the `skip_if_fast()` / `skip_on_cran()` guards its
+  four integrated-occupancy SLA fits were missing, so the fast pass no longer runs
+  them (#132). The SPDE recovery suite's `skip_if_not_installed("tulpaMesh")`
+  gates became `skip_if_no_tulpamesh()`, which fails loudly under
+  `TULPAOBS_REQUIRE_SPDE=1` instead of silently skipping the whole SPDE surface
+  when `tulpaMesh` is absent on a CI runner (#132). Also refreshed the stale
+  `ms_dyn_occu` method-coverage assertions to reflect its new NUTS route (0.0.158).
+
 ## 0.0.158 (2026-07-18)
 
 * **NUTS for the community dynamic occupancy family (`ms_dyn_occu()`, #115).**

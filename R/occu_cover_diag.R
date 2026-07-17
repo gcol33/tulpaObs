@@ -385,66 +385,6 @@
 # Posterior predictive check + PIT (gcol33/tulpaObs#27)
 # ---------------------------------------------------------------------------
 
-# Posterior-predictive cover discrepancy for one draw, at the granularity the
-# fitter optimised (gcol33/tulpaObs#34). Returns the observed and replicated
-# positive-part discrepancy (`obs` / `rep`) the PPC adds to the detection term.
-# `ep_mat` is the draw's [n_sites x max_visits] cover predictor; `disp` its
-# dispersion (beta precision / lognormal residual SD, or the cover-RE SD under
-# "latent"); `units` the per-unit detected covers from .occu_cover_unit_cover().
-# Mode branches mirror .occu_cover_cover_term: "none" scores the per-visit cells;
-# "mean" / "median" one aggregated cover per detected unit at the unit predictor
-# and dispersion the fit held; "latent" the per-unit covers replicated through
-# the shared cover RE (u_i ~ N(0, sigma_u^2)) at the within-unit residual disp2.
-.occu_cover_ppc_cover <- function(model, ep_mat, disp, units, positive, stat_fn,
-                                  cl) {
-  draw_pos <- function(eta, d) {
-    if (identical(positive, "beta")) {
-      mu <- stats::plogis(cl(eta))
-      stats::rbeta(length(eta), mu * d, (1 - mu) * d)
-    } else if (identical(positive, "gaussian")) {
-      stats::rnorm(length(eta), eta, d)               # identity-Gaussian (#112)
-    } else {
-      exp(stats::rnorm(length(eta), eta, d))
-    }
-  }
-  mean_pos <- function(eta, d) {
-    if (identical(positive, "beta")) stats::plogis(cl(eta))
-    else if (identical(positive, "gaussian")) eta       # mu = eta
-    else exp(cl(eta) + d^2 / 2)
-  }
-  mode <- model$cover_aggregate %||% "none"
-
-  if (identical(mode, "none")) {
-    pos_mask <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
-    if (!any(pos_mask)) return(c(obs = 0, rep = 0))
-    Epos <- mean_pos(ep_mat, disp)
-    yrep <- matrix(draw_pos(as.vector(ep_mat), disp), nrow(ep_mat), ncol(ep_mat))
-    return(c(obs = stat_fn(model$y_pos[pos_mask], Epos[pos_mask]),
-             rep = stat_fn(yrep[pos_mask],        Epos[pos_mask])))
-  }
-
-  ps <- units$pos_site
-  if (length(ps) == 0L) return(c(obs = 0, rep = 0))
-  eta <- ep_mat[ps, 1L]                     # unit-level cover predictor
-
-  if (identical(mode, "latent")) {
-    disp2   <- model$cover_latent_disp2
-    m       <- lengths(units$vals)
-    unit_of <- rep(seq_along(ps), m)
-    v_all   <- unlist(units$vals, use.names = FALSE)
-    eta_all <- eta[unit_of]
-    u_all   <- stats::rnorm(length(ps), 0, disp)[unit_of]
-    e_all   <- mean_pos(eta_all, disp2)
-    return(c(obs = stat_fn(v_all, e_all),
-             rep = stat_fn(draw_pos(eta_all + u_all, disp2), e_all)))
-  }
-
-  aggfun <- if (identical(mode, "median")) stats::median else mean
-  yv   <- vapply(units$vals, function(v) as.numeric(aggfun(v)), numeric(1))
-  Epos <- mean_pos(eta, disp)
-  c(obs = stat_fn(yv, Epos), rep = stat_fn(draw_pos(eta, disp), Epos))
-}
-
 # Posterior predictive check for an occu_cover() fit. Per draw, the latent
 # occupancy z is sampled from its full conditional given the detection history
 # (the spOccupancy construction), detection replicates from Bernoulli(z p), and

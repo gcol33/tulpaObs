@@ -452,21 +452,6 @@ encode_cover_hurdle <- function(formula, data, y,
   invisible(spec)
 }
 
-# Tag the cover-arm label a bar's `to` selects onto the joint-engine arm name:
-# presence -> "occ", positive -> "pos". The cover hurdle's two response arms are
-# named occ/pos internally (the binomial occurrence arm and the positive-cover
-# arm); the formula `to =` labels are presence/positive (gcol33/tulpaObs#61).
-.cover_arm_to_slot <- function(arm) {
-  switch(arm,
-         presence = "occ",
-         positive = "pos",
-         detection = stop(
-           "cover() has no detection arm; a detection-arm field belongs to ",
-           "occu_cover(). Use \"presence\" or \"positive\".", call. = FALSE),
-         stop(sprintf("internal: unknown cover arm label '%s'.", arm),
-              call. = FALSE))
-}
-
 # Desugar a captured INDEPENDENT (`||`) varying-coefficient spatial bar
 # (gcol33/tulpaObs#61) into the intercept + per-covariate trend `tobs_spatial`
 # terms the cover machinery already consumes. The expanded terms are plain

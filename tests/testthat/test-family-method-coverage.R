@@ -52,17 +52,17 @@ test_that("ms_occu supports laplace/nuts/nested_laplace; ms_int_occu laplace-onl
                "not available")
 })
 
-test_that("ms_dyn_occu supports laplace + nested_laplace (stMsPGOcc, #123)", {
+test_that("ms_dyn_occu supports laplace + nested_laplace + nuts", {
   # A shared areal field on the first-season occupancy arm added the
-  # nested_laplace route (gcol33/tulpaObs#123); NUTS remains a follow-up.
-  expect_silent(.tobs_validate_family_method("laplace", ms_dyn_occu()))
-  expect_silent(.tobs_validate_family_method("nested_laplace", ms_dyn_occu()))
-  expect_error(.tobs_validate_family_method("nuts", ms_dyn_occu()),
-               "not available")
+  # nested_laplace route (gcol33/tulpaObs#123); the community HMM-forward NUTS
+  # sampler added the nuts route (gcol33/tulpaObs#115, 0.0.158).
+  for (m in c("laplace", "nested_laplace", "nuts"))
+    expect_silent(.tobs_validate_family_method(m, ms_dyn_occu()))
 })
 
 test_that("the rejection lists the family's supported methods", {
-  err <- tryCatch(.tobs_validate_family_method("nuts", ms_dyn_occu()),
+  # ms_int_occu is community Laplace-EM only, so nuts is genuinely rejected.
+  err <- tryCatch(.tobs_validate_family_method("nuts", ms_int_occu()),
                   error = function(e) conditionMessage(e))
   expect_match(err, "Supported:")
   expect_match(err, "laplace", fixed = TRUE)

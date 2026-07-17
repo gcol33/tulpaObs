@@ -504,13 +504,6 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   out
 }
 
-.se_from_hessian <- function(H, scale = 1) {
-  if (is.null(H)) return(numeric(0))
-  cov <- tryCatch(scale * solve(H), error = function(e) NULL)
-  if (is.null(cov)) return(rep(NA_real_, nrow(H)))
-  sqrt(pmax(diag(cov), 0))
-}
-
 # Per-grid constrained covariance block for the selected latent
 # coordinates. Same conditioning-by-kriging constraint correction as
 # `.joint_inner_var()` on the BYM2/ICAR/CAR_proper spatial blocks, returning

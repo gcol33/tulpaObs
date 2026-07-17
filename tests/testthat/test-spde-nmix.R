@@ -14,7 +14,7 @@
 test_that("abun() + spde() recovers the abundance slope and the mesh field", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   beta_lambda <- c(0.6, 0.5)     # log-lambda intercept + slope
   beta_p      <- c(0.2, -0.3)    # logit-p intercept + slope
@@ -75,7 +75,7 @@ test_that("abun() + spde() recovers the abundance slope and the mesh field", {
 test_that("ms_abun() + spde() recovers the shared mesh field across species", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   # Single seed: the per-species joint EM over the (range, sigma) grid is the
   # cost driver, so the scale (N = 120, 4 species) is kept modest. The shared

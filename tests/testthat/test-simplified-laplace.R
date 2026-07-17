@@ -110,6 +110,14 @@ test_that("Binomial l3 has expected sign structure", {
                10 * tulpaObs:::.l3_binomial_logit(1, 1))
 })
 
+test_that("Poisson l3 equals -lambda = -exp(eta)", {
+  # d^3 log p / d eta^3 = -lambda_i = -exp(eta_i); always negative, matches
+  # the exact third cumulant of a Poisson on the log-mean scale.
+  eta <- rnorm(10, 0, 1)
+  expect_equal(tulpaObs:::.l3_poisson_log(eta), -exp(eta))
+  expect_true(all(tulpaObs:::.l3_poisson_log(eta) < 0))
+})
+
 test_that("tulpa::sn_match round-trips for a moderately skewed distribution", {
   sn <- tulpa::sn_match(mu = 0, sigma = 1, gamma = 0.3)
   expect_false(is.null(sn))

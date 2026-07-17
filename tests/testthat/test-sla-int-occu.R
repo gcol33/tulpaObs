@@ -32,6 +32,8 @@
 
 
 test_that("simplified_laplace attaches finite skew on int_occu (smoke)", {
+  skip_if_fast()
+  skip_on_cran()
   set.seed(2027)
   sim <- .make_int_occu_sim(n = 80, J = c(3, 4, 3))
 
@@ -58,6 +60,8 @@ test_that("simplified_laplace attaches finite skew on int_occu (smoke)", {
 
 
 test_that(".loglik_int_occu agrees with EM log_marginal_likelihood at beta_hat", {
+  skip_if_fast()
+  skip_on_cran()
   set.seed(2028)
   sim <- .make_int_occu_sim(n = 60, J = c(3, 3, 4))
 
@@ -100,6 +104,8 @@ test_that(".loglik_int_occu agrees with EM log_marginal_likelihood at beta_hat",
 
 
 test_that(".loglik_int_occu is finite and on the same magnitude as EM marginal", {
+  skip_if_fast()
+  skip_on_cran()
   # Tier-3 sanity: at the gaussian-laplace mode, the R-side R-only int_occu
   # log-lik should be a finite scalar of order n_sites * 1 (typical Bernoulli
   # log-prob per site is in [-log 2, 0]).
@@ -135,6 +141,8 @@ test_that(".loglik_int_occu is finite and on the same magnitude as EM marginal",
 
 
 test_that("SLA gamma on int_occu is finite on a realistic simulated setup", {
+  skip_if_fast()
+  skip_on_cran()
   set.seed(2030)
   sim <- .make_int_occu_sim(n = 100, J = c(3, 4, 4),
                             beta_occ = c(0.2, 0.5),

@@ -362,17 +362,6 @@
 }
 
 
-# Per-arm coef names for unpacking joint modes into a (means, sds) table.
-.occu_cover_joint_coef_names <- function(model) {
-  pi_list <- model$process_info
-  list(
-    psi = pi_list[[1L]]$coef_names,
-    p   = pi_list[[2L]]$coef_names,
-    pos = pi_list[[3L]]$coef_names
-  )
-}
-
-
 # Resolve per-arm weakly-informative fixed-effect priors for the coupled arms,
 # returning list(psi=, p=, pos=) of list(mean, prec) (NULL per arm -> the weak
 # engine default). All three arms carry weakly-informative defaults; the

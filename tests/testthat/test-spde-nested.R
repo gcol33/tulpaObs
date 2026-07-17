@@ -43,7 +43,7 @@ fit_spde_nested <- function(d) {
 # stop(); it now fits and stores the mesh field.
 test_that("spde() + nested_laplace builds the multi-block SPDE prior and fits", {
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
   d <- simulate_spde_occu(1L, n_sites = 120, J = 6)
   fit <- fit_spde_nested(d)
 
@@ -75,7 +75,7 @@ test_that("spde() + nested_laplace builds the multi-block SPDE prior and fits", 
 test_that("spde() + nested_laplace recovers beta_occ and the field shape", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   beta_occ <- c(-0.5, 0.7)
   beta_det <- c(-0.3, 0.4)
@@ -115,7 +115,7 @@ test_that("spde() + nested_laplace recovers beta_occ and the field shape", {
 # still fit after the INDEXED_MULTI generalisation of the multi-block engine.
 test_that("areal nested_laplace path still fits (regression)", {
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
   set.seed(7)
   n_sites <- 24
   adj <- matrix(0, n_sites, n_sites)

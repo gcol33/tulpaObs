@@ -49,7 +49,7 @@
 test_that("tobs() + detection-arm spde() Laplace recovers beta and the field", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   sim <- .sim_spde_det(seed = 1)
   fit <- .fit_spde_det(sim)
@@ -77,7 +77,7 @@ test_that("tobs() + detection-arm spde() Laplace recovers beta and the field", {
 test_that("detection-arm spde() recovery holds across seeds", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   seeds <- c(2L, 3L, 4L)
   res <- lapply(seeds, function(s) {

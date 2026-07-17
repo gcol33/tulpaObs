@@ -43,7 +43,7 @@ test_that("spde() with fractional nu builds a valid spec", {
 test_that("tobs() + spde() Laplace recovers beta and the field shape", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   set.seed(42)
   n_sites <- 400
@@ -105,7 +105,7 @@ test_that("tobs() + spde() Laplace recovers beta and the field shape", {
 test_that("tobs() + spde() Laplace recovery tightens at N = 1500", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("tulpaMesh")
+  skip_if_no_tulpamesh()
 
   n_sites <- 1500
   J <- 8
