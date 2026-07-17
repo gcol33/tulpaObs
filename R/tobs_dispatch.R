@@ -959,13 +959,14 @@
   n_quad    <- as.integer(control[["n.quad"]] %||% 1L)
   .tobs_fit_ms_nmix(
     model,
-    mixture   = family$params$mixture %||% "poisson",
-    K_max     = family$params$K_max,
-    max_iter  = control[["max.iter"]] %||% 100L,
-    optimizer = optimizer,
-    n_quad    = n_quad,
-    lkj_eta   = control[["re.lkj"]] %||% 1.5,
-    verbose   = isTRUE(control[["verbose"]]))
+    mixture       = family$params$mixture %||% "poisson",
+    K_max         = family$params$K_max,
+    max_iter      = control[["max.iter"]] %||% 100L,
+    optimizer     = optimizer,
+    n_quad        = n_quad,
+    n_quad_scalar = as.integer(control[["n.quad.scalar"]] %||% 2L),
+    lkj_eta       = control[["re.lkj"]] %||% 1.5,
+    verbose       = isTRUE(control[["verbose"]]))
 }
 
 

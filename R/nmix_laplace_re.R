@@ -98,7 +98,15 @@
 #'   [tulpa_re_aghq()] (default 1, the joint Laplace). A higher `n_quad`
 #'   debiases the community covariances at a `n_quad^(p_lambda + p_p)`
 #'   per-species grid cost, so keep it modest when the coefficient dimension is
-#'   large.
+#'   large. This sets the order of the correlated coefficient blocks
+#'   (`lambda`, `p`); the scalar nuisance blocks use `n_quad_scalar`.
+#' @param n_quad_scalar Quadrature points for the scalar nuisance random-effect
+#'   blocks -- the negative-binomial dispersion `log_r` and the zero-inflation
+#'   `logit_omega` (default 2). These integrate a 1-D near-Gaussian posterior, so
+#'   [tulpa_re_aghq()]'s per-block quadrature runs them at this coarser order
+#'   rather than the full `n_quad`, trimming the `n_quad^(NB + ZI)` factor the
+#'   nuisance axes would otherwise multiply into the tensor grid. Clamped to
+#'   `[2, n_quad]`.
 #' @param lkj_eta LKJ shape regularizing each *correlated* community covariance
 #'   block's correlation off the boundary (default 1, no penalty); passed
 #'   through to [tulpa_re_aghq()]. Does not touch the marginal SDs.
@@ -137,7 +145,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   mixture = c("P", "NB", "ZIP", "ZINB"),
                                   r_init = 10, sigma_logr_init = 0.5,
                                   omega_init = 0.2, sigma_omega_init = 0.5,
-                                  n_quad = 1L, lkj_eta = 1,
+                                  n_quad = 1L, n_quad_scalar = 2L, lkj_eta = 1,
                                   sigma_beta = 100, verbose = FALSE) {
   mixture <- match.arg(mixture)
   is_nb <- mixture %in% c("NB", "ZINB")   # negative-binomial abundance (log_r RE)
@@ -302,12 +310,24 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     Sigma0    <- c(Sigma0, list(matrix(sigma_omega_init^2, 1L, 1L)))
     omega_blk <- length(re_terms)
   }
+  # Per-block quadrature order (tulpa_re_aghq accepts a per-RE-block n_quad
+  # vector). The correlated coefficient blocks (lambda, p) use the requested
+  # n_quad; the scalar nuisance blocks (log_r, omega) integrate a 1-D
+  # near-Gaussian posterior, so they use the coarser n_quad_scalar. The tensor
+  # grid is prod_b n_quad_b^dim_b, so trimming each scalar axis removes the extra
+  # n_quad factor it would otherwise multiply in (e.g. ZINB at n_quad = 3,
+  # n_quad_scalar = 2 gives 3^2 * 3^2 * 2 * 2 = 324 nodes vs 3^6 = 729). Kept at
+  # >= 2 so every axis carries the quadrature the joint analytic gradient needs.
+  nq_vec <- rep(as.integer(n_quad), length(re_terms))
+  nqs    <- max(2L, min(as.integer(n_quad), as.integer(n_quad_scalar)))
+  if (!is.na(logr_blk))  nq_vec[logr_blk]  <- nqs
+  if (!is.na(omega_blk)) nq_vec[omega_blk] <- nqs
   fit <- tulpa::tulpa_re_aghq(
     theta0  = theta0,
     re_terms = re_terms,
     Sigma0  = Sigma0,
     oracle  = orc, gradient = grad_mode,
-    n_quad = n_quad, lkj_eta = lkj_eta,
+    n_quad = nq_vec, lkj_eta = lkj_eta,
     theta_prior_sd = sigma_beta, max_iter = as.integer(max_iter))
 
   if (is.null(fit)) {
@@ -327,7 +347,10 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     log_lik      = fit$log_marginal,
     converged    = fit$converged,
     K_max        = K_max,
-    n_quad       = fit$n_quad,
+    # Headline n_quad is the coefficient-block order; the scalar nuisance blocks
+    # ran at n_quad_scalar (the full per-block vector is nq_vec).
+    n_quad       = as.integer(n_quad),
+    n_quad_grid  = nq_vec,
     lkj_eta      = fit$lkj_eta,
     optimizer    = optimizer,
     mixture      = mixture

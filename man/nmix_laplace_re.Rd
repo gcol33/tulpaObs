@@ -25,6 +25,7 @@ nmix_laplace_re(
   omega_init = 0.2,
   sigma_omega_init = 0.5,
   n_quad = 1L,
+  n_quad_scalar = 2L,
   lkj_eta = 1,
   sigma_beta = 100,
   verbose = FALSE
@@ -103,7 +104,16 @@ structural-zero-logit random effect \code{logit_omega_s} (\code{mixture = "ZIP"}
 \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}} (default 1, the joint Laplace). A higher \code{n_quad}
 debiases the community covariances at a \code{n_quad^(p_lambda + p_p)}
 per-species grid cost, so keep it modest when the coefficient dimension is
-large.}
+large. This sets the order of the correlated coefficient blocks
+(\code{lambda}, \code{p}); the scalar nuisance blocks use \code{n_quad_scalar}.}
+
+\item{n_quad_scalar}{Quadrature points for the scalar nuisance random-effect
+blocks -- the negative-binomial dispersion \code{log_r} and the zero-inflation
+\code{logit_omega} (default 2). These integrate a 1-D near-Gaussian posterior, so
+\code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}}'s per-block quadrature runs them at this coarser order
+rather than the full \code{n_quad}, trimming the \code{n_quad^(NB + ZI)} factor the
+nuisance axes would otherwise multiply into the tensor grid. Clamped to
+\verb{[2, n_quad]}.}
 
 \item{lkj_eta}{LKJ shape regularizing each \emph{correlated} community covariance
 block's correlation off the boundary (default 1, no penalty); passed
