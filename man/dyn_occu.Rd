@@ -11,5 +11,12 @@ A \code{tobs_family} object.
 }
 \description{
 Bernoulli occupancy state with colonisation + extinction transitions across
-seasons (the MacKenzie et al. dynamic model).
+seasons (the MacKenzie et al. dynamic model). Colonisation / extinction are
+constant across a site's seasons by default; a season-varying rate is supplied
+as a \verb{[n_sites x (T - 1)]} matrix column of \code{data} (one column per transition
+interval) on \code{colonization} / \code{extinction}. Detection is site-level by default;
+a \verb{[n_sites x T]} matrix column of \code{data} (one column per primary season) on
+the \code{detection} formula gives per-season detection. All season-varying paths
+run under \code{method = "laplace"} (the exact HMM-forward marginal refine
+calibrates the coefficients); they are gated under \code{"nuts"} with a pointer.
 }

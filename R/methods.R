@@ -436,11 +436,15 @@ fitted.tobs_fit <- function(object, ...) {
 # same recursion the likelihood evaluates (src/dyn_occ_likelihood.h); the
 # backward pass folds in the future detection history so each season's state is
 # conditioned on the whole series, not just the marginal occupancy probability.
-# Returns an [n_sites x n_seasons] matrix. Detection / colonization / extinction
-# are site-level (constant across seasons), matching the engine.
+# Returns an [n_sites x n_seasons] matrix. Detection is indexed per (site, season)
+# and colonization / extinction per (site, interval), so a season-varying
+# detection covariate ([n_sites x T]) or an interval-varying transition covariate
+# ([n_sites x (T-1)]) is honoured (gcol33/tulpaObs#124); constant arms broadcast a
+# single value across the periods, matching the engine.
 .tobs_dynamic_smoothed_z <- function(model, means, pi_list) {
   n_sites   <- model$n_sites
   T_seasons <- model$n_seasons
+  n_int     <- T_seasons - 1L
 
   X <- model$X_processes
   off <- cumsum(c(0L, vapply(pi_list, function(pp) pp$p, integer(1))))
@@ -450,19 +454,30 @@ fitted.tobs_fit <- function(object, ...) {
   beta_eps  <- means[off[4] + seq_len(pi_list[[4]]$p)]
 
   psi1  <- plogis(as.vector(X[[1]] %*% beta_psi1))
-  p     <- plogis(as.vector(X[[2]] %*% beta_p))
-  gamma <- plogis(as.vector(X[[3]] %*% beta_gam))
-  eps   <- plogis(as.vector(X[[4]] %*% beta_eps))
+  # Per-(site, period) rate matrices: a long-form design (season / interval
+  # varying) flattens site-major period-minor and is reshaped byrow; a per-site
+  # design broadcasts the single value across the periods.
+  ep <- as.vector(X[[2]] %*% beta_p)
+  p_mat <- if (isTRUE(model$det_season_varying))
+    matrix(plogis(ep), n_sites, T_seasons, byrow = TRUE)
+  else matrix(plogis(ep), n_sites, T_seasons)
+  eg <- as.vector(X[[3]] %*% beta_gam)
+  gam_mat <- if (isTRUE(model$col_season_varying))
+    matrix(plogis(eg), n_sites, n_int, byrow = TRUE)
+  else matrix(plogis(eg), n_sites, n_int)
+  ee <- as.vector(X[[4]] %*% beta_eps)
+  eps_mat <- if (isTRUE(model$ext_season_varying))
+    matrix(plogis(ee), n_sites, n_int, byrow = TRUE)
+  else matrix(plogis(ee), n_sites, n_int)
 
   y <- model$y  # [n_sites x max_visits x n_seasons]
   z <- matrix(NA_real_, n_sites, T_seasons)
 
   for (i in seq_len(n_sites)) {
-    pi_i <- p[i]; gam_i <- gamma[i]; eps_i <- eps[i]
-
     # Per-season emission likelihood under each state, and a hard-detection mask.
     em <- matrix(1, T_seasons, 2L)  # columns: state 0 (unocc), state 1 (occ)
     for (t in seq_len(T_seasons)) {
+      p_it <- p_mat[i, t]
       raw <- y[i, , t]
       raw <- raw[!is.na(raw) & raw >= 0]
       if (length(raw) == 0L) {
@@ -470,37 +485,35 @@ fitted.tobs_fit <- function(object, ...) {
       } else if (any(raw == 1)) {
         # A detection rules out the unoccupied state.
         em[t, 1L] <- 0
-        em[t, 2L] <- prod(p[i]^raw * (1 - p[i])^(1 - raw))
+        em[t, 2L] <- prod(p_it^raw * (1 - p_it)^(1 - raw))
       } else {
         em[t, 1L] <- 1                       # unoccupied -> all non-detections
-        em[t, 2L] <- prod(1 - p[i])^length(raw)
+        em[t, 2L] <- prod(1 - p_it)^length(raw)
       }
     }
 
-    # Transition matrix Tr[a, b] = P(z_{t+1}=b-1 | z_t=a-1).
-    Tr <- matrix(c(1 - gam_i, eps_i,
-                   gam_i,     1 - eps_i), 2L, 2L)
+    # Per-interval transition matrices Tr_t[a, b] = P(z_{t+1}=b-1 | z_t=a-1).
+    Tr_of <- function(iv) matrix(c(1 - gam_mat[i, iv], eps_mat[i, iv],
+                                   gam_mat[i, iv],     1 - eps_mat[i, iv]), 2L, 2L)
 
-    # Forward filtering (scaled).
+    # Forward filtering (scaled). Step t-1 -> t uses interval (t - 1)'s rates.
     fwd <- matrix(0, T_seasons, 2L)
     prior <- c(1 - psi1[i], psi1[i])
-    a <- prior * em[1L, ]
-    a <- a / sum(a)
-    fwd[1L, ] <- a
+    a <- prior * em[1L, ]; a <- a / sum(a); fwd[1L, ] <- a
     if (T_seasons > 1L) {
       for (t in 2L:T_seasons) {
-        pred <- as.vector(t(Tr) %*% fwd[t - 1L, ])
-        a <- pred * em[t, ]
-        a <- a / sum(a)
-        fwd[t, ] <- a
+        pred <- as.vector(t(Tr_of(t - 1L)) %*% fwd[t - 1L, ])
+        a <- pred * em[t, ]; a <- a / sum(a); fwd[t, ] <- a
       }
     }
 
-    # Backward smoothing (Rauch-Tung-Striebel style for discrete HMM).
+    # Backward smoothing (Rauch-Tung-Striebel style for discrete HMM). The
+    # transition at backward step t is interval t (seasons t -> t+1).
     sm <- matrix(0, T_seasons, 2L)
     sm[T_seasons, ] <- fwd[T_seasons, ]
     if (T_seasons > 1L) {
       for (t in (T_seasons - 1L):1L) {
+        Tr <- Tr_of(t)
         pred <- as.vector(t(Tr) %*% fwd[t, ])  # P(z_{t+1} | y_{1:t})
         ratio <- ifelse(pred > 0, sm[t + 1L, ] / pred, 0)
         sm[t, ] <- fwd[t, ] * as.vector(Tr %*% ratio)

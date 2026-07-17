@@ -862,6 +862,9 @@ simulate_royle_nichols <- function(N = 200, J = 5,
 #'   colonization logit driven by a drawn per-`(site, interval)` covariate.
 #' @param beta_epsilon Optional `c(intercept, slope)` for a season-varying
 #'   extinction logit driven by a drawn per-`(site, interval)` covariate.
+#' @param beta_det_season Optional `c(intercept, slope)` for a season-varying
+#'   detection logit driven by a drawn per-`(site, season)` covariate `det_cov`
+#'   (a `[N x T]` matrix column of `data`); fit with `detection = ~ det_cov`.
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
 #' @export
@@ -869,13 +872,23 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
                     beta_occ = c(0.5), beta_det = c(0),
                     gamma = 0.2, epsilon = 0.1,
                     beta_gamma = NULL, beta_epsilon = NULL,
-                    seed = NULL) {
+                    beta_det_season = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   data <- data.frame(x = rnorm(N))
   psi1 <- plogis(beta_occ[1])
   p <- plogis(beta_det[1])
   n_int <- n_seasons - 1L
+
+  # Season-varying detection [N x T] when a covariate coefficient is given: p
+  # varies by primary season off a [N x T] covariate `det_cov`. Constant detection
+  # keeps the scalar p (the RNG stream is unchanged in that branch).
+  p_mat <- matrix(p, N, n_seasons)
+  if (!is.null(beta_det_season)) {
+    det_cov <- matrix(rnorm(N * n_seasons), N, n_seasons)
+    p_mat <- plogis(beta_det_season[1] + beta_det_season[2] * det_cov)
+    data$det_cov <- det_cov
+  }
 
   # Season-varying rate matrices [N x (T-1)] when covariate coefficients are
   # given; otherwise the scalar rate broadcast over intervals. The covariate
@@ -906,7 +919,7 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
   y <- array(NA_integer_, dim = c(N, J, n_seasons))
   for (i in seq_len(N)) {
     for (t in seq_len(n_seasons)) {
-      y[i, , t] <- rbinom(J, 1, z[i, t] * p)
+      y[i, , t] <- rbinom(J, 1, z[i, t] * p_mat[i, t])
     }
   }
 
@@ -916,6 +929,7 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
     truth = list(
       psi1 = psi1, p = p, gamma = gamma, epsilon = epsilon,
       beta_gamma = beta_gamma, beta_epsilon = beta_epsilon,
+      beta_det_season = beta_det_season,
       z = z, beta_occ = beta_occ, beta_det = beta_det
     )
   )

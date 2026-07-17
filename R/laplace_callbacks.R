@@ -310,6 +310,12 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
   n_int  <- model$n_intervals %||% (n_seasons - 1L)
   col_sv <- isTRUE(model$col_season_varying)
   ext_sv <- isTRUE(model$ext_season_varying)
+  # Season-varying detection (gcol33/tulpaObs#124): X_det is then the long-form
+  # [(n_sites x n_seasons) x p] design (site-major season-minor); the per-season
+  # detection probability is a [n_sites x n_seasons] matrix. A constant-detection
+  # arm keeps the site-level design and the matrix broadcasts the site's single
+  # probability across seasons -- byte-identical to the pre-#124 path.
+  det_sv <- isTRUE(model$det_season_varying)
 
   # The state field enters season-1 occupancy psi1 only (one psi1 row per
   # site, the identity map). The colonization (gamma) and extinction
@@ -333,7 +339,12 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     sp_off <- .spatial_eta_offset(spatial_occ, fits$occ, p_occ)
     if (length(sp_off) == n_sites) eta_psi1 <- eta_psi1 + sp_off
     psi1 <- plogis(eta_psi1)
-    p <- plogis(as.vector(X_det %*% beta_det))
+    # Per-season detection probability [n_sites x n_seasons]: season-varying reads
+    # the long-form eta site-major season-minor; constant broadcasts the per-site p.
+    p_mat <- if (det_sv)
+      matrix(plogis(as.vector(X_det %*% beta_det)), n_sites, n_seasons, byrow = TRUE)
+    else
+      matrix(plogis(as.vector(X_det %*% beta_det)), n_sites, n_seasons)
     # gamma / epsilon as [n_sites x n_int] per-interval rate matrices. Constant
     # rates recycle a length-n_sites vector down every column (each row constant),
     # so the per-interval transition below is byte-identical to the scalar path;
@@ -382,7 +393,7 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         nv_it <- nv[idx]; det_it <- ad[idx]
         if (nv_it == 0L)      { b0v[t] <- 1;  b1v[t] <- 1 }
         else if (det_it)      { b0v[t] <- 0;  b1v[t] <- 1 }
-        else                  { b0v[t] <- 1;  b1v[t] <- (1 - p[i])^nv_it }
+        else                  { b0v[t] <- 1;  b1v[t] <- (1 - p_mat[i, t])^nv_it }
       }
       # forward (scaled): ahat_t(z) = b_t(z) sum_z' ahat_{t-1}(z') A(z',z) / c_t.
       # The step t-1 -> t uses interval (t - 1)'s transition rates.
@@ -478,9 +489,11 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     # Detection: per-(site, season) rows weighted by w[i, t] = P(z_it = 1 | y).
     # Replaces the legacy hard threshold (w > 0.5) which silently dropped
     # site-seasons in the boundary regime and double-counted detection
-    # evidence for site-seasons in the high-confidence regime. X_det is
-    # site-indexed in this model, so per-season rows just replicate the
-    # site's covariates.
+    # evidence for site-seasons in the high-confidence regime. A constant-detection
+    # arm's X_det is site-indexed, so per-season rows read the site's covariates
+    # (design_row = i); a season-varying arm's X_det is the long-form
+    # [(site x season) x p] design, so the row is the (site, season) index
+    # (i - 1) * n_seasons + t (gcol33/tulpaObs#124).
     rows_i <- integer(n_sites * n_seasons)
     det_count <- integer(n_sites * n_seasons)
     vis_count <- integer(n_sites * n_seasons)
@@ -500,7 +513,7 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         w_eff <- if (dc > 0L) 1 else w[i, t]
         if (w_eff <= 1e-6) next
         n_rows <- n_rows + 1L
-        rows_i[n_rows] <- i
+        rows_i[n_rows] <- if (det_sv) (i - 1L) * n_seasons + t else i
         det_count[n_rows] <- dc
         vis_count[n_rows] <- vc
         w_it[n_rows] <- w_eff
@@ -580,29 +593,59 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
            family = "binomial")
       else list(y = ext_y, n_trials = ext_n, X = X_ext, family = "binomial")
 
-    total_det <- integer(n_sites); total_vis <- integer(n_sites)
-    for (i in seq_len(n_sites)) {
-      for (t in seq_len(n_seasons)) {
-        if (z[i, t] == 1 && nv[(i-1)*n_seasons+t] > 0) {
+    # Detection counts among occupied (z = 1) site-seasons. A constant-detection
+    # arm aggregates a site's detections over its seasons onto one per-site row;
+    # a season-varying arm (gcol33/tulpaObs#124) keeps one row per (site, season)
+    # so each reads the season's own detection covariate (the long-form X_det row
+    # (i - 1) * n_seasons + t).
+    if (det_sv) {
+      row_map <- integer(n_sites * n_seasons)
+      dcv <- integer(n_sites * n_seasons); vcv <- integer(n_sites * n_seasons)
+      nr <- 0L
+      for (i in seq_len(n_sites)) {
+        for (t in seq_len(n_seasons)) {
+          if (z[i, t] != 1 || nv[(i-1)*n_seasons+t] <= 0) next
           base <- (i-1)*n_seasons*max_visits + (t-1)*max_visits
+          dc <- 0L; vc <- 0L
           for (j in seq_len(nv[(i-1)*n_seasons+t])) {
             v <- y_flat[base + j]
-            if (v >= 0) { total_vis[i] <- total_vis[i]+1L; if (v==1) total_det[i] <- total_det[i]+1L }
+            if (v >= 0) { vc <- vc + 1L; if (v == 1) dc <- dc + 1L }
+          }
+          if (vc == 0L) next
+          nr <- nr + 1L
+          row_map[nr] <- (i - 1L) * n_seasons + t; dcv[nr] <- dc; vcv[nr] <- vc
+        }
+      }
+      det_hard <- if (nr > 0L)
+        list(y = dcv[seq_len(nr)], n_trials = vcv[seq_len(nr)],
+             X = X_det[row_map[seq_len(nr)], , drop = FALSE], family = "binomial")
+      else NULL
+    } else {
+      total_det <- integer(n_sites); total_vis <- integer(n_sites)
+      for (i in seq_len(n_sites)) {
+        for (t in seq_len(n_seasons)) {
+          if (z[i, t] == 1 && nv[(i-1)*n_seasons+t] > 0) {
+            base <- (i-1)*n_seasons*max_visits + (t-1)*max_visits
+            for (j in seq_len(nv[(i-1)*n_seasons+t])) {
+              v <- y_flat[base + j]
+              if (v >= 0) { total_vis[i] <- total_vis[i]+1L; if (v==1) total_det[i] <- total_det[i]+1L }
+            }
           }
         }
       }
+      dk <- total_vis > 0
+      det_hard <- if (sum(dk) > 0)
+        list(y = total_det[dk], n_trials = total_vis[dk],
+             X = X_det[dk,,drop=FALSE], family = "binomial")
+      else NULL
     }
-    dk <- total_vis > 0
 
     occ_block <- list(y = z1, n_trials = rep(1L, n_sites), X = X_occ,
                       family = "binomial")
     occ_block <- .attach_spatial_spde(occ_block, spatial_occ)
     list(
       occ = occ_block,
-      det = if (sum(dk) > 0)
-        list(y = total_det[dk], n_trials = total_vis[dk],
-             X = X_det[dk,,drop=FALSE], family = "binomial")
-      else NULL,
+      det = det_hard,
       col = col_hard,
       ext = ext_hard
     )

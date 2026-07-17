@@ -41,44 +41,66 @@
 # site-major interval-minor (row (i-1)*(T-1) + iv), otherwise it collapses to the
 # site-level [n_sites x p] design (byte-identical to the constant-rate path).
 # `fam` names the calling family for the error message only.
-.tobs_interval_arm_design <- function(fe_formula, data, n_sites, n_intervals,
-                                      arm, fam = "dyn_abun") {
+# Period-agnostic arm-design unroller. A covariate supplied as a [n_sites x
+# n_periods] matrix column of `data` varies over the arm's period axis; the design
+# is then long-form over (site, period), site-major period-minor; a plain per-site
+# covariate is repeated across the site's periods, giving a fit byte-identical to
+# the constant path. `period_label` names the axis in the error / is purely
+# cosmetic. The two named wrappers below fix the axis: transition INTERVALS (T-1,
+# survival / recruitment / colonization / extinction) vs primary SEASONS (T,
+# season-varying detection / occupancy). Single source of truth (gcol33/tulpaObs
+# #80, #124).
+.tobs_period_arm_design <- function(fe_formula, data, n_sites, n_periods,
+                                    arm, period_label, fam = "dyn_abun") {
   vars <- all.vars(fe_formula)
   vars <- vars[vars %in% names(data)]
   is_sv <- vapply(vars, function(v) {
     col <- data[[v]]
-    is.matrix(col) && ncol(col) == n_intervals
+    is.matrix(col) && ncol(col) == n_periods
   }, logical(1))
   bad <- vapply(vars, function(v) {
     col <- data[[v]]
-    is.matrix(col) && ncol(col) != n_intervals
+    is.matrix(col) && ncol(col) != n_periods
   }, logical(1))
   if (any(bad)) {
     stop(sprintf(paste0("%s() %s covariate '%s' is a matrix with %d ",
-                        "columns; a season-varying %s covariate must have one ",
-                        "column per transition interval (T-1 = %d)."),
-                 fam, arm, vars[bad][1], ncol(data[[vars[bad][1]]]), arm,
-                 n_intervals),
+                        "columns; a %s-varying %s covariate must have one ",
+                        "column per %s (%s = %d)."),
+                 fam, arm, vars[bad][1], ncol(data[[vars[bad][1]]]),
+                 period_label, arm, period_label, period_label, n_periods),
          call. = FALSE)
   }
   if (!any(is_sv)) {
     return(list(X = model.matrix(fe_formula, data), season_varying = FALSE))
   }
-  # Unroll to long form: season-varying matrix columns flatten site-major
-  # interval-minor; per-site columns repeat across the site's intervals.
-  rep_site <- rep(seq_len(n_sites), each = n_intervals)
-  iv_idx   <- rep(seq_len(n_intervals), times = n_sites)
+  rep_site <- rep(seq_len(n_sites), each = n_periods)
+  pr_idx   <- rep(seq_len(n_periods), times = n_sites)
   long <- list()
   for (v in names(data)) {
     col <- data[[v]]
-    if (is.matrix(col) && ncol(col) == n_intervals) {
-      long[[v]] <- col[cbind(rep_site, iv_idx)]
+    if (is.matrix(col) && ncol(col) == n_periods) {
+      long[[v]] <- col[cbind(rep_site, pr_idx)]
     } else if (!is.matrix(col)) {
       long[[v]] <- col[rep_site]
     }
   }
   data_long <- as.data.frame(long, stringsAsFactors = FALSE)
   list(X = model.matrix(fe_formula, data_long), season_varying = TRUE)
+}
+
+# Transition-interval axis (T-1): survival / recruitment (dyn_abun),
+# colonization / extinction (dyn_occu).
+.tobs_interval_arm_design <- function(fe_formula, data, n_sites, n_intervals,
+                                      arm, fam = "dyn_abun") {
+  .tobs_period_arm_design(fe_formula, data, n_sites, n_intervals, arm,
+                          "transition interval", fam = fam)
+}
+
+# Primary-season axis (T): season-varying detection / occupancy (dyn_occu).
+.tobs_season_arm_design <- function(fe_formula, data, n_sites, n_seasons,
+                                    arm, fam = "dyn_occu") {
+  .tobs_period_arm_design(fe_formula, data, n_sites, n_seasons, arm,
+                          "primary season", fam = fam)
 }
 
 # Back-compat alias for the dyn_abun call sites.

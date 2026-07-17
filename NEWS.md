@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.148 (2026-07-17)
+
+* Season-varying detection on `dyn_occu()` (#124): a detection covariate supplied
+  as a `[n_sites x T]` matrix column of `data` (one column per primary season)
+  drives per-season detection, `logit p_it = X_it beta_p`, fit with
+  `detection = ~ det_cov`. The E-step emission reads the season's detection
+  probability, the M-step encodes one detection row per `(site, season)` at that
+  season's covariate, and the exact season-varying HMM-forward marginal refine
+  calibrates the coefficients (recovered with ~95% coverage over 20 seeds). A
+  plain per-site detection covariate keeps the byte-identical constant-detection
+  path. Detection unrolling shares the period-agnostic
+  `.tobs_period_arm_design()` with the season-varying colonization / extinction
+  path (the `#80` recipe); gated under `method = "nuts"` with a pointer.
+  `simulate_dyn_occu(beta_det_season =)`; `test-dyn-occ.R`. `fitted()$z` is now
+  period-varying-aware (also corrects the smoothed state for season-varying
+  colonization / extinction, which the previous per-site indexing got wrong).
+
 ## 0.0.147 (2026-07-17)
 
 * Zero-inflated open N-mixture: `dyn_abun(mixture = "zip" / "zinb")` (#116). A

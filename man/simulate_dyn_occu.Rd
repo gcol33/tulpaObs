@@ -14,6 +14,7 @@ simulate_dyn_occu(
   epsilon = 0.1,
   beta_gamma = NULL,
   beta_epsilon = NULL,
+  beta_det_season = NULL,
   seed = NULL
 )
 }
@@ -39,6 +40,10 @@ colonization logit driven by a drawn per-\verb{(site, interval)} covariate.}
 
 \item{beta_epsilon}{Optional \code{c(intercept, slope)} for a season-varying
 extinction logit driven by a drawn per-\verb{(site, interval)} covariate.}
+
+\item{beta_det_season}{Optional \code{c(intercept, slope)} for a season-varying
+detection logit driven by a drawn per-\verb{(site, season)} covariate \code{det_cov}
+(a \verb{[N x T]} matrix column of \code{data}); fit with \code{detection = ~ det_cov}.}
 
 \item{seed}{Random seed.}
 }

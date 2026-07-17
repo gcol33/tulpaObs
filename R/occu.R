@@ -121,7 +121,13 @@
     list(psi1 = occ_formula, p = det_formula,
          gamma = col_formula, epsilon = ext_formula), data)
   X_occ <- model.matrix(bind$fe$psi1, data)
-  X_det <- model.matrix(bind$fe$p, data)
+  # Detection may vary by primary season (gcol33/tulpaObs#124): a covariate
+  # supplied as a [n_sites x T] matrix column of `data` drives per-season
+  # detection, unrolled long-form over (site, season); a plain per-site covariate
+  # keeps the site-level design (byte-identical to the constant-detection path).
+  det_ad <- .tobs_season_arm_design(bind$fe$p, data, n_sites, n_seasons,
+                                    "detection", fam = "dyn_occu")
+  X_det <- det_ad$X
 
   # Colonization (gamma) and extinction (epsilon) span the T-1 transition
   # intervals. A rate that varies by interval is supplied as a [n_sites x (T-1)]
@@ -180,6 +186,7 @@
     n_intervals = n_intervals,
     col_season_varying = col_ad$season_varying,
     ext_season_varying = ext_ad$season_varying,
+    det_season_varying = det_ad$season_varying,
     max_visits = max_visits,
     process_info = list(
       list(name = "psi1",    p = ncol(X_occ), coef_names = colnames(X_occ)),

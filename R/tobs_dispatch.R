@@ -50,14 +50,16 @@
     col_formula  = dots$colonization,
     ext_formula  = dots$extinction
   )
-  # Season-varying colonization / extinction (a [n_sites x (T-1)] matrix column;
-  # gcol33/tulpaObs#124) is wired for the Laplace-EM engines only. The C++ NUTS
-  # forward reads one gamma / epsilon linear predictor per site, so an
-  # interval-indexed rate is gated there with a pointer.
-  if ((isTRUE(model$col_season_varying) || isTRUE(model$ext_season_varying)) &&
-      identical(engine, "nuts")) {
+  # Season-varying colonization / extinction (a [n_sites x (T-1)] matrix column)
+  # and season-varying detection (a [n_sites x T] matrix column; gcol33/tulpaObs
+  # #124) are wired for the Laplace-EM engines only. The C++ NUTS forward reads one
+  # linear predictor per site per arm, so an interval- / season-indexed rate is
+  # gated there with a pointer.
+  if ((isTRUE(model$col_season_varying) || isTRUE(model$ext_season_varying) ||
+       isTRUE(model$det_season_varying)) && identical(engine, "nuts")) {
     stop("dyn_occu(): season-varying colonization / extinction (a ",
-         "[n_sites x (T-1)] matrix covariate) is not yet wired for ",
+         "[n_sites x (T-1)] matrix covariate) or season-varying detection (a ",
+         "[n_sites x T] matrix covariate) is not yet wired for ",
          "method = \"nuts\"; use method = \"laplace\" ",
          "(gcol33/tulpaObs#124).", call. = FALSE)
   }

@@ -81,7 +81,12 @@
   b_eps <- par[(o + 1L):(o + p_sizes[4])]
 
   eta_psi <- as.numeric(model$X_processes[[1]] %*% b_psi)     # [n_sites]
-  eta_p   <- as.numeric(model$X_processes[[2]] %*% b_p)       # [n_sites]
+  # Detection eta [n_sites x T]: season-varying reads the long-form design
+  # site-major season-minor; a constant arm's per-site eta broadcasts across the
+  # seasons (byte-identical to the pre-#124 path).
+  ep <- as.numeric(model$X_processes[[2]] %*% b_p)
+  eta_p_mat <- if (isTRUE(model$det_season_varying))
+    matrix(ep, n_sites, T_s, byrow = TRUE) else matrix(ep, n_sites, T_s)
   # gamma / epsilon per interval: long-form design -> [n_sites x n_int] byrow;
   # a constant arm's site-level eta recycles across the intervals.
   eg <- as.numeric(model$X_processes[[3]] %*% b_gam)
@@ -93,8 +98,8 @@
 
   lg  <- plogis(eta_psi, log.p = TRUE)          # log psi1
   l1g <- plogis(-eta_psi, log.p = TRUE)         # log(1 - psi1)
-  lp  <- plogis(eta_p, log.p = TRUE)            # log p
-  l1p <- plogis(-eta_p, log.p = TRUE)           # log(1 - p)
+  lp_mat  <- plogis(eta_p_mat, log.p = TRUE)    # log p        [n_sites x T]
+  l1p_mat <- plogis(-eta_p_mat, log.p = TRUE)   # log(1 - p)   [n_sites x T]
   # Transition log-probs per interval [n_sites x n_int]
   lgam  <- plogis(gam_mat, log.p = TRUE);  l1gam <- plogis(-gam_mat, log.p = TRUE)
   leps  <- plogis(eps_mat, log.p = TRUE);  l1eps <- plogis(-eps_mat, log.p = TRUE)
@@ -106,8 +111,7 @@
   }
   # Emission log-prob per (site, season): occupied uses the per-visit detection
   # likelihood; empty is 0 (log 1) when no visit detected, -Inf otherwise.
-  emit1 <- ndet * matrix(lp, n_sites, T_s) +
-           (nvalid - ndet) * matrix(l1p, n_sites, T_s)          # [n_sites x T]
+  emit1 <- ndet * lp_mat + (nvalid - ndet) * l1p_mat            # [n_sites x T]
   emit0 <- ifelse(ndet > 0, -Inf, 0)                            # [n_sites x T]
 
   # Forward recursion, vectorised over sites.
@@ -136,7 +140,8 @@
     if (length(pi_list) < 4L) return(fit)
 
     sv_dyn <- isTRUE(model$col_season_varying) ||
-              isTRUE(model$ext_season_varying)
+              isTRUE(model$ext_season_varying) ||
+              isTRUE(model$det_season_varying)
 
     # Fixed-effect names in process-block order (psi1, p, gamma, epsilon), the
     # layout fit$means / the draw matrix already carry.

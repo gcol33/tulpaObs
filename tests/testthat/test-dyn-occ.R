@@ -214,3 +214,69 @@ test_that("dyn_occu recovers season-varying gamma/epsilon + ~95% coverage", {
   expect_equal(colMeans(est), truth, tolerance = 0.08)
   expect_true(all(colMeans(cover) >= 0.85))
 })
+
+# --- season-varying detection (gcol33/tulpaObs#124) --------------------------
+
+test_that("a season-varying detection covariate routes to the season path", {
+  # A [n_sites x T] matrix covariate on detection triggers the season-indexed
+  # (T-column) design; a plain site-level covariate does NOT.
+  sv <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 5,
+                          beta_det_season = c(0.2, -0.8), seed = 1)
+  m_sv <- tulpaObs:::.tobs_build_model(
+    occ_formula = ~ 1, det_formula = ~ det_cov, data = sv$data, y = sv$y,
+    col_formula = ~ 1, ext_formula = ~ 1)
+  expect_true(m_sv$det_season_varying)
+  # long-form detection design: (n_sites * T) rows
+  expect_equal(nrow(m_sv$X_processes[[2]]), 40 * 5)
+
+  # a site-level detection covariate is NOT season-varying (byte-identical path)
+  d2 <- sv$data; d2$sitecov <- rnorm(40)
+  m_c <- tulpaObs:::.tobs_build_model(
+    occ_formula = ~ 1, det_formula = ~ sitecov, data = d2, y = sv$y,
+    col_formula = ~ 1, ext_formula = ~ 1)
+  expect_false(isTRUE(m_c$det_season_varying))
+  expect_equal(nrow(m_c$X_processes[[2]]), 40)
+
+  # a matrix detection covariate with the wrong number of columns errors
+  d3 <- sv$data; d3$bad <- matrix(rnorm(40 * 3), 40, 3)   # T = 5, so 3 is wrong
+  expect_error(
+    tulpaObs:::.tobs_build_model(occ_formula = ~ 1, det_formula = ~ bad,
+      data = d3, y = sv$y, col_formula = ~ 1, ext_formula = ~ 1),
+    "one column per primary season")
+
+  # gated under NUTS (the C++ forward reads one detection predictor per site)
+  expect_error(
+    tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y,
+         detection = ~ det_cov, colonization = ~ 1, extinction = ~ 1,
+         method = "nuts"),
+    "season-varying")
+})
+
+test_that("dyn_occu recovers season-varying detection + ~95% coverage", {
+  skip_if_fast()
+  skip_on_cran()
+  # Per-(site, season) detection driven by a [n_sites x T] covariate: the E-step
+  # emission reads the season's detection probability and the M-step encodes one
+  # detection row per (site, season) at the season's covariate, then the exact
+  # season-varying HMM-forward marginal refine calibrates the coefficients.
+  truth  <- c(0.2, -0.8)               # p intercept, p slope on det_cov
+  n_seed <- 20L
+  est   <- matrix(NA_real_, n_seed, 2)
+  cover <- matrix(FALSE, n_seed, 2)
+  for (s in seq_len(n_seed)) {
+    sv <- simulate_dyn_occu(N = 350, J = 4, n_seasons = 6, beta_occ = 0.4,
+                            beta_det_season = c(0.2, -0.8),
+                            gamma = 0.25, epsilon = 0.15, seed = 400 + s)
+    fit <- tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y,
+                detection = ~ det_cov, colonization = ~ 1, extinction = ~ 1,
+                method = "laplace", control = list(progress = FALSE, verbose = FALSE))
+    cc <- unlist(coef(fit)); se <- sqrt(diag(vcov(fit)))
+    idx <- c(which(names(cc) == "p.(Intercept)"),
+             which(names(cc) == "p.det_cov"))
+    b <- cc[idx]; s_e <- se[idx]
+    est[s, ]   <- b
+    cover[s, ] <- (truth >= b - 1.96 * s_e) & (truth <= b + 1.96 * s_e)
+  }
+  expect_equal(colMeans(est), truth, tolerance = 0.08)
+  expect_true(all(colMeans(cover) >= 0.85))
+})
