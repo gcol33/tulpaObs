@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.0.141 (2026-07-17)
+
+* Multi-season integrated occupancy: `dyn_int_occu()` (#122, spOccupancy
+  `tIntPGOcc`). The product of the two shipped families -- a dynamic
+  (multi-season HMM) occupancy state (`psi1`, colonization `gamma`, extinction
+  `eps`) whose per-season emission pools SEVERAL detection sources (integrated
+  occupancy). Pooling sources across seasons is how colonization / extinction
+  estimates come out of individually-sparse opportunistic data. The latent
+  occupancy sequence integrates out by the two-state HMM forward recursion (the
+  `dyn_occu` exact-marginal forward generalised with a per-season emission pooled
+  over sources), maximised by `optim` with an observed-information vcov -- pure R,
+  no new C++. `y` is a list of `S` `[sites x visits x seasons]` detection arrays;
+  the state `formula` models `logit psi1`, `colonization = ~` / `extinction = ~`
+  the transitions (required, as in `dyn_occu()`), `detection` the shared
+  per-source design (each source carries its own coefficients). Full `fitted` /
+  `predict` / `residuals` / `simulate` / WAIC surface; `simulate_dyn_int_occu()`.
+  Recovers `psi1` / `gamma` / `eps` and per-source detection over 12 seeds. v1:
+  full site/season overlap, constant transitions, site-level detection,
+  non-spatial laplace; partial overlap, season-varying rates, an areal `psi1`
+  field (`stIntPGOcc`), a weighted bar (`svcTIntPGOcc`), and NUTS are documented
+  follow-ups. `test-dyn-int-occu.R`.
+
 ## 0.0.140 (2026-07-17)
 
 * Double-observer abundance: `double_observer()` (#116, \pkg{unmarked}

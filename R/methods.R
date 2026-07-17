@@ -365,6 +365,8 @@ fitted.tobs_fit <- function(object, ...) {
     return(.tobs_fitted_occu_multi(object))
   if (identical(model$model_type, "double_observer"))
     return(.tobs_fitted_double_observer(object))
+  if (identical(model$model_type, "dyn_int_occu"))
+    return(.tobs_fitted_dyn_int_occu(object))
   if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))
   if (identical(model$model_type, "ms_count")) {
     return(.tobs_fitted_ms_count(object))
@@ -554,6 +556,9 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   if (identical(object$model$model_type, "double_observer")) {
     return(.tobs_residuals_double_observer(object, type))
   }
+  if (identical(object$model$model_type, "dyn_int_occu")) {
+    return(.tobs_residuals_dyn_int_occu(object, type))
+  }
   if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
     return(.tobs_residuals_ms_community(object, type))
   }
@@ -663,6 +668,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   }
   if (identical(model$model_type, "double_observer")) {
     return(.tobs_simulate_double_observer(object, nsim))
+  }
+  if (identical(model$model_type, "dyn_int_occu")) {
+    return(.tobs_simulate_dyn_int_occu(object, nsim))
   }
   if (identical(model$model_type, "ms_nmix")) {
     return(.tobs_simulate_ms_nmix(object, nsim))
@@ -837,6 +845,12 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     nd <- newdata
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
     return(.tobs_predict_double_observer(object, newdata = nd, type = do_type))
+  }
+  if (identical(object$model$model_type, "dyn_int_occu")) {
+    di_type <- if (missing(type) || length(type) > 1L) "state" else type
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_dyn_int_occu(object, newdata = nd, type = di_type))
   }
   # occu_cover joint fit: the response types are occurrence / cover_cond /
   # cover_exp / change, so route before the occupancy match.arg(type) rejects

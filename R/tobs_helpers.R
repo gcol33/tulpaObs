@@ -231,6 +231,14 @@
   # sum); maximised by optim BFGS with an observed-information vcov. Site-level
   # detection, non-spatial laplace only for the first ship (#116).
   double_observer = c("laplace"),
+  # dyn_int_occu: multi-season integrated occupancy (spOccupancy tIntPGOcc). A
+  # dynamic-occupancy HMM whose per-season emission pools multiple detection
+  # sources; the latent state integrates out by the two-state forward recursion,
+  # maximised (optim BFGS) with an observed-information vcov. v1 = full site /
+  # season overlap, constant transitions, site-level detection, non-spatial
+  # laplace (partial overlap, season-varying rates, areal psi1 field, NUTS are
+  # documented follow-ups, #122).
+  dyn_int_occu = c("laplace"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under
