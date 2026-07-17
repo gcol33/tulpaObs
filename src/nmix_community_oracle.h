@@ -44,6 +44,32 @@
 // log_r row of the score / observed-info block is assembled from the kernel's
 // dispersion outputs (grad_theta / info_theta / info_lambda_theta /
 // cov_N_stheta / var_stheta).
+//
+// Zero-inflation (ZIP / ZINB, spAbundance-style structural absence) is a
+// PER-SPECIES structural-zero random effect logit_omega_s ~ N(mu_omega,
+// sigma_omega), mirroring the log_r_s design: the per-species RE vector gains a
+// trailing logit_omega_s coordinate (identity design, index idx_omega), the
+// community mean mu_omega joins theta, and a scalar covariance block integrates
+// b_omega_s. The per-site marginal wraps the plain Royle marginal L_i in a
+// structural-zero mixture -- for an all-zero site,
+//   m_i = log( omega_s + (1 - omega_s) exp(L_i) ) = LSE(log omega_s,
+//                                                       log(1 - omega_s) + L_i),
+// a detection site rules out N = 0 so m_i = log(1 - omega_s) + L_i. Writing this
+// as LSE(c0, c1) with c0 = log(omega_s) (all-zero only, else -Inf) and c1 =
+// log(1 - omega_s) + L_i and pi_i = the posterior structural-zero weight
+// exp(c0 - m_i) (== 0 at a detection site), the composition is closed form on top
+// of the kernel outputs: the abundance/detection/log_r score scales by (1 - pi_i);
+//   d m_i / d logit_omega = pi_i - omega_s;
+// the marginal observed-info inner block becomes
+//   (1 - pi_i) B_i - pi_i (1 - pi_i) g_i g_i'   (g_i the plain inner score),
+//   info(omega, omega) = omega_s(1 - omega_s) - pi_i(1 - pi_i),
+//   info(omega, inner) = pi_i(1 - pi_i) g_i;
+// the complete-data Fisher (the PSD Newton curvature, latent zero-indicator z_i
+// observed) is block-diagonal: (1 - pi_i) F_i on the inner block, omega_s(1 -
+// omega_s) on the omega diagonal, zero cross. Poisson / NB with no ZI is the
+// idx_omega < 0 limit (pi_i = 0, no omega coordinate) -- byte-identical to the
+// plain path. ZI has no closed-form EM (like NB), so it is fit by the joint AGHQ
+// optimizer only.
 
 #ifndef TULPAOBS_NMIX_COMMUNITY_ORACLE_H
 #define TULPAOBS_NMIX_COMMUNITY_ORACLE_H
@@ -60,9 +86,11 @@ namespace tulpaObs {
 struct NMixCommunityOracle : tulpa::REGroupOracle {
     int p_lam = 0, p_p = 0;
     int idx_logr = -1;                    // RE/coef index of log_r_s (NB only; -1 = Poisson)
+    int idx_omega = -1;                   // RE/coef index of logit_omega_s (ZI only; -1 = no ZI)
     Eigen::MatrixXd Xlam;                 // n_sites x p_lambda (shared across species)
     Eigen::VectorXd mu;                   // active community means (theta), length d
     bool   is_nb = false;                 // negative-binomial abundance (per-species log_r RE)
+    bool   is_zi = false;                 // zero-inflated abundance (per-species logit_omega RE)
 
     // Per species, per site: the cached Poisson marginal (lgamma precompute) and
     // the detection design rows for that site's visits, in input order.
@@ -91,7 +119,7 @@ struct NMixCommunityOracle : tulpa::REGroupOracle {
                         const Rcpp::NumericMatrix& X_lambda,
                         const Rcpp::NumericMatrix& X_p,
                         int n_sites, int n_species, int K_max,
-                        bool nb = false);
+                        bool nb = false, bool zi = false);
 
     static inline double clamp30(double e) {
         return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e);

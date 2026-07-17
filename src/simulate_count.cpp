@@ -40,9 +40,14 @@ Rcpp::List cpp_simulate_nmix(
     Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix draws,
     Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx,
     int n_sites, int max_visits, int p_lam, int p_p,
-    bool is_nb, double r_size, int nsim
+    bool is_nb, double r_size, int nsim, double zi_omega = NA_REAL
 ) {
   const int ndr = draws.nrow(), n_obs = site_idx.size();
+  // Zero-inflation: after drawing N_i, a structural-zero share zi_omega of sites
+  // is forced to N = 0 (all-zero detection history). The extra Bernoulli draw is
+  // taken ONLY when zi_omega is finite, so the plain N-mixture stream is
+  // byte-identical under a seed.
+  const bool zi = R_finite(zi_omega);
   Rcpp::RNGScope scope;
   Rcpp::List out(nsim);
   const double* pXl = X_lambda.begin(); const double* pXp = X_p.begin();
@@ -50,8 +55,10 @@ Rcpp::List cpp_simulate_nmix(
   for (int s = 0; s < nsim; ++s) {
     int idx = (int) R_unif_index((double) ndr);
     std::vector<int> N(n_sites);
-    for (int i = 0; i < n_sites; ++i)
+    for (int i = 0; i < n_sites; ++i) {
       N[i] = draw_N(std::exp(rowdot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam)), is_nb, r_size);
+      if (zi && R::unif_rand() < zi_omega) N[i] = 0;
+    }
     Rcpp::IntegerMatrix ys(n_sites, max_visits);
     std::fill(ys.begin(), ys.end(), NA_INTEGER);
     for (int k = 0; k < n_obs; ++k) {

@@ -249,8 +249,8 @@ cpp_nmix_community_field_solve <- function(y, site_idx, species_idx, X_lambda, X
     .Call(`_tulpaObs_cpp_nmix_community_field_solve`, y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau, rho, log_det_Q_rho, z_init, K_max, max_iter, tol, verbose)
 }
 
-cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE) {
-    .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb)
+cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE, zi = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb, zi)
 }
 
 cpp_nmix_community_spatial_icar <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
@@ -405,8 +405,8 @@ cpp_nested_laplace_removal_car_proper <- function(y, site_idx, map_site_to_unit_
     .Call(`_tulpaObs_cpp_nested_laplace_removal_car_proper`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
-cpp_simulate_nmix <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_nmix`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim)
+cpp_simulate_nmix <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim, zi_omega = NA_real_) {
+    .Call(`_tulpaObs_cpp_simulate_nmix`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim, zi_omega)
 }
 
 cpp_simulate_removal <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim) {

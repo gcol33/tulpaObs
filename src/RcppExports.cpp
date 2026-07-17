@@ -1123,8 +1123,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_nmix_community_oracle
-SEXP cpp_nmix_community_oracle(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector species_idx, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, int n_sites, int n_species, int K_max, bool nb);
-RcppExport SEXP _tulpaObs_cpp_nmix_community_oracle(SEXP ySEXP, SEXP site_idxSEXP, SEXP species_idxSEXP, SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP n_sitesSEXP, SEXP n_speciesSEXP, SEXP K_maxSEXP, SEXP nbSEXP) {
+SEXP cpp_nmix_community_oracle(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector species_idx, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, int n_sites, int n_species, int K_max, bool nb, bool zi);
+RcppExport SEXP _tulpaObs_cpp_nmix_community_oracle(SEXP ySEXP, SEXP site_idxSEXP, SEXP species_idxSEXP, SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP n_sitesSEXP, SEXP n_speciesSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP ziSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1137,7 +1137,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
     Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
     Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_nmix_community_oracle(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb));
+    Rcpp::traits::input_parameter< bool >::type zi(ziSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_nmix_community_oracle(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb, zi));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2008,8 +2009,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_simulate_nmix
-Rcpp::List cpp_simulate_nmix(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix draws, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx, int n_sites, int max_visits, int p_lam, int p_p, bool is_nb, double r_size, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_nmix(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP drawsSEXP, SEXP site_idxSEXP, SEXP visit_idxSEXP, SEXP n_sitesSEXP, SEXP max_visitsSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP, SEXP nsimSEXP) {
+Rcpp::List cpp_simulate_nmix(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix draws, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx, int n_sites, int max_visits, int p_lam, int p_p, bool is_nb, double r_size, int nsim, double zi_omega);
+RcppExport SEXP _tulpaObs_cpp_simulate_nmix(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP drawsSEXP, SEXP site_idxSEXP, SEXP visit_idxSEXP, SEXP n_sitesSEXP, SEXP max_visitsSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP, SEXP nsimSEXP, SEXP zi_omegaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2025,7 +2026,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
     Rcpp::traits::input_parameter< double >::type r_size(r_sizeSEXP);
     Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_nmix(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim));
+    Rcpp::traits::input_parameter< double >::type zi_omega(zi_omegaSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_nmix(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim, zi_omega));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2329,7 +2331,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_ms_ocs_ploglik", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_ploglik, 21},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 20},
-    {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 9},
+    {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 10},
     {"_tulpaObs_cpp_nmix_community_spatial_icar", (DL_FUNC) &_tulpaObs_cpp_nmix_community_spatial_icar, 22},
     {"_tulpaObs_cpp_nmix_community_spatial_car_proper", (DL_FUNC) &_tulpaObs_cpp_nmix_community_spatial_car_proper, 24},
     {"_tulpaObs_cpp_nmix_community_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_nmix_community_spatial_bym2, 24},
@@ -2368,7 +2370,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nested_laplace_removal_icar", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_icar, 22},
     {"_tulpaObs_cpp_nested_laplace_removal_bym2", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_bym2, 25},
     {"_tulpaObs_cpp_nested_laplace_removal_car_proper", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_car_proper, 23},
-    {"_tulpaObs_cpp_simulate_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_nmix, 12},
+    {"_tulpaObs_cpp_simulate_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_nmix, 13},
     {"_tulpaObs_cpp_simulate_removal", (DL_FUNC) &_tulpaObs_cpp_simulate_removal, 12},
     {"_tulpaObs_cpp_simulate_dyn_abun", (DL_FUNC) &_tulpaObs_cpp_simulate_dyn_abun, 15},
     {"_tulpaObs_cpp_simulate_fp_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_fp_occu, 12},

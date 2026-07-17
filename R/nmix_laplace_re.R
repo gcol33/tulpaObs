@@ -71,18 +71,27 @@
 #'   (slower; the FD sweep re-solves every per-species mode per coordinate) and
 #'   is kept for correctness / architecture validation and as the `n_quad = 1`
 #'   joint reference.
-#' @param mixture Abundance mixing distribution: `"P"` (Poisson, default) or
+#' @param mixture Abundance mixing distribution: `"P"` (Poisson, default),
 #'   `"NB"` (negative binomial with a per-species dispersion random effect
-#'   `log_r_s ~ N(mu_log_r, sigma_log_r)`). `"NB"` has no closed-form EM, so it
-#'   defaults `optimizer` to `"joint_grad"` and `n_quad` to `5` when those are
-#'   not supplied, and errors on `optimizer = "em"`.
+#'   `log_r_s ~ N(mu_log_r, sigma_log_r)`), or their zero-inflated counterparts
+#'   `"ZIP"` / `"ZINB"` (a per-species structural-zero random effect
+#'   `logit_omega_s ~ N(mu_omega, sigma_omega)`; a share `omega_s` of a species'
+#'   sites is structurally empty). None of `"NB"` / `"ZIP"` / `"ZINB"` has a
+#'   closed-form EM, so each defaults `optimizer` to `"joint_grad"` and `n_quad`
+#'   to `5` when those are not supplied, and errors on `optimizer = "em"`.
 #' @param r_init Initial community-mean negative-binomial size for the joint
 #'   optimizer (`mixture = "NB"` only; default `10`, a moderate overdispersion
 #'   start). The optimizer carries `mu_log_r = log(r_init)` as the
 #'   `(p_lambda + p_p + 1)`-th fixed effect.
 #' @param sigma_logr_init Initial standard deviation of the per-species
-#'   log-dispersion random effect `log_r_s` (`mixture = "NB"` only; default
-#'   `0.5`). Seeds the scalar third covariance block.
+#'   log-dispersion random effect `log_r_s` (`mixture = "NB"` / `"ZINB"` only;
+#'   default `0.5`). Seeds the scalar log_r covariance block.
+#' @param omega_init Initial community-mean structural-zero probability for the
+#'   joint optimizer (`mixture = "ZIP"` / `"ZINB"` only; default `0.2`). The
+#'   optimizer carries `mu_omega = qlogis(omega_init)` as a trailing fixed effect.
+#' @param sigma_omega_init Initial standard deviation of the per-species
+#'   structural-zero-logit random effect `logit_omega_s` (`mixture = "ZIP"` /
+#'   `"ZINB"` only; default `0.5`). Seeds the scalar omega covariance block.
 #' @param n_quad Quadrature points per random-effect dimension passed to
 #'   [tulpa_re_aghq()] (default 1, the joint Laplace). A higher `n_quad`
 #'   debiases the community covariances at a `n_quad^(p_lambda + p_p)`
@@ -123,21 +132,26 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   Sigma_lambda_init = NULL, Sigma_p_init = NULL,
                                   K_max = NULL, max_iter = 200L,
                                   optimizer = c("em", "joint_fd", "joint_grad"),
-                                  mixture = c("P", "NB"), r_init = 10,
-                                  sigma_logr_init = 0.5,
+                                  mixture = c("P", "NB", "ZIP", "ZINB"),
+                                  r_init = 10, sigma_logr_init = 0.5,
+                                  omega_init = 0.2, sigma_omega_init = 0.5,
                                   n_quad = 1L, lkj_eta = 1,
                                   sigma_beta = 100, verbose = FALSE) {
   mixture <- match.arg(mixture)
-  # NB has no closed-form EM (that is the Poisson Laplace special case): the
-  # global dispersion log_r is an extra fixed effect the joint optimizer carries.
-  # So NB defaults to the analytic-gradient debias path, which (like any
-  # joint_grad) needs n_quad > 1. Explicit optimizer = "em" with NB is an error.
-  if (mixture == "NB" && missing(optimizer)) optimizer <- "joint_grad"
-  if (mixture == "NB" && missing(n_quad))    n_quad <- 5L
+  is_nb <- mixture %in% c("NB", "ZINB")   # negative-binomial abundance (log_r RE)
+  is_zi <- mixture %in% c("ZIP", "ZINB")  # structural-zero share (logit_omega RE)
+  # Neither the NB dispersion nor the ZI structural-zero share has a closed-form
+  # EM (the closed-form Sigma M-step is the Poisson Laplace special case): each is
+  # an extra fixed effect / per-species RE the joint optimizer carries. So both
+  # default to the analytic-gradient debias path, which (like any joint_grad)
+  # needs n_quad > 1. Explicit optimizer = "em" with either is an error.
+  needs_joint <- is_nb || is_zi
+  if (needs_joint && missing(optimizer)) optimizer <- "joint_grad"
+  if (needs_joint && missing(n_quad))    n_quad <- 5L
   optimizer <- match.arg(optimizer)
-  if (mixture == "NB" && optimizer == "em") {
-    stop("mixture = \"NB\" needs a joint optimizer (\"joint_grad\" or ",
-         "\"joint_fd\"); the EM is the Poisson Laplace solver.", call. = FALSE)
+  if (needs_joint && optimizer == "em") {
+    stop("mixture = \"", mixture, "\" needs a joint optimizer (\"joint_grad\" ",
+         "or \"joint_fd\"); the EM is the Poisson Laplace solver.", call. = FALSE)
   }
   y        <- as.integer(y)
   site_idx <- as.integer(site_idx)
@@ -197,7 +211,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   n_quad <- as.integer(n_quad)
   orc <- cpp_nmix_community_oracle(y, site_idx, species_idx, X_lambda, X_p,
                                    n_sites, n_species, K_max,
-                                   nb = (mixture == "NB"))
+                                   nb = is_nb, zi = is_zi)
 
   if (optimizer == "em") {
     # Default. EM is an outer driver over the shared oracle: block-coordinate
@@ -255,21 +269,32 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
          call. = FALSE)
   }
   grad_mode <- if (optimizer == "joint_grad") "analytic" else "fd"
-  # NB makes the dispersion a per-species random effect log_r_s ~ N(mu_log_r,
-  # sigma_log_r): the oracle widens the per-species RE vector to d = p_lambda +
-  # p_p + 1 (the trailing log_r_s coordinate) and carries mu_log_r as the trailing
-  # fixed effect (n_theta = d). A third scalar (diagonal) covariance block
-  # integrates b_logr_s; r_s = exp(mu_log_r + b_logr_s). Poisson omits all of it.
+  # NB / ZI each add a trailing per-species random-effect coordinate mirroring the
+  # abundance / detection blocks: NB the log-dispersion log_r_s ~ N(mu_log_r,
+  # sigma_log_r) (r_s = exp(mu_log_r + b_logr_s)), ZI the structural-zero logit
+  # logit_omega_s ~ N(mu_omega, sigma_omega) (omega_s = plogis(mu_omega +
+  # b_omega_s)). The oracle widens the per-species RE vector to d = p_lambda + p_p
+  # + (NB) + (ZI); each community mean joins theta as a trailing fixed effect and
+  # each gets its own scalar (diagonal) covariance block. Coordinate / block order
+  # is [lambda | p | log_r? | omega?], matching the oracle's idx_logr / idx_omega.
   theta0 <- c(as.numeric(mu_lambda_init), as.numeric(mu_p_init))
   re_terms <- list(
     list(n_groups = n_species, n_coefs = p_lam, correlated = p_lam > 1L),
     list(n_groups = n_species, n_coefs = p_p,   correlated = p_p   > 1L))
   Sigma0 <- list(as.matrix(Sigma_lambda_init), as.matrix(Sigma_p_init))
-  if (mixture == "NB") {
+  scalar_block <- list(n_groups = n_species, n_coefs = 1L, correlated = FALSE)
+  logr_blk <- omega_blk <- NA_integer_
+  if (is_nb) {
     theta0   <- c(theta0, log(r_init))
-    re_terms <- c(re_terms,
-                  list(list(n_groups = n_species, n_coefs = 1L, correlated = FALSE)))
+    re_terms <- c(re_terms, list(scalar_block))
     Sigma0   <- c(Sigma0, list(matrix(sigma_logr_init^2, 1L, 1L)))
+    logr_blk <- length(re_terms)
+  }
+  if (is_zi) {
+    theta0    <- c(theta0, stats::qlogis(min(max(omega_init, 1e-3), 1 - 1e-3)))
+    re_terms  <- c(re_terms, list(scalar_block))
+    Sigma0    <- c(Sigma0, list(matrix(sigma_omega_init^2, 1L, 1L)))
+    omega_blk <- length(re_terms)
   }
   fit <- tulpa::tulpa_re_aghq(
     theta0  = theta0,
@@ -301,17 +326,33 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     optimizer    = optimizer,
     mixture      = mixture
   )
-  # NB: the trailing theta entry is mu_log_r (community-mean log-dispersion); its
-  # log-scale SE is the corresponding marginal-Hessian diagonal in `vcov`. The
-  # third covariance block is sigma_log_r^2, and the per-species deviation BLUPs
-  # give r_s = exp(mu_log_r + b_logr_s).
-  if (mixture == "NB") {
-    out$mu_log_r    <- unname(mu[p_lam + p_p + 1L])
-    out$sigma_log_r <- sqrt(pmax(as.numeric(fit$Sigma_list[[3L]]), 0))
-    out$b_logr      <- as.numeric(fit$blup[[3L]])
+  # NB: a trailing theta entry is mu_log_r (community-mean log-dispersion); its
+  # log-scale SE is the corresponding marginal-Hessian diagonal in `vcov`. Its
+  # scalar covariance block is sigma_log_r^2 and the per-species BLUPs give
+  # r_s = exp(mu_log_r + b_logr_s). The theta index / block position depend on
+  # whether ZI also added a coordinate (order [lambda | p | log_r? | omega?]).
+  th_i <- p_lam + p_p
+  if (is_nb) {
+    th_i            <- th_i + 1L
+    out$mu_log_r    <- unname(mu[th_i])
+    out$sigma_log_r <- sqrt(pmax(as.numeric(fit$Sigma_list[[logr_blk]]), 0))
+    out$b_logr      <- as.numeric(fit$blup[[logr_blk]])
     out$r_s         <- exp(out$mu_log_r + out$b_logr)
     # Community-mean size (the LogNormal median; the report's headline r).
     out$r           <- exp(out$mu_log_r)
+  }
+  # ZI: a trailing theta entry is mu_omega (community-mean structural-zero logit);
+  # its SE is the marginal-Hessian diagonal in `vcov`. Its scalar covariance block
+  # is sigma_omega^2 and the per-species BLUPs give
+  # omega_s = plogis(mu_omega + b_omega_s). out$omega is the community-mean
+  # structural-zero probability plogis(mu_omega).
+  if (is_zi) {
+    th_i            <- th_i + 1L
+    out$mu_omega    <- unname(mu[th_i])
+    out$sigma_omega <- sqrt(pmax(as.numeric(fit$Sigma_list[[omega_blk]]), 0))
+    out$b_omega     <- as.numeric(fit$blup[[omega_blk]])
+    out$omega_s     <- stats::plogis(out$mu_omega + out$b_omega)
+    out$omega       <- stats::plogis(out$mu_omega)
   }
   class(out) <- c("nmix_re_fit", "list")
   out

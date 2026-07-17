@@ -1043,9 +1043,18 @@ dyn_int_occu <- function() {
 #' Per-species N-mixture with shared community-level hyperparameters.
 #'
 #' @inheritParams abun
+#' @param mixture Abundance mixing distribution: `"poisson"` (default),
+#'   `"negbin"`, or their zero-inflated counterparts `"zip"` / `"zinb"`. The
+#'   negative-binomial dispersion and the zero-inflation structural-zero share
+#'   are each a per-species random effect (`log_r_s ~ N(mu_log_r, sigma_log_r)`,
+#'   `logit_omega_s ~ N(mu_omega, sigma_omega)`) integrated by the community AGHQ
+#'   path alongside the abundance / detection coefficients. Zero-inflation is a
+#'   non-spatial `laplace` fit with an intercept-only structural-zero logit; a
+#'   shared field stays Poisson / negbin.
 #' @return A `tobs_family` object.
 #' @export
-ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+ms_abun <- function(K_max = NULL,
+                    mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
   .tobs_check_K_max(K_max, "ms_abun")
   obs_family(

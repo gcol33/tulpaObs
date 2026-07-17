@@ -1,5 +1,38 @@
 # tulpaObs NEWS
 
+## 0.0.156 (2026-07-17)
+
+* Require `tulpa (>= 0.0.84)` and pin `Remotes: gcol33/tulpa@v0.0.84` so an
+  install pulls the engine build in which a joint `occu_cover` fit with a
+  checkpoint and `diagnose_k = TRUE` no longer aborts with a fingerprint
+  mismatch from the Pareto-k diagnostic re-solve (tulpa#161).
+
+## 0.0.155 (2026-07-17)
+
+* Zero-inflated counts for the community N-mixture `ms_abun(mixture = "zip" /
+  "zinb")` (spAbundance-style structural absence; #116). Structural zeros are a
+  per-species random effect `logit_omega_s ~ N(mu_omega, sigma_omega)`: a share
+  `omega_s` of a species' sites is never occupied. It mirrors the per-species NB
+  dispersion `log_r_s` design, integrated jointly with the abundance / detection
+  (and, under `zinb`, dispersion) coefficients by the community AGHQ oracle. The
+  per-site marginal wraps the Royle marginal in a structural-zero mixture in
+  `NMixCommunityOracle` -- an all-zero site is `log(omega_s + (1 - omega_s)
+  exp(L_i))`, a detection site rules out `N = 0` -- with the score / observed-
+  information / Fisher composed in closed form from the plain-marginal kernel
+  outputs (no marginal-kernel change). `mu_omega` joins the coefficient surface
+  as `logit_omega`; `ms_zi` carries the community-mean `omega` and the
+  per-species `omega_s`; `ranef()` gains the structural-zero deviation. A shared
+  field / `latent()` factor on a `zip` / `zinb` fit errors rather than silently
+  dropping the structural-zero share. `simulate_ms_abun(mixture = "zip" /
+  "zinb")` generates the truth; 20-seed community-mean recovery holds at the
+  coverage floor. This completes the ZIP / ZINB axis across `abun()` /
+  `ms_abun()` / `dyn_abun()`.
+
+* Fixed `simulate()` on a zero-inflated `abun()` fit dropping the structural
+  zeros: the posterior-predictive count draws ignored `zi_omega`, so a `zip` /
+  `zinb` fit's replicates had no excess zeros. The structural-zero Bernoulli is
+  now drawn per site (byte-identical stream when no zero-inflation).
+
 ## 0.0.154 (2026-07-17)
 
 * Partial season overlap for `dyn_int_occu()` (spOccupancy `tIntPGOcc`; #122).

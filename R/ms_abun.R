@@ -173,21 +173,24 @@
 .tobs_fit_ms_nmix <- function(model, mixture = "poisson", K_max = NULL,
                               max_iter = 100L, optimizer = "em",
                               n_quad = 1L, lkj_eta = 1, verbose = TRUE) {
-  if (!identical(mixture, "poisson") && !identical(mixture, "negbin")) {
-    stop("Community N-mixture supports mixture = \"poisson\" or \"negbin\" ",
-         "(got \"", mixture, "\").", call. = FALSE)
-  }
-  # tulpaObs vocabulary ("poisson" / "negbin") -> nmix_laplace_re's
-  # mixing-distribution code ("P" / "NB"). NB makes the dispersion a per-species
-  # random effect log_r_s ~ N(mu_log_r, sigma_log_r): mu_log_r joins the community
-  # means as a fixed effect and b_logr_s is the trailing per-species RE coordinate,
-  # joint-optimised via the analytic-gradient AGHQ path. There is no closed-form EM
-  # for NB, so when the user does not pin them, switch the EM defaults to the
-  # joint_grad / n_quad = 5 NB defaults (matching nmix_laplace_re()'s own
-  # missing()-driven NB defaults).
-  mix_code <- if (identical(mixture, "negbin")) "NB" else "P"
-  if (mix_code == "NB" && identical(optimizer, "em")) optimizer <- "joint_grad"
-  if (mix_code == "NB" && n_quad == 1L)               n_quad    <- 5L
+  # tulpaObs vocabulary ("poisson" / "negbin" / "zip" / "zinb") ->
+  # nmix_laplace_re's mixing-distribution code ("P" / "NB" / "ZIP" / "ZINB").
+  # NB makes the dispersion a per-species random effect log_r_s ~ N(mu_log_r,
+  # sigma_log_r); ZI makes the structural-zero share a per-species random effect
+  # logit_omega_s ~ N(mu_omega, sigma_omega). Each community mean joins the
+  # community means as a fixed effect with its own trailing per-species RE
+  # coordinate, joint-optimised via the analytic-gradient AGHQ path. Neither has a
+  # closed-form EM, so when the user does not pin them, switch the EM defaults to
+  # the joint_grad / n_quad = 5 defaults (matching nmix_laplace_re()'s own
+  # missing()-driven NB / ZI defaults).
+  mix_code <- switch(mixture,
+                     poisson = "P", negbin = "NB", zip = "ZIP", zinb = "ZINB",
+                     stop("Community N-mixture supports mixture = \"poisson\", ",
+                          "\"negbin\", \"zip\" or \"zinb\" (got \"", mixture,
+                          "\").", call. = FALSE))
+  needs_joint <- mix_code %in% c("NB", "ZIP", "ZINB")
+  if (needs_joint && identical(optimizer, "em")) optimizer <- "joint_grad"
+  if (needs_joint && n_quad == 1L)               n_quad    <- 5L
   lf  <- .tobs_ms_nmix_longform(model)
   raw <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
@@ -574,8 +577,12 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   # field-agnostic), so it carries no log_r coordinate and is summarized as a
   # grid hyperparameter (raw$dispersion / ms_hyper) rather than the per-species
   # log_r RE the non-spatial NB path appends here.
-  is_nb <- is.null(spatial) && identical(mixture, "negbin") &&
+  is_nb <- is.null(spatial) && mixture %in% c("negbin", "zinb") &&
            !is.null(raw$mu_log_r) && is.finite(raw$mu_log_r)
+  # Zero-inflation adds a trailing mu_omega (community-mean structural-zero logit)
+  # coordinate to the theta / vcov surface, after mu_log_r under ZINB.
+  is_zi <- is.null(spatial) && mixture %in% c("zip", "zinb") &&
+           !is.null(raw$mu_omega) && is.finite(raw$mu_omega)
   log_r <- if (is_nb) unname(as.numeric(raw$mu_log_r)) else NA_real_
 
   means <- c(as.numeric(raw$mu_lambda), as.numeric(raw$mu_p))
@@ -583,14 +590,18 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     means <- c(means, log_r)
     nms   <- c(nms, "log_r")
   }
+  if (is_zi) {
+    means <- c(means, unname(as.numeric(raw$mu_omega)))
+    nms   <- c(nms, "logit_omega")
+  }
   names(means) <- nms
   vcov  <- as.matrix(raw$vcov)
   if (nrow(vcov) != length(nms) || ncol(vcov) != length(nms)) {
     stop(sprintf("build_ms_nmix_fit(): vcov dim %dx%d does not match the %d ",
                  nrow(vcov), ncol(vcov), length(nms)),
-         "coefficient names. Expected the joint optimizer to return one ",
-         "trailing log_r row/col under NB and a plain (p_lambda + p_p) block ",
-         "under Poisson.", call. = FALSE)
+         "coefficient names. Expected the joint optimizer to return trailing ",
+         "log_r (NB) / logit_omega (ZI) row/cols and a plain (p_lambda + p_p) ",
+         "block otherwise.", call. = FALSE)
   }
   rownames(vcov) <- colnames(vcov) <- nms
   sds   <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
@@ -629,6 +640,18 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     raw$dispersion
   } else NULL
 
+  # ZI structural-zero summary: the community-mean structural-zero probability
+  # omega = plogis(mu_omega), the per-species omega_s, and the log-scale SE / SD.
+  ms_zi <- if (is_zi) {
+    omega_s <- as.numeric(raw$omega_s)
+    names(omega_s) <- model$species_names
+    list(omega        = unname(as.numeric(raw$omega)),   # plogis(mu_omega)
+         mu_omega     = unname(as.numeric(raw$mu_omega)),
+         sigma_omega  = unname(as.numeric(raw$sigma_omega)),
+         omega_s      = omega_s,                          # per-species plogis(mu_omega + b_omega_s)
+         mu_omega_sd  = unname(sds["logit_omega"]))
+  } else NULL
+
   structure(list(
     draws = draws, means = means, sds = sds, vcov = vcov,
     n_samples = n_pseudo, n_params = length(means),
@@ -642,6 +665,10 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     ms_hyper = raw$hyper,
     method = if (is.null(spatial)) "laplace" else "nested_laplace",
     mixture = mixture,
+    # Top-level ZI surface (mirrors the single-species abun ZIP fit) so reporting
+    # / simulate read the community-mean structural-zero probability directly.
+    zero_inflated = is_zi,
+    zi_omega = if (is_zi) unname(as.numeric(raw$omega)) else NA_real_,
     log_lik = raw$log_lik %||% NA_real_,
     ms_community = list(
       Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
@@ -649,15 +676,20 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
       sd_p      = sqrt(pmax(diag(Sigma_p), 0)),
       coef_lambda = coef_lambda, coef_p = coef_p,
       blup_lambda = blup_lambda, blup_p = blup_p,
-      # NB per-species log-dispersion deviation b_logr_s (NULL under Poisson),
-      # so ranef() carries the dispersion RE alongside the coefficient REs.
+      # NB per-species log-dispersion deviation b_logr_s (NULL under Poisson) and
+      # ZI per-species structural-zero-logit deviation b_omega_s (NULL otherwise),
+      # so ranef() carries the dispersion / ZI REs alongside the coefficient REs.
       blup_logr = if (is_nb)
         matrix(as.numeric(raw$b_logr), ncol = 1L,
                dimnames = list(model$species_names, "log_r")) else NULL,
+      blup_omega = if (is_zi)
+        matrix(as.numeric(raw$b_omega), ncol = 1L,
+               dimnames = list(model$species_names, "logit_omega")) else NULL,
       optimizer = raw$optimizer %||% "em",
       n_quad = raw$n_quad %||% 1L, lkj_eta = raw$lkj_eta %||% 1
     ),
     ms_dispersion = ms_dispersion,
+    ms_zi = ms_zi,
     convergence = list(converged = isTRUE(raw$converged),
                        n_iter = raw$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))
@@ -672,11 +704,11 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 # coefficients in `coef()`; here we report the deviations b_s). Long form:
 # one row per (species, arm, term).
 .tobs_ranef_ms_nmix <- function(object) {
-  # blup_logr is present only under mixture = "negbin"; absent fields are
-  # skipped by .tobs_ranef_ms_long.
+  # blup_logr / blup_omega are present only under negbin / zip-zinb; absent
+  # fields are skipped by .tobs_ranef_ms_long.
   .tobs_ranef_ms_long(object$ms_community,
                       c(lambda = "blup_lambda", p = "blup_p",
-                        logr = "blup_logr"))
+                        logr = "blup_logr", omega = "blup_omega"))
 }
 
 # Per-species linear predictors at the posterior-mean (mu + BLUP) coefficients:
@@ -769,15 +801,24 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   sqrt-diagonal of `Sigma_lambda`). Length 1 (recycled) or `1 + n_abund_covs`.
 #'   Default 0.5.
 #' @param sd_p Per-coefficient community SD for the detection arm. Default 0.4.
-#' @param mixture Abundance mixing distribution: `"poisson"` (default) or
-#'   `"negbin"`.
+#' @param mixture Abundance mixing distribution: `"poisson"` (default),
+#'   `"negbin"`, or their zero-inflated counterparts `"zip"` / `"zinb"` (a
+#'   per-species structural-zero share).
 #' @param size Community-mean negative-binomial size, equal to
 #'   \eqn{\exp(\mu_{\log r})} (ignored under Poisson). Default 3. The per-species
 #'   sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
 #'   \eqn{b^{\log r}_s \sim N(0, \sigma_{\log r}^2)}.
 #' @param sigma_logr Standard deviation of the per-species log-dispersion random
-#'   effect `log_r_s` (used only under `mixture = "negbin"`). Default 0.4. Set to
-#'   0 for a shared (single-`r`) community.
+#'   effect `log_r_s` (used only under `mixture = "negbin"` / `"zinb"`). Default
+#'   0.4. Set to 0 for a shared (single-`r`) community.
+#' @param omega Community-mean structural-zero probability, equal to
+#'   \eqn{\mathrm{plogis}(\mu_\omega)} (used only under `mixture = "zip"` /
+#'   `"zinb"`). Default 0.3. The per-species structural-zero probabilities are
+#'   \eqn{\omega_s = \mathrm{plogis}(\mu_\omega + b^\omega_s)} with
+#'   \eqn{b^\omega_s \sim N(0, \sigma_\omega^2)}.
+#' @param sigma_omega Standard deviation of the per-species structural-zero-logit
+#'   random effect `logit_omega_s` (used only under zero-inflation). Default 0.4.
+#'   Set to 0 for a shared (single-`omega`) community.
 #' @param graph Optional `N x N` 0/1 adjacency matrix. When supplied, a single
 #'   shared spatial field `f` (one value per site) is drawn from a proper GMRF on
 #'   the graph, centered and scaled to standard deviation `sigma.field`, and
@@ -797,8 +838,9 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
                              n_abund_covs = 1, n_det_covs = 1,
                              mu_lambda = NULL, mu_p = NULL,
                              sd_lambda = 0.5, sd_p = 0.4,
-                             mixture = c("poisson", "negbin"), size = 3,
-                             sigma_logr = 0.4,
+                             mixture = c("poisson", "negbin", "zip", "zinb"),
+                             size = 3, sigma_logr = 0.4,
+                             omega = 0.3, sigma_omega = 0.4,
                              graph = NULL, sigma.field = 0.6,
                              seed = NULL) {
   mixture <- match.arg(mixture)
@@ -841,10 +883,17 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
 
   # Per-species NB size r_s = exp(mu_log_r + b_logr_s), b_logr_s ~ N(0, sigma_logr^2);
   # mu_log_r = log(size). NA-valued under Poisson.
-  is_nb    <- identical(mixture, "negbin")
+  is_nb    <- mixture %in% c("negbin", "zinb")
+  is_zi    <- mixture %in% c("zip", "zinb")
   mu_log_r <- if (is_nb) log(size) else NA_real_
   b_logr   <- if (is_nb) stats::rnorm(n_species, 0, sigma_logr) else rep(0, n_species)
   r_s      <- if (is_nb) exp(mu_log_r + b_logr) else rep(NA_real_, n_species)
+
+  # Per-species structural-zero probability omega_s = plogis(mu_omega + b_omega_s),
+  # b_omega_s ~ N(0, sigma_omega^2); mu_omega = qlogis(omega). NA under no-ZI.
+  mu_omega <- if (is_zi) stats::qlogis(omega) else NA_real_
+  b_omega  <- if (is_zi) stats::rnorm(n_species, 0, sigma_omega) else rep(0, n_species)
+  omega_s  <- if (is_zi) stats::plogis(mu_omega + b_omega) else rep(NA_real_, n_species)
 
   # Shared spatial field f ~ N(0, Q^{-1}) on the graph (Q = D - W + ridge, a
   # proper GMRF), centred and scaled to sigma.field. Zero when no graph.
@@ -867,10 +916,13 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
     pp  <- plogis(as.vector(X_det %*% beta_p[s, ]))
     Ns  <- if (is_nb) stats::rnbinom(N, size = r_s[s], mu = lam)
            else stats::rpois(N, lam)
+    # Structural zeros: a share omega_s of sites is never occupied (N = 0).
+    if (is_zi) Ns[stats::rbinom(N, 1L, omega_s[s]) == 1L] <- 0L
     for (i in seq_len(N)) y[i, , s] <- stats::rbinom(J, Ns[i], pp[i])
     lambda[, s] <- lam; p_arr[, s] <- pp; Nlat[, s] <- Ns
   }
   names(r_s) <- names(b_logr) <- species_names
+  names(omega_s) <- names(b_omega) <- species_names
 
   list(
     y = y, data = data, species = species_names,
@@ -885,6 +937,11 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
       mu_log_r = mu_log_r,
       sigma_log_r = if (is_nb) sigma_logr else NA_real_,
       b_logr = b_logr,
-      r_s = r_s)
+      r_s = r_s,
+      omega = if (is_zi) omega else NA_real_,
+      mu_omega = mu_omega,
+      sigma_omega = if (is_zi) sigma_omega else NA_real_,
+      b_omega = b_omega,
+      omega_s = omega_s)
   )
 }

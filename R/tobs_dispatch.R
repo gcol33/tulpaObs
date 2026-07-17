@@ -879,6 +879,17 @@
          "and latent() factors on the abundance formula; temporal / re / svc ",
          "terms are not yet wired for the community N-mixture.", call. = FALSE)
   }
+  # Zero-inflation (zip / zinb) is the non-spatial community AGHQ path only; a
+  # shared field / latent-factor route maps to Poisson / negbin and would drop the
+  # structural-zero share silently, so reject it with a pointer rather than fit a
+  # different model than asked.
+  if ((family$params$mixture %||% "poisson") %in% c("zip", "zinb") &&
+      (!is.null(structs$spatial) || !is.null(structs$latent))) {
+    stop("ms_abun(mixture = \"", family$params$mixture, "\") is the non-spatial ",
+         "community fit; a shared field / latent() factor is not wired for the ",
+         "zero-inflated count families. Drop the structured term, or use ",
+         "mixture = \"poisson\" / \"negbin\" with the field.", call. = FALSE)
+  }
   # latent() factors -- residual species co-occurrence on the abundance arm via
   # Q per-site factors with per-species loadings (the lfMsNMix analogue), on
   # their own or alongside a shared field (the spatial-factor case) -- route to

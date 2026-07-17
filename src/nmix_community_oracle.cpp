@@ -21,15 +21,20 @@ NMixCommunityOracle::NMixCommunityOracle(const Rcpp::IntegerVector& y,
                                          const Rcpp::NumericMatrix& X_lambda,
                                          const Rcpp::NumericMatrix& X_p,
                                          int n_sites, int n_species, int K_max,
-                                         bool nb) {
+                                         bool nb, bool zi) {
     p_lam    = X_lambda.ncol();
     p_p      = X_p.ncol();
     is_nb    = nb;
+    is_zi    = zi;
     // Under NB the per-species RE vector carries a trailing log_r_s coordinate
-    // (dispersion is a per-species random effect); Poisson omits it. n_theta == d
-    // in both cases (the community means, plus mu_log_r under NB).
-    idx_logr = nb ? (p_lam + p_p) : -1;
-    d        = p_lam + p_p + (nb ? 1 : 0);
+    // (dispersion is a per-species random effect); Poisson omits it. Under ZI a
+    // further trailing logit_omega_s coordinate carries the per-species
+    // structural-zero probability. Coordinate order: [lambda | p | log_r? |
+    // omega?]; n_theta == d in every case (the community means, plus mu_log_r
+    // under NB and mu_omega under ZI).
+    idx_logr  = nb ? (p_lam + p_p) : -1;
+    idx_omega = zi ? (p_lam + p_p + (nb ? 1 : 0)) : -1;
+    d        = p_lam + p_p + (nb ? 1 : 0) + (zi ? 1 : 0);
     n_theta  = d;
     n_groups = n_species;
     mu       = Eigen::VectorXd::Zero(d);
@@ -84,6 +89,15 @@ NMixCommunityOracle::eval_species(int g, const double* b,
     const double r_s = is_nb ? std::exp(coef(idx_logr))
                              : std::numeric_limits<double>::infinity();
 
+    // Per-species structural-zero probability omega_s = plogis(logit_omega_s)
+    // (ZI only); the omega coordinate enters every all-zero site's marginal
+    // through the mixture wrap, design = identity.
+    double om = 0.0, log_om = 0.0, log1m_om = 0.0;
+    if (is_zi) {
+        logit_log_probs(coef(idx_omega), log_om, log1m_om);
+        om = std::exp(log_om);
+    }
+
     std::vector<double> eta_p;
     for (const SiteRec& rec : sp_sites[g]) {
         const int J = rec.cache.n_visits;
@@ -100,41 +114,67 @@ NMixCommunityOracle::eval_species(int g, const double* b,
 
         const NMixSiteResult res =
             compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r_s);
-        e.logL += res.log_lik;
 
-        // Score: lambda block += Xlam_i * grad_eta_lambda; p block += Xp * grad_eta_p.
+        // Structural-zero mixture wrap (ZI). pi = posterior structural-zero weight
+        // exp(c0 - m), c0 = log(omega) (all-zero site only), c1 = log(1-omega) +
+        // L_i; pi == 0 at any detection site (a detection rules out N = 0). w =
+        // 1 - pi scales the abundance / detection / dispersion score. Without ZI,
+        // pi = 0 / w = 1 and this is byte-identical to the plain Royle path.
+        double pi = 0.0, w = 1.0;
+        if (is_zi) {
+            const double c1 = log1m_om + res.log_lik;
+            if (rec.cache.K_lo == 0) {                 // max(y_i) == 0: all-zero site
+                const double c0 = log_om;
+                const double mx = c0 > c1 ? c0 : c1;
+                const double m  = mx + std::log(std::exp(c0 - mx) + std::exp(c1 - mx));
+                pi = std::exp(c0 - m);
+                w  = 1.0 - pi;
+                e.logL += m;
+            } else {
+                e.logL += c1;                          // pi = 0
+            }
+        } else {
+            e.logL += res.log_lik;
+        }
+
+        // Score: inner (lambda / p / log_r) scaled by w; the omega coordinate is
+        // d m_i / d logit_omega = pi - omega_s (identity design).
         for (int c = 0; c < p_lam; ++c)
-            e.grad(c) += Xlam(rec.site, c) * res.grad_eta_lambda;
+            e.grad(c) += w * Xlam(rec.site, c) * res.grad_eta_lambda;
         for (int j = 0; j < J; ++j)
             for (int c = 0; c < p_p; ++c)
-                e.grad(p_lam + c) += rec.Xp(j, c) * res.grad_eta_p[j];
-        // log_r_s score: design = 1, so the RE-coordinate score is the per-site
-        // d ell / d log_r summed over the species' sites.
-        if (is_nb) e.grad(idx_logr) += res.grad_theta;
+                e.grad(p_lam + c) += w * rec.Xp(j, c) * res.grad_eta_p[j];
+        if (is_nb) e.grad(idx_logr)  += w * res.grad_theta;
+        if (is_zi) e.grad(idx_omega) += (pi - om);
 
         if (!want_negH && !want_fisher) continue;
 
-        // Per-site eta-space block. Coords: 0 = lambda, 1..J = visits, and (under
-        // NB) a trailing log_r coordinate at index `tt = 1 + J`.
+        // Per-site inner block. Coords: 0 = lambda, 1..J = visits, (NB) log_r at
+        // tt = 1 + J. The ZI wrap extends by an omega coord at oo = dd (du coords).
         const int dd = 1 + J + (is_nb ? 1 : 0);
-        const int tt = 1 + J;                       // log_r eta-coord index (NB only)
-        Eigen::MatrixXd Bobs, Bfis;
-        if (want_negH)   { Bobs = Eigen::MatrixXd::Zero(dd, dd); Bobs(0, 0) = res.info_eta_lambda; }
-        if (want_fisher) { Bfis = Eigen::MatrixXd::Zero(dd, dd); Bfis(0, 0) = res.info_eta_lambda; }
+        const int tt = 1 + J;                       // log_r inner-coord index (NB only)
+        const int du = dd + (is_zi ? 1 : 0);
+        const int oo = dd;                          // omega inner-coord index (ZI only)
+
+        // Plain marginal inner block Bm (observed info) and complete-data Fisher
+        // Bf, exactly as the non-ZI path; the ZI wrap rescales / extends them.
+        Eigen::MatrixXd Bm, Bf;
+        if (want_negH)   { Bm = Eigen::MatrixXd::Zero(dd, dd); Bm(0, 0) = res.info_eta_lambda; }
+        if (want_fisher) { Bf = Eigen::MatrixXd::Zero(dd, dd); Bf(0, 0) = res.info_eta_lambda; }
         for (int j = 0; j < J; ++j) {
-            if (want_negH)   Bobs(1 + j, 1 + j) = res.info_eta_p[j];
-            if (want_fisher) Bfis(1 + j, 1 + j) = res.info_eta_p[j];
+            if (want_negH)   Bm(1 + j, 1 + j) = res.info_eta_p[j];
+            if (want_fisher) Bf(1 + j, 1 + j) = res.info_eta_p[j];
         }
         if (is_nb) {
             // Complete-data Fisher: log_r diagonal info_theta and the lambda<->log_r
             // cross info_lambda_theta (Poisson-neutral / zero under r = +Inf).
             if (want_fisher) {
-                Bfis(tt, tt) = res.info_theta;
-                Bfis(0, tt)  = Bfis(tt, 0) = res.info_lambda_theta;
+                Bf(tt, tt) = res.info_theta;
+                Bf(0, tt)  = Bf(tt, 0) = res.info_lambda_theta;
             }
             if (want_negH) {
-                Bobs(tt, tt) = res.info_theta;
-                Bobs(0, tt)  = Bobs(tt, 0) = res.info_lambda_theta;
+                Bm(tt, tt) = res.info_theta;
+                Bm(0, tt)  = Bm(tt, 0) = res.info_lambda_theta;
             }
         }
         if (want_negH && (J > 0 || is_nb)) {
@@ -152,29 +192,62 @@ NMixCommunityOracle::eval_species(int g, const double* b,
             }
             if (is_nb) {
                 vv(tt) = 0.0;
-                Bobs.noalias() -= res.var_N * (vv * vv.transpose());
-                // log_r row/col of Cov(score): Cov(s_coord, s_logr) = (N-coeff of
-                // s_coord) * Cov(N, s_logr) = -vv(coord) * cov_N_stheta; the
-                // log_r/log_r entry is var_stheta.
+                Bm.noalias() -= res.var_N * (vv * vv.transpose());
                 for (int c = 0; c < tt; ++c) {
                     const double cv = -vv(c) * res.cov_N_stheta;
-                    Bobs(c, tt) -= cv;
-                    Bobs(tt, c) -= cv;
+                    Bm(c, tt) -= cv;
+                    Bm(tt, c) -= cv;
                 }
-                Bobs(tt, tt) -= res.var_stheta;
+                Bm(tt, tt) -= res.var_stheta;
             } else if (J > 0) {
-                Bobs.noalias() -= res.var_N * (vv * vv.transpose());
+                Bm.noalias() -= res.var_N * (vv * vv.transpose());
             }
         }
 
-        // Design map Z_i: eta coord 0 -> Xlam_i over the lambda coefs,
-        // eta coord 1+j -> Xp row j over the p coefs, and (NB) the log_r eta coord
-        // -> identity on the log_r RE coordinate.
-        Eigen::MatrixXd Zi = Eigen::MatrixXd::Zero(dd, d);
+        // Inner plain score g_i, needed for the ZI rank-1 / omega-cross terms.
+        Eigen::VectorXd ginner;
+        if (is_zi) {
+            ginner = Eigen::VectorXd::Zero(dd);
+            ginner(0) = res.grad_eta_lambda;
+            for (int j = 0; j < J; ++j) ginner(1 + j) = res.grad_eta_p[j];
+            if (is_nb) ginner(tt) = res.grad_theta;
+        }
+
+        // Assemble the du x du observed-info / Fisher blocks. Marginal observed
+        // info: inner -> (1-pi) Bm - pi(1-pi) g g', omega/omega -> om(1-om) -
+        // pi(1-pi), omega/inner -> pi(1-pi) g. Complete-data Fisher (PSD Newton
+        // curvature, latent z_i observed): block-diagonal, inner -> (1-pi) Bf,
+        // omega -> om(1-om). Without ZI, du == dd, w == 1 and these are the plain
+        // blocks unchanged.
+        Eigen::MatrixXd Bobs, Bfis;
+        if (want_negH) {
+            Bobs = Eigen::MatrixXd::Zero(du, du);
+            Bobs.topLeftCorner(dd, dd) = w * Bm;
+            if (is_zi) {
+                Bobs.topLeftCorner(dd, dd).noalias() -=
+                    (pi * w) * (ginner * ginner.transpose());
+                Bobs(oo, oo) = om * (1.0 - om) - pi * w;
+                for (int c = 0; c < dd; ++c) {
+                    const double cv = (pi * w) * ginner(c);
+                    Bobs(oo, c) = cv; Bobs(c, oo) = cv;
+                }
+            }
+        }
+        if (want_fisher) {
+            Bfis = Eigen::MatrixXd::Zero(du, du);
+            Bfis.topLeftCorner(dd, dd) = w * Bf;
+            if (is_zi) Bfis(oo, oo) = om * (1.0 - om);
+        }
+
+        // Design map Z_i (du x d): eta coord 0 -> Xlam_i over the lambda coefs,
+        // eta coord 1+j -> Xp row j over the p coefs, (NB) log_r -> identity, and
+        // (ZI) the omega coord -> identity on the omega RE coordinate.
+        Eigen::MatrixXd Zi = Eigen::MatrixXd::Zero(du, d);
         for (int c = 0; c < p_lam; ++c) Zi(0, c) = Xlam(rec.site, c);
         for (int j = 0; j < J; ++j)
             for (int c = 0; c < p_p; ++c) Zi(1 + j, p_lam + c) = rec.Xp(j, c);
-        if (is_nb) Zi(tt, idx_logr) = 1.0;
+        if (is_nb) Zi(tt, idx_logr)  = 1.0;
+        if (is_zi) Zi(oo, idx_omega) = 1.0;
 
         const Eigen::MatrixXd Zt = Zi.transpose();
         if (want_negH) {
@@ -204,6 +277,8 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
         for (int i = 0; i < d; ++i) coef(i) = mu(i) + bk[i];
         const double r_s = is_nb ? std::exp(coef(idx_logr))
                                  : std::numeric_limits<double>::infinity();
+        double log_om = 0.0, log1m_om = 0.0;
+        if (is_zi) logit_log_probs(coef(idx_omega), log_om, log1m_om);
         double ll = 0.0;
         for (const SiteRec& rec : sp_sites[g]) {
             const int J = rec.cache.n_visits;
@@ -216,7 +291,20 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
                 for (int c = 0; c < p_p; ++c) v += rec.Xp(j, c) * coef(p_lam + c);
                 eta_p[j] = clamp30(v);
             }
-            ll += compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r_s).log_lik;
+            const double llr =
+                compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r_s).log_lik;
+            if (is_zi) {
+                const double c1 = log1m_om + llr;
+                if (rec.cache.K_lo == 0) {             // all-zero site: mix in the 0
+                    const double c0 = log_om;
+                    const double mx = c0 > c1 ? c0 : c1;
+                    ll += mx + std::log(std::exp(c0 - mx) + std::exp(c1 - mx));
+                } else {
+                    ll += c1;
+                }
+            } else {
+                ll += llr;
+            }
         }
         out[k] = ll;
     }
@@ -249,10 +337,10 @@ SEXP cpp_nmix_community_oracle(Rcpp::IntegerVector y, Rcpp::IntegerVector site_i
                                Rcpp::NumericMatrix X_lambda,
                                Rcpp::NumericMatrix X_p,
                                int n_sites, int n_species, int K_max,
-                               bool nb = false) {
+                               bool nb = false, bool zi = false) {
     return Rcpp::XPtr<tulpa::REGroupOracle>(
         new tulpaObs::NMixCommunityOracle(y, site_idx, species_idx,
                                           X_lambda, X_p,
-                                          n_sites, n_species, K_max, nb),
+                                          n_sites, n_species, K_max, nb, zi),
         true);
 }

@@ -627,19 +627,26 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 # simulate() for N-mixture: draw N_i from the abundance mixing distribution
 # (Poisson, or NegBin(mu = lambda_i, size = r) under mixture = "negbin"), then
 # y_ij ~ Binomial(N_i, p_ij) at the observed visits, respecting the NA pattern.
+# Under zero-inflation (mixture = "zip" / "zinb") a structural-zero share
+# `zi_omega` of sites is forced to N = 0 before the binomial detection step, so
+# the posterior replicates carry the same excess-zero structure as the fit.
 .tobs_simulate_nmix <- function(object, nsim = 1) {
   model  <- object$model; draws <- object$draws
   p_lam  <- model$process_info[[1]]$p; p_p <- model$process_info[[2]]$p
   r_size <- object$nmix_dispersion$r
   is_nb  <- !is.null(r_size) && is.finite(r_size)
-  # Draw selection (R_unif_index) + latent N (rpois / rnbinom) + per-visit
-  # binomial detections run in cpp_simulate_nmix from R's RNG stream in the same
-  # order as the former loop, so the simulation is byte-identical under a seed.
+  zi_om  <- if (isTRUE(object$zero_inflated) && is.finite(object$zi_omega %||% NA_real_))
+              as.numeric(object$zi_omega) else NA_real_
+  # Draw selection (R_unif_index) + latent N (rpois / rnbinom) + (ZI) the
+  # structural-zero Bernoulli + per-visit binomial detections run in
+  # cpp_simulate_nmix from R's RNG stream in the same order as the former loop,
+  # so the simulation is byte-identical under a seed (the ZI draw is skipped when
+  # zi_omega is NA, leaving the plain stream unchanged).
   res <- cpp_simulate_nmix(model$X_processes[[1]], model$X_processes[[2]],
     draws[, seq_len(p_lam + p_p), drop = FALSE],
     as.integer(model$site_idx), as.integer(model$visit_idx),
     model$n_sites, model$max_visits, p_lam, p_p, is_nb,
-    if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
+    if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim), zi_om)
   if (nsim == 1L) res[[1]] else res
 }
 
