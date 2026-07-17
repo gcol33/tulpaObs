@@ -59,11 +59,13 @@ test_that("t_occu() accepts a list of per-season matrices", {
   expect_length(fit$temporal_field, 5L)
 })
 
+# 20-seed recovery: the year-effect surface, occupancy / detection coefficients,
+# and the AR1 innovation SD recover with nominal interval coverage.
 test_that("t_occu() recovers the year-effect surface, coefficients + sigma", {
   skip_if_fast()
   skip_on_cran()
 
-  n_seed <- 12L
+  n_seed <- 20L
   eta_cor <- psi0 <- p_hat <- sigma_hat <- rho_hat <- max_rhat <-
     numeric(n_seed)
   psi0_cov <- logical(n_seed)

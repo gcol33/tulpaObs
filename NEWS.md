@@ -13,7 +13,7 @@
   precision as the year-effect prior, then `beta_p`, then the AR1
   hyperparameters (`sigma^2` conjugate Inverse-Gamma, `rho` on a grid). The
   year-effect surface (`fit$temporal_field`), the occupancy / detection
-  coefficients, and the innovation SD `sigma` recover cleanly (12-seed
+  coefficients, and the innovation SD `sigma` recover cleanly (20-seed
   `test-t-occu.R`, year-effect correlation ~0.97, `Rhat` ~1.00); the AR1
   correlation `rho` is a weakly-identified parameter of a short time series that
   recovers only as the number of seasons grows (an identifiability property of
