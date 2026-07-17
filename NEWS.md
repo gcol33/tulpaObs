@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.0.154 (2026-07-17)
+
+* Partial season overlap for `dyn_int_occu()` (spOccupancy `tIntPGOcc`; #122).
+  A detection source that does not observe a `(site, season)` marks it `NA`, so a
+  staggered survey where sources cover different seasons is expressed by
+  NA-padding each source to the common `[n_sites x max_visits x T]` grid: the
+  forward drops an absent source from that season's emission (`nvalid = 0`) and
+  marginalises a `(site, season)` unobserved by every source (`e0 = e1 = 1`).
+  `simulate_dyn_int_occu(source_seasons = list(1:4, 3:6))` generates staggered
+  coverage; 20-seed recovery holds. Two boundary anchors pin the reduction to its
+  neighbours: one source (the others all `NA`) reproduces `dyn_occu()`, and one
+  season of data (`T = 2`, season 2 all `NA`) reproduces `int_occu()`, both to
+  ~1e-3 -- the #122 definition-of-done anchors.
+
+* Fixed the non-spatial `dyn_int_occu()` variance-covariance sign: the observed
+  information was built from the Jacobian of the *log-likelihood* gradient (`-I`),
+  so `solve()` returned the negative vcov and every standard error was clamped to
+  zero, silently breaking `confint()` and interval coverage. It is now the
+  Jacobian of the negative-log-likelihood gradient (`+I`); SEs are proper and
+  95% Wald intervals cover at ~0.90 over 20 seeds. The spatial fitter was
+  unaffected.
+
 ## 0.0.153 (2026-07-17)
 
 * Visit-varying detection for `royle_nichols()` (unmarked `occuRN` with

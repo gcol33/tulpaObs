@@ -15,6 +15,7 @@ simulate_dyn_int_occu(
   p = c(0.4, 0.6),
   field = NULL,
   trend = NULL,
+  source_seasons = NULL,
   seed = NULL
 )
 }
@@ -41,6 +42,12 @@ integrated spatial model (stIntPGOcc). Default \code{NULL} (no field).}
 gains \code{w * trend} on top of \code{field} -- the svcTIntPGOcc surface. Default
 \code{NULL}. When set, \code{data} carries a \code{cell} node index (\verb{1..N}) and the
 covariate \code{w} for the bar \code{spatial(~ 1 + w || cell, graph)}.}
+
+\item{source_seasons}{Optional length-\code{S} list; \code{source_seasons[[s]]} is the
+integer vector of seasons source \code{s} observes (partial season overlap). The
+seasons a source does not cover are set to \code{NA} in its array -- the staggered
+survey where sources rarely share the full season grid. Default \code{NULL} (every
+source observes every season).}
 
 \item{seed}{Optional random seed.}
 }

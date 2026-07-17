@@ -37,9 +37,15 @@
 # ---------------------------------------------------------------------------
 
 # `y` is a length-S list of [n_sites x max_visits_s x T] detection arrays (0/1/NA;
-# NA = visit not conducted). `state_formula` models logit psi1; `col_formula` /
-# `ext_formula` the site-level colonization / extinction; `det_formula` the shared
-# per-source detection design (each source carries its own coefficients).
+# NA = visit not conducted). Sources share the site count and season grid, but a
+# source that does not observe a (site, season) marks it NA -- so PARTIAL season
+# overlap (a staggered survey where sources cover different seasons) is expressed
+# by NA-padding each source to the common grid: a source absent at season t
+# contributes nothing to that season's emission (nvalid = 0), and a (site, season)
+# unobserved by every source is marginalised (e0 = e1 = 1) by the forward.
+# `state_formula` models logit psi1; `col_formula` / `ext_formula` the site-level
+# colonization / extinction; `det_formula` the shared per-source detection design
+# (each source carries its own coefficients).
 .tobs_build_dyn_int_occu <- function(state_formula, col_formula, ext_formula,
                                      det_formula, data, y, sources = NULL) {
   if (!is.list(y) || length(y) < 2L)
@@ -54,7 +60,9 @@
   n_sites <- dims[[1L]][1L]; T_s <- dims[[1L]][3L]
   if (any(vapply(dims, function(d) d[1L] != n_sites || d[3L] != T_s, TRUE)))
     stop("all dyn_int_occu() sources must share the site count and season grid ",
-         "(v1: full overlap).", call. = FALSE)
+         "([n_sites x max_visits_s x T]); a source that does not cover a ",
+         "(site, season) marks it NA (partial season overlap is NA-padded to the ",
+         "common grid).", call. = FALSE)
   if (T_s < 2L) stop("dyn_int_occu() needs >= 2 seasons.", call. = FALSE)
   .tobs_check_site_count(n_sites, nrow(data), "sites")
 
@@ -562,6 +570,11 @@
 #'   gains `w * trend` on top of `field` -- the svcTIntPGOcc surface. Default
 #'   `NULL`. When set, `data` carries a `cell` node index (`1..N`) and the
 #'   covariate `w` for the bar `spatial(~ 1 + w || cell, graph)`.
+#' @param source_seasons Optional length-`S` list; `source_seasons[[s]]` is the
+#'   integer vector of seasons source `s` observes (partial season overlap). The
+#'   seasons a source does not cover are set to `NA` in its array -- the staggered
+#'   survey where sources rarely share the full season grid. Default `NULL` (every
+#'   source observes every season).
 #' @param seed Optional random seed.
 #' @return A list with `y` (a length-`S` list of `[N x J x T]` arrays), `data`,
 #'   `sources`, and `truth`.
@@ -569,7 +582,7 @@
 simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
                                   psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                   p = c(0.4, 0.6), field = NULL, trend = NULL,
-                                  seed = NULL) {
+                                  source_seasons = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   if (length(J) != S) J <- rep(J[1L], S)
   if (length(p) != S) p <- rep(p[1L], S)
@@ -577,6 +590,14 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
     stop("simulate_dyn_int_occu(): `field` must have length N.", call. = FALSE)
   if (!is.null(trend) && length(trend) != N)
     stop("simulate_dyn_int_occu(): `trend` must have length N.", call. = FALSE)
+  if (!is.null(source_seasons)) {
+    if (!is.list(source_seasons) || length(source_seasons) != S)
+      stop("simulate_dyn_int_occu(): `source_seasons` must be a length-S list.",
+           call. = FALSE)
+    if (any(unlist(source_seasons) < 1L | unlist(source_seasons) > T_seasons))
+      stop("simulate_dyn_int_occu(): `source_seasons` indices must be in 1..T.",
+           call. = FALSE)
+  }
   data <- data.frame(row.names = seq_len(N))
   z <- matrix(0L, N, T_seasons)
   # Season-1 occupancy carries the optional shared field + a varying-coefficient
@@ -604,10 +625,18 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
     arr <- array(0L, c(N, J[s], T_seasons))
     for (t in seq_len(T_seasons)) for (j in seq_len(J[s]))
       arr[, j, t] <- ifelse(z[, t] == 1L, stats::rbinom(N, 1L, p[s]), 0L)
+    # Partial season overlap: source s observes only source_seasons[[s]]; the
+    # seasons it does not cover are NA (absent), the per-source-season-map form
+    # of a staggered survey where sources rarely share the full season grid.
+    if (!is.null(source_seasons)) {
+      miss <- setdiff(seq_len(T_seasons), source_seasons[[s]])
+      if (length(miss)) arr[, , miss] <- NA_integer_
+    }
     arr
   })
   names(y) <- paste0("src", seq_len(S))
   list(y = y, data = data, sources = names(y),
        truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p, z = z,
-                    field = field, trend = trend, w = w))
+                    field = field, trend = trend, w = w,
+                    source_seasons = source_seasons))
 }
