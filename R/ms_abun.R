@@ -173,7 +173,8 @@
 .tobs_fit_ms_nmix <- function(model, mixture = "poisson", K_max = NULL,
                               max_iter = 100L, optimizer = "em",
                               n_quad = 1L, n_quad_scalar = 2L,
-                              lkj_eta = 1, verbose = TRUE) {
+                              lkj_eta = 1, omega_sigma_prior = c(1, 0.05),
+                              verbose = TRUE) {
   # tulpaObs vocabulary ("poisson" / "negbin" / "zip" / "zinb") ->
   # nmix_laplace_re's mixing-distribution code ("P" / "NB" / "ZIP" / "ZINB").
   # NB makes the dispersion a per-species random effect log_r_s ~ N(mu_log_r,
@@ -204,6 +205,7 @@
     mixture = mix_code,
     optimizer = optimizer, n_quad = as.integer(n_quad),
     n_quad_scalar = as.integer(n_quad_scalar), lkj_eta = lkj_eta,
+    omega_sigma_prior = omega_sigma_prior,
     verbose = isTRUE(verbose))
   build_ms_nmix_fit(raw, model, mixture = mixture)
 }

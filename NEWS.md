@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.157 (2026-07-17)
+
+* **Regularize the community zero-inflated N-mixture structural-zero variance
+  (#116).** `ms_abun(mixture = "zip" / "zinb")` now puts a weak Penalized-
+  Complexity prior on the per-species structural-zero random-effect SD
+  `sigma_omega` (new `control$omega.sigma.prior = c(U, alpha)`, default
+  `c(1, 0.05)`; set `NULL` to restore pure ML). `sigma_omega` is the softest
+  AGHQ direction and at few species can collapse to the boundary, flattening the
+  marginal Hessian and attenuating the recovered SD; the prior adds curvature
+  there without biasing an identified fit (measured: a collapse-prone seed's
+  `sigma_omega` recovers 0.07 -> 0.18 toward a 0.3 truth, identified seeds
+  unmoved). Consumes tulpa 0.0.85's `tulpa_re_aghq(sigma_prior = ...)`.
+* **Actionable error when `K_max` is below the largest observed count.** The
+  community N-mixture marginal sums the latent N only to `K_max`, so a
+  user-supplied `K_max < max(y)` made the per-(species,site) marginal
+  structurally `-Inf` and the joint optimum singular -- previously surfaced as an
+  opaque "singular marginal Hessian". It now fails early with a message pointing
+  at `K_max`. The default (`max(y) + 100`) never trips it.
+* Require `tulpa (>= 0.0.85)` and pin `Remotes: gcol33/tulpa@v0.0.85`.
+
 ## 0.0.156 (2026-07-17)
 
 * Require `tulpa (>= 0.0.84)` and pin `Remotes: gcol33/tulpa@v0.0.84` so an

@@ -113,6 +113,14 @@
 #' @param sigma_beta Weak Gaussian ridge SD on the community means (default 100,
 #'   i.e. `tau = 1e-4`, matching the other Laplace paths); stabilizes a
 #'   weakly-identified community mean without materially shifting it.
+#' @param omega_sigma_prior Penalized-Complexity prior `c(U, alpha)`
+#'   (`P(sigma_omega > U) = alpha`) on the per-species structural-zero random
+#'   effect SD (`mixture = "ZIP"` / `"ZINB"` only; default `c(1, 0.05)`, interior
+#'   mode ~ 0.33). `sigma_omega` is the softest AGHQ direction and at few species
+#'   can collapse to the boundary, flattening the marginal Hessian and attenuating
+#'   the recovered SD; the weak prior adds curvature there (passed to
+#'   [tulpa_re_aghq()]'s `sigma_prior`) without biasing an identified fit. `NULL`
+#'   restores pure ML on the structural-zero variance. Ignored for Poisson / NB.
 #' @param verbose Unused (kept for backward compatibility); the engine is silent.
 #'
 #' @return A list of class `nmix_re_fit`: `mu_lambda`, `mu_p` (community
@@ -146,7 +154,9 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   r_init = 10, sigma_logr_init = 0.5,
                                   omega_init = 0.2, sigma_omega_init = 0.5,
                                   n_quad = 1L, n_quad_scalar = 2L, lkj_eta = 1,
-                                  sigma_beta = 100, verbose = FALSE) {
+                                  sigma_beta = 100,
+                                  omega_sigma_prior = c(1, 0.05),
+                                  verbose = FALSE) {
   mixture <- match.arg(mixture)
   is_nb <- mixture %in% c("NB", "ZINB")   # negative-binomial abundance (log_r RE)
   is_zi <- mixture %in% c("ZIP", "ZINB")  # structural-zero share (logit_omega RE)
@@ -185,6 +195,19 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # The lgamma cache makes a generous K_max cheap, so correctness wins.
   if (is.null(K_max)) K_max <- max(y) + 100L
   K_max <- as.integer(K_max)
+  # A count above K_max has zero probability under the truncated marginal (the
+  # latent N is summed to K_max), so a user-supplied K_max below the largest
+  # observed count makes the per-(species,site) marginal structurally -Inf and the
+  # joint optimum singular. Fail with an actionable message rather than the opaque
+  # "singular marginal Hessian" the AGHQ solve would otherwise return. The default
+  # (max(y) + 100) never trips this.
+  y_max <- max(y)
+  if (K_max < y_max) {
+    stop(sprintf(paste0("K_max (%d) is below the largest observed count (%d). ",
+                        "The N-mixture marginal sums the latent N only to K_max, ",
+                        "so a count above K_max has zero probability. Raise K_max ",
+                        "above max(y)."), K_max, y_max), call. = FALSE)
+  }
 
   # ---- warm start: independent per-species fixed-effect fits ----
   if (is.null(mu_lambda_init) || is.null(Sigma_lambda_init) ||
@@ -322,13 +345,24 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   nqs    <- max(2L, min(as.integer(n_quad), as.integer(n_quad_scalar)))
   if (!is.na(logr_blk))  nq_vec[logr_blk]  <- nqs
   if (!is.na(omega_blk)) nq_vec[omega_blk] <- nqs
+  # Regularize the weakly-identified structural-zero variance component. sigma_omega
+  # is the softest AGHQ direction and at few species can collapse to the boundary,
+  # flattening the marginal Hessian (a singular joint optimum) and attenuating the
+  # recovered SD. A weak Penalized-Complexity prior on the omega block adds
+  # curvature there without biasing an identified fit (the +log sigma Jacobian
+  # repels sigma -> 0, the -lambda sigma term caps inflation). omega_sigma_prior =
+  # NULL restores pure ML on the structural-zero variance. The NB log_r block keeps
+  # pure ML (its Poisson-limit path stays byte-identical to the non-ZI fit).
+  sigma_prior <- if (is_zi && !is.null(omega_sigma_prior) && !is.na(omega_blk))
+    list(blocks = omega_blk, prior_sigma = omega_sigma_prior) else NULL
   fit <- tulpa::tulpa_re_aghq(
     theta0  = theta0,
     re_terms = re_terms,
     Sigma0  = Sigma0,
     oracle  = orc, gradient = grad_mode,
     n_quad = nq_vec, lkj_eta = lkj_eta,
-    theta_prior_sd = sigma_beta, max_iter = as.integer(max_iter))
+    theta_prior_sd = sigma_beta, sigma_prior = sigma_prior,
+    max_iter = as.integer(max_iter))
 
   if (is.null(fit)) {
     stop("Community N-mixture optimization failed (singular marginal Hessian ",

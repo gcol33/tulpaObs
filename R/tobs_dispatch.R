@@ -966,6 +966,8 @@
     n_quad        = n_quad,
     n_quad_scalar = as.integer(control[["n.quad.scalar"]] %||% 2L),
     lkj_eta       = control[["re.lkj"]] %||% 1.5,
+    omega_sigma_prior = if ("omega.sigma.prior" %in% names(control))
+                          control[["omega.sigma.prior"]] else c(1, 0.05),
     verbose       = isTRUE(control[["verbose"]]))
 }
 

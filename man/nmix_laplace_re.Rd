@@ -28,6 +28,7 @@ nmix_laplace_re(
   n_quad_scalar = 2L,
   lkj_eta = 1,
   sigma_beta = 100,
+  omega_sigma_prior = c(1, 0.05),
   verbose = FALSE
 )
 }
@@ -122,6 +123,15 @@ through to \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}}. Does not touch th
 \item{sigma_beta}{Weak Gaussian ridge SD on the community means (default 100,
 i.e. \code{tau = 1e-4}, matching the other Laplace paths); stabilizes a
 weakly-identified community mean without materially shifting it.}
+
+\item{omega_sigma_prior}{Penalized-Complexity prior \code{c(U, alpha)}
+(\code{P(sigma_omega > U) = alpha}) on the per-species structural-zero random
+effect SD (\code{mixture = "ZIP"} / \code{"ZINB"} only; default \code{c(1, 0.05)}, interior
+mode ~ 0.33). \code{sigma_omega} is the softest AGHQ direction and at few species
+can collapse to the boundary, flattening the marginal Hessian and attenuating
+the recovered SD; the weak prior adds curvature there (passed to
+\code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}}'s \code{sigma_prior}) without biasing an identified fit. \code{NULL}
+restores pure ML on the structural-zero variance. Ignored for Poisson / NB.}
 
 \item{verbose}{Unused (kept for backward compatibility); the engine is silent.}
 }
