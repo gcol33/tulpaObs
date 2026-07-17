@@ -155,8 +155,9 @@
   adj <- as.matrix(spatial$graph)
   n   <- model$n_sites
   if (nrow(adj) != n)
-    stop(sprintf("the icar() graph has %d nodes but the model has %d sites; one ",
-                 "field node per site is required.", nrow(adj), n), call. = FALSE)
+    stop(sprintf(paste0("the icar() graph has %d nodes but the model has %d ",
+                        "sites; one field node per site is required."),
+                 nrow(adj), n), call. = FALSE)
   Q   <- .occu_cover_icar_Q(adj)
 
   y      <- model$y
