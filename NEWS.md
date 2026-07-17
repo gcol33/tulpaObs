@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.153 (2026-07-17)
+
+* Visit-varying detection for `royle_nichols()` (unmarked `occuRN` with
+  observation covariates; #116). Detection was site-level only; passing `visits`
+  now lets `logit r_ij` carry visit-level covariates. The latent-`N` marginal
+  generalises from the `(k_i, n_i)` sufficient-statistic form to the full
+  per-visit product inside the same Poisson sum,
+  `prod_j [1 - (1 - r_ij)^N]^{y_ij} [(1 - r_ij)^N]^{1 - y_ij}`, which reduces
+  exactly to the site-level form when `r_ij` is constant (verified to machine
+  precision). `fitted()` / `predict(type = "detection")` / `simulate()` return the
+  per-visit `[n_sites x max_visits]` detection grid; the site-level path is
+  byte-identical. `simulate_royle_nichols(beta_r_visit =)` draws a visit-level
+  detection covariate and returns `visits` for `tobs(..., visits =)`. Recovery
+  over 20 seeds: max rel-bias ~0.04, min 95% CI coverage ~0.95
+  (`test-royle-nichols.R`).
+
 ## 0.0.152 (2026-07-17)
 
 * Varying-coefficient areal field on multi-season integrated occupancy:

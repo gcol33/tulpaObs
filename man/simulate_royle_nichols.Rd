@@ -9,6 +9,7 @@ simulate_royle_nichols(
   J = 5,
   beta_lambda = c(0.3, 0.5),
   beta_r = -0.8,
+  beta_r_visit = NULL,
   seed = NULL
 )
 }
@@ -21,19 +22,28 @@ simulate_royle_nichols(
 
 \item{beta_r}{Per-individual detection logit (a scalar intercept).}
 
+\item{beta_r_visit}{Optional scalar slope on a drawn per-visit detection
+covariate \code{w}. When supplied, detection varies by visit and the returned list
+carries \code{visits = list(w = )} (an \verb{N x J} matrix) for \code{tobs(..., visits =)}.}
+
 \item{seed}{Random seed.}
 }
 \value{
-A list with \code{y} (\verb{N x J} 0/1 matrix), \code{data}, and \code{truth}
-(\code{beta_lambda}, \code{beta_r}, realised abundance \code{N}, per-site \code{lambda} / \code{r}).
+A list with \code{y} (\verb{N x J} 0/1 matrix), \code{data}, \code{truth}
+(\code{beta_lambda}, \code{beta_r}, \code{beta_r_visit}, realised abundance \code{N}, \code{lambda},
+per-site or per-visit \code{r}), and, when \code{beta_r_visit} is supplied, \code{visits}.
 }
 \description{
 Latent abundance \code{N_i ~ Poisson(lambda_i)}, \verb{log lambda = X beta_lambda}, and
-per-visit detection \code{y_ij ~ Bernoulli(1 - (1 - r_i)^{N_i})} with per-individual
-detection \verb{logit r_i = beta_r} (site-level). Matches the \code{\link[=royle_nichols]{royle_nichols()}}
+per-visit detection \code{y_ij ~ Bernoulli(1 - (1 - r_ij)^{N_i})} with per-individual
+detection \verb{logit r_ij = beta_r}. Detection is site-level by default; supplying
+\code{beta_r_visit} draws a per-visit covariate \code{w} and makes \verb{logit r_ij = beta_r + beta_r_visit * w_ij} visit-varying. Matches the \code{\link[=royle_nichols]{royle_nichols()}}
 family; the response is an \verb{N x J} 0/1 detection-history matrix.
 }
 \examples{
 sim <- simulate_royle_nichols(N = 100, J = 4, seed = 1)
 dim(sim$y)
+# Visit-varying detection:
+sv <- simulate_royle_nichols(N = 100, J = 4, beta_r_visit = 0.8, seed = 1)
+names(sv$visits)
 }

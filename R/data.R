@@ -803,40 +803,64 @@ simulate_count <- function(N = 200, beta = c(1, 0.5),
 #' Simulate Royle-Nichols occupancy data
 #'
 #' Latent abundance `N_i ~ Poisson(lambda_i)`, `log lambda = X beta_lambda`, and
-#' per-visit detection `y_ij ~ Bernoulli(1 - (1 - r_i)^{N_i})` with per-individual
-#' detection `logit r_i = beta_r` (site-level). Matches the [royle_nichols()]
+#' per-visit detection `y_ij ~ Bernoulli(1 - (1 - r_ij)^{N_i})` with per-individual
+#' detection `logit r_ij = beta_r`. Detection is site-level by default; supplying
+#' `beta_r_visit` draws a per-visit covariate `w` and makes `logit r_ij =
+#' beta_r + beta_r_visit * w_ij` visit-varying. Matches the [royle_nichols()]
 #' family; the response is an `N x J` 0/1 detection-history matrix.
 #'
 #' @param N Number of sites (default 200).
 #' @param J Number of visits per site (default 5).
 #' @param beta_lambda Log-abundance coefficients `c(intercept, slope_on_x)`.
 #' @param beta_r Per-individual detection logit (a scalar intercept).
+#' @param beta_r_visit Optional scalar slope on a drawn per-visit detection
+#'   covariate `w`. When supplied, detection varies by visit and the returned list
+#'   carries `visits = list(w = )` (an `N x J` matrix) for `tobs(..., visits =)`.
 #' @param seed Random seed.
-#' @return A list with `y` (`N x J` 0/1 matrix), `data`, and `truth`
-#'   (`beta_lambda`, `beta_r`, realised abundance `N`, per-site `lambda` / `r`).
+#' @return A list with `y` (`N x J` 0/1 matrix), `data`, `truth`
+#'   (`beta_lambda`, `beta_r`, `beta_r_visit`, realised abundance `N`, `lambda`,
+#'   per-site or per-visit `r`), and, when `beta_r_visit` is supplied, `visits`.
 #' @examples
 #' sim <- simulate_royle_nichols(N = 100, J = 4, seed = 1)
 #' dim(sim$y)
+#' # Visit-varying detection:
+#' sv <- simulate_royle_nichols(N = 100, J = 4, beta_r_visit = 0.8, seed = 1)
+#' names(sv$visits)
 #' @export
 simulate_royle_nichols <- function(N = 200, J = 5,
                                    beta_lambda = c(0.3, 0.5),
                                    beta_r = -0.8,
+                                   beta_r_visit = NULL,
                                    seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   data   <- data.frame(x = rnorm(N))
   X_l    <- model.matrix(~ x, data)
   lambda <- exp(as.vector(X_l %*% beta_lambda))
-  r      <- plogis(rep(beta_r[1], N))
+  Ni     <- rpois(N, lambda)
 
-  Ni <- rpois(N, lambda)
-  y  <- matrix(0L, N, J)
-  for (i in seq_len(N)) {
-    p_i <- 1 - (1 - r[i])^Ni[i]
-    y[i, ] <- rbinom(J, 1, p_i)
+  if (is.null(beta_r_visit)) {
+    r <- plogis(rep(beta_r[1], N))
+    y <- matrix(0L, N, J)
+    for (i in seq_len(N)) {
+      p_i <- 1 - (1 - r[i])^Ni[i]
+      y[i, ] <- rbinom(J, 1, p_i)
+    }
+    return(list(y = y, data = data,
+                truth = list(beta_lambda = beta_lambda, beta_r = beta_r,
+                             beta_r_visit = NULL, N = Ni, lambda = lambda, r = r)))
   }
-  list(y = y, data = data,
+
+  w     <- matrix(rnorm(N * J), N, J)
+  r_mat <- plogis(beta_r[1] + beta_r_visit[1] * w)
+  y     <- matrix(0L, N, J)
+  for (i in seq_len(N)) {
+    p_ij   <- 1 - (1 - r_mat[i, ])^Ni[i]
+    y[i, ] <- rbinom(J, 1, p_ij)
+  }
+  list(y = y, data = data, visits = list(w = w),
        truth = list(beta_lambda = beta_lambda, beta_r = beta_r,
-                    N = Ni, lambda = lambda, r = r))
+                    beta_r_visit = beta_r_visit, N = Ni, lambda = lambda,
+                    r = r_mat, w = w))
 }
 
 #' Simulate temporal (multi-season) occupancy data

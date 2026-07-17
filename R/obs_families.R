@@ -838,11 +838,13 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) 
 #'
 #' Occupancy with abundance-induced detection heterogeneity (Royle & Nichols
 #' 2003; \pkg{unmarked} `occuRN`). Latent abundance `N_i ~ Poisson(lambda_i)`
-#' drives the per-visit detection probability `1 - (1 - r_i)^{N_i}`, where `r_i`
-#' is the per-individual detection probability. The state `formula` models
-#' `log lambda` (abundance); `detection` models `logit r` at the site level. The
-#' latent `N` marginalises in closed form (a Poisson sum to `K_max`), so the fit
-#' maximises the exact marginal with an observed-information vcov.
+#' drives the per-visit detection probability `1 - (1 - r_ij)^{N_i}`, where
+#' `r_ij` is the per-individual detection probability. The state `formula` models
+#' `log lambda` (abundance); `detection` models `logit r`. Detection is site-level
+#' by default; passing `visits` makes it visit-varying (`logit r_ij` gains the
+#' visit-level covariates), exactly as for the occupancy / N-mixture front doors.
+#' The latent `N` marginalises in closed form (a Poisson sum to `K_max`), so the
+#' fit maximises the exact marginal with an observed-information vcov.
 #'
 #' @param K_max Upper summation bound for the latent abundance (default: a
 #'   data-driven Poisson-tail guess).
@@ -853,6 +855,13 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) 
 #' fit <- tobs(~ x, data = sim$data, family = royle_nichols(),
 #'             detection = ~ 1, y = sim$y, control = list(verbose = FALSE))
 #' coef(fit)
+#'
+#' # Visit-varying detection via `visits`:
+#' sv <- simulate_royle_nichols(N = 150, J = 5, beta_r_visit = 0.8, seed = 1)
+#' fv <- tobs(~ x, data = sv$data, family = royle_nichols(),
+#'            detection = ~ w, y = sv$y, visits = sv$visits,
+#'            control = list(verbose = FALSE))
+#' coef(fv)
 #' }
 #' @export
 royle_nichols <- function(K_max = NULL) {
