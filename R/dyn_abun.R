@@ -115,9 +115,9 @@
     stop("dyn_abun() needs >= 2 primary seasons; for a single season use abun().",
          call. = FALSE)
   }
-  if (!mixture %in% c("poisson", "negbin")) {
+  if (!mixture %in% c("poisson", "negbin", "zip", "zinb")) {
     stop("dyn_abun(mixture = '", mixture, "') is not supported. ",
-         "Use 'poisson' or 'negbin'.", call. = FALSE)
+         "Use 'poisson', 'negbin', 'zip', or 'zinb'.", call. = FALSE)
   }
 
   bind <- .tobs_bind_formulas(list(lambda = occ_formula, p = det_formula,
@@ -176,6 +176,171 @@
     mixture = model$mixture %||% "poisson",
     max_iter = as.integer(max_iter), tol = as.numeric(tol), verbose = isTRUE(verbose))
   build_dyn_abun_fit(raw, model)
+}
+
+
+# ---------------------------------------------------------------------------
+# Zero-inflated open N-mixture (ZIP / ZINB) for dyn_abun(mixture = "zip" /
+# "zinb"; gcol33/tulpaObs#116)
+# ---------------------------------------------------------------------------
+
+# A structural-zero site is one that is NEVER occupied across any season -- so
+# every observation at that site (all visits, all seasons) is zero. The observed
+# per-site marginal is therefore the same two-component mixture the static ZIP
+# uses (nmix_zip.R), only with the Dail-Madsen forward-HMM marginal in place of
+# the Royle marginal:
+#   L_i = omega * 1{all y_i = 0} + (1 - omega) * L_DailMadsen_i,
+# with L_DailMadsen_i = exp(log_lik_site_i) the exact open-population marginal
+# that cpp_dyn_abun_total_log_lik() already returns per site (its analytic eta
+# gradients are unused here -- BFGS on the additive-layer marginal is cheap). This
+# is a PURE-R layer over the C++ per-site marginal; the Poisson / negbin paths are
+# untouched. omega is an intercept-only structural-zero probability (logit). The
+# ZI logit is named `zi_logit` (NOT `omega_*`, which is dyn_abun's SURVIVAL arm).
+#
+# Scope (v1): non-spatial laplace only, intercept-only omega. An areal field, a
+# grouped RE, and a NUTS path stay Poisson / negbin (rejected upstream in
+# .tobs_fit_model with a pointer); the additive marginal + its gradient are the
+# layer those would share.
+.tobs_fit_dyn_abun_zip <- function(model, max_iter = 300L, verbose = TRUE, ...) {
+  is_nb <- identical(model$mixture, "zinb")
+  N <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
+  K <- model$K_max
+  X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
+  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
+  p_om  <- ncol(X_omega);  p_gm <- ncol(X_gamma)
+  y_flat <- as.integer(model$y_flat)
+
+  # Per-site all-zero indicator over the whole [visit x season] block. y is
+  # [n_sites x max_visits x n_seasons]; NA visits are ignored.
+  az <- apply(model$y, 1L, function(m) { v <- m[!is.na(m)]; length(v) == 0L || all(v == 0L) })
+
+  # Fixed layout [beta_lambda | beta_p | beta_omega | beta_gamma | zi_logit |
+  # (log_r if ZINB)]. The Dail-Madsen marginal underneath is Poisson OR negbin;
+  # the structural-zero mixing is the outer ZI layer either way.
+  idx <- list(lambda = seq_len(p_lam),
+              p     = p_lam + seq_len(p_p),
+              omega = p_lam + p_p + seq_len(p_om),
+              gamma = p_lam + p_p + p_om + seq_len(p_gm))
+  izi <- p_lam + p_p + p_om + p_gm + 1L
+  ir  <- if (is_nb) izi + 1L else NA_integer_
+
+  # One marginal evaluation: the Dail-Madsen per-site log-lik AND its per-site eta
+  # gradients (the closed-form analytic gradients cpp_dyn_abun_total_log_lik
+  # already returns). The ZIP layer then weights these by the structural-zero
+  # posterior so BFGS runs on analytic gradients (fast) rather than a numeric
+  # gradient / numeric Hessian over the expensive forward-HMM marginal.
+  eval_dm <- function(theta) {
+    tryCatch(cpp_dyn_abun_total_log_lik(
+      y_flat, N, T, J, K,
+      as.numeric(X_lambda %*% theta[idx$lambda]),
+      as.numeric(X_p      %*% theta[idx$p]),
+      as.numeric(X_omega  %*% theta[idx$omega]),
+      as.numeric(X_gamma  %*% theta[idx$gamma]),
+      use_nb = is_nb, eta_logr = if (is_nb) theta[ir] else 0.0),
+      error = function(e) NULL)
+  }
+
+  # ZIP marginal log-lik and its posterior "not-a-structural-zero" weight w_i.
+  # A detected site is certainly not a structural zero (w = 1); an all-zero site
+  # mixes the structural point mass in, w_i = (1 - om) L_dm_i / L_i. The score wrt
+  # the ZI logit is (1 - w_i) - om summed (the standard ZIP score).
+  zip_pieces <- function(theta, ev) {
+    om <- stats::plogis(theta[izi]); log1m <- log1p(-om)
+    llr <- ev$log_lik_site
+    ll <- numeric(N); w <- rep(1, N)
+    ll[!az] <- log1m + llr[!az]
+    a <- log1m + llr[az]; b <- log(om); mx <- pmax(a, b)
+    Li <- mx + log(exp(a - mx) + exp(b - mx))
+    ll[az] <- Li
+    w[az] <- exp(a - Li)                        # (1 - om) L_dm / L on all-zero sites
+    list(log_lik = sum(ll), w = w, om = om)
+  }
+
+  neg_ll <- function(theta) {
+    ev <- eval_dm(theta)
+    if (is.null(ev) || any(!is.finite(ev$log_lik_site))) return(1e10)
+    val <- -zip_pieces(theta, ev)$log_lik
+    if (is.finite(val)) val else 1e10
+  }
+  # Analytic gradient: the Dail-Madsen per-site eta gradients scaled by w_i (they
+  # enter L only through the L_dm component), summed through the arm designs; plus
+  # the ZI-logit score. omega / gamma per-site gradients are returned as [N] under
+  # constant rates (the season-varying [N x (T-1)] layout is not used on the ZIP
+  # v1 path -- intercept-only rate arms).
+  neg_grad <- function(theta) {
+    ev <- eval_dm(theta)
+    if (is.null(ev)) return(rep(0, length(theta)))
+    zp <- zip_pieces(theta, ev); w <- zp$w; om <- zp$om
+    g <- numeric(length(theta))
+    g[idx$lambda] <- as.numeric(crossprod(X_lambda, w * ev$grad_eta_lambda))
+    g[idx$p]      <- as.numeric(crossprod(X_p,      w * ev$grad_eta_p))
+    g[idx$omega]  <- as.numeric(crossprod(X_omega,  w * as.numeric(ev$grad_eta_omega)))
+    g[idx$gamma]  <- as.numeric(crossprod(X_gamma,  w * as.numeric(ev$grad_eta_gamma)))
+    # ZI logit score: the two-component mixture (structural-zero point mass +
+    # Dail-Madsen marginal) has per-site score (1 - om) - w_i, where w_i is the
+    # posterior weight on the DM component (= 1 for a detected site, giving the
+    # -om pull; = (1 - om) L_dm / L on an all-zero site). Summed:
+    g[izi] <- sum((1 - om) - w)
+    # The NB dispersion score is returned only SUMMED across sites (not per-site),
+    # so it cannot be ZIP-weighted analytically; central-difference just this one
+    # coordinate on the exact ZIP objective (two extra marginal evals).
+    if (is_nb) {
+      h <- 1e-4; th <- theta
+      th[ir] <- theta[ir] + h; fp <- -neg_ll(th)
+      th[ir] <- theta[ir] - h; fm <- -neg_ll(th)
+      g[ir] <- (fp - fm) / (2 * h)
+    }
+    -g
+  }
+
+  # Naive warm start. The analytic-gradient BFGS below climbs to the joint mode
+  # from here, so a separate no-ZI Dail-Madsen pre-fit (a second expensive
+  # forward-HMM optimisation) is not needed. Initial abundance is seeded from the
+  # mean count over the sites that DID detect (structural + sampling zeros would
+  # bias a global mean toward 0); the structural-zero logit from a modest share of
+  # the all-zero sites.
+  theta0 <- numeric(if (is_nb) izi + 1L else izi)
+  nz_mean <- mean(model$y[!az, , , drop = FALSE], na.rm = TRUE)
+  theta0[idx$lambda[1]] <- log(max(nz_mean / 0.5, 0.5) + 0.5)
+  theta0[idx$omega[1]]  <- stats::qlogis(0.6); theta0[idx$gamma[1]] <- log(0.5)
+  if (is_nb) theta0[ir] <- log(2)
+  theta0[izi] <- stats::qlogis(min(max(mean(az) * 0.5, 0.05), 0.7))
+
+  # Analytic-gradient BFGS over the exact ZIP marginal (the ZI logit and, for
+  # ZINB, log_r are the only runaway corners; a huge NB overdispersion mimics
+  # structural zeros, so the ZINB seed is warm-started at the no-ZI dispersion).
+  .prog <- tulpa:::.tulpa_iter_progress("dyn-abun-zip", as.integer(max_iter), unit = "iter")
+  opt <- stats::optim(theta0, neg_ll,
+                      gr = function(th) { .prog$tick(); neg_grad(th) },
+                      method = "BFGS",
+                      control = list(maxit = as.integer(max_iter), reltol = 1e-8))
+  .prog$finish()
+
+  est <- opt$par
+  # Observed-information vcov: the negative FD-Jacobian of the analytic gradient
+  # at the mode (O(p) marginal evals, not the O(p^2) numeric Hessian).
+  Hobs <- tryCatch(-.fp_fd_jacobian(function(th) -neg_grad(th), est),
+                   error = function(e) NULL)
+  vcov <- tryCatch(solve(Hobs), error = function(e) {
+    d <- if (!is.null(Hobs)) diag(Hobs) else rep(NA_real_, length(est))
+    d[d <= 0] <- NA_real_; diag(1 / d, length(est)) })
+  nm <- c(paste0("lambda_", colnames(X_lambda)), paste0("p_", colnames(X_p)),
+          paste0("omega_", colnames(X_omega)), paste0("gamma_", colnames(X_gamma)),
+          "zi_logit")
+  if (is_nb) nm <- c(nm, "log_r")
+  dimnames(vcov) <- list(nm, nm)
+
+  raw <- list(
+    beta_lambda = est[idx$lambda], beta_p = est[idx$p],
+    beta_omega = est[idx$omega], beta_gamma = est[idx$gamma],
+    zi_logit = est[izi], mixture = model$mixture,
+    means = est, vcov = vcov, log_lik = -opt$value,
+    mean_N1 = NA_real_, K_max = K,
+    converged = opt$convergence == 0L, n_iter = NA_integer_,
+    coef_names = nm)
+  if (is_nb) { raw$log_r <- est[ir]; raw$r <- exp(raw$log_r) }
+  build_dyn_abun_fit(raw, model, zi_logit = est[izi])
 }
 
 
@@ -581,10 +746,10 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
 # Fit packer
 # ---------------------------------------------------------------------------
 
-build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
+build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   pi_list <- model$process_info
   mixture <- raw$mixture %||% model$mixture %||% "poisson"
-  is_nb   <- identical(mixture, "negbin")
+  is_nb   <- identical(mixture, "negbin") || identical(mixture, "zinb")
   nms <- raw$coef_names
   means <- raw$means; names(means) <- nms
   vcov <- as.matrix(raw$vcov); dimnames(vcov) <- list(nms, nms)
@@ -637,6 +802,8 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
     process_info = pi_list, model = model, spatial = NULL, method = "laplace",
     log_lik = ll, mean_N1 = raw$mean_N1, K_max = raw$K_max,
     mixture = mixture, dispersion = dispersion,
+    zero_inflated = !is.null(zi_logit),
+    zi_omega = if (!is.null(zi_logit)) stats::plogis(as.numeric(zi_logit)) else NULL,
     re_effects = re_block$re_effects,
     dyn_abun_re = if (!is.null(re_post))
       list(arm = re_post$arm, n_quad = re_post$n_quad,
@@ -779,6 +946,10 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL) {
 #' @param mixture Initial-abundance distribution: `"poisson"` (default) or
 #'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`).
 #' @param r Negative-binomial size for `mixture = "negbin"` (default 2).
+#' @param zi Structural-zero share for a zero-inflated model (default 0). With
+#'   probability `zi` a site is never occupied (`N_t = 0` for all seasons), so
+#'   all its counts are zero; fit such data with `dyn_abun(mixture = "zip")` /
+#'   `"zinb"`.
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J x T count array), `data` (covariates, including
 #'   the `[N x (T-1)]` `season_cov` matrix column when a season-varying rate is
@@ -789,7 +960,7 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
                               beta_lambda = NULL, p = 0.5, omega = 0.6,
                               gamma = 1.0, beta_omega = NULL, beta_gamma = NULL,
                               mixture = c("poisson", "negbin"),
-                              r = 2, seed = NULL) {
+                              r = 2, zi = 0, seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
   if (is.null(beta_lambda)) beta_lambda <- c(log(5), stats::runif(n_abund_covs, -0.4, 0.4))
@@ -814,9 +985,15 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
                  exp(beta_gamma[1] + beta_gamma[2] * season_cov)
                else matrix(gamma, N, nIv)
 
+  # Structural zeros (zip / zinb): a site is never occupied (N_t = 0 for all t)
+  # with probability zi, so every count at that site is zero. The remaining sites
+  # follow the ordinary Dail-Madsen trajectory.
+  struct_zero <- if (zi > 0) stats::rbinom(N, 1L, zi) == 1L else rep(FALSE, N)
+
   y <- array(0L, dim = c(N, J, T))
   Nmat <- matrix(0L, N, T)
   for (i in seq_len(N)) {
+    if (struct_zero[i]) next               # all counts stay 0
     Ni <- if (is_nb) stats::rnbinom(1L, mu = lambda[i], size = r)
           else stats::rpois(1L, lambda[i])
     for (t in seq_len(T)) {
@@ -834,5 +1011,6 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
                     beta_omega = beta_omega, beta_gamma = beta_gamma,
                     omega_mat = omega_mat, gamma_mat = gamma_mat,
                     season_cov = season_cov, mixture = mixture,
+                    zi = zi, struct_zero = struct_zero,
                     r = if (is_nb) r else NA_real_, N = Nmat))
 }

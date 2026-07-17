@@ -17,6 +17,7 @@ simulate_dyn_abun(
   beta_gamma = NULL,
   mixture = c("poisson", "negbin"),
   r = 2,
+  zi = 0,
   seed = NULL
 )
 }
@@ -45,6 +46,11 @@ covariate. \code{NULL} (default) keeps the constant \code{omega} / \code{gamma}.
 \code{"negbin"} (negative-binomial \code{N_1 ~ NB(mean = lambda, size = r)}).}
 
 \item{r}{Negative-binomial size for \code{mixture = "negbin"} (default 2).}
+
+\item{zi}{Structural-zero share for a zero-inflated model (default 0). With
+probability \code{zi} a site is never occupied (\code{N_t = 0} for all seasons), so
+all its counts are zero; fit such data with \code{dyn_abun(mixture = "zip")} /
+\code{"zinb"}.}
 
 \item{seed}{Optional random seed.}
 }

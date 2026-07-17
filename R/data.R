@@ -991,6 +991,10 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #' @param field Optional per-site shared areal field (length `N`) added to the
 #'   first-season occupancy logit of every species -- the shared field of the
 #'   community dynamic-spatial model (stMsPGOcc). Default `NULL` (no field).
+#' @param trend Optional per-site shared varying-coefficient field (length `N`),
+#'   added to the first-season occupancy logit as `trend_i * x_i` (weighted by
+#'   the site covariate `x`) -- the varying-coefficient field of the
+#'   community dynamic-spatial model (svcTMsPGOcc). Default `NULL`.
 #' @param seed Random seed.
 #' @return A list with `y` (4D array), `data`, and `truth`.
 #' @seealso [ms_dyn_occu()], the family this simulates for.
@@ -998,7 +1002,7 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
                       beta_comm_mean = c(0), beta_comm_sd = c(0.5),
                       gamma = 0.15, epsilon = 0.1,
-                      field = NULL, seed = NULL) {
+                      field = NULL, trend = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   data <- data.frame(x = rnorm(N))
@@ -1010,13 +1014,21 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
   if (!is.null(field) && length(field) != N) {
     stop("simulate_ms_dyn_occu(): `field` must have length N.", call. = FALSE)
   }
+  # An optional spatially-varying-coefficient field (svcTMsPGOcc): a second shared
+  # field weighted by the site covariate `x`, so logit psi1 also carries
+  # trend_i * x_i. Both fields are shared across species (a community SVC).
+  if (!is.null(trend) && length(trend) != N) {
+    stop("simulate_ms_dyn_occu(): `trend` must have length N.", call. = FALSE)
+  }
+  trend_off <- if (is.null(trend)) rep(0, N) else trend * data$x
 
   z <- array(NA_integer_, dim = c(N, n_seasons, n_species))
   y <- array(NA_integer_, dim = c(N, J, n_seasons, n_species))
 
   for (sp in seq_len(n_species)) {
-    psi1_i <- if (is.null(field)) rep(psi1_species[sp], N)
-              else plogis(logit_psi1_species[sp] + field)
+    psi1_i <- if (is.null(field) && is.null(trend)) rep(psi1_species[sp], N)
+              else plogis(logit_psi1_species[sp] +
+                          (if (is.null(field)) 0 else field) + trend_off)
     z[, 1, sp] <- rbinom(N, 1, psi1_i)
     for (t in 2:n_seasons) {
       z[, t, sp] <- z[, t-1, sp] * (1 - rbinom(N, 1, epsilon)) +
@@ -1034,7 +1046,7 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
     data = data,
     truth = list(
       psi1_species = psi1_species, p_species = p_species,
-      gamma = gamma, epsilon = epsilon, z = z, field = field
+      gamma = gamma, epsilon = epsilon, z = z, field = field, trend = trend
     )
   )
 }

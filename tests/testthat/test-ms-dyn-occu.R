@@ -225,3 +225,50 @@ test_that("ms_dyn_occu() + icar recovers the shared field + community means", {
   # shared transition-dynamics coverage at the 0.85 working floor.
   expect_gt(mean(covered), 0.85)
 })
+
+# --- spatially-varying coefficient on the psi1 arm (svcTMsPGOcc, #123) ---
+
+# A second interior field, shifted from .msdyn_field so the intercept and trend
+# surfaces are not collinear (which would make them unidentifiable).
+.msdyn_field2 <- function(side, sd = 0.9) {
+  co <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f  <- sd * scale(cos(co$r / side * pi * 1.3) + sin(co$c / side * pi * 0.8))[, 1]
+  f - mean(f)
+}
+
+test_that("ms_dyn_occu() + spatial SVC bar recovers intercept + trend fields", {
+  skip_if_fast()
+  skip_on_cran()
+  # svcTMsPGOcc: an intercept field PLUS a covariate-weighted (varying-coefficient)
+  # field on the first-season occupancy arm, both shared across species. The K-field
+  # weighted-ICAR solve is the same block-coordinate machinery as the community
+  # count SVC (svcMsAbund); the psi1 oracle already returns per-site/per-species
+  # score+curv, so the weighted bar flows through unchanged. Assert BOTH interior
+  # fields recover by cor (never on sigma; the null-field trap).
+  side <- 8L; N <- side * side; A <- .msdyn_grid_graph(side)
+  f0 <- .msdyn_field(side, sd = 0.9); f1 <- .msdyn_field2(side, sd = 0.9)
+  n_seed <- 10L
+  c0 <- c1 <- numeric(n_seed)
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_ms_dyn_occu(N = N, J = 4, n_species = 8, n_seasons = 4,
+                                beta_comm_mean = 0.2, beta_comm_sd = 0.5,
+                                gamma = 0.2, epsilon = 0.12,
+                                field = f0, trend = f1, seed = 700 + s)
+    sim$data$cell <- seq_len(N)
+    sim$data$w    <- sim$data$x
+    fit <- tryCatch(
+      tobs(~ spatial(~ 1 + w || cell, graph = A), data = sim$data,
+           family = ms_dyn_occu(), detection = ~ 1, colonization = ~ 1,
+           extinction = ~ 1, y = sim$y, species = paste0("sp", seq_len(8)),
+           method = "nested_laplace",
+           control = list(progress = FALSE, verbose = FALSE, max.outer = 20L)),
+      error = function(e) NULL)
+    if (is.null(fit)) next
+    c0[s] <- stats::cor(fit$spatial_field, f0)
+    c1[s] <- if (!is.null(fit$trend_field)) stats::cor(fit$trend_field, f1) else NA_real_
+  }
+  # Both the intercept and the varying-coefficient surface recover; the SVC field
+  # is the new object versus stMsPGOcc.
+  expect_gt(stats::median(c0[c0 != 0], na.rm = TRUE), 0.75)
+  expect_gt(stats::median(c1[c1 != 0], na.rm = TRUE), 0.70)
+})

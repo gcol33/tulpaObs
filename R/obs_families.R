@@ -1069,13 +1069,18 @@ ms_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' @param K_max abundance-state truncation for the forward recursion (states
 #'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
 #'   may exceed that (the forward cost is roughly cubic in `K_max`).
-#' @param mixture initial-abundance distribution: `"poisson"` (default) or
-#'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`).
+#' @param mixture initial-abundance distribution: `"poisson"` (default),
+#'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`), or their
+#'   zero-inflated counterparts `"zip"` / `"zinb"` (a structural-zero share
+#'   `omega` of sites is never occupied across any season; the remaining sites
+#'   follow the Dail-Madsen open-population process). Zero-inflation is
+#'   non-spatial `laplace` with an intercept-only `omega`; a field / RE / NUTS
+#'   stay Poisson / negbin.
 #' @return A `tobs_family` object.
 #' @references Dail, D., Madsen, L. (2011). Models for estimating abundance from
 #'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.
 #' @export
-dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
   obs_family(
     name           = "dyn_abun",

@@ -14,6 +14,7 @@ simulate_ms_dyn_occu(
   gamma = 0.15,
   epsilon = 0.1,
   field = NULL,
+  trend = NULL,
   seed = NULL
 )
 }
@@ -37,6 +38,11 @@ simulate_ms_dyn_occu(
 \item{field}{Optional per-site shared areal field (length \code{N}) added to the
 first-season occupancy logit of every species -- the shared field of the
 community dynamic-spatial model (stMsPGOcc). Default \code{NULL} (no field).}
+
+\item{trend}{Optional per-site shared varying-coefficient field (length \code{N}),
+added to the first-season occupancy logit as \code{trend_i * x_i} (weighted by
+the site covariate \code{x}) -- the varying-coefficient field of the
+community dynamic-spatial model (svcTMsPGOcc). Default \code{NULL}.}
 
 \item{seed}{Random seed.}
 }

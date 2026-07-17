@@ -25,10 +25,14 @@ first-season occupancy formula (\code{~ 1 + icar(graph = adj)}) fits the
 is shared across species, and because the first-season occupancy \code{psi1} only
 sets the initial mixing weight of each species' HMM, the block-coordinate
 driver alternates the community EM (field as a \code{psi1} offset) with an areal
-field Newton, the field recovering cleanly (\code{cor} ~0.94). \code{icar()} only; a
-NUTS sampler and \code{bym2()} / \code{car_proper()} fields are a deliberate follow-up;
-\code{method = "nuts"} errors from the dispatcher with a pointer rather than
-silently downgrading.
+field Newton, the field recovering cleanly (\code{cor} ~0.94). A
+spatially-varying-coefficient bar (\code{~ spatial(~ 1 + w || cell, graph = adj)})
+adds a shared covariate-weighted field alongside the intercept field, fitting
+the \code{svcTMsPGOcc} model through the same K-field weighted-ICAR solve as the
+community count SVC (both fields recover, \code{cor} ~0.90 / ~0.89). \code{icar()} only;
+a NUTS sampler and \code{bym2()} / \code{car_proper()} fields are a deliberate
+follow-up; \code{method = "nuts"} errors from the dispatcher with a pointer rather
+than silently downgrading.
 }
 
 \seealso{

@@ -279,6 +279,25 @@
   # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
   # effects only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
   if (identical(model$model_type, "dyn_abun")) {
+    # Zero-inflated open N-mixture (zip / zinb): a pure-R structural-zero layer
+    # over the Dail-Madsen marginal (gcol33/tulpaObs#116). v1 is non-spatial
+    # laplace with an intercept-only structural-zero probability; a field, an RE,
+    # or NUTS stay Poisson / negbin.
+    if (model$mixture %in% c("zip", "zinb")) {
+      if (!is.null(spatial) || !is.null(temporal) || !is.null(re) ||
+          identical(method, "nuts")) {
+        stop("Zero-inflated open N-mixture (zip / zinb) does not yet compose ",
+             "with a spatial field, a temporal term, a random effect, or NUTS; ",
+             "use mixture = \"poisson\" / \"negbin\" for those, or drop the term.",
+             call. = FALSE)
+      }
+      fit <- .tobs_fit_dyn_abun_zip(fit_model, max_iter = 300L, verbose = verbose)
+      fit <- .unscale_fit_per_process(fit, scales, process_info)
+      fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
+      fit$model  <- model
+      fit$intercepts <- compute_intercepts(model, fit$means)
+      return(fit)
+    }
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "dyn_abun",
                                  "initial-abundance", allow_temporal_only = TRUE,

@@ -1,5 +1,35 @@
 # tulpaObs NEWS
 
+## 0.0.147 (2026-07-17)
+
+* Zero-inflated open N-mixture: `dyn_abun(mixture = "zip" / "zinb")` (#116). A
+  structural-zero site is never occupied across any season, so all its counts are
+  zero; the observed per-site marginal is the two-component mixture
+  `omega * 1{all y = 0} + (1 - omega) * L_DailMadsen`, the same additive
+  structural-zero layer the static `abun()` ZIP uses (`nmix_zip.R`) but over the
+  exact forward-HMM open-population marginal. Pure-R over the C++ per-site
+  marginal; the Poisson / negbin paths are byte-identical. Analytic-gradient BFGS
+  (the Dail-Madsen per-site eta gradients weighted by the structural-zero
+  posterior, plus the mixture score for the ZI logit), observed-information vcov
+  from the FD-Jacobian of the analytic gradient. The structural-zero share
+  recovers with nominal coverage over 20 seeds; the ZI logit is named `zi_logit`
+  (dyn_abun's `omega_*` is the SURVIVAL arm). `simulate_dyn_abun(zi =)` injects
+  structural zeros. Non-spatial laplace, intercept-only omega; a field / RE / NUTS
+  stay Poisson / negbin with a pointer. `test-dyn-abun-zip.R`. This completes the
+  ZIP / ZINB mixture axis across `abun()` and `dyn_abun()`.
+
+* Spatially-varying coefficient on community dynamic occupancy:
+  `ms_dyn_occu()` + `spatial(~ 1 + w || cell, graph)` (the `svcTMsPGOcc` model,
+  #123). An intercept field plus a shared covariate-weighted field on the
+  first-season occupancy arm, both recovering (`cor` ~0.90 / ~0.89). No new code
+  was needed: the psi1 oracle already returns per-site/per-species score+curv, and
+  the K-field weighted-ICAR block-coordinate solve is the same machinery the
+  community count SVC (`svcMsAbund`) uses -- the weighted bar flows through the
+  existing dynamic-spatial dispatch unchanged. `simulate_ms_dyn_occu(trend =)`
+  adds the varying-coefficient surface; `test-ms-dyn-occu.R`. Completes the
+  spatial multi-season community occupancy line (`stMsPGOcc` + `svcTMsPGOcc`);
+  `bym2()` / `car_proper()` fields and a NUTS sampler remain follow-ups.
+
 ## 0.0.146 (2026-07-17)
 
 * Spatial Polya-Gamma Gibbs for single-season occupancy: `occu() + icar()` under
