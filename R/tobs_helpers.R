@@ -243,6 +243,11 @@
   # (partial overlap, season-varying rates, bym2 / car_proper, NUTS are
   # documented follow-ups, #122).
   dyn_int_occu = c("laplace", "nested_laplace"),
+  # t_occu: multi-season occupancy with an AR1 year random effect on the state
+  # (spOccupancy tPGOcc). NOT colext -- a per-(site, season) Bernoulli GLMM with a
+  # shared AR1 year effect; the seasons factorise given the year effects, so the
+  # Polya-Gamma Gibbs sampler is exact (the engine spOccupancy uses). pg_gibbs only.
+  t_occu = c("pg_gibbs"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
   # (per-species coefficient RE with Gaussian community covariances). A shared
   # areal field (icar / bym2 / car_proper) on the abundance arm fits under

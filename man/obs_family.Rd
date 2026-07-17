@@ -10,7 +10,7 @@ obs_family(
   latent,
   observation,
   replicates = c("required", "optional", "single"),
-  default_engine = c("laplace", "nested_laplace", "nuts"),
+  default_engine = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
   status = c("working", "planned", "experimental"),
   params = list(),
   control_keys = character(0),

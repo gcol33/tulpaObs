@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.151 (2026-07-17)
+
+* Multi-season occupancy with an AR1 year random effect: `t_occu()`
+  (spOccupancy `tPGOcc`; #124). Per-`(site, season)` Bernoulli occupancy with a
+  shared AR1 year effect on the occupancy logit and NO colonization / extinction
+  transition (that is `dyn_occu()`); use it for an occupancy trend over years
+  with a temporal random effect. Given the year effects the seasons factorise,
+  so the fit is an exact Polya-Gamma Gibbs sampler (`method = "pg_gibbs"`, the
+  engine spOccupancy uses): draw the latent state, then the joint
+  `(beta_occ, eta)` as one Gaussian Markov random field update with the AR1
+  precision as the year-effect prior, then `beta_p`, then the AR1
+  hyperparameters (`sigma^2` conjugate Inverse-Gamma, `rho` on a grid). The
+  year-effect surface (`fit$temporal_field`), the occupancy / detection
+  coefficients, and the innovation SD `sigma` recover cleanly (12-seed
+  `test-t-occu.R`, year-effect correlation ~0.97, `Rhat` ~1.00); the AR1
+  correlation `rho` is a weakly-identified parameter of a short time series that
+  recovers only as the number of seasons grows (an identifiability property of
+  the AR1, not the sampler -- given even the true year effects `rho_hat` climbs
+  from ~0.08 at 8 seasons to ~0.59 at 200, `dev_notes/_probe_tpg_rho.R`), so it
+  is reported but not asserted tightly. `y` is a 3D array
+  `[n_sites x n_seasons x max_visits]` or a list of per-season matrices;
+  `simulate_t_occu()`. v1 = site-level occupancy / detection covariates,
+  `pg_gibbs` only.
+
 ## 0.0.150 (2026-07-17)
 
 * Polya-Gamma Gibbs for community multi-source integrated occupancy:
