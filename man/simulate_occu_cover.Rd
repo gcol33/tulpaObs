@@ -30,6 +30,8 @@ simulate_occu_cover(
   sigma_p_trend = 0.6,
   re_det_groups = NULL,
   sigma_re_p = 0.7,
+  re_pos_groups = NULL,
+  sigma_re_pos = 0.7,
   re_det = NULL,
   seed = NULL
 )
@@ -95,6 +97,15 @@ levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_p^2)} and centred. \code
 \code{detection = ~ ... + (1 | habitat)}.}
 
 \item{sigma_re_p}{SD of the \code{re_det_groups} random intercept (default 0.7).}
+
+\item{re_pos_groups}{Optional integer \verb{>= 2}: the number of levels of a
+per-visit COVER-arm random intercept (a \code{habitat} factor on \code{visit_data},
+levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_pos^2)} and centred, added to
+the positive-cover linear predictor. \code{NULL} (default) adds no cover RE.
+Recover it with \code{positive = ~ ... + (1 | habitat)} under
+\code{cover_aggregate = "none"}. Truth in \code{truth$b_pos_re} / \code{truth$sigma_re_pos}.}
+
+\item{sigma_re_pos}{SD of the \code{re_pos_groups} random intercept (default 0.7).}
 
 \item{re_det}{Optional named list of FURTHER per-visit detection random
 effects, for crossed / nested / slope designs. Each element

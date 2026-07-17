@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.160 (2026-07-18)
+
+* **Parameter-recovery tests for three grouped-RE paths (#130).** The detection
+  (`p`) arm RE on `abun()`, the cover (`pos`) arm RE on `occu_cover()`, and the
+  uncorrelated detection random slope `(0 + x | g)` on `occu_cover()` were
+  shipped with label/shape smoke tests only. Each now has a multi-seed recovery
+  block asserting the RE SD recovers (band, measured from the sibling paths) and
+  the per-group BLUPs correlate with the simulated offsets. To support the cover
+  arm, `simulate_occu_cover()` gained `re_pos_groups` / `sigma_re_pos`, which
+  inject a per-visit random intercept on the positive-cover linear predictor
+  (mirroring the existing `re_det_groups` on the detection arm) and return
+  `truth$b_pos_re` / `truth$sigma_re_pos`.
+
 ## 0.0.159 (2026-07-18)
 
 * **Maintenance: dead-helper removal and test-suite hygiene (#129, #132).**

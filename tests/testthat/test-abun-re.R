@@ -225,6 +225,36 @@ test_that("NB + lambda-arm RE returns a usable fit with positive r", {
 })
 
 
+# The detection-arm RE is the softest AGHQ direction (the per-group offset is
+# uniform over a site's visits and only enters through the binomial emission),
+# so its sigma carries more small-cluster attenuation than the lambda arm; the
+# band below is set from the measured 8-seed mean (~0.50 vs truth 0.6, ~16% low)
+# rather than the tighter lambda-arm tolerance. BLUPs recover strongly.
+test_that("sigma + BLUP recovery on the detection (p) arm (multi-seed)", {
+  skip_on_cran()
+  skip_if_fast()
+  beta_lambda <- 1.6; beta_p <- c(0, 0.4); sigma_b <- 0.6
+  n_seed <- 8L
+  sig_hat <- numeric(n_seed); blup_cor <- numeric(n_seed)
+  for (s in seq_len(n_seed)) {
+    sim <- sim_abun_p_re(N = 100, J = 4, ngrp = 10,
+                         beta_lambda = beta_lambda, beta_p = beta_p,
+                         sigma_b = sigma_b, seed = 5000 + s)
+    fit <- tobs(formula = ~ 1, detection = ~ z1 + (1 | g),
+                data = sim$data, y = sim$y, family = abun(),
+                method = "laplace", verbose = FALSE,
+                control = list(n.quad = 5))
+    sig_hat[s]  <- fit$means["sigma_p1_(Intercept)"]
+    blup        <- fit$means[grep("^re_p1_", names(fit$means))]
+    blup_cor[s] <- cor(as.numeric(blup), sim$b)
+  }
+  rel_bias <- abs(mean(sig_hat) - sigma_b) / sigma_b
+  expect_lt(rel_bias, 0.35)
+  # Per-group detection-arm BLUPs track the simulated offsets.
+  expect_gt(mean(blup_cor), 0.7)
+})
+
+
 # --- NUTS + random effect (tulpaObs#51) ------------------------------------
 
 test_that("abun() NUTS samples a single intercept RE and recovers sigma + betas", {

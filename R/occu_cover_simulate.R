@@ -64,6 +64,13 @@
 #'   (default) adds no detection RE. Recover it with
 #'   `detection = ~ ... + (1 | habitat)`.
 #' @param sigma_re_p SD of the `re_det_groups` random intercept (default 0.7).
+#' @param re_pos_groups Optional integer `>= 2`: the number of levels of a
+#'   per-visit COVER-arm random intercept (a `habitat` factor on `visit_data`,
+#'   levels `hab1..K`), drawn `b_g ~ N(0, sigma_re_pos^2)` and centred, added to
+#'   the positive-cover linear predictor. `NULL` (default) adds no cover RE.
+#'   Recover it with `positive = ~ ... + (1 | habitat)` under
+#'   `cover_aggregate = "none"`. Truth in `truth$b_pos_re` / `truth$sigma_re_pos`.
+#' @param sigma_re_pos SD of the `re_pos_groups` random intercept (default 0.7).
 #' @param re_det Optional named list of FURTHER per-visit detection random
 #'   effects, for crossed / nested / slope designs. Each element
 #'   `list(K =, sigma =, prefix =, nested_in =, slope_cov =, sigma_slope =, rho =)`
@@ -111,6 +118,8 @@ simulate_occu_cover <- function(N             = 200L,
                                  sigma_p_trend   = 0.6,
                                  re_det_groups = NULL,
                                  sigma_re_p    = 0.7,
+                                 re_pos_groups = NULL,
+                                 sigma_re_pos  = 0.7,
                                  re_det        = NULL,
                                  seed          = NULL) {
   positive <- match.arg(positive)
@@ -298,6 +307,28 @@ simulate_occu_cover <- function(N             = 200L,
     }
   }
 
+  # Optional per-visit COVER-arm random intercept (gcol33/tulpaObs#102). A
+  # categorical visit-level grouping carries a random intercept on the positive-
+  # cover linear predictor, mirroring the detection-arm RE above; it rides
+  # `visit_data` so a fit reads it via `positive = ~ ... + (1 | habitat)` under
+  # cover_aggregate = "none". BLUPs are centred so the cover intercept stays
+  # identified. Kept separate from the detection block: a pos-arm recovery test
+  # sets re_pos_groups alone, so the `habitat` factor carries a genuine cover
+  # offset (the detection RE would otherwise put the offset on eta_p).
+  b_pos_re <- NULL; re_pos_levels <- NULL
+  if (!is.null(re_pos_groups)) {
+    Kp <- as.integer(re_pos_groups)
+    if (Kp < 2L) stop("re_pos_groups needs K >= 2.", call. = FALSE)
+    sub_pos    <- sample.int(Kp, N * J, replace = TRUE)
+    re_pos_levels <- paste0("hab", seq_len(Kp))
+    visit_data[["habitat"]] <- factor(paste0("hab", sub_pos),
+                                      levels = re_pos_levels)
+    b_pos <- stats::rnorm(Kp, 0, sigma_re_pos); b_pos <- b_pos - mean(b_pos)
+    names(b_pos)  <- re_pos_levels
+    eta_pos_base  <- eta_pos_base + b_pos[sub_pos]
+    b_pos_re      <- b_pos
+  }
+
   y     <- matrix(0L, N, J)
   y_pos <- matrix(NA_real_, N, J)
 
@@ -378,6 +409,9 @@ simulate_occu_cover <- function(N             = 200L,
       sigma_re_p  = if (!is.null(re_det_groups)) sigma_re_p else NA_real_,
       b_p_re      = b_p_re,
       re_det_levels = re_det_levels,
+      sigma_re_pos = if (!is.null(re_pos_groups)) sigma_re_pos else NA_real_,
+      b_pos_re     = b_pos_re,
+      re_pos_levels = re_pos_levels,
       re_det      = if (length(re_truth)) re_truth else NULL
     )
   )

@@ -24,6 +24,17 @@
     re_det_groups = n_g, sigma_re_p = sigma_re_p, seed = seed)
 }
 
+# Cover-arm RE sibling: the per-visit `habitat` grouping carries a random
+# intercept on the positive-cover predictor (re_pos_groups), so a fit with
+# `positive = ~ ... + (1 | habitat)` under cover_aggregate = "none" recovers it.
+.ocor_sim_pos <- function(seed, side = 8L, J = 8L, n_g = 6L, sigma_re_pos = 0.8) {
+  adj <- .ocor_grid_adj(side)
+  simulate_occu_cover(
+    N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+    re_pos_groups = n_g, sigma_re_pos = sigma_re_pos, seed = seed)
+}
+
 test_that("occu_cover() detection RE: fit runs and reports the RE on the p arm", {
   skip_on_cran()
   sim <- .ocor_sim(1L, side = 6L, n_g = 6L)
@@ -132,6 +143,34 @@ test_that("occu_cover() detection RE recovers BLUPs and detects the variance", {
   # the grid-integrated sigma a lower bound on the small-cluster truth, so it is
   # checked as detected rather than exact (matches the occupancy-arm RE path).
   expect_gt(mn[["sd_re"]], 0.3)
+})
+
+test_that("occu_cover() cover RE recovers BLUPs and the variance", {
+  skip_on_cran()
+  skip_if_fast()
+  seeds <- 1:6
+  sigma_re_pos <- 0.8
+  res <- t(vapply(seeds, function(s) {
+    sim <- .ocor_sim_pos(s, side = 8L, J = 8L, n_g = 6L,
+                         sigma_re_pos = sigma_re_pos)
+    adj <- .ocor_grid_adj(8L)
+    fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+                family = occu_cover("lognormal", cover_aggregate = "none"),
+                detection = ~ det_cov1, positive = ~ pos_cov1 + (1 | habitat),
+                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+                method = "nested_laplace",
+                control = list(verbose = FALSE, progress = FALSE))
+    bl <- fit$re$pos$blup; names(bl) <- fit$re$pos$levels
+    truth <- sim$truth$b_pos_re
+    c(blup_cor = stats::cor(bl[names(truth)], truth),
+      sd_re    = unname(fit$means[["sigma_re_pos"]]))
+  }, numeric(2)))
+  mn <- colMeans(res)
+  # The continuous cover arm identifies the per-group offsets strongly (no
+  # binary-RE attenuation), so BLUPs recover near-perfectly and the variance is
+  # checked with a two-sided band rather than a lower bound.
+  expect_gt(mn[["blup_cor"]], 0.8)
+  expect_lt(abs(mn[["sd_re"]] - sigma_re_pos) / sigma_re_pos, 0.40)
 })
 
 test_that("occu_cover() observation RE gates the unsupported configurations", {
@@ -473,6 +512,39 @@ test_that("occu_cover() correlated random slope recovers Sigma + BLUPs", {
   expect_gt(mn[["s0"]], 0.25)
   expect_gt(mn[["s1"]], 0.2)
   expect_gt(mn[["rho"]], 0.1)
+})
+
+test_that("occu_cover() uncorrelated random slope recovers slope SD + BLUPs", {
+  skip_on_cran()
+  skip_if_fast()
+  seeds <- 1:5
+  sigma_slope <- 0.6
+  res <- t(vapply(seeds, function(s) {
+    adj <- .ocor_grid_adj(9L)
+    sim <- simulate_occu_cover(
+      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
+      re_det = list(habitat = list(K = 8L, sigma = sigma_slope, prefix = "hab",
+                                   slope_cov = "area")),
+      seed = s)
+    fit <- suppressWarnings(tobs(
+      occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
+      family = occu_cover("lognormal"),
+      detection = ~ det_cov1 + (0 + area | habitat), positive = ~ pos_cov1,
+      y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+      method = "nested_laplace",
+      control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
+    re <- fit$re[["p"]]
+    th <- sim$truth$re_det$habitat            # slope-only: b_slope named by level
+    bs <- th$b_slope[re$levels]
+    c(blup_cor = stats::cor(as.numeric(re$blup), as.numeric(bs)),
+      s1       = unname(re$sigma[[1L]]))
+  }, numeric(2)))
+  mn <- colMeans(res)
+  # The single-coefficient slope block recovers its per-group slope offsets and
+  # the slope SD is detected (lower bound under binary inner-Laplace attenuation).
+  expect_gt(mn[["blup_cor"]], 0.6)
+  expect_gt(mn[["s1"]], 0.3)
 })
 
 test_that("occu_cover() random slope recovers on a NON-unit covariate scale", {
