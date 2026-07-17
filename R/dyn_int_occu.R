@@ -243,8 +243,10 @@
                       control = list(maxit = 800L))
   converged <- opt$convergence == 0L
   # Observed-information vcov from the FD-Jacobian of the analytic gradient
-  # (O(p) marginal evals; no numeric Hessian over the forward-backward).
-  opt$hessian <- .fp_fd_jacobian(function(th) -ngr(th), opt$par)
+  # (O(p) marginal evals; no numeric Hessian over the forward-backward). `ngr` is
+  # the negative-log-likelihood gradient, so its Jacobian at the minimum IS the
+  # observed information (positive definite); solve() gives the vcov directly.
+  opt$hessian <- .fp_fd_jacobian(ngr, opt$par)
 
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))

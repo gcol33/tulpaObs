@@ -61,9 +61,13 @@ test_that("dyn_int_occu() fits + full S3 surface", {
 test_that("dyn_int_occu() recovers psi1 / gamma / eps + per-source detection", {
   skip_on_cran()
   skip_if_fast()
-  n_seed <- 12L
+  n_seed <- 20L
   ps <- gm <- ep <- p1 <- p2 <- rep(NA_real_, n_seed)
-  hit <- tot <- 0L
+  # 95% Wald coverage of each intercept on the logit scale, pooled over params.
+  truth_logit <- c(psi1 = stats::qlogis(0.5), gamma = stats::qlogis(0.3),
+                   eps = stats::qlogis(0.2), p_src1 = stats::qlogis(0.35),
+                   p_src2 = stats::qlogis(0.6))
+  cov_hits <- 0L; cov_tot <- 0L
   for (s in seq_len(n_seed)) {
     sim <- simulate_dyn_int_occu(N = 350, T_seasons = 5, S = 2, J = 3,
                                  psi1 = 0.5, gamma = 0.3, eps = 0.2,
@@ -80,13 +84,21 @@ test_that("dyn_int_occu() recovers psi1 / gamma / eps + per-source detection", {
     ep[s] <- stats::plogis(m[["eps_(Intercept)"]])
     p1[s] <- stats::plogis(m[["p_src1_(Intercept)"]])
     p2[s] <- stats::plogis(m[["p_src2_(Intercept)"]])
-    tot <- tot + 1L
-    if (abs(stats::plogis(m[["gamma_(Intercept)"]]) - 0.3) <=
-        1.96 * fit$sds[["gamma_(Intercept)"]] * 0.3 * 0.7) hit <- hit + 1L
+    for (nm in c("psi1_(Intercept)", "gamma_(Intercept)", "eps_(Intercept)",
+                 "p_src1_(Intercept)", "p_src2_(Intercept)")) {
+      key <- sub("_\\(Intercept\\)", "", nm)
+      lo <- m[[nm]] - 1.96 * fit$sds[[nm]]; hi <- m[[nm]] + 1.96 * fit$sds[[nm]]
+      cov_tot <- cov_tot + 1L
+      if (truth_logit[[key]] >= lo && truth_logit[[key]] <= hi)
+        cov_hits <- cov_hits + 1L
+    }
   }
+  # Unbiased recovery of every arm.
   expect_lt(abs(mean(ps, na.rm = TRUE) - 0.50), 0.05)
   expect_lt(abs(mean(gm, na.rm = TRUE) - 0.30), 0.05)
   expect_lt(abs(mean(ep, na.rm = TRUE) - 0.20), 0.05)
   expect_lt(abs(mean(p1, na.rm = TRUE) - 0.35), 0.05)
   expect_lt(abs(mean(p2, na.rm = TRUE) - 0.60), 0.05)
+  # 95% Wald intervals cover at the 0.85 pooled working floor (>= 20 seeds x 5).
+  expect_gt(cov_hits / cov_tot, 0.85)
 })
