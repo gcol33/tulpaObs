@@ -8,7 +8,8 @@
 #'
 #' @keywords internal
 .tobs_fit_model <- function(model,
-                            method = c("laplace", "nested_laplace", "nuts"),
+                            method = c("laplace", "nested_laplace", "nuts",
+                                       "pg_gibbs"),
                             priors = NULL,
                             sigma.beta = 10, sigma.re.scale = 1,
                             max.iter = 100L, tol = 1e-4, damping = 0.7,
@@ -60,6 +61,28 @@
       if (!identical(method, "nuts")) sprintf(" under method = \"%s\"", method)
       else ""),
       call. = FALSE)
+  }
+
+  # Polya-Gamma Gibbs (spOccupancy PGOcc, gcol33/tulpaObs#126): a REAL MCMC chain
+  # over the exact single-season occupancy posterior via PG data augmentation
+  # (distinct from method = "laplace_gibbs", the stochastic-EM variance
+  # correction). Runs on the natural-scale design (the conjugate Gaussian update
+  # needs no autoscaling). v1: single-season, site-level detection, no structured
+  # terms (the PG-spatial extensions -- tulpa's pg_binomial_{icar,bym2,...} -- are
+  # the documented follow-up).
+  if (identical(method, "pg_gibbs")) {
+    if (!identical(model$model_type, "single"))
+      stop("method = \"pg_gibbs\" is currently wired for single-season occu() ",
+           "only.", call. = FALSE)
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(re) ||
+        !is.null(latent) || !is.null(svc))
+      stop("method = \"pg_gibbs\" does not yet support spatial / temporal / RE / ",
+           "latent terms (the PG-spatial extensions are the documented ",
+           "follow-up, tulpaObs#126).", call. = FALSE)
+    return(.tobs_fit_occu_pg_gibbs(
+      model, priors = priors, sigma.beta = sigma.beta,
+      n.iter = n.iter, n.warmup = n.warmup, n.chains = max(n.chains, 2L),
+      n.thin = n.thin, seed = seed, verbose = verbose))
   }
 
   # Autoscale every per-process design matrix before the engine sees it

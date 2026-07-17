@@ -132,6 +132,12 @@
 #'     correction refits, so these use the same
 #'     weakly-informative default prior as `"laplace"`; pass `priors = FALSE`
 #'     for the unpenalised correction.
+#'   * `"pg_gibbs"` — a Polya-Gamma Gibbs sampler over the exact single-season
+#'     occupancy posterior (the spOccupancy `PGOcc` engine). A real MCMC chain
+#'     (with `Rhat` / `ESS` diagnostics), distinct from `"laplace_gibbs"` (a
+#'     stochastic-EM variance correction). Sampler controls (`n.iter`,
+#'     `n.warmup`, `n.chains`, `n.thin`, `seed`, `sigma.beta`). v1: single-season
+#'     `occu()`, site-level detection, no structured terms.
 #'   * `"nested_laplace"` — multi-block nested Laplace (single-season
 #'     occupancy and cover-hurdle joint).
 #'   * `"nested_laplace_sla"` — nested Laplace with skew-corrected marginals.
@@ -294,7 +300,7 @@ tobs <- function(formula,
                  y          = NULL,
                  visits     = NULL,
                  method     = c("auto", "laplace", "laplace_sla",
-                                "laplace_gibbs", "laplace_mi",
+                                "laplace_gibbs", "laplace_mi", "pg_gibbs",
                                 "nested_laplace", "nested_laplace_sla", "nuts"),
                  priors     = NULL,
                  control    = list(),

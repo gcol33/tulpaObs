@@ -13,7 +13,7 @@ tobs(
   positive = NULL,
   y = NULL,
   visits = NULL,
-  method = c("auto", "laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
+  method = c("auto", "laplace", "laplace_sla", "laplace_gibbs", "laplace_mi", "pg_gibbs",
     "nested_laplace", "nested_laplace_sla", "nuts"),
   priors = NULL,
   control = list(),

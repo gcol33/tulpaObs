@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.142 (2026-07-17)
+
+* Polya-Gamma Gibbs engine for single-season occupancy: `method = "pg_gibbs"`
+  (#126, the spOccupancy `PGOcc` engine). A REAL Gibbs chain over the exact
+  occupancy posterior via Polya-Gamma data augmentation (Polson, Scott & Windle
+  2013) -- conditional on the PG auxiliaries, both the occupancy and detection
+  logistic coefficient updates are exactly conjugate Gaussian. This is distinct
+  from `method = "laplace_gibbs"`, which is a stochastic-EM variance correction
+  (mode-finds + Rubin pooling, no PG augmentation, stationary distribution not
+  the posterior). Each sweep samples the latent occupancy `z`, then draws
+  `omega ~ PG` and the conjugate Gaussian coefficients on each arm, using tulpa's
+  tested Polson-Scott-Windle sampler (`tulpa:::cpp_rpg`). Reports split-Rhat and
+  bulk-ESS (a real MCMC). Validated: on a well-identified model the PG-Gibbs
+  posterior matches the Laplace observed-Fisher fit (means within 1 SE, SDs
+  within 20%), Rhat ~ 1.00 / ESS ~ 700-900, and 95% credible intervals cover at
+  the nominal rate over 15 seeds. v1: single-season `occu()`, site-level
+  detection, no structured terms (the PG-spatial extensions --
+  `pg_binomial_{icar,bym2,rsr,gp}` in tulpa -- are the documented follow-up).
+  `R/occu_pg_gibbs.R`; `test-occu-pg-gibbs.R`.
+
 ## 0.0.141 (2026-07-17)
 
 * Multi-season integrated occupancy: `dyn_int_occu()` (#122, spOccupancy

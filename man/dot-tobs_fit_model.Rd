@@ -6,7 +6,7 @@
 \usage{
 .tobs_fit_model(
   model,
-  method = c("laplace", "nested_laplace", "nuts"),
+  method = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
   priors = NULL,
   sigma.beta = 10,
   sigma.re.scale = 1,

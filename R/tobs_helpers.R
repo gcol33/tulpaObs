@@ -81,6 +81,7 @@
   laplace_sla        = list(engine = "laplace",        approx = "simplified_laplace", correction = "none"),
   laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs"),
   laplace_mi         = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "mi"),
+  pg_gibbs           = list(engine = "pg_gibbs",       approx = "gaussian_laplace",   correction = "none"),
   nested_laplace     = list(engine = "nested_laplace", approx = "gaussian_laplace",   correction = "none"),
   nested_laplace_sla = list(engine = "nested_laplace", approx = "simplified_laplace", correction = "none"),
   nuts               = list(engine = "nuts",           approx = "gaussian_laplace",   correction = "none")
@@ -141,7 +142,7 @@
 # `.stop_planned_family()`; the validator is a no-op for them.
 .tobs_family_methods <- list(
   occu     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
-               "nested_laplace", "nested_laplace_sla", "nuts"),
+               "pg_gibbs", "nested_laplace", "nested_laplace_sla", "nuts"),
   dyn_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   # ms_occu: community single-season occupancy via the shared community
@@ -461,6 +462,7 @@
                        if (correction != "none") "correction"),
     nested_laplace = c("laplace_em", "block_coordinate", "nested_laplace_joint"),
     nuts           = "sampler",
+    pg_gibbs       = "sampler",
     character(0)
   )
 }
