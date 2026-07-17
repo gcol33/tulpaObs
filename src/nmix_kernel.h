@@ -208,6 +208,72 @@ inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max)
     return c;
 }
 
+// Build the per-N log-weights a[k] (k = 0..K_grid-1, N = K_lo + k) of the site
+// marginal and their running max, the eta-dependent part shared by the full
+// evaluator and the log-lik-only fast path below. When p_out != nullptr the
+// per-visit detection probabilities are filled too (the full path's detection
+// score / info needs them; the log-lik-only path does not). Factored out so the
+// slope / base-const / a[k] construction is single-sourced across both callers.
+inline void nmix_build_logweights(
+    const NMixSiteCache& c, const double* eta_p, double eta_lambda,
+    double r, bool is_nb, std::vector<double>& a, double& max_a,
+    double* p_out) {
+    const int n_visits = c.n_visits;
+    const double lambda = std::exp(eta_lambda);
+    double sum_log_1mp = 0.0, sum_y_eta_p = 0.0;
+    for (int j = 0; j < n_visits; ++j) {
+        double lp, l1mp;
+        logit_log_probs(eta_p[j], lp, l1mp);
+        sum_log_1mp += l1mp;
+        sum_y_eta_p += (double)c.y[j] * eta_p[j];
+        if (p_out) {
+            if (eta_p[j] > 0.0) p_out[j] = 1.0 / (1.0 + std::exp(-eta_p[j]));
+            else { double e = std::exp(eta_p[j]); p_out[j] = e / (1.0 + e); }
+        }
+    }
+    // Abundance prior: Poisson vs NB changes only the N-slope and N-constant of
+    // the per-N weight; the NB path also carries a per-N lgamma(N+r) term.
+    double slope, base_const;
+    if (is_nb) {
+        const double log_rpl = std::log(r + lambda);
+        slope      = eta_lambda - log_rpl + sum_log_1mp;
+        base_const = -std::lgamma(r) + r * std::log(r) - r * log_rpl
+                     + sum_y_eta_p + c.const_log_yfact;
+    } else {
+        slope      = eta_lambda + sum_log_1mp;
+        base_const = -lambda + sum_y_eta_p + c.const_log_yfact;
+    }
+    const int K_grid = c.K_hi - c.K_lo + 1;
+    a.resize(K_grid);
+    max_a = -std::numeric_limits<double>::infinity();
+    for (int k = 0; k < K_grid; ++k) {
+        const double Nd = (double)(c.K_lo + k);
+        a[k] = Nd * slope + base_const + c.term_lgam[k];
+        if (is_nb) a[k] += std::lgamma(Nd + r);
+        if (a[k] > max_a) max_a = a[k];
+    }
+}
+
+// Log-lik-only fast path: the per-site marginal WITHOUT the posterior-moment
+// pass (mean_N / var_N and, under NB, the digamma / trigamma dispersion
+// moments) that the full evaluator computes for the gradients / observed info.
+// Callers that need only log L_i -- the AGHQ node evaluation (node_ll), which
+// visits n_quad^d nodes per group -- avoid that dead work; for NB this drops
+// two digamma + one trigamma per latent-N state per node. Numerically identical
+// to compute_nmix_site_cached().log_lik (same a[k], same log-sum-exp). The
+// caller supplies the scratch buffer `a` so the hot node loop allocates nothing.
+inline double nmix_loglik_cached(
+    const NMixSiteCache& c, const double* eta_p, double eta_lambda,
+    double r, std::vector<double>& a) {
+    if (!c.admissible) return -std::numeric_limits<double>::infinity();
+    const bool is_nb = std::isfinite(r);
+    double max_a;
+    nmix_build_logweights(c, eta_p, eta_lambda, r, is_nb, a, max_a, nullptr);
+    double sum_exp = 0.0;
+    for (double ak : a) sum_exp += std::exp(ak - max_a);
+    return max_a + std::log(sum_exp);
+}
+
 // Per-site marginal from a precomputed cache, Poisson (r = +Inf) OR negative
 // binomial (finite r; theta = log r). The cache supplies the r-independent
 // combinatorial lgamma terms (the abundance slope, per-visit detection terms,
@@ -235,38 +301,10 @@ inline NMixSiteResult compute_nmix_site_cached(
     }
     const double lambda = std::exp(eta_lambda);
     std::vector<double> p_vec(n_visits);
-    double sum_log_1mp = 0.0, sum_y_eta_p = 0.0;
-    for (int j = 0; j < n_visits; ++j) {
-        double lp, l1mp;
-        logit_log_probs(eta_p[j], lp, l1mp);
-        sum_log_1mp += l1mp;
-        sum_y_eta_p += (double)c.y[j] * eta_p[j];
-        if (eta_p[j] > 0.0) p_vec[j] = 1.0 / (1.0 + std::exp(-eta_p[j]));
-        else { double e = std::exp(eta_p[j]); p_vec[j] = e / (1.0 + e); }
-    }
-
-    // Abundance prior: Poisson vs NB changes only the N-slope and N-constant of
-    // the per-N weight; the NB path also carries a per-N lgamma(N+r) term.
-    double slope, base_const;
-    if (is_nb) {
-        const double log_rpl = std::log(r + lambda);
-        slope      = eta_lambda - log_rpl + sum_log_1mp;
-        base_const = -std::lgamma(r) + r * std::log(r) - r * log_rpl
-                     + sum_y_eta_p + c.const_log_yfact;
-    } else {
-        slope      = eta_lambda + sum_log_1mp;
-        base_const = -lambda + sum_y_eta_p + c.const_log_yfact;
-    }
-    const int K_grid = c.K_hi - c.K_lo + 1;
-
-    std::vector<double> a(K_grid);
-    double max_a = -std::numeric_limits<double>::infinity();
-    for (int k = 0; k < K_grid; ++k) {
-        const double Nd = (double)(c.K_lo + k);
-        a[k] = Nd * slope + base_const + c.term_lgam[k];
-        if (is_nb) a[k] += std::lgamma(Nd + r);
-        if (a[k] > max_a) max_a = a[k];
-    }
+    std::vector<double> a;
+    double max_a;
+    nmix_build_logweights(c, eta_p, eta_lambda, r, is_nb, a, max_a, p_vec.data());
+    const int K_grid = (int)a.size();
     const NMixMoments m =
         accumulate_count_moments(a.data(), c.K_lo, K_grid, max_a, r, is_nb);
     res.log_lik = m.log_lik; res.mean_N = m.mean_N; res.var_N = m.var_N;

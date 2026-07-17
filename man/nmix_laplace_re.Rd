@@ -77,8 +77,10 @@ joint reference.}
 \code{"ZIP"} / \code{"ZINB"} (a per-species structural-zero random effect
 \code{logit_omega_s ~ N(mu_omega, sigma_omega)}; a share \code{omega_s} of a species'
 sites is structurally empty). None of \code{"NB"} / \code{"ZIP"} / \code{"ZINB"} has a
-closed-form EM, so each defaults \code{optimizer} to \code{"joint_grad"} and \code{n_quad}
-to \code{5} when those are not supplied, and errors on \code{optimizer = "em"}.}
+closed-form EM, so each defaults \code{optimizer} to \code{"joint_grad"} and errors on
+\code{optimizer = "em"}. The default \code{n_quad} when unsupplied is \code{5} for \code{"NB"}
+and \code{3} for the zero-inflated \code{"ZIP"} / \code{"ZINB"} (which carry an extra
+per-species RE coordinate, so a coarser grid keeps the tensor tractable).}
 
 \item{r_init}{Initial community-mean negative-binomial size for the joint
 optimizer (\code{mixture = "NB"} only; default \code{10}, a moderate overdispersion

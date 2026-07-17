@@ -272,6 +272,10 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
                                   double* out) const {
     Eigen::VectorXd coef(d);
     std::vector<double> eta_p;
+    std::vector<double> a_scratch;   // per-call log-weight buffer (node_ll only
+                                     // needs log L_i, so it uses the fast path
+                                     // that skips the moment / dispersion pass);
+                                     // local, so thread-safe across group sweeps.
     for (int k = 0; k < n_nodes; ++k) {
         const double* bk = B + (std::size_t)k * d;
         for (int i = 0; i < d; ++i) coef(i) = mu(i) + bk[i];
@@ -292,7 +296,7 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
                 eta_p[j] = clamp30(v);
             }
             const double llr =
-                compute_nmix_site_cached(rec.cache, eta_p.data(), eta_lam, r_s).log_lik;
+                nmix_loglik_cached(rec.cache, eta_p.data(), eta_lam, r_s, a_scratch);
             if (is_zi) {
                 const double c1 = log1m_om + llr;
                 if (rec.cache.K_lo == 0) {             // all-zero site: mix in the 0

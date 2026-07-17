@@ -190,7 +190,10 @@
                           "\").", call. = FALSE))
   needs_joint <- mix_code %in% c("NB", "ZIP", "ZINB")
   if (needs_joint && identical(optimizer, "em")) optimizer <- "joint_grad"
-  if (needs_joint && n_quad == 1L)               n_quad    <- 5L
+  # ZI adds a per-species RE coordinate on top of NB, so its default AGHQ grid is
+  # coarser (3 vs 5) to keep the n_quad^d tensor tractable; the user can raise it.
+  if (needs_joint && n_quad == 1L)
+    n_quad <- if (mix_code %in% c("ZIP", "ZINB")) 3L else 5L
   lf  <- .tobs_ms_nmix_longform(model)
   raw <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,

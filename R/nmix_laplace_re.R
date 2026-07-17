@@ -77,8 +77,10 @@
 #'   `"ZIP"` / `"ZINB"` (a per-species structural-zero random effect
 #'   `logit_omega_s ~ N(mu_omega, sigma_omega)`; a share `omega_s` of a species'
 #'   sites is structurally empty). None of `"NB"` / `"ZIP"` / `"ZINB"` has a
-#'   closed-form EM, so each defaults `optimizer` to `"joint_grad"` and `n_quad`
-#'   to `5` when those are not supplied, and errors on `optimizer = "em"`.
+#'   closed-form EM, so each defaults `optimizer` to `"joint_grad"` and errors on
+#'   `optimizer = "em"`. The default `n_quad` when unsupplied is `5` for `"NB"`
+#'   and `3` for the zero-inflated `"ZIP"` / `"ZINB"` (which carry an extra
+#'   per-species RE coordinate, so a coarser grid keeps the tensor tractable).
 #' @param r_init Initial community-mean negative-binomial size for the joint
 #'   optimizer (`mixture = "NB"` only; default `10`, a moderate overdispersion
 #'   start). The optimizer carries `mu_log_r = log(r_init)` as the
@@ -147,7 +149,11 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # needs n_quad > 1. Explicit optimizer = "em" with either is an error.
   needs_joint <- is_nb || is_zi
   if (needs_joint && missing(optimizer)) optimizer <- "joint_grad"
-  if (needs_joint && missing(n_quad))    n_quad <- 5L
+  # Default quadrature order: pure NB keeps 5; the zero-inflated families add a
+  # further per-species RE coordinate (logit_omega), so the tensor grid is
+  # n_quad^(p_lambda + p_p + [NB] + [ZI]) -- a 5^d grid is punishing there, so ZI
+  # defaults to 3 (the user can raise it).
+  if (needs_joint && missing(n_quad))    n_quad <- if (is_zi) 3L else 5L
   optimizer <- match.arg(optimizer)
   if (needs_joint && optimizer == "em") {
     stop("mixture = \"", mixture, "\" needs a joint optimizer (\"joint_grad\" ",
