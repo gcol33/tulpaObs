@@ -51,10 +51,63 @@ test_that("occu() pg_gibbs posterior matches the Laplace fit (calibration)", {
   expect_true(all(fg$rhat < 1.05))
 })
 
+test_that("occu() pg_gibbs matches the NUTS posterior (both exact)", {
+  skip_on_cran()
+  skip_if_fast()
+  # PG-Gibbs and NUTS both target the EXACT posterior (unlike Laplace), so on the
+  # same data their posterior means and SDs must agree -- a stronger anchor than
+  # the Laplace calibration, which only holds asymptotically.
+  sim <- simulate_occu(N = 300, J = 5, n_occ_covs = 1, n_det_covs = 1,
+                       beta_occ = c(0.3, 0.6), beta_det = c(0.2, -0.4), seed = 11)
+  fn <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
+             y = sim$y, method = "nuts",
+             control = list(n.iter = 1500L, n.warmup = 750L, n.chains = 3L,
+                            seed = 3, verbose = FALSE))
+  fg <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
+             y = sim$y, method = "pg_gibbs",
+             control = list(n.iter = 3000L, n.warmup = 1500L, n.chains = 3L,
+                            seed = 7, verbose = FALSE))
+  # Means within ~0.4 SE of each other; SDs within 25% (both Monte-Carlo noisy).
+  se <- pmax(fn$sds, fg$sds)
+  expect_true(all(abs(fg$means[names(fn$means)] - fn$means) < 0.4 * se))
+  expect_true(all(abs(fg$sds[names(fn$sds)] / fn$sds - 1) < 0.25))
+})
+
+test_that("occu() pg_gibbs agrees with spOccupancy::PGOcc (reference impl)", {
+  skip_on_cran()
+  skip_if_fast()
+  skip_if_not_installed("spOccupancy")
+  # External reference: spOccupancy::PGOcc IS the Polson-Scott-Windle PG Gibbs
+  # sampler this method reimplements. On matched data the two posteriors must
+  # overlap -- the reference-implementation anchor the DoD asks for.
+  sim <- simulate_occu(N = 300, J = 5, n_occ_covs = 1, n_det_covs = 1,
+                       beta_occ = c(0.3, 0.6), beta_det = c(0.2, -0.4), seed = 21)
+  y <- sim$y; y[y < 0L] <- NA
+  fg <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
+             y = sim$y, method = "pg_gibbs",
+             control = list(n.iter = 4000L, n.warmup = 2000L, n.chains = 3L,
+                            seed = 4, verbose = FALSE))
+  det_cov1 <- matrix(rep(sim$data$det_cov1, ncol(y)), nrow = nrow(y))
+  # spOccupancy's lme4 dependency emits findbars/nobars deprecation warnings; they
+  # are unrelated to the fit and would otherwise surface as test warnings.
+  sp <- suppressWarnings(spOccupancy::PGOcc(
+    occ.formula = ~ occ_cov1, det.formula = ~ det_cov1,
+    data = list(y = y, occ.covs = data.frame(occ_cov1 = sim$data$occ_cov1),
+                det.covs = list(det_cov1 = det_cov1)),
+    n.samples = 4000L, n.burn = 2000L, n.thin = 1L, n.chains = 3L,
+    verbose = FALSE))
+  sp_m <- c(colMeans(sp$beta.samples), colMeans(sp$alpha.samples))
+  sp_s <- c(apply(sp$beta.samples, 2L, stats::sd),
+            apply(sp$alpha.samples, 2L, stats::sd))
+  # Same PG posterior: means agree within ~0.3 of the (matched) posterior SD.
+  expect_true(all(abs(fg$means - sp_m) < 0.3 * pmax(fg$sds, sp_s)))
+  expect_true(all(abs(fg$sds / sp_s - 1) < 0.3))
+})
+
 test_that("occu() pg_gibbs recovers coefficients with nominal coverage", {
   skip_on_cran()
   skip_if_fast()
-  n_seed <- 15L
+  n_seed <- 20L
   bo0 <- 0.3; bo1 <- 0.6; bd0 <- 0.2; bd1 <- -0.4
   truth <- c(bo0, bo1, bd0, bd1)
   est <- matrix(NA_real_, n_seed, 4L)
