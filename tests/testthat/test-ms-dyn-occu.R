@@ -140,11 +140,8 @@ test_that("ms_dyn_occu() capability gates", {
          y = sim$y, species = paste0("sp", seq_len(4)),
          method = "nested_laplace"),
     "areal field")
-  # nuts is not offered.
-  expect_error(
-    tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
-         y = sim$y, species = paste0("sp", seq_len(4)), method = "nuts"),
-    "not available")
+  # nuts IS offered (non-spatial community sampler, #115); recovery is exercised
+  # in test-ms-dyn-occu-nuts.R. A structured term still routes to nested_laplace.
   # Missing y.
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,

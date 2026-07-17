@@ -381,9 +381,14 @@
   # species coefficient RE with per-arm Gaussian community covariances, fit by
   # the shared community Laplace-EM (R/community_em.R). The latent occupancy
   # path (HMM forward for dynamic, two-state mixture for integrated) marginalizes
-  # in closed form. Non-spatial Laplace only; correct community NUTS needs
-  # independent per-arm RE blocks in the sampler (gcol33/tulpaObs#30).
-  ms_dyn_occu = c("laplace", "pg_gibbs", "nested_laplace"),
+  # in closed form. nuts (ms_dyn_occu): the non-spatial community sampler over
+  # the exact HMM-forward per-species marginal via the in-tree C++ FullGradFn
+  # (R/ms_dyn_occu_nuts.R, src/ms_dyn_occu_nuts.cpp) -- samples the community
+  # means, per-species first-season / detection deviations, the two independent
+  # per-arm community covariances, AND the shared colonisation / extinction
+  # globals jointly, non-centered, warm-started at the Laplace-EM mode
+  # (gcol33/tulpaObs#115). Non-spatial only (NUTS + areal field -> nested_laplace).
+  ms_dyn_occu = c("laplace", "pg_gibbs", "nested_laplace", "nuts"),
   ms_int_occu = c("laplace", "pg_gibbs"),
   # occu_categorical: presence + nominal K-class hurdle (gcol33/tulpaObs#106).
   # A Bernoulli presence arm and a baseline-category multinomial logit on the

@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.158 (2026-07-18)
+
+* **NUTS for the community dynamic occupancy family (`ms_dyn_occu()`, #115).**
+  `ms_dyn_occu(..., method = "nuts")` now samples the exact joint posterior --
+  the community means, the per-species first-season / detection deviations, the
+  two independent per-arm community covariances, and the shared colonisation /
+  extinction transition globals -- over the per-(species, site) HMM-forward
+  marginal via an in-tree C++ `FullGradFn` (`src/ms_dyn_occu_nuts.cpp`,
+  `R/ms_dyn_occu_nuts.R`), warm-started at the community Laplace-EM mode with a
+  diagonal Laplace metric. Non-centered per-species blocks
+  `b_{s,arm} = C_arm z_{s,arm}` break the covariance/deviation funnel; the C++
+  gradient is byte-exact against the R oracle. Removing the Gaussian
+  approximation de-attenuates the community variance components the Laplace-EM
+  under-reports on the binary arms. Non-spatial only (a structured term still
+  routes to `nested_laplace`). `test-ms-dyn-occu-nuts.R` (R-oracle vs
+  finite-difference gradient, C++ byte-exact, community-mean recovery + 0
+  divergences, S3 methods, variance de-attenuation, spatial gate).
+
 ## 0.0.157 (2026-07-17)
 
 * **Regularize the community zero-inflated N-mixture structural-zero variance

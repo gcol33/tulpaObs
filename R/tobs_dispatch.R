@@ -1279,6 +1279,28 @@
       verbose  = isTRUE(control[["verbose"]])))
   }
 
+  # NUTS (method = "nuts", gcol33/tulpaObs#115): the non-spatial community
+  # sampler over the exact per-species HMM-forward marginal via the in-tree C++
+  # FullGradFn (R/ms_dyn_occu_nuts.R, src/ms_dyn_occu_nuts.cpp), warm-started at
+  # the Laplace-EM mode. Samples the community means, per-species deviations, the
+  # two per-arm community covariances, and the shared gamma / eps globals jointly
+  # -> calibrated (de-attenuated) community-covariance posteriors. Non-spatial
+  # only (a structured term routes to nested_laplace above).
+  if (identical(engine, "nuts")) {
+    return(.tobs_fit_ms_dyn_occu_nuts(
+      model, priors = priors,
+      sigma.beta    = control[["sigma.beta"]]    %||% 5,
+      n.iter        = as.integer(control[["n.iter"]]        %||% 1000L),
+      n.warmup      = as.integer(control[["n.warmup"]]      %||% 1000L),
+      n.chains      = as.integer(control[["n.chains"]]      %||% 1L),
+      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+      adapt.delta   = control[["adapt.delta"]]   %||% 0.9,
+      seed          = as.integer(control[["seed"]]          %||% 1L),
+      max.iter      = as.integer(control[["max.iter"]]      %||% 200L),
+      tol           = control[["tol"]]           %||% 1e-4,
+      verbose       = isTRUE(control[["verbose"]])))
+  }
+
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_dyn_occu, fit_args)
 }
