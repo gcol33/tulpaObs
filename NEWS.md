@@ -18,6 +18,16 @@
   structurally `-Inf` and the joint optimum singular -- previously surfaced as an
   opaque "singular marginal Hessian". It now fails early with a message pointing
   at `K_max`. The default (`max(y) + 100`) never trips it.
+* **Faster community N-mixture AGHQ fits**, recovery preserved. Three changes to
+  the joint AGHQ integration of the community count families: the per-node
+  log-likelihood takes a fast path that skips the count-moment (digamma /
+  trigamma) pass (byte-identical `log_lik`); the default zero-inflated `n_quad`
+  drops to 3 (from 5), making a default `zinb` fit tractable; and the scalar
+  nuisance blocks (the NB dispersion `log_r`, the structural-zero `omega`)
+  integrate at fewer quadrature nodes than the correlated abundance / detection
+  blocks via tulpa 0.0.85's per-block `n_quad` (`control$n.quad.scalar`, default
+  2). Measured on the test fixtures: NB ~24% faster, ZINB ~33% faster, with
+  `lambda` / `r` / `omega` unchanged.
 * Require `tulpa (>= 0.0.85)` and pin `Remotes: gcol33/tulpa@v0.0.85`.
 
 ## 0.0.156 (2026-07-17)
