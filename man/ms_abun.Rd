@@ -4,7 +4,17 @@
 \alias{ms_abun}
 \title{Multispecies N-mixture family}
 \usage{
-ms_abun(K_max = NULL, mixture = c("poisson", "negbin"))
+ms_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+}
+\arguments{
+\item{mixture}{Abundance mixing distribution: \code{"poisson"} (default),
+\code{"negbin"}, or their zero-inflated counterparts \code{"zip"} / \code{"zinb"}. The
+negative-binomial dispersion and the zero-inflation structural-zero share
+are each a per-species random effect (\code{log_r_s ~ N(mu_log_r, sigma_log_r)},
+\code{logit_omega_s ~ N(mu_omega, sigma_omega)}) integrated by the community AGHQ
+path alongside the abundance / detection coefficients. Zero-inflation is a
+non-spatial \code{laplace} fit with an intercept-only structural-zero logit; a
+shared field stays Poisson / negbin.}
 }
 \value{
 A \code{tobs_family} object.

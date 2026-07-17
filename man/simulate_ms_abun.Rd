@@ -14,9 +14,11 @@ simulate_ms_abun(
   mu_p = NULL,
   sd_lambda = 0.5,
   sd_p = 0.4,
-  mixture = c("poisson", "negbin"),
+  mixture = c("poisson", "negbin", "zip", "zinb"),
   size = 3,
   sigma_logr = 0.4,
+  omega = 0.3,
+  sigma_omega = 0.4,
   graph = NULL,
   sigma.field = 0.6,
   seed = NULL
@@ -44,8 +46,9 @@ Default 0.5.}
 
 \item{sd_p}{Per-coefficient community SD for the detection arm. Default 0.4.}
 
-\item{mixture}{Abundance mixing distribution: \code{"poisson"} (default) or
-\code{"negbin"}.}
+\item{mixture}{Abundance mixing distribution: \code{"poisson"} (default),
+\code{"negbin"}, or their zero-inflated counterparts \code{"zip"} / \code{"zinb"} (a
+per-species structural-zero share).}
 
 \item{size}{Community-mean negative-binomial size, equal to
 \eqn{\exp(\mu_{\log r})} (ignored under Poisson). Default 3. The per-species
@@ -53,8 +56,18 @@ sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
 \eqn{b^{\log r}_s \sim N(0, \sigma_{\log r}^2)}.}
 
 \item{sigma_logr}{Standard deviation of the per-species log-dispersion random
-effect \code{log_r_s} (used only under \code{mixture = "negbin"}). Default 0.4. Set to
-0 for a shared (single-\code{r}) community.}
+effect \code{log_r_s} (used only under \code{mixture = "negbin"} / \code{"zinb"}). Default
+0.4. Set to 0 for a shared (single-\code{r}) community.}
+
+\item{omega}{Community-mean structural-zero probability, equal to
+\eqn{\mathrm{plogis}(\mu_\omega)} (used only under \code{mixture = "zip"} /
+\code{"zinb"}). Default 0.3. The per-species structural-zero probabilities are
+\eqn{\omega_s = \mathrm{plogis}(\mu_\omega + b^\omega_s)} with
+\eqn{b^\omega_s \sim N(0, \sigma_\omega^2)}.}
+
+\item{sigma_omega}{Standard deviation of the per-species structural-zero-logit
+random effect \code{logit_omega_s} (used only under zero-inflation). Default 0.4.
+Set to 0 for a shared (single-\code{omega}) community.}
 
 \item{graph}{Optional \verb{N x N} 0/1 adjacency matrix. When supplied, a single
 shared spatial field \code{f} (one value per site) is drawn from a proper GMRF on

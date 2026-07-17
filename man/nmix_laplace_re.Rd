@@ -19,9 +19,11 @@ nmix_laplace_re(
   K_max = NULL,
   max_iter = 200L,
   optimizer = c("em", "joint_fd", "joint_grad"),
-  mixture = c("P", "NB"),
+  mixture = c("P", "NB", "ZIP", "ZINB"),
   r_init = 10,
   sigma_logr_init = 0.5,
+  omega_init = 0.2,
+  sigma_omega_init = 0.5,
   n_quad = 1L,
   lkj_eta = 1,
   sigma_beta = 100,
@@ -69,11 +71,14 @@ per-coordinate objective re-solve -- and requires \code{n_quad > 1} (at
 is kept for correctness / architecture validation and as the \code{n_quad = 1}
 joint reference.}
 
-\item{mixture}{Abundance mixing distribution: \code{"P"} (Poisson, default) or
+\item{mixture}{Abundance mixing distribution: \code{"P"} (Poisson, default),
 \code{"NB"} (negative binomial with a per-species dispersion random effect
-\code{log_r_s ~ N(mu_log_r, sigma_log_r)}). \code{"NB"} has no closed-form EM, so it
-defaults \code{optimizer} to \code{"joint_grad"} and \code{n_quad} to \code{5} when those are
-not supplied, and errors on \code{optimizer = "em"}.}
+\code{log_r_s ~ N(mu_log_r, sigma_log_r)}), or their zero-inflated counterparts
+\code{"ZIP"} / \code{"ZINB"} (a per-species structural-zero random effect
+\code{logit_omega_s ~ N(mu_omega, sigma_omega)}; a share \code{omega_s} of a species'
+sites is structurally empty). None of \code{"NB"} / \code{"ZIP"} / \code{"ZINB"} has a
+closed-form EM, so each defaults \code{optimizer} to \code{"joint_grad"} and \code{n_quad}
+to \code{5} when those are not supplied, and errors on \code{optimizer = "em"}.}
 
 \item{r_init}{Initial community-mean negative-binomial size for the joint
 optimizer (\code{mixture = "NB"} only; default \code{10}, a moderate overdispersion
@@ -81,8 +86,16 @@ start). The optimizer carries \code{mu_log_r = log(r_init)} as the
 \code{(p_lambda + p_p + 1)}-th fixed effect.}
 
 \item{sigma_logr_init}{Initial standard deviation of the per-species
-log-dispersion random effect \code{log_r_s} (\code{mixture = "NB"} only; default
-\code{0.5}). Seeds the scalar third covariance block.}
+log-dispersion random effect \code{log_r_s} (\code{mixture = "NB"} / \code{"ZINB"} only;
+default \code{0.5}). Seeds the scalar log_r covariance block.}
+
+\item{omega_init}{Initial community-mean structural-zero probability for the
+joint optimizer (\code{mixture = "ZIP"} / \code{"ZINB"} only; default \code{0.2}). The
+optimizer carries \code{mu_omega = qlogis(omega_init)} as a trailing fixed effect.}
+
+\item{sigma_omega_init}{Initial standard deviation of the per-species
+structural-zero-logit random effect \code{logit_omega_s} (\code{mixture = "ZIP"} /
+\code{"ZINB"} only; default \code{0.5}). Seeds the scalar omega covariance block.}
 
 \item{n_quad}{Quadrature points per random-effect dimension passed to
 \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}} (default 1, the joint Laplace). A higher \code{n_quad}
