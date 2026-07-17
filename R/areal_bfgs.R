@@ -122,8 +122,13 @@
   list(field_load = L, tau = tau, rho = rho, n_raw = ncol(L))
 }
 
-# ICAR / proper-CAR single-block field (parameter z, length n_sp; eta += z[map]).
-.areal_field_car <- function(adj, kind, map, n_sp) {
+# ICAR / proper-CAR single-block field (parameter z, length n_sp). An unweighted
+# intercept field loads eta += z[map]; a varying-coefficient (SVC) field carries a
+# per-observation `weight` w and loads eta += w * z[map] (the field z is the
+# coefficient surface, reported unweighted via to_phi). `weight = NULL` is the
+# unweighted intercept field and is byte-identical to the historical builder.
+.areal_field_car <- function(adj, kind, map, n_sp, weight = NULL) {
+  wtd <- !is.null(weight)
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
   rho_grid <- if (kind == "car_proper") seq(0.1, 0.95, length.out = 6L) else 1.0
   # One cell from physical hyperparameters: ICAR -> (tau); proper CAR -> (tau, rho).
@@ -145,8 +150,12 @@
   list(
     n_field = n_sp, n_sp = n_sp, cells = cells, axes = axes, make_cell = make_cell,
     valid = function(cell) is.finite(cell$ldQ),
-    offset = function(fp, cell) fp[map],
-    scatter = function(grad_eta) {
+    offset = if (wtd) function(fp, cell) weight * fp[map] else function(fp, cell) fp[map],
+    scatter = if (wtd) function(grad_eta) {
+      g <- numeric(n_sp)
+      for (s in seq_along(map)) g[map[s]] <- g[map[s]] + weight[s] * grad_eta[s]
+      g
+    } else function(grad_eta) {
       g <- numeric(n_sp); for (s in seq_along(map)) g[map[s]] <- g[map[s]] + grad_eta[s]; g
     },
     prior_logp = function(fp, cell) {
@@ -505,6 +514,11 @@
       out$temporal_field <- field_means[[2L]]
       out$temporal_hyper <- hyper_means[[2L]]
     }
+    # Full per-block posterior-mean fields + hyperparameters, in block order, for
+    # a multi-field consumer (an intercept field plus weighted SVC fields, e.g.
+    # svcTIntPGOcc; gcol33/tulpaObs#122). Block 1 stays the legacy scalar slots.
+    out$field_means <- field_means
+    out$hyper_means <- hyper_means
     out
   }
 
@@ -586,4 +600,47 @@
     .areal_field_car(adj, if (identical(spatial$type, "icar")) "icar" else "car_proper",
                      map, spatial$n_units)
   }
+}
+
+# Resolve a LIST of areal-BFGS field blocks from a spatial spec: one block for a
+# plain areal term, or an intercept block plus one weighted (varying-coefficient)
+# block per bar covariate for a `spatial(~ 1 + w || node, graph)` bar (svcTIntPGOcc,
+# gcol33/tulpaObs#122). The weighted blocks are icar-only in v1. Returns
+# `list(blocks, labels)`; `labels` is "intercept" or the covariate name per block,
+# in block order (intercept first). A plain term is byte-identical to the
+# single-block `.tobs_areal_field_spec()` path.
+.tobs_areal_field_blocks <- function(spatial, n_sites, family, data) {
+  is_multi <- isTRUE(spatial$is_bar) || isTRUE(spatial$is_multifield)
+  if (!is_multi) {
+    return(list(blocks = list(.tobs_areal_field_spec(spatial, n_sites, family,
+                                                     seq_len(n_sites))),
+                labels = "intercept"))
+  }
+  if (!identical(spatial$type, "icar"))
+    stop(sprintf(paste0("%s() varying-coefficient (SVC) areal field supports icar() ",
+                        "only in v1 (car_proper / bym2 are follow-ups; ",
+                        "gcol33/tulpaObs#122)."), family), call. = FALSE)
+  # A collected multifield wrapping a single bar spec still needs expanding into
+  # its intercept + weighted-trend terms; a plain list of areal terms is used as is.
+  terms <- if (isTRUE(spatial$is_bar)) .tobs_expand_spatial_bar(spatial, data)
+           else if (length(spatial$fields) == 1L && isTRUE(spatial$fields[[1L]]$is_bar))
+             .tobs_expand_spatial_bar(spatial$fields[[1L]], data)
+           else spatial$fields
+  adj <- as.matrix(spatial$graph); n_nodes <- nrow(adj)
+  blocks <- list(); labels <- character(0)
+  for (tm in terms) {
+    node  <- tm$group_var
+    map_t <- as.integer(data[[node]])
+    if (length(map_t) != n_sites)
+      stop(sprintf(paste0("%s() SVC bar node index \"%s\" has %d rows but the model ",
+                          "has %d sites."), family, node, length(map_t), n_sites),
+           call. = FALSE)
+    is_int <- identical(tm$component, "intercept") || is.null(tm$weight)
+    wt     <- if (is_int) NULL else as.numeric(tm$weight)
+    blocks[[length(blocks) + 1L]] <-
+      .areal_field_car(adj, "icar", map_t, n_nodes, weight = wt)
+    labels <- c(labels, if (is_int) "intercept"
+                        else (tm$weight_label %||% tm$component %||% "trend"))
+  }
+  list(blocks = blocks, labels = labels)
 }

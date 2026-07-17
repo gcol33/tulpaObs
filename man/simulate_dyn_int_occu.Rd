@@ -14,6 +14,7 @@ simulate_dyn_int_occu(
   eps = 0.2,
   p = c(0.4, 0.6),
   field = NULL,
+  trend = NULL,
   seed = NULL
 )
 }
@@ -34,6 +35,12 @@ simulate_dyn_int_occu(
 \item{field}{Optional per-site shared areal field (length \code{N}) added to the
 first-season occupancy logit -- the shared field of the multi-season
 integrated spatial model (stIntPGOcc). Default \code{NULL} (no field).}
+
+\item{trend}{Optional per-site varying-coefficient (SVC) areal field (length
+\code{N}); with a covariate \code{w ~ N(0,1)} stored in \code{data}, the first-season logit
+gains \code{w * trend} on top of \code{field} -- the svcTIntPGOcc surface. Default
+\code{NULL}. When set, \code{data} carries a \code{cell} node index (\verb{1..N}) and the
+covariate \code{w} for the bar \code{spatial(~ 1 + w || cell, graph)}.}
 
 \item{seed}{Optional random seed.}
 }

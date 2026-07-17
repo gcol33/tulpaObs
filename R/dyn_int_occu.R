@@ -292,7 +292,6 @@
   if (!identical(spatial$type, "icar"))
     stop("dyn_int_occu() + a spatial field supports icar() only in v1 ",
          "(bym2 / car_proper are follow-ups; gcol33/tulpaObs#122).", call. = FALSE)
-  .tobs_reject_weighted_spatial(spatial, "dyn_int_occu occupancy spatial")
   S <- model$S; n_sites <- model$n_sites
   X_psi <- model$X_psi; X_gam <- model$X_gam; X_eps <- model$X_eps
   X_det <- model$X_det
@@ -302,8 +301,8 @@
   i_eps <- off[3] + seq_len(p_eps)
   i_p   <- lapply(seq_len(S), function(s) off[3 + s] + seq_len(p_det))
   n_fixed <- off[length(off)]
-  map <- seq_len(n_sites)
-  field <- .tobs_areal_field_spec(spatial, n_sites, "dyn_int_occu", map)
+  fb <- .tobs_areal_field_blocks(spatial, n_sites, "dyn_int_occu", model$data)
+  field <- if (length(fb$blocks) == 1L) fb$blocks[[1L]] else fb$blocks
 
   unpack_fix <- function(theta_fix) list(
     psi1  = stats::plogis(as.numeric(X_psi %*% theta_fix[i_psi])),
@@ -343,6 +342,14 @@
   n_draws <- 1000L
   draws <- .occu_cover_rmvn(n_draws, means, V); colnames(draws) <- nm
 
+  # Intercept field on the legacy scalar slots; any weighted (SVC) blocks become
+  # the trend field(s) -- svcTIntPGOcc (gcol33/tulpaObs#122).
+  fmeans <- res$field_means %||% list(res$field_mean)
+  trend_labels <- fb$labels[-1L]
+  trend_fields <- if (length(fmeans) > 1L) {
+    tf <- fmeans[-1L]; names(tf) <- trend_labels; tf
+  } else NULL
+
   structure(c(list(
     draws = draws, means = means, sds = sds, vcov = V,
     n_samples = n_draws, n_params = length(means),
@@ -351,7 +358,9 @@
     list(
     col_names = nm, param_names = nm, n_fixed = length(means), fixed_names = nm,
     process_info = model$process_info, model = model,
-    spatial = spatial, spatial_field = res$field_mean, spatial_hyper = res$hyper,
+    spatial = spatial, spatial_field = fmeans[[1L]], spatial_hyper = res$hyper,
+    trend_field = if (!is.null(trend_fields)) trend_fields[[1L]] else NULL,
+    trend_fields = trend_fields,
     spatial_integration = res$integration, spatial_pareto_k = res$pareto_k,
     method = "nested_laplace",
     convergence = list(converged = TRUE, n_iter = NA_integer_)
@@ -546,23 +555,44 @@
 #' @param field Optional per-site shared areal field (length `N`) added to the
 #'   first-season occupancy logit -- the shared field of the multi-season
 #'   integrated spatial model (stIntPGOcc). Default `NULL` (no field).
+#' @param trend Optional per-site varying-coefficient (SVC) areal field (length
+#'   `N`); with a covariate `w ~ N(0,1)` stored in `data`, the first-season logit
+#'   gains `w * trend` on top of `field` -- the svcTIntPGOcc surface. Default
+#'   `NULL`. When set, `data` carries a `cell` node index (`1..N`) and the
+#'   covariate `w` for the bar `spatial(~ 1 + w || cell, graph)`.
 #' @param seed Optional random seed.
 #' @return A list with `y` (a length-`S` list of `[N x J x T]` arrays), `data`,
 #'   `sources`, and `truth`.
 #' @export
 simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
                                   psi1 = 0.5, gamma = 0.3, eps = 0.2,
-                                  p = c(0.4, 0.6), field = NULL, seed = NULL) {
+                                  p = c(0.4, 0.6), field = NULL, trend = NULL,
+                                  seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   if (length(J) != S) J <- rep(J[1L], S)
   if (length(p) != S) p <- rep(p[1L], S)
   if (!is.null(field) && length(field) != N)
     stop("simulate_dyn_int_occu(): `field` must have length N.", call. = FALSE)
+  if (!is.null(trend) && length(trend) != N)
+    stop("simulate_dyn_int_occu(): `trend` must have length N.", call. = FALSE)
   data <- data.frame(row.names = seq_len(N))
   z <- matrix(0L, N, T_seasons)
-  # Season-1 occupancy carries the optional shared field on the logit scale.
-  psi1_i <- if (is.null(field)) rep(psi1, N)
-            else stats::plogis(stats::qlogis(psi1) + field)
+  # Season-1 occupancy carries the optional shared field + a varying-coefficient
+  # field (weighted by a covariate w) on the logit scale. No field and no trend
+  # keeps the exact constant-psi1 path (byte-identical to the pre-SVC simulator).
+  w <- NULL
+  if (is.null(field) && is.null(trend)) {
+    psi1_i <- rep(psi1, N)
+  } else {
+    eta1 <- stats::qlogis(psi1)
+    if (!is.null(field)) eta1 <- eta1 + field
+    if (!is.null(trend)) {
+      w <- stats::rnorm(N)
+      data$cell <- seq_len(N); data$w <- w
+      eta1 <- eta1 + w * trend
+    }
+    psi1_i <- stats::plogis(eta1)
+  }
   z[, 1L] <- stats::rbinom(N, 1L, psi1_i)
   for (t in 2:T_seasons) {
     surv <- stats::rbinom(N, 1L, 1 - eps); col <- stats::rbinom(N, 1L, gamma)
@@ -577,5 +607,5 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
   names(y) <- paste0("src", seq_len(S))
   list(y = y, data = data, sources = names(y),
        truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p, z = z,
-                    field = field))
+                    field = field, trend = trend, w = w))
 }

@@ -76,3 +76,47 @@ test_that("dyn_int_occu() + icar recovers the shared field + transitions", {
   expect_lt(abs(mean(gm, na.rm = TRUE) - 0.30), 0.06)
   expect_lt(abs(mean(ep, na.rm = TRUE) - 0.20), 0.06)
 })
+
+# --- varying-coefficient bar on the psi1 arm (svcTIntPGOcc, #122) ---
+
+# A second interior field, shifted from .dio_field so the intercept and trend
+# surfaces are not collinear (which would make them unidentifiable).
+.dio_field2 <- function(side, sd = 0.9) {
+  co <- expand.grid(r = seq_len(side), c = seq_len(side))
+  f  <- sd * scale(cos(co$r / side * pi * 1.3) + sin(co$c / side * pi * 0.8))[, 1]
+  f - mean(f)
+}
+
+test_that("dyn_int_occu() + SVC bar recovers intercept + trend fields", {
+  skip_if_fast()
+  skip_on_cran()
+  # svcTIntPGOcc: an intercept field PLUS a covariate-weighted (varying-coefficient)
+  # field on the first-season occupancy arm, both shared. The weighted areal block
+  # flows through the same multi-block areal-BFGS driver as stIntPGOcc; the psi1
+  # score w1 - psi1 scatters to each block (weighted by the covariate for the trend
+  # block). Assert BOTH interior fields recover by cor (never sigma; null-field trap).
+  side <- 9L; N <- side * side; A <- .dio_grid_graph(side)
+  f0 <- .dio_field(side, sd = 0.9); f1 <- .dio_field2(side, sd = 0.9)
+  n_seed <- 12L
+  c0 <- c1 <- rep(NA_real_, n_seed)
+  for (s in seq_len(n_seed)) {
+    sim <- simulate_dyn_int_occu(N = N, T_seasons = 4, S = 2, J = 3,
+                                 psi1 = 0.5, gamma = 0.3, eps = 0.2,
+                                 p = c(0.45, 0.6), field = f0, trend = f1,
+                                 seed = 600 + s)
+    fit <- tryCatch(
+      tobs(~ spatial(~ 1 + w || cell, graph = A), data = sim$data,
+           family = dyn_int_occu(), detection = ~ 1, colonization = ~ 1,
+           extinction = ~ 1, y = sim$y, sources = sim$sources,
+           method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE)),
+      error = function(e) NULL)
+    if (is.null(fit)) next
+    c0[s] <- stats::cor(fit$spatial_field, f0)
+    c1[s] <- if (!is.null(fit$trend_field)) stats::cor(fit$trend_field, f1) else NA_real_
+  }
+  # Both the intercept and the varying-coefficient surface recover; the SVC field
+  # is more weakly identified (weighted loading, jointly separated from the
+  # intercept), so a looser floor than the intercept field.
+  expect_gt(stats::median(c0[!is.na(c0)]), 0.75)
+  expect_gt(stats::median(c1[!is.na(c1)]), 0.55)
+})

@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.152 (2026-07-17)
+
+* Varying-coefficient areal field on multi-season integrated occupancy:
+  `dyn_int_occu()` + a `spatial(~ 1 + w || cell, graph)` bar (spOccupancy
+  `svcTIntPGOcc`; #122). Alongside the shared intercept field (`stIntPGOcc`), a
+  covariate-weighted (spatially-varying-coefficient) field loads on the
+  first-season occupancy logit. The areal-BFGS nested-Laplace driver
+  (`R/areal_bfgs.R`) already accepts a list of field blocks and scatters the
+  per-site psi1 score `w1 - psi1` to each; the weighted block is the ICAR field
+  with a `w`-weighted loading (`eta += w * z[map]`, the field `z` reported
+  unweighted). `.areal_field_car()` gained an optional `weight` (byte-identical
+  when absent), and `.tobs_areal_field_blocks()` expands a bar into an intercept
+  block plus one weighted block per covariate. `fit$spatial_field` is the
+  intercept surface, `fit$trend_field(s)` the varying-coefficient surface(s);
+  both recover by correlation (intercept ~0.85, trend ~0.72;
+  `test-dyn-int-occu-areal-recovery.R`). `simulate_dyn_int_occu(trend =)`. icar
+  only in v1.
+
 ## 0.0.151 (2026-07-17)
 
 * Multi-season occupancy with an AR1 year random effect: `t_occu()`
