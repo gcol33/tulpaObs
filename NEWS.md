@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.144 (2026-07-17)
+
+* Community dynamic occupancy Polya-Gamma Gibbs: `ms_dyn_occu()` with
+  `method = "pg_gibbs"` (#115, #126; the spOccupancy `tMsPGOcc` engine). Combines
+  the community PG machinery (msPGOcc) with a two-state HMM forward-filter
+  backward-sample (FFBS) latent-occupancy step: each sweep FFBS-samples the
+  per-species occupancy path z, then does the PG-augmented conjugate coefficient
+  updates -- per-species season-1 occupancy `psi1` and detection `p` (with
+  Gaussian community hyperpriors), and the SHARED community-level colonization
+  `gamma` and extinction `eps` from the aggregated 0-origin / 1-origin
+  transitions across all species -- plus the conjugate community mean and
+  Inverse-Gamma community variance for the psi1 / p arms. Samples the exact
+  community posterior, so the community variance recovers where the Laplace-EM
+  attenuates. The shared gamma / eps recover tightly (informed by every species),
+  the community season-1 occupancy mean and SD recover, and split-Rhat ~ 1.00. v1:
+  constant transitions, site-level detection, no structured terms.
+  `R/ms_dyn_occu_pg_gibbs.R`; `test-ms-dyn-occu-pg-gibbs.R`.
+
 ## 0.0.143 (2026-07-17)
 
 * Community occupancy Polya-Gamma Gibbs: `ms_occu()` with `method = "pg_gibbs"`

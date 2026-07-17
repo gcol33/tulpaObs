@@ -1205,6 +1205,22 @@
          "community dynamic fit use method = \"laplace\".", call. = FALSE)
   }
 
+  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy tMsPGOcc; tulpaObs#115,
+  # #126): the community PG machinery (msPGOcc) + a 2-state HMM FFBS latent step,
+  # giving a calibrated community-variance posterior (vs the attenuated
+  # Laplace-EM). Constant transitions, site-level detection, no structured terms.
+  if (identical(engine, "pg_gibbs")) {
+    return(.tobs_fit_ms_dyn_occu_pg_gibbs(
+      model, priors = priors,
+      sigma.beta = control[["sigma.beta"]] %||% 2.5,
+      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
+      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
+      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
+      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
+      seed     = as.integer(control[["seed"]]     %||% 1L),
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_dyn_occu, fit_args)
 }
