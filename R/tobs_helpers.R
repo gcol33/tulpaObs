@@ -157,7 +157,7 @@
   # (icar/bym2/car_proper) on the occupancy arm via the in-tree community-spatial
   # nested Laplace-EM (R/ms_occu_spatial.R, src/ms_occu_spatial.cpp) -- the
   # occupancy analogue of sfMsNMix (gcol33/tulpaObs#75).
-  ms_occu  = c("laplace", "nuts", "nested_laplace"),
+  ms_occu  = c("laplace", "nuts", "pg_gibbs", "nested_laplace"),
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
   # jsdm: the joint species distribution model observes presence/absence directly

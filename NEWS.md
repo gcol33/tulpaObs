@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.143 (2026-07-17)
+
+* Community occupancy Polya-Gamma Gibbs: `ms_occu()` with `method = "pg_gibbs"`
+  (#115, #126; the spOccupancy `msPGOcc` engine). The hierarchical extension of
+  the single-species PGOcc engine: per-species occupancy / detection coefficients
+  with Gaussian community hyperpriors, each PG-augmented conjugate-Gaussian
+  update wrapped in conjugate community-mean and near-Jeffreys Inverse-Gamma
+  community-variance draws (a diagonal per-arm community covariance, as
+  spOccupancy uses). Conditional on the Polya-Gamma auxiliaries every coefficient
+  update is exactly conjugate, so this samples the exact community posterior --
+  and, unlike the community Laplace-EM (whose variance components carry a
+  documented small-cluster attenuation), it recovers the community VARIANCE:
+  across seeds the PG `sd_psi` / `sd_p` land on the true community SDs (e.g.
+  0.667 / 0.417 vs truth 0.6 / 0.4) where the Laplace-EM attenuates below them
+  (0.595 / 0.342). The SD is reported as the posterior median (robust to the
+  variance-component skew at moderate species counts). Community means and
+  per-species coefficients recover; split-Rhat ~ 1.00. v1: single-season
+  community occupancy, site-level detection, no structured terms (the shared-field
+  sfMsPGOcc is a follow-up). `R/ms_occu_pg_gibbs.R`; `test-ms-occu-pg-gibbs.R`.
+
 ## 0.0.142 (2026-07-17)
 
 * Polya-Gamma Gibbs engine for single-season occupancy: `method = "pg_gibbs"`

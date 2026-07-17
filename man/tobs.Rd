@@ -150,6 +150,12 @@ multiple-imputation correction. The fixed-effect prior threads into the
 correction refits, so these use the same
 weakly-informative default prior as \code{"laplace"}; pass \code{priors = FALSE}
 for the unpenalised correction.
+\item \code{"pg_gibbs"} — a Polya-Gamma Gibbs sampler over the exact single-season
+occupancy posterior (the spOccupancy \code{PGOcc} engine). A real MCMC chain
+(with \code{Rhat} / \code{ESS} diagnostics), distinct from \code{"laplace_gibbs"} (a
+stochastic-EM variance correction). Sampler controls (\code{n.iter},
+\code{n.warmup}, \code{n.chains}, \code{n.thin}, \code{seed}, \code{sigma.beta}). v1: single-season
+\code{occu()}, site-level detection, no structured terms.
 \item \code{"nested_laplace"} — multi-block nested Laplace (single-season
 occupancy and cover-hurdle joint).
 \item \code{"nested_laplace_sla"} — nested Laplace with skew-corrected marginals.

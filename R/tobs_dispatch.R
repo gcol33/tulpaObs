@@ -277,6 +277,23 @@
          "non-spatial community fit use method = \"laplace\".", call. = FALSE)
   }
 
+  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy msPGOcc; tulpaObs#115,
+  # #126): a hierarchical PG Gibbs over the exact community posterior -- per-
+  # species PG-augmented conjugate coefficient updates with conjugate community
+  # mean + Inverse-Gamma community variance draws. Gives a CALIBRATED community-
+  # variance posterior (the Laplace-EM leaves those attenuated).
+  if (identical(engine, "pg_gibbs")) {
+    return(.tobs_fit_ms_occu_pg_gibbs(
+      model, priors = priors,
+      sigma.beta = control[["sigma.beta"]] %||% 2.5,
+      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
+      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
+      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
+      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
+      seed     = as.integer(control[["seed"]]     %||% 1L),
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+
   # NUTS (method = "nuts", tulpaObs#69): sample the exact joint posterior of the
   # non-spatial community single-season occupancy (community means, per-species
   # deviations, and the two independent per-arm community covariances) via the
