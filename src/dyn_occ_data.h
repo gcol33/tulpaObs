@@ -25,11 +25,6 @@ struct DynOccResponseData {
 
     // Whether any detection occurred in each site-season
     std::vector<bool> any_detected;  // [n_sites * n_seasons]
-
-    // Visit-level detection covariates (optional)
-    // X_det_visit[site * n_seasons * max_visits * p + season * max_visits * p + visit * p + j]
-    std::vector<double> X_det_visit;
-    int p_det_visit = 0;
 };
 
 } // namespace tulpaObs

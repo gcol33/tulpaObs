@@ -59,9 +59,9 @@
 #' Joint coefficient vector layout (matches `model$process_info`):
 #'   beta = c(beta_psi1, beta_p, beta_gamma, beta_epsilon)
 #'
-#' Site-level only: visit-level detection covariates are not used by the
-#' default `dyn_occu()` builder (the detection design is site-level), so we
-#' ignore the `X_det_visit` branch of the C++ likelihood.
+#' Site-level or season-varying detection: the `dyn_occu()` detection design is
+#' site-level, optionally season-indexed (a `[n_sites x n_seasons]` covariate,
+#' #124); there is no visit-level (within-season) detection covariate.
 #'
 #' No priors. No pseudo-binomial encoding. Returns the original-data
 #' log-likelihood, matching the convention of `.loglik_occu_single()`.

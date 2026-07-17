@@ -95,20 +95,8 @@ T dyn_occ_log_likelihood(
                 int y_ij = dyn->y[base_y + j];
                 if (y_ij < 0) continue;
 
-                T logit_p_ij = logit_p;
-                // Add visit-level covariates if present
-                if (dyn->p_det_visit > 0) {
-                    int xbase = i * T_seasons * K * dyn->p_det_visit
-                              + t * K * dyn->p_det_visit
-                              + j * dyn->p_det_visit;
-                    int beta_offset = layout.extra_offset;
-                    for (int c = 0; c < dyn->p_det_visit; c++) {
-                        logit_p_ij = logit_p_ij + T(dyn->X_det_visit[xbase + c]) * params[beta_offset + c];
-                    }
-                }
-
-                T log_p = log_inv_logit(logit_p_ij);
-                T log1m_p = log1m_inv_logit(logit_p_ij);
+                T log_p = log_inv_logit(logit_p);
+                T log1m_p = log1m_inv_logit(logit_p);
 
                 if (y_ij == 1) {
                     log_p_data_occ = log_p_data_occ + log_p;
