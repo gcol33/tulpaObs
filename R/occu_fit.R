@@ -74,11 +74,18 @@
     if (!identical(model$model_type, "single"))
       stop("method = \"pg_gibbs\" is currently wired for single-season occu() ",
            "only.", call. = FALSE)
-    if (!is.null(spatial) || !is.null(temporal) || !is.null(re) ||
-        !is.null(latent) || !is.null(svc))
-      stop("method = \"pg_gibbs\" does not yet support spatial / temporal / RE / ",
-           "latent terms (the PG-spatial extensions are the documented ",
-           "follow-up, tulpaObs#126).", call. = FALSE)
+    if (!is.null(temporal) || !is.null(re) || !is.null(latent) || !is.null(svc))
+      stop("method = \"pg_gibbs\" does not yet support temporal / RE / latent / ",
+           "svc terms (an areal icar() field IS supported -- spPGOcc, ",
+           "tulpaObs#126).", call. = FALSE)
+    if (!is.null(spatial)) {
+      # spPGOcc: an intrinsic areal (ICAR) field on the occupancy logit, jointly
+      # updated with the coefficients as a Gaussian Markov random field.
+      return(.tobs_fit_occu_pg_gibbs_spatial(
+        model, spatial, priors = priors, sigma.beta = sigma.beta,
+        n.iter = n.iter, n.warmup = n.warmup, n.chains = max(n.chains, 2L),
+        n.thin = n.thin, seed = seed, verbose = verbose))
+    }
     return(.tobs_fit_occu_pg_gibbs(
       model, priors = priors, sigma.beta = sigma.beta,
       n.iter = n.iter, n.warmup = n.warmup, n.chains = max(n.chains, 2L),

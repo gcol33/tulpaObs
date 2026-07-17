@@ -24,12 +24,12 @@ test_that("occu() method = 'pg_gibbs' gates + S3", {
   expect_true(all(is.finite(fit$rhat)))
   expect_true(all(fit$rhat < 1.1))
   expect_true(all(fit$ess > 50))
-  # A structured term is rejected (v1 has no PG-spatial path).
-  adj <- matrix(0, 120, 120); for (i in 1:119) adj[i, i+1] <- adj[i+1, i] <- 1
+  # An icar() field IS supported (spPGOcc, tested in test-occu-pg-gibbs-spatial.R);
+  # a temporal / RE term is not wired for the PG path in v1.
   expect_error(
-    tobs(~ occ_cov1 + icar(graph = adj), data = sim$data, family = occu(),
+    tobs(~ occ_cov1 + (1 | occ_cov1), data = sim$data, family = occu(),
          detection = ~ det_cov1, y = sim$y, method = "pg_gibbs"),
-    "spatial")
+    "temporal / RE|RE")
 })
 
 test_that("occu() pg_gibbs posterior matches the Laplace fit (calibration)", {

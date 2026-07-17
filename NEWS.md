@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.146 (2026-07-17)
+
+* Spatial Polya-Gamma Gibbs for single-season occupancy: `occu() + icar()` under
+  `method = "pg_gibbs"` (#126; the spOccupancy `spPGOcc` engine). An intrinsic
+  areal (ICAR) field on the occupancy logit, `logit(psi_i) = X_i beta + f_i`,
+  `f ~ ICAR(tau)`. Conditional on the Polya-Gamma auxiliaries the joint
+  `(beta, f)` update is a single Gaussian Markov random field draw (dense
+  `(p + n) x (p + n)` precision `t(W) Omega W + blkdiag(B0inv, tau Q)`,
+  `W = [X | I]`); `tau` has a conjugate Gamma full conditional; the field is
+  centred to sum-to-zero each sweep with its level moved into the intercept (so
+  `eta` is preserved -- omitting that leaks a systematic shift). The field
+  recovers (`cor ~ 0.74`), the intercept and detection recover, split-Rhat
+  ~ 1.00. As with any spatial occupancy model, a site-level occupancy covariate
+  spatially-confounds with the saturated one-node-per-site field, so the
+  recovery target is the field + intercept + detection. icar only in v1
+  (bym2 / car_proper are follow-ups). `test-occu-pg-gibbs-spatial.R`.
+
+  This completes the Polya-Gamma engine (#126): PGOcc + spPGOcc (`occu`),
+  msPGOcc (`ms_occu`), tMsPGOcc (`ms_dyn_occu`), and the community Bernoulli /
+  binomial GLMM (`jsdm()` / `ms_count("binomial")`).
+
 ## 0.0.145 (2026-07-17)
 
 * Polya-Gamma Gibbs for the community Bernoulli / binomial GLMM: `jsdm()` and

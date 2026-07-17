@@ -131,3 +131,118 @@
                         n_iter = n.iter)
   )), class = c("tobs_fit", "tulpa_fit"))
 }
+
+
+# Spatial PG Gibbs for single-season occupancy with an intrinsic areal (ICAR)
+# field on the occupancy logit (spOccupancy spPGOcc; gcol33/tulpaObs#126). The
+# field f (one node per site) enters psi linearly: logit psi_i = X_i beta + f_i,
+# f ~ ICAR(tau). Conditional on the Polya-Gamma auxiliaries the joint (beta, f)
+# update is a Gaussian Markov random field draw -- the coefficient prior on beta
+# and the intrinsic tau Q prior on f -- and tau has a conjugate Gamma full
+# conditional. The field is centred (sum-to-zero) each sweep for identifiability
+# against the intercept. icar only (bym2 adds the iid block; a follow-up).
+.tobs_fit_occu_pg_gibbs_spatial <- function(model, spatial, priors = NULL,
+                                            sigma.beta = 2.5,
+                                            n.iter = 2000L, n.warmup = 1000L,
+                                            n.chains = 2L, n.thin = 1L, seed = 1L,
+                                            verbose = FALSE) {
+  if (!identical(spatial$type, "icar"))
+    stop("occu() method = \"pg_gibbs\" + a spatial field supports icar() only in ",
+         "v1 (bym2 / car_proper are follow-ups).", call. = FALSE)
+  if (!is.null(model$X_det_visit))
+    stop("occu() pg_gibbs supports site-level detection only.", call. = FALSE)
+  rpg <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  adj <- as.matrix(spatial$graph)
+  n   <- model$n_sites
+  if (nrow(adj) != n)
+    stop(sprintf("the icar() graph has %d nodes but the model has %d sites; one ",
+                 "field node per site is required.", nrow(adj), n), call. = FALSE)
+  Q   <- .occu_cover_icar_Q(adj)
+
+  y      <- model$y
+  X_psi  <- model$X_processes[[1L]]; X_p <- model$X_processes[[2L]]
+  p_psi  <- ncol(X_psi); p_p <- ncol(X_p)
+  valid  <- y >= 0L
+  nvis   <- rowSums(valid); kdet <- rowSums(y == 1L & valid); anydet <- kdet > 0L
+  B0inv_psi <- diag(1 / sigma.beta^2, p_psi)
+  B0inv_p   <- diag(1 / sigma.beta^2, p_p)
+
+  n_keep <- length(seq.int(n.warmup + 1L, n.iter, by = n.thin))
+  par_names <- c(paste0("psi_", model$process_info[[1L]]$coef_names),
+                 paste0("p_",   model$process_info[[2L]]$coef_names), "log_tau")
+
+  run_chain <- function(chain_id) {
+    set.seed(seed + chain_id)
+    bpsi <- stats::rnorm(p_psi, 0, 0.1); bp <- stats::rnorm(p_p, 0, 0.1)
+    f <- rep(0, n); tau <- 1
+    out <- matrix(NA_real_, n_keep, p_psi + p_p + 1L); ki <- 0L
+    f_sum <- numeric(n); nsum <- 0L
+    for (it in seq_len(n.iter)) {
+      eta_psi <- as.vector(X_psi %*% bpsi) + f; psi <- stats::plogis(eta_psi)
+      eta_p   <- as.vector(X_p %*% bp);        pdet <- stats::plogis(eta_p)
+      # 1. latent occupancy
+      z <- integer(n); z[anydet] <- 1L
+      und <- !anydet
+      if (any(und)) {
+        l1 <- psi[und] * (1 - pdet[und])^nvis[und]; l0 <- 1 - psi[und]
+        z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
+      }
+      # 2. joint (beta_psi, f) GMRF update given omega_psi
+      om  <- rpg(rep(1, n), eta_psi); kap <- z - 0.5
+      Pbb <- crossprod(X_psi, X_psi * om) + B0inv_psi          # p x p
+      Pbf <- t(X_psi * om)                                     # p x n
+      Pff <- diag(om, n) + tau * Q                             # n x n
+      Prec <- rbind(cbind(Pbb, Pbf), cbind(t(Pbf), Pff))
+      rhs  <- c(crossprod(X_psi, kap), kap)
+      L    <- chol(Prec + diag(1e-8, p_psi + n))
+      mean <- backsolve(L, forwardsolve(t(L), rhs))
+      samp <- mean + backsolve(L, stats::rnorm(p_psi + n))
+      bpsi <- samp[seq_len(p_psi)]; f <- samp[p_psi + seq_len(n)]
+      # Sum-to-zero the field, moving its level into the intercept so eta = X beta
+      # + f is preserved (the field mean is confounded with the intercept; column
+      # 1 of X_psi is the all-ones intercept).
+      mf <- mean(f); f <- f - mf; bpsi[1L] <- bpsi[1L] + mf
+      # 3. field precision tau (ICAR rank n - 1)
+      tau <- stats::rgamma(1, 0.5 + (n - 1) / 2, 0.5 + 0.5 * as.numeric(t(f) %*% Q %*% f))
+      # 4. detection coefficients at occupied sites
+      occ <- which(z == 1L & nvis > 0L)
+      if (length(occ) >= p_p) {
+        Xo <- X_p[occ, , drop = FALSE]
+        om_p <- rpg(nvis[occ], as.vector(Xo %*% bp))
+        Vp <- chol2inv(chol(crossprod(Xo, Xo * om_p) + B0inv_p))
+        bp <- as.vector(Vp %*% crossprod(Xo, kdet[occ] - nvis[occ] / 2) +
+                          t(chol(Vp)) %*% stats::rnorm(p_p))
+      }
+      if (it > n.warmup && ((it - n.warmup - 1L) %% n.thin == 0L)) {
+        ki <- ki + 1L; out[ki, ] <- c(bpsi, bp, log(tau))
+        f_sum <- f_sum + f; nsum <- nsum + 1L
+      }
+    }
+    list(draws = out, field = f_sum / nsum)
+  }
+
+  chains <- lapply(seq_len(n.chains), run_chain)
+  dr_chains <- lapply(chains, function(c) { colnames(c$draws) <- par_names; c$draws })
+  draws <- do.call(rbind, dr_chains)
+  means <- colMeans(draws); names(means) <- par_names
+  V <- stats::cov(draws); dimnames(V) <- list(par_names, par_names)
+  sds <- apply(draws, 2L, stats::sd); names(sds) <- par_names
+  re <- .tobs_nuts_rhat_ess(dr_chains); rhat <- re$rhat; ess <- re$ess
+  names(rhat) <- names(ess) <- par_names
+  spatial_field <- Reduce(`+`, lapply(chains, `[[`, "field")) / n.chains
+
+  structure(c(list(
+    draws = draws, means = means, sds = sds, vcov = V,
+    n_samples = nrow(draws), n_params = length(means),
+    log_prob = rep(NA_real_, nrow(draws)), log_lik = NA_real_, N = n,
+    rhat = rhat, ess = ess),
+    list(
+    col_names = par_names, param_names = par_names,
+    n_fixed = length(means), fixed_names = par_names,
+    process_info = model$process_info, model = model,
+    spatial = spatial, spatial_field = spatial_field,
+    method = "pg_gibbs", n_chains = n.chains,
+    convergence = list(converged = any(is.finite(rhat)) &&
+                         max(rhat, na.rm = TRUE) < 1.1, n_iter = n.iter)
+  )), class = c("tobs_fit", "tulpa_fit"))
+}
