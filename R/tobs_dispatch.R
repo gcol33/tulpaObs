@@ -93,6 +93,33 @@
     formula = bind$fe$mu, data = data, y = y, species = dots$species,
     response = response, trials = dots$trials, structured_terms = bind$terms)
 
+  # Polya-Gamma Gibbs (method = "pg_gibbs", #126): the logistic responses
+  # (binomial / bernoulli) admit PG augmentation, so the community coefficient
+  # posterior is sampled exactly by a per-species conjugate Gibbs -- a calibrated
+  # community-variance posterior. Non-spatial; the binder rejects a structured
+  # term for pg_gibbs below via the shared structs check being bypassed here (v1
+  # has no PG-spatial path).
+  if (identical(engine, "pg_gibbs")) {
+    if (!(response %in% c("bernoulli", "binomial"))) {
+      stop("ms_count(): method = \"pg_gibbs\" applies to the logistic responses ",
+           "(binomial; jsdm() is bernoulli). For ", response,
+           " use method = \"laplace\" or \"nuts\".", call. = FALSE)
+    }
+    if (!is.null(bind$terms) && length(bind$terms) > 0L) {
+      stop("ms_count(): method = \"pg_gibbs\" is the non-spatial community fit; ",
+           "drop the structured term (PG-spatial is a follow-up).", call. = FALSE)
+    }
+    return(.tobs_fit_ms_count_pg_gibbs(
+      model, priors = priors,
+      sigma.beta = control[["sigma.beta"]] %||% 2.5,
+      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
+      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
+      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
+      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
+      seed     = as.integer(control[["seed"]]     %||% 1L),
+      verbose  = isTRUE(control[["verbose"]])))
+  }
+
   # The binomial community response is wired for the non-spatial Laplace-EM only
   # (community svcPGBinom, gcol33/tulpaObs#125). NUTS needs a binomial family in
   # the in-tree C++ FullGradFn, and a shared field / latent factor needs the
@@ -395,6 +422,21 @@
     stop("jsdm(): method = \"nested_laplace\" needs a shared areal field ",
          "(icar()/car_proper()/bym2()) on the formula. For the non-spatial ",
          "JSDM use method = \"laplace\".", call. = FALSE)
+  }
+  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy msPGOcc-family; #126): the
+  # community Bernoulli GLMM has no latent state, so the PG sampler is the pure
+  # per-species conjugate update + community mean / Inverse-Gamma variance -- a
+  # calibrated community-variance posterior (the Laplace-EM attenuates it).
+  if (identical(engine, "pg_gibbs")) {
+    return(.tobs_fit_ms_count_pg_gibbs(
+      model, priors = priors,
+      sigma.beta = control[["sigma.beta"]] %||% 2.5,
+      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
+      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
+      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
+      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
+      seed     = as.integer(control[["seed"]]     %||% 1L),
+      verbose  = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nuts")) {
     # Samples the exact joint community posterior (community means, per-species

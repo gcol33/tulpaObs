@@ -172,7 +172,7 @@
   # The single-block correction routes (laplace_sla / laplace_gibbs / laplace_mi)
   # belonged to the former shared-FE + scalar-species-intercept model and do not
   # apply to the community EM.
-  jsdm     = c("laplace", "nuts",
+  jsdm     = c("laplace", "nuts", "pg_gibbs",
                "nested_laplace"),
   # count: GLMM on the observed count / continuous response directly (no
   # detection, no latent state) -- the relative-abundance model of spAbundance
@@ -194,7 +194,7 @@
   # field update (R/ms_count_spatial.R), no C++. nuts: the exact joint community
   # count posterior via the in-tree C++ FullGradFn (R/ms_count_nuts.R,
   # src/ms_count_nuts.cpp), warm-started at the Laplace-EM mode; Poisson.
-  ms_count = c("laplace", "nested_laplace", "nuts"),
+  ms_count = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
   # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
   # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
   # tulpa's spatial fitters return the grid-integrated coefficient covariance, so

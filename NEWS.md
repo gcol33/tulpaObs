@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.145 (2026-07-17)
+
+* Polya-Gamma Gibbs for the community Bernoulli / binomial GLMM: `jsdm()` and
+  `ms_count(response = "binomial")` with `method = "pg_gibbs"` (#126). The
+  community logistic GLMM has no latent state and no detection sub-model -- `y`
+  is the observed k-of-n (n = 1 for jsdm's presence/absence) -- so this is the
+  simplest of the PG engines: per-species coefficients with Gaussian community
+  hyperpriors, each an exactly conjugate Gaussian update conditional on the
+  Polya-Gamma auxiliaries, plus the conjugate community mean and near-Jeffreys
+  Inverse-Gamma community variance. One fitter serves both front doors (jsdm =
+  bernoulli, `ms_count("binomial")` = k-of-n). Samples the exact community
+  posterior, so the community variance recovers where the Laplace-EM attenuates
+  (jsdm `sd_mu` 0.674 / 0.439 vs truth 0.7 / 0.5, vs Laplace 0.635 / 0.401);
+  community means + per-species coefficients recover, split-Rhat ~ 1.00. Only the
+  logistic responses are routed here -- Poisson / negbin / gaussian reject
+  `pg_gibbs` with a pointer. Non-spatial in v1 (the sfMsPGBinom / lfJSDM
+  spatial-factor PG variants are follow-ups). `R/ms_count_pg_gibbs.R`;
+  `test-ms-count-pg-gibbs.R`.
+
 ## 0.0.144 (2026-07-17)
 
 * Community dynamic occupancy Polya-Gamma Gibbs: `ms_dyn_occu()` with
