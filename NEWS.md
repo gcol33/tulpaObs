@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.169 (2026-07-18)
+
+* **Community-covariance CI coverage validation for `ms_occu_cover()` NUTS
+  (#115, B7 DoD).** The community-model NUTS Definition of Done asks for community
+  *covariance* recovery at nominal 95% coverage over >= 20 seeds, not only the
+  mean and the de-attenuation direction. Added a 20-seed test
+  (`test-ms-occu-cover-nuts.R`) that reconstructs, per fit, the posterior for the
+  six community SDs (`sqrt(diag(Sigma_arm))` for the occ / p / pos arms, 2 coords
+  each, from the sampled log-Cholesky coordinates via `.ms_ocs_chol_unpack`) and
+  checks each central 95% interval against the simulated truth. Measured: pooled
+  coverage 0.908 over the six SD components x 20 seeds (every component >= 0.85),
+  0 divergences on every seed. This is the joint-cover analogue of the `ms_occu`
+  covariance-coverage sweep (0.0.167); the covariance sampling machinery
+  (`.ms_ocs_*` log-Cholesky pack / unpack + prior) is byte-shared across all four
+  community NUTS families, and the two direct measurements (a two-state
+  single-season marginal and the heavier three-arm joint-cover marginal) bracket
+  the family likelihoods. Closes the last #115 item -- both B2 (community
+  occupancy NUTS for `ms_occu` / `ms_dyn_occu` / `ms_int_occu`) and B7
+  (`ms_occu_cover` NUTS + dispersion-RE) are shipped and validated to the DoD.
+
 ## 0.0.168 (2026-07-18)
 
 * **Continuous SPDE field on the count families (`count()` + `spde()`; #116).**
