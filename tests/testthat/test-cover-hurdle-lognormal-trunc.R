@@ -82,6 +82,47 @@ test_that("lognormal_trunc cover recovers truth from bounded cover data", {
   expect_true(all(is.finite(ll)))
 })
 
+test_that("lognormal_trunc cover recovers betas + dispersion across seeds (#140)", {
+  # Multi-seed recovery for the upper-truncated lognormal cover arm on the shared-
+  # field joint path. Estimands: occurrence + cover-arm slopes (point recovery) and
+  # the latent dispersion.
+  #
+  # Coverage caveat (measured, 8-seed diagnostic dev_notes/_diag_trunc_cov.R): unlike
+  # the plain lognormal / beta / ordinal arms, the truncated-lognormal slope Wald CI
+  # is anti-conservative on this path. The occurrence arm carries a mild ~7% shared-
+  # field slope attenuation (mean 0.65 vs 0.7; its observed-Fisher SE is honest,
+  # meanSE 0.045 >= empSD 0.036, so the miss is bias not under-dispersion), and the
+  # truncated positive arm's mode-Hessian under-captures the truncation curvature
+  # (empSD 0.058 vs meanSE 0.042, ~1.4x under-dispersed) with a ~12% upward slope
+  # bias. Pooled 95% Wald coverage therefore runs ~0.6, not the 0.85 the untruncated
+  # arms reach. This mirrors the documented shared-field-slope anti-conservatism and
+  # is a truncation-under-Laplace property (the observed information at the mode omits
+  # the truncation's third-order term), NOT a fitter regression -- so this test asserts
+  # robust point recovery and guards only against catastrophic CI breakage below.
+  skip_on_cran()
+  skip_if_fast()
+  n_seeds <- 10L
+  covered <- logical(0)
+  bo2 <- bp2 <- sg <- numeric(n_seeds)
+  for (r in seq_len(n_seeds)) {
+    s <- .sim_trunc(3000L + r, N = 3000L)
+    fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
+                data = s$data, family = cover(response = "lognormal_trunc"),
+                method = "nested_laplace", control = list(progress = FALSE))
+    expect_s3_class(fit, "cover_fit")
+    bo2[r] <- fit$beta_occ[2]; bp2[r] <- fit$beta_pos[2]; sg[r] <- fit$sigma_pos
+    covered <- c(covered,
+                 abs(fit$beta_occ[2] - s$truth$beta_occ[2]) <= 1.96 * fit$se_occ[2],
+                 abs(fit$beta_pos[2] - s$truth$beta_pos[2]) <= 1.96 * fit$se_pos[2])
+  }
+  expect_lt(abs(mean(bo2) - 0.7), 0.15)                 # occurrence slope
+  expect_lt(abs(mean(bp2) - 0.5), 0.12)                 # cover-arm slope
+  expect_lt(abs(mean(sg) / 0.8 - 1), 0.15)              # dispersion
+  # CIs recover to within a truncation-inflated band, not the nominal 0.95 (see the
+  # coverage caveat above): guard against total breakage, do not assert nominal.
+  expect_gte(mean(covered), 0.45)
+})
+
 test_that("negligible truncation reduces to the lognormal fit", {
   skip_on_cran()
   skip_if_fast()

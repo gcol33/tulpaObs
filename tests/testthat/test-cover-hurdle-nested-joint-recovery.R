@@ -114,6 +114,42 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
   expect_lt(max(rel_err), 0.25)
 })
 
+test_that("joint areal cover hurdle recovers the betas + slope CIs, calibrated (lognormal)", {
+  # #140: the base areal cover hurdle was only recovering the dispersion scalar.
+  # Here the estimands are the occurrence + cover-arm covariate slopes -- both the
+  # point recovery and the 95% Wald CI coverage over 15 seeds, matching the bar the
+  # non-spatial cover parts already meet. (The joint fit integrates out the areal
+  # field rather than surfacing a per-cell posterior mean, so the field itself is
+  # not an exposed estimand on this path.)
+  skip_on_cran()
+  skip_if_fast()
+  n_seeds <- 15L
+  n_s     <- 30L
+  adj     <- chain_adj_for_test(n_s)
+  covered <- logical(0)
+  bo2 <- bp2 <- numeric(n_seeds)
+  for (r in seq_len(n_seeds)) {
+    sim <- simulate_joint_lognormal_for_recovery(N = 400, n_s = n_s, seed = 4000L + r)
+    fit <- tobs(
+      formula = ~ x + bym2(graph = adj, group_var = "region"),
+      data = sim$data, family = cover("lognormal"), y = sim$y,
+      method = "nested_laplace",
+      control = list(sigma.grid = c(0.3, 0.6, 0.9), rho.grid = c(0.5, 0.7, 0.9),
+                     sigma.pos.grid = c(0.3, 0.6, 0.9)))
+    expect_s3_class(fit, "cover_fit")
+    bo2[r] <- fit$beta_occ[2]; bp2[r] <- fit$beta_pos[2]
+    # 95% Wald CI on each arm's covariate slope contains truth.
+    covered <- c(covered,
+                 abs(fit$beta_occ[2] - sim$truth$beta_occ[2]) <= 1.96 * fit$se_occ[2],
+                 abs(fit$beta_pos[2] - sim$truth$beta_pos[2]) <= 1.96 * fit$se_pos[2])
+  }
+  # Slope recovery: unbiased in the mean on both arms.
+  expect_lt(abs(mean(bo2) - 0.7), 0.12)      # occurrence slope
+  expect_lt(abs(mean(bp2) - 0.3), 0.10)      # cover-arm slope
+  # Pooled 95% CI coverage over both slopes x 15 seeds, >= the 0.85 rubric floor.
+  expect_gte(mean(covered), 0.85)
+})
+
 test_that("separate-hurdle beta recovers phi_pos across 10 seeds", {
   skip_on_cran()
   skip_if_fast()

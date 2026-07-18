@@ -92,3 +92,31 @@ test_that("ordinal cover recovers truth from censored class data", {
   expect_equal(ncol(ll), nrow(s$data))
   expect_true(all(is.finite(ll)))
 })
+
+test_that("ordinal cover recovers betas + slope CIs across seeds, calibrated (#140)", {
+  # The Braun-Blanquet interval-censored arm is the most survey-relevant cover
+  # positive arm (the real MOTIVATE use case), so it warrants multi-seed recovery
+  # + CI-coverage, not a single seed. Estimands: the occurrence + cover-arm slopes
+  # (point recovery + 95% Wald CI coverage) and the dispersion. (The joint fit
+  # integrates out the shared field, so it is not an exposed per-cell estimand.)
+  skip_on_cran()
+  skip_if_fast()
+  n_seeds <- 10L
+  covered <- logical(0)
+  bo2 <- bp2 <- sg <- numeric(n_seeds)
+  for (r in seq_len(n_seeds)) {
+    s <- .sim_ordinal(3000L + r, N = 3000L)
+    fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
+                data = s$data, family = cover(response = "ordinal", breaks = s$brks),
+                method = "nested_laplace", control = list(progress = FALSE))
+    expect_s3_class(fit, "cover_fit")
+    bo2[r] <- fit$beta_occ[2]; bp2[r] <- fit$beta_pos[2]; sg[r] <- fit$sigma_pos
+    covered <- c(covered,
+                 abs(fit$beta_occ[2] - s$truth$beta_occ[2]) <= 1.96 * fit$se_occ[2],
+                 abs(fit$beta_pos[2] - s$truth$beta_pos[2]) <= 1.96 * fit$se_pos[2])
+  }
+  expect_lt(abs(mean(bo2) - 0.7), 0.15)                 # occurrence slope
+  expect_lt(abs(mean(bp2) - 0.5), 0.12)                 # cover-arm slope
+  expect_lt(abs(mean(sg) / 0.85 - 1), 0.15)             # dispersion
+  expect_gte(mean(covered), 0.80)                       # pooled 95% CI coverage
+})
