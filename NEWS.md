@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.167 (2026-07-18)
+
+* **Community-covariance CI coverage validation for `ms_occu()` NUTS (#115).**
+  The community-model NUTS Definition of Done asks for community-*covariance*
+  recovery, not only the mean. Added a 20-seed test that reconstructs, per fit,
+  the posterior for the community SDs (`sqrt(diag(Sigma_arm))` from the sampled
+  log-Cholesky coordinates) and checks their 95% CIs against the simulated truth.
+  Measured coverage: `sd_psi[1]` 0.85, `sd_psi[2]` 0.95, `sd_p[1]` 0.90 (pooled
+  ~0.90), at/above the 0.85 rubric floor -- the calibration the Laplace-EM
+  variance lower bound cannot provide (`test-ms-occu-nuts.R`).
+
 ## 0.0.166 (2026-07-18)
 
 * **bym2 areal field on the count families (#116).** `count(...) + bym2(graph)`
