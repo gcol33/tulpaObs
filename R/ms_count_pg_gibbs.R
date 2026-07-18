@@ -40,13 +40,6 @@
     if (is.null(nt)) rep(1, length(vi[[s]])) else as.numeric(nt[vi[[s]], s]))
   Xs <- lapply(seq_len(S), function(s) X[vi[[s]], , drop = FALSE])
 
-  sigma.mu2 <- 100; ig_a <- 0.1; ig_b <- 0.1
-  draw_beta <- function(Xv, omega, kappa, mu, tau2) {
-    XtOX <- crossprod(Xv, Xv * omega); diag(XtOX) <- diag(XtOX) + 1 / tau2
-    V <- chol2inv(chol(XtOX)); m <- V %*% (crossprod(Xv, kappa) + mu / tau2)
-    as.vector(m + t(chol(V)) %*% stats::rnorm(ncol(Xv)))
-  }
-
   n_keep <- length(seq.int(n.warmup + 1L, n.iter, by = n.thin))
   cn <- model$process_info[[1L]]$coef_names
   run_chain <- function(chain_id) {
@@ -60,14 +53,10 @@
         if (!length(vi[[s]])) next
         eta <- as.vector(Xs[[s]] %*% b[s, ])
         om  <- rpg(ns[[s]], eta)
-        b[s, ] <- draw_beta(Xs[[s]], om, ks[[s]] - ns[[s]] / 2, mu, tau2)
+        b[s, ] <- .tobs_pg_draw_beta(Xs[[s]], om, ks[[s]] - ns[[s]] / 2,
+                                     1 / tau2, mu / tau2)
       }
-      for (j in seq_len(p)) {
-        vj <- 1 / (S / tau2[j] + 1 / sigma.mu2)
-        mu[j] <- stats::rnorm(1, vj * sum(b[, j]) / tau2[j], sqrt(vj))
-        tau2[j] <- 1 / stats::rgamma(1, ig_a + S / 2,
-                                     ig_b + 0.5 * sum((b[, j] - mu[j])^2))
-      }
+      cu <- .tobs_pg_community_update(b, mu, tau2, S); mu <- cu$mu; tau2 <- cu$tau2
       if (it > n.warmup && ((it - n.warmup - 1L) %% n.thin == 0L)) {
         ki <- ki + 1L; mu_draws[ki, ] <- mu; tau_draws[ki, ] <- sqrt(tau2)
         b_sum <- b_sum + b; nsum <- nsum + 1L
@@ -77,35 +66,19 @@
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
-  mu_chains <- lapply(chains, function(c) { colnames(c$mu) <- cn; c$mu })
-  draws <- do.call(rbind, mu_chains)
-  means <- colMeans(draws); names(means) <- cn
-  V <- stats::cov(draws); dimnames(V) <- list(cn, cn)
-  sds <- apply(draws, 2L, stats::sd); names(sds) <- cn
+  summ <- .tobs_pg_summarize(lapply(chains, `[[`, "mu"), cn)
 
   tau_all <- do.call(rbind, lapply(chains, `[[`, "tau"))
   sd_mu <- apply(tau_all, 2L, stats::median); names(sd_mu) <- cn
 
   coef_mu <- Reduce(`+`, lapply(chains, `[[`, "b")) / n.chains
   rownames(coef_mu) <- model$species_names; colnames(coef_mu) <- cn
-  blup_mu <- sweep(coef_mu, 2L, means, "-")
+  blup_mu <- sweep(coef_mu, 2L, summ$means, "-")
 
-  re <- .tobs_nuts_rhat_ess(mu_chains)
-  rhat <- re$rhat; ess <- re$ess; names(rhat) <- names(ess) <- cn
-
-  structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    n_samples = nrow(draws), n_params = length(means),
-    log_prob = rep(NA_real_, nrow(draws)), log_lik = NA_real_,
-    N = sum(model$valid), rhat = rhat, ess = ess),
-    list(
-    col_names = cn, param_names = cn, n_fixed = length(means), fixed_names = cn,
-    process_info = model$process_info,
-    model = model, spatial = NULL, method = "pg_gibbs", n_chains = n.chains,
-    ms_community = list(
+  .tobs_pg_finalize_fit(
+    summ, cn, model, model$process_info, N = sum(model$valid),
+    n.iter = n.iter, n.chains = n.chains,
+    extra = list(ms_community = list(
       Sigma_mu = diag(sd_mu^2, p), sd_mu = sd_mu,
-      coef_mu = coef_mu, blup_mu = blup_mu),
-    convergence = list(converged = any(is.finite(rhat)) &&
-                         max(rhat, na.rm = TRUE) < 1.1, n_iter = n.iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+      coef_mu = coef_mu, blup_mu = blup_mu)))
 }

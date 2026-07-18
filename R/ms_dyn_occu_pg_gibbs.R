@@ -40,14 +40,6 @@
     kmat[[s]] <- k; nmat[[s]] <- nv
   }
 
-  sigma.mu2 <- 100; ig_a <- 0.1; ig_b <- 0.1
-
-  draw_beta <- function(X, omega, kappa, mu, tau2) {
-    XtOX <- crossprod(X, X * omega); diag(XtOX) <- diag(XtOX) + 1 / tau2
-    V <- chol2inv(chol(XtOX)); m <- V %*% (crossprod(X, kappa) + mu / tau2)
-    as.vector(m + t(chol(V)) %*% stats::rnorm(ncol(X)))
-  }
-
   # 2-state FFBS for one species: returns the sampled z [n x T].
   ffbs <- function(psi1, p, gamma, eps, k, nv) {
     e1 <- p^k * (1 - p)^(nv - k)                    # occupied emission [n x T]
@@ -103,7 +95,8 @@
         z <- ffbs(psi1_s, p_s, gamma, eps, kmat[[s]], nmat[[s]])
         # season-1 occupancy -> beta_psi1_s
         om1 <- rpg(rep(1, n), as.vector(Xp1 %*% b_p1[s, ]))
-        b_p1[s, ] <- draw_beta(Xp1, om1, z[, 1] - 0.5, mu_p1, tau2_p1)
+        b_p1[s, ] <- .tobs_pg_draw_beta(Xp1, om1, z[, 1] - 0.5,
+                                        1 / tau2_p1, mu_p1 / tau2_p1)
         # detection at occupied site-seasons -> beta_p_s (aggregated per site)
         occ <- z == 1L
         nocc <- rowSums(nmat[[s]] * occ); kocc <- rowSums(kmat[[s]] * occ)
@@ -111,7 +104,8 @@
         if (length(si) >= p_pd) {
           Xo <- Xp[si, , drop = FALSE]
           omp <- rpg(nocc[si], as.vector(Xo %*% b_pd[s, ]))
-          b_pd[s, ] <- draw_beta(Xo, omp, kocc[si] - nocc[si] / 2, mu_pd, tau2_pd)
+          b_pd[s, ] <- .tobs_pg_draw_beta(Xo, omp, kocc[si] - nocc[si] / 2,
+                                          1 / tau2_pd, mu_pd / tau2_pd)
         }
         # transitions for the shared gamma / eps
         if (T_s >= 2L) {
@@ -126,29 +120,19 @@
       if (length(s0) >= p_g) {
         Xg0 <- Xg[s0, , drop = FALSE]
         omg <- rpg(n0[s0], as.vector(Xg0 %*% b_g))
-        b_g <- draw_beta(Xg0, omg, k0[s0] - n0[s0] / 2, rep(0, p_g),
-                         rep(sigma.beta^2, p_g))
+        b_g <- .tobs_pg_draw_beta(Xg0, omg, k0[s0] - n0[s0] / 2, 1 / sigma.beta^2)
       }
       s1 <- which(n1 > 0)
       if (length(s1) >= p_e) {
         Xe1 <- Xe[s1, , drop = FALSE]
         ome <- rpg(n1[s1], as.vector(Xe1 %*% b_e))
-        b_e <- draw_beta(Xe1, ome, k1[s1] - n1[s1] / 2, rep(0, p_e),
-                         rep(sigma.beta^2, p_e))
+        b_e <- .tobs_pg_draw_beta(Xe1, ome, k1[s1] - n1[s1] / 2, 1 / sigma.beta^2)
       }
       # community mean + Inverse-Gamma variance for the per-species arms
-      for (j in seq_len(p_p1)) {
-        vj <- 1 / (S / tau2_p1[j] + 1 / sigma.mu2)
-        mu_p1[j] <- stats::rnorm(1, vj * sum(b_p1[, j]) / tau2_p1[j], sqrt(vj))
-        tau2_p1[j] <- 1 / stats::rgamma(1, ig_a + S / 2,
-                                        ig_b + 0.5 * sum((b_p1[, j] - mu_p1[j])^2))
-      }
-      for (j in seq_len(p_pd)) {
-        vj <- 1 / (S / tau2_pd[j] + 1 / sigma.mu2)
-        mu_pd[j] <- stats::rnorm(1, vj * sum(b_pd[, j]) / tau2_pd[j], sqrt(vj))
-        tau2_pd[j] <- 1 / stats::rgamma(1, ig_a + S / 2,
-                                        ig_b + 0.5 * sum((b_pd[, j] - mu_pd[j])^2))
-      }
+      cu <- .tobs_pg_community_update(b_p1, mu_p1, tau2_p1, S)
+      mu_p1 <- cu$mu; tau2_p1 <- cu$tau2
+      cu <- .tobs_pg_community_update(b_pd, mu_pd, tau2_pd, S)
+      mu_pd <- cu$mu; tau2_pd <- cu$tau2
       if (it > n.warmup && ((it - n.warmup - 1L) %% n.thin == 0L)) {
         ki <- ki + 1L
         out[ki, ]     <- c(mu_p1, mu_pd, b_g, b_e)
@@ -160,11 +144,8 @@
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
-  mu_chains <- lapply(chains, function(c) { colnames(c$mu) <- par_names; c$mu })
-  draws <- do.call(rbind, mu_chains)
-  means <- colMeans(draws); names(means) <- par_names
-  V <- stats::cov(draws); dimnames(V) <- list(par_names, par_names)
-  sds <- apply(draws, 2L, stats::sd); names(sds) <- par_names
+  summ <- .tobs_pg_summarize(lapply(chains, `[[`, "mu"), par_names)
+  means <- summ$means
 
   tau_all <- do.call(rbind, lapply(chains, `[[`, "tau"))
   tau_med <- apply(tau_all, 2L, stats::median)
@@ -178,25 +159,12 @@
   colnames(coef_psi1) <- model$process_info[[1L]]$coef_names
   colnames(coef_p)    <- model$process_info[[2L]]$coef_names
 
-  re <- .tobs_nuts_rhat_ess(mu_chains)
-  rhat <- re$rhat; ess <- re$ess; names(rhat) <- names(ess) <- par_names
-
-  structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    n_samples = nrow(draws), n_params = length(means),
-    log_prob = rep(NA_real_, nrow(draws)), log_lik = NA_real_,
-    N = sum(model$valid), rhat = rhat, ess = ess),
-    list(
-    col_names = par_names, param_names = par_names,
-    n_fixed = length(means), fixed_names = par_names,
-    process_info = model$process_info,
-    model = model, spatial = NULL, method = "pg_gibbs", n_chains = n.chains,
-    ms_community = list(
+  .tobs_pg_finalize_fit(
+    summ, par_names, model, model$process_info, N = sum(model$valid),
+    n.iter = n.iter, n.chains = n.chains,
+    extra = list(ms_community = list(
       Sigma_psi1 = diag(sd_psi1^2, p_p1), Sigma_p = diag(sd_p^2, p_pd),
       sd_psi1 = sd_psi1, sd_p = sd_p, coef_psi1 = coef_psi1, coef_p = coef_p,
       blup_psi1 = sweep(coef_psi1, 2L, means[seq_len(p_p1)], "-"),
-      blup_p    = sweep(coef_p,    2L, means[p_p1 + seq_len(p_pd)], "-")),
-    convergence = list(converged = any(is.finite(rhat)) &&
-                         max(rhat, na.rm = TRUE) < 1.1, n_iter = n.iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+      blup_p    = sweep(coef_p,    2L, means[p_p1 + seq_len(p_pd)], "-"))))
 }

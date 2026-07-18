@@ -104,8 +104,8 @@ t_occu <- function() {
   n <- model$n_sites; T_s <- model$n_seasons
   p_psi <- ncol(X_occ); p_p <- ncol(X_det)
   nvis <- model$nvis; kdet <- model$kdet; anydet <- model$anydet
-  B0inv_psi <- diag(1 / sigma.beta^2, p_psi)
-  B0inv_p   <- diag(1 / sigma.beta^2, p_p)
+  B0inv_psi <- diag(1 / sigma.beta^2, p_psi)        # joins the (beta_psi, eta) GMRF
+  prec      <- 1 / sigma.beta^2                      # detection-arm coefficient prior
   ig_a <- 0.1; ig_b <- 0.1                          # near-Jeffreys IG(sigma^2)
   rho_grid <- seq(-0.95, 0.95, by = 0.05)           # AR1 correlation grid
 
@@ -114,12 +114,6 @@ t_occu <- function() {
   Xf  <- X_occ[rep(seq_len(n), each = T_s), , drop = FALSE]   # [(n*T) x p_psi]
   srow <- rep(seq_len(T_s), times = n)                        # season of each row
   N_rows <- n * T_s
-
-  draw_beta_p <- function(X, omega, kappa) {
-    XtOX <- crossprod(X, X * omega) + B0inv_p
-    V <- chol2inv(chol(XtOX)); m <- V %*% crossprod(X, kappa)
-    as.vector(m + t(chol(V)) %*% stats::rnorm(ncol(X)))
-  }
 
   n_keep <- length(seq.int(n.warmup + 1L, n.iter, by = n.thin))
   par_names <- c(paste0("psi_", model$process_info[[1L]]$coef_names),
@@ -183,7 +177,7 @@ t_occu <- function() {
         Xo <- X_det[si, , drop = FALSE]
         nv_o <- nvis[cbind(si, ti)]; kd_o <- kdet[cbind(si, ti)]
         om_p <- rpg(nv_o, as.vector(Xo %*% bp))
-        bp <- draw_beta_p(Xo, om_p, kd_o - nv_o / 2)
+        bp <- .tobs_pg_draw_beta(Xo, om_p, kd_o - nv_o / 2, prec)
       }
       if (it > n.warmup && ((it - n.warmup - 1L) %% n.thin == 0L)) {
         ki <- ki + 1L
@@ -195,29 +189,13 @@ t_occu <- function() {
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
-  dr_chains <- lapply(chains, function(c) { colnames(c$draws) <- par_names; c$draws })
-  draws <- do.call(rbind, dr_chains)
-  means <- colMeans(draws); names(means) <- par_names
-  V <- stats::cov(draws); dimnames(V) <- list(par_names, par_names)
-  sds <- apply(draws, 2L, stats::sd); names(sds) <- par_names
-  re <- .tobs_nuts_rhat_ess(dr_chains); rhat <- re$rhat; ess <- re$ess
-  names(rhat) <- names(ess) <- par_names
+  summ <- .tobs_pg_summarize(lapply(chains, `[[`, "draws"), par_names)
   eta_mean <- Reduce(`+`, lapply(chains, `[[`, "eta")) / n.chains
 
-  structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    n_samples = nrow(draws), n_params = length(means),
-    log_prob = rep(NA_real_, nrow(draws)), log_lik = NA_real_,
-    N = sum(model$nvis), rhat = rhat, ess = ess),
-    list(
-    col_names = par_names, param_names = par_names,
-    n_fixed = length(means), fixed_names = par_names,
-    process_info = model$process_info, model = model, spatial = NULL,
-    method = "pg_gibbs", n_chains = n.chains,
-    temporal_field = eta_mean,
-    convergence = list(converged = any(is.finite(rhat)) &&
-                         max(rhat, na.rm = TRUE) < 1.1, n_iter = n.iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_pg_finalize_fit(
+    summ, par_names, model, model$process_info, N = sum(model$nvis),
+    n.iter = n.iter, n.chains = n.chains,
+    extra = list(temporal_field = eta_mean))
 }
 
 .dispatch_t_occu <- function(formula, data, family, detection, y, visits,

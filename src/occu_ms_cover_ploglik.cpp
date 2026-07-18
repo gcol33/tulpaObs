@@ -116,30 +116,37 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
           if (yij == 1) {
             det_plot = true;
             sum_hdet += lp;
-            double eta_pos = eta_pos_site;
-            if (has_posv) {
-              double add = 0.0;
-              for (int k = 0; k < p_pos_visit; ++k)
-                add += X_pos_visit((std::size_t) vrow, k) * coef(idx_pos_visit, k);
-              eta_pos += add;
-            }
+            // Cover term at a detected plot with an observed cover; a missing
+            // (NA -> non-finite) cover drops out (missing-at-random cover), the
+            // detection mixture above still counts it. Without the guard an NA
+            // cover poisons sum_cover with NaN (gcol33/tulpaObs#133), unlike the
+            // 2-level sibling occu_cover_ploglik.cpp which already guards it.
             double cv = y_pos((std::size_t) i, j);
-            double dens;
-            if (positive == 3) {
-              double mu = clp(plogis(eta_pos));
-              double cvc = cv < 1e-9 ? 1e-9 : (cv > 1.0 - 1e-9 ? 1.0 - 1e-9 : cv);
-              double a = mu * disp, b = (1.0 - mu) * disp;
-              dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
-                     (a - 1.0) * std::log(cvc) + (b - 1.0) * std::log(1.0 - cvc);
-            } else if (positive == 4) {
-              // identity-Gaussian: mu = eta, residual on the raw response.
-              double r = (cv - eta_pos) / disp;
-              dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r;
-            } else {
-              double ly = std::log(cv), r = (ly - eta_pos) / disp;
-              dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r - ly;
+            if (std::isfinite(cv)) {
+              double eta_pos = eta_pos_site;
+              if (has_posv) {
+                double add = 0.0;
+                for (int k = 0; k < p_pos_visit; ++k)
+                  add += X_pos_visit((std::size_t) vrow, k) * coef(idx_pos_visit, k);
+                eta_pos += add;
+              }
+              double dens;
+              if (positive == 3) {
+                double mu = clp(plogis(eta_pos));
+                double cvc = cv < 1e-9 ? 1e-9 : (cv > 1.0 - 1e-9 ? 1.0 - 1e-9 : cv);
+                double a = mu * disp, b = (1.0 - mu) * disp;
+                dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
+                       (a - 1.0) * std::log(cvc) + (b - 1.0) * std::log(1.0 - cvc);
+              } else if (positive == 4) {
+                // identity-Gaussian: mu = eta, residual on the raw response.
+                double r = (cv - eta_pos) / disp;
+                dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r;
+              } else {
+                double ly = std::log(cv), r = (ly - eta_pos) / disp;
+                dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r - ly;
+              }
+              sum_cover += dens;
             }
-            sum_cover += dens;
           } else {
             sum_hdet += l1mp;
           }

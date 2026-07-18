@@ -40,17 +40,6 @@
     anydet[, s] <- kdet[, s] > 0L
   }
 
-  sigma.mu2 <- 100                                # community-mean prior variance
-  ig_a <- 0.1; ig_b <- 0.1                        # near-Jeffreys Inverse-Gamma(tau^2)
-
-  # One conjugate Gaussian PG update with a N(mu, diag(tau^2)) coefficient prior.
-  draw_beta <- function(X, omega, kappa, mu, tau2) {
-    XtOX <- crossprod(X, X * omega); diag(XtOX) <- diag(XtOX) + 1 / tau2
-    V <- chol2inv(chol(XtOX))
-    m <- V %*% (crossprod(X, kappa) + mu / tau2)
-    as.vector(m + t(chol(V)) %*% stats::rnorm(ncol(X)))
-  }
-
   n_keep <- length(seq.int(n.warmup + 1L, n.iter, by = n.thin))
   par_names <- c(paste0("psi_", model$process_info[[1L]]$coef_names),
                  paste0("p_",   model$process_info[[2L]]$coef_names))
@@ -78,29 +67,22 @@
         }
         # occupancy coefficients
         om <- rpg(rep(1, n), eta_psi)
-        b_psi[s, ] <- draw_beta(X_psi, om, z - 0.5, mu_psi, tau2_psi)
+        b_psi[s, ] <- .tobs_pg_draw_beta(X_psi, om, z - 0.5,
+                                         1 / tau2_psi, mu_psi / tau2_psi)
         # detection coefficients at occupied sites
         occ <- which(z == 1L & nvis[, s] > 0L)
         if (length(occ) >= p_p) {
           Xo <- X_p[occ, , drop = FALSE]
           om_p <- rpg(nvis[occ, s], as.vector(Xo %*% b_p[s, ]))
-          b_p[s, ] <- draw_beta(Xo, om_p, kdet[occ, s] - nvis[occ, s] / 2,
-                                mu_p, tau2_p)
+          b_p[s, ] <- .tobs_pg_draw_beta(Xo, om_p, kdet[occ, s] - nvis[occ, s] / 2,
+                                         1 / tau2_p, mu_p / tau2_p)
         }
       }
       # community means + variances (per coordinate, both arms)
-      for (j in seq_len(p_psi)) {
-        vj <- 1 / (S / tau2_psi[j] + 1 / sigma.mu2)
-        mu_psi[j] <- stats::rnorm(1, vj * sum(b_psi[, j]) / tau2_psi[j], sqrt(vj))
-        tau2_psi[j] <- 1 / stats::rgamma(1, ig_a + S / 2,
-                                         ig_b + 0.5 * sum((b_psi[, j] - mu_psi[j])^2))
-      }
-      for (j in seq_len(p_p)) {
-        vj <- 1 / (S / tau2_p[j] + 1 / sigma.mu2)
-        mu_p[j] <- stats::rnorm(1, vj * sum(b_p[, j]) / tau2_p[j], sqrt(vj))
-        tau2_p[j] <- 1 / stats::rgamma(1, ig_a + S / 2,
-                                       ig_b + 0.5 * sum((b_p[, j] - mu_p[j])^2))
-      }
+      cu <- .tobs_pg_community_update(b_psi, mu_psi, tau2_psi, S)
+      mu_psi <- cu$mu; tau2_psi <- cu$tau2
+      cu <- .tobs_pg_community_update(b_p, mu_p, tau2_p, S)
+      mu_p <- cu$mu; tau2_p <- cu$tau2
       if (it > n.warmup && ((it - n.warmup - 1L) %% n.thin == 0L)) {
         ki <- ki + 1L
         mu_draws[ki, ]  <- c(mu_psi, mu_p)
@@ -113,12 +95,8 @@
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
-  mu_chains <- lapply(chains, function(c) { colnames(c$mu) <- par_names; c$mu })
-
-  draws <- do.call(rbind, mu_chains)
-  means <- colMeans(draws); names(means) <- par_names
-  V <- stats::cov(draws); dimnames(V) <- list(par_names, par_names)
-  sds <- apply(draws, 2L, stats::sd); names(sds) <- par_names
+  summ <- .tobs_pg_summarize(lapply(chains, `[[`, "mu"), par_names)
+  means <- summ$means
 
   # Community SD (a derived quantity = sqrt(tau^2)): report the posterior MEDIAN,
   # robust to the right-skew of the variance-component posterior at moderate S
@@ -139,25 +117,12 @@
   blup_psi <- sweep(coef_psi, 2L, means[seq_len(p_psi)], "-")
   blup_p   <- sweep(coef_p,   2L, means[p_psi + seq_len(p_p)], "-")
 
-  re <- .tobs_nuts_rhat_ess(mu_chains)
-  rhat <- re$rhat; ess <- re$ess; names(rhat) <- names(ess) <- par_names
-
-  structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    n_samples = nrow(draws), n_params = length(means),
-    log_prob = rep(NA_real_, nrow(draws)), log_lik = NA_real_,
-    N = sum(model$valid), rhat = rhat, ess = ess),
-    list(
-    col_names = par_names, param_names = par_names,
-    n_fixed = length(means), fixed_names = par_names,
-    process_info = model$process_info,
-    model = model, spatial = NULL, method = "pg_gibbs", n_chains = n.chains,
-    ms_community = list(
+  .tobs_pg_finalize_fit(
+    summ, par_names, model, model$process_info, N = sum(model$valid),
+    n.iter = n.iter, n.chains = n.chains,
+    extra = list(ms_community = list(
       Sigma_psi = diag(sd_psi^2, p_psi), Sigma_p = diag(sd_p^2, p_p),
       sd_psi = sd_psi, sd_p = sd_p,
       coef_psi = coef_psi, coef_p = coef_p,
-      blup_psi = blup_psi, blup_p = blup_p),
-    convergence = list(converged = any(is.finite(rhat)) &&
-                         max(rhat, na.rm = TRUE) < 1.1, n_iter = n.iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+      blup_psi = blup_psi, blup_p = blup_p)))
 }

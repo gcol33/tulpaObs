@@ -661,22 +661,29 @@
   switch(positive, beta = 3L, gaussian = 4L, lognormal = 0L, 0L)
 }
 
+# Positive-arm log-density. Single source of truth with the fit kernel
+# src/occu_coupling_shared.h::pos_log_density: no eta clamp (the coupling kernel
+# does not clamp -- at |eta| <= the converged mode the +-30 clamp never bit, and
+# dropping it makes the WAIC / LOO pointwise density the number the model was fit
+# with) and .tobs_log_safe on every log so the density is finite at the cover
+# boundary (cover exactly 0 or 1) instead of -Inf (gcol33/tulpaObs#133).
 .occu_cover_pos_logdens <- function(y, eta, disp, positive) {
   if (identical(positive, "beta")) {
-    mu <- stats::plogis(.tobs_clamp_eta(eta))
+    mu <- stats::plogis(eta)
     a  <- mu * disp
     b  <- (1 - mu) * disp
     lgamma(disp) - lgamma(a) - lgamma(b) +
-      (a - 1) * log(y) + (b - 1) * log(1 - y)
+      (a - 1) * .tobs_log_safe(y) + (b - 1) * .tobs_log_safe(1 - y)
   } else if (identical(positive, "gaussian")) {
     # Identity-Gaussian arm (gcol33/tulpaObs#112): residual on the raw response,
     # no change-of-variable Jacobian. mu = eta.
-    -log(disp) - 0.5 * log(2 * pi) -
+    -.tobs_log_safe(disp) - 0.5 * log(2 * pi) -
       0.5 * ((y - eta) / disp)^2
   } else {
     # lognormal: residual on log-cover, with the -log(y) Jacobian.
-    -log(y) - log(disp) - 0.5 * log(2 * pi) -
-      0.5 * ((log(y) - eta) / disp)^2
+    ly <- .tobs_log_safe(y)
+    -ly - .tobs_log_safe(disp) - 0.5 * log(2 * pi) -
+      0.5 * ((ly - eta) / disp)^2
   }
 }
 

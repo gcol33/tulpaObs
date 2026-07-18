@@ -22,6 +22,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "occu_coupling_shared.h"   // pos_log_density -- the fit-kernel positive density
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -53,26 +54,13 @@ inline double logsumexp2(double a, double b) {
   return m + std::log1p(std::exp(s - m));
 }
 
-// Positive-arm log-density, mirroring .occu_cover_pos_logdens. The `positive`
-// code follows the shared cover scheme (lognormal 0, beta 3, gaussian 4). Beta
-// clamps the predictor before the logistic; lognormal uses the raw predictor on
-// log-cover; gaussian (gcol33/tulpaObs#112) uses the raw response, no Jacobian.
-inline double pos_logdens(double y, double eta, double disp, int positive,
-                          double bound) {
-  if (positive == 3) {  // beta
-    double mu = stable_plogis(clamp_eta(eta, bound));
-    double a  = mu * disp;
-    double b  = (1.0 - mu) * disp;
-    return std::lgamma(disp) - std::lgamma(a) - std::lgamma(b) +
-           (a - 1.0) * std::log(y) + (b - 1.0) * std::log(1.0 - y);
-  }
-  if (positive == 4) {  // identity-Gaussian (raw response, no log Jacobian)
-    double r = (y - eta) / disp;
-    return -std::log(disp) - 0.5 * std::log(2.0 * M_PI) - 0.5 * r * r;
-  }
-  double ly = std::log(y);   // lognormal (y on log scale via the -ly Jacobian)
-  double r  = (ly - eta) / disp;
-  return -ly - std::log(disp) - 0.5 * std::log(2.0 * M_PI) - 0.5 * r * r;
+// Positive-arm log-density = the fit kernel src/occu_coupling_shared.h::
+// pos_log_density (Beta/Lognormal/Gaussian::log_density; code 0/3/4). Routing
+// through it makes WAIC / LOO score the positive arm with the exact density the
+// model was fit with: log_safe at the cover boundary (cover exactly 0 or 1) so
+// the density is finite rather than -Inf, and no eta clamp (gcol33/tulpaObs#133).
+inline double pos_logdens(double y, double eta, double disp, int positive) {
+  return tulpaObs::pos_log_density(positive, y, eta, disp);
 }
 
 // Dot of design row i (column-major [nrow x p]) with draw-d coefficient row of
@@ -196,7 +184,7 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
           if (has_pos_visit) {
             ep += row_dot(pXpv, V, v, pBpos, S, d, p_pos_site, p_pos_vis);
           }
-          cov[s] += pos_logdens(ypos[v], ep, disp_d, positive, eta_bound);
+          cov[s] += pos_logdens(ypos[v], ep, disp_d, positive);
         }
       }
 

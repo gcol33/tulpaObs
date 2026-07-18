@@ -73,6 +73,30 @@ test_that("planned families are a no-op (they error earlier via dispatch)", {
   expect_silent(.tobs_validate_family_method("nuts", distance()))
 })
 
+test_that("the #116 laplace-only families give the friendly registry error", {
+  # royle_nichols / occu_ttd / occu_multi / double_observer / gdistremoval /
+  # distsamp_open are laplace-only. Each is in `.tobs_family_methods`, so an
+  # unsupported method= is rejected by the central registry with a "Supported:"
+  # pointer BEFORE dispatch, rather than falling through to a per-dispatcher
+  # `.map_engine` internal-error (gcol33/tulpaObs#141).
+  laplace_only <- c("royle_nichols", "occu_ttd", "occu_multi",
+                    "double_observer", "gdistremoval", "distsamp_open")
+  for (fam_name in laplace_only) {
+    fam <- get(fam_name, envir = asNamespace("tulpaObs"))()
+    expect_identical(.tobs_family_methods[[fam_name]], "laplace",
+                     info = fam_name)
+    err <- tryCatch(
+      .tobs_validate_family_method("nested_laplace", fam),
+      error = function(e) conditionMessage(e)
+    )
+    expect_match(err, sprintf("not available for %s", fam_name), fixed = TRUE)
+    expect_match(err, "Supported:", fixed = TRUE)
+    expect_match(err, "\"laplace\"", fixed = TRUE)
+    # The internal .map_engine fall-through message must NOT surface.
+    expect_false(grepl("Internal error", err), info = fam_name)
+  }
+})
+
 # ---- public tobs() path ---------------------------------------------------
 
 test_that("tobs() passes the method gate for dyn_occu + nested_laplace (now supported)", {

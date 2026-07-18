@@ -1,5 +1,40 @@
 # tulpaObs NEWS
 
+## 0.0.174 (2026-07-18)
+
+Consistency, single-source, and WAIC-boundary fixes from the read-only audit
+(closes #141, #135, #133).
+
+* **The Polya-Gamma Gibbs conjugate machinery is a single shared engine
+  (#135).** The six PG-Gibbs fitters (`occu()`, `t_occu()`, `ms_occu()`,
+  `ms_int_occu()`, `ms_dyn_occu()`, `ms_count()` / `jsdm()`) re-inlined the same
+  conjugate coefficient draw, the community mean + Inverse-Gamma variance loop,
+  the hyperprior constants, and the post-sampling summary / fit assembly. These
+  now live once in `R/pg_gibbs_shared.R` (`.tobs_pg_draw_beta`,
+  `.tobs_pg_community_update`, `.tobs_pg_hyper`, `.tobs_pg_summarize`,
+  `.tobs_pg_finalize_fit`); each fitter keeps only its latent-state step and
+  design layout. Behaviour is byte-identical (verified: every family's fit is
+  bit-for-bit unchanged at a fixed seed).
+
+* **The `#116` observation families give the friendly method error (#141).**
+  `royle_nichols()`, `occu_ttd()`, `occu_multi()`, `double_observer()`,
+  `gdistremoval()`, and `distsamp_open()` already sat in `.tobs_family_methods`,
+  so an unsupported `method =` was already rejected with a "Supported: laplace"
+  pointer; a regression test now pins that contract.
+
+* **`occu_cover()` WAIC / LOO pointwise density matches the fit kernel at the
+  cover boundary (#133).** The WAIC / LOO pointwise log-density
+  (`src/occu_cover_ploglik.cpp`) is now the fit kernel
+  `src/occu_coupling_shared.h::pos_log_density` itself, and the R positive-arm
+  density (`.occu_cover_pos_logdens`, via the new `.tobs_log_safe`) drops the eta
+  clamp and guards `log(0)`. A detected visit with cover exactly 0 or 1 now
+  yields a finite pointwise density (the number the model was fit with) instead
+  of `-Inf` / `NaN`, and the density no longer clamps the predictor. The
+  three-level `src/occu_ms_cover_ploglik.cpp` gains the missing
+  `isfinite(cover)` guard at a detected plot, so a missing-at-random cover drops
+  out instead of poisoning the pointwise sum. Non-spatial fits are numerically
+  unchanged.
+
 ## 0.0.173 (2026-07-18)
 
 Three inline-variant scope notes graduated to working features.
