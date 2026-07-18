@@ -30,9 +30,9 @@ A single-season occupancy site contributes a *mixture* over its latent state: oc
 
 `tulpaObs` implements the marginalized likelihood directly. The latent state integrates out exactly (the occupancy `z`, the N-mixture abundance `N`), so the fit recovers `psi` and `p` as separate processes. The `occupancy-vs-inla` vignette runs the head-to-head against the binomial workaround on simulated data with known truth.
 
-## Two inference backends, one model
+## Inference backends, one model
 
-Laplace by default, with Gibbs / multiple-imputation debiasing where the approximation is biased; HMC/NUTS on demand for a full posterior. Both backends share the same model, the same data, and the same S3 surface:
+Laplace by default, with Gibbs / multiple-imputation debiasing where the approximation is biased; HMC/NUTS on demand for a full posterior. Occupancy families also offer `method = "pg_gibbs"`, an exact Polya-Gamma Gibbs sampler (the `spOccupancy` engine) that recovers the community-variance components the Laplace-EM attenuates. Every backend shares the same model, the same data, and the same S3 surface:
 
 ```r
 coef(fit); confint(fit); vcov(fit); logLik(fit)
@@ -49,17 +49,24 @@ The random-effect variance components carry the Laplace small-cluster bias for b
 | Constructor               | Model                                          | Reference                  |
 |---------------------------|------------------------------------------------|----------------------------|
 | `occu()`                  | Single-season occupancy                        | MacKenzie et al. (2002)    |
-| `dyn_occu()`              | Dynamic occupancy (colonization / extinction)  |                            |
-| `int_occu()`              | Integrated multi-source occupancy              |                            |
+| `dyn_occu()`              | Dynamic occupancy (colonization / extinction)  | MacKenzie et al. (2003)    |
+| `t_occu()`                | Multi-season occupancy, AR1 year effect        | spOccupancy `tPGOcc`       |
+| `int_occu()`              | Integrated multi-source occupancy              | Miller et al. (2019)       |
+| `dyn_int_occu()`          | Multi-season integrated occupancy              | spOccupancy `tIntPGOcc`    |
 | `fp_occu()`               | False-positive occupancy                       | Miller et al. (2011)       |
 | `royle_nichols()`         | Abundance-induced detection heterogeneity      | Royle & Nichols (2003)     |
+| `occu_ttd()`              | Time-to-detection occupancy                    | Garrard et al. (2008)      |
+| `occu_multi()`            | Multi-species co-occurrence occupancy          | Rota et al. (2016)         |
 | `jsdm()`                  | Joint species distribution (no detection)      |                            |
 | `abun()`                  | N-mixture abundance (Poisson / negbin)         | Royle (2004)               |
+| `dyn_abun()`              | Open (Dail-Madsen) N-mixture                   | Dail & Madsen (2011)       |
 | `count()`                 | Count / relative-abundance GLMM (no detection) | spAbundance `abund`        |
 | `ms_count()`              | Community relative-abundance GLMM (no detection) | spAbundance `msAbund`    |
-| `dyn_abun()`              | Open (Dail-Madsen) N-mixture                   | Dail & Madsen (2011)       |
 | `distance()`              | Binned distance sampling                       | Buckland et al. (2001)     |
+| `distsamp_open()`         | Open-population distance sampling              | Sollmann et al. (2015)     |
+| `gdistremoval()`          | Joint distance + removal                       | Amundson et al. (2014)     |
 | `removal()`               | Removal sampling                               | Dorazio et al. (2005)      |
+| `double_observer()`       | Double-observer abundance                      | Nichols et al. (2000)      |
 | `cover()`                 | Cover hurdle (beta / lognormal / ordinal)      |                            |
 | `occu_categorical()`      | Presence + nominal-class hurdle                |                            |
 | `occu_cover()`            | Joint occupancy + cover hurdle                 |                            |
@@ -68,6 +75,7 @@ The random-effect variance components carry the Laplace small-cluster bias for b
 | `ms_dyn_occu()`           | Community dynamic occupancy                    |                            |
 | `ms_int_occu()`           | Community integrated occupancy                 |                            |
 | `ms_abun()`               | Community N-mixture                            | spAbundance `msNMix`       |
+| `ms_distance()`           | Community distance sampling                    | Sollmann et al. (2016)     |
 | `ms_occu_cover()`         | Community joint occupancy + cover              |                            |
 
 `unmarked`, `spOccupancy`, and `spAbundance` cover these models with a fixed per-model menu of structure. Here the same likelihoods sit on the tulpa engine, so any of them composes with the engine's latent structure.
@@ -95,7 +103,7 @@ WAIC, posterior predictive checks, PIT residuals, over-dispersion and zero-infla
 ```r
 install.packages("pak")
 pak::pak("gcol33/tulpaObs")            # latest from GitHub
-pak::pak("gcol33/tulpaObs@v0.0.112")  # a specific tagged release
+pak::pak("gcol33/tulpaObs@v0.0.172")  # a specific tagged release
 ```
 
 Tagged releases are listed at
