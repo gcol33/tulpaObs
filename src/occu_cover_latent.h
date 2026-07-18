@@ -71,7 +71,7 @@ struct LnSuffStat {
 inline LnSuffStat ln_suff_stat(const double* y, int m) {
     LnSuffStat s; s.m = m;
     for (int j = 0; j < m; ++j) {
-        const double ly = std::log(y[j]);
+        const double ly = log_safe_(y[j]);   // consistent boundary with the other cover paths
         s.t1 += ly;
         s.t2 += ly * ly;
     }

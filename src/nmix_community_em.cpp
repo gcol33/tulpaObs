@@ -67,6 +67,12 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
     if (orcp == nullptr)
         Rcpp::stop("cpp_nmix_community_em: `oracle` is not an NMixCommunityOracle.");
     tulpaObs::NMixCommunityOracle& orc = *orcp;
+    // This driver's covariance M-step slices b_s as head(p_lam)/tail(p_p); an
+    // NB/ZI oracle carries a trailing log_r so d != p_lam + p_p and tail(p_p)
+    // would slice the wrong block. Poisson-only by contract.
+    if (orc.is_nb || orc.is_zi)
+        Rcpp::stop("cpp_nmix_community_em: Poisson-only oracle required "
+                   "(NB/ZI community N-mixture uses the AGHQ path).");
 
     const int p_lam = orc.p_lam;
     const int p_p   = orc.p_p;

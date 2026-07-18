@@ -340,9 +340,6 @@
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
                               max_iter = max_iter, tol = tol,
                               label = "dyn-int-occu-spatial", integration = integration)
-  if (!isTRUE(res$ok))
-    stop("dyn_int_occu() areal spatial fit produced no usable grid point.",
-         call. = FALSE)
 
   nm <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))

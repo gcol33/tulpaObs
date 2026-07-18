@@ -124,7 +124,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
 
     std::vector<double> C_beta;
     chol_unpack_cpp(th + d.chol_beta_off, pb, C_beta);
-    const double C_lr = nb ? std::exp(th[d.chol_logr_off]) : 0.0;
+    const double C_lr = nb ? chol_diag_exp(th[d.chol_logr_off]) : 0.0;
 
     std::vector<double> A_beta((std::size_t) pb * pb, 0.0);   // A[i,j] = sum_s gb_i z_j
     double A_lr = 0.0;

@@ -290,17 +290,9 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   n_sites <- model$n_sites
   map <- seq_len(n_sites)
   temporal_only <- is.null(spatial)
-  temporal_spec <- if (!is.null(temporal))
-    .tobs_temporal_field_spec(temporal, n_sites, "removal") else NULL
-  # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
-  # temporal block; otherwise the areal field is block 1 and the temporal block 2.
   # A detection-arm areal field (det_arm, #114) is a single areal block that loads
   # on eta_p; temporal does not compose with the detection-arm field on this path.
-  field <- if (temporal_only) list(temporal_spec)
-           else if (is.null(temporal))
-             .tobs_areal_field_spec(spatial, n_sites, "removal", map)
-           else list(.tobs_areal_field_spec(spatial, n_sites, "removal", map),
-                     temporal_spec)
+  field <- .tobs_build_field_spec(spatial, temporal, "removal", n_sites, map)
 
   X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lam); p_p <- ncol(X_p)
@@ -356,9 +348,6 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
                               max_iter = max_iter, tol = tol,
                               label = "removal-spatial", integration = "grid")
-  if (!isTRUE(res$ok))
-    stop("removal() areal spatial + temporal fit produced no usable grid point.",
-         call. = FALSE)
 
   means <- res$beta_mean; V <- res$vcov
   raw <- list(
@@ -372,26 +361,11 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     vcov = V[c(i_lam, i_p), c(i_lam, i_p), drop = FALSE],
     log_lik = res$log_lik, converged = TRUE, K_max = K_max)
   fit <- build_nmix_fit(raw, model, spatial = spatial)
-  fit$method <- "nested_laplace"
-  fit$temporal <- temporal
-  fit$spatial_integration <- res$integration
-  if (temporal_only) {
-    # The single temporal block is reported by the driver as block 1
-    # (field_mean / hyper); relabel it as the temporal field (#114).
-    fit$temporal_field <- res$field_mean
-    fit$temporal_hyper <- res$hyper
-  } else {
-    fit$spatial_field  <- res$field_mean
-    fit$spatial_hyper  <- res$hyper
-    # The field loads on the abundance (log lambda) arm by default, or on the
-    # per-pass capture logit when the term sits in the detection formula (#114).
-    fit$spatial_field_arm <- if (det_arm) "detection" else "abundance"
-    if (!is.null(temporal)) {
-      fit$temporal_field <- res$temporal_field
-      fit$temporal_hyper <- res$temporal_hyper
-    }
-  }
-  fit
+  # The field loads on the abundance (log lambda) arm by default, or on the
+  # per-pass capture logit when the term sits in the detection formula (#114).
+  # removal does not surface the outer Pareto-k diagnostic (pareto_k = FALSE).
+  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
+                             pareto_k = FALSE)
 }
 
 # Areal-spatial removal sampling via NUTS (gcol33/tulpaObs#72): a FIXED-HYPER

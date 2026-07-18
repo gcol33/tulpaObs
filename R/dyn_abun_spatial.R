@@ -28,16 +28,7 @@
   # back with no aggregation. omega / gamma never carry a structured field.
   det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
   map <- seq_len(model$n_sites)
-  # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
-  # temporal block; otherwise the areal field is block 1 and the temporal block 2.
-  field <- if (temporal_only) {
-    list(.tobs_temporal_field_spec(temporal, model$n_sites, "dyn_abun"))
-  } else {
-    field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "dyn_abun", map)
-    if (is.null(temporal)) field_sp
-    else list(field_sp,
-              .tobs_temporal_field_spec(temporal, model$n_sites, "dyn_abun"))
-  }
+  field <- .tobs_build_field_spec(spatial, temporal, "dyn_abun", model$n_sites, map)
 
   X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
@@ -84,8 +75,6 @@
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
                               max_iter = max_iter, tol = tol, label = "dyn-abun-spatial",
                               integration = integration)
-  if (!isTRUE(res$ok))
-    stop("dyn_abun() areal spatial fit produced no usable grid point.", call. = FALSE)
 
   nm <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
           paste0("p_",      model$process_info[[2]]$coef_names),
@@ -103,28 +92,9 @@
     means = means, vcov = V, log_lik = res$log_lik, mean_N1 = NULL,
     K_max = K, converged = TRUE, n_iter = NA_integer_, coef_names = nm)
   fit <- build_dyn_abun_fit(raw, model)
-  fit$method <- "nested_laplace"
-  fit$spatial_integration <- res$integration
-  fit$spatial_pareto_k <- res$pareto_k
-  if (temporal_only) {
-    # The single temporal block is reported by the driver as block 1
-    # (field_mean / hyper); relabel it as the temporal field (#114).
-    fit$temporal <- temporal
-    fit$temporal_field <- res$field_mean
-    fit$temporal_hyper <- res$hyper
-  } else {
-    fit$spatial_field <- res$field_mean
-    fit$spatial_hyper <- res$hyper
-    # The field loads on the initial-abundance (log lambda_1) arm by default, or on
-    # the per-site detection logit eta_p when the term sits in `detection=` (#114).
-    fit$spatial_field_arm <- if (det_arm) "detection" else "abundance"
-    if (!is.null(temporal)) {
-      fit$temporal <- temporal
-      fit$temporal_field <- res$temporal_field
-      fit$temporal_hyper <- res$temporal_hyper
-    }
-  }
-  fit
+  # The field loads on the initial-abundance (log lambda_1) arm by default, or on
+  # the per-site detection logit eta_p when the term sits in `detection=` (#114).
+  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance")
 }
 
 # Areal-spatial Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#72): a FIXED-

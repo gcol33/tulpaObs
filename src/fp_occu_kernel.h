@@ -105,8 +105,8 @@ inline FpOccuSiteResult compute_fp_occu_site(
         }
     }
 
-    const double lpsi  = std::log(psi);
-    const double l1mpsi = std::log1p(-psi);
+    double lpsi, l1mpsi;
+    fp_logit_log_probs(eta_psi, lpsi, l1mpsi);  // stable log(psi), log(1-psi)
     const double t1 = lpsi + logA;          // log(psi * A)
     double log_lik, w1;
     if (B_zero) {

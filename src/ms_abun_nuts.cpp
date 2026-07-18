@@ -208,7 +208,7 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
     std::vector<double> C_lam, C_p;
     chol_unpack_cpp(th + d.chol_lam_off, p_lam, C_lam);
     chol_unpack_cpp(th + d.chol_p_off,   p_p,   C_p);
-    const double C_lr = nb ? std::exp(th[d.chol_logr_off]) : 0.0;
+    const double C_lr = nb ? chol_diag_exp(th[d.chol_logr_off]) : 0.0;
 
     // chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
     std::vector<double> A_lam((std::size_t) p_lam * p_lam, 0.0),

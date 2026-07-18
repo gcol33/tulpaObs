@@ -581,6 +581,34 @@
   }
 }
 
+# Attach the `$nuts` slot to a reconstructed community-NUTS fit from a
+# `.ms_ocs_run_chains` result. Every in-tree community sampler assembles the same
+# diagnostics block (draws, per-iter accept/divergent/treedepth/epsilon, chain
+# count, and the split-Rhat/bulk-ESS tail when >1 chain ran); the only per-family
+# differences are the layout `lay` and any extra scalar hyperparameters (e.g. the
+# NB `sigma_logr`), passed through `...` into the block. Single source for the
+# rc-unpack + fit$nuts glue the families used to re-inline (gcol33/tulpaObs#136).
+.ms_ocs_finalize_nuts_fit <- function(fit, rc, lay, n_chains, ...) {
+  fit$nuts <- c(list(
+    draws           = rc$draws,
+    layout          = lay,
+    accept_prob     = rc$accept,
+    divergent       = rc$divergent,
+    treedepth       = rc$treedepth,
+    epsilon         = rc$epsilon,
+    n_chains        = as.integer(n_chains),
+    divergent_total = sum(rc$divergent)),
+    list(...))
+  re <- rc$rhat_ess
+  if (!is.null(re)) {
+    fit$nuts$rhat     <- re$rhat
+    fit$nuts$ess      <- re$ess
+    fit$nuts$max_rhat <- max(re$rhat, na.rm = TRUE)
+    fit$nuts$min_ess  <- min(re$ess,  na.rm = TRUE)
+  }
+  fit
+}
+
 # Fit the spatial-factor community occu_cover by NUTS: a short Laplace-EM warm
 # start sets the initial position and the inverse-mass metric, then tulpa's NUTS
 # (driven by the C++ FullGradFn) samples the exact joint posterior. `n.chains > 1`

@@ -734,6 +734,12 @@ Rcpp::List run_community_spatial_grid(
     const int p_lam = orc.p_lam, p_p = orc.p_p, d = p_lam + p_p;
     Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
     std::vector<int> map = resolve_map(map_site_to_unit_R, n_sites, n_spatial);
+    if ((int)mu_init.size() != d)
+        Rcpp::stop("mu_init length must equal p_lam + p_p.");
+    if (Sigma_lambda_init.nrow() != p_lam || Sigma_lambda_init.ncol() != p_lam)
+        Rcpp::stop("Sigma_lambda_init must be p_lam x p_lam.");
+    if (Sigma_p_init.nrow() != p_p || Sigma_p_init.ncol() != p_p)
+        Rcpp::stop("Sigma_p_init must be p_p x p_p.");
     VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
     MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
     MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);
@@ -937,6 +943,12 @@ Rcpp::List cpp_nmix_community_spatial_spde(
         Rcpp::stop("nrow(A) must equal nrow(X_lambda).");
     Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
     const MatrixXd A = Map<MatrixXd>(REAL(A_R), n_sites, n_mesh);
+    if ((int)mu_init.size() != d)
+        Rcpp::stop("mu_init length must equal p_lam + p_p.");
+    if (Sigma_lambda_init.nrow() != p_lam || Sigma_lambda_init.ncol() != p_lam)
+        Rcpp::stop("Sigma_lambda_init must be p_lam x p_lam.");
+    if (Sigma_p_init.nrow() != p_p || Sigma_p_init.ncol() != p_p)
+        Rcpp::stop("Sigma_p_init must be p_p x p_p.");
     VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
     MatrixXd Sl0 = Map<MatrixXd>(REAL(Sigma_lambda_init), p_lam, p_lam);
     MatrixXd Sp0 = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);

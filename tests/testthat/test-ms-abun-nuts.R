@@ -44,7 +44,7 @@
                n_sites = model$n_sites, n_species = model$n_species,
                K_max = K_max, is_nb = is_nb)
   list(sim = sim, model = model, lay = lay, margs = margs, theta0 = theta0,
-       spec = spec, pri = tulpaObs:::.tobs_ms_abun_nuts_priors(), is_nb = is_nb)
+       spec = spec, pri = tulpaObs:::.ms_ocs_nuts_priors(), is_nb = is_nb)
 }
 
 .msan_fd_grad <- function(f, theta, h = 1e-5) {

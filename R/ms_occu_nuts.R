@@ -304,12 +304,7 @@
   }
 
   rc <- .ms_ocs_run_chains(run_chain, n.chains)
-  draws     <- rc$draws
-  accept    <- rc$accept
-  divergent <- rc$divergent
-  treedepth <- rc$treedepth
-  epsilon   <- rc$epsilon
-  rhat_ess  <- rc$rhat_ess
+  draws <- rc$draws
 
   # ---- reconstruct the .tobs_community_em `fit` shape from the draws ----
   par    <- colMeans(draws)
@@ -346,17 +341,5 @@
   fit$method <- "nuts"
   fit$log_prob <- rep(ll_mean, nrow(draws))
 
-  fit$nuts <- list(
-    draws = draws, layout = lay,
-    accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = as.integer(n.chains),
-    divergent_total = sum(divergent),
-    sigma_beta = sigma.beta)
-  if (!is.null(rhat_ess)) {
-    fit$nuts$rhat     <- rhat_ess$rhat
-    fit$nuts$ess      <- rhat_ess$ess
-    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
-    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
-  }
-  fit
+  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains, sigma_beta = sigma.beta)
 }

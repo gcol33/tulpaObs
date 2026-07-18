@@ -112,6 +112,8 @@ inline MsIntOccuNutsData ms_int_occu_nuts_build_data(const Rcpp::List& spec) {
         IntegerMatrix dd = Rcpp::as<IntegerMatrix>(nd[s]);
         if (vd.nrow() != d.n_sites || vd.ncol() != d.n_species)
             Rcpp::stop("n_valid[[d]] must be n_sites x n_species");
+        if (dd.nrow() != d.n_sites || dd.ncol() != d.n_species)
+            Rcpp::stop("n_det[[d]] must be n_sites x n_species");
         NV.push_back(vd); ND.push_back(dd);
     }
 

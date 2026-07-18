@@ -35,16 +35,7 @@
   hazard <- identical(model$key, "hazard")
   key_code <- .dist_key_code(model$key)
   map <- seq_len(model$n_sites)
-  # Temporal-only fit (gcol33/tulpaObs#114): the areal-BFGS driver runs the single
-  # temporal block; otherwise the areal field is block 1 and the temporal block 2.
-  field <- if (temporal_only) {
-    list(.tobs_temporal_field_spec(temporal, model$n_sites, "distance"))
-  } else {
-    field_sp <- .tobs_areal_field_spec(spatial, model$n_sites, "distance", map)
-    if (is.null(temporal)) field_sp
-    else list(field_sp,
-              .tobs_temporal_field_spec(temporal, model$n_sites, "distance"))
-  }
+  field <- .tobs_build_field_spec(spatial, temporal, "distance", model$n_sites, map)
 
   X_lam <- model$X_processes[[1]]; X_sig <- model$X_processes[[2]]
   p_lam <- ncol(X_lam); p_sig <- ncol(X_sig)
@@ -105,8 +96,6 @@
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
                               max_iter = max_iter, tol = tol, label = "distance-spatial",
                               integration = integration)
-  if (!isTRUE(res$ok))
-    stop("distance() areal spatial fit produced no usable grid point.", call. = FALSE)
 
   means <- res$beta_mean
   raw <- list(
@@ -119,28 +108,9 @@
     vcov = res$vcov, log_lik = res$log_lik, converged = TRUE,
     key = model$key, transect = model$transect, hazard = hazard, K_max = K_max)
   fit <- build_distance_fit(raw, model)
-  fit$method <- "nested_laplace"
-  fit$spatial_integration <- res$integration
-  fit$spatial_pareto_k <- res$pareto_k
-  if (temporal_only) {
-    # The single temporal block is reported by the driver as block 1
-    # (field_mean / hyper); relabel it as the temporal field (#114).
-    fit$temporal <- temporal
-    fit$temporal_field <- res$field_mean
-    fit$temporal_hyper <- res$hyper
-  } else {
-    fit$spatial_field <- res$field_mean
-    fit$spatial_hyper <- res$hyper
-    # The field loads on the abundance (log lambda) arm by default, or on the
-    # detection scale (log sigma) arm when the term sits in the detection formula.
-    fit$spatial_field_arm <- if (det_arm) "detection" else "abundance"
-    if (!is.null(temporal)) {
-      fit$temporal <- temporal
-      fit$temporal_field <- res$temporal_field
-      fit$temporal_hyper <- res$temporal_hyper
-    }
-  }
-  fit
+  # The field loads on the abundance (log lambda) arm by default, or on the
+  # detection scale (log sigma) arm when the term sits in the detection formula.
+  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance")
 }
 
 # Areal-spatial binned distance sampling via NUTS (gcol33/tulpaObs#72): a FIXED-

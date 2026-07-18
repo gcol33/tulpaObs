@@ -129,6 +129,9 @@ inline DistSiteResult compute_distance_site(
         if (nd == 2) { p1 += s1; p11 += s11; p01 += s01; }
     }
 
+    // Gauss-Legendre quadrature can round the total detection probability to
+    // 1+eps; clamp so 1-p stays positive on a detection-ceiling site.
+    if (p > 1.0 - 1e-12) p = 1.0 - 1e-12;
     const double omp = 1.0 - p;                  // 1 - p (undetected prob)
     // A detected bin with vanishing cell probability makes the site impossible.
     bool impossible = (omp <= 0.0);

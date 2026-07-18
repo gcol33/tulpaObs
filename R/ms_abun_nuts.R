@@ -382,12 +382,7 @@
   }
 
   rc <- .ms_ocs_run_chains(run_chain, n.chains)
-  draws     <- rc$draws
-  accept    <- rc$accept
-  divergent <- rc$divergent
-  treedepth <- rc$treedepth
-  epsilon   <- rc$epsilon
-  rhat_ess  <- rc$rhat_ess
+  draws <- rc$draws
 
   # ---- reconstruct the build_ms_nmix_fit `raw` shape from the draws ----
   par    <- colMeans(draws)
@@ -432,20 +427,9 @@
   fit$method <- "nuts"
   fit$log_prob <- rep(ll_mean, nrow(draws))
 
-  fit$nuts <- list(
-    draws = draws, layout = lay,
-    accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = as.integer(n.chains),
-    divergent_total = sum(divergent),
-    is_nb = is_nb, K_max = K_max,
-    sigma_beta = sigma.beta, sigma_logr = sigma.logr)
-  if (!is.null(rhat_ess)) {
-    fit$nuts$rhat     <- rhat_ess$rhat
-    fit$nuts$ess      <- rhat_ess$ess
-    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
-    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
-  }
-  fit
+  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                            is_nb = is_nb, K_max = K_max,
+                            sigma_beta = sigma.beta, sigma_logr = sigma.logr)
 }
 
 
@@ -566,12 +550,7 @@
     seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
 
   rc <- .ms_ocs_run_chains(run_chain, n.chains)
-  draws     <- rc$draws
-  accept    <- rc$accept
-  divergent <- rc$divergent
-  treedepth <- rc$treedepth
-  epsilon   <- rc$epsilon
-  rhat_ess  <- rc$rhat_ess
+  draws <- rc$draws
 
   # Reconstruct the community block (drop the trailing raw columns).
   par     <- colMeans(draws)
@@ -603,17 +582,8 @@
   fit$method <- "nuts"
   fit$log_prob <- rep(ll_mean, nrow(draws))
   fit$spatial_field <- field_mean
-  fit$nuts <- list(
-    draws = draws, layout = lay, n_field_units = n_sites,
-    accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = as.integer(n.chains), divergent_total = sum(divergent),
-    is_nb = FALSE, K_max = K_max, field_tau = fl$tau, field_rho = fl$rho,
-    sigma_beta = sigma.beta, sigma_logr = sigma.logr)
-  if (!is.null(rhat_ess)) {
-    fit$nuts$rhat     <- rhat_ess$rhat
-    fit$nuts$ess      <- rhat_ess$ess
-    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
-    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
-  }
-  fit
+  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                            n_field_units = n_sites, is_nb = FALSE, K_max = K_max,
+                            field_tau = fl$tau, field_rho = fl$rho,
+                            sigma_beta = sigma.beta, sigma_logr = sigma.logr)
 }

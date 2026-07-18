@@ -771,8 +771,9 @@
   if (is.na(arm) && identical(type, "survival"))    arm <- match("K", arm_names)
   if (is.na(arm) && identical(type, "recruitment")) arm <- match("r", arm_names)
   if (is.na(arm)) {
-    stop(sprintf("distsamp_open(dynamics = \"%s\"): predict type '%s' has no arm; ",
-         "available: %s.", model$dynamics %||% "constant", type,
+    stop(sprintf(paste0("distsamp_open(dynamics = \"%s\"): predict type '%s' has no arm; ",
+                        "available: %s."),
+         model$dynamics %||% "constant", type,
          paste(arm_names, collapse = ", ")), call. = FALSE)
   }
   X <- if (is.null(newdata)) model$X_processes[[arm]]

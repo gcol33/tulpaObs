@@ -391,6 +391,52 @@
                        cyclic = isTRUE(temporal$cyclic))
 }
 
+# Assemble the latent field block(s) an observation-family areal-BFGS fit passes to
+# the driver (gcol33/tulpaObs#136). The shape is identical across the family
+# wrappers: a temporal-only fit runs the single temporal block; otherwise the areal
+# field is block 1 and any temporal term becomes block 2. Returns a single block
+# object (areal-only) or a list of blocks (temporal-only / areal+temporal), matching
+# the driver's `if (!is.null(field$n_field)) list(field) else field` contract.
+# `family` labels the blocks for reporting; `map` is site -> field-node (identity by
+# default, group_var incidence otherwise).
+.tobs_build_field_spec <- function(spatial, temporal, family, n_sites,
+                                   map = seq_len(n_sites)) {
+  if (is.null(spatial))
+    return(list(.tobs_temporal_field_spec(temporal, n_sites, family)))
+  field_sp <- .tobs_areal_field_spec(spatial, n_sites, family, map)
+  if (is.null(temporal)) field_sp
+  else list(field_sp, .tobs_temporal_field_spec(temporal, n_sites, family))
+}
+
+# Attach the driver's marginalised field results to an observation-family fit
+# (gcol33/tulpaObs#136). Byte-identical across the family wrappers apart from the
+# non-detection arm label (`arm`): a temporal-only fit reports the single block as
+# the temporal field; otherwise the areal field is the spatial field (loading on
+# `arm`, or the detection arm when `det_arm`) and any temporal term rides alongside.
+# `pareto_k = FALSE` for the wrapper (removal) that does not surface the diagnostic.
+.tobs_attach_field_results <- function(fit, res, det_arm, temporal, temporal_only,
+                                       arm, pareto_k = TRUE) {
+  fit$method <- "nested_laplace"
+  fit$spatial_integration <- res$integration
+  if (isTRUE(pareto_k)) fit$spatial_pareto_k <- res$pareto_k
+  fit$temporal <- temporal
+  if (temporal_only) {
+    # The single temporal block is reported by the driver as block 1
+    # (field_mean / hyper); relabel it as the temporal field (#114).
+    fit$temporal_field <- res$field_mean
+    fit$temporal_hyper <- res$hyper
+  } else {
+    fit$spatial_field <- res$field_mean
+    fit$spatial_hyper <- res$hyper
+    fit$spatial_field_arm <- if (det_arm) "detection" else arm
+    if (!is.null(temporal)) {
+      fit$temporal_field <- res$temporal_field
+      fit$temporal_hyper <- res$temporal_hyper
+    }
+  }
+  fit
+}
+
 # Areal-BFGS nested-Laplace fit over one OR several latent field blocks (#78).
 .tobs_areal_bfgs_fit <- function(eval, n_fixed, field, theta0_fix,
                                  max_iter = 300L, tol = 1e-8, label = "areal-bfgs",
@@ -561,9 +607,16 @@
     prog$tick()
   }
   prog$finish()
-  if (!any(is.finite(logm))) return(list(ok = FALSE))
+  # Terminal grid path: unlike the CCD branch (which declines to the grid on a
+  # bad cell), a failure here means no usable grid point at all -- raise once,
+  # centrally, so every family wrapper drops its own identical guard (#136).
+  if (!any(is.finite(logm)))
+    stop(sprintf("%s: fit produced no usable grid point.", label), call. = FALSE)
   w <- tulpa:::.nl_normalise_weights_safe(logm, "tau_grid / data")
-  summarise(res, w, "grid")
+  out <- summarise(res, w, "grid")
+  if (!isTRUE(out$ok))
+    stop(sprintf("%s: fit produced no usable grid point.", label), call. = FALSE)
+  out
 }
 
 # Cartesian product of each block's `cells` list -> a list of per-block cell

@@ -61,6 +61,8 @@ Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(
       (std::size_t) n_species * n_sites);
   for (int o = 0; o < n_obs; ++o) {
     int s = species_idx[o] - 1, si = site_idx[o] - 1;
+    if (s < 0 || s >= n_species) Rcpp::stop("species_idx out of range.");
+    if (si < 0 || si >= n_sites) Rcpp::stop("site_idx out of range.");
     obs_by[(std::size_t) s * n_sites + si].push_back(o);
   }
 

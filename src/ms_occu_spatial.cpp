@@ -455,6 +455,8 @@ OccCommData build_occ_data(const NumericMatrix& X_psi_R, const NumericMatrix& X_
             d_.n_det[s][i]   = n_det_R(i, s);
             d_.any_det[s][i] = (n_det_R(i, s) > 0) ? 1 : 0;
         }
+    if ((int)map_R.size() != d_.n_sites)
+        Rcpp::stop("length(map_site_to_unit) must equal n_sites.");
     d_.map_site_to_unit.assign(d_.n_sites, 0);
     for (int i = 0; i < d_.n_sites; ++i) {
         const int u = map_R[i] - 1;
@@ -524,6 +526,12 @@ Rcpp::List run_occ_spatial_grid(
 
     OccCommData d_ = build_occ_data(X_psi_R, X_p_R, n_valid_R, n_det_R, map_R, n_spatial);
     const int p_psi = d_.p_psi, p_p = d_.p_p, d = p_psi + p_p;
+    if ((int)mu_init.size() != d)
+        Rcpp::stop("mu_init length must equal p_psi + p_p.");
+    if (Sigma_psi_init.nrow() != p_psi || Sigma_psi_init.ncol() != p_psi)
+        Rcpp::stop("Sigma_psi_init must be p_psi x p_psi.");
+    if (Sigma_p_init.nrow() != p_p || Sigma_p_init.ncol() != p_p)
+        Rcpp::stop("Sigma_p_init must be p_p x p_p.");
     VectorXd mu0 = Map<VectorXd>(REAL(mu_init), d);
     MatrixXd Spsi0 = Map<MatrixXd>(REAL(Sigma_psi_init), p_psi, p_psi);
     MatrixXd Sp0   = Map<MatrixXd>(REAL(Sigma_p_init), p_p, p_p);

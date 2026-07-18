@@ -141,6 +141,10 @@ inline KeyDeriv dist_key_deriv(double x, int key, double sigma, double b) {
     const double ratio = sigma / x;
     const double L = std::log(ratio);                        // ln(sigma / x)
     const double z = std::pow(ratio, b);
+    if (!std::isfinite(z) || z > 700.0) {                    // exp(-z) underflows; g -> 1, all derivs -> 0
+        k.g = 1.0; k.g_e = k.g_ee = 0.0;
+        return k;
+    }
     const double w = std::exp(-z);                           // exp(-z)
     const double bz = b * z;
     k.g    = 1.0 - w;

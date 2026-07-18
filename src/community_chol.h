@@ -22,13 +22,21 @@
 
 namespace tulpaObs {
 
+// exp() on a Cholesky log-diagonal, clamped so a wild NUTS proposal cannot
+// overflow the factor (and hence Sigma = C C') to +inf and poison the log-post.
+// exp(30) ~ 1e13 sits far above any real SD, so a converging fit never reaches
+// the clamp; it only makes an extreme proposal reject cleanly instead of as NaN.
+inline double chol_diag_exp(double x) {
+    return std::exp(x < 30.0 ? x : 30.0);
+}
+
 // Packed column-major lower-triangle (diagonal on the log scale) -> lower
 // Cholesky factor C (row-major), matching .ms_ocs_chol_unpack.
 inline void chol_unpack_cpp(const double* vec, int P, std::vector<double>& C) {
     C.assign((std::size_t) P * P, 0.0);
     int pos = 0;
     for (int j = 0; j < P; ++j) {
-        C[(std::size_t) j * P + j] = std::exp(vec[pos++]);
+        C[(std::size_t) j * P + j] = chol_diag_exp(vec[pos++]);
         for (int i = j + 1; i < P; ++i) C[(std::size_t) i * P + j] = vec[pos++];
     }
 }

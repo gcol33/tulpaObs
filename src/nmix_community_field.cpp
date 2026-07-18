@@ -325,15 +325,20 @@ Rcpp::List cpp_nmix_community_field_solve(
 
     double log_prior_z = z_log_prior(z);
     double log_det_Hzz = R_NaN;
+    double field_marginal;
     Eigen::LLT<MatrixXd> chol(H);
     if (chol.info() == Eigen::Success) {
         log_det_Hzz = 2.0 * chol.matrixL().toDenseMatrix().diagonal()
                               .array().log().sum();
+        // Field Laplace marginal correction: log p(z|tau) - 0.5 log|H_zz|.
+        // (The z-dependent data log-lik is already inside the community marginal
+        // the R driver computes at this offset; we return it for diagnostics.)
+        field_marginal = log_prior_z - 0.5 * log_det_Hzz;
+    } else {
+        // Singular field Hessian: reject this grid cell (the R driver drops any
+        // non-finite field_marginal) rather than propagate a NaN.
+        field_marginal = -std::numeric_limits<double>::infinity();
     }
-    // Field Laplace marginal correction: log p(z|tau) - 0.5 log|H_zz|.
-    // (The z-dependent data log-lik is already inside the community marginal the
-    // R driver computes at this offset; we return it for diagnostics.)
-    double field_marginal = log_prior_z - 0.5 * log_det_Hzz;
 
     Rcpp::NumericVector z_out(n_spatial);
     for (int u = 0; u < n_spatial; ++u) z_out[u] = z(u);
