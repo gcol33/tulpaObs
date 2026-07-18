@@ -173,3 +173,155 @@
   }
   B
 }
+
+
+# Pack a community occu_cover Laplace-EM mode into the full NUTS coordinate
+# vector: community means, the shared log-dispersion, the three community
+# covariances as log-Cholesky coordinates, and the whitened per-species
+# deviations z_s = C_arm^{-1} b_s. `Sigma` = list(occ=, p=, pos=); `b_list` a
+# per-species list of full P-vectors (occ, p, pos coefficients concatenated).
+.tobs_ms_occu_cover_nuts_pack_init <- function(mu, ld, Sigma, b_list, lay) {
+  theta <- numeric(lay$total)
+  theta[lay$mu]       <- as.numeric(mu)
+  theta[lay$log_disp] <- as.numeric(ld)
+  C_occ <- t(chol(.ms_ocs_pd(as.matrix(Sigma$occ))))
+  C_p   <- t(chol(.ms_ocs_pd(as.matrix(Sigma$p))))
+  C_pos <- t(chol(.ms_ocs_pd(as.matrix(Sigma$pos))))
+  theta[lay$chol_occ] <- .ms_ocs_chol_pack(C_occ)
+  theta[lay$chol_p]   <- .ms_ocs_chol_pack(C_p)
+  theta[lay$chol_pos] <- .ms_ocs_chol_pack(C_pos)
+  B <- do.call(rbind, b_list)                      # S x P
+  for (s in seq_len(lay$n_species)) {
+    z_s <- numeric(lay$P)
+    z_s[lay$occ] <- forwardsolve(C_occ, B[s, lay$occ])
+    z_s[lay$p]   <- forwardsolve(C_p,   B[s, lay$p])
+    z_s[lay$pos] <- forwardsolve(C_pos, B[s, lay$pos])
+    theta[.ms_ocs_b_idx(lay, s)] <- z_s
+  }
+  theta
+}
+
+# Marshal the C++ NUTS spec: the shared occ / detection / cover designs (visit
+# blocks are 0-column matrices when absent) + per-species y / y_pos / valid
+# [n_sites x max_visits] matrices + the positive-arm code.
+.tobs_ms_occu_cover_nuts_spec <- function(model) {
+  N <- model$n_sites; J <- model$max_visits; S <- model$n_species
+  emptyv <- matrix(0, N * J, 0)
+  Xdv <- if (is.null(model$X_det_visit)) emptyv else model$X_det_visit
+  Xpv <- if (is.null(model$X_pos_visit)) emptyv else model$X_pos_visit
+  intm <- function(m) { storage.mode(m) <- "integer"; m }
+  list(n_sites = N, max_visits = J, n_species = S,
+       pos_code = .occu_cover_pos_code(model$positive),
+       X_occ = model$X_occ, X_det_site = model$X_det_site, X_det_visit = Xdv,
+       X_pos_site = model$X_pos_site, X_pos_visit = Xpv,
+       y     = lapply(seq_len(S), function(s) intm(model$y[, , s])),
+       y_pos = lapply(seq_len(S), function(s) model$y_pos[, , s]),
+       valid = lapply(seq_len(S), function(s) intm(model$valid[, , s])))
+}
+
+
+# ---------------------------------------------------------------------------
+# Front-door NUTS fitter for the community joint occu+cover model
+# ---------------------------------------------------------------------------
+
+# Warm-start the community occu_cover Laplace-EM (the same engine the laplace path
+# runs), pack the mode into the NUTS coordinate vector, and sample the exact joint
+# posterior via the in-tree C++ FullGradFn (cpp_ms_occu_cover_nuts). Samples the
+# community means, per-species deviations, the three community covariances, AND the
+# shared log-dispersion jointly -> removes the Laplace variance attenuation. The
+# returned fit reuses build_ms_occu_cover_fit so the tobs_fit surface matches the
+# laplace path. Mirrors .tobs_fit_ms_int_occu_nuts (3 arms + a shared scalar).
+.tobs_fit_ms_occu_cover_nuts <- function(model,
+                                         sigma.beta = 5,
+                                         n.iter = 1000L, n.warmup = 1000L,
+                                         n.chains = 1L, max.treedepth = 10L,
+                                         adapt.delta = 0.9, seed = 1L,
+                                         max.iter = 200L, tol = 1e-4,
+                                         verbose = FALSE, ...) {
+  pil   <- model$process_info
+  P_occ <- pil[[1L]]$p; P_p <- pil[[2L]]$p; P_pos <- pil[[3L]]$p
+  P     <- P_occ + P_p + P_pos
+  S     <- model$n_species
+  arm_idx <- list(occ = seq_len(P_occ), p = P_occ + seq_len(P_p),
+                  pos = P_occ + P_p + seq_len(P_pos))
+
+  # Warm start at the community Laplace-EM mode (single source of truth).
+  warm <- .tobs_fit_ms_occu_cover(model, sigma.beta = sigma.beta,
+                                  max.iter = as.integer(max.iter),
+                                  tol = as.numeric(tol), verbose = FALSE)
+  ms  <- warm$ms_community
+  mu  <- unname(warm$means[seq_len(P)])
+  ld  <- unname(warm$means[P + 1L])
+  Sigma_w <- list(occ = ms$Sigma_occ, p = ms$Sigma_p, pos = ms$Sigma_pos)
+  b_list  <- lapply(seq_len(S), function(s)
+    c(ms$blup_occ[s, ], ms$blup_p[s, ], ms$blup_pos[s, ]))
+
+  lay    <- .tobs_ms_occu_cover_nuts_layout(P_occ, P_p, P_pos, S)
+  pri    <- .ms_ocs_nuts_priors()
+  theta0 <- .tobs_ms_occu_cover_nuts_pack_init(mu, ld, Sigma_w, b_list, lay)
+  spec   <- .tobs_ms_occu_cover_nuts_spec(model)
+
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_occu_cover_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
+    theta0)
+
+  run_chain <- function(ch) {
+    cpp_ms_occu_cover_nuts(
+      spec, theta0 = theta0, pri = pri, sigma_beta = sigma.beta,
+      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+      n_warmup = as.integer(n.warmup), max_treedepth = as.integer(max.treedepth),
+      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
+      verbose = isTRUE(verbose))
+  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  draws     <- rc$draws
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
+  rhat_ess  <- rc$rhat_ess
+
+  # ---- reconstruct the EM-shaped outputs from the draws ----
+  par     <- colMeans(draws)
+  mu_hat  <- par[lay$mu]
+  ld_hat  <- par[lay$log_disp]
+  Vf      <- stats::cov(draws[, c(lay$mu, lay$log_disp), drop = FALSE])
+  Sigma_hat <- list(
+    occ = .ms_ocs_sig_mean(draws, lay$chol_occ, P_occ),
+    p   = .ms_ocs_sig_mean(draws, lay$chol_p,   P_p),
+    pos = .ms_ocs_sig_mean(draws, lay$chol_pos, P_pos))
+
+  B_bar <- matrix(0, S, lay$P)
+  for (i in seq_len(nrow(draws)))
+    B_bar <- B_bar + .tobs_ms_occu_cover_nuts_b_from_z(draws[i, ], lay)
+  B_bar <- B_bar / nrow(draws)
+  b_list_hat <- lapply(seq_len(S), function(s) B_bar[s, ])
+
+  # Data-only marginal log-lik at the posterior mean over reconstructed b_s.
+  views <- lapply(seq_len(S), function(s) .ms_occu_cover_species_view(model, s))
+  ll_mean <- 0
+  for (s in seq_len(S)) {
+    bs <- mu_hat + B_bar[s, ]
+    ll_mean <- ll_mean + .occu_cover_sp_ll(views[[s]], bs[lay$occ], bs[lay$p],
+                                           bs[lay$pos], ld_hat)
+  }
+
+  fit <- build_ms_occu_cover_fit(model, unname(mu_hat), unname(ld_hat), b_list_hat,
+                                 Sigma_hat, Cinv_list = NULL, Vf, arm_idx,
+                                 F_val = ll_mean, converged = TRUE,
+                                 n_iter = warm$convergence$n_iter %||% NA_integer_,
+                                 debias_method = "none")
+  fit$method   <- "nuts"
+  fit$log_prob <- rep(ll_mean, nrow(draws))
+  fit$nuts <- list(
+    draws = draws, layout = lay, accept_prob = accept, divergent = divergent,
+    treedepth = treedepth, epsilon = epsilon, n_chains = as.integer(n.chains),
+    divergent_total = sum(divergent), sigma_beta = sigma.beta)
+  if (!is.null(rhat_ess)) {
+    fit$nuts$rhat     <- rhat_ess$rhat
+    fit$nuts$ess      <- rhat_ess$ess
+    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
+    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
+  }
+  fit
+}

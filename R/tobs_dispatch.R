@@ -1178,12 +1178,6 @@
     )
     return(build_ms_occu_cover_spatial_fit(model, fit))
   }
-  if (identical(engine, "nuts")) {
-    stop("method = \"nuts\" for ms_occu_cover() requires a shared spatial-factor ",
-         "term (icar()/car_proper()/bym2() on the occupancy arm); the ",
-         "non-spatial community fit is Laplace only.", call. = FALSE)
-  }
-
   model <- .tobs_build_ms_occu_cover(
     occ_formula      = formula,
     det_formula      = vd_det$det_formula,
@@ -1198,6 +1192,28 @@
     pos_visit_formula = vd_pos$det_visit_formula,
     pos_visit_data    = vd_pos$visits
   )
+
+  # NUTS (method = "nuts"; tulpaObs#115 part B7): the non-spatial community
+  # sampler over the exact per-(species, cell) two-state occu_cover marginal via
+  # the in-tree C++ FullGradFn (R/ms_occu_cover_nuts.R, src/ms_occu_cover_nuts.cpp),
+  # warm-started at the Laplace-EM mode. Samples the community means, per-species
+  # occ/p/pos deviations, the three per-arm community covariances, AND the shared
+  # log-dispersion jointly -> removes the Laplace variance attenuation. (The
+  # spatial-factor NUTS route with a shared field is handled above.)
+  if (identical(engine, "nuts")) {
+    return(.tobs_fit_ms_occu_cover_nuts(
+      model,
+      sigma.beta    = control[["sigma.beta"]]    %||% 5,
+      n.iter        = as.integer(control[["n.iter"]]        %||% 1000L),
+      n.warmup      = as.integer(control[["n.warmup"]]      %||% 1000L),
+      n.chains      = as.integer(control[["n.chains"]]      %||% 1L),
+      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
+      adapt.delta   = control[["adapt.delta"]]   %||% 0.9,
+      seed          = as.integer(control[["seed"]]          %||% 1L),
+      max.iter      = as.integer(control[["max.iter"]]      %||% 200L),
+      tol           = control[["tol"]]           %||% 1e-4,
+      verbose       = isTRUE(control[["verbose"]])))
+  }
 
   fit_args <- c(list(model = model, priors = priors), control)
   do.call(.tobs_fit_ms_occu_cover, fit_args)

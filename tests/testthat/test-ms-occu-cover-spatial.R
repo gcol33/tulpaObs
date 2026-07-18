@@ -469,7 +469,8 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
   expect_gt(stats::cor(cm, mu_true), 0.7)
   expect_lt(sum(fit$divergent) / length(fit$divergent), 0.2)
 
-  # NUTS rejects auto-K (a Laplace-evidence procedure) and the non-spatial path.
+  # NUTS on the spatial-factor path still rejects auto-K (a Laplace-evidence
+  # procedure).
   expect_error(
     tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
@@ -477,11 +478,15 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
          species = sim$species, method = "nuts",
          control = list(n.factors = "auto")),
     "explicit n.factors")
-  expect_error(
-    tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
-         detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-         y_pos = sim$y_pos, species = sim$species, method = "nuts"),
-    "spatial-factor")
+  # The non-spatial path is now the community NUTS route (gcol33/tulpaObs#115 B7):
+  # a plain occupancy formula with method = "nuts" fits rather than erroring.
+  fit_ns <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+                 detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+                 y_pos = sim$y_pos, species = sim$species, method = "nuts",
+                 control = list(n.iter = 150L, n.warmup = 150L, seed = 1L,
+                                verbose = FALSE))
+  expect_identical(fit_ns$method, "nuts")
+  expect_false(is.null(fit_ns$nuts$draws))
 })
 
 test_that("multi-chain NUTS reports split-R-hat / ESS and converges on the means", {

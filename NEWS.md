@@ -1,5 +1,30 @@
 # tulpaObs NEWS
 
+## 0.0.164 (2026-07-18)
+
+* **NUTS for the community joint occupancy + cover family (`ms_occu_cover()`,
+  #115 part B7).** `ms_occu_cover(..., method = "nuts")` (non-spatial) now samples
+  the exact joint posterior -- the community means, the per-species
+  occupancy / detection / cover deviations, the three independent per-arm
+  community covariances (occ / p / pos), AND the shared community log-dispersion
+  -- over the per-(species, cell) two-state occu_cover marginal via an in-tree C++
+  `FullGradFn` (`src/ms_occu_cover_nuts.cpp`), warm-started at the Laplace-EM mode.
+  The joint-cover analogue of the `ms_occu` / `ms_int_occu` community NUTS targets
+  (per-arm non-centered blocks `b = C z` + a shared log-dispersion scalar); it
+  wraps the existing cover-density kernels (`occu_coupling_shared.h`,
+  `pos_log_density` / `pos_grad_eta` / `pos_grad_logdisp`) in the community loop
+  rather than reimplementing them. Non-centered, so 0 divergences, and it
+  **removes the documented Laplace community-variance attenuation** (the
+  `fit$ms_community$var_attenuation` caveat) -- the sampled per-arm community SD
+  de-attenuates toward truth where the Laplace estimate collapses at small
+  per-species n. The R oracle is FD-validated and the C++ port is byte-exact
+  against it (`test-ms-occu-cover-nuts.R`: R-oracle vs FD, C++ vs oracle,
+  `b_from_z` round-trip, community-mean recovery + de-attenuation). With this the
+  community-model NUTS family (#115 B2) is joined by the joint-cover route (B7).
+  Non-spatial lognormal / beta / gaussian; negbin / dispersion-RE remain
+  follow-ups. The shared spatial-factor NUTS route (a field on the occupancy arm)
+  is unchanged.
+
 ## 0.0.163 (2026-07-18)
 
 * **NUTS for the community integrated occupancy family (`ms_int_occu()`, #115).**
