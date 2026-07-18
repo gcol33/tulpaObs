@@ -1389,6 +1389,61 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 }
 
 
+#' Open-population distance-sampling family
+#'
+#' The `unmarked` `distsampOpen` model: a Dail-Madsen open N-mixture (as
+#' [dyn_abun()]) observed by distance sampling at each primary period -- the
+#' open-population counterpart of the single-season [gdistremoval()]. Initial
+#' abundance `N_1 ~ Poisson(lambda)`, then `N_t = Binomial(N_{t-1}, omega) +
+#' Poisson(gamma)` (apparent survival `omega` + recruitment `gamma`); at each
+#' primary period the detected birds are distance-sampled into bins.
+#'
+#' The distance-band allocation is conditional on the period total detected, so it
+#' factors out of the abundance HMM (the [gdistremoval()] trick): the marginal is
+#' the [dyn_abun()] forward recursion with the detection probability set to the
+#' overall distance detection `pdist`, plus the per-period band multinomials.
+#'
+#' Four site-level arms: log abundance `lambda` (the [tobs()] `formula`), log
+#' distance scale `sigma` (`detection`), logit survival `omega` (`omega = ~ ...`),
+#' and log recruitment `gamma` (`gamma = ~ ...`), the last two intercept-only by
+#' default.
+#'
+#' @section Inputs:
+#' `y` is a 3D array `[n_sites x n_bins x n_seasons]` of per-distance-band counts
+#' at each primary period (secondary occasions absorbed into the period total).
+#'
+#' @param transect Transect geometry: `"line"` (default) or `"point"`.
+#' @param cutpoints Distance-bin edges, length `dim(y)[2] + 1`, strictly
+#'   increasing and starting at `>= 0`.
+#' @param K_max Truncation for the latent abundance HMM. Defaults to
+#'   `3 * max(period total) + 40`.
+#' @return A `tobs_family` object.
+#' @references
+#' Dail, D., Madsen, L. (2011). Models for estimating abundance from repeated
+#'   counts of an open metapopulation. *Biometrics* 67, 577-587.
+#' Sollmann, R., Gardner, B., Chandler, R. B., Royle, J. A., Sillett, T. S.
+#'   (2015). An open-population hierarchical distance sampling model. *Ecology*
+#'   96, 325-331.
+#' @seealso [gdistremoval()] (single-season), [dyn_abun()] (open N-mixture),
+#'   [distance()].
+#' @export
+distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
+                          K_max = NULL) {
+  transect <- match.arg(transect)
+  obs_family(
+    name           = "distsamp_open",
+    class_long     = "open-population distance sampling",
+    latent         = "poisson",
+    observation    = "distance_open",
+    replicates     = "required",
+    default_engine = "laplace",
+    status         = "working",
+    params         = list(transect = transect, cutpoints = cutpoints,
+                          K_max = K_max)
+  )
+}
+
+
 #' Presence + nominal class hurdle family
 #'
 #' A hurdle for a response that is either absent or, when present, one of `K`

@@ -1,5 +1,41 @@
 # tulpaObs NEWS
 
+## 0.0.171 (2026-07-18)
+
+* **New family `distsamp_open()` -- open-population distance sampling (#116, the
+  final item; closes #116).** The unmarked `distsampOpen` model: a Dail-Madsen
+  open N-mixture (as [dyn_abun()]) observed by distance sampling at each primary
+  period -- the open-population counterpart of the single-season
+  `gdistremoval()`. `N_1 ~ Poisson(lambda)`, `N_t = Binomial(N_{t-1}, omega) +
+  Poisson(gamma)` (apparent survival `omega`, recruitment `gamma`); at each period
+  the detected birds are distance-sampled into bins. The band allocation is
+  conditional on the period total detected, so it factors out of the abundance
+  HMM (the `gdistremoval()` trick): the marginal reuses the validated `dyn_abun`
+  forward kernel with the detection probability set to the overall distance
+  detection `pdist` (`eta_p = logit(pdist)`), plus the per-period band
+  multinomials -- no new HMM kernel. Four site-level arms: log abundance
+  (`formula`), log distance scale (`detection`), logit survival (`omega = ~ ...`),
+  log recruitment (`gamma = ~ ...`). Maximised by `optim` BFGS with an ANALYTIC
+  gradient (one kernel call per evaluation -- the `dyn_abun` kernel returns
+  `grad_eta_*`, and the sigma block chains through `pdist` via a distance-integral
+  finite difference; FD-validated to 4e-7) and an observed-information vcov. The
+  `K_max` truncation defaults to the detection-corrected abundance scale
+  (`max(period total) / pdist + headroom`), since the forward recursion is cubic
+  in `K_max`. `simulate_distsamp_open()`, full S3 (`fitted` / `predict` /
+  `residuals` / WAIC), `y` = a `[n_sites x n_bins x n_seasons]` array of
+  distance-band counts per primary period. Recovery-tested: 20/20 seeds converge,
+  every parameter's 95% coverage >= 0.90 (pooled 0.933), max coefficient bias
+  ~0.068 at `n_seasons = 4` (`test-distsamp-open.R`). Scope for the first ship:
+  half-normal key, line / point transect, Poisson initial abundance, constant
+  Dail-Madsen dynamics, site-level arms; NB / ZIP, other dynamics, and
+  season-varying detection are follow-ups.
+
+  This closes #116 -- every enumerated model family (Royle-Nichols, ZIP/ZINB,
+  continuous SPDE fields on the count families, generalized multinomial /
+  double-observer, time-to-detection occupancy, community distance sampling,
+  multi-species co-occurrence occupancy, joint distance+removal, and now
+  open-population distance sampling) is shipped and recovery-tested.
+
 ## 0.0.170 (2026-07-18)
 
 * **New family `gdistremoval()` -- joint distance + removal sampling (#116, the

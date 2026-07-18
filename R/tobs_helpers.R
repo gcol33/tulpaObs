@@ -240,6 +240,14 @@
   # (no latent-N sum), maximised by optim BFGS with an observed-information vcov.
   # Site-level arms, half-normal key, non-spatial laplace only for the first ship.
   gdistremoval = c("laplace"),
+  # distsamp_open: open-population distance sampling (unmarked distsampOpen). A
+  # Dail-Madsen open N-mixture (dyn_abun) with a distance-bin multinomial emission
+  # per primary period. The band allocation is conditional on the period total, so
+  # it factors out of the abundance HMM: the marginal reuses the dyn_abun forward
+  # kernel (eta_p = logit(pdist)) + the per-period band multinomials, maximised by
+  # optim BFGS with an observed-information vcov. Site-level arms, half-normal key,
+  # constant dynamics, non-spatial laplace only for the first ship.
+  distsamp_open = c("laplace"),
   # dyn_int_occu: multi-season integrated occupancy (spOccupancy tIntPGOcc). A
   # dynamic-occupancy HMM whose per-season emission pools multiple detection
   # sources; the latent state integrates out by the two-state forward recursion,
