@@ -280,9 +280,8 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         col_names[idx] = "param[" + std::to_string(idx + 1) + "]";
 
     // ---- Name the SVC block (gcol33/tulpaObs#118) ----
-    // The engine exports the SVC offsets on ParamLayout, so the block can be
-    // named instead of falling through to "param[k]" above -- which is why the
-    // fitted surface was previously unreadable from the fit. The offsets are
+    // The engine exports the SVC offsets on ParamLayout, so the block is named
+    // here instead of falling through to "param[k]" above. The offsets are
     // absolute positions in the parameter vector, so they are written directly
     // rather than through the running cursor, and after the fallback loop so
     // they are not overwritten by it.
