@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.170 (2026-07-18)
+
+* **New family `gdistremoval()` -- joint distance + removal sampling (#116, the
+  last open item).** The unmarked `gdistremoval` model (Amundson et al. 2014): a
+  single-season point count where the detected birds are cross-classified by a
+  distance band (distance sampling) AND the removal period of first detection
+  (removal sampling). Site abundance `N ~ Poisson(lambda)`; the total detected is
+  a binomial thinning of `N`, and Poisson is closed under binomial thinning, so
+  the marginal is closed-form -- `ysum ~ Poisson(lambda * pdist * prem)` with the
+  band and period counts as two conditional multinomials (the `double_observer()`
+  Poisson-multinomial pattern, here with a half-normal distance multinomial and a
+  depleting-removal multinomial `pi_k = r(1-r)^{k-1}`). Three site-level arms: log
+  abundance (`formula`), log distance scale (`detection`), logit per-period
+  removal capture (`removal = ~ ...`). Maximised by `optim` BFGS with an
+  observed-information vcov. The half-normal band integrals are closed-form for
+  both line and point transects (matching numeric integration to machine
+  precision). `simulate_gdistremoval()`, full S3 (`fitted` / `predict` /
+  `residuals` / WAIC), `y` = distance-band counts + `y_rem` = removal-period
+  counts (per-site totals must match). Recovery-tested: 20/20 seeds converge,
+  coefficients unbiased (max bias 0.011), pooled 95% coverage ~0.975
+  (`test-gdistremoval.R`). Scope for the first ship: half-normal key, line / point
+  transect, Poisson abundance, constant removal capture, availability fixed at 1
+  (a single primary period does not identify availability separately). Hazard-rate
+  key, NB / ZIP abundance, and a multi-period availability arm are follow-ups
+  (each closed-form under the same thinning). This closes #116.
+
 ## 0.0.169 (2026-07-18)
 
 * **Community-covariance CI coverage validation for `ms_occu_cover()` NUTS

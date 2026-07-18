@@ -200,6 +200,9 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "occu_multi")) {
     return(.tobs_ploglik_occu_multi(object, nd, n.threads = n.threads))
   }
+  if (identical(object$model$model_type %||% "NULL", "gdistremoval")) {
+    return(.tobs_ploglik_gdistremoval(object, nd, n.threads = n.threads))
+  }
   if (identical(object$model$model_type %||% "NULL", "double_observer")) {
     return(.tobs_ploglik_double_observer(object, nd, n.threads = n.threads))
   }
@@ -285,6 +288,12 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
                         dimnames = list(NULL, colnames(object$draws)))
     obj_mean  <- object; obj_mean$draws <- mean_draw
     return(as.numeric(.tobs_ploglik_double_observer(obj_mean, n.draws = 1L)))
+  }
+  if (identical(object$model$model_type %||% "NULL", "gdistremoval")) {
+    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
+                        dimnames = list(NULL, colnames(object$draws)))
+    obj_mean  <- object; obj_mean$draws <- mean_draw
+    return(as.numeric(.tobs_ploglik_gdistremoval(obj_mean, n.draws = 1L)))
   }
   if (identical(object$model$model_type %||% "NULL", "dyn_int_occu")) {
     mean_draw <- matrix(colMeans(object$draws), nrow = 1L,

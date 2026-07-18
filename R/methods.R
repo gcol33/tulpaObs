@@ -365,6 +365,8 @@ fitted.tobs_fit <- function(object, ...) {
     return(.tobs_fitted_occu_multi(object))
   if (identical(model$model_type, "double_observer"))
     return(.tobs_fitted_double_observer(object))
+  if (identical(model$model_type, "gdistremoval"))
+    return(.tobs_fitted_gdistremoval(object))
   if (identical(model$model_type, "dyn_int_occu"))
     return(.tobs_fitted_dyn_int_occu(object))
   if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))
@@ -566,6 +568,9 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   if (identical(object$model$model_type, "occu_multi")) {
     return(.tobs_residuals_occu_multi(object, type))
   }
+  if (identical(object$model$model_type, "gdistremoval")) {
+    return(.tobs_residuals_gdistremoval(object, type))
+  }
   if (identical(object$model$model_type, "double_observer")) {
     return(.tobs_residuals_double_observer(object, type))
   }
@@ -678,6 +683,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   }
   if (identical(model$model_type, "occu_multi")) {
     return(.tobs_simulate_occu_multi(object, nsim))
+  }
+  if (identical(model$model_type, "gdistremoval")) {
+    return(.tobs_simulate_gdistremoval(object, nsim))
   }
   if (identical(model$model_type, "double_observer")) {
     return(.tobs_simulate_double_observer(object, nsim))
@@ -858,6 +866,12 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     nd <- newdata
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
     return(.tobs_predict_double_observer(object, newdata = nd, type = do_type))
+  }
+  if (identical(object$model$model_type, "gdistremoval")) {
+    gd_type <- if (missing(type) || length(type) > 1L) "abundance" else type
+    nd <- newdata
+    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
+    return(.tobs_predict_gdistremoval(object, newdata = nd, type = gd_type))
   }
   if (identical(object$model$model_type, "dyn_int_occu")) {
     di_type <- if (missing(type) || length(type) > 1L) "state" else type

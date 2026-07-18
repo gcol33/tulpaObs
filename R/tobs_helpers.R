@@ -232,6 +232,14 @@
   # sum); maximised by optim BFGS with an observed-information vcov. Site-level
   # detection, non-spatial laplace only for the first ship (#116).
   double_observer = c("laplace"),
+  # gdistremoval: joint distance + removal sampling (unmarked gdistremoval,
+  # Amundson et al. 2014). Single-season; the detected birds are cross-classified
+  # by distance band and removal period. Binomial thinning of a Poisson N is
+  # closed under thinning, so the total-detected count is Poisson and the band /
+  # period allocations are two conditional multinomials -- a closed-form marginal
+  # (no latent-N sum), maximised by optim BFGS with an observed-information vcov.
+  # Site-level arms, half-normal key, non-spatial laplace only for the first ship.
+  gdistremoval = c("laplace"),
   # dyn_int_occu: multi-season integrated occupancy (spOccupancy tIntPGOcc). A
   # dynamic-occupancy HMM whose per-season emission pools multiple detection
   # sources; the latent state integrates out by the two-state forward recursion,

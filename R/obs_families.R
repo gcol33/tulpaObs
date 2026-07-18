@@ -1336,6 +1336,59 @@ fp_occu <- function() {
 }
 
 
+#' Joint distance + removal sampling family
+#'
+#' The `unmarked` `gdistremoval` model (Amundson et al. 2014): a **single-season**
+#' point-count design in which the detected individuals are recorded two ways at
+#' once -- their distance band (distance sampling) and the removal period of first
+#' detection (removal sampling). This is NOT the open-population distance model
+#' (`distsampOpen`); the abundance is static.
+#'
+#' Site abundance `N_i ~ Poisson(lambda_i)`; the detected birds are
+#' cross-classified by a distance band and a removal period. Writing `pdist_i` for
+#' the overall distance detection, `prem_i` for the overall removal detection, the
+#' total detected is a binomial thinning of `N_i`, and Poisson is closed under
+#' binomial thinning, so the marginal is closed-form:
+#' \deqn{\mathrm{ysum}_i \sim \mathrm{Poisson}(\lambda_i\, p^{dist}_i\, p^{rem}_i),}
+#' with the distance-band counts and removal-period counts as two conditional
+#' multinomials -- the [double_observer()] Poisson-multinomial pattern, here with
+#' a distance multinomial (half-normal key band integrals) and a depleting-removal
+#' multinomial `pi_k = r (1 - r)^{k-1}`.
+#'
+#' Three site-level arms: log abundance `lambda` (the [tobs()] `formula`), log
+#' distance scale `sigma` (`detection`), and logit per-period removal capture `r`
+#' (`removal = ~ ...`, default intercept-only).
+#'
+#' @section Inputs:
+#' `y` is an `n_sites x n_bins` integer matrix of per-distance-band counts;
+#' `y_rem` an `n_sites x n_periods` integer matrix of per-removal-period counts.
+#' The per-site row totals must match (the same detected birds cross-classified).
+#'
+#' @param transect Transect geometry: `"line"` (default) or `"point"`.
+#' @param cutpoints Distance-bin edges, length `ncol(y) + 1`, strictly increasing
+#'   and starting at `>= 0`.
+#' @return A `tobs_family` object.
+#' @references
+#' Amundson, C. L., Royle, J. A., Handel, C. M. (2014). A hierarchical model
+#'   combining distance sampling and time removal to estimate detection
+#'   probability during avian point counts. *The Auk* 131, 476-494.
+#' @seealso [distance()], [removal()], [double_observer()].
+#' @export
+gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
+  transect <- match.arg(transect)
+  obs_family(
+    name           = "gdistremoval",
+    class_long     = "joint distance + removal sampling",
+    latent         = "poisson",
+    observation    = "distance_removal",
+    replicates     = "required",
+    default_engine = "laplace",
+    status         = "working",
+    params         = list(transect = transect, cutpoints = cutpoints)
+  )
+}
+
+
 #' Presence + nominal class hurdle family
 #'
 #' A hurdle for a response that is either absent or, when present, one of `K`
