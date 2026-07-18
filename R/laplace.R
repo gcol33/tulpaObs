@@ -292,7 +292,7 @@
                                               latent_prior) {
   blocks <- if (!is.null(latent_prior$type)) list(latent_prior) else latent_prior
   is_areal <- vapply(blocks, function(b)
-    isTRUE(b$type %in% c("icar", "car_proper", "bym2")), logical(1))
+    isTRUE(b$type %in% c("icar", "car_proper", "bym2", "spde")), logical(1))
   if (!any(is_areal)) return(fit)
   if (is.null(state_fit$theta_grid) || is.null(state_fit$weights) ||
       is.null(state_fit$modes)) {

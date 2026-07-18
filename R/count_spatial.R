@@ -153,6 +153,17 @@
   flds <- c(list(fit$spatial_field), as.list(fit$trend_fields %||% list()))
   flds <- Filter(function(z) !is.null(z) && !all(is.na(z)), flds)
   if (!length(flds)) return(NULL)
+
+  # Continuous SPDE field: the realization lives on the mesh nodes, so the
+  # per-site contribution is the barycentric projection A %*% mesh_field (A is
+  # n_sites x n_mesh), summed over the intercept + any covariate-weighted fields.
+  A <- fit$spatial$tulpa_spec$A
+  if (!is.null(A)) {
+    off <- numeric(nrow(A))
+    for (fk in flds) off <- off + as.numeric(A %*% as.numeric(fk))
+    return(off)
+  }
+
   sp_fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
   if (length(sp_fields) < length(flds)) return(NULL)
   n   <- length(as.numeric(flds[[1L]]))

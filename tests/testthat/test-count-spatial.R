@@ -280,3 +280,42 @@ test_that("Bernoulli areal count recovers the field (trials = 1, svcPGBinom)", {
   }
   expect_gt(stats::median(fcor), 0.6)
 })
+
+test_that("areal count recovers a continuous SPDE field + slope (gcol33/tulpaObs#116)", {
+  skip_if_fast()
+  skip_on_cran()
+  skip_if_no_tulpamesh()
+  # A continuous-mesh spde() field on the count formula: the latent lives on the
+  # mesh nodes (fit$spatial_field, length n_mesh) and the barycentric projector
+  # fit$spatial$tulpa_spec$A maps it onto sites. The field summary reconstructs the
+  # mesh field (grid-averaged block modes) and .count_spatial_field_offset projects
+  # it to sites (A %*% mesh_field) for fitted() / predict().
+  set.seed(42)
+  n <- 300L
+  coords <- cbind(runif(n), runif(n))
+  u  <- 0.8 * cos(3 * coords[, 1]) * sin(3 * coords[, 2])
+  x  <- rnorm(n)
+  y  <- rpois(n, exp(0.5 + 0.5 * x + u))
+  dat <- data.frame(x = x, lon = coords[, 1], lat = coords[, 2])
+
+  fit <- tobs(~ x + spde(lon, lat, max_edge = c(0.3, 0.6), nu = 1,
+                         prior_range = c(0.3, 0.5), prior_sigma = c(0.7, 0.5)),
+              data = dat, y = y, family = count(), method = "nested_laplace",
+              control = list(progress = FALSE, verbose = FALSE))
+
+  expect_identical(fit$method, "nested_laplace")
+  # The mesh field lives on n_mesh nodes; the projector maps it to sites.
+  expect_false(is.null(fit$spatial_field))
+  expect_false(is.null(fit$spatial$tulpa_spec$A))
+  expect_equal(length(fit$spatial_field), fit$spatial$n_units)
+  field_at_sites <- as.numeric(fit$spatial$tulpa_spec$A %*% fit$spatial_field)
+  expect_gt(cor(field_at_sites, u), 0.7)
+
+  # Abundance slope recovers.
+  expect_lt(abs(unname(unlist(coef(fit)))[2] - 0.5), 0.15)
+
+  # fitted() projects the mesh field to sites (length n_sites, tracks y).
+  ft <- fitted(fit)
+  expect_equal(length(ft$mu), n)
+  expect_gt(cor(ft$mu, y), 0.5)
+})

@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.168 (2026-07-18)
+
+* **Continuous SPDE field on the count families (`count()` + `spde()`; #116).**
+  A continuous-mesh Matern field via `spde(lon, lat, ...)` on the abundance
+  formula now fits under `method = "nested_laplace"`, alongside the areal
+  icar / car_proper / bym2 fields. The latent lives on the mesh nodes
+  (`fit$spatial_field`, length `n_mesh`) and the barycentric projector
+  `fit$spatial$tulpa_spec$A` (`n_sites x n_mesh`) maps it onto the sites, so
+  `fitted()` / `predict()` add the projected per-site contribution
+  `A %*% mesh_field`. Three touch points: the count dispatch gate accepts
+  `spde`; `.tobs_nested_attach_field_summary` reconstructs the mesh field from
+  the grid-averaged block modes (the same icar-style summary, one field node per
+  mesh node); `.count_spatial_field_offset` A-projects the mesh field to sites.
+  The areal (icar/car_proper/bym2) path is byte-identical -- those fits carry no
+  projector (`tulpa_spec$A` is `NULL`), so the A-projection branch is skipped.
+  Poisson only (as the areal count field: a per-node field is not jointly
+  identified with a negbin size / gaussian residual variance under the
+  fixed-dispersion nested loop). Recovery-tested: the mesh field projects to the
+  sites with `cor > 0.9` against the simulated truth and the abundance slope
+  recovers (`test-count-spatial.R`, gated `skip_if_no_tulpamesh()`).
+
 ## 0.0.167 (2026-07-18)
 
 * **Community-covariance CI coverage validation for `ms_occu()` NUTS (#115).**
