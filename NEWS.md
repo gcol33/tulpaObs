@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.165 (2026-07-18)
+
+* **Per-species dispersion random effect for `ms_occu_cover()` NUTS (#115 B7).**
+  `ms_occu_cover(..., method = "nuts", control = list(dispersion.re = TRUE))`
+  promotes the shared community cover log-dispersion to a per-species random
+  effect `log_disp_s = mu_ld + sigma_ld * z_ld_s` -- a fourth 1-D community arm
+  (the `ms_abun` `log_r_s` analogue), sampled jointly with the coefficient arms.
+  It reuses the same non-centered machinery (the 1x1 log-Cholesky factor is
+  `sigma_ld`) and the extracted per-cell sweep, so the shared-dispersion path is
+  byte-identical. The C++ `FullGradFn` is byte-exact against the FD-validated R
+  oracle (lp diff 0); 0 divergences. `fit$ms_dispersion` carries
+  `sigma_log_disp` (the community dispersion SD) and `log_disp_species` (the
+  per-species posterior-mean log-dispersions). `test-ms-occu-cover-nuts.R`. (A
+  simulated per-species dispersion spread for a full `sigma_ld` recovery sweep is
+  a simulator follow-up; on shared-dispersion data `sigma_ld` is small, as
+  expected.)
+
 ## 0.0.164 (2026-07-18)
 
 * **NUTS for the community joint occupancy + cover family (`ms_occu_cover()`,

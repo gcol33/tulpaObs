@@ -1212,6 +1212,8 @@
       seed          = as.integer(control[["seed"]]          %||% 1L),
       max.iter      = as.integer(control[["max.iter"]]      %||% 200L),
       tol           = control[["tol"]]           %||% 1e-4,
+      dispersion.re = isTRUE(control[["dispersion.re"]]),
+      sigma.ld.init = control[["sigma.ld.init"]] %||% 0.3,
       verbose       = isTRUE(control[["verbose"]])))
   }
 

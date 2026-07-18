@@ -237,6 +237,7 @@
                                          n.chains = 1L, max.treedepth = 10L,
                                          adapt.delta = 0.9, seed = 1L,
                                          max.iter = 200L, tol = 1e-4,
+                                         dispersion.re = FALSE, sigma.ld.init = 0.3,
                                          verbose = FALSE, ...) {
   pil   <- model$process_info
   P_occ <- pil[[1L]]$p; P_p <- pil[[2L]]$p; P_pos <- pil[[3L]]$p
@@ -256,10 +257,75 @@
   b_list  <- lapply(seq_len(S), function(s)
     c(ms$blup_occ[s, ], ms$blup_p[s, ], ms$blup_pos[s, ]))
 
+  pri  <- .ms_ocs_nuts_priors()
+  spec <- .tobs_ms_occu_cover_nuts_spec(model)
+
+  # Dispersion-RE variant: the shared log-dispersion becomes a per-species RE
+  # (a 4th 1-D community arm). Same warm start + sampler harness; the RE layout /
+  # pack / C++ spec flag differ, and the fit carries the per-species dispersion.
+  if (isTRUE(dispersion.re)) {
+    lay    <- .tobs_ms_occu_cover_re_disp_layout(P_occ, P_p, P_pos, S)
+    theta0 <- .tobs_ms_occu_cover_re_disp_pack_init(mu, ld, Sigma_w, b_list,
+                                                    sigma.ld.init, lay)
+    spec$re_disp <- TRUE
+    inv_metric <- .ms_ocs_fd_metric(
+      function(th) cpp_ms_occu_cover_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
+      theta0)
+    run_chain <- function(ch) cpp_ms_occu_cover_nuts(
+      spec, theta0 = theta0, pri = pri, sigma_beta = sigma.beta,
+      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+      n_warmup = as.integer(n.warmup), max_treedepth = as.integer(max.treedepth),
+      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
+      verbose = isTRUE(verbose))
+    rc <- .ms_ocs_run_chains(run_chain, n.chains)
+    draws <- rc$draws
+    par     <- colMeans(draws)
+    mu_hat  <- par[lay$mu_coef]
+    mu_ld_hat <- par[lay$mu_ld]
+    sigma_ld_hat <- mean(exp(draws[, lay$chol_ld]))
+    Vf <- stats::cov(draws[, c(lay$mu_coef, lay$mu_ld), drop = FALSE])
+    Sigma_hat <- list(
+      occ = .ms_ocs_sig_mean(draws, lay$chol_occ, P_occ),
+      p   = .ms_ocs_sig_mean(draws, lay$chol_p,   P_p),
+      pos = .ms_ocs_sig_mean(draws, lay$chol_pos, P_pos))
+    B_bar <- matrix(0, S, lay$P_coef); ld_bar <- numeric(S)
+    for (i in seq_len(nrow(draws))) {
+      rec <- .tobs_ms_occu_cover_re_disp_b_from_z(draws[i, ], lay)
+      B_bar <- B_bar + rec$B; ld_bar <- ld_bar + rec$log_disp
+    }
+    B_bar <- B_bar / nrow(draws); ld_bar <- ld_bar / nrow(draws)
+    b_list_hat <- lapply(seq_len(S), function(s) B_bar[s, ])
+    views <- lapply(seq_len(S), function(s) .ms_occu_cover_species_view(model, s))
+    ll_mean <- 0
+    for (s in seq_len(S)) {
+      bs <- mu_hat + B_bar[s, ]
+      ll_mean <- ll_mean + .occu_cover_sp_ll(views[[s]], bs[lay$occ], bs[lay$p],
+                                             bs[lay$pos], ld_bar[s])
+    }
+    fit <- build_ms_occu_cover_fit(model, unname(mu_hat), unname(mu_ld_hat),
+                                   b_list_hat, Sigma_hat, Cinv_list = NULL, Vf,
+                                   arm_idx, F_val = ll_mean, converged = TRUE,
+                                   n_iter = warm$convergence$n_iter %||% NA_integer_,
+                                   debias_method = "none")
+    fit$method <- "nuts"
+    fit$log_prob <- rep(ll_mean, nrow(draws))
+    fit$ms_dispersion <- list(sigma_log_disp = sigma_ld_hat,
+                              log_disp_species = stats::setNames(ld_bar, model$species_names),
+                              dispersion_re = TRUE)
+    fit$nuts <- list(draws = draws, layout = lay, accept_prob = rc$accept,
+                     divergent = rc$divergent, treedepth = rc$treedepth,
+                     epsilon = rc$epsilon, n_chains = as.integer(n.chains),
+                     divergent_total = sum(rc$divergent), sigma_beta = sigma.beta)
+    if (!is.null(rc$rhat_ess)) {
+      fit$nuts$rhat <- rc$rhat_ess$rhat; fit$nuts$ess <- rc$rhat_ess$ess
+      fit$nuts$max_rhat <- max(rc$rhat_ess$rhat, na.rm = TRUE)
+      fit$nuts$min_ess  <- min(rc$rhat_ess$ess,  na.rm = TRUE)
+    }
+    return(fit)
+  }
+
   lay    <- .tobs_ms_occu_cover_nuts_layout(P_occ, P_p, P_pos, S)
-  pri    <- .ms_ocs_nuts_priors()
   theta0 <- .tobs_ms_occu_cover_nuts_pack_init(mu, ld, Sigma_w, b_list, lay)
-  spec   <- .tobs_ms_occu_cover_nuts_spec(model)
 
   inv_metric <- .ms_ocs_fd_metric(
     function(th) cpp_ms_occu_cover_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
@@ -463,4 +529,52 @@
 
   if (!grad) return(list(lp = lp))
   list(lp = lp, grad = g)
+}
+
+# Reconstruct the per-species coefficient deviations (S x P_coef) AND the
+# per-species log-dispersions from a dispersion-RE draw.
+.tobs_ms_occu_cover_re_disp_b_from_z <- function(theta, lay) {
+  C_occ <- .ms_ocs_chol_unpack(theta[lay$chol_occ], lay$P_occ)
+  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$P_p)
+  C_pos <- .ms_ocs_chol_unpack(theta[lay$chol_pos], lay$P_pos)
+  sigma_ld <- exp(theta[lay$chol_ld])
+  mu_ld <- theta[lay$mu_ld]
+  S <- lay$n_species
+  B  <- matrix(0, S, lay$P_coef)
+  ld <- numeric(S)
+  for (s in seq_len(S)) {
+    z <- theta[.tobs_ms_occu_cover_re_disp_b_idx(lay, s)]
+    B[s, lay$occ] <- as.numeric(C_occ %*% z[lay$occ])
+    B[s, lay$p]   <- as.numeric(C_p   %*% z[lay$p])
+    B[s, lay$pos] <- as.numeric(C_pos %*% z[lay$pos])
+    ld[s] <- mu_ld + sigma_ld * z[lay$ld]
+  }
+  list(B = B, log_disp = ld)
+}
+
+# Pack a Laplace-EM mode into the dispersion-RE NUTS vector. `ld` is the shared
+# Laplace log-dispersion -> the community mean mu_ld; sigma_ld starts at
+# `sigma_ld_init` (z_ld_s = 0, all species at the community mean dispersion).
+.tobs_ms_occu_cover_re_disp_pack_init <- function(mu, ld, Sigma, b_list,
+                                                  sigma_ld_init, lay) {
+  theta <- numeric(lay$total)
+  theta[lay$mu_coef] <- as.numeric(mu)
+  theta[lay$mu_ld]   <- as.numeric(ld)
+  theta[lay$chol_ld] <- log(sigma_ld_init)
+  C_occ <- t(chol(.ms_ocs_pd(as.matrix(Sigma$occ))))
+  C_p   <- t(chol(.ms_ocs_pd(as.matrix(Sigma$p))))
+  C_pos <- t(chol(.ms_ocs_pd(as.matrix(Sigma$pos))))
+  theta[lay$chol_occ] <- .ms_ocs_chol_pack(C_occ)
+  theta[lay$chol_p]   <- .ms_ocs_chol_pack(C_p)
+  theta[lay$chol_pos] <- .ms_ocs_chol_pack(C_pos)
+  B <- do.call(rbind, b_list)
+  for (s in seq_len(lay$n_species)) {
+    z_s <- numeric(lay$Pz)
+    z_s[lay$occ] <- forwardsolve(C_occ, B[s, lay$occ])
+    z_s[lay$p]   <- forwardsolve(C_p,   B[s, lay$p])
+    z_s[lay$pos] <- forwardsolve(C_pos, B[s, lay$pos])
+    # z_ld_s = 0 (species start at the community-mean dispersion).
+    theta[.tobs_ms_occu_cover_re_disp_b_idx(lay, s)] <- z_s
+  }
+  theta
 }

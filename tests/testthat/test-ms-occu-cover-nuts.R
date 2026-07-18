@@ -190,3 +190,65 @@ test_that("ms_occu_cover dispersion-RE oracle gradient matches finite difference
   expect_lt(max(abs(an - fd)) / max(1, max(abs(fd))), 1e-4)
   expect_gt(cor(an, fd), 0.9999)
 })
+
+test_that("ms_occu_cover dispersion-RE C++ FullGradFn matches the R oracle", {
+  skip_on_cran()
+  skip_if_fast()
+  set.seed(1)
+  sim <- simulate_ms_occu_cover(n_species = 4, N = 40, J = 3,
+                                positive = "lognormal", seed = 1)
+  vis <- .msoc_nuts_visits(40, 3, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+              detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "laplace", control = list(verbose = FALSE, max.iter = 5L))
+  model <- fit$model; S <- model$n_species; pil <- model$process_info
+  P_occ <- pil[[1]]$p; P_p <- pil[[2]]$p; P_pos <- pil[[3]]$p
+  views <- lapply(seq_len(S), function(s)
+    tulpaObs:::.ms_occu_cover_species_view(model, s))
+  layr <- tulpaObs:::.tobs_ms_occu_cover_re_disp_layout(P_occ, P_p, P_pos, S)
+  pri <- tulpaObs:::.ms_ocs_nuts_priors()
+  set.seed(9); thr <- rnorm(layr$total, 0, 0.4); thr[layr$mu_ld] <- log(0.6)
+  o_r <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(thr, views, layr,
+           priors = pri, sigma.beta = 5)
+  spec <- c(tulpaObs:::.tobs_ms_occu_cover_nuts_spec(model), list(re_disp = TRUE))
+  o_c <- tulpaObs:::cpp_ms_occu_cover_nuts_joint_logpost(spec, thr, pri, 5)
+  expect_lt(abs(o_r$lp - o_c$lp), 1e-8)
+  expect_lt(max(abs(o_r$grad - o_c$grad)), 1e-8)
+})
+
+test_that("ms_occu_cover dispersion-RE NUTS fits and recovers the means", {
+  skip_on_cran()
+  skip_if_fast()
+  set.seed(5)
+  sim <- simulate_ms_occu_cover(
+    n_species = 8, N = 90, J = 4,
+    mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
+    mu_pos = c(log(0.4), 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
+    positive = "lognormal", sigma_pos = 0.4, seed = 5)
+  vis <- .msoc_nuts_visits(90, 4, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+              detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "nuts",
+              control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
+                             dispersion.re = TRUE, adapt.delta = 0.95,
+                             verbose = FALSE))
+
+  expect_identical(fit$method, "nuts")
+  # On shared-dispersion data the community dispersion SD sits near its 0
+  # boundary, so the non-centered ld arm carries a mild funnel; a low divergence
+  # rate (not exactly 0) is the honest calibration here.
+  expect_lt(mean(fit$nuts$divergent), 0.1)
+  expect_true(isTRUE(fit$ms_dispersion$dispersion_re))
+  # The per-species dispersion SD is present and finite; on shared-dispersion
+  # data (no simulated per-species spread) it is small.
+  expect_true(is.finite(fit$ms_dispersion$sigma_log_disp))
+  expect_lt(fit$ms_dispersion$sigma_log_disp, 0.5)
+  expect_length(fit$ms_dispersion$log_disp_species, 8L)
+  # The community-mean log-dispersion recovers the shared truth log(0.4).
+  expect_lt(abs(fit$means[["log_sigma_pos"]] - log(0.4)), 0.25)
+  # Community means recover on the beta arms.
+  truth <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
+  expect_true(all(abs(fit$means[seq_len(6)] - truth) / fit$sds[seq_len(6)] < 3.5))
+})
