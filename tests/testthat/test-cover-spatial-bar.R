@@ -102,6 +102,33 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
   expect_identical(fit_bar$trend_weight, "time")
 })
 
+test_that("the coupled intercept+trend || bar recovers the trend-field SD + occurrence slope (#140)", {
+  skip_if_fast()
+  skip_on_cran()
+  # End-to-end recovery for the flagship coupled intercept+trend bar on the cover
+  # hurdle (the byte-identical test above only proves it reproduces the two-term
+  # machinery). The recoverable estimands are the trend-field SD (sigma_trend, what
+  # the bar exists to estimate) and the occurrence-arm time slope. The cover-arm FE
+  # time slope beta_pos[2] is CONFOUNDED with the time-weighted trend field -- both
+  # multiply `time` -- so it attenuates (measured mean ~0.12 vs 0.2, coverage ~0.2);
+  # that is a model property (a linear trend FE competes with a trend field), not a
+  # fitter bug, and is deliberately not asserted here. Calibrated over seeds 701-706:
+  # dev_notes/_calib_bar_trend.R.
+  n_seeds <- 6L
+  bo2 <- st <- numeric(n_seeds); co <- logical(n_seeds)
+  for (r in seq_len(n_seeds)) {
+    sim <- .bar_sim_cover_trend(seed = 700L + r)
+    fit <- tobs(~ time + spatial(~ 1 + time || cell, graph = sim$adj),
+                data = sim$data, family = cover(response = "lognormal"), y = sim$y,
+                method = "nested_laplace", control = .bar_trend_control)
+    bo2[r] <- fit$beta_occ[2]; st[r] <- fit$sigma_trend
+    co[r]  <- abs(fit$beta_occ[2] - 0.3) <= 1.96 * fit$se_occ[2]
+  }
+  expect_lt(abs(mean(bo2) - 0.3), 0.12)          # occurrence slope recovers
+  expect_lt(abs(mean(st) / 0.7 - 1), 0.2)        # trend-field SD recovers (~0.78)
+  expect_gte(mean(co), 0.6)                       # occurrence-slope CI coverage
+})
+
 # ---- Validation / scope gates (no fit, always run) -------------------------
 
 .bar_small_data <- function(n_cells = 16L) {
