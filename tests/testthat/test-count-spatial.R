@@ -319,3 +319,59 @@ test_that("areal count recovers a continuous SPDE field + slope (gcol33/tulpaObs
   expect_equal(length(ft$mu), n)
   expect_gt(cor(ft$mu, y), 0.5)
 })
+
+
+test_that("areal count recovers a slope under a continuous NNGP gp() field", {
+  skip_if_fast()
+  skip_on_cran()
+  # A continuous NNGP gp() field on the count formula routes to tulpa's single-
+  # block `nngp` nested-Laplace kernel (gcol33/tulpaObs#117 follow-up): the GP
+  # marginal variance and range are integrated on the kernel's own outer grid and
+  # the field is Schur-folded out, so the fit reports grid-integrated fixed
+  # effects plus the GP hyperparameter posterior (fit$gp_hyper). The per-cell
+  # field itself is not reconstructed on this path -- spde() is the route for a
+  # continuous field map.
+  set.seed(7)
+  n <- 150L
+  coords <- cbind(runif(n), runif(n))
+  D <- as.matrix(dist(coords))
+  u <- as.numeric(t(chol(exp(-D / 0.25) + diag(1e-6, n))) %*% rnorm(n)); u <- u - mean(u)
+  x <- rnorm(n)
+  y <- rpois(n, exp(0.6 + 0.6 * x + u))
+  dat <- data.frame(x = x, lon = coords[, 1], lat = coords[, 2])
+
+  fit <- tobs(~ x + gp(lon, lat, prior_range = c(0.1, 0.05)),
+              data = dat, y = y, family = count("poisson"),
+              method = "nested_laplace",
+              control = list(progress = FALSE, verbose = FALSE))
+
+  expect_identical(fit$method, "nested_laplace")
+  # Slope recovers under the field-integrated marginal.
+  expect_lt(abs(unname(unlist(coef(fit)))[2] - 0.6), 0.15)
+  # The GP hyperparameter posterior (marginal variance + range) is surfaced.
+  expect_true(all(c("sigma2", "phi_gp") %in% fit$gp_hyper$theta_names))
+  expect_true(all(is.finite(fit$gp_hyper$mean)))
+  # The field is integrated out (no per-cell map on this path).
+  expect_null(fit$spatial_field)
+  # S3 surface: fitted / predict / WAIC.
+  expect_equal(length(fitted(fit)$mu), n)
+  expect_length(predict(fit), n)
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
+test_that("count() spatial-field gates: multiscale_gp and negbin + gp", {
+  skip_on_cran()
+  set.seed(9); n <- 50L
+  dat <- data.frame(x = rnorm(n), lon = runif(n), lat = runif(n))
+  y <- rpois(n, exp(0.5 + 0.4 * dat$x))
+  expect_error(
+    tobs(~ x + multiscale_gp(lon, lat), data = dat, y = y,
+         family = count("poisson"), method = "nested_laplace",
+         control = list(verbose = FALSE)),
+    "multiscale_gp")
+  expect_error(
+    tobs(~ x + gp(lon, lat, prior_range = c(0.1, 0.05)), data = dat, y = y,
+         family = count("negbin"), method = "nested_laplace",
+         control = list(verbose = FALSE)),
+    "identifiable|confounded")
+})

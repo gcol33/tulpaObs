@@ -4,7 +4,13 @@
 \alias{distsamp_open}
 \title{Open-population distance-sampling family}
 \usage{
-distsamp_open(transect = c("line", "point"), cutpoints = NULL, K_max = NULL)
+distsamp_open(
+  transect = c("line", "point"),
+  cutpoints = NULL,
+  K_max = NULL,
+  mixture = c("poisson", "negbin", "zip", "zinb"),
+  dynamics = c("constant", "notrend", "trend", "autoreg", "ricker", "gompertz")
+)
 }
 \arguments{
 \item{transect}{Transect geometry: \code{"line"} (default) or \code{"point"}.}
@@ -14,6 +20,34 @@ increasing and starting at \verb{>= 0}.}
 
 \item{K_max}{Truncation for the latent abundance HMM. Defaults to
 \verb{3 * max(period total) + 40}.}
+
+\item{mixture}{Initial-abundance mixing distribution. \code{"poisson"} (default),
+\code{"negbin"} (negative binomial, \code{Var(N_1) = lambda + lambda^2 / r}, with an
+overdispersion \code{r} estimated jointly and reported as \code{log_r}), \code{"zip"}
+(zero-inflated Poisson) or \code{"zinb"} (zero-inflated negative binomial). A
+structural-zero site is never occupied across any primary period, so all its
+band counts are zero; the observed per-site marginal is the two-component
+mixture \verb{omega * 1\{all zero\} + (1 - omega) * L_open}, with \code{L_open} the exact
+open-population distance marginal and \code{omega} an intercept-only structural-zero
+probability reported as \code{zi_logit} (distinct from \code{omega}, the survival arm).
+The negative-binomial size / zero-inflation is layered over the same
+forward-HMM marginal; the Poisson path is unchanged.}
+
+\item{dynamics}{Population-dynamics form for the transition
+\verb{N_t | N_\{t-1\}} (following \code{unmarked::distsampOpen()}):
+\code{"constant"} (default) is \verb{N_t = Binomial(N_\{t-1\}, omega) + Poisson(gamma)};
+\code{"notrend"} ties recruitment so the expected abundance is stationary
+(\code{gamma = (1 - omega) * lambda}, no free \code{gamma} arm); \code{"trend"} is an
+exponential-growth process \verb{N_t ~ Poisson(N_\{t-1\} * gamma)} with no survival
+term (\code{omega} unused); \code{"autoreg"} adds density-dependent recruitment
+\verb{Poisson(N_\{t-1\} * gamma)} on top of survival; \code{"ricker"} and \code{"gompertz"}
+are the density-regulated recruitment forms with an estimated carrying
+capacity \code{K} (reported as \code{K}, on the log scale, modelled through the
+\code{omega = ~ ...} formula slot) and a growth rate reported as \code{r} (modelled
+through the \code{gamma = ~ ...} slot).
+\code{"constant"} / \code{"notrend"} fit with the exact analytic gradient; the
+density-dependent forms (\code{trend} / \code{autoreg} / \code{ricker} / \code{gompertz}) use the
+exact forward-HMM marginal with a numeric gradient.}
 }
 \value{
 A \code{tobs_family} object.

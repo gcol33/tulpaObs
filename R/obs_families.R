@@ -960,19 +960,35 @@ occu_multi <- function() {
 
 #' Double-observer abundance family
 #'
-#' Abundance from an independent double-observer protocol (\pkg{unmarked}
-#' `multinomPois` with the double-observer pi-function). Site abundance
-#' `N ~ Poisson(lambda)` is surveyed by two independent observers with detection
-#' `p1` / `p2`; each individual is recorded by observer 1 only, observer 2 only,
-#' or both. By Poisson-multinomial thinning the three observable cell counts are
-#' independent Poissons (`n_c ~ Poisson(lambda * pi_c)`), so the marginal is
-#' closed form with no latent-abundance summation. The state `formula` models
+#' Abundance from a double-observer protocol (\pkg{unmarked} `multinomPois` with a
+#' double-observer pi-function). Site abundance `N ~ Poisson(lambda)` is surveyed
+#' by two observers with detection `p1` / `p2`. The state `formula` models
 #' `log lambda`; `detection` the shared site-level per-observer detection design
-#' (observers 1 and 2 carry separate coefficients).
+#' (observers 1 and 2 carry separate coefficients). By Poisson-multinomial
+#' thinning the observable cell counts are independent Poissons, so the marginal
+#' is closed form with no latent-abundance summation.
 #'
-#' `y` is an `N x 3` matrix of cell counts in column order (observer-1-only,
-#' observer-2-only, both).
+#' @section Independent vs dependent protocol:
+#' `type = "independent"` (the default): the two observers detect independently and
+#' each individual is recorded by observer 1 only, observer 2 only, or both, so `y`
+#' is an `N x 3` matrix of cell counts in that column order and the three cells are
+#' `pi = (p1(1 - p2), (1 - p1)p2, p1 p2)`.
 #'
+#' `type = "dependent"`: a removal-style protocol where a *primary* observer
+#' records what it detects and a *secondary* observer records only what the primary
+#' missed, so `y` is an `N x 2` matrix `(primary-detected, secondary-only)` with
+#' cells `pi = (p_pri, (1 - p_pri)p_sec)`. A single fixed primary observer gives
+#' only two cells for three parameters (`lambda`, `p1`, `p2`), a ridge that does
+#' not separate the two observer detections; observer **role-swapping** identifies
+#' them -- pass `primary =` (a length-`N` vector in `{1, 2}` naming each site's
+#' primary observer), and with observer 1 primary at some sites and observer 2 at
+#' others `(p_pri, p_sec)` alternates between `(p1, p2)` and `(p2, p1)`, giving the
+#' four cell means that recover `(lambda, p1, p2)`. With `p1 = p2` (an
+#' interchangeable pair) the dependent protocol reduces to a two-pass [removal()]
+#' model.
+#'
+#' @param type `"independent"` (default; `N x 3` cell counts) or `"dependent"`
+#'   (removal-style, `N x 2` cell counts, needs `primary =` for identifiability).
 #' @return A `tobs_family` object for [tobs()].
 #' @examples
 #' \donttest{
@@ -980,9 +996,17 @@ occu_multi <- function() {
 #' fit <- tobs(~ abund_cov1, data = sim$data, family = double_observer(),
 #'             detection = ~ det_cov1, y = sim$y, control = list(verbose = FALSE))
 #' coef(fit)
+#'
+#' # Dependent (role-swapping) protocol:
+#' sd <- simulate_double_observer(N = 300, type = "dependent", seed = 1)
+#' fd <- tobs(~ abund_cov1, data = sd$data, family = double_observer("dependent"),
+#'            detection = ~ det_cov1, y = sd$y, primary = sd$primary,
+#'            control = list(verbose = FALSE))
+#' coef(fd)
 #' }
 #' @export
-double_observer <- function() {
+double_observer <- function(type = c("independent", "dependent")) {
+  type <- match.arg(type)
   obs_family(
     name           = "double_observer",
     class_long     = "double-observer abundance",
@@ -991,7 +1015,7 @@ double_observer <- function() {
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
-    params         = list()
+    params         = list(type = type)
   )
 }
 
@@ -1417,6 +1441,32 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 #'   increasing and starting at `>= 0`.
 #' @param K_max Truncation for the latent abundance HMM. Defaults to
 #'   `3 * max(period total) + 40`.
+#' @param mixture Initial-abundance mixing distribution. `"poisson"` (default),
+#'   `"negbin"` (negative binomial, `Var(N_1) = lambda + lambda^2 / r`, with an
+#'   overdispersion `r` estimated jointly and reported as `log_r`), `"zip"`
+#'   (zero-inflated Poisson) or `"zinb"` (zero-inflated negative binomial). A
+#'   structural-zero site is never occupied across any primary period, so all its
+#'   band counts are zero; the observed per-site marginal is the two-component
+#'   mixture `omega * 1{all zero} + (1 - omega) * L_open`, with `L_open` the exact
+#'   open-population distance marginal and `omega` an intercept-only structural-zero
+#'   probability reported as `zi_logit` (distinct from `omega`, the survival arm).
+#'   The negative-binomial size / zero-inflation is layered over the same
+#'   forward-HMM marginal; the Poisson path is unchanged.
+#' @param dynamics Population-dynamics form for the transition
+#'   `N_t | N_{t-1}` (following `unmarked::distsampOpen()`):
+#'   `"constant"` (default) is `N_t = Binomial(N_{t-1}, omega) + Poisson(gamma)`;
+#'   `"notrend"` ties recruitment so the expected abundance is stationary
+#'   (`gamma = (1 - omega) * lambda`, no free `gamma` arm); `"trend"` is an
+#'   exponential-growth process `N_t ~ Poisson(N_{t-1} * gamma)` with no survival
+#'   term (`omega` unused); `"autoreg"` adds density-dependent recruitment
+#'   `Poisson(N_{t-1} * gamma)` on top of survival; `"ricker"` and `"gompertz"`
+#'   are the density-regulated recruitment forms with an estimated carrying
+#'   capacity `K` (reported as `K`, on the log scale, modelled through the
+#'   `omega = ~ ...` formula slot) and a growth rate reported as `r` (modelled
+#'   through the `gamma = ~ ...` slot).
+#'   `"constant"` / `"notrend"` fit with the exact analytic gradient; the
+#'   density-dependent forms (`trend` / `autoreg` / `ricker` / `gompertz`) use the
+#'   exact forward-HMM marginal with a numeric gradient.
 #' @return A `tobs_family` object.
 #' @references
 #' Dail, D., Madsen, L. (2011). Models for estimating abundance from repeated
@@ -1428,18 +1478,23 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 #'   [distance()].
 #' @export
 distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
-                          K_max = NULL) {
+                          K_max = NULL,
+                          mixture = c("poisson", "negbin", "zip", "zinb"),
+                          dynamics = c("constant", "notrend", "trend", "autoreg",
+                                       "ricker", "gompertz")) {
   transect <- match.arg(transect)
+  mixture  <- match.arg(mixture)
+  dynamics <- match.arg(dynamics)
   obs_family(
     name           = "distsamp_open",
     class_long     = "open-population distance sampling",
-    latent         = "poisson",
+    latent         = mixture,
     observation    = "distance_open",
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
     params         = list(transect = transect, cutpoints = cutpoints,
-                          K_max = K_max)
+                          K_max = K_max, mixture = mixture, dynamics = dynamics)
   )
 }
 

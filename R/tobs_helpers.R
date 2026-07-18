@@ -226,11 +226,12 @@
   # detection, non-spatial laplace only for the first ship (per-parameter
   # formulas, higher-order terms, visit-level detection are follow-ups, #116).
   occu_multi = c("laplace"),
-  # double_observer: independent double-observer abundance (unmarked multinomPois
-  # double-observer pi). Poisson-multinomial thinning makes the three observable
-  # cell counts independent Poissons, so the marginal is closed form (no latent-N
-  # sum); maximised by optim BFGS with an observed-information vcov. Site-level
-  # detection, non-spatial laplace only for the first ship (#116).
+  # double_observer: double-observer abundance (unmarked multinomPois pi). Poisson-
+  # multinomial thinning makes the observable cell counts independent Poissons, so
+  # the marginal is closed form (no latent-N sum); maximised by optim BFGS with an
+  # observed-information vcov. type = "independent" (3 cells) or "dependent"
+  # (removal-style, 2 cells, role-swapping `primary` for identifiability, #116).
+  # Site-level detection, non-spatial laplace only.
   double_observer = c("laplace"),
   # gdistremoval: joint distance + removal sampling (unmarked gdistremoval,
   # Amundson et al. 2014). Single-season; the detected birds are cross-classified

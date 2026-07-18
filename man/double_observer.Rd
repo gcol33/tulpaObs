@@ -4,31 +4,57 @@
 \alias{double_observer}
 \title{Double-observer abundance family}
 \usage{
-double_observer()
+double_observer(type = c("independent", "dependent"))
+}
+\arguments{
+\item{type}{\code{"independent"} (default; \verb{N x 3} cell counts) or \code{"dependent"}
+(removal-style, \verb{N x 2} cell counts, needs \verb{primary =} for identifiability).}
 }
 \value{
 A \code{tobs_family} object for \code{\link[=tobs]{tobs()}}.
 }
 \description{
-Abundance from an independent double-observer protocol (\pkg{unmarked}
-\code{multinomPois} with the double-observer pi-function). Site abundance
-\code{N ~ Poisson(lambda)} is surveyed by two independent observers with detection
-\code{p1} / \code{p2}; each individual is recorded by observer 1 only, observer 2 only,
-or both. By Poisson-multinomial thinning the three observable cell counts are
-independent Poissons (\code{n_c ~ Poisson(lambda * pi_c)}), so the marginal is
-closed form with no latent-abundance summation. The state \code{formula} models
+Abundance from a double-observer protocol (\pkg{unmarked} \code{multinomPois} with a
+double-observer pi-function). Site abundance \code{N ~ Poisson(lambda)} is surveyed
+by two observers with detection \code{p1} / \code{p2}. The state \code{formula} models
 \verb{log lambda}; \code{detection} the shared site-level per-observer detection design
-(observers 1 and 2 carry separate coefficients).
+(observers 1 and 2 carry separate coefficients). By Poisson-multinomial
+thinning the observable cell counts are independent Poissons, so the marginal
+is closed form with no latent-abundance summation.
 }
-\details{
-\code{y} is an \verb{N x 3} matrix of cell counts in column order (observer-1-only,
-observer-2-only, both).
+\section{Independent vs dependent protocol}{
+
+\code{type = "independent"} (the default): the two observers detect independently and
+each individual is recorded by observer 1 only, observer 2 only, or both, so \code{y}
+is an \verb{N x 3} matrix of cell counts in that column order and the three cells are
+\verb{pi = (p1(1 - p2), (1 - p1)p2, p1 p2)}.
+
+\code{type = "dependent"}: a removal-style protocol where a \emph{primary} observer
+records what it detects and a \emph{secondary} observer records only what the primary
+missed, so \code{y} is an \verb{N x 2} matrix \verb{(primary-detected, secondary-only)} with
+cells \verb{pi = (p_pri, (1 - p_pri)p_sec)}. A single fixed primary observer gives
+only two cells for three parameters (\code{lambda}, \code{p1}, \code{p2}), a ridge that does
+not separate the two observer detections; observer \strong{role-swapping} identifies
+them -- pass \verb{primary =} (a length-\code{N} vector in \verb{\{1, 2\}} naming each site's
+primary observer), and with observer 1 primary at some sites and observer 2 at
+others \verb{(p_pri, p_sec)} alternates between \verb{(p1, p2)} and \verb{(p2, p1)}, giving the
+four cell means that recover \verb{(lambda, p1, p2)}. With \code{p1 = p2} (an
+interchangeable pair) the dependent protocol reduces to a two-pass \code{\link[=removal]{removal()}}
+model.
 }
+
 \examples{
 \donttest{
 sim <- simulate_double_observer(N = 200, seed = 1)
 fit <- tobs(~ abund_cov1, data = sim$data, family = double_observer(),
             detection = ~ det_cov1, y = sim$y, control = list(verbose = FALSE))
 coef(fit)
+
+# Dependent (role-swapping) protocol:
+sd <- simulate_double_observer(N = 300, type = "dependent", seed = 1)
+fd <- tobs(~ abund_cov1, data = sd$data, family = double_observer("dependent"),
+           detection = ~ det_cov1, y = sd$y, primary = sd$primary,
+           control = list(verbose = FALSE))
+coef(fd)
 }
 }

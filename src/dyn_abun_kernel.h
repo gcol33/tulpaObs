@@ -340,6 +340,115 @@ inline DynAbunSiteResult compute_dyn_abun_site(
                                  eo.data(), eg.data(), use_nb, eta_logr);
 }
 
+// ---------------------------------------------------------------------------
+// Alternative population dynamics (unmarked distsampOpen / pcountOpen tp2..tp5).
+// VALUE-ONLY forward recursion: the density-dependent transitions make the exact
+// forward-mode gradient (and, for ricker/gompertz, a carrying-capacity direction)
+// hand-derivation heavy, so these dynamics are fit with a numeric gradient over
+// this exact marginal. The constant / notrend path keeps the analytic-gradient
+// kernel above untouched (byte-identical). Dynamics codes (matching the unmarked
+// transition functions), with imm (immigration) fixed at 0:
+//   2 autoreg  Tr(n1->n2) = sum_s Binom(s|n1,om) Poisson(n2-s | gam*n1)   (survival + AR recruitment)
+//   3 trend    Tr(n1->n2) = Poisson(n2 | n1*gam)                          (no survival)
+//   4 ricker   Tr(n1->n2) = Poisson(n2 | n1*exp(gam*(1 - n1/K)))          (no survival, om slot = K)
+//   5 gompertz Tr(n1->n2) = Poisson(n2 | n1*exp(gam*(1 - log(n1+1)/log(K+1))))
+// Links: gam = exp(eta_gamma) for autoreg / trend (log, matching unmarked's
+// gamma invlink="exp"); gam = eta_gamma (identity, so growth may be negative) and
+// K = exp(eta_omega) (the om slot carries log carrying capacity) for ricker /
+// gompertz; om = invlogit(eta_omega) survival for autoreg. eta_omega / eta_gamma
+// are interval-indexed (length T-1). Poisson or NB initial abundance.
+inline double da_pois_pmf_at(int k, double rate) {
+    if (rate <= 0.0) return (k == 0) ? 1.0 : 0.0;
+    return std::exp(-rate + (double)k * std::log(rate) - R::lgammafn((double)k + 1.0));
+}
+
+inline double compute_dyn_abun_site_dyn(
+    const int* y, int T, int J, int K,
+    double eta_lambda, double eta_p,
+    const double* eta_omega, const double* eta_gamma,
+    int dynamics, bool use_nb = false, double eta_logr = 0.0
+) {
+    const int S = K + 1;
+    const int nIv = T - 1;
+    const double lambda = std::exp(eta_lambda);
+    const double p      = da_inv_logit(eta_p);
+    const double logp = std::log(p), log1mp = std::log1p(-p);
+    const double rr = use_nb ? std::exp(eta_logr) : 0.0;
+    const bool has_survival = (dynamics == 2);   // autoreg keeps binomial survival
+
+    // Per-interval transition matrices Tr[iv](n1, n2), n1 the source state.
+    std::vector<std::vector<double> > Tr(nIv);
+    std::vector<double> binom(S);
+    for (int iv = 0; iv < nIv; ++iv) {
+        Tr[iv].assign(S * S, 0.0);
+        const double gam = (dynamics == 2 || dynamics == 3)
+            ? std::exp(eta_gamma[iv]) : eta_gamma[iv];       // log for AR/trend, identity else
+        const double om  = da_inv_logit(eta_omega[iv]);      // survival (autoreg)
+        const double Kc  = std::exp(eta_omega[iv]);          // carrying capacity (ricker/gompertz)
+        const double logom = std::log(om), log1mom = std::log1p(-om);
+        for (int n1 = 0; n1 < S; ++n1) {
+            if (has_survival) {
+                da_binom_pmf_row(n1, logom, log1mom, binom);
+                const double rate = gam * (double)n1;        // AR recruitment mean
+                for (int s = 0; s <= n1; ++s) {
+                    const double bs = binom[s];
+                    if (bs <= 0.0) continue;
+                    for (int gn = 0; s + gn < S; ++gn)
+                        Tr[iv][n1 * S + (s + gn)] += bs * da_pois_pmf_at(gn, rate);
+                }
+            } else {
+                double rate;
+                if (dynamics == 3) rate = (double)n1 * gam;                       // trend
+                else if (dynamics == 4)                                          // ricker
+                    rate = (double)n1 * std::exp(gam * (1.0 - (double)n1 / Kc));
+                else                                                             // gompertz
+                    rate = (double)n1 * std::exp(gam * (1.0 -
+                           std::log((double)n1 + 1.0) / std::log(Kc + 1.0)));
+                for (int n2 = 0; n2 < S; ++n2) Tr[iv][n1 * S + n2] = da_pois_pmf_at(n2, rate);
+            }
+        }
+    }
+
+    std::vector<double> a(S), pre(S), obs(S);
+    // Season 1: initial Poisson / NB x observation.
+    da_obs_season_pmf(y, 0, J, S, logp, log1mp, obs);
+    double c1 = 0.0;
+    for (int n = 0; n < S; ++n) {
+        double pi_n;
+        if (use_nb) {
+            const double rpm = rr + lambda;
+            const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
+                - R::lgammafn((double)n + 1.0)
+                + rr * std::log(rr / rpm) + (double)n * std::log(lambda / rpm);
+            pi_n = std::exp(lpn);
+        } else {
+            pi_n = std::exp(-lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0));
+        }
+        a[n] = pi_n * obs[n]; c1 += a[n];
+    }
+    if (!(c1 > 0.0)) return -std::numeric_limits<double>::infinity();
+    double log_lik = std::log(c1);
+    for (int n = 0; n < S; ++n) a[n] /= c1;
+
+    for (int t = 1; t < T; ++t) {
+        const std::vector<double>& Tt = Tr[t - 1];
+        for (int n2 = 0; n2 < S; ++n2) pre[n2] = 0.0;
+        for (int n1 = 0; n1 < S; ++n1) {
+            const double an = a[n1];
+            if (an <= 0.0) continue;
+            const double* row = &Tt[n1 * S];
+            for (int n2 = 0; n2 < S; ++n2) pre[n2] += an * row[n2];
+        }
+        da_obs_season_pmf(y, t, J, S, logp, log1mp, obs);
+        double ct = 0.0;
+        for (int n2 = 0; n2 < S; ++n2) { a[n2] = pre[n2] * obs[n2]; ct += a[n2]; }
+        if (!(ct > 0.0)) return -std::numeric_limits<double>::infinity();
+        log_lik += std::log(ct);
+        for (int n2 = 0; n2 < S; ++n2) a[n2] /= ct;
+    }
+    return log_lik;
+}
+
 struct DynAbunPCurv {
     double log_lik;
     double d1;   // d log L / d eta_p

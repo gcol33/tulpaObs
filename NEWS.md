@@ -1,5 +1,79 @@
 # tulpaObs NEWS
 
+## 0.0.173 (2026-07-18)
+
+Three inline-variant scope notes graduated to working features.
+
+* **`distsamp_open()` gains alternative population dynamics
+  (`dynamics = "notrend" / "trend" / "autoreg" / "ricker" / "gompertz"`).**
+  Following `unmarked::distsampOpen()`, the transition `N_t | N_{t-1}` can now be
+  the density-independent `"constant"` (default, `Binomial(N_{t-1}, omega) +
+  Poisson(gamma)`), the stationary `"notrend"` (recruitment tied to
+  `(1 - omega) * lambda`, no free `gamma` arm), the exponential `"trend"`
+  (`Poisson(N_{t-1} * gamma)`, no survival), the `"autoreg"` density-dependent
+  recruitment (`Binomial(N_{t-1}, omega) + Poisson(gamma * N_{t-1})`), or the
+  carrying-capacity forms `"ricker"` / `"gompertz"` (an estimated `K` reported as
+  `K`, a growth rate reported as `r`). `"constant"` / `"notrend"` fit with the
+  exact analytic gradient; the density-dependent forms use the same exact
+  forward-HMM marginal through a value-only kernel
+  (`compute_dyn_abun_site_dyn()` in `src/dyn_abun_kernel.h`, validated against a
+  brute-force reference to `< 4e-15`) with a numeric gradient. The abundance and
+  distance-scale arms recover on every dynamics; survival / recruitment / K / r
+  sit on the usual short-series ridge, and the density-regulated forms grow
+  toward the carrying capacity, so bound `K_max` (the forward is cubic in the
+  truncation) when abundance is high. `simulate_distsamp_open()` gains
+  `dynamics`; NUTS / areal / season-varying detection stay follow-ups.
+* **`double_observer()` gains the dependent (removal-style) protocol
+  (`type = "dependent"`).** A primary observer records what it detects and a
+  secondary observer records only the primary's misses (two cell counts:
+  primary-detected and secondary-only). A single fixed primary observer gives
+  two cell means for three parameters (`lambda`, `p1`, `p2`) -- a ridge -- so the
+  two detections are not separately identified; observer role-swapping breaks it,
+  with observer 1 primary at some sites and observer 2 primary at others (a
+  per-site `primary` indicator in `{1, 2}`), giving four cell means that identify
+  all three. The marginal is again a product of independent thinned Poissons, fit
+  by `optim` BFGS with an observed-information vcov. A single-observer `primary`
+  warns (no role-swapping). `simulate_double_observer(type = "dependent")` draws
+  the two cells with an alternating primary; the independent three-cell protocol
+  is unchanged.
+* **`count()` gains a continuous NNGP Gaussian-process field via `gp()`.**
+  `count(...) + gp(lon, lat, prior_range = c(r0, alpha))` on the abundance formula
+  routes to tulpa's single-block `nngp` nested-Laplace kernel: the GP marginal
+  variance and range are integrated on the kernel's own outer grid and the field
+  is Schur-folded out, so the fit reports grid-integrated fixed effects plus the
+  GP hyperparameter posterior (`fit$gp_hyper`, `sigma2` / `phi_gp`). The per-cell
+  field is integrated out on this path (`fit$spatial_field` is `NULL`); use
+  `spde()` for a reconstructed continuous field map. Poisson / binomial only (a
+  negbin size / gaussian residual variance is not jointly identified against a
+  per-node field, gated with a pointer), as for the areal `icar()` / `car_proper()`
+  path; `multiscale_gp()` (two-scale) is not hosted by the nested-Laplace engine
+  and errors with a pointer to `gp()` / `spde()`.
+
+## 0.0.172 (2026-07-18)
+
+* **`distsamp_open()` gains negative-binomial and zero-inflated initial
+  abundance (`mixture = "negbin" / "zip" / "zinb"`).** The open-population
+  distance marginal already runs through the `dyn_abun()` forward-HMM kernel,
+  which carries `use_nb` / `eta_logr`, so the negative-binomial initial abundance
+  is threaded straight through with an analytic `log_r` score (FD-validated,
+  `cor = 1`, `max|an - fd| = 6e-8`). Zero inflation is a pure-R additive layer
+  over the composed per-site marginal (the `abun()` / `dyn_abun()` ZIP recipe): a
+  structural-zero site is never occupied across any primary period, so all its
+  band counts are zero and the marginal is
+  `omega * 1{all zero} + (1 - omega) * L_open`, with `omega` an intercept-only
+  structural-zero probability reported as `zi_logit` / `zi_omega` (distinct from
+  `omega`, the survival arm). The ZI structural-zero share recovers cleanly (a
+  single-seed probe recovered 0.30 against a truth of 0.30); the abundance and
+  distance-scale arms recover on every mixture. `simulate_distsamp_open()` gains
+  `mixture` / `size` / `zi`. Poisson fits are byte-identical. As with the base
+  family the survival / recruitment ridge (and the NB size) is weakly identified
+  at short series; the forward is cubic in the truncation `K_max`, so a high
+  abundance is slow. NUTS / areal / season-varying detection stay a follow-up.
+* **Fix: `distsamp_open()` WAIC / pointwise log-likelihood.** The per-site
+  `.dso_site_loglik()` read `ev$log_lik` (the summed dataset scalar) instead of
+  `ev$log_lik_site` (the per-site vector), adding the whole-dataset HMM total to
+  each site's band term. WAIC / LOO / `tobs_ploglik()` are now per-site correct.
+
 ## 0.0.171 (2026-07-18)
 
 * **New family `distsamp_open()` -- open-population distance sampling (#116, the

@@ -515,13 +515,15 @@
     # on this generic path; the improper non-intrinsic car() is likewise not
     # wired. Both are #117 follow-ups -- point to the supported fields rather
     # than return a fit with no field.
-    if (!all(ftypes %in% c("icar", "car_proper", "bym2", "spde"))) {
+    if (!all(ftypes %in% c("icar", "car_proper", "bym2", "spde", "gp"))) {
       stop(sprintf(paste0(
-        "count(): an areal field on the count formula supports icar(), ",
-        "car_proper(), bym2(), or the continuous-mesh spde(); got '%s'. The ",
-        "improper car() and gp() are not yet wired for the count family ",
+        "count(): a spatial field on the count formula supports the areal ",
+        "icar(), car_proper(), bym2(), the continuous-mesh spde(), or the ",
+        "continuous NNGP gp(); got '%s'. The improper car() and the two-scale ",
+        "multiscale_gp() are not yet wired for the count family ",
         "(gcol33/tulpaObs#117)."),
-        paste(unique(setdiff(ftypes, c("icar", "car_proper", "bym2", "spde"))),
+        paste(unique(setdiff(ftypes,
+              c("icar", "car_proper", "bym2", "spde", "gp"))),
               collapse = "' / '")), call. = FALSE)
     }
     # A bar spells its grouping as `|| cell`, so group_var is set even when the

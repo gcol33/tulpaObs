@@ -141,6 +141,10 @@ cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, e
     .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr)
 }
 
+cpp_dyn_abun_dynamics_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb = FALSE, eta_logr = 0.0) {
+    .Call(`_tulpaObs_cpp_dyn_abun_dynamics_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb, eta_logr)
+}
+
 cpp_dyn_abun_init_weights_mat <- function(y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma) {
     .Call(`_tulpaObs_cpp_dyn_abun_init_weights_mat`, y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma)
 }

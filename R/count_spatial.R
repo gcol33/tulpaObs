@@ -69,6 +69,19 @@
   if (!identical(model$model_type, "count")) {
     stop("`.tobs_fit_count_spatial` expects a count model.", call. = FALSE)
   }
+  # A continuous NNGP Gaussian-process field on the abundance arm (gcol33/
+  # tulpaObs#117 follow-up). tulpa's nested-Laplace hosts a single-block `nngp`
+  # kernel (its own cpp_fn, integrated over the GP marginal variance and range),
+  # so this routes around the multi-block areal builder to tulpa directly.
+  if (identical(spatial$type, "gp"))
+    return(.tobs_fit_count_gp(model, spatial, max_iter = max_iter, tol = tol,
+                              verbose = verbose))
+  if (identical(spatial$type, "multiscale_gp")) {
+    stop("Areal count: the two-scale multiscale_gp() field is not hosted by the ",
+         "nested-Laplace engine (a single-scale continuous field). Use gp() for ",
+         "a one-scale NNGP field, or spde() for a mesh-based continuous Matern ",
+         "field with a reconstructed per-cell map.", call. = FALSE)
+  }
   prior <- .tobs_to_multi_block_prior(spatial = spatial, model = model)
   if (is.null(prior)) {
     stop("Areal count needs an areal field block (icar / car_proper); none was ",
@@ -150,6 +163,10 @@
 # contribution only when there is no SVC field. Returns NULL when the fit carries
 # no reconstructed field.
 .count_spatial_field_offset <- function(fit, spatial, model) {
+  # The NNGP GP field is integrated out on the nested path (no reconstructed
+  # per-cell realization), so there is no per-site field offset to add; fitted()
+  # / predict() run on the field-integrated fixed effects.
+  if (identical(spatial$type, "gp")) return(NULL)
   flds <- c(list(fit$spatial_field), as.list(fit$trend_fields %||% list()))
   flds <- Filter(function(z) !is.null(z) && !all(is.na(z)), flds)
   if (!length(flds)) return(NULL)
@@ -175,4 +192,103 @@
     off <- off + w * as.numeric(flds[[k]])
   }
   off
+}
+
+
+# ---------------------------------------------------------------------------
+# Continuous NNGP Gaussian-process field on the count arm (gp())
+# ---------------------------------------------------------------------------
+
+# Build the tulpa `nngp` nested-Laplace prior from a resolved gp() spatial term.
+# The tobs gp() term caches the coordinate matrix (row-major, `spatial$coords`)
+# and the covariance settings; tulpa's `spatial_gp()` + `prior_from_spec()` are
+# the single source of truth for the NNGP neighbour structure and the nested
+# prior block, so the coordinates are handed back to them rather than re-deriving
+# the block here.
+.count_gp_prior <- function(spatial, n_sites) {
+  co <- matrix(as.numeric(spatial$coords), ncol = 2L, byrow = TRUE)
+  if (nrow(co) != n_sites) {
+    stop(sprintf(paste0("Areal count gp(): the term carries %d coordinates but ",
+         "the model has %d sites."), nrow(co), n_sites), call. = FALSE)
+  }
+  tmp <- data.frame(.gp_lon = co[, 1L], .gp_lat = co[, 2L])
+  gspec <- tulpa::spatial_gp(
+    coords = c(".gp_lon", ".gp_lat"),
+    cov    = spatial$cov_type %||% "exponential",
+    nu     = spatial$nu %||% 1.5,
+    nn     = as.integer(spatial$nn %||% 15L))
+  tulpa::prior_from_spec(gspec, tmp)
+}
+
+# Fit a count / relative-abundance GLMM with a continuous NNGP GP field on the
+# abundance arm. tulpa's nested-Laplace `nngp` kernel integrates the GP marginal
+# variance and range on its own outer grid and Schur-folds the field out, so this
+# returns grid-integrated fixed effects (via the shared `.count_spatial_fe_moments`)
+# plus the GP hyperparameter posterior; the per-cell field itself is integrated out
+# (use spde() for a reconstructed continuous field map). Poisson / binomial only,
+# as for the areal path (a negbin size / gaussian residual variance is not jointly
+# identified with a per-node field under the fixed-dispersion nested loop).
+.tobs_fit_count_gp <- function(model, spatial, max_iter = 50L, tol = 1e-6,
+                               verbose = FALSE, ...) {
+  X <- model$X_processes[[1]]
+  p <- ncol(X)
+  y <- as.numeric(model$y_count)
+  N <- length(y)
+  resp <- model$response %||% "poisson"
+  if (!resp %in% c("poisson", "binomial")) {
+    stop(sprintf(paste0("Areal count gp(): response '%s' is not identified ",
+         "against a continuous per-node GP field (the size / residual variance ",
+         "and the field both absorb overdispersion). Use 'poisson' / 'binomial', ",
+         "or spde() / an areal field."), resp), call. = FALSE)
+  }
+  fam <- if (identical(resp, "binomial")) "binomial" else "poisson"
+  n_trials <- if (identical(fam, "binomial"))
+                as.integer(model$n_trials %||% rep(1L, N)) else rep(1L, N)
+
+  prior <- .count_gp_prior(spatial, N)
+  res <- tulpa::tulpa_nested_laplace(
+    y = y, n_trials = n_trials, X = X, prior = prior,
+    family = fam, phi = as.numeric(model$count_phi %||% 1.0),
+    control = list(max_iter = as.integer(max_iter), tol = as.numeric(tol),
+                   keep_grid_hessians = TRUE))
+
+  fe <- .count_spatial_fe_moments(res, p)
+  pi_list <- model$process_info
+  nms <- paste0(pi_list[[1L]]$name, "_", pi_list[[1L]]$coef_names)
+
+  means <- fe$beta; names(means) <- nms
+  V <- fe$vcov; dimnames(V) <- list(nms, nms)
+  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nms
+
+  n_draws <- 1000L
+  draws <- .rmvn(n_draws, means, V)
+  colnames(draws) <- nms
+
+  # GP hyperparameter posterior (marginal SD sqrt(sigma2) and the range phi_gp),
+  # grid-integrated by tulpa; surfaced on fit$spatial for the user.
+  gp_hyper <- list(theta_names = res$theta_names,
+                   mean = res$theta_mean, sd = res$theta_sd,
+                   median = res$theta_median,
+                   ci_lo = res$theta_ci_lo, ci_hi = res$theta_ci_hi)
+
+  fit <- structure(c(list(
+    draws = draws, means = means, sds = sds,
+    skew = NULL, sla_status = "off",
+    n_samples = n_draws, n_params = length(means),
+    log_prob = rep(NA_real_, n_draws)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names = nms, param_names = nms,
+    intercepts = compute_intercepts(model, means),
+    model = model,
+    spatial = spatial,
+    spatial_field = NULL,          # GP field integrated out (no per-cell map)
+    gp_hyper = gp_hyper,
+    process_info = pi_list,
+    method = "nested_laplace",
+    nested_laplace = list(prior = prior, occ_fit = res),
+    convergence = list(converged = TRUE, n_iter = as.integer(res$n_iter %||% 1L)),
+    correction = "none"
+  )), class = c("tobs_fit", "tulpa_fit"))
+  fit
 }

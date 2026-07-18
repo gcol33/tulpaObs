@@ -6,6 +6,7 @@
 \usage{
 simulate_double_observer(
   N = 200,
+  type = c("independent", "dependent"),
   n_abund_covs = 1,
   n_det_covs = 1,
   beta_lambda = NULL,
@@ -16,6 +17,8 @@ simulate_double_observer(
 }
 \arguments{
 \item{N}{Number of sites (default 200).}
+
+\item{type}{\code{"independent"} (default) or \code{"dependent"} (role-swapping).}
 
 \item{n_abund_covs, n_det_covs}{Number of abundance / detection covariates.}
 
@@ -28,10 +31,17 @@ moderate detection.}
 \item{seed}{Optional random seed.}
 }
 \value{
-A list with \code{y} (N x 3 cell counts), \code{data}, and \code{truth}.
+A list with \code{y} (\verb{N x 3} cell counts for \code{"independent"}, \verb{N x 2} for
+\code{"dependent"}), \code{data}, \code{primary} (the per-site primary observer, for
+\code{"dependent"}), and \code{truth}.
 }
 \description{
 Draws from the \code{\link[=double_observer]{double_observer()}} model: site abundance
-\code{N ~ Poisson(lambda)} observed by two independent observers with detection
-\code{p1} / \code{p2}, recorded as the three observable cell counts.
+\code{N ~ Poisson(lambda)} observed by two observers with detection \code{p1} / \code{p2}. For
+\code{type = "independent"} each individual is recorded by observer 1 only, observer
+2 only, or both (three cell counts). For \code{type = "dependent"} a primary observer
+records what it detects and a secondary observer records only the primary's
+misses (two cell counts, primary-detected and secondary-only); the primary
+observer alternates across sites (role-swapping) so \code{p1} and \code{p2} are
+identifiable, and the per-site primary indicator is returned as \code{primary}.
 }

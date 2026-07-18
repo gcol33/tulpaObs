@@ -15,6 +15,12 @@ simulate_distsamp_open(
   beta_sigma = NULL,
   omega = 0.7,
   gamma = 2.5,
+  mixture = c("poisson", "negbin", "zip", "zinb"),
+  size = 3,
+  zi = 0.3,
+  dynamics = c("constant", "notrend", "trend", "autoreg", "ricker", "gompertz"),
+  K = NULL,
+  r = 0.3,
   seed = NULL
 )
 }
@@ -35,6 +41,27 @@ arms. Defaults give moderate abundance / detection.}
 \item{omega, gamma}{Apparent survival probability and recruitment rate
 (intercept-only defaults 0.7 / 2.5).}
 
+\item{mixture}{Initial-abundance distribution: \code{"poisson"} (default),
+\code{"negbin"} / \code{"zinb"} (draws \code{N_1} negative-binomial with size \code{size}), or
+\code{"zip"} / \code{"zinb"} (a \code{zi} fraction of sites are structural zeros).}
+
+\item{size}{Negative-binomial size (overdispersion \code{r}) when \code{mixture} draws
+an NB initial abundance (default 3).}
+
+\item{zi}{Structural-zero probability when \code{mixture} is \code{"zip"} / \code{"zinb"}
+(default 0.3).}
+
+\item{dynamics}{Population-dynamics form (see \code{\link[=distsamp_open]{distsamp_open()}}): \code{"constant"}
+(default), \code{"notrend"}, \code{"trend"}, \code{"autoreg"}, \code{"ricker"}, or \code{"gompertz"}.
+The alternative dynamics draw the abundance sequence from the matching
+transition (Poisson initial abundance only).}
+
+\item{K}{Carrying capacity for \code{"ricker"} / \code{"gompertz"} (default \code{4 * lambda0});
+\code{r} the intrinsic growth rate for those forms (default 0.3). For \code{"trend"} /
+\code{"autoreg"} the recruitment multiplier is \code{gamma}.}
+
+\item{r}{Intrinsic growth rate for \code{"ricker"} / \code{"gompertz"} (default 0.3).}
+
 \item{seed}{Optional random seed.}
 }
 \value{
@@ -43,7 +70,6 @@ counts), \code{data}, and \code{truth}.
 }
 \description{
 Draws from the \code{\link[=distsamp_open]{distsamp_open()}} model: an open metapopulation
-(\code{N_1 ~ Poisson(lambda)}, \verb{N_t = Binomial(N_\{t-1\}, omega) + Poisson(gamma)})
-observed by distance sampling (half-normal key, scale \code{sigma}) at each primary
-period.
+(\code{N_1 ~ Poisson / NB(lambda)}, \verb{N_t = Binomial(N_\{t-1\}, omega) + Poisson(gamma)}) observed by distance sampling (half-normal key, scale
+\code{sigma}) at each primary period.
 }

@@ -124,3 +124,149 @@ test_that("distsamp_open recovers lambda / sigma / omega / gamma with ~95% cover
   expect_equal(colMeans(est, na.rm = TRUE), tt, tolerance = 0.12)
   expect_true(all(colMeans(cov) >= 0.85))
 })
+
+
+# --- (6) negative-binomial initial abundance ------------------------------
+
+test_that("the distsamp_open NB analytic gradient (incl. log_r) matches FD", {
+  skip_on_cran()
+  sim <- simulate_distsamp_open(N = 80, cutpoints = cutp, n_seasons = 3L,
+           beta_lambda = c(log(6), 0.3), beta_sigma = c(log(18), 0.1),
+           omega = 0.6, gamma = 1.2, mixture = "negbin", size = 5, seed = 4)
+  m <- tulpaObs:::.tobs_build_distsamp_open(~ abund_cov1, ~ det_cov1, ~ 1, ~ 1,
+         sim$data, sim$y, cutp, "line", mixture = "negbin")
+  th <- c(log(6), 0.2, log(17), 0.05, stats::qlogis(0.55), log(1.1), log(4))
+  an <- tulpaObs:::.dso_grad(th, m)
+  expect_length(an, 7L)                       # the 4 arms + trailing log_r
+  h  <- 1e-5; fd <- numeric(length(th))
+  for (j in seq_along(th)) {
+    tp <- th; tp[j] <- tp[j] + h; tm <- th; tm[j] <- tm[j] - h
+    fd[j] <- -(tulpaObs:::.dso_negll(tp, m) - tulpaObs:::.dso_negll(tm, m)) / (2 * h)
+  }
+  expect_lt(max(abs(an - fd)), 1e-4)
+  expect_gt(cor(an, fd), 0.9999)
+})
+
+test_that("a distsamp_open(negbin) fit recovers abundance / scale and surfaces r", {
+  skip_if_fast()
+  skip_on_cran()
+  # Modest lambda keeps the cubic-in-K forward tractable; NB size / omega / gamma
+  # sit on a weakly identified ridge at short series, so the recovery targets are
+  # the well-identified abundance + distance-scale arms (and a finite r / log_r).
+  sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n_seasons = 4L,
+           beta_lambda = c(log(8), 0.3), beta_sigma = c(log(18), 0.1),
+           omega = 0.6, gamma = 1.5, mixture = "negbin", size = 6, seed = 401)
+  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
+              family = distsamp_open(cutpoints = cutp, mixture = "negbin"),
+              detection = ~ det_cov1, method = "laplace",
+              control = list(verbose = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true(fit$convergence$converged)
+  expect_true("log_r" %in% names(fit$means))
+  expect_true(is.finite(fit$r) && fit$r > 0)
+  expect_length(unlist(coef(fit)), 6L)        # log_r is a trailing coord, not an arm
+  b <- fit$means; se <- fit$sds
+  tgt <- c("lambda_(Intercept)", "lambda_abund_cov1", "sigma_(Intercept)")
+  tru <- c(log(8), 0.3, log(18))
+  expect_true(all(abs(b[tgt] - tru) / se[tgt] < 3.5))
+  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_identical(dim(simulate(fit)), dim(sim$y))
+})
+
+
+# --- (7) zero-inflated initial abundance (ZIP / ZINB) ---------------------
+
+test_that("a distsamp_open(zip) fit recovers abundance / scale and the ZI share", {
+  skip_if_fast()
+  skip_on_cran()
+  sim <- simulate_distsamp_open(N = 120, cutpoints = cutp, n_seasons = 4L,
+           beta_lambda = c(log(8), 0.3), beta_sigma = c(log(18), 0.1),
+           omega = 0.55, gamma = 1.2, mixture = "zip", zi = 0.35, seed = 411)
+  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
+              family = distsamp_open(cutpoints = cutp, mixture = "zip"),
+              detection = ~ det_cov1, omega = ~ 1, gamma = ~ 1,
+              method = "laplace", control = list(verbose = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true(fit$convergence$converged)
+  expect_true(isTRUE(fit$zero_inflated))
+  expect_true("zi_logit" %in% names(fit$means))
+  # The structural-zero share is the distinctive ZIP quantity and recovers well.
+  expect_equal(fit$zi_omega, 0.35, tolerance = 0.12)
+  b <- fit$means; se <- fit$sds
+  tgt <- c("lambda_(Intercept)", "lambda_abund_cov1", "sigma_(Intercept)")
+  tru <- c(log(8), 0.3, log(18))
+  expect_true(all(abs(b[tgt] - tru) / se[tgt] < 3.5))
+  expect_true(is.finite(tobs_waic(fit)$waic))     # the per-site log_lik_site path
+  expect_identical(dim(simulate(fit)), dim(sim$y))
+})
+
+test_that("distsamp_open(zinb) fits and names both zi_logit and log_r", {
+  skip_if_fast()
+  skip_on_cran()
+  sim <- simulate_distsamp_open(N = 90, cutpoints = cutp, n_seasons = 3L,
+           beta_lambda = c(log(6), 0.3), beta_sigma = c(log(18), 0.1),
+           omega = 0.55, gamma = 1, mixture = "zinb", size = 6, zi = 0.3, seed = 21)
+  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
+              family = distsamp_open(cutpoints = cutp, mixture = "zinb"),
+              detection = ~ det_cov1, omega = ~ 1, gamma = ~ 1,
+              method = "laplace", control = list(verbose = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_true(all(c("zi_logit", "log_r") %in% names(fit$means)))
+  expect_true(is.finite(fit$r) && fit$r > 0)
+  expect_true(fit$zi_omega > 0 && fit$zi_omega < 1)
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
+
+# --- (8) alternative population dynamics (tp2..tp5) ------------------------
+
+test_that("distsamp_open fits every alternative dynamics and recovers lambda/sigma", {
+  skip_if_fast()
+  skip_on_cran()
+  # The density-regulated transitions (trend / autoreg / ricker / gompertz) use the
+  # value-only forward-HMM kernel with a numeric gradient. Their transition rates
+  # are per-capita (autoreg gamma), geometric (trend gamma), or bounded by a
+  # carrying capacity (ricker / gompertz K), so the truth is set to keep abundance
+  # low and the cubic-in-K forward cheap; an explicit small K_max bounds the cost.
+  # The well-identified recovery target is the abundance / distance-scale arms --
+  # survival / recruitment / K / r sit on the usual short-series ridge.
+  cp3 <- c(0, 10, 20, 30)
+  bl  <- c(log(4), 0.3); bs <- c(log(16), 0.1)
+  spec <- list(
+    notrend  = list(arm = "omega_(Intercept)",
+                    sim = list(omega = 0.6, gamma = 1.5)),
+    trend    = list(arm = "gamma_(Intercept)",
+                    sim = list(gamma = 1.05)),
+    autoreg  = list(arm = "gamma_(Intercept)",
+                    sim = list(omega = 0.5, gamma = 0.25)),
+    ricker   = list(arm = "K_(Intercept)",
+                    sim = list(r = 0.3, K = 8)),
+    gompertz = list(arm = "K_(Intercept)",
+                    sim = list(r = 0.3, K = 8)))
+
+  for (d in names(spec)) {
+    args <- c(list(N = 40, cutpoints = cp3, n_seasons = 3L,
+                   beta_lambda = bl, beta_sigma = bs, dynamics = d, seed = 51),
+              spec[[d]]$sim)
+    sim <- do.call(simulate_distsamp_open, args)
+    fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
+                family = distsamp_open(cutpoints = cp3, dynamics = d, K_max = 22L),
+                detection = ~ det_cov1, method = "laplace",
+                control = list(verbose = FALSE))
+    info <- paste0("dynamics = ", d)
+    expect_s3_class(fit, "tobs_fit")
+    expect_true(isTRUE(fit$convergence$converged), info = info)
+    # The dynamics-specific third / fourth arm is present and named.
+    expect_true(spec[[d]]$arm %in% names(fit$means), info = info)
+    # Abundance + distance-scale recover (rough tolerance at N = 40, bounded K).
+    b <- fit$means
+    expect_lt(abs(b[["lambda_(Intercept)"]] - bl[1]), 0.35)
+    expect_lt(abs(b[["sigma_(Intercept)"]]  - bs[1]), 0.35)
+    # S3 surface works on every dynamics.
+    fv <- fitted(fit)
+    expect_length(fv$lambda, 40L); expect_length(fv$sigma, 40L)
+    expect_length(predict(fit, type = "abundance"), 40L)
+    expect_true(is.finite(tobs_waic(fit)$waic), info = info)
+    expect_identical(dim(simulate(fit)), dim(sim$y))
+  }
+})

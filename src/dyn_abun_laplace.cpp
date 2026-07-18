@@ -80,6 +80,54 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
         Rcpp::Named("n_inadmissible")   = n_inadmissible);
 }
 
+// Per-site VALUE-ONLY marginal for the alternative population dynamics (unmarked
+// distsampOpen / pcountOpen tp2..tp5: autoreg / trend / ricker / gompertz). The
+// density-dependent transitions are fit with a numeric gradient in R, so only the
+// exact forward-HMM log-likelihood is returned per site (no analytic eta grads);
+// the constant / notrend path keeps its own analytic-gradient kernel. `dynamics`
+// is 2 (autoreg), 3 (trend), 4 (ricker) or 5 (gompertz); eta_omega / eta_gamma
+// are per-site or per-(site, interval) exactly as cpp_dyn_abun_total_log_lik.
+// [[Rcpp::export]]
+Rcpp::List cpp_dyn_abun_dynamics_log_lik(
+    Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
+    Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p,
+    Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma,
+    int dynamics, bool use_nb = false, double eta_logr = 0.0
+) {
+    if ((int)y.size() != n_sites * T * J)
+        Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
+    if (eta_lambda.size() != n_sites || eta_p.size() != n_sites)
+        Rcpp::stop("eta_lambda / eta_p must have length n_sites.");
+    const int nIv = T - 1;
+    const bool om_iv = (eta_omega.size() == n_sites * nIv);
+    const bool gm_iv = (eta_gamma.size() == n_sites * nIv);
+    if (!om_iv && eta_omega.size() != n_sites)
+        Rcpp::stop("eta_omega must have length n_sites or n_sites*(T-1).");
+    if (!gm_iv && eta_gamma.size() != n_sites)
+        Rcpp::stop("eta_gamma must have length n_sites or n_sites*(T-1).");
+
+    double total = 0.0;
+    Rcpp::NumericVector log_lik_site(n_sites);
+    int n_inadmissible = 0;
+    const int* yp = y.begin();
+    std::vector<double> eo(nIv), eg(nIv);
+    for (int i = 0; i < n_sites; ++i) {
+        for (int iv = 0; iv < nIv; ++iv) {
+            eo[iv] = om_iv ? eta_omega[i * nIv + iv] : eta_omega[i];
+            eg[iv] = gm_iv ? eta_gamma[i * nIv + iv] : eta_gamma[i];
+        }
+        double ll = tulpaObs::compute_dyn_abun_site_dyn(
+            yp + (std::size_t)i * T * J, T, J, K,
+            eta_lambda[i], eta_p[i], eo.data(), eg.data(), dynamics, use_nb, eta_logr);
+        if (!R_finite(ll)) ++n_inadmissible;
+        total += ll; log_lik_site[i] = ll;
+    }
+    return Rcpp::List::create(
+        Rcpp::Named("log_lik")        = total,
+        Rcpp::Named("log_lik_site")   = log_lik_site,
+        Rcpp::Named("n_inadmissible") = n_inadmissible);
+}
+
 // Per-site conditional-likelihood weights c(n1) = P(all data | N_1 = n1) for the
 // grouped random-effect AGHQ path on the initial-abundance arm (tulpaObs#51).
 // `site` are 0-based site indices into `y`; eta_p is the (RE-fixed) detection

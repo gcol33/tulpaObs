@@ -35,18 +35,49 @@
     stats::dpois(n11, m11, log = TRUE)
 }
 
+# DEPENDENT (removal-style) double-observer marginal. A primary observer records
+# what it detects; a secondary observer records only what the primary missed. With
+# per-site primary detection p_pri and secondary detection p_sec the two observable
+# cells are independent Poissons by thinning:
+#   n1 (primary detects)          ~ Poisson(lambda * p_pri)
+#   n2 (secondary among misses)   ~ Poisson(lambda * (1 - p_pri) * p_sec)
+# A single fixed primary observer gives 2 cells for 3 parameters (lambda, p1, p2)
+# -- a 1-D ridge, so the two observer detections are NOT separately identified.
+# Observer ROLE-SWAPPING breaks it: with observer 1 primary at some sites and
+# observer 2 primary at others, (p_pri, p_sec) is (p1, p2) or (p2, p1) by the
+# per-site `primary` indicator, giving 4 cell means that identify (lambda, p1, p2).
+# `primary` is a length-n_sites integer in {1, 2} naming each site's primary
+# observer; n1 / n2 the per-site cell counts.
+.dobs_dep_site_loglik <- function(lambda, p1, p2, primary, n1, n2) {
+  p1 <- pmin(pmax(p1, 1e-10), 1 - 1e-10)
+  p2 <- pmin(pmax(p2, 1e-10), 1 - 1e-10)
+  ppri <- ifelse(primary == 1L, p1, p2)
+  psec <- ifelse(primary == 1L, p2, p1)
+  m1 <- lambda * ppri
+  m2 <- lambda * (1 - ppri) * psec
+  stats::dpois(n1, m1, log = TRUE) + stats::dpois(n2, m2, log = TRUE)
+}
+
 # ---------------------------------------------------------------------------
 # Data binder
 # ---------------------------------------------------------------------------
 
-# `y` is an n_sites x 3 matrix of cell counts in column order
-# (observer-1-only, observer-2-only, both). abund_formula models log lambda;
-# det_formula the shared site-level per-observer detection design.
-.tobs_build_double_observer <- function(abund_formula, det_formula, data, y) {
+# `y` is an n_sites x 3 matrix of cell counts in column order (observer-1-only,
+# observer-2-only, both) for the independent protocol, or n_sites x 2
+# (primary-detected, secondary-only) for the dependent protocol. abund_formula
+# models log lambda; det_formula the shared site-level per-observer detection
+# design. `primary` (dependent only) is a length-n_sites {1, 2} indicator naming
+# each site's primary observer.
+.tobs_build_double_observer <- function(abund_formula, det_formula, data, y,
+                                        type = "independent", primary = NULL) {
   y <- as.matrix(y)
-  if (ncol(y) != 3L) {
-    stop("double_observer() y must be an N x 3 matrix of cell counts ",
-         "(observer-1-only, observer-2-only, both).", call. = FALSE)
+  dependent <- identical(type, "dependent")
+  need <- if (dependent) 2L else 3L
+  if (ncol(y) != need) {
+    stop(sprintf(paste0("double_observer(type = \"%s\") y must be an N x %d ",
+         "matrix of cell counts (%s)."), type, need,
+         if (dependent) "primary-detected, secondary-only"
+         else "observer-1-only, observer-2-only, both"), call. = FALSE)
   }
   if (any(y < 0 | y != round(y), na.rm = TRUE)) {
     stop("double_observer() y must be non-negative integer counts.",
@@ -56,6 +87,26 @@
   .tobs_check_site_count(n_sites, nrow(data), "sites")
   storage.mode(y) <- "integer"
 
+  if (dependent) {
+    if (is.null(primary)) {
+      stop("double_observer(type = \"dependent\") requires `primary` (a length-N ",
+           "vector in {1, 2} naming each site's primary observer). Without ",
+           "observer role-swapping the two detection probabilities are not ",
+           "separately identified.", call. = FALSE)
+    }
+    primary <- as.integer(primary)
+    if (length(primary) != n_sites || any(!primary %in% c(1L, 2L)) ||
+        anyNA(primary)) {
+      stop("double_observer() `primary` must be a length-N vector in {1, 2}.",
+           call. = FALSE)
+    }
+    if (length(unique(primary)) < 2L) {
+      warning("double_observer(type = \"dependent\") `primary` names a single ",
+              "observer at every site; with no role-swapping p1 and p2 are not ",
+              "separately identified.", call. = FALSE)
+    }
+  }
+
   bind     <- .tobs_bind_formulas(list(lambda = abund_formula, p = det_formula),
                                   data)
   X_lambda <- stats::model.matrix(bind$fe$lambda, data)
@@ -63,10 +114,12 @@
 
   structure(list(
     model_type  = "double_observer",
+    type        = type,
     y           = y,
     n10         = as.integer(y[, 1L]),
     n01         = as.integer(y[, 2L]),
-    n11         = as.integer(y[, 3L]),
+    n11         = if (dependent) NULL else as.integer(y[, 3L]),
+    primary     = if (dependent) primary else NULL,
     X_processes = list(X_lambda, X_det),
     formulas    = list(lambda = bind$fe$lambda, p = bind$fe$p),
     structured_terms = bind$terms,
@@ -99,21 +152,32 @@
 .tobs_fit_double_observer <- function(model, verbose = TRUE, ...) {
   X_lambda <- model$X_processes[[1L]]; X_det <- model$X_processes[[2L]]
   p_lam <- ncol(X_lambda); p_det <- ncol(X_det)
+  dependent <- identical(model$type, "dependent")
   n10 <- model$n10; n01 <- model$n01; n11 <- model$n11
 
   nll <- function(theta) {
     up  <- .dobs_unpack(theta, model)
-    ll  <- .dobs_site_loglik(up$lambda, up$p1, up$p2, n10, n01, n11)
+    ll  <- if (dependent)
+      .dobs_dep_site_loglik(up$lambda, up$p1, up$p2, model$primary, n10, n01)
+    else
+      .dobs_site_loglik(up$lambda, up$p1, up$p2, n10, n01, n11)
     val <- -sum(ll)
     if (is.finite(val)) val else 1e10
   }
 
   # Moment init: total detected / a rough detection guess seed lambda; the
-  # both-vs-only ratio seeds the detection probabilities.
-  ntot   <- n10 + n01 + n11
-  p_hat  <- min(max(2 * mean(n11) / (mean(n10) + mean(n01) + 2 * mean(n11) + 1e-6),
-                    0.1), 0.9)
-  lam0   <- mean(ntot) / max(1 - (1 - p_hat)^2, 0.1)
+  # depletion / both-vs-only ratio seeds the detection probabilities.
+  if (dependent) {
+    ntot  <- n10 + n01
+    # secondary-only share of the detected -> a rough (1 - p_pri) p_sec signal.
+    p_hat <- min(max(mean(n10) / (mean(ntot) + 1e-6), 0.1), 0.9)
+    lam0  <- mean(ntot) / max(1 - (1 - p_hat)^2, 0.1)
+  } else {
+    ntot   <- n10 + n01 + n11
+    p_hat  <- min(max(2 * mean(n11) / (mean(n10) + mean(n01) + 2 * mean(n11) + 1e-6),
+                      0.1), 0.9)
+    lam0   <- mean(ntot) / max(1 - (1 - p_hat)^2, 0.1)
+  }
   init <- c(log(max(lam0, 1e-2)), rep(0, p_lam - 1L),
             stats::qlogis(p_hat), rep(0, p_det - 1L),
             stats::qlogis(p_hat), rep(0, p_det - 1L))
@@ -167,19 +231,25 @@
                                       engine, priors, control,
                                       approx = "gaussian_laplace",
                                       correction = "none", ...) {
+  dots <- list(...)
+  type <- family$params$type %||% "independent"
   if (is.null(detection))
     stop("double_observer() requires a `detection` formula (the shared ",
          "site-level per-observer detection model).", call. = FALSE)
-  if (is.null(y))
-    stop("double_observer() requires `y` (an N x 3 cell-count matrix: ",
-         "observer-1-only, observer-2-only, both).", call. = FALSE)
+  if (is.null(y)) {
+    shape <- if (identical(type, "dependent"))
+      "an N x 2 cell-count matrix: primary-detected, secondary-only"
+    else "an N x 3 cell-count matrix: observer-1-only, observer-2-only, both"
+    stop(sprintf("double_observer() requires `y` (%s).", shape), call. = FALSE)
+  }
   if (!is.null(visits))
     stop("double_observer() detection is site-level; visit-level detection ",
          "covariates (`visits`) are not yet supported.", call. = FALSE)
   if (!identical(.map_engine(engine, family = "double_observer"), "laplace"))
     stop("double_observer() supports method = \"laplace\" only.", call. = FALSE)
   model <- .tobs_build_double_observer(
-    abund_formula = formula, det_formula = detection, data = data, y = y)
+    abund_formula = formula, det_formula = detection, data = data, y = y,
+    type = type, primary = dots$primary)
   .tobs_fit_double_observer(model, verbose = isTRUE(control$verbose))
 }
 
@@ -188,9 +258,19 @@
 # ---------------------------------------------------------------------------
 
 # fitted(): per-site abundance lambda, per-observer detection p1 / p2, and the
-# expected observable cell means.
+# expected observable cell means. For the dependent protocol there are two cells
+# (primary-detected, secondary-only) whose means follow the per-site primary
+# observer; for the independent protocol the three (obs1-only, obs2-only, both).
 .tobs_fitted_double_observer <- function(object) {
-  up <- .dobs_unpack(object$means, object$model)
+  model <- object$model
+  up <- .dobs_unpack(object$means, model)
+  if (identical(model$type, "dependent")) {
+    ppri <- ifelse(model$primary == 1L, up$p1, up$p2)
+    psec <- ifelse(model$primary == 1L, up$p2, up$p1)
+    return(list(lambda = up$lambda, p1 = up$p1, p2 = up$p2,
+                cell_pri = up$lambda * ppri,
+                cell_sec = up$lambda * (1 - ppri) * psec))
+  }
   list(lambda = up$lambda, p1 = up$p1, p2 = up$p2,
        cell10 = up$lambda * up$p1 * (1 - up$p2),
        cell01 = up$lambda * (1 - up$p1) * up$p2,
@@ -217,11 +297,14 @@
 }
 
 # residuals(): per-site Pearson residual on the total detected count against its
-# expected value lambda * (1 - (1 - p1)(1 - p2)).
+# expected value lambda * (1 - (1 - p1)(1 - p2)) (the overall detection is the
+# same for either protocol -- an individual is missed only if both observers miss).
 .tobs_residuals_double_observer <- function(object, type) {
+  model <- object$model
   fv   <- .tobs_fitted_double_observer(object)
-  mtot <- fv$cell10 + fv$cell01 + fv$cell11
-  obs  <- object$model$n10 + object$model$n01 + object$model$n11
+  mtot <- if (identical(model$type, "dependent")) fv$cell_pri + fv$cell_sec
+          else fv$cell10 + fv$cell01 + fv$cell11
+  obs  <- model$n10 + model$n01 + if (identical(model$type, "dependent")) 0L else model$n11
   eps  <- 1e-10
   res <- switch(type,
     response = obs - mtot,
@@ -238,23 +321,36 @@
   if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
     draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
   }
+  dependent <- identical(model$type, "dependent")
   n10 <- model$n10; n01 <- model$n01; n11 <- model$n11
   t(vapply(seq_len(nrow(draws)), function(d) {
     up <- .dobs_unpack(draws[d, ], model)
-    .dobs_site_loglik(up$lambda, up$p1, up$p2, n10, n01, n11)
+    if (dependent)
+      .dobs_dep_site_loglik(up$lambda, up$p1, up$p2, model$primary, n10, n01)
+    else
+      .dobs_site_loglik(up$lambda, up$p1, up$p2, n10, n01, n11)
   }, numeric(model$n_sites)))
 }
 
 # Posterior replicate cell counts: draw a coefficient vector, then per site the
-# three independent Poisson cell counts.
+# independent Poisson cell counts (three cells independent protocol, two cells
+# following the per-site primary observer for the dependent protocol).
 .tobs_simulate_double_observer <- function(object, nsim = 1) {
   model <- object$model
+  dependent <- identical(model$type, "dependent")
   draw_one <- function() {
     idx <- sample.int(nrow(object$draws), 1L)
     up  <- .dobs_unpack(object$draws[idx, ], model)
-    cbind(stats::rpois(model$n_sites, up$lambda * up$p1 * (1 - up$p2)),
-          stats::rpois(model$n_sites, up$lambda * (1 - up$p1) * up$p2),
-          stats::rpois(model$n_sites, up$lambda * up$p1 * up$p2))
+    if (dependent) {
+      ppri <- ifelse(model$primary == 1L, up$p1, up$p2)
+      psec <- ifelse(model$primary == 1L, up$p2, up$p1)
+      cbind(stats::rpois(model$n_sites, up$lambda * ppri),
+            stats::rpois(model$n_sites, up$lambda * (1 - ppri) * psec))
+    } else {
+      cbind(stats::rpois(model$n_sites, up$lambda * up$p1 * (1 - up$p2)),
+            stats::rpois(model$n_sites, up$lambda * (1 - up$p1) * up$p2),
+            stats::rpois(model$n_sites, up$lambda * up$p1 * up$p2))
+    }
   }
   if (nsim == 1L) return(draw_one())
   lapply(seq_len(nsim), function(s) draw_one())
@@ -267,21 +363,32 @@
 #' Simulate a double-observer abundance data set
 #'
 #' Draws from the [double_observer()] model: site abundance
-#' `N ~ Poisson(lambda)` observed by two independent observers with detection
-#' `p1` / `p2`, recorded as the three observable cell counts.
+#' `N ~ Poisson(lambda)` observed by two observers with detection `p1` / `p2`. For
+#' `type = "independent"` each individual is recorded by observer 1 only, observer
+#' 2 only, or both (three cell counts). For `type = "dependent"` a primary observer
+#' records what it detects and a secondary observer records only the primary's
+#' misses (two cell counts, primary-detected and secondary-only); the primary
+#' observer alternates across sites (role-swapping) so `p1` and `p2` are
+#' identifiable, and the per-site primary indicator is returned as `primary`.
 #'
 #' @param N Number of sites (default 200).
+#' @param type `"independent"` (default) or `"dependent"` (role-swapping).
 #' @param n_abund_covs,n_det_covs Number of abundance / detection covariates.
 #' @param beta_lambda Log-abundance coefficients `c(intercept, slopes...)`.
 #'   Default `c(log(8), runif(n_abund_covs, -0.5, 0.5))`.
 #' @param beta_p1,beta_p2 Per-observer detection coefficients (logit). Default
 #'   moderate detection.
 #' @param seed Optional random seed.
-#' @return A list with `y` (N x 3 cell counts), `data`, and `truth`.
+#' @return A list with `y` (`N x 3` cell counts for `"independent"`, `N x 2` for
+#'   `"dependent"`), `data`, `primary` (the per-site primary observer, for
+#'   `"dependent"`), and `truth`.
 #' @export
-simulate_double_observer <- function(N = 200, n_abund_covs = 1, n_det_covs = 1,
+simulate_double_observer <- function(N = 200,
+                                     type = c("independent", "dependent"),
+                                     n_abund_covs = 1, n_det_covs = 1,
                                      beta_lambda = NULL, beta_p1 = NULL,
                                      beta_p2 = NULL, seed = NULL) {
+  type <- match.arg(type)
   if (!is.null(seed)) set.seed(seed)
   if (is.null(beta_lambda))
     beta_lambda <- c(log(8), stats::runif(n_abund_covs, -0.5, 0.5))
@@ -303,6 +410,24 @@ simulate_double_observer <- function(N = 200, n_abund_covs = 1, n_det_covs = 1,
   p2 <- plogis(as.vector(X_det %*% beta_p2))
   N_lat <- stats::rpois(N, lambda)
 
+  if (identical(type, "dependent")) {
+    primary <- rep(1:2, length.out = N)                 # alternating primary
+    y <- matrix(0L, N, 2L)
+    for (i in seq_len(N)) {
+      if (N_lat[i] == 0L) next
+      ppri <- if (primary[i] == 1L) p1[i] else p2[i]
+      psec <- if (primary[i] == 1L) p2[i] else p1[i]
+      d1 <- stats::rbinom(N_lat[i], 1L, ppri)           # primary detections
+      d2 <- stats::rbinom(sum(d1 == 0L), 1L, psec)      # secondary among misses
+      y[i, 1L] <- sum(d1); y[i, 2L] <- sum(d2)
+    }
+    colnames(y) <- c("primary", "secondary_only")
+    return(list(y = y, data = data, primary = primary,
+                truth = list(beta_lambda = beta_lambda, beta_p1 = beta_p1,
+                             beta_p2 = beta_p2, lambda = lambda, p1 = p1, p2 = p2,
+                             N = N_lat, type = type)))
+  }
+
   y <- matrix(0L, N, 3L)
   for (i in seq_len(N)) {
     if (N_lat[i] == 0L) next
@@ -316,5 +441,5 @@ simulate_double_observer <- function(N = 200, n_abund_covs = 1, n_det_covs = 1,
   list(y = y, data = data,
        truth = list(beta_lambda = beta_lambda, beta_p1 = beta_p1,
                     beta_p2 = beta_p2, lambda = lambda, p1 = p1, p2 = p2,
-                    N = N_lat))
+                    N = N_lat, type = type))
 }
