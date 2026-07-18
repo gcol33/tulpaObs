@@ -151,3 +151,42 @@ test_that("ms_occu_cover NUTS recovers community means + de-attenuates the varia
   expect_gt(mean(nut$ms_community$sd_occ), mean(lap$ms_community$sd_occ))
   expect_gt(mean(nut$ms_community$sd_occ), 0.25)
 })
+
+test_that("ms_occu_cover dispersion-RE oracle gradient matches finite differences", {
+  # The per-species dispersion-RE variant (#115 B7 follow-up): a fourth 1-D
+  # community arm log_disp_s = mu_ld + sigma_ld * z_ld_s. Validates the analytic
+  # gradient (incl the mu_ld mean and the sigma_ld = chol_ld coordinate) on a real
+  # small community model. The compiled sampler is the follow-up (C++ port).
+  skip_on_cran()
+  skip_if_fast()
+  set.seed(1)
+  sim <- simulate_ms_occu_cover(n_species = 4, N = 40, J = 3,
+                                positive = "lognormal", seed = 1)
+  vis <- .msoc_nuts_visits(40, 3, sim$visit_data)
+  fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
+              detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              method = "laplace", control = list(verbose = FALSE, max.iter = 5L))
+  model <- fit$model; S <- model$n_species; pil <- model$process_info
+  P_occ <- pil[[1]]$p; P_p <- pil[[2]]$p; P_pos <- pil[[3]]$p
+  views <- lapply(seq_len(S), function(s)
+    tulpaObs:::.ms_occu_cover_species_view(model, s))
+  lay <- tulpaObs:::.tobs_ms_occu_cover_re_disp_layout(P_occ, P_p, P_pos, S)
+  pri <- tulpaObs:::.ms_ocs_nuts_priors()
+  set.seed(7); theta <- rnorm(lay$total, 0, 0.4); theta[lay$mu_ld] <- log(0.6)
+
+  o  <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(theta, views, lay,
+          priors = pri, sigma.beta = 5)
+  an <- o$grad; h <- 1e-6; fd <- numeric(lay$total)
+  for (j in seq_len(lay$total)) {
+    tp <- theta; tp[j] <- tp[j] + h
+    tm <- theta; tm[j] <- tm[j] - h
+    lp <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(tp, views, lay,
+            priors = pri, sigma.beta = 5, grad = FALSE)$lp
+    lm <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(tm, views, lay,
+            priors = pri, sigma.beta = 5, grad = FALSE)$lp
+    fd[j] <- (lp - lm) / (2 * h)
+  }
+  expect_lt(max(abs(an - fd)) / max(1, max(abs(fd))), 1e-4)
+  expect_gt(cor(an, fd), 0.9999)
+})

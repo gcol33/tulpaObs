@@ -325,3 +325,142 @@
   }
   fit
 }
+
+
+# ---------------------------------------------------------------------------
+# Per-species dispersion random effect (#115 B7 follow-up)
+# ---------------------------------------------------------------------------
+#
+# The shared-dispersion target above carries ONE community log-dispersion scalar.
+# The dispersion-RE variant instead gives each species its own log-dispersion
+#   log_disp_s = mu_ld + sigma_ld * z_ld_s,   z_ld_s ~ N(0, 1)
+# i.e. a FOURTH community arm of dimension 1 (the ms_abun log_r_s analogue), with
+# community mean mu_ld and community SD sigma_ld. It reuses the same non-centered
+# machinery: the 1x1 log-Cholesky "factor" is C_ld = exp(chol_ld) = sigma_ld, and
+# the per-species dispersion score (.occu_cover_sp_grad's g_ld entry) chains to
+# mu_ld / z_ld_s / the 1x1 covariance exactly like a coefficient arm. mu_ld carries
+# the weakly-informative log-dispersion prior (not the coefficient ridge).
+
+# Packed layout for the dispersion-RE variant:
+#   theta = ( mu_coef [P_coef], mu_ld [1], {z_s} [S*(P_coef+1)],
+#             chol_occ, chol_p, chol_pos, chol_ld [1] )
+# with z_s = (z_occ, z_p, z_pos, z_ld). `mu_ld` is the community mean log-dispersion
+# and `chol_ld` = log(sigma_ld).
+.tobs_ms_occu_cover_re_disp_layout <- function(P_occ, P_p, P_pos, n_species) {
+  P_coef <- P_occ + P_p + P_pos
+  Pz     <- P_coef + 1L                          # per-species block width (+ z_ld)
+  occ <- seq_len(P_occ)
+  p   <- P_occ + seq_len(P_p)
+  pos <- P_occ + P_p + seq_len(P_pos)
+  ld  <- P_coef + 1L                             # z_ld position within a block
+  mu_coef <- seq_len(P_coef)
+  mu_ld   <- P_coef + 1L
+  b_off <- P_coef + 1L                           # after (mu_coef, mu_ld)
+  q_occ <- .ms_ocs_chol_dim(P_occ)
+  q_p   <- .ms_ocs_chol_dim(P_p)
+  q_pos <- .ms_ocs_chol_dim(P_pos)
+  coff  <- (P_coef + 1L) + n_species * Pz
+  chol_occ <- coff + seq_len(q_occ); coff <- coff + q_occ
+  chol_p   <- coff + seq_len(q_p);   coff <- coff + q_p
+  chol_pos <- coff + seq_len(q_pos); coff <- coff + q_pos
+  chol_ld  <- coff + 1L; coff <- coff + 1L
+  list(P_coef = P_coef, Pz = Pz, P_occ = P_occ, P_p = P_p, P_pos = P_pos,
+       n_species = n_species, occ = occ, p = p, pos = pos, ld = ld,
+       mu_coef = mu_coef, mu_ld = mu_ld, b_off = b_off,
+       q_occ = q_occ, q_p = q_p, q_pos = q_pos,
+       chol_occ = chol_occ, chol_p = chol_p, chol_pos = chol_pos,
+       chol_ld = chol_ld, total = coff)
+}
+
+# Per-species z-block indices for the dispersion-RE layout (block width Pz).
+.tobs_ms_occu_cover_re_disp_b_idx <- function(lay, s) {
+  lay$b_off + (s - 1L) * lay$Pz + seq_len(lay$Pz)
+}
+
+# Joint log-posterior + gradient for the dispersion-RE variant. `views` the
+# per-species occu_cover model views; `lay` the RE layout. Non-centered on all
+# four arms (occ/p/pos coefficients + the 1-D log-dispersion).
+.tobs_ms_occu_cover_re_disp_logpost <- function(theta, views, lay, priors,
+                                                sigma.beta = 5, grad = TRUE) {
+  S <- lay$n_species
+  mu_coef <- theta[lay$mu_coef]
+  mu_ld   <- theta[lay$mu_ld]
+  g    <- numeric(lay$total)
+  g_mc <- numeric(lay$P_coef)
+  g_mld <- 0
+  lp   <- 0
+
+  C_occ <- .ms_ocs_chol_unpack(theta[lay$chol_occ], lay$P_occ)
+  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$P_p)
+  C_pos <- .ms_ocs_chol_unpack(theta[lay$chol_pos], lay$P_pos)
+  sigma_ld <- exp(theta[lay$chol_ld])            # 1x1 Cholesky factor
+
+  A_occ <- matrix(0, lay$P_occ, lay$P_occ)
+  A_p   <- matrix(0, lay$P_p,   lay$P_p)
+  A_pos <- matrix(0, lay$P_pos, lay$P_pos)
+  A_ld  <- 0
+
+  for (s in seq_len(S)) {
+    bidx <- .tobs_ms_occu_cover_re_disp_b_idx(lay, s)
+    z_s  <- theta[bidx]
+    zocc <- z_s[lay$occ]; zp <- z_s[lay$p]; zpos <- z_s[lay$pos]; zld <- z_s[lay$ld]
+    bocc <- mu_coef[lay$occ] + as.numeric(C_occ %*% zocc)
+    bp   <- mu_coef[lay$p]   + as.numeric(C_p   %*% zp)
+    bpos <- mu_coef[lay$pos] + as.numeric(C_pos %*% zpos)
+    log_disp_s <- mu_ld + sigma_ld * zld
+
+    lp <- lp + .occu_cover_sp_ll(views[[s]], bocc, bp, bpos, log_disp_s)
+    if (grad) {
+      gvec <- .occu_cover_sp_grad(views[[s]], bocc, bp, bpos, log_disp_s)
+      gocc <- gvec[lay$occ]; gp <- gvec[lay$p]; gpos <- gvec[lay$pos]
+      g_ld_s <- gvec[lay$P_coef + 1L]
+      g_mc[lay$occ] <- g_mc[lay$occ] + gocc
+      g_mc[lay$p]   <- g_mc[lay$p]   + gp
+      g_mc[lay$pos] <- g_mc[lay$pos] + gpos
+      g_mld <- g_mld + g_ld_s
+      g[bidx[lay$occ]] <- g[bidx[lay$occ]] + as.numeric(crossprod(C_occ, gocc))
+      g[bidx[lay$p]]   <- g[bidx[lay$p]]   + as.numeric(crossprod(C_p,   gp))
+      g[bidx[lay$pos]] <- g[bidx[lay$pos]] + as.numeric(crossprod(C_pos, gpos))
+      g[bidx[lay$ld]]  <- g[bidx[lay$ld]]  + sigma_ld * g_ld_s
+      A_occ <- A_occ + outer(gocc, zocc)
+      A_p   <- A_p   + outer(gp,   zp)
+      A_pos <- A_pos + outer(gpos, zpos)
+      A_ld  <- A_ld  + g_ld_s * zld
+    }
+  }
+
+  # ---- z prior: standard normal over the whole per-species block ----
+  z_idx <- lay$b_off + seq_len(S * lay$Pz)
+  z_all <- theta[z_idx]
+  lp <- lp - 0.5 * sum(z_all^2)
+  if (grad) g[z_idx] <- g[z_idx] - z_all
+
+  # ---- chol coords: data gradient (via b = C z) + hyperprior, per arm ----
+  arms <- list(list(chol = lay$chol_occ, A = A_occ, C = C_occ, Pa = lay$P_occ),
+               list(chol = lay$chol_p,   A = A_p,   C = C_p,   Pa = lay$P_p),
+               list(chol = lay$chol_pos, A = A_pos, C = C_pos, Pa = lay$P_pos),
+               list(chol = lay$chol_ld,  A = matrix(A_ld, 1, 1),
+                    C = matrix(sigma_ld, 1, 1), Pa = 1L))
+  for (arm in arms) {
+    pr <- .ms_ocs_chol_logprior(theta[arm$chol], arm$Pa, priors)
+    lp <- lp + pr$lp
+    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, arm$Pa) +
+        pr$grad
+  }
+
+  # ---- community-mean priors: coefficients ridge + log-dispersion prior ----
+  ib2 <- 1 / sigma.beta^2
+  lp <- lp - 0.5 * ib2 * sum(mu_coef^2)
+  g_mc <- g_mc - ib2 * mu_coef
+  ld_mean <- priors$log_disp_mean %||% log(0.5)
+  ld_sd   <- priors$log_disp_sd   %||% 2.0
+  lp <- lp - 0.5 * ((mu_ld - ld_mean) / ld_sd)^2
+  g_mld <- g_mld - (mu_ld - ld_mean) / ld_sd^2
+  if (grad) {
+    g[lay$mu_coef] <- g[lay$mu_coef] + g_mc
+    g[lay$mu_ld]   <- g_mld
+  }
+
+  if (!grad) return(list(lp = lp))
+  list(lp = lp, grad = g)
+}
