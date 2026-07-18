@@ -429,6 +429,37 @@ test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+icar samples (#1
 })
 
 
+test_that("removal() bym2 + proper-CAR recover the abundance field + slope (#131)", {
+  skip_on_cran()
+  skip_if_fast()
+  # bym2 is a distinct code path from icar: the fitted unit field is the
+  # rho-mixed reconstruction z = sqrt(rho) * phi + sqrt(1 - rho) * theta, so it
+  # exercises the mixture the icar recovery never touches. proper-CAR uses a
+  # full-rank precision. Both still track a structured (icar-simulated) field and
+  # recover the abundance slope on the shared count-marginal driver.
+  adj <- .rem_grid_adj(7L)
+  b_lambda <- c(log(8), 0.5); b_p <- c(0.2, 0.4)
+  for (term in c("bym2", "car_proper")) {
+    tf <- if (term == "bym2") (~ abund_cov1 + bym2(graph = adj)) else
+                              (~ abund_cov1 + car_proper(graph = adj))
+    slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+    for (s in 1:3) {
+      sim <- .sim_spatial_removal(adj, b_lambda, b_p, K = 5L, seed = 300 + s)
+      fit <- tobs(formula = tf, data = sim$data, family = removal(),
+                  detection = ~ det_cov1, y = sim$y, method = "nested_laplace",
+                  control = list(progress = FALSE, verbose = FALSE))
+      est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+      slopes    <- c(slopes, est)
+      slope_ok  <- c(slope_ok, abs(est - 0.5) / se < 3)
+      field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+    }
+    expect_true(all(slope_ok), info = term)
+    expect_lt(abs(mean(slopes) - 0.5), 0.15)
+    expect_gt(mean(field_cor), 0.6)
+  }
+})
+
+
 test_that("removal() temporal()-only field recovers the AR1 field + slope (#114)", {
   skip_on_cran()
   skip_if_fast()

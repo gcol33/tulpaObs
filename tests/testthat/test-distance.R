@@ -581,6 +581,32 @@ test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+icar samples (#
   expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
 })
 
+test_that("distance() bym2 recovers the abundance field + slope (#131)", {
+  skip_on_cran()
+  skip_if_fast()
+  # bym2 fits the rho-mixed unit field z = sqrt(rho) * phi + sqrt(1 - rho) * theta
+  # (a distinct path from the icar recovery above). proper-CAR under distance is
+  # already recovered via the hazard-key variant below (#79); here bym2 is the
+  # gap. Same half-normal fixture as the icar recovery.
+  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(7L)
+  b_lambda <- c(log(40), 0.5); b_sigma <- c(log(0.4), 0.2)
+  slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+  for (s in 1:3) {
+    sim <- .sim_dist_spatial(adj, cuts, b_lambda, b_sigma, seed = 400 + s)
+    fit <- tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = sim$data,
+                family = distance(key = "halfnorm", transect = "line", cutpoints = cuts),
+                detection = ~ sigma_cov1, y = sim$y, method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+    slopes    <- c(slopes, est)
+    slope_ok  <- c(slope_ok, abs(est - 0.5) / se < 3)
+    field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+  }
+  expect_true(all(slope_ok))
+  expect_lt(abs(mean(slopes) - 0.5), 0.15)
+  expect_gt(mean(field_cor), 0.6)
+})
+
 test_that("distance() hazard-rate key under areal spatial recovers slope, shape + field (#79)", {
   skip_on_cran()
   skip_if_fast()

@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.161 (2026-07-18)
+
+* **bym2 / proper-CAR areal recovery tests for the observation families (#131).**
+  The `nested_laplace` areal path on `distance`, `removal`, `fp_occu`, and
+  `dyn_abun` was recovery-tested for `icar` but only smoke-tested (finite vcov,
+  non-null field) for `bym2` / `car_proper`. `bym2` is a distinct code path -- it
+  reconstructs the rho-mixed unit field `z = sqrt(rho) * phi + sqrt(1 - rho) *
+  theta`, which the `icar` recovery never exercises. Each family now has a field
+  correlation + FE slope recovery block for `bym2` (all four) and `car_proper`
+  (`removal` upgraded from smoke, `fp_occu` / `dyn_abun` newly covered; `distance`
+  proper-CAR is already recovered via the hazard-key variant). Measured field
+  correlations: count families recover strongly (distance ~0.92, removal ~0.89,
+  dyn_abun ~0.82), the weakly-identified occupancy `fp_occu` field lower (~0.37 --
+  one binary site per node) but well above chance. Reuses the existing `icar`
+  fixtures; only the term and the field reconstruction differ.
+
 ## 0.0.160 (2026-07-18)
 
 * **Parameter-recovery tests for three grouped-RE paths (#130).** The detection

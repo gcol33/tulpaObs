@@ -496,6 +496,34 @@ test_that("dyn_abun() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
 })
 
+test_that("dyn_abun() bym2 + proper-CAR recover the initial-abundance field + slope (#131)", {
+  skip_on_cran()
+  skip_if_fast()
+  # bym2 fits the rho-mixed unit field z = sqrt(rho) * phi + sqrt(1 - rho) * theta
+  # over the exact forward-HMM marginal; proper-CAR (absent from the dyn_abun
+  # suite before #131) a full-rank precision. Same 25-site fixture as the icar
+  # recovery above; the forward-HMM marginal keeps this to two seeds.
+  adj <- .da_grid_adj(5L)
+  for (term in c("bym2", "car_proper")) {
+    tf <- if (term == "bym2") (~ abund_cov1 + bym2(graph = adj)) else
+                              (~ abund_cov1 + car_proper(graph = adj))
+    slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+    for (s in 1:2) {
+      sim <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 500 + s)
+      fit <- tobs(formula = tf, data = sim$data, family = dyn_abun(K_max = 25),
+                  detection = ~ 1, y = sim$y, method = "nested_laplace",
+                  control = list(progress = FALSE, verbose = FALSE))
+      est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
+      slopes    <- c(slopes, est)
+      slope_ok  <- c(slope_ok, abs(est - 0.5) / se < 3.5)
+      field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+    }
+    expect_true(all(slope_ok), info = term)
+    expect_lt(abs(mean(slopes) - 0.5), 0.2)
+    expect_gt(mean(field_cor), 0.6)
+  }
+})
+
 test_that("dyn_abun() temporal()-only field recovers the AR1 field + slope (#114)", {
   skip_on_cran()
   skip_if_fast()

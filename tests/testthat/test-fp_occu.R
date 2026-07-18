@@ -454,6 +454,34 @@ test_that("fp_occu() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)
 })
 
+test_that("fp_occu() bym2 + proper-CAR recover the occupancy field + slope (#131)", {
+  skip_on_cran()
+  skip_if_fast()
+  # Occupancy fields are weakly identified (one binary site per node), so the
+  # field-correlation bar is lower than the count families. bym2 fits the
+  # rho-mixed unit field; proper-CAR (absent from the fp_occu suite before #131)
+  # a full-rank precision. Same fixture as the icar recovery above.
+  adj <- .fp_grid_adj(7L)
+  for (term in c("bym2", "car_proper")) {
+    tf <- if (term == "bym2") (~ x + bym2(graph = adj)) else
+                              (~ x + car_proper(graph = adj))
+    slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
+    for (s in 1:3) {
+      sim <- .sim_fp_spatial(adj, seed = 600 + s)
+      fit <- tobs(formula = tf, data = sim$data, family = fp_occu(),
+                  detection = ~ 1, y = sim$y, method = "nested_laplace",
+                  control = list(progress = FALSE, verbose = FALSE))
+      est <- fit$means[["psi_x"]]; se <- fit$sds[["psi_x"]]
+      slopes    <- c(slopes, est)
+      slope_ok  <- c(slope_ok, abs(est - 0.6) / se < 3.5)
+      field_cor <- c(field_cor, cor(fit$spatial_field, sim$phi))
+    }
+    expect_true(all(slope_ok), info = term)
+    expect_lt(abs(mean(slopes) - 0.6), 0.25)
+    expect_gt(mean(field_cor), 0.3)
+  }
+})
+
 test_that("fp_occu() temporal()-only field recovers the AR1 field + slope (#114)", {
   skip_on_cran()
   skip_if_fast()
