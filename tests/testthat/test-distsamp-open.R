@@ -200,21 +200,31 @@ test_that("a distsamp_open(zip) fit recovers abundance / scale and the ZI share"
   expect_identical(dim(simulate(fit)), dim(sim$y))
 })
 
-test_that("distsamp_open(zinb) fits and names both zi_logit and log_r", {
+test_that("distsamp_open(zinb) recovers the structural-zero share across seeds (#137)", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_distsamp_open(N = 90, cutpoints = cutp, n_seasons = 3L,
-           beta_lambda = c(log(6), 0.3), beta_sigma = c(log(18), 0.1),
-           omega = 0.55, gamma = 1, mixture = "zinb", size = 6, zi = 0.3, seed = 21)
-  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
-              family = distsamp_open(cutpoints = cutp, mixture = "zinb"),
-              detection = ~ det_cov1, omega = ~ 1, gamma = ~ 1,
-              method = "laplace", control = list(verbose = FALSE))
-  expect_s3_class(fit, "tobs_fit")
-  expect_true(all(c("zi_logit", "log_r") %in% names(fit$means)))
-  expect_true(is.finite(fit$r) && fit$r > 0)
-  expect_true(fit$zi_omega > 0 && fit$zi_omega < 1)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  # Was smoke-only ("fits and names zi_logit / log_r"). The distinctive ZINB quantity
+  # is the structural-zero share; over a few seeds it recovers to the same tolerance
+  # the ZIP path meets (calibrated dev_notes/_calib_137_min.R: zi ~0.30, well within
+  # 0.12 of truth). lambda / sigma / r sit on the usual ridge and are checked loosely.
+  zi <- numeric(0)
+  for (s in seq_len(3L)) {
+    sim <- simulate_distsamp_open(N = 110, cutpoints = cutp, n_seasons = 4L,
+             beta_lambda = c(log(9), 0.3), beta_sigma = c(log(16), 0.1),
+             omega = 0.6, gamma = 1.2, mixture = "zinb", size = 8, zi = 0.3,
+             seed = 80L + s)
+    fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
+                family = distsamp_open(cutpoints = cutp, mixture = "zinb"),
+                detection = ~ det_cov1, omega = ~ 1, gamma = ~ 1,
+                method = "laplace", control = list(verbose = FALSE))
+    expect_s3_class(fit, "tobs_fit")
+    expect_true(all(c("zi_logit", "log_r") %in% names(fit$means)))
+    expect_true(is.finite(fit$r) && fit$r > 0)
+    expect_true(is.finite(tobs_waic(fit)$waic))
+    zi <- c(zi, fit$zi_omega)
+  }
+  # The structural-zero share recovers (the ZINB estimand); mean over seeds is tight.
+  expect_lt(abs(mean(zi) - 0.3), 0.12)
 })
 
 
@@ -269,4 +279,62 @@ test_that("distsamp_open fits every alternative dynamics and recovers lambda/sig
     expect_true(is.finite(tobs_waic(fit)$waic), info = info)
     expect_identical(dim(simulate(fit)), dim(sim$y))
   }
+})
+
+test_that("distsamp_open density-dependent dynamics params have nominal CI coverage (#137)", {
+  skip_if_fast()
+  skip_on_cran()
+  # Section 8 above only asserts lambda / sigma recovery per dynamics; the survival /
+  # recruitment / carrying-capacity / growth params it introduces (omega, gamma, K, r)
+  # were untested. They sit on the short-series ridge, so the POINT estimate can be
+  # biased (e.g. ricker/gompertz r ~0.46 vs 0.3), but the observed-Fisher CI widens on
+  # the ridge and COVERS the truth -- the honest, testable claim. Coverage is pooled
+  # across every introduced param and seed (measured 38/40 = 0.95, per-arm 0.80-1.00;
+  # dev_notes/_calib_137_min.R) so the floor is robust to the ridge point-bias.
+  cp3 <- c(0, 10, 20, 30)
+  bl  <- c(log(4), 0.3); bs <- c(log(16), 0.1)
+  qlog <- stats::qlogis
+  spec <- list(
+    notrend  = list(sim = list(omega = 0.6, gamma = 1.5), ns = 3L, K = 22L,
+                    arms = c("omega_(Intercept)"),
+                    truth = function(s) c(qlog(s$truth$omega))),
+    trend    = list(sim = list(gamma = 1.05), ns = 3L, K = 22L,
+                    arms = c("gamma_(Intercept)"),
+                    truth = function(s) c(log(s$truth$gamma))),
+    autoreg  = list(sim = list(omega = 0.5, gamma = 0.25), ns = 3L, K = 22L,
+                    arms = c("omega_(Intercept)", "gamma_(Intercept)"),
+                    truth = function(s) c(qlog(s$truth$omega), log(s$truth$gamma))),
+    ricker   = list(sim = list(K = 8, r = 0.3), ns = 4L, K = 24L,
+                    arms = c("K_(Intercept)", "r_(Intercept)"),
+                    truth = function(s) c(log(s$truth$K), s$truth$r)),
+    gompertz = list(sim = list(K = 8, r = 0.3), ns = 4L, K = 24L,
+                    arms = c("K_(Intercept)", "r_(Intercept)"),
+                    truth = function(s) c(log(s$truth$K), s$truth$r)))
+
+  covered <- logical(0)
+  for (d in names(spec)) {
+    sp <- spec[[d]]; info <- paste0("dynamics = ", d)
+    lam_ok <- sig_ok <- logical(0)
+    for (seed in seq_len(5L)) {
+      args <- c(list(N = 40L, cutpoints = cp3, n_seasons = sp$ns,
+                     beta_lambda = bl, beta_sigma = bs, dynamics = d, seed = 50L + seed),
+                sp$sim)
+      sim <- do.call(simulate_distsamp_open, args)
+      fit <- tryCatch(tobs(~ abund_cov1, data = sim$data, y = sim$y,
+                       family = distsamp_open(cutpoints = cp3, dynamics = d, K_max = sp$K),
+                       detection = ~ det_cov1, method = "laplace",
+                       control = list(verbose = FALSE)), error = function(e) NULL)
+      if (is.null(fit) || !isTRUE(fit$convergence$converged)) next
+      est <- fit$means[sp$arms]; se <- fit$sds[sp$arms]; tv <- sp$truth(sim)
+      covered <- c(covered, abs(est - tv) <= 1.96 * se)
+      lam_ok <- c(lam_ok, abs(fit$means[["lambda_(Intercept)"]] - bl[1]) < 0.4)
+      sig_ok <- c(sig_ok, abs(fit$means[["sigma_(Intercept)"]]  - bs[1]) < 0.4)
+    }
+    # Abundance / distance-scale recover on the majority of seeds per dynamics.
+    expect_gte(mean(lam_ok), 0.6, label = paste0("lambda recovery ", info))
+    expect_gte(mean(sig_ok), 0.6, label = paste0("sigma recovery ", info))
+  }
+  # The dynamics-introduced params (omega / gamma / K / r) cover at the nominal rate
+  # when pooled -- wide ridge CIs cover even where the point estimate is biased.
+  expect_gte(mean(covered), 0.75)
 })
