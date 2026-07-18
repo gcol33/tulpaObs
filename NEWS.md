@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.163 (2026-07-18)
+
+* **NUTS for the community integrated occupancy family (`ms_int_occu()`, #115).**
+  `ms_int_occu(..., method = "nuts")` now samples the exact joint posterior --
+  the community means, the per-species occupancy / per-source detection
+  deviations, and the D + 1 independent per-arm community covariances -- over the
+  multi-source two-state per-(species, site) marginal via an in-tree C++
+  `FullGradFn` (`src/ms_int_occu_nuts.cpp`), warm-started at the community
+  Laplace-EM mode. The multi-source generalisation of the `ms_occu` / `ms_dyn_occu`
+  NUTS targets (per-arm non-centered blocks `b = C z`, no shared globals), reusing
+  the shared `.ms_ocs_` epilogue helpers (#128). Non-centered, so 0 divergences,
+  and it removes the Laplace-EM small-cluster attenuation of the community
+  variance (the sampled community SD de-attenuates vs the Laplace lower bound).
+  The R oracle `.tobs_ms_int_occu_nuts_logpost` is FD-validated and the C++ port
+  is byte-exact against it (`test-ms-int-occu-nuts.R`: R-oracle vs FD, C++ vs
+  oracle, `b_from_z` round-trip, community-mean recovery + de-attenuation).
+  Non-spatial only.
+
 ## 0.0.162 (2026-07-18)
 
 * **Deduplicated the community-NUTS R epilogue into shared `.ms_ocs_*` helpers

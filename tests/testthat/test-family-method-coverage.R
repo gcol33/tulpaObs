@@ -39,16 +39,15 @@ test_that(".tobs_validate_family_method now accepts nested_laplace for the multi
   expect_silent(.tobs_validate_family_method("nested_laplace", jsdm()))
 })
 
-test_that("ms_occu supports laplace/nuts/nested_laplace; ms_int_occu laplace-only", {
+test_that("ms_occu / ms_int_occu support laplace + pg_gibbs + nuts, not areal", {
   # ms_occu gained a community NUTS sampler (gcol33/tulpaObs#69) and a shared
-  # areal field (gcol33/tulpaObs#75); ms_int_occu remains on the dedicated
-  # community Laplace-EM only.
+  # areal field (gcol33/tulpaObs#75); ms_int_occu gained the multi-source
+  # community NUTS sampler (gcol33/tulpaObs#115) but has no areal path.
   for (m in c("laplace", "nuts", "nested_laplace"))
     expect_silent(.tobs_validate_family_method(m, ms_occu()))
-  expect_silent(.tobs_validate_family_method("laplace", ms_int_occu()))
+  for (m in c("laplace", "pg_gibbs", "nuts"))
+    expect_silent(.tobs_validate_family_method(m, ms_int_occu()))
   expect_error(.tobs_validate_family_method("nested_laplace", ms_int_occu()),
-               "not available")
-  expect_error(.tobs_validate_family_method("nuts", ms_int_occu()),
                "not available")
 })
 
@@ -61,8 +60,8 @@ test_that("ms_dyn_occu supports laplace + nested_laplace + nuts", {
 })
 
 test_that("the rejection lists the family's supported methods", {
-  # ms_int_occu is community Laplace-EM only, so nuts is genuinely rejected.
-  err <- tryCatch(.tobs_validate_family_method("nuts", ms_int_occu()),
+  # occu_categorical is Laplace-only, so nuts is genuinely rejected.
+  err <- tryCatch(.tobs_validate_family_method("nuts", occu_categorical()),
                   error = function(e) conditionMessage(e))
   expect_match(err, "Supported:")
   expect_match(err, "laplace", fixed = TRUE)

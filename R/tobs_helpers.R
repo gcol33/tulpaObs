@@ -389,7 +389,7 @@
   # globals jointly, non-centered, warm-started at the Laplace-EM mode
   # (gcol33/tulpaObs#115). Non-spatial only (NUTS + areal field -> nested_laplace).
   ms_dyn_occu = c("laplace", "pg_gibbs", "nested_laplace", "nuts"),
-  ms_int_occu = c("laplace", "pg_gibbs"),
+  ms_int_occu = c("laplace", "pg_gibbs", "nuts"),
   # occu_categorical: presence + nominal K-class hurdle (gcol33/tulpaObs#106).
   # A Bernoulli presence arm and a baseline-category multinomial logit on the
   # class given present (the FD-validated tulpa multinomial kernel; the

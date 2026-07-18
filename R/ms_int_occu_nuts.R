@@ -192,3 +192,151 @@
   }
   theta
 }
+
+
+# ---------------------------------------------------------------------------
+# Front-door NUTS fitter for the community integrated occupancy model
+# ---------------------------------------------------------------------------
+
+# Warm-start the community Laplace-EM (the same engine the laplace path runs),
+# pack the mode into the NUTS coordinate vector, and sample the exact joint
+# posterior via the in-tree C++ FullGradFn (cpp_ms_int_occu_nuts). The community
+# means, per-species deviations, and D + 1 community covariances are sampled
+# jointly; the returned fit reuses build_ms_int_occu_fit so the tobs_fit surface
+# matches the laplace path. Mirrors .tobs_fit_ms_dyn_occu_nuts (no shared globals).
+.tobs_fit_ms_int_occu_nuts <- function(model,
+                                       sigma.beta = 5,
+                                       n.iter = 1000L, n.warmup = 1000L,
+                                       n.chains = 1L, max.treedepth = 10L,
+                                       adapt.delta = 0.9, seed = 1L,
+                                       max.iter = 100L, tol = 1e-4,
+                                       newton.max = 30L, verbose = FALSE,
+                                       ...) {
+  pi_list <- model$process_info
+  D       <- model$n_sources
+  P_psi   <- pi_list[[1L]]$p
+  P_p     <- vapply(seq_len(D), function(d) pi_list[[d + 1L]]$p, integer(1))
+  P       <- P_psi + sum(P_p)
+  S       <- model$n_species
+
+  psi_idx <- seq_len(P_psi)
+  p_idx   <- vector("list", D); off <- P_psi
+  for (d in seq_len(D)) { p_idx[[d]] <- off + seq_len(P_p[d]); off <- off + P_p[d] }
+  arm_idx <- c(list(psi = psi_idx),
+               stats::setNames(p_idx, model$process_names))
+
+  X_psi <- model$X_psi
+  X_p   <- model$X_p
+  summaries <- model$summaries
+
+  eta_from_theta <- function(theta) {
+    eta_psi <- as.numeric(X_psi %*% theta[psi_idx])
+    eta_p   <- lapply(seq_len(D), function(d) as.numeric(X_p[[d]] %*% theta[p_idx[[d]]]))
+    list(psi = eta_psi, p = eta_p)
+  }
+  sp_ll <- function(s, theta, global) {
+    e <- eta_from_theta(theta); .ms_int_occu_sp_ll(e$psi, e$p, summaries[[s]])
+  }
+  sp_grad <- function(s, theta, global) {
+    e <- eta_from_theta(theta)
+    .ms_int_occu_sp_grad(e$psi, e$p, summaries[[s]], X_psi, X_p)
+  }
+
+  clp <- function(x) min(max(x, 1e-3), 1 - 1e-3)
+  any_det_prop <- mean(vapply(summaries, function(z) mean(z$any_det), numeric(1)))
+  mu0 <- numeric(P)
+  mu0[psi_idx][1L] <- stats::qlogis(clp(any_det_prop))
+  for (d in seq_len(D)) {
+    det_sites <- vapply(summaries, function(z) sum(z$n_det[, d]), numeric(1))
+    val_sites <- vapply(summaries, function(z) sum(z$n_valid[z$any_det, d]), numeric(1))
+    rate <- if (sum(val_sites) > 0) sum(det_sites) / sum(val_sites) else 0.5
+    mu0[p_idx[[d]]][1L] <- stats::qlogis(clp(rate))
+  }
+
+  em <- .tobs_community_em(
+    S = S, P = P, arm_idx = arm_idx, sp_ll = sp_ll, sp_grad = sp_grad,
+    init_mu = mu0, init_global = numeric(0), penalize_global = FALSE,
+    sigma_beta = sigma.beta, priors = NULL, sigma_init = 0.3,
+    max_iter = as.integer(max.iter), tol = as.numeric(tol),
+    newton_max = as.integer(newton.max), verbose = FALSE)
+
+  lay    <- .tobs_ms_int_occu_nuts_layout(P_psi, P_p, S)
+  pri    <- .ms_ocs_nuts_priors()
+  theta0 <- .tobs_ms_int_occu_nuts_pack_init(em, lay, arm_idx)
+
+  # C++ spec: n_valid / n_det as D integer matrices [n_sites x n_species].
+  n_sites <- model$n_sites
+  nv_list <- lapply(seq_len(D), function(d) {
+    m <- vapply(summaries, function(z) as.integer(z$n_valid[, d]), integer(n_sites))
+    matrix(as.integer(m), n_sites, S)
+  })
+  nd_list <- lapply(seq_len(D), function(d) {
+    m <- vapply(summaries, function(z) as.integer(z$n_det[, d]), integer(n_sites))
+    matrix(as.integer(m), n_sites, S)
+  })
+  spec <- list(X_psi = X_psi, X_p = X_p, n_valid = nv_list, n_det = nd_list,
+               n_sites = n_sites, n_species = S, D = D)
+
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_int_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
+    theta0)
+
+  run_chain <- function(ch) {
+    cpp_ms_int_occu_nuts(
+      spec, theta0 = theta0, pri = pri, sigma_beta = sigma.beta,
+      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+      n_warmup = as.integer(n.warmup), max_treedepth = as.integer(max.treedepth),
+      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
+      verbose = isTRUE(verbose))
+  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  draws     <- rc$draws
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
+  rhat_ess  <- rc$rhat_ess
+
+  # ---- reconstruct the .tobs_community_em `fit` shape from the draws ----
+  par    <- colMeans(draws)
+  mu_hat <- par[lay$mu]
+  Vf     <- stats::cov(draws[, lay$mu, drop = FALSE])
+
+  Sigma <- list(psi = .ms_ocs_sig_mean(draws, lay$chol_psi, lay$P_psi))
+  for (d in seq_len(D)) {
+    Sigma[[names(arm_idx)[d + 1L]]] <-
+      .ms_ocs_sig_mean(draws, lay$chol_p[[d]], lay$P_p[d])
+  }
+
+  B_bar <- matrix(0, S, lay$P)
+  for (i in seq_len(nrow(draws)))
+    B_bar <- B_bar + .tobs_ms_int_occu_nuts_b_from_z(draws[i, ], lay)
+  B_bar <- B_bar / nrow(draws)
+  b_list <- lapply(seq_len(S), function(s) B_bar[s, ])
+
+  # Data-only marginal log-lik at the posterior mean over reconstructed b_s.
+  ll_mean <- 0
+  for (s in seq_len(S)) {
+    beta_s <- mu_hat + B_bar[s, ]
+    e <- eta_from_theta(beta_s)
+    ll_mean <- ll_mean + .ms_int_occu_sp_ll(e$psi, e$p, summaries[[s]])
+  }
+
+  res_em <- list(mu = unname(mu_hat), b_list = b_list, Sigma = Sigma,
+                 Vf = Vf, logML = ll_mean, converged = TRUE, n_iter = em$n_iter)
+
+  fit <- build_ms_int_occu_fit(model, res_em, arm_idx)
+  fit$method   <- "nuts"
+  fit$log_prob <- rep(ll_mean, nrow(draws))
+  fit$nuts <- list(
+    draws = draws, layout = lay, accept_prob = accept, divergent = divergent,
+    treedepth = treedepth, epsilon = epsilon, n_chains = as.integer(n.chains),
+    divergent_total = sum(divergent), sigma_beta = sigma.beta)
+  if (!is.null(rhat_ess)) {
+    fit$nuts$rhat     <- rhat_ess$rhat
+    fit$nuts$ess      <- rhat_ess$ess
+    fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
+    fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
+  }
+  fit
+}
