@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.162 (2026-07-18)
+
+* **Deduplicated the community-NUTS R epilogue into shared `.ms_ocs_*` helpers
+  (#128).** The tail half of every in-tree community-NUTS fitter (`ms_occu`,
+  `ms_dyn_occu`, `ms_abun` non-spatial + spatial, `ms_count`) carried
+  near-byte-identical copies of the warm-start metric, the multi-chain harness,
+  and the posterior-summary code. These now live once in the `.ms_ocs_`
+  namespace: `.ms_ocs_b_idx()` (per-species z-block indices), `.ms_ocs_pd()`
+  (symmetrise + jitter to PD), `.ms_ocs_fd_metric(grad_fn, theta)` (FD-Hessian
+  inverse mass, taking the per-family gradient closure), `.ms_ocs_sig_mean()`
+  (community-covariance posterior mean), and `.ms_ocs_run_chains(run_chain,
+  n_chains)` (the multi-chain runner). The five families call them instead of
+  private twins; net ~180 fewer duplicated lines. Behaviour-preserving: the
+  refactor only relocates identical code and factors the gradient closure out of
+  the metric, so the NUTS draws are byte-identical on a fixed seed (verified per
+  family) and every recovery test is unchanged. The per-family `_b_from_z`
+  reconstruction stays local (the scalar dispersion / Gaussian-variance arms make
+  it genuinely family-specific), and `ms_count`'s log-phi prior likewise.
+
 ## 0.0.161 (2026-07-18)
 
 * **bym2 / proper-CAR areal recovery tests for the observation families (#131).**

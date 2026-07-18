@@ -78,20 +78,7 @@
     total = total)
 }
 
-# Coordinate indices of species s's z_s sub-vector within the packed theta.
-.tobs_ms_dyn_occu_nuts_b_idx <- function(lay, s) {
-  lay$b_off + (s - 1L) * lay$P + seq_len(lay$P)
-}
 
-
-# ---------------------------------------------------------------------------
-# Hyperprior specification (shared with the community single-season target)
-# ---------------------------------------------------------------------------
-
-.tobs_ms_dyn_occu_nuts_priors <- function() {
-  list(chol_logdiag_mean = log(0.5), chol_logdiag_sd = 1.5,
-       chol_offdiag_sd   = 1.0)
-}
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +123,7 @@
   A_p    <- matrix(0, lay$p_p,    lay$p_p)
 
   for (s in seq_len(S)) {
-    bidx <- .tobs_ms_dyn_occu_nuts_b_idx(lay, s)
+    bidx <- .ms_ocs_b_idx(lay, s)
     z_s  <- theta[bidx]
     zpsi1 <- z_s[lay$psi1]; zp <- z_s[lay$p]
     bpsi1 <- mu[lay$psi1] + as.numeric(C_psi1 %*% zpsi1)
@@ -217,7 +204,7 @@
   C_p    <- .ms_ocs_chol_unpack(theta[lay$chol_p],    lay$p_p)
   B <- matrix(0, lay$n_species, lay$P)
   for (s in seq_len(lay$n_species)) {
-    z <- theta[.tobs_ms_dyn_occu_nuts_b_idx(lay, s)]
+    z <- theta[.ms_ocs_b_idx(lay, s)]
     B[s, lay$psi1] <- as.numeric(C_psi1 %*% z[lay$psi1])
     B[s, lay$p]    <- as.numeric(C_p    %*% z[lay$p])
   }
@@ -302,14 +289,6 @@
        init_global = init_global)
 }
 
-# Symmetrise + (if needed) jitter a covariance to a Cholesky-able PD matrix.
-.tobs_ms_dyn_occu_pd <- function(S) {
-  S <- (S + t(S)) / 2
-  ok <- tryCatch({ chol(S); TRUE }, error = function(e) FALSE)
-  if (ok) return(S)
-  S + diag(max(1e-6, 1e-6 * mean(diag(S))), ncol(S))
-}
-
 # Pack a community Laplace-EM fit into the full NUTS coordinate vector: community
 # means, the two community covariances as log-Cholesky coordinates, the whitened
 # per-species deviations z_s = C_arm^{-1} b_s, and the shared transition globals.
@@ -317,8 +296,8 @@
   theta <- numeric(lay$total)
   theta[lay$mu]     <- as.numeric(em$mu)
   theta[lay$global] <- as.numeric(em$global)
-  C_psi1 <- t(chol(.tobs_ms_dyn_occu_pd(as.matrix(em$Sigma$psi1))))
-  C_p    <- t(chol(.tobs_ms_dyn_occu_pd(as.matrix(em$Sigma$p))))
+  C_psi1 <- t(chol(.ms_ocs_pd(as.matrix(em$Sigma$psi1))))
+  C_p    <- t(chol(.ms_ocs_pd(as.matrix(em$Sigma$p))))
   theta[lay$chol_psi1] <- .ms_ocs_chol_pack(C_psi1)
   theta[lay$chol_p]    <- .ms_ocs_chol_pack(C_p)
   B <- do.call(rbind, em$b_list)                     # S x P
@@ -326,23 +305,11 @@
     z_s <- numeric(lay$P)
     z_s[lay$psi1] <- forwardsolve(C_psi1, B[s, pieces$arm_idx$psi1])
     z_s[lay$p]    <- forwardsolve(C_p,    B[s, pieces$arm_idx$p])
-    theta[.tobs_ms_dyn_occu_nuts_b_idx(lay, s)] <- z_s
+    theta[.ms_ocs_b_idx(lay, s)] <- z_s
   }
   theta
 }
 
-# Inverse-mass diagonal for the NUTS warm start: the Laplace metric via the fast
-# C++ gradient's finite-difference Hessian diagonal at the mode.
-.tobs_ms_dyn_occu_nuts_metric <- function(spec, theta, pri, sigma.beta, h = 1e-4) {
-  np <- length(theta); md <- numeric(np)
-  g <- function(th) cpp_ms_dyn_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad
-  for (j in seq_len(np)) {
-    tp <- theta; tp[j] <- tp[j] + h
-    tm <- theta; tm[j] <- tm[j] - h
-    md[j] <- -(g(tp)[j] - g(tm)[j]) / (2 * h)
-  }
-  1 / pmax(md, 1e-3)
-}
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +336,7 @@
   pieces <- .tobs_ms_dyn_occu_nuts_pieces(model)
   lay <- .tobs_ms_dyn_occu_nuts_layout(pieces$P_psi1, pieces$P_p,
                                        pieces$P_gam, pieces$P_eps, pieces$S)
-  pri <- .tobs_ms_dyn_occu_nuts_priors()
+  pri <- .ms_ocs_nuts_priors()
 
   # Warm start at the community Laplace-EM mode (same engine as the laplace path).
   em <- .tobs_community_em(
@@ -385,7 +352,9 @@
                X_gamma = pieces$X_gamma, X_eps = pieces$X_eps,
                n_sites = pieces$Ns, n_seasons = pieces$T, n_species = pieces$S,
                n_valid = pieces$nv_list, n_det = pieces$nd_list)
-  inv_metric <- .tobs_ms_dyn_occu_nuts_metric(spec, theta0, pri, sigma.beta)
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_dyn_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
+    theta0)
 
   run_chain <- function(ch) {
     cpp_ms_dyn_occu_nuts(
@@ -398,25 +367,13 @@
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
 
-  n_chains <- as.integer(n.chains)
-  rhat_ess <- NULL
-  if (n_chains > 1L) {
-    rcs    <- lapply(seq_len(n_chains), run_chain)
-    chains <- lapply(rcs, `[[`, "draws")
-    rhat_ess <- .ms_ocs_rhat_ess(chains)
-    draws  <- do.call(rbind, chains)
-    accept    <- unlist(lapply(rcs, `[[`, "accept_prob"))
-    divergent <- unlist(lapply(rcs, `[[`, "divergent"))
-    treedepth <- as.integer(unlist(lapply(rcs, `[[`, "treedepth")))
-    epsilon   <- mean(vapply(rcs, `[[`, 0, "epsilon"))
-  } else {
-    res <- run_chain(1L)
-    draws     <- res$draws
-    accept    <- res$accept_prob
-    divergent <- res$divergent
-    treedepth <- as.integer(res$treedepth)
-    epsilon   <- res$epsilon
-  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  draws     <- rc$draws
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
+  rhat_ess  <- rc$rhat_ess
 
   # ---- reconstruct the .tobs_community_em `res` shape from the draws ----
   par     <- colMeans(draws)
@@ -425,14 +382,8 @@
   fe_idx  <- c(lay$mu, lay$global)
   Vf      <- stats::cov(draws[, fe_idx, drop = FALSE])
 
-  sig_mean <- function(cols, Pa) {
-    acc <- matrix(0, Pa, Pa)
-    for (i in seq_len(nrow(draws)))
-      acc <- acc + tcrossprod(.ms_ocs_chol_unpack(draws[i, cols], Pa))
-    acc <- acc / nrow(draws); (acc + t(acc)) / 2
-  }
-  Sigma_psi1 <- sig_mean(lay$chol_psi1, lay$p_psi1)
-  Sigma_p    <- sig_mean(lay$chol_p,    lay$p_p)
+  Sigma_psi1 <- .ms_ocs_sig_mean(draws, lay$chol_psi1, lay$p_psi1)
+  Sigma_p    <- .ms_ocs_sig_mean(draws, lay$chol_p,    lay$p_p)
 
   B_bar <- matrix(0, pieces$S, lay$P)
   for (i in seq_len(nrow(draws)))
@@ -465,7 +416,7 @@
   fit$nuts <- list(
     draws = draws, layout = lay,
     accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = n_chains,
+    epsilon = epsilon, n_chains = as.integer(n.chains),
     divergent_total = sum(divergent), sigma_beta = sigma.beta)
   if (!is.null(rhat_ess)) {
     fit$nuts$rhat     <- rhat_ess$rhat

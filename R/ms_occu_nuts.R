@@ -63,26 +63,10 @@
     total = total)
 }
 
-# Coordinate indices of species s's b_s sub-vector within the packed theta.
-.tobs_ms_occu_nuts_b_idx <- function(lay, s) {
-  lay$b_off + (s - 1L) * lay$P + seq_len(lay$P)
-}
-
 
 # ---------------------------------------------------------------------------
 # Hyperprior specification
 # ---------------------------------------------------------------------------
-
-# Weakly-informative priors on the sampled log-Cholesky coordinates of the
-# community covariances (shared in spirit with the community N-mixture target):
-# the log-diagonal carries a Normal centred at log(0.5) with a wide SD; the
-# off-diagonals a mean-zero Normal shrinking community correlations toward
-# independence.
-.tobs_ms_occu_nuts_priors <- function() {
-  list(chol_logdiag_mean = log(0.5), chol_logdiag_sd = 1.5,
-       chol_offdiag_sd   = 1.0)
-}
-
 
 # ---------------------------------------------------------------------------
 # Joint log-posterior + gradient (the NUTS target density / oracle)
@@ -114,7 +98,7 @@
   A_p   <- matrix(0, lay$p_p,   lay$p_p)
 
   for (s in seq_len(S)) {
-    bidx <- .tobs_ms_occu_nuts_b_idx(lay, s)
+    bidx <- .ms_ocs_b_idx(lay, s)
     z_s  <- theta[bidx]
     zpsi <- z_s[lay$psi]; zp <- z_s[lay$p]
     bpsi <- mu[lay$psi] + as.numeric(C_psi %*% zpsi)
@@ -172,7 +156,7 @@
   C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
   B <- matrix(0, lay$n_species, lay$P)
   for (s in seq_len(lay$n_species)) {
-    z <- theta[.tobs_ms_occu_nuts_b_idx(lay, s)]
+    z <- theta[.ms_ocs_b_idx(lay, s)]
     B[s, lay$psi] <- as.numeric(C_psi %*% z[lay$psi])
     B[s, lay$p]   <- as.numeric(C_p   %*% z[lay$p])
   }
@@ -184,13 +168,6 @@
 # Warm-start packing + inverse-mass metric
 # ---------------------------------------------------------------------------
 
-# Symmetrise + (if needed) jitter a covariance to a Cholesky-able PD matrix.
-.tobs_ms_occu_pd <- function(S) {
-  S <- (S + t(S)) / 2
-  ok <- tryCatch({ chol(S); TRUE }, error = function(e) FALSE)
-  if (ok) return(S)
-  S + diag(max(1e-6, 1e-6 * mean(diag(S))), ncol(S))
-}
 
 # Pack a community Laplace-EM fit (.tobs_community_em output) into the full NUTS
 # coordinate vector: the community means, the two community covariances as
@@ -202,8 +179,8 @@
   theta <- numeric(lay$total)
   theta[lay$mu] <- as.numeric(em$mu)
 
-  C_psi <- t(chol(.tobs_ms_occu_pd(as.matrix(em$Sigma$psi))))
-  C_p   <- t(chol(.tobs_ms_occu_pd(as.matrix(em$Sigma$p))))
+  C_psi <- t(chol(.ms_ocs_pd(as.matrix(em$Sigma$psi))))
+  C_p   <- t(chol(.ms_ocs_pd(as.matrix(em$Sigma$p))))
   theta[lay$chol_psi] <- .ms_ocs_chol_pack(C_psi)
   theta[lay$chol_p]   <- .ms_ocs_chol_pack(C_p)
 
@@ -212,25 +189,10 @@
     z_s <- numeric(lay$P)
     z_s[lay$psi] <- forwardsolve(C_psi, B[s, arm_idx$psi])
     z_s[lay$p]   <- forwardsolve(C_p,   B[s, arm_idx$p])
-    theta[.tobs_ms_occu_nuts_b_idx(lay, s)] <- z_s
+    theta[.ms_ocs_b_idx(lay, s)] <- z_s
   }
   theta
 }
-
-# Inverse-mass diagonal for the NUTS warm start: the posterior variance per
-# coordinate from the finite-difference diagonal of the joint log-posterior
-# Hessian at the mode (the Laplace metric), via the fast C++ gradient.
-.tobs_ms_occu_nuts_metric <- function(spec, theta, pri, sigma.beta, h = 1e-4) {
-  np <- length(theta); md <- numeric(np)
-  g <- function(th) cpp_ms_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad
-  for (j in seq_len(np)) {
-    tp <- theta; tp[j] <- tp[j] + h
-    tm <- theta; tm[j] <- tm[j] - h
-    md[j] <- -(g(tp)[j] - g(tm)[j]) / (2 * h)
-  }
-  1 / pmax(md, 1e-3)
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door NUTS fitter for the community occupancy model
@@ -308,7 +270,7 @@
                                    ...) {
   pieces <- .tobs_ms_occu_nuts_pieces(model)
   lay <- .tobs_ms_occu_nuts_layout(pieces$P_psi, pieces$P_p, pieces$S)
-  pri <- .tobs_ms_occu_nuts_priors()
+  pri <- .ms_ocs_nuts_priors()
 
   # Warm start at the community Laplace-EM mode (the same engine the laplace path
   # uses; verbose forced off here).
@@ -326,7 +288,9 @@
   spec <- list(X_psi = pieces$X_psi, X_p = pieces$X_p,
                n_sites = model$n_sites, n_species = pieces$S,
                n_valid = mats$n_valid, n_det = mats$n_det)
-  inv_metric <- .tobs_ms_occu_nuts_metric(spec, theta0, pri, sigma.beta)
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
+    theta0)
 
   run_chain <- function(ch) {
     cpp_ms_occu_nuts(
@@ -339,39 +303,21 @@
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
 
-  n_chains <- as.integer(n.chains)
-  rhat_ess <- NULL
-  if (n_chains > 1L) {
-    rcs    <- lapply(seq_len(n_chains), run_chain)
-    chains <- lapply(rcs, `[[`, "draws")
-    rhat_ess <- .ms_ocs_rhat_ess(chains)
-    draws  <- do.call(rbind, chains)
-    accept    <- unlist(lapply(rcs, `[[`, "accept_prob"))
-    divergent <- unlist(lapply(rcs, `[[`, "divergent"))
-    treedepth <- as.integer(unlist(lapply(rcs, `[[`, "treedepth")))
-    epsilon   <- mean(vapply(rcs, `[[`, 0, "epsilon"))
-  } else {
-    res <- run_chain(1L)
-    draws     <- res$draws
-    accept    <- res$accept_prob
-    divergent <- res$divergent
-    treedepth <- as.integer(res$treedepth)
-    epsilon   <- res$epsilon
-  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  draws     <- rc$draws
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
+  rhat_ess  <- rc$rhat_ess
 
   # ---- reconstruct the .tobs_community_em `fit` shape from the draws ----
   par    <- colMeans(draws)
   mu_hat <- par[lay$mu]
   vcov_mu <- stats::cov(draws[, lay$mu, drop = FALSE])
 
-  sig_mean <- function(cols, Pa) {
-    acc <- matrix(0, Pa, Pa)
-    for (i in seq_len(nrow(draws)))
-      acc <- acc + tcrossprod(.ms_ocs_chol_unpack(draws[i, cols], Pa))
-    acc <- acc / nrow(draws); (acc + t(acc)) / 2
-  }
-  Sigma_psi <- sig_mean(lay$chol_psi, lay$p_psi)
-  Sigma_p   <- sig_mean(lay$chol_p,   lay$p_p)
+  Sigma_psi <- .ms_ocs_sig_mean(draws, lay$chol_psi, lay$p_psi)
+  Sigma_p   <- .ms_ocs_sig_mean(draws, lay$chol_p,   lay$p_p)
 
   # Per-species BLUPs = posterior mean of the reconstructed deviation b = C z.
   B_bar <- matrix(0, pieces$S, lay$P)
@@ -403,7 +349,7 @@
   fit$nuts <- list(
     draws = draws, layout = lay,
     accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = n_chains,
+    epsilon = epsilon, n_chains = as.integer(n.chains),
     divergent_total = sum(divergent),
     sigma_beta = sigma.beta)
   if (!is.null(rhat_ess)) {

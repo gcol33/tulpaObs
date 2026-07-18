@@ -46,10 +46,6 @@
     total = chol_beta_off + q_beta + q_logr + n_phi)
 }
 
-.tobs_ms_count_nuts_b_idx <- function(lay, s) {
-  lay$b_off + (s - 1L) * lay$P + seq_len(lay$P)
-}
-
 # Log-Cholesky hyperprior + weakly-informative gaussian log_phi prior scalars.
 .tobs_ms_count_nuts_priors <- function() {
   list(chol_logdiag_mean = log(0.5), chol_logdiag_sd = 1.5, chol_offdiag_sd = 1.0,
@@ -77,7 +73,7 @@
   A_beta <- matrix(0, pb, pb); A_lr <- 0; lp <- 0
 
   for (s in seq_len(S)) {
-    bidx <- .tobs_ms_count_nuts_b_idx(lay, s)
+    bidx <- .ms_ocs_b_idx(lay, s)
     z_s  <- theta[bidx]; zb <- z_s[lay$beta]
     b_beta <- mu[lay$beta] + as.numeric(C_beta %*% zb)
     # Drop missing (NA) site x species observations for this species.
@@ -176,7 +172,7 @@
   C_lr   <- if (lay$is_nb) exp(theta[lay$chol_logr]) else NULL
   B <- matrix(0, lay$n_species, lay$P)
   for (s in seq_len(lay$n_species)) {
-    z <- theta[.tobs_ms_count_nuts_b_idx(lay, s)]
+    z <- theta[.ms_ocs_b_idx(lay, s)]
     B[s, lay$beta] <- as.numeric(C_beta %*% z[lay$beta])
     if (lay$is_nb) B[s, lay$logr] <- C_lr * z[lay$logr]
   }
@@ -207,7 +203,7 @@
     z_s <- numeric(P)
     z_s[lay$beta] <- forwardsolve(C_beta, B_beta[s, ])   # C z = b, C lower-tri
     if (lay$is_nb) z_s[lay$logr] <- b_logr[s] / sigma_logr
-    theta[.tobs_ms_count_nuts_b_idx(lay, s)] <- z_s
+    theta[.ms_ocs_b_idx(lay, s)] <- z_s
   }
   theta
 }
@@ -263,20 +259,21 @@
     spec$logphi_sd   <- priors$logphi_sd
   }
 
-  chains_res <- lapply(seq_len(n.chains), function(ch) {
+  run_chain <- function(ch) {
     # tulpa's NUTS engine takes n_iter as the TOTAL (warmup + sampling) count and
     # returns n_iter - n_warmup post-warmup draws.
     cpp_ms_count_nuts(spec, theta0, priors, sigma.beta, sigma.logr, NULL,
                       as.integer(n.iter + n.warmup), as.integer(n.warmup),
                       as.integer(max.treedepth), adapt.delta,
                       as.integer(seed + ch - 1L), isTRUE(verbose))
-  })
-  chains    <- lapply(chains_res, `[[`, "draws")
-  draws_all <- do.call(rbind, chains)               # (n_chains*n_sample) x total
-  accept    <- unlist(lapply(chains_res, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains_res, `[[`, "divergent"))
-  treedepth <- as.integer(unlist(lapply(chains_res, `[[`, "treedepth")))
-  epsilon   <- mean(vapply(chains_res, `[[`, 0, "epsilon"))
+  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  chains    <- rc$chains
+  draws_all <- rc$draws                             # (n_chains*n_sample) x total
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
 
   # Community means + covariance from the beta-coefficient mu draws.
   mu_draws <- draws_all[, lay$beta, drop = FALSE]

@@ -500,6 +500,87 @@
 # community call site.
 .ms_ocs_rhat_ess <- function(chains) .tobs_nuts_rhat_ess(chains)
 
+# ---------------------------------------------------------------------------
+# Shared community-NUTS R epilogue helpers (gcol33/tulpaObs#128)
+#
+# Every in-tree community-NUTS fitter (ms_occu / ms_dyn_occu / ms_abun /
+# ms_count) shares the same warm-start metric, multi-chain harness, and
+# posterior-summary code once the per-family C++ FullGradFn has produced draws.
+# These live here, in the .ms_ocs_ namespace, as the single source; the families
+# call them instead of carrying private twins.
+# ---------------------------------------------------------------------------
+
+# Packed-coordinate indices of species s's non-centered z block. Every community
+# NUTS layout stacks the per-species blocks contiguously after `b_off`, each of
+# width `P`, so this index arithmetic is family-agnostic.
+.ms_ocs_b_idx <- function(lay, s) {
+  lay$b_off + (s - 1L) * lay$P + seq_len(lay$P)
+}
+
+# Symmetrise + (if needed) jitter a covariance to a Cholesky-able PD matrix.
+.ms_ocs_pd <- function(S) {
+  S <- (S + t(S)) / 2
+  ok <- tryCatch({ chol(S); TRUE }, error = function(e) FALSE)
+  if (ok) return(S)
+  S + diag(max(1e-6, 1e-6 * mean(diag(S))), ncol(S))
+}
+
+# Inverse-mass diagonal for the NUTS warm start: the posterior variance per
+# coordinate from the finite-difference diagonal of the joint log-posterior
+# Hessian at the mode (the Laplace metric). `grad_fn(theta)` returns the full
+# analytic gradient of the joint log-posterior (the per-family C++ oracle); only
+# that closure differs across families.
+.ms_ocs_fd_metric <- function(grad_fn, theta, h = 1e-4) {
+  np <- length(theta); md <- numeric(np)
+  for (j in seq_len(np)) {
+    tp <- theta; tp[j] <- tp[j] + h
+    tm <- theta; tm[j] <- tm[j] - h
+    md[j] <- -(grad_fn(tp)[j] - grad_fn(tm)[j]) / (2 * h)
+  }
+  1 / pmax(md, 1e-3)
+}
+
+# Posterior mean of a community covariance from the packed log-Cholesky draws:
+# Sigma_bar = mean_i C_i C_i', symmetrised. `cols` selects the arm's Cholesky
+# coordinates out of each draw row; `Pa` the arm dimension.
+.ms_ocs_sig_mean <- function(draws, cols, Pa) {
+  acc <- matrix(0, Pa, Pa)
+  for (i in seq_len(nrow(draws)))
+    acc <- acc + tcrossprod(.ms_ocs_chol_unpack(draws[i, cols], Pa))
+  acc <- acc / nrow(draws); (acc + t(acc)) / 2
+}
+
+# Multi-chain harness: run `run_chain(ch)` for ch = 1..n_chains and assemble the
+# combined draws + per-iteration diagnostics. A single chain returns its draws
+# untouched (rhat_ess = NULL); >1 chain stacks the draw matrices and computes
+# split-R-hat / bulk-ESS. `run_chain` returns one C++ sampler result list with
+# `draws`, `accept_prob`, `divergent`, `treedepth`, `epsilon`. `chains` (the list
+# of per-chain draw matrices) is also returned so a caller that reports diagnostics
+# unconditionally (single chain included) can recompute them.
+.ms_ocs_run_chains <- function(run_chain, n_chains) {
+  n_chains <- as.integer(n_chains)
+  if (n_chains > 1L) {
+    rcs    <- lapply(seq_len(n_chains), run_chain)
+    chains <- lapply(rcs, `[[`, "draws")
+    list(draws     = do.call(rbind, chains),
+         accept    = unlist(lapply(rcs, `[[`, "accept_prob")),
+         divergent = unlist(lapply(rcs, `[[`, "divergent")),
+         treedepth = as.integer(unlist(lapply(rcs, `[[`, "treedepth"))),
+         epsilon   = mean(vapply(rcs, `[[`, 0, "epsilon")),
+         chains    = chains,
+         rhat_ess  = .ms_ocs_rhat_ess(chains))
+  } else {
+    res <- run_chain(1L)
+    list(draws     = res$draws,
+         accept    = res$accept_prob,
+         divergent = res$divergent,
+         treedepth = as.integer(res$treedepth),
+         epsilon   = res$epsilon,
+         chains    = list(res$draws),
+         rhat_ess  = NULL)
+  }
+}
+
 # Fit the spatial-factor community occu_cover by NUTS: a short Laplace-EM warm
 # start sets the initial position and the inverse-mass metric, then tulpa's NUTS
 # (driven by the C++ FullGradFn) samples the exact joint posterior. `n.chains > 1`

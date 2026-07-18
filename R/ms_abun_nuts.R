@@ -70,27 +70,10 @@
     total = total)
 }
 
-# Coordinate indices of species s's b_s sub-vector within the packed theta.
-.tobs_ms_abun_nuts_b_idx <- function(lay, s) {
-  lay$b_off + (s - 1L) * lay$P + seq_len(lay$P)
-}
-
 
 # ---------------------------------------------------------------------------
 # Hyperprior specification
 # ---------------------------------------------------------------------------
-
-# Weakly-informative priors on the sampled log-Cholesky coordinates of the
-# community covariances: the log-diagonal carries a Normal centred at log(0.5)
-# (community SDs of order 0.5 on the link scale) with a wide SD; the off-diagonals
-# a mean-zero Normal shrinking community correlations toward independence. Shared
-# in spirit with the spatial-factor target's chol priors; the field / dispersion
-# axes there are absent here.
-.tobs_ms_abun_nuts_priors <- function() {
-  list(chol_logdiag_mean = log(0.5), chol_logdiag_sd = 1.5,
-       chol_offdiag_sd   = 1.0)
-}
-
 
 # ---------------------------------------------------------------------------
 # Per-species marginal kernels
@@ -155,7 +138,7 @@
 
   # ---- data log-lik + inner gradient (per species), non-centered b = C z ----
   for (s in seq_len(S)) {
-    bidx <- .tobs_ms_abun_nuts_b_idx(lay, s)
+    bidx <- .ms_ocs_b_idx(lay, s)
     z_s  <- theta[bidx]
     zl <- z_s[lay$lambda]; zp <- z_s[lay$p]
     bl   <- mu[lay$lambda] + as.numeric(C_lam %*% zl)
@@ -244,7 +227,7 @@
   C_lr  <- if (lay$is_nb) exp(theta[lay$chol_logr]) else NULL
   B <- matrix(0, lay$n_species, lay$P)
   for (s in seq_len(lay$n_species)) {
-    z <- theta[.tobs_ms_abun_nuts_b_idx(lay, s)]
+    z <- theta[.ms_ocs_b_idx(lay, s)]
     B[s, lay$lambda] <- as.numeric(C_lam %*% z[lay$lambda])
     B[s, lay$p]      <- as.numeric(C_p   %*% z[lay$p])
     if (lay$is_nb) B[s, lay$logr] <- C_lr * z[lay$logr]
@@ -272,14 +255,6 @@
 # Warm-start packing + inverse-mass metric
 # ---------------------------------------------------------------------------
 
-# Symmetrise + (if needed) jitter a covariance to a Cholesky-able PD matrix.
-.tobs_ms_abun_pd <- function(S) {
-  S <- (S + t(S)) / 2
-  ok <- tryCatch({ chol(S); TRUE }, error = function(e) FALSE)
-  if (ok) return(S)
-  S + diag(max(1e-6, 1e-6 * mean(diag(S))), ncol(S))
-}
-
 # Pack a nmix_laplace_re() community fit into the full NUTS coordinate vector: the
 # community means, the community covariances as log-Cholesky coordinates (the 1x1
 # dispersion covariance as log(sigma_log_r)), and -- under the non-centered map --
@@ -292,8 +267,8 @@
   if (lay$is_nb) mu <- c(mu, as.numeric(warm$mu_log_r))
   theta[lay$mu] <- mu
 
-  C_lam <- t(chol(.tobs_ms_abun_pd(as.matrix(warm$Sigma_lambda))))
-  C_p   <- t(chol(.tobs_ms_abun_pd(as.matrix(warm$Sigma_p))))
+  C_lam <- t(chol(.ms_ocs_pd(as.matrix(warm$Sigma_lambda))))
+  C_p   <- t(chol(.ms_ocs_pd(as.matrix(warm$Sigma_p))))
   theta[lay$chol_lam] <- .ms_ocs_chol_pack(C_lam)
   theta[lay$chol_p]   <- .ms_ocs_chol_pack(C_p)
   s_lr <- if (lay$is_nb) max(as.numeric(warm$sigma_log_r), 1e-3) else NA_real_
@@ -306,27 +281,10 @@
     z_s[lay$lambda] <- forwardsolve(C_lam, bl[s, ])   # C z = b, C lower-tri
     z_s[lay$p]      <- forwardsolve(C_p,   bp[s, ])
     if (lay$is_nb) z_s[lay$logr] <- blogr[s] / s_lr
-    theta[.tobs_ms_abun_nuts_b_idx(lay, s)] <- z_s
+    theta[.ms_ocs_b_idx(lay, s)] <- z_s
   }
   theta
 }
-
-# Inverse-mass diagonal for the NUTS warm start: the posterior variance per
-# coordinate from the finite-difference diagonal of the joint log-posterior
-# Hessian at the mode (the Laplace metric), via the fast C++ gradient.
-.tobs_ms_abun_nuts_metric <- function(spec, theta, pri, sigma.beta, sigma.logr,
-                                      h = 1e-4) {
-  np <- length(theta); md <- numeric(np)
-  g <- function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri,
-                                                   sigma.beta, sigma.logr)$grad
-  for (j in seq_len(np)) {
-    tp <- theta; tp[j] <- tp[j] + h
-    tm <- theta; tm[j] <- tm[j] - h
-    md[j] <- -(g(tp)[j] - g(tm)[j]) / (2 * h)
-  }
-  1 / pmax(md, 1e-3)
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door NUTS fitter for the community N-mixture
@@ -364,7 +322,7 @@
   user_K  <- !is.null(K_max)
   K_warm  <- if (user_K) as.integer(K_max) else max(lf$y) + 100L
   lay  <- .tobs_ms_abun_nuts_layout(p_lam, p_p, n_species, is_nb)
-  pri  <- .tobs_ms_abun_nuts_priors()
+  pri  <- .ms_ocs_nuts_priors()
 
   # Warm start at the Laplace-EM mode (Poisson: closed-form EM; NB: the joint_grad
   # / AGHQ path, matching the .tobs_fit_ms_nmix NB defaults so mu_log_r /
@@ -406,8 +364,10 @@
                X_lambda = X_lambda, X_p = lf$X_p,
                n_sites = model$n_sites, n_species = n_species,
                K_max = K_max, is_nb = is_nb)
-  inv_metric <- .tobs_ms_abun_nuts_metric(spec, theta0, pri, sigma.beta,
-                                          sigma.logr)
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri, sigma.beta,
+                                                sigma.logr)$grad,
+    theta0)
 
   run_chain <- function(ch) {
     cpp_ms_abun_nuts(
@@ -421,39 +381,21 @@
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
 
-  n_chains <- as.integer(n.chains)
-  rhat_ess <- NULL
-  if (n_chains > 1L) {
-    rcs    <- lapply(seq_len(n_chains), run_chain)
-    chains <- lapply(rcs, `[[`, "draws")
-    rhat_ess <- .ms_ocs_rhat_ess(chains)
-    draws  <- do.call(rbind, chains)
-    accept    <- unlist(lapply(rcs, `[[`, "accept_prob"))
-    divergent <- unlist(lapply(rcs, `[[`, "divergent"))
-    treedepth <- as.integer(unlist(lapply(rcs, `[[`, "treedepth")))
-    epsilon   <- mean(vapply(rcs, `[[`, 0, "epsilon"))
-  } else {
-    res <- run_chain(1L)
-    draws     <- res$draws
-    accept    <- res$accept_prob
-    divergent <- res$divergent
-    treedepth <- as.integer(res$treedepth)
-    epsilon   <- res$epsilon
-  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  draws     <- rc$draws
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
+  rhat_ess  <- rc$rhat_ess
 
   # ---- reconstruct the build_ms_nmix_fit `raw` shape from the draws ----
   par    <- colMeans(draws)
   mu_hat <- par[lay$mu]
   vcov_mu <- stats::cov(draws[, lay$mu, drop = FALSE])
 
-  sig_mean <- function(cols, Pa) {
-    acc <- matrix(0, Pa, Pa)
-    for (i in seq_len(nrow(draws)))
-      acc <- acc + tcrossprod(.ms_ocs_chol_unpack(draws[i, cols], Pa))
-    acc <- acc / nrow(draws); (acc + t(acc)) / 2
-  }
-  Sigma_lambda <- sig_mean(lay$chol_lam, lay$p_lam)
-  Sigma_p      <- sig_mean(lay$chol_p,   lay$p_p)
+  Sigma_lambda <- .ms_ocs_sig_mean(draws, lay$chol_lam, lay$p_lam)
+  Sigma_p      <- .ms_ocs_sig_mean(draws, lay$chol_p,   lay$p_p)
 
   # Per-species BLUPs = posterior mean of the RECONSTRUCTED deviation b = C z
   # (non-centered: the stored coordinates are the whitened z, so b is rebuilt per
@@ -493,7 +435,7 @@
   fit$nuts <- list(
     draws = draws, layout = lay,
     accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = n_chains,
+    epsilon = epsilon, n_chains = as.integer(n.chains),
     divergent_total = sum(divergent),
     is_nb = is_nb, K_max = K_max,
     sigma_beta = sigma.beta, sigma_logr = sigma.logr)
@@ -552,7 +494,7 @@
   lf <- .tobs_ms_nmix_longform(model)
   K_warm <- if (is.null(K_max)) max(lf$y) + 100L else as.integer(K_max)
   lay  <- .tobs_ms_abun_nuts_layout(p_lam, p_p, n_species, FALSE)
-  pri  <- .tobs_ms_abun_nuts_priors()
+  pri  <- .ms_ocs_nuts_priors()
   csr  <- .nmix_spatial_csr(spatial)
 
   # Warm the field precision + community means / covariances / field from the
@@ -611,8 +553,10 @@
                n_sites = n_sites, n_species = n_species, K_max = K_max,
                is_nb = FALSE, n_field_units = n_sites,
                field_map = seq_len(n_sites), field_load = field_load)
-  inv_metric <- .tobs_ms_abun_nuts_metric(spec, theta0, pri, sigma.beta,
-                                          sigma.logr)
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri, sigma.beta,
+                                                sigma.logr)$grad,
+    theta0)
 
   run_chain <- function(ch) cpp_ms_abun_nuts(
     spec, theta0 = theta0, pri = pri, sigma_beta = sigma.beta,
@@ -621,35 +565,20 @@
     max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
     seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
 
-  n_chains <- as.integer(n.chains); rhat_ess <- NULL
-  if (n_chains > 1L) {
-    rcs    <- lapply(seq_len(n_chains), run_chain)
-    chains <- lapply(rcs, `[[`, "draws")
-    rhat_ess <- .ms_ocs_rhat_ess(chains)
-    draws  <- do.call(rbind, chains)
-    accept <- unlist(lapply(rcs, `[[`, "accept_prob"))
-    divergent <- unlist(lapply(rcs, `[[`, "divergent"))
-    treedepth <- as.integer(unlist(lapply(rcs, `[[`, "treedepth")))
-    epsilon   <- mean(vapply(rcs, `[[`, 0, "epsilon"))
-  } else {
-    res <- run_chain(1L)
-    draws <- res$draws; accept <- res$accept_prob
-    divergent <- res$divergent; treedepth <- as.integer(res$treedepth)
-    epsilon <- res$epsilon
-  }
+  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  draws     <- rc$draws
+  accept    <- rc$accept
+  divergent <- rc$divergent
+  treedepth <- rc$treedepth
+  epsilon   <- rc$epsilon
+  rhat_ess  <- rc$rhat_ess
 
   # Reconstruct the community block (drop the trailing raw columns).
   par     <- colMeans(draws)
   mu_hat  <- par[lay$mu]
   vcov_mu <- stats::cov(draws[, lay$mu, drop = FALSE])
-  sig_mean <- function(cols, Pa) {
-    acc <- matrix(0, Pa, Pa)
-    for (i in seq_len(nrow(draws)))
-      acc <- acc + tcrossprod(.ms_ocs_chol_unpack(draws[i, cols], Pa))
-    acc <- acc / nrow(draws); (acc + t(acc)) / 2
-  }
-  Sigma_lambda <- sig_mean(lay$chol_lam, lay$p_lam)
-  Sigma_p      <- sig_mean(lay$chol_p,   lay$p_p)
+  Sigma_lambda <- .ms_ocs_sig_mean(draws, lay$chol_lam, lay$p_lam)
+  Sigma_p      <- .ms_ocs_sig_mean(draws, lay$chol_p,   lay$p_p)
   B_bar <- matrix(0, n_species, lay$P)
   for (i in seq_len(nrow(draws)))
     B_bar <- B_bar + .tobs_ms_abun_nuts_b_from_z(draws[i, ], lay)
@@ -677,7 +606,7 @@
   fit$nuts <- list(
     draws = draws, layout = lay, n_field_units = n_sites,
     accept_prob = accept, divergent = divergent, treedepth = treedepth,
-    epsilon = epsilon, n_chains = n_chains, divergent_total = sum(divergent),
+    epsilon = epsilon, n_chains = as.integer(n.chains), divergent_total = sum(divergent),
     is_nb = FALSE, K_max = K_max, field_tau = fl$tau, field_rho = fl$rho,
     sigma_beta = sigma.beta, sigma_logr = sigma.logr)
   if (!is.null(rhat_ess)) {
