@@ -80,13 +80,6 @@ test_that("areal count() gates the unsupported forms", {
          y = d$y, family = count(), method = "nested_laplace"),
     "group_var|sites > cells|one field node per site")
 
-  # bym2 (mixed structured/unstructured field) is not reconstructed on the
-  # generic nested path -> pointer to icar()/car_proper()
-  expect_error(
-    tobs(~ x + bym2(graph = d$graph), data = d$data, y = d$y,
-         family = count(), method = "nested_laplace"),
-    "icar.*car_proper|bym2")
-
   # engine mismatch either way
   expect_error(
     tobs(~ x, data = d$data, y = d$y, family = count(),
@@ -179,6 +172,32 @@ test_that("areal count recovers the field under car_proper", {
   expect_identical(fit_cp$method, "nested_laplace")
   expect_equal(length(fit_cp$spatial_field), d$N)
   expect_gt(stats::cor(fit_cp$spatial_field, d$field), 0.7)
+})
+
+test_that("areal count recovers the field + slope under bym2 (gcol33/tulpaObs#116)", {
+  skip_if_fast()
+  skip_on_cran()
+  # bym2 reconstructs the rho-mixed unit field z = sqrt(rho/scale) * phi +
+  # sqrt(1 - rho) * theta on the generic nested-Laplace field summary (a distinct
+  # path from icar/car_proper, which carry a single per-site block).
+  fcor <- slopes <- numeric(3)
+  for (s in seq_len(3)) {
+    d <- .count_sim_areal(side = 10L, beta = c(0.5, 0.5), seed = 400 + s)
+    fit <- tobs(~ x + bym2(graph = d$graph), data = d$data, y = d$y,
+                family = count(), method = "nested_laplace",
+                control = list(progress = FALSE, verbose = FALSE))
+    if (s == 1L) {
+      expect_identical(fit$method, "nested_laplace")
+      expect_equal(length(fit$spatial_field), d$N)
+      expect_true("sigma" %in% names(fit$means))
+    }
+    fcor[s]   <- stats::cor(fit$spatial_field, d$field)
+    slopes[s] <- unname(unlist(coef(fit)))[2L]
+  }
+  # The bym2 field tracks the simulated (structured) truth, and the abundance
+  # slope recovers on average.
+  expect_gt(mean(fcor), 0.75)
+  expect_lt(abs(mean(slopes) - 0.5), 0.15)
 })
 
 

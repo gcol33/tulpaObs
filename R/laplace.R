@@ -292,7 +292,7 @@
                                               latent_prior) {
   blocks <- if (!is.null(latent_prior$type)) list(latent_prior) else latent_prior
   is_areal <- vapply(blocks, function(b)
-    isTRUE(b$type %in% c("icar", "car_proper")), logical(1))
+    isTRUE(b$type %in% c("icar", "car_proper", "bym2")), logical(1))
   if (!any(is_areal)) return(fit)
   if (is.null(state_fit$theta_grid) || is.null(state_fit$weights) ||
       is.null(state_fit$modes)) {
@@ -320,34 +320,64 @@
   areal_idx   <- which(is_areal)
   for (j in seq_along(areal_idx)) {
     b <- areal_idx[j]
+    btype   <- blocks[[b]]$type
+    is_bym2 <- identical(btype, "bym2")
     n_units <- as.integer(blocks[[b]]$n_spatial_units %||% blk_len[b])
 
-    # sigma = 1/sqrt(tau) marginalized over the grid. The ICAR axis is the
-    # precision tau (joint-grid column `b<b>.tau`); fall back to the single-axis
-    # grid when there is one block.
-    tau_col <- match(sprintf("b%d.tau", b), tg_names)
-    if (is.na(tau_col)) tau_col <- match("tau", tg_names)
-    if (!is.na(tau_col)) {
-      tau_vals <- as.numeric(tg[, tau_col])
-      sig_vals <- 1 / sqrt(pmax(tau_vals, 1e-12))
+    # Marginal field SD over the grid. icar / car_proper carry the conditional
+    # precision `b<b>.tau` (sigma = 1/sqrt(tau)); the bym2 grid carries the
+    # marginal SD directly as `b<b>.sigma`.
+    nm <- if (j == 1L) "sigma"
+          else if (length(areal_idx) == 2L) "sigma_trend"
+          else sprintf("sigma_trend%d", j - 1L)
+    sig_vals <- NULL
+    if (is_bym2) {
+      sig_col <- match(sprintf("b%d.sigma", b), tg_names)
+      if (is.na(sig_col)) sig_col <- match("sigma", tg_names)
+      if (!is.na(sig_col)) sig_vals <- as.numeric(tg[, sig_col])
+    } else {
+      tau_col <- match(sprintf("b%d.tau", b), tg_names)
+      if (is.na(tau_col)) tau_col <- match("tau", tg_names)
+      if (!is.na(tau_col)) sig_vals <- 1 / sqrt(pmax(as.numeric(tg[, tau_col]), 1e-12))
+    }
+    if (!is.null(sig_vals)) {
       s_mean <- sum(w * sig_vals)
       s_sd   <- sqrt(max(sum(w * sig_vals^2) - s_mean^2, 0))
-      nm <- if (j == 1L) "sigma"
-            else if (length(areal_idx) == 2L) "sigma_trend"
-            else sprintf("sigma_trend%d", j - 1L)
       sigma_means[[nm]] <- s_mean
       sigma_sds  [[nm]] <- s_sd
       sigma_nms <- c(sigma_nms, nm)
     }
 
-    # Grid-weighted posterior mean of this block's field slice, demeaned.
-    cols <- p_occ + blk_off[b] + seq_len(n_units)
-    if (max(cols) <= ncol(modes)) {
-      fld <- as.numeric(crossprod(modes[, cols, drop = FALSE], w))
-      fld <- fld - mean(fld)
-      field_list[[j]] <- fld
+    # Grid-weighted posterior mean of this block's field slice, demeaned. For a
+    # bym2 block the mode slice is (phi | theta) of width 2 * n_units; the unit
+    # field is the rho-mixed reconstruction z = sqrt(rho / scale) * phi +
+    # sqrt(1 - rho) * theta (Riebler 2016), averaged over the grid.
+    if (is_bym2) {
+      rho_col <- match(sprintf("b%d.rho", b), tg_names)
+      if (is.na(rho_col)) rho_col <- match("rho", tg_names)
+      scale_f <- as.numeric(blocks[[b]]$scale_factor %||% 1)
+      phi_cols   <- p_occ + blk_off[b] + seq_len(n_units)
+      theta_cols <- p_occ + blk_off[b] + n_units + seq_len(n_units)
+      if (!is.na(rho_col) && max(theta_cols) <= ncol(modes)) {
+        rho <- as.numeric(tg[, rho_col])
+        fld <- numeric(n_units)
+        for (g in seq_len(nrow(modes))) {
+          zg <- sqrt(rho[g] / scale_f) * modes[g, phi_cols] +
+                sqrt(1 - rho[g])       * modes[g, theta_cols]
+          fld <- fld + w[g] * zg
+        }
+        field_list[[j]] <- fld - mean(fld)
+      } else {
+        field_list[[j]] <- rep(NA_real_, n_units)
+      }
     } else {
-      field_list[[j]] <- rep(NA_real_, n_units)
+      cols <- p_occ + blk_off[b] + seq_len(n_units)
+      if (max(cols) <= ncol(modes)) {
+        fld <- as.numeric(crossprod(modes[, cols, drop = FALSE], w))
+        field_list[[j]] <- fld - mean(fld)
+      } else {
+        field_list[[j]] <- rep(NA_real_, n_units)
+      }
     }
   }
 

@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.166 (2026-07-18)
+
+* **bym2 areal field on the count families (#116).** `count(...) + bym2(graph)`
+  under `method = "nested_laplace"` now fits and reconstructs its field, joining
+  the icar / car_proper areal support. The generic nested-Laplace field summary
+  (`.tobs_nested_attach_field_summary`) gained a bym2 branch: it reads the block's
+  `sigma` / `rho` grid axes and the (phi | theta) mode slices and reconstructs the
+  rho-mixed unit field `z = sqrt(rho / scale) * phi + sqrt(1 - rho) * theta`
+  (Riebler 2016), grid-averaged. Measured field correlation ~0.93 with the
+  simulated (structured) truth over three seeds; the abundance slope recovers
+  (`test-count-spatial.R`). The same summary path drives `occu()` etc., so a bym2
+  areal field on those families is now reconstructed (`fit$spatial_field`) rather
+  than dropped. icar / car_proper reconstruction is unchanged. spde() / gp() on
+  the count families remain follow-ups.
+
 ## 0.0.165 (2026-07-18)
 
 * **Per-species dispersion random effect for `ms_occu_cover()` NUTS (#115 B7).**
