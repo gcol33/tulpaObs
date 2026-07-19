@@ -692,9 +692,13 @@ blocked", not "validated". Family NUTS paths (#37/#38/#39/#40/#41/#14/#67) ARE
 recovery-tested. `dyn_occu`/`int_occu` NUTS are recovery + CI-coverage tested
 (#139, `test-family-nuts-coverage.R`; the `cpp_occu_fit` path reports NO
 per-parameter `fit$sds`, so those blocks read the 95% CI off `fit$draws` via
-`.nuts_ci_cover_draws`; NOTE `n.iter` there = TOTAL, retained draws =
-`n.iter - n.warmup`, so `n.iter == n.warmup` retains ZERO draws -> NaN means; the
-family/community FullGradFn paths instead treat `n.iter` as post-warmup).
+`.nuts_ci_cover_draws`). **`n.iter` = POST-WARMUP samples kept per chain on ALL
+NUTS paths; the total run per chain is `n.iter + n.warmup`** (every R sampler
+call site passes `n_iter = n.iter + n.warmup` to the engine, which returns
+`n_iter - n_warmup` draws). The occu/dyn_occu/int_occu + cover/occu_cover paths
+used to pass `n_iter = n.iter` (n.iter = TOTAL) -> kept `n.iter - n.warmup` and
+returned ZERO draws (NaN means) at `n.iter == n.warmup`; unified to the sampling
+convention (bugfix, occu_fit.R/cover_nuts.R/occu_cover_nuts.R).
 
 **Areal field on the occu NUTS path** (#142): `occu() + icar()/bym2()` under
 `method="nuts"` now EXPOSES its field. `occu_fit.cpp` emits `spatial_layout`

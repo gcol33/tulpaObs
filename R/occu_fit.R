@@ -540,7 +540,7 @@
   spec <- list(
     model_type = model_type,
     sigma_beta = sigma.beta,
-    n_iter = as.integer(n.iter),               # total iterations (incl. warmup)
+    n_iter = as.integer(n.iter + n.warmup),    # engine total = warmup + kept samples
     n_warmup = as.integer(n.warmup),
     max_treedepth = as.integer(max.treedepth),
     adapt_delta = adapt.delta,

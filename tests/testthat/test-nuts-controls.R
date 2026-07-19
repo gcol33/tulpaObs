@@ -23,7 +23,7 @@ test_that("n.chains pools chains and reports convergence diagnostics", {
                              seed = 7L, verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$n_chains, 2L)
-  expect_equal(nrow(fit$draws), 2L * (400L - 200L))
+  expect_equal(nrow(fit$draws), 2L * 400L)   # n.iter kept per chain (post-warmup)
   expect_false(is.null(fit$convergence))
   expect_true(all(c("rhat", "ess_bulk", "ess_tail") %in% names(fit$convergence)))
   expect_true(all(is.finite(fit$convergence$rhat)))
@@ -43,7 +43,7 @@ test_that("n.thin reduces retained draws per chain", {
               control = list(n.chains = 1L, n.iter = 400L, n.warmup = 200L,
                              n.thin = 2L, seed = 9L, verbose = FALSE))
   expect_identical(fit$n_thin, 2L)
-  expect_equal(nrow(fit$draws), length(seq.int(1L, 400L - 200L, by = 2L)))
+  expect_equal(nrow(fit$draws), length(seq.int(1L, 400L, by = 2L)))
 })
 
 test_that("summary() carries Rhat / ESS columns for a NUTS fit", {
@@ -68,7 +68,7 @@ test_that("single-chain NUTS still works and reports a 1-chain convergence table
               control = list(n.iter = 300L, n.warmup = 150L,
                              seed = 13L, verbose = FALSE))
   expect_identical(fit$n_chains, 1L)
-  expect_equal(nrow(fit$draws), 150L)
+  expect_equal(nrow(fit$draws), 300L)        # n.iter kept (post-warmup)
   # split-Rhat is defined for one chain (posterior splits it in two)
   expect_false(is.null(fit$convergence))
   expect_true(any(is.finite(fit$convergence$rhat)))

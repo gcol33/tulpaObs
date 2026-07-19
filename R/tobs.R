@@ -157,8 +157,10 @@
 #'   is forwarded to the underlying tulpa engine.
 #' @param control list of low-level engine controls. Names follow the
 #'   dotted-separator convention. Sampler controls (`method = "nuts"`):
-#'   * `n.iter` — total iterations per chain, including warmup (default 2000).
-#'   * `n.warmup` — warmup / adaptation iterations per chain (default 1000).
+#'   * `n.iter` — post-warmup sampling iterations kept per chain (default 2000);
+#'     the total run per chain is `n.iter + n.warmup`.
+#'   * `n.warmup` — warmup / adaptation iterations per chain, discarded
+#'     (default 1000).
 #'   * `n.thin` — keep every `n.thin`-th post-warmup draw (default 1).
 #'   * `n.chains` — number of chains, run with offset seeds and pooled
 #'     (default 1). Split-Rhat / bulk / tail ESS are reported on `$convergence`.

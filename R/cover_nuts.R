@@ -209,7 +209,7 @@
     cpp_cover_nuts(
       spec, theta0 = theta0, sigma_beta = sigma.beta,
       sigma_logdisp = sigma.logdisp, inv_metric = inv_metric,
-      n_iter = as.integer(n.iter), n_warmup = as.integer(n.warmup),
+      n_iter = as.integer(n.iter + n.warmup), n_warmup = as.integer(n.warmup),
       max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
       seed = as.integer(seed + ch - 1L),
       verbose = isTRUE(verbose) && ch == 1L)

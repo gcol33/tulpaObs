@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.177 (2026-07-19)
+
+* **`n.iter` is the post-warmup sample count on every NUTS path (bugfix).** The
+  observation-family and community samplers already ran `n.iter + n.warmup`
+  iterations and kept `n.iter` post-warmup draws, but the single-season
+  occupancy path (`occu()` / `dyn_occu()` / `int_occu()`) and the cover paths
+  (`cover()` / `occu_cover()`) instead treated `n.iter` as the *total* including
+  warmup, so they kept only `n.iter - n.warmup` draws -- and returned zero draws
+  (all-`NaN` summaries) when `n.iter == n.warmup`. All paths now agree:
+  `n.iter` = kept samples, total run per chain = `n.iter + n.warmup`. The `?tobs`
+  control docs are corrected to match. Existing calls keep more draws (and run
+  `n.warmup` more iterations) than before on the occu/cover paths.
+
 ## 0.0.176 (2026-07-19)
 
 NUTS calibration coverage and areal-field exposure from the read-only

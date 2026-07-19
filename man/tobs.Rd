@@ -179,8 +179,10 @@ is forwarded to the underlying tulpa engine.}
 \item{control}{list of low-level engine controls. Names follow the
 dotted-separator convention. Sampler controls (\code{method = "nuts"}):
 \itemize{
-\item \code{n.iter} — total iterations per chain, including warmup (default 2000).
-\item \code{n.warmup} — warmup / adaptation iterations per chain (default 1000).
+\item \code{n.iter} — post-warmup sampling iterations kept per chain (default 2000);
+the total run per chain is \code{n.iter + n.warmup}.
+\item \code{n.warmup} — warmup / adaptation iterations per chain, discarded
+(default 1000).
 \item \code{n.thin} — keep every \code{n.thin}-th post-warmup draw (default 1).
 \item \code{n.chains} — number of chains, run with offset seeds and pooled
 (default 1). Split-Rhat / bulk / tail ESS are reported on \verb{$convergence}.
