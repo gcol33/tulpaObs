@@ -71,6 +71,30 @@ test_that("community count Poisson NUTS recovers community means + agrees with L
   expect_equal(dim(ranef(nut)), c(12L * 2L, 4L))
 })
 
+test_that("ms_count NUTS community-mean 95% CIs cover at the nominal rate", {
+  # gcol33/tulpaObs#139: the single-seed recovery proves the byte-exact oracle;
+  # this proves the community-mean intervals cover at the nominal rate (the
+  # calibration NUTS exists to get right).
+  skip_if_fast()
+  skip_on_cran()
+  truth <- c(1, 0.5)
+  covered <- logical(0)
+  for (s in seq_len(20L)) {
+    sim <- simulate_ms_count(N = 150, n_species = 12, beta_comm_mean = truth,
+                             beta_comm_sd = c(0.4, 0.3), response = "poisson",
+                             seed = 300 + s)
+    fit <- tryCatch(tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
+                    species = colnames(sim$y), method = "nuts",
+                    control = list(n.iter = 400L, n.warmup = 400L, seed = 1,
+                                   verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    est <- as.numeric(fit$means); se <- as.numeric(fit$sds)
+    covered <- c(covered, abs(est - truth) <= 1.96 * se)
+  }
+  expect_gte(mean(covered), 0.85)
+})
+
 test_that("community count negbin NUTS recovers community means + dispersion", {
   skip_if_fast()
   skip_on_cran()

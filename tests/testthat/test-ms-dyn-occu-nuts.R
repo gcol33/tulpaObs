@@ -126,6 +126,32 @@ test_that("ms_dyn_occu NUTS recovers community means", {
   expect_gt(cor(cm$coef_p[, 1],    stats::qlogis(sim$truth$p_species)),    0.50)
 })
 
+test_that("ms_dyn_occu NUTS community-mean 95% CIs cover at the nominal rate", {
+  # gcol33/tulpaObs#139: raise the single-seed / directional check to a 20-seed
+  # CI-coverage study on the community means + shared gamma/eps globals.
+  skip_on_cran()
+  skip_if_fast()
+  truth <- c("psi1_(Intercept)"  = 0.3,
+             "p_(Intercept)"     = 0,
+             "gamma_(Intercept)" = stats::qlogis(0.2),
+             "eps_(Intercept)"   = stats::qlogis(0.1))
+  covered <- logical(0)
+  for (s in seq_len(20L)) {
+    sim <- simulate_ms_dyn_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
+                                beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+                                gamma = 0.2, epsilon = 0.1, seed = 300 + s)
+    fit <- tryCatch(tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
+                    y = sim$y, species = paste0("sp", seq_len(14)), method = "nuts",
+                    control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
+                                   verbose = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    m <- fit$means[names(truth)]; se <- fit$sds[names(truth)]
+    covered <- c(covered, abs(m - truth) <= 1.96 * se)
+  }
+  expect_gte(mean(covered), 0.85)
+})
+
 
 # --- (4) S3 methods + richness ---------------------------------------------
 

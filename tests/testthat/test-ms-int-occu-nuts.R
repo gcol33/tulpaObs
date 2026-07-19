@@ -137,3 +137,26 @@ test_that("ms_int_occu NUTS recovers community means + de-attenuates the varianc
   expect_gt(nut$ms_community$sd_psi, 0.9 * lap$ms_community$sd_psi)
   expect_true(all(cm$sd_psi > 0 & cm$sd_p1 > 0 & cm$sd_p2 > 0))
 })
+
+test_that("ms_int_occu NUTS community-mean 95% CIs cover at the nominal rate", {
+  # gcol33/tulpaObs#139: raise the single-seed / directional check to a 20-seed
+  # CI-coverage study on the community means (per-arm intercepts).
+  skip_on_cran()
+  skip_if_fast()
+  sp <- paste0("sp", seq_len(12))
+  truth <- c("psi_(Intercept)" = 0, "p1_(Intercept)" = 0, "p2_(Intercept)" = 0)
+  covered <- logical(0)
+  for (s in seq_len(20L)) {
+    sim <- simulate_ms_int_occu(N = 150, J = c(3, 4), n_species = 12,
+                                n_data = 2, seed = 300 + s)
+    fit <- tryCatch(tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
+                    y = sim$y, species = sp, method = "nuts",
+                    control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
+                                   verbose = FALSE, progress = FALSE)),
+                    error = function(e) NULL)
+    if (is.null(fit)) next
+    m <- fit$means[names(truth)]; se <- fit$sds[names(truth)]
+    covered <- c(covered, abs(m - truth) <= 1.96 * se)
+  }
+  expect_gte(mean(covered), 0.85)
+})

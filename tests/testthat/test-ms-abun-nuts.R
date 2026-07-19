@@ -127,7 +127,7 @@ test_that("ms_abun NUTS recovers community means (Poisson)", {
 test_that("ms_abun NUTS community-mean 95% CIs cover at the nominal rate", {
   skip_on_cran()
   skip_if_fast()
-  n_seed <- 6L
+  n_seed <- 20L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
     sim <- simulate_ms_abun(n_species = 8, N = 40, J = 4,
