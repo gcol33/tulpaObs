@@ -689,7 +689,23 @@ a coupled SVC/trend field (single cell-declaring term only).
 (`dev_notes/probe_blocked_nuts.R`, single-season occ) -> return `tobs_fit` w/o crash,
 but gradient correctness / calibration / convergence NOT verified. Treat as "not
 blocked", not "validated". Family NUTS paths (#37/#38/#39/#40/#41/#14/#67) ARE
-recovery-tested.
+recovery-tested. `dyn_occu`/`int_occu` NUTS are recovery + CI-coverage tested
+(#139, `test-family-nuts-coverage.R`; the `cpp_occu_fit` path reports NO
+per-parameter `fit$sds`, so those blocks read the 95% CI off `fit$draws` via
+`.nuts_ci_cover_draws`; NOTE `n.iter` there = TOTAL, retained draws =
+`n.iter - n.warmup`, so `n.iter == n.warmup` retains ZERO draws -> NaN means; the
+family/community FullGradFn paths instead treat `n.iter` as post-warmup).
+
+**Areal field on the occu NUTS path** (#142): `occu() + icar()/bym2()` under
+`method="nuts"` now EXPOSES its field. `occu_fit.cpp` emits `spatial_layout`
+(from the engine ParamLayout) + names the columns (`spatial_field[i]`/
+`spatial_theta[i]`/`log_tau_spatial`/`log_sigma_spatial`/`logit_rho_spatial`, no
+more `param[k]`); `.tobs_areal_field()` (occu_fit.R) sets `fit$spatial_field` =
+centred per-cell surface for icar/car_proper (level confounded w/ intercept ->
+centred). bym2 field = Riebler rho-mix of both blocks x graph scale factor, so its
+columns are named but the reconstruction is left to the draws. icar field cor
+~0.81 (`test-occu-areal-nuts-recovery.R`). car_proper is NOT a wired occu-NUTS
+term (errors at fit, pre-existing).
 
 **SVC = two distinct flavors, do NOT conflate (#118):**
 - **Areal spatially-varying coefficient** (the `svcPGOcc` analogue): a WEIGHTED

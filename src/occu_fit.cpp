@@ -314,6 +314,33 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         }
     }
 
+    // ---- Name the areal spatial field block (gcol33/tulpaObs#142) ----
+    // ICAR/BYM2/CAR_PROPER field nodes + their hyperparameters were falling
+    // through to "param[k]"; the engine already exports the offsets on
+    // ParamLayout (the SVC pattern above), so name them here.
+    if (layout.has_spatial && layout.spatial_start >= 0) {
+        if (layout.log_tau_spatial_idx >= 0 && layout.log_tau_spatial_idx < n_params)
+            col_names[layout.log_tau_spatial_idx] = "log_tau_spatial";
+        if (layout.log_sigma_bym2_idx >= 0 && layout.log_sigma_bym2_idx < n_params)
+            col_names[layout.log_sigma_bym2_idx] = "log_sigma_spatial";
+        if (layout.logit_rho_bym2_idx >= 0 && layout.logit_rho_bym2_idx < n_params)
+            col_names[layout.logit_rho_bym2_idx] = "logit_rho_spatial";
+        if (layout.logit_rho_car_idx >= 0 && layout.logit_rho_car_idx < n_params)
+            col_names[layout.logit_rho_car_idx] = "logit_rho_spatial";
+        for (int i = 0; layout.spatial_start + i < layout.spatial_end; i++) {
+            const int c = layout.spatial_start + i;
+            if (c >= 0 && c < n_params)
+                col_names[c] = "spatial_field[" + std::to_string(i + 1) + "]";
+        }
+        if (layout.is_bym2 && layout.theta_bym2_start >= 0) {
+            for (int i = 0; layout.theta_bym2_start + i < layout.theta_bym2_end; i++) {
+                const int c = layout.theta_bym2_start + i;
+                if (c >= 0 && c < n_params)
+                    col_names[c] = "spatial_theta[" + std::to_string(i + 1) + "]";
+            }
+        }
+    }
+
     NumericMatrix draws = Rcpp::as<NumericMatrix>(result["draws"]);
     Rcpp::colnames(draws) = col_names;
 
@@ -334,6 +361,28 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
             Rcpp::Named("w_end")            = layout.svc_w_end,
             Rcpp::Named("log_sigma2_start") = layout.log_sigma2_svc_start + 1,
             Rcpp::Named("log_phi_start")    = layout.log_phi_svc_start + 1);
+    }
+
+    // The areal field block's layout, so R can slice the field off the draws
+    // without re-deriving offsets or parsing names (gcol33/tulpaObs#142). All
+    // indices 1-based for R; NA where an offset does not exist for this type.
+    if (layout.has_spatial && layout.spatial_start >= 0) {
+        result["spatial_layout"] = Rcpp::List::create(
+            Rcpp::Named("type")          = std::string(layout.is_bym2 ? "bym2" :
+                                            (layout.is_car_proper ? "car_proper" : "icar")),
+            Rcpp::Named("n_units")       = data.n_spatial_units,
+            Rcpp::Named("field_start")   = layout.spatial_start + 1,
+            Rcpp::Named("field_end")     = layout.spatial_end,
+            Rcpp::Named("theta_start")   = (layout.is_bym2 && layout.theta_bym2_start >= 0
+                                            ? layout.theta_bym2_start + 1 : NA_INTEGER),
+            Rcpp::Named("theta_end")     = (layout.is_bym2 && layout.theta_bym2_start >= 0
+                                            ? layout.theta_bym2_end : NA_INTEGER),
+            Rcpp::Named("log_sigma_idx") = (layout.log_sigma_bym2_idx >= 0
+                                            ? layout.log_sigma_bym2_idx + 1 : NA_INTEGER),
+            Rcpp::Named("logit_rho_idx") = (layout.logit_rho_bym2_idx >= 0
+                                            ? layout.logit_rho_bym2_idx + 1
+                                            : (layout.logit_rho_car_idx >= 0
+                                               ? layout.logit_rho_car_idx + 1 : NA_INTEGER)));
     }
 
     return result;

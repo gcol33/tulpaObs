@@ -699,6 +699,9 @@
   # `fit$spatial_field` on the areal path. Without it the surface was in the
   # draws but unreadable, so the term could only ever be smoke-tested.
   fit$svc_field <- .tobs_svc_field(fit)
+  # The fitted areal (icar/car_proper) field, mirroring the nested-Laplace
+  # `fit$spatial_field` (gcol33/tulpaObs#142). NULL when there is no areal term.
+  fit$spatial_field <- .tobs_areal_field(fit)
   fit$latent <- latent
   # Resolved per-chain seeds (chain c used seed + c - 1) for reproducibility.
   fit$seeds <- as.integer(seed) + seq_len(as.integer(n.chains)) - 1L
@@ -745,6 +748,33 @@
     return(out)
   }
   surf
+}
+
+# Fitted areal field from a single-season occupancy NUTS fit (gcol33/tulpaObs#142).
+#
+# The engine exports the field block's offsets on `ParamLayout` (emitted as
+# `spatial_layout` in occu_fit.cpp), so the field is sliced by position rather
+# than parsed from names. For icar / car_proper the field node enters the logit
+# linear predictor directly, so the posterior-mean node IS the per-cell surface;
+# the intrinsic level is confounded with the intercept, so it is centred (as the
+# nested-Laplace areal summary is). Returns a length-`n_units` vector with the
+# per-draw centred field on attribute "draws", or NULL when there is no areal
+# term. bym2 names its blocks (`spatial_field` / `spatial_theta`) but its field
+# is the Riebler rho-mix of both blocks scaled by the graph scale factor, so it
+# is left to the named draws here rather than reconstructed on a partial block.
+.tobs_areal_field <- function(fit) {
+  lay <- fit$spatial_layout
+  if (is.null(lay) || is.null(fit$means)) return(NULL)
+  if (!identical(lay$type, "icar") && !identical(lay$type, "car_proper")) return(NULL)
+  cols <- seq.int(as.integer(lay$field_start), as.integer(lay$field_end))
+  if (length(fit$means) < max(cols)) return(NULL)
+  field <- as.numeric(fit$means[cols])
+  field <- field - mean(field)
+  if (!is.null(fit$draws) && ncol(fit$draws) >= max(cols)) {
+    d <- fit$draws[, cols, drop = FALSE]
+    attr(field, "draws") <- d - rowMeans(d)
+  }
+  field
 }
 
 # Translate the structured terms a formula carried (`model$structured_terms`)

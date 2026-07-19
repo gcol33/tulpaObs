@@ -1,5 +1,35 @@
 # tulpaObs NEWS
 
+## 0.0.176 (2026-07-19)
+
+NUTS calibration coverage and areal-field exposure from the read-only
+test-coverage audit (closes #139, #142; #137/#140 test gaps also closed).
+
+* **The single-season occupancy NUTS path now exposes its areal field
+  (#142).** `occu()` with an `icar()` / `bym2()` term under `method = "nuts"`
+  sampled the field but left the field parameters unnamed (`param[k]`) and
+  `fit$spatial_field` `NULL`, so it could only be smoke-tested. The engine
+  already exports the block offsets on its parameter layout; `occu_fit.cpp` now
+  emits them as `spatial_layout` and names the columns
+  (`spatial_field[i]` / `spatial_theta[i]` / `log_tau_spatial` /
+  `log_sigma_spatial` / `logit_rho_spatial`), and `fit$spatial_field` carries
+  the centred per-cell surface for `icar` / `car_proper` (the intrinsic level is
+  confounded with the intercept, so it is centred as the nested-Laplace summary
+  is). The `bym2` field is the Riebler rho-mix of two blocks scaled by the graph
+  scale factor, so its columns are named but its reconstruction is left to the
+  named draws. Recovery-tested: `icar` field correlation ~0.81 across seeds
+  (`test-occu-areal-nuts-recovery.R`).
+
+* **Observation-family, abundance, community, and single-season NUTS paths get
+  20-seed CI-coverage tests (#139).** The family paths (`distance` / `removal` /
+  `fp_occu` / `dyn_abun` / `abun`) and community paths (`ms_count` /
+  `ms_int_occu` / `ms_dyn_occu` / `ms_abun`) had only single-seed recovery;
+  `dyn_occu` / `int_occu` NUTS had no recovery test at all. All now carry a
+  >=20-seed 95% CI-coverage study on the calibrated interval the NUTS path
+  exists to get right (`test-family-nuts-coverage.R`). The single-season
+  `cpp_occu_fit` path reports no per-parameter SD, so those blocks score the
+  credible interval off the draws.
+
 ## 0.0.174 (2026-07-18)
 
 Consistency, single-source, and WAIC-boundary fixes from the read-only audit
