@@ -32,7 +32,7 @@
     data = sim$data, y = sim$y, species = paste0("sp", seq_len(n_species)))
   pieces <- tulpaObs:::.tobs_ms_occu_nuts_pieces(model)
   lay <- tulpaObs:::.tobs_ms_occu_nuts_layout(pieces$P_psi, pieces$P_p, pieces$S)
-  pri <- tulpaObs:::.tobs_ms_occu_nuts_priors()
+  pri <- tulpaObs:::.ms_ocs_nuts_priors()
   em <- tulpaObs:::.tobs_community_em(
     S = pieces$S, P = pieces$P, arm_idx = pieces$arm_idx,
     sp_ll = pieces$sp_ll, sp_grad = pieces$sp_grad,

@@ -33,7 +33,7 @@
   lay <- tulpaObs:::.tobs_ms_dyn_occu_nuts_layout(pieces$P_psi1, pieces$P_p,
                                                  pieces$P_gam, pieces$P_eps,
                                                  pieces$S)
-  pri <- tulpaObs:::.tobs_ms_dyn_occu_nuts_priors()
+  pri <- tulpaObs:::.ms_ocs_nuts_priors()
   em <- tulpaObs:::.tobs_community_em(
     S = pieces$S, P = pieces$P, arm_idx = pieces$arm_idx,
     sp_ll = pieces$sp_ll, sp_grad = pieces$sp_grad,
