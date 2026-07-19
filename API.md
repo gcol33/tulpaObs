@@ -153,6 +153,8 @@ Common term options:
 Areal terms (`icar`/`bym2`/`car`/`car_proper`) accept `group_var =` to map
 observations to graph nodes when the graph is over regions rather than rows.
 
+Full argument documentation lives at `?tobs_terms`.
+
 ### Two ways to ask for a spatially varying coefficient
 
 They read alike in prose and are different terms with different coverage:
@@ -467,4 +469,5 @@ a JSDM / community-factor fit (the spatial-factor `ms_occu_cover()` loadings).
 > Structured terms (`icar`, `bym2`, `car`, `car_proper`, `gp`, `multiscale_gp`,
 > `spde`, `re`, `temporal`, `svc`, `latent`, `copy`) are **not exported** — they
 > are only meaningful inside a `tobs()` formula and resolved through the
-> internal registry.
+> internal registry. They are documented at `?tobs_terms`, which carries their
+> aliases, so `?svc` and `?icar` reach the same page.
