@@ -18,7 +18,7 @@ the formula.
 library(tulpaObs)
 
 fit <- tobs(
-  ~ elevation + icar(graph = adj),   # occupancy: fixed effects + a spatial field
+  ~ elevation + spatial(graph = adj), # occupancy: fixed effects + a spatial field
   data      = camera_data,
   family    = occu(),                # MacKenzie et al. (2002) single-season
   detection = ~ wind + time,         # the detection process
@@ -84,19 +84,37 @@ formula:
 
 ```r
 ~ elevation +
-  icar(graph = adj) +             # areal field: icar / bym2 / car / car_proper
-  spde(lon, lat) +                # continuous Matern field over a mesh
-  gp(lon, lat, cov = "matern") +  # NNGP-approximated Gaussian process
-  temporal(year, type = "ar1") +  # temporal: rw1 / rw2 / ar1 / iid
-  svc(lon, lat, indices = 2) +    # spatially varying coefficient
-  (1 | observer)                  # random intercept (lme4 bar syntax)
+  spatial(graph = adj) +               # areal: icar / bym2 / car / car_proper
+  spatial(lon, lat, model = "spde") +  # continuous: spde / gp / multiscale_gp
+  temporal(year, type = "ar1") +       # temporal: ar1 / rw1 / rw2 / iid
+  svc(lon, lat, indices = 2) +         # spatially varying coefficient
+  (1 | observer)                       # random intercept (lme4 bar syntax)
 ```
+
+`spatial()` and `temporal()` are the two front doors: `model =` picks the spatial
+model (`"icar"` by default), `type =` the temporal one.
 
 A term enters whichever process it is written in, so `detection = ~ (1 | observer)` puts
 the random effect on detection. `copy("id")` shares one realization across both processes.
 Bar syntax follows `lme4` throughout: `(1 | site)`, `(x | site)` for a correlated random
 slope, `(x || site)` uncorrelated, `(1 | g:h)` and `(1 | g/h)` for crossed and nested
 factors.
+
+Advanced usage: each spatial model also has a direct constructor, and `spatial()` forwards
+its arguments to it, so the two forms build the same term.
+
+```r
+icar(graph = adj)                     # spatial(graph = adj)
+bym2(graph = adj)                     # spatial(graph = adj, model = "bym2")
+spde(lon, lat)                        # spatial(lon, lat, model = "spde")
+gp(lon, lat, cov = "matern",          # spatial(lon, lat, model = "gp", cov = "matern",
+   prior_range = c(0.1, 0.05))        #         prior_range = c(0.1, 0.05))
+```
+
+Model-specific arguments are checked against the model named in `model =`, so an argument
+that model does not take is an error. `gp()` requires a PC prior on the range:
+`prior_range = c(r0, alpha)` encodes `P(range < r0) = alpha` in the units of the
+coordinates.
 
 ## The latent state integrates out
 
