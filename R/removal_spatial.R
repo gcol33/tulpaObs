@@ -205,7 +205,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 # continuous spde() field is not yet wired for removal, and a weighted (SVC) field
 # is rejected. The packed fit reuses build_nmix_fit (the removal coefficient
 # layout is the shared (lambda, p) block).
-.tobs_fit_removal_spatial <- function(model, spatial, temporal = NULL,
+.tobs_fit_removal_spatial <- function(model, spatial, temporal = NULL, svc = NULL,
                                       mixture = "P", K_max = NULL,
                                       max_iter = 100L, tol = 1e-6, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "removal abundance spatial")
@@ -239,13 +239,14 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                         "spatial unit per site is required for removal."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
-  # Spatial + temporal: route through the shared areal-BFGS driver (a second
-  # latent block alongside the field), reusing the removal marginal's analytic
-  # per-site / per-pass gradient (cpp_removal_total_log_lik). The C++ count-
-  # spatial driver carries only the field, so the temporal block lives on the
-  # BFGS path (gcol33/tulpaObs#78). Spatial-only fits keep the C++ driver.
-  if (!is.null(temporal)) {
-    return(.tobs_fit_removal_spatial_bfgs(model, spatial, temporal,
+  # Spatial + temporal, or spatial + a continuous varying coefficient: route
+  # through the shared areal-BFGS driver (a second latent block alongside the
+  # field), reusing the removal marginal's analytic per-site / per-pass gradient
+  # (cpp_removal_total_log_lik). The C++ count-spatial driver carries only the
+  # field, so the extra blocks live on the BFGS path (gcol33/tulpaObs#78, #144).
+  # Spatial-only fits keep the C++ driver.
+  if (!is.null(temporal) || !is.null(svc)) {
+    return(.tobs_fit_removal_spatial_bfgs(model, spatial, temporal, svc = svc,
                                           mixture = mixture, K_max = K_max,
                                           max_iter = max_iter, tol = tol,
                                           verbose = verbose))
@@ -283,18 +284,21 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 # + both block priors, integrated over the product of the two blocks'
 # hyperparameter grids. The field + temporal block both load onto eta_lambda.
 .tobs_fit_removal_spatial_bfgs <- function(model, spatial, temporal,
-                                           det_arm = FALSE,
+                                           det_arm = FALSE, svc = NULL,
                                            mixture = "P", K_max = NULL,
                                            max_iter = 200L, tol = 1e-8,
                                            verbose = TRUE) {
   n_sites <- model$n_sites
   map <- seq_len(n_sites)
-  temporal_only <- is.null(spatial)
+  temporal_only <- is.null(spatial) && !is.null(temporal)
+  X_lam <- model$X_processes[[1]]
+  .tobs_check_svc_arm(svc, det_arm, "removal")
   # A detection-arm areal field (det_arm, #114) is a single areal block that loads
   # on eta_p; temporal does not compose with the detection-arm field on this path.
-  field <- .tobs_build_field_spec(spatial, temporal, "removal", n_sites, map)
+  field <- .tobs_build_field_spec(spatial, temporal, "removal", n_sites, map,
+                                  svc = svc, X_svc = X_lam)
 
-  X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lam); p_p <- ncol(X_p)
   y_long   <- as.integer(model$y_long)
   site_idx <- as.integer(model$site_idx)
@@ -365,7 +369,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   # per-pass capture logit when the term sits in the detection formula (#114).
   # removal does not surface the outer Pareto-k diagnostic (pareto_k = FALSE).
   .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
-                             pareto_k = FALSE)
+                             pareto_k = FALSE, svc = svc,
+                             has_spatial = !is.null(spatial))
 }
 
 # Areal-spatial removal sampling via NUTS (gcol33/tulpaObs#72): a FIXED-HYPER

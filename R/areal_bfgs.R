@@ -392,47 +392,66 @@
 }
 
 # Assemble the latent field block(s) an observation-family areal-BFGS fit passes to
-# the driver (gcol33/tulpaObs#136). The shape is identical across the family
-# wrappers: a temporal-only fit runs the single temporal block; otherwise the areal
-# field is block 1 and any temporal term becomes block 2. Returns a single block
-# object (areal-only) or a list of blocks (temporal-only / areal+temporal), matching
+# the driver (gcol33/tulpaObs#136, #144). The shape is identical across the family
+# wrappers: the areal field is block 1 and any temporal term block 2, with any
+# continuous NNGP varying-coefficient surfaces (`svc`, one block per `indices`
+# entry) appended after them. A fit carrying only one of the three runs that block
+# alone. Returns a single block object (areal-only) or a list of blocks, matching
 # the driver's `if (!is.null(field$n_field)) list(field) else field` contract.
 # `family` labels the blocks for reporting; `map` is site -> field-node (identity by
-# default, group_var incidence otherwise).
+# default, group_var incidence otherwise); `X_svc` is the design matrix of the arm
+# the varying coefficients load on.
 .tobs_build_field_spec <- function(spatial, temporal, family, n_sites,
-                                   map = seq_len(n_sites)) {
-  if (is.null(spatial))
-    return(list(.tobs_temporal_field_spec(temporal, n_sites, family)))
-  field_sp <- .tobs_areal_field_spec(spatial, n_sites, family, map)
-  if (is.null(temporal)) field_sp
-  else list(field_sp, .tobs_temporal_field_spec(temporal, n_sites, family))
+                                   map = seq_len(n_sites), svc = NULL,
+                                   X_svc = NULL) {
+  blocks <- c(
+    if (!is.null(spatial)) list(.tobs_areal_field_spec(spatial, n_sites, family, map)),
+    if (!is.null(temporal)) list(.tobs_temporal_field_spec(temporal, n_sites, family)),
+    if (!is.null(svc)) .tobs_svc_field_blocks(svc, X_svc, n_sites, family))
+  # A lone areal block is handed back bare rather than wrapped: the driver's
+  # opt-in CCD outer integration is single-block only and reaches for `field$axes`,
+  # which the areal specs are the ones to carry.
+  if (length(blocks) == 1L && !is.null(spatial)) blocks[[1L]] else blocks
 }
 
 # Attach the driver's marginalised field results to an observation-family fit
-# (gcol33/tulpaObs#136). Byte-identical across the family wrappers apart from the
-# non-detection arm label (`arm`): a temporal-only fit reports the single block as
-# the temporal field; otherwise the areal field is the spatial field (loading on
-# `arm`, or the detection arm when `det_arm`) and any temporal term rides alongside.
-# `pareto_k = FALSE` for the wrapper (removal) that does not surface the diagnostic.
+# (gcol33/tulpaObs#136, #144). Byte-identical across the family wrappers apart from
+# the non-detection arm label (`arm`). The driver returns per-block posterior-mean
+# fields in block order, which `.tobs_build_field_spec()` fixes as areal, temporal,
+# then one block per continuous varying coefficient; each present block is reported
+# under its own slot (`spatial_field` loading on `arm`, or the detection arm when
+# `det_arm`; `temporal_field`; `svc_field` / `svc_hyper`, the last named as the NUTS
+# and single-season Laplace paths name them -- a bare vector for one varying
+# coefficient, an n_sites x n_svc matrix otherwise). `pareto_k = FALSE` for the
+# wrapper (removal) that does not surface the diagnostic.
 .tobs_attach_field_results <- function(fit, res, det_arm, temporal, temporal_only,
-                                       arm, pareto_k = TRUE) {
+                                       arm, pareto_k = TRUE, svc = NULL,
+                                       has_spatial = !temporal_only) {
   fit$method <- "nested_laplace"
   fit$spatial_integration <- res$integration
   if (isTRUE(pareto_k)) fit$spatial_pareto_k <- res$pareto_k
   fit$temporal <- temporal
-  if (temporal_only) {
-    # The single temporal block is reported by the driver as block 1
-    # (field_mean / hyper); relabel it as the temporal field (#114).
-    fit$temporal_field <- res$field_mean
-    fit$temporal_hyper <- res$hyper
-  } else {
-    fit$spatial_field <- res$field_mean
-    fit$spatial_hyper <- res$hyper
+  fields <- res$field_means; hypers <- res$hyper_means
+  b <- 0L
+  if (has_spatial) {
+    b <- b + 1L
+    fit$spatial_field <- fields[[b]]
+    fit$spatial_hyper <- hypers[[b]]
     fit$spatial_field_arm <- if (det_arm) "detection" else arm
-    if (!is.null(temporal)) {
-      fit$temporal_field <- res$temporal_field
-      fit$temporal_hyper <- res$temporal_hyper
-    }
+  }
+  if (!is.null(temporal)) {
+    b <- b + 1L
+    fit$temporal_field <- fields[[b]]
+    fit$temporal_hyper <- hypers[[b]]
+  }
+  if (!is.null(svc)) {
+    k <- length(svc$indices)
+    surf <- matrix(unlist(fields[b + seq_len(k)]), ncol = k)
+    fit$svc <- svc
+    fit$svc_indices <- as.integer(svc$indices)
+    fit$svc_field <- if (k == 1L) as.numeric(surf[, 1L]) else surf
+    fit$svc_hyper <- stats::setNames(hypers[b + seq_len(k)], paste0("svc", seq_len(k)))
+    fit$svc_field_arm <- arm
   }
   fit
 }
@@ -519,6 +538,11 @@
     list(logm = ll_fn(th) - 0.5 * ldH,
          mode = th[seq_len(n_fixed)],
          phi  = phi_b, hyper = hyper_b,
+         # Per-observation eta offset the blocks jointly load at this cell's mode.
+         # The blocks own their site mapping and weighting, so a consumer wanting
+         # the fitted linear predictor reads this rather than re-deriving each
+         # block's map (areal node index, time index, design column).
+         eta_offset = block_offset(th),
          cov  = cov_full[seq_len(n_fixed), seq_len(n_fixed), drop = FALSE])
   }
 
@@ -552,8 +576,11 @@
       Hm <- t(vapply(ik, function(k) res[[k]]$hyper[[b]], numeric(length(h1))))
       hm <- as.numeric(crossprod(wk, Hm)); names(hm) <- names(h1); hm
     })
+    n_off <- length(res[[ik[1L]]]$eta_offset)
+    offs  <- t(vapply(ik, function(k) res[[k]]$eta_offset, numeric(n_off)))
     out <- list(ok = TRUE, beta_mean = beta_mean,
                 field_mean = field_means[[1L]], hyper = hyper_means[[1L]],
+                eta_offset = as.numeric(crossprod(wk, offs)),
                 vcov = V, log_lik = sum(wk * logm),
                 integration = method, pareto_k = pareto_k)
     if (n_blk >= 2L) {

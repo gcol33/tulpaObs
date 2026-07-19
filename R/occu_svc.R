@@ -198,6 +198,90 @@
 }
 
 
+# Resolve an svc() term into a LIST of continuous NNGP field blocks for the
+# areal-BFGS driver -- one coefficient surface per `indices` entry, loaded by that
+# design column of the arm the term sits on (a column of ones is the unweighted
+# intercept surface). Shared by every family that rides the driver, so the term's
+# validation and hyperparameter grid live in one place rather than once per family
+# (gcol33/tulpaObs#143, #144).
+#
+# `X_arm` is the design matrix of the arm the surfaces load on -- the occupancy
+# logit for occu()/fp_occu(), log lambda for the count families -- so `indices` is
+# read against the same design the coefficients are.
+#
+# Each surface is its own block and the driver's outer grid is the product of the
+# blocks' grids, so the per-surface grid is coarsened when several coefficients
+# vary.
+.tobs_svc_field_blocks <- function(svc, X_arm, n_sites, family,
+                                   sigma_grid = NULL, phi_grid = NULL) {
+  arm <- .tobs_svc_arm_label(family)
+  if (isTRUE(svc$shared[2L])) {
+    stop(sprintf(paste0("svc() is wired on the %s predictor of %s(); a ",
+                        "detection-arm varying coefficient is not yet fit on the ",
+                        "Laplace backends. Move the term to the %s formula%s. ",
+                        "(tulpaObs#143, #144)"),
+                 arm, family, arm,
+                 if (identical(family, "occu")) ", or use method = \"nuts\"" else ""),
+         call. = FALSE)
+  }
+  if (as.integer(svc$n_obs) != n_sites) {
+    stop(sprintf(paste0("svc() carries %d coordinates but the model has %d ",
+                        "sites; one coordinate pair per site is required."),
+                 as.integer(svc$n_obs), n_sites), call. = FALSE)
+  }
+  idx <- as.integer(svc$indices)
+  if (any(idx < 1L) || any(idx > ncol(X_arm))) {
+    stop(sprintf(paste0("svc(indices = ): index out of range -- the %s() %s ",
+                        "design has %d columns."),
+                 family, arm, ncol(X_arm)), call. = FALSE)
+  }
+  co      <- matrix(as.numeric(svc$coords), ncol = 2L, byrow = TRUE)
+  nn_idx  <- matrix(as.integer(svc$nn_idx),  nrow = n_sites, byrow = TRUE)
+  nn_dist <- matrix(as.numeric(svc$nn_dist), nrow = n_sites, byrow = TRUE)
+  ord     <- as.integer(svc$nn_order)
+  cov_code <- .tobs_nngp_cov_code(svc$cov_type)
+
+  n_g <- if (length(idx) > 1L) 3L else 4L
+  if (is.null(sigma_grid))
+    sigma_grid <- exp(seq(log(0.3), log(3), length.out = n_g))
+  if (is.null(phi_grid)) {
+    U <- svc$prior_range[1L]
+    phi_grid <- exp(seq(log(U * 0.5), log(U * 10), length.out = n_g))
+  }
+  lapply(idx, function(j) {
+    w <- as.numeric(X_arm[, j])
+    .tobs_svc_nngp_field(
+      co, nn_idx, nn_dist, ord, cov_code,
+      prior_range = as.numeric(svc$prior_range),
+      sigma_scale = as.numeric(svc$sigma2_prior_scale %||% 1),
+      weight = if (isTRUE(all(w == 1))) NULL else w,
+      sigma_grid = sigma_grid, phi_grid = phi_grid)
+  })
+}
+
+# Name of the arm an svc() surface loads on, per family, for error messages.
+.tobs_svc_arm_label <- function(family) {
+  switch(family,
+         occu = , fp_occu = "occupancy",
+         "abundance")
+}
+
+# An areal-BFGS fit exposes ONE per-observation eta gradient to its field blocks,
+# on whichever arm its spatial term selected. A detection-arm areal field therefore
+# hands the varying-coefficient blocks the detection gradient, which would fit the
+# surfaces against the wrong arm; reject the combination rather than fit it.
+.tobs_check_svc_arm <- function(svc, det_arm, family) {
+  if (!is.null(svc) && isTRUE(det_arm))
+    stop(sprintf(paste0("%s() fits svc() on the %s arm, so it cannot be combined ",
+                        "with a detection-arm areal field in the same fit. Move ",
+                        "the areal term to the %s formula, or drop svc(). ",
+                        "(tulpaObs#144)"),
+                 family, .tobs_svc_arm_label(family),
+                 .tobs_svc_arm_label(family)), call. = FALSE)
+  invisible(TRUE)
+}
+
+
 # Exact single-season occupancy marginal with analytic gradients, shaped as the
 # areal-BFGS driver's family callback.
 #
@@ -295,48 +379,14 @@
     stop("occu() + svc() on the Laplace backends fits a single-season model.",
          call. = FALSE)
   }
-  if (isTRUE(svc$shared[2L])) {
-    stop("svc() is wired on the occupancy predictor; a detection-arm varying ",
-         "coefficient is not yet fit on the Laplace backends. Move the term to ",
-         "the occupancy formula, or use method = \"nuts\". (tulpaObs#143)",
-         call. = FALSE)
-  }
   n_sites <- model$n_sites
-  if (as.integer(svc$n_obs) != n_sites) {
-    stop(sprintf(paste0("svc() carries %d coordinates but the model has %d ",
-                        "sites; one coordinate pair per site is required."),
-                 as.integer(svc$n_obs), n_sites), call. = FALSE)
-  }
   X_occ <- model$X_processes[[1L]]
   idx <- as.integer(svc$indices)
-  if (any(idx < 1L) || any(idx > ncol(X_occ))) {
-    stop(sprintf(paste0("svc(indices = ): index out of range -- the occupancy ",
-                        "design has %d columns."), ncol(X_occ)), call. = FALSE)
-  }
 
   dots <- list(...)
-  co      <- matrix(as.numeric(svc$coords), ncol = 2L, byrow = TRUE)
-  nn_idx  <- matrix(as.integer(svc$nn_idx),  nrow = n_sites, byrow = TRUE)
-  nn_dist <- matrix(as.numeric(svc$nn_dist), nrow = n_sites, byrow = TRUE)
-  ord     <- as.integer(svc$nn_order)
-  cov_code <- .tobs_nngp_cov_code(svc$cov_type)
-
-  # Each varying coefficient is its own field block; the outer grid is their
-  # product, so the per-field grid is coarsened when several coefficients vary.
-  n_g <- if (length(idx) > 1L) 3L else 4L
-  sigma_grid <- dots$sigma.grid %||% exp(seq(log(0.3), log(3), length.out = n_g))
-  U <- svc$prior_range[1L]
-  phi_grid <- dots$phi.grid %||% exp(seq(log(U * 0.5), log(U * 10), length.out = n_g))
-
-  blocks <- lapply(idx, function(j) {
-    w <- as.numeric(X_occ[, j])
-    .tobs_svc_nngp_field(
-      co, nn_idx, nn_dist, ord, cov_code,
-      prior_range = as.numeric(svc$prior_range),
-      sigma_scale = as.numeric(svc$sigma2_prior_scale %||% 1),
-      weight = if (isTRUE(all(w == 1))) NULL else w,
-      sigma_grid = sigma_grid, phi_grid = phi_grid)
-  })
+  blocks <- .tobs_svc_field_blocks(svc, X_occ, n_sites, "occu",
+                                   sigma_grid = dots$sigma.grid,
+                                   phi_grid = dots$phi.grid)
 
   prior_spec <- .resolve_occu_priors(priors)
   marg <- .tobs_occu_svc_marginal(model, prior_spec)

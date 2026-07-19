@@ -17,10 +17,10 @@
 # =============================================================================
 
 .tobs_fit_distance_spatial <- function(model, spatial, temporal = NULL,
-                                       mixture = "poisson",
+                                       svc = NULL, mixture = "poisson",
                                        K_max = NULL, max_iter = 200L, tol = 1e-6,
                                        verbose = TRUE, integration = "grid") {
-  temporal_only <- is.null(spatial)
+  temporal_only <- is.null(spatial) && !is.null(temporal)
   # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
   # carries shared = c(state, detection) = c(FALSE, TRUE). It loads on the per-site
   # detection scale eta_sigma (a spatially-varying detection scale) instead of the
@@ -29,15 +29,19 @@
   # gradient. Under the hazard-rate key the detection scale sigma still carries the
   # field while the log-shape eta_b stays a single global coordinate (the eval
   # threads both -- the field on eta_sigma, eta_b as a fixed parameter).
-  det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
-  if (!temporal_only)
+  det_arm <- !is.null(spatial) && isTRUE(spatial$shared[2L]) &&
+             !isTRUE(spatial$shared[1L])
+  if (!is.null(spatial))
     .tobs_reject_weighted_spatial(spatial, "distance abundance spatial")
   hazard <- identical(model$key, "hazard")
   key_code <- .dist_key_code(model$key)
   map <- seq_len(model$n_sites)
-  field <- .tobs_build_field_spec(spatial, temporal, "distance", model$n_sites, map)
+  X_lam <- model$X_processes[[1]]
+  .tobs_check_svc_arm(svc, det_arm, "distance")
+  field <- .tobs_build_field_spec(spatial, temporal, "distance", model$n_sites, map,
+                                  svc = svc, X_svc = X_lam)
 
-  X_lam <- model$X_processes[[1]]; X_sig <- model$X_processes[[2]]
+  X_sig <- model$X_processes[[2]]
   p_lam <- ncol(X_lam); p_sig <- ncol(X_sig)
   y <- matrix(as.integer(model$y), nrow(model$y), ncol(model$y))
   cutpoints <- as.numeric(model$cutpoints)
@@ -110,7 +114,8 @@
   fit <- build_distance_fit(raw, model)
   # The field loads on the abundance (log lambda) arm by default, or on the
   # detection scale (log sigma) arm when the term sits in the detection formula.
-  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance")
+  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
+                             svc = svc, has_spatial = !is.null(spatial))
 }
 
 # Areal-spatial binned distance sampling via NUTS (gcol33/tulpaObs#72): a FIXED-

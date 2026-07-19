@@ -14,11 +14,11 @@
 # =============================================================================
 
 .tobs_fit_dyn_abun_spatial <- function(model, spatial, temporal = NULL,
-                                       mixture = "poisson",
+                                       svc = NULL, mixture = "poisson",
                                        K_max = NULL, max_iter = 300L, tol = 1e-8,
                                        verbose = TRUE, integration = "grid") {
-  temporal_only <- is.null(spatial)
-  if (!temporal_only)
+  temporal_only <- is.null(spatial) && !is.null(temporal)
+  if (!is.null(spatial))
     .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
   # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
   # carries shared = c(abundance, detection) = c(FALSE, TRUE). The dyn_abun
@@ -26,11 +26,15 @@
   # (a spatially-varying detection probability applied across every season's obs
   # pmf) loads on eta_p directly and the marginal's per-site grad_eta_p scatters
   # back with no aggregation. omega / gamma never carry a structured field.
-  det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
+  det_arm <- !is.null(spatial) && isTRUE(spatial$shared[2L]) &&
+             !isTRUE(spatial$shared[1L])
   map <- seq_len(model$n_sites)
-  field <- .tobs_build_field_spec(spatial, temporal, "dyn_abun", model$n_sites, map)
+  X_lam <- model$X_processes[[1]]
+  .tobs_check_svc_arm(svc, det_arm, "dyn_abun")
+  field <- .tobs_build_field_spec(spatial, temporal, "dyn_abun", model$n_sites, map,
+                                  svc = svc, X_svc = X_lam)
 
-  X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
+  X_p <- model$X_processes[[2]]
   X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
   p_lam <- ncol(X_lam); p_p <- ncol(X_p); p_om <- ncol(X_om); p_gm <- ncol(X_gm)
   y_flat <- as.integer(model$y_flat); N <- model$n_sites
@@ -94,7 +98,8 @@
   fit <- build_dyn_abun_fit(raw, model)
   # The field loads on the initial-abundance (log lambda_1) arm by default, or on
   # the per-site detection logit eta_p when the term sits in `detection=` (#114).
-  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance")
+  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
+                             svc = svc, has_spatial = !is.null(spatial))
 }
 
 # Areal-spatial Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#72): a FIXED-

@@ -87,12 +87,30 @@ formula:
   spatial(graph = adj) +               # areal: icar / bym2 / car / car_proper
   spatial(lon, lat, model = "spde") +  # continuous: spde / gp / multiscale_gp
   temporal(year, type = "ar1") +       # temporal: ar1 / rw1 / rw2 / iid
-  svc(lon, lat, indices = 2) +         # spatially varying coefficient
   (1 | observer)                       # random intercept (lme4 bar syntax)
 ```
 
 `spatial()` and `temporal()` are the two front doors: `model =` picks the spatial
 model (`"icar"` by default), `type =` the temporal one.
+
+A coefficient that varies over space is written one of two ways. The areal form is
+a weighted bar under the spatial umbrella and has the broad family coverage:
+
+```r
+~ spatial(~ 1 + year || cell, graph = adj)   # areal SVC, method = "nested_laplace"
+```
+
+The continuous form is its own term, an NNGP surface over coordinates, and asks for
+a range prior (`P(range < r0) = alpha`):
+
+```r
+~ elevation + svc(lon, lat, indices = 2, prior_range = c(50, 0.05))
+```
+
+`svc()` fits on single-season `occu()` under `laplace` / `nested_laplace` / `nuts`,
+and on `removal()`, `distance()`, `fp_occu()` and `dyn_abun()` under `laplace` /
+`nested_laplace`; the surfaces come back as `fit$svc_field`. Elsewhere the term
+errors and points at the areal bar.
 
 A term enters whichever process it is written in, so `detection = ~ (1 | observer)` puts
 the random effect on detection. `copy("id")` shares one realization across both processes.

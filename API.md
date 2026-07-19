@@ -140,7 +140,7 @@ tobs(~ elev + bym2(graph = adj) + re(region),
 | `spde(lon, lat, ...)`             | Continuous Matern field via triangular mesh |
 | `re(group, ...)`                  | Grouped random effect (intercept / slope / iid) |
 | `temporal(time, ...)`             | AR1 / RW1 / RW2 / IID temporal field |
-| `svc(lon, lat, indices)`          | Spatially varying coefficients on design columns |
+| `svc(lon, lat, indices, prior_range)` | Continuous NNGP spatially varying coefficients on design columns |
 | `latent(n_factors, ...)`          | Latent factors for community models |
 | `copy("id")`                      | Share a named term's realization across processes |
 
@@ -152,6 +152,25 @@ Common term options:
 
 Areal terms (`icar`/`bym2`/`car`/`car_proper`) accept `group_var =` to map
 observations to graph nodes when the graph is over regions rather than rows.
+
+### Two ways to ask for a spatially varying coefficient
+
+They read alike in prose and are different terms with different coverage:
+
+- **Areal** — a weighted bar under the spatial umbrella,
+  `spatial(~ 1 + w || cell, graph = adj)` with `method = "nested_laplace"`. Broad
+  family support (single-season, dynamic, integrated, and the community routes),
+  recovery-tested throughout. This is the one most spatial-coefficient questions
+  want.
+- **Continuous** — `svc(lon, lat, indices = 2, prior_range = c(r0, alpha))`, an
+  NNGP surface over coordinates. `prior_range` is required (a PC prior on the
+  range, `P(range < r0) = alpha`); there is no default. Available on single-season
+  `occu()` under `laplace` / `nested_laplace` / `nuts`, and on `removal()`,
+  `distance()`, `fp_occu()` and `dyn_abun()` under `laplace` /
+  `nested_laplace`. The surfaces load on the state arm (occupancy logit, or log
+  lambda for the count families) and are reported as `fit$svc_field` /
+  `fit$svc_hyper`. Elsewhere the term errors with a pointer rather than being
+  dropped.
 
 ### lme4 bar syntax (sugar over `re()`)
 

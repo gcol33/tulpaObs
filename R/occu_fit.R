@@ -40,26 +40,34 @@
   svc      <- structs$svc
   latent   <- structs$latent
 
-  # svc() (the continuous NNGP spatially-varying coefficient) is wired for
-  # single-season occupancy: the NUTS path samples it in the compiled tulpa
-  # engine (populate_svc, src/occu_fit.cpp), and the Laplace backends fit it
-  # through the shared areal-BFGS nested-Laplace driver (R/occu_svc.R,
-  # gcol33/tulpaObs#143). Every other fitter -- the count families (nmix /
-  # removal / distance / fp_occu / dyn_abun) -- would silently drop it and fit a
-  # model missing the term the user asked for, so those error with a pointer
+  # svc() (the continuous NNGP spatially-varying coefficient) is a latent field
+  # block on the state arm, so every family whose marginal exposes a per-site eta
+  # gradient to the shared areal-BFGS nested-Laplace driver (R/areal_bfgs.R) fits
+  # it: single-season occu(), and the observation families removal / distance /
+  # fp_occu / dyn_abun (gcol33/tulpaObs#143, #144). Single-season occu() also
+  # samples it on the NUTS path, in the compiled tulpa engine (populate_svc,
+  # src/occu_fit.cpp). The remaining fitters -- the N-mixture families, whose
+  # areal path is the C++ count-spatial driver rather than the areal-BFGS one, and
+  # every family NUTS target -- would silently drop the term and fit a model
+  # missing what the user asked for, so those error with a pointer
   # (gcol33/tulpaObs#118). The areal analogue of a spatially-varying coefficient
   # is the weighted areal bar (spatial(~ 1 + w || cell, graph)), which arrives as
   # a `spatial` term, not `svc`.
-  svc_wired <- identical(model$model_type, "single") &&
-               method %in% c("laplace", "nested_laplace", "nuts")
+  svc_bfgs <- c("removal", "distance", "fp_occu", "dyn_abun")
+  svc_wired <-
+    (identical(model$model_type, "single") &&
+       method %in% c("laplace", "nested_laplace", "nuts")) ||
+    (model$model_type %in% svc_bfgs &&
+       method %in% c("laplace", "nested_laplace"))
   if (!is.null(svc) && !svc_wired) {
     stop(sprintf(paste0(
       "svc() (a spatially-varying coefficient) is wired for single-season ",
-      "occu() under method = \"laplace\" / \"nested_laplace\" / \"nuts\"; it is ",
-      "silently unsupported for model_type = \"%s\"%s. For an areal ",
-      "spatially-varying coefficient use a weighted areal bar -- ",
-      "spatial(~ 1 + w || cell, graph = adj) with method = \"nested_laplace\" -- ",
-      "which is recovery-tested (tulpaObs#118, #143)."),
+      "occu() under method = \"laplace\" / \"nested_laplace\" / \"nuts\", and for ",
+      "removal() / distance() / fp_occu() / dyn_abun() under method = ",
+      "\"laplace\" / \"nested_laplace\"; it is silently unsupported for ",
+      "model_type = \"%s\"%s. For an areal spatially-varying coefficient use a ",
+      "weighted areal bar -- spatial(~ 1 + w || cell, graph = adj) with method = ",
+      "\"nested_laplace\" -- which is recovery-tested (tulpaObs#118, #143, #144)."),
       model$model_type,
       if (!method %in% c("laplace", "nested_laplace", "nuts"))
         sprintf(" under method = \"%s\"", method) else ""),
@@ -170,13 +178,14 @@
       .tobs_check_count_temporal(temporal, spatial, method, "removal", "abundance",
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
-    if (!is.null(spatial) || !is.null(temporal)) {
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the abundance arm: icar() / car_proper() / bym2() under
       # the nested-Laplace driver, optionally composed with a temporal() block
-      # via the shared areal-BFGS driver (gcol33/tulpaObs#78), or a fixed-hyper
-      # non-centered car_proper() field sampled jointly with the coefficients
-      # under NUTS. A temporal() term on its own (no areal field) runs the same
-      # areal-BFGS driver with a single temporal block (gcol33/tulpaObs#114).
+      # or continuous varying-coefficient surfaces via the shared areal-BFGS
+      # driver (gcol33/tulpaObs#78, #144), or a fixed-hyper non-centered
+      # car_proper() field sampled jointly with the coefficients under NUTS. A
+      # temporal() or svc() term on its own runs the same areal-BFGS driver with
+      # just that block (gcol33/tulpaObs#114, #144).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_removal_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal,
@@ -187,12 +196,13 @@
           seed = seed, verbose = verbose)
       } else if (is.null(spatial)) {
         fit <- .tobs_fit_removal_spatial_bfgs(fit_model, spatial = NULL,
-                                              temporal = temporal, mixture = mixture,
+                                              temporal = temporal, svc = svc,
+                                              mixture = mixture,
                                               K_max = K.max, max_iter = max.iter,
                                               tol = tol, verbose = verbose)
       } else {
         fit <- .tobs_fit_removal_spatial(fit_model, spatial, temporal = temporal,
-                                         mixture = mixture,
+                                         svc = svc, mixture = mixture,
                                          K_max = K.max, max_iter = max.iter,
                                          tol = tol, verbose = verbose)
       }
@@ -230,13 +240,14 @@
       .tobs_check_count_temporal(temporal, spatial, method, "distance", "abundance",
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
-    if (!is.null(spatial) || !is.null(temporal)) {
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the abundance arm: icar() / car_proper() (half-normal or
       # hazard key) under the nested-Laplace driver, optionally composed with a
-      # temporal() block via the shared areal-BFGS driver (gcol33/tulpaObs#78),
-      # or a fixed-hyper non-centered car_proper() field sampled under NUTS
-      # (half-normal key). A temporal() term on its own (no areal field) runs the
-      # same areal-BFGS driver with a single temporal block (gcol33/tulpaObs#114).
+      # temporal() block or continuous varying-coefficient surfaces via the shared
+      # areal-BFGS driver (gcol33/tulpaObs#78, #144), or a fixed-hyper
+      # non-centered car_proper() field sampled under NUTS (half-normal key). A
+      # temporal() or svc() term on its own runs the same areal-BFGS driver with
+      # just that block (gcol33/tulpaObs#114, #144).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_distance_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal,
@@ -247,7 +258,7 @@
           seed = seed, verbose = verbose)
       } else {
         fit <- .tobs_fit_distance_spatial(fit_model, spatial, temporal = temporal,
-                                          mixture = mixture,
+                                          svc = svc, mixture = mixture,
                                           K_max = K.max, max_iter = max.iter,
                                           tol = tol, verbose = verbose,
                                           integration = integration)
@@ -305,13 +316,14 @@
       .tobs_check_count_temporal(temporal, spatial, method, "dyn_abun",
                                  "initial-abundance", allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
-    if (!is.null(spatial) || !is.null(temporal)) {
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the initial-abundance arm: icar() / car_proper() under
       # the nested-Laplace forward-HMM driver, optionally composed with a
-      # temporal() block via the shared areal-BFGS driver (gcol33/tulpaObs#78),
-      # or a fixed-hyper non-centered car_proper() field sampled jointly with the
-      # coefficients under NUTS. A temporal() term on its own (no areal field)
-      # runs the same areal-BFGS driver with a single temporal block (#114), or a
+      # temporal() block or continuous varying-coefficient surfaces via the shared
+      # areal-BFGS driver (gcol33/tulpaObs#78, #144), or a fixed-hyper
+      # non-centered car_proper() field sampled jointly with the coefficients
+      # under NUTS. A temporal() or svc() term on its own runs the same areal-BFGS
+      # driver with just that block (#114, #144), or -- for temporal -- a
       # fixed-hyper non-centered temporal field on the NUTS field block (#114).
       if (identical(method, "nuts")) {
         fit <- if (is.null(spatial))
@@ -329,6 +341,7 @@
           seed = seed, verbose = verbose)
       } else {
         fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial, temporal = temporal,
+                                          svc = svc,
                                           mixture = model$mixture %||% "poisson",
                                           K_max = K.max, max_iter = 300L, tol = 1e-8,
                                           verbose = verbose, integration = integration)
@@ -368,13 +381,14 @@
       .tobs_check_count_temporal(temporal, spatial, method, "fp_occu", "occupancy",
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
-    if (!is.null(spatial) || !is.null(temporal)) {
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
       # nested-Laplace two-state driver, optionally composed with a temporal()
-      # block via the shared areal-BFGS driver (gcol33/tulpaObs#78), or a
-      # fixed-hyper non-centered car_proper() field sampled jointly with the
-      # coefficients under NUTS. A temporal() term on its own (no areal field)
-      # runs the same areal-BFGS driver with a single temporal block (#114).
+      # block or continuous varying-coefficient surfaces via the shared areal-BFGS
+      # driver (gcol33/tulpaObs#78, #144), or a fixed-hyper non-centered
+      # car_proper() field sampled jointly with the coefficients under NUTS. A
+      # temporal() or svc() term on its own runs the same areal-BFGS driver with
+      # just that block (#114, #144).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_fp_occu_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal, sigma.beta = sigma.beta,
@@ -383,7 +397,7 @@
           seed = seed, verbose = verbose)
       } else {
         fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, temporal = temporal,
-                                         max_iter = max.iter,
+                                         svc = svc, max_iter = max.iter,
                                          tol = 1e-8, verbose = verbose,
                                          integration = integration)
       }

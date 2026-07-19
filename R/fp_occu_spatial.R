@@ -14,11 +14,11 @@
 # =============================================================================
 
 .tobs_fit_fp_occu_spatial <- function(model, spatial, temporal = NULL,
-                                      max_iter = 200L,
+                                      svc = NULL, max_iter = 200L,
                                       tol = 1e-8, verbose = TRUE,
                                       integration = "grid") {
-  temporal_only <- is.null(spatial)
-  if (!temporal_only)
+  temporal_only <- is.null(spatial) && !is.null(temporal)
+  if (!is.null(spatial))
     .tobs_reject_weighted_spatial(spatial, "fp_occu occupancy spatial")
   # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
   # carries shared = c(occupancy, detection) = c(FALSE, TRUE). It loads on the
@@ -26,12 +26,16 @@
   # probability) instead of the psi arm; the marginal exposes the per-visit p11
   # gradient (cpp_fp_occu_total_log_lik$grad_eta_p11), summed to a per-site field
   # gradient. The false-positive arms (p10, b) never carry a structured field.
-  det_arm <- !temporal_only && isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
+  det_arm <- !is.null(spatial) && isTRUE(spatial$shared[2L]) &&
+             !isTRUE(spatial$shared[1L])
   n_sites <- model$n_sites
   map <- seq_len(model$n_sites)
-  field <- .tobs_build_field_spec(spatial, temporal, "fp_occu", model$n_sites, map)
+  X_psi <- model$X_processes[[1]]
+  .tobs_check_svc_arm(svc, det_arm, "fp_occu")
+  field <- .tobs_build_field_spec(spatial, temporal, "fp_occu", model$n_sites, map,
+                                  svc = svc, X_svc = X_psi)
 
-  X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
+  X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
   p_psi <- ncol(X_psi); p_p11 <- ncol(X_p11); p_p10 <- ncol(X_p10); p_b <- ncol(X_b)
   y_long <- as.integer(model$y_long); site_idx <- as.integer(model$site_idx)
@@ -84,9 +88,9 @@
   # Posterior occupancy w1 at the integrated estimate + field (for fitted()). The
   # field enters the psi arm, or the p11 detection arm when det_arm (#114).
   cl <- .tobs_clamp_eta
-  fld <- res$field_mean
-  eta_psi <- cl(as.numeric(X_psi %*% means[i_psi]) + (if (det_arm) 0 else fld[map]))
-  eta_p11 <- as.numeric(X_p11 %*% means[i_p11]) + (if (det_arm) fld[map] else 0)
+  fld <- res$eta_offset
+  eta_psi <- cl(as.numeric(X_psi %*% means[i_psi]) + (if (det_arm) 0 else fld))
+  eta_p11 <- as.numeric(X_p11 %*% means[i_p11]) + (if (det_arm) fld else 0)
   ev <- cpp_fp_occu_total_log_lik(
     y_long, site_idx, eta_psi, eta_p11,
     as.numeric(X_p10 %*% means[i_p10]), as.numeric(X_b %*% means[i_b]))
@@ -99,7 +103,9 @@
   fit <- build_fp_occu_fit(raw, model)
   # The field loads on the occupancy (psi) arm by default, or on the per-visit
   # true-positive detection logit p11 when the term sits in `detection=` (#114).
-  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "occupancy")
+  .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only,
+                             "occupancy", svc = svc,
+                             has_spatial = !is.null(spatial))
 }
 
 # Areal-spatial multistate false-positive occupancy via NUTS (gcol33/tulpaObs#72):
