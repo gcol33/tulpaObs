@@ -402,7 +402,11 @@ fitted.tobs_fit <- function(object, ...) {
   beta_occ <- means[seq_len(pi_list[[1]]$p)]
   beta_det <- means[pi_list[[1]]$p + seq_len(pi_list[[2]]$p)]
 
-  eta_occ <- as.vector(X_occ %*% beta_occ)
+  # A fitted latent surface on the state arm (the continuous NNGP svc() field of
+  # a Laplace fit, gcol33/tulpaObs#143) is a per-site offset on the occupancy
+  # logit, so the in-sample psi / z read it. NULL on every other route, which
+  # leaves eta_occ exactly as it was.
+  eta_occ <- as.vector(X_occ %*% beta_occ) + (model$occ_eta_offset %||% 0)
   eta_det <- as.vector(X_det %*% beta_det)
 
   psi <- plogis(eta_occ)

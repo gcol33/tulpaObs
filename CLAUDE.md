@@ -735,8 +735,9 @@ term (errors at fit, pre-existing).
   (`fit$spatial_field`/`fit$trend_field`, `cor > 0.75`), the SD hyperparameters,
   and the coefficients. This arm arrives as a `spatial` term, not `svc`.
 - **Continuous NNGP `svc()` term** (`svc(lon, lat, indices=)`): wired to
-  single-season `occu()` NUTS ONLY (`populate_svc`, `src/populate_helpers.h` ->
-  `data.svc_data`). The eta-assembly + NNGP prior + gradient live in the compiled
+  single-season `occu()` on NUTS (`populate_svc`, `src/populate_helpers.h` ->
+  `data.svc_data`) AND on the deterministic backends (#143, below). On NUTS the
+  eta-assembly + NNGP prior + gradient live in the compiled
   UPSTREAM tulpa engine (not tulpaObs). The fitted surface IS now exposed as
   `fit$svc_field` (an n_obs vector / n_obs x n_svc matrix of posterior means,
   per-draw surface on `attr(., "draws")`), sliced by position from the layout the
@@ -757,9 +758,26 @@ term (errors at fit, pre-existing).
   deliberately does NOT assert on cor. tulpa cannot make this measurement:
   `svc()` is a tulpaObs term and `cpp_tulpa_fit_generic` is a plain LM, so no
   tulpa-side fit reaches the NNGP SVC path -- which is how #144 survived there.
-  On any OTHER family, or `occu()` under laplace/nested_laplace, `svc()` ERRORS
-  with a pointer to the areal bar (`.tobs_fit_model` guard, #118) rather than
-  silently dropping. `test-svc-guard.R`.
+  **Laplace backends (#143, `R/occu_svc.R`)**: `occu() + svc()` also fits under
+  `method="laplace"` / `"nested_laplace"`. The K surfaces are latent field blocks
+  on the psi logit, so the fit rides the SHARED areal-BFGS nested-Laplace driver
+  (`.tobs_areal_bfgs_fit`, `R/areal_bfgs.R`) -- two new pieces only:
+  `.tobs_svc_nngp_field()` (a continuous NNGP block with an optional per-site
+  design weight, the continuous sibling of `.areal_field_car(weight=)`) and
+  `.tobs_occu_svc_marginal()` (exact two-state occupancy marginal, Fisher-identity
+  gradients `w-psi` / `w(y-p)`, FD-validated). The Vecchia precision
+  `Q=(I-A)'D^-1(I-A)` is assembled in R (`.tobs_nngp_precision`) from the term's
+  OWN neighbour structure with the compiled kernel's kernels/jitter/variance
+  floor, so both backends integrate the same density -- asserted == tulpa's
+  `cpp_test_svc_nngp_twins` to 1e-8. Hypers (sigma, phi) grid-integrated on both
+  routes (so `laplace` == `nested_laplace` here), reported as `fit$svc_hyper`;
+  surface as `fit$svc_field` (NUTS naming). Surface cor 0.78/0.60/0.83 on seeds
+  1/2/3 at N=150,J=6,p=0.6 -- matching the NUTS path's 0.76/0.60/0.81 on the same
+  truth (information-bounded, not backend-bounded). `fitted()` adds the surface
+  in-sample via `model$occ_eta_offset`; `predict(newdata=)` does NOT krige to new
+  locations (as on NUTS). Gated: detection-arm svc, non-single families, a
+  spatial/temporal/re term alongside svc, `pg_gibbs` -- all error with a pointer.
+  `test-occu-svc-laplace-recovery.R` + `test-svc-guard.R`.
 
 ## Performance
 

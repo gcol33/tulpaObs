@@ -40,26 +40,29 @@
   svc      <- structs$svc
   latent   <- structs$latent
 
-  # svc() (the continuous NNGP spatially-varying coefficient) is consumed only by
-  # the single-season occupancy NUTS path (populate_svc, src/occu_fit.cpp). Every
-  # other fitter -- the count families (nmix / removal / distance / fp_occu /
-  # dyn_abun) and even occu() under laplace / nested_laplace -- would silently
-  # drop it and fit a model missing the term the user asked for. Error with a
-  # pointer instead (gcol33/tulpaObs#118). The recovery-tested route for a
-  # spatially-varying coefficient is the weighted areal bar
-  # (spatial(~ 1 + w || cell, graph), method = "nested_laplace"), which arrives as
+  # svc() (the continuous NNGP spatially-varying coefficient) is wired for
+  # single-season occupancy: the NUTS path samples it in the compiled tulpa
+  # engine (populate_svc, src/occu_fit.cpp), and the Laplace backends fit it
+  # through the shared areal-BFGS nested-Laplace driver (R/occu_svc.R,
+  # gcol33/tulpaObs#143). Every other fitter -- the count families (nmix /
+  # removal / distance / fp_occu / dyn_abun) -- would silently drop it and fit a
+  # model missing the term the user asked for, so those error with a pointer
+  # (gcol33/tulpaObs#118). The areal analogue of a spatially-varying coefficient
+  # is the weighted areal bar (spatial(~ 1 + w || cell, graph)), which arrives as
   # a `spatial` term, not `svc`.
-  if (!is.null(svc) &&
-      !(identical(model$model_type, "single") && identical(method, "nuts"))) {
+  svc_wired <- identical(model$model_type, "single") &&
+               method %in% c("laplace", "nested_laplace", "nuts")
+  if (!is.null(svc) && !svc_wired) {
     stop(sprintf(paste0(
-      "svc() (a spatially-varying coefficient) is only wired for single-season ",
-      "occu() under method = \"nuts\"; it is silently unsupported for ",
-      "model_type = \"%s\"%s. For an areal spatially-varying coefficient use a ",
-      "weighted areal bar -- spatial(~ 1 + w || cell, graph = adj) with ",
-      "method = \"nested_laplace\" -- which is recovery-tested (tulpaObs#118)."),
+      "svc() (a spatially-varying coefficient) is wired for single-season ",
+      "occu() under method = \"laplace\" / \"nested_laplace\" / \"nuts\"; it is ",
+      "silently unsupported for model_type = \"%s\"%s. For an areal ",
+      "spatially-varying coefficient use a weighted areal bar -- ",
+      "spatial(~ 1 + w || cell, graph = adj) with method = \"nested_laplace\" -- ",
+      "which is recovery-tested (tulpaObs#118, #143)."),
       model$model_type,
-      if (!identical(method, "nuts")) sprintf(" under method = \"%s\"", method)
-      else ""),
+      if (!method %in% c("laplace", "nested_laplace", "nuts"))
+        sprintf(" under method = \"%s\"", method) else ""),
       call. = FALSE)
   }
 
@@ -404,6 +407,37 @@
     fit <- .unscale_fit_per_process(fit, scales, process_info)
     fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
     fit$model  <- model
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    return(fit)
+  }
+
+  # Continuous NNGP varying coefficient(s) on single-season occupancy under the
+  # deterministic backends (gcol33/tulpaObs#143). The surfaces are latent field
+  # blocks on the occupancy logit, so the fit rides the shared areal-BFGS
+  # nested-Laplace driver: the field hyperparameters (marginal SD, range) are
+  # integrated on an outer grid either way, so `laplace` and `nested_laplace`
+  # land on the same fitter and the fit reports `nested_laplace`. A structured
+  # term alongside svc() would need a second field family in the same block list
+  # and is not wired, so it errors instead of being dropped.
+  if (!is.null(svc) && method %in% c("laplace", "nested_laplace")) {
+    if (!is.null(spatial) || !is.null(temporal) || !is.null(re)) {
+      stop("occu() + svc() on the Laplace backends fits the varying-coefficient ",
+           "surface(s) alone; a spatial() / temporal() / re() term alongside it ",
+           "is not wired. Use method = \"nuts\", or drop the extra term. ",
+           "(tulpaObs#143)", call. = FALSE)
+    }
+    fit <- do.call(.tobs_fit_occu_svc, c(
+      list(model = fit_model, svc = svc, priors = priors,
+           max_iter = as.integer(max.iter), tol = 1e-8, verbose = verbose),
+      list(...)))
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$model      <- model
+    # The fitted surfaces contribute a per-site offset on the occupancy logit
+    # (sum_k X[, index_k] * z_k), carried on the natural-scale model so the
+    # in-sample fitted() reads it -- the surfaces are latent, so the offset is
+    # scale-invariant. Attached after the model swap, which drops any slot the
+    # fitter set on its own copy.
+    fit$model$occ_eta_offset <- fit$svc_eta_offset
     fit$intercepts <- compute_intercepts(model, fit$means)
     return(fit)
   }
