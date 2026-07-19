@@ -5,9 +5,14 @@
 [![Lifecycle: stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Latent-state observation models (occupancy, N-mixture abundance, distance, removal, cover) on the [tulpa](https://github.com/gcol33/tulpa) engine.**
+**Hierarchical observation models -- occupancy, N-mixture abundance, distance, removal, cover -- on the [tulpa](https://github.com/gcol33/tulpa) inference engine.**
 
-A site can read zero because the species is absent, or because you were there on the wrong day. `tulpaObs` fits the hierarchical models that separate the two: a latent ecological state (occupied, abundant, present-and-covering) under an imperfect detection process. You write one model menu's worth of likelihoods, and they compose with the spatial fields, temporal structure, random effects, and latent factors that the tulpa engine already carries.
+A site reads zero because the species is absent, or because you visited on the wrong day.
+`tulpaObs` fits the models that hold those two apart: a latent ecological state under an
+imperfect detection process, with the state integrated out exactly so occupancy and
+detection come back as separate estimates. One fitter, one family object per model, and
+the spatial fields, temporal structure, random effects, and latent factors written inside
+the formula.
 
 ```r
 library(tulpaObs)
@@ -21,30 +26,20 @@ fit <- tobs(
 )
 
 summary(fit)
-predict(fit, newdata = grid)         # marginalized per-site psi, held-out sites interpolated
+predict(fit, newdata = grid)         # marginalized per-site psi
 ```
 
-## The likelihood INLA can't write row-wise
+## One fitter, thirty families
 
-A single-season occupancy site contributes a *mixture* over its latent state: occupied with probability `psi` and detected on a Bernoulli schedule, or unoccupied and silent. That mixture is not a row-wise GLM likelihood, so `INLA::inla()` cannot fit it without writing a custom `inla.rgeneric`. The common workaround stacks the detection histories into one binomial, which only ever identifies the product `psi * p` and confounds occupancy change with detection change.
-
-`tulpaObs` implements the marginalized likelihood directly. The latent state integrates out exactly (the occupancy `z`, the N-mixture abundance `N`), so the fit recovers `psi` and `p` as separate processes. The `occupancy-vs-inla` vignette runs the head-to-head against the binomial workaround on simulated data with known truth.
-
-## Inference backends, one model
-
-Laplace by default, with Gibbs / multiple-imputation debiasing where the approximation is biased; HMC/NUTS on demand for a full posterior. Occupancy families also offer `method = "pg_gibbs"`, an exact Polya-Gamma Gibbs sampler (the `spOccupancy` engine) that recovers the community-variance components the Laplace-EM attenuates. Every backend shares the same model, the same data, and the same S3 surface:
+`tobs()` is the only fitter; the family object chooses the model, and the response shape
+follows from it.
 
 ```r
-coef(fit); confint(fit); vcov(fit); logLik(fit)
-fitted(fit); residuals(fit); predict(fit); simulate(fit)
-ranef(fit); tidy(fit); glance(fit); update(fit)
+tobs(~ forest, data = sites, family = abun(K_max = 50), detection = ~ effort, y = counts)
+tobs(~ moisture, data = plots, family = cover(response = "beta"), y = pct_cover)
+tobs(~ elev, data = sites, family = ms_occu(), detection = ~ effort, y = y_array,
+     species = species_id)
 ```
-
-The random-effect variance components carry the Laplace small-cluster bias for binary data (the `glmer` `nAGQ = 1` regime); an adaptive Gauss-Hermite refinement (`re.aghq`, on by default) corrects it back toward the NUTS estimate, and NUTS remains the calibrated route for the full covariance.
-
-## The model menu
-
-`tobs()` is the single dispatcher; the family object chooses the model.
 
 | Constructor               | Model                                          | Reference                  |
 |---------------------------|------------------------------------------------|----------------------------|
@@ -78,38 +73,167 @@ The random-effect variance components carry the Laplace small-cluster bias for b
 | `ms_distance()`           | Community distance sampling                    | Sollmann et al. (2016)     |
 | `ms_occu_cover()`         | Community joint occupancy + cover              |                            |
 
-`unmarked`, `spOccupancy`, and `spAbundance` cover these models with a fixed per-model menu of structure. Here the same likelihoods sit on the tulpa engine, so any of them composes with the engine's latent structure.
+Every family carries the same structured-effect vocabulary, so any of them composes with
+the engine's spatial, temporal, and latent structure.
 
 ## Structured effects inside the formula
 
-Structured terms are written *in* the formula, the way `lme4`, `mgcv`, and `INLA` do:
+Structured terms are written *in* the formula, the way `lme4`, `mgcv`, and `INLA` do. The
+parser resolves bare symbols against `data` columns, so a spatial field is one term rather
+than a separate argument block:
 
 ```r
 ~ elevation +
-  icar(graph = adj) +          # spatial field: icar / bym2 / gp / spde
-  temporal(year, type = "ar1") +  # temporal: rw1 / rw2 / ar1
-  svc(slope, graph = adj) +    # spatially varying coefficient
-  (1 | observer)               # random intercept (lme4 bar syntax)
+  icar(graph = adj) +             # areal field: icar / bym2 / car / car_proper
+  spde(lon, lat) +                # continuous Matern field over a mesh
+  gp(lon, lat, cov = "matern") +  # NNGP-approximated Gaussian process
+  temporal(year, type = "ar1") +  # temporal: rw1 / rw2 / ar1 / iid
+  svc(lon, lat, indices = 2) +    # spatially varying coefficient
+  (1 | observer)                  # random intercept (lme4 bar syntax)
 ```
 
-A term enters whichever process it is written in (occupancy or detection); `copy("id")` shares one realization across both. Bar syntax follows `lme4`: `(1 | site)` is `re(site)`, `(x | site)` a correlated random slope, `(x || site)` an uncorrelated one. `spatial(..., model = ...)` is a single-verb umbrella over the areal and continuous spatial terms.
+A term enters whichever process it is written in, so `detection = ~ (1 | observer)` puts
+the random effect on detection. `copy("id")` shares one realization across both processes.
+Bar syntax follows `lme4` throughout: `(1 | site)`, `(x | site)` for a correlated random
+slope, `(x || site)` uncorrelated, `(1 | g:h)` and `(1 | g/h)` for crossed and nested
+factors.
 
-## Diagnostics
+## The latent state integrates out
 
-WAIC, posterior predictive checks, PIT residuals, over-dispersion and zero-inflation tests, Moran's I, Durbin-Watson, variograms, and `spatial_range` / `temporal_corr` for the latent structure.
+An occupancy site contributes a mixture over its latent state: occupied with probability
+`psi` and detected on a Bernoulli schedule, or unoccupied and silent. `tulpaObs` evaluates
+that marginalized likelihood directly, and the same holds for the N-mixture abundance `N`,
+so `psi` and `p` are recovered as separate processes rather than as their product. Fitting
+the detection histories as one stacked binomial identifies only `psi * p`; the
+[occupancy-vs-INLA vignette](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd)
+runs that head-to-head on simulated data with known truth.
+
+## Choose the inference route
+
+`method` names one fully specified route, so no setting is silently ignored. Laplace is
+fast and the default; the stochastic corrections debias it where it is biased; NUTS gives
+the full posterior and fits every structure.
+
+```r
+tobs(..., method = "laplace")         # EM + Laplace, deterministic
+tobs(..., method = "laplace_sla")     # skew-corrected marginals, adds a `skew` column
+tobs(..., method = "laplace_gibbs")   # post-EM Gibbs chain, Rubin-pooled
+tobs(..., method = "nested_laplace")  # multi-block: areal fields, joint cover hurdle
+tobs(..., method = "nuts")            # HMC, reports split-Rhat and bulk / tail ESS
+```
+
+Occupancy families also take `method = "pg_gibbs"`, an exact Polya-Gamma Gibbs sampler that
+recovers the community variance components the Laplace EM attenuates. `fit$method` records
+the resolved route, and an unsupported combination errors with a pointer rather than
+downgrading quietly.
+
+Random-effect variance components carry the Laplace small-cluster bias for binary data (the
+`glmer` `nAGQ = 1` regime). An adaptive Gauss-Hermite refinement on the exact per-group
+marginal runs by default (`re.aghq`), cutting the occupancy per-group-`n = 8` sigma bias
+from ~18% to ~4% and the detection-arm bias from ~70% to ~1%, both against NUTS.
+
+## The data shape you already have
+
+Detection histories arrive as matrices, as long tables with one row per site-visit, or as
+species arrays. Three helpers build the same `tobs_data` object from any of them:
+
+```r
+tobs_format(y, occ.covs = sites, det.covs = list(wind = wind_mat), coords = xy)
+tobs_data(visits_df, y = "detected", site = "site_id", visit = "visit")
+tobs_format_ms(y_array, occ.covs = sites, species_names = spp)
+
+occu_cover_inputs(plot_df, site = "plot", visit = "visit",
+                  response = "present", y_pos = "cover")
+```
+
+`summary()`, `plot()`, and `print()` on a `tobs_data` report naive occupancy and detection,
+per-visit rates, completeness, and a detection map when coordinates are present. Three
+fixed-seed example datasets ship with a known `truth` attached: `peatland_occu`,
+`foray_counts`, and `meadow_cover`.
+
+## Simulate, fit, recover
+
+Every family has a matching simulator that returns `y`, `data`, and the `truth` that
+generated them, so a model can be checked against known parameters before it meets real
+data. The package's own recovery tests are built on these:
+
+```r
+sim <- simulate_occu(N = 200, J = 4,
+                     beta_occ = c(-0.5, 1.2, 0.4),
+                     beta_det = c(0.2, -0.8),
+                     seed = 1)
+
+fit <- tobs(~ occ_cov1 + occ_cov2, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y)
+
+coef(fit)
+sim$truth
+```
+
+`simulate_abun()`, `simulate_cover()`, `simulate_dyn_occu()`, `simulate_ms_occu()`,
+`simulate_distance()`, and the rest cover the full menu, including a
+`simulate_cover_joint()` that shares a demeaned BYM2 field across both hurdle arms.
+
+## The usual R surface
+
+A fit is an ordinary R model object, whichever route produced it:
+
+```r
+coef(fit); confint(fit); vcov(fit); logLik(fit)
+fitted(fit); residuals(fit); predict(fit); simulate(fit)
+ranef(fit); tidy(fit); glance(fit); update(fit)
+converged(fit); convergence(fit)
+```
+
+`fitted()` returns `list(psi, p, z)` at the posterior mean, `ranef()` per-group BLUPs with
+standard errors, and `predict()` works in-sample, on a design matrix (`X.0=`), or on terms
+(`terms=`, which returns a `tobs_prediction` with a `plot()` method). Spatial fits
+interpolate to new coordinates through `tobs_predict_spatial()`. `$` accessors
+(`beta.samples`, `psi.samples`, `z.samples`, `run.time`) follow spOccupancy naming.
+
+## Diagnostics and identifiability
+
+```r
+tobs_check(fit, coords = xy)     # roll-up: sampler, WAIC, PPC, zero-inflation, Moran's I
+tobs_check_id(model, fit)        # confounding, low detection, sparse data
+
+tobs_waic(fit); tobs_dic(fit); tobs_cpo(fit)
+tobs_ppc(fit, fit.stat = "chi-squared")
+tobs_test_dispersion(fit); tobs_test_zero_inflation(fit); tobs_test_outliers(fit)
+tobs_test_uniformity(tobs_pit_residuals(fit))
+```
+
+Moran's I, Durbin-Watson, variograms, and `spatial_range` / `temporal_corr` for the latent
+structure come through from tulpa. `tobs_stack()` LOO-weights two or more fits on the same
+observations into an ensemble whose `predict()` returns the combined predictive.
+
+## Longitudinal and community extras
+
+`within_between()` splits a covariate into its per-group mean and within-group deviation, so
+`~ x_btw + x_wtn` separates the cross-site gradient from change inside a site across a
+resurvey:
+
+```r
+d <- within_between(plots, group = "plot", vars = c("temperature", "grazing"))
+tobs(~ temperature_btw + temperature_wtn, data = d, family = cover(), y = d$cover)
+```
+
+For community fits, `tobs_richness()` returns posterior species richness and
+`tobs_associations()` the residual species-association matrix from the latent factors.
 
 ## Installation
 
 ```r
 install.packages("pak")
 pak::pak("gcol33/tulpaObs")            # latest from GitHub
-pak::pak("gcol33/tulpaObs@v0.0.172")  # a specific tagged release
+pak::pak("gcol33/tulpaObs@v0.0.176")   # a specific tagged release
 ```
 
-Tagged releases are listed at
-<https://github.com/gcol33/tulpaObs/releases>.
+Tagged releases are listed at <https://github.com/gcol33/tulpaObs/releases>.
 
-pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from GitHub (declared in `Remotes:`). A C++17 toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS, `r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their backends on first install.
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from GitHub (declared in
+`Remotes:`). A C++17 toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their backends on first install.
 
 ## Documentation
 
@@ -137,10 +261,41 @@ Structure
 - [Random effects](https://github.com/gcol33/tulpaObs/blob/main/vignettes/random-effects.Rmd)
 - [Diagnostics](https://github.com/gcol33/tulpaObs/blob/main/vignettes/diagnostics.Rmd)
 
+[API.md](https://github.com/gcol33/tulpaObs/blob/main/API.md) is the full reference: every
+argument of `tobs()`, the term registry, the method table, the `control` list, and the
+complete export list.
+
 ## Status
 
-The public API -- `tobs()`, the family constructors, and the `tobs_*` S3 classes -- is stable. Internal entry points (`.tobs_build_model()`, `.tobs_fit_model()`, `.tobs_laplace()`) and the C++ surface follow tulpa's ABI version and may change between releases.
+The public API -- `tobs()`, the family constructors, and the `tobs_*` S3 classes -- is
+stable. Internal entry points (`.tobs_build_model()`, `.tobs_fit_model()`,
+`.tobs_laplace()`) and the C++ surface follow tulpa's ABI version and may change between
+releases.
+
+## Support
+
+> "Software is like sex: it's better when it's free." -- Linus Torvalds
+
+I'm a PhD student who builds R packages in my free time because I believe good tools
+should be free and open. I started these projects for my own work and figured others
+might find them useful too.
+
+If this package saved you some time, buying me a coffee is a nice way to say thanks.
+It helps with my coffee addiction.
+
+[![Buy Me A Coffee](https://img.shields.io/badge/-Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/gcol33)
 
 ## License
 
 MIT (see the LICENSE file)
+
+## Citation
+
+```bibtex
+@software{tulpaObs,
+  author = {Colling, Gilles},
+  title  = {tulpaObs: Hierarchical Latent-State Observation Models via tulpa},
+  year   = {2026},
+  url    = {https://github.com/gcol33/tulpaObs}
+}
+```
