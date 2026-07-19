@@ -5,7 +5,7 @@
 [![Lifecycle: stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Hierarchical observation models -- occupancy, N-mixture abundance, distance, removal, cover -- on the [tulpa](https://github.com/gcol33/tulpa) inference engine.**
+**Hierarchical observation models on the [tulpa](https://github.com/gcol33/tulpa) inference engine: occupancy, N-mixture abundance, distance, removal, cover.**
 
 A site reads zero because the species is absent, or because you visited on the wrong day.
 `tulpaObs` fits the models that hold those two apart: a latent ecological state under an
@@ -29,7 +29,7 @@ summary(fit)
 predict(fit, newdata = grid)         # marginalized per-site psi
 ```
 
-## One fitter, thirty families
+## One fitter, every family
 
 `tobs()` is the only fitter; the family object chooses the model, and the response shape
 follows from it.
@@ -79,8 +79,8 @@ the engine's spatial, temporal, and latent structure.
 ## Structured effects inside the formula
 
 Structured terms are written *in* the formula, the way `lme4`, `mgcv`, and `INLA` do. The
-parser resolves bare symbols against `data` columns, so a spatial field is one term rather
-than a separate argument block:
+parser resolves bare symbols against `data` columns, so a spatial field is one term in the
+formula:
 
 ```r
 ~ elevation +
@@ -103,16 +103,16 @@ factors.
 An occupancy site contributes a mixture over its latent state: occupied with probability
 `psi` and detected on a Bernoulli schedule, or unoccupied and silent. `tulpaObs` evaluates
 that marginalized likelihood directly, and the same holds for the N-mixture abundance `N`,
-so `psi` and `p` are recovered as separate processes rather than as their product. Fitting
-the detection histories as one stacked binomial identifies only `psi * p`; the
+so `psi` and `p` come back as separate processes. Fitting the detection histories as one
+stacked binomial identifies only their product `psi * p`; the
 [occupancy-vs-INLA vignette](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd)
 runs that head-to-head on simulated data with known truth.
 
 ## Choose the inference route
 
-`method` names one fully specified route, so no setting is silently ignored. Laplace is
-fast and the default; the stochastic corrections debias it where it is biased; NUTS gives
-the full posterior and fits every structure.
+`method` names one fully specified route. Laplace is fast and the default; the stochastic
+corrections debias it where it is biased; NUTS gives the full posterior and fits every
+structure.
 
 ```r
 tobs(..., method = "laplace")         # EM + Laplace, deterministic
@@ -124,8 +124,8 @@ tobs(..., method = "nuts")            # HMC, reports split-Rhat and bulk / tail 
 
 Occupancy families also take `method = "pg_gibbs"`, an exact Polya-Gamma Gibbs sampler that
 recovers the community variance components the Laplace EM attenuates. `fit$method` records
-the resolved route, and an unsupported combination errors with a pointer rather than
-downgrading quietly.
+the resolved route, and an unsupported combination errors with a pointer to the methods
+that family accepts.
 
 Random-effect variance components carry the Laplace small-cluster bias for binary data (the
 `glmer` `nAGQ = 1` regime). An adaptive Gauss-Hermite refinement on the exact per-group
@@ -171,7 +171,7 @@ sim$truth
 ```
 
 `simulate_abun()`, `simulate_cover()`, `simulate_dyn_occu()`, `simulate_ms_occu()`,
-`simulate_distance()`, and the rest cover the full menu, including a
+`simulate_distance()`, and the rest cover the remaining families, including a
 `simulate_cover_joint()` that shares a demeaned BYM2 field across both hurdle arms.
 
 ## The usual R surface
@@ -267,14 +267,16 @@ complete export list.
 
 ## Status
 
-The public API -- `tobs()`, the family constructors, and the `tobs_*` S3 classes -- is
+The public API (`tobs()`, the family constructors, and the `tobs_*` S3 classes) is
 stable. Internal entry points (`.tobs_build_model()`, `.tobs_fit_model()`,
 `.tobs_laplace()`) and the C++ surface follow tulpa's ABI version and may change between
 releases.
 
 ## Support
 
-> "Software is like sex: it's better when it's free." -- Linus Torvalds
+> "Software is like sex: it's better when it's free."
+>
+> Linus Torvalds
 
 I'm a PhD student who builds R packages in my free time because I believe good tools
 should be free and open. I started these projects for my own work and figured others
