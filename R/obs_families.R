@@ -764,6 +764,24 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
 # Abundance, distance, removal, and specialised occupancy families
 # ---------------------------------------------------------------------------
 
+# Validate a latent-count truncation. `K_max` is the FIRST formal of abun() /
+# ms_abun(), so abun("negbin") -- reaching for the mixing distribution -- binds
+# the string to K_max instead. Left alone it coerces to NA and resurfaces much
+# later as an unrelated comparison error inside a kernel, so catch it here where
+# the fix is obvious.
+.tobs_check_K_max <- function(K_max, family_name) {
+  if (is.null(K_max)) return(invisible(NULL))
+  if (!is.numeric(K_max) || length(K_max) != 1L || !is.finite(K_max) ||
+      K_max < 1) {
+    stop(sprintf(paste0("%s(): `K_max` must be a single positive number (the ",
+                        "latent-count truncation), got %s. `K_max` is the first ",
+                        "argument -- to set the mixing distribution write ",
+                        "%s(mixture = \"negbin\")."),
+                 family_name, deparse(K_max)[1L], family_name), call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 #' N-mixture abundance family
 #'
 #' Latent Poisson (or NB) abundance with binomial detection per visit
@@ -800,24 +818,6 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
 #' summary(fit)
 #' }
 #' @export
-# Validate a latent-count truncation. `K_max` is the FIRST formal of abun() /
-# ms_abun(), so abun("negbin") -- reaching for the mixing distribution -- binds
-# the string to K_max instead. Left alone it coerces to NA and resurfaces much
-# later as an unrelated comparison error inside a kernel, so catch it here where
-# the fix is obvious.
-.tobs_check_K_max <- function(K_max, family_name) {
-  if (is.null(K_max)) return(invisible(NULL))
-  if (!is.numeric(K_max) || length(K_max) != 1L || !is.finite(K_max) ||
-      K_max < 1) {
-    stop(sprintf(paste0("%s(): `K_max` must be a single positive number (the ",
-                        "latent-count truncation), got %s. `K_max` is the first ",
-                        "argument -- to set the mixing distribution write ",
-                        "%s(mixture = \"negbin\")."),
-                 family_name, deparse(K_max)[1L], family_name), call. = FALSE)
-  }
-  invisible(NULL)
-}
-
 abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
   .tobs_check_K_max(K_max, "abun")

@@ -7,6 +7,11 @@
 ms_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 }
 \arguments{
+\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
+fit warns that the posterior over \code{N} puts mass on the boundary.}
+
 \item{mixture}{Abundance mixing distribution: \code{"poisson"} (default),
 \code{"negbin"}, or their zero-inflated counterparts \code{"zip"} / \code{"zinb"}. The
 negative-binomial dispersion and the zero-inflation structural-zero share
