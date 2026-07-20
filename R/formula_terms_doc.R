@@ -63,27 +63,38 @@
 #'
 #' @section Spatially varying coefficients:
 #'
-#' Two terms carry a coefficient that varies over space. They read alike in
-#' prose and are different terms with different coverage.
+#' A coefficient that varies over space is a spatial field like any other, so it
+#' is written under \code{spatial()} and the \code{model = } choice says whether
+#' space is a graph or a set of coordinates. In both forms you name the
+#' coefficients that vary; the difference is only what they vary over.
 #'
-#' \strong{Areal}, a weighted bar under the spatial umbrella:
+#' \strong{Areal}, over graph nodes, written as a bar:
 #'
 #' \preformatted{~ 1 + w + spatial(~ 1 + w || cell, graph = adj)}
 #'
-#' with \code{method = "nested_laplace"}. One field per bar column, over graph
-#' nodes. Broad family support (single-season, dynamic, integrated and the
-#' community routes) and recovery-tested throughout. This is what most
-#' spatially-varying-coefficient questions want, and it arrives as a
-#' \code{spatial} term, not as \code{svc()}.
+#' with \code{method = "nested_laplace"}. The bar's left-hand side names the
+#' varying coefficients (one field per column, the intercept included), its
+#' right-hand side the graph node. Broad family support (single-season, dynamic,
+#' integrated and the community routes) and recovery-tested throughout. This is
+#' what most spatially-varying-coefficient questions want. \code{model = }
+#' selects the areal structure (\code{"icar"} by default, or \code{"bym2"} /
+#' \code{"car"} / \code{"car_proper"}).
 #'
-#' \strong{Continuous}, its own term, an NNGP surface over coordinates:
+#' \strong{Continuous}, over coordinates, as NNGP surfaces:
 #'
-#' \preformatted{~ elevation + svc(lon, lat, indices = 2, prior_range = c(50, 0.05))}
+#' \preformatted{~ elevation + spatial(lon, lat, model = "svc",
+#'                       coefficients = "elevation", prior_range = c(50, 0.05))}
+#'
+#' There is no node index to group on, so the coefficients are named directly
+#' instead of through a bar.
 #'
 #' \describe{
-#'   \item{\code{indices}}{Positions of the design columns whose coefficients
-#'     vary, read against the design of the arm the surfaces load on. One
-#'     surface per entry; index 1 is the intercept.}
+#'   \item{\code{coefficients}}{Names of the design columns whose coefficients
+#'     vary, matched against the design of the arm the surfaces load on. One
+#'     surface per entry; \code{"(Intercept)"} gives a plain intercept surface.}
+#'   \item{\code{indices}}{The same selection by column position, for a design
+#'     column with no usable name. Give \code{coefficients} or \code{indices},
+#'     not both.}
 #'   \item{\code{coords}}{Two-column coordinate matrix, as an alternative to
 #'     bare \code{lon, lat} column names. One coordinate pair per site.}
 #'   \item{\code{cov}}{\code{"exponential"} (default), \code{"matern"} or
@@ -96,14 +107,19 @@
 #'     marginal variance.}
 #' }
 #'
-#' \code{svc()} fits on single-season \code{\link{occu}()} under
+#' \code{svc(lon, lat, coefficients = )} is the direct constructor and stays
+#' available, the way \code{icar()} does alongside
+#' \code{spatial(model = "icar")}.
+#'
+#' The continuous form fits on single-season \code{\link{occu}()} under
 #' \code{"laplace"}, \code{"nested_laplace"} and \code{"nuts"}, and on
 #' \code{\link{removal}()}, \code{\link{distance}()}, \code{\link{fp_occu}()}
 #' and \code{\link{dyn_abun}()} under \code{"laplace"} and
 #' \code{"nested_laplace"}. The surfaces load on the state arm (the occupancy
 #' logit, or log lambda for the count families) and come back as
 #' \code{fit$svc_field}, with the integrated hyperparameters in
-#' \code{fit$svc_hyper}. On any other family, method or arm the term errors and
+#' \code{fit$svc_hyper} and the resolved design columns in
+#' \code{fit$svc_indices}. On any other family, method or arm the term errors and
 #' points at the areal bar rather than being silently dropped.
 #'
 #' @section Random effects:
@@ -165,8 +181,10 @@
 #' tobs(occu(), y ~ year + spatial(~ 1 + year || cell, graph = adj),
 #'      data = d, visits = v, method = "nested_laplace")
 #'
-#' # Continuous NNGP varying coefficient on the second design column
-#' tobs(occu(), y ~ elev + svc(lon, lat, indices = 2, prior_range = c(50, 0.05)),
+#' # Continuous NNGP varying coefficient on the elev slope
+#' tobs(occu(), y ~ elev + spatial(lon, lat, model = "svc",
+#'                                 coefficients = "elev",
+#'                                 prior_range = c(50, 0.05)),
 #'      data = d, visits = v, method = "laplace")
 #' }
 NULL

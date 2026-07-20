@@ -105,7 +105,8 @@
   # true-positive detection logit p11 when the term sits in `detection=` (#114).
   .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only,
                              "occupancy", svc = svc,
-                             has_spatial = !is.null(spatial))
+                             has_spatial = !is.null(spatial),
+                             X_svc = X_psi, family = "fp_occu")
 }
 
 # Areal-spatial multistate false-positive occupancy via NUTS (gcol33/tulpaObs#72):

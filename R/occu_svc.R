@@ -2,9 +2,10 @@
 # occu_svc.R - continuous NNGP spatially-varying coefficients on the Laplace
 # backends of single-season occupancy (gcol33/tulpaObs#143).
 #
-# `svc(lon, lat, indices = )` declares K continuous coefficient surfaces:
+# `spatial(lon, lat, model = "svc", coefficients = )` -- equivalently the direct
+# `svc(lon, lat, coefficients = )` -- declares K continuous coefficient surfaces:
 #
-#   logit psi_i = X_i . beta + sum_k X[i, indices_k] * z_k(s_i)
+#   logit psi_i = X_i . beta + sum_k X[i, col_k] * z_k(s_i)
 #   z_k ~ NNGP(sigma_k^2, phi_k)      (Vecchia / Datta et al. 2016)
 #
 # The NUTS path samples this in the compiled tulpa engine. On the Laplace
@@ -30,6 +31,51 @@
 # grid, so `method = "laplace"` and `method = "nested_laplace"` land on the same
 # fitter; `fit$svc_hyper` reports each surface's marginalised SD and range.
 # =============================================================================
+
+
+# Resolve an svc() term's coefficient selector to design column POSITIONS in
+# `X_arm`, the design of the arm the surfaces load on. Names (`coefficients = `)
+# are matched against the design column names; positions (`indices = `) are
+# range-checked. Both consumers -- the Laplace field builder
+# (`.tobs_svc_field_blocks`) and the NUTS spec packer (R/occu_fit.R) -- go
+# through here, so the term reads its columns against the same design the
+# coefficients are and neither path can drift (gcol33/tulpaObs#146).
+#
+# `family` and `arm` name the model in the error, so a mistyped coefficient
+# reports the design it was matched against rather than a bare index failure.
+.tobs_svc_columns <- function(svc, X_arm, family, arm = NULL) {
+  if (is.null(arm)) arm <- .tobs_svc_arm_label(family)
+  nms <- colnames(X_arm)
+  if (!is.null(svc$coefficients)) {
+    if (is.null(nms)) {
+      stop(sprintf(paste0(
+        "svc(coefficients = ): the %s() %s design has no column names to match ",
+        "against; select the columns by position with `indices = `."),
+        family, arm), call. = FALSE)
+    }
+    hit <- match(svc$coefficients, nms)
+    if (anyNA(hit)) {
+      stop(sprintf(paste0(
+        "svc(coefficients = ): no %s() %s design column named %s.\n",
+        "  Available: %s."),
+        family, arm,
+        paste0("`", svc$coefficients[is.na(hit)], "`", collapse = ", "),
+        paste0("`", nms, "`", collapse = ", ")), call. = FALSE)
+    }
+    return(as.integer(hit))
+  }
+  idx <- as.integer(svc$indices)
+  if (any(idx < 1L) || any(idx > ncol(X_arm))) {
+    stop(sprintf(paste0(
+      "svc(indices = ): index out of range -- the %s() %s design has %d ",
+      "column(s)%s."),
+      family, arm, ncol(X_arm),
+      if (is.null(nms)) "" else
+        paste0(" (", paste0("`", nms, "`", collapse = ", "), ")")),
+      call. = FALSE)
+  }
+  idx
+}
 
 
 # Covariance kernels of the NNGP field, keyed by tulpa's CovType code
@@ -229,12 +275,7 @@
                         "sites; one coordinate pair per site is required."),
                  as.integer(svc$n_obs), n_sites), call. = FALSE)
   }
-  idx <- as.integer(svc$indices)
-  if (any(idx < 1L) || any(idx > ncol(X_arm))) {
-    stop(sprintf(paste0("svc(indices = ): index out of range -- the %s() %s ",
-                        "design has %d columns."),
-                 family, arm, ncol(X_arm)), call. = FALSE)
-  }
+  idx <- .tobs_svc_columns(svc, X_arm, family, arm)
   co      <- matrix(as.numeric(svc$coords), ncol = 2L, byrow = TRUE)
   nn_idx  <- matrix(as.integer(svc$nn_idx),  nrow = n_sites, byrow = TRUE)
   nn_dist <- matrix(as.numeric(svc$nn_dist), nrow = n_sites, byrow = TRUE)
@@ -381,7 +422,7 @@
   }
   n_sites <- model$n_sites
   X_occ <- model$X_processes[[1L]]
-  idx <- as.integer(svc$indices)
+  idx <- .tobs_svc_columns(svc, X_occ, "occu")
 
   dots <- list(...)
   blocks <- .tobs_svc_field_blocks(svc, X_occ, n_sites, "occu",
@@ -453,6 +494,7 @@
     svc_field = svc_field,
     svc_hyper = hyper,
     svc_indices = idx,
+    svc_coefficients = svc$coefficients,
     method = "nested_laplace",
     spatial_integration = res$integration,
     convergence = list(converged = TRUE, n_iter = NA_integer_),

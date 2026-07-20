@@ -93,24 +93,28 @@ formula:
 `spatial()` and `temporal()` are the two front doors: `model =` picks the spatial
 model (`"icar"` by default), `type =` the temporal one.
 
-A coefficient that varies over space is written one of two ways. The areal form is
-a weighted bar under the spatial umbrella and has the broad family coverage:
+A coefficient that varies over space is a spatial field, so it is written under
+`spatial()` and `model =` says whether space is a graph or a set of coordinates.
+The areal form is a bar over graph nodes and has the broad family coverage:
 
 ```r
 ~ spatial(~ 1 + year || cell, graph = adj)   # areal SVC, method = "nested_laplace"
 ```
 
-The continuous form is its own term, an NNGP surface over coordinates, and asks for
-a range prior (`P(range < r0) = alpha`):
+The continuous form names the varying coefficients directly and asks for a range
+prior (`P(range < r0) = alpha`):
 
 ```r
-~ elevation + svc(lon, lat, indices = 2, prior_range = c(50, 0.05))
+~ elevation + spatial(lon, lat, model = "svc",
+                      coefficients = "elevation", prior_range = c(50, 0.05))
 ```
 
-`svc()` fits on single-season `occu()` under `laplace` / `nested_laplace` / `nuts`,
-and on `removal()`, `distance()`, `fp_occu()` and `dyn_abun()` under `laplace` /
-`nested_laplace`; the surfaces come back as `fit$svc_field`. Elsewhere the term
-errors and points at the areal bar.
+The continuous form fits on single-season `occu()` under `laplace` /
+`nested_laplace` / `nuts`, and on `removal()`, `distance()`, `fp_occu()` and
+`dyn_abun()` under `laplace` / `nested_laplace`; the surfaces come back as
+`fit$svc_field`. Elsewhere the term errors and points at the areal bar.
+`svc(lon, lat, coefficients = )` is the direct constructor, as `icar()` is for
+`spatial(model = "icar")`.
 
 A term enters whichever process it is written in, so `detection = ~ (1 | observer)` puts
 the random effect on detection. `copy("id")` shares one realization across both processes.

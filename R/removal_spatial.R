@@ -370,7 +370,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   # removal does not surface the outer Pareto-k diagnostic (pareto_k = FALSE).
   .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
                              pareto_k = FALSE, svc = svc,
-                             has_spatial = !is.null(spatial))
+                             has_spatial = !is.null(spatial),
+                             X_svc = X_lam, family = "removal")
 }
 
 # Areal-spatial removal sampling via NUTS (gcol33/tulpaObs#72): a FIXED-HYPER

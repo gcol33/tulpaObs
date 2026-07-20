@@ -426,7 +426,8 @@
 # wrapper (removal) that does not surface the diagnostic.
 .tobs_attach_field_results <- function(fit, res, det_arm, temporal, temporal_only,
                                        arm, pareto_k = TRUE, svc = NULL,
-                                       has_spatial = !temporal_only) {
+                                       has_spatial = !temporal_only,
+                                       X_svc = NULL, family = NULL) {
   fit$method <- "nested_laplace"
   fit$spatial_integration <- res$integration
   if (isTRUE(pareto_k)) fit$spatial_pareto_k <- res$pareto_k
@@ -445,10 +446,15 @@
     fit$temporal_hyper <- hypers[[b]]
   }
   if (!is.null(svc)) {
-    k <- length(svc$indices)
+    k <- as.integer(svc$n_svc)
     surf <- matrix(unlist(fields[b + seq_len(k)]), ncol = k)
     fit$svc <- svc
-    fit$svc_indices <- as.integer(svc$indices)
+    # Resolved design-column positions, so a name-selected term reports the same
+    # slot a position-selected one does (gcol33/tulpaObs#146). `X_svc` is the arm
+    # design the blocks were built against, already validated by the builder.
+    fit$svc_indices <- if (is.null(X_svc)) as.integer(svc$indices)
+                       else .tobs_svc_columns(svc, X_svc, family, arm)
+    fit$svc_coefficients <- svc$coefficients
     fit$svc_field <- if (k == 1L) as.numeric(surf[, 1L]) else surf
     fit$svc_hyper <- stats::setNames(hypers[b + seq_len(k)], paste0("svc", seq_len(k)))
     fit$svc_field_arm <- arm

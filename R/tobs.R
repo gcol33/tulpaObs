@@ -56,8 +56,10 @@
 #'   `lme4`, `mgcv`, and `INLA` do: spatial fields `icar(graph = adj)`,
 #'   `bym2(graph = adj)`, `gp(lon, lat, prior_range = c(r0, alpha))`,
 #'   `spde(lon, lat)`; random effects `re(group)`; temporal fields
-#'   `temporal(time)`; spatially varying coefficients `svc(lon, lat,
-#'   indices = ..., prior_range = c(r0, alpha))`; community latent factors
+#'   `temporal(time)`; spatially varying coefficients `spatial(~ 1 + w || cell,
+#'   graph = adj)` over a graph or `spatial(lon, lat, model = "svc",
+#'   coefficients = ..., prior_range = c(r0, alpha))` over coordinates;
+#'   community latent factors
 #'   `latent(k)`. A term enters whichever linear predictor it is written in
 #'   (occupancy `formula` or `detection`). To share one realization across
 #'   both predictors, tag the term with `id = "u"` and write `copy("u")` in
@@ -69,7 +71,11 @@
 #'   `spatial(graph = adj, model = "bym2")` is `bym2(graph = adj)` and
 #'   `spatial(lon, lat, model = "spde")` is `spde(lon, lat)`. `model` is one
 #'   of `"icar"`, `"bym2"`, `"car"`, `"car_proper"`, `"gp"`, `"multiscale_gp"`,
-#'   `"spde"`; per-model arguments pass through unchanged.
+#'   `"spde"`, `"svc"`; per-model arguments pass through unchanged. The
+#'   umbrella also reads a varying-coefficient bar
+#'   (`spatial(~ 1 + w || cell, graph = adj)`), so both flavours of
+#'   spatially-varying coefficient -- areal over a graph, continuous over
+#'   coordinates (`model = "svc"`) -- are written through the same verb.
 #'
 #'   The continuous fields (`gp()`, `svc()`, `spde()`) require `prior_range =
 #'   c(r0, alpha)`, a penalized-complexity prior on the spatial range encoding

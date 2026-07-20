@@ -667,10 +667,13 @@
     # both natural and scaled spaces; for svc on a non-intercept numeric
     # column the per-location offsets land on the scaled-column scale.
     X_occ <- fit_model$X_processes[[1]]
-    svc_indices_0based <- svc$indices - 1L  # C++ 0-based
+    # `coefficients = ` names the columns, `indices = ` gives their positions;
+    # both resolve here against the same design (gcol33/tulpaObs#146).
+    svc_cols <- .tobs_svc_columns(svc, X_occ, "occu")
+    svc_indices_0based <- svc_cols - 1L  # C++ 0-based
     X_svc_flat <- numeric(nrow(X_occ) * svc$n_svc)
-    for (j in seq_along(svc$indices)) {
-      col <- svc$indices[j]
+    for (j in seq_along(svc_cols)) {
+      col <- svc_cols[j]
       for (i in seq_len(nrow(X_occ))) {
         X_svc_flat[(i - 1) * svc$n_svc + j] <- X_occ[i, col]
       }
@@ -742,6 +745,13 @@
   fit$temporal <- temporal
   fit$re <- re
   fit$svc <- svc
+  if (!is.null(svc)) {
+    # `svc_cols` was resolved above against the design the surfaces were packed
+    # against; reporting it rather than re-resolving keeps the reported columns
+    # and the sampled ones the same object (gcol33/tulpaObs#146).
+    fit$svc_indices <- svc_cols
+    fit$svc_coefficients <- svc$coefficients
+  }
   # The fitted per-location SVC surface (gcol33/tulpaObs#118). `fit$svc` is the
   # term the user passed in; `fit$svc_field` is what was estimated, mirroring
   # `fit$spatial_field` on the areal path. Without it the surface was in the

@@ -39,7 +39,8 @@ Structured effects are written as terms inside the formula, the way
 \code{lme4}, \code{mgcv}, and \code{INLA} do: spatial fields \code{icar(graph = adj)},
 \code{bym2(graph = adj)}, \code{gp(lon, lat, prior_range = c(r0, alpha))},
 \code{spde(lon, lat)}; random effects \code{re(group)}; temporal fields
-\code{temporal(time)}; spatially varying coefficients \code{svc(lon, lat, indices = ..., prior_range = c(r0, alpha))}; community latent factors
+\code{temporal(time)}; spatially varying coefficients \code{spatial(~ 1 + w || cell, graph = adj)} over a graph or \code{spatial(lon, lat, model = "svc", coefficients = ..., prior_range = c(r0, alpha))} over coordinates;
+community latent factors
 \code{latent(k)}. A term enters whichever linear predictor it is written in
 (occupancy \code{formula} or \code{detection}). To share one realization across
 both predictors, tag the term with \code{id = "u"} and write \code{copy("u")} in
@@ -50,7 +51,11 @@ The spatial fields also have a single-verb umbrella \code{spatial(..., model = .
 \code{spatial(graph = adj, model = "bym2")} is \code{bym2(graph = adj)} and
 \code{spatial(lon, lat, model = "spde")} is \code{spde(lon, lat)}. \code{model} is one
 of \code{"icar"}, \code{"bym2"}, \code{"car"}, \code{"car_proper"}, \code{"gp"}, \code{"multiscale_gp"},
-\code{"spde"}; per-model arguments pass through unchanged.
+\code{"spde"}, \code{"svc"}; per-model arguments pass through unchanged. The
+umbrella also reads a varying-coefficient bar
+(\code{spatial(~ 1 + w || cell, graph = adj)}), so both flavours of
+spatially-varying coefficient -- areal over a graph, continuous over
+coordinates (\code{model = "svc"}) -- are written through the same verb.
 
 The continuous fields (\code{gp()}, \code{svc()}, \code{spde()}) require \code{prior_range = c(r0, alpha)}, a penalized-complexity prior on the spatial range encoding
 \code{P(range < r0) = alpha} (Fuglstad et al. 2019). The range is in the units

@@ -353,23 +353,85 @@
   .tobs_term(spec, class = "tobs_temporal", id = id, label = "temporal")
 }
 
-# svc(lon, lat, indices)   — spatially varying coefficients on design columns
-.tobs_term_svc <- function(..., indices, coords = NULL, cov = "exponential",
+# svc(lon, lat, coefficients) — spatially varying coefficients over continuous
+#                               coordinates (the continuous sibling of the areal
+#                               `spatial(~ 1 + w || node, graph)` bar).
+#
+# Which coefficients vary is given by NAME (`coefficients = c("(Intercept)",
+# "elev")`), matched against the arm's design column names at fit time, the way
+# the areal bar's left-hand side names them. `indices =` is the lower-level
+# numeric form, kept because it predates the names and because a design column
+# is addressable by position when it has no usable name. Exactly one of the two
+# is given; positions are reorder-sensitive, so the names are the documented
+# form (the same argument copy() makes against `spatial(<n>)`).
+#
+# Resolution is deferred to fit time by `.tobs_svc_columns()`: the design matrix
+# is not in scope here, and the names must be read against the same design the
+# coefficients are.
+.tobs_term_svc <- function(..., coefficients = NULL, indices = NULL,
+                           coords = NULL, cov = "exponential",
                            nn = 15, id = NULL, sigma2_prior_scale = 1,
                            prior_range = NULL) {
   coords <- .tobs_collect_coords(list(...), coords, "svc")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian"))
   prior_range <- .tobs_check_prior_range(prior_range, "svc")
+  sel <- .tobs_svc_check_selector(coefficients, indices)
   n <- nrow(coords); nn <- min(nn, n - 1L)
   nngp <- compute_nngp_neighbors(coords, nn)
   .tobs_term(list(
-    indices = as.integer(indices), n_svc = length(indices),
+    coefficients = sel$coefficients, indices = sel$indices, n_svc = sel$n_svc,
     n_obs = n, nn = nn, coords = as.vector(t(coords)),
     nn_idx = as.vector(t(nngp$nn_idx)), nn_dist = as.vector(t(nngp$nn_dist)),
     nn_order = nngp$nn_order, nn_order_inv = nngp$nn_order_inv,
     cov_type = cov, sigma2_prior_scale = sigma2_prior_scale,
     prior_range = prior_range
   ), class = "tobs_svc", id = id, label = "svc")
+}
+
+# Validate svc()'s coefficient selector: exactly one of `coefficients` (names,
+# resolved against the design at fit time) or `indices` (design column
+# positions). Returns the normalised pair plus the surface count, which is known
+# here either way -- only the column positions need the design.
+.tobs_svc_check_selector <- function(coefficients, indices) {
+  if (is.null(coefficients) && is.null(indices)) {
+    stop(paste0(
+      "svc(): name the coefficients that vary over space, e.g.\n",
+      "  coefficients = \"elev\" (one surface on the elev slope), or\n",
+      "  coefficients = c(\"(Intercept)\", \"elev\").\n",
+      "  The names are matched against the design columns of the process the\n",
+      "  term sits in. `indices = ` takes column positions instead."),
+      call. = FALSE)
+  }
+  if (!is.null(coefficients) && !is.null(indices)) {
+    stop("svc(): give `coefficients` (names) or `indices` (column positions), ",
+         "not both.", call. = FALSE)
+  }
+  if (!is.null(coefficients)) {
+    if (!is.character(coefficients) || !length(coefficients) ||
+        any(is.na(coefficients)) || any(!nzchar(coefficients))) {
+      stop("svc(coefficients = ): give one or more non-empty design column ",
+           "names, e.g. coefficients = c(\"(Intercept)\", \"elev\").",
+           call. = FALSE)
+    }
+    if (anyDuplicated(coefficients)) {
+      stop("svc(coefficients = ): duplicate coefficient name(s) ",
+           paste0("`", unique(coefficients[duplicated(coefficients)]), "`",
+                  collapse = ", "), "; each surface is declared once.",
+           call. = FALSE)
+    }
+    return(list(coefficients = as.character(coefficients), indices = NULL,
+                n_svc = length(coefficients)))
+  }
+  idx <- suppressWarnings(as.integer(indices))
+  if (!length(idx) || anyNA(idx) || any(idx < 1L)) {
+    stop("svc(indices = ): give one or more positive design column positions, ",
+         "or name them with `coefficients = `.", call. = FALSE)
+  }
+  if (anyDuplicated(idx)) {
+    stop("svc(indices = ): duplicate column position(s); each surface is ",
+         "declared once.", call. = FALSE)
+  }
+  list(coefficients = NULL, indices = idx, n_svc = length(idx))
 }
 
 # latent(n_factors, ...)   — latent factors for community models
@@ -532,8 +594,16 @@
 # Spatial model names, in registry order. Single source of truth for the
 # `spatial()` umbrella's `model =` choices; an areal/continuous term added to
 # the registry below is exposed through `spatial()` by listing it here too.
+#
+# `svc` is the continuous varying-coefficient field. It sits here rather than
+# only behind its own verb so the two ways of asking for a spatially-varying
+# coefficient read as one concept with a model choice (gcol33/tulpaObs#146):
+# the areal flavour is the weighted bar `spatial(~ 1 + w || node, graph = adj)`,
+# the continuous flavour is `spatial(lon, lat, model = "svc", coefficients = ...)`.
+# It returns a `tobs_svc` spec, not a `tobs_spatial` one -- the parser bins by
+# class, so the umbrella is a front door, not a change of type.
 .tobs_spatial_models <- c("icar", "bym2", "car", "car_proper",
-                          "gp", "multiscale_gp", "spde")
+                          "gp", "multiscale_gp", "spde", "svc")
 
 # spatial(..., model = ...) — single-verb umbrella over the areal (icar / bym2
 # / car / car_proper) and continuous (gp / multiscale_gp / spde) spatial terms,
@@ -653,6 +723,14 @@
   # `model` may arrive as the full default vector (umbrella default) or a single
   # name; collapse to one areal model. Only areal models carry a graph.
   model <- match.arg(model)
+  if (identical(model, "svc")) {
+    stop(paste0(
+      "spatial(<bar>, model = \"svc\"): the bar is the AREAL varying-coefficient ",
+      "form and needs a graph. Over continuous coordinates, name the varying ",
+      "coefficients directly:\n",
+      "  spatial(lon, lat, model = \"svc\", coefficients = c(\"(Intercept)\", \"w\"), ",
+      "prior_range = c(r0, alpha))"), call. = FALSE)
+  }
   if (!model %in% c("icar", "bym2", "car", "car_proper")) {
     stop(sprintf(paste0(
       "spatial(<bar>, model = \"%s\"): a varying-coefficient bar needs an areal ",

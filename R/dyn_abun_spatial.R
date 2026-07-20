@@ -99,7 +99,8 @@
   # The field loads on the initial-abundance (log lambda_1) arm by default, or on
   # the per-site detection logit eta_p when the term sits in `detection=` (#114).
   .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
-                             svc = svc, has_spatial = !is.null(spatial))
+                             svc = svc, has_spatial = !is.null(spatial),
+                             X_svc = X_lam, family = "dyn_abun")
 }
 
 # Areal-spatial Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#72): a FIXED-

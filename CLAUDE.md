@@ -726,7 +726,20 @@ columns are named but the reconstruction is left to the draws. icar field cor
 ~0.81 (`test-occu-areal-nuts-recovery.R`). car_proper is NOT a wired occu-NUTS
 term (errors at fit, pre-existing).
 
-**SVC = two distinct flavors, do NOT conflate (#118):**
+**SVC = two flavors behind ONE verb (#118, unified #146).** Both are written
+under `spatial()`; `model =` picks which. `spatial(~ 1 + w || cell, graph)` is
+areal, `spatial(lon, lat, model = "svc", coefficients = )` continuous. `svc()`
+stays as the direct ctor (like `icar()`). The continuous form selects its
+columns BY NAME (`coefficients = c("(Intercept)", "elev")`), matched against the
+arm design at fit time by `.tobs_svc_columns()` (`R/occu_svc.R`, single source
+of truth -- BOTH the Laplace field builder `.tobs_svc_field_blocks()` and the
+NUTS packer in `R/occu_fit.R` call it, so the two backends cannot drift).
+`indices =` (column positions) is the lower-level form, still supported; giving
+both errors. Fits report `fit$svc_indices` (resolved positions) +
+`fit$svc_coefficients` on both backends. A bar with `model = "svc"` errors with
+a pointer to the continuous form. `test-svc-spatial-umbrella.R`. The two flavors
+are still DIFFERENT ENGINES with different coverage -- do not conflate what they
+fit, only how they are spelled:
 - **Areal spatially-varying coefficient** (the `svcPGOcc` analogue): a WEIGHTED
   areal bar `spatial(~ 1 + w || cell, graph)` on `occu()` via `nested_laplace`,
   rerouted through the joint direct-grid engine (`.tobs_fit_occu_joint`, #81).
@@ -734,7 +747,8 @@ term (errors at fit, pre-existing).
   `test-occu-svc-joint-recovery.R` recover the known intercept + trend surfaces
   (`fit$spatial_field`/`fit$trend_field`, `cor > 0.75`), the SD hyperparameters,
   and the coefficients. This arm arrives as a `spatial` term, not `svc`.
-- **Continuous NNGP `svc()` term** (`svc(lon, lat, indices=)`): wired to
+- **Continuous NNGP `svc()` term** (`spatial(lon, lat, model="svc",
+  coefficients=)`, or the direct `svc()`): wired to
   single-season `occu()` on NUTS (`populate_svc`, `src/populate_helpers.h` ->
   `data.svc_data`) AND on the deterministic backends (#143, below). On NUTS the
   eta-assembly + NNGP prior + gradient live in the compiled

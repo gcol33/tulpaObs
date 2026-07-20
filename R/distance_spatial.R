@@ -115,7 +115,8 @@
   # The field loads on the abundance (log lambda) arm by default, or on the
   # detection scale (log sigma) arm when the term sits in the detection formula.
   .tobs_attach_field_results(fit, res, det_arm, temporal, temporal_only, "abundance",
-                             svc = svc, has_spatial = !is.null(spatial))
+                             svc = svc, has_spatial = !is.null(spatial),
+                             X_svc = X_lam, family = "distance")
 }
 
 # Areal-spatial binned distance sampling via NUTS (gcol33/tulpaObs#72): a FIXED-
