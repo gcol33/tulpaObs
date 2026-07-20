@@ -87,12 +87,16 @@ Do NOT run on every edit. Ladder:
    `testthat::test_file("tests/testthat/test-occu.R")` or
    `devtools::test(filter = "occu")`. Seconds.
 2. **Whole-suite smoke** (plumbing/dispatch/closed-form, no fits) ->
-   `Sys.setenv(TULPAOBS_FAST = "1"); devtools::test()`. Measured 2026-07-19 SERIAL
-   (`TESTTHAT_PARALLEL=false`, over `test_dir()` after `load_all()`): **153s**, 2691
-   assertions, 705 skips, 0 failures, **5 errors** (all the nested_laplace + areal
-   field breakage, #148 -- expect those until it is resolved). Parallel wall time not
-   re-measured; the earlier "~22s / ~1330 assertions / ~215 skips" figures are stale by
-   roughly 2-3x on the counts, so re-measure rather than trusting a number here.
+   `Sys.setenv(TULPAOBS_FAST = "1"); devtools::test()`. Measured 2026-07-20 SERIAL
+   (`TESTTHAT_PARALLEL=false`, over `test_dir()` after `load_all()`, on tulpa 0.0.93):
+   3322 assertions, 629 skips, **0 failures, 0 errors**. The 5 errors recorded here
+   through 2026-07-19 were #148 (tulpa handed its own nested-Laplace validator a
+   length-1 `re_idx`); fixed upstream in tulpa 0.0.93, and the assertion count rose
+   because those blocks now run. Wall time NOT cleanly measured -- that run shared the
+   box with several of the user's R jobs, and it ran far past the 153s recorded on
+   2026-07-19, so treat any figure here as unmeasured and time it yourself. Parallel
+   wall time also not re-measured; the older "~22s / ~1330 assertions / ~215 skips"
+   figures are stale by 2-3x on the counts.
    `skip_if_fast()` gates every fitting block (628 call sites across 166 files);
    no-op when env var unset.
 3. **Full recovery suite** (all seeds, NUTS, spatial) -> ONLY before committing to
