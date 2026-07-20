@@ -1,0 +1,92 @@
+name: R-CMD-check
+
+# Checks a BUILT TARBALL, not a load_all() session. The test suite runs against
+# a loaded namespace where internals resolve whether or not they are exported,
+# so an export that never reached NAMESPACE is invisible locally and surfaces
+# only here, when an example or vignette calls it from the installed package
+# (issue #147: abun() shipped unexported in a tagged release).
+#
+# Push and pull requests check one platform. The three-platform matrix runs
+# weekly, because both engines compile from source and a cold matrix is long.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Platforms are chosen here rather than by a job-level condition so the
+  # skipped combinations never appear as jobs at all.
+  platforms:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.pick.outputs.include }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'include=[{"os":"ubuntu-latest"},{"os":"windows-latest"},{"os":"macos-latest"}]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'include=[{"os":"ubuntu-latest"}]' >> "$GITHUB_OUTPUT"
+          fi
+
+  check:
+    needs: platforms
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.platforms.outputs.include) }}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      # INLA, spAbundance and unmarked back reference-comparison tests that
+      # already gate themselves with skip_if_not_installed(). INLA in particular
+      # is a large non-CRAN install, so check must not demand every Suggests.
+      _R_CHECK_FORCE_SUGGESTS_: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      # Resolves Remotes from DESCRIPTION, so tulpa and tulpaMesh install at
+      # the pinned tags. The action caches the built library, which is where the
+      # expensive third-party compiles (tulpa, RcppEigen) are amortised.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          dependencies: '"hard"'
+          extra-packages: |
+            any::rcmdcheck
+            any::testthat
+            any::knitr
+            any::rmarkdown
+            any::loo
+            any::MASS
+            any::betareg
+            any::dplyr
+            any::ggplot2
+
+      - name: Verify engine pin
+        run: Rscript .github/scripts/check-engine-pin.R
+
+      # --no-manual: the Rd sources carry non-ASCII that breaks the LaTeX PDF
+      # manual, matching the repo's own devtools::check(args = "--no-manual").
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual")'
+          upload-snapshots: true

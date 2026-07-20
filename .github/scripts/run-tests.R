@@ -1,0 +1,46 @@
+#!/usr/bin/env Rscript
+
+# Runs the test suite against the INSTALLED package and reports the tier it
+# actually ran, not the tier it was asked for.
+#
+# Both CI test workflows call this: the smoke job with TULPAOBS_FAST=1, the
+# weekly job with it unset. Which tier ran is the difference between "the
+# plumbing holds" and "the estimators recover simulated truth", so the counts
+# are logged every run and the tier is stated up front -- a smoke run reporting
+# a few thousand assertions and several hundred skips looks identical to a
+# broken full run unless the tier is on the record.
+
+library(testthat)
+library(tulpaObs)
+
+fast <- identical(Sys.getenv("TULPAOBS_FAST"), "1")
+tier <- if (fast) {
+  "smoke (TULPAOBS_FAST=1: recovery loops skipped)"
+} else {
+  "full recovery (all seeds, NUTS, spatial)"
+}
+
+cat("tier      :", tier, "\n")
+cat("tulpaObs  :", as.character(utils::packageVersion("tulpaObs")), "\n")
+cat("tulpa     :", as.character(utils::packageVersion("tulpa")), "\n")
+cat("parallel  :", Sys.getenv("TESTTHAT_PARALLEL", "<unset>"), "\n\n")
+
+res <- test_dir("tests/testthat", package = "tulpaObs",
+                reporter = "summary", stop_on_failure = FALSE)
+
+df <- as.data.frame(res)
+failed <- sum(df$failed)
+errors <- sum(df$error)
+
+cat(sprintf(
+  "\n%s\nassertions %d | skipped %d | failed %d | errors %d\n",
+  tier, sum(df$passed), sum(df$skipped), failed, errors))
+
+if (failed > 0 || errors > 0) {
+  cat("\nFailing test files:\n")
+  bad <- df[df$failed > 0 | df$error, c("file", "test", "failed", "error")]
+  print(unique(bad), row.names = FALSE)
+  quit(status = 1L)
+}
+
+cat("Suite green.\n")

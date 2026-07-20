@@ -4,6 +4,8 @@
 
 [![Lifecycle: stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![R-CMD-check](https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml)
+[![smoke](https://github.com/gcol33/tulpaObs/actions/workflows/smoke.yaml/badge.svg)](https://github.com/gcol33/tulpaObs/actions/workflows/smoke.yaml)
 
 **Hierarchical observation models on the [tulpa](https://github.com/gcol33/tulpa) inference engine: occupancy, N-mixture abundance, distance, removal, cover.**
 

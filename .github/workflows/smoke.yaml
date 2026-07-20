@@ -1,0 +1,60 @@
+name: smoke
+
+# The TULPAOBS_FAST tier: plumbing, dispatch and closed-form blocks, with every
+# multi-seed fitting loop and NUTS sample skipped. Catches the class of breakage
+# that sits outside whatever was last being worked on -- issue #148 turned five
+# blocks red and went unnoticed between manual full runs.
+#
+# Runs against the INSTALLED package rather than load_all(), so an export that
+# never reached NAMESPACE fails here too.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      TULPAOBS_FAST: '1'
+      # Config/testthat/parallel is set, but neither parallel entry point
+      # completes a run locally (issue #151: devtools::test() hangs, test_dir()
+      # aborts in the chunky event loop). Serial is the measured-working path.
+      TESTTHAT_PARALLEL: 'false'
+      NOT_CRAN: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          dependencies: '"hard"'
+          extra-packages: |
+            any::testthat
+            any::loo
+            any::MASS
+            any::betareg
+            any::dplyr
+            any::ggplot2
+
+      - name: Verify engine pin
+        run: Rscript .github/scripts/check-engine-pin.R
+
+      - name: Install package
+        run: R CMD INSTALL --no-multiarch --with-keep.source .
+
+      - name: Smoke suite
+        run: Rscript .github/scripts/run-tests.R

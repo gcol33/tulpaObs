@@ -107,6 +107,30 @@ Adding a slow test: pair `skip_if_fast()` + `skip_on_cran()` at top of any
 multi-seed fit / NUTS block (helper `tests/testthat/helper-speed.R`). C++ recompiles
 ccache-backed; only a killed/partial build needs `pkgbuild::clean_dll()`.
 
+### CI (#149)
+
+`.github/workflows/`, all serial (`TESTTHAT_PARALLEL=false` -- parallel is #151):
+
+- `R-CMD-check.yaml` -- push/PR + weekly. Checks a **built tarball**, not
+  `load_all()`, so a missing NAMESPACE export surfaces (#147 shipped `abun()`
+  unexported precisely because `load_all()` resolves internals regardless).
+  `--no-manual` (dev non-ASCII in Rd). ubuntu on push; ubuntu+windows+macOS on
+  the weekly cron + `workflow_dispatch`.
+- `smoke.yaml` -- push/PR, tier 2 (`TULPAOBS_FAST=1`) against the INSTALLED
+  package. The tier that catches #148-class breakage the day it lands.
+- `full-recovery.yaml` -- weekly cron + dispatch, tier 3, `NOT_CRAN=true` +
+  `TULPAOBS_REQUIRE_SPDE=1`. Hours; carries the calibration evidence.
+
+Both test workflows call `.github/scripts/run-tests.R` (one runner, logs which
+tier actually ran -- a smoke run and a broken full run report similar counts
+otherwise). Every job first runs `.github/scripts/check-engine-pin.R`, which
+fails if DESCRIPTION's `Imports` floor, its `Remotes` tag, and the installed
+`tulpa`/`tulpaMesh` disagree, so the #150 skew cannot reopen silently.
+
+Suggests are NOT all installed (`_R_CHECK_FORCE_SUGGESTS_: false`); INLA is a
+large non-CRAN install and every INLA vignette chunk is already `eval =
+have_inla`, every INLA/unmarked/spAbundance test `skip_if_not_installed()`.
+
 ## Architecture
 
 One C++ entry `cpp_occu_fit` for NUTS. Laplace via tulpa EM+Laplace
