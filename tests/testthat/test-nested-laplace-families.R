@@ -43,8 +43,10 @@ test_that("integrated occupancy fits nested_laplace with a spatial field", {
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$method, "nested_laplace")
   expect_identical(fit$nested_laplace$multi_prior[[1]]$type, "bym2")
-  # bym2 carries 2 components per spatial unit (combined + structured).
-  expect_equal(length(fit$spatial_field), 2L * n)
+  # A bym2 block stores (phi | theta) internally; the reported field is the
+  # rho-mixed unit surface z = sqrt(rho / scale) * phi + sqrt(1 - rho) * theta
+  # (Riebler 2016), so it carries one value per spatial unit.
+  expect_equal(length(fit$spatial_field), n)
 })
 
 
