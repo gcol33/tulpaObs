@@ -24,25 +24,27 @@
 .tobs_ms_count_oracle <- function(y_mat, link = "log") {
   dims <- list(n_sites = nrow(y_mat), n_species = ncol(y_mat))
   if (identical(link, "logit")) {
+    ll_cell <- function(eta) ifelse(y_mat > 0, stats::plogis(eta,  log.p = TRUE),
+                                               stats::plogis(-eta, log.p = TRUE))
     return(c(dims, list(
       working = function(eta) {
         psi <- stats::plogis(eta)
         list(score = y_mat - psi, curv = psi * (1 - psi))
       },
-      data_ll = function(eta) {
-        sum(ifelse(y_mat > 0, stats::plogis(eta,  log.p = TRUE),
-                              stats::plogis(-eta, log.p = TRUE)))
-      })))
+      ll_cell = ll_cell,
+      data_ll = function(eta) sum(ll_cell(eta)))))
+  }
+  ll_cell <- function(eta) {
+    e <- pmin(eta, 700)
+    y_mat * e - exp(e)
   }
   c(dims, list(
     working = function(eta) {
       mu <- exp(pmin(eta, 700))
       list(score = y_mat - mu, curv = mu)
     },
-    data_ll = function(eta) {
-      e <- pmin(eta, 700)
-      sum(y_mat * e - exp(e))
-    }))
+    ll_cell = ll_cell,
+    data_ll = function(eta) sum(ll_cell(eta))))
 }
 
 

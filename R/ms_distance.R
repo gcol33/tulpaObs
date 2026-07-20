@@ -175,6 +175,8 @@
         curv  = vapply(sws, function(sw)
           pmax(as.numeric(sw$info_lam - sw$var_N * sw$swl^2), 1e-8), numeric(Ns)))
     },
+    ll_cell = function(eta) vapply(eval_all(eta),
+      function(sw) as.numeric(sw$log_lik), numeric(Ns)),
     data_ll = function(eta) sum(vapply(eval_all(eta),
                                        function(sw) sum(sw$log_lik), 0)))
 }

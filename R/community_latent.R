@@ -44,6 +44,96 @@
 
 
 # ---------------------------------------------------------------------------
+# Factor magnitude
+# ---------------------------------------------------------------------------
+
+# The factors are a LATENT, not a parameter: zeta_i ~ N(0, I_Q). The factor
+# update holds them at their joint mode and treats zeta t(lambda) as a known
+# offset, and that penalised objective is UNBOUNDED in the magnitude direction --
+# lambda is free to rescale, so sending zeta -> 0 and lambda -> Inf at fixed
+# product drives the N(0, I) prior cost to zero. Measured on lfJSDM with the
+# unit-variance anchor removed the loadings run to 48x truth; the anchor masks
+# that but leaves the magnitude at pure maximum likelihood, which over-fits
+# (1.74x) and inflates the community coefficients to compensate (slope 1.44x
+# truth, gcol33/tulpaObs#153).
+#
+# So the update supplies the loading DIRECTIONS -- which set the cross-species
+# correlation, and which it already recovers well -- and the magnitude is set
+# here, by the one quantity that actually identifies it.
+
+# Gauss-Hermite nodes and weights for the standard normal, by Golub-Welsch on the
+# probabilists' Hermite Jacobi matrix. Weights sum to one, so
+# integral f(u) phi(u) du = sum_k w_k f(x_k).
+.tobs_gh_nodes <- function(n = 5L) {
+  n <- as.integer(n)
+  k <- seq_len(n - 1L)
+  J <- matrix(0, n, n)
+  J[cbind(k, k + 1L)] <- sqrt(k)
+  J[cbind(k + 1L, k)] <- sqrt(k)
+  e <- eigen(J, symmetric = TRUE)
+  o <- order(e$values)
+  list(x = e$values[o], w = (e$vectors[1L, o])^2)
+}
+
+# The JOINT site marginal, integrating zeta_i over all Q dimensions with the
+# species at a site kept together:
+#
+#   L_i = integral prod_s f(y_is | eta_is + lambda_s' z) N(z; 0, I_Q) dz
+#
+# on a tensor Gauss-Hermite grid. A node is a fixed Q-vector, so it shifts cell
+# (i, s) by lambda_s' z_k -- the same shift at every site -- and one node costs a
+# single ll_cell call.
+.tobs_latent_joint_marginal <- function(oracle, eta_base, lambda, gh) {
+  Ns <- nrow(eta_base)
+  nd <- as.matrix(expand.grid(rep(list(gh$x), ncol(lambda))))
+  lw <- rowSums(as.matrix(expand.grid(rep(list(log(gh$w)), ncol(lambda)))))
+  L  <- lapply(seq_len(nrow(nd)), function(k)
+    lw[k] + rowSums(oracle$ll_cell(
+      eta_base + rep(as.numeric(lambda %*% nd[k, ]), each = Ns))))
+  m <- Reduce(pmax, L)
+  sum(m + log(Reduce(`+`, lapply(L, function(z) exp(z - m)))))
+}
+
+# The factor SCALE: the scalar c maximising the joint marginal at loadings
+# c * lambda. The update fixes the loadings up to one overall magnitude, and that
+# magnitude is what over-fits.
+#
+# It has to be the JOINT marginal. Species s' own marginal integrates zeta in
+# closed form to one dimension and depends on lambda only through ||lambda_s||,
+# which looks like it identifies the magnitude -- but it does not. Species s
+# contributes a single Bernoulli per site, so its own marginal carries no
+# replication with which to see overdispersion: a normal-mixed logit is very
+# nearly a rescaled logit, plogis(eta / sqrt(1 + 0.346 sigma^2)), leaving sigma
+# and the coefficient scale confounded along a ridge. Held at the true
+# coefficients that profile peaks correctly; fitted jointly it slides to whichever
+# end of the grid it starts toward (measured: to the floor, 0.22x truth). What
+# identifies the magnitude is that zeta_i is SHARED across species at a site, so
+# it is the cross-species co-occurrence -- visible only in the joint integral --
+# that pins it.
+#
+# One shared scalar rather than a magnitude per species: the per-species
+# estimates are weakly identified (scattering 0.00-3.20 against known 0.16-1.91),
+# a species pushed to zero loses its row of the residual correlation, and the
+# inflation is close to uniform. A single scale also leaves the relative loadings
+# -- hence the co-occurrence structure -- untouched, so the residual CORRELATION
+# is unchanged and only its scale is corrected.
+.tobs_latent_factor_scale <- function(oracle, eta_base, lambda, gh) {
+  if (all(sqrt(rowSums(lambda^2)) < 1e-8)) return(1)
+  grid <- exp(seq(log(0.2), log(1.5), length.out = 14L))
+  prof <- vapply(grid, function(g)
+    .tobs_latent_joint_marginal(oracle, eta_base, g * lambda, gh), numeric(1))
+  j <- which.max(prof)
+  if (j == 1L || j == length(grid)) return(grid[j])
+  x <- grid[(j - 1L):(j + 1L)]; y <- prof[(j - 1L):(j + 1L)]
+  d <- (y[1] - y[2]) * (x[2] - x[3]) - (y[2] - y[3]) * (x[1] - x[2])
+  if (!is.finite(d) || abs(d) < 1e-12) return(grid[j])
+  v <- x[2] - 0.5 * ((x[2] - x[1])^2 * (y[2] - y[3]) -
+                     (x[2] - x[3])^2 * (y[2] - y[1])) / d
+  if (is.finite(v) && v >= x[1] && v <= x[3]) v else grid[j]
+}
+
+
+# ---------------------------------------------------------------------------
 # Field geometry
 # ---------------------------------------------------------------------------
 
@@ -517,7 +607,7 @@
                                           make_oracle, em_fit, offset_of,
                                           allow = c("icar", "car_proper", "bym2"),
                                           tol = 1e-4, max.outer = 25L,
-                                          verbose = FALSE) {
+                                          n.quad = 5L, verbose = FALSE) {
   S  <- model$n_species
   Ns <- model$n_sites
   has_field  <- !is.null(spatial)
@@ -578,11 +668,19 @@
   # ---- factor setup ----
   fac <- if (has_factor) .tobs_latent_factor_init(latent, Ns, S) else NULL
   zeta <- fac$zeta; lambda <- fac$lambda
+  # `lambda` is the update's own unconstrained iterate; `lambda_hat` is that
+  # direction at the marginal's magnitude, and is what the EM conditions on and
+  # what the fit reports. Rescaling the update's OWN state instead couples the
+  # two blocks destructively -- its next Newton simply regrows the magnitude to
+  # refit the residual, the rescale shrinks it again, and the pair diverges
+  # (measured: loadings to 5.3e3 x truth, residual correlation to 0.01).
+  lambda_hat <- lambda
+  gh_joint <- if (has_factor) .tobs_gh_nodes(n.quad) else NULL
 
   em <- NULL
   for (outer in seq_len(max.outer)) {
     site_off <- cur_site_off()
-    fac_off  <- if (has_factor) tcrossprod(zeta, lambda) else matrix(0, Ns, S)
+    fac_off  <- if (has_factor) tcrossprod(zeta, lambda_hat) else matrix(0, Ns, S)
     # (a) community EM given the combined latent offset.
     em <- em_fit(site_off, fac_off, em)
     eta_coef <- offset_of(em)
@@ -605,11 +703,13 @@
     }
     # (c) factor update (its base holds the coefficients + the field part).
     if (has_factor) {
-      gu <- .tobs_latent_factor_update(
-        oracle, eta_coef + matrix(cur_site_off(), Ns, S), zeta, lambda,
-        center = has_field)
-      delta <- max(delta, max(abs(tcrossprod(gu$zeta, gu$lambda) - fac_off)))
+      base_fac <- eta_coef + matrix(cur_site_off(), Ns, S)
+      gu <- .tobs_latent_factor_update(oracle, base_fac, zeta, lambda,
+                                       center = has_field)
       zeta <- gu$zeta; lambda <- gu$lambda
+      lambda_hat <- lambda * .tobs_latent_factor_scale(oracle, base_fac, lambda,
+                                                       gh_joint)
+      delta <- max(delta, max(abs(tcrossprod(zeta, lambda_hat) - fac_off)))
     }
     if (isTRUE(verbose)) {
       message(sprintf("[%s latent %d] delta=%.2e", what, outer, delta))
@@ -621,7 +721,7 @@
   if (has_field) {
     eta_coef <- offset_of(em)
     oracle   <- make_oracle(em)
-    base_f   <- eta_coef + (if (has_factor) tcrossprod(zeta, lambda) else 0)
+    base_f   <- eta_coef + (if (has_factor) tcrossprod(zeta, lambda_hat) else 0)
     if (is_car) {
       best <- list(m = -Inf)
       for (rr in rho_grid) {
@@ -688,7 +788,7 @@
          bym2 = if (is_bym2) list(sigma = bym_sigma, rho = bym_rho,
                                   scale = bym_scale, phi = bym_phi) else NULL),
        factor = if (!has_factor) NULL else list(
-         n_factors = fac$n_factors, zeta = zeta, lambda = lambda))
+         n_factors = fac$n_factors, zeta = zeta, lambda = lambda_hat))
 }
 
 

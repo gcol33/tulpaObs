@@ -82,6 +82,8 @@
                         ev$var_N * ev$score_wt_lambda^2), 1e-8), numeric(Ns))
       list(score = score, curv = curv)
     },
+    ll_cell = function(eta) vapply(eval_all(eta),
+      function(ev) as.numeric(ev$log_lik_site), numeric(Ns)),
     data_ll = function(eta) sum(vapply(eval_all(eta), function(ev) ev$log_lik, 0)))
 }
 
