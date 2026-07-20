@@ -127,6 +127,32 @@ otherwise). Every job first runs `.github/scripts/check-engine-pin.R`, which
 fails if DESCRIPTION's `Imports` floor, its `Remotes` tag, and the installed
 `tulpa`/`tulpaMesh` disagree, so the #150 skew cannot reopen silently.
 
+`R-CMD-check` also sets `TULPAOBS_FAST=1`: check runs `tests/` itself, and
+ungated that is the tier-3 suite, which blew the job's cap. Green baseline as
+of 2026-07-20: check `Status: OK` (0/0/0), smoke 3320 assertions / 630 skips /
+0 failures on ubuntu.
+
+**A Linux runner is not the local box, and two classes of test feel that.**
+Both surfaced on the first CI run and neither is reproducible on Windows:
+
+- *Exact float equality between two BLAS call shapes.* The batched ploglik
+  (`R/diagnostics.R`) builds eta with one `[S x p] x [p x n]` GEMM; the R
+  oracle builds it per draw as a GEMV. Different routines, different
+  accumulation order, so eta differs in the last ULP and a marginal summing
+  ~100 terms through `exp`/`lgamma` carries it (measured: max relative
+  6.5e-16). Reference BLAS collapses both to the same naive ordering, so the
+  equality held on Windows alone. Assert a tolerance and REPORT THE MAGNITUDE
+  -- a bare `expect_true(a == b)` cannot separate 1 ULP from a real bug, and
+  the two want opposite responses. Thread-count invariance IS exact (same
+  GEMM, same kernel) and stays `expect_identical`.
+- *Single-seed recovery under an aggregate tolerance.* `expect_equal(coefs,
+  truth, tolerance = t)` scores the whole vector, so a one-sided bias in one
+  coefficient can sit under `t` on one platform and over it on another. That
+  is what #153 was: lfJSDM slope 1.44x truth, high in 15/16 seeds, biased on
+  BOTH platforms, with the tolerance hiding it. When such a test flips,
+  measure the bias over many seeds BEFORE touching the tolerance -- widening
+  it deletes the signal.
+
 Suggests are NOT all installed (`_R_CHECK_FORCE_SUGGESTS_: false`); INLA is a
 large non-CRAN install and every INLA vignette chunk is already `eval =
 have_inla`, every INLA/unmarked/spAbundance test `skip_if_not_installed()`.
