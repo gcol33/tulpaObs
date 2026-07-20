@@ -6,8 +6,9 @@
 #' @importFrom stats nobs simulate update coef fitted predict residuals
 #' @importFrom stats dnorm plogis pnorm rbinom rnorm binomial cor glm ks.test
 #' @importFrom stats model.matrix optim quantile runif sd setNames var
+#' @importFrom stats logLik rpois
 #' @importFrom methods as
-#' @importFrom utils modifyList
+#' @importFrom utils modifyList getFromNamespace
 NULL
 
 # `.data` is the rlang/dplyr pronoun used inside conditional dplyr/ggplot2

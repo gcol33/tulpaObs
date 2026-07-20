@@ -611,7 +611,7 @@
 #' @param visits_per_plot detection replicate visits per plot.
 #' @param beta_psi,beta_theta,beta_p,beta_pos length-2 `c(intercept, slope)`
 #'   coefficients for the four arms (one covariate each).
-#' @param response `"lognormal"` or `"beta"` cover arm.
+#' @param positive `"lognormal"` or `"beta"` cover arm.
 #' @param phi cover dispersion (lognormal log-scale SD, or beta precision).
 #' @param adj `n_cells x n_cells` adjacency; default a 1-D chain.
 #' @param sigma areal-field marginal SD on the occupancy arm.
