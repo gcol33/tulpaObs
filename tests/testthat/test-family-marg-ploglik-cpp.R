@@ -1,24 +1,37 @@
 # Batched pointwise log-likelihood for the count / multistate families whose
 # per-site marginal was already C++ (compute_*_site) but whose per-draw loop was
 # R: N-mixture, removal, distance, false-positive occupancy, open N-mixture
-# (dyn_abun). The kernels loop draws over the SAME per-site kernel, so they are
-# BYTE-IDENTICAL to the former R loop (the oracle here, via the family marginal
-# builders) and thread-count invariant -- a divergence would be a bug, both
-# evaluate the identical marginal.
+# (dyn_abun). The kernels loop draws over the SAME per-site kernel, so they
+# evaluate the identical marginal to within floating point, and are exactly
+# thread-count invariant.
+#
+# The two paths are NOT bitwise equal, and asserting that they were is what this
+# file used to get wrong. The batched path builds its linear predictors with one
+# [S x p] x [p x n] GEMM (diagnostics.R); the oracle builds them per draw as a
+# GEMV. Those are different BLAS routines with different blocking and
+# accumulation order, so eta enters the shared kernel differing in the last ULP,
+# and a marginal that sums ~100 terms through exp/lgamma carries it through.
+# Reference BLAS collapses both to the same naive dot ordering and the equality
+# held on that platform alone; a tuned OpenBLAS separates them. Measured spread
+# on CI: max relative 6.5e-16, one to three ULP.
+#
+# So the R-oracle comparison is a tolerance check, reporting magnitude when it
+# trips -- a structural divergence would be O(1), nowhere near this bound. The
+# thread-count check below stays exact: same GEMM, same kernel, only the thread
+# count varies, so bitwise equality there IS the invariant.
 
 .eq_nanaware <- function(a, b) all((a == b) | (is.nan(a) & is.nan(b)) |
                                    (is.na(a) & is.na(b)))
 
-# Reports the magnitude of any divergence. A bare TRUE/FALSE cannot tell a
-# last-ULP difference (the two call sites compile to different floating-point
-# contractions) from a structural one, and the two call for opposite responses.
-expect_bitwise <- function(R, C) {
+expect_near <- function(R, C, tol = 1e-10) {
   if (.eq_nanaware(R, C)) return(testthat::succeed())
-  d <- abs(R - C)
-  d <- d[is.finite(d)]
+  ok <- is.finite(R) & is.finite(C)
+  rel <- abs(R[ok] - C[ok]) / pmax(abs(R[ok]), 1)
+  if (all(.eq_nanaware(R[!ok], C[!ok])) && max(rel, 0) < tol)
+    return(testthat::succeed())
   testthat::fail(sprintf(
-    "not bitwise equal: %d of %d cells differ, max abs %.3e, max rel %.3e",
-    sum(d > 0), length(R), max(d), max(d / pmax(abs(R[is.finite(R - C)]), 1e-300))))
+    "diverges beyond %.0e: %d of %d cells differ, max rel %.3e",
+    tol, sum(rel > 0), length(R), max(rel, 0)))
 }
 
 test_that("N-mixture batched ploglik == R loop (Poisson + NB)", {
@@ -39,7 +52,7 @@ test_that("N-mixture batched ploglik == R loop (Poisson + NB)", {
     for (s in seq_len(S)) { r <- if (nb) exp(draws[s, 5L]) else Inf
       R[s, ] <- marg$eval_beta(draws[s, 1:2], draws[s, 3:4], r = r)$log_lik_site }
     C1 <- .tobs_ploglik_nmix(model, draws, 1L)
-    expect_bitwise(R, C1)
+    expect_near(R, C1)
     expect_identical(.tobs_ploglik_nmix(model, draws, 4L), C1)
   }
 })
@@ -56,7 +69,7 @@ test_that("removal batched ploglik == R loop", {
   R <- matrix(0, S, n_sites)
   for (s in seq_len(S)) R[s, ] <- marg$eval_beta(draws[s, 1:2], draws[s, 3:4], r = Inf)$log_lik_site
   C1 <- .tobs_ploglik_removal(model, draws, 1L)
-  expect_bitwise(R, C1)
+  expect_near(R, C1)
   expect_identical(.tobs_ploglik_removal(model, draws, 4L), C1)
 })
 
@@ -74,7 +87,7 @@ test_that("false-positive occupancy batched ploglik == R loop", {
   for (s in seq_len(S)) R[s, ] <- marg$eval_beta(draws[s, lay$psi], draws[s, lay$p11],
                                                  draws[s, lay$p10], draws[s, lay$b])$log_lik_site
   C1 <- .tobs_ploglik_fp_occu(model, draws, 1L)
-  expect_bitwise(R, C1)
+  expect_near(R, C1)
   expect_identical(.tobs_ploglik_fp_occu(model, draws, 4L), C1)
 })
 
@@ -90,7 +103,7 @@ test_that("distance batched ploglik == R loop", {
   R <- matrix(0, S, n_sites)
   for (s in seq_len(S)) R[s, ] <- marg$eval_beta(draws[s, 1:2], draws[s, 3:4], eta_b = 0, r = Inf)$log_lik_site
   C1 <- .tobs_ploglik_distance(model, draws, 1L)
-  expect_bitwise(R, C1)
+  expect_near(R, C1)
   expect_identical(.tobs_ploglik_distance(model, draws, 4L), C1)
 })
 
@@ -108,6 +121,6 @@ test_that("open N-mixture (dyn_abun) batched ploglik == R loop", {
   for (s in seq_len(S)) R[s, ] <- marg$eval_beta(draws[s, lay$lambda], draws[s, lay$p],
                                                  draws[s, lay$omega], draws[s, lay$gamma])$log_lik_site
   C1 <- .tobs_ploglik_dyn_abun(model, draws, 1L)
-  expect_bitwise(R, C1)
+  expect_near(R, C1)
   expect_identical(.tobs_ploglik_dyn_abun(model, draws, 4L), C1)
 })

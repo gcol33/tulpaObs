@@ -875,7 +875,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 #'   weakly-informative values.
 #' @param sd_occ,sd_p,sd_pos Per-coefficient community SD on each arm (length 1,
 #'   recycled, or one per coefficient). Default 0.5 / 0.4 / 0.4.
-#' @param response `"lognormal"` (default) or `"beta"`.
+#' @param positive `"lognormal"` (default) or `"beta"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
 #' @param sigma_pos Lognormal residual SD when `positive = "lognormal"`
 #'   (default 0.4).

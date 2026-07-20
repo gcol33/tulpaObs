@@ -36,6 +36,7 @@
 #'   (in unit-square distance). `NULL` disables the spatial layer.
 #' @param spatial_var Marginal variance of the spatial field (default 1).
 #' @param seed Optional integer seed.
+#' @param response Positive-arm likelihood: `"lognormal"` (default) or `"gaussian"`.
 #' @return A list with:
 #' \describe{
 #'   \item{data}{A data frame with `cover`, covariate `x`, and `lon`, `lat`.}
@@ -167,7 +168,7 @@ simulate_cover <- function(N             = 200L,
 #'   `rho = 1` is pure ICAR; `rho = 0` is pure IID.
 #' @param alpha Cover-arm scaling: cover-arm linear predictor adds
 #'   `alpha * sigma * z[region]` (so `sigma_pos = alpha * sigma`).
-#' @param response Likelihood for the positive arm: `"beta"` or
+#' @param positive Likelihood for the positive arm: `"beta"` or
 #'   `"lognormal"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
 #' @param sigma_pos_resid Lognormal residual SD when `positive =

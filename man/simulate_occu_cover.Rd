@@ -48,6 +48,8 @@ simulate_occu_cover(
 Defaults pick weakly-informative values: psi intercept at logit(0.4),
 p intercept at logit(0.5), cover intercept on the appropriate link.}
 
+\item{positive}{\code{"beta"} or \code{"lognormal"}.}
+
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
 \item{sigma_pos}{Lognormal residual SD when \code{positive = "lognormal"}
@@ -90,6 +92,19 @@ the returned \code{data} and reports \code{g0} / \code{g1} (the two fields) and 
 \item{sigma_pos_trend}{Cover-arm trend-field SD (used only when
 \code{pos_field = TRUE}).}
 
+\item{det_field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
+INDEPENDENT areal field on the detection arm only -- an intercept field
+plus a time-weighted trend field, unrelated to the occupancy and cover
+fields and with no alpha copy, so detection varies spatially on its own.
+Fit by placing \code{spatial(~ 0 + time || cell, graph = adj, to = "detection")}
+in the \code{detection} formula.}
+
+\item{sigma_p_int}{Detection-arm intercept-field SD (used only when
+\code{det_field = TRUE}).}
+
+\item{sigma_p_trend}{Detection-arm trend-field SD (used only when
+\code{det_field = TRUE}).}
+
 \item{re_det_groups}{Optional integer \verb{>= 2}: the number of levels of a
 per-visit detection random intercept (a \code{habitat} factor on \code{visit_data},
 levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_p^2)} and centred. \code{NULL}
@@ -123,8 +138,6 @@ reconstructs): \code{b} / \code{b_slope} BLUP vectors, or the \code{B} BLUP matr
 \code{s0} / \code{s1} / \code{rho} for a correlated slope.}
 
 \item{seed}{Optional integer seed.}
-
-\item{response}{\code{"beta"} or \code{"lognormal"}.}
 }
 \value{
 A list with \code{y} (N x J detection matrix), \code{y_pos} (N x J cover

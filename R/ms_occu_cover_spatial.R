@@ -78,7 +78,7 @@
 #' @param phi BYM2 spatial-variance fraction in `[0, 1]`, used only when
 #'   `field = "bym2"` (`phi = 1` is the pure ICAR field, `phi = 0` pure iid).
 #' @param sigma_pos Lognormal cover residual SD (on the log scale).
-#' @param response Cover family; only `"lognormal"` in Stage 1.
+#' @param positive Cover family; only `"lognormal"` in Stage 1.
 #' @param seed Optional RNG seed.
 #'
 #' @return A list with `y` (N x J x n_species 0/1 detections), `y_pos`

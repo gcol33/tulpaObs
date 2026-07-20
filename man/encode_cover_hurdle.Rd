@@ -24,7 +24,20 @@ and positive-cover arms.}
 \item{y}{Length-N numeric vector of cover in \verb{[0, 1]}. NAs are dropped
 from both arms (treated as missing, not as zero cover).}
 
-\item{response}{One of \code{"lognormal"} or \code{"beta"}.}
+\item{positive}{Positive-arm likelihood: one of \code{"lognormal"},
+\code{"lognormal_trunc"}, \code{"beta"}, \code{"beta_oi"}, \code{"ordinal"}, \code{"gaussian"}.}
+
+\item{breaks}{Ordinal cut points, required when \code{positive = "ordinal"} and
+ignored otherwise.}
+
+\item{autoscale}{Logical (default \code{TRUE}); rescale the positive arm away
+from the boundary so the Laplace engine never sees an exact 0 or 1.}
+
+\item{presence_formula}{Optional formula overriding \code{formula} on the
+occurrence arm. \code{NULL} uses \code{formula} for both arms.}
+
+\item{positive_formula}{Optional formula overriding \code{formula} on the
+positive-cover arm. \code{NULL} uses \code{formula} for both arms.}
 }
 \value{
 A list with: \code{occ_data}, \code{pos_data}, \code{spatial_spec} (a

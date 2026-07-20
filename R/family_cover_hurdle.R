@@ -179,7 +179,16 @@
 #' @param data Data frame with `nrow(data) == length(y)`.
 #' @param y Length-N numeric vector of cover in `[0, 1]`. NAs are dropped
 #'   from both arms (treated as missing, not as zero cover).
-#' @param response One of `"lognormal"` or `"beta"`.
+#' @param positive Positive-arm likelihood: one of `"lognormal"`,
+#'   `"lognormal_trunc"`, `"beta"`, `"beta_oi"`, `"ordinal"`, `"gaussian"`.
+#' @param breaks Ordinal cut points, required when `positive = "ordinal"` and
+#'   ignored otherwise.
+#' @param autoscale Logical (default `TRUE`); rescale the positive arm away
+#'   from the boundary so the Laplace engine never sees an exact 0 or 1.
+#' @param presence_formula Optional formula overriding `formula` on the
+#'   occurrence arm. `NULL` uses `formula` for both arms.
+#' @param positive_formula Optional formula overriding `formula` on the
+#'   positive-cover arm. `NULL` uses `formula` for both arms.
 #' @return A list with: `occ_data`, `pos_data`, `spatial_spec` (a
 #'   `tulpa_spatial` built from the unweighted areal formula term, or NULL),
 #'   `trend` (per-observation weight + label from a weighted areal term, or
@@ -874,7 +883,7 @@ encode_cover_hurdle <- function(formula, data, y,
 #' an outer 1-D optimisation and weights the Hessian accordingly.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
-#' @param response `"lognormal"` or `"beta"` (taken from `enc$positive`).
+#' @param positive `"lognormal"` or `"beta"` (taken from `enc$positive`).
 #' @param engine `"laplace"` (default) or `"nested_laplace"`. The latter is
 #'   routed through [fit_cover_hurdle_joint_nested()].
 #' @param priors Optional [cover_priors()] object (or a coercible list /

@@ -25,12 +25,6 @@ visit / replicate, the 0/1 detection response, and the continuous cover
 response (used only where \code{response == 1}). The accepted range of \code{y_pos}
 follows \code{positive}.}
 
-\item{response}{The cover-arm distribution, matching \code{\link[=occu_cover]{occu_cover()}}: \code{"beta"}
-(default) stores \code{y_pos} as a proportion in \verb{[0, 1]} (\code{tobs_data()} type
-\code{"cover"}); \code{"lognormal"} / \code{"gamma"} store it as a positive real \verb{(0, Inf)}
-(type \code{"positive"}, validated non-negative with no upper bound). Pick the
-value you pass to \code{occu_cover(response = )}.}
-
 \item{occ.covs}{Optional character vector of site-level covariate columns.
 The default (\code{NULL}) keeps the full first-row-per-site frame and lets the
 occurrence / detection / positive formulas select what they reference.}
@@ -42,6 +36,12 @@ occurrence / detection / positive formulas select what they reference.}
 \item{compact}{Logical (default \code{TRUE}). Build the compact (ragged) arms the
 joint nested-Laplace \code{occu_cover()} engine consumes (no per-site visit
 cap), or the dense \verb{[n_sites x max_visits]} grid.}
+
+\item{positive}{The cover-arm distribution, matching \code{\link[=occu_cover]{occu_cover()}}: \code{"beta"}
+(default) stores \code{y_pos} as a proportion in \verb{[0, 1]} (\code{tobs_data()} type
+\code{"cover"}); \code{"lognormal"} / \code{"gamma"} store it as a positive real \verb{(0, Inf)}
+(type \code{"positive"}, validated non-negative with no upper bound). Pick the
+value you pass to \code{occu_cover(response = )}.}
 }
 \value{
 A list with \code{y}, \code{y_pos}, \code{visits}, \code{site_data}, \code{coords},

@@ -15,6 +15,8 @@ fit_cover_hurdle(
 \arguments{
 \item{enc}{Output of \code{\link[=encode_cover_hurdle]{encode_cover_hurdle()}}.}
 
+\item{positive}{\code{"lognormal"} or \code{"beta"} (taken from \code{enc$positive}).}
+
 \item{engine}{\code{"laplace"} (default) or \code{"nested_laplace"}. The latter is
 routed through \code{\link[=fit_cover_hurdle_joint_nested]{fit_cover_hurdle_joint_nested()}}.}
 
@@ -25,8 +27,6 @@ unpenalised. Rejected with a spatial formula (the spatial solver carries
 its own prior).}
 
 \item{control}{List with optional \code{max.iter}, \code{tol}, \code{n.threads}.}
-
-\item{response}{\code{"lognormal"} or \code{"beta"} (taken from \code{enc$positive}).}
 }
 \value{
 List with \code{m_occ}, \code{m_pos}, \code{positive}, \code{pos_fit_n}, \code{pos_fit_p},

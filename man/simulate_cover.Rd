@@ -24,6 +24,8 @@ simulate_cover(
 
 \item{sigma_pos}{Lognormal residual standard deviation (default 0.4).}
 
+\item{response}{Positive-arm likelihood: \code{"lognormal"} (default) or \code{"gaussian"}.}
+
 \item{spatial_range}{Length scale of the exponential spatial field
 (in unit-square distance). \code{NULL} disables the spatial layer.}
 

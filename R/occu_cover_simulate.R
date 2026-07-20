@@ -26,7 +26,7 @@
 #' @param beta_occ,beta_p,beta_pos Coefficient vectors c(intercept, slopes).
 #'   Defaults pick weakly-informative values: psi intercept at logit(0.4),
 #'   p intercept at logit(0.5), cover intercept on the appropriate link.
-#' @param response `"beta"` or `"lognormal"`.
+#' @param positive `"beta"` or `"lognormal"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
 #' @param sigma_pos Lognormal residual SD when `positive = "lognormal"`
 #'   (default 0.4).
@@ -58,6 +58,16 @@
 #'   `pos_field = TRUE`).
 #' @param sigma_pos_trend Cover-arm trend-field SD (used only when
 #'   `pos_field = TRUE`).
+#' @param det_field Logical; when `TRUE` (and `adj` is supplied) draw an
+#'   INDEPENDENT areal field on the detection arm only -- an intercept field
+#'   plus a time-weighted trend field, unrelated to the occupancy and cover
+#'   fields and with no alpha copy, so detection varies spatially on its own.
+#'   Fit by placing `spatial(~ 0 + time || cell, graph = adj, to = "detection")`
+#'   in the `detection` formula.
+#' @param sigma_p_int Detection-arm intercept-field SD (used only when
+#'   `det_field = TRUE`).
+#' @param sigma_p_trend Detection-arm trend-field SD (used only when
+#'   `det_field = TRUE`).
 #' @param re_det_groups Optional integer `>= 2`: the number of levels of a
 #'   per-visit detection random intercept (a `habitat` factor on `visit_data`,
 #'   levels `hab1..K`), drawn `b_g ~ N(0, sigma_re_p^2)` and centred. `NULL`

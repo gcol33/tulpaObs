@@ -21,6 +21,8 @@ fit_cover_hurdle_joint_nested(
 \item{data}{The original (un-subsetted) data frame — required to resolve
 the spatial spec (group_var lookup, n_spatial_units check).}
 
+\item{positive}{\code{"lognormal"} or \code{"beta"}.}
+
 \item{control}{List with optional \code{max_iter}, \code{tol}, \code{n_threads},
 \code{sigma_grid}, \code{rho_grid}, \code{rho_car_grid}, \code{sigma_pos_grid},
 \code{phi_init}, \code{phi_bounds} (the last two are forwarded to the beta
@@ -47,8 +49,6 @@ supplied, the per-arm fixed-effect prior reaches the joint engine as a
 \code{beta_prior_mean} / \code{beta_prior_prec} on the occurrence and positive
 responses, mirroring the separate-Laplace path. \code{NULL} / \code{FALSE} /
 \code{"none"} leave both arms unpenalised.}
-
-\item{response}{\code{"lognormal"} or \code{"beta"}.}
 }
 \value{
 List shaped like the single-Laplace fit output but with extra

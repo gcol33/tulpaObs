@@ -40,14 +40,14 @@ weakly-informative values.}
 \item{sd_occ, sd_p, sd_pos}{Per-coefficient community SD on each arm (length 1,
 recycled, or one per coefficient). Default 0.5 / 0.4 / 0.4.}
 
+\item{positive}{\code{"lognormal"} (default) or \code{"beta"}.}
+
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
 \item{sigma_pos}{Lognormal residual SD when \code{positive = "lognormal"}
 (default 0.4).}
 
 \item{seed}{Optional integer seed.}
-
-\item{response}{\code{"lognormal"} (default) or \code{"beta"}.}
 }
 \value{
 A list with \code{y} (3D detection array), \code{y_pos} (3D cover array, \code{NA}

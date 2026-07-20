@@ -702,7 +702,7 @@
 #' @param enc Output of [encode_cover_hurdle()].
 #' @param data The original (un-subsetted) data frame — required to resolve
 #'   the spatial spec (group_var lookup, n_spatial_units check).
-#' @param response `"lognormal"` or `"beta"`.
+#' @param positive `"lognormal"` or `"beta"`.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
 #'   `sigma_grid`, `rho_grid`, `rho_car_grid`, `sigma_pos_grid`,
 #'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta
