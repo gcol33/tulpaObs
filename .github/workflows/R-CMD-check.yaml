@@ -53,6 +53,12 @@ jobs:
       # already gate themselves with skip_if_not_installed(). INLA in particular
       # is a large non-CRAN install, so check must not demand every Suggests.
       _R_CHECK_FORCE_SUGGESTS_: false
+      # check runs tests/ as part of the tarball check, and the ungated suite is
+      # the multi-hour recovery tier. What check is here to catch is structural
+      # -- NAMESPACE, examples, vignettes, Rd -- so it takes the smoke tier and
+      # leaves the calibration evidence to full-recovery.yaml.
+      TULPAOBS_FAST: '1'
+      TESTTHAT_PARALLEL: 'false'
 
     steps:
       - uses: actions/checkout@v4

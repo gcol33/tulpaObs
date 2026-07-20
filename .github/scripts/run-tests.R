@@ -37,9 +37,15 @@ cat(sprintf(
   tier, sum(df$passed), sum(df$skipped), failed, errors))
 
 if (failed > 0 || errors > 0) {
-  cat("\nFailing test files:\n")
-  bad <- df[df$failed > 0 | df$error, c("file", "test", "failed", "error")]
-  print(unique(bad), row.names = FALSE)
+  # One line per failing test rather than a printed data frame: the frame wraps
+  # or drops the file column in a narrow log viewer, which is where this is read.
+  bad <- df[df$failed > 0 | df$error, ]
+  cat("\nFailing tests:\n")
+  for (i in seq_len(nrow(bad))) {
+    cat(sprintf("  %s :: %s  (failed %d%s)\n",
+                bad$file[i], bad$test[i], bad$failed[i],
+                if (bad$error[i]) ", errored" else ""))
+  }
   quit(status = 1L)
 }
 
