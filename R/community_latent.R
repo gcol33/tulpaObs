@@ -83,15 +83,123 @@
 # on a tensor Gauss-Hermite grid. A node is a fixed Q-vector, so it shifts cell
 # (i, s) by lambda_s' z_k -- the same shift at every site -- and one node costs a
 # single ll_cell call.
-.tobs_latent_joint_marginal <- function(oracle, eta_base, lambda, gh) {
-  Ns <- nrow(eta_base)
-  nd <- as.matrix(expand.grid(rep(list(gh$x), ncol(lambda))))
-  lw <- rowSums(as.matrix(expand.grid(rep(list(log(gh$w)), ncol(lambda)))))
-  L  <- lapply(seq_len(nrow(nd)), function(k)
-    lw[k] + rowSums(oracle$ll_cell(
-      eta_base + rep(as.numeric(lambda %*% nd[k, ]), each = Ns))))
+#
+# The rule is ADAPTIVE: the nodes are placed at the mode and curvature of each
+# site's own integrand rather than at the prior's scale. Fixed prior-scale nodes
+# are accurate when the per-site likelihood is flat and the N(0, I) prior
+# dominates -- which is the Bernoulli case, and is the only case the node-count
+# stability in test-community-latent-quad.R ever exercised. A Poisson site with
+# counts of a few carries a sharply peaked, shifted integrand that five
+# prior-scale nodes do not resolve, and the resulting quadrature error does NOT
+# cancel in the argmax: measured on the clean fixture (true eta, known loadings
+# handed in inflated), the implied magnitude wanders 0.69-0.93 across node counts
+# 5-35 on a Poisson oracle while sitting stable to under 0.4% on a Bernoulli one.
+# That is the ~25% low magnitude on the count routes in gcol33/tulpaObs#154.
+#
+# Non-adaptive is the zhat = 0, A = I special case of what follows, so there is
+# one path here rather than two: when the mode-find cannot proceed (a non-finite
+# score far from the mode, which the count marginals can return) it falls back to
+# exactly that and reproduces the previous estimator.
+.tobs_latent_joint_marginal <- function(oracle, eta_base, lambda, gh,
+                                        adapt = TRUE) {
+  Ns <- nrow(eta_base); Qk <- ncol(lambda)
+  nd <- as.matrix(expand.grid(rep(list(gh$x), Qk)))
+  lw <- rowSums(as.matrix(expand.grid(rep(list(log(gh$w)), Qk))))
+
+  zhat <- matrix(0, Ns, Qk)
+  A <- array(0, dim = c(Ns, Qk, Qk))
+  for (a in seq_len(Qk)) A[, a, a] <- 1
+  logdetA <- numeric(Ns)
+
+  if (isTRUE(adapt)) {
+    # Mode of h_i(z) = sum_s ll_cell(eta_is + lambda_s' z) - z'z / 2 by Newton.
+    # The gradient and curvature are the same quantities the factor update's
+    # zeta half-pass uses, assembled across sites at once: the Hessian entry
+    # (a, b) is sum_s curv_is lambda_sa lambda_sb + delta_ab.
+    # h_i(z) = sum_s ll_cell(eta_is + lambda_s' z) - z'z / 2, the objective whose
+    # mode and curvature the nodes adapt to.
+    hval <- function(z) {
+      v <- rowSums(oracle$ll_cell(eta_base + tcrossprod(z, lambda))) -
+        0.5 * rowSums(z^2)
+      ifelse(is.finite(v), v, -Inf)
+    }
+    # A Newton step is not guaranteed to ascend, and the count marginals are
+    # exp-linked, so an undamped overshoot drives exp(eta) past overflow and the
+    # mode lands somewhere arbitrary -- which then places every node there and
+    # makes the quadrature worse than not adapting at all. Backtrack per site:
+    # halve only the sites whose step did not improve, keep the ones that did.
+    ok <- TRUE
+    h0 <- hval(zhat)
+    if (any(!is.finite(h0))) ok <- FALSE
+    for (it in seq_len(12L)) {
+      if (!ok) break
+      wk <- oracle$working(eta_base + tcrossprod(zhat, lambda))
+      if (any(!is.finite(wk$score)) || any(!is.finite(wk$curv))) { ok <- FALSE; break }
+      G <- wk$score %*% lambda - zhat
+      step <- matrix(0, Ns, Qk)
+      for (i in seq_len(Ns)) {
+        Hi <- matrix(0, Qk, Qk)
+        for (a in seq_len(Qk)) for (b in seq_len(Qk)) {
+          Hi[a, b] <- sum(wk$curv[i, ] * lambda[, a] * lambda[, b]) +
+            (if (a == b) 1 else 0)
+        }
+        step[i, ] <- tryCatch(solve(Hi, G[i, ]),
+                              error = function(e) rep(NA_real_, Qk))
+      }
+      step[!is.finite(step)] <- 0
+      tt <- rep(1, Ns)
+      moved <- rep(FALSE, Ns)
+      for (bt in seq_len(25L)) {
+        pend <- !moved & (rowSums(abs(step)) > 0)
+        if (!any(pend)) break
+        cand <- zhat + step * tt
+        hc <- hval(cand)
+        take <- pend & is.finite(hc) & (hc > h0)
+        if (any(take)) {
+          zhat[take, ] <- cand[take, , drop = FALSE]
+          h0[take] <- hc[take]
+          moved[take] <- TRUE
+        }
+        tt[pend & !take] <- tt[pend & !take] / 2
+      }
+      if (max(abs(step * tt)) < 1e-8) break
+    }
+    if (ok) {
+      wk <- oracle$working(eta_base + tcrossprod(zhat, lambda))
+      ok <- all(is.finite(wk$score)) && all(is.finite(wk$curv))
+    }
+    if (ok) {
+      # A_i = H_i^{-1/2} via the Cholesky H = L L', A = L^{-T}: then A A' =
+      # H^{-1} and log|det A| = -sum(log(diag(L))).
+      for (i in seq_len(Ns)) {
+        Hi <- matrix(0, Qk, Qk)
+        for (a in seq_len(Qk)) for (b in seq_len(Qk)) {
+          Hi[a, b] <- sum(wk$curv[i, ] * lambda[, a] * lambda[, b]) +
+            (if (a == b) 1 else 0)
+        }
+        Li <- tryCatch(chol(Hi), error = function(e) NULL)
+        if (is.null(Li)) { ok <- FALSE; break }
+        A[i, , ] <- backsolve(Li, diag(Qk))       # L^{-T}, since chol() is upper
+        logdetA[i] <- -sum(log(diag(Li)))
+      }
+    }
+    if (!ok) {
+      zhat[] <- 0
+      A[] <- 0
+      for (a in seq_len(Qk)) A[, a, a] <- 1
+      logdetA[] <- 0
+    }
+  }
+
+  cphi <- -0.5 * Qk * log(2 * pi)
+  L <- lapply(seq_len(nrow(nd)), function(k) {
+    Zk <- zhat
+    for (b in seq_len(Qk)) Zk <- Zk + A[, , b] * nd[k, b]
+    lw[k] + rowSums(oracle$ll_cell(eta_base + tcrossprod(Zk, lambda))) +
+      (cphi - 0.5 * rowSums(Zk^2)) - (cphi - 0.5 * sum(nd[k, ]^2))
+  })
   m <- Reduce(pmax, L)
-  sum(m + log(Reduce(`+`, lapply(L, function(z) exp(z - m)))))
+  sum(logdetA + m + log(Reduce(`+`, lapply(L, function(z) exp(z - m)))))
 }
 
 # The factor SCALE: the scalar c maximising the joint marginal at loadings
@@ -127,17 +235,56 @@
          "log-likelihoods; this oracle supplies none.", call. = FALSE)
   }
   if (all(sqrt(rowSums(lambda^2)) < 1e-8)) return(1)
-  grid <- exp(seq(log(0.2), log(1.5), length.out = 14L))
-  prof <- vapply(grid, function(g)
-    .tobs_latent_joint_marginal(oracle, eta_base, g * lambda, gh), numeric(1))
+
+  prof_at <- function(g)
+    .tobs_latent_joint_marginal(oracle, eta_base, g * lambda, gh)
+
+  # The bracket EXPANDS rather than clamping. A fixed [0.2, 1.5] window returned
+  # its own boundary as though it were an optimum, so a run in which the update's
+  # lambda had drifted far from the marginal's answer reported a plausible number
+  # instead of a saturated one -- and because the reported loadings feed the next
+  # EM offset, a saturated scale and a regrowing update ratchet against each
+  # other (gcol33/tulpaObs#154, seed 305: c pinned at the 0.2 floor while the
+  # loadings ran to 10.7x truth). Expanding makes the scale an actual argmax; the
+  # attribute below reports the cases where even the widened bracket did not
+  # close, so saturation is visible rather than silent.
+  lo <- 0.2; hi <- 1.5
+  grid <- exp(seq(log(lo), log(hi), length.out = 14L))
+  prof <- vapply(grid, prof_at, numeric(1))
+  saturated <- FALSE
+  for (expand in seq_len(6L)) {
+    j <- which.max(prof)
+    if (j != 1L && j != length(grid)) break
+    if (j == 1L) {
+      lo <- lo / 4
+      add <- exp(seq(log(lo), log(grid[1L]), length.out = 5L))[-5L]
+      grid <- c(add, grid); prof <- c(vapply(add, prof_at, numeric(1)), prof)
+    } else {
+      hi <- hi * 4
+      add <- exp(seq(log(grid[length(grid)]), log(hi), length.out = 5L))[-1L]
+      grid <- c(grid, add); prof <- c(prof, vapply(add, prof_at, numeric(1)))
+    }
+    # A magnitude this far from the update's own iterate means the two blocks
+    # have come apart; widen a bounded number of times, then say so.
+    if (expand == 6L) saturated <- TRUE
+  }
   j <- which.max(prof)
-  if (j == 1L || j == length(grid)) return(grid[j])
-  x <- grid[(j - 1L):(j + 1L)]; y <- prof[(j - 1L):(j + 1L)]
-  d <- (y[1] - y[2]) * (x[2] - x[3]) - (y[2] - y[3]) * (x[1] - x[2])
-  if (!is.finite(d) || abs(d) < 1e-12) return(grid[j])
-  v <- x[2] - 0.5 * ((x[2] - x[1])^2 * (y[2] - y[3]) -
-                     (x[2] - x[3])^2 * (y[2] - y[1])) / d
-  if (is.finite(v) && v >= x[1] && v <= x[3]) v else grid[j]
+  if (j == 1L || j == length(grid)) saturated <- TRUE
+  out <- if (j == 1L || j == length(grid)) {
+    grid[j]
+  } else {
+    x <- grid[(j - 1L):(j + 1L)]; y <- prof[(j - 1L):(j + 1L)]
+    d <- (y[1] - y[2]) * (x[2] - x[3]) - (y[2] - y[3]) * (x[1] - x[2])
+    if (!is.finite(d) || abs(d) < 1e-12) {
+      grid[j]
+    } else {
+      v <- x[2] - 0.5 * ((x[2] - x[1])^2 * (y[2] - y[3]) -
+                         (x[2] - x[3])^2 * (y[2] - y[1])) / d
+      if (is.finite(v) && v >= x[1] && v <= x[3]) v else grid[j]
+    }
+  }
+  attr(out, "saturated") <- saturated
+  out
 }
 
 
@@ -684,6 +831,7 @@
   # (measured: loadings to 5.3e3 x truth, residual correlation to 0.01).
   lambda_hat <- lambda
   gh_joint <- if (has_factor) .tobs_gh_nodes(n.quad) else NULL
+  fac_saturated <- FALSE
 
   em <- NULL
   for (outer in seq_len(max.outer)) {
@@ -715,8 +863,9 @@
       gu <- .tobs_latent_factor_update(oracle, base_fac, zeta, lambda,
                                        center = has_field)
       zeta <- gu$zeta; lambda <- gu$lambda
-      lambda_hat <- lambda * .tobs_latent_factor_scale(oracle, base_fac, lambda,
-                                                       gh_joint)
+      sc <- .tobs_latent_factor_scale(oracle, base_fac, lambda, gh_joint)
+      if (isTRUE(attr(sc, "saturated"))) fac_saturated <- TRUE
+      lambda_hat <- lambda * as.numeric(sc)
       delta <- max(delta, max(abs(tcrossprod(zeta, lambda_hat) - fac_off)))
     }
     if (isTRUE(verbose)) {
@@ -796,7 +945,13 @@
          bym2 = if (is_bym2) list(sigma = bym_sigma, rho = bym_rho,
                                   scale = bym_scale, phi = bym_phi) else NULL),
        factor = if (!has_factor) NULL else list(
-         n_factors = fac$n_factors, zeta = zeta, lambda = lambda_hat))
+         n_factors = fac$n_factors, zeta = zeta, lambda = lambda_hat,
+         # TRUE when the magnitude search hit the end of even its widened
+         # bracket, i.e. the reported loadings are a boundary and not an argmax.
+         # Every quantity the family reports off the factors -- the loadings and
+         # so the residual COVARIANCE -- is then unreliable in scale, though the
+         # residual CORRELATION is row-normalised and survives.
+         magnitude_saturated = fac_saturated))
 }
 
 

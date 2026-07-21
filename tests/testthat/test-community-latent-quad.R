@@ -75,20 +75,95 @@ test_that("the factor scale recovers a known inflation of the loadings", {
   gh <- tulpaObs:::.tobs_gh_nodes(5L)
   for (infl in c(1.5, 2)) {
     cc <- tulpaObs:::.tobs_latent_factor_scale(or, eta, lam * infl, gh)
-    expect_equal(cc, 1 / infl, tolerance = 0.35)
+    # the scale carries a "saturated" attribute reporting whether the bracket
+    # closed (gcol33/tulpaObs#154); the value is what is asserted here
+    expect_false(attr(cc, "saturated"))
+    expect_equal(as.numeric(cc), 1 / infl, tolerance = 0.35)
   }
   # a degenerate (all-zero) loading matrix has no magnitude to set
   expect_identical(
     tulpaObs:::.tobs_latent_factor_scale(or, eta, matrix(0, S, Q), gh), 1)
 
-  # The driver runs this on a 5-node rule. The raw tensor integral is not
-  # converged there, but the scale is the ARGMAX over a grid, and the quadrature
-  # error is smooth in c and largely cancels: the estimate has to be stable in the
-  # node count, which is what licenses the cheap default.
+  # The driver runs this on a 5-node rule, and the rule is ADAPTIVE, so five
+  # nodes resolve the integral itself rather than relying on the quadrature error
+  # cancelling in the argmax. Measured on a Poisson oracle, where a fixed
+  # prior-scale rule needs ~81 nodes to reach the same argmax the adaptive rule
+  # reaches at 5 (gcol33/tulpaObs#154): stability in the node count is what
+  # licenses the cheap default, and it now holds on both links rather than on the
+  # Bernoulli one alone.
   ref <- tulpaObs:::.tobs_latent_factor_scale(or, eta, lam * 1.5,
                                               tulpaObs:::.tobs_gh_nodes(21L))
   for (n in c(5L, 9L, 15L)) {
     expect_equal(tulpaObs:::.tobs_latent_factor_scale(
       or, eta, lam * 1.5, tulpaObs:::.tobs_gh_nodes(n)), ref, tolerance = 0.01)
   }
+})
+
+
+test_that("the factor scale recovers the magnitude on a POISSON oracle", {
+  skip_if_fast()
+  skip_on_cran()
+  # The block above runs a Bernoulli oracle, and that was the ONLY link the
+  # quadrature was ever measured on -- which is how gcol33/tulpaObs#154's ~25%
+  # magnitude deficit on the count routes survived. A Poisson site carries a
+  # sharply peaked integrand that prior-scale nodes do not resolve: on this
+  # fixture a FIXED 5-node rule puts the argmax at 0.80 where the converged
+  # answer (a fixed rule needs ~81 nodes) is 1.12. The adaptive rule reaches it
+  # at 5.
+  set.seed(11)
+  Ns <- 400L; S <- 14L; Q <- 1L
+  lam  <- matrix(rnorm(S * Q, 0, 0.8), S, Q)
+  zeta <- matrix(rnorm(Ns * Q), Ns, Q)
+  eta  <- matrix(rnorm(Ns * S, log(4), 0.4), Ns, S)
+  y    <- matrix(rpois(Ns * S, exp(eta + tcrossprod(zeta, lam))), Ns, S)
+  or   <- tulpaObs:::.tobs_ms_count_oracle(y, link = "log")
+
+  # Handed the TRUE loadings, the scale has to come back near 1 -- the assertion
+  # #154 asks for, and the one no `residual_cor` check can make: rc is
+  # cov2cor(lambda lambda'), invariant to exactly this scalar.
+  cc <- tulpaObs:::.tobs_latent_factor_scale(or, eta, lam,
+                                             tulpaObs:::.tobs_gh_nodes(5L))
+  expect_false(attr(cc, "saturated"))
+  expect_gt(as.numeric(cc), 0.75)
+  expect_lt(as.numeric(cc), 1.35)
+
+  # and it discounts a known inflation by that factor, as on the Bernoulli side
+  for (infl in c(1.5, 2)) {
+    ci <- tulpaObs:::.tobs_latent_factor_scale(or, eta, lam * infl,
+                                               tulpaObs:::.tobs_gh_nodes(5L))
+    expect_equal(as.numeric(ci) * infl, as.numeric(cc), tolerance = 0.2)
+  }
+
+  # stable in the node count on THIS link too, which is what the 5-node default
+  # rests on and what the Bernoulli-only block could not establish
+  for (n in c(9L, 15L)) {
+    expect_equal(as.numeric(tulpaObs:::.tobs_latent_factor_scale(
+      or, eta, lam, tulpaObs:::.tobs_gh_nodes(n))), as.numeric(cc),
+      tolerance = 0.05)
+  }
+})
+
+
+test_that("the factor scale reports a bracket it could not close", {
+  # The old search clamped to a fixed [0.2, 1.5] window and returned the boundary
+  # as though it were an optimum, so a run whose loadings had drifted reported a
+  # plausible number instead of a saturated one (gcol33/tulpaObs#154). The
+  # bracket now expands, so a magnitude far outside the old window is FOUND
+  # rather than clipped.
+  set.seed(5)
+  Ns <- 200L; S <- 8L
+  lam  <- matrix(rnorm(S, 0, 0.9), S, 1L)
+  zeta <- matrix(rnorm(Ns), Ns, 1L)
+  eta  <- matrix(rnorm(Ns * S, 0, 0.5), Ns, S)
+  y    <- matrix(rbinom(Ns * S, 1, plogis(eta + tcrossprod(zeta, lam))), Ns, S)
+  or   <- tulpaObs:::.tobs_ms_count_oracle(y, link = "logit")
+  gh   <- tulpaObs:::.tobs_gh_nodes(5L)
+
+  # loadings handed in 10x too large: the corrective scale is ~0.1, below the
+  # old floor of 0.2, so the old search would have pinned at 0.2 and said nothing
+  cc <- tulpaObs:::.tobs_latent_factor_scale(or, eta, lam * 10, gh)
+  expect_lt(as.numeric(cc), 0.2)
+  expect_false(attr(cc, "saturated"))
+  # and the implied magnitude is back near the truth it was handed
+  expect_equal(as.numeric(cc) * 10, 1, tolerance = 0.4)
 })
