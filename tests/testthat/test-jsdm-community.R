@@ -46,7 +46,34 @@
   if (!is.null(field)) eta <- eta + matrix(field, N, S)
   y <- matrix(stats::rbinom(N * S, 1, stats::plogis(eta)), N, S,
               dimnames = list(NULL, paste0("sp", seq_len(S))))
-  list(y = y, data = d, S = S, beta = c(0.2, 0.8), cor_res = cor_res)
+  list(y = y, data = d, S = S, beta = c(0.2, 0.8),
+       beta_real = colMeans(bs), cor_res = cor_res)
+}
+
+
+# The community mean is a POPULATION constant, c(0.2, 0.8), but each seed draws
+# its own 16 species around it, so the mean this fixture actually realizes sits
+# an SD of beta_sd / sqrt(S) -- 0.10 on the intercept, 0.075 on the slope --
+# away from that constant. Scoring a fit against the population constant
+# therefore spends most of its tolerance on draw noise, and what is left is too
+# coarse to see estimator bias: that is how gcol33/tulpaObs#153 survived, a
+# slope inflated 1.44x sitting inside `tolerance = 0.35`.
+#
+# So the assertions below score against `beta_real`, the mean of that seed's own
+# draw, which removes the draw noise and leaves a pure estimator budget. They
+# also compare ABSOLUTELY. testthat's numeric `tolerance` is relative only while
+# the target is larger than the tolerance itself and switches to absolute below
+# it (all.equal.numeric), so one `tolerance = 0.35` meant +-0.28 on the 0.8 slope
+# and +-0.35 on the 0.2 intercept -- a budget that reads uniform and is not.
+#
+# Budgets from a 16-seed measurement (dev_notes/probe_153_intercept.R, seeds
+# 11-26). Deviation from the realized mean: lfJSDM intercept sd 0.035 /
+# max 0.093, slope sd 0.052 / max 0.151; the factor-free community GLMM
+# intercept max 0.074, slope max 0.059.
+expect_community_mean <- function(fit, real, tol) {
+  est <- unname(fit$means[seq_along(real)])
+  testthat::expect_lt(abs(est[1] - real[1]), tol[1])
+  testthat::expect_lt(abs(est[2] - real[2]), tol[2])
 }
 
 
@@ -91,7 +118,12 @@ test_that("jsdm() recovers community means with per-species coefficients", {
             species = colnames(d$y), method = "laplace",
             control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(f, "tobs_fit")
-  expect_equal(unname(f$means[1:2]), d$beta, tolerance = 0.25)
+  # Seed 1 realizes a community intercept of 0.340 against the population's
+  # 0.200, so scoring this against the population constant spends more than half
+  # the old 0.25 on the draw. Against the realized mean the factor-free route is
+  # unbiased (-0.006 over 16 seeds) and agrees with lme4's glmer on the same
+  # fixture to 0.001, which is what licenses the tighter budget here.
+  expect_community_mean(f, d$beta_real, c(0.12, 0.12))
   # per-species coefficients under a community covariance (not a scalar intercept)
   expect_equal(dim(f$ms_community$coef_mu), c(16L, 2L))
   expect_equal(dim(f$ms_community$Sigma_mu), c(2L, 2L))
@@ -121,10 +153,13 @@ test_that("lfJSDM recovers residual species co-occurrence", {
   # one-sided over 16 seeds -- because the factor magnitude was a joint-mode
   # estimate with nothing bounding it (gcol33/tulpaObs#153). With the magnitude
   # set by the joint site marginal the slope is unbiased: 0.796 vs 0.800 over
-  # seeds 11-26. Asserted per coefficient rather than on the vector, so a
-  # one-sided shift in either one cannot hide under an aggregate tolerance.
-  expect_equal(unname(f$means[2]), 0.8, tolerance = 0.35)
-  expect_equal(unname(f$means[1]), 0.2, tolerance = 0.35)
+  # seeds 11-26, 7 seeds above truth and 9 below.
+  #
+  # Scored per coefficient against this seed's realized mean, so neither a
+  # one-sided shift nor a draw offset can hide in the other. On seed 11 the fit
+  # deviates 0.039 (intercept) and 0.034 (slope); the pre-fix slope deviated
+  # 0.166 on the same seed, so the slope budget separates them.
+  expect_community_mean(f, d$beta_real, c(0.10, 0.12))
   expect_true(is.finite(tobs_waic(f)$waic))
 })
 
@@ -132,6 +167,7 @@ test_that("lfJSDM recovers the residual correlation over seeds", {
   skip_if_fast()
   skip_on_cran()
   rc <- numeric(4L)
+  dev <- matrix(NA_real_, 4L, 2L)
   for (s in seq_len(4L)) {
     d <- .jsdmc_sim(Q = 2L, seed = 10L + s)
     f <- tobs(~ x + latent(2), data = d$data, family = jsdm(), y = d$y,
@@ -139,8 +175,17 @@ test_that("lfJSDM recovers the residual correlation over seeds", {
               control = list(verbose = FALSE, progress = FALSE))
     off <- upper.tri(d$cor_res)
     rc[s] <- stats::cor(f$ms_factor$residual_cor[off], d$cor_res[off])
+    dev[s, ] <- unname(f$means[1:2]) - d$beta_real
   }
   expect_gt(stats::median(rc), 0.85)
+  # A one-sided coefficient shift is a property of the MEAN deviation, not of
+  # any single fit, so it is asserted here rather than on the single-seed fit
+  # above: averaging 4 seeds cuts the per-seed spread in half and makes the
+  # budget an estimator budget. Measured over these 4 seeds the mean deviation
+  # is +0.036 (intercept) and +0.017 (slope); before gcol33/tulpaObs#153 was
+  # fixed the slope's was +0.325.
+  expect_lt(abs(mean(dev[, 1])), 0.09)
+  expect_lt(abs(mean(dev[, 2])), 0.09)
 })
 
 

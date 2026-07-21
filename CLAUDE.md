@@ -153,6 +153,30 @@ Both surfaced on the first CI run and neither is reproducible on Windows:
   measure the bias over many seeds BEFORE touching the tolerance -- widening
   it deletes the signal.
 
+  Two things make that tolerance looser than it reads, and BOTH have to be
+  taken out before a community recovery number means anything:
+
+  - *The estimand is the wrong constant.* A community simulator draws its
+    per-species coefficients around a POPULATION mean (`rnorm(S, 0.2, 0.4)`),
+    so the mean the seed actually realizes sits `beta_sd/sqrt(S)` -- 0.10 at
+    S=16 -- from that constant. Scoring against the constant spends most of
+    the budget on draw noise. Score against `colMeans(bs)`, the seed's own
+    realized mean, and the budget becomes a pure estimator budget: on the
+    jsdm fixture that took the honest tolerance from 0.35 to 0.10/0.12 and
+    made the deviation from realized truth (sd 0.035 intercept / 0.052 slope,
+    16 seeds) the thing being asserted. `.jsdmc_sim` returns `beta_real` for
+    this; most other community simulators still return only the nominal
+    constant (#155).
+  - *`tolerance` silently switches scale.* `all.equal.numeric` is relative
+    only while the target exceeds the tolerance and absolute below it, so one
+    `tolerance = 0.35` meant +-0.28 on a 0.8 slope and +-0.35 on a 0.2
+    intercept. Assert absolutely (`expect_lt(abs(est - truth), tol)`) when the
+    budget is meant to be uniform.
+
+  A one-sided shift is a property of the MEAN deviation over seeds, not of one
+  fit, so assert it in a multi-seed loop; a single-seed assertion is a
+  gross-regression guard and should be budgeted as one.
+
 Suggests are NOT all installed (`_R_CHECK_FORCE_SUGGESTS_: false`); INLA is a
 large non-CRAN install and every INLA vignette chunk is already `eval =
 have_inla`, every INLA/unmarked/spAbundance test `skip_if_not_installed()`.
