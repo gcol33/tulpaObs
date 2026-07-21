@@ -73,7 +73,7 @@
                                  numeric(1)), na.rm = TRUE)
   # Row -> chain map, aligned with the pooled draws (which stay in chain-major
   # order through per-process unscaling). Convergence diagnostics (Rhat / ESS)
-  # are computed downstream by tulpa::mcmc_diagnostics() from the named,
+  # are computed downstream by tulpa::diagnostics() from the named,
   # unscaled draws + this chain_id; see .tobs_fit_model().
   out$chain_id    <- rep(seq_len(n.chains), vapply(per_chain_draws, nrow, integer(1)))
   out
@@ -84,7 +84,7 @@
 # Cross-chain convergence diagnostics for the in-tree FullGradFn samplers
 # (abun / removal / distance / occu_cover / ms_occu_cover ...), which run their
 # own per-chain loops in R rather than through cpp_occu_fit + .tobs_fit_model's
-# tulpa::mcmc_diagnostics path. Family-agnostic: every input is a list of
+# tulpa::diagnostics path. Family-agnostic: every input is a list of
 # per-chain draw matrices [N x P]. Single source of truth for split-R-hat /
 # bulk-ESS across those paths.
 # ---------------------------------------------------------------------------

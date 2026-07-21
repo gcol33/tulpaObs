@@ -766,9 +766,9 @@
   # Expose process_info at top level for tulpa generic S3 methods
   fit$process_info <- model$process_info
   # Cross-chain convergence diagnostics (Rhat / bulk + tail ESS). tulpa owns
-  # the generic estimator (mcmc_diagnostics); it reads fit$draws + fit$chain_id.
+  # the generic estimator (diagnostics); it reads fit$draws + fit$chain_id.
   # Computed on the named, natural-scale draws (Rhat / ESS are scale-invariant).
-  fit$convergence <- tryCatch(tulpa::mcmc_diagnostics(fit),
+  fit$convergence <- tryCatch(tulpa::diagnostics(fit),
                               error = function(e) NULL)
   class(fit) <- c("tobs_fit", "tulpa_fit")
   fit
