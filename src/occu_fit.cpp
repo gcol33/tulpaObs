@@ -341,6 +341,24 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         }
     }
 
+    // ---- Name the continuous GP block (gcol33/tulpaObs#152) ----
+    // layout.has_spatial covers only the areal types, so the GP block has its
+    // own offsets and was falling through to "param[k]" -- which is why the
+    // field could not be read off a fit without counting columns by hand.
+    if (layout.is_gp && layout.log_sigma2_gp_idx >= 0) {
+        if (layout.log_sigma2_gp_idx < n_params)
+            col_names[layout.log_sigma2_gp_idx] = "log_sigma2_gp";
+        if (layout.log_phi_gp_idx >= 0 && layout.log_phi_gp_idx < n_params)
+            col_names[layout.log_phi_gp_idx] = "log_phi_gp";
+        // Collapsed fits marginalise the field out, so there are no w slots.
+        for (int i = 0; layout.gp_w_start >= 0 &&
+                        layout.gp_w_start + i < layout.gp_w_end; i++) {
+            const int c = layout.gp_w_start + i;
+            if (c >= 0 && c < n_params)
+                col_names[c] = "gp_w[" + std::to_string(i + 1) + "]";
+        }
+    }
+
     NumericMatrix draws = Rcpp::as<NumericMatrix>(result["draws"]);
     Rcpp::colnames(draws) = col_names;
 
@@ -383,6 +401,23 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
                                             ? layout.logit_rho_bym2_idx + 1
                                             : (layout.logit_rho_car_idx >= 0
                                                ? layout.logit_rho_car_idx + 1 : NA_INTEGER)));
+    }
+
+    // The continuous GP block's layout, mirroring spatial_layout / svc_layout
+    // so R slices the field by position rather than by parsing column names
+    // (gcol33/tulpaObs#152). 1-based; field_start is NA for a collapsed fit,
+    // where the field is marginalised out and there is nothing to report.
+    if (layout.is_gp && layout.log_sigma2_gp_idx >= 0) {
+        result["gp_layout"] = Rcpp::List::create(
+            Rcpp::Named("n_units")          = data.gp_data.n_obs,
+            Rcpp::Named("field_start")      = (layout.gp_w_start >= 0
+                                               ? layout.gp_w_start + 1 : NA_INTEGER),
+            Rcpp::Named("field_end")        = (layout.gp_w_start >= 0
+                                               ? layout.gp_w_end : NA_INTEGER),
+            Rcpp::Named("log_sigma2_idx")   = layout.log_sigma2_gp_idx + 1,
+            Rcpp::Named("log_phi_idx")      = (layout.log_phi_gp_idx >= 0
+                                               ? layout.log_phi_gp_idx + 1 : NA_INTEGER),
+            Rcpp::Named("collapsed")        = layout.is_gp_collapsed);
     }
 
     return result;

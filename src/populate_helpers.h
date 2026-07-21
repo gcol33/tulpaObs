@@ -101,7 +101,12 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
         data.gp_sigma2_prior_alpha = Rcpp::as<double>(sp["sigma2_prior_alpha"]);
         data.gp_phi_prior_U = Rcpp::as<double>(sp["phi_prior_U"]);
         data.gp_phi_prior_alpha = Rcpp::as<double>(sp["phi_prior_alpha"]);
-        data.gp_parameterization = 1;  // Non-centered
+        // Centered: compute_gp_spatial_prior evaluates the sampled parameters
+        // directly as the field w, and has no z -> w branch, so the stored
+        // draws have to be those same values. Setting 1 makes the chain writer
+        // forward-transform them as if they were whitened, corrupting every
+        // stored field draw while leaving the trajectory untouched.
+        data.gp_parameterization = 0;
 
     } else if (type == "multiscale_gp") {
         data.spatial_type = tulpa::SpatialType::MULTISCALE_GP;

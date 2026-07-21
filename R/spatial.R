@@ -42,6 +42,24 @@ compute_bym2_scale <- function(adj) {
   exp(mean(log(evals)))
 }
 
+# Flatten the [N, k, k] neighbour-pair distance array for the NNGP kernels.
+#
+# `compute_nngp_neighbors()` returns an R array indexed [i, j1, j2]; the hmc_gp
+# kernels read it row-major, at i * k * k + j1 * k + j2 (tulpa
+# src/hmc_gp_autodiff.h, and the convention is stated at
+# inst/include/tulpa/sampler_model_data.h). `as.vector()` is column-major, so it
+# hands every off-diagonal entry of the neighbour covariance a distance from an
+# unrelated cell. Both orderings have N * k * k elements, so the kernel's bounds
+# guard passes and the corruption is silent: the neighbour covariance goes
+# near-singular, its conditional variance pins at the kernel's floor, and the
+# field is left effectively unconstrained.
+#
+# `populate_helpers.h` rebases nn_order / nn_idx for the engine, but passes this
+# array straight through, so the permutation has to happen here.
+.tobs_nngp_pair_dist <- function(nn_neighbor_dist) {
+  as.numeric(aperm(nn_neighbor_dist, c(3L, 2L, 1L)))
+}
+
 # Nearest-neighbor structure for the NNGP approximation: for each location
 # (in a coordinate ordering) its `k` nearest predecessors, their distances,
 # and the pairwise distances among those neighbors.

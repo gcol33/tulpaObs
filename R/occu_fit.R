@@ -760,6 +760,15 @@
   # The fitted areal (icar/car_proper) field, mirroring the nested-Laplace
   # `fit$spatial_field` (gcol33/tulpaObs#142). NULL when there is no areal term.
   fit$spatial_field <- .tobs_areal_field(fit)
+  # The fitted continuous GP field (gcol33/tulpaObs#152). Same slot as the areal
+  # surface -- they are alternative spatial terms, never both present.
+  if (is.null(fit$spatial_field)) fit$spatial_field <- .tobs_gp_field(fit)
+  # Every sampled spatial surface enters the psi logit in the sampler, so it has
+  # to enter the linear predictor `fitted()` rebuilds as well. Before this the
+  # slot was set only on the Laplace svc route, so a NUTS fit with ANY spatial
+  # term reported one psi per site -- the field was influencing the fit and
+  # silently absent from everything read off it.
+  fit$model$occ_eta_offset <- .tobs_nuts_occ_offset(fit, model)
   fit$latent <- latent
   # Resolved per-chain seeds (chain c used seed + c - 1) for reproducibility.
   fit$seeds <- as.integer(seed) + seq_len(as.integer(n.chains)) - 1L
@@ -833,6 +842,55 @@
     attr(field, "draws") <- d - rowMeans(d)
   }
   field
+}
+
+# Fitted continuous GP field from a NUTS fit (gcol33/tulpaObs#152).
+#
+# Sliced by position off `gp_layout`, the same way the areal and SVC surfaces
+# are. NOT centred, unlike the intrinsic areal field: a GP's prior is
+# N(0, sigma2 K), which is proper, so its level is identified rather than
+# confounded with the intercept. NULL when there is no GP term, or when the fit
+# collapsed the field (marginalised out, so there are no draws to report).
+.tobs_gp_field <- function(fit) {
+  lay <- fit$gp_layout
+  if (is.null(lay) || is.null(fit$means)) return(NULL)
+  if (isTRUE(lay$collapsed) || is.na(lay$field_start)) return(NULL)
+  cols <- seq.int(as.integer(lay$field_start), as.integer(lay$field_end))
+  if (length(fit$means) < max(cols)) return(NULL)
+  field <- as.numeric(fit$means[cols])
+  if (!is.null(fit$draws) && ncol(fit$draws) >= max(cols)) {
+    attr(field, "draws") <- fit$draws[, cols, drop = FALSE]
+  }
+  field
+}
+
+# The per-site occupancy-logit offset a sampled spatial surface contributes, for
+# the in-sample linear predictor `fitted()` rebuilds (gcol33/tulpaObs#152).
+#
+# The RAW field, not the centred one reported as `fit$spatial_field`: the
+# sampler's intercept was drawn against the uncentred surface, so subtracting
+# its mean here would shift every psi by that constant. Both the areal and GP
+# blocks map observations to units 1:1 on this backend (`spatial_group[i] = i+1`
+# / `obs_to_loc[i] = i` in populate_helpers.h), so the field vector IS the
+# per-site offset and no map is applied.
+#
+# NULL when there is nothing to add, which leaves eta exactly as it was:
+# no spatial term, a collapsed GP, bym2 (whose surface is the rho-mix of two
+# blocks and is left to the named draws, as `.tobs_areal_field` documents), or a
+# unit count that does not match the design's rows.
+.tobs_nuts_occ_offset <- function(fit, model) {
+  lay <- fit$spatial_layout %||% fit$gp_layout
+  if (is.null(lay) || is.null(fit$means)) return(NULL)
+  if (!is.null(fit$spatial_layout) &&
+      !identical(fit$spatial_layout$type, "icar") &&
+      !identical(fit$spatial_layout$type, "car_proper")) return(NULL)
+  if (isTRUE(lay$collapsed) || is.na(lay$field_start)) return(NULL)
+  cols <- seq.int(as.integer(lay$field_start), as.integer(lay$field_end))
+  if (length(fit$means) < max(cols)) return(NULL)
+  off <- as.numeric(fit$means[cols])
+  X_occ <- model$X_processes[[1L]]
+  if (is.null(X_occ) || nrow(X_occ) != length(off)) return(NULL)
+  off
 }
 
 # Translate the structured terms a formula carried (`model$structured_terms`)
