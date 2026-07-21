@@ -67,8 +67,9 @@
 # linear predictors (each length n_sites). `summ` is the .ms_int_occu_sp_summary
 # for this species. The latent z is integrated out exactly (det / no-det branch
 # per site), accumulated in log space with a log-sum-exp on the no-detection
-# branch for stability.
-.ms_int_occu_sp_ll <- function(eta_psi, eta_p, summ) {
+# branch for stability. `per_site = TRUE` returns the per-site vector instead of
+# its sum, which is what the community latent driver's joint site marginal reads.
+.ms_int_occu_sp_ll <- function(eta_psi, eta_p, summ, per_site = FALSE) {
   clp <- function(x) pmin(pmax(x, 1e-12), 1 - 1e-12)
   psi <- clp(stats::plogis(eta_psi))
   D <- length(eta_p)
@@ -100,7 +101,7 @@
     m <- pmax(a, b)
     ll[nd] <- m + log(exp(a - m) + exp(b - m))
   }
-  sum(ll)
+  if (per_site) ll else sum(ll)
 }
 
 # Per-species packed coefficient gradient over theta = (beta_psi, beta_p1, ...,

@@ -46,6 +46,9 @@
   nv <- vapply(su, function(z) z$n_valid[, 1L], numeric(Ns))    # n_sites x n_species
   ad <- vapply(su, function(z) z$any_det,       logical(Ns))    # n_sites x n_species
   qmat <- (1 - p_site)^nv
+  ll_cell <- function(eta) vapply(seq_len(S), function(s)
+    .ms_int_occu_sp_ll(eta[, s], list(eta_p[, s]), su[[s]], per_site = TRUE),
+    numeric(Ns))
   list(
     n_sites   = Ns,
     n_species = S,
@@ -62,13 +65,11 @@
     cov_curv = function(eta) {
       psi <- stats::plogis(eta); psi * (1 - psi)
     },
-    data_ll = function(eta) {
-      acc <- 0
-      for (s in seq_len(S)) {
-        acc <- acc + .ms_int_occu_sp_ll(eta[, s], list(eta_p[, s]), su[[s]])
-      }
-      acc
-    })
+    # Per-(site, species) marginal log-likelihood. The joint site marginal that
+    # sets the factor magnitude integrates zeta with the species at a site kept
+    # together, so it needs the cells rather than their sum.
+    ll_cell = ll_cell,
+    data_ll = function(eta) sum(ll_cell(eta)))
 }
 
 

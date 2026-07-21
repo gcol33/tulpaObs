@@ -118,6 +118,14 @@
 # -- hence the co-occurrence structure -- untouched, so the residual CORRELATION
 # is unchanged and only its scale is corrected.
 .tobs_latent_factor_scale <- function(oracle, eta_base, lambda, gh) {
+  # The magnitude step reads per-cell densities, which `working()` does not
+  # carry. Name the missing callback here: without this the first family wired
+  # in without one dies inside rowSums() as "attempt to apply non-function".
+  if (!is.function(oracle$ll_cell)) {
+    stop("the latent factor magnitude needs the oracle's `ll_cell(eta)` ",
+         "returning an [n_sites x n_species] matrix of per-cell marginal ",
+         "log-likelihoods; this oracle supplies none.", call. = FALSE)
+  }
   if (all(sqrt(rowSums(lambda^2)) < 1e-8)) return(1)
   grid <- exp(seq(log(0.2), log(1.5), length.out = 14L))
   prof <- vapply(grid, function(g)

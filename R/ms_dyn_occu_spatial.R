@@ -194,6 +194,10 @@
     cov_curv = function(eta) {
       psi <- stats::plogis(eta); psi * (1 - psi)
     },
+    # Per-(site, species) marginal log-likelihood. The joint site marginal that
+    # sets the factor magnitude integrates zeta with the species at a site kept
+    # together, so it needs the cells rather than their sum.
+    ll_cell = function(eta) branch(eta)$logL,
     data_ll = function(eta) sum(branch(eta)$logL))
 }
 
