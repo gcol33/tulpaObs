@@ -57,8 +57,15 @@ test_that("a latent-factor count fit recovers residual co-occurrence + S3", {
   # residual species-correlation recovery (identified up to rotation)
   off <- upper.tri(d$cor_res)
   expect_gt(stats::cor(fit$ms_factor$residual_cor[off], d$cor_res[off]), 0.8)
-  # community means recovered
-  expect_equal(unname(unlist(coef(fit))), d$beta, tolerance = 0.2)
+  # Community means against the seed's REALIZED mean, absolutely (#155). Scored
+  # against the nominal c(1, 0.5) this seed reads 0.142 off on the intercept and
+  # 0.002 off the realized one, so the old `tolerance = 0.2` spent most of its
+  # budget on the draw. Budget = 3 sd of the deviation over seeds 201-216
+  # (intercept sd 0.033 -> 0.099, slope sd 0.026 -> 0.077), which also covers the
+  # observed max (0.065 / 0.065). Seed 215 is excluded from that spread: it is
+  # the #157 direction basin (slope deviation 0.220, 4x the next largest) and
+  # building the budget to swallow it would encode that pathology as expected.
+  expect_community_mean(fit, d$beta_real, c(0.10, 0.08))
   # fitted() is factor-aware
   expect_gt(stats::cor(as.numeric(fitted(fit)$mu), as.numeric(d$y)), 0.7)
   expect_true(is.finite(tobs_waic(fit)$waic))
@@ -73,16 +80,19 @@ test_that("a latent-factor count fit recovers residual co-occurrence + S3", {
 # Score sqrt(tr(Sigma_res)) = ||lambda||_F instead, which is rotation-invariant
 # (so it survives the loading/factor indeterminacy) and IS the quantity that
 # regressed, against the seed's own realized loading draw.
-test_that("latent-factor count recovers the loading magnitude over seeds", {
+test_that("latent-factor count recovers the loading magnitude + mean over seeds", {
   skip_if_fast()
   skip_on_cran()
-  mag <- vapply(1:12, function(s) {
+  out <- vapply(1:12, function(s) {
     d <- .mscf_sim(N = 160L, S = 14L, Q = 2L, seed = 200L + s)
     fit <- tobs(~ x + latent(2), data = d$data, family = ms_count(), y = d$y,
                 species = colnames(d$y), method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2))
-  }, numeric(1))
+    c(sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2)),
+      unname(unlist(coef(fit))) - d$beta_real)
+  }, numeric(3))
+  mag <- out[1L, ]
+  dev <- t(out[-1L, , drop = FALSE])
   # Budgets measured on these 12 seeds: median 0.978, range 0.855 to 1.048. The
   # joint-mode estimator this replaced ran a median of 1.060 with a 1.53 tail
   # over seeds 201-216, so the CEILING is what carries the regression guard and
@@ -95,6 +105,14 @@ test_that("latent-factor count recovers the loading magnitude over seeds", {
   expect_lt(abs(stats::median(mag) - 1), 0.08)
   expect_lt(max(mag), 1.30)
   expect_gt(min(mag), 0.75)
+  # A one-sided coefficient shift is a property of the MEAN deviation over seeds,
+  # not of any single fit, so it belongs here rather than in the single-fit test
+  # above (#155). Measured over these 12 seeds: intercept +0.0032 (0.33 se),
+  # slope +0.0035 (0.54 se) -- both consistent with zero. Budget is 5 se
+  # (0.049 / 0.032), which still catches a #153-scale inflation: a slope 1.44x
+  # truth would shift it 0.35.
+  expect_lt(abs(mean(dev[, 1L])), 0.05)
+  expect_lt(abs(mean(dev[, 2L])), 0.04)
 })
 
 test_that("latent-factor count recovers the residual correlation over seeds", {

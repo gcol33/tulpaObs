@@ -70,11 +70,8 @@
 # 11-26). Deviation from the realized mean: lfJSDM intercept sd 0.035 /
 # max 0.093, slope sd 0.052 / max 0.151; the factor-free community GLMM
 # intercept max 0.074, slope max 0.059.
-expect_community_mean <- function(fit, real, tol) {
-  est <- unname(fit$means[seq_along(real)])
-  testthat::expect_lt(abs(est[1] - real[1]), tol[1])
-  testthat::expect_lt(abs(est[2] - real[2]), tol[2])
-}
+# `expect_community_mean()` is shared across the community families that have
+# been retargeted -- tests/testthat/helper-community-mean.R.
 
 
 # --- (1) registry + gates ---------------------------------------------------

@@ -83,8 +83,14 @@ test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
   # residual species-correlation recovery (identified up to rotation)
   off <- upper.tri(d$cor_res)
   expect_gt(stats::cor(fit$ms_factor$residual_cor[off], d$cor_res[off]), 0.8)
-  # community occupancy means still recovered alongside the factors
-  expect_equal(unname(fit$means[1:2]), d$beta_psi, tolerance = 0.25)
+  # Community means against the seed's REALIZED mean, absolutely (#155). Budget
+  # = 3 sd of the deviation over seeds 201-216 (intercept sd 0.031 -> 0.091,
+  # slope sd 0.068 -> 0.204), each also covering the observed max (0.088 /
+  # 0.154). The slope budget barely tightens the old 0.25 because the occupancy
+  # community slope genuinely varies that much seed to seed -- a detection
+  # history carries far less information per (site, species) than a count. The
+  # intercept is where retargeting bites: 0.25 -> 0.10.
+  expect_community_mean(fit, d$beta_real, c(0.10, 0.20))
   # fitted() is factor-aware: psi picks up the per-(site, species) offset
   expect_false(is.null(fit$model$occu_factor_offset))
   expect_equal(dim(fitted(fit)$psi), c(250L, 16L))
@@ -98,14 +104,17 @@ test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
 # loading/factor indeterminacy, and is scored against the realized draw.
 # A detection history carries less information per (site, species) than a count,
 # so this budget is wider than the ms_count family's.
-test_that("lfMsPGOcc recovers the loading magnitude over seeds", {
+test_that("lfMsPGOcc recovers the loading magnitude + community mean over seeds", {
   skip_if_fast()
   skip_on_cran()
-  mag <- vapply(201:210, function(s) {
+  out <- vapply(201:210, function(s) {
     d <- .msof_sim(seed = s)
     fit <- .msof_fit(d)
-    sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2))
-  }, numeric(1))
+    c(sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2)),
+      unname(fit$means[1:2]) - d$beta_real)
+  }, numeric(3))
+  mag <- out[1L, ]
+  dev <- t(out[-1L, , drop = FALSE])
   # Budgets measured on these 10 seeds: median 1.032, range 0.947 to 1.212. A
   # detection history carries far less information per (site, species) than a
   # count, so the spread is wider than the ms_count family's (0.855 to 1.048)
@@ -113,6 +122,15 @@ test_that("lfMsPGOcc recovers the loading magnitude over seeds", {
   expect_lt(abs(stats::median(mag) - 1), 0.12)
   expect_lt(max(mag), 1.45)
   expect_gt(min(mag), 0.72)
+  # One-sided community-mean shift over the same seeds (#155). Measured here:
+  # intercept -0.0228 (2.3 se), slope +0.0238 (1.6 se). The intercept is NOT
+  # centred -- it is the small residual bias #156 left in place and documented
+  # (it did not grow there: -0.014 -> -0.017, the same size measured against a
+  # tighter spread). The budget sits above that known level with margin rather
+  # than asserting a cleanliness this estimator does not have, and still catches
+  # a #153-scale shift (a slope 1.44x truth moves it 0.35).
+  expect_lt(abs(mean(dev[, 1L])), 0.06)
+  expect_lt(abs(mean(dev[, 2L])), 0.08)
 })
 
 test_that("lfMsPGOcc recovers the residual correlation over seeds", {
