@@ -54,7 +54,7 @@
 .tobs_fit_ms_count_latent <- function(model, spatial = NULL, latent = NULL,
                                       max.iter = 200L, tol = 1e-4,
                                       sigma.beta = 5, priors = NULL,
-                                      max.outer = 25L, verbose = FALSE, ...) {
+                                      max.outer = NULL, verbose = FALSE, ...) {
   response <- model$response %||% "poisson"
   # Poisson (ms_count) and Bernoulli (jsdm) carry no dispersion parameter, so the
   # per-site latent structure is identified against them. A negbin size /
@@ -104,6 +104,7 @@
     .tobs_community_em(
       S = S, P = P, arm_idx = arm_idx, sp_ll = sp_ll, sp_grad = sp_grad,
       init_mu = if (is.null(em_prev)) mu0 else em_prev$mu,
+      init_b = em_prev$b_list, init_Sigma = em_prev$Sigma,
       init_global = numeric(0), penalize_global = FALSE,
       sigma_beta = sigma.beta, priors = priors, sigma_init = 0.3,
       max_iter = min(as.integer(max.iter), 60L), tol = as.numeric(tol),
@@ -118,7 +119,10 @@
     spatial = spatial, latent = latent, model = model, what = what,
     make_oracle = function(em) oracle, em_fit = em_fit, offset_of = offset_of,
     allow = c("icar", "car_proper", "bym2", "spde"),
-    tol = tol, max.outer = max.outer, verbose = verbose)
+    # Measured on this family: the community intercept's truncation bias runs
+    # +0.0613 / +0.0237 / +0.0001 / -0.0038 at 25 / 60 / 150 / 400 outer passes
+    # (gcol33/tulpaObs#156), so 150 is where it closes.
+    tol = tol, max.outer = max.outer, factor.outer = 150L, verbose = verbose)
 
   fit <- build_ms_count_fit(model, res$em, arm_idx, disp = NULL)
   fit$method <- "laplace"

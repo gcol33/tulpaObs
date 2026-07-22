@@ -31,7 +31,12 @@
     for (j in seq_len(J)) y[, j, s] <- stats::rbinom(N, 1, z * p[, s])
   }
   dimnames(y) <- list(NULL, NULL, paste0("sp", seq_len(S)))
-  list(y = y, data = d, S = S, beta_psi = c(0, 0.8),
+  # `lam` and `beta_real` are the realized draws, not the population constants
+  # the arguments name -- the loading MAGNITUDE is scored against
+  # sqrt(sum(lam^2)) (see the magnitude test below) and the community mean
+  # against colMeans(b_psi) (gcol33/tulpaObs#155).
+  list(y = y, data = d, S = S, beta_psi = c(0, 0.8), lam = lam,
+       beta_real = colMeans(b_psi),
        cor_res = stats::cov2cor(tcrossprod(lam) + diag(1e-8, S)))
 }
 
@@ -85,6 +90,29 @@ test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
   expect_equal(dim(fitted(fit)$psi), c(250L, 16L))
   # WAIC scores the factor structure (community_ploglik.R adds the offset)
   expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
+# The loading magnitude, which the residual correlation is blind to: it is
+# row-normalised, so a pure scale error leaves it unchanged (gcol33/tulpaObs#156).
+# ||lambda||_F = sqrt(tr(Sigma_res)) is rotation-invariant, so it survives the
+# loading/factor indeterminacy, and is scored against the realized draw.
+# A detection history carries less information per (site, species) than a count,
+# so this budget is wider than the ms_count family's.
+test_that("lfMsPGOcc recovers the loading magnitude over seeds", {
+  skip_if_fast()
+  skip_on_cran()
+  mag <- vapply(201:210, function(s) {
+    d <- .msof_sim(seed = s)
+    fit <- .msof_fit(d)
+    sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2))
+  }, numeric(1))
+  # Budgets measured on these 10 seeds: median 1.032, range 0.947 to 1.212. A
+  # detection history carries far less information per (site, species) than a
+  # count, so the spread is wider than the ms_count family's (0.855 to 1.048)
+  # and the ceiling is correspondingly higher.
+  expect_lt(abs(stats::median(mag) - 1), 0.12)
+  expect_lt(max(mag), 1.45)
+  expect_gt(min(mag), 0.72)
 })
 
 test_that("lfMsPGOcc recovers the residual correlation over seeds", {

@@ -79,7 +79,7 @@
 .tobs_fit_ms_occu_field <- function(model, spatial = NULL, latent = NULL,
                                     max.iter = 200L, tol = 1e-4,
                                     sigma.beta = 5, priors = NULL,
-                                    max.outer = 20L, verbose = FALSE, ...) {
+                                    max.outer = NULL, verbose = FALSE, ...) {
   pi_list <- model$process_info
   P_occ <- pi_list[[1L]]$p; P_p <- pi_list[[2L]]$p; P <- P_occ + P_p
   S <- model$n_species; Ns <- model$n_sites
@@ -105,6 +105,7 @@
     .tobs_community_em(
       S = S, P = P, arm_idx = arm_idx, sp_ll = sp_ll, sp_grad = sp_grad,
       init_mu = if (is.null(em_prev)) mu0 else em_prev$mu,
+      init_b = em_prev$b_list, init_Sigma = em_prev$Sigma,
       init_global = numeric(0), penalize_global = FALSE,
       sigma_beta = sigma.beta, priors = priors, sigma_init = 0.3,
       max_iter = min(as.integer(max.iter), 50L), tol = as.numeric(tol),
@@ -124,7 +125,11 @@
   res <- .tobs_community_latent_ascent(
     spatial = spatial, latent = latent, model = model, what = "ms_occu()",
     make_oracle = make_oracle, em_fit = em_fit, offset_of = offset_of,
-    allow = "icar", tol = tol, max.outer = max.outer, verbose = verbose)
+    # 150 is the ms_count-measured factor budget (gcol33/tulpaObs#156); this
+    # family's 16-seed recovery was measured AT it (magnitude median 1.021,
+    # slope z 0.71) rather than inheriting it untested.
+    allow = "icar", tol = tol, max.outer = max.outer, factor.outer = 150L,
+    verbose = verbose)
 
   fit <- build_ms_occu_fit(model, res$em, arm_idx)
   fit$method <- "laplace"

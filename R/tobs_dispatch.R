@@ -177,7 +177,7 @@
       tol        = control[["tol"]] %||% 1e-4,
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
-      max.outer  = control[["max.outer"]] %||% 25L,
+      max.outer  = control[["max.outer"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
@@ -273,7 +273,7 @@
         tol       = control[["tol"]] %||% 1e-4,
         sigma.beta = control[["sigma.beta"]] %||% 5,
         priors    = priors,
-        max.outer = control[["max.outer"]] %||% 20L,
+        max.outer = control[["max.outer"]],
         verbose   = isTRUE(control[["verbose"]])))
     }
     return(.tobs_fit_ms_occu_spatial(
@@ -297,7 +297,7 @@
       tol       = control[["tol"]] %||% 1e-4,
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors    = priors,
-      max.outer = control[["max.outer"]] %||% 20L,
+      max.outer = control[["max.outer"]],
       verbose   = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
@@ -417,7 +417,7 @@
       tol        = control[["tol"]] %||% 1e-4,
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
-      max.outer  = control[["max.outer"]] %||% 25L,
+      max.outer  = control[["max.outer"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
@@ -927,7 +927,7 @@
       tol        = control[["tol"]] %||% 1e-4,
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
-      max.outer  = as.integer(control[["max.outer"]] %||% 25L),
+      max.outer  = control[["max.outer"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (!is.null(structs$spatial)) {
@@ -1040,7 +1040,7 @@
     tol        = control[["tol"]] %||% 1e-4,
     sigma.beta = control[["sigma.beta"]] %||% 5,
     priors     = priors,
-    max.outer  = as.integer(control[["max.outer"]] %||% 25L),
+    max.outer  = control[["max.outer"]],
     verbose    = isTRUE(control[["verbose"]]))
 }
 
@@ -1274,7 +1274,7 @@
       tol        = control[["tol"]] %||% 1e-4,
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
-      max.outer  = control[["max.outer"]] %||% 25L,
+      max.outer  = control[["max.outer"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {

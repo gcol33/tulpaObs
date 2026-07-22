@@ -209,7 +209,7 @@
 .tobs_fit_ms_dyn_occu_field <- function(model, spatial,
                                         max.iter = 200L, tol = 1e-4,
                                         sigma.beta = 5, priors = NULL,
-                                        max.outer = 25L, verbose = FALSE, ...) {
+                                        max.outer = NULL, verbose = FALSE, ...) {
   pi_list <- model$process_info
   P_psi1 <- pi_list[[1L]]$p; P_p <- pi_list[[2L]]$p
   P_gam  <- pi_list[[3L]]$p; P_eps <- pi_list[[4L]]$p
@@ -277,6 +277,7 @@
     .tobs_community_em(
       S = S, P = P, arm_idx = arm_idx, sp_ll = sp_ll, sp_grad = sp_grad,
       init_mu = if (is.null(em_prev)) init_mu else em_prev$mu,
+      init_b = em_prev$b_list, init_Sigma = em_prev$Sigma,
       init_global = if (is.null(em_prev)) init_global else em_prev$global,
       penalize_global = TRUE, sigma_beta = sigma.beta, priors = priors,
       sigma_init = 0.3, max_iter = min(as.integer(max.iter), 30L),

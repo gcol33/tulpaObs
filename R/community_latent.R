@@ -44,22 +44,32 @@
 
 
 # ---------------------------------------------------------------------------
-# Factor magnitude
+# Loadings
 # ---------------------------------------------------------------------------
 
-# The factors are a LATENT, not a parameter: zeta_i ~ N(0, I_Q). The factor
-# update holds them at their joint mode and treats zeta t(lambda) as a known
-# offset, and that penalised objective is UNBOUNDED in the magnitude direction --
-# lambda is free to rescale, so sending zeta -> 0 and lambda -> Inf at fixed
-# product drives the N(0, I) prior cost to zero. Measured on lfJSDM with the
-# unit-variance anchor removed the loadings run to 48x truth; the anchor masks
-# that but leaves the magnitude at pure maximum likelihood, which over-fits
-# (1.74x) and inflates the community coefficients to compensate (slope 1.44x
-# truth, gcol33/tulpaObs#153).
+# The factors are a LATENT, not a parameter: zeta_i ~ N(0, I_Q). Everything in
+# this section follows from taking that seriously, and the estimator arrived at
+# it in two steps.
 #
-# So the update supplies the loading DIRECTIONS -- which set the cross-species
-# correlation, and which it already recovers well -- and the magnitude is set
-# here, by the one quantity that actually identifies it.
+# The factor update holds the factors at their joint mode and treats
+# zeta t(lambda) as a known offset. That penalised objective is UNBOUNDED in the
+# magnitude direction -- lambda is free to rescale, so sending zeta -> 0 and
+# lambda -> Inf at fixed product drives the N(0, I) prior cost to zero (measured
+# on lfJSDM with the unit-variance anchor removed: loadings to 48x truth). The
+# anchor masks that rather than fixing it, leaving the magnitude at pure maximum
+# likelihood, which over-fits and inflates the community coefficients to
+# compensate (gcol33/tulpaObs#153).
+#
+# Setting the magnitude from the joint site marginal fixed the worst of it, but
+# not the rest: the DIRECTION handed to that search is itself a joint-mode
+# estimate over Ns * Q incidental parameters, so it carries the factors'
+# estimation error and no single scalar can take that back out
+# (gcol33/tulpaObs#156). Integrating the factors out of the loadings entirely is
+# what actually closes it.
+#
+# So the pieces below are, in the order the fit uses them: the shared quadrature
+# grid, the 1-D magnitude search (now an INITIALISER only), the marginal-
+# likelihood loading EM, and the offset the coefficient block conditions on.
 
 # Gauss-Hermite nodes and weights for the standard normal, by Golub-Welsch on the
 # probabilists' Hermite Jacobi matrix. Weights sum to one, so
@@ -75,14 +85,21 @@
   list(x = e$values[o], w = (e$vectors[1L, o])^2)
 }
 
-# The JOINT site marginal, integrating zeta_i over all Q dimensions with the
-# species at a site kept together:
+# The adaptive Gauss-Hermite grid for the JOINT site marginal, integrating zeta_i
+# over all Q dimensions with the species at a site kept together:
 #
 #   L_i = integral prod_s f(y_is | eta_is + lambda_s' z) N(z; 0, I_Q) dz
 #
 # on a tensor Gauss-Hermite grid. A node is a fixed Q-vector, so it shifts cell
 # (i, s) by lambda_s' z_k -- the same shift at every site -- and one node costs a
 # single ll_cell call.
+#
+# Returns the per-site node positions and the unnormalised per-node log terms.
+# Log-sum-exp over the nodes gives the marginal (.tobs_latent_joint_marginal);
+# normalising them over the nodes gives the posterior p(z_i | y_i) that the
+# loading M-step averages the complete-data score over
+# (.tobs_latent_factor_mmle). Both readers want the same grid, so it is built
+# once here rather than twice.
 #
 # The rule is ADAPTIVE: the nodes are placed at the mode and curvature of each
 # site's own integrand rather than at the prior's scale. Fixed prior-scale nodes
@@ -100,8 +117,8 @@
 # one path here rather than two: when the mode-find cannot proceed (a non-finite
 # score far from the mode, which the count marginals can return) it falls back to
 # exactly that and reproduces the previous estimator.
-.tobs_latent_joint_marginal <- function(oracle, eta_base, lambda, gh,
-                                        adapt = TRUE) {
+.tobs_latent_joint_grid <- function(oracle, eta_base, lambda, gh,
+                                    adapt = TRUE) {
   Ns <- nrow(eta_base); Qk <- ncol(lambda)
   nd <- as.matrix(expand.grid(rep(list(gh$x), Qk)))
   lw <- rowSums(as.matrix(expand.grid(rep(list(log(gh$w)), Qk))))
@@ -192,19 +209,33 @@
   }
 
   cphi <- -0.5 * Qk * log(2 * pi)
-  L <- lapply(seq_len(nrow(nd)), function(k) {
+  Z <- vector("list", nrow(nd))
+  L <- vector("list", nrow(nd))
+  for (k in seq_len(nrow(nd))) {
     Zk <- zhat
     for (b in seq_len(Qk)) Zk <- Zk + A[, , b] * nd[k, b]
-    lw[k] + rowSums(oracle$ll_cell(eta_base + tcrossprod(Zk, lambda))) +
+    Z[[k]] <- Zk
+    L[[k]] <- lw[k] + rowSums(oracle$ll_cell(eta_base + tcrossprod(Zk, lambda))) +
       (cphi - 0.5 * rowSums(Zk^2)) - (cphi - 0.5 * sum(nd[k, ]^2))
-  })
-  m <- Reduce(pmax, L)
-  sum(logdetA + m + log(Reduce(`+`, lapply(L, function(z) exp(z - m)))))
+  }
+  list(Z = Z, logterm = L, logdetA = logdetA)
+}
+
+# The joint site marginal itself: log-sum-exp of the grid's per-node log terms.
+.tobs_latent_joint_marginal <- function(oracle, eta_base, lambda, gh,
+                                        adapt = TRUE) {
+  g <- .tobs_latent_joint_grid(oracle, eta_base, lambda, gh, adapt = adapt)
+  m <- Reduce(pmax, g$logterm)
+  sum(g$logdetA + m +
+        log(Reduce(`+`, lapply(g$logterm, function(z) exp(z - m)))))
 }
 
 # The factor SCALE: the scalar c maximising the joint marginal at loadings
-# c * lambda. The update fixes the loadings up to one overall magnitude, and that
-# magnitude is what over-fits.
+# c * lambda. This runs ONCE, on the first outer pass, to put the joint-mode
+# direction at a sane magnitude before the loading EM refines all of it. Its
+# value there is that it searches GLOBALLY over an expanding bracket, which a
+# local ascent cannot do, and the joint-mode iterate it is handed can be an
+# order of magnitude out.
 #
 # It has to be the JOINT marginal. Species s' own marginal integrates zeta in
 # closed form to one dimension and depends on lambda only through ||lambda_s||,
@@ -219,12 +250,12 @@
 # it is the cross-species co-occurrence -- visible only in the joint integral --
 # that pins it.
 #
-# One shared scalar rather than a magnitude per species: the per-species
-# estimates are weakly identified (scattering 0.00-3.20 against known 0.16-1.91),
-# a species pushed to zero loses its row of the residual correlation, and the
-# inflation is close to uniform. A single scale also leaves the relative loadings
-# -- hence the co-occurrence structure -- untouched, so the residual CORRELATION
-# is unchanged and only its scale is corrected.
+# One shared scalar rather than a magnitude per species, because a per-species
+# search at this stage is weakly identified (estimates scattering 0.00-3.20
+# against known 0.16-1.91, and a species pushed to zero loses its row of the
+# residual correlation). Per-species magnitudes ARE recoverable, but from the
+# marginal likelihood with the factors integrated out, which is the EM below --
+# not from a profile over a joint-mode direction.
 .tobs_latent_factor_scale <- function(oracle, eta_base, lambda, gh) {
   # The magnitude step reads per-cell densities, which `working()` does not
   # carry. Name the missing callback here: without this the first family wired
@@ -285,6 +316,217 @@
   }
   attr(out, "saturated") <- saturated
   out
+}
+
+# The loadings by MARGINAL maximum likelihood: the same joint site marginal the
+# scale step searches in one dimension, ascended over all S * Q loadings.
+#
+# The scale step alone is not enough, because the DIRECTION it is handed is
+# already over-fit. The factor update holds zeta at its joint mode, so the pair
+# (zeta, lambda) is a joint-likelihood estimate with Ns * Q incidental parameters
+# growing with the sample -- the Neyman-Scott situation, in which the joint mode
+# is inconsistent. The site factors are estimated, their estimation error lands
+# in the fitted co-occurrence, and lambda absorbs it. A single scalar cannot
+# remove noise variance already baked into the direction: it finds the magnitude
+# that is right FOR THE FITTED DIRECTION and so too high for the true one.
+#
+# Measured on the ms_count fixture (N = 160, Poisson, 6 seeds per cell), mean
+# ||lambda_hat||_F / ||lambda_true||_F under the joint-mode estimator, against
+# Q / S -- the loadings per species-worth of data, which is what that argument
+# says the over-fit should grow with:
+#
+#   S =  7, Q = 2  (Q/S = 0.286)   1.435   (worst seed 2.229)
+#   S = 14, Q = 3  (Q/S = 0.214)   1.076
+#   S = 14, Q = 2  (Q/S = 0.143)   1.064
+#   S = 28, Q = 2  (Q/S = 0.071)   1.057
+#   S = 14, Q = 1  (Q/S = 0.071)   1.014
+#
+# Monotone in Q / S, so the direction is where the over-fit lives, but NOT
+# proportional to it: it is flat around 1.06 across the middle of that range and
+# most of the S = 7 excess is two seeds of six. Growing, not a clean law.
+#
+# Integrating zeta out instead removes the incidental parameters, which is what
+# this does. The E-step is the posterior p(z_i | y_i) on the grid the marginal is
+# already evaluated on; the M-step maximises the expected complete-data
+# log-likelihood, which separates across species into a Qk-dimensional weighted
+# Newton per species with the nodes as its design rows. Ascending that ascends
+# the marginal (Dempster, Laird & Rubin 1977).
+#
+# Warm-started at the scale step's answer rather than run from the update's raw
+# iterate: the marginal is not concave in lambda, and the 1-D bracket search is a
+# cheap GLOBAL pass over the magnitude, which is the direction the update's
+# iterate is grossly wrong in. This EM is then a local refinement of both
+# magnitude and direction. One objective, two search phases -- not two estimators.
+#
+# `center` carries the factor update's cross-species loading constraint (used
+# when a shared field is also present, so the field owns the shared spatial mean
+# and the factors the between-species differences). It is applied after each
+# M-step, so the E-step re-adapts to the constrained loadings and the sequence
+# stays a projected ascent rather than a projection tacked onto the answer.
+.tobs_latent_factor_mmle <- function(oracle, eta_base, lambda, gh,
+                                     em.iter = 10L, newton = 2L, tol = 1e-5,
+                                     center = FALSE) {
+  Ns <- nrow(eta_base); S <- ncol(eta_base); Qk <- ncol(lambda)
+  zeta0 <- matrix(0, Ns, Qk)
+  # Collapsed loadings carry no latent structure, so the offset is zero rather
+  # than absent -- the driver differences it against the previous pass and would
+  # fail on a NULL.
+  if (all(sqrt(rowSums(lambda^2)) < 1e-8)) {
+    return(list(lambda = lambda, zeta = zeta0, converged = TRUE,
+                offset = matrix(0, Ns, S)))
+  }
+
+  # The expected complete-data log-likelihood at `lam`, over the E-step's fixed
+  # nodes and weights. This, not the marginal, is what the M-step line search
+  # compares -- the nodes are adapted at the E-step's lambda and held through the
+  # M-step, so it is the quantity the Newton step is a step on.
+  qobj <- function(lam, Z, W) {
+    v <- 0
+    for (k in seq_along(Z)) {
+      v <- v + sum(W[[k]] *
+                     rowSums(oracle$ll_cell(eta_base + tcrossprod(Z[[k]], lam))))
+    }
+    if (is.finite(v)) v else -Inf
+  }
+
+  # The grid is re-adapted every E-step, so successive marginals are not
+  # evaluated on identical quadrature and the sequence is only near-monotone.
+  # Carry the best rather than the last, so a late quadrature wobble cannot
+  # return a worse lambda than one already seen.
+  best <- list(ll = -Inf, lambda = lambda, zeta = zeta0)
+  ll_prev <- -Inf
+  converged <- FALSE
+
+  for (it in seq_len(em.iter)) {
+    # ---- E-step: posterior weights over the nodes, and E[z_i | y_i] ----
+    g   <- .tobs_latent_joint_grid(oracle, eta_base, lambda, gh)
+    m   <- Reduce(pmax, g$logterm)
+    tot <- Reduce(`+`, lapply(g$logterm, function(z) exp(z - m)))
+    ll  <- sum(g$logdetA + m + log(tot))
+    if (!is.finite(ll)) break
+    W <- lapply(g$logterm, function(z) exp(z - m) / tot)
+    if (!all(vapply(W, function(w) all(is.finite(w)), logical(1)))) break
+
+    zeta <- matrix(0, Ns, Qk)
+    for (k in seq_along(W)) zeta <- zeta + W[[k]] * g$Z[[k]]
+    if (ll > best$ll) best <- list(ll = ll, lambda = lambda, zeta = zeta)
+    if (is.finite(ll_prev) && abs(ll - ll_prev) < tol * (abs(ll) + 1)) {
+      converged <- TRUE
+      break
+    }
+    ll_prev <- ll
+
+    # ---- M-step: weighted Newton on lambda_s, species by species ----
+    q0 <- qobj(lambda, g$Z, W)
+    for (nw in seq_len(newton)) {
+      if (!is.finite(q0)) break
+      grad <- matrix(0, S, Qk)
+      H    <- array(0, dim = c(Qk, Qk, S))
+      ok   <- TRUE
+      for (k in seq_along(W)) {
+        Zk <- g$Z[[k]]; wk <- W[[k]]
+        wr <- oracle$working(eta_base + tcrossprod(Zk, lambda))
+        if (any(!is.finite(wr$score)) || any(!is.finite(wr$curv))) {
+          ok <- FALSE
+          break
+        }
+        # grad[s, a]    = sum_ik w_ik score_isk Z_ika
+        # H[a, b, s]    = sum_ik w_ik curv_isk Z_ika Z_ikb
+        grad <- grad + crossprod(wr$score, Zk * wk)
+        for (a in seq_len(Qk)) for (b in a:Qk) {
+          h <- as.numeric(crossprod(wr$curv, wk * Zk[, a] * Zk[, b]))
+          H[a, b, ] <- H[a, b, ] + h
+          if (b != a) H[b, a, ] <- H[b, a, ] + h
+        }
+      }
+      if (!ok) break
+
+      D <- matrix(0, S, Qk)
+      for (s in seq_len(S)) {
+        Hs <- matrix(H[, , s], Qk, Qk)
+        D[s, ] <- tryCatch(as.numeric(solve(Hs, grad[s, ])), error = function(e)
+          tryCatch(as.numeric(solve(Hs + diag(1e-6, Qk), grad[s, ])),
+                   error = function(e2) rep(NA_real_, Qk)))
+      }
+      if (!all(is.finite(D))) break
+
+      # Exp-linked families overshoot, so backtrack on the M-step objective.
+      t <- 1; taken <- FALSE
+      while (t > 1e-4) {
+        cand <- lambda + t * D
+        q <- qobj(cand, g$Z, W)
+        if (q > q0) { lambda <- cand; q0 <- q; taken <- TRUE; break }
+        t <- t / 2
+      }
+      if (!taken) break
+    }
+    if (isTRUE(center)) lambda <- sweep(lambda, 2L, colMeans(lambda), "-")
+  }
+
+  list(lambda = best$lambda, zeta = best$zeta, converged = converged,
+       offset = .tobs_latent_factor_offset(oracle, eta_base, best$lambda, gh))
+}
+
+# The per-cell offset the community EM conditions on.
+#
+# The driver hands the coefficient update ONE [n_sites x n_species] offset and
+# lets it maximise sum_is ll_cell(eta_is(beta) + off_is). The quantity that
+# should be maximised is the integrated sum_is E_z[ll_cell(eta_is(beta) +
+# lambda_s' z_i)], and NO plug-in point offset reproduces it through a nonlinear
+# link: zeta t(lambda) at the posterior mean carries too little latent variance,
+# and rescaling the scores to the prior's spread carries too much. Both were
+# measured, and each trades one bias for the other -- posterior means put +0.165
+# on the community intercept (Jensen: a log link absorbs the missing variance),
+# unit-variance scores put the loading magnitude back up to 1.70x with a 4.92x
+# tail.
+#
+# Match the SCORE instead. The two objectives have stationary conditions
+#
+#   sum_is  score(eta_is + off_is)        d eta_is / d beta = 0     (plug-in)
+#   sum_is  E_z[score(eta_is + lam_s'z)]  d eta_is / d beta = 0     (integrated)
+#
+# so choosing off_is to solve score(eta_is + off_is) = E_z[score(...)] makes them
+# the SAME condition, for any family, with no knowledge of the link. The
+# expected score comes off the E-step grid already built; the solve is a scalar
+# Newton per cell (d score / d eta = -curv, which the oracle also supplies), and
+# the block-coordinate loop re-solves it at the current coefficients each pass,
+# so it is exact at convergence rather than only near the start.
+#
+# For a Poisson log link this reduces to off = lambda' zhat + v / 2, the Jensen
+# correction, which is the check that the general construction is right.
+.tobs_latent_factor_offset <- function(oracle, eta_base, lambda, gh) {
+  g <- .tobs_latent_joint_grid(oracle, eta_base, lambda, gh)
+  m   <- Reduce(pmax, g$logterm)
+  tot <- Reduce(`+`, lapply(g$logterm, function(z) exp(z - m)))
+  W   <- lapply(g$logterm, function(z) exp(z - m) / tot)
+
+  # The posterior-mean plug-in offset, E[lambda_s' z_i | y_i]. It needs only the
+  # grid, so it is available as a fallback even where the family's working()
+  # cannot be evaluated -- and it is exactly the plug-in this step improves on,
+  # not a degenerate zero.
+  off <- matrix(0, nrow(eta_base), ncol(eta_base))
+  for (k in seq_along(W)) off <- off + W[[k]] * tcrossprod(g$Z[[k]], lambda)
+
+  sbar <- matrix(0, nrow(eta_base), ncol(eta_base))
+  for (k in seq_along(W)) {
+    wr <- oracle$working(eta_base + tcrossprod(g$Z[[k]], lambda))
+    if (any(!is.finite(wr$score))) return(off)
+    sbar <- sbar + W[[k]] * wr$score
+  }
+
+  # Newton on f(off) = score(eta_base + off) - sbar, started at the plug-in mean
+  # offset. Steps are capped so a near-flat curvature cannot throw a cell into
+  # the region where an exp link overflows.
+  for (it in seq_len(30L)) {
+    wr <- oracle$working(eta_base + off)
+    if (any(!is.finite(wr$score)) || any(!is.finite(wr$curv))) break
+    step <- (wr$score - sbar) / pmax(wr$curv, 1e-8)
+    step[!is.finite(step)] <- 0
+    step <- pmax(pmin(step, 1), -1)
+    off <- off + step
+    if (max(abs(step)) < 1e-8) break
+  }
+  off
 }
 
 
@@ -761,12 +1003,38 @@
 .tobs_community_latent_ascent <- function(spatial, latent, model, what,
                                           make_oracle, em_fit, offset_of,
                                           allow = c("icar", "car_proper", "bym2"),
-                                          tol = 1e-4, max.outer = 25L,
+                                          tol = 1e-4, max.outer = NULL,
+                                          factor.outer = 25L,
                                           n.quad = 5L, verbose = FALSE) {
   S  <- model$n_species
   Ns <- model$n_sites
   has_field  <- !is.null(spatial)
   has_factor <- !is.null(latent)
+
+  # The two blocks converge at very different rates, so the iteration budget is
+  # resolved per model rather than shared. A field block reaches `tol` and breaks
+  # out early, so its budget is only a cap. The FACTOR block does not: it
+  # alternates with the coefficient block along a slow mode (the per-species
+  # intercepts and the offset's per-species level both absorb the same latent
+  # level), and the per-cell offset change decays about 2% per pass, so `tol`
+  # 1e-4 would need roughly 300 of them. Stopping at 25 leaves a real bias in
+  # the reported community mean, measured on the ms_count fixture (6 seeds,
+  # deviation from the seed's realized mean):
+  #
+  #   max.outer     25       60      150      400
+  #   intercept  +0.0613  +0.0237  +0.0001  -0.0038
+  #   slope      +0.0074  +0.0087  +0.0033  +0.0016
+  #
+  # so a factor model gets `factor.outer`, which each family sets from its OWN
+  # measurement rather than inheriting a number measured elsewhere. The curve
+  # above is ms_count's; ms_occu recovers at the same budget. The remaining
+  # factor families keep 25 until someone measures them, because the cost is not
+  # transferable either: ms_count also gained a 2.5x warm start that pays back
+  # part of the longer loop, whereas ms_abun_latent already warm-started and so
+  # takes the full 6x -- enough to push test-ms-abun-factor.R past 85 minutes on
+  # one file. An explicit `control$max.outer` still wins over both.
+  if (is.null(max.outer)) max.outer <- if (has_factor) factor.outer else 25L
+  max.outer <- as.integer(max.outer)
 
   # ---- field setup ----
   geom <- NULL; Ffield <- NULL; tau <- NULL; Q <- NULL
@@ -823,20 +1091,36 @@
   # ---- factor setup ----
   fac <- if (has_factor) .tobs_latent_factor_init(latent, Ns, S) else NULL
   zeta <- fac$zeta; lambda <- fac$lambda
-  # `lambda` is the update's own unconstrained iterate; `lambda_hat` is that
-  # direction at the marginal's magnitude, and is what the EM conditions on and
-  # what the fit reports. Rescaling the update's OWN state instead couples the
-  # two blocks destructively -- its next Newton simply regrows the magnitude to
-  # refit the residual, the rescale shrinks it again, and the pair diverges
-  # (measured: loadings to 5.3e3 x truth, residual correlation to 0.01).
+  # `(zeta, lambda)` seeds the first outer pass only. `(zeta_hat, lambda_hat)` is
+  # the marginal-likelihood pair, and is the loop's ONLY carried factor state:
+  # what the community EM conditions on, what the next pass warm-starts from, and
+  # what the fit reports.
+  #
+  # Running the joint-mode update every pass ALONGSIDE it does not work, in
+  # either direction. Writing the refined answer back over the update's state
+  # made its next Newton regrow the magnitude to refit the residual while the
+  # refinement shrank it again (loadings to 5.3e3 x truth, residual correlation
+  # to 0.01). Keeping the two separate instead ratchets: the EM conditions on
+  # E[z | y], whose spread is attenuated by the shrinkage a posterior mean
+  # carries, the update is not told that and grows lambda to explain the variance
+  # the offset did not deliver, and each pass compounds the last (measured on the
+  # S = 7 fixture: |lambda| 1.98 -> 2.94 -> 4.29 -> ... -> 925, and because the
+  # community EM absorbs the inflated offset into the coefficients, the runaway
+  # pair is locally self-consistent and nothing downstream rejects it). One
+  # estimator, one state.
   lambda_hat <- lambda
+  zeta_hat   <- zeta
+  # The score-matched per-cell offset the community EM conditions on, and the
+  # loop's convergence target. Zero until the first factor pass fills it.
+  fac_offset <- matrix(0, Ns, S)
   gh_joint <- if (has_factor) .tobs_gh_nodes(n.quad) else NULL
   fac_saturated <- FALSE
+  fac_em_converged <- FALSE
 
   em <- NULL
   for (outer in seq_len(max.outer)) {
     site_off <- cur_site_off()
-    fac_off  <- if (has_factor) tcrossprod(zeta, lambda_hat) else matrix(0, Ns, S)
+    fac_off  <- fac_offset
     # (a) community EM given the combined latent offset.
     em <- em_fit(site_off, fac_off, em)
     eta_coef <- offset_of(em)
@@ -860,16 +1144,48 @@
     # (c) factor update (its base holds the coefficients + the field part).
     if (has_factor) {
       base_fac <- eta_coef + matrix(cur_site_off(), Ns, S)
-      gu <- .tobs_latent_factor_update(oracle, base_fac, zeta, lambda,
-                                       center = has_field)
-      zeta <- gu$zeta; lambda <- gu$lambda
-      sc <- .tobs_latent_factor_scale(oracle, base_fac, lambda, gh_joint)
-      if (isTRUE(attr(sc, "saturated"))) fac_saturated <- TRUE
-      lambda_hat <- lambda * as.numeric(sc)
-      delta <- max(delta, max(abs(tcrossprod(zeta, lambda_hat) - fac_off)))
+      if (outer == 1L) {
+        # Initialise only. The marginal's gradient in lambda vanishes at
+        # lambda = 0, so the loading EM cannot start from the zero init; the
+        # joint-mode update supplies a non-degenerate direction cheaply, and the
+        # 1-D scale search puts its magnitude in the right basin with a global
+        # bracket the local EM has no way to perform.
+        gu <- .tobs_latent_factor_update(oracle, base_fac, zeta, lambda,
+                                         center = has_field)
+        sc <- .tobs_latent_factor_scale(oracle, base_fac, gu$lambda, gh_joint)
+        if (isTRUE(attr(sc, "saturated"))) fac_saturated <- TRUE
+        lambda_hat <- gu$lambda * as.numeric(sc)
+
+        # KNOWN LIMIT, do not "fix" by rescaling the start. The marginal is not
+        # concave in lambda, and the EM inherits whatever basin the joint-mode
+        # DIRECTION fell into. Measured on the ms_count fixture, 1 seed in 16
+        # (seed 215) settles at 1.65x truth on a marginal 31 nats BELOW what the
+        # same EM reaches when started from a better direction, and its residual
+        # correlation still reads 0.90, so nothing but the marginal flags it.
+        # Restarting the EM from 0.5x / 1x / 2x this magnitude was tried and
+        # changed that seed by 0.001 while costing 3x the fit -- every magnitude
+        # runs back to the same direction. Escaping it needs a different
+        # DIRECTION to start from (a residual-correlation eigen start, or a
+        # multi-start over directions), which is gcol33/tulpaObs#157.
+      }
+      mm <- .tobs_latent_factor_mmle(oracle, base_fac, lambda_hat, gh_joint,
+                                     center = has_field)
+      lambda_hat <- mm$lambda
+      zeta_hat   <- mm$zeta
+      fac_offset <- mm$offset
+      fac_em_converged <- isTRUE(mm$converged)
+      delta <- max(delta, max(abs(fac_offset - fac_off)))
     }
     if (isTRUE(verbose)) {
-      message(sprintf("[%s latent %d] delta=%.2e", what, outer, delta))
+      # The loading magnitude and the spread of the posterior factor scores. The
+      # pair is what shows the two blocks ratcheting against each other, which is
+      # the failure mode this loop is arranged to avoid.
+      message(sprintf("[%s latent %d] delta=%.2e%s", what, outer, delta,
+                      if (has_factor)
+                        sprintf("  |lambda_hat|=%.3f  sd(zeta_hat)=%.3f",
+                                sqrt(sum(lambda_hat^2)),
+                                stats::sd(as.numeric(zeta_hat)))
+                      else ""))
     }
     if (outer > 2L && delta < tol) break
   }
@@ -878,7 +1194,7 @@
   if (has_field) {
     eta_coef <- offset_of(em)
     oracle   <- make_oracle(em)
-    base_f   <- eta_coef + (if (has_factor) tcrossprod(zeta, lambda_hat) else 0)
+    base_f   <- eta_coef + (if (has_factor) fac_offset else 0)
     if (is_car) {
       best <- list(m = -Inf)
       for (rr in rho_grid) {
@@ -945,13 +1261,18 @@
          bym2 = if (is_bym2) list(sigma = bym_sigma, rho = bym_rho,
                                   scale = bym_scale, phi = bym_phi) else NULL),
        factor = if (!has_factor) NULL else list(
-         n_factors = fac$n_factors, zeta = zeta, lambda = lambda_hat,
-         # TRUE when the magnitude search hit the end of even its widened
-         # bracket, i.e. the reported loadings are a boundary and not an argmax.
-         # Every quantity the family reports off the factors -- the loadings and
-         # so the residual COVARIANCE -- is then unreliable in scale, though the
-         # residual CORRELATION is row-normalised and survives.
-         magnitude_saturated = fac_saturated))
+         n_factors = fac$n_factors, zeta = zeta_hat, lambda = lambda_hat,
+         offset = fac_offset,
+         # TRUE when the initialising magnitude search hit the end of even its
+         # widened bracket, i.e. the loadings the EM was started from were a
+         # boundary and not an argmax. Every quantity the family reports off the
+         # factors -- the loadings and so the residual COVARIANCE -- is then
+         # suspect in scale, though the residual CORRELATION is row-normalised
+         # and survives.
+         magnitude_saturated = fac_saturated,
+         # TRUE when the last pass's loading EM met its own tolerance rather than
+         # running out of iterations.
+         loading_em_converged = fac_em_converged))
 }
 
 
@@ -1020,7 +1341,14 @@
   fit$ms_factor <- list(
     n_factors = fc$n_factors, loadings = lambda, factors = fc$zeta,
     residual_cov = Sigma_res,
-    residual_cor = stats::cov2cor(Sigma_res + diag(1e-10, S)))
-  fit$model[[offset_slot]] <- tcrossprod(fc$zeta, lambda)
+    residual_cor = stats::cov2cor(Sigma_res + diag(1e-10, S)),
+    # Scale diagnostics. residual_cor is row-normalised and so cannot show a
+    # magnitude problem; these can.
+    magnitude_saturated = isTRUE(fc$magnitude_saturated),
+    loading_em_converged = isTRUE(fc$loading_em_converged))
+  # The score-matched offset the fit conditioned on, not zeta t(lambda): fitted()
+  # and WAIC read this slot, and they should see the predictor the coefficients
+  # were estimated against.
+  fit$model[[offset_slot]] <- fc$offset
   fit
 }

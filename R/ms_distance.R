@@ -195,7 +195,7 @@
                                   mixture = "poisson", K_max = NULL,
                                   max.iter = 100L, tol = 1e-4,
                                   sigma.beta = 5, priors = NULL,
-                                  max.outer = 25L, verbose = FALSE, ...) {
+                                  max.outer = NULL, verbose = FALSE, ...) {
   if (!identical(mixture, "poisson")) {
     stop("ms_distance() is Poisson-only: the negative-binomial size is a ",
          "per-site dispersion that the community distance fit does not yet ",

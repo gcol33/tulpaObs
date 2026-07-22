@@ -96,7 +96,7 @@
                                      mixture = "poisson", K_max = NULL,
                                      max.iter = 100L, tol = 1e-4,
                                      sigma.beta = 5, priors = NULL,
-                                     max.outer = 25L, verbose = FALSE, ...) {
+                                     max.outer = NULL, verbose = FALSE, ...) {
   if (!identical(mixture, "poisson")) {
     stop("ms_abun() with latent() factors is Poisson-only: a negative-binomial ",
          "size is a second per-site dispersion and is not identified against a ",
