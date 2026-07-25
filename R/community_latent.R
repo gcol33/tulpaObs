@@ -373,7 +373,7 @@
   # fail on a NULL.
   if (all(sqrt(rowSums(lambda^2)) < 1e-8)) {
     return(list(lambda = lambda, zeta = zeta0, converged = TRUE,
-                offset = matrix(0, Ns, S)))
+                offset = matrix(0, Ns, S), loglik = NA_real_))
   }
 
   # The expected complete-data log-likelihood at `lam`, over the E-step's fixed
@@ -463,8 +463,14 @@
     if (isTRUE(center)) lambda <- sweep(lambda, 2L, colMeans(lambda), "-")
   }
 
+  # The achieved joint marginal at the returned loadings (gcol33/tulpaObs#157):
+  # `best$ll` is not necessarily the last E-step's `ll` (the carried-best rule
+  # above), so it is surfaced here rather than recomputed, and lets a caller
+  # compare two fits (e.g. two directions, or a fit against one reference-
+  # started at known truth) on the objective the estimator actually ascends.
   list(lambda = best$lambda, zeta = best$zeta, converged = converged,
-       offset = .tobs_latent_factor_offset(oracle, eta_base, best$lambda, gh))
+       offset = .tobs_latent_factor_offset(oracle, eta_base, best$lambda, gh),
+       loglik = best$ll)
 }
 
 # The per-cell offset the community EM conditions on.
@@ -983,6 +989,104 @@
   list(n_factors = Qk, zeta = zeta, lambda = matrix(0.1, S, Qk))
 }
 
+# A second candidate DIRECTION for the outer==1 search (gcol33/tulpaObs#157):
+# the top-Q eigenvectors of the coefficient-only working-residual covariance
+# across species. This is the classical "principal factor" starting value for
+# factor analysis (Lawley & Maxwell 1971) and the residual-correlation-eigen
+# start used to initialise latent-factor JSDMs in practice (e.g. the
+# per-species-GLM-residual start behind Warton et al. 2015's factor-analytic
+# approach, and HMSC's PCA start) -- not a new estimator, a better place to
+# hand the existing joint-mode ascent off from.
+#
+# `working(eta_base)` at zero factor offset is the family-generic quantity
+# every oracle already exposes (the Newton step direction score/curv), so this
+# needs no family-specific code. Its species x species covariance
+# `Sigma_res = V diag(ev) V'` truncated to the top Q components and split as
+# `lambda = V[,1:Q] diag(sqrt(ev))`, `zeta = resid V[,1:Q] diag(1/sqrt(ev))`
+# reproduces the rank-Q SVD approximation of the residual at this starting
+# point -- an ordinary PCA start, deterministic given the data (no random
+# rotation to seed). Returns NULL when the decomposition is not well posed
+# (fewer than Qk positive eigenvalues, non-finite residuals), so the caller
+# falls back to the existing cosine start alone.
+.tobs_latent_factor_eigen_init <- function(oracle, eta_base, Qk) {
+  wk <- oracle$working(eta_base)
+  if (any(!is.finite(wk$score)) || any(!is.finite(wk$curv))) return(NULL)
+  # PEARSON residuals (score / sqrt(curv)), not the Newton working-response
+  # residual (score / curv). The Newton residual's denominator is the family's
+  # curvature itself (mu, for a Poisson log link), so a near-zero fitted mean
+  # sends it to +-1/mu and a handful of low-count cells dominate the whole
+  # covariance estimate -- measured: it drove the profile magnitude search on
+  # the resulting direction to 119x truth (non-convergent), a worse start than
+  # the plain cosine one it was meant to improve on. Pearson residuals divide
+  # by sqrt(curv) instead (the family's own standard-deviation scale, matching
+  # the classical Pearson-residual co-occurrence start used to initialise
+  # latent-factor JSDMs), and stay bounded the way an ordinary residual should.
+  resid <- wk$score / sqrt(pmax(wk$curv, 1e-8))
+  if (!all(is.finite(resid)) || nrow(resid) < 2L) return(NULL)
+  resid <- scale(resid, center = TRUE, scale = FALSE)
+  Sigma_res <- crossprod(resid) / (nrow(resid) - 1)
+  ee <- tryCatch(eigen(Sigma_res, symmetric = TRUE), error = function(e) NULL)
+  if (is.null(ee) || length(ee$values) < Qk) return(NULL)
+  ev <- ee$values[seq_len(Qk)]
+  if (any(!is.finite(ev)) || any(ev <= 1e-8)) return(NULL)
+  V <- ee$vectors[, seq_len(Qk), drop = FALSE]
+  # `lambda = V`, `zeta = resid %*% V`: the rank-Q PCA scores/loadings pair for
+  # the Pearson-residual matrix (V is already orthonormal, so no extra
+  # eigenvalue scaling is needed here). This is a DIRECTION only -- the
+  # subsequent global magnitude search (.tobs_latent_factor_scale) sets the
+  # overall scale on the actual marginal, so the candidate is handed to it
+  # directly rather than through the joint-mode ascent (which is the same
+  # inconsistent estimator #156 replaced, and re-optimizing a good direction
+  # against it can throw the direction away).
+  lambda <- V
+  zeta <- resid %*% V
+  for (q in seq_len(Qk)) {
+    zeta[, q] <- zeta[, q] - mean(zeta[, q])
+    sdq <- stats::sd(zeta[, q])
+    if (is.finite(sdq) && sdq > 1e-6) {
+      zeta[, q] <- zeta[, q] / sdq
+      lambda[, q] <- lambda[, q] * sdq
+    }
+  }
+  if (!all(is.finite(zeta)) || !all(is.finite(lambda))) return(NULL)
+  list(zeta = zeta, lambda = lambda)
+}
+
+# K pseudo-random restart DIRECTIONS for the outer==1 candidate search
+# (gcol33/tulpaObs#157). A single "smarter" deterministic direction is not
+# reliable -- the principal-factor start above helps on some data and is
+# measured WORSE than the plain cosine start on others -- so several i.i.d.
+# candidates are tried and the honest selector (the converged loading-EM
+# marginal, at the call site) picks whichever direction the ascent actually
+# reaches a better mode from. Verified against an EM started at the literal
+# simulated truth on the fixture that motivated this (ms_count seed 215): one
+# of these restarts reached the truth-quality basin (1.28x vs the truth
+# start's 1.03x) where the cosine start alone settled at 1.65x.
+#
+# The seed is FIXED, not random or data-derived, so the set of candidates --
+# and so the fit -- stays exactly reproducible run to run. The caller's own
+# RNG stream is saved and restored around the draw (the same pattern
+# `withr::with_seed` uses), so a `set.seed()` before `tobs()` still reproduces
+# everything else about the fit.
+.tobs_latent_factor_random_starts <- function(Ns, S, Qk, k = 6L,
+                                              seed = 20250157L) {
+  has_seed <- exists(".Random.seed", envir = .GlobalEnv)
+  if (has_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv)
+  on.exit({
+    if (has_seed) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  })
+  set.seed(seed)
+  lapply(seq_len(k), function(i) {
+    list(zeta = matrix(stats::rnorm(Ns * Qk), Ns, Qk),
+         lambda = matrix(stats::rnorm(S * Qk, 0, 0.3), S, Qk),
+         ascend = TRUE)
+  })
+}
+
 
 # ---------------------------------------------------------------------------
 # Block coordinate driver
@@ -1116,6 +1220,7 @@
   gh_joint <- if (has_factor) .tobs_gh_nodes(n.quad) else NULL
   fac_saturated <- FALSE
   fac_em_converged <- FALSE
+  fac_loglik <- NA_real_
 
   em <- NULL
   for (outer in seq_len(max.outer)) {
@@ -1150,30 +1255,84 @@
         # joint-mode update supplies a non-degenerate direction cheaply, and the
         # 1-D scale search puts its magnitude in the right basin with a global
         # bracket the local EM has no way to perform.
-        gu <- .tobs_latent_factor_update(oracle, base_fac, zeta, lambda,
-                                         center = has_field)
-        sc <- .tobs_latent_factor_scale(oracle, base_fac, gu$lambda, gh_joint)
-        if (isTRUE(attr(sc, "saturated"))) fac_saturated <- TRUE
-        lambda_hat <- gu$lambda * as.numeric(sc)
+        #
+        # gcol33/tulpaObs#157: that ascent is a LOCAL search and inherits
+        # whatever basin its starting DIRECTION falls into -- measured, 1 seed
+        # in 16 on the ms_count fixture (seed 215) settled 31 nats below what
+        # the same ascent reaches from a better direction, with the residual
+        # correlation reading 0.90 throughout (row-normalised, blind to it).
+        # Rescaling the magnitude of a bad direction does not escape it
+        # (measured: 0.001 movement at 3x cost). Escaping needs a different
+        # DIRECTION, and a single "smarter" one is not reliable enough on its
+        # own: a principal-factor start off the coefficient-only
+        # working-residual covariance (.tobs_latent_factor_eigen_init) beat
+        # the cosine start's basin on some seeds but was measured WORSE on
+        # seed 215 itself (final 7.50x truth against the cosine start's own
+        # 1.65x) -- a single alternative direction can just as easily be a
+        # worse one. What actually escaped seed 215's basin, verified against
+        # an EM started at the literal simulated truth (which reaches 1.03x,
+        # the reachable optimum the issue measured), was trying several fixed
+        # pseudo-random restarts alongside it and keeping whichever the SAME
+        # ascent + scale search + loading EM lands highest on the marginal --
+        # the "multi-start over directions, selected on the marginal" the
+        # issue names as the honest alternative. On seed 215 the winning
+        # random restart reached 701212 against the cosine start's 701195 and
+        # the truth start's 701211 -- AT the truth-quality basin, at 1.28x
+        # rather than 1.65x.
+        #
+        # The comparison has to be the CONVERGED loading-EM marginal, not the
+        # raw ascent + scale-search value: on seed 215 the candidates' raw
+        # scale-search marginals differed by under 0.04% of their scale (all
+        # far from any mode) and did not rank the same as their converged
+        # values. Running each candidate to its OWN loading-EM convergence and
+        # comparing THAT marginal is the same comparison the issue itself used
+        # to diagnose the basin (an EM started at truth reaching -4676.7
+        # against the seed's -4720.9), so it is what "selected on the
+        # marginal" has to mean here. This costs one extra loading-EM run per
+        # candidate, on the first outer pass only -- negligible against the
+        # `factor.outer` outer passes of community-EM refitting that follow
+        # (measured: +30s against an ~90s fit, for 8 extra candidates).
+        #
+        # The restarts use a FIXED internal seed, not a random or data-derived
+        # one, so a fit stays exactly reproducible run to run; the caller's own
+        # RNG stream is saved and restored around the draw so a `set.seed()`
+        # before `tobs()` still reproduces everything else about the fit.
+        starts <- list(list(zeta = zeta, lambda = lambda, ascend = TRUE))
+        eig <- .tobs_latent_factor_eigen_init(oracle, base_fac, ncol(lambda))
+        if (!is.null(eig)) starts <- c(starts, list(c(eig, list(ascend = FALSE))))
+        starts <- c(starts,
+                   .tobs_latent_factor_random_starts(Ns, S, ncol(lambda)))
 
-        # KNOWN LIMIT, do not "fix" by rescaling the start. The marginal is not
-        # concave in lambda, and the EM inherits whatever basin the joint-mode
-        # DIRECTION fell into. Measured on the ms_count fixture, 1 seed in 16
-        # (seed 215) settles at 1.65x truth on a marginal 31 nats BELOW what the
-        # same EM reaches when started from a better direction, and its residual
-        # correlation still reads 0.90, so nothing but the marginal flags it.
-        # Restarting the EM from 0.5x / 1x / 2x this magnitude was tried and
-        # changed that seed by 0.001 while costing 3x the fit -- every magnitude
-        # runs back to the same direction. Escaping it needs a different
-        # DIRECTION to start from (a residual-correlation eigen start, or a
-        # multi-start over directions), which is gcol33/tulpaObs#157.
+        cand <- NULL
+        for (st in starts) {
+          gu  <- if (isTRUE(st$ascend)) {
+            .tobs_latent_factor_update(oracle, base_fac, st$zeta, st$lambda,
+                                       center = has_field)
+          } else {
+            st
+          }
+          sc   <- .tobs_latent_factor_scale(oracle, base_fac, gu$lambda, gh_joint)
+          lam0 <- gu$lambda * as.numeric(sc)
+          sat  <- isTRUE(attr(sc, "saturated"))
+          mm_st <- .tobs_latent_factor_mmle(oracle, base_fac, lam0, gh_joint,
+                                            center = has_field)
+          m <- mm_st$loglik
+          if (is.null(cand) ||
+              (is.finite(m) && (!is.finite(cand$m) || m > cand$m))) {
+            cand <- list(m = m, mm = mm_st, saturated = sat)
+          }
+        }
+        if (isTRUE(cand$saturated)) fac_saturated <- TRUE
+        mm <- cand$mm
+      } else {
+        mm <- .tobs_latent_factor_mmle(oracle, base_fac, lambda_hat, gh_joint,
+                                       center = has_field)
       }
-      mm <- .tobs_latent_factor_mmle(oracle, base_fac, lambda_hat, gh_joint,
-                                     center = has_field)
       lambda_hat <- mm$lambda
       zeta_hat   <- mm$zeta
       fac_offset <- mm$offset
       fac_em_converged <- isTRUE(mm$converged)
+      fac_loglik <- mm$loglik
       delta <- max(delta, max(abs(fac_offset - fac_off)))
     }
     if (isTRUE(verbose)) {
@@ -1272,7 +1431,13 @@
          magnitude_saturated = fac_saturated,
          # TRUE when the last pass's loading EM met its own tolerance rather than
          # running out of iterations.
-         loading_em_converged = fac_em_converged))
+         loading_em_converged = fac_em_converged,
+         # The joint marginal at (lambda_hat, zeta_hat) from the last factor
+         # pass (gcol33/tulpaObs#157): lets a caller compare two fits (e.g. two
+         # starting directions) on the objective the estimator ascends, which
+         # is otherwise invisible -- the residual correlation is row-normalised
+         # and a magnitude regression does not move it.
+         marginal_loglik = fac_loglik))
 }
 
 
@@ -1345,7 +1510,8 @@
     # Scale diagnostics. residual_cor is row-normalised and so cannot show a
     # magnitude problem; these can.
     magnitude_saturated = isTRUE(fc$magnitude_saturated),
-    loading_em_converged = isTRUE(fc$loading_em_converged))
+    loading_em_converged = isTRUE(fc$loading_em_converged),
+    marginal_loglik = fc$marginal_loglik)
   # The score-matched offset the fit conditioned on, not zeta t(lambda): fitted()
   # and WAIC read this slot, and they should see the predictor the coefficients
   # were estimated against.

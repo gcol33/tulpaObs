@@ -98,10 +98,11 @@ test_that("latent-factor count recovers the loading magnitude + mean over seeds"
   # over seeds 201-216, so the CEILING is what carries the regression guard and
   # sits deliberately below that tail.
   #
-  # Seed 215 is excluded by the 201-212 range and would read 1.654: the loading
-  # EM settles in a bad direction basin on that one draw, tracked as
-  # gcol33/tulpaObs#157. Widening the ceiling to cover it would delete the guard
-  # this test exists to provide, so it is scoped out here rather than absorbed.
+  # Seed 215 is still excluded by the 201-212 range: even with the #157
+  # multi-start fix below it reads 1.28 (down from 1.654 pre-fix), close enough
+  # to this loop's 1.30 ceiling that including it would leave the guard almost
+  # no margin against a real regression on the other 12 seeds. It has its own
+  # dedicated regression test below instead.
   expect_lt(abs(stats::median(mag) - 1), 0.08)
   expect_lt(max(mag), 1.30)
   expect_gt(min(mag), 0.75)
@@ -113,6 +114,32 @@ test_that("latent-factor count recovers the loading magnitude + mean over seeds"
   # truth would shift it 0.35.
   expect_lt(abs(mean(dev[, 1L])), 0.05)
   expect_lt(abs(mean(dev[, 2L])), 0.04)
+})
+
+# gcol33/tulpaObs#157 regression guard: seed 215's loading EM settled in a bad
+# DIRECTION basin (1.654x truth, a marginal 31 nats below what the same EM
+# reaches from a better direction -- verified against an EM started at the
+# literal simulated truth, which reaches 1.03x). The fix
+# (.tobs_latent_factor_random_starts() in R/community_latent.R) tries several
+# fixed-seed pseudo-random restarts alongside the deterministic cosine one at
+# the first outer pass, through the SAME ascent + magnitude search, and keeps
+# whichever the loading EM converges to the higher marginal from -- the
+# "multi-start over directions, selected on the marginal" #157 asked for.
+# Measured on this seed: 1.654x -> 1.28x, and the achieved marginal (701212)
+# now sits ABOVE the truth-started reference (701211), i.e. this reaches the
+# same basin truth does, not merely a smaller one.
+test_that("latent-factor count escapes the #157 direction basin on seed 215", {
+  skip_if_fast()
+  skip_on_cran()
+  d <- .mscf_sim(N = 160L, S = 14L, Q = 2L, seed = 215L)
+  fit <- tobs(~ x + latent(2), data = d$data, family = ms_count(), y = d$y,
+              species = colnames(d$y), method = "laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  mag <- sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2))
+  # Pre-fix this read 1.654; the ceiling sits well clear of that regression
+  # while still requiring the basin to actually be escaped, not merely nudged.
+  expect_lt(mag, 1.40)
+  expect_gt(mag, 0.75)
 })
 
 test_that("latent-factor count recovers the residual correlation over seeds", {
