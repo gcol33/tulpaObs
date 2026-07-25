@@ -61,9 +61,18 @@ test_that("community count Poisson NUTS recovers community means + agrees with L
                              verbose = FALSE, progress = FALSE))
   expect_identical(nut$method, "nuts")
   expect_equal(sum(nut$divergent), 0)
-  # community means recover (a 12-species mean has ~0.1 sampling SE), and NUTS
-  # agrees closely with the Laplace mode (the discriminating check).
-  expect_equal(unname(unlist(coef(nut))), c(1, 0.5), tolerance = 0.2)
+  # Community means against the seed's REALIZED mean colMeans(truth$beta_species),
+  # not the nominal c(1, 0.5) (#155): a single-seed comparison to the nominal
+  # population constant is exactly the defect this issue targets. Budget = 3 sd
+  # of the Laplace-estimator deviation from the realized mean over a 16-seed
+  # measurement of this exact fixture (N=150, S=12, poisson: sd 0.018 / 0.012,
+  # max 0.036 / 0.024), plus the NUTS-vs-Laplace gap this file already measures
+  # below (0.08) -- the two errors are not perfectly aligned, so this is a
+  # conservative sum, not a tight one. Seed 5 itself sits at 0.018 / -0.026, well
+  # inside it.
+  real <- colMeans(sim$truth$beta_species)
+  expect_community_mean(nut, real, c(0.14, 0.12))
+  # NUTS agrees closely with the Laplace mode (the discriminating check).
   expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
                tolerance = 0.08)
   # S3 surface
@@ -110,7 +119,18 @@ test_that("community count negbin NUTS recovers community means + dispersion", {
                              verbose = FALSE, progress = FALSE))
   expect_identical(nut$method, "nuts")
   expect_equal(sum(nut$divergent), 0)
-  expect_equal(unname(unlist(coef(nut))), c(1, 0.5), tolerance = 0.2)
+  # Against the seed's REALIZED mean, not the nominal c(1, 0.5) (#155). The
+  # negbin community-mean estimator carries real, larger seed-to-seed spread
+  # than poisson/gaussian at this same N=150/S=12 fixture -- measured over 16
+  # seeds: intercept sd 0.110 (max 0.371), slope sd 0.207 (max 0.608), against
+  # poisson's 0.018/0.012. That is the documented per-species dispersion RE
+  # interacting with the community mean (CLAUDE.md: "negbin slope carries mild
+  # first-order-Laplace attenuation"), not an artefact of retargeting -- the
+  # budget below is wider than poisson's for that reason, not a looser standard.
+  # 3 sd of that spread plus the NUTS-vs-Laplace gap measured below (0.12).
+  # Seed 6 itself sits at 0.025 / 0.000, well inside it.
+  real <- colMeans(sim$truth$beta_species)
+  expect_community_mean(nut, real, c(0.45, 0.75))
   expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
                tolerance = 0.12)
   expect_identical(nut$ms_dispersion$response, "negbin")
@@ -181,7 +201,13 @@ test_that("community count NUTS accepts missing (NA) entries and matches Laplace
   expect_identical(nut$method, "nuts")
   expect_equal(sum(nut$divergent), 0)
   expect_equal(nut$N, sum(!is.na(y)))                   # N counts observed entries
-  expect_equal(unname(unlist(coef(nut))), c(1, 0.5), tolerance = 0.2)
+  # Against the seed's REALIZED mean, not the nominal c(1, 0.5) (#155). Same
+  # poisson N=150/S=12 fixture as the first test above, so its measured spread
+  # applies (3 sd 0.054 / 0.036, NUTS-vs-Laplace gap 0.1 below); the 12% MCAR
+  # mask reduces information per cell slightly but not enough to move this
+  # budget. Seed 21 itself sits at 0.037 / 0.015 on the unmasked fixture.
+  real <- colMeans(sim$truth$beta_species)
+  expect_community_mean(nut, real, c(0.14, 0.12))
   expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
                tolerance = 0.1)
   expect_true(is.finite(tobs_waic(nut)$waic))
@@ -199,7 +225,15 @@ test_that("community count gaussian NUTS recovers community means + residual var
                              verbose = FALSE, progress = FALSE))
   expect_identical(nut$method, "nuts")
   expect_equal(sum(nut$divergent), 0)
-  expect_equal(unname(unlist(coef(nut))), c(1, 0.5), tolerance = 0.2)
+  # Against the seed's REALIZED mean, not the nominal c(1, 0.5) (#155). Budget =
+  # 3 sd of the Laplace-estimator deviation over a 16-seed measurement of this
+  # exact fixture (N=150, S=12, gaussian: sd 0.028 / 0.020, max 0.052 / 0.036),
+  # plus a NUTS-vs-Laplace margin (this family has no Laplace comparison
+  # elsewhere in this file to measure that gap directly from, so 0.08 is
+  # borrowed from the poisson case above -- both are well-informed,
+  # non-dispersion families). Seed 7 itself sits at -0.002 / -0.002.
+  real <- colMeans(sim$truth$beta_species)
+  expect_community_mean(nut, real, c(0.16, 0.14))
   expect_identical(nut$ms_dispersion$response, "gaussian")
   expect_length(nut$ms_dispersion$variance, 12L)
   # residual variance recovers near the simulation truth sd^2 = 1

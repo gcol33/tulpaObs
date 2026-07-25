@@ -249,6 +249,7 @@ test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   skip_if_fast()
   n_seeds <- 8L
   occ_x <- p_x <- pos_x <- phi_e <- rep(NA_real_, n_seeds)
+  occ_dev <- p_dev <- pos_dev <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {
     sim <- simulate_ms_occu_cover(
       n_species = 12, N = 70, J = 4,
@@ -267,10 +268,27 @@ test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
     p_x[s]   <- fit$means[["p_det_cov1"]]
     pos_x[s] <- fit$means[["pos_pos_cov1"]]
     phi_e[s] <- exp(fit$means[["log_phi"]])
+    occ_dev[s] <- occ_x[s] - colMeans(sim$truth$beta_occ)[2L]
+    p_dev[s]   <- p_x[s]   - colMeans(sim$truth$beta_p)[2L]
+    pos_dev[s] <- pos_x[s] - colMeans(sim$truth$beta_pos)[2L]
   }
-  expect_lt(abs(mean(occ_x, na.rm = TRUE) - 0.6),  0.25)
-  expect_lt(abs(mean(p_x,   na.rm = TRUE) - (-0.4)), 0.25)
-  expect_lt(abs(mean(pos_x, na.rm = TRUE) - 0.3),  0.25)
+  # Community-mean slopes against the seed's REALIZED mean (colMeans of
+  # truth$beta_occ / beta_p / beta_pos), not the nominal 0.6 / -0.4 / 0.3
+  # (#155): this loop already averaged over seeds before comparing to the
+  # nominal, so gcol33/tulpaObs#155 calls it statistically valid as it stood;
+  # retargeting is a power improvement, not a bug fix. Budget is 5x the SE of
+  # an 8-seed mean, from a fresh 16-seed measurement of this exact fixture
+  # (occ sd 0.092 -> SE_8 0.033 -> budget 0.17; p sd 0.061 -> SE_8 0.021 ->
+  # budget 0.11; pos sd 0.015 -> SE_8 0.0053 -> budget 0.03), all well below
+  # the old flat 0.25. The occupancy and detection arms carry real per-seed
+  # outliers (occ deviation -0.208 on one seed, p deviation +0.161 on another,
+  # of 16 measured) consistent with this family's documented binary-data RE
+  # attenuation; none of the three means is significantly biased over the 16
+  # seeds (largest |mean| / se is occ at 0.66), so the budget is not absorbing
+  # a known one-sided shift.
+  expect_lt(abs(mean(occ_dev, na.rm = TRUE)), 0.17)
+  expect_lt(abs(mean(p_dev,   na.rm = TRUE)), 0.11)
+  expect_lt(abs(mean(pos_dev, na.rm = TRUE)), 0.03)
   expect_gt(mean(phi_e, na.rm = TRUE), 8)   # well above the boundary
 })
 

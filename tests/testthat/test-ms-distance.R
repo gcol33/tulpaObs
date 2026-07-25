@@ -83,9 +83,23 @@ test_that("msDS recovers the community means and per-species structure", {
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$model$model_type, "ms_distance")
-  # community means on both arms
-  expect_equal(unname(coef(fit)$lambda), d$truth$mu_lambda, tolerance = 0.25)
-  expect_equal(unname(coef(fit)$sigma),  d$truth$mu_sigma,  tolerance = 0.25)
+  # Community means against the seed's REALIZED mean, absolutely (#155). The old
+  # `tolerance = 0.25` compared to mu_lambda = c(log(30), 0.4) = c(3.40, 0.4) and
+  # mu_sigma = log(40) = 3.69: both intercepts exceed 0.25 in magnitude, so
+  # `all.equal.numeric` treated the tolerance as RELATIVE there, silently
+  # allowing +-0.85 / +-0.92 absolute -- effectively no check on either
+  # intercept. Budget below is 3-4x the sd of the deviation from
+  # colMeans(truth$beta_lambda) / colMeans(truth$beta_sigma) over seeds 1-16 of
+  # this fixture (lambda intercept sd 0.029, slope sd 0.008, sigma intercept sd
+  # 0.054), widened where needed to also cover this seed. Seed 4 itself sits at
+  # the sample MAX on both intercepts (-0.103 lambda / +0.197 sigma) -- the
+  # classic lambda/sigma trade-off direction the multi-seed test below already
+  # documents (one realisation can move along that ridge without either
+  # estimator arm being wrong), so the budget is set to cover it with margin
+  # rather than only the typical seed.
+  expect_community_mean(fit, c(colMeans(d$truth$beta_lambda),
+                               colMeans(d$truth$beta_sigma)),
+                        c(0.13, 0.025, 0.23))
   # per-species coefficients + community covariances
   expect_equal(dim(fit$ms_community$coef_lambda), c(10L, 2L))
   expect_equal(dim(fit$ms_community$Sigma_lambda), c(2L, 2L))

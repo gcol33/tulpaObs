@@ -31,7 +31,10 @@
                function(j) stats::rnorm(S, beta[j], beta_sd[j]), numeric(S))
   y <- matrix(NA_real_, Ns, S, dimnames = list(NULL, paste0("sp", seq_len(S))))
   for (s in seq_len(S)) y[, s] <- stats::rpois(Ns, exp(as.numeric(X %*% bs[s, ]) + f))
-  list(y = y, data = d, graph = A, field = f, beta = beta, Ns = Ns, S = S)
+  # `bs` is the REALIZED per-species draw, not the population constant `beta`:
+  # the community mean a fit should track is colMeans(bs), which sits
+  # beta_sd / sqrt(S) from `beta` (gcol33/tulpaObs#155).
+  list(y = y, data = d, graph = A, field = f, beta = beta, bs = bs, Ns = Ns, S = S)
 }
 
 
@@ -133,7 +136,17 @@ test_that("community field recovers under bym2 (scaled structured + iid)", {
   expect_true(fit$spatial_hyper$sigma > 0)
   # the combined field recovers a smooth structured truth
   expect_gt(stats::cor(fit$spatial_field, d$field), 0.8)
-  expect_equal(unname(unlist(coef(fit))), c(1, 0.5), tolerance = 0.15)
+  # Single fit vs the seed's REALIZED mean colMeans(d$bs), not the nominal
+  # c(1, 0.5) (#155): a single-seed comparison to the nominal population
+  # constant is exactly the defect this issue targets. Budget = 3 sd of the
+  # deviation from colMeans(bs) over a 16-seed measurement of this fixture at
+  # side = 10 (Ns = 100; sd 0.016 intercept / 0.019 slope, max 0.034 / 0.050),
+  # reused here at side = 9 (Ns = 81) as a close proxy -- one fewer site per
+  # side changes the field's precision by ~1.1x, not enough to move this
+  # budget.
+  cf_dev <- unname(unlist(coef(fit))) - colMeans(d$bs)
+  expect_lt(abs(cf_dev[1L]), 0.05)
+  expect_lt(abs(cf_dev[2L]), 0.06)
   # bym2 is the single shared intercept field only: an SVC bar errors
   expect_error(
     tobs(~ x + bym2(graph = d$graph, weight = x, group_var = "cell"),
@@ -164,7 +177,13 @@ test_that("community field recovers under group_var (sites > cells)", {
   # the field has one node per CELL (fewer than sites) and recovers the cell field
   expect_equal(length(fit$spatial_field), Ncell)
   expect_gt(stats::cor(fit$spatial_field, fcell), 0.85)
-  expect_equal(unname(unlist(coef(fit))), c(1, 0.5), tolerance = 0.15)
+  # Single fit vs the seed's REALIZED mean colMeans(bs), not the nominal
+  # c(1, 0.5) (#155). Budget = 3 sd of the deviation from colMeans(bs) over a
+  # 12-seed measurement of this exact group_var fixture (side = 8, R = 2,
+  # S = 12): intercept sd 0.016 (max 0.033), slope sd 0.013 (max 0.023).
+  cf_dev <- unname(unlist(coef(fit))) - colMeans(bs)
+  expect_lt(abs(cf_dev[1L]), 0.05)
+  expect_lt(abs(cf_dev[2L]), 0.04)
 })
 
 test_that("community field recovers under car_proper (proper CAR)", {
@@ -179,7 +198,13 @@ test_that("community field recovers under car_proper (proper CAR)", {
   expect_true(fit$spatial_hyper$rho > 0 && fit$spatial_hyper$rho < 1)
   expect_gt(stats::cor(fit$spatial_field, d$field), 0.8)
   # the intercept stays identified (the field is sum-to-zero deviations)
-  expect_equal(unname(unlist(coef(fit))), c(1, 0.5), tolerance = 0.15)
+  # Single fit vs the seed's REALIZED mean colMeans(d$bs), not the nominal
+  # c(1, 0.5) (#155). Budget = 3 sd of the deviation from colMeans(bs) over a
+  # 16-seed measurement of this exact fixture (side = 10, S = 12): intercept sd
+  # 0.016 (max 0.034), slope sd 0.019 (max 0.050).
+  cf_dev <- unname(unlist(coef(fit))) - colMeans(d$bs)
+  expect_lt(abs(cf_dev[1L]), 0.05)
+  expect_lt(abs(cf_dev[2L]), 0.06)
 })
 
 test_that("community SVC (svcMsAbund) recovers the intercept + trend fields", {

@@ -59,7 +59,7 @@
 test_that("jsdm + icar() recovers community means + the shared field", {
   skip_on_cran()
   skip_if_fast()
-  cors <- numeric(0); b0 <- numeric(0); b1 <- numeric(0)
+  cors <- numeric(0); dev0 <- numeric(0); dev1 <- numeric(0)
   for (sd in 1:4) {
     sim <- .jsds_sim(seed = sd)
     fit <- tobs(~ x + icar(graph = sim$graph), data = sim$data, family = jsdm(),
@@ -68,15 +68,32 @@ test_that("jsdm + icar() recovers community means + the shared field", {
     expect_equal(fit$method, "nested_laplace")
     expect_false(is.null(fit$spatial_field))
     cors <- c(cors, cor(fit$spatial_field, sim$field))
-    b0 <- c(b0, unname(fit$means[1L])); b1 <- c(b1, unname(fit$means[2L]))
+    real <- colMeans(sim$bs)
+    dev0 <- c(dev0, unname(fit$means[1L]) - real[1L])
+    dev1 <- c(dev1, unname(fit$means[2L]) - real[2L])
   }
   # Shared latent field recovered (up to the sum-to-zero constraint).
   expect_gt(mean(cors), 0.80)
   expect_true(all(cors > 0.70))
-  # Community-mean coefficients recovered (a small finite-sample bias on the
-  # intercept, which trades against the field level; the slope discriminates).
-  expect_lt(abs(mean(b0) - (-0.2)), 0.30)
-  expect_lt(abs(mean(b1) - 0.9), 0.25)
+  # Community means against the seed's REALIZED mean (colMeans(sim$bs)), not the
+  # nominal c(-0.2, 0.9): this loop already averaged over seeds before comparing
+  # to the nominal, so gcol33/tulpaObs#155 calls it statistically valid as it
+  # stood; retargeting is a power improvement here, not a bug fix. Budget is 5x
+  # the SE of a 4-seed mean, from a fresh 16-seed measurement of this exact
+  # fixture (dev0/dev1 = fit$means[1:2] - colMeans(sim$bs), seeds 1-16):
+  # intercept sd 0.054 -> SE_4 0.027 -> budget 0.135; slope sd 0.052 -> SE_4
+  # 0.026 -> budget 0.130.
+  #
+  # The slope carries a real, one-sided finite-sample bias, not just draw
+  # noise: over the 16-seed measurement the mean deviation is -0.076 (se 0.013,
+  # ~5.8 se from zero, 15 of 16 seeds negative) -- the shared field absorbs part
+  # of the slope's signal under the sum-to-zero constraint. On the seeds this
+  # loop actually runs (1-4) the mean deviation is -0.031, comfortably inside
+  # the budget; the budget is sized with margin above the larger 16-seed figure
+  # rather than tuned to only this loop's own smaller sample, so it does not
+  # silently paper over the known bias.
+  expect_lt(abs(mean(dev0)), 0.135)
+  expect_lt(abs(mean(dev1)), 0.130)
 })
 
 
@@ -86,6 +103,7 @@ test_that("jsdm + car_proper()/bym2() recover the shared field", {
   skip_on_cran()
   skip_if_fast()
   sim <- .jsds_sim(seed = 2L)
+  real_slope <- colMeans(sim$bs)[2L]
   for (term in c("car_proper", "bym2")) {
     f <- stats::as.formula(sprintf("~ x + %s(graph = sim$graph)", term))
     fit <- tobs(f, data = sim$data, family = jsdm(), y = sim$y,
@@ -93,7 +111,17 @@ test_that("jsdm + car_proper()/bym2() recover the shared field", {
                 control = list(verbose = FALSE, progress = FALSE))
     expect_equal(fit$method, "nested_laplace")
     expect_gt(cor(fit$spatial_field, sim$field), 0.70)
-    expect_lt(abs(unname(fit$means[2L]) - 0.9), 0.30)
+    # Single fit vs the seed's REALIZED slope mean (#155), not the nominal 0.9:
+    # this was a single-seed comparison to the nominal population constant, the
+    # actual defect pattern. Budget = 3 sd of the icar-route deviation over 16
+    # seeds of the sibling fixture above (sd 0.052, max 0.130), reused here as a
+    # proxy since the field TYPE (icar/car_proper/bym2) does not change what
+    # identifies the community slope against the shared field -- all three
+    # trade the same sum-to-zero constraint. Seed 2 itself sits at -0.071
+    # (within budget); the multi-seed test above documents this fixture also
+    # carries a real ~-0.076 population-level slope bias, so the budget is set
+    # with margin above that, not just this one draw.
+    expect_lt(abs(unname(fit$means[2L]) - real_slope), 0.16)
   }
 })
 
