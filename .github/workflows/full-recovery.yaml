@@ -22,7 +22,12 @@ jobs:
     timeout-minutes: 350
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      TESTTHAT_PARALLEL: 'false'
+      # #151: safe here because run-tests.R passes load_package = "installed"
+      # (every worker does a plain library(tulpaObs), not a source recompile);
+      # see smoke.yaml for the full explanation. This tier is the one #151 was
+      # actually filed to unblock -- hours serial, and the whole point of
+      # Config/testthat/parallel.
+      TESTTHAT_PARALLEL: 'true'
       # skip_on_cran() guards the recovery loops; NOT_CRAN is what lets them run.
       NOT_CRAN: 'true'
       # tulpaMesh is a hard dependency here, so a mesh-install regression must

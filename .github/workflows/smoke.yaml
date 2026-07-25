@@ -25,10 +25,18 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       TULPAOBS_FAST: '1'
-      # Config/testthat/parallel is set, but neither parallel entry point
-      # completes a run locally (issue #151: devtools::test() hangs, test_dir()
-      # aborts in the chunky event loop). Serial is the measured-working path.
-      TESTTHAT_PARALLEL: 'false'
+      # #151: devtools::test() can never run this package's suite in parallel --
+      # it unconditionally passes load_package = "source" to every worker
+      # (devtools:::load_package_for_testing()), so each of the N parallel
+      # `callr` workers independently recompiles the C++ backend into the same
+      # src/ tree, racing on the shared build artifacts (reproduced directly:
+      # a cold src/ plus 2 concurrent load_all() workers corrupted the DLL
+      # registration in under a minute). run-tests.R does not have that
+      # problem: it already loads the INSTALLED package and passes
+      # load_package = "installed" explicitly, so each worker does a plain
+      # library(tulpaObs) -- a read of one already-built DLL, safe for any
+      # number of concurrent workers. Parallel is enabled here for that reason.
+      TESTTHAT_PARALLEL: 'true'
       NOT_CRAN: 'true'
 
     steps:

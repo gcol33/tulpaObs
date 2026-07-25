@@ -25,8 +25,18 @@ cat("tulpaObs  :", as.character(utils::packageVersion("tulpaObs")), "\n")
 cat("tulpa     :", as.character(utils::packageVersion("tulpa")), "\n")
 cat("parallel  :", Sys.getenv("TESTTHAT_PARALLEL", "<unset>"), "\n\n")
 
+# load_package = "installed" (#151): under Config/testthat/parallel each
+# worker is a separate process that must load the package itself, and without
+# this argument testthat has every worker call pkgload::load_all() on the
+# source tree instead -- safe for a pure-R package, but this one compiles a
+# large C++ backend, so N workers each independently (re)compiling into the
+# same src/ race on the shared build artifacts and corrupt the DLL. This
+# script already requires the package to be installed (the library() call
+# above), so telling every worker to just library(tulpaObs) -- a read of one
+# already-built DLL -- costs nothing and is safe for any worker count.
 res <- test_dir("tests/testthat", package = "tulpaObs",
-                reporter = "summary", stop_on_failure = FALSE)
+                reporter = "summary", stop_on_failure = FALSE,
+                load_package = "installed")
 
 df <- as.data.frame(res)
 failed <- sum(df$failed)

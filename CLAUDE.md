@@ -100,8 +100,45 @@ Do NOT run on every edit. Ladder:
    `skip_if_fast()` gates every fitting block (628 call sites across 166 files);
    no-op when env var unset.
 3. **Full recovery suite** (all seeds, NUTS, spatial) -> ONLY before committing to
-   main, before release, or when asked. `Sys.unsetenv("TULPAOBS_FAST");
-   devtools::test()`. Hours; uses `Config/testthat/parallel`.
+   main, before release, or when asked. `Sys.unsetenv("TULPAOBS_FAST")`, then
+   see the parallel note below -- `devtools::test()` cannot use
+   `Config/testthat/parallel` safely on this package. Hours either way.
+
+**`devtools::test()` can never run this suite in parallel (#151, closed as
+won't-fix-in-devtools).** It unconditionally passes `load_package = "source"`
+to every worker (`devtools:::load_package_for_testing()` returns `"source"`
+for any package but testthat itself, with no override), so each of the N
+parallel `callr` workers independently calls `pkgload::load_all()` on the same
+source tree. That is harmless for a pure-R package, but this one compiles a
+large C++ backend (`src/tulpaObs.dll`, ~165MB): N workers each (re)compiling
+into the same `src/` race on the shared build artifacts. Reproduced directly
+in an isolated copy: a cold (never-compiled) `src/` plus 2 concurrent
+`load_all()` workers corrupted the DLL registration in under a minute
+(`Error in getDLLRegisteredRoutines.DLLInfo(dll, ...) : must specify DLL via a
+"DLLInfo" object`), wrapped by testthat's `cli_abort(..., parent = msg$error)`
+-- the real error is in that `parent`, not the printed message (`rlang::
+cnd_message(e, inherit = TRUE)` or `e$parent$message` surfaces it). The other
+reported symptom, a silent 10-minute hang with zero output, is the same race
+landing differently: a worker's corrupted/partial DLL load can block inside
+the loader without ever emitting its startup handshake, so `queue$poll(Inf)`
+waits forever.
+
+The safe recipe is what `.github/scripts/run-tests.R` does, and works locally
+too: install once (`devtools::install()`, `quick = TRUE` is fine), THEN call
+testthat directly rather than through `devtools::test()`, explicitly telling
+every worker to load the already-built package instead of recompiling:
+
+```r
+devtools::install(quick = TRUE)
+testthat::test_dir("tests/testthat", package = "tulpaObs",
+                   load_package = "installed")
+```
+
+Verified in an isolated copy: `load_package = "installed"` completes a
+multi-file parallel run in ~2-3s regardless of whether `src/` is warm or cold,
+because every worker's `library(tulpaObs)` is a read of one already-built DLL,
+safe for any number of concurrent workers. CI now runs both `smoke.yaml` and
+`full-recovery.yaml` with `TESTTHAT_PARALLEL: true` for exactly this reason.
 
 Adding a slow test: pair `skip_if_fast()` + `skip_on_cran()` at top of any
 multi-seed fit / NUTS block (helper `tests/testthat/helper-speed.R`). C++ recompiles
@@ -109,17 +146,24 @@ ccache-backed; only a killed/partial build needs `pkgbuild::clean_dll()`.
 
 ### CI (#149)
 
-`.github/workflows/`, all serial (`TESTTHAT_PARALLEL=false` -- parallel is #151):
+`.github/workflows/`:
 
 - `R-CMD-check.yaml` -- push/PR + weekly. Checks a **built tarball**, not
   `load_all()`, so a missing NAMESPACE export surfaces (#147 shipped `abun()`
   unexported precisely because `load_all()` resolves internals regardless).
   `--no-manual` (dev non-ASCII in Rd). ubuntu on push; ubuntu+windows+macOS on
-  the weekly cron + `workflow_dispatch`.
+  the weekly cron + `workflow_dispatch`. Serial; parallel here goes through R's
+  own `test_check()`, which already hardcodes `load_package = "installed"` and
+  so is not subject to #151 -- left alone because this job is about tarball
+  correctness, not speed.
 - `smoke.yaml` -- push/PR, tier 2 (`TULPAOBS_FAST=1`) against the INSTALLED
   package. The tier that catches #148-class breakage the day it lands.
+  `TESTTHAT_PARALLEL: true` (#151, safe here -- see the testing-ladder note
+  above).
 - `full-recovery.yaml` -- weekly cron + dispatch, tier 3, `NOT_CRAN=true` +
   `TULPAOBS_REQUIRE_SPDE=1`. Hours; carries the calibration evidence.
+  `TESTTHAT_PARALLEL: true` for the same reason -- this is the tier #151 was
+  filed to unblock.
 
 Both test workflows call `.github/scripts/run-tests.R` (one runner, logs which
 tier actually ran -- a smoke run and a broken full run report similar counts
