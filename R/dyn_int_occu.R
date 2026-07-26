@@ -254,7 +254,7 @@
   # (O(p) marginal evals; no numeric Hessian over the forward-backward). `ngr` is
   # the negative-log-likelihood gradient, so its Jacobian at the minimum IS the
   # observed information (positive definite); solve() gives the vcov directly.
-  opt$hessian <- .fp_fd_jacobian(ngr, opt$par)
+  opt$hessian <- .tobs_fd_jacobian(ngr, opt$par)
 
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
@@ -266,7 +266,7 @@
   sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
+  draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
   structure(c(list(
@@ -347,7 +347,7 @@
   V <- res$vcov; dimnames(V) <- list(nm, nm)
   sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nm
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V); colnames(draws) <- nm
+  draws <- .rmvn(n_draws, means, V); colnames(draws) <- nm
 
   # Intercept field on the legacy scalar slots; any weighted (SVC) blocks become
   # the trend field(s) -- svcTIntPGOcc (gcol33/tulpaObs#122).

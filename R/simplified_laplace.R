@@ -123,6 +123,53 @@
 # typical of tulpaObs fits.
 # ---------------------------------------------------------------------------
 
+# Five-point central third derivative of a scalar function sampled at
+# +-h and +-2h around a point:
+#
+#   f'''(x) ~ [ f(x+2h) - 2 f(x+h) + 2 f(x-h) - f(x-2h) ] / (2 h^3)
+#
+# Single source for every SLA gamma path, which differs only in what it samples
+# (a joint log-likelihood along a Sigma column, or a per-grid-cell one) and how
+# it picks h.
+.sla_fd3 <- function(f_p2, f_p1, f_m1, f_m2, h) {
+  (f_p2 - 2 * f_p1 + 2 * f_m1 - f_m2) / (2 * h^3)
+}
+
+# A simplified-Laplace computer reports failure as a value, not an error: the
+# caller falls back to Gaussian marginals and records the reason in
+# `sla_status`. `.sla_bailer()` builds that return value for one computer's
+# gamma field(s), so every failure path across the sla_* files carries the same
+# shape. Fields default to NULL; a multi-arm computer that already has one arm's
+# gamma passes it by name to keep it (`bail(reason, gamma_occ = g)`).
+.sla_bailer <- function(fields = "gamma") {
+  function(reason, ...) {
+    out  <- stats::setNames(vector("list", length(fields)), fields)
+    keep <- list(...)
+    out[names(keep)] <- keep
+    c(out, list(valid = FALSE, reason = reason))
+  }
+}
+
+# Invert a precision matrix, returning NULL when it is singular, so a computer
+# can bail with its own reason string instead of erroring.
+.sla_solve <- function(H) tryCatch(solve(H), error = function(e) NULL)
+
+# Why every computer declines a spatial Sigma. The third-cumulant correction is
+# valid for hyperparameter-free fixed-effect marginals; under a spatial field
+# the dominant skewness is hyperparameter-marginalisation, which the correction
+# does not capture. Validated against NUTS: every construction tried (modal
+# hyper, grid mixture, mixture of skew-normals) disagreed with the NUTS
+# posterior skewness in sign and/or magnitude, so applying one would be worse
+# than the Gaussian fallback. Retaining Gaussian marginals is by design, not a
+# stub (gcol33/tulpaObs#55).
+.sla_spatial_reason <- function(family) {
+  paste0("Gaussian marginals retained for spatial Sigma by design (", family,
+         "): the simplified-Laplace third-cumulant correction is valid for ",
+         "hyperparameter-free fixed-effect marginals only; under a spatial ",
+         "field the dominant skewness is hyperparameter-marginalisation, which ",
+         "it does not capture (validated against NUTS, gcol33/tulpaObs#55).")
+}
+
 #' Generic finite-difference SLA gamma for non-diagonal families
 #'
 #' Computes per-coefficient SLA gamma by 5-point central finite difference
@@ -162,12 +209,10 @@
       eps_h * sigma_vec[j] / max(nvj, .Machine$double.eps)
     } else h[j]
 
-    L_p2 <- log_lik_fn(beta_hat + 2 * hj * vj)
-    L_p1 <- log_lik_fn(beta_hat +     hj * vj)
-    L_m1 <- log_lik_fn(beta_hat -     hj * vj)
-    L_m2 <- log_lik_fn(beta_hat - 2 * hj * vj)
-
-    d3 <- (L_p2 - 2 * L_p1 + 2 * L_m1 - L_m2) / (2 * hj^3)
+    d3 <- .sla_fd3(log_lik_fn(beta_hat + 2 * hj * vj),
+                   log_lik_fn(beta_hat +     hj * vj),
+                   log_lik_fn(beta_hat -     hj * vj),
+                   log_lik_fn(beta_hat - 2 * hj * vj), hj)
     gamma[j] <- d3 / sigma_vec[j]^3
   }
   gamma
@@ -283,30 +328,19 @@
 #' @keywords internal
 .sla_compute_occu_single <- function(model, em_result, spatial = NULL,
                                      prior_spec = NULL) {
-  if (!is.null(spatial)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = paste0(
-                  "Gaussian marginals retained for spatial Sigma by design: the ",
-                  "simplified-Laplace third-cumulant correction is valid for ",
-                  "hyperparameter-free fixed-effect marginals only; for a spatial ",
-                  "field the dominant skewness is hyperparameter-marginalisation, ",
-                  "which it does not capture (validated against NUTS, ",
-                  "gcol33/tulpaObs#55).")))
-  }
+  bail <- .sla_bailer("gamma")
+  if (!is.null(spatial)) return(bail(.sla_spatial_reason("occu")))
   if (is.null(em_result$weights)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "em_result$weights missing -- needed for Louis Sigma_occ"))
+    return(bail("em_result$weights missing -- needed for Louis Sigma_occ"))
   }
 
   fit_occ <- em_result$fits$occ
   fit_det <- em_result$fits$det
   if (is.null(fit_occ) || is.null(fit_det)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "EM fits missing for occ or det block"))
+    return(bail("EM fits missing for occ or det block"))
   }
   if (is.null(fit_det$H_beta)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "fit_det$H_beta missing -- was return_hessian = TRUE?"))
+    return(bail("fit_det$H_beta missing -- was return_hessian = TRUE?"))
   }
 
   X_occ <- model$X_processes[[1]]
@@ -364,23 +398,17 @@
     prior_spec  = prior_spec,
     coef_names  = pi_list[[1]]$coef_names
   )
-  Sigma_occ <- tryCatch(solve(I_obs), error = function(e) NULL)
-  if (is.null(Sigma_occ)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "Louis I_obs (occ) not invertible"))
-  }
+  Sigma_occ <- .sla_solve(I_obs)
+  if (is.null(Sigma_occ)) return(bail("Louis I_obs (occ) not invertible"))
   gamma_occ <- .sla_gamma_diag(l3 = l3_occ, X = X_occ, Sigma = Sigma_occ)
 
   # ---- Detection process l''' (any-det sites only) -----------------------
   # Detection likelihood: Binomial(n_valid, p) with observed n_det; only
   # any-det sites contribute (E-step weight on z=0 sites zeroes detection).
-  l3_det_per_site <- -n_valid * p * (1 - p) * (1 - 2 * p)
+  l3_det_per_site <- .l3_binomial_logit(eta_det, n_valid)
   l3_det_per_site[!any_det] <- 0
-  Sigma_det <- tryCatch(solve(fit_det$H_beta), error = function(e) NULL)
-  if (is.null(Sigma_det)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "fit_det$H_beta not invertible"))
-  }
+  Sigma_det <- .sla_solve(fit_det$H_beta)
+  if (is.null(Sigma_det)) return(bail("fit_det$H_beta not invertible"))
   X_det_rows <- X_det
   if (nrow(X_det_rows) > n_sites) {
     X_det_rows <- X_det[seq_len(n_sites), , drop = FALSE]

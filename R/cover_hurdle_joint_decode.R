@@ -250,10 +250,10 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   # multi-block puts it in the block.)
   sp <- prior_spatial
   if (is.null(sp$sigma_grid)) {
-    sp$sigma_grid <- exp(seq(log(0.1), log(3), length.out = 5))
+    sp$sigma_grid <- .tobs_default_sigma_grid()
   }
   if (tolower(sp$type) == "bym2" && is.null(sp$rho_grid)) {
-    sp$rho_grid <- c(0.25, 0.5, 0.75)
+    sp$rho_grid <- .tobs_default_bym2_rho_grid()
   }
   sp$spatial_idx <- list(as.integer(spi_full), as.integer(spi_pos))
 

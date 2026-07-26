@@ -130,15 +130,9 @@ t_occu <- function() {
       psi_row <- stats::plogis(as.vector(Xf %*% bpsi) + eta[srow])
       p_it    <- stats::plogis(as.vector(X_det %*% bp))         # per-site detection
       # 1. latent occupancy z_{i,t}
-      z <- matrix(0L, n, T_s); z[anydet] <- 1L
-      und <- !anydet
-      if (any(und)) {
-        psi_m <- matrix(psi_row, n, T_s, byrow = TRUE)
-        pmat  <- matrix(p_it, n, T_s)
-        l1 <- psi_m[und] * (1 - pmat[und])^nvis[und]
-        l0 <- 1 - psi_m[und]
-        z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
-      }
+      psi_m <- matrix(psi_row, n, T_s, byrow = TRUE)
+      pmat  <- matrix(p_it, n, T_s)
+      z <- .tobs_pg_draw_z(psi_m, (1 - pmat)^nvis, anydet)
       zf <- as.vector(t(z))                                    # row order (i,t)
       # 2. joint (beta_psi, eta) GMRF update given omega_psi, AR1 precision on eta
       eta_lin <- as.vector(Xf %*% bpsi) + eta[srow]

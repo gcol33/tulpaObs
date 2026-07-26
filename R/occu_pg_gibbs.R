@@ -49,13 +49,7 @@
       eta_psi <- as.vector(X_psi %*% bpsi); psi  <- stats::plogis(eta_psi)
       eta_p   <- as.vector(X_p   %*% bp);   pdet <- stats::plogis(eta_p)
       # 1. latent occupancy
-      z <- integer(n); z[anydet] <- 1L
-      und <- !anydet
-      if (any(und)) {
-        l1 <- psi[und] * (1 - pdet[und])^nvis[und]
-        l0 <- 1 - psi[und]
-        z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
-      }
+      z <- .tobs_pg_draw_z(psi, (1 - pdet)^nvis, anydet)
       # 2. occupancy coefficients (all sites)
       om_psi <- rpg(rep(1, n), eta_psi)
       bpsi   <- .tobs_pg_draw_beta(X_psi, om_psi, z - 0.5, prec)
@@ -140,12 +134,7 @@
       eta_psi <- as.vector(X_psi %*% bpsi) + f; psi <- stats::plogis(eta_psi)
       eta_p   <- as.vector(X_p %*% bp);        pdet <- stats::plogis(eta_p)
       # 1. latent occupancy
-      z <- integer(n); z[anydet] <- 1L
-      und <- !anydet
-      if (any(und)) {
-        l1 <- psi[und] * (1 - pdet[und])^nvis[und]; l0 <- 1 - psi[und]
-        z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
-      }
+      z <- .tobs_pg_draw_z(psi, (1 - pdet)^nvis, anydet)
       # 2. joint (beta_psi, f) GMRF update given omega_psi
       om  <- rpg(rep(1, n), eta_psi); kap <- z - 0.5
       Pbb <- crossprod(X_psi, X_psi * om) + B0inv_psi          # p x p

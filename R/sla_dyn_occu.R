@@ -182,40 +182,6 @@
 # Per-block Sigma assembly
 # ---------------------------------------------------------------------------
 
-# Louis-corrected observed info for the psi1 (init) block.
-# Mirrors `.louis_info_psi_single()` in spirit, adapted for dyn_occu where
-# the relevant weights are w[, 1] (the E-step posterior P(z_{i,1} = 1 | y)).
-.louis_info_psi1_dynamic <- function(X_psi, beta_psi, w_t1,
-                                     prior_spec = NULL, coef_names = NULL) {
-  p_psi <- length(beta_psi)
-  if (p_psi == 0L || is.null(X_psi) || nrow(X_psi) == 0L) return(NULL)
-  if (is.null(w_t1) || length(w_t1) != nrow(X_psi))      return(NULL)
-
-  eta <- as.numeric(X_psi %*% beta_psi)
-  eta <- .tobs_clamp_eta(eta)
-  psi <- plogis(eta)
-
-  d <- psi * (1 - psi) - w_t1 * (1 - w_t1)
-  I_obs <- as.matrix(crossprod(X_psi, d * X_psi))
-
-  if (!is.null(prior_spec)) {
-    if (is.null(coef_names)) {
-      coef_names <- colnames(X_psi) %||% paste0("x", seq_len(p_psi))
-    }
-    pr <- .prior_for_submodel(prior_spec, "psi1", coef_names)
-    if (is.null(pr)) {
-      # Some legacy prior specs key on "psi"; honour that too.
-      pr <- .prior_for_submodel(prior_spec, "psi", coef_names)
-    }
-    if (!is.null(pr)) {
-      pen_prec <- ifelse(is.finite(pr$sd), 1 / (pr$sd^2), 0)
-      diag(I_obs) <- diag(I_obs) + pen_prec[seq_len(p_psi)]
-    }
-  }
-  I_obs
-}
-
-
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -238,13 +204,12 @@
 #' @keywords internal
 .sla_compute_dyn_occu <- function(model, em_result, spatial = NULL,
                                   prior_spec = NULL) {
+  bail <- .sla_bailer("gamma")
   if (!is.null(spatial)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "SLA for dyn_occu does not support spatial yet"))
+    return(bail("SLA for dyn_occu does not support spatial yet"))
   }
   if (is.null(em_result$weights)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "em_result$weights missing (need n_sites x n_seasons matrix)"))
+    return(bail("em_result$weights missing (need n_sites x n_seasons matrix)"))
   }
 
   fits <- em_result$fits
@@ -254,14 +219,11 @@
   fit_ext <- fits$ext
   if (is.null(fit_occ) || is.null(fit_det) ||
       is.null(fit_col) || is.null(fit_ext)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "EM fits missing for one of occ/det/col/ext blocks"))
+    return(bail("EM fits missing for one of occ/det/col/ext blocks"))
   }
   for (nm in c("det", "col", "ext")) {
-    fi <- fits[[nm]]
-    if (is.null(fi$H_beta)) {
-      return(list(gamma = NULL, valid = FALSE,
-                  reason = sprintf("fit_%s$H_beta missing (was return_hessian = TRUE?)", nm)))
+    if (is.null(fits[[nm]]$H_beta)) {
+      return(bail(sprintf("fit_%s$H_beta missing (was return_hessian = TRUE?)", nm)))
     }
   }
 
@@ -283,44 +245,31 @@
   # ---- psi1 block: Louis observed info ------------------------------------
   w <- em_result$weights
   if (!is.matrix(w) || nrow(w) != model$n_sites || ncol(w) != model$n_seasons) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "weights shape != n_sites x n_seasons"))
+    return(bail("weights shape != n_sites x n_seasons"))
   }
-  I_psi <- .louis_info_psi1_dynamic(
-    X_psi      = X_psi,
+  # The season-1 E-step posterior P(z_{i,1} = 1 | y) is the state weight the
+  # Louis identity takes; the initial-occupancy prior keys on "psi1".
+  I_psi <- .louis_info_psi_single(
+    X_occ      = X_psi,
     beta_psi   = beta_psi,
-    w_t1       = w[, 1],
+    weights    = w[, 1],
     prior_spec = prior_spec,
-    coef_names = pi_list[[1]]$coef_names
+    coef_names = pi_list[[1]]$coef_names,
+    prior_arms = c("psi1", "psi")
   )
-  Sigma_psi <- tryCatch(solve(I_psi), error = function(e) NULL)
-  if (is.null(Sigma_psi)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "Louis I_obs (psi1) not invertible"))
-  }
+  Sigma_psi <- .sla_solve(I_psi)
+  if (is.null(Sigma_psi)) return(bail("Louis I_obs (psi1) not invertible"))
 
   # ---- det block: raw H_beta (weighted binomial, no M inflation) ----------
-  Sigma_p <- tryCatch(solve(as.matrix(fit_det$H_beta)),
-                      error = function(e) NULL)
-  if (is.null(Sigma_p)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "fit_det$H_beta not invertible"))
-  }
+  Sigma_p <- .sla_solve(as.matrix(fit_det$H_beta))
+  if (is.null(Sigma_p)) return(bail("fit_det$H_beta not invertible"))
 
   # ---- col/ext blocks: H_beta / M (strip pseudo-binomial inflation) -------
   M <- .SLA_DYN_M_PSEUDO
-  Sigma_col <- tryCatch(solve(as.matrix(fit_col$H_beta) / M),
-                        error = function(e) NULL)
-  if (is.null(Sigma_col)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "fit_col$H_beta/M not invertible"))
-  }
-  Sigma_ext <- tryCatch(solve(as.matrix(fit_ext$H_beta) / M),
-                        error = function(e) NULL)
-  if (is.null(Sigma_ext)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "fit_ext$H_beta/M not invertible"))
-  }
+  Sigma_col <- .sla_solve(as.matrix(fit_col$H_beta) / M)
+  if (is.null(Sigma_col)) return(bail("fit_col$H_beta/M not invertible"))
+  Sigma_ext <- .sla_solve(as.matrix(fit_ext$H_beta) / M)
+  if (is.null(Sigma_ext)) return(bail("fit_ext$H_beta/M not invertible"))
 
   # ---- Block-diagonal joint Sigma -----------------------------------------
   Sigma <- matrix(0, p_total, p_total)

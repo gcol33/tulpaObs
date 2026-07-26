@@ -621,7 +621,7 @@
   # the field draws are large and the user typically wants the cell-level
   # marginal summaries computed below).
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means[beta_idx_all], V[beta_idx_all, beta_idx_all, drop = FALSE])
+  draws <- .rmvn(n_draws, means[beta_idx_all], V[beta_idx_all, beta_idx_all, drop = FALSE])
   colnames(draws) <- beta_names
 
   # Per-cell field summary (posterior mean + 95% Wald CI).

@@ -197,8 +197,8 @@
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }
 
-  alpha_grid <- dots$alpha.grid %||% c(0, exp(seq(log(0.1), log(3), length.out = 5)))
-  sigma_grid <- dots$sigma.grid %||% exp(seq(log(0.1), log(3), length.out = 5))
+  alpha_grid <- dots$alpha.grid %||% .tobs_default_alpha_grid()
+  sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields (tulpaObs#53): every weighted areal term in the
   # psi formula beyond the unweighted intercept field is a spatially-varying
@@ -402,17 +402,11 @@
     field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
     Vj <- NULL
   } else {
-    p_joint     <- length(idx_joint)
     modes_joint <- modes[, idx_joint, drop = FALSE]
     mbar_joint  <- as.numeric(crossprod(w, modes_joint))
-    Vj <- matrix(0, p_joint, p_joint)
-    for (kk in seq_along(ok_cells)) {
-      dk     <- modes_joint[kk, ] - mbar_joint
-      Ck     <- blocks[[ ok_cells[kk] ]]
-      within <- if (is.null(Ck) || anyNA(Ck)) matrix(0, p_joint, p_joint) else as.matrix(Ck)
-      Vj <- Vj + w[kk] * (within + tcrossprod(dk))
-    }
-    Vj <- (Vj + t(Vj)) / 2
+    Vj <- .tobs_grid_vcov(modes_joint, w, blocks[ok_cells],
+                          center = mbar_joint, on_missing = "zero",
+                          symmetrize = TRUE)
     diag_Vj    <- diag(Vj)
     sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
     beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
@@ -483,7 +477,7 @@
   dimnames(V) <- list(par_names, par_names)
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
+  draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
   # Split the stacked field summaries into one block of n_cells per coupled

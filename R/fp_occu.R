@@ -101,18 +101,6 @@
 # Laplace fit (analytic-gradient BFGS over the exact marginal)
 # ---------------------------------------------------------------------------
 
-# Central-difference Jacobian of a vector-valued function (the analytic gradient),
-# used to assemble the observed information at the mode. Exact to FD precision.
-.fp_fd_jacobian <- function(fn, x, h = 1e-5) {
-  p <- length(x)
-  J <- matrix(0, p, p)
-  for (i in seq_len(p)) {
-    xp <- x; xm <- x; xp[i] <- xp[i] + h; xm[i] <- xm[i] - h
-    J[, i] <- (fn(xp) - fn(xm)) / (2 * h)
-  }
-  0.5 * (J + t(J))      # symmetrise (the marginal Hessian is symmetric)
-}
-
 #' Maximum-likelihood fit of the multistate false-positive occupancy model
 #'
 #' @description
@@ -204,7 +192,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   }
 
   out  <- eval_cpp(theta)
-  Hobs <- -.fp_fd_jacobian(function(th) grad_design(eval_cpp(th), th), theta)
+  Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th), th), theta)
   vcov <- tryCatch(solve(Hobs), error = function(e) matrix(NA_real_, length(theta), length(theta)))
 
   nm <- c(paste0("psi_", colnames(X_psi)), paste0("p11_", colnames(X_p11)),

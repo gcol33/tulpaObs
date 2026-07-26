@@ -521,20 +521,6 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   if (length(out) == 0L) NULL else out
 }
 
-# Draw from a multivariate normal via the Cholesky of `sigma`; falls back to
-# independent normals (diagonal) when `sigma` is not PD (e.g. a non-converged
-# observed-info Hessian).
-.rmvn <- function(n, mu, sigma) {
-  p <- length(mu)
-  L <- tryCatch(chol(sigma), error = function(e) NULL)
-  z <- matrix(stats::rnorm(n * p), n, p)
-  if (is.null(L)) {
-    sds <- sqrt(pmax(diag(sigma), 1e-8))
-    return(sweep(z * rep(sds, each = n), 2, mu, "+"))
-  }
-  sweep(z %*% L, 2, mu, "+")
-}
-
 
 # ---------------------------------------------------------------------------
 # N-mixture S3 helpers (routed to from methods.R by model_type == "nmix")

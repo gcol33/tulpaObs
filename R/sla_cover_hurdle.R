@@ -120,27 +120,23 @@
 #' @return List(gamma_occ, gamma_pos, valid, reason).
 #' @keywords internal
 .sla_compute_cover_hurdle <- function(fits, enc, positive) {
+  bail  <- .sla_bailer(c("gamma_occ", "gamma_pos"))
   p_occ <- ncol(enc$occ_data$X)
   p_pos <- ncol(enc$pos_data$X)
   if (is.null(fits$m_occ) || is.null(fits$m_pos)) {
-    return(list(gamma_occ = NULL, gamma_pos = NULL, valid = FALSE,
-                reason = "missing occ or pos arm fit"))
+    return(bail("missing occ or pos arm fit"))
   }
   H_occ <- fits$m_occ$H_beta
   H_pos <- fits$m_pos$H_beta
   if (is.null(H_occ) || is.null(H_pos)) {
-    return(list(gamma_occ = NULL, gamma_pos = NULL, valid = FALSE,
-                reason = "H_beta missing on occ or pos arm"))
+    return(bail("H_beta missing on occ or pos arm"))
   }
 
   beta_occ <- as.numeric(fits$m_occ$mode)[seq_len(p_occ)]
   beta_pos <- as.numeric(fits$m_pos$mode)[seq_len(p_pos)]
 
-  Sigma_occ <- tryCatch(solve(H_occ), error = function(e) NULL)
-  if (is.null(Sigma_occ)) {
-    return(list(gamma_occ = NULL, gamma_pos = NULL, valid = FALSE,
-                reason = "H_beta (occ) not invertible"))
-  }
+  Sigma_occ <- .sla_solve(H_occ)
+  if (is.null(Sigma_occ)) return(bail("H_beta (occ) not invertible"))
   # The Gaussian-arm Hessian is computed under phi = 1; scale it back up
   # to the true noise scale so Sigma_pos = sigma_pos^2 * solve(H_beta) is
   # the right marginal precision. For the beta arm tulpa_laplace_beta()
@@ -149,11 +145,9 @@
     sig <- fits$sigma_pos
     if (is.null(sig) || !is.finite(sig) || sig <= 0) 1 else sig^2
   } else 1
-  Sigma_pos <- tryCatch(scale_pos * solve(H_pos), error = function(e) NULL)
-  if (is.null(Sigma_pos)) {
-    return(list(gamma_occ = NULL, gamma_pos = NULL, valid = FALSE,
-                reason = "H_beta (pos) not invertible"))
-  }
+  Sigma_pos <- .sla_solve(H_pos)
+  if (is.null(Sigma_pos)) return(bail("H_beta (pos) not invertible"))
+  Sigma_pos <- scale_pos * Sigma_pos
 
   # Occurrence arm: Bernoulli FD gamma
   gamma_occ <- tryCatch(
@@ -162,8 +156,7 @@
     error = function(e) NULL
   )
   if (is.null(gamma_occ) || !all(is.finite(gamma_occ))) {
-    return(list(gamma_occ = NULL, gamma_pos = NULL, valid = FALSE,
-                reason = "FD gamma on occ arm produced non-finite values"))
+    return(bail("FD gamma on occ arm produced non-finite values"))
   }
   names(gamma_occ) <- colnames(enc$occ_data$X)
 
@@ -171,8 +164,7 @@
   gamma_pos <- if (identical(positive, "beta")) {
     phi <- fits$phi_pos
     if (is.null(phi) || !is.finite(phi) || phi <= 0) {
-      return(list(gamma_occ = gamma_occ, gamma_pos = NULL, valid = FALSE,
-                  reason = "phi_pos missing or non-positive"))
+      return(bail("phi_pos missing or non-positive", gamma_occ = gamma_occ))
     }
     tryCatch(
       .sla_gamma_fd(beta_pos, Sigma_pos,
@@ -182,8 +174,7 @@
   } else if (identical(positive, "lognormal")) {
     sig <- fits$sigma_pos
     if (is.null(sig) || !is.finite(sig) || sig <= 0) {
-      return(list(gamma_occ = gamma_occ, gamma_pos = NULL, valid = FALSE,
-                  reason = "sigma_pos missing or non-positive"))
+      return(bail("sigma_pos missing or non-positive", gamma_occ = gamma_occ))
     }
     tryCatch(
       .sla_gamma_fd(beta_pos, Sigma_pos,
@@ -191,12 +182,12 @@
       error = function(e) NULL
     )
   } else {
-    return(list(gamma_occ = gamma_occ, gamma_pos = NULL, valid = FALSE,
-                reason = sprintf("unsupported positive family '%s'", positive)))
+    return(bail(sprintf("unsupported positive family '%s'", positive),
+                gamma_occ = gamma_occ))
   }
   if (is.null(gamma_pos) || !all(is.finite(gamma_pos))) {
-    return(list(gamma_occ = gamma_occ, gamma_pos = NULL, valid = FALSE,
-                reason = "FD gamma on pos arm produced non-finite values"))
+    return(bail("FD gamma on pos arm produced non-finite values",
+                gamma_occ = gamma_occ))
   }
   names(gamma_pos) <- colnames(enc$pos_data$X)
 

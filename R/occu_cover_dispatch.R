@@ -141,12 +141,12 @@
   # field. `cp_label` names the copy() in any error.
   apply_component <- function(comp, g, cp_label) {
     if (is.null(comp)) {
-      alpha_int <<- g %||% .occu_cover_default_alpha_grid()
-      if (has_trend) alpha_trend <<- g %||% .occu_cover_default_alpha_grid()
+      alpha_int <<- g %||% .tobs_default_alpha_grid()
+      if (has_trend) alpha_trend <<- g %||% .tobs_default_alpha_grid()
       return(c("intercept", if (has_trend) "trend"))
     }
     if (identical(comp, "intercept")) {
-      alpha_int <<- g %||% .occu_cover_default_alpha_grid()
+      alpha_int <<- g %||% .tobs_default_alpha_grid()
       return("intercept")
     }
     if (identical(comp, "trend") ||
@@ -156,7 +156,7 @@
           "%s: the spatial field has no trend component (it is a single ",
           "intercept field)."), cp_label), call. = FALSE)
       }
-      alpha_trend <<- g %||% .occu_cover_default_alpha_grid()
+      alpha_trend <<- g %||% .tobs_default_alpha_grid()
       return("trend")
     }
     avail <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
@@ -222,12 +222,6 @@
   control
 }
 
-# The engine's default coupling grid (a copy() with no alpha = falls back to it,
-# matching the joint fitter's own default). Single source of truth with
-# .tobs_fit_occu_cover_joint().
-.occu_cover_default_alpha_grid <- function() {
-  c(0, exp(seq(log(0.1), log(3), length.out = 5)))
-}
 
 
 # ---------------------------------------------------------------------------

@@ -534,7 +534,7 @@
   )
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
+  draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
   structure(c(list(

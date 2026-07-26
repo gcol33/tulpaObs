@@ -207,9 +207,9 @@
   }
 
   alpha_grid <- dots$alpha.grid %||%
-                c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+                .tobs_default_alpha_grid()
   sigma_grid <- dots$sigma.grid %||%
-                exp(seq(log(0.1), log(3), length.out = 5))
+                .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields: each is a per-cell-weighted areal field that
   # contributes weight_i * sigma_trend * z[cell_i] on occupancy and

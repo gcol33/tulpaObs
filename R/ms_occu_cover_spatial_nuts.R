@@ -428,23 +428,6 @@
 # NUTS fit (front-door method = "nuts")
 # ---------------------------------------------------------------------------
 
-# Inverse-mass diagonal for the NUTS warm-start: the posterior variance per
-# coordinate, read off the finite-difference diagonal of the joint
-# log-posterior Hessian at the mode (the Laplace metric). Uses the fast C++
-# gradient so the K*(few) gradient evaluations are cheap.
-.ms_ocs_nuts_metric <- function(spec, theta, pri, sigma.beta, sd_L, constrain,
-                                h = 1e-4) {
-  np <- length(theta); md <- numeric(np)
-  g <- function(th) cpp_ms_ocs_joint_logpost(spec, th, pri, sigma.beta, sd_L,
-                                             constrain)$grad
-  for (j in seq_len(np)) {
-    tp <- theta; tp[j] <- tp[j] + h
-    tm <- theta; tm[j] <- tm[j] - h
-    md[j] <- -(g(tp)[j] - g(tm)[j]) / (2 * h)
-  }
-  1 / pmax(md, 1e-3)
-}
-
 # Reconstruct a Laplace-EM-shaped `fit` object from the NUTS draws so the shared
 # builder (build_ms_occu_cover_spatial_fit) packages the tobs_fit unchanged. The
 # inner-latent posterior is summarised by its mean (`par`) and covariance (`cov`)
@@ -626,8 +609,10 @@
   theta0 <- .ms_ocs_nuts_pack_init(em)
   spec   <- .ms_ocs_nuts_spec(model)
   pri    <- .ms_ocs_nuts_priors()
-  inv_metric <- .ms_ocs_nuts_metric(spec, theta0, pri, sigma.beta, sd_L,
-                                    constrain)
+  inv_metric <- .ms_ocs_fd_metric(
+    function(th) cpp_ms_ocs_joint_logpost(spec, th, pri, sigma.beta, sd_L,
+                                          constrain)$grad,
+    theta0)
 
   n_warmup <- as.integer(control[["n.warmup"]] %||% 500L)
   n_sample <- as.integer(control[["n.iter"]]   %||% 1000L)

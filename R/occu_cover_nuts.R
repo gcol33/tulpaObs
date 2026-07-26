@@ -397,8 +397,8 @@
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }
 
-  alpha_grid <- alpha.grid %||% c(0, exp(seq(log(0.1), log(3), length.out = 5)))
-  sigma_grid <- sigma.grid %||% exp(seq(log(0.1), log(3), length.out = 5))
+  alpha_grid <- alpha.grid %||% .tobs_default_alpha_grid()
+  sigma_grid <- sigma.grid %||% .tobs_default_sigma_grid()
   rho_car_grid <- rho.car.grid %||% c(0.5, 0.8, 0.95, 0.99)
 
   # Single-block (multi = FALSE): the pos arm carries

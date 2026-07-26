@@ -441,13 +441,7 @@ print.cover_fit <- function(x, ...) {
   }
   cat("\nPresence (binomial logit):\n")
   print(.coef_table(x$beta_occ, x$se_occ))
-  pos_header <- switch(positive,
-    beta     = "Positive (beta, logit link, on y > 0):",
-    beta_oi  = "Positive interior (one-inflated beta, logit link, on 0 < y < 1):",
-    ordinal  = "Positive (ordinal interval-censored Gaussian on log y > 0):",
-    gaussian = "Positive (identity-Gaussian on y != 0):",
-    "Positive (Gaussian on log y > 0):")
-  cat("\n", pos_header, "\n", sep = "")
+  cat("\n", .cover_pos_header(positive), "\n", sep = "")
   print(.coef_table(x$beta_pos, x$se_pos))
   invisible(x)
 }
@@ -494,12 +488,21 @@ print.summary.cover_fit <- function(x, ...) {
   cat(sprintf("  log marginal: occ = %.3f, pos = %.3f\n",
               x$log_marginal["occ"], x$log_marginal["pos"]))
   cat("\nPresence:\n"); print(x$presence)
-  pos_header <- switch(x$positive,
-    beta    = "Positive (beta, logit):",
-    ordinal = "Positive (ordinal interval, log-cover):",
-    "Positive (Gaussian):")
-  cat("\n", pos_header, "\n", sep = ""); print(x$positive_arm)
+  cat("\n", .cover_pos_header(x$positive), "\n", sep = "")
+  print(x$positive_arm)
   invisible(x)
+}
+
+# Header naming the positive-arm density and the support it is fit on. Shared by
+# print.cover_fit() and print.summary.cover_fit() so a new `positive` family is
+# labelled once. The unmatched default is the lognormal arm (Gaussian on log y).
+.cover_pos_header <- function(positive) {
+  switch(positive,
+    beta     = "Positive (beta, logit link, on y > 0):",
+    beta_oi  = "Positive interior (one-inflated beta, logit link, on 0 < y < 1):",
+    ordinal  = "Positive (ordinal interval-censored Gaussian on log y > 0):",
+    gaussian = "Positive (identity-Gaussian on y != 0):",
+    "Positive (Gaussian on log y > 0):")
 }
 
 

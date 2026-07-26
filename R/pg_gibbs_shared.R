@@ -31,6 +31,27 @@
   as.vector(V %*% rhs + t(chol(V)) %*% stats::rnorm(ncol(X)))
 }
 
+# One latent-occupancy step: a unit with at least one detection is occupied, an
+# undetected unit is Bernoulli on
+#   P(z = 1 | y = 0) = psi q / (psi q + 1 - psi),
+# with `q` the probability that an occupied unit stayed undetected -- (1 - p)^nvis
+# for a single detection source, the product over sources when several observe
+# the same state. `psi`, `q` and `anydet` are conformable; the draw carries the
+# shape of `anydet`, so the same call serves the per-site vector layouts and the
+# (site x season) / (site x species) matrix layouts. One rbinom call over the
+# undetected units, in unit order.
+.tobs_pg_draw_z <- function(psi, q, anydet) {
+  z <- anydet * 0L
+  z[anydet] <- 1L
+  und <- !anydet
+  if (any(und)) {
+    l1 <- psi[und] * q[und]
+    l0 <- 1 - psi[und]
+    z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
+  }
+  z
+}
+
 # Per-coordinate community update for one arm: the conjugate Gaussian community
 # mean and the Inverse-Gamma community variance, given the S per-species
 # coefficient rows `b` (S x p). Returns the updated `mu` (length p) and `tau2`

@@ -58,13 +58,7 @@
   mu     <- as.numeric(crossprod(w, mu_mat))             # weighted-mean community means
 
   # Community-mean covariance: law of total covariance over the grid.
-  V <- matrix(0, d, d)
-  for (k in which(ok)) {
-    Ck <- fit$vcov_mu[[k]]
-    if (is.null(Ck) || anyNA(Ck)) next
-    dk <- mu_mat[k, ] - mu
-    V <- V + w[k] * (as.matrix(Ck) + tcrossprod(dk))
-  }
+  V <- .tobs_grid_vcov(mu_mat, w, fit$vcov_mu, center = mu)
 
   # Sigma + BLUPs: weighted means across the grid.
   Sl <- matrix(0, p_lam, p_lam); Sp <- matrix(0, p_p, p_p)
@@ -95,10 +89,7 @@
   hyper <- list()
   for (nm in theta_cols) {
     if (!(nm %in% colnames(fit$theta_grid))) next
-    vec <- fit$theta_grid[, nm]
-    m   <- sum(w * vec)
-    s   <- sqrt(max(0, sum(w * vec^2) - m^2))
-    hyper[[nm]] <- c(mean = m, sd = s)
+    hyper[[nm]] <- .tobs_weighted_moment(w, fit$theta_grid[, nm])
   }
   r_summary <- if (identical(mixture, "negbin") && "r" %in% colnames(fit$theta_grid)) {
     list(r = unname(hyper$r["mean"]), log_r = NA_real_, r_sd = unname(hyper$r["sd"]))

@@ -175,6 +175,70 @@
   )
 }
 
+# Maximise a closed-form marginal by BFGS and pack the result as a `tobs_fit`.
+#
+# The families whose latent state marginalises analytically -- royle_nichols,
+# occu_ttd, double_observer, gdistremoval, occu_multi, distsamp_open -- all end
+# the same way: minimise the negative log-likelihood, invert the observed
+# information at the mode, draw a pseudo-posterior from N(mode, V), and hand the
+# S3 layer one slot roster. Only the objective, the parameter names, the sample
+# size and a handful of family-specific slots differ.
+#
+# `gr` is the gradient of `nll`. Supplying it both drives BFGS and changes where
+# the observed information comes from: the Jacobian of the negative-log-
+# likelihood gradient IS that information, and computing it by finite difference
+# of an analytic gradient costs 2p cheap gradient calls, far less than optim's
+# numeric Hessian of the value. Without `gr`, optim's own Hessian is used. A
+# singular information matrix yields an all-NA covariance rather than an error,
+# so the fit still returns with its SEs reading as unavailable.
+#
+# `extra` is a function of the fitted `means` returning the family-specific
+# slots to splice in (an intercept list, a mixture label, a dispersion, ...).
+.tobs_bfgs_marginal_fit <- function(nll, init, par_names, model, N,
+                                    gr = NULL,
+                                    extra = function(means) list(),
+                                    control = list(maxit = 500L),
+                                    n_draws = 1000L) {
+  opt <- stats::optim(init, nll, gr = gr, method = "BFGS",
+                      hessian = is.null(gr), control = control)
+
+  means <- opt$par; names(means) <- par_names
+  info <- if (is.null(gr)) opt$hessian
+          else tryCatch(.tobs_fd_jacobian(gr, opt$par), error = function(e) NULL)
+  V <- tryCatch(solve(info), error = function(e) diag(NA_real_, length(means)))
+  V <- (V + t(V)) / 2
+  dimnames(V) <- list(par_names, par_names)
+  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+
+  draws <- .rmvn(n_draws, means, V)
+  colnames(draws) <- par_names
+
+  structure(c(list(
+    draws        = draws,
+    means        = means,
+    sds          = sds,
+    vcov         = V,
+    n_samples    = n_draws,
+    n_params     = length(means),
+    log_prob     = rep(-opt$value, n_draws),
+    log_lik      = -opt$value,
+    N            = N),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names    = par_names,
+    param_names  = par_names,
+    n_fixed      = length(means),
+    fixed_names  = par_names,
+    process_info = model$process_info,
+    model        = model,
+    spatial      = NULL,
+    method       = "laplace",
+    convergence  = list(converged = opt$convergence == 0L,
+                        n_iter = opt$counts[[1L]])),
+    extra(means)),
+    class = c("tobs_fit", "tulpa_fit"))
+}
+
 extract_beta <- function(sub, p) {
   if (is.null(sub)) return(rep(0, p))
   if (!is.null(sub$beta)) return(sub$beta)
@@ -228,10 +292,17 @@ extract_beta <- function(sub, p) {
 # per-site `psi(1-psi) - w(1-w)` term can be negative (the marginal log-lik
 # can be locally convex at a single site), but the aggregate X' D X is PSD at
 # the MLE because it equals minus the marginal log-lik Hessian at its max.
+#
+# The occupancy score x_i (z_i - psi_i) is family-generic, so the same identity
+# gives the state-block info of the dynamic (season-1 weights `w[, 1]`) and
+# integrated fits. `prior_arms` names the submodel key(s) the prior spec is
+# looked up under, in order, taking the first that resolves -- the dynamic fit
+# keys its initial-occupancy prior on "psi1", the others on "psi".
 .louis_info_psi_single <- function(X_occ, beta_psi, weights,
                                    spatial = NULL, spatial_fit = NULL,
                                    prior_spec = NULL,
-                                   coef_names = NULL) {
+                                   coef_names = NULL,
+                                   prior_arms = "psi") {
   p_psi <- length(beta_psi)
   if (p_psi == 0L) return(NULL)
   if (is.null(X_occ) || nrow(X_occ) == 0L) return(NULL)
@@ -248,7 +319,11 @@ extract_beta <- function(sub, p) {
 
   if (!is.null(prior_spec)) {
     if (is.null(coef_names)) coef_names <- colnames(X_occ) %||% paste0("x", seq_len(p_psi))
-    pr <- .prior_for_submodel(prior_spec, "psi", coef_names)
+    pr <- NULL
+    for (arm in prior_arms) {
+      pr <- .prior_for_submodel(prior_spec, arm, coef_names)
+      if (!is.null(pr)) break
+    }
     if (!is.null(pr)) {
       pen_prec <- ifelse(is.finite(pr$sd), 1 / (pr$sd^2), 0)
       diag(I_obs) <- diag(I_obs) + pen_prec[seq_len(p_psi)]

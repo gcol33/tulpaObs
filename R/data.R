@@ -127,16 +127,7 @@ tobs_data <- function(df, y, site, visit,
     ord  <- order(si, vi)
     si_o <- si[ord]; vi_o <- vi[ord]
     yv   <- df[[y]][ord]
-    if (type %in% c("cover", "positive")) {
-      values <- .tobs_floor_continuous(yv, type, cover.floor)
-    } else {
-      yi <- as.integer(yv)
-      if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
-        stop("tobs_data(type = 'occurrence'): y must be 0/1")
-      if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
-        stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
-      values <- yi
-    }
+    values <- .tobs_response_values(yv, type, cover.floor)
 
     occ_df <- NULL
     if (!is.null(occ.covs)) {
@@ -239,19 +230,28 @@ tobs_data <- function(df, y, site, visit,
 # (`si`, `vi`) stay NA (column-major-safe: 2D indexing, never a linear slot).
 .tobs_long_response_matrix <- function(yv, si, vi, n_sites, max_visits, type,
                                        cover.floor = 0) {
-  if (type %in% c("cover", "positive")) {
-    y_mat <- matrix(NA_real_, n_sites, max_visits)
-    y_mat[cbind(si, vi)] <- .tobs_floor_continuous(yv, type, cover.floor)
-  } else {
-    yi <- as.integer(yv)
-    if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
-      stop("tobs_data(type = 'occurrence'): y must be 0/1")
-    if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
-      stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
-    y_mat <- matrix(NA_integer_, n_sites, max_visits)
-    y_mat[cbind(si, vi)] <- yi
-  }
+  values <- .tobs_response_values(yv, type, cover.floor)
+  y_mat  <- matrix(if (is.double(values)) NA_real_ else NA_integer_,
+                   n_sites, max_visits)
+  y_mat[cbind(si, vi)] <- values
   y_mat
+}
+
+# Validate a long response vector against its `type` and coerce it to storage
+# type: cover / positive are continuous proportions or positive reals (floored
+# by .tobs_floor_continuous, kept double -- coercing them to integer would
+# truncate every value below 1 to zero), occurrence is 0/1 and abundance a
+# non-negative count, both integer. Single source for the dense pivot above and
+# the compact (ragged) layout in tobs_data().
+.tobs_response_values <- function(yv, type, cover.floor = 0) {
+  if (type %in% c("cover", "positive"))
+    return(.tobs_floor_continuous(yv, type, cover.floor))
+  yi <- as.integer(yv)
+  if (type == "occurrence" && !all(is.na(yi) | yi %in% c(0L, 1L)))
+    stop("tobs_data(type = 'occurrence'): y must be 0/1")
+  if (type == "abundance" && any(yi < 0L, na.rm = TRUE))
+    stop("tobs_data(type = 'abundance'): y must be non-negative integer counts")
+  yi
 }
 
 # Validate + floor a continuous positive-arm response, the single source for the

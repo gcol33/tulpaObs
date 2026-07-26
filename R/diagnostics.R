@@ -253,6 +253,13 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   )
 }
 
+# Families whose pointwise log-likelihood kernel is `.tobs_ploglik_<model_type>(
+# fit, n.draws)` -- it reads the whole fit rather than a bare draw matrix, so the
+# posterior-mean evaluation hands it a fit whose `draws` is the single mean row.
+.TOBS_PLOGLIK_FIT_FAMILIES <- c(
+  "royle_nichols", "occu_ttd", "occu_multi", "double_observer",
+  "gdistremoval", "distsamp_open", "dyn_int_occu")
+
 # Pointwise log-likelihood at the posterior mean of the parameters, the plug-in
 # DIC needs (length n_obs). The draw-matrix families evaluate their per-family
 # kernel at the column-mean draw; the cover / occu_cover families plug in the
@@ -268,47 +275,16 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
       c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover")) {
     return(.tobs_community_loglik_at_mean(object))
   }
-  if (identical(object$model$model_type %||% "NULL", "royle_nichols")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_royle_nichols(obj_mean, n.draws = 1L)))
-  }
-  if (identical(object$model$model_type %||% "NULL", "occu_ttd")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_occu_ttd(obj_mean, n.draws = 1L)))
-  }
-  if (identical(object$model$model_type %||% "NULL", "occu_multi")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_occu_multi(obj_mean, n.draws = 1L)))
-  }
-  if (identical(object$model$model_type %||% "NULL", "double_observer")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_double_observer(obj_mean, n.draws = 1L)))
-  }
-  if (identical(object$model$model_type %||% "NULL", "gdistremoval")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_gdistremoval(obj_mean, n.draws = 1L)))
-  }
-  if (identical(object$model$model_type %||% "NULL", "distsamp_open")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_distsamp_open(obj_mean, n.draws = 1L)))
-  }
-  if (identical(object$model$model_type %||% "NULL", "dyn_int_occu")) {
-    mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                        dimnames = list(NULL, colnames(object$draws)))
-    obj_mean  <- object; obj_mean$draws <- mean_draw
-    return(as.numeric(.tobs_ploglik_dyn_int_occu(obj_mean, n.draws = 1L)))
+  # Families whose pointwise kernel takes the FIT (not a raw draw matrix):
+  # evaluate it on a one-row fit carrying the posterior-mean draw.
+  mt <- object$model$model_type %||% "NULL"
+  if (mt %in% .TOBS_PLOGLIK_FIT_FAMILIES) {
+    obj_mean <- object
+    obj_mean$draws <- matrix(colMeans(object$draws), nrow = 1L,
+                             dimnames = list(NULL, colnames(object$draws)))
+    fn <- get0(paste0(".tobs_ploglik_", mt), envir = asNamespace("tulpaObs"),
+               mode = "function", inherits = FALSE)
+    return(as.numeric(fn(obj_mean, n.draws = 1L)))
   }
   draws <- object$draws
   if (is.null(draws) || !is.matrix(draws)) {

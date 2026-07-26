@@ -253,11 +253,9 @@
     # `s = eps^(1/5)` for the 5-point central rule => `h = eps^(1/5) / sigma_j`.
     # See header comment for the field-coupling rationale.
     h <- eps_h / sigma_j
-    L_p2 <- .loglik_cover_joint_at_grid(beta_hat + 2 * h * v_j, k, fit, enc, positive)
-    L_p1 <- .loglik_cover_joint_at_grid(beta_hat +     h * v_j, k, fit, enc, positive)
-    L_m1 <- .loglik_cover_joint_at_grid(beta_hat -     h * v_j, k, fit, enc, positive)
-    L_m2 <- .loglik_cover_joint_at_grid(beta_hat - 2 * h * v_j, k, fit, enc, positive)
-    d3 <- (L_p2 - 2 * L_p1 + 2 * L_m1 - L_m2) / (2 * h^3)
+    at <- function(b) .loglik_cover_joint_at_grid(b, k, fit, enc, positive)
+    d3 <- .sla_fd3(at(beta_hat + 2 * h * v_j), at(beta_hat +     h * v_j),
+                   at(beta_hat -     h * v_j), at(beta_hat - 2 * h * v_j), h)
     gamma[j] <- d3 / sigma_j^3
   }
   gamma

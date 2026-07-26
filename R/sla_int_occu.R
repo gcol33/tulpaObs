@@ -170,18 +170,10 @@
 #' @keywords internal
 .sla_compute_int_occu <- function(model, em_result, spatial = NULL,
                                   prior_spec = NULL) {
-  if (!is.null(spatial)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = paste0(
-                  "Gaussian marginals retained for spatial Sigma by design ",
-                  "(int_occu): the simplified-Laplace skew correction does not ",
-                  "capture the hyperparameter-marginalisation skewness that ",
-                  "dominates a spatial field (validated against NUTS, ",
-                  "gcol33/tulpaObs#55).")))
-  }
+  bail <- .sla_bailer("gamma")
+  if (!is.null(spatial)) return(bail(.sla_spatial_reason("int_occu")))
   if (is.null(em_result$weights)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "em_result$weights missing -- needed for Louis Sigma_occ"))
+    return(bail("em_result$weights missing -- needed for Louis Sigma_occ"))
   }
 
   pi_list   <- model$process_info
@@ -189,10 +181,7 @@
   n_sites   <- model$n_sites
 
   fit_occ <- em_result$fits$occ
-  if (is.null(fit_occ)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "EM fit missing for occ block"))
-  }
+  if (is.null(fit_occ)) return(bail("EM fit missing for occ block"))
 
   p_occ    <- pi_list[[1]]$p
   beta_psi <- extract_beta(fit_occ, p_occ)
@@ -209,11 +198,8 @@
     prior_spec  = prior_spec,
     coef_names  = pi_list[[1]]$coef_names
   )
-  Sigma_occ <- tryCatch(solve(I_obs_occ), error = function(e) NULL)
-  if (is.null(Sigma_occ)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "Louis I_obs (occ) not invertible"))
-  }
+  Sigma_occ <- .sla_solve(I_obs_occ)
+  if (is.null(Sigma_occ)) return(bail("Louis I_obs (occ) not invertible"))
 
   # Per-source detection blocks: invert each fit_det_s$H_beta.
   beta_det_list <- vector("list", n_sources)
@@ -222,22 +208,17 @@
   for (s in seq_len(n_sources)) {
     nm  <- paste0("det", s)
     fi  <- em_result$fits[[nm]]
-    if (is.null(fi)) {
-      return(list(gamma = NULL, valid = FALSE,
-                  reason = sprintf("EM fit missing for %s block", nm)))
-    }
+    if (is.null(fi)) return(bail(sprintf("EM fit missing for %s block", nm)))
     p_det_s <- pi_list[[1 + s]]$p
     p_det_vec[s] <- p_det_s
     beta_det_list[[s]] <- extract_beta(fi, p_det_s)
     H <- fi$H_beta
     if (is.null(H)) {
-      return(list(gamma = NULL, valid = FALSE,
-                  reason = sprintf("fit_%s$H_beta missing -- was return_hessian = TRUE?", nm)))
+      return(bail(sprintf("fit_%s$H_beta missing -- was return_hessian = TRUE?", nm)))
     }
-    Sigma_s <- tryCatch(solve(H), error = function(e) NULL)
+    Sigma_s <- .sla_solve(H)
     if (is.null(Sigma_s)) {
-      return(list(gamma = NULL, valid = FALSE,
-                  reason = sprintf("fit_%s$H_beta not invertible", nm)))
+      return(bail(sprintf("fit_%s$H_beta not invertible", nm)))
     }
     # H from the M-step weighted binomial may have rows for the full set of
     # det design columns plus auxiliary blocks (e.g. spatial). Take the
@@ -268,10 +249,7 @@
     .sla_gamma_fd(beta_hat, Sigma, log_lik_fn),
     error = function(e) NULL
   )
-  if (is.null(gamma)) {
-    return(list(gamma = NULL, valid = FALSE,
-                reason = "FD gamma evaluation failed"))
-  }
+  if (is.null(gamma)) return(bail("FD gamma evaluation failed"))
 
   # Process-info order names: occ_<coef>, <source_name>_<coef>, ...
   nms <- paste0(pi_list[[1]]$name, "_", pi_list[[1]]$coef_names)

@@ -27,7 +27,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
+  draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
   # Per-species community structure (mu + BLUP deviations) per arm.
@@ -402,7 +402,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   draws <- .ms_ocs_nuts_inner(fit, n_draws, idx)
   if (is.null(draws)) {
     V <- fit$cov[idx, idx, drop = FALSE]; V <- (V + t(V)) / 2
-    draws <- .occu_cover_rmvn(n_draws, mode, V)
+    draws <- .rmvn(n_draws, mode, V)
   }
   n_draws <- nrow(draws)
 

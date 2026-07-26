@@ -240,19 +240,6 @@
        sp_ll = sp_ll, sp_grad = sp_grad, mu0 = mu)
 }
 
-# Per-species (n_valid, n_det) integer matrices [n_sites x n_species] for the C++
-# spec (column-major species). Single source: read off the same summaries the
-# marginal uses.
-.tobs_ms_occu_nuts_count_mats <- function(summaries, n_sites, n_species) {
-  nv <- matrix(0L, n_sites, n_species)
-  nd <- matrix(0L, n_sites, n_species)
-  for (s in seq_len(n_species)) {
-    nv[, s] <- as.integer(summaries[[s]]$n_valid[, 1L])
-    nd[, s] <- as.integer(summaries[[s]]$n_det[, 1L])
-  }
-  list(n_valid = nv, n_det = nd)
-}
-
 # Sample the exact joint posterior of a non-spatial community single-season
 # occupancy model via tulpa's NUTS engine and the in-tree C++ FullGradFn
 # (cpp_ms_occu_nuts), warm-started at the community Laplace-EM mode with a
@@ -283,7 +270,7 @@
     newton_max = as.integer(newton.max), verbose = FALSE)
 
   theta0 <- .tobs_ms_occu_nuts_pack_init(em, lay, pieces$arm_idx)
-  mats   <- .tobs_ms_occu_nuts_count_mats(pieces$summaries, model$n_sites,
+  mats   <- .ms_occu_spatial_count_mats(pieces$summaries, model$n_sites,
                                           pieces$S)
   spec <- list(X_psi = pieces$X_psi, X_p = pieces$X_p,
                n_sites = model$n_sites, n_species = pieces$S,

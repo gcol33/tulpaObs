@@ -536,7 +536,7 @@
 
   copy_spec <- if (both_arm) {
     alpha_grid <- control$alpha.grid %||%
-      c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+      .tobs_default_alpha_grid()
     list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid))
   } else NULL
 
@@ -963,7 +963,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     sigma_pos_grid <- as.numeric(control$sigma.pos.grid)
   } else {
     sigma_donor <- prior_for_joint$sigma_grid %||%
-      exp(seq(log(0.1), log(3), length.out = 5))
+      .tobs_default_sigma_grid()
     sigma_pos_grid <- as.numeric(sigma_donor)
   }
 
@@ -972,7 +972,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # pos arm via field_coef (the engine takes no single-block `copy`); the
   # multi-block branches carry their own per-block alpha grids.
   alpha_grid <- control$alpha.grid %||%
-    c(0, exp(seq(log(0.1), log(3), length.out = 5L)))
+    .tobs_default_alpha_grid()
 
   # Outer joint-grid integration controls, shared by the multi-block and
   # single-block dispatch. The dense outer tensor (sigma_occ x [rho] x
@@ -1092,10 +1092,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # are b<k>.sigma / b<k>.alpha (gcol33/tulpaObs#15 on the cover hurdle).
     base_block <- prior_for_joint
     if (is.null(base_block$sigma_grid)) {
-      base_block$sigma_grid <- exp(seq(log(0.1), log(3), length.out = 5))
+      base_block$sigma_grid <- .tobs_default_sigma_grid()
     }
     if (tolower(base_block$type) == "bym2" && is.null(base_block$rho_grid)) {
-      base_block$rho_grid <- c(0.25, 0.5, 0.75)
+      base_block$rho_grid <- .tobs_default_bym2_rho_grid()
     }
     base_block$spatial_idx <- list(as.integer(spi_full), as.integer(spi_pos))
 
@@ -1125,7 +1125,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     }
 
     alpha_grid_base  <- control$alpha.grid %||%
-      c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+      .tobs_default_alpha_grid()
     alpha_grid_trend <- control$alpha.grid.trend %||% alpha_grid_base
 
     prior_coupled <- list(base_block, trend_block)

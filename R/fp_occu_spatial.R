@@ -207,42 +207,24 @@
                      max_treedepth = as.integer(max.treedepth),
                      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
                      verbose = isTRUE(verbose))
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("psi_", model$process_info[[1]]$coef_names),
            paste0("p11_", model$process_info[[2]]$coef_names),
            paste0("p10_", model$process_info[[3]]$coef_names),
            paste0("b_",   model$process_info[[4]]$coef_names),
            paste0("raw_", seq_len(n_raw)))
-  colnames(draws) <- nms
-  b_idx <- seq_len(n_base)
-  par <- colMeans(draws); names(par) <- nms
-  cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_raw)
-  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  par <- run$par; cov <- run$cov
 
   lay <- .tobs_fp_occu_nuts_layout(ncol(X_psi), ncol(X_p11), ncol(X_p10), ncol(X_b))
   marg <- .tobs_fp_occu_nuts_marginal(model)
   ev_mean <- marg$eval_beta(par[lay$psi], par[lay$p11], par[lay$p10], par[lay$b])
-  raw_fit <- list(means = unname(par[b_idx]), vcov = cov, coef_names = nms[b_idx],
+  raw_fit <- list(means = unname(par[run$b_idx]), vcov = cov,
+                  coef_names = nms[run$b_idx],
                   log_lik = ev_mean$log_lik, log_lik_site = ev_mean$log_lik_site,
                   w1 = ev_mean$w1, converged = TRUE)
   fit <- build_fp_occu_fit(raw_fit, model)
-  fit$draws <- draws[, b_idx, drop = FALSE]
-  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
-  fit$vcov <- cov
-  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ev_mean$log_lik, nrow(draws))
-  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains, `[[`, "divergent"))
-  fit$accept_prob <- accept; fit$divergent <- divergent
-  fit$method <- "nuts"
-  if (temporal_only) { fit$temporal <- temporal; fit$temporal_field <- z_mean }
-  else               fit$spatial_field <- z_mean
-  fit$nuts <- list(accept_prob = accept, divergent = divergent,
-                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
-                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
-                   prior_type = if (temporal_only) temporal$type else spatial$type,
-                   fixed_hyper = TRUE)
-  fit
+  .tobs_nuts_field_attach(
+    fit, run, ev_mean$log_lik, n.chains,
+    prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
+    temporal = if (temporal_only) temporal else NULL)
 }

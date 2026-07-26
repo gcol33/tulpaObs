@@ -41,6 +41,38 @@ summary.tobs_fit <- function(object, ...) {
   s
 }
 
+# Per-family S3 handlers follow one naming rule: `.tobs_<generic>_<model_type>`.
+# This resolves one, returning NULL when a family has no handler and the
+# generic's own inline branch (the single-season path) should run instead.
+# `alias` redirects a model type onto the handler of another family that already
+# implements the identical surface.
+.tobs_s3_handler <- function(generic, model_type, alias = character(0)) {
+  if (model_type %in% names(alias)) model_type <- alias[[model_type]]
+  get0(paste0(".tobs_", generic, "_", model_type),
+       envir = asNamespace("tulpaObs"), mode = "function", inherits = FALSE)
+}
+
+# `newdata` for a family predictor: the named argument, or the positional `X.0`
+# when that was handed a data frame (`predict(fit, some_df)` is the common call).
+.tobs_resolve_newdata <- function(newdata, X.0) {
+  if (is.null(newdata) && is.data.frame(X.0)) X.0 else newdata
+}
+
+# Families whose predictor takes `newdata` and a family-specific response type,
+# with the type each reports by default. The three community occupancy families
+# share one predictor (`.tobs_predict_ms_community`).
+.TOBS_PREDICT_NEWDATA_TYPE <- c(
+  royle_nichols   = "abundance",
+  occu_ttd        = "state",
+  occu_multi      = "state",
+  double_observer = "abundance",
+  gdistremoval    = "abundance",
+  distsamp_open   = "abundance",
+  dyn_int_occu    = "state",
+  ms_occu         = "occupancy",
+  ms_dyn_occu     = "occupancy",
+  ms_int_occu     = "occupancy")
+
 #' Number of observations
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
@@ -48,37 +80,20 @@ summary.tobs_fit <- function(object, ...) {
 #' @export
 nobs.tobs_fit <- function(object, ...) {
   model <- object$model
-  if (model$model_type == "single") {
-    y <- model$y
-    sum(y >= 0)
-  } else if (model$model_type == "dynamic") {
-    sum(model$y_flat >= 0)
-  } else if (model$model_type == "nmix" || model$model_type == "removal") {
-    length(model$y_long)
-  } else if (model$model_type == "distance") {
-    sum(!is.na(model$y))
-  } else if (model$model_type == "fp_occu") {
-    length(model$y_long)
-  } else if (model$model_type == "dyn_abun") {
-    sum(!is.na(model$y))
-  } else if (model$model_type == "ms_nmix" ||
-             model$model_type == "ms_distance" ||
-             model$model_type == "ms_occu_cover" ||
-             model$model_type == "ms_occu_cover_spatial" ||
-             model$model_type == "occu_multiscale_cover") {
-    sum(!is.na(model$y))
-  } else if (model$model_type == "ms_occu" ||
-             model$model_type == "ms_dyn_occu") {
-    sum(model$valid)
-  } else if (model$model_type == "ms_int_occu") {
-    sum(vapply(model$valid, sum, integer(1)))
-  } else if (model$model_type == "count") {
-    length(model$y_count)
-  } else if (model$model_type == "ms_count") {
-    sum(model$valid)
-  } else {
-    NA_integer_
-  }
+  switch(model$model_type,
+    single  = sum(model$y >= 0),
+    dynamic = sum(model$y_flat >= 0),
+    # Long-form response: one row per (site, pass / visit).
+    nmix = , removal = , fp_occu = length(model$y_long),
+    count = length(model$y_count),
+    # Padded response grid: NA marks an unsampled cell.
+    distance = , dyn_abun = , ms_nmix = , ms_distance = , ms_occu_cover = ,
+    ms_occu_cover_spatial = , occu_multiscale_cover = sum(!is.na(model$y)),
+    # Explicit validity mask alongside the response.
+    ms_occu = , ms_dyn_occu = , ms_count = sum(model$valid),
+    # One validity mask per detection source.
+    ms_int_occu = sum(vapply(model$valid, sum, integer(1))),
+    NA_integer_)
 }
 
 # Re-export tulpa's ranef() generic so it is reachable as tulpaObs::ranef()
@@ -206,27 +221,8 @@ converged.tobs_fit <- function(object, ...) isTRUE(convergence(object)$converged
 #'   `ranef` table when no `re_effects` are present.
 #' @export
 ranef.tobs_fit <- function(object, ...) {
-  if (identical(object$model$model_type, "ms_nmix")) {
-    return(.tobs_ranef_ms_nmix(object))
-  }
-  if (identical(object$model$model_type, "ms_distance")) {
-    return(.tobs_ranef_ms_distance(object))
-  }
-  if (identical(object$model$model_type, "ms_count")) {
-    return(.tobs_ranef_ms_count(object))
-  }
-  if (identical(object$model$model_type, "ms_occu")) {
-    return(.tobs_ranef_ms_occu(object))
-  }
-  if (identical(object$model$model_type, "ms_occu_cover")) {
-    return(.tobs_ranef_ms_occu_cover(object))
-  }
-  if (identical(object$model$model_type, "ms_dyn_occu")) {
-    return(.tobs_ranef_ms_dyn_occu(object))
-  }
-  if (identical(object$model$model_type, "ms_int_occu")) {
-    return(.tobs_ranef_ms_int_occu(object))
-  }
+  fn <- .tobs_s3_handler("ranef", object$model$model_type)
+  if (!is.null(fn)) return(fn(object))
   if (identical(object$model$model_type, "occu_cover") && !is.null(object$re)) {
     # occu_cover() shared-field + per-group RE (gcol33/tulpaObs#56, #102, #103):
     # `fit$re` is a flat list of random-intercept terms, one per arm for a lone
@@ -349,50 +345,10 @@ coef.tobs_fit <- function(object, ...) {
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
-  if (identical(model$model_type, "nmix") ||
-      identical(model$model_type, "removal")) return(.tobs_fitted_nmix(object))
-  if (identical(model$model_type, "distance")) return(.tobs_fitted_distance(object))
-  if (identical(model$model_type, "fp_occu")) return(.tobs_fitted_fp_occu(object))
-  if (identical(model$model_type, "dyn_abun")) return(.tobs_fitted_dyn_abun(object))
-  if (identical(model$model_type, "ms_nmix")) return(.tobs_fitted_ms_nmix(object))
-  if (identical(model$model_type, "ms_distance"))
-    return(.tobs_fitted_ms_distance(object))
-  if (identical(model$model_type, "royle_nichols"))
-    return(.tobs_fitted_royle_nichols(object))
-  if (identical(model$model_type, "occu_ttd"))
-    return(.tobs_fitted_occu_ttd(object))
-  if (identical(model$model_type, "occu_multi"))
-    return(.tobs_fitted_occu_multi(object))
-  if (identical(model$model_type, "double_observer"))
-    return(.tobs_fitted_double_observer(object))
-  if (identical(model$model_type, "gdistremoval"))
-    return(.tobs_fitted_gdistremoval(object))
-  if (identical(model$model_type, "distsamp_open"))
-    return(.tobs_fitted_distsamp_open(object))
-  if (identical(model$model_type, "dyn_int_occu"))
-    return(.tobs_fitted_dyn_int_occu(object))
-  if (identical(model$model_type, "count")) return(.tobs_fitted_count(object))
-  if (identical(model$model_type, "ms_count")) {
-    return(.tobs_fitted_ms_count(object))
-  }
-  if (identical(model$model_type, "ms_occu")) {
-    return(.tobs_fitted_ms_occu(object))
-  }
-  if (identical(model$model_type, "ms_occu_cover")) {
-    return(.tobs_fitted_ms_occu_cover(object))
-  }
-  if (identical(model$model_type, "ms_occu_cover_spatial")) {
-    return(.tobs_fitted_ms_occu_cover_spatial(object))
-  }
-  if (identical(model$model_type, "ms_dyn_occu")) {
-    return(.tobs_fitted_ms_dyn_occu(object))
-  }
-  if (identical(model$model_type, "ms_int_occu")) {
-    return(.tobs_fitted_ms_int_occu(object))
-  }
-  if (identical(model$model_type, "occu_multiscale_cover")) {
-    return(.tobs_fitted_occu_multiscale_cover(object))
-  }
+  # removal shares the N-mixture fitted surface: same count marginal, one
+  # removal unit per site.
+  fn <- .tobs_s3_handler("fitted", model$model_type, c(removal = "nmix"))
+  if (!is.null(fn)) return(fn(object))
   means <- object$means
   pi_list <- model$process_info
 
@@ -533,12 +489,15 @@ fitted.tobs_fit <- function(object, ...) {
   z
 }
 
-# Occupancy-probability draws at a design matrix X.0: plogis(X.0 %*% beta_occ)
-# for every posterior draw, returned as [n_draws x nrow(X.0)]. Used by
-# predict.tobs_fit (design-matrix mode) and predict.tobs_stack (stacked
-# predictive); kept in one place so the two share the same parameterization.
-.tobs_psi_draws <- function(draws, X.0, p_occ) {
-  beta <- draws[, seq_len(p_occ), drop = FALSE]
+# Logit-arm probability draws at a design matrix X.0: plogis(X.0 %*% beta) for
+# every posterior draw, returned as [n_draws x nrow(X.0)]. `offset` is where the
+# arm's `p` coefficients start in the packed draw row -- 0 for the occupancy
+# arm, p_occ for detection. Used by predict.tobs_fit (design-matrix mode),
+# predict.tobs_stack (stacked predictive) and the spOccupancy-compatible
+# `$psi.samples` / `$p.samples` accessors; kept in one place so they share the
+# same parameterization.
+.tobs_psi_draws <- function(draws, X.0, p_occ, offset = 0L) {
+  beta <- draws[, offset + seq_len(p_occ), drop = FALSE]
   plogis(beta %*% t(X.0))
 }
 
@@ -550,52 +509,13 @@ fitted.tobs_fit <- function(object, ...) {
 #' @export
 residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response"), ...) {
   type <- match.arg(type)
-  if (identical(object$model$model_type, "nmix")) {
-    return(.tobs_residuals_nmix(object, type))
-  }
-  if (identical(object$model$model_type, "removal")) {
-    return(.tobs_residuals_removal(object, type))
-  }
-  if (identical(object$model$model_type, "distance")) {
-    return(.tobs_residuals_distance(object, type))
-  }
-  if (identical(object$model$model_type, "fp_occu")) {
-    return(.tobs_residuals_fp_occu(object, type))
-  }
-  if (identical(object$model$model_type, "dyn_abun")) {
-    return(.tobs_residuals_dyn_abun(object, type))
-  }
-  if (identical(object$model$model_type, "royle_nichols")) {
-    return(.tobs_residuals_royle_nichols(object, type))
-  }
-  if (identical(object$model$model_type, "occu_ttd")) {
-    return(.tobs_residuals_occu_ttd(object, type))
-  }
-  if (identical(object$model$model_type, "occu_multi")) {
-    return(.tobs_residuals_occu_multi(object, type))
-  }
-  if (identical(object$model$model_type, "gdistremoval")) {
-    return(.tobs_residuals_gdistremoval(object, type))
-  }
-  if (identical(object$model$model_type, "distsamp_open")) {
-    return(.tobs_residuals_distsamp_open(object, type))
-  }
-  if (identical(object$model$model_type, "double_observer")) {
-    return(.tobs_residuals_double_observer(object, type))
-  }
-  if (identical(object$model$model_type, "dyn_int_occu")) {
-    return(.tobs_residuals_dyn_int_occu(object, type))
-  }
-  if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
-    return(.tobs_residuals_ms_community(object, type))
-  }
-  # The community GLMM: ms_count() and jsdm() (bernoulli) share one model class.
-  if (identical(object$model$model_type, "ms_count")) {
-    return(.tobs_residuals_ms_count(object, type))
-  }
-  if (identical(object$model$model_type, "count")) {
-    return(.tobs_residuals_count(object, type))
-  }
+  # The three community occupancy families share one residual surface.
+  # (`ms_count` covers jsdm() too -- one model class, bernoulli response.)
+  fn <- .tobs_s3_handler(
+    "residuals", object$model$model_type,
+    c(ms_occu = "ms_community", ms_dyn_occu = "ms_community",
+      ms_int_occu = "ms_community"))
+  if (!is.null(fn)) return(fn(object, type))
   fit_vals <- fitted(object)
   model <- object$model
 
@@ -669,63 +589,8 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
 simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (!is.null(seed)) set.seed(seed)
   model <- object$model
-  if (identical(model$model_type, "nmix")) {
-    return(.tobs_simulate_nmix(object, nsim))
-  }
-  if (identical(model$model_type, "removal")) {
-    return(.tobs_simulate_removal(object, nsim))
-  }
-  if (identical(model$model_type, "distance")) {
-    return(.tobs_simulate_distance(object, nsim))
-  }
-  if (identical(model$model_type, "fp_occu")) {
-    return(.tobs_simulate_fp_occu(object, nsim))
-  }
-  if (identical(model$model_type, "dyn_abun")) {
-    return(.tobs_simulate_dyn_abun(object, nsim))
-  }
-  if (identical(model$model_type, "royle_nichols")) {
-    return(.tobs_simulate_royle_nichols(object, nsim))
-  }
-  if (identical(model$model_type, "occu_ttd")) {
-    return(.tobs_simulate_occu_ttd(object, nsim))
-  }
-  if (identical(model$model_type, "occu_multi")) {
-    return(.tobs_simulate_occu_multi(object, nsim))
-  }
-  if (identical(model$model_type, "gdistremoval")) {
-    return(.tobs_simulate_gdistremoval(object, nsim))
-  }
-  if (identical(model$model_type, "distsamp_open")) {
-    return(.tobs_simulate_distsamp_open(object, nsim))
-  }
-  if (identical(model$model_type, "double_observer")) {
-    return(.tobs_simulate_double_observer(object, nsim))
-  }
-  if (identical(model$model_type, "dyn_int_occu")) {
-    return(.tobs_simulate_dyn_int_occu(object, nsim))
-  }
-  if (identical(model$model_type, "ms_nmix")) {
-    return(.tobs_simulate_ms_nmix(object, nsim))
-  }
-  if (identical(model$model_type, "ms_count")) {
-    return(.tobs_simulate_ms_count(object, nsim))
-  }
-  if (identical(model$model_type, "ms_occu")) {
-    return(.tobs_simulate_ms_occu(object, nsim))
-  }
-  if (identical(model$model_type, "ms_occu_cover")) {
-    return(.tobs_simulate_ms_occu_cover(object, nsim))
-  }
-  if (identical(model$model_type, "ms_dyn_occu")) {
-    return(.tobs_simulate_ms_dyn_occu(object, nsim))
-  }
-  if (identical(model$model_type, "ms_int_occu")) {
-    return(.tobs_simulate_ms_int_occu(object, nsim))
-  }
-  if (identical(model$model_type, "ms_occu_cover_spatial")) {
-    return(.tobs_simulate_ms_occu_cover_spatial(object, nsim))
-  }
+  fn <- .tobs_s3_handler("simulate", model$model_type)
+  if (!is.null(fn)) return(fn(object, nsim))
   draws <- object$draws
   n_samples <- nrow(draws)
   pi_list <- model$process_info
@@ -855,47 +720,19 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (identical(da_type, "abundance")) da_type <- "lambda"
     return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type))
   }
-  if (identical(object$model$model_type, "royle_nichols")) {
-    rn_type <- if (missing(type) || length(type) > 1L) "abundance" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_royle_nichols(object, newdata = nd, type = rn_type))
-  }
-  if (identical(object$model$model_type, "occu_ttd")) {
-    tt_type <- if (missing(type) || length(type) > 1L) "state" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_occu_ttd(object, newdata = nd, type = tt_type))
-  }
-  if (identical(object$model$model_type, "occu_multi")) {
-    om_type <- if (missing(type) || length(type) > 1L) "state" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_occu_multi(object, newdata = nd, type = om_type))
-  }
-  if (identical(object$model$model_type, "double_observer")) {
-    do_type <- if (missing(type) || length(type) > 1L) "abundance" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_double_observer(object, newdata = nd, type = do_type))
-  }
-  if (identical(object$model$model_type, "gdistremoval")) {
-    gd_type <- if (missing(type) || length(type) > 1L) "abundance" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_gdistremoval(object, newdata = nd, type = gd_type))
-  }
-  if (identical(object$model$model_type, "distsamp_open")) {
-    dso_type <- if (missing(type) || length(type) > 1L) "abundance" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_distsamp_open(object, newdata = nd, type = dso_type))
-  }
-  if (identical(object$model$model_type, "dyn_int_occu")) {
-    di_type <- if (missing(type) || length(type) > 1L) "state" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_dyn_int_occu(object, newdata = nd, type = di_type))
+  # Families predicting from `newdata` with their own response types, all
+  # through `.tobs_predict_<model_type>(object, newdata =, type =)`. Each
+  # names the type it reports when the caller did not choose one.
+  nd_default <- .TOBS_PREDICT_NEWDATA_TYPE[object$model$model_type %||% ""]
+  if (!is.na(nd_default)) {
+    fn <- .tobs_s3_handler(
+      "predict", object$model$model_type,
+      c(ms_occu = "ms_community", ms_dyn_occu = "ms_community",
+        ms_int_occu = "ms_community"))
+    return(fn(object,
+              newdata = .tobs_resolve_newdata(newdata, X.0),
+              type = if (missing(type) || length(type) > 1L) unname(nd_default)
+                     else type))
   }
   # occu_cover joint fit: the response types are occurrence / cover_cond /
   # cover_exp / change, so route before the occupancy match.arg(type) rejects
@@ -935,22 +772,11 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     oc_type <- if (missing(type) || length(type) > 1L) "occupancy" else type
     return(.tobs_ms_ocs_predict_state(object, oc_type))
   }
-  if (object$model$model_type %in% c("ms_occu", "ms_dyn_occu", "ms_int_occu")) {
-    ms_type <- if (missing(type) || length(type) > 1L) "occupancy" else type
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_ms_community(object, newdata = nd, type = ms_type))
-  }
-  # The community GLMM: ms_count() and jsdm() (bernoulli) share one model class.
-  if (identical(object$model$model_type, "ms_count")) {
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_ms_count(object, newdata = nd))
-  }
-  if (identical(object$model$model_type, "count")) {
-    nd <- newdata
-    if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_count(object, newdata = nd))
+  # The count GLMMs have a single response, so they take no `type`.
+  # (`ms_count` covers jsdm() too -- one model class, bernoulli response.)
+  if (object$model$model_type %in% c("ms_count", "count")) {
+    fn <- .tobs_s3_handler("predict", object$model$model_type)
+    return(fn(object, newdata = .tobs_resolve_newdata(newdata, X.0)))
   }
   # Standalone occu() SVC fit rerouted through the joint direct-grid engine
   # (gcol33/tulpaObs#81): the occupancy psi / detection p / per-cell change carry
@@ -1298,22 +1124,12 @@ tobs_check_id <- function(model, fit = NULL) {
       draws[, p_occ + seq_len(p_det), drop = FALSE]
     },
 
-    # Occupancy probabilities (n_draws x n_sites)
+    # Occupancy probabilities (n_draws x n_sites), recomputed from the draws so
+    # they carry the posterior uncertainty. Only families whose first process IS
+    # occupancy have them; an abundance arm (lambda) yields NULL.
     "psi.samples" = {
-      fit_vals <- fitted(x)
-      if (!is.null(fit_vals$psi)) {
-        # Recompute from draws for proper uncertainty
-        if (is.null(pi_list)) return(NULL)
-        p_occ <- pi_list[[1]]$p
-        X_occ <- model$X_processes[[1]]
-        n_draws <- nrow(draws)
-        psi_mat <- matrix(NA_real_, n_draws, nrow(X_occ))
-        for (s in seq_len(n_draws)) {
-          beta <- draws[s, seq_len(p_occ)]
-          psi_mat[s, ] <- plogis(as.vector(X_occ %*% beta))
-        }
-        psi_mat
-      }
+      if (is.null(pi_list) || !identical(pi_list[[1]]$name, "psi")) return(NULL)
+      .tobs_psi_draws(draws, model$X_processes[[1]], pi_list[[1]]$p)
     },
 
     # Latent occupancy state
@@ -1324,19 +1140,12 @@ tobs_check_id <- function(model, fit = NULL) {
       }
     },
 
-    # Detection probabilities
+    # Detection probabilities: the second arm's coefficients start after the
+    # first arm's block in each draw row.
     "p.samples" = {
       if (is.null(pi_list) || length(pi_list) < 2) return(NULL)
-      p_occ <- pi_list[[1]]$p
-      p_det <- pi_list[[2]]$p
-      X_det <- model$X_processes[[2]]
-      n_draws <- nrow(draws)
-      p_mat <- matrix(NA_real_, n_draws, nrow(X_det))
-      for (s in seq_len(n_draws)) {
-        alpha <- draws[s, p_occ + seq_len(p_det)]
-        p_mat[s, ] <- plogis(as.vector(X_det %*% alpha))
-      }
-      p_mat
+      .tobs_psi_draws(draws, model$X_processes[[2]], pi_list[[2]]$p,
+                      offset = pi_list[[1]]$p)
     },
 
     # Computation time

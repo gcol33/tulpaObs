@@ -13,6 +13,78 @@
 # `n.threads = 1` runs chains sequentially and works under `load_all()` too.
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# Fixed-hyper field NUTS: shared chain-run and fit-assembly tail
+#
+# The observation families that sample a latent field (abun, removal, distance,
+# fp_occu, dyn_abun, areal or temporal) all run the same shape of sampler: the
+# parameter vector is `c(coefficients, raw)` where `raw ~ N(0, I)` is the
+# whitened field and the field itself is `field_load %*% raw`, with the field
+# precision FIXED at its nested-Laplace posterior mean. What differs between
+# them is only the C++ entry point, the coefficient names, and how the family's
+# own builder turns the posterior-mean coefficients into a `tobs_fit`. The two
+# helpers below carry everything either side of that.
+# ---------------------------------------------------------------------------
+
+# Run the per-chain sampler, pool the draws, and split them into the
+# coefficient block (the leading `n_base` columns, whose posterior mean and
+# covariance are reported) and the whitened field block, whose posterior mean
+# maps back through `field_load` to the fitted field.
+.tobs_nuts_field_draws <- function(run_chain, n_chains, nms, n_base, n_raw,
+                                   field_load) {
+  chains <- lapply(seq_len(as.integer(n_chains)), run_chain)
+  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
+  colnames(draws) <- nms
+  b_idx   <- seq_len(n_base)
+  raw_idx <- n_base + seq_len(n_raw)
+  par     <- colMeans(draws); names(par) <- nms
+  list(chains     = chains,
+       draws      = draws,
+       nms        = nms,
+       par        = par,
+       cov        = stats::cov(draws[, b_idx, drop = FALSE]),
+       b_idx      = b_idx,
+       n_raw      = n_raw,
+       field_mean = as.numeric(
+         field_load %*% colMeans(draws[, raw_idx, drop = FALSE])))
+}
+
+# Attach the pooled draws, posterior moments, sampler diagnostics and the fitted
+# field to the `tobs_fit` the family's own builder produced from the posterior
+# mean. A non-NULL `temporal` spec routes the field to the temporal slots;
+# otherwise it is the spatial field. `fl` is the field loading (its fixed `tau`
+# / `rho` are recorded so the fit says which hyperparameters it sampled under).
+.tobs_nuts_field_attach <- function(fit, run, log_lik, n_chains, prior_type, fl,
+                                    temporal = NULL) {
+  b_idx <- run$b_idx
+  fit$draws <- run$draws[, b_idx, drop = FALSE]
+  fit$means <- run$par[b_idx]
+  fit$sds   <- sqrt(pmax(diag(run$cov), 0)); names(fit$sds) <- run$nms[b_idx]
+  fit$vcov  <- run$cov
+  fit$n_samples <- nrow(run$draws)
+  fit$log_prob  <- rep(log_lik, nrow(run$draws))
+
+  accept    <- unlist(lapply(run$chains, `[[`, "accept_prob"))
+  divergent <- unlist(lapply(run$chains, `[[`, "divergent"))
+  fit$accept_prob <- accept
+  fit$divergent   <- divergent
+  fit$method      <- "nuts"
+  if (is.null(temporal)) {
+    fit$spatial_field <- run$field_mean
+  } else {
+    fit$temporal <- temporal
+    fit$temporal_field <- run$field_mean
+  }
+  fit$nuts <- list(
+    accept_prob = accept, divergent = divergent,
+    treedepth = as.integer(unlist(lapply(run$chains, `[[`, "treedepth"))),
+    epsilon = run$chains[[1L]]$epsilon, n_chains = as.integer(n_chains),
+    divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
+    n_raw = run$n_raw, prior_type = prior_type, fixed_hyper = TRUE)
+  fit
+}
+
+
 # Keep every `n.thin`-th row of a draw / diagnostic vector or matrix.
 .tobs_thin <- function(x, n.thin) {
   if (n.thin <= 1L || is.null(x)) return(x)

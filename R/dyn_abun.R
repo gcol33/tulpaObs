@@ -342,7 +342,7 @@
   est <- opt$par
   # Observed-information vcov: the negative FD-Jacobian of the analytic gradient
   # at the mode (O(p) marginal evals, not the O(p^2) numeric Hessian).
-  Hobs <- tryCatch(-.fp_fd_jacobian(function(th) -neg_grad(th), est),
+  Hobs <- tryCatch(-.tobs_fd_jacobian(function(th) -neg_grad(th), est),
                    error = function(e) NULL)
   vcov <- tryCatch(solve(Hobs), error = function(e) {
     d <- if (!is.null(Hobs)) diag(Hobs) else rep(NA_real_, length(est))
@@ -738,7 +738,7 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
   theta <- opt$par
   converged <- opt$convergence == 0L
   out <- eval_cpp(theta)
-  Hobs <- -.fp_fd_jacobian(function(th) grad_design(eval_cpp(th)), theta)
+  Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th)), theta)
   vcov <- tryCatch(solve(Hobs), error = function(e)
     matrix(NA_real_, length(theta), length(theta)))
 

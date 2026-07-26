@@ -59,12 +59,7 @@
         eta_psi <- as.vector(X_psi %*% b_psi[s, ]); psi <- stats::plogis(eta_psi)
         eta_p   <- as.vector(X_p   %*% b_p[s, ]);   pd  <- stats::plogis(eta_p)
         # latent occupancy
-        z <- integer(n); z[anydet[, s]] <- 1L
-        und <- !anydet[, s]
-        if (any(und)) {
-          l1 <- psi[und] * (1 - pd[und])^nvis[und, s]; l0 <- 1 - psi[und]
-          z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
-        }
+        z <- .tobs_pg_draw_z(psi, (1 - pd)^nvis[, s], anydet[, s])
         # occupancy coefficients
         om <- rpg(rep(1, n), eta_psi)
         b_psi[s, ] <- .tobs_pg_draw_beta(X_psi, om, z - 0.5,

@@ -161,35 +161,16 @@
       K = log(max(2 * lam0, 5)), r = 0.1, 0)
   }
 
-  fn  <- function(theta) .dso_dyn_negll(theta, model)
-  opt <- stats::optim(init, fn, method = "BFGS", hessian = TRUE,
-                      control = list(maxit = 500L, reltol = 1e-9))
-  converged <- opt$convergence == 0L
-
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
-  means <- opt$par; names(means) <- par_names
-  V <- tryCatch(solve(opt$hessian), error = function(e) diag(NA_real_, length(means)))
-  V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
-  n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V); colnames(draws) <- par_names
-
-  structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    n_samples = n_draws, n_params = length(means),
-    log_prob = rep(-opt$value, n_draws), log_lik = -opt$value, N = model$n_sites),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names = par_names, param_names = par_names,
-    n_fixed = length(means), fixed_names = par_names,
-    process_info = model$process_info, model = model,
-    mixture = "poisson", dynamics = model$dynamics, zero_inflated = FALSE,
-    spatial = NULL, method = "laplace",
-    convergence = list(converged = converged, n_iter = opt$counts[[1L]])
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_bfgs_marginal_fit(
+    function(theta) .dso_dyn_negll(theta, model),
+    init, par_names, model, N = model$n_sites,
+    control = list(maxit = 500L, reltol = 1e-9),
+    extra = function(means) list(mixture = "poisson",
+                                 dynamics = model$dynamics,
+                                 zero_inflated = FALSE))
 }
 
 .dso_negll <- function(theta, model) {
@@ -452,53 +433,19 @@
   # observed information is the FD-Jacobian of the negative gradient at the mode
   # (2*n_par cheap gradient calls), as in fp_occu() -- far cheaper than a numeric
   # Hessian of the value over the cubic-in-K forward recursion.
-  fn  <- function(theta) .dso_negll(theta, model)
-  ngr <- function(theta) -.dso_grad(theta, model)
-  opt <- stats::optim(init, fn, gr = ngr, method = "BFGS",
-                      control = list(maxit = 500L))
-  converged <- opt$convergence == 0L
-
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
   if (use_nb) par_names <- c(par_names, "log_r")
-  means <- opt$par; names(means) <- par_names
-  Hobs <- .fp_fd_jacobian(ngr, opt$par)
-  V <- tryCatch(solve(Hobs),
-                error = function(e) diag(NA_real_, length(means)))
-  V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
-  n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(-opt$value, n_draws),
-    log_lik      = -opt$value,
-    N            = model$n_sites),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = model$process_info,
-    model        = model,
-    mixture      = model$mixture,
-    log_r        = if (use_nb) unname(means[["log_r"]]) else NULL,
-    r            = if (use_nb) exp(unname(means[["log_r"]])) else NULL,
-    zero_inflated = FALSE,
-    spatial      = NULL,
-    method       = "laplace",
-    convergence  = list(converged = converged, n_iter = opt$counts[[1L]])
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_bfgs_marginal_fit(
+    function(theta) .dso_negll(theta, model), init, par_names, model,
+    N = model$n_sites,
+    gr = function(theta) -.dso_grad(theta, model),
+    extra = function(means) list(
+      mixture       = model$mixture,
+      log_r         = if (use_nb) unname(means[["log_r"]]) else NULL,
+      r             = if (use_nb) exp(unname(means[["log_r"]])) else NULL,
+      zero_inflated = FALSE))
 }
 
 # ---------------------------------------------------------------------------
@@ -624,54 +571,21 @@
   theta0[izi]           <- stats::qlogis(min(max(mean(az) * 0.5, 0.05), 0.7))
   if (is_nb) theta0[ir] <- log(2)
 
-  opt <- stats::optim(theta0, neg_ll, gr = neg_grad, method = "BFGS",
-                      control = list(maxit = 500L, reltol = 1e-8))
-  converged <- opt$convergence == 0L
-
   par_names <- c(paste0("lambda_", colnames(Xl)), paste0("sigma_", colnames(Xs)),
                  paste0("omega_", colnames(Xo)), paste0("gamma_", colnames(Xg)),
                  "zi_logit")
   if (is_nb) par_names <- c(par_names, "log_r")
-  means <- opt$par; names(means) <- par_names
-  Hobs <- tryCatch(-.fp_fd_jacobian(function(th) -neg_grad(th), opt$par),
-                   error = function(e) NULL)
-  V <- tryCatch(solve(Hobs), error = function(e) diag(NA_real_, length(means)))
-  V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
-  n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(-opt$value, n_draws),
-    log_lik      = -opt$value,
-    N            = model$n_sites),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = model$process_info,
-    model        = model,
-    mixture      = model$mixture,
-    zero_inflated = TRUE,
-    zi_logit     = unname(means[["zi_logit"]]),
-    zi_omega     = stats::plogis(unname(means[["zi_logit"]])),
-    log_r        = if (is_nb) unname(means[["log_r"]]) else NULL,
-    r            = if (is_nb) exp(unname(means[["log_r"]])) else NULL,
-    spatial      = NULL,
-    method       = "laplace",
-    convergence  = list(converged = converged, n_iter = opt$counts[[1L]])
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_bfgs_marginal_fit(
+    neg_ll, theta0, par_names, model, N = model$n_sites, gr = neg_grad,
+    control = list(maxit = 500L, reltol = 1e-8),
+    extra = function(means) list(
+      mixture       = model$mixture,
+      zero_inflated = TRUE,
+      zi_logit      = unname(means[["zi_logit"]]),
+      zi_omega      = stats::plogis(unname(means[["zi_logit"]])),
+      log_r         = if (is_nb) unname(means[["log_r"]]) else NULL,
+      r             = if (is_nb) exp(unname(means[["log_r"]])) else NULL))
 }
 
 # ---------------------------------------------------------------------------

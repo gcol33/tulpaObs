@@ -316,7 +316,7 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
   sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
+  draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
   # Per-species community structure (mu + BLUP deviations) for the RE arms.

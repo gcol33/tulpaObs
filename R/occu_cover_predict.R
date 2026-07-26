@@ -48,19 +48,10 @@
   formula <- switch(arm, occ = model$formulas$occ,
                          det = model$formulas$det,
                          pos = model$formulas$pos)
-  tt <- stats::delete.response(stats::terms(formula))
-  X_site <- stats::model.matrix(tt, newdata)
   p_site <- switch(arm, occ = ncol(model$X_occ),
                         det = ncol(model$X_det_site),
                         pos = ncol(model$X_pos_site))
-  if (ncol(X_site) != p_site) {
-    stop(sprintf(paste0(
-      "predict(occu_cover): the %s site design from `newdata` has %d ",
-      "columns but the fitted model has %d. Check that `newdata` carries ",
-      "every cell-level covariate in the %s formula with matching factor ",
-      "levels."),
-      arm, ncol(X_site), p_site, arm), call. = FALSE)
-  }
+  X_site <- .tobs_arm_site_design(formula, newdata, p_site, arm, "occu_cover")
   if (p_site == p_arm) return(X_site)
   # The remaining coefficients are visit-level detection / positive covariates
   # (e.g. the time axis). Rebuild their design from `newdata` -- one prediction
@@ -411,19 +402,29 @@
     p_arm   <- ncol(model$X_processes[[2L]]) +
                (if (is.null(model$X_det_visit)) 0L else ncol(model$X_det_visit))
   }
-  tt <- stats::delete.response(stats::terms(formula))
-  X_site <- stats::model.matrix(tt, newdata)
   p_site <- if (identical(arm, "occ")) ncol(model$X_processes[[1L]])
             else ncol(model$X_processes[[2L]])
-  if (ncol(X_site) != p_site) {
-    stop(sprintf(paste0(
-      "predict(occu): the %s design from `newdata` has %d columns but the ",
-      "fitted model has %d. Check that `newdata` carries every covariate in ",
-      "the %s formula with matching factor levels."),
-      arm, ncol(X_site), p_site, arm), call. = FALSE)
-  }
+  X_site <- .tobs_arm_site_design(formula, newdata, p_site, arm, "occu")
   if (p_site == p_arm) return(X_site)
   cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
+}
+
+# Site-level design at `newdata` for one arm, checked against the width the fit
+# carried. A mismatch means `newdata` is missing a covariate, or carries a factor
+# with different levels, which would otherwise shift every coefficient onto the
+# wrong column silently -- so it errors naming the arm and both widths. `label`
+# names the front door in the message.
+.tobs_arm_site_design <- function(formula, newdata, p_site, arm, label) {
+  tt     <- stats::delete.response(stats::terms(formula))
+  X_site <- stats::model.matrix(tt, newdata)
+  if (ncol(X_site) != p_site) {
+    stop(sprintf(paste0(
+      "predict(%s): the %s site design from `newdata` has %d columns but the ",
+      "fitted model has %d. Check that `newdata` carries every cell-level ",
+      "covariate in the %s formula with matching factor levels."),
+      label, arm, ncol(X_site), p_site, arm), call. = FALSE)
+  }
+  X_site
 }
 
 # Core predict handler for the rerouted standalone occu() SVC joint fit

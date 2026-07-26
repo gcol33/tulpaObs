@@ -176,47 +176,45 @@
                       max_treedepth = as.integer(max.treedepth),
                       adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
                       verbose = isTRUE(verbose))
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
+  nms <- .tobs_dyn_abun_nuts_names(model, use_nb, n_raw)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+
+  ev  <- .tobs_dyn_abun_nuts_eval(model, run$par, X_lam, X_p, X_om, X_gm, use_nb)
+  fit <- build_dyn_abun_fit(
+    .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
+  .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
+                          prior_type = spatial$type, fl = fl)
+}
+
+# Coefficient + whitened-field column names for a field dyn_abun NUTS run.
+.tobs_dyn_abun_nuts_names <- function(model, use_nb, n_raw) {
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
            paste0("omega_",  model$process_info[[3]]$coef_names),
            paste0("gamma_",  model$process_info[[4]]$coef_names))
   if (use_nb) nms <- c(nms, "log_r")
-  nms <- c(nms, paste0("raw_", seq_len(n_raw)))
-  colnames(draws) <- nms
-  b_idx <- seq_len(n_base)
-  par <- colMeans(draws); names(par) <- nms
-  cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_raw)
-  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  c(nms, paste0("raw_", seq_len(n_raw)))
+}
 
+# Forward-HMM marginal at the posterior-mean coefficients.
+.tobs_dyn_abun_nuts_eval <- function(model, par, X_lam, X_p, X_om, X_gm, use_nb) {
   lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lam), ncol(X_p), ncol(X_om), ncol(X_gm),
                                     use_nb = use_nb)
-  marg <- .tobs_dyn_abun_nuts_marginal(model)
   log_r <- if (use_nb) as.numeric(par[lay$logr]) else NA_real_
-  ev_mean <- marg$eval_beta(par[lay$lambda], par[lay$p], par[lay$omega],
-                            par[lay$gamma], if (use_nb) log_r else 0)
-  raw_fit <- list(means = unname(par[b_idx]), vcov = cov, coef_names = nms[b_idx],
-                  log_lik = ev_mean$log_lik, log_lik_site = ev_mean$log_lik_site,
-                  mean_N1 = ev_mean$mean_N1, K_max = model$K_max, converged = TRUE,
-                  mixture = if (use_nb) "negbin" else "poisson",
-                  log_r = log_r, r = if (use_nb) exp(log_r) else NA_real_)
-  fit <- build_dyn_abun_fit(raw_fit, model)
-  fit$draws <- draws[, b_idx, drop = FALSE]
-  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
-  fit$vcov <- cov
-  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ev_mean$log_lik, nrow(draws))
-  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains, `[[`, "divergent"))
-  fit$accept_prob <- accept; fit$divergent <- divergent
-  fit$method <- "nuts"; fit$spatial_field <- z_mean
-  fit$nuts <- list(accept_prob = accept, divergent = divergent,
-                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
-                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
-                   prior_type = spatial$type, fixed_hyper = TRUE)
-  fit
+  ev <- .tobs_dyn_abun_nuts_marginal(model)$eval_beta(
+    par[lay$lambda], par[lay$p], par[lay$omega], par[lay$gamma],
+    if (use_nb) log_r else 0)
+  c(ev, list(log_r = log_r))
+}
+
+# The raw fit list build_dyn_abun_fit() consumes, from the posterior mean.
+.tobs_dyn_abun_nuts_raw <- function(run, nms, ev, model, use_nb) {
+  list(means = unname(run$par[run$b_idx]), vcov = run$cov,
+       coef_names = nms[run$b_idx],
+       log_lik = ev$log_lik, log_lik_site = ev$log_lik_site,
+       mean_N1 = ev$mean_N1, K_max = model$K_max, converged = TRUE,
+       mixture = if (use_nb) "negbin" else "poisson",
+       log_r = ev$log_r, r = if (use_nb) exp(ev$log_r) else NA_real_)
 }
 
 # Temporal-field Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#114): a
@@ -277,45 +275,13 @@
                       max_treedepth = as.integer(max.treedepth),
                       adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
                       verbose = isTRUE(verbose))
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
-  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
-           paste0("p_",      model$process_info[[2]]$coef_names),
-           paste0("omega_",  model$process_info[[3]]$coef_names),
-           paste0("gamma_",  model$process_info[[4]]$coef_names))
-  if (use_nb) nms <- c(nms, "log_r")
-  nms <- c(nms, paste0("raw_", seq_len(n_raw)))
-  colnames(draws) <- nms
-  b_idx <- seq_len(n_base)
-  par <- colMeans(draws); names(par) <- nms
-  cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_raw)
-  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  nms <- .tobs_dyn_abun_nuts_names(model, use_nb, n_raw)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
 
-  lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lam), ncol(X_p), ncol(X_om), ncol(X_gm),
-                                    use_nb = use_nb)
-  marg <- .tobs_dyn_abun_nuts_marginal(model)
-  log_r <- if (use_nb) as.numeric(par[lay$logr]) else NA_real_
-  ev_mean <- marg$eval_beta(par[lay$lambda], par[lay$p], par[lay$omega],
-                            par[lay$gamma], if (use_nb) log_r else 0)
-  raw_fit <- list(means = unname(par[b_idx]), vcov = cov, coef_names = nms[b_idx],
-                  log_lik = ev_mean$log_lik, log_lik_site = ev_mean$log_lik_site,
-                  mean_N1 = ev_mean$mean_N1, K_max = model$K_max, converged = TRUE,
-                  mixture = if (use_nb) "negbin" else "poisson",
-                  log_r = log_r, r = if (use_nb) exp(log_r) else NA_real_)
-  fit <- build_dyn_abun_fit(raw_fit, model)
-  fit$draws <- draws[, b_idx, drop = FALSE]
-  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
-  fit$vcov <- cov
-  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ev_mean$log_lik, nrow(draws))
-  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains, `[[`, "divergent"))
-  fit$accept_prob <- accept; fit$divergent <- divergent
-  fit$method <- "nuts"; fit$temporal <- temporal; fit$temporal_field <- z_mean
-  fit$nuts <- list(accept_prob = accept, divergent = divergent,
-                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
-                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
-                   prior_type = temporal$type, fixed_hyper = TRUE)
-  fit
+  ev  <- .tobs_dyn_abun_nuts_eval(model, run$par, X_lam, X_p, X_om, X_gm, use_nb)
+  fit <- build_dyn_abun_fit(
+    .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
+  .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
+                          prior_type = temporal$type, fl = fl,
+                          temporal = temporal)
 }

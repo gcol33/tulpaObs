@@ -15,6 +15,29 @@
 # =============================================================================
 
 
+# Default outer grids for a coupled joint fit, shared by every family that
+# drives `tulpa_nested_laplace_joint()` (cover, occu_cover, occu_multiscale_cover,
+# the standalone occu SVC path). Single source of truth: each fitter reads them
+# through the `control$*.grid` override, so the engine default and the front-door
+# default cannot drift apart.
+#
+# The copy coefficient alpha scales the shared field onto a copied arm; 0 is on
+# the grid so an uncoupled arm is reachable exactly. sigma is the field
+# amplitude. bym2 additionally mixes structured and unstructured components at
+# rho.
+.tobs_default_alpha_grid <- function() {
+  c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+}
+
+.tobs_default_sigma_grid <- function() {
+  exp(seq(log(0.1), log(3), length.out = 5))
+}
+
+.tobs_default_bym2_rho_grid <- function() {
+  c(0.25, 0.5, 0.75)
+}
+
+
 # The joint nested-Laplace object regardless of family slot: occu_cover() stores
 # it at `$joint_fit`, cover() at `$joint`. NULL when neither is present (a
 # non-spatial / separate-Laplace fit that carries no joint object).

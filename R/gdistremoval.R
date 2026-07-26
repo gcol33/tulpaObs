@@ -206,45 +206,10 @@
               log(max(sig0, 1e-2)),  rep(0, ps - 1L),
               stats::qlogis(r_hat),  rep(0, pr - 1L))
 
-  opt <- stats::optim(init, nll, method = "BFGS", hessian = TRUE,
-                      control = list(maxit = 500L))
-  converged <- opt$convergence == 0L
-
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
-  means <- opt$par; names(means) <- par_names
-  V <- tryCatch(solve(opt$hessian),
-                error = function(e) diag(NA_real_, length(means)))
-  V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
-  n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(-opt$value, n_draws),
-    log_lik      = -opt$value,
-    N            = model$n_sites),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = model$process_info,
-    model        = model,
-    spatial      = NULL,
-    method       = "laplace",
-    convergence  = list(converged = converged, n_iter = opt$counts[[1L]])
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_bfgs_marginal_fit(nll, init, par_names, model, N = model$n_sites)
 }
 
 # ---------------------------------------------------------------------------

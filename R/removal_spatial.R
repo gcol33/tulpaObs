@@ -137,14 +137,11 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
     K_max = pp$K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
     verbose = isTRUE(verbose))
 
-  rho_vec <- fit$theta_grid[, "rho"]
-  common  <- .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                        X_lambda, X_p, mixture)
-  w <- common$weights
-  rho_mean <- sum(w * rho_vec, na.rm = TRUE)
-  rho_sd   <- sqrt(max(0, sum(w * rho_vec^2, na.rm = TRUE) - rho_mean^2))
+  common <- .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
+                                       X_lambda, X_p, mixture)
+  rho <- .tobs_weighted_moment(common$weights, fit$theta_grid[, "rho"])
   out <- c(fit, common,
-           list(rho_mean = rho_mean, rho_sd = rho_sd,
+           list(rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
                 n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "car_proper",
                 call = match.call()))
   if (any(out$boundary_max > 1e-4, na.rm = TRUE))
@@ -490,16 +487,11 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                      max_treedepth = as.integer(max.treedepth),
                      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
                      verbose = isTRUE(verbose))
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
            if (is_nb) "log_r", paste0("raw_", seq_len(n_raw)))
-  colnames(draws) <- nms
-  b_idx <- seq_len(n_base)
-  par <- colMeans(draws); cov <- stats::cov(draws[, b_idx, drop = FALSE])
-  raw_idx <- n_base + seq_len(n_raw)
-  z_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  par <- run$par; cov <- run$cov
 
   lay  <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb)
   marg <- .tobs_removal_nuts_marginal(model, mixture = mix_code, K_max = K_max)
@@ -511,21 +503,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                   r = if (is_nb) exp(unname(par[lay$log_r])) else NA_real_,
                   vcov = cov, log_lik = ll_mean, converged = TRUE, K_max = K_max)
   fit <- build_nmix_fit(raw_fit, model, spatial = if (temporal_only) NULL else spatial)
-  fit$draws <- draws[, b_idx, drop = FALSE]
-  fit$means <- par[b_idx]; fit$sds <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms[b_idx]
-  fit$vcov <- cov
-  fit$n_samples <- nrow(draws); fit$log_prob <- rep(ll_mean, nrow(draws))
-  accept <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains, `[[`, "divergent"))
-  fit$accept_prob <- accept; fit$divergent <- divergent
-  fit$method <- "nuts"
-  if (temporal_only) { fit$temporal <- temporal; fit$temporal_field <- z_mean }
-  else               fit$spatial_field <- z_mean
-  fit$nuts <- list(accept_prob = accept, divergent = divergent,
-                   treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
-                   epsilon = chains[[1L]]$epsilon, n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
-                   prior_type = if (temporal_only) temporal$type else spatial$type,
-                   fixed_hyper = TRUE)
-  fit
+  .tobs_nuts_field_attach(
+    fit, run, ll_mean, n.chains,
+    prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
+    temporal = if (temporal_only) temporal else NULL)
 }

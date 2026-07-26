@@ -177,12 +177,10 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
   lm_post <- fit$log_marginal + pc_lp
   weights <- tulpa:::.nl_normalise_weights_safe(lm_post, "range / sigma grid")
 
-  range_vec <- theta_grid[, "range"]
-  sigma_vec <- theta_grid[, "sigma"]
-  range_mean <- sum(weights * range_vec, na.rm = TRUE)
-  range_sd   <- sqrt(max(0, sum(weights * range_vec^2, na.rm = TRUE) - range_mean^2))
-  sigma_mean <- sum(weights * sigma_vec, na.rm = TRUE)
-  sigma_sd   <- sqrt(max(0, sum(weights * sigma_vec^2, na.rm = TRUE) - sigma_mean^2))
+  rng   <- .tobs_weighted_moment(weights, theta_grid[, "range"])
+  sigma <- .tobs_weighted_moment(weights, theta_grid[, "sigma"])
+  range_mean <- unname(rng["mean"]);   range_sd <- unname(rng["sd"])
+  sigma_mean <- unname(sigma["mean"]); sigma_sd <- unname(sigma["sd"])
   disp <- .nmix_dispersion_summary(mixture, theta_grid, weights)
 
   modes <- fit$modes

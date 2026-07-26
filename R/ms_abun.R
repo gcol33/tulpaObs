@@ -518,21 +518,14 @@
   blup_lambda  <- Reduce(`+`, Map(function(w, B) w * B, weights[ok], blup_l_list[ok]))
   blup_p       <- Reduce(`+`, Map(function(w, B) w * B, weights[ok], blup_p_list[ok]))
   # Coefficient covariance: law of total covariance over the grid.
-  vcov <- matrix(0, d, d)
-  for (kk in which(ok)) {
-    dk <- theta_mat[kk, ] - theta_mean
-    vcov <- vcov + weights[kk] * (as.matrix(vcov_list[[kk]]) + tcrossprod(dk))
-  }
-  tau_mean   <- sum(weights * tau_vec, na.rm = TRUE)
-  tau_sd     <- sqrt(max(0, sum(weights * tau_vec^2, na.rm = TRUE) - tau_mean^2))
-  sigma_mean <- sum(weights * (1 / sqrt(tau_vec)), na.rm = TRUE)
-  hyper <- list(tau   = c(mean = tau_mean,   sd = tau_sd),
-                sigma = c(mean = sigma_mean, sd = NA_real_))
-  if (identical(spatial$type, "car_proper")) {
-    rho_mean <- sum(weights * rho_vec, na.rm = TRUE)
-    rho_sd   <- sqrt(max(0, sum(weights * rho_vec^2, na.rm = TRUE) - rho_mean^2))
-    hyper$rho <- c(mean = rho_mean, sd = rho_sd)
-  }
+  vcov <- .tobs_grid_vcov(theta_mat, weights, vcov_list,
+                          center = theta_mean, on_missing = "zero")
+  hyper <- list(
+    tau   = .tobs_weighted_moment(weights, tau_vec),
+    sigma = c(mean = sum(weights * (1 / sqrt(tau_vec)), na.rm = TRUE),
+              sd = NA_real_))
+  if (identical(spatial$type, "car_proper"))
+    hyper$rho <- .tobs_weighted_moment(weights, rho_vec)
   if (any(boundary > 1e-4, na.rm = TRUE)) {
     warning(sprintf(paste0(
       "Max posterior weight on N = K_max is %.2e at one or more grid nodes; ",

@@ -35,6 +35,36 @@
 # Data binder
 # ---------------------------------------------------------------------------
 
+# Validate the cover response against the positive-arm density and reduce it to
+# the gated form the likelihood reads. Cover is meaningful only where the visit
+# is detected AND the value is observed; a detected visit with a missing cover
+# carries the NA sentinel (kept in the occupancy / detection arms, dropped from
+# the cover density by the same is.finite gate the C++ spec applies), an
+# undetected visit carries 0. `y_pos_num` and `pos_mask` are conformable -- the
+# dense [n_sites x max_visits] grid or the compact per-valid-visit vector -- so
+# both binders share this.
+#
+# Beta requires the open unit interval and lognormal a positive value; the
+# identity-Gaussian arm (gcol33/tulpaObs#112) lives on an unbounded real scale,
+# where every finite value is admissible and the is.finite gate is the whole
+# check.
+.occu_cover_validate_pos_values <- function(y_pos_num, pos_mask, positive) {
+  cover_obs <- pos_mask & is.finite(y_pos_num)
+  if (identical(positive, "beta")) {
+    if (any(cover_obs & (y_pos_num <= 0 | y_pos_num >= 1)))
+      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
+           "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
+           call. = FALSE)
+  } else if (!identical(positive, "gaussian")) {
+    if (any(cover_obs & (y_pos_num <= 0)))
+      stop("Lognormal positive arm requires y_pos > 0 at every detected visit ",
+           "with an observed cover.", call. = FALSE)
+  }
+  y_pos_num[pos_mask & !cover_obs] <- NA_real_
+  y_pos_num[!pos_mask]             <- 0
+  y_pos_num
+}
+
 # Bind the joint occupancy-cover model. The psi predictor is cell-level
 # (X_occ, n_sites rows). The detection and positive-cover predictors are
 # visit-level (X_p_visit, X_pos_visit, n_sites * max_visits rows in
@@ -71,35 +101,9 @@
   # occupancy arms but drops out of the Beta/lognormal cover factor
   # (missing-at-random cover): the likelihood gates the cover density on
   # `y == 1 & is.finite(cover)`, the same semantic as the C++ std::isfinite gate.
-  y_pos_num <- matrix(as.numeric(y_pos), n_sites, max_visits)
-  pos_mask  <- valid & (y_int == 1L)                 # detected
-  cover_obs <- pos_mask & is.finite(y_pos_num)       # detected AND cover observed
-  if (identical(positive, "beta")) {
-    bad <- cover_obs & (y_pos_num <= 0 | y_pos_num >= 1)
-    if (any(bad)) {
-      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
-           "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
-           call. = FALSE)
-    }
-  } else if (identical(positive, "gaussian")) {
-    # Identity-Gaussian arm (gcol33/tulpaObs#112): the response lives on a real,
-    # unbounded scale, so any finite value is admissible (only NaN/Inf rejected).
-    bad <- cover_obs & !is.finite(y_pos_num)
-    if (any(bad)) {
-      stop("Gaussian positive arm requires a finite y_pos at every detected ",
-           "visit with an observed cover.", call. = FALSE)
-    }
-  } else {
-    bad <- cover_obs & (y_pos_num <= 0)
-    if (any(bad)) {
-      stop("Lognormal positive arm requires y_pos > 0 at every detected visit ",
-           "with an observed cover.", call. = FALSE)
-    }
-  }
-  # Detected-but-unobserved cover -> NA sentinel; undetected -> 0. Both are gated
-  # out of the cover density, so with no missing cover no NA is introduced.
-  y_pos_num[pos_mask & !cover_obs] <- NA_real_
-  y_pos_num[!pos_mask]             <- 0
+  y_pos_num <- .occu_cover_validate_pos_values(
+    matrix(as.numeric(y_pos), n_sites, max_visits),
+    valid & (y_int == 1L), positive)
 
   # Reject structured terms in v1 (spatial sharing across arms is v2).
   .occu_cover_reject_structured(occ_formula, "occupancy")
@@ -202,31 +206,8 @@
   # missing cover (NA) stays in the detection / occupancy arms but drops out of
   # the cover density (missing-at-random cover); the spec gates the cover term on
   # y_det == 1 & is.finite(cover), the same semantic as the C++ std::isfinite gate.
-  pos_mask  <- y_det_visit == 1L
-  y_pos_num <- as.numeric(y_pos_values)
-  cover_obs <- pos_mask & is.finite(y_pos_num)
-  if (identical(positive, "beta")) {
-    bad <- cover_obs & (y_pos_num <= 0 | y_pos_num >= 1)
-    if (any(bad)) {
-      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
-           "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
-           call. = FALSE)
-    }
-  } else if (identical(positive, "gaussian")) {
-    bad <- cover_obs & !is.finite(y_pos_num)
-    if (any(bad)) {
-      stop("Gaussian positive arm requires a finite y_pos at every detected ",
-           "visit with an observed cover.", call. = FALSE)
-    }
-  } else {
-    bad <- cover_obs & (y_pos_num <= 0)
-    if (any(bad)) {
-      stop("Lognormal positive arm requires y_pos > 0 at every detected visit ",
-           "with an observed cover.", call. = FALSE)
-    }
-  }
-  y_pos_num[pos_mask & !cover_obs] <- NA_real_
-  y_pos_num[!pos_mask]             <- 0
+  y_pos_num <- .occu_cover_validate_pos_values(
+    as.numeric(y_pos_values), y_det_visit == 1L, positive)
 
   .occu_cover_reject_structured(occ_formula, "occupancy")
   .occu_cover_reject_structured(det_formula, "detection")
@@ -422,12 +403,26 @@
 # never-observed level adds no group.
 .occu_cover_obs_re_design <- function(re_parse, data, visit_df, valid,
                                       n_sites, max_visits, arm) {
-  valid_flat <- as.logical(t(valid))
+  .occu_cover_obs_re_terms(
+    re_parse,
+    function(expr) .occu_cover_obs_flat_eval(expr, data, visit_df,
+                                             n_sites, max_visits, arm),
+    as.logical(t(valid)), arm)
+}
+
+# Per-term design shared by the dense and compact routes. `eval_flat(expr)`
+# returns one value (or matrix row) per design row in the arm's row order --
+# site-major over the padded grid, or one row per valid visit -- and `observed`
+# masks the rows carrying data (TRUE recycles to "every row" under the compact
+# layout, where by construction every row is a sampled visit). Everything the
+# two routes share -- level extraction from observed rows only, the 0 sentinel
+# for padded / unseen-level rows, slope-matrix assembly and standardization --
+# lives here; only the evaluator and the mask differ.
+.occu_cover_obs_re_terms <- function(re_parse, eval_flat, observed, arm) {
   lapply(re_parse$terms, function(spec) {
-    g_flat <- .occu_cover_obs_flat_eval(spec$group_expr, data, visit_df,
-                                        n_sites, max_visits, arm)
+    g_flat <- eval_flat(spec$group_expr)
     var <- paste(spec$vars, collapse = ":")
-    lev <- sort(unique(as.character(g_flat[valid_flat])))
+    lev <- sort(unique(as.character(g_flat[observed])))
     if (length(lev) < 2L) {
       stop(sprintf(paste0(
         "occu_cover(): the %s random-effect grouping `%s` has %d level(s) among ",
@@ -445,9 +440,7 @@
       if (is.character(cov_chr)) {
         cov_expr <- as.call(c(list(as.name("cbind")), lapply(cov_chr, as.name)))
       }
-      Xs <- .occu_cover_obs_flat_eval(cov_expr, data, visit_df,
-                                      n_sites, max_visits, arm)
-      Xs <- as.matrix(Xs); storage.mode(Xs) <- "double"
+      Xs <- as.matrix(eval_flat(cov_expr)); storage.mode(Xs) <- "double"
       if (is.null(colnames(Xs)))
         colnames(Xs) <- paste0("slope", seq_len(ncol(Xs)))
       # Standardize each slope covariate to unit SD (over the observed visits), so
@@ -458,7 +451,7 @@
       # covariate's natural units (correlation is scale-free). Mirrors the
       # fixed-effect design autoscaling.
       slope_scale <- apply(Xs, 2L, function(col) {
-        s <- stats::sd(col[valid_flat]); if (!is.finite(s) || s <= 0) 1 else s
+        s <- stats::sd(col[observed]); if (!is.finite(s) || s <= 0) 1 else s
       })
       Xs <- sweep(Xs, 2L, slope_scale, "/")
       has_int <- isTRUE(spec$intercept)
@@ -517,49 +510,11 @@
 # (keep = 1..V), so the identical list shape feeds the same engine path.
 .occu_cover_obs_re_design_ragged <- function(re_parse, data, visit_df,
                                              site_of_visit, arm) {
-  lapply(re_parse$terms, function(spec) {
-    g <- .occu_cover_obs_flat_eval_ragged(spec$group_expr, data, visit_df,
-                                          site_of_visit, arm)
-    var <- paste(spec$vars, collapse = ":")
-    lev <- sort(unique(as.character(g)))
-    if (length(lev) < 2L) {
-      stop(sprintf(paste0(
-        "occu_cover(): the %s random-effect grouping `%s` has %d level(s) among ",
-        "the observed visits; a random effect needs at least 2 groups."),
-        arm, var, length(lev)), call. = FALSE)
-    }
-    codes <- match(as.character(g), lev)
-    codes[is.na(codes)] <- 0L
-
-    if (identical(spec$type, "slope")) {
-      cov_expr <- spec$covariate
-      cov_chr <- tryCatch(eval(cov_expr), error = function(...) NULL)
-      if (is.character(cov_chr))
-        cov_expr <- as.call(c(list(as.name("cbind")), lapply(cov_chr, as.name)))
-      Xs <- .occu_cover_obs_flat_eval_ragged(cov_expr, data, visit_df,
-                                             site_of_visit, arm)
-      Xs <- as.matrix(Xs); storage.mode(Xs) <- "double"
-      if (is.null(colnames(Xs)))
-        colnames(Xs) <- paste0("slope", seq_len(ncol(Xs)))
-      slope_scale <- apply(Xs, 2L, function(col) {
-        s <- stats::sd(col); if (!is.finite(s) || s <= 0) 1 else s
-      })
-      Xs <- sweep(Xs, 2L, slope_scale, "/")
-      has_int <- isTRUE(spec$intercept)
-      Z <- if (has_int) cbind(`(Intercept)` = 1, Xs) else Xs
-      coef_names  <- colnames(Z); n_coefs <- ncol(Z)
-      correlated  <- isTRUE(spec$correlated) && n_coefs > 1L
-      coef_scales <- if (has_int) c(1, slope_scale) else slope_scale
-    } else {
-      Z <- NULL; coef_names <- "(Intercept)"; n_coefs <- 1L
-      correlated <- FALSE; has_int <- TRUE; coef_scales <- 1
-    }
-    list(codes_flat = as.integer(codes), levels = lev, n_groups = length(lev),
-         var = var, type = spec$type, n_coefs = n_coefs,
-         coef_names = coef_names, correlated = correlated,
-         has_intercept = has_int, Z = Z, coef_scales = as.numeric(coef_scales),
-         term_label = spec$term_label)
-  })
+  .occu_cover_obs_re_terms(
+    re_parse,
+    function(expr) .occu_cover_obs_flat_eval_ragged(expr, data, visit_df,
+                                                    site_of_visit, arm),
+    TRUE, arm)
 }
 
 # ---------------------------------------------------------------------------
@@ -911,7 +866,7 @@
   dimnames(V)  <- list(par_names, par_names)
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
+  draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
   structure(c(list(
@@ -936,21 +891,6 @@
     convergence  = list(converged = opt$convergence == 0L,
                         n_iter    = opt$counts[1L])
   )), class = c("tobs_fit", "tulpa_fit"))
-}
-
-# Draw from MVN via Cholesky; fall back to independent normals if not PD.
-.occu_cover_rmvn <- function(n, mu, sigma) {
-  p <- length(mu)
-  if (any(!is.finite(sigma))) {
-    return(matrix(rep(mu, each = n), n, p, byrow = FALSE))
-  }
-  L <- tryCatch(chol(sigma), error = function(e) NULL)
-  z <- matrix(stats::rnorm(n * p), n, p)
-  if (is.null(L)) {
-    sds <- sqrt(pmax(diag(sigma), 1e-8))
-    return(sweep(z * rep(sds, each = n), 2L, mu, "+"))
-  }
-  sweep(z %*% L, 2L, mu, "+")
 }
 
 

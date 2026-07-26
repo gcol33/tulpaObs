@@ -221,6 +221,30 @@
 # Spatial terms (continuous, NNGP / SPDE)
 # ---------------------------------------------------------------------------
 
+# Nearest-neighbour structure for one continuous NNGP field over `coords`: the
+# neighbour count clamped to what n points allow, and the row-major neighbour
+# index / distance vectors, the maximin ordering and its inverse in the flat
+# layout the C++ kernels index. `pair_dist` adds the pairwise
+# neighbour-to-neighbour distances (needed to build the Vecchia conditional
+# covariance; svc() does not carry them). Shared by gp(), multiscale_gp() (once
+# per scale) and svc(); each splices the block under its own names.
+.tobs_build_nngp_block <- function(coords, nn, pair_dist = TRUE) {
+  n    <- nrow(coords)
+  nn   <- min(nn, n - 1L)
+  nngp <- compute_nngp_neighbors(coords, nn)
+  out  <- list(
+    n_obs        = n,
+    nn           = nn,
+    nn_idx       = as.vector(t(nngp$nn_idx)),
+    nn_dist      = as.vector(t(nngp$nn_dist)),
+    nn_order     = nngp$nn_order,
+    nn_order_inv = nngp$nn_order_inv
+  )
+  if (pair_dist)
+    out$nn_neighbor_dist <- .tobs_nngp_pair_dist(nngp$nn_neighbor_dist)
+  out
+}
+
 # gp(lon, lat, ...)        — NNGP-approximated Gaussian process
 .tobs_term_gp <- function(..., coords = NULL, cov = "exponential", nu = 1.5,
                           nn = 15, id = NULL,
@@ -229,15 +253,14 @@
   coords <- .tobs_collect_coords(list(...), coords, "gp")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian", "spherical"))
   prior_range <- .tobs_check_prior_range(prior_range, "gp")
-  n <- nrow(coords); nn <- min(nn, n - 1L)
-  nngp <- compute_nngp_neighbors(coords, nn)
+  nb <- .tobs_build_nngp_block(coords, nn)
   .tobs_term(list(
-    type = "gp", n_obs = n, nn = nn,
+    type = "gp", n_obs = nb$n_obs, nn = nb$nn,
     coords = as.vector(t(coords)),
-    nn_idx = as.vector(t(nngp$nn_idx)),
-    nn_dist = as.vector(t(nngp$nn_dist)),
-    nn_neighbor_dist = .tobs_nngp_pair_dist(nngp$nn_neighbor_dist),
-    nn_order = nngp$nn_order, nn_order_inv = nngp$nn_order_inv,
+    nn_idx = nb$nn_idx,
+    nn_dist = nb$nn_dist,
+    nn_neighbor_dist = nb$nn_neighbor_dist,
+    nn_order = nb$nn_order, nn_order_inv = nb$nn_order_inv,
     cov_type = cov, nu = nu,
     sigma2_prior_U = sigma2_prior_U, sigma2_prior_alpha = sigma2_prior_alpha,
     prior_range = prior_range
@@ -254,21 +277,19 @@
                                      sigma2_regional_prior_U = 1.0, sigma2_regional_prior_alpha = 0.01) {
   coords <- .tobs_collect_coords(list(...), coords, "multiscale_gp")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian", "spherical"))
-  n <- nrow(coords)
-  nn_local <- min(nn_local, n - 1L); nn_regional <- min(nn_regional, n - 1L)
-  loc <- compute_nngp_neighbors(coords, nn_local)
-  reg <- compute_nngp_neighbors(coords, nn_regional)
+  loc <- .tobs_build_nngp_block(coords, nn_local)
+  reg <- .tobs_build_nngp_block(coords, nn_regional)
   .tobs_term(list(
-    type = "multiscale_gp", n_obs = n, coords = as.vector(t(coords)),
-    nn_local = nn_local,
-    nn_idx_local = as.vector(t(loc$nn_idx)),
-    nn_dist_local = as.vector(t(loc$nn_dist)),
-    nn_neighbor_dist_local = .tobs_nngp_pair_dist(loc$nn_neighbor_dist),
+    type = "multiscale_gp", n_obs = loc$n_obs, coords = as.vector(t(coords)),
+    nn_local = loc$nn,
+    nn_idx_local = loc$nn_idx,
+    nn_dist_local = loc$nn_dist,
+    nn_neighbor_dist_local = loc$nn_neighbor_dist,
     nn_order_local = loc$nn_order, nn_order_inv_local = loc$nn_order_inv,
-    nn_regional = nn_regional,
-    nn_idx_regional = as.vector(t(reg$nn_idx)),
-    nn_dist_regional = as.vector(t(reg$nn_dist)),
-    nn_neighbor_dist_regional = .tobs_nngp_pair_dist(reg$nn_neighbor_dist),
+    nn_regional = reg$nn,
+    nn_idx_regional = reg$nn_idx,
+    nn_dist_regional = reg$nn_dist,
+    nn_neighbor_dist_regional = reg$nn_neighbor_dist,
     nn_order_regional = reg$nn_order, nn_order_inv_regional = reg$nn_order_inv,
     cov_type = cov, nu = nu,
     range_local_lower = range_local_lower, range_local_upper = range_local_upper,
@@ -376,13 +397,12 @@
   cov <- match.arg(cov, c("exponential", "matern", "gaussian"))
   prior_range <- .tobs_check_prior_range(prior_range, "svc")
   sel <- .tobs_svc_check_selector(coefficients, indices)
-  n <- nrow(coords); nn <- min(nn, n - 1L)
-  nngp <- compute_nngp_neighbors(coords, nn)
+  nb  <- .tobs_build_nngp_block(coords, nn, pair_dist = FALSE)
   .tobs_term(list(
     coefficients = sel$coefficients, indices = sel$indices, n_svc = sel$n_svc,
-    n_obs = n, nn = nn, coords = as.vector(t(coords)),
-    nn_idx = as.vector(t(nngp$nn_idx)), nn_dist = as.vector(t(nngp$nn_dist)),
-    nn_order = nngp$nn_order, nn_order_inv = nngp$nn_order_inv,
+    n_obs = nb$n_obs, nn = nb$nn, coords = as.vector(t(coords)),
+    nn_idx = nb$nn_idx, nn_dist = nb$nn_dist,
+    nn_order = nb$nn_order, nn_order_inv = nb$nn_order_inv,
     cov_type = cov, sigma2_prior_scale = sigma2_prior_scale,
     prior_range = prior_range
   ), class = "tobs_svc", id = id, label = "svc")

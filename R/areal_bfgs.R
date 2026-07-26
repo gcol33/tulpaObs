@@ -522,7 +522,7 @@
     th <- opt$par
     for (b in seq_len(n_blk))
       th[blk_fi[[b]]] <- blocks[[b]]$center(th[blk_fi[[b]]])
-    H <- tryCatch(-.fp_fd_jacobian(grad_wp, th), error = function(e) NULL)
+    H <- tryCatch(-.tobs_fd_jacobian(grad_wp, th), error = function(e) NULL)
     if (is.null(H)) return(NULL)
     H <- 0.5 * (H + t(H)); ridge <- max(1e-8 * mean(abs(diag(H))), 1e-10); diag(H) <- diag(H) + ridge
     ch <- tryCatch(chol(H), error = function(e) NULL); if (is.null(ch)) return(NULL)

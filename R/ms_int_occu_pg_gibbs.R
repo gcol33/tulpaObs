@@ -61,14 +61,10 @@
           stats::plogis(as.vector(X_p[[d]] %*% b_p[[d]][s, ])))
         # Latent occupancy: a detection at any source forces z = 1; else the
         # occupied-undetected mass pools (1 - p_d)^{n_valid_d} across sources.
-        z <- integer(n); z[anyd] <- 1L; und <- !anyd
-        if (any(und)) {
-          logmass <- log(pmax(psi[und], 1e-12))
-          for (d in seq_len(D))
-            logmass <- logmass + nv[und, d] * log1p(-pmin(pd_list[[d]][und], 1 - 1e-12))
-          l1 <- exp(logmass); l0 <- 1 - psi[und]
-          z[und] <- stats::rbinom(sum(und), 1L, l1 / (l1 + l0))
-        }
+        log_q <- numeric(n)
+        for (d in seq_len(D))
+          log_q <- log_q + nv[, d] * log1p(-pmin(pd_list[[d]], 1 - 1e-12))
+        z <- .tobs_pg_draw_z(psi, exp(log_q), anyd)
         # Occupancy coefficients (all sites).
         om <- rpg(rep(1, n), eta_psi)
         b_psi[s, ] <- .tobs_pg_draw_beta(X_psi, om, z - 0.5,

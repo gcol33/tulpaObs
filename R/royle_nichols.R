@@ -217,53 +217,16 @@
              stats::qlogis(r0),     rep(0, p_rs - 1L),
              rep(0, p_rv))
 
-  opt <- stats::optim(init, nll, method = "BFGS", hessian = TRUE,
-                      control = list(maxit = 500L))
-  converged <- opt$convergence == 0L
-
   r_visit_names <- if (p_rv) paste0("r_", model$process_info[[2L]]$visit_coef_names)
   par_names <- c(paste0("lambda_", model$process_info[[1L]]$coef_names),
                  paste0("r_",      model$process_info[[2L]]$coef_names),
                  r_visit_names)
-  means <- opt$par; names(means) <- par_names
-  V <- tryCatch(solve(opt$hessian), error = function(e) {
-    diag(NA_real_, length(means))
-  })
-  V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
-  n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
-  intercepts <- list(
-    lambda = stats::setNames(means[1L], par_names[1L]),
-    r      = stats::setNames(means[p_lam + 1L], par_names[p_lam + 1L]))
-
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(-opt$value, n_draws),
-    log_lik      = -opt$value,
-    N            = sum(nn > 0L)),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    intercepts   = intercepts,
-    process_info = model$process_info,
-    model        = model,
-    spatial      = NULL,
-    method       = "laplace",
-    convergence  = list(converged = converged, n_iter = opt$counts[[1L]])
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_bfgs_marginal_fit(
+    nll, init, par_names, model, N = sum(nn > 0L),
+    extra = function(means) list(intercepts = list(
+      lambda = stats::setNames(means[1L], par_names[1L]),
+      r      = stats::setNames(means[p_lam + 1L], par_names[p_lam + 1L]))))
 }
 
 # ---------------------------------------------------------------------------

@@ -44,18 +44,14 @@
          "tulpaObs bug (keep_grid_hessians was not honoured).", call. = FALSE)
   }
 
-  beta <- numeric(p)
-  for (k in which(ok)) beta <- beta + w[k] * as.numeric(modes[[k]])
+  mode_mat <- do.call(rbind, lapply(modes, as.numeric))
+  beta     <- as.numeric(crossprod(w, mode_mat))
 
-  V <- matrix(0, p, p)
-  for (k in which(ok)) {
-    Hk <- as.matrix(hess[[k]])
-    Ck <- tryCatch(solve(Hk), error = function(e) NULL)
-    if (is.null(Ck) || anyNA(Ck)) next
-    dk <- as.numeric(modes[[k]]) - beta
-    V <- V + w[k] * (Ck + tcrossprod(dk))
-  }
-  V <- (V + t(V)) / 2
+  # The kernel returns per-cell FE precisions; the law of total covariance takes
+  # covariances, so invert each cell first (a singular cell drops out).
+  cov_k <- lapply(hess, function(H) tryCatch(solve(as.matrix(H)),
+                                             error = function(e) NULL))
+  V <- .tobs_grid_vcov(mode_mat, w, cov_k, center = beta, symmetrize = TRUE)
   list(beta = beta, vcov = V, weights = w)
 }
 

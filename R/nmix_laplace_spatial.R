@@ -319,15 +319,12 @@ nmix_laplace_car_proper <- function(y,
 
   # rho summaries are proper-CAR-specific; the rest of the grid summarisation is
   # shared with the ICAR path.
-  rho_vec <- fit$theta_grid[, "rho"]
-  common  <- .count_spatial_pack_common(fit, p_lam, p_p, n_spatial,
-                                        X_lambda, X_p, mixture)
-  w <- common$weights
-  rho_mean <- sum(w * rho_vec, na.rm = TRUE)
-  rho_sd   <- sqrt(max(0, sum(w * rho_vec^2, na.rm = TRUE) - rho_mean^2))
+  common <- .count_spatial_pack_common(fit, p_lam, p_p, n_spatial,
+                                       X_lambda, X_p, mixture)
+  rho <- .tobs_weighted_moment(common$weights, fit$theta_grid[, "rho"])
 
   out <- c(fit, common,
-           list(rho_mean = rho_mean, rho_sd = rho_sd,
+           list(rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
                 n_sites = n_sites, n_obs = n_obs, prior_type = "car_proper",
                 call = match.call()))
   if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
@@ -607,9 +604,7 @@ print.nmix_spatial_fit <- function(x, ...) {
 .count_spatial_pack_common <- function(fit, p_lam, p_p, n_spatial,
                                        X_lambda, X_p, mixture) {
   weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal, "tau_grid / data")
-  tau_vec <- fit$theta_grid[, "tau"]
-  tau_mean <- sum(weights * tau_vec, na.rm = TRUE)
-  tau_sd   <- sqrt(max(0, sum(weights * tau_vec^2, na.rm = TRUE) - tau_mean^2))
+  tau  <- .tobs_weighted_moment(weights, fit$theta_grid[, "tau"])
   disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
 
   modes <- fit$modes
@@ -627,8 +622,8 @@ print.nmix_spatial_fit <- function(x, ...) {
 
   list(
     weights          = weights,
-    tau_mean         = tau_mean,
-    tau_sd           = tau_sd,
+    tau_mean         = unname(tau["mean"]),
+    tau_sd           = unname(tau["sd"]),
     mixture          = mixture,
     r_mean           = disp$r_mean,
     r_sd             = disp$r_sd,
@@ -649,11 +644,9 @@ print.nmix_spatial_fit <- function(x, ...) {
                                             X_lambda, X_p, mixture, scale_factor) {
   weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
   sigma_vec <- fit$theta_grid[, "sigma"]; rho_vec <- fit$theta_grid[, "rho"]
-  sigma_mean <- sum(weights * sigma_vec, na.rm = TRUE)
-  sigma_sd   <- sqrt(max(0, sum(weights * sigma_vec^2, na.rm = TRUE) - sigma_mean^2))
-  rho_mean   <- sum(weights * rho_vec, na.rm = TRUE)
-  rho_sd     <- sqrt(max(0, sum(weights * rho_vec^2, na.rm = TRUE) - rho_mean^2))
-  disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
+  sigma <- .tobs_weighted_moment(weights, sigma_vec)
+  rho   <- .tobs_weighted_moment(weights, rho_vec)
+  disp  <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
 
   modes <- fit$modes
   beta_lambda_mean <- as.numeric(crossprod(weights, modes[, seq_len(p_lam), drop = FALSE]))
@@ -678,8 +671,10 @@ print.nmix_spatial_fit <- function(x, ...) {
   names(beta_lambda_mean) <- nm_lam; names(beta_p_mean) <- nm_p
 
   list(
-    weights = weights, sigma_mean = sigma_mean, sigma_sd = sigma_sd,
-    rho_mean = rho_mean, rho_sd = rho_sd, mixture = mixture,
+    weights = weights,
+    sigma_mean = unname(sigma["mean"]), sigma_sd = unname(sigma["sd"]),
+    rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
+    mixture = mixture,
     r_mean = disp$r_mean, r_sd = disp$r_sd,
     beta_lambda_mean = beta_lambda_mean, beta_p_mean = beta_p_mean,
     vcov = .nmix_grid_vcov(fit$cov_blocks, modes, weights, p_lam, p_p,
@@ -693,35 +688,24 @@ print.nmix_spatial_fit <- function(x, ...) {
   if (identical(mixture, "P") || !("r" %in% colnames(theta_grid))) {
     return(list(r_mean = NA_real_, r_sd = NA_real_))
   }
-  r_vec  <- theta_grid[, "r"]
-  r_mean <- sum(weights * r_vec, na.rm = TRUE)
-  r_sd   <- sqrt(max(0, sum(weights * r_vec^2, na.rm = TRUE) - r_mean^2))
-  list(r_mean = r_mean, r_sd = r_sd)
+  r <- .tobs_weighted_moment(weights, theta_grid[, "r"])
+  list(r_mean = unname(r["mean"]), r_sd = unname(r["sd"]))
 }
 
-# Grid-integrated coefficient covariance via the law of total covariance:
-#   V(beta) = sum_k w_k [ Cov_k + (m_k - mbar)(m_k - mbar)' ]
-# where Cov_k = cov_blocks[[k]] is the within-grid Laplace covariance of
-# beta = (beta_lambda, beta_p) at the k-th grid mode (the (beta) block of the
-# joint H^{-1} returned by the C++ kernel), and the second term is the
-# between-grid mode variance. The result is the marginal coefficient covariance
-# integrating over the hyperparameter grid -- the right object for calibrated
-# coefficient standard errors.
+# Grid-integrated covariance of beta = (beta_lambda, beta_p) over the outer
+# hyperparameter grid. `cov_blocks[[k]]` is the within-grid Laplace covariance
+# at the k-th mode (the beta block of the joint H^{-1} the C++ kernel returns);
+# .tobs_grid_vcov() adds the between-grid mode spread. A grid with no usable
+# weight yields an all-NA covariance.
 .nmix_grid_vcov <- function(cov_blocks, modes, weights, p_lam, p_p, nm) {
-  p_beta <- p_lam + p_p
+  p_beta     <- p_lam + p_p
   beta_modes <- modes[, seq_len(p_beta), drop = FALSE]
-  V <- matrix(NA_real_, p_beta, p_beta)
   ok <- is.finite(weights) & weights > 0
-  if (any(ok)) {
+  V  <- if (any(ok)) {
     w <- weights; w[!ok] <- 0
-    mbar <- as.numeric(crossprod(w, beta_modes))
-    V <- matrix(0, p_beta, p_beta)
-    for (k in which(ok)) {
-      Ck <- cov_blocks[[k]]
-      if (is.null(Ck) || anyNA(Ck)) next
-      dk <- beta_modes[k, ] - mbar
-      V <- V + w[k] * (as.matrix(Ck) + tcrossprod(dk))
-    }
+    .tobs_grid_vcov(beta_modes, w, cov_blocks)
+  } else {
+    matrix(NA_real_, p_beta, p_beta)
   }
   dimnames(V) <- list(nm, nm)
   V

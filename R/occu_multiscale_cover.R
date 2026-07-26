@@ -438,7 +438,7 @@
   sds   <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
   n_draws <- 1000L
-  draws <- .occu_cover_rmvn(n_draws, means, V); colnames(draws) <- par_names
+  draws <- .rmvn(n_draws, means, V); colnames(draws) <- par_names
   ll_val <- .occu_ms_cover_nonspatial_ll(par, model, idx)
 
   structure(c(list(
