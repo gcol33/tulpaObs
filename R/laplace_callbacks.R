@@ -466,13 +466,22 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         # M-pseudo-binomial inflation, which -- applied per interval -- makes each
         # row individually near-separable (a confident interval has r ~ 0 or 1),
         # so the inner Newton hits numerical separation and returns ~the initial
-        # zero slope. A fractional response with a fractional weight is exactly a
-        # soft-label logistic and is well conditioned.
+        # zero slope.
+        #
+        # The soft label is carried by the WEIGHTS, not by a fractional `y`: the
+        # binomial likelihood casts `y` to an integer, so a response in [0, 1)
+        # would floor to 0. Each interval therefore contributes the two integral
+        # outcomes it is a mixture of -- (y = 1, weight = n r) and (y = 0,
+        # weight = n (1 - r)) -- over the same design row. Summing the two gives
+        # score n (r - mu) and curvature n mu (1 - mu), which is the weighted
+        # logistic exactly, with no discretization of r.
         nn <- as.vector(t(n_mat))
         r  <- as.vector(t(y_mat)) / pmax(nn, 1e-12)
         r  <- pmin(pmax(r, 0), 1)
-        list(y = r, n_trials = rep(1, length(r)), weights = nn,
-             X = Xarm, family = "binomial")
+        list(y = rep(c(1L, 0L), each = length(r)),
+             n_trials = rep(1L, 2L * length(r)),
+             weights = c(nn * r, nn * (1 - r)),
+             X = rbind(Xarm, Xarm), family = "binomial")
       } else {
         # Aggregated per-site: guard against an all-other-origin site (no rows).
         yv2 <- as.integer(round(y_agg * M))
