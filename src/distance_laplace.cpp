@@ -33,6 +33,18 @@ using tulpaObs::DistSiteResult;
 using tulpaObs::DistQuad;
 using tulpaObs::compute_distance_site;
 
+// Slack on the backtracking accept test. A Newton step at a converged mode moves
+// the objective by less than the rounding error of the sweep that measures it, so
+// a strict `ll_try >= ll` would reject the final step and exhaust the halving
+// loop; accepting a decrease this small lets the step through instead.
+constexpr double kLineSearchSlack = 1e-10;
+
+// Floor on the negative-binomial size r during the profile. As r grows the NB
+// tends to the Poisson, so the log-r axis is only weakly identified from below
+// and an unbounded profile can walk toward zero; log(r) is optimised inside
+// [log(kMinNbSize), theta_max].
+constexpr double kMinNbSize = 1e-4;
+
 // One per-site kernel pass at the current (beta, r); fills `out` and returns the
 // total marginal log-likelihood.
 inline double dist_sweep(const Rcpp::IntegerMatrix& y,
@@ -164,7 +176,7 @@ Rcpp::List cpp_distance_laplace_fixed(
 
     const int pb = p_lam + p_sig + (hazard ? 1 : 0);
     const int p_total = pb + (nb ? 1 : 0);
-    const double theta_min = std::log(1e-4);
+    const double theta_min = std::log(kMinNbSize);
     double theta = nb ? std::min(std::max(log_r_init, theta_min), theta_max) : R_PosInf;
     double r = nb ? std::exp(theta) : std::numeric_limits<double>::infinity();
 
@@ -207,7 +219,7 @@ Rcpp::List cpp_distance_laplace_fixed(
                 VectorXd bs = beta_sig + step * ds;
                 double eb = eta_b + step * db;
                 double ll_try = dist_loglik(y, Xl, Xs, bl, bs, eb, key, quad, K_max, r);
-                if (R_finite(ll_try) && ll_try >= log_lik - 1e-10) {
+                if (R_finite(ll_try) && ll_try >= log_lik - kLineSearchSlack) {
                     beta_lam = bl; beta_sig = bs; eta_b = eb; stepped = true; break;
                 }
                 step *= 0.5;
@@ -242,7 +254,7 @@ Rcpp::List cpp_distance_laplace_fixed(
             if (th_try == theta) break;
             double r_try = std::exp(th_try);
             double ll_try = dist_loglik(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad, K_max, r_try);
-            if (R_finite(ll_try) && ll_try >= ll_cur - 1e-10) {
+            if (R_finite(ll_try) && ll_try >= ll_cur - kLineSearchSlack) {
                 theta = th_try; r = r_try; stepped = true; break;
             }
             step *= 0.5;

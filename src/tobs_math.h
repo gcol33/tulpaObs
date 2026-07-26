@@ -25,6 +25,18 @@ inline double clamp_eta(double e, double bound = kEtaClampBound) {
     return e > bound ? bound : (e < -bound ? -bound : e);
 }
 
+// Largest argument passed to exp() before the result stops being representable
+// (exp overflows to Inf just above 709). Used where the predictor is NOT the
+// eta-clamped kind above -- a community count arm carries mu + b_s + a field
+// offset, any of which a sampler can push far out mid-trajectory, and an Inf
+// mean poisons the gradient rather than just saturating it.
+constexpr double kExpArgBound = 700.0;
+
+// Floor on a count mean before it enters a density. exp() underflows to exactly
+// 0 for very negative eta, and a zero mean makes the negative-binomial score
+// r (y - m) / (r + m) evaluate at a pole.
+constexpr double kMinCountMean = 1e-10;
+
 // Logistic function, branch-split on the sign of `x` so the exponential is
 // always taken of a non-positive argument. This is the form R's plogis() uses,
 // so a diagnostic / pointwise-likelihood kernel written against an R oracle

@@ -61,6 +61,29 @@ struct CountGroupedOracle : tulpa::REGroupOracle {
     virtual NMixSiteResult eval_site(int i, const double* eta_p_ptr,
                                      double eta_lam) const = 0;
 
+    // The per-site predictors at RE value b. The abundance arm shifts the site
+    // log-abundance; the detection arm shifts every visit's logit by the same
+    // scalar, which needs a shifted copy of the site's detection vector --
+    // `scratch` holds it, and the returned `eta_p_ptr` aliases that buffer, so
+    // it stays valid until the next call on the same scratch. Callers reuse one
+    // scratch across a group's sites to keep the loop allocation-free.
+    void site_eta(int i, const double* b, std::vector<double>& scratch,
+                  double& eta_lam, const double*& eta_p_ptr) const {
+        double shift = 0.0;
+        for (int c = 0; c < d; ++c) shift += Zsite(i, c) * b[c];
+        if (arm == 0) {
+            eta_lam   = clamp_eta(eta_lambda_base(i) + shift);
+            eta_p_ptr = eta_p_site[i].empty() ? nullptr : eta_p_site[i].data();
+        } else {
+            eta_lam = eta_lambda_base(i);
+            const int J = (int)Xp_site[i].rows();
+            const double shift_cl = clamp_eta(shift);
+            scratch.assign(J, 0.0);
+            for (int j = 0; j < J; ++j) scratch[j] = eta_p_site[i][j] + shift_cl;
+            eta_p_ptr = scratch.empty() ? nullptr : scratch.data();
+        }
+    }
+
     // Per-site evaluation request flags (see nmix_re_oracle.h history): the
     // Newton mode-find asks for negH (marginal observed info) and the PSD Fisher
     // at the SAME (g, b), so one site loop fills both on demand.

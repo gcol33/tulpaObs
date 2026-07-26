@@ -218,30 +218,10 @@ inline double nmix_bym2_log_prior(
     const Eigen::VectorXd& v,
     const Eigen::VectorXd& w
 ) {
-    double quad_v = 0.0;
-    for (int s = 0; s < n_spatial; ++s) {
-        quad_v += n_neighbors[s] * v(s) * v(s);
-        for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
-            int t = adj_col_idx[kk];
-            if (t > s) quad_v -= 2.0 * v(s) * v(t);
-        }
-    }
-    double quad_w = w.squaredNorm();
+    const double quad_v = nmix_car_quadratic_form(
+        n_spatial, 1.0, adj_row_ptr, adj_col_idx, n_neighbors, v);
+    const double quad_w = w.squaredNorm();
     return -0.5 * quad_v - 0.5 * quad_w;
-}
-
-// Sum-to-zero centering of v (the ICAR component). The iid component w is
-// identified by its prior and is not centred.
-inline void nmix_center_v_bym2(
-    int p_lam, int p_p, int n_spatial,
-    Eigen::VectorXd& x
-) {
-    if (n_spatial <= 0) return;
-    const int v_start = p_lam + p_p;
-    double mean = 0.0;
-    for (int s = 0; s < n_spatial; ++s) mean += x(v_start + s);
-    mean /= n_spatial;
-    for (int s = 0; s < n_spatial; ++s) x(v_start + s) -= mean;
 }
 
 }  // namespace tulpaObs

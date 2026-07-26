@@ -341,26 +341,6 @@ inline void nmix_add_diagonal_ridge(Eigen::MatrixXd& H, double rel_ridge = 1e-10
     for (int i = 0; i < n; ++i) H(i, i) += ridge;
 }
 
-// z' Q(rho) z quadratic form. Symmetry of adjacency lets us halve the work
-// by only counting edges with t > s.
-inline double nmix_car_quadratic_form(
-    int n_spatial, double rho,
-    const Rcpp::IntegerVector& adj_row_ptr,
-    const Rcpp::IntegerVector& adj_col_idx,
-    const Rcpp::IntegerVector& n_neighbors,
-    const Eigen::VectorXd& z
-) {
-    double quad = 0.0;
-    for (int s = 0; s < n_spatial; ++s) {
-        quad += n_neighbors[s] * z(s) * z(s);
-        for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
-            int t = adj_col_idx[kk];
-            if (t > s) quad -= 2.0 * rho * z(s) * z(t);
-        }
-    }
-    return quad;
-}
-
 // log p(z | tau) under ICAR: -0.5 * tau * z' Q z + 0.5 * (n - 1) * log(tau)
 // (rank-deficient by 1; the (2 pi)^{n/2} normalising constant is absorbed by
 // the caller into the Cartesian factor that is tau-independent).
@@ -392,20 +372,6 @@ inline double nmix_car_proper_log_prior(
     return 0.5 * log_det_Q_rho
          + 0.5 * n_spatial * std::log(tau)
          - 0.5 * tau * quad;
-}
-
-// Centering: subtract mean(z) from z, enforcing the sum-to-zero constraint
-// that anchors ICAR identifiability against the global intercept.
-inline void nmix_center_z(
-    int p_lam, int p_p, int n_spatial,
-    Eigen::VectorXd& x
-) {
-    if (n_spatial <= 0) return;
-    const int z_start = p_lam + p_p;
-    double mean = 0.0;
-    for (int s = 0; s < n_spatial; ++s) mean += x(z_start + s);
-    mean /= n_spatial;
-    for (int s = 0; s < n_spatial; ++s) x(z_start + s) -= mean;
 }
 
 }  // namespace tulpaObs

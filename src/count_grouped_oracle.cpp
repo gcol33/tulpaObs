@@ -102,23 +102,10 @@ CountGroupedOracle::eval_group(int g, const double* b,
 
     std::vector<double> eta_p_shift;
     for (const int i : sites_by_group[g]) {
-        // Z_i . b -- the per-site shift the engine applies to the active arm.
-        double shift = 0.0;
-        for (int c = 0; c < d; ++c) shift += Zsite(i, c) * b[c];
-
         const int J = (int)Xp_site[i].rows();
         double eta_lam;
         const double* eta_p_ptr;
-        if (arm == 0) {
-            eta_lam = tulpaObs::clamp_eta(eta_lambda_base(i) + shift);
-            eta_p_ptr = eta_p_site[i].empty() ? nullptr : eta_p_site[i].data();
-        } else {
-            eta_lam = eta_lambda_base(i);
-            const double shift_cl = tulpaObs::clamp_eta(shift);
-            eta_p_shift.assign(J, 0.0);
-            for (int j = 0; j < J; ++j) eta_p_shift[j] = eta_p_site[i][j] + shift_cl;
-            eta_p_ptr = eta_p_shift.empty() ? nullptr : eta_p_shift.data();
-        }
+        site_eta(i, b, eta_p_shift, eta_lam, eta_p_ptr);
 
         const NMixSiteResult res = eval_site(i, eta_p_ptr, eta_lam);
         e.logL += res.log_lik;
@@ -198,21 +185,9 @@ void CountGroupedOracle::node_ll(int g, const double* B, int n_nodes,
         const double* bk = B + (std::size_t)k * d;
         double ll = 0.0;
         for (const int i : sites_by_group[g]) {
-            double shift = 0.0;
-            for (int c = 0; c < d; ++c) shift += Zsite(i, c) * bk[c];
-            const int J = (int)Xp_site[i].rows();
             double eta_lam;
             const double* eta_p_ptr;
-            if (arm == 0) {
-                eta_lam = tulpaObs::clamp_eta(eta_lambda_base(i) + shift);
-                eta_p_ptr = eta_p_site[i].empty() ? nullptr : eta_p_site[i].data();
-            } else {
-                eta_lam = eta_lambda_base(i);
-                const double shift_cl = tulpaObs::clamp_eta(shift);
-                eta_p_shift.assign(J, 0.0);
-                for (int j = 0; j < J; ++j) eta_p_shift[j] = eta_p_site[i][j] + shift_cl;
-                eta_p_ptr = eta_p_shift.empty() ? nullptr : eta_p_shift.data();
-            }
+            site_eta(i, bk, eta_p_shift, eta_lam, eta_p_ptr);
             ll += eval_site(i, eta_p_ptr, eta_lam).log_lik;
         }
         out[k] = ll;

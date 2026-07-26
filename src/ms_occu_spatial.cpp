@@ -205,10 +205,7 @@ inline void occ_center_field(OccFieldKind kind, int p_psi, int p_p, int n_spatia
     VectorXd holder(p_psi + p_p + len);
     holder.setZero();
     holder.segment(p_psi + p_p, len) = field;
-    if (kind == OccFieldKind::BYM2)
-        nmix_center_v_bym2(p_psi, p_p, n_spatial, holder);
-    else
-        nmix_center_z(p_psi, p_p, n_spatial, holder);
+    nmix_center_field(p_psi, p_p, n_spatial, holder);
     field = holder.segment(p_psi + p_p, len);
 }
 

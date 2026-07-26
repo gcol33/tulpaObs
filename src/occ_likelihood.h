@@ -64,6 +64,25 @@ inline T log1m_inv_logit(const T& x) {
     return T(0.0) - safe_log1pexp(x);
 }
 
+// The detection logit for visit j at site i: the site-level eta[1] plus the
+// visit-level design row. Templated because the log-likelihood assembles it in
+// autodiff Var and the residual in plain double; T = double is the trivial
+// instantiation and compiles to the same arithmetic.
+template<typename T>
+inline T occ_visit_logit_p(const OccResponseData* occ, const T* eta,
+                           const std::vector<T>& params,
+                           const tulpa::ParamLayout& layout, int i, int j) {
+    T logit_p_ij = eta[1];
+    if (occ->p_det_visit > 0) {
+        const int base = i * occ->max_visits * occ->p_det_visit + j * occ->p_det_visit;
+        const int beta_offset = layout.extra_offset;
+        for (int c = 0; c < occ->p_det_visit; c++) {
+            logit_p_ij = logit_p_ij + T(occ->X_det_visit[base + c]) * params[beta_offset + c];
+        }
+    }
+    return logit_p_ij;
+}
+
 // ============================================================================
 // Single-season occupancy log-likelihood (per site)
 // ============================================================================
@@ -106,17 +125,7 @@ T occ_log_likelihood(
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;  // Missing visit
 
-        // Detection linear predictor for visit j
-        T logit_p_ij = eta[1];
-
-        // Add visit-level covariates if present
-        if (occ->p_det_visit > 0) {
-            int base = i * occ->max_visits * occ->p_det_visit + j * occ->p_det_visit;
-            int beta_offset = layout.extra_offset;
-            for (int c = 0; c < occ->p_det_visit; c++) {
-                logit_p_ij = logit_p_ij + T(occ->X_det_visit[base + c]) * params[beta_offset + c];
-            }
-        }
+        T logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j);
 
         T log_p = log_inv_logit(logit_p_ij);
         T log1m_p = log1m_inv_logit(logit_p_ij);
@@ -173,24 +182,20 @@ inline void occ_residual(
         return;
     }
 
-    // Compute detection probabilities and sum_log1m_p
+    // Compute detection probabilities and sum_log1m_p. p_ij is kept because the
+    // undetected branch below needs every visit's probability a second time.
     double prod_1m_p = 1.0;
     double d_logit_p_sum = 0.0;
+    std::vector<double> p_visit(occ->max_visits, 0.0);
 
     for (int j = 0; j < occ->max_visits; j++) {
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;
 
-        double logit_p_ij = eta[1];
-        if (occ->p_det_visit > 0) {
-            int base = i * occ->max_visits * occ->p_det_visit + j * occ->p_det_visit;
-            int beta_offset = layout.extra_offset;
-            for (int c = 0; c < occ->p_det_visit; c++) {
-                logit_p_ij += occ->X_det_visit[base + c] * params[beta_offset + c];
-            }
-        }
+        double logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j);
 
         double p_ij = 1.0 / (1.0 + std::exp(-logit_p_ij));
+        p_visit[j] = p_ij;
         prod_1m_p *= (1.0 - p_ij);
 
         // d(ll_det)/d(logit_p_ij) = y_ij - p_ij (for the part that goes through eta[1])
@@ -215,21 +220,13 @@ inline void occ_residual(
         // d(ll)/d eta[1] = psi / denom * d(prod(1-p))/d(eta[1])
         // = psi / denom * sum_j [-p_j * prod_{k!=j}(1-p_k)]
         // For uniform p: = psi / denom * K * (-p*(1-p)^{K-1})
-        // General case: recalculate per-visit
+        // General case: per-visit, off the probabilities the first pass kept
         double d_prod_d_eta1 = 0.0;
         for (int j = 0; j < occ->max_visits; j++) {
             int y_ij = occ->y[i * occ->max_visits + j];
             if (y_ij < 0) continue;
 
-            double logit_p_ij = eta[1];
-            if (occ->p_det_visit > 0) {
-                int base = i * occ->max_visits * occ->p_det_visit + j * occ->p_det_visit;
-                int beta_offset = layout.extra_offset;
-                for (int c = 0; c < occ->p_det_visit; c++) {
-                    logit_p_ij += occ->X_det_visit[base + c] * params[beta_offset + c];
-                }
-            }
-            double p_ij = 1.0 / (1.0 + std::exp(-logit_p_ij));
+            double p_ij = p_visit[j];
             double prod_others = (1.0 - p_ij) > 1e-300 ? prod_1m_p / (1.0 - p_ij) : 0.0;
             d_prod_d_eta1 += -p_ij * (1.0 - p_ij) * prod_others;
         }

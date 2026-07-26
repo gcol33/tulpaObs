@@ -249,14 +249,21 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
     std::vector<double> Ap_s((std::size_t) S * p_p * p_p, 0.0);
     std::vector<double> Alr_s(S, 0.0);
 
-    #pragma omp parallel for schedule(static)
+    // Scratch sized once per thread and reused across species. b_* are fully
+    // overwritten each pass and eta_p_site is resized then written per site;
+    // gbl/gbp accumulate and are re-zeroed explicitly.
+    #pragma omp parallel
+    {
+    std::vector<double> b_lam(p_lam), b_p(p_p), gbl(p_lam), gbp(p_p), eta_p_site;
+
+    #pragma omp for schedule(static)
     for (int s = 0; s < S; ++s) {
         const double* z_s = z + s * P;
         const double* zl  = z_s;             // length p_lam
         const double* zp  = z_s + p_lam;     // length p_p
         const double  zr  = nb ? z_s[p_lam + p_p] : 0.0;
-        std::vector<double> b_lam(p_lam), b_p(p_p), gbl(p_lam, 0.0), gbp(p_p, 0.0),
-                            eta_p_site;
+        std::fill(gbl.begin(), gbl.end(), 0.0);
+        std::fill(gbp.begin(), gbp.end(), 0.0);
         // reconstruct b = C z (lower-triangular C)
         for (int i = 0; i < p_lam; ++i) {
             double v = 0.0;
@@ -340,6 +347,7 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
             for (int j = 0; j <= i; ++j) Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
         if (nb) Alr_s[s] = gblr * zr;
     }
+    }  // omp parallel
 
     // serial reduction in species order -> byte-identical to the serial path.
     double lp = 0.0;

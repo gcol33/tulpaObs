@@ -134,6 +134,17 @@ inline MsDynOccuNutsData ms_dyn_occu_nuts_build_data(const Rcpp::List& spec) {
     return d;
 }
 
+// Per-thread scratch for the HMM recursion below: six length-T buffers, every
+// element of each fully overwritten per site, so one allocation per thread
+// serves every call instead of one per species per gradient evaluation.
+struct MsDynOccuFbScratch {
+    std::vector<double> cs, A0, A1, emocc, emunocc, wsm;
+    void resize(int T) {
+        cs.resize(T); A0.resize(T); A1.resize(T);
+        emocc.resize(T); emunocc.resize(T); wsm.resize(T);
+    }
+};
+
 // Per-species forward-backward smoothing (mirrors .ms_dyn_occu_fb_vec, per-site).
 // Inputs: per-site psi1 / p (unclamped plogis values) and the SHARED per-site
 // gamma / eps; the species' per-(site,season) (nvalid, ndet). Accumulates:
@@ -149,11 +160,18 @@ inline double ms_dyn_occu_fb(const MsDynOccuNutsData& d, int s,
                              const double* psi1, const double* p,
                              const double* gamma, const double* eps,
                              double* score_psi1, double* score_p,
-                             double* g_gam_add, double* g_eps_add) {
+                             double* g_gam_add, double* g_eps_add,
+                             MsDynOccuFbScratch& sc) {
     const int Ns = d.n_sites, T = d.n_seasons;
     const std::vector<int>& nv = d.nvalid[s];
     const std::vector<int>& nd = d.ndet[s];
-    std::vector<double> cs(T), A0(T), A1(T), emocc(T), emunocc(T), wsm(T);
+    sc.resize(T);
+    std::vector<double>& cs      = sc.cs;
+    std::vector<double>& A0      = sc.A0;
+    std::vector<double>& A1      = sc.A1;
+    std::vector<double>& emocc   = sc.emocc;
+    std::vector<double>& emunocc = sc.emunocc;
+    std::vector<double>& wsm     = sc.wsm;
     double ll = 0.0;
     for (int i = 0; i < Ns; ++i) {
         const double ps1c = mdo_clamp(psi1[i]);
@@ -263,12 +281,24 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
     std::vector<double> ggam_s((std::size_t) S * n_sites, 0.0);
     std::vector<double> geps_s((std::size_t) S * n_sites, 0.0);
 
-    #pragma omp parallel for schedule(static)
+    // Scratch sized once per thread and reused across species. b_*, psi1/pp and
+    // s_psi1/s_p are fully overwritten each pass (ms_dyn_occu_fb assigns its four
+    // score outputs, it does not accumulate); gbpsi1/gbp accumulate and are
+    // re-zeroed explicitly.
+    #pragma omp parallel
+    {
+    std::vector<double> b_psi1(p_psi1), b_p(p_p);
+    std::vector<double> psi1(n_sites), pp(n_sites), s_psi1(n_sites), s_p(n_sites);
+    std::vector<double> gbpsi1(p_psi1), gbp(p_p);
+    MsDynOccuFbScratch fb_sc;
+
+    #pragma omp for schedule(static)
     for (int s = 0; s < S; ++s) {
         const double* z_s  = z + s * P;
         const double* zpsi1 = z_s;
         const double* zp    = z_s + p_psi1;
-        std::vector<double> b_psi1(p_psi1), b_p(p_p);
+        std::fill(gbpsi1.begin(), gbpsi1.end(), 0.0);
+        std::fill(gbp.begin(), gbp.end(), 0.0);
         for (int i = 0; i < p_psi1; ++i) {
             double v = 0.0;
             for (int j = 0; j <= i; ++j)
@@ -280,7 +310,6 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
             for (int j = 0; j <= i; ++j) v += C_p[(std::size_t) i * p_p + j] * zp[j];
             b_p[i] = v;
         }
-        std::vector<double> psi1(n_sites), pp(n_sites);
         for (int i = 0; i < n_sites; ++i) {
             double e_psi1 = 0.0, e_p = 0.0;
             for (int k = 0; k < p_psi1; ++k)
@@ -290,15 +319,13 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
             psi1[i] = mdo_plogis(e_psi1);
             pp[i]   = mdo_plogis(e_p);
         }
-        std::vector<double> s_psi1(n_sites), s_p(n_sites);
         double* ggam = &ggam_s[(std::size_t) s * n_sites];
         double* geps = &geps_s[(std::size_t) s * n_sites];
         lp_s[s] = ms_dyn_occu_fb(d, s, psi1.data(), pp.data(),
                                  gamma.data(), eps.data(),
-                                 s_psi1.data(), s_p.data(), ggam, geps);
+                                 s_psi1.data(), s_p.data(), ggam, geps, fb_sc);
 
         // design-sandwiched eta-gradient on the psi1 / p arms (grad_b).
-        std::vector<double> gbpsi1(p_psi1, 0.0), gbp(p_p, 0.0);
         double* gmu_loc = &gmu_s[(std::size_t) s * P];
         for (int i = 0; i < n_sites; ++i) {
             const double gpsi1 = s_psi1[i];
@@ -338,6 +365,7 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
             for (int j = 0; j <= i; ++j)
                 Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
     }
+    }  // omp parallel
 
     // serial reduction in species order -> byte-identical to the serial path.
     double lp = 0.0;

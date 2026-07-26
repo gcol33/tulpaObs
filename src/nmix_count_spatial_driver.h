@@ -232,7 +232,7 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
                     x_holder.segment(0, p_lam) = res.beta_lambda;
                     x_holder.segment(p_lam, p_p) = res.beta_p;
                     x_holder.segment(p_lam + p_p, n_spatial) = res.z;
-                    nmix_center_z(p_lam, p_p, n_spatial, x_holder);
+                    nmix_center_field(p_lam, p_p, n_spatial, x_holder);
                     res.z = x_holder.segment(p_lam + p_p, n_spatial);
                 }
                 stepped = true;
@@ -561,7 +561,7 @@ CountBYM2InnerResult inner_newton_count_bym2(
                 x_holder.segment(p_lam, p_p) = res.beta_p;
                 x_holder.segment(v_start, n_spatial) = res.v;
                 x_holder.segment(w_start, n_spatial) = res.w;
-                nmix_center_v_bym2(p_lam, p_p, n_spatial, x_holder);
+                nmix_center_field(p_lam, p_p, n_spatial, x_holder);
                 res.v = x_holder.segment(v_start, n_spatial);
                 stepped = true; break;
             }

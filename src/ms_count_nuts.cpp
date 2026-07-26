@@ -25,6 +25,7 @@
 
 #include <Rcpp.h>
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <tulpa/model_data.h>
@@ -32,6 +33,7 @@
 #include <tulpa/likelihood.h>
 #include <tulpa/nuts_api.h>
 #include "community_chol.h"
+#include "tobs_math.h"
 
 #include "nuts_engine.h"
 using namespace Rcpp;
@@ -135,12 +137,19 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
     std::vector<double> Abeta_s((std::size_t) S * pb * pb, 0.0);
     std::vector<double> Alr_s(S, 0.0), glogphi_s(gauss ? S : 0, 0.0);
 
-    #pragma omp parallel for schedule(static)
+    // Scratch sized once per thread and reused across species (widths are known
+    // before the loop). b_beta is fully overwritten each pass; gbb accumulates
+    // and is re-zeroed explicitly.
+    #pragma omp parallel
+    {
+    std::vector<double> b_beta(pb), gbb(pb);
+
+    #pragma omp for schedule(static)
     for (int s = 0; s < S; ++s) {
         const double* z_s = z + s * P;
         const double* zb  = z_s;               // length pb
         const double  zr  = nb ? z_s[pb] : 0.0;
-        std::vector<double> b_beta(pb), gbb(pb, 0.0);
+        std::fill(gbb.begin(), gbb.end(), 0.0);
         for (int i = 0; i < pb; ++i) {         // b_beta = C_beta z (lower-tri C)
             double v = 0.0;
             for (int j = 0; j <= i; ++j) v += C_beta[(std::size_t) i * pb + j] * zb[j];
@@ -160,8 +169,8 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
             for (int k = 0; k < pb; ++k) eta += d.X(i, k) * (mu[k] + b_beta[k]);
             double ge;                         // d log p / d eta
             if (nb) {
-                double m = std::exp(eta < 700.0 ? eta : 700.0);
-                if (m < 1e-10) m = 1e-10;
+                double m = std::exp(eta < kExpArgBound ? eta : kExpArgBound);
+                if (m < kMinCountMean) m = kMinCountMean;
                 lp_loc += R::dnbinom_mu(ys[i], r, m, 1);
                 ge = r * (ys[i] - m) / (r + m);
                 const double dLL_dr = R::digamma(ys[i] + r) - R::digamma(r)
@@ -180,7 +189,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
                 lp_loc += ys[i] * eta - lse;
                 ge = ys[i] - 1.0 / (1.0 + std::exp(-eta));
             } else {                           // Poisson
-                const double lam = std::exp(eta < 700.0 ? eta : 700.0);
+                const double lam = std::exp(eta < kExpArgBound ? eta : kExpArgBound);
                 lp_loc += ys[i] * eta - lam - lg[i];
                 ge = ys[i] - lam;
             }
@@ -206,6 +215,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
         }
         if (gauss) glogphi_s[s] = glp;
     }
+    }  // omp parallel
 
     double lp = 0.0;                           // serial reduction (species order)
     for (int s = 0; s < S; ++s) {

@@ -152,13 +152,23 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
     std::vector<double> Apsi_s((std::size_t) S * p_psi * p_psi, 0.0);
     std::vector<double> Ap_s((std::size_t) S * p_p * p_p, 0.0);
 
-    #pragma omp parallel for schedule(static)
+    // Scratch is sized once per thread and reused across species: the widths are
+    // known before the loop, and the per-species work below is O(n_sites), so a
+    // fresh allocation per iteration buys nothing. b_* and eta_* are fully
+    // overwritten each pass; gb* accumulate and are re-zeroed explicitly.
+    #pragma omp parallel
+    {
+    std::vector<double> b_psi(p_psi), b_p(p_p), gbpsi(p_psi), gbp(p_p);
+    std::vector<double> eta_psi(n_sites), eta_p(n_sites);
+    MsOccuSiteResult res;
+
+    #pragma omp for schedule(static)
     for (int s = 0; s < S; ++s) {
         const double* z_s = z + s * P;
         const double* zpsi = z_s;             // length p_psi
         const double* zp   = z_s + p_psi;     // length p_p
-        std::vector<double> b_psi(p_psi), b_p(p_p), gbpsi(p_psi, 0.0),
-                            gbp(p_p, 0.0);
+        std::fill(gbpsi.begin(), gbpsi.end(), 0.0);
+        std::fill(gbp.begin(), gbp.end(), 0.0);
         // reconstruct b = C z (lower-triangular C)
         for (int i = 0; i < p_psi; ++i) {
             double v = 0.0;
@@ -173,7 +183,6 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
             b_p[i] = v;
         }
         // per-site eta over the shared site-level designs
-        std::vector<double> eta_psi(n_sites), eta_p(n_sites);
         for (int i = 0; i < n_sites; ++i) {
             double e_psi = 0.0, e_p = 0.0;
             for (int k = 0; k < p_psi; ++k)
@@ -183,7 +192,6 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
             eta_psi[i] = e_psi;
             eta_p[i]   = e_p;
         }
-        MsOccuSiteResult res;
         compute_ms_occu_site(eta_psi.data(), eta_p.data(), d.summ[s], n_sites,
                              true, res);
         lp_s[s] = res.log_lik;
@@ -228,6 +236,7 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
             for (int j = 0; j <= i; ++j)
                 Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
     }
+    }  // omp parallel
 
     // serial reduction in species order -> byte-identical to the serial path.
     double lp = 0.0;

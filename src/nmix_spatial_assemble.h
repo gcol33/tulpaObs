@@ -177,6 +177,44 @@ inline void nmix_assemble_complete_fisher(
     H_f = H_f.selfadjointView<Eigen::Lower>();
 }
 
+// z' Q(rho) z quadratic form. Symmetry of adjacency lets us halve the work
+// by only counting edges with t > s. rho = 1 gives the intrinsic (ICAR) form,
+// which is what the BYM2 structured component uses.
+inline double nmix_car_quadratic_form(
+    int n_spatial, double rho,
+    const Rcpp::IntegerVector& adj_row_ptr,
+    const Rcpp::IntegerVector& adj_col_idx,
+    const Rcpp::IntegerVector& n_neighbors,
+    const Eigen::VectorXd& z
+) {
+    double quad = 0.0;
+    for (int s = 0; s < n_spatial; ++s) {
+        quad += n_neighbors[s] * z(s) * z(s);
+        for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
+            int t = adj_col_idx[kk];
+            if (t > s) quad -= 2.0 * rho * z(s) * z(t);
+        }
+    }
+    return quad;
+}
+
+// Subtract the mean from the field segment of x, enforcing the sum-to-zero
+// constraint that anchors intrinsic-field identifiability against the global
+// intercept. The field starts right after the two coefficient blocks. Under
+// BYM2 this is applied to the structured component only -- the iid component
+// is identified by its own prior and is not centred.
+inline void nmix_center_field(
+    int p_lam, int p_p, int n_spatial,
+    Eigen::VectorXd& x
+) {
+    if (n_spatial <= 0) return;
+    const int start = p_lam + p_p;
+    double mean = 0.0;
+    for (int s = 0; s < n_spatial; ++s) mean += x(start + s);
+    mean /= n_spatial;
+    for (int s = 0; s < n_spatial; ++s) x(start + s) -= mean;
+}
+
 }  // namespace tulpaObs
 
 #endif  // TULPAOBS_NMIX_SPATIAL_ASSEMBLE_H

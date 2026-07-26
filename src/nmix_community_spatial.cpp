@@ -298,10 +298,7 @@ inline void center_field(FieldKind kind, int p_lam, int p_p, int n_spatial,
     VectorXd holder(p_lam + p_p + len);
     holder.setZero();
     holder.segment(p_lam + p_p, len) = field;
-    if (kind == FieldKind::BYM2)
-        tulpaObs::nmix_center_v_bym2(p_lam, p_p, n_spatial, holder);
-    else
-        tulpaObs::nmix_center_z(p_lam, p_p, n_spatial, holder);
+    tulpaObs::nmix_center_field(p_lam, p_p, n_spatial, holder);
     field = holder.segment(p_lam + p_p, len);
 }
 
