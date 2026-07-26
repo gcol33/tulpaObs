@@ -15,28 +15,26 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
+using tulpaObs::stable_plogis;
+using tulpaObs::clamp_eta;
+using tulpaObs::ppc_stat;
 
 namespace {
-const double EB = 30.0;
-inline double clampe(double e) { return e > EB ? EB : (e < -EB ? -EB : e); }
-inline double plg(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
 // Positive-arm response-scale mean / replicate draw. `positive` follows the
 // shared cover scheme (lognormal 0, beta 3, gaussian 4, gcol33/tulpaObs#112).
 inline double mean_pos(double eta, double d, int positive) {
-  if (positive == 3) return plg(clampe(eta));                 // beta mean
+  if (positive == 3) return stable_plogis(clamp_eta(eta));                 // beta mean
   if (positive == 4) return eta;                              // gaussian: mu = eta
-  return std::exp(clampe(eta) + d * d / 2.0);                 // lognormal mean
+  return std::exp(clamp_eta(eta) + d * d / 2.0);                 // lognormal mean
 }
 inline double draw_pos(double eta, double d, int positive) {
-  if (positive == 3) { double mu = plg(clampe(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
+  if (positive == 3) { double mu = stable_plogis(clamp_eta(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
   if (positive == 4) return R::rnorm(eta, d);                 // gaussian draw
   return std::exp(R::rnorm(eta, d));                          // lognormal draw
 }
@@ -93,12 +91,12 @@ Rcpp::List cpp_occu_cover_cdf_limits(
       double eta_psi = pfo[(std::size_t) d * n_sites + i];
       for (int k = 0; k < p_occ; ++k)
         eta_psi += pXo[(std::size_t) k * n_sites + i] * pbo[(std::size_t) k * S + d];
-      double psi = plg(clampe(eta_psi));
+      double psi = stable_plogis(clamp_eta(eta_psi));
       double sum_l1mp = 0.0;
       for (int j = 0; j < max_v; ++j) {
         if (pv[(std::size_t) j * n_sites + i] == 0) continue;
         int vrow = i * max_v + j;
-        double p = plg(clampe(eta_p_ij(pXds, n_sites, i, pbd, S, d, p_det_site,
+        double p = stable_plogis(clamp_eta(eta_p_ij(pXds, n_sites, i, pbd, S, d, p_det_site,
                                        pXdv, nvrow, vrow, p_det_visit, has_dv)));
         sum_l1mp += std::log(1.0 - p);
       }
@@ -142,10 +140,7 @@ Rcpp::List cpp_occu_cover_ppc(
   const double* pyp = y_pos.begin();
   const int* pad = any_det.begin(); const int* pnv = n_valid.begin();
 
-  auto stat = [&](double o, double e) {
-    if (freeman) { double t = std::sqrt(o) - std::sqrt(e); return t * t; }
-    double t = o - e; return t * t / (e + 1e-10);
-  };
+  auto stat = [&](double o, double e) { return ppc_stat(o, e, freeman); };
   std::vector<double> zmass(n_sites);
 
   for (int s = 0; s < S; ++s) {
@@ -234,10 +229,7 @@ Rcpp::List cpp_occu_cover_ppc_agg(
   const int* pv = valid.begin(); const int* py = y.begin();
   const int* pad = any_det.begin(); const int* pnv = n_valid.begin();
   const int* pps = pos_site.begin();
-  auto stat = [&](double o, double e) {
-    if (freeman) { double t = std::sqrt(o) - std::sqrt(e); return t * t; }
-    double t = o - e; return t * t / (e + 1e-10);
-  };
+  auto stat = [&](double o, double e) { return ppc_stat(o, e, freeman); };
   std::vector<double> zmass(n_sites);
 
   for (int s = 0; s < S; ++s) {

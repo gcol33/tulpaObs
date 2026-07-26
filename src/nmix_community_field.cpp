@@ -23,6 +23,7 @@
 
 #include "nmix_kernel.h"
 #include "nmix_spatial_kernel.h"
+#include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -34,6 +35,8 @@
 
 // [[Rcpp::depends(RcppEigen)]]
 
+using tulpaObs::clamp_eta;
+
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::Map;
@@ -42,13 +45,6 @@ using tulpaObs::NMixSiteResult;
 using tulpaObs::nmix_car_quadratic_form;
 
 namespace {
-
-// Linear-predictor clamp bound: holds a log-mean / logit within double range
-// before exp() / inv-logit (a logit at +-30 sits within ~1e-13 of {0, 1}).
-constexpr double kEtaBound = 30.0;
-inline double clamp_eta(double e) {
-    return std::max(-kEtaBound, std::min(kEtaBound, e));
-}
 
 // Per-(species, site) row grouping: for each species, the long-form row indices
 // at each site, in input order.

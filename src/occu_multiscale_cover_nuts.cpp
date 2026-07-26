@@ -18,7 +18,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
-#include "occu_coupling_shared.h"   // sigmoid_ / log_safe_ / Pos policies / nodet_mixture_block
+#include "occu_coupling_shared.h"   // sigmoid_ / Pos policies / nodet_mixture_block
 #include "nuts_engine.h"
 
 namespace tulpaObs {
@@ -198,21 +198,21 @@ inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
 
         if (any_det_cell) {
             // Branch A: z = 1 forced. log L = log psi + sum_j log Q_j.
-            lp += log_safe_(psi);
+            lp += log_safe(psi);
             ge_psi[c] += 1.0 - psi;
             for (int jj = 0; jj < M_c; ++jj) {
                 const int pi = plots[jj];
                 const double theta_j = sigmoid_(eta_theta[pi]);
                 if (plot_det[jj]) {
                     // Detected plot: factorised. log theta + per-visit GLM terms.
-                    lp += log_safe_(theta_j);
+                    lp += log_safe(theta_j);
                     ge_theta[pi] += 1.0 - theta_j;
                     for (int v = 0; v < J; ++v) {
                         const int row = pi * J + v;
                         if (!m.valid[row]) continue;
                         const double p_v = sigmoid_(eta_p[row]);
                         if (m.y[row] == 1) {
-                            lp += log_safe_(p_v);
+                            lp += log_safe(p_v);
                             ge_p[row] += 1.0 - p_v;
                             const double eta_po = eta_pos[row];
                             const double ypos   = m.y_pos[row];
@@ -222,7 +222,7 @@ inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
                             ge_pos[row] += g_eta;
                             ge_logdisp  += g_ld;
                         } else {
-                            lp += log_safe_(1.0 - p_v);
+                            lp += log_safe(1.0 - p_v);
                             ge_p[row] += -p_v;
                         }
                     }
@@ -266,11 +266,11 @@ inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
                     const double pv = sigmoid_(eta_p[row]);
                     vrows[jj].push_back(row);
                     p_val[jj].push_back(pv);
-                    logP0 += log_safe_(1.0 - pv);
+                    logP0 += log_safe(1.0 - pv);
                 }
                 P0[jj]   = std::exp(logP0);
                 m_j[jj]  = theta_j[jj] * P0[jj] + (1.0 - theta_j[jj]);
-                logm[jj] = log_safe_(m_j[jj]);
+                logm[jj] = log_safe(m_j[jj]);
                 A[jj]    = -theta_d[jj] * (1.0 - P0[jj]);   // dm_j / d eta_theta_j
                 logM    += logm[jj];
             }
@@ -278,7 +278,7 @@ inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
             const double L     = psi * Mc + (1.0 - psi);
             const double inv_L = (L > 0.0) ? (1.0 / L) : 0.0;
             const double psi_d = psi * (1.0 - psi);
-            lp += log_safe_(L);
+            lp += log_safe(L);
 
             ge_psi[c] += psi_d * (Mc - 1.0) * inv_L;
             for (int jj = 0; jj < M_c; ++jj) {

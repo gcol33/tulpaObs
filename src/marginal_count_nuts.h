@@ -25,7 +25,8 @@
 #include <tulpa/nuts_api.h>
 #include "nmix_kernel.h"        // NMixSiteResult
 #include "nuts_engine.h"        // run_tulpa_nuts (shared engine plumbing)
-#include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
+#include "nuts_field_block.h"
+#include "nuts_re_block.h"   // FieldBlock (shared fixed-hyper areal field)
 
 namespace tulpaObs {
 
@@ -44,15 +45,11 @@ struct CountNutsData {
     Rcpp::NumericMatrix X_p;
     std::vector<std::vector<int>> obs_by_site;
     int total = 0;
-    // Optional single-grouping intercept random effect (tulpaObs#51). re_arm =
-    // -1 none, 0 abundance (lambda), 1 detection (p). The RE is a per-site
-    // offset (uniform over a site's visits) sigma_re * z[group], with z ~ N(0,I)
-    // non-centered and one variance hyperparameter log_sigma_re. The flat vector
-    // grows to [beta_lambda, beta_p, (log_r), z_1..z_G, log_sigma_re].
-    int re_arm = -1, n_re_groups = 0;
-    std::vector<int> re_group;        // 0-based group per site (length n_sites)
-    double sigma_re_lsd = 1.5;        // prior SD on log_sigma_re
-    int o_z = 0, o_logsig = 0;        // offsets of the z block / log_sigma_re
+    // Optional single-grouping intercept random effect (tulpaObs#51), arm 0 =
+    // abundance (lambda), 1 = detection (p). The offset is per SITE (uniform
+    // over a site's visits); see nuts_re_block.h. The flat vector grows to
+    // [beta_lambda, beta_p, (log_r), z_1..z_G, log_sigma_re].
+    ReBlock re;
     // Optional fixed-hyper areal field on the abundance arm (tulpaObs#51/#72): the
     // shared non-centered Gaussian field z = Linv %*% raw added to eta_lambda
     // (nuts_field_block.h). The field covariance is fixed at the nested-Laplace
@@ -82,22 +79,8 @@ inline CountNutsData count_nuts_build_data(const Rcpp::List& spec) {
         d.obs_by_site[i].push_back(o);
     }
     int base = d.p_lam + d.p_p + (d.is_nb ? 1 : 0);
-    if (spec.containsElementNamed("re_arm")) {
-        d.re_arm = Rcpp::as<int>(spec["re_arm"]);
-        if (d.re_arm >= 0) {
-            Rcpp::IntegerVector rg = spec["re_group"];     // 1-based, length n_sites
-            if ((int) rg.size() != d.n_sites)
-                Rcpp::stop("re_group must have length n_sites");
-            d.re_group.resize(d.n_sites);
-            for (int i = 0; i < d.n_sites; ++i) d.re_group[i] = rg[i] - 1;
-            d.n_re_groups = Rcpp::as<int>(spec["n_re_groups"]);
-            if (spec.containsElementNamed("sigma_re_lsd"))
-                d.sigma_re_lsd = Rcpp::as<double>(spec["sigma_re_lsd"]);
-            d.o_z      = base;
-            d.o_logsig = base + d.n_re_groups;
-            base       = d.o_logsig + 1;
-        }
-    }
+    d.re = re_block_build(spec, base, d.n_sites, /*max_arm=*/1);
+    base += re_block_size(d.re);
     d.field = field_block_build(spec, base, d.n_sites);
     base += field_block_size(d.field);
     d.total = base;
@@ -124,10 +107,8 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         eta_p_all[o] = e;
     }
 
-    // Random-effect setup: non-centered per-site intercept offset
-    // sigma_re * z[group(site)] added to the chosen arm's eta.
-    const bool has_re = d.re_arm >= 0;
-    const double sigma_re = has_re ? std::exp(theta[d.o_logsig]) : 0.0;
+    // Non-centered per-site intercept offset added to the chosen arm's eta.
+    const double sigma_re = re_block_sigma(d.re, theta);
     double grad_logsig = 0.0;
 
     // Fixed-hyper areal field: z = Linv %*% raw (per unit), added to eta_lambda.
@@ -142,15 +123,15 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
     for (int i = 0; i < d.n_sites; ++i) {
         const std::vector<int>& obs = d.obs_by_site[i];
         const int J = (int) obs.size();
-        const double re_off = has_re ? sigma_re * theta[d.o_z + d.re_group[i]] : 0.0;
+        const double re_off = re_block_offset(d.re, sigma_re, theta, i);
         double eta_lambda = 0.0;
         for (int k = 0; k < p_lam; ++k) eta_lambda += d.X_lambda(i, k) * theta[k];
-        if (has_re && d.re_arm == 0) eta_lambda += re_off;
+        if (d.re.arm == 0) eta_lambda += re_off;
         if (has_field) eta_lambda += zfield[d.field.field_map[i]];
         y_site.resize(J); eta_p_site.resize(J);
         for (int jj = 0; jj < J; ++jj) {
             y_site[jj]     = d.y[obs[jj]];
-            eta_p_site[jj] = eta_p_all[obs[jj]] + ((has_re && d.re_arm == 1) ? re_off : 0.0);
+            eta_p_site[jj] = eta_p_all[obs[jj]] + ((d.re.arm == 1) ? re_off : 0.0);
         }
         const NMixSiteResult res = kern(
             y_site.data(), eta_p_site.data(), J, eta_lambda, d.K_max, r);
@@ -164,14 +145,10 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
             const int o = obs[jj];
             for (int k = 0; k < p_p; ++k)
                 grad[p_lam + k] += ge * d.X_p(o, k);
-            if (has_re && d.re_arm == 1) g_off += ge;
+            if (d.re.arm == 1) g_off += ge;
         }
-        if (has_re && d.re_arm == 0) g_off = res.grad_eta_lambda;
-        if (has_re) {
-            // d eta / d z_g = sigma_re ; d eta / d log_sigma = sigma_re*z = re_off.
-            grad[d.o_z + d.re_group[i]] += sigma_re * g_off;
-            grad_logsig += g_off * re_off;
-        }
+        if (d.re.arm == 0) g_off = res.grad_eta_lambda;
+        re_block_accumulate(d.re, sigma_re, g_off, i, theta, grad, grad_logsig);
         if (d.is_nb) grad[p_lam + p_p] += res.grad_theta;
     }
 
@@ -186,19 +163,8 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
         lp -= 0.5 * ilr2 * lr * lr;
         grad[p_lam + p_p] -= ilr2 * lr;
     }
-    if (has_re) {
-        // Non-centered RE prior: z ~ N(0, I); weak Gaussian hyperprior on
-        // log_sigma_re.
-        for (int g = 0; g < d.n_re_groups; ++g) {
-            const double zg = theta[d.o_z + g];
-            lp -= 0.5 * zg * zg;
-            grad[d.o_z + g] -= zg;
-        }
-        const double ls   = theta[d.o_logsig];
-        const double ils2 = 1.0 / (d.sigma_re_lsd * d.sigma_re_lsd);
-        lp -= 0.5 * ils2 * ls * ls;
-        grad[d.o_logsig] += grad_logsig - ils2 * ls;
-    }
+    // Non-centered RE prior: z ~ N(0, I) + Gaussian hyperprior on log_sigma_re.
+    lp += re_block_backward(d.re, theta, grad_logsig, grad);
     // Whitened field prior raw ~ N(0, I); the chain grad_raw = Linv^T grad_z.
     lp += field_block_backward(d.field, theta, grad_z, grad);
     return lp;

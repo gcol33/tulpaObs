@@ -217,13 +217,13 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
 
         double g_eta_psi = 0.0;
         if (any_det) {
-            lp += log_safe_(psi);
+            lp += log_safe(psi);
             g_eta_psi = 1.0 - psi;
             for (int v = 0; v < J; ++v) {
                 if (d.valid(i, v) == 0) continue;
                 const double pv = sigmoid_(eta_p[v]);
-                if (d.y(i, v) == 1) { lp += log_safe_(pv);       g_eta_p[v] = 1.0 - pv; }
-                else                { lp += log_safe_(1.0 - pv); g_eta_p[v] = -pv; }
+                if (d.y(i, v) == 1) { lp += log_safe(pv);       g_eta_p[v] = 1.0 - pv; }
+                else                { lp += log_safe(1.0 - pv); g_eta_p[v] = -pv; }
             }
             // Cover arm at detected visits (+ the shared field scaled by alpha).
             for (int v = 0; v < J; ++v) {

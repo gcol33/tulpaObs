@@ -13,13 +13,12 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 using namespace Rcpp;
+using tulpaObs::stable_plogis;
+using tulpaObs::ppc_stat;
 
 namespace {
-inline double plg(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
 inline double pnorm1(double z) { return 0.5 * std::erfc(-z * M_SQRT1_2); }
 }  // namespace
 
@@ -42,13 +41,13 @@ Rcpp::List cpp_cover_pit_cdf(
   Rcpp::NumericMatrix Fl(S, N), Fu(S, N);
   for (int i = 0; i < N; ++i) {
     for (int s = 0; s < S; ++s) {
-      double p = plg(eta_occ(s, i));
+      double p = stable_plogis(eta_occ(s, i));
       Fl(s, i) = 0.0; Fu(s, i) = 1.0 - p;
     }
     if (occur[i] != 1) continue;
     int j = pos_col[i] - 1;
     for (int s = 0; s < S; ++s) {
-      double p = plg(eta_occ(s, i)), one_mp = 1.0 - p;
+      double p = stable_plogis(eta_occ(s, i)), one_mp = 1.0 - p;
       double e = eta_pos(s, j), sd = disp[s];
       if (positive == 2) {                         // ordinal: class jump
         double Flp = pnorm1((lower[j] - e) / sd), Fup = pnorm1((upper[j] - e) / sd);
@@ -60,7 +59,7 @@ Rcpp::List cpp_cover_pit_cdf(
         if (positive == 0 || positive == 4) Fpos = pnorm1((y_pos[j] - e) / sd);
         else if (positive == 1)
           Fpos = pnorm1((y_pos[j] - e) / sd) / pnorm1((trunc_upper[j] - e) / sd);
-        else { double mu = plg(e); Fpos = R::pbeta(y_pos[j], mu * sd, (1.0 - mu) * sd, 1, 0); }
+        else { double mu = stable_plogis(e); Fpos = R::pbeta(y_pos[j], mu * sd, (1.0 - mu) * sd, 1, 0); }
         double val = one_mp + p * Fpos;
         Fl(s, i) = val; Fu(s, i) = val;
       }
@@ -86,19 +85,16 @@ Rcpp::List cpp_cover_ppc(
   const int S = eta_occ.nrow(), N = eta_occ.ncol(), n_pos = y_pos_nat.size();
   Rcpp::RNGScope scope;
   Rcpp::NumericVector fit_y(S), fit_rep(S);
-  auto stat = [&](double o, double e) {
-    if (freeman) { double t = std::sqrt(o) - std::sqrt(e); return t * t; }
-    double t = o - e; return t * t / (e + 1e-10);
-  };
+  auto stat = [&](double o, double e) { return ppc_stat(o, e, freeman); };
   for (int s = 0; s < S; ++s) {
     double occ_obs = 0.0, occ_rp = 0.0;
     std::vector<int> occ_rep(N);
     for (int i = 0; i < N; ++i) {
-      double p = plg(eta_occ(s, i));
+      double p = stable_plogis(eta_occ(s, i));
       occ_rep[i] = (int) R::rbinom(1.0, p);
     }
     for (int i = 0; i < N; ++i) {
-      double p = plg(eta_occ(s, i));
+      double p = stable_plogis(eta_occ(s, i));
       occ_obs += stat((double) occur[i], p);
       occ_rp  += stat((double) occ_rep[i], p);
     }
@@ -119,7 +115,7 @@ Rcpp::List cpp_cover_ppc(
           Epos[j] = e;                               // mu = eta, response scale
           yrep[j] = R::rnorm(e, sd);
         } else {                                     // beta
-          double mu = plg(e); Epos[j] = mu;
+          double mu = stable_plogis(e); Epos[j] = mu;
           yrep[j] = R::rbeta(mu * sd, (1.0 - mu) * sd);
         }
       }

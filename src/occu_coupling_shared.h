@@ -3,7 +3,8 @@
 // `OccuCoverCoupling` in cell_coupling_occu_cover.h and the 3-level
 // `OccuMultiscaleCoverCoupling` in cell_coupling_occu_multiscale_cover.h):
 //
-//   * sigmoid_ / log_safe_                     -- scalar link helpers
+//   * sigmoid_                                 -- the fit kernel's logistic
+//                                                 (log_safe lives in tobs_math.h)
 //   * LognormalPositive / BetaPositive         -- positive-arm policies
 //                                                 (log-density + eta grad/hess)
 //   * nodet_mixture_block                       -- closed-form score + curvature
@@ -22,6 +23,7 @@
 #ifndef TULPAOBS_OCCU_COUPLING_SHARED_H
 #define TULPAOBS_OCCU_COUPLING_SHARED_H
 
+#include "tobs_math.h"             // log_safe / clamp_eta / kEtaClampBound
 #include <tulpa/portable_math.h>   // portable_digamma / portable_trigamma
 #include <tulpa/cell_coupling.h>   // CellEtas / CellResponse / CellDerivs / CurvatureMode
 #include <Rcpp.h>                  // M_PI
@@ -44,10 +46,6 @@ inline double occu_det_weight_(const tulpa::CellResponse& y_cell, int j) {
            ? static_cast<double>(y_cell.n_trials(1, j)) : 1.0;
 }
 
-inline double log_safe_(double x) {
-    return (x > 0.0) ? std::log(x) : -1e300;
-}
-
 
 // ---------------------------------------------------------------------------
 // Positive-arm policies: log-density and first/second derivatives wrt the
@@ -62,9 +60,9 @@ struct LognormalPositive {
     // log f(y; mu = eta_pos, sigma = phi) on the natural scale:
     //   -log y - log sigma - 0.5 log(2 pi) - 0.5 ((log y - eta) / sigma)^2
     static double log_density(double y_pos, double eta_pos, double phi) {
-        const double log_y     = log_safe_(y_pos);
+        const double log_y     = log_safe(y_pos);
         const double sigma     = phi;
-        const double log_sigma = log_safe_(sigma);
+        const double log_sigma = log_safe(sigma);
         const double inv_s2    = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
         const double r         = log_y - eta_pos;
         return -log_y - log_sigma - 0.5 * std::log(2.0 * M_PI)
@@ -85,7 +83,7 @@ struct LognormalPositive {
                               bool want_hess, double& grad, double& neg_hess) {
         const double sigma  = phi;
         const double inv_s2 = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
-        grad = (log_safe_(y_pos) - eta_pos) * inv_s2;
+        grad = (log_safe(y_pos) - eta_pos) * inv_s2;
         if (want_hess) neg_hess = inv_s2;
     }
     // d log f / d log_sigma = (log y - eta)^2 / sigma^2 - 1 = rstd^2 - 1. The
@@ -95,7 +93,7 @@ struct LognormalPositive {
     // spatial-factor community sampler ms_occu_cover_spatial_nuts.cpp).
     static double grad_logdisp(double y_pos, double eta_pos, double phi) {
         const double sigma = phi;
-        const double r     = (sigma > 0.0) ? (log_safe_(y_pos) - eta_pos) / sigma : 0.0;
+        const double r     = (sigma > 0.0) ? (log_safe(y_pos) - eta_pos) / sigma : 0.0;
         return r * r - 1.0;
     }
 };
@@ -115,7 +113,7 @@ struct GaussianPositive {
     //   -log sigma - 0.5 log(2 pi) - 0.5 ((y - eta) / sigma)^2
     static double log_density(double y_pos, double eta_pos, double phi) {
         const double sigma     = phi;
-        const double log_sigma = log_safe_(sigma);
+        const double log_sigma = log_safe(sigma);
         const double inv_s2    = (sigma > 0.0) ? 1.0 / (sigma * sigma) : 0.0;
         const double r         = y_pos - eta_pos;
         return -log_sigma - 0.5 * std::log(2.0 * M_PI)
@@ -157,8 +155,8 @@ struct BetaPositive {
     //   + (mu phi - 1) log y + ((1 - mu) phi - 1) log(1 - y)
     static double log_density(double y_pos, double eta_pos, double phi) {
         const double mu      = sigmoid_(eta_pos);
-        const double log_y   = log_safe_(y_pos);
-        const double log_1my = log_safe_(1.0 - y_pos);
+        const double log_y   = log_safe(y_pos);
+        const double log_1my = log_safe(1.0 - y_pos);
         return std::lgamma(phi) - std::lgamma(mu * phi)
              - std::lgamma((1.0 - mu) * phi)
              + (mu * phi - 1.0) * log_y
@@ -187,8 +185,8 @@ struct BetaPositive {
                               bool want_hess, double& grad, double& neg_hess,
                               double* fisher = nullptr) {
         const double mu      = sigmoid_(eta_pos);
-        const double log_y   = log_safe_(y_pos);
-        const double log_1my = log_safe_(1.0 - y_pos);
+        const double log_y   = log_safe(y_pos);
+        const double log_1my = log_safe(1.0 - y_pos);
         const double a       = mu * phi;
         const double b       = (1.0 - mu) * phi;
         const double g       = -tulpa::math::portable_digamma(a)
@@ -213,8 +211,8 @@ struct BetaPositive {
         const double mu    = sigmoid_(eta_pos);
         const double a     = mu * phi;
         const double b     = (1.0 - mu) * phi;
-        const double ly    = log_safe_(y_pos);
-        const double l1my  = log_safe_(1.0 - y_pos);
+        const double ly    = log_safe(y_pos);
+        const double l1my  = log_safe(1.0 - y_pos);
         return phi * (tulpa::math::portable_digamma(phi)
                       - mu * tulpa::math::portable_digamma(a)
                       - (1.0 - mu) * tulpa::math::portable_digamma(b)
@@ -333,7 +331,7 @@ inline double nodet_mixture_block(
     for (int v = 0; v < nv; v++) {
         p[v]    = sigmoid_(eta_p[v]);
         const double wv = wt ? wt[v] : 1.0;
-        log_P0 += wv * log_safe_(1.0 - p[v]);
+        log_P0 += wv * log_safe(1.0 - p[v]);
     }
     const double P0     = std::exp(log_P0);
     const double L      = w * P0 + (1.0 - w);
@@ -349,7 +347,7 @@ inline double nodet_mixture_block(
         const double wv = wt ? wt[v] : 1.0;
         g_p[v] = wv * (-w * P0 * p[v] * inv_L);
     }
-    if (!want_hess) return log_safe_(L);
+    if (!want_hess) return log_safe(L);
 
     if (expected) {
         // Complete-data Fisher: block-diagonal, responsibility-weighted; the
@@ -360,7 +358,7 @@ inline double nodet_mixture_block(
             const double wv = wt ? wt[v] : 1.0;
             nh_p[v] = wv * gamma * p[v] * (1.0 - p[v]);
         }
-        return log_safe_(L);
+        return log_safe(L);
     }
 
     // Observed (true mixture) Hessian. The reduced block is S^T H S with H the
@@ -412,7 +410,7 @@ inline double nodet_mixture_block(
             }
         }
     }
-    return log_safe_(L);
+    return log_safe(L);
 }
 
 
@@ -439,7 +437,7 @@ inline double occu_det_psi_p_block(double                     psi,
                                    int                        s = 0) {
     const int base0 = s * out.n_rows_in_arm(0);
     const int base1 = s * out.n_rows_in_arm(1);
-    double cell_ll = log_safe_(psi);
+    double cell_ll = log_safe(psi);
     out.arm_grad[0][base0] = 1.0 - psi;
     if (want_hess) out.arm_neg_hess_diag[0][base0] = psi * (1.0 - psi);
     for (int v = 0; v < Jc; ++v) {
@@ -451,10 +449,10 @@ inline double occu_det_psi_p_block(double                     psi,
         // aligned. wv = 1 (the uncompressed path) is byte-identical to before.
         const double wv    = occu_det_weight_(y_cell, v);
         if (y_det > 0.5) {
-            cell_ll += log_safe_(p_v);
+            cell_ll += log_safe(p_v);
             out.arm_grad[1][base1 + v] = 1.0 - p_v;
         } else {
-            cell_ll += wv * log_safe_(1.0 - p_v);
+            cell_ll += wv * log_safe(1.0 - p_v);
             out.arm_grad[1][base1 + v] = -wv * p_v;
         }
         if (want_hess) out.arm_neg_hess_diag[1][base1 + v] = wv * p_v * (1.0 - p_v);

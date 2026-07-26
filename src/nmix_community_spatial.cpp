@@ -47,6 +47,7 @@
 #include "nmix_progress.h"
 #include "nmix_spatial_kernel.h"        // nmix_icar/car_proper prior, Q-adds, centering
 #include "nmix_spatial_kernel_bym2.h"   // bym2 prior, Q+I-adds, centering
+#include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -57,6 +58,8 @@
 #include <vector>
 
 // [[Rcpp::depends(RcppEigen)]]
+
+using tulpaObs::clamp_eta;
 
 namespace {
 
@@ -85,7 +88,6 @@ struct SpdeCtx {
     int n_mesh = 0;
 };
 
-inline double clamp30(double e) { return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e); }
 
 // Per-site augmented assembly. na = d + nfield, with the d coefficient coords
 // first and the nfield field loadings last (eta coord 0 = lambda, 1..J =
@@ -113,12 +115,12 @@ double site_blocks(const NMixCommunityOracle::SiteRec& rec,
 
     double eta_lam = field_offset;
     for (int c = 0; c < p_lam; ++c) eta_lam += Xlam(rec.site, c) * coef(c);
-    eta_lam = clamp30(eta_lam);
+    eta_lam = clamp_eta(eta_lam);
     std::vector<double> eta_p(J);
     for (int j = 0; j < J; ++j) {
         double v = 0.0;
         for (int c = 0; c < p_p; ++c) v += rec.Xp(j, c) * coef(p_lam + c);
-        eta_p[j] = clamp30(v);
+        eta_p[j] = clamp_eta(v);
     }
     const NMixSiteResult res = compute_nmix_site_cached(rec.cache, eta_p.data(),
                                                         eta_lam, r);

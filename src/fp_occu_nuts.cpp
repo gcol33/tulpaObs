@@ -12,6 +12,7 @@
 #include "fp_occu_kernel.h"
 #include "nuts_engine.h"
 #include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
+#include "nuts_re_block.h"      // ReBlock (shared non-centered grouped RE)
 
 namespace tulpaObs {
 
@@ -22,13 +23,11 @@ struct FpNutsModel {
     std::vector<int> y;
     Rcpp::NumericMatrix X_psi, X_p11, X_p10, X_b;
     std::vector<std::vector<int>> obs_by_site;
-    // Optional single intercept RE on the occupancy (psi) arm (tulpaObs#51):
-    // per-site offset sigma_re * z[group], non-centered, with one log_sigma_re
-    // hyperparameter. re_arm = -1 none, 0 psi. The RE block [z_1..z_G,
-    // log_sigma_re] follows the four coefficient blocks.
-    int re_arm = -1, n_re_groups = 0, o_re_z = 0, o_re_logsig = 0, n_pre_re = 0;
-    double sigma_re_lsd = 1.5;
-    std::vector<int> re_group;        // 0-based group per site
+    // Optional single intercept RE on the occupancy (psi) arm (tulpaObs#51),
+    // loaded on eta_psi (nuts_re_block.h). The block [z_1..z_G, log_sigma_re]
+    // follows the four coefficient blocks.
+    int n_pre_re = 0;
+    ReBlock re;
     // Optional fixed-hyper areal field on the occupancy (psi) arm (tulpaObs#72):
     // the shared non-centered field z = Linv %*% raw added to eta_psi
     // (nuts_field_block.h). Field XOR RE (gated upstream).
@@ -49,18 +48,8 @@ inline FpNutsModel fp_nuts_build(const Rcpp::List& spec) {
     m.p_p10 = m.X_p10.ncol(); m.p_b = m.X_b.ncol();
     m.total = m.p_psi + m.p_p11 + m.p_p10 + m.p_b;
     m.n_pre_re = m.total;                                 // coords under the beta prior
-    if (spec.containsElementNamed("re_arm")) m.re_arm = Rcpp::as<int>(spec["re_arm"]);
-    if (m.re_arm == 0) {
-        Rcpp::IntegerVector rg = spec["re_group"];
-        if ((int) rg.size() != m.n_sites) Rcpp::stop("re_group must have length n_sites");
-        m.re_group.resize(m.n_sites);
-        for (int i = 0; i < m.n_sites; ++i) m.re_group[i] = rg[i] - 1;
-        m.n_re_groups = Rcpp::as<int>(spec["n_re_groups"]);
-        if (spec.containsElementNamed("sigma_re_lsd"))
-            m.sigma_re_lsd = Rcpp::as<double>(spec["sigma_re_lsd"]);
-        m.o_re_z = m.total; m.o_re_logsig = m.total + m.n_re_groups;
-        m.total = m.o_re_logsig + 1;
-    } else { m.re_arm = -1; }
+    m.re = re_block_build(spec, m.total, m.n_sites);       // psi arm only
+    m.total += re_block_size(m.re);
     m.field = field_block_build(spec, m.total, m.n_sites);
     m.total += field_block_size(m.field);
     m.y.assign(y.begin(), y.end());
@@ -77,8 +66,7 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
     const int p_psi = m.p_psi, p_p11 = m.p_p11, p_p10 = m.p_p10, p_b = m.p_b;
     const int o_psi = 0, o_p11 = p_psi, o_p10 = p_psi + p_p11, o_b = p_psi + p_p11 + p_p10;
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
-    const bool has_re = m.re_arm == 0;
-    const double sigma_re = has_re ? std::exp(theta[m.o_re_logsig]) : 0.0;
+    const double sigma_re = re_block_sigma(m.re, theta);
     double grad_re_logsig = 0.0;
 
     const bool has_field = m.field.active();
@@ -94,8 +82,7 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         for (int k = 0; k < p_p11; ++k) eta_p11 += m.X_p11(s, k) * theta[o_p11 + k];
         for (int k = 0; k < p_p10; ++k) eta_p10 += m.X_p10(s, k) * theta[o_p10 + k];
         for (int k = 0; k < p_b;   ++k) eta_b   += m.X_b(s, k)   * theta[o_b + k];
-        const double re_off = has_re ? sigma_re * theta[m.o_re_z + m.re_group[s]] : 0.0;
-        if (has_re) eta_psi += re_off;
+        eta_psi += re_block_offset(m.re, sigma_re, theta, s);
         if (has_field) eta_psi += zfield[m.field.field_map[s]];
         const std::vector<int>& idx = m.obs_by_site[s];
         const int J = (int)idx.size();
@@ -108,10 +95,8 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         for (int k = 0; k < p_p11; ++k) grad[o_p11 + k] += r.grad_eta_p11 * m.X_p11(s, k);
         for (int k = 0; k < p_p10; ++k) grad[o_p10 + k] += r.grad_eta_p10 * m.X_p10(s, k);
         for (int k = 0; k < p_b;   ++k) grad[o_b + k]   += r.grad_eta_b   * m.X_b(s, k);
-        if (has_re) {
-            grad[m.o_re_z + m.re_group[s]] += sigma_re * r.grad_eta_psi;
-            grad_re_logsig += r.grad_eta_psi * re_off;
-        }
+        re_block_accumulate(m.re, sigma_re, r.grad_eta_psi, s, theta, grad,
+                            grad_re_logsig);
         if (has_field) grad_z[m.field.field_map[s]] += r.grad_eta_psi;
     }
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
@@ -119,16 +104,7 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         lp -= 0.5 * ib2 * theta[k] * theta[k];
         grad[k] -= ib2 * theta[k];
     }
-    if (has_re) {
-        for (int g = 0; g < m.n_re_groups; ++g) {
-            const double zg = theta[m.o_re_z + g];
-            lp -= 0.5 * zg * zg;
-            grad[m.o_re_z + g] -= zg;
-        }
-        const double ls = theta[m.o_re_logsig], ils2 = 1.0 / (m.sigma_re_lsd * m.sigma_re_lsd);
-        lp -= 0.5 * ils2 * ls * ls;
-        grad[m.o_re_logsig] += grad_re_logsig - ils2 * ls;
-    }
+    lp += re_block_backward(m.re, theta, grad_re_logsig, grad);
     lp += field_block_backward(m.field, theta, grad_z, grad);
     return lp;
 }

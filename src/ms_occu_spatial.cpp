@@ -25,6 +25,7 @@
 // an exactly flat direction the sum-to-zero centering of the intrinsic field
 // resolves).
 
+#include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <vector>
@@ -36,6 +37,7 @@
 #include "nmix_linalg.h"
 
 using namespace Rcpp;
+using tulpaObs::clamp_eta;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::Map;
@@ -45,7 +47,6 @@ namespace {
 
 enum class OccFieldKind { ICAR, CAR_PROPER, BYM2 };
 
-inline double clamp30(double x) { return x < -30.0 ? -30.0 : (x > 30.0 ? 30.0 : x); }
 
 // Per-(species) site records: the site index, occupancy / detection design rows
 // are shared (site-level) across species, so only the summary (n_valid, n_det,
@@ -107,10 +108,10 @@ inline double occ_site_blocks(const OccCommData& d_, int s, int site,
 
     double eta_psi = field_offset;
     for (int c = 0; c < p_psi; ++c) eta_psi += d_.X_psi(site, c) * coef(c);
-    eta_psi = clamp30(eta_psi);
+    eta_psi = clamp_eta(eta_psi);
     double eta_p = 0.0;
     for (int c = 0; c < p_p; ++c) eta_p += d_.X_p(site, c) * coef(p_psi + c);
-    eta_p = clamp30(eta_p);
+    eta_p = clamp_eta(eta_p);
 
     const MsOccuSiteCell cell = ms_occu_site_cell(
         eta_psi, eta_p, nv, d_.n_det[s][site], d_.any_det[s][site] != 0, want_obs);

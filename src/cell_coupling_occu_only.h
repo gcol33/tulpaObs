@@ -42,6 +42,7 @@
 #include <tulpa/cell_coupling.h>
 #include "occu_coupling_shared.h"  // occu_det_psi_p_block / occu_nodet_block
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tulpaObs {
@@ -49,6 +50,21 @@ namespace tulpaObs {
 class OccuOnlyCoupling final : public tulpa::CellCouplingSpec {
 public:
     std::vector<int> arm_ids() const override { return {0, 1}; }
+
+    // Dense cross-Hessian slabs this spec writes (arms: psi = 0, p = 1). Same
+    // set as OccuCoverCoupling with the cover arm dropped, because both run the
+    // SAME occu_det_psi_p_block / occu_nodet_block helpers, and those write only
+    // arm_cross_hess[0][1] and [1][1]. The det branch factorises (every cross is
+    // zero); the nodet branch writes the (psi, p) cross (1 x J) plus the (p, p)
+    // block, which rides the rank-1 self-cross when the engine supplies it and
+    // needs a dense slab otherwise. Without this override the default allocates
+    // every kk <= ll pair, so an all-undetected cell allocates a J x J (p, p)
+    // slab it never writes -- O(J^2) per cell instead of O(J).
+    std::vector<std::pair<int, int>> dense_cross_pairs(
+            int /*n_coupled*/, bool rank1_self_supported) const override {
+        if (rank1_self_supported) return {{0, 1}};
+        return {{0, 1}, {1, 1}};
+    }
 
     double evaluate_cell(int                       /*cell_idx*/,
                          const tulpa::CellEtas&     etas,

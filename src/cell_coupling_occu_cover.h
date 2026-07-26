@@ -52,7 +52,7 @@
 #define TULPAOBS_CELL_COUPLING_OCCU_COVER_H
 
 #include <tulpa/cell_coupling.h>
-#include "occu_coupling_shared.h"  // sigmoid_ / log_safe_ / PosPolicy / nodet_mixture_block
+#include "occu_coupling_shared.h"  // sigmoid_ / PosPolicy / nodet_mixture_block
 #include <cmath>
 #include <string>
 #include <utility>

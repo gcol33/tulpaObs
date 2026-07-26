@@ -8,23 +8,12 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
+#include "simulate_helpers.h"
 using namespace Rcpp;
-
-namespace {
-const double EB = 30.0;
-inline double clampe(double e) { return e > EB ? EB : (e < -EB ? -EB : e); }
-inline double plg(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
-inline int draw_N(double lambda, double size) {   // NB(mu) or Poisson
-  if (R_finite(size)) {
-    if (lambda <= 0.0) return 0;
-    return (int) R::rpois(R::rgamma(size, lambda / size));
-  }
-  return (int) R::rpois(lambda);
-}
-}  // namespace
+using tulpaObs::stable_plogis;
+using tulpaObs::clamp_eta;
+using tulpaObs::draw_latent_N;
 
 // Community N-mixture (ms_abun). lambda / p are [n_sites x n_species] fitted
 // values; obs_mask flags observed (site, visit, species); size_s the per-species
@@ -47,7 +36,7 @@ Rcpp::List cpp_simulate_ms_nmix(
     int* base = ys.begin();
     for (int sp = 0; sp < n_species; ++sp) {
       std::vector<int> N(n_sites);
-      for (int i = 0; i < n_sites; ++i) N[i] = draw_N(lambda(i, sp), size_s[sp]);
+      for (int i = 0; i < n_sites; ++i) N[i] = draw_latent_N(lambda(i, sp), size_s[sp]);
       for (int i = 0; i < n_sites; ++i)
         for (int j = 0; j < max_v; ++j) {
           std::size_t off = (std::size_t) sp * sp_stride + (std::size_t) j * n_sites + i;
@@ -138,7 +127,7 @@ Rcpp::List cpp_simulate_ms_occu_cover(
           std::size_t off = (std::size_t) sp * sp_stride + (std::size_t) j * n_sites + i;
           double eta = pe[off];
           byp[off] = (positive == 3)
-                       ? (R::rbeta(plg(clampe(eta)) * d, (1.0 - plg(clampe(eta))) * d))
+                       ? (R::rbeta(stable_plogis(clamp_eta(eta)) * d, (1.0 - stable_plogis(clamp_eta(eta))) * d))
                        : (positive == 4)
                          ? R::rnorm(eta, d)
                          : std::exp(R::rnorm(eta, d));

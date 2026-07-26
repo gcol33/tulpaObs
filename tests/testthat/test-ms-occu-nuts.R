@@ -41,8 +41,8 @@
     sigma_init = 0.3, max_iter = 40L, tol = 1e-4, newton_max = 30L,
     verbose = FALSE)
   theta0 <- tulpaObs:::.tobs_ms_occu_nuts_pack_init(em, lay, pieces$arm_idx)
-  mats <- tulpaObs:::.tobs_ms_occu_nuts_count_mats(pieces$summaries,
-                                                  model$n_sites, pieces$S)
+  mats <- tulpaObs:::.ms_occu_spatial_count_mats(pieces$summaries,
+                                                 model$n_sites, pieces$S)
   spec <- list(X_psi = pieces$X_psi, X_p = pieces$X_p,
                n_sites = model$n_sites, n_species = pieces$S,
                n_valid = mats$n_valid, n_det = mats$n_det)
@@ -185,10 +185,13 @@ test_that("ms_occu NUTS community-covariance 95% CIs cover at the nominal rate",
     lay <- fit$nuts$layout; dr <- fit$nuts$draws
     # Per-draw community SDs from the sampled log-Cholesky coordinates.
     sd_draws <- function(cols, P) {
-      vapply(seq_len(nrow(dr)), function(i) {
+      s <- vapply(seq_len(nrow(dr)), function(i) {
         C <- tulpaObs:::.ms_ocs_chol_unpack(dr[i, cols], P)
         sqrt(diag(C %*% t(C)))
-      }, numeric(P))                              # P x n_draws
+      }, numeric(P))
+      # vapply returns a plain vector when P == 1 (the detection arm here, whose
+      # design is ~ 1), so re-impose the P x n_draws shape the callers index.
+      matrix(s, nrow = P)
     }
     Spsi <- sd_draws(lay$chol_psi, lay$p_psi)      # 2 x n_draws
     Sp   <- sd_draws(lay$chol_p,   lay$p_p)        # 1 x n_draws

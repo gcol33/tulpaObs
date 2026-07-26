@@ -14,25 +14,15 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
-
-namespace {
-const double ETA_BOUND = 30.0;
-inline double clampe(double e) { return e > ETA_BOUND ? ETA_BOUND
-                                      : (e < -ETA_BOUND ? -ETA_BOUND : e); }
-inline double plg(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
-inline double lse2(double a, double b) {
-  double m = a > b ? a : b;
-  return m + std::log1p(std::exp((a > b ? b : a) - m));
-}
-}  // namespace
+using tulpaObs::stable_plogis;
+using tulpaObs::clamp_eta;
+using tulpaObs::logsumexp2;
 
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
@@ -100,7 +90,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
           for (int k = 0; k < P_occ; ++k) eta_psi += X_occ((std::size_t) c, k) * thocc[k];
           for (int f = 0; f < K; ++f)
             eta_psi += dr(off_W + f * N + c) * dr(off_L + f * S + s);
-          double psi = plg(clampe(eta_psi));
+          double psi = stable_plogis(clamp_eta(eta_psi));
           double lpsi = std::log(psi), l1mpsi = std::log(1.0 - psi);
 
           // Site-level detection / cover predictors (broadcast across visits).
@@ -121,7 +111,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
             double eta_p = ep_site;
             for (int k = 0; k < P_p_visit; ++k)
               eta_p += X_det_visit((std::size_t) vrow, k) * thp[P_p_site + k];
-            double p = plg(clampe(eta_p));
+            double p = stable_plogis(clamp_eta(eta_p));
             double lp = std::log(p), l1mp = std::log(1.0 - p);
             sum_1mp += l1mp;
             int yij = y_s[cj];
@@ -134,7 +124,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
               double cv = yp_s[cj];
               double dens;
               if (is_beta) {
-                double mu = plg(clampe(ep));
+                double mu = stable_plogis(clamp_eta(ep));
                 double a = mu * disp, b = (1.0 - mu) * disp;
                 dens = std::lgamma(disp) - std::lgamma(a) - std::lgamma(b) +
                        (a - 1.0) * std::log(cv) + (b - 1.0) * std::log(1.0 - cv);
@@ -148,7 +138,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
             }
           }
           double val = (ndet > 0) ? (lpsi + sum_hdet + cover)
-                                  : lse2(lpsi + sum_1mp, l1mpsi);
+                                  : logsumexp2(lpsi + sum_1mp, l1mpsi);
           std::size_t col = (std::size_t) s * N + c;
           pout[col * M + m] = val;
         }

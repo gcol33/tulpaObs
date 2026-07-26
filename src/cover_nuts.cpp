@@ -96,8 +96,8 @@ inline double cover_nuts_eval(const CoverNutsData& d, const double* theta,
         for (int k = 0; k < p_pres; ++k) eta += d.X_pres(i, k) * b_pres[k];
         const double pr = sigmoid_(eta);
         double g_eta;
-        if (d.present[i] == 1) { lp += log_safe_(pr);       g_eta = 1.0 - pr; }
-        else                   { lp += log_safe_(1.0 - pr); g_eta = -pr; }
+        if (d.present[i] == 1) { lp += log_safe(pr);       g_eta = 1.0 - pr; }
+        else                   { lp += log_safe(1.0 - pr); g_eta = -pr; }
         for (int k = 0; k < p_pres; ++k) grad[g_bpres + k] += g_eta * d.X_pres(i, k);
     }
 

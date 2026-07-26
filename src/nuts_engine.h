@@ -24,24 +24,34 @@ namespace tulpaObs {
 // (it reads its model through ModelData.model_response_data = `model_ptr`);
 // `n_params` the parameter dimension; `inv_metric` an optional diagonal inverse
 // mass matrix (length n_params). Returns draws + sampler diagnostics.
+//
+// `spec_name` labels the LikelihoodSpec and `data_N` sets ModelData.N (the
+// observation count, which the community targets carry as their site count).
+// Neither reaches the sampled density: nothing consults the spec name, and the
+// engine reads ModelData.N only for a checkpoint fingerprint (gated on a
+// checkpoint path these targets never set) and for a latent-factor stride that
+// is multiplied by latent_n_factors = 0 here. They are threaded so each caller
+// keeps the values it declared rather than relying on that.
 inline Rcpp::List run_tulpa_nuts(
     decltype(tulpa::LikelihoodSpec::gradient_fn) grad_fn,
     void* model_ptr, int n_params,
     const Rcpp::NumericVector& theta0, double sigma_beta,
     Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
     int n_iter, int n_warmup, int max_treedepth, double adapt_delta,
-    int seed, bool verbose
+    int seed, bool verbose,
+    const char* spec_name = "tulpaobs_marginal",
+    int data_N = -1
 ) {
     if ((int) theta0.size() != n_params)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), n_params);
 
     tulpa::LikelihoodSpec lspec;
-    lspec.name = "tulpaobs_marginal";
+    lspec.name = spec_name;
     lspec.n_processes = 1;
     lspec.gradient_fn = grad_fn;
 
     tulpa::ModelData data;
-    data.N = n_params;
+    data.N = (data_N >= 0) ? data_N : n_params;
     data.n_processes = 1;
     data.sigma_beta = sigma_beta;
     data.model_response_data = model_ptr;

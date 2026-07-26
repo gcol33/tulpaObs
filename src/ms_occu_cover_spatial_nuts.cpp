@@ -12,6 +12,7 @@
 // reusing nodet_mixture_block / LognormalPositive / BetaPositive from
 // occu_coupling_shared.h so the likelihood stays on one source of truth.
 
+#include "tobs_math.h"
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
@@ -22,7 +23,9 @@
 #include "occu_coupling_shared.h"
 #include "community_chol.h"
 
+#include "nuts_engine.h"
 using namespace Rcpp;
+using tulpaObs::clamp_eta;
 
 namespace tulpaObs {
 
@@ -176,7 +179,6 @@ inline void field_hyper_terms(const MsOcsData& d, double h, const double* Wk,
     } else { dquad = 0.0; dlogdet = 0.0; }
 }
 
-inline double clamp30(double e) { return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e); }
 
 // X (n x p, column-major) times the length-p coefficient vector at row i.
 inline double row_dot(const NumericMatrix& X, int i, const double* beta, int p) {
@@ -206,24 +208,24 @@ inline double ms_ocs_species_ll(const MsOcsData& d, int s,
         // occupancy predictor + shared field offset
         double eta_occ = row_dot(d.X_occ, i, th_occ, d.P_occ);
         for (int k = 0; k < d.K; ++k) eta_occ += Wik(W, N, i, k) * L_s[k];
-        const double psi = sigmoid_(clamp30(eta_occ));
+        const double psi = sigmoid_(clamp_eta(eta_occ));
 
         // detection / cover predictors (cell-level, constant across visits)
         const double eta_p   = row_dot(d.X_p,   i, th_p,   d.P_p);
         double eta_pos       = row_dot(d.X_pos, i, th_pos, d.P_pos);
         if (d.cover_factor)
             for (int k = 0; k < d.K; ++k) eta_pos += Wik(W, N, i, k) * Lpos_s[k];
-        const double p_i = sigmoid_(clamp30(eta_p));
+        const double p_i = sigmoid_(clamp_eta(eta_p));
 
         bool any_det = false;
         for (int v = 0; v < d.max_visits; ++v)
             if (vv(i, v) > 0.5 && y(i, v) > 0.5) { any_det = true; break; }
 
         if (any_det) {
-            ll += log_safe_(psi);
+            ll += log_safe(psi);
             for (int v = 0; v < d.max_visits; ++v) {
                 if (vv(i, v) < 0.5) continue;
-                ll += (y(i, v) > 0.5) ? log_safe_(p_i) : log_safe_(1.0 - p_i);
+                ll += (y(i, v) > 0.5) ? log_safe(p_i) : log_safe(1.0 - p_i);
                 if (y(i, v) > 0.5) {
                     ll += d.is_beta
                         ? BetaPositive::log_density(yp(i, v), eta_pos, disp)
@@ -275,12 +277,12 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
     for (int i = 0; i < N; ++i) {
         double eta_occ = row_dot(d.X_occ, i, th_occ, d.P_occ);
         for (int k = 0; k < K; ++k) eta_occ += Wik(W, N, i, k) * L_s[k];
-        const double psi = sigmoid_(clamp30(eta_occ));
+        const double psi = sigmoid_(clamp_eta(eta_occ));
         const double eta_p = row_dot(d.X_p, i, th_p, d.P_p);
         double eta_pos     = row_dot(d.X_pos, i, th_pos, d.P_pos);
         if (d.cover_factor)
             for (int k = 0; k < K; ++k) eta_pos += Wik(W, N, i, k) * Lpos_s[k];
-        const double p_i = sigmoid_(clamp30(eta_p));
+        const double p_i = sigmoid_(clamp_eta(eta_p));
 
         bool any_det = false; int n_valid = 0;
         for (int v = 0; v < J; ++v) {
@@ -292,11 +294,11 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
         double g_psi = 0.0, gp_rowsum = 0.0, gpos_rowsum = 0.0;
         if (any_det) {
             g_psi = 1.0 - psi;
-            ll += log_safe_(psi);
+            ll += log_safe(psi);
             for (int v = 0; v < J; ++v) {
                 if (vv(i, v) < 0.5) continue;
                 gp_rowsum += (y(i, v) > 0.5) ? (1.0 - p_i) : (-p_i);
-                ll += (y(i, v) > 0.5) ? log_safe_(p_i) : log_safe_(1.0 - p_i);
+                ll += (y(i, v) > 0.5) ? log_safe(p_i) : log_safe(1.0 - p_i);
                 if (y(i, v) > 0.5) {
                     ll += d.is_beta
                         ? BetaPositive::log_density(yp(i, v), eta_pos, disp)
@@ -304,29 +306,29 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
                     if (d.is_beta) {
                         gpos_rowsum += BetaPositive::grad_eta(yp(i, v), eta_pos, disp);
                         // dispersion score, beta (per detected visit)
-                        const double mu = sigmoid_(clamp30(eta_pos));
+                        const double mu = sigmoid_(clamp_eta(eta_pos));
                         const double a = mu * disp, b = (1.0 - mu) * disp;
-                        const double ly = log_safe_(yp(i, v));
-                        const double l1my = log_safe_(1.0 - yp(i, v));
+                        const double ly = log_safe(yp(i, v));
+                        const double l1my = log_safe(1.0 - yp(i, v));
                         g_ld += disp * (tulpa::math::portable_digamma(disp)
                                         - tulpa::math::portable_digamma(a) * mu
                                         - tulpa::math::portable_digamma(b) * (1.0 - mu)
                                         + mu * ly + (1.0 - mu) * l1my);
                     } else {
-                        const double r = (log_safe_(yp(i, v)) - eta_pos) / sigma;
+                        const double r = (log_safe(yp(i, v)) - eta_pos) / sigma;
                         gpos_rowsum += r / sigma;       // (log y - eta) / sigma^2
                         g_ld += r * r - 1.0;
                     }
                 }
             }
         } else {
-            double log_P0 = (double) n_valid * log_safe_(1.0 - p_i);
+            double log_P0 = (double) n_valid * log_safe(1.0 - p_i);
             const double P0 = std::exp(log_P0);
             const double A = psi * P0, L = A + (1.0 - psi);
             const double invL = (L > 0.0) ? 1.0 / L : 0.0;
             g_psi = psi * (1.0 - psi) * (P0 - 1.0) * invL;
             gp_rowsum = -(A * invL) * p_i * (double) n_valid;
-            ll += log_safe_(L);
+            ll += log_safe(L);
         }
 
         // chain to coefficients / loadings / field
@@ -813,55 +815,10 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     if ((int) theta0.size() != m.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.total);
 
-    tulpa::LikelihoodSpec lspec;
-    lspec.name = "ms_occu_cover_spatial";
-    lspec.n_processes = 1;
-    lspec.gradient_fn = &tulpaObs::ms_ocs_full_grad;
-
-    tulpa::ModelData data;
-    data.N = m.d.n_sites;
-    data.n_processes = 1;
-    data.sigma_beta = sigma_beta;
-    data.model_response_data = &m;
-    data.likelihood_spec = &lspec;
-    data.sharing.init(1);
-    data.zi_type = tulpa::ZIType::NONE;
-    data.p_zi = 0; data.p_oi = 0;
-
-    tulpa::ParamLayout layout;
-    layout.total_params = m.total;
-
-    tulpa::set_gradient_mode_str("H");
-
-    std::vector<double> init(theta0.begin(), theta0.end());
-    std::vector<double> imv;
-    const double* im = nullptr;
-    if (inv_metric.isNotNull()) {
-        Rcpp::NumericVector v(inv_metric);
-        imv.assign(v.begin(), v.end()); im = imv.data();
-    }
-
-    tulpa::NUTSFn run_nuts = tulpa::get_nuts_fn();
-    tulpa::NUTSResult result = {};
-    run_nuts(&data, &layout, init.data(), m.total, n_iter, n_warmup,
-             max_treedepth, adapt_delta, static_cast<unsigned int>(seed),
-             verbose ? 1 : 0, im, &result);
-
-    const int n_samples = result.n_sample, np = m.total;
-    Rcpp::NumericMatrix draws(n_samples, np);
-    Rcpp::NumericVector lp(n_samples), ap(n_samples);
-    Rcpp::IntegerVector div(n_samples), td(n_samples);
-    for (int s = 0; s < n_samples; ++s) {
-        for (int j = 0; j < np; ++j) draws(s, j) = result.samples[s * np + j];
-        lp[s] = result.log_prob[s]; ap[s] = result.accept_prob[s];
-        div[s] = result.divergent[s]; td[s] = result.treedepth[s];
-    }
-    const double epsilon = result.epsilon;
-    result.free_buffers();
-    return Rcpp::List::create(
-        Rcpp::Named("draws") = draws, Rcpp::Named("log_prob") = lp,
-        Rcpp::Named("accept_prob") = ap, Rcpp::Named("divergent") = div,
-        Rcpp::Named("treedepth") = td, Rcpp::Named("epsilon") = epsilon,
-        Rcpp::Named("n_params") = np);
+    return tulpaObs::run_tulpa_nuts(
+        &tulpaObs::ms_ocs_full_grad, &m, m.total,
+        theta0, sigma_beta, inv_metric,
+        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
+        "ms_occu_cover_spatial", m.d.n_sites);
 }
 

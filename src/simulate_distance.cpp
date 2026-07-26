@@ -17,23 +17,13 @@
 #include "distance_quad.h"
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
+#include "simulate_helpers.h"
 using namespace Rcpp;
+using tulpaObs::row_draw_dot;
+using tulpaObs::draw_latent_N;
 
 namespace {
-inline double rowdot(const double* X, int nrow, int i, const double* dr,
-                     int ndr, int idx, int off, int p) {
-  double a = 0.0;
-  for (int k = 0; k < p; ++k)
-    a += X[(std::size_t) k * nrow + i] * dr[(std::size_t) (off + k) * ndr + idx];
-  return a;
-}
-inline int draw_N(double lambda, bool is_nb, double r_size) {
-  if (is_nb && R_finite(r_size)) {
-    if (lambda <= 0.0) return 0;
-    return (int) R::rpois(R::rgamma(r_size, lambda / r_size));
-  }
-  return (int) R::rpois(lambda);
-}
 // R's rmultinom(1, N, prob) via sequential conditional binomials (matches the
 // stats C routine's draw sequence).
 inline void rmultinom_R(int N, const std::vector<double>& prob, std::vector<int>& out) {
@@ -72,12 +62,12 @@ Rcpp::List cpp_simulate_distance(
     int idx = (int) R_unif_index((double) ndr);
     std::vector<int> N(n_sites);
     for (int i = 0; i < n_sites; ++i)
-      N[i] = draw_N(std::exp(rowdot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam)), is_nb, r_size);
+      N[i] = draw_latent_N(std::exp(row_draw_dot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam)), is_nb ? r_size : R_PosInf);
     Rcpp::IntegerMatrix ys(n_sites, n_bins);
     std::vector<double> prob(n_bins + 1);
     std::vector<int> counts;
     for (int i = 0; i < n_sites; ++i) {
-      double sigma = std::exp(rowdot(pXs, n_sites, i, pd, ndr, idx, p_lam, p_sig));
+      double sigma = std::exp(row_draw_dot(pXs, n_sites, i, pd, ndr, idx, p_lam, p_sig));
       double psum = 0.0;
       for (int b = 0; b < n_bins; ++b) {
         double pi_b = 0.0;

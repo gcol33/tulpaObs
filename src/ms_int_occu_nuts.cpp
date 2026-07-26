@@ -36,6 +36,7 @@
 #include <tulpa/nuts_api.h>
 #include "community_chol.h"
 
+#include "nuts_engine.h"
 using namespace Rcpp;
 
 namespace tulpaObs {
@@ -375,54 +376,9 @@ Rcpp::List cpp_ms_int_occu_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     if ((int) theta0.size() != m.d.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.d.total);
 
-    tulpa::LikelihoodSpec lspec;
-    lspec.name = "ms_int_occu";
-    lspec.n_processes = 1;
-    lspec.gradient_fn = &tulpaObs::ms_int_occu_nuts_full_grad;
-
-    tulpa::ModelData data;
-    data.N = m.d.n_sites;
-    data.n_processes = 1;
-    data.sigma_beta = sigma_beta;
-    data.model_response_data = &m;
-    data.likelihood_spec = &lspec;
-    data.sharing.init(1);
-    data.zi_type = tulpa::ZIType::NONE;
-    data.p_zi = 0; data.p_oi = 0;
-
-    tulpa::ParamLayout layout;
-    layout.total_params = m.d.total;
-
-    tulpa::set_gradient_mode_str("H");
-
-    std::vector<double> init(theta0.begin(), theta0.end());
-    std::vector<double> imv;
-    const double* im = nullptr;
-    if (inv_metric.isNotNull()) {
-        Rcpp::NumericVector v(inv_metric);
-        imv.assign(v.begin(), v.end()); im = imv.data();
-    }
-
-    tulpa::NUTSFn run_nuts = tulpa::get_nuts_fn();
-    tulpa::NUTSResult result = {};
-    run_nuts(&data, &layout, init.data(), m.d.total, n_iter, n_warmup,
-             max_treedepth, adapt_delta, static_cast<unsigned int>(seed),
-             verbose ? 1 : 0, im, &result);
-
-    const int n_samples = result.n_sample, np = m.d.total;
-    Rcpp::NumericMatrix draws(n_samples, np);
-    Rcpp::NumericVector lp(n_samples), ap(n_samples);
-    Rcpp::IntegerVector div(n_samples), td(n_samples);
-    for (int s = 0; s < n_samples; ++s) {
-        for (int j = 0; j < np; ++j) draws(s, j) = result.samples[s * np + j];
-        lp[s] = result.log_prob[s]; ap[s] = result.accept_prob[s];
-        div[s] = result.divergent[s]; td[s] = result.treedepth[s];
-    }
-    const double epsilon = result.epsilon;
-    result.free_buffers();
-    return Rcpp::List::create(
-        Rcpp::Named("draws") = draws, Rcpp::Named("log_prob") = lp,
-        Rcpp::Named("accept_prob") = ap, Rcpp::Named("divergent") = div,
-        Rcpp::Named("treedepth") = td, Rcpp::Named("epsilon") = epsilon,
-        Rcpp::Named("n_params") = np);
+    return tulpaObs::run_tulpa_nuts(
+        &tulpaObs::ms_int_occu_nuts_full_grad, &m, m.d.total,
+        theta0, sigma_beta, inv_metric,
+        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
+        "ms_int_occu", m.d.n_sites);
 }

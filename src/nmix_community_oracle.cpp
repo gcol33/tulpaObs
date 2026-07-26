@@ -22,6 +22,7 @@ NMixCommunityOracle::NMixCommunityOracle(const Rcpp::IntegerVector& y,
                                          const Rcpp::NumericMatrix& X_p,
                                          int n_sites, int n_species, int K_max,
                                          bool nb, bool zi) {
+    this->n_sites = n_sites;
     p_lam    = X_lambda.ncol();
     p_p      = X_p.ncol();
     is_nb    = nb;
@@ -101,15 +102,15 @@ NMixCommunityOracle::eval_species(int g, const double* b,
     std::vector<double> eta_p;
     for (const SiteRec& rec : sp_sites[g]) {
         const int J = rec.cache.n_visits;
-        double eta_lam = 0.0;
+        double eta_lam = site_offset(rec.site);
         for (int c = 0; c < p_lam; ++c) eta_lam += Xlam(rec.site, c) * coef(c);
-        eta_lam = clamp30(eta_lam);
+        eta_lam = tulpaObs::clamp_eta(eta_lam);
 
         eta_p.assign(J, 0.0);
         for (int j = 0; j < J; ++j) {
             double v = 0.0;
             for (int c = 0; c < p_p; ++c) v += rec.Xp(j, c) * coef(p_lam + c);
-            eta_p[j] = clamp30(v);
+            eta_p[j] = tulpaObs::clamp_eta(v);
         }
 
         const NMixSiteResult res =
@@ -286,14 +287,14 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
         double ll = 0.0;
         for (const SiteRec& rec : sp_sites[g]) {
             const int J = rec.cache.n_visits;
-            double eta_lam = 0.0;
+            double eta_lam = site_offset(rec.site);
             for (int c = 0; c < p_lam; ++c) eta_lam += Xlam(rec.site, c) * coef(c);
-            eta_lam = clamp30(eta_lam);
+            eta_lam = tulpaObs::clamp_eta(eta_lam);
             eta_p.assign(J, 0.0);
             for (int j = 0; j < J; ++j) {
                 double v = 0.0;
                 for (int c = 0; c < p_p; ++c) v += rec.Xp(j, c) * coef(p_lam + c);
-                eta_p[j] = clamp30(v);
+                eta_p[j] = tulpaObs::clamp_eta(v);
             }
             const double llr =
                 nmix_loglik_cached(rec.cache, eta_p.data(), eta_lam, r_s, a_scratch);
@@ -326,6 +327,17 @@ void NMixCommunityOracle::theta_score(int g, const double* b,
 bool NMixCommunityOracle::newton_hess(int g, const double* b, double* H) const {
     emit_fisher(eval_species(g, b, /*want_negH=*/false, /*want_fisher=*/true), d, H);
     return true;
+}
+
+
+// Attach the shared per-site abundance offset (= sigma * f). The outer
+// nested-Laplace driver conditions on one field value per grid point and calls
+// this before each inner AGHQ solve.
+void NMixCommunityOracle::set_offset(const Rcpp::NumericVector& z) {
+    if ((int) z.size() != n_sites)
+        Rcpp::stop("set_offset: length(z) must equal n_sites.");
+    offset.resize(n_sites);
+    for (int i = 0; i < n_sites; ++i) offset(i) = z[i];
 }
 
 }  // namespace tulpaObs

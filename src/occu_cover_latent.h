@@ -42,7 +42,7 @@
 #ifndef TULPAOBS_OCCU_COVER_LATENT_H
 #define TULPAOBS_OCCU_COVER_LATENT_H
 
-#include "occu_coupling_shared.h"   // LognormalPositive / BetaPositive / sigmoid_ / log_safe_
+#include "occu_coupling_shared.h"   // LognormalPositive / BetaPositive / sigmoid_
 #include <tulpa/gauss_hermite.h>    // tulpa::GaussHermite / gauss_hermite_prob
 #include <Rcpp.h>                   // M_PI
 #include <cmath>
@@ -71,7 +71,7 @@ struct LnSuffStat {
 inline LnSuffStat ln_suff_stat(const double* y, int m) {
     LnSuffStat s; s.m = m;
     for (int j = 0; j < m; ++j) {
-        const double ly = log_safe_(y[j]);   // consistent boundary with the other cover paths
+        const double ly = log_safe(y[j]);   // consistent boundary with the other cover paths
         s.t1 += ly;
         s.t2 += ly * ly;
     }

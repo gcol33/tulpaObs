@@ -11,14 +11,9 @@
 #include <R_ext/Random.h>   // R_unif_index
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 using namespace Rcpp;
-
-namespace {
-inline double plg(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
-}  // namespace
+using tulpaObs::stable_plogis;
 
 // [[Rcpp::export]]
 Rcpp::List cpp_simulate_single(
@@ -42,7 +37,7 @@ Rcpp::List cpp_simulate_single(
       double eo = 0.0, ed = 0.0;
       for (int k = 0; k < p_occ; ++k) eo += pXo[(std::size_t) k * n_sites + i] * pd[(std::size_t) k * ndr + idx];
       for (int k = 0; k < p_det; ++k) ed += pXd[(std::size_t) k * n_sites + i] * pd[(std::size_t) (p_occ + k) * ndr + idx];
-      psi[i] = plg(eo); p[i] = plg(ed);
+      psi[i] = stable_plogis(eo); p[i] = stable_plogis(ed);
     }
     std::vector<int> z(n_sites);
     for (int i = 0; i < n_sites; ++i) z[i] = (int) R::rbinom(1.0, psi[i]);

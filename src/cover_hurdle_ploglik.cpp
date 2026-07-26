@@ -18,11 +18,13 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
+using tulpaObs::stable_plogis;
 
 namespace {
 
@@ -33,11 +35,6 @@ inline double log_plogis(double x) {
   return x - std::log1p(std::exp(x));
 }
 inline double log_1m_plogis(double x) { return log_plogis(-x); }
-
-inline double plogis(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
 
 inline double dnorm_log(double x, double mean, double sd) {
   double r = (x - mean) / sd;
@@ -122,7 +119,7 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
           dens = dnorm_log(y, e, sd);
           break;
         default: { // beta
-          double mu = plogis(e);
+          double mu = stable_plogis(e);
           double a  = mu * sd;
           double b  = (1.0 - mu) * sd;
           dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +

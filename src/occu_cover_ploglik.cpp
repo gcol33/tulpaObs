@@ -22,37 +22,18 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 #include "occu_coupling_shared.h"   // pos_log_density -- the fit-kernel positive density
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
+using tulpaObs::stable_plogis;
+using tulpaObs::clamp_eta;
+using tulpaObs::logsumexp2;
 
 namespace {
-
-// Stable logistic, matching R's plogis(x) two-branch form.
-inline double stable_plogis(double x) {
-  if (x >= 0.0) {
-    double z = std::exp(-x);
-    return 1.0 / (1.0 + z);
-  }
-  double z = std::exp(x);
-  return z / (1.0 + z);
-}
-
-inline double clamp_eta(double e, double bound) {
-  if (e >  bound) return  bound;
-  if (e < -bound) return -bound;
-  return e;
-}
-
-// log(exp(a) + exp(b)), max-shifted -- the C++ analogue of .tobs_logsumexp2.
-inline double logsumexp2(double a, double b) {
-  double m = a > b ? a : b;
-  double s = a > b ? b : a;
-  return m + std::log1p(std::exp(s - m));
-}
 
 // Positive-arm log-density = the fit kernel src/occu_coupling_shared.h::
 // pos_log_density (Beta/Lognormal/Gaussian::log_density; code 0/3/4). Routing

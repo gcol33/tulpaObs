@@ -41,7 +41,7 @@
 #define TULPAOBS_CELL_COUPLING_OCCU_MULTISCALE_COVER_H
 
 #include <tulpa/cell_coupling.h>
-#include "occu_coupling_shared.h"  // sigmoid_ / log_safe_ / PosPolicy / nodet_mixture_block
+#include "occu_coupling_shared.h"  // sigmoid_ / PosPolicy / nodet_mixture_block
 #include <cmath>
 #include <string>
 #include <vector>
@@ -120,7 +120,7 @@ private:
                          const tulpa::CellEtas&     etas,
                          const tulpa::CellResponse& y_cell,
                          tulpa::CellDerivs&         out) const {
-        double cell_ll = log_safe_(psi);
+        double cell_ll = log_safe(psi);
         out.arm_grad[0][0] = 1.0 - psi;
         if (want_hess) out.arm_neg_hess_diag[0][0] = psi * (1.0 - psi);
 
@@ -132,7 +132,7 @@ private:
             if (plot_det[j]) {
                 // Detected plot: log theta_j + sum_v [detected: log p + log f_pos;
                 // undetected: log(1-p)]. Fully factorized -> no cross-Hessians.
-                cell_ll += log_safe_(theta);
+                cell_ll += log_safe(theta);
                 out.arm_grad[1][j] = 1.0 - theta;
                 if (want_hess) out.arm_neg_hess_diag[1][j] = theta * (1.0 - theta);
 
@@ -140,7 +140,7 @@ private:
                     const int row = off[j] + v;
                     const double p_v = sigmoid_(etas.eta(2, row));
                     if (y_cell.y(2, row) > 0.5) {
-                        cell_ll += log_safe_(p_v);
+                        cell_ll += log_safe(p_v);
                         out.arm_grad[2][row] = 1.0 - p_v;
                         if (want_hess) out.arm_neg_hess_diag[2][row] = p_v * (1.0 - p_v);
 
@@ -153,7 +153,7 @@ private:
                         out.arm_grad[3][row] = g_pos;
                         if (want_hess) out.arm_neg_hess_diag[3][row] = h_pos;
                     } else {
-                        cell_ll += log_safe_(1.0 - p_v);
+                        cell_ll += log_safe(1.0 - p_v);
                         out.arm_grad[2][row] = -p_v;
                         if (want_hess) out.arm_neg_hess_diag[2][row] = p_v * (1.0 - p_v);
                     }
@@ -236,11 +236,11 @@ private:
                 const double pv = sigmoid_(etas.eta(2, row));
                 p_val[row]   = pv;
                 plot_of[row] = j;
-                logP0 += log_safe_(1.0 - pv);
+                logP0 += log_safe(1.0 - pv);
             }
             P0[j]   = std::exp(logP0);
             m[j]    = theta[j] * P0[j] + (1.0 - theta[j]);
-            logm[j] = log_safe_(m[j]);
+            logm[j] = log_safe(m[j]);
             A[j]    = -theta_d[j] * (1.0 - P0[j]);          // dm_j/d eta_theta_j
             for (int v = 0; v < sz; v++) {
                 const int row = off[j] + v;
@@ -270,7 +270,7 @@ private:
                 out.arm_grad[2][row] = s_p[row];
             }
         }
-        if (!want_hess) return log_safe_(L);
+        if (!want_hess) return log_safe(L);
 
         if (expected) {
             // Complete-data Fisher: block-diagonal, responsibility-weighted.
@@ -286,7 +286,7 @@ private:
                         gamma_c * gamma_j * p_val[row] * (1.0 - p_val[row]);
                 }
             }
-            return log_safe_(L);
+            return log_safe(L);
         }
 
         // Observed (true mixture) Hessian. Diagonal: -d2 logL = -(d2L)/L + s^2.
@@ -307,7 +307,7 @@ private:
 
         // Cross-Hessians: -d2 logL / d eta_x d eta_y = -(d2L)/L + s_x s_y.
         double* const* const* CH = out.arm_cross_hess;
-        if (!CH) return log_safe_(L);
+        if (!CH) return log_safe(L);
         double* ch_psi_theta = (CH[0] && CH[0][1]) ? CH[0][1] : nullptr;  // 1 x M_c
         double* ch_psi_p     = (CH[0] && CH[0][2]) ? CH[0][2] : nullptr;  // 1 x Jc
         double* ch_theta_theta = (CH[1] && CH[1][1]) ? CH[1][1] : nullptr; // M_c x M_c
@@ -388,7 +388,7 @@ private:
                 }
             }
         }
-        return log_safe_(L);
+        return log_safe(L);
     }
 };
 

@@ -76,6 +76,7 @@
 
 #include "tulpa/aghq_oracle.h"
 #include "nmix_kernel.h"
+#include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <limits>
@@ -91,6 +92,22 @@ struct NMixCommunityOracle : tulpa::REGroupOracle {
     Eigen::VectorXd mu;                   // active community means (theta), length d
     bool   is_nb = false;                 // negative-binomial abundance (per-species log_r RE)
     bool   is_zi = false;                 // zero-inflated abundance (per-species logit_omega RE)
+    int    n_sites = 0;
+
+    // Optional SHARED per-site abundance offset (spAbundance sfMsNMix): the
+    // value sigma * f of the outer-integrated areal field, identical across
+    // species, added to eta_lambda before the per-site marginal. This is the
+    // ONLY thing that distinguishes the spatial community N-mixture from the
+    // non-spatial one, so both run on this class. Empty => no field, and
+    // eta_lambda starts from 0.0 exactly as on the non-spatial path.
+    Eigen::VectorXd offset;
+
+    // 0.0 when no field is attached; the field value at `site` otherwise.
+    double site_offset(int site) const {
+        return offset.size() ? offset(site) : 0.0;
+    }
+    // Attach the field values the outer nested-Laplace grid point conditions on.
+    void set_offset(const Rcpp::NumericVector& z);
 
     // Per species, per site: the cached Poisson marginal (lgamma precompute) and
     // the detection design rows for that site's visits, in input order.
@@ -120,10 +137,6 @@ struct NMixCommunityOracle : tulpa::REGroupOracle {
                         const Rcpp::NumericMatrix& X_p,
                         int n_sites, int n_species, int K_max,
                         bool nb = false, bool zi = false);
-
-    static inline double clamp30(double e) {
-        return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e);
-    }
 
     SpeciesEval eval_species(int g, const double* b,
                              bool want_negH = true, bool want_fisher = true) const;

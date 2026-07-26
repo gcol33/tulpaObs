@@ -14,22 +14,12 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 using namespace Rcpp;
+using tulpaObs::stable_plogis;
+using tulpaObs::row_draw_dot;
+using tulpaObs::ppc_stat;
 
-namespace {
-inline double plg(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
-}
-// Row-i design . coefficient slice draws[idx, off + 0..p-1] (draws column-major).
-inline double dot(const double* X, int n_sites, int i, const double* dr,
-                  int ndr, int idx, int off, int p) {
-  double a = 0.0;
-  for (int k = 0; k < p; ++k)
-    a += X[(std::size_t) k * n_sites + i] * dr[(std::size_t) (off + k) * ndr + idx];
-  return a;
-}
-}  // namespace
 
 // [[Rcpp::export]]
 Rcpp::List cpp_single_ppc(
@@ -51,18 +41,15 @@ Rcpp::List cpp_single_ppc(
   Rcpp::NumericVector fit_y(nsamp), fit_rep(nsamp);
   const double* pXo = X_occ.begin(); const double* pXd = X_det.begin();
   const double* pdr = draws.begin(); const int* py = y.begin();
-  auto stat = [&](double o, double e) {
-    if (freeman) { double t = std::sqrt(o) - std::sqrt(e); return t * t; }
-    double t = o - e; return t * t / (e + 1e-10);
-  };
+  auto stat = [&](double o, double e) { return ppc_stat(o, e, freeman); };
   std::vector<double> psi(n_sites), p(n_sites);
   std::vector<int> z(n_sites);
 
   for (int s = 0; s < nsamp; ++s) {
     int idx = draw_idx[s] - 1;
     for (int i = 0; i < n_sites; ++i) {
-      psi[i] = plg(dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
-      p[i]   = plg(dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
+      psi[i] = stable_plogis(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
+      p[i]   = stable_plogis(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
     }
     // z_prob (deterministic), then z ~ Bernoulli in site order.
     for (int i = 0; i < n_sites; ++i) {
@@ -118,8 +105,8 @@ Rcpp::NumericVector cpp_single_pit(
     for (int s = 0; s < n_draws; ++s) {
       int idx = draw_idx[s] - 1;
       if (n_det > 0) { acc += 1.0; continue; }
-      double psi = plg(dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
-      double p   = plg(dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
+      double psi = stable_plogis(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
+      double p   = stable_plogis(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
       acc += psi * std::pow(1.0 - p, (double) n_valid) + (1.0 - psi);
     }
     double v = acc / n_draws + R::runif(0.0, 1.0 / n_draws);

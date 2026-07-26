@@ -78,12 +78,12 @@ void CountGroupedOracle::rebind(const double* theta) {
     for (int i = 0; i < n_sites; ++i) {
         double e = 0.0;
         for (int c = 0; c < p_lam; ++c) e += Xlam(i, c) * theta[c];
-        eta_lambda_base(i) = clamp30(e);
+        eta_lambda_base(i) = tulpaObs::clamp_eta(e);
         const int J = (int)Xp_site[i].rows();
         for (int j = 0; j < J; ++j) {
             double v = 0.0;
             for (int c = 0; c < p_p; ++c) v += Xp_site[i](j, c) * theta[p_lam + c];
-            eta_p_site[i][j] = clamp30(v);
+            eta_p_site[i][j] = tulpaObs::clamp_eta(v);
         }
     }
     if (is_nb) r = std::exp(theta[p_lam + p_p]);
@@ -110,11 +110,11 @@ CountGroupedOracle::eval_group(int g, const double* b,
         double eta_lam;
         const double* eta_p_ptr;
         if (arm == 0) {
-            eta_lam = clamp30(eta_lambda_base(i) + shift);
+            eta_lam = tulpaObs::clamp_eta(eta_lambda_base(i) + shift);
             eta_p_ptr = eta_p_site[i].empty() ? nullptr : eta_p_site[i].data();
         } else {
             eta_lam = eta_lambda_base(i);
-            const double shift_cl = clamp30(shift);
+            const double shift_cl = tulpaObs::clamp_eta(shift);
             eta_p_shift.assign(J, 0.0);
             for (int j = 0; j < J; ++j) eta_p_shift[j] = eta_p_site[i][j] + shift_cl;
             eta_p_ptr = eta_p_shift.empty() ? nullptr : eta_p_shift.data();
@@ -204,11 +204,11 @@ void CountGroupedOracle::node_ll(int g, const double* B, int n_nodes,
             double eta_lam;
             const double* eta_p_ptr;
             if (arm == 0) {
-                eta_lam = clamp30(eta_lambda_base(i) + shift);
+                eta_lam = tulpaObs::clamp_eta(eta_lambda_base(i) + shift);
                 eta_p_ptr = eta_p_site[i].empty() ? nullptr : eta_p_site[i].data();
             } else {
                 eta_lam = eta_lambda_base(i);
-                const double shift_cl = clamp30(shift);
+                const double shift_cl = tulpaObs::clamp_eta(shift);
                 eta_p_shift.assign(J, 0.0);
                 for (int j = 0; j < J; ++j) eta_p_shift[j] = eta_p_site[i][j] + shift_cl;
                 eta_p_ptr = eta_p_shift.empty() ? nullptr : eta_p_shift.data();

@@ -11,11 +11,13 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
+using tulpaObs::logsumexp2;
 
 namespace {
 
@@ -24,13 +26,6 @@ inline double log_plogis(double x) {              // log(plogis(x))
   return x - std::log1p(std::exp(x));
 }
 inline double log_1m_plogis(double x) { return log_plogis(-x); }
-
-// log(exp(a) + exp(b)), max-shifted (matches .tobs_logaddexp incl. both -Inf).
-inline double logaddexp(double a, double b) {
-  double m = a > b ? a : b;
-  if (std::isinf(m) && a == b) return m;
-  return m + std::log1p(std::exp(-std::fabs(a - b)));
-}
 
 }  // namespace
 
@@ -79,7 +74,7 @@ Rcpp::NumericMatrix cpp_occu_single_ploglik(
       if (k1 > 0) {
         col[s] = lpsi + k1 * lp + k0 * l1mp;
       } else {
-        col[s] = logaddexp(lpsi + nv * l1mp, log_1m_plogis(eps[s]));
+        col[s] = logsumexp2(lpsi + nv * l1mp, log_1m_plogis(eps[s]));
       }
     }
   }
@@ -147,14 +142,14 @@ Rcpp::NumericMatrix cpp_occu_dynamic_ploglik(
             a_occ = 0.0; a_un = NEG;               // z_t = 1 known
           } else {
             double term1 = a_occ + nv * l1mp, term2 = a_un;
-            double lnorm = logaddexp(term1, term2);
+            double lnorm = logsumexp2(term1, term2);
             site_ll += lnorm;
             a_occ = term1 - lnorm; a_un = term2 - lnorm;
           }
         }
         if (t < Tn - 1) {
-          double new_occ = logaddexp(a_occ + l1meps, a_un + lgam);
-          double new_un  = logaddexp(a_occ + leps,   a_un + l1mgam);
+          double new_occ = logsumexp2(a_occ + l1meps, a_un + lgam);
+          double new_un  = logsumexp2(a_occ + leps,   a_un + l1mgam);
           a_occ = new_occ; a_un = new_un;
         }
       }
@@ -207,7 +202,7 @@ Rcpp::NumericMatrix cpp_occu_integrated_ploglik(
       }
       double lpsi = log_plogis(eps[s]);
       col[s] = any_det ? (lpsi + log_det_occ)
-                       : logaddexp(lpsi + log_det_occ, log_1m_plogis(eps[s]));
+                       : logsumexp2(lpsi + log_det_occ, log_1m_plogis(eps[s]));
     }
   }
   return ll;

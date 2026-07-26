@@ -24,6 +24,7 @@
 
 #include "tulpa/aghq_oracle.h"
 #include "nmix_kernel.h"      // NMixSiteResult
+#include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <limits>
@@ -52,10 +53,6 @@ struct CountGroupedOracle : tulpa::REGroupOracle {
     // Active fixed-effect predictors (rebuilt in rebind), clamped to [-30, 30].
     Eigen::VectorXd eta_lambda_base;               // length n_sites
     std::vector<std::vector<double>> eta_p_site;   // per-site J_i entries
-
-    static inline double clamp30(double e) {
-        return e < -30.0 ? -30.0 : (e > 30.0 ? 30.0 : e);
-    }
 
     // The single family-specific hook: the per-site marginal at this site's
     // current eta. `eta_p_ptr` is the per-visit/per-pass detection logit vector

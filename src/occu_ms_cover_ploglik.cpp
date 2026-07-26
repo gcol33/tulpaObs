@@ -11,21 +11,19 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_math.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
+using tulpaObs::stable_plogis;
 
 namespace {
 inline double clp(double x) {
   if (x < 1e-12) return 1e-12;
   if (x > 1.0 - 1e-12) return 1.0 - 1e-12;
   return x;
-}
-inline double plogis(double x) {
-  if (x >= 0.0) { double z = std::exp(-x); return 1.0 / (1.0 + z); }
-  double z = std::exp(x); return z / (1.0 + z);
 }
 // log(exp(a)+exp(b)) as the R code writes it: m + log(exp(a-m)+exp(b-m)).
 inline double lae2(double a, double b) {
@@ -90,7 +88,7 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
         double eta_theta = 0.0;
         for (int k = 0; k < p_theta; ++k)
           eta_theta += X_theta((std::size_t) i, k) * coef(idx_theta, k);
-        double theta = clp(plogis(eta_theta));
+        double theta = clp(stable_plogis(eta_theta));
 
         // Site-level detection / cover predictors (broadcast across visits).
         double eta_p_site = 0.0, eta_pos_site = 0.0;
@@ -109,7 +107,7 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
             for (int k = 0; k < p_p_visit; ++k)
               eta_p += X_p_visit((std::size_t) vrow, k) * coef(idx_p_visit, k);
           }
-          double p = clp(plogis(eta_p));
+          double p = clp(stable_plogis(eta_p));
           double lp = std::log(p), l1mp = std::log(1.0 - p);
           sum_1mp += l1mp;
           int yij = y((std::size_t) i, j);
@@ -132,7 +130,7 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
               }
               double dens;
               if (positive == 3) {
-                double mu = clp(plogis(eta_pos));
+                double mu = clp(stable_plogis(eta_pos));
                 double cvc = cv < 1e-9 ? 1e-9 : (cv > 1.0 - 1e-9 ? 1.0 - 1e-9 : cv);
                 double a = mu * disp, b = (1.0 - mu) * disp;
                 dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
@@ -169,7 +167,7 @@ Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
         double eta_psi = 0.0;
         for (int k = 0; k < p_psi; ++k)
           eta_psi += X_psi((std::size_t) c, k) * coef(idx_psi, k);
-        double psi = clp(plogis(eta_psi));
+        double psi = clp(stable_plogis(eta_psi));
         double log_psi = std::log(psi), log_1mpsi = std::log(1.0 - psi);
         double val;
         if (det_cell[c]) {
