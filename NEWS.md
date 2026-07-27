@@ -1,5 +1,59 @@
 # tulpaObs NEWS
 
+## 0.0.178 (2026-07-27)
+
+* **The cover-hurdle occurrence reduction no longer shifts the reported
+  log-marginal (bugfix).** `control$aggregate.occ` (default ON) collapses the
+  occurrence arm to one Binomial row per group of exchangeable Bernoulli plots.
+  That leaves the gradient, the Hessian, the mode, the SEs and every posterior
+  weight pointwise unchanged, but the binomial log-density carries
+  `lchoose(n, y)`, which is zero on a Bernoulli row and non-zero on the group
+  replacing it -- so `fit$log_marginal` came back on a different additive scale
+  depending on an internal performance switch (measured 74.7 and 72.4 nats on an
+  18-cell x 10-plot fixture). The constant is now subtracted, putting the
+  reported value back on the scale of the observed per-plot data. Estimates are
+  unaffected in either direction; only the reported marginal moves, and only
+  when the reduction runs. A model comparison between two fits made with the same
+  setting was already valid and is unchanged.
+
+* **`TULPAOBS_PROGRESS=0` silences the console progress bar process-wide.** The
+  bar defaults on and is set per fit from `control$progress`, which `tobs()`
+  writes to the scoped `tulpa.nl_progress` option on every call -- so a caller
+  that cannot reach the individual fits could not turn it off at all. A test
+  suite is exactly that caller: the weekly recovery job's log is mostly
+  per-iteration bars from hundreds of fits, which buries the failure output the
+  log exists to show. Setting the environment variable (also `false` / `no` /
+  `off`) flips the default for the whole process. An explicit
+  `control$progress` still wins in both directions, and the `progress.file`
+  heartbeat is untouched -- it is the only liveness signal on a detached run,
+  so silencing the console must not take it along.
+
+* **Two recovery blocks that had never run are now green, and one of them was
+  hiding a real bug.** Both sit behind `skip_if_fast()` and `skip_on_cran()`, so
+  neither smoke nor `R CMD check` reaches them and the weekly full-recovery job
+  has never completed a run -- the cover-hurdle aggregation block was byte
+  identical to the commit that introduced it and had simply never executed. It
+  found the log-marginal shift above. The second, `test-dyn-int-occu-recovery.R`,
+  failed on the test runner rather than the model: the runner passes
+  `package = "tulpaObs"` so that oracle files can reach internals through `:::`,
+  which also puts the namespace on the symbol-lookup chain ahead of the search
+  path and shadows `unmarked`'s S4 `logLik()` with the S3 generic. Both
+  `unmarked` calls are now namespace-qualified.
+
+* **The cover trend-field test asserts the amplitude ratio, not the amplitude.**
+  `sigma` and `sigma_trend` are ICAR conditional-scale hyperparameters, and the
+  map onto a field's marginal SD is an engine parameterisation: both moved by the
+  same factor (-33% and -32% over 12 seeds, sd 0.031) while the occurrence slope,
+  its coverage and `alpha_trend` stood still. Two independently simulated fields
+  with different truths shifting together is a convention change, not a recovery
+  regression. The test now asserts the convention-free estimand -- the ratio of
+  the two amplitudes, 1.129 against a simulated 1.143 -- and keeps an absolute
+  bracket only as a gross-regression guard, labelled as such.
+
+* **Engine floor moved to `tulpa (>= 0.0.100)`** (`Remotes: gcol33/tulpa@v0.0.100`),
+  which carries exact dispersion and closed-form outer curvature for
+  zero-inflated and hurdle mixtures. `gcol33/tulpaMesh` stays at `@v0.1.3`.
+
 ## 0.0.177 (2026-07-19)
 
 * **`n.iter` is the post-warmup sample count on every NUTS path (bugfix).** The

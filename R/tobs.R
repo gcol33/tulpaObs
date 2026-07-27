@@ -239,6 +239,17 @@
 #'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
 #'   on `$seed`).
 #'
+#'   Progress controls (every method): `progress` toggles the console
+#'   iteration / grid bar (default `TRUE`), `progress.every` and
+#'   `progress.throttle` set its emit cadence, and `progress.file` names a
+#'   heartbeat file rewritten with `"<done> <total> <elapsed_s> <eta_s>"`. The
+#'   file is the channel that survives a detached run, where a console flush
+#'   does not, and it is written whenever it is set regardless of `progress`.
+#'   Setting the environment variable `TULPAOBS_PROGRESS=0` flips the console
+#'   default off for the whole session -- for a batch or CI run whose caller
+#'   cannot pass `control` to each individual fit; an explicit
+#'   `control$progress` still wins.
+#'
 #'   Control names are validated against the chosen `method`: passing a
 #'   sampler control (e.g. `n.chains`) to a Laplace method, a Laplace control
 #'   (e.g. `max.iter`) to `"nuts"`, `seed` to a deterministic route, or an
@@ -594,11 +605,28 @@ tobs <- function(formula,
     # `[[` (exact) not `$`: `control$progress` prefix-matches `progress.file`,
     # so a fit that sets only progress.file would otherwise read the file path
     # string as the console flag.
-    progress          = control[["progress"]] %||% TRUE,
+    progress          = control[["progress"]] %||% .tobs_progress_default(),
     progress_every    = as.integer(control$progress.every    %||% 0L),
     progress_throttle = as.numeric(control$progress.throttle %||% 2),
     progress_file     = as.character(control$progress.file    %||% "")
   )
+}
+
+# Default for the console progress bar, used when a fit does not set
+# `control$progress` either way. On, except where the caller cannot reach the
+# individual fits to silence them: a test suite or any redirected batch run
+# emits every fit's bar into one log, which buries the output that is actually
+# read there. `TULPAOBS_PROGRESS=0` (also `false` / `no` / `off`) flips the
+# default off for the whole process.
+#
+# An explicit `control$progress` still wins in both directions, so a fit that
+# asks for the bar keeps it under the env var, and the heartbeat file
+# (`progress.file`) is a separate channel this does not touch -- it is the only
+# liveness signal on a detached run, and silencing the console must not take it
+# with it.
+.tobs_progress_default <- function() {
+  v <- tolower(trimws(Sys.getenv("TULPAOBS_PROGRESS", "")))
+  !(v %in% c("0", "false", "no", "off"))
 }
 
 # The four cpp-side progress arguments for the tulpaObs N-mixture spatial

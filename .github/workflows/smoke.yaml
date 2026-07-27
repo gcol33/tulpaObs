@@ -38,6 +38,10 @@ jobs:
       # number of concurrent workers. Parallel is enabled here for that reason.
       TESTTHAT_PARALLEL: 'true'
       NOT_CRAN: 'true'
+      # Per-fit console progress bars interleave across parallel workers into
+      # one unreadable log; nothing here can pass control$progress down to the
+      # individual fits, so the default is flipped process-wide instead.
+      TULPAOBS_PROGRESS: '0'
 
     steps:
       - uses: actions/checkout@v4

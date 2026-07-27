@@ -5,37 +5,50 @@
 # Collapse the occurrence (binomial) arm to its exact sufficient statistic.
 # Observations agreeing on the occurrence design row AND every per-observation
 # component of the linear predictor -- the spatial cell, any temporal / RE block
-# index, any SVC weight -- are exchangeable Bernoulli trials: replacing them with
-# one Binomial row (n = count, y = successes) leaves the log-likelihood, gradient
-# and Hessian pointwise unchanged (the engine's binomial kernel carries no
-# combinatorial constant) while cutting the row count. `keys` is the named list
-# of those per-observation vectors; the X-row plus every key forms the grouping
-# key. Returns the aggregated `y`, `n` (n_trials), `X`, the per-group
-# representative of each key, and `rep_i` (the representative row per group).
+# index, any SVC weight -- are exchangeable Bernoulli trials, so replacing them
+# with one Binomial row (n = count, y = successes) leaves the gradient and
+# Hessian pointwise unchanged, and with them the mode, the SEs and every
+# posterior weight, while cutting the row count.
+#
+# The log-likelihood shifts by a parameter-free constant: the engine's binomial
+# kernel DOES carry lchoose(n, y), which is 0 on each Bernoulli row and
+# lchoose(n, y) on the group that replaces them. `lconst` returns that shift so
+# the caller can subtract it and keep the reported marginal on the scale of the
+# observed per-plot sequence. Each input row is one Bernoulli trial here (one
+# plot, y in {0, 1}), so the pre-aggregation constant is 0.
+#
+# `keys` is the named list of those per-observation vectors; the X-row plus every
+# key forms the grouping key. Returns the aggregated `y`, `n` (n_trials), `X`,
+# the per-group representative of each key, `rep_i` (the representative row per
+# group) and `lconst`.
 .cover_aggregate_occ <- function(y, X, keys) {
   parts <- c(as.data.frame(X, stringsAsFactors = FALSE), keys)
   gid   <- as.integer(factor(do.call(paste, c(parts, list(sep = "\r")))))
   ord   <- order(gid)
   rep_i <- ord[!duplicated(gid[ord])]               # first row per group, group order
+  y_agg <- as.numeric(rowsum(as.numeric(y), gid))   # rowsum orders by sorted gid
+  n_agg <- as.integer(tabulate(gid, nbins = max(gid)))
   list(
-    y     = as.numeric(rowsum(as.numeric(y), gid)),   # rowsum orders by sorted gid
-    n     = as.integer(tabulate(gid, nbins = max(gid))),
-    X     = X[rep_i, , drop = FALSE],
-    keys  = lapply(keys, function(v) v[rep_i]),
-    rep_i = rep_i
+    y      = y_agg,
+    n      = n_agg,
+    X      = X[rep_i, , drop = FALSE],
+    keys   = lapply(keys, function(v) v[rep_i]),
+    rep_i  = rep_i,
+    lconst = sum(lchoose(n_agg, y_agg))
   )
 }
 
 # Aggregate the occurrence arm in place against `keys` and reset its trial /
-# RE bookkeeping. Returns the updated arm plus the per-group key representatives
-# for the caller to scatter back onto the latent blocks.
+# RE bookkeeping. Returns the updated arm, the per-group key representatives for
+# the caller to scatter back onto the latent blocks, and the binomial
+# combinatorial constant the reduction introduces.
 .cover_apply_occ_agg <- function(arm_occ, keys) {
   og <- .cover_aggregate_occ(arm_occ$y, arm_occ$X, keys)
   arm_occ$y        <- og$y
   arm_occ$n_trials <- og$n
   arm_occ$X        <- og$X
   arm_occ$re_idx   <- rep(0, length(og$y))
-  list(arm_occ = arm_occ, keys = og$keys)
+  list(arm_occ = arm_occ, keys = og$keys, lconst = og$lconst)
 }
 
 # Collapse the positive (beta) arm to its exact grouped sufficient statistics
@@ -1049,12 +1062,21 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # default ON (tulpaObs#48). The collapse is pointwise exact -- observations
   # sharing the occurrence design row AND every per-observation latent component
   # (cell, trend weight, RE/time index) are exchangeable Bernoulli trials, so one
-  # Binomial row (n = count, y = successes) leaves the log-likelihood, gradient
-  # and Hessian unchanged. Multi-seed parameter recovery on the aggregated path
+  # Binomial row (n = count, y = successes) leaves the gradient and Hessian
+  # unchanged, and shifts the log-likelihood by the parameter-free binomial
+  # constant the reduction introduces (`agg_lconst` below, removed from the
+  # reported marginal). Multi-seed parameter recovery on the aggregated path
   # holds against simulated truth (test-cover-hurdle-aggregate-recovery.R), so
   # the reduction is the default; set control$aggregate.occ = FALSE for the
   # full per-plot occurrence arm. `[[` (exact), never `$` (prefix-matching).
   do_agg_occ <- !isFALSE(control[["aggregate.occ"]])
+
+  # sum lchoose(n_g, y_g) over the groups the occurrence reduction forms, in
+  # whichever branch below runs it. Subtracted from the engine's log-marginal so
+  # the reported value stays the marginal of the observed per-plot sequence and
+  # does not depend on an internal performance switch. Every grid cell shifts by
+  # the same amount, so posterior weights, the mode and the SEs are untouched.
+  agg_lconst <- 0
 
   # Exact grouped sufficient-statistic reduction of the positive (beta) arm,
   # default ON for the beta arm (tulpaObs#49). Beta has no single-row collapse,
@@ -1111,6 +1133,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       blocks <- list(base_block, trend_block)
       ag      <- .cover_apply_occ_agg(arm_occ, .cover_occ_keys_from_blocks(blocks))
       arm_occ <- ag$arm_occ
+      agg_lconst <- ag$lconst
       blocks  <- .cover_scatter_occ_keys(blocks, ag$keys)
       base_block  <- blocks[[1L]]
       trend_block <- blocks[[2L]]
@@ -1167,6 +1190,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     if (do_agg_occ) {
       ag          <- .cover_apply_occ_agg(arm_occ, .cover_occ_keys_from_blocks(multi$prior))
       arm_occ     <- ag$arm_occ
+      agg_lconst  <- ag$lconst
       multi$prior <- .cover_scatter_occ_keys(multi$prior, ag$keys)
     }
     if (do_agg_pos) {
@@ -1191,6 +1215,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     if (do_agg_occ) {
       ag      <- .cover_apply_occ_agg(arm_occ, list(idx1 = arm_occ$spatial_idx))
       arm_occ <- ag$arm_occ
+      agg_lconst <- ag$lconst
       arm_occ$spatial_idx <- as.integer(ag$keys$idx1)
     }
     if (do_agg_pos) {
@@ -1213,6 +1238,14 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       prior_alpha = control$prior.alpha,
       control = joint_control
     )
+  }
+
+  # Put the reported marginal back on the observed per-plot scale (see
+  # `agg_lconst` above). A constant shared by every grid cell, so the integrated
+  # posterior is untouched -- this only stops the reported value from moving when
+  # control$aggregate.occ flips.
+  if (agg_lconst != 0 && !is.null(fit$log_marginal)) {
+    fit$log_marginal <- fit$log_marginal - agg_lconst
   }
 
   # Posterior-weighted mean / SE for the per-arm beta blocks.

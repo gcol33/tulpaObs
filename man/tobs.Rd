@@ -263,6 +263,17 @@ Stochastic-correction controls (\code{"laplace_gibbs"} / \code{"laplace_mi"}):
 on \verb{$seed}).
 }
 
+Progress controls (every method): \code{progress} toggles the console
+iteration / grid bar (default \code{TRUE}), \code{progress.every} and
+\code{progress.throttle} set its emit cadence, and \code{progress.file} names a
+heartbeat file rewritten with \code{"<done> <total> <elapsed_s> <eta_s>"}. The
+file is the channel that survives a detached run, where a console flush
+does not, and it is written whenever it is set regardless of \code{progress}.
+Setting the environment variable \code{TULPAOBS_PROGRESS=0} flips the console
+default off for the whole session -- for a batch or CI run whose caller
+cannot pass \code{control} to each individual fit; an explicit
+\code{control$progress} still wins.
+
 Control names are validated against the chosen \code{method}: passing a
 sampler control (e.g. \code{n.chains}) to a Laplace method, a Laplace control
 (e.g. \code{max.iter}) to \code{"nuts"}, \code{seed} to a deterministic route, or an

@@ -89,3 +89,66 @@ test_that("validation fires through tobs() ahead of dispatch", {
     "n.chains", fixed = TRUE
   )
 })
+
+# The console progress bar defaults ON, and a batch caller that cannot pass
+# `control` down to each individual fit -- a test suite, a CI job, any
+# redirected run -- silences the whole process with TULPAOBS_PROGRESS.
+
+# Evaluate `code` with TULPAOBS_PROGRESS set to `value` (NA unsets it),
+# restoring whatever was there. Base R, since the package declares no withr.
+with_progress_env <- function(value, code) {
+  old <- Sys.getenv("TULPAOBS_PROGRESS", unset = NA_character_)
+  restore <- function() {
+    if (is.na(old)) Sys.unsetenv("TULPAOBS_PROGRESS")
+    else Sys.setenv(TULPAOBS_PROGRESS = old)
+  }
+  on.exit(restore(), add = TRUE)
+  if (is.na(value)) Sys.unsetenv("TULPAOBS_PROGRESS")
+  else Sys.setenv(TULPAOBS_PROGRESS = value)
+  force(code)
+}
+
+test_that("console progress defaults on when the env var is unset", {
+  with_progress_env(NA_character_, {
+    expect_true(tulpaObs:::.tobs_progress_default())
+    expect_true(tulpaObs:::.tobs_progress_opt(list())$progress)
+  })
+})
+
+test_that("TULPAOBS_PROGRESS turns the console default off", {
+  for (v in c("0", "false", "FALSE", "no", "off", " Off ")) {
+    with_progress_env(v, {
+      expect_false(tulpaObs:::.tobs_progress_default(),
+                   info = paste("value:", v))
+      expect_false(tulpaObs:::.tobs_progress_opt(list())$progress,
+                   info = paste("value:", v))
+    })
+  }
+})
+
+test_that("any other TULPAOBS_PROGRESS value leaves the default on", {
+  for (v in c("1", "true", "yes", "on")) {
+    with_progress_env(v, {
+      expect_true(tulpaObs:::.tobs_progress_default(), info = paste("value:", v))
+    })
+  }
+})
+
+test_that("an explicit control$progress overrides the env var both ways", {
+  with_progress_env("0", {
+    expect_true(tulpaObs:::.tobs_progress_opt(list(progress = TRUE))$progress)
+  })
+  with_progress_env("1", {
+    expect_false(tulpaObs:::.tobs_progress_opt(list(progress = FALSE))$progress)
+  })
+})
+
+test_that("silencing the console leaves the heartbeat file channel alone", {
+  # The file is the only liveness signal on a detached run, so it is written
+  # whenever it is set regardless of the console flag.
+  with_progress_env("0", {
+    opt <- tulpaObs:::.tobs_progress_opt(list(progress.file = "beat.eta"))
+    expect_false(opt$progress)
+    expect_identical(opt$progress_file, "beat.eta")
+  })
+})

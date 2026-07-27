@@ -123,7 +123,9 @@ test_that("dyn_occu marginal recursion matches unmarked::colext at its MLE", {
   ps <- plogis(uc[1]); gm <- plogis(uc[2]); ep <- plogis(uc[3]); pp <- plogis(uc[4])
   r_marg <- sum(vapply(seq_len(n_sites),
     function(i) log(.dm_fwd_R(t(y[i, , ]), ps, gm, ep, pp)), numeric(1)))
-  expect_equal(r_marg, as.numeric(logLik(fm)), tolerance = 1e-5)
+  # unmarked fits are S4; call logLik() namespace-qualified (see test-nmix-laplace.R)
+  # so it binds to unmarked's S4 generic rather than stats' S3 one.
+  expect_equal(r_marg, as.numeric(unmarked::logLik(fm)), tolerance = 1e-5)
 })
 
 # Head-to-head coefficient equivalence with unmarked::colext. The exact
@@ -206,8 +208,8 @@ test_that("dyn_occu exact-marginal refine reaches colext MLE and calibrated SEs"
     cx_se  <- c(use[1], use[4], use[2], use[3])
 
     # Marginal log-likelihood lands on colext's MLE (refine removes the residual).
-    expect_equal(as.numeric(logLik(fit)), as.numeric(logLik(fm)), tolerance = 0.05,
-                 info = sprintf("seed %d logLik", seed))
+    expect_equal(as.numeric(logLik(fit)), as.numeric(unmarked::logLik(fm)),
+                 tolerance = 0.05, info = sprintf("seed %d logLik", seed))
     # Point estimates and Hessian-calibrated SEs match colext.
     expect_lt(max(abs(est - cx_est)), 0.02)
     expect_lt(max(abs(se  - cx_se)),  0.02)

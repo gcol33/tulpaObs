@@ -33,6 +33,11 @@ jobs:
       # tulpaMesh is a hard dependency here, so a mesh-install regression must
       # fail loudly instead of silently skipping the whole SPDE surface.
       TULPAOBS_REQUIRE_SPDE: '1'
+      # The console progress bar defaults on and is set per fit, so nothing here
+      # can reach the hundreds of fits this tier runs. Left on, their
+      # per-iteration lines are most of the log and bury the failure output the
+      # log is read for. The progress.file heartbeat channel is unaffected.
+      TULPAOBS_PROGRESS: '0'
 
     steps:
       - uses: actions/checkout@v4
