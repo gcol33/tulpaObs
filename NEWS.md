@@ -1,5 +1,21 @@
 # tulpaObs NEWS
 
+## 0.0.179 (2026-07-27)
+
+* **macOS `R CMD check` builds again** (`tulpa (>= 0.0.101)`,
+  `Remotes: gcol33/tulpa@v0.0.101`). `tulpa/portable_math.h` returns
+  `std::pair` while including only `<cmath>` and `<limits>`; libstdc++ supplies
+  `<utility>` transitively, Apple clang's libc++ does not, so
+  `count_grouped_oracle.cpp` failed with `no template named 'pair' in namespace
+  'std'` and the whole macOS job died before producing a check directory. The
+  header now includes `<utility>` itself -- a header-only fix with no behaviour
+  on any platform, so nothing in this package moves with it.
+
+  Worth recording how long it hid: `R-CMD-check.yaml` runs ubuntu alone on push
+  and adds windows and macOS only on the weekly cron, so a macOS-only compile
+  error is invisible to every push and surfaces once a week at most. The two
+  platforms that pass are the two that share libstdc++.
+
 ## 0.0.178 (2026-07-27)
 
 * **The cover-hurdle occurrence reduction no longer shifts the reported
