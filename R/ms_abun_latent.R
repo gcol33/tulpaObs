@@ -197,11 +197,31 @@
     .tobs_ms_abun_oracle(ms$marg, eta_p_list, Ns, S)
   }
 
+  # One starting direction, from this family's own measurement. The multi-start
+  # exists to escape a bad direction basin, whose signature is a loading
+  # magnitude far above truth. Over 16 seeds at N = 80, S = 8, Q = 2 the widest
+  # magnitude at one start was 1.25x, none reaching the 1.3x flag, and on six
+  # seeds re-fit at eight starts -- the three worst by residual correlation plus
+  # three healthy controls -- the answer did not move: largest change in
+  # residual correlation 0.0027 (a CONTROL, moving down), largest in magnitude
+  # 0.0145. The seven extra candidates cost a consistent 2.0-2.3x, since each
+  # runs a full loading-EM against an oracle that sums over the latent N.
+  #
+  # One seed (314) recovers badly at BOTH widths -- residual correlation 0.077
+  # either way, at a healthy magnitude -- so it is a hard fixture, not a basin
+  # the multi-start would have escaped. Note that neither summary screens a fit
+  # alone: residual correlation is row-normalised and blind to a magnitude
+  # regression, magnitude is rotation-invariant and blind to a direction one.
+  #
+  # This is the family default, so control$factor.starts still overrides it.
+  # Do NOT copy the value to another family: the cost and the benefit both
+  # depend on how expensive one oracle evaluation is.
   res <- .tobs_community_latent_ascent(
     spatial = spatial, latent = latent, model = model, what = "ms_abun()",
     make_oracle = make_oracle, em_fit = em_fit, offset_of = offset_of,
     allow = c("icar", "car_proper", "bym2", "spde"),
-    tol = tol, max.outer = max.outer, factor.starts = factor.starts,
+    tol = tol, max.outer = max.outer,
+    factor.starts = if (is.null(factor.starts)) 1L else factor.starts,
     verbose = verbose)
 
   em <- res$em
