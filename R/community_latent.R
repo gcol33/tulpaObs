@@ -1109,6 +1109,7 @@
                                           allow = c("icar", "car_proper", "bym2"),
                                           tol = 1e-4, max.outer = NULL,
                                           factor.outer = 25L,
+                                          factor.starts = 8L,
                                           n.quad = 5L, verbose = FALSE) {
   S  <- model$n_species
   Ns <- model$n_sites
@@ -1139,6 +1140,20 @@
   # one file. An explicit `control$max.outer` still wins over both.
   if (is.null(max.outer)) max.outer <- if (has_factor) factor.outer else 25L
   max.outer <- as.integer(max.outer)
+
+  # Number of candidate starting DIRECTIONS the first factor pass selects over
+  # (cosine, then the principal-factor init, then fixed pseudo-random restarts).
+  # Each candidate costs a full loading-EM run, so the price is set by how
+  # expensive one oracle evaluation is, and that varies by family: a community
+  # GLMM (ms_count, ms_occu) evaluates a closed-form density, whereas the
+  # N-mixture oracle sums over the latent N per species-site. Measured on
+  # test-ms-abun-factor.R's own fixture (N = 80, S = 8, Q = 2), the first pass
+  # costs 19.7 min against 0.43 min for each later outer pass -- roughly 65% of
+  # a default fit spent selecting a direction, and about 4.5 h for the file.
+  # So each family sets this from its OWN measurement, exactly as factor.outer
+  # is set, rather than inheriting a count measured on a cheaper oracle.
+  if (is.null(factor.starts)) factor.starts <- 8L
+  factor.starts <- max(1L, as.integer(factor.starts))
 
   # ---- field setup ----
   geom <- NULL; Ffield <- NULL; tau <- NULL; Q <- NULL
@@ -1298,10 +1313,15 @@
         # RNG stream is saved and restored around the draw so a `set.seed()`
         # before `tobs()` still reproduces everything else about the fit.
         starts <- list(list(zeta = zeta, lambda = lambda, ascend = TRUE))
-        eig <- .tobs_latent_factor_eigen_init(oracle, base_fac, ncol(lambda))
-        if (!is.null(eig)) starts <- c(starts, list(c(eig, list(ascend = FALSE))))
-        starts <- c(starts,
-                   .tobs_latent_factor_random_starts(Ns, S, ncol(lambda)))
+        if (factor.starts >= 2L) {
+          eig <- .tobs_latent_factor_eigen_init(oracle, base_fac, ncol(lambda))
+          if (!is.null(eig)) starts <- c(starts, list(c(eig, list(ascend = FALSE))))
+        }
+        n_rand <- max(0L, factor.starts - 2L)
+        if (n_rand > 0L) {
+          starts <- c(starts, .tobs_latent_factor_random_starts(
+            Ns, S, ncol(lambda), k = n_rand))
+        }
 
         cand <- NULL
         for (st in starts) {

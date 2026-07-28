@@ -14,16 +14,30 @@
 # full recovery suite. Place skip_if_fast() as the first line of any test_that()
 # block whose cost is a multi-seed fitting loop or a NUTS sample.
 #
-# RELEASE GATE. The recovery loops carry the calibration evidence (estimators
-# recover simulated truth; intervals cover at the nominal rate). They are also
-# behind skip_on_cran(), so R CMD check runs plumbing only. devtools::test()
-# sets NOT_CRAN=true and, with TULPAOBS_FAST unset, runs the full recovery suite
-# -- running it green is a HARD pre-release gate:
+# RELEASE GATE. A release verifies what it changed; the schedule verifies
+# everything. Green before tagging:
 #
-#   Sys.unsetenv("TULPAOBS_FAST"); Sys.setenv(NOT_CRAN = "true"); devtools::test()
+#   1. R CMD check on the built tarball -- a missing NAMESPACE export surfaces
+#      there and nowhere else, since load_all() resolves internals regardless.
+#   2. Whole-suite smoke against the INSTALLED package, which is seconds:
+#        Sys.setenv(TULPAOBS_FAST = "1", NOT_CRAN = "true")
+#        testthat::test_dir("tests/testthat", package = "tulpaObs",
+#                           load_package = "installed")
+#   3. The recovery files covering the families the diff touches, with
+#      TULPAOBS_FAST unset -- a change under R/cover_*.R runs test-cover-*.R.
+#      Cost is bounded by the diff, not by the suite.
 #
-# (The recovery paths call the tulpa engine, so verify the shared tulpa
-# dep / Remotes pin from a clean library before release.)
+# The full recovery tier -- every multi-seed recovery and coverage loop, all
+# seeds -- does NOT gate a release. It carries the calibration evidence
+# (estimators recover simulated truth; intervals cover at the nominal rate) and
+# runs on the schedule in .github/workflows/full-recovery.yaml. The calibration
+# claim rests on that workflow's last green run, recorded with the version it
+# ran against; a release states which run it inherits. Untouched families are
+# covered by the schedule, touched ones by step 3.
+#
+# The recovery paths call the tulpa engine, so verify the shared tulpa dep /
+# Remotes pin from a clean library before tagging
+# (.github/scripts/check-engine-pin.R).
 skip_if_fast <- function() {
   if (identical(Sys.getenv("TULPAOBS_FAST"), "1")) {
     testthat::skip("TULPAOBS_FAST set: skipping slow recovery/coverage loop")

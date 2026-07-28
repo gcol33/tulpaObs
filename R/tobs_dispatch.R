@@ -928,6 +928,7 @@
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
       max.outer  = control[["max.outer"]],
+      factor.starts = control[["factor.starts"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (!is.null(structs$spatial)) {

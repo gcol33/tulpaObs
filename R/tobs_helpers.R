@@ -458,7 +458,11 @@
   # community Laplace-EM and the field / factor updates (R/community_latent.R).
   # `max.outer` caps that outer alternation. Admitted on both Laplace routes:
   # a factor-only model is method = "laplace", a shared field "nested_laplace".
-  block_coordinate = c("max.outer"),
+  # `factor.starts` sets how many candidate starting directions the first factor
+  # pass selects over; each costs a full loading-EM run against the family's own
+  # oracle, so it is the dominant cost on families whose oracle marginalises a
+  # latent state.
+  block_coordinate = c("max.outer", "factor.starts"),
   # Outer-grid knobs for the standalone occu() varying-coefficient (SVC) bar,
   # which reroutes from the EM fixed-point path onto the joint direct-grid engine
   # under method = "nested_laplace" (gcol33/tulpaObs#81). They are no-ops on the

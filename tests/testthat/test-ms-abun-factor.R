@@ -94,6 +94,7 @@ test_that("ms_abun() + latent() gates unsupported combinations", {
 # re-enters the community EM, and every likelihood evaluation sums over the
 # latent N). N = 80 / S = 8 keeps the recovery well clear of the threshold.
 test_that("a latent-factor community N-mixture recovers residual co-occurrence", {
+  skip_if_fast()
   skip_on_cran()
   d <- .msaf_sim(N = 80L, S = 8L, J = 4L, Q = 2L, seed = 4L)
   fit <- tobs(~ x + latent(2), detection = ~ 1, data = d$data,
