@@ -36,7 +36,7 @@ struct NMixGroupedOracle : CountGroupedOracle {
                       const Rcpp::NumericMatrix& Z_site,
                       const Rcpp::IntegerVector& site_group,
                       int n_sites_, int n_groups_, int K_max,
-                      bool nb);
+                      bool nb, int headroom = -1);
 
     NMixSiteResult eval_site(int i, const double* eta_p_ptr,
                              double eta_lam) const override {

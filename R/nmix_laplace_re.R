@@ -57,7 +57,12 @@
 #' @param Sigma_lambda_init,Sigma_p_init Optional warm starts for the community
 #'   covariances. Default: the (ridge-regularized) sample covariance of the
 #'   per-species coefficient estimates.
-#' @param K_max Marginal-sum truncation (default `max(y) + 100`).
+#' @param K_max Marginal-sum truncation (default `max(y) + 100`), applied per
+#'   site (see `headroom`).
+#' @param headroom Latent-N states summed above each site's own `max(y_i)`.
+#'   `NULL` (default) derives it from `K_max`: an unset `K_max` caps each site at
+#'   `max(y_i) + 100`, an explicit one truncates globally and uncapped. A caller
+#'   that resolved the ceiling itself passes both.
 #' @param max_iter Optimizer iteration cap (default 200).
 #' @param optimizer Outer optimize driver over the shared native oracle:
 #'   `"em"` (default) is the fast Laplace-EM (block-coordinate Newton mode +
@@ -148,7 +153,8 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   X_lambda, X_p, n_sites, n_species,
                                   mu_lambda_init = NULL, mu_p_init = NULL,
                                   Sigma_lambda_init = NULL, Sigma_p_init = NULL,
-                                  K_max = NULL, max_iter = 200L,
+                                  K_max = NULL, headroom = NULL,
+                                  max_iter = 200L,
                                   optimizer = c("em", "joint_fd", "joint_grad"),
                                   mixture = c("P", "NB", "ZIP", "ZINB"),
                                   r_init = 10, sigma_logr_init = 0.5,
@@ -189,12 +195,26 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   if (nrow(X_p) != n_obs) stop("nrow(X_p) must equal length(y).", call. = FALSE)
   if (nrow(X_lambda) != n_sites) stop("nrow(X_lambda) must equal n_sites.", call. = FALSE)
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
-  # Marginal-sum truncation. Default max(y) + 100 (matching nmix_laplace):
-  # it must cover the latent-N posterior, which the observed counts pull ABOVE
-  # the prior-lambda tail, so a qpois(lambda) cap under-covers and truncates.
-  # The lgamma cache makes a generous K_max cheap, so correctness wins.
-  if (is.null(K_max)) K_max <- max(y) + 100L
-  K_max <- as.integer(K_max)
+  # Marginal-sum truncation, per site. The truncation must cover the latent-N
+  # posterior, which the observed counts pull ABOVE the prior-lambda tail, so a
+  # qpois(lambda) cap under-covers. What it has to cover is each site's OWN
+  # posterior, so the ceiling is per site (see .nmix_truncation): the lgamma
+  # cache removes the per-N gamma cost but the log-sum-exp and moment passes stay
+  # linear in the state count, which a shared ceiling inflates for every site but
+  # the one holding the largest count.
+  trunc    <- .nmix_truncation(K_max, y)
+  K_max    <- trunc$K_max
+  headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
+  # The guard verifies the truncation through a Poisson per-site marginal, which
+  # would under-state what a heavier-tailed abundance needs, so the cap is not
+  # taken on the NB / zero-inflated paths until the check carries the fitted
+  # dispersion. Those keep the shared ceiling.
+  if (is_nb || is_zi) headroom <- -1L
+  # Captured for the truncation guard below, which re-enters this fit with a
+  # wider window; taken here so the re-entry reproduces the original call in the
+  # original caller's frame rather than whatever frame the guard runs in.
+  self_call   <- match.call()
+  self_caller <- parent.frame()
   # A count above K_max has zero probability under the truncated marginal (the
   # latent N is summed to K_max), so a user-supplied K_max below the largest
   # observed count makes the per-(species,site) marginal structurally -Inf and the
@@ -223,7 +243,8 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
         suppressWarnings(
           nmix_laplace(y = y[sel], site_idx = site_idx[sel],
                              X_lambda = X_lambda, X_p = X_p[sel, , drop = FALSE],
-                             mixture = "P", K_max = K_max, verbose = FALSE)),
+                             mixture = "P", K_max = K_max, headroom = headroom,
+                             verbose = FALSE)),
         error = function(e) NULL)
       if (!is.null(f)) {
         if (all(is.finite(f$beta_lambda))) B_lam[s, ] <- f$beta_lambda
@@ -246,9 +267,33 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # C++, and BOTH optimize drivers consume it -- there is no second marginal
   # source. The driver is selected by `optimizer`.
   n_quad <- as.integer(n_quad)
+
+  # Guard the per-site truncation: the fitted coefficients have to carry the same
+  # score under the shared ceiling as under the capped window, or the cap moved
+  # the answer. Checked here rather than in the oracle, which exposes no such
+  # diagnostic; a fit that fails is redone wider, escalating to the uncapped
+  # ceiling, never reported truncated.
+  guard <- function(out) {
+    if (headroom < 0L) return(out)
+    gap <- tryCatch(
+      .nmix_community_score_gap(
+        lf = list(y = y, site_idx = site_idx, species_idx = species_idx,
+                  X_p = X_p),
+        X_lambda = X_lambda,
+        coef_lambda = sweep(as.matrix(out$b_lambda), 2L,
+                            as.numeric(out$mu_lambda), "+"),
+        coef_p = sweep(as.matrix(out$b_p), 2L, as.numeric(out$mu_p), "+"),
+        K_max = K_max, headroom = headroom),
+      error = function(e) NA_real_)
+    if (!is.finite(gap) || gap <= .NMIX_SCORE_TOL) return(out)
+    h_next <- .nmix_widen_headroom(headroom, K_max)
+    if (is.null(h_next)) return(out)
+    self_call$headroom <- h_next
+    eval(self_call, self_caller)
+  }
   orc <- cpp_nmix_community_oracle(y, site_idx, species_idx, X_lambda, X_p,
                                    n_sites, n_species, K_max,
-                                   nb = is_nb, zi = is_zi)
+                                   nb = is_nb, zi = is_zi, headroom = headroom)
 
   if (optimizer == "em") {
     # Default. EM is an outer driver over the shared oracle: block-coordinate
@@ -284,6 +329,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
       converged = isTRUE(em$converged), K_max = K_max,
       n_quad = 1L, lkj_eta = lkj_eta, optimizer = "em", mixture = "P")
     class(out) <- c("nmix_re_fit", "list")
+    out <- guard(out)
     return(out)
   }
 
@@ -418,7 +464,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     out$omega       <- stats::plogis(out$mu_omega)
   }
   class(out) <- c("nmix_re_fit", "list")
-  out
+  guard(out)
 }
 
 # Per-species community N-mixture oracle for the shared RE integrator. Each
@@ -428,7 +474,8 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
 # the design-sandwiched per-site observed-information block (with the latent-N
 # coupling) -- the covariate generalization of the intercept-only assembly.
 .nmix_re_oracle <- function(y, site_idx, species_idx, X_lambda, X_p,
-                            n_sites, n_species, p_lam, p_p, K_max) {
+                            n_sites, n_species, p_lam, p_p, K_max,
+                            headroom = NULL) {
   cl <- .tobs_clamp_eta
   d  <- p_lam + p_p
   rows_by_sp <- split(seq_len(length(y)), species_idx)
@@ -438,7 +485,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     nmix_site_marginal(
       y = y[sel], site_idx = site_idx[sel],
       X_lambda = X_lambda, X_p = X_p[sel, , drop = FALSE],
-      mixture = "P", K_max = K_max)
+      mixture = "P", K_max = K_max, headroom = headroom)
   })
 
   eta_of <- function(m, coef) {

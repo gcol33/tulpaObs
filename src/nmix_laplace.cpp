@@ -30,12 +30,16 @@ Rcpp::List cpp_nmix_laplace_fixed(
     bool verbose,
     bool nb,
     double log_r_init,
-    double theta_max
+    double theta_max,
+    int headroom = -1   // latent-N states above each site's own max(y); <0 = none
 ) {
     return tulpaObs::mcl::marginal_count_laplace_fixed(
         y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init,
         K_max, max_iter, tol, verbose, nb, log_r_init, theta_max,
-        [](const int* yy, const double* ep, int J, double el, int Km, double r) {
-            return tulpaObs::compute_nmix_site(yy, ep, J, el, Km, r);
+        [headroom](const int* yy, const double* ep, int J, double el, int Km,
+                   double r) {
+            const tulpaObs::NMixSiteCache c =
+                tulpaObs::nmix_precompute_site(yy, J, Km, headroom);
+            return tulpaObs::compute_nmix_site_cached(c, ep, el, r);
         });
 }

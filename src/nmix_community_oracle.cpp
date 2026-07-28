@@ -21,7 +21,7 @@ NMixCommunityOracle::NMixCommunityOracle(const Rcpp::IntegerVector& y,
                                          const Rcpp::NumericMatrix& X_lambda,
                                          const Rcpp::NumericMatrix& X_p,
                                          int n_sites, int n_species, int K_max,
-                                         bool nb, bool zi) {
+                                         bool nb, bool zi, int headroom) {
     this->n_sites = n_sites;
     p_lam    = X_lambda.ncol();
     p_p      = X_p.ncol();
@@ -65,7 +65,7 @@ NMixCommunityOracle::NMixCommunityOracle(const Rcpp::IntegerVector& y,
                 yv[j] = y[rr[j]];
                 for (int c = 0; c < p_p; ++c) rec.Xp(j, c) = X_p(rr[j], c);
             }
-            rec.cache = nmix_precompute_site(yv.data(), J, K_max);
+            rec.cache = nmix_precompute_site(yv.data(), J, K_max, headroom);
             sp_sites[s].push_back(std::move(rec));
         }
     }
@@ -353,10 +353,12 @@ SEXP cpp_nmix_community_oracle(Rcpp::IntegerVector y, Rcpp::IntegerVector site_i
                                Rcpp::NumericMatrix X_lambda,
                                Rcpp::NumericMatrix X_p,
                                int n_sites, int n_species, int K_max,
-                               bool nb = false, bool zi = false) {
+                               bool nb = false, bool zi = false,
+                               int headroom = -1) {
     return Rcpp::XPtr<tulpa::REGroupOracle>(
         new tulpaObs::NMixCommunityOracle(y, site_idx, species_idx,
                                           X_lambda, X_p,
-                                          n_sites, n_species, K_max, nb, zi),
+                                          n_sites, n_species, K_max, nb, zi,
+                                          headroom),
         true);
 }

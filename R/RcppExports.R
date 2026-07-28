@@ -277,8 +277,8 @@ cpp_nmix_community_field_solve <- function(y, site_idx, species_idx, X_lambda, X
     .Call(`_tulpaObs_cpp_nmix_community_field_solve`, y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau, rho, log_det_Q_rho, z_init, K_max, max_iter, tol, verbose)
 }
 
-cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE, zi = FALSE) {
-    .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb, zi)
+cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE, zi = FALSE, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb, zi, headroom)
 }
 
 cpp_nmix_community_spatial_icar <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
@@ -305,12 +305,12 @@ cpp_nmix_spatial_community_set_offset <- function(oracle_ptr, z) {
     invisible(.Call(`_tulpaObs_cpp_nmix_spatial_community_set_offset`, oracle_ptr, z))
 }
 
-cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {
-    .Call(`_tulpaObs_cpp_nmix_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max)
+cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_nmix_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom)
 }
 
-cpp_nmix_total_log_lik <- function(y, site_idx, eta_p, eta_lambda, K_max, r) {
-    .Call(`_tulpaObs_cpp_nmix_total_log_lik`, y, site_idx, eta_p, eta_lambda, K_max, r)
+cpp_nmix_total_log_lik <- function(y, site_idx, eta_p, eta_lambda, K_max, r, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_nmix_total_log_lik`, y, site_idx, eta_p, eta_lambda, K_max, r, headroom)
 }
 
 cpp_nmix_ploglik_batch <- function(y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads) {
@@ -325,8 +325,8 @@ cpp_fp_occu_ploglik_batch <- function(y, site_idx, eta_psi, eta_p11, eta_p10, et
     .Call(`_tulpaObs_cpp_fp_occu_ploglik_batch`, y, site_idx, eta_psi, eta_p11, eta_p10, eta_b, n_threads)
 }
 
-cpp_nmix_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb = FALSE) {
-    .Call(`_tulpaObs_cpp_nmix_grouped_oracle`, arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb)
+cpp_nmix_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb = FALSE, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_nmix_grouped_oracle`, arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb, headroom)
 }
 
 cpp_nested_laplace_nmix_icar <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {

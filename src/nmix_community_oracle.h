@@ -136,7 +136,7 @@ struct NMixCommunityOracle : tulpa::REGroupOracle {
                         const Rcpp::NumericMatrix& X_lambda,
                         const Rcpp::NumericMatrix& X_p,
                         int n_sites, int n_species, int K_max,
-                        bool nb = false, bool zi = false);
+                        bool nb = false, bool zi = false, int headroom = -1);
 
     SpeciesEval eval_species(int g, const double* b,
                              bool want_negH = true, bool want_fisher = true) const;

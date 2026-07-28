@@ -47,9 +47,14 @@
 #'   optimiser pins `log_r` at `log(r_max)` the data are consistent with Poisson
 #'   and a warning recommends `mixture = "P"`.
 #' @param K_max Marginal-sum truncation. Defaults to `max(y) + 100` (matches
-#'   `unmarked::pcount`). The returned `boundary_weight` per site flags any
-#'   site whose posterior over N puts non-trivial mass on `K_max`; raise
-#'   `K_max` if any such weight exceeds ~1e-4.
+#'   `unmarked::pcount`), applied per site (see `headroom`). The returned
+#'   `boundary_weight` per site flags any site whose posterior over N puts
+#'   non-trivial mass on its truncation; raise `K_max` if any such weight
+#'   exceeds ~1e-4.
+#' @param headroom Latent-N states summed above each site's own `max(y_i)`.
+#'   `NULL` (default) derives it from `K_max`: an unset `K_max` caps each site at
+#'   `max(y_i) + 100`, an explicit one truncates globally and uncapped. A
+#'   negative value disables the per-site cap.
 #' @param max_iter Newton iteration budget (default 100).
 #' @param tol Gradient-norm convergence tolerance (default 1e-6).
 #' @param verbose Print per-iteration `(log_lik, grad_norm, boundary_max)`.
@@ -88,6 +93,7 @@ nmix_laplace <- function(y,
                                log_r_init = NULL,
                                r_max = 1e5,
                                K_max = NULL,
+                               headroom = NULL,
                                max_iter = 100L,
                                tol = 1e-6,
                                verbose = FALSE) {
@@ -126,13 +132,15 @@ nmix_laplace <- function(y,
     stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
   }
 
-  if (is.null(K_max)) {
-    K_max <- as.integer(max(y) + 100L)
-  } else {
-    K_max <- as.integer(K_max)
-    if (K_max < max(y)) {
-      stop("`K_max` must be >= max(y).", call. = FALSE)
-    }
+  trunc    <- .nmix_truncation(K_max, y)
+  K_max    <- trunc$K_max
+  headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
+  # A negative-binomial abundance has a heavier tail than the per-site window is
+  # sized for, so the cap is not taken there until the guard's check carries the
+  # fitted dispersion; NB keeps the shared ceiling.
+  if (nb) headroom <- -1L
+  if (K_max < max(y)) {
+    stop("`K_max` must be >= max(y).", call. = FALSE)
   }
 
   if (!is.numeric(r_max) || length(r_max) != 1L || r_max <= 0) {
@@ -154,6 +162,7 @@ nmix_laplace <- function(y,
     beta_lambda_init = as.numeric(beta_lambda_init),
     beta_p_init      = as.numeric(beta_p_init),
     K_max            = K_max,
+    headroom         = headroom,
     max_iter         = as.integer(max_iter),
     tol              = as.numeric(tol),
     verbose          = isTRUE(verbose),
@@ -177,6 +186,9 @@ nmix_laplace <- function(y,
   fit$mixture <- mixture
   if (!nb) { fit$log_r <- NA_real_; fit$r <- NA_real_ }
   fit$K_max <- K_max
+  # The window the fit finally ran at, after any widening by the guard below.
+  # -1 means no per-site cap: every site truncated at the shared K_max.
+  fit$headroom <- headroom
   fit$n_sites <- n_sites
   fit$n_obs <- length(y)
   fit$call <- match.call()
@@ -194,10 +206,36 @@ nmix_laplace <- function(y,
     ), call. = FALSE)
   }
   max_bw <- max(fit$boundary_weight, na.rm = TRUE)
-  if (is.finite(max_bw) && max_bw > 1e-4) {
+  # Guard the per-site truncation: the answer has to be stationary under the
+  # UNCAPPED likelihood too, so compare the score at the fitted coefficients
+  # under both truncations and widen the window when they disagree. Escalates to
+  # the shared ceiling, so this can only move the fit back toward the
+  # untruncated answer.
+  if (headroom >= 0L) {
+    gap <- tryCatch({
+      one <- function(h) {
+        ev <- nmix_site_marginal(y, site_idx, X_lambda, X_p, mixture = "P",
+                                 K_max = K_max,
+                                 headroom = h)$eval_beta(fit$beta_lambda,
+                                                         fit$beta_p)
+        c(as.numeric(crossprod(X_lambda, ev$grad_eta_lambda)),
+          as.numeric(crossprod(X_p, ev$grad_eta_p)))
+      }
+      max(abs(one(headroom) - one(-1L)))
+    }, error = function(e) NA_real_)
+    if (is.finite(gap) && gap > .NMIX_SCORE_TOL) {
+      h_next <- .nmix_widen_headroom(headroom, K_max)
+      if (!is.null(h_next)) {
+        cl <- match.call()
+        cl$headroom <- h_next
+        return(eval(cl, parent.frame()))
+      }
+    }
+  }
+  if (is.finite(max_bw) && max_bw > .NMIX_BOUNDARY_TOL) {
     warning(sprintf(
       "Max posterior weight on N = K_max is %.2e at %d sites; raise K_max.",
-      max_bw, sum(fit$boundary_weight > 1e-4)
+      max_bw, sum(fit$boundary_weight > .NMIX_BOUNDARY_TOL)
     ), call. = FALSE)
   }
   class(fit) <- c("nmix_fit", "list")

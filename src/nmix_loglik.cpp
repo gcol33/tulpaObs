@@ -45,7 +45,8 @@ Rcpp::List cpp_nmix_total_log_lik(
     Rcpp::NumericVector eta_p,
     Rcpp::NumericVector eta_lambda,
     int K_max,
-    double r          // NB size; pass Inf for the Poisson kernel
+    double r,         // NB size; pass Inf for the Poisson kernel
+    int headroom = -1 // latent-N states above each site's own max(y); <0 = none
 ) {
     const int n_obs = y.size();
     const int n_sites = eta_lambda.size();
@@ -115,9 +116,10 @@ Rcpp::List cpp_nmix_total_log_lik(
             y_site[j]     = y[idx[j]];
             eta_p_site[j] = eta_p[idx[j]];
         }
-        tulpaObs::NMixSiteResult res = tulpaObs::compute_nmix_site(
-            y_site.data(), eta_p_site.data(), J,
-            eta_lambda[s], K_max, r
+        const tulpaObs::NMixSiteCache cache =
+            tulpaObs::nmix_precompute_site(y_site.data(), J, K_max, headroom);
+        tulpaObs::NMixSiteResult res = tulpaObs::compute_nmix_site_cached(
+            cache, eta_p_site.data(), eta_lambda[s], r
         );
         if (!R_finite(res.log_lik)) ++n_K_inadmissible;
         total_log_lik += res.log_lik;

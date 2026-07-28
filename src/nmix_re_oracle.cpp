@@ -18,7 +18,7 @@ NMixGroupedOracle::NMixGroupedOracle(int arm_,
                                      const Rcpp::NumericMatrix& Z_site,
                                      const Rcpp::IntegerVector& site_group,
                                      int n_sites_, int n_groups_, int K_max,
-                                     bool nb) {
+                                     bool nb, int headroom) {
     std::vector<std::vector<int>> y_by_site;
     build_common(arm_, y, site_idx, X_lambda, X_p, Z_site, site_group,
                  n_sites_, n_groups_, nb, y_by_site);
@@ -26,7 +26,8 @@ NMixGroupedOracle::NMixGroupedOracle(int arm_,
     site_cache.assign(n_sites, NMixSiteCache());
     for (int i = 0; i < n_sites; ++i) {
         const int J = (int)y_by_site[i].size();
-        site_cache[i] = nmix_precompute_site(y_by_site[i].data(), J, K_max);
+        site_cache[i] =
+            nmix_precompute_site(y_by_site[i].data(), J, K_max, headroom);
     }
 }
 
@@ -45,10 +46,10 @@ SEXP cpp_nmix_grouped_oracle(int arm,
                              Rcpp::NumericMatrix Z_site,
                              Rcpp::IntegerVector site_group,
                              int n_sites, int n_groups, int K_max,
-                             bool nb = false) {
+                             bool nb = false, int headroom = -1) {
     return Rcpp::XPtr<tulpa::REGroupOracle>(
         new tulpaObs::NMixGroupedOracle(arm, y, site_idx, X_lambda, X_p,
                                         Z_site, site_group,
-                                        n_sites, n_groups, K_max, nb),
+                                        n_sites, n_groups, K_max, nb, headroom),
         true);
 }

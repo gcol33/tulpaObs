@@ -99,10 +99,23 @@ Do NOT run on every edit. Ladder:
    figures are stale by 2-3x on the counts.
    `skip_if_fast()` gates every fitting block (628 call sites across 166 files);
    no-op when env var unset.
-3. **Full recovery suite** (all seeds, NUTS, spatial) -> ONLY before committing to
-   main, before release, or when asked. `Sys.unsetenv("TULPAOBS_FAST")`, then
-   see the parallel note below -- `devtools::test()` cannot use
-   `Config/testthat/parallel` safely on this package. Hours either way.
+3. **Full recovery suite** (all seeds, NUTS, spatial) -> CI's schedule
+   (`full-recovery.yaml`), or when asked. NOT a release gate and NOT a
+   pre-commit step: measured serial cost is ~9h and one file has never
+   terminated, so a local run of the whole tier finishes only by luck.
+   `Sys.unsetenv("TULPAOBS_FAST")`, then see the parallel note below --
+   `devtools::test()` cannot use `Config/testthat/parallel` safely on this
+   package.
+
+**Release gate = what the diff changed, not the whole tier.** Tarball
+`R CMD check` + whole-suite smoke against the installed package + the recovery
+files for the families the diff touches. The calibration evidence (every
+multi-seed recovery / coverage loop) rests on `full-recovery.yaml`'s last green
+run and the version it ran against; a release states which run it inherits.
+Full policy in `tests/testthat/helper-speed.R`. As of 2026-07-28 that workflow
+has completed ZERO times (one run, 2026-07-25, cancelled at the 350-min cap),
+so the calibration evidence is currently absent rather than stale -- treat any
+claim resting on it as unverified until the tier reports.
 
 **`devtools::test()` can never run this suite in parallel (#151, closed as
 won't-fix-in-devtools).** It unconditionally passes `load_package = "source"`
@@ -399,6 +412,66 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
 
 - **Non-spatial** (`laplace`): `nmix_laplace()`. vcov = marginal observed-Fisher inv
   (full joint lambda/p block).
+- **Latent-N truncation is PER SITE, and guarded.** The sum runs on `[max(y_i), K]`:
+  the lower end was always the site's own maximum, only the ceiling was shared, and
+  a shared ceiling makes every site pay for the largest count ANYWHERE in the data.
+  Measured: one species-site drawing `y = 2248` (mean count 8.15) took `K_max` to
+  2348 and made the other 639 evaluate 2344 states each instead of ~100 -- cost is
+  linear in the state count, so the fit slowed by that ratio and a single fixture
+  seed ran 4x its siblings. `K_max = NULL` (the default) now caps each site at
+  `max(y_i) + 100` (`.nmix_truncation`, `R/nmix_site_marginal.R`), the SAME headroom
+  the site holding the global maximum already had; an explicit `K_max` keeps its
+  documented meaning (hard global truncation) and is never capped, since a caller
+  raising it is compensating for the one regime headroom cannot see. Threaded as a
+  `headroom` argument (`< 0` = no cap) through `nmix_precompute_site` -- the single
+  place `K_hi` is set, so every caller inherits it. Do NOT give `compute_nmix_site`
+  a headroom argument: its arity IS the `CountKernelFn` function-pointer contract
+  the shared count-NUTS / count-Laplace drivers take, and a defaulted 7th parameter
+  silently breaks that conversion (`abun_nuts.cpp`). Capping callers build the cache
+  themselves instead.
+  **The cap is verified, not assumed.** It is exact where the posterior over N
+  decays inside its window and wrong where it does not, and no fixed headroom
+  survives `p -> 0` (the never-detected count is ~`Poisson(lambda (1-p)^J)`). The
+  guard is NOT the boundary mass `nmix_laplace()` warns on: that bounds the error
+  where the fit STOPPED, and a fixture passed it at 4.6e-06 while sitting 0.032 nats
+  below the uncapped optimum and 0.57 away in the coefficients -- the optimiser's
+  PATH ran through the truncated region. What is tested is that the answer is also
+  stationary under the shared ceiling: the score at the fitted coefficients under
+  both truncations, which must agree to `.NMIX_SCORE_TOL` (1e-4). It separates by
+  eight orders of magnitude (1e-10 at the uncapped optimum, 7.4e-02 at the capped
+  one) where boundary mass separated by nothing. Failing that, the window widens 4x
+  and the fit is redone, escalating to uncapped -- so a guarded fit is never worse
+  than the shared-ceiling fit, at worst it costs the extra fits. Verified
+  bit-identical (0.000e+00 under the uncapped likelihood) on ordinary counts (guard
+  never fires), an unidentified lambda/p ridge (escalates to uncapped) and an
+  identified high-abundance fixture (settles at 400). Wired into `nmix_laplace()`,
+  `nmix_laplace_re()` and the `ms_abun() + latent()` path (which scores at the
+  predictor the fit ran on, field + factor offsets included -- a latent surface can
+  push a site above what its own counts suggest, the direction that exhausts a
+  window). NB / zero-inflated keep the shared ceiling: the check runs a Poisson
+  marginal and would understate a heavier tail. The dedicated C++ areal community
+  path (#12) and the removal / distance kernels are untouched and uncapped --
+  a capped oracle beside an uncapped field solve in one fit is worse than neither.
+  **The guard is live, not just wired.** `.nmix_community_score_gap()` sits behind
+  a `tryCatch(error = NA)` and `is.finite(NA)` is FALSE, so an ERRORING guard and a
+  PASSING guard both leave the fit untouched and look identical from outside -- a
+  capped fit matching its uncapped twin is NOT evidence the check ran. Measured
+  directly on a fitted `ms_abun() + latent()` (`dev_notes/_probe_guard_live.R`):
+  gap exactly 0 at the shipped headroom, 93.5 with the window collapsed to the
+  single state `max(y_i)`, and 137.0 collapsed WITH the fit's own factor offset --
+  finite on every call, six orders above `.NMIX_SCORE_TOL`. The offset raising the
+  collapsed-window gap is the design rationale showing up in the measurement: the
+  latent surface lifts exactly the sites a tight window starves.
+  **What it buys, end to end** (`dev_notes/_probe_kmax_fit.R`, `ms_abun() +
+  latent(2)`): the pathological seed (`max(y) = 2248`, N=80 S=8) went from running
+  past 108 min UNFINISHED to completing in 52.2 min, `res_cor` 0.955. A paired
+  small fixture (N=40 S=6, ceiling 259) ran 1496.1s uncapped vs 788.6s capped --
+  **1.90x**, with `mag_ratio` and `res_cor` agreeing to all six printed digits.
+  It buys NOTHING on a fixture whose counts are not heavy-tailed: `test-ms-abun-factor.R`'s
+  own seed 4 has `max(y) = 30`, so the shared ceiling was already nearly per-site
+  (9832 -> 8080 states, 1.2x by construction) and the guard spends part of that
+  back. So this is a tier-3 fix for heavy-tailed seeds, NOT a way to shrink that
+  file -- its lever is `factor.starts`.
 - **Areal** (`nested_laplace`): icar/bym2/car_proper on abundance ->
   `.tobs_fit_nmix_spatial()` -> `nmix_laplace_{icar,bym2,car_proper}` (one unit/site).
   Cov grid-integrated (law of total cov): kernels return per-grid `cov_blocks`, wrapper
@@ -1004,7 +1077,9 @@ R/
 
 **Block-coordinate callers MUST warm-start `init_b`/`init_Sigma` (#156).** `.tobs_community_em()` has accepted them since #119 but only `ms_abun_latent.R` passed them -- every other latent caller cold-restarted all per-species deviations AND the community covariances on every outer pass. Wiring them into ms_count / ms_occu / ms_dyn_occu cut the factor fit **2.5x** (96s -> 39s per 6 seeds) with the answer unchanged to 4 decimals.
 
-**Factor path needs `max.outer` 150; field path 25 (#156).** A field block reaches `tol` and breaks early. The factor block does NOT: it alternates w/ the coefficient block along a SLOW mode (the per-species intercepts and the offset's per-species level absorb the same latent level), the per-cell offset change decaying ~2%/pass, so `tol` 1e-4 on the STEP would need ~300 passes -- and the step is ~1/50 of the REMAINING error, so the criterion reads converged long before it is. Stopping at 25 leaves a real community-mean bias: int **+0.0613** (25) / +0.0237 (60) / **+0.0001** (150) / -0.0038 (400). Driver resolves `max.outer = NULL` -> `factor.outer` when `has_factor` else 25; an explicit `control$max.outer` still wins. Callers pass the raw `control[["max.outer"]]`, NOT `%||% 25L`. **`factor.outer` is per-family and each family sets it from its OWN measurement** -- ms_count/jsdm 150 (the curve above), ms_occu 150 (its 16-seed recovery was measured AT that budget), everything else stays 25 until measured. Do NOT globalize it: the cost is not transferable either. ms_count nets 13.8s -> 22.5s (1.6x) because the 2.5x warm start pays back part of the 3.5x longer loop, but `ms_abun_latent` already warm-started, so 150 costs it the full 6x and pushed `test-ms-abun-factor.R` past **85 min on one file** before it was reverted to 25. `max.outer = 60` is the measured middle for ms_count (11.2s/fit, FASTER than shipped, intercept +0.024 = the size the shipped fit already carried) if suite time ever matters more than the last of the bias. The MMLE's inner `em.iter` (default 10) is NOT a speed lever: on ms_abun cutting it 10 -> 2 saved ~20% of a ~1000s contended fit and pushed the loading magnitude 1.93 -> 2.03 (under-shrinks) with `res_cor` dropping 0.994 -> 0.993 -- the per-outer-pass community EM refit over latent N is the cost, not the loading EM, so leave em.iter at 10.
+**Factor path needs `max.outer` 150; field path 25 (#156).** A field block reaches `tol` and breaks early. The factor block does NOT: it alternates w/ the coefficient block along a SLOW mode (the per-species intercepts and the offset's per-species level absorb the same latent level), the per-cell offset change decaying ~2%/pass, so `tol` 1e-4 on the STEP would need ~300 passes -- and the step is ~1/50 of the REMAINING error, so the criterion reads converged long before it is. Stopping at 25 leaves a real community-mean bias: int **+0.0613** (25) / +0.0237 (60) / **+0.0001** (150) / -0.0038 (400). Driver resolves `max.outer = NULL` -> `factor.outer` when `has_factor` else 25; an explicit `control$max.outer` still wins. Callers pass the raw `control[["max.outer"]]`, NOT `%||% 25L`. **`factor.outer` is per-family and each family sets it from its OWN measurement** -- ms_count/jsdm 150 (the curve above), ms_occu 150 (its 16-seed recovery was measured AT that budget), everything else stays 25 until measured. Do NOT globalize it: the cost is not transferable either. ms_count nets 13.8s -> 22.5s (1.6x) because the 2.5x warm start pays back part of the 3.5x longer loop, but `ms_abun_latent` already warm-started, so 150 costs it the full 6x and pushed `test-ms-abun-factor.R` past **85 min on one file** before it was reverted to 25. `max.outer = 60` is the measured middle for ms_count (11.2s/fit, FASTER than shipped, intercept +0.024 = the size the shipped fit already carried) if suite time ever matters more than the last of the bias. The MMLE's inner `em.iter` (default 10) is NOT a speed lever: on ms_abun cutting it 10 -> 2 saved ~20% of a ~1000s contended fit and pushed the loading magnitude 1.93 -> 2.03 (under-shrinks) with `res_cor` dropping 0.994 -> 0.993 -- the per-outer-pass community EM refit over latent N is the cost, not the loading EM, so leave em.iter at 10. **That last conclusion predates the #157 multi-start and no longer holds** -- see `factor.starts` below.
+
+**`factor.starts` (multi-start width) dominates a latent-N fit, NOT `max.outer`.** #157's basin escape runs K candidate starting directions on the FIRST factor pass -- cosine + principal-factor init + `.tobs_latent_factor_random_starts(k = 6L)` = 8 -- and each runs a FULL loading-EM to convergence, because the raw scale-search values were measured not to rank the same as the converged ones. Its cost was measured on `ms_count` ("+30s against an ~90s fit"), whose oracle evaluates a closed-form density. `ms_abun`'s oracle sums over the latent N per species-site, so the same 8 candidates cost far more there. Measured on `test-ms-abun-factor.R`'s own fixture (N=80, S=8, Q=2, seed 4, tulpaObs 0.0.179 / tulpa 0.0.101, idle box): `max.outer` 1 -> **19.7 min**, 3 -> 21.5, 25 (default) -> 30.1, with `resid_cor` 0.983/0.992/0.994. So a later outer pass costs **0.4-0.9 min** while the FIRST pass -- the only one that runs the multi-start -- costs **19.7 min**. Pass 1 also runs the warm start (`nmix_laplace_re(max_iter = 100L)`, a full community EM), so the two were separated directly on that same fixture (K_max=130): **warm start 2.5s**, full fit at `factor.starts` 1 -> **442.2s**, at 8 -> **892.3s**. The warm start is not the cost; the 7 extra candidates are **450s, half the fit**. What they buy on that seed is nothing measurable -- `mag_ratio` 0.9539 (1 start) vs 0.9535 (8), `res_cor` 0.9942 both. Successive halving was considered and rejected on these numbers: it makes a component cheaper that should instead be smaller, and it prunes on truncated candidate values that #157 measured as mis-ranking against their converged ones. NB the 30.1-min figure above and the clean 14.87-min fit are the SAME fixture and settings; the first sweep shared the box with another session's R job, so treat the `max.outer` row costs as contended and the ratios (not the absolutes) as the usable part. The share is also fixture-specific -- at N=40/S=6/seed 300 the same 7 candidates were only 109s (16%) -- because candidate cost scales with `K_max = max(y)+100` (the Royle marginal is O(K) per site). The nested_laplace spatial-factor fit is 34.3 min at `max.outer = 1` alone. At defaults the file is ~4.5-5h (block3 ~30 min + block5 6x30 + block4 ~70), which is the 6.6h abort once contended. Driver takes `factor.starts` (default 8L, byte-identical to the pre-knob path: cosine, eigen attempted iff >=2, then `factor.starts - 2` random), threaded family -> `control$factor.starts` via the `block_coordinate` group. Set it per family from that family's OWN measurement, exactly as `factor.outer` is -- `ms_abun`'s value is NOT yet measured and stays at 8. **`residual_cor` cannot decide it**: it is row-normalized and blind to a magnitude regression (the ms_count seed at 1.53x truth still read 0.93), so score `sqrt(tr(Sigma_res))` against truth.
 
 **`n.quad` is NOT threaded from any caller** -- the driver's default 5 is what every community latent fit actually uses, so `control$n.quad` silently does nothing on this path. Not a defect for the magnitude (ARGMAX stable to <0.4% vs n=21, `test-community-latent-quad.R`) NOR for the offset (5 nodes == 21 to 8e-4), but do not read a passed `n.quad` as having taken effect.
 

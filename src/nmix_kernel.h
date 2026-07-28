@@ -184,7 +184,27 @@ struct NMixSiteCache {
     bool admissible;                 // K_max >= max(y)
 };
 
-inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max) {
+// Truncation headroom: how many latent-N states above a site's own maximum
+// count the sum is allowed to run for. `headroom < 0` disables the cap and the
+// site truncates at the shared `K_max`, which is the historical behaviour and
+// what an explicitly supplied K_max still means.
+//
+// Why the cap exists. The sum runs over [max(y_i), K_max] -- Binom(y, N, p) is
+// zero below the site's own maximum, so the LOWER end is already per-site. Only
+// the ceiling is shared, and the summand past max(y_i) is the posterior of the
+// individuals never detected there, which decays geometrically. Sharing one
+// ceiling therefore makes every site pay for the largest count anywhere in the
+// data: one site with y = 2248 gives K_max = 2348 and forces a site with y = 5
+// to evaluate 2344 states whose combined posterior mass is ~0, instead of the
+// ~100 that carry it. Cost is linear in the state count, so the whole fit slows
+// by the ratio.
+//
+// A shared K_max = max_i(max(y_i)) + h already gives the site that determines it
+// exactly h states of headroom. Capping each site at its own max + h gives every
+// site the headroom the binding site has, so no site is left with a tighter
+// truncation than the current default already accepts.
+inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max,
+                                          int headroom = -1) {
     NMixSiteCache c;
     c.n_visits = n_visits;
     c.y.assign(y, y + n_visits);
@@ -192,7 +212,8 @@ inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max)
     for (int j = 0; j < n_visits; ++j) if (y[j] > y_max) y_max = y[j];
     c.K_lo = y_max;
     c.K_hi = K_max;
-    c.admissible = (K_max >= y_max);
+    if (headroom >= 0 && y_max <= K_max - headroom) c.K_hi = y_max + headroom;
+    c.admissible = (c.K_hi >= y_max);
     c.const_log_yfact = 0.0;
     for (int j = 0; j < n_visits; ++j)
         c.const_log_yfact -= R::lgammafn((double)y[j] + 1.0);
@@ -345,6 +366,11 @@ inline NMixSiteResult compute_nmix_site_cached(
 //     truncation is exact, not approximate (Royle 2004, eq. 4).
 //   - Poisson path is recovered exactly at r = +Inf; the dispersion outputs
 //     are set Poisson-neutral (grad_theta = 0, score_wt_lambda = 1, ...).
+//   - The arity here matches CountKernelFn, the function-pointer contract the
+//     shared count-NUTS / count-Laplace drivers take, so a caller wanting the
+//     per-site truncation cap builds the cache itself (nmix_precompute_site with
+//     a headroom, then compute_nmix_site_cached) rather than adding an argument
+//     that would silently break that conversion.
 inline NMixSiteResult compute_nmix_site(
     const int* y,
     const double* eta_p,

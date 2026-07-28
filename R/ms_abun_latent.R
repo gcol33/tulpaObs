@@ -46,18 +46,22 @@
 # Per-species Royle marginals over the shared abundance design. `lf` is the
 # long-form (y, site_idx, species_idx, X_p); each species gets its own marginal
 # closure over its own visit rows, sharing the site-level X_lambda.
-.tobs_ms_abun_marginals <- function(model, K_max = NULL) {
+.tobs_ms_abun_marginals <- function(model, K_max = NULL, headroom = NULL) {
   lf <- .tobs_ms_nmix_longform(model)
   X_lambda <- model$X_processes[[1L]]
-  if (is.null(K_max)) K_max <- max(lf$y) + 100L
-  K_max <- as.integer(K_max)
+  # One ceiling across species (the warm start and the community oracle share
+  # it), with the per-site cap carried alongside so a single heavy-tailed
+  # species-site does not set the state count for every other one.
+  trunc    <- .nmix_truncation(K_max, lf$y)
+  K_max    <- trunc$K_max
+  headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
   marg <- lapply(seq_len(model$n_species), function(s) {
     k <- lf$species_idx == s
     nmix_site_marginal(y = lf$y[k], site_idx = lf$site_idx[k],
                        X_lambda = X_lambda, X_p = lf$X_p[k, , drop = FALSE],
-                       mixture = "P", K_max = K_max)
+                       mixture = "P", K_max = K_max, headroom = headroom)
   })
-  list(lf = lf, marg = marg, K_max = K_max,
+  list(lf = lf, marg = marg, K_max = K_max, headroom = headroom,
        X_p = lapply(seq_len(model$n_species),
                     function(s) lf$X_p[lf$species_idx == s, , drop = FALSE]))
 }
@@ -94,9 +98,11 @@
 # not identified against a per-site latent structure.
 .tobs_fit_ms_abun_latent <- function(model, spatial = NULL, latent = NULL,
                                      mixture = "poisson", K_max = NULL,
+                                     headroom = NULL,
                                      max.iter = 100L, tol = 1e-4,
                                      sigma.beta = 5, priors = NULL,
-                                     max.outer = NULL, verbose = FALSE, ...) {
+                                     max.outer = NULL, factor.starts = NULL,
+                                     verbose = FALSE, ...) {
   if (!identical(mixture, "poisson")) {
     stop("ms_abun() with latent() factors is Poisson-only: a negative-binomial ",
          "size is a second per-site dispersion and is not identified against a ",
@@ -106,7 +112,7 @@
   }
   S  <- model$n_species
   Ns <- model$n_sites
-  ms <- .tobs_ms_abun_marginals(model, K_max = K_max)
+  ms <- .tobs_ms_abun_marginals(model, K_max = K_max, headroom = headroom)
   lf <- ms$lf
   X_lambda <- model$X_processes[[1L]]
   p_lam <- ncol(X_lambda)
@@ -122,7 +128,8 @@
   warm <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
     X_lambda = X_lambda, X_p = lf$X_p, n_sites = Ns, n_species = S,
-    K_max = ms$K_max, max_iter = as.integer(max.iter), mixture = "P",
+    K_max = ms$K_max, headroom = ms$headroom,
+    max_iter = as.integer(max.iter), mixture = "P",
     optimizer = "em", n_quad = 1L, lkj_eta = 1, verbose = FALSE)
   mu0 <- c(as.numeric(warm$mu_lambda), as.numeric(warm$mu_p))
 
@@ -194,9 +201,43 @@
     spatial = spatial, latent = latent, model = model, what = "ms_abun()",
     make_oracle = make_oracle, em_fit = em_fit, offset_of = offset_of,
     allow = c("icar", "car_proper", "bym2", "spde"),
-    tol = tol, max.outer = max.outer, verbose = verbose)
+    tol = tol, max.outer = max.outer, factor.starts = factor.starts,
+    verbose = verbose)
 
-  em  <- res$em
+  em <- res$em
+
+  # Guard the per-site truncation: the fitted coefficients have to carry the same
+  # score under the shared ceiling as under the capped window. Scored at the
+  # predictor the fit actually ran on, offsets included -- a latent surface can
+  # push a site's abundance well above what its own counts suggest, which is the
+  # direction that exhausts a window. Redo the fit wider if it disagrees.
+  if (ms$headroom >= 0L) {
+    # The same two offsets em_fit() adds to eta_lambda: the shared field's
+    # per-site contribution and the factor surface's per-(site, species) one.
+    off <- matrix(0, Ns, S)
+    if (!is.null(res$field$site_off))  off <- off + as.numeric(res$field$site_off)
+    if (!is.null(res$factor$offset))   off <- off + res$factor$offset
+    gap <- tryCatch(
+      .nmix_community_score_gap(
+        lf = lf, X_lambda = X_lambda,
+        coef_lambda = do.call(rbind, lapply(em$b_list,
+                                            function(b) (em$mu + b)[lam_idx])),
+        coef_p = do.call(rbind, lapply(em$b_list,
+                                       function(b) (em$mu + b)[p_idx])),
+        K_max = ms$K_max, headroom = ms$headroom,
+        eta_lambda_off = off),
+      error = function(e) NA_real_)
+    if (is.finite(gap) && gap > .NMIX_SCORE_TOL) {
+      h_next <- .nmix_widen_headroom(ms$headroom, ms$K_max)
+      if (!is.null(h_next)) {
+        cl <- match.call()
+        cl$K_max <- ms$K_max
+        cl$headroom <- h_next
+        return(eval(cl, parent.frame()))
+      }
+    }
+  }
+
   raw <- list(
     mu_lambda = em$mu[lam_idx], mu_p = em$mu[p_idx],
     vcov = em$Vf,
