@@ -102,7 +102,6 @@ test_that("dyn_occu marginal recursion is internally consistent", {
 test_that("dyn_occu marginal recursion matches unmarked::colext at its MLE", {
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  suppressPackageStartupMessages(library(unmarked))
   set.seed(101)
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
   n_sites <- 120L; T <- 4L; J <- 3L
@@ -138,7 +137,6 @@ test_that("dyn_occu coefficients match unmarked::colext (tulpaObs#86)", {
   skip_on_cran()
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  suppressPackageStartupMessages(library(unmarked))
   set.seed(101)
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
   n_sites <- 120L; T <- 4L; J <- 3L
@@ -176,7 +174,6 @@ test_that("dyn_occu exact-marginal refine reaches colext MLE and calibrated SEs"
   skip_on_cran()
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  suppressPackageStartupMessages(library(unmarked))
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
   n_sites <- 120L; T <- 4L; J <- 3L
   for (seed in c(101L, 7L, 22L)) {

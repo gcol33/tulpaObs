@@ -100,12 +100,10 @@ test_that("Multi-seed coverage of 95% Wald CIs is near nominal", {
 test_that("Cross-check against unmarked::pcount", {
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  # unmarked fits are S4. Call its coef()/logLik() namespace-qualified so they
-  # bind to unmarked's S4 generics directly: under R CMD check all test files
-  # share one session, and a bare coef() can resolve to stats::coef.default
-  # (-> "$ operator not defined for this S4 class") if the search path shifts
-  # after another file attaches a package. unmarked:: is immune to that.
-  suppressPackageStartupMessages(library(unmarked))
+  # unmarked fits are S4. Every unmarked call below is namespace-qualified
+  # (unmarked::coef, unmarked::logLik, ...) so it binds to unmarked's S4
+  # generics without attaching the package -- avoids shadowing tobs()'s own
+  # occu()/ranef() exports in test files that run later in the same session.
   dat <- simulate_nmix(seed = 42)
   fit <- nmix_laplace(
     y = dat$y, site_idx = dat$site_idx,
@@ -242,7 +240,6 @@ test_that("NB multi-seed recovery: slopes and dispersion, near-nominal coverage"
 test_that("NB cross-check against unmarked::pcount(mixture = 'NB')", {
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  suppressPackageStartupMessages(library(unmarked))
   dat <- simulate_nmix(seed = 5, n_sites = 250, r = 2)
   fit <- nmix_laplace(
     y = dat$y, site_idx = dat$site_idx,

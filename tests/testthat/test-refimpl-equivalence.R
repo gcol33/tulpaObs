@@ -12,7 +12,6 @@
 test_that("removal_laplace matches unmarked::multinomPois", {
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  suppressPackageStartupMessages(library(unmarked))
 
   sim <- simulate_removal(N = 200, K = 4, n_abund_covs = 1, n_det_covs = 1,
                           seed = 7)
@@ -48,7 +47,6 @@ test_that("removal_laplace matches unmarked::multinomPois", {
 test_that("distance_laplace matches unmarked::distsamp", {
   skip_if_fast()
   skip_if_not_installed("unmarked")
-  suppressPackageStartupMessages(library(unmarked))
 
   sim <- simulate_distance(N = 200, seed = 11)
   fit <- distance_laplace(
