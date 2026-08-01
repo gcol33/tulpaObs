@@ -73,7 +73,29 @@ test_that("ms_distance() gates unsupported combinations", {
     "nuts|method")
 })
 
+# Cheap plumbing companion (gcol33/tulpaObs#159): a small design with no truth
+# thresholds to re-calibrate, so it stays ungated and keeps this path exercised
+# on every push while the recovery block below moves to the recovery tier.
+test_that("a small msDS fit wires the community S3 surface", {
+  d <- simulate_ms_distance(n_species = 3, N = 25, cutpoints = .msds_cut,
+                            seed = 4)
+  fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
+              family = ms_distance(cutpoints = .msds_cut), y = d$y,
+              species = d$species, method = "laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$method, "laplace")
+  expect_identical(fit$model$model_type, "ms_distance")
+  expect_equal(dim(fit$ms_community$coef_lambda), c(3L, 2L))
+  expect_equal(dim(fit$ms_community$Sigma_lambda), c(2L, 2L))
+  expect_identical(rownames(fit$ms_community$coef_lambda), d$species)
+  ft <- fitted(fit)
+  expect_equal(dim(ft$lambda), c(25L, 3L))
+  expect_true(is.finite(nobs(fit)))
+})
+
 test_that("msDS recovers the community means and per-species structure", {
+  skip_if_fast()
   skip_on_cran()
   d <- simulate_ms_distance(n_species = 10, N = 100, cutpoints = .msds_cut,
                             seed = 4)
