@@ -17,6 +17,7 @@ nmix_laplace_re(
   Sigma_lambda_init = NULL,
   Sigma_p_init = NULL,
   K_max = NULL,
+  headroom = NULL,
   max_iter = 200L,
   optimizer = c("em", "joint_fd", "joint_grad"),
   mixture = c("P", "NB", "ZIP", "ZINB"),
@@ -56,7 +57,13 @@ fits.}
 covariances. Default: the (ridge-regularized) sample covariance of the
 per-species coefficient estimates.}
 
-\item{K_max}{Marginal-sum truncation (default \code{max(y) + 100}).}
+\item{K_max}{Marginal-sum truncation (default \code{max(y) + 100}), applied per
+site (see \code{headroom}).}
+
+\item{headroom}{Latent-N states summed above each site's own \code{max(y_i)}.
+\code{NULL} (default) derives it from \code{K_max}: an unset \code{K_max} caps each site at
+\code{max(y_i) + 100}, an explicit one truncates globally and uncapped. A caller
+that resolved the ceiling itself passes both.}
 
 \item{max_iter}{Optimizer iteration cap (default 200).}
 

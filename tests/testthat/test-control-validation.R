@@ -152,3 +152,68 @@ test_that("silencing the console leaves the heartbeat file channel alone", {
     expect_identical(opt$progress_file, "beat.eta")
   })
 })
+
+
+# --- family-scoped capability groups (gcol33/tulpaObs#160) -------------------
+#
+# `max.outer` / `factor.starts` used to be admitted route-wide, so every Laplace
+# family accepted them and all but six dropped them. They are now opted into per
+# family via obs_family(control_groups=), still gated by route.
+
+fcheck <- function(control, method, family) {
+  tulpaObs:::.tobs_validate_control(
+    control, tulpaObs:::.tobs_resolve_method(method, family), family)
+}
+
+test_that("block-coordinate controls are accepted only by the families that fit that way", {
+  # Consumers: the community families whose latent structure runs through
+  # .tobs_community_latent_ascent().
+  expect_silent(fcheck(list(max.outer = 5L, factor.starts = 3L), "laplace",
+                       ms_count()))
+  expect_silent(fcheck(list(max.outer = 5L, factor.starts = 3L), "laplace",
+                       ms_occu()))
+  expect_silent(fcheck(list(max.outer = 5L, factor.starts = 3L), "laplace",
+                       ms_abun()))
+  expect_silent(fcheck(list(max.outer = 5L, factor.starts = 3L), "laplace",
+                       jsdm()))
+  expect_silent(fcheck(list(max.outer = 5L, factor.starts = 3L), "laplace",
+                       ms_distance()))
+
+  # Non-consumers. occu() has no outer alternation at all; count()'s areal fit is
+  # a single tulpa_nested_laplace() call over the count block, not an EM.
+  expect_error(fcheck(list(max.outer = 5L), "laplace", occu()),
+               "not used by occu\\(\\)")
+  expect_error(fcheck(list(factor.starts = 3L), "laplace", occu()),
+               "not used by occu\\(\\)")
+  expect_error(fcheck(list(max.outer = 5L), "nested_laplace", count()),
+               "not used by count\\(\\)")
+})
+
+test_that("ms_dyn_occu takes max.outer but not factor.starts", {
+  # Its driver call passes latent = NULL: an outer alternation over a field block,
+  # with no candidate starting directions to widen.
+  expect_silent(fcheck(list(max.outer = 5L), "laplace", ms_dyn_occu()))
+  expect_error(fcheck(list(factor.starts = 3L), "laplace", ms_dyn_occu()),
+               "not used by ms_dyn_occu\\(\\)")
+})
+
+test_that("a family group stays route-gated, so a sampler route still rejects it", {
+  # The distinction matters for the message: under a sampler route the key is a
+  # wrong-method control (it applies to the Laplace routes), not one this family
+  # has no use for.
+  err <- tryCatch(fcheck(list(max.outer = 5L), "nuts", ms_count()),
+                  error = function(e) conditionMessage(e))
+  expect_match(err, "not used by method")
+  expect_match(err, "laplace")
+  expect_false(grepl("not used by ms_count", err))
+})
+
+test_that("the scope is enforced through tobs(), ahead of dispatch", {
+  set.seed(1)
+  y <- matrix(stats::rbinom(30 * 3, 1, 0.4), 30L, 3L)
+  d <- data.frame(x = stats::rnorm(30L))
+  expect_error(
+    tobs(~ x, detection = ~ 1, data = d, family = occu(), y = y,
+         method = "laplace", control = list(max.outer = 5L)),
+    "not used by occu\\(\\)")
+})

@@ -15,6 +15,7 @@ nmix_laplace(
   log_r_init = NULL,
   r_max = 1e+05,
   K_max = NULL,
+  headroom = NULL,
   max_iter = 100L,
   tol = 1e-06,
   verbose = FALSE
@@ -50,9 +51,15 @@ optimiser pins \code{log_r} at \code{log(r_max)} the data are consistent with Po
 and a warning recommends \code{mixture = "P"}.}
 
 \item{K_max}{Marginal-sum truncation. Defaults to \code{max(y) + 100} (matches
-\code{unmarked::pcount}). The returned \code{boundary_weight} per site flags any
-site whose posterior over N puts non-trivial mass on \code{K_max}; raise
-\code{K_max} if any such weight exceeds ~1e-4.}
+\code{unmarked::pcount}), applied per site (see \code{headroom}). The returned
+\code{boundary_weight} per site flags any site whose posterior over N puts
+non-trivial mass on its truncation; raise \code{K_max} if any such weight
+exceeds ~1e-4.}
+
+\item{headroom}{Latent-N states summed above each site's own \code{max(y_i)}.
+\code{NULL} (default) derives it from \code{K_max}: an unset \code{K_max} caps each site at
+\code{max(y_i) + 100}, an explicit one truncates globally and uncapped. A
+negative value disables the per-site cap.}
 
 \item{max_iter}{Newton iteration budget (default 100).}
 

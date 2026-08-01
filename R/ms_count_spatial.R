@@ -54,7 +54,8 @@
 .tobs_fit_ms_count_latent <- function(model, spatial = NULL, latent = NULL,
                                       max.iter = 200L, tol = 1e-4,
                                       sigma.beta = 5, priors = NULL,
-                                      max.outer = NULL, verbose = FALSE, ...) {
+                                      max.outer = NULL, factor.starts = NULL,
+                                      n.quad = NULL, verbose = FALSE, ...) {
   response <- model$response %||% "poisson"
   # Poisson (ms_count) and Bernoulli (jsdm) carry no dispersion parameter, so the
   # per-site latent structure is identified against them. A negbin size /
@@ -122,7 +123,8 @@
     # Measured on this family: the community intercept's truncation bias runs
     # +0.0613 / +0.0237 / +0.0001 / -0.0038 at 25 / 60 / 150 / 400 outer passes
     # (gcol33/tulpaObs#156), so 150 is where it closes.
-    tol = tol, max.outer = max.outer, factor.outer = 150L, verbose = verbose)
+    tol = tol, max.outer = max.outer, factor.outer = 150L,
+    factor.starts = factor.starts, n.quad = n.quad, verbose = verbose)
 
   fit <- build_ms_count_fit(model, res$em, arm_idx, disp = NULL)
   fit$method <- "laplace"

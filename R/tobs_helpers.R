@@ -462,7 +462,17 @@
   # pass selects over; each costs a full loading-EM run against the family's own
   # oracle, so it is the dominant cost on families whose oracle marginalises a
   # latent state.
-  block_coordinate = c("max.outer", "factor.starts"),
+  # Opted into per family via `obs_family(control_groups=)`, NOT admitted
+  # route-wide: only the community families fit by
+  # `.tobs_community_latent_ascent()` have an outer alternation to cap, and a
+  # route-wide allowance let `max.outer` be passed to every Laplace family and
+  # dropped (gcol33/tulpaObs#160). Still route-gated, so it is rejected under
+  # "nuts" as a wrong-method control rather than an unknown one.
+  block_coordinate = "max.outer",
+  # Split from `block_coordinate` because the two are not co-extensive:
+  # `ms_dyn_occu` reaches the driver with `latent = NULL`, so it has an outer
+  # alternation but no candidate set of starting directions to widen.
+  block_coordinate_factor = "factor.starts",
   # Outer-grid knobs for the standalone occu() varying-coefficient (SVC) bar,
   # which reroutes from the EM fixed-point path onto the joint direct-grid engine
   # under method = "nested_laplace" (gcol33/tulpaObs#81). They are no-ops on the
@@ -495,13 +505,30 @@
 .tobs_control_allow <- function(engine, correction) {
   switch(
     engine,
-    laplace        = c("laplace_em", "block_coordinate",
-                       if (correction != "none") "correction"),
-    nested_laplace = c("laplace_em", "block_coordinate", "nested_laplace_joint"),
+    laplace        = c("laplace_em", if (correction != "none") "correction"),
+    nested_laplace = c("laplace_em", "nested_laplace_joint"),
     nuts           = "sampler",
     pg_gibbs       = "sampler",
     character(0)
   )
+}
+
+# Family-opted capability groups, gated by route. A family declares these via
+# `obs_family(control_groups=)`; they are admitted only on the engines that host
+# them, so a Laplace-only group stays rejected under a sampler route
+# (gcol33/tulpaObs#160).
+.tobs_family_group_hosts <- list(
+  block_coordinate        = c("laplace", "nested_laplace"),
+  block_coordinate_factor = c("laplace", "nested_laplace"))
+
+.tobs_family_groups <- function(family, engine) {
+  groups <- family$control_groups %||% character(0)
+  if (!length(groups)) return(character(0))
+  keep <- vapply(groups, function(g) {
+    hosts <- .tobs_family_group_hosts[[g]]
+    is.null(hosts) || engine %in% hosts
+  }, logical(1))
+  groups[keep]
 }
 
 # Public method names that accept a given control key (for "wrong method"
@@ -513,7 +540,11 @@
   methods <- names(.tobs_method_table)
   keep <- vapply(methods, function(m) {
     r <- .tobs_method_table[[m]]
-    any(.tobs_control_allow(r$engine, r$correction) %in% groups)
+    # A family-opted group belongs to the methods whose engine hosts it, even
+    # though no route admits it unconditionally -- otherwise a key in such a group
+    # would report as applying to no method at all (gcol33/tulpaObs#160).
+    hosted <- names(Filter(function(h) r$engine %in% h, .tobs_family_group_hosts))
+    any(c(.tobs_control_allow(r$engine, r$correction), hosted) %in% groups)
   }, logical(1))
   methods[keep]
 }
@@ -535,8 +566,9 @@
   family_keys <- if (!is.null(family)) family$control_keys %||% character(0)
                  else character(0)
 
-  allowed_groups <- c("universal",
-                      .tobs_control_allow(route$engine, route$correction))
+  route_groups  <- .tobs_control_allow(route$engine, route$correction)
+  family_groups <- .tobs_family_groups(family, route$engine)
+  allowed_groups <- c("universal", route_groups, family_groups)
   allowed_keys <- unique(c(unlist(.tobs_control_groups[allowed_groups],
                                   use.names = FALSE),
                            family_keys))
@@ -547,8 +579,17 @@
   if (!length(bad)) return(invisible(NULL))
 
   method <- route$method %||% route$engine
+  # Keys whose group this ROUTE hosts but this FAMILY did not opt into. Pointing
+  # at another method would be wrong -- no method makes them apply here.
+  fam_only <- names(Filter(function(g) route$engine %in% (g %||% character(0)),
+                           .tobs_family_group_hosts))
+  fam_only_keys <- unlist(.tobs_control_groups[setdiff(fam_only, family_groups)],
+                          use.names = FALSE)
+  fam_label <- if (!is.null(family$name)) paste0(family$name, "()") else "this family"
   msgs <- vapply(bad, function(key) {
-    if (key %in% vocabulary) {
+    if (key %in% fam_only_keys) {
+      sprintf("  - '%s' is not used by %s.", key, fam_label)
+    } else if (key %in% vocabulary) {
       uses <- .tobs_methods_for_control(key)
       sprintf("  - '%s' is not used by method = \"%s\"; it applies to %s.",
               key, method,

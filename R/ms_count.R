@@ -670,6 +670,8 @@ ms_count <- function(response = c("poisson", "negbin", "gaussian",
     default_engine = "laplace",
     status         = "working",
     params         = list(response = response),
+    # latent() factors and a shared field are fit by the block-coordinate driver
+    control_groups = c("block_coordinate", "block_coordinate_factor"),
     response       = "matrix"
   )
 }

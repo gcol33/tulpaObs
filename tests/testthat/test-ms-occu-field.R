@@ -55,7 +55,26 @@ test_that("svcMsPGOcc (occupancy SVC bar) recovers the intercept + trend fields"
   expect_gt(stats::cor(fit$trend_field,   d$f1), 0.8)   # varying-coefficient field
 })
 
+# Smoke coverage of the routing decision itself: a plain intercept field must not
+# be diverted onto the block-coordinate R path, since the dedicated C++ fitter is
+# the faster and already recovery-tested one. Asserted on a small grid, with the
+# field-recovery threshold left to the gated block (gcol33/tulpaObs#159).
+test_that("a plain intercept ms_occu field routes to the C++ spatial fitter", {
+  # The cost here is the nested-Laplace outer grid, not the design, so the fixture
+  # is trimmed on species and visits rather than on sites.
+  d <- .msof_sim(side = 4L, S = 3L, J = 2L, svc = FALSE, seed = 4L)
+  fit <- tobs(~ x + icar(graph = d$graph), data = d$data, family = ms_occu(),
+              detection = ~ 1, y = d$y, species = paste0("sp", seq_len(3L)),
+              method = "nested_laplace",
+              control = list(verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_length(fit$spatial_field, length(d$f0))
+  # The C++ path reports no block-coordinate settings; the R driver always does.
+  expect_null(fit$latent_control)
+})
+
 test_that("plain intercept ms_occu field keeps the C++ community-spatial path", {
+  skip_if_fast()
   skip_on_cran()
   d <- .msof_sim(side = 10L, S = 16L, svc = FALSE, seed = 4L)
   fit <- tobs(~ x + icar(graph = d$graph), data = d$data, family = ms_occu(),

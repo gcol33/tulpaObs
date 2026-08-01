@@ -79,7 +79,8 @@
 .tobs_fit_ms_occu_field <- function(model, spatial = NULL, latent = NULL,
                                     max.iter = 200L, tol = 1e-4,
                                     sigma.beta = 5, priors = NULL,
-                                    max.outer = NULL, verbose = FALSE, ...) {
+                                    max.outer = NULL, factor.starts = NULL,
+                                    n.quad = NULL, verbose = FALSE, ...) {
   pi_list <- model$process_info
   P_occ <- pi_list[[1L]]$p; P_p <- pi_list[[2L]]$p; P <- P_occ + P_p
   S <- model$n_species; Ns <- model$n_sites
@@ -129,7 +130,7 @@
     # family's 16-seed recovery was measured AT it (magnitude median 1.021,
     # slope z 0.71) rather than inheriting it untested.
     allow = "icar", tol = tol, max.outer = max.outer, factor.outer = 150L,
-    verbose = verbose)
+    factor.starts = factor.starts, n.quad = n.quad, verbose = verbose)
 
   fit <- build_ms_occu_fit(model, res$em, arm_idx)
   fit$method <- "laplace"

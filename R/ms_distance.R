@@ -182,6 +182,47 @@
 }
 
 
+# Per-species marginal observed information from one sweep, assembled rather than
+# finite-differenced. The per-site Louis (1982) block is
+#
+#   B_i = diag(info_lam_i, info_sig_i) - Var(N_i|y) v_i v_i',
+#         v_i = (-swl_i, -vN_sig_i)
+#
+# the same block nmix_site_marginal()'s obs_info_block() forms for the community
+# N-mixture (R/ms_abun_latent.R); only the kernel supplying the pieces differs.
+# The second component takes a further sign flip because the distance kernel
+# stores `vN_d` already negated (-p_k/(1-p), src/distance_kernel.h), where the
+# N-mixture's v carries +p. That is invisible on the diagonal and wrong by a
+# factor of ~2 on the cross block, so it is asserted against the finite
+# difference rather than reasoned from the sibling family
+# (test-ms-distance-info.R).
+# The complete-data log-likelihood splits as log P(N_i | lambda) +
+# log P(y_i | N_i, sigma), so its expected information carries no lambda-sigma
+# cross term and the whole off-diagonal comes from the rank-1 score-variance
+# subtraction. Distance carries ONE unit per site (the bins sit inside it), so
+# D_i is the 2 x P row [X_lam[i, ] | 0 ; 0 | X_sig[i, ]] and sum_i D_i' B_i D_i
+# is three crossprods against diagonal weights, with no per-site loop -- the
+# N-mixture needs one only because its visit count varies by site.
+#
+# Half-normal key only: under the hazard key the shared log-shape is a community
+# global, and the sweep returns its score and information already summed over
+# sites, with no per-site cross terms to sandwich (gcol33/tulpaObs#161).
+.tobs_ms_distance_info_block <- function(sw, X_lam, X_sig, lam_idx, sig_idx, P) {
+  # diag(info) - Var(N|y) v v', expanded. The two diagonal entries cannot see the
+  # relative sign inside v; the off-diagonal is where it lands.
+  b11 <- sw$info_lam     - sw$var_N * sw$swl^2
+  b22 <- sw$info_sig_obs - sw$var_N * sw$vN_sig^2
+  b12 <-                 - sw$var_N * sw$swl * sw$vN_sig
+  I <- matrix(0, P, P)
+  I[lam_idx, lam_idx] <- crossprod(X_lam, X_lam * b11)
+  I[sig_idx, sig_idx] <- crossprod(X_sig, X_sig * b22)
+  cross <- crossprod(X_lam, X_sig * b12)
+  I[lam_idx, sig_idx] <- cross
+  I[sig_idx, lam_idx] <- t(cross)
+  (I + t(I)) / 2
+}
+
+
 # ---------------------------------------------------------------------------
 # Fitter
 # ---------------------------------------------------------------------------
@@ -195,7 +236,8 @@
                                   mixture = "poisson", K_max = NULL,
                                   max.iter = 100L, tol = 1e-4,
                                   sigma.beta = 5, priors = NULL,
-                                  max.outer = NULL, verbose = FALSE, ...) {
+                                  max.outer = NULL, factor.starts = NULL,
+                                  n.quad = NULL, verbose = FALSE, ...) {
   if (!identical(mixture, "poisson")) {
     stop("ms_distance() is Poisson-only: the negative-binomial size is a ",
          "per-site dispersion that the community distance fit does not yet ",
@@ -254,10 +296,19 @@
         as.numeric(crossprod(X_sig, sw$grad_sig)),
         if (hazard) sw$grad_b else numeric(0))
     }
+    # The community EM otherwise central-differences this, at 2U sweeps per
+    # species per Newton step, and every sweep sums over the latent N
+    # (gcol33/tulpaObs#161).
+    sp_info <- if (hazard) NULL else function(s, theta, global) {
+      e <- eta_of(s, theta)
+      .tobs_ms_distance_info_block(eng$sweep(s, e$lam, e$sig, 0),
+                                   X_lam, X_sig, lam_idx, sig_idx, P)
+    }
     # Each sweep sums over the latent N, so a cold restart every outer pass
     # dominates the fit: resume the whole state from the previous pass.
     .tobs_community_em(
       S = S, P = P, arm_idx = arm_idx, sp_ll = sp_ll, sp_grad = sp_grad,
+      sp_info = sp_info,
       init_mu     = if (is.null(em_prev)) mu0 else em_prev$mu,
       init_global = if (is.null(em_prev)) g0  else em_prev$global,
       init_b      = em_prev$b_list,
@@ -288,7 +339,8 @@
       spatial = spatial, latent = latent, model = model, what = "ms_distance()",
       make_oracle = make_oracle, em_fit = em_fit, offset_of = offset_of,
       allow = c("icar", "car_proper", "bym2", "spde"),
-      tol = tol, max.outer = max.outer, verbose = verbose)
+      tol = tol, max.outer = max.outer, factor.starts = factor.starts,
+      n.quad = n.quad, verbose = verbose)
   }
 
   fit <- build_ms_distance_fit(res$em, model, lam_idx, sig_idx, hazard)

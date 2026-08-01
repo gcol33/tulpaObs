@@ -39,6 +39,14 @@
 #'   dispatcher accepts beyond the engine/route controls. These are added to
 #'   the allowlist `tobs()` validates `control` against, so a family with a
 #'   bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.
+#'   Admitted on every route the family supports.
+#' @param control_groups character vector of capability groups (names of
+#'   `.tobs_control_groups`) this family participates in beyond the ones its
+#'   route admits unconditionally. Unlike `control_keys` these stay route-gated,
+#'   so a group tied to the Laplace engines is still rejected under `"nuts"`.
+#'   `"block_coordinate"` is the case this exists for: `max.outer` /
+#'   `factor.starts` mean something only to a family whose latent structure is fit
+#'   by the block-coordinate driver.
 #'
 #' @return A `tobs_family` object.
 #' @keywords internal
@@ -53,6 +61,7 @@ obs_family <- function(name,
                        status         = c("working", "planned", "experimental"),
                        params         = list(),
                        control_keys   = character(0),
+                       control_groups = character(0),
                        response       = c("matrix", "vector")) {
   replicates     <- match.arg(replicates)
   default_engine <- match.arg(default_engine)
@@ -70,6 +79,7 @@ obs_family <- function(name,
       status         = status,
       params         = params,
       control_keys   = control_keys,
+      control_groups = control_groups,
       response       = response
     ),
     class = "tobs_family"
@@ -166,7 +176,10 @@ jsdm <- function() {
     observation    = "probit",
     replicates     = "single",
     default_engine = "nuts",
-    status         = "working"
+    status         = "working",
+    # Shares the ms_count binder and fitter, so latent() factors and a shared
+    # field are fit by the same block-coordinate driver.
+    control_groups = c("block_coordinate", "block_coordinate_factor")
   )
 }
 
@@ -1089,7 +1102,11 @@ ms_abun <- function(K_max = NULL,
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture)
+    params         = list(K_max = K_max, mixture = mixture),
+    # latent() factors and the spatial-factor route are fit by the
+    # block-coordinate driver. A plain shared field with no factors keeps the
+    # dedicated C++ path and reaches no outer loop.
+    control_groups = c("block_coordinate", "block_coordinate_factor")
   )
 }
 
@@ -1273,10 +1290,12 @@ ms_distance <- function(key = c("halfnorm", "hazard"),
     params         = list(key = key, transect = transect,
                           cutpoints = cutpoints, K_max = K_max,
                           mixture = mixture),
-    # max.iter / tol / sigma.beta come from the laplace_em group and max.outer
-    # from block_coordinate; quad.order (the Gauss-Legendre order for the per-bin
-    # detection integrals) is this family's own knob.
-    control_keys   = "quad.order"
+    # max.iter / tol / sigma.beta come from the laplace_em group; quad.order (the
+    # Gauss-Legendre order for the per-bin detection integrals) is this family's
+    # own knob.
+    control_keys   = "quad.order",
+    # latent() factors and a shared field are fit by the block-coordinate driver
+    control_groups = c("block_coordinate", "block_coordinate_factor")
   )
 }
 

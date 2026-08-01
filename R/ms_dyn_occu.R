@@ -482,6 +482,10 @@ ms_dyn_occu <- function() {
     observation    = "binomial_detection",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "working"
+    status         = "working",
+    # The shared psi1 field is fit by the block-coordinate driver, but the call
+    # passes `latent = NULL`: a field block and no factors, so no candidate
+    # starting directions and no `factor.starts`.
+    control_groups = "block_coordinate"
   )
 }

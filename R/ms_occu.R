@@ -392,6 +392,9 @@ ms_occu <- function() {
     observation    = "binomial_detection",
     replicates     = "required",
     default_engine = "laplace",
-    status         = "working"
+    status         = "working",
+    # latent() factors and the SVC / shared field routes are fit by the
+    # block-coordinate driver
+    control_groups = c("block_coordinate", "block_coordinate_factor")
   )
 }

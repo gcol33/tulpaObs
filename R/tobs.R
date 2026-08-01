@@ -194,7 +194,22 @@
 #'     `FALSE` for the raw EM (Laplace, `nAGQ = 1`) fit.
 #'   * `n.quad` — quadrature points per random-effect dimension for `re.aghq`
 #'     (default 9). `n.quad = 1` is the plain Laplace (`nAGQ = 1`) marginal;
-#'     higher values refine it toward the exact marginal.
+#'     higher values refine it toward the exact marginal. On a community family
+#'     carrying `latent()` factors it instead sets the Gauss-Hermite nodes the
+#'     joint site marginal integrates the factor scores on (default 5, which the
+#'     loading magnitude and the score-matched offset are both insensitive to).
+#'   * `max.outer` — for a community family whose `latent()` factors or shared
+#'     areal field are fit by block coordinate ascent, the cap on the outer
+#'     alternation between the community EM and the field / factor update. A field
+#'     block reaches `tol` and stops early, so its default 25 is only a cap; a
+#'     factor block does not, and each family sets its own budget from a measured
+#'     bias curve (150 on `ms_count()` / `jsdm()` / `ms_occu()`, 25 elsewhere).
+#'   * `factor.starts` — candidate starting directions the first factor pass
+#'     selects over, on the joint marginal. Each costs a full loading EM against
+#'     that family's oracle, so the default is per family: 1 on `ms_abun()`
+#'     (measured to buy nothing there against a 2.0-2.3x cost), 8 elsewhere.
+#'     Accepted only by the families fit this way; the resolved value, and
+#'     `max.outer` / `n.quad` alongside it, is reported as `fit$latent_control`.
 #'   * `re.lkj` — LKJ shape (`eta`) regularizing a *correlated* random slope's
 #'     correlation in the `re.aghq` refine (default 1.5). Pulls a
 #'     weakly-identified RE correlation off the `+-1` boundary toward 0 without

@@ -211,14 +211,21 @@
   cphi <- -0.5 * Qk * log(2 * pi)
   Z <- vector("list", nrow(nd))
   L <- vector("list", nrow(nd))
+  # The per-node data log-likelihood, kept rather than folded away. The M-step's
+  # starting objective is this same quantity at this same lambda and these same
+  # nodes, so returning it is what stops the caller re-running the oracle over
+  # every node to recover it (gcol33/tulpaObs#162); at Q=2, n.quad=5 that was 25
+  # of the E-step's 86 ll_cell calls.
+  D <- vector("list", nrow(nd))
   for (k in seq_len(nrow(nd))) {
     Zk <- zhat
     for (b in seq_len(Qk)) Zk <- Zk + A[, , b] * nd[k, b]
     Z[[k]] <- Zk
-    L[[k]] <- lw[k] + rowSums(oracle$ll_cell(eta_base + tcrossprod(Zk, lambda))) +
+    D[[k]] <- rowSums(oracle$ll_cell(eta_base + tcrossprod(Zk, lambda)))
+    L[[k]] <- lw[k] + D[[k]] +
       (cphi - 0.5 * rowSums(Zk^2)) - (cphi - 0.5 * sum(nd[k, ]^2))
   }
-  list(Z = Z, logterm = L, logdetA = logdetA)
+  list(Z = Z, logterm = L, logdetA = logdetA, ll = D)
 }
 
 # The joint site marginal itself: log-sum-exp of the grid's per-node log terms.
@@ -417,7 +424,14 @@
     ll_prev <- ll
 
     # ---- M-step: weighted Newton on lambda_s, species by species ----
-    q0 <- qobj(lambda, g$Z, W)
+    # `lambda` and `g$Z` are exactly what the E-step just built the grid from, so
+    # its per-node data log-likelihood IS this objective and the oracle does not
+    # need re-running over the nodes to recover it (gcol33/tulpaObs#162).
+    # Accumulated in the same order qobj() uses, so the value is identical to the
+    # last floating-point bit and no backtracking comparison can tip on it.
+    q0 <- 0
+    for (k in seq_along(W)) q0 <- q0 + sum(W[[k]] * g$ll[[k]])
+    if (!is.finite(q0)) q0 <- -Inf
     for (nw in seq_len(newton)) {
       if (!is.finite(q0)) break
       grad <- matrix(0, S, Qk)
@@ -1110,7 +1124,7 @@
                                           tol = 1e-4, max.outer = NULL,
                                           factor.outer = 25L,
                                           factor.starts = 8L,
-                                          n.quad = 5L, verbose = FALSE) {
+                                          n.quad = NULL, verbose = FALSE) {
   S  <- model$n_species
   Ns <- model$n_sites
   has_field  <- !is.null(spatial)
@@ -1154,6 +1168,15 @@
   # is set, rather than inheriting a count measured on a cheaper oracle.
   if (is.null(factor.starts)) factor.starts <- 8L
   factor.starts <- max(1L, as.integer(factor.starts))
+
+  # Nodes for the Gauss-Hermite rule the joint site marginal integrates the
+  # factor scores on. 5 is enough for what the estimator reads off that integral:
+  # the magnitude argmax is stable to under 0.4% against 21 nodes and the
+  # score-matched offset agrees to 8e-4 (test-community-latent-quad.R). Exposed as
+  # `control$n.quad` all the same, since the default being adequate is a
+  # measurement and not a reason to swallow the argument (gcol33/tulpaObs#158).
+  if (is.null(n.quad)) n.quad <- 5L
+  n.quad <- max(1L, as.integer(n.quad))
 
   # ---- field setup ----
   geom <- NULL; Ffield <- NULL; tau <- NULL; Q <- NULL
@@ -1434,6 +1457,20 @@
   }
 
   list(em = em, geom = geom,
+       # The settings the fit actually RAN under, not the ones it was called
+       # with. `max.outer` resolves against the family's `factor.outer` when a
+       # factor block is present, and each family sets `factor.starts` /
+       # `factor.outer` from its own measurement, so the effective values are not
+       # knowable from the call site (gcol33/tulpaObs#158). Reported on the fit so
+       # a caller can confirm a control took effect rather than inferring it.
+       # The factor knobs read NA on a field-only fit: there is no factor block
+       # for them to act on, and reporting the number they would have taken would
+       # claim an effect the fit does not carry.
+       settings = list(
+         max.outer = max.outer, tol = tol,
+         factor.outer  = if (has_factor) as.integer(factor.outer) else NA_integer_,
+         factor.starts = if (has_factor) factor.starts else NA_integer_,
+         n.quad        = if (has_factor) n.quad else NA_integer_),
        field = if (!has_field) NULL else list(
          F = Ffield, tau = tau, type = geom$type, rho = rho, kappa = kappa,
          site_off = cur_site_off(),
@@ -1465,10 +1502,19 @@
 # Result assembly
 # ---------------------------------------------------------------------------
 
+# Record the block-coordinate settings the driver resolved. Idempotent, and
+# called from both attach paths so a field-only, factor-only or spatial-factor
+# fit all carry it (gcol33/tulpaObs#158).
+.tobs_latent_attach_settings <- function(fit, res) {
+  if (!is.null(res$settings)) fit$latent_control <- res$settings
+  fit
+}
+
 # Attach the shared-field summary of a block-coordinate latent fit onto `fit`.
 # `offset_slot` names the model slot holding the per-site eta contribution that
 # fitted() / WAIC add back (e.g. "count_field_offset").
 .tobs_latent_attach_field <- function(fit, res, spatial, offset_slot) {
+  fit <- .tobs_latent_attach_settings(fit, res)
   fd <- res$field
   if (is.null(fd)) return(fit)
   fit$spatial <- spatial
@@ -1514,6 +1560,7 @@
 # up to rotation, so the recoverable target is the residual species covariance
 # Sigma_res = lambda lambda' (reported alongside the implied correlation).
 .tobs_latent_attach_factor <- function(fit, res, latent, model, offset_slot) {
+  fit <- .tobs_latent_attach_settings(fit, res)
   fc <- res$factor
   if (is.null(fc)) return(fit)
   fit$latent <- latent

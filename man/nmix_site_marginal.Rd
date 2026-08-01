@@ -10,7 +10,8 @@ nmix_site_marginal(
   X_lambda,
   X_p,
   mixture = c("P", "NB"),
-  K_max = NULL
+  K_max = NULL,
+  headroom = NULL
 )
 }
 \arguments{
@@ -30,9 +31,17 @@ row order matches \code{y}).}
 error.}
 
 \item{K_max}{Marginal-sum truncation. Defaults to \code{max(y) + 100} (matches
-\code{unmarked::pcount}). The returned \code{boundary_weight} per site flags any
-site whose posterior over N puts non-trivial mass on \code{K_max}; raise
-\code{K_max} if any such weight exceeds ~1e-4.}
+\code{unmarked::pcount}), applied per site (see \code{headroom}). The returned
+\code{boundary_weight} per site flags any site whose posterior over N puts
+non-trivial mass on its truncation; raise \code{K_max} if any such weight
+exceeds ~1e-4.}
+
+\item{headroom}{Latent-N states summed above each site's own \code{max(y_i)}.
+\code{NULL} (default) derives it from \code{K_max}: an unset \code{K_max} caps each site at
+\code{max(y_i) + 100}, an explicit one truncates globally and uncapped. A
+negative value disables the per-site cap. Callers that resolve the ceiling
+themselves (the community fitters share one \code{K_max} across species) pass
+both.}
 }
 \value{
 An object of class \code{nmix_marginal}: a list of the validated

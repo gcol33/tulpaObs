@@ -14,6 +14,7 @@ obs_family(
   status = c("working", "planned", "experimental"),
   params = list(),
   control_keys = character(0),
+  control_groups = character(0),
   response = c("matrix", "vector")
 )
 }
@@ -40,7 +41,16 @@ object (K_max, positive-part link, etc.).}
 \item{control_keys}{character vector of extra \code{control} names this family's
 dispatcher accepts beyond the engine/route controls. These are added to
 the allowlist \code{tobs()} validates \code{control} against, so a family with a
-bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.}
+bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.
+Admitted on every route the family supports.}
+
+\item{control_groups}{character vector of capability groups (names of
+\code{.tobs_control_groups}) this family participates in beyond the ones its
+route admits unconditionally. Unlike \code{control_keys} these stay route-gated,
+so a group tied to the Laplace engines is still rejected under \code{"nuts"}.
+\code{"block_coordinate"} is the case this exists for: \code{max.outer} /
+\code{factor.starts} mean something only to a family whose latent structure is fit
+by the block-coordinate driver.}
 
 \item{response}{shape of the family's response: \code{"vector"} for a plain
 length-N response vector (the cover hurdle), or \code{"matrix"} (the default)

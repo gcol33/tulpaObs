@@ -44,7 +44,29 @@ test_that("ms_count() + latent() gates unsupported combinations", {
     "not identified|Poisson")
 })
 
+# Smoke coverage of the lfMsAbund path: a small fit that exercises dispatch, the
+# factor block and the S3 surface, with no threshold against truth to keep
+# calibrated (gcol33/tulpaObs#159). The recovery assertions live in the gated block
+# below, at the size their thresholds were measured on.
+test_that("a latent-factor count fit wires the factor block and S3", {
+  d <- .mscf_sim(N = 50L, S = 5L, Q = 1L, seed = 4L)
+  fit <- tobs(~ x + latent(1), data = d$data, family = ms_count(), y = d$y,
+              species = colnames(d$y), method = "laplace",
+              control = list(max.outer = 2L, factor.starts = 1L,
+                             verbose = FALSE, progress = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$method, "laplace")
+  expect_identical(fit$ms_factor$n_factors, 1L)
+  expect_equal(dim(fit$ms_factor$loadings), c(5L, 1L))
+  expect_equal(dim(fit$ms_factor$residual_cov), c(5L, 5L))
+  expect_identical(rownames(fit$ms_factor$loadings), colnames(d$y))
+  expect_false(is.null(fit$model$count_factor_offset))
+  expect_equal(dim(fitted(fit)$mu), c(50L, 5L))
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
 test_that("a latent-factor count fit recovers residual co-occurrence + S3", {
+  skip_if_fast()
   skip_on_cran()
   d <- .mscf_sim(N = 160L, S = 14L, Q = 2L, seed = 4L)
   fit <- tobs(~ x + latent(2), data = d$data, family = ms_count(), y = d$y,
@@ -192,7 +214,26 @@ test_that("latent-factor count recovers the residual correlation over seeds", {
   list(y = y, data = d, graph = A, f = f, cor_res = cor_res, Ns = Ns)
 }
 
+# Smoke coverage of the composition: both latents present and both offsets
+# reaching fitted(), on a grid small enough for the push gate (#159).
+test_that("spatial-factor count carries both a shared field and factors", {
+  d <- .mscsf_sim(side = 5L, S = 5L, Q = 1L, seed = 6L)
+  fit <- tobs(~ x + icar(graph = d$graph) + latent(1), data = d$data,
+              family = ms_count(), y = d$y, species = colnames(d$y),
+              method = "nested_laplace",
+              control = list(max.outer = 2L, factor.starts = 1L,
+                             verbose = FALSE, progress = FALSE))
+  expect_identical(fit$method, "nested_laplace")
+  expect_false(is.null(fit$spatial_field))
+  expect_false(is.null(fit$ms_factor))
+  expect_length(fit$spatial_field, d$Ns)
+  expect_false(is.null(fit$model$count_field_offset))
+  expect_false(is.null(fit$model$count_factor_offset))
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
 test_that("spatial-factor count recovers BOTH the shared field and the factors", {
+  skip_if_fast()
   skip_on_cran()
   d <- .mscsf_sim(side = 11L, S = 16L, Q = 2L, seed = 6L)
   fit <- tobs(~ x + icar(graph = d$graph) + latent(2), data = d$data,

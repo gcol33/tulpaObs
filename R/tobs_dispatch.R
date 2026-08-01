@@ -178,6 +178,8 @@
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
       max.outer  = control[["max.outer"]],
+      factor.starts = control[["factor.starts"]],
+      n.quad     = control[["n.quad"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
@@ -274,6 +276,8 @@
         sigma.beta = control[["sigma.beta"]] %||% 5,
         priors    = priors,
         max.outer = control[["max.outer"]],
+        factor.starts = control[["factor.starts"]],
+        n.quad    = control[["n.quad"]],
         verbose   = isTRUE(control[["verbose"]])))
     }
     return(.tobs_fit_ms_occu_spatial(
@@ -298,6 +302,8 @@
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors    = priors,
       max.outer = control[["max.outer"]],
+      factor.starts = control[["factor.starts"]],
+      n.quad    = control[["n.quad"]],
       verbose   = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
@@ -418,6 +424,8 @@
       sigma.beta = control[["sigma.beta"]] %||% 5,
       priors     = priors,
       max.outer  = control[["max.outer"]],
+      factor.starts = control[["factor.starts"]],
+      n.quad     = control[["n.quad"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
@@ -929,6 +937,7 @@
       priors     = priors,
       max.outer  = control[["max.outer"]],
       factor.starts = control[["factor.starts"]],
+      n.quad     = control[["n.quad"]],
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (!is.null(structs$spatial)) {
@@ -1042,6 +1051,8 @@
     sigma.beta = control[["sigma.beta"]] %||% 5,
     priors     = priors,
     max.outer  = control[["max.outer"]],
+    factor.starts = control[["factor.starts"]],
+    n.quad     = control[["n.quad"]],
     verbose    = isTRUE(control[["verbose"]]))
 }
 

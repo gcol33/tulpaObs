@@ -136,7 +136,24 @@ test_that("jsdm() recovers community means with per-species coefficients", {
 
 # --- (3) lfJSDM: latent factors ---------------------------------------------
 
+# Smoke coverage of the lfJSDM path: the factor block and the S3 surface on a
+# small fixture, no threshold tied to the size (gcol33/tulpaObs#159).
+test_that("lfJSDM wires the factor block and S3", {
+  d <- .jsdmc_sim(N = 60L, S = 5L, Q = 1L, seed = 11L)
+  f <- tobs(~ x + latent(1), data = d$data, family = jsdm(), y = d$y,
+            species = colnames(d$y), method = "laplace",
+            control = list(max.outer = 2L, factor.starts = 1L,
+                           verbose = FALSE, progress = FALSE))
+  expect_s3_class(f, "tobs_fit")
+  expect_identical(f$ms_factor$n_factors, 1L)
+  expect_equal(dim(f$ms_factor$residual_cov), c(5L, 5L))
+  expect_equal(dim(f$ms_factor$loadings), c(5L, 1L))
+  expect_false(is.null(f$model$count_factor_offset))
+  expect_true(is.finite(tobs_waic(f)$waic))
+})
+
 test_that("lfJSDM recovers residual species co-occurrence", {
+  skip_if_fast()
   skip_on_cran()
   d <- .jsdmc_sim(Q = 2L, seed = 11L)
   f <- tobs(~ x + latent(2), data = d$data, family = jsdm(), y = d$y,

@@ -68,7 +68,29 @@ test_that("ms_occu() + latent() gates unsupported combinations", {
     "n_factors")
 })
 
+# Smoke coverage of the lfMsPGOcc path: dispatch, the factor block and the S3
+# surface on a small fixture, with nothing asserted against truth so there is no
+# calibrated threshold tied to the size (gcol33/tulpaObs#159).
+test_that("lfMsPGOcc wires the factor block and S3", {
+  d   <- .msof_sim(N = 50L, S = 5L, Q = 1L, J = 3L, seed = 4L)
+  fit <- tobs(~ x + latent(1), data = d$data, family = ms_occu(),
+              detection = ~ 1, y = d$y, species = paste0("sp", seq_len(5L)),
+              method = "laplace",
+              control = list(max.outer = 2L, factor.starts = 1L,
+                             verbose = FALSE, progress = FALSE))
+  expect_s3_class(fit, "tobs_fit")
+  expect_identical(fit$method, "laplace")
+  expect_identical(fit$ms_factor$n_factors, 1L)
+  expect_equal(dim(fit$ms_factor$loadings), c(5L, 1L))
+  expect_equal(dim(fit$ms_factor$residual_cov), c(5L, 5L))
+  expect_identical(rownames(fit$ms_factor$loadings), paste0("sp", 1:5))
+  expect_false(is.null(fit$model$occu_factor_offset))
+  expect_equal(dim(fitted(fit)$psi), c(50L, 5L))
+  expect_true(is.finite(tobs_waic(fit)$waic))
+})
+
 test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
+  skip_if_fast()
   skip_on_cran()
   d   <- .msof_sim(seed = 4L)
   fit <- .msof_fit(d)
