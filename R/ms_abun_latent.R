@@ -86,8 +86,18 @@
                         ev$var_N * ev$score_wt_lambda^2), 1e-8), numeric(Ns))
       list(score = score, curv = curv)
     },
-    ll_cell = function(eta) vapply(eval_all(eta),
-      function(ev) as.numeric(ev$log_lik_site), numeric(Ns)),
+    # `idx` is accepted for the same site-subset backtracking contract every
+    # community-latent oracle implements (gcol33/tulpaObs#162 lever 2), but the
+    # per-visit detection design here (`eta_p_list[[s]]` indexed by visit row,
+    # not by site) means a site subset cannot cheaply restrict `marg[[s]]$eval`
+    # -- it would need to filter and re-index the long-form rows and rebuild the
+    # Royle marginal per call. Deferred: this oracle always evaluates every
+    # site and slices the result down to `idx`, which is correct but not yet
+    # faster.
+    ll_cell = function(eta, idx = NULL) {
+      full <- vapply(eval_all(eta), function(ev) as.numeric(ev$log_lik_site), numeric(Ns))
+      if (is.null(idx)) full else full[idx, , drop = FALSE]
+    },
     data_ll = function(eta) sum(vapply(eval_all(eta), function(ev) ev$log_lik, 0)))
 }
 

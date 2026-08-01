@@ -152,8 +152,13 @@
   K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
   list(
     y_s = ys, K_max = K_max, hazard = identical(model$key, "hazard"),
-    sweep = function(s, eta_lam, eta_sig, eta_b = 0) {
-      cpp_distance_site_sweep(ys[[s]], eta_lam, eta_sig, cut, tc, qo, K_max,
+    # `idx` (a subset of site rows) lets a caller sweep only those sites --
+    # `eta_lam` / `eta_sig` must already be subsetted to the same rows by the
+    # caller (gcol33/tulpaObs#162 lever 2); `ys[[s]]` is subsetted here since it
+    # is this closure's own fixed data.
+    sweep = function(s, eta_lam, eta_sig, eta_b = 0, idx = NULL) {
+      y_use <- if (is.null(idx)) ys[[s]] else ys[[s]][idx, , drop = FALSE]
+      cpp_distance_site_sweep(y_use, eta_lam, eta_sig, cut, tc, qo, K_max,
                               nb = FALSE, r = Inf, key = kc,
                               eta_b = as.numeric(eta_b))
     })
@@ -164,8 +169,16 @@
 # each species' binned-distance marginal with respect to an additive offset on
 # its abundance log-predictor.
 .tobs_ms_distance_oracle <- function(eng, eta_sig_list, eta_b, Ns, S) {
-  eval_all <- function(eta) lapply(seq_len(S), function(s)
-    eng$sweep(s, eta[, s], eta_sig_list[[s]], eta_b))
+  # `idx` (a subset of site rows) restricts the sweep to those sites --
+  # `eta_sig_list[[s]]` and `eta_b` (fixed at this oracle's construction) are
+  # subsetted here to match, and `eng$sweep`'s own `ys[[s]]` subsets itself
+  # (gcol33/tulpaObs#162 lever 2). `eta_b` is a scalar (0, or the hazard shape
+  # parameter) in every caller, so it needs no subsetting.
+  eval_all <- function(eta, idx = NULL) {
+    ii <- idx %||% seq_len(Ns)
+    lapply(seq_len(S), function(s)
+      eng$sweep(s, eta[ii, s], eta_sig_list[[s]][ii], eta_b, idx = ii))
+  }
   list(
     n_sites = Ns, n_species = S,
     working = function(eta) {
@@ -175,8 +188,15 @@
         curv  = vapply(sws, function(sw)
           pmax(as.numeric(sw$info_lam - sw$var_N * sw$swl^2), 1e-8), numeric(Ns)))
     },
-    ll_cell = function(eta) vapply(eval_all(eta),
-      function(sw) as.numeric(sw$log_lik), numeric(Ns)),
+    ll_cell = function(eta, idx = NULL) {
+      nn <- length(idx %||% seq_len(Ns))
+      # vapply degenerates to a plain vector (not an nn x S matrix) when
+      # nn == 1, since a length-1 FUN.VALUE never triggers its matrix path --
+      # only pending on one site is common in the mode-adaptation backtracking
+      # tail, so this must be forced back into a matrix rather than assumed.
+      matrix(vapply(eval_all(eta, idx), function(sw) as.numeric(sw$log_lik),
+                    numeric(nn)), nrow = nn)
+    },
     data_ll = function(eta) sum(vapply(eval_all(eta),
                                        function(sw) sum(sw$log_lik), 0)))
 }

@@ -135,9 +135,13 @@
     # (a, b) is sum_s curv_is lambda_sa lambda_sb + delta_ab.
     # h_i(z) = sum_s ll_cell(eta_is + lambda_s' z) - z'z / 2, the objective whose
     # mode and curvature the nodes adapt to.
-    hval <- function(z) {
-      v <- rowSums(oracle$ll_cell(eta_base + tcrossprod(z, lambda))) -
-        0.5 * rowSums(z^2)
+    # `idx` (a subset of 1:Ns) lets an idx-aware oracle skip the sites this call
+    # does not need; oracles that ignore it just evaluate every site and this
+    # still returns the right length(idx) slice, so it is always safe to pass.
+    hval <- function(z, idx = NULL) {
+      cells <- oracle$ll_cell(eta_base + tcrossprod(z, lambda), idx = idx)
+      zz <- if (is.null(idx)) z else z[idx, , drop = FALSE]
+      v <- rowSums(cells) - 0.5 * rowSums(zz^2)
       ifelse(is.finite(v), v, -Inf)
     }
     # A Newton step is not guaranteed to ascend, and the count marginals are
@@ -145,6 +149,10 @@
     # mode lands somewhere arbitrary -- which then places every node there and
     # makes the quadrature worse than not adapting at all. Backtrack per site:
     # halve only the sites whose step did not improve, keep the ones that did.
+    # The pass itself is site-separable, so only the still-pending sites are
+    # re-evaluated each round (gcol33/tulpaObs#162 lever 2) -- the accepted
+    # iterates are identical, only the discarded work on already-moved /
+    # zero-step sites goes.
     ok <- TRUE
     h0 <- hval(zhat)
     if (any(!is.finite(h0))) ok <- FALSE
@@ -169,15 +177,17 @@
       for (bt in seq_len(25L)) {
         pend <- !moved & (rowSums(abs(step)) > 0)
         if (!any(pend)) break
+        idx <- which(pend)
         cand <- zhat + step * tt
-        hc <- hval(cand)
-        take <- pend & is.finite(hc) & (hc > h0)
+        hc <- hval(cand, idx = idx)
+        take <- is.finite(hc) & (hc > h0[idx])
         if (any(take)) {
-          zhat[take, ] <- cand[take, , drop = FALSE]
-          h0[take] <- hc[take]
-          moved[take] <- TRUE
+          ti <- idx[take]
+          zhat[ti, ] <- cand[ti, , drop = FALSE]
+          h0[ti] <- hc[take]
+          moved[ti] <- TRUE
         }
-        tt[pend & !take] <- tt[pend & !take] / 2
+        tt[idx[!take]] <- tt[idx[!take]] / 2
       }
       if (max(abs(step * tt)) < 1e-8) break
     }

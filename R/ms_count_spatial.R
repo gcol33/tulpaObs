@@ -23,9 +23,17 @@
 # compared across a field hyperparameter grid, over which they cancel.
 .tobs_ms_count_oracle <- function(y_mat, link = "log") {
   dims <- list(n_sites = nrow(y_mat), n_species = ncol(y_mat))
+  # `idx` (a subset of site rows) lets the mode-adaptation backtracking line
+  # search (R/community_latent.R) skip already-settled sites; both branches
+  # subset `eta` and the closed-over `y_mat` to the same rows up front, so the
+  # elementwise math below is unchanged (gcol33/tulpaObs#162 lever 2).
   if (identical(link, "logit")) {
-    ll_cell <- function(eta) ifelse(y_mat > 0, stats::plogis(eta,  log.p = TRUE),
-                                               stats::plogis(-eta, log.p = TRUE))
+    ll_cell <- function(eta, idx = NULL) {
+      e  <- if (is.null(idx)) eta   else eta[idx, , drop = FALSE]
+      ym <- if (is.null(idx)) y_mat else y_mat[idx, , drop = FALSE]
+      ifelse(ym > 0, stats::plogis(e,  log.p = TRUE),
+                     stats::plogis(-e, log.p = TRUE))
+    }
     return(c(dims, list(
       working = function(eta) {
         psi <- stats::plogis(eta)
@@ -34,9 +42,11 @@
       ll_cell = ll_cell,
       data_ll = function(eta) sum(ll_cell(eta)))))
   }
-  ll_cell <- function(eta) {
-    e <- pmin(eta, 700)
-    y_mat * e - exp(e)
+  ll_cell <- function(eta, idx = NULL) {
+    e  <- if (is.null(idx)) eta   else eta[idx, , drop = FALSE]
+    ym <- if (is.null(idx)) y_mat else y_mat[idx, , drop = FALSE]
+    e  <- pmin(e, 700)
+    ym * e - exp(e)
   }
   c(dims, list(
     working = function(eta) {

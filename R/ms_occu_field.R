@@ -46,9 +46,24 @@
   nv <- vapply(su, function(z) z$n_valid[, 1L], numeric(Ns))    # n_sites x n_species
   ad <- vapply(su, function(z) z$any_det,       logical(Ns))    # n_sites x n_species
   qmat <- (1 - p_site)^nv
-  ll_cell <- function(eta) vapply(seq_len(S), function(s)
-    .ms_int_occu_sp_ll(eta[, s], list(eta_p[, s]), su[[s]], per_site = TRUE),
-    numeric(Ns))
+  # `idx` (a subset of site rows) restricts the per-species marginal to those
+  # sites; `su[[s]]` (fixed per-site detection summaries) is subsetted to match
+  # (gcol33/tulpaObs#162 lever 2).
+  summ_subset <- function(summ, idx)
+    list(n_valid = summ$n_valid[idx, , drop = FALSE],
+         n_det   = summ$n_det[idx, , drop = FALSE],
+         any_det = summ$any_det[idx])
+  ll_cell <- function(eta, idx = NULL) {
+    ii <- idx %||% seq_len(Ns)
+    # vapply degenerates to a plain vector (not a length(ii) x S matrix) when
+    # length(ii) == 1, since a length-1 FUN.VALUE never triggers its matrix
+    # path -- only pending on one site is common in the mode-adaptation
+    # backtracking tail, so this must be forced back into a matrix.
+    matrix(vapply(seq_len(S), function(s)
+      .ms_int_occu_sp_ll(eta[ii, s], list(eta_p[ii, s]),
+                         summ_subset(su[[s]], ii), per_site = TRUE),
+      numeric(length(ii))), nrow = length(ii))
+  }
   list(
     n_sites   = Ns,
     n_species = S,
