@@ -46,10 +46,14 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
     if (type == "icar" || type == "bym2") {
         data.spatial_type = (type == "icar") ? tulpa::SpatialType::ICAR
                                               : tulpa::SpatialType::BYM2;
-        data.n_spatial_units = Rcpp::as<int>(sp["n_units"]);
-        data.adj_row_ptr = Rcpp::as<std::vector<int>>(sp["adj_row_ptr"]);
-        data.adj_col_idx = Rcpp::as<std::vector<int>>(sp["adj_col_idx"]);
-        data.n_neighbors = Rcpp::as<std::vector<int>>(sp["n_neighbors"]);
+        // set_spatial_adjacency() derives spatial_partition / n_spatial_components
+        // from the CSR arrays; assigning them directly leaves the partition at its
+        // default (0 nodes), which tulpa's compute_param_layout now rejects
+        // (ABI 40, gcol33/tulpaRatio#19).
+        data.set_spatial_adjacency(Rcpp::as<int>(sp["n_units"]),
+                                   Rcpp::as<std::vector<int>>(sp["adj_row_ptr"]),
+                                   Rcpp::as<std::vector<int>>(sp["adj_col_idx"]),
+                                   Rcpp::as<std::vector<int>>(sp["n_neighbors"]));
 
         // 1:1 mapping obs -> spatial unit
         data.spatial_group.resize(n_units);
