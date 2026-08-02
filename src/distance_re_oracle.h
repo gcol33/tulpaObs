@@ -49,6 +49,13 @@ struct DistanceGroupedOracle : CountGroupedOracle {
     int key_code = DIST_HALFNORMAL;             // half-normal / hazard detection key
     double eta_b = 0.0;                         // fixed hazard log-shape (profiled in R)
     DistQuad quad;                              // per-fit detection quadrature
+    // Built once in the constructor, read-only thereafter (gcol33/tulpaObs#167):
+    // safe to share read-only across an eval_site() that may be called from a
+    // parallel group loop the same way the quadrature above already is. No
+    // DistScratch here -- eval_site() is const and its caller's threading is
+    // not visible from this file, and scratch reuse needs per-call mutation
+    // that a shared oracle object cannot safely give it without knowing that.
+    std::vector<double> comb_table;
 
     DistanceGroupedOracle(int arm_,
                           const Rcpp::IntegerMatrix& y_bins,
@@ -72,7 +79,8 @@ struct DistanceGroupedOracle : CountGroupedOracle {
         const double eta_sigma = (eta_p_ptr != nullptr) ? eta_p_ptr[0] : 0.0;
         const DistSiteResult d = compute_distance_site(
             y_bins_site[i].data(), n_bins, eta_lam, eta_sigma, eta_b,
-            static_cast<DistKey>(key_code), quad, K_max, r);
+            static_cast<DistKey>(key_code), quad, K_max, r,
+            /*value_only=*/false, &comb_table);
         NMixSiteResult res;
         res.log_lik         = d.log_lik;
         res.grad_eta_lambda = d.grad_eta_lambda;

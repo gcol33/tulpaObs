@@ -28,6 +28,13 @@ struct DistNutsModel {
     Rcpp::NumericMatrix X_lambda, X_sigma;
     DistQuad quad;
     int total = 0;
+    // Built once in dist_nuts_build() and reused across every leapfrog step
+    // (gcol33/tulpaObs#167): K_max is fixed for the model, so the O(K_max)
+    // combinatorial table and the per-site derivative scratch would otherwise
+    // be rebuilt from scratch on every one of the thousands of gradient calls
+    // a NUTS run makes.
+    std::vector<double> comb_table;
+    mutable DistScratch scratch;
     // Optional single intercept random effect on the abundance arm (tulpaObs#51),
     // loaded on eta_lambda (nuts_re_block.h). The flat vector grows by
     // [z_1..z_G, log_sigma_re] at the tail.
@@ -58,6 +65,7 @@ inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
     m.field = field_block_build(spec, base, m.n_sites);
     base += field_block_size(m.field);
     m.total = base;
+    m.comb_table = dist_build_comb_table(m.K_max);
     return m;
 }
 
@@ -90,7 +98,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         for (int b = 0; b < m.n_bins; ++b) y_site[b] = m.y(s, b);
         const DistSiteResult res = compute_distance_site(
             y_site.data(), m.n_bins, eta_lambda, eta_sigma, eta_b, m.key,
-            m.quad, m.K_max, r);
+            m.quad, m.K_max, r, /*value_only=*/false, &m.comb_table, &m.scratch);
         lp += res.log_lik;
         for (int k = 0; k < p_lam; ++k) grad[k] += res.grad_eta_lambda * m.X_lambda(s, k);
         for (int k = 0; k < p_sig; ++k) grad[p_lam + k] += res.grad_eta_d[0] * m.X_sigma(s, k);

@@ -53,18 +53,43 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
   const double* prv = r_vec.begin();
   double* pll = ll.begin();
 
+  // Shared, read-only: the K_max-indexed combinatorial table (gcol33/tulpaObs#167)
+  // is the SAME for every (site, draw), so it is built once and reused across
+  // the whole S x n_sites sweep instead of every one of those calls repeating
+  // its own O(K_max) run of R::lgammafn().
+  const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
+
 #ifdef _OPENMP
-  #pragma omp parallel for schedule(static) num_threads(n_threads > 0 ? n_threads : 1)
-#endif
+  #pragma omp parallel num_threads(n_threads > 0 ? n_threads : 1)
+  {
+    tulpaObs::DistScratch scratch;
+    #pragma omp for schedule(static)
+    for (int d = 0; d < S; ++d) {
+      double eb = peb[d], r = prv[d];
+      for (int s = 0; s < n_sites; ++s) {
+        std::size_t off = (std::size_t) s * S + d;
+        // Only log_lik is read below, so value_only=true skips the detection-arm
+        // gradient/Fisher block and its five per-bin derivative vectors entirely
+        // (gcol33/tulpaObs#164) -- this call previously computed and discarded them.
+        double val = tulpaObs::compute_distance_site(
+          y_by_site[s].data(), n_bins, pel[off], pes[off], eb, key, quad,
+          K_max, r, /*value_only=*/true, &comb_table, &scratch).log_lik;
+        pll[off] = val;
+      }
+    }
+  }
+#else
+  tulpaObs::DistScratch scratch;
   for (int d = 0; d < S; ++d) {
     double eb = peb[d], r = prv[d];
     for (int s = 0; s < n_sites; ++s) {
       std::size_t off = (std::size_t) s * S + d;
       double val = tulpaObs::compute_distance_site(
         y_by_site[s].data(), n_bins, pel[off], pes[off], eb, key, quad,
-        K_max, r).log_lik;
+        K_max, r, /*value_only=*/true, &comb_table, &scratch).log_lik;
       pll[off] = val;
     }
   }
+#endif
   return ll;
 }

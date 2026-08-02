@@ -54,6 +54,34 @@
 
 namespace tulpaObs {
 
+// Combinatorial term of the latent-N marginal sum (gcol33/tulpaObs#167): the
+// sum runs N = R_i .. K_max with K_lo = R_i exactly (the site's own detected
+// total), so the per-N term `-lgamma((N - R_i) + 1)` depends only on the
+// offset k = N - R_i, NEVER on R_i itself -- it is the SAME table for every
+// site. Building it once per fit (size K_max + 1, covering the widest range
+// any site can need) and indexing into it replaces up to n_sites * K_max
+// redundant R::lgammafn() calls per sweep with array lookups; a caller that
+// sweeps the same K_max repeatedly (a Newton iteration, a NUTS leapfrog step,
+// an AGHQ node) builds this ONCE outside its loop and passes it to every
+// compute_distance_site() call. Byte-identical to the inline computation --
+// same R::lgammafn(), just memoized.
+inline std::vector<double> dist_build_comb_table(int K_max) {
+    std::vector<double> t((std::size_t) K_max + 1);
+    for (int k = 0; k <= K_max; ++k) t[k] = -R::lgammafn((double)k + 1.0);
+    return t;
+}
+
+// Reusable scratch for compute_distance_site()'s per-call heap allocations
+// (the per-bin detection vectors and the per-N marginal-weight vector). A
+// caller that evaluates many sites -- or the same site many times at changing
+// eta -- builds ONE DistScratch outside its loop(s) and passes it by pointer;
+// the vectors are resized (not reallocated) to each call's n_bins / K_grid, so
+// after the first call warms them to the loop's maximum sizes no further heap
+// traffic occurs. In OpenMP code each thread must own its own DistScratch.
+struct DistScratch {
+    std::vector<double> pi, d1_0, d2_00, d1_1, d2_11, d2_01, a;
+};
+
 // Per-site distance marginal result. The abundance / NB-dispersion fields mirror
 // NMixSiteResult; the detection arm carries up to two parameters (sigma, and the
 // hazard-rate shape b), so its gradient / Fisher are small fixed-size blocks.
@@ -91,7 +119,9 @@ inline DistSiteResult compute_distance_site(
     double eta_lambda, double eta_sigma, double eta_b,
     int key, const DistQuad& quad, int K_max,
     double r = std::numeric_limits<double>::infinity(),
-    bool value_only = false
+    bool value_only = false,
+    const std::vector<double>* comb_table = nullptr,
+    DistScratch* scratch = nullptr
 ) {
     const bool is_nb = std::isfinite(r);
     const int nd = (key == DIST_HAZARD) ? 2 : 1;
@@ -122,8 +152,14 @@ inline DistSiteResult compute_distance_site(
     // totals p, p_k, p_jk. The five per-bin derivative vectors and the second-
     // derivative quadrature accumulation are skipped when only `pi_b` / `p`
     // (and hence `log_lik`) are needed.
-    std::vector<double> pi(n_bins);
-    std::vector<double> d1_0, d2_00, d1_1, d2_11, d2_01;
+    std::vector<double> pi_local, d1_0_local, d2_00_local, d1_1_local, d2_11_local, d2_01_local;
+    std::vector<double>& pi    = scratch ? scratch->pi    : pi_local;
+    std::vector<double>& d1_0  = scratch ? scratch->d1_0  : d1_0_local;
+    std::vector<double>& d2_00 = scratch ? scratch->d2_00 : d2_00_local;
+    std::vector<double>& d1_1  = scratch ? scratch->d1_1  : d1_1_local;
+    std::vector<double>& d2_11 = scratch ? scratch->d2_11 : d2_11_local;
+    std::vector<double>& d2_01 = scratch ? scratch->d2_01 : d2_01_local;
+    pi.resize(n_bins);
     if (!value_only) {
         d1_0.assign(n_bins, 0.0); d2_00.assign(n_bins, 0.0);
         d1_1.assign(n_bins, 0.0); d2_11.assign(n_bins, 0.0); d2_01.assign(n_bins, 0.0);
@@ -194,11 +230,18 @@ inline DistSiteResult compute_distance_site(
     }
 
     const int K_grid = K_max - K_lo + 1;
-    std::vector<double> a(K_grid);
+    std::vector<double> a_local;
+    std::vector<double>& a = scratch ? scratch->a : a_local;
+    a.resize(K_grid);
+    // K_lo == R exactly (see above), so N - R == k always: the combinatorial
+    // term depends only on the offset k, never on R itself (gcol33/tulpaObs#167)
+    // -- comb_table[k], when supplied, is a memoized -lgamma(k+1) built once per
+    // fit rather than recomputed at every (site, call) pair.
     double max_a = -std::numeric_limits<double>::infinity();
     for (int k = 0; k < K_grid; ++k) {
         const int N = K_lo + k;
-        a[k] = (double)N * slope + base_const - R::lgammafn((double)(N - R) + 1.0);
+        const double comb = comb_table ? (*comb_table)[k] : -R::lgammafn((double)k + 1.0);
+        a[k] = (double)N * slope + base_const + comb;
         if (is_nb) a[k] += std::lgamma((double)N + r);
         if (a[k] > max_a) max_a = a[k];
     }

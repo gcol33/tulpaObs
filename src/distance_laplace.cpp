@@ -46,13 +46,19 @@ constexpr double kLineSearchSlack = 1e-10;
 constexpr double kMinNbSize = 1e-4;
 
 // One per-site kernel pass at the current (beta, r); fills `out` and returns the
-// total marginal log-likelihood.
+// total marginal log-likelihood. `comb_table` / `scratch` (gcol33/tulpaObs#167)
+// are built ONCE by the caller outside the Newton loop and threaded through
+// every sweep, so the per-N combinatorial lgamma table and the per-site
+// derivative-vector heap allocations are not repeated on every one of the
+// dozens of Newton / line-search sweeps a fit runs.
 inline double dist_sweep(const Rcpp::IntegerMatrix& y,
                          const Map<MatrixXd>& Xl, const Map<MatrixXd>& Xs,
                          const VectorXd& beta_lam, const VectorXd& beta_sig,
                          double eta_b, int key, const DistQuad& quad,
                          int K_max, double r,
-                         std::vector<DistSiteResult>& out) {
+                         std::vector<DistSiteResult>& out,
+                         const std::vector<double>& comb_table,
+                         tulpaObs::DistScratch& scratch) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     VectorXd eta_lam = Xl * beta_lam;
     VectorXd eta_sig = Xs * beta_sig;
@@ -61,7 +67,8 @@ inline double dist_sweep(const Rcpp::IntegerMatrix& y,
     for (int s = 0; s < n_sites; ++s) {
         for (int b = 0; b < n_bins; ++b) y_site[b] = y(s, b);
         out[s] = compute_distance_site(y_site.data(), n_bins, eta_lam(s),
-                                       eta_sig(s), eta_b, key, quad, K_max, r);
+                                       eta_sig(s), eta_b, key, quad, K_max, r,
+                                       /*value_only=*/false, &comb_table, &scratch);
         ll += out[s].log_lik;
     }
     return ll;
@@ -72,7 +79,9 @@ inline double dist_loglik(const Rcpp::IntegerMatrix& y,
                           const Map<MatrixXd>& Xl, const Map<MatrixXd>& Xs,
                           const VectorXd& beta_lam, const VectorXd& beta_sig,
                           double eta_b, int key, const DistQuad& quad,
-                          int K_max, double r) {
+                          int K_max, double r,
+                          const std::vector<double>& comb_table,
+                          tulpaObs::DistScratch& scratch) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     VectorXd eta_lam = Xl * beta_lam;
     VectorXd eta_sig = Xs * beta_sig;
@@ -81,7 +90,8 @@ inline double dist_loglik(const Rcpp::IntegerMatrix& y,
     for (int s = 0; s < n_sites; ++s) {
         for (int b = 0; b < n_bins; ++b) y_site[b] = y(s, b);
         DistSiteResult res = compute_distance_site(y_site.data(), n_bins, eta_lam(s),
-                                                   eta_sig(s), eta_b, key, quad, K_max, r);
+                                                   eta_sig(s), eta_b, key, quad, K_max, r,
+                                                   /*value_only=*/true, &comb_table, &scratch);
         if (!R_finite(res.log_lik)) return res.log_lik;
         ll += res.log_lik;
     }
@@ -180,13 +190,19 @@ Rcpp::List cpp_distance_laplace_fixed(
     double r = nb ? std::exp(theta) : std::numeric_limits<double>::infinity();
 
     std::vector<DistSiteResult> st(n_sites);
+    // Built once for the whole fit (gcol33/tulpaObs#167): K_max is fixed across
+    // every Newton / line-search sweep below, so the combinatorial table and the
+    // per-site derivative-vector scratch are shared rather than rebuilt on each
+    // of the dozens of sweeps a fit runs.
+    const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
+    tulpaObs::DistScratch scratch;
 
     // --- Inner Newton on beta at fixed r, run inside the theta profile loop. ---
     auto inner_newton = [&](double& log_lik, double& grad_norm, bool& converged) {
         log_lik = R_NegInf; grad_norm = R_PosInf; converged = false;
         for (int iter = 0; iter < max_iter; ++iter) {
             log_lik = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
-                                 K_max, r, st);
+                                 K_max, r, st, comb_table, scratch);
             VectorXd grad = dist_grad_beta(Xl, Xs, p_lam, p_sig, hazard, st);
             grad_norm = grad.norm();
             if (verbose) Rcpp::Rcout << "    [beta] iter " << iter << "  log_lik "
@@ -217,7 +233,8 @@ Rcpp::List cpp_distance_laplace_fixed(
                 VectorXd bl = beta_lam + step * dl;
                 VectorXd bs = beta_sig + step * ds;
                 double eb = eta_b + step * db;
-                double ll_try = dist_loglik(y, Xl, Xs, bl, bs, eb, key, quad, K_max, r);
+                double ll_try = dist_loglik(y, Xl, Xs, bl, bs, eb, key, quad, K_max, r,
+                                           comb_table, scratch);
                 if (R_finite(ll_try) && ll_try >= log_lik - kLineSearchSlack) {
                     beta_lam = bl; beta_sig = bs; eta_b = eb; stepped = true; break;
                 }
@@ -226,7 +243,7 @@ Rcpp::List cpp_distance_laplace_fixed(
             if (!stepped) { Rcpp::warning("beta step halving exhausted at iter %d.", iter); break; }
         }
         log_lik = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
-                             K_max, r, st);
+                             K_max, r, st, comb_table, scratch);
     };
 
     double log_lik = R_NegInf, beta_grad_norm = R_PosInf, grad_theta = 0.0;
@@ -252,7 +269,8 @@ Rcpp::List cpp_distance_laplace_fixed(
             double th_try = std::min(std::max(theta + step * dth, theta_min), theta_max);
             if (th_try == theta) break;
             double r_try = std::exp(th_try);
-            double ll_try = dist_loglik(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad, K_max, r_try);
+            double ll_try = dist_loglik(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad, K_max, r_try,
+                                       comb_table, scratch);
             if (R_finite(ll_try) && ll_try >= ll_cur - kLineSearchSlack) {
                 theta = th_try; r = r_try; stepped = true; break;
             }
@@ -267,7 +285,7 @@ Rcpp::List cpp_distance_laplace_fixed(
 
     // --- Final joint observed-information Hessian at the mode. ---
     double log_lik_final = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
-                                      K_max, r, st);
+                                      K_max, r, st, comb_table, scratch);
     MatrixXd H_beta = dist_hess_beta(Xl, Xs, p_lam, p_sig, hazard, st, true);
     MatrixXd H_obs = MatrixXd::Zero(p_total, p_total);
     H_obs.topLeftCorner(pb, pb) = H_beta;
@@ -358,11 +376,14 @@ Rcpp::List cpp_distance_total_log_lik(
         grad_eta_sigma(n_sites), mean_N(n_sites), var_N(n_sites),
         boundary_weight(n_sites), p_det(n_sites);
     std::vector<int> y_site(n_bins);
+    const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
+    tulpaObs::DistScratch scratch;
     int n_K_inadmissible = 0;
     for (int s = 0; s < n_sites; ++s) {
         for (int b = 0; b < n_bins; ++b) y_site[b] = y(s, b);
         DistSiteResult res = compute_distance_site(y_site.data(), n_bins, eta_lambda[s],
-                                                   eta_sigma[s], eta_b, key, quad, K_max, r);
+                                                   eta_sigma[s], eta_b, key, quad, K_max, r,
+                                                   /*value_only=*/false, &comb_table, &scratch);
         if (!R_finite(res.log_lik)) ++n_K_inadmissible;
         total_ll += res.log_lik; total_grad_theta += res.grad_theta;
         log_lik_site[s] = res.log_lik;
@@ -421,6 +442,11 @@ Rcpp::List cpp_distance_site_sweep(
     Rcpp::NumericVector logL(n_sites);
     std::vector<int> yb(n_bins);
     int n_inadmissible = 0;
+    // Built once per sweep call (gcol33/tulpaObs#167), not once per site: the
+    // combinatorial table only depends on K_max, and the scratch vectors are
+    // resized (not reallocated) once they reach the widest site's n_bins/K_grid.
+    const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
+    tulpaObs::DistScratch scratch;
 
     // `value_only`: the mode-adaptation backtracking line search (ll_cell)
     // reads only log_lik, so skip building the other 10 per-site vectors and
@@ -431,7 +457,7 @@ Rcpp::List cpp_distance_site_sweep(
             for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
             tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
                 yb.data(), n_bins, eta_lambda[s], eta_sigma[s], eta_b,
-                key_code, quad, K_max, rr, /*value_only=*/true);
+                key_code, quad, K_max, rr, /*value_only=*/true, &comb_table, &scratch);
             if (!R_finite(d.log_lik)) ++n_inadmissible;
             logL[s] = d.log_lik;
         }
@@ -448,7 +474,7 @@ Rcpp::List cpp_distance_site_sweep(
         for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
         tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
             yb.data(), n_bins, eta_lambda[s], eta_sigma[s], eta_b,
-            key_code, quad, K_max, rr);
+            key_code, quad, K_max, rr, /*value_only=*/false, &comb_table, &scratch);
         if (!R_finite(d.log_lik)) ++n_inadmissible;
         logL[s] = d.log_lik;
         grad_lam[s] = d.grad_eta_lambda; info_lam[s] = d.info_eta_lambda;

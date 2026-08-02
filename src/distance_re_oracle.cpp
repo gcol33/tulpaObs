@@ -37,6 +37,7 @@ DistanceGroupedOracle::DistanceGroupedOracle(
                  site_group, n_sites_, n_groups_, nb, y_by_site_ignored);
 
     quad = *dist_quad_from_xptr(quad_xptr);
+    comb_table = dist_build_comb_table(K_max);
 
     y_bins_site.assign(n_sites_, std::vector<int>(n_bins, 0));
     for (int i = 0; i < n_sites_; ++i)
