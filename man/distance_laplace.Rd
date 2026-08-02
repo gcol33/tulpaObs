@@ -21,7 +21,8 @@ distance_laplace(
   quad_order = 64L,
   max_iter = 100L,
   tol = 1e-06,
-  verbose = FALSE
+  verbose = FALSE,
+  quad_xptr = NULL
 )
 }
 \arguments{
@@ -56,6 +57,11 @@ starts.}
 \item{tol}{Gradient-norm convergence tolerance (default 1e-6).}
 
 \item{verbose}{Print per-iteration progress.}
+
+\item{quad_xptr}{Optional pre-built quadrature (from \code{cpp_distance_build_quad()})
+for a caller fitting several species/starts against the same \code{cutpoints}
+/ \code{transect} / \code{quad_order}; built once and reused instead of every call
+rebuilding it. Internal; defaults to building it fresh.}
 }
 \value{
 A list of class \code{distance_fit} with \code{beta_lambda}, \code{beta_sigma},

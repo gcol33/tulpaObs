@@ -232,6 +232,10 @@
 #' @param max_iter Newton iteration budget (default 100).
 #' @param tol Gradient-norm convergence tolerance (default 1e-6).
 #' @param verbose Print per-iteration progress.
+#' @param quad_xptr Optional pre-built quadrature (from `cpp_distance_build_quad()`)
+#'   for a caller fitting several species/starts against the same `cutpoints`
+#'   / `transect` / `quad_order`; built once and reused instead of every call
+#'   rebuilding it. Internal; defaults to building it fresh.
 #'
 #' @return A list of class `distance_fit` with `beta_lambda`, `beta_sigma`,
 #'   `shape` / `eta_b` (hazard-rate), `log_r` / `r` (NB), `log_lik`, `vcov`,
