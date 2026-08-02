@@ -406,7 +406,7 @@ Rcpp::List cpp_distance_site_sweep(
     Rcpp::IntegerMatrix y_bins,
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma,
     Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max,
-    bool nb, double r, int key = 0, double eta_b = 0.0
+    bool nb, double r, int key = 0, double eta_b = 0.0, bool value_only = false
 ) {
     const int n_sites = y_bins.nrow(), n_bins = y_bins.ncol();
     if (eta_lambda.size() != n_sites || eta_sigma.size() != n_sites)
@@ -417,11 +417,30 @@ Rcpp::List cpp_distance_site_sweep(
     const int key_code = (key == 1) ? tulpaObs::DIST_HAZARD : tulpaObs::DIST_HALFNORMAL;
     const bool hazard = (key_code == tulpaObs::DIST_HAZARD);
 
-    Rcpp::NumericVector logL(n_sites), grad_lam(n_sites), info_lam(n_sites),
-        var_N(n_sites), swl(n_sites), grad_sig(n_sites), info_sig_obs(n_sites),
-        info_sig_fs(n_sites), vN_sig(n_sites), boundary(n_sites), p_det(n_sites);
+    Rcpp::NumericVector logL(n_sites);
     std::vector<int> yb(n_bins);
     int n_inadmissible = 0;
+
+    // `value_only`: the mode-adaptation backtracking line search (ll_cell)
+    // reads only log_lik, so skip building the other 10 per-site vectors and
+    // the compiled kernel's derivative computation behind them
+    // (gcol33/tulpaObs#164).
+    if (value_only) {
+        for (int s = 0; s < n_sites; ++s) {
+            for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
+            tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
+                yb.data(), n_bins, eta_lambda[s], eta_sigma[s], eta_b,
+                key_code, quad, K_max, rr, /*value_only=*/true);
+            if (!R_finite(d.log_lik)) ++n_inadmissible;
+            logL[s] = d.log_lik;
+        }
+        return Rcpp::List::create(Rcpp::Named("log_lik") = logL,
+                                   Rcpp::Named("n_inadmissible") = n_inadmissible);
+    }
+
+    Rcpp::NumericVector grad_lam(n_sites), info_lam(n_sites),
+        var_N(n_sites), swl(n_sites), grad_sig(n_sites), info_sig_obs(n_sites),
+        info_sig_fs(n_sites), vN_sig(n_sites), boundary(n_sites), p_det(n_sites);
     double grad_logr = 0.0;       // summed NB dispersion score (0 under Poisson)
     double grad_b = 0.0, info_b = 0.0;  // summed hazard log-shape score / Fisher info
     for (int s = 0; s < n_sites; ++s) {

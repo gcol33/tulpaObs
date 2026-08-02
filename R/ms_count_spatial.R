@@ -134,7 +134,17 @@
     # +0.0613 / +0.0237 / +0.0001 / -0.0038 at 25 / 60 / 150 / 400 outer passes
     # (gcol33/tulpaObs#156), so 150 is where it closes.
     tol = tol, max.outer = max.outer, factor.outer = 150L,
-    factor.starts = factor.starts, n.quad = n.quad, verbose = verbose)
+    # NOT measured down from the driver default of 8 (gcol33/tulpaObs#164):
+    # a random 10-seed screen at N=100/S=10/Q=2 found no seed where the extra
+    # starts reliably helped, but test-ms-count-factor.R's OWN suite already
+    # carries a documented adversarial case this family needs multiple starts
+    # for -- seed 215 (gcol33/tulpaObs#157) regresses to mag_ratio 1.65 (the
+    # pre-#157-fix value) at factor.starts = 1, vs < 1.40 at the driver
+    # default. A screen against random seeds cannot stand in for a family's
+    # own known-hard cases; this family is split into gcol33/tulpaObs#166
+    # alongside ms_distance for a measurement that checks known seeds first.
+    factor.starts = factor.starts,
+    n.quad = n.quad, verbose = verbose)
 
   fit <- build_ms_count_fit(model, res$em, arm_idx, disp = NULL)
   fit$method <- "laplace"

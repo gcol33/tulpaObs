@@ -75,11 +75,23 @@ struct DistSiteResult {
 // (hazard-rate only, ignored for half-normal); `key` the detection key; `quad`
 // the per-fit bin quadrature; `K_max` the marginal-sum truncation (>= sum(y));
 // `r` the NB size (+Inf -> Poisson).
+// `value_only`: skip every derivative computation (the per-bin quadrature
+// second-derivative accumulation, its five per-bin derivative vectors, and
+// the whole detection-arm gradient/Fisher block) and fill only `log_lik` (plus
+// the cheap `mean_N` / `var_N` / `boundary_weight` / `p_det` moments the
+// log-likelihood sum already produces). Every gradient/info field of the
+// returned struct is left at its zero-initialized default in this mode -- the
+// caller must not read them. For a caller that only needs `ll_cell` (the
+// per-site marginal value at a trial point, e.g. the mode-adaptation
+// backtracking line search in R/community_latent.R), this drops the 5 extra
+// per-bin heap-allocated vectors and the O(n_dparam^2 * n_bins) detection
+// block that `working()`'s score/curvature need but a value lookup does not.
 inline DistSiteResult compute_distance_site(
     const int* y_bins, int n_bins,
     double eta_lambda, double eta_sigma, double eta_b,
     int key, const DistQuad& quad, int K_max,
-    double r = std::numeric_limits<double>::infinity()
+    double r = std::numeric_limits<double>::infinity(),
+    bool value_only = false
 ) {
     const bool is_nb = std::isfinite(r);
     const int nd = (key == DIST_HAZARD) ? 2 : 1;
@@ -105,28 +117,44 @@ inline DistSiteResult compute_distance_site(
     const double sigma = std::exp(eta_sigma);
     const double b_shape = (key == DIST_HAZARD) ? std::exp(eta_b) : 0.0;
 
-    // Per-bin detection integrals pi_b and their eta-derivatives (sum over the
-    // bin's quadrature nodes), and the region totals p, p_k, p_jk.
-    std::vector<double> pi(n_bins), d1_0(n_bins), d2_00(n_bins);
-    std::vector<double> d1_1(n_bins, 0.0), d2_11(n_bins, 0.0), d2_01(n_bins, 0.0);
+    // Per-bin detection integrals pi_b and, unless `value_only`, their
+    // eta-derivatives (summed over the bin's quadrature nodes) and the region
+    // totals p, p_k, p_jk. The five per-bin derivative vectors and the second-
+    // derivative quadrature accumulation are skipped when only `pi_b` / `p`
+    // (and hence `log_lik`) are needed.
+    std::vector<double> pi(n_bins);
+    std::vector<double> d1_0, d2_00, d1_1, d2_11, d2_01;
+    if (!value_only) {
+        d1_0.assign(n_bins, 0.0); d2_00.assign(n_bins, 0.0);
+        d1_1.assign(n_bins, 0.0); d2_11.assign(n_bins, 0.0); d2_01.assign(n_bins, 0.0);
+    }
     double p = 0.0, p0 = 0.0, p1 = 0.0;          // p, dp/deta_sigma, dp/deta_b
     double p00 = 0.0, p11 = 0.0, p01 = 0.0;      // second derivatives of p
     for (int b = 0; b < n_bins; ++b) {
         double s = 0.0, s0 = 0.0, s00 = 0.0, s1 = 0.0, s11 = 0.0, s01 = 0.0;
         const std::vector<double>& xb = quad.x[b];
         const std::vector<double>& wb = quad.base_w[b];
-        for (int q = 0; q < quad.order; ++q) {
-            const KeyDeriv k = dist_key_deriv(xb[q], key, sigma, b_shape);
-            const double w = wb[q];
-            s   += w * k.g;
-            s0  += w * k.g_e;
-            s00 += w * k.g_ee;
-            if (nd == 2) { s1 += w * k.g_b; s11 += w * k.g_bb; s01 += w * k.g_eb; }
+        if (value_only) {
+            for (int q = 0; q < quad.order; ++q)
+                s += wb[q] * dist_key_value(xb[q], key, sigma, b_shape);
+        } else {
+            for (int q = 0; q < quad.order; ++q) {
+                const KeyDeriv k = dist_key_deriv(xb[q], key, sigma, b_shape);
+                const double w = wb[q];
+                s   += w * k.g;
+                s0  += w * k.g_e;
+                s00 += w * k.g_ee;
+                if (nd == 2) { s1 += w * k.g_b; s11 += w * k.g_bb; s01 += w * k.g_eb; }
+            }
         }
-        pi[b]   = s;  d1_0[b] = s0;  d2_00[b] = s00;
-        if (nd == 2) { d1_1[b] = s1; d2_11[b] = s11; d2_01[b] = s01; }
-        p   += s;  p0  += s0;  p00 += s00;
-        if (nd == 2) { p1 += s1; p11 += s11; p01 += s01; }
+        pi[b] = s;
+        p += s;
+        if (!value_only) {
+            d1_0[b] = s0;  d2_00[b] = s00;
+            if (nd == 2) { d1_1[b] = s1; d2_11[b] = s11; d2_01[b] = s01; }
+            p0  += s0;  p00 += s00;
+            if (nd == 2) { p1 += s1; p11 += s11; p01 += s01; }
+        }
     }
 
     // Gauss-Legendre quadrature can round the total detection probability to
@@ -178,6 +206,13 @@ inline DistSiteResult compute_distance_site(
         accumulate_count_moments(a.data(), K_lo, K_grid, max_a, r, is_nb);
     res.log_lik = m.log_lik; res.mean_N = m.mean_N; res.var_N = m.var_N;
     res.boundary_weight = m.boundary_weight;
+
+    if (value_only) {
+        // `log_lik` (and the mean_N/var_N/boundary_weight already filled above)
+        // is everything a value-only caller reads; every gradient/info field
+        // stays at its zero-initialized default.
+        return res;
+    }
 
     // Detection arm. d1[k] / d2[j][k] are the region first/second derivatives of
     // the per-bin / total detection probabilities in eta space.

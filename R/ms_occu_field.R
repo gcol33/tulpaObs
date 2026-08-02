@@ -145,7 +145,18 @@
     # family's 16-seed recovery was measured AT it (magnitude median 1.021,
     # slope z 0.71) rather than inheriting it untested.
     allow = "icar", tol = tol, max.outer = max.outer, factor.outer = 150L,
-    factor.starts = factor.starts, n.quad = n.quad, verbose = verbose)
+    # One starting direction, from this family's own measurement
+    # (gcol33/tulpaObs#164). Over 10 seeds at N=250, S=16, Q=2, J=5 the
+    # multi-start's 7 extra candidates cost 3.5-4.3x and, on 4 of the 8
+    # reseeded seeds, landed on the EXACT SAME loadings as the 1-start fit
+    # (d_mag = d_res = 0.0000) -- the eight directions are converging to one
+    # basin, not escaping it. The one seed flagged by mag_ratio (1.40x truth)
+    # reproduced identically at 8 starts too, so it is a hard fixture the
+    # multi-start was never going to reach (the same character as the
+    # ms_abun measurement's own seed 314). Family default 1;
+    # `control$factor.starts` still overrides it.
+    factor.starts = if (is.null(factor.starts)) 1L else factor.starts,
+    n.quad = n.quad, verbose = verbose)
 
   fit <- build_ms_occu_fit(model, res$em, arm_idx)
   fit$method <- "laplace"

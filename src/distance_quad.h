@@ -122,6 +122,20 @@ struct KeyDeriv {
     double g_b, g_bb, g_eb;       // d/d eta_b, d^2/d eta_b^2, d^2/d eta_sigma d eta_b
 };
 
+// Detection-function value alone, with none of KeyDeriv's derivative terms --
+// for the hazard key this skips the log() that only feeds g_b / g_eb / g_bb.
+inline double dist_key_value(double x, int key, double sigma, double b) {
+    if (key == DIST_HALFNORMAL) {
+        const double u = (x * x) / (sigma * sigma);
+        return std::exp(-0.5 * u);
+    }
+    // hazard-rate: g = 1 - exp(-z), z = (x / sigma)^(-b) = (sigma / x)^b
+    if (x <= 0.0) return 1.0;                                  // g -> 1
+    const double z = std::pow(sigma / x, b);
+    if (!std::isfinite(z) || z > 700.0) return 1.0;           // exp(-z) underflows
+    return 1.0 - std::exp(-z);
+}
+
 inline KeyDeriv dist_key_deriv(double x, int key, double sigma, double b) {
     KeyDeriv k;
     k.g_b = k.g_bb = k.g_eb = 0.0;

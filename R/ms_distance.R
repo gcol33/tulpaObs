@@ -156,11 +156,15 @@
     # `eta_lam` / `eta_sig` must already be subsetted to the same rows by the
     # caller (gcol33/tulpaObs#162 lever 2); `ys[[s]]` is subsetted here since it
     # is this closure's own fixed data.
-    sweep = function(s, eta_lam, eta_sig, eta_b = 0, idx = NULL) {
+    # `value_only = TRUE` skips every gradient/Fisher computation in the
+    # compiled kernel and returns just `log_lik` (gcol33/tulpaObs#164) -- for a
+    # caller that only reads `sw$log_lik` (the oracle's `ll_cell` / `data_ll`),
+    # not `working()`, which needs the full sweep.
+    sweep = function(s, eta_lam, eta_sig, eta_b = 0, idx = NULL, value_only = FALSE) {
       y_use <- if (is.null(idx)) ys[[s]] else ys[[s]][idx, , drop = FALSE]
       cpp_distance_site_sweep(y_use, eta_lam, eta_sig, cut, tc, qo, K_max,
                               nb = FALSE, r = Inf, key = kc,
-                              eta_b = as.numeric(eta_b))
+                              eta_b = as.numeric(eta_b), value_only = value_only)
     })
 }
 
@@ -174,10 +178,11 @@
   # subsetted here to match, and `eng$sweep`'s own `ys[[s]]` subsets itself
   # (gcol33/tulpaObs#162 lever 2). `eta_b` is a scalar (0, or the hazard shape
   # parameter) in every caller, so it needs no subsetting.
-  eval_all <- function(eta, idx = NULL) {
+  eval_all <- function(eta, idx = NULL, value_only = FALSE) {
     ii <- idx %||% seq_len(Ns)
     lapply(seq_len(S), function(s)
-      eng$sweep(s, eta[ii, s], eta_sig_list[[s]][ii], eta_b, idx = ii))
+      eng$sweep(s, eta[ii, s], eta_sig_list[[s]][ii], eta_b, idx = ii,
+               value_only = value_only))
   }
   list(
     n_sites = Ns, n_species = S,
@@ -188,16 +193,18 @@
         curv  = vapply(sws, function(sw)
           pmax(as.numeric(sw$info_lam - sw$var_N * sw$swl^2), 1e-8), numeric(Ns)))
     },
+    # value_only = TRUE: ll_cell only ever reads log_lik (gcol33/tulpaObs#164).
     ll_cell = function(eta, idx = NULL) {
       nn <- length(idx %||% seq_len(Ns))
       # vapply degenerates to a plain vector (not an nn x S matrix) when
       # nn == 1, since a length-1 FUN.VALUE never triggers its matrix path --
       # only pending on one site is common in the mode-adaptation backtracking
       # tail, so this must be forced back into a matrix rather than assumed.
-      matrix(vapply(eval_all(eta, idx), function(sw) as.numeric(sw$log_lik),
+      matrix(vapply(eval_all(eta, idx, value_only = TRUE),
+                    function(sw) as.numeric(sw$log_lik),
                     numeric(nn)), nrow = nn)
     },
-    data_ll = function(eta) sum(vapply(eval_all(eta),
+    data_ll = function(eta) sum(vapply(eval_all(eta, value_only = TRUE),
                                        function(sw) sum(sw$log_lik), 0)))
 }
 
