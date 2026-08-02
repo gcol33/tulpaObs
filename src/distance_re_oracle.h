@@ -57,8 +57,7 @@ struct DistanceGroupedOracle : CountGroupedOracle {
                           const Rcpp::NumericMatrix& Z_site,
                           const Rcpp::IntegerVector& site_group,
                           int n_sites_, int n_groups_,
-                          const Rcpp::NumericVector& cutpoints,
-                          int transect, int quad_order, int K_max_,
+                          SEXP quad_xptr, int K_max_,
                           bool nb, int key_code_, double eta_b_);
 
     // The RE arm is the abundance arm; eta_p_ptr[0] is the site's log-sigma.

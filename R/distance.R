@@ -248,7 +248,8 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
                              beta_lambda_init = NULL, beta_sigma_init = NULL,
                              eta_b_init = NULL, log_r_init = NULL,
                              r_max = 1e5, K_max = NULL, quad_order = 64L,
-                             max_iter = 100L, tol = 1e-6, verbose = FALSE) {
+                             max_iter = 100L, tol = 1e-6, verbose = FALSE,
+                             quad_xptr = NULL) {
   key      <- match.arg(key)
   transect <- match.arg(transect)
   mixture  <- match.arg(mixture)
@@ -291,17 +292,23 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
     if (K_max < R_max) stop("`K_max` must be >= the largest per-site total.", call. = FALSE)
   }
 
+  # `quad_xptr`: a caller that fits several species/starts against the SAME
+  # (cutpoints, transect, quad_order) -- e.g. ms_distance()'s per-species warm
+  # start -- builds the Gauss-Legendre quadrature ONCE and passes it through,
+  # instead of every call Newton-Raphson root-finding it fresh
+  # (gcol33/tulpaObs#165).
+  qptr <- quad_xptr %||%
+    cpp_distance_build_quad(as.numeric(cutpoints), .dist_transect_code(transect),
+                            as.integer(quad_order))
   fit <- cpp_distance_laplace_fixed(
     y = y, X_lambda_R = X_lambda, X_sigma_R = X_sigma,
-    cutpoints = as.numeric(cutpoints),
-    transect = .dist_transect_code(transect), key = .dist_key_code(key),
+    quad_xptr = qptr, key = .dist_key_code(key),
     beta_lambda_init = as.numeric(beta_lambda_init),
     beta_sigma_init  = as.numeric(beta_sigma_init),
     eta_b_init = as.numeric(eta_b_init),
     K_max = K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
     verbose = isTRUE(verbose), nb = nb,
-    log_r_init = as.numeric(log_r_init), theta_max = log(r_max),
-    quad_order = as.integer(quad_order))
+    log_r_init = as.numeric(log_r_init), theta_max = log(r_max))
 
   nm_lam <- colnames(X_lambda); nm_sig <- colnames(X_sigma)
   if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lambda))

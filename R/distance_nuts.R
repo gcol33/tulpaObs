@@ -31,10 +31,11 @@
   y         <- model$y
   X_lambda  <- model$X_processes[[1]]
   X_sigma   <- model$X_processes[[2]]
-  cutpoints <- model$cutpoints
   key_code  <- .dist_key_code(model$key)
   trans_code <- .dist_transect_code(model$transect)
   quad_order <- model$quad_order
+  quad_xptr <- cpp_distance_build_quad(as.numeric(model$cutpoints), trans_code,
+                                       as.integer(quad_order))
   if (is.null(K_max)) K_max <- 3L * max(rowSums(y)) + 100L
   K_max <- as.integer(K_max)
   resolve_r <- function(r) {
@@ -47,8 +48,7 @@
     eta_lambda <- as.numeric(X_lambda %*% beta_lambda)
     eta_sigma  <- as.numeric(X_sigma  %*% beta_sigma)
     cpp_distance_total_log_lik(y, eta_lambda, eta_sigma, as.numeric(eta_b),
-                               cutpoints, trans_code, key_code, K_max,
-                               resolve_r(r), quad_order)
+                               quad_xptr, key_code, K_max, resolve_r(r))
   }
   list(X_lambda = X_lambda, X_sigma = X_sigma, K_max = K_max, mixture = mixture,
        eval_beta = eval_beta)
@@ -135,12 +135,14 @@
                                    lay, re_info)
   theta0 <- init$theta0; inv_metric <- init$inv_metric
 
+  quad_xptr <- cpp_distance_build_quad(as.numeric(model$cutpoints),
+                                       .dist_transect_code(model$transect),
+                                       as.integer(model$quad_order))
   spec <- .tobs_count_nuts_re_spec(
     list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
-         cutpoints = as.numeric(model$cutpoints),
-         transect = .dist_transect_code(model$transect),
+         quad_xptr = quad_xptr,
          key = .dist_key_code(model$key), K_max = K_max,
-         is_nb = is_nb, quad_order = as.integer(model$quad_order)),
+         is_nb = is_nb),
     re_info, sigma.logr)
 
   run_chain <- function(ch) {

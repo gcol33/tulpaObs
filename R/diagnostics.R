@@ -473,9 +473,11 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   eta_b <- if (hazard) draws[, off + 1L] else rep(0, nrow(draws))
   r_vec <- if (is_nb) exp(draws[, off + (if (hazard) 2L else 1L)])
            else rep(Inf, nrow(draws))
+  quad_xptr <- cpp_distance_build_quad(as.numeric(model$cutpoints),
+                                       .dist_transect_code(model$transect),
+                                       as.integer(model$quad_order))
   cpp_distance_ploglik_batch(
-    y, as.numeric(model$cutpoints), .dist_transect_code(model$transect),
-    .dist_key_code(model$key), as.integer(model$quad_order), K_max,
+    y, quad_xptr, .dist_key_code(model$key), K_max,
     eta_lambda, eta_sigma, as.numeric(eta_b), as.numeric(r_vec),
     max(1L, as.integer(n.threads)))
 }

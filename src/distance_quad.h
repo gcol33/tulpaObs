@@ -171,6 +171,18 @@ inline KeyDeriv dist_key_deriv(double x, int key, double sigma, double b) {
     return k;
 }
 
+// External-pointer wrapping so a fit builds the quadrature ONCE (the R driver
+// calls cpp_distance_build_quad() a single time per fit) and every repeated
+// .Call() into the compiled kernel reuses it, instead of Newton-Raphson
+// root-finding the Gauss-Legendre nodes fresh on every call (gcol33/tulpaObs#165).
+inline SEXP dist_quad_wrap(const DistQuad& q) {
+    return Rcpp::XPtr<DistQuad>(new DistQuad(q), true);
+}
+
+inline Rcpp::XPtr<DistQuad> dist_quad_from_xptr(SEXP quad_xptr) {
+    return Rcpp::XPtr<DistQuad>(quad_xptr);
+}
+
 }  // namespace tulpaObs
 
 #endif  // TULPAOBS_DISTANCE_QUAD_H

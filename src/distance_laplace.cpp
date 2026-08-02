@@ -147,26 +147,25 @@ Rcpp::List cpp_distance_laplace_fixed(
     Rcpp::IntegerMatrix y,               // n_sites x n_bins bin counts
     Rcpp::NumericMatrix X_lambda_R,      // n_sites x p_lam
     Rcpp::NumericMatrix X_sigma_R,       // n_sites x p_sig
-    Rcpp::NumericVector cutpoints,       // length n_bins + 1
-    int transect,                        // 0 line, 1 point
+    SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
     int key,                             // 0 half-normal, 1 hazard-rate
     Rcpp::NumericVector beta_lambda_init,
     Rcpp::NumericVector beta_sigma_init,
     double eta_b_init,                   // log-shape init (hazard only)
     int K_max, int max_iter, double tol, bool verbose,
-    bool nb, double log_r_init, double theta_max, int quad_order
+    bool nb, double log_r_init, double theta_max
 ) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     const int p_lam = X_lambda_R.ncol(), p_sig = X_sigma_R.ncol();
     const bool hazard = (key == tulpaObs::DIST_HAZARD);
     if (X_lambda_R.nrow() != n_sites) Rcpp::stop("nrow(X_lambda) must equal nrow(y).");
     if (X_sigma_R.nrow()  != n_sites) Rcpp::stop("nrow(X_sigma) must equal nrow(y).");
-    if ((int)cutpoints.size() != n_bins + 1) Rcpp::stop("length(cutpoints) must equal ncol(y) + 1.");
     if ((int)beta_lambda_init.size() != p_lam) Rcpp::stop("beta_lambda_init length must equal ncol(X_lambda).");
     if ((int)beta_sigma_init.size()  != p_sig) Rcpp::stop("beta_sigma_init length must equal ncol(X_sigma).");
 
-    std::vector<double> cut(cutpoints.begin(), cutpoints.end());
-    DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
+    Rcpp::XPtr<DistQuad> quad_ptr = tulpaObs::dist_quad_from_xptr(quad_xptr);
+    const DistQuad& quad = *quad_ptr;
+    if (quad.n_bins != n_bins) Rcpp::stop("quad_xptr's bin count must equal ncol(y).");
 
     Map<MatrixXd> Xl(REAL(X_lambda_R), n_sites, p_lam);
     Map<MatrixXd> Xs(REAL(X_sigma_R), n_sites, p_sig);
@@ -343,16 +342,16 @@ Rcpp::List cpp_distance_total_log_lik(
     Rcpp::NumericVector eta_lambda,
     Rcpp::NumericVector eta_sigma,
     double eta_b,
-    Rcpp::NumericVector cutpoints,
-    int transect, int key, int K_max, double r, int quad_order
+    SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
+    int key, int K_max, double r
 ) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     if ((int)eta_lambda.size() != n_sites) Rcpp::stop("length(eta_lambda) must equal nrow(y).");
     if ((int)eta_sigma.size()  != n_sites) Rcpp::stop("length(eta_sigma) must equal nrow(y).");
-    if ((int)cutpoints.size() != n_bins + 1) Rcpp::stop("length(cutpoints) must equal ncol(y) + 1.");
     const bool hazard = (key == tulpaObs::DIST_HAZARD);
-    std::vector<double> cut(cutpoints.begin(), cutpoints.end());
-    DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
+    Rcpp::XPtr<DistQuad> quad_ptr = tulpaObs::dist_quad_from_xptr(quad_xptr);
+    const DistQuad& quad = *quad_ptr;
+    if (quad.n_bins != n_bins) Rcpp::stop("quad_xptr's bin count must equal ncol(y).");
 
     double total_ll = 0.0, total_grad_theta = 0.0, grad_eta_b = 0.0;
     Rcpp::NumericVector log_lik_site(n_sites), grad_eta_lambda(n_sites),
@@ -405,14 +404,16 @@ Rcpp::List cpp_distance_total_log_lik(
 Rcpp::List cpp_distance_site_sweep(
     Rcpp::IntegerMatrix y_bins,
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma,
-    Rcpp::NumericVector cutpoints, int transect, int quad_order, int K_max,
-    bool nb, double r, int key = 0, double eta_b = 0.0, bool value_only = false
+    SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
+    int K_max, bool nb, double r, int key = 0, double eta_b = 0.0,
+    bool value_only = false
 ) {
     const int n_sites = y_bins.nrow(), n_bins = y_bins.ncol();
     if (eta_lambda.size() != n_sites || eta_sigma.size() != n_sites)
         Rcpp::stop("eta_lambda / eta_sigma must have length nrow(y_bins).");
-    std::vector<double> cut(cutpoints.begin(), cutpoints.end());
-    tulpaObs::DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
+    Rcpp::XPtr<tulpaObs::DistQuad> quad_ptr = tulpaObs::dist_quad_from_xptr(quad_xptr);
+    const tulpaObs::DistQuad& quad = *quad_ptr;
+    if (quad.n_bins != n_bins) Rcpp::stop("quad_xptr's bin count must equal ncol(y_bins).");
     const double rr = nb ? r : std::numeric_limits<double>::infinity();
     const int key_code = (key == 1) ? tulpaObs::DIST_HAZARD : tulpaObs::DIST_HALFNORMAL;
     const bool hazard = (key_code == tulpaObs::DIST_HAZARD);

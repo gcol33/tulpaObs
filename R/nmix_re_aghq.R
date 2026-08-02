@@ -256,6 +256,12 @@
   hazard   <- identical(model$key, "hazard")
   key_code <- .dist_key_code(model$key)
   p_lam    <- ncol(model$X_processes[[1]]); p_sig <- ncol(model$X_processes[[2]])
+  # Built ONCE for the whole profile -- every candidate eta_b's oracle reuses it
+  # instead of rebuilding the Gauss-Legendre quadrature per candidate
+  # (gcol33/tulpaObs#165; cutpoints/transect/quad_order don't vary with eta_b).
+  quad_xptr <- cpp_distance_build_quad(as.numeric(model$cutpoints),
+                                       .dist_transect_code(model$transect),
+                                       as.integer(model$quad_order))
 
   # A make_oracle closure at a FIXED hazard shape eta_b (0 for the half-normal
   # key). Profiling rebuilds the closure per candidate eta_b (gcol33/tulpaObs#114).
@@ -265,9 +271,7 @@
       X_lambda = model$X_processes[[1]], X_sigma = model$X_processes[[2]],
       Z_site = Z_site, site_group = idx1,
       n_sites = length(idx1), n_groups = as.integer(design[[1]]$n_groups),
-      cutpoints = as.numeric(model$cutpoints),
-      transect = .dist_transect_code(model$transect),
-      quad_order = as.integer(model$quad_order),
+      quad_xptr = quad_xptr,
       K_max = as.integer(K_max), nb = is_nb, key = key_code, eta_b = eta_b)
   fit_at <- function(eta_b)
     .tobs_count_re_aghq(make_oracle_eb(eta_b), model, design,

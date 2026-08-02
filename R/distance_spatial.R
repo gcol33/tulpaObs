@@ -47,6 +47,10 @@
   cutpoints <- as.numeric(model$cutpoints)
   transect_code <- .dist_transect_code(model$transect)
   quad_order <- as.integer(model$quad_order %||% 64L)
+  # Built ONCE outside `eval()` -- the areal-BFGS driver calls `eval()` every
+  # gradient evaluation, so rebuilding the quadrature there would pay the
+  # Newton-Raphson root-find on every BFGS step (gcol33/tulpaObs#165).
+  quad_xptr <- cpp_distance_build_quad(cutpoints, transect_code, quad_order)
   R_max <- if (length(y)) max(rowSums(y)) else 0L
   K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
   is_nb <- mixture %in% c("negbin", "NB")
@@ -65,8 +69,8 @@
     eta_sig <- as.numeric(X_sig %*% theta_fix[i_sig]) + (if (det_arm) offset else 0)
     eta_b <- if (hazard) theta_fix[i_b] else 0.0
     rr <- if (is_nb) exp(theta_fix[i_logr]) else Inf
-    sw <- cpp_distance_site_sweep(y, eta_lam, eta_sig, cutpoints, transect_code,
-                                  quad_order, K_max, nb = is_nb, r = rr,
+    sw <- cpp_distance_site_sweep(y, eta_lam, eta_sig, quad_xptr,
+                                  K_max, nb = is_nb, r = rr,
                                   key = key_code, eta_b = eta_b)
     g <- numeric(n_fixed)
     g[i_lam] <- as.numeric(crossprod(X_lam, sw$grad_lam))
@@ -225,10 +229,10 @@
   inv_metric <- c(rep(0.1, n_base), rep(1, n_raw))
 
   spec <- list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
-               cutpoints = as.numeric(model$cutpoints),
-               transect = .dist_transect_code(model$transect),
+               quad_xptr = cpp_distance_build_quad(
+                 as.numeric(model$cutpoints), .dist_transect_code(model$transect),
+                 as.integer(model$quad_order %||% 64L)),
                key = .dist_key_code(model$key), K_max = K_max, is_nb = is_nb,
-               quad_order = as.integer(model$quad_order %||% 64L),
                n_field_units = n_field_units, field_map = field_map,
                field_load = field_load)
 

@@ -146,12 +146,18 @@
   tc  <- .dist_transect_code(model$transect)
   kc  <- .dist_key_code(model$key)
   qo  <- as.integer(model$quad_order %||% 64L)
+  # Built ONCE for the whole fit (every species, every EM/block-coordinate
+  # iteration) rather than Newton-Raphson root-finding the Gauss-Legendre nodes
+  # fresh on every `sweep()` call (gcol33/tulpaObs#165) -- `sweep()` is the
+  # community EM's inner-loop oracle, called far more than once per species.
+  qptr <- cpp_distance_build_quad(cut, tc, qo)
   ys  <- lapply(seq_len(S), function(s)
     matrix(as.integer(model$y[, , s]), model$n_sites, model$n_bins))
   R_max <- max(vapply(ys, function(m) if (length(m)) max(rowSums(m)) else 0, 0))
   K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
   list(
     y_s = ys, K_max = K_max, hazard = identical(model$key, "hazard"),
+    quad_xptr = qptr,
     # `idx` (a subset of site rows) lets a caller sweep only those sites --
     # `eta_lam` / `eta_sig` must already be subsetted to the same rows by the
     # caller (gcol33/tulpaObs#162 lever 2); `ys[[s]]` is subsetted here since it
@@ -162,7 +168,7 @@
     # not `working()`, which needs the full sweep.
     sweep = function(s, eta_lam, eta_sig, eta_b = 0, idx = NULL, value_only = FALSE) {
       y_use <- if (is.null(idx)) ys[[s]] else ys[[s]][idx, , drop = FALSE]
-      cpp_distance_site_sweep(y_use, eta_lam, eta_sig, cut, tc, qo, K_max,
+      cpp_distance_site_sweep(y_use, eta_lam, eta_sig, qptr, K_max,
                               nb = FALSE, r = Inf, key = kc,
                               eta_b = as.numeric(eta_b), value_only = value_only)
     })
@@ -292,7 +298,8 @@
                      cutpoints = model$cutpoints, key = model$key,
                      transect = model$transect, mixture = "P",
                      K_max = eng$K_max, quad_order = model$quad_order,
-                     max_iter = as.integer(max.iter), tol = 1e-6, verbose = FALSE),
+                     max_iter = as.integer(max.iter), tol = 1e-6, verbose = FALSE,
+                     quad_xptr = eng$quad_xptr),
     error = function(e) NULL))
   ok <- !vapply(warm, is.null, logical(1))
   mu0 <- if (any(ok)) {

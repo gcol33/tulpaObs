@@ -18,8 +18,7 @@ DistanceGroupedOracle::DistanceGroupedOracle(
         const Rcpp::NumericMatrix& Z_site,
         const Rcpp::IntegerVector& site_group,
         int n_sites_, int n_groups_,
-        const Rcpp::NumericVector& cutpoints,
-        int transect, int quad_order, int K_max_, bool nb,
+        SEXP quad_xptr, int K_max_, bool nb,
         int key_code_, double eta_b_) {
     K_max    = K_max_;
     key_code = key_code_;
@@ -37,9 +36,7 @@ DistanceGroupedOracle::DistanceGroupedOracle(
     build_common(arm_, dummy_y, site_idx, X_lambda, X_sigma, Z_site,
                  site_group, n_sites_, n_groups_, nb, y_by_site_ignored);
 
-    std::vector<double> cut(cutpoints.size());
-    for (R_xlen_t b = 0; b < cutpoints.size(); ++b) cut[b] = cutpoints[b];
-    quad = dist_build_quad(cut, transect, quad_order);
+    quad = *dist_quad_from_xptr(quad_xptr);
 
     y_bins_site.assign(n_sites_, std::vector<int>(n_bins, 0));
     for (int i = 0; i < n_sites_; ++i)
@@ -61,14 +58,12 @@ SEXP cpp_distance_grouped_oracle(int arm,
                                  Rcpp::NumericMatrix Z_site,
                                  Rcpp::IntegerVector site_group,
                                  int n_sites, int n_groups,
-                                 Rcpp::NumericVector cutpoints,
-                                 int transect, int quad_order, int K_max,
+                                 SEXP quad_xptr, int K_max,
                                  bool nb = false, int key = 0, double eta_b = 0.0) {
     return Rcpp::XPtr<tulpa::REGroupOracle>(
         new tulpaObs::DistanceGroupedOracle(arm, y_bins, X_lambda, X_sigma,
                                             Z_site, site_group,
-                                            n_sites, n_groups, cutpoints,
-                                            transect, quad_order, K_max, nb,
-                                            key, eta_b),
+                                            n_sites, n_groups, quad_xptr,
+                                            K_max, nb, key, eta_b),
         true);
 }

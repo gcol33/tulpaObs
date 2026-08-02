@@ -33,10 +33,11 @@ test_that("distance marginal equals independent per-bin Poissons (Poisson abunda
       sigma  <- runif(1, 0.25, 0.7)
       pi_b   <- tulpaObs:::.distance_pi(sigma, cuts5, "halfnorm", trans)
       y      <- rpois(length(pi_b), lambda * pi_b)
+      qptr <- tulpaObs:::cpp_distance_build_quad(
+        cuts5, if (trans == "point") 1L else 0L, 64L)
       out <- tulpaObs:::cpp_distance_total_log_lik(
         matrix(as.integer(y), 1L), log(lambda), log(sigma), 0,
-        cuts5, if (trans == "point") 1L else 0L, 0L,
-        K_max = sum(y) + 400L, r = Inf, quad_order = 64L)
+        qptr, 0L, K_max = sum(y) + 400L, r = Inf)
       ll_ref <- sum(dpois(y, lambda * pi_b, log = TRUE))
       expect_equal(out$log_lik, ll_ref, tolerance = 1e-7,
                    info = paste(trans, rep))
@@ -94,12 +95,13 @@ test_that("analytic observed information matches the FD Hessian (Louis curvature
                                        verbose = FALSE)
     theta <- c(raw$beta_lambda, raw$beta_sigma, if (hazard) raw$eta_b)
     pl <- length(raw$beta_lambda); ps <- length(raw$beta_sigma)
+    qptr <- tulpaObs:::cpp_distance_build_quad(sim$cutpoints, 0L, 64L)
     grad_at <- function(th) {
       bl <- th[seq_len(pl)]; bs <- th[pl + seq_len(ps)]
       eb <- if (hazard) th[pl + ps + 1L] else 0
       o <- tulpaObs:::cpp_distance_total_log_lik(
         sim$y, as.numeric(Xl %*% bl), as.numeric(Xs %*% bs), eb,
-        sim$cutpoints, 0L, if (hazard) 1L else 0L, raw$K_max, Inf, 64L)
+        qptr, if (hazard) 1L else 0L, raw$K_max, Inf)
       g <- c(as.numeric(crossprod(Xl, o$grad_eta_lambda)),
              as.numeric(crossprod(Xs, o$grad_eta_sigma)))
       if (hazard) g <- c(g, o$grad_eta_b)
@@ -132,10 +134,11 @@ test_that("C++ distance NUTS log-posterior matches the R oracle byte-for-byte", 
     theta <- c(log(30), 0.2, log(0.45), 0.15,
                if (hazard) log(3), if (is_nb) log(4))
     spec <- list(y = model$y, X_lambda = model$X_processes[[1]],
-                 X_sigma = model$X_processes[[2]], cutpoints = model$cutpoints,
-                 transect = 1L, key = if (hazard) 1L else 0L,
-                 K_max = marg$K_max, is_nb = is_nb,
-                 quad_order = model$quad_order)
+                 X_sigma = model$X_processes[[2]],
+                 quad_xptr = tulpaObs:::cpp_distance_build_quad(
+                   model$cutpoints, 1L, model$quad_order),
+                 key = if (hazard) 1L else 0L,
+                 K_max = marg$K_max, is_nb = is_nb)
     r_out <- tulpaObs:::.tobs_distance_nuts_logpost(theta, marg, lay)
     c_out <- tulpaObs:::cpp_distance_nuts_joint_logpost(spec, theta, 10, 1.5, 1.5)
     expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9, info = paste(cs$key, cs$mix))

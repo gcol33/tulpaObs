@@ -51,11 +51,7 @@ inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
     m.K_max    = Rcpp::as<int>(spec["K_max"]);
     m.is_nb    = Rcpp::as<bool>(spec["is_nb"]);
     m.hazard   = (m.key == DIST_HAZARD);
-    Rcpp::NumericVector cutpoints = spec["cutpoints"];
-    const int transect  = Rcpp::as<int>(spec["transect"]);
-    const int quad_order = Rcpp::as<int>(spec["quad_order"]);
-    std::vector<double> cut(cutpoints.begin(), cutpoints.end());
-    m.quad = dist_build_quad(cut, transect, quad_order);
+    m.quad     = *dist_quad_from_xptr(spec["quad_xptr"]);
     int base = m.p_lam + m.p_sig + (m.hazard ? 1 : 0) + (m.is_nb ? 1 : 0);
     m.re = re_block_build(spec, base, m.n_sites);      // lambda arm only
     base += re_block_size(m.re);

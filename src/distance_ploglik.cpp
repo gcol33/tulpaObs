@@ -20,8 +20,8 @@ using namespace Rcpp;
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_distance_ploglik_batch(
     Rcpp::IntegerMatrix y,          // [n_sites x n_bins]
-    Rcpp::NumericVector cutpoints,
-    int transect, int key, int quad_order, int K_max,
+    SEXP quad_xptr,                 // per-fit quadrature (cpp_distance_build_quad)
+    int key, int K_max,
     Rcpp::NumericMatrix eta_lambda, // [S x n_sites]
     Rcpp::NumericMatrix eta_sigma,  // [S x n_sites]
     Rcpp::NumericVector eta_b,      // [S] (hazard shape; 0 otherwise)
@@ -37,9 +37,9 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
   if (eta_b.size() != S || r_vec.size() != S)
     Rcpp::stop("eta_b / r_vec must be length S.");
 
-  std::vector<double> cut(cutpoints.begin(), cutpoints.end());
-  const tulpaObs::DistQuad quad =
-    tulpaObs::dist_build_quad(cut, transect, quad_order);
+  Rcpp::XPtr<tulpaObs::DistQuad> quad_ptr = tulpaObs::dist_quad_from_xptr(quad_xptr);
+  const tulpaObs::DistQuad& quad = *quad_ptr;
+  if (quad.n_bins != n_bins) Rcpp::stop("quad_xptr's bin count must equal ncol(y).");
 
   // Per-site bin counts (draw-invariant), gathered once.
   std::vector<std::vector<int>> y_by_site(n_sites, std::vector<int>(n_bins));
