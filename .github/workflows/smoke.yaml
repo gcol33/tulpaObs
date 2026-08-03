@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 60
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      MAKEFLAGS: "-j4"
       TULPAOBS_FAST: '1'
       # #151: devtools::test() can never run this package's suite in parallel --
       # it unconditionally passes load_package = "source" to every worker

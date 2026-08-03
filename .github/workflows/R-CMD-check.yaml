@@ -49,6 +49,7 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      MAKEFLAGS: "-j4"
       # INLA, spAbundance and unmarked back reference-comparison tests that
       # already gate themselves with skip_if_not_installed(). INLA in particular
       # is a large non-CRAN install, so check must not demand every Suggests.
