@@ -36,7 +36,7 @@ Suggests:
     rmarkdown,
     spAbundance,
     unmarked
-Additional_repositories: https://inla.r-inla-download.org/R/stable
+Additional_repositories: https://inla.r-inla-download.org/R/stable, https://gcol33.r-universe.dev
 VignetteBuilder: knitr
 LinkingTo:
     Rcpp,
