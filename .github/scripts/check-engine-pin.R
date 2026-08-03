@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
 
-# Assert that the declared engine versions, the pinned Remotes tags, and the
-# versions actually installed all agree, and log all three every run.
+# Assert that the declared engine versions, the pinned Remotes tags (where one
+# is declared), and the versions actually installed all agree, and log all
+# three every run.
 #
 # tulpaObs is a thin statistical layer over the tulpa engine and links against
 # its headers (LinkingTo: tulpa), so a version the package does not declare can
@@ -9,6 +10,10 @@
 # an Imports floor and an exact Remotes tag -- and those two plus the installed
 # version drifted apart once already (issue #150: Imports/Remotes said 0.0.85
 # while every local measurement ran on 0.0.92).
+#
+# An engine resolved from a CRAN-like repo (CRAN itself, or r-universe via
+# Additional_repositories) rather than Remotes has no tag to cross-check --
+# only the ordinary Imports floor applies there.
 #
 # Fails loudly rather than warning: an engine skew that only shows up as a NOTE
 # is the failure mode this guard exists to remove.
@@ -54,14 +59,19 @@ for (pkg in engines) {
       pkg, pkg))
     next
   }
-  if (is.na(remotes)) {
-    problems <- c(problems, sprintf(
-      "%s: no pinned tag in DESCRIPTION Remotes. Declare 'Remotes: gcol33/%s@vX.Y.Z'.",
-      pkg, pkg))
-    next
-  }
   if (is.na(installed)) {
     problems <- c(problems, sprintf("%s: declared but not installed.", pkg))
+    next
+  }
+
+  if (is.na(remotes)) {
+    # Repo-resolved (CRAN or Additional_repositories): only the ordinary
+    # Imports floor applies -- there is no exact tag to cross-check.
+    if (package_version(installed) < package_version(imports)) {
+      problems <- c(problems, sprintf(
+        "%s: installed %s is below the Imports floor %s.",
+        pkg, installed, imports))
+    }
     next
   }
 
