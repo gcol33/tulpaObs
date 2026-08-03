@@ -114,6 +114,15 @@ struct DistSiteResult {
 // backtracking line search in R/community_latent.R), this drops the 5 extra
 // per-bin heap-allocated vectors and the O(n_dparam^2 * n_bins) detection
 // block that `working()`'s score/curvature need but a value lookup does not.
+// `headroom` (gcol33/tulpaObs#168): caps this site's own ceiling at
+// `K_lo + headroom` rather than the shared `K_max`, mirroring
+// nmix_precompute_site()'s per-site cap (nmix_kernel.h). K_lo == R (the site's
+// detected total) exactly for every distance site, so unlike the N-mixture the
+// comb_table stays valid unchanged -- it is already indexed by the offset
+// `k = N - K_lo`, never by K_lo itself (dist_build_comb_table(), #167), so
+// capping here needs only a smaller K_grid, no separate per-site cache. A
+// negative headroom (the default) disables the cap: every site still sums to
+// the shared K_max, the historical behaviour.
 inline DistSiteResult compute_distance_site(
     const int* y_bins, int n_bins,
     double eta_lambda, double eta_sigma, double eta_b,
@@ -121,7 +130,8 @@ inline DistSiteResult compute_distance_site(
     double r = std::numeric_limits<double>::infinity(),
     bool value_only = false,
     const std::vector<double>* comb_table = nullptr,
-    DistScratch* scratch = nullptr
+    DistScratch* scratch = nullptr,
+    int headroom = -1
 ) {
     const bool is_nb = std::isfinite(r);
     const int nd = (key == DIST_HAZARD) ? 2 : 1;
@@ -229,14 +239,22 @@ inline DistSiteResult compute_distance_site(
         base_const = -lambda + det_const - (double)R * log1mp - sum_lgam_yfact;
     }
 
-    const int K_grid = K_max - K_lo + 1;
+    // Per-site ceiling K_hi (gcol33/tulpaObs#168): headroom >= 0 caps this
+    // site's sum at K_lo + headroom rather than the shared K_max, whenever that
+    // cap is tighter -- a site whose own total already sits within `headroom`
+    // of K_max keeps the shared ceiling, never grows past it.
+    const int K_hi = (headroom >= 0 && K_lo <= K_max - headroom)
+        ? K_lo + headroom : K_max;
+    const int K_grid = K_hi - K_lo + 1;
     std::vector<double> a_local;
     std::vector<double>& a = scratch ? scratch->a : a_local;
     a.resize(K_grid);
     // K_lo == R exactly (see above), so N - R == k always: the combinatorial
     // term depends only on the offset k, never on R itself (gcol33/tulpaObs#167)
     // -- comb_table[k], when supplied, is a memoized -lgamma(k+1) built once per
-    // fit rather than recomputed at every (site, call) pair.
+    // fit rather than recomputed at every (site, call) pair. Indexing k up to
+    // K_hi - K_lo <= K_max - K_lo stays in the table's bounds regardless of the
+    // cap.
     double max_a = -std::numeric_limits<double>::infinity();
     for (int k = 0; k < K_grid; ++k) {
         const int N = K_lo + k;

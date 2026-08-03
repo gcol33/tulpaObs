@@ -26,7 +26,8 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
     Rcpp::NumericMatrix eta_sigma,  // [S x n_sites]
     Rcpp::NumericVector eta_b,      // [S] (hazard shape; 0 otherwise)
     Rcpp::NumericVector r_vec,      // [S] (Inf for Poisson)
-    int n_threads
+    int n_threads,
+    int headroom = -1               // gcol33/tulpaObs#168: per-site K_hi cap
 ) {
   const int S = eta_lambda.nrow();
   const int n_sites = eta_lambda.ncol();
@@ -73,7 +74,8 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
         // (gcol33/tulpaObs#164) -- this call previously computed and discarded them.
         double val = tulpaObs::compute_distance_site(
           y_by_site[s].data(), n_bins, pel[off], pes[off], eb, key, quad,
-          K_max, r, /*value_only=*/true, &comb_table, &scratch).log_lik;
+          K_max, r, /*value_only=*/true, &comb_table, &scratch,
+          headroom).log_lik;
         pll[off] = val;
       }
     }
@@ -86,7 +88,8 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
       std::size_t off = (std::size_t) s * S + d;
       double val = tulpaObs::compute_distance_site(
         y_by_site[s].data(), n_bins, pel[off], pes[off], eb, key, quad,
-        K_max, r, /*value_only=*/true, &comb_table, &scratch).log_lik;
+        K_max, r, /*value_only=*/true, &comb_table, &scratch,
+        headroom).log_lik;
       pll[off] = val;
     }
   }

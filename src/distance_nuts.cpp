@@ -22,6 +22,14 @@ namespace tulpaObs {
 
 struct DistNutsModel {
     int n_sites = 0, n_bins = 0, p_lam = 0, p_sig = 0, key = 0, K_max = 0;
+    // Per-site K_hi cap (gcol33/tulpaObs#168), FIXED for the whole chain (set
+    // once in dist_nuts_build() from the R wrapper's verified headroom -- the
+    // same one the warm-start Laplace fit's score-gap guard already checked at
+    // its mode) rather than re-verified at every leapfrog gradient call. The R
+    // wrapper runs ONE post-hoc check at the posterior mean after sampling and
+    // re-runs the whole chain at a wider headroom on disagreement, mirroring
+    // the escalate-and-refit pattern the other fitters use.
+    int headroom = -1;
     bool is_nb = false, hazard = false;
     double sigma_beta = 10.0, sigma_shape = 1.5, sigma_logr = 1.5;
     Rcpp::IntegerMatrix y;
@@ -56,6 +64,8 @@ inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
     m.p_sig    = m.X_sigma.ncol();
     m.key      = Rcpp::as<int>(spec["key"]);
     m.K_max    = Rcpp::as<int>(spec["K_max"]);
+    m.headroom = spec.containsElementNamed("headroom")
+        ? Rcpp::as<int>(spec["headroom"]) : -1;
     m.is_nb    = Rcpp::as<bool>(spec["is_nb"]);
     m.hazard   = (m.key == DIST_HAZARD);
     m.quad     = *dist_quad_from_xptr(spec["quad_xptr"]);
@@ -98,7 +108,8 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         for (int b = 0; b < m.n_bins; ++b) y_site[b] = m.y(s, b);
         const DistSiteResult res = compute_distance_site(
             y_site.data(), m.n_bins, eta_lambda, eta_sigma, eta_b, m.key,
-            m.quad, m.K_max, r, /*value_only=*/false, &m.comb_table, &m.scratch);
+            m.quad, m.K_max, r, /*value_only=*/false, &m.comb_table, &m.scratch,
+            m.headroom);
         lp += res.log_lik;
         for (int k = 0; k < p_lam; ++k) grad[k] += res.grad_eta_lambda * m.X_lambda(s, k);
         for (int k = 0; k < p_sig; ++k) grad[p_lam + k] += res.grad_eta_d[0] * m.X_sigma(s, k);

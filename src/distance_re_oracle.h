@@ -49,6 +49,10 @@ struct DistanceGroupedOracle : CountGroupedOracle {
     int key_code = DIST_HALFNORMAL;             // half-normal / hazard detection key
     double eta_b = 0.0;                         // fixed hazard log-shape (profiled in R)
     DistQuad quad;                              // per-fit detection quadrature
+    // Per-site K_hi cap (gcol33/tulpaObs#168), verified by the R wrapper against
+    // the shared K_max ceiling before the AGHQ integration runs; -1 disables it
+    // (every group evaluates at the shared K_max, the historical behaviour).
+    int headroom = -1;
     // Built once in the constructor, read-only thereafter (gcol33/tulpaObs#167):
     // safe to share read-only across an eval_site() that may be called from a
     // parallel group loop the same way the quadrature above already is. No
@@ -65,7 +69,8 @@ struct DistanceGroupedOracle : CountGroupedOracle {
                           const Rcpp::IntegerVector& site_group,
                           int n_sites_, int n_groups_,
                           SEXP quad_xptr, int K_max_,
-                          bool nb, int key_code_, double eta_b_);
+                          bool nb, int key_code_, double eta_b_,
+                          int headroom_ = -1);
 
     // The RE arm is the abundance arm; eta_p_ptr[0] is the site's log-sigma.
     // Pack the distance marginal's abundance + NB-dispersion fields into the
@@ -80,7 +85,7 @@ struct DistanceGroupedOracle : CountGroupedOracle {
         const DistSiteResult d = compute_distance_site(
             y_bins_site[i].data(), n_bins, eta_lam, eta_sigma, eta_b,
             static_cast<DistKey>(key_code), quad, K_max, r,
-            /*value_only=*/false, &comb_table);
+            /*value_only=*/false, &comb_table, /*scratch=*/nullptr, headroom);
         NMixSiteResult res;
         res.log_lik         = d.log_lik;
         res.grad_eta_lambda = d.grad_eta_lambda;

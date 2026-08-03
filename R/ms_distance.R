@@ -140,7 +140,7 @@
 # eta-level scores, and the (info_lam, var_N, swl) pieces the marginal curvature
 # is built from. Single source of truth for the community EM and the latent
 # driver's oracle.
-.tobs_ms_distance_engine <- function(model, K_max = NULL) {
+.tobs_ms_distance_engine <- function(model, K_max = NULL, headroom = NULL) {
   S   <- model$n_species
   cut <- as.numeric(model$cutpoints)
   tc  <- .dist_transect_code(model$transect)
@@ -153,10 +153,13 @@
   qptr <- cpp_distance_build_quad(cut, tc, qo)
   ys  <- lapply(seq_len(S), function(s)
     matrix(as.integer(model$y[, , s]), model$n_sites, model$n_bins))
-  R_max <- max(vapply(ys, function(m) if (length(m)) max(rowSums(m)) else 0, 0))
-  K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
+  site_tot <- unlist(lapply(ys, rowSums))
+  trunc    <- .dist_truncation(K_max, site_tot)
+  K_max    <- trunc$K_max
+  headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
   list(
-    y_s = ys, K_max = K_max, hazard = identical(model$key, "hazard"),
+    y_s = ys, K_max = K_max, headroom = headroom, key_code = kc,
+    hazard = identical(model$key, "hazard"),
     quad_xptr = qptr,
     # `idx` (a subset of site rows) lets a caller sweep only those sites --
     # `eta_lam` / `eta_sig` must already be subsetted to the same rows by the
@@ -170,7 +173,8 @@
       y_use <- if (is.null(idx)) ys[[s]] else ys[[s]][idx, , drop = FALSE]
       cpp_distance_site_sweep(y_use, eta_lam, eta_sig, qptr, K_max,
                               nb = FALSE, r = Inf, key = kc,
-                              eta_b = as.numeric(eta_b), value_only = value_only)
+                              eta_b = as.numeric(eta_b), value_only = value_only,
+                              headroom = headroom)
     })
 }
 
@@ -267,6 +271,7 @@
 # the same code path as the latent ones.
 .tobs_fit_ms_distance <- function(model, spatial = NULL, latent = NULL,
                                   mixture = "poisson", K_max = NULL,
+                                  headroom = NULL,
                                   max.iter = 100L, tol = 1e-4,
                                   sigma.beta = 5, priors = NULL,
                                   max.outer = NULL, factor.starts = NULL,
@@ -279,7 +284,7 @@
   }
   S  <- model$n_species
   Ns <- model$n_sites
-  eng <- .tobs_ms_distance_engine(model, K_max = K_max)
+  eng <- .tobs_ms_distance_engine(model, K_max = K_max, headroom = headroom)
   X_lam <- model$X_processes[[1L]]; X_sig <- model$X_processes[[2L]]
   p_lam <- ncol(X_lam); p_sig <- ncol(X_sig)
   P <- p_lam + p_sig
@@ -297,7 +302,8 @@
     distance_laplace(y = eng$y_s[[s]], X_lambda = X_lam, X_sigma = X_sig,
                      cutpoints = model$cutpoints, key = model$key,
                      transect = model$transect, mixture = "P",
-                     K_max = eng$K_max, quad_order = model$quad_order,
+                     K_max = eng$K_max, headroom = eng$headroom,
+                     quad_order = model$quad_order,
                      max_iter = as.integer(max.iter), tol = 1e-6, verbose = FALSE,
                      quad_xptr = eng$quad_xptr),
     error = function(e) NULL))
@@ -375,6 +381,31 @@
       allow = c("icar", "car_proper", "bym2", "spde"),
       tol = tol, max.outer = max.outer, factor.starts = factor.starts,
       n.quad = n.quad, verbose = verbose)
+  }
+
+  # Guard the per-site truncation at the converged community coefficients
+  # (gcol33/tulpaObs#168): the field / factor offsets the block-coordinate
+  # ascent converged to (`res$field$site_off`, `res$factor$offset`) are the
+  # SAME ones `eta_of()` inside `em_fit()` folds into eta_lambda, so the check
+  # runs at the predictor the fit actually used. Escalates to the shared
+  # ceiling on disagreement and re-fits the whole community model, exactly as
+  # the single-species and areal-spatial guards do.
+  if (eng$headroom >= 0L) {
+    site_off_mode <- if (!is.null(res$field)) res$field$site_off else NULL
+    fac_off_mode  <- if (!is.null(res$factor)) res$factor$offset else NULL
+    gap <- tryCatch(
+      .dist_community_score_gap(eng, res$em, X_lam, X_sig, lam_idx, sig_idx,
+                                hazard, S, site_off = site_off_mode,
+                                fac_off = fac_off_mode),
+      error = function(e) NA_real_)
+    if (is.finite(gap) && gap > .NMIX_SCORE_TOL) {
+      h_next <- .nmix_widen_headroom(eng$headroom, eng$K_max)
+      if (!is.null(h_next)) {
+        cl <- match.call()
+        cl$headroom <- h_next
+        return(eval(cl, parent.frame()))
+      }
+    }
   }
 
   fit <- build_ms_distance_fit(res$em, model, lam_idx, sig_idx, hazard)

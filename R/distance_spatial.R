@@ -18,7 +18,8 @@
 
 .tobs_fit_distance_spatial <- function(model, spatial, temporal = NULL,
                                        svc = NULL, mixture = "poisson",
-                                       K_max = NULL, max_iter = 200L, tol = 1e-6,
+                                       K_max = NULL, headroom = NULL,
+                                       max_iter = 200L, tol = 1e-6,
                                        verbose = TRUE, integration = "grid") {
   temporal_only <- is.null(spatial) && !is.null(temporal)
   # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
@@ -51,9 +52,14 @@
   # gradient evaluation, so rebuilding the quadrature there would pay the
   # Newton-Raphson root-find on every BFGS step (gcol33/tulpaObs#165).
   quad_xptr <- cpp_distance_build_quad(cutpoints, transect_code, quad_order)
-  R_max <- if (length(y)) max(rowSums(y)) else 0L
-  K_max <- if (is.null(K_max)) as.integer(3L * R_max + 100L) else as.integer(K_max)
+  site_tot <- if (length(y)) rowSums(y) else integer(0)
+  trunc    <- .dist_truncation(K_max, site_tot)
+  K_max    <- trunc$K_max
+  headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
   is_nb <- mixture %in% c("negbin", "NB")
+  # NB's heavier tail is not sized for the per-site window; keep the shared
+  # ceiling under NB (mirrors nmix_laplace(), R/nmix_laplace.R).
+  if (is_nb) headroom <- -1L
 
   # Fixed coefficient layout: (beta_lambda, beta_sigma[, eta_b][, log_r]). Under
   # the hazard-rate key the scalar log-shape eta_b is a global coordinate (#79),
@@ -71,7 +77,8 @@
     rr <- if (is_nb) exp(theta_fix[i_logr]) else Inf
     sw <- cpp_distance_site_sweep(y, eta_lam, eta_sig, quad_xptr,
                                   K_max, nb = is_nb, r = rr,
-                                  key = key_code, eta_b = eta_b)
+                                  key = key_code, eta_b = eta_b,
+                                  headroom = headroom)
     g <- numeric(n_fixed)
     g[i_lam] <- as.numeric(crossprod(X_lam, sw$grad_lam))
     g[i_sig] <- as.numeric(crossprod(X_sig, sw$grad_sig))
@@ -104,6 +111,39 @@
   res <- .tobs_areal_bfgs_fit(eval, n_fixed, field, theta0_fix,
                               max_iter = max_iter, tol = tol, label = "distance-spatial",
                               integration = integration)
+
+  # Guard the per-site truncation at the BFGS mode (gcol33/tulpaObs#168): the
+  # same score-gap comparison distance_laplace() runs, but sandwiched at the
+  # field-adjusted eta the areal fit actually converged to (`res$eta_offset`,
+  # the SAME per-site offset eval()'s own `offset` argument carries).
+  if (headroom >= 0L) {
+    gap <- tryCatch({
+      means0 <- res$beta_mean
+      offset_mode <- res$eta_offset %||% numeric(model$n_sites)
+      eta_lam_mode <- as.numeric(X_lam %*% means0[i_lam]) + (if (det_arm) 0 else offset_mode)
+      eta_sig_mode <- as.numeric(X_sig %*% means0[i_sig]) + (if (det_arm) offset_mode else 0)
+      eta_b_mode <- if (hazard) means0[i_b] else 0
+      r_mode <- if (is_nb) exp(means0[i_logr]) else Inf
+      sw_h <- cpp_distance_site_sweep(y, eta_lam_mode, eta_sig_mode, quad_xptr, K_max,
+                                      nb = is_nb, r = r_mode, key = key_code,
+                                      eta_b = eta_b_mode, headroom = headroom)
+      sw_u <- cpp_distance_site_sweep(y, eta_lam_mode, eta_sig_mode, quad_xptr, K_max,
+                                      nb = is_nb, r = r_mode, key = key_code,
+                                      eta_b = eta_b_mode, headroom = -1L)
+      .dist_score_gap(sw_h$grad_lam, sw_u$grad_lam, X_lam,
+                      sw_h$grad_sig, sw_u$grad_sig, X_sig)
+    }, error = function(e) NA_real_)
+    if (is.finite(gap) && gap > .NMIX_SCORE_TOL) {
+      h_next <- .nmix_widen_headroom(headroom, K_max)
+      if (!is.null(h_next)) {
+        cl <- match.call()
+        cl$headroom <- h_next
+        # `eval` is shadowed in this scope by the sweep closure above -- call
+        # base::eval explicitly, not the closure.
+        return(base::eval(cl, parent.frame()))
+      }
+    }
+  }
 
   means <- res$beta_mean
   raw <- list(

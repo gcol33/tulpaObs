@@ -109,16 +109,16 @@ cpp_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, 
     .Call(`_tulpaObs_cpp_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
-cpp_distance_laplace_fixed <- function(y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {
-    .Call(`_tulpaObs_cpp_distance_laplace_fixed`, y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max)
+cpp_distance_laplace_fixed <- function(y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_distance_laplace_fixed`, y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom)
 }
 
-cpp_distance_total_log_lik <- function(y, eta_lambda, eta_sigma, eta_b, quad_xptr, key, K_max, r) {
-    .Call(`_tulpaObs_cpp_distance_total_log_lik`, y, eta_lambda, eta_sigma, eta_b, quad_xptr, key, K_max, r)
+cpp_distance_total_log_lik <- function(y, eta_lambda, eta_sigma, eta_b, quad_xptr, key, K_max, r, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_distance_total_log_lik`, y, eta_lambda, eta_sigma, eta_b, quad_xptr, key, K_max, r, headroom)
 }
 
-cpp_distance_site_sweep <- function(y_bins, eta_lambda, eta_sigma, quad_xptr, K_max, nb, r, key = 0L, eta_b = 0.0, value_only = FALSE) {
-    .Call(`_tulpaObs_cpp_distance_site_sweep`, y_bins, eta_lambda, eta_sigma, quad_xptr, K_max, nb, r, key, eta_b, value_only)
+cpp_distance_site_sweep <- function(y_bins, eta_lambda, eta_sigma, quad_xptr, K_max, nb, r, key = 0L, eta_b = 0.0, value_only = FALSE, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_distance_site_sweep`, y_bins, eta_lambda, eta_sigma, quad_xptr, K_max, nb, r, key, eta_b, value_only, headroom)
 }
 
 cpp_distance_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_shape, sigma_logr) {
@@ -129,16 +129,16 @@ cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr,
     .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
-cpp_distance_ploglik_batch <- function(y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads) {
-    .Call(`_tulpaObs_cpp_distance_ploglik_batch`, y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads)
+cpp_distance_ploglik_batch <- function(y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_distance_ploglik_batch`, y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads, headroom)
 }
 
 cpp_distance_build_quad <- function(cutpoints, transect, quad_order) {
     .Call(`_tulpaObs_cpp_distance_build_quad`, cutpoints, transect, quad_order)
 }
 
-cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb = FALSE, key = 0L, eta_b = 0.0) {
-    .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb, key, eta_b)
+cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb = FALSE, key = 0L, eta_b = 0.0, headroom = -1L) {
+    .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb, key, eta_b, headroom)
 }
 
 cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0) {

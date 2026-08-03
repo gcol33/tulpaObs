@@ -58,7 +58,7 @@ inline double dist_sweep(const Rcpp::IntegerMatrix& y,
                          int K_max, double r,
                          std::vector<DistSiteResult>& out,
                          const std::vector<double>& comb_table,
-                         tulpaObs::DistScratch& scratch) {
+                         tulpaObs::DistScratch& scratch, int headroom = -1) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     VectorXd eta_lam = Xl * beta_lam;
     VectorXd eta_sig = Xs * beta_sig;
@@ -68,7 +68,8 @@ inline double dist_sweep(const Rcpp::IntegerMatrix& y,
         for (int b = 0; b < n_bins; ++b) y_site[b] = y(s, b);
         out[s] = compute_distance_site(y_site.data(), n_bins, eta_lam(s),
                                        eta_sig(s), eta_b, key, quad, K_max, r,
-                                       /*value_only=*/false, &comb_table, &scratch);
+                                       /*value_only=*/false, &comb_table, &scratch,
+                                       headroom);
         ll += out[s].log_lik;
     }
     return ll;
@@ -81,7 +82,7 @@ inline double dist_loglik(const Rcpp::IntegerMatrix& y,
                           double eta_b, int key, const DistQuad& quad,
                           int K_max, double r,
                           const std::vector<double>& comb_table,
-                          tulpaObs::DistScratch& scratch) {
+                          tulpaObs::DistScratch& scratch, int headroom = -1) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     VectorXd eta_lam = Xl * beta_lam;
     VectorXd eta_sig = Xs * beta_sig;
@@ -91,7 +92,8 @@ inline double dist_loglik(const Rcpp::IntegerMatrix& y,
         for (int b = 0; b < n_bins; ++b) y_site[b] = y(s, b);
         DistSiteResult res = compute_distance_site(y_site.data(), n_bins, eta_lam(s),
                                                    eta_sig(s), eta_b, key, quad, K_max, r,
-                                                   /*value_only=*/true, &comb_table, &scratch);
+                                                   /*value_only=*/true, &comb_table, &scratch,
+                                                   headroom);
         if (!R_finite(res.log_lik)) return res.log_lik;
         ll += res.log_lik;
     }
@@ -163,7 +165,8 @@ Rcpp::List cpp_distance_laplace_fixed(
     Rcpp::NumericVector beta_sigma_init,
     double eta_b_init,                   // log-shape init (hazard only)
     int K_max, int max_iter, double tol, bool verbose,
-    bool nb, double log_r_init, double theta_max
+    bool nb, double log_r_init, double theta_max,
+    int headroom = -1                    // gcol33/tulpaObs#168: per-site K_hi cap
 ) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     const int p_lam = X_lambda_R.ncol(), p_sig = X_sigma_R.ncol();
@@ -202,7 +205,7 @@ Rcpp::List cpp_distance_laplace_fixed(
         log_lik = R_NegInf; grad_norm = R_PosInf; converged = false;
         for (int iter = 0; iter < max_iter; ++iter) {
             log_lik = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
-                                 K_max, r, st, comb_table, scratch);
+                                 K_max, r, st, comb_table, scratch, headroom);
             VectorXd grad = dist_grad_beta(Xl, Xs, p_lam, p_sig, hazard, st);
             grad_norm = grad.norm();
             if (verbose) Rcpp::Rcout << "    [beta] iter " << iter << "  log_lik "
@@ -234,7 +237,7 @@ Rcpp::List cpp_distance_laplace_fixed(
                 VectorXd bs = beta_sig + step * ds;
                 double eb = eta_b + step * db;
                 double ll_try = dist_loglik(y, Xl, Xs, bl, bs, eb, key, quad, K_max, r,
-                                           comb_table, scratch);
+                                           comb_table, scratch, headroom);
                 if (R_finite(ll_try) && ll_try >= log_lik - kLineSearchSlack) {
                     beta_lam = bl; beta_sig = bs; eta_b = eb; stepped = true; break;
                 }
@@ -243,7 +246,7 @@ Rcpp::List cpp_distance_laplace_fixed(
             if (!stepped) { Rcpp::warning("beta step halving exhausted at iter %d.", iter); break; }
         }
         log_lik = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
-                             K_max, r, st, comb_table, scratch);
+                             K_max, r, st, comb_table, scratch, headroom);
     };
 
     double log_lik = R_NegInf, beta_grad_norm = R_PosInf, grad_theta = 0.0;
@@ -270,7 +273,7 @@ Rcpp::List cpp_distance_laplace_fixed(
             if (th_try == theta) break;
             double r_try = std::exp(th_try);
             double ll_try = dist_loglik(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad, K_max, r_try,
-                                       comb_table, scratch);
+                                       comb_table, scratch, headroom);
             if (R_finite(ll_try) && ll_try >= ll_cur - kLineSearchSlack) {
                 theta = th_try; r = r_try; stepped = true; break;
             }
@@ -285,7 +288,7 @@ Rcpp::List cpp_distance_laplace_fixed(
 
     // --- Final joint observed-information Hessian at the mode. ---
     double log_lik_final = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
-                                      K_max, r, st, comb_table, scratch);
+                                      K_max, r, st, comb_table, scratch, headroom);
     MatrixXd H_beta = dist_hess_beta(Xl, Xs, p_lam, p_sig, hazard, st, true);
     MatrixXd H_obs = MatrixXd::Zero(p_total, p_total);
     H_obs.topLeftCorner(pb, pb) = H_beta;
@@ -361,7 +364,8 @@ Rcpp::List cpp_distance_total_log_lik(
     Rcpp::NumericVector eta_sigma,
     double eta_b,
     SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
-    int key, int K_max, double r
+    int key, int K_max, double r,
+    int headroom = -1                    // gcol33/tulpaObs#168: per-site K_hi cap
 ) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     if ((int)eta_lambda.size() != n_sites) Rcpp::stop("length(eta_lambda) must equal nrow(y).");
@@ -383,7 +387,8 @@ Rcpp::List cpp_distance_total_log_lik(
         for (int b = 0; b < n_bins; ++b) y_site[b] = y(s, b);
         DistSiteResult res = compute_distance_site(y_site.data(), n_bins, eta_lambda[s],
                                                    eta_sigma[s], eta_b, key, quad, K_max, r,
-                                                   /*value_only=*/false, &comb_table, &scratch);
+                                                   /*value_only=*/false, &comb_table, &scratch,
+                                                   headroom);
         if (!R_finite(res.log_lik)) ++n_K_inadmissible;
         total_ll += res.log_lik; total_grad_theta += res.grad_theta;
         log_lik_site[s] = res.log_lik;
@@ -427,7 +432,8 @@ Rcpp::List cpp_distance_site_sweep(
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma,
     SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
     int K_max, bool nb, double r, int key = 0, double eta_b = 0.0,
-    bool value_only = false
+    bool value_only = false,
+    int headroom = -1                    // gcol33/tulpaObs#168: per-site K_hi cap
 ) {
     const int n_sites = y_bins.nrow(), n_bins = y_bins.ncol();
     if (eta_lambda.size() != n_sites || eta_sigma.size() != n_sites)
@@ -457,7 +463,8 @@ Rcpp::List cpp_distance_site_sweep(
             for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
             tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
                 yb.data(), n_bins, eta_lambda[s], eta_sigma[s], eta_b,
-                key_code, quad, K_max, rr, /*value_only=*/true, &comb_table, &scratch);
+                key_code, quad, K_max, rr, /*value_only=*/true, &comb_table, &scratch,
+                headroom);
             if (!R_finite(d.log_lik)) ++n_inadmissible;
             logL[s] = d.log_lik;
         }
@@ -474,7 +481,8 @@ Rcpp::List cpp_distance_site_sweep(
         for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);
         tulpaObs::DistSiteResult d = tulpaObs::compute_distance_site(
             yb.data(), n_bins, eta_lambda[s], eta_sigma[s], eta_b,
-            key_code, quad, K_max, rr, /*value_only=*/false, &comb_table, &scratch);
+            key_code, quad, K_max, rr, /*value_only=*/false, &comb_table, &scratch,
+            headroom);
         if (!R_finite(d.log_lik)) ++n_inadmissible;
         logL[s] = d.log_lik;
         grad_lam[s] = d.grad_eta_lambda; info_lam[s] = d.info_eta_lambda;

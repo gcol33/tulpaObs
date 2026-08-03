@@ -227,7 +227,13 @@
 #' @param beta_lambda_init,beta_sigma_init,eta_b_init,log_r_init Optional warm
 #'   starts.
 #' @param r_max Upper bound on the NB size `r` (NB only, default `1e5`).
-#' @param K_max Marginal-sum truncation; defaults to `max(site total) + 100`.
+#' @param K_max Marginal-sum truncation; defaults to `3 * max(site total) + 100`
+#'   (applied per site, see `headroom`).
+#' @param headroom Latent-N states summed above each site's own detected total.
+#'   `NULL` (default) derives it from `K_max`: an unset `K_max` caps each site
+#'   at its own total plus `2 * max(site total) + 100`, an explicit `K_max`
+#'   truncates globally and uncapped. A negative value disables the per-site
+#'   cap (gcol33/tulpaObs#168).
 #' @param quad_order Gauss-Legendre nodes per bin (default 64).
 #' @param max_iter Newton iteration budget (default 100).
 #' @param tol Gradient-norm convergence tolerance (default 1e-6).
@@ -251,7 +257,8 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
                              mixture = c("P", "NB"),
                              beta_lambda_init = NULL, beta_sigma_init = NULL,
                              eta_b_init = NULL, log_r_init = NULL,
-                             r_max = 1e5, K_max = NULL, quad_order = 64L,
+                             r_max = 1e5, K_max = NULL, headroom = NULL,
+                             quad_order = 64L,
                              max_iter = 100L, tol = 1e-6, verbose = FALSE,
                              quad_xptr = NULL) {
   key      <- match.arg(key)
@@ -290,11 +297,18 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
     # buffer is therefore too tight when detection is low, so the default uses a
     # multiplicative margin; the boundary-weight warning below still flags any
     # residual truncation so a wider K_max can be set explicitly.
-    K_max <- as.integer(3L * R_max + 100L)
+    trunc    <- .dist_truncation(NULL, site_tot)
+    K_max    <- trunc$K_max
+    headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
   } else {
     K_max <- as.integer(K_max)
     if (K_max < R_max) stop("`K_max` must be >= the largest per-site total.", call. = FALSE)
+    headroom <- if (is.null(headroom)) -1L else as.integer(headroom)
   }
+  # A negative-binomial abundance has a heavier tail than the per-site window is
+  # sized for, so the cap is not taken there; NB keeps the shared ceiling
+  # (mirrors nmix_laplace(), R/nmix_laplace.R).
+  if (nb) headroom <- -1L
 
   # `quad_xptr`: a caller that fits several species/starts against the SAME
   # (cutpoints, transect, quad_order) -- e.g. ms_distance()'s per-species warm
@@ -312,7 +326,8 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
     eta_b_init = as.numeric(eta_b_init),
     K_max = K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
     verbose = isTRUE(verbose), nb = nb,
-    log_r_init = as.numeric(log_r_init), theta_max = log(r_max))
+    log_r_init = as.numeric(log_r_init), theta_max = log(r_max),
+    headroom = headroom)
 
   nm_lam <- colnames(X_lambda); nm_sig <- colnames(X_sigma)
   if (is.null(nm_lam)) nm_lam <- paste0("lam_", seq_len(p_lambda))
@@ -327,7 +342,11 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
   fit$hazard <- hazard; fit$nb <- nb
   fit$cutpoints <- as.numeric(cutpoints); fit$quad_order <- as.integer(quad_order)
   if (!nb) { fit$log_r <- NA_real_; fit$r <- NA_real_ }
-  fit$K_max <- K_max; fit$n_sites <- n_sites; fit$n_bins <- n_bins
+  fit$K_max <- K_max
+  # The window the fit finally ran at, after any widening by the guard below.
+  # -1 means no per-site cap: every site truncated at the shared K_max.
+  fit$headroom <- headroom
+  fit$n_sites <- n_sites; fit$n_bins <- n_bins
   fit$call <- match.call()
   if (!fit$converged) {
     warning(sprintf("distance_laplace did not converge in %d iterations (grad_norm = %.2e).",
@@ -337,6 +356,37 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
     warning(sprintf(paste0("NB dispersion pinned at the boundary (r = r_max = %.3g); ",
             "the data are consistent with Poisson. Consider mixture = \"P\"."), r_max),
             call. = FALSE)
+  }
+  # Guard the per-site truncation (gcol33/tulpaObs#168): the answer has to be
+  # stationary under the UNCAPPED (shared-ceiling) likelihood too, so compare
+  # the total-log-lik score at the fitted coefficients under both truncations
+  # and widen the window when they disagree. Escalates to the shared ceiling,
+  # so this can only move the fit back toward the untruncated answer -- never
+  # worse than the shared-ceiling fit it replaces, at worst it costs the extra
+  # fits (the same guard nmix_laplace() runs, R/nmix_site_marginal.R).
+  if (headroom >= 0L) {
+    gap <- tryCatch({
+      eta_lam <- as.numeric(X_lambda %*% fit$beta_lambda)
+      eta_sig <- as.numeric(X_sigma  %*% fit$beta_sigma)
+      eb <- if (hazard) fit$eta_b else 0
+      rr <- if (nb) fit$r else Inf
+      ev_h <- cpp_distance_total_log_lik(y, eta_lam, eta_sig, eb, qptr,
+                                         .dist_key_code(key), K_max, rr,
+                                         headroom = headroom)
+      ev_u <- cpp_distance_total_log_lik(y, eta_lam, eta_sig, eb, qptr,
+                                         .dist_key_code(key), K_max, rr,
+                                         headroom = -1L)
+      .dist_score_gap(ev_h$grad_eta_lambda, ev_u$grad_eta_lambda, X_lambda,
+                      ev_h$grad_eta_sigma,  ev_u$grad_eta_sigma,  X_sigma)
+    }, error = function(e) NA_real_)
+    if (is.finite(gap) && gap > .NMIX_SCORE_TOL) {
+      h_next <- .nmix_widen_headroom(headroom, K_max)
+      if (!is.null(h_next)) {
+        cl <- match.call()
+        cl$headroom <- h_next
+        return(eval(cl, parent.frame()))
+      }
+    }
   }
   max_bw <- max(fit$boundary_weight, na.rm = TRUE)
   if (is.finite(max_bw) && max_bw > 1e-4) {

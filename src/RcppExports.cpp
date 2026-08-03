@@ -415,8 +415,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_distance_laplace_fixed
-Rcpp::List cpp_distance_laplace_fixed(Rcpp::IntegerMatrix y, Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_sigma_R, SEXP quad_xptr, int key, Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_sigma_init, double eta_b_init, int K_max, int max_iter, double tol, bool verbose, bool nb, double log_r_init, double theta_max);
-RcppExport SEXP _tulpaObs_cpp_distance_laplace_fixed(SEXP ySEXP, SEXP X_lambda_RSEXP, SEXP X_sigma_RSEXP, SEXP quad_xptrSEXP, SEXP keySEXP, SEXP beta_lambda_initSEXP, SEXP beta_sigma_initSEXP, SEXP eta_b_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP nbSEXP, SEXP log_r_initSEXP, SEXP theta_maxSEXP) {
+Rcpp::List cpp_distance_laplace_fixed(Rcpp::IntegerMatrix y, Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_sigma_R, SEXP quad_xptr, int key, Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_sigma_init, double eta_b_init, int K_max, int max_iter, double tol, bool verbose, bool nb, double log_r_init, double theta_max, int headroom);
+RcppExport SEXP _tulpaObs_cpp_distance_laplace_fixed(SEXP ySEXP, SEXP X_lambda_RSEXP, SEXP X_sigma_RSEXP, SEXP quad_xptrSEXP, SEXP keySEXP, SEXP beta_lambda_initSEXP, SEXP beta_sigma_initSEXP, SEXP eta_b_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP nbSEXP, SEXP log_r_initSEXP, SEXP theta_maxSEXP, SEXP headroomSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -435,13 +435,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
     Rcpp::traits::input_parameter< double >::type log_r_init(log_r_initSEXP);
     Rcpp::traits::input_parameter< double >::type theta_max(theta_maxSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_distance_laplace_fixed(y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max));
+    Rcpp::traits::input_parameter< int >::type headroom(headroomSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_laplace_fixed(y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_distance_total_log_lik
-Rcpp::List cpp_distance_total_log_lik(Rcpp::IntegerMatrix y, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma, double eta_b, SEXP quad_xptr, int key, int K_max, double r);
-RcppExport SEXP _tulpaObs_cpp_distance_total_log_lik(SEXP ySEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP eta_bSEXP, SEXP quad_xptrSEXP, SEXP keySEXP, SEXP K_maxSEXP, SEXP rSEXP) {
+Rcpp::List cpp_distance_total_log_lik(Rcpp::IntegerMatrix y, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma, double eta_b, SEXP quad_xptr, int key, int K_max, double r, int headroom);
+RcppExport SEXP _tulpaObs_cpp_distance_total_log_lik(SEXP ySEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP eta_bSEXP, SEXP quad_xptrSEXP, SEXP keySEXP, SEXP K_maxSEXP, SEXP rSEXP, SEXP headroomSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -453,13 +454,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type key(keySEXP);
     Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
     Rcpp::traits::input_parameter< double >::type r(rSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_distance_total_log_lik(y, eta_lambda, eta_sigma, eta_b, quad_xptr, key, K_max, r));
+    Rcpp::traits::input_parameter< int >::type headroom(headroomSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_total_log_lik(y, eta_lambda, eta_sigma, eta_b, quad_xptr, key, K_max, r, headroom));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_distance_site_sweep
-Rcpp::List cpp_distance_site_sweep(Rcpp::IntegerMatrix y_bins, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma, SEXP quad_xptr, int K_max, bool nb, double r, int key, double eta_b, bool value_only);
-RcppExport SEXP _tulpaObs_cpp_distance_site_sweep(SEXP y_binsSEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP quad_xptrSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP rSEXP, SEXP keySEXP, SEXP eta_bSEXP, SEXP value_onlySEXP) {
+Rcpp::List cpp_distance_site_sweep(Rcpp::IntegerMatrix y_bins, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_sigma, SEXP quad_xptr, int K_max, bool nb, double r, int key, double eta_b, bool value_only, int headroom);
+RcppExport SEXP _tulpaObs_cpp_distance_site_sweep(SEXP y_binsSEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP quad_xptrSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP rSEXP, SEXP keySEXP, SEXP eta_bSEXP, SEXP value_onlySEXP, SEXP headroomSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -473,7 +475,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type key(keySEXP);
     Rcpp::traits::input_parameter< double >::type eta_b(eta_bSEXP);
     Rcpp::traits::input_parameter< bool >::type value_only(value_onlySEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_distance_site_sweep(y_bins, eta_lambda, eta_sigma, quad_xptr, K_max, nb, r, key, eta_b, value_only));
+    Rcpp::traits::input_parameter< int >::type headroom(headroomSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_site_sweep(y_bins, eta_lambda, eta_sigma, quad_xptr, K_max, nb, r, key, eta_b, value_only, headroom));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -515,8 +518,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_distance_ploglik_batch
-Rcpp::NumericMatrix cpp_distance_ploglik_batch(Rcpp::IntegerMatrix y, SEXP quad_xptr, int key, int K_max, Rcpp::NumericMatrix eta_lambda, Rcpp::NumericMatrix eta_sigma, Rcpp::NumericVector eta_b, Rcpp::NumericVector r_vec, int n_threads);
-RcppExport SEXP _tulpaObs_cpp_distance_ploglik_batch(SEXP ySEXP, SEXP quad_xptrSEXP, SEXP keySEXP, SEXP K_maxSEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP eta_bSEXP, SEXP r_vecSEXP, SEXP n_threadsSEXP) {
+Rcpp::NumericMatrix cpp_distance_ploglik_batch(Rcpp::IntegerMatrix y, SEXP quad_xptr, int key, int K_max, Rcpp::NumericMatrix eta_lambda, Rcpp::NumericMatrix eta_sigma, Rcpp::NumericVector eta_b, Rcpp::NumericVector r_vec, int n_threads, int headroom);
+RcppExport SEXP _tulpaObs_cpp_distance_ploglik_batch(SEXP ySEXP, SEXP quad_xptrSEXP, SEXP keySEXP, SEXP K_maxSEXP, SEXP eta_lambdaSEXP, SEXP eta_sigmaSEXP, SEXP eta_bSEXP, SEXP r_vecSEXP, SEXP n_threadsSEXP, SEXP headroomSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -529,7 +532,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_b(eta_bSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type r_vec(r_vecSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_distance_ploglik_batch(y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads));
+    Rcpp::traits::input_parameter< int >::type headroom(headroomSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_ploglik_batch(y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads, headroom));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -547,8 +551,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_distance_grouped_oracle
-SEXP cpp_distance_grouped_oracle(int arm, Rcpp::IntegerMatrix y_bins, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, SEXP quad_xptr, int K_max, bool nb, int key, double eta_b);
-RcppExport SEXP _tulpaObs_cpp_distance_grouped_oracle(SEXP armSEXP, SEXP y_binsSEXP, SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP quad_xptrSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP keySEXP, SEXP eta_bSEXP) {
+SEXP cpp_distance_grouped_oracle(int arm, Rcpp::IntegerMatrix y_bins, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix Z_site, Rcpp::IntegerVector site_group, int n_sites, int n_groups, SEXP quad_xptr, int K_max, bool nb, int key, double eta_b, int headroom);
+RcppExport SEXP _tulpaObs_cpp_distance_grouped_oracle(SEXP armSEXP, SEXP y_binsSEXP, SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP Z_siteSEXP, SEXP site_groupSEXP, SEXP n_sitesSEXP, SEXP n_groupsSEXP, SEXP quad_xptrSEXP, SEXP K_maxSEXP, SEXP nbSEXP, SEXP keySEXP, SEXP eta_bSEXP, SEXP headroomSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -565,7 +569,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type nb(nbSEXP);
     Rcpp::traits::input_parameter< int >::type key(keySEXP);
     Rcpp::traits::input_parameter< double >::type eta_b(eta_bSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_distance_grouped_oracle(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb, key, eta_b));
+    Rcpp::traits::input_parameter< int >::type headroom(headroomSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_distance_grouped_oracle(arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb, key, eta_b, headroom));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2431,14 +2436,14 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_cover_hurdle_ploglik", (DL_FUNC) &_tulpaObs_cpp_cover_hurdle_ploglik, 11},
     {"_tulpaObs_cpp_cover_nuts_logpost", (DL_FUNC) &_tulpaObs_cpp_cover_nuts_logpost, 4},
     {"_tulpaObs_cpp_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_cover_nuts, 11},
-    {"_tulpaObs_cpp_distance_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_distance_laplace_fixed, 15},
-    {"_tulpaObs_cpp_distance_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_distance_total_log_lik, 8},
-    {"_tulpaObs_cpp_distance_site_sweep", (DL_FUNC) &_tulpaObs_cpp_distance_site_sweep, 10},
+    {"_tulpaObs_cpp_distance_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_distance_laplace_fixed, 16},
+    {"_tulpaObs_cpp_distance_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_distance_total_log_lik, 9},
+    {"_tulpaObs_cpp_distance_site_sweep", (DL_FUNC) &_tulpaObs_cpp_distance_site_sweep, 11},
     {"_tulpaObs_cpp_distance_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_distance_nuts_joint_logpost, 5},
     {"_tulpaObs_cpp_distance_nuts", (DL_FUNC) &_tulpaObs_cpp_distance_nuts, 12},
-    {"_tulpaObs_cpp_distance_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_distance_ploglik_batch, 9},
+    {"_tulpaObs_cpp_distance_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_distance_ploglik_batch, 10},
     {"_tulpaObs_cpp_distance_build_quad", (DL_FUNC) &_tulpaObs_cpp_distance_build_quad, 3},
-    {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 13},
+    {"_tulpaObs_cpp_distance_grouped_oracle", (DL_FUNC) &_tulpaObs_cpp_distance_grouped_oracle, 14},
     {"_tulpaObs_cpp_dyn_abun_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_total_log_lik, 11},
     {"_tulpaObs_cpp_dyn_abun_dynamics_log_lik", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_dynamics_log_lik, 12},
     {"_tulpaObs_cpp_dyn_abun_init_weights_mat", (DL_FUNC) &_tulpaObs_cpp_dyn_abun_init_weights_mat, 9},
