@@ -2,6 +2,17 @@
 
 ## 0.0.180 (2026-08-03)
 
+* **Pinned to `tulpa (>= 0.0.115)` (gcol33/tulpa#270).** The 0.0.114 pin
+  below (needed for #169's `set_spatial_adjacency()` fix) exposed a
+  separate engine bug: `occu_cover()`'s coupled ICAR joint Hessian dropped
+  10592-124160 nonzero contributions whenever the field met either a
+  correlated detection-arm random slope or its own detection-arm beta
+  under the rank-1 s2z fold path (fields above 256 units) --
+  `HessianPatternGuard` (new since 0.0.101) caught the pattern builder
+  missing a cross-arm entry for a latent block reached by only one side of
+  a coupled arm pair. Fixed in tulpa 0.0.115; no tulpaObs-side change
+  needed.
+
 * **ICAR/BYM2 occupancy NUTS fits work again (bugfix, #169).**
   `populate_spatial()` (the shared `ModelData` builder `cpp_occu_fit`'s
   unified NUTS entry point uses) assigned `n_spatial_units` /
