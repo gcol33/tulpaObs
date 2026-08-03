@@ -1,5 +1,34 @@
 # tulpaObs NEWS
 
+## 0.0.180 (2026-08-03)
+
+* **ICAR/BYM2 occupancy NUTS fits work again (bugfix, #169).**
+  `populate_spatial()` (the shared `ModelData` builder `cpp_occu_fit`'s
+  unified NUTS entry point uses) assigned `n_spatial_units` /
+  `adj_row_ptr` / `adj_col_idx` / `n_neighbors` directly for ICAR/BYM2,
+  leaving `spatial_partition` at its default (0 nodes) and
+  `n_spatial_components` at its default (1) -- the exact case tulpa's
+  ABI 39->40 `set_spatial_adjacency()` was added to prevent
+  (`tulpa_compute_param_layout()` now rejects a partition that doesn't
+  describe its adjacency instead of silently pinning nothing). Every
+  ICAR/BYM2 occupancy NUTS fit through this path errored at first use.
+  Now calls `set_spatial_adjacency()`. Requires `tulpa (>= 0.0.114)`.
+
+* **Distance-sampling marginal sums truncate per site instead of to a
+  shared ceiling (bugfix, #168).** Each site's binned-distance
+  marginal-count sum now caps at `K_hi = min(K_max, K_lo + headroom)`
+  instead of always summing to the shared `K_max`, mirroring
+  `nmix_kernel.h`'s per-site truncation. A verified-widening safety
+  layer ports nmix's approach: after fitting under a capped headroom,
+  the score at the fitted coefficients is compared under both the
+  capped and uncapped truncation, and disagreement widens the headroom
+  4x and re-fits, escalating to fully uncapped if needed. Wired into
+  `distance_laplace()`, `.tobs_fit_distance_spatial()`,
+  `.tobs_fit_ms_distance()`, and `.tobs_fit_distance_nuts()`.
+
+* `distance_laplace()`'s `quad_xptr` parameter is now documented
+  (codoc fix; the parameter itself shipped in 0.0.179 for #165).
+
 ## 0.0.179 (2026-07-27)
 
 * **macOS `R CMD check` builds again** (`tulpa (>= 0.0.101)`,
