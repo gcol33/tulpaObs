@@ -18,6 +18,7 @@ distance_laplace(
   log_r_init = NULL,
   r_max = 1e+05,
   K_max = NULL,
+  headroom = NULL,
   quad_order = 64L,
   max_iter = 100L,
   tol = 1e-06,
@@ -48,7 +49,14 @@ starts.}
 
 \item{r_max}{Upper bound on the NB size \code{r} (NB only, default \code{1e5}).}
 
-\item{K_max}{Marginal-sum truncation; defaults to \verb{max(site total) + 100}.}
+\item{K_max}{Marginal-sum truncation; defaults to \verb{3 * max(site total) + 100}
+(applied per site, see \code{headroom}).}
+
+\item{headroom}{Latent-N states summed above each site's own detected total.
+\code{NULL} (default) derives it from \code{K_max}: an unset \code{K_max} caps each site
+at its own total plus \verb{2 * max(site total) + 100}, an explicit \code{K_max}
+truncates globally and uncapped. A negative value disables the per-site
+cap (gcol33/tulpaObs#168).}
 
 \item{quad_order}{Gauss-Legendre nodes per bin (default 64).}
 
