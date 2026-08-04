@@ -73,10 +73,12 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
+          extra-repositories: https://gcol33.r-universe.dev
 
-      # Resolves Remotes from DESCRIPTION, so tulpa and tulpaMesh install at
-      # the pinned tags. The action caches the built library, which is where the
-      # expensive third-party compiles (tulpa, RcppEigen) are amortised.
+      # tulpa resolves from gcol33.r-universe.dev as a prebuilt binary (pinned
+      # via Remotes as a fallback for the exact commit between sync cycles).
+      # The action caches the built library, which is where the expensive
+      # third-party compiles (RcppEigen) are amortised.
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           dependencies: '"hard"'
