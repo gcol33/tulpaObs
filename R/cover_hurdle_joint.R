@@ -165,6 +165,179 @@
   L
 }
 
+# ---------------------------------------------------------------------------
+# Shared spine of the three joint cover fitters (arm-specific `||`, correlated
+# MCAR `|`, and the shared-field nested path). They differ only in how they
+# build their latent prior blocks and what derived quantities they report; the
+# arm build, the engine control list, and the per-arm beta post-processing are
+# the same computation in all three. Extracted here so a correction to the
+# reported se_occ / se_pos cannot land on one route and miss the other two
+# (gcol33/tulpaObs#170).
+# ---------------------------------------------------------------------------
+
+# Both response arms for the joint engine, plus the positive-arm family and its
+# dispersion grid. `spi_occ` / `spi_pos` add the per-observation `spatial_idx`
+# the single-block shared-field path carries; the multi-block routes pass NULL
+# and declare each block's own per-arm index instead. Opt-in fixed-effect priors
+# (cover_priors()) are attached here so every route penalises identically: the
+# natural-scale numbers apply at face value to the (autoscaled) design, where
+# every predictor is O(1), and precisions are floored at the engine's own weak
+# default so an Inf-sd bucket reproduces the weak ridge rather than dropping the
+# diagonal. NULL / FALSE / "none" leaves both arms unpenalised.
+.cover_joint_arms <- function(enc, positive, control, priors,
+                              spi_occ = NULL, spi_pos = NULL) {
+  N     <- enc$N
+  N_pos <- length(enc$pos_data$y)
+  pfg <- .cover_pos_family_grid(positive, enc, control)
+
+  arm_occ <- c(
+    list(y = as.numeric(enc$occ_data$y), n_trials = enc$occ_data$n_trials,
+         X = enc$occ_data$X),
+    if (!is.null(spi_occ)) list(spatial_idx = as.integer(spi_occ)),
+    list(re_idx = rep(0, N), n_re_groups = 0L, sigma_re = 1.0,
+         family = "binomial", phi = 1.0))
+  arm_pos <- c(
+    list(y = as.numeric(enc$pos_data$y), n_trials = rep(1L, N_pos),
+         X = enc$pos_data$X),
+    if (!is.null(spi_pos)) list(spatial_idx = as.integer(spi_pos)),
+    list(re_idx = rep(0, N_pos), n_re_groups = 0L, sigma_re = 1.0,
+         family = pfg$pos_family, phi = pfg$phi_hat))
+  arm_pos <- .cover_arm_pos_bounds(arm_pos, enc, positive)
+
+  cprior <- .resolve_cover_priors(priors)
+  if (!is.null(cprior)) {
+    to_prec <- function(pr) {
+      if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
+      list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
+    }
+    occ_ap <- to_prec(.cover_arm_prior(cprior, "occ", colnames(arm_occ$X)))
+    pos_ap <- to_prec(.cover_arm_prior(cprior, "pos", colnames(arm_pos$X)))
+    if (!is.null(occ_ap)) {
+      arm_occ$beta_prior_mean <- occ_ap$mean
+      arm_occ$beta_prior_prec <- occ_ap$prec
+    }
+    if (!is.null(pos_ap)) {
+      arm_pos$beta_prior_mean <- pos_ap$mean
+      arm_pos$beta_prior_prec <- pos_ap$prec
+    }
+  }
+
+  list(arm_occ = arm_occ, arm_pos = arm_pos,
+       pos_family = pfg$pos_family, phi_hat = pfg$phi_hat,
+       phi_grid_pos = pfg$phi_grid_pos)
+}
+
+# The joint engine's control list. `integration` is the route's default outer-
+# grid layout, used when the caller does not set `control$integration`: the
+# multi-block routes carry >= 3 latent axes and default to the mode-centred CCD
+# (the dense tensor would blow up; the engine declines back to the tensor grid
+# on a ridge), while the single-block path passes NULL and lets the engine
+# choose. `prune` adds the opt-in cheap-pass screen axes, which only the
+# shared-field path exposes.
+#
+# Notes on the individual entries, which every route inherits:
+#   * hessian -- the beta positive arm's observed mixture Hessian is indefinite
+#     away from the mode, so observed-curvature Newton steps stall and the inner
+#     Newton hits max.iter in every grid cell. Expected/Fisher curvature is PSD
+#     by construction and converges in ~12 steps; the final mode-pass always
+#     re-factorizes with the observed Hessian, so the reported SEs, log_det and
+#     grid weights are unchanged. The lognormal arm is exactly quadratic (one
+#     inner step), so observed curvature is already optimal -> "lm".
+#   * n_threads_outer -- outer-grid parallelism (gcol33/tulpa#46 lever 2), one
+#     replicated cell-solve state per thread. Preferred over inner per-obs
+#     threads on many-core hardware, where the mode-region cells dominate.
+#   * adaptive_grid -- brackets the mode with FULL inner solves and densifies
+#     near it, so it never approximates the marginal and cannot drop the true
+#     mode (gcol33/tulpaObs#20).
+#   * progress / progress.file -- two independent channels, both ON by default.
+#     `progress` gates the console bar (NOT tied to `verbose`); `progress.file`
+#     is emitted whenever non-empty and is the only channel that survives a
+#     detached Start-Process stdout buffer (gcol33/tulpa#53). `[[` (exact) not
+#     `$`: `control$progress` prefix-matches `progress.file`.
+#   * checkpoint -- grid-cell checkpoint/resume (gcol33/tulpa#50), forwarded
+#     verbatim so a killed run resumes instead of restarting.
+.cover_joint_control <- function(control, positive, integration = NULL,
+                                 prune = FALSE) {
+  head <- list(
+    max_iter  = control$max.iter  %||% 50L,
+    tol       = control$tol       %||% 1e-6,
+    n_threads = control$n.threads %||% 1L,
+    n_threads_outer = control$n.threads.outer %||% 1L,
+    store_Q   = TRUE,
+    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"))
+  screen <- if (prune) {
+    list(prune     = control$prune     %||% FALSE,
+         prune_tol = control$prune.tol %||% 1e-4)
+  } else list()
+  tail <- list(
+    adaptive_grid             = control$adaptive.grid             %||% TRUE,
+    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
+    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
+    progress          = control[["progress"]]     %||% TRUE,
+    progress.every    = control$progress.every    %||% 0L,
+    progress.throttle = control$progress.throttle %||% 2,
+    progress.file     = control$progress.file     %||% "",
+    checkpoint        = control$checkpoint,
+    integration       = control$integration %||% integration)
+  c(head, screen, tail)
+}
+
+# Per-arm natural-scale beta posterior moments from a joint fit, by the law of
+# total covariance over the outer grid.
+#
+# The engine returns per-cell modes and per-cell precision blocks in the SCALED
+# design's parameterization (`encode_cover_hurdle()`, gcol33/tulpaObs#9), so each
+# cell is transformed to the natural scale first and aggregated after. Doing it
+# cell-by-cell on the full constrained vcov block preserves the intercept's
+# cross-covariance contribution; a diag-only approach would underestimate the
+# intercept SE. Returns the beta means, their SEs, and the layout pieces
+# (`p_occ` / `p_pos`, the per-arm index vectors, the scale transforms) the
+# callers report or reuse.
+.cover_joint_beta_moments <- function(fit, enc) {
+  layout <- fit$arm_layout
+  p_occ  <- layout$p[1]; p_pos <- layout$p[2]
+  bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
+  bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
+
+  scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
+  scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
+  T_occ <- .scale_transform(scale_occ); T_pos <- .scale_transform(scale_pos)
+  modes_occ <- fit$modes[, bocc_idx, drop = FALSE] %*% t(T_occ)
+  modes_pos <- fit$modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
+  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
+  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
+  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
+  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
+
+  inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
+  if (is.null(inner_blocks)) {
+    mean_of_var_occ <- rep(0, p_occ); mean_of_var_pos <- rep(0, p_pos)
+  } else {
+    occ_rows <- seq_along(bocc_idx)
+    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
+    n_grid_eff <- length(inner_blocks)
+    diag_occ <- matrix(0, n_grid_eff, p_occ)
+    diag_pos <- matrix(0, n_grid_eff, p_pos)
+    for (k in seq_len(n_grid_eff)) {
+      V_block <- inner_blocks[[k]]
+      if (is.null(V_block)) next
+      V_occ_nat <- T_occ %*% V_block[occ_rows, occ_rows, drop = FALSE] %*% t(T_occ)
+      V_pos_nat <- T_pos %*% V_block[pos_rows, pos_rows, drop = FALSE] %*% t(T_pos)
+      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
+      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
+    }
+    w_eff <- fit$weights[seq_len(n_grid_eff)]
+    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
+    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
+  }
+
+  list(p_occ = p_occ, p_pos = p_pos, bocc_idx = bocc_idx, bpos_idx = bpos_idx,
+       T_occ = T_occ, T_pos = T_pos,
+       beta_occ = beta_occ, beta_pos = beta_pos,
+       se_occ = sqrt(pmax(0, var_of_means_occ + mean_of_var_occ)),
+       se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)))
+}
+
 # Build one areal latent block restricted to a SINGLE arm with NO cross-arm copy
 # (gcol33/tulpaObs#65). The block carries the field's own precision axis (tau for
 # icar/car/car_proper, sigma + rho for bym2) integrated on the outer grid; the
@@ -271,42 +444,12 @@
   N_pos <- length(enc$pos_data$y)
   idx_pos <- enc$idx_pos
 
-  # Positive-arm family + dispersion grid (same regime as the single-field path).
-  .pfg         <- .cover_pos_family_grid(positive, enc, control)
-  pos_family   <- .pfg$pos_family
-  phi_hat      <- .pfg$phi_hat
-  phi_grid_pos <- .pfg$phi_grid_pos
-
-  arm_occ <- list(
-    y = as.numeric(enc$occ_data$y), n_trials = enc$occ_data$n_trials,
-    X = enc$occ_data$X, re_idx = rep(0, N), n_re_groups = 0L,
-    sigma_re = 1.0, family = "binomial", phi = 1.0
-  )
-  arm_pos <- list(
-    y = as.numeric(enc$pos_data$y), n_trials = rep(1L, N_pos),
-    X = enc$pos_data$X, re_idx = rep(0, N_pos), n_re_groups = 0L,
-    sigma_re = 1.0, family = pos_family, phi = phi_hat
-  )
-  arm_pos <- .cover_arm_pos_bounds(arm_pos, enc, positive)
-
-  # Opt-in fixed-effect priors (cover_priors()), as on the single-field path.
-  cprior <- .resolve_cover_priors(priors)
-  if (!is.null(cprior)) {
-    to_prec <- function(pr) {
-      if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
-      list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
-    }
-    occ_ap <- to_prec(.cover_arm_prior(cprior, "occ", colnames(arm_occ$X)))
-    pos_ap <- to_prec(.cover_arm_prior(cprior, "pos", colnames(arm_pos$X)))
-    if (!is.null(occ_ap)) {
-      arm_occ$beta_prior_mean <- occ_ap$mean
-      arm_occ$beta_prior_prec <- occ_ap$prec
-    }
-    if (!is.null(pos_ap)) {
-      arm_pos$beta_prior_mean <- pos_ap$mean
-      arm_pos$beta_prior_prec <- pos_ap$prec
-    }
-  }
+  # Both arms + the positive-arm family / dispersion grid (same regime as the
+  # single-field path), via the shared spine.
+  .arms        <- .cover_joint_arms(enc, positive, control, priors)
+  arm_occ      <- .arms$arm_occ
+  arm_pos      <- .arms$arm_pos
+  phi_grid_pos <- .arms$phi_grid_pos
 
   # Build one NON-copied block per field column, restricted to its arm. The
   # positive arm's node codes are the occ codes subset by idx_pos. `armspec_meta`
@@ -340,27 +483,10 @@
     }
   }
 
-  joint_control <- list(
-    max_iter  = control$max.iter  %||% 50L,
-    tol       = control$tol       %||% 1e-6,
-    n_threads = control$n.threads %||% 1L,
-    n_threads_outer = control$n.threads.outer %||% 1L,
-    store_Q   = TRUE,
-    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
-    adaptive_grid             = control$adaptive.grid             %||% TRUE,
-    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
-    progress          = control[["progress"]]      %||% TRUE,
-    progress.every    = control$progress.every    %||% 0L,
-    progress.throttle = control$progress.throttle %||% 2,
-    progress.file     = control$progress.file     %||% "",
-    checkpoint        = control$checkpoint,
-    # Each field carries 1 (icar/car) or 2 (bym2/car_proper) latent axes; with
-    # the pos-arm phi axis the dense outer tensor grows fast, so the mode-centred
-    # CCD is the default for >= 3 axes (forwarded; the engine declines back to
-    # the tensor grid on a ridge). Override via control$integration.
-    integration       = control$integration %||% "ccd"
-  )
+  # Each field carries 1 (icar/car) or 2 (bym2/car_proper) latent axes; with the
+  # pos-arm phi axis the dense outer tensor grows fast, so the mode-centred CCD
+  # is this route's default.
+  joint_control <- .cover_joint_control(control, positive, integration = "ccd")
 
   fit <- tulpa::tulpa_nested_laplace_joint(
     responses = list(occ = arm_occ, pos = arm_pos),
@@ -373,44 +499,10 @@
   )
 
   # Shared per-arm beta post-processing (identical to the single-field path).
-  layout <- fit$arm_layout
-  p_occ  <- layout$p[1]; p_pos <- layout$p[2]
-  bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
-  bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
-
-  scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
-  scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
-  T_occ <- .scale_transform(scale_occ); T_pos <- .scale_transform(scale_pos)
-  modes_occ <- fit$modes[, bocc_idx, drop = FALSE] %*% t(T_occ)
-  modes_pos <- fit$modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
-  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
-  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
-  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
-  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
-
-  inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
-  if (is.null(inner_blocks)) {
-    mean_of_var_occ <- rep(0, p_occ); mean_of_var_pos <- rep(0, p_pos)
-  } else {
-    occ_rows <- seq_along(bocc_idx)
-    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
-    n_grid_eff <- length(inner_blocks)
-    diag_occ <- matrix(0, n_grid_eff, p_occ)
-    diag_pos <- matrix(0, n_grid_eff, p_pos)
-    for (k in seq_len(n_grid_eff)) {
-      V_block <- inner_blocks[[k]]
-      if (is.null(V_block)) next
-      V_occ_nat <- T_occ %*% V_block[occ_rows, occ_rows, drop = FALSE] %*% t(T_occ)
-      V_pos_nat <- T_pos %*% V_block[pos_rows, pos_rows, drop = FALSE] %*% t(T_pos)
-      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
-      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
-    }
-    w_eff <- fit$weights[seq_len(n_grid_eff)]
-    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
-    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
-  }
-  se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
-  se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
+  bm <- .cover_joint_beta_moments(fit, enc)
+  p_pos <- bm$p_pos
+  beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
+  se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
 
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
@@ -481,42 +573,12 @@
   N_pos <- length(enc$pos_data$y)
   idx_pos <- enc$idx_pos
 
-  # Positive-arm family + dispersion grid (same regime as the single-field path).
-  .pfg         <- .cover_pos_family_grid(positive, enc, control)
-  pos_family   <- .pfg$pos_family
-  phi_hat      <- .pfg$phi_hat
-  phi_grid_pos <- .pfg$phi_grid_pos
-
-  arm_occ <- list(
-    y = as.numeric(enc$occ_data$y), n_trials = enc$occ_data$n_trials,
-    X = enc$occ_data$X, re_idx = rep(0, N), n_re_groups = 0L,
-    sigma_re = 1.0, family = "binomial", phi = 1.0
-  )
-  arm_pos <- list(
-    y = as.numeric(enc$pos_data$y), n_trials = rep(1L, N_pos),
-    X = enc$pos_data$X, re_idx = rep(0, N_pos), n_re_groups = 0L,
-    sigma_re = 1.0, family = pos_family, phi = phi_hat
-  )
-  arm_pos <- .cover_arm_pos_bounds(arm_pos, enc, positive)
-
-  # Opt-in fixed-effect priors (cover_priors()), as on the single-field path.
-  cprior <- .resolve_cover_priors(priors)
-  if (!is.null(cprior)) {
-    to_prec <- function(pr) {
-      if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
-      list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
-    }
-    occ_ap <- to_prec(.cover_arm_prior(cprior, "occ", colnames(arm_occ$X)))
-    pos_ap <- to_prec(.cover_arm_prior(cprior, "pos", colnames(arm_pos$X)))
-    if (!is.null(occ_ap)) {
-      arm_occ$beta_prior_mean <- occ_ap$mean
-      arm_occ$beta_prior_prec <- occ_ap$prec
-    }
-    if (!is.null(pos_ap)) {
-      arm_pos$beta_prior_mean <- pos_ap$mean
-      arm_pos$beta_prior_prec <- pos_ap$prec
-    }
-  }
+  # Both arms + the positive-arm family / dispersion grid (same regime as the
+  # single-field path), via the shared spine.
+  .arms        <- .cover_joint_arms(enc, positive, control, priors)
+  arm_occ      <- .arms$arm_occ
+  arm_pos      <- .arms$arm_pos
+  phi_grid_pos <- .arms$phi_grid_pos
 
   # MCAR block: per-arm cell index (occ, pos) and per-field per-arm design
   # weight (occ, pos). The positive arm slices the occ weights / cell index by
@@ -553,26 +615,10 @@
     list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid))
   } else NULL
 
-  joint_control <- list(
-    max_iter  = control$max.iter  %||% 50L,
-    tol       = control$tol       %||% 1e-6,
-    n_threads = control$n.threads %||% 1L,
-    n_threads_outer = control$n.threads.outer %||% 1L,
-    store_Q   = TRUE,
-    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
-    adaptive_grid             = control$adaptive.grid             %||% TRUE,
-    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
-    progress          = control[["progress"]]      %||% TRUE,
-    progress.every    = control$progress.every    %||% 0L,
-    progress.throttle = control$progress.throttle %||% 2,
-    progress.file     = control$progress.file     %||% "",
-    checkpoint        = control$checkpoint,
-    # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky + alpha),
-    # so the outer grid uses the mode-centred CCD by default (the same recipe
-    # the single-arm MCAR uses); the dense tensor would blow up.
-    integration       = control$integration %||% "ccd"
-  )
+  # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky + alpha), so
+  # the outer grid uses the mode-centred CCD by default; the dense tensor would
+  # blow up.
+  joint_control <- .cover_joint_control(control, positive, integration = "ccd")
 
   fit <- tulpa::tulpa_nested_laplace_joint(
     responses = list(occ = arm_occ, pos = arm_pos),
@@ -586,44 +632,10 @@
   )
 
   # Shared per-arm beta post-processing (identical to the single-field path).
-  layout <- fit$arm_layout
-  p_occ  <- layout$p[1]; p_pos <- layout$p[2]
-  bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
-  bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
-
-  scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
-  scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
-  T_occ <- .scale_transform(scale_occ); T_pos <- .scale_transform(scale_pos)
-  modes_occ <- fit$modes[, bocc_idx, drop = FALSE] %*% t(T_occ)
-  modes_pos <- fit$modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
-  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
-  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
-  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
-  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
-
-  inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
-  if (is.null(inner_blocks)) {
-    mean_of_var_occ <- rep(0, p_occ); mean_of_var_pos <- rep(0, p_pos)
-  } else {
-    occ_rows <- seq_along(bocc_idx)
-    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
-    n_grid_eff <- length(inner_blocks)
-    diag_occ <- matrix(0, n_grid_eff, p_occ)
-    diag_pos <- matrix(0, n_grid_eff, p_pos)
-    for (k in seq_len(n_grid_eff)) {
-      V_block <- inner_blocks[[k]]
-      if (is.null(V_block)) next
-      V_occ_nat <- T_occ %*% V_block[occ_rows, occ_rows, drop = FALSE] %*% t(T_occ)
-      V_pos_nat <- T_pos %*% V_block[pos_rows, pos_rows, drop = FALSE] %*% t(T_pos)
-      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
-      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
-    }
-    w_eff <- fit$weights[seq_len(n_grid_eff)]
-    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
-    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
-  }
-  se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
-  se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
+  bm <- .cover_joint_beta_moments(fit, enc)
+  p_pos <- bm$p_pos
+  beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
+  se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
 
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
@@ -876,70 +888,22 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
          "be combined with temporal()/re() blocks in the same fit.", call. = FALSE)
   }
 
-  arm_occ <- list(
-    y           = as.numeric(enc$occ_data$y),
-    n_trials    = enc$occ_data$n_trials,
-    X           = enc$occ_data$X,
-    spatial_idx = as.integer(spi_full),
-    re_idx      = rep(0, N),
-    n_re_groups = 0L,
-    sigma_re    = 1.0,
-    family      = "binomial",
-    phi         = 1.0
-  )
-
-  # Positive-arm family + dispersion. Both regimes integrate phi on the outer
-  # joint hyperparameter grid; `arm_pos$phi` is a placeholder overridden per grid
-  # point by the joint engine. The family / phi grid (lognormal noise SD, ordinal
-  # latent log-cover SD, or beta precision; 7 log-spaced points, densified by the
-  # engine's mode-tracked refinement near the peak) is built by the shared
-  # `.cover_pos_family_grid()`. Override the grid via `control$phi.grid`.
-  .pfg         <- .cover_pos_family_grid(positive, enc, control)
-  pos_family   <- .pfg$pos_family
-  phi_hat      <- .pfg$phi_hat
-  phi_grid_pos <- .pfg$phi_grid_pos
-
-  arm_pos <- list(
-    y           = as.numeric(enc$pos_data$y),
-    n_trials    = rep(1L, N_pos),
-    X           = enc$pos_data$X,
-    spatial_idx = as.integer(spi_pos),
-    re_idx      = rep(0, N_pos),
-    n_re_groups = 0L,
-    sigma_re    = 1.0,
-    family      = pos_family,
-    phi         = phi_hat
-  )
-  arm_pos <- .cover_arm_pos_bounds(arm_pos, enc, positive)
-
-  # Opt-in fixed-effect priors (cover_priors()). The joint engine reads a
-  # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replaces
-  # its uniform weak default with the quadratic penalty. Mirrors the separate-
-  # Laplace path (.cover_arm_prior -> tulpa_laplace beta_prior): the natural-
-  # scale numbers are applied at face value to the (autoscaled) design, where
-  # every predictor is O(1), so a weakly-informative sd is a sensible ridge.
-  # Attaching here lets the priors ride through the aggregation/scatter steps
-  # (they mutate rows, not the design columns the prior keys on). Precisions are
-  # floored at the engine's own weak default so an Inf-sd bucket reproduces the
-  # pre-existing weak ridge rather than dropping the diagonal. NULL / FALSE /
-  # "none" leave both arms unpenalised.
-  cprior <- .resolve_cover_priors(priors)
-  if (!is.null(cprior)) {
-    to_prec <- function(pr) {
-      if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
-      list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
-    }
-    occ_ap <- to_prec(.cover_arm_prior(cprior, "occ", colnames(arm_occ$X)))
-    pos_ap <- to_prec(.cover_arm_prior(cprior, "pos", colnames(arm_pos$X)))
-    if (!is.null(occ_ap)) {
-      arm_occ$beta_prior_mean <- occ_ap$mean
-      arm_occ$beta_prior_prec <- occ_ap$prec
-    }
-    if (!is.null(pos_ap)) {
-      arm_pos$beta_prior_mean <- pos_ap$mean
-      arm_pos$beta_prior_prec <- pos_ap$prec
-    }
-  }
+  # Both arms + the positive-arm family / dispersion, via the shared spine. Both
+  # dispersion regimes integrate phi on the outer joint hyperparameter grid;
+  # `arm_pos$phi` is a placeholder overridden per grid point by the joint engine.
+  # The family / phi grid (lognormal noise SD, ordinal latent log-cover SD, or
+  # beta precision; 7 log-spaced points, densified by the engine's mode-tracked
+  # refinement near the peak) comes from `.cover_pos_family_grid()`; override it
+  # via `control$phi.grid`. This is the single-block path, so each arm carries
+  # its own per-observation `spatial_idx` (the multi-block branches below replace
+  # it with per-block indices). Attaching the fixed-effect priors here lets them
+  # ride through the aggregation / scatter steps, which mutate rows rather than
+  # the design columns the prior keys on.
+  .arms        <- .cover_joint_arms(enc, positive, control, priors,
+                                    spi_occ = spi_full, spi_pos = spi_pos)
+  arm_occ      <- .arms$arm_occ
+  arm_pos      <- .arms$arm_pos
+  phi_grid_pos <- .arms$phi_grid_pos
 
   # Strip the per-obs spatial_idx (tulpa_nested_laplace_joint takes it per
   # arm) and the legacy rho_bounds field (joint car_proper uses rho_car_grid).
@@ -1001,62 +965,12 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # full grid if the screen's ranking looks unreliable), but the correct
   # full grid remains the default. Override via control$prune /
   # control$prune.tol.
-  joint_control <- list(
-    max_iter  = control$max.iter  %||% 50L,
-    tol       = control$tol       %||% 1e-6,
-    n_threads = control$n.threads %||% 1L,
-    # Outer-grid parallelism (gcol33/tulpa#46 lever 2). The sparse joint driver
-    # dispatches grid cells across n_threads_outer threads, each with its own
-    # replicated cell-solve state (the engine clamps the count if the replicas
-    # would be too large). Default 1 (serial outer, prior behaviour). Preferred
-    # over inner per-observation threads on many-core hardware for the cover
-    # hurdle's large outer grid, where the expensive mode-region cells dominate.
-    n_threads_outer = control$n.threads.outer %||% 1L,
-    store_Q   = TRUE,
-    # Inner-Newton curvature (gcol33/tulpa#46). The beta positive arm's observed
-    # mixture Hessian is indefinite away from the mode, so observed-curvature
-    # Newton steps stall and the inner Newton hits max.iter in every grid cell.
-    # Expected/Fisher curvature is PSD by construction and converges in ~12
-    # steps. The final mode-pass always re-factorizes with the observed Hessian,
-    # so the reported SEs, log_det and grid weights are unchanged. The lognormal
-    # arm is exactly quadratic (one inner step), so observed curvature is already
-    # optimal -> keep "lm".
-    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
-    prune     = control$prune     %||% FALSE,
-    prune_tol = control$prune.tol %||% 1e-4,
-    adaptive_grid             = control$adaptive.grid             %||% TRUE,
-    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
-    # Outer-grid progress + ETA (gcol33/tulpa#45, tulpaObs#43). Two independent
-    # channels, both ON by default:
-    #   * `progress` gates the Rcout console line -- the progress bar. ON by
-    #     default (NOT tied to `verbose`); set control$progress = FALSE to
-    #     silence it. This fit runs for hours, so the bar earns its place.
-    #   * `progress.file` writes the ETA to disk and is emitted whenever it is
-    #     non-empty, INDEPENDENT of `progress`/`verbose` -- it is the only
-    #     channel that survives a detached Start-Process stdout buffer, and a
-    #     detached fit is exactly when it is the sole liveness signal
-    #     (gcol33/tulpa#53). The engine builds GridProgress when either channel
-    #     is wanted, so a quiet console with a heartbeat file still reports.
-    # `[[` (exact) not `$`: `control$progress` prefix-matches `progress.file`.
-    progress          = control[["progress"]]      %||% TRUE,
-    progress.every    = control$progress.every    %||% 0L,
-    progress.throttle = control$progress.throttle %||% 2,
-    progress.file     = control$progress.file     %||% "",
-    # Grid-cell checkpoint/resume (gcol33/tulpa#50). A full-field cover-hurdle
-    # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
-    # the outer grid append each completed cell to `path` and a resume run load
-    # the finished cells and solve only the rest, so a killed/rebooted fit
-    # resumes instead of restarting. Forwarded verbatim to the engine.
-    checkpoint        = control$checkpoint,
-    # Outer-grid node layout (gcol33/tulpa#61, tulpaObs#31). On the coupled-trend
-    # multi-block path (>= 3 latent axes: intercept + trend sigma/alpha) "ccd"
-    # places a central composite design over the latent axes and crosses the
-    # pos-arm phi tensor on top; "grid" forces the dense tensor. Forwarded so a
-    # two-field trend fit can request CCD; NULL falls through to the engine
-    # default.
-    integration       = control$integration
-  )
+  # This is the only route that exposes the opt-in cheap-pass screen
+  # (`control$prune`), and the only one with no outer-grid layout default: the
+  # coupled-trend multi-block path (>= 3 latent axes: intercept + trend
+  # sigma/alpha) can request "ccd" via control$integration, and NULL falls
+  # through to the engine default (gcol33/tulpa#61, tulpaObs#31).
+  joint_control <- .cover_joint_control(control, positive, prune = TRUE)
 
   # Exact sufficient-statistic reduction of the occurrence (binomial) arm,
   # default ON (tulpaObs#48). The collapse is pointwise exact -- observations
@@ -1249,63 +1163,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   }
 
   # Posterior-weighted mean / SE for the per-arm beta blocks.
-  layout <- fit$arm_layout
-  p_occ  <- layout$p[1]
-  p_pos  <- layout$p[2]
-  bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
-  bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
-
-  # The engine returns per-cell modes and per-cell precision blocks in the
-  # *scaled* design's parameterization (see `encode_cover_hurdle()` and
-  # gcol33/tulpaObs#9). Transform per cell, then aggregate to natural-scale
-  # posterior moments. Doing it cell-by-cell on the full constrained vcov
-  # block preserves the intercept's cross-covariance contribution; a
-  # diag-only approach would underestimate the intercept SE.
-  scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
-  scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
-  T_occ <- .scale_transform(scale_occ)
-  T_pos <- .scale_transform(scale_pos)
-
-  modes_occ_sc <- fit$modes[, bocc_idx, drop = FALSE]
-  modes_pos_sc <- fit$modes[, bpos_idx, drop = FALSE]
-  # Per-cell transform: modes_nat[k, ] = T %*% modes_sc[k, ]
-  modes_occ <- modes_occ_sc %*% t(T_occ)
-  modes_pos <- modes_pos_sc %*% t(T_pos)
-
-  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
-  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
-
-  # Var-of-means + Mean-of-Var, both in natural scale.
-  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
-  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
-
-  inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
-  if (is.null(inner_blocks)) {
-    mean_of_var_occ <- rep(0, p_occ)
-    mean_of_var_pos <- rep(0, p_pos)
-  } else {
-    occ_rows <- seq_along(bocc_idx)
-    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
-    n_grid_eff <- length(inner_blocks)
-    diag_occ <- matrix(0, n_grid_eff, p_occ)
-    diag_pos <- matrix(0, n_grid_eff, p_pos)
-    for (k in seq_len(n_grid_eff)) {
-      V_block <- inner_blocks[[k]]
-      if (is.null(V_block)) next
-      V_occ_sc <- V_block[occ_rows, occ_rows, drop = FALSE]
-      V_pos_sc <- V_block[pos_rows, pos_rows, drop = FALSE]
-      V_occ_nat <- T_occ %*% V_occ_sc %*% t(T_occ)
-      V_pos_nat <- T_pos %*% V_pos_sc %*% t(T_pos)
-      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
-      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
-    }
-    w_eff <- fit$weights[seq_len(n_grid_eff)]
-    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
-    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
-  }
-
-  se_occ <- sqrt(pmax(0, var_of_means_occ + mean_of_var_occ))
-  se_pos <- sqrt(pmax(0, var_of_means_pos + mean_of_var_pos))
+  bm <- .cover_joint_beta_moments(fit, enc)
+  p_pos <- bm$p_pos
+  beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
+  se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
 
   # Dispersion summary on the positive arm. Both regimes integrate the
   # dispersion scalar on the outer joint hyperparameter grid; read the
