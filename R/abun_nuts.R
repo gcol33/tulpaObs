@@ -107,95 +107,9 @@
 }
 
 
-# ---------------------------------------------------------------------------
-# Shared single-intercept RE wiring for the count-marginal NUTS families
-# (abun, removal): one grouping factor, intercept only, on the abundance OR
-# detection arm. The C++ side (marginal_count_nuts.h) carries the non-centered
-# per-site offset; these helpers resolve the RE term, thread it into the spec /
-# warm-start / draw names, and surface fit$re. Slopes / correlated / multi-term
-# / both-arm RE stay on the AGHQ Laplace path.
-# ---------------------------------------------------------------------------
-
-# Resolve a single intercept RE from the formula `re` terms. NULL = no RE.
-# `arms` names the two predictor blocks the term may sit on (state arm first,
-# detection arm second) so the count families (abun/removal: lambda/p), the
-# open N-mixture and distance (lambda only) and the false-positive occupancy
-# family (psi/p11) share one resolver; the returned `arm` is 0 for the first,
-# 1 for the second.
-.tobs_count_nuts_re_info <- function(re, model, arms = c("lambda", "p")) {
-  if (is.null(re) || length(re) == 0L) return(NULL)
-  if (inherits(re, "tobs_re")) re <- list(re)
-  split <- .tobs_re_split_two_arms(
-    re, model, arms[1L], arms[2L],
-    sprintf(paste0("method = \"nuts\" with a random effect supports the RE on ",
-                   "ONE arm; put it on %s OR %s, or use method = \"laplace\"."),
-            arms[1L], arms[2L]))
-  a1 <- split[[arms[1L]]]; a2 <- split[[arms[2L]]]
-  if (length(a1) && length(a2))
-    stop(sprintf(paste0("method = \"nuts\" with a random effect supports the RE ",
-                        "on ONE arm; put it on %s OR %s, or use ",
-                        "method = \"laplace\"."), arms[1L], arms[2L]),
-         call. = FALSE)
-  design <- if (length(a1)) a1 else a2
-  if (length(design) != 1L || design[[1L]]$n_coefs != 1L ||
-      !isTRUE(design[[1L]]$has_intercept))
-    stop("method = \"nuts\" supports a single intercept random effect (1|g) on ",
-         "one arm; random slopes / multiple grouping factors fit under ",
-         "method = \"laplace\" (AGHQ).", call. = FALSE)
-  list(arm = if (length(a1)) 0L else 1L,
-       arm_tag = if (length(a1)) arms[1L] else arms[2L],
-       group = as.integer(design[[1L]]$idx),
-       n_groups = as.integer(design[[1L]]$n_groups),
-       label = design[[1L]]$group_label %||% "g1")
-}
-
-# Merge the RE block fields into the NUTS spec list (re_arm = -1 -> no RE).
-.tobs_count_nuts_re_spec <- function(spec, re_info, sigma.logr) {
-  if (is.null(re_info)) { spec$re_arm <- -1L; return(spec) }
-  spec$re_arm       <- re_info$arm
-  spec$re_group     <- re_info$group
-  spec$n_re_groups  <- re_info$n_groups
-  spec$sigma_re_lsd <- sigma.logr
-  spec
-}
-
-# Append z (warm-started at 0, unit metric) + log_sigma_re (log(0.5), 0.25
-# metric) to the warm-start init.
-.tobs_count_nuts_re_init <- function(init, lay, re_info) {
-  if (is.null(re_info)) return(init)
-  G <- re_info$n_groups
-  init$theta0     <- c(init$theta0, rep(0, G), log(0.5))
-  init$inv_metric <- c(init$inv_metric[seq_len(lay$total - G - 1L)],
-                       rep(1, G), 0.25)
-  init
-}
-
-# Draw-column names for the RE block (z_1..z_G + log_sigma_<arm>_<label>).
-.tobs_count_nuts_re_names <- function(re_info) {
-  if (is.null(re_info)) return(character(0))
-  c(paste0("re_", re_info$label, "_z", seq_len(re_info$n_groups)),
-    paste0("log_sigma_", re_info$arm_tag, "_", re_info$label))
-}
-
-# With an RE present, set means/sds/vcov to the full coordinate set (so they
-# align with the RE draws columns and the per-process unscaler leaves the RE
-# tail untouched) and attach fit$re (sigma + per-group BLUPs on the natural
-# scale, b_g = sigma_re * z_g).
-.tobs_count_nuts_re_finish <- function(fit, draws, par, cov, nms, re_info) {
-  if (is.null(re_info)) return(fit)
-  fit$means <- par
-  fit$sds   <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms
-  fit$vcov  <- cov
-  ls_col  <- paste0("log_sigma_", re_info$arm_tag, "_", re_info$label)
-  z_cols  <- paste0("re_", re_info$label, "_z", seq_len(re_info$n_groups))
-  sig_dr  <- exp(draws[, ls_col])
-  blup_dr <- sig_dr * draws[, z_cols, drop = FALSE]
-  fit$re <- list(arm = re_info$arm_tag, group_label = re_info$label,
-                 n_groups = re_info$n_groups,
-                 sigma = mean(sig_dr), sigma_sd = stats::sd(sig_dr),
-                 blup = colMeans(blup_dr), blup_sd = apply(blup_dr, 2L, stats::sd))
-  fit
-}
+# The shared single-intercept RE wiring these families use
+# (.tobs_count_nuts_re_info / _spec / _init / _names / _finish) lives with the
+# rest of the shared NUTS orchestration in R/nuts_chains.R.
 
 
 # ---------------------------------------------------------------------------
@@ -255,20 +169,13 @@
                   adapt_delta = adapt.delta,
                   seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
            if (is_nb) "log_r",
            .tobs_count_nuts_re_names(re_info))
-  colnames(draws) <- nms
-  accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains, `[[`, "divergent"))
-  treedepth <- as.integer(unlist(lapply(chains, `[[`, "treedepth")))
-  epsilon   <- chains[[1L]]$epsilon
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  par <- run$par; cov <- run$cov
 
-  par <- colMeans(draws); names(par) <- nms
-  cov <- stats::cov(draws)
   # Data log-likelihood at the posterior mean (scale-invariant), so logLik() on
   # the NUTS fit matches the laplace-path convention (mean(log_prob)).
   marg <- .tobs_abun_nuts_marginal(model, mixture = mix_code, K_max = K_max)
@@ -295,24 +202,11 @@
   # block present, means/sds/vcov carry the trailing RE coordinates too (column
   # order [lambda, p, (log_r), z_1..z_G, log_sigma_re] matches the draws, so the
   # per-process unscaler leaves the RE tail untouched, like log_r).
-  n_draws <- nrow(draws)
-  fit$draws       <- draws
-  fit <- .tobs_count_nuts_re_finish(fit, draws, par, cov, nms, re_info)
-  fit$n_samples   <- n_draws
-  fit$log_prob    <- rep(ll_mean, n_draws)
-  fit$accept_prob <- accept
-  fit$divergent   <- divergent
-  fit$treedepth   <- treedepth
-  fit$epsilon     <- epsilon
-  fit$method      <- "nuts"
-  fit$nuts <- list(accept_prob = accept, divergent = divergent,
-                   treedepth = treedepth, epsilon = epsilon,
-                   n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent),
-                   is_nb = is_nb, K_max = K_max,
-                   re_arm = if (has_re) re_info$arm else -1L,
-                   sigma_beta = sigma.beta, sigma_logr = sigma.logr)
-  fit
+  .tobs_count_nuts_attach(
+    fit, run, ll_mean, n.chains, re_info,
+    extra = list(is_nb = is_nb, K_max = K_max,
+                 re_arm = if (has_re) re_info$arm else -1L,
+                 sigma_beta = sigma.beta, sigma_logr = sigma.logr))
 }
 
 

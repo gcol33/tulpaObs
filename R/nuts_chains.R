@@ -85,6 +85,155 @@
 }
 
 
+# ---------------------------------------------------------------------------
+# Non-spatial marginal NUTS: shared chain-run and fit-assembly tail
+#
+# The same five families (abun, removal, distance, fp_occu, dyn_abun) run an
+# identically shaped sampler when there is no field: a flat coefficient vector,
+# one C++ FullGradFn entry point, and a `run_chain(ch)` closure. Everything
+# after that closure -- pooling the chains, naming the draw columns, the
+# posterior moments, the RE tail, and the `fit$nuts` diagnostics block -- is the
+# same for all of them. The two helpers below carry it, so a change to the
+# reported diagnostics is made once.
+# ---------------------------------------------------------------------------
+
+# Run the per-chain sampler, pool the draws under `nms`, and collect the
+# posterior moments plus the raw sampler diagnostics.
+.tobs_count_nuts_run <- function(run_chain, n_chains, nms) {
+  chains <- lapply(seq_len(as.integer(n_chains)), run_chain)
+  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
+  colnames(draws) <- nms
+  par <- colMeans(draws); names(par) <- nms
+  list(chains    = chains,
+       draws     = draws,
+       nms       = nms,
+       par       = par,
+       cov       = stats::cov(draws),
+       accept    = unlist(lapply(chains, `[[`, "accept_prob")),
+       divergent = unlist(lapply(chains, `[[`, "divergent")),
+       treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
+       epsilon   = chains[[1L]]$epsilon)
+}
+
+# Replace the family builder's moment-matched draws and NA diagnostics with the
+# actual NUTS posterior. `log_lik` is the data log-likelihood at the posterior
+# mean (the laplace-path `logLik()` convention); `re_info` attaches the RE tail
+# when the fit carries one; `extra` is the family's own `fit$nuts` entries
+# (`is_nb`, `K_max`, `re_arm`, the prior scales, ...), appended after the common
+# sampler diagnostics.
+.tobs_count_nuts_attach <- function(fit, run, log_lik, n_chains, re_info = NULL,
+                                    extra = list()) {
+  n_draws <- nrow(run$draws)
+  fit$draws <- run$draws
+  fit <- .tobs_count_nuts_re_finish(fit, run$draws, run$par, run$cov, run$nms,
+                                    re_info)
+  fit$n_samples   <- n_draws
+  fit$log_prob    <- rep(log_lik, n_draws)
+  fit$accept_prob <- run$accept
+  fit$divergent   <- run$divergent
+  fit$treedepth   <- run$treedepth
+  fit$epsilon     <- run$epsilon
+  fit$method      <- "nuts"
+  fit$nuts <- c(list(accept_prob = run$accept, divergent = run$divergent,
+                     treedepth = run$treedepth, epsilon = run$epsilon,
+                     n_chains = as.integer(n_chains),
+                     divergent_total = sum(run$divergent)),
+                extra)
+  fit
+}
+
+
+# ---------------------------------------------------------------------------
+# Shared single-intercept RE wiring for the marginal NUTS families
+# (abun, removal, distance, fp_occu, dyn_abun): one grouping factor, intercept
+# only, on the state OR detection arm. The C++ side (marginal_count_nuts.h)
+# carries the non-centered per-site offset; these helpers resolve the RE term,
+# thread it into the spec / warm-start / draw names, and surface fit$re. Slopes
+# / correlated / multi-term / both-arm RE stay on the AGHQ Laplace path.
+# ---------------------------------------------------------------------------
+
+# Resolve a single intercept RE from the formula `re` terms. NULL = no RE.
+# `arms` names the two predictor blocks the term may sit on (state arm first,
+# detection arm second) so the count families (abun/removal: lambda/p), the
+# open N-mixture and distance (lambda only) and the false-positive occupancy
+# family (psi/p11) share one resolver; the returned `arm` is 0 for the first,
+# 1 for the second.
+.tobs_count_nuts_re_info <- function(re, model, arms = c("lambda", "p")) {
+  if (is.null(re) || length(re) == 0L) return(NULL)
+  if (inherits(re, "tobs_re")) re <- list(re)
+  split <- .tobs_re_split_two_arms(
+    re, model, arms[1L], arms[2L],
+    sprintf(paste0("method = \"nuts\" with a random effect supports the RE on ",
+                   "ONE arm; put it on %s OR %s, or use method = \"laplace\"."),
+            arms[1L], arms[2L]))
+  a1 <- split[[arms[1L]]]; a2 <- split[[arms[2L]]]
+  if (length(a1) && length(a2))
+    stop(sprintf(paste0("method = \"nuts\" with a random effect supports the RE ",
+                        "on ONE arm; put it on %s OR %s, or use ",
+                        "method = \"laplace\"."), arms[1L], arms[2L]),
+         call. = FALSE)
+  design <- if (length(a1)) a1 else a2
+  if (length(design) != 1L || design[[1L]]$n_coefs != 1L ||
+      !isTRUE(design[[1L]]$has_intercept))
+    stop("method = \"nuts\" supports a single intercept random effect (1|g) on ",
+         "one arm; random slopes / multiple grouping factors fit under ",
+         "method = \"laplace\" (AGHQ).", call. = FALSE)
+  list(arm = if (length(a1)) 0L else 1L,
+       arm_tag = if (length(a1)) arms[1L] else arms[2L],
+       group = as.integer(design[[1L]]$idx),
+       n_groups = as.integer(design[[1L]]$n_groups),
+       label = design[[1L]]$group_label %||% "g1")
+}
+
+# Merge the RE block fields into the NUTS spec list (re_arm = -1 -> no RE).
+.tobs_count_nuts_re_spec <- function(spec, re_info, sigma.logr) {
+  if (is.null(re_info)) { spec$re_arm <- -1L; return(spec) }
+  spec$re_arm       <- re_info$arm
+  spec$re_group     <- re_info$group
+  spec$n_re_groups  <- re_info$n_groups
+  spec$sigma_re_lsd <- sigma.logr
+  spec
+}
+
+# Append z (warm-started at 0, unit metric) + log_sigma_re (log(0.5), 0.25
+# metric) to the warm-start init.
+.tobs_count_nuts_re_init <- function(init, lay, re_info) {
+  if (is.null(re_info)) return(init)
+  G <- re_info$n_groups
+  init$theta0     <- c(init$theta0, rep(0, G), log(0.5))
+  init$inv_metric <- c(init$inv_metric[seq_len(lay$total - G - 1L)],
+                       rep(1, G), 0.25)
+  init
+}
+
+# Draw-column names for the RE block (z_1..z_G + log_sigma_<arm>_<label>).
+.tobs_count_nuts_re_names <- function(re_info) {
+  if (is.null(re_info)) return(character(0))
+  c(paste0("re_", re_info$label, "_z", seq_len(re_info$n_groups)),
+    paste0("log_sigma_", re_info$arm_tag, "_", re_info$label))
+}
+
+# With an RE present, set means/sds/vcov to the full coordinate set (so they
+# align with the RE draws columns and the per-process unscaler leaves the RE
+# tail untouched) and attach fit$re (sigma + per-group BLUPs on the natural
+# scale, b_g = sigma_re * z_g).
+.tobs_count_nuts_re_finish <- function(fit, draws, par, cov, nms, re_info) {
+  if (is.null(re_info)) return(fit)
+  fit$means <- par
+  fit$sds   <- sqrt(pmax(diag(cov), 0)); names(fit$sds) <- nms
+  fit$vcov  <- cov
+  ls_col  <- paste0("log_sigma_", re_info$arm_tag, "_", re_info$label)
+  z_cols  <- paste0("re_", re_info$label, "_z", seq_len(re_info$n_groups))
+  sig_dr  <- exp(draws[, ls_col])
+  blup_dr <- sig_dr * draws[, z_cols, drop = FALSE]
+  fit$re <- list(arm = re_info$arm_tag, group_label = re_info$label,
+                 n_groups = re_info$n_groups,
+                 sigma = mean(sig_dr), sigma_sd = stats::sd(sig_dr),
+                 blup = colMeans(blup_dr), blup_sd = apply(blup_dr, 2L, stats::sd))
+  fit
+}
+
+
 # Keep every `n.thin`-th row of a draw / diagnostic vector or matrix.
 .tobs_thin <- function(x, n.thin) {
   if (n.thin <= 1L || is.null(x)) return(x)

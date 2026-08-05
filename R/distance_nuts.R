@@ -176,20 +176,13 @@
                       adapt_delta = adapt.delta,
                       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("sigma_",  model$process_info[[2]]$coef_names),
            if (hazard) "log_shape", if (is_nb) "log_r",
            .tobs_count_nuts_re_names(re_info))
-  colnames(draws) <- nms
-  accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- unlist(lapply(chains, `[[`, "divergent"))
-  treedepth <- as.integer(unlist(lapply(chains, `[[`, "treedepth")))
-  epsilon   <- chains[[1L]]$epsilon
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  par <- run$par; cov <- run$cov
 
-  par <- colMeans(draws); names(par) <- nms
-  cov <- stats::cov(draws)
   marg <- .tobs_distance_nuts_marginal(model, mixture = mix_code, K_max = K_max,
                                        headroom = headroom)
   eta_b_hat <- if (hazard) par[lay$log_shape] else 0
@@ -238,23 +231,10 @@
   fit <- build_distance_fit(raw, model)
   fit$headroom <- headroom
 
-  n_draws <- nrow(draws)
-  fit$draws       <- draws
-  fit <- .tobs_count_nuts_re_finish(fit, draws, par, cov, nms, re_info)
-  fit$n_samples   <- n_draws
-  fit$log_prob    <- rep(ll_mean, n_draws)
-  fit$accept_prob <- accept
-  fit$divergent   <- divergent
-  fit$treedepth   <- treedepth
-  fit$epsilon     <- epsilon
-  fit$method      <- "nuts"
-  fit$nuts <- list(accept_prob = accept, divergent = divergent,
-                   treedepth = treedepth, epsilon = epsilon,
-                   n_chains = as.integer(n.chains),
-                   divergent_total = sum(divergent),
-                   is_nb = is_nb, hazard = hazard, K_max = K_max,
-                   headroom = headroom,
-                   sigma_beta = sigma.beta, sigma_shape = sigma.shape,
-                   sigma_logr = sigma.logr)
-  fit
+  .tobs_count_nuts_attach(
+    fit, run, ll_mean, n.chains, re_info,
+    extra = list(is_nb = is_nb, hazard = hazard, K_max = K_max,
+                 headroom = headroom,
+                 sigma_beta = sigma.beta, sigma_shape = sigma.shape,
+                 sigma_logr = sigma.logr))
 }
