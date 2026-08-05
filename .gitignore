@@ -34,3 +34,10 @@ _*/
 
 # Ad-hoc probes, reproducers, build/test logs (kept in-tree, not committed)
 dev_notes/
+
+# Local output of the sharded full-recovery tier (.github/scripts/run-tests.R
+# writes per-shard results, aggregate-tier3.R collects them into a timings CSV).
+# The CI workflow moves these through artifacts; a local run leaves them here.
+tier3-out/
+tier3-artifacts/
+tier3-timings.csv
