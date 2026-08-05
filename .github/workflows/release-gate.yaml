@@ -1,0 +1,39 @@
+name: release-gate
+
+# The floor availability gate at the release moment. A tag is the point where
+# every engine floor the package declares has to be installable by anyone
+# checking it out, and no other workflow here fires on a tag at all.
+#
+# Cheap by construction: base R plus one script, no dependency resolution and no
+# compile, so the answer lands in under a minute instead of behind the engine
+# builds. That is the whole point -- when a floor is not yet served, the
+# resolver's own error names no version (issue #180), and this names all of it.
+#
+# The script reads its repositories from DESCRIPTION rather than from
+# options("repos"), so setup-r deliberately does NOT register the engine
+# universe here: the gate measures what a user installing this package resolves,
+# not what this workflow configured for itself.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  floor-served:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Verify floor availability
+        run: Rscript .github/scripts/check-floor-served.R

@@ -75,8 +75,18 @@ jobs:
           use-public-rspm: true
           extra-repositories: https://gcol33.r-universe.dev
 
-      # tulpa resolves from gcol33.r-universe.dev as a prebuilt binary (pinned
-      # via Remotes as a fallback for the exact commit between sync cycles).
+      # Before dependency resolution, because resolution is what fails when an
+      # engine floor is not yet served and its error names no version at all
+      # ("Can't install dependency tulpa (>= 0.0.117)"). This reports which
+      # floor, what is served, and from where (issue #180).
+      - name: Verify floor availability
+        run: Rscript .github/scripts/check-floor-served.R
+
+      # tulpa resolves from gcol33.r-universe.dev as a prebuilt binary, by
+      # Imports floor alone -- no Remotes tag, because r-universe builds
+      # default-branch HEAD and a tag publishes nothing there. The window that
+      # opens between an engine release and the next r-universe build is covered
+      # by the floor availability gate above, not by a pin.
       # The action caches the built library, which is where the expensive
       # third-party compiles (RcppEigen) are amortised.
       - uses: r-lib/actions/setup-r-dependencies@v2

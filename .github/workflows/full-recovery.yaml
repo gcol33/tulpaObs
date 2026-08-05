@@ -49,6 +49,13 @@ jobs:
           use-public-rspm: true
           extra-repositories: https://gcol33.r-universe.dev
 
+      # Before dependency resolution, because resolution is what fails when an
+      # engine floor is not yet served and its error names no version at all
+      # ("Can't install dependency tulpa (>= 0.0.117)"). This reports which
+      # floor, what is served, and from where (issue #180).
+      - name: Verify floor availability
+        run: Rscript .github/scripts/check-floor-served.R
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           dependencies: '"hard"'
