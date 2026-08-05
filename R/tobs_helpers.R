@@ -134,12 +134,15 @@
 #   * laplace / laplace_sla / laplace_gibbs / laplace_mi -- run on tulpa's
 #     EM+Laplace engine, which has callbacks for every occupancy family. The
 #     cover hurdle is fit by a separate two-Laplace dispatcher with no EM
-#     correction engine, so it offers laplace / laplace_sla only (no gibbs/mi).
-#   * nuts -- the C++ sampler covers single / dynamic / community / integrated /
-#     jsdm; the cover hurdle has no HMC likelihood yet.
+#     correction engine, so it takes no laplace_gibbs / laplace_mi.
+#   * nuts -- sampled either by the unified C++ entry `cpp_occu_fit` (the
+#     occupancy families) or by an in-tree FullGradFn over the family's own
+#     closed-form marginal. The per-family comments below name the file each
+#     path lives in.
 #
-# Planned families (status == "planned") have no entry and error earlier via
-# `.stop_planned_family()`; the validator is a no-op for them.
+# The list below is the roster, and every family constructor the package exports
+# has an entry. A family object with no entry is a no-op for the validator and
+# is rejected at dispatch instead.
 .tobs_family_methods <- list(
   occu     = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "pg_gibbs", "nested_laplace", "nested_laplace_sla", "nuts"),
@@ -419,7 +422,9 @@
 
 # Validate a resolved public method name against the family's supported set.
 # `method` is the concrete name ("auto" already resolved upstream). No-op for a
-# family with no entry (planned families, which error before reaching here).
+# family with no entry: every exported family constructor has one, so a family
+# object that reaches here without an entry is a hand-built `obs_family()`, and
+# `tobs()` rejects it at dispatch.
 .tobs_validate_family_method <- function(method, family) {
   supported <- .tobs_family_methods[[family$name]]
   if (is.null(supported) || method %in% supported) return(invisible(NULL))
@@ -779,28 +784,6 @@
 .drop_intercept <- function(f) {
   stats::update(f, ~ . - 1)
 }
-
-.stop_planned_family <- function(family) {
-  phase <- switch(
-    family$name,
-    cover    = "Phase 1 (cover hurdle, beta variant)",
-    ms_abun  = "Phase 2 (multispecies N-mixture)",
-    dyn_abun = "Phase 3 (open N-mixture)",
-    distance = "Phase 4 (distance / removal / FP)",
-    removal  = "Phase 4 (distance / removal / FP)",
-    fp_occu  = "Phase 4 (distance / removal / FP)",
-    "a future phase"
-  )
-  stop(
-    sprintf(
-      "Family `%s` (%s) is planned but not yet implemented. Scheduled: %s. ",
-      family$name, family$class_long, phase
-    ),
-    "See PLAN_tulpaObs.md for the rollout.",
-    call. = FALSE
-  )
-}
-
 
 # ---------------------------------------------------------------------------
 # Print method for fits

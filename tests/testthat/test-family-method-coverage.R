@@ -68,9 +68,17 @@ test_that("the rejection lists the family's supported methods", {
   expect_false(grepl("\"nuts\"[^.]*Supported", err))  # nuts is not in the set
 })
 
-test_that("planned families are a no-op (they error earlier via dispatch)", {
-  expect_silent(.tobs_validate_family_method("laplace", abun()))
-  expect_silent(.tobs_validate_family_method("nuts", distance()))
+test_that("a family with no roster entry is a no-op for the validator", {
+  # Every family constructor the package exports has a `.tobs_family_methods`
+  # entry, so the no-entry branch is reached only by a hand-built
+  # `obs_family()`. The validator passes it through; tobs() rejects it at
+  # dispatch.
+  fam <- obs_family(name        = "not_a_family",
+                    class_long  = "hand-built family object",
+                    latent      = "bernoulli",
+                    observation = "binomial_detection")
+  expect_null(.tobs_family_methods[[fam$name]])
+  expect_silent(.tobs_validate_family_method("laplace", fam))
 })
 
 test_that("the #116 laplace-only families give the friendly registry error", {

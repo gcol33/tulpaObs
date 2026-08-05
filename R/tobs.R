@@ -497,10 +497,6 @@ tobs <- function(formula,
   # same weakly-informative default prior as `"laplace"`. Pass `priors = FALSE`
   # to recover the unpenalised correction.
 
-  if (family$status == "planned") {
-    .stop_planned_family(family)
-  }
-
   # Backend coverage is enforced centrally: each working family declares the
   # methods it actually supports (`.tobs_family_methods`). Reject an unsupported
   # method with a pointer to the supported set, rather than silently downgrading
@@ -574,7 +570,7 @@ tobs <- function(formula,
     ms_dyn_occu = .dispatch_ms_dyn_occu,
     ms_int_occu = .dispatch_ms_int_occu,
     stop(sprintf(
-      "Internal error: family '%s' has status 'working' but no dispatcher.",
+      "Internal error: family '%s' has no dispatcher.",
       family$name
     ), call. = FALSE)
   )
