@@ -1,5 +1,51 @@
 # tulpaObs NEWS
 
+## 0.0.181 (2026-08-05)
+
+* **Pinned to `tulpa (>= 0.0.117)` for the inner-Laplace skewness
+  diagnostic (gcol33/tulpa#272).** `pareto_k` scores only the OUTER
+  hyperparameter-grid integration around a fixed inner Laplace, but it read
+  as a whole-fit verdict; the inner Gaussian approximation to the latent-field
+  conditional posterior was a separate, unscored layer. The motivating case
+  was a tulpaObs one: an `occu_cover()` batch flagged 42/78 species
+  "unreliable" on outer k-hat alone when their point estimates, governed by
+  the healthy inner layer, were fine. tulpa 0.0.117 adds `gamma_3` (the
+  leading-order Edgeworth skewness estimate of Rue, Martino & Chopin 2009
+  Sec 3.2.3), computed with one extra deterministic Newton solve at the
+  fitted MAP grid cell.
+
+  It reaches a tulpaObs fit exactly where that fit routes through one of
+  tulpa's own single-arm nested-Laplace kernels, surfacing as `inner_skew` /
+  `inner_skew_idx` / `inner_skew_dropped` on the inner fit. Measured on this
+  release: `occu() + icar()` reports it (`inner_skew` -0.038 / 0.091,
+  `inner_skew_dropped` 0), as does `count() + icar()` (-0.057 / 0.049) --
+  both small, i.e. the inner Gaussian approximation is healthy there.
+  `abun() + icar()` does NOT report it, because that fit runs tulpaObs's own
+  in-tree `nmix_laplace_icar()` rather than a tulpa kernel -- which by the
+  same routing argument should also exclude the areal fits that go through
+  the in-tree count-spatial and areal-BFGS drivers, though only `abun()` was
+  measured here. Upstream, the diagnostic declines to
+  `NA` rather than a silently-wrong `0` for a coupled multi-process spec,
+  which is what `occu_cover()`'s joint fit is -- the coupled-arm cubic term
+  is tracked in gcol33/tulpa#273.
+
+  Default on (`control$diagnose_skew`); no tulpaObs-side change needed, and
+  the areal recovery fixture is unmoved (`occu() + icar()` seed 1: slope
+  0.596 against truth 0.5, field cor 0.965, versus that test's 8-seed
+  medians of 0.943 cor / 0.9189 field sd). tulpa 0.0.116 in between was a
+  stale-test fix with no engine change.
+
+* **`spOccupancy` and `withr` declared in `Suggests`.** Both were already
+  used under `::` in the test suite -- `spOccupancy::PGOcc` as the external
+  reference implementation in `test-occu-pg-gibbs.R`, `withr::local_options`
+  in `test-occu-cover-pareto-k.R` -- without being declared, which
+  `R CMD check` reports as "unstated dependencies in 'tests'". This is a
+  declaration fix, not a new dependency: both are on CRAN, both stay in
+  `Suggests`, and the `spOccupancy` block is already gated by
+  `skip_if_not_installed()`. Restores the tarball check to
+  `0 errors / 0 warnings`; the one remaining NOTE is the deliberate
+  `-Wa,-mbig-obj` flag in `src/Makevars.win`.
+
 ## 0.0.180 (2026-08-03)
 
 * **Pinned to `tulpa (>= 0.0.115)` (gcol33/tulpa#270).** The 0.0.114 pin
