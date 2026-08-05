@@ -1,0 +1,29 @@
+# Per-file cost table for the full-recovery (tier 3) shard planner.
+#
+# Only files whose cost has actually been measured, or that are known to run
+# unbounded, are listed. Everything else takes the planner's default weight.
+# The planner errors if an entry here names a file that no longer exists, so a
+# renamed or split test file cannot leave a stale weight pointing at nothing.
+#
+# seconds  measured serial wall time, or NA when the file has never completed a
+#          timed run. NA is only meaningful together with isolate = yes.
+# isolate  yes -> the file gets a shard to itself. Reserved for files whose cost
+#          is at or beyond the job cap, so that overrunning costs only their own
+#          evidence instead of taking a bucket of other files down with them.
+#
+# HOW TO REFRESH. The aggregate job publishes tier3-timings.csv, one row per
+# test file with the wall time that run actually spent in it. Sort it, and move
+# anything expensive into this table with the run id as its source. These
+# numbers are the input to a bin-packing problem, so they only have to be right
+# to within a factor of two; what they must not be is invented.
+file,seconds,isolate,source
+test-ms-distance.R,18422.6,yes,"beast serial 2026-07-30, before the issue 161 Louis-block speedup (2.3x on the community EM), so this is an upper bound"
+test-ms-occu-factor.R,6937.3,yes,"beast serial 2026-07-30"
+test-ms-count-factor.R,2110.8,no,"beast serial 2026-07-30"
+test-jsdm-community.R,642.1,no,"beast serial 2026-07-30"
+test-ms-count-spatial.R,190.3,no,"beast serial 2026-07-30"
+test-ms-occu-field.R,188.8,no,"beast serial 2026-07-30"
+test-community-latent-control.R,163.1,no,"beast serial 2026-07-30"
+test-community-latent-quad.R,58.8,no,"beast serial 2026-07-30"
+test-ms-abun-factor.R,NA,yes,"never timed to completion. CLAUDE.md records roughly 4.5-5h at the defaults of the time and a 6.6h abort under contention; factor.starts has since dropped to 1 for this family, which was measured at 2.0-2.3x on the affected blocks, but the file has not been re-timed"
+test-ms-abun-nb-rs.R,NA,yes,"never timed to completion: ran 15.5h in an earlier attempt without finishing"
