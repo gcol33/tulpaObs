@@ -179,6 +179,69 @@ test_that("simulation functions work", {
   expect_equal(dim(sim_t$y), c(10, 3, 4))
 })
 
+test_that("predict(terms=) varies one term and rejects a longer vector", {
+  set.seed(4)
+  n <- 60
+  d <- data.frame(elev = stats::rnorm(n), slope = stats::rnorm(n))
+  psi <- plogis(0.4 + 0.6 * d$elev - 0.5 * d$slope)
+  z <- rbinom(n, 1, psi)
+  y <- matrix(rbinom(n * 3, 1, z * 0.5), n, 3)
+  fit <- tobs(~ elev + slope, data = d, family = occu(), detection = ~ 1,
+              y = y, control = list(verbose = FALSE))
+
+  # The documented mode: a grid over `elev`, every other design column at its
+  # mean, on the occupancy probability scale.
+  pr <- predict(fit, terms = "elev", n_points = 12L)
+  expect_s3_class(pr, "tobs_prediction")
+  expect_equal(nrow(pr), 12L)
+  expect_identical(attr(pr, "term"), "elev")
+  expect_true(all(pr$estimate >= 0 & pr$estimate <= 1))
+  expect_true(all(pr$lower <= pr$estimate & pr$estimate <= pr$upper))
+
+  # A second term is not a grouping variable here: it would be held at its
+  # mean, answering a different question under a plausible-looking result. It
+  # is an error, not element one of the vector.
+  expect_error(predict(fit, terms = c("elev", "slope")), "one term")
+  expect_error(predict(fit, terms = character(0)), "one term")
+  expect_error(predict(fit, terms = 1), "one term")
+  expect_error(predict(fit, terms = NA_character_), "one term")
+
+  # An unknown single term still reports the coefficient names it looked in.
+  expect_error(predict(fit, terms = "nope"), "not found")
+
+  # The detection arm takes the same route and the same contract.
+  expect_error(predict(fit, terms = c("(Intercept)", "elev"),
+                       type = "detection"), "one term")
+
+  # tobs_marginal_effect() calls the same fitter, so it inherits the contract.
+  me <- tobs_marginal_effect(fit, "elev", n_points = 8L)
+  expect_equal(nrow(me), 8L)
+  expect_error(tobs_marginal_effect(fit, c("elev", "slope")), "one term")
+
+  # plot() reads its input shape from this table alone (x / estimate / lower /
+  # upper plus the term and process attributes) and returns it invisibly.
+  expect_named(as.data.frame(pr), c("x", "estimate", "lower", "upper"))
+  expect_identical(attr(pr, "process"), "psi")
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_s3_class(plot(pr), "tobs_prediction")
+})
+
+test_that("predict(terms=) on the N-mixture route holds the same contract", {
+  sim <- simulate_abun(N = 40, J = 3, n_abund_covs = 2, n_det_covs = 1,
+                       seed = 3)
+  fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, family = abun(),
+              detection = ~ 1, y = sim$y, control = list(verbose = FALSE))
+
+  pr <- predict(fit, terms = "abund_cov1", n_points = 10L)
+  expect_s3_class(pr, "tobs_prediction")
+  expect_equal(nrow(pr), 10L)
+  expect_identical(attr(pr, "term"), "abund_cov1")
+  expect_true(all(pr$estimate > 0))   # abundance intensity, not a probability
+
+  expect_error(predict(fit, terms = c("abund_cov1", "abund_cov2")), "one term")
+})
+
 test_that("tobs_data long format conversion works", {
   df <- expand.grid(site = 1:5, visit = 1:3)
   df$detected <- rbinom(15, 1, 0.3)

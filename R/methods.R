@@ -659,7 +659,11 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `occu_cover` fit: `"occurrence"`, `"cover_cond"`, `"cover_exp"`, or
 #'   `"change"`.
 #' @param quantiles Quantile levels for credible intervals.
-#' @param terms Character vector of terms to vary (ggpredict-style).
+#' @param terms Name of a single term to vary: one column of the predicted
+#'   process's design matrix, every other column held at its column mean. A
+#'   vector of more than one term is an error, since a second term would be
+#'   held at its mean rather than grouped over its levels. For a grid over
+#'   more than one covariate, build the design matrix and pass it as `X.0`.
 #' @param n_points Number of prediction points per continuous term.
 #' @param newdata `occu_cover` only: data.frame of prediction units, one row per
 #'   field cell (or carrying a `cell` column mapping rows to field cells).
@@ -690,6 +694,9 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  newdata = NULL, times = NULL, level = 0.95,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
                                  ...) {
+  # `terms` names one design column, and every family reading it does so
+  # through this generic, so validate here rather than in each fitter.
+  if (!is.null(terms)) terms <- .tobs_predict_term(terms)
   # N-mixture abundance: the response types are "abundance" / "detection", so
   # route before the occupancy-specific match.arg(type) rejects them.
   if (identical(object$model$model_type, "nmix") ||
@@ -845,7 +852,27 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   )
 }
 
-# Terms-based prediction (ggpredict-style)
+# `terms` names ONE column of the fitted design matrix to vary; every other
+# column is held at its column mean. A second term could only be honoured the
+# same way, at its own mean, which is a grid over one covariate reported as a
+# grid over two. Grouping it instead (the ggeffects convention) is not
+# expressible here: a factor's levels span several design columns, and this
+# path sees column names, not model-frame variables. So a longer vector is
+# rejected, and `X.0` carries any grid over more than one covariate.
+.tobs_predict_term <- function(terms) {
+  if (is.character(terms) && length(terms) == 1L && !is.na(terms)) return(terms)
+  got <- if (!is.character(terms))
+           paste0("a ", class(terms)[1L], " of length ", length(terms))
+         else if (length(terms) == 0L) "an empty character vector"
+         else paste0("[", paste(terms, collapse = ", "), "]")
+  stop("predict(terms = ) varies one term: the name of a single column of ",
+       "the predicted process's design matrix, with every other column held ",
+       "at its mean. Got ", got, ". For a grid over more than one covariate, ",
+       "build the design matrix yourself and pass it as `X.0` (one row per ",
+       "prediction unit).", call. = FALSE)
+}
+
+# Terms-based prediction: the response over the range of one design column.
 predict_terms <- function(object, terms, type, quantiles, n_points) {
   model <- object$model
   draws <- object$draws
@@ -857,8 +884,8 @@ predict_terms <- function(object, terms, type, quantiles, n_points) {
   coef_names <- pi_list[[proc_idx]]$coef_names
   beta_offset <- if (proc_idx > 1) sum(vapply(pi_list[1:(proc_idx-1)], function(pi) pi$p, integer(1))) else 0
 
-  # Parse the first term (simple: just a variable name for now)
-  term_var <- terms[1]
+  # Also reached directly from tobs_marginal_effect(), so validate here too.
+  term_var <- .tobs_predict_term(terms)
   col_idx <- match(term_var, coef_names)
   if (is.na(col_idx)) {
     stop(sprintf("term '%s' not found in %s coefficients: %s",
