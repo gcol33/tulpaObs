@@ -348,26 +348,8 @@
   bpsi_idx <- layout$beta_start[1L] + seq_len(p_psi)
   bp_idx   <- layout$beta_start[2L] + seq_len(p_p)
 
-  ok_cells <- which(is.finite(fit$log_marginal))
-  if (length(ok_cells) == 0L) {
-    stop("occu joint: inner Newton failed at every grid cell. ",
-         "Bump control$max.iter or tighten control$tol.", call. = FALSE)
-  }
-  if (length(ok_cells) < length(fit$log_marginal)) {
-    n_bad <- length(fit$log_marginal) - length(ok_cells)
-    warning(sprintf(paste0(
-      "occu joint: dropping %d / %d outer-grid cell(s) ",
-      "whose inner Newton did not converge."),
-      n_bad, length(fit$log_marginal)), call. = FALSE)
-  }
-  w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
-  w     <- w_raw / sum(w_raw)
-
-  if (!any(is.finite(fit$weights) & fit$weights > 0)) {
-    w_full <- numeric(length(fit$log_marginal))
-    w_full[ok_cells] <- w
-    fit$weights <- w_full
-  }
+  oc       <- .tobs_joint_ok_cells(fit, "occu joint")
+  ok_cells <- oc$ok_cells; w <- oc$w; fit <- oc$fit
 
   modes <- fit$modes[ok_cells, , drop = FALSE]
   beta_psi_m <- as.numeric(crossprod(w, modes[, bpsi_idx, drop = FALSE]))
@@ -378,57 +360,17 @@
   n_fields      <- length(field_starts0)
   field_idx     <- as.integer(unlist(lapply(field_starts0,
                                             function(s0) s0 + seq_len(n_cells))))
-  idx_joint <- c(bpsi_idx, bp_idx, field_idx)
-  blocks    <- .joint_inner_vcov_block(fit, idx_joint, n_dense = p_psi + p_p,
-                                       n_threads = ctx$n_threads)
-
-  if (is.null(blocks)) {
-    # Older tulpa without stored per-grid Q: marginal-only diagonal (var-of-means
-    # plus the diagonal inner-Laplace variance), no betas+field cross-covariance.
-    beta_idx_all <- c(bpsi_idx, bp_idx)
-    inner_var    <- .joint_inner_var(fit, beta_idx_all)
-    total_var <- function(modes_block, mean_vec, iv_block) {
-      vom <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
-      mov <- if (is.null(iv_block)) {
-        0
-      } else {
-        iv_k <- iv_block[ok_cells, , drop = FALSE]
-        iv_k[!is.finite(iv_k)] <- 0
-        as.numeric(crossprod(w, iv_k))
-      }
-      pmax(vom + mov, 0)
-    }
-    iv_psi <- if (is.null(inner_var)) NULL
-              else inner_var[, seq_len(p_psi), drop = FALSE]
-    iv_p   <- if (is.null(inner_var)) NULL
-              else inner_var[, p_psi + seq_len(p_p), drop = FALSE]
-    sds_beta <- c(
-      sqrt(total_var(modes[, bpsi_idx, drop = FALSE], beta_psi_m, iv_psi)),
-      sqrt(total_var(modes[, bp_idx,   drop = FALSE], beta_p_m,   iv_p))
-    )
-    beta_block <- diag(sds_beta^2, nrow = p_beta)
-
-    field_modes    <- modes[, field_idx, drop = FALSE]
-    field_at_cell  <- as.numeric(crossprod(w, field_modes))
-    field_var      <- as.numeric(crossprod(w, field_modes^2)) - field_at_cell^2
-    field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
-    Vj <- NULL
-  } else {
-    modes_joint <- modes[, idx_joint, drop = FALSE]
-    mbar_joint  <- as.numeric(crossprod(w, modes_joint))
-    Vj <- .tobs_grid_vcov(modes_joint, w, blocks[ok_cells],
-                          center = mbar_joint, on_missing = "zero",
-                          symmetrize = TRUE)
-    diag_Vj    <- diag(Vj)
-    sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
-    beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
-
-    n_field_cols   <- n_fields * n_cells
-    field_at_cell  <- mbar_joint[p_beta + seq_len(n_field_cols)]
-    field_var      <- diag_Vj[p_beta + seq_len(n_field_cols)]
-    field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
-  }
-  field_sd <- sqrt(pmax(field_var, 0))
+  bfv <- .tobs_joint_beta_field_vcov(
+    fit, modes, w, ok_cells,
+    arms = list(list(idx = bpsi_idx, mean = beta_psi_m),
+                list(idx = bp_idx,   mean = beta_p_m)),
+    field_idx = field_idx, n_cells = n_cells, n_fields = n_fields,
+    n_threads = ctx$n_threads)
+  sds_beta       <- bfv$sds_beta
+  beta_block     <- bfv$beta_block
+  field_demeaned <- bfv$field_demeaned
+  field_sd       <- bfv$field_sd
+  Vj             <- bfv$Vj
 
   sd_psi <- sds_beta[seq_len(p_psi)]
   sd_p   <- sds_beta[p_psi + seq_len(p_p)]
@@ -490,73 +432,28 @@
   names(means) <- par_names
   names(sds)   <- par_names
 
-  # Parameter-surface vcov by the law of total covariance over the outer grid.
-  # The betas carry within + between (beta_block); the hyperparameters ARE the
-  # grid coordinates, so within a cell their variance / cross-covariance with the
-  # betas is zero, leaving only the between (mode-deviation) term, computed
-  # jointly so the cross- and hyper-hyper covariance are retained.
-  n_par <- length(means)
-  V <- matrix(0, n_par, n_par)
-  V[seq_len(p_beta), seq_len(p_beta)] <- beta_block
-  if (length(hyper_names) > 0L) {
-    hyper_idx <- p_beta + seq_along(hyper_names)
-    H    <- do.call(cbind, hyper_vals[hyper_names])
-    H_dm <- sweep(H, 2L, unlist(hyper_means)[hyper_names], "-")
-    if (!is.null(Vj)) {
-      beta_modes <- modes[, c(bpsi_idx, bp_idx), drop = FALSE]
-      B_dm   <- sweep(beta_modes, 2L, means[seq_len(p_beta)], "-")
-      cross  <- crossprod(B_dm * w, H_dm)
-      hyhy   <- crossprod(H_dm * w, H_dm)
-      hyhy   <- (hyhy + t(hyhy)) / 2
-      V[seq_len(p_beta), hyper_idx] <- cross
-      V[hyper_idx, seq_len(p_beta)] <- t(cross)
-      V[hyper_idx, hyper_idx]       <- hyhy
-    } else {
-      diag(V)[hyper_idx] <- sds[hyper_idx]^2
-    }
-  }
-  dimnames(V) <- list(par_names, par_names)
+  V <- .tobs_joint_param_vcov(modes, w, bfv$beta_idx, beta_block, p_beta,
+                              hyper_names, hyper_vals, hyper_means,
+                              means, sds, par_names, Vj)
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
 
-  field_block <- function(b) {
-    idx <- (b - 1L) * n_cells + seq_len(n_cells)
-    list(mean = field_demeaned[idx], sd = field_sd[idx])
-  }
-  field_z_table <- function(blk) {
-    data.frame(cell = seq_len(n_cells), z_mean = blk$mean, z_sd = blk$sd,
-               z_lower = blk$mean - 1.96 * blk$sd,
-               z_upper = blk$mean + 1.96 * blk$sd)
-  }
-  fblocks <- lapply(seq_len(n_fields), field_block)
-
-  field_intercept <- fblocks[[1L]]$mean
-  field_table     <- field_z_table(fblocks[[1L]])
-
-  trend_blocks <- if (n_fields >= 2L) fblocks[-1L] else list()
-  trend_means  <- lapply(trend_blocks, function(b) b$mean)
-  trend_tables <- lapply(trend_blocks, field_z_table)
-  trend_labels <- vapply(coupled_trends, function(tf) tf$weight_label,
-                         character(1))
-  if (length(trend_labels) == length(trend_means)) {
-    names(trend_means)  <- trend_labels
-    names(trend_tables) <- trend_labels
-  }
-  field_trend       <- if (length(trend_means))  trend_means[[1L]]  else NULL
-  trend_field_table <- if (length(trend_tables)) trend_tables[[1L]] else NULL
+  fs <- .tobs_joint_field_split(field_demeaned, field_sd, n_cells, n_fields,
+                                n_fields, coupled_trends)
+  field_intercept   <- fs$intercept
+  field_table       <- fs$field_table
+  trend_means       <- fs$trend_means
+  trend_tables      <- fs$trend_tables
+  trend_labels      <- fs$trend_labels
+  field_trend       <- fs$field_trend
+  trend_field_table <- fs$trend_field_table
 
   # Joint betas+field posterior for field-aware predict (the occupancy psi at a
   # new cell marginalizes the betas + field). Fields are stacked in block order
   # (intercept then trend fields), demeaned to the sum-to-zero convention.
-  field_par_names <- unlist(c(
-    list(paste0("field_", seq_len(n_cells))),
-    lapply(seq_len(n_fields - 1L), function(j) {
-      suffix <- if (n_fields - 1L == 1L) "" else as.character(j)
-      paste0("trend_field", suffix, "_", seq_len(n_cells))
-    })
-  ))
+  field_par_names <- .tobs_joint_field_par_names(n_cells, n_fields - 1L)
   joint_par_names <- c(psi_names, p_names, field_par_names)
   joint_means <- c(beta_psi_m, beta_p_m, field_demeaned)
   names(joint_means) <- joint_par_names
