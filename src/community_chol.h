@@ -16,11 +16,38 @@
 #ifndef TULPAOBS_COMMUNITY_CHOL_H
 #define TULPAOBS_COMMUNITY_CHOL_H
 
+#include <Rcpp.h>
 #include <vector>
 #include <cmath>
 #include <cstddef>
 
 namespace tulpaObs {
+
+// Log-Cholesky coordinate hyperprior scalars for a community covariance: a
+// Normal(logdiag_mean, logdiag_sd) on each log-diagonal and a
+// Normal(0, offdiag_sd) on each off-diagonal. How strongly a community
+// covariance is regularized is one modelling choice for the package, so the
+// defaults live here and every community NUTS target reads them from this one
+// struct rather than restating them.
+struct CommunityCholPri {
+    double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0;
+};
+
+// Read the three scalars off the R-side `pri` list. The list keys exist only
+// here, so renaming one on the R side is a single edit rather than one per
+// community family.
+inline void community_chol_pri_read(const Rcpp::List& pri,
+                                    CommunityCholPri& pr) {
+    pr.logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
+    pr.logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
+    pr.offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
+}
+
+inline CommunityCholPri community_chol_pri_from_list(const Rcpp::List& pri) {
+    CommunityCholPri pr;
+    community_chol_pri_read(pri, pr);
+    return pr;
+}
 
 // exp() on a Cholesky log-diagonal, clamped so a wild NUTS proposal cannot
 // overflow the factor (and hence Sigma = C C') to +inf and poison the log-post.

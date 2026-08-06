@@ -35,6 +35,7 @@
 #include "nmix_spatial_kernel.h"
 #include "nmix_spatial_kernel_bym2.h"
 #include "nmix_linalg.h"
+#include "community_grid_pack.h"
 
 using namespace Rcpp;
 using tulpaObs::clamp_eta;
@@ -465,48 +466,6 @@ OccCommData build_occ_data(const NumericMatrix& X_psi_R, const NumericMatrix& X_
     return d_;
 }
 
-Rcpp::List pack_occ_grid(int d, int field_len, int n_grid,
-                         const std::vector<OccCommResult>& results,
-                         const NumericMatrix& theta_grid_out,
-                         int p_psi, int p_p, int n_spatial) {
-    NumericVector log_marginals(n_grid), log_liks(n_grid);
-    IntegerVector n_iters(n_grid);
-    LogicalVector convergeds(n_grid);
-    NumericMatrix modes(n_grid, d + field_len);
-    Rcpp::List vcov_mu(n_grid), Sigma_psi(n_grid), Sigma_p(n_grid);
-    Rcpp::List blup_psi(n_grid), blup_p(n_grid);
-    for (int k = 0; k < n_grid; ++k) {
-        const OccCommResult& rr = results[k];
-        log_marginals[k] = rr.log_marginal;
-        log_liks[k]      = rr.log_lik;
-        n_iters[k]       = rr.n_iter;
-        convergeds[k]    = rr.converged;
-        for (int j = 0; j < d; ++j)         modes(k, j) = rr.mu(j);
-        for (int j = 0; j < field_len; ++j) modes(k, d + j) = rr.field(j);
-        vcov_mu[k]   = Rcpp::wrap(rr.vcov_mu);
-        Sigma_psi[k] = Rcpp::wrap(rr.Sigma_psi);
-        Sigma_p[k]   = Rcpp::wrap(rr.Sigma_p);
-        blup_psi[k]  = Rcpp::wrap(rr.blup_psi);
-        blup_p[k]    = Rcpp::wrap(rr.blup_p);
-    }
-    return Rcpp::List::create(
-        Rcpp::Named("theta_grid")   = theta_grid_out,
-        Rcpp::Named("log_marginal") = log_marginals,
-        Rcpp::Named("log_lik")      = log_liks,
-        Rcpp::Named("modes")        = modes,
-        Rcpp::Named("vcov_mu")      = vcov_mu,
-        Rcpp::Named("Sigma_psi")    = Sigma_psi,
-        Rcpp::Named("Sigma_p")      = Sigma_p,
-        Rcpp::Named("b_psi")        = blup_psi,
-        Rcpp::Named("b_p")          = blup_p,
-        Rcpp::Named("n_iter")       = n_iters,
-        Rcpp::Named("converged")    = convergeds,
-        Rcpp::Named("p_psi")        = p_psi,
-        Rcpp::Named("p_p")          = p_p,
-        Rcpp::Named("n_spatial")    = n_spatial,
-        Rcpp::Named("n_grid")       = n_grid);
-}
-
 struct OccGridPoint { double tau, rho, log_det_Q_rho, a, b; };
 
 Rcpp::List run_occ_spatial_grid(
@@ -543,8 +502,10 @@ Rcpp::List run_occ_spatial_grid(
             g.tau, g.rho, g.log_det_Q_rho, g.a, g.b,
             mu0, Spsi0, Sp0, max_iter_em, tol_em, inner_max, inner_tol, verbose);
     }
-    return pack_occ_grid(d, field_len, n_grid, results, theta_grid_out,
-                         p_psi, p_p, n_spatial);
+    return tulpaObs::community_pack_grid(
+        d, field_len, n_grid, results, theta_grid_out,
+        &OccCommResult::Sigma_psi, &OccCommResult::blup_psi,
+        "Sigma_psi", "b_psi", "p_psi", p_psi, p_p, n_spatial);
 }
 
 }  // namespace

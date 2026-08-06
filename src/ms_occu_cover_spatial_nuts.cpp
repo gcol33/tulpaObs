@@ -478,9 +478,10 @@ double cpp_ms_ocs_marginal_ll(Rcpp::List spec, Rcpp::NumericVector theta_inner) 
 // the hyperprior scalars. Returns list(lp, grad).
 namespace tulpaObs {
 
-struct PriScalars {
-    double logdiag_mean, logdiag_sd, offdiag_sd,
-           log_tau_mean, log_tau_sd, log_disp_mean, log_disp_sd,
+// The three community-covariance hyperprior scalars plus the six this target
+// adds for the field precision, the cover dispersion, and the BYM2 mixing.
+struct PriScalars : CommunityCholPri {
+    double log_tau_mean, log_tau_sd, log_disp_mean, log_disp_sd,
            logit_h_mean, logit_h_sd;
 };
 
@@ -762,15 +763,15 @@ inline void ms_ocs_full_grad(const std::vector<double>& params,
 }
 
 inline PriScalars ms_ocs_pri_from_list(const Rcpp::List& pri) {
-    return PriScalars{ Rcpp::as<double>(pri["chol_logdiag_mean"]),
-                       Rcpp::as<double>(pri["chol_logdiag_sd"]),
-                       Rcpp::as<double>(pri["chol_offdiag_sd"]),
-                       Rcpp::as<double>(pri["log_tau_mean"]),
-                       Rcpp::as<double>(pri["log_tau_sd"]),
-                       Rcpp::as<double>(pri["log_disp_mean"]),
-                       Rcpp::as<double>(pri["log_disp_sd"]),
-                       Rcpp::as<double>(pri["logit_h_mean"]),
-                       Rcpp::as<double>(pri["logit_h_sd"]) };
+    PriScalars pr;
+    community_chol_pri_read(pri, pr);
+    pr.log_tau_mean  = Rcpp::as<double>(pri["log_tau_mean"]);
+    pr.log_tau_sd    = Rcpp::as<double>(pri["log_tau_sd"]);
+    pr.log_disp_mean = Rcpp::as<double>(pri["log_disp_mean"]);
+    pr.log_disp_sd   = Rcpp::as<double>(pri["log_disp_sd"]);
+    pr.logit_h_mean  = Rcpp::as<double>(pri["logit_h_mean"]);
+    pr.logit_h_sd    = Rcpp::as<double>(pri["logit_h_sd"]);
+    return pr;
 }
 
 } // namespace tulpaObs

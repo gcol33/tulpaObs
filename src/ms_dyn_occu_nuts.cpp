@@ -59,11 +59,6 @@ inline double mdo_clamp(double x) {
 }
 inline double mdo_plogis(double e) { return 1.0 / (1.0 + std::exp(-e)); }
 
-// Log-Cholesky coordinate hyperprior scalars for the community covariances.
-struct MsDynOccuPri {
-    double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0;
-};
-
 // Marshalled per-fit data. X_* are site-level designs (n_sites rows, shared
 // across species). Per species the (n_valid, n_det) [n_sites x n_seasons]
 // detection sufficient statistics drive the HMM emissions; stored flattened
@@ -242,7 +237,7 @@ inline double ms_dyn_occu_fb(const MsDynOccuNutsData& d, int s,
 // NUTS maximises, so this returns the log-posterior and writes the gradient into
 // `g` (length d.total). Mirrors .tobs_ms_dyn_occu_nuts_logpost.
 inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th,
-                                    double sigma_beta, const MsDynOccuPri& pr,
+                                    double sigma_beta, const CommunityCholPri& pr,
                                     double* g) {
     const int P = d.P_tot, S = d.n_species;
     const int p_psi1 = d.p_psi1, p_p = d.p_p, p_gam = d.p_gam, p_eps = d.p_eps;
@@ -423,7 +418,7 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
 struct MsDynOccuNutsModel {
     MsDynOccuNutsData d;
     double sigma_beta = 5.0;
-    MsDynOccuPri pr;
+    CommunityCholPri pr;
 };
 
 inline void ms_dyn_occu_nuts_full_grad(const std::vector<double>& params,
@@ -439,14 +434,6 @@ inline void ms_dyn_occu_nuts_full_grad(const std::vector<double>& params,
     if (log_post_out) *log_post_out = lp;
 }
 
-inline MsDynOccuPri ms_dyn_occu_pri_from_list(const Rcpp::List& pri) {
-    MsDynOccuPri pr;
-    pr.logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
-    pr.logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
-    pr.offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
-    return pr;
-}
-
 } // namespace tulpaObs
 
 // Full-vector joint log-posterior + gradient, the Rcpp cross-check entry for the
@@ -458,7 +445,7 @@ Rcpp::List cpp_ms_dyn_occu_nuts_joint_logpost(Rcpp::List spec,
     tulpaObs::MsDynOccuNutsData d = tulpaObs::ms_dyn_occu_nuts_build_data(spec);
     if ((int) theta.size() != d.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), d.total);
-    tulpaObs::MsDynOccuPri pr = tulpaObs::ms_dyn_occu_pri_from_list(pri);
+    tulpaObs::CommunityCholPri pr = tulpaObs::community_chol_pri_from_list(pri);
     Rcpp::NumericVector grad(d.total);
     const double lp = tulpaObs::ms_dyn_occu_nuts_eval(
         d, theta.begin(), sigma_beta, pr, grad.begin());
@@ -477,7 +464,7 @@ Rcpp::List cpp_ms_dyn_occu_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     tulpaObs::MsDynOccuNutsModel m;
     m.d = tulpaObs::ms_dyn_occu_nuts_build_data(spec);
     m.sigma_beta = sigma_beta;
-    m.pr = tulpaObs::ms_dyn_occu_pri_from_list(pri);
+    m.pr = tulpaObs::community_chol_pri_from_list(pri);
     if ((int) theta0.size() != m.d.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.d.total);
 

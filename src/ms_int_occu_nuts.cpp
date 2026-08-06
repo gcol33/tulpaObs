@@ -46,10 +46,6 @@ static inline double mio_clamp_(double p) {
     return std::min(std::max(p, 1e-12), 1.0 - 1e-12);
 }
 
-struct MsIntOccuPri {
-    double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0;
-};
-
 // Per-(species, source) site summary: n_valid_{d,i} visits, n_det_{d,i} detections
 // (each length n_sites). `any_det` is per-site pooled over sources.
 struct MioSpecSumm {
@@ -141,7 +137,7 @@ inline MsIntOccuNutsData ms_int_occu_nuts_build_data(const Rcpp::List& spec) {
 // Joint log-posterior + gradient over theta = (mu, {z_s}, chol_psi, chol_p1..pD).
 // NUTS maximises; returns the log-posterior (no negation) and writes grad into g.
 inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th,
-                                    double sigma_beta, const MsIntOccuPri& pr,
+                                    double sigma_beta, const CommunityCholPri& pr,
                                     double* g) {
     const int P = d.P_tot, S = d.n_species, p_psi = d.p_psi, D = d.D;
     const int n_sites = d.n_sites;
@@ -319,7 +315,7 @@ inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th
 struct MsIntOccuNutsModel {
     MsIntOccuNutsData d;
     double sigma_beta = 5.0;
-    MsIntOccuPri pr;
+    CommunityCholPri pr;
 };
 
 inline void ms_int_occu_nuts_full_grad(const std::vector<double>& params,
@@ -335,14 +331,6 @@ inline void ms_int_occu_nuts_full_grad(const std::vector<double>& params,
     if (log_post_out) *log_post_out = lp;
 }
 
-inline MsIntOccuPri ms_int_occu_pri_from_list(const Rcpp::List& pri) {
-    MsIntOccuPri pr;
-    pr.logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
-    pr.logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
-    pr.offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
-    return pr;
-}
-
 } // namespace tulpaObs
 
 // Full-vector joint log-posterior + gradient, the Rcpp cross-check entry for the
@@ -354,7 +342,7 @@ Rcpp::List cpp_ms_int_occu_nuts_joint_logpost(Rcpp::List spec,
     tulpaObs::MsIntOccuNutsData d = tulpaObs::ms_int_occu_nuts_build_data(spec);
     if ((int) theta.size() != d.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), d.total);
-    tulpaObs::MsIntOccuPri pr = tulpaObs::ms_int_occu_pri_from_list(pri);
+    tulpaObs::CommunityCholPri pr = tulpaObs::community_chol_pri_from_list(pri);
     Rcpp::NumericVector grad(d.total);
     const double lp = tulpaObs::ms_int_occu_nuts_eval(
         d, theta.begin(), sigma_beta, pr, grad.begin());
@@ -372,7 +360,7 @@ Rcpp::List cpp_ms_int_occu_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     tulpaObs::MsIntOccuNutsModel m;
     m.d = tulpaObs::ms_int_occu_nuts_build_data(spec);
     m.sigma_beta = sigma_beta;
-    m.pr = tulpaObs::ms_int_occu_pri_from_list(pri);
+    m.pr = tulpaObs::community_chol_pri_from_list(pri);
     if ((int) theta0.size() != m.d.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.d.total);
 

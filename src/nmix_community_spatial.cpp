@@ -44,6 +44,7 @@
 #include "nmix_kernel.h"
 #include "nmix_community_oracle.h"
 #include "nmix_linalg.h"
+#include "community_grid_pack.h"
 #include "nmix_progress.h"
 #include "nmix_spatial_kernel.h"        // nmix_icar/car_proper prior, Q-adds, centering
 #include "nmix_spatial_kernel_bym2.h"   // bym2 prior, Q+I-adds, centering
@@ -652,51 +653,6 @@ std::vector<int> resolve_map(const Rcpp::IntegerVector& map_R, int n_sites,
     return map;
 }
 
-// Pack the per-grid EM results into the return list shared by all field kinds.
-Rcpp::List pack_grid(FieldKind kind, int d, int field_len, int n_grid,
-                     const std::vector<CommSpatialResult>& results,
-                     const Rcpp::NumericMatrix& theta_grid_out,
-                     int p_lam, int p_p, int n_spatial) {
-    Rcpp::NumericVector log_marginals(n_grid), log_liks(n_grid), boundary(n_grid);
-    Rcpp::IntegerVector n_iters(n_grid);
-    Rcpp::LogicalVector convergeds(n_grid);
-    Rcpp::NumericMatrix modes(n_grid, d + field_len);   // (mu, field) per grid
-    Rcpp::List vcov_mu(n_grid), Sigma_l(n_grid), Sigma_p(n_grid);
-    Rcpp::List blup_l(n_grid), blup_p(n_grid);
-    for (int k = 0; k < n_grid; ++k) {
-        const CommSpatialResult& rr = results[k];
-        log_marginals[k] = rr.log_marginal;
-        log_liks[k]      = rr.log_lik;
-        boundary[k]      = rr.boundary_max;
-        n_iters[k]       = rr.n_iter;
-        convergeds[k]    = rr.converged;
-        for (int j = 0; j < d; ++j)         modes(k, j) = rr.mu(j);
-        for (int j = 0; j < field_len; ++j) modes(k, d + j) = rr.field(j);
-        vcov_mu[k] = Rcpp::wrap(rr.vcov_mu);
-        Sigma_l[k] = Rcpp::wrap(rr.Sigma_l);
-        Sigma_p[k] = Rcpp::wrap(rr.Sigma_p);
-        blup_l[k]  = Rcpp::wrap(rr.blup_l);
-        blup_p[k]  = Rcpp::wrap(rr.blup_p);
-    }
-    return Rcpp::List::create(
-        Rcpp::Named("theta_grid")   = theta_grid_out,
-        Rcpp::Named("log_marginal") = log_marginals,
-        Rcpp::Named("log_lik")      = log_liks,
-        Rcpp::Named("modes")        = modes,
-        Rcpp::Named("vcov_mu")      = vcov_mu,
-        Rcpp::Named("Sigma_lambda") = Sigma_l,
-        Rcpp::Named("Sigma_p")      = Sigma_p,
-        Rcpp::Named("b_lambda")     = blup_l,
-        Rcpp::Named("b_p")          = blup_p,
-        Rcpp::Named("n_iter")       = n_iters,
-        Rcpp::Named("converged")    = convergeds,
-        Rcpp::Named("boundary_max") = boundary,
-        Rcpp::Named("p_lambda")     = p_lam,
-        Rcpp::Named("p_p")          = p_p,
-        Rcpp::Named("n_spatial")    = n_spatial,
-        Rcpp::Named("n_grid")       = n_grid);
-}
-
 // One outer-grid point: the field hyperparameters (tau / rho / log|Q(rho)| and
 // the BYM2 mixing loadings a, b) plus the NB size r that the inner Laplace-EM
 // conditions on. Each entry builds a plan of these in its own grid-nesting
@@ -705,8 +661,9 @@ struct CommGridPoint { double tau, rho, log_det_Q_rho, a, b, r; };
 
 // Shared outer-grid driver for the community spatial nested-Laplace-EM. Owns the
 // oracle / map / init unpacking, the grid walk, progress plumbing, and the
-// pack_grid output assembly; each field kind supplies only its FieldKind, its
-// field length, and the per-point plan + theta_grid_out it filled. community_
+// community_pack_grid output assembly; each field kind supplies only its
+// FieldKind, its field length, and the per-point plan + theta_grid_out it
+// filled. community_
 // spatial_em already dispatches the field prior on FieldKind, so adding a field
 // kind is a new plan-builder, not a new copy of this loop.
 Rcpp::List run_community_spatial_grid(
@@ -759,8 +716,11 @@ Rcpp::List run_community_spatial_grid(
         if (gp) gp->tick();
     }
     if (gp) gp->finish();
-    return pack_grid(kind, d, field_len, n_grid, results,
-                     theta_grid_out, p_lam, p_p, n_spatial);
+    return tulpaObs::community_pack_grid(
+        d, field_len, n_grid, results, theta_grid_out,
+        &CommSpatialResult::Sigma_l, &CommSpatialResult::blup_l,
+        "Sigma_lambda", "b_lambda", "p_lambda", p_lam, p_p, n_spatial,
+        &CommSpatialResult::boundary_max);
 }
 
 }  // namespace
@@ -984,6 +944,9 @@ Rcpp::List cpp_nmix_community_spatial_spde(
         if (gp) gp->tick();
     }
     if (gp) gp->finish();
-    return pack_grid(FieldKind::SPDE, d, n_mesh, n_grid, results,
-                     theta_grid_R, p_lam, p_p, n_mesh);
+    return tulpaObs::community_pack_grid(
+        d, n_mesh, n_grid, results, theta_grid_R,
+        &CommSpatialResult::Sigma_l, &CommSpatialResult::blup_l,
+        "Sigma_lambda", "b_lambda", "p_lambda", p_lam, p_p, n_mesh,
+        &CommSpatialResult::boundary_max);
 }

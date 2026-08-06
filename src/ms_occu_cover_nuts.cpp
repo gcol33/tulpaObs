@@ -42,8 +42,9 @@ using namespace Rcpp;
 
 namespace tulpaObs {
 
-struct MsOccuCoverPri {
-    double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0;
+// The three community-covariance hyperprior scalars plus the two this family
+// adds for the shared cover log-dispersion.
+struct MsOccuCoverPri : CommunityCholPri {
     double log_disp_mean = 0.0, log_disp_sd = 2.0;
 };
 
@@ -493,9 +494,7 @@ inline void ms_occu_cover_nuts_full_grad(const std::vector<double>& params,
 
 inline MsOccuCoverPri ms_occu_cover_pri_from_list(const Rcpp::List& pri) {
     MsOccuCoverPri pr;
-    pr.logdiag_mean  = Rcpp::as<double>(pri["chol_logdiag_mean"]);
-    pr.logdiag_sd    = Rcpp::as<double>(pri["chol_logdiag_sd"]);
-    pr.offdiag_sd    = Rcpp::as<double>(pri["chol_offdiag_sd"]);
+    community_chol_pri_read(pri, pr);
     if (pri.containsElementNamed("log_disp_mean"))
         pr.log_disp_mean = Rcpp::as<double>(pri["log_disp_mean"]);
     if (pri.containsElementNamed("log_disp_sd"))

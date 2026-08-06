@@ -51,15 +51,21 @@
   chol_psi_off <- P + n_species * P
   chol_p_off   <- chol_psi_off + q_psi
   total <- chol_p_off + q_p
+  psi <- seq_len(p_psi)
+  p   <- p_psi + seq_len(p_p)
+  chol_psi <- chol_psi_off + seq_len(q_psi)
+  chol_p   <- chol_p_off   + seq_len(q_p)
   list(
     P = P, p_psi = p_psi, p_p = p_p, n_species = n_species,
     q_psi = q_psi, q_p = q_p,
-    psi = seq_len(p_psi),
-    p   = p_psi + seq_len(p_p),
+    psi = psi,
+    p   = p,
     mu  = seq_len(P),
     b_off = b_off,
-    chol_psi = chol_psi_off + seq_len(q_psi),
-    chol_p   = chol_p_off   + seq_len(q_p),
+    chol_psi = chol_psi,
+    chol_p   = chol_p,
+    arms = list(.ms_ocs_arm(psi, chol_psi, p_psi),
+                .ms_ocs_arm(p,   chol_p,   p_p)),
     total = total)
 }
 
@@ -147,20 +153,6 @@
 
   if (!grad) return(list(lp = lp))
   list(lp = lp, grad = g)
-}
-
-# Reconstruct the per-species deviation matrix b (S x P) from a packed coordinate
-# vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
-.tobs_ms_occu_nuts_b_from_z <- function(theta, lay) {
-  C_psi <- .ms_ocs_chol_unpack(theta[lay$chol_psi], lay$p_psi)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
-  B <- matrix(0, lay$n_species, lay$P)
-  for (s in seq_len(lay$n_species)) {
-    z <- theta[.ms_ocs_b_idx(lay, s)]
-    B[s, lay$psi] <- as.numeric(C_psi %*% z[lay$psi])
-    B[s, lay$p]   <- as.numeric(C_p   %*% z[lay$p])
-  }
-  B
 }
 
 
@@ -304,7 +296,7 @@
   # Per-species BLUPs = posterior mean of the reconstructed deviation b = C z.
   B_bar <- matrix(0, pieces$S, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .tobs_ms_occu_nuts_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
   B_bar <- B_bar / nrow(draws)
   b_list <- lapply(seq_len(pieces$S), function(s) B_bar[s, ])
 

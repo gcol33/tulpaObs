@@ -46,8 +46,6 @@ namespace tulpaObs {
 // layout (community means + per-species deviations only).
 enum MsCountFamily { MSC_POIS = 0, MSC_NB = 1, MSC_GAUSS = 2, MSC_BERN = 3 };
 
-struct MsCountPri { double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0; };
-
 struct MsCountNutsData {
     int n_sites = 0, n_species = 0, p_beta = 0;
     int family = MSC_POIS;
@@ -113,7 +111,7 @@ inline MsCountNutsData ms_count_nuts_build_data(const Rcpp::List& spec) {
 // [chol_logr], [log_phi]). NUTS maximises. Mirrors .tobs_ms_count_nuts_logpost.
 inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
                                  double sigma_beta, double sigma_logr,
-                                 const MsCountPri& pr, double* g) {
+                                 const CommunityCholPri& pr, double* g) {
     const int pb = d.p_beta, S = d.n_species, N = d.n_sites, P = d.P;
     const bool nb = (d.family == MSC_NB), gauss = (d.family == MSC_GAUSS);
     const bool bern = (d.family == MSC_BERN);
@@ -266,7 +264,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
 struct MsCountNutsModel {
     MsCountNutsData d;
     double sigma_beta = 10.0, sigma_logr = 1.5;
-    MsCountPri pr;
+    CommunityCholPri pr;
 };
 
 inline void ms_count_nuts_full_grad(const std::vector<double>& params,
@@ -281,14 +279,6 @@ inline void ms_count_nuts_full_grad(const std::vector<double>& params,
     if (log_post_out) *log_post_out = lp;
 }
 
-inline MsCountPri ms_count_pri_from_list(const Rcpp::List& pri) {
-    MsCountPri pr;
-    pr.logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
-    pr.logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
-    pr.offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
-    return pr;
-}
-
 } // namespace tulpaObs
 
 // [[Rcpp::export]]
@@ -298,7 +288,7 @@ Rcpp::List cpp_ms_count_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector 
     tulpaObs::MsCountNutsData d = tulpaObs::ms_count_nuts_build_data(spec);
     if ((int) theta.size() != d.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), d.total);
-    tulpaObs::MsCountPri pr = tulpaObs::ms_count_pri_from_list(pri);
+    tulpaObs::CommunityCholPri pr = tulpaObs::community_chol_pri_from_list(pri);
     Rcpp::NumericVector grad(d.total);
     const double lp = tulpaObs::ms_count_nuts_eval(
         d, theta.begin(), sigma_beta, sigma_logr, pr, grad.begin());
@@ -314,7 +304,7 @@ Rcpp::List cpp_ms_count_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     tulpaObs::MsCountNutsModel m;
     m.d = tulpaObs::ms_count_nuts_build_data(spec);
     m.sigma_beta = sigma_beta; m.sigma_logr = sigma_logr;
-    m.pr = tulpaObs::ms_count_pri_from_list(pri);
+    m.pr = tulpaObs::community_chol_pri_from_list(pri);
     if ((int) theta0.size() != m.d.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.d.total);
 

@@ -4,7 +4,7 @@
 # kernel does the log-Cholesky reconstruction and the per-(species, site)
 # marginal (compute_nmix_site) internally, parallel over draws. Because both call
 # the identical per-site kernel, the batched result is BYTE-IDENTICAL to the R
-# loop (the oracle here, via .tobs_ms_abun_nuts_b_from_z) and thread invariant.
+# loop (the oracle here, via .ms_ocs_b_from_z) and thread invariant.
 
 .mk_ms_nmix <- function(is_nb, n_species = 4L, n_sites = 12L, p_lam = 2L,
                         p_p = 2L, M = 20L, seed = 101) {
@@ -27,7 +27,7 @@
                                         if (d$is_nb) "NB" else "P", d$K_max)
   out <- matrix(0, M, S * d$n_sites)
   for (m in seq_len(M)) {
-    mu <- d$draws[m, lay$mu]; B <- .tobs_ms_abun_nuts_b_from_z(d$draws[m, ], lay)
+    mu <- d$draws[m, lay$mu]; B <- .ms_ocs_b_from_z(d$draws[m, ], lay)
     for (s in seq_len(S)) {
       b_s <- B[s, ]; r <- if (d$is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
       out[m, (s - 1L) * d$n_sites + seq_len(d$n_sites)] <-

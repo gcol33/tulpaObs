@@ -64,6 +64,9 @@
        occ = occ, p = p, pos = pos, mu = seq_len(P), b_off = b_off,
        q_occ = q_occ, q_p = q_p, q_pos = q_pos,
        chol_occ = chol_occ, chol_p = chol_p, chol_pos = chol_pos,
+       arms = list(.ms_ocs_arm(occ, chol_occ, P_occ),
+                   .ms_ocs_arm(p,   chol_p,   P_p),
+                   .ms_ocs_arm(pos, chol_pos, P_pos)),
        log_disp = log_disp, total = coff)
 }
 
@@ -156,22 +159,6 @@
 
   if (!grad) return(list(lp = lp))
   list(lp = lp, grad = g)
-}
-
-# Reconstruct the per-species deviation matrix b (S x P) from a packed coordinate
-# vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
-.tobs_ms_occu_cover_nuts_b_from_z <- function(theta, lay) {
-  C_occ <- .ms_ocs_chol_unpack(theta[lay$chol_occ], lay$P_occ)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$P_p)
-  C_pos <- .ms_ocs_chol_unpack(theta[lay$chol_pos], lay$P_pos)
-  B <- matrix(0, lay$n_species, lay$P)
-  for (s in seq_len(lay$n_species)) {
-    z <- theta[.ms_ocs_b_idx(lay, s)]
-    B[s, lay$occ] <- as.numeric(C_occ %*% z[lay$occ])
-    B[s, lay$p]   <- as.numeric(C_p   %*% z[lay$p])
-    B[s, lay$pos] <- as.numeric(C_pos %*% z[lay$pos])
-  }
-  B
 }
 
 
@@ -349,7 +336,7 @@
 
   B_bar <- matrix(0, S, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .tobs_ms_occu_cover_nuts_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
   B_bar <- B_bar / nrow(draws)
   b_list_hat <- lapply(seq_len(S), function(s) B_bar[s, ])
 
@@ -419,6 +406,11 @@
        mu_coef = mu_coef, mu_ld = mu_ld, b_off = b_off,
        q_occ = q_occ, q_p = q_p, q_pos = q_pos,
        chol_occ = chol_occ, chol_p = chol_p, chol_pos = chol_pos,
+       # The coefficient arms only; the log-dispersion arm is reconstructed
+       # against its own community mean, so it is handled by its caller.
+       arms = list(.ms_ocs_arm(occ, chol_occ, P_occ),
+                   .ms_ocs_arm(p,   chol_p,   P_p),
+                   .ms_ocs_arm(pos, chol_pos, P_pos)),
        chol_ld = chol_ld, total = coff)
 }
 
@@ -518,22 +510,15 @@
 # Reconstruct the per-species coefficient deviations (S x P_coef) AND the
 # per-species log-dispersions from a dispersion-RE draw.
 .tobs_ms_occu_cover_re_disp_b_from_z <- function(theta, lay) {
-  C_occ <- .ms_ocs_chol_unpack(theta[lay$chol_occ], lay$P_occ)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$P_p)
-  C_pos <- .ms_ocs_chol_unpack(theta[lay$chol_pos], lay$P_pos)
+  B <- .ms_ocs_b_from_z(theta, lay, n_coef = lay$P_coef,
+                        b_idx = .tobs_ms_occu_cover_re_disp_b_idx)
+  # The log-dispersion arm is centred on its own community mean rather than on
+  # the coefficient means, so it is reconstructed here rather than as an arm.
   sigma_ld <- exp(theta[lay$chol_ld])
-  mu_ld <- theta[lay$mu_ld]
-  S <- lay$n_species
-  B  <- matrix(0, S, lay$P_coef)
-  ld <- numeric(S)
-  for (s in seq_len(S)) {
-    z <- theta[.tobs_ms_occu_cover_re_disp_b_idx(lay, s)]
-    B[s, lay$occ] <- as.numeric(C_occ %*% z[lay$occ])
-    B[s, lay$p]   <- as.numeric(C_p   %*% z[lay$p])
-    B[s, lay$pos] <- as.numeric(C_pos %*% z[lay$pos])
-    ld[s] <- mu_ld + sigma_ld * z[lay$ld]
-  }
-  list(B = B, log_disp = ld)
+  z_ld <- vapply(seq_len(lay$n_species),
+                 function(s) theta[.tobs_ms_occu_cover_re_disp_b_idx(lay, s)][lay$ld],
+                 numeric(1))
+  list(B = B, log_disp = theta[lay$mu_ld] + sigma_ld * z_ld)
 }
 
 # Pack a Laplace-EM mode into the dispersion-RE NUTS vector. `ld` is the shared

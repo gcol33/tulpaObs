@@ -56,17 +56,28 @@
   chol_p_off   <- chol_lam_off + q_lam
   chol_logr_off <- chol_p_off + q_p
   total <- chol_logr_off + q_logr
+  lambda <- seq_len(p_lam)
+  p      <- p_lam + seq_len(p_p)
+  logr   <- if (is_nb) p_lam + p_p + 1L else integer(0)
+  chol_lam  <- chol_lam_off + seq_len(q_lam)
+  chol_p    <- chol_p_off   + seq_len(q_p)
+  chol_logr <- if (is_nb) chol_logr_off + seq_len(q_logr) else integer(0)
+  arms <- list(.ms_ocs_arm(lambda, chol_lam, p_lam),
+               .ms_ocs_arm(p,      chol_p,   p_p))
+  # The per-species log-size is a one-dimensional community arm.
+  if (is_nb) arms <- c(arms, list(.ms_ocs_arm(logr, chol_logr, 1L)))
   list(
     P = P, p_lam = p_lam, p_p = p_p, n_species = n_species, is_nb = isTRUE(is_nb),
     q_lam = q_lam, q_p = q_p, q_logr = q_logr,
-    lambda = seq_len(p_lam),
-    p      = p_lam + seq_len(p_p),
-    logr   = if (is_nb) p_lam + p_p + 1L else integer(0),
+    lambda = lambda,
+    p      = p,
+    logr   = logr,
     mu     = seq_len(P),
     b_off  = b_off,
-    chol_lam  = chol_lam_off  + seq_len(q_lam),
-    chol_p    = chol_p_off    + seq_len(q_p),
-    chol_logr = if (is_nb) chol_logr_off + seq_len(q_logr) else integer(0),
+    chol_lam  = chol_lam,
+    chol_p    = chol_p,
+    chol_logr = chol_logr,
+    arms      = arms,
     total = total)
 }
 
@@ -219,28 +230,12 @@
   out
 }
 
-# Reconstruct the per-species deviation matrix b (S x P) from a packed coordinate
-# vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
-.tobs_ms_abun_nuts_b_from_z <- function(theta, lay) {
-  C_lam <- .ms_ocs_chol_unpack(theta[lay$chol_lam], lay$p_lam)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
-  C_lr  <- if (lay$is_nb) exp(theta[lay$chol_logr]) else NULL
-  B <- matrix(0, lay$n_species, lay$P)
-  for (s in seq_len(lay$n_species)) {
-    z <- theta[.ms_ocs_b_idx(lay, s)]
-    B[s, lay$lambda] <- as.numeric(C_lam %*% z[lay$lambda])
-    B[s, lay$p]      <- as.numeric(C_p   %*% z[lay$p])
-    if (lay$is_nb) B[s, lay$logr] <- C_lr * z[lay$logr]
-  }
-  B
-}
-
 # Data-only log-likelihood (no priors) at a packed coordinate vector, summed over
 # (species, site). Used for the fit's reported log_lik (the scale-invariant value
 # logLik() / glance() read) at the posterior-mean coefficients.
 .tobs_ms_abun_nuts_data_loglik <- function(theta, margs, lay) {
   mu <- theta[lay$mu]; tot <- 0
-  B  <- .tobs_ms_abun_nuts_b_from_z(theta, lay)
+  B  <- .ms_ocs_b_from_z(theta, lay)
   for (s in seq_len(lay$n_species)) {
     b_s <- B[s, ]
     r   <- if (lay$is_nb) exp(mu[lay$logr] + b_s[lay$logr]) else Inf
@@ -397,7 +392,7 @@
   # draw with that draw's Cholesky factor before averaging).
   B_bar <- matrix(0, n_species, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .tobs_ms_abun_nuts_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
   B_bar <- B_bar / nrow(draws)
   b_lambda <- B_bar[, lay$lambda, drop = FALSE]
   b_p      <- B_bar[, lay$p,      drop = FALSE]
@@ -560,7 +555,7 @@
   Sigma_p      <- .ms_ocs_sig_mean(draws, lay$chol_p,   lay$p_p)
   B_bar <- matrix(0, n_species, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .tobs_ms_abun_nuts_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
   B_bar <- B_bar / nrow(draws)
 
   # Field posterior mean f = L %*% mean(raw) (n_raw whitened coordinates).

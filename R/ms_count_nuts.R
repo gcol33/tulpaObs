@@ -33,15 +33,22 @@
   q_logr <- if (is_nb) 1L else 0L
   n_phi  <- if (is_gauss) n_species else 0L
   chol_beta <- chol_beta_off + seq_len(q_beta)
+  beta      <- seq_len(p_beta)
+  logr      <- if (is_nb) p_beta + 1L else integer(0)
+  chol_logr <- if (is_nb) chol_logr_off + seq_len(q_logr) else integer(0)
+  arms <- list(.ms_ocs_arm(beta, chol_beta, p_beta))
+  # The per-species log-size is a one-dimensional community arm.
+  if (is_nb) arms <- c(arms, list(.ms_ocs_arm(logr, chol_logr, 1L)))
   list(
     family = family, is_nb = is_nb, is_gauss = is_gauss,
     p_beta = p_beta, P = P, n_species = n_species, q_beta = q_beta,
-    beta  = seq_len(p_beta),
-    logr  = if (is_nb) p_beta + 1L else integer(0),
+    beta  = beta,
+    logr  = logr,
     mu    = seq_len(P), b_off = b_off,
     chol_beta = chol_beta,
     chol      = chol_beta,                          # backward-compat alias
-    chol_logr = if (is_nb) chol_logr_off + seq_len(q_logr) else integer(0),
+    chol_logr = chol_logr,
+    arms      = arms,
     logphi    = if (is_gauss) logphi_off + seq_len(n_phi) else integer(0),
     total = chol_beta_off + q_beta + q_logr + n_phi)
 }
@@ -166,19 +173,6 @@
   list(lp = lp, grad = g)
 }
 
-# Per-species deviation matrix B (S x P) from a packed vector, b = C z per arm.
-.tobs_ms_count_nuts_b_from_z <- function(theta, lay) {
-  C_beta <- .ms_ocs_chol_unpack(theta[lay$chol_beta], lay$p_beta)
-  C_lr   <- if (lay$is_nb) exp(theta[lay$chol_logr]) else NULL
-  B <- matrix(0, lay$n_species, lay$P)
-  for (s in seq_len(lay$n_species)) {
-    z <- theta[.ms_ocs_b_idx(lay, s)]
-    B[s, lay$beta] <- as.numeric(C_beta %*% z[lay$beta])
-    if (lay$is_nb) B[s, lay$logr] <- C_lr * z[lay$logr]
-  }
-  B
-}
-
 # Pack a community Laplace-EM warm start into theta: the means, each arm's
 # covariance as log-Cholesky, the whitened per-species deviations z = C^{-1} b,
 # and (gaussian) the per-species log residual variances.
@@ -290,7 +284,7 @@
   logr_acc <- numeric(S); sigma_logr_acc <- 0; phi_acc <- numeric(S)
   for (r in seq_len(nd)) {
     th <- draws_all[r, ]
-    Bd <- .tobs_ms_count_nuts_b_from_z(th, lay)
+    Bd <- .ms_ocs_b_from_z(th, lay)
     B_acc <- B_acc + Bd[, lay$beta, drop = FALSE]
     C <- .ms_ocs_chol_unpack(th[lay$chol_beta], P_beta); Sig_acc <- Sig_acc + tcrossprod(C)
     if (is_nb) {

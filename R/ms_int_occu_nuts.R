@@ -55,9 +55,14 @@
   chol_p   <- vector("list", D)
   for (d in seq_len(D)) { chol_p[[d]] <- coff + seq_len(q_p[d]); coff <- coff + q_p[d] }
 
+  arms <- c(list(.ms_ocs_arm(psi, chol_psi, P_psi)),
+            lapply(seq_len(D),
+                   function(d) .ms_ocs_arm(p_slices[[d]], chol_p[[d]], P_p[d])))
+
   list(P = P, P_psi = P_psi, P_p = P_p, D = D, n_species = n_species,
        psi = psi, p = p_slices, mu = seq_len(P), b_off = b_off,
        q_psi = q_psi, q_p = q_p, chol_psi = chol_psi, chol_p = chol_p,
+       arms = arms,
        total = coff)
 }
 
@@ -145,23 +150,6 @@
 
   if (!grad) return(list(lp = lp))
   list(lp = lp, grad = g)
-}
-
-# Reconstruct the per-species deviation matrix b (S x P) from a packed coordinate
-# vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
-.tobs_ms_int_occu_nuts_b_from_z <- function(theta, lay) {
-  D <- lay$D
-  C_psi <- .ms_ocs_chol_unpack(theta[lay$chol_psi], lay$P_psi)
-  C_p   <- lapply(seq_len(D),
-                  function(d) .ms_ocs_chol_unpack(theta[lay$chol_p[[d]]], lay$P_p[d]))
-  B <- matrix(0, lay$n_species, lay$P)
-  for (s in seq_len(lay$n_species)) {
-    z <- theta[.ms_ocs_b_idx(lay, s)]
-    B[s, lay$psi] <- as.numeric(C_psi %*% z[lay$psi])
-    for (d in seq_len(D))
-      B[s, lay$p[[d]]] <- as.numeric(C_p[[d]] %*% z[lay$p[[d]]])
-  }
-  B
 }
 
 # Pack a community Laplace-EM fit into the full NUTS coordinate vector: the
@@ -305,7 +293,7 @@
 
   B_bar <- matrix(0, S, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .tobs_ms_int_occu_nuts_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
   B_bar <- B_bar / nrow(draws)
   b_list <- lapply(seq_len(S), function(s) B_bar[s, ])
 

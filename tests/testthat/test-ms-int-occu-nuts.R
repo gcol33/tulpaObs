@@ -93,7 +93,7 @@ test_that("ms_int_occu b_from_z round-trips a whitened deviation matrix", {
   Z <- matrix(rnorm(S * lay$P), S, lay$P)
   for (s in seq_len(S)) theta[tulpaObs:::.ms_ocs_b_idx(lay, s)] <- Z[s, ]
 
-  B <- tulpaObs:::.tobs_ms_int_occu_nuts_b_from_z(theta, lay)
+  B <- tulpaObs:::.ms_ocs_b_from_z(theta, lay)
   # Recompute the expected b per arm and compare.
   exp_B <- matrix(0, S, lay$P)
   for (s in seq_len(S)) {

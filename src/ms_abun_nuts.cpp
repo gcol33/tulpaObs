@@ -58,11 +58,6 @@ using namespace Rcpp;
 
 namespace tulpaObs {
 
-// Log-Cholesky coordinate hyperprior scalars for the community covariances.
-struct MsNmixPri {
-    double logdiag_mean = 0.0, logdiag_sd = 1.5, offdiag_sd = 1.0;
-};
-
 // Marshalled per-fit data for the community N-mixture NUTS target. The long form
 // is what .tobs_ms_nmix_longform() produces: y / site_idx / species_idx in the
 // stacked per-(species, site, visit) order, X_lambda site-level (n_sites rows,
@@ -192,7 +187,7 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
 // gradient into `g` (length d.total). Mirrors .tobs_ms_abun_nuts_logpost.
 inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
                                 double sigma_beta, double sigma_logr,
-                                const MsNmixPri& pr, double* g) {
+                                const CommunityCholPri& pr, double* g) {
     const int P = d.P_tot, S = d.n_species, p_lam = d.p_lam, p_p = d.p_p;
     const bool nb = d.is_nb;
     for (int j = 0; j < d.total; ++j) g[j] = 0.0;
@@ -423,7 +418,7 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
 struct MsNmixNutsModel {
     MsNmixNutsData d;
     double sigma_beta = 10.0, sigma_logr = 1.5;
-    MsNmixPri pr;
+    CommunityCholPri pr;
 };
 
 // FullGradFn: log-posterior + gradient over the entire parameter vector.
@@ -439,14 +434,6 @@ inline void ms_abun_nuts_full_grad(const std::vector<double>& params,
     if (log_post_out) *log_post_out = lp;
 }
 
-inline MsNmixPri ms_abun_pri_from_list(const Rcpp::List& pri) {
-    MsNmixPri pr;
-    pr.logdiag_mean = Rcpp::as<double>(pri["chol_logdiag_mean"]);
-    pr.logdiag_sd   = Rcpp::as<double>(pri["chol_logdiag_sd"]);
-    pr.offdiag_sd   = Rcpp::as<double>(pri["chol_offdiag_sd"]);
-    return pr;
-}
-
 } // namespace tulpaObs
 
 // Full-vector joint log-posterior + gradient, the Rcpp cross-check entry for the
@@ -458,7 +445,7 @@ Rcpp::List cpp_ms_abun_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector t
     tulpaObs::MsNmixNutsData d = tulpaObs::ms_abun_nuts_build_data(spec);
     if ((int) theta.size() != d.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), d.total);
-    tulpaObs::MsNmixPri pr = tulpaObs::ms_abun_pri_from_list(pri);
+    tulpaObs::CommunityCholPri pr = tulpaObs::community_chol_pri_from_list(pri);
     Rcpp::NumericVector grad(d.total);
     const double lp = tulpaObs::ms_abun_nuts_eval(
         d, theta.begin(), sigma_beta, sigma_logr, pr, grad.begin());
@@ -478,7 +465,7 @@ Rcpp::List cpp_ms_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     tulpaObs::MsNmixNutsModel m;
     m.d = tulpaObs::ms_abun_nuts_build_data(spec);
     m.sigma_beta = sigma_beta; m.sigma_logr = sigma_logr;
-    m.pr = tulpaObs::ms_abun_pri_from_list(pri);
+    m.pr = tulpaObs::community_chol_pri_from_list(pri);
     if ((int) theta0.size() != m.d.total)
         Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.d.total);
 
