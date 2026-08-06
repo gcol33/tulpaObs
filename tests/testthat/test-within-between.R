@@ -1,4 +1,4 @@
-# Tests for within_between() (Phase 1d Mundlak helper).
+# Tests for within_between(), the Mundlak within/between decomposition helper.
 
 test_that("within_between() arithmetic is exact and group-respecting", {
   set.seed(1)

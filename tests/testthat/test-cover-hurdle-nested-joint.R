@@ -1,4 +1,4 @@
-# Joint nested-Laplace cover_hurdle smoke test (Phase 1c first cut).
+# Joint nested-Laplace cover_hurdle smoke test.
 
 simulate_joint_lognormal_cover <- function(N = 250, n_s = 30,
                                            sigma = 0.6, rho = 0.7,

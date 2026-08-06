@@ -61,7 +61,7 @@ test_that("predict() respects the beta back-transform", {
                expected_p * expected_mu)
 })
 
-test_that("cover(response='beta') matches a separate-fit pipeline that mirrors Michael Glaser's INLA hurdle", {
+test_that("cover(response='beta') matches a separate-fit pipeline mirroring the reference INLA hurdle", {
   skip_if_not_installed("betareg")
 
   sim <- simulate_beta_cover(N = 800, seed = 19)

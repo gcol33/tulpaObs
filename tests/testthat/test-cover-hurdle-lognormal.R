@@ -1,4 +1,4 @@
-# Tests for cover(response = "lognormal") -- Phase 1a.
+# Tests for cover(response = "lognormal").
 
 test_that("cover(response = 'lognormal') flips to working", {
   fam <- cover(response = "lognormal")

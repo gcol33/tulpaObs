@@ -1,5 +1,5 @@
-# Phase 3.5 — simplified-Laplace skewness on the integrated multi-source
-# occupancy family (shared psi via FD d3 along Sigma[, j] in beta-space).
+# Simplified-Laplace skewness on the integrated multi-source occupancy family
+# (shared psi via FD d3 along Sigma[, j] in beta-space).
 
 # -----------------------------------------------------------------------------
 # Helper: build a small int_occu test data set with three detection sources,

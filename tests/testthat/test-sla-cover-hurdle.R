@@ -1,4 +1,4 @@
-# Phase 3.5 SLA regression tests for cover(response = "beta") and
+# SLA regression tests for cover(response = "beta") and
 # cover(response = "lognormal").
 #
 # See R/sla_cover_hurdle.R and R/simplified_laplace.R.
