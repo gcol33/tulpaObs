@@ -260,8 +260,11 @@
   ), class = "tobs_model")
 }
 
-# Reject formulas containing structured terms (bym2, icar, car, gp, etc.).
-# v1 of occu_cover is non-spatial; spatial sharing across the three arms is v2.
+# Reject formulas containing structured terms (bym2, icar, car, gp, etc.) on the
+# non-spatial backends. A field shared across the psi and cover arms is fitted by
+# the nested-Laplace joint engine, which resolves its own terms through
+# .occu_cover_spatial_fields(); this guard is what keeps a structured term from
+# being silently dropped on the routes that cannot carry one.
 .occu_cover_reject_structured <- function(formula, arm) {
   if (is.null(formula)) return(invisible(NULL))
   labs <- attr(stats::terms(formula), "term.labels")
