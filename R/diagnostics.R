@@ -556,7 +556,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   }
   # The non-centered reconstruction (b = C z per species) and the per-(species,
   # site) Royle marginal (still compute_nmix_site) are batched over draws in the
-  # kernel; mirrors the former R loop (via .tobs_ms_abun_nuts_b_from_z) exactly.
+  # kernel; mirrors the former R loop (via .ms_ocs_b_from_z) exactly.
   clogr <- if (is_nb) as.integer(lay$chol_logr[1L]) - 1L else 0L
   cpp_ms_nmix_ploglik_batch(
     as.integer(lf$y), as.integer(lf$species_idx), as.integer(lf$site_idx),
