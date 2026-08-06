@@ -1,5 +1,6 @@
 # =============================================================================
-# occu_cover_nested.R - v3 nested-Laplace spatial path for occu_cover().
+# occu_cover_nested.R - the `control$engine = "v3_nested"` spatial path for
+# occu_cover().
 #
 # Profile the latent field z[1..n_cells] OUT of the outer optimisation. For
 # each candidate (betas, alpha, log_sigma), find z* by inner Newton on the
@@ -10,22 +11,16 @@
 #     log p(y | betas, alpha, z*) + log p(z* | sigma)
 #       + (n_eff / 2) * log(2 pi) - 0.5 * log |H_z(z*)|
 #
-# Outer optim over (betas, alpha, log_sigma) is then ~10-dimensional, so
-# BFGS handles it without the (alpha, sigma) ridge that v2's joint Laplace
-# slid down.
+# Outer optim over (betas, alpha, log_sigma) is then ~10-dimensional, so BFGS
+# handles it without the (alpha, sigma) ridge that a joint MAP over
+# c(betas, z, alpha, log_sigma) carries.
 #
-# v3 vs v2:
-#   v2: joint Laplace MAP on c(betas, z, alpha, log_sigma) -- ridge issue.
-#   v3: nested Laplace -- inner Newton on z given outer; outer BFGS on small
-#       hyperparameter+coef block. Same family API (`method = "nested_laplace"`).
-#
-# Limitations still pending v4:
-#   - Lognormal positive arm only (beta arm pending; needs the cleaner
-#     d log f_pos / d eta closed form). occu_cover("beta") under
-#     nested_laplace currently errors with a pointer.
-#   - ICAR (besag) field only; BYM2 with free rho mixing pending.
-#   - Outer-grid integration of (alpha, sigma) for proper posterior summaries
-#     pending; for now the outer Laplace gives the point + observed-Fisher SE.
+# Scope:
+#   - Lognormal positive arm only; a beta positive arm errors with a pointer
+#     (the inner Newton wants a closed-form d log f_pos / d eta).
+#   - ICAR (besag) field only.
+#   - (alpha, sigma) come out of the outer Laplace as a point estimate plus
+#     observed-Fisher SE.
 # =============================================================================
 
 
@@ -265,7 +260,7 @@
                        (alpha^2) * n_pos[any_det] / (sigma_pos^2)
 
   # no_det case: FD on the NLP wrt z_i. O(n_nodet) cell-level evaluations.
-  # Each evaluation re-walks the whole likelihood; this is the v3 bottleneck.
+  # Each evaluation re-walks the whole likelihood; this is the bottleneck here.
   # For small/medium n_cells (<= ~1000) it is still much cheaper than the
   # joint optim's BFGS line search.
   if (any(!any_det)) {
@@ -324,7 +319,7 @@
   inv_sig2 <- exp(-2 * log_sigma)
   # Prior Hessian piece (constant for the inner Newton at fixed sigma).
   H_prior <- inv_sig2 * scale_q * Q
-  kappa_sum <- 1e4   # soft sum-to-zero penalty (matches v2)
+  kappa_sum <- 1e4   # soft sum-to-zero penalty (matches the `v2_joint` engine)
 
   for (iter in seq_len(max_inner)) {
     g <- .occu_cover_z_grad(z, model, Q, scale_q, beta_psi, beta_p_vec,
@@ -404,7 +399,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Public fitter -- the v3 replacement for v2's joint Laplace.
+# Public fitter for the `v3_nested` engine.
 # ---------------------------------------------------------------------------
 .tobs_fit_occu_cover_nested <- function(model, adj,
                                           priors    = NULL,
@@ -414,10 +409,10 @@
                                           sigma.beta = 5,
                                           ...) {
   if (!identical(model$positive, "lognormal")) {
-    stop("occu_cover() v3 nested-Laplace currently supports positive = ",
-         "\"lognormal\" only. Beta positive arm coming in v4 (needs the ",
-         "cleaner closed-form d log f / d eta for the inner Newton).",
-         call. = FALSE)
+    stop("the occu_cover() \"v3_nested\" engine supports positive = ",
+         "\"lognormal\" only (the inner Newton wants a closed-form ",
+         "d log f / d eta). Use the default joint engine for a beta ",
+         "positive arm.", call. = FALSE)
   }
 
   pi_list <- model$process_info
@@ -467,8 +462,8 @@
     beta_idx <- seq_len(p_psi + p_p + p_pos)
     pprec[beta_idx] <- 1 / (sigma.beta^2)
   }
-  # Weakly-informative anchors on hypers (much wider than v2's: v3 doesn't
-  # need them tight, the (alpha, sigma) ridge is broken by profiling).
+  # Weakly-informative anchors on the hyperparameters. Profiling z out breaks
+  # the (alpha, sigma) ridge, so these can stay wide.
   pprec[n_outer - 1L] <- 1 / (5^2)   # alpha
   pprec[n_outer]      <- 1 / (2^2)   # log_sigma
 

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Joint nested-Laplace fit (Phase 1c lognormal, Phase 1d beta)
+# Joint nested-Laplace fit (shared field across the occurrence and cover arms)
 # ---------------------------------------------------------------------------
 
 # Collapse the occurrence (binomial) arm to its exact sufficient statistic.

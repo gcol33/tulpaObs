@@ -1,5 +1,5 @@
 # =============================================================================
-# within_between.R - Mundlak-style within/between decomposition (Phase 1d)
+# within_between.R - Mundlak-style within/between decomposition
 #
 # Splits each numeric column into a per-group mean (between) and the deviation
 # from that mean (within). Driven by the MOTIVATE resurvey workflow: a year

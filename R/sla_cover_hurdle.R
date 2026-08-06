@@ -1,8 +1,8 @@
 # =============================================================================
 # sla_cover_hurdle.R — Simplified-Laplace skewness correction for cover hurdle
 #
-# Phase 3.5 extension. The cover hurdle has two independent arms (no shared
-# spatial field in the single-Laplace path):
+# The cover hurdle has two independent arms (no shared spatial field in the
+# single-Laplace path):
 #
 #   1. Occurrence arm: y_indicator_i ~ Bernoulli(plogis(X_occ_i beta_occ))
 #   2. Positive arm:   y_i | y_i > 0 ~ Beta(mu_i phi, (1-mu_i) phi)

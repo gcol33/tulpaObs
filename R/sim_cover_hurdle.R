@@ -1,5 +1,5 @@
 # =============================================================================
-# sim_cover_hurdle.R — simulator for the cover-hurdle family (Phase 1a)
+# sim_cover_hurdle.R — simulator for the cover-hurdle family
 #
 # Generates vegetation-cover style data with a Bernoulli occurrence layer and
 # a lognormal positive-cover layer, optionally with a shared exponential
@@ -10,7 +10,7 @@
 #' Simulate cover-hurdle data (lognormal positive part)
 #'
 #' Generates synthetic data matching the `cover(response = "lognormal")`
-#' generative model used in Phase 1a:
+#' generative model:
 #'
 #' \describe{
 #'   \item{eta_occ}{`= X %*% beta_occ + spatial_occ`}
@@ -25,8 +25,8 @@
 #' covariate plus an intercept). When `spatial_range` is supplied, a simple
 #' exponential-kernel Gaussian field on a random unit-square coordinate set
 #' is added to both linear predictors; the two layers see independently
-#' simulated draws of that field (matching the Phase 1a separate-fit story;
-#' the shared-field model is Phase 1c).
+#' simulated draws of that field, which matches the two-independent-arm fit.
+#' The joint engine's shared field is a different generative model.
 #'
 #' @param N Number of sites (default 200).
 #' @param beta_occ Length-2 occurrence coefficients (intercept, slope on x).

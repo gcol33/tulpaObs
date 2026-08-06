@@ -1,8 +1,8 @@
 # ============================================================================
 # sla_dyn_occu.R — Simplified Laplace for the dynamic (HMM) occupancy family
 #
-# Phase 3.5 of the SLA roadmap. The single-season occu likelihood decomposes
-# as sum_i l_i(eta_i) with eta_i = X_i beta — the analytical SLA path in
+# The single-season occu likelihood decomposes as sum_i l_i(eta_i) with
+# eta_i = X_i beta — the analytical SLA path in
 # `.sla_compute_occu_single()` rests on that. The HMM forward does *not*
 # decompose that way: alpha_t depends recursively on alpha_{t-1}, so the
 # third derivative in eta-space has non-trivial off-diagonal terms across the

@@ -1,9 +1,11 @@
 # =============================================================================
-# occu_cover_spatial.R - v2 nested-Laplace spatial path for occu_cover().
+# occu_cover_spatial.R - the `control$engine = "v2_joint"` spatial path for
+# occu_cover().
 #
 # Adds a cell-level latent ICAR field z[1..n_cells] (sum-to-zero) shared
-# across the psi and cover arms, mirroring Michael Glaser's mod.joint
-# (`copy = "cell.occ"` linking the besag field on cell.occ to cell.ab).
+# across the psi and cover arms, in the INLA `copy =` idiom: one field is
+# estimated on the occurrence arm and read by the cover arm through a scaling
+# coefficient.
 #
 # Augmented linear predictors:
 #
@@ -28,17 +30,13 @@
 #     par = c(beta_psi, beta_p, beta_pos, log_disp, z, alpha, log_sigma)
 #   SEs from the inverse observed-Fisher Hessian (full joint covariance).
 #
-# v2.0 limitations (intentional, will be addressed in v3):
-#   - ICAR only (rho = 1). BYM2 with free rho mixing requires another
-#     latent block; for now bym2() in the formula is read as ICAR with a
-#     warning the first time. Most of Michael's `mod.joint` runs use
-#     besag (= ICAR), so the head-to-head still holds.
-#   - Joint optim grows linearly in n_cells. For n_cells > ~2000 the
-#     dense Hessian becomes the bottleneck; sparse-Q + sparse linear
-#     algebra is v3.
-#   - No outer-grid integration of (sigma, alpha); they're point-estimated
-#     at the joint MAP with their SE read off the Hessian. The full
-#     nested-Laplace integration of these hyperpriors is v3.
+# Scope:
+#   - ICAR field only (rho = 1). Free rho mixing needs a second latent block,
+#     so a bym2() term in the formula is read as ICAR and warns.
+#   - The joint parameter vector carries one coordinate per cell, so the dense
+#     Hessian dominates the cost as the graph grows.
+#   - (sigma, alpha) are point-estimated at the joint MAP, with their SE read
+#     off that Hessian.
 # =============================================================================
 
 
@@ -66,8 +64,7 @@
 # constraint. Multiplying Q by this factor gives a precision whose
 # generalized-inverse diagonal has geometric mean 1, so `sigma` in the linear
 # predictor `sigma * z` is the geo-mean marginal SD of the field.
-# Matches INLA's `scale.model = TRUE` (Sorbye & Rue 2014), the convention
-# Michael's `mod.joint` uses on the besag field.
+# Matches INLA's `scale.model = TRUE` (Sorbye & Rue 2014).
 # ---------------------------------------------------------------------------
 .occu_cover_icar_scale <- function(adj) {
   n <- nrow(adj)
@@ -94,8 +91,9 @@
 # A weighted areal term (`icar(graph = adj, weight = col)`) is a second coupled
 # field -- a spatially-varying coefficient on `col` sharing the same areal
 # graph -- the formula-DSL spelling of the trend field that `control$trend`
-# also produces (gcol33/tulpaObs#15). The joint engine couples N such
-# fields; the legacy single-field v2/v3 engines take only the intercept field.
+# also produces (gcol33/tulpaObs#15). The joint engine couples N such fields;
+# the single-field `v2_joint` / `v3_nested` engines take only the intercept
+# field.
 # ---------------------------------------------------------------------------
 .occu_cover_spatial_fields <- function(formula, data, arm_fields = list()) {
   bind <- .tobs_bind_formulas(list(psi = formula), data)
@@ -202,8 +200,8 @@
       bad[[1L]]$type), call. = FALSE)
   }
   if (any(vapply(specs, function(s) identical(s$type, "bym2"), logical(1)))) {
-    warning("occu_cover() reads bym2() as ICAR (rho fixed to 1); ",
-            "BYM2 with free rho mixing is the v3 escape hatch.", call. = FALSE)
+    warning("occu_cover() reads bym2() as ICAR (rho fixed to 1).",
+            call. = FALSE)
   }
 
   # Exactly one unweighted (intercept) field is the shared base field; the rest
@@ -333,7 +331,7 @@
 
 
 # ---------------------------------------------------------------------------
-# NLP for the spatial v2 fit.
+# NLP for the `v2_joint` spatial fit.
 #
 # par layout (offsets recorded once in the fitter):
 #   beta_psi      [1, p_psi]
@@ -559,14 +557,14 @@
   # sign / scale without nudging toward 1. log_sigma ~ N(0, 0.6^2) — sigma
   # in roughly [0.3, 3.3], wide enough to not dominate when data has signal.
   # The joint Laplace still slides this ridge when the cover arm dominates
-  # in info; v3 (proper nested-Laplace with z profiled out) is the structural
-  # fix.
+  # in info; the `v3_nested` engine profiles z out of the outer optimisation,
+  # so it does not carry the ridge.
   pmean[n_par - 1L] <- 0
   pprec[n_par - 1L] <- 1 / 1
   pmean[n_par]      <- 0
   pprec[n_par]      <- 1 / (0.6^2)
 
-  # max_calls ceiling for the v2 outer BFGS: n_par + 3 calls per iter
+  # max_calls ceiling for the outer BFGS: n_par + 3 calls per iter
   # (FD gradient + line search), * max.iter.
   calls_per_iter_est <- n_par + 3L
   max_calls_est <- as.integer(max.iter) * calls_per_iter_est

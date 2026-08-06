@@ -1,14 +1,21 @@
 # =============================================================================
 # family_cover_hurdle.R — Vegetation cover hurdle on the tulpa Laplace backend
 #
-# Phase 1a: lognormal-positive variant via two independent tulpa_laplace()
-# calls (binomial on occur, gaussian on log(cover[occur==1])).
-# Phase 1c: joint shared-field model via tulpa_nested_laplace_joint(),
-# lognormal-positive on BYM2/ICAR/CAR_proper.
-# Phase 1d: beta-positive on the joint engine. phi is profiled (pre-fit on
-# the positive subset alone via tulpa_laplace_beta(), then plugged into the
-# joint as fixed dispersion). Mirrors the sigma_pos handling for lognormal.
-# Full posterior integration over phi is scheduled for Phase 3.
+# A cover response is a hurdle: a Bernoulli occurrence indicator plus a
+# positive-magnitude arm fit on the occupied subset. Three routes fit it.
+#
+# laplace: two independent tulpa_laplace() calls, one per arm. The arms share
+# no latent structure, so each is fit at its own mode and the positive-arm
+# dispersion comes from that fit (residual SD for the gaussian arms, the beta
+# solver's own phi for the beta arms).
+#
+# nested_laplace: the joint shared-field model via
+# tulpa_nested_laplace_joint(), on a bym2 / icar / car / car_proper graph. The
+# positive-arm dispersion becomes a hyperparameter axis integrated on the outer
+# grid, with a non-spatial pre-fit supplying the grid centre.
+#
+# nuts: the non-spatial sampler over the exact two-arm coefficient marginal; a
+# structured term is rejected with a pointer.
 # =============================================================================
 
 
@@ -875,10 +882,10 @@ encode_cover_hurdle <- function(formula, data, y,
 
 #' Fit the two arms of a cover hurdle
 #'
-#' Two independent `tulpa::tulpa_laplace()` calls. The joint shared-field
-#' fit is Phase 1c. For `positive = "lognormal"` the positive arm is a
-#' Gaussian fit on `log(cover)` with sigma estimated post-hoc as the
-#' residual standard error. For `positive = "beta"` the positive arm uses
+#' Two independent `tulpa::tulpa_laplace()` calls. For
+#' `positive = "lognormal"` the positive arm is a Gaussian fit on
+#' `log(cover)` with sigma estimated post-hoc as the residual standard
+#' error. For `positive = "beta"` the positive arm uses
 #' `tulpa::tulpa_laplace_beta()` which estimates the precision `phi` via
 #' an outer 1-D optimisation and weights the Hessian accordingly.
 #'
@@ -899,9 +906,10 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
                              engine = "laplace",
                              priors = NULL, control = list()) {
   if (!engine %in% c("laplace", "auto")) {
-    stop("cover() currently supports only method = 'laplace'/'laplace_sla' ",
-         "or 'nested_laplace'/'nested_laplace_sla' (got engine '", engine,
-         "'). nuts lands in later phases.", call. = FALSE)
+    stop("cover() supports method = 'laplace'/'laplace_sla', ",
+         "'nested_laplace'/'nested_laplace_sla' and 'nuts' (got engine '",
+         engine, "'). This fitter takes the two-arm laplace path only.",
+         call. = FALSE)
   }
   max_iter  <- control$max.iter  %||% 100L
   tol       <- control$tol       %||% 1e-6

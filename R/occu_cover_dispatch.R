@@ -463,7 +463,7 @@
   if (has_spatial && engine == "laplace") {
     stop("occu_cover() found a spatial term (icar/bym2) in the psi formula ",
          "but method = \"laplace\" is non-spatial. Use method = ",
-         "\"nested_laplace\" for the spatial v2 path.", call. = FALSE)
+         "\"nested_laplace\" for the spatial path.", call. = FALSE)
   }
   if (has_spatial && engine == "nuts") {
     # A car_proper() term would already have routed to the spatial NUTS fitter

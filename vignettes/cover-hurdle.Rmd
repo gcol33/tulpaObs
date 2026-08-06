@@ -604,9 +604,8 @@ and `control$aggregate.pos`, both on by default and byte-identical to the full
 per-plot fit); `vignette("cover-hurdle-motivate")` shows those controls.
 
 ```{r compare-inla, eval = FALSE}
-# Phase 1e: compare against the joint INLA hurdle fit on the MOTIVATE
-# resurvey data. Skeleton retained here so the comparison drops in
-# without restructuring the vignette.
+# The equivalent joint hurdle in INLA, for comparison on the MOTIVATE
+# resurvey data.
 #
 # library(INLA)
 # joint <- inla(
