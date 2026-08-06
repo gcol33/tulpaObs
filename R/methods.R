@@ -73,6 +73,13 @@ summary.tobs_fit <- function(object, ...) {
   ms_dyn_occu     = "occupancy",
   ms_int_occu     = "occupancy")
 
+# Model types whose predictor has no `terms` argument. `distance` / `fp_occu` /
+# `dyn_abun` vary covariates through `X.0`; the `newdata` families above build
+# their grid from a data frame. `terms` reaches none of them, so a caller who
+# passes it gets told, rather than an in-sample fit that quietly ignored it.
+.TOBS_PREDICT_NO_TERMS <- c("distance", "fp_occu", "dyn_abun",
+                            names(.TOBS_PREDICT_NEWDATA_TYPE))
+
 #' Number of observations
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
@@ -697,6 +704,19 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   # `terms` names one design column, and every family reading it does so
   # through this generic, so validate here rather than in each fitter.
   if (!is.null(terms)) terms <- .tobs_predict_term(terms)
+  # Several families return below without ever reading `terms`; say so instead
+  # of handing back an in-sample fit that ignored it.
+  if (!is.null(terms)) {
+    mt <- object$model$model_type %||% ""
+    if (mt %in% .TOBS_PREDICT_NO_TERMS)
+      stop(sprintf(paste0("predict(terms = ) is not supported for model type ",
+                          "'%s': its predictor varies covariates through %s. ",
+                          "Build the grid you want and pass it there."),
+                   mt,
+                   if (mt %in% names(.TOBS_PREDICT_NEWDATA_TYPE)) "`newdata`"
+                   else "`X.0`"),
+           call. = FALSE)
+  }
   # N-mixture abundance: the response types are "abundance" / "detection", so
   # route before the occupancy-specific match.arg(type) rejects them.
   if (identical(object$model$model_type, "nmix") ||

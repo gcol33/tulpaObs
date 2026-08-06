@@ -242,6 +242,37 @@ test_that("predict(terms=) on the N-mixture route holds the same contract", {
   expect_error(predict(fit, terms = c("abund_cov1", "abund_cov2")), "one term")
 })
 
+test_that("families whose predictor has no terms= argument say so", {
+  # `terms` is read by the classic occupancy route and the N-mixture route
+  # above. Every other family returns from predict() before reaching it, so a
+  # supplied `terms` used to come back as an in-sample fitted() vector that had
+  # quietly ignored it -- the same half-answer as reading terms[1] of a vector.
+  # Each is told which argument its own predictor varies covariates through.
+  sim_rn <- simulate_royle_nichols(N = 60L, J = 4L, beta_lambda = c(0.3, 0.4),
+                                   beta_r = -0.8, seed = 11L)
+  fit_rn <- tobs(~ x, detection = ~ 1, data = sim_rn$data, y = sim_rn$y,
+                 family = royle_nichols(),
+                 control = list(verbose = FALSE, progress = FALSE))
+  expect_error(predict(fit_rn, terms = "x"), "newdata")
+
+  sim_fp <- simulate_fp_occu(N = 80L, J = 5L, beta_psi = c(0.2, 0.5),
+                             p11 = 0.6, p10 = 0.05, b = 0.5, seed = 12L)
+  fit_fp <- tobs(~ occ_cov1, detection = ~ 1, data = sim_fp$data, y = sim_fp$y,
+                 family = fp_occu(),
+                 control = list(verbose = FALSE, progress = FALSE))
+  expect_error(predict(fit_fp, terms = "occ_cov1"), "X\\.0")
+
+  # The guard is keyed on the model type, so it must not disturb a predict()
+  # that passed no `terms` at all -- both still return their in-sample fit.
+  expect_length(predict(fit_rn), nrow(sim_rn$y))
+  expect_length(predict(fit_fp), nrow(sim_fp$y))
+
+  # Every model type named in the no-terms set is a real dispatch target, so
+  # the set cannot drift into naming a family that does honour `terms`.
+  expect_true(all(.TOBS_PREDICT_NO_TERMS %in% names(.tobs_family_methods)))
+  expect_false(any(c("nmix", "removal") %in% .TOBS_PREDICT_NO_TERMS))
+})
+
 test_that("tobs_data long format conversion works", {
   df <- expand.grid(site = 1:5, visit = 1:3)
   df$detected <- rbinom(15, 1, 0.3)
