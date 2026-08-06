@@ -190,20 +190,31 @@ test_that("fixed effects enter through newocc.covs", {
   # prediction is beta0 + beta1 * x exactly.
   d <- cbind(rep(0.5, 3), rep(2, 3))
   colnames(d) <- c("psi_(Intercept)", "psi_x")
+  # An identically-zero field, so whatever the interpolation does it adds 0 and
+  # the fixed-effect half is what is being read.
   obj <- structure(list(
-    draws = d, spatial = list(type = "icar"),
+    draws = d, spatial = list(type = "icar"), spatial_field = rep(0, 3),
     model = list(process_info = list(list(name = "psi", p = 2L,
                                           link = "identity")))),
     class = c("tobs_fit", "tulpa_fit"))
+  nodes <- cbind(0:2, 0)
 
   x <- c(0, 1, -0.5)
-  pr <- tobs_predict_spatial(obj, cbind(x, 0), newocc.covs = data.frame(x = x))
+  pr <- tobs_predict_spatial(obj, cbind(x, 0), newocc.covs = data.frame(x = x),
+                             node.coords = nodes)
   expect_equal(pr$mean, 0.5 + 2 * x)
 
   # Without covariates the design is intercept-only, so every location shares
   # the fixed-effect value (the field, when it enters, is what separates them).
-  flat <- tobs_predict_spatial(obj, cbind(x, 0))
+  flat <- tobs_predict_spatial(obj, cbind(x, 0), node.coords = nodes)
   expect_equal(flat$mean, rep(0.5, 3))
+
+  # A fit that declares a spatial component but carries no field at all is a
+  # broken object, not an intercept-only prediction.
+  no_field <- obj
+  no_field$spatial_field <- NULL
+  expect_error(tobs_predict_spatial(no_field, cbind(x, 0), node.coords = nodes),
+               "no fitted field")
 })
 
 
@@ -261,9 +272,15 @@ test_that("the fixed-effect half matches a recomputation from the draws", {
   s <- .tps_fixture()
   fit <- .tps_fit_icar(s)
 
-  newx <- c(-1, 0, 1)
-  pr <- tobs_predict_spatial(fit, cbind(c(2, 8, 15), 0),
-                             newocc.covs = data.frame(x = newx))
+  newx  <- c(-1, 0, 1)
+  cells <- c(2, 8, 15)
+  nodes <- cbind(seq_along(fit$spatial_field), 0)
+  # Predicting AT node coordinates makes the interpolated field that node's own
+  # value (IDW gives the coincident node all the weight), so the field half is
+  # known in closed form and the fixed-effect half can be checked against it.
+  pr <- tobs_predict_spatial(fit, cbind(cells, 0),
+                             newocc.covs = data.frame(x = newx),
+                             node.coords = nodes)
 
   # Independent recomputation of the occupancy-arm contribution from the same
   # draws. This pins WHICH draw columns the predictor reads: the psi block is
@@ -272,9 +289,13 @@ test_that("the fixed-effect half matches a recomputation from the draws", {
   p_occ <- fit$model$process_info[[1]]$p
   X0 <- cbind(1, newx)
   eta <- fit$draws[, seq_len(p_occ), drop = FALSE] %*% t(X0)
-  expect_equal(pr$mean, colMeans(stats::plogis(eta)), tolerance = 1e-8)
+  # This backend reports a posterior-mean field, so it enters every draw as the
+  # same offset. Tolerance covers the 1e-10 IDW distance epsilon, which leaves
+  # the coincident node a weight of 1 only to ~1e-10.
+  eta <- sweep(eta, 2L, as.numeric(fit$spatial_field[cells]), "+")
+  expect_equal(pr$mean, colMeans(stats::plogis(eta)), tolerance = 1e-6)
   expect_equal(pr$sd, apply(stats::plogis(eta), 2, stats::sd),
-               tolerance = 1e-8)
+               tolerance = 1e-6)
 
   # Occupancy probabilities, and intervals in the right order.
   expect_true(all(pr$mean > 0 & pr$mean < 1))
@@ -285,31 +306,28 @@ test_that("the fixed-effect half matches a recomputation from the draws", {
 test_that("predictions vary across locations once a field is fitted", {
   skip_on_cran()
   skip_if_fast()
-  skip(paste(
-    "tobs_predict_spatial() does not reach the fitted field on any route that",
-    "produces one. Under laplace / nested_laplace `fit$draws` carries only the",
-    "fixed-effect columns and an areal term's `fit$spatial$coords` is NULL, so",
-    "the interpolation is skipped and every location gets the same prediction",
-    "(measured on this fixture: the spread over three cells is exactly 0",
-    "against a fitted field of sd 1.44). Under NUTS an areal field's columns",
-    "are named spatial_field[i], which the branch's phi_spatial / w_gp",
-    "patterns do not match, so it is skipped there too; the one pattern that",
-    "does match a real column, gp_w, belongs to a gp() term whose coords are",
-    "stored flattened, so that route errors on fit_coords[, 1] instead.",
-    "Reported from gcol33/tulpaObs#179; unskip with the fix."))
 
   s <- .tps_fixture()
   fit <- .tps_fit_icar(s)
+  # This fixture's graph is a chain, so node i is placed at (i, 0). An areal
+  # field's nodes are graph vertices and carry no geometry of their own, so
+  # this placement is the caller's to make.
+  nodes <- cbind(seq_along(fit$spatial_field), 0)
+
+  # Without it the call must refuse: an intercept-only prediction is
+  # indistinguishable from a fit whose field happens to be flat.
+  expect_error(tobs_predict_spatial(fit, cbind(c(2, 8, 15), 0)),
+               "node\\.coords")
 
   # The truth on this fixture is a full sine wave across the cell chain, so
   # cells 2, 8 and 15 sit at genuinely different field values.
-  pr <- tobs_predict_spatial(fit, cbind(c(2, 8, 15), 0))
+  pr <- tobs_predict_spatial(fit, cbind(c(2, 8, 15), 0), node.coords = nodes)
   expect_gt(diff(range(pr$mean)), 0.05)
 
   # At a cell centre the interpolated field must reproduce that cell's own
   # fitted value, which is what makes this the field predictor rather than an
   # intercept-only one.
-  at_nodes <- tobs_predict_spatial(fit, cbind(seq_along(fit$spatial_field), 0))
+  at_nodes <- tobs_predict_spatial(fit, nodes, node.coords = nodes)
   b0 <- fit$means[["psi_(Intercept)"]]
   expect_gt(stats::cor(stats::qlogis(at_nodes$mean) - b0,
                        as.numeric(fit$spatial_field)), 0.95)

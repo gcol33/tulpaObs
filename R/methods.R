@@ -1208,23 +1208,85 @@ tobs_check_id <- function(model, fit = NULL) {
 # Spatial prediction at new locations
 # ============================================================================
 
+# The fitted spatial field a `tobs_fit` carries, and where its variance comes
+# from. Two sources, in order of preference:
+#
+#   "draws" -- the sampled field columns of `fit$draws`, which the samplers name
+#     `spatial_field[i]` on the areal path (gcol33/tulpaObs#142) and `gp_w[i]`
+#     on the continuous-GP path. These carry the field's posterior variance, so
+#     the predicted spread includes it.
+#   "point" -- `fit$spatial_field`, the posterior-mean surface the deterministic
+#     backends report. It is a point estimate: it shifts every draw by the same
+#     amount, so the predicted spread is the coefficients' alone.
+#
+# The two prefixes are the ones `src/occu_fit.cpp` actually emits. An SVC term's
+# `svc_w[i,j]` columns are deliberately not matched: those are one surface per
+# varying coefficient, not a single additive field, so summing them here would
+# report a quantity the model does not have.
+.tobs_spatial_field_source <- function(object) {
+  idx <- grep("^spatial_field\\[|^gp_w\\[", colnames(object$draws))
+  if (length(idx))
+    return(list(kind = "draws", values = object$draws[, idx, drop = FALSE],
+                n_nodes = length(idx)))
+  f <- object$spatial_field
+  if (!is.null(f) && length(f))
+    return(list(kind = "point", values = as.numeric(f), n_nodes = length(f)))
+  list(kind = "none", values = NULL, n_nodes = 0L)
+}
+
+# Coordinates for the fitted field's nodes, as an n_nodes x 2 matrix, or NULL
+# when they cannot be resolved. A caller-supplied `node.coords` wins; otherwise
+# the continuous terms (gp / multiscale_gp / svc) carry their own, stored
+# flattened row-major by their constructors, so a bare vector is reshaped.
+# Areal terms carry none, which is what NULL reports.
+.tobs_spatial_node_coords <- function(object, node.coords, n_nodes) {
+  co <- node.coords %||% object$spatial$coords
+  if (is.null(co) || !length(co)) return(NULL)
+  if (is.null(dim(co))) {
+    if (length(co) != 2L * n_nodes) return(NULL)
+    co <- matrix(as.numeric(co), ncol = 2L, byrow = TRUE)
+  }
+  co <- as.matrix(co)
+  if (ncol(co) < 2L || nrow(co) != n_nodes) return(NULL)
+  co
+}
+
 #' Predict the state process at new spatial locations
 #'
-#' Generates state-process predictions at new coordinates, including the
-#' spatial random effect interpolated from the fitted continuous field (IDW,
-#' k = 5). The returned scale follows the family's state-process link:
-#' occupancy probability for occupancy families, abundance intensity (lambda)
-#' for the count families.
+#' Generates state-process predictions at new coordinates, including the fitted
+#' spatial field interpolated to those locations by inverse-distance weighting
+#' over its five nearest nodes. The returned scale follows the family's
+#' state-process link: occupancy probability for occupancy families, abundance
+#' intensity (lambda) for the count families.
+#'
+#' The field is taken from the sampled field columns of `object$draws` when the
+#' fit has them (the NUTS paths), so the reported `sd` and quantiles carry the
+#' field's own posterior variance. On the deterministic backends
+#' (`laplace` / `nested_laplace`) the draws hold only the coefficients, so the
+#' posterior-mean surface in `object$spatial_field` is used instead: it enters
+#' every draw as the same offset, and the reported spread is then the
+#' coefficients' alone.
+#'
+#' A continuous term (`gp()`, `spde()`, `svc()`) carries the coordinates of its
+#' own nodes, so nothing extra is needed. An areal term (`icar()`, `bym2()`,
+#' `car()`) has graph nodes and no geometry, so interpolating it to a new point
+#' is only defined once the nodes are placed: pass `node.coords`, one row per
+#' element of `object$spatial_field`. Without it the call is an error rather
+#' than a prediction that quietly drops the field.
 #'
 #' @param object A `tobs_fit` object fitted with a spatial component.
 #' @param newcoords Matrix of new coordinates (n_new x 2).
 #' @param newocc.covs Optional data.frame of covariates at new locations.
 #' @param quantiles Quantiles for credible intervals (default 0.025, 0.5, 0.975).
+#' @param node.coords Optional matrix of coordinates for the fitted field's
+#'   nodes (n_nodes x 2), required for an areal field and ignored when the term
+#'   already carries its own coordinates.
 #' @return A data.frame with `mean`, `sd`, and quantile columns (on the response
 #'   scale: occupancy probability or abundance intensity).
 #' @export
 tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
-                                 quantiles = c(0.025, 0.5, 0.975)) {
+                                 quantiles = c(0.025, 0.5, 0.975),
+                                 node.coords = NULL) {
   if (is.null(object$spatial)) {
     stop("tobs_predict_spatial requires a model fitted with a spatial component", call. = FALSE)
   }
@@ -1258,30 +1320,42 @@ tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
     eta_draws[s, ] <- as.vector(X.0 %*% beta)
   }
 
-  # Interpolate spatial field to new locations using nearest-neighbor
-  sp_type <- object$spatial$type
-  cn <- colnames(draws)
-  sp_cols <- grep("^phi_spatial\\[|^w_gp\\[|^gp_w\\[", cn)
+  # Interpolate the fitted field to the new locations (IDW over the k = 5
+  # nearest nodes). Both the field values and the node coordinates are resolved
+  # explicitly, and a field that cannot be placed is an error: silently
+  # returning the fixed-effect-only prediction is indistinguishable from a fit
+  # whose field is flat (gcol33/tulpaObs#179).
+  fld <- .tobs_spatial_field_source(object)
+  if (identical(fld$kind, "none"))
+    stop("tobs_predict_spatial: the fit declares a spatial component but ",
+         "carries no fitted field to interpolate (neither sampled field ",
+         "columns in `draws` nor `spatial_field`).", call. = FALSE)
 
-  if (length(sp_cols) > 0 && !is.null(object$spatial$coords)) {
-    fit_coords <- object$spatial$coords
-    n_fit <- nrow(fit_coords)
+  fit_coords <- .tobs_spatial_node_coords(object, node.coords, fld$n_nodes)
+  if (is.null(fit_coords))
+    stop(sprintf(paste0("tobs_predict_spatial: the fitted %s field has %d ",
+                        "nodes and no coordinates to place them at. An areal ",
+                        "field's nodes are graph vertices, so supply ",
+                        "`node.coords` (a %d x 2 matrix, one row per element ",
+                        "of `fit$spatial_field`)."),
+                 object$spatial$type %||% "spatial", fld$n_nodes, fld$n_nodes),
+         call. = FALSE)
 
-    # Compute distances from new points to fitted points
-    for (s in seq_len(n_draws)) {
-      sp_effects <- draws[s, sp_cols]
-      # Nearest-neighbor interpolation
-      for (i in seq_len(n_new)) {
-        dists <- sqrt((fit_coords[, 1] - newcoords[i, 1])^2 +
-                       (fit_coords[, 2] - newcoords[i, 2])^2)
-        # IDW with k=5 nearest neighbors
-        k <- min(5, n_fit)
-        nn <- order(dists)[seq_len(k)]
-        w <- 1 / (dists[nn] + 1e-10)
-        w <- w / sum(w)
-        eta_draws[s, i] <- eta_draws[s, i] + sum(w * sp_effects[nn])
-      }
-    }
+  # The IDW weights depend only on geometry, so build them once per new
+  # location and apply them to every draw at once.
+  k <- min(5L, nrow(fit_coords))
+  W <- matrix(0, n_new, fld$n_nodes)
+  for (i in seq_len(n_new)) {
+    dists <- sqrt((fit_coords[, 1] - newcoords[i, 1])^2 +
+                  (fit_coords[, 2] - newcoords[i, 2])^2)
+    nn <- order(dists)[seq_len(k)]
+    w  <- 1 / (dists[nn] + 1e-10)
+    W[i, nn] <- w / sum(w)
+  }
+  eta_draws <- if (identical(fld$kind, "draws")) {
+    eta_draws + tcrossprod(fld$values, W)          # per-draw field, real variance
+  } else {
+    sweep(eta_draws, 2L, as.numeric(W %*% fld$values), "+")  # point surface
   }
 
   # Apply the state process's inverse link so the returned scale is correct for
