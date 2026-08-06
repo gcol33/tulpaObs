@@ -102,6 +102,7 @@
   # term for pg_gibbs below via the shared structs check being bypassed here (v1
   # has no PG-spatial path).
   if (identical(engine, "pg_gibbs")) {
+    control <- .tobs_control_defaults(control, "pg_gibbs", "ms_count")
     if (!(response %in% c("bernoulli", "binomial"))) {
       stop("ms_count(): method = \"pg_gibbs\" applies to the logistic responses ",
            "(binomial; jsdm() is bernoulli). For ", response,
@@ -113,12 +114,12 @@
     }
     return(.tobs_fit_ms_count_pg_gibbs(
       model, priors = priors,
-      sigma.beta = control[["sigma.beta"]] %||% 2.5,
-      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
-      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
-      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
-      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
-      seed     = as.integer(control[["seed"]]     %||% 1L),
+      sigma.beta = control[["sigma.beta"]],
+      n.iter   = as.integer(control[["n.iter"]]),
+      n.warmup = as.integer(control[["n.warmup"]]),
+      n.chains = max(as.integer(control[["n.chains"]]), 2L),
+      n.thin   = as.integer(control[["n.thin"]]),
+      seed     = as.integer(control[["seed"]]),
       verbose  = isTRUE(control[["verbose"]])))
   }
 
@@ -175,7 +176,7 @@
       model, spatial = structs$spatial, latent = structs$latent,
       max.iter   = control[["max.iter"]] %||% 200L,
       tol        = control[["tol"]] %||% 1e-4,
-      sigma.beta = control[["sigma.beta"]] %||% 5,
+      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
       priors     = priors,
       max.outer  = control[["max.outer"]],
       factor.starts = control[["factor.starts"]],
@@ -188,19 +189,20 @@
          "method = \"laplace\".", call. = FALSE)
   }
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "ms_count")
     # NUTS over the exact joint community count posterior (community means,
     # per-species deviations, community covariance) via the in-tree C++
     # FullGradFn, warm-started at the Laplace-EM mode (gcol33/tulpaObs#117).
     return(.tobs_fit_ms_count_nuts(
       model,
-      sigma.beta    = control[["sigma.beta"]] %||% 10,
-      sigma.logr    = control[["sigma.logr"]] %||% 1.5,
-      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
-      seed          = as.integer(control[["seed"]] %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      sigma.logr    = control[["sigma.logr"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       verbose       = isTRUE(control[["verbose"]])))
   }
 
@@ -273,7 +275,7 @@
         model, spatial = structs$spatial, latent = structs$latent,
         max.iter  = control[["max.iter"]] %||% 200L,
         tol       = control[["tol"]] %||% 1e-4,
-        sigma.beta = control[["sigma.beta"]] %||% 5,
+        sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
         priors    = priors,
         max.outer = control[["max.outer"]],
         factor.starts = control[["factor.starts"]],
@@ -299,7 +301,7 @@
       model, spatial = NULL, latent = structs$latent,
       max.iter  = control[["max.iter"]] %||% 200L,
       tol       = control[["tol"]] %||% 1e-4,
-      sigma.beta = control[["sigma.beta"]] %||% 5,
+      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
       priors    = priors,
       max.outer = control[["max.outer"]],
       factor.starts = control[["factor.starts"]],
@@ -318,14 +320,15 @@
   # mean + Inverse-Gamma community variance draws. Gives a CALIBRATED community-
   # variance posterior (the Laplace-EM leaves those attenuated).
   if (identical(engine, "pg_gibbs")) {
+    control <- .tobs_control_defaults(control, "pg_gibbs", "ms_occu")
     return(.tobs_fit_ms_occu_pg_gibbs(
       model, priors = priors,
-      sigma.beta = control[["sigma.beta"]] %||% 2.5,
-      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
-      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
-      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
-      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
-      seed     = as.integer(control[["seed"]]     %||% 1L),
+      sigma.beta = control[["sigma.beta"]],
+      n.iter   = as.integer(control[["n.iter"]]),
+      n.warmup = as.integer(control[["n.warmup"]]),
+      n.chains = max(as.integer(control[["n.chains"]]), 2L),
+      n.thin   = as.integer(control[["n.thin"]]),
+      seed     = as.integer(control[["seed"]]),
       verbose  = isTRUE(control[["verbose"]])))
   }
 
@@ -336,15 +339,16 @@
   # site) marginal (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp), warm-started at the
   # community Laplace-EM mode.
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "ms_occu")
     return(.tobs_fit_ms_occu_nuts(
       model,
-      sigma.beta    = control[["sigma.beta"]] %||% 5,
-      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
-      seed          = as.integer(control[["seed"]] %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       verbose       = isTRUE(control[["verbose"]])))
   }
 
@@ -421,7 +425,7 @@
       model, spatial = structs$spatial, latent = structs$latent,
       max.iter   = control[["max.iter"]] %||% 200L,
       tol        = control[["tol"]] %||% 1e-4,
-      sigma.beta = control[["sigma.beta"]] %||% 5,
+      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
       priors     = priors,
       max.outer  = control[["max.outer"]],
       factor.starts = control[["factor.starts"]],
@@ -438,30 +442,32 @@
   # per-species conjugate update + community mean / Inverse-Gamma variance -- a
   # calibrated community-variance posterior (the Laplace-EM attenuates it).
   if (identical(engine, "pg_gibbs")) {
+    control <- .tobs_control_defaults(control, "pg_gibbs", "jsdm")
     return(.tobs_fit_ms_count_pg_gibbs(
       model, priors = priors,
-      sigma.beta = control[["sigma.beta"]] %||% 2.5,
-      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
-      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
-      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
-      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
-      seed     = as.integer(control[["seed"]]     %||% 1L),
+      sigma.beta = control[["sigma.beta"]],
+      n.iter   = as.integer(control[["n.iter"]]),
+      n.warmup = as.integer(control[["n.warmup"]]),
+      n.chains = max(as.integer(control[["n.chains"]]), 2L),
+      n.thin   = as.integer(control[["n.thin"]]),
+      seed     = as.integer(control[["seed"]]),
       verbose  = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "jsdm")
     # Samples the exact joint community posterior (community means, per-species
     # deviations, community covariance) over the Bernoulli response via the
     # family-aware in-tree C++ FullGradFn, warm-started at the Laplace-EM mode.
     return(.tobs_fit_ms_count_nuts(
       model,
-      sigma.beta    = control[["sigma.beta"]] %||% 10,
-      sigma.logr    = control[["sigma.logr"]] %||% 1.5,
-      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
-      seed          = as.integer(control[["seed"]] %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      sigma.logr    = control[["sigma.logr"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       verbose       = isTRUE(control[["verbose"]])))
   }
 
@@ -831,6 +837,7 @@
   # warm-started at the Laplace-EM mode. Spatial / temporal / RE terms are not yet
   # wired on the sampler.
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "ms_abun")
     structs <- .tobs_structures_from_model(model)
     if (!is.null(structs$temporal) || !is.null(structs$re) ||
         !is.null(structs$svc) || !is.null(structs$latent)) {
@@ -851,27 +858,27 @@
         model, spatial = structs$spatial,
         mixture       = family$params$mixture %||% "poisson",
         K_max         = family$params$K_max,
-        sigma.beta    = control[["sigma.beta"]] %||% 10,
+        sigma.beta    = control[["sigma.beta"]],
         sigma.logr    = 1.5,
-        n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
-        n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
-        n.chains      = as.integer(control[["n.chains"]] %||% 1L),
-        max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-        adapt.delta   = control[["adapt.delta"]] %||% 0.9,
-        seed          = as.integer(control[["seed"]] %||% 1L),
+        n.iter        = as.integer(control[["n.iter"]]),
+        n.warmup      = as.integer(control[["n.warmup"]]),
+        n.chains      = as.integer(control[["n.chains"]]),
+        max.treedepth = as.integer(control[["max.treedepth"]]),
+        adapt.delta   = control[["adapt.delta"]],
+        seed          = as.integer(control[["seed"]]),
         max.iter      = as.integer(control[["max.iter"]] %||% 100L),
         verbose       = isTRUE(control[["verbose"]])))
     }
     return(.tobs_fit_ms_abun_nuts(
       model, mixture = family$params$mixture %||% "poisson",
       K_max         = family$params$K_max,
-      sigma.beta    = control[["sigma.beta"]] %||% 10,
-      n.iter        = as.integer(control[["n.iter"]]   %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]] %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]] %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]] %||% 0.9,
-      seed          = as.integer(control[["seed"]] %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       verbose       = isTRUE(control[["verbose"]])))
   }
 
@@ -933,7 +940,7 @@
       K_max      = family$params$K_max,
       max.iter   = control[["max.iter"]] %||% 100L,
       tol        = control[["tol"]] %||% 1e-4,
-      sigma.beta = control[["sigma.beta"]] %||% 5,
+      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
       priors     = priors,
       max.outer  = control[["max.outer"]],
       factor.starts = control[["factor.starts"]],
@@ -1048,7 +1055,7 @@
     K_max      = family$params$K_max,
     max.iter   = control[["max.iter"]] %||% 100L,
     tol        = control[["tol"]] %||% 1e-4,
-    sigma.beta = control[["sigma.beta"]] %||% 5,
+    sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
     priors     = priors,
     max.outer  = control[["max.outer"]],
     factor.starts = control[["factor.starts"]],
@@ -1147,7 +1154,7 @@
         model,
         K.max      = as.integer(control[["n.factors.max"]] %||% 4L),
         sd_L       = control[["sd.load"]]    %||% 1.0,
-        sigma.beta = control[["sigma.beta"]] %||% 5,
+        sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
         max.em     = control[["max.iter"]]   %||% 30L,
         tol        = control[["tol"]]        %||% 1e-3,
         verbose    = isTRUE(control[["verbose"]]))
@@ -1164,7 +1171,7 @@
     if (use_nuts) {
       fit <- .tobs_fit_ms_occu_cover_spatial_nuts(
         model, sd_L = control[["sd.load"]] %||% 1.0,
-        sigma.beta = control[["sigma.beta"]] %||% 5,
+        sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
         constrain = constrain, control = control)
       out <- build_ms_occu_cover_spatial_fit(model, fit)
       # Surface the sampler diagnostics at the top level (the shared builder
@@ -1187,7 +1194,7 @@
       sd_L       = control[["sd.load"]]   %||% 1.0,
       max.em     = control[["max.iter"]]  %||% 30L,
       tol        = control[["tol"]]       %||% 1e-3,
-      sigma.beta = control[["sigma.beta"]] %||% 5,
+      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
       constrain  = constrain,
       verbose    = isTRUE(control[["verbose"]])
     )
@@ -1216,15 +1223,16 @@
   # log-dispersion jointly -> removes the Laplace variance attenuation. (The
   # spatial-factor NUTS route with a shared field is handled above.)
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "ms_occu_cover")
     return(.tobs_fit_ms_occu_cover_nuts(
       model,
-      sigma.beta    = control[["sigma.beta"]]    %||% 5,
-      n.iter        = as.integer(control[["n.iter"]]        %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]]      %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]]      %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]]   %||% 0.9,
-      seed          = as.integer(control[["seed"]]          %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       max.iter      = as.integer(control[["max.iter"]]      %||% 200L),
       tol           = control[["tol"]]           %||% 1e-4,
       dispersion.re = isTRUE(control[["dispersion.re"]]),
@@ -1285,7 +1293,7 @@
       model, spatial = structs$spatial,
       max.iter   = control[["max.iter"]] %||% 200L,
       tol        = control[["tol"]] %||% 1e-4,
-      sigma.beta = control[["sigma.beta"]] %||% 5,
+      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
       priors     = priors,
       max.outer  = control[["max.outer"]],
       verbose    = isTRUE(control[["verbose"]])))
@@ -1301,14 +1309,15 @@
   # giving a calibrated community-variance posterior (vs the attenuated
   # Laplace-EM). Constant transitions, site-level detection, no structured terms.
   if (identical(engine, "pg_gibbs")) {
+    control <- .tobs_control_defaults(control, "pg_gibbs", "ms_dyn_occu")
     return(.tobs_fit_ms_dyn_occu_pg_gibbs(
       model, priors = priors,
-      sigma.beta = control[["sigma.beta"]] %||% 2.5,
-      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
-      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
-      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
-      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
-      seed     = as.integer(control[["seed"]]     %||% 1L),
+      sigma.beta = control[["sigma.beta"]],
+      n.iter   = as.integer(control[["n.iter"]]),
+      n.warmup = as.integer(control[["n.warmup"]]),
+      n.chains = max(as.integer(control[["n.chains"]]), 2L),
+      n.thin   = as.integer(control[["n.thin"]]),
+      seed     = as.integer(control[["seed"]]),
       verbose  = isTRUE(control[["verbose"]])))
   }
 
@@ -1320,15 +1329,16 @@
   # -> calibrated (de-attenuated) community-covariance posteriors. Non-spatial
   # only (a structured term routes to nested_laplace above).
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "ms_dyn_occu")
     return(.tobs_fit_ms_dyn_occu_nuts(
       model, priors = priors,
-      sigma.beta    = control[["sigma.beta"]]    %||% 5,
-      n.iter        = as.integer(control[["n.iter"]]        %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]]      %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]]      %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]]   %||% 0.9,
-      seed          = as.integer(control[["seed"]]          %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       max.iter      = as.integer(control[["max.iter"]]      %||% 200L),
       tol           = control[["tol"]]           %||% 1e-4,
       verbose       = isTRUE(control[["verbose"]])))
@@ -1361,14 +1371,15 @@
   # the attenuated Laplace-EM). Site-level per-source detection, no structured
   # terms.
   if (identical(engine, "pg_gibbs")) {
+    control <- .tobs_control_defaults(control, "pg_gibbs", "ms_int_occu")
     return(.tobs_fit_ms_int_occu_pg_gibbs(
       model, priors = priors,
-      sigma.beta = control[["sigma.beta"]] %||% 2.5,
-      n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
-      n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
-      n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
-      n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
-      seed     = as.integer(control[["seed"]]     %||% 1L),
+      sigma.beta = control[["sigma.beta"]],
+      n.iter   = as.integer(control[["n.iter"]]),
+      n.warmup = as.integer(control[["n.warmup"]]),
+      n.chains = max(as.integer(control[["n.chains"]]), 2L),
+      n.thin   = as.integer(control[["n.thin"]]),
+      seed     = as.integer(control[["seed"]]),
       verbose  = isTRUE(control[["verbose"]])))
   }
 
@@ -1379,15 +1390,16 @@
   # and the D + 1 per-arm community covariances jointly -> calibrated
   # (de-attenuated) community-covariance posteriors. Non-spatial only.
   if (identical(engine, "nuts")) {
+    control <- .tobs_control_defaults(control, "nuts", "ms_int_occu")
     return(.tobs_fit_ms_int_occu_nuts(
       model,
-      sigma.beta    = control[["sigma.beta"]]    %||% 5,
-      n.iter        = as.integer(control[["n.iter"]]        %||% 1000L),
-      n.warmup      = as.integer(control[["n.warmup"]]      %||% 1000L),
-      n.chains      = as.integer(control[["n.chains"]]      %||% 1L),
-      max.treedepth = as.integer(control[["max.treedepth"]] %||% 10L),
-      adapt.delta   = control[["adapt.delta"]]   %||% 0.9,
-      seed          = as.integer(control[["seed"]]          %||% 1L),
+      sigma.beta    = control[["sigma.beta"]],
+      n.iter        = as.integer(control[["n.iter"]]),
+      n.warmup      = as.integer(control[["n.warmup"]]),
+      n.chains      = as.integer(control[["n.chains"]]),
+      max.treedepth = as.integer(control[["max.treedepth"]]),
+      adapt.delta   = control[["adapt.delta"]],
+      seed          = as.integer(control[["seed"]]),
       max.iter      = as.integer(control[["max.iter"]]      %||% 200L),
       tol           = control[["tol"]]           %||% 1e-4,
       verbose       = isTRUE(control[["verbose"]])))

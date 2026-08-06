@@ -500,6 +500,34 @@
   lay$b_off + (s - 1L) * lay$P + seq_len(lay$P)
 }
 
+# One community-covariance arm, as `lay$arms` carries it: the coefficient
+# columns of b this arm fills, the theta coordinates holding its packed
+# log-Cholesky factor, and that factor's dimension.
+.ms_ocs_arm <- function(idx, chol, p) {
+  list(idx = idx, chol = chol, p = as.integer(p))
+}
+
+# Reconstruct the per-species deviation matrix b (S x n_coef) from a packed
+# coordinate vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
+# Which arms a family has is the only thing that differs between families, and
+# that is declared once in its layout as `lay$arms`, so adding an arm is a row
+# in that declaration rather than a private copy of this loop. A one-dimensional
+# arm (a per-species log-dispersion or log-size) is the p = 1 case: for p = 1
+# the log-Cholesky factor is the 1 x 1 matrix exp(theta), so it needs no branch.
+.ms_ocs_b_from_z <- function(theta, lay, arms = lay$arms, n_coef = lay$P,
+                             b_idx = .ms_ocs_b_idx) {
+  C <- lapply(arms, function(a) .ms_ocs_chol_unpack(theta[a$chol], a$p))
+  B <- matrix(0, lay$n_species, n_coef)
+  for (s in seq_len(lay$n_species)) {
+    z <- theta[b_idx(lay, s)]
+    for (k in seq_along(arms)) {
+      idx <- arms[[k]]$idx
+      B[s, idx] <- as.numeric(C[[k]] %*% z[idx])
+    }
+  }
+  B
+}
+
 # Symmetrise + (if needed) jitter a covariance to a Cholesky-able PD matrix.
 .ms_ocs_pd <- function(S) {
   S <- (S + t(S)) / 2
@@ -625,12 +653,13 @@
                                           constrain)$grad,
     theta0)
 
-  n_warmup <- as.integer(control[["n.warmup"]] %||% 500L)
-  n_sample <- as.integer(control[["n.iter"]]   %||% 1000L)
-  n_chains <- as.integer(control[["n.chains"]] %||% 1L)
-  md  <- as.integer(control[["max.treedepth"]] %||% 10L)
-  ad  <- control[["adapt.delta"]] %||% 0.95
-  seed <- as.integer(control[["seed"]] %||% 1L)
+  control <- .tobs_control_defaults(control, "nuts", "ms_occu_cover_spatial")
+  n_warmup <- as.integer(control[["n.warmup"]])
+  n_sample <- as.integer(control[["n.iter"]])
+  n_chains <- as.integer(control[["n.chains"]])
+  md  <- as.integer(control[["max.treedepth"]])
+  ad  <- control[["adapt.delta"]]
+  seed <- as.integer(control[["seed"]])
   verbose <- isTRUE(control[["verbose"]])
 
   run_chain <- function(s) cpp_ms_ocs_nuts(

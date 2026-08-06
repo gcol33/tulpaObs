@@ -206,14 +206,15 @@ t_occu <- function() {
          "sampler spOccupancy's tPGOcc uses).", call. = FALSE)
   model <- .tobs_build_t_occu(occ_formula = formula, det_formula = detection,
                               data = data, y = y)
+  control <- .tobs_control_defaults(control, "pg_gibbs", "t_occu")
   .tobs_fit_t_occu_pg_gibbs(
     model, priors = priors,
-    sigma.beta = control[["sigma.beta"]] %||% 2.5,
-    n.iter   = as.integer(control[["n.iter"]]   %||% 3000L),
-    n.warmup = as.integer(control[["n.warmup"]] %||% 1500L),
-    n.chains = max(as.integer(control[["n.chains"]] %||% 2L), 2L),
-    n.thin   = as.integer(control[["n.thin"]]   %||% 1L),
-    seed     = as.integer(control[["seed"]]     %||% 1L),
+    sigma.beta = control[["sigma.beta"]],
+    n.iter   = as.integer(control[["n.iter"]]),
+    n.warmup = as.integer(control[["n.warmup"]]),
+    n.chains = max(as.integer(control[["n.chains"]]), 2L),
+    n.thin   = as.integer(control[["n.thin"]]),
+    seed     = as.integer(control[["seed"]]),
     verbose  = isTRUE(control[["verbose"]]))
 }
 

@@ -1081,6 +1081,7 @@ R/
   tobs.R / obs_families.R / occu.R   — top-level router+print; family ctors; .tobs_build_model()
   tobs_dispatch.R           — the per-family `.dispatch_<family>()` bodies (~1370 lines). tobs.R routes HERE; it does not hold the dispatch itself
   tobs_helpers.R            — `.tobs_family_methods` (the method-support single source of truth) + shared dispatch helpers. NOT tobs.R
+  engine_defaults.R         — `.TOBS_ENGINE_DEFAULTS` / `.TOBS_FAMILY_DEFAULTS` (#183): the per-engine SAMPLER defaults, one table. `.tobs_control_defaults(control, engine, family)` fills every knob the user left unset (resolve once per dispatcher branch); `.tobs_default(engine, knob, family)` reads one knob inline. Scope is the sampler knobs ONLY -- `max.iter`/`tol` are per-ROUTE Laplace-EM values (`ms_occu_cover()` iterates 30 at 1e-3 on its own EM but warm-starts its sampler with 200 at 1e-4; `ms_occu()`'s plain areal C++ EM uses 100 where its latent fitter uses 200), so they stay at their call sites. Log-link families (`ms_count`/`jsdm`/`ms_abun`) carry `sigma.beta=10` under nuts, logit-link occupancy families 5 -- matching the C++ model defaults; that split is a `.TOBS_FAMILY_DEFAULTS` row, NOT a uniform "community NUTS" value. `test-engine-defaults.R` pins every resolved profile
   occu_categorical.R        — presence + nominal K-class hurdle (#106); Bernoulli presence arm + baseline-category multinomial logit class arm over tulpa `cpp_multinomial_logit_terms`
   occu_cover_dispatch.R     — formula-native cross-arm copy()/spatial-field DAG coupling dispatch for occu_cover()
   occu_joint.R              — standalone occu() SVC-spatial-bar nested-Laplace path (#81): occu_cover()'s joint direct-grid engine with the cover arm removed
@@ -1143,7 +1144,8 @@ src/
   cell_coupling_occu_cover.h / cell_coupling_occu_multiscale_cover.{cpp,h} / occu_coupling_shared.h — coupling specs + shared helpers
   ms_occu_cover_spatial_nuts.cpp / abun_nuts.cpp / ms_abun_nuts.cpp / occu_cover_nuts.cpp — NUTS (#67/#41/#14; occu_cover non-spatial)
   nuts_engine.h            — shared run_tulpa_nuts driver for the in-tree FullGradFn targets
-  community_chol.h         — shared log-Cholesky helpers (#14 non-centered, #67 centered)
+  community_chol.h         — shared log-Cholesky helpers (#14 non-centered, #67 centered) + `CommunityCholPri` / `community_chol_pri_read()` (#181): the log-Cholesky hyperprior scalars + the `pri` list keys, ONE declaration for all seven community NUTS targets. `MsOccuCoverPri` / the spatial-factor `PriScalars` INHERIT it and add their own fields; do not restate the three
+  community_grid_pack.h    — `community_pack_grid()` (#181): the per-outer-grid-point pack shared by the community areal drivers (ms_occu_spatial.cpp, nmix_community_spatial.cpp). The state arm is reached by pointer-to-member and named by the caller ("psi" vs "lambda"), and a family with no boundary diagnostic passes a null member pointer. Include AFTER RcppEigen.h
   RcppExports.cpp          — generated, do not edit
   Makevars.win             — CXX_STD=CXX17, OpenMP, -Wa,-mbig-obj (large-obj MinGW)
 tests/testthat/ — test files;  vignettes/ — cover-hurdle/spatial-spde/vs-inla Rmd;  dev_notes/ — probes/repros
