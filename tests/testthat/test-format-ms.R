@@ -157,7 +157,50 @@ test_that("the object prints its dimensions and its populated slots", {
 
 test_that("a list with no species is refused", {
   # Nothing downstream can consume a zero-species object, so this must stop
-  # rather than build one. The message is not asserted: it comes from the
-  # subscript, and improving it should not fail this test.
-  expect_error(tobs_format_ms(list()))
+  # rather than build one.
+  expect_error(tobs_format_ms(list()), "empty list")
+})
+
+
+test_that("a species off the shared sites x visits grid is refused", {
+  # The array slice is filled by assignment, so a matrix whose length divides
+  # the first's is RECYCLED rather than rejected: before this guard, species 2
+  # below produced a full 6 x 4 slice built by tiling its 12 values twice, and
+  # nothing downstream could tell. Every shape below is a real way to get this
+  # wrong, and each must stop.
+  ok <- matrix(rbinom(24, 1L, 0.5), 6L, 4L)
+
+  half <- matrix(rbinom(12, 1L, 0.5), 6L, 2L)      # length divides 24 exactly
+  expect_error(tobs_format_ms(list(a = ok, b = half)), "must share one")
+
+  transposed <- t(ok)                               # 4 x 6, same length
+  expect_error(tobs_format_ms(list(a = ok, b = transposed)), "must share one")
+
+  ragged <- matrix(rbinom(20, 1L, 0.5), 5L, 4L)     # one site short
+  expect_error(tobs_format_ms(list(a = ok, b = ragged)), "must share one")
+
+  expect_error(tobs_format_ms(list(a = ok, b = as.vector(ok))), "not a matrix")
+
+  # The species is named in the message when the list is named, so the caller
+  # is told which one to look at.
+  expect_error(tobs_format_ms(list(setophaga = ok, dendroica = half)),
+               "dendroica")
+
+  # A matrix on the shared grid still goes through untouched.
+  expect_equal(dim(tobs_format_ms(list(a = ok, b = ok))$y), c(6L, 4L, 2L))
+})
+
+
+test_that("a non-integer response is refused rather than truncated", {
+  # The slice is integer storage, so 2.7 would land as 2 with no warning.
+  ok   <- matrix(rbinom(24, 1L, 0.5), 6L, 4L)
+  frac <- matrix(as.numeric(ok), 6L, 4L); frac[1L, 1L] <- 2.7
+  expect_error(tobs_format_ms(list(a = ok, b = frac)), "non-integer")
+
+  # Whole-number doubles are lossless, so they are accepted and stored as
+  # integer -- and NA is not mistaken for a fractional value.
+  whole <- matrix(as.numeric(ok), 6L, 4L); whole[2L, 2L] <- NA_real_
+  res <- tobs_format_ms(list(a = ok, b = whole))
+  expect_type(res$y, "integer")
+  expect_true(is.na(res$y[2L, 2L, 2L]))
 })

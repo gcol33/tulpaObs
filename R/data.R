@@ -299,12 +299,45 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
                            coords = NULL, species_names = NULL) {
   if (is.list(y) && !is.array(y)) {
     n_species <- length(y)
+    if (n_species == 0L)
+      stop("tobs_format_ms(): `y` is an empty list; supply one detection ",
+           "matrix per species.", call. = FALSE)
+    if (!is.matrix(y[[1L]]))
+      stop("tobs_format_ms(): `y[[1]]` is not a matrix; each species needs a ",
+           "sites x visits detection matrix.", call. = FALSE)
     n_sites <- nrow(y[[1]])
     max_visits <- ncol(y[[1]])
     if (is.null(species_names)) species_names <- names(y)
     y_array <- array(NA_integer_, dim = c(n_sites, max_visits, n_species))
     for (s in seq_len(n_species)) {
-      y_array[, , s] <- as.integer(y[[s]])
+      ys <- y[[s]]
+      # Every species must be on the same sites x visits grid. Without this a
+      # matrix whose length divides the first's is RECYCLED into the slice, so
+      # a truncated or transposed species is silently accepted and the array
+      # looks well-formed (gcol33/tulpaObs#179).
+      if (!is.matrix(ys) || nrow(ys) != n_sites || ncol(ys) != max_visits)
+        stop(sprintf(paste0("tobs_format_ms(): species %s is %s, but species 1 ",
+                            "is %d x %d. Every species must share one ",
+                            "sites x visits grid; pad short surveys with NA."),
+                     if (!is.null(species_names[s]) && nzchar(species_names[s]))
+                       sQuote(species_names[s]) else as.character(s),
+                     if (is.matrix(ys))
+                       sprintf("%d x %d", nrow(ys), ncol(ys))
+                     else sprintf("not a matrix (length %d)", length(ys)),
+                     n_sites, max_visits),
+             call. = FALSE)
+      # The slice is integer storage, so a fractional value would be truncated
+      # towards zero without warning. Refuse it rather than silently rounding a
+      # response the caller meant as continuous.
+      obs <- ys[!is.na(ys)]
+      if (length(obs) && !isTRUE(all.equal(obs, round(obs))))
+        stop(sprintf(paste0("tobs_format_ms(): species %s holds non-integer ",
+                            "values; `y` is a detection / count response and ",
+                            "is stored as integer."),
+                     if (!is.null(species_names[s]) && nzchar(species_names[s]))
+                       sQuote(species_names[s]) else as.character(s)),
+             call. = FALSE)
+      y_array[, , s] <- as.integer(ys)
     }
     y <- y_array
   }
