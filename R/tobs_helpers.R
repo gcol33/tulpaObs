@@ -848,12 +848,14 @@ print.tobs_fit <- function(x, ...) {
   } else if (!is.null(x$seed)) {
     cat(sprintf("  Seed: %d\n", x$seed))
   }
+  conv_shown <- FALSE
   if (!is.null(x$convergence)) {
     rh <- x$convergence$rhat
     eb <- x$convergence$ess_bulk
     if (any(is.finite(rh)) || any(is.finite(eb))) {
       cat(sprintf("  Convergence: max Rhat %.3f, min bulk ESS %.0f\n",
                   max(rh, na.rm = TRUE), min(eb, na.rm = TRUE)))
+      conv_shown <- TRUE
       if (any(rh > 1.01, na.rm = TRUE)) {
         cat("    WARNING: Rhat > 1.01 for some parameters; chains may not have ",
             "mixed. Increase n.iter / n.chains.\n", sep = "")
@@ -876,7 +878,9 @@ print.tobs_fit <- function(x, ...) {
   if (!is.null(x$divergent) && isTRUE(sum(x$divergent) > 0)) {
     cat(sprintf("  WARNING: %d divergent transitions\n", sum(x$divergent)))
   }
-  if (!is.null(x$max_rhat) && is.finite(x$max_rhat)) {
+  # Scalar fallback for a fit carrying only the summary numbers (no per-parameter
+  # record); the per-parameter branch above already prints the same line.
+  if (!conv_shown && !is.null(x$max_rhat) && is.finite(x$max_rhat)) {
     cat(sprintf("  Convergence: max R-hat %.3f, min ESS %.0f\n",
                 x$max_rhat, x$min_ess))
   }

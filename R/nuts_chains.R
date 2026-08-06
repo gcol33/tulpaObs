@@ -81,7 +81,11 @@
     epsilon = run$chains[[1L]]$epsilon, n_chains = as.integer(n_chains),
     divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
     n_raw = run$n_raw, prior_type = prior_type, fixed_hyper = TRUE)
-  fit
+  # Diagnostics over the coefficient block -- the coordinates the fit reports.
+  # The whitened field `raw` coordinates are sampled but carry no reported
+  # parameter, so they are summarised through the field they map to.
+  .tobs_nuts_attach_convergence(fit, run$chains, par_names = run$nms[b_idx],
+                                cols = b_idx)
 }
 
 
@@ -139,7 +143,9 @@
                      n_chains = as.integer(n_chains),
                      divergent_total = sum(run$divergent)),
                 extra)
-  fit
+  # Every sampled coordinate here is a reported model parameter (the coefficients
+  # plus the trailing log_r / RE block), so the record covers all of them.
+  .tobs_nuts_attach_convergence(fit, run$chains, par_names = run$nms)
 }
 
 
@@ -294,8 +300,8 @@
                                  numeric(1)), na.rm = TRUE)
   # Row -> chain map, aligned with the pooled draws (which stay in chain-major
   # order through per-process unscaling). Convergence diagnostics (Rhat / ESS)
-  # are computed downstream by tulpa::diagnostics() from the named,
-  # unscaled draws + this chain_id; see .tobs_fit_model().
+  # are attached downstream from the named, unscaled draws + this chain_id, by
+  # .tobs_nuts_attach_convergence(); see .tobs_fit_model().
   out$chain_id    <- rep(seq_len(n.chains), vapply(per_chain_draws, nrow, integer(1)))
   out
 }
@@ -303,62 +309,120 @@
 
 # ---------------------------------------------------------------------------
 # Cross-chain convergence diagnostics for the in-tree FullGradFn samplers
-# (abun / removal / distance / occu_cover / ms_occu_cover ...), which run their
-# own per-chain loops in R rather than through cpp_occu_fit + .tobs_fit_model's
-# tulpa::diagnostics path. Family-agnostic: every input is a list of
-# per-chain draw matrices [N x P]. Single source of truth for split-R-hat /
-# bulk-ESS across those paths.
+# (abun / removal / distance / occu_cover / the community targets ...), which run
+# their own per-chain loops in R rather than through cpp_occu_fit.
+#
+# tulpa owns the estimator -- `tulpa::diagnostics()` computes the rank-normalized
+# split-R-hat, the bulk ESS, and the 5% / 95% tail-indicator ESS of Vehtari et al.
+# (2021) from a draws matrix plus a row -> chain map. Everything below is the
+# adapter: normalise whatever each family's chain loop kept into per-chain
+# matrices, name the columns, and write ONE convergence record in the shape
+# `summary.tobs_fit` and `print.tobs_fit` read
+# (parameter / rhat / ess_bulk / ess_tail).
 # ---------------------------------------------------------------------------
 
-# Per-parameter biased autocovariance (lags 0..n-1) via the FFT, for the
-# effective-sample-size sum.
-.tobs_nuts_acov <- function(x) {
-  n <- length(x); x <- x - mean(x)
-  nf <- 2^ceiling(log2(2 * n))
-  f  <- stats::fft(c(x, rep(0, nf - n)))
-  ac <- Re(stats::fft(f * Conj(f), inverse = TRUE)) / nf
-  ac[seq_len(n)] / n
+# Per-chain draw matrices from whatever the family's loop retained: a list of
+# matrices, or a list of sampler results carrying `$draws`. `cols` selects the
+# coordinates to report. NULL when no draws are reachable.
+.tobs_nuts_chain_mats <- function(chains, cols = NULL) {
+  if (is.matrix(chains)) chains <- list(chains)
+  if (!is.list(chains) || !length(chains)) return(NULL)
+  mats <- lapply(chains, function(ch) {
+    d <- if (is.matrix(ch)) ch else ch[["draws"]]
+    if (is.null(d)) return(NULL)
+    d <- as.matrix(d)
+    if (!is.null(cols)) d <- d[, cols, drop = FALSE]
+    d
+  })
+  if (any(vapply(mats, is.null, logical(1)))) return(NULL)
+  mats
 }
 
-# Split-R-hat and bulk effective sample size per parameter from a list of M
-# per-chain draw matrices [N x P] (Vehtari et al. 2021): split each chain in half
-# (2M segments of length n), R-hat = sqrt(((n-1)/n) W + B/n) / W) with W the mean
-# within-segment variance and B the between-segment variance; ESS = (2M n) / tau,
-# tau = 1 + 2 sum rho_t truncated by Geyer's positive-pair rule, rho_t the
-# combined autocorrelation 1 - (W - s_t)/var_plus.
+# Per-parameter diagnostics for a list of per-chain matrices: a data frame with
+# `parameter`, `rhat`, `ess_bulk`, `ess_tail`, or NULL when the draws are too
+# short for the estimator. A family may sample coordinates it does not report
+# (the packed community Cholesky, the whitened field, the non-centered z blocks);
+# `par_names` names the leading block that is reported, and the table covers
+# exactly that block.
+.tobs_nuts_diag_mats <- function(mats, par_names = NULL) {
+  if (is.null(mats) || !length(mats)) return(NULL)
+  P <- ncol(mats[[1L]])
+  if (!length(par_names)) par_names <- colnames(mats[[1L]])
+  nms <- if (length(par_names)) par_names else paste0("param", seq_len(P))
+  k <- min(P, length(nms))
+  if (k < 1L) return(NULL)
+  nms <- nms[seq_len(k)]
+  mats <- lapply(mats, function(m) {
+    m <- m[, seq_len(k), drop = FALSE]
+    colnames(m) <- nms
+    m
+  })
+  pooled <- do.call(rbind, mats)
+  cid <- rep(seq_along(mats), vapply(mats, nrow, integer(1)))
+  tab <- tryCatch(tulpa::diagnostics(list(draws = pooled, chain_id = cid)),
+                  error = function(e) NULL)
+  if (!is.data.frame(tab)) return(NULL)
+  tab
+}
+
+# list(rhat, ess) over every column of a list of per-chain draw matrices, for the
+# callers that report the full sampled coordinate set as a `fit$nuts` block
+# rather than as the named convergence record. `ess` is the BULK ESS.
 .tobs_nuts_rhat_ess <- function(chains) {
-  M <- length(chains); P <- ncol(chains[[1L]])
-  N <- nrow(chains[[1L]]); n <- N %/% 2L
-  if (n < 2L) return(list(rhat = rep(NA_real_, P), ess = rep(NA_real_, P)))
-  # 2M split segments, each n draws.
-  segs <- vector("list", 2L * M)
-  for (m in seq_len(M)) {
-    segs[[2L * m - 1L]] <- chains[[m]][seq_len(n), , drop = FALSE]
-    segs[[2L * m]]      <- chains[[m]][n + seq_len(n), , drop = FALSE]
-  }
-  K <- length(segs)
-  rhat <- numeric(P); ess <- numeric(P)
-  for (p in seq_len(P)) {
-    means <- vapply(segs, function(s) mean(s[, p]), 0)
-    vars  <- vapply(segs, function(s) stats::var(s[, p]), 0)
-    W <- mean(vars); B <- n * stats::var(means)
-    var_plus <- ((n - 1) / n) * W + B / n
-    rhat[p] <- if (W > 0) sqrt(var_plus / W) else NA_real_
-    # combined autocorrelation rho_t (averaged segment autocovariances).
-    acovs <- vapply(segs, function(s) .tobs_nuts_acov(s[, p]), numeric(n))  # n x K
-    s_t <- rowMeans(acovs)                                                  # mean acov per lag
-    rho <- if (var_plus > 0) 1 - (W - s_t) / var_plus else rep(0, n)
-    rho[1L] <- 1
-    # Geyer initial positive sequence: sum paired (rho_{2k}, rho_{2k+1}) while >0.
-    tau <- 1
-    t <- 2L
-    while (t + 1L <= n) {
-      pair <- rho[t] + rho[t + 1L]
-      if (pair < 0) break
-      tau <- tau + 2 * pair
-      t <- t + 2L
-    }
-    ess[p] <- if (tau > 0) (K * n) / tau else NA_real_
-  }
-  list(rhat = rhat, ess = ess)
+  mats <- .tobs_nuts_chain_mats(chains)
+  P <- if (is.null(mats)) 0L else ncol(mats[[1L]])
+  tab <- .tobs_nuts_diag_mats(mats)
+  if (is.null(tab)) return(list(rhat = rep(NA_real_, P), ess = rep(NA_real_, P)))
+  list(rhat = tab$rhat, ess = tab$ess_bulk)
+}
+
+# THE writer for a sampled fit's convergence record. `chains` is the family's
+# per-chain draws, `cols` the coordinates the fit reports, `par_names` their
+# names -- which must be the names `summary()` puts on its rows, since that is
+# what the record is matched against.
+#
+# `converged` on a sampled fit describes the CHAINS: every reported parameter's
+# split-R-hat below 1.01 (the threshold `print.tobs_fit` warns at). It is NOT the
+# warm-start optimiser's flag, which says nothing about mixing; NA when no
+# parameter yielded a finite R-hat. `max_rhat` / `min_ess` are the scalar summary
+# `print.tobs_fit` falls back to.
+.tobs_nuts_attach_convergence <- function(fit, chains, par_names = NULL,
+                                          cols = NULL, n_iter = NULL) {
+  mats <- .tobs_nuts_chain_mats(chains, cols)
+  tab  <- .tobs_nuts_diag_mats(mats, par_names)
+  if (is.null(tab)) return(fit)
+
+  rhat <- stats::setNames(tab$rhat,     tab$parameter)
+  eb   <- stats::setNames(tab$ess_bulk, tab$parameter)
+  et   <- stats::setNames(tab$ess_tail, tab$parameter)
+  prev <- fit$convergence
+  fit$convergence <- list(
+    converged = if (any(is.finite(rhat))) all(rhat < 1.01, na.rm = TRUE) else NA,
+    n_iter    = n_iter %||% (if (is.list(prev)) prev$n_iter else NULL) %||%
+                  NA_integer_,
+    parameter = tab$parameter,
+    rhat      = rhat,
+    ess_bulk  = eb,
+    ess_tail  = et)
+  fit$max_rhat <- if (any(is.finite(rhat))) max(rhat, na.rm = TRUE) else NA_real_
+  fit$min_ess  <- if (any(is.finite(eb)))   min(eb,   na.rm = TRUE) else NA_real_
+
+  # `n_chains` describes the fit's OWN draws, so it is stamped only when those
+  # draws are the sampler's. Several community builders report moment-matched
+  # pseudo-draws around the posterior mean instead, and splitting those into
+  # "chains" would read as a diagnostic of a chain that was never run.
+  n_samp <- sum(vapply(mats, nrow, integer(1)))
+  if (is.matrix(fit$draws) && nrow(fit$draws) == n_samp)
+    fit$n_chains <- length(mats)
+  fit
+}
+
+# Per-chain matrices from a pooled draws matrix plus its row -> chain map, for
+# the paths that already carry `chain_id` (the cpp_occu_fit sampler).
+.tobs_nuts_chains_from_ids <- function(draws, chain_id) {
+  if (!is.matrix(draws)) return(NULL)
+  if (is.null(chain_id) || length(chain_id) != nrow(draws))
+    return(list(draws))
+  lapply(sort(unique(chain_id)),
+         function(k) draws[chain_id == k, , drop = FALSE])
 }

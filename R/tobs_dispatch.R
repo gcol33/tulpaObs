@@ -1179,6 +1179,7 @@
       out$max_rhat    <- nd$max_rhat
       out$min_ess     <- nd$min_ess
       out$nuts        <- nd
+      out <- .ms_ocs_attach_spatial_convergence(out, nd, fit$d$P)
       return(out)
     }
     fit <- .tobs_fit_ms_occu_cover_spatial(

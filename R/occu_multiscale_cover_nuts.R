@@ -137,7 +137,7 @@
   ll_mean <- .occu_ms_cover_nonspatial_ll(par, model, lay)
   n_draws <- nrow(draws)
 
-  structure(c(list(
+  fit <- structure(c(list(
     draws        = draws,
     means        = par,
     sds          = sds,
@@ -166,7 +166,10 @@
                 n_chains = as.integer(n.chains),
                 divergent_total = sum(divergent, na.rm = TRUE),
                 sigma_beta = sigma.beta),
-    convergence  = list(converged = TRUE,
-                        n_iter = as.integer(n.iter))
+    convergence  = list(converged = NA, n_iter = as.integer(n.iter))
   )), class = c("tobs_fit", "tulpa_fit"))
+
+  # Every sampled coordinate is a reported parameter here (the four arms plus
+  # the cover dispersion), so the record covers all of them.
+  .tobs_nuts_attach_convergence(fit, per_chain, par_names = par_names)
 }

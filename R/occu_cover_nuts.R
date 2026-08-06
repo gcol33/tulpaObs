@@ -275,18 +275,8 @@
   nuts <- list(accept_prob = accept, divergent = divergent, treedepth = treedepth,
                epsilon = epsilon, n_chains = n_chains, divergent_total = sum(divergent),
                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp)
-  # Split-R-hat / bulk-ESS when more than one chain (the shared diagnostic). The
-  # convergence list mirrors the cpp_occu_fit NUTS shape (parameter / rhat /
-  # ess_bulk / ess_tail) so summary.tobs_fit surfaces them per parameter.
-  rhat <- ess <- rep(NA_real_, n_par)
-  if (n_chains > 1L) {
-    re <- .tobs_nuts_rhat_ess(per_chain_draws)
-    rhat <- re$rhat; ess <- re$ess
-    names(rhat) <- par_names; names(ess) <- par_names
-    nuts$rhat <- rhat; nuts$ess <- ess
-  }
 
-  structure(list(
+  fit <- structure(list(
     draws        = draws,
     means        = means,
     sds          = sds,
@@ -308,10 +298,17 @@
     method       = "nuts",
     positive     = model$positive,
     nuts         = nuts,
-    convergence  = list(converged = TRUE, n_iter = as.integer(n.iter),
-                        parameter = par_names, rhat = rhat,
-                        ess_bulk = ess, ess_tail = rep(NA_real_, n_par))
+    convergence  = list(converged = NA, n_iter = as.integer(n.iter))
   ), class = c("tobs_fit", "tulpa_fit"))
+
+  # Per-parameter split-R-hat / bulk + tail ESS, through the writer every sampled
+  # path shares, so summary.tobs_fit surfaces them per parameter; `fit$nuts`
+  # carries the same two vectors alongside the sampler diagnostics.
+  fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws,
+                                       par_names = par_names)
+  fit$nuts$rhat <- fit$convergence$rhat
+  fit$nuts$ess  <- fit$convergence$ess_bulk
+  fit
 }
 
 
@@ -615,25 +612,15 @@
   epsilon   <- mean(vapply(chains, function(ch) ch$epsilon %||% NA_real_, numeric(1)),
                     na.rm = TRUE)
 
-  rhat <- ess <- rep(NA_real_, n_base)
-  names(rhat) <- names(ess) <- par_names
-  if (n_chains > 1L) {
-    re <- .tobs_nuts_rhat_ess(lapply(per_chain_draws,
-                                     function(d) d[, b_idx, drop = FALSE]))
-    rhat <- re$rhat; ess <- re$ess
-    names(rhat) <- names(ess) <- par_names
-  }
-
   nuts <- list(accept_prob = accept, divergent = divergent, treedepth = treedepth,
                epsilon = epsilon, n_chains = n_chains,
                divergent_total = sum(divergent),
                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp,
                field_tau = fl$tau, field_rho = fl$rho, field_alpha = alpha,
                field_sigma = warm$sigma, fixed_hyper = TRUE,
-               n_field_units = n_cells,
-               rhat = rhat, ess = ess)
+               n_field_units = n_cells)
 
-  structure(list(
+  fit <- structure(list(
     draws        = draws[, b_idx, drop = FALSE],
     means        = par_means,
     sds          = sds,
@@ -658,8 +645,14 @@
     method       = "nuts",
     positive     = model$positive,
     nuts         = nuts,
-    convergence  = list(converged = TRUE, n_iter = as.integer(n.iter),
-                        parameter = par_names, rhat = rhat,
-                        ess_bulk = ess, ess_tail = rep(NA_real_, n_base))
+    convergence  = list(converged = NA, n_iter = as.integer(n.iter))
   ), class = c("tobs_fit", "tulpa_fit"))
+
+  # Diagnostics over the coefficient block (the coordinates the fit reports);
+  # the whitened field `raw` coordinates carry no named parameter.
+  fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws, par_names = par_names,
+                                       cols = b_idx)
+  fit$nuts$rhat <- fit$convergence$rhat
+  fit$nuts$ess  <- fit$convergence$ess_bulk
+  fit
 }

@@ -408,5 +408,9 @@
                                pieces$gam_idx, pieces$eps_idx)
   fit$method <- "nuts"
   fit$log_prob <- rep(ll_mean, nrow(draws))
-  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains, sigma_beta = sigma.beta)
+  # Reported set = the per-species community means (psi1, p) followed by the
+  # shared colonisation / extinction globals.
+  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                            par_cols = c(lay$mu, lay$global),
+                            sigma_beta = sigma.beta)
 }

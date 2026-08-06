@@ -910,6 +910,34 @@ used to pass `n_iter = n.iter` (n.iter = TOTAL) -> kept `n.iter - n.warmup` and
 returned ZERO draws (NaN means) at `n.iter == n.warmup`; unified to the sampling
 convention (bugfix, occu_fit.R/cover_nuts.R/occu_cover_nuts.R).
 
+**Convergence diagnostics on EVERY NUTS path** (#174): one writer,
+`.tobs_nuts_attach_convergence()` (`R/nuts_chains.R`), fills the record
+`summary.tobs_fit` + `print.tobs_fit` read -- `convergence$parameter/rhat/
+ess_bulk/ess_tail` -- plus the scalar `fit$max_rhat`/`fit$min_ess`. tulpa owns
+the estimator (`tulpa::diagnostics()`: rank-normalized split-Rhat, bulk ESS, and
+the 5%/95% tail-indicator ESS, Vehtari 2021); tulpaObs only hands it per-chain
+matrices + names. Wired at the shared choke points: `.tobs_count_nuts_attach()`
+(abun/removal/distance/fp_occu/dyn_abun), `.tobs_nuts_field_attach()` (their
+fixed-hyper field paths), `.ms_ocs_finalize_nuts_fit()` (the community samplers),
+plus ms_count/jsdm, cover, occu_cover (both), occu_multiscale_cover, and the
+spatial-factor community fit via `.ms_ocs_attach_spatial_convergence()`.
+`convergence$parameter` MUST carry the names `summary()` puts on its rows or the
+record is present but unreadable, so the writer takes `par_names` (the fit's
+`fixed_names`) and `cols` (the sampler coordinates those name). Most community
+builders report moment-matched pseudo-draws around the posterior mean, NOT the
+chain, so their record comes from the sampler's own `rc$chains` at
+`par_cols` (default `lay$mu`; ms_dyn_occu adds `lay$global`, ms_occu_cover adds
+`lay$log_disp` / `lay$mu_ld`) -- computing it off `fit$draws` there would
+diagnose a chain that was never run. `converged` on a sampled fit means every
+reported split-Rhat < 1.01 (the threshold print warns at), NOT the warm-start
+optimiser's flag. `test-nuts-convergence-contract.R` fits every family
+advertising `nuts` and asserts the record resolves an Rhat for every `summary()`
+row (199 assertions, ~173s); its name-set check fails when a new NUTS family
+lands without a case. `.tobs_nuts_rhat_ess()` (the `list(rhat, ess)` accessor the
+`fit$nuts` full-coordinate block + the PG-Gibbs summariser use) reads the same
+table. PG-Gibbs still keeps its rhat/ess at `fit$rhat`/`fit$ess` only, where
+summary/print do not look.
+
 **Areal field on the occu NUTS path** (#142): `occu() + icar()/bym2()` under
 `method="nuts"` now EXPOSES its field. `occu_fit.cpp` emits `spatial_layout`
 (from the engine ParamLayout) + names the columns (`spatial_field[i]`/

@@ -312,7 +312,11 @@
     fit$ms_dispersion <- list(sigma_log_disp = sigma_ld_hat,
                               log_disp_species = stats::setNames(ld_bar, model$species_names),
                               dispersion_re = TRUE)
-    return(.ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains, sigma_beta = sigma.beta))
+    # Reported set = the community coefficient means followed by the community
+    # mean log-dispersion (the RE layout names those blocks mu_coef / mu_ld).
+    return(.ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                                     par_cols = c(lay$mu_coef, lay$mu_ld),
+                                     sigma_beta = sigma.beta))
   }
 
   lay    <- .tobs_ms_occu_cover_nuts_layout(P_occ, P_p, P_pos, S)
@@ -365,7 +369,11 @@
                                  debias_method = "none")
   fit$method   <- "nuts"
   fit$log_prob <- rep(ll_mean, nrow(draws))
-  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains, sigma_beta = sigma.beta)
+  # Reported set = the community coefficient means plus the shared cover
+  # log-dispersion.
+  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                            par_cols = c(lay$mu, lay$log_disp),
+                            sigma_beta = sigma.beta)
 }
 
 

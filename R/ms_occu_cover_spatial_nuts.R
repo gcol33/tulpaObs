@@ -571,7 +571,16 @@
 # differences are the layout `lay` and any extra scalar hyperparameters (e.g. the
 # NB `sigma_logr`), passed through `...` into the block. Single source for the
 # rc-unpack + fit$nuts glue the families used to re-inline (gcol33/tulpaObs#136).
-.ms_ocs_finalize_nuts_fit <- function(fit, rc, lay, n_chains, ...) {
+#
+# `par_cols` are the sampler coordinates the fit REPORTS, in the order its
+# `fixed_names` list them; every layout puts the community means first as
+# `lay$mu`, so that is the default, and the families whose reported set also
+# carries the shared globals (or a differently named mean block) pass their own.
+# The reported draws are moment-matched around the posterior mean on most of
+# these builders, so the convergence record has to be computed from the sampler's
+# own chains, not from `fit$draws` (gcol33/tulpaObs#174).
+.ms_ocs_finalize_nuts_fit <- function(fit, rc, lay, n_chains, par_cols = lay$mu,
+                                      ...) {
   fit$nuts <- c(list(
     draws           = rc$draws,
     layout          = lay,
@@ -589,7 +598,9 @@
     fit$nuts$max_rhat <- max(re$rhat, na.rm = TRUE)
     fit$nuts$min_ess  <- min(re$ess,  na.rm = TRUE)
   }
-  fit
+  .tobs_nuts_attach_convergence(
+    fit, rc$chains, cols = par_cols,
+    par_names = fit$fixed_names %||% colnames(fit$draws))
 }
 
 # Fit the spatial-factor community occu_cover by NUTS: a short Laplace-EM warm
@@ -650,15 +661,37 @@
   }
 
   fit <- .ms_ocs_nuts_fit_from_draws(model, res, em, constrain)
+  fit$nuts$n_chains <- n_chains
   if (!is.null(rhat_ess)) {
     fit$nuts$rhat <- rhat_ess$rhat
     fit$nuts$ess  <- rhat_ess$ess
     fit$nuts$max_rhat <- max(rhat_ess$rhat, na.rm = TRUE)
     fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
-    fit$nuts$n_chains <- n_chains
     fit$nuts$divergent_total <- res$divergent_total
   }
   fit
+}
+
+# Convergence record for the spatial-factor community fit, which is assembled by
+# build_ms_occu_cover_spatial_fit() from the sampler's posterior MEAN (its own
+# `draws` are moment-matched around that mean). The reported parameters are the
+# community means followed by the log-dispersion, and the packed inner latent is
+# `c(mu[P], b[S*P], L, w, ld)`, so those sit at the head and tail of `lay$inner`.
+.ms_ocs_attach_spatial_convergence <- function(out, nd, P) {
+  lay <- nd$layout
+  if (is.null(lay) || is.null(lay$inner) || is.null(nd$draws)) return(out)
+  inner <- lay$inner
+  if (length(inner) < P + 1L) return(out)
+  sel <- inner[c(seq_len(P), length(inner))]
+  n_ch <- as.integer(nd$n_chains %||% 1L)
+  if (nrow(nd$draws) %% n_ch != 0L) n_ch <- 1L
+  per <- nrow(nd$draws) %/% n_ch
+  chains <- lapply(seq_len(n_ch),
+                   function(k) nd$draws[((k - 1L) * per + 1L):(k * per), ,
+                                        drop = FALSE])
+  .tobs_nuts_attach_convergence(out, chains, cols = sel,
+                                par_names = out$fixed_names %||%
+                                  colnames(out$draws))
 }
 
 

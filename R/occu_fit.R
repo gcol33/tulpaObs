@@ -774,12 +774,14 @@
   fit$seeds <- as.integer(seed) + seq_len(as.integer(n.chains)) - 1L
   # Expose process_info at top level for tulpa generic S3 methods
   fit$process_info <- model$process_info
-  # Cross-chain convergence diagnostics (Rhat / bulk + tail ESS). tulpa owns
-  # the generic estimator (diagnostics); it reads fit$draws + fit$chain_id.
-  # Computed on the named, natural-scale draws (Rhat / ESS are scale-invariant).
-  fit$convergence <- tryCatch(tulpa::diagnostics(fit),
-                              error = function(e) NULL)
+  # Cross-chain convergence diagnostics (Rhat / bulk + tail ESS), through the
+  # writer every sampled path shares, so the record has one shape across
+  # families. Computed on the named, natural-scale draws (Rhat / ESS are
+  # scale-invariant).
   class(fit) <- c("tobs_fit", "tulpa_fit")
+  fit <- .tobs_nuts_attach_convergence(
+    fit, .tobs_nuts_chains_from_ids(fit$draws, fit$chain_id),
+    par_names = colnames(fit$draws), n_iter = as.integer(n.iter))
   fit
 }
 

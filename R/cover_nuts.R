@@ -256,17 +256,6 @@
                divergent_total = sum(divergent), sigma_beta = sigma.beta,
                sigma_logdisp = sigma.logdisp)
 
-  # Split-R-hat / bulk-ESS when more than one chain (the shared diagnostic). The
-  # convergence list mirrors the cpp_occu_fit NUTS shape (parameter / rhat /
-  # ess_bulk / ess_tail) so summary.cover_fit surfaces them per parameter.
-  rhat <- ess <- rep(NA_real_, n_par)
-  if (n_chains > 1L) {
-    re <- .tobs_nuts_rhat_ess(per_chain_draws)
-    rhat <- re$rhat; ess <- re$ess
-    names(rhat) <- par_names; names(ess) <- par_names
-    nuts$rhat <- rhat; nuts$ess <- ess
-  }
-
   hyperpar <- list(occ = NULL, pos = NULL)
   if (identical(positive, "lognormal")) hyperpar$sigma_pos <- sigma_pos
   else                                  hyperpar$phi_pos   <- phi_pos
@@ -277,7 +266,7 @@
                                                  if (identical(positive, "beta"))
                                                    phi_pos else sigma_pos))
 
-  structure(list(
+  fit <- structure(list(
     occ          = warm$m_occ,
     pos          = warm$m_pos,
     beta_occ     = beta_occ,
@@ -316,10 +305,17 @@
     N            = enc$N,
     method       = "nuts",
     nuts         = nuts,
-    convergence  = list(converged = TRUE, n_iter = as.integer(n.iter),
-                        parameter = par_names, rhat = rhat,
-                        ess_bulk = ess, ess_tail = rep(NA_real_, n_par))
+    convergence  = list(converged = NA, n_iter = as.integer(n.iter))
   ), class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit"))
+
+  # Per-parameter split-R-hat / bulk + tail ESS, through the writer every sampled
+  # path shares, so summary.cover_fit surfaces them per parameter; `fit$nuts`
+  # carries the same two vectors alongside the sampler diagnostics.
+  fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws,
+                                       par_names = par_names)
+  fit$nuts$rhat <- fit$convergence$rhat
+  fit$nuts$ess  <- fit$convergence$ess_bulk
+  fit
 }
 
 
