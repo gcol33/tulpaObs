@@ -62,52 +62,19 @@ Rcpp::List cpp_nmix_total_log_lik(
     if (R_finite(r) && r <= 0.0) Rcpp::stop("r (NB size) must be > 0.");
 
     // Group observations by site (preserves input order within each site).
-    std::vector<std::vector<int>> obs_by_site(n_sites);
-    for (int o = 0; o < n_obs; ++o) {
-        const int s = site_idx[o] - 1;
-        if (s < 0 || s >= n_sites) {
-            Rcpp::stop("site_idx[%d] = %d out of range [1, %d].",
-                       o + 1, site_idx[o], n_sites);
-        }
-        obs_by_site[s].push_back(o);
-    }
+    const std::vector<std::vector<int>> obs_by_site =
+        tulpaObs::count_group_by_site(site_idx, n_sites);
 
-    // Outputs.
-    double total_log_lik = 0.0;
-    double total_grad_theta = 0.0;   // sum_i d log L_i / d theta (NB only; 0 for Poisson)
-    Rcpp::NumericVector log_lik_site(n_sites);
-    Rcpp::NumericVector grad_eta_lambda(n_sites);
-    Rcpp::NumericVector info_eta_lambda(n_sites);
-    Rcpp::NumericVector score_wt_lambda(n_sites);
-    Rcpp::NumericVector mean_N(n_sites);
-    Rcpp::NumericVector var_N(n_sites);
-    Rcpp::NumericVector boundary_weight(n_sites);
-    Rcpp::NumericVector grad_eta_p(n_obs);
-    Rcpp::NumericVector info_eta_p(n_obs);
-    // NB dispersion (theta = log r) coupling pieces, per site (0 on Poisson).
-    Rcpp::NumericVector info_theta(n_sites);
-    Rcpp::NumericVector info_lambda_theta(n_sites);
-    Rcpp::NumericVector cov_N_stheta(n_sites);
-    Rcpp::NumericVector var_stheta(n_sites);
-    int n_K_inadmissible = 0;
+    // The output field set, the per-site scatter and the returned list are
+    // shared with the removal sweep (nmix_kernel.h, gcol33/tulpaObs#173), so a
+    // field added here reaches every count family.
+    tulpaObs::CountSweepAccum acc(n_sites, n_obs);
 
     for (int s = 0; s < n_sites; ++s) {
         const auto& idx = obs_by_site[s];
         const int J = (int)idx.size();
         if (J == 0) {
-            // Site with no visits: marginal collapses to 1 (log_lik = 0),
-            // posterior over N equals the Poisson prior. The site contributes
-            // *zero* marginal information about lambda (no data), so info = 0
-            // even though the complete-data Fisher would be lambda. The rank-1
-            // coupling vanishes (var_N drops out via info = 0), so the
-            // Poisson-neutral score_wt_lambda = 1 is harmless.
-            log_lik_site[s]    = 0.0;
-            grad_eta_lambda[s] = 0.0;
-            info_eta_lambda[s] = 0.0;
-            score_wt_lambda[s] = 1.0;
-            mean_N[s] = std::exp(eta_lambda[s]);
-            var_N[s]  = std::exp(eta_lambda[s]);
-            boundary_weight[s] = 0.0;
+            acc.empty_site(s, eta_lambda[s]);
             continue;
         }
         std::vector<int>    y_site(J);
@@ -121,42 +88,8 @@ Rcpp::List cpp_nmix_total_log_lik(
         tulpaObs::NMixSiteResult res = tulpaObs::compute_nmix_site_cached(
             cache, eta_p_site.data(), eta_lambda[s], r
         );
-        if (!R_finite(res.log_lik)) ++n_K_inadmissible;
-        total_log_lik += res.log_lik;
-        total_grad_theta += res.grad_theta;
-        log_lik_site[s]    = res.log_lik;
-        grad_eta_lambda[s] = res.grad_eta_lambda;
-        info_eta_lambda[s] = res.info_eta_lambda;
-        score_wt_lambda[s] = res.score_wt_lambda;
-        mean_N[s] = res.mean_N;
-        var_N[s]  = res.var_N;
-        boundary_weight[s] = res.boundary_weight;
-        info_theta[s]        = res.info_theta;
-        info_lambda_theta[s] = res.info_lambda_theta;
-        cov_N_stheta[s]      = res.cov_N_stheta;
-        var_stheta[s]        = res.var_stheta;
-        for (int j = 0; j < J; ++j) {
-            grad_eta_p[idx[j]] = res.grad_eta_p[j];
-            info_eta_p[idx[j]] = res.info_eta_p[j];
-        }
+        acc.scatter(s, idx, res);
     }
 
-    return Rcpp::List::create(
-        Rcpp::Named("log_lik")           = total_log_lik,
-        Rcpp::Named("log_lik_site")      = log_lik_site,
-        Rcpp::Named("grad_eta_lambda")   = grad_eta_lambda,
-        Rcpp::Named("grad_eta_p")        = grad_eta_p,
-        Rcpp::Named("grad_theta")        = total_grad_theta,
-        Rcpp::Named("info_eta_lambda")   = info_eta_lambda,
-        Rcpp::Named("info_eta_p")        = info_eta_p,
-        Rcpp::Named("score_wt_lambda")   = score_wt_lambda,
-        Rcpp::Named("mean_N")            = mean_N,
-        Rcpp::Named("var_N")             = var_N,
-        Rcpp::Named("boundary_weight")   = boundary_weight,
-        Rcpp::Named("info_theta")        = info_theta,
-        Rcpp::Named("info_lambda_theta") = info_lambda_theta,
-        Rcpp::Named("cov_N_stheta")      = cov_N_stheta,
-        Rcpp::Named("var_stheta")        = var_stheta,
-        Rcpp::Named("n_K_inadmissible")  = n_K_inadmissible
-    );
+    return acc.result();
 }

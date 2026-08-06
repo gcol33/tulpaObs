@@ -387,6 +387,120 @@ inline NMixSiteResult compute_nmix_site(
     return compute_nmix_site_cached(c, eta_p, eta_lambda, r);
 }
 
+// -----------------------------------------------------------------------------
+// Per-site sweep accumulator (gcol33/tulpaObs#173)
+//
+// The count families' R-facing sweeps -- `cpp_nmix_total_log_lik()`
+// (nmix_loglik.cpp) and `cpp_removal_total_log_lik()` (removal_laplace.cpp) --
+// do the same thing around different kernels: group the visits by site, call the
+// family's per-site kernel, scatter the `NMixSiteResult` into per-site and
+// per-visit vectors, and return one 16-field list.
+//
+// That list is the contract every R-side count consumer reads by NAME:
+// `ms_distance` assembles its Louis block from `info_lam` / `var_N` / `swl`, and
+// `ms_abun_latent.R`'s working oracle reads `grad_eta_lambda` /
+// `info_eta_lambda` / `var_N` / `score_wt_lambda`. Declaring the field set twice
+// means adding a field for one family and forgetting the other yields an R-side
+// NULL at the far end of a Schur complement rather than a compile error. Holding
+// the vectors, the scatter and the return list here makes it one declaration, so
+// a new field reaches every count family at once.
+struct CountSweepAccum {
+    double total_log_lik   = 0.0;
+    double total_grad_theta = 0.0;  // sum_i d log L_i / d theta (NB; 0 Poisson)
+    Rcpp::NumericVector log_lik_site, grad_eta_lambda, info_eta_lambda,
+        score_wt_lambda, mean_N, var_N, boundary_weight;
+    // NB dispersion (theta = log r) coupling pieces, per site (0 on Poisson).
+    Rcpp::NumericVector info_theta, info_lambda_theta, cov_N_stheta, var_stheta;
+    Rcpp::NumericVector grad_eta_p, info_eta_p;   // per visit
+    int n_K_inadmissible = 0;
+
+    CountSweepAccum(int n_sites, int n_obs)
+        : log_lik_site(n_sites), grad_eta_lambda(n_sites),
+          info_eta_lambda(n_sites), score_wt_lambda(n_sites), mean_N(n_sites),
+          var_N(n_sites), boundary_weight(n_sites), info_theta(n_sites),
+          info_lambda_theta(n_sites), cov_N_stheta(n_sites),
+          var_stheta(n_sites), grad_eta_p(n_obs), info_eta_p(n_obs) {}
+
+    // Site with no visits: the marginal collapses to 1 (log_lik = 0) and the
+    // posterior over N equals the Poisson prior. The site contributes *zero*
+    // marginal information about lambda (no data), so info = 0 even though the
+    // complete-data Fisher would be lambda. The rank-1 coupling vanishes with it
+    // (var_N drops out via info = 0), so the Poisson-neutral score_wt_lambda = 1
+    // is harmless.
+    void empty_site(int s, double eta_lambda_s) {
+        log_lik_site[s]    = 0.0;
+        grad_eta_lambda[s] = 0.0;
+        info_eta_lambda[s] = 0.0;
+        score_wt_lambda[s] = 1.0;
+        mean_N[s] = std::exp(eta_lambda_s);
+        var_N[s]  = std::exp(eta_lambda_s);
+        boundary_weight[s] = 0.0;
+    }
+
+    // Scatter one site's kernel result: the per-site fields by site, the
+    // detection-arm fields back to each visit's own row of the long form.
+    void scatter(int s, const std::vector<int>& idx,
+                 const NMixSiteResult& res) {
+        if (!R_finite(res.log_lik)) ++n_K_inadmissible;
+        total_log_lik    += res.log_lik;
+        total_grad_theta += res.grad_theta;
+        log_lik_site[s]      = res.log_lik;
+        grad_eta_lambda[s]   = res.grad_eta_lambda;
+        info_eta_lambda[s]   = res.info_eta_lambda;
+        score_wt_lambda[s]   = res.score_wt_lambda;
+        mean_N[s]            = res.mean_N;
+        var_N[s]             = res.var_N;
+        boundary_weight[s]   = res.boundary_weight;
+        info_theta[s]        = res.info_theta;
+        info_lambda_theta[s] = res.info_lambda_theta;
+        cov_N_stheta[s]      = res.cov_N_stheta;
+        var_stheta[s]        = res.var_stheta;
+        const int J = static_cast<int>(idx.size());
+        for (int j = 0; j < J; ++j) {
+            grad_eta_p[idx[j]] = res.grad_eta_p[j];
+            info_eta_p[idx[j]] = res.info_eta_p[j];
+        }
+    }
+
+    Rcpp::List result() const {
+        return Rcpp::List::create(
+            Rcpp::Named("log_lik")           = total_log_lik,
+            Rcpp::Named("log_lik_site")      = log_lik_site,
+            Rcpp::Named("grad_eta_lambda")   = grad_eta_lambda,
+            Rcpp::Named("grad_eta_p")        = grad_eta_p,
+            Rcpp::Named("grad_theta")        = total_grad_theta,
+            Rcpp::Named("info_eta_lambda")   = info_eta_lambda,
+            Rcpp::Named("info_eta_p")        = info_eta_p,
+            Rcpp::Named("score_wt_lambda")   = score_wt_lambda,
+            Rcpp::Named("mean_N")            = mean_N,
+            Rcpp::Named("var_N")             = var_N,
+            Rcpp::Named("boundary_weight")   = boundary_weight,
+            Rcpp::Named("info_theta")        = info_theta,
+            Rcpp::Named("info_lambda_theta") = info_lambda_theta,
+            Rcpp::Named("cov_N_stheta")      = cov_N_stheta,
+            Rcpp::Named("var_stheta")        = var_stheta,
+            Rcpp::Named("n_K_inadmissible")  = n_K_inadmissible
+        );
+    }
+};
+
+// Group long-form visits by site, validating the 1-based `site_idx`. Shared by
+// both sweeps for the same reason the accumulator is.
+inline std::vector<std::vector<int>> count_group_by_site(
+        const Rcpp::IntegerVector& site_idx, int n_sites) {
+    const int n_obs = static_cast<int>(site_idx.size());
+    std::vector<std::vector<int>> obs_by_site(n_sites);
+    for (int o = 0; o < n_obs; ++o) {
+        const int s = site_idx[o] - 1;
+        if (s < 0 || s >= n_sites) {
+            Rcpp::stop("site_idx[%d] = %d out of range [1, %d].",
+                       o + 1, site_idx[o], n_sites);
+        }
+        obs_by_site[s].push_back(o);
+    }
+    return obs_by_site;
+}
+
 }  // namespace tulpaObs
 
 #endif  // TULPAOBS_NMIX_KERNEL_H
