@@ -1,7 +1,7 @@
-// occu_ms_cover_ploglik.cpp
+// occu_mscale_cover_ploglik.cpp
 // Batched per-cell pointwise log-likelihood for the three-level multiscale
 // occupancy + cover family (occu_multiscale_cover, non-spatial). The R reference
-// .occu_ms_cover_nonspatial_ll (R/occu_multiscale_cover.R, per_cell = TRUE) is
+// .occu_mscale_cover_nonspatial_ll (R/occu_multiscale_cover.R, per_cell = TRUE) is
 // the oracle; this port mirrors it draw for draw and parallelises over draws.
 // The marginal is cell (occupancy z) over plot (availability a) over visit
 // (detection), plus the per-detected-visit cover density. Designs arrive as
@@ -34,7 +34,7 @@ inline double lae2(double a, double b) {
 
 // idx_* are 0-based coefficient offsets into each draw row; p_* the block widths.
 // [[Rcpp::export]]
-Rcpp::NumericMatrix cpp_occu_ms_cover_ploglik(
+Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
     Rcpp::NumericMatrix draws,        // [S x total]
     Rcpp::NumericMatrix X_psi,        // [n_cells x p_psi]
     Rcpp::NumericMatrix X_theta,      // [n_plots x p_theta]

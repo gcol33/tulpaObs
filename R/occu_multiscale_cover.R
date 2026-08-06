@@ -137,7 +137,7 @@
 # ---------------------------------------------------------------------------
 
 # Posterior-mean arm coefficients, split by process block.
-.occu_ms_cover_arm_betas <- function(object) {
+.occu_mscale_cover_arm_betas <- function(object) {
   m  <- object$means
   pp <- vapply(object$model$process_info, function(x) as.integer(x$p), integer(1))
   off <- cumsum(c(0L, pp))
@@ -157,7 +157,7 @@
 # per-plot marginal detection probability psi_cell * theta * p (a single visit).
 .tobs_fitted_occu_multiscale_cover <- function(object) {
   model <- object$model
-  b     <- .occu_ms_cover_arm_betas(object)
+  b     <- .occu_mscale_cover_arm_betas(object)
   field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))   # per cell
   alpha <- unname(object$means["alpha"]); if (!is.finite(alpha)) alpha <- 0
   pc    <- model$plot_cell
@@ -172,7 +172,7 @@
   } else if (identical(model$positive, "gaussian")) {
     cover <- eta_pos
   } else {
-    sigma_pos <- .occu_ms_cover_sigma_pos(object)
+    sigma_pos <- .occu_mscale_cover_sigma_pos(object)
     cover <- exp(eta_pos + 0.5 * sigma_pos^2)
   }
   list(psi = psi_cell, theta = theta, p = pdet, cover = cover,
@@ -183,7 +183,7 @@
 # the spatial path reports `phi_pos` (already sigma_pos on the natural scale),
 # the non-spatial path a log-scale `log_sigma_pos`. Returns 0 if neither (beta
 # arm / unavailable), giving the conditional median exp(eta).
-.occu_ms_cover_sigma_pos <- function(object) {
+.occu_mscale_cover_sigma_pos <- function(object) {
   m <- object$means
   if ("phi_pos" %in% names(m) && is.finite(m[["phi_pos"]])) return(unname(m[["phi_pos"]]))
   if ("log_sigma_pos" %in% names(m) && is.finite(m[["log_sigma_pos"]]))
@@ -233,7 +233,7 @@
 # `idx` carries each block's coordinate indices and the per-arm site/visit split.
 # `per_cell = TRUE` returns the length-n_cells per-cell log-likelihood vector
 # (the pointwise unit WAIC / LOO score), otherwise their sum.
-.occu_ms_cover_nonspatial_ll <- function(par, model, idx, per_cell = FALSE) {
+.occu_mscale_cover_nonspatial_ll <- function(par, model, idx, per_cell = FALSE) {
   J        <- model$max_visits
   n_plots  <- model$n_plots
   n_cells  <- model$n_cells
@@ -316,11 +316,11 @@
 # matrix. Used for both the NUTS draws (calibrated WAIC) and the Laplace
 # pseudo-draws.
 # Batched [n_draws x n_cells] per-cell pointwise log-likelihood via the C++
-# kernel (cpp_occu_ms_cover_ploglik), parallel over draws. Mirrors
-# .occu_ms_cover_nonspatial_ll (the R oracle) draw for draw. `draws` is the
+# kernel (cpp_occu_mscale_cover_ploglik), parallel over draws. Mirrors
+# .occu_mscale_cover_nonspatial_ll (the R oracle) draw for draw. `draws` is the
 # [S x total] parameter matrix.
-.occu_ms_cover_ploglik_core <- function(model, draws, n_threads = 1L) {
-  idx <- .tobs_occu_ms_cover_nuts_layout(model)
+.occu_mscale_cover_ploglik_core <- function(model, draws, n_threads = 1L) {
+  idx <- .tobs_occu_mscale_cover_nuts_layout(model)
   off_w <- function(v) if (length(v) == 0L) c(0L, 0L)
                        else c(as.integer(v[1L]) - 1L, length(v))
   pw <- off_w(idx$psi); tw <- off_w(idx$theta)
@@ -329,7 +329,7 @@
   np <- model$n_plots; J <- model$max_visits
   empty_v <- function(m) if (is.null(m)) matrix(0, np * J, 0L) else m
   y <- model$y; storage.mode(y) <- "integer"
-  cpp_occu_ms_cover_ploglik(
+  cpp_occu_mscale_cover_ploglik(
     draws, model$X_psi, model$X_theta, model$X_p_site, empty_v(model$X_p_visit),
     model$X_pos_site, empty_v(model$X_pos_visit),
     y, model$y_pos, model$valid, as.integer(model$plot_cell),
@@ -350,7 +350,7 @@
   if (!is.null(n.draws) && n.draws < nrow(draws)) {
     draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
   }
-  .occu_ms_cover_ploglik_core(model, draws, n.threads)
+  .occu_mscale_cover_ploglik_core(model, draws, n.threads)
 }
 
 # Non-spatial Laplace fit: BFGS over the exact marginal (numeric gradient),
@@ -420,7 +420,7 @@
   }
 
   neg_pen <- function(par) {
-    ll <- .occu_ms_cover_nonspatial_ll(par, model, idx)
+    ll <- .occu_mscale_cover_nonspatial_ll(par, model, idx)
     -(ll - 0.5 * sum(pprec * par^2))
   }
   .prog <- tulpa:::.tulpa_iter_progress("occu-ms-cover-laplace",
@@ -439,7 +439,7 @@
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V); colnames(draws) <- par_names
-  ll_val <- .occu_ms_cover_nonspatial_ll(par, model, idx)
+  ll_val <- .occu_mscale_cover_nonspatial_ll(par, model, idx)
 
   structure(c(list(
     draws        = draws,

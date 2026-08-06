@@ -1,7 +1,7 @@
 # Batched per-cell pointwise log-likelihood for the three-level multiscale
 # occupancy + cover family (occu_multiscale_cover). The R reference
-# .occu_ms_cover_nonspatial_ll (per_cell = TRUE) is the oracle; the C++ kernel
-# (via .occu_ms_cover_ploglik_core) mirrors it draw for draw over the cell ->
+# .occu_mscale_cover_nonspatial_ll (per_cell = TRUE) is the oracle; the C++ kernel
+# (via .occu_mscale_cover_ploglik_core) mirrors it draw for draw over the cell ->
 # plot -> visit marginal plus the cover density, and parallelises over draws.
 # Byte-close (~1e-14) and thread-count invariant, both cover families and both
 # visit-block layouts.
@@ -36,12 +36,12 @@ test_that("multiscale occupancy+cover per-cell ploglik: C++ == R oracle", {
   for (positive in c("beta", "lognormal")) for (has_pv in c(FALSE, TRUE)) {
     m <- .mk_ms_cover(positive, has_pv); S <- 30L
     draws <- matrix(rnorm(S * m$total, 0, 0.5), S, m$total)
-    idx <- .tobs_occu_ms_cover_nuts_layout(m$model)
+    idx <- .tobs_occu_mscale_cover_nuts_layout(m$model)
     R <- t(apply(draws, 1L, function(par)
-      .occu_ms_cover_nonspatial_ll(par, m$model, idx, per_cell = TRUE)))
-    C1 <- .occu_ms_cover_ploglik_core(m$model, draws, 1L)
+      .occu_mscale_cover_nonspatial_ll(par, m$model, idx, per_cell = TRUE)))
+    C1 <- .occu_mscale_cover_ploglik_core(m$model, draws, 1L)
     expect_equal(C1, R, tolerance = 1e-8,
                  info = sprintf("%s pv=%s", positive, has_pv))
-    expect_identical(.occu_ms_cover_ploglik_core(m$model, draws, 4L), C1)
+    expect_identical(.occu_mscale_cover_ploglik_core(m$model, draws, 4L), C1)
   }
 })

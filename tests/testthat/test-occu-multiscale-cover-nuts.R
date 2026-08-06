@@ -6,7 +6,7 @@
 # The sampler draws the EXACT coefficient posterior of the non-spatial three-
 # level marginal (z over cells, a over plots both summed in closed form) via the
 # in-tree C++ FullGradFn (src/occu_multiscale_cover_nuts.cpp), warm-started at the
-# Laplace mode. The R target .tobs_occu_ms_cover_nuts_logpost is the oracle the
+# Laplace mode. The R target .tobs_occu_mscale_cover_nuts_logpost is the oracle the
 # C++ port is cross-checked against.
 #
 # Coverage:
@@ -62,22 +62,22 @@ test_that("occu_multiscale_cover NUTS C++ FullGradFn matches the R oracle", {
       positive = positive, phi = if (positive == "beta") 12 else 0.35,
       sigma = 0, alpha = 0, seed = if (positive == "beta") 22L else 11L)
     model <- .omcn_model(sim, positive)
-    lay   <- tulpaObs:::.tobs_occu_ms_cover_nuts_layout(model)
-    spec  <- tulpaObs:::.tobs_occu_ms_cover_nuts_spec(model)
+    lay   <- tulpaObs:::.tobs_occu_mscale_cover_nuts_layout(model)
+    spec  <- tulpaObs:::.tobs_occu_mscale_cover_nuts_spec(model)
 
     set.seed(3)
     theta <- stats::rnorm(lay$total) * 0.3
     theta[lay$disp] <- log(if (positive == "beta") 12 else 0.35)
     sb <- 5
 
-    lp_R <- tulpaObs:::.tobs_occu_ms_cover_nuts_logpost(theta, model, lay, sb)
-    cpp  <- cpp_occu_ms_cover_nuts_joint_logpost(spec, theta, sb)
+    lp_R <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb)
+    cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb)
 
     # Value byte-exact.
     expect_equal(cpp$lp, lp_R, tolerance = 1e-9)
     # C++ analytic gradient vs finite differences of the R oracle.
     f_lp <- function(th)
-      tulpaObs:::.tobs_occu_ms_cover_nuts_logpost(th, model, lay, sb)
+      tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(th, model, lay, sb)
     num <- .omcn_fd_grad(f_lp, theta)
     expect_lt(max(abs(cpp$grad - num)), 1e-5)
   }

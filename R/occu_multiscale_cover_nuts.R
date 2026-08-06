@@ -10,14 +10,14 @@
 # There is no latent field here (the iid-cell marginal, field fixed at 0), so the
 # parameter vector is just the flat coefficient block plus log_disp. The C++
 # FullGradFn (src/occu_multiscale_cover_nuts.cpp) is the sampler target;
-# .tobs_occu_ms_cover_nuts_logpost below is the byte-exact R oracle it is
+# .tobs_occu_mscale_cover_nuts_logpost below is the byte-exact R oracle it is
 # cross-checked against.
 
 
 # Layout helper: contiguous coordinate blocks of the packed vector
 # c(beta_psi, beta_theta, beta_p[site, visit], beta_pos[site, visit], log_disp),
 # matching .tobs_fit_occu_multiscale_cover_laplace's `idx`.
-.tobs_occu_ms_cover_nuts_layout <- function(model) {
+.tobs_occu_mscale_cover_nuts_layout <- function(model) {
   pi_list <- model$process_info
   p_psi   <- pi_list[[1L]]$p; p_theta <- pi_list[[2L]]$p
   p_p     <- pi_list[[3L]]$p; p_pos   <- pi_list[[4L]]$p
@@ -39,12 +39,12 @@
 
 # Byte-exact R oracle for the C++ FullGradFn: the exact three-level marginal
 # log-likelihood plus weak Gaussian coefficient priors, with the same value the
-# kernel returns. Reuses .occu_ms_cover_nonspatial_ll (the Laplace path's LL) for
+# kernel returns. Reuses .occu_mscale_cover_nonspatial_ll (the Laplace path's LL) for
 # the log-density and a finite-difference-free analytic gradient is supplied by
 # the C++ side; here we numerically check the value and gradient via the C++
 # joint-logpost cross-check, so the oracle only needs the (penalised) log-density.
-.tobs_occu_ms_cover_nuts_logpost <- function(theta, model, idx, sigma.beta = 5) {
-  ll  <- .occu_ms_cover_nonspatial_ll(theta, model, idx)
+.tobs_occu_mscale_cover_nuts_logpost <- function(theta, model, idx, sigma.beta = 5) {
+  ll  <- .occu_mscale_cover_nonspatial_ll(theta, model, idx)
   ib2 <- 1 / sigma.beta^2
   beta_idx <- setdiff(seq_len(idx$total), idx$disp)
   ll - 0.5 * ib2 * sum(theta[beta_idx]^2)
@@ -52,7 +52,7 @@
 
 
 # Assemble the C++ NUTS spec from a bound multiscale model.
-.tobs_occu_ms_cover_nuts_spec <- function(model) {
+.tobs_occu_mscale_cover_nuts_spec <- function(model) {
   J  <- model$max_visits
   np <- model$n_plots
   # y / y_pos / valid in plot-major flat order (row p*J + v), matching the kernel.
@@ -81,7 +81,7 @@
 # ---------------------------------------------------------------------------
 
 # Sample the exact coefficient posterior of the non-spatial three-level model
-# via tulpa's NUTS engine and the in-tree C++ FullGradFn (cpp_occu_ms_cover_nuts),
+# via tulpa's NUTS engine and the in-tree C++ FullGradFn (cpp_occu_mscale_cover_nuts),
 # warm-started at the Laplace mode with a diagonal Laplace metric. Packages a
 # tobs_fit shaped like .tobs_fit_occu_multiscale_cover_laplace but carrying the
 # real NUTS draws / diagnostics.
@@ -92,7 +92,7 @@
                                                  max.treedepth = 10L,
                                                  adapt.delta = 0.9, seed = 1L,
                                                  verbose = FALSE, ...) {
-  lay     <- .tobs_occu_ms_cover_nuts_layout(model)
+  lay     <- .tobs_occu_mscale_cover_nuts_layout(model)
   pi_list <- model$process_info
   is_beta <- identical(model$positive, "beta")
   par_names <- c(
@@ -111,10 +111,10 @@
                     all(is.finite(diag(V)))) pmax(diag(V), 1e-6)
                 else rep(1, lay$total)
 
-  spec <- .tobs_occu_ms_cover_nuts_spec(model)
+  spec <- .tobs_occu_mscale_cover_nuts_spec(model)
 
   run_chain <- function(ch) {
-    cpp_occu_ms_cover_nuts(
+    cpp_occu_mscale_cover_nuts(
       spec, theta0 = theta0, sigma_beta = sigma.beta, inv_metric = inv_metric,
       n_iter = as.integer(n.iter + n.warmup), n_warmup = as.integer(n.warmup),
       max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
@@ -134,7 +134,7 @@
   par   <- colMeans(draws); names(par) <- par_names
   V_out <- stats::cov(draws); dimnames(V_out) <- list(par_names, par_names)
   sds   <- sqrt(pmax(diag(V_out), 0)); names(sds) <- par_names
-  ll_mean <- .occu_ms_cover_nonspatial_ll(par, model, lay)
+  ll_mean <- .occu_mscale_cover_nonspatial_ll(par, model, lay)
   n_draws <- nrow(draws)
 
   fit <- structure(c(list(

@@ -27,7 +27,7 @@
 # visits and laid PLOT-MAJOR within each cell (plot 1's visits, plot 2's, ...),
 # the order build_cell_rows_from_arms reproduces from input row order so the
 # spec's per-cell `cell_plot_sizes` partition aligns with arm 2/3's flat rows.
-.occu_ms_cover_build_arms <- function(model, sigma_pos_init, alpha_grid,
+.occu_mscale_cover_build_arms <- function(model, sigma_pos_init, alpha_grid,
                                       positive = "lognormal", multi = FALSE) {
   n_cells   <- model$n_cells
   n_plots   <- model$n_plots
@@ -133,7 +133,7 @@
 # prior in particular keeps the coupled occupancy mixture off the psi = 1
 # boundary); pos carries cover_priors() only when supplied. theta reuses the
 # detection-arm prior shape (a logit-scale availability gate).
-.occu_ms_cover_arm_priors <- function(priors, responses) {
+.occu_mscale_cover_arm_priors <- function(priors, responses) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
     return(list(psi = NULL, theta = NULL, p = NULL, pos = NULL))
   }
@@ -224,13 +224,13 @@
   n_trend   <- length(coupled_trends)
   has_trend <- n_trend > 0L
 
-  arms_out  <- .occu_ms_cover_build_arms(
+  arms_out  <- .occu_mscale_cover_build_arms(
     model = model, sigma_pos_init = phi_pos_init,
     alpha_grid = alpha_grid, positive = model$positive, multi = has_trend)
   responses <- arms_out$responses
 
   # Attach per-arm fixed-effect priors.
-  arm_priors <- .occu_ms_cover_arm_priors(priors, responses)
+  arm_priors <- .occu_mscale_cover_arm_priors(priors, responses)
   for (nm in c("psi", "theta", "p", "pos")) {
     ap <- arm_priors[[nm]]
     if (!is.null(ap)) {

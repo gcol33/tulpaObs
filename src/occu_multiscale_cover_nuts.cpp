@@ -5,15 +5,15 @@
 //            log_disp)
 // and the joint log-posterior is the exact three-level marginal (z over cells
 // and a over plots both summed in closed form -- the same density the
-// non-spatial Laplace path .occu_ms_cover_nonspatial_ll() optimises) plus weak
+// non-spatial Laplace path .occu_mscale_cover_nonspatial_ll() optimises) plus weak
 // Gaussian coefficient priors. The cover hurdle, the no-detection occupancy /
 // availability mixtures, and their eta-derivatives reuse the cover policies and
 // nodet_mixture_block from occu_coupling_shared.h (single source of truth with
 // the cell-coupling spec) -- no new likelihood math here.
 //
 // The shared engine (nuts_engine.h) drives tulpa's NUTS. The R reference
-// .tobs_occu_ms_cover_nuts_logpost (R/occu_multiscale_cover_nuts.R) is the
-// oracle that cpp_occu_ms_cover_nuts_joint_logpost is cross-checked against.
+// .tobs_occu_mscale_cover_nuts_logpost (R/occu_multiscale_cover_nuts.R) is the
+// oracle that cpp_occu_mscale_cover_nuts_joint_logpost is cross-checked against.
 
 #include <Rcpp.h>
 #include <vector>
@@ -28,7 +28,7 @@ namespace tulpaObs {
 // optional visit-level blocks of the p / pos arms are stored separately so the
 // flat coefficient gradient is the design-sandwiched eta-gradient (mirroring the
 // R oracle's two-block .occu_ms_eta_visit()).
-struct MsCoverNutsModel {
+struct MscaleCoverNutsModel {
     int n_cells = 0, n_plots = 0, max_visits = 0;
     int p_psi = 0, p_theta = 0, p_p_site = 0, p_p_visit = 0,
         p_pos_site = 0, p_pos_visit = 0;
@@ -49,8 +49,8 @@ struct MsCoverNutsModel {
     std::vector<std::vector<int>> plots_of_cell;   // plot indices per cell
 };
 
-inline MsCoverNutsModel ms_cover_nuts_build(const Rcpp::List& spec) {
-    MsCoverNutsModel m;
+inline MscaleCoverNutsModel mscale_cover_nuts_build(const Rcpp::List& spec) {
+    MscaleCoverNutsModel m;
     m.X_psi      = Rcpp::as<Rcpp::NumericMatrix>(spec["X_psi"]);
     m.X_theta    = Rcpp::as<Rcpp::NumericMatrix>(spec["X_theta"]);
     m.X_p_site   = Rcpp::as<Rcpp::NumericMatrix>(spec["X_p_site"]);
@@ -121,7 +121,7 @@ inline void ms_cover_pos_grad(int positive, double y_pos, double eta, double dis
 // Build the [n_plots x J] eta matrices (site predictor broadcast across a
 // plot's visits + optional visit-varying part, visit-major rows). Returns flat
 // length n_plots*J, plot-major (row p*J + v), matching `y` / `y_pos` / `valid`.
-inline void ms_cover_eta_visit(const MsCoverNutsModel& m, const double* theta,
+inline void ms_cover_eta_visit(const MscaleCoverNutsModel& m, const double* theta,
                                int o, int p_site, int p_visit,
                                const Rcpp::NumericMatrix& Xs,
                                const Rcpp::NumericMatrix& Xv,
@@ -148,7 +148,7 @@ inline void ms_cover_eta_visit(const MsCoverNutsModel& m, const double* theta,
 }
 
 // Joint log-posterior + full coefficient gradient of the three-level marginal.
-inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
+inline double mscale_cover_nuts_eval(const MscaleCoverNutsModel& m, const double* theta,
                                  double* grad) {
     const int J = m.max_visits, np = m.n_plots;
     const int p_p = m.p_p_site + m.p_p_visit;
@@ -334,14 +334,14 @@ inline double ms_cover_nuts_eval(const MsCoverNutsModel& m, const double* theta,
     return lp;
 }
 
-inline void ms_cover_nuts_full_grad(const std::vector<double>& params,
+inline void mscale_cover_nuts_full_grad(const std::vector<double>& params,
                                     const tulpa::ModelData& data,
                                     const tulpa::ParamLayout& /*layout*/,
                                     std::vector<double>& grad, double* log_post_out) {
-    const MsCoverNutsModel* m =
-        static_cast<const MsCoverNutsModel*>(data.model_response_data);
+    const MscaleCoverNutsModel* m =
+        static_cast<const MscaleCoverNutsModel*>(data.model_response_data);
     grad.assign((std::size_t) m->total, 0.0);
-    const double lp = ms_cover_nuts_eval(*m, params.data(), grad.data());
+    const double lp = mscale_cover_nuts_eval(*m, params.data(), grad.data());
     if (log_post_out) *log_post_out = lp;
 }
 
@@ -350,27 +350,27 @@ inline void ms_cover_nuts_full_grad(const std::vector<double>& params,
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-Rcpp::List cpp_occu_ms_cover_nuts_joint_logpost(Rcpp::List spec,
+Rcpp::List cpp_occu_mscale_cover_nuts_joint_logpost(Rcpp::List spec,
                                                 Rcpp::NumericVector theta,
                                                 double sigma_beta) {
-    tulpaObs::MsCoverNutsModel m = tulpaObs::ms_cover_nuts_build(spec);
+    tulpaObs::MscaleCoverNutsModel m = tulpaObs::mscale_cover_nuts_build(spec);
     m.sigma_beta = sigma_beta;
     if ((int) theta.size() != m.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), m.total);
     Rcpp::NumericVector grad(m.total);
-    const double lp = tulpaObs::ms_cover_nuts_eval(m, theta.begin(), grad.begin());
+    const double lp = tulpaObs::mscale_cover_nuts_eval(m, theta.begin(), grad.begin());
     return Rcpp::List::create(Rcpp::Named("lp") = lp, Rcpp::Named("grad") = grad);
 }
 
 // [[Rcpp::export]]
-Rcpp::List cpp_occu_ms_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
+Rcpp::List cpp_occu_mscale_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                                   double sigma_beta,
                                   Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                                   int n_iter, int n_warmup, int max_treedepth,
                                   double adapt_delta, int seed, bool verbose) {
-    tulpaObs::MsCoverNutsModel m = tulpaObs::ms_cover_nuts_build(spec);
+    tulpaObs::MscaleCoverNutsModel m = tulpaObs::mscale_cover_nuts_build(spec);
     m.sigma_beta = sigma_beta;
-    return tulpaObs::run_tulpa_nuts(&tulpaObs::ms_cover_nuts_full_grad, &m, m.total,
+    return tulpaObs::run_tulpa_nuts(&tulpaObs::mscale_cover_nuts_full_grad, &m, m.total,
                                     theta0, sigma_beta, inv_metric, n_iter, n_warmup,
                                     max_treedepth, adapt_delta, seed, verbose);
 }

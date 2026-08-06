@@ -247,7 +247,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
     distance   = .tobs_ploglik_distance(model, draws, n.threads),
     fp_occu    = .tobs_ploglik_fp_occu(model, draws, n.threads),
     dyn_abun   = .tobs_ploglik_dyn_abun(model, draws, n.threads),
-    occu_multiscale_cover = .occu_ms_cover_ploglik_core(model, draws, n.threads),
+    occu_multiscale_cover = .occu_mscale_cover_ploglik_core(model, draws, n.threads),
     stop("Pointwise log-likelihood is not implemented for model_type = '",
          mt, "'.", call. = FALSE)
   )
