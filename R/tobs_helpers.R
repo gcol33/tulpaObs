@@ -364,10 +364,9 @@
   cover    = c("laplace", "laplace_sla", "nested_laplace", "nested_laplace_sla",
                "nuts"),
   # occu_cover: non-spatial Laplace via direct optim on the exact two-state
-  # marginal (v1); nested-Laplace adds a cell-level ICAR field shared across
-  # psi and cover arms with scaling alpha (v2, the mod.joint analogue with
-  # `copy = "cell.occ"`). v2 currently reads bym2() as ICAR (rho fixed to 1);
-  # free-rho BYM2 + outer-grid integration of (sigma, alpha) is v3.
+  # marginal; nested-Laplace adds a cell-level ICAR field shared across the psi
+  # and cover arms with scaling alpha, in the INLA `copy =` idiom. A bym2() term
+  # is read as ICAR (rho fixed to 1).
   # nuts: the non-spatial sampler over the exact two-state coefficient marginal
   # via the in-tree C++ FullGradFn (R/occu_cover_nuts.R, src/occu_cover_nuts.cpp),
   # warm-started at the Laplace mode -- calibrated (non-Gaussian) intervals and a
