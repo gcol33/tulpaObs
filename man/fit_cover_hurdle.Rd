@@ -33,10 +33,10 @@ List with \code{m_occ}, \code{m_pos}, \code{positive}, \code{pos_fit_n}, \code{p
 plus one of \code{sigma_pos} (lognormal) or \code{phi_pos} (beta).
 }
 \description{
-Two independent \code{tulpa::tulpa_laplace()} calls. The joint shared-field
-fit is Phase 1c. For \code{positive = "lognormal"} the positive arm is a
-Gaussian fit on \code{log(cover)} with sigma estimated post-hoc as the
-residual standard error. For \code{positive = "beta"} the positive arm uses
+Two independent \code{tulpa::tulpa_laplace()} calls. For
+\code{positive = "lognormal"} the positive arm is a Gaussian fit on
+\code{log(cover)} with sigma estimated post-hoc as the residual standard
+error. For \code{positive = "beta"} the positive arm uses
 \code{tulpa::tulpa_laplace_beta()} which estimates the precision \code{phi} via
 an outer 1-D optimisation and weights the Hessian accordingly.
 }

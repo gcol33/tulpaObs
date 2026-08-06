@@ -45,7 +45,7 @@ A list with:
 }
 \description{
 Generates synthetic data matching the \code{cover(response = "lognormal")}
-generative model used in Phase 1a:
+generative model:
 }
 \details{
 \describe{
@@ -61,8 +61,8 @@ Both layers share the same design matrix by default (one continuous
 covariate plus an intercept). When \code{spatial_range} is supplied, a simple
 exponential-kernel Gaussian field on a random unit-square coordinate set
 is added to both linear predictors; the two layers see independently
-simulated draws of that field (matching the Phase 1a separate-fit story;
-the shared-field model is Phase 1c).
+simulated draws of that field, which matches the two-independent-arm fit.
+The joint engine's shared field is a different generative model.
 }
 \examples{
 sim <- simulate_cover(N = 200, seed = 1)

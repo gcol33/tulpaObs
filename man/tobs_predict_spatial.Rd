@@ -8,7 +8,8 @@ tobs_predict_spatial(
   object,
   newcoords,
   newocc.covs = NULL,
-  quantiles = c(0.025, 0.5, 0.975)
+  quantiles = c(0.025, 0.5, 0.975),
+  node.coords = NULL
 )
 }
 \arguments{
@@ -19,15 +20,35 @@ tobs_predict_spatial(
 \item{newocc.covs}{Optional data.frame of covariates at new locations.}
 
 \item{quantiles}{Quantiles for credible intervals (default 0.025, 0.5, 0.975).}
+
+\item{node.coords}{Optional matrix of coordinates for the fitted field's
+nodes (n_nodes x 2), required for an areal field and ignored when the term
+already carries its own coordinates.}
 }
 \value{
 A data.frame with \code{mean}, \code{sd}, and quantile columns (on the response
 scale: occupancy probability or abundance intensity).
 }
 \description{
-Generates state-process predictions at new coordinates, including the
-spatial random effect interpolated from the fitted continuous field (IDW,
-k = 5). The returned scale follows the family's state-process link:
-occupancy probability for occupancy families, abundance intensity (lambda)
-for the count families.
+Generates state-process predictions at new coordinates, including the fitted
+spatial field interpolated to those locations by inverse-distance weighting
+over its five nearest nodes. The returned scale follows the family's
+state-process link: occupancy probability for occupancy families, abundance
+intensity (lambda) for the count families.
+}
+\details{
+The field is taken from the sampled field columns of \code{object$draws} when the
+fit has them (the NUTS paths), so the reported \code{sd} and quantiles carry the
+field's own posterior variance. On the deterministic backends
+(\code{laplace} / \code{nested_laplace}) the draws hold only the coefficients, so the
+posterior-mean surface in \code{object$spatial_field} is used instead: it enters
+every draw as the same offset, and the reported spread is then the
+coefficients' alone.
+
+A continuous term (\code{gp()}, \code{spde()}, \code{svc()}) carries the coordinates of its
+own nodes, so nothing extra is needed. An areal term (\code{icar()}, \code{bym2()},
+\code{car()}) has graph nodes and no geometry, so interpolating it to a new point
+is only defined once the nodes are placed: pass \code{node.coords}, one row per
+element of \code{object$spatial_field}. Without it the call is an error rather
+than a prediction that quietly drops the field.
 }

@@ -32,7 +32,11 @@
 
 \item{quantiles}{Quantile levels for credible intervals.}
 
-\item{terms}{Character vector of terms to vary (ggpredict-style).}
+\item{terms}{Name of a single term to vary: one column of the predicted
+process's design matrix, every other column held at its column mean. A
+vector of more than one term is an error, since a second term would be
+held at its mean rather than grouped over its levels. For a grid over
+more than one covariate, build the design matrix and pass it as \code{X.0}.}
 
 \item{n_points}{Number of prediction points per continuous term.}
 
