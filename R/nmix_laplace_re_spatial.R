@@ -177,18 +177,6 @@ nmix_community_laplace_icar <- function(lf, X_lambda, n_sites, n_species,
 # Proper CAR
 # ---------------------------------------------------------------------------
 
-# log|Q(rho)| = log|D - rho W| per rho grid point (tau- and z-independent),
-# precomputed from the dense graph via a Cholesky.
-.nmix_car_logdet_Q <- function(graph, rho_grid) {
-  D <- diag(rowSums(graph))
-  vapply(rho_grid, function(rho) {
-    Q <- D - rho * graph
-    ch <- tryCatch(chol(Q), error = function(e) NULL)
-    if (is.null(ch)) return(-Inf)            # Q(rho) not PD -> skip grid point
-    2 * sum(log(diag(ch)))
-  }, numeric(1))
-}
-
 nmix_community_laplace_car_proper <- function(lf, X_lambda, n_sites, n_species,
                                               csr, n_spatial, graph,
                                               mixture = "P",
@@ -207,7 +195,7 @@ nmix_community_laplace_car_proper <- function(lf, X_lambda, n_sites, n_species,
          "precompute log|Q(rho)|.", call. = FALSE)
   }
   r_grid_use <- .nmix_community_r_grid(mixture, r_grid)
-  log_det_Q  <- .nmix_car_logdet_Q(graph, rho_grid)
+  log_det_Q  <- .tobs_car_logdet_Q(graph, rho_grid)
   ws <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
   raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_car_proper,

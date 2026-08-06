@@ -367,17 +367,11 @@
   mu0  <- c(as.numeric(warm$mu_lambda), as.numeric(warm$mu_p))
   Sig0 <- list(as.matrix(warm$Sigma_lambda), as.matrix(warm$Sigma_p))
 
-  proper_car_logdet <- function(rho) {
-    Q <- matrix(0, n_sites, n_sites)
-    for (s in seq_len(n_sites)) {
-      Q[s, s] <- csr$n_neighbors[s]
-      a <- csr$row_ptr[s] + 1L; b <- csr$row_ptr[s + 1L]
-      if (b >= a) for (kk in a:b) Q[s, csr$col_idx[kk] + 1L] <- -rho
-    }
-    ch <- tryCatch(chol(Q), error = function(e) NULL)
-    if (is.null(ch)) return(-Inf)
-    2 * sum(log(diag(ch)))
-  }
+  # Only the CSR arrays are carried here, so the dense graph the shared
+  # log|Q(rho)| reads is rebuilt once rather than per outer node.
+  car_graph <- if (identical(spatial$type, "car_proper")) {
+    csr_to_adjacency(csr, n_sites)
+  } else NULL
 
   # One profile-loop fit at a fixed field-hyperparameter node. `z_start` warm-
   # starts the field from a neighbouring node; the community (theta, Sigma) warm-
@@ -423,7 +417,7 @@
   # One outer (tau, rho) node: derive the proper-CAR log|Q|, run the profile loop,
   # pack the per-node community + field state into a record (NULL on failure).
   eval_node <- function(tau, rho, z_start = NULL) {
-    ldQ  <- if (is_car) proper_car_logdet(rho) else 0.0
+    ldQ  <- if (is_car) .tobs_car_logdet_Q(car_graph, rho) else 0.0
     node <- fit_node(tau, rho, ldQ, z_start = z_start)
     if (is.null(node) || !is.finite(node$field$field_marginal)) return(NULL)
     list(log_marg = node$comm$log_marginal + node$field$field_marginal,

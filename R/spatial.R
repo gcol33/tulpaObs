@@ -30,6 +30,32 @@ adjacency_to_csr <- function(adj) {
   )
 }
 
+# Dense 0/1 adjacency from the CSR arrays, for the callers that carry only the
+# compressed form. Inverse of adjacency_to_csr() for a binary graph.
+csr_to_adjacency <- function(csr, n) {
+  adj <- matrix(0, n, n)
+  for (i in seq_len(n)) {
+    a <- csr$row_ptr[i] + 1L
+    b <- csr$row_ptr[i + 1L]
+    if (b >= a) adj[i, csr$col_idx[a:b] + 1L] <- 1
+  }
+  adj
+}
+
+# log|Q(rho)| = log|D - rho W| per rho grid point (tau- and z-independent),
+# precomputed from the dense graph via a Cholesky. Enters the outer-grid
+# marginal as a weight on each hyperparameter node, so every family fitting a
+# proper CAR field reads it from here.
+.tobs_car_logdet_Q <- function(graph, rho_grid) {
+  D <- diag(rowSums(graph))
+  vapply(rho_grid, function(rho) {
+    Q <- D - rho * graph
+    ch <- tryCatch(chol(Q), error = function(e) NULL)
+    if (is.null(ch)) return(-Inf)            # Q(rho) not PD -> skip grid point
+    2 * sum(log(diag(ch)))
+  }, numeric(1))
+}
+
 # BYM2 scaling factor: geometric mean of the non-zero generalized eigenvalues
 # of the ICAR precision, so the mixing parameter has a graph-independent
 # interpretation (Riebler et al. 2016).

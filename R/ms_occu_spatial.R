@@ -164,7 +164,7 @@
     stop("car_proper() community occupancy needs the adjacency graph to ",
          "precompute log|Q(rho)|.", call. = FALSE)
   }
-  log_det_Q <- .ms_occu_car_logdet_Q(graph, rho_grid)
+  log_det_Q <- .tobs_car_logdet_Q(graph, rho_grid)
   ws <- .ms_occu_spatial_warm_start(model$summaries, p_psi, p_p)
   mats <- .ms_occu_spatial_count_mats(model$summaries, model$n_sites,
                                       model$n_species)
@@ -177,17 +177,6 @@
     mu_init = ws$mu, Sigma_psi_init = ws$Sigma_psi, Sigma_p_init = ws$Sigma_p,
     max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
   .ms_occu_spatial_post(raw, p_psi, p_p, n_spatial, "car_proper", c("tau", "rho"))
-}
-
-# log|Q(rho)| = log|D - rho W| per rho grid point.
-.ms_occu_car_logdet_Q <- function(graph, rho_grid) {
-  D <- diag(rowSums(graph))
-  vapply(rho_grid, function(rho) {
-    Q <- D - rho * graph
-    ch <- tryCatch(chol(Q), error = function(e) NULL)
-    if (is.null(ch)) return(-Inf)
-    2 * sum(log(diag(ch)))
-  }, numeric(1))
 }
 
 # BYM2
