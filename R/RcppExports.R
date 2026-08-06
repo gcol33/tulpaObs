@@ -353,12 +353,12 @@ occ_make_nested_likelihood <- function(y, det_prob) {
     .Call(`_tulpaObs_occ_make_nested_likelihood`, y, det_prob)
 }
 
-cpp_occu_cover_cdf_limits <- function(X_occ, X_det_site, X_det_visit, b_occ, b_det, field_occ, valid, any_det, n_threads) {
-    .Call(`_tulpaObs_cpp_occu_cover_cdf_limits`, X_occ, X_det_site, X_det_visit, b_occ, b_det, field_occ, valid, any_det, n_threads)
+cpp_occu_cover_cdf_limits <- function(X_occ, X_det_site, X_det_visit, site_of_visit, b_occ, b_det, field_occ, any_det, eta_bound, n_threads) {
+    .Call(`_tulpaObs_cpp_occu_cover_cdf_limits`, X_occ, X_det_site, X_det_visit, site_of_visit, b_occ, b_det, field_occ, any_det, eta_bound, n_threads)
 }
 
-cpp_occu_cover_ppc <- function(psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, positive, freeman) {
-    .Call(`_tulpaObs_cpp_occu_cover_ppc`, psi_all, p_all, ep_all, y, y_pos, valid, any_det, n_valid, disp, positive, freeman)
+cpp_occu_cover_ppc <- function(X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, any_det, n_valid, positive, eta_bound, freeman) {
+    .Call(`_tulpaObs_cpp_occu_cover_ppc`, X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, any_det, n_valid, positive, eta_bound, freeman)
 }
 
 cpp_occu_cover_ppc_agg <- function(psi_all, p_all, ep_all, y, valid, any_det, n_valid, disp, mode_code, pos_site, yv, vals_flat, unit_off, disp2, positive, freeman) {

@@ -1,5 +1,47 @@
 # tulpaObs NEWS
 
+## 0.0.184 (2026-08-07)
+
+* **`tobs_cpo()`, `tobs_ppc()` and `tobs_pit_residuals()` now work on a compact
+  (ragged) `occu_cover()` fit (#185).** `method = "nested_laplace"` defaults
+  `compact = TRUE`, so the ragged carrier is the standard representation for the
+  joint engine, and a compact fit stores no padded `[n_sites x max_visits]`
+  `y` / `valid` grid. The pointwise-log-likelihood path already read the ragged
+  carrier, but the PPC and the PIT / LOO-PIT CDF limits still derived their
+  per-site detection summary as `rowSums(model$y * model$valid)`, which errored
+  with `'x' must be an array of at least two dimensions`. LOO / CPO / LOO-PIT and
+  the posterior predictive check were therefore unavailable for any real-scale
+  `occu_cover()` fit while `tobs_waic()` worked.
+
+  All three now read one `.occu_cover_visit_view()`: the one-row-per-valid-visit
+  structure a compact fit stores, and the flattening of a dense fit's padded grid
+  (`.occu_cover_dense_ragged()`, the site-major visit-ascending order the
+  pointwise kernel already used). `n_valid` and `any_det` are derived there, so
+  there is one definition of each. Because both layouts now feed one kernel per
+  diagnostic, the dense and compact builds of the same data agree to the bit:
+  measured 0.000e+00 across `elpd_waic`, `elpd_loo`, the LOO-PIT, the PIT
+  residuals, and the PPC `fit.y` / `fit.y.rep` / `bayesian.p`.
+
+* **`tobs_ppc()` no longer returns `NA` when a detected visit has a missing
+  cover (#185).** The likelihood gates the cover density on `detected AND
+  finite` (missing-at-random cover), but the PPC kernel scored the `NA` into the
+  Freeman-Tukey / chi-squared sum, so `fit.y` came back `NA` for every draw and
+  `bayesian.p` with it. Verified directly against the pre-change kernel: one `NA`
+  cover at one detected visit took `fit.y` from `1.788` to `NA` on all draws.
+  The replicate is now drawn at every valid visit (so the RNG stream does not
+  depend on which visits happened to be detected) and scored only where a cover
+  was observed.
+
+* Internal: the three ragged `occu_cover()` kernels -- pointwise
+  log-likelihood, PPC, CDF limits -- assemble their per-draw predictors from one
+  shared `Arms` view (`src/occu_cover_ragged.h`) instead of each writing out the
+  column-major design / draw index arithmetic. The pointwise kernel is
+  byte-identical after the change (`test-occu-cover-ploglik-cpp.R` scores it
+  against its R oracle). The PPC kernel now takes the arm designs and the
+  coefficient draws rather than precomputed `[n_sites x (S * max_visits)]`
+  predictor blocks, so its memory is O(V) in the observations rather than
+  O(padded grid x draws).
+
 ## 0.0.183 (2026-08-06)
 
 * **Pinned to `tulpa (>= 0.0.130)` for the auto-recentering outer grid

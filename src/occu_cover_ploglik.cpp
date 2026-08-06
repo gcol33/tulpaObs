@@ -23,6 +23,7 @@
 #include <vector>
 #include <cmath>
 #include "tobs_math.h"
+#include "occu_cover_ragged.h"      // Arms -- the shared per-draw predictor view
 #include "occu_coupling_shared.h"   // pos_log_density -- the fit-kernel positive density
 #ifdef _OPENMP
 #include <omp.h>
@@ -32,6 +33,7 @@ using namespace Rcpp;
 using tulpaObs::stable_plogis;
 using tulpaObs::clamp_eta;
 using tulpaObs::logsumexp2;
+using tulpaObs::occu_cover_ragged::Arms;
 
 namespace {
 
@@ -42,18 +44,6 @@ namespace {
 // the density is finite rather than -Inf, and no eta clamp (gcol33/tulpaObs#133).
 inline double pos_logdens(double y, double eta, double disp, int positive) {
   return tulpaObs::pos_log_density(positive, y, eta, disp);
-}
-
-// Dot of design row i (column-major [nrow x p]) with draw-d coefficient row of
-// b (column-major [S x p]); ncol columns of b are offset by `boff`.
-inline double row_dot(const double* Xcol, int nrow, int i,
-                      const double* bcol, int S, int d, int boff, int p) {
-  double acc = 0.0;
-  for (int j = 0; j < p; ++j) {
-    acc += Xcol[(std::size_t) j * nrow + i] *
-           bcol[(std::size_t) (boff + j) * S + d];
-  }
-  return acc;
 }
 
 }  // namespace
@@ -78,39 +68,21 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
     double eta_bound,
     int n_threads
 ) {
-  const int n_sites = X_occ.nrow();
-  const int V       = site_of_visit.size();
-  const int S       = b_occ.nrow();
+  Arms arms = tulpaObs::occu_cover_ragged::make_arms(
+      X_occ, X_det_site, X_det_visit, site_of_visit, b_occ, b_det, field_occ,
+      eta_bound);
+  tulpaObs::occu_cover_ragged::attach_cover(arms, X_pos_site, X_pos_visit,
+                                            b_pos, field_pos);
 
-  const int p_occ      = X_occ.ncol();
-  const int p_det_site = X_det_site.ncol();
-  const int p_pos_site = X_pos_site.ncol();
-  const int p_det_vis  = X_det_visit.ncol();
-  const int p_pos_vis  = X_pos_visit.ncol();
-  const bool has_det_visit = p_det_vis > 0;
-  const bool has_pos_visit = p_pos_vis > 0;
-
-  if (field_occ.nrow() != n_sites || field_occ.ncol() != S ||
-      field_pos.nrow() != n_sites || field_pos.ncol() != S) {
-    Rcpp::stop("field_occ / field_pos must be [n_sites x S].");
-  }
+  const int n_sites = arms.n_sites;
+  const int V       = arms.V;
+  const int S       = arms.S;
   if (y_det_visit.size() != V || y_pos_visit.size() != V) {
     Rcpp::stop("y_det_visit / y_pos_visit must be length V.");
   }
 
   Rcpp::NumericMatrix ll(S, n_sites);
 
-  const double* pXocc  = X_occ.begin();
-  const double* pXds   = X_det_site.begin();
-  const double* pXps   = X_pos_site.begin();
-  const double* pXdv   = X_det_visit.begin();
-  const double* pXpv   = X_pos_visit.begin();
-  const double* pBocc  = b_occ.begin();
-  const double* pBdet  = b_det.begin();
-  const double* pBpos  = b_pos.begin();
-  const double* pFocc  = field_occ.begin();
-  const double* pFpos  = field_pos.begin();
-  const int*    sov    = site_of_visit.begin();
   const int*    ydet   = y_det_visit.begin();
   const double* ypos   = y_pos_visit.begin();
   double* pll          = ll.begin();          // column-major [S x n_sites]
@@ -127,30 +99,22 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
     #pragma omp for schedule(static)
 #endif
     for (int d = 0; d < S; ++d) {
-      const double* focc_d = pFocc + (std::size_t) d * n_sites;
-      const double* fpos_d = pFpos + (std::size_t) d * n_sites;
       const double  disp_d = disp[d];
 
       // Per-site: occupancy prob, site-level detection / cover predictors, and
       // reset the per-site accumulators.
       for (int i = 0; i < n_sites; ++i) {
-        double eta_psi = row_dot(pXocc, n_sites, i, pBocc, S, d, 0, p_occ) +
-                         focc_d[i];
-        psi[i]     = stable_plogis(clamp_eta(eta_psi, eta_bound));
-        p_site[i]  = row_dot(pXds, n_sites, i, pBdet, S, d, 0, p_det_site);
-        ep_site[i] = row_dot(pXps, n_sites, i, pBpos, S, d, 0, p_pos_site) +
-                     fpos_d[i];
+        psi[i]     = arms.psi(i, d);
+        p_site[i]  = arms.eta_p_site(i, d);
+        ep_site[i] = arms.eta_pos_site(i, d);
         slh[i] = 0.0; sl1mp[i] = 0.0; cov[i] = 0.0; ndet[i] = 0;
       }
 
       // Per-visit: fold the visit-level block onto its site, accumulate the
       // detection mixture terms and the cover density at detected visits.
       for (int v = 0; v < V; ++v) {
-        int s = sov[v] - 1;
-        double eta_p = p_site[s];
-        if (has_det_visit) {
-          eta_p += row_dot(pXdv, V, v, pBdet, S, d, p_det_site, p_det_vis);
-        }
+        int s = arms.site(v);
+        double eta_p = p_site[s] + arms.eta_p_visit(v, d);
         double p    = stable_plogis(clamp_eta(eta_p, eta_bound));
         double l1mp = std::log(1.0 - p);
         int    y    = ydet[v];
@@ -161,10 +125,7 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
         // non-finite) cover drops out (missing-at-random cover), the detection
         // mixture above still counts it.
         if (y == 1 && std::isfinite(ypos[v])) {
-          double ep = ep_site[s];
-          if (has_pos_visit) {
-            ep += row_dot(pXpv, V, v, pBpos, S, d, p_pos_site, p_pos_vis);
-          }
+          double ep = ep_site[s] + arms.eta_pos_visit(v, d);
           cov[s] += pos_logdens(ypos[v], ep, disp_d, positive);
         }
       }

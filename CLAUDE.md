@@ -771,6 +771,32 @@ p arm excluded via `field_coef=0` (NOT `svc_weight=0`). Resolved by
 **Escape hatches**: `control$engine="v3_nested"` (pure-R outer-BFGS,
 `R/occu_cover_nested.R`, lognormal only), `"v2_joint"` (v2 joint Laplace).
 
+**Compact (ragged) input**: `tobs_data(compact=TRUE)` (the DEFAULT under
+`method="nested_laplace"`, `R/tobs.R:433`) returns a `tobs_ragged` carrier -- one row
+per VALID visit in `order(site, visit)` -- instead of a padded `[n_sites x max_visits]`
+grid, so memory is O(observations) and there is NO per-site visit cap. Binder
+`.tobs_build_occu_cover_ragged` (`R/occu_cover.R`) sets `ragged=TRUE` +
+`site_of_visit`/`y_det_visit`/`y_pos_visit`/V-row visit designs; a compact model carries
+**NO `model$y` / `model$y_pos` / `model$valid`** (they are NULL). Gated to the joint
+nested-Laplace path + `cover_aggregate="none"`. `test-occu-cover-compact.R`.
+
+**A per-visit diagnostic reads `.occu_cover_visit_view()`, NEVER `model$y`/`$valid`**
+(#185). One length-V view for BOTH layouts: a compact fit's stored visit rows, or a
+dense grid flattened by `.occu_cover_dense_ragged()` (site-major, visit-ascending =
+the order the dense `rowSums` accumulates). It also derives `n_valid` + `any_det`, so
+the per-site detection summary has one definition. All three consumers -- pointwise
+loglik (`cpp_occu_cover_ploglik_ragged`), PPC (`cpp_occu_cover_ppc`), PIT/LOO-PIT CDF
+limits (`cpp_occu_cover_cdf_limits`) -- go through it, and the three kernels assemble
+per-draw predictors from one shared `Arms` view (`src/occu_cover_ragged.h`). One kernel
+per diagnostic => dense == compact TO THE BIT (measured 0.000e+00 on elpd_waic,
+elpd_loo, LOO-PIT, PIT residuals, PPC fit.y/fit.y.rep/bayesian.p). Reading the dense
+grid instead is what made `tobs_cpo()`/`tobs_ppc()` error with "'x' must be an array of
+at least two dimensions" on every compact fit while `tobs_waic()` worked. The
+aggregated (mean/median/latent) PPC keeps the padded grid + `cpp_occu_cover_ppc_agg`
+-- aggregation is dense-only by gate. Cover density gates on `detected AND finite`
+everywhere (a detected visit may carry NA cover, missing-at-random); the PPC used to
+score that NA and returned `fit.y = NA` for every draw.
+
 **`group_var` (sites > cells)**: `group_var="<col>"` on icar/bym2 maps each site ->
 field node, so `n_sites` > `n_cells`. Field length `n_cells` while psi/p/cover run over
 `n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_map` (occupancy unit)
@@ -1142,6 +1168,7 @@ src/
   occu_fit.cpp / populate_helpers.h  — unified C++ entry; populate_spatial/temporal/re/svc/latent
   occ_*.h / dyn_occ_*.h / integrated_occ_*.h — single/dynamic(HMC fwd)/integrated
   cell_coupling_occu_cover.h / cell_coupling_occu_multiscale_cover.{cpp,h} / occu_coupling_shared.h — coupling specs + shared helpers
+  occu_cover_ragged.h       — `Arms` (#185): the one-row-per-valid-visit predictor view every ragged occu_cover DIAGNOSTIC kernel assembles from (occu_cover_ploglik.cpp, occu_cover_diag.cpp). `make_arms()` = occ + det arms (what the CDF-limits kernel needs), `attach_cover()` adds the pos arm (loglik + PPC). NOT the fit kernels -- those are the cell-coupling specs above
   ms_occu_cover_spatial_nuts.cpp / abun_nuts.cpp / ms_abun_nuts.cpp / occu_cover_nuts.cpp — NUTS (#67/#41/#14; occu_cover non-spatial)
   nuts_engine.h            — shared run_tulpa_nuts driver for the in-tree FullGradFn targets
   community_chol.h         — shared log-Cholesky helpers (#14 non-centered, #67 centered) + `CommunityCholPri` / `community_chol_pri_read()` (#181): the log-Cholesky hyperprior scalars + the `pri` list keys, ONE declaration for all seven community NUTS targets. `MsOccuCoverPri` / the spatial-factor `PriScalars` INHERIT it and add their own fields; do not restate the three

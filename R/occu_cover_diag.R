@@ -278,6 +278,38 @@
   max(1L, min(as.integer(n_draws), as.integer(budget / per_draw)))
 }
 
+# One length-V (one row per VALID visit) view of an occu_cover model, whichever
+# layout it was built in. A compact fit already stores exactly this; a dense fit
+# is flattened by .occu_cover_dense_ragged. Every per-visit diagnostic kernel
+# reads the view rather than `model$y` / `model$valid` -- the pointwise
+# log-likelihood, the posterior predictive check, and the PIT / LOO-PIT CDF
+# limits -- so a compact fit has all three, and the dense and compact builds of
+# the same data feed one kernel byte-identical input (gcol33/tulpaObs#185).
+# The per-site detection summaries the PPC and the PIT need (`n_valid`, and
+# `any_det`, whether the site holds any detection) are derived here from the
+# visit rows, so there is one definition of each.
+.occu_cover_visit_view <- function(model) {
+  rg <- if (isTRUE(model$ragged)) {
+    list(site_of_visit = as.integer(model$site_of_visit),
+         y_det_visit   = as.integer(model$y_det_visit),
+         y_pos_visit   = as.numeric(model$y_pos_visit),
+         X_det_visit   = model$X_det_visit, X_pos_visit = model$X_pos_visit,
+         V = length(model$site_of_visit))
+  } else .occu_cover_dense_ragged(model)
+  n_sites <- model$n_sites
+  rg$n_valid <- tabulate(rg$site_of_visit, nbins = n_sites)
+  rg$any_det <- as.integer(
+    tabulate(rg$site_of_visit[rg$y_det_visit == 1L], nbins = n_sites) > 0L)
+  rg
+}
+
+# A visit-level design for the C++ kernels: the V-row matrix, or a V x 0 matrix
+# when that arm carries no visit-level covariate (the kernels read the column
+# count as the "arm has a visit block" flag).
+.occu_cover_visit_design <- function(X, V) {
+  if (is.null(X)) matrix(0, V, 0L) else X
+}
+
 # Flatten a dense (padded [n_sites x max_visits]) no-aggregation occu_cover model
 # to the ragged one-row-per-valid-visit form the C++ pointwise kernel consumes.
 # The dense visit designs are site-major with n_sites * max_visits rows (cell
@@ -316,7 +348,6 @@
   max_visits <- model$max_visits
   S  <- nrow(b_occ)
   cl <- .tobs_clamp_eta
-  is_ragged <- isTRUE(model$ragged)
   mode <- model$cover_aggregate %||% "none"
 
   # No-aggregation path (every ragged fit, and the dense grid without cover
@@ -324,22 +355,15 @@
   # draw and parallelises over draws, with no draw-chunking (each draw's
   # per-visit predictors live in thread-private scratch, not the [V x n_draws]
   # transient .occu_cover_waic_chunk bounds). A dense grid is flattened to the
-  # same one-row-per-valid-visit form (.occu_cover_dense_ragged), summed in the
+  # same one-row-per-valid-visit form (.occu_cover_visit_view), summed in the
   # same visit order as the dense rowSums, so both feed one kernel.
   if (identical(mode, "none")) {
-    rg <- if (is_ragged) {
-      list(site_of_visit = as.integer(model$site_of_visit),
-           y_det_visit   = as.integer(model$y_det_visit),
-           y_pos_visit   = as.numeric(model$y_pos_visit),
-           X_det_visit   = model$X_det_visit, X_pos_visit = model$X_pos_visit,
-           V = length(model$site_of_visit))
-    } else .occu_cover_dense_ragged(model)
-    empty_v <- function(m) if (is.null(m)) matrix(0, rg$V, 0L) else m
+    rg <- .occu_cover_visit_view(model)
     return(cpp_occu_cover_ploglik_ragged(
       X_occ = model$X_occ, X_det_site = model$X_det_site,
       X_pos_site = model$X_pos_site,
-      X_det_visit = empty_v(rg$X_det_visit),
-      X_pos_visit = empty_v(rg$X_pos_visit),
+      X_det_visit = .occu_cover_visit_design(rg$X_det_visit, rg$V),
+      X_pos_visit = .occu_cover_visit_design(rg$X_pos_visit, rg$V),
       site_of_visit = rg$site_of_visit,
       y_det_visit   = rg$y_det_visit,
       y_pos_visit   = rg$y_pos_visit,
@@ -407,42 +431,30 @@
   }
   pos_code <- .occu_cover_pos_code(positive)
   c0   <- .tobs_occu_cover_components(object, n.samples)
-  comp <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
-                                     c0$field_occ, c0$field_pos)
   disp <- c0$disp
   S <- nrow(c0$b_occ)
-  n_sites <- model$n_sites; max_visits <- model$max_visits
-  y <- model$y; valid <- model$valid
-  cl <- .tobs_clamp_eta
-  stat_fn <- if (fit.stat == "freeman-tukey") {
-    function(o, e) sum((sqrt(o) - sqrt(e))^2, na.rm = TRUE)
-  } else {
-    function(o, e) sum((o - e)^2 / (e + 1e-10), na.rm = TRUE)
-  }
-  any_det <- rowSums(y * valid, na.rm = TRUE) > 0
-  n_valid <- rowSums(valid)
   mode <- model$cover_aggregate %||% "none"
 
   # No-aggregation path: the per-draw simulation (latent z, detection replicate,
-  # cover replicate) runs in cpp_occu_cover_ppc, which draws from R's RNG stream
-  # in the SAME order as the former R loop, so under a fixed seed the discrepancy
-  # is byte-identical. Build the per-draw predictors (deterministic) here.
+  # cover replicate) runs in cpp_occu_cover_ppc over the one-row-per-valid-visit
+  # view, which the compact fit stores and a dense grid is flattened into -- so
+  # under a fixed seed the two builds of the same data give the same discrepancy.
+  # The kernel assembles its own per-draw predictors from the arm designs, so no
+  # [V x n_draws] transient is built here.
   if (identical(mode, "none")) {
-    psi_all <- matrix(0, n_sites, S)
-    p_all   <- matrix(0, n_sites, S * max_visits)
-    ep_all  <- matrix(0, n_sites, S * max_visits)
-    for (s in seq_len(S)) {
-      de   <- .occu_cover_draw_eta(comp, s, n_sites, max_visits)
-      cols <- (s - 1L) * max_visits + seq_len(max_visits)
-      psi_all[, s]   <- stats::plogis(cl(de$psi_eta))
-      p_all[, cols]  <- stats::plogis(cl(de$p_eta))
-      ep_all[, cols] <- de$ep_mat
-    }
-    vint <- valid; storage.mode(vint) <- "integer"
-    yint <- y;     storage.mode(yint) <- "integer"
-    r <- cpp_occu_cover_ppc(psi_all, p_all, ep_all, yint, model$y_pos, vint,
-                            as.integer(any_det), as.integer(n_valid), disp,
-                            pos_code, identical(fit.stat, "freeman-tukey"))
+    vw <- .occu_cover_visit_view(model)
+    r <- cpp_occu_cover_ppc(
+      X_occ = model$X_occ, X_det_site = model$X_det_site,
+      X_pos_site = model$X_pos_site,
+      X_det_visit = .occu_cover_visit_design(vw$X_det_visit, vw$V),
+      X_pos_visit = .occu_cover_visit_design(vw$X_pos_visit, vw$V),
+      site_of_visit = vw$site_of_visit, y_det_visit = vw$y_det_visit,
+      y_pos_visit = vw$y_pos_visit,
+      b_occ = c0$b_occ, b_det = c0$b_det, b_pos = c0$b_pos, disp = disp,
+      field_occ = c0$field_occ, field_pos = c0$field_pos,
+      any_det = vw$any_det, n_valid = as.integer(vw$n_valid),
+      positive = pos_code, eta_bound = .TOBS_ETA_BOUND,
+      freeman = identical(fit.stat, "freeman-tukey"))
     return(list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
                 bayesian.p = mean(r$fit.y.rep > r$fit.y)))
   }
@@ -450,7 +462,16 @@
   # Aggregated (mean / median / latent) cover discrepancy: the detection
   # replicate plus the aggregated / latent cover replicate run in
   # cpp_occu_cover_ppc_agg with matched RNG order (byte-identical). The observed
-  # aggregates / detected covers are draw-invariant and gathered once.
+  # aggregates / detected covers are draw-invariant and gathered once. Cover
+  # aggregation is dense-only (compact input is gated to "none"), so this branch
+  # reads the padded grid directly.
+  n_sites <- model$n_sites; max_visits <- model$max_visits
+  cl <- .tobs_clamp_eta
+  comp <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
+                                     c0$field_occ, c0$field_pos)
+  y <- model$y; valid <- model$valid
+  any_det <- rowSums(y * valid, na.rm = TRUE) > 0
+  n_valid <- rowSums(valid)
   units <- .occu_cover_unit_cover(model)
   psi_all <- matrix(0, n_sites, S)
   p_all   <- matrix(0, n_sites, S * max_visits)
@@ -492,16 +513,18 @@
 .occu_cover_pit_cdf_limits <- function(object, n.samples) {
   model <- object$model
   c0    <- .tobs_occu_cover_components(object, n.samples)
-  valid <- model$valid; y <- model$y
-  any_det <- as.integer(rowSums(y * valid, na.rm = TRUE) > 0)
-  vint <- valid; storage.mode(vint) <- "integer"
-  empty_v <- function(m) if (is.null(m))
-    matrix(0, model$n_sites * model$max_visits, 0L) else m
+  # The detection summary is read off the one-row-per-valid-visit view, so a
+  # compact fit -- which stores no padded y / valid grid -- reaches the same
+  # kernel as a dense one (gcol33/tulpaObs#185).
+  vw    <- .occu_cover_visit_view(model)
   # The per-draw detection-summary CDF limits are deterministic; the former R
   # loop now runs in cpp_occu_cover_cdf_limits, parallel over draws.
-  cpp_occu_cover_cdf_limits(model$X_occ, model$X_det_site,
-                            empty_v(model$X_det_visit), c0$b_occ, c0$b_det,
-                            c0$field_occ, vint, any_det, 1L)
+  cpp_occu_cover_cdf_limits(
+    X_occ = model$X_occ, X_det_site = model$X_det_site,
+    X_det_visit = .occu_cover_visit_design(vw$X_det_visit, vw$V),
+    site_of_visit = vw$site_of_visit,
+    b_occ = c0$b_occ, b_det = c0$b_det, field_occ = c0$field_occ,
+    any_det = vw$any_det, eta_bound = .TOBS_ETA_BOUND, n_threads = 1L)
 }
 
 # Randomized PIT for an occu_cover() fit, on the per-site detection summary

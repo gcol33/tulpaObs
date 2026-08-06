@@ -193,6 +193,159 @@ test_that("WAIC draw-chunking is exact (chunk size does not change the result)",
 })
 
 
+# The per-visit diagnostics -- pointwise log-likelihood, PPC, PIT / LOO-PIT --
+# all read .occu_cover_visit_view(), which is the compact fit's stored visit rows
+# and a flattening of the dense fit's padded grid. Everything downstream of it
+# therefore has to agree between the two builds; that is what these three assert
+# (gcol33/tulpaObs#185, where tobs_cpo() / tobs_ppc() instead read model$y /
+# model$valid and errored on a compact fit with "'x' must be an array of at least
+# two dimensions" while tobs_waic() worked).
+
+test_that(".occu_cover_visit_view is identical for a dense and a compact fit", {
+  skip_on_cran()
+  nc  <- 8L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 21)
+  vd <- tulpaObs:::.occu_cover_visit_view(.fit_occu_cover(dd, adj, FALSE)$model)
+  vc <- tulpaObs:::.occu_cover_visit_view(.fit_occu_cover(dd, adj, TRUE)$model)
+
+  expect_identical(vc$V, vd$V)
+  expect_identical(vc$V, nrow(dd))
+  expect_identical(vc$site_of_visit, vd$site_of_visit)
+  expect_identical(vc$y_det_visit,   vd$y_det_visit)
+  expect_identical(vc$y_pos_visit,   vd$y_pos_visit)
+  expect_equal(unname(vc$X_det_visit), unname(vd$X_det_visit), tolerance = 0)
+  expect_equal(unname(vc$X_pos_visit), unname(vd$X_pos_visit), tolerance = 0)
+  # The per-site detection summaries the PPC and the PIT read off the view are
+  # the ones the dense path derived from `rowSums(y * valid)`.
+  expect_identical(vc$n_valid, vd$n_valid)
+  expect_identical(vc$any_det, vd$any_det)
+  expect_identical(sum(vd$n_valid), nrow(dd))
+  expect_identical(vd$any_det,
+                   as.integer(tapply(dd$occur, dd$site_key, max)[
+                     unique(dd$site_key)] > 0L))
+})
+
+
+test_that("compact == dense for tobs_cpo() / tobs_ppc() / PIT (#185)", {
+  skip_on_cran()
+  nc  <- 10L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 22)
+  fit_d <- .fit_occu_cover(dd, adj, compact = FALSE)
+  fit_c <- .fit_occu_cover(dd, adj, compact = TRUE)
+
+  set.seed(31); cd <- tobs_cpo(fit_d, n.draws = 200L)
+  set.seed(31); cc <- tobs_cpo(fit_c, n.draws = 200L)
+  expect_equal(cc$elpd_loo, cd$elpd_loo, tolerance = 1e-10)
+  expect_equal(cc$p_loo,    cd$p_loo,    tolerance = 1e-10)
+  # The LOO-PIT is the piece the compact path could not build at all.
+  expect_length(cc$pit, fit_c$model$n_sites)
+  expect_true(all(cc$pit >= 0 & cc$pit <= 1))
+  expect_equal(cc$pit, cd$pit, tolerance = 1e-10)
+
+  set.seed(32); pd <- tobs_ppc(fit_d, n.samples = 150L)
+  set.seed(32); pc <- tobs_ppc(fit_c, n.samples = 150L)
+  expect_true(all(is.finite(pc$fit.y)) && all(is.finite(pc$fit.y.rep)))
+  expect_equal(pc$fit.y,     pd$fit.y,     tolerance = 1e-10)
+  expect_equal(pc$fit.y.rep, pd$fit.y.rep, tolerance = 1e-10)
+  expect_identical(pc$bayesian.p, pd$bayesian.p)
+
+  # Both discrepancies, so the chi-squared branch is covered too.
+  set.seed(33); qd <- tobs_ppc(fit_d, fit.stat = "chi-squared", n.samples = 100L)
+  set.seed(33); qc <- tobs_ppc(fit_c, fit.stat = "chi-squared", n.samples = 100L)
+  expect_equal(qc$fit.y, qd$fit.y, tolerance = 1e-10)
+
+  set.seed(34); rd <- tobs_pit_residuals(fit_d, n.samples = 150L)
+  set.seed(34); rc <- tobs_pit_residuals(fit_c, n.samples = 150L)
+  expect_equal(rc, rd, tolerance = 1e-10)
+})
+
+
+test_that("a detected visit with a missing cover carries no cover term (#185)", {
+  skip_on_cran()
+  nc  <- 8L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 23)
+  # Drop the cover value (keeping the detection) at a few detected visits. The
+  # likelihood gates the cover density on `detected AND finite`, so the PPC has
+  # to skip those cells; scoring the NA instead poisons the whole discrepancy.
+  det <- which(dd$occur == 1L)
+  expect_gt(length(det), 5L)
+  dd$cover.flat[det[seq_len(5L)]] <- NA_real_
+
+  fit_d <- .fit_occu_cover(dd, adj, compact = FALSE)
+  fit_c <- .fit_occu_cover(dd, adj, compact = TRUE)
+  vw <- tulpaObs:::.occu_cover_visit_view(fit_c$model)
+  expect_equal(sum(vw$y_det_visit == 1L & !is.finite(vw$y_pos_visit)), 5L)
+
+  set.seed(41); pd <- tobs_ppc(fit_d, n.samples = 150L)
+  set.seed(41); pc <- tobs_ppc(fit_c, n.samples = 150L)
+  expect_true(all(is.finite(pd$fit.y)) && all(is.finite(pd$fit.y.rep)))
+  expect_equal(pc$fit.y,     pd$fit.y,     tolerance = 1e-10)
+  expect_equal(pc$fit.y.rep, pd$fit.y.rep, tolerance = 1e-10)
+
+  set.seed(42); cd <- tobs_cpo(fit_d, n.draws = 200L)
+  set.seed(42); cc <- tobs_cpo(fit_c, n.draws = 200L)
+  expect_true(is.finite(cc$elpd_loo))
+  expect_equal(cc$elpd_loo, cd$elpd_loo, tolerance = 1e-10)
+})
+
+
+test_that("a compact `by =` batch scores tobs_cpo() / tobs_ppc() per species (#185)", {
+  skip_on_cran()
+  skip_if_fast()
+  # `tobs(by = )` on the nested-Laplace route builds COMPACT per-species arms by
+  # default, so every per-species fit in a batch hit the dense-grid read. This is
+  # the shape the per-species `_loo.csv` is written from.
+  nc  <- 8L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:5, 1), seed = 51)
+  d2  <- rbind(transform(dd, sp = "spA"), transform(dd, sp = "spB"))
+  set.seed(9)
+  is_b <- d2$sp == "spB"
+  d2$occur[is_b] <- rbinom(nrow(dd), 1L, 0.3)
+  d2$cover.flat[is_b] <- ifelse(d2$occur[is_b] == 1L, 0.4, 0)
+
+  fit_batch <- function(compact) {
+    ctrl <- list(engine = "joint", n.threads = 1L, n.threads.outer = 1L,
+                 max.iter = 200L, sigma.grid = c(0.5, 1.5),
+                 phi.grid.pos = c(2, 10), integration = "grid",
+                 adaptive.grid = FALSE, verbose = FALSE, progress = FALSE,
+                 compact = compact)
+    suppressMessages(suppressWarnings(tobs(
+      occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+      data = d2, family = occu_cover(response = "beta", cover_aggregate = "none"),
+      detection = ~ x1 + hab, positive = ~ hab,
+      site = "site_key", visit = "visit", response = "occur",
+      y_pos = "cover.flat", occ.covs = c("cell_idx", "time.sc"),
+      det.covs = c("x1", "hab"), by = "sp",
+      method = "nested_laplace", control = ctrl)))
+  }
+  b_c <- fit_batch(TRUE)
+  b_d <- fit_batch(FALSE)
+  expect_s3_class(b_c, "tobs_batch")
+
+  for (sp in c("spA", "spB")) {
+    fc <- tobs_get(b_c, sp); fd <- tobs_get(b_d, sp)
+    expect_true(isTRUE(fc$model$ragged))
+    expect_null(fc$model$y)                  # no padded grid to read
+    expect_false(isTRUE(fd$model$ragged))
+
+    set.seed(61); cc <- tobs_cpo(fc, n.draws = 200L)
+    set.seed(61); cd <- tobs_cpo(fd, n.draws = 200L)
+    expect_true(is.finite(cc$elpd_loo) && all(is.finite(cc$pit)))
+    expect_equal(cc$elpd_loo, cd$elpd_loo, tolerance = 1e-10)
+    expect_equal(cc$pit,      cd$pit,      tolerance = 1e-10)
+
+    set.seed(62); pc <- tobs_ppc(fc, n.samples = 150L)
+    set.seed(62); pd <- tobs_ppc(fd, n.samples = 150L)
+    expect_equal(pc$fit.y, pd$fit.y, tolerance = 1e-10)
+    expect_identical(pc$bayesian.p, pd$bayesian.p)
+  }
+})
+
+
 test_that("compact input is gated to the joint nested-Laplace path", {
   dd <- .mk_occu_cover_long(6L, 2L, function(cell, ti) 4L, seed = 5)
   od  <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",
