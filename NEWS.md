@@ -1,5 +1,42 @@
 # tulpaObs NEWS
 
+## 0.0.183 (2026-08-06)
+
+* **Pinned to `tulpa (>= 0.0.130)` for the auto-recentering outer grid
+  (gcol33/tulpa#289, #290).** Every nested-Laplace family built its outer
+  hyperparameter grid from a fixed default axis, so a fit whose field-SD
+  posterior mode sat above the top node collapsed every outer weight onto
+  that boundary node and reported it only as
+  `pareto_k_regime = "collapsed_edge"`. The motivating case was a tulpaObs
+  one: on the 78 real EVA `occu_cover()` fits, 10 railed the 5.0 sigma
+  ceiling (measurement upstream, in gcol33/tulpa#289). The fixed grid is now
+  a starting axis rather than a ceiling -- a collapsed fit re-centers using
+  the mode-Hessian its own outer Pareto-k diagnostic already computes, and
+  refits.
+
+  It reaches this package through the joint driver `occu_cover()` and
+  `cover()` already fit against (single-block icar/bym2 backends and
+  multi-block copy blocks) and through the standalone `.NL_REGISTRY` path.
+  An explicit `sigma_grid` / `tau_grid` still wins; auto-recenter engages
+  only where the grid was left at its default, and is a no-op when the mode
+  already sits inside the old axis. `car_proper` (its `rho` axis is
+  unguessable) and MCAR are out of scope upstream, so the correlated
+  cover-field routes keep the old behaviour.
+
+* **Restored the exact `Remotes: gcol33/tulpa@v0.0.130` tag pin.**
+  `be6b2de` dropped the tag on the expectation that r-universe would serve
+  the floor. r-universe builds default-branch HEAD on its own poll schedule,
+  not tags or releases, and currently serves tulpa 0.0.125 -- so an `Imports`
+  floor above that resolves an engine *below* the floor and
+  `check-engine-pin.R` fails, which is the gcol33/tulpaObs#150 skew
+  reopening. The tag pin installs the pinned engine directly. Cost, as
+  before: the `Imports` floor and the `Remotes` tag now have to move
+  together, which `check-engine-pin.R` asserts.
+
+* **Folds in the unreleased 0.0.182**, which moved the floor to
+  `tulpa (>= 0.0.129)` for the outer-grid regime split
+  (gcol33/tulpa#276) that the cover reliability CSV reports.
+
 ## 0.0.181 (2026-08-05)
 
 * **Pinned to `tulpa (>= 0.0.117)` for the inner-Laplace skewness
