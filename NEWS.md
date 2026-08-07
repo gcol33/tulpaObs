@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.188 (2026-08-07)
+
+* **Pinned to `tulpa (>= 0.0.136)`, which makes a joint nested-Laplace fit
+  return the same numbers twice.** `test-occu-cover-parallel-coupling.R`
+  asserts that two identical parallel `occu_cover()` fits are bit-identical,
+  and it failed once under a loaded parallel suite while passing 200+ paired
+  fits in isolation. The cause was upstream: the coupled-cell scatter's chunk
+  count, which sets its summation order, was derived from a count of solves in
+  flight, and the outer width was clamped against a live free-memory reading,
+  so both moved with whatever else the machine was doing (gcol33/tulpa#300).
+  Measured from here: forcing the chunked path moves `means` by 1.4e-15 and
+  `sds` by 1.19e-07, and the fixture's default path was bit-identical to the
+  forced serial scatter -- so the chunk count demonstrably changes the answer,
+  and whether it changed was race-decided. Both inputs are now read from the
+  problem rather than the machine, with no parallelism given up. Nothing in
+  this package changed; the engine's exported headers are unchanged from
+  0.0.135, so no rebuild is needed.
+
 ## 0.0.187 (2026-08-07)
 
 * **Pinned to `tulpa (>= 0.0.135)`.** The engine's exported headers
