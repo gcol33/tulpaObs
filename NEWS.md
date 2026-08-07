@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.185 (2026-08-07)
+
+* **Pinned to `tulpa (>= 0.0.131)` so the auto-recentering outer grid also
+  engages at this package's own defaults (gcol33/tulpa#291, #292).** The
+  0.0.130 rescue that 0.0.183 pinned for read `pareto_k_mode_u` / `cov_u`,
+  fields only the full outer Pareto-k diagnostic populates -- and
+  `control$diagnose.k` defaults to `FALSE` on every route reaching the joint
+  driver -- `occu_cover()`, `occu_multiscale_cover()`, and `occu()`'s
+  SVC-bar joint path (#101) -- so the driver's rescue never fired on a
+  default fit. It now computes the same (mode, covariance) itself
+  whenever the grid has collapsed onto an edge, independent of the
+  diagnostic. A collapsed default `occu_cover()` fit therefore re-centers and
+  refits where before it stayed railed.
+
+  The companion upstream change adds the same rescue to `fit_st_nested()`'s
+  `tau_spatial x tau_temporal [x rho]` tensor grid, which reaches the
+  observation families carrying an areal + temporal field on one arm
+  (`removal()`, `distance()`, `fp_occu()`, `dyn_abun()`).
+
+  Both are behaviour-preserving where the grid was not collapsed, and both
+  decline whenever a grid-construction knob was set explicitly. The
+  `Remotes: gcol33/tulpa@v0.0.131` tag moves with the floor, as
+  `check-engine-pin.R` asserts: r-universe builds default-branch HEAD on its
+  own poll schedule and currently serves 0.0.130, so the tag is what resolves
+  the pinned engine.
+
 ## 0.0.184 (2026-08-07)
 
 * **`tobs_cpo()`, `tobs_ppc()` and `tobs_pit_residuals()` now work on a compact
