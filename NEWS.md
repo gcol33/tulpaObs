@@ -1,5 +1,76 @@
 # tulpaObs NEWS
 
+## 0.0.187 (2026-08-07)
+
+* **Pinned to `tulpa (>= 0.0.135)`.** The engine's exported headers
+  (`inst/include/tulpa/`) are unchanged from 0.0.132, so this package's
+  compiled backend links against the same ABI and needs no rebuild; the
+  bump carries the engine's own nested-Laplace and diagnostics work
+  (gcol33/tulpa#294 through #299), including the per-block declaration of
+  required fields checked at dispatch. The `Imports` floor, the `Remotes`
+  tag, and the installed engine are checked against each other by
+  `.github/scripts/check-engine-pin.R` on every CI job, so the three
+  cannot drift apart silently.
+
+## 0.0.186 (2026-08-07)
+
+* **One answer per control knob (#188).** `engine_defaults.R` was read only
+  by the 14 community dispatch branches, while 29 fitters restated the same
+  sampler knobs in their own formals. For everything routed through
+  `.tobs_fit_model()` -- `occu()`, `dyn_occu()`, `int_occu()`, `abun()`,
+  `removal()`, `distance()`, `fp_occu()`, `dyn_abun()`, `count()` -- those
+  formals were dead: that entry forwards explicit values, so
+  `abun(method = "nuts")` ran 2050 iterations and kept 2000 rather than its
+  own documented `n.iter = 1000`. Every sampler knob is now a `NULL` formal
+  filled by `.tobs_fill_sampler()` as the fitter's first statement, making
+  the table the only answer, and `test-engine-defaults.R` asserts
+  structurally that no fitter carries a literal.
+
+  Two divergences were deleted as proven artifacts: `n.iter` 2000 -> 1000 on
+  the `occu` / `cover` / `occu_cover` NUTS paths (commit 8975470 changed
+  `n.iter` from a total to a kept-post-warmup count on exactly those paths
+  and left the literal behind, so a default that had always kept 1000
+  silently began keeping 2000), and `occu(method = "pg_gibbs")` 2000/1000 ->
+  the shared 3000/1500, which had been keeping 1000 draws where every `ms_*`
+  sibling kept 1500. Three were recorded rather than aligned, as
+  `.TOBS_SINGLE_SPECIES_NUTS` / `_LAPLACE`: the `.tobs_fit_model()` entry
+  keeps `sigma.beta = 10`, `adapt.delta = 0.8` and `seed = 42`, each the
+  value its recovery and coverage tests were calibrated against. `n.iter`
+  means opposite things under the two samplers -- a kept count under `nuts`
+  (the run is `n.iter + n.warmup`), a total under `pg_gibbs` (warmup taken
+  out of it) -- which is now stated in the table and pinned by a test that
+  recomputes the kept count from the profile.
+
+* **`sd.load` and `re.lkj` join the table; `n.quad` deliberately does not
+  (#189).** `sd.load` (1.0) and `re.lkj` (1.5) are laplace rows. `n.quad` is
+  not one number: `.TOBS_NQUAD_ROUTES` / `.tobs_n_quad()` enumerate the seven
+  marginals that name it, from 1 on the closed-form lognormal cover latent to
+  15 on its beta counterpart, and `?tobs` now lists them per route instead of
+  stating a single default most routes never use.
+
+* **Defaulted outer grids declare themselves (#186).** The engine's
+  auto-recentering rescue decides axis provenance, not field presence
+  (gcol33/tulpa#293): it moves an axis that is absent, `auto_grid()`-marked,
+  or exactly equal to its own default, and treats anything else as a user
+  pin. This package writes a grid on every joint fit, so an undeclared
+  default read as a pin and the rescue went inert. The
+  `.tobs_default_sigma_grid()` / `_alpha_grid()` / `_bym2_rho_grid()` helpers
+  now return `tulpa::auto_grid(...)`, and `.tobs_mark_auto()` re-applies the
+  marker wherever a site reshapes a defaulted grid, since `sort()`, `[`,
+  `c()`, `as.numeric()` and `expand.grid()` all drop the attribute. Verified
+  end to end: a defaulted axis reports `declined = "grid_not_collapsed"`, a
+  `control$sigma.grid` one `"axis_pinned"`.
+
+* **Outer-grid placement is visible in `glance()` (#187).**
+  `.tobs_promote_outer_grid()` lifts `outer_grid_placement`,
+  `_recenter_attempts`, `_prior_added` and `_recenter_declined` to the
+  `tobs_fit` top level and into `glance()`, so an inert recenter shows up in
+  a batch summary rather than only under a manual `$joint_fit` inspection.
+  It is not gated on the grid having moved -- a declined recenter is exactly
+  the case worth seeing. `glance.tobs_multiarm_fit()` gets the columns too,
+  since it is terminal for `cover_fit` and never reaches
+  `glance.tobs_fit()`.
+
 ## 0.0.185 (2026-08-07)
 
 * **Pinned to `tulpa (>= 0.0.131)` so the auto-recentering outer grid also
