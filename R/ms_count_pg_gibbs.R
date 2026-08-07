@@ -19,10 +19,13 @@
 # no latent factors (the sfMsPGBinom / lfJSDM spatial-factor PG variants are
 # follow-ups).
 
-.tobs_fit_ms_count_pg_gibbs <- function(model, priors = NULL, sigma.beta = 2.5,
-                                        n.iter = 3000L, n.warmup = 1500L,
-                                        n.chains = 2L, n.thin = 1L, seed = 1L,
+.tobs_fit_ms_count_pg_gibbs <- function(model, priors = NULL, sigma.beta = NULL,
+                                        n.iter = NULL, n.warmup = NULL,
+                                        n.chains = NULL, n.thin = NULL, seed = NULL,
                                         verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "pg_gibbs")
+
   if (!(model$response %in% c("bernoulli", "binomial"))) {
     stop("method = \"pg_gibbs\" applies to the logistic responses only ",
          "(jsdm() / count(response = \"binomial\")); for Poisson / negbin / ",

@@ -20,10 +20,13 @@
 # PG-spatial extensions -- pg_binomial_{icar,bym2,...} exist in tulpa and are the
 # documented follow-up).
 
-.tobs_fit_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = 2.5,
-                                    n.iter = 2000L, n.warmup = 1000L,
-                                    n.chains = 2L, n.thin = 1L, seed = 1L,
+.tobs_fit_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = NULL,
+                                    n.iter = NULL, n.warmup = NULL,
+                                    n.chains = NULL, n.thin = NULL, seed = NULL,
                                     verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "pg_gibbs", single_species = TRUE)
+
   if (!is.null(model$X_det_visit))
     stop("occu() method = \"pg_gibbs\" supports site-level detection only in v1 ",
          "(visit-level detection covariates are a follow-up).", call. = FALSE)
@@ -94,10 +97,13 @@
 # conditional. The field is centred (sum-to-zero) each sweep for identifiability
 # against the intercept. icar only (bym2 adds the iid block; a follow-up).
 .tobs_fit_occu_pg_gibbs_spatial <- function(model, spatial, priors = NULL,
-                                            sigma.beta = 2.5,
-                                            n.iter = 2000L, n.warmup = 1000L,
-                                            n.chains = 2L, n.thin = 1L, seed = 1L,
+                                            sigma.beta = NULL,
+                                            n.iter = NULL, n.warmup = NULL,
+                                            n.chains = NULL, n.thin = NULL, seed = NULL,
                                             verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "pg_gibbs", single_species = TRUE)
+
   if (!identical(spatial$type, "icar"))
     stop("occu() method = \"pg_gibbs\" + a spatial field supports icar() only in ",
          "v1 (bym2 / car_proper are follow-ups).", call. = FALSE)

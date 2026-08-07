@@ -121,11 +121,14 @@
 # sum-to-zero reparameterisation (#113). Occupancy fields are more weakly
 # identified than count fields (one binary site per node).
 .tobs_fit_fp_occu_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
-                                           sigma.beta = 10,
-                                           n.iter = 1000L, n.warmup = 1000L,
-                                           n.chains = 1L, max.treedepth = 10L,
-                                           adapt.delta = 0.9, seed = 1L,
+                                           sigma.beta = NULL,
+                                           n.iter = NULL, n.warmup = NULL,
+                                           n.chains = NULL, max.treedepth = NULL,
+                                           adapt.delta = NULL, seed = NULL,
                                            verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   # FIXED-HYPER non-centered field on the occupancy (psi) arm from EITHER an areal
   # term (#72/#113) OR a temporal() term (#114); both share the sampling tail,
   # differing only in the loading / field map / warm source.

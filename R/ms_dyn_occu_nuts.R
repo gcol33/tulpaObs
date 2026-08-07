@@ -317,12 +317,15 @@
 # kept under `fit$nuts$draws`.
 .tobs_fit_ms_dyn_occu_nuts <- function(model,
                                        priors = NULL,
-                                       sigma.beta = 5,
-                                       n.iter = 1000L, n.warmup = 1000L,
-                                       n.chains = 1L, max.treedepth = 10L,
-                                       adapt.delta = 0.9, seed = 1L,
+                                       sigma.beta = NULL,
+                                       n.iter = NULL, n.warmup = NULL,
+                                       n.chains = NULL, max.treedepth = NULL,
+                                       adapt.delta = NULL, seed = NULL,
                                        max.iter = 200L, tol = 1e-4,
                                        verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   dots <- list(...)
   newton.max <- as.integer(dots$newton.max %||% 30L)
   pieces <- .tobs_ms_dyn_occu_nuts_pieces(model)

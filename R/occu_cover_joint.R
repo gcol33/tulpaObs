@@ -206,10 +206,11 @@
     sigma_pos_init <- phi_pos_init  # passed through as pos-arm phi
   }
 
-  alpha_grid <- dots$alpha.grid %||%
-                .tobs_default_alpha_grid()
-  sigma_grid <- dots$sigma.grid %||%
-                .tobs_default_sigma_grid()
+  # A defaulted axis arrives already marked from the helper (gcol33/tulpaObs#186)
+  # and reaches its block unsorted, so the mark survives; the pos-arm amplitude
+  # below re-derives through `sort()` and is marked again there.
+  alpha_grid <- dots$alpha.grid %||% .tobs_default_alpha_grid()
+  sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields: each is a per-cell-weighted areal field that
   # contributes weight_i * sigma_trend * z[cell_i] on occupancy and
@@ -296,7 +297,12 @@
   # indices stay valid; the blocks carry no copy (each rides its own arm).
   # `re_descs` records each block's arm + grouping metadata in prior order so the
   # postprocess maps each block back to its `b<k>.sigma` axis and BLUP columns.
+  # Each per-group RE block's SD axis. Declared as ours whenever the matching
+  # `control$re.sigma.grid*` is unset, so the engine may recentre it
+  # (gcol33/tulpaObs#186); `re_auto()` pairs each call site with its own knob.
   re_grid_default <- exp(seq(log(0.05), log(2), length.out = 6L))
+  re_auto <- function(user) .tobs_mark_auto(user %||% re_grid_default,
+                                            is.null(user))
   re_blocks <- list()
   re_descs  <- list()   # one descriptor per RE TERM (may span several blocks)
   zero_psi <- rep(0L, n_sites)
@@ -332,10 +338,13 @@
                           coef_scales = NULL) {
     obs_idx <- obs_for(arm, codes)
     b0 <- length(re_blocks)
+    # `as.numeric()` drops the auto-grid marker the caller applied, so re-apply
+    # it to the vector that actually reaches the block (gcol33/tulpaObs#186).
+    grid <- .tobs_mark_auto(as.numeric(grid), tulpa::is_auto_grid(grid))
     if (!isTRUE(correlated)) {
       for (cc in seq_len(n_coefs)) {
         blk <- list(type = "iid", n_units = as.integer(n_groups),
-                    sigma_grid = as.numeric(grid), obs_idx = obs_idx)
+                    sigma_grid = grid, obs_idx = obs_idx)
         if (!is.null(Z)) blk$svc_weight <- wt_for(arm, Z[, cc])
         re_blocks[[length(re_blocks) + 1L]] <<- blk
       }
@@ -361,13 +370,13 @@
       block_start = b0 + 1L, n_blocks = length(re_blocks) - b0)
   }
   if (has_re) {
-    add_re_term("psi", re_spec$group_idx, dots$re.sigma.grid %||% re_grid_default,
+    add_re_term("psi", re_spec$group_idx, re_auto(dots$re.sigma.grid),
                 NULL, re_spec$n_groups, re_spec$var %||% NA_character_,
                 re_spec$levels, 1L, "(Intercept)", FALSE)
   }
   if (has_re_det) {
     for (d in re_det_terms) {
-      add_re_term("p", d$codes, dots$re.sigma.grid.p %||% re_grid_default,
+      add_re_term("p", d$codes, re_auto(dots$re.sigma.grid.p),
                   d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
                   d$correlated, logchol_grid = dots$re.logchol.grid.p,
                   coef_scales = d$coef_scales)
@@ -375,7 +384,7 @@
   }
   if (has_re_pos) {
     for (d in re_pos_terms) {
-      add_re_term("pos", d$codes, dots$re.sigma.grid.pos %||% re_grid_default,
+      add_re_term("pos", d$codes, re_auto(dots$re.sigma.grid.pos),
                   d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
                   d$correlated, logchol_grid = dots$re.logchol.grid.pos,
                   coef_scales = d$coef_scales)
@@ -397,8 +406,14 @@
   # (axis b<k>.tau, sigma = 1/sqrt(tau)), like the cover() arm-specific path -- the
   # copy reparameterization (b<k>.sigma + b<k>.alpha) applies only to a copied
   # field. So the amplitude grid is passed as tau = 1 / sigma^2.
+  # `sort()` / `as.numeric()` drop the auto-grid marker, so it is re-applied on
+  # the translated tau vector; the source vector's own marker is the provenance
+  # (gcol33/tulpaObs#186), which covers both the explicit pos-field grid and the
+  # shared sigma grid it falls back to.
   pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||% sigma_grid
-  pos_armspec_tau_grid   <- sort(1.0 / as.numeric(pos_armspec_sigma_grid)^2)
+  pos_armspec_tau_grid   <- .tobs_mark_auto(
+    sort(1.0 / as.numeric(pos_armspec_sigma_grid)^2),
+    tulpa::is_auto_grid(pos_armspec_sigma_grid))
 
   # One arm-specific field -> ICAR block(s) that scatter on ONE arm's rows: the
   # node index lands in that arm's slot of the 3-slot spatial_idx (psi = site rows
@@ -485,7 +500,8 @@
   # and the fixed within-unit dispersion. Last-writer-wins under the fixed name;
   # the joint driver holds the resolved shared_ptr for the duration of the fit.
   if (is_latent) {
-    n_quad_latent <- as.integer(dots$n.quad %||% (if (is_beta) 15L else 1L))
+    n_quad_latent <- as.integer(dots$n.quad %||% .tobs_n_quad(
+      if (is_beta) "cover_latent_beta" else "cover_latent_lognormal"))
     if (is_beta) {
       cpp_register_occu_cover_beta_latent_coupling(
         pos_cover_values, disp2_fixed, n_quad_latent)

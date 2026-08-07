@@ -86,12 +86,15 @@
 # tobs_fit shaped like .tobs_fit_occu_multiscale_cover_laplace but carrying the
 # real NUTS draws / diagnostics.
 .tobs_fit_occu_multiscale_cover_nuts <- function(model, priors = NULL,
-                                                 sigma.beta = 5,
-                                                 n.iter = 1000L, n.warmup = 1000L,
-                                                 n.chains = 1L, n.thin = 1L,
-                                                 max.treedepth = 10L,
-                                                 adapt.delta = 0.9, seed = 1L,
+                                                 sigma.beta = NULL,
+                                                 n.iter = NULL, n.warmup = NULL,
+                                                 n.chains = NULL, n.thin = NULL,
+                                                 max.treedepth = NULL,
+                                                 adapt.delta = NULL, seed = NULL,
                                                  verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   lay     <- .tobs_occu_mscale_cover_nuts_layout(model)
   pi_list <- model$process_info
   is_beta <- identical(model$positive, "beta")

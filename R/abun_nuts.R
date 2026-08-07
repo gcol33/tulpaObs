@@ -126,10 +126,13 @@
 # `fit$nuts` carries the sampler diagnostics only (no draws -- fit$draws is the
 # single, unscaled posterior copy).
 .tobs_fit_abun_nuts <- function(model, mixture = "poisson", K_max = NULL,
-                                sigma.beta = 10, sigma.logr = 1.5, re = NULL,
-                                n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
-                                max.treedepth = 10L, adapt.delta = 0.9,
-                                seed = 1L, verbose = FALSE) {
+                                sigma.beta = NULL, sigma.logr = NULL, re = NULL,
+                                n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                max.treedepth = NULL, adapt.delta = NULL,
+                                seed = NULL, verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   is_nb    <- identical(mixture, "negbin")
   mix_code <- if (is_nb) "NB" else "P"
   X_lambda <- model$X_processes[[1]]
@@ -223,10 +226,13 @@
 # sigma sqrt(rho / scale)) and unstructured (iid, sigma sqrt(1 - rho)) blocks into
 # one loading. Spatial XOR RE. Poisson or NB.
 .tobs_fit_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
-                                        K_max = NULL, sigma.beta = 10, sigma.logr = 1.5,
-                                        n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
-                                        max.treedepth = 10L, adapt.delta = 0.9,
-                                        seed = 1L, verbose = FALSE) {
+                                        K_max = NULL, sigma.beta = NULL, sigma.logr = NULL,
+                                        n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                        max.treedepth = NULL, adapt.delta = NULL,
+                                        seed = NULL, verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   .tobs_reject_weighted_spatial(spatial, "abun NUTS abundance spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf(paste0("abun() NUTS + areal spatial supports icar() / car_proper() / ",

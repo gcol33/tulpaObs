@@ -12,9 +12,17 @@
 \item{...}{Ignored.}
 }
 \value{
-The base one-row \code{glance} data frame, with three extra columns on a
-joint-coupled fit that requested the diagnostic (\code{control$diagnose.k = TRUE},
-off by default per gcol33/tulpaObs#101):
+The base one-row \code{glance} data frame. A joint-coupled fit adds two
+outer-grid placement columns, reported whether or not the grid moved so an
+inert auto-recenter is visible in a batch summary:
+\describe{
+\item{\code{outer_grid_placement}}{\code{"fixed"} (the grid the fit was given) or
+\code{"auto_recentered"} (the engine moved it onto the hyperparameter mode).}
+\item{\code{outer_grid_recenter_declined}}{On a \code{"fixed"} placement, why the
+recenter did not apply -- for instance a user-pinned axis, or
+\code{"auto_recenter_disabled"}. \code{NA} when the grid was recentered.}
+}
+A fit that also requested the Pareto-k diagnostic (\code{control$diagnose.k = TRUE}, off by default per gcol33/tulpaObs#101) adds three more:
 \describe{
 \item{\code{pareto_k}}{The outer importance-sampling \eqn{\hat{k}} for the
 hyperparameter Gaussian summary; \verb{< 0.7} indicates a reliable summary,
@@ -34,7 +42,9 @@ samples on a spread grid.}
 }
 \description{
 Extends the generic \code{tulpa_fit} glance with the joint nested-Laplace outer
-Pareto-k diagnostic when present. The joint-coupled families (\code{occu_cover()},
-\code{occu()} spatial, \code{occu_multiscale_cover()}) carry the diagnostic at the fit
-top level (gcol33/tulpaObs#104); every other family glances exactly as before.
+grid placement and the outer Pareto-k diagnostic when present. The
+joint-coupled families (\code{occu_cover()}, \code{cover()}, \code{occu()} spatial,
+\code{occu_multiscale_cover()}) carry both at the fit top level
+(gcol33/tulpaObs#104, gcol33/tulpaObs#187); every other family glances exactly
+as before.
 }

@@ -162,8 +162,13 @@
 #'   thread it through the correction refits. For NUTS, this
 #'   is forwarded to the underlying tulpa engine.
 #' @param control list of low-level engine controls. Names follow the
-#'   dotted-separator convention. Sampler controls (`method = "nuts"`):
-#'   * `n.iter` — post-warmup sampling iterations kept per chain (default 2000);
+#'   dotted-separator convention. Every default below is resolved from one table
+#'   (`.TOBS_ENGINE_DEFAULTS`), so it is a property of the fitting engine rather
+#'   than of the family. Where a default differs between the single-species and
+#'   community entries, both are given.
+#'
+#'   Sampler controls (`method = "nuts"`):
+#'   * `n.iter` — post-warmup sampling iterations kept per chain (default 1000);
 #'     the total run per chain is `n.iter + n.warmup`.
 #'   * `n.warmup` — warmup / adaptation iterations per chain, discarded
 #'     (default 1000).
@@ -172,10 +177,30 @@
 #'     (default 1). Split-Rhat / bulk / tail ESS are reported on `$convergence`.
 #'   * `n.threads` — chains to run in parallel (default 1, sequential). Values
 #'     `> 1` use a PSOCK cluster and require tulpaObs to be installed.
-#'   * `adapt.delta` — target acceptance probability (default 0.8).
+#'   * `adapt.delta` — target acceptance probability (default 0.8 on the
+#'     single-species families, 0.9 on the community samplers).
 #'   * `max.treedepth` — NUTS maximum tree depth (default 10).
-#'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42).
+#'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42 on the
+#'     single-species families, 1 on the community samplers).
 #'     The resolved per-chain seeds are stored on `$seeds`.
+#'
+#'   Sampler controls (`method = "pg_gibbs"`). A conjugate sweep is far cheaper
+#'   than a NUTS trajectory, so the chain is longer and two chains run by
+#'   default. **`n.iter` counts differently here**: it is the TOTAL number of
+#'   sweeps and warmup comes out of it, so the chain keeps `n.iter - n.warmup`
+#'   draws, where under `"nuts"` it is the kept count and the run is
+#'   `n.iter + n.warmup` long.
+#'   * `n.iter` — total sweeps per chain (default 3000).
+#'   * `n.warmup` — sweeps discarded from the front (default 1500), leaving
+#'     1500 kept draws.
+#'   * `n.thin` — keep every `n.thin`-th post-warmup sweep (default 1).
+#'   * `n.chains` — number of chains (default 2, so split-Rhat is available
+#'     without a second call).
+#'   * `seed` — base RNG seed (default 1).
+#'   * `sigma.beta` — coefficient prior SD (default 2.5; tighter than the NUTS
+#'     one because a conjugate update has no step-size adaptation to absorb a
+#'     wide prior). There is deliberately no `adapt.delta` / `max.treedepth`:
+#'     those are HMC knobs.
 #'   * `n.seeds` — number of seed-offset refits to fit and LOO-stack into a
 #'     `tobs_stack` ensemble (default 1, a single fit). Member `k` uses base
 #'     seed `seed + k - 1`. Only meaningful for the stochastic routes
@@ -192,12 +217,31 @@
 #'     EM converges (default `TRUE`). Removes the Laplace small-cluster
 #'     attenuation of `sigma` / the RE correlation for binary occupancy; set
 #'     `FALSE` for the raw EM (Laplace, `nAGQ = 1`) fit.
-#'   * `n.quad` — quadrature points per random-effect dimension for `re.aghq`
-#'     (default 9). `n.quad = 1` is the plain Laplace (`nAGQ = 1`) marginal;
-#'     higher values refine it toward the exact marginal. On a community family
-#'     carrying `latent()` factors it instead sets the Gauss-Hermite nodes the
-#'     joint site marginal integrates the factor scores on (default 5, which the
-#'     loading magnitude and the score-matched offset are both insensitive to).
+#'   * `n.quad` — quadrature points. One name across several routes, each
+#'     integrating a different marginal over a different latent dimension, so
+#'     the default is per route rather than one number. `n.quad = 1` is always
+#'     the plain Laplace (`nAGQ = 1`) marginal; higher values refine it toward
+#'     the exact one.
+#'     Formula random effect under `method = "laplace"`: 9. Adaptive
+#'     Gauss-Hermite over the exact per-group marginal, debiasing the Laplace
+#'     small-cluster attenuation of a binary occupancy variance component.
+#'     Binary data carries little information per group, so the refine wants
+#'     many nodes.
+#'     Community N-mixture (`ms_abun()`): 1, i.e. the EM default. Each species'
+#'     count marginal is already informative, so the AGHQ refine barely moves
+#'     the community covariances; it is opt-in via `optimizer = "joint_fd"` for
+#'     the sparse / rare-species regime. `n.quad.scalar` (default 2) is the
+#'     trailing per-species log-dispersion coordinate, integrated separately.
+#'     Community joint occupancy-cover (`ms_occu_cover()`): 5. Tensor AGHQ over
+#'     the joint per-species RE vector, so the node count is raised to a power
+#'     of the RE dimension and stays small.
+#'     Latent cover-per-unit (`cover_aggregate = "latent"`): 15 for a beta cover
+#'     arm, 1 for lognormal, whose per-unit marginal is closed form and needs no
+#'     quadrature at all.
+#'     Community `latent()` factors: 5, the Gauss-Hermite nodes the joint site
+#'     marginal integrates the factor scores on. Both the loading magnitude and
+#'     the score-matched offset are insensitive to it (argmax stable to < 0.4%
+#'     against 21 nodes).
 #'   * `max.outer` — for a community family whose `latent()` factors or shared
 #'     areal field are fit by block coordinate ascent, the cap on the outer
 #'     alternation between the community EM and the field / factor update. A field
@@ -215,6 +259,10 @@
 #'     weakly-identified RE correlation off the `+-1` boundary toward 0 without
 #'     touching the marginal SDs; `re.lkj = 1` disables it (uniform). No effect
 #'     on intercept / uncorrelated terms.
+#'   * `sd.load` — prior SD on a spatial-factor loading in the community
+#'     occupancy-cover fit (default 1). The auto-rank ladder selects `K` by
+#'     marginal evidence under this prior, so the selection fit and the final
+#'     fit necessarily read the same value.
 #'   * `inner_solver` — for a spatial community N-mixture (`ms_abun()` with an
 #'     `icar()` / `bym2()` / `car_proper()` field on the abundance arm), the
 #'     inner solver integrating the shared field given the community: `"em"`

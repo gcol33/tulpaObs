@@ -156,11 +156,14 @@
 # unused sampler controls (n.thin / n.threads / progress.*).
 .tobs_fit_cover_nuts <- function(formula, data, y, positive, family,
                                  priors = NULL,
-                                 sigma.beta = 5, sigma.logdisp = 5,
-                                 n.iter = 2000L, n.warmup = 1000L,
-                                 n.chains = 1L, max.treedepth = 10L,
-                                 adapt.delta = 0.9, seed = 1L,
+                                 sigma.beta = NULL, sigma.logdisp = 5,
+                                 n.iter = NULL, n.warmup = NULL,
+                                 n.chains = NULL, max.treedepth = NULL,
+                                 adapt.delta = NULL, seed = NULL,
                                  verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   # Natural-scale encoding: the NUTS spec and the warm-start mode share the same
   # (unscaled) design, so the draws need no unscale transform.
   enc <- encode_cover_hurdle(formula, data, y, positive = positive,

@@ -21,10 +21,13 @@
 # summaries -- an uncovered (site, source) has n_valid = 0 and drops out), site-
 # level per-source detection, constant/covariate arms, no spatial field.
 
-.tobs_fit_ms_int_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = 2.5,
-                                           n.iter = 3000L, n.warmup = 1500L,
-                                           n.chains = 2L, n.thin = 1L, seed = 1L,
+.tobs_fit_ms_int_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = NULL,
+                                           n.iter = NULL, n.warmup = NULL,
+                                           n.chains = NULL, n.thin = NULL, seed = NULL,
                                            verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "pg_gibbs")
+
   rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))
   X_psi <- model$X_psi; X_p <- model$X_p            # X_p: list of D designs
   D     <- model$n_sources; S <- model$n_species

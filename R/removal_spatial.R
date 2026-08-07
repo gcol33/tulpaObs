@@ -381,11 +381,14 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 # sum-to-zero reparameterisation, gcol33/tulpaObs#71). Poisson or NB.
 .tobs_fit_removal_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                            mixture = "poisson",
-                                           K_max = NULL, sigma.beta = 10,
-                                           sigma.logr = 1.5, n.iter = 1000L,
-                                           n.warmup = 1000L, n.chains = 1L,
-                                           max.treedepth = 10L, adapt.delta = 0.9,
-                                           seed = 1L, verbose = FALSE) {
+                                           K_max = NULL, sigma.beta = NULL,
+                                           sigma.logr = NULL, n.iter = NULL,
+                                           n.warmup = NULL, n.chains = NULL,
+                                           max.treedepth = NULL, adapt.delta = NULL,
+                                           seed = NULL, verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   # This fitter carries the FIXED-HYPER non-centered field on the abundance arm
   # under NUTS from EITHER an areal term (icar/car_proper/bym2; #72/#113) OR a
   # temporal() term (ar1/rw1/rw2/iid; #114). Both reduce to a whitened raw ~ N(0,I)

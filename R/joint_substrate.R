@@ -25,16 +25,43 @@
 # the grid so an uncoupled arm is reachable exactly. sigma is the field
 # amplitude. bym2 additionally mixes structured and unstructured components at
 # rho.
+# Declare an outer-grid axis this package defaulted rather than one the user
+# pinned (gcol33/tulpaObs#186, consumer of gcol33/tulpa#293). The engine's
+# auto-recenter decides axis PROVENANCE, not field presence: a marked axis (or
+# one whose nodes are exactly the engine's own default) may be recentred onto
+# the hyperparameter mode, anything else is treated as a deliberate pin and is
+# never moved. Because tulpaObs writes a grid on every joint fit -- it derives
+# a second axis from the first, and hands the same vector to several blocks --
+# an unmarked default is indistinguishable from a pin and silently makes the
+# rescue inert.
+#
+# The marker is an attribute, so `sort()` / `[` / `c()` / `as.numeric()` /
+# `expand.grid()` all drop it: call this LAST, on the vector actually written
+# into the block, after any sorting or `1 / sqrt(tau)` translation.
+#
+# `auto` is the "the user named nothing here" test, so a site reads
+# `.tobs_mark_auto(<grid>, is.null(control$sigma.grid))`.
+.tobs_mark_auto <- function(x, auto) {
+  if (isTRUE(auto)) tulpa::auto_grid(x) else x
+}
+
+#
+# Each returns its vector already marked with `auto_grid()`: these functions ARE
+# the layer that chose the values, and a caller only ever reaches them on the
+# `control$*.grid %||%` fallback, so a user-supplied grid never passes through
+# and never picks up the mark. A site that reshapes the result afterwards
+# (`sort()`, `1 / sigma^2`, `expand.grid()`) drops the attribute and re-applies
+# it with `.tobs_mark_auto()`.
 .tobs_default_alpha_grid <- function() {
-  c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+  tulpa::auto_grid(c(0, exp(seq(log(0.1), log(3), length.out = 5))))
 }
 
 .tobs_default_sigma_grid <- function() {
-  exp(seq(log(0.1), log(3), length.out = 5))
+  tulpa::auto_grid(exp(seq(log(0.1), log(3), length.out = 5)))
 }
 
 .tobs_default_bym2_rho_grid <- function() {
-  c(0.25, 0.5, 0.75)
+  tulpa::auto_grid(c(0.25, 0.5, 0.75))
 }
 
 
@@ -74,6 +101,47 @@
           (length(ess) == 1L && !is.na(ess))
   if (!ran) return(NULL)
   jf[present]
+}
+
+# Promote the outer-grid placement record from a joint nested-Laplace result to
+# the tobs_fit top level (gcol33/tulpaObs#187). The engine reports where the
+# outer grid ended up -- `outer_grid_placement` ("fixed" / "auto_recentered"),
+# `outer_grid_recenter_attempts`, `outer_grid_prior_added`, and (gcol33/tulpa#293)
+# `outer_grid_recenter_declined`, the reason a "fixed" placement stayed fixed.
+# Without this promotion a caller has to reach into `$joint_fit` / `$joint` to
+# learn whether the auto grid did anything, which is how an inert recenter stayed
+# invisible across a whole batch. Same contract as `.tobs_promote_pareto_k()`:
+# returns a named list of the fields actually present so the result splices with
+# `c(list(...), .tobs_promote_outer_grid(jf), list(...))`, and NULL when the
+# result carries none (a fit from an engine predating the record, or a
+# non-joint path).
+#
+# NOT gated on the placement being "auto_recentered": a fixed placement with its
+# decline reason is precisely the case worth surfacing.
+.tobs_promote_outer_grid <- function(jf) {
+  if (!is.list(jf)) return(NULL)
+  keys <- c("outer_grid_placement", "outer_grid_recenter_attempts",
+            "outer_grid_prior_added", "outer_grid_recenter_declined")
+  present <- keys[keys %in% names(jf)]
+  if (length(present) == 0L) return(NULL)
+  jf[present]
+}
+
+# Add the outer-grid placement columns to a one-row glance data frame. Shared by
+# `glance.tobs_fit()` and `glance.tobs_multiarm_fit()` -- the latter is terminal
+# for `cover_fit` (class order cover_fit / tobs_multiarm_fit / tobs_fit), so it
+# never reaches the former and would otherwise glance without the placement.
+# Reads the promoted top-level fields first, falling back to the nested joint
+# object so a fit saved before the promotion still glances. Both columns are
+# written whenever the record exists, filling the absent one with NA, so a batch
+# summary rbind()ing one row per species gets a rectangular frame instead of
+# losing the column on whichever rows recentered.
+.tobs_glance_outer_grid <- function(g, x) {
+  og <- .tobs_promote_outer_grid(x) %||% .tobs_promote_outer_grid(.tobs_joint_fit(x))
+  if (is.null(og)) return(g)
+  g$outer_grid_placement <- og$outer_grid_placement %||% NA_character_
+  g$outer_grid_recenter_declined <- og$outer_grid_recenter_declined %||% NA_character_
+  g
 }
 
 # Resolve a grid amplitude axis to a per-draw vector. A multi-block fit prefixes

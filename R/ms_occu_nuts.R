@@ -240,13 +240,16 @@
 # fitted / simulate / richness read the NUTS posterior. The full per-draw
 # parameter vector is kept under `fit$nuts$draws` (with the layout).
 .tobs_fit_ms_occu_nuts <- function(model,
-                                   sigma.beta = 5,
-                                   n.iter = 1000L, n.warmup = 1000L,
-                                   n.chains = 1L, max.treedepth = 10L,
-                                   adapt.delta = 0.9, seed = 1L,
+                                   sigma.beta = NULL,
+                                   n.iter = NULL, n.warmup = NULL,
+                                   n.chains = NULL, max.treedepth = NULL,
+                                   adapt.delta = NULL, seed = NULL,
                                    max.iter = 100L, tol = 1e-4,
                                    newton.max = 30L, verbose = FALSE,
                                    ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   pieces <- .tobs_ms_occu_nuts_pieces(model)
   lay <- .tobs_ms_occu_nuts_layout(pieces$P_psi, pieces$P_p, pieces$S)
   pri <- .ms_ocs_nuts_priors()

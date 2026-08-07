@@ -643,7 +643,7 @@
   # default there; disable with control$re.aghq = FALSE, set nodes with
   # control$n.quad. Larger RE dims keep the EM covariance + the attenuation flag.
   re_aghq   <- !isFALSE(dots$re.aghq)
-  aghq_nq   <- as.integer(dots$n.quad %||% 5L)
+  aghq_nq   <- as.integer(dots$n.quad %||% .tobs_n_quad("ms_occu_cover"))
   aghq_cap  <- as.integer(dots$re.aghq.maxdim %||% 4L)
   debias_method <- "none"
   if (re_aghq && P <= aghq_cap) {

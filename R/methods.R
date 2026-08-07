@@ -124,15 +124,26 @@ tulpa::glance
 #' One-row model summary for a tobs_fit
 #'
 #' Extends the generic `tulpa_fit` glance with the joint nested-Laplace outer
-#' Pareto-k diagnostic when present. The joint-coupled families (`occu_cover()`,
-#' `occu()` spatial, `occu_multiscale_cover()`) carry the diagnostic at the fit
-#' top level (gcol33/tulpaObs#104); every other family glances exactly as before.
+#' grid placement and the outer Pareto-k diagnostic when present. The
+#' joint-coupled families (`occu_cover()`, `cover()`, `occu()` spatial,
+#' `occu_multiscale_cover()`) carry both at the fit top level
+#' (gcol33/tulpaObs#104, gcol33/tulpaObs#187); every other family glances exactly
+#' as before.
 #'
 #' @param x A fitted `tobs_fit`.
 #' @param ... Ignored.
-#' @return The base one-row `glance` data frame, with three extra columns on a
-#'   joint-coupled fit that requested the diagnostic (`control$diagnose.k = TRUE`,
-#'   off by default per gcol33/tulpaObs#101):
+#' @return The base one-row `glance` data frame. A joint-coupled fit adds two
+#'   outer-grid placement columns, reported whether or not the grid moved so an
+#'   inert auto-recenter is visible in a batch summary:
+#'   \describe{
+#'     \item{`outer_grid_placement`}{`"fixed"` (the grid the fit was given) or
+#'       `"auto_recentered"` (the engine moved it onto the hyperparameter mode).}
+#'     \item{`outer_grid_recenter_declined`}{On a `"fixed"` placement, why the
+#'       recenter did not apply -- for instance a user-pinned axis, or
+#'       `"auto_recenter_disabled"`. `NA` when the grid was recentered.}
+#'   }
+#'   A fit that also requested the Pareto-k diagnostic (`control$diagnose.k =
+#'   TRUE`, off by default per gcol33/tulpaObs#101) adds three more:
 #'   \describe{
 #'     \item{`pareto_k`}{The outer importance-sampling \eqn{\hat{k}} for the
 #'       hyperparameter Gaussian summary; `< 0.7` indicates a reliable summary,
@@ -154,7 +165,8 @@ glance.tobs_fit <- function(x, ...) {
   g <- NextMethod()
   # Prefer the promoted top-level fields; fall back to the nested joint object so
   # a fit saved before the promotion (gcol33/tulpaObs#104) still glances its k-hat.
-  pk <- .tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
+  g <- .tobs_glance_outer_grid(g, x)
+  pk <-.tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
   if (is.null(pk)) return(g)
   if (!is.null(pk$pareto_k))        g$pareto_k <- pk$pareto_k
   if (!is.null(pk$pareto_k_is_ess)) g$pareto_k_is_ess <- pk$pareto_k_is_ess

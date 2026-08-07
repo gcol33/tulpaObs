@@ -374,6 +374,10 @@
   # single-arm tau parameterization (sigma = 1/sqrt(tau)); bym2 adds rho. The
   # sigma grid default mirrors the shared path's amplitude range. Override via
   # control$sigma.grid (translated to tau for the intrinsic backends).
+  # Whether this axis is ours to move (gcol33/tulpaObs#186): the marker goes on
+  # the vector finally written into the block, so track the provenance here and
+  # apply it after the tau translation / bym2 pairing below.
+  sigma_auto <- is.null(control$sigma.grid)
   sigma_grid <- as.numeric(control$sigma.grid %||%
                            exp(seq(log(0.2), log(2.5), length.out = 7)))
 
@@ -386,10 +390,11 @@
     spatial_idx     = list(idx_occ, idx_pos)
   )
   if (block$type %in% c("icar", "car_proper")) {
-    block$tau_grid <- sort(1.0 / sigma_grid^2)
+    block$tau_grid <- .tobs_mark_auto(sort(1.0 / sigma_grid^2), sigma_auto)
     if (block$type == "car_proper") {
-      block$rho_car_grid <- as.numeric(control$rho.car.grid %||%
-                                       c(0.5, 0.8, 0.95, 0.99))
+      block$rho_car_grid <- .tobs_mark_auto(
+        as.numeric(control$rho.car.grid %||% c(0.5, 0.8, 0.95, 0.99)),
+        is.null(control$rho.car.grid))
     }
   } else if (block$type == "bym2") {
     # BYM2 fits as a non-copied length-2 block (structured phi ICAR + iid theta
@@ -399,11 +404,12 @@
     # sub-blocks (gcol33/tulpaObs#107), so predict / WAIC see the full mix. The
     # block's bym2 grid is the PAIRED (cartesian-expanded) (sigma, rho) vectors
     # the registry consumes, not two separate axes.
+    rho_auto <- is.null(control$rho.grid)
     rho_vals <- as.numeric(control$rho.grid %||% c(0.2, 0.5, 0.8, 0.95))
     gr <- expand.grid(sigma = sort(sigma_grid), rho = rho_vals,
                       KEEP.OUT.ATTRS = FALSE)
-    block$sigma_grid   <- gr$sigma
-    block$rho_grid     <- gr$rho
+    block$sigma_grid   <- .tobs_mark_auto(gr$sigma, sigma_auto)
+    block$rho_grid     <- .tobs_mark_auto(gr$rho, rho_auto)
     block$scale_factor <- compute_bym2_scale(graph)
   } else {
     stop(sprintf(paste0(
@@ -612,7 +618,9 @@
   copy_spec <- if (both_arm) {
     alpha_grid <- control$alpha.grid %||%
       .tobs_default_alpha_grid()
-    list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid))
+    list(arm = "pos", block = 1L,
+         alpha_grid = .tobs_mark_auto(as.numeric(alpha_grid),
+                                      tulpa::is_auto_grid(alpha_grid)))
   } else NULL
 
   # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky + alpha), so
@@ -941,7 +949,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   } else {
     sigma_donor <- prior_for_joint$sigma_grid %||%
       .tobs_default_sigma_grid()
-    sigma_pos_grid <- as.numeric(sigma_donor)
+    sigma_pos_grid <- .tobs_mark_auto(as.numeric(sigma_donor),
+                                      tulpa::is_auto_grid(sigma_donor))
   }
 
   # Direct (sigma, alpha) copy axis: the cover arm sees the shared field at
@@ -1067,8 +1076,12 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
     prior_coupled <- list(base_block, trend_block)
     copy_coupled  <- list(
-      list(arm = "pos", block = 1L, alpha_grid = as.numeric(alpha_grid_base)),
-      list(arm = "pos", block = 2L, alpha_grid = as.numeric(alpha_grid_trend))
+      list(arm = "pos", block = 1L,
+           alpha_grid = .tobs_mark_auto(as.numeric(alpha_grid_base),
+                                        tulpa::is_auto_grid(alpha_grid_base))),
+      list(arm = "pos", block = 2L,
+           alpha_grid = .tobs_mark_auto(as.numeric(alpha_grid_trend),
+                                        tulpa::is_auto_grid(alpha_grid_trend)))
     )
     arm_occ$spatial_idx <- NULL
     arm_pos$spatial_idx <- NULL
@@ -1142,7 +1155,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
     # `control$adaptive.grid = FALSE` to recover the legacy fixed-grid
     # behaviour for reproducibility checks.
-    arm_pos$field_coef <- list(name = "alpha", grid = as.numeric(alpha_grid))
+    arm_pos$field_coef <- list(
+      name = "alpha",
+      grid = .tobs_mark_auto(as.numeric(alpha_grid),
+                             tulpa::is_auto_grid(alpha_grid)))
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),
       prior     = prior_for_joint,

@@ -52,10 +52,13 @@
 # Front-door NUTS fitter for the false-positive occupancy family
 # ---------------------------------------------------------------------------
 
-.tobs_fit_fp_occu_nuts <- function(model, sigma.beta = 10, re = NULL,
-                                   n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
-                                   max.treedepth = 10L, adapt.delta = 0.9,
-                                   seed = 1L, verbose = FALSE) {
+.tobs_fit_fp_occu_nuts <- function(model, sigma.beta = NULL, re = NULL,
+                                   n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                   max.treedepth = NULL, adapt.delta = NULL,
+                                   seed = NULL, verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
 

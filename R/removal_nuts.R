@@ -80,10 +80,13 @@
 # the draws into the build_nmix_fit shape. Operates on the (autoscaled) `model`;
 # the caller .tobs_fit_model() unscales the means / draws / vcov back to natural.
 .tobs_fit_removal_nuts <- function(model, mixture = "poisson", K_max = NULL,
-                                   sigma.beta = 10, sigma.logr = 1.5, re = NULL,
-                                   n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
-                                   max.treedepth = 10L, adapt.delta = 0.9,
-                                   seed = 1L, verbose = FALSE) {
+                                   sigma.beta = NULL, sigma.logr = NULL, re = NULL,
+                                   n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                   max.treedepth = NULL, adapt.delta = NULL,
+                                   seed = NULL, verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   is_nb    <- identical(mixture, "negbin")
   mix_code <- if (is_nb) "NB" else "P"
   X_lambda <- model$X_processes[[1]]

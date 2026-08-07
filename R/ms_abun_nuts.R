@@ -296,12 +296,15 @@
 # `fit$nuts$draws` (with the layout) so the calibrated per-(species, site) WAIC /
 # LOO can be scored from it.
 .tobs_fit_ms_abun_nuts <- function(model, mixture = "poisson", K_max = NULL,
-                                   sigma.beta = 10, sigma.logr = 1.5,
-                                   n.iter = 1000L, n.warmup = 1000L,
-                                   n.chains = 1L, max.treedepth = 10L,
-                                   adapt.delta = 0.9, seed = 1L,
+                                   sigma.beta = NULL, sigma.logr = NULL,
+                                   n.iter = NULL, n.warmup = NULL,
+                                   n.chains = NULL, max.treedepth = NULL,
+                                   adapt.delta = NULL, seed = NULL,
                                    lkj_eta = 1.5, n.quad = 5L, max.iter = 100L,
                                    verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", family = "ms_abun")
+
   if (!identical(mixture, "poisson") && !identical(mixture, "negbin")) {
     stop("Community N-mixture NUTS supports mixture = \"poisson\" or \"negbin\" ",
          "(got \"", mixture, "\").", call. = FALSE)
@@ -443,12 +446,15 @@
 # null-space (constant) direction (gcol33/tulpaObs#71/#113), the same reparam the
 # single-species abun() NUTS+areal path uses.
 .tobs_fit_ms_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
-                                           K_max = NULL, sigma.beta = 10,
-                                           sigma.logr = 1.5, n.iter = 1000L,
-                                           n.warmup = 1000L, n.chains = 1L,
-                                           max.treedepth = 10L, adapt.delta = 0.9,
-                                           seed = 1L, max.iter = 100L,
+                                           K_max = NULL, sigma.beta = NULL,
+                                           sigma.logr = NULL, n.iter = NULL,
+                                           n.warmup = NULL, n.chains = NULL,
+                                           max.treedepth = NULL, adapt.delta = NULL,
+                                           seed = NULL, max.iter = 100L,
                                            verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", family = "ms_abun")
+
   .tobs_reject_weighted_spatial(spatial, "ms_abun NUTS abundance spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(

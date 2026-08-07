@@ -213,11 +213,14 @@
 # abun's sigma.logr). `...` absorbs unused sampler controls (n.thin / n.threads /
 # progress.*).
 .tobs_fit_occu_cover_nuts <- function(model, priors = NULL,
-                                      sigma.beta = 5, sigma.logdisp = 5,
-                                      n.iter = 2000L, n.warmup = 1000L,
-                                      n.chains = 1L, max.treedepth = 10L,
-                                      adapt.delta = 0.9, seed = 1L,
+                                      sigma.beta = NULL, sigma.logdisp = 5,
+                                      n.iter = NULL, n.warmup = NULL,
+                                      n.chains = NULL, max.treedepth = NULL,
+                                      adapt.delta = NULL, seed = NULL,
                                       verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   pin   <- model$process_info
   p_occ <- pin[[1L]]$p; p_p <- pin[[2L]]$p; p_pos <- pin[[3L]]$p
   n_par <- p_occ + p_p + p_pos + 1L
@@ -491,14 +494,17 @@
 # the precision null-space (constant) direction (gcol33/tulpaObs#71/#113), the same
 # reparam abun NUTS+areal uses. `...` absorbs unused sampler controls.
 .tobs_fit_occu_cover_nuts_spatial <- function(model, spatial, priors = NULL,
-                                              sigma.beta = 5, sigma.logdisp = 5,
-                                              n.iter = 2000L, n.warmup = 1000L,
-                                              n.chains = 1L, max.treedepth = 10L,
-                                              adapt.delta = 0.9, seed = 1L,
+                                              sigma.beta = NULL, sigma.logdisp = 5,
+                                              n.iter = NULL, n.warmup = NULL,
+                                              n.chains = NULL, max.treedepth = NULL,
+                                              adapt.delta = NULL, seed = NULL,
                                               max.iter = 200L, tol = 1e-6,
                                               verbose = FALSE,
                                               sigma.grid = NULL, rho.car.grid = NULL,
                                               alpha.grid = NULL, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   .tobs_reject_weighted_spatial(spatial, "occu_cover NUTS psi spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(

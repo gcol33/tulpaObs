@@ -205,11 +205,14 @@
 
 # Fit the community count model by NUTS. Warm-starts at the community Laplace-EM
 # mode, then samples the exact joint posterior. Poisson / negbin / gaussian.
-.tobs_fit_ms_count_nuts <- function(model, sigma.beta = 10, sigma.logr = 1.5,
-                                    n.iter = 1000L, n.warmup = 1000L,
-                                    n.chains = 1L, max.treedepth = 10L,
-                                    adapt.delta = 0.9, seed = 1L,
+.tobs_fit_ms_count_nuts <- function(model, sigma.beta = NULL, sigma.logr = NULL,
+                                    n.iter = NULL, n.warmup = NULL,
+                                    n.chains = NULL, max.treedepth = NULL,
+                                    adapt.delta = NULL, seed = NULL,
                                     verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", family = "ms_count")
+
   response <- model$response %||% "poisson"
   is_nb    <- identical(response, "negbin")
   is_gauss <- identical(response, "gaussian")

@@ -182,9 +182,14 @@ thread it through the correction refits. For NUTS, this
 is forwarded to the underlying tulpa engine.}
 
 \item{control}{list of low-level engine controls. Names follow the
-dotted-separator convention. Sampler controls (\code{method = "nuts"}):
+dotted-separator convention. Every default below is resolved from one table
+(\code{.TOBS_ENGINE_DEFAULTS}), so it is a property of the fitting engine rather
+than of the family. Where a default differs between the single-species and
+community entries, both are given.
+
+Sampler controls (\code{method = "nuts"}):
 \itemize{
-\item \code{n.iter} — post-warmup sampling iterations kept per chain (default 2000);
+\item \code{n.iter} — post-warmup sampling iterations kept per chain (default 1000);
 the total run per chain is \code{n.iter + n.warmup}.
 \item \code{n.warmup} — warmup / adaptation iterations per chain, discarded
 (default 1000).
@@ -193,10 +198,32 @@ the total run per chain is \code{n.iter + n.warmup}.
 (default 1). Split-Rhat / bulk / tail ESS are reported on \verb{$convergence}.
 \item \code{n.threads} — chains to run in parallel (default 1, sequential). Values
 \verb{> 1} use a PSOCK cluster and require tulpaObs to be installed.
-\item \code{adapt.delta} — target acceptance probability (default 0.8).
+\item \code{adapt.delta} — target acceptance probability (default 0.8 on the
+single-species families, 0.9 on the community samplers).
 \item \code{max.treedepth} — NUTS maximum tree depth (default 10).
-\item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42).
+\item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42 on the
+single-species families, 1 on the community samplers).
 The resolved per-chain seeds are stored on \verb{$seeds}.
+}
+
+Sampler controls (\code{method = "pg_gibbs"}). A conjugate sweep is far cheaper
+than a NUTS trajectory, so the chain is longer and two chains run by
+default. \strong{\code{n.iter} counts differently here}: it is the TOTAL number of
+sweeps and warmup comes out of it, so the chain keeps \code{n.iter - n.warmup}
+draws, where under \code{"nuts"} it is the kept count and the run is
+\code{n.iter + n.warmup} long.
+\itemize{
+\item \code{n.iter} — total sweeps per chain (default 3000).
+\item \code{n.warmup} — sweeps discarded from the front (default 1500), leaving
+1500 kept draws.
+\item \code{n.thin} — keep every \code{n.thin}-th post-warmup sweep (default 1).
+\item \code{n.chains} — number of chains (default 2, so split-Rhat is available
+without a second call).
+\item \code{seed} — base RNG seed (default 1).
+\item \code{sigma.beta} — coefficient prior SD (default 2.5; tighter than the NUTS
+one because a conjugate update has no step-size adaptation to absorb a
+wide prior). There is deliberately no \code{adapt.delta} / \code{max.treedepth}:
+those are HMC knobs.
 \item \code{n.seeds} — number of seed-offset refits to fit and LOO-stack into a
 \code{tobs_stack} ensemble (default 1, a single fit). Member \code{k} uses base
 seed \code{seed + k - 1}. Only meaningful for the stochastic routes
@@ -215,12 +242,31 @@ the adaptive Gauss-Hermite debias of the variance components after the
 EM converges (default \code{TRUE}). Removes the Laplace small-cluster
 attenuation of \code{sigma} / the RE correlation for binary occupancy; set
 \code{FALSE} for the raw EM (Laplace, \code{nAGQ = 1}) fit.
-\item \code{n.quad} — quadrature points per random-effect dimension for \code{re.aghq}
-(default 9). \code{n.quad = 1} is the plain Laplace (\code{nAGQ = 1}) marginal;
-higher values refine it toward the exact marginal. On a community family
-carrying \code{latent()} factors it instead sets the Gauss-Hermite nodes the
-joint site marginal integrates the factor scores on (default 5, which the
-loading magnitude and the score-matched offset are both insensitive to).
+\item \code{n.quad} — quadrature points. One name across several routes, each
+integrating a different marginal over a different latent dimension, so
+the default is per route rather than one number. \code{n.quad = 1} is always
+the plain Laplace (\code{nAGQ = 1}) marginal; higher values refine it toward
+the exact one.
+Formula random effect under \code{method = "laplace"}: 9. Adaptive
+Gauss-Hermite over the exact per-group marginal, debiasing the Laplace
+small-cluster attenuation of a binary occupancy variance component.
+Binary data carries little information per group, so the refine wants
+many nodes.
+Community N-mixture (\code{ms_abun()}): 1, i.e. the EM default. Each species'
+count marginal is already informative, so the AGHQ refine barely moves
+the community covariances; it is opt-in via \code{optimizer = "joint_fd"} for
+the sparse / rare-species regime. \code{n.quad.scalar} (default 2) is the
+trailing per-species log-dispersion coordinate, integrated separately.
+Community joint occupancy-cover (\code{ms_occu_cover()}): 5. Tensor AGHQ over
+the joint per-species RE vector, so the node count is raised to a power
+of the RE dimension and stays small.
+Latent cover-per-unit (\code{cover_aggregate = "latent"}): 15 for a beta cover
+arm, 1 for lognormal, whose per-unit marginal is closed form and needs no
+quadrature at all.
+Community \code{latent()} factors: 5, the Gauss-Hermite nodes the joint site
+marginal integrates the factor scores on. Both the loading magnitude and
+the score-matched offset are insensitive to it (argmax stable to < 0.4\%
+against 21 nodes).
 \item \code{max.outer} — for a community family whose \code{latent()} factors or shared
 areal field are fit by block coordinate ascent, the cap on the outer
 alternation between the community EM and the field / factor update. A field
@@ -238,6 +284,10 @@ correlation in the \code{re.aghq} refine (default 1.5). Pulls a
 weakly-identified RE correlation off the \code{+-1} boundary toward 0 without
 touching the marginal SDs; \code{re.lkj = 1} disables it (uniform). No effect
 on intercept / uncorrelated terms.
+\item \code{sd.load} — prior SD on a spatial-factor loading in the community
+occupancy-cover fit (default 1). The auto-rank ladder selects \code{K} by
+marginal evidence under this prior, so the selection fit and the final
+fit necessarily read the same value.
 \item \code{inner_solver} — for a spatial community N-mixture (\code{ms_abun()} with an
 \code{icar()} / \code{bym2()} / \code{car_proper()} field on the abundance arm), the
 inner solver integrating the shared field given the community: \code{"em"}

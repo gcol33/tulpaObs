@@ -19,10 +19,13 @@
 #
 # v1: constant transitions, site-level detection, no structured terms.
 
-.tobs_fit_ms_dyn_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = 2.5,
-                                           n.iter = 3000L, n.warmup = 1500L,
-                                           n.chains = 2L, n.thin = 1L, seed = 1L,
+.tobs_fit_ms_dyn_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = NULL,
+                                           n.iter = NULL, n.warmup = NULL,
+                                           n.chains = NULL, n.thin = NULL, seed = NULL,
                                            verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "pg_gibbs")
+
   rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))
   Xp1   <- model$X_psi1; Xp <- model$X_p; Xg <- model$X_gamma; Xe <- model$X_eps
   n     <- model$n_sites; T_s <- model$n_seasons; S <- model$n_species

@@ -219,13 +219,16 @@
 # returned fit reuses build_ms_occu_cover_fit so the tobs_fit surface matches the
 # laplace path. Mirrors .tobs_fit_ms_int_occu_nuts (3 arms + a shared scalar).
 .tobs_fit_ms_occu_cover_nuts <- function(model,
-                                         sigma.beta = 5,
-                                         n.iter = 1000L, n.warmup = 1000L,
-                                         n.chains = 1L, max.treedepth = 10L,
-                                         adapt.delta = 0.9, seed = 1L,
+                                         sigma.beta = NULL,
+                                         n.iter = NULL, n.warmup = NULL,
+                                         n.chains = NULL, max.treedepth = NULL,
+                                         adapt.delta = NULL, seed = NULL,
                                          max.iter = 200L, tol = 1e-4,
                                          dispersion.re = FALSE, sigma.ld.init = 0.3,
                                          verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts")
+
   pil   <- model$process_info
   P_occ <- pil[[1L]]$p; P_p <- pil[[2L]]$p; P_pos <- pil[[3L]]$p
   P     <- P_occ + P_p + P_pos

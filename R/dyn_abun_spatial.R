@@ -113,11 +113,14 @@
 # bym2 -- the intrinsic icar / bym2 fields sample via the #71 sum-to-zero
 # reparameterisation (#113); Poisson or NB initial abundance.
 .tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
-                                            K_max = NULL, sigma.beta = 10,
-                                            n.iter = 1000L, n.warmup = 1000L,
-                                            n.chains = 1L, max.treedepth = 10L,
-                                            adapt.delta = 0.9, seed = 1L,
+                                            K_max = NULL, sigma.beta = NULL,
+                                            n.iter = NULL, n.warmup = NULL,
+                                            n.chains = NULL, max.treedepth = NULL,
+                                            adapt.delta = NULL, seed = NULL,
                                             verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
   if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
     stop(paste0("dyn_abun() NUTS carries the areal field on the initial-abundance ",
@@ -227,11 +230,14 @@
 # change. Poisson or NB initial abundance; temporal-only (no simultaneous areal
 # field on this path).
 .tobs_fit_dyn_abun_nuts_temporal <- function(model, temporal, mixture = "poisson",
-                                             K_max = NULL, sigma.beta = 10,
-                                             n.iter = 1000L, n.warmup = 1000L,
-                                             n.chains = 1L, max.treedepth = 10L,
-                                             adapt.delta = 0.9, seed = 1L,
+                                             K_max = NULL, sigma.beta = NULL,
+                                             n.iter = NULL, n.warmup = NULL,
+                                             n.chains = NULL, max.treedepth = NULL,
+                                             adapt.delta = NULL, seed = NULL,
                                              verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   n_sites <- model$n_sites
   ti <- as.integer(temporal$time_idx)
   if (length(ti) != n_sites)

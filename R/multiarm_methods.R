@@ -122,7 +122,9 @@
 #' @param ... Ignored, or forwarded to `NextMethod()` on the posterior path.
 #' @return `nobs()` an integer; `coef()` a named list of per-arm estimates;
 #'   `vcov()` the block-diagonal covariance; `confint()` a two-column matrix;
-#'   `logLik()` a `logLik` object; `glance()`/`tidy()` a data frame.
+#'   `logLik()` a `logLik` object; `glance()`/`tidy()` a data frame. On a joint
+#'   nested-Laplace fit `glance()` also carries `outer_grid_placement` and
+#'   `outer_grid_recenter_declined` (gcol33/tulpaObs#187).
 #' @name tobs_multiarm_methods
 #' @export
 nobs.tobs_multiarm_fit <- function(object, ...) {
@@ -197,13 +199,16 @@ logLik.tobs_multiarm_fit <- function(object, ...) {
 #' @export
 glance.tobs_multiarm_fit <- function(x, ...) {
   ll <- logLik(x)
-  data.frame(
+  g <- data.frame(
     n         = as.integer(x[["n_total"]] %||% NA_integer_),
     logLik    = as.numeric(ll),
     df        = attr(ll, "df"),
     converged = isTRUE(x[["convergence"]][["converged"]] %||% x[["converged"]]),
     stringsAsFactors = FALSE
   )
+  # This method is terminal for cover_fit, so the joint outer-grid placement
+  # (gcol33/tulpaObs#187) has to be added here as well as in glance.tobs_fit().
+  .tobs_glance_outer_grid(g, x)
 }
 
 # --- tidy coefficient table --------------------------------------------------

@@ -73,10 +73,13 @@
 # Front-door NUTS fitter for the open N-mixture family
 # ---------------------------------------------------------------------------
 
-.tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = 10, re = NULL,
-                                    n.iter = 1000L, n.warmup = 1000L, n.chains = 1L,
-                                    max.treedepth = 10L, adapt.delta = 0.9,
-                                    seed = 1L, verbose = FALSE) {
+.tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = NULL, re = NULL,
+                                    n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                    max.treedepth = NULL, adapt.delta = NULL,
+                                    seed = NULL, verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
   use_nb <- identical(model$mixture %||% "poisson", "negbin")

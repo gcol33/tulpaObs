@@ -954,8 +954,8 @@
       K_max        = family$params$K_max,
       max_iter     = control[["max.iter"]] %||% 100L,
       inner_solver = control[["inner_solver"]] %||% "em",
-      n_quad       = as.integer(control[["n.quad"]] %||% 1L),
-      lkj_eta      = control[["re.lkj"]] %||% 1.5,
+      n_quad       = as.integer(control[["n.quad"]] %||% .tobs_n_quad("ms_nmix")),
+      lkj_eta      = control[["re.lkj"]] %||% .tobs_default("laplace", "re.lkj"),
       integration  = control[["integration"]] %||% "grid",
       verbose      = isTRUE(control[["verbose"]])))
   }
@@ -975,7 +975,7 @@
   # accurate), so the EM default loses nothing in practice; n.quad is exposed via
   # joint_fd for sparse / rare-species regimes.
   optimizer <- control[["optimizer"]] %||% "em"
-  n_quad    <- as.integer(control[["n.quad"]] %||% 1L)
+  n_quad    <- as.integer(control[["n.quad"]] %||% .tobs_n_quad("ms_nmix"))
   .tobs_fit_ms_nmix(
     model,
     mixture       = family$params$mixture %||% "poisson",
@@ -983,8 +983,9 @@
     max_iter      = control[["max.iter"]] %||% 100L,
     optimizer     = optimizer,
     n_quad        = n_quad,
-    n_quad_scalar = as.integer(control[["n.quad.scalar"]] %||% 2L),
-    lkj_eta       = control[["re.lkj"]] %||% 1.5,
+    n_quad_scalar = as.integer(control[["n.quad.scalar"]] %||%
+                              .tobs_n_quad("ms_nmix_scalar")),
+    lkj_eta       = control[["re.lkj"]] %||% .tobs_default("laplace", "re.lkj"),
     omega_sigma_prior = if ("omega.sigma.prior" %in% names(control))
                           control[["omega.sigma.prior"]] else c(1, 0.05),
     verbose       = isTRUE(control[["verbose"]]))
@@ -1153,7 +1154,7 @@
       sel <- .ms_ocs_select_K(
         model,
         K.max      = as.integer(control[["n.factors.max"]] %||% 4L),
-        sd_L       = control[["sd.load"]]    %||% 1.0,
+        sd_L       = control[["sd.load"]]    %||% .tobs_default("laplace", "sd.load"),
         sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
         max.em     = control[["max.iter"]]   %||% 30L,
         tol        = control[["tol"]]        %||% 1e-3,
@@ -1170,7 +1171,7 @@
     constrain <- control[["constrain"]] %||% (model$K > 1L)
     if (use_nuts) {
       fit <- .tobs_fit_ms_occu_cover_spatial_nuts(
-        model, sd_L = control[["sd.load"]] %||% 1.0,
+        model, sd_L = control[["sd.load"]] %||% .tobs_default("laplace", "sd.load"),
         sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
         constrain = constrain, control = control)
       out <- build_ms_occu_cover_spatial_fit(model, fit)
@@ -1191,7 +1192,7 @@
     }
     fit <- .tobs_fit_ms_occu_cover_spatial(
       model,
-      sd_L       = control[["sd.load"]]   %||% 1.0,
+      sd_L       = control[["sd.load"]]   %||% .tobs_default("laplace", "sd.load"),
       max.em     = control[["max.iter"]]  %||% 30L,
       tol        = control[["tol"]]       %||% 1e-3,
       sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),

@@ -517,6 +517,7 @@
     N            = sum(model$valid)),
     .tobs_na_nuts_diagnostics(n_draws),
     .tobs_promote_pareto_k(fit),
+    .tobs_promote_outer_grid(fit),
     list(
     col_names    = par_names,
     param_names  = par_names,

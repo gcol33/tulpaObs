@@ -19,10 +19,13 @@
 # v1: single-season community occupancy, site-level detection, no structured
 # terms / spatial field (the shared-field sfMsPGOcc is a follow-up).
 
-.tobs_fit_ms_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = 2.5,
-                                       n.iter = 3000L, n.warmup = 1500L,
-                                       n.chains = 2L, n.thin = 1L, seed = 1L,
+.tobs_fit_ms_occu_pg_gibbs <- function(model, priors = NULL, sigma.beta = NULL,
+                                       n.iter = NULL, n.warmup = NULL,
+                                       n.chains = NULL, n.thin = NULL, seed = NULL,
                                        verbose = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "pg_gibbs")
+
   rpg    <- get("cpp_rpg", envir = asNamespace("tulpa"))
   X_psi  <- model$X_occ
   X_p    <- model$X_det

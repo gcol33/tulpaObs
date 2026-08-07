@@ -676,8 +676,10 @@
       sg <- exp(seq(log(0.2), log(2.0), length.out = 3))
       rg <- c(0.3, 0.7)
       gr <- expand.grid(sigma = sg, rho = rg)
-      out$sigma_grid <- gr$sigma
-      out$rho_grid   <- gr$rho
+      # Ours, not the user's, so the engine may recentre it
+      # (gcol33/tulpaObs#186); `expand.grid()` drops the marker, hence after.
+      out$sigma_grid <- tulpa::auto_grid(gr$sigma)
+      out$rho_grid   <- tulpa::auto_grid(gr$rho)
     }
   } else if (type == "icar") {
     if (!is.null(spatial$tau_grid)) out$tau_grid <- spatial$tau_grid
@@ -734,8 +736,8 @@
       tg <- exp(seq(log(0.5), log(20), length.out = 3))
       rg <- c(0.3, 0.8)
       gr <- expand.grid(tau = tg, rho = rg)
-      out$tau_grid <- gr$tau
-      out$rho_grid <- gr$rho
+      out$tau_grid <- tulpa::auto_grid(gr$tau)
+      out$rho_grid <- tulpa::auto_grid(gr$rho)
     }
   }
   out
@@ -776,7 +778,7 @@
       out$sigma_grid <- re$sigma_grid
     } else {
       # 3-point grid keeps multi-block combos comfortably under the cap.
-      out$sigma_grid <- exp(seq(log(0.2), log(2.0), length.out = 3))
+      out$sigma_grid <- tulpa::auto_grid(exp(seq(log(0.2), log(2.0), length.out = 3)))
     }
     out
   } else if (model_name %in% c("ar1", "rw1", "rw2")) {

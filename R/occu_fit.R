@@ -11,15 +11,16 @@
                             method = c("laplace", "nested_laplace", "nuts",
                                        "pg_gibbs"),
                             priors = NULL,
-                            sigma.beta = 10, sigma.re.scale = 1,
+                            sigma.beta = NULL, sigma.re.scale = 1,
                             max.iter = 100L, tol = 1e-4, damping = 0.7,
-                            n.iter = 2000, n.warmup = 1000, n.thin = 1L,
-                            n.chains = 1L, n.threads = 1L,
-                            max.treedepth = 10, adapt.delta = 0.8, seed = 42,
+                            n.iter = NULL, n.warmup = NULL, n.thin = NULL,
+                            n.chains = NULL, n.threads = 1L,
+                            max.treedepth = NULL, adapt.delta = NULL,
+                            seed = NULL,
                             approx = c("gaussian_laplace", "simplified_laplace"),
                             correction = "none",
                             n.gibbs = 10L, n.imputations = 20L,
-                            re.aghq = TRUE, n.quad = 9L, re.lkj = 1.5,
+                            re.aghq = TRUE, n.quad = NULL, re.lkj = NULL,
                             K.max = NULL, mixture = "poisson",
                             integration = c("grid", "ccd"),
                             verbose = TRUE, ...) {
@@ -31,6 +32,42 @@
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object (from `.tobs_build_model()`)")
   }
+
+  # Sampler knobs come from the one engine table (gcol33/tulpaObs#183, #188).
+  # They arrive as NULL sentinels rather than literal formals because this entry
+  # serves several engines and the profile is only known once `method` is: a
+  # literal formal here would be a second answer to "what is the default
+  # n.iter", and it was -- the whole family fitter roster below is handed
+  # explicit values from this frame, so their own formals never applied and this
+  # was the live answer for every one of them, at 2000 draws against the table's
+  # 1000.
+  #
+  # That 2000 was not a decision. Commit 8975470 fixed `n.iter` from meaning the
+  # TOTAL run to meaning kept post-warmup draws on exactly these paths, and left
+  # the literal alone -- so a default that had always kept 2000 - 1000 = 1000
+  # draws silently began keeping 2000 (that commit's own message records the
+  # behaviour change). Reading the table restores the count these paths were
+  # calibrated at. The knobs that ARE deliberate -- a wider coefficient prior, a
+  # looser adaptation target, a different stream seed -- are on the record as a
+  # family row instead (`.TOBS_SINGLE_SPECIES_NUTS`).
+  # The `%||%` tails cover a non-sampling engine (`laplace` / `nested_laplace`
+  # carry a ridge and no chain knobs) whose branches never read them anyway.
+  prof <- .tobs_single_species_defaults(method)
+  if (is.null(sigma.beta))    sigma.beta    <- prof$sigma.beta    %||% 10
+  if (is.null(n.iter))        n.iter        <- prof$n.iter        %||% 1000L
+  if (is.null(n.warmup))      n.warmup      <- prof$n.warmup      %||% 1000L
+  if (is.null(n.thin))        n.thin        <- prof$n.thin        %||% 1L
+  if (is.null(n.chains))      n.chains      <- prof$n.chains      %||% 1L
+  if (is.null(max.treedepth)) max.treedepth <- prof$max.treedepth %||% 10L
+  if (is.null(adapt.delta))   adapt.delta   <- prof$adapt.delta   %||% 0.9
+  if (is.null(seed))          seed          <- prof$seed          %||% 1L
+  # A regularization strength is an engine-level value like the ridge beside it
+  # (gcol33/tulpaObs#189); it is read on the Laplace routes, so the profile is
+  # the Laplace one regardless of `method`.
+  if (is.null(re.lkj)) re.lkj <- .tobs_default("laplace", "re.lkj")
+  # `n.quad` names one control across several marginals; this entry's route is
+  # the formula-RE AGHQ debias (gcol33/tulpaObs#189).
+  if (is.null(n.quad))  n.quad  <- .tobs_n_quad("re_aghq")
 
   # Engine-shaped structure specs derived from the formula's structured terms.
   structs  <- .tobs_structures_from_model(model)

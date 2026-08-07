@@ -176,12 +176,15 @@
 # Poisson or NB.
 .tobs_fit_distance_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                             mixture = "poisson",
-                                            K_max = NULL, sigma.beta = 10,
-                                            sigma.shape = 1.5, sigma.logr = 1.5,
-                                            n.iter = 1000L, n.warmup = 1000L,
-                                            n.chains = 1L, max.treedepth = 10L,
-                                            adapt.delta = 0.9, seed = 1L,
+                                            K_max = NULL, sigma.beta = NULL,
+                                            sigma.shape = 1.5, sigma.logr = NULL,
+                                            n.iter = NULL, n.warmup = NULL,
+                                            n.chains = NULL, max.treedepth = NULL,
+                                            adapt.delta = NULL, seed = NULL,
                                             verbose = FALSE) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
+
   # FIXED-HYPER non-centered field on the abundance (log lambda) arm from EITHER an
   # areal term (#72/#113) OR a temporal() term (#114); both share the sampling tail,
   # only the loading / field map / warm source differ. The hazard-rate key adds a
