@@ -403,8 +403,13 @@
     # sub-blocks (gcol33/tulpaObs#107), so predict / WAIC see the full mix. The
     # block's bym2 grid is the PAIRED (cartesian-expanded) (sigma, rho) vectors
     # the registry consumes, not two separate axes.
+    # The mixing-weight axis is READ from the engine rather than restated here
+    # (gcol33/tulpaObs#206): this block is meant to reach the registry as any
+    # other bym2 block does, and the engine's own `bym2_rho` default is what
+    # every other route gets. A copy of its nodes goes stale the moment the
+    # engine moves them, which is what it did in gcol33/tulpa#361.
     rho_auto <- is.null(control$rho.grid)
-    rho_vals <- as.numeric(control$rho.grid %||% c(0.2, 0.5, 0.8, 0.95))
+    rho_vals <- as.numeric(control$rho.grid %||% tulpa:::.nl_grid_axis("bym2_rho"))
     gr <- expand.grid(sigma = sort(sigma_grid), rho = rho_vals,
                       KEEP.OUT.ATTRS = FALSE)
     block$sigma_grid   <- .tobs_mark_auto(gr$sigma, sigma_auto)

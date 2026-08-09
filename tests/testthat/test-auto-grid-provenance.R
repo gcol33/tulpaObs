@@ -201,6 +201,25 @@ test_that("arm-specific bym2 declares the paired (sigma, rho) axes", {
   expect_false(tulpa::is_auto_grid(pinned$rho_grid))
 })
 
+test_that("arm-specific bym2 defaults rho to the engine's axis (#206)", {
+  skip_if_no_auto_grid()
+  # The nodes are READ from the engine at fit time, so this block integrates the
+  # same mixing-weight axis a bym2 block reaching the registry any other way
+  # does. The assertion reads the engine too: a literal here would drift out of
+  # step exactly as the block's own copy did when gcol33/tulpa#361 extended the
+  # axis to cover a rho near 1.
+  engine_rho <- tulpa:::.nl_grid_axis("bym2_rho")
+  b <- .agp_block("bym2", list())
+  expect_equal(as.numeric(unique(b$rho_grid)), as.numeric(engine_rho))
+  # Paired, not two separate axes: the block carries one (sigma, rho) cell per
+  # combination, which is what the registry consumes.
+  expect_length(b$rho_grid,
+                length(unique(as.numeric(b$sigma_grid))) * length(engine_rho))
+  # A pin still wins, and still reads as a pin.
+  pinned <- .agp_block("bym2", list(rho.grid = c(0.3, 0.9)))
+  expect_equal(as.numeric(unique(pinned$rho_grid)), c(0.3, 0.9))
+})
+
 # --------------------------------------------------------------------------- #
 # EM nested-Laplace path: per-component defaults built through expand.grid()    #
 # --------------------------------------------------------------------------- #
