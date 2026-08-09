@@ -1,5 +1,45 @@
 # tulpaObs NEWS
 
+## 0.0.189 (2026-08-09)
+
+* **Every outer-grid axis this package chooses now reaches the engine declared
+  as a default** (gcol33/tulpaObs#190, #191). The engine decides axis
+  PROVENANCE, not field presence: an axis marked with `tulpa::auto_grid()` (or
+  one whose nodes are exactly the engine's own default) may be recentred onto
+  the hyperparameter mode, and anything else is a deliberate pin it never
+  moves (gcol33/tulpa#293, #297). Nine sites chose a default and wrote it out
+  through `as.numeric()` / `sort()` / `1 / sigma^2`, each of which drops the
+  marker, so the engine read a tulpaObs default as a user pin. Now marked, on
+  the vector actually written into the block: the cover() multi-block AR1
+  (`tau_grid`, `rho_grid`), IID-temporal (`sigma_grid`), RW1 / RW2
+  (`tau_grid`) and per-group RE (`sigma_grid`) blocks; the multi-block copy
+  axis (`sigma_pos_grid`), whose mark `.cover_fit_joint()` applied and
+  `.cover_build_multi_prior()` then coerced away one call later; the
+  standalone occu() joint path's per-block `tau_grid`; the occu_cover() NUTS
+  warm fit's `rho_car_grid`; and the spec-supplied `tau_grid` the cover()
+  single-block path translates to a field SD.
+
+  Measured against tulpa 0.0.160 on the cover() multi-block, cover()
+  single-block, occu() SVC and occu_cover() NUTS warm paths, defaults and
+  pins alike: every fit's coefficients, hyperparameter means and outer-grid
+  placement are unchanged to every digit reported. No rescue reads these axes
+  yet -- the single-block joint rescue reads a `sigma_grid` the cover()
+  single-block path leaves absent (and therefore already recentre-eligible),
+  and the multi-block rescue is scoped to a copy block's `sigma_grid`, which
+  `.cover_build_multi_prior()` already marked. What the marks buy is that the
+  axes stay recentre-eligible as that scope widens, and that
+  gcol33/tulpa#352's unread-axis check keeps dropping them silently instead of
+  refusing the fit.
+
+* Grid defaults written in more than one place are single-sourced in
+  `R/joint_substrate.R` alongside the existing `.tobs_default_*_grid()`
+  helpers: `.tobs_default_rho_car_grid()`, `.tobs_default_temporal_tau_grid()`
+  (AR1 and RW1 / RW2 shared one literal), `.tobs_default_temporal_rho_grid()`,
+  `.tobs_default_temporal_sigma_grid()`, `.tobs_default_re_sigma_grid()` and
+  `.tobs_default_occu_joint_sigma_grid()`. Each returns its vector already
+  declared, and `.tobs_num_auto()` is the one spelling of "coerce to numeric,
+  carry the source's own provenance" the eight re-marking sites shared.
+
 ## 0.0.188 (2026-08-07)
 
 * **Pinned to `tulpa (>= 0.0.136)`, which makes a joint nested-Laplace fit

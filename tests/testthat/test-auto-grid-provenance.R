@@ -39,6 +39,115 @@ test_that(".tobs_mark_auto marks only when the caller defaulted", {
                c(0.5, 1, 2))
 })
 
+test_that(".tobs_num_auto coerces and carries the source's own provenance", {
+  skip_if_no_auto_grid()
+  marked <- tulpa::auto_grid(c(0.5, 1, 2))
+  expect_true(tulpa::is_auto_grid(tulpaObs:::.tobs_num_auto(marked)))
+  expect_false(tulpa::is_auto_grid(tulpaObs:::.tobs_num_auto(c(0.5, 1, 2))))
+  expect_equal(as.numeric(tulpaObs:::.tobs_num_auto(marked)), c(0.5, 1, 2))
+  # An integer grid still reaches the block as a double.
+  expect_type(tulpaObs:::.tobs_num_auto(1:3), "double")
+})
+
+test_that("the per-front-door default axes declare themselves", {
+  skip_if_no_auto_grid()
+  for (f in c(".tobs_default_rho_car_grid", ".tobs_default_temporal_tau_grid",
+              ".tobs_default_temporal_rho_grid", ".tobs_default_temporal_sigma_grid",
+              ".tobs_default_re_sigma_grid", ".tobs_default_occu_joint_sigma_grid")) {
+    expect_true(tulpa::is_auto_grid(getFromNamespace(f, "tulpaObs")()),
+                info = f)
+  }
+  # Values are the ones the front doors carried before they were single-sourced.
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_rho_car_grid()),
+               c(0.5, 0.8, 0.95, 0.99))
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_temporal_tau_grid()), c(1, 4, 16))
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_temporal_rho_grid()), c(0.3, 0.7))
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_temporal_sigma_grid()),
+               exp(seq(log(0.1), log(1), length.out = 3)))
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_re_sigma_grid()),
+               exp(seq(log(0.1), log(1.5), length.out = 3)))
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_occu_joint_sigma_grid()),
+               exp(seq(log(0.15), log(3), length.out = 4)))
+})
+
+# --------------------------------------------------------------------------- #
+# cover() multi-block: the non-spatial blocks and the copy axis                 #
+# (gcol33/tulpaObs#190, #191)                                                   #
+# --------------------------------------------------------------------------- #
+
+.agp_temporal <- function(type, n_times = 5L, n = 10L) {
+  structure(list(type = type, time_idx = rep_len(seq_len(n_times), n),
+                 n_times = n_times, shared = c(TRUE, FALSE)),
+            class = "tobs_temporal")
+}
+
+test_that("cover() multi-block temporal blocks declare every defaulted axis", {
+  skip_if_no_auto_grid()
+  idx_pos <- 1:5
+
+  ar1 <- tulpaObs:::.cover_temporal_block(.agp_temporal("ar1"), idx_pos, list())
+  expect_true(tulpa::is_auto_grid(ar1$tau_grid))
+  expect_true(tulpa::is_auto_grid(ar1$rho_grid))
+  expect_equal(ar1$tau_grid, c(1, 4, 16), ignore_attr = TRUE)
+
+  # Provenance is per axis: pinning the precision leaves the correlation ours.
+  mixed <- tulpaObs:::.cover_temporal_block(
+    .agp_temporal("ar1"), idx_pos, list(tau.temporal.grid = c(2, 8)))
+  expect_false(tulpa::is_auto_grid(mixed$tau_grid))
+  expect_true(tulpa::is_auto_grid(mixed$rho_grid))
+
+  iid <- tulpaObs:::.cover_temporal_block(.agp_temporal("iid"), idx_pos, list())
+  expect_true(tulpa::is_auto_grid(iid$sigma_grid))
+  expect_false(tulpa::is_auto_grid(tulpaObs:::.cover_temporal_block(
+    .agp_temporal("iid"), idx_pos, list(sigma.temporal.grid = c(0.2, 0.4)))$sigma_grid))
+
+  for (ty in c("rw1", "rw2")) {
+    rw <- tulpaObs:::.cover_temporal_block(.agp_temporal(ty), idx_pos, list())
+    expect_true(tulpa::is_auto_grid(rw$tau_grid), info = ty)
+    expect_false(tulpa::is_auto_grid(tulpaObs:::.cover_temporal_block(
+      .agp_temporal(ty), idx_pos, list(tau.temporal.grid = c(2, 8)))$tau_grid),
+      info = ty)
+  }
+})
+
+test_that("cover() multi-block RE block declares its defaulted sigma axis", {
+  skip_if_no_auto_grid()
+  re <- structure(list(group = "obs", type = "intercept", model = "iid",
+                       group_idx = rep_len(1:3, 10L), n_groups = 3L),
+                  class = "tobs_re")
+  blk <- tulpaObs:::.cover_re_block(re, 1:5, list())
+  expect_true(tulpa::is_auto_grid(blk$sigma_grid))
+  expect_equal(blk$sigma_grid, exp(seq(log(0.1), log(1.5), length.out = 3)),
+               ignore_attr = TRUE)
+  expect_false(tulpa::is_auto_grid(
+    tulpaObs:::.cover_re_block(re, 1:5, list(sigma.re.grid = c(0.2, 0.4)))$sigma_grid))
+})
+
+test_that("cover() multi-block carries the copy axis's mark through as.numeric()", {
+  skip_if_no_auto_grid()
+  # gcol33/tulpaObs#191: `.cover_build_multi_prior()` coerced the vector
+  # `.cover_fit_joint()` had just marked, so the copy axis reached the engine
+  # looking like a pin. Both provenances round-trip.
+  g <- matrix(0L, 4L, 4L); g[1, 2] <- g[2, 1] <- g[2, 3] <- g[3, 2] <-
+    g[3, 4] <- g[4, 3] <- 1L
+  sp <- list(type = "icar", n_spatial_units = 4L,
+             adj_row_ptr = c(0L, 1L, 3L, 5L, 6L),
+             adj_col_idx = c(1L, 0L, 2L, 1L, 3L, 2L),
+             n_neighbors = c(1L, 2L, 2L, 1L))
+  build <- function(sigma_pos_grid) {
+    tulpaObs:::.cover_build_multi_prior(
+      prior_spatial = sp, spi_full = rep_len(1:4, 10L),
+      spi_pos = rep_len(1:4, 5L), idx_pos = 1:5,
+      temporal = NULL, re = NULL, control = list(),
+      sigma_pos_grid = sigma_pos_grid)
+  }
+  auto <- build(tulpaObs:::.tobs_default_sigma_grid())
+  expect_true(tulpa::is_auto_grid(auto$copy$sigma_pos_grid))
+  expect_false(tulpa::is_auto_grid(build(c(0.4, 0.8, 1.2))$copy$sigma_pos_grid))
+  # The spatial block's own axis is defaulted (and declared) in the same call.
+  expect_true(tulpa::is_auto_grid(auto$prior[[1L]]$sigma_grid))
+})
+
 # --------------------------------------------------------------------------- #
 # cover() arm-specific block: the 0.2-2.5 axis that never matched the engine    #
 # --------------------------------------------------------------------------- #

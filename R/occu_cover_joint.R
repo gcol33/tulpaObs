@@ -340,7 +340,7 @@
     b0 <- length(re_blocks)
     # `as.numeric()` drops the auto-grid marker the caller applied, so re-apply
     # it to the vector that actually reaches the block (gcol33/tulpaObs#186).
-    grid <- .tobs_mark_auto(as.numeric(grid), tulpa::is_auto_grid(grid))
+    grid <- .tobs_num_auto(grid)
     if (!isTRUE(correlated)) {
       for (cc in seq_len(n_coefs)) {
         blk <- list(type = "iid", n_units = as.integer(n_groups),

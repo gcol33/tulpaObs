@@ -281,7 +281,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   list(
     prior = blocks,
     copy  = list(block = 1L, arm = "pos",
-                 sigma_pos_grid = as.numeric(sigma_pos_grid))
+                 sigma_pos_grid = .tobs_num_auto(sigma_pos_grid))
   )
 }
 
@@ -304,26 +304,26 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     list(
       type         = "ar1",
       n_times      = as.integer(n_t),
-      tau_grid     = as.numeric(control$tau.temporal.grid %||%
-                                 c(1, 4, 16)),
-      rho_grid     = as.numeric(control$rho.temporal.grid %||%
-                                 c(0.3, 0.7)),
+      tau_grid     = .tobs_num_auto(control$tau.temporal.grid %||%
+                                      .tobs_default_temporal_tau_grid()),
+      rho_grid     = .tobs_num_auto(control$rho.temporal.grid %||%
+                                      .tobs_default_temporal_rho_grid()),
       temporal_idx = list(as.integer(t_full), as.integer(t_pos))
     )
   } else if (type == "iid") {
     list(
       type       = "iid",
       n_units    = as.integer(n_t),
-      sigma_grid = as.numeric(control$sigma.temporal.grid %||%
-                               exp(seq(log(0.1), log(1), length.out = 3))),
+      sigma_grid = .tobs_num_auto(control$sigma.temporal.grid %||%
+                                    .tobs_default_temporal_sigma_grid()),
       obs_idx    = list(as.integer(t_full), as.integer(t_pos))
     )
   } else if (type %in% c("rw1", "rw2")) {
     list(
       type         = type,
       n_times      = as.integer(n_t),
-      tau_grid     = as.numeric(control$tau.temporal.grid %||%
-                                 c(1, 4, 16)),
+      tau_grid     = .tobs_num_auto(control$tau.temporal.grid %||%
+                                      .tobs_default_temporal_tau_grid()),
       temporal_idx = list(as.integer(t_full), as.integer(t_pos))
     )
   } else {
@@ -355,8 +355,8 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   list(
     type       = "iid",
     n_units    = as.integer(n_g),
-    sigma_grid = as.numeric(control$sigma.re.grid %||%
-                             exp(seq(log(0.1), log(1.5), length.out = 3))),
+    sigma_grid = .tobs_num_auto(control$sigma.re.grid %||%
+                                  .tobs_default_re_sigma_grid()),
     obs_idx    = list(as.integer(g_full), as.integer(g_pos))
   )
 }

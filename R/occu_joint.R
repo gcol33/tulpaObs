@@ -202,12 +202,14 @@
   # axis `b<k>.tau`). The user-facing `sigma.grid` is the field SD (the units the
   # occu_cover / cover paths grid on); convert it to tau = 1 / sigma^2 so the SD
   # knob is honoured, and the postprocess reports sigma = 1 / sqrt(tau) as a
-  # derived quantity marginalized over the grid. The 4-point default keeps the
-  # base outer grid at 4^n_fields cells (16 for an intercept + one trend field),
-  # comparable to the occu_cover deliverable's 4-point sigma grid; adaptive
-  # refinement densifies it where the posterior piles up at an edge.
-  sigma_grid <- dots$sigma.grid %||% exp(seq(log(0.15), log(3), length.out = 4))
-  tau_grid   <- 1.0 / (as.numeric(sigma_grid)^2)
+  # derived quantity marginalized over the grid.
+  #
+  # The `1 / sigma^2` translation drops the auto-grid marker, so it is re-applied
+  # on the tau vector every block receives; the source vector's own marker is the
+  # provenance (gcol33/tulpaObs#186, #190).
+  sigma_grid <- dots$sigma.grid %||% .tobs_default_occu_joint_sigma_grid()
+  tau_grid   <- .tobs_mark_auto(1.0 / (as.numeric(sigma_grid)^2),
+                                tulpa::is_auto_grid(sigma_grid))
 
   arms_out      <- .occu_joint_arms(model, n_cells, site_cell)
   responses     <- arms_out$responses

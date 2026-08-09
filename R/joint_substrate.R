@@ -45,6 +45,15 @@
   if (isTRUE(auto)) tulpa::auto_grid(x) else x
 }
 
+# `as.numeric()` on a grid whose provenance is already settled: coerce, then
+# carry the source vector's own marker onto the coerced copy. Every site that
+# writes `as.numeric(g)` into a block after resolving `control$*.grid %||%
+# <default>()` reads this instead, so the coerce-and-lose-the-marker step has
+# one spelling.
+.tobs_num_auto <- function(x) {
+  .tobs_mark_auto(as.numeric(x), tulpa::is_auto_grid(x))
+}
+
 #
 # Each returns its vector already marked with `auto_grid()`: these functions ARE
 # the layer that chose the values, and a caller only ever reaches them on the
@@ -62,6 +71,39 @@
 
 .tobs_default_bym2_rho_grid <- function() {
   tulpa::auto_grid(c(0.25, 0.5, 0.75))
+}
+
+# Spatial-correlation axis of a proper-CAR field, shared by the cover()
+# arm-specific block and the occu_cover() NUTS warm fit.
+.tobs_default_rho_car_grid <- function() {
+  tulpa::auto_grid(c(0.5, 0.8, 0.95, 0.99))
+}
+
+# Non-spatial block axes on the cover() multi-block path. The temporal
+# precision axis serves ar1 and rw1 / rw2 alike, so it is one function rather
+# than the same three nodes written per block type.
+.tobs_default_temporal_tau_grid <- function() {
+  tulpa::auto_grid(c(1, 4, 16))
+}
+
+.tobs_default_temporal_rho_grid <- function() {
+  tulpa::auto_grid(c(0.3, 0.7))
+}
+
+.tobs_default_temporal_sigma_grid <- function() {
+  tulpa::auto_grid(exp(seq(log(0.1), log(1), length.out = 3)))
+}
+
+.tobs_default_re_sigma_grid <- function() {
+  tulpa::auto_grid(exp(seq(log(0.1), log(1.5), length.out = 3)))
+}
+
+# Field-SD axis of the standalone occu() joint path, which grids each ICAR
+# block on its own precision. Four nodes rather than the coupled paths' five:
+# the base outer grid is 4^n_fields cells there (16 for an intercept plus one
+# trend field), and adaptive refinement densifies where the posterior piles up.
+.tobs_default_occu_joint_sigma_grid <- function() {
+  tulpa::auto_grid(exp(seq(log(0.15), log(3), length.out = 4)))
 }
 
 

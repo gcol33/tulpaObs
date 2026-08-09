@@ -392,9 +392,8 @@
   if (block$type %in% c("icar", "car_proper")) {
     block$tau_grid <- .tobs_mark_auto(sort(1.0 / sigma_grid^2), sigma_auto)
     if (block$type == "car_proper") {
-      block$rho_car_grid <- .tobs_mark_auto(
-        as.numeric(control$rho.car.grid %||% c(0.5, 0.8, 0.95, 0.99)),
-        is.null(control$rho.car.grid))
+      block$rho_car_grid <- .tobs_num_auto(
+        control$rho.car.grid %||% .tobs_default_rho_car_grid())
     }
   } else if (block$type == "bym2") {
     # BYM2 fits as a non-copied length-2 block (structured phi ICAR + iid theta
@@ -619,8 +618,7 @@
     alpha_grid <- control$alpha.grid %||%
       .tobs_default_alpha_grid()
     list(arm = "pos", block = 1L,
-         alpha_grid = .tobs_mark_auto(as.numeric(alpha_grid),
-                                      tulpa::is_auto_grid(alpha_grid)))
+         alpha_grid = .tobs_num_auto(alpha_grid))
   } else NULL
 
   # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky + alpha), so
@@ -927,12 +925,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   prior_for_joint <- prior
   prior_for_joint$spatial_idx <- NULL
   prior_for_joint$rho_bounds  <- NULL
-  # Translate any legacy tau_grid that prior_from_spec attached to an
-  # ICAR / CAR_proper prior — the joint engine takes sigma = 1/sqrt(tau)
-  # as its donor-amplitude axis under the new parameterization.
+  # Translate a tau_grid the spec carries on an ICAR / CAR_proper prior: the
+  # joint engine takes sigma = 1/sqrt(tau) as its donor-amplitude axis under the
+  # new parameterization. Such an axis comes from the spec, not from the user,
+  # so the translated vector is declared as ours (gcol33/tulpaObs#190); the
+  # `1 / sqrt()` step drops the marker, so it goes on last.
   if (!is.null(prior_for_joint$tau_grid) &&
       is.null(prior_for_joint$sigma_grid)) {
-    prior_for_joint$sigma_grid <- 1.0 / sqrt(as.numeric(prior_for_joint$tau_grid))
+    prior_for_joint$sigma_grid <- tulpa::auto_grid(
+      1.0 / sqrt(as.numeric(prior_for_joint$tau_grid)))
     prior_for_joint$tau_grid   <- NULL
   } else if (!is.null(prior_for_joint$tau_grid)) {
     prior_for_joint$tau_grid <- NULL
@@ -949,8 +950,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   } else {
     sigma_donor <- prior_for_joint$sigma_grid %||%
       .tobs_default_sigma_grid()
-    sigma_pos_grid <- .tobs_mark_auto(as.numeric(sigma_donor),
-                                      tulpa::is_auto_grid(sigma_donor))
+    sigma_pos_grid <- .tobs_num_auto(sigma_donor)
   }
 
   # Direct (sigma, alpha) copy axis: the cover arm sees the shared field at
@@ -1077,11 +1077,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     prior_coupled <- list(base_block, trend_block)
     copy_coupled  <- list(
       list(arm = "pos", block = 1L,
-           alpha_grid = .tobs_mark_auto(as.numeric(alpha_grid_base),
-                                        tulpa::is_auto_grid(alpha_grid_base))),
+           alpha_grid = .tobs_num_auto(alpha_grid_base)),
       list(arm = "pos", block = 2L,
-           alpha_grid = .tobs_mark_auto(as.numeric(alpha_grid_trend),
-                                        tulpa::is_auto_grid(alpha_grid_trend)))
+           alpha_grid = .tobs_num_auto(alpha_grid_trend))
     )
     arm_occ$spatial_idx <- NULL
     arm_pos$spatial_idx <- NULL
@@ -1157,8 +1155,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # behaviour for reproducibility checks.
     arm_pos$field_coef <- list(
       name = "alpha",
-      grid = .tobs_mark_auto(as.numeric(alpha_grid),
-                             tulpa::is_auto_grid(alpha_grid)))
+      grid = .tobs_num_auto(alpha_grid))
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),
       prior     = prior_for_joint,

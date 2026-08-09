@@ -399,7 +399,7 @@
 
   alpha_grid <- alpha.grid %||% .tobs_default_alpha_grid()
   sigma_grid <- sigma.grid %||% .tobs_default_sigma_grid()
-  rho_car_grid <- rho.car.grid %||% c(0.5, 0.8, 0.95, 0.99)
+  rho_car_grid <- rho.car.grid %||% .tobs_default_rho_car_grid()
 
   # Single-block (multi = FALSE): the pos arm carries
   # field_coef = list(name = "alpha", grid = alpha_grid), so the copy alpha axis
