@@ -69,3 +69,48 @@ Laplace backends (#143) on the same truth at N=150, J=6, p=0.6: surface cor
 0.78 / 0.60 / 0.83 on seeds 1/2/3, matching the NUTS path's 0.76 / 0.60 / 0.81.
 Measured surface cor for the observation families (#144): `removal()` ~0.97,
 `fp_occu()` ~0.78 at N=120.
+## Adaptive copy-axis boundary fixture (#194, tulpa 0.0.163)
+
+`test-cover-hurdle-adaptive-grid.R`, `simulate_d3_like()` at N=300, n_s=25, BYM2 chain
+graph, beta positive arm, `alpha_true = 1.5` pinned at the top node of
+`control$alpha.grid = c(0, 0.5, 1.0, 1.5)`, `sigma.grid = c(0.3, 0.6, 0.9)`,
+`rho.grid = c(0.5, 0.7, 0.9)`, seeds 3401-3420. Engine: tulpa 0.0.163 (commit
+0820e93) in a private library; tulpaObs 0.0.190.
+
+Four arms, 20 seeds each, 80 fits in 497 s total (5.6-6.6 s per fit):
+
+| arm | alpha coverage | mean ci_hi | sd ci_hi | max alpha node | triggered axes |
+|---|---|---|---|---|---|
+| adaptive, default 7-node phi | 1.00 | 2.2227 | 0.3034 | 3.375 (20/20) | `alpha,phi_pos` (20/20) |
+| fixed, default 7-node phi    | 1.00 | 1.7328 | 0.0120 | 1.5 (20/20)   | none (20/20) |
+| adaptive, 13-node phi        | 1.00 | 2.2698 | 0.3734 | 3.375 (20/20) | `alpha` (20/20) |
+| fixed, 13-node phi           | 1.00 | 1.7333 | 0.0107 | 1.5 (20/20)   | none (20/20) |
+
+- **The coverage gap does not open.** All four arms cover 20/20, so the fixed-vs-adaptive
+  coverage comparison the file used to assert is not evidence about the adaptive path at
+  this placement. With the truth exactly ON the top node the upper side of the fixed
+  arm's quantile interval cannot miss: since gcol33/tulpa#353 the outer cell contributes
+  its own half-width to the reported support, and before that change the quantile clamped
+  AT 1.5 so `truth <= ci_hi` held as an equality. The 0.53 -> 0.83 gain recorded when the
+  adaptive path landed (commit d054bf3) was measured on a Wald summary, which the file
+  replaced with the quantile CI.
+- **What separates the arms is the upper edge.** Fixed: full range 1.6832-1.7375 over 20
+  seeds, i.e. the axis's own outer-cell geometry. Adaptive: 1.8250-3.2263, following the
+  data. Paired, the adaptive upper edge is larger on 20/20 seeds, minimum ratio 1.0506.
+- **Truncation certificate.** The fixed arm puts mean 0.876 (13-node phi; min 0.206) /
+  0.888 (7-node phi; min 0.029) of its posterior weight on the top node 1.5.
+- The 13-node phi pin makes the adaptive pass fire on the copy axis ALONE; on the 7-node
+  default it also densifies `phi_pos`.
+
+At `alpha_true = 0` (seed 3101, same pins) the boundary trigger does not fire on the copy
+axis (`triggered_axes` = `phi_pos`), CI `[0, 0.449]`, median 0. The var-of-means
+consistency pass -- a separate mechanism, reported separately -- does place copy-axis
+cells there (down to 2e-10 and up to 8e+04), which is why the no-op assertion reads the
+triggered-axes list rather than the node set.
+
+Prune ladder on the same fixture (seed 101, N=400, `alpha_true = 1.0`, 5x4x4x7 grid, 560
+cells): `prune.tol` 1e-4 / 1e-3 / 1e-2 / 3e-2 / 1e-1 / 2e-1 prunes 539 / 543 / 548 / 553 /
+556 / 558 cells with no safety fallback, and moves the alpha posterior mean by 8e-05 /
+3e-04 / 3e-05 / 1e-02 / 5e-02 / 1.5e-01. At 0.5 the engine's cheap-screen argmax check
+fires and the fit falls back to the full grid, returning a bit-identical result -- so
+`prune.tol = 0.5` is not a usable perturbation and `0.2` is.

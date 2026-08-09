@@ -1,5 +1,33 @@
 # tulpaObs NEWS
 
+## 0.0.191 (2026-08-09)
+
+* **The adaptive-grid fixture places its truth back on the axis the engine
+  integrates** (gcol33/tulpaObs#194). `test-cover-hurdle-adaptive-grid.R` was
+  written around a truth sitting at the top node of `control$sigma.pos.grid`,
+  an axis of the retired (sigma_occ, sigma_pos) parameterization that no
+  cover() route read (gcol33/tulpaObs#192). Its four tests therefore integrated
+  the package default copy axis with `alpha_true = 1.5` between the 1.282 and
+  3.0 nodes -- inside the grid, not at its edge -- so they passed on a
+  configuration they were not designed to discriminate. Every fit now pins
+  `control$alpha.grid = c(0, 0.5, 1.0, 1.5)`, the axis the engine grids the
+  copy coefficient on, restoring the INLAabun Demo 3 placement the adaptive
+  path was built against.
+
+* The coverage gap the file used to assert does not open at that placement, and
+  the file no longer claims it does. Measured over 20 seeds on tulpa 0.0.163,
+  fixed and adaptive both cover 20/20: with the truth exactly ON the top node
+  the upper side of the fixed arm's quantile interval cannot miss, since
+  gcol33/tulpa#353 gives a grid's outer cell its own half-width of support and
+  before that the quantile clamped at the node. What separates the two reads is
+  the upper edge itself -- the fixed arm reports the axis's own geometry
+  (mean 1.733, SD 0.011, range 1.689-1.738), the adaptive arm follows the data
+  (mean 2.270, SD 0.373, range 1.825-3.226), and is higher on 20/20 seeds. The
+  tests assert that separation, plus that the boundary trigger fires on the copy
+  axis, plus non-regression on coverage. `NOTES_measurements.md` carries the
+  numbers. Each of the four was shown to fail against a perturbation of the
+  behaviour it checks.
+
 ## 0.0.190 (2026-08-09)
 
 * **The cover-arm coupling axis reaches the engine on the field the engine
