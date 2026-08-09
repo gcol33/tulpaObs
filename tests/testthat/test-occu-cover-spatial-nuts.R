@@ -164,6 +164,81 @@ test_that("occu_cover NUTS samples icar; rejects SVC/RE spatial; advertises nuts
 })
 
 
+test_that("occu_cover NUTS samples a single bar-form field (#203)", {
+  inp  <- .ocsn_inputs(side = 5L, J = 4L, seed = 11L)
+  dat  <- cbind(inp$cell_dat, cell_idx = seq_len(inp$N))
+  adj  <- inp$adj
+  ctl  <- list(verbose = FALSE, n.iter = 300L, n.warmup = 200L,
+               n.chains = 1L, seed = 1L)
+  run  <- function(f) suppressWarnings(tobs(
+    formula = f, data = dat, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
+    y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts", control = ctl))
+
+  # A single-column bar desugars to exactly icar(graph, group_var = node), so the
+  # resolved field description is the same object the non-bar spelling builds.
+  sp_bar <- tulpaObs:::.occu_cover_nuts_spatial_term(
+    ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj), dat)
+  sp_plain <- tulpaObs:::.occu_cover_nuts_spatial_term(
+    ~ occ_cov1 + icar(graph = adj, group_var = "cell_idx"), dat)
+  for (k in c("type", "n_units", "graph", "group_var", "adj_row_ptr",
+              "adj_col_idx", "n_neighbors", "weight")) {
+    expect_identical(sp_bar$spatial[[k]], sp_plain$spatial[[k]])
+  }
+  expect_identical(sp_bar$group_var, "cell_idx")
+
+  # Both spellings therefore reach .tobs_fit_occu_cover_nuts_spatial() as the same
+  # model. There is no sampler-noise tolerance to state: at one seed the two fits
+  # run the same warm nested-Laplace fit, the same field loading and the same
+  # chain, so the posteriors agree BIT for bit. A tolerance here would only hide
+  # the two spellings drifting into different models.
+  fit_bar   <- run(~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj))
+  fit_plain <- run(~ occ_cov1 + icar(graph = adj, group_var = "cell_idx"))
+  expect_identical(fit_bar$means, fit_plain$means)
+  expect_identical(fit_bar$sds,   fit_plain$sds)
+  expect_identical(fit_bar$spatial_field, fit_plain$spatial_field)
+  expect_identical(fit_bar$spatial$type, "icar")
+  expect_equal(length(fit_bar$spatial_field), inp$N)
+  expect_lt(abs(mean(fit_bar$spatial_field)), 1e-6)   # sum-to-zero centred
+
+  # The bar's `model =` picks the areal kind the sampler fixes the hyper of.
+  fit_cp <- run(~ occ_cov1 +
+                  spatial(~ 1 || cell_idx, graph = adj, model = "car_proper"))
+  expect_identical(fit_cp$spatial$type, "car_proper")
+})
+
+
+test_that("occu_cover NUTS + a two-field bar names the field-block limit (#203)", {
+  inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 5L)
+  dat <- cbind(inp$cell_dat, cell_idx = seq_len(inp$N))
+  adj <- inp$adj
+  run <- function(f) suppressWarnings(tobs(
+    formula = f, data = dat, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
+    y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
+    control = list(verbose = FALSE, n.iter = 50L, n.warmup = 50L)))
+
+  # An intercept + SVC bar declares two fields; the sampler's field block carries
+  # one loading and one field_map (src/nuts_field_block.h), so the message must
+  # name that, not the bar spelling.
+  expect_error(run(~ occ_cov1 + spatial(~ 1 + occ_cov1 || cell_idx, graph = adj)),
+               "one field block")
+  expect_error(run(~ occ_cov1 + spatial(~ 1 + occ_cov1 || cell_idx, graph = adj)),
+               "declares 2 fields")
+
+  # A single-field correlated bar has no cross-covariance to estimate, the same
+  # gate the nested-Laplace route applies.
+  expect_error(run(~ occ_cov1 + spatial(~ 1 | cell_idx, graph = adj)),
+               "cross-covariance")
+
+  # A replicated field spans a Kronecker graph the one-graph sampler has no map for.
+  dat$habitat <- rep(c("a", "b"), length.out = inp$N)
+  expect_error(
+    run(~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj, by = "habitat")),
+    "nested_laplace")
+})
+
+
 test_that("occu_cover spatial NUTS recovers betas, field, coverage (lognormal)", {
   skip_on_cran()
   skip_if_fast()

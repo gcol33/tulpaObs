@@ -261,10 +261,17 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' pointwise likelihood for WAIC / LOO. A shared areal field across the
 #' occupancy and cover arms is the `method = "nested_laplace"` path (a structured
 #' `icar()` / `bym2()` term on the psi formula); a structured term on a
-#' non-spatial route errors from the dispatcher with a pointer to it, and a
-#' spatial term under `method = "nuts"` is rejected (the shared coupled field is
-#' grid-integrated, not sampled; the sampled-field route is the spatial-factor
-#' community sampler [ms_occu_cover()]).
+#' non-spatial route errors from the dispatcher with a pointer to it.
+#'
+#' `method = "nuts"` also samples ONE shared coupled field
+#' (`icar()` / `bym2()` / `car_proper()`), written either as an areal term or as
+#' the single-column bar `spatial(~ 1 || cell, graph = adj)`, with its
+#' hyperparameters (the field precision and the cover-arm copy amplitude) FIXED
+#' at the nested-Laplace estimate. The sampler carries one field block, so a
+#' second field - a spatially-varying coefficient / trend - stays on the
+#' grid-integrated `nested_laplace` path; the route that samples a field with its
+#' variance estimated is the spatial-factor community sampler
+#' [ms_occu_cover()].
 #'
 #' On the shared-field `nested_laplace` path the field-coupled occupancy slope
 #' Wald interval is mildly anti-conservative at small N (the grid-integrated

@@ -320,31 +320,72 @@
 # (gcol33/tulpaObs#74)
 # ---------------------------------------------------------------------------
 
+# Desugar a varying-coefficient bar (`spatial(~ 1 || node, graph = adj)`) on the
+# psi formula into the plain areal field spec the NUTS sampler takes, through the
+# SAME expansion the nested-Laplace path uses (.tobs_expand_spatial_bar): one
+# unweighted intercept field plus one weight-scaled field per bar covariate
+# column, each identical to what `icar(graph = adj, group_var = node)` /
+# `icar(graph = adj, weight = col, group_var = node)` builds. A single-column bar
+# therefore IS the plain areal term, and routes unchanged (gcol33/tulpaObs#203).
+#
+# The sampler carries ONE field block -- one loading, one site -> node map and one
+# copy amplitude (src/occu_cover_nuts.cpp, the shared FieldBlock layout in
+# src/nuts_field_block.h) -- so a bar declaring a second field has nowhere to put
+# it; that is the limitation named in the error, not the bar spelling.
+.occu_cover_nuts_bar_field <- function(spec, data) {
+  if (!is.null(spec$by_var)) {
+    stop(paste0(
+      "occu_cover() NUTS + areal spatial samples one field over one graph; a ",
+      "replicated field (spatial(<bar>, by = \"", spec$by_var, "\")) needs ",
+      "method = \"nested_laplace\"."), call. = FALSE)
+  }
+  fields <- .tobs_expand_spatial_bar(spec, data)
+  if (length(fields) > 1L) {
+    stop(sprintf(paste0(
+      "occu_cover() NUTS + areal spatial samples a SINGLE areal field: the ",
+      "sampler carries one field block (one loading, one site -> node map, one ",
+      "copy amplitude onto the cover arm). This bar declares %d fields (the ",
+      "intercept field plus %d varying-coefficient field(s)); the additional ",
+      "field(s) need the grid-integrated method = \"nested_laplace\" path."),
+      length(fields), length(fields) - 1L), call. = FALSE)
+  }
+  if (isTRUE(spec$correlated)) {
+    stop(paste0(
+      "occu_cover(): a correlated spatial bar (`|`) needs at least one ",
+      "coefficient beyond the intercept (e.g. spatial(~ 1 + x | cell, ",
+      "graph = adj)); a single field has no cross-covariance to estimate. ",
+      "Use the independent spelling `||` for a single field."), call. = FALSE)
+  }
+  fields[[1L]]
+}
+
 # Resolve the single spatial term + fixed-effect psi formula for the NUTS
 # spatial path. Unlike .occu_cover_spatial_fields (which gates to icar/bym2 for
-# the grid-integrated nested-Laplace engine), the NUTS path accepts car_proper()
-# (the full-rank precision the fixed-hyper non-centered field needs) and rejects
-# icar/bym2/SVC/trend/temporal/RE/correlated bars with a pointer to the
-# nested-Laplace route. Returns NULL when the psi formula carries no spatial term
-# (the non-spatial NUTS sampler), or list(fe, spatial, group_var).
+# the grid-integrated nested-Laplace engine), the NUTS path also accepts
+# car_proper() (the full-rank precision the fixed-hyper non-centered field is
+# best conditioned on) and rejects SVC/trend/temporal/RE terms with a pointer to
+# the nested-Laplace route. The bar
+# form is desugared first, so `spatial(~ 1 || cell, graph = adj)` and
+# `icar(graph = adj, group_var = "cell")` reach the sampler as one field
+# description (gcol33/tulpaObs#203). Returns NULL when the psi formula carries no
+# spatial term (the non-spatial NUTS sampler), or list(fe, spatial, group_var).
 .occu_cover_nuts_spatial_term <- function(formula, data) {
   bind <- .tobs_bind_formulas(list(psi = formula), data)
   if (length(bind$terms) == 0L) return(NULL)
   spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
-  bars    <- Filter(function(t) isTRUE(t$spec$is_bar), spatial)
   re_terms <- Filter(function(t) inherits(t$spec, "tobs_re"), bind$terms)
   other   <- Filter(function(t) !inherits(t$spec, "tobs_spatial") &&
                                 !inherits(t$spec, "tobs_re"), bind$terms)
   if (length(spatial) == 0L) return(NULL)
-  if (length(spatial) > 1L || length(bars) > 0L || length(re_terms) > 0L ||
-      length(other) > 0L) {
+  if (length(spatial) > 1L || length(re_terms) > 0L || length(other) > 0L) {
     stop(paste0(
       "occu_cover() NUTS + areal spatial samples a SINGLE shared coupled field ",
-      "(one car_proper() term on the psi formula); SVC / trend / correlated bars ",
-      "/ per-group RE / temporal terms compose only on the grid-integrated ",
+      "(one areal term on the psi formula); a second field / per-group RE / ",
+      "temporal term composes only on the grid-integrated ",
       "method = \"nested_laplace\" path."), call. = FALSE)
   }
   spec <- spatial[[1L]]$spec
+  if (isTRUE(spec$is_bar)) spec <- .occu_cover_nuts_bar_field(spec, data)
   if (!is.null(spec$weight) || isTRUE(spec$is_multifield)) {
     stop(paste0(
       "occu_cover() NUTS + areal spatial samples a single unweighted shared ",

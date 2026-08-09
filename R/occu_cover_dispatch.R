@@ -328,11 +328,13 @@
   pos_copies <- pos_copy$copies
   pos_formula <- pos_copy$formula
 
-  # Spatial NUTS path (gcol33/tulpaObs#74): a car_proper() term on the psi formula
-  # under method = "nuts" samples a FIXED-HYPER non-centered coupled proper-CAR
-  # field jointly with the coefficient marginal (rather than grid-integrating it,
-  # as nested_laplace does). Detected separately from the grid-integrated
-  # icar/bym2 fields below, because the proper-CAR field is a NUTS-only structure.
+  # Spatial NUTS path (gcol33/tulpaObs#74): a single areal term on the psi formula
+  # -- icar() / bym2() / car_proper(), or the equivalent single-column bar
+  # spatial(~ 1 || cell, graph = adj) -- under method = "nuts" samples a
+  # FIXED-HYPER non-centered coupled field jointly with the coefficient marginal
+  # (rather than grid-integrating it, as nested_laplace does). Detected separately
+  # from the grid-integrated fields below, because the fixed-hyper sampled field
+  # is a NUTS-only structure.
   if (identical(engine, "nuts")) {
     nuts_sp <- .occu_cover_nuts_spatial_term(formula, data)
     if (!is.null(nuts_sp)) {
