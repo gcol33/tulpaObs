@@ -221,16 +221,28 @@ test_that("SLA gamma near zero at large N", {
         method  = "nested_laplace_sla",
         control = list(
             sigma.grid     = c(0.4, 0.8),
-            rho.grid       = c(0.5, 0.9)
+            rho.grid       = c(0.5, 0.9),
+            alpha.grid     = c(0.5, 1.0, 1.5),
+            adaptive.grid  = FALSE
         )
     ))
 
     # Inner Laplace is near-Gaussian at large N for Bernoulli/Beta with
     # moderately disperse data — gamma should be small in magnitude.
+    #
+    # The band is the measurement, not a round number. Grid: the pins above,
+    # 2 sigma x 2 rho x 3 alpha x 7 phi = 84 base cells (the engine's
+    # var-of-means consistency pass adds 2-4 more; `adaptive.grid = FALSE`
+    # holds the axes at the pins). Over seeds 104-108 at N = 1000 the
+    # measured maxima are 0.00002-0.00200 on the occurrence arm and
+    # 0.00199-0.01292 on the cover arm, so 0.02 leaves ~1.5x headroom on the
+    # worst seed and 4.5x on the one this test runs. The same fixture at
+    # N = 120 measures 0.128 on the cover arm at this seed, which is what
+    # makes the band fail when the Gaussian limit is taken away.
     expect_true(all(is.finite(fit$skew_occ)))
     expect_true(all(is.finite(fit$skew_pos)))
-    expect_lt(max(abs(fit$skew_occ)), 0.2)
-    expect_lt(max(abs(fit$skew_pos)), 0.2)
+    expect_lt(max(abs(fit$skew_occ)), 0.02)
+    expect_lt(max(abs(fit$skew_pos)), 0.02)
 })
 
 
@@ -256,8 +268,17 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
         y       = sim$y,
         method  = "nested_laplace_sla",
         control = list(
-            sigma.grid     = c(0.01, 0.02, 0.03),
-            rho.grid       = c(0.5)
+            # Both axes pinned and refinement off, so the grid this test
+            # integrates is the 3 x 1 x 3 x 7 = 63-cell tensor
+            # below. The donor truth sigma = 0.05 sits inside sigma.grid
+            # and on none of its nodes; the copy truth alpha = 0.01 sits
+            # inside alpha.grid and on none of its nodes. The largest
+            # cover-arm field amplitude any cell reaches is
+            # max(alpha) * max(sigma) = 0.2 * 0.15 = 0.03.
+            sigma.grid     = c(0.02, 0.08, 0.15),
+            rho.grid       = c(0.5),
+            alpha.grid     = c(0, 0.05, 0.20),
+            adaptive.grid  = FALSE
         )
     ))
 
@@ -274,15 +295,25 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
     expect_true(is.numeric(fit_sep$skew_pos))
     expect_equal(length(fit_joint$skew_pos), length(fit_sep$skew_pos))
 
-    # The joint path still integrates a 3-point (sigma, sigma_pos) grid
-    # at scale ~0.02, so per-grid skewness contributions don't fully
-    # cancel even at near-zero amplitude. What this test defends is the
-    # qualitative collapse: both arms' skewness stay close to zero (well
-    # under 0.1 absolute) and the joint stays within the SLA grid-mixing
-    # noise floor of the separate path. Empirically the residual is
-    # ~0.03-0.07 per coefficient; 1e-1 is the honest tolerance.
+    # Two separate claims, measured separately over seeds 105-114 on the
+    # grid pinned above (gcol33/tulpaObs#196).
+    #
+    # (a) Magnitude. Both paths' cover-arm skewness stays small: measured
+    #     maxima 0.0757 (joint) and 0.0633 (separate) across the ten seeds,
+    #     so 0.1 is the band. This band does NOT distinguish the vanishing
+    #     regime -- the same fixture at sigma = 0.5, alpha = 1 measures a
+    #     joint maximum of 0.0409 -- so it is a magnitude band and nothing
+    #     more.
+    #
+    # (b) Collapse. What says the joint kernel has collapsed onto two
+    #     independent arms is that its cover-arm posterior IS the separate
+    #     path's, in units of that path's own standard error. Measured over
+    #     the same ten seeds the gap reaches 0.2024 se; at sigma = 0.5,
+    #     alpha = 1 (donor and copy axes re-pinned around that truth) the
+    #     smallest gap over the same seeds is 0.6594 se. 0.30 se separates
+    #     the two regimes on every seed measured.
     expect_lt(max(abs(fit_joint$skew_pos)), 0.1)
     expect_lt(max(abs(fit_sep$skew_pos)),   0.1)
-    expect_equal(fit_joint$skew_pos, fit_sep$skew_pos, tolerance = 1e-1,
-                 ignore_attr = TRUE)
+    expect_lt(max(abs(fit_joint$beta_pos - fit_sep$beta_pos) / fit_sep$se_pos),
+              0.30)
 })

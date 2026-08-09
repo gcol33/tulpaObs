@@ -940,8 +940,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     .tobs_default_alpha_grid()
 
   # Outer joint-grid integration controls, shared by the multi-block and
-  # single-block dispatch. The dense outer tensor (sigma_occ x [rho] x
-  # sigma_pos x phi_pos) concentrates almost all posterior mass on a handful
+  # single-block dispatch. The dense outer tensor (sigma x [rho] x alpha x
+  # phi_pos) concentrates almost all posterior mass on a handful
   # of cells, but the inner latent mode moves substantially across the grid,
   # so the cheap-pass prune is OFF by default: the full-grid solve is the
   # correct default (gcol33/tulpaObs#20). The rank-safe speed path is the
@@ -1004,9 +1004,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # ---- Multi-block path (Phase J-D) -----------------------------------
   # When `temporal` or `re` components are supplied, stack the spatial
   # block with AR1/RW/IID blocks and dispatch through the multi-block
-  # joint engine. Copy semantics remain on the spatial block (sigma_occ /
-  # sigma_pos), other blocks are shared identically across the two arms
-  # (no per-arm scale).
+  # joint engine. Copy semantics remain on the spatial block, carried by its
+  # own `alpha` axis (`control$alpha.grid`); other blocks are shared
+  # identically across the two arms (no per-arm scale).
   if (has_trend) {
     # Coupled trend path: two shared areal blocks on the same graph -- block 1
     # the unweighted intercept field, block 2 the per-observation-weighted SVC

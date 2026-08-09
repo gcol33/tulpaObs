@@ -47,9 +47,20 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
       family  = cover("beta"),
       y       = sim$y,
       method  = "nested_laplace",
+      # Grid geometry the number below is measured under (gcol33/tulpaObs#198).
+      # Every axis is pinned and `adaptive.grid = FALSE`, so the base tensor is
+      # 3 sigma x 3 rho x 4 alpha x 7 phi = 252 cells; the engine's var-of-means
+      # consistency pass, a separate mechanism, placed 4 more on the phi axis in
+      # the run these numbers come from. Each simulator truth --
+      # sigma = 0.6, rho = 0.7 (simulate_cover_joint() defaults), alpha = 1.0 --
+      # sits inside its axis's span and on none of its nodes. The pins the file
+      # used to carry put sigma and rho each on the MIDDLE node of a symmetric
+      # three-node axis; measured, that placement moves nothing here (0.95
+      # either way, mean estimate 0.4096 vs 0.4037 against truth 0.40).
       control = list(
-        sigma.grid     = c(0.3, 0.6, 0.9),
-        rho.grid       = c(0.5, 0.7, 0.9),
+        sigma.grid     = c(0.25, 0.5, 1.0),
+        rho.grid       = c(0.4, 0.6, 0.85),
+        alpha.grid     = c(0.25, 0.75, 1.5, 2.5),
         adaptive.grid  = FALSE
       )
     )
@@ -60,10 +71,12 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
     in_ci[r] <- (beta_pos_0_truth >= lo && beta_pos_0_truth <= hi)
   }
 
-  # Nominal 95%; allow margin for 20-seed MC noise. The pre-fix
-  # regime (un-demeaned simulator at alpha=1) sat at 0.43-0.47, so
-  # 0.80 is well clear of that floor while leaving headroom for
-  # honest seed-to-seed noise.
+  # Nominal 95%; allow margin for 20-seed MC noise. Measured on this fixture
+  # and this grid (tulpa 0.0.163): 0.95, 19/20, mean estimate 0.4037 against
+  # truth 0.40. Re-run with the demean stripped out of the simulator -- the
+  # regime the header describes, `mean(w_s)` non-zero per seed -- the same 20
+  # seeds cover 0.55. So 0.80 sits between the two, with the measured pass at
+  # 0.95 and the measured break at 0.55.
   cov_hat <- mean(in_ci)
   expect_gte(cov_hat, 0.80)
 })

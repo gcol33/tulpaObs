@@ -9,6 +9,8 @@
 #   * The fit's underlying joint object is the multi-block class.
 #   * Multi-block hyperparameter summary is attached (block_moments
 #     populated, alpha finite).
+#   * Each block's posterior mean follows its own simulated truth across a
+#     pair of fits on one grid.
 #
 # Uses positive = "beta" so phi is integrated on the outer grid. (The
 # lognormal arm now integrates its noise SD the same way.)
@@ -80,30 +82,46 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
   )
 }
 
-test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
-  skip_if_fast()
-  sim <- simulate_cover_multi_block(N = 400, seed = 7001)
-  adj <- sim$adj
+# gcol33/tulpaObs#199. A posterior-weighted mean over a pinned axis is a convex
+# combination of that axis's nodes, so a band drawn at or outside the node span
+# holds by construction. Five of this test's bands were drawn that way, two of
+# them exactly at the pin. What replaces them is a paired fit: one grid, two
+# simulated truths, and one ordering per block, so each assertion fails when
+# that block's own truth stops moving.
+#
+# Grid (every axis pinned, `adaptive.grid = FALSE`): 3 sigma x 3 alpha x 2 rho x
+# 4 tau x 1 rho_temporal x 3 sigma_re x 4 phi = 864 base cells. Each truth below
+# sits inside its axis's span and on none of its nodes. The block axes are
+# asserted below to be exactly these; the phi axis can pick up a few extra nodes
+# from the engine's var-of-means consistency pass, which is a separate mechanism
+# from the adaptive grid this switches off.
+.mb_grid <- list(
+  sigma.grid         = c(0.2, 0.45, 0.9),
+  rho.grid           = c(0.5, 0.85),
+  alpha.grid         = c(0.4, 1.0, 2.5),
+  tau.temporal.grid  = c(1, 4, 16, 64),
+  rho.temporal.grid  = 0.6,
+  sigma.re.grid      = c(0.06, 0.2, 0.7),
+  phi.grid           = c(6, 15, 38, 95),
+  adaptive.grid      = FALSE
+)
 
-  # 6 spatial x 2 temporal x 2 RE x 4 phi = 96 cells (above the engine's
-  # 50-cell warn threshold but well under the 1000-cell hard cap).
-  fit <- suppressWarnings(tobs(
-    formula  = ~ x + bym2(graph = adj, group_var = "region") +
+.mb_fit <- function(sim) {
+  suppressWarnings(tobs(
+    formula  = ~ x + bym2(graph = sim$adj, group_var = "region") +
                  temporal(year, type = "ar1") + re(obs, type = "iid"),
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
     method   = "nested_laplace",
-    control  = list(
-      sigma.grid         = c(0.3, 0.6, 1.0),
-      rho.grid           = c(0.5, 0.85),
-      tau.temporal.grid  = c(4, 16),
-      rho.temporal.grid  = c(0.3, 0.7),
-      sigma.re.grid      = c(0.15, 0.4),
-      phi.grid           = exp(seq(log(5), log(80), length.out = 4)),
-      adaptive.grid      = FALSE
-    )
+    control  = .mb_grid
   ))
+}
+
+test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
+  skip_if_fast()
+  sim <- simulate_cover_multi_block(N = 400, seed = 7001)
+  fit <- .mb_fit(sim)
 
   expect_s3_class(fit, "cover_fit")
   expect_equal(fit$positive, "beta")
@@ -115,38 +133,69 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
   expect_true(all(is.finite(fit$beta_pos)))
   expect_gt(fit$beta_occ[2], 0)   # truth 0.7
   expect_lt(fit$beta_pos[2], 0)   # truth -0.3
-
-  # phi_pos finite and inside the user grid.
   expect_true(is.finite(fit$phi_pos))
-  expect_gt(fit$phi_pos, 1)
-  expect_lt(fit$phi_pos, 200)
 
-  # Multi-block hyperparameter summary: spatial + temporal + RE blocks all
-  # report sensible posterior means inside their grids.
-  # The R-facing outer grid for the BYM2 copy block lives in (sigma,
-  # alpha) space; the C++ kernel sees (sigma_occ, sigma_pos) but those
-  # names are not exposed at the R block_moments layer (see tulpa's
-  # nested_laplace_joint.R "API contract" comment around L672).
+  # Multi-block hyperparameter summary: three blocks, named moments.
+  # The R-facing outer grid for the BYM2 copy block lives in (sigma, alpha)
+  # space; the C++ kernel sees `b1.sigma_occ` / `b1.sigma_pos`, materialized
+  # from (sigma, alpha) at the kernel-call boundary and not exposed at the R
+  # block_moments layer (tulpa's `.joint_call_kernel_via_multi()` in
+  # R/nested_laplace_joint_backends.R carries the per-type axis table).
   bm <- fit$joint$block_moments
   expect_length(bm, 3L)
   expect_named(bm[[1L]]$mean, c("sigma", "alpha", "rho"))
   expect_named(bm[[2L]]$mean, c("tau", "rho"))
   expect_named(bm[[3L]]$mean, "sigma")
-  expect_true(bm[[1L]]$mean[["sigma"]] > 0.1 &&
-              bm[[1L]]$mean[["sigma"]] < 1.5)
-  expect_true(bm[[1L]]$mean[["alpha"]] > 0.3 &&
-              bm[[1L]]$mean[["alpha"]] < 3.0)
-  expect_true(bm[[2L]]$mean[["tau"]] >= 4 &&
-              bm[[2L]]$mean[["tau"]] <= 16)
-  expect_true(bm[[3L]]$mean[["sigma"]] >= 0.15 &&
-              bm[[3L]]$mean[["sigma"]] <= 0.4)
 
-  # alpha = sigma_pos / sigma_occ exposed via theta_mean on the copy
-  # block. In the multi-block path joint_grid columns are prefixed
-  # `b<N>.` (the copy block here is block 1, so `b1.alpha`).
+  # Every block axis the driver placed is the one asked for, per block.
+  tg <- fit$joint$theta_grid
+  expect_equal(sort(unique(tg[, "b1.sigma"])), .mb_grid$sigma.grid)
+  expect_equal(sort(unique(tg[, "b1.alpha"])), .mb_grid$alpha.grid)
+  expect_equal(sort(unique(tg[, "b2.tau"])),   .mb_grid$tau.temporal.grid)
+  expect_equal(sort(unique(tg[, "b3.sigma"])), .mb_grid$sigma.re.grid)
+
   expect_true("b1.alpha" %in% names(fit$joint$theta_mean))
   expect_true(is.finite(fit$joint$theta_mean[["b1.alpha"]]))
-  expect_gt(fit$joint$theta_mean[["b1.alpha"]], 0)
+})
+
+
+test_that("cover(): each multi-block hyperparameter follows its own truth", {
+  skip_if_fast()
+  # Same grid, two truths. A is the fixture's own configuration; B raises the
+  # copy coefficient and both non-spatial SDs, lowers the field SD, and makes
+  # the beta arm far more disperse. Measured on seed 7001 (tulpa 0.0.163):
+  #
+  #   quantity       A        B        ratio  margin asserted
+  #   b1.sigma     0.8933   0.4480     1.99x   1.5x
+  #   b1.alpha     1.0013   1.5717     1.57x   1.3x
+  #   b2.tau      51.4964   8.7709     5.87x   2.0x
+  #   b3.sigma     0.2395   0.7000     2.92x   2.0x
+  #   phi_pos     38.0000   6.0092     6.32x   3.0x
+  #
+  # Every ordering holds on all five of seeds 7001 / 7011-7014, and each rule
+  # fails when its own component of B is put back to A's value (the sigma_year
+  # reversal takes down `b2.tau` AND `b1.sigma`, the year effect and the field
+  # being partly confounded at this fixture size).
+  fit_a <- .mb_fit(simulate_cover_multi_block(N = 400, seed = 7001))
+  fit_b <- .mb_fit(simulate_cover_multi_block(N = 400, seed = 7001,
+                                              sigma      = 0.35,
+                                              alpha      = 2.2,
+                                              sigma_year = 0.8,
+                                              sigma_obs  = 0.6,
+                                              phi_b      = 8))
+  a <- fit_a$joint$block_moments
+  b <- fit_b$joint$block_moments
+
+  # Spatial field SD: truth 0.6 -> 0.35.
+  expect_gt(a[[1L]]$mean[["sigma"]], 1.5 * b[[1L]]$mean[["sigma"]])
+  # Copy coefficient: truth 1.2 -> 2.2.
+  expect_gt(b[[1L]]$mean[["alpha"]], 1.3 * a[[1L]]$mean[["alpha"]])
+  # AR1 precision: truth SD 0.3 -> 0.8, so tau falls.
+  expect_gt(a[[2L]]$mean[["tau"]], 2.0 * b[[2L]]$mean[["tau"]])
+  # Observer RE SD: truth 0.25 -> 0.6.
+  expect_gt(b[[3L]]$mean[["sigma"]], 2.0 * a[[3L]]$mean[["sigma"]])
+  # Beta precision: truth 30 -> 8.
+  expect_gt(fit_a$phi_pos, 3.0 * fit_b$phi_pos)
 })
 
 

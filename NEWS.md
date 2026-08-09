@@ -1,5 +1,86 @@
 # tulpaObs NEWS
 
+## 0.0.192 (2026-08-09)
+
+* **Five cover-hurdle fixtures re-anchored on the axis the engine integrates**
+  (gcol33/tulpaObs#196, #197, #198, #199, #200). Each carried a number -- a
+  tolerance, a coverage floor, a recovery band, a node count -- stated against
+  `control$sigma.pos.grid`, the retired axis gcol33/tulpaObs#192 established
+  nothing had ever read. Every one of them is now measured on the grid the fit
+  runs today, and every rewritten assertion is recorded with the perturbation
+  that breaks it.
+
+* `test-sla-cover-joint.R`'s vanishing-sigma test (#196) justified a `1e-1`
+  skewness tolerance by "a 3-point (sigma, sigma_pos) grid at scale ~0.02" --
+  the literal nodes of the removed pin. Measured, that fit ran a 138-cell grid
+  whose copy axis reached 16.4 after refinement. It now pins `sigma.grid`,
+  `alpha.grid` and `adaptive.grid = FALSE`, so the tensor is exactly 63 cells
+  and the largest cover-arm amplitude any cell reaches is 0.03, with the donor
+  and copy truths both inside their axis and on no node. The skewness tolerance
+  is gone: measured over ten seeds it does not separate the vanishing regime
+  from `sigma = 0.5, alpha = 1` (0.128 against 0.127), so it was never evidence
+  of the collapse. What replaces it is the cover-arm posterior itself, in units
+  of the separate path's own standard error -- 0.2024 at vanishing amplitude
+  against a smallest 0.6594 in the control, so the assertion holds on all ten
+  seeds of one regime and fails on all ten of the other. No translation of the
+  old nodes was attempted; `c(0, 0.01, 0.02)` in `sigma_pos` is not one `alpha`
+  grid across a three-node donor axis, which is why #192 refused to translate.
+
+* The same file's large-N band (#196) moves from `0.2` to `0.02`: at N = 1000 the
+  measured maxima over seeds 104-108 are 0.00002-0.00200 (occurrence) and
+  0.00199-0.01292 (cover). The same fixture at N = 120 measures 0.128 on the
+  cover arm.
+
+* `test-cover-hurdle-nested-joint-recovery.R` (#197) stated a phi axis of "5
+  log-spaced points in [2, 300]"; the beta arm's default has 7 and, per
+  `git log -S`, never had 5. Both of its pinned axes also sat with the truth on
+  the MIDDLE node, unrecorded. Every fit now pins the truth off-node on both
+  axes and the file records what the centred placement measured: 0.0384 against
+  0.0346 mean relative error on `sigma_pos`, identical 0.933 slope coverage,
+  0.0298 against 0.0246 on `phi_pos` -- centring moved nothing here, and the
+  file says so instead of leaving it to be inferred. The bands tighten onto the
+  re-measured numbers (0.15/0.25 -> 0.08/0.20 on `sigma_pos`, 0.12/0.10 ->
+  0.05/0.05 on the slopes, 0.10 -> 0.06 on `phi_pos`), and `phi_pos_sd`'s
+  span-derived `< 100` becomes the measured `< 8` (2.1975 at n_pos 316, 11.65 at
+  n_pos 42).
+
+* `test-cover-hurdle-bpos0-coverage.R`'s 0.80 floor (#198) was measured with
+  `sigma` and `rho` each on the middle node of a symmetric three-node axis. All
+  three axes now hold their truth off-node, and the file records both the
+  geometry and the two numbers the floor sits between: 0.95 (19/20) as it
+  stands, 0.55 with the demean stripped out of the simulator -- the regime the
+  test exists to catch.
+
+* Five bands in `test-cover-hurdle-multi-block.R` (#199) asserted that a
+  posterior-weighted mean lies inside its own pinned node span, which it does by
+  construction; two of them were drawn exactly at the pin. They are replaced by
+  one paired fit -- one grid, two simulated truths -- and one ordering per block,
+  so the spatial SD, the copy coefficient, the AR1 precision, the observer RE SD
+  and the beta precision each have to follow their own truth. Every ordering
+  holds on five seeds, and each fails when its own component of the second truth
+  is put back to the first's. The test also asserts every block axis the driver
+  placed is the one asked for, and pins `alpha.grid` rather than inheriting it.
+
+* The outer-tensor comment in `R/cover_hurdle_joint.R` named `sigma_occ` and
+  `sigma_pos` as axes of the grid (#200). The tensor is
+  `sigma x [rho] x alpha x phi_pos`; `sigma_occ` / `sigma_pos` are C++ kernel
+  columns the backend materializes from `(sigma, alpha)`. A second comment in
+  the same file named them as what the multi-block copy carries.
+
+* `vignettes/cover-hurdle-vs-inla.Rmd` knits again (gcol33/tulpaObs#201). Its
+  joint chunk passed `control$sigma.pos.grid`, which the `cover()` front door
+  refuses outright, so the vignette -- and with it `R CMD check` -- stopped
+  there. It carries the copy axis on `control$alpha.grid` and reads
+  `theta_mean["sigma"]`, the name the outer grid actually uses.
+
+* The same vignette's joint fixture put its cover-arm intercept at 0.4
+  (gcol33/tulpaObs#202), so the lognormal median sat at `exp(0.4) = 1.49` and
+  104 of its 140 positive responses were censored at the cover ceiling of 1
+  before the fit saw them; its cover-arm slope came back at 30% of truth. The
+  intercept moves to -1.5, which leaves 7 censored, and the recovery table now
+  reads 0.654 / -0.472 against truths 0.7 / -0.5 with `alpha` at 1.204 and
+  `sigma` at 0.653.
+
 ## 0.0.191 (2026-08-09)
 
 * **The adaptive-grid fixture places its truth back on the axis the engine

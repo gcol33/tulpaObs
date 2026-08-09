@@ -229,7 +229,7 @@ sim_joint <- simulate_cover_joint(
   N        = 300L,
   adj      = adj,
   beta_occ = c(-0.3, 0.7),
-  beta_pos = c( 0.4, -0.5),
+  beta_pos = c(-1.5, -0.5),
   sigma    = 0.6,
   rho      = 0.7,
   alpha    = 1.0,
@@ -241,7 +241,11 @@ sim_joint <- simulate_cover_joint(
 The `simulate_cover_joint()` generator demeans both BYM2 sub-blocks before
 scaling, matching the sum-to-zero constraint the engine applies, so the
 recovered cover-arm intercept targets the population truth rather than a
-field-mean offset. The truth carries `sigma = 0.6`, `alpha = 1.0` (the two
+field-mean offset. The cover-arm intercept sits well below zero so the
+lognormal median stays under the cover ceiling of 1: the generator caps its
+draws there, and an intercept near or above the ceiling censors most of the
+positive responses and flattens the cover-arm slope. The truth carries
+`sigma = 0.6`, `alpha = 1.0` (the two
 arms see the field identically), and `sigma_pos = alpha * sigma`. The same
 demeaning matters in INLA: a `bym2` field there is also sum-to-zero
 constrained, so a simulator that skips the demean biases the intercept in
@@ -256,28 +260,29 @@ fit_joint <- tobs(
   y       = sim_joint$y,
   method  = "nested_laplace",
   control = list(
-    sigma.grid     = c(0.4, 0.8),
-    rho.grid       = c(0.5, 0.9),
-    sigma.pos.grid = c(0.0, 0.6),
-    verbose        = FALSE
+    sigma.grid = c(0.4, 0.8),
+    rho.grid   = c(0.5, 0.9),
+    alpha.grid = c(0.25, 0.75, 1.5, 2.5),
+    verbose    = FALSE
   )
 )
 
 joint_recovery <- data.frame(
-  parameter = c("beta_occ_x", "beta_pos_x", "alpha", "sigma_occ"),
+  parameter = c("beta_occ_x", "beta_pos_x", "alpha", "sigma"),
   truth     = c(sim_joint$truth$beta_occ[2], sim_joint$truth$beta_pos[2],
                 sim_joint$truth$alpha,       sim_joint$truth$sigma),
   estimate  = c(fit_joint$beta_occ[2], fit_joint$beta_pos[2],
                 unname(fit_joint$joint$theta_mean["alpha"]),
-                unname(fit_joint$joint$theta_mean["sigma_occ"]))
+                unname(fit_joint$joint$theta_mean["sigma"]))
 )
 joint_recovery
 ```
 
 The occurrence and cover slopes land on the right side of zero (truth +0.7
 and -0.5), and `alpha` recovers near its true 1.0. The estimate of
-`sigma_occ` reads off the field amplitude on the occurrence arm. With only
-25 regions the field-level quantities (`alpha`, `sigma_occ`) carry visible
+`sigma` reads off the field amplitude on the occurrence arm; the cover arm
+sees the same field at `alpha * sigma`. With only
+25 regions the field-level quantities (`alpha`, `sigma`) carry visible
 sampling noise; the fixed-effect slopes, which pool over all 300 sites,
 recover more tightly. This is the same small-region behaviour Michael's
 MOTIVATE fit shows, and it is intrinsic to the data, not to the engine.
@@ -353,10 +358,10 @@ blocks, which is what the recovery table shows.
 **Speed.** For the separate-fit case both engines finish in well under a
 second on 400 sites; the cost is dominated by the design-matrix algebra,
 not the optimizer. For the joint shared-field case the cost is the outer
-grid size: the example above uses a small 2x2x2 grid, which keeps the fit
-fast, but a dense default grid with adaptive densification runs longer.
+grid size: the example above pins a small one, which keeps the fit fast,
+but a dense default grid with adaptive densification runs longer.
 tulpaObs exposes the grid directly through `control$sigma.grid`,
-`control$rho.grid`, and `control$sigma.pos.grid`, so the time-accuracy
+`control$rho.grid`, and `control$alpha.grid`, so the time-accuracy
 trade is in the user's hands.
 
 **Output format.** INLA returns full posterior marginals for every fixed

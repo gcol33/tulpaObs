@@ -114,3 +114,116 @@ cells): `prune.tol` 1e-4 / 1e-3 / 1e-2 / 3e-2 / 1e-1 / 2e-1 prunes 539 / 543 / 5
 3e-04 / 3e-05 / 1e-02 / 5e-02 / 1.5e-01. At 0.5 the engine's cheap-screen argmax check
 fires and the fit falls back to the full grid, returning a bit-identical result -- so
 `prune.tol = 0.5` is not a usable perturbation and `0.2` is.
+
+## Cover-hurdle fixtures re-anchored off the retired copy axis (#196-#200)
+
+Engine: tulpa 0.0.163 (commit 0820e93) built into a private library from a clean
+`git archive`; tulpaObs 0.0.191 installed against it. Probes in
+`dev_notes/issue196/` (gitignored). Every number below is a run, not a carry-over.
+
+### What the #196 fit actually integrated
+
+`test-sla-cover-joint.R`'s vanishing-sigma test, as shipped
+(`sigma.grid = c(0.01, 0.02, 0.03)`, `rho.grid = 0.5`, no copy pin, adaptive grid
+at its default TRUE): **138 cells**, axes `sigma, rho, alpha, phi_pos`, copy axis
+`0 0.1 0.234 0.376 0.548 1.282 1.961 3 3.622 7.021 13.22 16.43` (12 nodes after
+refinement) and `phi_pos` 13 nodes over [2, 300]. So the comment's "3-point
+(sigma, sigma_pos) grid at scale ~0.02" named neither the node count nor the
+amplitude: the largest cover-arm amplitude `alpha * sigma` any cell reached was
+`16.43 * 0.03 = 0.49`.
+
+### #196, vanishing-amplitude collapse (10 seeds, 105-114)
+
+Final pins `sigma.grid = c(0.02, 0.08, 0.15)`, `rho.grid = 0.5`,
+`alpha.grid = c(0, 0.05, 0.20)`, `adaptive.grid = FALSE` -> exactly 63 cells,
+max amplitude 0.03. Truth `sigma = 0.05`, `alpha = 0.01`, both off-node.
+
+| statistic | vanishing (sigma .05, alpha .01) | control (sigma .5, alpha 1) |
+|---|---|---|
+| max abs skew_pos, joint | 0.0757 | 0.0409 |
+| max abs skew_pos, separate | 0.0633 | 0.0957 |
+| max abs skew_occ, joint | 8.63e-04 | -- |
+| max abs(beta_pos joint - sep) / se_sep | **0.2024** | min **0.6594** |
+| max abs(beta_occ joint - sep) / se_sep | 0.0822 | min 0.0101 |
+| max abs(se_pos ratio - 1) | 0.1878 | min 0.1116 |
+
+Reads: the skewness DIFFERENCE does not separate the two regimes. On the
+neighbouring pin `sigma.grid = c(0.02, 0.05, 0.1)` (same alpha pin, same seeds,
+adaptive off) the vanishing arm's worst per-coefficient difference is 0.1281 and
+the non-vanishing control's is 0.1273 -- so the retired `tolerance = 1e-1` on it
+was not evidence of the collapse, and on that grid it fails at the very seed the
+test runs (0.1281). The cover-arm posterior gap DOES separate, on all 20
+paired fits, and the occurrence-arm gap does not (control minimum 0.0101). Hence
+the shipped assertion is the cover arm alone at 0.30 se.
+
+Large-N band, `alpha.grid = c(0.5, 1.0, 1.5)`, `adaptive.grid = FALSE`, seeds
+104-108: at N = 1000 max abs skew_occ 0.00002-0.00200, max abs skew_pos
+0.00199-0.01292 (seed 104: 0.00010 / 0.00444). At N = 120: skew_occ
+0.00114-0.00760, skew_pos 0.01756-0.12827 (seed 104: 0.12827).
+
+### #197 / #198, on-node vs off-node pinned axes
+
+Paired arms, same seeds, same fixtures, only the pins moved.
+
+| fixture | centred pins | off-node pins |
+|---|---|---|
+| lognormal `sigma_pos`, 10 seeds: mean rel err / max rel | 0.0384 / 0.1400 | 0.0346 / 0.1392 |
+| lognormal slopes, 15 seeds: abs bias occ / pos / pooled 95% coverage | 0.0062 / 0.0158 / 0.933 | 0.0081 / 0.0162 / 0.933 |
+| beta `phi_pos`, 10 seeds: mean rel err / max rel | 0.0298 / 0.2095 | 0.0246 / 0.2043 |
+| `beta_pos_0` coverage, 20 seeds | 0.95 (19/20), mean 0.4096 | 0.95 (19/20), mean 0.4098; with the copy axis also pinned off-node, 0.95, mean 0.4037 |
+
+So centring the pinned axes on the truth was worth less than a percentage point
+on every one of these, and nothing here rests on it. Recorded because a reader
+could not previously tell, not because it moved a number.
+
+Break perturbations (each rewritten band, shown failing):
+
+- `sigma_pos` bands 0.08 / 0.20: simulate the same 10 seeds at 0.55, score against
+  0.4 -> 0.2942 / 0.3594. (Against its own truth 0.55: 0.0588 / 0.1060.)
+- slope bands 0.05 / 0.05: simulate at slopes (0.9, 0.45), score against
+  (0.7, 0.3) -> 0.1900 / 0.1144. Note the fixture's coverage arm reads
+  `sim$truth`, so moving the simulated slopes moves the interval's target with
+  them and does NOT exercise the floor -- scored against the unshifted (0.7,
+  0.3) the same 15 seeds cover 0.367.
+- the 0.85 coverage floor: narrow the interval the seeds are scored in, 1.96 se
+  -> 0.4 se.
+- `phi_pos` bands 0.06 / 0.25: simulate at phi = 12, score against 30 -> 0.6165 /
+  0.6537. (Against its own truth 12: 0.0412 / 0.1888.)
+- `phi_pos_sd < 8`: 2.1975 at n_pos 316 (the fixture), 2.6580 at 151, 5.0595 at
+  83, 11.6546 at 42.
+- `beta_pos_0` coverage floor 0.80: 0.95 as shipped; 0.55 with the demean stripped
+  out of the simulator (0.60 under the old centred pins). The header's 0.43-0.47
+  is INLAabun's d3 sweep, a different fixture -- the number measured here is 0.55.
+
+### #199, multi-block bands that could not fail
+
+Grid: `sigma c(0.2, 0.45, 0.9)`, `rho c(0.5, 0.85)`, `alpha c(0.4, 1.0, 2.5)`,
+`tau c(1, 4, 16, 64)`, `rho_temporal 0.6`, `sigma_re c(0.06, 0.2, 0.7)`,
+`phi c(6, 15, 38, 95)`, `adaptive.grid = FALSE` -> 864 cells, ~3 s per fit.
+Truth A is the fixture's own; truth B raises alpha and both non-spatial SDs,
+lowers the field SD, and makes the beta arm far more disperse.
+
+Seed 7001: A `sigma .8933 alpha 1.0013 tau 51.50 re .2395 phi 38.00`;
+B `sigma .4480 alpha 1.5717 tau 8.771 re .7000 phi 6.009`. All five orderings
+also hold on seeds 7011-7014.
+
+Single-component reversals (B with one parameter put back to A's value), each
+failing exactly its own rule:
+
+| reversal | sigma | alpha | tau | re | phi |
+|---|---|---|---|---|---|
+| B full | pass | pass | pass | pass | pass |
+| sigma_year -> 0.3 | **FAIL** | pass | **FAIL** | pass | pass |
+| sigma_obs -> 0.25 | pass | pass | pass | **FAIL** | pass |
+| phi_b -> 30 | pass | pass | pass | pass | **FAIL** |
+| sigma -> 0.6 | **FAIL** | pass | pass | pass | pass |
+| alpha -> 1.2 | pass | **FAIL** | pass | pass | pass |
+
+The `sigma_year` reversal takes down the spatial rule as well: the year effect and
+the areal field are partly confounded at N = 400 with 6 seasons, so raising the
+year SD absorbs field amplitude.
+
+Per-seed variability of the block moments at this fixture size is large -- over
+seeds 7001/7011-7014 truth A gives `sigma` 0.386-0.894, `alpha` 1.001-2.399,
+`tau` 8.18-57.68 -- which is why the shipped assertions are orderings against a
+paired truth rather than single-seed recovery bands.
