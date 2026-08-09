@@ -40,7 +40,7 @@ test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
         data = sim$data, family = cover("beta"), y = sim$y,
         method = "nested_laplace",
         control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9),
-                       sigma.pos.grid = c(0.0, 0.6), phi.grid = phi_grid,
+                       phi.grid = phi_grid,
                        prior.phi = prior_phi))
 
     flat <- fit_one(NULL)

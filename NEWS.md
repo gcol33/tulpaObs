@@ -1,5 +1,38 @@
 # tulpaObs NEWS
 
+## 0.0.190 (2026-08-09)
+
+* **The cover-arm coupling axis reaches the engine on the field the engine
+  reads** (gcol33/tulpaObs#192, #195). `control$sigma.pos.grid` named the
+  cover-arm field amplitude when the joint engine parameterized the copy as
+  (sigma_occ, sigma_pos). It parameterizes it as (sigma, alpha) with
+  `sigma_pos = alpha * sigma`, and has done since that axis was retired, so
+  nothing has read the knob on any cover() route: `.cover_build_multi_prior()`
+  wrote it to `copy$sigma_pos_grid`, a field tulpa's `.resolve_one_copy_spec()`
+  does not look at, and the single-block and coupled-trend routes never took the
+  value at all. Measured on `simulate_cover_multi_block(N = 400, seed = 7001)`,
+  `c(0.4, 0.8, 1.2)` against `c(11, 12, 13)` gave a bit-identical
+  `log_marginal` and `beta_pos`. `control$alpha.grid` was unread on the
+  multi-block route too, so that route had no user control over the copy axis
+  whatsoever. It is now carried on the copy spec's `alpha_grid`, matching the
+  single-block and coupled-trend routes, and `control$sigma.pos.grid` is
+  refused with a message naming `control$alpha.grid`. NO FITTED NUMBER MOVES
+  for a caller who did not pin `alpha.grid` on a multi-block fit: the package
+  default `.tobs_default_alpha_grid()` is node-for-node the engine default the
+  route was falling back to. A caller who DID pin either knob was getting the
+  default axis and now gets the one they asked for.
+
+* The `prior_from_spec()` `tau_grid` -> `sigma_grid` translation in
+  `fit_cover_hurdle_joint_nested()` is removed (gcol33/tulpaObs#193). It was
+  guarded on a field `tulpa::prior_from_spec()` does not return: every areal
+  branch of the engine's spec converter builds a fresh list of `type`,
+  `spatial_idx`, `n_spatial_units`, `adj_row_ptr`, `adj_col_idx`,
+  `n_neighbors` (plus `scale_factor` / `rho_bounds`) and no grid field, and has
+  since the earliest version in that repo -- so the branch was dead when it was
+  written rather than dead from a regression (gcol33/tulpa#363 tracks the
+  roxygen claim it was written against). `control$tau.grid` is a separate,
+  live knob and is untouched.
+
 ## 0.0.189 (2026-08-09)
 
 * **Every outer-grid axis this package chooses now reaches the engine declared

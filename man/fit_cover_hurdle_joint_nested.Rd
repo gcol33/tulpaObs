@@ -24,12 +24,13 @@ the spatial spec (group_var lookup, n_spatial_units check).}
 \item{positive}{\code{"lognormal"} or \code{"beta"}.}
 
 \item{control}{List with optional \code{max_iter}, \code{tol}, \code{n_threads},
-\code{sigma_grid}, \code{rho_grid}, \code{rho_car_grid}, \code{sigma_pos_grid},
+\code{sigma_grid}, \code{rho_grid}, \code{rho_car_grid}, \code{alpha_grid},
 \code{phi_init}, \code{phi_bounds} (the last two are forwarded to the beta
 pre-fit when \code{positive = "beta"}). For ICAR / CAR_proper backends
 \code{tau_grid} is also accepted and translated to \code{sigma_grid} as
-\code{sigma = 1 / sqrt(tau)}. The cover-arm field amplitude rides its
-own \code{sigma_pos_grid} axis. Regularizing hyperpriors on the joint
+\code{sigma = 1 / sqrt(tau)}. The cover arm sees the shared field at
+amplitude \code{alpha * sigma}, so \code{alpha_grid} is the cover-arm
+amplitude axis and \code{sigma_grid} the donor's. Regularizing hyperpriors on the joint
 (sigma, alpha) axes can be set via \code{prior_sigma} (donor amplitude)
 and \code{prior_alpha} (copy coefficient) — each a length-2 list
 \code{list(family, params)} matching tulpa's \code{prior_sigma} / \code{prior_alpha}

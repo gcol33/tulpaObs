@@ -735,12 +735,13 @@
 #'   the spatial spec (group_var lookup, n_spatial_units check).
 #' @param positive `"lognormal"` or `"beta"`.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
-#'   `sigma_grid`, `rho_grid`, `rho_car_grid`, `sigma_pos_grid`,
+#'   `sigma_grid`, `rho_grid`, `rho_car_grid`, `alpha_grid`,
 #'   `phi_init`, `phi_bounds` (the last two are forwarded to the beta
 #'   pre-fit when `positive = "beta"`). For ICAR / CAR_proper backends
 #'   `tau_grid` is also accepted and translated to `sigma_grid` as
-#'   `sigma = 1 / sqrt(tau)`. The cover-arm field amplitude rides its
-#'   own `sigma_pos_grid` axis. Regularizing hyperpriors on the joint
+#'   `sigma = 1 / sqrt(tau)`. The cover arm sees the shared field at
+#'   amplitude `alpha * sigma`, so `alpha_grid` is the cover-arm
+#'   amplitude axis and `sigma_grid` the donor's. Regularizing hyperpriors on the joint
 #'   (sigma, alpha) axes can be set via `prior_sigma` (donor amplitude)
 #'   and `prior_alpha` (copy coefficient) — each a length-2 list
 #'   `list(family, params)` matching tulpa's `prior_sigma` / `prior_alpha`
@@ -915,29 +916,15 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # arm) and the legacy rho_bounds field (joint car_proper uses rho_car_grid).
   # Forward control-grid overrides per backend.
   #
-  # gcol33/tulpa#18: the engine now parameterizes the joint outer grid as
-  # (sigma_occ, sigma_pos) instead of (sigma, alpha). For ICAR / CAR_proper
-  # the spatial field is unit-precision and the donor-arm amplitude lives
-  # on `prior$sigma_grid` (legacy `tau_grid` from prior_from_spec is
-  # translated below). The cover-arm field amplitude lives on
-  # `copy$sigma_pos_grid`. alpha is recovered post-hoc as
-  # sigma_pos / sigma_occ from the joint posterior.
+  # The joint engine parameterizes the copy as (sigma, alpha): the donor
+  # (occurrence) arm sees the field at amplitude `sigma`, the cover arm at
+  # `alpha * sigma`. For ICAR / CAR_proper the spatial field is unit-precision,
+  # so the donor amplitude is `prior$sigma_grid` (`control$sigma.grid`, or
+  # `control$tau.grid` as `sigma = 1/sqrt(tau)`), and the coupling axis is the
+  # copy's own `alpha_grid` (`control$alpha.grid`).
   prior_for_joint <- prior
   prior_for_joint$spatial_idx <- NULL
   prior_for_joint$rho_bounds  <- NULL
-  # Translate a tau_grid the spec carries on an ICAR / CAR_proper prior: the
-  # joint engine takes sigma = 1/sqrt(tau) as its donor-amplitude axis under the
-  # new parameterization. Such an axis comes from the spec, not from the user,
-  # so the translated vector is declared as ours (gcol33/tulpaObs#190); the
-  # `1 / sqrt()` step drops the marker, so it goes on last.
-  if (!is.null(prior_for_joint$tau_grid) &&
-      is.null(prior_for_joint$sigma_grid)) {
-    prior_for_joint$sigma_grid <- tulpa::auto_grid(
-      1.0 / sqrt(as.numeric(prior_for_joint$tau_grid)))
-    prior_for_joint$tau_grid   <- NULL
-  } else if (!is.null(prior_for_joint$tau_grid)) {
-    prior_for_joint$tau_grid <- NULL
-  }
   if (!is.null(control$sigma.grid))   prior_for_joint$sigma_grid   <- control$sigma.grid
   if (!is.null(control$rho.grid))     prior_for_joint$rho_grid     <- control$rho.grid
   if (!is.null(control$tau.grid)) {
@@ -945,18 +932,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   }
   if (!is.null(control$rho.car.grid)) prior_for_joint$rho_car_grid <- control$rho.car.grid
 
-  if (!is.null(control$sigma.pos.grid)) {
-    sigma_pos_grid <- as.numeric(control$sigma.pos.grid)
-  } else {
-    sigma_donor <- prior_for_joint$sigma_grid %||%
-      .tobs_default_sigma_grid()
-    sigma_pos_grid <- .tobs_num_auto(sigma_donor)
-  }
-
   # Direct (sigma, alpha) copy axis: the cover arm sees the shared field at
   # amplitude alpha * sigma_donor. The single-block path declares alpha on the
   # pos arm via field_coef (the engine takes no single-block `copy`); the
-  # multi-block branches carry their own per-block alpha grids.
+  # multi-block branches carry it on their copy spec(s).
   alpha_grid <- control$alpha.grid %||%
     .tobs_default_alpha_grid()
 
@@ -1102,7 +1081,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       temporal      = temporal,
       re            = re,
       control       = control,
-      sigma_pos_grid = sigma_pos_grid
+      alpha_grid    = alpha_grid
     )
     # Strip spatial_idx from the arms — it lives inside the spatial
     # block's per-arm spatial_idx list in the multi-block prior.

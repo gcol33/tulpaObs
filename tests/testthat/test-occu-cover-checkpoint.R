@@ -122,7 +122,7 @@ test_that("cover hurdle forwards checkpoint into the joint engine", {
 
   run <- function(checkpoint = NULL) {
     ctrl <- list(sigma.grid = c(0.4, 0.7), rho.grid = c(0.5, 0.8),
-                 sigma.pos.grid = c(0.0, 0.6), adaptive.grid = FALSE)
+                 adaptive.grid = FALSE)
     if (!is.null(checkpoint)) ctrl$checkpoint <- checkpoint
     suppressWarnings(tobs(
       formula = ~ x + bym2(graph = adj, group_var = "region"),

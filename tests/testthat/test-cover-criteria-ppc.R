@@ -91,8 +91,7 @@ test_that("cover() nested-joint: PIT + PPC project the shared field", {
   fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
               data = dat, family = cover("lognormal"), y = y,
               method = "nested_laplace",
-              control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9),
-                             sigma.pos.grid = c(0.0, 0.6)))
+              control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))
   pit <- tobs_pit_residuals(fit, n.samples = 200L)
   expect_length(pit, N)
   expect_true(all(is.finite(pit) & pit >= 0 & pit <= 1))

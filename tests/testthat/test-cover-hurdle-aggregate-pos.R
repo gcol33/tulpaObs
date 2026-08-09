@@ -56,7 +56,6 @@
     f <- ~ x + bym2(graph = s$adj, group_var = "region") +
              bym2(graph = s$adj, weight = time, group_var = "region")
   } else {
-    ctrl$sigma.pos.grid <- c(0.4, 0.8)
     f <- ~ x + bym2(graph = s$adj, group_var = "region")
   }
   suppressWarnings(tobs(
@@ -134,8 +133,7 @@ test_that("aggregate.pos defaults ON for the beta arm", {
   # byte-identical both to the explicit full per-plot fit and to the explicit
   # aggregate.pos = TRUE fit -- the property that licenses the flipped default.
   ctrl <- list(verbose = FALSE, sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
-               phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L,
-               sigma.pos.grid = c(0.4, 0.8))
+               phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)
   fd <- suppressWarnings(tobs(
     formula = ~ x + bym2(graph = s$adj, group_var = "region"),
     data = s$data, family = cover("beta"), y = s$y,
@@ -188,7 +186,7 @@ test_that("aggregate.pos reduces and preserves the coupled-trend beta cover() fi
               temporal(year, type = "ar1") + re(obs, type = "iid"),
   data = s$data, family = cover("beta"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = agg.pos,
-                 sigma.grid = c(0.5, 1.0), rho.grid = 0.5, sigma.pos.grid = c(0.5, 1.0),
+                 sigma.grid = c(0.5, 1.0), rho.grid = 0.5,
                  tau.temporal.grid = 4, rho.temporal.grid = 0.5, sigma.re.grid = 0.25,
                  phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)))
 
@@ -217,7 +215,7 @@ test_that("aggregate.pos errors for the lognormal positive arm", {
       method = "nested_laplace",
       control = list(verbose = FALSE, aggregate.pos = TRUE,
                      sigma.grid = c(0.5, 1.0), rho.grid = 0.5,
-                     sigma.pos.grid = c(0.4, 0.8), adaptive.grid = FALSE))),
+                     adaptive.grid = FALSE))),
     "aggregate.pos"
   )
 })

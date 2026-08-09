@@ -93,7 +93,7 @@ test_that("nested_laplace cover threads fixed-effect priors (#54)", {
   adj <- matrix(0L, n_s, n_s)
   for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
-  ctrl <- list(sigma.grid = c(0.4, 0.8), sigma.pos.grid = c(0.0, 0.6),
+  ctrl <- list(sigma.grid = c(0.4, 0.8),
                progress = FALSE)
   f_unpen <- tobs(~ x + icar(graph = adj, group_var = "region"), data = d,
                   family = cover("lognormal"), y = y,

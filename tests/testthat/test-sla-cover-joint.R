@@ -100,8 +100,7 @@ test_that("joint SLA path no longer falls back via message", {
             method  = "nested_laplace_sla",
             control = list(
                 sigma.grid     = c(0.4, 0.8),
-                rho.grid       = c(0.5, 0.9),
-                sigma.pos.grid = c(0.0, 0.6)
+                rho.grid       = c(0.5, 0.9)
             )
         ),
         message = function(m) {
@@ -135,8 +134,7 @@ test_that("SLA joint fit exposes skew + draws fields", {
         method  = "nested_laplace_sla",
         control = list(
             sigma.grid     = c(0.4, 0.8),
-            rho.grid       = c(0.5, 0.9),
-            sigma.pos.grid = c(0.0, 0.6)
+            rho.grid       = c(0.5, 0.9)
         )
     ))
 
@@ -189,8 +187,7 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
         # the SLA fields un-populated.
         control = list(
             sigma.grid     = c(0.4, 0.8),
-            rho.grid       = c(0.5, 0.9),
-            sigma.pos.grid = c(0.0, 0.6)
+            rho.grid       = c(0.5, 0.9)
         )
     ))
 
@@ -224,8 +221,7 @@ test_that("SLA gamma near zero at large N", {
         method  = "nested_laplace_sla",
         control = list(
             sigma.grid     = c(0.4, 0.8),
-            rho.grid       = c(0.5, 0.9),
-            sigma.pos.grid = c(0.0, 0.6)
+            rho.grid       = c(0.5, 0.9)
         )
     ))
 
@@ -261,8 +257,7 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
         method  = "nested_laplace_sla",
         control = list(
             sigma.grid     = c(0.01, 0.02, 0.03),
-            rho.grid       = c(0.5),
-            sigma.pos.grid = c(0.0, 0.01, 0.02)
+            rho.grid       = c(0.5)
         )
     ))
 

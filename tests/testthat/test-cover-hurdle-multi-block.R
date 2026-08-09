@@ -97,7 +97,6 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
     control  = list(
       sigma.grid         = c(0.3, 0.6, 1.0),
       rho.grid           = c(0.5, 0.85),
-      sigma.pos.grid     = c(0.4, 0.8, 1.2),
       tau.temporal.grid  = c(4, 16),
       rho.temporal.grid  = c(0.3, 0.7),
       sigma.re.grid      = c(0.15, 0.4),
@@ -151,6 +150,71 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
 })
 
 
+# gcol33/tulpaObs#192. The multi-block copy spec used to carry the copy axis on
+# `sigma_pos_grid`, a field tulpa's copy resolver does not read, so the axis
+# integrated was the engine's own default whatever the caller asked for -- two
+# grids an order of magnitude apart gave a bit-identical `log_marginal`. The
+# assertion is therefore that the knob CHANGES the fit: a band the default also
+# satisfies is what let this survive.
+test_that("cover(): control$alpha.grid places the multi-block copy axis", {
+  skip_if_fast()
+  sim <- simulate_cover_multi_block(N = 300, seed = 7005)
+  adj <- sim$adj
+
+  fit_at <- function(alpha_grid) {
+    suppressWarnings(tobs(
+      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+                   temporal(year, type = "ar1"),
+      data     = sim$data,
+      family   = cover("beta"),
+      y        = sim$y,
+      method   = "nested_laplace",
+      control  = list(
+        sigma.grid        = c(0.4, 0.8),
+        rho.grid          = 0.85,
+        alpha.grid        = alpha_grid,
+        tau.temporal.grid = 9,
+        rho.temporal.grid = 0.5,
+        phi.grid          = c(12, 40),
+        adaptive.grid     = FALSE
+      )
+    ))
+  }
+
+  lo <- fit_at(c(0.2, 0.6))
+  hi <- fit_at(c(1.4, 2.2))
+
+  # The axis the driver placed is the one asked for, not the engine default.
+  expect_equal(sort(unique(lo$joint$theta_grid[, "b1.alpha"])), c(0.2, 0.6))
+  expect_equal(sort(unique(hi$joint$theta_grid[, "b1.alpha"])), c(1.4, 2.2))
+
+  # And it reaches the likelihood: two disjoint axes cannot integrate to the
+  # same marginal.
+  expect_false(isTRUE(all.equal(sum(exp(lo$joint$log_marginal -
+                                        max(lo$joint$log_marginal))),
+                                sum(exp(hi$joint$log_marginal -
+                                        max(hi$joint$log_marginal))))))
+  expect_false(isTRUE(all.equal(max(lo$joint$log_marginal),
+                                max(hi$joint$log_marginal))))
+  expect_false(isTRUE(all.equal(unname(lo$beta_pos), unname(hi$beta_pos))))
+})
+
+test_that("cover(): the retired sigma.pos.grid knob is refused, not ignored", {
+  sim <- simulate_cover_multi_block(N = 120, seed = 7006)
+  expect_error(
+    tobs(
+      formula  = ~ x + bym2(graph = sim$adj, group_var = "region") +
+                   temporal(year, type = "ar1"),
+      data     = sim$data,
+      family   = cover("beta"),
+      y        = sim$y,
+      method   = "nested_laplace",
+      control  = list(sigma.pos.grid = c(0.4, 0.8, 1.2))
+    ),
+    "control$alpha.grid", fixed = TRUE)
+})
+
+
 test_that("cover(): multi-block rejects method = 'laplace'", {
   skip_if_fast()
   sim <- simulate_cover_multi_block(N = 200, seed = 7002)
@@ -192,7 +256,6 @@ test_that("cover(): multi-block resolves character group / time columns", {
     control  = list(
       sigma.grid         = c(0.4, 0.8),
       rho.grid           = c(0.5, 0.85),
-      sigma.pos.grid     = c(0.6, 1.0),
       sigma.temporal.grid = c(0.2, 0.4),
       sigma.re.grid      = c(0.2, 0.4),
       phi.grid           = c(10, 40),

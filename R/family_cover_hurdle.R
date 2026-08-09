@@ -71,6 +71,20 @@
          "    icar(graph = adj, weight = time.sc, group_var = \"cell_idx\")",
          call. = FALSE)
   }
+  # `control$sigma.pos.grid` named the cover-arm field amplitude when the joint
+  # engine parameterized the copy as (sigma_occ, sigma_pos). It parameterizes it
+  # as (sigma, alpha) with `sigma_pos = alpha * sigma`, and has done since that
+  # axis was retired, so nothing has read the knob on any cover() route: a fit
+  # pinning it integrated the default coupling axis and reported a bit-identical
+  # log-marginal (gcol33/tulpaObs#192). `[[` (exact), never `$`.
+  if (!is.null(control[["sigma.pos.grid"]])) {
+    stop("control$sigma.pos.grid is no longer supported for cover hurdle ",
+         "models.\nThe joint engine integrates the copy coefficient `alpha`, ",
+         "with the cover-arm field amplitude `alpha * sigma`; `sigma` is the ",
+         "donor axis (control$sigma.grid).\nSet the coupling with ",
+         "control$alpha.grid, or with copy() in the positive formula.",
+         call. = FALSE)
+  }
   # Per-arm formulas (arm = formula): tobs()'s `presence` and `positive` formula
   # args (folded into `...`) give each hurdle arm its own fixed effects. `positive`
   # here is the formula, distinct from the family's positive-arm likelihood

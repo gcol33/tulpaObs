@@ -103,8 +103,7 @@ test_that("beta_oi carries through the spatial nested-Laplace path", {
   fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
               data = dat, family = cover("beta_oi"), y = y,
               method = "nested_laplace",
-              control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9),
-                             sigma.pos.grid = c(0.0, 0.6)))
+              control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))
   expect_s3_class(fit, "cover_fit")
   expect_identical(fit$positive, "beta_oi")
   expect_true(fit$converged)

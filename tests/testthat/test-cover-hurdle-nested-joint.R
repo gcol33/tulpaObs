@@ -49,8 +49,7 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
         method   = "nested_laplace",
         control  = list(
             sigma.grid     = c(0.4, 0.8),
-            rho.grid       = c(0.5, 0.9),
-            sigma.pos.grid = c(0.0, 0.6)
+            rho.grid       = c(0.5, 0.9)
         )
     )
 
@@ -87,8 +86,7 @@ test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            tau.grid       = c(1.0, 4.0),
-            sigma.pos.grid = c(0.0, 0.75)
+            tau.grid       = c(1.0, 4.0)
         )
     )
 
@@ -152,8 +150,7 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
         method   = "nested_laplace",
         control  = list(
             sigma.grid     = c(0.4, 0.8),
-            rho.grid       = c(0.5, 0.9),
-            sigma.pos.grid = c(0.0, 0.6)
+            rho.grid       = c(0.5, 0.9)
         )
     )
 
@@ -188,8 +185,7 @@ test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
         y        = sim$y,
         method   = "nested_laplace",
         control  = list(
-            tau.grid       = c(1.0, 4.0),
-            sigma.pos.grid = c(0.0, 0.75)
+            tau.grid       = c(1.0, 4.0)
         )
     )
 
@@ -218,8 +214,7 @@ test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
         method   = "nested_laplace",
         control  = list(
             tau.grid       = c(1.0, 4.0),
-            rho.car.grid   = c(0.7, 0.95),
-            sigma.pos.grid = c(0.0, 0.75)
+            rho.car.grid   = c(0.7, 0.95)
         )
     )
 

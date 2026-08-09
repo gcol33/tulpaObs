@@ -60,7 +60,7 @@ test_that("cover() hurdle writes its heartbeat file under verbose = FALSE", {
       verbose = FALSE,             # standard detached-run setting
       progress.file = path,        # ask for the ETA heartbeat
       sigma.grid = c(0.4, 0.7), rho.grid = c(0.5, 0.8),
-      sigma.pos.grid = c(0.0, 0.6), adaptive.grid = FALSE
+      adaptive.grid = FALSE
     )
   ))
   expect_s3_class(fit, "cover_fit")
@@ -132,7 +132,7 @@ test_that("verbose = FALSE without progress.file leaves no heartbeat file", {
     data = dat, family = cover("beta"), y = y,
     method = "nested_laplace",
     control = list(verbose = FALSE, sigma.grid = c(0.4, 0.7),
-                   rho.grid = c(0.5, 0.8), sigma.pos.grid = c(0.0, 0.6),
+                   rho.grid = c(0.5, 0.8),
                    adaptive.grid = FALSE)
   ))
   expect_s3_class(fit, "cover_fit")

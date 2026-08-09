@@ -1,20 +1,19 @@
 # Parameter-recovery test for the adaptive hyperparameter grid wrapped
 # around `tulpa_nested_laplace_joint`. Asserts that 95% credible intervals
 # for the copy-scaling parameter `alpha` cover the truth at the nominal
-# rate when the truth sits *at* the upper edge of the user-supplied
-# `sigma_pos_grid` (the cover-arm field amplitude axis introduced in
-# gcol33/tulpa#18). The fixed-grid path under-covers in this regime
-# because the integrand cannot extend past the boundary; the adaptive
-# path adds a densification point inside the heaviest cell and two
+# rate. The fixed-grid path under-covers when the truth sits near an outer
+# axis edge, because the integrand cannot extend past the boundary; the
+# adaptive path adds a densification point inside the heaviest cell and two
 # outward extension points whenever the relative integrand density at
 # the boundary exceeds `adaptive_grid_edge_thresh`.
 #
 # See gcol33/tulpaObs#8 and gcol33/INLAabun's Demo 3
 # `example/validation/d3_joint_copy.R` for the reproducer that motivated
 # the fix. The configuration here mirrors D3 (N=300, n_s=25, BYM2,
-# beta-positive arm) with truth `sigma_pos = alpha_true * sigma_true =
-# 1.5 * 0.6 = 0.9` sitting at the upper boundary of
-# `sigma.pos.grid = c(0, 0.3, 0.6, 0.9)`.
+# beta-positive arm) with `alpha_true = 1.5` on the default copy axis
+# (gcol33/tulpaObs#194: the boundary these seeds were chosen to sit on was
+# an axis of the retired (sigma_occ, sigma_pos) parameterization, so the
+# fixture no longer places the truth at an edge).
 
 simulate_d3_like <- function(seed, alpha_true,
                              N = 300L, n_s = 25L,
@@ -75,7 +74,6 @@ test_that("adaptive grid covers alpha at the upper boundary across 20 seeds", {
       control  = list(
         sigma.grid     = c(0.3, 0.6, 0.9),
         rho.grid       = c(0.5, 0.7, 0.9),
-        sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9),
         adaptive.grid  = TRUE
       )
     )
@@ -119,7 +117,6 @@ test_that("adaptive grid is strictly better than fixed grid at the boundary", {
     ctrl <- list(
       sigma.grid     = c(0.3, 0.6, 0.9),
       rho.grid       = c(0.5, 0.7, 0.9),
-      sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9),
       phi.grid       = exp(seq(log(2), log(300), length.out = 13))
     )
     fit_fix <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"), data = sim$data, family = cover("beta"),
@@ -164,7 +161,6 @@ test_that("adaptive grid stays a no-op when the integrand has fully decayed", {
     control = list(
       sigma.grid     = c(0.3, 0.6, 0.9),
       rho.grid       = c(0.5, 0.7, 0.9),
-      sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9),
       adaptive.grid  = TRUE
     )
   )
@@ -213,7 +209,6 @@ test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
   ctrl_grid <- list(
     sigma.grid     = exp(seq(log(0.2), log(1.5), length.out = 5)),
     rho.grid       = c(0.25, 0.5, 0.7, 0.9),
-    sigma.pos.grid = c(0.0, 0.2, 0.4, 0.6, 0.9, 1.3),
     phi.grid       = exp(seq(log(2), log(300), length.out = 7)),
     adaptive.grid  = FALSE
   )

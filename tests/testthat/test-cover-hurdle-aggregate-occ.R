@@ -127,7 +127,7 @@ test_that(".cover_aggregate_occ collapses exchangeable rows to exact sufficient 
   formula = ~ x + bym2(graph = s$adj, group_var = "region"),
   data = s$data, family = cover("lognormal"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = agg, sigma.grid = c(0.5, 1.0),
-                 rho.grid = 0.5, sigma.pos.grid = c(0.4, 0.8), phi.grid = c(0.3, 0.5),
+                 rho.grid = 0.5, phi.grid = c(0.3, 0.5),
                  adaptive.grid = FALSE)))
 
 test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
@@ -230,7 +230,7 @@ test_that("aggregate.occ reduces and preserves the coupled-trend cover() fit", {
               temporal(year, type = "ar1") + re(obs, type = "iid"),
   data = s$data, family = cover("beta"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = agg, sigma.grid = c(0.4, 0.8),
-                 rho.grid = 0.6, sigma.pos.grid = c(0.5, 1.0), tau.temporal.grid = 4,
+                 rho.grid = 0.6, tau.temporal.grid = 4,
                  rho.temporal.grid = 0.5, sigma.re.grid = 0.25, phi.grid = c(10, 40),
                  adaptive.grid = FALSE)))
 

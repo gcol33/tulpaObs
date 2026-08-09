@@ -50,7 +50,6 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
       control = list(
         sigma.grid     = c(0.3, 0.6, 0.9),
         rho.grid       = c(0.5, 0.7, 0.9),
-        sigma.pos.grid = c(0.0, 0.3, 0.6, 0.9, 1.2, 1.5),
         adaptive.grid  = FALSE
       )
     )

@@ -1838,6 +1838,8 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
     # is retained here only so a `control$trend` left over from the old API
     # reaches .dispatch_cover's removal error (a weighted formula term now
     # carries the trend), rather than a generic unknown-control-key rejection.
+    # `sigma.pos.grid` is retained for the same reason: its removal error names
+    # `alpha.grid`, the axis that replaced it.
     control_keys   = c(
       "max.iter", "tol", "n.threads", "n.threads.outer", "prior.sigma", "prior.alpha",
       "prior.phi",

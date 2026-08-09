@@ -98,8 +98,7 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
       method   = "nested_laplace",
       control  = list(
         sigma.grid     = c(0.3, 0.6, 0.9),
-        rho.grid       = c(0.5, 0.7, 0.9),
-        sigma.pos.grid = c(0.3, 0.6, 0.9)
+        rho.grid       = c(0.5, 0.7, 0.9)
       )
     )
     expect_s3_class(fit, "cover_fit")
@@ -134,8 +133,7 @@ test_that("joint areal cover hurdle recovers the betas + slope CIs, calibrated (
       formula = ~ x + bym2(graph = adj, group_var = "region"),
       data = sim$data, family = cover("lognormal"), y = sim$y,
       method = "nested_laplace",
-      control = list(sigma.grid = c(0.3, 0.6, 0.9), rho.grid = c(0.5, 0.7, 0.9),
-                     sigma.pos.grid = c(0.3, 0.6, 0.9)))
+      control = list(sigma.grid = c(0.3, 0.6, 0.9), rho.grid = c(0.5, 0.7, 0.9)))
     expect_s3_class(fit, "cover_fit")
     bo2[r] <- fit$beta_occ[2]; bp2[r] <- fit$beta_pos[2]
     # 95% Wald CI on each arm's covariate slope contains truth.
@@ -236,8 +234,7 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
       method   = "nested_laplace",
       control  = list(
         sigma.grid     = c(0.3, 0.5, 0.8),
-        rho.grid       = c(0.5, 0.7, 0.9),
-        sigma.pos.grid = c(0.25, 0.5, 0.75)
+        rho.grid       = c(0.5, 0.7, 0.9)
       )
     )
     expect_s3_class(fit, "cover_fit")
@@ -269,8 +266,7 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
     method   = "nested_laplace",
     control  = list(
       sigma.grid     = c(0.3, 0.5, 0.8),
-      rho.grid       = c(0.5, 0.7, 0.9),
-      sigma.pos.grid = c(0.25, 0.5, 0.75)
+      rho.grid       = c(0.5, 0.7, 0.9)
     )
   )
   expect_true(is.finite(fit$phi_pos_sd))

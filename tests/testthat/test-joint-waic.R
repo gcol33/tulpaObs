@@ -117,8 +117,7 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
   fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
               data = dat, family = cover("lognormal"), y = y,
               method = "nested_laplace",
-              control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9),
-                             sigma.pos.grid = c(0.0, 0.6)))
+              control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))
 
   expect_false(is.null(fit$spi_full))
   ll <- tulpaObs:::.tobs_pointwise_loglik(fit)
