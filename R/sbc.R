@@ -390,7 +390,213 @@
 
 
 # ---------------------------------------------------------------------------
-# 6. The registry
+# 6. Families whose site marginals multiply
+#
+# `occu`, `abun`, `count`, `removal`, `distance`, `fp_occu`, `royle_nichols`
+# and `occu_ttd` each fit ONE data set in which nothing latent is shared between
+# two sites: every quantity the fit reports is in theta, and the likelihood is a
+# product over sites. Three consequences carry the whole construction, so a
+# family here supplies its fitting call and nothing else.
+#
+#   INDEPENDENCE IS STRUCTURAL, NOT ARRANGED. With no unmodelled quantity shared
+#   between two blocks of sites, a replicate generated at theta on a second
+#   block is independent of the observed data given theta. The replicate is
+#   still given its own site labels and stacked below the observed rows, so
+#   `group_ids()` hands `tulpa::sbc()` disjoint labels to CHECK rather than an
+#   argument to trust -- the same premise `occu_cover` buys with a
+#   block-diagonal graph, here already held by the model. A fit carrying a
+#   structured term is refused: its field is exactly the shared unmodelled
+#   quantity this rests on not existing, and theta would carry no value for it.
+#
+#   THE REPLICATE IS THE FAMILY'S OWN POSTERIOR-PREDICTIVE KERNEL, evaluated at
+#   a `draws` matrix holding the single row theta. `simulate()` picks a draw and
+#   generates from the law the fitter maximised, so there is no second copy of
+#   the likelihood for a generator to drift from.
+#
+#   THE JOINT STATISTIC IS THE FAMILY'S OWN MARGINAL, `.tobs_pointwise_loglik()`
+#   summed over sites -- the exact log-likelihood here, where `occu_cover` can
+#   only afford a cell-by-cell surrogate. It reads a whole draw matrix, so the
+#   truth and every reference are scored in ONE kernel call.
+# ---------------------------------------------------------------------------
+
+# A structured term makes a latent quantity that theta does not carry shared
+# across sites, which is the one thing this construction denies. Refused with a
+# pointer rather than scored on the coefficients alone, which would report a
+# calibration the experiment did not measure.
+.tobs_sbc_reject_structure <- function(fit) {
+  st <- fit$model$structured_terms
+  present <- character(0)
+  if (is.list(st)) present <- names(Filter(Negate(is.null), st))
+  if (!is.null(fit$spatial))   present <- unique(c(present, "spatial"))
+  if (!is.null(fit$temporal))  present <- unique(c(present, "temporal"))
+  if (!is.null(fit$re_effects)) present <- unique(c(present, "re"))
+  if (!length(present)) return(invisible(NULL))
+  stop("SBC on family ", sQuote(attr(fit, "tobs_family")$name %||% "?"),
+       " is registered for a fit whose sites are conditionally independent ",
+       "given the scored parameters; this fit carries a structured term (",
+       paste(present, collapse = ", "), "), whose latent values theta does not ",
+       "hold. Refit without it, or use the coupled `occu_cover` route, which ",
+       "draws its replicate on fresh cells.", call. = FALSE)
+}
+
+# The -1 a binder writes for a visit not conducted. Every response these
+# families take is non-negative, so one rule reads both conventions.
+.tobs_sbc_clean_y <- function(y) {
+  if (is.null(dim(y))) y <- matrix(y, ncol = 1L)
+  storage.mode(y) <- "double"
+  y[y < 0] <- NA
+  y
+}
+
+.tobs_sbc_data_simple <- function(fit, resp) {
+  m <- fit$model
+  y <- .tobs_sbc_clean_y(m[[resp]])
+  cells <- m$data
+  if (!is.data.frame(cells) || nrow(cells) != nrow(y)) {
+    stop("SBC rebuilds the replicate from the fitted model's own site-level ",
+         "data frame, which must have one row per site (", nrow(y), "); this ",
+         "fit's has ", if (is.data.frame(cells)) nrow(cells) else "none", ".",
+         call. = FALSE)
+  }
+  list(cells  = cells,
+       y      = y,
+       y_pos  = NULL,
+       visits = .tobs_sbc_visit_matrices(m),
+       graph  = NULL,
+       site   = seq_len(nrow(y)))
+}
+
+# A visit-level design on the observation arm is REFUSED, not rebuilt. The
+# replicate comes from the family's own `simulate()` kernel, and the
+# single-season one assembles detection from the SITE-level design alone -- so a
+# visit-level column would be scored by the refit and absent from the data the
+# refit sees, which is a different model on each side and nothing in the ranks
+# would say so.
+.tobs_sbc_reject_visit_design <- function(fit) {
+  m <- fit$model
+  slots <- grep("_visit$", names(m), value = TRUE)
+  slots <- slots[vapply(slots, function(s)
+    is.matrix(m[[s]]) && ncol(m[[s]]) > 0L, logical(1))]
+  if (!length(slots)) return(invisible(NULL))
+  stop("SBC on family ", sQuote(attr(fit, "tobs_family")$name %||% "?"),
+       " generates its replicate from the family's own simulate() kernel, ",
+       "which assembles the observation arm from the site-level design; this ",
+       "fit carries a visit-level one (", paste(slots, collapse = ", "),
+       "). Refit with site-level observation covariates to run SBC on it.",
+       call. = FALSE)
+}
+
+.tobs_sbc_spec_simple <- function(fit, fit.control, state, det) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  if (is.null(m$formulas[[state]])) {
+    stop("SBC rebuilds the fitting call from the model's own arm formulas; ",
+         "slot ", sQuote(state), " is absent.", call. = FALSE)
+  }
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       state   = .tobs_sbc_recombine(m$formulas[[state]], NULL),
+       det     = if (is.null(det)) NULL else
+                   .tobs_sbc_recombine(m$formulas[[det]], NULL))
+}
+
+.tobs_sbc_refit_simple <- function(spec, data) {
+  args <- list(formula = spec$state,
+               data    = data$cells,
+               family  = spec$family,
+               y       = if (isTRUE(spec$y_vector)) as.numeric(data$y) else data$y,
+               method  = spec$method,
+               control = spec$control)
+  if (!is.null(spec$det)) args$detection <- spec$det
+  if (length(data$visits)) args$visits <- data$visits
+  suppressWarnings(do.call(tobs, c(args, spec$extra)))
+}
+
+.tobs_sbc_sim_simple <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  D <- matrix(theta, nrow = 1L)
+  colnames(D) <- names(theta)
+  f$draws <- D
+  obs <- spec$data_obs
+  list(cells  = obs$cells,
+       y      = .tobs_sbc_clean_y(spec$replicate(f)),
+       y_pos  = NULL,
+       visits = obs$visits,
+       graph  = NULL,
+       site   = obs$site)
+}
+
+# The fit's posterior-draw path, read rather than re-sampled: a row of the
+# matrix the fitter itself drew from N(mode, V). At the driver's `n.draws` the
+# selection is a permutation of that matrix, so the reported predictive is the
+# fit's own; at `draw_theta`'s single row it is one draw from it.
+.tobs_sbc_draws_fit <- function(fit, n) {
+  D <- fit$draws
+  if (is.null(D) || !is.matrix(D)) {
+    stop("SBC reads the posterior from the fit's own draw matrix; ",
+         "`fit$draws` is missing or not a matrix.", call. = FALSE)
+  }
+  if (is.null(colnames(D))) colnames(D) <- fit$col_names %||% names(fit$means)
+  idx <- sample.int(nrow(D), n, replace = n > nrow(D))
+  D[idx, , drop = FALSE]
+}
+
+# The exact marginal log-likelihood at each row of `Theta`, summed over sites.
+# One kernel call for the whole reference set.
+.tobs_sbc_loglik_many_simple <- function(fit, Theta) {
+  f <- fit
+  f$draws <- Theta
+  rowSums(.tobs_pointwise_loglik(f, n.draws = nrow(Theta)))
+}
+
+# The Poisson / negative-binomial count GLMM has no latent state and so no
+# `simulate()` handler to borrow; its replicate is the response drawn at the
+# fitted mean, which is that handler's whole content for this family.
+.tobs_sbc_replicate_count <- function(f) {
+  m <- f$model
+  p <- m$process_info[[1L]]$p
+  mu <- exp(as.vector(m$X_occ %*% f$draws[1L, seq_len(p)]))
+  switch(m$response,
+         poisson = stats::rpois(length(mu), mu),
+         negbin  = stats::rnbinom(length(mu), mu = mu,
+                                  size = exp(f$draws[1L, p + 1L])),
+         stop("SBC on count() is registered for the poisson and negbin ",
+              "responses; this fit is ", sQuote(m$response), ".",
+              call. = FALSE))
+}
+
+# One registry row. `state` / `det` name the arm formulas in the fitted model,
+# `resp` its response slot, `extra` any further arguments the family's front
+# door takes, `replicate` a generator when the family has no `simulate()`
+# handler.
+.tobs_sbc_simple_entry <- function(state, det = NULL, resp = "y",
+                                   extra = NULL, replicate = NULL,
+                                   y_vector = FALSE) {
+  list(
+    spec = function(fit, fit.control) {
+      sp <- .tobs_sbc_spec_simple(fit, fit.control, state = state, det = det)
+      sp$extra <- if (is.function(extra)) extra(fit$model) else extra
+      sp$replicate <- replicate %||%
+        function(f) stats::simulate(f, nsim = 1L)
+      sp$y_vector <- y_vector
+      sp
+    },
+    data        = function(fit) .tobs_sbc_data_simple(fit, resp = resp),
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_simple,
+    refit       = .tobs_sbc_refit_simple,
+    loglik_many = .tobs_sbc_loglik_many_simple)
+}
+
+
+# ---------------------------------------------------------------------------
+# 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
 # labels, the arm construction, the mis-scaled controls, the seed split -- is
@@ -402,14 +608,32 @@
     draws    = .tobs_sbc_draws_joint_occu_cover,
     simulate = .tobs_sbc_sim_occu_cover,
     refit    = .tobs_sbc_refit_occu_cover,
-    loglik   = .tobs_sbc_loglik_occu_cover)
+    loglik   = .tobs_sbc_loglik_occu_cover),
+
+  occu          = .tobs_sbc_simple_entry("occ",    "det"),
+  abun          = .tobs_sbc_simple_entry("lambda", "det"),
+  removal       = .tobs_sbc_simple_entry("lambda", "det"),
+  distance      = .tobs_sbc_simple_entry("lambda", "sigma"),
+  royle_nichols = .tobs_sbc_simple_entry("lambda", "r"),
+  occu_ttd      = .tobs_sbc_simple_entry("psi",    "rate"),
+  fp_occu       = .tobs_sbc_simple_entry(
+    "psi", "p11",
+    extra = function(m) list(p10 = m$formulas$p10, certainty = m$formulas$b)),
+  count         = .tobs_sbc_simple_entry(
+    "occ", resp = "y_count", y_vector = TRUE,
+    replicate = .tobs_sbc_replicate_count)
 )
+
+# Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
+# are the optional rank arm; `spec` / `data` / `pool` fall back to the shared
+# ones.
+.TOBS_SBC_REQUIRED <- c("draws", "simulate", "refit")
 
 .tobs_sbc_registered <- function() sort(names(.TOBS_SBC_REGISTRY))
 
 
 # ---------------------------------------------------------------------------
-# 7. The shared driver
+# 8. The shared driver
 # ---------------------------------------------------------------------------
 
 # The predictives one fit reports, plus the deliberately mis-scaled controls.
@@ -426,7 +650,7 @@
   post <- lapply(qs, function(q) tulpa::sbc_draws(M[, q]))
   names(post) <- qs
 
-  if (!is.null(reg$loglik) && n.ref > 0L) {
+  if ((!is.null(reg$loglik) || !is.null(reg$loglik_many)) && n.ref > 0L) {
     idx <- if (nrow(M) <= n.ref) seq_len(nrow(M)) else
       round(seq(1, nrow(M), length.out = n.ref))
     # The statistic is evaluated on the FULL parameter vector, references and
@@ -437,9 +661,20 @@
       attr(th, "blocks") <- blk
       th
     }
-    ll_ref <- vapply(idx, function(i) reg$loglik(fit, mk(i)), numeric(1))
     th0 <- data$theta
-    ll0 <- reg$loglik(fit, th0)
+    if (!is.null(reg$loglik_many)) {
+      # A vectorized statistic scores the whole reference set in one call; the
+      # truth goes through the SAME call on a one-row matrix, so the two sides
+      # cannot reach it by different routes. It is ordered by NAME against the
+      # reference columns, since the statistic reads its layout positionally.
+      T0 <- matrix(th0[colnames(M)], nrow = 1L,
+                   dimnames = list(NULL, colnames(M)))
+      ll_ref <- reg$loglik_many(fit, M[idx, , drop = FALSE])
+      ll0    <- reg$loglik_many(fit, T0)
+    } else {
+      ll_ref <- vapply(idx, function(i) reg$loglik(fit, mk(i)), numeric(1))
+      ll0 <- reg$loglik(fit, th0)
+    }
     post$log_lik <- tulpa::sbc_rank(sum(ll_ref < ll0), length(ll_ref))
   }
 
@@ -485,9 +720,9 @@
          ". Add an entry to `.TOBS_SBC_REGISTRY` (a simulate() and, for the ",
          "rank arm, a log-likelihood) to cover it.", call. = FALSE)
   }
-  spec <- .tobs_sbc_spec(object, fit.control)
+  spec <- (reg$spec %||% .tobs_sbc_spec)(object, fit.control)
   spec$model_graph <- object$spatial$graph
-  spec$data_obs <- .tobs_sbc_data_from_fit(object)
+  spec$data_obs <- (reg$data %||% .tobs_sbc_data_from_fit)(object)
 
   probe <- reg$draws(object, .TOBS_SBC_PROBE_DRAWS)
   scored <- .tobs_sbc_scored(probe)
@@ -510,7 +745,7 @@
       th
     },
     simulate = function(theta, seed) reg$simulate(spec, theta, seed),
-    pool = .tobs_sbc_pool,
+    pool = reg$pool %||% .tobs_sbc_pool,
     arms = function(fit, data) .tobs_sbc_arms(fit, data, reg, n.draws, n.ref,
                                               controls, bad.factor, scored),
     group_ids = .tobs_sbc_groups),
@@ -578,10 +813,21 @@
 #'
 #' @details
 #' Registered families: `occu_cover` (the coupled occupancy + cover hurdle on
-#' the joint nested-Laplace engine) and `occu`. A family is registered by adding
-#' one entry to the internal registry -- a replicate generator, a refit call and
-#' optionally a joint statistic; the pooling, the grouping labels, the arm
-#' construction and the controls are shared.
+#' the joint nested-Laplace engine), and `occu`, `abun`, `count`, `removal`,
+#' `distance`, `fp_occu`, `royle_nichols` and `occu_ttd`, whose site marginals
+#' multiply. For those the replicate is the family's own `simulate()` kernel at
+#' the drawn theta, the rank arm is the family's exact marginal
+#' log-likelihood, and two kinds of fit are refused rather than approximated: a
+#' structured term (its field is a latent quantity shared across sites that
+#' theta does not hold, which is what the coupled `occu_cover` route handles by
+#' drawing on fresh cells) and a visit-level observation design (the replicate
+#' kernel assembles the observation arm from the site-level design, so the two
+#' sides would carry different models).
+#'
+#' A family is registered by adding one entry to the internal registry -- a
+#' replicate generator, a refit call and optionally a joint statistic; the
+#' pooling, the grouping labels, the arm construction and the controls are
+#' shared.
 #'
 #' @return An object of class `sbc` from \pkg{tulpa}, carrying the per-quantity
 #'   rank ECDFs, the exact simultaneous band, and the uniformity tests. When

@@ -443,14 +443,12 @@ the point: 0.52 as the fit reports it, 3e-16 once its width is distorted.
 
 Two reads leave the band on the correct fit, and they are worth stating
 plainly. The occurrence-arm field standard deviation puts 81 of 100 ranks in
-the top decile, and the derived cover-arm SD 87 of 100: pooling shrinks the
-shared field SD relative to the truth. The mechanism is the replicate's
-cells. Posterior SBC needs them fresh, so the pooled areal graph has two
-disconnected components, and the fit applies a single global sum-to-zero
-across both rather than one per component. That leaves the between-block
-level with no prior, and the shared SD absorbs it. `alpha`, being a ratio of
-the two SDs, is untouched, and so are the slopes. Read the field-SD ranks on
-a pooled fit with that in mind.
+the top decile, and the derived cover-arm SD 87 of 100: the posterior sits
+systematically low on field scale, or the simulator draws it high. `alpha`,
+being a ratio of the two SDs, stays uniform at 0.52, and so do the slopes,
+which points at a common scale factor rather than at the coupling. The cause
+is open (gcol33/tulpaObs#213). Read the field-SD ranks on a pooled fit with
+that in mind.
 
 Supply `model.only = TRUE` to get the callback list instead of running the
 experiment, which is the way to inspect what will be simulated, pooled and

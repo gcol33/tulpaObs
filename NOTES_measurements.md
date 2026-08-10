@@ -532,3 +532,41 @@ place and then with `.tobs_check_graph()` restored to its pre-change body:
 `identical()` is TRUE on `means`, `sds`, `vcov`, `spatial_field`,
 `log_marginal`, grid `modes`, `weights`, `theta_grid`, `log_det_Q` and
 `converged`, and the connected graph emits zero messages.
+
+## SBC registry beyond `occu_cover` (`R/sbc.R`, #207)
+
+Eight single-response families registered and run end to end through
+`tobs_sbc()` at `n.sim = 100`, `n.draws = 1000`, `n.ref = 200`, `seed = 0`,
+`controls = "narrow"` (`bad.factor` 1.25). Both premises report `verified` on
+every one. `min p_unif` is over the arm coefficients; the joint `log_lik` arm is
+listed separately because on one family it carries the whole read.
+
+| family | wall | min p_unif (coefs) | log_lik arm | narrow control min |
+|---|---|---|---|---|
+| `occu` | 10 s | 0.437 | 0.855 | 5.4e-4 |
+| `count` (poisson) | 1.5 s | 0.049 (`mu_x`) | 0.464 | 3.6e-3 |
+| `abun` | 63 s | 0.096 | 0.266 | 4.9e-4 |
+| `royle_nichols` | 60 s | 0.235 | 0.012, OUTSIDE | 7.9e-5 |
+| `occu_ttd` | 3.5 s | 0.299 | 0.787 | 8.3e-4 |
+| `fp_occu` | 4 s | 0.077 | 0.481 | 2.4e-3 |
+| `removal` | 145 s | 0.134 | 0.240 | 4.7e-4 |
+| `distance` | 75 s | 0.291 | 0.291 | 1.0e-3 |
+
+Two reads chased across seeds rather than reported once:
+
+- `count`'s `mu_x` = SEED NOISE. At `n.sim = 300`, seeds 0/7/21 give 0.027 /
+  0.511 / 0.126. One low read in nine at three seeds is what a calibrated
+  algorithm looks like; do not re-tune on it.
+- `royle_nichols`'s `log_lik` = REPRODUCIBLE departure: 0.0116 / 0.0413 / 0.0288
+  at seeds 0/7/21, outside the band every time, while all four coefficient
+  marginals sit inside. The joint-statistic arm doing what it exists for -- the
+  Gaussian pseudo-posterior gets each marginal about right and the lambda/r
+  dependence wrong. Tracked separately; NOT an argument for loosening a
+  coefficient assertion.
+
+Refusals built in rather than approximated: a fit carrying a structured term
+(its field is a latent shared across sites that theta does not hold -- that is
+the coupled `occu_cover` route), and a fit carrying a visit-level observation
+design (the `single` generator assembles detection from the site-level design
+only, so a visit-level column would be scored by the refit and absent from the
+data it sees).

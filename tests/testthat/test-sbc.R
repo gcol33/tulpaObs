@@ -90,9 +90,10 @@
 test_that("tobs_sbc() refuses a non-fit and an unregistered family", {
   expect_error(tobs_sbc(list()), "fitted tobs_fit")
 
-  sim <- simulate_occu(N = 40L, J = 3L, seed = 2L)
-  fit <- suppressWarnings(tobs(~ occ_cov1, data = sim$data, family = occu(),
-                               detection = ~ det_cov1, y = sim$y,
+  sim <- simulate_double_observer(N = 60L, seed = 2L)
+  fit <- suppressWarnings(tobs(~ abund_cov1, data = sim$data,
+                               family = double_observer(),
+                               detection = ~ 1, y = sim$y,
                                method = "laplace",
                                control = list(verbose = FALSE,
                                               progress = FALSE)))
@@ -295,10 +296,10 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
   # The set is five of the six arm coefficients plus the DERIVED copy scale
   # `alpha` -- the quantity the deliverable reports and the one the outer grid
   # marginalizes rather than plugs in. The occurrence-arm field SD and the
-  # cover intercept are deliberately NOT here: the pooled data
-  # set's areal graph has two components and carries ONE sum-to-zero, so the
-  # replicate block's level is prior-free and the shared field SD absorbs it
-  # (gcol33/tulpaObs#212). Measured departures are in NOTES_measurements.md.
+  # cover intercept are deliberately NOT here: both field-scale reads leave the
+  # band on a pooled fit, uniform `alpha` puts that on a common scale factor
+  # rather than on the coupling, and the cause is open
+  # (gcol33/tulpaObs#213). Measured departures are in NOTES_measurements.md.
   qs <- c("psi_(Intercept)", "psi_occ_cov1", "p_(Intercept)", "p_det_cov1",
           "pos_pos_cov1", "alpha")
   ok <- pu("posterior", qs)
