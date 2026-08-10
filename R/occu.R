@@ -19,6 +19,24 @@
 #' ms_count / jsdm) have their own in-tree binders + Laplace-EM fitter and do not
 #' pass through here.
 #'
+#' A structured term enters the process whose formula it is written in. For an
+#' integrated model this makes `detection = ~ x + spde(lon, lat, ...)` a
+#' **detection-arm** field: the occupancy state stays whatever the occupancy
+#' formula says, and the continuous Matern field sits on the detection logit.
+#' The detection arm there is one arm observed through S sources, so the field
+#' is one structure fit once per source block -- source `s` fits its own
+#' realization at its own sites, and two sources covering the same location each
+#' carry their own value there, the same way each source carries its own
+#' detection coefficients. `fit$spatial_field_det` is the per-source named list
+#' of mesh fields (source names as given on `y`); project a source's field to
+#' its sites with `fit$spatial$tulpa_spec$A`.
+#'
+#' The arm accepts a continuous `spde()` field under `method = "laplace"`. The
+#' areal kinds and the temporal / re / svc / latent classes are grid-integrated
+#' as latent blocks on the state arm, so they are written on the occupancy
+#' formula; on a detection formula they error with a pointer rather than being
+#' fit against the wrong arm.
+#'
 #' @keywords internal
 .tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
                               col_formula = NULL, ext_formula = NULL,
@@ -197,6 +215,71 @@
   ), class = "tobs_model")
 }
 
+# Gate the structured terms an integrated model's DETECTION arm may carry.
+#
+# The state arm is the wide one: every spatial / temporal / re / svc / latent
+# term the occupancy formula can carry reaches its own fitter through
+# `.tobs_structures_from_model()`, and is untouched here. The detection arm is
+# reached by exactly one route -- the per-source detection blocks of the
+# single-Laplace EM (`build_integrated_callbacks`), which attaches a continuous
+# Matern (SPDE) mesh field to each source's binomial block. Every other term
+# class, and the areal spatial kinds, would be built into the multi-block latent
+# prior that the nested-Laplace path attaches to the STATE block, so a
+# detection-arm term there would be fit against the wrong arm rather than the
+# one it was written on. Those error here with a pointer instead.
+#
+# A single realization shared across both arms (a term written on the occupancy
+# formula and `copy()`d onto detection, or a second field on the other arm) is
+# the same limit the single-season path has: the block fitter fits one field
+# realization per submodel block, so one shared realization is not expressible.
+.tobs_validate_integrated_terms <- function(terms) {
+  if (!length(terms)) return(invisible())
+  on_arm <- function(t, k) k %in% t$processes
+  sp_occ <- sp_det <- 0L
+  for (t in terms) {
+    spec <- t$spec
+    is_sp <- inherits(spec, "tobs_spatial")
+    if (on_arm(t, 1L)) sp_occ <- sp_occ + is_sp
+    if (!on_arm(t, 2L)) next
+    sp_det <- sp_det + is_sp
+    label <- spec$label %||% class(spec)[1L]
+    if (on_arm(t, 1L)) {
+      stop("A structured term shared across the occupancy and detection arms ",
+           "of an integrated model is not supported (each submodel block fits ",
+           "its own field realization, so one shared realization is not ",
+           "expressible). Write the term on one formula.", call. = FALSE)
+    }
+    if (!is_sp) {
+      stop(sprintf(paste0(
+        "`%s` on an integrated detection formula is not supported; the ",
+        "detection arm carries a continuous spde() Matern field only. Place ",
+        "re() / temporal() / svc() / latent() terms on the occupancy formula, ",
+        "or use method = \"nuts\" for a family that samples them."), label),
+        call. = FALSE)
+    }
+    if (!identical(spec$type, "spde")) {
+      stop(sprintf(paste0(
+        "A '%s' field on an integrated detection formula is not supported; ",
+        "the detection arm is fit by the single-Laplace EM (method = ",
+        "\"laplace\"), which carries a continuous spde() Matern field. The ",
+        "areal kinds are grid-integrated on the state arm under method = ",
+        "\"nested_laplace\" -- write the areal term on the occupancy formula."),
+        spec$type), call. = FALSE)
+    }
+  }
+  if (sp_det > 1L) {
+    stop("Only one spatial term is supported on the integrated detection arm.",
+         call. = FALSE)
+  }
+  if (sp_det > 0L && sp_occ > 0L) {
+    stop("An integrated model carries one spatial field: a state field (on the ",
+         "occupancy formula) or a detection field (on the detection formula), ",
+         "not both. Fit the arms' fields separately, or use one arm.",
+         call. = FALSE)
+  }
+  invisible()
+}
+
 .tobs_build_integrated <- function(occ_formula, det_formula, data, y) {
   if (!is.list(y) || is.array(y)) {
     stop("For integrated models, y must be a list of detection matrices (one per source)")
@@ -216,10 +299,27 @@
   }
 
   n_sites <- nrow(data)
-  # Structured terms (spatial / re / temporal) are supported on the shared
-  # occupancy field only; the per-source detection formulas are fixed-effects.
-  occ_bind <- .tobs_bind_formulas(list(psi = occ_formula), data)
-  X_occ    <- model.matrix(occ_bind$fe$psi, data)
+  # A structured term's process is the formula it is written in, here as
+  # everywhere else: a term on the occupancy formula is the shared state field,
+  # a term on the detection formula is a detection-arm field. The detection arm
+  # of an integrated model is one arm spread over S source blocks -- every
+  # source measures the same latent occupancy state through its own detection
+  # process -- so the arm is bound as a single process and each source block
+  # carries its own realization of that field at its own sites. That needs ONE
+  # detection formula, which is what "the same detection model at every source"
+  # means; per-source formulas that differ carry fixed effects only. Sameness is
+  # a property of the formula, not of the object: two sources written the same
+  # way are one arm even though each `~` call carries its own environment, so
+  # the comparison is on the deparsed formula.
+  det_key <- vapply(det_formulas,
+                    function(f) paste(deparse(f), collapse = " "), character(1))
+  det_shared <- all(det_key == det_key[1L])
+  bind <- .tobs_bind_formulas(
+    if (det_shared) list(psi = occ_formula, p = det_formulas[[1L]])
+    else list(psi = occ_formula),
+    data)
+  .tobs_validate_integrated_terms(bind$terms)
+  X_occ <- model.matrix(bind$fe$psi, data)
 
   y_sources <- vector("list", n_sources)
   X_det_list <- vector("list", n_sources)
@@ -242,13 +342,19 @@
     y_int[is.na(y_int)] <- -1L
     y_sources[[s]] <- y_int
 
-    det_parsed <- .tobs_parse_formula(det_formulas[[s]], data = data)
-    if (length(det_parsed$terms)) {
-      stop("Structured terms on integrated detection sources are not ",
-           "supported; place spatial / re / temporal terms on the ",
-           "occupancy formula.", call. = FALSE)
+    if (det_shared) {
+      det_fe[[s]] <- bind$fe$p
+    } else {
+      det_parsed <- .tobs_parse_formula(det_formulas[[s]], data = data)
+      if (length(det_parsed$terms)) {
+        stop("A structured term on a per-source detection formula needs the ",
+             "same detection formula at every source (the detection arm is ",
+             "one arm, fit as one field realization per source block). Pass a ",
+             "single `detection` formula carrying the term, or drop the term ",
+             "from the per-source formulas.", call. = FALSE)
+      }
+      det_fe[[s]] <- det_parsed$fe_formula
     }
-    det_fe[[s]] <- det_parsed$fe_formula
     src_rows <- site_maps[[s]] + 1L
     X_det_list[[s]] <- model.matrix(det_fe[[s]], data[src_rows, , drop = FALSE])
   }
@@ -281,8 +387,8 @@
     y_sources = y_sources,
     site_maps = site_maps,
     X_processes = X_processes,
-    formulas = c(list(occ = occ_bind$fe$psi), setNames(det_fe, names(y))),
-    structured_terms = occ_bind$terms,
+    formulas = c(list(occ = bind$fe$psi), setNames(det_fe, names(y))),
+    structured_terms = bind$terms,
     n_sites = n_sites,
     n_sources = n_sources,
     process_info = process_info

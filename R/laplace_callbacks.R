@@ -86,6 +86,7 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
   # block. A detection field with visit-level detection covariates is not yet
   # wired (the field is site-indexed; the det block is per (site, visit) and
   # would need a row-expanded mesh projection).
+  .tobs_reject_nested_det_term(model, latent_prior, "occu")
   spatial_occ <- .spatial_for_arm(spatial, 1L)
   spatial_det <- .spatial_for_arm(spatial, 2L)
   if (!is.null(spatial_det) && p_det_visit > 0L) {
@@ -672,6 +673,7 @@ build_integrated_callbacks <- function(model, spatial = NULL,
   # does. The field is fit independently per source block (one realization per
   # submodel block; a genuinely shared realization across sources needs the
   # copy() path).
+  .tobs_reject_nested_det_term(model, latent_prior, "int_occu")
   spatial_occ <- .spatial_for_arm(spatial, 1L)
   spatial_det <- .spatial_for_arm(spatial, 2L)
 

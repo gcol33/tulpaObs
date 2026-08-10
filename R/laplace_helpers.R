@@ -7,7 +7,7 @@
 #
 #   model_type   state arm (shared[1])   detection arm (shared[2])
 #   single       wired                   wired
-#   integrated   wired                   wired (per source), unreachable
+#   integrated   wired                   wired (per source)
 #   jsdm         wired                   n/a (no detection process)
 #   community    wired                   stop()
 #   dynamic      wired (psi1 only)       stop()
@@ -18,10 +18,14 @@
 # and .tobs_state_block_dims). The dynamic state field enters season-1 psi1
 # only; the colonization / extinction transition predictors are separate latent
 # processes whose own mesh fields are not wired (a state-arm spde() term maps to
-# psi1). The integrated detection cell is wired in the fitter but no formula
-# reaches it: a term's arm membership is the formula it is written in, and
-# .tobs_build_integrated() rejects a structured term on a per-source detection
-# formula, so `spatial_det` there is NULL in any fit built through tobs().
+# psi1). The integrated detection cell is reached by writing the spde() term on
+# the `detection` formula (a term's arm membership is the formula it is written
+# in). That arm is S source blocks reading one shared latent occupancy state, so
+# each source fits its own realization of the field at its own sites and
+# `spatial_field_det` is a per-source named list; .tobs_validate_integrated_terms()
+# (R/occu.R) gates what the arm accepts, since the areal kinds and the
+# temporal / re / svc / latent classes are built into the multi-block latent
+# prior the nested-Laplace path attaches to the STATE block.
 # A single field shared across both arms at once (shared = c(TRUE, TRUE))
 # is a stop() everywhere: the single-Laplace block fitter fits one field
 # realization per submodel block, so a genuinely shared realization needs the
@@ -118,6 +122,41 @@
   if (length(mode_vec) <= p_fixed) return(rep(0, 0))
   u <- mode_vec[(p_fixed + 1L):length(mode_vec)]
   as.numeric(spatial$tulpa_spec$A %*% u)
+}
+
+# Stop a detection-arm structured term from being fit against the state arm.
+#
+# The two Laplace routes carry a field differently. The single-Laplace route
+# hands each M-step block its own `spatial` spec, so `shared = c(occ, det)`
+# decides which block gets the field. The nested-Laplace route builds every
+# latent block upstream (`.tobs_to_multi_block_prior`) and attaches the whole
+# multi-block prior to the STATE block, with no arm channel -- a detection-arm
+# term arriving there is fit against the occupancy predictor, which is not the
+# arm it was written on. `latent_prior` is what distinguishes the routes at the
+# callbacks builder, so the reject sits there.
+.tobs_reject_nested_det_term <- function(model, latent_prior, family) {
+  if (is.null(latent_prior)) return(invisible())
+  terms <- model$structured_terms
+  if (is.null(terms) || !any(vapply(terms, function(t) 2L %in% t$processes,
+                                    logical(1)))) {
+    return(invisible())
+  }
+  stop(sprintf(paste0(
+    "%s(): a structured term on the `detection` formula is fit by the ",
+    "single-Laplace EM (method = \"laplace\"); method = \"nested_laplace\" ",
+    "attaches its latent blocks to the state arm only, so the term would be ",
+    "fit against occupancy. Re-fit with method = \"laplace\", or move the term ",
+    "to the occupancy formula."), family), call. = FALSE)
+}
+
+# Latent tail of a fitted M-step block's mode. tulpa_laplace returns
+# mode = c(beta (p_fixed), latent units...) for a block carrying an SPDE field
+# or a multi-block latent prior. NULL before the first M-step has produced a
+# mode, and for a block with no latent tail.
+.tobs_block_latent_tail <- function(fit_sub, p_fixed) {
+  mode_vec <- fit_sub$mode
+  if (is.null(mode_vec) || length(mode_vec) <= p_fixed) return(NULL)
+  mode_vec[(p_fixed + 1L):length(mode_vec)]
 }
 
 # Attach the tulpa-side spatial spec to an M-step block. The block's `spatial`
@@ -754,37 +793,32 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # When SPDE is attached to the occ submodel, the M-step mode is
   # c(beta_occ, u_mesh). Extract u_mesh so callers can inspect or project
   # the latent field to observation locations via A %*% u_mesh.
-  spatial_field <- NULL
-  if (!is.null(spatial_occ) && !is.null(em_result$fits$occ$mode)) {
-    p_occ <- pi_list[[1]]$p
-    mode_vec <- em_result$fits$occ$mode
-    if (length(mode_vec) > p_occ) {
-      spatial_field <- mode_vec[(p_occ + 1L):length(mode_vec)]
-    }
-  }
   # Nested-Laplace: the occ block mode is c(beta_occ, latent units...) where the
   # latent tail is the grid-weighted posterior mean of the multi-block field.
-  if (is.null(spatial_field) && !is.null(latent_prior) &&
-      !is.null(em_result$fits$occ$mode)) {
-    p_occ <- pi_list[[1]]$p
-    mode_vec <- em_result$fits$occ$mode
-    if (length(mode_vec) > p_occ) {
-      spatial_field <- mode_vec[(p_occ + 1L):length(mode_vec)]
-    }
-  }
+  spatial_field <- if (!is.null(spatial_occ) || !is.null(latent_prior))
+    .tobs_block_latent_tail(em_result$fits$occ, pi_list[[1]]$p) else NULL
 
   # When SPDE is attached to the detection submodel, the det M-step mode is
   # c(beta_det, u_mesh_det); extract the detection field tail. The field is
   # identified off its own proper Matern (range, sigma) PC prior the same way
   # the state field is -- no separate sum-to-zero constraint is imposed (the
   # detection intercept absorbs the field level under the mean-zero prior).
+  #
+  # An integrated model's detection arm is S source blocks reading one shared
+  # latent occupancy state, each fitting its own realization of the field at its
+  # own sites, so the slot is a per-source named list there (source names as
+  # given on `y`); a single-season fit keeps the plain n_mesh vector.
   spatial_field_det <- NULL
-  if (!is.null(spatial_det) && !is.null(em_result$fits$det$mode)) {
-    p_det <- pi_list[[2]]$p
-    mode_det <- em_result$fits$det$mode
-    if (length(mode_det) > p_det) {
-      spatial_field_det <- mode_det[(p_det + 1L):length(mode_det)]
-    }
+  if (!is.null(spatial_det)) {
+    is_int <- identical(model$model_type, "integrated")
+    det_blocks <- if (is_int) paste0("det", seq_len(model$n_sources)) else "det"
+    tails <- lapply(seq_along(det_blocks), function(s)
+      .tobs_block_latent_tail(em_result$fits[[det_blocks[s]]],
+                              pi_list[[s + 1L]]$p))
+    names(tails) <- vapply(seq_along(det_blocks),
+                           function(s) pi_list[[s + 1L]]$name, character(1))
+    spatial_field_det <- if (!is_int) tails[[1L]]
+      else if (all(vapply(tails, is.null, logical(1)))) NULL else tails
   }
 
   # Marginal log-likelihood at the fixed-effect mode, so logLik() / AIC() /
