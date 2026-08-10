@@ -1,5 +1,61 @@
 # tulpaObs NEWS
 
+## 0.0.196 (2026-08-11)
+
+* **The information criteria score a random effect the fit carried**
+  (gcol33/tulpaObs#215). On the grid-integrated (`nested_laplace`) route,
+  `occu_cover()` scored every observation-arm random effect at the population
+  mean in WAIC, LOO, CPO, PPC and PIT, and an occupancy-arm one likewise. Both
+  now reach the criteria through the same per-visit and per-site offset path the
+  sampled route uses. **This moves existing numbers**: elpd_waic -17.939 ->
+  -6.406 on a detection-arm RE at `sigma_re_p` 1.10 over 216 visits, -125.94 ->
+  -64.41 on a cover-arm RE over 400 visits, and -209.525 -> -200.180 on an
+  occupancy-arm RE at `sigma_re` 1.57. A fit carrying no random effect is
+  identical to the bit. The occupancy term also carries its grouping variable
+  and factor levels now, so `ranef()` labels it like the observation arms and
+  `predict(newdata = )` matches on it.
+
+* **A bare areal term on `occu_cover()` loads on occurrence only under `nuts`,
+  as it already did under `nested_laplace`** (gcol33/tulpaObs#217). The same
+  input previously fit two different models: the deterministic backend decoupled
+  the cover arm while the sampler estimated a copy amplitude off the default
+  axis (mean 0.78 on a 36-cell fixture). A term's process is the formula it sits
+  in, and `copy()` is what couples it to the other arm. **This changes fitted
+  values for existing no-copy spatial NUTS fits.** Declaring `copy(spatial())`
+  reproduces the previous numbers to every printed digit on all three coupled
+  recovery fixtures.
+
+* **`occu_cover()` samples a second (spatially-varying-coefficient) areal field
+  under `nuts`** (gcol33/tulpaObs#214). The sampler carried one field block, so a
+  trend surface was confined to the grid-integrated path. Each block now carries
+  its own basis, site-to-node map, per-site design weight and its own sampled
+  `(sigma, rho, alpha)`. Reported as `fit$trend_field` / `trend_fields`, with
+  per-block suffixed hyperparameters in `hyper_draws`. Both surfaces recover with
+  zero divergences.
+
+* **A per-source detection formula can carry a structured term**
+  (gcol33/tulpaObs#216). An integrated detection-arm `spde()` field was wired in
+  the fitter and unreachable from `tobs()`. Per-source field correlation with
+  truth 0.87-0.93; the fields are reported in `fit$spatial_field_det`. Gating
+  this uncovered a silent misplacement: under `method = "nested_laplace"` a
+  detection-arm term was fit against the occupancy arm, on the single-season path
+  as well as the integrated one. Both now error with a pointer.
+
+* **Simulation-based calibration runs on eight more families**
+  (gcol33/tulpaObs#207): `occu`, `count`, `abun`, `royle_nichols`, `occu_ttd`,
+  `fp_occu`, `removal` and `distance`, each verified end to end against a
+  deliberately mis-scaled control. A structured term and a visit-level
+  observation design are refused rather than approximated.
+
+* **The SBC replicate field is drawn at the width the joint engine fits**
+  (gcol33/tulpaObs#213). The generator normalised its ICAR draw to geo-mean
+  marginal SD 1 while the joint nested-Laplace engine carries the amplitude
+  against the raw `Q = D - W`, so both reported field SDs were off by one common
+  factor while their ratio stayed clean. Ranks return inside the band. Note that
+  the joint path reports `sigma` as a raw amplitude while the sampled path
+  reports a geo-mean marginal SD; compare a fit against a simulator on the field,
+  not on the reported scalar.
+
 ## 0.0.195 (2026-08-10)
 
 * **An areal graph with more than one connected component says so at fit time**
