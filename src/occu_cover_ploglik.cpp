@@ -64,6 +64,8 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
     Rcpp::NumericVector disp,         // [S]
     Rcpp::NumericMatrix field_occ,    // [n_sites x S]
     Rcpp::NumericMatrix field_pos,    // [n_sites x S]
+    Rcpp::NumericMatrix off_det,      // [V x S] (0 cols if absent)
+    Rcpp::NumericMatrix off_pos,      // [V x S] (0 cols if absent)
     int positive,                     // 0 lognormal, 3 beta, 4 gaussian (#112)
     double eta_bound,
     int n_threads
@@ -73,6 +75,10 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
       eta_bound);
   tulpaObs::occu_cover_ragged::attach_cover(arms, X_pos_site, X_pos_visit,
                                             b_pos, field_pos);
+  arms.off_det_visit = tulpaObs::occu_cover_ragged::visit_offset(
+      off_det, arms.V, arms.S, "off_det");
+  arms.off_pos_visit = tulpaObs::occu_cover_ragged::visit_offset(
+      off_pos, arms.V, arms.S, "off_pos");
 
   const int n_sites = arms.n_sites;
   const int V       = arms.V;

@@ -61,6 +61,7 @@ Rcpp::List cpp_occu_cover_cdf_limits(
     Rcpp::NumericMatrix b_occ,        // [S x p_occ]
     Rcpp::NumericMatrix b_det,        // [S x (p_det_site + p_det_visit)]
     Rcpp::NumericMatrix field_occ,    // [n_sites x S]
+    Rcpp::NumericMatrix off_det,      // [V x S] (0 cols if absent)
     Rcpp::IntegerVector any_det,      // [n_sites] 0/1
     double eta_bound,
     int n_threads
@@ -68,6 +69,8 @@ Rcpp::List cpp_occu_cover_cdf_limits(
   Arms arms = tulpaObs::occu_cover_ragged::make_arms(
       X_occ, X_det_site, X_det_visit, site_of_visit, b_occ, b_det, field_occ,
       eta_bound);
+  arms.off_det_visit = tulpaObs::occu_cover_ragged::visit_offset(
+      off_det, arms.V, arms.S, "off_det");
   const int S = arms.S, n_sites = arms.n_sites, V = arms.V;
   if (any_det.size() != n_sites) {
     Rcpp::stop("any_det must be length n_sites.");
@@ -136,6 +139,8 @@ Rcpp::List cpp_occu_cover_ppc(
     Rcpp::NumericVector disp,         // [S]
     Rcpp::NumericMatrix field_occ,    // [n_sites x S]
     Rcpp::NumericMatrix field_pos,    // [n_sites x S]
+    Rcpp::NumericMatrix off_det,      // [V x S] (0 cols if absent)
+    Rcpp::NumericMatrix off_pos,      // [V x S] (0 cols if absent)
     Rcpp::IntegerVector any_det,      // [n_sites] 0/1
     Rcpp::IntegerVector n_valid,      // [n_sites]
     int positive, double eta_bound, bool freeman
@@ -145,6 +150,10 @@ Rcpp::List cpp_occu_cover_ppc(
       eta_bound);
   tulpaObs::occu_cover_ragged::attach_cover(arms, X_pos_site, X_pos_visit,
                                             b_pos, field_pos);
+  arms.off_det_visit = tulpaObs::occu_cover_ragged::visit_offset(
+      off_det, arms.V, arms.S, "off_det");
+  arms.off_pos_visit = tulpaObs::occu_cover_ragged::visit_offset(
+      off_pos, arms.V, arms.S, "off_pos");
   const int S = arms.S, n_sites = arms.n_sites, V = arms.V;
   if (y_det_visit.size() != V || y_pos_visit.size() != V) {
     Rcpp::stop("y_det_visit / y_pos_visit must be length V.");

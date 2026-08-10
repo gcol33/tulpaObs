@@ -704,6 +704,22 @@ coordinate, prior verified flat in `t` by holding `raw=0` (field vanishes -> the
 prior; catches a missing Jacobian, which the gradient check cannot).
 Was: `inv_metric` sized `n_cells` while bym2's `n_raw = 2n-1` -> the engine took a
 short metric pointer w/o a length check; now sized `n_raw + n_hyper`.
+**Sampled terms reach the criteria (#211).** `.tobs_occu_cover_components()` returns the
+structured terms as OFFSETS beside the coefficient draws: per SITE `field_occ`/`field_pos`
+(#204's sampled field off `fit$field_draws` + the per-draw `alpha`; the v3 route still reads
+`field_table`), per VISIT `off_det`/`off_pos` (#205's sampled obs-arm RE, `re_draws` ->
+`sigma_re*z` mapped through the view's `flat_idx`). All four diagnostics fold them in --
+ploglik (WAIC/LOO/CPO), PPC, PIT/LOO-PIT -- b/c the per-visit offset enters the SHARED `Arms`
+view (`src/occu_cover_ragged.h`, `eta_p_visit`/`eta_pos_visit`), so ONE change reaches all
+three kernels and dense == compact by construction (#185). A 0-column matrix = "arm carries
+none" -> null pointer -> the no-offset path byte-identical. Cell-aggregated cover scores one
+cover row per detected UNIT, so a per-visit offset errors there w/ a pointer. `test-occu-cover-nuts-ic.R`.
+Was: `fit$draws` = the coefficient block + `ncol(draws)` read positionally as `log_disp`, so
+the RE draws never reached the scorer, and `.tobs_occu_cover_v3_field()` read only
+`field_table` -> both terms scored at ZERO on a fit that carried them (elpd moved 31 nats on a
+det-arm RE, 549 on a sampled field). STILL AT ZERO: the grid-integrated (`nested_laplace`)
+route's own RE latents -- `.tobs_joint_draws()` returns them on `bundle$re`, the components
+builder reads only `bundle$blocks`.
 group_var maps sites>cells; SVC/trend/temporal/RE still gated -> n-L. predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67). **Spatial default** (`nested_laplace`,

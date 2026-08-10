@@ -11,17 +11,16 @@
               positive, "'.", call. = FALSE))
 }
 
-# Pointwise log-likelihood [n_draws x n_sites] for an occu_cover() fit: the
-# per-site marginal log-likelihood (latent occupancy state integrated out)
-# evaluated at each posterior draw. The spatial nested-Laplace fit samples the
-# grid-integrated joint (betas + shared field) via the joint substrate; the
-# non-spatial Laplace fit reuses the stored coefficient draws (no field). Both
-# feed the same per-draw site-likelihood accumulation.
-# Per-draw arm coefficients + dispersion + shared-field contributions for an
+# Per-draw arm coefficients + dispersion + structured-term contributions for an
 # occu_cover() fit. Joint path: sample the grid-integrated posterior and
-# accumulate each block's field on the occupancy / cover arms. Non-spatial path:
-# read the stored coefficient draws (no field). Returns a list consumed by both
-# the pointwise log-likelihood and the posterior-mean plug-in.
+# accumulate each block's field on the occupancy / cover arms. Otherwise: read
+# the stored coefficient draws, the sampled or marginal per-cell field, and the
+# per-visit offsets of a sampled observation-arm random effect. The structured
+# terms come back as offsets rather than coefficients -- `field_occ` /
+# `field_pos` per site, `off_det` / `off_pos` per visit (NULL for an arm with
+# none) -- and every diagnostic built on this list scores them: the pointwise
+# log-likelihood, the posterior-mean plug-in, the posterior predictive check and
+# the PIT / LOO-PIT.
 .tobs_occu_cover_components <- function(object, n.draws = 1000L) {
   model   <- object$model
   pi_list <- model$process_info
@@ -70,12 +69,61 @@
     b_pos <- draws[, p_occ + p_det + seq_len(p_pos), drop = FALSE]
     disp  <- exp(draws[, ncol(draws)])         # trailing log-dispersion column
     S     <- nrow(draws)
-    fld <- .tobs_occu_cover_v3_field(object, n_sites, S)
+    fld <- .tobs_occu_cover_sampled_field(object, n_sites, S) %||%
+           .tobs_occu_cover_v3_field(object, n_sites, S)
     field_occ <- fld$field_occ
     field_pos <- fld$field_pos
   }
+  # An observation-arm random effect enters per (site, visit), so it is carried
+  # as a per-visit offset alongside the per-site field rather than folded into
+  # the coefficient block.
+  off <- .occu_cover_re_visit_offsets(.occu_cover_visit_view(model),
+                                      .occu_cover_sampled_re_draws(object, S))
   list(b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
-       field_occ = field_occ, field_pos = field_pos)
+       field_occ = field_occ, field_pos = field_pos,
+       off_det = off$p, off_pos = off$pos)
+}
+
+# Per-draw coupled-field contributions for a fit that SAMPLED the field jointly
+# with the coefficients (gcol33/tulpaObs#74, #204): `field_draws` holds the
+# per-cell field at each draw and `hyper_draws` the copy amplitude alpha, so the
+# occupancy arm reads the field at the site's cell and the cover arm the same
+# field scaled by that draw's alpha. NULL when the fit sampled no field, which
+# sends the caller on to the marginal-table route.
+.tobs_occu_cover_sampled_field <- function(object, n_sites, S) {
+  fd <- object$field_draws
+  if (is.null(fd) || !is.matrix(fd)) return(NULL)
+  if (nrow(fd) < S) {
+    stop("occu_cover WAIC: the fit carries ", nrow(fd), " field draws for ", S,
+         " coefficient draws.", call. = FALSE)
+  }
+  site_cell <- object$model$site_cell %||% seq_len(n_sites)
+  f  <- t(fd[seq_len(S), site_cell, drop = FALSE])       # [n_sites x S]
+  hd <- object$hyper_draws
+  alpha <- if (!is.null(hd) && "alpha" %in% colnames(hd))
+             as.numeric(hd[seq_len(S), "alpha"])
+           else rep(object$spatial$alpha_mean %||% 0, S)
+  list(field_occ = f, field_pos = sweep(f, 2L, alpha, "*"))
+}
+
+# Per-term random-effect draws on the natural coefficient scale for a SAMPLED
+# occu_cover fit (gcol33/tulpaObs#205): each block contributes its group
+# deviations b_g = sigma_re * z_g, read off the `re_draws` columns in the block
+# order the sampler laid them out (n_groups whitened deviations then the log
+# SD). NULL when the fit carries no sampled random effect.
+.occu_cover_sampled_re_draws <- function(object, S) {
+  rd <- object$re_draws
+  if (is.null(rd) || !is.matrix(rd) || S < 1L) return(NULL)
+  blocks <- .occu_cover_nuts_re_blocks(object$model)
+  if (is.null(blocks)) return(NULL)
+  k <- 0L
+  lapply(blocks, function(b) {
+    idx <- k + seq_len(b$n_groups)
+    k   <<- k + b$n_groups + 1L
+    sig <- exp(rd[seq_len(S), k])
+    list(arm = b$arm_tag, var = as.character(b$var),
+         draws = sig * rd[seq_len(S), idx, drop = FALSE])
+  })
 }
 
 # Per-cell field draws for the v3 nested-Laplace occu_cover spatial path, which
@@ -122,11 +170,19 @@
   list(field_occ = field_occ, field_pos = field_pos)
 }
 
+# Pointwise log-likelihood [n_draws x n_sites] for an occu_cover() fit: the
+# per-site marginal log-likelihood (latent occupancy state integrated out)
+# evaluated at each posterior draw, at the full predictor -- arm coefficients
+# plus whatever structured terms the fit carries. The spatial nested-Laplace fit
+# samples the grid-integrated joint (betas + shared field) via the joint
+# substrate; the other routes read the stored draws. Both feed the same per-draw
+# site-likelihood accumulation.
 .tobs_ploglik_occu_cover <- function(object, n.draws = 1000L, n.threads = 1L) {
   c0 <- .tobs_occu_cover_components(object, n.draws)
   .occu_cover_ploglik_core(object$model, c0$b_occ, c0$b_det, c0$b_pos,
                            c0$disp, c0$field_occ, c0$field_pos,
-                           n_threads = n.threads)
+                           n_threads = n.threads,
+                           off_det = c0$off_det, off_pos = c0$off_pos)
 }
 
 # Pointwise log-likelihood at the posterior mean (length n_sites): the per-site
@@ -141,8 +197,16 @@
     matrix(colMeans(c0$b_pos), nrow = 1L),
     mean(c0$disp),
     matrix(rowMeans(c0$field_occ), ncol = 1L),
-    matrix(rowMeans(c0$field_pos), ncol = 1L)
+    matrix(rowMeans(c0$field_pos), ncol = 1L),
+    off_det = .occu_cover_off_mean(c0$off_det),
+    off_pos = .occu_cover_off_mean(c0$off_pos)
   ))
+}
+
+# The posterior-mean per-visit offset (a one-column [V x 1] matrix), or NULL for
+# an arm that carries none.
+.occu_cover_off_mean <- function(off) {
+  if (is.null(off)) NULL else matrix(rowMeans(off), ncol = 1L)
 }
 
 # Accumulate the [S x n_sites] pointwise log-likelihood from per-draw arm
@@ -288,19 +352,71 @@
 # The per-site detection summaries the PPC and the PIT need (`n_valid`, and
 # `any_det`, whether the site holds any detection) are derived here from the
 # visit rows, so there is one definition of each.
+# `flat_idx` positions the visit rows in the arm's own flat row order -- the
+# padded grid's valid cells for a dense model, 1..V for a compact one -- so any
+# per-(site, visit) quantity the model stores in that order (the observation-arm
+# random-effect group codes and slope designs, gathered on `$re`) is subset to
+# the visit rows the same way in both layouts.
 .occu_cover_visit_view <- function(model) {
   rg <- if (isTRUE(model$ragged)) {
+    V <- length(model$site_of_visit)
     list(site_of_visit = as.integer(model$site_of_visit),
          y_det_visit   = as.integer(model$y_det_visit),
          y_pos_visit   = as.numeric(model$y_pos_visit),
          X_det_visit   = model$X_det_visit, X_pos_visit = model$X_pos_visit,
-         V = length(model$site_of_visit))
+         V = V, flat_idx = seq_len(V))
   } else .occu_cover_dense_ragged(model)
   n_sites <- model$n_sites
   rg$n_valid <- tabulate(rg$site_of_visit, nbins = n_sites)
   rg$any_det <- as.integer(
     tabulate(rg$site_of_visit[rg$y_det_visit == 1L], nbins = n_sites) > 0L)
+  rg$re <- list(p   = .occu_cover_re_visit_terms(model$re_det, rg$flat_idx),
+                pos = .occu_cover_re_visit_terms(model$re_pos, rg$flat_idx))
   rg
+}
+
+# The observation-arm random-effect term designs of one arm, restricted to the
+# visit rows: each term's per-visit group code (0 where the row carries no
+# level) and, for a random slope, its per-visit weight matrix on the covariate's
+# natural scale (the stored design is standardized, `coef_scales` puts it back).
+.occu_cover_re_visit_terms <- function(terms, flat_idx) {
+  lapply(terms %||% list(), function(d) {
+    nc <- d$n_coefs %||% 1L
+    sc <- d$coef_scales %||% rep(1, nc)
+    list(var = as.character(d$var), n_groups = d$n_groups, n_coefs = nc,
+         codes = as.integer(d$codes_flat)[flat_idx],
+         Z = if (is.null(d$Z)) NULL
+             else sweep(d$Z[flat_idx, , drop = FALSE], 2L, sc, "*"))
+  })
+}
+
+# Per-visit offsets on the detection (`$p`) and cover (`$pos`) arms from the
+# per-term random-effect draws `re_draws` -- a list of
+# list(arm, var, draws [S x (n_coefs * n_groups)]) on the natural coefficient
+# scale, coefficient-major -- matched to the view's terms by arm and grouping
+# variable. Each arm's entry is an [V x S] matrix summed over that arm's terms,
+# or NULL when the arm carries none, the "no offset" signal the kernels read.
+.occu_cover_re_visit_offsets <- function(view, re_draws) {
+  out <- list(p = NULL, pos = NULL)
+  for (rd in re_draws %||% list()) {
+    hit <- Filter(function(t) identical(t$var, rd$var), view$re[[rd$arm]] %||% list())
+    if (!length(hit)) {
+      stop("occu_cover diagnostics: the sampled random effect on the ", rd$arm,
+           " arm has no grouping `", rd$var, "` among the fitted term designs.",
+           call. = FALSE)
+    }
+    tm <- hit[[1L]]
+    ok <- which(tm$codes > 0L)
+    if (!length(ok)) next
+    M  <- matrix(0, view$V, nrow(rd$draws))
+    for (cc in seq_len(tm$n_coefs)) {
+      w    <- if (is.null(tm$Z)) rep(1, length(ok)) else tm$Z[ok, cc]
+      cols <- (cc - 1L) * tm$n_groups + tm$codes[ok]
+      M[ok, ] <- M[ok, ] + w * t(rd$draws[, cols, drop = FALSE])
+    }
+    out[[rd$arm]] <- if (is.null(out[[rd$arm]])) M else out[[rd$arm]] + M
+  }
+  out
 }
 
 # A visit-level design for the C++ kernels: the V-row matrix, or a V x 0 matrix
@@ -308,6 +424,22 @@
 # count as the "arm has a visit block" flag).
 .occu_cover_visit_design <- function(X, V) {
   if (is.null(X)) matrix(0, V, 0L) else X
+}
+
+# A per-visit offset for the C++ kernels, on the same convention: the [V x S]
+# matrix, or a V x 0 matrix when that arm carries no offset.
+.occu_cover_visit_offset <- function(off, V) {
+  if (is.null(off)) matrix(0, V, 0L) else off
+}
+
+# Cell-aggregated cover scores one cover term per detected UNIT, so a per-visit
+# offset has no row to land on there.
+.occu_cover_reject_offsets <- function(off_det, off_pos, mode) {
+  if (is.null(off_det) && is.null(off_pos)) return(invisible(NULL))
+  stop("occu_cover diagnostics: an observation-arm random effect is scored per ",
+       "visit, which cover_aggregate = \"", mode, "\" does not carry (its cover ",
+       "arm holds one row per detected unit). Refit with ",
+       "cover_aggregate = \"none\".", call. = FALSE)
 }
 
 # Flatten a dense (padded [n_sites x max_visits]) no-aggregation occu_cover model
@@ -332,7 +464,8 @@
                       model$X_det_visit[sel, , drop = FALSE] else NULL,
     X_pos_visit   = if (!is.null(model$X_pos_visit))
                       model$X_pos_visit[sel, , drop = FALSE] else NULL,
-    V = length(sel)
+    V = length(sel),
+    flat_idx = as.integer(sel)
   )
 }
 
@@ -343,7 +476,8 @@
 # draw).
 .occu_cover_ploglik_core <- function(model, b_occ, b_det, b_pos, disp,
                                      field_occ, field_pos, chunk = NULL,
-                                     n_threads = 1L) {
+                                     n_threads = 1L,
+                                     off_det = NULL, off_pos = NULL) {
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
   S  <- nrow(b_occ)
@@ -369,10 +503,13 @@
       y_pos_visit   = rg$y_pos_visit,
       b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
       field_occ = field_occ, field_pos = field_pos,
+      off_det   = .occu_cover_visit_offset(off_det, rg$V),
+      off_pos   = .occu_cover_visit_offset(off_pos, rg$V),
       positive  = .occu_cover_pos_code(model$positive %||% "lognormal"),
       eta_bound = .TOBS_ETA_BOUND,
       n_threads = max(1L, as.integer(n_threads))))
   }
+  .occu_cover_reject_offsets(off_det, off_pos, mode)
 
   # Aggregated (mean / median / latent) paths stay in R, draw-chunked
   # to bound the [n_plots x chunk] per-visit eta transient. Detected-unit cover
@@ -452,6 +589,8 @@
       y_pos_visit = vw$y_pos_visit,
       b_occ = c0$b_occ, b_det = c0$b_det, b_pos = c0$b_pos, disp = disp,
       field_occ = c0$field_occ, field_pos = c0$field_pos,
+      off_det = .occu_cover_visit_offset(c0$off_det, vw$V),
+      off_pos = .occu_cover_visit_offset(c0$off_pos, vw$V),
       any_det = vw$any_det, n_valid = as.integer(vw$n_valid),
       positive = pos_code, eta_bound = .TOBS_ETA_BOUND,
       freeman = identical(fit.stat, "freeman-tukey"))
@@ -465,6 +604,7 @@
   # aggregates / detected covers are draw-invariant and gathered once. Cover
   # aggregation is dense-only (compact input is gated to "none"), so this branch
   # reads the padded grid directly.
+  .occu_cover_reject_offsets(c0$off_det, c0$off_pos, mode)
   n_sites <- model$n_sites; max_visits <- model$max_visits
   cl <- .tobs_clamp_eta
   comp <- .occu_cover_eta_components(model, c0$b_occ, c0$b_det, c0$b_pos,
@@ -524,6 +664,7 @@
     X_det_visit = .occu_cover_visit_design(vw$X_det_visit, vw$V),
     site_of_visit = vw$site_of_visit,
     b_occ = c0$b_occ, b_det = c0$b_det, field_occ = c0$field_occ,
+    off_det = .occu_cover_visit_offset(c0$off_det, vw$V),
     any_det = vw$any_det, eta_bound = .TOBS_ETA_BOUND, n_threads = 1L)
 }
 

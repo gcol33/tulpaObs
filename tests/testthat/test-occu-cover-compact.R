@@ -262,6 +262,53 @@ test_that("compact == dense for tobs_cpo() / tobs_ppc() / PIT (#185)", {
 })
 
 
+test_that("compact == dense for the per-visit RE offsets (#211)", {
+  skip_on_cran()
+  nc  <- 10L
+  adj <- .line_graph(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 8)
+
+  fit_re <- function(compact) {
+    od <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",
+                    type = "occurrence", occ.covs = c("cell_idx", "time.sc"),
+                    det.covs = c("x1", "hab"), compact = compact)
+    ocv <- suppressMessages(tobs_data(dd, y = "cover.flat", site = "site_key",
+                    visit = "visit", type = "cover", compact = compact))
+    ctrl <- list(engine = "joint", n.threads = 1L, n.threads.outer = 1L,
+                 max.iter = 60L, sigma.grid = c(0.5, 1.5), phi.grid.pos = c(2, 10),
+                 re.sigma.grid.p = c(0.2, 0.6), integration = "grid",
+                 adaptive.grid = FALSE, verbose = FALSE, progress = FALSE)
+    tobs(occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
+         data = od$occ.covs,
+         family = occu_cover(response = "beta", cover_aggregate = "none"),
+         detection = ~ x1 + (1 | hab), positive = ~ hab,
+         y = od$y, y_pos = ocv$y, visits = od$det.covs,
+         method = "nested_laplace", control = ctrl)
+  }
+  vd <- tulpaObs:::.occu_cover_visit_view(fit_re(FALSE)$model)
+  vc <- tulpaObs:::.occu_cover_visit_view(fit_re(TRUE)$model)
+
+  # The random effect's per-visit group codes are read off the same view the
+  # per-visit diagnostics read, so the compact fit's stored visit rows and the
+  # dense grid's valid cells carry the same codes in the same order.
+  expect_length(vc$re$p, 1L)
+  expect_identical(vc$re$p[[1L]]$codes, vd$re$p[[1L]]$codes)
+  expect_identical(vc$re$p[[1L]]$n_groups, vd$re$p[[1L]]$n_groups)
+  expect_length(vc$re$p[[1L]]$codes, nrow(dd))
+
+  # And the [V x S] offsets built from one set of group draws therefore agree
+  # to the bit between the two layouts.
+  set.seed(7)
+  D  <- matrix(stats::rnorm(20L * vd$re$p[[1L]]$n_groups), 20L)
+  rd <- list(list(arm = "p", var = vd$re$p[[1L]]$var, draws = D))
+  od_ <- tulpaObs:::.occu_cover_re_visit_offsets(vd, rd)
+  oc_ <- tulpaObs:::.occu_cover_re_visit_offsets(vc, rd)
+  expect_identical(dim(od_$p), c(nrow(dd), 20L))
+  expect_identical(oc_$p, od_$p)
+  expect_null(oc_$pos)
+})
+
+
 test_that("a detected visit with a missing cover carries no cover term (#185)", {
   skip_on_cran()
   nc  <- 8L

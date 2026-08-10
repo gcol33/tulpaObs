@@ -12,6 +12,12 @@
 // block + copied field + visit block). They are assembled here once, so the
 // three kernels cannot drift in how those blocks combine.
 //
+// The detection and cover arms also take an optional per-visit offset [V x S],
+// one value per (visit, draw): what an observation-arm random effect adds to
+// that arm's linear predictor at that draw. It enters the same place the
+// visit-level design block does, so a kernel scores the predictor the fit was
+// evaluated at without knowing where the offset came from.
+//
 // A dense (padded [n_sites x max_visits]) model reaches the same kernels
 // through .occu_cover_visit_view() in R, which flattens its grid to this
 // one-row-per-valid-visit form in site-major, visit-ascending order. Dense and
@@ -42,6 +48,8 @@ struct Arms {
   const double* b_pos = nullptr;
   const double* field_occ = nullptr;
   const double* field_pos = nullptr;
+  const double* off_det_visit = nullptr;      // [V x S] or null
+  const double* off_pos_visit = nullptr;      // [V x S] or null
   const int*    site_of_visit = nullptr;      // [V], 1-based
   int n_sites = 0, V = 0, S = 0;
   int p_occ = 0, p_det_site = 0, p_det_vis = 0;
@@ -73,18 +81,37 @@ struct Arms {
            field_pos[(std::size_t) d * n_sites + i];
   }
 
-  // Visit-level blocks, zero when that arm carries no visit-level design.
+  // Visit-level blocks: the visit-level design contribution (zero when that arm
+  // carries no visit-level design) plus the per-visit offset an observation-arm
+  // random effect contributes at this draw (zero when the arm carries none).
   double eta_p_visit(int v, int d) const {
-    return has_det_visit()
+    double e = has_det_visit()
       ? row_draw_dot(X_det_visit, V, v, b_det, S, d, p_det_site, p_det_vis)
       : 0.0;
+    if (off_det_visit) e += off_det_visit[(std::size_t) d * V + v];
+    return e;
   }
   double eta_pos_visit(int v, int d) const {
-    return has_pos_visit()
+    double e = has_pos_visit()
       ? row_draw_dot(X_pos_visit, V, v, b_pos, S, d, p_pos_site, p_pos_vis)
       : 0.0;
+    if (off_pos_visit) e += off_pos_visit[(std::size_t) d * V + v];
+    return e;
   }
 };
+
+// One [V x S] per-visit offset matrix, or null when the caller passes a
+// zero-column matrix (the same "arm carries none" convention as the visit-level
+// designs). A present matrix must carry one row per valid visit and one column
+// per draw.
+inline const double* visit_offset(const Rcpp::NumericMatrix& off, int V, int S,
+                                  const char* what) {
+  if (off.ncol() == 0) return nullptr;
+  if (off.nrow() != V || off.ncol() != S) {
+    Rcpp::stop("%s must be [V x S].", what);
+  }
+  return off.begin();
+}
 
 // Occupancy + detection arms: what the CDF-limits kernel needs.
 inline Arms make_arms(const Rcpp::NumericMatrix& X_occ,
