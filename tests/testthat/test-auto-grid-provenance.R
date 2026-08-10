@@ -125,25 +125,28 @@ test_that("cover() multi-block RE block declares its defaulted sigma axis", {
 
 test_that("cover() multi-block carries the copy axis's mark through as.numeric()", {
   skip_if_no_auto_grid()
-  # gcol33/tulpaObs#191: `.cover_build_multi_prior()` coerced the vector
-  # `.cover_fit_joint()` had just marked, so the copy axis reached the engine
-  # looking like a pin. Both provenances round-trip.
+  # gcol33/tulpaObs#191: `.cover_build_multi_prior()` coerced the vector its
+  # caller had just marked, so the copy axis reached the engine looking like a
+  # pin. Both provenances round-trip. The axis is `alpha_grid` since
+  # gcol33/tulpaObs#192 -- the copy coefficient rides the one field tulpa's
+  # `.resolve_one_copy_spec()` reads a grid off, and the retired
+  # `sigma_pos_grid` was never read on any cover() route.
   g <- matrix(0L, 4L, 4L); g[1, 2] <- g[2, 1] <- g[2, 3] <- g[3, 2] <-
     g[3, 4] <- g[4, 3] <- 1L
   sp <- list(type = "icar", n_spatial_units = 4L,
              adj_row_ptr = c(0L, 1L, 3L, 5L, 6L),
              adj_col_idx = c(1L, 0L, 2L, 1L, 3L, 2L),
              n_neighbors = c(1L, 2L, 2L, 1L))
-  build <- function(sigma_pos_grid) {
+  build <- function(alpha_grid) {
     tulpaObs:::.cover_build_multi_prior(
       prior_spatial = sp, spi_full = rep_len(1:4, 10L),
       spi_pos = rep_len(1:4, 5L), idx_pos = 1:5,
       temporal = NULL, re = NULL, control = list(),
-      sigma_pos_grid = sigma_pos_grid)
+      alpha_grid = alpha_grid)
   }
-  auto <- build(tulpaObs:::.tobs_default_sigma_grid())
-  expect_true(tulpa::is_auto_grid(auto$copy$sigma_pos_grid))
-  expect_false(tulpa::is_auto_grid(build(c(0.4, 0.8, 1.2))$copy$sigma_pos_grid))
+  auto <- build(tulpaObs:::.tobs_default_alpha_grid())
+  expect_true(tulpa::is_auto_grid(auto$copy$alpha_grid))
+  expect_false(tulpa::is_auto_grid(build(c(0.4, 0.8, 1.2))$copy$alpha_grid))
   # The spatial block's own axis is defaulted (and declared) in the same call.
   expect_true(tulpa::is_auto_grid(auto$prior[[1L]]$sigma_grid))
 })
