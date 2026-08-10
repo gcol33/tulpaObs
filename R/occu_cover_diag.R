@@ -13,14 +13,14 @@
 
 # Per-draw arm coefficients + dispersion + structured-term contributions for an
 # occu_cover() fit. Joint path: sample the grid-integrated posterior and
-# accumulate each block's field on the occupancy / cover arms. Otherwise: read
-# the stored coefficient draws, the sampled or marginal per-cell field, and the
-# per-visit offsets of a sampled observation-arm random effect. The structured
-# terms come back as offsets rather than coefficients -- `field_occ` /
-# `field_pos` per site, `off_det` / `off_pos` per visit (NULL for an arm with
-# none) -- and every diagnostic built on this list scores them: the pointwise
-# log-likelihood, the posterior-mean plug-in, the posterior predictive check and
-# the PIT / LOO-PIT.
+# accumulate each block's field on the occupancy / cover arms, plus the per-visit
+# offsets of its observation-arm random effects. Otherwise: read the stored
+# coefficient draws, the sampled or marginal per-cell field, and the per-visit
+# offsets of a sampled observation-arm random effect. The structured terms come
+# back as offsets rather than coefficients -- `field_occ` / `field_pos` per site,
+# `off_det` / `off_pos` per visit (NULL for an arm with none) -- and every
+# diagnostic built on this list scores them: the pointwise log-likelihood, the
+# posterior-mean plug-in, the posterior predictive check and the PIT / LOO-PIT.
 .tobs_occu_cover_components <- function(object, n.draws = 1000L) {
   model   <- object$model
   pi_list <- model$process_info
@@ -55,6 +55,10 @@
       field_occ <- field_occ + t(z_unit * blk$amp_occ) * w
       field_pos <- field_pos + t(z_unit * blk$amp_pos) * w
     }
+    # The RE blocks trail the fields in the same latent vector, so their draws
+    # come off the same grid-integrated posterior, already back-transformed to
+    # the covariate's natural units, in the layout the offset builder reads.
+    re_draws <- bundle$re
   } else {
     draws <- object$draws
     if (is.null(draws) || !is.matrix(draws)) {
@@ -73,12 +77,13 @@
            .tobs_occu_cover_v3_field(object, n_sites, S)
     field_occ <- fld$field_occ
     field_pos <- fld$field_pos
+    re_draws  <- .occu_cover_sampled_re_draws(object, S)
   }
   # An observation-arm random effect enters per (site, visit), so it is carried
   # as a per-visit offset alongside the per-site field rather than folded into
   # the coefficient block.
   off <- .occu_cover_re_visit_offsets(.occu_cover_visit_view(model),
-                                      .occu_cover_sampled_re_draws(object, S))
+                                      .occu_cover_obs_re_draws(re_draws))
   list(b_occ = b_occ, b_det = b_det, b_pos = b_pos, disp = disp,
        field_occ = field_occ, field_pos = field_pos,
        off_det = off$p, off_pos = off$pos)
@@ -124,6 +129,24 @@
     list(arm = b$arm_tag, var = as.character(b$var),
          draws = sig * rd[seq_len(S), idx, drop = FALSE])
   })
+}
+
+# The observation-arm (detection / positive-cover) entries of a per-term
+# random-effect draw list, which is what the per-visit offset builder consumes.
+# An occupancy-arm term (gcol33/tulpaObs#56) is per SITE, and its per-site
+# grouping is not carried on the fit -- the fitter takes the group codes as an
+# argument, and the occupancy formula the model stores is the design formula,
+# with the structured terms stripped -- so it is dropped here and the criteria
+# describe it at the population mean, which the caller is told.
+.occu_cover_obs_re_draws <- function(re_draws) {
+  rd <- unname(re_draws %||% list())
+  is_obs <- vapply(rd, function(r) r$arm %in% c("p", "pos"), logical(1))
+  if (any(!is_obs)) {
+    warning("occu_cover diagnostics: the occupancy-arm random effect is scored ",
+            "at the population mean; the fit does not carry the per-site ",
+            "grouping the criteria would need to score it.", call. = FALSE)
+  }
+  rd[is_obs]
 }
 
 # Per-cell field draws for the v3 nested-Laplace occu_cover spatial path, which

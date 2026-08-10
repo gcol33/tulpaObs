@@ -717,9 +717,13 @@ cover row per detected UNIT, so a per-visit offset errors there w/ a pointer. `t
 Was: `fit$draws` = the coefficient block + `ncol(draws)` read positionally as `log_disp`, so
 the RE draws never reached the scorer, and `.tobs_occu_cover_v3_field()` read only
 `field_table` -> both terms scored at ZERO on a fit that carried them (elpd moved 31 nats on a
-det-arm RE, 549 on a sampled field). STILL AT ZERO: the grid-integrated (`nested_laplace`)
-route's own RE latents -- `.tobs_joint_draws()` returns them on `bundle$re`, the components
-builder reads only `bundle$blocks`.
+det-arm RE, 549 on a sampled field). The grid-integrated (`nested_laplace`) route reaches the
+same criteria (#215): `.tobs_joint_draws()` returns its RE latents on `bundle$re` in the layout
+the offset builder already reads, so the components builder feeds them through the same
+per-visit path (elpd_waic moved 11.5 nats on a det-arm RE at sigma 1.1, 61.5 on a cover-arm
+RE). STILL AT ZERO: an occupancy-arm RE (#56) -- the fitter takes its group codes as an
+argument and nothing stores them on the fit, so the criteria warn and score it at the
+population mean.
 group_var maps sites>cells; SVC/trend/temporal/RE still gated -> n-L. predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67). **Spatial default** (`nested_laplace`,
