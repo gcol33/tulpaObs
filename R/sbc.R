@@ -293,11 +293,13 @@
 # chosen for POWER.
 #
 # For `occu_cover` that statistic is the data's log-likelihood with the shared
-# field integrated out CELL BY CELL against its own marginal N(0, sigma^2),
-# carrying the copy alpha * sigma onto the cover arm. It moves with every
-# coefficient, with both field scales and with the dispersion; it is not the
-# model's exact marginal likelihood, which would have to integrate the field's
-# cross-cell dependence too.
+# field integrated out CELL BY CELL against a marginal of the field's own
+# geo-mean width, `sigma * sqrt(scale_q)` (the scale the engine's raw-Q block
+# actually carries, see section 5), and the copy alpha * sigma onto the cover
+# arm. It moves with every coefficient, with both field scales and with the
+# dispersion; it is not the model's exact marginal likelihood, which would have
+# to integrate the field's cross-cell dependence and its per-cell marginal
+# variances too.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_loglik_occu_cover <- function(fit, theta, n_quad = 15L) {
@@ -305,6 +307,7 @@
   bl <- attr(theta, "blocks")
   gh <- .gauss_hermite_prob(as.integer(n_quad))
   sigma <- if ("sigma" %in% names(theta)) theta[["sigma"]] else 0
+  sigma <- sigma * .tobs_sbc_field_scale(fit$spatial$graph)
   alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0
   disp  <- if ("disp" %in% names(theta)) theta[["disp"]] else
              (m$cover_pos_disp %||% 1)
@@ -338,7 +341,37 @@
 # The linear predictors come from `.occu_cover_eta_from_par()`, the function the
 # fitter and every diagnostic assemble eta with, so a generator cannot drift
 # from the convention the likelihood is written in.
+#
+# THE FIELD'S SCALE IS THE ENGINE'S, NOT THE SIMULATOR'S. The joint
+# nested-Laplace path hands the ICAR block the RAW graph precision Q = D - W at
+# tau = 1 (`add_icar_prior(..., tau = 1.0, ...)` for a copy block) and carries
+# the amplitude in the arm scale, so the field the likelihood integrates is
+#   off_occ = sigma * x,   x ~ N(0, Q_aug^-1),   Q_aug = Q + sum_c 1_c 1_c'/J_c
+# whose geo-mean marginal SD is sqrt(scale_q), the Sorbye-Rue constant of the
+# graph -- NOT 1. `.occu_cover_draw_icar_field()` returns the NORMALISED draw
+# (geo-mean marginal SD 1), which is the convention `simulate_occu_cover()` and
+# the sampled-hyper NUTS route state their field in, so the replicate multiplies
+# that constant back in. Drawing the normalised field instead would generate at
+# `sigma` and refit under `sigma * sqrt(scale_q)`: both arm field SDs shift by
+# one common factor while `alpha`, their ratio, stays clean
+# (gcol33/tulpaObs#213).
 # ---------------------------------------------------------------------------
+
+# sqrt(scale_q) for a graph, cached on the last graph seen. The rank arm scores
+# n.ref + 1 parameter vectors per simulation against the SAME pooled graph, and
+# the constant costs an eigendecomposition, so recomputing it per call would
+# dominate the run. `identical()` on the graph is the key: a hash could collide,
+# and a wrong constant here is a silently mis-scaled experiment.
+.TOBS_SBC_SCALE_CACHE <- new.env(parent = emptyenv())
+
+.tobs_sbc_field_scale <- function(graph) {
+  if (is.null(graph)) return(1)
+  hit <- .TOBS_SBC_SCALE_CACHE$entry
+  if (!is.null(hit) && identical(hit$graph, graph)) return(hit$scale)
+  s <- sqrt(.occu_cover_icar_scale(as.matrix(graph)))
+  .TOBS_SBC_SCALE_CACHE$entry <- list(graph = graph, scale = s)
+  s
+}
 
 .tobs_sbc_draw_positive <- function(eta, disp, positive) {
   n <- length(eta)
@@ -363,7 +396,8 @@
              (m$cover_pos_disp %||% 1)
 
   f_cell <- if (spec$has_field)
-    as.numeric(.occu_cover_draw_icar_field(spec$model_graph, 1L)) else
+    (spec$field_scale %||% 1) *
+      as.numeric(.occu_cover_draw_icar_field(spec$model_graph, 1L)) else
     rep(0, max(spec$site_cell))
   f <- f_cell[spec$site_cell]
 
@@ -722,6 +756,9 @@
   }
   spec <- (reg$spec %||% .tobs_sbc_spec)(object, fit.control)
   spec$model_graph <- object$spatial$graph
+  # The replicate's field is drawn at the scale the engine's own block carries,
+  # resolved ONCE here so every generator call reads one constant (section 5).
+  spec$field_scale <- .tobs_sbc_field_scale(spec$model_graph)
   spec$data_obs <- (reg$data %||% .tobs_sbc_data_from_fit)(object)
 
   probe <- reg$draws(object, .TOBS_SBC_PROBE_DRAWS)

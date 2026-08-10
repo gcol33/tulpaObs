@@ -570,3 +570,61 @@ the coupled `occu_cover` route), and a fit carrying a visit-level observation
 design (the `single` generator assembles detection from the site-level design
 only, so a visit-level column would be scored by the refit and absent from the
 data it sees).
+
+## SBC field-SD pile-up: generator scale + outer-grid atomicity (#213)
+
+Two independent causes behind 81/100 and 87/100 top-decile ranks on the two
+field SDs while every coefficient and `alpha` stayed uniform.
+
+**Cause 1, the generator's units (the pile-up).** The joint nested-Laplace
+engine hands its ICAR block the RAW `Q = D - W` at `tau = 1` and carries the
+amplitude in the arm scale; no Sorbye-Rue scaling exists on that path
+(`scale_factor` is bym2-only). So the fit's `sigma` multiplies a field of
+geo-mean marginal SD `sqrt(scale_q)`, while `.occu_cover_draw_icar_field()`
+returns a field normalised to 1. One common factor on both arm SDs; `alpha`,
+their ratio, unaffected.
+
+Measured on chain(60), 12 seeds, data generated at geo-mean SD 0.8:
+`sigma_fit / 0.8 = 0.250`, 95% CI **0.179-0.350**. Predicted `1/sqrt(scale_q)`
+= 0.332 sits inside; `c = 1` is excluded by ~4x. The eta-scale field itself was
+always fine (sd ratio 0.88, cor 0.97) -- the LABEL was wrong, not the surface.
+`sqrt(scale_q)` = 1.74 / 2.13 / 2.75 / 3.01 for chains of 20 / 30 / 50 / 60. A
+pooled 2-component graph carries the same constant as one component.
+
+**Hypothesis 2 (grid truncation) EXCLUDED**, not argued away: over 100
+simulations the truth sits at the top node 0/100, bottom node 3/100, and 80/100
+at node 5 of 9, interior. `outer_grid_placement = "fixed"`,
+`recenter_declined = "axis_pinned"` (correct: the fixture pins the axis).
+
+**Demean lead measured, not the answer**: on the pooled 2-component fixture the
+two component levels are +-1.40e-02 against a field SD of 2.95 = 0.48% of the
+field's own scale.
+
+Before / after at n.sim = 100, seed 0, on the fixture's ORIGINAL 9/7-node grids:
+
+| quantity | top decile | mean PIT | p_unif |
+|---|---|---|---|
+| sigma | 81 -> 18 | 0.865 -> 0.605 | 0 -> 4.9e-04 |
+| sigma_pos_field | 87 -> 14 | 0.923 -> 0.579 | 0 -> 0.050 |
+| log_lik | 90 -> 18 | 0.940 -> 0.558 | 0 -> 0.083 |
+| pos_(Intercept) | 16 -> 11 | 0.582 -> 0.525 | 2.8e-03 -> 0.813 |
+
+**Cause 2, outer-grid ATOMICITY (the residual).** `sigma`'s posterior IS its
+axis -- the outer grid is its entire support -- so the axis's resolution is the
+resolution of the predictive the truth is ranked against. At 9 nodes 1000 draws
+carry 6 distinct values and the rank ECDF is a 6-step function, which a
+continuous-uniform read scores as a departure whatever the fit does. At 21 sigma
+/ 17 phi nodes every quantity is inside: sigma 0.714, sigma_pos_field 0.697,
+alpha 0.511, disp 0.819, log_lik 0.491, min over all 0.056. Cost: acceptance run
+3.6 -> ~13 min.
+
+**Isolating control** (fine grid, generator constant forced back to 1): sigma
+42/100 top decile p = 0, sigma_pos_field 52/100 p = 0. The GENERATOR moved them,
+not the resolution -- the two causes are separable and both are real.
+
+Consequence for anyone reading a spatial `occu_cover` fit: on the joint
+nested-Laplace path `sigma` is a RAW amplitude, while `simulate_occu_cover()`
+and the #204 NUTS `field_sd` state geo-mean marginal SD. Compare a fit against a
+simulator on the FIELD (sd / cor), never by reading `sigma` off both sides. Also
+`fit$spatial_field` is the LATENT field: the eta-scale surface is
+`sigma * spatial_field`.

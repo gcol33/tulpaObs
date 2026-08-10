@@ -151,7 +151,15 @@ simulate_occu_cover <- function(N             = 200L,
   # zero-mean draw on the constrained space, then divide by sqrt(scale_q) so the
   # field has geo-mean marginal variance 1 (the Sorbye-Rue convention; `sigma *
   # f` then has geo-mean marginal SD sigma, matching INLA's `scale.model = TRUE`
-  # and the fitter's parameterisation).
+  # and the `field_sd` the sampled-hyper NUTS route reports).
+  #
+  # THAT IS NOT THE UNIT THE JOINT NESTED-LAPLACE FIT REPORTS `sigma` IN. That
+  # engine hands its ICAR block the RAW graph precision Q = D - W at tau = 1 and
+  # carries the amplitude in the arm scale, so its `sigma` is the amplitude on a
+  # field of geo-mean marginal SD sqrt(scale_q) -- a factor of 2.1 on a 30-node
+  # chain, 3.0 on a 60-node one. Compare a spatial occu_cover fit against this
+  # simulator on the FIELD (sd / cor of the recovered surface), not by reading
+  # `sigma` off both sides (gcol33/tulpaObs#213).
   f  <- numeric(N)
   f2 <- numeric(N)
   g0 <- numeric(N)   # arm-specific cover intercept field (gcol33/tulpaObs#110)

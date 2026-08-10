@@ -18,7 +18,7 @@
 #   ACCEPTANCE (skip_if_fast + skip_on_cran). The calibration measurement
 #   itself: the reported posterior uniform, a deliberately mis-scaled control
 #   not. A band nothing can fail is not evidence, so both halves are asserted.
-#   ~210 s at n.sim = 100.
+#   ~13 min at n.sim = 100.
 # =============================================================================
 
 .sbc_chain_adj <- function(n) {
@@ -33,14 +33,28 @@
 # The dispersion grid the fixture puts phi_pos on. Without it the joint engine
 # holds the cover dispersion at a value it sets per data set, so the replicate
 # would be generated at one value and refitted under another.
-.SBC_PHI_GRID <- exp(seq(log(0.20), log(0.90), length.out = 7L))
+.SBC_PHI_GRID <- exp(seq(log(0.20), log(0.90), length.out = 17L))
 
 # The field-SD grid, PINNED. A defaulted axis is auto-recentred per fit, so the
 # observed fit and the augmented refits would integrate `sigma` over different
 # supports and the truth would be scored against a predictive on a support it is
 # not from. A user grid is not recentred, which is the same reason tulpa's own
 # SBC fixture fixes its hyperparameter support.
-.SBC_SIGMA_GRID <- exp(seq(log(0.15), log(2.0), length.out = 9L))
+#
+# BOTH AXES ARE RESOLVED, NOT MERELY PINNED: 21 sigma nodes and 17 phi_pos ones,
+# where the fixture used to carry 9 and 7. An outer-grid axis IS the whole
+# support of the quantity it carries, so its resolution is the resolution of the
+# predictive the truth is ranked against, and a rank read against a
+# continuous uniform scores a coarse axis as a departure whatever the fit does:
+# at 9 sigma nodes 1000 draws hold 6 distinct values and the rank ECDF is a
+# 6-step function. Measured on the SAME generator and the same seed, n.sim = 100,
+# `sigma` p_unif 4.9e-04 -> 0.056 -> 0.714 and `disp` 8.7e-09 -> 1.9e-14 -> 0.819
+# across (9, 7) -> (21, 7) -> (21, 17) nodes, with every mean PIT already within
+# noise of 0.5 at the coarse grids -- a step-function ECDF, not a location shift.
+# That is what lets the acceptance set below gate every scored quantity. The cost
+# is a 13-minute acceptance run instead of a 3.6-minute one, and the whole point
+# of the run is the read (gcol33/tulpaObs#213).
+.SBC_SIGMA_GRID <- exp(seq(log(0.15), log(2.0), length.out = 21L))
 
 # A small coupled occu_cover fixture: shared ICAR field on the occurrence arm,
 # copied onto the cover arm, dispersion on the outer grid.
@@ -247,18 +261,42 @@ test_that("the replicate generator draws from the law the likelihood scores", {
 })
 
 
-test_that("the field enters the replicate at the scale the fit reports", {
+test_that("the field enters the replicate at the scale the engine's block carries", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 40L, J = 4L)
   m <- tobs_sbc(fx$fit, model.only = TRUE,
                 fit.control = .sbc_fit_control(fx))
   spec <- environment(m$simulate)$spec
 
-  # The generator's field is the unit-scale ICAR draw the fitter's `sigma`
-  # multiplies: geo-mean marginal SD 1 under the Sorbye-Rue scaling.
+  # The joint engine's ICAR block is the RAW graph precision Q = D - W at
+  # tau = 1 with the amplitude in the arm scale, so the field `sigma`
+  # multiplies is x ~ N(0, Q^+): geo-mean marginal variance scale_q, NOT 1.
+  # `.occu_cover_draw_icar_field()` returns the Sorbye-Rue NORMALISED draw --
+  # the convention `simulate_occu_cover()` states its `sigma` in -- so the
+  # generator carries the constant that maps one to the other. Generating at
+  # the normalised scale instead refits every replicate under a field
+  # sqrt(scale_q) wider and piles both arm SDs at the top of their rank
+  # support (gcol33/tulpaObs#213).
+  #
+  # scale_q is recomputed here from the graph, independently of the package
+  # helper the generator uses, so the two cannot agree by sharing a bug.
+  Q <- diag(rowSums(fx$adj)) - fx$adj
+  eig <- eigen(Q, symmetric = TRUE)
+  pos <- eig$values > 1e-10
+  Qplus_diag <- rowSums(sweep(eig$vectors[, pos, drop = FALSE]^2, 2L,
+                              eig$values[pos], "/"))
+  scale_q <- exp(mean(log(Qplus_diag)))
+  expect_equal(spec$field_scale, sqrt(scale_q), tolerance = 1e-8)
+
+  # On this graph the two conventions are far apart, so a generator that lost
+  # the constant could not pass by rounding.
+  expect_gt(spec$field_scale, 2)
+
+  # The field as GENERATED carries the engine's marginal width.
   set.seed(9L)
-  F <- tulpaObs:::.occu_cover_draw_icar_field(fx$adj, 400L)
-  expect_equal(exp(mean(log(apply(F, 1L, stats::var)))), 1, tolerance = 0.2)
+  F <- spec$field_scale * tulpaObs:::.occu_cover_draw_icar_field(fx$adj, 400L)
+  expect_equal(exp(mean(log(apply(F, 1L, stats::var)))), scale_q,
+               tolerance = 0.2)
   expect_equal(mean(colMeans(F)), 0, tolerance = 1e-8)
 })
 
@@ -293,15 +331,20 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
   # threshold well below any per-quantity level, which is a multiplicity-aware
   # regression guard rather than a coin flip.
   #
-  # The set is five of the six arm coefficients plus the DERIVED copy scale
-  # `alpha` -- the quantity the deliverable reports and the one the outer grid
-  # marginalizes rather than plugs in. The occurrence-arm field SD and the
-  # cover intercept are deliberately NOT here: both field-scale reads leave the
-  # band on a pooled fit, uniform `alpha` puts that on a common scale factor
-  # rather than on the coupling, and the cause is open
-  # (gcol33/tulpaObs#213). Measured departures are in NOTES_measurements.md.
+  # EVERY scored quantity is in the set: the six arm coefficients, the DERIVED
+  # copy scale `alpha`, both field-scale reads (the occurrence-arm SD the outer
+  # grid integrates and the cover-arm SD derived from it), and the cover
+  # dispersion. The two field SDs used to pile at the top of their support
+  # (81/100 and 87/100 in the top decile) because the replicate's field was
+  # drawn one Sorbye-Rue constant narrower than the law the refit inverts -- the
+  # engine's ICAR block is the raw Q = D - W, so its `sigma` multiplies a field
+  # of geo-mean marginal SD sqrt(scale_q), not 1. Held at THIS grid with the
+  # generator's constant put back to 1, they return to 42/100 and 52/100 in the
+  # top decile, so what moved them is the generator and not the resolution
+  # (gcol33/tulpaObs#213).
   qs <- c("psi_(Intercept)", "psi_occ_cov1", "p_(Intercept)", "p_det_cov1",
-          "pos_pos_cov1", "alpha")
+          "pos_(Intercept)", "pos_pos_cov1", "alpha", "sigma",
+          "sigma_pos_field", "disp")
   ok <- pu("posterior", qs)
   expect_length(ok, length(qs))
   expect_gt(min(ok), 1e-3)
