@@ -56,17 +56,28 @@
 
 #
 # Each returns its vector already marked with `auto_grid()`: these functions ARE
-# the layer that chose the values, and a caller only ever reaches them on the
+# the layer that defaults the axis, and a caller only ever reaches them on the
 # `control$*.grid %||%` fallback, so a user-supplied grid never passes through
 # and never picks up the mark. A site that reshapes the result afterwards
 # (`sort()`, `1 / sigma^2`, `expand.grid()`) drops the attribute and re-applies
 # it with `.tobs_mark_auto()`.
+#
+# The copy-coefficient and field-SD axes are READ from the engine rather than
+# restated here (gcol33/tulpaObs#209). Both fields are bound in the engine's
+# `.NL_FAMILY_AXES` on the very paths these grids reach -- `alpha_grid` and
+# `sigma_grid` on `.copy`, `sigma_grid` on `.joint_areal` -- so
+# `.nl_axis_matches_default()` recognises a grid carrying those nodes as a
+# default by VALUE, independently of the `auto_grid()` marker. Reading holds
+# that recognition in step permanently: it is the belt that still classifies
+# the axis as ours after a reshape has dropped the marker, which is the failure
+# gcol33/tulpaObs#191 filed, and a restated copy loses the belt the moment the
+# engine moves the nodes the way gcol33/tulpa#361 moved `bym2_rho`.
 .tobs_default_alpha_grid <- function() {
-  tulpa::auto_grid(c(0, exp(seq(log(0.1), log(3), length.out = 5))))
+  tulpa::auto_grid(tulpa:::.nl_grid_axis("copy_alpha"))
 }
 
 .tobs_default_sigma_grid <- function() {
-  tulpa::auto_grid(exp(seq(log(0.1), log(3), length.out = 5)))
+  tulpa::auto_grid(tulpa:::.nl_grid_axis("field_sd"))
 }
 
 .tobs_default_bym2_rho_grid <- function() {
@@ -75,6 +86,20 @@
 
 # Spatial-correlation axis of a proper-CAR field, shared by the cover()
 # arm-specific block and the occu_cover() NUTS warm fit.
+#
+# These nodes are deliberately tulpaObs's own, NOT a read of the engine's
+# `joint_car_rho` (gcol33/tulpaObs#209), which today holds the same four values.
+# Two reasons, and they point the same way. The engine binds neither this axis
+# nor the `rho_car_grid` field it is written to into `.NL_FAMILY_AXES`, by its
+# own statement, precisely so a caller passing these nodes stays classified as
+# a caller rather than as the engine's default -- so unlike the alpha and
+# field-SD axes above there is no value-recognition belt to hold in step, and
+# the equality is coincidence rather than contract. And the axis does not exist
+# at this package's declared `Imports` floor (tulpa 0.0.136 errors on the key),
+# so a read would have to fall back to these nodes anyway, making the default
+# grid a function of which engine happens to be installed within one declared
+# floor. Provenance is carried by the `auto_grid()` marker, which the rescue
+# reads before it ever reaches the value comparison.
 .tobs_default_rho_car_grid <- function() {
   tulpa::auto_grid(c(0.5, 0.8, 0.95, 0.99))
 }

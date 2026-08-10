@@ -1212,6 +1212,13 @@
     } else {
       Dg   <- Matrix::Diagonal(x = rowSums(geom$graph))
       Wadj <- methods::as(geom$graph, "CsparseMatrix")
+      # This fitter's OWN field-marginal search grids, here and at
+      # `bym_rho_grid` below: the block-coordinate ascent profiles the field
+      # hyperparameters itself and never hands a prior block to the engine, so
+      # neither the outer-grid registry nor the `auto_grid()` provenance marker
+      # applies to them (gcol33/tulpaObs#209). The CAR nodes coincide with the
+      # engine's `joint_car_rho` because both place a correlation axis where an
+      # areal likelihood turns, not because either reads the other.
       rho_grid <- if (is_car) c(0.5, 0.8, 0.95, 0.99) else NA_real_
       rho <- if (is_car) 0.95 else NA_real_
       # The areal field is sum-to-zero (it captures spatial DEVIATIONS; the

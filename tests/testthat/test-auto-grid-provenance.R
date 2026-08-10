@@ -24,10 +24,50 @@ test_that("the shared default-grid helpers declare themselves", {
   expect_true(tulpa::is_auto_grid(tulpaObs:::.tobs_default_sigma_grid()))
   expect_true(tulpa::is_auto_grid(tulpaObs:::.tobs_default_alpha_grid()))
   expect_true(tulpa::is_auto_grid(tulpaObs:::.tobs_default_bym2_rho_grid()))
-  # Marking must not change the values -- clause 3 of the engine's provenance
-  # test still recognises the sigma axis by equality with its own default.
+})
+
+test_that("the alpha and sigma defaults read the engine's axes (#209)", {
+  skip_if_no_auto_grid()
+  # Both are READ from the engine, so they cannot fall out of step with the
+  # nodes `.nl_axis_matches_default()` compares against. The assertions read the
+  # engine too -- a literal here would drift exactly as the helpers' own copies
+  # would have.
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_alpha_grid()),
+               as.numeric(tulpa:::.nl_grid_axis("copy_alpha")))
   expect_equal(as.numeric(tulpaObs:::.tobs_default_sigma_grid()),
-               exp(seq(log(0.1), log(3), length.out = 5)))
+               as.numeric(tulpa:::.nl_grid_axis("field_sd")))
+  # The copy axis carries an exact 0, so the uncoupled model is ON the grid
+  # rather than a limit of it. That is the engine's `prepend`, and reading the
+  # axis is what keeps it.
+  expect_true(any(as.numeric(tulpaObs:::.tobs_default_alpha_grid()) == 0))
+
+  # What the read buys, asserted as the property rather than as a value: the
+  # engine recognises both axes as ITS OWN default by value on the paths these
+  # grids reach, which is the belt that still holds when a reshape has dropped
+  # the auto_grid() marker (gcol33/tulpaObs#191).
+  matches <- tulpa:::.nl_axis_matches_default
+  expect_true(matches(tulpaObs:::.tobs_default_sigma_grid(),
+                      "sigma_grid", ".joint_areal"))
+  expect_true(matches(tulpaObs:::.tobs_default_sigma_grid(),
+                      "sigma_grid", ".copy"))
+  expect_true(matches(tulpaObs:::.tobs_default_alpha_grid(),
+                      "alpha_grid", ".copy"))
+})
+
+test_that("the proper-CAR rho default is tulpaObs's own, not an engine read (#209)", {
+  skip_if_no_auto_grid()
+  # Deliberately OURS. The engine's `joint_car_rho` holds the same four nodes
+  # where it exists, but it is absent at this package's declared Imports floor
+  # (tulpa 0.0.136), and the engine binds neither it nor the `rho_car_grid`
+  # field into `.NL_FAMILY_AXES` -- so there is no value-recognition belt to
+  # keep in step and no floor-safe axis to read. A literal is the right
+  # assertion here for the same reason the value is a literal in the source.
+  expect_equal(as.numeric(tulpaObs:::.tobs_default_rho_car_grid()),
+               c(0.5, 0.8, 0.95, 0.99))
+  # No engine binding, so provenance rests entirely on the marker.
+  expect_true(tulpa::is_auto_grid(tulpaObs:::.tobs_default_rho_car_grid()))
+  expect_false(tulpa:::.nl_axis_matches_default(
+    tulpaObs:::.tobs_default_rho_car_grid(), "rho_car_grid", "car_proper"))
 })
 
 test_that(".tobs_mark_auto marks only when the caller defaulted", {
