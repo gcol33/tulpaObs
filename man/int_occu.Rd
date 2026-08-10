@@ -13,3 +13,10 @@ A \code{tobs_family} object.
 Multiple data sources informing a shared latent occupancy state, each with
 its own detection process.
 }
+\details{
+A continuous-mesh \code{spde()} term on the \code{detection} formula loads a
+spatially-structured detection field, broadcast to every source, under
+\code{method = "laplace"}. The per-source fields are reported as a named list in
+\code{fit$spatial_field_det}. All sources must share one detection formula; areal
+terms belong on the state arm.
+}

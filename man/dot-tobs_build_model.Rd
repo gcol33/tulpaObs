@@ -33,5 +33,23 @@ Inferred model type from arguments:
 Community families (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover /
 ms_count / jsdm) have their own in-tree binders + Laplace-EM fitter and do not
 pass through here.
+
+A structured term enters the process whose formula it is written in. For an
+integrated model this makes \code{detection = ~ x + spde(lon, lat, ...)} a
+\strong{detection-arm} field: the occupancy state stays whatever the occupancy
+formula says, and the continuous Matern field sits on the detection logit.
+The detection arm there is one arm observed through S sources, so the field
+is one structure fit once per source block -- source \code{s} fits its own
+realization at its own sites, and two sources covering the same location each
+carry their own value there, the same way each source carries its own
+detection coefficients. \code{fit$spatial_field_det} is the per-source named list
+of mesh fields (source names as given on \code{y}); project a source's field to
+its sites with \code{fit$spatial$tulpa_spec$A}.
+
+The arm accepts a continuous \code{spde()} field under \code{method = "laplace"}. The
+areal kinds and the temporal / re / svc / latent classes are grid-integrated
+as latent blocks on the state arm, so they are written on the occupancy
+formula; on a detection formula they error with a pointer rather than being
+fit against the wrong arm.
 }
 \keyword{internal}

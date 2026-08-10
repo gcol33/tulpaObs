@@ -63,10 +63,21 @@ from uniformity is a verdict on the approximation.
 }
 \details{
 Registered families: \code{occu_cover} (the coupled occupancy + cover hurdle on
-the joint nested-Laplace engine) and \code{occu}. A family is registered by adding
-one entry to the internal registry -- a replicate generator, a refit call and
-optionally a joint statistic; the pooling, the grouping labels, the arm
-construction and the controls are shared.
+the joint nested-Laplace engine), and \code{occu}, \code{abun}, \code{count}, \code{removal},
+\code{distance}, \code{fp_occu}, \code{royle_nichols} and \code{occu_ttd}, whose site marginals
+multiply. For those the replicate is the family's own \code{simulate()} kernel at
+the drawn theta, the rank arm is the family's exact marginal
+log-likelihood, and two kinds of fit are refused rather than approximated: a
+structured term (its field is a latent quantity shared across sites that
+theta does not hold, which is what the coupled \code{occu_cover} route handles by
+drawing on fresh cells) and a visit-level observation design (the replicate
+kernel assembles the observation arm from the site-level design, so the two
+sides would carry different models).
+
+A family is registered by adding one entry to the internal registry -- a
+replicate generator, a refit call and optionally a joint statistic; the
+pooling, the grouping labels, the arm construction and the controls are
+shared.
 }
 \section{What is scored}{
 
