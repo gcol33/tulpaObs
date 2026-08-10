@@ -1,5 +1,73 @@
 # tulpaObs NEWS
 
+## 0.0.194 (2026-08-10)
+
+* **Simulation-based calibration runs on a real observation-process family**
+  (gcol33/tulpaObs#207, consumer of gcol33/tulpa#380). New exported verb
+  `tobs_sbc()` adapts a fitted `tobs_fit` into the callback contract
+  `tulpa::sbc()`'s POSTERIOR experiment reads (Talts et al. 2018; Sailynoja,
+  Schmitt, Buerkner and Vehtari 2026, Algorithm 2), so calibration is measured
+  on the coupled `occu_cover` a deliverable ships rather than on a toy fixture.
+  The truth is drawn from the fit's own posterior at the observed data, a
+  replicate is simulated at that truth, the model is refitted on both data sets
+  together, and the truth's rank under that augmented posterior is scored
+  against tulpa's exact simultaneous band.
+
+  Three premises are carried rather than assumed. The replicate is drawn on
+  FRESH cells whose areal graph is block-diagonal against the observed one --
+  `occu_cover` couples its two arms through one shared field and theta carries
+  no per-cell value, so re-observing the observed cells would break the
+  factorization -- and `group_ids()` is supplied, so `tulpa::sbc()` VERIFIES the
+  observable half of that instead of taking it on trust. The per-cell field is
+  not scored; the arm fixed effects, the field SD on each arm, the copy scale
+  `alpha` and the dispersion are. `alpha` and the cover-arm field SD are read
+  per draw off the outer grid through `.tobs_joint_draws()`, whose cells are
+  sampled by their own normalized weight, so what is ranked is each one's
+  grid-marginalized posterior rather than a ratio of component modes.
+
+  Measured on a 50-cell, 6-visit chain fixture at `n.sim = 100` (204.6 s): the
+  six arm coefficients and `alpha` are uniform, smallest p-value 0.133, against
+  3.3e-16 for the same quantities on a deliberately mis-scaled control arm --
+  `alpha` alone reads 0.52 as reported and 3.3e-16 once its width is distorted.
+  Two reads leave the band on the correct fit and are reported rather than
+  tuned away: the occurrence-arm field SD puts 81 of 100 ranks in the top decile
+  and the derived cover-arm SD 87 of 100. The mechanism is the fresh cells --
+  the pooled graph has two components and the fit applies ONE global
+  sum-to-zero rather than one per component (measured: the two blocks' field
+  means come back exactly equal and opposite, and the pooled precision under a
+  single constraint is singular at reciprocal condition 5.6e-18), so the
+  between-block level has no prior and the shared SD absorbs it. `alpha`, a
+  ratio of the two SDs, is untouched, and so are the slopes. Numbers in
+  `NOTES_measurements.md`; the constraint itself is gcol33/tulpaObs#212.
+
+  A family is registered by one entry in the internal registry -- a replicate
+  generator, a refit call, a draw reader, optionally a joint statistic. The
+  pooling, the grouping labels, the arm construction, the mis-scaled controls
+  and the fixed-quantity guard are written once and shared. `occu_cover` is the
+  registered and verified family; a fit whose family has no entry errors naming
+  the roster rather than producing a result nothing checked.
+
+* **`control$phi.grid.pos` is what makes the cover dispersion a scored
+  quantity.** Left off it the joint engine fixes the dispersion per data set, so
+  the observed fit and each refit hold it at different values; `tobs_sbc()`
+  warns, names the consequence, and drops it from the scored set rather than
+  ranking a truth against a point mass.
+
+* **`.occu_cover_eta_from_par()` takes per-arm offsets** (`off_occ`, `off_p`,
+  `off_pos`), and `.occu_cover_draw_icar_field()` is the one unit-scale ICAR
+  draw `simulate_occu_cover()` and the SBC replicate generator share. Both
+  default to the previous behaviour exactly, and the extracted field draw keeps
+  the inline code's arithmetic as well as its RNG order -- checked
+  BYTE-IDENTICAL at 20, 47 and 100 nodes (`max|diff| = 0`), because writing
+  `z * (1 / sqrt(lambda))` instead of `z / sqrt(lambda)` moves the draw by one
+  ULP and that does reach `simulate_occu_cover(seed = )`'s output.
+
+* **Engine pin raised to tulpa 0.0.195** (Imports floor and `Remotes` tag
+  together, as `.github/scripts/check-engine-pin.R` requires). `sbc()` was
+  exported at tulpa commit 5d6c0d3, first tagged in v0.0.194, and the pooling
+  premise it reports was fixed in f7ac31d; r-universe serves 0.0.195, which is
+  also what the check demands be installed.
+
 ## 0.0.192 (2026-08-09)
 
 * **Five cover-hurdle fixtures re-anchored on the axis the engine integrates**

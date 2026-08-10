@@ -305,3 +305,105 @@ the same number, and the bym2 structured block normalises differently again
 (`compute_bym2_scale` = 2.6949 / 2.7732). `field_sd` -- the geo-mean marginal SD
 the block's own covariance implies at a draw's hypers -- is the one summary all
 three kinds share, so it is what the truth is stated in.
+
+## Posterior SBC on the coupled `occu_cover` (`R/sbc.R`, #207)
+
+`tobs_sbc()` runs the posterior experiment of `tulpa::sbc()` (gcol33/tulpa#380,
+Sailynoja et al. 2026 Algorithm 2) on a fitted `tobs_fit`. Everything below was
+measured on tulpa 0.0.195 / tulpaObs 0.0.193, Windows, R 4.6.0.
+
+### Fixture and cost
+
+Chain adjacency, `N = 50` cells, `J = 6` visits, lognormal cover, shared `icar()`
+field on the occurrence arm copied onto the cover arm, `phi_pos` on the outer
+grid. `n.sim = 100`, `n.draws = 1000`, `n.ref = 200`, `seed = 0`. Observed fit
+0.3 s; one augmented refit on the pooled 100 cells 0.75 s; the whole 100-sim run
+**204.6 s** on the pinned grid (9 x 11 x 7 = 693 outer cells) and **~105 s** on
+the smaller defaulted grid. Both premises report `verified` -- the pooling guard
+and the fresh-groups guard, the latter only because `group_ids()` is supplied.
+
+### What the observed fit recovers
+
+Truth `beta_occ = (0.2, 0.6)`, `beta_p = (0.4, -0.5)`, `beta_pos = (-1.386,
+0.3)`, `sigma = 0.8`, `alpha = 1`, dispersion 0.4. Fit: 0.312 / 0.545, 0.381 /
+-0.606, -1.359 / 0.276, sigma 0.511, alpha 0.615, phi_pos 0.408.
+
+### The calibration read, pinned grid, n = 100
+
+Uniformity p-values on the `posterior` (reported) arm against the `narrow`
+control (the same draws with their SD divided by 1.25, same fits, same
+simulations):
+
+| quantity | posterior ks | posterior p | narrow p |
+|---|---|---|---|
+| `psi_(Intercept)` | 0.063 | 0.890 | 0.060 |
+| `psi_occ_cov1` | 0.094 | 0.579 | 0.052 |
+| `p_(Intercept)` | 0.086 | 0.795 | 0.195 |
+| `p_det_cov1` | 0.123 | 0.176 | 3.5e-04 |
+| `pos_pos_cov1` | 0.130 | 0.133 | 1.8e-03 |
+| `alpha` | 0.051 | 0.521 | 3.3e-16 |
+| `pos_(Intercept)` | 0.141 | 2.8e-03 | 4.9e-03 |
+| `sigma` | 0.718 | 0 | 0 |
+| `sigma_pos_field` | 0.790 | 0 | 0 |
+| `disp` | 0.085 | 1.2e-06 | 2.0e-09 |
+| `log_lik` | 0.804 | 0 | -- |
+
+The gated set is the first six: `min(p)` = **0.133** on the reported posterior
+against **3.3e-16** on the mis-scaled control, fourteen orders of magnitude
+apart, which is why the test gates on `min(p_unif)` either side of 1e-3 rather
+than on the in-band indicator. Each band holds at 0.95 *within one quantity*, so
+requiring six of them at once fails ~26% of the time on a perfectly calibrated
+algorithm; the p-value gate is the multiplicity-aware form of the same read.
+
+`alpha` carries the demonstration on its own: p = 0.52 as reported, 3.3e-16 once
+its width is distorted. It is the DERIVED quantity the deliverable reports, and
+it is read per draw off the outer grid (cells sampled by their own normalized
+weight), so what is scored is its grid-marginalized posterior.
+
+### The departures, and the mechanism behind them
+
+`sigma` puts **81 of 100** PIT values in the top decile and `sigma_pos_field`
+**87 of 100**: the truth is almost always ABOVE the augmented posterior, i.e.
+pooling shrinks the shared field SD. `log_lik` is 90 of 100 in the top decile.
+`alpha` -- the RATIO of the two field SDs -- is unaffected, and so are the
+covariate slopes.
+
+That pattern is what an improper direction in the pooled field prior produces,
+and the improper direction is there. Posterior SBC needs the replicate on FRESH
+cells, so the pooled areal graph is block-diagonal, i.e. DISCONNECTED. Measured
+on three pooled fits, the two blocks' field means come back exactly equal and
+opposite (-0.0126 / +0.0126, -0.0140 / +0.0140, +0.0546 / -0.0546): the fit
+applies ONE global sum-to-zero, not one per connected component. `solve()` on
+the pooled precision with a single global constraint is singular (reciprocal
+condition 5.6e-18), so the block-level contrast has no prior at all. The
+generator draws each block centred, the model leaves the contrast free, and the
+shared SD absorbs the difference. `.occu_cover_icar_scale()` is NOT the culprit:
+it returns 4.53051 on a 30-node chain and 4.53051 on two of them, identical, as
+it must for a block-diagonal precision.
+
+The occurrence-arm field SD, the cover intercept (which confounds with the field
+level) and the joint-statistic rank are therefore NOT gated. Follow-up:
+gcol33/tulpaObs#212, one sum-to-zero per connected component. Repros in
+`dev_notes/repro_212_pooled_icar_constraint.R` and
+`dev_notes/repro_212_constrained_precision.R`.
+
+### Why the hyperparameter grid is pinned in the fixture
+
+With the DEFAULT (auto-recentred) grids, the observed fit and the augmented
+refits integrate different supports: measured over three refits, `alpha` differed
+on 1 of 3, `phi_pos` on 3 of 3 (extra nodes interpolated around the mode), and
+one refit recentred `sigma` from [0.100, 3.000] onto [0.031, 0.503] entirely.
+The truth is then an atom of one support scored against a predictive on another.
+Pinning `control$sigma.grid` marks it a USER grid, which is not recentred. It
+moves `alpha` from outside the band (ks 0.359, p = 0) to inside (ks 0.051,
+p = 0.52) and leaves the slopes where they were, so the unpinned `alpha` read was
+measuring grid placement.
+
+### Why the cover dispersion has to be on the outer grid
+
+Left off it, the joint engine fixes the dispersion per data set, so the observed
+fit and every refit hold it at a different value and the replicate is generated
+at one while scored under another. `tobs_sbc()` warns and drops it from the
+scored set (its posterior is a point mass, and `disp` took ONE unique value
+across 100 draws in that configuration). With `control$phi.grid.pos` it is
+estimated and scored.

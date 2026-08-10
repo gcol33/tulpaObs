@@ -83,6 +83,29 @@
 
 
 # ---------------------------------------------------------------------------
+# Draw `n_draw` unit-scale ICAR fields on `adj`: f ~ N(0, Q^-) on the
+# sum-to-zero constrained space, divided by sqrt(scale_q) so the geo-mean
+# marginal SD is 1. `sigma * f` then carries geo-mean marginal SD `sigma`,
+# which is the parameterisation the fitters and `simulate_occu_cover()` share.
+# Returns an n_nodes x n_draw matrix.
+# ---------------------------------------------------------------------------
+.occu_cover_draw_icar_field <- function(adj, n_draw = 1L) {
+  Q       <- .occu_cover_icar_Q(adj)
+  scale_q <- .occu_cover_icar_scale(adj)
+  eig  <- eigen(Q, symmetric = TRUE)
+  keep <- eig$values > 1e-8
+  out <- vapply(seq_len(n_draw), function(i) {
+    z_white <- stats::rnorm(sum(keep))
+    fk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
+                       (z_white / sqrt(eig$values[keep])))
+    fk <- fk - mean(fk)
+    fk / sqrt(scale_q)
+  }, numeric(nrow(adj)))
+  matrix(out, nrow(adj), as.integer(n_draw))
+}
+
+
+# ---------------------------------------------------------------------------
 # Pull the coupled spatial field(s) from the psi formula. Returns NULL when no
 # spatial term is present, otherwise a list with `fe` (the fixed-effects psi
 # formula) and `fields` (the ordered field specs: the one unweighted intercept

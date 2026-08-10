@@ -163,17 +163,7 @@ simulate_occu_cover <- function(N             = 200L,
     if (!is.matrix(adj) || nrow(adj) != N || ncol(adj) != N) {
       stop("adj must be an N x N adjacency matrix.", call. = FALSE)
     }
-    Q       <- .occu_cover_icar_Q(adj)
-    scale_q <- .occu_cover_icar_scale(adj)
-    eig <- eigen(Q, symmetric = TRUE)
-    keep <- eig$values > 1e-8
-    draw_field <- function() {
-      z_white <- stats::rnorm(sum(keep))
-      fk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                         (z_white / sqrt(eig$values[keep])))
-      fk <- fk - mean(fk)
-      fk / sqrt(scale_q)
-    }
+    draw_field <- function() as.numeric(.occu_cover_draw_icar_field(adj, 1L))
     f <- draw_field()
     # A time covariate is needed by either the shared trend field or the
     # arm-specific cover trend field.

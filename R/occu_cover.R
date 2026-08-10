@@ -584,12 +584,13 @@
 # its link scale, [n_sites x max_visits]). The eta does not depend on the
 # response, so the single-species fit and the community per-species marginal
 # share one builder (single source of truth for the occu_cover predictors).
-.occu_cover_eta_from_par <- function(model, bo, bp, bpos) {
+.occu_cover_eta_from_par <- function(model, bo, bp, bpos,
+                                     off_occ = 0, off_p = 0, off_pos = 0) {
   cl <- .tobs_clamp_eta
   n_sites    <- model$n_sites
   max_visits <- model$max_visits
 
-  psi <- stats::plogis(cl(as.numeric(model$X_occ %*% bo)))
+  psi <- stats::plogis(cl(as.numeric(model$X_occ %*% bo) + off_occ))
 
   bp_site <- bp[seq_len(ncol(model$X_det_site))]
   bp_visit <- if (!is.null(model$X_det_visit)) {
@@ -608,7 +609,7 @@
     eta_p_visit <- as.numeric(model$X_det_visit %*% bp_visit)
     p_mat <- p_mat + matrix(eta_p_visit, n_sites, max_visits, byrow = TRUE)
   }
-  p_mat <- stats::plogis(cl(p_mat))
+  p_mat <- stats::plogis(cl(p_mat + off_p))
 
   eta_pos_site <- as.numeric(model$X_pos_site %*% bpos_site)
   ep_mat <- matrix(eta_pos_site, n_sites, max_visits)
@@ -616,6 +617,7 @@
     eta_pos_visit <- as.numeric(model$X_pos_visit %*% bpos_visit)
     ep_mat <- ep_mat + matrix(eta_pos_visit, n_sites, max_visits, byrow = TRUE)
   }
+  ep_mat <- ep_mat + off_pos
 
   list(psi = psi, p_mat = p_mat, ep_mat = ep_mat)
 }

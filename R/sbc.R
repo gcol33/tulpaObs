@@ -1,0 +1,652 @@
+# =============================================================================
+# Simulation-based calibration for tobs families (gcol33/tulpaObs#207).
+#
+# tulpa owns the SBC machinery -- the predictive shapes, the within-atom PIT,
+# the CRPS closed forms, the exact simultaneous ECDF bands, and both drivers,
+# all behind `tulpa::sbc()` (gcol33/tulpa#380). This file owns the other side of
+# that contract: the callbacks that turn a fitted `tobs_fit` into the `model =`
+# list the POSTERIOR experiment reads, so calibration is measured on the model a
+# deliverable actually ships rather than on a toy fixture.
+#
+# WHY THE POSTERIOR EXPERIMENT AND NOT THE PRIOR-PREDICTIVE ONE. The nested door
+# puts no prior on the fixed effects, so they cannot be drawn from and the
+# prior-predictive experiment refuses them. Posterior SBC (Sailynoja, Schmitt,
+# Buerkner & Vehtari 2026, Algorithm 2) draws the truth from the posterior at an
+# observed data set, which is proper whatever the prior was:
+#
+#   theta'  ~ pi(theta | y_obs)          truth, from the fit under test
+#   y_rep   ~ pi(y | theta')             replicate, on FRESH cells
+#   theta'' ~ pi(theta | y_rep, y_obs)   the augmented posterior
+#   u       = P(theta'' < theta' | y_rep, y_obs)
+#
+# Both stages use the algorithm's OWN approximate posterior, which is what turns
+# a non-uniform rank into a verdict on the approximation.
+#
+# THREE CONSTRAINTS THE CONSTRUCTION RESTS ON, none of them optional:
+#
+#   FRESH CELLS. `occu_cover` couples its occurrence and cover arms through one
+#   shared areal field, and theta carries no per-cell field value. A replicate
+#   re-observing the cells y_obs already saw is therefore dependent on y_obs
+#   given theta and breaks the factorization. Every replicate here is drawn on
+#   new cells whose graph is block-diagonal against the observed one, and
+#   `group_ids()` is supplied so `tulpa::sbc()` VERIFIES the observable half of
+#   that (disjoint labels) instead of taking it on trust.
+#
+#   PARAMETERS AND DERIVED QUANTITIES, NOT THE LATENT FIELD. The per-cell field
+#   is high-dimensional and is integrated out by the fit; what is ranked is the
+#   arm fixed effects, the field SD on each arm, the copy scale alpha, and the
+#   dispersion where the fit estimates one.
+#
+#   THE DERIVED SCALES ARE MARGINALIZED, NOT PLUGGED IN. `alpha` and the
+#   cover-arm field SD `alpha * sigma` are read PER DRAW off the outer grid
+#   through `.tobs_joint_draws()`, whose cells are sampled by their own
+#   normalized grid weight. Their reported posterior is therefore the weighted
+#   mixture over the joint grid, not a function of component modes.
+#
+# THE REGISTRY. Everything above is family-agnostic and lives in the shared
+# driver; a family is one entry in `.TOBS_SBC_REGISTRY` naming its replicate
+# generator, its fitting call, its posterior-draw reader, and optionally the
+# joint statistic behind the rank arm. The pooling, the grouping labels, the
+# arm construction, the mis-scaled controls, the fixed-quantity guard and the
+# seed split are written once and shared, so a second family is data entry
+# rather than a second harness.
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# 1. The data shape the shared pooling / refitting operates on
+#
+# One row per site, plus the visit-level covariate matrices and the areal graph.
+# It is deliberately the shape `tobs()` already takes, so `refit()` is a plain
+# `tobs()` call rather than a private entry point.
+# ---------------------------------------------------------------------------
+
+# Recombine the site-level and visit-level halves a binder split the user's
+# arm formula into. The intercept belongs to the site-level half.
+.tobs_sbc_recombine <- function(f_site, f_visit) {
+  lab <- character(0)
+  icpt <- 1L
+  if (!is.null(f_site)) {
+    tt <- stats::terms(f_site)
+    lab <- attr(tt, "term.labels")
+    icpt <- attr(tt, "intercept")
+  }
+  if (!is.null(f_visit)) {
+    lab <- c(lab, attr(stats::terms(f_visit), "term.labels"))
+  }
+  rhs <- if (length(lab)) paste(lab, collapse = " + ") else "1"
+  if (!icpt) rhs <- paste(rhs, "- 1")
+  stats::as.formula(paste("~", rhs), env = globalenv())
+}
+
+# Invert a visit-level design back into the per-visit covariate matrices
+# `tobs(visits = )` takes. Only a plain numeric main effect inverts: a factor
+# contrast or an interaction column is not a covariate the binder would rebuild,
+# so it is refused here rather than silently reconstructed as something else.
+.tobs_sbc_visit_matrices <- function(model) {
+  n <- model$n_sites; J <- model$max_visits
+  out <- list()
+  for (slot in c("X_det_visit", "X_pos_visit")) {
+    X <- model[[slot]]
+    if (is.null(X) || !ncol(X)) next
+    for (nm in colnames(X)) {
+      if (!is.null(out[[nm]])) next
+      if (!grepl("^[.A-Za-z][.A-Za-z0-9_]*$", nm)) {
+        stop("SBC rebuilds the replicate design from the fitted one, which ",
+             "needs every visit-level design column to be a plain numeric ",
+             "covariate. Column ", sQuote(nm), " of ", slot, " is not ",
+             "(a factor contrast or an interaction cannot be inverted into a ",
+             "`visits` matrix). Refit with numeric visit covariates to run SBC ",
+             "on this model.", call. = FALSE)
+      }
+      out[[nm]] <- matrix(as.numeric(X[, nm]), n, J, byrow = TRUE)
+    }
+  }
+  out
+}
+
+# The observed data set, in the shape `refit()` reads.
+.tobs_sbc_data_from_fit <- function(fit) {
+  m <- fit$model
+  y <- m$y
+  if (!is.null(m$valid)) y[!m$valid] <- NA
+  list(cells  = m$data,
+       y      = y,
+       y_pos  = m$y_pos,
+       visits = .tobs_sbc_visit_matrices(m),
+       graph  = fit$spatial$graph,
+       site   = seq_len(m$n_sites))
+}
+
+# Stack two data sets on FRESH sites. The replicate's site labels are offset
+# past the observed ones and the two graphs go block-diagonal, so the pooled
+# field carries two a-priori independent blocks and `group_ids()` sees
+# n_obs + n_rep distinct labels -- which is the observable half of the
+# conditional-independence premise `tulpa::sbc()` checks.
+.tobs_sbc_pool <- function(obs, rep) {
+  n_o <- length(obs$site)
+  n_r <- length(rep$site)
+  graph <- NULL
+  if (!is.null(obs$graph)) {
+    g <- matrix(0L, n_o + n_r, n_o + n_r)
+    g[seq_len(n_o), seq_len(n_o)] <- as.matrix(obs$graph)
+    g[n_o + seq_len(n_r), n_o + seq_len(n_r)] <- as.matrix(rep$graph)
+    graph <- g
+  }
+  vis <- lapply(names(obs$visits),
+                function(nm) rbind(obs$visits[[nm]], rep$visits[[nm]]))
+  names(vis) <- names(obs$visits)
+  list(cells  = rbind(obs$cells, rep$cells),
+       y      = rbind(obs$y, rep$y),
+       y_pos  = if (is.null(obs$y_pos)) NULL else rbind(obs$y_pos, rep$y_pos),
+       visits = vis,
+       graph  = graph,
+       site   = c(obs$site, rep$site + n_o))
+}
+
+.tobs_sbc_groups <- function(data) data$site
+
+
+# ---------------------------------------------------------------------------
+# 2. Rebuilding the fitting call
+#
+# The spec carries the arm formulas the binder recorded (spatial terms already
+# stripped), the family object, the method and the fitting control, so `refit()`
+# is the same `tobs()` call the observed fit came from with the pooled data and
+# the pooled graph in place.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec <- function(fit, fit.control) {
+  m  <- fit$model
+  fm <- m$formulas
+  fam <- attr(fit, "tobs_family")
+  spatial <- fit$spatial
+  if (!is.null(spatial) && !identical(spatial$type, "icar")) {
+    stop("SBC rebuilds the replicate's areal graph, which is written today for ",
+         "an intrinsic `icar()` field; this fit carries a ", spatial$type,
+         " field. Refit with icar() to run SBC on it.", call. = FALSE)
+  }
+  ctl <- utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                           as.list(fit.control))
+  if (!is.null(fit$joint_fit) && is.null(ctl$engine)) ctl$engine <- "joint"
+  list(model      = m,
+       family     = fam,
+       method     = fit$method,
+       control    = ctl,
+       positive   = fit$positive,
+       occ_fe     = fm$occ,
+       det        = .tobs_sbc_recombine(fm$det, fm$det_visit),
+       pos        = .tobs_sbc_recombine(fm$pos, fm$pos_visit),
+       has_field  = !is.null(spatial),
+       site_cell  = m$site_cell %||% seq_len(m$n_sites))
+}
+
+# The occupancy formula with the areal term re-attached on the graph the
+# replicate / pooled data set actually carries. The term is written into a fresh
+# environment holding that graph, which is how `tobs()` resolves it.
+.tobs_sbc_occ_formula <- function(spec, graph) {
+  lab <- attr(stats::terms(spec$occ_fe), "term.labels")
+  if (is.null(graph)) {
+    return(stats::as.formula(paste("~", if (length(lab))
+      paste(lab, collapse = " + ") else "1"), env = globalenv()))
+  }
+  env <- new.env(parent = globalenv())
+  env$.tobs_sbc_graph <- graph
+  f <- stats::as.formula(
+    paste("~", paste(c(lab, "icar(graph = .tobs_sbc_graph)"), collapse = " + ")))
+  environment(f) <- env
+  f
+}
+
+# The cover formula, carrying the shared field's copy onto the cover arm when
+# the observed fit carried one. Without the copy the cover arm never sees the
+# field and `alpha` is pinned at zero, which is a different model.
+.tobs_sbc_pos_formula <- function(spec) {
+  # `control$alpha.grid` is the other spelling of the same coupling, and
+  # `occu_cover()` refuses both at once, so the formula copy is written only
+  # when the control does not already carry the scale.
+  if (!isTRUE(spec$has_copy) || !is.null(spec$control$alpha.grid)) {
+    return(spec$pos)
+  }
+  lab <- attr(stats::terms(spec$pos), "term.labels")
+  f <- stats::as.formula(
+    paste("~", paste(c(lab, "copy(spatial())"), collapse = " + ")))
+  environment(f) <- globalenv()
+  f
+}
+
+.tobs_sbc_refit_occu_cover <- function(spec, data) {
+  y_pos <- data$y_pos
+  if (!is.null(y_pos)) y_pos[is.na(y_pos)] <- 0
+  suppressWarnings(tobs(
+    formula   = .tobs_sbc_occ_formula(spec, data$graph),
+    data      = data$cells,
+    family    = spec$family,
+    detection = spec$det,
+    positive  = .tobs_sbc_pos_formula(spec),
+    y         = data$y,
+    y_pos     = y_pos,
+    visits    = data$visits,
+    method    = spec$method,
+    control   = spec$control))
+}
+
+
+# ---------------------------------------------------------------------------
+# 3. Posterior draws over the scored quantities
+#
+# ONE named matrix per family, `[n.draws x n_quantities]`, and both the truth
+# (`draw_theta`) and the predictives (`arms`) are read from it -- so a quantity
+# can never be simulated under one name and scored under another.
+#
+# A column with no spread is DROPPED rather than scored: a dispersion the joint
+# engine holds fixed in the cell-coupling spec has a point-mass posterior, and
+# ranking a truth that equals it produces a degenerate PIT that reads as a
+# defect. Which columns those are is decided ONCE, from a probe of the observed
+# fit, and then applied to every later draw -- deciding it per call would drop
+# every column of the single-draw read `draw_theta()` takes.
+# ---------------------------------------------------------------------------
+
+.TOBS_SBC_CONST_TOL <- 1e-8
+.TOBS_SBC_PROBE_DRAWS <- 256L
+
+.tobs_sbc_scored <- function(m) {
+  spread <- apply(m, 2L, function(v) diff(range(v)))
+  colnames(m)[spread > .TOBS_SBC_CONST_TOL * pmax(1, abs(colMeans(m)))]
+}
+
+# The joint nested-Laplace families: coefficients and the field scales come off
+# the SAME grid-integrated draw, so the derived cover-arm SD and `alpha` are
+# marginalized over the outer grid by construction.
+.tobs_sbc_draws_joint_occu_cover <- function(fit, n) {
+  d <- .tobs_joint_draws(fit, n = n)
+  pi_l <- fit$process_info
+  cn <- function(k, pre) paste0(pre, "_", pi_l[[k]]$coef_names)
+  cols <- list(d$b$occ, d$b$det, d$b$pos)
+  nms  <- c(cn(1L, "psi"), cn(2L, "p"), cn(3L, "pos"))
+  M <- cbind(cols[[1]], cols[[2]], cols[[3]])
+  colnames(M) <- nms
+  # Blocks are NAMES, not positions: a dropped constant column must not be able
+  # to shift which coefficients an arm is assembled from.
+  blocks <- list(occ = cn(1L, "psi"), det = cn(2L, "p"), pos = cn(3L, "pos"))
+  if (length(d$blocks)) {
+    b1 <- d$blocks[[1L]]
+    M <- cbind(M, sigma = b1$amp_occ, sigma_pos_field = b1$amp_pos,
+               alpha = ifelse(b1$amp_occ > 0, b1$amp_pos / b1$amp_occ, 0))
+  }
+  M <- cbind(M, disp = d$disp)
+  attr(M, "blocks") <- blocks
+  M
+}
+
+
+# ---------------------------------------------------------------------------
+# 4. The joint-statistic rank arm
+#
+# ONE scalar per simulation that depends on every scored quantity at once, so a
+# posterior getting each marginal right while getting their joint dependence
+# wrong is still caught. The rank of the truth's value among the same statistic
+# at `n.ref` reference draws from the augmented posterior is uniform on
+# 0..n_ref under correct inference for ANY fixed function of theta -- validity
+# comes from the exchangeability of truth and references, not from the statistic
+# being the exact marginal likelihood -- so what a family supplies here is
+# chosen for POWER.
+#
+# For `occu_cover` that statistic is the data's log-likelihood with the shared
+# field integrated out CELL BY CELL against its own marginal N(0, sigma^2),
+# carrying the copy alpha * sigma onto the cover arm. It moves with every
+# coefficient, with both field scales and with the dispersion; it is not the
+# model's exact marginal likelihood, which would have to integrate the field's
+# cross-cell dependence too.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_loglik_occu_cover <- function(fit, theta, n_quad = 15L) {
+  m  <- fit$model
+  bl <- attr(theta, "blocks")
+  gh <- .gauss_hermite_prob(as.integer(n_quad))
+  sigma <- if ("sigma" %in% names(theta)) theta[["sigma"]] else 0
+  alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0
+  disp  <- if ("disp" %in% names(theta)) theta[["disp"]] else
+             (m$cover_pos_disp %||% 1)
+  # Each site's integral is taken independently, which is what makes this the
+  # cell-by-cell surrogate rather than the model's own marginal; one shared
+  # quadrature node per pass is therefore correct, and the rows are combined
+  # afterwards.
+  M <- vapply(seq_along(gh$nodes), function(k) {
+    u <- gh$nodes[k]
+    e <- .occu_cover_eta_from_par(m, theta[bl$occ], theta[bl$det], theta[bl$pos],
+                                  off_occ = sigma * u,
+                                  off_pos = alpha * sigma * u)
+    .occu_cover_site_ll(m, e$psi, e$p_mat, e$ep_mat, log(disp)) +
+      log(gh$weights[k])
+  }, numeric(m$n_sites))
+  M <- matrix(M, m$n_sites)
+  mx <- apply(M, 1L, max)
+  sum(mx + log(rowSums(exp(M - mx))))
+}
+
+
+# ---------------------------------------------------------------------------
+# 5. Replicate generators
+#
+# Conditionally independent of the observed data given theta: a FRESH field is
+# drawn on a graph isomorphic to the observed one, over new cells. The
+# covariate design is the observed design re-instantiated on those cells, so
+# the replicate is a second realization of the same survey rather than a second
+# observation of the same cells.
+#
+# The linear predictors come from `.occu_cover_eta_from_par()`, the function the
+# fitter and every diagnostic assemble eta with, so a generator cannot drift
+# from the convention the likelihood is written in.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_draw_positive <- function(eta, disp, positive) {
+  n <- length(eta)
+  if (identical(positive, "beta")) {
+    mu <- stats::plogis(eta)
+    pmin(pmax(stats::rbeta(n, mu * disp, (1 - mu) * disp), 1e-6), 1 - 1e-6)
+  } else if (identical(positive, "gaussian")) {
+    stats::rnorm(n, eta, disp)
+  } else {
+    exp(stats::rnorm(n, eta, disp))
+  }
+}
+
+.tobs_sbc_sim_occu_cover <- function(spec, theta, seed) {
+  set.seed(seed)
+  m  <- spec$model
+  bl <- attr(theta, "blocks")
+  n <- m$n_sites; J <- m$max_visits
+  sigma <- if ("sigma" %in% names(theta)) theta[["sigma"]] else 0
+  alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0
+  disp  <- if ("disp" %in% names(theta)) theta[["disp"]] else
+             (m$cover_pos_disp %||% 1)
+
+  f_cell <- if (spec$has_field)
+    as.numeric(.occu_cover_draw_icar_field(spec$model_graph, 1L)) else
+    rep(0, max(spec$site_cell))
+  f <- f_cell[spec$site_cell]
+
+  e <- .occu_cover_eta_from_par(m, theta[bl$occ], theta[bl$det], theta[bl$pos],
+                               off_occ = sigma * f, off_pos = alpha * sigma * f)
+  z <- stats::rbinom(n, 1L, e$psi)
+  det <- matrix(stats::rbinom(n * J, 1L, as.numeric(e$p_mat)), n, J)
+  y <- det * z
+  y_pos <- matrix(0, n, J)
+  hit <- which(y == 1L)
+  if (length(hit)) {
+    y_pos[hit] <- .tobs_sbc_draw_positive(e$ep_mat[hit], disp, spec$positive)
+  }
+  if (!is.null(m$valid)) { y[!m$valid] <- NA; y_pos[!m$valid] <- NA }
+
+  obs <- spec$data_obs
+  list(cells  = obs$cells,
+       y      = y,
+       y_pos  = y_pos,
+       visits = obs$visits,
+       graph  = spec$model_graph,
+       site   = obs$site)
+}
+
+
+# ---------------------------------------------------------------------------
+# 6. The registry
+#
+# A family is one row. Everything not named here -- pooling, the grouping
+# labels, the arm construction, the mis-scaled controls, the seed split -- is
+# the shared driver's.
+# ---------------------------------------------------------------------------
+
+.TOBS_SBC_REGISTRY <- list(
+  occu_cover = list(
+    draws    = .tobs_sbc_draws_joint_occu_cover,
+    simulate = .tobs_sbc_sim_occu_cover,
+    refit    = .tobs_sbc_refit_occu_cover,
+    loglik   = .tobs_sbc_loglik_occu_cover)
+)
+
+.tobs_sbc_registered <- function() sort(names(.TOBS_SBC_REGISTRY))
+
+
+# ---------------------------------------------------------------------------
+# 7. The shared driver
+# ---------------------------------------------------------------------------
+
+# The predictives one fit reports, plus the deliberately mis-scaled controls.
+#
+# A control arm is the SAME draw set rescaled about its own mean, so it differs
+# from the reported posterior in width alone and in nothing else. A calibration
+# band that nothing can fail is not evidence, so a run that declares controls is
+# asserting that the instrument still reacts.
+.tobs_sbc_arms <- function(fit, data, reg, n.draws, n.ref, controls,
+                           bad.factor, scored) {
+  M <- reg$draws(fit, n.draws)
+  blk <- attr(M, "blocks")
+  qs <- intersect(scored, colnames(M))
+  post <- lapply(qs, function(q) tulpa::sbc_draws(M[, q]))
+  names(post) <- qs
+
+  if (!is.null(reg$loglik) && n.ref > 0L) {
+    idx <- if (nrow(M) <= n.ref) seq_len(nrow(M)) else
+      round(seq(1, nrow(M), length.out = n.ref))
+    # The statistic is evaluated on the FULL parameter vector, references and
+    # truth alike; restricting to the scored columns would leave a nuisance the
+    # two sides then carry at different values.
+    mk <- function(i) {
+      th <- M[i, ]; names(th) <- colnames(M)
+      attr(th, "blocks") <- blk
+      th
+    }
+    ll_ref <- vapply(idx, function(i) reg$loglik(fit, mk(i)), numeric(1))
+    th0 <- data$theta
+    ll0 <- reg$loglik(fit, th0)
+    post$log_lik <- tulpa::sbc_rank(sum(ll_ref < ll0), length(ll_ref))
+  }
+
+  arms <- list(posterior = post)
+  scale_arm <- function(mult) {
+    a <- lapply(qs, function(q) {
+      v <- M[, q]
+      tulpa::sbc_draws(mean(v) + mult * (v - mean(v)))
+    })
+    names(a) <- qs
+    a
+  }
+  if ("wide" %in% controls)   arms$wide   <- scale_arm(bad.factor)
+  if ("narrow" %in% controls) arms$narrow <- scale_arm(1 / bad.factor)
+  arms
+}
+
+# A dispersion the joint engine holds FIXED is set per data set, before the
+# outer grid, so the observed fit and every augmented refit hold it at different
+# values. The replicate is then generated at one dispersion and scored under
+# another, which biases the cover-arm ranks without anything in the result
+# saying so. Putting it on the outer grid estimates it, removes the mismatch,
+# and adds it to what is scored.
+.tobs_sbc_check_fixed_dispersion <- function(fit, fixed) {
+  if (!"disp" %in% fixed) return(invisible(NULL))
+  if (is.null(fit$model$cover_pos_disp)) return(invisible(NULL))
+  warning("this fit holds the cover dispersion fixed at ",
+          signif(fit$model$cover_pos_disp, 4),
+          ", a value set per data set rather than estimated, so the replicate ",
+          "is generated at the observed fit's value while each refit uses its ",
+          "own. Put it on the outer grid -- fit.control = list(phi.grid.pos = ",
+          "<grid>) -- to estimate and score it instead.", call. = FALSE)
+  invisible(NULL)
+}
+
+.tobs_sbc_build_model <- function(object, n.draws, n.ref, controls, bad.factor,
+                                  fit.control) {
+  fam <- attr(object, "tobs_family")$name
+  reg <- .TOBS_SBC_REGISTRY[[fam]]
+  if (is.null(reg)) {
+    stop("SBC is not registered for family ", sQuote(fam), ". Registered: ",
+         paste(.tobs_sbc_registered(), collapse = ", "),
+         ". Add an entry to `.TOBS_SBC_REGISTRY` (a simulate() and, for the ",
+         "rank arm, a log-likelihood) to cover it.", call. = FALSE)
+  }
+  spec <- .tobs_sbc_spec(object, fit.control)
+  spec$model_graph <- object$spatial$graph
+  spec$data_obs <- .tobs_sbc_data_from_fit(object)
+
+  probe <- reg$draws(object, .TOBS_SBC_PROBE_DRAWS)
+  scored <- .tobs_sbc_scored(probe)
+  fixed <- setdiff(colnames(probe), scored)
+  # Whether the shared field is copied onto the cover arm is read off the fit's
+  # own draws: the copy is what gives `alpha` a posterior at all, and without it
+  # the cover arm never sees the field.
+  spec$has_copy <- "alpha" %in% scored
+  .tobs_sbc_check_fixed_dispersion(object, fixed)
+
+  structure(list(
+    data_obs = spec$data_obs,
+    fit = function(data) reg$refit(spec, data),
+    draw_theta = function(fit, seed) {
+      set.seed(seed)
+      M <- reg$draws(fit, 1L)
+      th <- as.numeric(M[1L, ])
+      names(th) <- colnames(M)
+      attr(th, "blocks") <- attr(M, "blocks")
+      th
+    },
+    simulate = function(theta, seed) reg$simulate(spec, theta, seed),
+    pool = .tobs_sbc_pool,
+    arms = function(fit, data) .tobs_sbc_arms(fit, data, reg, n.draws, n.ref,
+                                              controls, bad.factor, scored),
+    group_ids = .tobs_sbc_groups),
+    family = fam, fixed = fixed, quantities = scored)
+}
+
+
+#' Simulation-based calibration for a fitted tobs model
+#'
+#' Runs the POSTERIOR simulation-based calibration experiment (Talts et al.
+#' 2018; Sailynoja, Schmitt, Buerkner and Vehtari 2026, Algorithm 2) on a
+#' fitted `tobs_fit`, through the engine's `tulpa::sbc()` front door. The truth
+#' is drawn from the fit's own posterior at the observed data, a replicate is
+#' simulated at that truth on FRESH cells, the model is refitted on the two data
+#' sets together, and the truth's rank under that augmented posterior is
+#' recorded. Under exact inference those ranks are Uniform(0, 1); the departure
+#' from uniformity is a verdict on the approximation.
+#'
+#' @section What is scored:
+#' The arm fixed effects, the areal field SD on each arm, the copy scale
+#' `alpha`, and the dispersion when the fit estimates one. The per-cell field
+#' itself is not scored -- it is integrated out by the fit and carries no truth
+#' theta could hold. The cover-arm field SD and `alpha` are read per draw off
+#' the outer hyperparameter grid, whose cells are sampled by their own
+#' normalized weight, so what is ranked is the grid-marginalized posterior of
+#' each rather than a function of component modes.
+#'
+#' A quantity whose posterior has no spread -- a dispersion the joint engine
+#' holds fixed in its cell-coupling spec, for instance -- is dropped rather than
+#' scored, and named in `attr(x, "fixed")`.
+#'
+#' An extra `log_lik` quantity ranks a joint statistic of the whole parameter
+#' vector, which catches a posterior getting each marginal right while getting
+#' the dependence between them wrong.
+#'
+#' @section Fresh cells:
+#' The replicate is drawn on new cells whose areal graph is block-diagonal
+#' against the observed one. `occu_cover` couples its occurrence and cover arms
+#' through one shared field, and theta carries no per-cell field value, so a
+#' replicate re-observing the observed cells would depend on the observed data
+#' given theta and break the factorization posterior SBC rests on. `group_ids`
+#' is supplied to `tulpa::sbc()`, which verifies the observable half of that
+#' (disjoint group labels) rather than assuming it.
+#'
+#' @section Controls:
+#' `controls = c("wide", "narrow")` adds arms reporting the same draws rescaled
+#' about their mean by `bad.factor` and its reciprocal. They are deliberately
+#' mis-scaled posteriors and are expected to leave the band: a calibration read
+#' that nothing can fail is not evidence.
+#'
+#' @param object A fitted `tobs_fit`. Its family must be registered; see
+#'   Details for the roster.
+#' @param n.sim Number of simulations. Each costs one refit on the pooled data.
+#' @param n.draws Posterior draws per fit backing the reported predictives.
+#' @param n.ref Reference draws behind the `log_lik` rank. `0` drops that arm.
+#' @param quantities Optional character vector restricting what is scored.
+#' @param controls Mis-scaled control arms to add: any of `"wide"`, `"narrow"`.
+#' @param bad.factor The control arms' SD multiplier.
+#' @param level Simultaneous band level.
+#' @param seed Seed offset. Simulation `i` draws its truth at `seed + i`.
+#' @param model.only Return the callback list instead of running the
+#'   experiment, for inspection or for passing to `tulpa::sbc()` directly.
+#' @param fit.control Merged into the `control` list of every refit.
+#' @param control Passed to `tulpa::sbc()` (`progress`, `rand_seed`).
+#'
+#' @details
+#' Registered families: `occu_cover` (the coupled occupancy + cover hurdle on
+#' the joint nested-Laplace engine) and `occu`. A family is registered by adding
+#' one entry to the internal registry -- a replicate generator, a refit call and
+#' optionally a joint statistic; the pooling, the grouping labels, the arm
+#' construction and the controls are shared.
+#'
+#' @return An object of class `sbc` from \pkg{tulpa}, carrying the per-quantity
+#'   rank ECDFs, the exact simultaneous band, and the uniformity tests. When
+#'   `model.only = TRUE`, the callback list instead.
+#'
+#' @references
+#' Talts, S., Betancourt, M., Simpson, D., Vehtari, A. and Gelman, A. (2018).
+#' Validating Bayesian inference algorithms with simulation-based calibration.
+#' arXiv:1804.06788.
+#'
+#' Sailynoja, T., Schmitt, M., Buerkner, P.-C. and Vehtari, A. (2026).
+#' Posterior SBC: simulation-based calibration checking conditional on data.
+#' Statistics and Computing 36:78.
+#'
+#' @seealso [tulpa::sbc()], [tobs_waic()]
+#' @examples
+#' \donttest{
+#' N <- 20L; J <- 3L
+#' adj <- matrix(0L, N, N)
+#' for (s in seq_len(N)) {
+#'   if (s > 1L) adj[s, s - 1L] <- 1L
+#'   if (s < N)  adj[s, s + 1L] <- 1L
+#' }
+#' sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+#'                            adj = adj, sigma = 0.7, alpha = 1, seed = 1L)
+#' long <- data.frame(site_id = rep(seq_len(N), each = J),
+#'                    visit = rep(seq_len(J), times = N),
+#'                    y = as.vector(t(sim$y)),
+#'                    det_cov1 = sim$visit_data$det_cov1,
+#'                    pos_cov1 = sim$visit_data$pos_cov1)
+#' od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+#'                 det.covs = c("det_cov1", "pos_cov1"))
+#' y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+#' # The dispersion goes on the outer grid so it is estimated and scored, and
+#' # the field-SD grid is pinned so both stages integrate the same support.
+#' ctl <- list(engine = "joint", verbose = FALSE,
+#'             sigma.grid   = exp(seq(log(0.15), log(2.0), length.out = 9)),
+#'             phi.grid.pos = exp(seq(log(0.20), log(0.90), length.out = 7)))
+#' fit <- tobs(~ occ_cov1 + icar(graph = adj),
+#'             data = cbind(data.frame(site_id = seq_len(N)), sim$data),
+#'             family = occu_cover("lognormal"),
+#'             detection = ~ det_cov1,
+#'             positive = ~ pos_cov1 + copy(spatial()),
+#'             y = od$y, y_pos = y_pos, visits = od$det.covs,
+#'             method = "nested_laplace", control = ctl)
+#' tobs_sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)
+#' }
+#' @export
+tobs_sbc <- function(object, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                     quantities = NULL, controls = character(),
+                     bad.factor = 1.25, level = 0.95, seed = 0L,
+                     model.only = FALSE, fit.control = list(),
+                     control = list()) {
+  if (!inherits(object, "tobs_fit")) {
+    stop("tobs_sbc() takes a fitted tobs_fit.", call. = FALSE)
+  }
+  controls <- if (length(controls))
+    match.arg(controls, c("wide", "narrow"), several.ok = TRUE) else character(0)
+  model <- .tobs_sbc_build_model(object, as.integer(n.draws), as.integer(n.ref),
+                                 controls, bad.factor, fit.control)
+  if (isTRUE(model.only)) return(model)
+  res <- tulpa::sbc(experiment = "posterior", model = model,
+                    n_sim = as.integer(n.sim), quantities = quantities,
+                    level = level, seed = as.integer(seed), control = control)
+  res$tobs_family <- attr(model, "family")
+  res$fixed_quantities <- attr(model, "fixed")
+  res
+}
