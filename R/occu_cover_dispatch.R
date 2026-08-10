@@ -247,15 +247,19 @@
 # selector rules, the per-component addressing and every error message are one
 # implementation. It reads two things off the resolved field description -- the
 # per-block roster (one entry per block, each with its `component` role) and the
-# grouping variable a `copy(spatial(<var>))` selector must match -- and this
-# path carries exactly ONE field: a weighted (SVC / trend) term is refused by
-# `.tobs_reject_weighted_spatial()` in the fitter, so there is no trend block to
-# address. `.occu_cover_spatial_fields()` cannot supply that description here,
-# because it resolves the grid-integrated path's field roster and rejects
-# `car_proper()`, which is the sampled field's primary kind.
+# grouping variable a `copy(spatial(<var>))` selector must match. The sampled
+# path resolves that roster itself (`.occu_cover_spatial_fields()` cannot supply
+# it: it resolves the grid-integrated path's fields and rejects `car_proper()`,
+# the sampled field's primary kind), so the roster here is the intercept field
+# plus one entry per varying-coefficient field (gcol33/tulpaObs#214), and a
+# per-component `copy(spatial(), terms = list(...))` addresses them by the same
+# names it does under nested_laplace.
 .occu_cover_nuts_copy_control <- function(copies, nuts_sp, control) {
-  field_view <- list(fields    = list(list(component = "intercept")),
-                     group_var = nuts_sp$group_var)
+  field_view <- list(
+    fields    = c(list(list(component = "intercept")),
+                  lapply(nuts_sp$trends %||% list(),
+                         function(tf) list(component = tf$label))),
+    group_var = nuts_sp$group_var)
   .occu_cover_apply_copy_coupling(copies, field_view, control)
 }
 
@@ -430,6 +434,7 @@
       model_sp$n_cells   <- n_cells_f
       return(do.call(.tobs_fit_occu_cover_nuts_spatial,
                      c(list(model = model_sp, spatial = nuts_sp$spatial,
+                            trends = nuts_sp$trends %||% list(),
                             priors = priors), control)))
     }
   }

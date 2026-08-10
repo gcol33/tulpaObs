@@ -727,7 +727,33 @@ builder adds the per-group draw to `field_occ` -- the per-site offset every kern
 (elpd_waic moved 9.34 nats, elpd_loo 9.41, at sigma_re 1.57; a fit carrying none byte-identical).
 `.occu_cover_spatial_fields()` also carries the term's `var` + factor `levels` through, so
 `fit$re$psi`/`ranef()` label the grouping like the obs arms and `predict(newdata=)` matches it.
-group_var maps sites>cells; SVC/trend/temporal/RE still gated -> n-L. predict() needs the joint object
+**A SECOND (SVC / trend) field samples too (#214).** The block is a LIST now
+(`hyper_field_build_list()`, `src/nuts_field_hyper.h`): each field carries its own basis,
+site->node map, per-site design WEIGHT (`field_weight`; absent = the intercept field) and
+its own sampled `(sigma, rho, alpha)` -- two fields share no hyper. Site i loads
+`sum_b w_b(i) z_b[cell(i)]` on psi and `sum_b alpha_b w_b(i) z_b[cell(i)]` on cover; the
+three places that loading is written are `hyper_field_site_{value,offsets,score}()`, so the
+eta assembly and the score cannot express it differently. Spec spelling `field_blocks`
+(list); the top-level entries still read as one block, and a one-block fit is
+`expect_identical` on lp+grad AND on a whole fit's means/sds/field/draws. Layout per block
+`[raw, sampled hypers]`, blocks back to back, RE blocks after -- so `n.iter`-for-`n.iter`
+the one-field vector is unchanged. **The warm fit is the multi-block coupled path**
+(`multi = TRUE` arms + one `icar/bym2/car_proper` block per field w/ `svc_weight` + a copy
+spec per block, `alpha.grid` / `alpha.grid.trend`), and it FORCES `integration = "grid"`:
+above 3 axes the engine switches to a mode-centred CCD star whose column range is a design
+radius, not an integrated span, and the sampler reads each axis's span as its flat prior's
+support (measured: a CCD warm put alpha bounds at 1.49-4.70 for a requested 0.2-2 axis, and
+the fit sampled alpha to 2.79). A DEFAULTED axis is thinned to 3 nodes over the SAME span
+when a second field is present (the prior is defined by the span alone -> unchanged; the
+tensor is a product over blocks). Reported: `fit$trend_field`/`trend_fields` (named by
+weight column), `fit$trend_field_draws`, per-block suffixed hypers (`sigma_trend`,
+`alpha_trend`, `field_sd_trend`, indexed when several) in `hyper_draws` / `sampled_hyper` /
+`fixed_hyper`, and `fit$spatial$field_suffix`/`field_weights` so
+`.tobs_occu_cover_sampled_field()` sums every block's loading into the criteria (#211 rule:
+a block the scorer cannot see is scored at ZERO). Both surfaces recover w/ 0 divergences;
+numbers (+ the CCD-vs-tensor measurement) in `NOTES_measurements.md`.
+`test-occu-cover-nuts-svc.R`. Correlated `|` (one free-Sigma MCAR block), temporal + RE
+still gated -> n-L. group_var maps sites>cells; predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67). **Spatial default** (`nested_laplace`,
 `R/occu_cover_joint.R`): `joint` engine via `tulpa_nested_laplace_joint()` w/

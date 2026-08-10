@@ -11,7 +11,11 @@
 #   - field-off path stays byte-identical to the non-spatial occu_cover NUTS
 #   - field recovery cor(est, truth), beta/cover recovery + 95% coverage,
 #     beta SD calibration vs the nested-Laplace joint SEs, 0 divergences
-#   - dispatch gating (icar/bym2/SVC/RE + nuts rejected with a pointer)
+#   - dispatch gating (an RE / temporal term + nuts rejected with a pointer)
+#
+# A weighted (spatially-varying-coefficient) field beside the intercept field is
+# a SECOND sampled block; its target, validation and recovery are in
+# test-occu-cover-nuts-svc.R (gcol33/tulpaObs#214).
 # =============================================================================
 
 
@@ -281,7 +285,7 @@ test_that("occu_cover spatial NUTS field-off path is byte-identical to non-spati
 })
 
 
-test_that("occu_cover NUTS samples icar; rejects SVC/RE spatial; advertises nuts", {
+test_that("occu_cover NUTS samples icar; rejects an RE term; advertises nuts", {
   expect_true("nuts" %in% tulpaObs:::.tobs_family_methods$occu_cover)
 
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 5L)
@@ -296,16 +300,18 @@ test_that("occu_cover NUTS samples icar; rejects SVC/RE spatial; advertises nuts
   expect_identical(fit_icar$method, "nuts")
   expect_false(is.null(fit_icar$spatial_field))
   expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)   # sum-to-zero centred
-  # A weighted SVC car_proper field is a grid-integrated structure.
+  # A weighted (SVC) field beside the intercept field samples as a second block
+  # (gcol33/tulpaObs#214, covered in test-occu-cover-nuts-svc.R); a per-group
+  # random effect on the occupancy arm is still a grid-integrated structure.
   expect_error(
     suppressWarnings(tobs(
-      formula = ~ occ_cov1 + car_proper(graph = inp$adj) +
-        car_proper(graph = inp$adj, weight = occ_cov1),
-      data = inp$cell_dat, family = occu_cover("lognormal"),
+      formula = ~ occ_cov1 + car_proper(graph = inp$adj) + re(site_id),
+      data = cbind(inp$cell_dat, site_id = seq_len(inp$N)),
+      family = occu_cover("lognormal"),
       detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
       y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
       control = list(verbose = FALSE))),
-    "single|SVC|weighted|nested_laplace")
+    "nested_laplace")
 })
 
 
@@ -353,7 +359,7 @@ test_that("occu_cover NUTS samples a single bar-form field (#203)", {
 })
 
 
-test_that("occu_cover NUTS + a two-field bar names the field-block limit (#203)", {
+test_that("occu_cover NUTS samples a two-field bar, one block each (#203, #214)", {
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 5L)
   dat <- cbind(inp$cell_dat, cell_idx = seq_len(inp$N))
   adj <- inp$adj
@@ -363,18 +369,20 @@ test_that("occu_cover NUTS + a two-field bar names the field-block limit (#203)"
     y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
     control = list(verbose = FALSE, n.iter = 50L, n.warmup = 50L)))
 
-  # An intercept + SVC bar declares two fields; the sampler's field block carries
-  # one loading and one field_map (src/nuts_field_block.h), so the message must
-  # name that, not the bar spelling.
-  expect_error(run(~ occ_cov1 + spatial(~ 1 + occ_cov1 || cell_idx, graph = adj)),
-               "one field block")
-  expect_error(run(~ occ_cov1 + spatial(~ 1 + occ_cov1 || cell_idx, graph = adj)),
-               "declares 2 fields")
+  # An intercept + SVC bar declares two fields, and the sampler now carries one
+  # block per field (gcol33/tulpaObs#214): the intercept surface plus a
+  # varying-coefficient surface named by its weight column, each with its own
+  # hyperparameters. The two-field target and its validation live in
+  # test-occu-cover-nuts-svc.R; here the point is that the bar reaches it.
+  fit2 <- run(~ occ_cov1 + spatial(~ 1 + occ_cov1 || cell_idx, graph = adj))
+  expect_identical(fit2$nuts$n_fields, 2L)
+  expect_named(fit2$trend_fields, "occ_cov1")
+  expect_length(fit2$spatial_field, inp$N)
 
-  # A single-field correlated bar has no cross-covariance to estimate, the same
-  # gate the nested-Laplace route applies.
+  # A correlated bar is one free-Sigma MCAR block across the fields, a different
+  # structure from the independent blocks this sampler carries.
   expect_error(run(~ occ_cov1 + spatial(~ 1 | cell_idx, graph = adj)),
-               "cross-covariance")
+               "MCAR")
 
   # A replicated field spans a Kronecker graph the one-graph sampler has no map for.
   dat$habitat <- rep(c("a", "b"), length.out = inp$N)

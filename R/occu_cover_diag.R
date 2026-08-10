@@ -95,12 +95,14 @@
        off_det = off$p, off_pos = off$pos)
 }
 
-# Per-draw coupled-field contributions for a fit that SAMPLED the field jointly
-# with the coefficients (gcol33/tulpaObs#74, #204): `field_draws` holds the
-# per-cell field at each draw and `hyper_draws` the copy amplitude alpha, so the
-# occupancy arm reads the field at the site's cell and the cover arm the same
-# field scaled by that draw's alpha. NULL when the fit sampled no field, which
-# sends the caller on to the marginal-table route.
+# Per-draw coupled-field contributions for a fit that SAMPLED the field(s)
+# jointly with the coefficients (gcol33/tulpaObs#74, #204, #214): each block's
+# `z` draws hold its per-cell field and `hyper_draws` its copy amplitude, so the
+# occupancy arm reads the block's field at the site's cell -- scaled by that
+# block's per-site design weight, which is what makes a block a varying
+# coefficient -- and the cover arm the same loading scaled by that draw's alpha.
+# NULL when the fit sampled no field, which sends the caller on to the
+# marginal-table route.
 .tobs_occu_cover_sampled_field <- function(object, n_sites, S) {
   fd <- object$field_draws
   if (is.null(fd) || !is.matrix(fd)) return(NULL)
@@ -109,12 +111,25 @@
          " coefficient draws.", call. = FALSE)
   }
   site_cell <- object$model$site_cell %||% seq_len(n_sites)
-  f  <- t(fd[seq_len(S), site_cell, drop = FALSE])       # [n_sites x S]
-  hd <- object$hyper_draws
-  alpha <- if (!is.null(hd) && "alpha" %in% colnames(hd))
-             as.numeric(hd[seq_len(S), "alpha"])
-           else rep(object$spatial$alpha_mean %||% 0, S)
-  list(field_occ = f, field_pos = sweep(f, 2L, alpha, "*"))
+  hd     <- object$hyper_draws
+  zs     <- c(list(fd), object$trend_field_draws %||% list())
+  # One suffix and one weight per block, recorded by the fitter that laid the
+  # blocks out (the intercept field carries no weight and the bare names).
+  suffix  <- object$spatial$field_suffix %||% rep("", length(zs))
+  weights <- object$spatial$field_weights %||% vector("list", length(zs))
+  field_occ <- matrix(0, n_sites, S)
+  field_pos <- matrix(0, n_sites, S)
+  for (b in seq_along(zs)) {
+    f <- t(zs[[b]][seq_len(S), site_cell, drop = FALSE])   # [n_sites x S]
+    if (!is.null(weights[[b]])) f <- f * as.numeric(weights[[b]])
+    col   <- paste0("alpha", suffix[b])
+    alpha <- if (!is.null(hd) && col %in% colnames(hd))
+               as.numeric(hd[seq_len(S), col])
+             else rep(object$spatial$alpha_mean %||% 0, S)
+    field_occ <- field_occ + f
+    field_pos <- field_pos + sweep(f, 2L, alpha, "*")
+  }
+  list(field_occ = field_occ, field_pos = field_pos)
 }
 
 # Per-term random-effect draws on the natural coefficient scale for a SAMPLED

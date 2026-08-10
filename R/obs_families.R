@@ -269,9 +269,9 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' `icar()` / `bym2()` term on the psi formula); a structured term on a
 #' non-spatial route errors from the dispatcher with a pointer to it.
 #'
-#' `method = "nuts"` also samples ONE shared coupled field
-#' (`icar()` / `bym2()` / `car_proper()`), written either as an areal term or as
-#' the single-column bar `spatial(~ 1 || cell, graph = adj)`, TOGETHER WITH its
+#' `method = "nuts"` also samples the coupled areal field(s)
+#' (`icar()` / `bym2()` / `car_proper()`), written either as areal terms or as
+#' the bar `spatial(~ 1 || cell, graph = adj)`, TOGETHER WITH their
 #' hyperparameters: the field SD, the mixing (`bym2`) or spatial-correlation
 #' (`car_proper`) parameter, and - where the formula asks for one - the cover-arm
 #' copy amplitude. Their priors are
@@ -285,10 +285,25 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' the copy amplitude at 0), `fit$hyper_draws` carries
 #' their posterior alongside `field_sd`, the geometric-mean marginal SD the
 #' field implies. `control$fixed.hyper = TRUE` conditions on the warm
-#' nested-Laplace estimate instead. The sampler carries one field block, so a
-#' second field - a spatially-varying coefficient / trend - stays on the
-#' grid-integrated `nested_laplace` path; the community spatial-factor route is
-#' [ms_occu_cover()].
+#' nested-Laplace estimate instead.
+#'
+#' A spatially-varying coefficient - a *weighted* areal term beside the
+#' unweighted intercept field, or a bar column
+#' `spatial(~ 1 + year || cell, graph = adj)` - is sampled as a SECOND field
+#' block, with its own whitened surface and its own (SD, mixing, copy amplitude)
+#' coordinates: two fields share no hyperparameter. The surfaces are
+#' `fit$spatial_field` and `fit$trend_field` / `fit$trend_fields` (named by the
+#' weight column), and each block's hypers carry that block's suffix in
+#' `fit$hyper_draws` and in `fit$nuts$sampled_hyper` (`sigma_trend`,
+#' `alpha_trend`, indexed when there are several). Each field's amplitude is
+#' addressed on its own through `copy(spatial(), terms = list(...))`, or through
+#' `control$alpha.grid` (intercept) and `control$alpha.grid.trend` (the weighted
+#' fields), the same knobs the grid-integrated route reads. A second field
+#' multiplies the warm fit's outer grid, so a defaulted axis is thinned to three
+#' nodes over the same span - the sampled prior is unchanged, the warm fit stays
+#' affordable. A correlated bar (`|`, one free-Sigma MCAR block across the
+#' fields) stays on the grid-integrated `nested_laplace` path; the community
+#' spatial-factor route is [ms_occu_cover()].
 #'
 #' On the shared-field `nested_laplace` path the field-coupled occupancy slope
 #' Wald interval is mildly anti-conservative at small N (the grid-integrated
@@ -319,8 +334,8 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' `control$alpha.grid`, not both.
 #'
 #' @section Coupled fields and spatially-varying trends:
-#' The spatial engine (`method = "nested_laplace"`, default
-#' `control$engine = "joint"`) can share one areal field (the
+#' The spatial engines (`method = "nested_laplace"`, default
+#' `control$engine = "joint"`, and `method = "nuts"`) share one areal field (the
 #' cell intercept, an unweighted `icar()` / `bym2()` term) across the occupancy
 #' and cover arms, when the `positive` formula copies it. ADDITIONAL coupled
 #' fields - spatially-varying coefficients,
@@ -339,7 +354,9 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' per-block amplitude and must address every block. The intercept field is
 #' reported in `fit$spatial_field`, trend fields in `fit$trend_field` /
 #' `fit$trend_fields`. The trend coupling grid defaults to
-#' `control$alpha.grid`; override it with `control$alpha.grid.trend`.
+#' `control$alpha.grid`; override it with `control$alpha.grid.trend`. Under
+#' `method = "nuts"` each field is its own sampled block, with the scales
+#' sampled over those same spans rather than integrated over the grid.
 #'
 #' A single trend field may also be requested out-of-band with
 #' `control = list(trend = list(weight = "<col>"))`, naming a numeric per-cell

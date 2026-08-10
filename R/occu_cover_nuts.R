@@ -34,6 +34,12 @@
 # The prior is flat in t, which is the measure the grid integrates against
 # (equal weight per cell); flat prior + change of variables leaves the
 # normalised log-density log(e) + log(1 - e), e = plogis(u).
+#
+# A block may carry a per-site design WEIGHT (gcol33/tulpaObs#214), which is what
+# makes it a spatially-varying coefficient rather than a second intercept field:
+# site i loads w_i * z[unit(i)] on psi and alpha * w_i * z[unit(i)] on the cover
+# arm. Several blocks stack, each with its own basis, map, weight and
+# (sigma, rho, alpha) coordinates, laid out back to back.
 # ---------------------------------------------------------------------------
 
 .OCHF_CONST <- 0L; .OCHF_BYM2_STR <- 1L; .OCHF_BYM2_IID <- 2L; .OCHF_CAR <- 3L
@@ -84,9 +90,35 @@
        scale1 = as.integer(field$field_scale1 %||% .OCHF_CONST),
        has_iid = has_iid, sf = as.numeric(field$field_sf %||% 1),
        lambda = as.numeric(field$field_lambda %||% numeric(0)),
-       n_raw = n_raw, o_raw = total,
+       n_raw = n_raw, o_raw = total, n_coord = k - total,
        field_map = as.integer(field$field_map),
+       weight = if (is.null(field$field_weight)) NULL
+                else as.numeric(field$field_weight),
        sigma = sigma, rho = rho, alpha = alpha)
+}
+
+# Every field block a spec (or a fit's field description) declares, each viewed
+# at its own offset. Accepts the plural spelling (`field_blocks`, or a bare list
+# of descriptions) and the single-block one, which is the same list of length
+# one -- so the oracle reads exactly what the C++ builder reads.
+.ochf_views <- function(field, total) {
+  if (is.null(field)) return(list())
+  blocks <- if (!is.null(field$field_blocks)) field$field_blocks
+            else if (is.null(field$field_map)) field    # bare list of blocks
+            else list(field)
+  out <- vector("list", length(blocks))
+  k <- total
+  for (b in seq_along(blocks)) {
+    out[[b]] <- .ochf_view(blocks[[b]], k)
+    k <- k + out[[b]]$n_coord
+  }
+  out
+}
+
+# Per-site loading of one block on the state arm: w_i * z[unit(i)].
+.ochf_site_value <- function(fv, fs) {
+  z <- fs$z[fv$field_map]
+  if (is.null(fv$weight)) z else fv$weight * z
 }
 
 # Forward pass: hyper values, per-column block scalings, and the field z.
@@ -220,27 +252,25 @@
   n_coef <- p_occ + p_p + p_pos
   total  <- n_coef + 1L
 
-  # Optional coupled field (gcol33/tulpaObs#74, #204): z over the trailing field
-  # block of theta, entering psi additively and the cover arm scaled by the copy
-  # amplitude alpha. sigma / rho / alpha are sampled coordinates or pinned, as
-  # `field` declares. The R oracle mirrors the C++ FullGradFn byte-for-byte;
-  # absent, the non-spatial target.
-  has_field <- !is.null(field)
-  if (has_field) {
-    fv     <- .ochf_view(field, total)
-    fs     <- .ochf_forward(fv, theta)
-    f_site <- fs$z[fv$field_map]                  # per-site field value
-    alpha  <- fs$alpha$value
-    # Coordinates the field block occupies, so any trailing block (the RE blocks)
-    # starts where the C++ layout starts it.
-    n_field <- fv$n_raw + sum(vapply(c("sigma", "rho", "alpha"),
-                                     function(nm) !is.null(fv[[nm]]$coord),
-                                     logical(1)))
-  } else {
-    f_site  <- numeric(model$n_sites)
-    alpha   <- 0
-    n_field <- 0L
-  }
+  # Optional coupled field(s) (gcol33/tulpaObs#74, #204, #214): each block's z
+  # over its own trailing slice of theta, entering psi weighted by its per-site
+  # design column and the cover arm scaled by its own copy amplitude alpha.
+  # sigma / rho / alpha are sampled coordinates or pinned, as each block
+  # declares. The R oracle mirrors the C++ FullGradFn byte-for-byte; absent, the
+  # non-spatial target.
+  fvs       <- .ochf_views(field, total)
+  has_field <- length(fvs) > 0L
+  # Per-block state, the per-site loading on psi, and the coordinates the field
+  # blocks occupy in total (so any trailing block -- the RE blocks -- starts
+  # where the C++ layout starts it).
+  fss     <- lapply(fvs, .ochf_forward, theta = theta)
+  f_site  <- lapply(seq_along(fvs), function(b) .ochf_site_value(fvs[[b]], fss[[b]]))
+  n_field <- sum(vapply(fvs, `[[`, numeric(1), "n_coord"))
+  psi_off <- if (has_field) Reduce(`+`, f_site) else numeric(model$n_sites)
+  pos_off <- if (has_field)
+    Reduce(`+`, lapply(seq_along(fvs),
+                       function(b) fss[[b]]$alpha$value * f_site[[b]]))
+    else numeric(model$n_sites)
 
   bo         <- theta[seq_len(p_occ)]
   bp_site    <- theta[p_occ + seq_len(p_det_site)]
@@ -254,14 +284,14 @@
   N <- model$n_sites; J <- model$max_visits
   sgm <- function(e) 1 / (1 + exp(-e))
 
-  eta_psi <- as.numeric(model$X_occ %*% bo) + f_site
+  eta_psi <- as.numeric(model$X_occ %*% bo) + psi_off
   psi     <- sgm(eta_psi)
 
   eta_p <- matrix(as.numeric(model$X_det_site %*% bp_site), N, J)   # site block broadcast
   if (p_det_visit > 0L) {
     eta_p <- eta_p + matrix(as.numeric(model$X_det_visit %*% bp_visit), N, J, byrow = TRUE)
   }
-  eta_pos <- matrix(as.numeric(model$X_pos_site %*% bpos_site) + alpha * f_site, N, J)
+  eta_pos <- matrix(as.numeric(model$X_pos_site %*% bpos_site) + pos_off, N, J)
   if (p_pos_visit > 0L) {
     eta_pos <- eta_pos + matrix(as.numeric(model$X_pos_visit %*% bpos_visit), N, J, byrow = TRUE)
   }
@@ -346,22 +376,28 @@
     grad_bpos <- c(grad_bpos, as.numeric(crossprod(model$X_pos_visit, as.numeric(t(g_eta_pos)))))
   grad <- c(grad_bo, grad_bp, grad_bpos, g_logdisp)
 
-  # Field block: accumulate the per-cell field score (psi arm + alpha * cover
-  # arm) and the copy amplitude's own data-score, then hand both to the field
-  # backward pass. Its gradient (whitened field, then any sampled hyper) appends
-  # to the coefficient block.
+  # Field blocks: per block accumulate the per-cell field score -- the psi-arm
+  # score plus alpha times the cover-arm score, both weighted by that block's own
+  # per-site design column -- and its copy amplitude's own data-score, then hand
+  # both to the field backward pass. Each block's gradient (whitened field, then
+  # any sampled hyper) appends in block order, as the C++ layout lays them out.
   lp_field <- 0
   if (has_field) {
     g_pos_site <- rowSums(g_eta_pos)
-    g_f_site   <- g_eta_psi + alpha * g_pos_site
-    g_field    <- numeric(fv$n_units)
-    for (s in seq_len(N)) {
-      cell <- fv$field_map[s]
-      g_field[cell] <- g_field[cell] + g_f_site[s]
+    for (b in seq_along(fvs)) {
+      fv <- fvs[[b]]
+      w  <- fv$weight %||% rep(1, N)
+      g_f_site <- w * (g_eta_psi + fss[[b]]$alpha$value * g_pos_site)
+      g_field  <- numeric(fv$n_units)
+      for (s in seq_len(N)) {
+        cell <- fv$field_map[s]
+        g_field[cell] <- g_field[cell] + g_f_site[s]
+      }
+      bk       <- .ochf_backward(fv, fss[[b]], g_field,
+                                 sum(f_site[[b]] * g_pos_site))
+      grad     <- c(grad, bk$grad)
+      lp_field <- lp_field + bk$lp
     }
-    bk       <- .ochf_backward(fv, fs, g_field, sum(f_site * g_pos_site))
-    grad     <- c(grad, bk$grad)
-    lp_field <- bk$lp
   }
 
   # RE blocks trail the field block, each scoring against its own arm's per-row
@@ -690,47 +726,40 @@
 # `icar(graph = adj, weight = col, group_var = node)` builds. A single-column bar
 # therefore IS the plain areal term, and routes unchanged (gcol33/tulpaObs#203).
 #
-# The sampler carries ONE field block -- one loading, one site -> node map and one
-# copy amplitude (src/occu_cover_nuts.cpp, the shared FieldBlock layout in
-# src/nuts_field_block.h) -- so a bar declaring a second field has nowhere to put
-# it; that is the limitation named in the error, not the bar spelling.
-.occu_cover_nuts_bar_field <- function(spec, data) {
+# The sampler carries one block PER FIELD (gcol33/tulpaObs#214) -- each with its
+# own loading, site -> node map, per-site design weight and copy amplitude -- so a
+# bar declaring an intercept field plus varying-coefficient field(s) expands to
+# that many blocks. A correlated bar (`|`) is a different structure (one
+# free-Sigma MCAR block across the fields) and is not sampled here.
+.occu_cover_nuts_bar_fields <- function(spec, data) {
   if (!is.null(spec$by_var)) {
     stop(paste0(
       "occu_cover() NUTS + areal spatial samples one field over one graph; a ",
       "replicated field (spatial(<bar>, by = \"", spec$by_var, "\")) needs ",
       "method = \"nested_laplace\"."), call. = FALSE)
   }
-  fields <- .tobs_expand_spatial_bar(spec, data)
-  if (length(fields) > 1L) {
-    stop(sprintf(paste0(
-      "occu_cover() NUTS + areal spatial samples a SINGLE areal field: the ",
-      "sampler carries one field block (one loading, one site -> node map, one ",
-      "copy amplitude onto the cover arm). This bar declares %d fields (the ",
-      "intercept field plus %d varying-coefficient field(s)); the additional ",
-      "field(s) need the grid-integrated method = \"nested_laplace\" path."),
-      length(fields), length(fields) - 1L), call. = FALSE)
-  }
   if (isTRUE(spec$correlated)) {
     stop(paste0(
-      "occu_cover(): a correlated spatial bar (`|`) needs at least one ",
-      "coefficient beyond the intercept (e.g. spatial(~ 1 + x | cell, ",
-      "graph = adj)); a single field has no cross-covariance to estimate. ",
-      "Use the independent spelling `||` for a single field."), call. = FALSE)
+      "occu_cover() NUTS + areal spatial samples INDEPENDENT areal fields, one ",
+      "block each (`||`); a correlated bar (`|`) is one free-Sigma MCAR block ",
+      "across the fields and needs method = \"nested_laplace\"."), call. = FALSE)
   }
-  fields[[1L]]
+  .tobs_expand_spatial_bar(spec, data)
 }
 
 # Resolve the single spatial term + fixed-effect psi formula for the NUTS
 # spatial path. Unlike .occu_cover_spatial_fields (which gates to icar/bym2 for
 # the grid-integrated nested-Laplace engine), the NUTS path also accepts
 # car_proper() (the full-rank precision the fixed-hyper non-centered field is
-# best conditioned on) and rejects SVC/trend/temporal/RE terms with a pointer to
-# the nested-Laplace route. The bar
-# form is desugared first, so `spatial(~ 1 || cell, graph = adj)` and
-# `icar(graph = adj, group_var = "cell")` reach the sampler as one field
-# description (gcol33/tulpaObs#203). Returns NULL when the psi formula carries no
-# spatial term (the non-spatial NUTS sampler), or list(fe, spatial, group_var).
+# best conditioned on) and rejects temporal / RE terms with a pointer to the
+# nested-Laplace route. The bar form is desugared first, so
+# `spatial(~ 1 || cell, graph = adj)` and `icar(graph = adj, group_var = "cell")`
+# reach the sampler as one field description (gcol33/tulpaObs#203), and
+# `spatial(~ 1 + w || cell, graph = adj)` as the intercept field plus one
+# varying-coefficient field per covariate column (gcol33/tulpaObs#214). Returns
+# NULL when the psi formula carries no spatial term (the non-spatial NUTS
+# sampler), or list(fe, spatial, group_var, trends) with `spatial` the intercept
+# field and `trends` the weighted ones.
 .occu_cover_nuts_spatial_term <- function(formula, data) {
   bind <- .tobs_bind_formulas(list(psi = formula), data)
   if (length(bind$terms) == 0L) return(NULL)
@@ -739,22 +768,52 @@
   other   <- Filter(function(t) !inherits(t$spec, "tobs_spatial") &&
                                 !inherits(t$spec, "tobs_re"), bind$terms)
   if (length(spatial) == 0L) return(NULL)
-  if (length(spatial) > 1L || length(re_terms) > 0L || length(other) > 0L) {
+  if (length(re_terms) > 0L || length(other) > 0L) {
     stop(paste0(
-      "occu_cover() NUTS + areal spatial samples a SINGLE shared coupled field ",
-      "(one areal term on the psi formula); a second field / per-group RE / ",
-      "temporal term composes only on the grid-integrated ",
-      "method = \"nested_laplace\" path."), call. = FALSE)
+      "occu_cover() NUTS + areal spatial samples coupled areal field(s) on the ",
+      "psi formula; a per-group RE / temporal term composes only on the ",
+      "grid-integrated method = \"nested_laplace\" path."), call. = FALSE)
   }
-  spec <- spatial[[1L]]$spec
-  if (isTRUE(spec$is_bar)) spec <- .occu_cover_nuts_bar_field(spec, data)
-  if (!is.null(spec$weight) || isTRUE(spec$is_multifield)) {
+  # Every areal term on the formula, bars desugared, in declaration order.
+  specs <- unlist(lapply(spatial, function(t) {
+    s <- t$spec
+    if (isTRUE(s$is_bar)) .occu_cover_nuts_bar_fields(s, data) else list(s)
+  }), recursive = FALSE)
+  if (any(vapply(specs, function(s) isTRUE(s$is_multifield), logical(1)))) {
     stop(paste0(
-      "occu_cover() NUTS + areal spatial samples a single unweighted shared ",
-      "field; a weighted SVC field needs method = \"nested_laplace\"."),
+      "occu_cover() NUTS + areal spatial takes each coupled field as its own ",
+      "term or bar column; a pre-combined multi-field container needs ",
+      "method = \"nested_laplace\"."), call. = FALSE)
+  }
+  weighted <- vapply(specs, function(s) !is.null(s$weight), logical(1))
+  base <- specs[!weighted]
+  if (length(base) != 1L) {
+    stop(sprintf(paste0(
+      "occu_cover() NUTS + areal spatial needs exactly one unweighted intercept ",
+      "field beside any varying-coefficient field(s); got %d."), length(base)),
       call. = FALSE)
   }
-  list(fe = bind$fe$psi, spatial = spec, group_var = spec$group_var)
+  trends <- specs[weighted]
+  # Every coupled field shares one node set: the sampler holds one graph and one
+  # site -> node map, and the varying-coefficient fields differ only in weight.
+  base_graph <- base[[1L]]$graph
+  for (s in trends) {
+    if (!identical(dim(s$graph), dim(base_graph)) || !all(s$graph == base_graph))
+      stop("occu_cover() NUTS coupled fields must share the same areal graph ",
+           "as the intercept field (same nodes / adjacency).", call. = FALSE)
+    if (!identical(s$type, base[[1L]]$type))
+      stop("occu_cover() NUTS coupled fields must share one areal kind; got ",
+           base[[1L]]$type, "() and ", s$type, "().", call. = FALSE)
+  }
+  gvs <- unique(Filter(Negate(is.null), lapply(specs, `[[`, "group_var")))
+  if (length(gvs) > 1L)
+    stop("occu_cover() NUTS coupled fields must share a single group_var ",
+         "(or none).", call. = FALSE)
+  list(fe = bind$fe$psi, spatial = base[[1L]],
+       group_var = if (length(gvs) == 1L) gvs[[1L]] else NULL,
+       trends = lapply(trends, function(s) list(
+         weight = as.numeric(s$weight),
+         label  = s$weight_label %||% s$component %||% "trend")))
 }
 
 
@@ -768,12 +827,22 @@
 # nested-Laplace estimate of THIS model (the marginalize-then-fix recipe). Returns
 # the betas, log-dispersion, (sigma, rho, alpha), and field f at its grid-weighted
 # posterior mean.
+#
+# `trends` (gcol33/tulpaObs#214) are the varying-coefficient fields beside the
+# intercept field, each a per-site weight column. With any of them the warm fit
+# is the MULTI-BLOCK coupled path -- one areal block per field, each carrying its
+# per-arm design weight and its own copy amplitude axis -- which is the same
+# structure the nested-Laplace SVC route fits (R/occu_cover_joint.R), so the
+# sampler's prior support and its starting values come from the grid the
+# deterministic backend would have integrated.
 .tobs_occu_cover_nuts_carproper_warm <- function(model, adj, priors,
                                                  max.iter = 200L, tol = 1e-6,
                                                  type = "car_proper",
                                                  sigma.grid = NULL,
                                                  rho.car.grid = NULL,
-                                                 alpha.grid = NULL) {
+                                                 alpha.grid = NULL,
+                                                 trends = list(),
+                                                 alpha.grid.trend = NULL) {
   is_beta   <- identical(model$positive, "beta")
   spec_name <- switch(model$positive,
                       beta     = "occu_cover_beta",
@@ -804,13 +873,44 @@
   sigma_grid <- sigma.grid %||% .tobs_default_sigma_grid()
   rho_car_grid <- rho.car.grid %||% .tobs_default_rho_car_grid()
 
+  n_trend <- length(trends)
+  multi   <- n_trend > 0L
+  if (multi) {
+    # Each coupled field adds its own (sigma, alpha[, rho]) axes, so the outer
+    # tensor is the PRODUCT over blocks, and the engine caps it. The sampler
+    # reads each axis's SPAN as the support of that hyper's flat prior, and
+    # nothing else off the grid, so a DEFAULTED axis is thinned to three nodes
+    # over the SAME span: the prior is unchanged and the warm fit stays
+    # affordable. Provenance is the auto-grid mark (gcol33/tulpaObs#186), not
+    # whether the argument arrived -- `copy(spatial())` with no amplitude hands
+    # this path the default alpha axis through `control$alpha.grid`, and that is
+    # a defaulted axis. An axis the caller chose keeps its nodes.
+    thin <- function(g) {
+      if (!tulpa::is_auto_grid(g)) return(g)
+      v   <- sort(unique(as.numeric(g)))
+      pos <- v[v != 0]
+      if (length(pos) > 3L)
+        pos <- pos[unique(round(seq(1, length(pos), length.out = 3L)))]
+      .tobs_mark_auto(c(v[v == 0], pos), TRUE)
+    }
+    alpha_grid   <- thin(alpha_grid)
+    sigma_grid   <- thin(sigma_grid)
+    rho_car_grid <- thin(rho_car_grid)
+    # bym2's mixing axis is defaulted by the engine rather than passed, so it is
+    # named here to be thinned on the same terms -- over its own span, so the
+    # sampled rho's prior support is the one the engine would have integrated.
+    bym2_rho_grid <- if (identical(type, "bym2"))
+      thin(tulpa::auto_grid(tulpa:::.nl_grid_axis("bym2_rho"))) else NULL
+  }
   # Single-block (multi = FALSE): the pos arm carries
   # field_coef = list(name = "alpha", grid = alpha_grid), so the copy alpha axis
   # rides the one shared field. The single-block joint path takes the copy
-  # coefficient on the arm, not a top-level `copy` block.
+  # coefficient on the arm, not a top-level `copy` block. With a varying-
+  # coefficient field the fit takes the multi-block driver instead, where each
+  # block's amplitude is an explicit copy spec.
   arms_out <- .occu_cover_build_joint_arms(
     model = model, sigma_pos_init = sigma_pos_init, alpha_grid = alpha_grid,
-    positive = model$positive, multi = FALSE, n_cells = n_cells,
+    positive = model$positive, multi = multi, n_cells = n_cells,
     site_cell = site_cell, cover_aggregate = "none")
   responses <- arms_out$responses
 
@@ -824,26 +924,68 @@
   }
 
   csr <- .occu_cover_adj_to_csr(adj)
-  prior_arg <- list(
-    type            = type,
-    n_spatial_units = csr$n_spatial_units,
-    adj_row_ptr     = csr$adj_row_ptr,
-    adj_col_idx     = csr$adj_col_idx,
-    n_neighbors     = csr$n_neighbors,
-    sigma_grid      = sigma_grid,
-    spatial_idx     = lapply(responses, function(a) as.integer(a$spatial_idx)))
-  # Only the proper-CAR field carries a spatial-correlation rho grid; the
-  # intrinsic icar / bym2 fields fix rho (icar rho = 1, bym2 mixing gridded by the
-  # engine's own bym2 axis).
-  if (identical(type, "car_proper")) prior_arg$rho_car_grid <- rho_car_grid
+  block_template <- function(sigma_g, extra = list()) {
+    p <- c(list(
+      type            = type,
+      n_spatial_units = csr$n_spatial_units,
+      adj_row_ptr     = csr$adj_row_ptr,
+      adj_col_idx     = csr$adj_col_idx,
+      n_neighbors     = csr$n_neighbors,
+      sigma_grid      = sigma_g), extra)
+    # Only the proper-CAR field carries a spatial-correlation rho grid; the
+    # intrinsic icar / bym2 fields fix rho (icar rho = 1, bym2 mixing gridded by
+    # the engine's own bym2 axis, thinned above when several blocks multiply it).
+    if (identical(type, "car_proper")) p$rho_car_grid <- rho_car_grid
+    if (multi && identical(type, "bym2")) p$rho_grid <- bym2_rho_grid
+    p
+  }
 
-  fit <- tulpa::tulpa_nested_laplace_joint(
-    responses = responses, prior = prior_arg,
-    cell_coupling = spec_name,
+  copy_arg <- NULL
+  if (!multi) {
+    prior_arg <- block_template(sigma_grid, list(
+      spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
+  } else {
+    # One areal block per coupled field, all on the same graph. The per-arm field
+    # node is the site's cell (psi rows are sites, pos rows are visits behind a
+    # site); the detection arm is excluded by its field_coef = 0. `svc_weight`
+    # carries the per-row design weight, which is what makes a block a varying
+    # coefficient; each block's cross-arm amplitude is its own copy spec.
+    pos_site     <- arms_out$pos_site
+    n_v          <- arms_out$n_visits_valid
+    spatial_idx  <- list(as.integer(site_cell), arms_out$cell_of_visit,
+                         as.integer(site_cell[pos_site]))
+    field_block  <- function(w_site, sigma_g) {
+      w <- if (is.null(w_site)) rep(1.0, n_sites) else as.numeric(w_site)
+      block_template(sigma_g, list(
+        spatial_idx = spatial_idx,
+        svc_weight  = list(w, rep(1.0, n_v), w[pos_site])))
+    }
+    alpha_grid_trend <- thin(alpha.grid.trend %||% alpha_grid)
+    prior_arg <- c(list(field_block(NULL, sigma_grid)),
+                   lapply(trends, function(tf)
+                     field_block(tf$weight, sigma_grid)))
+    copy_arg <- c(
+      list(list(arm = "pos", block = 1L, alpha_grid = alpha_grid)),
+      lapply(seq_len(n_trend), function(j)
+        list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend)))
+  }
+
+  fit_call <- list(
+    responses = responses, prior = prior_arg, cell_coupling = spec_name,
     control = list(max_iter = as.integer(max.iter), tol = as.numeric(tol),
                    n_threads = 1L, store_Q = FALSE, adaptive_grid = FALSE,
                    var_of_means_consistency = FALSE, diagnose_k = FALSE,
                    progress = FALSE))
+  # The sampler takes each axis's realised span as the support of that hyper's
+  # flat prior, so the design has to BE a tensor of the axis nodes. A second
+  # field takes the axis count past three, where the engine would otherwise
+  # switch to a mode-centred CCD star whose column range is a design radius
+  # rather than an integrated span -- and can sit outside the nodes entirely.
+  # One field never reaches that threshold, so the request is made only where it
+  # changes something.
+  if (multi) fit_call$control$integration <- "grid"
+  if (!is.null(copy_arg)) fit_call$copy <- copy_arg
+  fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
 
   ok <- which(is.finite(fit$log_marginal))
   if (length(ok) == 0L)
@@ -858,27 +1000,37 @@
   bp_idx   <- layout$beta_start[2L] + seq_len(p_p)
   bpos_idx <- layout$beta_start[3L] + seq_len(p_pos)
   f0       <- (layout$field_starts %||% layout$phi_start)
-  field_idx <- f0[[1L]] + seq_len(n_cells)
   modes <- fit$modes[ok, , drop = FALSE]
 
   beta_psi <- as.numeric(crossprod(w, modes[, bpsi_idx, drop = FALSE]))
   beta_p   <- as.numeric(crossprod(w, modes[, bp_idx,   drop = FALSE]))
   beta_pos <- as.numeric(crossprod(w, modes[, bpos_idx, drop = FALSE]))
-  field    <- as.numeric(crossprod(w, modes[, field_idx, drop = FALSE]))
-  field    <- field - mean(field)            # sum-to-zero convention
 
   tg     <- fit$theta_grid[ok, , drop = FALSE]
-  pick   <- function(nm) {
-    j <- match(nm, colnames(fit$theta_grid)); if (is.na(j)) return(NA_real_)
+  # Block b's axis is named bare on the single-block grid and `b<k>.` prefixed on
+  # the multi-block one.
+  pick   <- function(nm, b) {
+    j <- match(sprintf("b%d.%s", b, nm), colnames(fit$theta_grid))
+    if (is.na(j) && b == 1L) j <- match(nm, colnames(fit$theta_grid))
+    if (is.na(j)) return(NA_real_)
     sum(w * as.numeric(tg[, j]))
   }
-  sigma <- pick("sigma"); alpha <- pick("alpha")
-  rho   <- if (identical(type, "car_proper")) pick("rho_car")
-           else if (identical(type, "bym2")) pick("rho") else 1.0
+  blocks <- lapply(seq_len(1L + n_trend), function(b) {
+    field_idx <- f0[[b]] + seq_len(n_cells)
+    fld <- as.numeric(crossprod(w, modes[, field_idx, drop = FALSE]))
+    list(field = fld - mean(fld),                 # sum-to-zero convention
+         sigma = pick("sigma", b), alpha = pick("alpha", b),
+         rho   = if (identical(type, "car_proper")) pick("rho_car", b)
+                 else if (identical(type, "bym2")) pick("rho", b) else 1.0,
+         weight = if (b == 1L) NULL else trends[[b - 1L]]$weight,
+         label  = if (b == 1L) "intercept" else trends[[b - 1L]]$label)
+  })
 
+  b1 <- blocks[[1L]]
   list(beta_psi = beta_psi, beta_p = beta_p, beta_pos = beta_pos,
-       log_disp = log(sigma_pos_init), field = field, type = type,
-       sigma = sigma, rho = rho, alpha = alpha, joint_fit = fit)
+       log_disp = log(sigma_pos_init), field = b1$field, type = type,
+       sigma = b1$sigma, rho = b1$rho, alpha = b1$alpha,
+       blocks = blocks, joint_fit = fit)
 }
 
 
@@ -925,11 +1077,15 @@
 # makes the same `control$sigma.grid` / `alpha.grid` / `rho.car.grid` knob move
 # both. An axis the grid pinned to one node (or that the fit does not carry)
 # returns NULL and the hyper stays pinned.
-.occu_cover_nuts_hyper_bounds <- function(warm, type) {
+.occu_cover_nuts_hyper_bounds <- function(warm, type, block = 1L) {
   tg <- warm$joint_fit$theta_grid
+  # The single-block warm grid names its axes bare (`sigma`); the multi-block one
+  # prefixes each block (`b2.sigma`), so a block reads its own axis under either
+  # spelling (gcol33/tulpaObs#214).
   ax <- function(nm, positive_only = FALSE) {
     if (is.null(tg) || is.null(colnames(tg))) return(NULL)
-    j <- match(nm, colnames(tg))
+    j <- match(sprintf("b%d.%s", block, nm), colnames(tg))
+    if (is.na(j) && block == 1L) j <- match(nm, colnames(tg))
     if (is.na(j)) return(NULL)
     v <- as.numeric(tg[, j]); v <- v[is.finite(v)]
     if (positive_only) v <- v[v > 0]
@@ -947,26 +1103,35 @@
 # warm-start values of the sampled hyper coordinates. `sample_hyper = FALSE`
 # reproduces the fixed-hyper block: the loading built at the warm estimate, with
 # sigma and rho baked into its columns and alpha a constant.
+#
+# `block` names which of the warm fit's coupled fields this is, so its hypers and
+# its outer-grid axes are read off that block (gcol33/tulpaObs#214); `weight` is
+# the per-site design column of a varying-coefficient field (NULL = the
+# unweighted intercept field).
 .occu_cover_nuts_field_block <- function(adj, type, n_cells, site_cell, warm,
                                          scale_factor = NULL,
-                                         sample_hyper = TRUE) {
+                                         sample_hyper = TRUE,
+                                         block = 1L, weight = NULL) {
+  wh <- if (length(warm$blocks) >= block) warm$blocks[[block]] else warm
+  wt <- if (is.null(weight)) NULL else as.numeric(weight)
   if (!sample_hyper) {
     fl <- .tobs_nuts_field_loading(adj, type, n_cells,
-                                   tau = 1 / max(warm$sigma, 1e-3)^2,
-                                   rho = warm$rho, sigma = warm$sigma,
+                                   tau = 1 / max(wh$sigma, 1e-3)^2,
+                                   rho = wh$rho, sigma = wh$sigma,
                                    scale_factor = scale_factor)
     entries <- list(n_field_units = as.integer(n_cells),
                     field_map = as.integer(site_cell),
                     field_load = fl$field_load,
-                    field_alpha = as.numeric(warm$alpha))
+                    field_alpha = as.numeric(wh$alpha))
+    if (!is.null(wt)) entries$field_weight <- wt
     return(list(entries = entries, n_raw = fl$n_raw, theta0_hyper = numeric(0),
                 sampled = character(0),
-                pinned = c(sigma = warm$sigma, rho = fl$rho, alpha = warm$alpha),
+                pinned = c(sigma = wh$sigma, rho = fl$rho, alpha = wh$alpha),
                 tau = fl$tau, rho = fl$rho))
   }
 
   bas <- .occu_cover_nuts_field_basis(adj, type, n_cells, scale_factor)
-  bnd <- .occu_cover_nuts_hyper_bounds(warm, type)
+  bnd <- .occu_cover_nuts_hyper_bounds(warm, type, block = block)
   # rho rides a logit coordinate, so a grid node at 0 or 1 would put a bound at
   # infinity; both ends of the mixing / correlation range are degenerate anyway.
   if (!is.null(bnd$rho)) bnd$rho <- pmin(pmax(bnd$rho, 1e-4), 1 - 1e-4)
@@ -984,6 +1149,7 @@
                   field_has_iid = as.integer(bas$has_iid),
                   field_sf = as.numeric(bas$sf),
                   field_lambda = as.numeric(bas$lambda))
+  if (!is.null(wt)) entries$field_weight <- wt
   n_raw <- ncol(bas$B1) + if (bas$has_iid) n_cells else 0L
 
   theta0_hyper <- numeric(0); sampled <- character(0); pinned <- numeric(0)
@@ -1007,14 +1173,14 @@
     theta0_hyper <<- c(theta0_hyper, start_u(v, bounds[1L], bounds[2L], link))
     sampled <<- c(sampled, nm)
   }
-  add("sigma", warm$sigma, bnd$sigma, 0L, 1)
+  add("sigma", wh$sigma, bnd$sigma, 0L, 1)
   # icar carries no mixing parameter: rho = 1 is the intrinsic precision itself.
   if (identical(type, "icar")) { entries$field_rho_fixed <- 1; pinned[["rho"]] <- 1 }
-  else add("rho", warm$rho, bnd$rho, 1L, 1)
-  add("alpha", warm$alpha, bnd$alpha, 0L, 0)
+  else add("rho", wh$rho, bnd$rho, 1L, 1)
+  add("alpha", wh$alpha, bnd$alpha, 0L, 0)
 
   list(entries = entries, n_raw = n_raw, theta0_hyper = theta0_hyper,
-       sampled = sampled, pinned = pinned, tau = NA_real_, rho = warm$rho)
+       sampled = sampled, pinned = pinned, tau = NA_real_, rho = wh$rho)
 }
 
 # Natural-scale hyper draws from the sampled field coordinates, and the per-draw
@@ -1028,26 +1194,39 @@
 # bym2 mixing weights and the proper-CAR eigen weights all normalise differently),
 # which makes it the quantity a simulation truth can be stated in.
 .ochf_hyper_draws <- function(entries, draws, total) {
-  fv <- .ochf_view(entries, total)
-  hyp <- list()
-  for (nm in c("sigma", "rho", "alpha")) {
-    h <- fv[[nm]]
-    hyp[[nm]] <- if (is.null(h$coord)) rep(h$fixed, nrow(draws))
-                 else .ochf_inv_link(h$t_lo + (h$t_hi - h$t_lo) *
-                                       stats::plogis(draws[, h$coord]), h$link)
-  }
+  fvs <- .ochf_views(entries, total)
   n_draws <- nrow(draws)
-  z <- matrix(NA_real_, n_draws, fv$n_units)
-  fsd <- numeric(n_draws)
-  B2 <- fv$B1^2
-  for (i in seq_len(n_draws)) {
-    fs <- .ochf_forward(fv, draws[i, ])
-    z[i, ] <- fs$z
-    v <- as.numeric(B2 %*% (fs$s1^2)) + if (fv$has_iid) fs$s2^2 else 0
-    fsd[i] <- fs$sigma$value * exp(mean(log(pmax(v, 1e-300))) / 2)
+  # Column suffix per block: the intercept field keeps the bare names, a lone
+  # varying-coefficient field is `_trend`, several are indexed -- the same
+  # spelling the grid-integrated route's hyper table uses.
+  n_trend <- length(fvs) - 1L
+  suffix  <- c("", if (n_trend == 1L) "_trend"
+                   else if (n_trend > 1L) paste0("_trend", seq_len(n_trend)))
+  hyp <- list()
+  fields <- vector("list", length(fvs))
+  for (b in seq_along(fvs)) {
+    fv <- fvs[[b]]
+    for (nm in c("sigma", "rho", "alpha")) {
+      h <- fv[[nm]]
+      hyp[[paste0(nm, suffix[b])]] <-
+        if (is.null(h$coord)) rep(h$fixed, n_draws)
+        else .ochf_inv_link(h$t_lo + (h$t_hi - h$t_lo) *
+                              stats::plogis(draws[, h$coord]), h$link)
+    }
+    z   <- matrix(NA_real_, n_draws, fv$n_units)
+    fsd <- numeric(n_draws)
+    B2  <- fv$B1^2
+    for (i in seq_len(n_draws)) {
+      fs <- .ochf_forward(fv, draws[i, ])
+      z[i, ] <- fs$z
+      v <- as.numeric(B2 %*% (fs$s1^2)) + if (fv$has_iid) fs$s2^2 else 0
+      fsd[i] <- fs$sigma$value * exp(mean(log(pmax(v, 1e-300))) / 2)
+    }
+    hyp[[paste0("field_sd", suffix[b])]] <- fsd
+    fields[[b]] <- z
   }
-  hyp$field_sd <- fsd
-  list(hyper = do.call(cbind, hyp), field = z)
+  list(hyper = do.call(cbind, hyp), field = fields[[1L]], fields = fields,
+       suffix = suffix)
 }
 
 
@@ -1074,8 +1253,15 @@
 # the field block in src/occu_cover_nuts.cpp byte-exact vs the R oracle's field
 # branch. Intrinsic icar / bym2 fields sample through the sum-to-zero eigen-basis
 # that drops the precision null-space (constant) direction
-# (gcol33/tulpaObs#71/#113). `...` absorbs unused sampler controls.
+# (gcol33/tulpaObs#71/#113).
+#
+# `trends` (gcol33/tulpaObs#214) adds one varying-coefficient field per per-site
+# weight column beside the intercept field. Each is its own block -- own whitened
+# field, own (sigma, rho, alpha) coordinates -- so the parameter vector grows to
+# c(beta_psi, beta_p, beta_pos, log_disp, [raw_b, u_sigma_b?, u_rho_b?,
+# u_alpha_b?] per block). `...` absorbs unused sampler controls.
 .tobs_fit_occu_cover_nuts_spatial <- function(model, spatial, priors = NULL,
+                                              trends = list(),
                                               sigma.beta = NULL, sigma.logdisp = 5,
                                               n.iter = NULL, n.warmup = NULL,
                                               n.chains = NULL, max.treedepth = NULL,
@@ -1084,6 +1270,7 @@
                                               verbose = FALSE,
                                               sigma.grid = NULL, rho.car.grid = NULL,
                                               alpha.grid = NULL,
+                                              alpha.grid.trend = NULL,
                                               fixed.hyper = FALSE, ...) {
   # Sampler defaults come from the one engine table (gcol33/tulpaObs#188). This
   # path carries its own adaptation target there (the sampled proper-CAR rho
@@ -1120,54 +1307,86 @@
   # outer grid, the support of their priors.
   warm <- .tobs_occu_cover_nuts_carproper_warm(
     model, adj, priors, type = spatial$type, max.iter = max.iter, tol = tol,
-    sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid)
+    sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid,
+    trends = trends, alpha.grid.trend = alpha.grid.trend)
 
-  fb <- .occu_cover_nuts_field_block(
-    adj, spatial$type, n_cells, site_cell, warm,
-    scale_factor = spatial$scale_factor, sample_hyper = !isTRUE(fixed.hyper))
-  n_raw   <- fb$n_raw
-  n_hyper <- length(fb$sampled)
-  alpha   <- warm$alpha
+  # One block per coupled field: the unweighted intercept field, then one per
+  # varying-coefficient weight column. Each reads its own warm hypers and its own
+  # outer-grid axes, so a trend field's amplitude is its own coordinate rather
+  # than the intercept field's (gcol33/tulpaObs#214).
+  n_trend  <- length(trends)
+  weights  <- c(list(NULL), lapply(trends, `[[`, "weight"))
+  for (b in seq_along(trends)) {
+    w <- weights[[b + 1L]]
+    if (length(w) != n_sites || anyNA(w))
+      stop(sprintf(paste0(
+        "occu_cover NUTS spatial: the varying-coefficient field '%s' needs one ",
+        "finite weight per site (%d); got %d."),
+        trends[[b]]$label %||% "trend", n_sites, length(w)), call. = FALSE)
+  }
+  fbs <- lapply(seq_along(weights), function(b)
+    .occu_cover_nuts_field_block(
+      adj, spatial$type, n_cells, site_cell, warm,
+      scale_factor = spatial$scale_factor,
+      sample_hyper = !isTRUE(fixed.hyper), block = b, weight = weights[[b]]))
+  n_raw   <- vapply(fbs, `[[`, numeric(1), "n_raw")
+  n_hyper <- vapply(fbs, function(f) length(f$sampled), numeric(1))
+  # Suffix per block, matching the hyper table's own column spelling.
+  suffix <- c("", if (n_trend == 1L) "_trend"
+                  else if (n_trend > 1L) paste0("_trend", seq_len(n_trend)))
 
   # car_proper warm-starts raw at the integrated field, projected onto the
   # block's own basis (B1 %*% (s1 * raw) = f / sigma); the intrinsic icar / bym2
   # loadings start raw at 0.
-  raw0 <- if (identical(spatial$type, "car_proper")) {
+  raw_start <- function(b) {
+    fb <- fbs[[b]]
+    wb <- warm$blocks[[b]]
+    if (!identical(spatial$type, "car_proper")) return(numeric(fb$n_raw))
     if (isTRUE(fixed.hyper)) {
       Q <- .areal_Q(adj, fb$rho)
       L <- tryCatch(chol(fb$tau * Q + diag(1e-4 * fb$tau, n_cells)),
                     error = function(e) NULL)
       if (is.null(L)) stop("occu_cover NUTS spatial: field precision not PD.",
                            call. = FALSE)
-      as.numeric(L %*% warm$field)
-    } else {
-      # B1 = D^{-1/2} U with orthonormal U, so B1^{-1} = U' D^{1/2} and the
-      # column scaling divides out: raw = (1 - rho lambda)^{1/2} U' D^{1/2} f / sigma.
-      deg  <- rowSums(adj != 0)
-      lam  <- fb$entries$field_lambda
-      s1   <- 1 / sqrt(pmax(1 - warm$rho * lam, 1e-8))
-      as.numeric(crossprod(fb$entries$field_load * deg,
-                           warm$field)) / (s1 * max(warm$sigma, 1e-3))
+      return(as.numeric(L %*% wb$field))
     }
-  } else numeric(n_raw)
+    # B1 = D^{-1/2} U with orthonormal U, so B1^{-1} = U' D^{1/2} and the column
+    # scaling divides out: raw = (1 - rho lambda)^{1/2} U' D^{1/2} f / sigma.
+    deg <- rowSums(adj != 0)
+    lam <- fb$entries$field_lambda
+    s1  <- 1 / sqrt(pmax(1 - wb$rho * lam, 1e-8))
+    as.numeric(crossprod(fb$entries$field_load * deg,
+                         wb$field)) / (s1 * max(wb$sigma, 1e-3))
+  }
+  # The flat vector lays each block out as [raw, sampled hypers], block by block,
+  # exactly as hyper_field_build_list() reads it.
+  block_start <- unlist(lapply(seq_along(fbs), function(b)
+    c(raw_start(b), fbs[[b]]$theta0_hyper)))
   theta0 <- c(warm$beta_psi, warm$beta_p, warm$beta_pos, warm$log_disp,
-              raw0, fb$theta0_hyper)
+              block_start)
 
   spec <- .tobs_occu_cover_nuts_spec(model)
-  spec[names(fb$entries)] <- fb$entries
+  spec$field_blocks <- lapply(fbs, `[[`, "entries")
 
-  inv_metric <- c(rep(0.1, n_base), rep(1, n_raw), rep(1, n_hyper))
+  # Sized from the ACTUAL coordinate count -- the engine takes the metric as a
+  # bare pointer, so a short vector reads past its end (gcol33/tulpaObs#204).
+  inv_metric <- c(rep(0.1, n_base), rep(1, sum(n_raw) + sum(n_hyper)))
+  if (length(inv_metric) != length(theta0))
+    stop("occu_cover NUTS spatial: internal layout mismatch (metric ",
+         length(inv_metric), " vs theta ", length(theta0), ").", call. = FALSE)
 
   par_names <- c(
     paste0("psi_", pin[[1L]]$coef_names),
     paste0("p_",   pin[[2L]]$coef_names),
     paste0("pos_", pin[[3L]]$coef_names),
     if (identical(model$positive, "beta")) "log_phi" else "log_sigma_pos")
-  raw_names <- paste0("raw_", seq_len(n_raw))
-  # paste0() recycles a zero-length argument to "", so a fit with every hyper
+  # paste0() recycles a zero-length argument to "", so a block with every hyper
   # pinned would otherwise gain a phantom "u_" column name.
-  hyper_names <- if (n_hyper > 0L) paste0("u_", fb$sampled) else character(0)
-  all_names <- c(par_names, raw_names, hyper_names)
+  block_names <- unlist(lapply(seq_along(fbs), function(b) c(
+    paste0("raw", suffix[b], "_", seq_len(fbs[[b]]$n_raw)),
+    if (length(fbs[[b]]$sampled) > 0L)
+      paste0("u_", fbs[[b]]$sampled, suffix[b]) else character(0))))
+  all_names <- c(par_names, block_names)
 
   run_chain <- function(ch) {
     cpp_occu_cover_nuts(
@@ -1194,15 +1413,21 @@
   # Per-draw field and natural-scale hypers. The field is a nonlinear function of
   # the sampled hypers, so its posterior mean is the mean of the per-draw field,
   # not the field at the mean coordinate.
-  hd <- .ochf_hyper_draws(fb$entries, draws, n_base)
-  field_mean  <- colMeans(hd$field)
+  hd <- .ochf_hyper_draws(spec$field_blocks, draws, n_base)
+  field_means <- lapply(hd$fields, colMeans)
+  field_mean  <- field_means[[1L]]
   hyper_draws <- hd$hyper
   # A pinned block folds sigma and rho into the loading's columns rather than
   # carrying them as factors, so the block reports them as 1. Restate the values
   # the fit actually conditioned on -- `field_sd` is unaffected, since the scaled
   # loading already carries them.
-  for (nm in intersect(names(fb$pinned), colnames(hyper_draws)))
-    hyper_draws[, nm] <- fb$pinned[[nm]]
+  for (b in seq_along(fbs)) {
+    pin_b <- fbs[[b]]$pinned
+    for (nm in names(pin_b) %||% character(0)) {
+      col <- paste0(nm, suffix[b])
+      if (col %in% colnames(hyper_draws)) hyper_draws[, col] <- pin_b[[nm]]
+    }
+  }
   hyper_mean  <- colMeans(hyper_draws)
   hyper_sd    <- apply(hyper_draws, 2L, stats::sd)
   # A positive variance component at a few dozen binary sites has a right-skewed
@@ -1210,16 +1435,41 @@
   # quote against a known truth.
   hyper_median <- apply(hyper_draws, 2L, stats::median)
   alpha       <- hyper_mean[["alpha"]]
+  # Per-block sampled / pinned hyper names, suffixed as their columns are.
+  # paste0() recycles a zero-length argument to "", so a block that samples (or
+  # pins) nothing would otherwise contribute a phantom bare-suffix name.
+  suffixed <- function(nm, b)
+    if (length(nm)) paste0(nm, suffix[b]) else character(0)
+  sampled_nm <- unlist(lapply(seq_along(fbs), function(b)
+    suffixed(fbs[[b]]$sampled, b)))
+  pinned_nm  <- unlist(lapply(seq_along(fbs), function(b)
+    suffixed(names(fbs[[b]]$pinned), b)))
+  pinned_val <- unlist(lapply(seq_along(fbs), function(b) {
+    p <- fbs[[b]]$pinned
+    if (!length(p)) return(numeric(0))
+    stats::setNames(as.numeric(p), paste0(names(p), suffix[b]))
+  }))
+  # unlist() over per-block character(0) returns NULL, and `fixed_hyper` is a
+  # character vector by contract (empty when nothing is pinned).
+  if (is.null(sampled_nm)) sampled_nm <- character(0)
+  if (is.null(pinned_nm))  pinned_nm  <- character(0)
+  if (is.null(pinned_val)) pinned_val <- numeric(0)
 
-  # Data log-likelihood at the posterior mean (field on psi + alpha*field on
-  # cover), so logLik() matches the laplace convention.
+  # Data log-likelihood at the posterior mean (every field on psi, each scaled by
+  # its own alpha on cover), so logLik() matches the laplace convention.
   bo   <- par_means[seq_len(p_occ)]
   bp   <- par_means[p_occ + seq_len(p_p)]
   bpos <- par_means[p_occ + p_p + seq_len(p_pos)]
   eta  <- .occu_cover_eta_from_par(model, bo, bp, bpos)
-  f_site <- field_mean[site_cell]
+  site_load <- lapply(seq_along(fbs), function(b) {
+    w <- weights[[b]] %||% rep(1, n_sites)
+    as.numeric(w) * field_means[[b]][site_cell]
+  })
+  f_site <- Reduce(`+`, site_load)
+  pos_site_load <- Reduce(`+`, lapply(seq_along(fbs), function(b)
+    hyper_mean[[paste0("alpha", suffix[b])]] * site_load[[b]]))
   psi_f  <- stats::plogis(.tobs_clamp_eta(stats::qlogis(eta$psi) + f_site))
-  ep_f   <- eta$ep_mat + alpha * f_site
+  ep_f   <- eta$ep_mat + pos_site_load
   ll_mean <- sum(.occu_cover_site_ll(model, psi_f, eta$p_mat, ep_f, par_means[n_base]))
 
   accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
@@ -1232,35 +1482,37 @@
   # bounded transform is monotone, so this is the split-Rhat of the coordinate
   # itself). Reported for the sampled hypers only.
   hyper_diag <- NULL
-  if (n_hyper > 0L) {
+  if (length(sampled_nm) > 0L) {
     ends <- cumsum(vapply(per_chain_draws, nrow, integer(1)))
     starts <- c(1L, ends[-length(ends)] + 1L)
     hyper_chain <- lapply(seq_len(n_chains), function(ch)
-      hyper_draws[starts[ch]:ends[ch], fb$sampled, drop = FALSE])
+      hyper_draws[starts[ch]:ends[ch], sampled_nm, drop = FALSE])
     hyper_diag <- .tobs_nuts_rhat_ess(hyper_chain)
-    names(hyper_diag$rhat) <- names(hyper_diag$ess) <- fb$sampled
+    names(hyper_diag$rhat) <- names(hyper_diag$ess) <- sampled_nm
   }
 
   # The honest hyper report (gcol33/tulpaObs#204): `sampled_hyper` names the
   # hypers this fit integrated over, `fixed_hyper` those it conditioned on, and
   # `fixed_hyper_values` says at what. `fixed_hyper` is a character vector --
   # empty when nothing is pinned -- so a fit can never claim to have sampled a
-  # hyper it did not.
-  pinned_nm <- names(fb$pinned) %||% character(0)
+  # hyper it did not. With a varying-coefficient field beside the intercept one
+  # each block's hypers carry that block's suffix, so the two are never conflated
+  # (gcol33/tulpaObs#214).
   nuts <- list(accept_prob = accept, divergent = divergent, treedepth = treedepth,
                epsilon = epsilon, n_chains = n_chains,
                divergent_total = sum(divergent),
                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp,
                field_rho = hyper_mean[["rho"]], field_alpha = alpha,
                field_sigma = hyper_mean[["sigma"]],
-               sampled_hyper = fb$sampled,
+               sampled_hyper = sampled_nm,
                fixed_hyper = pinned_nm,
-               fixed_hyper_values = fb$pinned,
+               fixed_hyper_values = pinned_val,
                hyper_mean = hyper_mean, hyper_median = hyper_median,
                hyper_sd = hyper_sd,
                hyper_rhat = hyper_diag$rhat, hyper_ess = hyper_diag$ess,
                warm_hyper = c(sigma = warm$sigma, rho = warm$rho,
                               alpha = warm$alpha),
+               n_fields = length(fbs),
                n_field_units = n_cells)
 
   fit <- structure(list(
@@ -1287,9 +1539,27 @@
                         alpha_mean = alpha, alpha_sd = hyper_sd[["alpha"]],
                         rho_mean = hyper_mean[["rho"]],
                         rho_sd = hyper_sd[["rho"]],
-                        sampled_hyper = fb$sampled, fixed_hyper = pinned_nm),
+                        n_fields = length(fbs),
+                        field_labels = c("intercept",
+                                         vapply(trends, function(tf)
+                                           as.character(tf$label %||% "trend"),
+                                           character(1))),
+                        # Per-block suffix and per-site design weight, so the
+                        # criteria read every block's loading off the fit rather
+                        # than re-deriving it (gcol33/tulpaObs#211, #214).
+                        field_suffix = suffix, field_weights = weights,
+                        sampled_hyper = sampled_nm, fixed_hyper = pinned_nm),
     spatial_field = field_mean,
+    # Varying-coefficient surfaces, named by their weight column, beside the
+    # intercept field (gcol33/tulpaObs#214).
+    trend_field   = if (n_trend > 0L) field_means[[2L]] else NULL,
+    trend_fields  = if (n_trend > 0L)
+      stats::setNames(field_means[-1L],
+                      vapply(trends, function(tf)
+                        as.character(tf$label %||% "trend"), character(1)))
+      else NULL,
     field_draws   = hd$field,
+    trend_field_draws = if (n_trend > 0L) hd$fields[-1L] else NULL,
     hyper_draws   = hyper_draws,
     method       = "nuts",
     positive     = model$positive,

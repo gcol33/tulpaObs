@@ -41,6 +41,15 @@
 // log-spaced sigma / alpha and logit-spaced rho nodes equally. Flat prior plus
 // change-of-variables leaves a normalised log-density of log(e) + log(1 - e),
 // e = expit(u), per sampled hyper.
+//
+// A block may carry a per-site design WEIGHT (gcol33/tulpaObs#214), which is
+// what makes it a spatially-varying coefficient rather than a second intercept
+// field: site i loads w_i * z[unit(i)] on the state arm and alpha * w_i *
+// z[unit(i)] on the copied arm. An absent weight vector is the unit weight, so
+// an intercept field carries none. Several blocks stack -- each with its own
+// basis, site -> unit map, weight and (sigma, rho, alpha) coordinates -- and the
+// flat vector lays them out back to back, so a fit that carries one block has
+// the layout it had before the second was possible.
 
 #ifndef TULPAOBS_NUTS_FIELD_HYPER_H
 #define TULPAOBS_NUTS_FIELD_HYPER_H
@@ -123,9 +132,11 @@ struct HyperFieldBlock {
     std::vector<double> B1;           // row-major n_units x m1
     std::vector<double> lambda;       // car_proper: normalised-adjacency eigenvalues
     std::vector<int> field_map;       // 0-based unit per site (length n_sites)
+    std::vector<double> weight;       // per-site design weight (empty = unit)
     HyperCoord sigma, rho, alpha;
 
     bool active() const { return n_units > 0; }
+    double site_weight(int i) const { return weight.empty() ? 1.0 : weight[i]; }
 };
 
 // Working state of one forward pass: the hyper values and the field itself.
@@ -181,6 +192,13 @@ inline HyperFieldBlock hyper_field_build(const Rcpp::List& spec, int base,
     for (int u = 0; u < fb.n_units; ++u)
         for (int j = 0; j < fb.m1; ++j)
             fb.B1[(std::size_t) u * fb.m1 + j] = B(u, j);
+
+    if (spec.containsElementNamed("field_weight")) {
+        Rcpp::NumericVector w = spec["field_weight"];
+        if ((int) w.size() != n_sites)
+            Rcpp::stop("field_weight must have length n_sites");
+        fb.weight.assign(w.begin(), w.end());
+    }
 
     if (spec.containsElementNamed("field_scale1"))
         fb.scale1 = Rcpp::as<int>(spec["field_scale1"]);
@@ -325,6 +343,81 @@ inline double hyper_field_backward(const HyperFieldBlock& fb, const double* thet
     lp += hyper_coord_backward(fb.rho,   st.rho,   g_rho,        grad);
     lp += hyper_coord_backward(fb.alpha, st.alpha, g_alpha_data, grad);
     return lp;
+}
+
+// --------------------------------------------------------------------------
+// Several field blocks on one arm pair (gcol33/tulpaObs#214)
+//
+// Block b contributes w_b(i) * z_b[unit_b(i)] to the state arm and
+// alpha_b * w_b(i) * z_b[unit_b(i)] to the copied arm. The three helpers below
+// are the ONLY places that loading is written, so the target's eta assembly and
+// its score cannot express it differently, and a one-block fit runs the same
+// arithmetic it ran when the block count was fixed at one.
+// --------------------------------------------------------------------------
+
+// Site i's loading of block b on the state arm.
+inline double hyper_field_site_value(const HyperFieldBlock& fb,
+                                     const HyperFieldState& st, int i) {
+    if (!fb.active()) return 0.0;
+    return fb.site_weight(i) * st.z[fb.field_map[i]];
+}
+
+// Site i's total offset on the state arm and on the copied arm.
+inline void hyper_field_site_offsets(const std::vector<HyperFieldBlock>& fbs,
+                                     const std::vector<HyperFieldState>& sts,
+                                     int i, double& state_off, double& copy_off) {
+    state_off = 0.0;
+    copy_off  = 0.0;
+    for (std::size_t b = 0; b < fbs.size(); ++b) {
+        const double v = hyper_field_site_value(fbs[b], sts[b], i);
+        state_off += v;
+        copy_off  += sts[b].alpha.value * v;
+    }
+}
+
+// Scatter site i's arm scores onto each block's per-unit field score and its
+// copy amplitude's data score. `g_state` is d log L / d eta_state at this site;
+// `g_copy` is the copied arm's eta-score summed over the site's rows.
+inline void hyper_field_site_score(const std::vector<HyperFieldBlock>& fbs,
+                                   const std::vector<HyperFieldState>& sts,
+                                   int i, double g_state, double g_copy,
+                                   std::vector<std::vector<double> >& g_z,
+                                   std::vector<double>& g_alpha_data) {
+    for (std::size_t b = 0; b < fbs.size(); ++b) {
+        if (!fbs[b].active()) continue;
+        const double w = fbs[b].site_weight(i);
+        g_z[b][fbs[b].field_map[i]] += w * (g_state + sts[b].alpha.value * g_copy);
+        g_alpha_data[b] += hyper_field_site_value(fbs[b], sts[b], i) * g_copy;
+    }
+}
+
+// Read every field block a spec declares. `field_blocks` is the plural spelling
+// (one list per block, each carrying the same entries a single block does); a
+// spec with the entries at top level is the one-block case.
+inline std::vector<HyperFieldBlock> hyper_field_build_list(const Rcpp::List& spec,
+                                                           int base, int n_sites) {
+    std::vector<HyperFieldBlock> out;
+    if (spec.containsElementNamed("field_blocks")) {
+        Rcpp::List blocks = spec["field_blocks"];
+        for (int b = 0; b < blocks.size(); ++b) {
+            HyperFieldBlock fb = hyper_field_build(
+                Rcpp::as<Rcpp::List>(blocks[b]), base, n_sites);
+            if (!fb.active())
+                Rcpp::stop("field_blocks[[%d]] declares no field units", b + 1);
+            base += hyper_field_size(fb);
+            out.push_back(fb);
+        }
+        return out;
+    }
+    HyperFieldBlock fb = hyper_field_build(spec, base, n_sites);
+    if (fb.active()) out.push_back(fb);
+    return out;
+}
+
+inline int hyper_field_list_size(const std::vector<HyperFieldBlock>& fbs) {
+    int n = 0;
+    for (std::size_t b = 0; b < fbs.size(); ++b) n += hyper_field_size(fbs[b]);
+    return n;
 }
 
 }  // namespace tulpaObs

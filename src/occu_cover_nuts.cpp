@@ -68,17 +68,21 @@ struct OccuCoverNutsData {
     int p_occ = 0, p_det_site = 0, p_det_visit = 0, p_pos_site = 0, p_pos_visit = 0;
     int p_p = 0, p_pos = 0, total = 0;
 
-    // Optional coupled areal field on the latent state z (the gcol33/tulpaObs#74
-    // spatial NUTS path). The non-centered field enters psi additively and the
-    // cover arm scaled by the copy amplitude alpha:
-    //   eta_psi_c += z[cell(c)],  eta_pos_cv += alpha * z[cell(c)].
+    // Optional coupled areal field(s) on the latent state z (the
+    // gcol33/tulpaObs#74 spatial NUTS path). Each non-centered field enters psi
+    // additively, weighted by its own per-site design column, and the cover arm
+    // scaled by its own copy amplitude alpha:
+    //   eta_psi_c  += sum_b w_b(c) z_b[cell(c)],
+    //   eta_pos_cv += sum_b alpha_b w_b(c) z_b[cell(c)].
+    // An unweighted block is the shared intercept field; a weighted one is a
+    // spatially-varying coefficient (gcol33/tulpaObs#214).
     // nuts_field_hyper.h owns the field parameterisation: a fixed basis with the
     // field SD sigma, the mixing / correlation rho and alpha either sampled as
     // bounded coordinates (gcol33/tulpaObs#204) or pinned at a nested-Laplace
     // estimate (the #74 / #113 fixed-hyper loading, which marshals as the pinned
-    // configuration and is byte-identical to it). An inactive block leaves every
+    // configuration and is byte-identical to it). An empty list leaves every
     // field branch guarded, so the non-spatial sampler is unchanged.
-    HyperFieldBlock fb;
+    std::vector<HyperFieldBlock> fb;
 
     // Optional observation-arm random intercepts (gcol33/tulpaObs#205). Each
     // grouping factor on the detection or positive-cover formula is one shared
@@ -113,8 +117,8 @@ inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
     d.p_p   = d.p_det_site + d.p_det_visit;
     d.p_pos = d.p_pos_site + d.p_pos_visit;
     int base = d.p_occ + d.p_p + d.p_pos + 1;   // +1 log_dispersion
-    d.fb = hyper_field_build(spec, base, d.n_sites);
-    base += hyper_field_size(d.fb);
+    d.fb = hyper_field_build_list(spec, base, d.n_sites);
+    base += hyper_field_list_size(d.fb);
 
     // RE blocks trail the field block, so a fit that carries no random effect
     // keeps the exact coefficient / field layout the sampler had before.
@@ -170,17 +174,20 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     double lp = 0.0;
     double g_logdisp = 0.0;
 
-    // Coupled field: z per cell (nuts_field_hyper.h), entering psi additively and
-    // the cover arm scaled by the copy amplitude alpha. The per-cell field score
-    // is accumulated in g_f and the alpha data-score in g_alpha_data; both are
-    // handed back to the field block below.
-    const bool has_field = d.fb.active();
-    HyperFieldState fs;
-    hyper_field_forward(d.fb, theta, fs);
-    const double field_alpha = has_field ? fs.alpha.value : 0.0;
-    double g_alpha_data = 0.0;
-    std::vector<double> g_f;
-    if (has_field) g_f.assign(d.fb.n_units, 0.0);
+    // Coupled field(s): z per cell (nuts_field_hyper.h), each entering psi with
+    // its own per-site weight and the cover arm scaled by its own copy amplitude
+    // alpha. Per block the per-cell field score is accumulated in g_f[b] and the
+    // alpha data-score in g_alpha_data[b]; both are handed back to that block
+    // below.
+    const std::size_t n_fb = d.fb.size();
+    const bool has_field = n_fb > 0;
+    std::vector<HyperFieldState> fs(n_fb);
+    std::vector<double> g_alpha_data(n_fb, 0.0);
+    std::vector<std::vector<double> > g_f(n_fb);
+    for (std::size_t b = 0; b < n_fb; ++b) {
+        hyper_field_forward(d.fb[b], theta, fs[b]);
+        g_f[b].assign(d.fb[b].n_units, 0.0);
+    }
 
     // Observation-arm random intercepts: each block's sampled sigma_re, and the
     // running data score of its log_sigma_re coordinate.
@@ -192,10 +199,11 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     std::vector<double> eta_p(J), g_eta_p(J), g_eta_pos(J), eta_p_compact(J), g_p_compact(J);
 
     for (int i = 0; i < N; ++i) {
-        const int cell = has_field ? d.fb.field_map[i] : -1;
-        const double f_i = has_field ? fs.z[cell] : 0.0;
-        // Occupancy linear predictor (+ the shared field on psi).
-        double eta_psi = f_i;
+        // Field offsets this site carries on the two coupled arms.
+        double f_psi = 0.0, f_pos = 0.0;
+        if (has_field) hyper_field_site_offsets(d.fb, fs, i, f_psi, f_pos);
+        // Occupancy linear predictor (+ the shared field(s) on psi).
+        double eta_psi = f_psi;
         for (int k = 0; k < p_occ; ++k) eta_psi += d.X_occ(i, k) * bo[k];
         const double psi = sigmoid_(eta_psi);
 
@@ -239,7 +247,7 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
                 // (NA -> non-finite) drops out of the cover factor; its cover-arm
                 // score stays 0.
                 if (!std::isfinite(yp)) continue;
-                double eta_pos = field_alpha * f_i;
+                double eta_pos = f_pos;
                 for (int k = 0; k < p_pos_site; ++k) eta_pos += d.X_pos_site(i, k) * bpos_site[k];
                 if (p_pos_visit > 0) {
                     const int row = i * J + v;
@@ -286,12 +294,12 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
         for (int k = 0; k < p_pos_site; ++k) grad[g_bpos_site + k] += g_eta_pos_sum * d.X_pos_site(i, k);
 
         // Field score for this cell: the psi-arm eta-score plus alpha times the
-        // cover-arm eta-score sum (the cover arm sees alpha * f). The copy
-        // amplitude's own data-score is the mirror term, f times that sum.
-        if (has_field) {
-            g_f[cell]    += g_eta_psi + field_alpha * g_eta_pos_sum;
-            g_alpha_data += f_i * g_eta_pos_sum;
-        }
+        // cover-arm eta-score sum (the cover arm sees alpha * f), both weighted
+        // by the block's own per-site design column. Each copy amplitude's own
+        // data-score is the mirror term, its loading times that sum.
+        if (has_field)
+            hyper_field_site_score(d.fb, fs, i, g_eta_psi, g_eta_pos_sum,
+                                   g_f, g_alpha_data);
         if (p_det_visit > 0) {
             for (int v = 0; v < J; ++v) {
                 if (g_eta_p[v] == 0.0) continue;
@@ -345,9 +353,10 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     grad[g_ld]   -= ild2 * log_disp;
 
     // Whitened field prior, the chain rule onto raw, and any sampled hyper's
-    // bounded-transform log-density + gradient.
-    if (has_field)
-        lp += hyper_field_backward(d.fb, theta, fs, g_f, g_alpha_data, grad);
+    // bounded-transform log-density + gradient, per block.
+    for (std::size_t b = 0; b < n_fb; ++b)
+        lp += hyper_field_backward(d.fb[b], theta, fs[b], g_f[b],
+                                   g_alpha_data[b], grad);
 
     // Whitened RE prior z ~ N(0, I) plus the sampled log_sigma_re's own
     // N(0, sigma_lsd^2) prior, and that coordinate's accumulated data score.

@@ -60,24 +60,41 @@ occupancy and cover arms is the \code{method = "nested_laplace"} path (a structu
 \code{icar()} / \code{bym2()} term on the psi formula); a structured term on a
 non-spatial route errors from the dispatcher with a pointer to it.
 
-\code{method = "nuts"} also samples ONE shared coupled field
-(\code{icar()} / \code{bym2()} / \code{car_proper()}), written either as an areal term or as
-the single-column bar \code{spatial(~ 1 || cell, graph = adj)}, TOGETHER WITH its
+\code{method = "nuts"} also samples the coupled areal field(s)
+(\code{icar()} / \code{bym2()} / \code{car_proper()}), written either as areal terms or as
+the bar \code{spatial(~ 1 || cell, graph = adj)}, TOGETHER WITH their
 hyperparameters: the field SD, the mixing (\code{bym2}) or spatial-correlation
-(\code{car_proper}) parameter, and the cover-arm copy amplitude. Their priors are
+(\code{car_proper}) parameter, and - where the formula asks for one - the cover-arm
+copy amplitude. Their priors are
 flat over the same outer-grid span the \code{nested_laplace} path integrates
 against, in that grid's own coordinate, and the same \code{control$sigma.grid} /
 \code{alpha.grid} / \code{rho.car.grid} knobs set it on both routes - so the sampler is
 an independent reference for the hyperparameter layer rather than a fit
 conditioned on that layer's point estimate. \code{fit$nuts$sampled_hyper} and
 \code{fit$nuts$fixed_hyper} name which is which per fit (\code{icar} pins \code{rho} at 1:
-the intrinsic precision has no mixing parameter), \code{fit$hyper_draws} carries
+the intrinsic precision has no mixing parameter; a field with no \code{copy()} pins
+the copy amplitude at 0), \code{fit$hyper_draws} carries
 their posterior alongside \code{field_sd}, the geometric-mean marginal SD the
 field implies. \code{control$fixed.hyper = TRUE} conditions on the warm
-nested-Laplace estimate instead. The sampler carries one field block, so a
-second field - a spatially-varying coefficient / trend - stays on the
-grid-integrated \code{nested_laplace} path; the community spatial-factor route is
-\code{\link[=ms_occu_cover]{ms_occu_cover()}}.
+nested-Laplace estimate instead.
+
+A spatially-varying coefficient - a \emph{weighted} areal term beside the
+unweighted intercept field, or a bar column
+\code{spatial(~ 1 + year || cell, graph = adj)} - is sampled as a SECOND field
+block, with its own whitened surface and its own (SD, mixing, copy amplitude)
+coordinates: two fields share no hyperparameter. The surfaces are
+\code{fit$spatial_field} and \code{fit$trend_field} / \code{fit$trend_fields} (named by the
+weight column), and each block's hypers carry that block's suffix in
+\code{fit$hyper_draws} and in \code{fit$nuts$sampled_hyper} (\code{sigma_trend},
+\code{alpha_trend}, indexed when there are several). Each field's amplitude is
+addressed on its own through \code{copy(spatial(), terms = list(...))}, or through
+\code{control$alpha.grid} (intercept) and \code{control$alpha.grid.trend} (the weighted
+fields), the same knobs the grid-integrated route reads. A second field
+multiplies the warm fit's outer grid, so a defaulted axis is thinned to three
+nodes over the same span - the sampled prior is unchanged, the warm fit stays
+affordable. A correlated bar (\code{|}, one free-Sigma MCAR block across the
+fields) stays on the grid-integrated \code{nested_laplace} path; the community
+spatial-factor route is \code{\link[=ms_occu_cover]{ms_occu_cover()}}.
 
 On the shared-field \code{nested_laplace} path the field-coupled occupancy slope
 Wald interval is mildly anti-conservative at small N (the grid-integrated
@@ -86,25 +103,53 @@ arms stays near nominal). The non-spatial \code{nuts} path gives fully calibrate
 occupancy intervals.
 }
 
+\section{What a bare areal term means for the cover arm}{
+
+A term's process is the formula it sits in. An areal term written in the
+occurrence formula therefore loads on the OCCURRENCE arm alone: the cover arm
+sees no field, and the copy amplitude \code{alpha} is 0. This holds under
+\code{method = "nested_laplace"} and \code{method = "nuts"} alike, so the same input
+fits the same model on either engine.
+
+To carry the occurrence field onto the cover arm as well, write the copy in
+the \code{positive} formula:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{positive = ~ pos_cov + copy(spatial())                     # amplitude estimated
+positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over a given grid
+positive = ~ pos_cov + copy(spatial(), alpha = 0.5)          # fixed
+}\if{html}{\out{</div>}}
+
+The amplitude is integrated over that grid on the \code{nested_laplace} path and
+sampled over its span on the \code{nuts} path; a scalar \verb{alpha =} pins it on both.
+\code{control$alpha.grid} is the lower-level spelling of the same coupling and
+likewise sets it on both engines; set the amplitude with \code{copy()} or with
+\code{control$alpha.grid}, not both.
+}
+
 \section{Coupled fields and spatially-varying trends}{
 
-The spatial engine (\code{method = "nested_laplace"}, default
-\code{control$engine = "joint"}) couples one shared areal field (the
+The spatial engines (\code{method = "nested_laplace"}, default
+\code{control$engine = "joint"}, and \code{method = "nuts"}) share one areal field (the
 cell intercept, an unweighted \code{icar()} / \code{bym2()} term) across the occupancy
-and cover arms. ADDITIONAL coupled fields - spatially-varying coefficients,
+and cover arms, when the \code{positive} formula copies it. ADDITIONAL coupled
+fields - spatially-varying coefficients,
 e.g. a temporal trend - are added as \emph{weighted} areal terms in the formula:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{~ elev + icar(graph = adj) + icar(graph = adj, weight = year)
 }\if{html}{\out{</div>}}
 
-Each weighted term \code{icar(graph, weight = col)} is a second coupled field
-whose contribution to a predictor row is \code{weight_i * z[cell_i]}. All coupled
-fields share the same graph; each couples onto the cover arm with its own
+Each weighted term \code{icar(graph, weight = col)} is a second field whose
+contribution to a predictor row is \code{weight_i * z[cell_i]}. All such fields
+share the same graph; a \code{copy()} carries one onto the cover arm with its own
 scale (\code{alpha} for the intercept field, \code{alpha_trend} for a trend field),
-integrated over the outer grid. The intercept field is reported in
-\code{fit$spatial_field}, trend fields in \code{fit$trend_field} / \code{fit$trend_fields}.
-The trend coupling grid defaults to \code{control$alpha.grid}; override it with
-\code{control$alpha.grid.trend}.
+integrated over the outer grid, and a field the \code{positive} formula does not
+copy stays on occurrence. \code{copy(spatial(), terms = list(...))} gives a
+per-block amplitude and must address every block. The intercept field is
+reported in \code{fit$spatial_field}, trend fields in \code{fit$trend_field} /
+\code{fit$trend_fields}. The trend coupling grid defaults to
+\code{control$alpha.grid}; override it with \code{control$alpha.grid.trend}. Under
+\code{method = "nuts"} each field is its own sampled block, with the scales
+sampled over those same spans rather than integrated over the grid.
 
 A single trend field may also be requested out-of-band with
 \code{control = list(trend = list(weight = "<col>"))}, naming a numeric per-cell
@@ -159,9 +204,10 @@ bar is fitted as a random effect; suppress it with \code{\link[base:suppressMess
 
 \section{Independent field on the cover arm (placement)}{
 
-By default the occupancy field is shared: the cover arm sees it as
-\verb{alpha * (occupancy field)}, the coregionalization copy on the outer
-\verb{(sigma, alpha)} grid. When the cover trend is spatially structured but is not
+A \code{copy(spatial())} in the \code{positive} formula shares the occupancy field: the
+cover arm sees it as \verb{alpha * (occupancy field)}, the coregionalization copy
+on the outer \verb{(sigma, alpha)} grid. When the cover trend is spatially
+structured but is not
 a scalar multiple of the occupancy field, \code{alpha} collapses toward 0 and the
 cover arm inherits no field, so per-cell conditional cover (and its change over
 time, \code{delta_cover_cond}) comes out flat. A \code{spatial()} bar placed in the

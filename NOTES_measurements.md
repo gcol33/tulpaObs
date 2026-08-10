@@ -306,6 +306,85 @@ the same number, and the bym2 structured block normalises differently again
 the block's own covariance implies at a draw's hypers -- is the one summary all
 three kinds share, so it is what the truth is stated in.
 
+## A second (SVC) field on the occu_cover NUTS path (#214)
+
+The sampler carries one block per coupled field. Everything below was measured on
+Windows, R 4.6.0, against the shipped defaults unless a control is named.
+
+### The target, on two blocks
+
+Hand-built pairs of blocks (intercept + one weighted by a standardised per-site
+column), 16 cells, J = 4, every hyper sampled, one theta drawn off the Laplace
+mode. Same battery the single block was held to in #204:
+
+| field | C++ vs R oracle, lp | grad | analytic vs central FD, max | hyper coords only | worst hyper | prior flat in t |
+|---|---|---|---|---|---|---|
+| icar | 0.0e+00 | 1.8e-15 | 7.6e-10 | 2.4e-10 | `sigma` (block 1) | 6.9e-16 |
+| bym2 | 0.0e+00 | 8.9e-16 | 7.2e-10 | 1.6e-10 | `sigma` (block 1) | 1.4e-15 |
+| car_proper | 3.6e-15 | 7.1e-15 | 7.8e-10 | 2.1e-10 | `sigma` (block 2) | 1.4e-15 |
+
+The FD check is not vacuous: the hyper coordinates carry scores of 0.59-0.80 at
+that theta. Prior flatness is `sd/mean` of the implied density in the axis
+coordinate at `raw = 0`, over `u` in [-2, 1.5], per hyper of BOTH blocks.
+
+Byte identity, one field: the top-level spec spelling and the one-element
+`field_blocks` list give `identical()` lp and gradient, in C++ and in the R
+oracle. End to end, a whole one-field fit (16 cells, J = 4, icar + `copy()`,
+2 chains x 200 draws) is `identical()` before and after on `means`, `sds`,
+`spatial_field`, `hyper_mean`, `log_lik` and the raw draw / hyper-draw matrices.
+
+### Recovery, two icar fields
+
+6 seeds (4001-4006), 36 cells, J = 5, truth `sigma = 0.8` / `alpha = 1.0` and
+`sigma_trend = 0.7` / `alpha_trend = 0.9`, 2 chains x 800 kept draws after 600
+warmup, ~26 s per fit at the shipped defaults:
+
+| quantity | mean over seeds | truth |
+|---|---|---|
+| cor(intercept field, truth) | 0.637 | - |
+| cor(trend field, truth) | 0.461 | - |
+| `field_sd` | 0.817 | 0.8 |
+| `field_sd_trend` | 0.872 | 0.7 |
+| `alpha` | 0.996 | 1.0 |
+| `alpha_trend` | 0.838 | 0.9 |
+
+0 divergences on every seed, max Rhat 1.013, cover-dispersion bias 0.090. The two
+amplitudes separate cleanly, which is the property a shared hyper would break.
+Surface correlation is the weak part and stays weak by construction: one binary
+occupancy observation per node, and the trend surface is seen only through its
+weight column -- the per-seed spread is 0.42-0.82 (intercept) and 0.06-0.83
+(trend). At 49 cells / J = 6 over 4 seeds the intercept surface improves (0.659)
+and the trend does not (0.446), so the gates are set from the 36-cell fixture the
+test runs. The same loop before the defaulted amplitude axis was thinned (324
+warm cells rather than 144, 44 s per fit) gave 0.627 / 0.468 and field SDs
+0.820 / 0.888: thinning an axis over its own span moves nothing but the cost.
+
+### Why the warm fit forces a tensor grid
+
+Each field adds its own `(sigma, alpha[, rho])` axes, so two icar fields take the
+warm joint to 4 axes -- past the engine's CCD threshold, where it designs a
+mode-centred star instead of a tensor. The sampler reads each axis's realised
+span as the support of that hyper's flat prior, and a star's column range is a
+design radius: on a 30-cell chain fixture with requested axes `sigma` [0.2, 1.5]
+and `alpha` [0.2, 2.0], the CCD warm produced `b1.alpha` nodes from -1.23 to 4.70
+(25 cells), the derived bounds became [1.49, 4.70], and the fit sampled alpha to
+a posterior mean of 2.79 -- outside the axis the caller asked for. With
+`integration = "grid"` the same fixture gives 81 cells and bounds exactly
+[0.2, 1.5] / [0.2, 2.0].
+
+The tensor is a product over blocks, so a DEFAULTED axis is thinned to three
+nodes spanning the same range when a second field is present: the sampled prior
+is defined by the span alone, so it is unchanged, while the warm fit drops from
+900 cells (5 sigma x 6 alpha, squared) to 144. Provenance is the `auto_grid()`
+mark, not whether the argument arrived: `copy(spatial())` with no amplitude hands
+this path the DEFAULT alpha axis through `control$alpha.grid`, and reading that
+as a user pin put the two-field warm grid over the engine's 2048-cell cap
+(car_proper 2916 cells, bym2 7776 -- the latter because the trend block's own
+`alpha.grid.trend` and bym2's engine-defaulted mixing axis were both unthinned).
+Thinned on the mark, every areal kind fits at defaults on a 16-cell fixture:
+icar 1.4 s, bym2 1.6 s, car_proper 0.8 s. An axis the caller chose
+(`alpha = grid(c(...))`, `control$sigma.grid`) keeps its nodes.
+
 ## Posterior SBC on the coupled `occu_cover` (`R/sbc.R`, #207)
 
 `tobs_sbc()` runs the posterior experiment of `tulpa::sbc()` (gcol33/tulpa#380,
