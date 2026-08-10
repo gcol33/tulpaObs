@@ -247,7 +247,8 @@ spatial path only; requesting \code{"mean"} / \code{"median"} on the non-spatial
 
 \section{Random effects on the observation arms}{
 
-On the shared-field spatial path (\code{method = "nested_laplace"}) random
+Under \code{method = "nested_laplace"} (shared-field spatial) and \code{method = "nuts"}
+(non-spatial, which samples the group SD), random
 intercepts may be written on the \strong{detection} or \strong{positive-cover} formula
 with the usual \code{lme4} bar or \code{re()} spelling, e.g.
 \code{detection = ~ effort + (1 | habitat)}. The grouping is per visit -- one code
@@ -284,12 +285,27 @@ the outer grid, so its free-Sigma grid uses a compact principled default
 (symmetric correlation nodes including 0); widen it with
 \code{control$re.logchol.grid.p} / \code{re.logchol.grid.pos}.
 
-An RE without a spatial field on the psi arm uses the non-spatial path's RE
-instead. The positive-cover RE needs per-visit cover
-(\code{cover_aggregate = "none"}). As with the occupancy-arm RE, each
-grid-integrated variance carries the binary / small-cluster inner-Laplace
-attenuation and is a lower bound on the truth; the BLUPs recover the per-group
-structure.
+The positive-cover RE needs per-visit cover (\code{cover_aggregate = "none"}). As
+with the occupancy-arm RE, each grid-integrated variance carries the binary /
+small-cluster inner-Laplace attenuation and is a lower bound on the truth; the
+BLUPs recover the per-group structure.
+
+\code{method = "nuts"} samples an observation-arm random \strong{intercept} instead of
+integrating it on a grid: each grouping factor is a non-centered block
+(\verb{b_g = sigma_re z_g}, \code{z_g ~ N(0, 1)}) whose group SD is a coordinate of the
+sampled vector under a \code{N(0, 1.5^2)} prior on \verb{log sigma_re} -- the same
+weakly informative width the other observation-family samplers use, and the
+reason the sampled SD carries no small-cluster attenuation to correct for.
+Crossed and nested groupings are simply several blocks, on either or both
+observation arms. \code{fit$re} keys and \code{\link[=ranef]{ranef()}} match the \code{nested_laplace}
+path; each term additionally reports \code{sigma_median} and the per-draw
+\code{sigma_draws}, the summaries to quote for a right-skewed variance component,
+with per-SD convergence in \code{fit$nuts$re_sigma_rhat} / \code{re_sigma_ess}. The
+sampled coefficient surface (\code{coef()}, \code{vcov()}, \code{fit$draws}) is unchanged.
+Still on \code{nested_laplace} only: a random slope, and an observation-arm RE
+composed with the coupled areal field. \code{tobs_waic()} / \code{tobs_cpo()} on a
+sampled fit read the coefficient draws, so they score the RE at zero -- the
+same limitation the sampled coupled field has.
 }
 
 \examples{

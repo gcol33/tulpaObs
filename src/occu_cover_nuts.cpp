@@ -9,11 +9,13 @@
 // calibrated (non-Gaussian) intervals and the per-draw pointwise likelihood
 // WAIC / LOO need.
 //
-// There is no latent field, no random effect and no community covariance on the
-// non-spatial path, so -- unlike the spatial-factor community target
-// (ms_occu_cover_spatial_nuts.cpp) -- the parameter vector is just the flat
-// three-arm coefficient block plus one log-dispersion scalar. The joint
-// log-posterior is
+// The bare non-spatial target carries no latent structure at all, so its
+// parameter vector is just the flat three-arm coefficient block plus one
+// log-dispersion scalar. Two optional blocks extend it, each trailing that
+// vector and each a no-op when absent: a coupled areal field on the latent state
+// (nuts_field_hyper.h) and one observation-arm random intercept per grouping
+// factor on the detection / positive-cover arms (nuts_re_block.h). The joint
+// log-posterior of the bare vector is
 //
 //   log p(theta | y) = sum_i log m_i(theta)            # per-cell two-state marginal
 //                      - 0.5 ||beta||^2 / sigma_beta^2  # weak Gaussian coef priors
@@ -39,6 +41,7 @@
 #include <cmath>
 #include "occu_coupling_shared.h"
 #include "nuts_field_hyper.h"
+#include "nuts_re_block.h"
 #include "nuts_engine.h"
 
 namespace tulpaObs {
@@ -76,6 +79,16 @@ struct OccuCoverNutsData {
     // configuration and is byte-identical to it). An inactive block leaves every
     // field branch guarded, so the non-spatial sampler is unchanged.
     HyperFieldBlock fb;
+
+    // Optional observation-arm random intercepts (gcol33/tulpaObs#205). Each
+    // grouping factor on the detection or positive-cover formula is one shared
+    // ReBlock (nuts_re_block.h), non-centered with its own SAMPLED log_sigma_re,
+    // carrying ONE group code per observation ROW (site-major, row = i * J + v)
+    // rather than per site -- the observation arms are per-visit. Crossed /
+    // nested groupings are simply several blocks. `re_det` / `re_pos` index into
+    // `re` so a visit adds only the blocks that load on its own arm.
+    std::vector<ReBlock> re;
+    std::vector<int> re_det, re_pos;
 };
 
 inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
@@ -101,7 +114,22 @@ inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
     d.p_pos = d.p_pos_site + d.p_pos_visit;
     int base = d.p_occ + d.p_p + d.p_pos + 1;   // +1 log_dispersion
     d.fb = hyper_field_build(spec, base, d.n_sites);
-    d.total = base + hyper_field_size(d.fb);
+    base += hyper_field_size(d.fb);
+
+    // RE blocks trail the field block, so a fit that carries no random effect
+    // keeps the exact coefficient / field layout the sampler had before.
+    // Arm codes: 1 = detection, 2 = positive cover (0, the latent state arm, is
+    // the grid-integrated engine's own RE and never reaches this target).
+    d.re = re_block_build_list(spec, "re_blocks", base,
+                               d.n_sites * d.max_visits, /*max_arm=*/2);
+    for (std::size_t b = 0; b < d.re.size(); ++b) {
+        if (!d.re[b].active()) continue;
+        if (d.re[b].arm == 1)      d.re_det.push_back((int) b);
+        else if (d.re[b].arm == 2) d.re_pos.push_back((int) b);
+        else Rcpp::stop("occu_cover NUTS: re_arm 0 (the latent state arm) is not "
+                        "sampled by this target; use method = \"nested_laplace\".");
+    }
+    d.total = base + re_block_list_size(d.re);
     return d;
 }
 
@@ -154,6 +182,13 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     std::vector<double> g_f;
     if (has_field) g_f.assign(d.fb.n_units, 0.0);
 
+    // Observation-arm random intercepts: each block's sampled sigma_re, and the
+    // running data score of its log_sigma_re coordinate.
+    const std::size_t n_re = d.re.size();
+    std::vector<double> re_sig(n_re, 0.0), re_glsig(n_re, 0.0);
+    for (std::size_t b = 0; b < n_re; ++b)
+        re_sig[b] = re_block_sigma(d.re[b], theta);
+
     std::vector<double> eta_p(J), g_eta_p(J), g_eta_pos(J), eta_p_compact(J), g_p_compact(J);
 
     for (int i = 0; i < N; ++i) {
@@ -176,6 +211,10 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
             if (p_det_visit > 0) {
                 const int row = i * J + v;
                 for (int k = 0; k < p_det_visit; ++k) e += d.X_det_visit(row, k) * bp_visit[k];
+            }
+            for (std::size_t t = 0; t < d.re_det.size(); ++t) {
+                const int b = d.re_det[t];
+                e += re_block_offset(d.re[b], re_sig[b], theta, i * J + v);
             }
             eta_p[v] = e;
             ++n_valid;
@@ -205,6 +244,10 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
                 if (p_pos_visit > 0) {
                     const int row = i * J + v;
                     for (int k = 0; k < p_pos_visit; ++k) eta_pos += d.X_pos_visit(row, k) * bpos_visit[k];
+                }
+                for (std::size_t t = 0; t < d.re_pos.size(); ++t) {
+                    const int b = d.re_pos[t];
+                    eta_pos += re_block_offset(d.re[b], re_sig[b], theta, i * J + v);
                 }
                 lp += pos_log_density(d.pos_code, yp, eta_pos, disp);
                 g_eta_pos[v] = pos_grad_eta(d.pos_code, yp, eta_pos, disp);
@@ -265,6 +308,25 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
                     grad[g_bpos_visit + k] += g_eta_pos[v] * d.X_pos_visit(row, k);
             }
         }
+
+        // Chain the per-visit arm scores into each RE block's whitened z and its
+        // log_sigma_re; an invalid visit carries a zero eta-score anyway.
+        for (std::size_t t = 0; t < d.re_det.size(); ++t) {
+            const int b = d.re_det[t];
+            for (int v = 0; v < J; ++v) {
+                if (d.valid(i, v) == 0) continue;
+                re_block_accumulate(d.re[b], re_sig[b], g_eta_p[v], i * J + v,
+                                    theta, grad, re_glsig[b]);
+            }
+        }
+        for (std::size_t t = 0; t < d.re_pos.size(); ++t) {
+            const int b = d.re_pos[t];
+            for (int v = 0; v < J; ++v) {
+                if (g_eta_pos[v] == 0.0) continue;
+                re_block_accumulate(d.re[b], re_sig[b], g_eta_pos[v], i * J + v,
+                                    theta, grad, re_glsig[b]);
+            }
+        }
     }
 
     grad[g_ld] = g_logdisp;
@@ -286,6 +348,11 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     // bounded-transform log-density + gradient.
     if (has_field)
         lp += hyper_field_backward(d.fb, theta, fs, g_f, g_alpha_data, grad);
+
+    // Whitened RE prior z ~ N(0, I) plus the sampled log_sigma_re's own
+    // N(0, sigma_lsd^2) prior, and that coordinate's accumulated data score.
+    for (std::size_t b = 0; b < n_re; ++b)
+        lp += re_block_backward(d.re[b], theta, re_glsig[b], grad);
 
     return lp;
 }

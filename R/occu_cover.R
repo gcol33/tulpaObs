@@ -520,6 +520,36 @@
     TRUE, arm)
 }
 
+# Resolve the parsed observation-arm RE terms against the built model and attach
+# the per-term design lists (`model$re_det` / `model$re_pos`). The grouping codes
+# need the model's `valid` mask (dense) or `site_of_visit` (compact), so this runs
+# after the model build; every engine that hosts an observation-arm RE -- the
+# grid-integrated joint fit and the sampler -- reads the SAME designs from here.
+# The positive-cover RE is per visit, so it needs per-visit cover: a
+# cell-aggregated cover arm has one row per unit and no per-visit grouping.
+.occu_cover_attach_obs_re <- function(model, det_re_parse, pos_re_parse,
+                                      data, det_visits, pos_visits) {
+  design <- function(re_parse, visits, arm) {
+    if (isTRUE(model$ragged))
+      .occu_cover_obs_re_design_ragged(re_parse, data, visits,
+                                       model$site_of_visit, arm)
+    else
+      .occu_cover_obs_re_design(re_parse, data, visits, model$valid,
+                                model$n_sites, model$max_visits, arm)
+  }
+  if (!is.null(det_re_parse))
+    model$re_det <- design(det_re_parse, det_visits, "detection")
+  if (!is.null(pos_re_parse)) {
+    if (!identical(model$cover_aggregate %||% "none", "none")) {
+      stop("occu_cover(): a random effect on the positive-cover arm needs ",
+           "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
+           "cell-aggregated cover rows (one per unit).", call. = FALSE)
+    }
+    model$re_pos <- design(pos_re_parse, pos_visits, "positive cover")
+  }
+  model
+}
+
 # ---------------------------------------------------------------------------
 # Likelihood
 # ---------------------------------------------------------------------------

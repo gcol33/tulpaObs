@@ -285,22 +285,23 @@
 
   if (is.null(pos_formula)) pos_formula <- detection
 
-  # Observation-arm random intercept (gcol33/tulpaObs#102): a `(1 | g)` / `re(g)`
-  # on the detection or positive-cover formula adds an iid RE latent block on
-  # that arm of the joint nested-Laplace fit. Parse it off FIRST -- before the
-  # copy() extraction and every design build -- so each downstream consumer sees
-  # a clean fixed-effects formula; the grouping is resolved to per-visit codes
-  # once the model (and its `valid` mask) is built. The block rides the joint
-  # engine, so it needs method = "nested_laplace" (the non-spatial laplace / nuts
-  # paths are coefficient-marginal fits with no latent block) -- error early
-  # rather than silently drop the RE under another engine.
+  # Observation-arm random intercept (gcol33/tulpaObs#102, #205): a `(1 | g)` /
+  # `re(g)` on the detection or positive-cover formula adds a random effect on
+  # that arm -- an iid latent block on the joint nested-Laplace fit, a
+  # non-centered block with its own sampled SD under method = "nuts". Parse it
+  # off FIRST -- before the copy() extraction and every design build -- so each
+  # downstream consumer sees a clean fixed-effects formula; the grouping is
+  # resolved to per-visit codes once the model (and its `valid` mask) is built.
+  # The plain `laplace` route is a coefficient-marginal fit with no latent block
+  # at all, so it errors rather than silently dropping the RE.
   det_re_parse <- .occu_cover_obs_re_parse(detection,   "detection")
   pos_re_parse <- .occu_cover_obs_re_parse(pos_formula, "positive cover")
   has_obs_re   <- !is.null(det_re_parse) || !is.null(pos_re_parse)
-  if (has_obs_re && !identical(engine, "nested_laplace")) {
+  if (has_obs_re && !engine %in% c("nested_laplace", "nuts")) {
     stop("occu_cover(): a random effect on the detection / positive-cover arm ",
          "needs method = \"nested_laplace\" (the joint nested-Laplace engine ",
-         "carries the RE as a latent block); got method = \"", engine, "\".",
+         "carries the RE as a latent block) or method = \"nuts\" (which samples ",
+         "it, group SD included); got method = \"", engine, "\".",
          call. = FALSE)
   }
   if (ragged && identical(engine, "nuts")) {
@@ -338,6 +339,13 @@
   if (identical(engine, "nuts")) {
     nuts_sp <- .occu_cover_nuts_spatial_term(formula, data)
     if (!is.null(nuts_sp)) {
+      if (has_obs_re) {
+        stop("occu_cover(): method = \"nuts\" samples an observation-arm random ",
+             "effect on the NON-SPATIAL target; composed with the coupled areal ",
+             "field it needs the grid-integrated method = \"nested_laplace\" ",
+             "(which carries both as latent blocks). (gcol33/tulpaObs#205)",
+             call. = FALSE)
+      }
       .occu_cover_reject_structured(detection,   "detection")
       .occu_cover_reject_structured(pos_formula, "positive cover")
       vd_det  <- .normalize_visits(visits, detection,
@@ -539,6 +547,9 @@
       pos_visit_formula <- vd_pos$det_visit_formula
       pos_visit_data    <- vd_pos$visits
     } else {
+      # Cell-aggregated cover: the positive design is cell-level, so there is no
+      # per-visit positive frame (and no per-visit cover RE, gated below).
+      vd_pos            <- NULL
       pos_site_formula  <- pos_formula
       pos_visit_formula <- NULL
       pos_visit_data    <- NULL
@@ -560,6 +571,15 @@
   }
 
   model$cover_aggregate <- cover_aggregate
+
+  # Observation-arm random effects (gcol33/tulpaObs#102, #103, #205): resolve each
+  # detection / positive-cover RE term to its per-(site, visit) design (group
+  # codes + slope weights) now that the model carries its `valid` mask. Both
+  # hosting engines read model$re_det / model$re_pos from here -- the joint
+  # nested-Laplace builder subsets each term's codes by the same `keep` it uses
+  # for the arm rows, the sampler scatters them on the padded grid.
+  model <- .occu_cover_attach_obs_re(model, det_re_parse, pos_re_parse, data,
+                                     vd_det$visits, vd_pos$visits)
 
   if (has_spatial) {
     fields      <- spatial_info$fields
@@ -608,37 +628,6 @@
           "but there are %d occupancy units (sites)."),
           length(re_spec$group_idx), model$n_sites), call. = FALSE)
       }
-    }
-
-    # Observation-arm random effects (gcol33/tulpaObs#102, #103): resolve each
-    # detection / positive-cover RE term to its per-(site, visit) design (group
-    # codes + slope weights) now that the model carries its `valid` mask, and
-    # attach the per-term LIST to the model. The fitter reads model$re_det /
-    # model$re_pos (one entry per crossed / nested term) and the joint-coupled
-    # builder subsets each term's codes by the same `keep` used for the arm rows.
-    # The positive-cover RE is per visit, so it needs per-visit cover
-    # (cover_aggregate = "none"); a cell-aggregated cover arm has one row per unit
-    # and no per-visit grouping.
-    if (!is.null(det_re_parse)) {
-      model$re_det <- if (isTRUE(model$ragged))
-        .occu_cover_obs_re_design_ragged(det_re_parse, data, vd_det$visits,
-                                         model$site_of_visit, "detection")
-      else
-        .occu_cover_obs_re_design(det_re_parse, data, vd_det$visits, model$valid,
-                                  model$n_sites, model$max_visits, "detection")
-    }
-    if (!is.null(pos_re_parse)) {
-      if (cover_aggregate != "none") {
-        stop("occu_cover(): a random effect on the positive-cover arm needs ",
-             "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
-             "cell-aggregated cover rows (one per unit).", call. = FALSE)
-      }
-      model$re_pos <- if (isTRUE(model$ragged))
-        .occu_cover_obs_re_design_ragged(pos_re_parse, data, vd_pos$visits,
-                                         model$site_of_visit, "positive cover")
-      else
-        .occu_cover_obs_re_design(pos_re_parse, data, vd_pos$visits, model$valid,
-                                  model$n_sites, model$max_visits, "positive cover")
     }
 
     # joint (3-arm nested-Laplace via tulpa's cell_coupling spec) is the

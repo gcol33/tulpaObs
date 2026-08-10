@@ -7,9 +7,11 @@
 #   theta = c(beta_psi, beta_p, beta_pos, log_dispersion).
 # NUTS instead samples the exact marginal posterior of that vector, giving
 # calibrated (non-Gaussian) intervals and the per-draw pointwise likelihood that
-# WAIC / LOO need. There is no latent field, random effect, or community
-# covariance on the non-spatial path, so the parameter vector is just the flat
-# three-arm coefficient block plus one log-dispersion scalar.
+# WAIC / LOO need. The bare target carries no latent structure, so its parameter
+# vector is just the flat three-arm coefficient block plus one log-dispersion
+# scalar; two optional blocks trail it, each a no-op when absent -- a coupled
+# areal field on the latent state, and one observation-arm random intercept per
+# grouping factor on the detection / positive-cover arms.
 #
 # .tobs_occu_cover_nuts_logpost is the R oracle: it recomputes the joint
 # log-posterior and gradient exactly as the C++ FullGradFn (src/occu_cover_nuts.cpp,
@@ -142,6 +144,61 @@
 }
 
 
+# ---------------------------------------------------------------------------
+# Observation-arm random intercepts (gcol33/tulpaObs#205)
+#
+# R mirror of src/nuts_re_block.h. Each grouping factor on the detection or
+# positive-cover formula is ONE non-centered block: n_groups whitened
+# coordinates z_g ~ N(0, 1) plus the SAMPLED log_sigma_re under a
+# N(0, sigma_lsd^2) prior, adding sigma_re * z[code(row)] to that arm's per-row
+# linear predictor. The prior is written on the sampled coordinate itself
+# (log sigma_re), so the target needs no change-of-variables term: at z = 0 the
+# data term does not depend on log_sigma_re and the target reduces to exactly
+# that Gaussian. A code of 0 (padded visit / unseen level) carries no effect,
+# matching the deterministic engine's 0 scatter sentinel.
+#
+# `blocks` is a list of list(arm = 1 detection / 2 positive, group = per-row
+# codes, n_groups, sigma_lsd); `base` is the last coordinate before the first
+# block (the log-dispersion index plus the field block's own coordinates).
+# ---------------------------------------------------------------------------
+
+.ocre_view <- function(blocks, base) {
+  if (is.null(blocks) || length(blocks) == 0L) return(list())
+  k <- base
+  lapply(blocks, function(b) {
+    G <- as.integer(b$n_groups)
+    # `o_z` is a 0-based OFFSET (the whitened block is theta[o_z + 1:G]);
+    # `o_logsig` is the 1-based INDEX of the log-SD coordinate that follows it.
+    out <- list(arm = as.integer(b$arm), codes = as.integer(b$group), n_groups = G,
+                sigma_lsd = as.numeric(b$sigma_lsd %||% 1.5),
+                o_z = k, o_logsig = k + G + 1L)
+    k <<- k + G + 1L
+    out
+  })
+}
+
+# Per-row offset sigma_re * z[code], 0 where the code is 0.
+.ocre_offset <- function(rb, theta) {
+  z   <- theta[rb$o_z + seq_len(rb$n_groups)]
+  sig <- exp(theta[rb$o_logsig])
+  ifelse(rb$codes > 0L, sig * z[pmax(rb$codes, 1L)], 0)
+}
+
+# Gradient + log-prior of one block. `g_row` is d log L / d eta_arm on the same
+# per-row layout as `codes`.
+.ocre_backward <- function(rb, theta, g_row) {
+  z   <- theta[rb$o_z + seq_len(rb$n_groups)]
+  ls  <- theta[rb$o_logsig]
+  sig <- exp(ls)
+  gz  <- vapply(seq_len(rb$n_groups),
+                function(g) sum(g_row[rb$codes == g]), numeric(1))
+  ils2 <- 1 / rb$sigma_lsd^2
+  list(grad = c(sig * gz - z,
+                sum(g_row * .ocre_offset(rb, theta)) - ils2 * ls),
+       lp = -0.5 * sum(z^2) - 0.5 * ils2 * ls^2)
+}
+
+
 # Joint log-posterior + gradient of the non-spatial occu_cover coefficient vector
 # theta = c(beta_psi, beta_p, beta_pos, log_disp) (beta_p / beta_pos each packed as
 # the site-level block then the optional visit-level block, exactly as the fitter
@@ -150,7 +207,8 @@
 # without materially shifting the data-dominated optimum. Returns list(lp, grad)
 # over the packed coordinates. This is the oracle the C++ FullGradFn mirrors.
 .tobs_occu_cover_nuts_logpost <- function(theta, model, sigma.beta = 5,
-                                          sigma.logdisp = 5, field = NULL) {
+                                          sigma.logdisp = 5, field = NULL,
+                                          re = NULL) {
   pin         <- model$process_info
   p_occ       <- pin[[1L]]$p
   p_det_site  <- ncol(model$X_det_site)
@@ -173,9 +231,15 @@
     fs     <- .ochf_forward(fv, theta)
     f_site <- fs$z[fv$field_map]                  # per-site field value
     alpha  <- fs$alpha$value
+    # Coordinates the field block occupies, so any trailing block (the RE blocks)
+    # starts where the C++ layout starts it.
+    n_field <- fv$n_raw + sum(vapply(c("sigma", "rho", "alpha"),
+                                     function(nm) !is.null(fv[[nm]]$coord),
+                                     logical(1)))
   } else {
-    f_site <- numeric(model$n_sites)
-    alpha  <- 0
+    f_site  <- numeric(model$n_sites)
+    alpha   <- 0
+    n_field <- 0L
   }
 
   bo         <- theta[seq_len(p_occ)]
@@ -200,6 +264,19 @@
   eta_pos <- matrix(as.numeric(model$X_pos_site %*% bpos_site) + alpha * f_site, N, J)
   if (p_pos_visit > 0L) {
     eta_pos <- eta_pos + matrix(as.numeric(model$X_pos_visit %*% bpos_visit), N, J, byrow = TRUE)
+  }
+
+  # Observation-arm random intercepts (gcol33/tulpaObs#205). Each block owns
+  # n_groups whitened z coordinates and its own SAMPLED log_sigma_re, laid out
+  # back to back AFTER the field block, and adds the per-row offset
+  # sigma_re * z[code] to its arm. `codes` is site-major over the padded grid
+  # (row (i - 1) * J + v), so `matrix(..., byrow = TRUE)` puts each code on its
+  # own (site, visit); a 0 code carries no effect.
+  re_view <- .ocre_view(re, total + n_field)
+  for (rb in re_view) {
+    off <- matrix(.ocre_offset(rb, theta), N, J, byrow = TRUE)
+    if (rb$arm == 1L) eta_p   <- eta_p   + off
+    else              eta_pos <- eta_pos + off
   }
 
   valid <- model$valid; y <- model$y; y_pos <- model$y_pos
@@ -287,7 +364,17 @@
     lp_field <- bk$lp
   }
 
-  lp  <- lp_data + lp_field
+  # RE blocks trail the field block, each scoring against its own arm's per-row
+  # eta-gradient (site-major, matching `codes`).
+  lp_re <- 0
+  for (rb in re_view) {
+    g_row <- if (rb$arm == 1L) as.numeric(t(g_eta_p)) else as.numeric(t(g_eta_pos))
+    bk    <- .ocre_backward(rb, theta, g_row)
+    grad  <- c(grad, bk$grad)
+    lp_re <- lp_re + bk$lp
+  }
+
+  lp  <- lp_data + lp_field + lp_re
   ib2 <- 1 / sigma.beta^2
   nb  <- n_coef
   bv  <- theta[seq_len(nb)]
@@ -297,6 +384,71 @@
   lp   <- lp - 0.5 * ild2 * log_disp^2
   grad[total] <- grad[total] - ild2 * log_disp
   list(lp = lp, grad = grad)
+}
+
+# Resolve the model's observation-arm RE term designs
+# (.occu_cover_obs_re_design, shared with the nested-Laplace path) into the
+# sampler's block descriptions: arm code 1 = detection, 2 = positive cover, one
+# block per grouping factor in formula order (so crossed / nested groupings are
+# simply several blocks). `sigma_lsd` is the prior SD of log sigma_re.
+#
+# The sampler's block is a scalar per group, so a random SLOPE -- which needs a
+# per-row design weight (uncorrelated) or a multivariate free-Sigma block
+# (correlated) -- is rejected here rather than silently fitted as an intercept.
+# Returns NULL when the model carries no observation-arm RE.
+.occu_cover_nuts_re_blocks <- function(model, sigma_lsd = 1.5) {
+  arms <- list(list(tag = "p",   code = 1L, terms = model$re_det),
+               list(tag = "pos", code = 2L, terms = model$re_pos))
+  out <- list()
+  for (a in arms) {
+    for (d in a$terms %||% list()) {
+      if (!identical(d$type, "intercept") || !identical(d$n_coefs, 1L)) {
+        stop(sprintf(paste0(
+          "occu_cover() method = \"nuts\" samples random INTERCEPT blocks on the ",
+          "detection / positive-cover arms: one scalar deviation per level of a ",
+          "grouping factor. The %s term `%s` is a random SLOPE, which needs the ",
+          "grid-integrated method = \"nested_laplace\" path (weighted iid blocks ",
+          "for `||`, a free-Sigma `miid` block for `|`)."),
+          a$tag, d$term_label), call. = FALSE)
+      }
+      out[[length(out) + 1L]] <- list(
+        arm = a$code, arm_tag = a$tag, group = as.integer(d$codes_flat),
+        n_groups = as.integer(d$n_groups), sigma_lsd = as.numeric(sigma_lsd),
+        var = d$var, levels = d$levels)
+    }
+  }
+  if (!length(out)) NULL else out
+}
+
+# Public names for the RE coordinates, derived from the SAME arm/term naming the
+# nested-Laplace postprocess uses (.occu_cover_re_sigma_names): a lone term on an
+# arm keeps the bare `sigma_re_p` / `sigma_re_pos`, crossed / nested terms
+# sharing an arm are disambiguated by the grouping variable. The sampled
+# coordinate is the log SD, and the whitened deviations reuse the same stem.
+.occu_cover_nuts_re_names <- function(blocks) {
+  sig  <- .occu_cover_re_sigma_names(
+    lapply(blocks, function(b) list(arm = b$arm_tag, var = b$var)))
+  stem <- sub("^sigma_re", "re", sig)
+  unlist(lapply(seq_along(blocks), function(i)
+    c(paste0(stem[i], "_z", seq_len(blocks[[i]]$n_groups)),
+      paste0("log_", sig[i]))))
+}
+
+# Per-(site, visit) RE offset matrices at a given set of block deviations
+# `b_list` (one numeric vector of per-group offsets per block), on the padded
+# [n_sites x max_visits] grid the arm predictors live on. Returns one matrix per
+# observation arm, so the fit's log-likelihood is evaluated at the predictor the
+# sampler ran on.
+.occu_cover_nuts_re_offsets <- function(blocks, b_list, N, J) {
+  z <- matrix(0, N, J)
+  out <- list(p = z, pos = z)
+  for (i in seq_along(blocks)) {
+    rb <- blocks[[i]]
+    off <- ifelse(rb$group > 0L, b_list[[i]][pmax(rb$group, 1L)], 0)
+    tag <- rb$arm_tag
+    out[[tag]] <- out[[tag]] + matrix(off, N, J, byrow = TRUE)
+  }
+  out
 }
 
 # Build the C++ NUTS spec list from a bound non-spatial occu_cover model. NULL
@@ -332,11 +484,17 @@
 # same tobs_fit shape .tobs_fit_occu_cover returns so coef / vcov / confint /
 # predict / WAIC read the NUTS posterior. The occu_cover path is not autoscaled,
 # so the returned draws / means / vcov are already on the natural coefficient
-# scale. `sigma.logdisp` is an internal weak-prior width (no control knob, like
-# abun's sigma.logr). `...` absorbs unused sampler controls (n.thin / n.threads /
-# progress.*).
+# scale.
+#
+# An observation-arm random intercept (gcol33/tulpaObs#205) rides the same target
+# as one non-centered block per grouping factor, with its group SD SAMPLED rather
+# than pinned or grid-integrated. `sigma.logdisp` and `sigma.logre` are internal
+# weak-prior widths (no control knob, like abun's sigma.logr): the log-dispersion
+# and each log group SD. `...` absorbs unused sampler controls (n.thin /
+# n.threads / progress.*).
 .tobs_fit_occu_cover_nuts <- function(model, priors = NULL,
                                       sigma.beta = NULL, sigma.logdisp = 5,
+                                      sigma.logre = 1.5,
                                       n.iter = NULL, n.warmup = NULL,
                                       n.chains = NULL, max.treedepth = NULL,
                                       adapt.delta = NULL, seed = NULL,
@@ -347,6 +505,7 @@
   pin   <- model$process_info
   p_occ <- pin[[1L]]$p; p_p <- pin[[2L]]$p; p_pos <- pin[[3L]]$p
   n_par <- p_occ + p_p + p_pos + 1L
+  N <- model$n_sites; J <- model$max_visits
 
   par_names <- c(
     paste0("psi_", pin[[1L]]$coef_names),
@@ -355,15 +514,35 @@
     if (identical(model$positive, "beta")) "log_phi" else "log_sigma_pos"
   )
 
+  # Observation-arm random intercepts (gcol33/tulpaObs#205): one non-centered
+  # block per grouping factor on the detection / positive-cover arm, each with
+  # its own SAMPLED log sigma_re. Resolved before the warm fit so an unsupported
+  # term errors immediately.
+  re_blocks <- .occu_cover_nuts_re_blocks(model, sigma_lsd = sigma.logre)
+  re_names  <- if (is.null(re_blocks)) NULL else .occu_cover_nuts_re_names(re_blocks)
+  n_re_coef <- if (is.null(re_blocks)) 0L
+               else sum(vapply(re_blocks, function(b) b$n_groups + 1L, numeric(1)))
+
   # Warm start at the Laplace mode + a diagonal Laplace metric from its vcov.
+  # The RE coordinates start whitened at 0 with a moderate sigma_re, the
+  # convention the observation-family samplers share (nuts_chains.R).
   warm <- .tobs_fit_occu_cover(model, method = "laplace", priors = priors,
                                sigma.beta = sigma.beta, verbose = FALSE)
   theta0 <- as.numeric(warm$means)
   V <- as.matrix(warm$vcov)
   inv_metric <- if (!is.null(V) && all(dim(V) == n_par) && all(is.finite(diag(V))))
                   pmax(diag(V), 1e-6) else rep(1, n_par)
+  for (b in re_blocks %||% list()) {
+    theta0     <- c(theta0, rep(0, b$n_groups), log(0.5))
+    inv_metric <- c(inv_metric, rep(1, b$n_groups), 0.25)
+  }
 
   spec <- .tobs_occu_cover_nuts_spec(model)
+  if (!is.null(re_blocks)) {
+    spec$re_blocks <- lapply(re_blocks, function(b)
+      list(re_arm = b$arm, re_group = b$group, n_re_groups = b$n_groups,
+           sigma_re_lsd = b$sigma_lsd))
+  }
 
   run_chain <- function(ch) {
     cpp_occu_cover_nuts(
@@ -376,21 +555,60 @@
   n_chains <- max(1L, as.integer(n.chains))
   chains   <- lapply(seq_len(n_chains), run_chain)
   per_chain_draws <- lapply(chains, `[[`, "draws")
-  draws    <- do.call(rbind, per_chain_draws)
-  colnames(draws) <- par_names
+  all_draws <- do.call(rbind, per_chain_draws)
+  colnames(all_draws) <- c(par_names, re_names)
+  # The reported draw matrix is the coefficient block: `coef` / `vcov` / the WAIC
+  # substrate read it positionally, with the trailing column the log-dispersion.
+  # The RE coordinates are summarised on fit$re instead (fit$re_draws keeps them
+  # per draw), the same split the spatial sampler makes for its field.
+  draws    <- all_draws[, seq_len(n_par), drop = FALSE]
   n_draws  <- nrow(draws)
 
   means  <- colMeans(draws); names(means) <- par_names
   V_post <- stats::cov(draws); dimnames(V_post) <- list(par_names, par_names)
   sds    <- sqrt(pmax(diag(V_post), 0)); names(sds) <- par_names
 
+  # Per-block RE posterior: sigma_re = exp(log_sigma_re) and the per-group
+  # deviations b_g = sigma_re * z_g, on the natural scale. A positive variance
+  # component at a few dozen groups is right-skewed, so the median is reported
+  # alongside the mean as the summary to quote against a known truth.
+  re_out <- NULL
+  if (!is.null(re_blocks)) {
+    k <- n_par
+    re_out <- lapply(seq_along(re_blocks), function(i) {
+      rb  <- re_blocks[[i]]
+      idx <- k + seq_len(rb$n_groups); k <<- k + rb$n_groups + 1L
+      sig <- exp(all_draws[, k])
+      blup <- sig * all_draws[, idx, drop = FALSE]
+      list(arm = rb$arm_tag, var = rb$var, levels = rb$levels,
+           n_groups = rb$n_groups, n_coefs = 1L, coef_names = "(Intercept)",
+           correlated = FALSE,
+           sigma = mean(sig), sigma_median = stats::median(sig),
+           sigma_sd = stats::sd(sig),
+           sigma_draws = as.numeric(sig),
+           blup = colMeans(blup), blup_sd = apply(blup, 2L, stats::sd))
+    })
+    names(re_out) <- .occu_cover_re_keys(
+      vapply(re_blocks, `[[`, character(1), "arm_tag"),
+      vapply(re_blocks, function(b) as.character(b$var), character(1)))
+  }
+
   # Data log-likelihood at the posterior mean (scale-invariant), so logLik() on
-  # the NUTS fit matches the laplace-path convention. Reuses the shared marginal.
+  # the NUTS fit matches the laplace-path convention. Reuses the shared marginal,
+  # evaluated at the predictor the sampler ran on: the RE offsets enter the
+  # detection arm on its logit scale and the cover arm on its link scale.
   bo   <- means[seq_len(p_occ)]
   bp   <- means[p_occ + seq_len(p_p)]
   bpos <- means[p_occ + p_p + seq_len(p_pos)]
   eta  <- .occu_cover_eta_from_par(model, bo, bp, bpos)
-  ll_mean <- sum(.occu_cover_site_ll(model, eta$psi, eta$p_mat, eta$ep_mat, means[n_par]))
+  p_mat <- eta$p_mat; ep_mat <- eta$ep_mat
+  if (!is.null(re_blocks)) {
+    off <- .occu_cover_nuts_re_offsets(
+      re_blocks, lapply(re_out, `[[`, "blup"), N, J)
+    p_mat  <- stats::plogis(.tobs_clamp_eta(stats::qlogis(p_mat) + off$p))
+    ep_mat <- ep_mat + off$pos
+  }
+  ll_mean <- sum(.occu_cover_site_ll(model, eta$psi, p_mat, ep_mat, means[n_par]))
 
   accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
   divergent <- as.integer(unlist(lapply(chains, `[[`, "divergent")))
@@ -401,6 +619,22 @@
   nuts <- list(accept_prob = accept, divergent = divergent, treedepth = treedepth,
                epsilon = epsilon, n_chains = n_chains, divergent_total = sum(divergent),
                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp)
+
+  # Per-group SD convergence over the natural-scale sigma_re draws, chain by
+  # chain (exp is monotone, so this is the split-Rhat of the sampled coordinate).
+  if (!is.null(re_blocks)) {
+    ends   <- cumsum(vapply(per_chain_draws, nrow, integer(1)))
+    starts <- c(1L, ends[-length(ends)] + 1L)
+    sig_ch <- lapply(seq_len(n_chains), function(ch)
+      do.call(cbind, lapply(re_out, function(r)
+        r$sigma_draws[starts[ch]:ends[ch]])))
+    dg <- .tobs_nuts_rhat_ess(sig_ch)
+    names(dg$rhat) <- names(dg$ess) <- names(re_out)
+    nuts$sigma_logre  <- sigma.logre
+    nuts$re_sigma     <- vapply(re_out, `[[`, numeric(1), "sigma")
+    nuts$re_sigma_rhat <- dg$rhat
+    nuts$re_sigma_ess  <- dg$ess
+  }
 
   fit <- structure(list(
     draws        = draws,
@@ -421,6 +655,9 @@
     process_info = pin,
     model        = model,
     spatial      = NULL,
+    re           = re_out,
+    re_draws     = if (is.null(re_blocks)) NULL
+                   else all_draws[, n_par + seq_len(n_re_coef), drop = FALSE],
     method       = "nuts",
     positive     = model$positive,
     nuts         = nuts,
@@ -429,9 +666,11 @@
 
   # Per-parameter split-R-hat / bulk + tail ESS, through the writer every sampled
   # path shares, so summary.tobs_fit surfaces them per parameter; `fit$nuts`
-  # carries the same two vectors alongside the sampler diagnostics.
+  # carries the same two vectors alongside the sampler diagnostics. Reported over
+  # the coefficient block, the coordinates `summary()` puts on its rows.
   fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws,
-                                       par_names = par_names)
+                                       par_names = par_names,
+                                       cols = seq_len(n_par))
   fit$nuts$rhat <- fit$convergence$rhat
   fit$nuts$ess  <- fit$convergence$ess_bulk
   fit

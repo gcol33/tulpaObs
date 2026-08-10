@@ -46,6 +46,17 @@
   }, character(1))
 }
 
+# `fit$re` key for each RE block, on the same rule as the hyperparameter names: a
+# lone term on an arm is keyed by the arm ("psi" / "p" / "pos"), crossed / nested
+# terms sharing an arm by "<arm>:<var>". ranef() stacks the list and predict()
+# sums every term on the arm it predicts, so both read these keys.
+.occu_cover_re_keys <- function(arms, vars) {
+  counts <- table(arms)
+  vapply(seq_along(arms), function(i)
+    if (counts[[arms[[i]]]] > 1L) paste0(arms[[i]], ":", vars[[i]])
+    else arms[[i]], character(1))
+}
+
 # Post-process an occu_cover joint-coupled engine fit into a tobs_fit. `fit` is
 # the tulpa_nested_laplace_joint return (single-species) or a per-species slice
 # of a batched fused fit assembled to the same shape (gcol33/tulpa#66); `ctx`
@@ -582,11 +593,10 @@
     # arm are keyed "<arm>:<var>". ranef() stacks them; predict() sums every term
     # on the predicted arm.
     re           = if (length(re_terms)) {
-                     arms <- vapply(re_terms, `[[`, character(1), "arm")
-                     counts <- table(arms)
-                     keys <- vapply(re_terms, function(t)
-                       if (counts[[t$arm]] > 1L) paste0(t$arm, ":", t$var)
-                       else t$arm, character(1))
+                     keys <- .occu_cover_re_keys(
+                       vapply(re_terms, `[[`, character(1), "arm"),
+                       vapply(re_terms, function(t) as.character(t$var),
+                              character(1)))
                      stats::setNames(lapply(re_terms, function(t) {
                        # Intercept term -> per-group BLUP vector (back-compat);
                        # slope term -> [n_groups x n_coefs] matrix with coef-named
