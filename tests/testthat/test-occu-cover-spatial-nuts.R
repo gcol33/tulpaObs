@@ -60,13 +60,23 @@
 }
 
 .ocsn_fit <- function(inp, method = "nuts", spatial = TRUE, control = list(),
-                      field = "car_proper") {
+                      field = "car_proper", positive = ~ pos_cov1) {
   f <- if (!spatial) ~ occ_cov1
        else stats::as.formula(sprintf("~ occ_cov1 + %s(graph = inp$adj)", field))
   tobs(formula = f, data = inp$cell_dat, family = occu_cover(inp$positive),
-       detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
+       detection = ~ det_cov1, positive = positive, y = inp$od$y,
        y_pos = inp$y_pos, visits = inp$od$det.covs, method = method,
        control = control)
+}
+
+# The occurrence field carried onto the cover arm, which is what the simulator's
+# `alpha` puts there: a bare areal term loads on occurrence alone under both
+# engines (gcol33/tulpaObs#217), so a fixture simulated with alpha > 0 is fitted
+# with the copy declared.
+.ocsn_fit_coupled <- function(inp, method = "nuts", control = list(),
+                              field = "car_proper") {
+  .ocsn_fit(inp, method, spatial = TRUE, control = control, field = field,
+            positive = ~ pos_cov1 + copy(spatial()))
 }
 
 
@@ -378,6 +388,9 @@ test_that("occu_cover spatial NUTS recovers betas, field, coverage (lognormal)",
   skip_on_cran()
   skip_if_fast()
 
+  # The fixture simulates a field coupled onto the cover arm (alpha = 1), so the
+  # fitted model declares the copy; a bare areal term is an occurrence-only field
+  # (#217) and would be fitting a different model than the one simulated.
   n_seeds <- 5L
   side <- 8L; J <- 5L
   est <- se <- matrix(NA_real_, n_seeds, 7L)
@@ -386,7 +399,7 @@ test_that("occu_cover spatial NUTS recovers betas, field, coverage (lognormal)",
   for (s in seq_len(n_seeds)) {
     inp <- .ocsn_inputs(side = side, J = J, seed = 2000L + s, positive = "lognormal")
     truth <- inp$truth
-    nut <- tryCatch(.ocsn_fit(inp, "nuts",
+    nut <- tryCatch(.ocsn_fit_coupled(inp, "nuts",
                     control = list(verbose = FALSE, n.iter = 1200L,
                                    n.warmup = 800L, n.chains = 2L, seed = 1L)),
                     error = function(e) NULL)
@@ -435,7 +448,7 @@ test_that("occu_cover spatial NUTS + icar coupled field recovers betas + field (
   for (s in seq_len(n_seeds)) {
     inp <- .ocsn_inputs(side = side, J = J, seed = 3000L + s, positive = "lognormal")
     truth <- inp$truth
-    nut <- tryCatch(.ocsn_fit(inp, "nuts", field = "icar",
+    nut <- tryCatch(.ocsn_fit_coupled(inp, "nuts", field = "icar",
                     control = list(verbose = FALSE, n.iter = 1200L,
                                    n.warmup = 800L, n.chains = 2L, seed = 1L)),
                     error = function(e) NULL)
@@ -480,9 +493,11 @@ test_that("occu_cover spatial NUTS beta SDs calibrate to nested-Laplace SEs", {
   expect_equal(nut$method, "nuts")
   expect_lte(nut$nuts$divergent_total, 5L)
   # The sampler no longer conditions on the warm fit's hypers (#204): it reports
-  # which it integrated over and which (none, on a car_proper fit) it pinned.
-  expect_setequal(nut$nuts$sampled_hyper, c("sigma", "rho", "alpha"))
-  expect_identical(nut$nuts$fixed_hyper, character(0))
+  # which it integrated over and which it pinned. This fit's psi formula carries
+  # a bare areal term, so the field is on occurrence alone and the copy
+  # amplitude is pinned at 0 (#217); the field's own two hypers are sampled.
+  expect_setequal(nut$nuts$sampled_hyper, c("sigma", "rho"))
+  expect_identical(nut$nuts$fixed_hyper, "alpha")
 
   # The slope-coefficient SDs (psi / p / cover) calibrate to the grid-integrated
   # nested-Laplace SEs (the field hyper is fixed at the same kind of estimate).
@@ -505,7 +520,7 @@ test_that("occu_cover spatial NUTS recovers betas + field (beta arm, smoke)", {
     inp <- .ocsn_inputs(side = side, J = J, seed = 5000L + s, positive = "beta",
                         phi = 20)
     truth <- inp$truth
-    nut <- tryCatch(.ocsn_fit(inp, "nuts",
+    nut <- tryCatch(.ocsn_fit_coupled(inp, "nuts",
                     control = list(verbose = FALSE, n.iter = 1200L,
                                    n.warmup = 800L, n.chains = 1L, seed = 1L)),
                     error = function(e) NULL)
@@ -529,25 +544,33 @@ test_that("occu_cover spatial NUTS reports its hypers honestly per fit (#204)", 
   ctl <- list(verbose = FALSE, n.iter = 200L, n.warmup = 200L, n.chains = 1L,
               seed = 1L)
 
-  # icar carries no mixing parameter, so rho is pinned at 1 and says so; sigma
-  # and alpha are sampled and carry a posterior.
+  # icar carries no mixing parameter, so rho is pinned at 1 and says so; a bare
+  # areal term asks for no cover-arm copy, so alpha is pinned at 0 and says so
+  # (#217); sigma is sampled and carries a posterior.
   f_icar <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl)
-  expect_setequal(f_icar$nuts$sampled_hyper, c("sigma", "alpha"))
-  expect_identical(f_icar$nuts$fixed_hyper, "rho")
+  expect_identical(f_icar$nuts$sampled_hyper, "sigma")
+  expect_setequal(f_icar$nuts$fixed_hyper, c("rho", "alpha"))
   expect_equal(unname(f_icar$nuts$fixed_hyper_values[["rho"]]), 1)
+  expect_equal(unname(f_icar$nuts$fixed_hyper_values[["alpha"]]), 0)
   expect_true(all(c("sigma", "rho", "alpha", "field_sd") %in%
                   colnames(f_icar$hyper_draws)))
   expect_gt(f_icar$nuts$hyper_sd[["sigma"]], 0)
-  expect_gt(f_icar$nuts$hyper_sd[["alpha"]], 0)
+  expect_equal(f_icar$nuts$hyper_sd[["alpha"]], 0)
   expect_equal(f_icar$nuts$hyper_sd[["rho"]], 0)
 
-  # bym2 and car_proper sample all three.
+  # bym2 and car_proper sample the field's own two hypers.
   for (ty in c("bym2", "car_proper")) {
     ft <- .ocsn_fit(inp, "nuts", field = ty, control = ctl)
-    expect_setequal(ft$nuts$sampled_hyper, c("sigma", "rho", "alpha"))
-    expect_identical(ft$nuts$fixed_hyper, character(0))
+    expect_setequal(ft$nuts$sampled_hyper, c("sigma", "rho"))
+    expect_identical(ft$nuts$fixed_hyper, "alpha")
     expect_gt(ft$nuts$hyper_sd[["rho"]], 0)
   }
+
+  # A copy() puts the amplitude back among the sampled hypers.
+  f_cp <- .ocsn_fit_coupled(inp, "nuts", control = ctl, field = "icar")
+  expect_setequal(f_cp$nuts$sampled_hyper, c("sigma", "alpha"))
+  expect_identical(f_cp$nuts$fixed_hyper, "rho")
+  expect_gt(f_cp$nuts$hyper_sd[["alpha"]], 0)
 
   # An explicitly pinned fit reports all three as fixed, at the warm values.
   f_fix <- .ocsn_fit(inp, "nuts", field = "car_proper",
@@ -570,7 +593,10 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
   # Two targets, both stated on the sampler's own scale:
   #   alpha     the cover-arm copy amplitude -- dimensionless, and defined
   #             identically by the simulator (eta_pos += alpha * sigma * f) and
-  #             the fitter, so the truth needs no conversion.
+  #             the fitter, so the truth needs no conversion. The simulated truth
+  #             couples the field onto the cover arm, so the fitted model
+  #             declares that with copy(spatial()): a bare areal term is an
+  #             occurrence-only field and pins alpha at 0 (#217).
   #   field_sd  the geometric-mean marginal SD of the field the block implies at
   #             that draw's hypers. The simulator's f carries geo-mean marginal
   #             variance 1 (Sorbye-Rue), so the truth is exactly `sigma`. sigma
@@ -586,7 +612,7 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
     for (s in seq_len(n_seeds)) {
       inp <- .ocsn_inputs(side = side, J = J, seed = 7000L + s,
                           sigma = sig_true, alpha = alpha_true)
-      nut <- tryCatch(.ocsn_fit(inp, "nuts", field = ty,
+      nut <- tryCatch(.ocsn_fit_coupled(inp, "nuts", field = ty,
                         control = list(verbose = FALSE, n.iter = 1000L,
                                        n.warmup = 800L, n.chains = 2L,
                                        seed = 1L)),
@@ -648,11 +674,8 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
 # Same fixture as .ocsn_fit, with a copy() term on the positive formula.
 .ocsn_fit_copy <- function(inp, pos_formula, control = list(),
                            field = "car_proper") {
-  f <- stats::as.formula(sprintf("~ occ_cov1 + %s(graph = inp$adj)", field))
-  tobs(formula = f, data = inp$cell_dat, family = occu_cover(inp$positive),
-       detection = ~ det_cov1, positive = pos_formula, y = inp$od$y,
-       y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
-       control = control)
+  .ocsn_fit(inp, "nuts", spatial = TRUE, control = control, field = field,
+            positive = pos_formula)
 }
 
 test_that("occu_cover spatial NUTS honours a copy()'s fixed amplitude (#210)", {
@@ -719,4 +742,114 @@ test_that("occu_cover spatial NUTS refuses a copy() it cannot resolve (#210)", {
     .ocsn_fit_copy(inp, ~ pos_cov1 + copy("occ_space", alpha = 0.35),
                    control = ctl),
     "not a string")
+})
+
+
+# --------------------------------------------------------------------------- #
+# A bare areal term is occurrence-only on BOTH engines (gcol33/tulpaObs#217)    #
+# --------------------------------------------------------------------------- #
+
+# The grid-integrated route on the same input, for the two-backend comparison.
+# icar, because that is the field kind both engines accept.
+.ocsn_fit_nl <- function(inp, positive = ~ pos_cov1, control = list()) {
+  suppressWarnings(.ocsn_fit(
+    inp, "nested_laplace", spatial = TRUE, field = "icar", positive = positive,
+    control = utils::modifyList(
+      list(verbose = FALSE, max.iter = 300L, engine = "joint"), control)))
+}
+
+test_that("occu_cover: a bare areal term loads on occurrence alone on both engines (#217)", {
+  skip_on_cran()
+  skip_if_fast()
+  # Same input, same model. The psi formula carries an areal term and the
+  # positive formula carries no copy(), so the field rides occupancy and the
+  # cover-arm copy amplitude is 0 under nuts exactly as under nested_laplace.
+  # Before this, the sampler kept the default amplitude axis and estimated a
+  # cover-arm copy the deterministic route had pinned away.
+  inp <- .ocsn_inputs(side = 6L, J = 4L, seed = 11L)
+  ctl <- list(verbose = FALSE, n.iter = 400L, n.warmup = 400L, n.chains = 1L,
+              seed = 1L)
+
+  nut <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl)
+  nl  <- .ocsn_fit_nl(inp)
+
+  # nuts: alpha pinned at 0, and the record says so. `fixed_hyper` is a character
+  # vector (#204), so this cannot be read as a stale TRUE / FALSE flag.
+  expect_true(is.character(nut$nuts$fixed_hyper))
+  expect_true("alpha" %in% nut$nuts$fixed_hyper)
+  expect_false("alpha" %in% nut$nuts$sampled_hyper)
+  expect_equal(unname(nut$nuts$fixed_hyper_values[["alpha"]]), 0)
+  # Pinned in every draw, not merely centred at 0.
+  expect_true(all(nut$hyper_draws[, "alpha"] == 0))
+  expect_equal(unname(nut$nuts$hyper_sd[["alpha"]]), 0)
+
+  # nested_laplace: the same amplitude, from the grid the dispatcher pins at 0.
+  expect_equal(nl$spatial$alpha_mean, 0)
+
+  # ... and the two backends then recover the same occurrence field.
+  expect_gt(abs(stats::cor(nut$spatial_field, nl$spatial_field)), 0.8)
+})
+
+test_that("occu_cover: copy() puts the amplitude back on both engines (#217)", {
+  skip_on_cran()
+  skip_if_fast()
+  inp <- .ocsn_inputs(side = 6L, J = 4L, seed = 11L, alpha = 1.0)
+  ctl <- list(verbose = FALSE, n.iter = 400L, n.warmup = 400L, n.chains = 1L,
+              seed = 1L)
+  pos <- ~ pos_cov1 + copy(spatial())
+
+  nut <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl, positive = pos)
+  nl  <- .ocsn_fit_nl(inp, positive = pos)
+
+  expect_true("alpha" %in% nut$nuts$sampled_hyper)
+  expect_gt(nut$nuts$hyper_mean[["alpha"]], 0)
+  expect_gt(nl$spatial$alpha_mean, 0)
+
+  # The default copy() rides the same amplitude axis the pre-#217 no-copy fit
+  # used, so an explicit copy() is the spelling that reproduces it.
+  ctrl_copy <- tulpaObs:::.occu_cover_nuts_copy_control(
+    list(structure(list(id = "spatial()", selector_type = "spatial",
+                        selector_group = NULL, component = NULL,
+                        alpha_integrate = NA, alpha_grid = NULL,
+                        copy_terms = NULL), class = "tobs_copy")),
+    list(group_var = NULL), list())
+  expect_equal(as.numeric(ctrl_copy$alpha.grid),
+               as.numeric(tulpaObs:::.tobs_default_alpha_grid()))
+})
+
+test_that("occu_cover: control$alpha.grid overrides the amplitude on both engines (#217)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The low-level knob stays live: a user who names the axis gets it, on either
+  # engine, and the translation steps aside.
+  inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
+  ctl <- list(verbose = FALSE, n.iter = 200L, n.warmup = 200L, n.chains = 1L,
+              seed = 1L)
+
+  band <- .ocsn_fit(inp, "nuts", field = "icar",
+                    control = c(ctl, list(alpha.grid = c(0.2, 0.5))))
+  expect_true("alpha" %in% band$nuts$sampled_hyper)
+  a <- band$hyper_draws[, "alpha"]
+  expect_gte(min(a), 0.2 - 1e-8)
+  expect_lte(max(a), 0.5 + 1e-8)
+
+  # A one-node axis pins the amplitude. The warm fit reaches it as a grid-weight
+  # average over that one node, so it carries the last bit of the weight
+  # normalisation; the pinning itself is exact (zero spread across draws).
+  pinned <- .ocsn_fit(inp, "nuts", field = "icar",
+                      control = c(ctl, list(alpha.grid = 0.8)))
+  expect_true("alpha" %in% pinned$nuts$fixed_hyper)
+  expect_equal(unname(pinned$nuts$fixed_hyper_values[["alpha"]]), 0.8)
+  expect_equal(unname(pinned$nuts$hyper_sd[["alpha"]]), 0)
+  expect_equal(range(pinned$hyper_draws[, "alpha"]), c(0.8, 0.8))
+
+  # Same knob, same meaning on the grid-integrated route. A one-node axis is the
+  # assertion that carries: the reported amplitude of a MULTI-node axis is the
+  # engine's own derived posterior mean, which is not confined to the nodes.
+  nl_pin <- .ocsn_fit_nl(inp, control = list(alpha.grid = 0.8))
+  expect_equal(nl_pin$spatial$alpha_mean, 0.8)
+  nl_band <- .ocsn_fit_nl(inp, control = list(alpha.grid = c(0.2, 0.5)))
+  expect_gt(nl_band$spatial$alpha_mean, 0)
+  expect_false(isTRUE(all.equal(nl_band$spatial$alpha_mean,
+                                nl_pin$spatial$alpha_mean)))
 })

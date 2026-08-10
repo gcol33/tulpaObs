@@ -273,14 +273,16 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' (`icar()` / `bym2()` / `car_proper()`), written either as an areal term or as
 #' the single-column bar `spatial(~ 1 || cell, graph = adj)`, TOGETHER WITH its
 #' hyperparameters: the field SD, the mixing (`bym2`) or spatial-correlation
-#' (`car_proper`) parameter, and the cover-arm copy amplitude. Their priors are
+#' (`car_proper`) parameter, and - where the formula asks for one - the cover-arm
+#' copy amplitude. Their priors are
 #' flat over the same outer-grid span the `nested_laplace` path integrates
 #' against, in that grid's own coordinate, and the same `control$sigma.grid` /
 #' `alpha.grid` / `rho.car.grid` knobs set it on both routes - so the sampler is
 #' an independent reference for the hyperparameter layer rather than a fit
 #' conditioned on that layer's point estimate. `fit$nuts$sampled_hyper` and
 #' `fit$nuts$fixed_hyper` name which is which per fit (`icar` pins `rho` at 1:
-#' the intrinsic precision has no mixing parameter), `fit$hyper_draws` carries
+#' the intrinsic precision has no mixing parameter; a field with no `copy()` pins
+#' the copy amplitude at 0), `fit$hyper_draws` carries
 #' their posterior alongside `field_sd`, the geometric-mean marginal SD the
 #' field implies. `control$fixed.hyper = TRUE` conditions on the warm
 #' nested-Laplace estimate instead. The sampler carries one field block, so a
@@ -294,25 +296,50 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' arms stays near nominal). The non-spatial `nuts` path gives fully calibrated
 #' occupancy intervals.
 #'
+#' @section What a bare areal term means for the cover arm:
+#' A term's process is the formula it sits in. An areal term written in the
+#' occurrence formula therefore loads on the OCCURRENCE arm alone: the cover arm
+#' sees no field, and the copy amplitude `alpha` is 0. This holds under
+#' `method = "nested_laplace"` and `method = "nuts"` alike, so the same input
+#' fits the same model on either engine.
+#'
+#' To carry the occurrence field onto the cover arm as well, write the copy in
+#' the `positive` formula:
+#'
+#' ```r
+#' positive = ~ pos_cov + copy(spatial())                     # amplitude estimated
+#' positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over a given grid
+#' positive = ~ pos_cov + copy(spatial(), alpha = 0.5)          # fixed
+#' ```
+#'
+#' The amplitude is integrated over that grid on the `nested_laplace` path and
+#' sampled over its span on the `nuts` path; a scalar `alpha =` pins it on both.
+#' `control$alpha.grid` is the lower-level spelling of the same coupling and
+#' likewise sets it on both engines; set the amplitude with `copy()` or with
+#' `control$alpha.grid`, not both.
+#'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engine (`method = "nested_laplace"`, default
-#' `control$engine = "joint"`) couples one shared areal field (the
+#' `control$engine = "joint"`) can share one areal field (the
 #' cell intercept, an unweighted `icar()` / `bym2()` term) across the occupancy
-#' and cover arms. ADDITIONAL coupled fields - spatially-varying coefficients,
+#' and cover arms, when the `positive` formula copies it. ADDITIONAL coupled
+#' fields - spatially-varying coefficients,
 #' e.g. a temporal trend - are added as *weighted* areal terms in the formula:
 #'
 #' ```r
 #' ~ elev + icar(graph = adj) + icar(graph = adj, weight = year)
 #' ```
 #'
-#' Each weighted term `icar(graph, weight = col)` is a second coupled field
-#' whose contribution to a predictor row is `weight_i * z[cell_i]`. All coupled
-#' fields share the same graph; each couples onto the cover arm with its own
+#' Each weighted term `icar(graph, weight = col)` is a second field whose
+#' contribution to a predictor row is `weight_i * z[cell_i]`. All such fields
+#' share the same graph; a `copy()` carries one onto the cover arm with its own
 #' scale (`alpha` for the intercept field, `alpha_trend` for a trend field),
-#' integrated over the outer grid. The intercept field is reported in
-#' `fit$spatial_field`, trend fields in `fit$trend_field` / `fit$trend_fields`.
-#' The trend coupling grid defaults to `control$alpha.grid`; override it with
-#' `control$alpha.grid.trend`.
+#' integrated over the outer grid, and a field the `positive` formula does not
+#' copy stays on occurrence. `copy(spatial(), terms = list(...))` gives a
+#' per-block amplitude and must address every block. The intercept field is
+#' reported in `fit$spatial_field`, trend fields in `fit$trend_field` /
+#' `fit$trend_fields`. The trend coupling grid defaults to
+#' `control$alpha.grid`; override it with `control$alpha.grid.trend`.
 #'
 #' A single trend field may also be requested out-of-band with
 #' `control = list(trend = list(weight = "<col>"))`, naming a numeric per-cell
@@ -361,9 +388,10 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' bar is fitted as a random effect; suppress it with [base::suppressMessages()].
 #'
 #' @section Independent field on the cover arm (placement):
-#' By default the occupancy field is shared: the cover arm sees it as
-#' `alpha * (occupancy field)`, the coregionalization copy on the outer
-#' `(sigma, alpha)` grid. When the cover trend is spatially structured but is not
+#' A `copy(spatial())` in the `positive` formula shares the occupancy field: the
+#' cover arm sees it as `alpha * (occupancy field)`, the coregionalization copy
+#' on the outer `(sigma, alpha)` grid. When the cover trend is spatially
+#' structured but is not
 #' a scalar multiple of the occupancy field, `alpha` collapses toward 0 and the
 #' cover arm inherits no field, so per-cell conditional cover (and its change over
 #' time, `delta_cover_cond`) comes out flat. A `spatial()` bar placed in the

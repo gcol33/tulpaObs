@@ -224,7 +224,17 @@
 
 
 # Map the positive arm's copy() spec(s) onto the sampled field's coupling
-# amplitude on the NUTS spatial path (gcol33/tulpaObs#210).
+# amplitude on the NUTS spatial path (gcol33/tulpaObs#210), including the
+# no-copy case, which pins the amplitude at 0 (gcol33/tulpaObs#217).
+#
+# A bare areal term on the psi formula loads on the OCCURRENCE arm alone under
+# both engines: a term's process is the formula it sits in, and copy() is how a
+# field is also placed on the cover arm. Running the translation unconditionally
+# is what makes that true here -- with no copy() the shared translation pins
+# alpha at 0, exactly as the grid-integrated route already did, instead of
+# leaving the default amplitude axis in place for the warm fit to estimate and
+# the sampler to then integrate over (gcol33/tulpaObs#204 made that axis visible
+# work rather than a silent default).
 #
 # `control$alpha.grid` is a live knob here, not a deterministic-backend-only
 # one: the sampler's warm nested-Laplace fit integrates that axis, and the axis
@@ -244,7 +254,6 @@
 # because it resolves the grid-integrated path's field roster and rejects
 # `car_proper()`, which is the sampled field's primary kind.
 .occu_cover_nuts_copy_control <- function(copies, nuts_sp, control) {
-  if (!length(copies)) return(control)
   field_view <- list(fields    = list(list(component = "intercept")),
                      group_var = nuts_sp$group_var)
   .occu_cover_apply_copy_coupling(copies, field_view, control)
