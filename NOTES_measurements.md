@@ -470,3 +470,65 @@ numbers above were produced by handing the callbacks a mesh spec with
 `shared = c(FALSE, TRUE)` and driving `tulpa::tulpa_em_laplace()` directly. The
 SPDE coverage matrix at the top of `R/laplace_helpers.R` calls that cell "wired
 (per source)", which describes the fitter, not the parser.
+
+## Component count of an areal graph (`.tobs_check_graph()`, #212)
+
+Measured on tulpa 0.0.195 / tulpaObs 0.0.194, Windows, R 4.6.0, against the
+engine's own `log_prior_icar` through `tulpa:::cpp_test_log_prior_icar` (which
+derives the component partition from the adjacency it is passed, so it reads the
+same partition a fit does).
+
+### The constraint was already per component
+
+Two disjoint 50-node chains, `tau = 1.7`, each component's values centred:
+
+| read | measured | one global constraint would give |
+|---|---|---|
+| pooled log-prior minus sum of the two independent ones | `0.000e+00` | non-zero |
+| `+c` on component 1, `-c` on component 2, `c = 0.10` | `-0.850000` | `0` |
+| same at `c = 0.25` | `-5.312500` | `0` |
+| same at `c = 0.50` | `-21.250000` | `0` |
+
+The charged values are exactly `-0.5 * tau * (n1 + n2) * c^2`. The shift keeps
+the GLOBAL sum at zero, so a single global sum-to-zero cannot see it at all.
+
+Two reads the equal-size fixture cannot make, both exact: a 70-node plus a
+30-node chain is still additive to `-5.7e-14`, and permuting the node ordering
+of that graph leaves the log-prior unchanged to `5.7e-14`. The second is what
+pins component MEMBERSHIP rather than only the count -- a contiguous
+equal-split assumption reproduces neither.
+
+An isolated node (a size-1 component) is charged `-0.5 * tau * v^2`, i.e. the
+augmentation leaves it a proper `N(0, 1/tau)` effect and does NOT pin it to
+zero, which a hard sum-to-zero on one node would do. That is the engine's
+behaviour in the abstract; tulpaObs's own areal cover paths reject an isolated
+node before fitting (`.occu_cover_icar_Q()`, `.occu_cover_adj_to_csr()`,
+`R/occu_cover_nuts.R:903`, `R/ms_occu_cover_spatial.R:345`), and that decision
+is unchanged -- the component report does not restate it.
+
+### What the "one constraint" reading actually measured
+
+`fit$spatial_field` is demeaned globally per field block
+(`.occu_cover_demean_fields()`), so on two EQUAL-size components the reported
+block means are exactly equal and opposite whatever the prior did. Three seeds
+of the pooled `occu_cover` fixture, 50 + 50 cells:
+
+| seed | RAW block means | reported block means | raw sum |
+|---|---|---|---|
+| 707 | `+0.026417 / -0.026866` | `+0.026642 / -0.026642` | `-0.000449` |
+| 708 | `-0.013865 / +0.013130` | `-0.013497 / +0.013497` | `-0.000735` |
+| 709 | `+0.060253 / -0.060560` | `+0.060407 / -0.060407` | `-0.000307` |
+
+`reported == raw - mean(raw)` holds on every seed. The raw component means are
+not forced equal and opposite; the reported ones are, by the demean. The
+global demean shifts every cell by the same constant, so it preserves the
+between-component contrast exactly (seed 707: raw `0.053283`, reported
+`0.053284`) and only removes the grand mean.
+
+### Single-component bit-identity
+
+A connected 50-node chain `occu_cover` fit, run with the component check in
+place and then with `.tobs_check_graph()` restored to its pre-change body:
+`identical()` is TRUE on `means`, `sds`, `vcov`, `spatial_field`,
+`log_marginal`, grid `modes`, `weights`, `theta_grid`, `log_det_Q` and
+`converged`, and the connected graph emits zero messages.

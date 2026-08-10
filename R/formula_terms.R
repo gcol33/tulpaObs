@@ -104,6 +104,68 @@
 # regions rather than over observations directly. When NULL the graph is over
 # the observations 1:1. `group_var` is a deferred column-name string (matching
 # tulpa's spatial_*() convention) — it is resolved by the engine, not here.
+# Connected components of an adjacency matrix, as a 1-based component label per
+# node. Iterative traversal over an explicit stack, so a long chain carries no
+# recursion-depth risk. Matches the labelling the engine derives from the same
+# graph (tulpa `inst/include/tulpa/graph_components.h`), which is what decides
+# how many null directions an intrinsic field carries.
+.tobs_graph_components <- function(graph) {
+  n <- nrow(graph)
+  if (is.null(n) || n == 0L) return(integer(0))
+  nb <- lapply(seq_len(n), function(i) which(graph[i, ] != 0))
+  label <- integer(n)
+  stack <- integer(n)
+  k <- 0L
+  for (s0 in seq_len(n)) {
+    if (label[s0] != 0L) next
+    k <- k + 1L
+    label[s0] <- k
+    top <- 1L
+    stack[1L] <- s0
+    while (top > 0L) {
+      s <- stack[top]
+      top <- top - 1L
+      for (t in nb[[s]]) {
+        if (label[t] == 0L) {
+          label[t] <- k
+          top <- top + 1L
+          stack[top] <- t
+        }
+      }
+    }
+  }
+  label
+}
+
+# Component sizes for the fit-time report, abbreviated past a handful so a map
+# with many islands does not print one number per island.
+.tobs_component_size_summary <- function(sizes) {
+  if (length(sizes) <= 8L) return(paste(sizes, collapse = ", "))
+  sprintf("%s, ... (largest %d, smallest %d)",
+          paste(sizes[seq_len(5L)], collapse = ", "),
+          max(sizes), min(sizes))
+}
+
+# An intrinsic areal field has one constant null direction per CONNECTED
+# COMPONENT of its graph, and the engine identifies each of them separately (one
+# sum-to-zero per component, tulpa `inst/include/tulpa/sum_to_zero.h`). A
+# disconnected graph is therefore fitted correctly, but it is also the shape an
+# adjacency takes when a spatial join has quietly dropped edges, and the
+# component count is invisible in the fitted object. Report it so the number of
+# pinned levels is on the record at fit time.
+.tobs_report_graph_components <- function(graph, term) {
+  label <- .tobs_graph_components(graph)
+  n_comp <- if (length(label)) max(label) else 0L
+  if (n_comp <= 1L) return(invisible(NULL))
+  sizes <- tabulate(label, nbins = n_comp)
+  message(sprintf(paste0(
+    "%s(): the graph has %d connected components (sizes %s). Each component ",
+    "carries its own constant, constrained separately (one sum-to-zero per ",
+    "component); the components share one field variance."),
+    term, n_comp, .tobs_component_size_summary(sizes)))
+  invisible(NULL)
+}
+
 .tobs_check_graph <- function(graph, term) {
   if (!is.matrix(graph)) {
     stop(sprintf("%s(): `graph` must be an adjacency matrix.", term), call. = FALSE)
@@ -111,6 +173,7 @@
   if (!isSymmetric(graph)) {
     stop(sprintf("%s(): `graph` must be symmetric.", term), call. = FALSE)
   }
+  .tobs_report_graph_components(graph, term)
 }
 
 # The PC prior anchor on a continuous field's range, `c(r0, alpha)` encoding

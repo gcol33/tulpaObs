@@ -1,5 +1,38 @@
 # tulpaObs NEWS
 
+## 0.0.195 (2026-08-10)
+
+* **An areal graph with more than one connected component says so at fit time**
+  (gcol33/tulpaObs#212). `icar()`, `bym2()`, `car()`, `car_proper()` and the
+  `spatial()` umbrella now report the component count and the component sizes
+  when the adjacency is disconnected. One shared check (`.tobs_check_graph()`)
+  covers every areal entry point; the traversal is a few lines of base R, no new
+  dependency. A single-node component shows up in those sizes; the areal cover
+  paths already reject an isolated node with a more specific error naming it, and
+  that guard is unchanged.
+
+  The CONSTRAINT itself was already right and is unchanged. An intrinsic field
+  carries one constant null direction per connected component, and the engine
+  has augmented the precision with one sum-to-zero per component since tulpa
+  `eb7e532` (shipped in 0.0.195), reading component MEMBERSHIP from the
+  adjacency rather than from a contiguous equal-split assumption. Measured
+  against the engine's own `log_prior_icar` on a disconnected graph: the pooled
+  log-prior equals the sum of the independent per-component log-priors exactly;
+  raising one component's level and lowering another's, which leaves the GLOBAL
+  sum at zero, is charged `tau * (n1 + n2) * c^2 / 2` where a single global
+  constraint would charge nothing; and the log-prior is invariant under a
+  permutation of the node ordering, which is what pins membership rather than
+  only the count. What #212 read as a missing constraint was the reporting
+  convention: `fit$spatial_field` is demeaned globally per field block
+  (`.occu_cover_demean_fields()`), which makes two equal-size components' means
+  exactly equal and opposite whatever the prior did. The RAW field's component
+  means are not (they sum to -4.5e-04 on the fixture that motivated the issue).
+
+  A single-component graph, the overwhelmingly common case, is silent and
+  bit-identical: `identical()` holds on the coefficient means, SDs, vcov, field,
+  log-marginal, grid modes, weights and grid of a connected-graph `occu_cover`
+  fit run with and without the check. `test-graph-components.R`.
+
 ## 0.0.194 (2026-08-10)
 
 * **Simulation-based calibration runs on a real observation-process family**

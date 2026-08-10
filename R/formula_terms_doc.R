@@ -38,6 +38,22 @@
 #' forwards to the same terms and additionally reads a bar, which is how areal
 #' varying coefficients are usually written (see below).
 #'
+#' An intrinsic areal field (\code{icar}, \code{bym2}, \code{car}) has one
+#' constant null direction per CONNECTED COMPONENT of its graph, and each of
+#' them is identified separately: the engine augments the precision with one
+#' sum-to-zero per component (INLA's \code{adjust.for.con.comp = TRUE}), and the
+#' components share one field variance. A graph with islands or with separate
+#' survey regions is therefore fitted as intended. Because the component count
+#' is also what an adjacency looks like when a spatial join has quietly dropped
+#' edges, and because it is not visible in the fitted object, a graph with more
+#' than one component reports its component count and sizes at fit time.
+#'
+#' A component of a single node has no neighbours to borrow from. The areal
+#' cover paths reject one outright, with an error naming the node; where such a
+#' node is accepted it keeps a proper \code{N(0, 1/tau)} effect, because the
+#' identification augments the precision rather than imposing a hard constraint,
+#' which on a lone node would pin it to exactly zero.
+#'
 #' @section Continuous spatial fields:
 #'
 #' \code{gp(lon, lat, ...)} is an NNGP-approximated Gaussian process over
