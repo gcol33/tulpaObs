@@ -223,6 +223,33 @@
 }
 
 
+# Map the positive arm's copy() spec(s) onto the sampled field's coupling
+# amplitude on the NUTS spatial path (gcol33/tulpaObs#210).
+#
+# `control$alpha.grid` is a live knob here, not a deterministic-backend-only
+# one: the sampler's warm nested-Laplace fit integrates that axis, and the axis
+# span becomes the support of the sampled alpha's flat prior
+# (`.occu_cover_nuts_hyper_bounds()`), so `alpha = grid(c(...))` bounds the
+# amplitude and a scalar `alpha =` collapses the axis to one node and pins it.
+# The same copy() therefore means the same thing under both engines.
+#
+# The translation is the shared `.occu_cover_apply_copy_coupling()`, so the
+# selector rules, the per-component addressing and every error message are one
+# implementation. It reads two things off the resolved field description -- the
+# per-block roster (one entry per block, each with its `component` role) and the
+# grouping variable a `copy(spatial(<var>))` selector must match -- and this
+# path carries exactly ONE field: a weighted (SVC / trend) term is refused by
+# `.tobs_reject_weighted_spatial()` in the fitter, so there is no trend block to
+# address. `.occu_cover_spatial_fields()` cannot supply that description here,
+# because it resolves the grid-integrated path's field roster and rejects
+# `car_proper()`, which is the sampled field's primary kind.
+.occu_cover_nuts_copy_control <- function(copies, nuts_sp, control) {
+  if (!length(copies)) return(control)
+  field_view <- list(fields    = list(list(component = "intercept")),
+                     group_var = nuts_sp$group_var)
+  .occu_cover_apply_copy_coupling(copies, field_view, control)
+}
+
 
 # ---------------------------------------------------------------------------
 # Dispatcher (wired into tobs.R's switch)
@@ -348,6 +375,11 @@
       }
       .occu_cover_reject_structured(detection,   "detection")
       .occu_cover_reject_structured(pos_formula, "positive cover")
+      # The copy() specs were stripped off the positive formula above, so they
+      # have to be translated here rather than at the shared call below this
+      # branch (gcol33/tulpaObs#210). Ahead of the design build, so a copy() the
+      # field cannot satisfy is refused before any fitting work.
+      control <- .occu_cover_nuts_copy_control(pos_copies, nuts_sp, control)
       vd_det  <- .normalize_visits(visits, detection,
                                    n_sites = nrow(y), max_visits = ncol(y))
       vd_pos  <- .normalize_visits(visits, pos_formula,

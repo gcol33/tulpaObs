@@ -639,3 +639,84 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
   expect_true(all(is.finite(nut$spatial_field)))
   expect_identical(nut$spatial$type, "car_proper")
 })
+
+
+# --------------------------------------------------------------------------- #
+# copy() on the positive arm reaches the sampler (gcol33/tulpaObs#210)          #
+# --------------------------------------------------------------------------- #
+
+# Same fixture as .ocsn_fit, with a copy() term on the positive formula.
+.ocsn_fit_copy <- function(inp, pos_formula, control = list(),
+                           field = "car_proper") {
+  f <- stats::as.formula(sprintf("~ occ_cov1 + %s(graph = inp$adj)", field))
+  tobs(formula = f, data = inp$cell_dat, family = occu_cover(inp$positive),
+       detection = ~ det_cov1, positive = pos_formula, y = inp$od$y,
+       y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
+       control = control)
+}
+
+test_that("occu_cover spatial NUTS honours a copy()'s fixed amplitude (#210)", {
+  skip_on_cran()
+  skip_if_fast()
+  # A scalar `alpha =` is a pinned amplitude: it collapses the warm fit's copy
+  # axis to one node, which leaves the sampler nothing to integrate, so alpha is
+  # conditioned on exactly the value the user named. The fit reports which
+  # hypers it sampled and which it pinned, so this is asserted on that record
+  # rather than inferred from the draws alone.
+  inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
+  nut <- .ocsn_fit_copy(
+    inp, ~ pos_cov1 + copy(spatial(), alpha = 0.35),
+    control = list(verbose = FALSE, n.iter = 200L, n.warmup = 200L,
+                   n.chains = 1L, seed = 1L))
+  expect_true("alpha" %in% nut$nuts$fixed_hyper)
+  expect_false("alpha" %in% nut$nuts$sampled_hyper)
+  expect_equal(unname(nut$nuts$fixed_hyper_values[["alpha"]]), 0.35)
+  # Pinned means pinned in every draw, not merely centred there.
+  expect_true(all(nut$hyper_draws[, "alpha"] == 0.35))
+})
+
+test_that("occu_cover spatial NUTS honours a copy()'s amplitude grid (#210)", {
+  skip_on_cran()
+  skip_if_fast()
+  # An integrated `alpha = grid(c(...))` sets the SUPPORT of the sampled
+  # amplitude: the warm nested-Laplace fit lays the axis, and its span is the
+  # support of the flat prior the sampler draws alpha under
+  # (.occu_cover_nuts_hyper_bounds). So the knob reaches the sampler even though
+  # alpha is no longer pinned at the warm estimate (gcol33/tulpaObs#204).
+  #
+  # The band is deliberately BELOW the simulation truth (alpha = 1), so the
+  # posterior pushes against its upper bound: a dropped copy() would fall back
+  # to the default axis, whose positive span reaches 3, and the draws would sit
+  # near 1 rather than under 0.5. The assertion therefore cannot pass vacuously.
+  inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L, alpha = 1.0)
+  nut <- .ocsn_fit_copy(
+    inp, ~ pos_cov1 + copy(spatial(), alpha = grid(c(0.2, 0.5))),
+    control = list(verbose = FALSE, n.iter = 200L, n.warmup = 200L,
+                   n.chains = 1L, seed = 1L))
+  expect_true("alpha" %in% nut$nuts$sampled_hyper)
+  a <- nut$hyper_draws[, "alpha"]
+  expect_gte(min(a), 0.2 - 1e-8)
+  expect_lte(max(a), 0.5 + 1e-8)
+  # The default axis reaches far above this band, which is what the copy()
+  # narrowed.
+  expect_gt(max(as.numeric(tulpaObs:::.tobs_default_alpha_grid())), 0.5)
+})
+
+test_that("occu_cover spatial NUTS refuses a copy() it cannot resolve (#210)", {
+  skip_on_cran()
+  skip_if_fast()
+  inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
+  ctl <- list(verbose = FALSE, n.iter = 50L, n.warmup = 50L, n.chains = 1L,
+              seed = 1L)
+  # The amplitude is set in ONE place. Before the copy() reached this path the
+  # control knob simply won and the copy() vanished.
+  expect_error(
+    .ocsn_fit_copy(inp, ~ pos_cov1 + copy(spatial(), alpha = 0.35),
+                   control = c(ctl, list(alpha.grid = c(0.2, 0.5)))),
+    "copy() in the positive", fixed = TRUE)
+  # A string reference is not a coupling selector here, under either engine.
+  expect_error(
+    .ocsn_fit_copy(inp, ~ pos_cov1 + copy("occ_space", alpha = 0.35),
+                   control = ctl),
+    "not a string")
+})
