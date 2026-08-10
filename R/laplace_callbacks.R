@@ -171,28 +171,9 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
     w_det <- weights
     w_det[any_det] <- 1
 
-    if (!is.null(spatial_det)) {
-      # SPDE detection field: the single-Laplace spatial solver consumes no
-      # per-observation `weights`, so the occupancy weight is folded into the
-      # binomial response by scaling both successes and trials by w_i
-      # (y = round(w_i n_det_i), n = round(w_i n_valid_i)). This is the
-      # frequency-weight-as-counts identity for a binomial mode/Hessian, and it
-      # keeps ALL n_sites rows so the per-site rows stay aligned with the full
-      # mesh projection A (n_sites x n_mesh). A near-empty site (w_i ~ 0)
-      # collapses to a (0, 0) row that contributes nothing to the likelihood,
-      # score, or Hessian -- the analogue of dropping it under the explicit
-      # weight on the non-spatial path.
-      y_det_w <- as.integer(round(w_det * n_det))
-      n_det_w <- as.integer(round(w_det * n_valid))
-      y_det_w <- pmin(pmax(y_det_w, 0L), n_det_w)
-      det_block <- list(y = y_det_w, n_trials = n_det_w, X = X_det,
-                        family = "binomial")
-      det_block <- .attach_spatial_spde(det_block, spatial_det)
-    } else if (p_det_visit == 0L) {
-      keep_det <- keep & (w_det > 1e-6)
-      det_block <- list(y = n_det[keep_det], n_trials = n_valid[keep_det],
-                        X = X_det[keep_det, , drop = FALSE],
-                        weights = w_det[keep_det], family = "binomial")
+    if (p_det_visit == 0L) {
+      det_block <- .tobs_encode_det_block(n_det, n_valid, X_det, w_det, keep,
+                                          spatial_det)
     } else {
       # Per-visit detection block: one Bernoulli row per (site, valid visit)
       # whose weight is the site's posterior occupancy w_i. Combined design
@@ -687,10 +668,10 @@ build_integrated_callbacks <- function(model, spatial = NULL,
   # The shared psi field enters the state arm (one state row per site, the
   # identity map -- the proven single-season path). A field on the detection
   # arm enters every source's per-source detection block, broadcast onto that
-  # source's sites (`src_rows`) and folded into the response by count-scaling,
-  # exactly as the single-season detection arm does. The field is fit
-  # independently per source block (one realization per submodel block; a
-  # genuinely shared realization across sources needs the copy() path).
+  # source's sites (`src_rows`), exactly as the single-season detection arm
+  # does. The field is fit independently per source block (one realization per
+  # submodel block; a genuinely shared realization across sources needs the
+  # copy() path).
   spatial_occ <- .spatial_for_arm(spatial, 1L)
   spatial_det <- .spatial_for_arm(spatial, 2L)
 
@@ -762,25 +743,8 @@ build_integrated_callbacks <- function(model, spatial = NULL,
       si <- src_info[[s]]
       w_src <- weights[si$src_rows]
       w_src[si$ad] <- 1
-      if (!is.null(si$spatial_det)) {
-        # SPDE detection field on this source: fold the occupancy weight into
-        # the binomial response by count-scaling (y = round(w nd), n =
-        # round(w nv)) so every source row stays aligned with the broadcast
-        # mesh projection A; a near-empty site collapses to a (0, 0) row.
-        y_det_w <- as.integer(round(w_src * si$nd))
-        n_det_w <- as.integer(round(w_src * si$nv))
-        y_det_w <- pmin(pmax(y_det_w, 0L), n_det_w)
-        det_block <- list(y = y_det_w, n_trials = n_det_w, X = si$X_det,
-                          family = "binomial")
-        specs[[paste0("det", s)]] <- .attach_spatial_spde(det_block,
-                                                          si$spatial_det)
-      } else {
-        dk <- si$keep & (w_src > 1e-6)
-        specs[[paste0("det", s)]] <- list(y = si$nd[dk], n_trials = si$nv[dk],
-                                          X = si$X_det[dk,,drop=FALSE],
-                                          weights = w_src[dk],
-                                          family = "binomial")
-      }
+      specs[[paste0("det", s)]] <- .tobs_encode_det_block(
+        si$nd, si$nv, si$X_det, w_src, si$keep, si$spatial_det)
     }
     specs
   }

@@ -7,7 +7,7 @@
 #
 #   model_type   state arm (shared[1])   detection arm (shared[2])
 #   single       wired                   wired
-#   integrated   wired                   wired (per source)
+#   integrated   wired                   wired (per source), unreachable
 #   jsdm         wired                   n/a (no detection process)
 #   community    wired                   stop()
 #   dynamic      wired (psi1 only)       stop()
@@ -18,7 +18,11 @@
 # and .tobs_state_block_dims). The dynamic state field enters season-1 psi1
 # only; the colonization / extinction transition predictors are separate latent
 # processes whose own mesh fields are not wired (a state-arm spde() term maps to
-# psi1). A single field shared across both arms at once (shared = c(TRUE, TRUE))
+# psi1). The integrated detection cell is wired in the fitter but no formula
+# reaches it: a term's arm membership is the formula it is written in, and
+# .tobs_build_integrated() rejects a structured term on a per-source detection
+# formula, so `spatial_det` there is NULL in any fit built through tobs().
+# A single field shared across both arms at once (shared = c(TRUE, TRUE))
 # is a stop() everywhere: the single-Laplace block fitter fits one field
 # realization per submodel block, so a genuinely shared realization needs the
 # copy() path, not two independent blocks. The areal path (icar/bym2/car_proper
@@ -122,6 +126,26 @@
   if (is.null(spatial) || !identical(spatial$type, "spde")) return(block)
   block$spatial <- spatial$tulpa_spec
   block
+}
+
+# Encode one aggregated binomial detection block for an EM M-step: `nd`
+# detections out of `nv` valid visits per row, each row weighted by the E-step
+# occupancy probability `w`. The weight is what makes the M-step maximise the
+# expected complete-data log-likelihood -- a row the E-step calls almost
+# certainly empty must not feed its all-zero history in as evidence about
+# (1 - p)^J.
+#
+# Row set: without a field, a row carrying no visits or negligible weight
+# contributes nothing and is dropped. A mesh field pins the row set instead --
+# the block's projection A carries exactly one row per input row (broadcast onto
+# the source's sites for an integrated block), so dropping a row would leave the
+# remaining rows reading the wrong mesh basis. Those rows enter at weight ~0,
+# which is what dropping them expresses.
+.tobs_encode_det_block <- function(nd, nv, X, w, keep, spatial) {
+  dk <- if (is.null(spatial)) keep & (w > 1e-6) else rep(TRUE, length(w))
+  block <- list(y = nd[dk], n_trials = nv[dk], X = X[dk, , drop = FALSE],
+                weights = w[dk], family = "binomial")
+  .attach_spatial_spde(block, spatial)
 }
 
 # Broadcast a site-indexed SPDE field onto a state block whose rows are

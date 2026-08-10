@@ -407,3 +407,66 @@ at one while scored under another. `tobs_sbc()` warns and drops it from the
 scored set (its posterior is a point mass, and `disp` took ONE unique value
 across 100 draws in that configuration). With `control$phi.grid.pos` it is
 estimated and scored.
+
+## EM detection block carries the E-step weight (`.tobs_encode_det_block`)
+
+Issue #208 (tulpaObs), enabled by gcol33/tulpa#385 (tulpa >= 0.0.184; measured
+against installed 0.0.195, the DESCRIPTION floor).
+
+**The engine really does consume `weights` on the spatial route.** Checked
+directly against `tulpa::tulpa_laplace(spatial = <spde spec>)`, not taken from
+the issue: an integer weight vector reproduces literal row replication (the same
+design re-rowed through `.tobs_spde_broadcast_spec()`) to max |diff| **2.8e-17**
+on both fixed effects; `weights = NULL` is bit-identical to `weights = 1`; a
+fractional weight vector moves the mode by 0.0088, so it is not being silently
+dropped. Pinned by `test-em-det-block-weights.R`, which fails if the engine ever
+reverts.
+
+**What `round(w * nd)` / `round(w * nv)` was destroying.** The rounding is not
+symmetric between successes and trials, because the rows it erases are exactly
+the low-weight ones and a low-weight row is (almost always) a row with no
+detection. On the integrated fixture below (N = 300, 2 sources, E-step weights
+median 0.062): **161 of 300 rows** collapsed to a `(0, 0)` row, effective trials
+`sum(round(w nv))` = 265.0 against the exact `sum(w nv)` = 285.3 (**-7.1%**),
+while effective successes were unchanged (132 vs 132). Dropping 7% of the trials
+and none of the successes biases p_hat UP, and the occupancy arm compensates by
+biasing psi DOWN. Both show up in the recovery table.
+
+**Recovery, old encoding vs new, 8 seeds each.** Truth: p intercept -0.2,
+p slope 0.4, psi slope 0.7; smooth Matern-like field `0.9 cos(3 lon) sin(3 lat)`
+on logit(p).
+
+| | | old (count-scaled) | new (weights) |
+|---|---|---|---|
+| single-season, N = 500, J = 3 | p intercept bias / MAE | +0.151 / 0.156 | **-0.047 / 0.069** |
+| | p slope bias / MAE | +0.042 / 0.061 | **+0.014 / 0.050** |
+| | psi slope bias / MAE | -0.057 / 0.079 | **-0.019 / 0.061** |
+| | field cor | 0.814 | 0.815 |
+| integrated, N = 500, 2 sources | p intercept bias / MAE | +0.202 / 0.202 | **-0.004 / 0.135** |
+| | p slope bias / MAE | -0.030 / 0.112 | **+0.032 / 0.095** |
+| | psi slope bias / MAE | -0.070 / 0.080 | **-0.030 / 0.056** |
+| | field cor | 0.740 | 0.792 |
+
+Every mean bias and every MAE improves; the field correlation is a wash on the
+single-season arm and better on the integrated one. The direction is the one the
+mechanism predicts (the p intercept, which the erased trials hit hardest, moves
+from +0.15 / +0.20 to roughly zero). The residual -0.047 on the single-season p
+intercept is the ordinary Laplace-EM attenuation, a third of what the rounding
+was adding on top of it.
+
+**The non-SPDE branch does not move.** It already passed `weights = w[dk]`, so
+it is the control: block encodings compared against HEAD's
+`build_single_callbacks` / `build_integrated_callbacks` (sourced from
+`git show HEAD:R/laplace_callbacks.R`) over four weight vectors each are
+`identical()`, and full fits agree bit-for-bit on `means`, `sds` and `vcov`
+across five fixtures including the `laplace_gibbs` correction path.
+
+**The integrated detection-arm field is not reachable from `tobs()`.**
+`.tobs_build_integrated()` (`R/occu.R:247`) rejects any structured term on a
+per-source detection formula, and process membership comes only from which
+formula a term is written in, so `spatial_det` inside
+`build_integrated_callbacks()` is always NULL in a public fit. The integrated
+numbers above were produced by handing the callbacks a mesh spec with
+`shared = c(FALSE, TRUE)` and driving `tulpa::tulpa_em_laplace()` directly. The
+SPDE coverage matrix at the top of `R/laplace_helpers.R` calls that cell "wired
+(per source)", which describes the fitter, not the parser.
