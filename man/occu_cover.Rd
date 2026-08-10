@@ -62,12 +62,21 @@ non-spatial route errors from the dispatcher with a pointer to it.
 
 \code{method = "nuts"} also samples ONE shared coupled field
 (\code{icar()} / \code{bym2()} / \code{car_proper()}), written either as an areal term or as
-the single-column bar \code{spatial(~ 1 || cell, graph = adj)}, with its
-hyperparameters (the field precision and the cover-arm copy amplitude) FIXED
-at the nested-Laplace estimate. The sampler carries one field block, so a
+the single-column bar \code{spatial(~ 1 || cell, graph = adj)}, TOGETHER WITH its
+hyperparameters: the field SD, the mixing (\code{bym2}) or spatial-correlation
+(\code{car_proper}) parameter, and the cover-arm copy amplitude. Their priors are
+flat over the same outer-grid span the \code{nested_laplace} path integrates
+against, in that grid's own coordinate, and the same \code{control$sigma.grid} /
+\code{alpha.grid} / \code{rho.car.grid} knobs set it on both routes - so the sampler is
+an independent reference for the hyperparameter layer rather than a fit
+conditioned on that layer's point estimate. \code{fit$nuts$sampled_hyper} and
+\code{fit$nuts$fixed_hyper} name which is which per fit (\code{icar} pins \code{rho} at 1:
+the intrinsic precision has no mixing parameter), \code{fit$hyper_draws} carries
+their posterior alongside \code{field_sd}, the geometric-mean marginal SD the
+field implies. \code{control$fixed.hyper = TRUE} conditions on the warm
+nested-Laplace estimate instead. The sampler carries one field block, so a
 second field - a spatially-varying coefficient / trend - stays on the
-grid-integrated \code{nested_laplace} path; the route that samples a field with its
-variance estimated is the spatial-factor community sampler
+grid-integrated \code{nested_laplace} path; the community spatial-factor route is
 \code{\link[=ms_occu_cover]{ms_occu_cover()}}.
 
 On the shared-field \code{nested_laplace} path the field-coupled occupancy slope

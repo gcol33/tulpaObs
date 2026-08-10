@@ -117,6 +117,141 @@ test_that("occu_cover spatial NUTS field-block FullGradFn matches the R oracle",
 })
 
 
+test_that("occu_cover spatial NUTS sampled-hyper block matches the R oracle (#204)", {
+  # sigma / rho / alpha are sampled coordinates, so the field is z = sigma * (B1
+  # %*% (s1(rho) raw1) + s2(rho) raw2) with the hypers riding bounded transforms.
+  # Every new analytic derivative (the two block scalings, the copy amplitude's
+  # data-score, each transform's Jacobian) is checked against a central FD, and
+  # the compiled target against the R oracle.
+  inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  for (ty in c("icar", "bym2", "car_proper")) {
+    warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+      model, adj, NULL, type = ty, max.iter = 60L)
+    fb <- tulpaObs:::.occu_cover_nuts_field_block(adj, ty, N, seq_len(N), warm,
+                                                  sample_hyper = TRUE)
+    # icar has no mixing parameter; the other two sample all three hypers.
+    expect_true(all(c("sigma", "alpha") %in% fb$sampled))
+    expect_identical("rho" %in% fb$sampled, !identical(ty, "icar"))
+
+    spec <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+    spec[names(fb$entries)] <- fb$entries
+    n_base <- length(lap$means)
+    n_tot  <- n_base + fb$n_raw + length(fb$sampled)
+    set.seed(7)
+    theta <- c(as.numeric(lap$means) + stats::rnorm(n_base, 0, 0.1),
+               stats::rnorm(fb$n_raw, 0, 0.3),
+               stats::rnorm(length(fb$sampled), 0, 0.6))
+
+    rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                  field = fb$entries)
+    cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
+    expect_equal(rr$lp, cc$lp, tolerance = 1e-8)
+    expect_equal(rr$grad, as.numeric(cc$grad), tolerance = 1e-8)
+
+    fd <- numeric(n_tot); h <- 1e-5
+    for (k in seq_len(n_tot)) {
+      tp <- theta; tp[k] <- tp[k] + h
+      tm <- theta; tm[k] <- tm[k] - h
+      fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(tp, model, 5, 5,
+                                                         field = fb$entries)$lp -
+                tulpaObs:::.tobs_occu_cover_nuts_logpost(tm, model, 5, 5,
+                                                         field = fb$entries)$lp) / (2 * h)
+    }
+    expect_equal(rr$grad, fd, tolerance = 1e-4)
+    # The hyper coordinates specifically -- a whole-vector tolerance would let a
+    # wrong hyper derivative hide behind the much larger coefficient scores.
+    hy <- (n_base + fb$n_raw + 1L):n_tot
+    expect_equal(rr$grad[hy], fd[hy], tolerance = 1e-5)
+    expect_gt(max(abs(fd[hy])), 1e-3)   # the check is not vacuous
+  }
+})
+
+
+test_that("occu_cover spatial NUTS pinned hypers reproduce the fixed loading (#204)", {
+  # `fixed.hyper = TRUE` conditions on the warm fit's (sigma, rho, alpha) as the
+  # #74 / #113 path did. That is the degenerate configuration of the same block,
+  # not a second code path, so it must agree with the old loading BIT for bit --
+  # a tolerance here would let the two drift into different models.
+  inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  for (ty in c("icar", "bym2", "car_proper")) {
+    warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+      model, adj, NULL, type = ty, max.iter = 60L)
+    fb <- tulpaObs:::.occu_cover_nuts_field_block(adj, ty, N, seq_len(N), warm,
+                                                  sample_hyper = FALSE)
+    expect_identical(fb$sampled, character(0))
+    expect_setequal(names(fb$pinned), c("sigma", "rho", "alpha"))
+
+    fl <- tulpaObs:::.tobs_nuts_field_loading(
+      adj, ty, N, tau = 1 / max(warm$sigma, 1e-3)^2, rho = warm$rho,
+      sigma = warm$sigma)
+    legacy <- list(n_field_units = N, field_map = seq_len(N),
+                   Linv = fl$field_load, alpha = warm$alpha)
+    set.seed(3)
+    theta <- c(as.numeric(lap$means) + stats::rnorm(length(lap$means), 0, 0.1),
+               stats::rnorm(fb$n_raw, 0, 0.3))
+    r_new <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                      field = fb$entries)
+    r_leg <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                      field = legacy)
+    expect_identical(r_new$lp, r_leg$lp)
+    expect_identical(r_new$grad, r_leg$grad)
+  }
+})
+
+
+test_that("occu_cover spatial NUTS hyper prior is flat on the grid's axis (#204)", {
+  # At raw = 0 the field is identically zero whatever the hypers are, so the data
+  # term drops out and the target reduces to the hyper prior alone. Transformed
+  # back to the axis coordinate the outer grid spaces its nodes in (log sigma /
+  # log alpha / logit rho), that density must be CONSTANT -- which is the claim
+  # that the sampler integrates the same flat-over-cells measure the
+  # nested-Laplace grid does. A missing Jacobian is invisible in the gradient
+  # check above (lp and grad would agree with each other and both be wrong) and
+  # shows up here.
+  inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  for (ty in c("icar", "car_proper")) {
+    warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+      model, adj, NULL, type = ty, max.iter = 60L)
+    fb <- tulpaObs:::.occu_cover_nuts_field_block(adj, ty, N, seq_len(N), warm,
+                                                  sample_hyper = TRUE)
+    spec <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+    spec[names(fb$entries)] <- fb$entries
+    base <- c(as.numeric(lap$means), numeric(fb$n_raw))
+    n_h  <- length(fb$sampled)
+    u_grid <- c(-2, -1, -0.4, 0, 0.7, 1.5)
+    for (j in seq_len(n_h)) {
+      lp <- vapply(u_grid, function(u) {
+        th <- c(base, numeric(n_h)); th[length(base) + j] <- u
+        tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, th, 5, 5)$lp
+      }, numeric(1))
+      # p(u) ∝ exp(lp); the axis coordinate is t = t_lo + (t_hi - t_lo) e(u), so
+      # p(t) = p(u) / (dt/du) must not vary with u.
+      e <- stats::plogis(u_grid)
+      dens_t <- exp(lp - max(lp)) / (e * (1 - e))
+      expect_lt(stats::sd(dens_t) / mean(dens_t), 1e-8)
+    }
+  }
+})
+
+
 test_that("occu_cover spatial NUTS field-off path is byte-identical to non-spatial", {
   inp   <- .ocsn_inputs(side = 5L, J = 4L, seed = 21L)
   lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
@@ -344,7 +479,10 @@ test_that("occu_cover spatial NUTS beta SDs calibrate to nested-Laplace SEs", {
 
   expect_equal(nut$method, "nuts")
   expect_lte(nut$nuts$divergent_total, 5L)
-  expect_true(isTRUE(nut$nuts$fixed_hyper))
+  # The sampler no longer conditions on the warm fit's hypers (#204): it reports
+  # which it integrated over and which (none, on a car_proper fit) it pinned.
+  expect_setequal(nut$nuts$sampled_hyper, c("sigma", "rho", "alpha"))
+  expect_identical(nut$nuts$fixed_hyper, character(0))
 
   # The slope-coefficient SDs (psi / p / cover) calibrate to the grid-integrated
   # nested-Laplace SEs (the field hyper is fixed at the same kind of estimate).
@@ -383,6 +521,101 @@ test_that("occu_cover spatial NUTS recovers betas + field (beta arm, smoke)", {
   bias <- abs(colMeans(est[ok, , drop = FALSE]) - truth)
   expect_true(all(bias[1:6] < 0.35))
   expect_lt(bias[7], 0.45)
+})
+
+
+test_that("occu_cover spatial NUTS reports its hypers honestly per fit (#204)", {
+  inp <- .ocsn_inputs(side = 5L, J = 4L, seed = 11L)
+  ctl <- list(verbose = FALSE, n.iter = 200L, n.warmup = 200L, n.chains = 1L,
+              seed = 1L)
+
+  # icar carries no mixing parameter, so rho is pinned at 1 and says so; sigma
+  # and alpha are sampled and carry a posterior.
+  f_icar <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl)
+  expect_setequal(f_icar$nuts$sampled_hyper, c("sigma", "alpha"))
+  expect_identical(f_icar$nuts$fixed_hyper, "rho")
+  expect_equal(unname(f_icar$nuts$fixed_hyper_values[["rho"]]), 1)
+  expect_true(all(c("sigma", "rho", "alpha", "field_sd") %in%
+                  colnames(f_icar$hyper_draws)))
+  expect_gt(f_icar$nuts$hyper_sd[["sigma"]], 0)
+  expect_gt(f_icar$nuts$hyper_sd[["alpha"]], 0)
+  expect_equal(f_icar$nuts$hyper_sd[["rho"]], 0)
+
+  # bym2 and car_proper sample all three.
+  for (ty in c("bym2", "car_proper")) {
+    ft <- .ocsn_fit(inp, "nuts", field = ty, control = ctl)
+    expect_setequal(ft$nuts$sampled_hyper, c("sigma", "rho", "alpha"))
+    expect_identical(ft$nuts$fixed_hyper, character(0))
+    expect_gt(ft$nuts$hyper_sd[["rho"]], 0)
+  }
+
+  # An explicitly pinned fit reports all three as fixed, at the warm values.
+  f_fix <- .ocsn_fit(inp, "nuts", field = "car_proper",
+                     control = c(ctl, list(fixed.hyper = TRUE)))
+  expect_identical(f_fix$nuts$sampled_hyper, character(0))
+  expect_setequal(f_fix$nuts$fixed_hyper, c("sigma", "rho", "alpha"))
+  expect_equal(unname(f_fix$nuts$hyper_sd), rep(0, 4))
+  expect_equal(unname(f_fix$nuts$hyper_mean[c("sigma", "alpha")]),
+               unname(f_fix$nuts$warm_hyper[c("sigma", "alpha")]))
+})
+
+
+test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
+  skip_on_cran()
+  skip_if_fast()
+  # The point of sampling the hypers is that their posterior is honest, so the
+  # gate is coverage of a known truth, not agreement with the nested-Laplace
+  # point estimate (agreeing with that is the circularity #204 is about).
+  #
+  # Two targets, both stated on the sampler's own scale:
+  #   alpha     the cover-arm copy amplitude -- dimensionless, and defined
+  #             identically by the simulator (eta_pos += alpha * sigma * f) and
+  #             the fitter, so the truth needs no conversion.
+  #   field_sd  the geometric-mean marginal SD of the field the block implies at
+  #             that draw's hypers. The simulator's f carries geo-mean marginal
+  #             variance 1 (Sorbye-Rue), so the truth is exactly `sigma`. sigma
+  #             itself is NOT the comparable quantity: icar, bym2 and car_proper
+  #             normalise their precisions differently, so the same field has
+  #             three different sigmas and one field_sd.
+  n_seeds <- 12L
+  side <- 8L; J <- 5L
+  sig_true <- 0.7; alpha_true <- 1.0
+  for (ty in c("icar", "car_proper")) {
+    lo <- hi <- fsd_lo <- fsd_hi <- div <- rep(NA_real_, n_seeds)
+    a_mean <- fsd_mean <- rep(NA_real_, n_seeds)
+    for (s in seq_len(n_seeds)) {
+      inp <- .ocsn_inputs(side = side, J = J, seed = 7000L + s,
+                          sigma = sig_true, alpha = alpha_true)
+      nut <- tryCatch(.ocsn_fit(inp, "nuts", field = ty,
+                        control = list(verbose = FALSE, n.iter = 1000L,
+                                       n.warmup = 800L, n.chains = 2L,
+                                       seed = 1L)),
+                      error = function(e) NULL)
+      if (is.null(nut)) next
+      q <- stats::quantile(nut$hyper_draws[, "alpha"], c(0.025, 0.975))
+      lo[s] <- q[[1L]]; hi[s] <- q[[2L]]
+      a_mean[s] <- mean(nut$hyper_draws[, "alpha"])
+      qf <- stats::quantile(nut$hyper_draws[, "field_sd"], c(0.025, 0.975))
+      fsd_lo[s] <- qf[[1L]]; fsd_hi[s] <- qf[[2L]]
+      fsd_mean[s] <- mean(nut$hyper_draws[, "field_sd"])
+      div[s] <- nut$nuts$divergent_total
+    }
+    ok <- !is.na(lo)
+    expect_gte(mean(ok), 0.75)
+    expect_lte(max(div[ok]), 5L)
+    # 95% credible-interval coverage of the two truths. The pooled floor is the
+    # package's usual 0.85 rubric, not a literal 0.95 (that flakes at 12 seeds).
+    expect_gte(mean(lo[ok] <= alpha_true & alpha_true <= hi[ok]), 0.85)
+    expect_gte(mean(fsd_lo[ok] <= sig_true & sig_true <= fsd_hi[ok]), 0.85)
+    # A one-sided shift is a property of the MEAN over seeds, so it is asserted
+    # there and not per fit. Both gates are set from the measurement, not chosen:
+    # alpha lands within 0.06 of truth, field_sd about 0.25 high (the posterior of
+    # a positive variance component at 64 binary sites is right-skewed, so its
+    # MEAN sits above the bulk -- `fit$nuts$hyper_median` is the summary to quote).
+    # See NOTES_measurements.md.
+    expect_lt(abs(mean(a_mean[ok]) - alpha_true), 0.35)
+    expect_lt(abs(mean(fsd_mean[ok]) - sig_true), 0.45)
+  }
 })
 
 

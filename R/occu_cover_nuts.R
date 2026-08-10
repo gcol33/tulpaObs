@@ -18,6 +18,130 @@
 # arm and the no-detection mixture reuse the same closed forms the Laplace path uses.
 
 
+# ---------------------------------------------------------------------------
+# Coupled areal field with sampled hyperparameters (gcol33/tulpaObs#204)
+#
+# R mirror of src/nuts_field_hyper.h. The field is
+#   z = sigma * ( B1 %*% (s1(rho) * raw1) + s2(rho) * raw2 )
+# over a FIXED basis B1, with the field SD sigma, the mixing / spatial-
+# correlation rho and the cross-arm copy amplitude alpha either sampled as
+# bounded coordinates or pinned. A sampled hyper rides an unconstrained u,
+#   t = t_lo + (t_hi - t_lo) * plogis(u),   value = inv_link(t),
+# with `t` the coordinate the nested-Laplace outer grid spaces its nodes in
+# (log for sigma / alpha, logit for rho) and [t_lo, t_hi] that grid's own span.
+# The prior is flat in t, which is the measure the grid integrates against
+# (equal weight per cell); flat prior + change of variables leaves the
+# normalised log-density log(e) + log(1 - e), e = plogis(u).
+# ---------------------------------------------------------------------------
+
+.OCHF_CONST <- 0L; .OCHF_BYM2_STR <- 1L; .OCHF_BYM2_IID <- 2L; .OCHF_CAR <- 3L
+
+.ochf_inv_link <- function(t, link) if (link == 1L) stats::plogis(t) else exp(t)
+.ochf_link     <- function(v, link) if (link == 1L) stats::qlogis(v) else log(v)
+
+# One hyper's value at `theta` plus the chain-rule pieces (see HyperValue).
+.ochf_value <- function(h, theta) {
+  if (is.null(h$coord))
+    return(list(value = h$fixed, dvalue_dt = 0, dt_du = 0, e = 0))
+  e <- stats::plogis(theta[h$coord])
+  t <- h$t_lo + (h$t_hi - h$t_lo) * e
+  v <- .ochf_inv_link(t, h$link)
+  list(value = v, dvalue_dt = if (h$link == 1L) v * (1 - v) else v,
+       dt_du = (h$t_hi - h$t_lo) * e * (1 - e), e = e)
+}
+
+# Canonical view of a field description. Accepts the sampled-hyper spec entries
+# the C++ block reads AND the legacy fixed-hyper form (`Linv` / `field_load` +
+# `alpha`), which resolves to sigma pinned at 1 over a constant scaling -- the
+# fixed loading already carries sigma and rho in its columns, so that
+# configuration reproduces it exactly. `total` is the 1-based index of the
+# log-dispersion coordinate; the whitened field follows it, then each sampled
+# hyper in the order (sigma, rho, alpha).
+.ochf_view <- function(field, total) {
+  B1      <- field$field_load %||% field$Linv
+  n_units <- as.integer(field$n_field_units %||% nrow(B1))
+  m1      <- ncol(B1)
+  has_iid <- isTRUE(as.logical(field$field_has_iid %||% FALSE))
+  n_raw   <- m1 + if (has_iid) n_units else 0L
+  k       <- total + n_raw
+  slot <- function(fixed_key, lo_key, hi_key, link, dflt) {
+    h <- list(link = link, fixed = field[[fixed_key]] %||% dflt, coord = NULL)
+    lo <- field[[lo_key]]; hi <- field[[hi_key]]
+    if (!is.null(lo) && !is.null(hi)) {
+      k <<- k + 1L
+      h$t_lo <- lo; h$t_hi <- hi; h$coord <- k
+    }
+    h
+  }
+  sigma <- slot("field_sigma_fixed", "field_sigma_lo", "field_sigma_hi", 0L, 1)
+  rho   <- slot("field_rho_fixed",   "field_rho_lo",   "field_rho_hi",   1L, 1)
+  alpha <- slot("field_alpha_fixed", "field_alpha_lo", "field_alpha_hi", 0L, 0)
+  if (is.null(alpha$coord) && is.null(field$field_alpha_fixed))
+    alpha$fixed <- field$field_alpha %||% field$alpha %||% 0
+  list(n_units = n_units, m1 = m1, B1 = B1,
+       scale1 = as.integer(field$field_scale1 %||% .OCHF_CONST),
+       has_iid = has_iid, sf = as.numeric(field$field_sf %||% 1),
+       lambda = as.numeric(field$field_lambda %||% numeric(0)),
+       n_raw = n_raw, o_raw = total,
+       field_map = as.integer(field$field_map),
+       sigma = sigma, rho = rho, alpha = alpha)
+}
+
+# Forward pass: hyper values, per-column block scalings, and the field z.
+.ochf_forward <- function(fv, theta) {
+  sg <- .ochf_value(fv$sigma, theta)
+  rh <- .ochf_value(fv$rho,   theta)
+  al <- .ochf_value(fv$alpha, theta)
+  rho <- rh$value
+  s1 <- rep(1, fv$m1); ds1 <- rep(0, fv$m1)
+  if (fv$scale1 == .OCHF_BYM2_STR) {
+    s1[]  <- sqrt(rho / fv$sf)
+    ds1[] <- 1 / (2 * sqrt(rho * fv$sf))
+  } else if (fv$scale1 == .OCHF_CAR) {
+    a   <- 1 - rho * fv$lambda
+    s1  <- 1 / sqrt(a)
+    ds1 <- 0.5 * fv$lambda * s1 / a
+  }
+  s2 <- if (fv$has_iid) sqrt(1 - rho) else 0
+  ds2 <- if (fv$has_iid) -1 / (2 * sqrt(1 - rho)) else 0
+  raw1 <- theta[fv$o_raw + seq_len(fv$m1)]
+  raw2 <- if (fv$has_iid) theta[fv$o_raw + fv$m1 + seq_len(fv$n_units)]
+          else numeric(0)
+  z <- as.numeric(fv$B1 %*% (s1 * raw1))
+  if (fv$has_iid) z <- z + s2 * raw2
+  z <- sg$value * z
+  list(sigma = sg, rho = rh, alpha = al, s1 = s1, ds1 = ds1, s2 = s2, ds2 = ds2,
+       raw1 = raw1, raw2 = raw2, z = z)
+}
+
+# Backward pass. `g_z` is d log L / d z per unit (the caller folds in alpha times
+# the copied arm's score); `g_alpha_data` is d log L / d alpha from the data.
+# Returns the field coordinates' gradient (raw block then sampled hypers) and
+# the whitened-field prior plus the sampled hypers' log-densities.
+.ochf_backward <- function(fv, fs, g_z, g_alpha_data) {
+  sigma <- fs$sigma$value
+  BtG   <- as.numeric(crossprod(fv$B1, g_z))
+  lp    <- -0.5 * sum(fs$raw1^2)
+  g_raw <- sigma * fs$s1 * BtG - fs$raw1
+  g_rho <- sum(sigma * fs$ds1 * fs$raw1 * BtG)
+  if (fv$has_iid) {
+    lp    <- lp - 0.5 * sum(fs$raw2^2)
+    g_raw <- c(g_raw, sigma * fs$s2 * g_z - fs$raw2)
+    g_rho <- g_rho + sum(sigma * fs$ds2 * fs$raw2 * g_z)
+  }
+  g_hyper <- numeric(0)
+  add <- function(h, hv, dlp_dvalue) {
+    if (is.null(h$coord)) return(invisible(NULL))
+    g_hyper <<- c(g_hyper, dlp_dvalue * hv$dvalue_dt * hv$dt_du + (1 - 2 * hv$e))
+    lp <<- lp + log(hv$e) + log(1 - hv$e)
+  }
+  add(fv$sigma, fs$sigma, if (sigma > 0) sum(g_z * fs$z) / sigma else 0)
+  add(fv$rho,   fs$rho,   g_rho)
+  add(fv$alpha, fs$alpha, g_alpha_data)
+  list(grad = c(g_raw, g_hyper), lp = lp)
+}
+
+
 # Joint log-posterior + gradient of the non-spatial occu_cover coefficient vector
 # theta = c(beta_psi, beta_p, beta_pos, log_disp) (beta_p / beta_pos each packed as
 # the site-level block then the optional visit-level block, exactly as the fitter
@@ -38,17 +162,17 @@
   n_coef <- p_occ + p_p + p_pos
   total  <- n_coef + 1L
 
-  # Optional fixed-hyper coupled field (gcol33/tulpaObs#74): f = Linv %*% raw,
-  # raw the trailing block of theta. f enters psi additively and the cover arm
-  # scaled by alpha (both fixed at the nested-Laplace estimate). The R oracle
-  # mirrors the C++ FullGradFn byte-for-byte; absent, the non-spatial target.
+  # Optional coupled field (gcol33/tulpaObs#74, #204): z over the trailing field
+  # block of theta, entering psi additively and the cover arm scaled by the copy
+  # amplitude alpha. sigma / rho / alpha are sampled coordinates or pinned, as
+  # `field` declares. The R oracle mirrors the C++ FullGradFn byte-for-byte;
+  # absent, the non-spatial target.
   has_field <- !is.null(field)
   if (has_field) {
-    n_field  <- field$n_field_units
-    raw      <- theta[total + seq_len(n_field)]
-    f_field  <- as.numeric(field$Linv %*% raw)
-    f_site   <- f_field[field$field_map]          # per-site field value
-    alpha    <- field$alpha
+    fv     <- .ochf_view(field, total)
+    fs     <- .ochf_forward(fv, theta)
+    f_site <- fs$z[fv$field_map]                  # per-site field value
+    alpha  <- fs$alpha$value
   } else {
     f_site <- numeric(model$n_sites)
     alpha  <- 0
@@ -145,21 +269,25 @@
     grad_bpos <- c(grad_bpos, as.numeric(crossprod(model$X_pos_visit, as.numeric(t(g_eta_pos)))))
   grad <- c(grad_bo, grad_bp, grad_bpos, g_logdisp)
 
-  # Field block (gcol33/tulpaObs#74): accumulate the per-cell field score (psi
-  # arm + alpha * cover arm), push it back to raw via Linv^T, and add the
-  # whitened N(0, I) prior. The field gradient appends to the coefficient block.
+  # Field block: accumulate the per-cell field score (psi arm + alpha * cover
+  # arm) and the copy amplitude's own data-score, then hand both to the field
+  # backward pass. Its gradient (whitened field, then any sampled hyper) appends
+  # to the coefficient block.
+  lp_field <- 0
   if (has_field) {
-    g_f_site <- g_eta_psi + alpha * rowSums(g_eta_pos)
-    g_field  <- numeric(n_field)
+    g_pos_site <- rowSums(g_eta_pos)
+    g_f_site   <- g_eta_psi + alpha * g_pos_site
+    g_field    <- numeric(fv$n_units)
     for (s in seq_len(N)) {
-      cell <- field$field_map[s]
+      cell <- fv$field_map[s]
       g_field[cell] <- g_field[cell] + g_f_site[s]
     }
-    g_raw <- as.numeric(crossprod(field$Linv, g_field))   # Linv^T g_field
-    grad  <- c(grad, g_raw)
+    bk       <- .ochf_backward(fv, fs, g_field, sum(f_site * g_pos_site))
+    grad     <- c(grad, bk$grad)
+    lp_field <- bk$lp
   }
 
-  lp  <- lp_data
+  lp  <- lp_data + lp_field
   ib2 <- 1 / sigma.beta^2
   nb  <- n_coef
   bv  <- theta[seq_len(nb)]
@@ -168,11 +296,6 @@
   ild2 <- 1 / sigma.logdisp^2
   lp   <- lp - 0.5 * ild2 * log_disp^2
   grad[total] <- grad[total] - ild2 * log_disp
-  if (has_field) {
-    raw_v <- theta[total + seq_len(n_field)]
-    lp    <- lp - 0.5 * sum(raw_v^2)
-    grad[total + seq_len(n_field)] <- grad[total + seq_len(n_field)] - raw_v
-  }
   list(lp = lp, grad = grad)
 }
 
@@ -520,20 +643,199 @@
 }
 
 
-# Sample the exact occu_cover coefficient posterior jointly with a FIXED-HYPER
-# non-centered coupled PROPER-CAR field on the latent state z (gcol33/tulpaObs#74):
-# the psi-arm field f (one value per cell) enters psi linearly and is copied to the
-# cover (positive) arm with the FIXED scaling alpha; the field precision tau Q(rho)
-# and alpha are fixed at the nested-Laplace joint estimate, and the
-# whitened raw ~ N(0, I) (f = Linv %*% raw) is sampled alongside the coefficient
-# marginal. Parameter vector: c(beta_psi, beta_p, beta_pos, log_disp, raw_field).
-# This is the occu_cover analogue of .tobs_fit_abun_nuts_spatial (tulpa#87): a
-# full-rank proper-CAR precision gives a well-conditioned non-centered geometry, so
-# the field block reuses the abun#51 field machinery (the optional field block in
-# src/occu_cover_nuts.cpp, byte-exact vs the R oracle's field branch). Intrinsic
-# icar / bym2 fields also sample here via the sum-to-zero eigen-loading that drops
-# the precision null-space (constant) direction (gcol33/tulpaObs#71/#113), the same
-# reparam abun NUTS+areal uses. `...` absorbs unused sampler controls.
+# Fixed basis B1 of a coupled areal field, together with the rho-scaling its
+# columns carry (gcol33/tulpaObs#204). Every areal kind factors into a basis that
+# does NOT depend on the sampled hypers:
+#   icar / bym2 structured  the sum-to-zero eigen-loading of the intrinsic
+#                           precision Q at unit precision (gcol33/tulpaObs#71),
+#                           so sigma is a scalar multiply and bym2's rho a scalar
+#                           re-weight against the unstructured block.
+#   car_proper              Q(rho) = D - rho W = D^{1/2}(I - rho Lambda)D^{1/2}
+#                           in the eigenbasis of the symmetrically normalised
+#                           adjacency D^{-1/2} W D^{-1/2} = U Lambda U'. Hence
+#                           B1 = D^{-1/2} U is fixed and rho only rescales the
+#                           column weights (1 - rho lambda_j)^{-1/2}: no
+#                           per-leapfrog Cholesky of an irregular graph.
+# D and W follow .areal_Q: W = adj, D = diag(number of non-zero neighbours).
+.occu_cover_nuts_field_basis <- function(adj, type, n, scale_factor = NULL) {
+  if (identical(type, "car_proper")) {
+    deg <- rowSums(adj != 0)
+    if (any(deg <= 0))
+      stop("occu_cover NUTS spatial: the graph has an isolated node, so the ",
+           "proper-CAR precision is singular.", call. = FALSE)
+    dm12 <- 1 / sqrt(deg)
+    M    <- adj * outer(dm12, dm12)
+    ev   <- eigen((M + t(M)) / 2, symmetric = TRUE)
+    return(list(B1 = dm12 * ev$vectors, scale1 = .OCHF_CAR, has_iid = FALSE,
+                sf = 1, lambda = ev$values))
+  }
+  Lstr <- .tobs_field_load(adj, "icar", 1, 1, n)
+  if (identical(type, "bym2"))
+    return(list(B1 = Lstr, scale1 = .OCHF_BYM2_STR, has_iid = TRUE,
+                sf = scale_factor %||% compute_bym2_scale(adj),
+                lambda = numeric(0)))
+  list(B1 = Lstr, scale1 = .OCHF_CONST, has_iid = FALSE, sf = 1,
+       lambda = numeric(0))
+}
+
+# Bounds for each sampled hyper, read off the warm nested-Laplace fit's OWN
+# outer grid. That grid IS the measure the deterministic backend integrates
+# against -- equal weight per cell over log-spaced sigma / alpha nodes and
+# logit-spaced rho nodes -- so taking its span as the support of a flat prior in
+# the same coordinate makes the two backends integrate the same hyper prior, and
+# makes the same `control$sigma.grid` / `alpha.grid` / `rho.car.grid` knob move
+# both. An axis the grid pinned to one node (or that the fit does not carry)
+# returns NULL and the hyper stays pinned.
+.occu_cover_nuts_hyper_bounds <- function(warm, type) {
+  tg <- warm$joint_fit$theta_grid
+  ax <- function(nm, positive_only = FALSE) {
+    if (is.null(tg) || is.null(colnames(tg))) return(NULL)
+    j <- match(nm, colnames(tg))
+    if (is.na(j)) return(NULL)
+    v <- as.numeric(tg[, j]); v <- v[is.finite(v)]
+    if (positive_only) v <- v[v > 0]
+    if (length(v) < 2L) return(NULL)
+    r <- range(v)
+    if (r[2L] <= r[1L] * (1 + 1e-8)) return(NULL)
+    r
+  }
+  list(sigma = ax("sigma"),
+       alpha = ax("alpha", positive_only = TRUE),
+       rho   = switch(type, bym2 = ax("rho"), car_proper = ax("rho_car"), NULL))
+}
+
+# Assemble the field spec entries the C++ block (and the R oracle) read, plus the
+# warm-start values of the sampled hyper coordinates. `sample_hyper = FALSE`
+# reproduces the fixed-hyper block: the loading built at the warm estimate, with
+# sigma and rho baked into its columns and alpha a constant.
+.occu_cover_nuts_field_block <- function(adj, type, n_cells, site_cell, warm,
+                                         scale_factor = NULL,
+                                         sample_hyper = TRUE) {
+  if (!sample_hyper) {
+    fl <- .tobs_nuts_field_loading(adj, type, n_cells,
+                                   tau = 1 / max(warm$sigma, 1e-3)^2,
+                                   rho = warm$rho, sigma = warm$sigma,
+                                   scale_factor = scale_factor)
+    entries <- list(n_field_units = as.integer(n_cells),
+                    field_map = as.integer(site_cell),
+                    field_load = fl$field_load,
+                    field_alpha = as.numeric(warm$alpha))
+    return(list(entries = entries, n_raw = fl$n_raw, theta0_hyper = numeric(0),
+                sampled = character(0),
+                pinned = c(sigma = warm$sigma, rho = fl$rho, alpha = warm$alpha),
+                tau = fl$tau, rho = fl$rho))
+  }
+
+  bas <- .occu_cover_nuts_field_basis(adj, type, n_cells, scale_factor)
+  bnd <- .occu_cover_nuts_hyper_bounds(warm, type)
+  # rho rides a logit coordinate, so a grid node at 0 or 1 would put a bound at
+  # infinity; both ends of the mixing / correlation range are degenerate anyway.
+  if (!is.null(bnd$rho)) bnd$rho <- pmin(pmax(bnd$rho, 1e-4), 1 - 1e-4)
+  # A proper-CAR precision stays positive definite only while rho lambda_j < 1.
+  if (bas$scale1 == .OCHF_CAR && !is.null(bnd$rho)) {
+    lam_max <- max(bas$lambda, 0)
+    if (lam_max > 0)
+      bnd$rho[2L] <- min(bnd$rho[2L], (1 - 1e-6) / lam_max)
+    if (bnd$rho[2L] <= bnd$rho[1L]) bnd$rho <- NULL
+  }
+  entries <- list(n_field_units = as.integer(n_cells),
+                  field_map = as.integer(site_cell),
+                  field_load = bas$B1,
+                  field_scale1 = as.integer(bas$scale1),
+                  field_has_iid = as.integer(bas$has_iid),
+                  field_sf = as.numeric(bas$sf),
+                  field_lambda = as.numeric(bas$lambda))
+  n_raw <- ncol(bas$B1) + if (bas$has_iid) n_cells else 0L
+
+  theta0_hyper <- numeric(0); sampled <- character(0); pinned <- numeric(0)
+  # Warm-start a sampled coordinate at the grid-integrated estimate, held off the
+  # transform's flat tails so the first leapfrog step is informative.
+  start_u <- function(v, lo, hi, link) {
+    fr <- (.ochf_link(v, link) - .ochf_link(lo, link)) /
+          (.ochf_link(hi, link) - .ochf_link(lo, link))
+    stats::qlogis(min(max(fr, 0.05), 0.95))
+  }
+  add <- function(nm, value, bounds, link, dflt) {
+    if (is.null(bounds) || !is.finite(value) || value <= 0) {
+      entries[[paste0("field_", nm, "_fixed")]] <<-
+        as.numeric(if (is.finite(value) && value > 0) value else dflt)
+      pinned[[nm]] <<- entries[[paste0("field_", nm, "_fixed")]]
+      return(invisible(NULL))
+    }
+    v <- min(max(value, bounds[1L]), bounds[2L])
+    entries[[paste0("field_", nm, "_lo")]] <<- .ochf_link(bounds[1L], link)
+    entries[[paste0("field_", nm, "_hi")]] <<- .ochf_link(bounds[2L], link)
+    theta0_hyper <<- c(theta0_hyper, start_u(v, bounds[1L], bounds[2L], link))
+    sampled <<- c(sampled, nm)
+  }
+  add("sigma", warm$sigma, bnd$sigma, 0L, 1)
+  # icar carries no mixing parameter: rho = 1 is the intrinsic precision itself.
+  if (identical(type, "icar")) { entries$field_rho_fixed <- 1; pinned[["rho"]] <- 1 }
+  else add("rho", warm$rho, bnd$rho, 1L, 1)
+  add("alpha", warm$alpha, bnd$alpha, 0L, 0)
+
+  list(entries = entries, n_raw = n_raw, theta0_hyper = theta0_hyper,
+       sampled = sampled, pinned = pinned, tau = NA_real_, rho = warm$rho)
+}
+
+# Natural-scale hyper draws from the sampled field coordinates, and the per-draw
+# field. `draws` is the full sampler matrix; `total` the log-dispersion index.
+#
+# `field_sd` is the fourth reported quantity: the geometric-mean marginal SD the
+# block's own covariance implies at that draw's hypers,
+#   Cov(z) = sigma^2 (B1 diag(s1^2) B1' + s2^2 I),
+# so diag(Cov) needs only the row sums of (B1 s1)^2. It is the one field-scale
+# summary whose meaning does not depend on the areal kind (icar's precision, the
+# bym2 mixing weights and the proper-CAR eigen weights all normalise differently),
+# which makes it the quantity a simulation truth can be stated in.
+.ochf_hyper_draws <- function(entries, draws, total) {
+  fv <- .ochf_view(entries, total)
+  hyp <- list()
+  for (nm in c("sigma", "rho", "alpha")) {
+    h <- fv[[nm]]
+    hyp[[nm]] <- if (is.null(h$coord)) rep(h$fixed, nrow(draws))
+                 else .ochf_inv_link(h$t_lo + (h$t_hi - h$t_lo) *
+                                       stats::plogis(draws[, h$coord]), h$link)
+  }
+  n_draws <- nrow(draws)
+  z <- matrix(NA_real_, n_draws, fv$n_units)
+  fsd <- numeric(n_draws)
+  B2 <- fv$B1^2
+  for (i in seq_len(n_draws)) {
+    fs <- .ochf_forward(fv, draws[i, ])
+    z[i, ] <- fs$z
+    v <- as.numeric(B2 %*% (fs$s1^2)) + if (fv$has_iid) fs$s2^2 else 0
+    fsd[i] <- fs$sigma$value * exp(mean(log(pmax(v, 1e-300))) / 2)
+  }
+  hyp$field_sd <- fsd
+  list(hyper = do.call(cbind, hyp), field = z)
+}
+
+
+# Sample the exact occu_cover coefficient posterior jointly with a coupled
+# non-centered areal field on the latent state z (gcol33/tulpaObs#74, #204):
+# the psi-arm field z (one value per cell) enters psi linearly and is copied to
+# the cover (positive) arm with the amplitude alpha. Parameter vector:
+# c(beta_psi, beta_p, beta_pos, log_disp, raw_field, u_sigma?, u_rho?, u_alpha?).
+#
+# The field SD sigma, the mixing / spatial-correlation rho and the copy amplitude
+# alpha are SAMPLED (gcol33/tulpaObs#204): every areal kind's loading factors as a
+# fixed basis with hyper-dependent column weights, so the joint density costs a
+# scalar (or per-column) rescale per leapfrog step and no re-decomposition. Their
+# priors are flat in the coordinate the nested-Laplace outer grid spaces its nodes
+# in, over that grid's own span, so the sampler integrates the same hyper measure
+# the deterministic backend does -- and the sampler is then an INDEPENDENT
+# reference for it rather than a fit conditioned on its point estimate. icar
+# carries no mixing parameter (rho = 1 is the intrinsic precision), and an axis
+# the grid pinned to a single node stays pinned; `fit$nuts$sampled_hyper` /
+# `$fixed_hyper` report which is which per fit. `fixed.hyper = TRUE` restores the
+# #74 / #113 behaviour, conditioning on the warm fit's (sigma, rho, alpha).
+#
+# This is the occu_cover analogue of .tobs_fit_abun_nuts_spatial (tulpa#87), with
+# the field block in src/occu_cover_nuts.cpp byte-exact vs the R oracle's field
+# branch. Intrinsic icar / bym2 fields sample through the sum-to-zero eigen-basis
+# that drops the precision null-space (constant) direction
+# (gcol33/tulpaObs#71/#113). `...` absorbs unused sampler controls.
 .tobs_fit_occu_cover_nuts_spatial <- function(model, spatial, priors = NULL,
                                               sigma.beta = NULL, sigma.logdisp = 5,
                                               n.iter = NULL, n.warmup = NULL,
@@ -542,9 +844,12 @@
                                               max.iter = 200L, tol = 1e-6,
                                               verbose = FALSE,
                                               sigma.grid = NULL, rho.car.grid = NULL,
-                                              alpha.grid = NULL, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
-  .tobs_fill_sampler(environment(), "nuts")
+                                              alpha.grid = NULL,
+                                              fixed.hyper = FALSE, ...) {
+  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188). This
+  # path carries its own adaptation target there (the sampled proper-CAR rho
+  # reaches the near-intrinsic boundary; see .TOBS_FAMILY_DEFAULTS).
+  .tobs_fill_sampler(environment(), "nuts", "occu_cover_spatial")
 
   .tobs_reject_weighted_spatial(spatial, "occu_cover NUTS psi spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
@@ -570,43 +875,49 @@
       "graph nodes."), n_sites, n_cells), call. = FALSE)
   }
 
-  # Fixed hyper (sigma -> tau, rho_car) + copy amplitude alpha + warm betas / field
-  # from the nested-Laplace joint proper-CAR fit.
+  # Warm nested-Laplace joint fit: betas, field, and the grid-integrated
+  # (sigma, rho, alpha). Under fixed.hyper it supplies the pinned values; when
+  # the hypers are sampled it supplies their starting values and, through its own
+  # outer grid, the support of their priors.
   warm <- .tobs_occu_cover_nuts_carproper_warm(
     model, adj, priors, type = spatial$type, max.iter = max.iter, tol = tol,
     sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid)
-  alpha <- warm$alpha
 
-  # Whitened coupled-field loading L (f = L %*% raw): the square inverse Cholesky
-  # of the fixed precision for car_proper, the sum-to-zero eigen-loading for the
-  # intrinsic icar / bym2 fields (gcol33/tulpaObs#71/#113). The joint warm fit
-  # reports the field marginal SD sigma; tau = 1 / sigma^2 pins the icar/car
-  # precision.
-  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_cells,
-                                 tau = 1 / max(warm$sigma, 1e-3)^2, rho = warm$rho,
-                                 sigma = warm$sigma,
-                                 scale_factor = spatial$scale_factor)
-  field_load <- fl$field_load; n_raw <- fl$n_raw
+  fb <- .occu_cover_nuts_field_block(
+    adj, spatial$type, n_cells, site_cell, warm,
+    scale_factor = spatial$scale_factor, sample_hyper = !isTRUE(fixed.hyper))
+  n_raw   <- fb$n_raw
+  n_hyper <- length(fb$sampled)
+  alpha   <- warm$alpha
 
-  # car_proper warm-starts raw near the integrated field (raw0 = L %*% f_warm);
-  # the non-square icar / bym2 loadings start raw at 0.
+  # car_proper warm-starts raw at the integrated field, projected onto the
+  # block's own basis (B1 %*% (s1 * raw) = f / sigma); the intrinsic icar / bym2
+  # loadings start raw at 0.
   raw0 <- if (identical(spatial$type, "car_proper")) {
-    Q <- .areal_Q(adj, fl$rho)
-    L <- tryCatch(chol(fl$tau * Q + diag(1e-4 * fl$tau, n_cells)),
-                  error = function(e) NULL)
-    if (is.null(L)) stop("occu_cover NUTS spatial: field precision not PD.",
-                         call. = FALSE)
-    as.numeric(L %*% warm$field)
+    if (isTRUE(fixed.hyper)) {
+      Q <- .areal_Q(adj, fb$rho)
+      L <- tryCatch(chol(fb$tau * Q + diag(1e-4 * fb$tau, n_cells)),
+                    error = function(e) NULL)
+      if (is.null(L)) stop("occu_cover NUTS spatial: field precision not PD.",
+                           call. = FALSE)
+      as.numeric(L %*% warm$field)
+    } else {
+      # B1 = D^{-1/2} U with orthonormal U, so B1^{-1} = U' D^{1/2} and the
+      # column scaling divides out: raw = (1 - rho lambda)^{1/2} U' D^{1/2} f / sigma.
+      deg  <- rowSums(adj != 0)
+      lam  <- fb$entries$field_lambda
+      s1   <- 1 / sqrt(pmax(1 - warm$rho * lam, 1e-8))
+      as.numeric(crossprod(fb$entries$field_load * deg,
+                           warm$field)) / (s1 * max(warm$sigma, 1e-3))
+    }
   } else numeric(n_raw)
-  theta0 <- c(warm$beta_psi, warm$beta_p, warm$beta_pos, warm$log_disp, raw0)
+  theta0 <- c(warm$beta_psi, warm$beta_p, warm$beta_pos, warm$log_disp,
+              raw0, fb$theta0_hyper)
 
   spec <- .tobs_occu_cover_nuts_spec(model)
-  spec$n_field_units <- n_cells
-  spec$field_map     <- as.integer(site_cell)
-  spec$field_load    <- field_load
-  spec$field_alpha   <- as.numeric(alpha)
+  spec[names(fb$entries)] <- fb$entries
 
-  inv_metric <- c(rep(0.1, n_base), rep(1, n_cells))
+  inv_metric <- c(rep(0.1, n_base), rep(1, n_raw), rep(1, n_hyper))
 
   par_names <- c(
     paste0("psi_", pin[[1L]]$coef_names),
@@ -614,7 +925,10 @@
     paste0("pos_", pin[[3L]]$coef_names),
     if (identical(model$positive, "beta")) "log_phi" else "log_sigma_pos")
   raw_names <- paste0("raw_", seq_len(n_raw))
-  all_names <- c(par_names, raw_names)
+  # paste0() recycles a zero-length argument to "", so a fit with every hyper
+  # pinned would otherwise gain a phantom "u_" column name.
+  hyper_names <- if (n_hyper > 0L) paste0("u_", fb$sampled) else character(0)
+  all_names <- c(par_names, raw_names, hyper_names)
 
   run_chain <- function(ch) {
     cpp_occu_cover_nuts(
@@ -638,9 +952,25 @@
   sds <- sqrt(pmax(diag(V_post), 0)); names(sds) <- par_names
   par_means <- means[b_idx]; names(par_means) <- par_names
 
-  # Posterior-mean coupled field f = L %*% mean(raw) (n_raw whitened coords).
-  raw_idx <- n_base + seq_len(n_raw)
-  field_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
+  # Per-draw field and natural-scale hypers. The field is a nonlinear function of
+  # the sampled hypers, so its posterior mean is the mean of the per-draw field,
+  # not the field at the mean coordinate.
+  hd <- .ochf_hyper_draws(fb$entries, draws, n_base)
+  field_mean  <- colMeans(hd$field)
+  hyper_draws <- hd$hyper
+  # A pinned block folds sigma and rho into the loading's columns rather than
+  # carrying them as factors, so the block reports them as 1. Restate the values
+  # the fit actually conditioned on -- `field_sd` is unaffected, since the scaled
+  # loading already carries them.
+  for (nm in intersect(names(fb$pinned), colnames(hyper_draws)))
+    hyper_draws[, nm] <- fb$pinned[[nm]]
+  hyper_mean  <- colMeans(hyper_draws)
+  hyper_sd    <- apply(hyper_draws, 2L, stats::sd)
+  # A positive variance component at a few dozen binary sites has a right-skewed
+  # posterior, where the mean sits above the bulk; the median is the summary to
+  # quote against a known truth.
+  hyper_median <- apply(hyper_draws, 2L, stats::median)
+  alpha       <- hyper_mean[["alpha"]]
 
   # Data log-likelihood at the posterior mean (field on psi + alpha*field on
   # cover), so logLik() matches the laplace convention.
@@ -659,12 +989,39 @@
   epsilon   <- mean(vapply(chains, function(ch) ch$epsilon %||% NA_real_, numeric(1)),
                     na.rm = TRUE)
 
+  # Per-hyper convergence over the natural-scale draws, chain by chain (the
+  # bounded transform is monotone, so this is the split-Rhat of the coordinate
+  # itself). Reported for the sampled hypers only.
+  hyper_diag <- NULL
+  if (n_hyper > 0L) {
+    ends <- cumsum(vapply(per_chain_draws, nrow, integer(1)))
+    starts <- c(1L, ends[-length(ends)] + 1L)
+    hyper_chain <- lapply(seq_len(n_chains), function(ch)
+      hyper_draws[starts[ch]:ends[ch], fb$sampled, drop = FALSE])
+    hyper_diag <- .tobs_nuts_rhat_ess(hyper_chain)
+    names(hyper_diag$rhat) <- names(hyper_diag$ess) <- fb$sampled
+  }
+
+  # The honest hyper report (gcol33/tulpaObs#204): `sampled_hyper` names the
+  # hypers this fit integrated over, `fixed_hyper` those it conditioned on, and
+  # `fixed_hyper_values` says at what. `fixed_hyper` is a character vector --
+  # empty when nothing is pinned -- so a fit can never claim to have sampled a
+  # hyper it did not.
+  pinned_nm <- names(fb$pinned) %||% character(0)
   nuts <- list(accept_prob = accept, divergent = divergent, treedepth = treedepth,
                epsilon = epsilon, n_chains = n_chains,
                divergent_total = sum(divergent),
                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp,
-               field_tau = fl$tau, field_rho = fl$rho, field_alpha = alpha,
-               field_sigma = warm$sigma, fixed_hyper = TRUE,
+               field_rho = hyper_mean[["rho"]], field_alpha = alpha,
+               field_sigma = hyper_mean[["sigma"]],
+               sampled_hyper = fb$sampled,
+               fixed_hyper = pinned_nm,
+               fixed_hyper_values = fb$pinned,
+               hyper_mean = hyper_mean, hyper_median = hyper_median,
+               hyper_sd = hyper_sd,
+               hyper_rhat = hyper_diag$rhat, hyper_ess = hyper_diag$ess,
+               warm_hyper = c(sigma = warm$sigma, rho = warm$rho,
+                              alpha = warm$alpha),
                n_field_units = n_cells)
 
   fit <- structure(list(
@@ -686,9 +1043,15 @@
     process_info = pin,
     model        = model,
     spatial      = list(type = spatial$type, graph = adj,
-                        sigma_mean = warm$sigma, alpha_mean = alpha,
-                        rho_mean = fl$rho),
+                        sigma_mean = hyper_mean[["sigma"]],
+                        sigma_sd = hyper_sd[["sigma"]],
+                        alpha_mean = alpha, alpha_sd = hyper_sd[["alpha"]],
+                        rho_mean = hyper_mean[["rho"]],
+                        rho_sd = hyper_sd[["rho"]],
+                        sampled_hyper = fb$sampled, fixed_hyper = pinned_nm),
     spatial_field = field_mean,
+    field_draws   = hd$field,
+    hyper_draws   = hyper_draws,
     method       = "nuts",
     positive     = model$positive,
     nuts         = nuts,

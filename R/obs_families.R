@@ -265,12 +265,21 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #'
 #' `method = "nuts"` also samples ONE shared coupled field
 #' (`icar()` / `bym2()` / `car_proper()`), written either as an areal term or as
-#' the single-column bar `spatial(~ 1 || cell, graph = adj)`, with its
-#' hyperparameters (the field precision and the cover-arm copy amplitude) FIXED
-#' at the nested-Laplace estimate. The sampler carries one field block, so a
+#' the single-column bar `spatial(~ 1 || cell, graph = adj)`, TOGETHER WITH its
+#' hyperparameters: the field SD, the mixing (`bym2`) or spatial-correlation
+#' (`car_proper`) parameter, and the cover-arm copy amplitude. Their priors are
+#' flat over the same outer-grid span the `nested_laplace` path integrates
+#' against, in that grid's own coordinate, and the same `control$sigma.grid` /
+#' `alpha.grid` / `rho.car.grid` knobs set it on both routes - so the sampler is
+#' an independent reference for the hyperparameter layer rather than a fit
+#' conditioned on that layer's point estimate. `fit$nuts$sampled_hyper` and
+#' `fit$nuts$fixed_hyper` name which is which per fit (`icar` pins `rho` at 1:
+#' the intrinsic precision has no mixing parameter), `fit$hyper_draws` carries
+#' their posterior alongside `field_sd`, the geometric-mean marginal SD the
+#' field implies. `control$fixed.hyper = TRUE` conditions on the warm
+#' nested-Laplace estimate instead. The sampler carries one field block, so a
 #' second field - a spatially-varying coefficient / trend - stays on the
-#' grid-integrated `nested_laplace` path; the route that samples a field with its
-#' variance estimated is the spatial-factor community sampler
+#' grid-integrated `nested_laplace` path; the community spatial-factor route is
 #' [ms_occu_cover()].
 #'
 #' On the shared-field `nested_laplace` path the field-coupled occupancy slope
@@ -538,6 +547,9 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
       "re.sigma.grid", "re.sigma.grid.p", "re.sigma.grid.pos",
+      # Condition the NUTS + areal sampler on the warm nested-Laplace fit's
+      # (sigma, rho, alpha) instead of sampling them (gcol33/tulpaObs#204).
+      "fixed.hyper",
       "checkpoint"
     )
   )

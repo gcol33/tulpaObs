@@ -227,3 +227,81 @@ Per-seed variability of the block moments at this fixture size is large -- over
 seeds 7001/7011-7014 truth A gives `sigma` 0.386-0.894, `alpha` 1.001-2.399,
 `tau` 8.18-57.68 -- which is why the shipped assertions are orderings against a
 paired truth rather than single-seed recovery bands.
+
+## Sampled field hypers on the occu_cover NUTS + areal path (#204)
+
+`dev_notes/probe_204_calib.R`, 12 seeds (7001-7012) at side 8 (64 cells), J = 5,
+lognormal cover, truth `sigma = 0.7` / `alpha = 1.0`, 2 chains x 1000 kept draws
+after 800 warmup, run at the then-default `adapt.delta = 0.9`.
+
+Coverage of the 95% credible interval, 12/12 seeds on every line:
+
+| field | alpha cov | mean alpha | field_sd cov | mean field_sd | div total (max) | hyper Rhat max | min ESS | field cor | s / fit |
+|---|---|---|---|---|---|---|---|---|---|
+| icar | 1.00 | 1.053 | 1.00 | 0.943 | 0 (0) | 1.023 | 153 | 0.797 | 24.4 |
+| car_proper | 1.00 | 1.030 | 1.00 | 1.012 | 68 (13) | 1.015 | 178 | 0.786 | 30.3 |
+| bym2 | 1.00 | 1.036 | 1.00 | 0.871 | 3 (2) | 1.030 | 155 | 0.764 | 28.1 |
+
+`alpha` is essentially unbiased (0.03-0.05 high). `field_sd` runs 0.17-0.31 high:
+its posterior is right-skewed at 64 binary occupancy sites, so the posterior MEAN
+sits above the bulk -- `fit$nuts$hyper_median` is the summary to quote against a
+truth. The warm nested-Laplace point estimates over the same seeds
+(`sigma` 0.918 / 1.010 / 0.928, `alpha` 1.020 / 1.002 / 0.978) sit inside the
+sampled intervals, which is the like-for-like check; the shipped gate is coverage
+of the TRUTH, since agreeing with the deterministic backend is the circularity
+#204 exists to remove.
+
+### car_proper divergences are a step-size artifact, and adapt.delta clears them
+
+`Q(rho) = D - rho W` approaches the intrinsic (rank-deficient) limit as rho -> 1,
+and an ICAR-simulated field pushes the sampled rho there (posterior means
+0.78-0.97 against bounds [0.5, 0.99]), so the field's near-null direction
+stretches against the psi intercept. `dev_notes/probe_204_adapt.R`, seeds
+7002 / 7009 / 7010 / 7001:
+
+| adapt.delta | divergences | rho mean | field_sd mean | s / fit |
+|---|---|---|---|---|
+| 0.80 | 4 / 1 / 16 / 13 | 0.887 / 0.957 / 0.931 / 0.974 | 0.978 / 1.086 / 1.004 / 1.403 | 37-70 |
+| 0.95 | 6 / 0 / 2 / 0 | 0.888 / 0.959 / 0.929 / 0.977 | 1.041 / 1.120 / 1.025 / 1.443 | 51-101 |
+| 0.99 | 0 / 0 / 0 / 0 | 0.886 / 0.954 / 0.929 / 0.976 | 1.013 / 1.090 / 1.010 / 1.477 | 86-147 |
+
+The posterior does not move (rho identical to three decimals across the three
+settings), so the divergences were the step size, not a region the chain was
+missing. Hence the `occu_cover_spatial` row in `.TOBS_FAMILY_DEFAULTS`
+(`adapt.delta = 0.99`, roughly 2x wall time).
+
+### Cost of the parameterisation car_proper rho did NOT need
+
+Reading `Q(rho) = D - rho W` literally makes a sampled rho a per-leapfrog dense
+Cholesky. Measured on square lattices:
+
+| n | dense `chol` | one-off eigen | chol at 1e5 leapfrog steps |
+|---|---|---|---|
+| 400 | 0.010 s | 0.09 s | 0.3 h |
+| 1024 | 0.124 s | 1.27 s | 3.4 h |
+| 2025 | 0.974 s | 9.69 s | 27.1 h |
+
+The eigenbasis of the symmetrically normalised adjacency removes it entirely:
+`Q(rho) = D^{1/2}(I - rho Lambda)D^{1/2}` gives a rho-independent `B1 = D^{-1/2}U`
+with per-column weights `(1 - rho lambda_j)^{-1/2}`, so the one-off eigen above is
+the whole cost and every step is the same matvec the pinned block already did.
+
+### Shipped verification run
+
+`NOT_CRAN=true`, `TULPAOBS_FAST` unset, against the shipped defaults (so
+`adapt.delta = 0.99` on this path): `test-occu-cover-spatial-nuts.R` 62.4 min and
+`test-occu-cover-nuts.R` 1.7 min, both 0 fail / 0 error / 0 skip. That run
+includes the 24-fit coverage loop above and the pre-existing recovery blocks, so
+`max(divergences) <= 5` per fit holds at the shipped adaptation target across all
+24 sampled-hyper fits.
+
+### Field-SD scale, and why `field_sd` is the reported quantity
+
+`.tobs_field_load(adj, "icar", tau = 1, ...)` gives the field geo-mean marginal SD
+`sqrt(scale_q)` at `sigma = 1`: measured 0.7426 (36 cells) / 0.7777 (64 cells),
+matching `.occu_cover_icar_scale` = 0.5515 / 0.6048. The simulator's `f` carries
+geo-mean marginal variance 1, so the fitter's `sigma` and the simulator's are NOT
+the same number, and the bym2 structured block normalises differently again
+(`compute_bym2_scale` = 2.6949 / 2.7732). `field_sd` -- the geo-mean marginal SD
+the block's own covariance implies at a draw's hypers -- is the one summary all
+three kinds share, so it is what the truth is stated in.

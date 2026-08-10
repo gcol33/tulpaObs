@@ -52,6 +52,17 @@ test_that("the spatial-factor community sampler keeps its own warmup + adaptatio
   expect_identical(d$sigma.beta, 5)
 })
 
+test_that("the field-sampling occu_cover sampler keeps its own adaptation (#204)", {
+  d <- .tobs_engine_defaults("nuts", "occu_cover_spatial")
+  expect_identical(d$adapt.delta, 0.99)
+  # Only the adaptation target departs; everything else is the shared profile,
+  # and in particular the NON-spatial occu_cover sampler is untouched.
+  expect_identical(d$n.iter, 1000L)
+  expect_identical(d$n.warmup, 1000L)
+  expect_identical(.tobs_default("nuts", "adapt.delta"), 0.9)
+  expect_identical(.tobs_engine_defaults("nuts", "occu_cover")$adapt.delta, 0.9)
+})
+
 test_that("the Laplace-EM prior / regularization scales are one value each", {
   expect_identical(.tobs_default("laplace", "sigma.beta"), 5)
   # A loading prior width and an LKJ shape are engine-level values of the same

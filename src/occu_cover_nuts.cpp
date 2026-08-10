@@ -38,6 +38,7 @@
 #include <vector>
 #include <cmath>
 #include "occu_coupling_shared.h"
+#include "nuts_field_hyper.h"
 #include "nuts_engine.h"
 
 namespace tulpaObs {
@@ -64,23 +65,17 @@ struct OccuCoverNutsData {
     int p_occ = 0, p_det_site = 0, p_det_visit = 0, p_pos_site = 0, p_pos_visit = 0;
     int p_p = 0, p_pos = 0, total = 0;
 
-    // Optional fixed-hyper coupled areal field on the latent state z (the
-    // gcol33/tulpaObs#74 spatial NUTS path). The non-centered field f = Linv %*%
-    // raw, raw ~ N(0, I), with Linv the inverse Cholesky of the FIXED proper-CAR
-    // precision tau Q(rho); the field covariance is fixed at the nested-Laplace
-    // joint estimate, so NUTS samples only the whitened raw (appended to
-    // the coefficient vector). The field couples both arms with the FIXED scaling
-    // alpha (also from the nested-Laplace estimate): eta_psi_c += f[cell(c)] and
-    // eta_pos_cv += alpha * f[cell(c)]. n_field_units = 0 -> the non-spatial
-    // sampler (byte-identical: every field branch is guarded by has_field).
-    // The field is f = L %*% raw, raw ~ N(0, I_{n_raw}), with L a (possibly non-
-    // square) n_field_units x n_raw loading (gcol33/tulpaObs#71/#113): square
-    // inverse Cholesky for a full-rank proper-CAR field, or the sum-to-zero
-    // eigen-loading for an intrinsic icar / bym2 field (n_raw < n_field_units).
-    int n_field_units = 0, n_raw = 0, o_raw = 0;
-    double field_alpha = 0.0;
-    std::vector<int> field_map;   // 0-based field node (cell) per site (length n_sites)
-    std::vector<double> Linv;     // row-major n_field_units x n_raw loading
+    // Optional coupled areal field on the latent state z (the gcol33/tulpaObs#74
+    // spatial NUTS path). The non-centered field enters psi additively and the
+    // cover arm scaled by the copy amplitude alpha:
+    //   eta_psi_c += z[cell(c)],  eta_pos_cv += alpha * z[cell(c)].
+    // nuts_field_hyper.h owns the field parameterisation: a fixed basis with the
+    // field SD sigma, the mixing / correlation rho and alpha either sampled as
+    // bounded coordinates (gcol33/tulpaObs#204) or pinned at a nested-Laplace
+    // estimate (the #74 / #113 fixed-hyper loading, which marshals as the pinned
+    // configuration and is byte-identical to it). An inactive block leaves every
+    // field branch guarded, so the non-spatial sampler is unchanged.
+    HyperFieldBlock fb;
 };
 
 inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
@@ -105,31 +100,8 @@ inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
     d.p_p   = d.p_det_site + d.p_det_visit;
     d.p_pos = d.p_pos_site + d.p_pos_visit;
     int base = d.p_occ + d.p_p + d.p_pos + 1;   // +1 log_dispersion
-    if (spec.containsElementNamed("n_field_units")) {
-        d.n_field_units = Rcpp::as<int>(spec["n_field_units"]);
-        if (d.n_field_units > 0) {
-            Rcpp::IntegerVector fm = spec["field_map"];   // 1-based site -> field node
-            if ((int) fm.size() != d.n_sites)
-                Rcpp::stop("field_map must have length n_sites");
-            d.field_map.resize(d.n_sites);
-            for (int i = 0; i < d.n_sites; ++i) d.field_map[i] = fm[i] - 1;
-            // Accept a general n_field_units x n_raw loading (field_load, #113);
-            // the legacy square inverse Cholesky (field_Linv) is n_raw == NF.
-            Rcpp::NumericMatrix Li = spec.containsElementNamed("field_load")
-                ? Rcpp::as<Rcpp::NumericMatrix>(spec["field_load"])
-                : Rcpp::as<Rcpp::NumericMatrix>(spec["field_Linv"]);
-            if (Li.nrow() != d.n_field_units)
-                Rcpp::stop("field loading must have n_field_units rows");
-            d.n_raw = Li.ncol();
-            d.Linv.resize((std::size_t) d.n_field_units * d.n_raw);
-            for (int u = 0; u < d.n_field_units; ++u)
-                for (int v = 0; v < d.n_raw; ++v)
-                    d.Linv[(std::size_t) u * d.n_raw + v] = Li(u, v);
-            d.field_alpha = Rcpp::as<double>(spec["field_alpha"]);
-            d.o_raw = base; base += d.n_raw;
-        }
-    }
-    d.total = base;
+    d.fb = hyper_field_build(spec, base, d.n_sites);
+    d.total = base + hyper_field_size(d.fb);
     return d;
 }
 
@@ -170,28 +142,23 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     double lp = 0.0;
     double g_logdisp = 0.0;
 
-    // Fixed-hyper coupled field: f = Linv %*% raw (per cell), entering psi
-    // additively and the cover arm scaled by alpha. The field gradient is
-    // accumulated per cell (g_f) and pushed back to raw via Linv^T below.
-    const bool has_field = d.n_field_units > 0;
-    const double field_alpha = d.field_alpha;
-    std::vector<double> ffield, g_f;
-    if (has_field) {
-        ffield.assign(d.n_field_units, 0.0);
-        g_f.assign(d.n_field_units, 0.0);
-        for (int u = 0; u < d.n_field_units; ++u) {
-            double zz = 0.0;
-            const double* Lu = &d.Linv[(std::size_t) u * d.n_raw];
-            for (int v = 0; v < d.n_raw; ++v) zz += Lu[v] * theta[d.o_raw + v];
-            ffield[u] = zz;
-        }
-    }
+    // Coupled field: z per cell (nuts_field_hyper.h), entering psi additively and
+    // the cover arm scaled by the copy amplitude alpha. The per-cell field score
+    // is accumulated in g_f and the alpha data-score in g_alpha_data; both are
+    // handed back to the field block below.
+    const bool has_field = d.fb.active();
+    HyperFieldState fs;
+    hyper_field_forward(d.fb, theta, fs);
+    const double field_alpha = has_field ? fs.alpha.value : 0.0;
+    double g_alpha_data = 0.0;
+    std::vector<double> g_f;
+    if (has_field) g_f.assign(d.fb.n_units, 0.0);
 
     std::vector<double> eta_p(J), g_eta_p(J), g_eta_pos(J), eta_p_compact(J), g_p_compact(J);
 
     for (int i = 0; i < N; ++i) {
-        const int cell = has_field ? d.field_map[i] : -1;
-        const double f_i = has_field ? ffield[cell] : 0.0;
+        const int cell = has_field ? d.fb.field_map[i] : -1;
+        const double f_i = has_field ? fs.z[cell] : 0.0;
         // Occupancy linear predictor (+ the shared field on psi).
         double eta_psi = f_i;
         for (int k = 0; k < p_occ; ++k) eta_psi += d.X_occ(i, k) * bo[k];
@@ -276,8 +243,12 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
         for (int k = 0; k < p_pos_site; ++k) grad[g_bpos_site + k] += g_eta_pos_sum * d.X_pos_site(i, k);
 
         // Field score for this cell: the psi-arm eta-score plus alpha times the
-        // cover-arm eta-score sum (the cover arm sees alpha * f).
-        if (has_field) g_f[cell] += g_eta_psi + field_alpha * g_eta_pos_sum;
+        // cover-arm eta-score sum (the cover arm sees alpha * f). The copy
+        // amplitude's own data-score is the mirror term, f times that sum.
+        if (has_field) {
+            g_f[cell]    += g_eta_psi + field_alpha * g_eta_pos_sum;
+            g_alpha_data += f_i * g_eta_pos_sum;
+        }
         if (p_det_visit > 0) {
             for (int v = 0; v < J; ++v) {
                 if (g_eta_p[v] == 0.0) continue;
@@ -311,18 +282,10 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
     lp           -= 0.5 * ild2 * log_disp * log_disp;
     grad[g_ld]   -= ild2 * log_disp;
 
-    if (has_field) {
-        // Whitened field prior raw ~ N(0, I_{n_raw}); the chain grad_raw = L^T g_f
-        // (f = L %*% raw, so d lp / d raw_v = sum_u L[u,v] g_f[u]).
-        for (int v = 0; v < d.n_raw; ++v) {
-            double gr = 0.0;
-            for (int u = 0; u < d.n_field_units; ++u)
-                gr += d.Linv[(std::size_t) u * d.n_raw + v] * g_f[u];
-            const double rv = theta[d.o_raw + v];
-            lp -= 0.5 * rv * rv;
-            grad[d.o_raw + v] += gr - rv;
-        }
-    }
+    // Whitened field prior, the chain rule onto raw, and any sampled hyper's
+    // bounded-transform log-density + gradient.
+    if (has_field)
+        lp += hyper_field_backward(d.fb, theta, fs, g_f, g_alpha_data, grad);
 
     return lp;
 }

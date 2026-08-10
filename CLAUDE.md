@@ -596,7 +596,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | Cover hurdle (joint) | Yes | Yes | `family_cover_hurdle.R`, `sla_cover_*`, NUTS `R/cover_nuts.R` + `src/cover_nuts.cpp` (no `laplace_gibbs`/`laplace_mi`). positive = beta/lognormal/lognormal_trunc/ordinal/`beta_oi`. `beta_oi` (#108) = one-inflated Beta: ceiling (cover=1) plots = a point mass (constant pi = ceiling share, binomial SE), interior Beta on (0,1); encode splits `is_pos` to interior, `enc$oi` carries pi, decode reports `pi_one`, predict conditional cover = `pi + (1-pi)*mu` (`.tobs_cover_mu`). `control$aggregate.occ` (ON, #48) collapses occ arm to Binomial suff-stat; `control$aggregate.pos` (ON beta arm, #49) collapses beta pos arm to grouped suff-stat (tulpa `slog_y`/`slog_1my`), errors on non-beta. Both byte-identical to per-plot |
 | Cover hurdle spatial coef fields (`\|\|` / `\|`) | n-L | — | `spatial(~ 1 + w \|\| node, graph, to=)` independent (#61, two coupled ICAR blocks, per-field alpha) OR `\| ` correlated (#64, one separable-MCAR block sharing free Sigma). `\|` both-arm `to=c("presence","positive")` = copied to pos arm w/ one alpha (#64); `\|` single-arm `to="presence"`/`"positive"` = free-Sigma field on that arm alone, NO copy (#109, 0-sentinel `spatial_idx` on the other arm via `mc$to`, `copy=NULL`, `alpha_mcar`=NA). `\|` -> `.cover_build_mcar_spec`/`.fit_cover_hurdle_joint_mcar` (tulpa `type="mcar"` block, copy only when both-arm); reports `sigma_mcar`/`rho_mcar`/`alpha_mcar`. SLA on `\|` no-op. icar only |
 | Cover hurdle arm-specific fields (single-arm `to`) | n-L | — | `spatial(~ 1 + w \|\| cell, graph, to="positive")` (or `"presence"`); separate single-arm calls = independent per-arm fields, NO cross-arm copy (#65). NO engine change: per-arm `spatial_idx=0` makes the other arm's rows skip the block (tulpa `l_b>0` scatter guard), own precision grid-integrated. `.tobs_armspecific_bar_fields` (formula_terms.R) -> `enc$armspec` -> `.fit_cover_hurdle_joint_armspecific` (non-copied per-arm blocks, no `copy=`). `armspec_blocks` carries per-block arm/slot/type; `.tobs_joint_draws_cover_armspecific` scatters each block onto its arm only (amp 0 on other). icar/car/car_proper AND bym2 (#107): a bym2 block is the non-copied length-2 (phi ICAR + iid theta) block, paired (sigma,rho) grid; the draw projection reconstructs the rho-mixed unit field `z = sqrt(rho)*sf*phi + sqrt(1-rho)*theta` so predict/WAIC see the full mix. `\|\|` only (`\|` arm-specific undefined: copy-only). No mix w/ shared field/trend/temporal/re; one field per arm. SLA no-op |
-| Joint occu + cover | Yes | Yes | `occu_cover()` — see below. NUTS non-spatial (in-tree FullGradFn over exact two-state marginal, beta/lognormal; `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`) AND spatial fixed-hyper coupled areal field (#74, car_proper recovers; icar/bym2 sample + centre via the #71 sum-to-zero coupled field, #113). Sampled-field (estimated-variance) route = `ms_occu_cover()` factor |
+| Joint occu + cover | Yes | Yes | `occu_cover()` — see below. NUTS non-spatial (in-tree FullGradFn over exact two-state marginal, beta/lognormal; `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`) AND spatial coupled areal field (#74, car_proper recovers; icar/bym2 sample + centre via the #71 sum-to-zero coupled field, #113) with its HYPERS SAMPLED (#204: field SD, bym2/car mixing rho, copy amplitude alpha — fixed basis, no per-step decomposition; `fit$nuts$sampled_hyper`/`$fixed_hyper` report per fit). Community sampled-field (per-species loadings) route = `ms_occu_cover()` factor |
 | occu + cover + areal field + per-group RE | n-L | — | `occu_cover()` + icar/bym2 + `re(g)`/`(1\|g)` on psi; one iid RE block (#56); `sigma_re` + BLUPs; intercept RE only |
 | occu + cover independent cover-arm field (single-arm `to="positive"`) | n-L | — | `occu_cover()` + `spatial(~ 1 + w \|\| cell, graph, to="positive")` on occurrence formula (#110): NON-copied ICAR block(s) on the cover arm ALONE, decoupled from the occupancy field's alpha copy. Composes w/ the shared occupancy field (psi + `delta_cover_exp` keep it) -> `delta_cover_cond` varies instead of collapsing when `alpha->0`. Parse: `.occu_cover_spatial_fields` splits the single-arm `to="positive"` bar -> `spatial_info$pos_armspec` via `.tobs_armspecific_bar_fields`. Fitter appends non-copied ICAR blocks (`spatial_idx` psi=0/p=0/pos=cell, `tau_grid`, svc_weight for trend) after occ fields, before RE blocks; `ctx$field_specs` labels each block shared-vs-pos. Postprocess partitions occ (1..n_occ_fields) vs pos blocks; reports `sigma_pos_field`/`sigma_pos_field_<col>` from `b<k>.tau`; surfaces `fit$pos_field`/`pos_field_table(s)`. Draw substrate (`.tobs_joint_draws_occu_cover`) reads `field_specs`: pos block amp_occ=0, amp_pos=1/sqrt(tau) -> predict/WAIC add it to `field_pos` automatically. Predict weight override skips pos blocks. Per-visit cover (`cover_aggregate="none"`); icar only (bym2/car->icar); NOT w/ MCAR `\|`, latent cover RE, or batch. Static intercept field weakly ID'd vs alpha copy; time-weighted trend cleanly ID'd. `test-occu-cover-pos-field.R` |
 | occu + cover independent detection-arm field (single-arm `to="detection"`) | n-L | — | `occu_cover()` + `spatial(~ 0 + time \|\| cell, graph, to="detection")` on the `detection` formula (or lifted `to="detection"`) (tulpa#140): spatially-structured detection prob. Same non-copied arm-specific block machinery as the cover-arm field (#110) -- builder `arm_field_blocks(af, "p")` sets slot 2 (`spatial_idx` psi=0/p=cell/pos=0). Enters via detection arm `field_coef=1` (set when `det_armspec` present, `.occu_cover_build_joint_arms(det_field=)`) so the block scatters onto the p rows; shared occ field kept off detection by its `spatial_idx=0` sentinel -- identical to the #102 detection-RE mechanism, so NO tulpa engine change. Reports `sigma_p_field`/`sigma_p_field_<col>`. icar only; per-visit cover. `test-occu-cover-pos-field.R` |
@@ -662,18 +662,49 @@ N(0,sigma.logdisp^2=25) log-disp priors. Byte-exact R oracle
 `.tobs_occu_cover_nuts_logpost` vs `cpp_occu_cover_nuts_joint_logpost`; calibrated
 WAIC/LOO + Rhat/ESS (shared `.tobs_nuts_rhat_ess` in `nuts_chains.R`). 0 divergences,
 NUTS==Laplace mode, recovery + 95% coverage (`test-occu-cover-nuts.R`). **Spatial NUTS**
-(`nuts` + `car_proper()` on psi, #74, `R/occu_cover_nuts.R::.tobs_fit_occu_cover_nuts_spatial`):
-FIXED-HYPER non-centered coupled PROPER-CAR field — psi-arm field `f` (one/cell) enters psi
-linearly, copied to pos arm w/ scaling `alpha`; field precision `tau Q(rho)` + `alpha` FIXED
-at the nested-Laplace joint proper-CAR estimate (`.tobs_occu_cover_nuts_carproper_warm`: one
-warm `tulpa_nested_laplace_joint(type="car_proper")` fit), whitened `raw ~ N(0,I)` (`f =
-Linv %*% raw`) sampled jointly. Param vector `c(beta_psi, beta_p, beta_pos, log_disp,
-raw_field)`. Reuses the abun#51 field-block recipe (tulpa#87): optional field block in
-`src/occu_cover_nuts.cpp` (`n_field_units`/`field_map`/`field_Linv`/`field_alpha`), byte-exact
-vs R oracle's field branch; field-off path byte-identical to non-spatial NUTS. car_proper ONLY
-(full-rank precision -> well-conditioned geometry); icar/bym2 + SVC/trend/temporal/RE gated ->
-n-L. group_var maps sites>cells. 0 divergences, field cor ~0.78, 95% slope coverage ~0.92, beta
-SD calibrates to n-L SEs (`test-occu-cover-spatial-nuts.R`). predict() needs the joint object
+(`nuts` + an areal term on psi, #74/#113/#204,
+`R/occu_cover_nuts.R::.tobs_fit_occu_cover_nuts_spatial`): non-centered coupled areal field
+— psi-arm field `z` (one/cell) enters psi linearly, copied to pos arm w/ amplitude `alpha`.
+Param vector `c(beta_psi, beta_p, beta_pos, log_disp, raw_field, u_sigma?, u_rho?, u_alpha?)`.
+
+**Hypers SAMPLED, not pinned (#204)** — the point being that a fit conditioned on the outer
+grid's own point estimate cannot serve as an independent reference for that grid. Every areal
+kind's loading factors as a FIXED basis w/ hyper-dependent column weights, so a leapfrog step
+costs a rescale, never a re-decomposition (`src/nuts_field_hyper.h`, R mirror `.ochf_*` in
+`occu_cover_nuts.R`):
+`z = sigma*(B1 %*% (s1(rho)*raw1) + s2(rho)*raw2)`.
+icar `B1` = sum-to-zero eigen-loading of intrinsic `Q` (#71), `s1=1`, no `raw2`;
+bym2 same `B1`, `s1=sqrt(rho/sf)`, `raw2` iid w/ `s2=sqrt(1-rho)` (Riebler);
+car_proper `Q(rho)=D-rho W = D^{1/2}(I-rho Lambda)D^{1/2}` in the eigenbasis of the
+symmetrically normalised adjacency `D^{-1/2} W D^{-1/2}=U Lambda U'` -> `B1 = D^{-1/2}U`
+FIXED, `s1_j=(1-rho lambda_j)^{-1/2}`. That last one is why car_proper rho is NOT the O(n^3)
+per-step Cholesky the issue scoped it as (measured dense `chol` at n=2025: 0.974 s/call ->
+27.1 h per 1e5 leapfrog steps; the eigen route pays 9.7 s once and nothing per step).
+Each sampled hyper rides `t = t_lo + (t_hi-t_lo)*plogis(u)`, `value = inv_link(t)` (log for
+sigma/alpha, logit for rho) — bounded, so no wall, Jacobian in the target.
+**Prior = flat in `t` over the WARM FIT'S OWN outer-grid span** (`fit$theta_grid` column
+range), which is the measure the nested-Laplace grid integrates against (tulpa defaults to
+equal weight per cell over log-spaced sigma/alpha + logit-spaced rho nodes;
+`R/nested_laplace_joint_hyperpriors.R` shows the optional pc.prec/half_normal families are
+NOT set by this path). So `control$sigma.grid`/`alpha.grid`/`rho.car.grid` move BOTH backends.
+Flat prior + change of variables = normalised `log(e)+log(1-e)`, `e=plogis(u)`.
+alpha's grid `0` atom is not HMC-representable -> bounds take the positive nodes only.
+icar pins `rho=1` (intrinsic precision has no mixing param); an axis the grid pinned to one
+node stays pinned. `fit$nuts$sampled_hyper` / `$fixed_hyper` (CHARACTER vectors, empty when
+nothing pinned — deliberately a type change from the old `fixed_hyper=TRUE`, so a stale
+`isTRUE()` read fails loudly) + `$fixed_hyper_values`; `fit$hyper_draws` cols
+`sigma|rho|alpha|field_sd`. **`field_sd`** = geo-mean marginal SD the block implies at that
+draw = the ONLY field-scale summary comparable across kinds (the three normalise their
+precisions differently), so it is what a simulation truth is stated in: the simulator's `f`
+carries geo-mean marginal variance 1 (Sorbye-Rue), truth = `sigma`. `control$fixed.hyper=TRUE`
+restores #74 conditioning, byte-identical to the old loading (pinned = the degenerate
+configuration of the same block, not a second path).
+Validated: C++ == R oracle to ~1e-13, analytic == central FD to ~1e-9 incl. every hyper
+coordinate, prior verified flat in `t` by holding `raw=0` (field vanishes -> the target IS the
+prior; catches a missing Jacobian, which the gradient check cannot).
+Was: `inv_metric` sized `n_cells` while bym2's `n_raw = 2n-1` -> the engine took a
+short metric pointer w/o a length check; now sized `n_raw + n_hyper`.
+group_var maps sites>cells; SVC/trend/temporal/RE still gated -> n-L. predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67). **Spatial default** (`nested_laplace`,
 `R/occu_cover_joint.R`): `joint` engine via `tulpa_nested_laplace_joint()` w/
@@ -1134,6 +1165,7 @@ src/
   occu_cover_ragged.h       — `Arms` (#185): the one-row-per-valid-visit predictor view every ragged occu_cover DIAGNOSTIC kernel assembles from (occu_cover_ploglik.cpp, occu_cover_diag.cpp). `make_arms()` = occ + det arms (what the CDF-limits kernel needs), `attach_cover()` adds the pos arm (loglik + PPC). NOT the fit kernels -- those are the cell-coupling specs above
   ms_occu_cover_spatial_nuts.cpp / abun_nuts.cpp / ms_abun_nuts.cpp / occu_cover_nuts.cpp — NUTS (#67/#41/#14; occu_cover non-spatial)
   nuts_engine.h            — shared run_tulpa_nuts driver for the in-tree FullGradFn targets
+  nuts_field_block.h / nuts_field_hyper.h — the two non-centered areal field blocks. `_block` PINS the hypers at a nested-Laplace estimate and marshals one loading (abun/removal/distance/fp_occu/dyn_abun). `_hyper` SAMPLES them (#204, occu_cover): fixed basis `B1` + rho-dependent per-column weights + bounded transforms, so no leapfrog step re-decomposes anything; the pinned case is the same block with every hyper's coordinate absent, byte-identical to `_block`'s loading. A family moving from pinned to sampled swaps the header, not its eval
   community_chol.h         — shared log-Cholesky helpers (#14 non-centered, #67 centered) + `CommunityCholPri` / `community_chol_pri_read()` (#181): the log-Cholesky hyperprior scalars + the `pri` list keys, ONE declaration for all seven community NUTS targets. `MsOccuCoverPri` / the spatial-factor `PriScalars` INHERIT it and add their own fields; do not restate the three
   community_grid_pack.h    — `community_pack_grid()` (#181): the per-outer-grid-point pack shared by the community areal drivers (ms_occu_spatial.cpp, nmix_community_spatial.cpp). The state arm is reached by pointer-to-member and named by the caller ("psi" vs "lambda"), and a family with no boundary diagnostic passes a null member pointer. Include AFTER RcppEigen.h
   RcppExports.cpp          — generated, do not edit

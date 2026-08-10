@@ -105,7 +105,20 @@
     # The spatial-factor community occu_cover sampler carries a coupled field
     # and per-species loadings, a harder geometry than the non-spatial targets:
     # a tighter adaptation target and a shorter warmup than the shared profile.
-    ms_occu_cover_spatial = list(n.warmup = 500L, adapt.delta = 0.95)
+    ms_occu_cover_spatial = list(n.warmup = 500L, adapt.delta = 0.95),
+
+    # The single-species occu_cover sampler with a coupled areal field, whose
+    # field hyperparameters are sampled (gcol33/tulpaObs#204). A proper-CAR
+    # precision Q(rho) = D - rho W approaches the INTRINSIC (rank-deficient)
+    # limit as rho -> 1, and the data on an ICAR-simulated field pushes rho
+    # there, so the field's near-null direction stretches against the psi
+    # intercept -- a funnel the profile's step size cannot walk. Measured over
+    # four seeds at N = 64, the divergence count falls 4 / 1 / 16 / 13 (0.80) ->
+    # 6 / 0 / 2 / 0 (0.95) -> 0 / 0 / 0 / 0 (0.99) while the posterior does not
+    # move (rho mean identical to three decimals, field_sd within Monte Carlo
+    # noise) -- a step-size artifact, not a region the chain was missing. The
+    # cost is roughly 2x wall time, which a reference posterior is worth.
+    occu_cover_spatial = list(adapt.delta = 0.99)
   )
 )
 
