@@ -212,18 +212,30 @@ test_that("predict propagates a positive-arm covariate from newdata (gcol33/tulp
   # visit-level positive covariate was held at the reference, so these were equal.
   nd0 <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 0)
   nd1 <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 1)
-  c0 <- as.data.frame(predict(fit, newdata = nd0, type = "cover_cond", nsim = 300, draws = FALSE))
-  c1 <- as.data.frame(predict(fit, newdata = nd1, type = "cover_cond", nsim = 300, draws = FALSE))
+  c0 <- as.data.frame(predict(fit, newdata = nd0, type = "cover_cond", nsim = 3000, draws = FALSE))
+  c1 <- as.data.frame(predict(fit, newdata = nd1, type = "cover_cond", nsim = 3000, draws = FALSE))
   expect_false(isTRUE(all.equal(c0$mean, c1$mean)))
-  # lognormal conditional cover: log ratio tracks the positive slope.
-  expect_equal(mean(log(c1$mean) - log(c0$mean)), b_pos, tolerance = 0.1)
+  # lognormal conditional cover: per draw the ratio is exactly exp(b_pos), so the
+  # log ratio tracks the slope. The reported `mean` column averages exp() over
+  # draws before the log, which adds the posterior Var(b_pos)/2 (about +0.01 at
+  # this fixture), so the budget is absolute and set above that offset -- a slope
+  # held at the reference would land a full b_pos away.
+  expect_lt(abs(mean(log(c1$mean) - log(c0$mean)) - b_pos), 0.05)
 
   # type = "change" over the positive covariate gives a non-zero conditional change.
-  ch <- as.data.frame(predict(fit, newdata = nd0, type = "change",
-                              times = c(0, 1), time_col = "pos_cov1",
-                              nsim = 300, draws = FALSE))
+  chp <- predict(fit, newdata = nd0, type = "change", times = c(0, 1),
+                 time_col = "pos_cov1", nsim = 3000, draws = TRUE)
+  ch <- as.data.frame(chp)
   expect_true(all(abs(ch$delta_cover_cond) > 1e-8))
-  expect_equal(mean(log(ch$cover_cond_T2) - log(ch$cover_cond_T1)), b_pos, tolerance = 0.1)
+  expect_lt(abs(mean(log(ch$cover_cond_T2) - log(ch$cover_cond_T1)) - b_pos), 0.05)
+
+  # Both times are read off ONE draw bundle, so the identity is exact per draw:
+  # the log ratio is that draw's slope at every cell, and its draw mean is the
+  # coefficient up to Monte-Carlo error of the mean.
+  dr <- attr(chp, "draws")
+  lr <- log(dr$cover_cond_T2) - log(dr$cover_cond_T1)
+  expect_lt(max(abs(sweep(lr, 2L, colMeans(lr)))), 1e-10)
+  expect_lt(abs(mean(lr) - b_pos), 0.05)
 })
 
 test_that("occu_cover trend recovers slopes, both couplings, both fields (10 seeds)", {
