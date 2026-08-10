@@ -721,9 +721,12 @@ det-arm RE, 549 on a sampled field). The grid-integrated (`nested_laplace`) rout
 same criteria (#215): `.tobs_joint_draws()` returns its RE latents on `bundle$re` in the layout
 the offset builder already reads, so the components builder feeds them through the same
 per-visit path (elpd_waic moved 11.5 nats on a det-arm RE at sigma 1.1, 61.5 on a cover-arm
-RE). STILL AT ZERO: an occupancy-arm RE (#56) -- the fitter takes its group codes as an
-argument and nothing stores them on the fit, so the criteria warn and score it at the
-population mean.
+RE). An occupancy-arm RE (#56) is per SITE, so the dispatcher stores its group codes on the
+model (`model$re_psi`, the occupancy counterpart of `model$re_det`/`re_pos`) and the components
+builder adds the per-group draw to `field_occ` -- the per-site offset every kernel already reads
+(elpd_waic moved 9.34 nats, elpd_loo 9.41, at sigma_re 1.57; a fit carrying none byte-identical).
+`.occu_cover_spatial_fields()` also carries the term's `var` + factor `levels` through, so
+`fit$re$psi`/`ranef()` label the grouping like the obs arms and `predict(newdata=)` matches it.
 group_var maps sites>cells; SVC/trend/temporal/RE still gated -> n-L. predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67). **Spatial default** (`nested_laplace`,

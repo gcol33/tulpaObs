@@ -652,6 +652,9 @@
     # Optional per-group random intercept on the occupancy arm, layered on the
     # shared field (gcol33/tulpaObs#56). The grouping is per occupancy unit (one
     # code per site / data row); validate its length and carry it to the fitter.
+    # It also lands on the model, so the per-site offset the criteria add to the
+    # occupancy predictor is built from the same codes the fit ran on -- the
+    # occupancy counterpart of model$re_det / model$re_pos (gcol33/tulpaObs#215).
     re_spec <- spatial_info$re
     if (!is.null(re_spec)) {
       if (length(re_spec$group_idx) != model$n_sites) {
@@ -660,6 +663,7 @@
           "but there are %d occupancy units (sites)."),
           length(re_spec$group_idx), model$n_sites), call. = FALSE)
       }
+      model$re_psi <- re_spec
     }
 
     # joint (3-arm nested-Laplace via tulpa's cell_coupling spec) is the

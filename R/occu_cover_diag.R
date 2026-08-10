@@ -17,8 +17,9 @@
 # offsets of its observation-arm random effects. Otherwise: read the stored
 # coefficient draws, the sampled or marginal per-cell field, and the per-visit
 # offsets of a sampled observation-arm random effect. The structured terms come
-# back as offsets rather than coefficients -- `field_occ` / `field_pos` per site,
-# `off_det` / `off_pos` per visit (NULL for an arm with none) -- and every
+# back as offsets rather than coefficients -- `field_occ` (the occupancy field
+# plus an occupancy-arm random effect) / `field_pos` per site, `off_det` /
+# `off_pos` per visit (NULL for an arm with none) -- and every
 # diagnostic built on this list scores them: the pointwise log-likelihood, the
 # posterior-mean plug-in, the posterior predictive check and the PIT / LOO-PIT.
 .tobs_occu_cover_components <- function(object, n.draws = 1000L) {
@@ -79,6 +80,11 @@
     field_pos <- fld$field_pos
     re_draws  <- .occu_cover_sampled_re_draws(object, S)
   }
+  # An occupancy-arm random effect enters per SITE, on the same predictor the
+  # shared field loads, so it is added to `field_occ` rather than carried
+  # separately.
+  site_off <- .occu_cover_re_site_offset(model, re_draws, n_sites, S)
+  if (!is.null(site_off)) field_occ <- field_occ + site_off
   # An observation-arm random effect enters per (site, visit), so it is carried
   # as a per-visit offset alongside the per-site field rather than folded into
   # the coefficient block.
@@ -133,20 +139,36 @@
 
 # The observation-arm (detection / positive-cover) entries of a per-term
 # random-effect draw list, which is what the per-visit offset builder consumes.
-# An occupancy-arm term (gcol33/tulpaObs#56) is per SITE, and its per-site
-# grouping is not carried on the fit -- the fitter takes the group codes as an
-# argument, and the occupancy formula the model stores is the design formula,
-# with the structured terms stripped -- so it is dropped here and the criteria
-# describe it at the population mean, which the caller is told.
+# An occupancy-arm term (gcol33/tulpaObs#56) is per SITE, so it rides the
+# per-site offset builder instead.
 .occu_cover_obs_re_draws <- function(re_draws) {
   rd <- unname(re_draws %||% list())
-  is_obs <- vapply(rd, function(r) r$arm %in% c("p", "pos"), logical(1))
-  if (any(!is_obs)) {
-    warning("occu_cover diagnostics: the occupancy-arm random effect is scored ",
-            "at the population mean; the fit does not carry the per-site ",
-            "grouping the criteria would need to score it.", call. = FALSE)
+  rd[vapply(rd, function(r) r$arm %in% c("p", "pos"), logical(1))]
+}
+
+# Per-site offset [n_sites x S] of the occupancy-arm random effect
+# (gcol33/tulpaObs#56), or NULL when the fit carries none. The grouping is one
+# code per occupancy unit (`model$re_psi$group_idx`, the codes the fit ran on),
+# so each site reads its own group's deviation from the per-term draws; a 0 code
+# carries no level and contributes nothing. The term rides the occupancy arm
+# alone -- no copy onto the cover arm -- so the offset joins `field_occ`, which
+# every kernel already adds to the occupancy predictor.
+.occu_cover_re_site_offset <- function(model, re_draws, n_sites, S) {
+  terms <- Filter(function(r) identical(r$arm, "psi"), re_draws %||% list())
+  if (!length(terms)) return(NULL)
+  codes <- as.integer(model$re_psi$group_idx %||% integer(0))
+  if (length(codes) != n_sites) {
+    stop("occu_cover diagnostics: the fit carries an occupancy-arm random ",
+         "effect but no per-site grouping to place it on (expected ", n_sites,
+         " group codes on the model, got ", length(codes), ").", call. = FALSE)
   }
-  rd[is_obs]
+  M  <- matrix(0, n_sites, S)
+  ok <- which(codes > 0L)
+  if (!length(ok)) return(M)
+  for (rd in terms) {
+    M[ok, ] <- M[ok, ] + t(rd$draws[seq_len(S), codes[ok], drop = FALSE])
+  }
+  M
 }
 
 # Per-cell field draws for the v3 nested-Laplace occu_cover spatial path, which

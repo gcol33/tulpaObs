@@ -246,9 +246,8 @@ ranef.tobs_fit <- function(object, ...) {
     # occu_cover() shared-field + per-group RE (gcol33/tulpaObs#56, #102, #103):
     # `fit$re` is a flat list of random-intercept terms, one per arm for a lone
     # term, several for crossed / nested groupings sharing an arm. Stack them into
-    # one table with `arm` + `var` (grouping variable) columns; the observation
-    # arms carry their grouping `level` labels (the occupancy arm reports
-    # 1..n_groups).
+    # one table with `arm` + `var` (grouping variable) columns; every arm carries
+    # its grouping `level` labels.
     rows <- lapply(object$re, function(re) {
       bl <- re$blup; bsd <- re$blup_sd
       if (is.matrix(bl)) {

@@ -105,6 +105,31 @@
 }
 
 
+# The grouping label and factor levels behind an occupancy-arm `re()` term. The
+# resolved spec keeps the integer group codes only, so the label comes from the
+# term call's own `group` argument (matched against the constructor's formals,
+# not the deparsed text) and the levels from evaluating that argument in the
+# term's own evaluation environment. `.tobs_index_codes()` codes a grouping
+# vector through `as.factor()`, so those levels are in code order; a level count
+# that disagrees with the recorded group count is left unlabelled rather than
+# mismatched. Both feed the RE summary the fit reports (`fit$re$psi`, `ranef()`)
+# on the same footing as the observation arms.
+.occu_cover_psi_re_labels <- function(spec, formula, data) {
+  out <- list(var = NULL, levels = NULL)
+  cl <- tryCatch(str2lang(spec$term_call %||% ""), error = function(e) NULL)
+  if (!is.call(cl)) return(out)
+  mc <- tryCatch(match.call(.tobs_term_re, cl), error = function(e) NULL)
+  if (is.null(mc) || is.null(mc$group)) return(out)
+  out$var <- paste(deparse(mc$group), collapse = "")
+  lev <- tryCatch(
+    levels(as.factor(eval(mc$group,
+                          .tobs_term_eval_env(data, environment(formula))))),
+    error = function(e) NULL)
+  if (length(lev) == as.integer(spec$n_groups)) out$levels <- lev
+  out
+}
+
+
 # ---------------------------------------------------------------------------
 # Pull the coupled spatial field(s) from the psi formula. Returns NULL when no
 # spatial term is present, otherwise a list with `fe` (the fixed-effects psi
@@ -284,8 +309,10 @@
            "(e.g. (1 | group) / re(group)); a random slope or correlated block ",
            "is not wired on the shared-field joint engine.", call. = FALSE)
     }
+    lab <- .occu_cover_psi_re_labels(rs, formula, data)
     re_spec <- list(group_idx = as.integer(rs$group_idx),
-                    n_groups  = as.integer(rs$n_groups))
+                    n_groups  = as.integer(rs$n_groups),
+                    var       = lab$var, levels = lab$levels)
   }
 
   # Correlated (`|`) MCAR field requirements (gcol33/tulpaObs#63): at least one
