@@ -65,14 +65,6 @@ test_that("species labels resolve from species / names / default; validated", {
 test_that("2-species batch is per-species bit-identical to 2 independent fits", {
   skip_on_cran()
   skip_if_fast()
-  # Blocked on gcol33/tulpa#397 (gcol33/tulpaObs#224): the fused batch driver
-  # (control$batch.backend = "fused", opt-in, NOT the default) converges one
-  # species per batch to a different mode than its own independent fit on
-  # this fixture -- follows the DATA (not the batch slot: reproduces with
-  # either species in either position), reproduces on icar too (not
-  # bym2-specific). The default "looped" backend (batch_default below) is
-  # unaffected and stays asserted.
-  skip("fused batch driver: blocked on gcol33/tulpa#397")
 
   N <- 24L; J <- 4L
   adj <- matrix(0L, N, N)
@@ -182,10 +174,10 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
 
 
 # The DEFAULT (looped) backend's own correctness, independent of the fused
-# driver skip()'d above (gcol33/tulpa#397) -- this is the path every user who
-# has not opted into control$batch.backend = "fused" actually runs, so it
-# stays asserted directly against independent fits rather than transitively
-# through a comparison to the fused output.
+# driver gated above -- this is the path every user who has not opted into
+# control$batch.backend = "fused" actually runs, so it stays asserted directly
+# against independent fits rather than transitively through a comparison to
+# the fused output.
 test_that("the default looped batch backend is per-species bit-identical to independent fits", {
   skip_on_cran()
   skip_if_fast()
