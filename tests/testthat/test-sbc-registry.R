@@ -114,6 +114,14 @@
                           detection = ~ det_cov, y = yy,
                           method = "laplace", control = .sbc_reg_ctl))
   },
+  dyn_abun = function(N = 80L) {
+    sim <- simulate_dyn_abun(N = N, T = 4L, J = 3L,
+                             beta_lambda = c(log(5), 0.3), p = 0.5,
+                             omega = 0.6, gamma = 1.0, seed = 23L)
+    suppressWarnings(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(),
+                          detection = ~ 1, omega = ~ 1, gamma = ~ 1, y = sim$y,
+                          method = "laplace", control = .sbc_reg_ctl))
+  },
   gdistremoval = function(N = 150L) {
     cutp <- c(0, 25, 50, 75, 100)
     sim <- simulate_gdistremoval(N = N, cutpoints = cutp, n_periods = 4L,
@@ -125,6 +133,11 @@
                           family = gdistremoval(cutpoints = cutp),
                           detection = ~ det_cov1, removal = ~ rem_cov1,
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  occu_categorical = function(N = 300L) {
+    sim <- simulate_occu_categorical(N = N, seed = 11L)
+    suppressWarnings(tobs(~ x, data = sim$data, family = occu_categorical(),
+                          y = sim$y, method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -176,6 +189,26 @@ test_that("the roster in the error message names what is registered", {
 # Contract
 # ---------------------------------------------------------------------------
 
+# occu_categorical carries no fit$means -- two independent Laplace-Gaussian
+# blocks (presence, class), not tulpa's usual joint MVN summary -- so this
+# flattens it with the SAME arm-prefix scheme .tobs_sbc_draws_occu_categorical()
+# uses, letting the generic checks below read one name per reported
+# coefficient regardless of family.
+.sbc_reg_means <- function(fit) {
+  if (!is.null(fit$means)) return(fit$means)
+  if (inherits(fit, "occu_categorical_fit")) {
+    occ <- fit$beta_occ
+    names(occ) <- paste0("occ_", names(occ))
+    cls <- as.numeric(fit$beta_class)
+    names(cls) <- as.vector(outer(rownames(fit$beta_class),
+                                  colnames(fit$beta_class),
+                                  function(r, cl) paste0("class_", cl, "_", r)))
+    return(c(occ, cls))
+  }
+  stop("no means accessor for this fit class (", paste(class(fit), collapse = "/"),
+       ")", call. = FALSE)
+}
+
 test_that("each registered family composes its callbacks end to end", {
   skip_on_cran()
 
@@ -187,13 +220,14 @@ test_that("each registered family composes its callbacks end to end", {
     expect_true(all(c("data_obs", "fit", "draw_theta", "simulate", "pool",
                       "arms", "group_ids") %in% names(m)), info = fam)
     # Every fixed effect the fit reports is scored; nothing is silently fixed.
-    expect_setequal(attr(m, "quantities"), names(fit$means))
+    expect_setequal(attr(m, "quantities"), names(.sbc_reg_means(fit)))
     expect_length(attr(m, "fixed"), 0L)
 
     # Refitting the observed data ALONE reproduces the observed fit: the
     # rebuilt formula, family, method and control are the ones it came from.
     again <- m$fit(m$data_obs)
-    expect_equal(again$means, fit$means, tolerance = 1e-8, info = fam)
+    expect_equal(.sbc_reg_means(again), .sbc_reg_means(fit), tolerance = 1e-8,
+                info = fam)
 
     # `draw_theta` is reproducible from its seed alone and moves with it, which
     # is what the driver's RNG split relies on.
@@ -212,14 +246,18 @@ test_that("each registered family composes its callbacks end to end", {
     expect_length(unique(m$group_ids(pl)), n_o + n_r)
     expect_identical(nrow(pl$cells), n_o + n_r)
     # `y` is a plain 2D matrix for most families, a 3D [site x visit x season]
-    # array for the multi-season group (pooled on the site axis alone), and a
-    # list of one matrix per source for the multi-source group (each pooled on
-    # the site axis independently).
+    # array for the multi-season group (pooled on the site axis alone), a list
+    # of one matrix per source for the multi-source group (each pooled on the
+    # site axis independently), or a plain length-N vector for a family with
+    # one observation per unit and no visit/season axis (occu_categorical).
     if (is.list(pl$y) && !is.data.frame(pl$y)) {
       expect_identical(vapply(pl$y, nrow, integer(1)),
                        stats::setNames(rep(n_o + n_r, length(pl$y)), names(pl$y)),
                        info = fam)
       obs_slice <- lapply(pl$y, function(z) z[seq_len(n_o), , drop = FALSE])
+    } else if (is.null(dim(pl$y))) {
+      expect_identical(length(pl$y), n_o + n_r)
+      obs_slice <- pl$y[seq_len(n_o)]
     } else {
       expect_identical(nrow(pl$y), n_o + n_r)
       obs_slice <- if (length(dim(pl$y)) == 3L) pl$y[seq_len(n_o), , , drop = FALSE]
@@ -229,7 +267,7 @@ test_that("each registered family composes its callbacks end to end", {
 
     pooled <- m$fit(pl)
     expect_s3_class(pooled, "tobs_fit")
-    expect_true(all(is.finite(pooled$means)), info = fam)
+    expect_true(all(is.finite(.sbc_reg_means(pooled))), info = fam)
 
     # The rank arm reads the family's own marginal, so a reference set and the
     # truth score through one kernel and come back finite.
@@ -440,6 +478,36 @@ test_that("int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
 })
 
 
+test_that("dyn_abun posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multi-season group). dyn_abun shares dyn_occu's 3D
+  # response and site-axis pooling but has its own working simulate(), so the
+  # replicate is the shared simple-family route, not a bespoke forward
+  # simulator. bad.factor tuned below.
+  fit <- .SBC_REG_FIXTURES$dyn_abun()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok_dyn_abun <- pu("posterior")
+  expect_length(ok_dyn_abun, length(qs))
+  expect_gt(min(ok_dyn_abun), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
 test_that("gdistremoval posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
@@ -458,6 +526,37 @@ test_that("gdistremoval posterior SBC: correct fit uniform, mis-scaled is not", 
 
   rp <- res$report
   qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("occu_categorical posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multiarm-S3 group). occu_categorical has no
+  # fit$means/fit$draws -- two independent Laplace-Gaussian blocks (presence,
+  # class) instead of a joint MVN draw matrix -- so the scored quantity names
+  # come off the registry's own draws() rather than fit$means. Measured
+  # (seed = 0): posterior min p_unif 0.057, narrow max 2.8e-5.
+  fit <- .SBC_REG_FIXTURES$occu_categorical()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$occu_categorical$draws(fit, 2L))
   pu <- function(arm) {
     r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
     stats::setNames(r$p_unif, r$quantity)

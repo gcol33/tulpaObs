@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.0.207 (2026-08-12)
+
+* **`occu_categorical()` registered for `sbc()`** (#220, multiarm-S3 group):
+  a `tobs_multiarm_fit` with no `fit$means`/`fit$draws` -- the presence and
+  class arms are two independent Laplace-Gaussian blocks fit as separate
+  GLMs, not a joint MVN pseudo-draw matrix. `draws()` samples the two blocks
+  independently and stacks them into one theta row; `loglik_many()` scores
+  the two-arm likelihood directly off the encoding, since this family has no
+  `.tobs_pointwise_loglik` dispatch to reuse. The response is also a new
+  shape for the registry: a plain length-N vector (one nominal-class
+  observation per unit, no visit/season axis), which the generic
+  cross-family CONTRACT test's `y`-shape branching did not previously
+  handle. Verified to the #207 bar: 100-sim posterior SBC uniform on all
+  eight coefficients (min p_unif 0.057 at `bad.factor = 1.75`), a
+  mis-scaled control rejects hard (max 2.8e-5).
+* The shared cross-family SBC test (`test-sbc-registry.R`, "each registered
+  family composes its callbacks end to end") generalized past its two
+  implicit assumptions -- every fit has `fit$means`, every pooled response
+  has `nrow`/`dim` -- via a `.sbc_reg_means()` accessor and a third `y`-shape
+  branch for a plain vector response, so future families with either shape
+  are covered by the existing test rather than needing a bespoke one.
+
 ## 0.0.206 (2026-08-11)
 
 * Requires tulpa >= 0.0.197. The fused occu_cover batch driver

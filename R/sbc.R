@@ -669,7 +669,10 @@
        ext = .tobs_sbc_recombine(m$formulas$ext, NULL))
 }
 
-.tobs_sbc_data_dyn_occu <- function(fit) {
+# Shared by every multi-season family (dyn_occu, dyn_abun): `model$y` is a 3D
+# [n_sites x max_visits x n_seasons] array under both, and neither `data` nor
+# `pool` reads anything family-specific off it.
+.tobs_sbc_data_3d_season <- function(fit) {
   m <- fit$model
   list(cells  = m$data,
        y      = m$y,
@@ -682,7 +685,7 @@
 # Concatenate two 3D [n_sites x max_visits x n_seasons] response arrays on the
 # SITE axis; the season axis (and its transition structure) is shared design,
 # not something a replicate draws fresh.
-.tobs_sbc_pool_dyn_occu <- function(obs, rep) {
+.tobs_sbc_pool_3d_season <- function(obs, rep) {
   n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
   y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L]))
   y[seq_len(n_o), , ] <- obs$y
@@ -737,6 +740,55 @@
 
   list(cells = m$data, y = y, y_pos = NULL, visits = NULL, graph = NULL,
        site = seq_len(n))
+}
+
+
+# ---------------------------------------------------------------------------
+# 6b2. dyn_abun() (gcol33/tulpaObs#220, multi-season group): the abundance
+# sibling of dyn_occu -- same 3D [n_sites x max_visits x n_seasons] response,
+# same site-axis pooling (`.tobs_sbc_data_3d_season` / `.tobs_sbc_pool_3d_season`
+# above, shared verbatim). UNLIKE dyn_occu it already has a working
+# `simulate()` handler (the Dail-Madsen forward is not a two-state HMM to hand
+# -write), so the replicate is the family's own kernel via the shared
+# `.tobs_sbc_sim_simple`, exactly the `occu()`-style pattern -- no bespoke
+# forward simulator needed. Constant-rate only (season-varying omega/gamma is
+# a follow-up, same reasoning as dyn_occu's colonization/extinction).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_reject_dyn_abun_season_varying <- function(fit) {
+  m <- fit$model
+  sv <- c(omega = isTRUE(m$omega_season_varying),
+         gamma = isTRUE(m$gamma_season_varying))
+  if (!any(sv)) return(invisible(NULL))
+  stop("SBC on dyn_abun() is registered for constant-rate fits; this fit ",
+       "carries a season-varying (", paste(names(sv)[sv], collapse = ", "),
+       ") design, which the pooled refit does not yet reproduce.",
+       call. = FALSE)
+}
+
+.tobs_sbc_spec_dyn_abun <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_dyn_abun_season_varying(fit)
+  m <- fit$model
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
+       p         = .tobs_sbc_recombine(m$formulas$p,      NULL),
+       omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
+       gamma     = .tobs_sbc_recombine(m$formulas$gamma,  NULL),
+       replicate = function(f) stats::simulate(f, nsim = 1L))
+}
+
+.tobs_sbc_refit_dyn_abun <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$lambda, data = data$cells, family = spec$family,
+    detection = spec$p, omega = spec$omega, gamma = spec$gamma,
+    y = data$y, method = spec$method, control = spec$control)))
 }
 
 
@@ -898,6 +950,119 @@
 
 
 # ---------------------------------------------------------------------------
+# 6e. occu_categorical() (gcol33/tulpaObs#220, multiarm-S3 group): presence +
+# nominal-class hurdle. A `tobs_multiarm_fit` with NO `fit$model` / `fit$draws`
+# -- the two arms are independent Laplace-Gaussian blocks (`beta_occ`/
+# `vcov_occ`, `beta_class`/`vcov_class`), fit as two separate GLMs, not a
+# joint MVN pseudo-draw matrix off a shared `tulpa_laplace()` postprocessor.
+# `draws()` therefore samples the two blocks independently (they ARE
+# independent by construction) and stacks them into one theta row;
+# `loglik_many()` scores the two-arm likelihood directly off the encoding,
+# since there is no `.tobs_pointwise_loglik` dispatch for this family to
+# reuse. Non-spatial by construction (no spatial/NUTS route exists yet) and
+# takes no `detection` formula, so neither `.tobs_sbc_reject_structure` nor
+# `.tobs_sbc_reject_visit_design` apply here.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_mvn_draws <- function(mean, V, n) {
+  p <- length(mean)
+  if (is.null(V) || anyNA(V)) {
+    stop("SBC draws the posterior from this fit's own covariance, which is ",
+         "missing or non-finite here (a non-converged or rank-deficient fit).",
+         call. = FALSE)
+  }
+  L <- chol((V + t(V)) / 2)
+  Z <- matrix(stats::rnorm(n * p), n, p)
+  sweep(Z %*% L, 2L, mean, `+`)
+}
+
+.tobs_sbc_data_occu_categorical <- function(fit) {
+  enc <- fit$encoding
+  list(cells = enc$data, y = enc$y, y_pos = NULL, visits = NULL,
+       graph = NULL, site = seq_len(enc$N))
+}
+
+.tobs_sbc_pool_occu_categorical <- function(obs, rep) {
+  list(cells = rbind(obs$cells, rep$cells), y = c(obs$y, rep$y),
+       y_pos = NULL, visits = NULL, graph = NULL,
+       site = c(obs$site, rep$site + length(obs$site)))
+}
+
+.tobs_sbc_spec_occu_categorical <- function(fit, fit.control) {
+  list(formula = fit$encoding$formula, class_labels = fit$class_labels,
+       control = utils::modifyList(list(), as.list(fit.control)),
+       fit_obs = fit)
+}
+
+# Columns named `occ_<coef>` / `class_<label>_<coef>`, matching `beta_class`'s
+# column-major `vec()` order so a theta row unpacks back into the same matrix
+# shape it was drawn from.
+.tobs_sbc_draws_occu_categorical <- function(fit, n) {
+  occ_names   <- names(fit$beta_occ)
+  class_names <- as.vector(outer(rownames(fit$beta_class),
+                                 colnames(fit$beta_class),
+                                 function(r, cl) paste0("class_", cl, "_", r)))
+  D_occ <- .tobs_sbc_mvn_draws(fit$beta_occ, fit$vcov_occ, n)
+  D_cls <- .tobs_sbc_mvn_draws(as.numeric(fit$beta_class), fit$vcov_class, n)
+  M <- cbind(D_occ, D_cls)
+  colnames(M) <- c(paste0("occ_", occ_names), class_names)
+  M
+}
+
+.tobs_sbc_theta_occu_categorical <- function(fit, theta) {
+  occ_names <- names(fit$beta_occ)
+  beta_occ <- theta[paste0("occ_", occ_names)]
+  names(beta_occ) <- occ_names
+  Beta <- matrix(theta[grepl("^class_", names(theta))],
+                 nrow = nrow(fit$beta_class), ncol = ncol(fit$beta_class),
+                 dimnames = dimnames(fit$beta_class))
+  list(beta_occ = beta_occ, Beta = Beta)
+}
+
+.tobs_sbc_sim_occu_categorical <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  th <- .tobs_sbc_theta_occu_categorical(f, theta)
+  obs <- spec$data_obs
+  X <- stats::model.matrix(spec$formula, obs$cells)
+  psi <- stats::plogis(as.numeric(X %*% th$beta_occ))
+  present <- stats::rbinom(nrow(X), 1L, psi)
+  eta <- X %*% th$Beta
+  E <- exp(pmin(eta, 700)); denom <- 1 + rowSums(E)
+  P <- cbind(E / denom, 1 / denom)
+  K <- f$K
+  cls <- apply(P, 1L, function(pr) sample.int(K, 1L, prob = pr))
+  y <- ifelse(present == 1L, cls, 0L)
+  list(cells = obs$cells, y = as.integer(y), y_pos = NULL, visits = NULL,
+       graph = NULL, site = obs$site)
+}
+
+.tobs_sbc_refit_occu_categorical <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$formula, data = data$cells,
+    family = occu_categorical(classes = spec$class_labels),
+    y = data$y, method = "laplace", control = spec$control)))
+}
+
+# The two-arm log-likelihood at each reference theta row, read straight off
+# the encoding the refit already carries -- the same closed forms
+# `fit_occu_categorical()` fits, evaluated rather than optimized.
+.tobs_sbc_loglik_many_occu_categorical <- function(fit, Theta) {
+  enc <- fit$encoding
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- .tobs_sbc_theta_occu_categorical(fit, Theta[i, ])
+    eta_occ <- enc$X_occ %*% th$beta_occ
+    ll_occ <- sum(stats::dbinom(enc$present, 1L, stats::plogis(eta_occ),
+                                log = TRUE))
+    eta_cls <- enc$X_class %*% th$Beta
+    E <- exp(pmin(eta_cls, 700)); denom <- 1 + rowSums(E)
+    pmat <- cbind(E / denom, 1 / denom)
+    ll_occ + sum(log(pmat[cbind(seq_along(enc$cls), enc$cls)]))
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -941,11 +1106,23 @@
   # `dynamic` fit unchanged). Constant-rate only.
   dyn_occu = list(
     spec        = .tobs_sbc_spec_dyn_occu,
-    data        = .tobs_sbc_data_dyn_occu,
-    pool        = .tobs_sbc_pool_dyn_occu,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_dyn_occu,
     refit       = .tobs_sbc_refit_dyn_occu,
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # dyn_abun() (gcol33/tulpaObs#220): same 3D response + site-axis pooling as
+  # dyn_occu (section 6b2), but the replicate is the family's OWN simulate()
+  # kernel via the shared simple-family `simulate` (no hand-written forward
+  # needed -- the Dail-Madsen open N-mixture already has a working handler).
+  dyn_abun = list(
+    spec        = .tobs_sbc_spec_dyn_abun,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_simple,
+    refit       = .tobs_sbc_refit_dyn_abun,
     loglik_many = .tobs_sbc_loglik_many_simple),
   # Multi-source group (gcol33/tulpaObs#220): pools on the site axis, leaves
   # the per-source axis alone (custom `spec`/`data`/`pool`/`simulate`/`refit`
@@ -969,7 +1146,20 @@
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_gdistremoval,
     refit       = .tobs_sbc_refit_gdistremoval,
-    loglik_many = .tobs_sbc_loglik_many_simple)
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # Multiarm-S3 group (gcol33/tulpaObs#220): a `tobs_multiarm_fit` with two
+  # independent Laplace-Gaussian blocks instead of a joint MVN draw matrix
+  # (see section 6e) -- custom draws()/loglik_many() unpack/repack the two
+  # blocks, everything else is a plain length-N vector response (no visits,
+  # no detection formula).
+  occu_categorical = list(
+    spec        = .tobs_sbc_spec_occu_categorical,
+    data        = .tobs_sbc_data_occu_categorical,
+    pool        = .tobs_sbc_pool_occu_categorical,
+    draws       = .tobs_sbc_draws_occu_categorical,
+    simulate    = .tobs_sbc_sim_occu_categorical,
+    refit       = .tobs_sbc_refit_occu_categorical,
+    loglik_many = .tobs_sbc_loglik_many_occu_categorical)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -1195,6 +1385,19 @@
 #' period counts) together on the SITE axis, reusing the same
 #' list-of-matrices `pool` `int_occu` uses; its replicate generator is its
 #' own `simulate()` handler.
+#'
+#' `dyn_abun` (constant-rate only) shares `dyn_occu`'s 3D
+#' `[n_sites x max_visits x n_seasons]` response and site-axis pooling, but
+#' unlike `dyn_occu` it already has a working `simulate()` handler (the
+#' Dail-Madsen open N-mixture forward is not a two-state HMM that needs a
+#' bespoke generator), so its replicate is the same family-`simulate()` route
+#' as `occu`/`abun`/etc.
+#'
+#' `occu_categorical` is a `tobs_multiarm_fit` with two independent
+#' Laplace-Gaussian blocks (presence, class) rather than a joint MVN draw
+#' matrix; `draws()` samples the two blocks independently and `loglik_many()`
+#' scores the two-arm likelihood directly, since this family has no
+#' `.tobs_pointwise_loglik` dispatch to reuse.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

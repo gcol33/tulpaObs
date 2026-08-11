@@ -97,6 +97,19 @@ period counts) together on the SITE axis, reusing the same
 list-of-matrices \code{pool} \code{int_occu} uses; its replicate generator is its
 own \code{simulate()} handler.
 
+\code{dyn_abun} (constant-rate only) shares \code{dyn_occu}'s 3D
+\verb{[n_sites x max_visits x n_seasons]} response and site-axis pooling, but
+unlike \code{dyn_occu} it already has a working \code{simulate()} handler (the
+Dail-Madsen open N-mixture forward is not a two-state HMM that needs a
+bespoke generator), so its replicate is the same family-\code{simulate()} route
+as \code{occu}/\code{abun}/etc.
+
+\code{occu_categorical} is a \code{tobs_multiarm_fit} with two independent
+Laplace-Gaussian blocks (presence, class) rather than a joint MVN draw
+matrix; \code{draws()} samples the two blocks independently and \code{loglik_many()}
+scores the two-arm likelihood directly, since this family has no
+\code{.tobs_pointwise_loglik} dispatch to reuse.
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are

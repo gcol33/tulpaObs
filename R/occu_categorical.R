@@ -81,7 +81,7 @@
   is_pos  <- present == 1L
   list(present = present, X_occ = X, X_class = X[is_pos, , drop = FALSE],
        cls = as.integer(y[is_pos]), idx_pos = which(is_pos), K = K,
-       formula = fe, N = length(y))
+       formula = fe, N = length(y), data = data, y = as.integer(y))
 }
 
 
