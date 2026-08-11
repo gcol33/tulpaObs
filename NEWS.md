@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.199 (2026-08-11)
+
+* **`sbc()` on every family was broken** (found while starting #220):
+  `sbc.tobs_fit()`'s internal call into the engine used
+  `tulpa::sbc(experiment = "posterior", ...)`, but the currently pinned
+  tulpa (>= 0.0.196) names that parameter `object`; the stale name fell
+  through to `...` unmatched, leaving `object` at its default
+  (`"prior_predictive"`) and erroring there on EVERY family, not just a
+  newly registered one. Every `skip_if_fast()`-gated SBC acceptance test was
+  silently never exercising this path in the fast tier, so it went
+  undetected. Fixed to `tulpa::sbc(object = "posterior", ...)`.
+* **`double_observer()` registered for `sbc()`** (#220, partial): the
+  independent-observer protocol needed no new adapter (both `p1`/`p2` read
+  one `detection` formula slot, same shape as every other simple registry
+  entry); the dependent protocol's `primary` assignment threads through as
+  `extra`. Verified to the same bar as #207: 100-sim posterior SBC uniform
+  on every coefficient (min p_unif 0.057), a deliberately mis-scaled control
+  rejects hard (1.3e-8). The remaining groups #220 asks for (multi-season,
+  community, multi-response shapes, multiarm S3) are not attempted here --
+  the community group in particular needs a modelling decision (rank
+  community means/covariance with fresh species draws, vs. a fixed species
+  set's coefficients) that is the user's call, not a default to pick
+  silently.
+
 ## 0.0.198 (2026-08-11)
 
 * **`pit_residuals()` on single-season `occu()` was degenerate at 1 for every

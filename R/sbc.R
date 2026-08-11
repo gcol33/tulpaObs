@@ -655,7 +655,17 @@
     extra = function(m) list(p10 = m$formulas$p10, certainty = m$formulas$b)),
   count         = .tobs_sbc_simple_entry(
     "occ", resp = "y_count", y_vector = TRUE,
-    replicate = .tobs_sbc_replicate_count)
+    replicate = .tobs_sbc_replicate_count),
+  # Independent-observer double_observer(): both p1/p2 read ONE `detection`
+  # formula slot (`fit$model$formulas$p`), same shape as every other simple
+  # entry's site-level (state, det) pair (gcol33/tulpaObs#220). The dependent
+  # (`type = "dependent"`) protocol additionally carries a fixed per-site
+  # `primary` assignment the front door takes as `...`, which
+  # `.tobs_sbc_refit_simple`'s `spec$extra` threads through unchanged.
+  double_observer = .tobs_sbc_simple_entry(
+    "lambda", "p",
+    extra = function(m) if (!is.null(m$primary)) list(primary = m$primary)
+                        else NULL)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -852,9 +862,9 @@
 #' @details
 #' Registered families: `occu_cover` (the coupled occupancy + cover hurdle on
 #' the joint nested-Laplace engine), and `occu`, `abun`, `count`, `removal`,
-#' `distance`, `fp_occu`, `royle_nichols` and `occu_ttd`, whose site marginals
-#' multiply. For those the replicate is the family's own `simulate()` kernel at
-#' the drawn theta, the rank arm is the family's exact marginal
+#' `distance`, `fp_occu`, `royle_nichols`, `occu_ttd` and `double_observer`,
+#' whose site marginals multiply. For those the replicate is the family's own
+#' `simulate()` kernel at the drawn theta, the rank arm is the family's exact marginal
 #' log-likelihood, and two kinds of fit are refused rather than approximated: a
 #' structured term (its field is a latent quantity shared across sites that
 #' theta does not hold, which is what the coupled `occu_cover` route handles by
@@ -924,7 +934,13 @@ sbc.tobs_fit <- function(object, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
   model <- .tobs_sbc_build_model(object, as.integer(n.draws), as.integer(n.ref),
                                  controls, bad.factor, fit.control)
   if (isTRUE(model.only)) return(model)
-  res <- tulpa::sbc(experiment = "posterior", model = model,
+  # tulpa::sbc()'s S3-dispatch parameter is named `object` (the experiment
+  # name "posterior"/"prior_predictive"), not `experiment` -- a stale call
+  # site name silently fell through to `...`, leaving `object` at its default
+  # ("prior_predictive") and erroring there for every family, not just a
+  # newly registered one (gcol33/tulpaObs#220, found while adding
+  # double_observer to the registry).
+  res <- tulpa::sbc(object = "posterior", model = model,
                     n_sim = as.integer(n.sim), quantities = quantities,
                     level = level, seed = as.integer(seed), control = control)
   res$tobs_family <- attr(model, "family")

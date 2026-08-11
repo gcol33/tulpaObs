@@ -78,6 +78,16 @@
                                             transect = "line"),
                           detection = ~ sigma_cov1, y = sim$y,
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  double_observer = function(N = 150L) {
+    sim <- simulate_double_observer(N = N, beta_lambda = c(log(8), 0.4),
+                                    beta_p1 = c(stats::qlogis(0.5), 0.2),
+                                    beta_p2 = c(stats::qlogis(0.45), -0.1),
+                                    seed = 19L)
+    suppressWarnings(tobs(~ abund_cov1, data = sim$data,
+                          family = double_observer(),
+                          detection = ~ det_cov1, y = sim$y,
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -279,5 +289,34 @@ test_that("occu posterior SBC: correct fit uniform, mis-scaled is not", {
 
   # A deliberately mis-scaled posterior has to fail the same read, or the band
   # is not measuring anything. Same simulations, same fits, narrower report.
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("double_observer posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220. bad.factor = 1.5, the same tuning occu() needed: 100
+  # simulations on six coefficients do not resolve the default 20% mis-scale
+  # cleanly. Measured (seed = 0): posterior min p_unif 0.057, narrow 1.3e-8.
+  fit <- .SBC_REG_FIXTURES$double_observer()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.5, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
   expect_lt(min(pu("narrow")), 1e-3)
 })

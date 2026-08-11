@@ -67,9 +67,9 @@ from uniformity is a verdict on the approximation.
 \details{
 Registered families: \code{occu_cover} (the coupled occupancy + cover hurdle on
 the joint nested-Laplace engine), and \code{occu}, \code{abun}, \code{count}, \code{removal},
-\code{distance}, \code{fp_occu}, \code{royle_nichols} and \code{occu_ttd}, whose site marginals
-multiply. For those the replicate is the family's own \code{simulate()} kernel at
-the drawn theta, the rank arm is the family's exact marginal
+\code{distance}, \code{fp_occu}, \code{royle_nichols}, \code{occu_ttd} and \code{double_observer},
+whose site marginals multiply. For those the replicate is the family's own
+\code{simulate()} kernel at the drawn theta, the rank arm is the family's exact marginal
 log-likelihood, and two kinds of fit are refused rather than approximated: a
 structured term (its field is a latent quantity shared across sites that
 theta does not hold, which is what the coupled \code{occu_cover} route handles by
