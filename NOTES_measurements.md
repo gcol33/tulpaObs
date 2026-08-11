@@ -707,3 +707,72 @@ and the #204 NUTS `field_sd` state geo-mean marginal SD. Compare a fit against a
 simulator on the FIELD (sd / cor), never by reading `sigma` off both sides. Also
 `fit$spatial_field` is the LATENT field: the eta-scale surface is
 `sigma * spatial_field`.
+
+## Outer Pareto-k diagnostic cost (occu_cover joint, tulpa#118, issue #101)
+
+`joint` engine (`R/occu_cover_joint.R`) vs `v3_nested`: ~150-300x faster at N=100,
+completes at N=200+ where v3_nested does not. Outer Pareto-k diagnostic
+(`control$diagnose.k`, default OFF): 84-98% of joint-fit wall time, since it
+re-solves the inner Laplace at `k.samples`=200x on the full field vs the grid's
+~30-70 points. Per-phase profiling: the binding per-solve cost is the
+per-Newton-iteration Hessian/grad SCATTER (beta-arm digamma/trigamma fill,
+73-83% of a solve), NOT the factorize (flat ~0.5ms, 8-12%, not super-linear up
+to 1100 cells) -- corrected an earlier assumption that factorization dominated.
+tulpa#118 sped the diagnostic 2-4x (Shamanskii reuse via `.K_DIAG_REFRESH` ->
+grad-only scatter; loosened inner tolerance `.K_DIAG_TOL`=1e-4; near-neighbour
+batch order); k-hat stayed byte-stable, externally validated against
+`loo::psis`/`posterior::pareto_khat` on real EVA ratios. Knobs
+`tulpa.kdiag.{refresh,tol,reorder,capture}`.
+
+## royle_nichols() SBC joint log_lik arm (gcol33/tulpaObs#219)
+
+Investigated per the issue's own checklist; no code defect found, closing as
+documented approximation behaviour.
+
+`royle_nichols()` fits by `optim(..., method = "BFGS", hessian = TRUE)` over the
+closed-form Poisson-sum marginal (`.tobs_fit_royle_nichols` -> the shared
+`.tobs_bfgs_marginal_fit`, `R/laplace_helpers.R:260`), reporting `vcov = solve(
+observed information)` -- a single Gaussian (Laplace/Fisher) approximation to the
+posterior at its mode. `tobs_sbc()`'s coefficient marginals pass on this fit
+(seeds 0/7/21, min p_unif 0.235) while the joint `log_lik` arm rejects hard
+(0.0116 / 0.0413 / 0.0288). Checked the issue's three items:
+
+1. **Where the vcov comes from, and whether lambda/r is the discordant block.**
+   Confirmed it is `solve(hessian)` at the BFGS mode, no numerical shortcuts.
+   Profile-likelihood check on `r_x` (fix at a grid, re-optimize the other 3
+   coordinates, compare `2*(profile_nll - mle_nll)` against `qchisq(.95, 1)` and
+   against the Wald quadratic `((v - mle)/sd)^2`) at N=100, seeds 0/7/21: the
+   profile 95% CI is 11-23% NARROWER than the Wald CI (seed 0: 0.979 vs 1.279;
+   seed 7: 1.024 vs 1.147; seed 21: 0.693 vs 0.776) -- the 1-D marginal is close
+   to quadratic, mildly conservative, not badly broken. A crude importance-
+   resampling check (draw `N(mode, 4*V)`, reweight by the exact marginal
+   log-lik) is far more telling on the JOINT: effective sample size collapsed to
+   1-25 out of 20000 draws across the three seeds, meaning almost all mass of a
+   4x-variance-inflated Gaussian proposal lands far from where the true
+   likelihood surface actually sits. A well-approximated unimodal posterior does
+   not do that to a 4x-inflated proposal; a posterior concentrated along a
+   lower-dimensional CURVED manifold does. The reweighted correlations moved
+   from the Gaussian's |rho| ~ 0.3-0.9 toward |rho| ~ 0.9-1.0 in every seed
+   (numerically unreliable at that ESS, but directionally consistent across all
+   three) -- lambda and r trade off along a curved ridge the linear-correlation
+   Gaussian cannot represent, exactly the mechanism the issue named.
+2. **Whether it survives at higher counts.** Same profile-vs-Wald check at
+   N=1000 (seed 0): gap narrows from 23% to 13% (profile 0.258 vs Wald 0.289).
+   Shrinking with N is what a finite-sample curvature artifact should do, not
+   what a permanently mis-specified vcov would do.
+3. **Whether `abun` shares the signature.** It does not (issue's own measurement:
+   `log_lik` p = 0.266, inside the band). `abun`'s detection arm is a plain
+   logit-linear p; `royle_nichols`'s is `p_site = 1 - (1 - r)^N`, N-dependent and
+   nonlinear in the pair (lambda, r). That link is the one structural difference
+   between a family whose joint SBC arm passes and one whose does not, and it is
+   exactly the kind of link that turns a linear correlation into a curved one.
+
+Conclusion: individual coefficient marginals are close to quadratic and mildly
+conservative (matches the SBC coefficient pass); the joint dependency between
+`lambda` and `r` follows a curved ridge that ONE Gaussian cannot capture, and the
+joint `log_lik` SBC statistic is doing exactly what it exists to catch. Not a
+bug in the vcov computation, not a truncation artifact (`K_max` unchanged
+between checks), and not something a tolerance change should paper over --
+`royle_nichols()` has no `nuts` method to sample the exact joint instead, so this
+is a documented limitation of the `laplace`-only backend, not a defect to close
+by code change.

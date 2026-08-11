@@ -287,6 +287,20 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' field implies. `control$fixed.hyper = TRUE` conditions on the warm
 #' nested-Laplace estimate instead.
 #'
+#' The grid-integrated `nested_laplace` path reports `field_sd` too
+#' (`fit$spatial$field_sd_mean` / `field_sd_sd`, alongside `sigma_mean`), in
+#' the SAME geo-mean-marginal-SD convention as the NUTS path's `field_sd`.
+#' It is a fixed multiple of `sigma` (not an independent grid axis), so it is
+#' NOT in `fit$means` / `fit$vcov` -- folding it in there would make the
+#' joint parameter vcov exactly singular. Do not compare fits, or a fit
+#' against [simulate_occu_cover()]'s `sigma`, by reading the raw `sigma` on
+#' this path: it is the field's amplitude against the unscaled intrinsic ICAR
+#' precision `Q = D - W` (`gcol33/tulpaObs#221`), which differs from `field_sd`
+#' by `sqrt(scale_q)`, a graph-size-dependent factor (about 2.1 for a 30-node
+#' chain graph). `field_sd` is the number comparable across fits and to a
+#' simulation truth; `sigma` is the raw amplitude the engine's grid axis is
+#' spelled in.
+#'
 #' A spatially-varying coefficient - a *weighted* areal term beside the
 #' unweighted intercept field, or a bar column
 #' `spatial(~ 1 + year || cell, graph = adj)` - is sampled as a SECOND field

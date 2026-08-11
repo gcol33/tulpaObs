@@ -78,6 +78,20 @@ their posterior alongside \code{field_sd}, the geometric-mean marginal SD the
 field implies. \code{control$fixed.hyper = TRUE} conditions on the warm
 nested-Laplace estimate instead.
 
+The grid-integrated \code{nested_laplace} path reports \code{field_sd} too
+(\code{fit$spatial$field_sd_mean} / \code{field_sd_sd}, alongside \code{sigma_mean}), in
+the SAME geo-mean-marginal-SD convention as the NUTS path's \code{field_sd}.
+It is a fixed multiple of \code{sigma} (not an independent grid axis), so it is
+NOT in \code{fit$means} / \code{fit$vcov} -- folding it in there would make the
+joint parameter vcov exactly singular. Do not compare fits, or a fit
+against \code{\link[=simulate_occu_cover]{simulate_occu_cover()}}'s \code{sigma}, by reading the raw \code{sigma} on
+this path: it is the field's amplitude against the unscaled intrinsic ICAR
+precision \code{Q = D - W} (\code{gcol33/tulpaObs#221}), which differs from \code{field_sd}
+by \code{sqrt(scale_q)}, a graph-size-dependent factor (about 2.1 for a 30-node
+chain graph). \code{field_sd} is the number comparable across fits and to a
+simulation truth; \code{sigma} is the raw amplitude the engine's grid axis is
+spelled in.
+
 A spatially-varying coefficient - a \emph{weighted} areal term beside the
 unweighted intercept field, or a bar column
 \code{spatial(~ 1 + year || cell, graph = adj)} - is sampled as a SECOND field

@@ -32,7 +32,14 @@
 #'   (default 0.4).
 #' @param adj Optional N x N adjacency matrix. When supplied, generates the
 #'   shared ICAR field; when NULL, the simulator is non-spatial (matches v1).
-#' @param sigma Spatial field amplitude (used only when `adj` is supplied).
+#' @param sigma Spatial field amplitude (used only when `adj` is supplied), in
+#'   the geo-mean-marginal-SD (Sorbye-Rue) convention: the field is drawn with
+#'   geometric-mean marginal variance 1 before scaling by `sigma`, so `sigma`
+#'   is directly comparable to a fitted `field_sd` (`fit$spatial$field_sd_mean`
+#'   on the `nested_laplace` path, `fit$hyper_draws[, "field_sd"]` on `nuts`) --
+#'   never to the raw `sigma` a `nested_laplace` fit reports, which is the
+#'   amplitude against the unscaled intrinsic precision and differs by
+#'   `sqrt(scale_q)` (`gcol33/tulpaObs#221`).
 #' @param alpha Cover-arm scaling on the shared field (used only when `adj`
 #'   is supplied). 1.0 = arms see the field identically; positive = same sign,
 #'   negative = opposite.

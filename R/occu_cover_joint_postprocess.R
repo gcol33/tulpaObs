@@ -258,6 +258,27 @@
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
+  # Sorbye-Rue geo-mean marginal SD (gcol33/tulpaObs#221). `sigma` on this path
+  # is the raw amplitude against the unscaled intrinsic precision Q = D - W --
+  # the shared/trend occupancy field supports only icar here (bym2 is coerced
+  # to icar with rho fixed to 1 upstream, `.occu_cover_spatial_fields()`), so
+  # every field on this path shares the same Sorbye-Rue scale. That differs
+  # from the #204 NUTS path's `field_sd`, which states the geo-mean marginal SD
+  # directly, by sqrt(scale_q) -- a FIXED constant given the graph, not an
+  # independent grid axis, so it is reported alongside `sigma` (`fit$field_sd`
+  # / `field_sd_trend...`) rather than folded into `hyper_names`: doing that
+  # would add a row/column to the joint parameter vcov perfectly collinear
+  # with `sigma`'s (correlation exactly 1), singular by construction, which is
+  # exactly what broke `chol(V)` in `test-occu-cover-joint.R` on the first cut
+  # of this fix. Kept OUT of `means`/`sds`/`vcov`/`draws` for that reason.
+  field_sd_summary <- list()
+  put_field_sd <- function(sigma_name, out_name) {
+    if (is.null(hyper_means[[sigma_name]])) return(invisible())
+    scale_q <- sqrt(.occu_cover_icar_scale(adj))
+    field_sd_summary[[out_name]] <<- list(
+      mean = hyper_means[[sigma_name]] * scale_q,
+      sd   = hyper_sds[[sigma_name]]   * scale_q)
+  }
   # Clean a coefficient name for use in a hyperparameter name: `(Intercept)` ->
   # `intercept`, other punctuation collapsed to `_`.
   .re_coef_tag <- function(x) {
@@ -322,10 +343,12 @@
     # / nested terms sharing an arm).
     pick2("sigma", "b1.sigma")
     pick2("alpha", "b1.alpha")
+    put_field_sd("sigma", "field_sd")
     for (j in seq_len(n_trend)) {
       suffix <- if (n_trend == 1L) "" else as.character(j)
       pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
+      put_field_sd(paste0("sigma_trend", suffix), paste0("field_sd_trend", suffix))
     }
     # Arm-specific cover fields (gcol33/tulpaObs#110): blocks n_occ_fields+1 ..
     # n_fields, each a NON-copied ICAR with its own precision axis (b<k>.tau,
@@ -416,6 +439,7 @@
     pick("phi_pos", phi_pos_public)
   } else {
     pick("sigma"); pick("alpha"); pick("phi_pos", phi_pos_public)
+    put_field_sd("sigma", "field_sd")
   }
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])
@@ -524,16 +548,24 @@
       rho_mcar_names = rho_nms,
       alpha_mcar = unname(hyper_means["alpha_mcar"]))
   } else {
+    fsd <- field_sd_summary[["field_sd"]]
+    fsd_trend_nm <- if (n_trend == 1L) "field_sd_trend" else "field_sd_trend1"
+    fsd_trend <- field_sd_summary[[fsd_trend_nm]]
     spatial_summary <- list(
       type = "icar", graph = adj,
       sigma_mean = unname(hyper_means["sigma"]),
       alpha_mean = unname(hyper_means["alpha"]),
+      # Geo-mean marginal SD (Sorbye-Rue), the #204 NUTS `field_sd` convention
+      # (gcol33/tulpaObs#221) -- `sigma_mean` above is the raw amplitude.
+      field_sd_mean = fsd$mean, field_sd_sd = fsd$sd,
       sigma_trend_mean = if (has_trend)
         unname(hyper_means[if (n_trend == 1L) "sigma_trend"
                            else "sigma_trend1"]) else NULL,
       alpha_trend_mean = if (has_trend)
         unname(hyper_means[if (n_trend == 1L) "alpha_trend"
-                           else "alpha_trend1"]) else NULL)
+                           else "alpha_trend1"]) else NULL,
+      field_sd_trend_mean = if (has_trend) fsd_trend$mean else NULL,
+      field_sd_trend_sd   = if (has_trend) fsd_trend$sd   else NULL)
   }
 
   structure(c(list(

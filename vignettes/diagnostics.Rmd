@@ -299,15 +299,15 @@ what running a random variable through its own CDF does. Departures from
 uniformity are departures of the predictive distribution from the truth,
 and the shape of the departure names the flaw.
 
-For each site, `pit_residuals()` evaluates the fitted cumulative
-probability of the observed detection history, averaged over posterior
-draws. A site with at least one detection is occupied with certainty, so
-its predictive CDF is pinned at the top; a site with all-zero visits gets
-the probability mass the model places on the all-zero outcome, which is the
-occupied-but-undetected path plus the unoccupied path. A small jitter is
-added so that the discreteness of the binary response does not pile the
-values onto a few points and break the uniformity test. If the model is
-correct, the jittered values are uniform on $[0, 1]$.
+For each site, `pit_residuals()` treats the ordered detected/all-zero
+outcome as the response: at least one detection, or none. The predictive
+CDF at that outcome has two limits -- the probability the model places on
+the all-zero path (the occupied-but-undetected path plus the unoccupied
+path), and either 1 (a detected site sits above that mass) or 0 (an
+all-zero site sits below it). A randomized PIT residual is drawn uniformly
+between those two limits, per site, per posterior draw average -- the usual
+construction for a discrete or mixed response, not an ad hoc jitter. If the
+model is correct, the resulting values are uniform on $[0, 1]$.
 
 ```{r pit-shape}
 pit <- pit_residuals(fit)

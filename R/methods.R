@@ -355,11 +355,15 @@ coef.tobs_fit <- function(object, ...) {
 #' Fitted values (occupancy and detection probabilities)
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
-#' @return A list with `psi` (occupancy probabilities), `p` (detection probabilities),
-#'   and `z` (posterior state probability at posterior-mean parameters). For
-#'   single-season and community models `z` is the per-site Bayes posterior
-#'   `P(z=1 | y)`; for dynamic models `z` is the forward-backward (HMM smoothing)
-#'   state posterior `P(z_t=1 | y_{1:T})` as an `[n_sites x n_seasons]` matrix.
+#' @return A list with `psi` (occupancy probabilities), `p` (detection
+#'   probabilities), and `z` (posterior state probability at posterior-mean
+#'   parameters). For an [int_occu()] fit `p` is a named list, one detection
+#'   probability vector per source (matching `y`'s names), since each source
+#'   carries its own detection design and, when present, its own detection-arm
+#'   spatial field. For single-season and community models `z` is the per-site
+#'   Bayes posterior `P(z=1 | y)`; for dynamic models `z` is the
+#'   forward-backward (HMM smoothing) state posterior `P(z_t=1 | y_{1:T})` as
+#'   an `[n_sites x n_seasons]` matrix.
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
@@ -372,19 +376,52 @@ fitted.tobs_fit <- function(object, ...) {
 
   # Extract occupancy and detection linear predictors at posterior mean
   X_occ <- model$X_processes[[1]]
-  X_det <- model$X_processes[[2]]
   beta_occ <- means[seq_len(pi_list[[1]]$p)]
-  beta_det <- means[pi_list[[1]]$p + seq_len(pi_list[[2]]$p)]
 
   # A fitted latent surface on the state arm (the continuous NNGP svc() field of
   # a Laplace fit, gcol33/tulpaObs#143) is a per-site offset on the occupancy
   # logit, so the in-sample psi / z read it. NULL on every other route, which
   # leaves eta_occ exactly as it was.
   eta_occ <- as.vector(X_occ %*% beta_occ) + (model$occ_eta_offset %||% 0)
-  eta_det <- as.vector(X_det %*% beta_det)
-
   psi <- plogis(eta_occ)
-  p <- plogis(eta_det)
+
+  # Detection-arm SPDE field offset (gcol33/tulpaObs#218): the site -> mesh
+  # projector is the SAME `A` the state-arm offset above would read, since one
+  # mesh is built from the site coordinates regardless of which formula's
+  # spde() term attached it -- only the field REALIZATION differs by arm
+  # (`spatial_field` vs `spatial_field_det`). NULL on every non-field fit,
+  # leaving eta_det exactly as it was.
+  A <- object$spatial$tulpa_spec$A
+  .det_field_offset <- function(fld) {
+    if (is.null(fld) || is.null(A) || anyNA(fld)) return(0)
+    as.numeric(A %*% fld)
+  }
+
+  if (identical(model$model_type, "integrated")) {
+    # One detection SOURCE per process_info entry beyond the occupancy arm; the
+    # field is a per-source named list (gcol33/tulpaObs#216), so `p` is too --
+    # unlike the site-level `psi`, a single pooled vector cannot carry S
+    # sources' distinct designs and fields at once.
+    n_src   <- model$n_sources %||% (length(pi_list) - 1L)
+    fld_det <- object$spatial_field_det %||% list()
+    src_off <- pi_list[[1]]$p
+    p <- vector("list", n_src)
+    for (s in seq_len(n_src)) {
+      pp     <- pi_list[[1 + s]]
+      beta_s <- means[src_off + seq_len(pp$p)]
+      eta_s  <- as.vector(model$X_processes[[1 + s]] %*% beta_s) +
+        .det_field_offset(fld_det[[pp$name]])
+      p[[s]] <- plogis(eta_s)
+      src_off <- src_off + pp$p
+    }
+    names(p) <- vapply(seq_len(n_src), function(s) pi_list[[1 + s]]$name, character(1))
+  } else {
+    X_det <- model$X_processes[[2]]
+    beta_det <- means[pi_list[[1]]$p + seq_len(pi_list[[2]]$p)]
+    eta_det <- as.vector(X_det %*% beta_det) +
+      .det_field_offset(object$spatial_field_det)
+    p <- plogis(eta_det)
+  }
 
   # Compute z posterior: P(z=1 | y)
   if (identical(model$model_type, "single")) {

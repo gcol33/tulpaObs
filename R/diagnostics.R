@@ -725,10 +725,12 @@ pit_residuals.tobs_fit <- function(object, n.samples = 250, ...) {
   n_draws <- min(n.samples, nrow(draws))
   draw_idx <- sample.int(nrow(draws), n_draws)   # draw selection stays in R
   yint <- y; storage.mode(yint) <- "integer"
-  # Per-site posterior-mean predictive CDF plus a uniform jitter (the former R
-  # loop) in cpp_single_pit; the jitter draws from R's stream in the same order.
-  cpp_single_pit(X_occ, X_det, draws[, seq_len(p_occ + p_det), drop = FALSE],
-                 as.integer(draw_idx), yint)
+  # Per-site posterior-mean predictive CDF limits for the detected/all-zero
+  # event (cpp_single_pit_cdf); the randomized-PIT interpolation + jitter is
+  # tulpa::tulpa_pit()'s job, as for cover()/occu_cover() (gcol33/tulpaObs#222).
+  lim <- cpp_single_pit_cdf(X_occ, X_det, draws[, seq_len(p_occ + p_det), drop = FALSE],
+                            as.integer(draw_idx), yint)
+  tulpa::tulpa_pit(lim$cdf_upper, cdf_lower = lim$cdf_lower)
 }
 
 #' Goodness-of-fit tests for a tobs fit

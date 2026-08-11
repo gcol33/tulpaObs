@@ -1,5 +1,62 @@
 # tulpaObs NEWS
 
+## 0.0.198 (2026-08-11)
+
+* **`pit_residuals()` on single-season `occu()` was degenerate at 1 for every
+  detected site** (breaking: reported values and `test_uniformity()` results
+  change) (#222). `cpp_single_pit` treated the site-level detected/all-zero
+  event's CDF as pinned at 1 for a detected site and added a `1/n_draws`
+  jitter instead of the randomized-PIT interpolation, so `test_uniformity()`
+  rejected on correctly specified models. Rewritten as `cpp_single_pit_cdf`
+  (deterministic CDF limits, no RNG) + `tulpa::tulpa_pit()`, the same
+  construction `cover()`/`occu_cover()` already used correctly. Verified: KS
+  test on the package's own diagnostics-vignette fixture moves from
+  rejecting (p < 2.2e-16, ~58% of PIT values piled at 1) to p = 0.28; a
+  20-seed calibration loop shows no seed rejecting at alpha = 0.05.
+* **`occu_cover()`'s joint `nested_laplace` path reported the areal field's
+  raw amplitude, not its scale** (#221). `sigma` there is the amplitude
+  against the unscaled intrinsic ICAR precision `Q = D - W`, while the #204
+  NUTS path's `field_sd` states the geo-mean marginal SD (Sorbye-Rue) -- the
+  only field-scale summary comparable across backends and to
+  `simulate_occu_cover()`'s own `sigma` convention. The two differed by
+  `sqrt(scale_q)` (~2.1 for a 30-node chain graph), so comparing a fit
+  against a simulator, or the two backends against each other, by reading
+  `sigma` was silently off by that factor. The joint path now also reports
+  `field_sd` (`fit$spatial$field_sd_mean` / `field_sd_sd`, and
+  `field_sd_trend_mean` / `_sd` for a coupled trend field) in the NUTS
+  convention. Kept out of `fit$means`/`fit$vcov` deliberately: `field_sd` is
+  a fixed multiple of `sigma`, not an independent grid axis, so folding it
+  into the sampled parameter vector makes the joint vcov exactly singular.
+* **A detection-arm `spde()` field on `occu()`/`int_occu()` was fit and
+  reported (`fit$spatial_field_det`) but not applied in `fitted()`/`predict()`**
+  (#218). Two sites with the same detection covariates and different
+  detection fields got identical fitted `p`. `fitted.tobs_fit()` now adds the
+  projected field to the detection linear predictor, mirroring how the
+  state-arm field already worked; `predict()` with no `newdata` already
+  delegates to `fitted()`, so it inherits the fix. Fixing this exposed that
+  `int_occu()`'s `fitted()`/`predict()` used only the FIRST detection
+  source's coefficients for every source (silently, pre-existing) --
+  `fitted(fit)$p` on an `int_occu()` fit is now a named list, one detection
+  probability vector per source (matching `y`'s names), each with its own
+  field when present. `fitted()$z` on an integrated fit still reports the
+  prior marginal rather than a real posterior, and out-of-sample
+  `predict(newdata=)` still has no detection prediction for `occu()`/
+  `int_occu()` at all -- both pre-existing, tracked separately (#223).
+* Investigated (#219): `royle_nichols()`'s SBC joint `log_lik` arm rejects
+  while every coefficient marginal passes. No code defect -- the
+  `optim(hessian=TRUE)` Gaussian pseudo-posterior is a fair approximation to
+  each 1-D coefficient marginal (profile-likelihood CIs 11-23% narrower than
+  Wald at N=100, narrowing further at N=1000) but cannot represent the curved
+  ridge the nonlinear `p_site = 1-(1-r)^N` link induces between `lambda` and
+  `r`; the joint SBC statistic is doing exactly what it exists to catch. Not
+  something a tolerance change should paper over. Details in
+  `NOTES_measurements.md`.
+* Found while regression-testing #221: `occu_cover()`'s fused batch backend
+  (`control$batch.backend = "fused"`) is not bit-identical to independent
+  per-species fits on a `bym2()` shared field -- the fused outer grid carries
+  one fewer cell. Pre-existing, unrelated to #221 (reproduces with that
+  change reverted); tracked separately (#224).
+
 ## 0.0.197 (2026-08-11)
 
 * **Every diagnostic is now one verb, dispatched on the fit** (breaking). The

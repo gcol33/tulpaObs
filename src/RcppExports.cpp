@@ -2406,9 +2406,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// cpp_single_pit
-Rcpp::NumericVector cpp_single_pit(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det, Rcpp::NumericMatrix draws, Rcpp::IntegerVector draw_idx, Rcpp::IntegerMatrix y);
-RcppExport SEXP _tulpaObs_cpp_single_pit(SEXP X_occSEXP, SEXP X_detSEXP, SEXP drawsSEXP, SEXP draw_idxSEXP, SEXP ySEXP) {
+// cpp_single_pit_cdf
+Rcpp::List cpp_single_pit_cdf(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det, Rcpp::NumericMatrix draws, Rcpp::IntegerVector draw_idx, Rcpp::IntegerMatrix y);
+RcppExport SEXP _tulpaObs_cpp_single_pit_cdf(SEXP X_occSEXP, SEXP X_detSEXP, SEXP drawsSEXP, SEXP draw_idxSEXP, SEXP ySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2417,7 +2417,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type draw_idx(draw_idxSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_single_pit(X_occ, X_det, draws, draw_idx, y));
+    rcpp_result_gen = Rcpp::wrap(cpp_single_pit_cdf(X_occ, X_det, draws, draw_idx, y));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2544,7 +2544,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_simulate_ms_int_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_int_occu, 8},
     {"_tulpaObs_cpp_simulate_single", (DL_FUNC) &_tulpaObs_cpp_simulate_single, 7},
     {"_tulpaObs_cpp_single_ppc", (DL_FUNC) &_tulpaObs_cpp_single_ppc, 8},
-    {"_tulpaObs_cpp_single_pit", (DL_FUNC) &_tulpaObs_cpp_single_pit, 5},
+    {"_tulpaObs_cpp_single_pit_cdf", (DL_FUNC) &_tulpaObs_cpp_single_pit_cdf, 5},
     {NULL, NULL, 0}
 };
 

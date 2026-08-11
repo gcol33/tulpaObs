@@ -434,11 +434,9 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   on a fitted `ms_abun() + latent()`: finite on every call, gap rises further when
   the fit's own factor offset is included -- design rationale showing up in the
   measurement, since the latent surface lifts exactly the sites a tight window
-  starves. **What it buys** is confined to heavy-tailed seeds (a
-  pathological one went from unfinished past 108 min to 52.2 min; a paired small
-  fixture 1.90x, answers agreeing to all six printed digits) and is NOTHING where
-  counts are not heavy-tailed, so this is a tier-3 fix, NOT a way to shrink
-  `test-ms-abun-factor.R` -- its lever is `factor.starts`. Numbers in
+  starves. **What it buys** is confined to heavy-tailed seeds and is NOTHING
+  where counts are not heavy-tailed, so this is a tier-3 fix, NOT a way to
+  shrink `test-ms-abun-factor.R` -- its lever is `factor.starts`. Numbers in
   `NOTES_measurements.md`.
 - **Areal** (`nested_laplace`): icar/bym2/car_proper on abundance ->
   `.tobs_fit_nmix_spatial()` -> `nmix_laplace_{icar,bym2,car_proper}` (one unit/site).
@@ -789,23 +787,19 @@ still gated -> n-L. group_var maps sites>cells; predict() needs the joint object
 `R/occu_cover_joint.R`): `joint` engine via `tulpa_nested_laplace_joint()` w/
 `occu_cover_{lognormal,beta}` cell-coupling spec (tulpa#32) — 3-arm joint
 nested-Laplace, outer-grid over `(sigma, alpha)`, per-cell occupancy mixture
-closed-form derivs drive inner Newton. ~150-300x faster than v3_nested at N=100,
-completes N=200+. 18-seed lognormal + beta recovery
+closed-form derivs drive inner Newton. Much faster than v3_nested, completes at
+sizes v3_nested does not. 18-seed lognormal + beta recovery
 (`test-occu-cover-joint-coupled.R`); status `"working"` (#96). Shared-field occ
 SLOPE Wald CI mildly anti-conservative small-N (pooled ~0.94; NUTS non-spatial
 calibrated). Outer Pareto-k diagnostic (`control$diagnose.k`) defaults OFF
-(#101): 84-98% of joint-fit wall time (re-solves the inner Laplace `k.samples`=200x
-on the full field vs the grid's ~30-70). Per-phase profiling corrected the cause:
-binding per-solve cost = per-Newton-iter Hessian/grad SCATTER (beta arm
-digamma/trigamma fill, 73-83%), NOT the factorize (flat ~0.5ms, 8-12%, not
-super-linear <=1100 cells). tulpa#118 sped the diagnostic 2-4x (Shamanskii reuse
+(#101): dominates joint-fit wall time (re-solves the inner Laplace on the full
+field vs the grid's node count). tulpa#118 sped it up (Shamanskii reuse via
 `.K_DIAG_REFRESH` -> grad-only scatter; loosened inner tol `.K_DIAG_TOL`=1e-4;
 near-neighbour batch order), k-hat byte-stable (externally validated ==
-`loo::psis`/`posterior::pareto_khat` on real EVA ratios; knobs
-`tulpa.kdiag.{refresh,tol,reorder,capture}`). Still OFF by default: reports k-hat only,
-fit byte-identical on/off, opt-in; matches `occu_joint` / `occu_multiscale_cover`.
-`control$diagnose.k = TRUE` re-enables. Same default flip on
-`occu_multiscale_cover_joint.R`.
+`loo::psis`/`posterior::pareto_khat`). Numbers in `NOTES_measurements.md`. Still
+OFF by default: reports k-hat only, fit byte-identical on/off, opt-in; matches
+`occu_joint` / `occu_multiscale_cover`. `control$diagnose.k = TRUE` re-enables.
+Same default flip on `occu_multiscale_cover_joint.R`.
 
 **Cover-arm intercept prior (#32)**: on the shared-field path the cover intercept
 confounds w/ field level over detected cells. `.occu_cover_coupled_arm_priors()` hands
@@ -1200,25 +1194,25 @@ R/
   ms_count_spatial.R        — community count + shared areal field (sfMsAbund) + SVC bar (svcMsAbund, #117/#118); block coordinate ascent (community EM offset <-> multi-field Poisson-ICAR), pure R
   community_latent.R        — SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group_var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter. **The measured evidence behind every number below -- fixtures, seeds, wall times, per-family screens -- is in `NOTES_measurements.md`; the rules here are what it concluded.**
 
-**Backtracking + guards.** Factor Newton (`.tobs_latent_factor_update`) DOES backtrack: local `ascend()` halves the step until the penalized objective improves, holds previous iterate if never. `nstep()` ridge-bumps singular curvature. Non-finite guards INLINE, NOT a named helper -- `if (all(is.finite(Dz)))` / `(Dl)` skip a bad step; non-finite `working()` score/curv `break`s the pass. Field solve `.tobs_latent_field_solve` has its OWN local `safe_solve()` = ridge retry for a SINGULAR Hessian only, its Newton update unconditional. Do NOT confuse the two -- no `safe_step()` anywhere in the repo. Latent-count marginal (nmix/distance) can return non-finite curvature far from the mode; NaN used to surface only later as a non-finite `sd()` in the rescale. Found by a 6-SEED loop, never by one fit.
+**Backtracking + guards.** Factor Newton (`.tobs_latent_factor_update`) backtracks: local `ascend()` halves the step until the penalized objective improves, holds previous iterate if never; `nstep()` ridge-bumps singular curvature. Non-finite guards are inline (`if (all(is.finite(Dz)))` / `(Dl)`), not a named helper; non-finite `working()` score/curv `break`s the pass. Field solve `.tobs_latent_field_solve` has its own local `safe_solve()` (ridge retry for a singular Hessian only, Newton update unconditional) -- do not confuse the two, there is no `safe_step()` anywhere in the repo.
 
-**Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Factor update holds zeta at its joint mode -> `(zeta, lambda)` = joint-likelihood estimate w/ `Ns*Q` incidental params growing w/ the sample = Neyman-Scott -> joint mode INCONSISTENT. Site factors' estimation error lands in the fitted co-occurrence, lambda absorbs it -> why #153's scalar could not close it: rescaling a direction gets the magnitude right FOR THE FITTED DIRECTION, hence too high for the true one. Over-fit grows w/ Q/S. Fix = `.tobs_latent_factor_mmle()`: EM on the SAME joint site marginal over all S*Q loadings. E-step = posterior `p(z_i|y_i)` on the grid the marginal already builds (`.tobs_latent_joint_grid()`, split out of `.tobs_latent_joint_marginal()` -> both readers share ONE grid); M-step = per-species Qk-dim weighted Newton, nodes as design rows, backtracked on expected complete-data ll (Dempster/Laird/Rubin 1977).
+**Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Factor update holds zeta at its joint mode -> `(zeta, lambda)` is a joint-likelihood estimate with `Ns*Q` incidental params growing with the sample = Neyman-Scott, inconsistent. Site factors' estimation error lands in the fitted co-occurrence and lambda absorbs it, over-fit growing with Q/S. Fix = `.tobs_latent_factor_mmle()`: EM on the SAME joint site marginal over all S*Q loadings (E-step = posterior `p(z_i|y_i)` off `.tobs_latent_joint_grid()`; M-step = per-species Qk-dim weighted Newton, backtracked on expected complete-data ll). Numbers in `NOTES_measurements.md`.
 
-**ONE estimator, ONE state (#156).** `.tobs_latent_factor_update()` + `.tobs_latent_factor_scale()` run ONCE, outer pass 1, purely to INITIALIZE -- marginal's lambda-gradient vanishes at lambda=0 so the EM cannot start from zero init, and the 1-D bracket = GLOBAL magnitude search the local EM cannot do. Running the joint-mode update every pass alongside the MMLE diverges BOTH ways: write refined lambda back over the update's state -> its Newton regrows the magnitude while the refinement shrinks it; keep separate -> EM conditions on an attenuated-spread offset, update grows lambda to cover the shortfall, each pass compounds. Community EM absorbs the inflated offset into the coefficients -> runaway pair LOCALLY SELF-CONSISTENT, nothing downstream rejects it.
+**ONE estimator, ONE state (#156).** `.tobs_latent_factor_update()` + `.tobs_latent_factor_scale()` run ONCE, outer pass 1, purely to INITIALIZE -- the marginal's lambda-gradient vanishes at lambda=0, and the 1-D bracket is a global magnitude search the local EM cannot do. Running the joint-mode update every pass alongside the MMLE diverges both ways, so it never repeats.
 
-**Offset by SCORE-MATCHING, NOT `zeta t(lambda)` (#156).** Driver hands the coefficient update ONE point offset, and no plug-in reproduces the integrated objective through a nonlinear link: posterior means carry too little latent variance (log-link Jensen), unit-variance-rescaled scores too much. `.tobs_latent_factor_offset()` solves `score(eta+off) = E_z[score(eta+lambda_s'z)]` per cell (scalar Newton, `d score/d eta = -curv`) -> plug-in + integrated STATIONARY CONDITIONS identical for ANY family, no knowledge of the link; reduces to `lambda'zhat + v/2` on a Poisson log link. `fit$model[[offset_slot]]` reads THIS, not `zeta t(lambda)` -> fitted()/WAIC see the predictor the coefficients were fit against.
+**Offset by SCORE-MATCHING, NOT `zeta t(lambda)` (#156).** `.tobs_latent_factor_offset()` solves `score(eta+off) = E_z[score(eta+lambda_s'z)]` per cell (scalar Newton) -- plug-in and integrated stationary conditions match for ANY family, no link-specific derivation; reduces to `lambda'zhat + v/2` on a Poisson log link. `fit$model[[offset_slot]]` reads THIS, not `zeta t(lambda)`.
 
-**Block-coordinate callers MUST warm-start `init_b`/`init_Sigma` (#156).** `.tobs_community_em()` has accepted them since #119; caller omitting them cold-restarts every per-species deviation AND both community covariances every outer pass. Wiring in = factor fit 2.5x faster, answer unchanged to 4 decimals.
+**Block-coordinate callers MUST warm-start `init_b`/`init_Sigma`.** Omitting cold-restarts every per-species deviation and both community covariances on every outer pass.
 
-**`max.outer`: factor path 150, field path 25 (#156).** Field block reaches `tol`, breaks early. Factor block does NOT: alternates w/ the coefficient block along a SLOW mode (per-species intercepts + offset's per-species level absorb the same latent level), step ~1/50 of the REMAINING error -> `tol` on the STEP reads converged long before it is. Stopping at 25 leaves real community-mean bias. Driver resolves `max.outer = NULL` -> `factor.outer` when `has_factor`, else 25; explicit `control$max.outer` still wins. Callers pass raw `control[["max.outer"]]`, NOT `%||% 25L`. **`factor.outer` per-family, each set from that family's OWN measurement** -- ms_count/jsdm 150, ms_occu 150, everything else 25 until measured. Do NOT globalize: cost not transferable (`ms_abun` already warm-started -> 150 cost it the full 6x, pushed `test-ms-abun-factor.R` past 85 min on one file before revert to 25).
+**`max.outer`: factor path 150, field path 25 by default.** Field reaches `tol` and breaks early; factor does NOT (alternates with the coefficient block along a slow mode) -- 25 leaves real community-mean bias. `factor.outer` is per-family, set from that family's own measurement: ms_count/jsdm/ms_occu 150, everything else 25 until measured. Do NOT globalize -- cost is not transferable.
 
-**`factor.starts` (multi-start width) dominates a latent-N fit, NOT `max.outer`.** #157 basin escape runs K candidate starting directions on the FIRST factor pass (cosine + principal-factor init + `.tobs_latent_factor_random_starts()`), each a FULL loading-EM to convergence -- raw scale-search values measured NOT to rank the same as converged ones, which also kills successive halving. Driver takes `factor.starts` (default 8L, byte-identical to pre-knob path), threaded family -> `control$factor.starts` via the `block_coordinate` group. Per family: **ms_abun 1** (`R/ms_abun_latent.R`), **ms_occu 1** (`R/ms_occu_field.R`), **ms_count/jsdm + ms_distance at driver 8** (both measured, both kept -- ms_distance had one genuine rescue in its reseed set). Candidate cost scales w/ `K_max` (Royle marginal O(K) per site) -> cost AND benefit both depend on how expensive one oracle eval is: NEVER copy a family's value. **Before setting one, run that family's OWN recovery suite at the candidate, not just a random seed screen** -- a 10-seed screen set ms_count to 1, and `test-ms-count-factor.R:163` (committed regression test for #157's adversarial seed 215) caught it back at the documented pre-fix 1.65 vs its own `< 1.40` gate (#166). Random screen cannot reproduce a specific known-hard seed unless it happens to draw it.
+**`factor.starts` (multi-start width) dominates a latent-N fit, NOT `max.outer`.** #157's basin escape runs K candidate starting directions on the first factor pass, each a full loading-EM to convergence. Per family, measured from that family's OWN recovery suite (a random seed screen alone is not enough -- the committed regression test #157 was built for caught a value ms_count's own screen missed): ms_abun 1, ms_occu 1, ms_count/jsdm + ms_distance at the driver default 8. NEVER copy a family's value -- cost and benefit both scale with how expensive one oracle eval is.
 
-**NEITHER summary screens a fit alone.** `residual_cor` row-normalized -> blind to a MAGNITUDE regression (ms_count seed at 1.53x truth still read 0.93), so score `sqrt(tr(Sigma_res))` vs truth -- but `mag_ratio` rotation-invariant -> equally blind to a DIRECTION regression, which is how a 16-seed screen's `mag_ratio > 1.3` criterion reported "0 flagged" while seed 314 sat at `res_cor` 0.0769 on a healthy 0.956 magnitude. Screen on BOTH. Some flagged seeds = hard fixtures, not basins -- reproduce identically at 8 starts, so a starts-only remedy was never going to reach them.
+**NEITHER summary screens a fit alone.** `residual_cor` is row-normalized -> blind to a magnitude regression; `mag_ratio` is rotation-invariant -> blind to a direction regression. Screen on both.
 
-**`n.quad` NOT threaded from any caller** -- driver default 5 = what every community latent fit actually uses, so `control$n.quad` silently does nothing here. Not a defect for the magnitude (ARGMAX stable to <0.4% vs n=21, `test-community-latent-quad.R`) NOR the offset (5 nodes == 21 to 8e-4), but do NOT read a passed `n.quad` as having taken effect.
+**`n.quad` NOT threaded from any caller** -- driver default 5 is what every community latent fit actually uses; `control$n.quad` silently does nothing here.
 
-TRAP surviving all of the above: magnitude MUST come from the JOINT marginal. Species s' OWN marginal reduces exactly to 1-D in `||lambda_s||` but does NOT identify it -- one Bernoulli/site = no replication, and a normal-mixed logit ~ rescaled logit `plogis(eta/sqrt(1+0.346 sigma^2))` -> sigma and coef scale confounded along a ridge (fitted that way the scale slides to the grid floor, 0.22x truth). Cross-species co-occurrence, visible ONLY in the joint integral, pins it. Assert on `sqrt(tr(Sigma_res))` (rotation-invariant), as `test-ms-count-factor.R` / `test-ms-occu-factor.R` now do
+TRAP surviving all of the above: magnitude MUST come from the JOINT marginal, never a per-species one (identifiability ridge between sigma and coef scale). Assert on `sqrt(tr(Sigma_res))` (rotation-invariant), as `test-ms-count-factor.R` / `test-ms-occu-factor.R` do
   ms_occu_field.R           — community occupancy SVC (svcMsPGOcc, #118); block coordinate ascent (community occ EM psi offset <-> two-state-marginal occupancy field solve), intercept + SVC field(s), pure R; plain intercept -> C++ ms_occu_spatial.R
   ms_abun.R / ms_abun_nuts.R         — community nmix + NUTS (#14)
   ms_abun_latent.R          — community nmix + latent() factors (lfMsNMix) / + shared field (spatial-factor); the ONLY new piece is the working oracle over the Royle marginal: score=grad_eta_lambda, curv=info_eta_lambda-var_N*score_wt_lambda^2 (the Louis (1982) (1,1) block = abundance curvature w/ the detection arm profiled out), which nmix_site_marginal() already exposes. Supplies `sp_info` (the design-sandwiched per-site Louis block) so the community EM skips its FD Hessian: 387s -> see table. Plain field w/o factors KEEPS the C++ #12 path

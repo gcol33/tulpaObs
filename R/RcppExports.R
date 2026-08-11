@@ -485,7 +485,7 @@ cpp_single_ppc <- function(X_occ, X_det, draws, draw_idx, y, n_valid, any_det, f
     .Call(`_tulpaObs_cpp_single_ppc`, X_occ, X_det, draws, draw_idx, y, n_valid, any_det, freeman)
 }
 
-cpp_single_pit <- function(X_occ, X_det, draws, draw_idx, y) {
-    .Call(`_tulpaObs_cpp_single_pit`, X_occ, X_det, draws, draw_idx, y)
+cpp_single_pit_cdf <- function(X_occ, X_det, draws, draw_idx, y) {
+    .Call(`_tulpaObs_cpp_single_pit_cdf`, X_occ, X_det, draws, draw_idx, y)
 }
 

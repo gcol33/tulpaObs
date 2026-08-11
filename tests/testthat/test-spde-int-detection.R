@@ -155,6 +155,48 @@ test_that("the detection field changes the fit it is dropped from", {
   expect_gt(min(abs(fit$means[ints] - fit_flat$means[ints])), 0.02)
 })
 
+# gcol33/tulpaObs#218: the per-source field was reportable
+# (fit$spatial_field_det[["src1"]] / [["src2"]]) but not predictive.
+# fitted()$p on an integrated fit is now a named list, one vector per source,
+# each carrying that source's own field.
+test_that("fitted() adds each source's detection-arm spde() field to p", {
+  skip_on_cran()
+  skip_if_fast()
+  skip_if_no_tulpamesh()
+
+  sim <- .sim_spde_int_det(seed = 1)
+  fit <- .fit_spde_int_det(sim)
+  A   <- fit$spatial$tulpa_spec$A
+
+  f <- fitted(fit)
+  expect_true(is.list(f$p))
+  expect_identical(names(f$p), c("src1", "src2"))
+
+  pi_list <- fit$model$process_info
+  off <- pi_list[[1]]$p
+  for (s in seq_along(c("src1", "src2"))) {
+    src <- c("src1", "src2")[s]
+    pp  <- pi_list[[1 + s]]
+    beta_s <- fit$means[off + seq_len(pp$p)]
+    eta_manual <- as.vector(fit$model$X_processes[[1 + s]] %*% beta_s) +
+      as.numeric(A %*% fit$spatial_field_det[[src]])
+    expect_equal(unname(f$p[[src]]), plogis(eta_manual))
+    expect_gt(cor(f$p[[src]], sim$u_true), 0.5)
+    off <- off + pp$p
+  }
+
+  # predict() with no newdata is the in-sample fit.
+  expect_identical(predict(fit)$p, f$p)
+
+  # A fit with no detection-arm field falls back to a plain vector per source,
+  # unaffected (the offset is a no-op).
+  fit_flat <- .fit_spde_int_det(sim, detection = ~ det_cov)
+  expect_null(fit_flat$spatial_field_det)
+  f_flat <- fitted(fit_flat)
+  expect_true(is.list(f_flat$p))
+  expect_identical(names(f_flat$p), c("src1", "src2"))
+})
+
 # --- gates ------------------------------------------------------------------
 # Everything the detection arm does NOT fit errors with a pointer. It is fit by
 # the single-Laplace EM, which attaches a continuous mesh field per M-step

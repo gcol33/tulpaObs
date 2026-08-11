@@ -79,8 +79,15 @@ Rcpp::List cpp_single_ppc(
                             Rcpp::Named("fit.y.rep") = fit_rep);
 }
 
+// The site-level occupancy response is the ordered detected/all-zero event D_i
+// = 1{>=1 detection}, not the individual visit outcomes, so its randomized-PIT
+// interval is [P(D=0), 1] when D_i = 1 (detected) and [0, P(D=0)] when D_i = 0
+// (all-zero), with P(D=0) = psi*(1-p)^n_valid + (1-psi) posterior-averaged over
+// draws. This mirrors the cdf_lower/cdf_upper construction cpp_cover_pit_cdf /
+// cpp_occu_cover_cdf_limits already use; the randomization itself is left to
+// tulpa::tulpa_pit() in R (gcol33/tulpaObs#222), so no RNG runs here.
 // [[Rcpp::export]]
-Rcpp::NumericVector cpp_single_pit(
+Rcpp::List cpp_single_pit_cdf(
     Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det,
     Rcpp::NumericMatrix draws, Rcpp::IntegerVector draw_idx,
     Rcpp::IntegerMatrix y
@@ -89,8 +96,7 @@ Rcpp::NumericVector cpp_single_pit(
   const int p_occ = X_occ.ncol(), p_det = X_det.ncol();
   const int max_v = y.ncol(); const int ndr = draws.nrow();
   const int n_draws = draw_idx.size();
-  Rcpp::RNGScope scope;
-  Rcpp::NumericVector pit(n_sites);
+  Rcpp::NumericVector lower(n_sites), upper(n_sites);
   const double* pXo = X_occ.begin(); const double* pXd = X_det.begin();
   const double* pdr = draws.begin(); const int* py = y.begin();
 
@@ -100,17 +106,18 @@ Rcpp::NumericVector cpp_single_pit(
       int yij = py[(std::size_t) j * n_sites + i];
       if (yij >= 0) { ++n_valid; if (yij == 1) ++n_det; }
     }
-    if (n_valid == 0) { pit[i] = R::unif_rand(); continue; }
+    if (n_valid == 0) { lower[i] = 0.0; upper[i] = 1.0; continue; }
     double acc = 0.0;
     for (int s = 0; s < n_draws; ++s) {
       int idx = draw_idx[s] - 1;
-      if (n_det > 0) { acc += 1.0; continue; }
       double psi = stable_plogis(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
       double p   = stable_plogis(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
       acc += psi * std::pow(1.0 - p, (double) n_valid) + (1.0 - psi);
     }
-    double v = acc / n_draws + R::runif(0.0, 1.0 / n_draws);
-    pit[i] = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
+    double q = acc / n_draws;  // posterior-mean P(all-zero) at this site
+    if (n_det > 0) { lower[i] = q;   upper[i] = 1.0; }
+    else           { lower[i] = 0.0; upper[i] = q; }
   }
-  return pit;
+  return Rcpp::List::create(Rcpp::Named("cdf_lower") = lower,
+                            Rcpp::Named("cdf_upper") = upper);
 }

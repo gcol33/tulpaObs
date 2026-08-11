@@ -98,3 +98,40 @@ test_that("detection-arm spde() recovery holds across seeds", {
   expect_lt(mean(abs(p_bias)), 0.12)
   expect_gt(mean(field_cor),   0.72)
 })
+
+# gcol33/tulpaObs#218: the field was reportable (fit$spatial_field_det) but not
+# predictive -- fitted()/predict() built the detection logit from the fixed
+# effects alone. fitted(fit)$p must now equal the fixed-effect predictor plus
+# the projected field, and predict() with no newdata delegates to fitted().
+test_that("fitted() adds the detection-arm spde() field to p", {
+  skip_on_cran()
+  skip_if_fast()
+  skip_if_no_tulpamesh()
+
+  sim <- .sim_spde_det(seed = 1)
+  fit <- .fit_spde_det(sim)
+
+  X_det    <- fit$model$X_processes[[2]]
+  beta_det <- fit$means[fit$model$process_info[[1]]$p +
+                          seq_len(fit$model$process_info[[2]]$p)]
+  A        <- fit$spatial$tulpa_spec$A
+  eta_manual <- as.vector(X_det %*% beta_det) +
+    as.numeric(A %*% fit$spatial_field_det)
+
+  f <- fitted(fit)
+  expect_equal(unname(f$p), plogis(eta_manual))
+  expect_gt(cor(f$p, sim$u_true), 0.5)
+
+  # predict() with no newdata is the in-sample fit.
+  expect_identical(predict(fit)$p, f$p)
+
+  # A fit with no detection-arm field is unaffected (the offset is a no-op).
+  fit_flat <- tobs(~ occ_cov, data = sim$data, family = occu(),
+                   detection = ~ det_cov, y = sim$y, method = "laplace",
+                   control = list(verbose = FALSE))
+  expect_null(fit_flat$spatial_field_det)
+  eta_flat <- as.vector(fit_flat$model$X_processes[[2]] %*%
+    fit_flat$means[fit_flat$model$process_info[[1]]$p +
+                    seq_len(fit_flat$model$process_info[[2]]$p)])
+  expect_equal(unname(fitted(fit_flat)$p), plogis(eta_flat))
+})

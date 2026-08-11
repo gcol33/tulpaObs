@@ -58,7 +58,14 @@ p intercept at logit(0.5), cover intercept on the appropriate link.}
 \item{adj}{Optional N x N adjacency matrix. When supplied, generates the
 shared ICAR field; when NULL, the simulator is non-spatial (matches v1).}
 
-\item{sigma}{Spatial field amplitude (used only when \code{adj} is supplied).}
+\item{sigma}{Spatial field amplitude (used only when \code{adj} is supplied), in
+the geo-mean-marginal-SD (Sorbye-Rue) convention: the field is drawn with
+geometric-mean marginal variance 1 before scaling by \code{sigma}, so \code{sigma}
+is directly comparable to a fitted \code{field_sd} (\code{fit$spatial$field_sd_mean}
+on the \code{nested_laplace} path, \code{fit$hyper_draws[, "field_sd"]} on \code{nuts}) --
+never to the raw \code{sigma} a \code{nested_laplace} fit reports, which is the
+amplitude against the unscaled intrinsic precision and differs by
+\code{sqrt(scale_q)} (\code{gcol33/tulpaObs#221}).}
 
 \item{alpha}{Cover-arm scaling on the shared field (used only when \code{adj}
 is supplied). 1.0 = arms see the field identically; positive = same sign,
