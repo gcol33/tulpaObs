@@ -113,6 +113,18 @@
     suppressWarnings(tobs(~ occ_cov, data = dat, family = int_occu(),
                           detection = ~ det_cov, y = yy,
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  gdistremoval = function(N = 150L) {
+    cutp <- c(0, 25, 50, 75, 100)
+    sim <- simulate_gdistremoval(N = N, cutpoints = cutp, n_periods = 4L,
+                                 beta_lambda = c(log(30), 0.3),
+                                 beta_sigma = c(log(18), 0.1),
+                                 beta_r = c(stats::qlogis(0.4), -0.2), seed = 11L)
+    suppressWarnings(tobs(~ abund_cov1, data = sim$data, y = sim$y,
+                          y_rem = sim$y_rem,
+                          family = gdistremoval(cutpoints = cutp),
+                          detection = ~ det_cov1, removal = ~ rem_cov1,
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -409,6 +421,36 @@ test_that("int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   fit <- .SBC_REG_FIXTURES$int_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok_int_occu <- pu("posterior")
+  expect_length(ok_int_occu, length(qs))
+  expect_gt(min(ok_int_occu), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("gdistremoval posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multi-response group). bad.factor = 2.0 -- the
+  # single time-step, two-response-matrix shape needed a bigger tick than
+  # the other registered families to clear 1e-3 on both arms cleanly.
+  # Measured (seed = 0): posterior min p_unif 0.449, narrow max 2.0e-9.
+  fit <- .SBC_REG_FIXTURES$gdistremoval()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 2.0, seed = 0L)
 
   expect_s3_class(res, "sbc")
   expect_identical(res$premises$pooling, "verified")

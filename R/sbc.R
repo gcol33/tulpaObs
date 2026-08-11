@@ -790,7 +790,10 @@
 
 # Concatenate each source's own matrix on the SITE axis; sources stay
 # separate lists (they need not share a visit count).
-.tobs_sbc_pool_int_occu <- function(obs, rep) {
+# Generic over any family whose `y` is a NAMED LIST of matrices sharing one
+# site axis -- int_occu()'s per-source detection matrices, gdistremoval()'s
+# yDist/yRem -- so both registry entries below share this one `pool`.
+.tobs_sbc_pool_named_matrices <- function(obs, rep) {
   n_o <- length(obs$site); n_r <- length(rep$site)
   y <- Map(function(a, b) rbind(a, b), obs$y, rep$y[names(obs$y)])
   list(cells = rbind(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
@@ -835,6 +838,62 @@
   names(y) <- .tobs_sbc_int_occu_src_names(m)
   list(cells = m$data, y = y, y_pos = NULL, visits = NULL, graph = NULL,
        site = seq_len(m$n_sites))
+}
+
+
+# ---------------------------------------------------------------------------
+# 6d. gdistremoval() (gcol33/tulpaObs#220, multi-response group): a single
+# time-step family whose response is TWO matrices (yDist band counts, yRem
+# period counts) that must stay row-consistent, pooled together on the site
+# axis via the same `.tobs_sbc_pool_named_matrices` int_occu()'s per-source
+# matrices use. Already has a `simulate()` handler returning
+# `list(yDist=, yRem=)`, reused here as the replicate generator the way the
+# occu()-family entries reuse their own `simulate()` handler.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec_gdistremoval <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
+       detection = .tobs_sbc_recombine(m$formulas$sigma,  NULL),
+       removal   = .tobs_sbc_recombine(m$formulas$r,      NULL))
+}
+
+.tobs_sbc_data_gdistremoval <- function(fit) {
+  m <- fit$model
+  list(cells  = m$data,
+       y      = list(yDist = m$y, yRem = m$y_rem),
+       y_pos  = NULL,
+       visits = NULL,
+       graph  = NULL,
+       site   = seq_len(m$n_sites))
+}
+
+.tobs_sbc_refit_gdistremoval <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$lambda, data = data$cells, family = spec$family,
+    detection = spec$detection, removal = spec$removal,
+    y = data$y$yDist, y_rem = data$y$yRem,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_sim_gdistremoval <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  D <- matrix(theta, nrow = 1L)
+  colnames(D) <- names(theta)
+  f$draws <- D
+  rep <- stats::simulate(f, nsim = 1L)
+  list(cells = spec$model$data, y = list(yDist = rep$yDist, yRem = rep$yRem),
+       y_pos = NULL, visits = NULL, graph = NULL,
+       site = seq_len(spec$model$n_sites))
 }
 
 
@@ -894,10 +953,22 @@
   int_occu = list(
     spec        = .tobs_sbc_spec_int_occu,
     data        = .tobs_sbc_data_int_occu,
-    pool        = .tobs_sbc_pool_int_occu,
+    pool        = .tobs_sbc_pool_named_matrices,
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_int_occu,
     refit       = .tobs_sbc_refit_int_occu,
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # Multi-response group (gcol33/tulpaObs#220): y = (yDist, yRem), two
+  # response matrices that must stay row-consistent -- gdistremoval() already
+  # has a simulate() handler returning list(yDist=, yRem=), reused here as the
+  # replicate generator (see section 6d).
+  gdistremoval = list(
+    spec        = .tobs_sbc_spec_gdistremoval,
+    data        = .tobs_sbc_data_gdistremoval,
+    pool        = .tobs_sbc_pool_named_matrices,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_gdistremoval,
+    refit       = .tobs_sbc_refit_gdistremoval,
     loglik_many = .tobs_sbc_loglik_many_simple)
 )
 
@@ -1115,10 +1186,15 @@
 #' `int_occu` (full source-site overlap only) pools on the SITE axis and
 #' leaves the per-source axis alone, since its response is a list of one
 #' detection matrix per source; the rank statistic is the shared machinery
-#' unchanged, but its per-source detection intercepts do not yet clear
-#' posterior SBC's acceptance bar (`gcol33/tulpaObs#225`) -- the CONTRACT
-#' checks pass (the replicate generator and refit are correct), the
-#' calibration read does not.
+#' unchanged. Registering it surfaced a real bug (`gcol33/tulpaObs#225`,
+#' fixed): the detection intercept was silently left in standardized-covariate
+#' units on every fit with an autoscaled detection covariate, independent of
+#' SBC.
+#'
+#' `gdistremoval` pools two response matrices (`yDist` band counts, `yRem`
+#' period counts) together on the SITE axis, reusing the same
+#' list-of-matrices `pool` `int_occu` uses; its replicate generator is its
+#' own `simulate()` handler.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

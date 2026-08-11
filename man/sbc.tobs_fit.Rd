@@ -87,10 +87,15 @@ registered family uses.
 \code{int_occu} (full source-site overlap only) pools on the SITE axis and
 leaves the per-source axis alone, since its response is a list of one
 detection matrix per source; the rank statistic is the shared machinery
-unchanged, but its per-source detection intercepts do not yet clear
-posterior SBC's acceptance bar (\code{gcol33/tulpaObs#225}) -- the CONTRACT
-checks pass (the replicate generator and refit are correct), the
-calibration read does not.
+unchanged. Registering it surfaced a real bug (\code{gcol33/tulpaObs#225},
+fixed): the detection intercept was silently left in standardized-covariate
+units on every fit with an autoscaled detection covariate, independent of
+SBC.
+
+\code{gdistremoval} pools two response matrices (\code{yDist} band counts, \code{yRem}
+period counts) together on the SITE axis, reusing the same
+list-of-matrices \code{pool} \code{int_occu} uses; its replicate generator is its
+own \code{simulate()} handler.
 
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the

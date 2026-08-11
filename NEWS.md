@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.205 (2026-08-11)
+
+* **`gdistremoval()` registered for `sbc()`** (#220, multi-response group):
+  its response is two matrices (`yDist` band counts, `yRem` period counts)
+  that must stay row-consistent -- pooled together on the site axis via the
+  same list-of-matrices `pool` `int_occu()` already uses (now shared as
+  `.tobs_sbc_pool_named_matrices()`). Its own `simulate()` handler serves as
+  the replicate generator directly. Verified to the #207 bar: 100-sim
+  posterior SBC uniform on all six coefficients (min p_unif 0.449 at
+  `bad.factor = 2.0`), a mis-scaled control rejects hard (2.0e-9).
+
 ## 0.0.204 (2026-08-11)
 
 * **`int_occu()`'s detection-arm intercepts and SEs were systematically
