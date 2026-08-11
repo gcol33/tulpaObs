@@ -17,10 +17,12 @@ probabilities), and \code{z} (posterior state probability at posterior-mean
 parameters). For an \code{\link[=int_occu]{int_occu()}} fit \code{p} is a named list, one detection
 probability vector per source (matching \code{y}'s names), since each source
 carries its own detection design and, when present, its own detection-arm
-spatial field. For single-season and community models \code{z} is the per-site
-Bayes posterior \code{P(z=1 | y)}; for dynamic models \code{z} is the
-forward-backward (HMM smoothing) state posterior \verb{P(z_t=1 | y_\{1:T\})} as
-an \verb{[n_sites x n_seasons]} matrix.
+spatial field. For single-season, \code{\link[=int_occu]{int_occu()}} and community models \code{z}
+is the per-site Bayes posterior \code{P(z=1 | y)} (an \code{\link[=int_occu]{int_occu()}} site is
+occupied with certainty if ANY source detected it, and otherwise
+pools every source's non-detection evidence); for dynamic models \code{z} is
+the forward-backward (HMM smoothing) state posterior \verb{P(z_t=1 | y_\{1:T\})}
+as an \verb{[n_sites x n_seasons]} matrix.
 }
 \description{
 Fitted values (occupancy and detection probabilities)

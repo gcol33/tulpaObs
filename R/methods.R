@@ -360,10 +360,12 @@ coef.tobs_fit <- function(object, ...) {
 #'   parameters). For an [int_occu()] fit `p` is a named list, one detection
 #'   probability vector per source (matching `y`'s names), since each source
 #'   carries its own detection design and, when present, its own detection-arm
-#'   spatial field. For single-season and community models `z` is the per-site
-#'   Bayes posterior `P(z=1 | y)`; for dynamic models `z` is the
-#'   forward-backward (HMM smoothing) state posterior `P(z_t=1 | y_{1:T})` as
-#'   an `[n_sites x n_seasons]` matrix.
+#'   spatial field. For single-season, [int_occu()] and community models `z`
+#'   is the per-site Bayes posterior `P(z=1 | y)` (an [int_occu()] site is
+#'   occupied with certainty if ANY source detected it, and otherwise
+#'   pools every source's non-detection evidence); for dynamic models `z` is
+#'   the forward-backward (HMM smoothing) state posterior `P(z_t=1 | y_{1:T})`
+#'   as an `[n_sites x n_seasons]` matrix.
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
@@ -443,6 +445,33 @@ fitted.tobs_fit <- function(object, ...) {
     }
   } else if (identical(model$model_type, "dynamic")) {
     z <- .tobs_dynamic_smoothed_z(model, means, pi_list)
+  } else if (identical(model$model_type, "integrated")) {
+    # Multi-source Bayes posterior P(z=1|y) (gcol33/tulpaObs#223): a site is
+    # occupied with certainty if ANY source detected it at ANY visit;
+    # otherwise every source's every visit contributes a non-detection factor
+    # to the same product the single-season branch above uses for one source.
+    # `site_maps[[s]]` is 0-based row->site; a source that never surveyed a
+    # site contributes no rows (and so no information) for it.
+    z <- numeric(model$n_sites)
+    for (i in seq_len(model$n_sites)) {
+      any_det_i <- FALSE
+      log_prod_1mp <- 0
+      for (s in seq_along(p)) {
+        rows <- which(model$site_maps[[s]] + 1L == i)
+        if (!length(rows)) next
+        ys <- model$y_sources[[s]]
+        for (r in rows) {
+          yr <- ys[r, ]
+          valid <- yr >= 0
+          if (any(yr[valid] == 1)) any_det_i <- TRUE
+          log_prod_1mp <- log_prod_1mp + sum(valid) * log1p(-p[[s]][r])
+        }
+      }
+      z[i] <- if (any_det_i) 1 else {
+        prod_1mp <- exp(log_prod_1mp)
+        psi[i] * prod_1mp / (psi[i] * prod_1mp + (1 - psi[i]))
+      }
+    }
   } else {
     z <- psi
   }
@@ -712,7 +741,15 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' @param type `"occupancy"` (default), `"detection"`, `"both"`, or `"state"`
 #'   (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
 #'   `occu_cover` fit: `"occurrence"`, `"cover_cond"`, `"cover_exp"`, or
-#'   `"change"`.
+#'   `"change"`. `"detection"` / `"both"` on a `single`/`int_occu()` fit needs
+#'   `X_det.0`.
+#' @param X_det.0 Optional detection design for out-of-sample `"detection"` /
+#'   `"both"` prediction on a `single`-season or [int_occu()] fit
+#'   (gcol33/tulpaObs#223): a plain design matrix for a single-season fit, or
+#'   a list of one design matrix per source (named by source, or in source
+#'   order) for an `int_occu()` fit -- matching `fitted()$p`'s per-source
+#'   shape. In-sample locations only: like the state-arm `svc()`/`spde()`
+#'   surfaces, this does not krige a spatial detection field to unseen points.
 #' @param quantiles Quantile levels for credible intervals.
 #' @param terms Name of a single term to vary: one column of the predicted
 #'   process's design matrix, every other column held at its column mean. A
@@ -738,8 +775,11 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   data.frame with `row`, `psi` (marginalised posterior mean), `psi_lower` /
 #'   `psi_upper` (equal-tailed 95% credible interval; `NA` when the engine did
 #'   not return per-cell predictive variance), and `heldout`. Design-matrix/
-#'   terms: data.frame with estimate and CIs. `occu_cover`: a `tobs_prediction`
-#'   table (one row per cell) with per-unit draw matrices in `attr(, "draws")`.
+#'   terms: data.frame with estimate and CIs; `type = "detection"` on an
+#'   `int_occu()` fit returns a named list of such data.frames (one per
+#'   source), and `type = "both"` returns `list(occupancy = , detection = )`.
+#'   `occu_cover`: a `tobs_prediction` table (one row per cell) with per-unit
+#'   draw matrices in `attr(, "draws")`.
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
@@ -748,6 +788,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  terms = NULL, n_points = 50L,
                                  newdata = NULL, times = NULL, level = 0.95,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
+                                 X_det.0 = NULL,
                                  ...) {
   # `terms` names one design column, and every family reading it does so
   # through this generic, so validate here rather than in each fitter.
@@ -886,7 +927,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   }
 
   # In-sample mode
-  if (is.null(X.0) && is.null(terms)) return(fitted(object))
+  if (is.null(X.0) && is.null(X_det.0) && is.null(terms)) return(fitted(object))
 
   model <- object$model
   draws <- object$draws
@@ -898,26 +939,102 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   }
 
   # Design-matrix mode
-  n_pred <- nrow(X.0)
   n_draws <- nrow(draws)
   p_occ <- pi_list[[1]]$p
 
-  if (ncol(X.0) != p_occ) {
-    stop(sprintf("X.0 has %d columns but model has %d occupancy coefficients",
-                 ncol(X.0), p_occ))
+  .quantile_df <- function(pr_draws) {
+    data.frame(
+      mean = colMeans(pr_draws),
+      sd = apply(pr_draws, 2, sd),
+      q2.5 = apply(pr_draws, 2, quantile, quantiles[1]),
+      q50 = apply(pr_draws, 2, quantile, quantiles[2]),
+      q97.5 = apply(pr_draws, 2, quantile, quantiles[3])
+    )
   }
 
-  # Occupancy probability draws at the new design (shared with the ensemble
-  # stacked-predictive path; see .tobs_psi_draws()).
-  psi_draws <- .tobs_psi_draws(draws, X.0, p_occ)
+  want_occ <- type %in% c("occupancy", "both")
+  want_det <- type %in% c("detection", "both")
 
-  data.frame(
-    mean = colMeans(psi_draws),
-    sd = apply(psi_draws, 2, sd),
-    q2.5 = apply(psi_draws, 2, quantile, quantiles[1]),
-    q50 = apply(psi_draws, 2, quantile, quantiles[2]),
-    q97.5 = apply(psi_draws, 2, quantile, quantiles[3])
-  )
+  occ_out <- NULL
+  if (want_occ) {
+    if (is.null(X.0)) {
+      stop("predict(type = \"", type, "\") needs X.0 (or newdata), the ",
+           "occupancy design at the new points.", call. = FALSE)
+    }
+    if (ncol(X.0) != p_occ) {
+      stop(sprintf("X.0 has %d columns but model has %d occupancy coefficients",
+                   ncol(X.0), p_occ))
+    }
+    # Occupancy probability draws at the new design (shared with the ensemble
+    # stacked-predictive path; see .tobs_psi_draws()).
+    occ_out <- .quantile_df(.tobs_psi_draws(draws, X.0, p_occ))
+  }
+
+  # Out-of-sample detection prediction (gcol33/tulpaObs#223): the design-matrix
+  # mode used to build occupancy draws only, regardless of `type` -- silently
+  # ignoring a "detection"/"both" request rather than answering it or erroring.
+  # `X_det.0` is per-source for an int_occu() fit (a list matching
+  # fitted()$p's per-source shape, gcol33/tulpaObs#218), a plain matrix
+  # otherwise. This is in-sample-location prediction only, same as the
+  # occupancy design matrix mode above -- no kriging to unseen field
+  # locations (the state-arm svc()/spde() limit already documented).
+  det_out <- NULL
+  if (want_det) {
+    if (is.null(X_det.0)) {
+      stop("predict(type = \"", type, "\") needs X_det.0, the detection ",
+           "design at the new points (a plain matrix, or a named list of ",
+           "per-source matrices for an int_occu() fit).", call. = FALSE)
+    }
+    if (identical(model$model_type, "integrated")) {
+      if (!is.list(X_det.0) || is.data.frame(X_det.0)) {
+        stop("predict(type = \"", type, "\") on an int_occu() fit needs ",
+             "X_det.0 as a list, one detection design matrix per source ",
+             "(matching fitted()$p's per-source shape).", call. = FALSE)
+      }
+      n_src <- model$n_sources %||% (length(pi_list) - 1L)
+      src_nm <- vapply(seq_len(n_src), function(s) pi_list[[1L + s]]$name,
+                       character(1))
+      if (is.null(names(X_det.0))) {
+        if (length(X_det.0) != n_src) {
+          stop(sprintf(
+            "predict(): X_det.0 has %d unnamed entries but the fit has %d sources (%s); name each entry or supply exactly one per source in order.",
+            length(X_det.0), n_src, paste(src_nm, collapse = ", ")))
+        }
+        src_off <- seq_len(n_src)
+      } else {
+        src_off <- match(src_nm, names(X_det.0))
+        if (anyNA(src_off)) {
+          stop("predict(): X_det.0 must name every source (",
+               paste(src_nm, collapse = ", "), ").", call. = FALSE)
+        }
+      }
+      off <- p_occ
+      det_out <- vector("list", n_src)
+      names(det_out) <- src_nm
+      for (s in seq_len(n_src)) {
+        pp <- pi_list[[1L + s]]
+        Xs <- X_det.0[[src_off[s]]]
+        if (ncol(Xs) != pp$p) {
+          stop(sprintf(
+            "X_det.0[[\"%s\"]] has %d columns but source %s has %d detection coefficients",
+            src_nm[s], ncol(Xs), src_nm[s], pp$p))
+        }
+        det_out[[s]] <- .quantile_df(.tobs_psi_draws(draws, Xs, pp$p, offset = off))
+        off <- off + pp$p
+      }
+    } else {
+      p_det <- pi_list[[2L]]$p
+      if (ncol(X_det.0) != p_det) {
+        stop(sprintf("X_det.0 has %d columns but model has %d detection coefficients",
+                     ncol(X_det.0), p_det))
+      }
+      det_out <- .quantile_df(.tobs_psi_draws(draws, X_det.0, p_det, offset = p_occ))
+    }
+  }
+
+  if (identical(type, "occupancy")) return(occ_out)
+  if (identical(type, "detection")) return(det_out)
+  list(occupancy = occ_out, detection = det_out)
 }
 
 # `terms` names ONE column of the fitted design matrix to vary; every other

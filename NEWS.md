@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.200 (2026-08-11)
+
+* **`int_occu()`'s `fitted()$z` ignored the data, and `predict()` had no
+  out-of-sample detection prediction** (#223, found while fixing #218):
+  - `fitted(fit)$z` on an `int_occu()` fit reported the prior marginal
+    (`psi`) rather than a real posterior, for every fit. Now a proper
+    multi-source Bayes update: a site is occupied with certainty if ANY
+    source detected it, otherwise its posterior pools every source's
+    non-detection evidence.
+  - `predict(fit, X.0 = , type = "detection" / "both")` silently returned
+    only occupancy regardless of `type`, for `occu()` AND `int_occu()`. A
+    new `X_det.0` argument (a plain matrix for `occu()`, a list of one
+    matrix per source for `int_occu()`, matching `fitted()$p`'s per-source
+    shape) now drives real out-of-sample detection prediction; requesting
+    `"detection"`/`"both"` without it errors rather than answering with
+    occupancy. No design matrix at all still means in-sample (`fitted()`),
+    unchanged.
+
 ## 0.0.199 (2026-08-11)
 
 * **`sbc()` on every family was broken** (found while starting #220):

@@ -17,6 +17,7 @@
   nsim = 1000L,
   draws = TRUE,
   time_col = NULL,
+  X_det.0 = NULL,
   ...
 )
 }
@@ -28,7 +29,8 @@
 \item{type}{\code{"occupancy"} (default), \code{"detection"}, \code{"both"}, or \code{"state"}
 (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
 \code{occu_cover} fit: \code{"occurrence"}, \code{"cover_cond"}, \code{"cover_exp"}, or
-\code{"change"}.}
+\code{"change"}. \code{"detection"} / \code{"both"} on a \code{single}/\code{int_occu()} fit needs
+\code{X_det.0}.}
 
 \item{quantiles}{Quantile levels for credible intervals.}
 
@@ -59,6 +61,14 @@ Defaults to the training data.}
 trend field / driving the change map; auto-resolved from the fit's stored
 trend weight when omitted.}
 
+\item{X_det.0}{Optional detection design for out-of-sample \code{"detection"} /
+\code{"both"} prediction on a \code{single}-season or \code{\link[=int_occu]{int_occu()}} fit
+(gcol33/tulpaObs#223): a plain design matrix for a single-season fit, or
+a list of one design matrix per source (named by source, or in source
+order) for an \code{int_occu()} fit -- matching \code{fitted()$p}'s per-source
+shape. In-sample locations only: like the state-arm \code{svc()}/\code{spde()}
+surfaces, this does not krige a spatial detection field to unseen points.}
+
 \item{...}{Ignored.}
 }
 \value{
@@ -66,8 +76,11 @@ Depends on mode. In-sample: \code{fitted()} result. \code{"state"}: a
 data.frame with \code{row}, \code{psi} (marginalised posterior mean), \code{psi_lower} /
 \code{psi_upper} (equal-tailed 95\% credible interval; \code{NA} when the engine did
 not return per-cell predictive variance), and \code{heldout}. Design-matrix/
-terms: data.frame with estimate and CIs. \code{occu_cover}: a \code{tobs_prediction}
-table (one row per cell) with per-unit draw matrices in \code{attr(, "draws")}.
+terms: data.frame with estimate and CIs; \code{type = "detection"} on an
+\code{int_occu()} fit returns a named list of such data.frames (one per
+source), and \code{type = "both"} returns \code{list(occupancy = , detection = )}.
+\code{occu_cover}: a \code{tobs_prediction} table (one row per cell) with per-unit
+draw matrices in \code{attr(, "draws")}.
 }
 \description{
 Four modes:
