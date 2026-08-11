@@ -121,8 +121,8 @@ test_that("occu_cover() joint: pointwise log-lik folds in the spatial field", {
   expect_gt(abs(cr_full$waic - cr_fe$waic), 5.0)
   expect_gt(abs(cr_full$elpd_loo - cr_fe$elpd_loo), 5.0)
 
-  # tobs_waic() end-to-end returns the field-folded value, not the FE one.
-  w <- tobs_waic(fit, n.draws = 300L)
+  # waic() end-to-end returns the field-folded value, not the FE one.
+  w <- waic(fit, n.draws = 300L)
   expect_lt(abs(w$waic - cr_full$waic), 15)    # MC noise across draw sets
   expect_gt(abs(w$waic - cr_fe$waic), 5.0)
 })
@@ -135,10 +135,10 @@ test_that("occu_cover() field-folded WAIC/LOO prefers the true strong-field mode
   prefer_waic <- prefer_loo <- logical(0)
   for (seed in c(4201L, 4202L, 4203L)) {
     o <- .icfm_sim_and_fit(seed = seed, sigma_true = 2.0)
-    wf <- tobs_waic(o$fit_field,   n.draws = 600L)
-    wn <- tobs_waic(o$fit_nofield, n.draws = 600L)
-    cf <- tobs_cpo(o$fit_field,    n.draws = 600L)
-    cn <- tobs_cpo(o$fit_nofield,  n.draws = 600L)
+    wf <- waic(o$fit_field,   n.draws = 600L)
+    wn <- waic(o$fit_nofield, n.draws = 600L)
+    cf <- cpo(o$fit_field,    n.draws = 600L)
+    cn <- cpo(o$fit_nofield,  n.draws = 600L)
     prefer_waic <- c(prefer_waic, wf$waic < wn$waic)
     prefer_loo  <- c(prefer_loo,  cf$elpd_loo > cn$elpd_loo)
   }
@@ -180,7 +180,7 @@ test_that("occu_cover() LOO-PIT is returned, calibrated, with good Pareto-k", {
   o <- .icfm_sim_and_fit(seed = 4401L)
   fit <- o$fit_field
 
-  cpo <- tobs_cpo(fit, n.draws = 600L)
+  cpo <- cpo(fit, n.draws = 600L)
   expect_true("pit" %in% names(cpo))
   expect_equal(length(cpo$pit), fit$model$n_sites)
   expect_true(all(is.finite(cpo$pit)))
@@ -208,14 +208,14 @@ test_that("occu_cover(): loo.unit = 'cell' routes through the site_cell map (tul
 
   # loo.unit = "cell" == passing that map as group (RNG fixed so the sampled
   # joint draws are identical between the two calls).
-  set.seed(7L); a <- tobs_cpo(fit, n.draws = 200L, loo.unit = "cell")
-  set.seed(7L); b <- tobs_cpo(fit, n.draws = 200L, group = map)
+  set.seed(7L); a <- cpo(fit, n.draws = 200L, loo.unit = "cell")
+  set.seed(7L); b <- cpo(fit, n.draws = 200L, group = map)
   expect_equal(a$elpd_loo, b$elpd_loo)
   expect_equal(a$pareto_k, b$pareto_k)
   expect_equal(a$n_groups, n_sites)
 
   # With the identity cell map cell-level LOO equals the per-site default exactly
   # (each fold is a single site).
-  set.seed(7L); d <- tobs_cpo(fit, n.draws = 200L)
+  set.seed(7L); d <- cpo(fit, n.draws = 200L)
   expect_equal(a$elpd_loo, d$elpd_loo)
 })

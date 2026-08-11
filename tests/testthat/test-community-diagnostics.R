@@ -34,7 +34,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_occu", {
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
-  w <- tobs_waic(fit); d <- tobs_dic(fit); cpo <- tobs_cpo(fit)
+  w <- waic(fit); d <- dic(fit); cpo <- cpo(fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))
@@ -51,7 +51,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_int_occu", {
   fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
-  w <- tobs_waic(fit); d <- tobs_dic(fit); cpo <- tobs_cpo(fit)
+  w <- waic(fit); d <- dic(fit); cpo <- cpo(fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))
@@ -65,7 +65,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_dyn_occu", {
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
-  w <- tobs_waic(fit); d <- tobs_dic(fit); cpo <- tobs_cpo(fit)
+  w <- waic(fit); d <- dic(fit); cpo <- cpo(fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))

@@ -31,24 +31,24 @@ test_that("cover() separate-Laplace: WAIC/DIC/CPO + PIT + PPC", {
   fit <- tobs(formula = ~ x, data = data.frame(x = x),
               family = cover("lognormal"), y = y, method = "laplace")
 
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$elpd))
 
-  d <- tobs_dic(fit, n.draws = 300L)
+  d <- dic(fit, n.draws = 300L)
   expect_true(is.finite(d$dic) && is.finite(d$p_dic))
   expect_true(d$p_dic >= -1)               # effective parameters ~ small positive
 
-  cp <- tobs_cpo(fit, n.draws = 300L)
+  cp <- cpo(fit, n.draws = 300L)
   expect_true(is.finite(cp$lpml))
   expect_equal(cp$lpml, cp$elpd_loo, tolerance = 1e-8)
   expect_length(cp$pointwise$cpo, N)
   expect_true(all(cp$pointwise$cpo > 0))
 
-  pit <- tobs_pit_residuals(fit, n.samples = 300L)
+  pit <- pit_residuals(fit, n.samples = 300L)
   expect_length(pit, N)
   expect_true(all(pit >= 0 & pit <= 1))
 
-  ppc <- tobs_ppc(fit, n.samples = 200L)
+  ppc <- ppc(fit, n.samples = 200L)
   expect_true(ppc$bayesian.p >= 0 && ppc$bayesian.p <= 1)
   # Correct model: not in the extreme tails.
   expect_gt(ppc$bayesian.p, 0.001)
@@ -67,10 +67,10 @@ test_that("cover() beta arm: criteria + PIT + PPC run", {
               pmin(pmax(rbeta(N, mu * phi, (1 - mu) * phi), 1e-6), 1 - 1e-6), 0)
   fit <- tobs(formula = ~ x, data = data.frame(x = x),
               family = cover("beta"), y = y, method = "laplace")
-  expect_true(is.finite(tobs_dic(fit, n.draws = 200L)$dic))
-  pit <- tobs_pit_residuals(fit, n.samples = 200L)
+  expect_true(is.finite(dic(fit, n.draws = 200L)$dic))
+  pit <- pit_residuals(fit, n.samples = 200L)
   expect_true(all(pit >= 0 & pit <= 1))
-  expect_true(tobs_ppc(fit, n.samples = 150L)$bayesian.p <= 1)
+  expect_true(ppc(fit, n.samples = 150L)$bayesian.p <= 1)
 })
 
 test_that("cover() nested-joint: PIT + PPC project the shared field", {
@@ -92,11 +92,11 @@ test_that("cover() nested-joint: PIT + PPC project the shared field", {
               data = dat, family = cover("lognormal"), y = y,
               method = "nested_laplace",
               control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))
-  pit <- tobs_pit_residuals(fit, n.samples = 200L)
+  pit <- pit_residuals(fit, n.samples = 200L)
   expect_length(pit, N)
   expect_true(all(is.finite(pit) & pit >= 0 & pit <= 1))
-  expect_true(is.finite(tobs_dic(fit, n.draws = 200L)$dic))
-  expect_true(tobs_ppc(fit, n.samples = 150L)$bayesian.p <= 1)
+  expect_true(is.finite(dic(fit, n.draws = 200L)$dic))
+  expect_true(ppc(fit, n.samples = 150L)$bayesian.p <= 1)
 })
 
 test_that("occu_cover(): DIC/CPO + PIT + PPC", {
@@ -114,16 +114,16 @@ test_that("occu_cover(): DIC/CPO + PIT + PPC", {
               y = od$y, y_pos = y_pos, visits = od$det.covs,
               method = "laplace", control = list(verbose = FALSE))
 
-  d <- tobs_dic(fit, n.draws = 300L)
+  d <- dic(fit, n.draws = 300L)
   expect_true(is.finite(d$dic) && is.finite(d$p_dic))
-  cp <- tobs_cpo(fit, n.draws = 300L)
+  cp <- cpo(fit, n.draws = 300L)
   expect_equal(cp$lpml, cp$elpd_loo, tolerance = 1e-8)
   expect_length(cp$pointwise$cpo, N)
 
-  pit <- tobs_pit_residuals(fit, n.samples = 250L)
+  pit <- pit_residuals(fit, n.samples = 250L)
   expect_length(pit, N)
   expect_true(all(pit >= 0 & pit <= 1))
 
-  ppc <- tobs_ppc(fit, n.samples = 200L)
+  ppc <- ppc(fit, n.samples = 200L)
   expect_true(ppc$bayesian.p >= 0 && ppc$bayesian.p <= 1)
 })

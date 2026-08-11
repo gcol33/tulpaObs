@@ -847,6 +847,7 @@
 #'   experiment, for inspection or for passing to `tulpa::sbc()` directly.
 #' @param fit.control Merged into the `control` list of every refit.
 #' @param control Passed to `tulpa::sbc()` (`progress`, `rand_seed`).
+#' @param ... Unused.
 #'
 #' @details
 #' Registered families: `occu_cover` (the coupled occupancy + cover hurdle on
@@ -879,7 +880,7 @@
 #' Posterior SBC: simulation-based calibration checking conditional on data.
 #' Statistics and Computing 36:78.
 #'
-#' @seealso [tulpa::sbc()], [tobs_waic()]
+#' @seealso [tulpa::sbc()], [waic()]
 #' @examples
 #' \donttest{
 #' N <- 20L; J <- 3L
@@ -910,17 +911,14 @@
 #'             positive = ~ pos_cov1 + copy(spatial()),
 #'             y = od$y, y_pos = y_pos, visits = od$det.covs,
 #'             method = "nested_laplace", control = ctl)
-#' tobs_sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)
+#' sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)
 #' }
 #' @export
-tobs_sbc <- function(object, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
-                     quantities = NULL, controls = character(),
-                     bad.factor = 1.25, level = 0.95, seed = 0L,
-                     model.only = FALSE, fit.control = list(),
-                     control = list()) {
-  if (!inherits(object, "tobs_fit")) {
-    stop("tobs_sbc() takes a fitted tobs_fit.", call. = FALSE)
-  }
+sbc.tobs_fit <- function(object, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                         quantities = NULL, controls = character(),
+                         bad.factor = 1.25, level = 0.95, seed = 0L,
+                         model.only = FALSE, fit.control = list(),
+                         control = list(), ...) {
   controls <- if (length(controls))
     match.arg(controls, c("wide", "narrow"), several.ok = TRUE) else character(0)
   model <- .tobs_sbc_build_model(object, as.integer(n.draws), as.integer(n.ref),

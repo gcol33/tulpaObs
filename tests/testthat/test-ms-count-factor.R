@@ -62,7 +62,7 @@ test_that("a latent-factor count fit wires the factor block and S3", {
   expect_identical(rownames(fit$ms_factor$loadings), colnames(d$y))
   expect_false(is.null(fit$model$count_factor_offset))
   expect_equal(dim(fitted(fit)$mu), c(50L, 5L))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("a latent-factor count fit recovers residual co-occurrence + S3", {
@@ -90,7 +90,7 @@ test_that("a latent-factor count fit recovers residual co-occurrence + S3", {
   expect_community_mean(fit, d$beta_real, c(0.10, 0.08))
   # fitted() is factor-aware
   expect_gt(stats::cor(as.numeric(fitted(fit)$mu), as.numeric(d$y)), 0.7)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 # The loading MAGNITUDE, which no assertion on the residual correlation can see.
@@ -229,7 +229,7 @@ test_that("spatial-factor count carries both a shared field and factors", {
   expect_length(fit$spatial_field, d$Ns)
   expect_false(is.null(fit$model$count_field_offset))
   expect_false(is.null(fit$model$count_factor_offset))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("spatial-factor count recovers BOTH the shared field and the factors", {
@@ -249,5 +249,5 @@ test_that("spatial-factor count recovers BOTH the shared field and the factors",
   expect_gt(stats::cor(fit$ms_factor$residual_cor[off], d$cor_res[off]), 0.8)
   # fitted() adds both offsets
   expect_gt(stats::cor(as.numeric(fitted(fit)$mu), as.numeric(d$y)), 0.7)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })

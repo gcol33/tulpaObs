@@ -378,7 +378,7 @@ summaries from the draws. The call shape stays the same across both.
 | `vcov()` | fixed-effect covariance |
 | `fitted()` | per-site `psi`, `p`, `z` |
 | `predict()` | occupancy at a new design or varied term |
-| `tobs_waic()` | WAIC, elpd, effective parameters |
+| `waic()` | WAIC, elpd, effective parameters |
 | `residuals()` | deviance / Pearson / response residuals |
 | `simulate()` | replicate detection histories from the fit |
 
@@ -392,7 +392,7 @@ angles: an information criterion for predictive accuracy, a posterior
 predictive check for whether replicated data look like the real data, and a
 calibration check on the per-site residuals.
 
-`tobs_waic()` computes the widely applicable information criterion from the
+`waic()` computes the widely applicable information criterion from the
 pointwise marginal log-likelihood, along with the expected log predictive
 density and the effective number of parameters. The marginal log-likelihood is
 the right input here because it has already summed out the latent state, so the
@@ -402,7 +402,7 @@ score, and on its own one number means little; it earns its keep in the
 comparison below, against another model fit to the same data.
 
 ```{r waic}
-w <- tobs_waic(fit)
+w <- waic(fit)
 c(waic = w$waic, elpd = w$elpd, p_waic = w$p_waic)
 ```
 
@@ -416,7 +416,7 @@ scale, which is why lower is better and why it reads on the same scale as an
 AIC, with the difference that the penalty is the effective parameter count
 rather than the nominal one.
 
-`tobs_ppc()` runs a posterior predictive check. It simulates detection
+`ppc()` runs a posterior predictive check. It simulates detection
 histories from the fitted parameters, computes a discrepancy statistic
 (Freeman-Tukey by default) on the replicates and on the observed data, and
 reports a Bayesian $p$-value, the fraction of replicates whose statistic
@@ -424,28 +424,28 @@ exceeds the observed one. A value near 0.5 means the observed data look like a
 typical draw from the fitted model; values near 0 or 1 flag a misfit.
 
 ```{r ppc}
-ppc <- tobs_ppc(fit, fit.stat = "freeman-tukey")
-ppc$bayesian.p
+pp <- ppc(fit, fit.stat = "freeman-tukey")
+pp$bayesian.p
 ```
 
 ```{r ppc-plot, fig.alt = "Histogram of replicated Freeman-Tukey statistics with the observed value marked by a vertical line falling inside the bulk"}
-hist(ppc$fit.y.rep, breaks = 30, col = "grey85", border = "white",
+hist(pp$fit.y.rep, breaks = 30, col = "grey85", border = "white",
      main = "", xlab = "Freeman-Tukey statistic (replicated)")
-abline(v = mean(ppc$fit.y), col = "firebrick", lwd = 2)
+abline(v = mean(pp$fit.y), col = "firebrick", lwd = 2)
 ```
 
 The observed statistic sits inside the bulk of the replicated values, so the
 fit reproduces the spread of the detection histories. The probability integral
-transform offers a complementary view. `tobs_pit_residuals()` returns one PIT
+transform offers a complementary view. `pit_residuals()` returns one PIT
 value per site; under a well-calibrated model they are uniform on $[0, 1]$, and
-`tobs_test_uniformity()` runs the formal Kolmogorov-Smirnov test against that
+`test_uniformity()` runs the formal Kolmogorov-Smirnov test against that
 target.
 
 ```{r pit, fig.alt = "Histogram of PIT residuals across sites, roughly flat between zero and one"}
-pit <- tobs_pit_residuals(fit)
+pit <- pit_residuals(fit)
 hist(pit, breaks = 12, col = "grey85", border = "white",
      main = "", xlab = "PIT residual")
-tobs_test_uniformity(pit)$p.value
+test_uniformity(pit)$p.value
 ```
 
 The histogram is roughly flat and the test does not reject uniformity, which is
@@ -626,8 +626,8 @@ fit0 <- tobs(~ 1, data = dat, family = occu(),
 
 waic_tab <- data.frame(
   model  = c("intercept only", "with occ_cov1"),
-  waic   = c(tobs_waic(fit0)$waic, tobs_waic(fit)$waic),
-  p_waic = c(tobs_waic(fit0)$p_waic, tobs_waic(fit)$p_waic)
+  waic   = c(waic(fit0)$waic, waic(fit)$waic),
+  p_waic = c(waic(fit0)$p_waic, waic(fit)$p_waic)
 )
 waic_tab$delta <- waic_tab$waic - min(waic_tab$waic)
 waic_tab
@@ -650,15 +650,15 @@ deciding which process each covariate enters, and WAIC gives a check on those
 decisions one covariate at a time. The two extra diagnostics below round out
 the picture for count-like discrepancies the Freeman-Tukey statistic might miss.
 
-`tobs_test_dispersion()` compares the variance of the per-site detection totals
+`test_dispersion()` compares the variance of the per-site detection totals
 in the data against the variance across simulated replicates, and
-`tobs_test_zero_inflation()` does the same for the count of all-zero sites.
+`test_zero_inflation()` does the same for the count of all-zero sites.
 Both return a ratio near one and a $p$-value near 0.5 when the model reproduces
 that feature of the data.
 
 ```{r dispersion}
-disp <- tobs_test_dispersion(fit, n.samples = 200)
-zi   <- tobs_test_zero_inflation(fit, n.samples = 200)
+disp <- test_dispersion(fit, n.samples = 200)
+zi   <- test_zero_inflation(fit, n.samples = 200)
 c(dispersion_ratio = disp$ratio, dispersion_p = disp$p.value,
   zero_ratio = zi$ratio, zero_p = zi$p.value)
 ```
@@ -684,9 +684,9 @@ fit_misplaced <- tobs(~ occ_cov1 + det_cov1, data = dat, family = occu(),
                       detection = ~ 1, y = y, method = "laplace",
                       control = list(verbose = FALSE))
 
-c(correct        = tobs_waic(fit)$waic,
-  no_det_cov     = tobs_waic(fit_det_only)$waic,
-  det_on_occ     = tobs_waic(fit_misplaced)$waic)
+c(correct        = waic(fit)$waic,
+  no_det_cov     = waic(fit_det_only)$waic,
+  det_on_occ     = waic(fit_misplaced)$waic)
 ```
 
 The correct model, with `det_cov1` in the detection formula, carries the lowest

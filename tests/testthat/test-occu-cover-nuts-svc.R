@@ -385,8 +385,8 @@ test_that("the criteria score the second field too (#211, #214)", {
   off <- elpd(core(fit$model, c1$b_occ, c1$b_det, c1$b_pos, c1$disp,
                    c1$field_occ, c1$field_pos))
   expect_gt(abs(on - off), 1)
-  expect_equal(tobs_waic(fit, n.draws = S)$elpd_waic, on, tolerance = 1e-8)
-  expect_true(is.finite(tobs_cpo(fit, n.draws = S)$elpd_loo))
+  expect_equal(waic(fit, n.draws = S)$elpd_waic, on, tolerance = 1e-8)
+  expect_true(is.finite(cpo(fit, n.draws = S)$elpd_loo))
 })
 
 

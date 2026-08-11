@@ -2,35 +2,32 @@
 % Please edit documentation in R/diagnostics.R
 \name{tobs_gof_tests}
 \alias{tobs_gof_tests}
-\alias{tobs_test_uniformity}
-\alias{tobs_test_dispersion}
-\alias{tobs_test_zero_inflation}
-\alias{tobs_test_outliers}
+\alias{test_dispersion.tobs_fit}
+\alias{test_zero_inflation.tobs_fit}
+\alias{test_outliers.tobs_fit}
 \title{Goodness-of-fit tests for a tobs fit}
 \usage{
-tobs_test_uniformity(pit)
+\method{test_dispersion}{tobs_fit}(object, n.samples = 250, ...)
 
-tobs_test_dispersion(object, n.samples = 250)
+\method{test_zero_inflation}{tobs_fit}(object, n.samples = 250, ...)
 
-tobs_test_zero_inflation(object, n.samples = 250)
-
-tobs_test_outliers(object, n.samples = 250)
+\method{test_outliers}{tobs_fit}(object, n.samples = 250, ...)
 }
 \arguments{
-\item{pit}{Numeric vector of PIT residuals (\code{tobs_test_uniformity}).}
-
 \item{object}{A fitted \code{tobs_fit}.}
 
 \item{n.samples}{Number of posterior-predictive replicates to simulate.}
+
+\item{...}{Unused.}
 }
 \value{
 A list with the observed statistic, its posterior-predictive
-expectation, and a tail p-value; \code{tobs_test_uniformity} returns the
-\code{htest} object from \code{\link[stats:ks.test]{stats::ks.test()}}.
+expectation, and a tail p-value.
 }
 \description{
-Posterior-predictive goodness-of-fit checks for an occupancy / N-mixture
-\code{tobs_fit}: dispersion, zero-inflation, and outlier counts compared against
-the fitted model's simulated replicates, plus a Kolmogorov-Smirnov
-uniformity test on PIT residuals.
+The \pkg{tulpa} goodness-of-fit generics for \code{tobs_fit}: dispersion,
+zero-inflation, and outlier counts compared against the fitted model's
+simulated replicates. For the Kolmogorov-Smirnov uniformity test, hand
+\code{\link[=pit_residuals]{pit_residuals()}} to \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}}, which takes a PIT vector
+directly.
 }

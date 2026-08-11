@@ -334,7 +334,7 @@
 # ---------------------------------------------------------------------------
 
 # Per-observation log-likelihood matrix [n_draws x (n_cells * n_species)] for a
-# NUTS spatial-factor community occu_cover fit, the input tobs_waic / tobs_cpo
+# NUTS spatial-factor community occu_cover fit, the input waic() / cpo()
 # consume. The pointwise unit is a (species, cell): the latent presence z is
 # integrated out in closed form (.occu_cover_site_ll) with the shared field
 # injected on psi (and on cover with a cover-arm factor). Evaluated over the

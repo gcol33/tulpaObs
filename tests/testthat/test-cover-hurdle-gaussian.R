@@ -83,9 +83,9 @@ test_that("cover(gaussian): WAIC works, PPC gated, NUTS available", {
                         response = "gaussian", seed = 21)
   fit <- tobs(formula = ~ x, data = sim$data,
               family = cover(response = "gaussian"), y = sim$y)
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$p_waic))
-  expect_error(tobs_ppc(fit), "not defined for cover.*gaussian")
+  expect_error(ppc(fit), "not defined for cover.*gaussian")
   # NUTS is wired for the identity-Gaussian arm (gcol33/tulpaObs#112); a short
   # sample returns a cover_fit rather than erroring.
   nut <- tobs(formula = ~ x, data = sim$data,

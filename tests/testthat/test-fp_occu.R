@@ -192,7 +192,7 @@ test_that("fp_occu NUTS recovers truth and scores WAIC", {
   est <- as.numeric(fit$means); se <- as.numeric(fit$sds)
   expect_true(all(abs(est - truth) / se < 3.5))
   expect_lt(mean(fit$nuts$divergent), 0.2)
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_gt(w$p_waic, 0)
 })

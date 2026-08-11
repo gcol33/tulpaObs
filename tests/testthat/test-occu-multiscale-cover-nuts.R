@@ -203,7 +203,7 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
   expect_length(predict(fit, type = "state"), fit$model$n_cells)
 
   # Calibrated WAIC from the per-cell draws (the point of the NUTS path).
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_s3_class(w, "tulpa_criteria")
   expect_true(is.finite(w$elpd_waic))
 

@@ -26,9 +26,9 @@ test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
   fit <- tobs(formula = ~ occ_cov1, data = cell, family = occu_cover("gaussian"),
     detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y_pos = yp,
     visits = od$det.covs, method = "laplace", control = list(verbose = FALSE))
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$p_waic))
-  expect_error(tobs_ppc(fit), "not defined for occu_cover.*gaussian")
+  expect_error(ppc(fit), "not defined for occu_cover.*gaussian")
   # NUTS is wired for the gaussian arm (gcol33/tulpaObs#112); a short sample
   # returns a fit rather than routing gaussian through the lognormal dispatch.
   nut <- tobs(formula = ~ occ_cov1, data = cell, family = occu_cover("gaussian"),

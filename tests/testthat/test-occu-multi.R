@@ -39,7 +39,7 @@ test_that("occu_multi() fits + full S3 surface (S = 2)", {
   expect_equal(dim(fv$psi), c(300L, 2L))
   expect_true(all(fv$psi > 0 & fv$psi < 1))
   expect_equal(predict(fit, type = "state"), fv$psi)
-  w <- tobs_waic(fit, n.draws = 100L)
+  w <- waic(fit, n.draws = 100L)
   expect_true(is.finite(w$waic))
   s2 <- simulate(fit, nsim = 1)
   expect_length(s2, 2L)

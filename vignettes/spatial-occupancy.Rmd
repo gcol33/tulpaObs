@@ -610,7 +610,7 @@ prediction and from whether it clears the spatial autocorrelation the covariates
 left behind. The held-out correlation above is the first read; the residual
 Moran's I from "Checking the fit" is the second.
 
-`tobs_waic()` scores each fit from its fixed-effect coefficient draws, and the
+`waic()` scores each fit from its fixed-effect coefficient draws, and the
 areal field is not folded into that predictor (the SPDE vignette makes the same
 point). A flat-versus-spatial WAIC table therefore compares the models' fixed
 parts, which here is the shared intercept, so it does not on its own credit the
@@ -618,7 +618,7 @@ field. The table below is worth reading with that scope in mind.
 
 ```{r waic}
 waic_row <- function(fit) {
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   c(waic = round(w$waic, 1), elpd = round(w$elpd, 1), p_waic = round(w$p_waic, 1))
 }
 waic_tab <- rbind(

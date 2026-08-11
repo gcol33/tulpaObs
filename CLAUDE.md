@@ -564,6 +564,36 @@ shared-field loading (#113); temporal/RE NUTS still gated to n-L.
 NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 `hmc_sampler.cpp`, not here. File against `gcol33/tulpa`.
 
+### Diagnostic doors = S3 methods, NEVER a second name
+
+ONE verb per diagnostic, owned by whoever owns the CONCEPT; tulpaObs registers a
+`tobs_fit` method + re-exports the generic (`R/reexports.R`), so `library(tulpaObs)`
+alone reaches every door and no session masks anything. Roster:
+`waic()`/`loo()` = **loo**'s generics (so `loo_compare()` reads a `tobs_fit`;
+`loo.tobs_fit` returns a real `psis_loo` via `.tobs_loo_one()`, shared w/
+`tobs_stack()`); `sbc()` `pit_residuals()` `test_uniformity()` `test_dispersion()`
+`test_outliers()` `test_zero_inflation()` `dic()` `cpo()` `check_model()` =
+**tulpa**'s; `ppc()` = tulpaObs's own (no owner elsewhere). Old `tobs_*` spellings
+DELETED, not aliased.
+
+NEVER define a generic another package owns (`waic`, `loo`, `pp_check`) --
+attaching both masks it and their `waic(matrix)` breaks. Method's first formal must
+MATCH the generic's (`loo::waic(x, ...)` -> `waic.tobs_fit(x, ...)`; tulpa's take
+`object`).
+
+A method must honour the generic's CONTRACT. `ppc()` did NOT fold into
+`tulpa::pp_check()` for that reason: pp_check DRAWS, ppc returns a Bayesian
+p-value. Same topic, different return -> different verb.
+
+`check_model.tobs_fit()` (`R/diagnostics.R`, panel `.tobs_check_panel`) DID fold,
+by meeting the contract: prints the roll-up AND draws the panel (`plot=FALSE`
+prints only). tulpa's `.default` cannot run here at all -- it wants `fitted()` /
+`residuals()` as numeric VECTORS and a latent-state fit has `list(psi,p,z)` /
+`list(occ,det)`, so it dies resolving the response. Method reads the family's own
+doors instead (`pit_residuals`/`ppc`/`test_dispersion`/`moran_i`) and plots ONLY
+what the report already computed -> nothing simulated twice (hence
+`test_dispersion()` returning `$sim`).
+
 ### Key design rules
 
 - **Never pass `Rcpp::Nullable<T>` to header helpers** — MinGW crashes. Unwrap in
@@ -837,8 +867,8 @@ detection summary has ONE definition. All three consumers -- pointwise loglik
 predictors from one shared `Arms` view (`src/occu_cover_ragged.h`). One kernel per
 diagnostic => dense == compact TO THE BIT (0.000e+00 on elpd_waic, elpd_loo, LOO-PIT,
 PIT residuals, PPC fit.y/fit.y.rep/bayesian.p). Reading the dense grid instead is what
-made `tobs_cpo()`/`tobs_ppc()` error w/ "'x' must be an array of at least two
-dimensions" on every compact fit while `tobs_waic()` worked. The
+made `cpo()`/`ppc()` error w/ "'x' must be an array of at least two
+dimensions" on every compact fit while `waic()` worked. The
 aggregated (mean/median/latent) PPC keeps the padded grid + `cpp_occu_cover_ppc_agg`
 -- aggregation is dense-only by gate. Cover density gates on `detected AND finite`
 everywhere (a detected visit may carry NA cover, missing-at-random); the PPC used to
@@ -1159,7 +1189,7 @@ R/
     **Defaulted grids declare themselves (#186, needs tulpa >= 0.0.132)**: engine auto-recenter decides axis PROVENANCE, not field presence -- moves an axis that is absent, `auto_grid()`-marked, or exactly equal to its own default; anything else = user pin. tulpaObs writes a grid on EVERY joint fit -> unmarked default reads as a pin, rescue goes inert. `.tobs_default_{sigma,alpha,bym2_rho}_grid()` now RETURN `tulpa::auto_grid(...)` (they are the layer that chose the values; a user grid never passes through them); `.tobs_mark_auto(x, auto)` re-applies the mark wherever a site reshapes a defaulted grid, since `sort()`/`[`/`c()`/`as.numeric()`/`expand.grid()` all drop the attribute -- cover arm-specific tau translation, occu_cover pos-arm tau, copy `alpha_grid`s, RE `sigma_grid`s, EM-path bym2/ar1 pairings. Verified end to end: defaulted axis reports `declined = "grid_not_collapsed"`, a `control$sigma.grid` one `"axis_pinned"`
   pg_gibbs_shared.R         — shared Polya-Gamma machinery (.tobs_pg_draw_beta, .tobs_pg_community_update, .tobs_pg_finalize_fit) behind EVERY pg_gibbs fitter
   stacking.R                — `tobs_stack()`, LOO-weighted predictive stacking across fitted tobs_fit objects of any family
-  sbc.R                     — `tobs_sbc()` (#207): posterior SBC via `tulpa::sbc()`. Registry `.TOBS_SBC_REGISTRY` per family (simulate/refit/draws/+statistic); pooling, group_ids, arms, controls shared. Replicate on FRESH cells (block-diag graph) -> premise VERIFIED. occu_cover registered+verified; field SD not gated (#212). Numbers in NOTES_measurements.md
+  sbc.R                     — `sbc.tobs_fit()` (#207): posterior SBC, the `tobs_fit` method of `tulpa::sbc()`. Registry `.TOBS_SBC_REGISTRY` per family (simulate/refit/draws/+statistic); pooling, group_ids, arms, controls shared. Replicate on FRESH cells (block-diag graph) -> premise VERIFIED. occu_cover registered+verified; field SD not gated (#212). Numbers in NOTES_measurements.md
   aggregation_scan.R        — cell-size / NN-spacing / changepoint scan utilities
   community_em.R            — shared community Laplace-EM .tobs_community_em() (ms_occu/ms_dyn_occu/ms_int_occu/ms_count/jsdm/ms_abun-latent/ms_distance). Three OPTIONAL args, each defaulting to the previous behaviour byte-identically: `sp_info` (analytic per-species observed info; the FD fallback costs 2(P+G) marginal sweeps per species per Newton step -- supply it when the kernel exposes the Louis block), `init_b`/`init_Sigma` (warm start; a block-coordinate caller re-enters the EM once per outer pass, so a cold restart each time dominates)
   ms_{occu,dyn_occu,int_occu}.R      — community single/dynamic/integrated

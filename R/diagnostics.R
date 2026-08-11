@@ -17,13 +17,20 @@
 
 #' Model criteria for occupancy / cover models
 #'
-#' `tobs_waic()`, `tobs_dic()`, and `tobs_cpo()` build the family pointwise
-#' log-likelihood matrix once and hand it to the engine's single criteria layer
-#' [tulpa::tulpa_criteria()], which derives WAIC / DIC / CPO / LPML / PSIS-LOO.
-#' DIC additionally evaluates the deviance at the posterior mean of the
-#' parameters, supplied by the family-specific `.tobs_loglik_at_mean()`.
+#' `waic()`, `loo()`, `dic()`, and `cpo()` on a `tobs_fit` build the family
+#' pointwise log-likelihood matrix once and hand it to the engine's single
+#' criteria layer [tulpa::tulpa_criteria()], which derives WAIC / DIC / CPO /
+#' LPML / PSIS-LOO. DIC additionally evaluates the deviance at the posterior
+#' mean of the parameters, supplied by the family-specific
+#' `.tobs_loglik_at_mean()`.
 #'
-#' @param object A `tobs_fit` object.
+#' `waic()` and `loo()` are the \pkg{loo} package's generics, so
+#' [loo::loo_compare()] and the rest of that ecosystem read a `tobs_fit`
+#' directly; `loo()` returns a genuine `loo` object built from the same
+#' pointwise matrix, via PSIS with relative effective sample sizes. `dic()` and
+#' `cpo()` are \pkg{tulpa}'s, and return a `tulpa_criteria` object.
+#'
+#' @param x,object A `tobs_fit` object.
 #' @param n.draws Posterior draws used to build the pointwise log-likelihood
 #'   (the cover / occu_cover paths sample this many; the draw-matrix families use
 #'   the first `n.draws` stored draws). Default 1000.
@@ -32,7 +39,7 @@
 #'   parallel, so this is the WAIC / LOO analogue of the fit's `n.threads.outer`.
 #'   `NULL` (default) uses all but four logical cores, matching the occu_cover
 #'   fit's own outer-grid default; other families ignore it.
-#' @param loo.unit The cross-validation unit for `tobs_waic()` / `tobs_cpo()`.
+#' @param loo.unit The cross-validation unit for `waic()` / `loo()` / `cpo()`.
 #'   `"obs"` (default) is the family's pointwise unit -- one column of the
 #'   log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
 #'   to the call without the argument. `"cell"` switches to leave-one-group-out
@@ -45,35 +52,51 @@
 #'   it.
 #' @param ... Forwarded to [tulpa::tulpa_criteria()] (e.g. `chunk_size`, or an
 #'   explicit `group =` for a custom leave-one-group-out unit).
-#' @return A `tulpa_criteria` object. `tobs_waic()` also carries `$elpd`
-#'   (an alias for `elpd_waic`) for back-compatibility.
-#' @seealso [tulpa::tulpa_criteria()]
+#' @return `dic()` and `cpo()` return a `tulpa_criteria` object; `waic()`
+#'   returns one carrying `$elpd` as an alias for `elpd_waic`. `loo()` returns
+#'   a `loo` object from the \pkg{loo} package.
+#' @seealso [tulpa::tulpa_criteria()], [loo::loo_compare()]
+#' @name tobs_criteria
+NULL
+
+#' @rdname tobs_criteria
 #' @export
-tobs_waic <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
-                      n.threads = NULL, ...) {
+waic.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
+                          n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
-  ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
+  ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
-  dots <- .tobs_criteria_group(object, loo.unit, list(...))
+  dots <- .tobs_criteria_group(x, loo.unit, list(...))
   cr <- do.call(tulpa::tulpa_criteria,
                 c(list(ll_mat, criteria = "waic"), dots))
   cr$elpd <- cr$elpd_waic
   cr
 }
 
-#' @rdname tobs_waic
+# The PSIS door. loo::loo() wants the pointwise matrix and the relative
+# effective sample sizes off the chain layout, which is what the stacking path
+# assembles per member, so both go through `.tobs_loo_one()`.
+#' @rdname tobs_criteria
 #' @export
-tobs_dic <- function(object, n.draws = 1000L, n.threads = NULL, ...) {
+loo.tobs_fit <- function(x, n.draws = 1000L, n.threads = NULL, ...) {
+  ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
+                                   n.threads = .tobs_ploglik_threads(n.threads))
+  .tobs_loo_one(ll_mat, x$chain_id)
+}
+
+#' @rdname tobs_criteria
+#' @export
+dic.tobs_fit <- function(object, n.draws = 1000L, n.threads = NULL, ...) {
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
   lam <- .tobs_loglik_at_mean(object, n.draws = n.draws)
   tulpa::tulpa_criteria(ll_mat, criteria = "dic", loglik_at_mean = lam, ...)
 }
 
-#' @rdname tobs_waic
+#' @rdname tobs_criteria
 #' @export
-tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
-                     n.threads = NULL, ...) {
+cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
+                         n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
@@ -96,7 +119,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # each cell's pointwise log-likelihood columns into one fold. The cell map is
 # auto-supplied from the fit, so the caller need not hand-build it. The
 # loo.unit -> group plumbing and the explicit-`group` conflict check live here so
-# tobs_waic() / tobs_cpo() share one path; "obs" leaves `...` untouched (so an
+# waic() / cpo() share one path; "obs" leaves `...` untouched (so an
 # explicit `group =` still flows through, byte-identical to the ungrouped call).
 .tobs_criteria_group <- function(object, loo.unit, dots) {
   if (identical(loo.unit, "obs")) return(dots)
@@ -116,7 +139,7 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 }
 
 # Per-observation -> cell map matching the column order of the family's pointwise
-# log-likelihood (.tobs_pointwise_loglik). tobs_cpo() / tobs_waic() pass it as
+# log-likelihood (.tobs_pointwise_loglik). cpo() / waic() pass it as
 # tulpa_criteria(group =) for cell-level LOGO-CV. Each .tobs_ploglik_* builder
 # fixes its own column order, so the map is family-specific:
 #   * cover()      -- columns are the occupancy-arm rows (enc$occ_data$y order);
@@ -613,13 +636,28 @@ tobs_cpo <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 }
 
 #' Posterior predictive check
+#'
+#' The discrepancy-statistic check (the spOccupancy `ppcOcc` construction):
+#' latent occupancy is drawn from its full conditional, a detection replicate
+#' from the fitted model, and the two are compared through a discrepancy
+#' statistic to give a Bayesian p-value. This is a test, not a plot, so it is
+#' its own generic rather than a method on [tulpa::pp_check()], which draws the
+#' graphical check.
+#'
 #' @param object A `tobs_fit` object.
 #' @param fit.stat `"freeman-tukey"` (default) or `"chi-squared"`.
 #' @param n.samples Number of posterior samples (default 500).
+#' @param ... Passed to methods.
 #' @return A list with `fit.y`, `fit.y.rep`, and `bayesian.p`.
 #' @export
-tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
-                     n.samples = 500) {
+ppc <- function(object, ...) {
+  UseMethod("ppc")
+}
+
+#' @rdname ppc
+#' @export
+ppc.tobs_fit <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
+                         n.samples = 500, ...) {
   fit.stat <- match.arg(fit.stat)
   if (inherits(object, "cover_fit")) {
     return(.tobs_ppc_cover(object, fit.stat, n.samples))
@@ -629,7 +667,7 @@ tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
   }
   model <- object$model
   if (model$model_type != "single") {
-    stop("tobs_ppc supports single-season occupancy, cover(), and occu_cover() ",
+    stop("ppc() supports single-season occupancy, cover(), and occu_cover() ",
          "fits.", call. = FALSE)
   }
 
@@ -657,12 +695,18 @@ tobs_ppc <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
        bayesian.p = mean(r$fit.y.rep > r$fit.y))
 }
 
-#' PIT residuals
+#' PIT residuals for a tobs fit
+#'
+#' The [tulpa::pit_residuals()] method for `tobs_fit`: the family's own
+#' predictive CDF, with the randomisation step a discrete response needs.
+#'
 #' @param object A `tobs_fit` object.
 #' @param n.samples Number of posterior samples (default 250).
+#' @param ... Unused.
 #' @return Numeric vector of PIT residuals.
+#' @seealso [tulpa::test_uniformity()] for the uniformity test on the result.
 #' @export
-tobs_pit_residuals <- function(object, n.samples = 250) {
+pit_residuals.tobs_fit <- function(object, n.samples = 250, ...) {
   if (inherits(object, "cover_fit")) {
     return(.tobs_pit_cover(object, n.samples))
   }
@@ -671,7 +715,7 @@ tobs_pit_residuals <- function(object, n.samples = 250) {
   }
   model <- object$model
   if (model$model_type != "single") {
-    stop("tobs_pit_residuals supports single-season occupancy, cover(), and ",
+    stop("pit_residuals() supports single-season occupancy, cover(), and ",
          "occu_cover() fits.", call. = FALSE)
   }
   draws <- object$draws; pi_list <- model$process_info
@@ -689,34 +733,19 @@ tobs_pit_residuals <- function(object, n.samples = 250) {
 
 #' Goodness-of-fit tests for a tobs fit
 #'
-#' Posterior-predictive goodness-of-fit checks for an occupancy / N-mixture
-#' `tobs_fit`: dispersion, zero-inflation, and outlier counts compared against
-#' the fitted model's simulated replicates, plus a Kolmogorov-Smirnov
-#' uniformity test on PIT residuals.
+#' The \pkg{tulpa} goodness-of-fit generics for `tobs_fit`: dispersion,
+#' zero-inflation, and outlier counts compared against the fitted model's
+#' simulated replicates. For the Kolmogorov-Smirnov uniformity test, hand
+#' [pit_residuals()] to [tulpa::test_uniformity()], which takes a PIT vector
+#' directly.
 #'
-#' @param pit Numeric vector of PIT residuals (`tobs_test_uniformity`).
 #' @param object A fitted `tobs_fit`.
 #' @param n.samples Number of posterior-predictive replicates to simulate.
+#' @param ... Unused.
 #' @return A list with the observed statistic, its posterior-predictive
-#'   expectation, and a tail p-value; `tobs_test_uniformity` returns the
-#'   `htest` object from [stats::ks.test()].
+#'   expectation, and a tail p-value.
 #' @name tobs_gof_tests
 NULL
-
-#' @rdname tobs_gof_tests
-#' @export
-tobs_test_uniformity <- function(pit) {
-  # PIT residuals can have ties when the response is discrete (counts /
-  # detections). The asymptotic KS p-value remains valid; only the
-  # ties-warning is noisy, so suppress just that warning class.
-  withCallingHandlers(
-    ks.test(pit, "punif"),
-    warning = function(w) {
-      if (grepl("ties should not be present", conditionMessage(w),
-                fixed = TRUE)) invokeRestart("muffleWarning")
-    }
-  )
-}
 
 # The dispersion / zero-inflation / outlier GOF tests use single-season
 # detection-history semantics (per-site totals over an N x J 0/1/NA matrix, and
@@ -728,10 +757,10 @@ tobs_test_uniformity <- function(pit) {
   if (!identical(mt, "single")) {
     hint <- if (inherits(object, "cover_fit") ||
                 identical(mt, "occu_cover")) {
-      " Use tobs_ppc() for cover() / occu_cover() fits."
+      " Use ppc() for cover() / occu_cover() fits."
     } else {
       paste0(" Multi-season and community goodness-of-fit tests are not ",
-             "implemented; use tobs_waic() for those families. (The count ",
+             "implemented; use waic() for those families. (The count ",
              "families abun / removal / distance / dyn_abun have per-site-total ",
              "dispersion / zero-inflation / outlier tests.)")
     }
@@ -743,25 +772,26 @@ tobs_test_uniformity <- function(pit) {
 
 #' @rdname tobs_gof_tests
 #' @export
-tobs_test_dispersion <- function(object, n.samples = 250) {
+test_dispersion.tobs_fit <- function(object, n.samples = 250, ...) {
   if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
     return(.tobs_test_dispersion_count(object, n.samples))
   }
-  .tobs_gof_require_single(object, "tobs_test_dispersion")
+  .tobs_gof_require_single(object, "test_dispersion()")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   obs_var <- var(rowSums(y_obs * (y_obs >= 0), na.rm = TRUE))
   sim_vars <- vapply(sims, function(ys) var(rowSums(ys * (ys >= 0), na.rm = TRUE)), double(1))
   list(observed = obs_var, expected = mean(sim_vars),
-       ratio = obs_var / mean(sim_vars), p.value = mean(sim_vars >= obs_var))
+       ratio = obs_var / mean(sim_vars), p.value = mean(sim_vars >= obs_var),
+       sim = sim_vars)
 }
 
 #' @rdname tobs_gof_tests
 #' @export
-tobs_test_zero_inflation <- function(object, n.samples = 250) {
+test_zero_inflation.tobs_fit <- function(object, n.samples = 250, ...) {
   if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
     return(.tobs_test_zero_inflation_count(object, n.samples))
   }
-  .tobs_gof_require_single(object, "tobs_test_zero_inflation")
+  .tobs_gof_require_single(object, "test_zero_inflation()")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   count_zeros <- function(y) sum(apply(y, 1, function(r) { v <- r >= 0; all(r[v] == 0) }))
   obs <- count_zeros(y_obs); sim <- vapply(sims, count_zeros, integer(1))
@@ -771,11 +801,11 @@ tobs_test_zero_inflation <- function(object, n.samples = 250) {
 
 #' @rdname tobs_gof_tests
 #' @export
-tobs_test_outliers <- function(object, n.samples = 250) {
+test_outliers.tobs_fit <- function(object, n.samples = 250, ...) {
   if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
     return(.tobs_test_outliers_count(object, n.samples))
   }
-  .tobs_gof_require_single(object, "tobs_test_outliers")
+  .tobs_gof_require_single(object, "test_outliers()")
   sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
   n_sites <- nrow(y_obs)
   obs_det <- apply(y_obs, 1, function(r) sum(r[r >= 0] == 1))
@@ -787,12 +817,33 @@ tobs_test_outliers <- function(object, n.samples = 250) {
 }
 
 #' Comprehensive model checking
+#'
+#' The [tulpa::check_model()] method for `tobs_fit`: the criteria, the
+#' posterior-predictive check and the goodness-of-fit tests in one call,
+#' printed as a report and drawn as the diagnostic panel.
+#'
+#' The engine's default method builds its panel from `fitted()` and
+#' `residuals()` as numeric vectors, which a latent-state fit does not have --
+#' `fitted()` returns `list(psi, p, z)` and `residuals()` one series per
+#' process, so the response cannot be resolved. This method reads the same
+#' quantities through the family's own doors instead: [pit_residuals()],
+#' [ppc()], [test_dispersion()] and [tulpa::moran_i()].
+#'
 #' @param object A `tobs_fit` object.
-#' @param coords Optional coordinates for spatial diagnostics.
+#' @param coords Optional `n_sites x 2` coordinate matrix. Adds Moran's I on
+#'   the occupancy residuals and the correlogram panel.
 #' @param n.samples Posterior samples for simulation tests.
-#' @return Invisibly, diagnostic results.
+#' @param plot Draw the panel. `FALSE` prints the report alone, for a log or a
+#'   headless run.
+#' @param ... Unused.
+#' @return Invisibly, the diagnostic results: `waic`, `dic`, `cpo`, `ppc`,
+#'   `zero_inflation`, `dispersion`, `pit`, `uniformity`, and `moran` when
+#'   `coords` is supplied.
+#' @importFrom graphics abline hist par
+#' @importFrom grDevices adjustcolor
 #' @export
-tobs_check <- function(object, coords = NULL, n.samples = 250) {
+check_model.tobs_fit <- function(object, coords = NULL, n.samples = 250,
+                                 plot = TRUE, ...) {
   cat("=== tobs Model Diagnostics ===\n\n")
   if (identical(object$method, "nuts")) {
     cat(sprintf("Sampler: %d samples, %d divergent, mean accept = %.3f\n",
@@ -802,26 +853,38 @@ tobs_check <- function(object, coords = NULL, n.samples = 250) {
                 object$method %||% "laplace", object$n_samples))
   }
 
-  w <- tryCatch(tobs_waic(object), error = function(e) NULL)
+  w <- tryCatch(waic(object), error = function(e) NULL)
   if (!is.null(w)) cat(sprintf("\nWAIC: %.1f (p_waic = %.1f)\n", w$waic, w$p_waic))
 
-  dic <- tryCatch(tobs_dic(object), error = function(e) NULL)
-  if (!is.null(dic) && is.finite(dic$dic))
-    cat(sprintf("DIC:  %.1f (p_DIC = %.1f)\n", dic$dic, dic$p_dic))
+  d <- tryCatch(dic(object), error = function(e) NULL)
+  if (!is.null(d) && is.finite(d$dic))
+    cat(sprintf("DIC:  %.1f (p_DIC = %.1f)\n", d$dic, d$p_dic))
 
-  cpo <- tryCatch(tobs_cpo(object), error = function(e) NULL)
-  if (!is.null(cpo)) cat(sprintf("LPML: %.1f (elpd_loo = %.1f)\n",
-                                 cpo$lpml, cpo$elpd_loo))
+  cp <- tryCatch(cpo(object), error = function(e) NULL)
+  if (!is.null(cp)) cat(sprintf("LPML: %.1f (elpd_loo = %.1f)\n",
+                                cp$lpml, cp$elpd_loo))
 
-  ppc <- tryCatch(tobs_ppc(object, n.samples = n.samples), error = function(e) NULL)
-  if (!is.null(ppc)) {
-    cat(sprintf("\nPPC: Bayesian p = %.3f\n", ppc$bayesian.p))
-    if (ppc$bayesian.p < 0.05 || ppc$bayesian.p > 0.95) cat("  WARNING: poor fit\n")
+  pc <- tryCatch(ppc(object, n.samples = n.samples), error = function(e) NULL)
+  if (!is.null(pc)) {
+    cat(sprintf("\nPPC: Bayesian p = %.3f\n", pc$bayesian.p))
+    if (pc$bayesian.p < 0.05 || pc$bayesian.p > 0.95) cat("  WARNING: poor fit\n")
   }
 
-  zi <- tryCatch(tobs_test_zero_inflation(object, n.samples = n.samples), error = function(e) NULL)
+  zi <- tryCatch(test_zero_inflation(object, n.samples = n.samples), error = function(e) NULL)
   if (!is.null(zi)) cat(sprintf("\nZero-inflation: obs=%d, exp=%.1f, p=%.3f\n", zi$observed, zi$expected, zi$p.value))
 
+  dp <- tryCatch(test_dispersion(object, n.samples = n.samples), error = function(e) NULL)
+  if (!is.null(dp)) cat(sprintf("Dispersion:     ratio=%.2f, p=%.3f\n",
+                                dp$ratio, dp$p.value))
+
+  pit <- tryCatch(pit_residuals(object, n.samples = n.samples),
+                  error = function(e) NULL)
+  ks <- if (is.null(pit)) NULL else
+    tryCatch(test_uniformity(pit), error = function(e) NULL)
+  if (!is.null(ks)) cat(sprintf("PIT uniformity: KS D=%.3f, p=%.3f\n",
+                                unname(ks$statistic), ks$p.value))
+
+  mi <- NULL
   if (!is.null(coords)) {
     mi <- tryCatch(tulpa::moran_i(residuals(object)$occ, coords), error = function(e) NULL)
     if (!is.null(mi)) {
@@ -830,6 +893,69 @@ tobs_check <- function(object, coords = NULL, n.samples = 250) {
     }
   }
   cat("\n")
-  invisible(list(waic = w, dic = dic, cpo = cpo, ppc = ppc,
-                 zero_inflation = zi))
+  if (isTRUE(plot)) .tobs_check_panel(object, pit, ks, pc, dp, coords)
+  invisible(list(waic = w, dic = d, cpo = cp, ppc = pc, zero_inflation = zi,
+                 dispersion = dp, pit = pit, uniformity = ks, moran = mi))
+}
+
+# The panel behind check_model(). Every quantity arrives already computed by the
+# report above, so nothing is simulated twice. A panel whose quantity could not
+# be computed for this family is dropped rather than drawn empty, and the layout
+# follows how many survive.
+.tobs_check_panel <- function(object, pit, ks, pc, dp, coords) {
+  have <- c(pit = !is.null(pit), ppc = !is.null(pc),
+            disp = !is.null(dp) && !is.null(dp$sim),
+            moran = !is.null(coords))
+  n <- sum(have)
+  if (n == 0L) return(invisible(NULL))
+  old_par <- par(mfrow = if (n >= 4L) c(2, 2) else c(1, n),
+                 mar = c(4, 4, 2.5, 1))
+  on.exit(par(old_par))
+  grey <- adjustcolor("black", 0.6)
+
+  if (have[["pit"]]) {
+    m <- length(pit)
+    plot(sort(pit), (seq_len(m) - 0.5) / m,
+         xlab = "PIT residuals", ylab = "Expected Uniform",
+         main = if (is.null(ks)) "QQ Uniform" else
+           sprintf("QQ Uniform (KS p = %.3f)", ks$p.value),
+         pch = 19, cex = 0.5, col = grey)
+    abline(0, 1, col = "red", lty = 2, lwd = 1.5)
+  }
+
+  if (have[["ppc"]]) {
+    hist(pc$fit.y.rep, breaks = 30, col = "grey85", border = "white",
+         main = sprintf("PPC (Bayesian p = %.3f)", pc$bayesian.p),
+         xlab = "Replicate fit statistic")
+    abline(v = mean(pc$fit.y), col = "red", lwd = 2)
+  }
+
+  if (have[["disp"]]) {
+    hist(dp$sim, breaks = 20, col = "grey85", border = "white",
+         main = sprintf("Dispersion (ratio = %.2f)", dp$ratio),
+         xlab = "Simulated variance")
+    abline(v = dp$observed, col = "red", lwd = 2)
+  }
+
+  if (have[["moran"]]) {
+    xy <- as.matrix(coords)
+    r <- residuals(object)$occ
+    ks_vals <- c(3, 5, 8, 12, 20)
+    ks_vals <- ks_vals[ks_vals < nrow(xy)]
+    mi <- lapply(ks_vals, function(k)
+      tryCatch(tulpa::moran_i(r, coords = xy, weights = "knn", k = k),
+               error = function(e) NULL))
+    keep <- !vapply(mi, is.null, logical(1))
+    if (any(keep)) {
+      I_vals <- vapply(mi[keep], function(m) unname(m$statistic), numeric(1))
+      p_vals <- vapply(mi[keep], function(m) m$p.value, numeric(1))
+      sig <- p_vals < 0.05
+      plot(ks_vals[keep], I_vals, type = "b",
+           xlab = "k neighbours", ylab = "Moran's I",
+           main = "Spatial Correlogram",
+           pch = ifelse(sig, 19, 1), col = ifelse(sig, "red", "black"))
+      abline(h = -1 / (nrow(xy) - 1), col = "grey50", lty = 2)
+    }
+  }
+  invisible(NULL)
 }

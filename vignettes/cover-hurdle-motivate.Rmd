@@ -761,7 +761,7 @@ fit_sep <- tobs(
   y       = pmin(cover_y, 1 - 1e-6),
   method  = "laplace"
 )
-sep_waic <- tobs_waic(fit_sep)
+sep_waic <- waic(fit_sep)
 ```
 
 ```{r oc-compare-table}

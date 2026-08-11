@@ -273,30 +273,30 @@ test_that("cover() front door: loo.unit routes to tulpa_criteria(group =), obs i
 
   # loo.unit = "cell" == passing the auto cell map as group (RNG fixed so the
   # sampled pointwise log-likelihood is identical between the two calls).
-  set.seed(11L); a <- tobs_cpo(ff, n.draws = 200L, loo.unit = "cell")
-  set.seed(11L); b <- tobs_cpo(ff, n.draws = 200L, group = map)
+  set.seed(11L); a <- cpo(ff, n.draws = 200L, loo.unit = "cell")
+  set.seed(11L); b <- cpo(ff, n.draws = 200L, group = map)
   expect_equal(a$elpd_loo,  b$elpd_loo)
   expect_equal(a$looic,     b$looic)
   expect_equal(a$pareto_k,  b$pareto_k)
   expect_equal(a$n_groups,  16L)
 
   # loo.unit = "obs" (and the default) is byte-identical to the ungrouped call.
-  set.seed(11L); d <- tobs_cpo(ff, n.draws = 200L)
-  set.seed(11L); e <- tobs_cpo(ff, n.draws = 200L, loo.unit = "obs")
+  set.seed(11L); d <- cpo(ff, n.draws = 200L)
+  set.seed(11L); e <- cpo(ff, n.draws = 200L, loo.unit = "obs")
   expect_identical(d$elpd_loo, e$elpd_loo)
   expect_identical(d$pareto_k, e$pareto_k)
   expect_null(d$n_groups)
   # The cell unit genuinely differs from the per-plot default.
   expect_false(isTRUE(all.equal(a$elpd_loo, d$elpd_loo)))
 
-  # tobs_waic() carries the same loo.unit plumbing.
-  set.seed(12L); wa <- tobs_waic(ff, n.draws = 200L, loo.unit = "cell")
-  set.seed(12L); wb <- tobs_waic(ff, n.draws = 200L, group = map)
+  # waic() carries the same loo.unit plumbing.
+  set.seed(12L); wa <- waic(ff, n.draws = 200L, loo.unit = "cell")
+  set.seed(12L); wb <- waic(ff, n.draws = 200L, group = map)
   expect_equal(wa$waic,      wb$waic)
   expect_equal(wa$elpd_waic, wb$elpd_waic)
   expect_equal(wa$n_groups,  16L)
 
   # Passing both an explicit group and loo.unit = "cell" is an error.
-  expect_error(tobs_cpo(ff, n.draws = 50L, loo.unit = "cell", group = map),
+  expect_error(cpo(ff, n.draws = 50L, loo.unit = "cell", group = map),
                "either")
 })

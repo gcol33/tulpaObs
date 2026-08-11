@@ -343,7 +343,7 @@ test_that("distance NUTS recovers truth and scores WAIC", {
   expect_true(all(abs(est - truth) / se < 3.5))
   expect_false(any(is.na(fit$divergent)))
   expect_lt(mean(fit$nuts$divergent), 0.2)
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_gt(w$p_waic, 0)
 })

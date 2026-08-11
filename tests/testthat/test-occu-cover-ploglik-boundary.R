@@ -50,7 +50,7 @@ test_that("occu_cover WAIC pointwise density is finite when a detected beta cove
               control = list(verbose = FALSE, max.iter = 60L))
 
   # Baseline WAIC is finite.
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 
   # Force a boundary cover (exactly 1) at a detected visit. Before the fix the
   # bare log(1 - 1) = log(0) put -Inf / NaN into the WAIC pointwise output; now

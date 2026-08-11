@@ -448,7 +448,7 @@ the small-cluster bias and when to reach for NUTS, is in
 
 ## Comparing models
 
-`tobs_waic()` computes the widely applicable information criterion from
+`waic()` computes the widely applicable information criterion from
 the pointwise log-likelihood. Lower is better. Compare the covariate
 model against an intercept-only occupancy model to check the covariate
 earns its place.
@@ -458,8 +458,8 @@ fit0 <- tobs(~ 1, data = dat, family = occu(),
              detection = ~ det_cov1, y = y, method = "laplace",
              control = list(verbose = FALSE))
 
-c(intercept_only = tobs_waic(fit0)$waic,
-  with_covariate = tobs_waic(fit)$waic)
+c(intercept_only = waic(fit0)$waic,
+  with_covariate = waic(fit)$waic)
 ```
 
 The covariate model has the lower WAIC, matching how the data were
@@ -477,19 +477,19 @@ fit_re0 <- tobs(~ x, data = d_re, y = y_re, detection = ~ 1,
                 family = occu(), method = "laplace",
                 control = list(verbose = FALSE))
 
-c(no_random_effect = tobs_waic(fit_re0)$waic,
-  with_random_int  = tobs_waic(fit_re)$waic)
+c(no_random_effect = waic(fit_re0)$waic,
+  with_random_int  = waic(fit_re)$waic)
 ```
 
 The clustered model carries the lower WAIC, the random intercept paying
 for its one variance parameter by predicting the between-cluster spread
-the flat model averages away. `tobs_waic()` returns more than the headline
+the flat model averages away. `waic()` returns more than the headline
 number: `$waic` is the criterion, `$elpd` the expected log pointwise
 predictive density it is built from, and `$p_waic` the effective number of
 parameters, which is what docks a flexible model for its complexity. Read
 WAIC as a comparison, not a verdict: a lower value says one model predicts
 the in-sample data better, not that its intervals are calibrated. Pair it
-with a posterior-predictive check (`tobs_ppc()`) before trusting a fit.
+with a posterior-predictive check (`ppc()`) before trusting a fit.
 The full model-comparison and diagnostic workflow is in
 `vignette("diagnostics")`.
 
@@ -894,7 +894,7 @@ result through one set of methods.
 | `ranef()` | group-level random effects (when present) |
 | `fitted()` | per-site `psi`, `p`, `z` |
 | `predict()` | occupancy at a new design or varied term |
-| `tobs_waic()` | WAIC, elpd, effective parameters |
+| `waic()` | WAIC, elpd, effective parameters |
 | `residuals()` | deviance / Pearson / response residuals |
 | `simulate()` | replicate detection histories from the fit |
 
@@ -922,7 +922,7 @@ result through one set of methods.
 - **WAIC compares, it does not validate.** A lower WAIC says one model
   predicts the in-sample data better; it does not say the model is
   calibrated. Pair it with a posterior-predictive check
-  (`tobs_ppc()`, see `vignette("diagnostics")`).
+  (`ppc()`, see `vignette("diagnostics")`).
 
 ## Where to go next
 

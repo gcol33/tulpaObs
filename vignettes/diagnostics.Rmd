@@ -94,33 +94,35 @@ confirming an obviously broken model.
 
 ## The one-call panel
 
-Before working through the diagnostics one at a time, `tobs_check()` runs the
+Before working through the diagnostics one at a time, `check_model()` runs the
 main ones in a single call and prints a compact report. It is the fast first
-pass: fit the model, call `tobs_check()`, and read the headline numbers to
+pass: fit the model, call `check_model()`, and read the headline numbers to
 decide whether anything needs a closer look. The detailed sections below are
 where you go once the panel flags something or once you want the plot behind
 a number.
 
-```{r check-panel}
-tobs_check(fit)
+```{r check-panel, fig.alt = "Three diagnostic panels: a QQ plot of PIT residuals against the uniform, a histogram of replicate fit statistics with the observed value marked, and a histogram of simulated variances with the observed variance marked"}
+check_model(fit)
 ```
 
-The report has four blocks, each a condensed form of a section that follows.
+The report has four blocks, each a condensed form of a section that follows,
+and the panel beneath it draws the three that have a plot behind them
+(`plot = FALSE` prints the report alone).
 The first line records how the fit was produced. Under `method = "laplace"`
 there is no Markov chain, so it reports the draw count and notes that the
 NUTS sampler diagnostics (divergences, accept probability) do not apply; a
 fit produced with `method = "nuts"` prints those instead. The WAIC line is
-the single number from `tobs_waic()`, useful only against a rival model, with
+the single number from `waic()`, useful only against a rival model, with
 the effective parameter count `p_waic` alongside. The PPC line is the
-Bayesian p-value from `tobs_ppc()`; the panel attaches a `WARNING: poor fit`
+Bayesian p-value from `ppc()`; the panel attaches a `WARNING: poor fit`
 when it falls below 0.05 or above 0.95, the two-sided cue that the fit fails
 to reproduce the data. The zero-inflation line reports the observed and
-expected counts of all-zero sites from `tobs_test_zero_inflation()`. Passing
+expected counts of all-zero sites from `test_zero_inflation()`. Passing
 a `coords` matrix adds a Moran's I line that warns when residual spatial
 autocorrelation is significant.
 
-```{r check-coords}
-out <- tobs_check(fit, coords = cbind(dat$occ_cov1, dat$det_cov1))
+```{r check-coords, fig.alt = "The same diagnostic panels with a fourth added: Moran's I of the occupancy residuals against the number of neighbours"}
+out <- check_model(fit, coords = cbind(dat$occ_cov1, dat$det_cov1))
 names(out)
 ```
 
@@ -136,12 +138,12 @@ the matching section below rather than the end of the check.
 
 ## WAIC and model comparison
 
-`tobs_waic()` computes the widely applicable information criterion from the
+`waic()` computes the widely applicable information criterion from the
 pointwise log-likelihood, marginalised over the latent occupancy state. It
 returns four numbers.
 
 ```{r waic-shape}
-w <- tobs_waic(fit)
+w <- waic(fit)
 str(w)
 ```
 
@@ -187,8 +189,8 @@ fit2 <- tobs(~ occ_cov1 + occ_cov1_sq, data = dat, family = occu(),
 
 waic_tab <- data.frame(
   model  = c("intercept", "linear", "quadratic"),
-  waic   = c(tobs_waic(fit0)$waic, tobs_waic(fit)$waic, tobs_waic(fit2)$waic),
-  p_waic = c(tobs_waic(fit0)$p_waic, tobs_waic(fit)$p_waic, tobs_waic(fit2)$p_waic)
+  waic   = c(waic(fit0)$waic, waic(fit)$waic, waic(fit2)$waic),
+  p_waic = c(waic(fit0)$p_waic, waic(fit)$p_waic, waic(fit2)$p_waic)
 )
 waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 2)
 waic_tab[order(waic_tab$waic), ]
@@ -216,7 +218,7 @@ term strains the Laplace approximation that the pointwise log-likelihood is
 read from.
 
 One caveat matters for the structured models. The pointwise log-likelihood
-behind `tobs_waic()` is evaluated from the process fixed-effect
+behind `waic()` is evaluated from the process fixed-effect
 coefficients. Spatial fields, temporal terms, and random effects are not
 folded into the linear predictor for the score, so for a model carrying
 those components the WAIC is conditional on the fixed-effect part of the
@@ -238,7 +240,7 @@ replicate, and asks how often the replicates are more extreme than the
 data. The gap between the observed and replicate statistics is the reading;
 a smaller gap means the fit reproduces the data more closely.
 
-`tobs_ppc()` offers two discrepancy statistics. The Freeman-Tukey statistic
+`ppc()` offers two discrepancy statistics. The Freeman-Tukey statistic
 sums $(\sqrt{\text{obs}} - \sqrt{\text{exp}})^2$ over cells, which tames the
 mean-variance link of binary counts. The chi-squared statistic sums
 $(\text{obs} - \text{exp})^2 / \text{exp}$ in the usual way. The expected
@@ -248,8 +250,8 @@ all-zero site is occupied with probability
 $\psi_i (1 - p_i)^J / [\psi_i (1 - p_i)^J + (1 - \psi_i)]$.
 
 ```{r ppc-shape}
-ppc <- tobs_ppc(fit, fit.stat = "freeman-tukey")
-str(ppc)
+pp <- ppc(fit, fit.stat = "freeman-tukey")
+str(pp)
 ```
 
 `fit.y` is the statistic on the real data across draws, `fit.y.rep` the
@@ -259,10 +261,10 @@ distributions against each other shows where the data sit relative to a
 draw from the fit.
 
 ```{r ppc-plot, fig.alt = "Distributions of the observed and replicate Freeman-Tukey fit statistics, with the observed values sitting above the replicate values"}
-plot(density(ppc$fit.y), col = "firebrick", lwd = 2,
-     xlim = range(ppc$fit.y, ppc$fit.y.rep),
+plot(density(pp$fit.y), col = "firebrick", lwd = 2,
+     xlim = range(pp$fit.y, pp$fit.y.rep),
      xlab = "Freeman-Tukey statistic", main = "Observed vs replicate")
-lines(density(ppc$fit.y.rep), col = "steelblue", lwd = 2)
+lines(density(pp$fit.y.rep), col = "steelblue", lwd = 2)
 legend("topright", c("observed", "replicate"), lwd = 2,
        col = c("firebrick", "steelblue"), bty = "n")
 ```
@@ -272,7 +274,7 @@ sits near the middle of its range, which is what a correctly specified model
 produces. The chi-squared statistic reads the same way.
 
 ```{r ppc-chisq}
-tobs_ppc(fit, fit.stat = "chi-squared")$bayesian.p
+ppc(fit, fit.stat = "chi-squared")$bayesian.p
 ```
 
 Conditioning the latent state on the detection history is what keeps the
@@ -297,7 +299,7 @@ what running a random variable through its own CDF does. Departures from
 uniformity are departures of the predictive distribution from the truth,
 and the shape of the departure names the flaw.
 
-For each site, `tobs_pit_residuals()` evaluates the fitted cumulative
+For each site, `pit_residuals()` evaluates the fitted cumulative
 probability of the observed detection history, averaged over posterior
 draws. A site with at least one detection is occupied with certainty, so
 its predictive CDF is pinned at the top; a site with all-zero visits gets
@@ -308,15 +310,15 @@ values onto a few points and break the uniformity test. If the model is
 correct, the jittered values are uniform on $[0, 1]$.
 
 ```{r pit-shape}
-pit <- tobs_pit_residuals(fit)
+pit <- pit_residuals(fit)
 length(pit); summary(pit)
 ```
 
-`tobs_test_uniformity()` runs a Kolmogorov-Smirnov test of the PIT values
+`test_uniformity()` runs a Kolmogorov-Smirnov test of the PIT values
 against the uniform. It returns the standard `htest` object.
 
 ```{r pit-test}
-tobs_test_uniformity(pit)
+test_uniformity(pit)
 ```
 
 A large p-value, as here, says the PIT values are consistent with
@@ -361,7 +363,7 @@ Simulation-based calibration answers it by construction. Draw a truth from
 the distribution the fit updates, simulate a data set at that truth, refit,
 and record where the truth falls in the new posterior. Under exact inference
 those ranks are uniform, so the whole rank ECDF is the measurement rather
-than coverage at one or two nominal levels (Talts et al. 2018). `tobs_sbc()`
+than coverage at one or two nominal levels (Talts et al. 2018). `sbc()`
 runs the posterior variant, which draws the truth from the fit's own
 posterior at an observed data set and refits on the observed data and the
 replicate together (Sailynoja et al. 2026). That variant is the one that
@@ -415,7 +417,7 @@ one support scored against a predictive on another measures grid placement
 instead of calibration.
 
 ```{r sbc-run, eval = FALSE}
-res <- tobs_sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                 controls = "narrow", fit.control = ctl)
 res
 ```
@@ -468,12 +470,12 @@ omnibus posterior-predictive check, and their p-values are closer to honest
 tail probabilities. Each one isolates a single named feature, which makes
 the verdict easy to act on.
 
-`tobs_test_dispersion()` compares the variance of the per-site detection
+`test_dispersion()` compares the variance of the per-site detection
 totals against what the model predicts. The ratio is the observed variance
 over the expected.
 
 ```{r dispersion}
-tobs_test_dispersion(fit)
+test_dispersion(fit)
 ```
 
 A ratio near 1 and a p-value away from the extremes mean the spread of
@@ -489,11 +491,11 @@ negative binomial abundance: an overdispersion flag on a Poisson N-mixture
 fit is the standard reason to switch to the negative binomial, covered in
 the abundance vignette.
 
-`tobs_test_zero_inflation()` counts sites with no detections at all and asks
+`test_zero_inflation()` counts sites with no detections at all and asks
 whether the model produces that many all-zero sites.
 
 ```{r zero-inflation}
-tobs_test_zero_inflation(fit)
+test_zero_inflation(fit)
 ```
 
 The observed count of empty sites matches the expected count, so there is
@@ -509,12 +511,12 @@ to near zero at a subset of sites. Either points toward a zero-inflated or
 hurdle structure, or toward a detection covariate that separates the dead
 sites from the live ones.
 
-`tobs_test_outliers()` flags sites whose detection total falls outside the
+`test_outliers()` flags sites whose detection total falls outside the
 central 95% of the replicate distribution, then checks whether the number
 of such sites is itself surprising.
 
 ```{r outliers}
-tobs_test_outliers(fit)
+test_outliers(fit)
 ```
 
 A handful of outliers is expected by chance; 5% of sites sit outside a 95%
@@ -780,7 +782,7 @@ coordinates and a second fit. Running them in this order means you rarely
 pay for the expensive checks on a model that a cheap check would have
 rejected.
 
-1. **Run `tobs_check()` for a first pass.** The one-call panel prints the
+1. **Run `check_model()` for a first pass.** The one-call panel prints the
    WAIC, the PPC p-value, the zero-inflation count, and, with `coords`, the
    Moran's I, each with a warning band. A clean panel means the detailed
    steps are confirmation; a warning means open the matching section.
@@ -789,21 +791,21 @@ rejected.
    point estimate. Start with `summary()` and `confint()`. On a fit with
    few visits, an outsized detection coefficient is the identifiability
    ridge, not a finding; confirm the default `occu_priors()` is in place.
-3. **Compare against nested alternatives with `tobs_waic()`.** Drop the
+3. **Compare against nested alternatives with `waic()`.** Drop the
    covariate, add a plausible one, and read the `delta`. A change of a few
    units or less is a tie; prefer the simpler model. WAIC ranks, it does
    not validate.
-4. **Run a posterior-predictive check with `tobs_ppc()`.** The Bayesian
+4. **Run a posterior-predictive check with `ppc()`.** The Bayesian
    p-value sits near 0.5 for a fit that reproduces the data. A value near 0
    means the data are more dispersed than the fit predicts, near 1 means
    less. The check conditions the latent state on the detection history, so
    the value is calibrated rather than purely relative.
-5. **Inspect the PIT histogram and `tobs_test_uniformity()`.** A flat
+5. **Inspect the PIT histogram and `test_uniformity()`.** A flat
    histogram is the target. A U-shape means underdispersion, a central hump
    overdispersion, a slope a biased mean.
-6. **Target specific failures.** `tobs_test_dispersion()` for spread,
-   `tobs_test_zero_inflation()` for excess empty sites,
-   `tobs_test_outliers()` for individual sites the model cannot fit.
+6. **Target specific failures.** `test_dispersion()` for spread,
+   `test_zero_inflation()` for excess empty sites,
+   `test_outliers()` for individual sites the model cannot fit.
 7. **Plot residuals against fitted values.** Structure in the cloud points
    to a misspecified mean or variance. Use Pearson residuals for a common
    scale.

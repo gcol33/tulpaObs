@@ -134,9 +134,9 @@ test_that("the criteria move with the detection RE and reduce to it at zero", {
 
   # The public criteria read the same components, so WAIC and LOO land on the
   # scored model rather than the population-mean one.
-  w <- tobs_waic(fit, n.draws = 400L)
+  w <- waic(fit, n.draws = 400L)
   expect_gt(w$elpd_waic, off[["elpd"]] + 3)
-  cp <- tobs_cpo(fit, n.draws = 400L)
+  cp <- cpo(fit, n.draws = 400L)
   expect_true(is.finite(cp$elpd_loo))
   expect_gt(cp$elpd_loo, off[["elpd"]] + 3)
 })
@@ -160,9 +160,9 @@ test_that("the criteria move with the cover-arm RE", {
 
   # The posterior predictive check and the PIT read the same offsets, so both
   # stay finite on a fit that carries one.
-  pp <- tobs_ppc(fit, n.samples = 40L)
+  pp <- ppc(fit, n.samples = 40L)
   expect_true(is.finite(pp$bayesian.p))
-  pit <- tobs_pit_residuals(fit, n.samples = 40L)
+  pit <- pit_residuals(fit, n.samples = 40L)
   expect_true(all(is.finite(as.numeric(unlist(pit)))))
 })
 
@@ -188,8 +188,8 @@ test_that("a fit with no random effect keeps the no-offset arithmetic", {
   # No offset -> the kernels take the zero-column "arm carries none" signal, so
   # the score is the arithmetic of the no-offset path, bit for bit.
   expect_identical(.ocnl_ll(fit, c0, "zero"), .ocnl_ll(fit, c0, "absent"))
-  set.seed(7); w1 <- tobs_waic(fit, n.draws = 200L)
-  set.seed(7); w2 <- tobs_waic(fit, n.draws = 200L)
+  set.seed(7); w1 <- waic(fit, n.draws = 200L)
+  set.seed(7); w2 <- waic(fit, n.draws = 200L)
   expect_identical(w1$elpd_waic, w2$elpd_waic)
   expect_true(is.finite(w1$elpd_waic))
 })
@@ -269,12 +269,12 @@ test_that("the criteria score an occupancy-arm random effect", {
 
   # The public criteria read the same components, so they score the term rather
   # than the population-mean model -- and say nothing about dropping it.
-  expect_warning(w <- tobs_waic(fit, n.draws = S), NA)
+  expect_warning(w <- waic(fit, n.draws = S), NA)
   expect_lt(abs(w$elpd_waic - on[["elpd"]]),
             abs(w$elpd_waic - off[["elpd"]]))
-  cp <- tobs_cpo(fit, n.draws = S)
+  cp <- cpo(fit, n.draws = S)
   expect_true(is.finite(cp$elpd_loo))
   expect_lt(abs(cp$elpd_loo - on[["elpd"]]), abs(cp$elpd_loo - off[["elpd"]]))
-  pp <- tobs_ppc(fit, n.samples = 40L)
+  pp <- ppc(fit, n.samples = 40L)
   expect_true(is.finite(pp$bayesian.p))
 })

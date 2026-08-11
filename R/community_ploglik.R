@@ -1,6 +1,6 @@
 # community_ploglik.R - pointwise log-likelihood for the community-occupancy
-# families (ms_occu / ms_dyn_occu / ms_int_occu), so tobs_waic() / tobs_dic() /
-# tobs_cpo() score them.
+# families (ms_occu / ms_dyn_occu / ms_int_occu), so waic() / dic() /
+# cpo() score them.
 #
 # The observation unit is the (species, site) pair: for each species the latent
 # occupancy at a site is integrated out over that site's visits / seasons /

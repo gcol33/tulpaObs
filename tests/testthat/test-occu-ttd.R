@@ -45,7 +45,7 @@ test_that("occu_ttd() fits + full S3 surface", {
   expect_equal(predict(fit, type = "state"), fv$psi)
   expect_equal(predict(fit, type = "detection"), fv$rate)
 
-  w <- tobs_waic(fit, n.draws = 200L)
+  w <- waic(fit, n.draws = 200L)
   expect_true(is.finite(w$waic) && w$p_waic > 0)
   s2 <- simulate(fit, nsim = 1)
   expect_true(all(s2[!is.na(s2)] >= 0 & s2[!is.na(s2)] <= 3))   # in [0, Tmax]

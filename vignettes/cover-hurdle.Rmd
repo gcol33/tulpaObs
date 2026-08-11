@@ -326,7 +326,7 @@ c(resid_sd = sd(resid_std), frac_within_2 = mean(abs(resid_std) < 2))
 A standard deviation near one and about 95% of residuals inside $\pm 2$ are the
 marks of a Gaussian arm fitting its data. These checks are deliberately built
 from the fit's own coefficients and `predict()` rather than from the
-single-season occupancy diagnostics (`tobs_ppc()`, `tobs_pit_residuals()`),
+single-season occupancy diagnostics (`ppc()`, `pit_residuals()`),
 which operate on replicated detection data and do not apply to the plot-level
 cover hurdle.
 
@@ -494,7 +494,7 @@ projection machinery this dispatcher does not.
 ## Model comparison
 
 The positive family is a modelling choice, and the hurdle is fully observed, so
-WAIC is available to score it. `tobs_waic()` assembles the pointwise
+WAIC is available to score it. `waic()` assembles the pointwise
 log-likelihood across both arms (the occurrence Bernoulli plus, where
 $y_i > 0$, the positive-part density) and returns the WAIC, the expected
 log-pointwise predictive density `elpd`, the effective number of parameters
@@ -506,8 +506,8 @@ to decide which positive family the data prefers.
 fit_ln   <- tobs(~ x, data = sim$data, family = cover("lognormal"), y = sim$y)
 fit_beta <- tobs(~ x, data = sim$data, family = cover("beta"),      y = sim$y)
 
-waic_ln   <- tobs_waic(fit_ln)
-waic_beta <- tobs_waic(fit_beta)
+waic_ln   <- waic(fit_ln)
+waic_beta <- waic(fit_beta)
 ```
 
 The two fits share the occurrence arm exactly (the Bernoulli sees the same
@@ -536,11 +536,11 @@ but it should be read alongside the conditional-cover residual check above,
 because WAIC rewards the family that fits the bulk of the data and can miss a
 boundary misfit that the residual plot makes obvious.
 
-The same `tobs_waic()` call also scores the hurdle against a simpler nested
+The same `waic()` call also scores the hurdle against a simpler nested
 model, for instance an intercept-only cover formula versus the covariate model,
 which tests whether `x` earns its place on the arms. The comparison is valid as
 long as both fits are scored on the same response with the same WAIC assembly,
-which `tobs_waic()` guarantees by reading each fit's own encoding.
+which `waic()` guarantees by reading each fit's own encoding.
 
 ## Practical guidance
 

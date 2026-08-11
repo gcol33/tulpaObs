@@ -239,7 +239,7 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
   est <- as.numeric(fit$means); se <- as.numeric(fit$sds)
   expect_true(all(abs(est - truth) / se < 4))
   expect_lt(mean(fit$nuts$divergent), 0.2)
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
 })
 

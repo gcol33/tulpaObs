@@ -83,7 +83,7 @@ test_that("count() S3 surface works (fitted / predict / residuals / WAIC)", {
   expect_equal(pr, exp(b[1] + b[2] * c(-1, 0, 1)), tolerance = 1e-6)
   expect_true(all(diff(pr) > 0))   # monotone increasing in x (positive slope)
   expect_identical(nobs(fit), 250L)
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_true(w$p_waic > 0 && w$p_waic < 6)   # ~2 fixed effects
 })
@@ -202,7 +202,7 @@ test_that("count() S3 surface works for the binomial response", {
   pr <- predict(fit, newdata = data.frame(x = c(-1, 0, 1)))
   expect_true(all(pr > 0 & pr < 1))
   expect_true(all(diff(pr) > 0))              # monotone in x (positive slope)
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
 })
 

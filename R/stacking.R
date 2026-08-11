@@ -75,11 +75,6 @@ tobs_stack <- function(..., method = c("stacking", "pseudobma")) {
     stop("tobs_stack() inputs must all be `tobs_fit` objects; element(s) ",
          paste(which(!is_fit), collapse = ", "), " are not.", call. = FALSE)
   }
-  if (!requireNamespace("loo", quietly = TRUE)) {
-    stop("Package 'loo' is required for LOO stacking. Install it with ",
-         "install.packages(\"loo\").", call. = FALSE)
-  }
-
   nms <- names(fits)
   if (is.null(nms) || any(!nzchar(nms))) {
     nms <- paste0("model", seq_along(fits))

@@ -123,8 +123,8 @@ test_that("the criteria move with the random effect and reduce to it at zero", {
   # A random effect held at zero is the no-random-effect model, to the bit.
   expect_identical(.ocic_ll(fit, c0, "zero"), .ocic_ll(fit, c0, "absent"))
 
-  # tobs_waic() is the scored version, not the zeroed one.
-  w <- tobs_waic(fit, n.draws = 250L)
+  # waic() is the scored version, not the zeroed one.
+  w <- waic(fit, n.draws = 250L)
   expect_equal(w$elpd_waic, unname(on[["elpd"]]), tolerance = 1e-8)
   expect_gt(w$elpd_waic, off[["elpd"]] + 5)
 })
@@ -186,9 +186,9 @@ test_that("a fit carrying neither term scores bit for bit as with no offset", {
   expect_identical(lim(zero), lim(none))
 
   # The whole criteria stack still runs on a fit with no structured term.
-  expect_true(is.finite(tobs_waic(fit, n.draws = 200L)$waic))
-  expect_true(is.finite(tobs_cpo(fit, n.draws = 200L)$elpd_loo))
-  set.seed(7); expect_true(is.finite(tobs_ppc(fit, n.samples = 100L)$bayesian.p))
+  expect_true(is.finite(waic(fit, n.draws = 200L)$waic))
+  expect_true(is.finite(cpo(fit, n.draws = 200L)$elpd_loo))
+  set.seed(7); expect_true(is.finite(ppc(fit, n.samples = 100L)$bayesian.p))
 })
 
 
@@ -226,7 +226,7 @@ test_that("the PPC and the PIT see the random-effect offsets too", {
   # offset is folded in, so the CDF limits move.
   expect_false(isTRUE(all.equal(lim(c0$off_det)$cdf_upper, lim(none)$cdf_upper)))
 
-  set.seed(8); r <- tobs_pit_residuals(fit, n.samples = 150L)
+  set.seed(8); r <- pit_residuals(fit, n.samples = 150L)
   expect_length(r, fit$model$n_sites)
   expect_true(all(is.finite(r)))
 })
@@ -289,9 +289,9 @@ test_that("a sampled coupled field is scored per site", {
   off <- .ocic_score(core(fit$model, c0$b_occ, c0$b_det, c0$b_pos, c0$disp,
                           zero, zero))
   expect_gt(on[["elpd"]] - off[["elpd"]], 2)
-  expect_equal(tobs_waic(fit, n.draws = S)$elpd_waic, unname(on[["elpd"]]),
+  expect_equal(waic(fit, n.draws = S)$elpd_waic, unname(on[["elpd"]]),
                tolerance = 1e-8)
-  expect_true(is.finite(tobs_cpo(fit, n.draws = S)$elpd_loo))
+  expect_true(is.finite(cpo(fit, n.draws = S)$elpd_loo))
   set.seed(9)
-  expect_true(is.finite(tobs_ppc(fit, n.samples = 150L)$bayesian.p))
+  expect_true(is.finite(ppc(fit, n.samples = 150L)$bayesian.p))
 })

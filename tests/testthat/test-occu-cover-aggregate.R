@@ -218,7 +218,7 @@ test_that("WAIC scores aggregated cover at the unit scale, not per visit (#34)",
   pw <- vapply(c(12L, 60L), function(J) {
     sim <- .agg_sim(seed = 909L, J = J)
     fit <- .agg_fit(sim, cover_aggregate = "mean")
-    tobs_waic(fit, n.draws = 200L)$p_waic
+    waic(fit, n.draws = 200L)$p_waic
   }, numeric(1))
   n_sites <- 30L * 5L
   # Effective parameter count stays well below the site count (it scaled past it
@@ -248,7 +248,7 @@ test_that("tobs_ppc scores aggregated cover at the unit scale, not per visit (#3
     sim <- .agg_sim(seed = 707L, J = J)
     fit <- .agg_fit(sim, cover_aggregate = "mean")
     set.seed(1L)
-    tobs_ppc(fit, n.samples = 200L)$bayesian.p
+    ppc(fit, n.samples = 200L)$bayesian.p
   }, numeric(1))
   expect_true(all(bp > 0.02 & bp < 0.98))
 })

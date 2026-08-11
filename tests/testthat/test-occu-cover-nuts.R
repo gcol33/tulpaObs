@@ -219,7 +219,7 @@ test_that("occu_cover NUTS fit supports the S3 method surface", {
   expect_true(all(nut$convergence$rhat[!is.na(nut$convergence$rhat)] > 0.9))
 
   # Calibrated WAIC from the per-draw pointwise likelihood.
-  expect_true(is.finite(tobs_waic(nut)$waic))
+  expect_true(is.finite(waic(nut)$waic))
 
   # predict() for the non-spatial occu_cover fit needs the joint nested-Laplace
   # object (the map paths live on the spatial fit); the NUTS and Laplace engines

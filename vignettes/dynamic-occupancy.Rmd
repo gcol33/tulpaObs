@@ -335,7 +335,7 @@ information criterion that scores predictive accuracy, the smoothed state
 posterior compared against what the model implies, and the per-site-season
 residuals.
 
-`tobs_waic()` computes the widely applicable information criterion from the
+`waic()` computes the widely applicable information criterion from the
 pointwise marginal log-likelihood. For a dynamic fit that pointwise term is the
 forward-algorithm likelihood of each site's whole detection history with the
 latent chain summed out, so the score measures how well the model predicts the
@@ -344,7 +344,7 @@ WAIC means little on its own; it earns its keep in the comparison section below,
 against a simpler model on the same data.
 
 ```{r dyn-waic}
-w <- tobs_waic(fit)
+w <- waic(fit)
 c(waic = round(w$waic, 1), elpd = round(w$elpd, 1), p_waic = round(w$p_waic, 2))
 ```
 
@@ -403,7 +403,7 @@ state structure is adequate across the range of fitted probabilities. A funnel
 opening toward one end, or a band that drifts off zero, would point to a rate
 that varies with something the constant-rate model leaves out, the cue to add a
 covariate to colonisation or extinction. The posterior-predictive machinery
-(`tobs_ppc()`, the dispersion and zero-inflation tests) is wired for the
+(`ppc()`, the dispersion and zero-inflation tests) is wired for the
 single-season detection-history shape and does not run on the three-dimensional
 dynamic array, so the WAIC, the smoothed-state comparison, and the residuals are
 the dynamic model's fit checks.
@@ -693,10 +693,10 @@ fit_cov_e <- tobs(
 waic_tab <- data.frame(
   model  = c("constant rates", "connectivity on colonisation",
              "connectivity on both rates"),
-  waic   = c(tobs_waic(fit)$waic, tobs_waic(fit_cov)$waic,
-             tobs_waic(fit_cov_e)$waic),
-  p_waic = c(tobs_waic(fit)$p_waic, tobs_waic(fit_cov)$p_waic,
-             tobs_waic(fit_cov_e)$p_waic)
+  waic   = c(waic(fit)$waic, waic(fit_cov)$waic,
+             waic(fit_cov_e)$waic),
+  p_waic = c(waic(fit)$p_waic, waic(fit_cov)$p_waic,
+             waic(fit_cov_e)$p_waic)
 )
 waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 1)
 waic_tab$waic  <- round(waic_tab$waic, 1)

@@ -133,7 +133,7 @@ test_that("non-NUTS fits report NA sampler diagnostics, NUTS reports numeric", {
 
 test_that("WAIC works on single-season fit", {
   res <- .fit_simple(formula = ~ elev, n = 30, seed = 42)
-  w <- tobs_waic(res$fit)
+  w <- waic(res$fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(w$elpd))
   expect_true(w$p_waic >= 0)
@@ -141,7 +141,7 @@ test_that("WAIC works on single-season fit", {
 
 test_that("PPC works on single-season fit", {
   res <- .fit_simple(formula = ~ 1, n = 30, seed = 42)
-  ppc <- tobs_ppc(res$fit, n.samples = 50)
+  ppc <- ppc(res$fit, n.samples = 50)
   expect_length(ppc$fit.y, 50)
   expect_length(ppc$fit.y.rep, 50)
   expect_true(ppc$bayesian.p >= 0 && ppc$bayesian.p <= 1)

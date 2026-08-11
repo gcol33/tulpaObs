@@ -101,8 +101,8 @@
 # Contract
 # ---------------------------------------------------------------------------
 
-test_that("tobs_sbc() refuses a non-fit and an unregistered family", {
-  expect_error(tobs_sbc(list()), "fitted tobs_fit")
+test_that("sbc() refuses a non-fit and an unregistered family", {
+  expect_error(sbc(list()), "No sbc method is registered")
 
   sim <- simulate_double_observer(N = 60L, seed = 2L)
   fit <- suppressWarnings(tobs(~ abund_cov1, data = sim$data,
@@ -111,15 +111,15 @@ test_that("tobs_sbc() refuses a non-fit and an unregistered family", {
                                method = "laplace",
                                control = list(verbose = FALSE,
                                               progress = FALSE)))
-  expect_error(tobs_sbc(fit), "not registered for family")
-  expect_error(tobs_sbc(fit), "occu_cover")
+  expect_error(sbc(fit), "not registered for family")
+  expect_error(sbc(fit), "occu_cover")
 })
 
 
 test_that("the callback list satisfies the engine's posterior contract", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 20L, J = 3L)
-  m <- tobs_sbc(fx$fit, model.only = TRUE,
+  m <- sbc(fx$fit, model.only = TRUE,
                 fit.control = .sbc_fit_control(fx))
 
   expect_true(all(c("data_obs", "fit", "draw_theta", "simulate", "pool",
@@ -148,7 +148,7 @@ test_that("the callback list satisfies the engine's posterior contract", {
 test_that("pooling keeps both data sets and the replicate's cells are fresh", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 20L, J = 3L)
-  m <- tobs_sbc(fx$fit, model.only = TRUE,
+  m <- sbc(fx$fit, model.only = TRUE,
                 fit.control = .sbc_fit_control(fx))
 
   obs <- m$data_obs
@@ -180,7 +180,7 @@ test_that("pooling keeps both data sets and the replicate's cells are fresh", {
 test_that("the refit rebuilds the same call on the pooled graph", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 20L, J = 3L)
-  m <- tobs_sbc(fx$fit, model.only = TRUE,
+  m <- sbc(fx$fit, model.only = TRUE,
                 fit.control = .sbc_fit_control(fx))
 
   # Refitting the observed data alone must reproduce the observed fit: the
@@ -203,7 +203,7 @@ test_that("the refit rebuilds the same call on the pooled graph", {
 test_that("a dispersion the engine holds fixed is reported, not scored", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 20L, J = 3L, phi.grid = NULL)
-  expect_warning(m <- tobs_sbc(fx$fit, model.only = TRUE),
+  expect_warning(m <- sbc(fx$fit, model.only = TRUE),
                  "holds the cover dispersion fixed")
   expect_true("disp" %in% attr(m, "fixed"))
   expect_false("disp" %in% attr(m, "quantities"))
@@ -227,7 +227,7 @@ test_that("a visit design that cannot be inverted is refused, not guessed", {
 test_that("the replicate generator draws from the law the likelihood scores", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 30L, J = 4L)
-  m <- tobs_sbc(fx$fit, model.only = TRUE,
+  m <- sbc(fx$fit, model.only = TRUE,
                 fit.control = .sbc_fit_control(fx))
   spec <- environment(m$simulate)$spec
 
@@ -264,7 +264,7 @@ test_that("the replicate generator draws from the law the likelihood scores", {
 test_that("the field enters the replicate at the scale the engine's block carries", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 40L, J = 4L)
-  m <- tobs_sbc(fx$fit, model.only = TRUE,
+  m <- sbc(fx$fit, model.only = TRUE,
                 fit.control = .sbc_fit_control(fx))
   spec <- environment(m$simulate)$spec
 
@@ -310,7 +310,7 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_if_fast()
 
   fx <- .sbc_fixture(N = 50L, J = 6L, seed = 707L)
-  res <- tobs_sbc(fx$fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+  res <- sbc(fx$fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = c("wide", "narrow"),
                   fit.control = .sbc_fit_control(fx), seed = 0L)
 

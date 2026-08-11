@@ -349,7 +349,7 @@ path; each term additionally reports \code{sigma_median} and the per-draw
 with per-SD convergence in \code{fit$nuts$re_sigma_rhat} / \code{re_sigma_ess}. The
 sampled coefficient surface (\code{coef()}, \code{vcov()}, \code{fit$draws}) is unchanged.
 Still on \code{nested_laplace} only: a random slope, and an observation-arm RE
-composed with the coupled areal field. \code{tobs_waic()} / \code{tobs_cpo()} on a
+composed with the coupled areal field. \code{waic()} / \code{cpo()} on a
 sampled fit read the coefficient draws, so they score the RE at zero -- the
 same limitation the sampled coupled field has.
 }

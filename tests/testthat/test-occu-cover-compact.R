@@ -102,8 +102,8 @@ test_that("compact == dense: byte-identical fit on uncapped data", {
                    type = "occurrence", nsim = 100, draws = FALSE))
   expect_equal(po_c$mean, po_d$mean, tolerance = 1e-8)
 
-  set.seed(11); wd <- tobs_waic(fit_d)
-  set.seed(11); wc <- tobs_waic(fit_c)
+  set.seed(11); wd <- waic(fit_d)
+  set.seed(11); wc <- waic(fit_c)
   expect_equal(wc$waic,    wd$waic,    tolerance = 1e-8)
   expect_equal(wc$se_waic, wd$se_waic, tolerance = 1e-8)
   expect_equal(wc$n_obs,   wd$n_obs)   # = the site count, shared across species
@@ -188,7 +188,7 @@ test_that("WAIC draw-chunking is exact (chunk size does not change the result)",
   expect_identical(llA, llS)
 
   # And the criterion built on it is unchanged.
-  set.seed(11); wa <- tobs_waic(fit)
+  set.seed(11); wa <- waic(fit)
   expect_true(is.finite(wa$waic) && is.finite(wa$se_waic))
 })
 
@@ -197,9 +197,9 @@ test_that("WAIC draw-chunking is exact (chunk size does not change the result)",
 # all read .occu_cover_visit_view(), which is the compact fit's stored visit rows
 # and a flattening of the dense fit's padded grid. Everything downstream of it
 # therefore has to agree between the two builds; that is what these three assert
-# (gcol33/tulpaObs#185, where tobs_cpo() / tobs_ppc() instead read model$y /
+# (gcol33/tulpaObs#185, where cpo() / ppc() instead read model$y /
 # model$valid and errored on a compact fit with "'x' must be an array of at least
-# two dimensions" while tobs_waic() worked).
+# two dimensions" while waic() worked).
 
 test_that(".occu_cover_visit_view is identical for a dense and a compact fit", {
   skip_on_cran()
@@ -227,7 +227,7 @@ test_that(".occu_cover_visit_view is identical for a dense and a compact fit", {
 })
 
 
-test_that("compact == dense for tobs_cpo() / tobs_ppc() / PIT (#185)", {
+test_that("compact == dense for cpo() / ppc() / PIT (#185)", {
   skip_on_cran()
   nc  <- 10L
   adj <- .line_graph(nc)
@@ -235,8 +235,8 @@ test_that("compact == dense for tobs_cpo() / tobs_ppc() / PIT (#185)", {
   fit_d <- .fit_occu_cover(dd, adj, compact = FALSE)
   fit_c <- .fit_occu_cover(dd, adj, compact = TRUE)
 
-  set.seed(31); cd <- tobs_cpo(fit_d, n.draws = 200L)
-  set.seed(31); cc <- tobs_cpo(fit_c, n.draws = 200L)
+  set.seed(31); cd <- cpo(fit_d, n.draws = 200L)
+  set.seed(31); cc <- cpo(fit_c, n.draws = 200L)
   expect_equal(cc$elpd_loo, cd$elpd_loo, tolerance = 1e-10)
   expect_equal(cc$p_loo,    cd$p_loo,    tolerance = 1e-10)
   # The LOO-PIT is the piece the compact path could not build at all.
@@ -244,20 +244,20 @@ test_that("compact == dense for tobs_cpo() / tobs_ppc() / PIT (#185)", {
   expect_true(all(cc$pit >= 0 & cc$pit <= 1))
   expect_equal(cc$pit, cd$pit, tolerance = 1e-10)
 
-  set.seed(32); pd <- tobs_ppc(fit_d, n.samples = 150L)
-  set.seed(32); pc <- tobs_ppc(fit_c, n.samples = 150L)
+  set.seed(32); pd <- ppc(fit_d, n.samples = 150L)
+  set.seed(32); pc <- ppc(fit_c, n.samples = 150L)
   expect_true(all(is.finite(pc$fit.y)) && all(is.finite(pc$fit.y.rep)))
   expect_equal(pc$fit.y,     pd$fit.y,     tolerance = 1e-10)
   expect_equal(pc$fit.y.rep, pd$fit.y.rep, tolerance = 1e-10)
   expect_identical(pc$bayesian.p, pd$bayesian.p)
 
   # Both discrepancies, so the chi-squared branch is covered too.
-  set.seed(33); qd <- tobs_ppc(fit_d, fit.stat = "chi-squared", n.samples = 100L)
-  set.seed(33); qc <- tobs_ppc(fit_c, fit.stat = "chi-squared", n.samples = 100L)
+  set.seed(33); qd <- ppc(fit_d, fit.stat = "chi-squared", n.samples = 100L)
+  set.seed(33); qc <- ppc(fit_c, fit.stat = "chi-squared", n.samples = 100L)
   expect_equal(qc$fit.y, qd$fit.y, tolerance = 1e-10)
 
-  set.seed(34); rd <- tobs_pit_residuals(fit_d, n.samples = 150L)
-  set.seed(34); rc <- tobs_pit_residuals(fit_c, n.samples = 150L)
+  set.seed(34); rd <- pit_residuals(fit_d, n.samples = 150L)
+  set.seed(34); rc <- pit_residuals(fit_c, n.samples = 150L)
   expect_equal(rc, rd, tolerance = 1e-10)
 })
 
@@ -326,20 +326,20 @@ test_that("a detected visit with a missing cover carries no cover term (#185)", 
   vw <- tulpaObs:::.occu_cover_visit_view(fit_c$model)
   expect_equal(sum(vw$y_det_visit == 1L & !is.finite(vw$y_pos_visit)), 5L)
 
-  set.seed(41); pd <- tobs_ppc(fit_d, n.samples = 150L)
-  set.seed(41); pc <- tobs_ppc(fit_c, n.samples = 150L)
+  set.seed(41); pd <- ppc(fit_d, n.samples = 150L)
+  set.seed(41); pc <- ppc(fit_c, n.samples = 150L)
   expect_true(all(is.finite(pd$fit.y)) && all(is.finite(pd$fit.y.rep)))
   expect_equal(pc$fit.y,     pd$fit.y,     tolerance = 1e-10)
   expect_equal(pc$fit.y.rep, pd$fit.y.rep, tolerance = 1e-10)
 
-  set.seed(42); cd <- tobs_cpo(fit_d, n.draws = 200L)
-  set.seed(42); cc <- tobs_cpo(fit_c, n.draws = 200L)
+  set.seed(42); cd <- cpo(fit_d, n.draws = 200L)
+  set.seed(42); cc <- cpo(fit_c, n.draws = 200L)
   expect_true(is.finite(cc$elpd_loo))
   expect_equal(cc$elpd_loo, cd$elpd_loo, tolerance = 1e-10)
 })
 
 
-test_that("a compact `by =` batch scores tobs_cpo() / tobs_ppc() per species (#185)", {
+test_that("a compact `by =` batch scores cpo() / ppc() per species (#185)", {
   skip_on_cran()
   skip_if_fast()
   # `tobs(by = )` on the nested-Laplace route builds COMPACT per-species arms by
@@ -379,14 +379,14 @@ test_that("a compact `by =` batch scores tobs_cpo() / tobs_ppc() per species (#1
     expect_null(fc$model$y)                  # no padded grid to read
     expect_false(isTRUE(fd$model$ragged))
 
-    set.seed(61); cc <- tobs_cpo(fc, n.draws = 200L)
-    set.seed(61); cd <- tobs_cpo(fd, n.draws = 200L)
+    set.seed(61); cc <- cpo(fc, n.draws = 200L)
+    set.seed(61); cd <- cpo(fd, n.draws = 200L)
     expect_true(is.finite(cc$elpd_loo) && all(is.finite(cc$pit)))
     expect_equal(cc$elpd_loo, cd$elpd_loo, tolerance = 1e-10)
     expect_equal(cc$pit,      cd$pit,      tolerance = 1e-10)
 
-    set.seed(62); pc <- tobs_ppc(fc, n.samples = 150L)
-    set.seed(62); pd <- tobs_ppc(fd, n.samples = 150L)
+    set.seed(62); pc <- ppc(fc, n.samples = 150L)
+    set.seed(62); pd <- ppc(fd, n.samples = 150L)
     expect_equal(pc$fit.y, pd$fit.y, tolerance = 1e-10)
     expect_identical(pc$bayesian.p, pd$bayesian.p)
   }

@@ -58,7 +58,7 @@ their tulpaObs counterparts. The left block is the independent-arm path
 | `f(site, model = "iid")`, `"besag"`, `"besagproper2"` | `icar(graph = adj)`, `car(graph = adj)`, `car_proper(graph = adj)` | One areal term per latent-presence formula. |
 | `copy = "site", fixed = FALSE` (shared field, fitted scale) | the joint `cover()` path: `method = "nested_laplace"` with a `bym2()` term, copy coefficient `alpha` | `alpha` is integrated on the outer grid, surfaced as `fit$joint$theta_mean["alpha"]`. |
 | `inla.stack()` for the joint design | not needed | tulpaObs builds the two-arm design from one formula and one `y`. |
-| `control.compute = list(waic = TRUE)` | `tobs_waic(fit)` | WAIC on the assembled pointwise log-likelihood. |
+| `control.compute = list(waic = TRUE)` | `waic(fit)` | WAIC on the assembled pointwise log-likelihood. |
 | `inla.posterior.sample()` + manual differencing | `predict(fit, newdata, type = "expected")` | Posterior draws are differenced per draw inside `predict()`. |
 | `pc.prec` / `pc` hyperpriors via `hyper = list(...)` | `cover_priors()` (fixed effects); `control$prior.sigma`, `control$prior.alpha` (joint hyperparameters) | Fixed-effect priors on both arms; PC-style amplitude / copy priors on the joint grid. |
 | replicated detection: `inla()` has no native single-species detection arm | `occu_cover()` with a `detection` formula and an `N x J` visit matrix | The generalization INLA cannot express directly (see `example/info.md`). |

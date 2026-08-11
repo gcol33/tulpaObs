@@ -1,5 +1,59 @@
 # tulpaObs NEWS
 
+## 0.0.197 (2026-08-11)
+
+* **Every diagnostic is now one verb, dispatched on the fit** (breaking). The
+  package exported a parallel `tobs_*` spelling for diagnostics that already had
+  an owner elsewhere, so the same concept carried two names and neither could
+  dispatch. Each is now an S3 method on the generic of whichever package owns
+  the concept, and the generic is re-exported here, so attaching tulpaObs is
+  enough to reach it:
+
+  | was | now | generic from |
+  | --- | --- | --- |
+  | `tobs_waic(fit)` | `waic(fit)` | loo |
+  | -- | `loo(fit)` | loo |
+  | `tobs_cpo(fit)` | `cpo(fit)` | tulpa |
+  | `tobs_dic(fit)` | `dic(fit)` | tulpa |
+  | `tobs_sbc(fit)` | `sbc(fit)` | tulpa |
+  | `tobs_pit_residuals(fit)` | `pit_residuals(fit)` | tulpa |
+  | `tobs_test_uniformity(pit)` | `test_uniformity(pit)` | tulpa |
+  | `tobs_test_dispersion(fit)` | `test_dispersion(fit)` | tulpa |
+  | `tobs_test_outliers(fit)` | `test_outliers(fit)` | tulpa |
+  | `tobs_test_zero_inflation(fit)` | `test_zero_inflation(fit)` | tulpa |
+  | `tobs_ppc(fit)` | `ppc(fit)` | tulpaObs |
+  | `tobs_check(fit)` | `check_model(fit)` | tulpa |
+
+  The old names are removed rather than aliased. Results are unchanged: each
+  method is the previous function body, and `test_uniformity()` runs the same
+  Kolmogorov-Smirnov test on the same PIT vector.
+
+* **`loo(fit)` is new, and returns a genuine `psis_loo` object**, so
+  [loo::loo_compare()] and the model-weight machinery read a `tobs_fit`
+  directly. It builds the same pointwise log-likelihood matrix the other
+  criteria use and hands it to PSIS with relative effective sample sizes off the
+  chain layout -- the builder `tobs_stack()` already used per member.
+
+* **`tobs_check()` is now `check_model(fit)`, and it draws the panel its
+  generic promises.** [tulpa::check_model()] errored on a `tobs_fit` before
+  this: its default method builds the panel from `fitted()` and `residuals()`
+  as numeric vectors, and a latent-state fit has neither (`fitted()` returns
+  `list(psi, p, z)`), so the response could not be resolved. The method reads
+  the same quantities through the family's own doors instead -- `pit_residuals()`,
+  `ppc()`, `test_dispersion()`, `moran_i()` -- printing the roll-up report as
+  before and drawing a QQ-uniform, PPC, dispersion and (given `coords`)
+  correlogram panel beside it. `plot = FALSE` prints the report alone. Nothing
+  is simulated twice: the panel plots what the report already computed, which is
+  why `test_dispersion()` now also returns the simulated variances in `$sim`.
+
+* **`ppc()` deliberately did not fold into `tulpa::pp_check()`.** That generic
+  draws a graphical check while `ppc()` returns a Bayesian p-value, and a method
+  has to honour its generic's contract, so the discrepancy check became its own
+  generic.
+
+* `loo` moves from Suggests to Imports (it now owns two of the doors), and
+  requires tulpa >= 0.0.196 for the generics.
+
 ## 0.0.196 (2026-08-11)
 
 * **The information criteria score a random effect the fit carried**

@@ -95,7 +95,7 @@ structure, choose the inference, and pull summaries off the result.
 | Coefficient summary | `m$summary.fixed` | `coef()`, `summary()`, `confint()` | per-process lists, `psi_` / `p_` prefixes |
 | Fitted / predicted | `m$summary.fitted.values` | `fitted()` (`psi`, `p`, `z`), `predict(X.0 = )` | `z` is posterior occupancy given the history |
 | Marginal effect | manual `inla.tmarginal()` | `tobs_marginal_effect()` | inverse-link curve with credible band |
-| Model comparison | `control.compute = list(waic = TRUE)` | `tobs_waic()` | WAIC from the pointwise marginal log-lik |
+| Model comparison | `control.compute = list(waic = TRUE)` | `waic()` | WAIC from the pointwise marginal log-lik |
 | Held-out prediction | `NA` response rows | `NA` rows in `y` under `method = "nested_laplace"` | same convention as INLA |
 
 The one structural difference to keep in mind from the start: in INLA the
@@ -452,7 +452,7 @@ lists with `psi_` and `p_` prefixes so the two arms never run together;
 `confint()` and `vcov()` read the fixed-effect block; `fitted()` returns
 per-site `psi`, `p`, and the posterior occupancy `z`; `predict(X.0 = )`
 evaluates occupancy at a chosen design; `tobs_marginal_effect()` returns
-an inverse-link response curve with a credible band; and `tobs_waic()`
+an inverse-link response curve with a credible band; and `waic()`
 gives WAIC from the pointwise marginal log-likelihood. The mental shift
 is from "pull a marginal off a list" to "call the accessor the model
 type provides".

@@ -76,7 +76,7 @@ test_that("a community-spatial count fit recovers the field and wires S3", {
   ft <- fitted(fit)$mu
   expect_equal(dim(ft), c(d$Ns, d$S))
   expect_gt(stats::cor(as.numeric(ft), as.numeric(d$y)), 0.6)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("community-spatial count recovers community means + field over seeds", {
@@ -219,7 +219,7 @@ test_that("community SVC (svcMsAbund) recovers the intercept + trend fields", {
   expect_gt(stats::cor(fit$spatial_field, d$f0), 0.8)    # intercept field
   expect_gt(stats::cor(fit$trend_field,   d$f1), 0.8)    # varying-coefficient field
   expect_equal(fit$spatial_hyper$field_labels, c("intercept", "w"))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("community SVC recovers both fields across seeds", {

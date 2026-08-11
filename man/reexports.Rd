@@ -7,6 +7,17 @@
 \alias{tidy}
 \alias{glance}
 \alias{fem_matrices}
+\alias{sbc}
+\alias{pit_residuals}
+\alias{test_uniformity}
+\alias{test_dispersion}
+\alias{test_outliers}
+\alias{test_zero_inflation}
+\alias{check_model}
+\alias{dic}
+\alias{cpo}
+\alias{waic}
+\alias{loo}
 \title{Objects exported from other packages}
 \keyword{internal}
 \description{
@@ -14,7 +25,9 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{tulpa}{\code{\link[tulpa:glance]{glance}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:tidy]{tidy}}}
+  \item{loo}{\code{\link[loo:loo]{loo()}}, \code{\link[loo:waic]{waic()}}}
+
+  \item{tulpa}{\code{\link[tulpa:check_model]{check_model()}}, \code{\link[tulpa:cpo]{cpo()}}, \code{\link[tulpa:dic]{dic()}}, \code{\link[tulpa:glance]{glance}}, \code{\link[tulpa:pit_residuals]{pit_residuals()}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:sbc]{sbc()}}, \code{\link[tulpa:test_dispersion]{test_dispersion()}}, \code{\link[tulpa:test_outliers]{test_outliers()}}, \code{\link[tulpa:test_uniformity]{test_uniformity()}}, \code{\link[tulpa:test_zero_inflation]{test_zero_inflation()}}, \code{\link[tulpa:tidy]{tidy}}}
 
   \item{tulpaMesh}{\code{\link[tulpaMesh:fem_matrices]{fem_matrices()}}}
 }}

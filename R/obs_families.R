@@ -546,7 +546,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' with per-SD convergence in `fit$nuts$re_sigma_rhat` / `re_sigma_ess`. The
 #' sampled coefficient surface (`coef()`, `vcov()`, `fit$draws`) is unchanged.
 #' Still on `nested_laplace` only: a random slope, and an observation-arm RE
-#' composed with the coupled areal field. `tobs_waic()` / `tobs_cpo()` on a
+#' composed with the coupled areal field. `waic()` / `cpo()` on a
 #' sampled fit read the coefficient draws, so they score the RE at zero -- the
 #' same limitation the sampled coupled field has.
 #'

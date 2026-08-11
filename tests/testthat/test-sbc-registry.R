@@ -117,11 +117,11 @@ test_that("every registry entry supplies the callbacks the driver reads", {
 
 
 test_that("the roster in the error message names what is registered", {
-  expect_error(tobs_sbc(list()), "fitted tobs_fit")
+  expect_error(sbc(list()), "No sbc method is registered")
   fake <- structure(list(model = list()), class = "tobs_fit",
                     tobs_family = list(name = "not_a_family"))
-  expect_error(tobs_sbc(fake), "not registered for family")
-  expect_error(tobs_sbc(fake), "occu_cover")
+  expect_error(sbc(fake), "not registered for family")
+  expect_error(sbc(fake), "occu_cover")
 })
 
 
@@ -136,7 +136,7 @@ test_that("each registered family composes its callbacks end to end", {
     fit <- .SBC_REG_FIXTURES[[fam]]()
     expect_identical(attr(fit, "tobs_family")$name, fam)
 
-    m <- tobs_sbc(fit, model.only = TRUE)
+    m <- sbc(fit, model.only = TRUE)
     expect_true(all(c("data_obs", "fit", "draw_theta", "simulate", "pool",
                       "arms", "group_ids") %in% names(m)), info = fam)
     # Every fixed effect the fit reports is scored; nothing is silently fixed.
@@ -190,12 +190,12 @@ test_that("a structured term is refused, not scored on the coefficients", {
   # experiment did not measure.
   spatial <- fit
   spatial$spatial <- list(type = "icar")
-  expect_error(tobs_sbc(spatial, model.only = TRUE), "structured term")
-  expect_error(tobs_sbc(spatial, model.only = TRUE), "fresh cells")
+  expect_error(sbc(spatial, model.only = TRUE), "structured term")
+  expect_error(sbc(spatial, model.only = TRUE), "fresh cells")
 
   re <- fit
   re$re_effects <- list(g = 1)
-  expect_error(tobs_sbc(re, model.only = TRUE), "structured term")
+  expect_error(sbc(re, model.only = TRUE), "structured term")
 })
 
 
@@ -219,7 +219,7 @@ test_that("a visit-level observation design is refused, not rebuilt", {
                                visits = od$det.covs, method = "laplace",
                                control = .sbc_reg_ctl))
   expect_true(ncol(fit$model$X_det_visit) > 0L)
-  expect_error(tobs_sbc(fit, model.only = TRUE), "visit-level")
+  expect_error(sbc(fit, model.only = TRUE), "visit-level")
 })
 
 
@@ -232,7 +232,7 @@ test_that("the replicate generator draws at the theta it is handed", {
   # replicates of 120 Poisson sites the standard error of the pooled mean is
   # under 0.02, so 0.08 is four of them.
   fit <- .SBC_REG_FIXTURES$count()
-  m <- tobs_sbc(fit, model.only = TRUE)
+  m <- sbc(fit, model.only = TRUE)
   th <- m$draw_theta(fit, 3L)
   mu <- exp(as.vector(fit$model$X_occ %*% th[seq_len(ncol(fit$model$X_occ))]))
 
@@ -255,7 +255,7 @@ test_that("occu posterior SBC: correct fit uniform, mis-scaled is not", {
   # four coefficients do not resolve a 20% mis-scale: measured over two seeds
   # the 1.25 control landed at 1.8e-3 and 2.1e-2, so an assertion on it would
   # be reporting the seed. At 1.5 it lands at 7.7e-7 and 2.2e-6.
-  res <- tobs_sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.5, seed = 0L)
 
   expect_s3_class(res, "sbc")

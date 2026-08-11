@@ -345,9 +345,9 @@ test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116
   ll <- .tobs_pointwise_loglik(fit, n.draws = 100L)
   expect_equal(dim(ll), c(100L, 5L * 40L))
   expect_true(all(is.finite(ll)))
-  w <- tobs_waic(fit, n.draws = 100L)
-  d <- tobs_dic(fit, n.draws = 100L)
-  cp <- tobs_cpo(fit, n.draws = 100L)
+  w <- waic(fit, n.draws = 100L)
+  d <- dic(fit, n.draws = 100L)
+  cp <- cpo(fit, n.draws = 100L)
   expect_true(is.finite(w$waic) && w$p_waic > 0)
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cp$lpml))
@@ -364,7 +364,7 @@ test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127
               detection = ~ det_cov1, positive = ~ pos_cov1,
               y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
-  w <- tobs_waic(fit, n.draws = 100L)
+  w <- waic(fit, n.draws = 100L)
   expect_true(is.finite(w$waic))
 })
 

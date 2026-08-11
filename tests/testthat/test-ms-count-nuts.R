@@ -210,7 +210,7 @@ test_that("community count NUTS accepts missing (NA) entries and matches Laplace
   expect_community_mean(nut, real, c(0.14, 0.12))
   expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
                tolerance = 0.1)
-  expect_true(is.finite(tobs_waic(nut)$waic))
+  expect_true(is.finite(waic(nut)$waic))
 })
 
 test_that("community count gaussian NUTS recovers community means + residual variance", {

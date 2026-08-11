@@ -253,6 +253,6 @@ test_that("MAR cover fits and stays close to full on the spatial compact path", 
   expect_lt(max(abs(f_mar$means[pos_nm] - f_full$means[pos_nm])), 0.5)
 
   # WAIC is defined with NA cover in the data (the pointwise ll drops the term).
-  w <- suppressWarnings(tobs_waic(f_mar))
+  w <- suppressWarnings(waic(f_mar))
   expect_true(is.finite(w$waic))
 })

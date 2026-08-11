@@ -86,7 +86,7 @@ test_that("lfMsPGOcc wires the factor block and S3", {
   expect_identical(rownames(fit$ms_factor$loadings), paste0("sp", 1:5))
   expect_false(is.null(fit$model$occu_factor_offset))
   expect_equal(dim(fitted(fit)$psi), c(50L, 5L))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
@@ -117,7 +117,7 @@ test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
   expect_false(is.null(fit$model$occu_factor_offset))
   expect_equal(dim(fitted(fit)$psi), c(250L, 16L))
   # WAIC scores the factor structure (community_ploglik.R adds the offset)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 # The loading magnitude, which the residual correlation is blind to: it is
@@ -248,7 +248,7 @@ test_that("sfMsPGOcc recovers BOTH the shared field and the factors", {
   # fitted() adds BOTH offsets (field per-site, factors per-(site, species))
   expect_false(is.null(fit$model$occu_field_offset))
   expect_false(is.null(fit$model$occu_factor_offset))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("sfMsPGOcc recovers both structures over seeds", {

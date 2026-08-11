@@ -70,17 +70,17 @@ test_that("tobs_check_id works", {
 test_that("tobs_pit_residuals returns uniform-ish values", {
   skip_if_fast()
   res <- .simple_fit(method = "nuts")
-  pit <- tobs_pit_residuals(res$fit, n.samples = 50)
+  pit <- pit_residuals(res$fit, n.samples = 50)
   expect_length(pit, res$n)
   expect_true(all(pit >= 0 & pit <= 1))
-  ks <- tobs_test_uniformity(pit)
+  ks <- test_uniformity(pit)
   expect_s3_class(ks, "htest")
 })
 
 test_that("tobs_test_dispersion returns sensible output", {
   skip_if_fast()
   res <- .simple_fit(method = "nuts")
-  disp <- tobs_test_dispersion(res$fit, n.samples = 20)
+  disp <- test_dispersion(res$fit, n.samples = 20)
   expect_true(is.finite(disp$ratio))
   expect_true(disp$p.value >= 0 && disp$p.value <= 1)
 })
@@ -88,7 +88,7 @@ test_that("tobs_test_dispersion returns sensible output", {
 test_that("tobs_test_zero_inflation returns sensible output", {
   skip_if_fast()
   res <- .simple_fit(method = "nuts")
-  zi <- tobs_test_zero_inflation(res$fit, n.samples = 20)
+  zi <- test_zero_inflation(res$fit, n.samples = 20)
   expect_true(is.finite(zi$ratio))
 })
 
@@ -118,7 +118,7 @@ test_that("update works", {
 test_that("tobs_check runs without error", {
   skip_if_fast()
   res <- .simple_fit(method = "nuts")
-  expect_output(tobs_check(res$fit), "tobs Model Diagnostics")
+  expect_output(check_model(res$fit), "tobs Model Diagnostics")
 })
 
 test_that("tobs_check reports Moran's I when coords are supplied", {
@@ -126,7 +126,7 @@ test_that("tobs_check reports Moran's I when coords are supplied", {
   set.seed(7)
   res <- .simple_fit(method = "nuts", n = 30)
   coords <- cbind(runif(res$n), runif(res$n))
-  expect_output(tobs_check(res$fit, coords = coords), "Moran's I")
+  expect_output(check_model(res$fit, coords = coords), "Moran's I")
 })
 
 test_that("tobs_ppc is calibrated for a correct occupancy model", {
@@ -144,7 +144,7 @@ test_that("tobs_ppc is calibrated for a correct occupancy model", {
               method = "nuts",
               control = list(n.iter = 800, n.warmup = 400, seed = 11,
                              verbose = FALSE))
-  bp <- tobs_ppc(fit, n.samples = 300)$bayesian.p
+  bp <- ppc(fit, n.samples = 300)$bayesian.p
   expect_gt(bp, 0.1)
   expect_lt(bp, 0.9)
 })

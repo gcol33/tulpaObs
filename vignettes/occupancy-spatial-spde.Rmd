@@ -314,14 +314,14 @@ field at all.
 The formal check is whether any spatial structure is left in the residuals. If
 the field has absorbed the smooth signal, the occupancy residuals should look
 spatially random; leftover autocorrelation means the field missed something or
-the range was set wrong. `tobs_check()` runs the model diagnostics and, given
+the range was set wrong. `check_model()` runs the model diagnostics and, given
 the coordinates, computes Moran's I on the occupancy residuals, the standard
 test for spatial autocorrelation. It also reports WAIC and a posterior
 predictive Bayesian p-value. Run it on both fits.
 
 ```{r moran-check}
-chk_ns <- tobs_check(fit_ns, coords = coords, n.samples = 200)
-chk_sp <- tobs_check(fit_sp, coords = coords, n.samples = 200)
+chk_ns <- check_model(fit_ns, coords = coords, n.samples = 200, plot = FALSE)
+chk_sp <- check_model(fit_sp, coords = coords, n.samples = 200, plot = FALSE)
 ```
 
 A significant Moran's I on the non-spatial residuals (small p-value) is the
@@ -335,7 +335,7 @@ Moran's I is computed on the occupancy residuals, the difference between the
 realised ever-detected indicator and the smoothed occupancy state, weighted by
 inverse distance between sites. The test asks whether residuals at nearby sites
 are more alike than residuals at distant sites, which is exactly the structure a
-spatial field is meant to remove. Reading the two `tobs_check()` outputs side by
+spatial field is meant to remove. Reading the two `check_model()` outputs side by
 side is the cleanest single-number summary of whether the field earned its
 place: the non-spatial residuals should carry autocorrelation the SPDE residuals
 do not. If the SPDE residuals still test significant, the field is
@@ -488,8 +488,8 @@ apples-to-apples comparison against the non-spatial fit, which has no field
 either.
 
 ```{r waic}
-w_ns <- tobs_waic(fit_ns)
-w_sp <- tobs_waic(fit_sp)
+w_ns <- waic(fit_ns)
+w_sp <- waic(fit_sp)
 data.frame(
   model  = c("non_spatial", "spde"),
   waic   = round(c(w_ns$waic, w_sp$waic), 1),
@@ -531,7 +531,7 @@ data.frame(
 The field correlation is the simulation-only number, available only for the
 SPDE fit since the non-spatial model has no surface to recover, and the WAIC is
 conditional on the fixed effects. Read alongside the residual Moran's I from the
-`tobs_check()` output above, they say the field captured a real spatial signal
+`check_model()` output above, they say the field captured a real spatial signal
 that the non-spatial model could not, which is exactly how the data were built.
 
 ## Practical guidance

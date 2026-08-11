@@ -269,9 +269,9 @@
   enc      <- object$encoding
   positive <- object$positive %||% "lognormal"
   if (identical(positive, "gaussian")) {
-    stop("tobs_ppc() is not defined for cover(response = \"gaussian\"): the ",
+    stop("ppc() is not defined for cover(response = \"gaussian\"): the ",
          "Freeman-Tukey and chi-squared discrepancies assume a non-negative ",
-         "response, but the identity-Gaussian arm is unbounded. Use tobs_waic() ",
+         "response, but the identity-Gaussian arm is unbounded. Use waic() ",
          "/ tobs_loo() for model comparison.", call. = FALSE)
   }
   e <- .tobs_cover_eta_draws(object, n.draws = n.samples)

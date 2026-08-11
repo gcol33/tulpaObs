@@ -129,7 +129,7 @@ test_that("jsdm() recovers community means with per-species coefficients", {
   fv <- fitted(f)$mu
   expect_equal(dim(fv), c(300L, 16L))
   expect_true(all(fv > 0 & fv < 1))
-  expect_true(is.finite(tobs_waic(f)$waic))
+  expect_true(is.finite(waic(f)$waic))
   expect_equal(dim(ranef(f)), c(32L, 4L))
 })
 
@@ -149,7 +149,7 @@ test_that("lfJSDM wires the factor block and S3", {
   expect_equal(dim(f$ms_factor$residual_cov), c(5L, 5L))
   expect_equal(dim(f$ms_factor$loadings), c(5L, 1L))
   expect_false(is.null(f$model$count_factor_offset))
-  expect_true(is.finite(tobs_waic(f)$waic))
+  expect_true(is.finite(waic(f)$waic))
 })
 
 test_that("lfJSDM recovers residual species co-occurrence", {
@@ -174,7 +174,7 @@ test_that("lfJSDM recovers residual species co-occurrence", {
   # deviates 0.039 (intercept) and 0.034 (slope); the pre-fix slope deviated
   # 0.166 on the same seed, so the slope budget separates them.
   expect_community_mean(f, d$beta_real, c(0.10, 0.12))
-  expect_true(is.finite(tobs_waic(f)$waic))
+  expect_true(is.finite(waic(f)$waic))
 })
 
 test_that("lfJSDM recovers the residual correlation over seeds", {
@@ -224,7 +224,7 @@ test_that("sfJSDM recovers BOTH the shared field and the factors", {
   expect_gt(stats::cor(f$spatial_field, fl), 0.9)
   off <- upper.tri(d$cor_res)
   expect_gt(stats::cor(f$ms_factor$residual_cor[off], d$cor_res[off]), 0.75)
-  expect_true(is.finite(tobs_waic(f)$waic))
+  expect_true(is.finite(waic(f)$waic))
 })
 
 

@@ -1,6 +1,6 @@
 # =============================================================================
-# test-criteria-loo-unit.R -- loo.unit = c("obs", "cell") on tobs_cpo() /
-# tobs_waic() (tulpaObs#105). The convenience wrapper that auto-supplies the
+# test-criteria-loo-unit.R -- loo.unit = c("obs", "cell") on cpo() /
+# waic() (tulpaObs#105). The convenience wrapper that auto-supplies the
 # fit's per-observation cell map as tulpa_criteria(group =) for leave-one-group-
 # out cross-validation (LOGO-CV), so cover() / occu_cover() report plot/site-level
 # (default) AND cell-level LOO without the caller hand-building the cell map.
@@ -86,9 +86,9 @@ test_that(".tobs_criteria_group errors when loo.unit = 'cell' collides with an e
     "either .* or an explicit")
 })
 
-test_that("tobs_waic() / tobs_cpo() reject an unknown loo.unit", {
+test_that("waic() / cpo() reject an unknown loo.unit", {
   fit <- structure(list(model = list(model_type = "single")),
                    class = c("tobs_fit", "tulpa_fit"))
-  expect_error(tobs_waic(fit, loo.unit = "plot"), "should be one of")
-  expect_error(tobs_cpo(fit, loo.unit = "plot"),  "should be one of")
+  expect_error(waic(fit, loo.unit = "plot"), "should be one of")
+  expect_error(cpo(fit, loo.unit = "plot"),  "should be one of")
 })

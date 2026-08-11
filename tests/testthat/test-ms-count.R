@@ -68,7 +68,7 @@ test_that("ms_count() S3 surface works (coef / ranef / fitted / simulate / WAIC)
   expect_gt(stats::cor(as.numeric(ft), as.numeric(sim$y)), 0.4)
   sm <- simulate(fit)
   expect_equal(dim(sm), c(120L, 8L))
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
 })
 
@@ -86,7 +86,7 @@ test_that("ms_count() Laplace fit accepts missing (NA) site x species entries", 
   expect_equal(fit$N, sum(!is.na(y)))                    # N counts observed entries
   expect_true(all(is.finite(unlist(coef(fit)))))
   expect_true(all(is.finite(diag(vcov(fit)))))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("Poisson community count recovers community means with ~95% coverage", {

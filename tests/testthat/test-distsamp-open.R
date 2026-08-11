@@ -89,7 +89,7 @@ test_that("a distsamp_open fit recovers a single data set and wires S3", {
   expect_length(predict(fit, type = "abundance"), 100L)
   expect_length(predict(fit, type = "survival"), 100L)
   expect_length(residuals(fit)$occ, 100L)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
   expect_identical(dim(simulate(fit)), dim(sim$y))
 })
 
@@ -169,7 +169,7 @@ test_that("a distsamp_open(negbin) fit recovers abundance / scale and surfaces r
   tgt <- c("lambda_(Intercept)", "lambda_abund_cov1", "sigma_(Intercept)")
   tru <- c(log(8), 0.3, log(18))
   expect_true(all(abs(b[tgt] - tru) / se[tgt] < 3.5))
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
   expect_identical(dim(simulate(fit)), dim(sim$y))
 })
 
@@ -196,7 +196,7 @@ test_that("a distsamp_open(zip) fit recovers abundance / scale and the ZI share"
   tgt <- c("lambda_(Intercept)", "lambda_abund_cov1", "sigma_(Intercept)")
   tru <- c(log(8), 0.3, log(18))
   expect_true(all(abs(b[tgt] - tru) / se[tgt] < 3.5))
-  expect_true(is.finite(tobs_waic(fit)$waic))     # the per-site log_lik_site path
+  expect_true(is.finite(waic(fit)$waic))     # the per-site log_lik_site path
   expect_identical(dim(simulate(fit)), dim(sim$y))
 })
 
@@ -220,7 +220,7 @@ test_that("distsamp_open(zinb) recovers the structural-zero share across seeds (
     expect_s3_class(fit, "tobs_fit")
     expect_true(all(c("zi_logit", "log_r") %in% names(fit$means)))
     expect_true(is.finite(fit$r) && fit$r > 0)
-    expect_true(is.finite(tobs_waic(fit)$waic))
+    expect_true(is.finite(waic(fit)$waic))
     zi <- c(zi, fit$zi_omega)
   }
   # The structural-zero share recovers (the ZINB estimand); mean over seeds is tight.
@@ -276,7 +276,7 @@ test_that("distsamp_open fits every alternative dynamics and recovers lambda/sig
     fv <- fitted(fit)
     expect_length(fv$lambda, 40L); expect_length(fv$sigma, 40L)
     expect_length(predict(fit, type = "abundance"), 40L)
-    expect_true(is.finite(tobs_waic(fit)$waic), info = info)
+    expect_true(is.finite(waic(fit)$waic), info = info)
     expect_identical(dim(simulate(fit)), dim(sim$y))
   }
 })

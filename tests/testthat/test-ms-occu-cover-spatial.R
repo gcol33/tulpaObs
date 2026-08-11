@@ -631,14 +631,14 @@ test_that("tobs_waic / tobs_cpo deliver calibrated WAIC / LOO from the NUTS draw
               control = list(n.factors = 1L, n.iter = 600L, n.warmup = 300L,
                              n.chains = 2L, adapt.delta = 0.95, seed = 7L))
   n_obs <- nrow(adj) * S
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_true(is.finite(w$p_waic))
   expect_gt(w$p_waic, 0)
   # NUTS draws are the exact posterior, so p_waic is well below the pathological
   # multiples of n_obs the over-dispersed Laplace draws produced.
   expect_lt(w$p_waic / n_obs, 1)
-  lo <- tobs_cpo(fit)
+  lo <- cpo(fit)
   expect_true(is.finite(lo$elpd_loo) || is.finite(lo$elpd))
 
   # A Laplace fit (community-mean draws omit the field) errors with a pointer.
@@ -647,7 +647,7 @@ test_that("tobs_waic / tobs_cpo deliver calibrated WAIC / LOO from the NUTS draw
                positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
                species = sim$species, method = "laplace",
                control = list(n.factors = 1L))
-  expect_error(tobs_waic(fitL), "NUTS")
+  expect_error(waic(fitL), "NUTS")
 })
 
 test_that("inner mode-find recovers the latent field + loadings at the true hyperparameters", {

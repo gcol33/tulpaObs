@@ -124,11 +124,11 @@ test_that("a Poisson areal count fit recovers the field and wires S3", {
   # WAIC is field-aware: the shared field is part of the log-mean, so the areal
   # fit scores better than the fixed-effect-only model on the same data (a wrong
   # FE-only WAIC would ignore the field and not improve).
-  w_sp <- tobs_waic(fit)
+  w_sp <- waic(fit)
   expect_true(is.finite(w_sp$waic))
   fit_fe <- tobs(~ x, data = d$data, y = d$y, family = count(),
                  control = list(progress = FALSE, verbose = FALSE))
-  expect_lt(w_sp$waic, tobs_waic(fit_fe)$waic)
+  expect_lt(w_sp$waic, waic(fit_fe)$waic)
 })
 
 
@@ -356,7 +356,7 @@ test_that("areal count recovers a slope under a continuous NNGP gp() field", {
   # S3 surface: fitted / predict / WAIC.
   expect_equal(length(fitted(fit)$mu), n)
   expect_length(predict(fit), n)
-  expect_true(is.finite(tobs_waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$waic))
 })
 
 test_that("count() spatial-field gates: multiscale_gp and negbin + gp", {

@@ -359,7 +359,7 @@ count) and `nobs` attributes, so `AIC(fit)` / `BIC(fit)` resolve through the
 components and spatial-field hyperparameters are not penalised), and under
 `method = "nuts"` the log-likelihood is the mean posterior log-density (prior
 included), not a maximised likelihood — so for hierarchical model comparison
-prefer `tobs_waic()` / `tobs_dic()` / `tobs_cpo()`. tulpaObs overrides or adds:
+prefer `waic()` / `loo()` / `dic()` / `cpo()`. tulpaObs overrides or adds:
 
 | Method                          | Notes |
 |---------------------------------|-------|
@@ -394,17 +394,27 @@ directly from seed-offset refits (§5).
 
 | Function                       | Returns |
 |--------------------------------|---------|
-| `tobs_waic()`                  | `waic`, `elpd`, `p_waic`, `lppd` |
-| `tobs_dic()`                   | DIC, effective parameter count `p_D` |
-| `tobs_cpo()`                   | Conditional predictive ordinate / LOO log-score (`loo.unit = "obs"`/`"cell"`) |
-| `tobs_ppc(fit.stat, n.samples)`| Posterior predictive check + Bayesian p-value |
-| `tobs_pit_residuals(n.samples)`| PIT residual vector |
-| `tobs_test_uniformity(pit)`    | KS test of PIT residuals against uniform |
-| `tobs_test_dispersion()`       | Observed vs simulated variance ratio + p |
-| `tobs_test_zero_inflation()`   | Observed vs simulated all-zero sites + p |
-| `tobs_test_outliers()`         | Count of sites outside simulated 95% envelope + p |
-| `tobs_check(coords, n.samples)`| Roll-up report (sampler, WAIC, PPC, zero-inflation, Moran's I) |
+| `waic()`                       | `waic`, `elpd`, `p_waic`, `lppd` |
+| `loo()`                        | PSIS-LOO; a `loo` object, so `loo::loo_compare()` reads it |
+| `dic()`                        | DIC, effective parameter count `p_D` |
+| `cpo()`                        | Conditional predictive ordinate / LOO log-score (`loo.unit = "obs"`/`"cell"`) |
+| `ppc(fit.stat, n.samples)`     | Posterior predictive check + Bayesian p-value |
+| `pit_residuals(n.samples)`     | PIT residual vector |
+| `test_uniformity(pit)`         | KS test of PIT residuals against uniform |
+| `test_dispersion()`            | Observed vs simulated variance ratio + p |
+| `test_zero_inflation()`        | Observed vs simulated all-zero sites + p |
+| `test_outliers()`              | Count of sites outside simulated 95% envelope + p |
+| `sbc(n.sim, controls)`         | Posterior simulation-based calibration |
+| `check_model(coords, n.samples)`| Roll-up report (sampler, WAIC, PPC, dispersion, zero-inflation, PIT, Moran's I) plus the diagnostic panel; `plot = FALSE` for the report alone |
 | `tobs_check_id(model, fit)`    | Pre/post-fit identifiability checks (confounding, low detection, sparse data) |
+
+Each of these is an S3 method on the generic of whichever package owns the
+concept: `waic()` and `loo()` are the `loo` package's, so `loo::loo_compare()`
+and the model-weight machinery read a `tobs_fit` directly; `sbc()`,
+`pit_residuals()`, `dic()`, `cpo()`, `check_model()` and the `test_*()` family
+are `tulpa`'s;
+`ppc()` is tulpaObs's own. All are re-exported here, so attaching tulpaObs is
+enough to reach them.
 
 Generic spatial/temporal diagnostics (`moranI`, `durbinWatson`, `variogram`,
 `compare_models`) are inherited from tulpa. Many tobs diagnostics currently
@@ -457,9 +467,9 @@ a JSDM / community-factor fit (the spatial-factor `ms_occu_cover()` loadings).
 `simulate_dyn_abun` `simulate_distance` `simulate_removal` `simulate_fp_occu`
 `simulate_cover` `simulate_cover_joint` `simulate_occu_cover`
 `simulate_ms_occu_cover` `simulate_ms_occu_cover_spatial`
-`simulate_occu_multiscale_cover` · **Diagnostics** `tobs_waic` `tobs_cpo`
-`tobs_dic` `tobs_ppc` `tobs_pit_residuals` `tobs_test_uniformity`
-`tobs_test_dispersion` `tobs_test_zero_inflation` `tobs_test_outliers`
+`simulate_occu_multiscale_cover` · **Diagnostics** `waic` `loo` `cpo`
+`dic` `ppc` `pit_residuals` `test_uniformity`
+`test_dispersion` `test_zero_inflation` `test_outliers` `sbc`
 `tobs_check` `tobs_check_id` · **Prediction / effects** `tobs_predict_spatial`
 `tobs_marginal_effect` `tobs_richness` `tobs_associations`
 `occu_aggregation_scan` `within_between` · **Ensembles** `tobs_stack` ·

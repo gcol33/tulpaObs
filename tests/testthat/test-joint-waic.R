@@ -41,7 +41,7 @@ test_that("occu_cover() non-spatial: WAIC + pointwise log-lik (#26)", {
   expect_equal(ncol(ll), N)                       # per-site pointwise
   expect_true(all(is.finite(ll)))
 
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$elpd))
   expect_gte(w$p_waic, 0)
   # lppd is a sane per-observation magnitude for a hurdle (not absurd).
@@ -63,7 +63,7 @@ test_that("occu_cover() beta arm: pointwise log-lik is finite (#26)", {
               detection = ~ det_cov1, positive = ~ pos_cov1,
               y = od$y, y_pos = y_pos, visits = od$det.covs,
               method = "laplace", control = list(verbose = FALSE))
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_equal(ncol(tulpaObs:::.tobs_pointwise_loglik(fit)), N)
 })
@@ -93,7 +93,7 @@ test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
   ll <- tulpaObs:::.tobs_pointwise_loglik(fit)
   expect_equal(ncol(ll), N)
   expect_true(all(is.finite(ll)))
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_gte(w$p_waic, 0)
 })
@@ -123,13 +123,13 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
   ll <- tulpaObs:::.tobs_pointwise_loglik(fit)
   expect_equal(ncol(ll), N)                       # per-observation pointwise
   expect_true(all(is.finite(ll)))
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$elpd))
   expect_lt(abs(w$lppd / N), 5)
 
   # Without the stored spatial-unit index the joint log-lik errors clearly.
   fit2 <- fit; fit2$spi_full <- NULL
-  expect_error(tobs_waic(fit2), "spatial-unit index")
+  expect_error(waic(fit2), "spatial-unit index")
 })
 
 test_that("cover() separate-Laplace WAIC is unaffected (#26)", {
@@ -142,7 +142,7 @@ test_that("cover() separate-Laplace WAIC is unaffected (#26)", {
   y <- ifelse(occur == 1L, pmin(exp(rnorm(N, 0.3 - 0.4 * x, 0.4)), 1 - 1e-6), 0)
   fit <- tobs(formula = ~ x, data = data.frame(x = x),
               family = cover("lognormal"), y = y, method = "laplace")
-  w <- tobs_waic(fit)
+  w <- waic(fit)
   expect_true(is.finite(w$waic))
   expect_equal(ncol(tulpaObs:::.tobs_pointwise_loglik(fit)), N)
 })

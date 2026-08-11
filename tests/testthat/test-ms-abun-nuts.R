@@ -205,7 +205,7 @@ test_that("ms_abun NUTS S3 methods + WAIC work", {
   expect_equal(dim(fv$lambda), c(30L, 8L))
 
   # WAIC scored over the per-(species, site) NUTS draws.
-  w <- tobs_waic(fit, n.draws = 200L)
+  w <- waic(fit, n.draws = 200L)
   expect_true(is.finite(w$waic))
   expect_gt(w$p_waic, 0)
 })

@@ -387,7 +387,7 @@ icar 1.4 s, bym2 1.6 s, car_proper 0.8 s. An axis the caller chose
 
 ## Posterior SBC on the coupled `occu_cover` (`R/sbc.R`, #207)
 
-`tobs_sbc()` runs the posterior experiment of `tulpa::sbc()` (gcol33/tulpa#380,
+`sbc()` runs the posterior experiment of `tulpa::sbc()` (gcol33/tulpa#380,
 Sailynoja et al. 2026 Algorithm 2) on a fitted `tobs_fit`. Everything below was
 measured on tulpa 0.0.195 / tulpaObs 0.0.193, Windows, R 4.6.0.
 
@@ -482,7 +482,7 @@ measuring grid placement.
 
 Left off it, the joint engine fixes the dispersion per data set, so the observed
 fit and every refit hold it at a different value and the replicate is generated
-at one while scored under another. `tobs_sbc()` warns and drops it from the
+at one while scored under another. `sbc()` warns and drops it from the
 scored set (its posterior is a point mass, and `disp` took ONE unique value
 across 100 draws in that configuration). With `control$phi.grid.pos` it is
 estimated and scored.
@@ -615,7 +615,7 @@ place and then with `.tobs_check_graph()` restored to its pre-change body:
 ## SBC registry beyond `occu_cover` (`R/sbc.R`, #207)
 
 Eight single-response families registered and run end to end through
-`tobs_sbc()` at `n.sim = 100`, `n.draws = 1000`, `n.ref = 200`, `seed = 0`,
+`sbc()` at `n.sim = 100`, `n.draws = 1000`, `n.ref = 200`, `seed = 0`,
 `controls = "narrow"` (`bad.factor` 1.25). Both premises report `verified` on
 every one. `min p_unif` is over the arm coefficients; the joint `log_lik` arm is
 listed separately because on one family it carries the whole read.

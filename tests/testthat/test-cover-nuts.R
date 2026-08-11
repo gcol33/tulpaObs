@@ -279,7 +279,7 @@ test_that("cover NUTS fit supports the S3 method surface", {
   expect_true(all(nut$convergence$rhat[!is.na(nut$convergence$rhat)] > 0.9))
 
   # Calibrated WAIC from the per-draw pointwise likelihood (NUTS draws).
-  expect_true(is.finite(tobs_waic(nut)$waic))
+  expect_true(is.finite(waic(nut)$waic))
 
   # predict.cover_fit works on the fixed-effects (non-joint) NUTS fit.
   newdata <- data.frame(x = sim$data$x)

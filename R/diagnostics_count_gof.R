@@ -4,7 +4,7 @@
 # per-site TOTAL count, the natural overdispersion / excess-zero unit for an
 # N-mixture-type model. Each compares the observed statistic to its posterior
 # predictive distribution (simulate() replicates) and returns a tail p-value,
-# mirroring the single-season tobs_test_* return shape.
+# mirroring the single-season test_* return shape.
 
 .tobs_count_gof_families <- c("nmix", "removal", "distance", "dyn_abun")
 
@@ -40,7 +40,8 @@
   obs_var <- stats::var(tt$obs)
   sim_var <- apply(tt$sim, 2L, stats::var)
   list(observed = obs_var, expected = mean(sim_var),
-       ratio = obs_var / mean(sim_var), p.value = mean(sim_var >= obs_var))
+       ratio = obs_var / mean(sim_var), p.value = mean(sim_var >= obs_var),
+       sim = sim_var)
 }
 
 .tobs_test_zero_inflation_count <- function(object, n.samples) {

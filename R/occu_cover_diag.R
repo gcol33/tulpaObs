@@ -621,9 +621,9 @@
   model    <- object$model
   positive <- model$positive %||% "lognormal"
   if (identical(positive, "gaussian")) {
-    stop("tobs_ppc() is not defined for occu_cover(response = \"gaussian\"): the ",
+    stop("ppc() is not defined for occu_cover(response = \"gaussian\"): the ",
          "Freeman-Tukey and chi-squared discrepancies assume a non-negative ",
-         "response, but the identity-Gaussian arm is unbounded. Use tobs_waic() ",
+         "response, but the identity-Gaussian arm is unbounded. Use waic() ",
          "/ tobs_loo() for model comparison.", call. = FALSE)
   }
   pos_code <- .occu_cover_pos_code(positive)
