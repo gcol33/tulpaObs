@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.0.206 (2026-08-11)
+
+* Requires tulpa >= 0.0.197. The fused occu_cover batch driver
+  (`control$batch.backend = "fused"`) could converge one species to a
+  different mode than its own independent fit; root-caused and fixed
+  upstream in gcol33/tulpa#397 (the batched joint driver's dense path lacked
+  the PD escalation the sparse path and the single-species driver already
+  had). The previously-`skip()`-blocked bit-identity gate in
+  `test-occu-cover-batch.R` (gcol33/tulpaObs#224) is un-skipped and passing.
+
 ## 0.0.205 (2026-08-11)
 
 * **`gdistremoval()` registered for `sbc()`** (#220, multi-response group):
