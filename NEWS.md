@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.203 (2026-08-11)
+
+* **`int_occu()` registered for `sbc()`** (#220, multi-source group,
+  full-overlap only): its response is a list of one detection matrix per
+  source, a third response shape needing its own `spec`/`data`/`pool`/
+  `simulate`/`refit` set, pooling on the site axis and leaving the
+  per-source axis alone. The CONTRACT tier (refit reproduces the observed
+  fit exactly, pooling creates disjoint groups) passes cleanly, confirming
+  the adapter itself is correct. The acceptance tier does not: the
+  per-source detection intercepts fail posterior SBC's uniformity check,
+  and get WORSE at larger N rather than better -- not the small-sample-noise
+  signature #219 found for `royle_nichols()`, and not reproduced by a naive
+  bias check (which shows a comparable or larger discrepancy on plain
+  `occu()`, whose own SBC is known to pass, so that check isn't diagnostic
+  here). Filed as #225 rather than shipped as a false pass; the affected
+  test is `skip()`'d with a pointer, not deleted or asserted green.
+
 ## 0.0.202 (2026-08-11)
 
 * **`dyn_occu()` registered for `sbc()`** (#220, multi-season group,

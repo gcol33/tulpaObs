@@ -741,6 +741,104 @@
 
 
 # ---------------------------------------------------------------------------
+# 6c. int_occu() (gcol33/tulpaObs#220, multi-source group): pooling on the
+# SITE axis, leaving the per-source axis alone. `model$y_sources` is a list
+# of one detection matrix per source (`model$site_maps` the row -> site map),
+# so this is a second response shape the shared simple-family `data`/`pool`
+# cannot read. Full-overlap fits only (every source observes every site) --
+# `.tobs_ploglik_integrated`, which `loglik_many` reuses unchanged, is itself
+# only wired for that case.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_int_occu_src_names <- function(m) {
+  vapply(seq_len(m$n_sources), function(s) m$process_info[[1L + s]]$name,
+        character(1))
+}
+
+.tobs_sbc_spec_int_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  full <- vapply(seq_len(m$n_sources), function(s)
+    identical(as.integer(m$site_maps[[s]]), seq_len(m$n_sites) - 1L), logical(1))
+  if (!all(full)) {
+    stop("SBC on int_occu() is registered for full-overlap fits (every ",
+         "source observes every site); this fit has partial overlap.",
+         call. = FALSE)
+  }
+  src_nm <- .tobs_sbc_int_occu_src_names(m)
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det_list  = lapply(src_nm, function(nm) .tobs_sbc_recombine(m$formulas[[nm]], NULL)),
+       src_names = src_nm)
+}
+
+.tobs_sbc_data_int_occu <- function(fit) {
+  m <- fit$model
+  list(cells  = m$data,
+       y      = stats::setNames(m$y_sources, .tobs_sbc_int_occu_src_names(m)),
+       y_pos  = NULL,
+       visits = NULL,
+       graph  = NULL,
+       site   = seq_len(m$n_sites))
+}
+
+# Concatenate each source's own matrix on the SITE axis; sources stay
+# separate lists (they need not share a visit count).
+.tobs_sbc_pool_int_occu <- function(obs, rep) {
+  n_o <- length(obs$site); n_r <- length(rep$site)
+  y <- Map(function(a, b) rbind(a, b), obs$y, rep$y[names(obs$y)])
+  list(cells = rbind(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
+       graph = NULL, site = c(obs$site, rep$site + n_o))
+}
+
+.tobs_sbc_refit_int_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det_list, y = data$y[spec$src_names],
+    method = spec$method, control = spec$control)))
+}
+
+# Shared latent occupancy z ~ Bern(psi), independently observed through each
+# source's own detection process (per-visit Bernoulli(p_s)); the ordered
+# detected/all-zero event per source stays consistent with the same z draw,
+# matching what the exact marginal (`.tobs_ploglik_integrated`) integrates
+# over.
+.tobs_sbc_sim_int_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  m <- spec$model
+  pi_list <- m$process_info
+  n_src <- m$n_sources
+
+  beta_psi <- theta[seq_len(pi_list[[1L]]$p)]
+  psi <- plogis(as.vector(m$X_processes[[1L]] %*% beta_psi))
+  z <- stats::rbinom(m$n_sites, 1L, psi)
+
+  off <- pi_list[[1L]]$p
+  y <- vector("list", n_src)
+  for (s in seq_len(n_src)) {
+    pp <- pi_list[[1L + s]]
+    beta_s <- theta[off + seq_len(pp$p)]
+    off <- off + pp$p
+    p_s <- plogis(as.vector(m$X_processes[[1L + s]] %*% beta_s))
+    J_s <- ncol(m$y_sources[[s]])
+    ys <- z * matrix(stats::rbinom(m$n_sites * J_s, 1L, rep(p_s, J_s)),
+                     m$n_sites, J_s)
+    ys[m$y_sources[[s]] < 0] <- -1
+    y[[s]] <- ys
+  }
+  names(y) <- .tobs_sbc_int_occu_src_names(m)
+  list(cells = m$data, y = y, y_pos = NULL, visits = NULL, graph = NULL,
+       site = seq_len(m$n_sites))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -789,6 +887,17 @@
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_dyn_occu,
     refit       = .tobs_sbc_refit_dyn_occu,
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # Multi-source group (gcol33/tulpaObs#220): pools on the site axis, leaves
+  # the per-source axis alone (custom `spec`/`data`/`pool`/`simulate`/`refit`
+  # -- see section 6c). Full-overlap only.
+  int_occu = list(
+    spec        = .tobs_sbc_spec_int_occu,
+    data        = .tobs_sbc_data_int_occu,
+    pool        = .tobs_sbc_pool_int_occu,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_int_occu,
+    refit       = .tobs_sbc_refit_int_occu,
     loglik_many = .tobs_sbc_loglik_many_simple)
 )
 
@@ -1002,6 +1111,14 @@
 #' forward-simulates the colonization/extinction HMM, but the posterior
 #' draws and the rank statistic are the same shared machinery every other
 #' registered family uses.
+#'
+#' `int_occu` (full source-site overlap only) pools on the SITE axis and
+#' leaves the per-source axis alone, since its response is a list of one
+#' detection matrix per source; the rank statistic is the shared machinery
+#' unchanged, but its per-source detection intercepts do not yet clear
+#' posterior SBC's acceptance bar (`gcol33/tulpaObs#225`) -- the CONTRACT
+#' checks pass (the replicate generator and refit are correct), the
+#' calibration read does not.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

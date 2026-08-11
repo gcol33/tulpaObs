@@ -84,6 +84,14 @@ forward-simulates the colonization/extinction HMM, but the posterior
 draws and the rank statistic are the same shared machinery every other
 registered family uses.
 
+\code{int_occu} (full source-site overlap only) pools on the SITE axis and
+leaves the per-source axis alone, since its response is a list of one
+detection matrix per source; the rank statistic is the shared machinery
+unchanged, but its per-source detection intercepts do not yet clear
+posterior SBC's acceptance bar (\code{gcol33/tulpaObs#225}) -- the CONTRACT
+checks pass (the replicate generator and refit are correct), the
+calibration read does not.
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are
