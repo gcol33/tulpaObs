@@ -88,6 +88,15 @@
                           family = double_observer(),
                           detection = ~ det_cov1, y = sim$y,
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  dyn_occu = function(N = 80L) {
+    sim <- simulate_dyn_occu(N = N, J = 4L, n_seasons = 5L,
+                             beta_occ = c(0.2, 0.6), beta_det = c(0.4),
+                             gamma = 0.25, epsilon = 0.15, seed = 21L)
+    suppressWarnings(tobs(~ x, data = sim$data, family = dyn_occu(),
+                          detection = ~ 1, colonization = ~ 1,
+                          extinction = ~ 1, y = sim$y,
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -175,7 +184,11 @@ test_that("each registered family composes its callbacks end to end", {
     expect_length(unique(m$group_ids(pl)), n_o + n_r)
     expect_identical(nrow(pl$y), n_o + n_r)
     expect_identical(nrow(pl$cells), n_o + n_r)
-    expect_equal(pl$y[seq_len(n_o), , drop = FALSE], m$data_obs$y, info = fam)
+    # A multi-season family's y is 3D [site x visit x season] (pooled on the
+    # site axis alone), a single-season family's is the plain 2D matrix.
+    obs_slice <- if (length(dim(pl$y)) == 3L) pl$y[seq_len(n_o), , , drop = FALSE]
+                else pl$y[seq_len(n_o), , drop = FALSE]
+    expect_equal(obs_slice, m$data_obs$y, info = fam)
 
     pooled <- m$fit(pl)
     expect_s3_class(pooled, "tobs_fit")
@@ -303,6 +316,36 @@ test_that("double_observer posterior SBC: correct fit uniform, mis-scaled is not
   fit <- .SBC_REG_FIXTURES$double_observer()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.5, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("dyn_occu posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multi-season group). bad.factor = 1.75 -- the extra
+  # tick past double_observer's 1.5 that epsilon's weak identification at 5
+  # seasons needs to clear 1e-3 cleanly. Measured (seed = 0): posterior min
+  # p_unif 0.090 (epsilon), narrow max 1.5e-4 (epsilon).
+  fit <- .SBC_REG_FIXTURES$dyn_occu()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
 
   expect_s3_class(res, "sbc")
   expect_identical(res$premises$pooling, "verified")

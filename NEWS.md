@@ -1,5 +1,19 @@
 # tulpaObs NEWS
 
+## 0.0.202 (2026-08-11)
+
+* **`dyn_occu()` registered for `sbc()`** (#220, multi-season group,
+  constant-rate only): its response is 3D `[n_sites x max_visits x
+  n_seasons]`, so unlike every family registered so far it needed a bespoke
+  `spec`/`data`/`pool`/`simulate`/`refit` set -- pooling on the site axis
+  and leaving the season axis alone (the design the issue itself states),
+  with a hand-written HMM forward-simulator for the replicate generator.
+  `draws` and the `log_lik` rank statistic reuse the shared machinery
+  unchanged. Verified to the #207 bar: 100-sim posterior SBC uniform on all
+  five coefficients (min p_unif 0.090), a mis-scaled control rejects hard
+  (1.5e-4 at `bad.factor = 1.75`). Season-varying detection/colonization/
+  extinction fits are refused with a pointer, not silently mis-scored.
+
 ## 0.0.201 (2026-08-11)
 
 * Diagnosed #224 (`occu_cover()`'s fused batch backend not bit-identical to

@@ -77,6 +77,13 @@ drawing on fresh cells) and a visit-level observation design (the replicate
 kernel assembles the observation arm from the site-level design, so the two
 sides would carry different models).
 
+\code{dyn_occu} (constant-rate only) pools on the SITE axis and leaves the
+season axis alone, since its response is 3D
+\verb{[n_sites x max_visits x n_seasons]}: a bespoke replicate generator
+forward-simulates the colonization/extinction HMM, but the posterior
+draws and the rank statistic are the same shared machinery every other
+registered family uses.
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are

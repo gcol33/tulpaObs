@@ -630,6 +630,117 @@
 
 
 # ---------------------------------------------------------------------------
+# 6b. dyn_occu() (gcol33/tulpaObs#220, multi-season group): pooling on the
+# SITE axis, leaving the season axis alone. `model$y` is a 3D
+# [n_sites x max_visits x n_seasons] array, so the shared simple-family
+# `data`/`pool` (2D `rbind`) cannot be reused; every other piece (draws off
+# `fit$draws`, the `dynamic` pointwise log-likelihood already dispatched by
+# `.tobs_pointwise_loglik`) is. Constant-rate only (season-varying detection /
+# colonization / extinction is a follow-up -- `.tobs_sbc_reject_visit_design`
+# alone does not see those designs, so they are refused explicitly).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_reject_season_varying <- function(fit) {
+  m <- fit$model
+  sv <- c(det = isTRUE(m$det_season_varying),
+         col = isTRUE(m$col_season_varying),
+         ext = isTRUE(m$ext_season_varying))
+  if (!any(sv)) return(invisible(NULL))
+  stop("SBC on dyn_occu() is registered for constant-rate fits; this fit ",
+       "carries a season-varying (", paste(names(sv)[sv], collapse = ", "),
+       ") design, which the replicate generator does not yet reproduce.",
+       call. = FALSE)
+}
+
+.tobs_sbc_spec_dyn_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_season_varying(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       occ = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det = .tobs_sbc_recombine(m$formulas$det, NULL),
+       col = .tobs_sbc_recombine(m$formulas$col, NULL),
+       ext = .tobs_sbc_recombine(m$formulas$ext, NULL))
+}
+
+.tobs_sbc_data_dyn_occu <- function(fit) {
+  m <- fit$model
+  list(cells  = m$data,
+       y      = m$y,
+       y_pos  = NULL,
+       visits = NULL,
+       graph  = NULL,
+       site   = seq_len(m$n_sites))
+}
+
+# Concatenate two 3D [n_sites x max_visits x n_seasons] response arrays on the
+# SITE axis; the season axis (and its transition structure) is shared design,
+# not something a replicate draws fresh.
+.tobs_sbc_pool_dyn_occu <- function(obs, rep) {
+  n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
+  y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L]))
+  y[seq_len(n_o), , ] <- obs$y
+  y[n_o + seq_len(n_r), , ] <- rep$y
+  list(cells = rbind(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
+       graph = NULL, site = c(obs$site, rep$site + n_o))
+}
+
+.tobs_sbc_refit_dyn_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det, colonization = spec$col, extinction = spec$ext,
+    y = data$y, method = spec$method, control = spec$control)))
+}
+
+# Forward-simulate the HMM: z_1 ~ Bern(psi1), z_t | z_{t-1} ~ colonization /
+# extinction, y_{i,j,t} | z_{i,t} ~ Bern(p_i) over every visit. Missing visits
+# in the fitted model's OWN design (its own `NA` pattern, not the pooled
+# data's) are masked back to `NA` so the replicate's visit design matches the
+# one it will be pooled against.
+.tobs_sbc_sim_dyn_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  m <- spec$model
+  pi_list <- m$process_info
+  off <- 0L
+  get_beta <- function(k) {
+    b <- theta[off + seq_len(pi_list[[k]]$p)]
+    off <<- off + pi_list[[k]]$p
+    b
+  }
+  beta_psi1 <- get_beta(1L); beta_p <- get_beta(2L)
+  beta_gam  <- get_beta(3L); beta_eps <- get_beta(4L)
+
+  psi1 <- plogis(as.vector(m$X_processes[[1L]] %*% beta_psi1))
+  p    <- plogis(as.vector(m$X_processes[[2L]] %*% beta_p))
+  gam  <- plogis(as.vector(m$X_processes[[3L]] %*% beta_gam))
+  eps  <- plogis(as.vector(m$X_processes[[4L]] %*% beta_eps))
+
+  n <- m$n_sites; Tn <- m$n_seasons; J <- dim(m$y)[2L]
+  z <- matrix(0L, n, Tn)
+  z[, 1L] <- stats::rbinom(n, 1L, psi1)
+  for (t in 2:Tn) {
+    z[, t] <- ifelse(z[, t - 1L] == 1L,
+                     stats::rbinom(n, 1L, 1 - eps),
+                     stats::rbinom(n, 1L, gam))
+  }
+  y <- array(NA_real_, dim = c(n, J, Tn))
+  for (t in seq_len(Tn)) {
+    y[, , t] <- z[, t] * matrix(stats::rbinom(n * J, 1L, rep(p, J)), n, J)
+  }
+  y[is.na(m$y)] <- NA_real_
+
+  list(cells = m$data, y = y, y_pos = NULL, visits = NULL, graph = NULL,
+       site = seq_len(n))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -665,7 +776,20 @@
   double_observer = .tobs_sbc_simple_entry(
     "lambda", "p",
     extra = function(m) if (!is.null(m$primary)) list(primary = m$primary)
-                        else NULL)
+                        else NULL),
+  # Multi-season group (gcol33/tulpaObs#220): pools on the site axis, leaves
+  # the season axis alone (custom `spec`/`data`/`pool`/`simulate`/`refit` --
+  # see section 6b -- `draws` and `loglik_many` are the shared simple-family
+  # ones, since `fit$draws` and `.tobs_pointwise_loglik` already work for a
+  # `dynamic` fit unchanged). Constant-rate only.
+  dyn_occu = list(
+    spec        = .tobs_sbc_spec_dyn_occu,
+    data        = .tobs_sbc_data_dyn_occu,
+    pool        = .tobs_sbc_pool_dyn_occu,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_dyn_occu,
+    refit       = .tobs_sbc_refit_dyn_occu,
+    loglik_many = .tobs_sbc_loglik_many_simple)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -871,6 +995,13 @@
 #' drawing on fresh cells) and a visit-level observation design (the replicate
 #' kernel assembles the observation arm from the site-level design, so the two
 #' sides would carry different models).
+#'
+#' `dyn_occu` (constant-rate only) pools on the SITE axis and leaves the
+#' season axis alone, since its response is 3D
+#' `[n_sites x max_visits x n_seasons]`: a bespoke replicate generator
+#' forward-simulates the colonization/extinction HMM, but the posterior
+#' draws and the rank statistic are the same shared machinery every other
+#' registered family uses.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the
