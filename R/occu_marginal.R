@@ -73,7 +73,15 @@
     start <- as.numeric(fit$means[all_nm])
     if (any(!is.finite(start))) return(fit)
 
-    opt <- optim(start, nlp, method = "BFGS", hessian = TRUE)
+    # A tighter reltol than optim()'s default (relative to the function
+    # VALUE, ~1e-8) matters when the starting point is farther from the
+    # optimum along a shallow direction -- the default can pass a point whose
+    # NLP value has stopped moving while a coordinate is still ~0.01 off
+    # (gcol33/tulpaObs#225: int_occu()'s un-refined EM mode is farther from
+    # the exact-marginal optimum than occu()'s own, and needed this to reach
+    # the same point occu() already reached under the looser default).
+    opt <- optim(start, nlp, method = "BFGS", hessian = TRUE,
+                control = list(reltol = 1e-12, maxit = 500L))
     V <- tryCatch(solve(opt$hessian), error = function(e) NULL)
     if (is.null(V)) return(fit)
     se <- sqrt(pmax(diag(V), 0))

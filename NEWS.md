@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.204 (2026-08-11)
+
+* **`int_occu()`'s detection-arm intercepts and SEs were systematically
+  wrong** (breaking: reported values change; #225, root-caused from the
+  SBC calibration failure filed there). Two compounding bugs, neither an
+  SBC adapter issue:
+  - `int_occu()`'s per-source detection design matrix lost its column
+    names when padded to full-site width (`R/occu.R`), so the covariate
+    autoscaler's unscale step could not find the intercept column by name.
+    It correctly unscaled the detection slope back to natural units but
+    silently left the detection intercept in standardized-covariate units,
+    on every fit with an autoscaled detection covariate.
+  - `model_type == "integrated"` never received the exact-marginal Newton
+    debiasing that single-season `occu()` and `dyn_occu()` already have
+    (the EM's pseudo-binomial M-step leaves a small discretisation
+    residual their refine corrects); a new `.tobs_integrated_marginal_refine()`
+    (`R/int_occu_marginal.R`) closes that gap the same way.
+  - Verified: `int_occu()` with a single source now matches `occu()` on
+    identical data to full optimizer precision (all four coefficients and
+    both SDs bit-identical, previously off by ~0.06 on the detection
+    intercept even at full EM convergence with priors disabled). The
+    `int_occu()` SBC acceptance test (blocked in 0.0.203) now passes
+    cleanly: posterior min p_unif 0.171 (was failing at 8e-6).
+
 ## 0.0.203 (2026-08-11)
 
 * **`int_occu()` registered for `sbc()`** (#220, multi-source group,

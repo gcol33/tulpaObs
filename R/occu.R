@@ -368,6 +368,7 @@
 
   for (s in seq_len(n_sources)) {
     X_det_s <- matrix(0, n_sites, ncol(X_det_list[[s]]))
+    colnames(X_det_s) <- colnames(X_det_list[[s]])
     src_rows <- site_maps[[s]] + 1L
     X_det_s[src_rows, ] <- X_det_list[[s]]
     X_processes[[1 + s]] <- X_det_s

@@ -167,6 +167,8 @@
       fit <- .tobs_occu_marginal_refine(fit, model, prior_spec)
     } else if (identical(model$model_type, "dynamic")) {
       fit <- .tobs_dyn_occu_marginal_refine(fit, model, prior_spec)
+    } else if (identical(model$model_type, "integrated")) {
+      fit <- .tobs_integrated_marginal_refine(fit, model, prior_spec)
     }
   }
 

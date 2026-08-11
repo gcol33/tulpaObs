@@ -393,15 +393,19 @@ test_that("dyn_occu posterior SBC: correct fit uniform, mis-scaled is not", {
 test_that("int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
-  # Blocked on gcol33/tulpaObs#225: the CONTRACT tier above (refit reproduces
-  # the observed fit exactly, pooling is disjoint) passes cleanly -- the
-  # registration machinery is correct -- but the per-source detection
-  # intercepts (src1_(Intercept) / src2_(Intercept)) fail posterior SBC's
-  # uniformity read, worse at larger N, which is not the small-sample-noise
-  # signature #219 found for royle_nichols(). Root cause not yet isolated
-  # (adapter vs a genuine property of int_occu's Laplace fit); see #225.
-  skip("int_occu per-source intercepts: blocked on gcol33/tulpaObs#225")
 
+  # gcol33/tulpaObs#225 (via #220). Root-caused to two compounding bugs, not
+  # an SBC adapter issue: (1) int_occu()'s per-source detection design
+  # matrix lost its column names when padded to full-site width
+  # (R/occu.R), so the autoscale unscale step couldn't find the intercept
+  # column and left the detection intercept in standardized-covariate units
+  # while correctly unscaling the slope; (2) model_type == "integrated"
+  # never got the exact-marginal Newton debiasing single-season occu() and
+  # dyn_occu() already have (R/int_occu_marginal.R). Verified: int_occu()
+  # with one source now matches occu() on the same data to full optim
+  # precision (all four coefficients and both SDs bit-identical). bad.factor
+  # = 1.75, the same tuning dyn_occu() needed. Measured (seed = 0): posterior
+  # min p_unif 0.171, narrow max 1.0e-5.
   fit <- .SBC_REG_FIXTURES$int_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
