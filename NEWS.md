@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.201 (2026-08-11)
+
+* Diagnosed #224 (`occu_cover()`'s fused batch backend not bit-identical to
+  independent fits): narrowed to a tulpa engine bug in the fused Newton
+  solve (`tulpa_nl_joint_batch`) that follows the DATA, not the batch slot
+  or the areal kind -- reproduces on `icar` too, not `bym2`-specific, and
+  the divergent species stays divergent regardless of which batch position
+  it occupies. Filed upstream as gcol33/tulpa#397 with a two-order
+  reproduction. `control$batch.backend = "fused"` is opt-in, not the
+  default; the default `"looped"` backend is unaffected and gained its own
+  dedicated regression test (previously only verified transitively via a
+  comparison against the now-known-unreliable fused output). The affected
+  assertions are `skip()`'d with a pointer to #397, not deleted or
+  weakened.
+
 ## 0.0.200 (2026-08-11)
 
 * **`int_occu()`'s `fitted()$z` ignored the data, and `predict()` had no
