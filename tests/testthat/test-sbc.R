@@ -104,15 +104,15 @@
 test_that("sbc() refuses a non-fit and an unregistered family", {
   expect_error(sbc(list()), "No sbc method is registered")
 
-  sim <- simulate_double_observer(N = 60L, seed = 2L)
-  fit <- suppressWarnings(tobs(~ abund_cov1, data = sim$data,
-                               family = double_observer(),
-                               detection = ~ 1, y = sim$y,
-                               method = "laplace",
-                               control = list(verbose = FALSE,
-                                              progress = FALSE)))
-  expect_error(sbc(fit), "not registered for family")
-  expect_error(sbc(fit), "occu_cover")
+  # double_observer() graduated to registered (gcol33/tulpaObs#220); a
+  # synthetic fake family keeps this test's premise -- a fit whose family is
+  # genuinely absent from the registry -- true regardless of what graduates
+  # next, matching test-sbc-registry.R's own "roster names what is
+  # registered" test.
+  fake <- structure(list(model = list()), class = "tobs_fit",
+                    tobs_family = list(name = "not_a_family"))
+  expect_error(sbc(fake), "not registered for family")
+  expect_error(sbc(fake), "occu_cover")
 })
 
 
