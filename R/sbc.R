@@ -1790,6 +1790,150 @@
 
 
 # ---------------------------------------------------------------------------
+# 6m. occu_multiscale_cover() (gcol33/tulpaObs#220, multiarm-S3 group): a
+# THREE-level hurdle -- cell occupancy psi gates plot availability theta,
+# which gates per-visit detection p and the cover hurdle pos -- fit under
+# `method = "laplace"` (non-spatial: iid cells, field fixed at 0). Unlike
+# `cover()`, this is the STANDARD single-block fit shape: `fit$means`/
+# `fit$draws` are a real joint MVN (dispersion `log_sigma_pos` optimized
+# jointly with the coefficients via BFGS + `optimHess`, so it carries a
+# proper SE, unlike `cover()`'s post-hoc MOM estimate) and
+# `.tobs_pointwise_loglik` already dispatches for this model_type -- so
+# `draws`/`loglik_many` are the shared generic ones, unlike every other
+# family in this section.
+#
+# What IS custom, and why: the exchangeable UNIT for this family's SBC
+# premise is the CELL, not the plot -- z_c (cell occupancy) is the top
+# hierarchical draw, and every plot within a cell shares it, so plots are
+# not conditionally independent given theta the way one row is in every
+# other registered family. `site` in the pooled data is therefore the
+# per-plot CELL INDEX (`model$plot_cell`), not a running plot counter, so
+# the driver's fresh-groups premise (unique `site` labels) counts unique
+# CELLS. Pooling offsets the replicate's cell indices past the observed
+# cell COUNT (`model$n_cells`), not the plot count.
+#
+# `formula` is REQUIRED to carry an `icar(graph =, group_var = "<col>")`
+# term declaring the plot -> cell map, even under the non-spatial engine
+# (the graph itself is ignored there, but the term's presence and its
+# group_var column are not optional syntax). Rather than track and
+# reproduce the OBSERVED fit's own group_var column name through pooling, a
+# fixed synthetic column (`.sbc_cell`) is written into `cells` by both
+# `data()` and `simulate()`, with a same-size dummy graph built at refit
+# time -- the group_var mapping the refit reads is entirely the SBC
+# adapter's own, decoupled from whatever the original fit used.
+#
+# `simulate()` has no family handler to inject theta into (unlike `cover()`
+# reusing `.tobs_simulate_ms_occu()`-style machinery), so it is a
+# hand-written three-level generator: z_c ~ Bernoulli(psi_c) per cell,
+# a_j | z_{cell(j)} ~ Bernoulli(theta_j) per plot, y_jv | a_j ~
+# Bernoulli(p_j) per visit, cover | y_jv=1 ~ Lognormal(eta_pos_j,
+# sigma_pos). `positive = "lognormal"` only, matching `cover()`'s v1 scope
+# and reasoning (no beta-arm generator to mirror, and dispersion carries a
+# real SE here so there is no dispersion-fixing complication to work
+# around). No visit-level covariates for v1 (`.tobs_sbc_reject_visit_design`
+# rejects them).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_reject_occu_mscale_cover_scope <- function(fit) {
+  m <- fit$model
+  if (!identical(m$positive %||% "lognormal", "lognormal")) {
+    stop("SBC on occu_multiscale_cover() is registered for positive = ",
+         "\"lognormal\" only (got \"", m$positive, "\").", call. = FALSE)
+  }
+}
+
+.tobs_sbc_spec_occu_mscale_cover <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_occu_mscale_cover_scope(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method %||% "laplace",
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       psi     = .tobs_sbc_recombine(m$formulas$psi,   NULL),
+       theta   = .tobs_sbc_recombine(m$formulas$theta, NULL),
+       det     = .tobs_sbc_recombine(m$formulas$p,     NULL),
+       pos     = .tobs_sbc_recombine(m$formulas$pos,   NULL))
+}
+
+.tobs_sbc_data_occu_mscale_cover <- function(fit) {
+  m <- fit$model
+  cells <- m$data
+  cells$.sbc_cell <- m$plot_cell
+  list(cells = cells, y = m$y, y_pos = m$y_pos, visits = NULL, graph = NULL,
+       site = m$plot_cell, n_cells = m$n_cells)
+}
+
+.tobs_sbc_pool_occu_mscale_cover <- function(obs, rep) {
+  n_c_o <- obs$n_cells
+  rep_cells <- rep$cells
+  rep_cells$.sbc_cell <- rep_cells$.sbc_cell + n_c_o
+  list(cells   = .tobs_sbc_rbind_cells(obs$cells, rep_cells),
+       y       = rbind(obs$y, rep$y),
+       y_pos   = rbind(obs$y_pos, rep$y_pos),
+       visits  = NULL, graph = NULL,
+       site    = c(obs$site, rep$site + n_c_o),
+       n_cells = n_c_o + rep$n_cells)
+}
+
+.tobs_sbc_refit_occu_mscale_cover <- function(spec, data) {
+  n_cells <- max(data$cells$.sbc_cell)
+  dummy_graph <- matrix(0, n_cells, n_cells)
+  fe_labels <- attr(stats::terms(spec$psi), "term.labels")
+  icpt <- attr(stats::terms(spec$psi), "intercept")
+  rhs <- paste(c(fe_labels,
+                'icar(graph = dummy_graph, group_var = ".sbc_cell")'),
+              collapse = " + ")
+  if (!icpt) rhs <- paste(rhs, "- 1")
+  full_formula <- stats::as.formula(paste("~", rhs), env = environment())
+  suppressWarnings(do.call(tobs, list(
+    formula = full_formula, data = data$cells, family = spec$family,
+    detection = spec$det, availability = spec$theta, positive = spec$pos,
+    y = data$y, y_pos = data$y_pos,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_sim_occu_mscale_cover <- function(spec, theta, seed) {
+  set.seed(seed)
+  m <- spec$model
+  psi_names   <- m$process_info[[1L]]$coef_names
+  theta_names <- m$process_info[[2L]]$coef_names
+  det_names   <- m$process_info[[3L]]$coef_names
+  pos_names   <- m$process_info[[4L]]$coef_names
+  beta_psi   <- theta[paste0("psi_",   psi_names)]
+  beta_theta <- theta[paste0("theta_", theta_names)]
+  beta_p     <- theta[paste0("p_",     det_names)]
+  beta_pos   <- theta[paste0("pos_",   pos_names)]
+  sigma_pos  <- exp(theta[["log_sigma_pos"]])
+
+  n_cells <- m$n_cells; n_plots <- m$n_plots; J <- m$max_visits
+  psi_c   <- stats::plogis(as.vector(m$X_psi %*% beta_psi))
+  z_c     <- stats::rbinom(n_cells, 1L, psi_c)
+
+  theta_j <- stats::plogis(as.vector(m$X_theta %*% beta_theta))
+  a_j     <- stats::rbinom(n_plots, 1L, theta_j) * z_c[m$plot_cell]
+
+  p_j <- stats::plogis(as.vector(m$X_p_site %*% beta_p))
+  eta_pos_j <- as.vector(m$X_pos_site %*% beta_pos)
+
+  y <- matrix(0L, n_plots, J)
+  y_pos <- matrix(0, n_plots, J)
+  for (v in seq_len(J)) {
+    y[, v] <- ifelse(a_j == 1L, stats::rbinom(n_plots, 1L, p_j), 0L)
+    cov_draw <- exp(stats::rnorm(n_plots, eta_pos_j, sigma_pos))
+    y_pos[, v] <- ifelse(y[, v] == 1L, pmin(cov_draw, 1), 0)
+  }
+
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = y, y_pos = y_pos, visits = NULL, graph = NULL,
+       site = obs$site, n_cells = obs$n_cells)
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -1963,9 +2107,22 @@
     draws       = .tobs_sbc_draws_cover,
     simulate    = .tobs_sbc_sim_cover,
     refit       = .tobs_sbc_refit_cover,
-    loglik_many = .tobs_sbc_loglik_many_cover)
+    loglik_many = .tobs_sbc_loglik_many_cover),
   # ms_int_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6l).
   # Confirmed to share ms_occu's exact failure mode, not just suspected.
+  #
+  # occu_multiscale_cover() (gcol33/tulpaObs#220, multiarm-S3 group, section
+  # 6m): the standard single-block fit shape (unlike cover()), so
+  # draws/loglik_many are the shared generic ones; site is the per-plot CELL
+  # index (the exchangeable unit for this family), not a plot counter.
+  occu_multiscale_cover = list(
+    spec        = .tobs_sbc_spec_occu_mscale_cover,
+    data        = .tobs_sbc_data_occu_mscale_cover,
+    pool        = .tobs_sbc_pool_occu_mscale_cover,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_occu_mscale_cover,
+    refit       = .tobs_sbc_refit_occu_mscale_cover,
+    loglik_many = .tobs_sbc_loglik_many_simple)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -2228,6 +2385,10 @@
 #' `cover` is a `tobs_multiarm_fit` with the same two-independent-block shape
 #' as `occu_categorical`; `positive = "lognormal"` only for v1, with
 #' dispersion held fixed (no SE is reported for it anywhere in the package).
+#'
+#' `occu_multiscale_cover` is a standard single-block fit (unlike `cover`'s
+#' two-block one); the exchangeable unit is the CELL rather than the plot, so
+#' pooling and site labeling track cell indices.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

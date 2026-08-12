@@ -178,9 +178,22 @@
                           sigma_pos = 0.4, response = "lognormal", seed = 51L)
     suppressWarnings(tobs(~ x, data = sim$data, family = cover("lognormal"),
                           y = sim$y, method = "laplace", control = .sbc_reg_ctl))
-  }
+  },
   # ms_int_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6l).
   # Confirmed (not just suspected) to share ms_occu's failure mode.
+  occu_multiscale_cover = function(n_cells = 40L) {
+    sim <- simulate_occu_multiscale_cover(
+      n_cells = n_cells, plots_per_cell = 4L, visits_per_plot = 2L,
+      beta_psi = c(0.4, 0.6), beta_theta = c(0.2, 0.5),
+      beta_p = c(0.0, 0.5), beta_pos = c(log(0.10), -0.4),
+      positive = "lognormal", phi = 0.35, seed = 61L)
+    suppressWarnings(tobs(~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+                          data = sim$data,
+                          family = occu_multiscale_cover(response = "lognormal"),
+                          detection = ~ x_pdet, availability = ~ x_plot,
+                          positive = ~ x_cov, y = sim$y, y_pos = sim$y_pos,
+                          method = "laplace", control = .sbc_reg_ctl))
+  }
 )
 
 
@@ -776,4 +789,37 @@ test_that("occu_categorical posterior SBC: correct fit uniform, mis-scaled is no
   expect_length(ok, length(qs))
   expect_gt(min(ok), 1e-3)
   expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("occu_multiscale_cover posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multiarm-S3 group, section 6m). The standard
+  # single-block fit shape (unlike cover()); the exchangeable unit is the
+  # CELL, not the plot, so pooling/site track cell indices. Checked at three
+  # configurations (n_cells=40 seeds 0/1, n_cells=120 seed 0) before
+  # registering -- all consistent, no anomaly like the ms_occu/ms_int_occu
+  # near-misses (#226). Measured (n_cells=40, seed=0): posterior min p_unif
+  # 0.093 (psi_(Intercept)), narrow max 5.5e-6.
+  fit <- .SBC_REG_FIXTURES$occu_multiscale_cover()
+  res <- suppressMessages(sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L))
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs2 <- names(fit$means)
+  pu2 <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs2, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok2 <- pu2("posterior")
+  expect_length(ok2, length(qs2))
+  expect_gt(min(ok2), 1e-3)
+  expect_lt(min(pu2("narrow")), 1e-3)
 })

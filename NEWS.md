@@ -1,5 +1,16 @@
 # tulpaObs NEWS
 
+## 0.0.214 (2026-08-12)
+
+* **`occu_multiscale_cover()` registered for `sbc()`** (#220, multiarm-S3
+  group -- completes it, alongside `cover()`): the standard single-block fit
+  shape (unlike `cover()`'s two-block one), with the exchangeable unit the
+  CELL rather than the plot, so pooling/site-labeling tracks cell indices.
+  Checked at three configurations (`n_cells=40` seeds 0/1, `n_cells=120`
+  seed 0) before registering -- all consistent, no anomaly like the
+  ms_occu/ms_int_occu near-misses (#226). Measured (`n_cells=40`, seed 0):
+  posterior min p_unif 0.093 (`psi_(Intercept)`), narrow max 5.5e-6.
+
 ## 0.0.213 (2026-08-12)
 
 * **`ms_int_occu()` was live in `.TOBS_SBC_REGISTRY` with an unverified

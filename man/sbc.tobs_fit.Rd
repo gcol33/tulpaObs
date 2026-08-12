@@ -134,6 +134,10 @@ a fresh AR1 year effect at the theta's own \verb{(sigma, rho)}, and
 as \code{occu_categorical}; \code{positive = "lognormal"} only for v1, with
 dispersion held fixed (no SE is reported for it anywhere in the package).
 
+\code{occu_multiscale_cover} is a standard single-block fit (unlike \code{cover}'s
+two-block one); the exchangeable unit is the CELL rather than the plot, so
+pooling and site labeling track cell indices.
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are
