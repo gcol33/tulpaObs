@@ -470,7 +470,13 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
       sd_lambda = sqrt(pmax(diag(Sigma_lambda), 0)),
       sd_sigma  = sqrt(pmax(diag(Sigma_sigma), 0)),
       coef_lambda = coef_lambda, coef_sigma = coef_sigma,
-      blup_lambda = blup_lambda, blup_sigma = blup_sigma),
+      blup_lambda = blup_lambda, blup_sigma = blup_sigma,
+      # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
+      # community EM's own Newton solve, conditional on the converged
+      # community mean) -- what a per-species-coefficient consumer (SBC's
+      # "rank a fixed species set" design, a calibrated per-species CI) needs
+      # beyond the point BLUP; not previously exposed on the fit object.
+      Cinv = em$Cinv),
     convergence = list(converged = isTRUE(em$converged),
                        n_iter = em$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))
