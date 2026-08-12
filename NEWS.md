@@ -1,5 +1,19 @@
 # tulpaObs NEWS
 
+## 0.0.216 (2026-08-12)
+
+* **`ms_distance()` gained a `simulate()` handler** (#227): reads
+  `ms_community$coef_lambda`/`coef_sigma` (the deterministic per-species
+  matrices, matching `ms_occu()`/`ms_count()`'s own handlers) and draws a
+  replicate through `cpp_simulate_distance` -- the same kernel the
+  likelihood integrates against, as `simulate_ms_distance()`'s own
+  docstring already notes for the standalone generator. `key = "halfnorm"`
+  only for now; the hazard key's log-shape is a community `global` scalar
+  not carried by `ms_community`, left as a follow-up. Unblocks registering
+  `ms_distance()` for `sbc()` -- not attempted yet in this pass, and would
+  need the same multi-seed check every other community family in this
+  design has needed given #226's track record (3 for 3 so far).
+
 ## 0.0.215 (2026-08-12)
 
 * **`ms_count()` is a THIRD family confirmed to share #226's bug.**

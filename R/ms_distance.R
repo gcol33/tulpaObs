@@ -512,6 +512,44 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
   list(lambda = lambda, sigma = sigma)
 }
 
+# Posterior replicate binned-count arrays: per species, draw the latent N and
+# allocate detections to distance bins through `cpp_simulate_distance` -- the
+# SAME kernel the likelihood integrates against (as `simulate_ms_distance()`'s
+# own docstring notes: a separate R-side quadrature would simulate from a pi
+# the model is not fit against). Reads `ms_community$coef_lambda`/`coef_sigma`
+# (deterministic per-species matrices), not `object$draws`, matching
+# ms_occu()/ms_count()'s own `simulate()` handlers. `key = "halfnorm"` only --
+# the hazard key's log-shape is a community `global` scalar not carried by
+# `ms_community`, a documented follow-up (gcol33/tulpaObs#227).
+.tobs_simulate_ms_distance <- function(object, nsim = 1) {
+  model <- object$model
+  if (!identical(model$key, "halfnorm")) {
+    stop("simulate() for ms_distance() fits is only wired for key = ",
+         "\"halfnorm\" (the hazard key's log-shape is a community global not ",
+         "carried by ms_community; gcol33/tulpaObs#227).", call. = FALSE)
+  }
+  cm <- object$ms_community
+  n_sites <- model$n_sites; n_bins <- model$n_bins; n_species <- model$n_species
+  X_lambda <- model$X_processes[[1L]]; X_sigma <- model$X_processes[[2L]]
+  p_lam <- ncol(X_lambda); p_sig <- ncol(X_sigma)
+  kc <- .dist_key_code(model$key)
+  tc <- .dist_transect_code(model$transect)
+  one <- function() {
+    y <- array(0L, dim = c(n_sites, n_bins, n_species),
+              dimnames = list(NULL, NULL, model$species_names))
+    for (s in seq_len(n_species)) {
+      res <- cpp_simulate_distance(
+        X_lambda, X_sigma,
+        matrix(c(cm$coef_lambda[s, ], cm$coef_sigma[s, ]), nrow = 1L),
+        as.numeric(model$cutpoints), kc, tc, 0, n_sites, n_bins, p_lam, p_sig,
+        FALSE, NA_real_, 1L)
+      y[, , s] <- res[[1L]]
+    }
+    y
+  }
+  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+}
+
 
 # ---------------------------------------------------------------------------
 # Simulator
