@@ -742,6 +742,13 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
       coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
       blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup,
+      # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
+      # community EM's own Newton solve, conditional on the converged
+      # community mean) -- what a per-species-coefficient consumer (SBC's
+      # "rank a fixed species set" design, a calibrated per-species CI) needs
+      # beyond the point BLUP; not previously exposed on the fit object.
+      # Covers the full b_s vector across all three arms (occ + p + pos).
+      Cinv = Cinv_list,
       # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
       # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
       # sd_*) carry Laplace small-cluster attenuation at small per-species n.
