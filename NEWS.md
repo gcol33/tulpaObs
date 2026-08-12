@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.0.215 (2026-08-12)
+
+* **`ms_count()` is a THIRD family confirmed to share #226's bug.**
+  CONTRACT-verified, but multi-seed (0, 1, 2) posterior SBC found
+  `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7 every time (several
+  other coefficients also suspiciously low, e.g. `sp3_mu_x` ~5e-6) --
+  the same systematic `Cov(mu, b_s)` bias diagnosed for `ms_occu` and
+  confirmed for `ms_int_occu`, and WORSE here: `ms_count` has no detection
+  arm to dilute it, just the single `mu` arm. Not registered; the adapter
+  functions (`R/sbc.R` section 6n) are kept as CONTRACT-verified groundwork.
+  #226 updated to note all three affected families.
+
 ## 0.0.214 (2026-08-12)
 
 * **`occu_multiscale_cover()` registered for `sbc()`** (#220, multiarm-S3

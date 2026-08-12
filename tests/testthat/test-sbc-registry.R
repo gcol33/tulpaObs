@@ -194,6 +194,9 @@
                           positive = ~ x_cov, y = sim$y, y_pos = sim$y_pos,
                           method = "laplace", control = .sbc_reg_ctl))
   }
+  # ms_count: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6n).
+  # Multi-seed (0, 1, 2) confirmed the same Cov(mu, b_s) bias, worse than
+  # ms_occu/ms_int_occu.
 )
 
 

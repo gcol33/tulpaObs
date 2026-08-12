@@ -1934,6 +1934,112 @@
 
 
 # ---------------------------------------------------------------------------
+# 6n. ms_count() (gcol33/tulpaObs#220, community group): community relative-
+# abundance GLMM, no detection/latent state (the abundance analogue of
+# ms_occu). `model$y` is a plain [n_sites x n_species] matrix (no visit
+# axis), so the SHARED generic `.tobs_sbc_pool` (2D `rbind`) applies
+# unchanged. Ranks the FIXED species set's own realized coefficients (mu +
+# b_s per species), the same design as ms_occu/ms_int_occu -- MULTI-SEED
+# tested (0, 1, 2) before registering, per the lesson #226 and the
+# ms_int_occu near-miss both taught: a single seed clearing the 1e-3 bar is
+# not evidence of calibration. `simulate()` is custom, overwriting
+# `ms_community$coef_mu` directly (`.tobs_simulate_ms_count()` reads that,
+# not `object$draws`, the same mechanism cover()/ms_occu()/ms_int_occu()
+# use for the identical reason). `loglik_many` sums each species' own exact
+# Poisson log-likelihood (`.ms_count_ll_pois`, the same kernel the fitter
+# optimizes) at that species' theta slice. `response = "poisson"` only for
+# v1 (negbin/gaussian/bernoulli/binomial carry an extra per-species
+# dispersion arm, a follow-up); `jsdm()` is `ms_count(response =
+# "bernoulli")` under the hood and is NOT covered by this registration --
+# a different response family with its own calibration to check.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_data_ms_count <- function(fit) {
+  m <- fit$model
+  list(cells = m$data, y = m$y, y_pos = NULL, visits = NULL, graph = NULL,
+       site = seq_len(m$n_sites))
+}
+
+.tobs_sbc_spec_ms_count <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  m <- fit$model
+  if (!identical(m$response, "poisson")) {
+    stop("SBC on ms_count() is registered for response = \"poisson\" only ",
+         "(got \"", m$response, "\"); negbin/gaussian/bernoulli/binomial are ",
+         "follow-ups.", call. = FALSE)
+  }
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       formula = .tobs_sbc_recombine(m$formulas$mu, NULL),
+       species = m$species_names)
+}
+
+.tobs_sbc_refit_ms_count <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$formula, data = data$cells, family = spec$family,
+    y = data$y, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_ms_count_names <- function(m) {
+  mu_names <- m$process_info[[1L]]$coef_names
+  list(mu_names = mu_names,
+       cols = as.vector(outer(mu_names, m$species_names,
+                              function(p, sp) paste0(sp, "_mu_", p))))
+}
+
+.tobs_sbc_draws_ms_count <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_count_names(m)
+  S <- m$n_species; P <- length(nm$mu_names)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
+  M <- matrix(NA_real_, n, S * P)
+  for (s in seq_len(S)) {
+    b_draws <- .tobs_sbc_mvn_draws(cm$blup_mu[s, ], cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
+  }
+  colnames(M) <- nm$cols
+  M
+}
+
+.tobs_sbc_sim_ms_count <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_count_names(m)
+  S <- m$n_species
+  coef_mu <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_mu_", nm$mu_names)]))
+  dimnames(coef_mu) <- list(m$species_names, nm$mu_names)
+  f$ms_community$coef_mu <- coef_mu
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_count <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_count_names(m)
+  S <- m$n_species
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta <- th[paste0(m$species_names[s], "_mu_", nm$mu_names)]
+      ll <- ll + .ms_count_ll_pois(m$summaries[[s]], beta)
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -2123,6 +2229,14 @@
     simulate    = .tobs_sbc_sim_occu_mscale_cover,
     refit       = .tobs_sbc_refit_occu_mscale_cover,
     loglik_many = .tobs_sbc_loglik_many_simple)
+  # ms_count() (gcol33/tulpaObs#220, community group, section 6n): NOT
+  # registered -- CONTRACT-verified, but multi-seed (0, 1, 2) posterior SBC
+  # found `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7 every time
+  # (several other coefficients also suspiciously low, e.g. sp3_mu_x ~5e-6),
+  # the SAME systematic Cov(mu, b_s) bias #226 diagnosed for ms_occu /
+  # ms_int_occu -- worse here, with no detection arm to dilute it. The
+  # adapter functions (.tobs_sbc_spec_ms_count etc.) are kept as
+  # CONTRACT-verified groundwork, matching the other two families' treatment.
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
