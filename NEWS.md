@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.219 (2026-08-12)
+
+* **`ms_occu_cover()`'s AGHQ variance debias never reprojected `Cinv`**
+  (gcol33/tulpaObs#226 part 2, found while scoping that issue's remaining
+  gap). `.ms_occu_cover_aghq_sigma()` debiases the community covariance
+  `Sigma`, but `Cov(b_s|y)` depends on `Sigma` only through `Sinv` in
+  `C_s = Htt_s + Sinv`, and nothing re-solved that per-species block at the
+  debiased `Sinv` -- `fit$ms_community$Cinv` silently kept its pre-debias
+  (attenuated) value even on an AGHQ-debiased fit, contradicting the fit's
+  own reported `Sigma`. Fixed by reprojecting: `Htt_s` is recoverable
+  without re-deriving the Newton solve (`solve(Cinv_old_s) - Sinv_old`), then
+  `Cinv_new_s = solve(Htt_s + Sinv_new)` -- exact, no new approximation
+  (`Bf_s`, being pure likelihood curvature with no `Sinv` term, needs no
+  update). Round-trip and reprojection identities validated to machine
+  precision (`~1e-15`) on synthetic SPD inputs; on a real fit (P=4, AGHQ
+  engaged), `Cinv` now measurably differs from the AGHQ-off fit where before
+  it was byte-identical. `test-ms-occu-cover.R` unaffected (19/19 pass).
+
 ## 0.0.218 (2026-08-12)
 
 * **#226 partial fix: the community-family SBC draws now sample mu and each

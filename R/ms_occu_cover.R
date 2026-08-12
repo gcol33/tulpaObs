@@ -646,20 +646,37 @@
   aghq_nq   <- as.integer(dots$n.quad %||% .tobs_n_quad("ms_occu_cover"))
   aghq_cap  <- as.integer(dots$re.aghq.maxdim %||% 4L)
   debias_method <- "none"
+  Cinv_out <- res$Cinv
   if (re_aghq && P <= aghq_cap) {
-    Sigma <- tryCatch({
+    Sinv_old <- Sinv
+    aghq_out <- tryCatch({
       Sd <- .ms_occu_cover_aghq_sigma(sp_ll, mu, ld, b_list, res$Cinv, Sinv,
                                       arm_idx, P, n_quad = aghq_nq)
-      debias_method <- "aghq"
-      Sd
+      # Cov(b_s|y) rides Sigma through Sinv (C_s = Htt_s + Sinv); AGHQ debiases
+      # Sigma but never re-solved that per-species Newton block, so
+      # `res$Cinv`/`fit$ms_community$Cinv` silently kept the pre-debias
+      # (attenuated) value even on an AGHQ-debiased fit (gcol33/tulpaObs#226
+      # part 2). Htt_s is recoverable without re-deriving the Newton solve --
+      # `solve(res$Cinv[[s]]) - Sinv_old` -- and re-solving at the debiased
+      # Sinv keeps Cinv consistent with the Sigma actually reported. Bf_s is
+      # pure likelihood curvature (no Sinv term) and needs no update.
+      Sinv_new <- blockdiag_inv(Sd)
+      Cinv_new <- lapply(res$Cinv, function(C_s) {
+        Htt_s <- solve(C_s) - Sinv_old
+        tryCatch(solve(Htt_s + Sinv_new),
+                 error = function(e) .tobs_cem_ginv(Htt_s + Sinv_new))
+      })
+      list(Sigma = Sd, Cinv = Cinv_new, ok = TRUE)
     }, error = function(e) {
       warning("ms_occu_cover AGHQ variance debias failed (", conditionMessage(e),
               "); reporting the EM (Laplace) variance components.", call. = FALSE)
-      Sigma
+      list(Sigma = Sigma, Cinv = res$Cinv, ok = FALSE)
     })
+    Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
+    debias_method <- if (aghq_out$ok) "aghq" else "none"
   }
 
-  build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, res$Cinv, res$Bf, Vf,
+  build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, Cinv_out, res$Bf, Vf,
                           arm_idx, F_val = logML,
                           converged = converged, n_iter = n_iter,
                           debias_method = debias_method)
