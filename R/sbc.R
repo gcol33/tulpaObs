@@ -1266,6 +1266,280 @@
 
 
 # ---------------------------------------------------------------------------
+# 6i. t_occu() (gcol33/tulpaObs#220): a Polya-Gamma Gibbs family, but
+# `.tobs_pg_finalize_fit()` already reports the pooled cross-chain draws as
+# `fit$draws` in the standard shape (real posterior samples, not a Gaussian
+# pseudo-draw matrix) -- so `.tobs_sbc_draws_fit` reads it unchanged, no
+# Gibbs-aware draws() needed. `model$y` is `[n_sites x n_seasons x
+# max_visits]` (season BEFORE visits -- the one family with this axis order),
+# but the 3D-season pool only ever stacks axis 1 and leaves the other two
+# alone, so `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are still
+# exactly right. What genuinely IS custom: the family has no `simulate()`
+# handler at all (`simulate_t_occu()` draws a FRESH truth, not a replicate at
+# a given theta) and no `.tobs_pointwise_loglik` dispatch, so `simulate` is
+# hand-written (drawing a fresh AR1 year-effect sequence at the theta's own
+# (sigma, rho) -- the same generative model `simulate_t_occu()` uses,
+# parameterized by theta instead of drawing its own truth). v1 is also
+# fully-observed only (no NA-visit masking, matching `simulate_t_occu()`'s
+# own output).
+#
+# The log_lik rank arm needs the AR1 year effect eta MARGINALIZED (theta
+# carries only its (sigma, rho) hyperparameters, not eta itself), which is a
+# real T-dimensional integral -- but a Laplace one, using the SAME Louis
+# (1982) mixture identity already established elsewhere in this codebase for
+# an additive logit offset into a 2-state mixture (e.g. the ms_dyn_occu psi1
+# areal-field oracle: score = w - psi, curv = psi(1-psi) - w(1-w), w = the
+# posterior P(z=1|data)). Per season t, eta_t enters every site's occupancy
+# logit as a shared additive offset, so summing that identity over sites
+# gives the score/curvature of the data term in eta_t; the AR1 prior
+# contributes its own tridiagonal precision Q(rho)/sigma^2 (`.t_occu_ar1_Q`,
+# the SAME precision the Gibbs sampler's GMRF update already uses). Newton on
+# the T x T system (diag(curv) + Q/sigma^2) finds the mode; the Laplace
+# log-marginal is the joint log-density at the mode plus the Gaussian
+# normalizing correction. FD-validated against the joint-density gradient in
+# eta and cross-checked against a brute-force dense-grid sum at T = 2.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec_t_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det     = .tobs_sbc_recombine(m$formulas$det, NULL))
+}
+
+.tobs_sbc_refit_t_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det, y = data$y, method = spec$method,
+    control = spec$control)))
+}
+
+.tobs_sbc_sim_t_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  m <- spec$model
+  occ_names <- m$process_info[[1L]]$coef_names
+  det_names <- m$process_info[[2L]]$coef_names
+  beta_psi <- theta[paste0("psi_", occ_names)]
+  beta_p   <- theta[paste0("p_",   det_names)]
+  sigma <- exp(theta[["log_sigma_ar1"]]); rho <- theta[["rho_ar1"]]
+
+  T_s <- m$n_seasons; n <- m$n_sites; J <- m$max_visits
+  eta <- numeric(T_s)
+  eta[1L] <- stats::rnorm(1, 0, sigma / sqrt(pmax(1 - rho^2, 1e-6)))
+  for (t in 2:T_s) eta[t] <- rho * eta[t - 1L] + stats::rnorm(1, 0, sigma)
+  eta <- eta - mean(eta)
+
+  lin  <- as.vector(m$X_occ %*% beta_psi)
+  p_it <- stats::plogis(as.vector(m$X_det %*% beta_p))
+  z <- matrix(0L, n, T_s)
+  for (t in seq_len(T_s)) z[, t] <- stats::rbinom(n, 1L, stats::plogis(lin + eta[t]))
+
+  obs <- spec$data_obs
+  y <- array(0L, dim = c(n, T_s, J))
+  for (t in seq_len(T_s)) for (j in seq_len(J))
+    y[, t, j] <- ifelse(z[, t] == 1L, stats::rbinom(n, 1L, p_it), 0L)
+  list(cells = obs$cells, y = y, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+# Newton mode-finder for the T-dim AR1 year effect at fixed (lin, p_i, rho,
+# sigma). `nvis`/`kdet` are the model's own [n_sites x T] detection
+# suff-stats. Returns the mode plus the pieces the Laplace formula needs
+# (H = the Gaussian precision at the mode, Pmix = the per-(site,season)
+# mixture probability at the mode).
+.tobs_t_occu_eta_laplace <- function(lin, p_i, nvis, kdet, T_s, rho, sigma,
+                                     max_iter = 50L, tol = 1e-9) {
+  n <- length(lin)
+  Pmat <- matrix(p_i, n, T_s)
+  Bmat <- Pmat^kdet * (1 - Pmat)^(nvis - kdet)
+  Amat <- (kdet == 0) * 1
+  prec <- .t_occu_ar1_Q(T_s, rho) / sigma^2
+  eta <- numeric(T_s)
+  H <- prec; psi <- matrix(stats::plogis(lin), n, T_s); Pmix <- Amat
+  for (it in seq_len(max_iter)) {
+    psi  <- stats::plogis(outer(lin, eta, "+"))
+    Pmix <- pmax((1 - psi) * Amat + psi * Bmat, 1e-300)
+    w    <- psi * Bmat / Pmix
+    score <- colSums(w - psi)
+    curv  <- pmax(colSums(psi * (1 - psi) - w * (1 - w)), 1e-8)
+    H <- diag(curv, T_s) + prec
+    grad <- score - as.vector(prec %*% eta)
+    step <- tryCatch(solve(H, grad), error = function(e) NULL)
+    if (is.null(step) || anyNA(step)) break
+    eta <- eta + step
+    if (max(abs(step)) < tol) break
+  }
+  list(eta = eta, H = H, Pmix = Pmix)
+}
+
+# Laplace approximation to log integral_eta P(data|eta,theta) p(eta|theta)
+# d(eta) -- see the section header for the derivation. `|Q(rho)| = 1 - rho^2`
+# for the standard unit-innovation AR1 precision (`.t_occu_ar1_Q`), and the
+# -T/2 log(2 pi) / +T/2 log(2 pi) terms from the prior normalizer and the
+# Laplace formula cancel exactly.
+.tobs_t_occu_laplace_ll <- function(theta, model) {
+  occ_names <- model$process_info[[1L]]$coef_names
+  det_names <- model$process_info[[2L]]$coef_names
+  beta_psi <- theta[paste0("psi_", occ_names)]
+  beta_p   <- theta[paste0("p_",   det_names)]
+  sigma <- exp(theta[["log_sigma_ar1"]]); rho <- theta[["rho_ar1"]]
+  T_s <- model$n_seasons
+
+  lin <- as.vector(model$X_occ %*% beta_psi)
+  p_i <- stats::plogis(as.vector(model$X_det %*% beta_p))
+  fitm <- .tobs_t_occu_eta_laplace(lin, p_i, model$nvis, model$kdet, T_s, rho, sigma)
+  eta <- fitm$eta
+  prec <- .t_occu_ar1_Q(T_s, rho) / sigma^2
+
+  ll_data  <- sum(log(fitm$Pmix))
+  ll_prior <- -T_s * log(sigma) + 0.5 * log(pmax(1 - rho^2, 1e-300)) -
+    0.5 * as.numeric(crossprod(eta, prec %*% eta))
+  logdetH <- as.numeric(determinant(fitm$H, logarithm = TRUE)$modulus)
+  ll_data + ll_prior - 0.5 * logdetH
+}
+
+.tobs_sbc_loglik_many_t_occu <- function(fit, Theta) {
+  m <- fit$model
+  vapply(seq_len(nrow(Theta)), function(i)
+    .tobs_t_occu_laplace_ll(Theta[i, ], m), numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
+# 6j. ms_occu() (gcol33/tulpaObs#220, community group): the design decision
+# the issue asks to state rather than default -- rank a FIXED species set's
+# own coefficients (mu + b_s per species), not the community means with fresh
+# species drawn per replicate. theta is the per-species REALIZED coefficient
+# vector for every species (S x P, column names `<species>_psi_<coef>` /
+# `<species>_p_<coef>`), not the P-length community mean `fit$means` alone.
+#
+# `.tobs_community_em()` (R/community_em.R) already computes `Cinv`, the
+# per-species posterior covariance Cov(b_s|y) (a Louis 1982 block from its own
+# Newton solve), but `build_ms_occu_fit()` never exposed it -- added as
+# `fit$ms_community$Cinv` (R/ms_occu.R) since a per-species-coefficient
+# consumer needs it to draw anything beyond the point BLUP. `draws()` samples
+# the community mean once per row (`mu ~ N(means, vcov)`) and each species'
+# deviation independently (`b_s ~ N(blup_s, Cinv_s)`), theta_s = mu + b_s --
+# conditional independence given the community hyperparameters, the standard
+# hierarchical assumption (and what the community EM's own M-step already
+# assumes when pooling species deviations into one covariance).
+#
+# `simulate()` reuses the family's OWN `.tobs_simulate_ms_occu()` handler
+# (the validated `cpp_simulate_ms_occu` kernel, which already respects the
+# observed model's own visit-validity pattern) rather than a hand-written
+# generator -- injecting the candidate theta by overwriting
+# `f$ms_community$coef_psi`/`coef_p` (the per-species coefficient matrices
+# `.tobs_simulate_ms_occu` actually reads), not `f$draws` (which that handler
+# does not consult). `loglik_many()` sums each species' own two-state
+# marginal (`.ms_int_occu_sp_ll`, the exact kernel `.tobs_fit_ms_occu()`
+# already optimizes) at that species' theta slice -- the natural per-species
+# analogue of every other family's marginal rank arm. Pooling/data reuse the
+# generic 3D-season helpers unchanged: `model$y` is `[site x visit x
+# species]`, and stacking axis 1 (sites) while leaving axes 2-3 alone is
+# exactly what they already do, regardless of what those axes mean.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec_ms_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                   as.list(fit.control)),
+       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
+       species = m$species_names)
+}
+
+.tobs_sbc_refit_ms_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det, y = data$y, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+# theta column names: `<species>_psi_<coef>` / `<species>_p_<coef>`, one
+# block of length P per species, species-major -- the layout `draws()`,
+# `simulate()` and `loglik_many()` all share.
+.tobs_sbc_ms_occu_names <- function(m) {
+  occ_names <- m$process_info[[1L]]$coef_names
+  det_names <- m$process_info[[2L]]$coef_names
+  par <- c(paste0("psi_", occ_names), paste0("p_", det_names))
+  list(occ = occ_names, det = det_names, par = par,
+       cols = as.vector(outer(par, m$species_names,
+                              function(p, sp) paste0(sp, "_", p))))
+}
+
+.tobs_sbc_draws_ms_occu <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_occu_names(m)
+  S <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x P
+  M <- matrix(NA_real_, n, S * P)
+  for (s in seq_len(S)) {
+    b_hat_s <- c(cm$blup_psi[s, ], cm$blup_p[s, ])
+    b_draws <- .tobs_sbc_mvn_draws(b_hat_s, cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
+  }
+  colnames(M) <- nm$cols
+  M
+}
+
+.tobs_sbc_sim_ms_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_occu_names(m)
+  S <- m$n_species
+  # do.call(rbind, lapply(...)), not t(vapply(...)) -- vapply collapses a
+  # length-1 per-species result (a single detection coefficient, e.g.
+  # `detection = ~ 1`) to a plain vector, and t() of that transposes the
+  # wrong axis (1 x S instead of S x 1).
+  coef_psi <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_psi_", nm$occ)]))
+  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_p_", nm$det)]))
+  dimnames(coef_psi) <- list(m$species_names, nm$occ)
+  dimnames(coef_p)   <- list(m$species_names, nm$det)
+  f$ms_community$coef_psi <- coef_psi
+  f$ms_community$coef_p   <- coef_p
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_occu <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_occu_names(m)
+  S <- m$n_species
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta_psi <- th[paste0(m$species_names[s], "_psi_", nm$occ)]
+      beta_p   <- th[paste0(m$species_names[s], "_p_",   nm$det)]
+      eta_psi <- as.numeric(m$X_occ %*% beta_psi)
+      eta_p   <- as.numeric(m$X_det %*% beta_p)
+      ll <- ll + .ms_int_occu_sp_ll(eta_psi, list(eta_p), m$summaries[[s]])
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -1395,7 +1669,38 @@
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_dyn_int_occu,
     refit       = .tobs_sbc_refit_dyn_int_occu,
-    loglik_many = .tobs_sbc_loglik_many_simple)
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # t_occu() (gcol33/tulpaObs#220, section 6i): a pg_gibbs family whose
+  # fit$draws is already the real pooled posterior sample (no Gibbs-aware
+  # draws() needed); shares the 3D-season pool despite its different axis
+  # order (season before visits). loglik_many is a Laplace approximation to
+  # the AR1 year effect's marginal (see section 6i).
+  t_occu = list(
+    spec        = .tobs_sbc_spec_t_occu,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_t_occu,
+    refit       = .tobs_sbc_refit_t_occu,
+    loglik_many = .tobs_sbc_loglik_many_t_occu)
+  # ms_occu() (gcol33/tulpaObs#220, community group, section 6j): NOT
+  # registered -- the "rank a fixed species set" design (theta_s = mu + b_s,
+  # drawn as mu ~ N(means, vcov) and b_s ~ N(blup_s, Cinv_s) INDEPENDENTLY per
+  # species) is CONTRACT-verified (refit reproduces, simulate/pool shapes
+  # correct, loglik_many finite) but fails ACCEPTANCE: posterior SBC min
+  # p_unif ~1e-5 on a specific species' psi intercept at N=80/5 species, and
+  # WORSE (more coefficients affected, ~2.6e-5) at N=300 -- the opposite of
+  # what Laplace-EM small-sample attenuation predicts, so this is not that
+  # documented caveat. Most likely cause: the independence assumption between
+  # mu's and b_s's draws is wrong -- the true posterior almost certainly has
+  # Cov(mu, b_s) != 0 (a community-mean shift and a species deviation shift
+  # trade off against each other since only mu + b_s is informed by data),
+  # and dropping that covariance term biases Var(theta_s). Filed as
+  # gcol33/tulpaObs#226 with the full repro; the adapter functions below
+  # (.tobs_sbc_spec_ms_occu etc.) are kept as verified CONTRACT-tier
+  # groundwork, not registered until the joint covariance is fixed. `Cinv`
+  # IS now exposed on the fit (R/ms_occu.R) independent of this -- useful on
+  # its own for per-species posterior uncertainty, kept regardless of #226.
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -1647,6 +1952,13 @@
 #' `dyn_int_occu` is the product of the multi-season and multi-source shapes:
 #' a named list of S per-source 3D arrays, pooled by a new
 #' `.tobs_sbc_pool_named_3d` that composes both existing pooling rules.
+#'
+#' `t_occu` is a `pg_gibbs` family whose `fit$draws` is already the real
+#' pooled posterior sample; it has no `simulate()` handler and no
+#' `.tobs_pointwise_loglik` dispatch, so both are custom -- `simulate` draws
+#' a fresh AR1 year effect at the theta's own `(sigma, rho)`, and
+#' `loglik_many` is a Laplace approximation to that year effect's marginal
+#' (FD-validated, brute-force cross-checked at T = 2).
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

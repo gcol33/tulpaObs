@@ -242,7 +242,13 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
       sd_psi = sqrt(pmax(diag(Sigma_occ), 0)),
       sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
       coef_psi = occ_b$coef, coef_p = p_b$coef,
-      blup_psi = occ_b$blup, blup_p = p_b$blup
+      blup_psi = occ_b$blup, blup_p = p_b$blup,
+      # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
+      # community EM's own Newton solve, conditional on the converged
+      # community mean) -- what a per-species-coefficient consumer (SBC's
+      # "rank a fixed species set" design, a calibrated per-species CI) needs
+      # beyond the point BLUP; not previously exposed on the fit object.
+      Cinv = fit$Cinv
     ),
     convergence  = list(converged = isTRUE(fit$converged), n_iter = fit$n_iter)
   )), class = c("tobs_fit", "tulpa_fit"))

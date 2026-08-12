@@ -123,6 +123,13 @@ one joint multi-species state rather than being independently observed.
 a named list of S per-source 3D arrays, pooled by a new
 \code{.tobs_sbc_pool_named_3d} that composes both existing pooling rules.
 
+\code{t_occu} is a \code{pg_gibbs} family whose \code{fit$draws} is already the real
+pooled posterior sample; it has no \code{simulate()} handler and no
+\code{.tobs_pointwise_loglik} dispatch, so both are custom -- \code{simulate} draws
+a fresh AR1 year effect at the theta's own \verb{(sigma, rho)}, and
+\code{loglik_many} is a Laplace approximation to that year effect's marginal
+(FD-validated, brute-force cross-checked at T = 2).
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are

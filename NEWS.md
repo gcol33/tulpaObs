@@ -1,5 +1,48 @@
 # tulpaObs NEWS
 
+## 0.0.211 (2026-08-12)
+
+* **`t_occu()` registered for `sbc()`** (#220, closes the multi-season/
+  multi-source group): a `pg_gibbs` family whose `fit$draws` is already the
+  real pooled cross-chain posterior sample (`.tobs_pg_finalize_fit()`), so no
+  Gibbs-aware `draws()` was needed. It has no `simulate()` handler at all
+  (`simulate_t_occu()` draws a fresh truth, not a replicate at a given theta)
+  and no `.tobs_pointwise_loglik` dispatch, so both were written: `simulate`
+  draws a fresh AR1 year-effect sequence at the theta's own `(sigma, rho)`;
+  `loglik_many` is a Laplace approximation to the AR1 year effect's marginal
+  (the effect is not part of theta and has to be integrated out), using the
+  same Louis (1982) mixture identity already established elsewhere in this
+  codebase for an additive-logit-offset 2-state mixture. FD-validated
+  (gradient and Hessian match finite differences to ~1e-8) and cross-checked
+  against a brute-force dense-grid integral at T = 2 (agrees to grid
+  resolution, ~0.02 nats, after the validation script's own missing
+  normalizing-constant bug was found and fixed -- the package function was
+  correct throughout). Verified to the #207 bar: 100-sim posterior SBC
+  uniform on all five coefficients (min p_unif 0.081 at `bad.factor = 1.75`),
+  a mis-scaled control rejects hard (max 1.2e-4).
+* **`ms_occu()`'s per-species posterior covariance is now exposed**
+  (`fit$ms_community$Cinv`, `R/ms_occu.R`): `.tobs_community_em()` already
+  computed `Cov(b_s|y)` per species internally (a Louis 1982 block from its
+  own Newton solve) but never surfaced it. Independently useful for anyone
+  wanting a per-species coefficient's own uncertainty beyond the point BLUP.
+* **`ms_occu()`'s `sbc()` registration attempt found a real calibration gap,
+  filed as #226, not registered.** Following the community-group design
+  (rank a fixed species set's own realized coefficients `mu + b_s`), the
+  adapter draws `mu ~ N(means, vcov)` and each species' `b_s ~ N(blup_s,
+  Cinv_s)` independently. CONTRACT-verified (refit reproduces exactly,
+  `simulate()`/pooling shapes correct via the family's own validated
+  `cpp_simulate_ms_occu` kernel, `loglik_many` finite), but posterior SBC
+  is not uniform: min p_unif ~1e-5 on one species' occupancy intercept at
+  N=80/5 species, and *worse* (more coefficients affected) at N=300 -- the
+  opposite of what Laplace-EM small-sample attenuation predicts, ruling out
+  that documented caveat. Leading hypothesis: `Cinv_s` is `Cov(b_s|y)`
+  conditional on `mu` at its mode, so independent draws implicitly assume
+  `Cov(mu, b_s) = 0`, which is almost certainly wrong in a hierarchical model
+  where only `mu + b_s` is informed by data. The adapter functions
+  (`R/sbc.R` section 6j) are kept as CONTRACT-verified groundwork, commented
+  as not wired into the registry pending #226 -- likely affects
+  `ms_dyn_occu`/`ms_int_occu` too, sharing the same community EM engine.
+
 ## 0.0.210 (2026-08-12)
 
 * **`dyn_int_occu()` registered for `sbc()`** (#220): the product of the
