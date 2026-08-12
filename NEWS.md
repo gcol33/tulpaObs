@@ -1,5 +1,36 @@
 # tulpaObs NEWS
 
+## 0.0.208 (2026-08-12)
+
+* **`occu_multi()` registered for `sbc()`** (#220, multi-response group):
+  `model$y` is a list of S per-species detection matrices sharing one site
+  axis, the same shape `int_occu()` already pools (`.tobs_sbc_pool_named_matrices`
+  reused unchanged). `simulate()` is custom -- unlike `int_occu()`, species
+  are not independently observed given the shared latent state: the joint
+  occupancy state is one draw from the log-linear multi-species model
+  (first + second-order natural parameters), then each species is
+  independently detected given its own realized state. Wraps the family's
+  own `.tobs_simulate_occu_multi()` handler, matching how `gdistremoval()`'s
+  adapter reuses its own `simulate()`. `fit$means`/`fit$draws` are the
+  standard `.tobs_bfgs_marginal_fit()` shape and `.tobs_pointwise_loglik`
+  already dispatches for this model_type, so `draws`/`loglik_many` are the
+  shared generic ones. Verified to the #207 bar: 100-sim posterior SBC
+  uniform on all eight coefficients (min p_unif 0.019 at `bad.factor = 1.75`),
+  a mis-scaled control rejects hard (max 4.3e-6).
+* `distsamp_open()`'s `sbc()` adapter is written and CONTRACT-verified
+  (refit reproduces the observed fit; `simulate()`/pooling shapes correct);
+  constant-dynamics, Poisson only for v1, sharing `dyn_abun`'s 3D response
+  and site-axis pooling. Its acceptance-tier `bad.factor` is still a
+  placeholder pending its 100-sim measurement (a long-running fit, same as
+  `dyn_abun`'s still-pending acceptance run) -- to be finalized in a
+  follow-up commit.
+* The shared cross-family CONTRACT test (`test-sbc-registry.R`) generalized
+  past a third implicit assumption: the observed-slice-equals-pooled-input
+  check compared `y` including dimnames, which a family's own stored
+  response may carry (site/bin/season labels) but a freshly pooled array
+  never does (`distsamp_open` surfaced this; `dyn_abun`/`dyn_occu` never
+  carried dimnames to expose it). Both sides are now compared by value only.
+
 ## 0.0.207 (2026-08-12)
 
 * **`occu_categorical()` registered for `sbc()`** (#220, multiarm-S3 group):

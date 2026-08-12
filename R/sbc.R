@@ -1063,6 +1063,122 @@
 
 
 # ---------------------------------------------------------------------------
+# 6f. distsamp_open() (gcol33/tulpaObs#220, multi-season group): the same 3D
+# [n_sites x n_bins x n_seasons] response shape and site-axis pooling as
+# dyn_abun (section 6b2) -- the "season" axis here is the open-population
+# primary period rather than a revisit season, but the shape and the pooling
+# rule (stack on sites, leave the season axis alone) are identical, so
+# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are reused unchanged.
+# `fit$means`/`fit$draws`/`fit$model` are the standard shape too
+# (`.tobs_bfgs_marginal_fit()`), and `.tobs_pointwise_loglik` already
+# dispatches for this model_type, so `draws`/`loglik_many` are also the
+# shared generic ones -- only `spec`/`refit` are custom, to route the
+# family's four arm formulas (`lambda`, `sigma`, `omega`, `gamma`) and rebuild
+# `distsamp_open(cutpoints=, transect=)`. Constant-dynamics, Poisson only for
+# v1 (the alternative dynamics / negbin / zero-inflated layers are follow-ups,
+# same reasoning as dyn_abun's season-varying-rate exclusion).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_reject_distsamp_open_scope <- function(fit) {
+  m <- fit$model
+  dyn <- m$dynamics %||% "constant"
+  mix <- m$mixture %||% "poisson"
+  if (identical(dyn, "constant") && identical(mix, "poisson")) return(invisible(NULL))
+  stop("SBC on distsamp_open() is registered for constant-dynamics, Poisson ",
+       "fits; this fit carries dynamics = ", sQuote(dyn), ", mixture = ",
+       sQuote(mix), ", which the pooled refit does not yet reproduce.",
+       call. = FALSE)
+}
+
+.tobs_sbc_spec_distsamp_open <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_distsamp_open_scope(fit)
+  m <- fit$model
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
+       sigma     = .tobs_sbc_recombine(m$formulas$sigma,  NULL),
+       omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
+       gamma     = .tobs_sbc_recombine(m$formulas$gamma,  NULL),
+       cutpoints = m$cutpoints, transect = m$transect,
+       replicate = function(f) stats::simulate(f, nsim = 1L))
+}
+
+.tobs_sbc_refit_distsamp_open <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$lambda, data = data$cells,
+    family = distsamp_open(transect = spec$transect, cutpoints = spec$cutpoints,
+                           mixture = "poisson", dynamics = "constant"),
+    detection = spec$sigma, omega = spec$omega, gamma = spec$gamma,
+    y = data$y, method = spec$method, control = spec$control)))
+}
+
+
+# ---------------------------------------------------------------------------
+# 6g. occu_multi() (gcol33/tulpaObs#220, multi-response group): `model$y` is a
+# list of S per-species detection matrices sharing one site axis -- the same
+# shape as int_occu()'s per-source list, so `.tobs_sbc_pool_named_matrices` is
+# reused unchanged for pooling (species names attached explicitly in `data()`,
+# since the binder does not always name `model$y`). `fit$means`/`fit$draws`
+# are the standard `.tobs_bfgs_marginal_fit()` shape and
+# `.tobs_pointwise_loglik` already dispatches for this model_type, so
+# `draws`/`loglik_many` are the shared generic ones. `simulate` is custom
+# (unlike int_occu, species are NOT independent given a shared z -- the joint
+# state is one draw from the log-linear multi-species model, then each
+# species is independently detected given its own z_k), wrapping the
+# family's own `.tobs_simulate_occu_multi()` handler exactly as
+# `.tobs_sbc_sim_gdistremoval()` wraps `simulate_gdistremoval()`'s handler --
+# `.tobs_sbc_sim_simple`'s cleaning step assumes a single matrix/array
+# response, not a list, so it cannot be reused here either.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_data_occu_multi <- function(fit) {
+  m <- fit$model
+  list(cells = m$data, y = stats::setNames(m$y, m$species), y_pos = NULL,
+       visits = NULL, graph = NULL, site = seq_len(m$n_sites))
+}
+
+.tobs_sbc_spec_occu_multi <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       state     = .tobs_sbc_recombine(m$formulas$state, NULL),
+       det       = .tobs_sbc_recombine(m$formulas$det,   NULL),
+       species   = m$species)
+}
+
+.tobs_sbc_refit_occu_multi <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$state, data = data$cells, family = spec$family,
+    detection = spec$det, y = data$y[spec$species], species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_sim_occu_multi <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  D <- matrix(theta, nrow = 1L)
+  colnames(D) <- names(theta)
+  f$draws <- D
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -1159,7 +1275,29 @@
     draws       = .tobs_sbc_draws_occu_categorical,
     simulate    = .tobs_sbc_sim_occu_categorical,
     refit       = .tobs_sbc_refit_occu_categorical,
-    loglik_many = .tobs_sbc_loglik_many_occu_categorical)
+    loglik_many = .tobs_sbc_loglik_many_occu_categorical),
+  # distsamp_open() (gcol33/tulpaObs#220): shares dyn_abun's 3D response and
+  # site-axis pooling (section 6f) -- constant-dynamics, Poisson only for v1.
+  distsamp_open = list(
+    spec        = .tobs_sbc_spec_distsamp_open,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_simple,
+    refit       = .tobs_sbc_refit_distsamp_open,
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # occu_multi() (gcol33/tulpaObs#220): a list-of-species response, same shape
+  # as int_occu()'s list-of-source one (section 6g) -- pooling is the shared
+  # named-matrices route; simulate() is custom (joint multi-species state,
+  # not independent per-source arms).
+  occu_multi = list(
+    spec        = .tobs_sbc_spec_occu_multi,
+    data        = .tobs_sbc_data_occu_multi,
+    pool        = .tobs_sbc_pool_named_matrices,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_occu_multi,
+    refit       = .tobs_sbc_refit_occu_multi,
+    loglik_many = .tobs_sbc_loglik_many_simple)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -1398,6 +1536,15 @@
 #' matrix; `draws()` samples the two blocks independently and `loglik_many()`
 #' scores the two-arm likelihood directly, since this family has no
 #' `.tobs_pointwise_loglik` dispatch to reuse.
+#'
+#' `distsamp_open` (constant-dynamics, Poisson only) shares `dyn_abun`'s 3D
+#' response and site-axis pooling, and its `fit$means`/`fit$draws` are the
+#' standard `.tobs_bfgs_marginal_fit()` shape, so `draws`/`simulate`/
+#' `loglik_many` are all the shared generic ones.
+#'
+#' `occu_multi`'s response is a list of S per-species matrices, the same
+#' shape `int_occu()` pools; its `simulate()` is custom, since species share
+#' one joint multi-species state rather than being independently observed.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

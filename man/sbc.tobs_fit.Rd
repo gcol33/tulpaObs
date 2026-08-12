@@ -110,6 +110,15 @@ matrix; \code{draws()} samples the two blocks independently and \code{loglik_man
 scores the two-arm likelihood directly, since this family has no
 \code{.tobs_pointwise_loglik} dispatch to reuse.
 
+\code{distsamp_open} (constant-dynamics, Poisson only) shares \code{dyn_abun}'s 3D
+response and site-axis pooling, and its \code{fit$means}/\code{fit$draws} are the
+standard \code{.tobs_bfgs_marginal_fit()} shape, so \code{draws}/\code{simulate}/
+\code{loglik_many} are all the shared generic ones.
+
+\code{occu_multi}'s response is a list of S per-species matrices, the same
+shape \code{int_occu()} pools; its \code{simulate()} is custom, since species share
+one joint multi-species state rather than being independently observed.
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are

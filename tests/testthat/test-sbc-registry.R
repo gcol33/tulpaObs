@@ -138,6 +138,23 @@
     sim <- simulate_occu_categorical(N = N, seed = 11L)
     suppressWarnings(tobs(~ x, data = sim$data, family = occu_categorical(),
                           y = sim$y, method = "laplace", control = .sbc_reg_ctl))
+  },
+  distsamp_open = function(N = 100L) {
+    cutp <- c(0, 10, 20, 30, 40)
+    sim <- simulate_distsamp_open(N = N, cutpoints = cutp, n_seasons = 4L,
+                                  beta_lambda = c(log(15), 0.3),
+                                  beta_sigma = c(log(15), 0.1),
+                                  omega = 0.7, gamma = 2.5, seed = 7L)
+    suppressWarnings(tobs(~ abund_cov1, data = sim$data,
+                          family = distsamp_open(cutpoints = cutp),
+                          detection = ~ det_cov1, y = sim$y,
+                          method = "laplace", control = .sbc_reg_ctl))
+  },
+  occu_multi = function(N = 150L) {
+    sim <- simulate_occu_multi(S = 2L, N = N, J = 4L, seed = 5L)
+    suppressWarnings(tobs(~ scov1, data = sim$data, family = occu_multi(),
+                          detection = ~ 1, y = sim$y, species = sim$species,
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -263,7 +280,11 @@ test_that("each registered family composes its callbacks end to end", {
       obs_slice <- if (length(dim(pl$y)) == 3L) pl$y[seq_len(n_o), , , drop = FALSE]
                   else pl$y[seq_len(n_o), , drop = FALSE]
     }
-    expect_equal(obs_slice, m$data_obs$y, info = fam)
+    # Values only -- a family's own y may carry dimnames (site/bin/season
+    # labels) the freshly-built pooled array never does; that carries no
+    # information this check is about.
+    strip_dn <- function(z) if (is.list(z)) lapply(z, unname) else unname(z)
+    expect_equal(strip_dn(obs_slice), strip_dn(m$data_obs$y), info = fam)
 
     pooled <- m$fit(pl)
     expect_s3_class(pooled, "tobs_fit")
@@ -519,6 +540,65 @@ test_that("gdistremoval posterior SBC: correct fit uniform, mis-scaled is not", 
   fit <- .SBC_REG_FIXTURES$gdistremoval()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 2.0, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("distsamp_open posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multi-season group). Constant-dynamics, Poisson only
+  # for v1 -- shares dyn_abun's 3D response/pooling and fit$means/fit$draws
+  # shape. bad.factor tuned below.
+  fit <- .SBC_REG_FIXTURES$distsamp_open()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("occu_multi posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multi-response group). Same list-of-matrices response
+  # shape int_occu() pools, but simulate() is custom (joint multi-species
+  # state, not independent per-source arms). Measured (seed = 0): posterior
+  # min p_unif 0.019, narrow max 4.3e-6.
+  fit <- .SBC_REG_FIXTURES$occu_multi()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
 
   expect_s3_class(res, "sbc")
   expect_identical(res$premises$pooling, "verified")
