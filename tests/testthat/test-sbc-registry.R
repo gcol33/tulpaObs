@@ -305,9 +305,17 @@ test_that("each registered family composes its callbacks end to end", {
     # `tulpa::sbc()` verifies.
     rep <- m$simulate(t1, 4400L)
     pl  <- m$pool(m$data_obs, rep)
-    n_o <- length(m$group_ids(m$data_obs)); n_r <- length(m$group_ids(rep))
-    expect_length(unique(m$group_ids(pl)), n_o + n_r)
-    expect_identical(nrow(pl$cells), n_o + n_r)
+    # Row count (one row per unit in `cells`/`y`'s first axis) and GROUP count
+    # (unique exchangeable-unit labels) coincide for every family except
+    # occu_multiscale_cover, where several plot-rows share one cell group id
+    # -- the premise check is about groups, the slicing below is about rows,
+    # and conflating them under one n_o/n_r silently passed for every family
+    # that happens to have one row per group.
+    n_row_o <- nrow(m$data_obs$cells); n_row_r <- nrow(rep$cells)
+    n_grp_o <- length(unique(m$group_ids(m$data_obs)))
+    n_grp_r <- length(unique(m$group_ids(rep)))
+    expect_length(unique(m$group_ids(pl)), n_grp_o + n_grp_r)
+    expect_identical(nrow(pl$cells), n_row_o + n_row_r)
     # `y` is a plain 2D matrix for most families, a 3D [site x visit x season]
     # array for the multi-season group (pooled on the site axis alone), a list
     # of one matrix (or, for the product shape, one 3D array) per source for
@@ -315,17 +323,17 @@ test_that("each registered family composes its callbacks end to end", {
     # a plain length-N vector for a family with one observation per unit and
     # no visit/season axis (occu_categorical).
     slice_site <- function(z) if (length(dim(z)) == 3L)
-      z[seq_len(n_o), , , drop = FALSE] else z[seq_len(n_o), , drop = FALSE]
+      z[seq_len(n_row_o), , , drop = FALSE] else z[seq_len(n_row_o), , drop = FALSE]
     if (is.list(pl$y) && !is.data.frame(pl$y)) {
       expect_identical(vapply(pl$y, nrow, integer(1)),
-                       stats::setNames(rep(n_o + n_r, length(pl$y)), names(pl$y)),
+                       stats::setNames(rep(n_row_o + n_row_r, length(pl$y)), names(pl$y)),
                        info = fam)
       obs_slice <- lapply(pl$y, slice_site)
     } else if (is.null(dim(pl$y))) {
-      expect_identical(length(pl$y), n_o + n_r)
-      obs_slice <- pl$y[seq_len(n_o)]
+      expect_identical(length(pl$y), n_row_o + n_row_r)
+      obs_slice <- pl$y[seq_len(n_row_o)]
     } else {
-      expect_identical(nrow(pl$y), n_o + n_r)
+      expect_identical(nrow(pl$y), n_row_o + n_row_r)
       obs_slice <- slice_site(pl$y)
     }
     # Values only -- a family's own y may carry dimnames (site/bin/season
