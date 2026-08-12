@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.217 (2026-08-12)
+
+* **`sbc()` refits now show progress/ETA by default.** Every `.tobs_sbc_spec_*`
+  callback had its own copy of `list(verbose = FALSE, progress = FALSE)`,
+  silencing every refit inside an `sbc()` run unless the caller explicitly
+  passed `fit.control = list(progress = TRUE)`. Found the hard way: a
+  `distsamp_open()` 100-sim acceptance run (2 control arms x n.ref=200,
+  ~130-170s/refit measured directly) ran 11+ hours with zero console output,
+  indistinguishable from a hang without separately probing CPU time. The 15
+  duplicated literals are now one `.tobs_sbc_default_control()`
+  (`verbose = FALSE, progress = TRUE`); `fit.control =` still overrides it,
+  so the automated test suite's fast fixtures are unaffected wherever they
+  set their own control, and any `sbc()` call as expensive as
+  `distsamp_open()`'s now reports where it is instead of going dark.
+
 ## 0.0.216 (2026-08-12)
 
 * **`ms_distance()` gained a `simulate()` handler** (#227): reads
