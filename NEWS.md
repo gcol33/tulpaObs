@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.218 (2026-08-12)
+
+* **#226 partial fix: the community-family SBC draws now sample mu and each
+  species' deviation JOINTLY, not independently.** `.tobs_community_em()`'s
+  Newton solve already carries a `Bf_s` cross-Hessian block between the
+  community mean and each species' deviation, discarded after every solve --
+  now returned and exposed on the fit (`fit$ms_community$Bf`, alongside the
+  existing `Cinv`) for `ms_occu`/`ms_int_occu`/`ms_count`/`ms_dyn_occu`/
+  `ms_distance`/`ms_occu_cover`. A new shared `.tobs_sbc_community_b_draws()`
+  draws `b_s | mu ~ N(blup_s - Cinv_s %*% t(Bf_s) %*% (mu_draw - means),
+  Cinv_s)` -- derived by block-inverting the joint (mu, b_s) arrowhead
+  precision and validated to machine precision against a direct construction
+  of that matrix. Confirmed the diagnosis: the original failure was one
+  SPECIFIC coefficient pinned at p_unif ~1e-5 on every seed; after this fix,
+  10 seeds each fail (if at all) on a DIFFERENT coefficient at n.sim=100 --
+  the multiple-testing-noise signature replacing the reproducible-bug one.
+  **Not sufficient alone**, though: one of those 10 seeds does not regress
+  toward the pack at n.sim=400 (it gets WORSE -- min p_unif 5.4e-6 -> 8.2e-11,
+  spreading from 2 to 6 affected coefficients across three species), the
+  signature of a real remaining effect. Most likely the documented Laplace
+  small-cluster community-VARIANCE attenuation (`ms_occu_cover()` already has
+  an AGHQ debias step for exactly this; the plain `.tobs_community_em()`
+  consumers do not) compounding through `Cinv_s`. `ms_occu`/`ms_int_occu`/
+  `ms_count` stay OUT of `.TOBS_SBC_REGISTRY` pending that debias; `Bf`/`Cinv`
+  are kept regardless since they are correct and independently useful.
+
 ## 0.0.217 (2026-08-12)
 
 * **`sbc()` refits now show progress/ETA by default.** Every `.tobs_sbc_spec_*`

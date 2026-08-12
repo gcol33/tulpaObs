@@ -581,8 +581,8 @@
       mu <- mu_n; ld <- ld_n; b_list <- b_n; F_cur <- F_n
       if (delta < 1e-7) break
     }
-    list(mu = mu, ld = ld, b_list = b_list, Cinv = Cinv_list, Sf = Sf,
-         F = F_cur)
+    list(mu = mu, ld = ld, b_list = b_list, Cinv = Cinv_list, Bf = Bf_list,
+         Sf = Sf, F = F_cur)
   }
 
   converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
@@ -659,7 +659,7 @@
     })
   }
 
-  build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, res$Cinv, Vf,
+  build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, res$Cinv, res$Bf, Vf,
                           arm_idx, F_val = logML,
                           converged = converged, n_iter = n_iter,
                           debias_method = debias_method)
@@ -670,8 +670,8 @@
 # ---------------------------------------------------------------------------
 
 build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
-                                    Vf, arm_idx, F_val, converged, n_iter,
-                                    debias_method = "none") {
+                                    Bf_list, Vf, arm_idx, F_val, converged,
+                                    n_iter, debias_method = "none") {
   pi_list <- model$process_info
   P_occ <- pi_list[[1L]]$p
   P_p   <- pi_list[[2L]]$p
@@ -748,7 +748,12 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       # "rank a fixed species set" design, a calibrated per-species CI) needs
       # beyond the point BLUP; not previously exposed on the fit object.
       # Covers the full b_s vector across all three arms (occ + p + pos).
-      Cinv = Cinv_list,
+      # Bf = the (mu,log_disp)-b_s cross-Hessian block from the same Newton
+      # solve (gcol33/tulpaObs#226): mu/log_disp and b_s are NOT independent
+      # in the posterior, and Bf is what lets a consumer draw them jointly
+      # instead -- see .tobs_sbc_community_b_draws (R/sbc.R). NULL on a NUTS
+      # fit (no Newton solve to read it from).
+      Cinv = Cinv_list, Bf = Bf_list,
       # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
       # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
       # sd_*) carry Laplace small-cluster attenuation at small per-species n.

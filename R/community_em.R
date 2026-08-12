@@ -190,8 +190,13 @@
   }
 
   # One joint-Newton mode-find of (mu, global, {b_s}) at fixed Sigma. Returns the
-  # updated mode, per-species posterior covariances Cinv (Cov(b_s|y)), and the
-  # marginal fixed-effect information Sf (Schur complement of the b-block).
+  # updated mode, per-species posterior covariances Cinv (Cov(b_s|y)), the
+  # u-b_s cross-Hessian blocks Bf (u=(mu,global); gcol33/tulpaObs#226 -- needed
+  # to draw (u, b_s) jointly rather than independently: Cov(u,b_s) =
+  # -Vf %*% Bf_s %*% Cinv_s, and conditional on a draw of u, b_s's mean shifts
+  # by -Cinv_s %*% t(Bf_s) %*% (u_draw - u_hat) while its covariance stays
+  # exactly Cinv_s), and the marginal fixed-effect information Sf (Schur
+  # complement of the b-block, Vf = solve(Sf)).
   solve_mode <- function(mu, global, b_list, Sinv) {
     F_cur <- total_F(mu, global, b_list, Sinv)
     Cinv_list <- vector("list", S)
@@ -259,7 +264,7 @@
       if (delta < 1e-7) break
     }
     list(mu = mu, global = global, b_list = b_list, Cinv = Cinv_list,
-         Sf = Sf, F = F_cur)
+         Bf = Bf_list, Sf = Sf, F = F_cur)
   }
 
   # ---- initialization ----
@@ -331,6 +336,6 @@
   logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
 
   list(mu = mu, global = global, b_list = b_list, Sigma = Sigma,
-       Cinv = res$Cinv, Vf = Vf, logML = logML,
+       Cinv = res$Cinv, Bf = res$Bf, Vf = Vf, logML = logML,
        converged = converged, n_iter = n_iter)
 }

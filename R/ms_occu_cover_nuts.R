@@ -293,8 +293,9 @@
                                              bs[lay$pos], ld_bar[s])
     }
     fit <- build_ms_occu_cover_fit(model, unname(mu_hat), unname(mu_ld_hat),
-                                   b_list_hat, Sigma_hat, Cinv_list = NULL, Vf,
-                                   arm_idx, F_val = ll_mean, converged = TRUE,
+                                   b_list_hat, Sigma_hat, Cinv_list = NULL,
+                                   Bf_list = NULL, Vf = Vf,
+                                   arm_idx = arm_idx, F_val = ll_mean, converged = TRUE,
                                    n_iter = warm$convergence$n_iter %||% NA_integer_,
                                    debias_method = "none")
     fit$method <- "nuts"
@@ -353,7 +354,8 @@
   }
 
   fit <- build_ms_occu_cover_fit(model, unname(mu_hat), unname(ld_hat), b_list_hat,
-                                 Sigma_hat, Cinv_list = NULL, Vf, arm_idx,
+                                 Sigma_hat, Cinv_list = NULL, Bf_list = NULL,
+                                 Vf = Vf, arm_idx = arm_idx,
                                  F_val = ll_mean, converged = TRUE,
                                  n_iter = warm$convergence$n_iter %||% NA_integer_,
                                  debias_method = "none")

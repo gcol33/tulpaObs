@@ -369,7 +369,11 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
       # community mean) -- what a per-species-coefficient consumer (SBC's
       # "rank a fixed species set" design, a calibrated per-species CI) needs
       # beyond the point BLUP; not previously exposed on the fit object.
-      Cinv = res$Cinv
+      # Bf = the (mu,global)-b_s cross-Hessian block from the same Newton
+      # solve (gcol33/tulpaObs#226): mu/global and b_s are NOT independent in
+      # the posterior, and Bf is what lets a consumer draw them jointly
+      # instead -- see .tobs_sbc_community_b_draws (R/sbc.R).
+      Cinv = res$Cinv, Bf = res$Bf
     ),
     convergence  = list(converged = isTRUE(res$converged), n_iter = res$n_iter)
   )), class = c("tobs_fit", "tulpa_fit"))

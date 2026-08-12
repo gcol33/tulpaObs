@@ -476,7 +476,11 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
       # community mean) -- what a per-species-coefficient consumer (SBC's
       # "rank a fixed species set" design, a calibrated per-species CI) needs
       # beyond the point BLUP; not previously exposed on the fit object.
-      Cinv = em$Cinv),
+      # Bf = the (mu,global)-b_s cross-Hessian block from the same Newton
+      # solve (gcol33/tulpaObs#226): mu/global and b_s are NOT independent in
+      # the posterior, and Bf is what lets a consumer draw them jointly
+      # instead -- see .tobs_sbc_community_b_draws (R/sbc.R).
+      Cinv = em$Cinv, Bf = em$Bf),
     convergence = list(converged = isTRUE(em$converged),
                        n_iter = em$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))

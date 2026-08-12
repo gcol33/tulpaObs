@@ -1426,16 +1426,18 @@
 # vector for every species (S x P, column names `<species>_psi_<coef>` /
 # `<species>_p_<coef>`), not the P-length community mean `fit$means` alone.
 #
-# `.tobs_community_em()` (R/community_em.R) already computes `Cinv`, the
-# per-species posterior covariance Cov(b_s|y) (a Louis 1982 block from its own
-# Newton solve), but `build_ms_occu_fit()` never exposed it -- added as
-# `fit$ms_community$Cinv` (R/ms_occu.R) since a per-species-coefficient
-# consumer needs it to draw anything beyond the point BLUP. `draws()` samples
-# the community mean once per row (`mu ~ N(means, vcov)`) and each species'
-# deviation independently (`b_s ~ N(blup_s, Cinv_s)`), theta_s = mu + b_s --
-# conditional independence given the community hyperparameters, the standard
-# hierarchical assumption (and what the community EM's own M-step already
-# assumes when pooling species deviations into one covariance).
+# `.tobs_community_em()` (R/community_em.R) computes `Cinv` (per-species
+# posterior covariance Cov(b_s|y), Louis 1982) and `Bf` (the mu-b_s
+# cross-Hessian block from the same Newton solve), both exposed as
+# `fit$ms_community$Cinv`/`Bf` (R/ms_occu.R). `draws()` samples the community
+# mean once per row (`mu ~ N(means, vcov)`) then draws each species'
+# deviation CONDITIONAL on that mu draw via `.tobs_sbc_community_b_draws`
+# (`b_s | mu ~ N(blup_s - Cinv_s t(Bf_s)(mu_draw-means), Cinv_s)`), theta_s =
+# mu + b_s -- NOT independently, which was #226 (drawing mu and b_s as
+# independent ignores their posterior cross-covariance and biases Var(theta_s)
+# on whichever species trades off most against the community mean). See the
+# registry entry below for why ms_occu is still not registered despite this
+# fix: a second, pre-existing small-cluster variance-attenuation issue.
 #
 # `simulate()` reuses the family's OWN `.tobs_simulate_ms_occu()` handler
 # (the validated `cpp_simulate_ms_occu` kernel, which already respects the
@@ -1486,6 +1488,24 @@
                               function(p, sp) paste0(sp, "_", p))))
 }
 
+# gcol33/tulpaObs#226: mu and b_s are NOT independent in the posterior --
+# conditional on a draw of mu, b_s's mean shifts by
+# -Cinv_s %*% t(Bf_s) %*% (mu_draw - mu_hat) (Bf_s the mu-b_s cross-Hessian
+# block from the community EM's own Newton solve, R/community_em.R), while
+# its covariance is UNCHANGED at Cinv_s. Derived by block-inverting the joint
+# (mu, b_s) arrowhead precision [Sf + Bf_s Cinv_s Bf_s', Bf_s; Bf_s',
+# Cinv_s^-1] and validated to machine precision against a direct construction
+# of that matrix on random SPD inputs (dev_notes probe, 2026-08-12). Drawing
+# mu and each b_s independently -- what every affected family did before this
+# -- is exactly the #226 bug: it under-covers on whichever species' deviation
+# most strongly trades off against the community mean.
+.tobs_sbc_community_b_draws <- function(mu_draws, mu_hat, b_hat_s, Bf_s, Cinv_s, n) {
+  eps <- .tobs_sbc_mvn_draws(rep(0, length(b_hat_s)), Cinv_s, n)
+  delta <- sweep(mu_draws, 2L, mu_hat, "-")
+  shift <- (delta %*% Bf_s) %*% Cinv_s
+  sweep(eps - shift, 2L, b_hat_s, "+")
+}
+
 .tobs_sbc_draws_ms_occu <- function(fit, n) {
   m <- fit$model
   nm <- .tobs_sbc_ms_occu_names(m)
@@ -1495,7 +1515,8 @@
   M <- matrix(NA_real_, n, S * P)
   for (s in seq_len(S)) {
     b_hat_s <- c(cm$blup_psi[s, ], cm$blup_p[s, ])
-    b_draws <- .tobs_sbc_mvn_draws(b_hat_s, cm$Cinv[[s]], n)
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
     M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
   }
   colnames(M) <- nm$cols
@@ -1739,7 +1760,10 @@
   for (s in seq_len(S)) {
     b_hat_s <- c(cm$blup_psi[s, ],
                 unlist(lapply(seq_len(D), function(d) cm[[paste0("blup_p", d)]][s, ])))
-    b_draws <- .tobs_sbc_mvn_draws(b_hat_s, cm$Cinv[[s]], n)
+    # gcol33/tulpaObs#226 (see .tobs_sbc_community_b_draws): mu and b_s draw
+    # jointly, not independently.
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
     M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
   }
   colnames(M) <- nm$cols
@@ -2002,7 +2026,10 @@
   mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
   M <- matrix(NA_real_, n, S * P)
   for (s in seq_len(S)) {
-    b_draws <- .tobs_sbc_mvn_draws(cm$blup_mu[s, ], cm$Cinv[[s]], n)
+    # gcol33/tulpaObs#226 (see .tobs_sbc_community_b_draws): mu and b_s draw
+    # jointly, not independently.
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, cm$blup_mu[s, ],
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
     M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
   }
   colnames(M) <- nm$cols
@@ -2186,23 +2213,38 @@
     refit       = .tobs_sbc_refit_t_occu,
     loglik_many = .tobs_sbc_loglik_many_t_occu),
   # ms_occu() (gcol33/tulpaObs#220, community group, section 6j): NOT
-  # registered -- the "rank a fixed species set" design (theta_s = mu + b_s,
-  # drawn as mu ~ N(means, vcov) and b_s ~ N(blup_s, Cinv_s) INDEPENDENTLY per
-  # species) is CONTRACT-verified (refit reproduces, simulate/pool shapes
-  # correct, loglik_many finite) but fails ACCEPTANCE: posterior SBC min
-  # p_unif ~1e-5 on a specific species' psi intercept at N=80/5 species, and
-  # WORSE (more coefficients affected, ~2.6e-5) at N=300 -- the opposite of
-  # what Laplace-EM small-sample attenuation predicts, so this is not that
-  # documented caveat. Most likely cause: the independence assumption between
-  # mu's and b_s's draws is wrong -- the true posterior almost certainly has
-  # Cov(mu, b_s) != 0 (a community-mean shift and a species deviation shift
-  # trade off against each other since only mu + b_s is informed by data),
-  # and dropping that covariance term biases Var(theta_s). Filed as
-  # gcol33/tulpaObs#226 with the full repro; the adapter functions below
-  # (.tobs_sbc_spec_ms_occu etc.) are kept as verified CONTRACT-tier
-  # groundwork, not registered until the joint covariance is fixed. `Cinv`
-  # IS now exposed on the fit (R/ms_occu.R) independent of this -- useful on
-  # its own for per-species posterior uncertainty, kept regardless of #226.
+  # registered -- STILL fails ACCEPTANCE after a real partial fix. #226 is
+  # TWO bugs, not one:
+  #
+  # (1) mu and b_s were drawn INDEPENDENTLY (mu ~ N(means, vcov), b_s ~
+  # N(blup_s, Cinv_s)) when the true posterior has Cov(mu, b_s) != 0. FIXED:
+  # b_s | mu ~ N(blup_s - Cinv_s %*% t(Bf_s) %*% (mu_draw - means), Cinv_s),
+  # Bf_s the mu-b_s cross-Hessian block now exposed on `fit$ms_community$Bf`
+  # (R/community_em.R, R/ms_occu.R). Derivation block-inverts the joint (mu,
+  # b_s) arrowhead precision and is validated to machine precision against a
+  # direct construction of that matrix (see `.tobs_sbc_community_b_draws`).
+  # Confirmed effective: the ORIGINAL failure was a SPECIFIC coefficient
+  # pinned at p_unif ~1e-5 on EVERY seed (a reproducible bug signature); after
+  # this fix, 10 seeds each fail on a DIFFERENT coefficient at n.sim=100 (the
+  # multiple-testing-noise signature), consistent with (1) being resolved.
+  #
+  # (2) One of those 10 seeds (seed 6) does NOT regress toward the pack under
+  # more replicates -- re-run at n.sim=400 it gets WORSE, not better (min
+  # p_unif 5.4e-6 -> 8.2e-11, 2 -> 6 quantities below 1e-3, across THREE
+  # species). That is the signature of a real, persistent effect, not
+  # n.sim=100 sampling noise (which would regress toward uniform with more
+  # sims). Species 4's data was not degenerate (59/160 detections, 19/40
+  # sites with any detection) so this is not quasi-separation. Most likely
+  # cause: `.tobs_community_em()`'s Sigma/Cinv carry the documented Laplace
+  # small-cluster VARIANCE attenuation (a SEPARATE, pre-existing caveat --
+  # `ms_occu_cover()` already has an AGHQ debias step for exactly this,
+  # `ms_occu()` has none) -- an attenuated Sigma over-shrinks Cinv_s, so a
+  # deviating species' draws are systematically too narrow on some truth
+  # draws, worse at more species/less-informative arms. NOT yet fixed; needs
+  # an AGHQ (or equivalent) variance-component debias for
+  # `.tobs_community_em()` consumers before registering. `Bf`/`Cinv` ARE
+  # exposed on the fit (R/ms_occu.R) independent of this -- useful on their
+  # own, kept regardless.
   #
   # cover() (gcol33/tulpaObs#220, multiarm-S3 group, section 6k): the same
   # two-independent-block shape as occu_categorical, reusing the generalized
