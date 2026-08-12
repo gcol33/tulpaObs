@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.221 (2026-08-12)
+
+* **`ms_occu_cover()` registered for `sbc()`** (gcol33/tulpaObs#220, the 20th
+  registered family): the occ+p+pos community adapter added in 0.0.220
+  cleared acceptance after a 9-seed check (seeds 0-8, not just the usual
+  3) -- every seed's posterior min p_unif comfortably above 1e-3 (range
+  0.0024-0.087), no coefficient repeating as the minimum more than twice out
+  of 17 possible across the 9 runs (chance level, not the reproducible-bug
+  signature #226 taught this design to watch for), and the mis-scaled
+  `narrow` control rejecting hard every time. An apparent decreasing trend
+  across the first 3 seeds (0.087 -> 0.012 -> 0.0044) turned out to be
+  small-sample noise -- seeds 4 and 7 bounced back up to 0.068 and 0.028,
+  and by seed 8 there was no trend left to see. `bad.factor = 1.75` (the
+  package's established default for this test) separated cleanly throughout.
+
 ## 0.0.220 (2026-08-12)
 
 * **`ms_occu_cover()` gains a CONTRACT-verified `sbc()` adapter**
