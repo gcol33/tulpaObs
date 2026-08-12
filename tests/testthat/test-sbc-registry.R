@@ -179,6 +179,8 @@
     suppressWarnings(tobs(~ x, data = sim$data, family = cover("lognormal"),
                           y = sim$y, method = "laplace", control = .sbc_reg_ctl))
   }
+  # ms_int_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6l).
+  # Confirmed (not just suspected) to share ms_occu's failure mode.
 )
 
 

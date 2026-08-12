@@ -1,5 +1,28 @@
 # tulpaObs NEWS
 
+## 0.0.213 (2026-08-12)
+
+* **`ms_int_occu()` was live in `.TOBS_SBC_REGISTRY` with an unverified
+  acceptance test -- reverted, confirmed to share #226's bug.** Found while
+  scoping the next community family: its registry entry and adapter (community
+  analogue of `int_occu()`, same "rank a fixed species set" design as
+  `ms_occu`) had already been written in an earlier pass, registered as
+  active, but its acceptance test still carried a `bad.factor` placeholder
+  comment -- it had never actually been run to completion, so `sbc()` on an
+  `ms_int_occu` fit was silently offering an unverified calibration check. A
+  single seed happened to cross the 1e-3 bar (p_unif 0.0029) and an earlier
+  pass concluded from that alone that it was fine, unlike `ms_occu`. Running
+  it at three different `sbc()` seeds (0, 1, 2) found the SAME coefficient
+  (`sp3_p2_(Intercept)`) pinned at p_unif ~0.0029-0.0030 every time --
+  reproducibility that rules out sampling noise (which would vary run to
+  run) and points at the same systematic bias #226 diagnosed for `ms_occu`
+  (the independent `mu`/`b_s` draw construction dropping `Cov(mu, b_s)`),
+  just proportionally smaller for this fixture. Reverted the registry entry
+  and acceptance test; the adapter functions (`R/sbc.R` section 6l) are kept
+  as CONTRACT-verified groundwork, matching `ms_occu`'s treatment. #226
+  updated to note both families are now confirmed affected, not just one
+  suspected.
+
 ## 0.0.212 (2026-08-12)
 
 * **`cover()` registered for `sbc()`** (#220, multiarm-S3 group): a

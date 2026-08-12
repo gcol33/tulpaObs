@@ -1649,33 +1649,35 @@
 
 
 # ---------------------------------------------------------------------------
-# 6l. ms_int_occu() (gcol33/tulpaObs#220, community group): the community
-# analogue of int_occu() -- `model$y` is a list of D per-source 3D
-# [n_sites x visits_d x n_species] arrays sharing the site axis, exactly the
-# shape dyn_int_occu()'s adapter already generalized `.tobs_sbc_pool_named_3d`
-# for, reused unchanged here (source names instead of source-x-season).
-# Ranks the FIXED species set's own realized per-species coefficients (mu +
-# b_s), the design decision established for ms_occu (#226) -- theta is the
-# S x P per-species coefficient vector (psi + every per-source detection
-# arm), not the community means alone. `draws()` mirrors ms_occu's: the
-# community mean once per row, each species' deviation independently from
-# its own Cinv block (exposed in commit 3b6fba9). `simulate()` is custom,
-# NOT the `f$draws` trick: `.tobs_simulate_ms_int_occu()` reads
-# `object$ms_community$coef_psi`/`coef_p<d>` (deterministic per-species
-# matrices), not `object$draws` -- so the candidate theta is injected by
-# overwriting those fields directly, the same mechanism `cover()`'s and
-# `ms_occu()`'s own adapters use for the identical reason. `loglik_many`
-# sums each species' own exact two-state marginal (`.ms_int_occu_sp_ll`,
-# the same kernel the fitter optimizes) at that species' theta slice. Full
-# site-overlap only (every source's site_map covers every site), matching
-# int_occu()'s existing gate -- ms_int_occu() supports partial overlap in
-# general, but pooling two partially-covered fits correctly is a documented
-# follow-up.
+# 6l. ms_int_occu() (gcol33/tulpaObs#220, community group): NOT registered --
+# checked directly against #226 rather than assumed safe, and it has the
+# SAME bug. This is the community analogue of int_occu(): `model$y` is a
+# list of D per-source 3D [n_sites x visits_d x n_species] arrays sharing
+# the site axis (`.tobs_sbc_pool_named_3d` from dyn_int_occu() reused
+# unchanged), ranking the fixed species set's own realized coefficients via
+# the identical independent-mu/b_s draw construction ms_occu used. A direct
+# probe (100-sim SBC at three different seeds) found `sp3_p2_(Intercept)`
+# stuck at p_unif ~0.0029-0.0030 across all three -- reproducible, not
+# noise, the same signature as ms_occu's failure (just less extreme here:
+# above the 1e-3 test threshold, but an order of magnitude below every
+# other passing family's typical minimum). The adapter functions below are
+# kept as verified CONTRACT-tier groundwork (refit reproduces, simulate()
+# injects `ms_community$coef_psi`/`coef_p<d>` directly rather than the
+# `f$draws` trick since `.tobs_simulate_ms_int_occu()` doesn't consult
+# `object$draws`, `loglik_many` sums each species' own exact two-state
+# marginal via `.ms_int_occu_sp_ll`), not registered until #226 is fixed.
+# Full site-overlap only (matching int_occu()'s existing gate) would still
+# apply once it is.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_data_ms_int_occu <- function(fit) {
   m <- fit$model
-  list(cells = m$data, y = stats::setNames(m$y, m$source_names), y_pos = NULL,
+  # Named by `process_names` ("p1".."pD"), NOT `source_names` -- the family's
+  # own `.tobs_simulate_ms_int_occu()` names its replicate list that way
+  # (`names(srcs) <- model$process_names`), and `source_names` defaults to a
+  # DIFFERENT label ("src1".."srcD") whenever `y` came in unnamed, which would
+  # silently mismatch the two lists' keys at pooling.
+  list(cells = m$data, y = stats::setNames(m$y, m$process_names), y_pos = NULL,
        visits = NULL, graph = NULL, site = seq_len(m$n_sites))
 }
 
@@ -1698,7 +1700,7 @@
        occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det_list  = lapply(m$formulas$det, function(f) .tobs_sbc_recombine(f, NULL)),
        species   = m$species_names,
-       sources   = m$source_names)
+       sources   = m$process_names)
 }
 
 .tobs_sbc_refit_ms_int_occu <- function(spec, data) {
@@ -1961,21 +1963,9 @@
     draws       = .tobs_sbc_draws_cover,
     simulate    = .tobs_sbc_sim_cover,
     refit       = .tobs_sbc_refit_cover,
-    loglik_many = .tobs_sbc_loglik_many_cover),
-  # ms_int_occu() (gcol33/tulpaObs#220, community group, section 6l): the
-  # community analogue of int_occu(); reuses dyn_int_occu()'s
-  # `.tobs_sbc_pool_named_3d` for its list-of-D-per-source-3D-arrays
-  # response. simulate() overwrites `ms_community$coef_psi`/`coef_p<d>`
-  # directly (the family's own simulate() handler does not consult
-  # `object$draws`). Full site-overlap only for v1.
-  ms_int_occu = list(
-    spec        = .tobs_sbc_spec_ms_int_occu,
-    data        = .tobs_sbc_data_ms_int_occu,
-    pool        = .tobs_sbc_pool_named_3d,
-    draws       = .tobs_sbc_draws_ms_int_occu,
-    simulate    = .tobs_sbc_sim_ms_int_occu,
-    refit       = .tobs_sbc_refit_ms_int_occu,
-    loglik_many = .tobs_sbc_loglik_many_ms_int_occu)
+    loglik_many = .tobs_sbc_loglik_many_cover)
+  # ms_int_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6l).
+  # Confirmed to share ms_occu's exact failure mode, not just suspected.
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
