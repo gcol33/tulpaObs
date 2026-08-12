@@ -46,6 +46,78 @@
 }
 
 
+# AGHQ variance-component debias, shared by every .tobs_community_em()
+# consumer (generalized from R/ms_occu_cover.R's own bespoke copy,
+# gcol33/tulpaObs#226 part 2). The EM's Sigma/Cinv carry the documented
+# Laplace small-cluster attenuation; this integrates the EXACT per-species RE
+# posterior by adaptive Gauss-Hermite quadrature at the EM's own per-species
+# mode/curvature (b_list, Cinv_list) and recovers the raw second moment
+# E[b b'] the EM's own M-step targets -- the quantity Sigma should equal at
+# the true (non-attenuated) posterior. `arm_idx` is an arbitrary NAMED list
+# (not hardcoded arm names): the debiased Sigma comes back keyed the same way,
+# so this serves any family's arm layout. `sp_ll(s, theta, global)` is the
+# SAME per-species callback .tobs_community_em() already threads through.
+.tobs_cem_aghq_sigma <- function(sp_ll, mu, global, b_list, Cinv_list,
+                                 Sinv, arm_idx, P, n_quad = 5L) {
+  S  <- length(b_list)
+  gh <- .ms_gh_quad(as.integer(n_quad))
+  # Tensor grid of z in R^P (P small): rows = nodes, plus the product GH weight.
+  grid <- as.matrix(do.call(expand.grid, rep(list(gh$x), P)))   # (n_quad^P) x P
+  lw   <- as.matrix(do.call(expand.grid, rep(list(log(gh$w)), P)))
+  log_w_gh <- rowSums(lw)                                        # product weight
+  sqrt2 <- sqrt(2)
+
+  Sigma_acc <- matrix(0, P, P)
+  for (s in seq_len(S)) {
+    bhat <- b_list[[s]]
+    C_s  <- (Cinv_list[[s]] + t(Cinv_list[[s]])) / 2
+    L_s  <- tryCatch(t(chol(C_s)),
+                     error = function(e) t(chol(C_s + diag(1e-8, P))))
+    # b_q = bhat + sqrt(2) L z_q ; AGHQ exp(+sum z^2) undoes the e^{-z^2} weight.
+    B_q  <- sweep(grid %*% (sqrt2 * t(L_s)), 2L, bhat, "+")      # n_node x P
+    logp <- numeric(nrow(B_q))
+    for (q in seq_len(nrow(B_q))) {
+      bq <- B_q[q, ]
+      logp[q] <- sp_ll(s, mu + bq, global) -
+                 0.5 * as.numeric(crossprod(bq, Sinv %*% bq)) +
+                 sum(grid[q, ]^2) + log_w_gh[q]
+    }
+    logp <- logp - max(logp)
+    w <- exp(logp); w <- w / sum(w)
+    # Raw second moment about zero E[b b'] = sum_q w_q b_q b_q' (the EM M-step
+    # quantity, since b ~ N(0, Sigma)).
+    M <- matrix(0, P, P)
+    for (q in seq_len(nrow(B_q))) M <- M + w[q] * tcrossprod(B_q[q, ])
+    Sigma_acc <- Sigma_acc + M
+  }
+  Sigma_acc <- Sigma_acc / S
+
+  # Keep the per-arm block-diagonal structure of the community covariance.
+  lapply(arm_idx, function(idx) {
+    blk <- Sigma_acc[idx, idx, drop = FALSE]
+    blk <- (blk + t(blk)) / 2
+    ev  <- eigen(blk, symmetric = TRUE)
+    ev$values <- pmax(ev$values, 1e-4)
+    ev$vectors %*% diag(ev$values, length(idx)) %*% t(ev$vectors)
+  })
+}
+
+# Reproject Cov(b_s|y) at a NEW Sinv without re-deriving the Newton solve
+# (gcol33/tulpaObs#226 part 2). Cinv_s = solve(Htt_s + Sinv); Htt_s is pure
+# likelihood curvature (independent of Sigma) and is recoverable from the
+# EM's own output as solve(Cinv_old_s) - Sinv_old. Exact, no new
+# approximation -- validated to machine precision against a direct
+# construction of the joint (mu, b_s) arrowhead precision (dev_notes probe,
+# 2026-08-12; first applied in R/ms_occu_cover.R, commit `03b87ad`).
+.tobs_cem_reproject_cinv <- function(Cinv_list, Sinv_old, Sinv_new) {
+  lapply(Cinv_list, function(C_s) {
+    Htt_s <- solve(C_s) - Sinv_old
+    tryCatch(solve(Htt_s + Sinv_new),
+             error = function(e) .tobs_cem_ginv(Htt_s + Sinv_new))
+  })
+}
+
+
 # ---------------------------------------------------------------------------
 # Community Laplace-EM engine
 # ---------------------------------------------------------------------------
@@ -68,6 +140,11 @@
 #'   EM resumes from a near-converged point instead of rediscovering it; it is the
 #'   dominant cost when the per-species likelihood is expensive (an N-mixture /
 #'   distance marginal sums over the latent count).
+#' @param re_aghq Debias `Sigma`/`Cinv` by adaptive Gauss-Hermite quadrature of
+#'   the exact per-species RE posterior (gcol33/tulpaObs#226 part 2), gated to
+#'   `P <= re_aghq_maxdim` (tensor AGHQ over the joint b couples the arms).
+#'   Defaults `FALSE` -- every existing caller is byte-identical unless it
+#'   opts in. `n_quad` sets the per-dimension node count.
 .tobs_community_em <- function(S, P, arm_idx, sp_ll, sp_grad = NULL,
                                init_mu, init_global = numeric(0),
                                penalize_global = FALSE, sigma_beta = 5,
@@ -75,7 +152,9 @@
                                sigma_init = 0.3, max_iter = 200L, tol = 1e-4,
                                newton_max = 30L, verbose = TRUE,
                                sp_info = NULL,
-                               init_b = NULL, init_Sigma = NULL) {
+                               init_b = NULL, init_Sigma = NULL,
+                               re_aghq = FALSE, n_quad = 5L,
+                               re_aghq_maxdim = 4L) {
   S          <- as.integer(S)
   P          <- as.integer(P)
   G          <- length(init_global)
@@ -335,7 +414,34 @@
   Vf <- (Vf + t(Vf)) / 2
   logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
 
+  # AGHQ variance-component debias (gcol33/tulpaObs#226 part 2), opt-in
+  # (re_aghq defaults FALSE -- every existing caller is byte-identical unless
+  # it explicitly asks for this). Sigma carries the documented Laplace
+  # small-cluster attenuation; Cinv must be reprojected at the debiased Sinv
+  # or it silently keeps the pre-debias value even though Sigma changed (the
+  # exact bug found and fixed in R/ms_occu_cover.R, commit `03b87ad`).
+  Cinv_out <- res$Cinv
+  debias_method <- "none"
+  if (isTRUE(re_aghq) && P <= as.integer(re_aghq_maxdim)) {
+    aghq_out <- tryCatch({
+      Sinv_old <- Sinv
+      Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, global, b_list, res$Cinv, Sinv,
+                                 arm_idx, P, n_quad = n_quad)
+      Sinv_new <- blockdiag_inv(Sd)
+      list(Sigma = Sd,
+           Cinv = .tobs_cem_reproject_cinv(res$Cinv, Sinv_old, Sinv_new),
+           ok = TRUE)
+    }, error = function(e) {
+      warning("community EM AGHQ variance debias failed (",
+              conditionMessage(e), "); reporting the EM (Laplace) variance ",
+              "components.", call. = FALSE)
+      list(Sigma = Sigma, Cinv = res$Cinv, ok = FALSE)
+    })
+    Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
+    debias_method <- if (aghq_out$ok) "aghq" else "none"
+  }
+
   list(mu = mu, global = global, b_list = b_list, Sigma = Sigma,
-       Cinv = res$Cinv, Bf = res$Bf, Vf = Vf, logML = logML,
-       converged = converged, n_iter = n_iter)
+       Cinv = Cinv_out, Bf = res$Bf, Vf = Vf, logML = logML,
+       converged = converged, n_iter = n_iter, debias_method = debias_method)
 }

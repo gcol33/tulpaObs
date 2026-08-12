@@ -335,62 +335,12 @@
 }
 
 # AGHQ debias of the community covariance (tulpaObs#56, the single-arm #47 fix
-# generalised to the joint community RE). The EM covariance M-step uses the
-# Laplace second moment E[b b'] ~ b_hat b_hat' + Cov_Laplace(b|y); for a binary
-# RE at small per-species n that posterior is right-skewed / heavier-tailed than
-# the Gaussian mode approximation, so the Laplace second moment ATTENUATES the
-# variance. This recomputes E_post[b_s b_s'] by adaptive Gauss-Hermite quadrature
-# of the EXACT per-species marginal (centred at the mode, scaled by the Laplace
-# Cholesky), then sets Sigma_arm = mean_s of the arm block of E_post[b_s b_s'].
-# Only the variance components are debiased; the community means and their cov
-# are unbiased and untouched. Tensor-product AGHQ over the full P-dim b couples
-# the arms through the likelihood, so it is gated to small total RE dim.
-.ms_occu_cover_aghq_sigma <- function(sp_ll, mu, ld, b_list, Cinv_list,
-                                      Sinv, arm_idx, P, n_quad = 5L) {
-  S  <- length(b_list)
-  gh <- .ms_gh_quad(as.integer(n_quad))
-  # Tensor grid of z in R^P (P small): rows = nodes, plus the product GH weight.
-  grid <- as.matrix(do.call(expand.grid, rep(list(gh$x), P)))   # (n_quad^P) x P
-  lw   <- as.matrix(do.call(expand.grid, rep(list(log(gh$w)), P)))
-  log_w_gh <- rowSums(lw)                                        # product weight
-  sqrt2 <- sqrt(2)
-
-  Sigma_acc <- matrix(0, P, P)
-  for (s in seq_len(S)) {
-    bhat <- b_list[[s]]
-    C_s  <- (Cinv_list[[s]] + t(Cinv_list[[s]])) / 2
-    L_s  <- tryCatch(t(chol(C_s)),
-                     error = function(e) t(chol(C_s + diag(1e-8, P))))
-    # b_q = bhat + sqrt(2) L z_q ; AGHQ exp(+sum z^2) undoes the e^{-z^2} weight.
-    B_q  <- sweep(grid %*% (sqrt2 * t(L_s)), 2L, bhat, "+")      # n_node x P
-    logp <- numeric(nrow(B_q))
-    for (q in seq_len(nrow(B_q))) {
-      bq <- B_q[q, ]
-      logp[q] <- sp_ll(s, mu + bq, ld) -
-                 0.5 * as.numeric(crossprod(bq, Sinv %*% bq)) +
-                 sum(grid[q, ]^2) + log_w_gh[q]
-    }
-    logp <- logp - max(logp)
-    w <- exp(logp); w <- w / sum(w)
-    # Raw second moment about zero E[b b'] = sum_q w_q b_q b_q' (the EM M-step
-    # quantity, since b ~ N(0, Sigma)).
-    M <- matrix(0, P, P)
-    for (q in seq_len(nrow(B_q))) M <- M + w[q] * tcrossprod(B_q[q, ])
-    Sigma_acc <- Sigma_acc + M
-  }
-  Sigma_acc <- Sigma_acc / S
-
-  # Keep the per-arm block-diagonal structure of the community covariance.
-  pick <- function(arm) {
-    idx <- arm_idx[[arm]]
-    blk <- Sigma_acc[idx, idx, drop = FALSE]
-    blk <- (blk + t(blk)) / 2
-    ev  <- eigen(blk, symmetric = TRUE)
-    ev$values <- pmax(ev$values, 1e-4)
-    ev$vectors %*% diag(ev$values, length(idx)) %*% t(ev$vectors)
-  }
-  list(occ = pick("occ"), p = pick("p"), pos = pick("pos"))
-}
+# generalised to the joint community RE) now lives in R/community_em.R as the
+# shared `.tobs_cem_aghq_sigma()`/`.tobs_cem_reproject_cinv()` (generalized
+# from this file's own bespoke implementation, gcol33/tulpaObs#226 part 2) --
+# every `.tobs_community_em()` consumer reads the same fix. `arm_idx` here is
+# `list(occ=, p=, pos=)`, so the shared function's arm-agnostic `lapply()`
+# returns exactly the `list(occ=, p=, pos=)` this family's callers expect.
 
 # Fit the community joint occupancy-cover model. `model` is the bound
 # ms_occu_cover model. Returns a `tobs_fit` (via build_ms_occu_cover_fit).
@@ -650,22 +600,14 @@
   if (re_aghq && P <= aghq_cap) {
     Sinv_old <- Sinv
     aghq_out <- tryCatch({
-      Sd <- .ms_occu_cover_aghq_sigma(sp_ll, mu, ld, b_list, res$Cinv, Sinv,
-                                      arm_idx, P, n_quad = aghq_nq)
-      # Cov(b_s|y) rides Sigma through Sinv (C_s = Htt_s + Sinv); AGHQ debiases
-      # Sigma but never re-solved that per-species Newton block, so
-      # `res$Cinv`/`fit$ms_community$Cinv` silently kept the pre-debias
-      # (attenuated) value even on an AGHQ-debiased fit (gcol33/tulpaObs#226
-      # part 2). Htt_s is recoverable without re-deriving the Newton solve --
-      # `solve(res$Cinv[[s]]) - Sinv_old` -- and re-solving at the debiased
-      # Sinv keeps Cinv consistent with the Sigma actually reported. Bf_s is
-      # pure likelihood curvature (no Sinv term) and needs no update.
+      # Shared with every .tobs_community_em() consumer (R/community_em.R,
+      # gcol33/tulpaObs#226 part 2): Cov(b_s|y) rides Sigma through Sinv
+      # (C_s = Htt_s + Sinv), so AGHQ-debiasing Sigma alone leaves Cinv
+      # inconsistent unless that per-species block is reprojected too.
+      Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, ld, b_list, res$Cinv, Sinv,
+                                 arm_idx, P, n_quad = aghq_nq)
       Sinv_new <- blockdiag_inv(Sd)
-      Cinv_new <- lapply(res$Cinv, function(C_s) {
-        Htt_s <- solve(C_s) - Sinv_old
-        tryCatch(solve(Htt_s + Sinv_new),
-                 error = function(e) .tobs_cem_ginv(Htt_s + Sinv_new))
-      })
+      Cinv_new <- .tobs_cem_reproject_cinv(res$Cinv, Sinv_old, Sinv_new)
       list(Sigma = Sd, Cinv = Cinv_new, ok = TRUE)
     }, error = function(e) {
       warning("ms_occu_cover AGHQ variance debias failed (", conditionMessage(e),

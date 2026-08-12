@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.222 (2026-08-12)
+
+* **AGHQ variance-component debias generalized to `.tobs_community_em()`**
+  (gcol33/tulpaObs#226 part 2 groundwork): `ms_occu_cover()`'s own
+  `.ms_occu_cover_aghq_sigma()` was already ~95% generic (it took the
+  per-species log-likelihood as a first-class `sp_ll(s, theta, global)`
+  callback, exactly `.tobs_community_em()`'s own convention) -- extracted
+  into `R/community_em.R` as `.tobs_cem_aghq_sigma()`/
+  `.tobs_cem_reproject_cinv()`, shared by every `.tobs_community_em()`
+  consumer (`ms_occu`, `ms_int_occu`, `ms_count`, `ms_dyn_occu`,
+  `ms_distance`), not just `ms_occu_cover()`. Wired into
+  `.tobs_community_em()` as new opt-in parameters `re_aghq`/`n_quad`/
+  `re_aghq_maxdim`, default `re_aghq = FALSE` -- every existing caller stays
+  byte-identical unless it explicitly opts in, so this commit alone changes
+  no family's default behavior. `ms_occu_cover()` itself refactored to call
+  the shared functions instead of its own copy (no-copy-paste); its test
+  suite unaffected (19/19 pass, unchanged). Opting individual families in
+  (starting with `ms_occu`, the actual #226 part-2 target) is a separate,
+  deliberately smaller follow-up step so each can be regression-checked on
+  its own.
+
 ## 0.0.221 (2026-08-12)
 
 * **`ms_occu_cover()` registered for `sbc()`** (gcol33/tulpaObs#220, the 20th
