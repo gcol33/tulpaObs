@@ -1,5 +1,12 @@
 # tulpaObs NEWS
 
+## 0.0.209 (2026-08-12)
+
+* `dyn_abun()`'s `sbc()` acceptance-tier `bad.factor = 1.75` (written
+  pending measurement in 0.0.207) is confirmed: its 100-sim posterior SBC
+  run finished uniform on all five coefficients (min p_unif 0.087), a
+  mis-scaled control rejects hard (max 1.6e-7). No retuning needed.
+
 ## 0.0.208 (2026-08-12)
 
 * **`occu_multi()` registered for `sbc()`** (#220, multi-response group):
