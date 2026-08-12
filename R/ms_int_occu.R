@@ -445,7 +445,14 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
     coef_list[[paste0("coef_", arm)]]   <- coef
     blup_list[[paste0("blup_", arm)]]   <- blup
   }
-  ms_community <- c(Sigma_list, sd_list, coef_list, blup_list)
+  # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
+  # community EM's own Newton solve, conditional on the converged community
+  # mean) -- what a per-species-coefficient consumer (SBC's "rank a fixed
+  # species set" design, a calibrated per-species CI) needs beyond the point
+  # BLUP; not previously exposed on the fit object. Covers the FULL b_s
+  # vector across every arm (psi + all D detection sources), matching
+  # `B <- do.call(rbind, fit$b_list)` above.
+  ms_community <- c(Sigma_list, sd_list, coef_list, blup_list, list(Cinv = fit$Cinv))
 
   structure(c(list(
     draws        = draws,
