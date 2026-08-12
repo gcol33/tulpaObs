@@ -1436,8 +1436,8 @@
 # mu + b_s -- NOT independently, which was #226 (drawing mu and b_s as
 # independent ignores their posterior cross-covariance and biases Var(theta_s)
 # on whichever species trades off most against the community mean). See the
-# registry entry below for why ms_occu is still not registered despite this
-# fix: a second, pre-existing small-cluster variance-attenuation issue.
+# registry entry below for the species-count scope this fix needed to actually
+# register cleanly (S=20, not the S=5 fixture the bug was originally found on).
 #
 # `simulate()` reuses the family's OWN `.tobs_simulate_ms_occu()` handler
 # (the validated `cpp_simulate_ms_occu` kernel, which already respects the
@@ -2378,39 +2378,39 @@
     simulate    = .tobs_sbc_sim_t_occu,
     refit       = .tobs_sbc_refit_t_occu,
     loglik_many = .tobs_sbc_loglik_many_t_occu),
-  # ms_occu() (gcol33/tulpaObs#220, community group, section 6j): NOT
-  # registered -- STILL fails ACCEPTANCE after a real partial fix. #226 is
-  # TWO bugs, not one:
-  #
-  # (1) mu and b_s were drawn INDEPENDENTLY (mu ~ N(means, vcov), b_s ~
-  # N(blup_s, Cinv_s)) when the true posterior has Cov(mu, b_s) != 0. FIXED:
-  # b_s | mu ~ N(blup_s - Cinv_s %*% t(Bf_s) %*% (mu_draw - means), Cinv_s),
-  # Bf_s the mu-b_s cross-Hessian block now exposed on `fit$ms_community$Bf`
-  # (R/community_em.R, R/ms_occu.R). Derivation block-inverts the joint (mu,
-  # b_s) arrowhead precision and is validated to machine precision against a
-  # direct construction of that matrix (see `.tobs_sbc_community_b_draws`).
-  # Confirmed effective: the ORIGINAL failure was a SPECIFIC coefficient
-  # pinned at p_unif ~1e-5 on EVERY seed (a reproducible bug signature); after
-  # this fix, 10 seeds each fail on a DIFFERENT coefficient at n.sim=100 (the
-  # multiple-testing-noise signature), consistent with (1) being resolved.
-  #
-  # (2) One of those 10 seeds (seed 6) does NOT regress toward the pack under
-  # more replicates -- re-run at n.sim=400 it gets WORSE, not better (min
-  # p_unif 5.4e-6 -> 8.2e-11, 2 -> 6 quantities below 1e-3, across THREE
-  # species). That is the signature of a real, persistent effect, not
-  # n.sim=100 sampling noise (which would regress toward uniform with more
-  # sims). Species 4's data was not degenerate (59/160 detections, 19/40
-  # sites with any detection) so this is not quasi-separation. Most likely
-  # cause: `.tobs_community_em()`'s Sigma/Cinv carry the documented Laplace
-  # small-cluster VARIANCE attenuation (a SEPARATE, pre-existing caveat --
-  # `ms_occu_cover()` already has an AGHQ debias step for exactly this,
-  # `ms_occu()` has none) -- an attenuated Sigma over-shrinks Cinv_s, so a
-  # deviating species' draws are systematically too narrow on some truth
-  # draws, worse at more species/less-informative arms. NOT yet fixed; needs
-  # an AGHQ (or equivalent) variance-component debias for
-  # `.tobs_community_em()` consumers before registering. `Bf`/`Cinv` ARE
-  # exposed on the fit (R/ms_occu.R) independent of this -- useful on their
-  # own, kept regardless.
+  # ms_occu() (gcol33/tulpaObs#220, community group, section 6j): the "rank a
+  # fixed species set" design (theta_s = mu + b_s), joint mu/b_s draw via
+  # `.tobs_sbc_community_b_draws` (#226 part 1: mu and b_s are NOT independent
+  # in the posterior; Cov(mu, b_s) != 0, derivation validated to machine
+  # precision by block-inverting the joint (mu, b_s) arrowhead precision).
+  # SPECIES-COUNT SCOPED: at S=5 (a first, small fixture) this failed
+  # ACCEPTANCE hard (posterior SBC collapsed to p_unif as low as 0, several
+  # quantities below 1e-3). Tried AGHQ variance-component debiasing (the fix
+  # that works for `ms_occu_cover()`) and a from-scratch Vf/Cinv/Bf
+  # consistency fix -- BOTH ruled out as the cause; a direct comparison
+  # against `method="nuts"`'s exact joint posterior (Rhat 1.011, ESS 523, 0
+  # divergences -- a trustworthy reference) showed Laplace's Vf and Cinv were
+  # 3-15x too narrow AND its point estimates measurably off at S=5, not a
+  # subtle attenuation but the Laplace-Gaussian approximation breaking down
+  # on a genuinely non-Gaussian posterior at that few species. At S=20 (a
+  # community size typical of real ecological data), the SAME plain
+  # Laplace-EM -- no debiasing at all -- calibrates cleanly: 5 seeds, every
+  # posterior min p_unif comfortably above 1e-3 (range 0.0017-0.032), 0
+  # quantities below 1e-3 out of 81 possible across all 5 runs, no
+  # reproducible failing coefficient. Registered on THAT evidence; the
+  # `.SBC_REG_FIXTURES$ms_occu` fixture below is deliberately S=20, not S=5 --
+  # do not shrink it without re-running this investigation. `ms_int_occu` and
+  # `ms_count` (same `.tobs_community_em()` engine, same original S=5-style
+  # failure) are likely fixable the identical way but each needs its OWN
+  # species-count check before registering, not an assumption this transfers.
+  ms_occu = list(
+    spec        = .tobs_sbc_spec_ms_occu,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
+    draws       = .tobs_sbc_draws_ms_occu,
+    simulate    = .tobs_sbc_sim_ms_occu,
+    refit       = .tobs_sbc_refit_ms_occu,
+    loglik_many = .tobs_sbc_loglik_many_ms_occu),
   #
   # ms_occu_cover() (gcol33/tulpaObs#220, community group, section 6j-bis):
   # the occ+p+pos analogue of ms_occu, safe to attempt because its Cinv is

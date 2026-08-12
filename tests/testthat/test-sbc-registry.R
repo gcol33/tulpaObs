@@ -172,7 +172,22 @@
                           detection = ~ 1, y = sim$y,
                           method = "pg_gibbs", control = .sbc_reg_ctl))
   },
-  # ms_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6j).
+  # ms_occu: S=20, not a smaller/faster count -- see gcol33/tulpaObs#226
+  # (R/sbc.R section 6j). At S=5 this family's Laplace-EM posterior is
+  # measurably non-Gaussian (validated against method="nuts", the exact
+  # reference: Vf/Cinv 3-15x too narrow) and posterior SBC fails hard; at
+  # S=20 the same plain Laplace-EM calibrates cleanly. Shrinking N/S here
+  # for fixture speed would silently resurrect that failure.
+  ms_occu = function(N = 80L, n_species = 20L) {
+    sim <- simulate_ms_occu(N = N, J = 4L, n_species = n_species,
+                            beta_comm_mean = c(0.2, 0.5), beta_comm_sd = c(0.6, 0.3),
+                            alpha_comm_mean = c(0, 0.3), alpha_comm_sd = c(0.4, 0.2),
+                            seed = 0L)
+    suppressWarnings(tobs(~ x, data = sim$data, family = ms_occu(),
+                          detection = ~ x, y = sim$y,
+                          species = paste0("sp", seq_len(n_species)),
+                          method = "laplace", control = .sbc_reg_ctl))
+  },
   ms_occu_cover = function(N = 60L) {
     sim <- simulate_ms_occu_cover(n_species = 4L, N = N, J = 5L,
                                   positive = "lognormal",
@@ -270,6 +285,14 @@ test_that("the roster in the error message names what is registered", {
 # short-circuit below or it silently returns the wrong (right-sized-for-the-
 # wrong-quantity) vector.
 .sbc_reg_means <- function(fit) {
+  if (identical(attr(fit, "tobs_family")$name, "ms_occu")) {
+    m <- fit$model
+    nm <- tulpaObs:::.tobs_sbc_ms_occu_names(m)
+    cm <- fit$ms_community
+    theta <- as.vector(t(cbind(cm$coef_psi, cm$coef_p)))
+    names(theta) <- nm$cols
+    return(theta)
+  }
   if (identical(attr(fit, "tobs_family")$name, "ms_occu_cover")) {
     m <- fit$model
     nm <- tulpaObs:::.tobs_sbc_ms_occu_cover_names(m)
@@ -817,6 +840,45 @@ test_that("occu_categorical posterior SBC: correct fit uniform, mis-scaled is no
 
   rp <- res$report
   qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$occu_categorical$draws(fit, 2L))
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("ms_occu posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (community group, section 6j) / gcol33/tulpaObs#226.
+  # SPECIES-COUNT SCOPED: at S=5 this family's Laplace-EM posterior is
+  # measurably non-Gaussian (validated against method="nuts", the exact
+  # reference posterior: Rhat 1.011, ESS 523, 0 divergences -- Vf/Cinv came
+  # back 3-15x too narrow and point estimates measurably off), and posterior
+  # SBC fails hard (p_unif as low as 0 on some coefficients). At S=20 (the
+  # `.SBC_REG_FIXTURES$ms_occu()` fixture below), the SAME plain Laplace-EM
+  # -- no AGHQ debiasing -- calibrates cleanly: 5 seeds during development
+  # (0-4), min p_unif range 0.0017-0.032, 0 quantities below 1e-3 out of 81
+  # possible across all 5 runs, no reproducible failing coefficient. Do NOT
+  # shrink the fixture's N/species count for speed -- that resurrects the
+  # S=5 failure this test exists to guard against. Measured (seed = 0):
+  # posterior min p_unif 0.010, narrow max <1e-3.
+  fit <- .SBC_REG_FIXTURES$ms_occu()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$ms_occu$draws(fit, 2L))
   pu <- function(arm) {
     r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
     stats::setNames(r$p_unif, r$quantity)

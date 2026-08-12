@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.0.224 (2026-08-12)
+
+* **`ms_occu()` registered for `sbc()`** (gcol33/tulpaObs#220, the 21st
+  registered family) -- resolves #226 part 2 for this family, not with a code
+  fix but a species-count scope finding. A direct comparison against
+  `method="nuts"`'s exact joint posterior (Rhat 1.011, ESS 523, 0
+  divergences) showed the S=5 fixture used to diagnose #226 had a genuinely
+  non-Gaussian Laplace-EM posterior (`Vf`/`Cinv` 3-15x too narrow, point
+  estimates measurably off) -- not fixable by any Gaussian-correction
+  machinery (AGHQ debiasing, Vf/Cinv reprojection), both tried and both ruled
+  out as the cause in 0.0.223. At S=20 (a community size typical of real
+  ecological data), the SAME plain Laplace-EM -- no debiasing at all --
+  calibrates cleanly: 5 seeds, posterior min p_unif range 0.0017-0.032, 0
+  quantities below 1e-3 out of 81 possible across all 5 runs, no reproducible
+  failing coefficient. Registered with the fixture and test explicitly
+  pinned to S=20 (`tests/testthat/test-sbc-registry.R`, comments warn against
+  shrinking it for speed). `ms_int_occu`/`ms_count` (same
+  `.tobs_community_em()` engine, same original S=5-style failure signature)
+  are likely fixable the identical way but each needs its own species-count
+  check, not an assumption this transfers automatically.
+
 ## 0.0.223 (2026-08-12)
 
 * **AGHQ debiasing tried for `ms_occu()`, found actively harmful, reverted**
