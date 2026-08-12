@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.220 (2026-08-12)
+
+* **`ms_occu_cover()` gains a CONTRACT-verified `sbc()` adapter**
+  (gcol33/tulpaObs#220): spec/data/pool/draws/simulate/refit/loglik_many,
+  the occ+p+pos analogue of `ms_occu`'s (reverted) adapter -- same joint
+  mu/b_s draw (#226 part 1) and safe to attempt because this family's `Cinv`
+  now stays consistent with `Sigma` under AGHQ debiasing (#226 part 2 fix,
+  0.0.219). `draws()` ranks S blocks of per-species realized coefficients
+  (`psi_`/`p_`/`pos_`, species-major) plus one trailing shared dispersion
+  coordinate (`log_sigma_pos`/`log_phi`, no per-species deviation).
+  `loglik_many` reuses `.occu_cover_sp_ll`, the exact per-species two-state
+  marginal `.tobs_fit_ms_occu_cover()` already optimizes. Verified against
+  the real `sbc()` dispatcher (not just the adapter functions in isolation):
+  refit-on-observed-data reproduces the fit exactly, pooling creates disjoint
+  groups, draws/simulate/loglik_many all compose and stay finite (8/8 checks).
+  Found and fixed a generalization gap in the shared test's `.sbc_reg_means()`
+  helper along the way: it assumed `fit$means` IS what a family's SBC design
+  ranks, true for single-species families but wrong for COMMUNITY ones (whose
+  `fit$means` is the P-length community mean, not the S x P per-species
+  theta) -- the same gap flagged earlier for `ms_int_occu` but never fixed
+  since that registration was reverted first. Acceptance (posterior SBC
+  uniformity) not yet run -- v1 scope non-spatial laplace, `positive =
+  "lognormal"` only, matching `occu_cover`/`cover`'s own v1 scope.
+
 ## 0.0.219 (2026-08-12)
 
 * **`ms_occu_cover()`'s AGHQ variance debias never reprojected `Cinv`**

@@ -173,6 +173,18 @@
                           method = "pg_gibbs", control = .sbc_reg_ctl))
   },
   # ms_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6j).
+  ms_occu_cover = function(N = 60L) {
+    sim <- simulate_ms_occu_cover(n_species = 4L, N = N, J = 5L,
+                                  positive = "lognormal",
+                                  sd_occ = 0.6, sd_p = 0.4, sd_pos = 0.3,
+                                  seed = 3L)
+    suppressWarnings(tobs(~ occ_cov1, data = sim$data,
+                          family = ms_occu_cover("lognormal"),
+                          detection = ~ 1, positive = ~ 1,
+                          y = sim$y, y_pos = sim$y_pos,
+                          species = paste0("sp", seq_len(4L)),
+                          method = "laplace", control = .sbc_reg_ctl))
+  },
   cover = function(N = 200L) {
     sim <- simulate_cover(N = N, beta_occ = c(-0.5, 0.8), beta_pos = c(-1.0, 0.3),
                           sigma_pos = 0.4, response = "lognormal", seed = 51L)
@@ -251,8 +263,22 @@ test_that("the roster in the error message names what is registered", {
 # blocks (presence, class), not tulpa's usual joint MVN summary -- so this
 # flattens it with the SAME arm-prefix scheme .tobs_sbc_draws_occu_categorical()
 # uses, letting the generic checks below read one name per reported
-# coefficient regardless of family.
+# coefficient regardless of family. A COMMUNITY family's fit$means is the
+# community MEAN alone (P-length), never what its own SBC design ranks --
+# ms_occu_cover's theta is the per-species REALIZED coefficient (mu + b_s,
+# S x P, species-major), so it must be checked BEFORE the fit$means
+# short-circuit below or it silently returns the wrong (right-sized-for-the-
+# wrong-quantity) vector.
 .sbc_reg_means <- function(fit) {
+  if (identical(attr(fit, "tobs_family")$name, "ms_occu_cover")) {
+    m <- fit$model
+    nm <- tulpaObs:::.tobs_sbc_ms_occu_cover_names(m)
+    cm <- fit$ms_community
+    theta <- as.vector(t(cbind(cm$coef_occ, cm$coef_p, cm$coef_pos)))
+    vals <- c(theta, fit$means[[length(fit$means)]])
+    names(vals) <- nm$cols
+    return(vals)
+  }
   if (!is.null(fit$means)) return(fit$means)
   if (inherits(fit, "occu_categorical_fit")) {
     occ <- fit$beta_occ

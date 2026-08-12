@@ -1567,6 +1567,172 @@
 
 
 # ---------------------------------------------------------------------------
+# 6j-bis. ms_occu_cover() (gcol33/tulpaObs#220, community group): the
+# occ+p+pos analogue of ms_occu -- same "rank a fixed species set" design
+# (theta_s = mu_arm + b_s per species, one block per arm, species-major),
+# same joint mu/b_s draw (gcol33/tulpaObs#226 part 1, `.tobs_sbc_community_b_draws`),
+# now safe to attempt because `Cinv` is kept consistent with `Sigma` even
+# under AGHQ debiasing (#226 part 2 fix specific to this family, commit
+# `03b87ad` -- `ms_occu`/`ms_int_occu`/`ms_count` have no AGHQ path at all and
+# stay deferred).
+#
+# `fit$means`/`vcov` carry ONE extra coordinate beyond the three arms' P
+# dimensions: the shared cover-arm dispersion (`log_sigma_pos` for lognormal,
+# `log_phi` for beta), a SINGLE community-level scalar with no per-species
+# deviation (`b_list[[s]]` in `R/ms_occu_cover.R` is P-long, arm coefs only).
+# `.tobs_sbc_community_b_draws(mu_draws, mu_hat, ...)` needs no change for
+# this -- `Bf_s` is `(P+1) x P` (mu+disp -> b_s), so the shift term already
+# reads the disp coordinate; a species' theta gets the disp-informed shift on
+# its arm coefs, while the disp value itself is copied straight off the
+# u=(mu,disp) draw with no per-species addition.
+#
+# Reuses `.occu_cover_sp_ll` (the exact per-species two-state marginal
+# `.tobs_fit_ms_occu_cover()` already optimizes, via
+# `.ms_occu_cover_species_view()`) for `loglik_many` -- same "family's own
+# kernel" pattern as `ms_occu`/`ms_int_occu`. `simulate()` reuses
+# `.tobs_simulate_ms_occu_cover()`, overwriting `f$ms_community$coef_occ`/
+# `coef_p`/`coef_pos` (the field names THAT handler reads -- note these are
+# "occ"/"p"/"pos", not the "psi"/"p"/"pos" prefix `fit$means`'s own
+# coefficient names use) and the last element of `f$means` (the shared
+# log-dispersion `.tobs_simulate_ms_occu_cover` reads via
+# `object$means[[length(object$means)]]`).
+#
+# `y`/`y_pos` are both `[site x visit x species]` -- the 3D-season pool
+# generalizes to carry both response arrays, not just one.
+#
+# v1 scope: non-spatial `laplace`, `positive = "lognormal"` only (matches
+# `occu_cover`/`cover`'s own v1 scope -- beta's mu/phi reparameterization is a
+# separate correctness question, not attempted here).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec_ms_occu_cover <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  if (!identical(m$positive, "lognormal")) {
+    stop("SBC on ms_occu_cover() is registered for positive = \"lognormal\" ",
+         "only (gcol33/tulpaObs#220).", call. = FALSE)
+  }
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(.tobs_sbc_default_control(),
+                                   as.list(fit.control)),
+       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
+       pos     = .tobs_sbc_recombine(m$formulas$pos, NULL),
+       species = m$species_names)
+}
+
+.tobs_sbc_refit_ms_occu_cover <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det, positive = spec$pos,
+    y = data$y, y_pos = data$y_pos, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+# theta columns: S blocks of `psi_<coef>`/`p_<coef>`/`pos_<coef>` (species-
+# major, matching ms_occu's layout), plus ONE trailing shared dispersion
+# column (`log_sigma_pos`/`log_phi`) -- not per-species.
+.tobs_sbc_ms_occu_cover_names <- function(m) {
+  occ_names <- m$process_info[[1L]]$coef_names
+  det_names <- m$process_info[[2L]]$coef_names
+  pos_names <- m$process_info[[3L]]$coef_names
+  par <- c(paste0("psi_", occ_names), paste0("p_", det_names),
+          paste0("pos_", pos_names))
+  disp_name <- if (identical(m$positive, "beta")) "log_phi" else "log_sigma_pos"
+  list(occ = occ_names, det = det_names, pos = pos_names, par = par,
+       disp_name = disp_name,
+       cols = c(as.vector(outer(par, m$species_names,
+                                function(p, sp) paste0(sp, "_", p))),
+               disp_name))
+}
+
+.tobs_sbc_data_ms_occu_cover <- function(fit) {
+  m <- fit$model
+  list(cells = m$data, y = m$y, y_pos = m$y_pos, visits = NULL, graph = NULL,
+       site = seq_len(m$n_sites))
+}
+
+.tobs_sbc_pool_ms_occu_cover <- function(obs, rep) {
+  n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
+  y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L]))
+  y[seq_len(n_o), , ] <- obs$y
+  y[n_o + seq_len(n_r), , ] <- rep$y
+  y_pos <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y_pos)[2L], dim(obs$y_pos)[3L]))
+  y_pos[seq_len(n_o), , ] <- obs$y_pos
+  y_pos[n_o + seq_len(n_r), , ] <- rep$y_pos
+  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = y_pos,
+       visits = NULL, graph = NULL, site = c(obs$site, rep$site + n_o))
+}
+
+.tobs_sbc_draws_ms_occu_cover <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_occu_cover_names(m)
+  S <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x (P+1)
+  mu_arm <- mu_draws[, seq_len(P), drop = FALSE]
+  M <- matrix(NA_real_, n, S * P + 1L)
+  for (s in seq_len(S)) {
+    b_hat_s <- c(cm$blup_occ[s, ], cm$blup_p[s, ], cm$blup_pos[s, ])
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_arm + b_draws
+  }
+  M[, S * P + 1L] <- mu_draws[, P + 1L]
+  colnames(M) <- nm$cols
+  M
+}
+
+.tobs_sbc_sim_ms_occu_cover <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_occu_cover_names(m)
+  S <- m$n_species
+  coef_occ <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_psi_", nm$occ)]))
+  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_p_", nm$det)]))
+  coef_pos <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_pos_", nm$pos)]))
+  dimnames(coef_occ) <- list(m$species_names, nm$occ)
+  dimnames(coef_p)   <- list(m$species_names, nm$det)
+  dimnames(coef_pos) <- list(m$species_names, nm$pos)
+  f$ms_community$coef_occ <- coef_occ
+  f$ms_community$coef_p   <- coef_p
+  f$ms_community$coef_pos <- coef_pos
+  f$means[[length(f$means)]] <- theta[[nm$disp_name]]
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep$y, y_pos = rep$y_pos, visits = NULL,
+       graph = NULL, site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_occu_cover <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_occu_cover_names(m)
+  S <- m$n_species
+  views <- lapply(seq_len(S), function(s) .ms_occu_cover_species_view(m, s))
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ld <- th[[nm$disp_name]]
+    ll <- 0
+    for (s in seq_len(S)) {
+      bo   <- th[paste0(m$species_names[s], "_psi_", nm$occ)]
+      bp   <- th[paste0(m$species_names[s], "_p_",   nm$det)]
+      bpos <- th[paste0(m$species_names[s], "_pos_", nm$pos)]
+      ll <- ll + .occu_cover_sp_ll(views[[s]], bo, bp, bpos, ld)
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 6k. cover() (gcol33/tulpaObs#220, multiarm-S3 group): a `tobs_multiarm_fit`
 # with the same two-independent-Laplace-Gaussian-block shape as
 # occu_categorical (presence, positive), which is why `.tobs_sbc_data_vector`/
@@ -2245,6 +2411,21 @@
   # `.tobs_community_em()` consumers before registering. `Bf`/`Cinv` ARE
   # exposed on the fit (R/ms_occu.R) independent of this -- useful on their
   # own, kept regardless.
+  #
+  # ms_occu_cover() (gcol33/tulpaObs#220, community group, section 6j-bis):
+  # the occ+p+pos analogue of ms_occu, safe to attempt because its Cinv is
+  # kept consistent with Sigma even under AGHQ debiasing (#226 part 2 fix
+  # specific to this family, commit `03b87ad`) -- CONTRACT-verified (refit on
+  # 0-pooled data reproduces means exactly, pool/draws/simulate/loglik_many
+  # all finite and correctly shaped); acceptance not yet run.
+  ms_occu_cover = list(
+    spec        = .tobs_sbc_spec_ms_occu_cover,
+    data        = .tobs_sbc_data_ms_occu_cover,
+    pool        = .tobs_sbc_pool_ms_occu_cover,
+    draws       = .tobs_sbc_draws_ms_occu_cover,
+    simulate    = .tobs_sbc_sim_ms_occu_cover,
+    refit       = .tobs_sbc_refit_ms_occu_cover,
+    loglik_many = .tobs_sbc_loglik_many_ms_occu_cover),
   #
   # cover() (gcol33/tulpaObs#220, multiarm-S3 group, section 6k): the same
   # two-independent-block shape as occu_categorical, reusing the generalized
