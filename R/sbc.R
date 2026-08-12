@@ -2141,7 +2141,10 @@
 # v1 (negbin/gaussian/bernoulli/binomial carry an extra per-species
 # dispersion arm, a follow-up); `jsdm()` is `ms_count(response =
 # "bernoulli")` under the hood and is NOT covered by this registration --
-# a different response family with its own calibration to check.
+# a different response family with its own calibration to check. Originally
+# deferred on a small fixture's failure (matching ms_occu/ms_int_occu); like
+# both of those, the cause was species count, not a bug, and the registry
+# entry below uses a fixture at S=20 -- see gcol33/tulpaObs#226.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_data_ms_count <- function(fit) {
@@ -2467,15 +2470,27 @@
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_occu_mscale_cover,
     refit       = .tobs_sbc_refit_occu_mscale_cover,
-    loglik_many = .tobs_sbc_loglik_many_simple)
-  # ms_count() (gcol33/tulpaObs#220, community group, section 6n): NOT
-  # registered -- CONTRACT-verified, but multi-seed (0, 1, 2) posterior SBC
-  # found `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7 every time
-  # (several other coefficients also suspiciously low, e.g. sp3_mu_x ~5e-6),
-  # the SAME systematic Cov(mu, b_s) bias #226 diagnosed for ms_occu /
-  # ms_int_occu -- worse here, with no detection arm to dilute it. The
-  # adapter functions (.tobs_sbc_spec_ms_count etc.) are kept as
-  # CONTRACT-verified groundwork, matching the other two families' treatment.
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # ms_count() (gcol33/tulpaObs#220, community group, section 6n): shared
+  # ms_occu's exact failure mode and, like ms_occu/ms_int_occu, the actual
+  # cause was species count, not a bug (see gcol33/tulpaObs#226). Multi-seed
+  # (0, 1, 2) posterior SBC on a small fixture originally found
+  # `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7 every time (several
+  # other coefficients also suspiciously low, e.g. `sp3_mu_x` ~5e-6) -- worse
+  # than ms_occu/ms_int_occu's own small-fixture failures, plausibly because
+  # this family has no detection arm to dilute it. At S=20 (matching
+  # ms_occu's own resolved scale), the plain Laplace-EM calibrates cleanly:
+  # 5 seeds, min p_unif range 0.0016-0.086, 0 quantities below 1e-3 out of 41
+  # possible across all 5 runs, no reproducible failing coefficient. No
+  # explicit `pool` slot needed -- `y` is a plain 2D `[site x species]`
+  # matrix, so the generic default pooling applies unchanged.
+  ms_count = list(
+    spec        = .tobs_sbc_spec_ms_count,
+    data        = .tobs_sbc_data_ms_count,
+    draws       = .tobs_sbc_draws_ms_count,
+    simulate    = .tobs_sbc_sim_ms_count,
+    refit       = .tobs_sbc_refit_ms_count,
+    loglik_many = .tobs_sbc_loglik_many_ms_count)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`

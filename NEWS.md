@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.226 (2026-08-12)
+
+* **`ms_count()` registered for `sbc()`** (gcol33/tulpaObs#220, the 23rd
+  registered family) -- completes #226 part 2 for all three families it was
+  originally filed against (`ms_occu`, `ms_int_occu`, `ms_count`). Originally
+  the worst of the three on a small fixture (multi-seed 0/1/2 pinned
+  `sp3_mu_(Intercept)` at p_unif ~9.6e-7-9.9e-7 every time, no detection arm
+  to dilute the effect). At S=20 (matching `ms_occu`'s own resolved scale),
+  the plain Laplace-EM -- no debiasing -- calibrates cleanly: 5 seeds, min
+  p_unif range 0.0016-0.086, 0 quantities below 1e-3 out of 41 possible
+  across all 5 runs, no reproducible failing coefficient. Registered with
+  the fixture and test explicitly pinned to S=20. No explicit `pool` slot
+  needed for this family's registry entry -- `y` is a plain 2D `[site x
+  species]` matrix, so the shared generic default pooling applies.
+
 ## 0.0.225 (2026-08-12)
 
 * **`ms_int_occu()` registered for `sbc()`** (gcol33/tulpaObs#220, the 22nd
