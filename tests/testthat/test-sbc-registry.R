@@ -188,6 +188,18 @@
                           species = paste0("sp", seq_len(n_species)),
                           method = "laplace", control = .sbc_reg_ctl))
   },
+  # ms_int_occu: S=14 (matching this family's own recovery-test fixture),
+  # not a smaller/faster count -- see gcol33/tulpaObs#226 (R/sbc.R section
+  # 6l). Shares ms_occu's species-count-dependent non-Gaussianity; a smaller
+  # fixture silently resurrects the original S~3 failure.
+  ms_int_occu = function(N = 140L, n_species = 14L) {
+    sim <- simulate_ms_int_occu(N = N, J = c(3, 4), n_species = n_species,
+                                n_data = 2, seed = 0L)
+    suppressWarnings(tobs(~ 1, data = sim$data, family = ms_int_occu(),
+                          detection = ~ 1, y = sim$y,
+                          species = paste0("sp", seq_len(n_species)),
+                          method = "laplace", control = .sbc_reg_ctl))
+  },
   ms_occu_cover = function(N = 60L) {
     sim <- simulate_ms_occu_cover(n_species = 4L, N = N, J = 5L,
                                   positive = "lognormal",
@@ -285,6 +297,16 @@ test_that("the roster in the error message names what is registered", {
 # short-circuit below or it silently returns the wrong (right-sized-for-the-
 # wrong-quantity) vector.
 .sbc_reg_means <- function(fit) {
+  if (identical(attr(fit, "tobs_family")$name, "ms_int_occu")) {
+    m <- fit$model
+    nm <- tulpaObs:::.tobs_sbc_ms_int_occu_names(m)
+    cm <- fit$ms_community
+    D <- m$n_sources
+    theta <- as.vector(t(cbind(cm$coef_psi,
+      do.call(cbind, lapply(seq_len(D), function(d) cm[[paste0("coef_p", d)]])))))
+    names(theta) <- nm$cols
+    return(theta)
+  }
   if (identical(attr(fit, "tobs_family")$name, "ms_occu")) {
     m <- fit$model
     nm <- tulpaObs:::.tobs_sbc_ms_occu_names(m)
@@ -879,6 +901,43 @@ test_that("ms_occu posterior SBC: correct fit uniform, mis-scaled is not", {
 
   rp <- res$report
   qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$ms_occu$draws(fit, 2L))
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("ms_int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (community group, section 6l) / gcol33/tulpaObs#226.
+  # SPECIES-COUNT SCOPED the same way ms_occu was: a direct probe at three
+  # seeds on a small fixture found `sp3_p2_(Intercept)` stuck at p_unif
+  # ~0.0029-0.0030 (reproducible, ms_occu's exact failure signature). At
+  # S=14 (the `.SBC_REG_FIXTURES$ms_int_occu()` fixture below, matching this
+  # family's own recovery-test fixture size), the plain Laplace-EM -- no
+  # debiasing -- calibrates cleanly: 5 seeds during development (0-4), min
+  # p_unif range 0.0013-0.052, 0 quantities below 1e-3 out of 43 possible
+  # across all 5 runs, no reproducible failing coefficient. Do NOT shrink
+  # the fixture's N/species count for speed. Measured (seed = 0): posterior
+  # min p_unif 0.052, narrow max <1e-3.
+  fit <- .SBC_REG_FIXTURES$ms_int_occu()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$ms_int_occu$draws(fit, 2L))
   pu <- function(arm) {
     r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
     stats::setNames(r$p_unif, r$quantity)

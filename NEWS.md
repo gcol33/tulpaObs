@@ -1,5 +1,20 @@
 # tulpaObs NEWS
 
+## 0.0.225 (2026-08-12)
+
+* **`ms_int_occu()` registered for `sbc()`** (gcol33/tulpaObs#220, the 22nd
+  registered family) -- the species-count scoping that resolved `ms_occu()`
+  in 0.0.224 transfers directly. Originally found to share `ms_occu()`'s
+  exact failure signature (a probe at three seeds on a small fixture found
+  `sp3_p2_(Intercept)` stuck at p_unif ~0.0029-0.0030, reproducible). At S=14
+  (matching this family's own existing recovery-test fixture size, N=140, 2
+  detection sources), the plain Laplace-EM -- no debiasing -- calibrates
+  cleanly: 5 seeds, min p_unif range 0.0013-0.052, 0 quantities below 1e-3
+  out of 43 possible across all 5 runs, no reproducible failing coefficient.
+  Registered with the fixture and test explicitly pinned to S=14. `ms_count`
+  (same `.tobs_community_em()` engine, same original failure signature) is
+  the remaining untested candidate for this fix.
+
 ## 0.0.224 (2026-08-12)
 
 * **`ms_occu()` registered for `sbc()`** (gcol33/tulpaObs#220, the 21st

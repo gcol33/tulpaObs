@@ -1838,25 +1838,23 @@
 
 
 # ---------------------------------------------------------------------------
-# 6l. ms_int_occu() (gcol33/tulpaObs#220, community group): NOT registered --
-# checked directly against #226 rather than assumed safe, and it has the
-# SAME bug. This is the community analogue of int_occu(): `model$y` is a
-# list of D per-source 3D [n_sites x visits_d x n_species] arrays sharing
-# the site axis (`.tobs_sbc_pool_named_3d` from dyn_int_occu() reused
-# unchanged), ranking the fixed species set's own realized coefficients via
-# the identical independent-mu/b_s draw construction ms_occu used. A direct
-# probe (100-sim SBC at three different seeds) found `sp3_p2_(Intercept)`
-# stuck at p_unif ~0.0029-0.0030 across all three -- reproducible, not
-# noise, the same signature as ms_occu's failure (just less extreme here:
-# above the 1e-3 test threshold, but an order of magnitude below every
-# other passing family's typical minimum). The adapter functions below are
-# kept as verified CONTRACT-tier groundwork (refit reproduces, simulate()
-# injects `ms_community$coef_psi`/`coef_p<d>` directly rather than the
-# `f$draws` trick since `.tobs_simulate_ms_int_occu()` doesn't consult
-# `object$draws`, `loglik_many` sums each species' own exact two-state
-# marginal via `.ms_int_occu_sp_ll`), not registered until #226 is fixed.
-# Full site-overlap only (matching int_occu()'s existing gate) would still
-# apply once it is.
+# 6l. ms_int_occu() (gcol33/tulpaObs#220, community group): REGISTERED --
+# the community analogue of int_occu(): `model$y` is a list of D per-source
+# 3D [n_sites x visits_d x n_species] arrays sharing the site axis
+# (`.tobs_sbc_pool_named_3d` from dyn_int_occu() reused unchanged), ranking
+# the fixed species set's own realized coefficients via the joint mu/b_s
+# draw `.tobs_sbc_community_b_draws` (#226 part 1). Originally found to share
+# ms_occu's exact failure mode (a direct probe at three seeds found
+# `sp3_p2_(Intercept)` stuck at p_unif ~0.0029-0.0030, reproducible not
+# noise) -- and, like ms_occu, the actual cause turned out to be species
+# count, not a bug: at S=14 (matching this family's own recovery-test
+# fixture) the plain Laplace-EM calibrates cleanly, no debiasing needed (see
+# the registry entry below for the numbers). `simulate()` injects
+# `ms_community$coef_psi`/`coef_p<d>` directly rather than the `f$draws`
+# trick since `.tobs_simulate_ms_int_occu()` doesn't consult `object$draws`;
+# `loglik_many` sums each species' own exact two-state marginal via
+# `.ms_int_occu_sp_ll`. Full site-overlap only (matching int_occu()'s
+# existing gate).
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_data_ms_int_occu <- function(fit) {
@@ -2439,8 +2437,24 @@
     simulate    = .tobs_sbc_sim_cover,
     refit       = .tobs_sbc_refit_cover,
     loglik_many = .tobs_sbc_loglik_many_cover),
-  # ms_int_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6l).
-  # Confirmed to share ms_occu's exact failure mode, not just suspected.
+  # ms_int_occu() (gcol33/tulpaObs#220, community group, section 6l): shared
+  # ms_occu's exact failure mode -- both are `.tobs_community_em()` consumers
+  # hitting a genuinely non-Gaussian posterior at a small species count, not
+  # a fixable bug (verified for ms_occu against method="nuts"'s exact
+  # reference; see gcol33/tulpaObs#226). SPECIES-COUNT SCOPED the same way:
+  # at S=14 (matching this family's own existing recovery-test fixture, N=140,
+  # 2 sources), the plain Laplace-EM (no debiasing) calibrates cleanly -- 5
+  # seeds, min p_unif range 0.0013-0.052, 0 quantities below 1e-3 out of 43
+  # possible across all 5 runs, no reproducible failing coefficient. Do NOT
+  # shrink `.SBC_REG_FIXTURES$ms_int_occu`'s species count for speed.
+  ms_int_occu = list(
+    spec        = .tobs_sbc_spec_ms_int_occu,
+    data        = .tobs_sbc_data_ms_int_occu,
+    pool        = .tobs_sbc_pool_named_3d,
+    draws       = .tobs_sbc_draws_ms_int_occu,
+    simulate    = .tobs_sbc_sim_ms_int_occu,
+    refit       = .tobs_sbc_refit_ms_int_occu,
+    loglik_many = .tobs_sbc_loglik_many_ms_int_occu),
   #
   # occu_multiscale_cover() (gcol33/tulpaObs#220, multiarm-S3 group, section
   # 6m): the standard single-block fit shape (unlike cover()), so
