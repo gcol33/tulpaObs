@@ -155,6 +155,15 @@
     suppressWarnings(tobs(~ scov1, data = sim$data, family = occu_multi(),
                           detection = ~ 1, y = sim$y, species = sim$species,
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  dyn_int_occu = function(N = 60L) {
+    sim <- simulate_dyn_int_occu(N = N, T_seasons = 4L, S = 2L, J = 3L,
+                                 psi1 = 0.5, gamma = 0.3, eps = 0.2,
+                                 p = c(0.4, 0.6), seed = 25L)
+    suppressWarnings(tobs(~ 1, data = sim$data, family = dyn_int_occu(),
+                          detection = ~ 1, colonization = ~ 1,
+                          extinction = ~ 1, y = sim$y, sources = sim$sources,
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -264,21 +273,23 @@ test_that("each registered family composes its callbacks end to end", {
     expect_identical(nrow(pl$cells), n_o + n_r)
     # `y` is a plain 2D matrix for most families, a 3D [site x visit x season]
     # array for the multi-season group (pooled on the site axis alone), a list
-    # of one matrix per source for the multi-source group (each pooled on the
-    # site axis independently), or a plain length-N vector for a family with
-    # one observation per unit and no visit/season axis (occu_categorical).
+    # of one matrix (or, for the product shape, one 3D array) per source for
+    # the multi-source group (each pooled on the site axis independently), or
+    # a plain length-N vector for a family with one observation per unit and
+    # no visit/season axis (occu_categorical).
+    slice_site <- function(z) if (length(dim(z)) == 3L)
+      z[seq_len(n_o), , , drop = FALSE] else z[seq_len(n_o), , drop = FALSE]
     if (is.list(pl$y) && !is.data.frame(pl$y)) {
       expect_identical(vapply(pl$y, nrow, integer(1)),
                        stats::setNames(rep(n_o + n_r, length(pl$y)), names(pl$y)),
                        info = fam)
-      obs_slice <- lapply(pl$y, function(z) z[seq_len(n_o), , drop = FALSE])
+      obs_slice <- lapply(pl$y, slice_site)
     } else if (is.null(dim(pl$y))) {
       expect_identical(length(pl$y), n_o + n_r)
       obs_slice <- pl$y[seq_len(n_o)]
     } else {
       expect_identical(nrow(pl$y), n_o + n_r)
-      obs_slice <- if (length(dim(pl$y)) == 3L) pl$y[seq_len(n_o), , , drop = FALSE]
-                  else pl$y[seq_len(n_o), , drop = FALSE]
+      obs_slice <- slice_site(pl$y)
     }
     # Values only -- a family's own y may carry dimnames (site/bin/season
     # labels) the freshly-built pooled array never does; that carries no
@@ -506,7 +517,8 @@ test_that("dyn_abun posterior SBC: correct fit uniform, mis-scaled is not", {
   # gcol33/tulpaObs#220 (multi-season group). dyn_abun shares dyn_occu's 3D
   # response and site-axis pooling but has its own working simulate(), so the
   # replicate is the shared simple-family route, not a bespoke forward
-  # simulator. bad.factor tuned below.
+  # simulator. Measured (seed = 0): posterior min p_unif 0.087, narrow max
+  # 1.6e-7.
   fit <- .SBC_REG_FIXTURES$dyn_abun()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -597,6 +609,37 @@ test_that("occu_multi posterior SBC: correct fit uniform, mis-scaled is not", {
   # state, not independent per-source arms). Measured (seed = 0): posterior
   # min p_unif 0.019, narrow max 4.3e-6.
   fit <- .SBC_REG_FIXTURES$occu_multi()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("dyn_int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (the multi-season x multi-source product shape,
+  # section 6h). A named list of S per-source 3D arrays, pooled with
+  # `.tobs_sbc_pool_named_3d`; simulate() wraps the family's own
+  # `.tobs_simulate_dyn_int_occu()` handler. Measured (seed = 0): posterior
+  # min p_unif 0.033, narrow max 2.5e-5.
+  fit <- .SBC_REG_FIXTURES$dyn_int_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
 

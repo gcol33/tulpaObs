@@ -1,5 +1,33 @@
 # tulpaObs NEWS
 
+## 0.0.210 (2026-08-12)
+
+* **`dyn_int_occu()` registered for `sbc()`** (#220): the product of the
+  multi-season and multi-source shapes -- `model$y` is a named list of S
+  per-source 3D `[n_sites x max_visits_s x T]` arrays sharing the site axis.
+  Neither the named-matrices pool (`int_occu()`/`gdistremoval()`) nor the
+  3D-season pool (`dyn_occu()`/`dyn_abun()`/`distsamp_open()`) fits alone, so
+  a new `.tobs_sbc_pool_named_3d` composes both: site-axis stack within each
+  source's own 3D array. `simulate()` wraps the family's own
+  `.tobs_simulate_dyn_int_occu()` handler, which already reproduces each
+  source's own NA/missingness pattern, so partial season overlap needs no
+  special-casing. `fit$means`/`fit$draws` are the standard shape and
+  `.tobs_pointwise_loglik` already dispatches for this model_type, so
+  `draws`/`loglik_many` are the shared generic ones. Verified to the #207
+  bar: 100-sim posterior SBC uniform on all five coefficients (min p_unif
+  0.033 at `bad.factor = 1.75`), a mis-scaled control rejects hard (max
+  2.5e-5).
+* **`rbind()` on two zero-column data frames silently collapses to 0 rows,
+  0 columns** -- base R drops the row count when there is no column to align
+  on. Every SBC pool helper built its refit data via
+  `rbind(obs$cells, rep$cells)`, so an intercept-only (`~ 1`) fixed-effects
+  fit on ANY already-registered family -- not just the one that surfaced
+  it -- would fail its refit with a bogus "y has N sites but data has 0
+  rows" the moment someone ran `sbc()` on it. Fixed with one shared
+  `.tobs_sbc_rbind_cells()` guard, applied at all five call sites
+  (`.tobs_sbc_pool`, `.tobs_sbc_pool_3d_season`, `.tobs_sbc_pool_named_matrices`,
+  `.tobs_sbc_pool_occu_categorical`, the new `.tobs_sbc_pool_named_3d`).
+
 ## 0.0.209 (2026-08-12)
 
 * `dyn_abun()`'s `sbc()` acceptance-tier `bad.factor = 1.75` (written

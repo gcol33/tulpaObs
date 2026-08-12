@@ -118,6 +118,17 @@
        site   = seq_len(m$n_sites))
 }
 
+# `rbind()` on two ZERO-COLUMN data frames collapses to 0 rows, 0 columns
+# (base R silently drops the row count when there is no column to align on)
+# -- an intercept-only fixed-effects fit (a `~ 1` arm, no site covariates)
+# hits this on every pool call, not a corner case a fixture happens to avoid.
+.tobs_sbc_rbind_cells <- function(a, b) {
+  if (ncol(a) == 0L && ncol(b) == 0L) {
+    return(data.frame(row.names = seq_len(nrow(a) + nrow(b))))
+  }
+  rbind(a, b)
+}
+
 # Stack two data sets on FRESH sites. The replicate's site labels are offset
 # past the observed ones and the two graphs go block-diagonal, so the pooled
 # field carries two a-priori independent blocks and `group_ids()` sees
@@ -136,7 +147,7 @@
   vis <- lapply(names(obs$visits),
                 function(nm) rbind(obs$visits[[nm]], rep$visits[[nm]]))
   names(vis) <- names(obs$visits)
-  list(cells  = rbind(obs$cells, rep$cells),
+  list(cells  = .tobs_sbc_rbind_cells(obs$cells, rep$cells),
        y      = rbind(obs$y, rep$y),
        y_pos  = if (is.null(obs$y_pos)) NULL else rbind(obs$y_pos, rep$y_pos),
        visits = vis,
@@ -690,7 +701,7 @@
   y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L]))
   y[seq_len(n_o), , ] <- obs$y
   y[n_o + seq_len(n_r), , ] <- rep$y
-  list(cells = rbind(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
+  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
        graph = NULL, site = c(obs$site, rep$site + n_o))
 }
 
@@ -848,7 +859,7 @@
 .tobs_sbc_pool_named_matrices <- function(obs, rep) {
   n_o <- length(obs$site); n_r <- length(rep$site)
   y <- Map(function(a, b) rbind(a, b), obs$y, rep$y[names(obs$y)])
-  list(cells = rbind(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
+  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
        graph = NULL, site = c(obs$site, rep$site + n_o))
 }
 
@@ -983,7 +994,7 @@
 }
 
 .tobs_sbc_pool_occu_categorical <- function(obs, rep) {
-  list(cells = rbind(obs$cells, rep$cells), y = c(obs$y, rep$y),
+  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = c(obs$y, rep$y),
        y_pos = NULL, visits = NULL, graph = NULL,
        site = c(obs$site, rep$site + length(obs$site)))
 }
@@ -1179,6 +1190,82 @@
 
 
 # ---------------------------------------------------------------------------
+# 6h. dyn_int_occu() (gcol33/tulpaObs#220): the product of the multi-season
+# and multi-source shapes -- `model$y` is a NAMED list of S per-source 3D
+# [n_sites x max_visits_s x T] arrays sharing the site axis. Neither the
+# named-matrices pool (2D `rbind`, int_occu()/gdistremoval()) nor the
+# 3D-season pool (a single array, dyn_occu()/dyn_abun()/distsamp_open()) fits
+# alone, so a new generic `.tobs_sbc_pool_named_3d` composes both: site-axis
+# stack WITHIN each source's own 3D array. `simulate()` is custom, wrapping
+# the family's own `.tobs_simulate_dyn_int_occu()` handler -- which already
+# reproduces each source's own NA/missingness pattern, so partial season
+# overlap needs no special-casing here, it falls out of the family's own
+# simulate(). `fit$means`/`fit$draws` are the standard shape and
+# `.tobs_pointwise_loglik` already dispatches for this model_type, so
+# `draws`/`loglik_many` are the shared generic ones. The binder itself only
+# accepts full SITE overlap across sources (every source's array shares
+# `n_sites`), so no extra reject is needed there (unlike int_occu()); v1 has
+# no season-varying-rate option to reject either (the family's only mode).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_pool_named_3d <- function(obs, rep) {
+  n_o <- length(obs$site); n_r <- length(rep$site)
+  y <- Map(function(a, b) {
+    d <- dim(a)
+    z <- array(NA_real_, dim = c(n_o + n_r, d[2L], d[3L]))
+    z[seq_len(n_o), , ] <- a
+    z[n_o + seq_len(n_r), , ] <- b
+    z
+  }, obs$y, rep$y[names(obs$y)])
+  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
+       graph = NULL, site = c(obs$site, rep$site + n_o))
+}
+
+.tobs_sbc_data_dyn_int_occu <- function(fit) {
+  m <- fit$model
+  list(cells = m$data, y = stats::setNames(m$y, m$sources), y_pos = NULL,
+       visits = NULL, graph = NULL, site = seq_len(m$n_sites))
+}
+
+.tobs_sbc_spec_dyn_int_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_visit_design(fit)
+  m <- fit$model
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       state     = .tobs_sbc_recombine(m$formulas$psi,   NULL),
+       col       = .tobs_sbc_recombine(m$formulas$gamma, NULL),
+       ext       = .tobs_sbc_recombine(m$formulas$eps,   NULL),
+       det       = .tobs_sbc_recombine(m$formulas$p,     NULL),
+       sources   = m$sources)
+}
+
+.tobs_sbc_refit_dyn_int_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$state, data = data$cells, family = spec$family,
+    colonization = spec$col, extinction = spec$ext, detection = spec$det,
+    y = data$y[spec$sources], sources = spec$sources,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_sim_dyn_int_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  D <- matrix(theta, nrow = 1L)
+  colnames(D) <- names(theta)
+  f$draws <- D
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -1297,6 +1384,17 @@
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_occu_multi,
     refit       = .tobs_sbc_refit_occu_multi,
+    loglik_many = .tobs_sbc_loglik_many_simple),
+  # dyn_int_occu() (gcol33/tulpaObs#220): the product shape (section 6h) --
+  # a named list of S per-source 3D arrays, pooled with the new
+  # `.tobs_sbc_pool_named_3d`; simulate() is custom (family's own handler).
+  dyn_int_occu = list(
+    spec        = .tobs_sbc_spec_dyn_int_occu,
+    data        = .tobs_sbc_data_dyn_int_occu,
+    pool        = .tobs_sbc_pool_named_3d,
+    draws       = .tobs_sbc_draws_fit,
+    simulate    = .tobs_sbc_sim_dyn_int_occu,
+    refit       = .tobs_sbc_refit_dyn_int_occu,
     loglik_many = .tobs_sbc_loglik_many_simple)
 )
 
@@ -1545,6 +1643,10 @@
 #' `occu_multi`'s response is a list of S per-species matrices, the same
 #' shape `int_occu()` pools; its `simulate()` is custom, since species share
 #' one joint multi-species state rather than being independently observed.
+#'
+#' `dyn_int_occu` is the product of the multi-season and multi-source shapes:
+#' a named list of S per-source 3D arrays, pooled by a new
+#' `.tobs_sbc_pool_named_3d` that composes both existing pooling rules.
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the

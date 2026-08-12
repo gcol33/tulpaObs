@@ -119,6 +119,10 @@ standard \code{.tobs_bfgs_marginal_fit()} shape, so \code{draws}/\code{simulate}
 shape \code{int_occu()} pools; its \code{simulate()} is custom, since species share
 one joint multi-species state rather than being independently observed.
 
+\code{dyn_int_occu} is the product of the multi-season and multi-source shapes:
+a named list of S per-source 3D arrays, pooled by a new
+\code{.tobs_sbc_pool_named_3d} that composes both existing pooling rules.
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are
