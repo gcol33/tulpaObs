@@ -171,8 +171,14 @@
     suppressWarnings(tobs(~ x, data = sim$data, family = t_occu(),
                           detection = ~ 1, y = sim$y,
                           method = "pg_gibbs", control = .sbc_reg_ctl))
-  }
+  },
   # ms_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6j).
+  cover = function(N = 200L) {
+    sim <- simulate_cover(N = N, beta_occ = c(-0.5, 0.8), beta_pos = c(-1.0, 0.3),
+                          sigma_pos = 0.4, response = "lognormal", seed = 51L)
+    suppressWarnings(tobs(~ x, data = sim$data, family = cover("lognormal"),
+                          y = sim$y, method = "laplace", control = .sbc_reg_ctl))
+  }
 )
 
 
@@ -238,6 +244,11 @@ test_that("the roster in the error message names what is registered", {
                                   colnames(fit$beta_class),
                                   function(r, cl) paste0("class_", cl, "_", r)))
     return(c(occ, cls))
+  }
+  if (inherits(fit, "cover_fit")) {
+    occ <- fit$beta_occ; names(occ) <- paste0("occ_", names(occ))
+    pos <- fit$beta_pos; names(pos) <- paste0("pos_", names(pos))
+    return(c(occ, pos))
   }
   stop("no means accessor for this fit class (", paste(class(fit), collapse = "/"),
        ")", call. = FALSE)
@@ -691,6 +702,38 @@ test_that("t_occu posterior SBC: correct fit uniform, mis-scaled is not", {
 
   rp <- res$report
   qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("cover posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (multiarm-S3 group). Same two-independent-block
+  # shape as occu_categorical (presence, positive); positive = "lognormal"
+  # only for v1, dispersion held fixed (no SE anywhere in the package for
+  # it). Checked at both N=200 and N=600 during development -- consistent,
+  # no anomaly like the ms_occu near-miss (#226). Measured (seed = 0, N=200):
+  # posterior min p_unif 0.124, narrow max 1.8e-8.
+  fit <- .SBC_REG_FIXTURES$cover()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$cover$draws(fit, 2L))
   pu <- function(arm) {
     r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
     stats::setNames(r$p_unif, r$quantity)

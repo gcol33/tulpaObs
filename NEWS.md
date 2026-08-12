@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.0.212 (2026-08-12)
+
+* **`cover()` registered for `sbc()`** (#220, multiarm-S3 group): a
+  `tobs_multiarm_fit` with the same two-independent-Laplace-Gaussian-block
+  shape as `occu_categorical` (presence, positive) -- `.tobs_sbc_data_vector`/
+  `.tobs_sbc_pool_vector` (renamed from the occu_categorical-only spelling,
+  now shared by both) handle the plain length-N vector response unchanged.
+  Two small additions to the fit object, both independently useful: raw
+  `encoding$data`/`encoding$y` (needed to rebuild a refit call) and the full
+  per-arm coefficient covariance `V_occ`/`V_pos` (previously only the
+  diagonal `se_occ`/`se_pos` was stored -- drawing a joint sample of an arm's
+  coefficients needs the off-diagonal terms, a lesson directly from the
+  ms_occu near-miss in #226). `X_occ`/`X_pos` are always rebuilt fresh via
+  `model.matrix()` from the arm formula against natural-scale data, never
+  read off the stored autoscaled `encoding$occ_data$X`/`pos_data$X` -- mixing
+  those with the already-unscaled `beta_occ`/`beta_pos` would reproduce the
+  exact #225 bug class. v1 scope: non-spatial `laplace`,
+  `positive = "lognormal"` only (`simulate_cover()`'s own generator only
+  covers lognormal/gaussian); `sigma_pos` is held fixed rather than scored,
+  since no SE is reported for it anywhere in the package. Checked at two
+  sample sizes (N=200, N=600) before registering, given the ms_occu lesson
+  about not trusting a single passing run -- both consistent, no anomaly.
+  Verified to the #207 bar: 100-sim posterior SBC uniform on all four
+  coefficients (min p_unif 0.124 at `bad.factor = 1.75`), a mis-scaled
+  control rejects hard (max 1.8e-8).
+
 ## 0.0.211 (2026-08-12)
 
 * **`t_occu()` registered for `sbc()`** (#220, closes the multi-season/

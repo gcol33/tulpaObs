@@ -435,6 +435,8 @@ encode_cover_hurdle <- function(formula, data, y,
   list(
     occ_data = list(y = occur, n_trials = rep(1L, length(occur)), X = X_occ),
     pos_data = pos_data,
+    data     = data_obs,
+    y        = y_obs,
     spatial_spec = cover_struct$spatial,
     trend        = cover_struct$trend,
     mcar         = cover_struct$mcar,
@@ -1115,6 +1117,12 @@ decode_cover_hurdle <- function(fits, enc, family,
       beta_pos     = beta_pos,
       se_occ       = se_occ,
       se_pos       = se_pos,
+      # Full per-arm coefficient covariance (unscaled to natural units, same
+      # as beta_occ/beta_pos), not just the diagonal se_occ/se_pos -- needed
+      # by anything drawing a joint sample of an arm's coefficients (e.g.
+      # SBC) rather than reading off individual marginal SEs.
+      V_occ        = V_occ,
+      V_pos        = V_pos,
       positive     = fits$positive,
       sigma_pos    = if (fits$positive %in% c("lognormal", "gaussian"))
                        fits$sigma_pos else NA_real_,

@@ -130,6 +130,10 @@ a fresh AR1 year effect at the theta's own \verb{(sigma, rho)}, and
 \code{loglik_many} is a Laplace approximation to that year effect's marginal
 (FD-validated, brute-force cross-checked at T = 2).
 
+\code{cover} is a \code{tobs_multiarm_fit} with the same two-independent-block shape
+as \code{occu_categorical}; \code{positive = "lognormal"} only for v1, with
+dispersion held fixed (no SE is reported for it anywhere in the package).
+
 A family is registered by adding one entry to the internal registry -- a
 replicate generator, a refit call and optionally a joint statistic; the
 pooling, the grouping labels, the arm construction and the controls are

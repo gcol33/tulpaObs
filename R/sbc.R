@@ -987,13 +987,17 @@
   sweep(Z %*% L, 2L, mean, `+`)
 }
 
-.tobs_sbc_data_occu_categorical <- function(fit) {
+# Shared by every family whose response is a plain length-N vector (one
+# observation per unit, no visit/season axis) and whose fit stores its
+# encoding at `fit$encoding` with `data`/`y`/`N` fields -- occu_categorical,
+# cover.
+.tobs_sbc_data_vector <- function(fit) {
   enc <- fit$encoding
   list(cells = enc$data, y = enc$y, y_pos = NULL, visits = NULL,
        graph = NULL, site = seq_len(enc$N))
 }
 
-.tobs_sbc_pool_occu_categorical <- function(obs, rep) {
+.tobs_sbc_pool_vector <- function(obs, rep) {
   list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = c(obs$y, rep$y),
        y_pos = NULL, visits = NULL, graph = NULL,
        site = c(obs$site, rep$site + length(obs$site)))
@@ -1540,6 +1544,250 @@
 
 
 # ---------------------------------------------------------------------------
+# 6k. cover() (gcol33/tulpaObs#220, multiarm-S3 group): a `tobs_multiarm_fit`
+# with the same two-independent-Laplace-Gaussian-block shape as
+# occu_categorical (presence, positive), which is why `.tobs_sbc_data_vector`/
+# `.tobs_sbc_pool_vector` (renamed from the occu_categorical-only spelling,
+# section 6e) are reused unchanged here too. Two things this family did NOT
+# already carry, both now added (small, independently useful, kept regardless
+# of SBC): `encoding$data`/`encoding$y` (the raw fitting inputs, needed to
+# rebuild a refit call -- occu_categorical needed the identical addition) and
+# `V_occ`/`V_pos` (the full per-arm coefficient covariance, previously only
+# the diagonal `se_occ`/`se_pos` was stored -- needed to draw a JOINT sample
+# of an arm's coefficients rather than assume independence across them,
+# which the ms_occu near-miss (#226) is a direct warning against).
+#
+# v1 scope: non-spatial `laplace`, `positive = "lognormal"` only
+# (`simulate_cover()`'s own generator only covers lognormal/gaussian, and
+# lognormal's `log(y_pos) ~ N(eta_pos, sigma_pos)` is simpler to get right
+# than beta's mu/phi -> shape1/shape2 reparameterization). `sigma_pos` is
+# NOT part of theta -- the fitted point estimate carries no SE anywhere in
+# the package (`sigma_pos_sd` is hardcoded NA), so it is held fixed at the
+# observed fit's value for both the replicate and the reference score,
+# matching the established `.tobs_sbc_check_fixed_dispersion` convention
+# elsewhere in this codebase. `X_occ`/`X_pos` are rebuilt fresh via
+# `model.matrix()` from the arm formula + natural-scale data, NEVER read off
+# `encoding$occ_data$X`/`pos_data$X` -- those are autoscaled design matrices
+# (gcol33/tulpaObs#9) paired with SCALED coefficients internally, while
+# `beta_occ`/`beta_pos` on the fit are already unscaled to natural units
+# (`.unscale_beta_vec`); mixing the two would reproduce the exact class of
+# bug #225 found in `int_occu()`.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec_cover <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  if (!identical(fit$positive, "lognormal")) {
+    stop("SBC on cover() is registered for positive = \"lognormal\" only ",
+         "(got \"", fit$positive, "\"); the beta/beta_oi/lognormal_trunc/",
+         "ordinal/gaussian arms are follow-ups.", call. = FALSE)
+  }
+  enc <- fit$encoding
+  list(presence  = .tobs_sbc_recombine(enc$fe_occ, NULL),
+       positive  = .tobs_sbc_recombine(enc$fe_pos, NULL),
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method %||% "laplace",
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       sigma_pos = fit$sigma_pos,
+       fit_obs   = fit)
+}
+
+.tobs_sbc_refit_cover <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$presence, data = data$cells, family = spec$family,
+    presence = spec$presence, positive = spec$positive, y = data$y,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_draws_cover <- function(fit, n) {
+  occ_names <- names(fit$beta_occ)
+  pos_names <- names(fit$beta_pos)
+  D_occ <- .tobs_sbc_mvn_draws(fit$beta_occ, fit$V_occ, n)
+  D_pos <- .tobs_sbc_mvn_draws(fit$beta_pos, fit$V_pos, n)
+  M <- cbind(D_occ, D_pos)
+  colnames(M) <- c(paste0("occ_", occ_names), paste0("pos_", pos_names))
+  M
+}
+
+.tobs_sbc_sim_cover <- function(spec, theta, seed) {
+  set.seed(seed)
+  obs <- spec$data_obs
+  X_occ <- stats::model.matrix(spec$presence, obs$cells)
+  X_pos <- stats::model.matrix(spec$positive, obs$cells)
+  beta_occ <- theta[paste0("occ_", colnames(X_occ))]
+  beta_pos <- theta[paste0("pos_", colnames(X_pos))]
+  eta_occ <- as.vector(X_occ %*% beta_occ)
+  eta_pos <- as.vector(X_pos %*% beta_pos)
+  n <- nrow(X_occ)
+  occur <- stats::rbinom(n, 1L, stats::plogis(eta_occ))
+  log_cover <- stats::rnorm(n, eta_pos, spec$sigma_pos)
+  cover <- ifelse(occur == 1L, pmin(exp(log_cover), 1), 0)
+  list(cells = obs$cells, y = cover, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_cover <- function(fit, Theta) {
+  enc <- fit$encoding
+  X_occ <- stats::model.matrix(enc$fe_occ, enc$data)
+  X_pos <- stats::model.matrix(enc$fe_pos, enc$data)
+  occur <- as.integer(enc$y > 0)
+  is_pos <- occur == 1L
+  y_pos <- enc$y[is_pos]
+  X_pos_obs <- X_pos[is_pos, , drop = FALSE]
+  sigma_pos <- fit$sigma_pos
+  occ_names <- colnames(X_occ); pos_names <- colnames(X_pos)
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    beta_occ <- th[paste0("occ_", occ_names)]
+    beta_pos <- th[paste0("pos_", pos_names)]
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    ll_occ <- sum(stats::dbinom(occur, 1L, stats::plogis(eta_occ), log = TRUE))
+    eta_pos <- as.vector(X_pos_obs %*% beta_pos)
+    ll_occ + sum(stats::dnorm(log(y_pos), eta_pos, sigma_pos, log = TRUE))
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
+# 6l. ms_int_occu() (gcol33/tulpaObs#220, community group): the community
+# analogue of int_occu() -- `model$y` is a list of D per-source 3D
+# [n_sites x visits_d x n_species] arrays sharing the site axis, exactly the
+# shape dyn_int_occu()'s adapter already generalized `.tobs_sbc_pool_named_3d`
+# for, reused unchanged here (source names instead of source-x-season).
+# Ranks the FIXED species set's own realized per-species coefficients (mu +
+# b_s), the design decision established for ms_occu (#226) -- theta is the
+# S x P per-species coefficient vector (psi + every per-source detection
+# arm), not the community means alone. `draws()` mirrors ms_occu's: the
+# community mean once per row, each species' deviation independently from
+# its own Cinv block (exposed in commit 3b6fba9). `simulate()` is custom,
+# NOT the `f$draws` trick: `.tobs_simulate_ms_int_occu()` reads
+# `object$ms_community$coef_psi`/`coef_p<d>` (deterministic per-species
+# matrices), not `object$draws` -- so the candidate theta is injected by
+# overwriting those fields directly, the same mechanism `cover()`'s and
+# `ms_occu()`'s own adapters use for the identical reason. `loglik_many`
+# sums each species' own exact two-state marginal (`.ms_int_occu_sp_ll`,
+# the same kernel the fitter optimizes) at that species' theta slice. Full
+# site-overlap only (every source's site_map covers every site), matching
+# int_occu()'s existing gate -- ms_int_occu() supports partial overlap in
+# general, but pooling two partially-covered fits correctly is a documented
+# follow-up.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_data_ms_int_occu <- function(fit) {
+  m <- fit$model
+  list(cells = m$data, y = stats::setNames(m$y, m$source_names), y_pos = NULL,
+       visits = NULL, graph = NULL, site = seq_len(m$n_sites))
+}
+
+.tobs_sbc_spec_ms_int_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  m <- fit$model
+  full <- vapply(m$site_maps, function(mp)
+    identical(as.integer(mp), seq_len(m$n_sites)), logical(1))
+  if (!all(full)) {
+    stop("SBC on ms_int_occu() is registered for full-overlap fits (every ",
+         "source observes every site); this fit has partial overlap.",
+         call. = FALSE)
+  }
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(list(verbose = FALSE, progress = FALSE),
+                                     as.list(fit.control)),
+       occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det_list  = lapply(m$formulas$det, function(f) .tobs_sbc_recombine(f, NULL)),
+       species   = m$species_names,
+       sources   = m$source_names)
+}
+
+.tobs_sbc_refit_ms_int_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det_list, y = data$y[spec$sources], species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+# theta column names: `<species>_psi_<coef>` / `<species>_p<d>_<coef>`, one
+# block of length P per species, species-major -- the layout `draws()`,
+# `simulate()` and `loglik_many()` all share. `arm_names` c("p1", ..., "pD")
+# matches `model$process_names`, the SAME labels `ms_community`'s
+# `coef_p<d>` / `blup_p<d>` fields are keyed by (build_ms_int_occu_fit()).
+.tobs_sbc_ms_int_occu_names <- function(m) {
+  D <- m$n_sources
+  occ_names <- m$process_info[[1L]]$coef_names
+  det_names_list <- lapply(seq_len(D), function(d) m$process_info[[1L + d]]$coef_names)
+  par <- c(paste0("psi_", occ_names),
+          unlist(lapply(seq_len(D), function(d)
+            paste0("p", d, "_", det_names_list[[d]]))))
+  list(occ_names = occ_names, det_names_list = det_names_list, par = par,
+       cols = as.vector(outer(par, m$species_names,
+                              function(p, sp) paste0(sp, "_", p))))
+}
+
+.tobs_sbc_draws_ms_int_occu <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_int_occu_names(m)
+  D <- m$n_sources; S <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x P
+  M <- matrix(NA_real_, n, S * P)
+  for (s in seq_len(S)) {
+    b_hat_s <- c(cm$blup_psi[s, ],
+                unlist(lapply(seq_len(D), function(d) cm[[paste0("blup_p", d)]][s, ])))
+    b_draws <- .tobs_sbc_mvn_draws(b_hat_s, cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
+  }
+  colnames(M) <- nm$cols
+  M
+}
+
+.tobs_sbc_sim_ms_int_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_int_occu_names(m)
+  D <- m$n_sources; S <- m$n_species
+  coef_psi <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_psi_", nm$occ_names)]))
+  dimnames(coef_psi) <- list(m$species_names, nm$occ_names)
+  f$ms_community$coef_psi <- coef_psi
+  for (d in seq_len(D)) {
+    arm <- paste0("p", d); cn <- nm$det_names_list[[d]]
+    coef_d <- do.call(rbind, lapply(seq_len(S), function(s)
+      theta[paste0(m$species_names[s], "_", arm, "_", cn)]))
+    dimnames(coef_d) <- list(m$species_names, cn)
+    f$ms_community[[paste0("coef_", arm)]] <- coef_d
+  }
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_int_occu <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_int_occu_names(m)
+  D <- m$n_sources; S <- m$n_species
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta_psi <- th[paste0(m$species_names[s], "_psi_", nm$occ_names)]
+      eta_psi <- as.numeric(m$X_psi %*% beta_psi)
+      eta_p <- lapply(seq_len(D), function(d) {
+        arm <- paste0("p", d)
+        beta_d <- th[paste0(m$species_names[s], "_", arm, "_", nm$det_names_list[[d]])]
+        as.numeric(m$X_p[[d]] %*% beta_d)
+      })
+      ll <- ll + .ms_int_occu_sp_ll(eta_psi, eta_p, m$summaries[[s]])
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -1631,8 +1879,8 @@
   # no detection formula).
   occu_categorical = list(
     spec        = .tobs_sbc_spec_occu_categorical,
-    data        = .tobs_sbc_data_occu_categorical,
-    pool        = .tobs_sbc_pool_occu_categorical,
+    data        = .tobs_sbc_data_vector,
+    pool        = .tobs_sbc_pool_vector,
     draws       = .tobs_sbc_draws_occu_categorical,
     simulate    = .tobs_sbc_sim_occu_categorical,
     refit       = .tobs_sbc_refit_occu_categorical,
@@ -1682,7 +1930,7 @@
     draws       = .tobs_sbc_draws_fit,
     simulate    = .tobs_sbc_sim_t_occu,
     refit       = .tobs_sbc_refit_t_occu,
-    loglik_many = .tobs_sbc_loglik_many_t_occu)
+    loglik_many = .tobs_sbc_loglik_many_t_occu),
   # ms_occu() (gcol33/tulpaObs#220, community group, section 6j): NOT
   # registered -- the "rank a fixed species set" design (theta_s = mu + b_s,
   # drawn as mu ~ N(means, vcov) and b_s ~ N(blup_s, Cinv_s) INDEPENDENTLY per
@@ -1701,6 +1949,33 @@
   # groundwork, not registered until the joint covariance is fixed. `Cinv`
   # IS now exposed on the fit (R/ms_occu.R) independent of this -- useful on
   # its own for per-species posterior uncertainty, kept regardless of #226.
+  #
+  # cover() (gcol33/tulpaObs#220, multiarm-S3 group, section 6k): the same
+  # two-independent-block shape as occu_categorical, reusing the generalized
+  # vector data/pool helpers; positive = "lognormal" only for v1, dispersion
+  # held fixed (no SE reported anywhere in the package for it).
+  cover = list(
+    spec        = .tobs_sbc_spec_cover,
+    data        = .tobs_sbc_data_vector,
+    pool        = .tobs_sbc_pool_vector,
+    draws       = .tobs_sbc_draws_cover,
+    simulate    = .tobs_sbc_sim_cover,
+    refit       = .tobs_sbc_refit_cover,
+    loglik_many = .tobs_sbc_loglik_many_cover),
+  # ms_int_occu() (gcol33/tulpaObs#220, community group, section 6l): the
+  # community analogue of int_occu(); reuses dyn_int_occu()'s
+  # `.tobs_sbc_pool_named_3d` for its list-of-D-per-source-3D-arrays
+  # response. simulate() overwrites `ms_community$coef_psi`/`coef_p<d>`
+  # directly (the family's own simulate() handler does not consult
+  # `object$draws`). Full site-overlap only for v1.
+  ms_int_occu = list(
+    spec        = .tobs_sbc_spec_ms_int_occu,
+    data        = .tobs_sbc_data_ms_int_occu,
+    pool        = .tobs_sbc_pool_named_3d,
+    draws       = .tobs_sbc_draws_ms_int_occu,
+    simulate    = .tobs_sbc_sim_ms_int_occu,
+    refit       = .tobs_sbc_refit_ms_int_occu,
+    loglik_many = .tobs_sbc_loglik_many_ms_int_occu)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -1959,6 +2234,10 @@
 #' a fresh AR1 year effect at the theta's own `(sigma, rho)`, and
 #' `loglik_many` is a Laplace approximation to that year effect's marginal
 #' (FD-validated, brute-force cross-checked at T = 2).
+#'
+#' `cover` is a `tobs_multiarm_fit` with the same two-independent-block shape
+#' as `occu_categorical`; `positive = "lognormal"` only for v1, with
+#' dispersion held fixed (no SE is reported for it anywhere in the package).
 #'
 #' A family is registered by adding one entry to the internal registry -- a
 #' replicate generator, a refit call and optionally a joint statistic; the
