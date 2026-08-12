@@ -616,6 +616,22 @@
     })
     Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
     debias_method <- if (aghq_out$ok) "aghq" else "none"
+    if (aghq_out$ok) {
+      # Vf was computed under the PRE-debias Sinv; reprojecting Cinv without
+      # also updating Vf leaves Vf/Bf/Cinv mutually inconsistent (the joint
+      # (u, b_s) draw formula assumes all three come from the SAME Sigma --
+      # gcol33/tulpaObs#226 part 2, same fix as R/community_em.R's shared
+      # engine). A_uu = Sf_old + sum_s Bf_s Cinv_s_old Bf_s' (Bf_s is pure
+      # likelihood curvature, unaffected by a Sigma change), so
+      # Sf_new = Sf_old + sum_s Bf_s (Cinv_s_old - Cinv_s_new) Bf_s' -- exact.
+      Sf_new <- res$Sf
+      for (s in seq_len(S)) {
+        dC <- res$Cinv[[s]] - Cinv_out[[s]]
+        Sf_new <- Sf_new + res$Bf[[s]] %*% dC %*% t(res$Bf[[s]])
+      }
+      Vf <- tryCatch(solve(Sf_new), error = function(e) .tobs_cem_ginv(Sf_new))
+      Vf <- (Vf + t(Vf)) / 2
+    }
   }
 
   build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, Cinv_out, res$Bf, Vf,

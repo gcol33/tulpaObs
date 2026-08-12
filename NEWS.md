@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.223 (2026-08-12)
+
+* **AGHQ debiasing tried for `ms_occu()`, found actively harmful, reverted**
+  (gcol33/tulpaObs#226 part 2). Enabling the shared engine's AGHQ debias by
+  default (matching `ms_occu_cover()`'s own precedent) made posterior SBC
+  calibration WORSE, not better: seed 0 of a 5-species fixture went from a
+  passing baseline to min p_unif 4.6e-5 at n.sim=100, then collapsed to 5.8e-10
+  (6/21 quantities below 1e-3) at n.sim=400. Two hypotheses tested and BOTH
+  ruled out: (1) insufficient quadrature nodes -- Sigma was already converged
+  comparing n.quad=5 vs 9, identical SBC result; (2) `Vf`/`Cinv`/`Bf`
+  mutual inconsistency (Vf computed pre-debias, Cinv reprojected post-debias)
+  -- a real bug, fixed exactly (validated to 2.8e-14 against a direct
+  reconstruction) in both `R/community_em.R`'s shared engine and
+  `R/ms_occu_cover.R`'s own implementation, but fixing it left `ms_occu`'s
+  failure essentially unchanged (seed 0 at n.sim=400: 1.7e-10 -> 5.8e-10,
+  same coefficient `sp1_psi_x`, same magnitude of failure). Root cause of
+  #226 part 2 remains genuinely unidentified for `ms_occu` -- `ms_occu.R`'s
+  own AGHQ opt-in reverted to keep it OFF (`.tobs_community_em()` still
+  defaults `re_aghq = FALSE`, and `ms_occu()` no longer sets it), restoring
+  the pre-experiment, tested baseline (`test-ms-occu.R` 30/30). The Vf-
+  consistency fix is KEPT on both engines regardless (correct on its own
+  terms, validated, no regression on `ms_occu_cover()`'s existing 19/19 test
+  suite) even though it did not resolve `ms_occu`'s issue.
+
 ## 0.0.222 (2026-08-12)
 
 * **AGHQ variance-component debias generalized to `.tobs_community_em()`**

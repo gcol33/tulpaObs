@@ -439,6 +439,28 @@
     })
     Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
     debias_method <- if (aghq_out$ok) "aghq" else "none"
+    if (aghq_out$ok) {
+      # Vf (the community-mean marginal covariance) was computed under the
+      # PRE-debias Sinv (res$Sf = A_uu - sum_s Bf_s Cinv_s_old Bf_s'); leaving
+      # it there while Cinv is reprojected to the debiased Sinv makes Vf,
+      # Bf and Cinv mutually INCONSISTENT -- the joint (u, b_s) draw formula
+      # (.tobs_sbc_community_b_draws) assumes all three come from the SAME
+      # Sigma, and a fit whose Cinv shifts a lot under debiasing (unlike the
+      # small shift ms_occu_cover's own fixture happened to show) breaks that
+      # assumption badly: measured on ms_occu, this alone collapsed posterior
+      # SBC to p_unif = 0 on 8/21 quantities. A_uu is recoverable without
+      # re-deriving the Newton solve (Bf_s is pure likelihood curvature,
+      # unaffected by a Sigma change): A_uu = Sf_old + sum_s Bf_s Cinv_s_old
+      # Bf_s', so Sf_new = Sf_old + sum_s Bf_s (Cinv_s_old - Cinv_s_new) Bf_s'
+      # -- exact, no new approximation.
+      Sf_new <- res$Sf
+      for (s in seq_len(S)) {
+        dC <- res$Cinv[[s]] - Cinv_out[[s]]
+        Sf_new <- Sf_new + res$Bf[[s]] %*% dC %*% t(res$Bf[[s]])
+      }
+      Vf <- tryCatch(solve(Sf_new), error = function(e) .tobs_cem_ginv(Sf_new))
+      Vf <- (Vf + t(Vf)) / 2
+    }
   }
 
   list(mu = mu, global = global, b_list = b_list, Sigma = Sigma,

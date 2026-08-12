@@ -166,6 +166,18 @@
   mu[occ_idx][1L] <- stats::qlogis(clp(any_det_prop))
   mu[p_idx][1L]   <- stats::qlogis(clp(rate))
 
+  # AGHQ variance-component debias (gcol33/tulpaObs#226 part 2) is available
+  # on the shared engine (R/community_em.R) but NOT defaulted on here, unlike
+  # ms_occu_cover(): tried and found actively HARMFUL for this family, not
+  # just unhelpful. Measured (5-species fixture, N=40): with AGHQ on, seed 0's
+  # posterior SBC min p_unif went from a passing baseline down to 4.6e-5 at
+  # n.sim=100, then to 5.8e-10 (6/21 quantities below 1e-3) at n.sim=400 --
+  # WORSE than the pre-AGHQ baseline, and NOT explained by insufficient
+  # quadrature accuracy (Sigma was already converged at n.quad=5 vs 9, same
+  # SBC result) or by the Vf/Cinv consistency bug fixed the same day (fixing
+  # that left the failure essentially unchanged). Root cause not identified;
+  # see gcol33/tulpaObs#226 for the full investigation. Do not flip this
+  # default without a fresh diagnosis, not another parameter guess.
   fit <- .tobs_community_em(
     S = S, P = P, arm_idx = arm_idx,
     sp_ll = sp_ll, sp_grad = sp_grad,
@@ -251,7 +263,33 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
       # Bf = the mu-b_s cross-Hessian block from the same Newton solve
       # (gcol33/tulpaObs#226): mu and b_s are NOT independent in the
       # posterior, and Bf is what lets a consumer draw them jointly instead.
-      Cinv = fit$Cinv, Bf = fit$Bf
+      Cinv = fit$Cinv, Bf = fit$Bf,
+      # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
+      # community VARIANCE components (Sigma_psi/Sigma_p and their sd_*) carry
+      # Laplace small-cluster attenuation at small per-species n. When
+      # `debias_method == "aghq"` they (and Cinv, gcol33/tulpaObs#226 part 2)
+      # have been debiased by adaptive Gauss-Hermite quadrature of the exact
+      # per-species RE posterior; otherwise (large RE dim / re.aghq = FALSE)
+      # they remain the attenuated EM lower bound.
+      var_attenuation = if (identical(fit$debias_method, "aghq")) list(
+        affects = character(0),
+        means_affected = FALSE,
+        source = "laplace_small_cluster",
+        debias = "aghq",
+        note = paste0(
+          "Community variance components (and Cinv) debiased by adaptive ",
+          "Gauss-Hermite quadrature of the exact per-species RE posterior ",
+          "(gcol33/tulpaObs#226 part 2); community means are unaffected.")
+      ) else list(
+        affects = c("Sigma_psi", "Sigma_p", "sd_psi", "sd_p", "Cinv"),
+        means_affected = FALSE,
+        source = "laplace_small_cluster",
+        debias = "none",
+        note = paste0(
+          "Community variance components (and Cinv) carry the Laplace ",
+          "small-cluster attenuation lower bound; RE dimension exceeded ",
+          "control$re.aghq.maxdim or control$re.aghq = FALSE.")
+      )
     ),
     convergence  = list(converged = isTRUE(fit$converged), n_iter = fit$n_iter)
   )), class = c("tobs_fit", "tulpa_fit"))
