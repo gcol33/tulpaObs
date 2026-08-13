@@ -1,5 +1,24 @@
 # tulpaObs NEWS
 
+## 0.0.227 (2026-08-13)
+
+* **`distsamp_open()` acceptance-tier SBC finalized** (gcol33/tulpaObs#220,
+  closing out the last item from the original registration scope). CONTRACT
+  tier had been verified earlier; the acceptance run needed its own tuning.
+  A single refit on the standard fixture measured ~100-130s, and the full
+  posterior-SBC experiment (which refits on a pooled/augmented dataset)
+  measured 758.5 sec/sim -- at the standard `n.sim=100` every sibling family
+  uses that is ~21h, which is exactly what the first attempt ran into before
+  being killed with no output. Registered instead at `n.sim=15` (~4.3h). At
+  that reduced simulation count the standard `bad.factor=1.75` under-powered
+  the narrow (mis-scaled) control arm -- only 3 of 6 quantities failed
+  clearly, `lambda_(Intercept)` and `sigma_det_cov1` showed no signal at all.
+  `bad.factor=4.0` (same `n.sim`, same cost) pushed every quantity below
+  1e-5, matching the comprehensive-failure bar every other family's narrow
+  arm hits. Posterior arm: `p_unif` in [0.011, 0.904] across all six
+  coefficients, byte-identical between the two tuning runs (`bad.factor`
+  only touches the narrow arm). 24th family registered.
+
 ## 0.0.226 (2026-08-12)
 
 * **`ms_count()` registered for `sbc()`** (gcol33/tulpaObs#220, the 23rd
