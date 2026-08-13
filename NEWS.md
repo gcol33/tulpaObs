@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.228 (2026-08-13)
+
+* **`jsdm()` registered for `sbc()`** (gcol33/tulpaObs#220, the 25th
+  registered family). `jsdm()` is `ms_count(response = "bernoulli")` under
+  the hood (`.dispatch_jsdm` routes through the same community Laplace-EM
+  as `ms_count()`, gcol33/tulpaObs#121), so its `data`/`draws`/`simulate`
+  adapters reuse `ms_count()`'s exact generic helpers unchanged; only
+  `spec` (constructs `jsdm()`, not `ms_count(response=)`) and `loglik_many`
+  (the Bernoulli kernel `.ms_count_ll_bern`, not `.ms_count_ll_pois`) are
+  new. Shares `ms_count()`'s S=20 fixture scale, resolved the same way for
+  the same reason (gcol33/tulpaObs#226) -- 3 seeds, min p_unif range
+  0.0093-0.0108, 0 quantities below 1e-3 out of 40 possible across all 3
+  runs. `bad.factor=3.0` rather than the `1.75` every sibling family uses:
+  a refit here is cheap (~35s for the full `n.sim=100` run) so the standard
+  budget did not need reducing, but at 1.75 the narrow arm only reached
+  max p_unif ~0.001 (borderline); 3.0 (same cost) pushed every quantity to
+  p_unif 0.
+
 ## 0.0.227 (2026-08-13)
 
 * **`distsamp_open()` acceptance-tier SBC finalized** (gcol33/tulpaObs#220,

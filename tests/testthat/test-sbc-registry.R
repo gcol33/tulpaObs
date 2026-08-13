@@ -244,6 +244,14 @@
     suppressWarnings(tobs(~ x, data = sim$data, family = ms_count("poisson"),
                           y = sim$y, species = paste0("sp", seq_len(n_species)),
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  # jsdm() shares ms_count()'s exact community Laplace-EM (gcol33/tulpaObs#121)
+  # -- same S=20 scale for the same reason (gcol33/tulpaObs#226).
+  jsdm = function(N = 150L, n_species = 20L) {
+    sim <- simulate_jsdm(N = N, n_species = n_species, seed = 0L)
+    suppressWarnings(tobs(~ x, data = sim$data, family = jsdm(),
+                          y = sim$y, species = paste0("sp", seq_len(n_species)),
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -306,7 +314,8 @@ test_that("the roster in the error message names what is registered", {
 # short-circuit below or it silently returns the wrong (right-sized-for-the-
 # wrong-quantity) vector.
 .sbc_reg_means <- function(fit) {
-  if (identical(attr(fit, "tobs_family")$name, "ms_count")) {
+  if (identical(attr(fit, "tobs_family")$name, "ms_count") ||
+      identical(attr(fit, "tobs_family")$name, "jsdm")) {
     m <- fit$model
     nm <- tulpaObs:::.tobs_sbc_ms_count_names(m)
     cm <- fit$ms_community
@@ -735,6 +744,48 @@ test_that("distsamp_open posterior SBC: correct fit uniform, mis-scaled is not",
 
   rp <- res$report
   qs <- names(fit$means)
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+
+test_that("jsdm posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (community group, section 6o). jsdm() shares
+  # ms_count()'s exact community Laplace-EM (gcol33/tulpaObs#121), so the
+  # same S=20 fixture that resolved ms_count's #226 failure mode applies
+  # directly -- 3 seeds (0, 1, 2) during development, min p_unif range
+  # 0.0093-0.0108, 0 quantities below 1e-3 out of 40 possible across all 3
+  # runs, no reproducible failing coefficient. Do NOT shrink the fixture's
+  # N/species count for speed.
+  #
+  # bad.factor = 3.0, not the 1.75 every sibling community family uses: a
+  # single refit here is cheap (~0.3s, ~35s for the whole n.sim=100 run), so
+  # unlike distsamp_open the standard n.sim did not need reducing -- but at
+  # 1.75 the narrow arm only reached max p_unif ~0.0009-0.0012 (borderline,
+  # not the comprehensive failure every other family's narrow arm shows).
+  # bad.factor=3.0 (same n.sim, ~35s either way) pushed every quantity to
+  # p_unif 0 across all 3 seeds while leaving the posterior arm's numbers
+  # unchanged (bad.factor only touches the narrow arm).
+  fit <- .SBC_REG_FIXTURES$jsdm()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 3.0, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$jsdm$draws(fit, 2L))
   pu <- function(arm) {
     r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
     stats::setNames(r$p_unif, r$quantity)

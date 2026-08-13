@@ -2236,6 +2236,59 @@
 
 
 # ---------------------------------------------------------------------------
+# 6o. jsdm() (gcol33/tulpaObs#220, community group): `jsdm()` is
+# `ms_count(response = "bernoulli")` under the hood (`.dispatch_jsdm` calls
+# `.tobs_build_ms_count(..., response = "bernoulli")` and routes through the
+# same community Laplace-EM / latent driver / NUTS target as ms_count() --
+# gcol33/tulpaObs#121). The fit object shares ms_count()'s `fit$model`
+# shape byte for byte, so `data`/`draws`/`simulate` are the exact same
+# generic helpers ms_count() already registers (`.tobs_sbc_data_ms_count`,
+# `.tobs_sbc_draws_ms_count`, `.tobs_sbc_sim_ms_count` -- the last reads
+# `f$ms_community$coef_mu` and calls `stats::simulate()`, neither of which
+# is response-specific). `attr(fit, "tobs_family")` is "jsdm", not
+# "ms_count", though (the family ctor's own name), so the SBC dispatch
+# needs its own registry row regardless. Only `spec` (constructs `jsdm()`,
+# not `ms_count(response=)`) and `loglik_many` (the Bernoulli kernel
+# `.ms_count_ll_bern`, not `.ms_count_ll_pois`) are new.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_spec_jsdm <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(.tobs_sbc_default_control(),
+                                   as.list(fit.control)),
+       formula = .tobs_sbc_recombine(m$formulas$mu, NULL),
+       species = m$species_names)
+}
+
+.tobs_sbc_refit_jsdm <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$formula, data = data$cells, family = jsdm(),
+    y = data$y, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_loglik_many_jsdm <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_count_names(m)
+  S <- m$n_species
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta <- th[paste0(m$species_names[s], "_mu_", nm$mu_names)]
+      ll <- ll + .ms_count_ll_bern(m$summaries[[s]], beta)
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -2490,7 +2543,18 @@
     draws       = .tobs_sbc_draws_ms_count,
     simulate    = .tobs_sbc_sim_ms_count,
     refit       = .tobs_sbc_refit_ms_count,
-    loglik_many = .tobs_sbc_loglik_many_ms_count)
+    loglik_many = .tobs_sbc_loglik_many_ms_count),
+  # jsdm() (gcol33/tulpaObs#220, community group, section 6o): ms_count()'s
+  # generic data/draws/simulate helpers reused unchanged (see the section
+  # comment); only spec (family = jsdm()) and loglik_many (Bernoulli kernel)
+  # are jsdm-specific.
+  jsdm = list(
+    spec        = .tobs_sbc_spec_jsdm,
+    data        = .tobs_sbc_data_ms_count,
+    draws       = .tobs_sbc_draws_ms_count,
+    simulate    = .tobs_sbc_sim_ms_count,
+    refit       = .tobs_sbc_refit_jsdm,
+    loglik_many = .tobs_sbc_loglik_many_jsdm)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
