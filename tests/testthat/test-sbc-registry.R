@@ -381,6 +381,14 @@ test_that("the roster in the error message names what is registered", {
     names(theta) <- nm$cols
     return(theta)
   }
+  if (identical(attr(fit, "tobs_family")$name, "ms_abun")) {
+    m <- fit$model
+    nm <- tulpaObs:::.tobs_sbc_ms_abun_names(m)
+    cm <- fit$ms_community
+    theta <- as.vector(t(cbind(cm$coef_lambda, cm$coef_p)))
+    names(theta) <- nm$cols
+    return(theta)
+  }
   if (identical(attr(fit, "tobs_family")$name, "ms_dyn_occu")) {
     m <- fit$model
     nm <- tulpaObs:::.tobs_sbc_ms_dyn_occu_names(m)

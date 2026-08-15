@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.0.232 (2026-08-15)
+
+* **The `sbc()` registry test reads `ms_abun()`'s ranked quantity, not its
+  community mean.** `.sbc_reg_means()` carries one branch per community
+  family because a community fit's `fit$means` is the community MEAN alone
+  (P-length) while its SBC design ranks the per-species REALIZED coefficient
+  `mu + b_s` (S x P, species-major). `ms_abun()` was registered without its
+  branch, so it fell through to the `fit$means` short-circuit and returned a
+  2-length vector against the registry's 40 -- the exact failure the comment
+  above that helper describes. Branch added, mirroring `ms_distance()`'s:
+  `as.vector(t(cbind(coef_lambda, coef_p)))` against
+  `.tobs_sbc_ms_abun_names()$cols`. All eight community families now have one.
+
 ## 0.0.231 (2026-08-15)
 
 * **The `sbc()` registry's end-to-end composition test slices the pooled
