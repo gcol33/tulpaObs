@@ -1,5 +1,12 @@
 # tulpaObs NEWS
 
+## 0.0.233 (2026-08-15)
+
+* **`AGENTS.md` added, the Codex-facing counterpart of `CLAUDE.md`.** Same
+  contract: rules and interfaces here, the measurements they rest on in
+  `NOTES_measurements.md`. Listed in `.Rbuildignore` alongside `CLAUDE.md`, so
+  `R CMD check` does not report a non-standard file at top level.
+
 ## 0.0.232 (2026-08-15)
 
 * **The `sbc()` registry test reads `ms_abun()`'s ranked quantity, not its
