@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.0.231 (2026-08-15)
+
+* **The `sbc()` registry's end-to-end composition test slices the pooled
+  response at whatever rank the family brings.** Its `slice_site()` helper
+  enumerated ranks -- 3D array, else 2D matrix -- so `ms_dyn_occu()`, whose
+  `y` is 4D `[site x visit x season x species]`, fell to the 2D branch and
+  errored with "incorrect number of dimensions". `.tobs_sbc_pool_4d_species()`
+  was right: every registered family pools on the first axis and leaves the
+  rest alone, so the helper now indexes axis 1 at any rank and the
+  rank-enumeration cannot go stale again the next time a family arrives with
+  a new response shape.
+
+* **`man/dot-tobs_community_em.Rd` regenerated**, clearing an `R CMD check`
+  codoc WARNING. `.tobs_community_em()` gained `re_aghq`/`n_quad`/
+  `re_aghq_maxdim` (with their roxygen) when the AGHQ variance debias was
+  generalized onto it, but `document()` was not re-run, so the Rd's `\usage`
+  had been three arguments behind the function since then.
+
 ## 0.0.230 (2026-08-15)
 
 * **`ms_abun()` registered for `sbc()`** (gcol33/tulpaObs#220, the 27th and

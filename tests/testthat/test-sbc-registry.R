@@ -463,13 +463,20 @@ test_that("each registered family composes its callbacks end to end", {
     expect_length(unique(m$group_ids(pl)), n_grp_o + n_grp_r)
     expect_identical(nrow(pl$cells), n_row_o + n_row_r)
     # `y` is a plain 2D matrix for most families, a 3D [site x visit x season]
-    # array for the multi-season group (pooled on the site axis alone), a list
-    # of one matrix (or, for the product shape, one 3D array) per source for
-    # the multi-source group (each pooled on the site axis independently), or
-    # a plain length-N vector for a family with one observation per unit and
-    # no visit/season axis (occu_categorical).
-    slice_site <- function(z) if (length(dim(z)) == 3L)
-      z[seq_len(n_row_o), , , drop = FALSE] else z[seq_len(n_row_o), , drop = FALSE]
+    # array for the multi-season group (pooled on the site axis alone), a 4D
+    # [site x visit x season x species] array for the community dynamic group,
+    # a list of one matrix (or, for the product shape, one 3D array) per source
+    # for the multi-source group (each pooled on the site axis independently),
+    # or a plain length-N vector for a family with one observation per unit and
+    # no visit/season axis (occu_categorical). Every one of those pools on the
+    # first axis and leaves the rest alone, so the slice indexes axis 1 at
+    # whatever rank the family brings rather than enumerating the ranks.
+    slice_site <- function(z) {
+      d <- dim(z)
+      if (is.null(d)) return(z[seq_len(n_row_o)])
+      do.call(`[`, c(list(z), list(seq_len(n_row_o)),
+                     rep(list(bquote()), length(d) - 1L), list(drop = FALSE)))
+    }
     if (is.list(pl$y) && !is.data.frame(pl$y)) {
       expect_identical(vapply(pl$y, nrow, integer(1)),
                        stats::setNames(rep(n_row_o + n_row_r, length(pl$y)), names(pl$y)),

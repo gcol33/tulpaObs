@@ -22,7 +22,10 @@
   verbose = TRUE,
   sp_info = NULL,
   init_b = NULL,
-  init_Sigma = NULL
+  init_Sigma = NULL,
+  re_aghq = FALSE,
+  n_quad = 5L,
+  re_aghq_maxdim = 4L
 )
 }
 \arguments{
@@ -42,6 +45,12 @@ outer pass (R/community_latent.R) passes the previous pass's state, so the
 EM resumes from a near-converged point instead of rediscovering it; it is the
 dominant cost when the per-species likelihood is expensive (an N-mixture /
 distance marginal sums over the latent count).}
+
+\item{re_aghq}{Debias \code{Sigma}/\code{Cinv} by adaptive Gauss-Hermite quadrature of
+the exact per-species RE posterior (gcol33/tulpaObs#226 part 2), gated to
+\code{P <= re_aghq_maxdim} (tensor AGHQ over the joint b couples the arms).
+Defaults \code{FALSE} -- every existing caller is byte-identical unless it
+opts in. \code{n_quad} sets the per-dimension node count.}
 }
 \description{
 Generic community Laplace-EM engine
