@@ -213,14 +213,6 @@
   out
 }
 
-# BYM2 Riebler scale factor (geometric mean of the non-zero ICAR-Q eigenvalues).
-.ms_occu_bym2_scale_factor <- function(graph) {
-  Q <- diag(rowSums(graph)) - graph
-  eig <- eigen(Q, symmetric = TRUE, only.values = TRUE)$values
-  nz  <- eig[abs(eig) > 1e-10]
-  exp(mean(log(nz)))
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door fitter
@@ -263,8 +255,7 @@
       max_iter = max.iter, verbose = verbose),
     bym2 = .ms_occu_community_bym2(
       model, csr, n_spatial, map_site_to_unit,
-      scale_factor = spatial$scale_factor %||%
-        .ms_occu_bym2_scale_factor(spatial$graph),
+      scale_factor = spatial$scale_factor %||% compute_bym2_scale(spatial$graph),
       max_iter = max.iter, verbose = verbose),
     stop(sprintf("ms_occu() areal field supports icar / bym2 / car_proper; got '%s'.",
                  ptype), call. = FALSE))

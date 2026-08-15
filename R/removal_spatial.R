@@ -157,7 +157,7 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
 removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                  adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
                                  sigma_grid = NULL, rho_grid = NULL,
-                                 scale_factor = 1, mixture = c("P", "NB"),
+                                 scale_factor = NULL, mixture = c("P", "NB"),
                                  r_grid = NULL, beta_lambda_init = NULL,
                                  beta_p_init = NULL, v_init = NULL, w_init = NULL,
                                  K_max = NULL, max_iter = 100L, tol = 1e-6,
@@ -170,7 +170,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                               beta_lambda_init, beta_p_init, K_max, r_grid)
   if (is.null(sigma_grid)) sigma_grid <- exp(seq(log(0.2), log(3), length.out = 5L))
   if (is.null(rho_grid))   rho_grid <- c(0.05, 0.3, 0.5, 0.7, 0.95)
-  if (scale_factor <= 0) stop("scale_factor must be positive.", call. = FALSE)
+  scale_factor <- .bym2_resolve_scale(scale_factor, adj_row_ptr, adj_col_idx,
+                                      n_spatial)
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_bym2,
     y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,

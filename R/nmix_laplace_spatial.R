@@ -449,26 +449,8 @@ nmix_laplace_bym2 <- function(y,
     stop("rho_grid values must lie in [0, 1].", call. = FALSE)
   }
   r_grid_use <- .nmix_resolve_r_grid(mixture, r_grid)
-  if (is.null(scale_factor)) {
-    # Build dense Q = D - W from CSR, compute geometric mean of non-zero
-    # eigenvalues (Riebler scaling).
-    W <- matrix(0, n_spatial, n_spatial)
-    for (s in seq_len(n_spatial)) {
-      a <- adj_row_ptr[s] + 1L
-      b <- adj_row_ptr[s + 1L]
-      if (b >= a) for (kk in a:b) {
-        t <- adj_col_idx[kk] + 1L
-        W[s, t] <- 1
-      }
-    }
-    Q <- diag(as.numeric(n_neighbors)) - W
-    eig <- eigen(Q, symmetric = TRUE, only.values = TRUE)$values
-    nz  <- eig[abs(eig) > 1e-10]
-    scale_factor <- exp(mean(log(nz)))
-  }
-  if (!is.numeric(scale_factor) || length(scale_factor) != 1L || scale_factor <= 0) {
-    stop("scale_factor must be a positive scalar.", call. = FALSE)
-  }
+  scale_factor <- .bym2_resolve_scale(scale_factor, adj_row_ptr, adj_col_idx,
+                                      n_spatial)
   if (is.null(beta_lambda_init)) {
     beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
   }

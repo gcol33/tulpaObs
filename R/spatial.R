@@ -59,13 +59,55 @@ csr_to_adjacency <- function(csr, n) {
 # BYM2 scaling factor: geometric mean of the non-zero generalized eigenvalues
 # of the ICAR precision, so the mixing parameter has a graph-independent
 # interpretation (Riebler et al. 2016).
+#
+# Q = D - W is positive semi-definite with one null direction per connected
+# component, so the filter is a NUMERICAL-ZERO test, not a sign test: the null
+# eigenvalues come back at roundoff scale with either sign, and everything
+# surviving the test belongs in the geometric mean. An eigenvalue that survives
+# it and is still negative says the matrix handed in is not an ICAR precision,
+# and it errors here rather than reaching log() and sending NaN on into the BYM2
+# mixing weight. 1e-10 is the historical floor; the n * eps * max|lambda| term is
+# the scale the roundoff-zero eigenvalues actually sit at, and overtakes the
+# floor only on graphs far larger than the floor was picked for.
 compute_bym2_scale <- function(adj) {
   n <- nrow(adj)
-  D <- diag(rowSums(adj))
-  Q <- D - adj
+  Q <- diag(rowSums(adj)) - adj
   evals <- eigen(Q, symmetric = TRUE, only.values = TRUE)$values
-  evals <- evals[evals > 1e-10]
-  exp(mean(log(evals)))
+  tol <- max(1e-10, n * .Machine$double.eps * max(abs(evals)))
+  nz <- evals[abs(evals) > tol]
+  if (!length(nz)) {
+    stop("ICAR precision has no non-zero eigenvalues (the graph carries no ",
+         "edges); the BYM2 scale factor is undefined for it.", call. = FALSE)
+  }
+  if (any(nz < 0)) {
+    stop(sprintf(paste0(
+      "ICAR precision has a negative eigenvalue (%.3e) past the numerical-zero ",
+      "tolerance (%.3e); the BYM2 scale factor is undefined for it. The ",
+      "adjacency matrix must be symmetric 0/1 with a zero diagonal."),
+      min(nz), tol), call. = FALSE)
+  }
+  exp(mean(log(nz)))
+}
+
+# Same constant for the fitters that carry only the compressed graph.
+compute_bym2_scale_csr <- function(row_ptr, col_idx, n) {
+  compute_bym2_scale(
+    csr_to_adjacency(list(row_ptr = row_ptr, col_idx = col_idx), n))
+}
+
+# Resolve the scale factor at an areal-BYM2 fitter door: compute it from the
+# graph when the caller left it out, validate whatever came in. Both count
+# fitters (nmix, removal) go through here, so a missing argument means the same
+# thing at each door.
+.bym2_resolve_scale <- function(scale_factor, row_ptr, col_idx, n) {
+  if (is.null(scale_factor)) {
+    scale_factor <- compute_bym2_scale_csr(row_ptr, col_idx, n)
+  }
+  if (!is.numeric(scale_factor) || length(scale_factor) != 1L ||
+      !is.finite(scale_factor) || scale_factor <= 0) {
+    stop("scale_factor must be a positive scalar.", call. = FALSE)
+  }
+  as.numeric(scale_factor)
 }
 
 # Flatten the [N, k, k] neighbour-pair distance array for the NNGP kernels.
