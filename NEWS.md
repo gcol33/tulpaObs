@@ -43,6 +43,13 @@
 
   All 27 originally-scoped families are now registered for `sbc()`.
 
+* **Engine pin raised to tulpa 0.0.198** (Imports floor and `Remotes` tag
+  together, as `.github/scripts/check-engine-pin.R` requires). That release
+  carries both engine changes the `ms_abun()` registration above depends on:
+  `blup_cross` (gcol33/tulpa#398) and the full per-group joint covariance
+  `blup_cov_g`/`blup_cross_g`. The floor and the tag had also drifted apart
+  from each other (0.0.197 vs v0.0.196), which the pin check fails on.
+
 ## 0.0.229 (2026-08-15)
 
 * **`ms_distance()` and `ms_dyn_occu()` registered for `sbc()`** (gcol33/tulpaObs#220,
