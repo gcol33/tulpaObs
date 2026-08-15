@@ -9,6 +9,11 @@ here; put the MEASUREMENTS they rest on (fixtures, seeds, wall times, per-seed
 recovery numbers, cost ratios) in `NOTES_measurements.md`, committed alongside and
 Rbuildignored. Adding a paragraph of numbers here costs someone else's context.
 
+**Adding a family / prior / backend / diagnostic -> read `DESIGN.md` FIRST.** This
+file is the ROSTER (what each family supports); `DESIGN.md` is the EXTENSION POINTS
+(which single registry to edit, which duplication is deliberate). Short by design;
+read it in full. Do not restate the roster there or the extension points here.
+
 ## tulpaObs — hierarchical latent-state observation models on tulpa
 
 Bayesian occupancy / abundance / distance / removal / cover. Built on
