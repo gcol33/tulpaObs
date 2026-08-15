@@ -252,6 +252,25 @@
     suppressWarnings(tobs(~ x, data = sim$data, family = jsdm(),
                           y = sim$y, species = paste0("sp", seq_len(n_species)),
                           method = "laplace", control = .sbc_reg_ctl))
+  },
+  ms_distance = function(N = 150L, n_species = 20L) {
+    cutp <- c(0, 25, 50, 75, 100)
+    sim <- simulate_ms_distance(n_species = n_species, N = N, cutpoints = cutp,
+                                transect = "line", key = "halfnorm", seed = 0L)
+    suppressWarnings(tobs(~ abund_cov1, data = sim$data,
+                          family = ms_distance(key = "halfnorm", transect = "line",
+                                               cutpoints = cutp),
+                          detection = ~ 1, y = sim$y,
+                          species = paste0("sp", seq_len(n_species)),
+                          method = "laplace", control = .sbc_reg_ctl))
+  },
+  ms_dyn_occu = function(N = 150L, n_species = 20L, n_seasons = 4L, J = 3L) {
+    sim <- simulate_ms_dyn_occu(N = N, J = J, n_species = n_species,
+                                n_seasons = n_seasons, seed = 0L)
+    suppressWarnings(tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
+                          detection = ~ 1, y = sim$y,
+                          species = paste0("sp", seq_len(n_species)),
+                          method = "laplace", control = .sbc_reg_ctl))
   }
 )
 
@@ -340,6 +359,23 @@ test_that("the roster in the error message names what is registered", {
     theta <- as.vector(t(cbind(cm$coef_psi, cm$coef_p)))
     names(theta) <- nm$cols
     return(theta)
+  }
+  if (identical(attr(fit, "tobs_family")$name, "ms_distance")) {
+    m <- fit$model
+    nm <- tulpaObs:::.tobs_sbc_ms_distance_names(m)
+    cm <- fit$ms_community
+    theta <- as.vector(t(cbind(cm$coef_lambda, cm$coef_sigma)))
+    names(theta) <- nm$cols
+    return(theta)
+  }
+  if (identical(attr(fit, "tobs_family")$name, "ms_dyn_occu")) {
+    m <- fit$model
+    nm <- tulpaObs:::.tobs_sbc_ms_dyn_occu_names(m)
+    cm <- fit$ms_community
+    sp_theta <- as.vector(t(cbind(cm$coef_psi1, cm$coef_p)))
+    vals <- c(sp_theta, fit$means[nm$global_cols])
+    names(vals) <- nm$cols
+    return(vals)
   }
   if (identical(attr(fit, "tobs_family")$name, "ms_occu_cover")) {
     m <- fit$model
@@ -1130,6 +1166,75 @@ test_that("ms_count posterior SBC: correct fit uniform, mis-scaled is not", {
 
   rp <- res$report
   qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$ms_count$draws(fit, 2L))
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-3)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+test_that("ms_distance posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (community group, section 6p). Multi-seed
+  # reproducibility probe (seeds 0-1) on this same fixture found a DIFFERENT
+  # coefficient dipping moderately low each time (seed 0:
+  # sp15_sigma_(Intercept) at 6.3e-4; seed 1: sp19_lambda_abund_cov1 at
+  # 2.7e-4), consistent w/ the ~6% expected false-positive rate across 60
+  # tested quantities per run, NOT a reproducible calibration bug (that
+  # signature is the SAME coefficient pinned at ~1e-6-1e-7 on every seed).
+  # bad.factor=1.75's posterior arm matched bad.factor=3's exactly
+  # (min_post=0.0006338732 at sp15_sigma_(Intercept), 1/60 below 1e-3) --
+  # expected, bad.factor only rescales the narrow control arm, not the
+  # well-specified posterior. Measured (seed = 0, bad.factor = 3): posterior
+  # min p_unif 6.3e-4 (1/60 below 1e-3), narrow max p_unif 3.0e-15.
+  fit <- .SBC_REG_FIXTURES$ms_distance()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 3.0, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$ms_distance$draws(fit, 2L))
+  pu <- function(arm) {
+    r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
+    stats::setNames(r$p_unif, r$quantity)
+  }
+
+  ok <- pu("posterior")
+  expect_length(ok, length(qs))
+  expect_gt(min(ok), 1e-4)
+  expect_lt(min(pu("narrow")), 1e-3)
+})
+
+test_that("ms_dyn_occu posterior SBC: correct fit uniform, mis-scaled is not", {
+  skip_on_cran()
+  skip_if_fast()
+
+  # gcol33/tulpaObs#220 (community group, section 6q). Shared gamma/eps
+  # globals condition each species' psi1/p draw on the FULL (mu, global)
+  # vector via the (P+G) x P `Bf[[s]]` cross-Hessian block (verified by
+  # inspecting dim(Bf[[1]]) directly, not assumed square). Measured (seed =
+  # 0): posterior min p_unif 4.1e-3 (0/42 below 1e-3) at BOTH bad.factor =
+  # 1.75 and 3 (bad.factor rescales the narrow control only); narrow max
+  # p_unif 6.5e-6 (bad.factor=1.75) / 1.2e-15 (bad.factor=3).
+  fit <- .SBC_REG_FIXTURES$ms_dyn_occu()
+  res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
+                  controls = "narrow", bad.factor = 1.75, seed = 0L)
+
+  expect_s3_class(res, "sbc")
+  expect_identical(res$premises$pooling, "verified")
+  expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
+
+  rp <- res$report
+  qs <- colnames(tulpaObs:::.TOBS_SBC_REGISTRY$ms_dyn_occu$draws(fit, 2L))
   pu <- function(arm) {
     r <- rp[rp$arm == arm & rp$quantity %in% qs, ]
     stats::setNames(r$p_unif, r$quantity)

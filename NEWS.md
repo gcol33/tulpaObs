@@ -1,5 +1,43 @@
 # tulpaObs NEWS
 
+## 0.0.229 (2026-08-15)
+
+* **`ms_distance()` and `ms_dyn_occu()` registered for `sbc()`** (gcol33/tulpaObs#220,
+  the 26th and 27th registered families -- the last two of the original
+  registration scope besides `ms_abun()`, which stays deferred on
+  gcol33/tulpa#398).
+
+  `ms_distance()`: community binned distance sampling, S=20/N=150 fixture
+  (`cutpoints = c(0,25,50,75,100)`, halfnorm/line). A multi-seed (0, 1)
+  reproducibility probe found a DIFFERENT coefficient dipping moderately low
+  each time (seed 0: `sp15_sigma_(Intercept)` at 6.3e-4; seed 1:
+  `sp19_lambda_abund_cov1` at 2.7e-4) -- the false-positive signature (~6%
+  expected across 60 tested quantities per run), not the same-coefficient-
+  pinned-low-every-seed signature that would indicate a real calibration bug.
+  Registered at `bad.factor = 3.0` (the `1.75` posterior arm is identical --
+  `bad.factor` only rescales the narrow control, verified by comparing both
+  arms' completed runs): posterior min p_unif 6.3e-4 (1/60 below 1e-3),
+  narrow max p_unif 3.0e-15.
+
+  `ms_dyn_occu()`: community dynamic (HMM-forward) occupancy, S=20/N=150/
+  4 seasons/3 visits fixture. Two of the four arms (psi1, p) carry a
+  per-species deviation; the other two (gamma, eps, shared colonization/
+  extinction) are community globals with no RE of their own -- `draws()`
+  conditions each species' psi1/p deviation on the FULL (mu, global) draw via
+  the `(P+G) x P` `Bf[[s]]` cross-Hessian block (verified by inspecting
+  `dim(Bf[[1]])` directly, not assumed square). Registered at the standard
+  `bad.factor = 1.75`: posterior min p_unif 4.1e-3 (0/42 below 1e-3), narrow
+  max p_unif 6.5e-6 -- both arms tested (1.75 and 3.0), byte-identical
+  posterior result at both (confirms `bad.factor` only touches the narrow
+  arm).
+
+  Both acceptance runs (`n.sim = 100`) took multi-hour wall time (ms_distance
+  ~121min for the bad.factor=3 arm; ms_dyn_occu ~513min/~516min per arm) --
+  run via detached Windows Scheduled Tasks (the `hardware-nodes` pattern),
+  which were themselves killed by an unrelated external event partway through
+  the first attempt and relaunched, skipping the already-completed
+  bad.factor=1.75 arm for `ms_distance` to avoid redundant compute.
+
 ## 0.0.228 (2026-08-13)
 
 * **`jsdm()` registered for `sbc()`** (gcol33/tulpaObs#220, the 25th

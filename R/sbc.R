@@ -984,7 +984,23 @@
          "missing or non-finite here (a non-converged or rank-deficient fit).",
          call. = FALSE)
   }
-  L <- chol((V + t(V)) / 2)
+  Vs <- (V + t(V)) / 2
+  # A refit's per-species Cinv/vcov can occasionally be numerically singular
+  # OR genuinely indefinite, not merely ill-conditioned (a community family
+  # fit on a data-sparse simulated replicate -- observed on ms_distance's own
+  # acceptance run at n.sim=100, "the leading minor of order 3 is not
+  # positive" survived even a 1e-4-relative ridge retry), which a bare
+  # chol() has no recourse for. Eigen-clip to the nearest valid covariance
+  # instead of guessing at a ridge scale: a small floor on the eigenvalues
+  # leaves a well-conditioned Vs untouched (floor << its smallest eigenvalue)
+  # and guarantees chol() succeeds regardless of how indefinite the input is.
+  L <- tryCatch(chol(Vs), error = function(e) {
+    ee <- eigen(Vs, symmetric = TRUE)
+    floor_val <- max(1e-8, 1e-6 * max(ee$values))
+    vals <- pmax(ee$values, floor_val)
+    Vpd <- ee$vectors %*% (vals * t(ee$vectors))
+    chol((Vpd + t(Vpd)) / 2)
+  })
   Z <- matrix(stats::rnorm(n * p), n, p)
   sweep(Z %*% L, 2L, mean, `+`)
 }
@@ -2289,6 +2305,321 @@
 
 
 # ---------------------------------------------------------------------------
+# 6p. ms_distance() (gcol33/tulpaObs#220, community group): community binned
+# distance sampling (the spAbundance msDS analogue), the two-arm
+# (lambda/sigma) sibling of ms_occu -- same "rank a fixed species set" design
+# (theta_s = mu_arm + b_s per species, species-major), same joint mu/b_s draw
+# (`.tobs_sbc_community_b_draws`, #226 part 1). `.tobs_community_em()`
+# already exposes `Cinv`/`Bf` on this family's fit (R/ms_distance.R,
+# `build_ms_distance_fit()` -- added alongside the #226 fix, not something
+# this registration needed to add). `model$y` is a plain 3D
+# `[n_sites x n_bins x n_species]` array, structurally identical to
+# ms_occu()'s `[n_sites x max_visits x n_species]` -- the generic
+# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` pair (stacking axis 1
+# while leaving axes 2-3 alone) applies unchanged, species standing in for
+# season. `simulate()` reuses the family's own `.tobs_simulate_ms_distance()`
+# handler (draws through `cpp_simulate_distance`, the SAME kernel the
+# likelihood integrates against), overwriting `f$ms_community$coef_lambda`/
+# `coef_sigma`. `loglik_many()` sums each species' own exact binned-distance
+# marginal via `.tobs_ms_distance_engine(m)$sweep(s, eta_lam, eta_sig,
+# value_only = TRUE)$log_lik` (the same kernel the fitter and
+# `simulate_ms_distance()` optimize against/simulate through), NOT a
+# hand-rolled likelihood.
+#
+# Registered `key = "halfnorm"`, `mixture = "poisson"` only, matching
+# `.tobs_simulate_ms_distance()`'s own restriction (the hazard key's
+# log-shape rides the community EM's `global` slot, not `ms_community`, so
+# neither `simulate()` nor this registration can reach it yet -- #227);
+# negbin is a second per-species dispersion arm this registration does not
+# cover either.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_reject_ms_distance_scope <- function(fit) {
+  m <- fit$model
+  if (!identical(m$key, "halfnorm") || !identical(m$mixture, "poisson")) {
+    stop("SBC on ms_distance() is registered for key = \"halfnorm\", ",
+         "mixture = \"poisson\" only (the hazard key's log-shape and negbin's ",
+         "dispersion are not carried by simulate(); gcol33/tulpaObs#227). Got ",
+         "key = \"", m$key, "\", mixture = \"", m$mixture, "\".", call. = FALSE)
+  }
+}
+
+# theta column names: `<species>_lambda_<coef>` / `<species>_sigma_<coef>`,
+# one block of length P per species, species-major.
+.tobs_sbc_ms_distance_names <- function(m) {
+  lam_nm <- m$process_info[[1L]]$coef_names
+  sig_nm <- m$process_info[[2L]]$coef_names
+  par <- c(paste0("lambda_", lam_nm), paste0("sigma_", sig_nm))
+  list(lam = lam_nm, sig = sig_nm, par = par,
+       cols = as.vector(outer(par, m$species_names,
+                              function(p, sp) paste0(sp, "_", p))))
+}
+
+.tobs_sbc_spec_ms_distance <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_ms_distance_scope(fit)
+  m <- fit$model
+  list(model     = m,
+       fit_obs   = fit,
+       family    = attr(fit, "tobs_family"),
+       method    = fit$method,
+       control   = utils::modifyList(.tobs_sbc_default_control(),
+                                     as.list(fit.control)),
+       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
+       sigma     = .tobs_sbc_recombine(m$formulas$sigma, NULL),
+       cutpoints = m$cutpoints, key = m$key, transect = m$transect,
+       mixture   = m$mixture,
+       species   = m$species_names)
+}
+
+.tobs_sbc_refit_ms_distance <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$lambda, data = data$cells,
+    family = ms_distance(key = spec$key, transect = spec$transect,
+                         cutpoints = spec$cutpoints, mixture = spec$mixture),
+    detection = spec$sigma, y = data$y, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_draws_ms_distance <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_distance_names(m)
+  S <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
+  M <- matrix(NA_real_, n, S * P)
+  for (s in seq_len(S)) {
+    b_hat_s <- c(cm$blup_lambda[s, ], cm$blup_sigma[s, ])
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
+  }
+  colnames(M) <- nm$cols
+  M
+}
+
+.tobs_sbc_sim_ms_distance <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_distance_names(m)
+  S <- m$n_species
+  coef_lambda <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_lambda_", nm$lam)]))
+  coef_sigma <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_sigma_", nm$sig)]))
+  dimnames(coef_lambda) <- list(m$species_names, nm$lam)
+  dimnames(coef_sigma)  <- list(m$species_names, nm$sig)
+  f$ms_community$coef_lambda <- coef_lambda
+  f$ms_community$coef_sigma  <- coef_sigma
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_distance <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_distance_names(m)
+  S <- m$n_species
+  eng <- .tobs_ms_distance_engine(m)
+  X_lambda <- m$X_processes[[1L]]; X_sigma <- m$X_processes[[2L]]
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta_lam <- th[paste0(m$species_names[s], "_lambda_", nm$lam)]
+      beta_sig <- th[paste0(m$species_names[s], "_sigma_", nm$sig)]
+      eta_lam <- as.numeric(X_lambda %*% beta_lam)
+      eta_sig <- as.numeric(X_sigma %*% beta_sig)
+      sw <- eng$sweep(s, eta_lam, eta_sig, value_only = TRUE)
+      ll <- ll + sum(sw$log_lik)
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
+# 6q. ms_dyn_occu() (gcol33/tulpaObs#220, community group): community DYNAMIC
+# (multi-season) occupancy, the HMM-forward analogue of ms_occu. `model$y` is
+# a 4D `[n_sites x max_visits x n_seasons x n_species]` array -- ONE axis
+# past every existing pool helper, so this section adds the generic
+# `.tobs_sbc_data_4d_species`/`.tobs_sbc_pool_4d_species` pair (stack axis 1,
+# leave axes 2-4 alone; the same recipe as `_3d_season`, one more dimension).
+#
+# Two of the four arms carry a per-species deviation (psi1, p -- the "rank a
+# fixed species set" design, same as every other community family); the
+# other two (gamma, eps, season-to-season colonization/extinction) are
+# SHARED community globals with no per-species term at all (`R/ms_dyn_occu.R`
+# section comment: "colonization/extinction coefficients carry no per-species
+# random effect... shared community globals"). `fit$means`/`fit$vcov` already
+# carry all four arms jointly (psi1, p, gamma, eps concatenated, ONE MVN), so
+# `draws()` draws that whole vector once per row and conditions each
+# species' b_s on the FULL draw via `.tobs_sbc_community_b_draws` (#226 part
+# 1) -- `fit$ms_community$Bf[[s]]` is `(P + G) x P` (P = the two RE arms'
+# width, G = gamma + eps), the cross-Hessian block against the WHOLE (mu,
+# global) vector, not just the RE arms: the community EM's Newton solve
+# finds gamma/eps jointly informative about each species' deviation even
+# though they carry no random effect of their own, verified by inspecting
+# `dim(Bf[[1]])` directly rather than assumed from the P x P shape every
+# other community family's `Bf` block has. The shared gamma/eps columns
+# themselves copy straight out of that same draw, UNCHANGED per species
+# (there is nothing to condition -- they are the same shared draw for every
+# species in that row, exactly as they are the same shared FIT for every
+# species).
+#
+# `simulate()` reuses the family's own `.tobs_simulate_ms_dyn_occu()` handler
+# (drives `cpp_simulate_ms_dyn_occu`, the SAME kernel the likelihood
+# integrates against for the RE arms' HMM forward), overwriting
+# `f$ms_community$coef_psi1`/`coef_p` (per-species) AND
+# `f$means[gamma_names]`/`f$means[eps_names]` (the shared globals that
+# handler reads directly off `object$means`, not `ms_community`).
+# `loglik_many()` sums each species' own `.ms_dyn_occu_forward_ll()` (the
+# exact HMM-forward marginal the fitter's `sp_ll` closure optimizes) at that
+# species' psi1/p slice plus the SAME shared gamma/eps every species uses.
+# ---------------------------------------------------------------------------
+
+# Concatenate two 4D [n_sites x max_visits x n_seasons x n_species] response
+# arrays on the SITE axis; visits/seasons/species are shared design, not
+# something a replicate draws fresh. The `_3d_season` recipe one axis over.
+.tobs_sbc_data_4d_species <- function(fit) {
+  m <- fit$model
+  list(cells  = m$data,
+       y      = m$y,
+       y_pos  = NULL,
+       visits = NULL,
+       graph  = NULL,
+       site   = seq_len(m$n_sites))
+}
+
+.tobs_sbc_pool_4d_species <- function(obs, rep) {
+  n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
+  y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L],
+                               dim(obs$y)[4L]))
+  y[seq_len(n_o), , , ] <- obs$y
+  y[n_o + seq_len(n_r), , , ] <- rep$y
+  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL,
+       visits = NULL, graph = NULL, site = c(obs$site, rep$site + n_o))
+}
+
+.tobs_sbc_spec_ms_dyn_occu <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  m <- fit$model
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = utils::modifyList(.tobs_sbc_default_control(),
+                                   as.list(fit.control)),
+       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
+       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
+       col     = .tobs_sbc_recombine(m$formulas$col, NULL),
+       ext     = .tobs_sbc_recombine(m$formulas$ext, NULL),
+       species = m$species_names)
+}
+
+.tobs_sbc_refit_ms_dyn_occu <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$occ, data = data$cells, family = spec$family,
+    detection = spec$det, colonization = spec$col, extinction = spec$ext,
+    y = data$y, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+# theta column names: `<species>_psi1_<coef>` / `<species>_p_<coef>` (one
+# block of length P per species, species-major) followed by the SHARED
+# `gamma_<coef>` / `eps_<coef>` columns (no species prefix -- one value per
+# row, not per species).
+.tobs_sbc_ms_dyn_occu_names <- function(m) {
+  pi_list <- m$process_info
+  psi1_nm <- pi_list[[1L]]$coef_names
+  p_nm    <- pi_list[[2L]]$coef_names
+  gam_nm  <- pi_list[[3L]]$coef_names
+  eps_nm  <- pi_list[[4L]]$coef_names
+  par <- c(paste0("psi1_", psi1_nm), paste0("p_", p_nm))
+  sp_cols <- as.vector(outer(par, m$species_names,
+                             function(p, sp) paste0(sp, "_", p)))
+  global_cols <- c(paste0("gamma_", gam_nm), paste0("eps_", eps_nm))
+  list(psi1 = psi1_nm, p = p_nm, gam = gam_nm, eps = eps_nm,
+       par = par, sp_cols = sp_cols, global_cols = global_cols,
+       cols = c(sp_cols, global_cols))
+}
+
+.tobs_sbc_draws_ms_dyn_occu <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_dyn_occu_names(m)
+  S <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  # `Bf[[s]]` is (P + G) x P -- the cross-Hessian block between b_s and the
+  # FULL (mu, global) vector, not just the RE arms (verified: dim(Bf[[1]]) =
+  # 4x2 for P_psi1=P_p=P_gam=P_eps=1, i.e. (P+G) x P). The community EM's
+  # Newton solve treats gamma/eps as jointly informative about each species'
+  # deviation even though they carry no RE of their own, so the draw must
+  # condition on the FULL mu_draws, not a psi1/p-only slice.
+  re_idx <- seq_len(P)
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x (P + G)
+  M <- matrix(NA_real_, n, length(nm$cols))
+  colnames(M) <- nm$cols
+  for (s in seq_len(S)) {
+    b_hat_s <- c(cm$blup_psi1[s, ], cm$blup_p[s, ])
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_draws[, re_idx, drop = FALSE] + b_draws
+  }
+  M[, nm$global_cols] <- mu_draws[, nm$global_cols]
+  M
+}
+
+.tobs_sbc_sim_ms_dyn_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_dyn_occu_names(m)
+  S <- m$n_species
+  coef_psi1 <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_psi1_", nm$psi1)]))
+  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_p_", nm$p)]))
+  dimnames(coef_psi1) <- list(m$species_names, nm$psi1)
+  dimnames(coef_p)    <- list(m$species_names, nm$p)
+  f$ms_community$coef_psi1 <- coef_psi1
+  f$ms_community$coef_p    <- coef_p
+  f$means[paste0("gamma_", nm$gam)] <- theta[paste0("gamma_", nm$gam)]
+  f$means[paste0("eps_",   nm$eps)] <- theta[paste0("eps_",   nm$eps)]
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_dyn_occu <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_dyn_occu_names(m)
+  S <- m$n_species
+  n_sites <- m$n_sites; n_seasons <- m$n_seasons
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    beta_gam <- th[paste0("gamma_", nm$gam)]
+    beta_eps <- th[paste0("eps_",   nm$eps)]
+    gamma <- as.numeric(stats::plogis(m$X_gamma %*% beta_gam))
+    eps   <- as.numeric(stats::plogis(m$X_eps   %*% beta_eps))
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta_psi1 <- th[paste0(m$species_names[s], "_psi1_", nm$psi1)]
+      beta_p    <- th[paste0(m$species_names[s], "_p_",    nm$p)]
+      psi1 <- as.numeric(stats::plogis(m$X_psi1 %*% beta_psi1))
+      p    <- as.numeric(stats::plogis(m$X_p    %*% beta_p))
+      ll <- ll + .ms_dyn_occu_forward_ll(psi1, p, gamma, eps,
+                                         m$y[, , , s], m$valid[, , , s],
+                                         n_sites, n_seasons)
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -2554,7 +2885,31 @@
     draws       = .tobs_sbc_draws_ms_count,
     simulate    = .tobs_sbc_sim_ms_count,
     refit       = .tobs_sbc_refit_jsdm,
-    loglik_many = .tobs_sbc_loglik_many_jsdm)
+    loglik_many = .tobs_sbc_loglik_many_jsdm),
+  # ms_distance() (gcol33/tulpaObs#220, community group, section 6p): the
+  # two-arm (lambda/sigma) sibling of ms_occu; `data`/`pool` reuse the
+  # generic 3D-season helpers unchanged (model$y is [site x bin x species],
+  # structurally identical to ms_occu's [site x visit x species]).
+  ms_distance = list(
+    spec        = .tobs_sbc_spec_ms_distance,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
+    draws       = .tobs_sbc_draws_ms_distance,
+    simulate    = .tobs_sbc_sim_ms_distance,
+    refit       = .tobs_sbc_refit_ms_distance,
+    loglik_many = .tobs_sbc_loglik_many_ms_distance),
+  # ms_dyn_occu() (gcol33/tulpaObs#220, community group, section 6q): the
+  # HMM-forward dynamic analogue of ms_occu, with two SHARED (non-species)
+  # transition globals (gamma, eps) alongside the two per-species RE arms
+  # (psi1, p). New 4D pool (model$y is [site x visit x season x species]).
+  ms_dyn_occu = list(
+    spec        = .tobs_sbc_spec_ms_dyn_occu,
+    data        = .tobs_sbc_data_4d_species,
+    pool        = .tobs_sbc_pool_4d_species,
+    draws       = .tobs_sbc_draws_ms_dyn_occu,
+    simulate    = .tobs_sbc_sim_ms_dyn_occu,
+    refit       = .tobs_sbc_refit_ms_dyn_occu,
+    loglik_many = .tobs_sbc_loglik_many_ms_dyn_occu)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
