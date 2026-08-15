@@ -664,6 +664,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     zero_inflated = is_zi,
     zi_omega = if (is_zi) unname(as.numeric(raw$omega)) else NA_real_,
     log_lik = raw$log_lik %||% NA_real_,
+    K_max = raw$K_max,
     ms_community = list(
       Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
       sd_lambda = sqrt(pmax(diag(Sigma_lambda), 0)),
@@ -679,6 +680,19 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
       blup_omega = if (is_zi)
         matrix(as.numeric(raw$b_omega), ncol = 1L,
                dimnames = list(model$species_names, "logit_omega")) else NULL,
+      # Per-species FULL joint (lambda, p) posterior covariance / mode-theta
+      # cross-Hessian (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g,
+      # gcol33/tulpa#398 pt. 2) -- present only on the joint_fd/joint_grad
+      # (n_quad > 1) path; NULL under the default n_quad = 1 Laplace-EM
+      # (cpp_nmix_community_em(), which does not expose this). Same
+      # convention as every .tobs_community_em()-based family's
+      # `Cinv[[s]]`/`Bf[[s]]` (R/community_em.R): `Cinv[[s]]` is
+      # `(p_lambda+p_p) x (p_lambda+p_p)`, `Bf[[s]]` is
+      # `n_theta x (p_lambda+p_p)`, indexed species-order-matching
+      # `model$species_names` (same order `blup_lambda`/`blup_p` use, since
+      # nmix_laplace_re()'s re_terms lists lambda before p).
+      Cinv = raw$blup_cov_g %||% NULL,
+      Bf   = raw$blup_cross_g %||% NULL,
       optimizer = raw$optimizer %||% "em",
       n_quad = raw$n_quad %||% 1L, lkj_eta = raw$lkj_eta %||% 1
     ),

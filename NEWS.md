@@ -1,5 +1,48 @@
 # tulpaObs NEWS
 
+## 0.0.230 (2026-08-15)
+
+* **`ms_abun()` registered for `sbc()`** (gcol33/tulpaObs#220, the 27th and
+  final family of the original registration scope). Needed TWO upstream
+  `tulpa` engine changes before it could even be attempted:
+
+  1. `tulpa#398` (`blup_cross`): exposes `tulpa_re_aghq()`'s per-group
+     mode/theta cross-Hessian.
+  2. A second gap found while wiring this family: `tulpa_re_aghq()` also
+     only ever exposed the per-RE-TERM DIAGONAL of a group's posterior
+     covariance (`blup_var`). `ms_abun()`'s lambda (abundance) and p
+     (detection) arms share a per-species grouping factor with real
+     cross-arm posterior covariance -- the same lambda/p identifiability
+     ridge `tobs()`'s penalized-EM exists to break for occupancy psi/p --
+     so drawing a species' abundance and detection deviations
+     independently would repeat the `#226` bug one level deeper (inside a
+     species instead of between the community mean and a species). Fixed
+     upstream by adding `blup_cov_g`/`blup_cross_g` (the full per-group
+     joint covariance/cross-Hessian, unsliced by RE term), validated
+     against a closed-form joint-Hessian construction on a toy model with
+     deliberately collinear RE terms.
+
+  `ms_community$Cinv`/`Bf` now thread off `blup_cov_g`/`blup_cross_g`
+  (`R/ms_abun.R`), matching the convention every other `sbc()`-registered
+  community family uses. Only reachable via the AGHQ/joint_fd engine
+  (`control = list(optimizer = "joint_fd", n.quad > 1)`) -- the default
+  `n.quad = 1` Laplace-EM path (a different, faster engine entirely) does
+  not expose `Cinv`/`Bf` at all, and errors with a pointer rather than
+  silently drawing an independent `(mu, b_s)`.
+
+  Registered at reduced `n.sim = 15` (distsamp_open's own precedent for the
+  identical cost problem, see `0.0.227` below): a `n.sim = 100` run at
+  standard settings was projected to take >12h; the actual `n.sim = 15` run
+  completed in 39.9 min. Posterior calibrates cleanly (min p_unif 3.9e-3,
+  0/40 quantities below 1e-3); narrow control's minimum p_unif is 2.9e-12
+  (comfortably below the 1e-3 pass bar every sibling family uses), though
+  one narrow-arm quantity did not fail as comprehensively as siblings'
+  (max p_unif 1.3e-2 there, vs ~1e-6 to 1e-15 elsewhere) -- not
+  re-investigated given the ~40min cost of a re-run, and does not weaken
+  the primary (posterior) calibration signal.
+
+  All 27 originally-scoped families are now registered for `sbc()`.
+
 ## 0.0.229 (2026-08-15)
 
 * **`ms_distance()` and `ms_dyn_occu()` registered for `sbc()`** (gcol33/tulpaObs#220,

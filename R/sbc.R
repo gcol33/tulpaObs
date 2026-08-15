@@ -2620,6 +2620,164 @@
 
 
 # ---------------------------------------------------------------------------
+# 6r. ms_abun() (gcol33/tulpaObs#220, community group): community N-mixture
+# (spAbundance msNMix), the abundance-arm sibling of ms_distance/ms_occu --
+# same "rank a fixed species set" design (theta_s = mu_arm + b_s, species-
+# major), same joint mu/b_s draw (`.tobs_sbc_community_b_draws`, #226 part
+# 1). `model$y` is a plain 3D `[n_sites x max_visits x n_species]` array,
+# structurally identical to ms_occu()'s -- the generic
+# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` pair applies
+# unchanged. `simulate()` reuses the family's own `.tobs_simulate_ms_nmix()`
+# S3 handler (drives `cpp_simulate_ms_nmix`, the SAME kernel `simulate()`
+# elsewhere in the package uses), overwriting `f$ms_community$coef_lambda`/
+# `coef_p`. `loglik_many()` sums each species' own exact N-mixture marginal
+# via `nmix_site_marginal()$eval()` (the SAME closed-form Royle marginal the
+# fitter optimizes), not a hand-rolled likelihood.
+#
+# UNLIKE every other `.tobs_community_em()`-based family here, this family's
+# engine is `tulpa::tulpa_re_aghq()` (a pure-R Newton solve never enters it),
+# and until gcol33/tulpa#398 that engine exposed only the per-term DIAGONAL
+# of a group's posterior covariance (`blup_var`) -- no cross-covariance
+# between a species' lambda (abundance) deviation and its p (detection)
+# deviation, which N-mixture's own lambda/p identifiability ridge makes
+# genuinely nonzero (the same ridge `tobs()`'s penalized-EM exists to break
+# for occupancy psi/p). #398's `blup_cross`/`blup_cov_g` additions expose
+# exactly that (verified against a closed-form joint-Hessian construction on
+# a toy model with deliberately collinear RE terms). Only reachable when the
+# fit ran the AGHQ/joint path (`control = list(optimizer = "joint_fd",
+# n.quad > 1)`) -- the DEFAULT `n.quad = 1` route (`cpp_nmix_community_em()`,
+# a different, faster engine entirely) does not expose Cinv/Bf at all, so
+# `.tobs_sbc_reject_ms_abun_scope()` requires it explicitly rather than
+# silently falling back to an independent (mu, b_s) draw (#226's exact bug).
+# Poisson only for v1 (negbin/zip/zinb add a further per-species RE arm
+# `.tobs_simulate_ms_nmix()` handles but this registration's `theta` layout
+# does not yet carry).
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_reject_ms_abun_scope <- function(fit) {
+  if (!identical(fit$mixture, "poisson")) {
+    stop("SBC on ms_abun() is registered for mixture = \"poisson\" only ",
+         "(negbin/zip/zinb add a further per-species RE arm this ",
+         "registration does not cover). Got mixture = \"", fit$mixture,
+         "\".", call. = FALSE)
+  }
+  if (is.null(fit$ms_community$Cinv) || is.null(fit$ms_community$Bf)) {
+    stop("SBC on ms_abun() needs the joint AGHQ posterior covariance/cross-",
+         "Hessian (fit$ms_community$Cinv/Bf), only available when the fit ",
+         "ran control = list(optimizer = \"joint_fd\", n.quad > 1) ",
+         "(gcol33/tulpa#398). The default n.quad = 1 Laplace-EM ",
+         "(cpp_nmix_community_em()) does not expose the abundance/detection ",
+         "cross-covariance a joint (mu, b_s) draw needs -- refit with a ",
+         "higher n.quad rather than drawing mu and b_s independently.",
+         call. = FALSE)
+  }
+}
+
+# theta column names: `<species>_lambda_<coef>` / `<species>_p_<coef>`, one
+# block of length P per species, species-major.
+.tobs_sbc_ms_abun_names <- function(m) {
+  lam_nm <- m$process_info[[1L]]$coef_names
+  p_nm   <- m$process_info[[2L]]$coef_names
+  par <- c(paste0("lambda_", lam_nm), paste0("p_", p_nm))
+  list(lam = lam_nm, p = p_nm, par = par,
+       cols = as.vector(outer(par, m$species_names,
+                              function(pp, sp) paste0(sp, "_", pp))))
+}
+
+.tobs_sbc_spec_ms_abun <- function(fit, fit.control) {
+  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_ms_abun_scope(fit)
+  m <- fit$model
+  cm <- fit$ms_community
+  # Preserve the ORIGINAL fit's engine choice on refit -- the default
+  # optimizer = "em" (n.quad = 1) does not expose Cinv/Bf at all, so a refit
+  # that silently dropped back to it would break every downstream draw.
+  ctl <- utils::modifyList(.tobs_sbc_default_control(), as.list(fit.control))
+  ctl$optimizer <- cm$optimizer
+  ctl[["n.quad"]] <- cm$n_quad
+  list(model   = m,
+       fit_obs = fit,
+       family  = attr(fit, "tobs_family"),
+       method  = fit$method,
+       control = ctl,
+       lambda  = .tobs_sbc_recombine(m$formulas$lambda, NULL),
+       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
+       mixture = fit$mixture,
+       species = m$species_names)
+}
+
+.tobs_sbc_refit_ms_abun <- function(spec, data) {
+  suppressWarnings(do.call(tobs, list(
+    formula = spec$lambda, data = data$cells,
+    family = ms_abun(mixture = spec$mixture),
+    detection = spec$det, y = data$y, species = spec$species,
+    method = spec$method, control = spec$control)))
+}
+
+.tobs_sbc_draws_ms_abun <- function(fit, n) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_abun_names(m)
+  S <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
+  M <- matrix(NA_real_, n, S * P)
+  for (s in seq_len(S)) {
+    b_hat_s <- c(cm$blup_lambda[s, ], cm$blup_p[s, ])
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
+  }
+  colnames(M) <- nm$cols
+  M
+}
+
+.tobs_sbc_sim_ms_abun <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  nm <- .tobs_sbc_ms_abun_names(m)
+  S <- m$n_species
+  coef_lambda <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_lambda_", nm$lam)]))
+  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
+    theta[paste0(m$species_names[s], "_p_", nm$p)]))
+  dimnames(coef_lambda) <- list(m$species_names, nm$lam)
+  dimnames(coef_p)      <- list(m$species_names, nm$p)
+  f$ms_community$coef_lambda <- coef_lambda
+  f$ms_community$coef_p      <- coef_p
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+.tobs_sbc_loglik_many_ms_abun <- function(fit, Theta) {
+  m <- fit$model
+  nm <- .tobs_sbc_ms_abun_names(m)
+  S <- m$n_species
+  lf <- .tobs_ms_nmix_longform(m)
+  X_lambda <- m$X_processes[[1L]]
+  K_max <- fit$K_max %||% (max(lf$y) + 100L)
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    ll <- 0
+    for (s in seq_len(S)) {
+      beta_lam <- th[paste0(m$species_names[s], "_lambda_", nm$lam)]
+      beta_p   <- th[paste0(m$species_names[s], "_p_",      nm$p)]
+      k  <- lf$species_idx == s
+      Xp <- lf$X_p[k, , drop = FALSE]
+      eta_lam <- as.numeric(X_lambda %*% beta_lam)
+      eta_p   <- as.numeric(Xp %*% beta_p)
+      ev <- nmix_site_marginal(lf$y[k], lf$site_idx[k], X_lambda, Xp,
+                               mixture = "P", K_max = K_max)$eval(eta_lam, eta_p)
+      ll <- ll + ev$log_lik
+    }
+    ll
+  }, numeric(1))
+}
+
+
+# ---------------------------------------------------------------------------
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
@@ -2909,7 +3067,22 @@
     draws       = .tobs_sbc_draws_ms_dyn_occu,
     simulate    = .tobs_sbc_sim_ms_dyn_occu,
     refit       = .tobs_sbc_refit_ms_dyn_occu,
-    loglik_many = .tobs_sbc_loglik_many_ms_dyn_occu)
+    loglik_many = .tobs_sbc_loglik_many_ms_dyn_occu),
+  # ms_abun() (gcol33/tulpaObs#220, community group, section 6r): the
+  # abundance-arm sibling of ms_occu/ms_distance -- see section 6r for why
+  # this family needed a tulpa engine change (gcol33/tulpa#398) before it
+  # could register at all. Poisson only, and only reachable via the AGHQ
+  # engine (control = list(optimizer = "joint_fd", n.quad > 1)); the default
+  # n.quad = 1 Laplace-EM path errors with a pointer rather than drawing an
+  # independent (mu, b_s).
+  ms_abun = list(
+    spec        = .tobs_sbc_spec_ms_abun,
+    data        = .tobs_sbc_data_3d_season,
+    pool        = .tobs_sbc_pool_3d_season,
+    draws       = .tobs_sbc_draws_ms_abun,
+    simulate    = .tobs_sbc_sim_ms_abun,
+    refit       = .tobs_sbc_refit_ms_abun,
+    loglik_many = .tobs_sbc_loglik_many_ms_abun)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
