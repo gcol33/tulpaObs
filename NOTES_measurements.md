@@ -776,3 +776,61 @@ between checks), and not something a tolerance change should paper over --
 `royle_nichols()` has no `nuts` method to sample the exact joint instead, so this
 is a documented limitation of the `laplace`-only backend, not a defect to close
 by code change.
+
+## BYM2 scale factor: Riebler marginal-variance constant (#232)
+
+The constant is `s = geomean(diag(Q^+))` for the intrinsic ICAR precision
+`Q = D - W`, NOT `geomean(non-zero eigenvalues of Q)` -- the two are different
+numbers and the gap grows with the graph. `s` is what `INLA::inla.scale.model()`
+applies. Measured against it (`inla.scale.model(Q, constr = list(A = matrix(1,
+1, n), e = 0))`, factor read off `Qs[1,1] / Q[1,1]`), and against tulpa's
+`compute_bym2_scale()` (unexported, reach it with `getFromNamespace()`), which
+returns the ENGINE-side reciprocal `1 / sqrt(s)`:
+
+| lattice | `.bym2_scale()` | `inla.scale.model` | old eigenvalue mean | `.bym2_engine_scale(s)` vs tulpa |
+|---|---|---|---|---|
+| 5x5   | 0.516386 | 0.516386 | 2.646529 | 1.391595 vs 1.391595 |
+| 10x10 | 0.644879 | 0.644879 | 2.831882 | 1.245263 vs 1.245263 |
+| 20x20 | 0.765027 | 0.765026 | 2.984944 | 1.143304 vs 1.143304 |
+
+The old constant is not the reference under a reciprocal or a square root
+either: `1/sqrt(eigmean)` FALLS with graph size (0.6147 / 0.5942 / 0.5788)
+where `s` RISES (0.5164 / 0.6449 / 0.7650), so the two cross near a 10x10
+lattice. An absolute gap at ONE graph size is therefore not a separating
+property -- `test-bym2-scale.R` asserts the size TREND plus a ratio range,
+after an absolute-gap assertion failed at 10x10 (0.051) while holding at
+5x5 (0.098) and 20x20 (0.186).
+
+**Recovery** (`dev_notes/probe_232_bym2_constant.R`, nmix areal BYM2, 35 cells,
+8 seeds, truth `sigma = 1`, `rho = 0.7`):
+
+| constant | sigma | rho | field cor |
+|---|---|---|---|
+| Riebler `s` | 0.921 (bias -0.079) | 0.595 (bias -0.105) | 0.897 |
+| old eigenvalue mean | 1.429 (bias +0.429) | 0.726 (bias +0.026) | 0.896 |
+
+`sigma` is the decisive axis: the old constant inflated the field SD by 43% and
+did it on 8 seeds out of 8 (per-seed range 1.13-1.91, never once below truth),
+while the corrected one lands within 8% and straddles truth (7 of 8 below, mild
+attenuation). Mechanism: the old constant shrinks the structured block by
+`sqrt(2.773 / 0.605) ~ 2.1`, and the fit buys that back through BOTH `sigma`
+and `rho`.
+
+`rho` is mildly WORSE in the mean under the correct constant (-0.105 vs +0.026)
+and this is not a regression to chase: per-seed `rho` scatters 0.28-0.80 (new)
+and 0.40-0.89 (old) at 35 cells, so the SE over 8 seeds is ~0.065 -- the new
+bias is ~1.6 SE, the old ~0.4 SE, neither decisive at this sample. Correcting
+the scale removes the `sigma` compensation and leaves `rho` carrying its own
+weak identification at this graph size. A `rho` verdict needs more cells, not a
+different constant.
+
+**Field cor is 0.897 vs 0.896** -- identical. Every BYM2 recovery fixture in the
+package asserts field cor, so a green suite is not evidence about this constant
+in either direction. That is why the issue asked for `sigma`/`rho`.
+
+Verified at close: `test-bym2-scale.R` (46/46), `test-nmix-spatial-bym2.R`
+(pass; its one warning is a `K_max` truncation notice on the fixture, unrelated).
+NOT swept: the other ~57 test files mentioning bym2, most of which only exercise
+term parsing or gates. `test-occu-cover-field-sd-units.R` is the one whose name
+says it asserts on the axis this moves; the smoke and full-recovery tiers cover
+the rest.
