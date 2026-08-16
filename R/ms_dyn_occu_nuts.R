@@ -53,35 +53,20 @@
 # `psi1` / `p` are the within-arm coordinate indices (used to slice both mu and
 # each z_s); `gam` / `eps` index within `global`.
 .tobs_ms_dyn_occu_nuts_layout <- function(p_psi1, p_p, p_gam, p_eps, n_species) {
-  P      <- p_psi1 + p_p
-  q_psi1 <- as.integer(p_psi1 * (p_psi1 + 1L) / 2L)
-  q_p    <- as.integer(p_p    * (p_p    + 1L) / 2L)
-  G      <- p_gam + p_eps
-  b_off         <- P
-  chol_psi1_off <- P + n_species * P
-  chol_p_off    <- chol_psi1_off + q_psi1
-  global_off    <- chol_p_off + q_p
-  total <- global_off + G
-  psi1 <- seq_len(p_psi1)
-  p    <- p_psi1 + seq_len(p_p)
-  chol_psi1 <- chol_psi1_off + seq_len(q_psi1)
-  chol_p    <- chol_p_off    + seq_len(q_p)
-  list(
-    P = P, p_psi1 = p_psi1, p_p = p_p, p_gam = p_gam, p_eps = p_eps,
-    n_species = n_species, q_psi1 = q_psi1, q_p = q_p, G = G,
-    psi1 = psi1,
-    p    = p,
-    mu   = seq_len(P),
-    b_off = b_off,
-    chol_psi1 = chol_psi1,
-    chol_p    = chol_p,
-    arms = list(.ms_ocs_arm(psi1, chol_psi1, p_psi1),
-                .ms_ocs_arm(p,    chol_p,    p_p)),
-    global    = global_off + seq_len(G),
-    gam = seq_len(p_gam),
-    eps = p_gam + seq_len(p_eps),
-    global_off = global_off,
-    total = total)
+  G   <- p_gam + p_eps
+  lay <- .ms_ocs_layout(list(list(name = "psi1", width = p_psi1),
+                             list(name = "p",    width = p_p)),
+                        n_species,
+                        trailing = list(list(name = "global", size = G)))
+  c(.ms_ocs_layout_base(lay),
+    list(p_psi1 = p_psi1, p_p = p_p, p_gam = p_gam, p_eps = p_eps,
+         q_psi1 = lay$q[["psi1"]], q_p = lay$q[["p"]], G = G,
+         psi1 = lay$idx$psi1, p = lay$idx$p,
+         chol_psi1 = lay$chol$psi1, chol_p = lay$chol$p,
+         global = lay$trailing$global,
+         gam = seq_len(p_gam),
+         eps = p_gam + seq_len(p_eps),
+         global_off = lay$total - G))
 }
 
 

@@ -42,28 +42,17 @@
 # the per-source detection coefficient count.
 .tobs_ms_int_occu_nuts_layout <- function(P_psi, P_p, n_species) {
   D <- length(P_p)
-  P <- P_psi + sum(P_p)
-  psi <- seq_len(P_psi)
-  p_slices <- vector("list", D); off <- P_psi
-  for (d in seq_len(D)) { p_slices[[d]] <- off + seq_len(P_p[d]); off <- off + P_p[d] }
-
-  b_off <- P
-  q_psi <- .ms_ocs_chol_dim(P_psi)
-  q_p   <- vapply(P_p, .ms_ocs_chol_dim, integer(1))
-  coff  <- P + n_species * P
-  chol_psi <- coff + seq_len(q_psi); coff <- coff + q_psi
-  chol_p   <- vector("list", D)
-  for (d in seq_len(D)) { chol_p[[d]] <- coff + seq_len(q_p[d]); coff <- coff + q_p[d] }
-
-  arms <- c(list(.ms_ocs_arm(psi, chol_psi, P_psi)),
-            lapply(seq_len(D),
-                   function(d) .ms_ocs_arm(p_slices[[d]], chol_p[[d]], P_p[d])))
-
-  list(P = P, P_psi = P_psi, P_p = P_p, D = D, n_species = n_species,
-       psi = psi, p = p_slices, mu = seq_len(P), b_off = b_off,
-       q_psi = q_psi, q_p = q_p, chol_psi = chol_psi, chol_p = chol_p,
-       arms = arms,
-       total = coff)
+  lay <- .ms_ocs_layout(
+    c(list(list(name = "psi", width = P_psi)),
+      lapply(seq_len(D),
+             function(d) list(name = paste0("p", d), width = P_p[d]))),
+    n_species)
+  d_nm <- paste0("p", seq_len(D))
+  c(.ms_ocs_layout_base(lay),
+    list(P_psi = P_psi, P_p = P_p, D = D,
+         psi = lay$idx$psi, p = unname(lay$idx[d_nm]),
+         q_psi = lay$q[["psi"]], q_p = unname(lay$q[d_nm]),
+         chol_psi = lay$chol$psi, chol_p = unname(lay$chol[d_nm])))
 }
 
 

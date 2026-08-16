@@ -47,38 +47,19 @@
 # (its single packed coordinate is log(sigma_log_r)). `lambda` / `p` / `logr` are
 # the within-arm coordinate indices (used to slice both mu and each b_s).
 .tobs_ms_abun_nuts_layout <- function(p_lam, p_p, n_species, is_nb) {
-  P     <- p_lam + p_p + (if (is_nb) 1L else 0L)
-  q_lam <- as.integer(p_lam * (p_lam + 1L) / 2L)
-  q_p   <- as.integer(p_p   * (p_p   + 1L) / 2L)
-  q_logr <- if (is_nb) 1L else 0L
-  b_off        <- P
-  chol_lam_off <- P + n_species * P
-  chol_p_off   <- chol_lam_off + q_lam
-  chol_logr_off <- chol_p_off + q_p
-  total <- chol_logr_off + q_logr
-  lambda <- seq_len(p_lam)
-  p      <- p_lam + seq_len(p_p)
-  logr   <- if (is_nb) p_lam + p_p + 1L else integer(0)
-  chol_lam  <- chol_lam_off + seq_len(q_lam)
-  chol_p    <- chol_p_off   + seq_len(q_p)
-  chol_logr <- if (is_nb) chol_logr_off + seq_len(q_logr) else integer(0)
-  arms <- list(.ms_ocs_arm(lambda, chol_lam, p_lam),
-               .ms_ocs_arm(p,      chol_p,   p_p))
+  arms <- list(list(name = "lambda", width = p_lam),
+               list(name = "p",      width = p_p))
   # The per-species log-size is a one-dimensional community arm.
-  if (is_nb) arms <- c(arms, list(.ms_ocs_arm(logr, chol_logr, 1L)))
-  list(
-    P = P, p_lam = p_lam, p_p = p_p, n_species = n_species, is_nb = isTRUE(is_nb),
-    q_lam = q_lam, q_p = q_p, q_logr = q_logr,
-    lambda = lambda,
-    p      = p,
-    logr   = logr,
-    mu     = seq_len(P),
-    b_off  = b_off,
-    chol_lam  = chol_lam,
-    chol_p    = chol_p,
-    chol_logr = chol_logr,
-    arms      = arms,
-    total = total)
+  if (is_nb) arms <- c(arms, list(list(name = "logr", width = 1L)))
+  lay <- .ms_ocs_layout(arms, n_species)
+  c(.ms_ocs_layout_base(lay),
+    list(p_lam = p_lam, p_p = p_p, is_nb = isTRUE(is_nb),
+         q_lam = lay$q[["lambda"]], q_p = lay$q[["p"]],
+         q_logr = if (is_nb) lay$q[["logr"]] else 0L,
+         lambda = lay$idx$lambda, p = lay$idx$p,
+         logr = if (is_nb) lay$idx$logr else integer(0),
+         chol_lam = lay$chol$lambda, chol_p = lay$chol$p,
+         chol_logr = if (is_nb) lay$chol$logr else integer(0)))
 }
 
 

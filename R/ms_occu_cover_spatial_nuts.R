@@ -507,6 +507,76 @@
   list(idx = idx, chol = chol, p = as.integer(p))
 }
 
+# The block-offset walk every community NUTS layout performs
+# (gcol33/tulpaObs#231). One recipe:
+#
+#   mu [P] | {z_s} species-major [S*P] | per-arm chol blocks, arm order
+#          | trailing family blocks
+#
+# `arms` declares the per-species community arms in packed order, each
+# `list(name, width)`; P is their total width, an arm's `idx` slices both mu and
+# each z_s, and its chol block is the packed log-Cholesky of that arm's
+# community covariance. A one-dimensional arm (a per-species log-size or
+# log-dispersion) is just `width = 1`.
+#
+# `trailing` declares what follows the chol section, each `list(name, size)`.
+# Three shapes are in use and all three are the same declaration: a shared
+# vector (ms_dyn_occu's gamma / eps globals), a shared scalar (ms_occu_cover's
+# log_disp), and a per-species vector (ms_count's gaussian log_phi).
+#
+# Returned slices are named after the declaration (`idx$psi`, `chol$psi`,
+# `trailing$global`); a family aliases those onto whatever its own logpost
+# reads, so this builder never has to know a family's spelling. The family's
+# returned layout carries `.ms_ocs_layout_base()` -- the fields the shared
+# consumers (`.ms_ocs_b_idx`, `.ms_ocs_b_from_z`, the samplers) read -- plus its
+# own aliases, and NOT the construction slices above: `ms_count` already
+# exposes a field called `chol`, so splicing the whole builder in would give
+# `lay$chol` two meanings.
+.ms_ocs_layout <- function(arms, n_species, trailing = list()) {
+  widths <- vapply(arms, function(a) as.integer(a$width), integer(1))
+  nms    <- vapply(arms, function(a) a$name, character(1))
+  P      <- sum(widths)
+
+  idx <- vector("list", length(arms)); off <- 0L
+  for (k in seq_along(arms)) {
+    idx[[k]] <- if (widths[k] > 0L) off + seq_len(widths[k]) else integer(0)
+    off <- off + widths[k]
+  }
+  names(idx) <- nms
+
+  b_off <- P
+  q     <- vapply(widths, .ms_ocs_chol_dim, integer(1))
+  coff  <- P + n_species * P
+  chol  <- vector("list", length(arms))
+  for (k in seq_along(arms)) {
+    chol[[k]] <- if (q[k] > 0L) coff + seq_len(q[k]) else integer(0)
+    coff <- coff + q[k]
+  }
+  names(chol) <- names(q) <- nms
+
+  tail_idx <- vector("list", length(trailing))
+  for (k in seq_along(trailing)) {
+    n_k <- as.integer(trailing[[k]]$size)
+    tail_idx[[k]] <- if (n_k > 0L) coff + seq_len(n_k) else integer(0)
+    coff <- coff + n_k
+  }
+  names(tail_idx) <- vapply(trailing, function(t) t$name, character(1))
+  names(widths) <- nms
+
+  list(P = P, n_species = n_species, mu = seq_len(P), b_off = b_off,
+       widths = widths, q = q,
+       idx = idx, chol = chol, trailing = tail_idx,
+       arms = lapply(seq_along(arms),
+                     function(k) .ms_ocs_arm(idx[[k]], chol[[k]], widths[k])),
+       total = coff)
+}
+
+# The fields of a community NUTS layout the SHARED consumers read, in the order
+# they are declared. A family splices its own aliases onto this.
+.ms_ocs_layout_base <- function(lay) {
+  lay[c("P", "n_species", "mu", "b_off", "arms", "total")]
+}
+
 # Reconstruct the per-species deviation matrix b (S x n_coef) from a packed
 # coordinate vector under the non-centered map b_{s,arm} = C_arm z_{s,arm}.
 # Which arms a family has is the only thing that differs between families, and

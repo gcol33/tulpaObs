@@ -24,33 +24,24 @@
 .tobs_ms_count_nuts_layout <- function(p_beta, n_species, family = "poisson") {
   is_nb    <- identical(family, "negbin")
   is_gauss <- identical(family, "gaussian")
-  q_beta   <- as.integer(p_beta * (p_beta + 1L) / 2L)
-  P        <- p_beta + (if (is_nb) 1L else 0L)
-  b_off         <- P
-  chol_beta_off <- P + n_species * P
-  chol_logr_off <- chol_beta_off + q_beta
-  logphi_off    <- chol_beta_off + q_beta
-  q_logr <- if (is_nb) 1L else 0L
-  n_phi  <- if (is_gauss) n_species else 0L
-  chol_beta <- chol_beta_off + seq_len(q_beta)
-  beta      <- seq_len(p_beta)
-  logr      <- if (is_nb) p_beta + 1L else integer(0)
-  chol_logr <- if (is_nb) chol_logr_off + seq_len(q_logr) else integer(0)
-  arms <- list(.ms_ocs_arm(beta, chol_beta, p_beta))
+  arms <- list(list(name = "beta", width = p_beta))
   # The per-species log-size is a one-dimensional community arm.
-  if (is_nb) arms <- c(arms, list(.ms_ocs_arm(logr, chol_logr, 1L)))
-  list(
-    family = family, is_nb = is_nb, is_gauss = is_gauss,
-    p_beta = p_beta, P = P, n_species = n_species, q_beta = q_beta,
-    beta  = beta,
-    logr  = logr,
-    mu    = seq_len(P), b_off = b_off,
-    chol_beta = chol_beta,
-    chol      = chol_beta,                          # backward-compat alias
-    chol_logr = chol_logr,
-    arms      = arms,
-    logphi    = if (is_gauss) logphi_off + seq_len(n_phi) else integer(0),
-    total = chol_beta_off + q_beta + q_logr + n_phi)
+  if (is_nb) arms <- c(arms, list(list(name = "logr", width = 1L)))
+  # The gaussian per-species log-variances are FREE (no community prior), so
+  # they trail the chol section as a per-species vector rather than an arm.
+  lay <- .ms_ocs_layout(
+    arms, n_species,
+    trailing = list(list(name = "logphi",
+                         size = if (is_gauss) n_species else 0L)))
+  c(.ms_ocs_layout_base(lay),
+    list(family = family, is_nb = is_nb, is_gauss = is_gauss,
+         p_beta = p_beta, q_beta = lay$q[["beta"]],
+         beta = lay$idx$beta,
+         logr = if (is_nb) lay$idx$logr else integer(0),
+         chol_beta = lay$chol$beta,
+         chol      = lay$chol$beta,                 # backward-compat alias
+         chol_logr = if (is_nb) lay$chol$logr else integer(0),
+         logphi    = lay$trailing$logphi))
 }
 
 # Log-Cholesky hyperprior + weakly-informative gaussian log_phi prior scalars.

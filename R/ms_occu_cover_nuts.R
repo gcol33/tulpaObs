@@ -45,29 +45,17 @@
 # with P = p_occ + p_p + p_pos, mu = (mu_occ, mu_p, mu_pos), z_s stacked the same
 # way, and log_disp the single SHARED community log-dispersion coordinate.
 .tobs_ms_occu_cover_nuts_layout <- function(P_occ, P_p, P_pos, n_species) {
-  P <- P_occ + P_p + P_pos
-  occ <- seq_len(P_occ)
-  p   <- P_occ + seq_len(P_p)
-  pos <- P_occ + P_p + seq_len(P_pos)
-
-  b_off <- P
-  q_occ <- .ms_ocs_chol_dim(P_occ)
-  q_p   <- .ms_ocs_chol_dim(P_p)
-  q_pos <- .ms_ocs_chol_dim(P_pos)
-  coff  <- P + n_species * P
-  chol_occ <- coff + seq_len(q_occ); coff <- coff + q_occ
-  chol_p   <- coff + seq_len(q_p);   coff <- coff + q_p
-  chol_pos <- coff + seq_len(q_pos); coff <- coff + q_pos
-  log_disp <- coff + 1L; coff <- coff + 1L
-
-  list(P = P, P_occ = P_occ, P_p = P_p, P_pos = P_pos, n_species = n_species,
-       occ = occ, p = p, pos = pos, mu = seq_len(P), b_off = b_off,
-       q_occ = q_occ, q_p = q_p, q_pos = q_pos,
-       chol_occ = chol_occ, chol_p = chol_p, chol_pos = chol_pos,
-       arms = list(.ms_ocs_arm(occ, chol_occ, P_occ),
-                   .ms_ocs_arm(p,   chol_p,   P_p),
-                   .ms_ocs_arm(pos, chol_pos, P_pos)),
-       log_disp = log_disp, total = coff)
+  lay <- .ms_ocs_layout(list(list(name = "occ", width = P_occ),
+                             list(name = "p",   width = P_p),
+                             list(name = "pos", width = P_pos)),
+                        n_species,
+                        trailing = list(list(name = "log_disp", size = 1L)))
+  c(.ms_ocs_layout_base(lay),
+    list(P_occ = P_occ, P_p = P_p, P_pos = P_pos,
+         occ = lay$idx$occ, p = lay$idx$p, pos = lay$idx$pos,
+         q_occ = lay$q[["occ"]], q_p = lay$q[["p"]], q_pos = lay$q[["pos"]],
+         chol_occ = lay$chol$occ, chol_p = lay$chol$p, chol_pos = lay$chol$pos,
+         log_disp = lay$trailing$log_disp))
 }
 
 

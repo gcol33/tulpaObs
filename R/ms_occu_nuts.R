@@ -44,29 +44,13 @@
 # with P = p_psi + p_p, mu = (mu_psi, mu_p), b_s = (b_psi_s, b_p_s). `psi` / `p`
 # are the within-arm coordinate indices (used to slice both mu and each b_s).
 .tobs_ms_occu_nuts_layout <- function(p_psi, p_p, n_species) {
-  P     <- p_psi + p_p
-  q_psi <- as.integer(p_psi * (p_psi + 1L) / 2L)
-  q_p   <- as.integer(p_p   * (p_p   + 1L) / 2L)
-  b_off        <- P
-  chol_psi_off <- P + n_species * P
-  chol_p_off   <- chol_psi_off + q_psi
-  total <- chol_p_off + q_p
-  psi <- seq_len(p_psi)
-  p   <- p_psi + seq_len(p_p)
-  chol_psi <- chol_psi_off + seq_len(q_psi)
-  chol_p   <- chol_p_off   + seq_len(q_p)
-  list(
-    P = P, p_psi = p_psi, p_p = p_p, n_species = n_species,
-    q_psi = q_psi, q_p = q_p,
-    psi = psi,
-    p   = p,
-    mu  = seq_len(P),
-    b_off = b_off,
-    chol_psi = chol_psi,
-    chol_p   = chol_p,
-    arms = list(.ms_ocs_arm(psi, chol_psi, p_psi),
-                .ms_ocs_arm(p,   chol_p,   p_p)),
-    total = total)
+  lay <- .ms_ocs_layout(list(list(name = "psi", width = p_psi),
+                             list(name = "p",   width = p_p)), n_species)
+  c(.ms_ocs_layout_base(lay),
+    list(p_psi = p_psi, p_p = p_p,
+         q_psi = lay$q[["psi"]], q_p = lay$q[["p"]],
+         psi = lay$idx$psi, p = lay$idx$p,
+         chol_psi = lay$chol$psi, chol_p = lay$chol$p))
 }
 
 
