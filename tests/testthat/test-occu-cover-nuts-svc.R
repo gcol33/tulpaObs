@@ -75,7 +75,7 @@
 .ocsvc_blocks <- function(adj, type, n, weight) {
   one <- function(w) {
     bas <- tulpaObs:::.occu_cover_nuts_field_basis(
-      adj, type, n, if (identical(type, "bym2")) compute_bym2_scale(adj) else NULL)
+      adj, type, n, if (identical(type, "bym2")) .bym2_scale(adj) else NULL)
     e <- list(n_field_units = n, field_map = seq_len(n), field_load = bas$B1,
               field_scale1 = as.integer(bas$scale1),
               field_has_iid = as.integer(bas$has_iid),

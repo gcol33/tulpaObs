@@ -669,7 +669,10 @@
     out$svc_weight <- w_site[site_of_row]
   }
   if (type == "bym2") {
-    out$scale_factor <- as.numeric(spatial$scale_factor %||% 1.0)
+    # A tulpa multi-block prior: the engine multiplies the structured block by
+    # this, where the term carries the Riebler constant (gcol33/tulpaObs#232).
+    out$scale_factor <- if (is.null(spatial$scale_factor)) 1.0 else
+      .bym2_engine_scale(as.numeric(spatial$scale_factor))
     if (!is.null(spatial$sigma_grid)) out$sigma_grid <- spatial$sigma_grid
     if (!is.null(spatial$rho_grid))   out$rho_grid   <- spatial$rho_grid
     if (is.null(out$sigma_grid) && is.null(out$rho_grid)) {

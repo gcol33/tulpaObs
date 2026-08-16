@@ -240,7 +240,7 @@
                             weight = NULL, id = NULL) {
   .tobs_check_graph(graph, "bym2")
   csr <- adjacency_to_csr(graph)
-  if (is.null(scale_factor)) scale_factor <- compute_bym2_scale(graph)
+  if (is.null(scale_factor)) scale_factor <- .bym2_scale(graph)
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
   weight <- .tobs_resolve_field_weight(weight, nrow(graph), "bym2",
                                        per_obs = !is.null(group_var))

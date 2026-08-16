@@ -88,7 +88,7 @@
     sigma <- max(if (is.finite(sigma)) sigma else sqrt(max(tau, 1e-3, na.rm = TRUE)),
                  1e-3)
     rho   <- min(max(if (is.finite(rho)) rho else 0.5, 0.01), 0.99)
-    sf    <- scale_factor %||% compute_bym2_scale(adj)
+    sf    <- scale_factor %||% .bym2_scale(adj)
     Lstr  <- .tobs_field_load(adj, "icar", 1, 1, n)      # centred ICAR basis
     a <- sigma * sqrt(rho / sf); b <- sigma * sqrt(1 - rho)
     L <- cbind(a * Lstr, b * diag(n))                    # [structured | iid]
@@ -680,7 +680,7 @@
   adj <- if (!is.null(spatial$graph)) as.matrix(spatial$graph) else
     stop(sprintf("%s() spatial term must carry an adjacency graph.", family), call. = FALSE)
   if (identical(spatial$type, "bym2")) {
-    sf <- spatial$scale_factor %||% compute_bym2_scale(spatial$graph)
+    sf <- spatial$scale_factor %||% .bym2_scale(spatial$graph)
     .areal_field_bym2(adj, sf, map, spatial$n_units)
   } else {
     .areal_field_car(adj, if (identical(spatial$type, "icar")) "icar" else "car_proper",

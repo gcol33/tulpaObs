@@ -1189,7 +1189,12 @@ build_spatial_params <- function(spatial, n_sites) {
     params$n_neighbors <- spatial$n_neighbors
     params$spatial_shared_occ <- spatial$shared[1]
     params$spatial_shared_det <- spatial$shared[2]
-    if (spatial$type == "bym2") params$scale_factor <- spatial$scale_factor
+    # The compiled sampler is tulpa's, and its `scale_factor` multiplies the
+    # structured block (`sigma * sqrt(rho) * scale_factor`), where the term
+    # carries the Riebler constant itself -- gcol33/tulpaObs#232.
+    if (spatial$type == "bym2") {
+      params$scale_factor <- .bym2_engine_scale(spatial$scale_factor)
+    }
 
   } else if (spatial$type == "gp") {
     if (spatial$n_obs != n_sites) {

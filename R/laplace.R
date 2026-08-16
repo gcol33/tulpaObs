@@ -352,8 +352,13 @@
 
     # Grid-weighted posterior mean of this block's field slice, demeaned. For a
     # bym2 block the mode slice is (phi | theta) of width 2 * n_units; the unit
-    # field is the rho-mixed reconstruction z = sqrt(rho / scale) * phi +
-    # sqrt(1 - rho) * theta (Riebler 2016), averaged over the grid.
+    # field is the rho-mixed reconstruction z = sqrt(rho) * scale * phi +
+    # sqrt(1 - rho) * theta (Riebler 2016), averaged over the grid. `scale` is
+    # the block's own `scale_factor`, which is the ENGINE's spelling of the
+    # loading (1 / sqrt(s)) because the engine is what produced these modes --
+    # reconstructing with a different spelling than the block was loaded with
+    # rescales the structured component against the unstructured one
+    # (gcol33/tulpaObs#232).
     if (is_bym2) {
       rho_col <- match(sprintf("b%d.rho", b), tg_names)
       if (is.na(rho_col)) rho_col <- match("rho", tg_names)
@@ -364,7 +369,7 @@
         rho <- as.numeric(tg[, rho_col])
         fld <- numeric(n_units)
         for (g in seq_len(nrow(modes))) {
-          zg <- sqrt(rho[g] / scale_f) * modes[g, phi_cols] +
+          zg <- sqrt(rho[g]) * scale_f * modes[g, phi_cols] +
                 sqrt(1 - rho[g])       * modes[g, theta_cols]
           fld <- fld + w[g] * zg
         }

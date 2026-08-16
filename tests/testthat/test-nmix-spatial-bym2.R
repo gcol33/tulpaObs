@@ -47,8 +47,12 @@ simulate_nmix_bym2 <- function(seed,
   }
   Q <- diag(as.numeric(adj$n_neighbors)) - W
   eig <- eigen(Q, symmetric = TRUE)
-  nz_vals <- eig$values[abs(eig$values) > 1e-10]
-  scale_factor <- exp(mean(log(nz_vals)))
+  # The package's own Riebler constant, so the fixture simulates from the model
+  # the fitter fits. This used to be the geometric mean of the EIGENVALUES,
+  # matching what the fitter then used -- self-consistent, but at a
+  # `sigma_true` / `rho_true` that did not mean the geometric-mean marginal SD
+  # and the structured variance share they are named for (gcol33/tulpaObs#232).
+  scale_factor <- .bym2_scale_from_Q(Q)
 
   # Draw v from scaled ICAR (sum-to-zero), w from N(0, I).
   # Pseudo-inverse via spectral decomposition.

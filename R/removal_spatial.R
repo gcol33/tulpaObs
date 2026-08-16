@@ -246,7 +246,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     car_proper = do.call(removal_laplace_car_proper, common),
     bym2       = do.call(removal_laplace_bym2, c(common,
                    list(scale_factor = spatial$scale_factor %||%
-                          compute_bym2_scale(spatial$graph)))))
+                          .bym2_scale(spatial$graph)))))
   build_nmix_fit(raw, model, spatial = spatial)
 }
 
@@ -437,7 +437,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
       car_proper = do.call(removal_laplace_car_proper, common),
       bym2       = do.call(removal_laplace_bym2, c(common,
                      list(scale_factor = spatial$scale_factor %||%
-                            compute_bym2_scale(spatial$graph)))))
+                            .bym2_scale(spatial$graph)))))
     fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
                                    tau = nl$tau_mean, rho = nl$rho_mean,
                                    sigma = nl$sigma_mean,

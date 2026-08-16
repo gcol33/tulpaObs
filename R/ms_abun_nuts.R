@@ -496,7 +496,7 @@
                          c(warm_common, list(graph = spatial$graph))),
     bym2       = do.call(nmix_community_laplace_bym2,
                          c(warm_common, list(scale_factor = spatial$scale_factor %||%
-                             compute_bym2_scale(spatial$graph)))))
+                             .bym2_scale(spatial$graph)))))
   hg <- function(k) { h <- nl$hyper[[k]]; if (is.null(h)) NA_real_ else as.numeric(h[["mean"]]) }
   fl <- .tobs_nuts_field_loading(as.matrix(spatial$graph), spatial$type, n_sites,
                                  tau = hg("tau"), rho = hg("rho"), sigma = hg("sigma"),

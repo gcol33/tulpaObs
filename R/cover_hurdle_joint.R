@@ -414,7 +414,11 @@
                       KEEP.OUT.ATTRS = FALSE)
     block$sigma_grid   <- .tobs_mark_auto(gr$sigma, sigma_auto)
     block$rho_grid     <- .tobs_mark_auto(gr$rho, rho_auto)
-    block$scale_factor <- compute_bym2_scale(graph)
+    # The joint nested-Laplace engine is tulpa's: its `scale_factor` MULTIPLIES
+    # the structured block, so it takes 1 / sqrt(s) (gcol33/tulpaObs#232). The
+    # draw substrate and the SLA reconstruction read this same stored value
+    # back and mirror the engine's spelling, so they need no conversion.
+    block$scale_factor <- .bym2_engine_scale(.bym2_scale(graph))
   } else {
     stop(sprintf(paste0(
       "cover() arm-specific field (%s): areal type '%s' is not supported. ",

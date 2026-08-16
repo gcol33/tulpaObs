@@ -827,18 +827,6 @@
 # BYM2 field solve (generic over the family working weights)
 # ---------------------------------------------------------------------------
 
-# Riebler BYM2 scale factor: the geometric mean of the marginal variances of the
-# intrinsic ICAR field (its generalised-inverse diagonal), so a unit-scale
-# structured component v has geometric-mean marginal variance 1 and rho is
-# interpretable as the structured share.
-.tobs_latent_bym2_scale <- function(Qic) {
-  e   <- eigen(as.matrix(Qic), symmetric = TRUE)
-  pos <- e$values > max(e$values) * 1e-10
-  vdiag <- rowSums((e$vectors[, pos, drop = FALSE]^2) %*%
-                   diag(1 / e$values[pos], sum(pos)))
-  exp(mean(log(pmax(vdiag, 1e-12))))
-}
-
 # BYM2 field update (one shared field). The combined field phi = a v + b u enters
 # eta, with v ~ ICAR (unit precision, sum-to-zero) the structured part and
 # u ~ N(0, I) the unstructured part; a = sigma sqrt(rho/scale),
@@ -1230,7 +1218,7 @@
       Ffield <- matrix(0, geom$n_nodes, geom$K); tau <- rep(1, geom$K)
       if (is_bym2) {
         Qic       <- Dg - Wadj
-        bym_scale <- .tobs_latent_bym2_scale(Qic)
+        bym_scale <- .bym2_scale_from_Q(Qic)
         bym_v <- numeric(Ns); bym_u <- numeric(Ns)
         bym_sigma_grid <- c(0.3, 0.6, 1.0, 1.6)
         bym_rho_grid   <- c(0.25, 0.5, 0.75, 0.9)

@@ -1063,7 +1063,7 @@
   Lstr <- .tobs_field_load(adj, "icar", 1, 1, n)
   if (identical(type, "bym2"))
     return(list(B1 = Lstr, scale1 = .OCHF_BYM2_STR, has_iid = TRUE,
-                sf = scale_factor %||% compute_bym2_scale(adj),
+                sf = scale_factor %||% .bym2_scale(adj),
                 lambda = numeric(0)))
   list(B1 = Lstr, scale1 = .OCHF_CONST, has_iid = FALSE, sf = 1,
        lambda = numeric(0))

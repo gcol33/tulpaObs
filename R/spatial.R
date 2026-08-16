@@ -56,52 +56,108 @@ csr_to_adjacency <- function(csr, n) {
   }, numeric(1))
 }
 
-# BYM2 scaling factor: geometric mean of the non-zero generalized eigenvalues
-# of the ICAR precision, so the mixing parameter has a graph-independent
-# interpretation (Riebler et al. 2016).
+# BYM2 scaling factor s: the geometric mean of the MARGINAL VARIANCES of the
+# intrinsic ICAR field, i.e. of diag(Q^+) for the unit-precision ICAR precision
+# Q = D - W (Riebler et al. 2016, section 3.2). Dividing the structured
+# component by sqrt(s) puts it on unit geometric-mean marginal variance, which
+# is what makes the mixing weight rho mean "the structured share of the
+# variance" independently of the graph, and what makes it comparable across
+# implementations.
 #
-# Q = D - W is positive semi-definite with one null direction per connected
-# component, so the filter is a NUMERICAL-ZERO test, not a sign test: the null
+# This is the constant `INLA::inla.scale.model()` applies: it returns s * Q, the
+# precision whose generalised inverse has geometric-mean diagonal 1. Verified
+# against it directly on square lattices (gcol33/tulpaObs#232) --
+#
+#   lattice     inla.scale.model     .bym2_scale()
+#   5x5              0.516386             0.516386
+#   10x10            0.644879             0.644879
+#   20x20            0.765026             0.765027
+#
+# -- and NOT the geometric mean of the eigenvalues of Q, which this function
+# used to return (2.646529 / 2.831882 / 2.984944 on the same three graphs) and
+# which no reciprocal or square root of maps onto the reference.
+#
+# The engine and the R paths spell the loading differently; `.bym2_engine_scale()`
+# below is the boundary between the two conventions.
+#
+# Q is positive semi-definite with one null direction per connected component,
+# so the eigenvalue filter is a NUMERICAL-ZERO test, not a sign test: the null
 # eigenvalues come back at roundoff scale with either sign, and everything
-# surviving the test belongs in the geometric mean. An eigenvalue that survives
-# it and is still negative says the matrix handed in is not an ICAR precision,
-# and it errors here rather than reaching log() and sending NaN on into the BYM2
-# mixing weight. 1e-10 is the historical floor; the n * eps * max|lambda| term is
-# the scale the roundoff-zero eigenvalues actually sit at, and overtakes the
-# floor only on graphs far larger than the floor was picked for.
-compute_bym2_scale <- function(adj) {
-  n <- nrow(adj)
-  Q <- diag(rowSums(adj)) - adj
-  evals <- eigen(Q, symmetric = TRUE, only.values = TRUE)$values
-  tol <- max(1e-10, n * .Machine$double.eps * max(abs(evals)))
-  nz <- evals[abs(evals) > tol]
-  if (!length(nz)) {
+# surviving the test carries a real marginal variance. An eigenvalue that
+# survives it and is still negative says the matrix handed in is not an ICAR
+# precision, and it errors here rather than reaching log() and sending NaN on
+# into the BYM2 mixing weight. 1e-10 is the historical floor; the
+# n * eps * max|lambda| term is the scale the roundoff-zero eigenvalues actually
+# sit at, and overtakes the floor only on graphs far larger than the floor was
+# picked for.
+.bym2_scale <- function(adj) {
+  .bym2_scale_from_Q(diag(rowSums(adj)) - adj)
+}
+
+# The same constant from the ICAR precision directly, for the callers that
+# already hold Q rather than the adjacency.
+.bym2_scale_from_Q <- function(Q) {
+  Q <- as.matrix(Q)
+  n <- nrow(Q)
+  e <- eigen(Q, symmetric = TRUE)
+  tol <- max(1e-10, n * .Machine$double.eps * max(abs(e$values)))
+  keep <- abs(e$values) > tol
+  if (!any(keep)) {
     stop("ICAR precision has no non-zero eigenvalues (the graph carries no ",
          "edges); the BYM2 scale factor is undefined for it.", call. = FALSE)
   }
-  if (any(nz < 0)) {
+  if (any(e$values[keep] < 0)) {
     stop(sprintf(paste0(
       "ICAR precision has a negative eigenvalue (%.3e) past the numerical-zero ",
       "tolerance (%.3e); the BYM2 scale factor is undefined for it. The ",
       "adjacency matrix must be symmetric 0/1 with a zero diagonal."),
-      min(nz), tol), call. = FALSE)
+      min(e$values[keep]), tol), call. = FALSE)
   }
-  exp(mean(log(nz)))
+  # diag(Q^+), assembled from the surviving spectrum. A node that sits in the
+  # null space contributes a zero marginal variance -- it carries no ICAR prior
+  # at all -- and the geometric mean over the graph is then zero, so this is an
+  # error rather than a floored value that would surface as a huge loading.
+  V <- e$vectors[, keep, drop = FALSE]
+  vdiag <- as.numeric((V^2) %*% (1 / e$values[keep]))
+  if (any(vdiag <= tol)) {
+    stop(sprintf(paste0(
+      "%d graph node(s) have zero marginal variance under the ICAR prior (they ",
+      "are isolated -- no neighbours); the BYM2 scale factor is undefined for ",
+      "such a graph. Drop them or connect them."), sum(vdiag <= tol)),
+      call. = FALSE)
+  }
+  exp(mean(log(vdiag)))
 }
 
 # Same constant for the fitters that carry only the compressed graph.
-compute_bym2_scale_csr <- function(row_ptr, col_idx, n) {
-  compute_bym2_scale(
+.bym2_scale_csr <- function(row_ptr, col_idx, n) {
+  .bym2_scale(
     csr_to_adjacency(list(row_ptr = row_ptr, col_idx = col_idx), n))
 }
+
+# The BYM2 loading, in the two spellings that are live (gcol33/tulpaObs#232).
+#
+# The structured block is always built from the UNSCALED ICAR precision, so its
+# realization v has covariance Q^+ and geometric-mean marginal variance s. To
+# put the field on unit geometric-mean marginal variance the structured
+# component has to be loaded at sigma * sqrt(rho / s).
+#
+# That is what tulpaObs's own R paths and its own C++ kernels write, so they
+# take `s` and divide. The tulpa engine instead writes
+# `sigma * sqrt(rho) * scale_factor` (src/latent_block.h states it as the block
+# contract), so its `scale_factor` argument means 1 / sqrt(s). Both spellings
+# describe the same loading; only the argument differs, and this is the one
+# place the conversion happens, so a call site's convention is visible at the
+# call rather than inferred from which kernel it reaches.
+.bym2_engine_scale <- function(s) 1 / sqrt(s)
 
 # Resolve the scale factor at an areal-BYM2 fitter door: compute it from the
 # graph when the caller left it out, validate whatever came in. Both count
 # fitters (nmix, removal) go through here, so a missing argument means the same
-# thing at each door.
+# thing at each door. Returns `s` -- these doors reach tulpaObs's own kernels.
 .bym2_resolve_scale <- function(scale_factor, row_ptr, col_idx, n) {
   if (is.null(scale_factor)) {
-    scale_factor <- compute_bym2_scale_csr(row_ptr, col_idx, n)
+    scale_factor <- .bym2_scale_csr(row_ptr, col_idx, n)
   }
   if (!is.numeric(scale_factor) || length(scale_factor) != 1L ||
       !is.finite(scale_factor) || scale_factor <= 0) {

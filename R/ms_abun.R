@@ -300,7 +300,7 @@
                          c(common, list(graph = spatial$graph))),
     bym2 = do.call(nmix_community_laplace_bym2,
                    c(common, list(scale_factor = spatial$scale_factor %||%
-                                    compute_bym2_scale(spatial$graph))))
+                                    .bym2_scale(spatial$graph))))
   )
   build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial)
 }

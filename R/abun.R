@@ -300,7 +300,7 @@
     K_max = K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
     verbose = isTRUE(verbose)
   )
-  scale_factor <- spatial$scale_factor %||% compute_bym2_scale(spatial$graph)
+  scale_factor <- spatial$scale_factor %||% .bym2_scale(spatial$graph)
   switch(
     spatial$type,
     icar = do.call(nmix_laplace_icar, common),

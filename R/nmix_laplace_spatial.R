@@ -262,10 +262,11 @@ nmix_laplace_car_proper <- function(y,
 #' 2016) prior on the abundance-arm spatial offset. The offset decomposes as
 #' \deqn{\phi_u = \sigma \left(\sqrt{\rho / s} \, v_u + \sqrt{1 - \rho} \, w_u\right),}
 #' with \eqn{v \sim \mathrm{ICAR}} (unscaled, sum-to-zero) and
-#' \eqn{w \sim \mathrm{N}(0, I)} iid. \eqn{s} is the geometric mean of the
-#' non-zero eigenvalues of the ICAR precision \eqn{Q} (the Riebler scaling
-#' factor); \eqn{\sigma} is then the joint marginal standard deviation of
-#' \eqn{\phi}, and \eqn{\rho \in [0, 1]} is the spatial fraction of variance.
+#' \eqn{w \sim \mathrm{N}(0, I)} iid. \eqn{s} is the Riebler scaling factor,
+#' the geometric mean of the marginal variances \eqn{\mathrm{diag}(Q^{+})} of
+#' the intrinsic ICAR field; \eqn{\sigma} is then the joint marginal standard
+#' deviation of \eqn{\phi}, and \eqn{\rho \in [0, 1]} is the spatial fraction
+#' of variance.
 #'
 #' The inner Newton works in the joint state
 #' \eqn{x = (\beta_\lambda, \beta_p, v, w)} (dimension
@@ -281,9 +282,10 @@ nmix_laplace_car_proper <- function(y,
 #'   Defaults to `exp(seq(log(0.2), log(3), length.out = 5L))`.
 #' @param rho_grid Numeric vector of spatial-fraction grid points in
 #'   \eqn{[0, 1]}. Defaults to `c(0.05, 0.3, 0.5, 0.7, 0.95)`.
-#' @param scale_factor Optional scalar Riebler scaling factor (geometric mean
-#'   of non-zero eigenvalues of \eqn{Q}). If `NULL`, it is computed from the
-#'   adjacency via dense eigendecomposition.
+#' @param scale_factor Optional scalar Riebler scaling factor \eqn{s}, the
+#'   geometric mean of the marginal variances \eqn{\mathrm{diag}(Q^{+})} of the
+#'   intrinsic ICAR field. If `NULL`, it is computed from the adjacency via
+#'   dense eigendecomposition.
 #' @param v_init,w_init Optional warm starts (each length `n_spatial`) for the
 #'   two BYM2 latent components -- the structured (spatial) and unstructured
 #'   (iid) effects. `NULL` (default) starts both at zero.

@@ -268,7 +268,7 @@
     car_proper = do.call(nmix_laplace_car_proper, common),
     bym2       = do.call(nmix_laplace_bym2, c(common,
                    list(scale_factor = spatial$scale_factor %||%
-                          compute_bym2_scale(spatial$graph)))))
+                          .bym2_scale(spatial$graph)))))
 
   # Whitened-field loading + fixed hyper (shared single source of truth, #71/#113).
   fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,

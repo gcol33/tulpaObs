@@ -21,7 +21,7 @@
 #'
 #' \code{icar(graph)}, \code{bym2(graph, scale_factor)}, \code{car(graph)} and
 #' \code{car_proper(graph)} put a field over the nodes of a symmetric adjacency
-#' matrix \code{graph}. \code{bym2()} computes its \code{scale_factor} from the
+#' matrix \code{graph}. \code{bym2()} computes its Riebler \code{scale_factor} from the
 #' graph when it is not supplied. All four accept:
 #'
 #' \describe{
