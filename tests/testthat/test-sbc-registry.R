@@ -341,69 +341,20 @@ test_that("the roster in the error message names what is registered", {
 # uses, letting the generic checks below read one name per reported
 # coefficient regardless of family. A COMMUNITY family's fit$means is the
 # community MEAN alone (P-length), never what its own SBC design ranks --
-# ms_occu_cover's theta is the per-species REALIZED coefficient (mu + b_s,
-# S x P, species-major), so it must be checked BEFORE the fit$means
-# short-circuit below or it silently returns the wrong (right-sized-for-the-
-# wrong-quantity) vector.
+# a community family's theta is the per-species REALIZED coefficient (mu + b_s,
+# S x P, species-major) plus any shared blocks, so it must be checked BEFORE
+# the fit$means short-circuit below or it silently returns the wrong
+# (right-sized-for-the-wrong-quantity) vector. The registry entry exposes the
+# layout, so this reads it rather than restating each family's arm list.
 .sbc_reg_means <- function(fit) {
-  if (identical(attr(fit, "tobs_family")$name, "ms_count") ||
-      identical(attr(fit, "tobs_family")$name, "jsdm")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_count_names(m)
+  fam   <- attr(fit, "tobs_family")$name
+  entry <- tulpaObs:::.TOBS_SBC_REGISTRY[[fam]]
+  if (!is.null(entry$names)) {
+    nm <- entry$names(fit$model)
     cm <- fit$ms_community
-    theta <- as.vector(t(cm$coef_mu))
-    names(theta) <- nm$cols
-    return(theta)
-  }
-  if (identical(attr(fit, "tobs_family")$name, "ms_int_occu")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_int_occu_names(m)
-    cm <- fit$ms_community
-    D <- m$n_sources
-    theta <- as.vector(t(cbind(cm$coef_psi,
-      do.call(cbind, lapply(seq_len(D), function(d) cm[[paste0("coef_p", d)]])))))
-    names(theta) <- nm$cols
-    return(theta)
-  }
-  if (identical(attr(fit, "tobs_family")$name, "ms_occu")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_occu_names(m)
-    cm <- fit$ms_community
-    theta <- as.vector(t(cbind(cm$coef_psi, cm$coef_p)))
-    names(theta) <- nm$cols
-    return(theta)
-  }
-  if (identical(attr(fit, "tobs_family")$name, "ms_distance")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_distance_names(m)
-    cm <- fit$ms_community
-    theta <- as.vector(t(cbind(cm$coef_lambda, cm$coef_sigma)))
-    names(theta) <- nm$cols
-    return(theta)
-  }
-  if (identical(attr(fit, "tobs_family")$name, "ms_abun")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_abun_names(m)
-    cm <- fit$ms_community
-    theta <- as.vector(t(cbind(cm$coef_lambda, cm$coef_p)))
-    names(theta) <- nm$cols
-    return(theta)
-  }
-  if (identical(attr(fit, "tobs_family")$name, "ms_dyn_occu")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_dyn_occu_names(m)
-    cm <- fit$ms_community
-    sp_theta <- as.vector(t(cbind(cm$coef_psi1, cm$coef_p)))
-    vals <- c(sp_theta, fit$means[nm$global_cols])
-    names(vals) <- nm$cols
-    return(vals)
-  }
-  if (identical(attr(fit, "tobs_family")$name, "ms_occu_cover")) {
-    m <- fit$model
-    nm <- tulpaObs:::.tobs_sbc_ms_occu_cover_names(m)
-    cm <- fit$ms_community
-    theta <- as.vector(t(cbind(cm$coef_occ, cm$coef_p, cm$coef_pos)))
-    vals <- c(theta, fit$means[[length(fit$means)]])
+    theta <- as.vector(t(do.call(
+      cbind, lapply(nm$arms, function(a) cm[[a$coef]]))))
+    vals <- c(theta, fit$means[nm$global_cols])
     names(vals) <- nm$cols
     return(vals)
   }

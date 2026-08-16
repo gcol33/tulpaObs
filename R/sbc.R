@@ -643,6 +643,201 @@
 
 
 # ---------------------------------------------------------------------------
+# 6a-bis. The community group's shared draws / simulate / loglik_many
+# (gcol33/tulpaObs#230)
+#
+# Seven families rank a fixed species set to one design: theta carries one
+# block of length P per species, species-major, with theta_s = mu + b_s,
+# followed by any SHARED coordinates that carry no per-species deviation. The
+# three functions over that layout were written out seven times, differing only
+# in per-arm bookkeeping. The cost of that is on the record: the #226 fix (mu
+# and b_s are not independent in the posterior, so they draw jointly) is a few
+# lines inside `.tobs_sbc_community_b_draws()`, but landing it meant editing
+# all seven copies, with nothing to guarantee the seventh got it.
+#
+# An ARM is one per-species coefficient block: `name` (what the family's kernel
+# calls it), `prefix` (its theta-column prefix), `pi` (its slot in
+# `model$process_info`, where the coefficient names live), `blup` and `coef`
+# (its `fit$ms_community` slots -- the BLUP the draw centres on, and the
+# coefficient matrix `simulate()` overwrites). Prefix and slot are independent:
+# `ms_occu_cover`'s first arm is written `psi_` in theta and `occ` in
+# `ms_community`.
+#
+# A GLOBAL is a shared block with no per-species deviation: `ms_dyn_occu`'s
+# gamma / eps transition coefficients, `ms_occu_cover`'s cover-arm dispersion.
+# Its columns sit after every species block, are copied straight off the
+# community draw, and are written back onto `fit$means` by name. The dispersion
+# is the one whose column name is not a prefix + coefficient-name product, so a
+# global names its columns with a function of the model rather than a slot.
+# ---------------------------------------------------------------------------
+
+.tobs_sbc_arm <- function(name, prefix, pi, blup = paste0("blup_", name),
+                          coef = paste0("coef_", name)) {
+  list(name = name, prefix = prefix, pi = pi, blup = blup, coef = coef)
+}
+
+# A shared block whose columns are `prefix` + the coefficient names at
+# `process_info[[pi]]`.
+.tobs_sbc_global <- function(name, prefix, pi) {
+  list(name = name,
+       cols = function(m) paste0(prefix, m$process_info[[pi]]$coef_names))
+}
+
+# A shared block naming its own columns (the cover-arm dispersion, whose name
+# depends on the positive family rather than on a design).
+.tobs_sbc_global_named <- function(name, cols) list(name = name, cols = cols)
+
+# An arm / global list may be a plain list or a function of the model, since
+# `ms_int_occu`'s detection arms are one per source.
+.tobs_sbc_resolve_blocks <- function(x, m) if (is.function(x)) x(m) else x
+
+# Theta column names + the per-arm coefficient names every community generic
+# below reads. Species-major over the arms, then the globals.
+.tobs_sbc_community_names <- function(m, arms, globals) {
+  arms  <- .tobs_sbc_resolve_blocks(arms, m)
+  coefs <- lapply(arms, function(a) m$process_info[[a$pi]]$coef_names)
+  par   <- unlist(lapply(seq_along(arms),
+                         function(k) paste0(arms[[k]]$prefix, coefs[[k]])),
+                  use.names = FALSE)
+  sp_cols <- as.vector(outer(par, m$species_names,
+                             function(p, sp) paste0(sp, "_", p)))
+  globals <- .tobs_sbc_resolve_blocks(globals, m)
+  gcols   <- lapply(globals, function(g) g$cols(m))
+  names(gcols) <- vapply(globals, `[[`, character(1), "name")
+  list(arms = arms, coefs = coefs, par = par, sp_cols = sp_cols,
+       globals = globals, gcols = gcols,
+       global_cols = unlist(gcols, use.names = FALSE) %||% character(0),
+       cols = c(sp_cols, unlist(gcols, use.names = FALSE)))
+}
+
+# Species s's coefficients out of one theta row, as a list keyed by arm name.
+.tobs_sbc_community_beta <- function(th, nm, m, s) {
+  sp <- m$species_names[s]
+  out <- lapply(seq_along(nm$arms), function(k)
+    th[paste0(sp, "_", nm$arms[[k]]$prefix, nm$coefs[[k]])])
+  names(out) <- vapply(nm$arms, `[[`, character(1), "name")
+  out
+}
+
+# The shared blocks out of one theta row, keyed by global name. Unnamed: a
+# kernel multiplies these into a design, and a stray name would ride out on the
+# scalar `loglik_many` returns.
+.tobs_sbc_community_globals <- function(th, nm) {
+  lapply(nm$gcols, function(cols) unname(th[cols]))
+}
+
+# The community posterior draw: each species' block is the community mean draw
+# plus that species' deviation, drawn JOINTLY with it
+# (gcol33/tulpaObs#226 -- see .tobs_sbc_community_b_draws), and each shared
+# block is copied straight off the same draw.
+.tobs_sbc_draws_community <- function(fit, n, nm) {
+  m  <- fit$model
+  S  <- m$n_species; P <- length(nm$par)
+  cm <- fit$ms_community
+  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)  # n x (P + globals)
+  # The draw inherits its column names from `fit$vcov`'s dimnames; a shared
+  # block is read off it by NAME, so name them here rather than rely on that.
+  if (is.null(colnames(mu_draws))) colnames(mu_draws) <- names(fit$means)
+  mu_arm <- mu_draws[, seq_len(P), drop = FALSE]
+  M <- matrix(NA_real_, n, length(nm$cols)); colnames(M) <- nm$cols
+  for (s in seq_len(S)) {
+    b_hat_s <- unlist(lapply(nm$arms, function(a) cm[[a$blup]][s, ]),
+                      use.names = FALSE)
+    # `Bf[[s]]` spans the FULL (mu, globals) vector, not just the RE arms: the
+    # community EM's Newton solve treats a shared block as jointly informative
+    # about each species' deviation even where it carries no RE of its own, so
+    # the draw conditions on all of `mu_draws`.
+    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
+                                           cm$Bf[[s]], cm$Cinv[[s]], n)
+    M[, (s - 1L) * P + seq_len(P)] <- mu_arm + b_draws
+  }
+  if (length(nm$global_cols)) {
+    M[, nm$global_cols] <- mu_draws[, nm$global_cols]
+  }
+  M
+}
+
+# The replicate at one theta row: write each arm's [S x p] coefficient matrix
+# and each shared block back onto the fit, then let the family's own
+# `simulate()` handler draw the response.
+.tobs_sbc_sim_community <- function(spec, theta, seed, nm, y_pos = FALSE) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  m <- f$model
+  S <- m$n_species
+  for (k in seq_along(nm$arms)) {
+    a <- nm$arms[[k]]; cn <- nm$coefs[[k]]
+    # do.call(rbind, lapply(...)), not t(vapply(...)) -- vapply collapses a
+    # length-1 per-species result (a single detection coefficient, e.g.
+    # `detection = ~ 1`) to a plain vector, and t() of that transposes the
+    # wrong axis (1 x S instead of S x 1).
+    B <- do.call(rbind, lapply(seq_len(S), function(s)
+      theta[paste0(m$species_names[s], "_", a$prefix, cn)]))
+    dimnames(B) <- list(m$species_names, cn)
+    f$ms_community[[a$coef]] <- B
+  }
+  if (length(nm$global_cols)) {
+    f$means[nm$global_cols] <- theta[nm$global_cols]
+  }
+  rep <- stats::simulate(f, nsim = 1L)
+  obs <- spec$data_obs
+  list(cells  = obs$cells,
+       y      = if (y_pos) rep$y else rep,
+       y_pos  = if (y_pos) rep$y_pos else NULL,
+       visits = NULL, graph = NULL, site = obs$site)
+}
+
+# The exact marginal log-likelihood at each row of `Theta`, summed over
+# species. `ll` is the family's own per-species kernel -- the one thing that
+# genuinely differs; `setup` builds whatever it needs once per call (species
+# views, a distance engine, a long-form response), and `row` whatever depends
+# on the shared blocks alone, once per row rather than once per species.
+.tobs_sbc_loglik_many_community <- function(fit, Theta, nm, ll,
+                                            setup = NULL, row = NULL) {
+  m   <- fit$model
+  S   <- m$n_species
+  aux <- if (is.null(setup)) NULL else setup(fit)
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    gl <- .tobs_sbc_community_globals(th, nm)
+    rw <- if (is.null(row)) NULL else row(m, gl, aux)
+    total <- 0
+    for (s in seq_len(S)) {
+      total <- total + ll(m, s, .tobs_sbc_community_beta(th, nm, m, s),
+                          gl, aux, rw)
+    }
+    total
+  }, numeric(1))
+}
+
+# One community registry row. `arms` / `globals` declare the layout; `ll`
+# (+ optional `setup` / `row`) the family's kernel; `y_pos` says the family's
+# `simulate()` returns both response arrays. `spec` / `data` / `pool` / `refit`
+# stay the family's own -- what a community family constructs and how it pools
+# is not shared, and was never claimed to be.
+.tobs_sbc_community_entry <- function(arms, ll, spec, data, refit,
+                                      globals = list(), setup = NULL,
+                                      row = NULL, pool = NULL, y_pos = FALSE) {
+  nmf <- function(m) .tobs_sbc_community_names(m, arms, globals)
+  entry <- list(
+    spec     = spec,
+    data     = data,
+    # The resolved theta layout, exposed so a consumer can read the family's
+    # ranked quantity off `ms_community` without restating its arm list.
+    names    = nmf,
+    draws    = function(fit, n) .tobs_sbc_draws_community(fit, n, nmf(fit$model)),
+    simulate = function(spec, theta, seed)
+      .tobs_sbc_sim_community(spec, theta, seed, nmf(spec$model), y_pos = y_pos),
+    refit    = refit,
+    loglik_many = function(fit, Theta)
+      .tobs_sbc_loglik_many_community(fit, Theta, nmf(fit$model),
+                                      ll = ll, setup = setup, row = row))
+  if (!is.null(pool)) entry$pool <- pool
+  entry
+}
+
+
+# ---------------------------------------------------------------------------
 # 6b. dyn_occu() (gcol33/tulpaObs#220, multi-season group): pooling on the
 # SITE axis, leaving the season axis alone. `model$y` is a 3D
 # [n_sites x max_visits x n_seasons] array, so the shared simple-family
@@ -1492,18 +1687,6 @@
     method = spec$method, control = spec$control)))
 }
 
-# theta column names: `<species>_psi_<coef>` / `<species>_p_<coef>`, one
-# block of length P per species, species-major -- the layout `draws()`,
-# `simulate()` and `loglik_many()` all share.
-.tobs_sbc_ms_occu_names <- function(m) {
-  occ_names <- m$process_info[[1L]]$coef_names
-  det_names <- m$process_info[[2L]]$coef_names
-  par <- c(paste0("psi_", occ_names), paste0("p_", det_names))
-  list(occ = occ_names, det = det_names, par = par,
-       cols = as.vector(outer(par, m$species_names,
-                              function(p, sp) paste0(sp, "_", p))))
-}
-
 # gcol33/tulpaObs#226: mu and b_s are NOT independent in the posterior --
 # conditional on a draw of mu, b_s's mean shifts by
 # -Cinv_s %*% t(Bf_s) %*% (mu_draw - mu_hat) (Bf_s the mu-b_s cross-Hessian
@@ -1522,63 +1705,12 @@
   sweep(eps - shift, 2L, b_hat_s, "+")
 }
 
-.tobs_sbc_draws_ms_occu <- function(fit, n) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_occu_names(m)
-  S <- m$n_species; P <- length(nm$par)
-  cm <- fit$ms_community
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x P
-  M <- matrix(NA_real_, n, S * P)
-  for (s in seq_len(S)) {
-    b_hat_s <- c(cm$blup_psi[s, ], cm$blup_p[s, ])
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
-  }
-  colnames(M) <- nm$cols
-  M
-}
-
-.tobs_sbc_sim_ms_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_occu_names(m)
-  S <- m$n_species
-  # do.call(rbind, lapply(...)), not t(vapply(...)) -- vapply collapses a
-  # length-1 per-species result (a single detection coefficient, e.g.
-  # `detection = ~ 1`) to a plain vector, and t() of that transposes the
-  # wrong axis (1 x S instead of S x 1).
-  coef_psi <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_psi_", nm$occ)]))
-  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_p_", nm$det)]))
-  dimnames(coef_psi) <- list(m$species_names, nm$occ)
-  dimnames(coef_p)   <- list(m$species_names, nm$det)
-  f$ms_community$coef_psi <- coef_psi
-  f$ms_community$coef_p   <- coef_p
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_occu <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_occu_names(m)
-  S <- m$n_species
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta_psi <- th[paste0(m$species_names[s], "_psi_", nm$occ)]
-      beta_p   <- th[paste0(m$species_names[s], "_p_",   nm$det)]
-      eta_psi <- as.numeric(m$X_occ %*% beta_psi)
-      eta_p   <- as.numeric(m$X_det %*% beta_p)
-      ll <- ll + .ms_int_occu_sp_ll(eta_psi, list(eta_p), m$summaries[[s]])
-    }
-    ll
-  }, numeric(1))
+# The community occupancy kernel: the exact per-species two-state marginal the
+# fitter itself optimizes, reached through the shared multi-source form with a
+# single detection arm.
+.tobs_sbc_ll_ms_occu <- function(m, s, b, g, aux, row) {
+  .ms_int_occu_sp_ll(as.numeric(m$X_occ %*% b$psi),
+                     list(as.numeric(m$X_det %*% b$p)), m$summaries[[s]])
 }
 
 
@@ -1649,21 +1781,11 @@
     method = spec$method, control = spec$control)))
 }
 
-# theta columns: S blocks of `psi_<coef>`/`p_<coef>`/`pos_<coef>` (species-
-# major, matching ms_occu's layout), plus ONE trailing shared dispersion
-# column (`log_sigma_pos`/`log_phi`) -- not per-species.
-.tobs_sbc_ms_occu_cover_names <- function(m) {
-  occ_names <- m$process_info[[1L]]$coef_names
-  det_names <- m$process_info[[2L]]$coef_names
-  pos_names <- m$process_info[[3L]]$coef_names
-  par <- c(paste0("psi_", occ_names), paste0("p_", det_names),
-          paste0("pos_", pos_names))
-  disp_name <- if (identical(m$positive, "beta")) "log_phi" else "log_sigma_pos"
-  list(occ = occ_names, det = det_names, pos = pos_names, par = par,
-       disp_name = disp_name,
-       cols = c(as.vector(outer(par, m$species_names,
-                                function(p, sp) paste0(sp, "_", p))),
-               disp_name))
+# The cover arm's shared dispersion coordinate: the LAST entry of `fit$means`
+# (`build_ms_occu_cover_fit()` appends it after the three arms' coefficients),
+# named for the positive family.
+.tobs_sbc_disp_name <- function(m) {
+  if (identical(m$positive, "beta")) "log_phi" else "log_sigma_pos"
 }
 
 .tobs_sbc_data_ms_occu_cover <- function(fit) {
@@ -1684,67 +1806,15 @@
        visits = NULL, graph = NULL, site = c(obs$site, rep$site + n_o))
 }
 
-.tobs_sbc_draws_ms_occu_cover <- function(fit, n) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_occu_cover_names(m)
-  S <- m$n_species; P <- length(nm$par)
-  cm <- fit$ms_community
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x (P+1)
-  mu_arm <- mu_draws[, seq_len(P), drop = FALSE]
-  M <- matrix(NA_real_, n, S * P + 1L)
-  for (s in seq_len(S)) {
-    b_hat_s <- c(cm$blup_occ[s, ], cm$blup_p[s, ], cm$blup_pos[s, ])
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_arm + b_draws
-  }
-  M[, S * P + 1L] <- mu_draws[, P + 1L]
-  colnames(M) <- nm$cols
-  M
+# The community joint occu+cover kernel: the exact per-species two-state
+# marginal `.tobs_fit_ms_occu_cover()` optimizes, over that species' view.
+.tobs_sbc_setup_ms_occu_cover <- function(fit) {
+  lapply(seq_len(fit$model$n_species),
+         function(s) .ms_occu_cover_species_view(fit$model, s))
 }
 
-.tobs_sbc_sim_ms_occu_cover <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_occu_cover_names(m)
-  S <- m$n_species
-  coef_occ <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_psi_", nm$occ)]))
-  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_p_", nm$det)]))
-  coef_pos <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_pos_", nm$pos)]))
-  dimnames(coef_occ) <- list(m$species_names, nm$occ)
-  dimnames(coef_p)   <- list(m$species_names, nm$det)
-  dimnames(coef_pos) <- list(m$species_names, nm$pos)
-  f$ms_community$coef_occ <- coef_occ
-  f$ms_community$coef_p   <- coef_p
-  f$ms_community$coef_pos <- coef_pos
-  f$means[[length(f$means)]] <- theta[[nm$disp_name]]
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep$y, y_pos = rep$y_pos, visits = NULL,
-       graph = NULL, site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_occu_cover <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_occu_cover_names(m)
-  S <- m$n_species
-  views <- lapply(seq_len(S), function(s) .ms_occu_cover_species_view(m, s))
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ld <- th[[nm$disp_name]]
-    ll <- 0
-    for (s in seq_len(S)) {
-      bo   <- th[paste0(m$species_names[s], "_psi_", nm$occ)]
-      bp   <- th[paste0(m$species_names[s], "_p_",   nm$det)]
-      bpos <- th[paste0(m$species_names[s], "_pos_", nm$pos)]
-      ll <- ll + .occu_cover_sp_ll(views[[s]], bo, bp, bpos, ld)
-    }
-    ll
-  }, numeric(1))
+.tobs_sbc_ll_ms_occu_cover <- function(m, s, b, g, aux, row) {
+  .occu_cover_sp_ll(aux[[s]], b$occ, b$p, b$pos, g$disp)
 }
 
 
@@ -1913,85 +1983,25 @@
     method = spec$method, control = spec$control)))
 }
 
-# theta column names: `<species>_psi_<coef>` / `<species>_p<d>_<coef>`, one
-# block of length P per species, species-major -- the layout `draws()`,
-# `simulate()` and `loglik_many()` all share. `arm_names` c("p1", ..., "pD")
-# matches `model$process_names`, the SAME labels `ms_community`'s
-# `coef_p<d>` / `blup_p<d>` fields are keyed by (build_ms_int_occu_fit()).
-.tobs_sbc_ms_int_occu_names <- function(m) {
-  D <- m$n_sources
-  occ_names <- m$process_info[[1L]]$coef_names
-  det_names_list <- lapply(seq_len(D), function(d) m$process_info[[1L + d]]$coef_names)
-  par <- c(paste0("psi_", occ_names),
-          unlist(lapply(seq_len(D), function(d)
-            paste0("p", d, "_", det_names_list[[d]]))))
-  list(occ_names = occ_names, det_names_list = det_names_list, par = par,
-       cols = as.vector(outer(par, m$species_names,
-                              function(p, sp) paste0(sp, "_", p))))
+# One occupancy arm plus one detection arm per source. `p<d>` matches
+# `model$process_names`, the SAME labels `ms_community`'s `coef_p<d>` /
+# `blup_p<d>` fields are keyed by (build_ms_int_occu_fit()).
+.tobs_sbc_arms_ms_int_occu <- function(m) {
+  c(list(.tobs_sbc_arm("psi", "psi_", 1L)),
+    lapply(seq_len(m$n_sources), function(d) {
+      nm <- paste0("p", d)
+      .tobs_sbc_arm(nm, paste0(nm, "_"), 1L + d)
+    }))
 }
 
-.tobs_sbc_draws_ms_int_occu <- function(fit, n) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_int_occu_names(m)
-  D <- m$n_sources; S <- m$n_species; P <- length(nm$par)
-  cm <- fit$ms_community
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x P
-  M <- matrix(NA_real_, n, S * P)
-  for (s in seq_len(S)) {
-    b_hat_s <- c(cm$blup_psi[s, ],
-                unlist(lapply(seq_len(D), function(d) cm[[paste0("blup_p", d)]][s, ])))
-    # gcol33/tulpaObs#226 (see .tobs_sbc_community_b_draws): mu and b_s draw
-    # jointly, not independently.
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
-  }
-  colnames(M) <- nm$cols
-  M
-}
-
-.tobs_sbc_sim_ms_int_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_int_occu_names(m)
-  D <- m$n_sources; S <- m$n_species
-  coef_psi <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_psi_", nm$occ_names)]))
-  dimnames(coef_psi) <- list(m$species_names, nm$occ_names)
-  f$ms_community$coef_psi <- coef_psi
-  for (d in seq_len(D)) {
-    arm <- paste0("p", d); cn <- nm$det_names_list[[d]]
-    coef_d <- do.call(rbind, lapply(seq_len(S), function(s)
-      theta[paste0(m$species_names[s], "_", arm, "_", cn)]))
-    dimnames(coef_d) <- list(m$species_names, cn)
-    f$ms_community[[paste0("coef_", arm)]] <- coef_d
-  }
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_int_occu <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_int_occu_names(m)
-  D <- m$n_sources; S <- m$n_species
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta_psi <- th[paste0(m$species_names[s], "_psi_", nm$occ_names)]
-      eta_psi <- as.numeric(m$X_psi %*% beta_psi)
-      eta_p <- lapply(seq_len(D), function(d) {
-        arm <- paste0("p", d)
-        beta_d <- th[paste0(m$species_names[s], "_", arm, "_", nm$det_names_list[[d]])]
-        as.numeric(m$X_p[[d]] %*% beta_d)
-      })
-      ll <- ll + .ms_int_occu_sp_ll(eta_psi, eta_p, m$summaries[[s]])
-    }
-    ll
-  }, numeric(1))
+# The multi-source per-species two-state marginal, the same kernel `ms_occu`
+# reaches with a single detection arm.
+.tobs_sbc_ll_ms_int_occu <- function(m, s, b, g, aux, row) {
+  .ms_int_occu_sp_ll(
+    as.numeric(m$X_psi %*% b$psi),
+    lapply(seq_len(m$n_sources),
+           function(d) as.numeric(m$X_p[[d]] %*% b[[paste0("p", d)]])),
+    m$summaries[[s]])
 }
 
 
@@ -2194,60 +2204,15 @@
     method = spec$method, control = spec$control)))
 }
 
-.tobs_sbc_ms_count_names <- function(m) {
-  mu_names <- m$process_info[[1L]]$coef_names
-  list(mu_names = mu_names,
-       cols = as.vector(outer(mu_names, m$species_names,
-                              function(p, sp) paste0(sp, "_mu_", p))))
+# The community relative-abundance kernels: the per-species GLMM likelihood
+# over that species' precomputed summaries. jsdm() is ms_count() on a Bernoulli
+# response, so only the kernel differs.
+.tobs_sbc_ll_ms_count_pois <- function(m, s, b, g, aux, row) {
+  .ms_count_ll_pois(m$summaries[[s]], b$mu)
 }
 
-.tobs_sbc_draws_ms_count <- function(fit, n) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_count_names(m)
-  S <- m$n_species; P <- length(nm$mu_names)
-  cm <- fit$ms_community
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
-  M <- matrix(NA_real_, n, S * P)
-  for (s in seq_len(S)) {
-    # gcol33/tulpaObs#226 (see .tobs_sbc_community_b_draws): mu and b_s draw
-    # jointly, not independently.
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, cm$blup_mu[s, ],
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
-  }
-  colnames(M) <- nm$cols
-  M
-}
-
-.tobs_sbc_sim_ms_count <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_count_names(m)
-  S <- m$n_species
-  coef_mu <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_mu_", nm$mu_names)]))
-  dimnames(coef_mu) <- list(m$species_names, nm$mu_names)
-  f$ms_community$coef_mu <- coef_mu
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_count <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_count_names(m)
-  S <- m$n_species
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta <- th[paste0(m$species_names[s], "_mu_", nm$mu_names)]
-      ll <- ll + .ms_count_ll_pois(m$summaries[[s]], beta)
-    }
-    ll
-  }, numeric(1))
+.tobs_sbc_ll_ms_count_bern <- function(m, s, b, g, aux, row) {
+  .ms_count_ll_bern(m$summaries[[s]], b$mu)
 }
 
 
@@ -2257,15 +2222,13 @@
 # `.tobs_build_ms_count(..., response = "bernoulli")` and routes through the
 # same community Laplace-EM / latent driver / NUTS target as ms_count() --
 # gcol33/tulpaObs#121). The fit object shares ms_count()'s `fit$model`
-# shape byte for byte, so `data`/`draws`/`simulate` are the exact same
-# generic helpers ms_count() already registers (`.tobs_sbc_data_ms_count`,
-# `.tobs_sbc_draws_ms_count`, `.tobs_sbc_sim_ms_count` -- the last reads
-# `f$ms_community$coef_mu` and calls `stats::simulate()`, neither of which
-# is response-specific). `attr(fit, "tobs_family")` is "jsdm", not
-# "ms_count", though (the family ctor's own name), so the SBC dispatch
-# needs its own registry row regardless. Only `spec` (constructs `jsdm()`,
-# not `ms_count(response=)`) and `loglik_many` (the Bernoulli kernel
-# `.ms_count_ll_bern`, not `.ms_count_ll_pois`) are new.
+# shape byte for byte, so its registry row is ms_count()'s arm declaration
+# unchanged (`.tobs_sbc_data_ms_count` for the data, the shared community
+# draws/simulate). `attr(fit, "tobs_family")` is "jsdm", not "ms_count",
+# though (the family ctor's own name), so the SBC dispatch needs its own
+# registry row regardless. Only `spec` (constructs `jsdm()`, not
+# `ms_count(response=)`) and the kernel (`.ms_count_ll_bern`, not
+# `.ms_count_ll_pois`) are new.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_jsdm <- function(fit, fit.control) {
@@ -2287,22 +2250,6 @@
     y = data$y, species = spec$species,
     method = spec$method, control = spec$control)))
 }
-
-.tobs_sbc_loglik_many_jsdm <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_count_names(m)
-  S <- m$n_species
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta <- th[paste0(m$species_names[s], "_mu_", nm$mu_names)]
-      ll <- ll + .ms_count_ll_bern(m$summaries[[s]], beta)
-    }
-    ll
-  }, numeric(1))
-}
-
 
 # ---------------------------------------------------------------------------
 # 6p. ms_distance() (gcol33/tulpaObs#220, community group): community binned
@@ -2344,17 +2291,6 @@
   }
 }
 
-# theta column names: `<species>_lambda_<coef>` / `<species>_sigma_<coef>`,
-# one block of length P per species, species-major.
-.tobs_sbc_ms_distance_names <- function(m) {
-  lam_nm <- m$process_info[[1L]]$coef_names
-  sig_nm <- m$process_info[[2L]]$coef_names
-  par <- c(paste0("lambda_", lam_nm), paste0("sigma_", sig_nm))
-  list(lam = lam_nm, sig = sig_nm, par = par,
-       cols = as.vector(outer(par, m$species_names,
-                              function(p, sp) paste0(sp, "_", p))))
-}
-
 .tobs_sbc_spec_ms_distance <- function(fit, fit.control) {
   .tobs_sbc_reject_structure(fit)
   .tobs_sbc_reject_ms_distance_scope(fit)
@@ -2381,62 +2317,18 @@
     method = spec$method, control = spec$control)))
 }
 
-.tobs_sbc_draws_ms_distance <- function(fit, n) {
+# The community distance kernel: the per-species binned-distance marginal from
+# the family's own sweep, the kernel the fitter reads its score off.
+.tobs_sbc_setup_ms_distance <- function(fit) {
   m <- fit$model
-  nm <- .tobs_sbc_ms_distance_names(m)
-  S <- m$n_species; P <- length(nm$par)
-  cm <- fit$ms_community
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
-  M <- matrix(NA_real_, n, S * P)
-  for (s in seq_len(S)) {
-    b_hat_s <- c(cm$blup_lambda[s, ], cm$blup_sigma[s, ])
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
-  }
-  colnames(M) <- nm$cols
-  M
+  list(eng = .tobs_ms_distance_engine(m),
+       X_lambda = m$X_processes[[1L]], X_sigma = m$X_processes[[2L]])
 }
 
-.tobs_sbc_sim_ms_distance <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_distance_names(m)
-  S <- m$n_species
-  coef_lambda <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_lambda_", nm$lam)]))
-  coef_sigma <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_sigma_", nm$sig)]))
-  dimnames(coef_lambda) <- list(m$species_names, nm$lam)
-  dimnames(coef_sigma)  <- list(m$species_names, nm$sig)
-  f$ms_community$coef_lambda <- coef_lambda
-  f$ms_community$coef_sigma  <- coef_sigma
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_distance <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_distance_names(m)
-  S <- m$n_species
-  eng <- .tobs_ms_distance_engine(m)
-  X_lambda <- m$X_processes[[1L]]; X_sigma <- m$X_processes[[2L]]
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta_lam <- th[paste0(m$species_names[s], "_lambda_", nm$lam)]
-      beta_sig <- th[paste0(m$species_names[s], "_sigma_", nm$sig)]
-      eta_lam <- as.numeric(X_lambda %*% beta_lam)
-      eta_sig <- as.numeric(X_sigma %*% beta_sig)
-      sw <- eng$sweep(s, eta_lam, eta_sig, value_only = TRUE)
-      ll <- ll + sum(sw$log_lik)
-    }
-    ll
-  }, numeric(1))
+.tobs_sbc_ll_ms_distance <- function(m, s, b, g, aux, row) {
+  sw <- aux$eng$sweep(s, as.numeric(aux$X_lambda %*% b$lambda),
+                      as.numeric(aux$X_sigma %*% b$sigma), value_only = TRUE)
+  sum(sw$log_lik)
 }
 
 
@@ -2527,95 +2419,20 @@
     method = spec$method, control = spec$control)))
 }
 
-# theta column names: `<species>_psi1_<coef>` / `<species>_p_<coef>` (one
-# block of length P per species, species-major) followed by the SHARED
-# `gamma_<coef>` / `eps_<coef>` columns (no species prefix -- one value per
-# row, not per species).
-.tobs_sbc_ms_dyn_occu_names <- function(m) {
-  pi_list <- m$process_info
-  psi1_nm <- pi_list[[1L]]$coef_names
-  p_nm    <- pi_list[[2L]]$coef_names
-  gam_nm  <- pi_list[[3L]]$coef_names
-  eps_nm  <- pi_list[[4L]]$coef_names
-  par <- c(paste0("psi1_", psi1_nm), paste0("p_", p_nm))
-  sp_cols <- as.vector(outer(par, m$species_names,
-                             function(p, sp) paste0(sp, "_", p)))
-  global_cols <- c(paste0("gamma_", gam_nm), paste0("eps_", eps_nm))
-  list(psi1 = psi1_nm, p = p_nm, gam = gam_nm, eps = eps_nm,
-       par = par, sp_cols = sp_cols, global_cols = global_cols,
-       cols = c(sp_cols, global_cols))
+# The community dynamic-occupancy kernel: the exact per-species HMM forward.
+# The transition probabilities depend only on the SHARED gamma / eps blocks, so
+# they are built once per theta row rather than once per species.
+.tobs_sbc_row_ms_dyn_occu <- function(m, g, aux) {
+  list(gamma = as.numeric(stats::plogis(m$X_gamma %*% g$gamma)),
+       eps   = as.numeric(stats::plogis(m$X_eps   %*% g$eps)))
 }
 
-.tobs_sbc_draws_ms_dyn_occu <- function(fit, n) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_dyn_occu_names(m)
-  S <- m$n_species; P <- length(nm$par)
-  cm <- fit$ms_community
-  # `Bf[[s]]` is (P + G) x P -- the cross-Hessian block between b_s and the
-  # FULL (mu, global) vector, not just the RE arms (verified: dim(Bf[[1]]) =
-  # 4x2 for P_psi1=P_p=P_gam=P_eps=1, i.e. (P+G) x P). The community EM's
-  # Newton solve treats gamma/eps as jointly informative about each species'
-  # deviation even though they carry no RE of their own, so the draw must
-  # condition on the FULL mu_draws, not a psi1/p-only slice.
-  re_idx <- seq_len(P)
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)   # n x (P + G)
-  M <- matrix(NA_real_, n, length(nm$cols))
-  colnames(M) <- nm$cols
-  for (s in seq_len(S)) {
-    b_hat_s <- c(cm$blup_psi1[s, ], cm$blup_p[s, ])
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_draws[, re_idx, drop = FALSE] + b_draws
-  }
-  M[, nm$global_cols] <- mu_draws[, nm$global_cols]
-  M
-}
-
-.tobs_sbc_sim_ms_dyn_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_dyn_occu_names(m)
-  S <- m$n_species
-  coef_psi1 <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_psi1_", nm$psi1)]))
-  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_p_", nm$p)]))
-  dimnames(coef_psi1) <- list(m$species_names, nm$psi1)
-  dimnames(coef_p)    <- list(m$species_names, nm$p)
-  f$ms_community$coef_psi1 <- coef_psi1
-  f$ms_community$coef_p    <- coef_p
-  f$means[paste0("gamma_", nm$gam)] <- theta[paste0("gamma_", nm$gam)]
-  f$means[paste0("eps_",   nm$eps)] <- theta[paste0("eps_",   nm$eps)]
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_dyn_occu <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_dyn_occu_names(m)
-  S <- m$n_species
-  n_sites <- m$n_sites; n_seasons <- m$n_seasons
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    beta_gam <- th[paste0("gamma_", nm$gam)]
-    beta_eps <- th[paste0("eps_",   nm$eps)]
-    gamma <- as.numeric(stats::plogis(m$X_gamma %*% beta_gam))
-    eps   <- as.numeric(stats::plogis(m$X_eps   %*% beta_eps))
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta_psi1 <- th[paste0(m$species_names[s], "_psi1_", nm$psi1)]
-      beta_p    <- th[paste0(m$species_names[s], "_p_",    nm$p)]
-      psi1 <- as.numeric(stats::plogis(m$X_psi1 %*% beta_psi1))
-      p    <- as.numeric(stats::plogis(m$X_p    %*% beta_p))
-      ll <- ll + .ms_dyn_occu_forward_ll(psi1, p, gamma, eps,
-                                         m$y[, , , s], m$valid[, , , s],
-                                         n_sites, n_seasons)
-    }
-    ll
-  }, numeric(1))
+.tobs_sbc_ll_ms_dyn_occu <- function(m, s, b, g, aux, row) {
+  .ms_dyn_occu_forward_ll(
+    as.numeric(stats::plogis(m$X_psi1 %*% b$psi1)),
+    as.numeric(stats::plogis(m$X_p    %*% b$p)),
+    row$gamma, row$eps,
+    m$y[, , , s], m$valid[, , , s], m$n_sites, m$n_seasons)
 }
 
 
@@ -2675,15 +2492,6 @@
 
 # theta column names: `<species>_lambda_<coef>` / `<species>_p_<coef>`, one
 # block of length P per species, species-major.
-.tobs_sbc_ms_abun_names <- function(m) {
-  lam_nm <- m$process_info[[1L]]$coef_names
-  p_nm   <- m$process_info[[2L]]$coef_names
-  par <- c(paste0("lambda_", lam_nm), paste0("p_", p_nm))
-  list(lam = lam_nm, p = p_nm, par = par,
-       cols = as.vector(outer(par, m$species_names,
-                              function(pp, sp) paste0(sp, "_", pp))))
-}
-
 .tobs_sbc_spec_ms_abun <- function(fit, fit.control) {
   .tobs_sbc_reject_structure(fit)
   .tobs_sbc_reject_ms_abun_scope(fit)
@@ -2714,66 +2522,22 @@
     method = spec$method, control = spec$control)))
 }
 
-.tobs_sbc_draws_ms_abun <- function(fit, n) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_abun_names(m)
-  S <- m$n_species; P <- length(nm$par)
-  cm <- fit$ms_community
-  mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)
-  M <- matrix(NA_real_, n, S * P)
-  for (s in seq_len(S)) {
-    b_hat_s <- c(cm$blup_lambda[s, ], cm$blup_p[s, ])
-    b_draws <- .tobs_sbc_community_b_draws(mu_draws, fit$means, b_hat_s,
-                                           cm$Bf[[s]], cm$Cinv[[s]], n)
-    M[, (s - 1L) * P + seq_len(P)] <- mu_draws + b_draws
-  }
-  colnames(M) <- nm$cols
-  M
-}
-
-.tobs_sbc_sim_ms_abun <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  m <- f$model
-  nm <- .tobs_sbc_ms_abun_names(m)
-  S <- m$n_species
-  coef_lambda <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_lambda_", nm$lam)]))
-  coef_p <- do.call(rbind, lapply(seq_len(S), function(s)
-    theta[paste0(m$species_names[s], "_p_", nm$p)]))
-  dimnames(coef_lambda) <- list(m$species_names, nm$lam)
-  dimnames(coef_p)      <- list(m$species_names, nm$p)
-  f$ms_community$coef_lambda <- coef_lambda
-  f$ms_community$coef_p      <- coef_p
-  rep <- stats::simulate(f, nsim = 1L)
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_ms_abun <- function(fit, Theta) {
-  m <- fit$model
-  nm <- .tobs_sbc_ms_abun_names(m)
-  S <- m$n_species
+# The community N-mixture kernel: each species' own exact closed-form Royle
+# marginal, the SAME `nmix_site_marginal()` the fitter optimizes.
+.tobs_sbc_setup_ms_abun <- function(fit) {
+  m  <- fit$model
   lf <- .tobs_ms_nmix_longform(m)
-  X_lambda <- m$X_processes[[1L]]
-  K_max <- fit$K_max %||% (max(lf$y) + 100L)
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    ll <- 0
-    for (s in seq_len(S)) {
-      beta_lam <- th[paste0(m$species_names[s], "_lambda_", nm$lam)]
-      beta_p   <- th[paste0(m$species_names[s], "_p_",      nm$p)]
-      k  <- lf$species_idx == s
-      Xp <- lf$X_p[k, , drop = FALSE]
-      eta_lam <- as.numeric(X_lambda %*% beta_lam)
-      eta_p   <- as.numeric(Xp %*% beta_p)
-      ev <- nmix_site_marginal(lf$y[k], lf$site_idx[k], X_lambda, Xp,
-                               mixture = "P", K_max = K_max)$eval(eta_lam, eta_p)
-      ll <- ll + ev$log_lik
-    }
-    ll
-  }, numeric(1))
+  list(lf = lf, X_lambda = m$X_processes[[1L]],
+       K_max = fit$K_max %||% (max(lf$y) + 100L))
+}
+
+.tobs_sbc_ll_ms_abun <- function(m, s, b, g, aux, row) {
+  k  <- aux$lf$species_idx == s
+  Xp <- aux$lf$X_p[k, , drop = FALSE]
+  nmix_site_marginal(aux$lf$y[k], aux$lf$site_idx[k], aux$X_lambda, Xp,
+                     mixture = "P", K_max = aux$K_max)$eval(
+                       as.numeric(aux$X_lambda %*% b$lambda),
+                       as.numeric(Xp %*% b$p))$log_lik
 }
 
 
@@ -2946,14 +2710,14 @@
   # `ms_count` (same `.tobs_community_em()` engine, same original S=5-style
   # failure) are likely fixable the identical way but each needs its OWN
   # species-count check before registering, not an assumption this transfers.
-  ms_occu = list(
-    spec        = .tobs_sbc_spec_ms_occu,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_ms_occu,
-    simulate    = .tobs_sbc_sim_ms_occu,
-    refit       = .tobs_sbc_refit_ms_occu,
-    loglik_many = .tobs_sbc_loglik_many_ms_occu),
+  ms_occu = .tobs_sbc_community_entry(
+    arms  = list(.tobs_sbc_arm("psi", "psi_", 1L),
+                 .tobs_sbc_arm("p",   "p_",   2L)),
+    ll    = .tobs_sbc_ll_ms_occu,
+    spec  = .tobs_sbc_spec_ms_occu,
+    data  = .tobs_sbc_data_3d_season,
+    pool  = .tobs_sbc_pool_3d_season,
+    refit = .tobs_sbc_refit_ms_occu),
   #
   # ms_occu_cover() (gcol33/tulpaObs#220, community group, section 6j-bis):
   # the occ+p+pos analogue of ms_occu, safe to attempt because its Cinv is
@@ -2961,14 +2725,18 @@
   # specific to this family, commit `03b87ad`) -- CONTRACT-verified (refit on
   # 0-pooled data reproduces means exactly, pool/draws/simulate/loglik_many
   # all finite and correctly shaped); acceptance not yet run.
-  ms_occu_cover = list(
-    spec        = .tobs_sbc_spec_ms_occu_cover,
-    data        = .tobs_sbc_data_ms_occu_cover,
-    pool        = .tobs_sbc_pool_ms_occu_cover,
-    draws       = .tobs_sbc_draws_ms_occu_cover,
-    simulate    = .tobs_sbc_sim_ms_occu_cover,
-    refit       = .tobs_sbc_refit_ms_occu_cover,
-    loglik_many = .tobs_sbc_loglik_many_ms_occu_cover),
+  ms_occu_cover = .tobs_sbc_community_entry(
+    arms    = list(.tobs_sbc_arm("occ", "psi_", 1L),
+                   .tobs_sbc_arm("p",   "p_",   2L),
+                   .tobs_sbc_arm("pos", "pos_", 3L)),
+    globals = list(.tobs_sbc_global_named("disp", .tobs_sbc_disp_name)),
+    ll      = .tobs_sbc_ll_ms_occu_cover,
+    setup   = .tobs_sbc_setup_ms_occu_cover,
+    y_pos   = TRUE,
+    spec    = .tobs_sbc_spec_ms_occu_cover,
+    data    = .tobs_sbc_data_ms_occu_cover,
+    pool    = .tobs_sbc_pool_ms_occu_cover,
+    refit   = .tobs_sbc_refit_ms_occu_cover),
   #
   # cover() (gcol33/tulpaObs#220, multiarm-S3 group, section 6k): the same
   # two-independent-block shape as occu_categorical, reusing the generalized
@@ -2992,14 +2760,13 @@
   # seeds, min p_unif range 0.0013-0.052, 0 quantities below 1e-3 out of 43
   # possible across all 5 runs, no reproducible failing coefficient. Do NOT
   # shrink `.SBC_REG_FIXTURES$ms_int_occu`'s species count for speed.
-  ms_int_occu = list(
-    spec        = .tobs_sbc_spec_ms_int_occu,
-    data        = .tobs_sbc_data_ms_int_occu,
-    pool        = .tobs_sbc_pool_named_3d,
-    draws       = .tobs_sbc_draws_ms_int_occu,
-    simulate    = .tobs_sbc_sim_ms_int_occu,
-    refit       = .tobs_sbc_refit_ms_int_occu,
-    loglik_many = .tobs_sbc_loglik_many_ms_int_occu),
+  ms_int_occu = .tobs_sbc_community_entry(
+    arms  = .tobs_sbc_arms_ms_int_occu,
+    ll    = .tobs_sbc_ll_ms_int_occu,
+    spec  = .tobs_sbc_spec_ms_int_occu,
+    data  = .tobs_sbc_data_ms_int_occu,
+    pool  = .tobs_sbc_pool_named_3d,
+    refit = .tobs_sbc_refit_ms_int_occu),
   #
   # occu_multiscale_cover() (gcol33/tulpaObs#220, multiarm-S3 group, section
   # 6m): the standard single-block fit shape (unlike cover()), so
@@ -3026,48 +2793,50 @@
   # possible across all 5 runs, no reproducible failing coefficient. No
   # explicit `pool` slot needed -- `y` is a plain 2D `[site x species]`
   # matrix, so the generic default pooling applies unchanged.
-  ms_count = list(
-    spec        = .tobs_sbc_spec_ms_count,
-    data        = .tobs_sbc_data_ms_count,
-    draws       = .tobs_sbc_draws_ms_count,
-    simulate    = .tobs_sbc_sim_ms_count,
-    refit       = .tobs_sbc_refit_ms_count,
-    loglik_many = .tobs_sbc_loglik_many_ms_count),
+  ms_count = .tobs_sbc_community_entry(
+    arms  = list(.tobs_sbc_arm("mu", "mu_", 1L)),
+    ll    = .tobs_sbc_ll_ms_count_pois,
+    spec  = .tobs_sbc_spec_ms_count,
+    data  = .tobs_sbc_data_ms_count,
+    refit = .tobs_sbc_refit_ms_count),
   # jsdm() (gcol33/tulpaObs#220, community group, section 6o): ms_count()'s
   # generic data/draws/simulate helpers reused unchanged (see the section
   # comment); only spec (family = jsdm()) and loglik_many (Bernoulli kernel)
   # are jsdm-specific.
-  jsdm = list(
-    spec        = .tobs_sbc_spec_jsdm,
-    data        = .tobs_sbc_data_ms_count,
-    draws       = .tobs_sbc_draws_ms_count,
-    simulate    = .tobs_sbc_sim_ms_count,
-    refit       = .tobs_sbc_refit_jsdm,
-    loglik_many = .tobs_sbc_loglik_many_jsdm),
+  jsdm = .tobs_sbc_community_entry(
+    arms  = list(.tobs_sbc_arm("mu", "mu_", 1L)),
+    ll    = .tobs_sbc_ll_ms_count_bern,
+    spec  = .tobs_sbc_spec_jsdm,
+    data  = .tobs_sbc_data_ms_count,
+    refit = .tobs_sbc_refit_jsdm),
   # ms_distance() (gcol33/tulpaObs#220, community group, section 6p): the
   # two-arm (lambda/sigma) sibling of ms_occu; `data`/`pool` reuse the
   # generic 3D-season helpers unchanged (model$y is [site x bin x species],
   # structurally identical to ms_occu's [site x visit x species]).
-  ms_distance = list(
-    spec        = .tobs_sbc_spec_ms_distance,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_ms_distance,
-    simulate    = .tobs_sbc_sim_ms_distance,
-    refit       = .tobs_sbc_refit_ms_distance,
-    loglik_many = .tobs_sbc_loglik_many_ms_distance),
+  ms_distance = .tobs_sbc_community_entry(
+    arms  = list(.tobs_sbc_arm("lambda", "lambda_", 1L),
+                 .tobs_sbc_arm("sigma",  "sigma_",  2L)),
+    ll    = .tobs_sbc_ll_ms_distance,
+    setup = .tobs_sbc_setup_ms_distance,
+    spec  = .tobs_sbc_spec_ms_distance,
+    data  = .tobs_sbc_data_3d_season,
+    pool  = .tobs_sbc_pool_3d_season,
+    refit = .tobs_sbc_refit_ms_distance),
   # ms_dyn_occu() (gcol33/tulpaObs#220, community group, section 6q): the
   # HMM-forward dynamic analogue of ms_occu, with two SHARED (non-species)
   # transition globals (gamma, eps) alongside the two per-species RE arms
   # (psi1, p). New 4D pool (model$y is [site x visit x season x species]).
-  ms_dyn_occu = list(
-    spec        = .tobs_sbc_spec_ms_dyn_occu,
-    data        = .tobs_sbc_data_4d_species,
-    pool        = .tobs_sbc_pool_4d_species,
-    draws       = .tobs_sbc_draws_ms_dyn_occu,
-    simulate    = .tobs_sbc_sim_ms_dyn_occu,
-    refit       = .tobs_sbc_refit_ms_dyn_occu,
-    loglik_many = .tobs_sbc_loglik_many_ms_dyn_occu),
+  ms_dyn_occu = .tobs_sbc_community_entry(
+    arms    = list(.tobs_sbc_arm("psi1", "psi1_", 1L),
+                   .tobs_sbc_arm("p",    "p_",    2L)),
+    globals = list(.tobs_sbc_global("gamma", "gamma_", 3L),
+                   .tobs_sbc_global("eps",   "eps_",   4L)),
+    ll      = .tobs_sbc_ll_ms_dyn_occu,
+    row     = .tobs_sbc_row_ms_dyn_occu,
+    spec    = .tobs_sbc_spec_ms_dyn_occu,
+    data    = .tobs_sbc_data_4d_species,
+    pool    = .tobs_sbc_pool_4d_species,
+    refit   = .tobs_sbc_refit_ms_dyn_occu),
   # ms_abun() (gcol33/tulpaObs#220, community group, section 6r): the
   # abundance-arm sibling of ms_occu/ms_distance -- see section 6r for why
   # this family needed a tulpa engine change (gcol33/tulpa#398) before it
@@ -3075,14 +2844,15 @@
   # engine (control = list(optimizer = "joint_fd", n.quad > 1)); the default
   # n.quad = 1 Laplace-EM path errors with a pointer rather than drawing an
   # independent (mu, b_s).
-  ms_abun = list(
-    spec        = .tobs_sbc_spec_ms_abun,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_ms_abun,
-    simulate    = .tobs_sbc_sim_ms_abun,
-    refit       = .tobs_sbc_refit_ms_abun,
-    loglik_many = .tobs_sbc_loglik_many_ms_abun)
+  ms_abun = .tobs_sbc_community_entry(
+    arms  = list(.tobs_sbc_arm("lambda", "lambda_", 1L),
+                 .tobs_sbc_arm("p",      "p_",      2L)),
+    ll    = .tobs_sbc_ll_ms_abun,
+    setup = .tobs_sbc_setup_ms_abun,
+    spec  = .tobs_sbc_spec_ms_abun,
+    data  = .tobs_sbc_data_3d_season,
+    pool  = .tobs_sbc_pool_3d_season,
+    refit = .tobs_sbc_refit_ms_abun)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
