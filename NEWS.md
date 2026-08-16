@@ -1,5 +1,39 @@
 # tulpaObs NEWS
 
+## 0.0.234 (2026-08-16)
+
+* **One preamble behind the count-marginal spatial fitters (#229).** The three
+  areal N-mixture wrappers, the SPDE wrapper and the three removal wrappers fit
+  the same count marginal over the same designs and so validated the same
+  arguments; each inlined the coercions, dimension and adjacency checks, the
+  beta warm starts and the latent-N truncation, and the seven copies of the
+  `K_max` boundary warning were identical character for character.
+  `.count_spatial_prep()` (`R/nmix_laplace_spatial.R`) now resolves all of it,
+  taking the family's truncation rule (`.count_K_floor_max_y()` for the
+  N-mixture, `.count_K_floor_site_total()` for removal, where the depleting
+  passes at a site sum) and the names of its latent warm starts; the boundary
+  warning is `.count_spatial_warn_boundary()`.
+
+* **The areal outer-grid defaults are settled per axis, not per wrapper
+  (#229).** The copies had drifted where the code did not show which value was
+  chosen and which was inherited. Two removal defaults MOVE, both to the
+  N-mixture spelling: `removal_laplace_car_proper()`'s `tau_grid` from 9 nodes
+  to 7 and its `rho_grid` from `seq(0.1, 0.95, length.out = 6)` to
+  `c(0.1, 0.3, 0.5, 0.75, 0.95)`. The 2D proper-CAR grid is a product over both
+  axes, so 7 x 5 = 35 inner Newton solves is already four times the 1D ICAR
+  grid's 9 -- a defensible reason for the coarser tau axis, and the reason it
+  belongs to the axis rather than to whichever wrapper the caller reached.
+  `.count_spatial_default_grid()` is now the only place any of them is written.
+  An explicit `tau_grid` / `rho_grid` / `sigma_grid` is unaffected.
+
+* **Two range checks now apply at both count doors (#229).** The removal
+  proper-CAR wrapper did not validate `rho_grid` at all, so `rho = 1` reached
+  the dense Cholesky behind `log|Q(rho)|` at a rank-deficient `Q`; the removal
+  BYM2 wrapper checked only `scale_factor`, leaving `sigma_grid <= 0` and
+  `rho_grid` outside `[0, 1]` to the kernel. Both now go through
+  `.count_spatial_check_grid()`, which the N-mixture doors already had in
+  inlined form. `test-count-spatial-prep.R`.
+
 ## 0.0.233 (2026-08-15)
 
 * **`AGENTS.md` added, the Codex-facing counterpart of `CLAUDE.md`.** Same

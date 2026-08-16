@@ -76,44 +76,28 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
   mixture  <- match.arg(mixture)
   y        <- as.integer(y)
   site_idx <- as.integer(site_idx)
-  if (!is.matrix(X_lambda)) stop("`X_lambda` must be a numeric matrix.", call. = FALSE)
-  if (!is.matrix(X_p))      stop("`X_p` must be a numeric matrix.", call. = FALSE)
 
   ts <- spatial$tulpa_spec
   if (is.null(ts) || !identical(ts$type, "spde")) {
     stop("nmix_laplace_spde() requires an SPDE tulpa_spec.", call. = FALSE)
   }
-  n_sites <- nrow(X_lambda)
-  n_obs   <- nrow(X_p)
-  p_lam   <- ncol(X_lambda)
-  p_p     <- ncol(X_p)
   n_mesh  <- ts$n_mesh
   A_dense <- as.matrix(ts$A)
+  # No site-to-unit map or CSR graph here: a mesh reaches its sites through the
+  # barycentric projector A, so the shared preamble's areal checks are skipped
+  # and A is checked against the site count it resolves instead.
+  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
+                            beta_lambda_init, beta_p_init, K_max, r_grid,
+                            latent = list(u_init = u_init),
+                            n_latent = c(n_mesh = n_mesh))
+  n_sites <- pp$n_sites; n_obs <- pp$n_obs
+  p_lam   <- pp$p_lam;   p_p   <- pp$p_p
+  beta_lambda_init <- pp$beta_lambda_init
+  beta_p_init      <- pp$beta_p_init
+  K_max            <- pp$K_max
   if (nrow(A_dense) != n_sites) {
     stop(sprintf("SPDE projection A has %d rows but the model has %d sites.",
                  nrow(A_dense), n_sites), call. = FALSE)
-  }
-  if (length(y) != n_obs) stop("length(y) must equal nrow(X_p).", call. = FALSE)
-  if (length(site_idx) != n_obs) stop("length(site_idx) must equal nrow(X_p).", call. = FALSE)
-
-  if (is.null(beta_lambda_init)) {
-    beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
-  }
-  if (is.null(beta_p_init)) beta_p_init <- rep(0, p_p)
-  if (length(beta_lambda_init) != p_lam) {
-    stop("length(beta_lambda_init) must equal ncol(X_lambda).", call. = FALSE)
-  }
-  if (length(beta_p_init) != p_p) {
-    stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
-  }
-  if (is.null(K_max)) {
-    K_max <- as.integer(max(y) + 100L)
-  } else {
-    K_max <- as.integer(K_max)
-    if (K_max < max(y)) stop("K_max must be >= max(y).", call. = FALSE)
-  }
-  if (!is.null(u_init) && length(u_init) != n_mesh) {
-    stop("length(u_init) must equal n_mesh.", call. = FALSE)
   }
 
   # --- Outer (range, sigma) grid centred on the PC-prior medians ----------
@@ -129,9 +113,9 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
     s_scale <- prior_sigma[1]
     sigma_grid <- exp(seq(log(s_scale * 0.35), log(s_scale * 2.0), length.out = 5L))
   }
-  if (any(range_grid <= 0)) stop("range_grid must be strictly positive.", call. = FALSE)
-  if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
-  r_grid_use <- .nmix_resolve_r_grid(mixture, r_grid)
+  range_grid <- .count_spatial_check_grid(range_grid, "range_grid", 0, Inf)
+  sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
+  r_grid_use <- pp$r_grid
 
   # --- Per-grid-point precision Q(range, sigma) and log|Q| ----------------
   # kappa / tau_spde from the Matern parameterisation (matches fit_spde).
@@ -219,11 +203,7 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
     prior_type       = "spde",
     call             = match.call()
   ))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(
-      "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-      max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
-  }
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }

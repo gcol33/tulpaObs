@@ -98,49 +98,15 @@ nmix_laplace_icar <- function(y,
   y                <- as.integer(y)
   site_idx         <- as.integer(site_idx)
   map_site_to_unit <- as.integer(map_site_to_unit)
-  if (!is.matrix(X_lambda)) stop("`X_lambda` must be a numeric matrix.", call. = FALSE)
-  if (!is.matrix(X_p))      stop("`X_p` must be a numeric matrix.", call. = FALSE)
-  n_sites <- nrow(X_lambda)
-  n_obs   <- nrow(X_p)
-  p_lam   <- ncol(X_lambda)
-  p_p     <- ncol(X_p)
-  if (length(y) != n_obs) stop("length(y) must equal nrow(X_p).", call. = FALSE)
-  if (length(site_idx) != n_obs) stop("length(site_idx) must equal nrow(X_p).", call. = FALSE)
-  if (length(map_site_to_unit) != n_sites) {
-    stop("length(map_site_to_unit) must equal nrow(X_lambda).", call. = FALSE)
-  }
-  if (any(map_site_to_unit < 1L) || any(map_site_to_unit > n_spatial)) {
-    stop("map_site_to_unit values must lie in [1, n_spatial].", call. = FALSE)
-  }
-  if (length(adj_row_ptr) != n_spatial + 1L) {
-    stop("length(adj_row_ptr) must equal n_spatial + 1.", call. = FALSE)
-  }
-  if (length(n_neighbors) != n_spatial) {
-    stop("length(n_neighbors) must equal n_spatial.", call. = FALSE)
-  }
-  r_grid_use <- .nmix_resolve_r_grid(mixture, r_grid)
-  if (is.null(tau_grid)) {
-    tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
-  }
-  if (is.null(beta_lambda_init)) {
-    beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
-  }
-  if (is.null(beta_p_init)) beta_p_init <- rep(0, p_p)
-  if (length(beta_lambda_init) != p_lam) {
-    stop("length(beta_lambda_init) must equal ncol(X_lambda).", call. = FALSE)
-  }
-  if (length(beta_p_init) != p_p) {
-    stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
-  }
-  if (is.null(K_max)) {
-    K_max <- as.integer(max(y) + 100L)
-  } else {
-    K_max <- as.integer(K_max)
-    if (K_max < max(y)) stop("K_max must be >= max(y).", call. = FALSE)
-  }
-  if (!is.null(z_init) && length(z_init) != n_spatial) {
-    stop("length(z_init) must equal n_spatial.", call. = FALSE)
-  }
+  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
+                            beta_lambda_init, beta_p_init, K_max, r_grid,
+                            map_site_to_unit = map_site_to_unit,
+                            n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
+                            n_neighbors = n_neighbors,
+                            latent = list(z_init = z_init),
+                            n_latent = c(n_spatial = n_spatial))
+  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_icar")
+  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_icar,
     y                  = y,
@@ -153,26 +119,21 @@ nmix_laplace_icar <- function(y,
     n_neighbors        = as.integer(n_neighbors),
     n_spatial          = as.integer(n_spatial),
     tau_grid           = as.numeric(tau_grid),
-    r_grid             = as.numeric(r_grid_use),
-    beta_lambda_init   = as.numeric(beta_lambda_init),
-    beta_p_init        = as.numeric(beta_p_init),
+    r_grid             = as.numeric(pp$r_grid),
+    beta_lambda_init   = as.numeric(pp$beta_lambda_init),
+    beta_p_init        = as.numeric(pp$beta_p_init),
     z_init             = if (is.null(z_init)) NULL else as.numeric(z_init),
-    K_max              = K_max,
+    K_max              = pp$K_max,
     max_iter           = as.integer(max_iter),
     tol                = as.numeric(tol),
     verbose            = isTRUE(verbose)
   )
 
-  out <- c(fit, .count_spatial_pack_common(fit, p_lam, p_p, n_spatial,
+  out <- c(fit, .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
                                            X_lambda, X_p, mixture),
-           list(n_sites = n_sites, n_obs = n_obs, prior_type = "icar",
+           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "icar",
                 call = match.call()))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(
-      "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-      max(out$boundary_max, na.rm = TRUE)
-    ), call. = FALSE)
-  }
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }
@@ -243,57 +204,19 @@ nmix_laplace_car_proper <- function(y,
   y                <- as.integer(y)
   site_idx         <- as.integer(site_idx)
   map_site_to_unit <- as.integer(map_site_to_unit)
-  if (!is.matrix(X_lambda)) stop("`X_lambda` must be a numeric matrix.", call. = FALSE)
-  if (!is.matrix(X_p))      stop("`X_p` must be a numeric matrix.", call. = FALSE)
-  n_sites <- nrow(X_lambda)
-  n_obs   <- nrow(X_p)
-  p_lam   <- ncol(X_lambda)
-  p_p     <- ncol(X_p)
-  if (length(y) != n_obs) stop("length(y) must equal nrow(X_p).", call. = FALSE)
-  if (length(site_idx) != n_obs) stop("length(site_idx) must equal nrow(X_p).", call. = FALSE)
-  if (length(map_site_to_unit) != n_sites) {
-    stop("length(map_site_to_unit) must equal nrow(X_lambda).", call. = FALSE)
-  }
-  if (any(map_site_to_unit < 1L) || any(map_site_to_unit > n_spatial)) {
-    stop("map_site_to_unit values must lie in [1, n_spatial].", call. = FALSE)
-  }
-  if (length(adj_row_ptr) != n_spatial + 1L) {
-    stop("length(adj_row_ptr) must equal n_spatial + 1.", call. = FALSE)
-  }
-  if (length(n_neighbors) != n_spatial) {
-    stop("length(n_neighbors) must equal n_spatial.", call. = FALSE)
-  }
-  if (is.null(tau_grid)) {
-    tau_grid <- exp(seq(log(0.3), log(30), length.out = 7L))
-  }
-  if (is.null(rho_grid)) {
-    rho_grid <- c(0.1, 0.3, 0.5, 0.75, 0.95)
-  }
-  if (any(rho_grid <= 0) || any(rho_grid >= 1)) {
-    stop("rho_grid values must lie strictly in (0, 1) for the default ",
-         "eigenvalue interval. Pass explicit bounds via spatial_car_proper().",
-         call. = FALSE)
-  }
-  r_grid_use <- .nmix_resolve_r_grid(mixture, r_grid)
-  if (is.null(beta_lambda_init)) {
-    beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
-  }
-  if (is.null(beta_p_init)) beta_p_init <- rep(0, p_p)
-  if (length(beta_lambda_init) != p_lam) {
-    stop("length(beta_lambda_init) must equal ncol(X_lambda).", call. = FALSE)
-  }
-  if (length(beta_p_init) != p_p) {
-    stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
-  }
-  if (is.null(K_max)) {
-    K_max <- as.integer(max(y) + 100L)
-  } else {
-    K_max <- as.integer(K_max)
-    if (K_max < max(y)) stop("K_max must be >= max(y).", call. = FALSE)
-  }
-  if (!is.null(z_init) && length(z_init) != n_spatial) {
-    stop("length(z_init) must equal n_spatial.", call. = FALSE)
-  }
+  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
+                            beta_lambda_init, beta_p_init, K_max, r_grid,
+                            map_site_to_unit = map_site_to_unit,
+                            n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
+                            n_neighbors = n_neighbors,
+                            latent = list(z_init = z_init),
+                            n_latent = c(n_spatial = n_spatial))
+  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_car")
+  if (is.null(rho_grid)) rho_grid <- .count_spatial_default_grid("rho_car")
+  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
+  rho_grid <- .count_spatial_check_grid(
+    rho_grid, "rho_grid", 0, 1, open = TRUE,
+    hint = "Pass explicit eigenvalue bounds via spatial_car_proper().")
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_car_proper,
     y                  = y,
@@ -307,11 +230,11 @@ nmix_laplace_car_proper <- function(y,
     n_spatial          = as.integer(n_spatial),
     tau_grid           = as.numeric(tau_grid),
     rho_grid           = as.numeric(rho_grid),
-    r_grid             = as.numeric(r_grid_use),
-    beta_lambda_init   = as.numeric(beta_lambda_init),
-    beta_p_init        = as.numeric(beta_p_init),
+    r_grid             = as.numeric(pp$r_grid),
+    beta_lambda_init   = as.numeric(pp$beta_lambda_init),
+    beta_p_init        = as.numeric(pp$beta_p_init),
     z_init             = if (is.null(z_init)) NULL else as.numeric(z_init),
-    K_max              = K_max,
+    K_max              = pp$K_max,
     max_iter           = as.integer(max_iter),
     tol                = as.numeric(tol),
     verbose            = isTRUE(verbose)
@@ -319,20 +242,15 @@ nmix_laplace_car_proper <- function(y,
 
   # rho summaries are proper-CAR-specific; the rest of the grid summarisation is
   # shared with the ICAR path.
-  common <- .count_spatial_pack_common(fit, p_lam, p_p, n_spatial,
+  common <- .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
                                        X_lambda, X_p, mixture)
   rho <- .tobs_weighted_moment(common$weights, fit$theta_grid[, "rho"])
 
   out <- c(fit, common,
            list(rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
-                n_sites = n_sites, n_obs = n_obs, prior_type = "car_proper",
-                call = match.call()))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(
-      "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-      max(out$boundary_max, na.rm = TRUE)
-    ), call. = FALSE)
-  }
+                n_sites = pp$n_sites, n_obs = pp$n_obs,
+                prior_type = "car_proper", call = match.call()))
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }
@@ -418,61 +336,19 @@ nmix_laplace_bym2 <- function(y,
   y                <- as.integer(y)
   site_idx         <- as.integer(site_idx)
   map_site_to_unit <- as.integer(map_site_to_unit)
-  if (!is.matrix(X_lambda)) stop("`X_lambda` must be a numeric matrix.", call. = FALSE)
-  if (!is.matrix(X_p))      stop("`X_p` must be a numeric matrix.", call. = FALSE)
-  n_sites <- nrow(X_lambda)
-  n_obs   <- nrow(X_p)
-  p_lam   <- ncol(X_lambda)
-  p_p     <- ncol(X_p)
-  if (length(y) != n_obs) stop("length(y) must equal nrow(X_p).", call. = FALSE)
-  if (length(site_idx) != n_obs) stop("length(site_idx) must equal nrow(X_p).", call. = FALSE)
-  if (length(map_site_to_unit) != n_sites) {
-    stop("length(map_site_to_unit) must equal nrow(X_lambda).", call. = FALSE)
-  }
-  if (any(map_site_to_unit < 1L) || any(map_site_to_unit > n_spatial)) {
-    stop("map_site_to_unit values must lie in [1, n_spatial].", call. = FALSE)
-  }
-  if (length(adj_row_ptr) != n_spatial + 1L) {
-    stop("length(adj_row_ptr) must equal n_spatial + 1.", call. = FALSE)
-  }
-  if (length(n_neighbors) != n_spatial) {
-    stop("length(n_neighbors) must equal n_spatial.", call. = FALSE)
-  }
-  if (is.null(sigma_grid)) {
-    sigma_grid <- exp(seq(log(0.2), log(3), length.out = 5L))
-  }
-  if (is.null(rho_grid)) {
-    rho_grid <- c(0.05, 0.3, 0.5, 0.7, 0.95)
-  }
-  if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
-  if (any(rho_grid < 0) || any(rho_grid > 1)) {
-    stop("rho_grid values must lie in [0, 1].", call. = FALSE)
-  }
-  r_grid_use <- .nmix_resolve_r_grid(mixture, r_grid)
+  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
+                            beta_lambda_init, beta_p_init, K_max, r_grid,
+                            map_site_to_unit = map_site_to_unit,
+                            n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
+                            n_neighbors = n_neighbors,
+                            latent = list(v_init = v_init, w_init = w_init),
+                            n_latent = c(n_spatial = n_spatial))
+  if (is.null(sigma_grid)) sigma_grid <- .count_spatial_default_grid("sigma_bym2")
+  if (is.null(rho_grid))   rho_grid   <- .count_spatial_default_grid("rho_bym2")
+  sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
+  rho_grid   <- .count_spatial_check_grid(rho_grid, "rho_grid", 0, 1, open = FALSE)
   scale_factor <- .bym2_resolve_scale(scale_factor, adj_row_ptr, adj_col_idx,
                                       n_spatial)
-  if (is.null(beta_lambda_init)) {
-    beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
-  }
-  if (is.null(beta_p_init)) beta_p_init <- rep(0, p_p)
-  if (length(beta_lambda_init) != p_lam) {
-    stop("length(beta_lambda_init) must equal ncol(X_lambda).", call. = FALSE)
-  }
-  if (length(beta_p_init) != p_p) {
-    stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
-  }
-  if (is.null(K_max)) {
-    K_max <- as.integer(max(y) + 100L)
-  } else {
-    K_max <- as.integer(K_max)
-    if (K_max < max(y)) stop("K_max must be >= max(y).", call. = FALSE)
-  }
-  if (!is.null(v_init) && length(v_init) != n_spatial) {
-    stop("length(v_init) must equal n_spatial.", call. = FALSE)
-  }
-  if (!is.null(w_init) && length(w_init) != n_spatial) {
-    stop("length(w_init) must equal n_spatial.", call. = FALSE)
-  }
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_bym2,
     y                  = y,
@@ -486,28 +362,23 @@ nmix_laplace_bym2 <- function(y,
     n_spatial          = as.integer(n_spatial),
     sigma_grid         = as.numeric(sigma_grid),
     rho_grid           = as.numeric(rho_grid),
-    r_grid             = as.numeric(r_grid_use),
+    r_grid             = as.numeric(pp$r_grid),
     scale_factor       = as.numeric(scale_factor),
-    beta_lambda_init   = as.numeric(beta_lambda_init),
-    beta_p_init        = as.numeric(beta_p_init),
+    beta_lambda_init   = as.numeric(pp$beta_lambda_init),
+    beta_p_init        = as.numeric(pp$beta_p_init),
     v_init             = if (is.null(v_init)) NULL else as.numeric(v_init),
     w_init             = if (is.null(w_init)) NULL else as.numeric(w_init),
-    K_max              = K_max,
+    K_max              = pp$K_max,
     max_iter           = as.integer(max_iter),
     tol                = as.numeric(tol),
     verbose            = isTRUE(verbose)
   )
 
-  out <- c(fit, .count_spatial_pack_bym2_common(fit, p_lam, p_p, n_spatial,
+  out <- c(fit, .count_spatial_pack_bym2_common(fit, pp$p_lam, pp$p_p, n_spatial,
                                                 X_lambda, X_p, mixture, scale_factor),
-           list(n_sites = n_sites, n_obs = n_obs, prior_type = "bym2",
+           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "bym2",
                 call = match.call()))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(
-      "Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-      max(out$boundary_max, na.rm = TRUE)
-    ), call. = FALSE)
-  }
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }
@@ -574,6 +445,159 @@ print.nmix_spatial_fit <- function(x, ...) {
     stop("`r_grid` must be a vector of positive NB sizes.", call. = FALSE)
   }
   r_grid
+}
+
+# ---------------------------------------------------------------------------
+# Shared preamble for the count-marginal spatial fitters (gcol33/tulpaObs#229)
+#
+# The areal N-mixture wrappers (icar / car_proper / bym2), the SPDE mesh wrapper
+# and the removal wrappers fit the same count marginal over the same designs,
+# and so validate the same arguments. Everything below is the part they share;
+# what differs is passed in, so a default or a check is a property of the axis
+# or of the family rather than of which wrapper the caller happened to reach.
+# ---------------------------------------------------------------------------
+
+# Default outer-grid axes for the areal count fitters.
+#
+# The tau axis carries 9 nodes on the 1D ICAR grid and 7 on the 2D proper-CAR
+# grid: the proper-CAR grid is the product of both axes, so 7 x 5 = 35 inner
+# Newton solves already costs four times the ICAR grid's 9. Both count families
+# read these, so the axis is what decides, not the family.
+.count_spatial_default_grid <- function(axis) {
+  switch(
+    axis,
+    tau_icar   = exp(seq(log(0.3), log(30), length.out = 9L)),
+    tau_car    = exp(seq(log(0.3), log(30), length.out = 7L)),
+    rho_car    = c(0.1, 0.3, 0.5, 0.75, 0.95),
+    sigma_bym2 = exp(seq(log(0.2), log(3), length.out = 5L)),
+    rho_bym2   = c(0.05, 0.3, 0.5, 0.7, 0.95),
+    stop(sprintf("Unknown count-spatial grid axis '%s'.", axis), call. = FALSE)
+  )
+}
+
+# Range check for a resolved outer-grid axis. `open` = the proper-CAR rho
+# interval, which excludes both ends (rho = 1 is the intrinsic limit, where
+# Q(rho) drops rank and the dense Cholesky behind log|Q(rho)| fails); the closed
+# form is the BYM2 mixing weight, where both ends are meaningful (all-iid and
+# all-structured). Applied at every door, so a grid valid for one areal count
+# family is valid for the other.
+.count_spatial_check_grid <- function(x, name, lo, hi, open = TRUE, hint = "") {
+  if (!is.numeric(x) || !length(x) || anyNA(x)) {
+    stop(sprintf("`%s` must be a non-empty numeric vector.", name), call. = FALSE)
+  }
+  bad <- if (open) any(x <= lo) || any(x >= hi) else any(x < lo) || any(x > hi)
+  if (bad) {
+    stop(sprintf("`%s` values must lie %s.%s", name,
+                 if (open) sprintf("strictly in (%g, %g)", lo, hi)
+                 else sprintf("in [%g, %g]", lo, hi),
+                 if (nzchar(hint)) paste0(" ", hint) else ""),
+         call. = FALSE)
+  }
+  as.numeric(x)
+}
+
+# Latent-N truncation floor: the largest count at any single site, which the
+# N-mixture marginal must be able to represent.
+.count_K_floor_max_y <- function(y, site_idx, n_sites) {
+  list(value = max(y), label = "max(y)")
+}
+
+# Removal's floor: the depleting passes at a site sum, so the latent N clears
+# that site's TOTAL removal, not its largest single pass.
+.count_K_floor_site_total <- function(y, site_idx, n_sites) {
+  tot <- tapply(as.integer(y),
+                factor(as.integer(site_idx), levels = seq_len(n_sites)), sum)
+  tot[is.na(tot)] <- 0L
+  list(value = max(as.integer(tot)),
+       label = "the largest per-site removal total")
+}
+
+# Resolve the latent-N truncation. An explicit K_max below the family's floor
+# cannot represent the data; the default clears the floor by the same 100
+# headroom at every door.
+.count_spatial_K_max <- function(K_max, floor) {
+  if (is.null(K_max)) return(as.integer(floor$value + 100L))
+  K_max <- as.integer(K_max)
+  if (K_max < floor$value) {
+    stop(sprintf("K_max must be >= %s.", floor$label), call. = FALSE)
+  }
+  K_max
+}
+
+# Resolve and validate everything the count-marginal spatial fitters share:
+# the two designs against the declared dimensions, the site-to-unit map and the
+# CSR graph against `n_spatial`, the coefficient warm starts, the NB-size grid
+# and the latent-N truncation, plus any latent-field warm start.
+#
+# `map_site_to_unit` / `adj_row_ptr` are NULL on the SPDE door (a mesh carries a
+# projector, not a graph), and the checks they gate are skipped there.
+# `K_floor` names the family's truncation rule; `latent` is the named list of
+# field warm starts, each checked against `n_latent` -- whose NAME is what the
+# message calls that length (`n_spatial` areal, `n_mesh` on the mesh).
+.count_spatial_prep <- function(y, site_idx, X_lambda, X_p, mixture,
+                                beta_lambda_init, beta_p_init, K_max, r_grid,
+                                K_floor = .count_K_floor_max_y,
+                                map_site_to_unit = NULL, n_spatial = NULL,
+                                adj_row_ptr = NULL, n_neighbors = NULL,
+                                latent = list(), n_latent = NULL) {
+  if (!is.matrix(X_lambda)) stop("`X_lambda` must be a numeric matrix.", call. = FALSE)
+  if (!is.matrix(X_p))      stop("`X_p` must be a numeric matrix.", call. = FALSE)
+  n_sites <- nrow(X_lambda); n_obs <- nrow(X_p)
+  p_lam   <- ncol(X_lambda); p_p   <- ncol(X_p)
+  if (length(y) != n_obs) stop("length(y) must equal nrow(X_p).", call. = FALSE)
+  if (length(site_idx) != n_obs) {
+    stop("length(site_idx) must equal nrow(X_p).", call. = FALSE)
+  }
+  if (!is.null(map_site_to_unit)) {
+    if (length(map_site_to_unit) != n_sites) {
+      stop("length(map_site_to_unit) must equal nrow(X_lambda).", call. = FALSE)
+    }
+    if (any(map_site_to_unit < 1L) || any(map_site_to_unit > n_spatial)) {
+      stop("map_site_to_unit values must lie in [1, n_spatial].", call. = FALSE)
+    }
+  }
+  if (!is.null(adj_row_ptr)) {
+    if (length(adj_row_ptr) != n_spatial + 1L) {
+      stop("length(adj_row_ptr) must equal n_spatial + 1.", call. = FALSE)
+    }
+    if (length(n_neighbors) != n_spatial) {
+      stop("length(n_neighbors) must equal n_spatial.", call. = FALSE)
+    }
+  }
+  if (is.null(beta_lambda_init)) {
+    beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
+  }
+  if (is.null(beta_p_init)) beta_p_init <- rep(0, p_p)
+  if (length(beta_lambda_init) != p_lam) {
+    stop("length(beta_lambda_init) must equal ncol(X_lambda).", call. = FALSE)
+  }
+  if (length(beta_p_init) != p_p) {
+    stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
+  }
+  for (nm in names(latent)) {
+    v <- latent[[nm]]
+    if (!is.null(v) && length(v) != n_latent) {
+      stop(sprintf("length(%s) must equal %s.", nm, names(n_latent)),
+           call. = FALSE)
+    }
+  }
+  list(n_sites = n_sites, n_obs = n_obs, p_lam = p_lam, p_p = p_p,
+       beta_lambda_init = beta_lambda_init, beta_p_init = beta_p_init,
+       K_max = .count_spatial_K_max(K_max, K_floor(y, site_idx, n_sites)),
+       r_grid = .nmix_resolve_r_grid(mixture, r_grid))
+}
+
+# The boundary diagnostic every count-marginal spatial fitter reports: posterior
+# mass sitting on N = K_max at any outer-grid point means the truncation clipped
+# the latent-N sum there, so the fit is answering a question the window could
+# not hold. One wording, one threshold, one call.
+.count_spatial_warn_boundary <- function(out) {
+  if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
+    warning(sprintf(paste0("Max posterior weight on N = K_max is %.2e at one or ",
+                           "more grid points; raise K_max."),
+                    max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
+  }
+  invisible(out)
 }
 
 # Shared grid-summarisation for the single-field areal count fits (ICAR /

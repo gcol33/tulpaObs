@@ -14,55 +14,27 @@
 #   .tobs_fit_removal_spatial()    dispatch from .tobs_fit_model (icar / car_proper)
 # =============================================================================
 
-# Per-site removal total + buffer: the marginal truncation must clear each site's
-# summed removals across passes (the latent N is >= the total removed).
+# The removal latent-N truncation on its own, for the BFGS driver -- which packs
+# its own state and so does not go through the wrapper preamble below.
 .removal_spatial_K_max <- function(y, site_idx, n_sites, K_max) {
-  if (!is.null(K_max)) {
-    K_max <- as.integer(K_max)
-    site_tot <- tapply(as.integer(y), factor(as.integer(site_idx),
-                                             levels = seq_len(n_sites)), sum)
-    site_tot[is.na(site_tot)] <- 0L
-    if (K_max < max(as.integer(site_tot)))
-      stop("K_max must be >= the largest per-site removal total.", call. = FALSE)
-    return(K_max)
-  }
-  site_tot <- tapply(as.integer(y), factor(as.integer(site_idx),
-                                           levels = seq_len(n_sites)), sum)
-  site_tot[is.na(site_tot)] <- 0L
-  as.integer(max(as.integer(site_tot)) + 100L)
+  .count_spatial_K_max(K_max, .count_K_floor_site_total(y, site_idx, n_sites))
 }
 
-# Shared input validation for the removal areal wrappers (mirrors the N-mixture
-# spatial wrappers; the abundance design is per-site, the detection design and y
-# are per-pass long form). Returns the resolved inits / K_max / r_grid.
+# Input validation for the removal areal wrappers. The count-marginal preamble
+# is shared with the N-mixture spatial wrappers (gcol33/tulpaObs#229); removal
+# supplies only its own truncation rule, since depleting passes at a site sum
+# and the latent N must clear that site's TOTAL removal.
 .removal_spatial_prep <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                   adj_row_ptr, n_neighbors, n_spatial, mixture,
-                                  beta_lambda_init, beta_p_init, K_max, r_grid) {
-  if (!is.matrix(X_lambda)) stop("`X_lambda` must be a numeric matrix.", call. = FALSE)
-  if (!is.matrix(X_p))      stop("`X_p` must be a numeric matrix.", call. = FALSE)
-  n_sites <- nrow(X_lambda); n_obs <- nrow(X_p)
-  p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
-  if (length(y) != n_obs) stop("length(y) must equal nrow(X_p).", call. = FALSE)
-  if (length(site_idx) != n_obs) stop("length(site_idx) must equal nrow(X_p).", call. = FALSE)
-  if (length(map_site_to_unit) != n_sites)
-    stop("length(map_site_to_unit) must equal nrow(X_lambda).", call. = FALSE)
-  if (any(map_site_to_unit < 1L) || any(map_site_to_unit > n_spatial))
-    stop("map_site_to_unit values must lie in [1, n_spatial].", call. = FALSE)
-  if (length(adj_row_ptr) != n_spatial + 1L)
-    stop("length(adj_row_ptr) must equal n_spatial + 1.", call. = FALSE)
-  if (length(n_neighbors) != n_spatial)
-    stop("length(n_neighbors) must equal n_spatial.", call. = FALSE)
-  if (is.null(beta_lambda_init))
-    beta_lambda_init <- c(log(mean(y) + 0.1), rep(0, p_lam - 1L))
-  if (is.null(beta_p_init)) beta_p_init <- rep(0, p_p)
-  if (length(beta_lambda_init) != p_lam)
-    stop("length(beta_lambda_init) must equal ncol(X_lambda).", call. = FALSE)
-  if (length(beta_p_init) != p_p)
-    stop("length(beta_p_init) must equal ncol(X_p).", call. = FALSE)
-  list(n_sites = n_sites, n_obs = n_obs, p_lam = p_lam, p_p = p_p,
-       beta_lambda_init = beta_lambda_init, beta_p_init = beta_p_init,
-       K_max = .removal_spatial_K_max(y, site_idx, n_sites, K_max),
-       r_grid = .nmix_resolve_r_grid(mixture, r_grid))
+                                  beta_lambda_init, beta_p_init, K_max, r_grid,
+                                  latent = list()) {
+  .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
+                      beta_lambda_init, beta_p_init, K_max, r_grid,
+                      K_floor = .count_K_floor_site_total,
+                      map_site_to_unit = map_site_to_unit,
+                      n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
+                      n_neighbors = n_neighbors,
+                      latent = latent, n_latent = c(n_spatial = n_spatial))
 }
 
 #' Areal ICAR removal-sampling abundance via nested Laplace (internal)
@@ -79,8 +51,10 @@ removal_laplace_icar <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   map_site_to_unit <- as.integer(map_site_to_unit)
   pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
                               adj_row_ptr, n_neighbors, n_spatial, mixture,
-                              beta_lambda_init, beta_p_init, K_max, r_grid)
-  if (is.null(tau_grid)) tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
+                              beta_lambda_init, beta_p_init, K_max, r_grid,
+                              latent = list(z_init = z_init))
+  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_icar")
+  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_icar,
     y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
@@ -98,9 +72,7 @@ removal_laplace_icar <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                            X_lambda, X_p, mixture),
            list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "icar",
                 call = match.call()))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE))
-    warning(sprintf("Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-                    max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }
@@ -120,9 +92,14 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
   map_site_to_unit <- as.integer(map_site_to_unit)
   pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
                               adj_row_ptr, n_neighbors, n_spatial, mixture,
-                              beta_lambda_init, beta_p_init, K_max, r_grid)
-  if (is.null(tau_grid)) tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
-  if (is.null(rho_grid)) rho_grid <- seq(0.1, 0.95, length.out = 6L)
+                              beta_lambda_init, beta_p_init, K_max, r_grid,
+                              latent = list(z_init = z_init))
+  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_car")
+  if (is.null(rho_grid)) rho_grid <- .count_spatial_default_grid("rho_car")
+  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
+  rho_grid <- .count_spatial_check_grid(
+    rho_grid, "rho_grid", 0, 1, open = TRUE,
+    hint = "Pass explicit eigenvalue bounds via spatial_car_proper().")
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_car_proper,
     y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
@@ -144,9 +121,7 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
            list(rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
                 n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "car_proper",
                 call = match.call()))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE))
-    warning(sprintf("Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-                    max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }
@@ -167,9 +142,12 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   map_site_to_unit <- as.integer(map_site_to_unit)
   pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
                               adj_row_ptr, n_neighbors, n_spatial, mixture,
-                              beta_lambda_init, beta_p_init, K_max, r_grid)
-  if (is.null(sigma_grid)) sigma_grid <- exp(seq(log(0.2), log(3), length.out = 5L))
-  if (is.null(rho_grid))   rho_grid <- c(0.05, 0.3, 0.5, 0.7, 0.95)
+                              beta_lambda_init, beta_p_init, K_max, r_grid,
+                              latent = list(v_init = v_init, w_init = w_init))
+  if (is.null(sigma_grid)) sigma_grid <- .count_spatial_default_grid("sigma_bym2")
+  if (is.null(rho_grid))   rho_grid   <- .count_spatial_default_grid("rho_bym2")
+  sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
+  rho_grid   <- .count_spatial_check_grid(rho_grid, "rho_grid", 0, 1, open = FALSE)
   scale_factor <- .bym2_resolve_scale(scale_factor, adj_row_ptr, adj_col_idx,
                                       n_spatial)
 
@@ -191,9 +169,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                                 X_lambda, X_p, mixture, scale_factor),
            list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "bym2",
                 call = match.call()))
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE))
-    warning(sprintf("Max posterior weight on N = K_max is %.2e at one or more grid points; raise K_max.",
-                    max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
+  .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")
   out
 }
