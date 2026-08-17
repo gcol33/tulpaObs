@@ -1,5 +1,61 @@
 # tulpaObs NEWS
 
+## 0.0.235 (2026-08-17)
+
+* **BYM2 uses the Riebler marginal-variance scale factor (#232).** BEHAVIOUR
+  CHANGE on every `bym2()` fit. `.bym2_scale()` returned the geometric mean of
+  the non-zero eigenvalues of the intrinsic precision `Q = D - W`; the constant
+  the BYM2 parameterization is defined against is the geometric mean of
+  `diag(Q+)`, the generalized-inverse diagonal, which is what
+  `INLA::inla.scale.model()` applies (Riebler et al. 2016, section 3.2). The two
+  are not close and do not even move the same way with graph size: on 5x5 /
+  10x10 / 20x20 lattices the old constant gives 2.651 / 2.832 / 2.985 where the
+  correct one gives 0.516 / 0.645 / 0.765. The structured component was
+  therefore scaled by roughly `sqrt(2.773 / 0.605) ~ 2.1` in the wrong
+  direction, and `sigma` absorbed it: over 8 seeds on a 35-cell graph at truth
+  `sigma = 1`, `rho = 0.7`, the old constant recovered `sigma = 1.429` (high on
+  8 of 8 seeds, range 1.13 to 1.91) against 0.921 now. Field correlation is
+  unchanged (0.896 against 0.897) -- the shape of the surface was never wrong,
+  only the variance it was reported at. `rho` is mildly worse in the mean
+  (-0.105 against +0.026) but per-seed scatter puts the standard error near
+  0.065, so at 8 seeds neither shift is decisive; it is reported, not claimed.
+  Verified against `INLA::inla.scale.model()` to 6 digits on three lattices and
+  against the tulpa engine's own constant to machine precision.
+
+* **The two loading conventions for `scale_factor` are named (#232).** The
+  package's own R paths write `sigma * sqrt(rho / s)` and the tulpa engine
+  writes `sigma * sqrt(rho) * scale_factor`, so the engine's argument means
+  `1 / sqrt(s)`. That reciprocal was inlined at each of the three engine
+  boundaries. `.bym2_engine_scale()` (`R/spatial.R`) now performs it, and
+  `.bym2_scale_from_Q()` is the single definition both conventions read;
+  `.tobs_latent_bym2_scale()` in `R/community_latent.R` was a fourth copy of the
+  eigenvalue formula and is deleted.
+
+* **One block-offset walk behind the six community NUTS layouts (#231).** The
+  six community samplers pack the same vector -- community means, then
+  species-major deviations, then a log-Cholesky block per arm, then whatever
+  trails -- and each rebuilt that walk privately, so an arm added to one family
+  had to be re-derived rather than declared. `.ms_ocs_layout()`
+  (`R/ms_occu_cover_spatial_nuts.R`) takes the arm widths and the trailing
+  declaration and returns the slices; a family aliases them onto its own
+  spelling, so the builder never learns a family's names. All three trailing
+  shapes in use are the same declaration: a shared vector (`ms_dyn_occu`'s
+  gamma / eps globals), a shared scalar (`ms_occu_cover`'s log-dispersion), and
+  a per-species vector (`ms_count`'s gaussian log-variances). Behaviour is
+  unchanged: the R logpost and gradient oracles stay byte-exact against their
+  C++ twins on all seven community NUTS files (249 assertions, 0 failures).
+
+* **One registry entry builder behind the eight community SBC families (#230).**
+  Each community row in `.TOBS_SBC_REGISTRY` restated the same `names` / `draws`
+  / `simulate` / `loglik_many` construction around a per-family kernel.
+  `.tobs_sbc_community_entry()` (`R/sbc.R`) builds the row from the arm
+  declaration plus that kernel; `spec` / `data` / `pool` / `refit` stay the
+  family's own, since what a community family constructs and how it pools is not
+  shared. `R/sbc.R` loses 590 lines. The per-family rank-uniformity blocks in
+  `test-sbc-registry.R` are tier 3 and have not been re-run against this
+  refactor, so rank equivalence at a fixed seed is asserted by construction
+  here, not measured; #230 stays open until they land.
+
 ## 0.0.234 (2026-08-16)
 
 * **One preamble behind the count-marginal spatial fitters (#229).** The three
