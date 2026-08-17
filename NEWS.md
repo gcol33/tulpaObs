@@ -51,10 +51,13 @@
   `.tobs_sbc_community_entry()` (`R/sbc.R`) builds the row from the arm
   declaration plus that kernel; `spec` / `data` / `pool` / `refit` stay the
   family's own, since what a community family constructs and how it pools is not
-  shared. `R/sbc.R` loses 590 lines. The per-family rank-uniformity blocks in
-  `test-sbc-registry.R` are tier 3 and have not been re-run against this
-  refactor, so rank equivalence at a fixed seed is asserted by construction
-  here, not measured; #230 stays open until they land.
+  shared. `R/sbc.R` loses 590 lines. Ranks are unchanged: run at the acceptance
+  blocks' own fixtures on both sides of the refactor, all eight families return
+  a bit-identical per-replicate PIT table (2952 rows over 369 quantities, 8
+  replicates each, `n.draws = 1000`, `n.ref = 200`, `seed = 0`), and the wall
+  times track to within 2 percent. This is an equivalence measurement, not the
+  rank-uniformity blocks in `test-sbc-registry.R` -- those score whether a
+  posterior is calibrated, which is a different question and is tier 3.
 
 ## 0.0.234 (2026-08-16)
 
