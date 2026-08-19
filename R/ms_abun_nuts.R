@@ -108,14 +108,16 @@
 # chain, so it has to cover where the sampler GOES, not only where it starts:
 # a cell whose lambda wanders above its ceiling loses real mass and the target
 # there is wrong, which is a correctness failure and not a precision one. The
-# inflation factor is that margin. Measured on the 20-seed ms_abun coverage
-# fixture, the largest sampled lambda reached 3.27x its warm-mode value, so the
-# ceiling is built at 4x and the mass past it is <= 1e-12 THERE -- far smaller at
-# the abundances actually visited. .tobs_ms_nmix_kmax_check() re-reads the
-# realised excursion off the draws afterwards, so the margin is measured on every
-# fit rather than assumed to have held.
+# inflation factor is that margin, and it is set to twice the worst excursion
+# measured rather than to the excursion itself. On the 20-seed ms_abun coverage
+# fixture the largest sampled lambda reached 3.93x its warm-mode value, so a 4x
+# margin was already spent; at 8x the same fixture still sums 2.04x fewer states
+# than one shared ceiling does (against 3.09x at 4x -- the headroom costs about
+# half the saving and buys back the whole safety factor).
+# .tobs_ms_nmix_kmax_check() re-reads the realised excursion off the draws, so
+# the margin is measured on every fit rather than assumed to have held.
 .MS_NMIX_NUTS_TAIL_TOL <- 1e-12
-.MS_NMIX_NUTS_INFLATE  <- 4
+.MS_NMIX_NUTS_INFLATE  <- 8
 
 # Per-(species, site) max count, [n_species x n_sites]; 0 where a cell has no
 # visits (those cells are skipped by the kernel).
@@ -396,7 +398,8 @@
   # 20-seed coverage fixture one cell at lambda 236 against a median of 5.3 put
   # the shared ceiling at 307, so all 320 cells summed 307 states.
   # A user-supplied K_max keeps its documented meaning (hard global truncation)
-  # and is never narrowed.
+  # and is never narrowed. Cost on that fixture: 3.09x fewer summed states at a
+  # 4x excursion margin, 2.04x at the 8x margin actually used.
   eta_warm <- matrix(0, n_species, model$n_sites)
   bl <- as.matrix(warm$b_lambda)
   for (s in seq_len(n_species))

@@ -834,3 +834,64 @@ NOT swept: the other ~57 test files mentioning bym2, most of which only exercise
 term parsing or gates. `test-occu-cover-field-sd-units.R` is the one whose name
 says it asserts on the axis this moves; the smoke and full-recovery tiers cover
 the rest.
+
+## ms_abun NUTS per-(species, site) latent-N ceiling (#233)
+
+Fixture: `simulate_ms_abun(n_species = 8, N = 40, J = 4, ...)`, seeds 201-220,
+`n.iter = 300`, `n.warmup = 300`, Poisson (the simulator's default -- so every
+number in this section is the Poisson path). Wall time on this box is +-2.6x
+noisy; the state counts are byte-identical across runs, so the conclusions rest
+on those.
+
+Summed latent states per fit, one shared ceiling vs one ceiling per cell:
+
+| | shared `K_max` | per-cell | saving |
+|---|---|---|---|
+| mean over 20 seeds (margin 8) | -- | -- | 2.04x |
+| mean over 20 seeds (margin 4) | -- | -- | 3.09x |
+| seed 211 (margin 8) | 128761 | 27934 | 4.61x |
+| seed 203 (margin 8) | 96669 | 33080 | 2.92x |
+| seed 212 (margin 8, mildest) | 36815 | 25411 | 1.45x |
+
+The point is the flatness, not the ratio: `K_site_mean` stays in 77.8-108.3 over
+all 20 seeds while the shared `K_max` swings 118-407. Under one shared ceiling a
+seed's per-step cost is set by its single heaviest cell; per-cell resolution
+decouples it, so the ratio is largest exactly where the shared ceiling was worst.
+
+Excursion margin (`.MS_NMIX_NUTS_INFLATE`). The ceiling is fixed at the warm-start
+mode and held for the whole chain, so it has to cover where the sampler GOES; a
+cell wandering past it loses real posterior mass, which is a wrong answer rather
+than a slow one. Max sampled/warm-mode lambda ratio over the 20 seeds: **3.93**
+(seed 208; 3.76 seed 212, 3.68 seed 207). That figure is IDENTICAL at margin 4 and
+margin 8, as it must be -- the ceiling caps the latent-N sum and never constrains
+lambda -- so it measures the posterior, not the setting. Margin 8 is therefore a
+2x safety factor over the worst measured excursion. Cost of the headroom, from the
+warm-start-only probe across all 20 seeds:
+
+```
+  inflate  4 : 3.09x fewer states  (100% of the inflate-4 cost)
+  inflate  6 : 2.42x fewer states  (128%)
+  inflate  8 : 2.04x fewer states  (151%)
+  inflate 12 : 1.64x fewer states  (186%)
+  inflate 16 : 1.44x fewer states  (210%)
+```
+
+The probe's 2.04x predicted the end-to-end 20-fit result exactly. Coverage 0.975
+at both margins (gate 0.85 pooled), divergences 0-6 per seed.
+
+Negbin saves much less, and the reason is structural rather than a fixture
+accident: the ceiling is an exact tail quantile at `.MS_NMIX_NUTS_TAIL_TOL` 1e-12,
+and the NB tail is far heavier than the Poisson one, so each cell's own ceiling
+lands near the shared one. On the `test-ms-abun-nuts.R` fixture at margin 8:
+
+```
+  poisson  K_max 136  K_site 36..136 (mean  95.4)  69% of cells < K_max  1.45x
+  negbin   K_max 174  K_site 59..174 (mean 153.5)  31% of cells < K_max  1.14x
+```
+
+That is why `test-ms-abun-nuts.R` asserts that the ceiling BINDS (>25% of cells
+strictly below `K_max`, total states strictly down) and not a states ratio: the
+ratio tracks the excursion margin and the mixture's tail weight, both tuning, so a
+pinned ratio would need re-deriving whenever either moved. Correctness is the
+separate assertion -- capped == uncapped to 1e-8, and C++ == R oracle to 1e-9 WITH
+the ceiling present, both of which the binding check keeps non-vacuous.
