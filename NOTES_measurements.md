@@ -837,6 +837,31 @@ the rest.
 
 ## ms_abun NUTS per-(species, site) latent-N ceiling (#233)
 
+CONTRACT (CLAUDE.md points here rather than restating it; that file is at its
+150k cap). This is a DIFFERENT mechanism from the Laplace headroom guard in the
+`abun()` truncation section -- do not conflate them.
+
+- The ceiling is set PER (species, site) by `.tobs_ms_nmix_nuts_kmax()` from an
+  exact tail quantile (`qpois` / `qnbinom`, `.MS_NMIX_NUTS_TAIL_TOL` 1e-12) at
+  `.MS_NMIX_NUTS_INFLATE` x that cell's WARM-MODE lambda. NOT a `max(y_i)`
+  -relative headroom: `max(y_i)` understates N by exactly the detection rate, so
+  a fixed headroom is tightest where detection is lowest = the wrong direction.
+- The ceiling is FIXED at the warm-start mode and held for the whole chain, so
+  the inflation factor is an EXCURSION margin, not a precision knob. A cell whose
+  lambda wanders past its ceiling loses real posterior mass -- a wrong answer,
+  not a slow one. `.tobs_ms_nmix_kmax_check()` re-reads the realised excursion
+  off the draws on every fit (`fit$nuts$K_site_check`), so the margin is measured
+  rather than assumed to have held.
+- Threaded to the kernel as `K_site` (`nmix_precompute_site(K_site=)`).
+  `compute_nmix_site`'s arity is UNTOUCHED -- it IS the `CountKernelFn` function
+  -pointer contract the shared count-NUTS / count-Laplace drivers take, and a
+  defaulted extra parameter silently breaks that conversion.
+- C++ AND the R oracle REJECT a ceiling below a cell's own `max(y)` rather than
+  silently raising it; raising it would hide a caller bug.
+- The R oracle slices the SAME per-cell ceiling (`.tobs_ms_abun_nuts_marginals`
+  takes `K_site`), which is what keeps it a real check of the capped target
+  rather than of a different one.
+
 Fixture: `simulate_ms_abun(n_species = 8, N = 40, J = 4, ...)`, seeds 201-220,
 `n.iter = 300`, `n.warmup = 300`, Poisson (the simulator's default -- so every
 number in this section is the Poisson path). Wall time on this box is +-2.6x

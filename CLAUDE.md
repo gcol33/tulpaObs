@@ -535,27 +535,9 @@ S3).
   Field-off path byte-identical to non-spatial; full grad FD-validated.
   `.tobs_fit_ms_abun_nuts_spatial` warms from `nmix_community_laplace_car_proper` (#12).
   `test-ms-abun-nuts.R`. Design note `dev_notes/design_73.md`.
-  **Latent-N ceiling is PER (species, site) here (#233)**, a DIFFERENT mechanism
-  from the Laplace headroom guard above: the sum is re-evaluated every leapfrog
-  step, so one SHARED ceiling makes every cell pay for the array's heaviest one
-  (measured `K_max` 118-407 across seeds while the per-cell mean held 78-108).
-  `.tobs_ms_nmix_nuts_kmax()` resolves each cell's ceiling by exact tail quantile
-  (`qpois`/`qnbinom`, tol 1e-12) at `.MS_NMIX_NUTS_INFLATE` x its warm-mode lambda
-  -- NOT a `max(y_i)`-relative headroom, which understates N by exactly the
-  detection rate and so is tightest where detection is lowest = the wrong
-  direction. The ceiling is FIXED at the warm mode and held for the whole chain,
-  so the inflation is an EXCURSION margin: a cell wandering past it loses real
-  posterior mass (wrong answer, not a slow one). Set to 8 = 2x the worst measured
-  excursion (3.93); `.tobs_ms_nmix_kmax_check()` re-reads the realised excursion
-  off the draws on every fit (`fit$nuts$K_site_check`), so the margin is measured,
-  never assumed. That figure is INVARIANT to the margin (the ceiling caps the sum,
-  never lambda) -> it measures the posterior, so raising the margin cannot flatter
-  it. Threaded to the kernel as `K_site` (`nmix_precompute_site(K_site=)`,
-  `compute_nmix_site` arity UNTOUCHED -- it IS the `CountKernelFn` contract); both
-  C++ and the R oracle REJECT a ceiling below a cell's own `max(y)` rather than
-  raising it. NB saves far less than Pois (heavier tail -> per-cell ceiling lands
-  near the shared one), so the test asserts the ceiling BINDS, not a states ratio.
-  Numbers in `NOTES_measurements.md`.
+  **Latent-N ceiling PER (species, site) (#233)**: warm-mode-lambda tail
+  quantile, an EXCURSION margin re-checked every fit; kernel arity untouched.
+  Contract + numbers in `NOTES_measurements.md`.
 
 #### Areal-spatial community N-mixture (`ms_abun()` + shared field; sfMsNMix)
 
