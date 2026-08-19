@@ -61,9 +61,10 @@ Defaults to \code{exp(seq(log(0.2), log(3), length.out = 5L))}.}
 
 \item{r_grid}{Optional NB size grid (NB only); see \code{\link[=nmix_laplace_icar]{nmix_laplace_icar()}}.}
 
-\item{scale_factor}{Optional scalar Riebler scaling factor (geometric mean
-of non-zero eigenvalues of \eqn{Q}). If \code{NULL}, it is computed from the
-adjacency via dense eigendecomposition.}
+\item{scale_factor}{Optional scalar Riebler scaling factor \eqn{s}, the
+geometric mean of the marginal variances \eqn{\mathrm{diag}(Q^{+})} of the
+intrinsic ICAR field. If \code{NULL}, it is computed from the adjacency via
+dense eigendecomposition.}
 
 \item{beta_lambda_init}{Optional warm start; default \code{c(log(mean(y)+0.1), 0, ...)}.}
 
@@ -103,10 +104,11 @@ Nested-Laplace fit of the spatial N-mixture model with a BYM2 (Riebler et al.
 2016) prior on the abundance-arm spatial offset. The offset decomposes as
 \deqn{\phi_u = \sigma \left(\sqrt{\rho / s} \, v_u + \sqrt{1 - \rho} \, w_u\right),}
 with \eqn{v \sim \mathrm{ICAR}} (unscaled, sum-to-zero) and
-\eqn{w \sim \mathrm{N}(0, I)} iid. \eqn{s} is the geometric mean of the
-non-zero eigenvalues of the ICAR precision \eqn{Q} (the Riebler scaling
-factor); \eqn{\sigma} is then the joint marginal standard deviation of
-\eqn{\phi}, and \eqn{\rho \in [0, 1]} is the spatial fraction of variance.
+\eqn{w \sim \mathrm{N}(0, I)} iid. \eqn{s} is the Riebler scaling factor,
+the geometric mean of the marginal variances \eqn{\mathrm{diag}(Q^{+})} of
+the intrinsic ICAR field; \eqn{\sigma} is then the joint marginal standard
+deviation of \eqn{\phi}, and \eqn{\rho \in [0, 1]} is the spatial fraction
+of variance.
 
 The inner Newton works in the joint state
 \eqn{x = (\beta_\lambda, \beta_p, v, w)} (dimension
