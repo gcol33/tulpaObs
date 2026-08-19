@@ -203,8 +203,20 @@ struct NMixSiteCache {
 // exactly h states of headroom. Capping each site at its own max + h gives every
 // site the headroom the binding site has, so no site is left with a tighter
 // truncation than the current default already accepts.
+//
+// `K_site` is the same ceiling stated directly: a caller that already knows each
+// site's own abundance scale resolves that site's ceiling itself and passes it
+// (`<= 0` = not supplied). `headroom` derives a ceiling from max(y_i), which is
+// what the counts alone reveal; a caller holding a fitted lambda_i can key the
+// ceiling to the abundance instead, which is tighter wherever detection is high
+// and wider wherever it is low -- max(y_i) understates N exactly when p is small.
+// Supplied `K_site` therefore takes precedence over `headroom`; both write K_hi
+// here, the one place the sum's ceiling is set. A `K_site` below the site's own
+// max(y_i) leaves the site inadmissible rather than being silently raised: the
+// sum's lower end is a property of the data, so a ceiling under it is a caller
+// bug, and callers validate before reaching this.
 inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max,
-                                          int headroom = -1) {
+                                          int headroom = -1, int K_site = 0) {
     NMixSiteCache c;
     c.n_visits = n_visits;
     c.y.assign(y, y + n_visits);
@@ -212,7 +224,11 @@ inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max,
     for (int j = 0; j < n_visits; ++j) if (y[j] > y_max) y_max = y[j];
     c.K_lo = y_max;
     c.K_hi = K_max;
-    if (headroom >= 0 && y_max <= K_max - headroom) c.K_hi = y_max + headroom;
+    if (K_site > 0) {
+        if (K_site < c.K_hi) c.K_hi = K_site;
+    } else if (headroom >= 0 && y_max <= K_max - headroom) {
+        c.K_hi = y_max + headroom;
+    }
     c.admissible = (c.K_hi >= y_max);
     c.const_log_yfact = 0.0;
     for (int j = 0; j < n_visits; ++j)

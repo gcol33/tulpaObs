@@ -44,7 +44,23 @@
                n_sites = model$n_sites, n_species = model$n_species,
                K_max = K_max, is_nb = is_nb)
   list(sim = sim, model = model, lay = lay, margs = margs, theta0 = theta0,
-       spec = spec, pri = tulpaObs:::.ms_ocs_nuts_priors(), is_nb = is_nb)
+       spec = spec, pri = tulpaObs:::.ms_ocs_nuts_priors(), is_nb = is_nb,
+       lf = lf, Xlam = Xlam, K_max = K_max, warm = warm)
+}
+
+# The per-(species, site) latent-N ceiling the fitters resolve from the warm-start
+# mode, plus the shared-ceiling pieces to compare it against.
+.msan_ksite <- function(P) {
+  S <- P$model$n_species; N <- P$model$n_sites
+  eta <- matrix(0, S, N)
+  bl  <- as.matrix(P$warm$b_lambda)
+  for (s in seq_len(S))
+    eta[s, ] <- as.numeric(P$Xlam %*% (P$warm$mu_lambda + bl[s, ]))
+  ymax <- tulpaObs:::.tobs_ms_nmix_ymax(P$lf, S, N)
+  K <- tulpaObs:::.tobs_ms_nmix_nuts_kmax(
+    eta, ymax, P$K_max,
+    r_species = if (P$is_nb) as.numeric(P$warm$r_s) else NULL)
+  list(K = K, ymax = ymax, eta = eta)
 }
 
 .msan_fd_grad <- function(f, theta, h = 1e-5) {
@@ -91,6 +107,90 @@ test_that("ms_abun NUTS C++ FullGradFn matches the R oracle", {
     expect_lt(abs(cpp$lp - r$lp), 1e-9)
     expect_lt(max(abs(cpp$grad - r$grad)), 1e-9)
   }
+})
+
+
+# --- (2b) per-(species, site) latent-N ceiling ------------------------------
+#
+# The latent sum is re-evaluated on every leapfrog step, so its width IS the
+# per-step cost, and a SHARED ceiling is set by the single heaviest cell in the
+# whole array -- every other cell then pays for that one. Each cell's ceiling is
+# resolved from its own warm-mode abundance instead (gcol33/tulpaObs#233).
+#
+# What has to hold: the narrower sum returns the SAME target. That is what these
+# assert, on both the C++ target and the R oracle, together with the narrowing
+# itself -- without it the equality is vacuous, since a ceiling that never binds
+# trivially agrees with the shared one.
+
+test_that("ms_abun NUTS per-cell latent-N ceiling narrows the sum", {
+  skip_on_cran()
+  for (mix in c("poisson", "negbin")) {
+    P  <- .msan_pieces(mix)
+    ks <- .msan_ksite(P)
+
+    # Never below the cell's own max(y) (the sum's lower end, a property of the
+    # data) and never above the shared ceiling (so it can only be cheaper).
+    expect_true(all(ks$K >= ks$ymax))
+    expect_true(all(ks$K <= P$K_max))
+
+    # It binds: the summed state count drops well short of the shared ceiling's.
+    states_site   <- sum(ks$K - ks$ymax + 1)
+    states_shared <- sum(P$K_max - ks$ymax + 1)
+    expect_lt(states_site, 0.8 * states_shared)
+  }
+})
+
+test_that("ms_abun NUTS per-cell ceiling leaves the target unchanged", {
+  skip_on_cran()
+  for (mix in c("poisson", "negbin")) {
+    P  <- .msan_pieces(mix)
+    ks <- .msan_ksite(P)
+    set.seed(2)
+    theta <- P$theta0 + stats::rnorm(length(P$theta0), 0, 0.05)
+
+    spec_cap <- P$spec
+    spec_cap$K_max  <- as.integer(max(ks$K))
+    spec_cap$K_site <- ks$K
+    margs_cap <- tulpaObs:::.tobs_ms_abun_nuts_marginals(
+      P$lf, P$Xlam, P$model$n_sites, if (P$is_nb) "NB" else "P",
+      max(ks$K), ks$K)
+
+    cpp_full <- cpp_ms_abun_nuts_joint_logpost(P$spec, theta, P$pri,
+                                               sigma_beta = 10, sigma_logr = 1.5)
+    cpp_cap  <- cpp_ms_abun_nuts_joint_logpost(spec_cap, theta, P$pri,
+                                               sigma_beta = 10, sigma_logr = 1.5)
+    r_cap <- tulpaObs:::.tobs_ms_abun_nuts_logpost(
+      theta, margs_cap, P$lay, P$pri, sigma.beta = 10, sigma.logr = 1.5,
+      grad = TRUE)
+
+    # The dropped upper tail carries no mass at this width: capped == uncapped.
+    expect_lt(abs(cpp_cap$lp - cpp_full$lp), 1e-8)
+    expect_lt(max(abs(cpp_cap$grad - cpp_full$grad)), 1e-8)
+    # ... and the C++ target stays byte-exact against the R oracle WITH the
+    # ceiling present, which is what keeps the oracle a real check of it.
+    expect_lt(abs(cpp_cap$lp - r_cap$lp), 1e-9)
+    expect_lt(max(abs(cpp_cap$grad - r_cap$grad)), 1e-9)
+  }
+})
+
+test_that("ms_abun NUTS rejects a ceiling below a cell's own max(y)", {
+  skip_on_cran()
+  P  <- .msan_pieces("poisson")
+  ks <- .msan_ksite(P)
+  hot <- which(ks$ymax == max(ks$ymax), arr.ind = TRUE)[1, ]
+  expect_gt(ks$ymax[hot[1], hot[2]], 0)          # else the case is vacuous
+  bad <- ks$K
+  bad[hot[1], hot[2]] <- ks$ymax[hot[1], hot[2]] - 1L
+
+  spec_bad <- P$spec
+  spec_bad$K_max  <- as.integer(max(ks$K))
+  spec_bad$K_site <- bad
+  # Silently raising it would hide a caller bug; both sides refuse instead.
+  expect_error(cpp_ms_abun_nuts_joint_logpost(spec_bad, P$theta0, P$pri,
+                                              sigma_beta = 10, sigma_logr = 1.5),
+               "below")
+  expect_error(tulpaObs:::.tobs_ms_abun_nuts_marginals(
+    P$lf, P$Xlam, P$model$n_sites, "P", max(ks$K), bad), "max")
 })
 
 

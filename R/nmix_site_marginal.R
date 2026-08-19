@@ -145,6 +145,12 @@
 #'   negative value disables the per-site cap. Callers that resolve the ceiling
 #'   themselves (the community fitters share one `K_max` across species) pass
 #'   both.
+#' @param K_site Per-site latent-N ceiling, an integer vector of length
+#'   `n_sites` (`NULL` = none). The same ceiling `headroom` derives from
+#'   `max(y_i)`, stated directly instead: a caller holding a fitted
+#'   \eqn{\lambda_i} keys each site's ceiling to that site's abundance scale,
+#'   which `max(y_i)` understates wherever detection is low. Takes precedence
+#'   over `headroom`, and must be at least each site's own `max(y_i)`.
 #'
 #' @return An object of class `nmix_marginal`: a list of the validated
 #'   data plus closures
@@ -179,7 +185,8 @@ nmix_site_marginal <- function(y,
                                      X_p,
                                      mixture = c("P", "NB"),
                                      K_max = NULL,
-                                     headroom = NULL) {
+                                     headroom = NULL,
+                                     K_site = NULL) {
   mixture <- match.arg(mixture)
   y        <- as.integer(y)
   site_idx <- as.integer(site_idx)
@@ -210,6 +217,23 @@ nmix_site_marginal <- function(y,
   if (K_max < max(y)) stop("`K_max` must be >= max(y).", call. = FALSE)
   headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
 
+  if (!is.null(K_site)) {
+    K_site <- as.integer(K_site)
+    if (length(K_site) != n_sites) {
+      stop(sprintf("`K_site` must have length n_sites (%d), got %d.",
+                   n_sites, length(K_site)), call. = FALSE)
+    }
+    if (anyNA(K_site)) stop("`K_site` must not contain NA.", call. = FALSE)
+    y_max_site <- rep(0L, n_sites)
+    ms <- tapply(y, site_idx, max)
+    y_max_site[as.integer(names(ms))] <- as.integer(ms)
+    if (any(K_site < y_max_site)) {
+      bad <- which(K_site < y_max_site)[1L]
+      stop(sprintf("`K_site`[%d] = %d is below that site's max(y) = %d.",
+                   bad, K_site[bad], y_max_site[bad]), call. = FALSE)
+    }
+  }
+
   obs_by_site <- split(seq_len(n_obs), site_idx)
   # Re-key to a dense 1..n_sites list (sites with no visits get integer(0)).
   obs_by_site <- lapply(seq_len(n_sites), function(s) {
@@ -235,7 +259,8 @@ nmix_site_marginal <- function(y,
       stop("length(eta_p) must equal n_obs.", call. = FALSE)
     }
     out <- cpp_nmix_total_log_lik(y, site_idx, eta_p, eta_lambda, K_max,
-                                  r = resolve_r(r), headroom = headroom)
+                                  r = resolve_r(r), headroom = headroom,
+                                  K_site = K_site)
     out$p <- plogis(eta_p)
     out
   }
@@ -274,7 +299,7 @@ nmix_site_marginal <- function(y,
   structure(
     list(
       y = y, site_idx = site_idx, X_lambda = X_lambda, X_p = X_p,
-      mixture = mixture, K_max = K_max, headroom = headroom,
+      mixture = mixture, K_max = K_max, headroom = headroom, K_site = K_site,
       n_sites = n_sites, n_obs = n_obs, p_lambda = p_lambda, p_p = p_p,
       obs_by_site = obs_by_site,
       eval = eval_eta, eval_beta = eval_beta, obs_info_block = obs_info_block

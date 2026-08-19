@@ -313,8 +313,8 @@ cpp_nmix_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_i
     .Call(`_tulpaObs_cpp_nmix_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom)
 }
 
-cpp_nmix_total_log_lik <- function(y, site_idx, eta_p, eta_lambda, K_max, r, headroom = -1L) {
-    .Call(`_tulpaObs_cpp_nmix_total_log_lik`, y, site_idx, eta_p, eta_lambda, K_max, r, headroom)
+cpp_nmix_total_log_lik <- function(y, site_idx, eta_p, eta_lambda, K_max, r, headroom = -1L, K_site = NULL) {
+    .Call(`_tulpaObs_cpp_nmix_total_log_lik`, y, site_idx, eta_p, eta_lambda, K_max, r, headroom, K_site)
 }
 
 cpp_nmix_ploglik_batch <- function(y, site_idx, eta_p, eta_lambda, K_max, r_vec, n_threads) {

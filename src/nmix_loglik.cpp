@@ -38,6 +38,13 @@
 #include <Rcpp.h>
 #include <vector>
 
+// `r` is the NB size (pass Inf for the Poisson kernel). `headroom` caps each
+// site's latent-N sum that many states above its own max(y) (< 0 = no cap).
+// `K_site` states each site's ceiling directly (length n_sites, NULL = none) and
+// takes precedence over `headroom`: a caller holding a fitted lambda_i resolves
+// the ceiling from the abundance scale rather than from max(y_i).
+// (Comments stay OUT of the parameter list -- the attribute parser folds one
+// into the signature it generates, see gcol33/tulpaObs#233.)
 // [[Rcpp::export]]
 Rcpp::List cpp_nmix_total_log_lik(
     Rcpp::IntegerVector y,
@@ -45,8 +52,9 @@ Rcpp::List cpp_nmix_total_log_lik(
     Rcpp::NumericVector eta_p,
     Rcpp::NumericVector eta_lambda,
     int K_max,
-    double r,         // NB size; pass Inf for the Poisson kernel
-    int headroom = -1 // latent-N states above each site's own max(y); <0 = none
+    double r,
+    int headroom = -1,
+    Rcpp::Nullable<Rcpp::IntegerVector> K_site = R_NilValue
 ) {
     const int n_obs = y.size();
     const int n_sites = eta_lambda.size();
@@ -60,6 +68,17 @@ Rcpp::List cpp_nmix_total_log_lik(
     }
     if (K_max < 0) Rcpp::stop("K_max must be >= 0.");
     if (R_finite(r) && r <= 0.0) Rcpp::stop("r (NB size) must be > 0.");
+
+    // Unwrap the per-site ceiling here; header helpers take concrete types.
+    std::vector<int> K_site_vec;
+    if (K_site.isNotNull()) {
+        Rcpp::IntegerVector ks(K_site);
+        if (ks.size() != n_sites) {
+            Rcpp::stop("K_site length must match n_sites (%d vs %d).",
+                       ks.size(), n_sites);
+        }
+        K_site_vec.assign(ks.begin(), ks.end());
+    }
 
     // Group observations by site (preserves input order within each site).
     const std::vector<std::vector<int>> obs_by_site =
@@ -83,8 +102,17 @@ Rcpp::List cpp_nmix_total_log_lik(
             y_site[j]     = y[idx[j]];
             eta_p_site[j] = eta_p[idx[j]];
         }
+        const int K_s = K_site_vec.empty() ? 0 : K_site_vec[s];
+        if (K_s > 0) {
+            int y_max = 0;
+            for (int j = 0; j < J; ++j) if (y_site[j] > y_max) y_max = y_site[j];
+            if (K_s < y_max) {
+                Rcpp::stop("K_site[%d] = %d is below that site's max(y) = %d.",
+                           s + 1, K_s, y_max);
+            }
+        }
         const tulpaObs::NMixSiteCache cache =
-            tulpaObs::nmix_precompute_site(y_site.data(), J, K_max, headroom);
+            tulpaObs::nmix_precompute_site(y_site.data(), J, K_max, headroom, K_s);
         tulpaObs::NMixSiteResult res = tulpaObs::compute_nmix_site_cached(
             cache, eta_p_site.data(), eta_lambda[s], r
         );

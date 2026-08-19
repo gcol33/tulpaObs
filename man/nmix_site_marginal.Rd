@@ -11,7 +11,8 @@ nmix_site_marginal(
   X_p,
   mixture = c("P", "NB"),
   K_max = NULL,
-  headroom = NULL
+  headroom = NULL,
+  K_site = NULL
 )
 }
 \arguments{
@@ -42,6 +43,13 @@ exceeds ~1e-4.}
 negative value disables the per-site cap. Callers that resolve the ceiling
 themselves (the community fitters share one \code{K_max} across species) pass
 both.}
+
+\item{K_site}{Per-site latent-N ceiling, an integer vector of length
+\code{n_sites} (\code{NULL} = none). The same ceiling \code{headroom} derives from
+\code{max(y_i)}, stated directly instead: a caller holding a fitted
+\eqn{\lambda_i} keys each site's ceiling to that site's abundance scale,
+which \code{max(y_i)} understates wherever detection is low. Takes precedence
+over \code{headroom}, and must be at least each site's own \code{max(y_i)}.}
 }
 \value{
 An object of class \code{nmix_marginal}: a list of the validated

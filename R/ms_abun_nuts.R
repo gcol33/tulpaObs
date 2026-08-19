@@ -76,7 +76,12 @@
 # grad_eta_lambda is length n_sites) and that species' detection-design slice;
 # eval_beta() then differentiates through both arms exactly as the single-species
 # abun() NUTS target does, once per species.
-.tobs_ms_abun_nuts_marginals <- function(lf, X_lambda, n_sites, mix_code, K_max) {
+#
+# `K_site` (optional, [n_species x n_sites]) is the per-cell latent-N ceiling the
+# C++ target reads off the spec; passing the same matrix here is what keeps the R
+# oracle byte-exact against it.
+.tobs_ms_abun_nuts_marginals <- function(lf, X_lambda, n_sites, mix_code, K_max,
+                                         K_site = NULL) {
   S <- max(lf$species_idx)
   lapply(seq_len(S), function(s) {
     idx <- which(lf$species_idx == s)
@@ -86,8 +91,76 @@
       X_lambda = X_lambda,
       X_p      = lf$X_p[idx, , drop = FALSE],
       mixture  = mix_code,
-      K_max    = K_max)
+      K_max    = K_max,
+      K_site   = if (is.null(K_site)) NULL else K_site[s, ])
   })
+}
+
+
+# ---------------------------------------------------------------------------
+# Per-(species, site) latent-N ceiling for the NUTS marginal
+# ---------------------------------------------------------------------------
+
+# Upper-tail mass the ceiling is allowed to drop at ONE (species, site), and the
+# factor the warm-mode abundance is inflated by before that tail is read off.
+#
+# The ceiling is fixed once, at the warm-start mode, and then held for the whole
+# chain, so it has to cover where the sampler GOES, not only where it starts:
+# a cell whose lambda wanders above its ceiling loses real mass and the target
+# there is wrong, which is a correctness failure and not a precision one. The
+# inflation factor is that margin. Measured on the 20-seed ms_abun coverage
+# fixture, the largest sampled lambda reached 3.27x its warm-mode value, so the
+# ceiling is built at 4x and the mass past it is <= 1e-12 THERE -- far smaller at
+# the abundances actually visited. .tobs_ms_nmix_kmax_check() re-reads the
+# realised excursion off the draws afterwards, so the margin is measured on every
+# fit rather than assumed to have held.
+.MS_NMIX_NUTS_TAIL_TOL <- 1e-12
+.MS_NMIX_NUTS_INFLATE  <- 4
+
+# Per-(species, site) max count, [n_species x n_sites]; 0 where a cell has no
+# visits (those cells are skipped by the kernel).
+.tobs_ms_nmix_ymax <- function(lf, n_species, n_sites) {
+  m   <- matrix(0L, n_species, n_sites)
+  key <- (as.integer(lf$site_idx) - 1L) * n_species + as.integer(lf$species_idx)
+  agg <- tapply(as.integer(lf$y), key, max)
+  m[as.integer(names(agg))] <- as.integer(agg)
+  m
+}
+
+# Resolve each (species, site)'s own latent-N ceiling from that cell's warm-mode
+# abundance. `eta_lambda` / `y_max` are [n_species x n_sites]; `K_max` is the
+# shared ceiling the result is never allowed to exceed, so a capped fit sums a
+# subset of what the uncapped one does and can only be cheaper.
+#
+# Keying the ceiling to lambda rather than to max(y_i) is the point: max(y_i) is
+# what the counts reveal, and it understates N by exactly the detection rate, so
+# a headroom above it is tightest where detection is LOWEST. The abundance scale
+# does not have that inversion.
+.tobs_ms_nmix_nuts_kmax <- function(eta_lambda, y_max, K_max, r_species = NULL,
+                                    tol = .MS_NMIX_NUTS_TAIL_TOL,
+                                    inflate = .MS_NMIX_NUTS_INFLATE) {
+  lam <- exp(eta_lambda) * inflate
+  K <- if (is.null(r_species)) {
+    stats::qpois(tol, lam, lower.tail = FALSE)
+  } else {
+    r <- pmax(as.numeric(r_species), 1e-6)
+    stats::qnbinom(tol, size = r[row(lam)], mu = lam, lower.tail = FALSE)
+  }
+  K <- matrix(as.numeric(K), nrow(eta_lambda), ncol(eta_lambda))
+  K <- pmax(K, y_max + 5)
+  K <- pmin(K, K_max)
+  storage.mode(K) <- "integer"
+  K
+}
+
+# What the ceiling's excursion margin was actually asked to absorb. `eta_max` is
+# the per-cell maximum of the sampled abundance predictor, `eta_design` the
+# warm-mode one the ceiling was built from. `ratio` > `inflate` means a cell went
+# past where the ceiling was resolved and its marginal was truncated too early.
+.tobs_ms_nmix_kmax_check <- function(eta_max, eta_design,
+                                     inflate = .MS_NMIX_NUTS_INFLATE) {
+  ratio <- max(exp(eta_max - eta_design))
+  list(inflate = inflate, max_lambda_ratio = ratio, ok = ratio <= inflate)
 }
 
 
@@ -315,25 +388,27 @@
     n_quad = if (is_nb) as.integer(n.quad) else 1L,
     lkj_eta = lkj_eta, verbose = FALSE)
 
-  # Data-driven K_max for the (expensive) NUTS marginal: the latent N is summed
-  # over [max(y), K_max] on EVERY leapfrog step, so a too-generous cap wastes the
-  # inner loop. Cap at the abundance scale's 10-sigma upper tail (Poisson, or NB
-  # variance lambda + lambda^2/r), where the dropped mass is < 1e-12 -- the
-  # marginal is unchanged to machine precision while the per-step cost drops with
-  # the latent range. A user-supplied K_max is respected verbatim.
+  # Data-driven latent-N ceiling for the (expensive) NUTS marginal: the sum over
+  # [max(y), K] is re-evaluated on EVERY leapfrog step, so its width IS the
+  # per-step cost. The ceiling is resolved per (species, site) from that cell's
+  # own warm-mode abundance, because one ceiling shared across cells is set by
+  # the single heaviest cell and charges every other cell for it -- on the
+  # 20-seed coverage fixture one cell at lambda 236 against a median of 5.3 put
+  # the shared ceiling at 307, so all 320 cells summed 307 states.
+  # A user-supplied K_max keeps its documented meaning (hard global truncation)
+  # and is never narrowed.
+  eta_warm <- matrix(0, n_species, model$n_sites)
+  bl <- as.matrix(warm$b_lambda)
+  for (s in seq_len(n_species))
+    eta_warm[s, ] <- as.numeric(X_lambda %*% (warm$mu_lambda + bl[s, ]))
   if (user_K) {
-    K_max <- K_warm
+    K_max  <- K_warm
+    K_site <- NULL
   } else {
-    bl <- as.matrix(warm$b_lambda)
-    lam_max <- 0
-    for (s in seq_len(n_species))
-      lam_max <- max(lam_max, exp(as.numeric(X_lambda %*% (warm$mu_lambda + bl[s, ]))))
-    var_max <- if (is_nb) {
-      r_min <- max(min(as.numeric(warm$r_s)), 1e-6)
-      lam_max + lam_max^2 / r_min
-    } else lam_max
-    K_tail <- as.integer(ceiling(lam_max + 10 * sqrt(var_max))) + 10L
-    K_max  <- min(K_warm, max(max(lf$y) + 5L, K_tail))
+    K_site <- .tobs_ms_nmix_nuts_kmax(
+      eta_warm, .tobs_ms_nmix_ymax(lf, n_species, model$n_sites), K_warm,
+      r_species = if (is_nb) as.numeric(warm$r_s) else NULL)
+    K_max <- max(K_site)
   }
   K_max <- as.integer(K_max)
 
@@ -343,6 +418,7 @@
                X_lambda = X_lambda, X_p = lf$X_p,
                n_sites = model$n_sites, n_species = n_species,
                K_max = K_max, is_nb = is_nb)
+  if (!is.null(K_site)) spec$K_site <- K_site
   inv_metric <- .ms_ocs_fd_metric(
     function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri, sigma.beta,
                                                 sigma.logr)$grad,
@@ -374,15 +450,28 @@
   # Per-species BLUPs = posterior mean of the RECONSTRUCTED deviation b = C z
   # (non-centered: the stored coordinates are the whitened z, so b is rebuilt per
   # draw with that draw's Cholesky factor before averaging).
-  B_bar <- matrix(0, n_species, lay$P)
-  for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
+  # The same sweep records the per-cell MAXIMUM sampled abundance predictor, so
+  # the ceiling's excursion margin is read off the chain that ran rather than
+  # assumed to have held (.tobs_ms_nmix_kmax_check below).
+  B_bar   <- matrix(0, n_species, lay$P)
+  eta_max <- matrix(-Inf, n_species, model$n_sites)
+  for (i in seq_len(nrow(draws))) {
+    Bi    <- .ms_ocs_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + Bi
+    mu_i  <- draws[i, lay$mu][lay$lambda]
+    for (s in seq_len(n_species)) {
+      e <- as.numeric(X_lambda %*% (mu_i + Bi[s, lay$lambda]))
+      eta_max[s, ] <- pmax(eta_max[s, ], e)
+    }
+  }
   B_bar <- B_bar / nrow(draws)
   b_lambda <- B_bar[, lay$lambda, drop = FALSE]
   b_p      <- B_bar[, lay$p,      drop = FALSE]
+  k_check  <- if (is.null(K_site)) NULL
+              else .tobs_ms_nmix_kmax_check(eta_max, eta_warm)
 
   margs   <- .tobs_ms_abun_nuts_marginals(lf, X_lambda, model$n_sites, mix_code,
-                                          K_max)
+                                          K_max, K_site)
   ll_mean <- .tobs_ms_abun_nuts_data_loglik(par, margs, lay)
 
   raw <- list(
@@ -408,6 +497,7 @@
 
   .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
                             is_nb = is_nb, K_max = K_max,
+                            K_site = K_site, K_site_check = k_check,
                             sigma_beta = sigma.beta, sigma_logr = sigma.logr)
 }
 
@@ -484,17 +574,23 @@
                                  scale_factor = spatial$scale_factor)
   field_load <- fl$field_load; n_raw <- fl$n_raw
 
-  # K_max for the NUTS marginal (data-driven, as the non-spatial path).
-  if (!is.null(K_max)) {
-    K_max <- K_warm
+  # Latent-N ceiling for the NUTS marginal, per (species, site) as on the
+  # non-spatial path -- keyed to each cell's own warm-mode abundance, which here
+  # carries the shared field as well, so a heavy corner of the field widens the
+  # sum only where it is heavy.
+  user_K <- !is.null(K_max)
+  bl <- as.matrix(nl$b_lambda)
+  eta_warm <- matrix(0, n_species, n_sites)
+  for (s in seq_len(n_species))
+    eta_warm[s, ] <- as.numeric(X_lambda %*% (nl$mu_lambda + bl[s, ])) +
+      nl$spatial_field
+  if (user_K) {
+    K_max  <- K_warm
+    K_site <- NULL
   } else {
-    bl <- as.matrix(nl$b_lambda)
-    lam_max <- 0
-    for (s in seq_len(n_species))
-      lam_max <- max(lam_max, exp(as.numeric(
-        X_lambda %*% (nl$mu_lambda + bl[s, ])) + max(nl$spatial_field)))
-    K_tail <- as.integer(ceiling(lam_max + 10 * sqrt(lam_max))) + 10L
-    K_max  <- min(K_warm, max(max(lf$y) + 5L, K_tail))
+    K_site <- .tobs_ms_nmix_nuts_kmax(
+      eta_warm, .tobs_ms_nmix_ymax(lf, n_species, n_sites), K_warm)
+    K_max <- max(K_site)
   }
   K_max <- as.integer(K_max)
 
@@ -519,6 +615,7 @@
                n_sites = n_sites, n_species = n_species, K_max = K_max,
                is_nb = FALSE, n_field_units = n_sites,
                field_map = seq_len(n_sites), field_load = field_load)
+  if (!is.null(K_site)) spec$K_site <- K_site
   inv_metric <- .ms_ocs_fd_metric(
     function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri, sigma.beta,
                                                 sigma.logr)$grad,
@@ -540,16 +637,31 @@
   vcov_mu <- stats::cov(draws[, lay$mu, drop = FALSE])
   Sigma_lambda <- .ms_ocs_sig_mean(draws, lay$chol_lam, lay$p_lam)
   Sigma_p      <- .ms_ocs_sig_mean(draws, lay$chol_p,   lay$p_p)
-  B_bar <- matrix(0, n_species, lay$P)
-  for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
+  raw_idx <- lay$total + seq_len(n_raw)
+  # The same sweep records the per-cell MAXIMUM sampled abundance predictor
+  # (community mean + species deviation + sampled field), so the ceiling's
+  # excursion margin is read off the chain that ran.
+  B_bar   <- matrix(0, n_species, lay$P)
+  eta_max <- matrix(-Inf, n_species, n_sites)
+  for (i in seq_len(nrow(draws))) {
+    Bi    <- .ms_ocs_b_from_z(draws[i, ], lay)
+    B_bar <- B_bar + Bi
+    mu_i  <- draws[i, lay$mu][lay$lambda]
+    f_i   <- as.numeric(field_load %*% draws[i, raw_idx])
+    for (s in seq_len(n_species)) {
+      e <- as.numeric(X_lambda %*% (mu_i + Bi[s, lay$lambda])) + f_i
+      eta_max[s, ] <- pmax(eta_max[s, ], e)
+    }
+  }
   B_bar <- B_bar / nrow(draws)
+  k_check <- if (is.null(K_site)) NULL
+             else .tobs_ms_nmix_kmax_check(eta_max, eta_warm)
 
   # Field posterior mean f = L %*% mean(raw) (n_raw whitened coordinates).
-  raw_idx  <- lay$total + seq_len(n_raw)
   field_mean <- as.numeric(field_load %*% colMeans(draws[, raw_idx, drop = FALSE]))
 
-  margs   <- .tobs_ms_abun_nuts_marginals(lf, X_lambda, n_sites, "P", K_max)
+  margs   <- .tobs_ms_abun_nuts_marginals(lf, X_lambda, n_sites, "P", K_max,
+                                          K_site)
   ll_mean <- .tobs_ms_abun_nuts_data_loglik(par[seq_len(lay$total)], margs, lay)
 
   raw <- list(
@@ -566,6 +678,7 @@
   fit$spatial_field <- field_mean
   .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
                             n_field_units = n_sites, is_nb = FALSE, K_max = K_max,
+                            K_site = K_site, K_site_check = k_check,
                             field_tau = fl$tau, field_rho = fl$rho,
                             sigma_beta = sigma.beta, sigma_logr = sigma.logr)
 }

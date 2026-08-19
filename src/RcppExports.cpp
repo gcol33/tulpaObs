@@ -1463,8 +1463,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_nmix_total_log_lik
-Rcpp::List cpp_nmix_total_log_lik(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_lambda, int K_max, double r, int headroom);
-RcppExport SEXP _tulpaObs_cpp_nmix_total_log_lik(SEXP ySEXP, SEXP site_idxSEXP, SEXP eta_pSEXP, SEXP eta_lambdaSEXP, SEXP K_maxSEXP, SEXP rSEXP, SEXP headroomSEXP) {
+Rcpp::List cpp_nmix_total_log_lik(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_lambda, int K_max, double r, int headroom, Rcpp::Nullable<Rcpp::IntegerVector> K_site);
+RcppExport SEXP _tulpaObs_cpp_nmix_total_log_lik(SEXP ySEXP, SEXP site_idxSEXP, SEXP eta_pSEXP, SEXP eta_lambdaSEXP, SEXP K_maxSEXP, SEXP rSEXP, SEXP headroomSEXP, SEXP K_siteSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1475,7 +1475,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type K_max(K_maxSEXP);
     Rcpp::traits::input_parameter< double >::type r(rSEXP);
     Rcpp::traits::input_parameter< int >::type headroom(headroomSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_nmix_total_log_lik(y, site_idx, eta_p, eta_lambda, K_max, r, headroom));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::IntegerVector> >::type K_site(K_siteSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_nmix_total_log_lik(y, site_idx, eta_p, eta_lambda, K_max, r, headroom, K_site));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2501,7 +2502,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nmix_spatial_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_spatial_community_oracle, 8},
     {"_tulpaObs_cpp_nmix_spatial_community_set_offset", (DL_FUNC) &_tulpaObs_cpp_nmix_spatial_community_set_offset, 2},
     {"_tulpaObs_cpp_nmix_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_nmix_laplace_fixed, 14},
-    {"_tulpaObs_cpp_nmix_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_nmix_total_log_lik, 7},
+    {"_tulpaObs_cpp_nmix_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_nmix_total_log_lik, 8},
     {"_tulpaObs_cpp_nmix_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_nmix_ploglik_batch, 7},
     {"_tulpaObs_cpp_removal_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_removal_ploglik_batch, 7},
     {"_tulpaObs_cpp_fp_occu_ploglik_batch", (DL_FUNC) &_tulpaObs_cpp_fp_occu_ploglik_batch, 7},

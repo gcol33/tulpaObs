@@ -76,6 +76,12 @@ struct MsNmixNutsData {
     // every leapfrog step, which dominated the runtime); the eval loop calls
     // compute_nmix_site_cached with the precomputed cache.
     std::vector<std::vector<NMixSiteCache>> cache;      // [s][i]
+    // Optional per-(species, site) latent-N ceiling, row-major [s * n_sites + i]
+    // (empty = every site truncates at the shared K_max). The latent sum is
+    // re-evaluated on every leapfrog step, so its width is the per-step cost;
+    // keying each species-site's ceiling to that cell's own fitted abundance
+    // stops one heavy cell from widening all of them.
+    std::vector<int> K_site;
 
     // Optional fixed-hyper areal field SHARED across species on the abundance
     // arm (tulpaObs#73): the non-centered Gaussian field f = Linv %*% raw,
@@ -126,6 +132,17 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
     d.p_lam     = d.X_lambda.ncol();
     d.p_p       = d.X_p.ncol();
     d.y.assign(y.begin(), y.end());
+    if (spec.containsElementNamed("K_site")) {
+        IntegerMatrix Ks = Rcpp::as<IntegerMatrix>(spec["K_site"]);
+        if (Ks.nrow() != d.n_species || Ks.ncol() != d.n_sites) {
+            Rcpp::stop("K_site must be n_species x n_sites (%d x %d, got %d x %d).",
+                       d.n_species, d.n_sites, Ks.nrow(), Ks.ncol());
+        }
+        d.K_site.assign((size_t)d.n_species * d.n_sites, 0);
+        for (int s = 0; s < d.n_species; ++s)
+            for (int i = 0; i < d.n_sites; ++i)
+                d.K_site[(size_t)s * d.n_sites + i] = Ks(s, i);
+    }
     // Optional shared areal field block (tulpaObs#73).
     if (spec.containsElementNamed("n_field_units")) {
         d.n_field_units = Rcpp::as<int>(spec["n_field_units"]);
@@ -174,7 +191,18 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
             if (J == 0) continue;
             y_site.resize(J);
             for (int jj = 0; jj < J; ++jj) y_site[jj] = d.y[obs[jj]];
-            d.cache[s][i] = nmix_precompute_site(y_site.data(), J, d.K_max);
+            const int K_si = d.K_site.empty()
+                ? 0 : d.K_site[(size_t)s * d.n_sites + i];
+            if (K_si > 0) {
+                int y_max = 0;
+                for (int jj = 0; jj < J; ++jj)
+                    if (y_site[jj] > y_max) y_max = y_site[jj];
+                if (K_si < y_max) {
+                    Rcpp::stop("K_site[%d, %d] = %d is below that cell's max(y) = %d.",
+                               s + 1, i + 1, K_si, y_max);
+                }
+            }
+            d.cache[s][i] = nmix_precompute_site(y_site.data(), J, d.K_max, -1, K_si);
         }
     }
     ms_abun_nuts_layout(d);
