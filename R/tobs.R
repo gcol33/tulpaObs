@@ -183,6 +183,13 @@
 #'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42 on the
 #'     single-species families, 1 on the community samplers).
 #'     The resolved per-chain seeds are stored on `$seeds`.
+#'   * `sigma.beta` — prior SD on the community-mean coefficients (default 5).
+#'   * `sigma.logr` — prior SD on the community-mean log-dispersion `mu_log_r`
+#'     (default 1.5), on the negative-binomial samplers that carry one
+#'     (`ms_abun()`, `ms_count()`, `jsdm()`). At the default this is an
+#'     informative prior on the dispersion scale, so raise it to compare the
+#'     sampler against a maximum-likelihood target. Ignored where the family or
+#'     mixture has no log-dispersion arm.
 #'
 #'   Sampler controls (`method = "pg_gibbs"`). A conjugate sweep is far cheaper
 #'   than a NUTS trajectory, so the chain is longer and two chains run by

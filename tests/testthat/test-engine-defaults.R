@@ -247,6 +247,26 @@ test_that("n.quad names one control across several marginals, each enumerated", 
   expect_error(.tobs_n_quad("no_such_route"), "no n.quad default")
 })
 
+test_that("sigma.logr is reachable from control on the sampler routes", {
+  # The community-mean ridge on mu_log_r is read from `control` by the
+  # negative-binomial NUTS dispatchers, so the allowlist has to admit the name
+  # for those reads to see anything. It is a sampler knob, so the Laplace routes
+  # reject it the way they reject any other sampler control.
+  expect_true("sigma.logr" %in% .tobs_control_groups$sampler)
+  expect_false("sigma.logr" %in% .tobs_control_groups$laplace_em)
+
+  nuts_route <- list(engine = "nuts", correction = "none")
+  expect_silent(.tobs_validate_control(list(sigma.logr = 100), nuts_route))
+  expect_error(
+    .tobs_validate_control(list(sigma.logr = 100),
+                           list(engine = "laplace", correction = "none")),
+    "sigma.logr")
+
+  # And the table stays the single answer for its default: no route may carry
+  # its own literal (see the sampler-knob test above, which covers the fitters).
+  expect_identical(.tobs_default("nuts", "sigma.logr"), 1.5)
+})
+
 test_that("the scalar nuisance block cannot be run below the converged rule", {
   # gcol33/tulpaObs#234. Two Gauss-Hermite nodes place two points and leave no
   # freedom for curvature, so on a 1-D posterior that is not near-Gaussian the

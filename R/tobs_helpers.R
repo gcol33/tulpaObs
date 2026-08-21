@@ -497,6 +497,11 @@
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",
                  "sigma.re.scale", "n.seeds",
+                 # Community-mean prior SD on the log-dispersion mu_log_r, for
+                 # the negative-binomial NUTS paths that carry one
+                 # (ms_abun(), ms_count(), jsdm()). Ignored by a family or
+                 # mixture with no log-dispersion arm.
+                 "sigma.logr",
                  # ms_occu_cover() NUTS per-species dispersion RE (#115 B7): opt
                  # into a fourth 1-D community arm on the cover log-dispersion.
                  "dispersion.re", "sigma.ld.init"),

@@ -204,6 +204,13 @@ single-species families, 0.9 on the community samplers).
 \item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42 on the
 single-species families, 1 on the community samplers).
 The resolved per-chain seeds are stored on \verb{$seeds}.
+\item \code{sigma.beta} — prior SD on the community-mean coefficients (default 5).
+\item \code{sigma.logr} — prior SD on the community-mean log-dispersion \code{mu_log_r}
+(default 1.5), on the negative-binomial samplers that carry one
+(\code{ms_abun()}, \code{ms_count()}, \code{jsdm()}). At the default this is an
+informative prior on the dispersion scale, so raise it to compare the
+sampler against a maximum-likelihood target. Ignored where the family or
+mixture has no log-dispersion arm.
 }
 
 Sampler controls (\code{method = "pg_gibbs"}). A conjugate sweep is far cheaper
