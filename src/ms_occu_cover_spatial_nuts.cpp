@@ -352,6 +352,29 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
 // sinv_from_cinv, chol_block_grad_cpp) live in community_chol.h, shared with the
 // community N-mixture NUTS target (ms_abun_nuts.cpp).
 
+// Free triangular-loading length: K*S - K(K-1)/2 (matches .ms_ocs_lfree_dim).
+inline int ms_ocs_lfree_dim(int S, int K) { return K * S - K * (K - 1) / 2; }
+
+// Length of the packed inner latent every ms_ocs kernel indexes:
+// c(mu[P], b[S*P], vec(L)[Lbase], [vec(Lpos)[S*K]], vec(W)[N*K], log_disp).
+// `constrain` swaps the S*K unconstrained loading block for the triangular free
+// block. Single source of truth for the offsets the kernels walk.
+inline int ms_ocs_inner_total(const MsOcsData& d, bool constrain = false) {
+    const int P = d.P_occ + d.P_p + d.P_pos;
+    const int Lbase = constrain ? ms_ocs_lfree_dim(d.S, d.K) : d.S * d.K;
+    const int Lw = Lbase + (d.cover_factor ? d.S * d.K : 0);
+    return P + d.S * P + Lw + d.n_sites * d.K + 1;
+}
+
+// Length check every ms_ocs entry point runs before handing a bare pointer to a
+// kernel: the layout is derived from the spec, so a vector that does not match
+// it is read past its end.
+inline void ms_ocs_check_theta(const Rcpp::NumericVector& theta, int expected,
+                               const char* name) {
+    if ((int) theta.size() != expected)
+        Rcpp::stop("%s length %d != expected %d", name, (int) theta.size(), expected);
+}
+
 } // namespace tulpaObs
 
 // Data-log-lik gradient (no priors) over the packed inner latent, same layout as
@@ -361,6 +384,8 @@ inline double ms_ocs_species_grad(const MsOcsData& d, int s,
 Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec,
                                              Rcpp::NumericVector theta_inner) {
     tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
+    tulpaObs::ms_ocs_check_theta(theta_inner, tulpaObs::ms_ocs_inner_total(d),
+                                 "theta_inner");
     const int P = d.P_occ + d.P_p + d.P_pos;
     const int N = d.n_sites, S = d.S, K = d.K;
     const double* th = theta_inner.begin();
@@ -377,7 +402,7 @@ Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec,
     const double log_disp = th[off];
 
     const int Lw = d.cover_factor ? 2 * S * K : S * K;
-    Rcpp::NumericVector grad(P + S * P + Lw + N * K + 1);
+    Rcpp::NumericVector grad(tulpaObs::ms_ocs_inner_total(d));
     double* g = grad.begin();
     double* g_mu = g;
     double* g_b  = g + P;
@@ -432,6 +457,8 @@ Rcpp::NumericVector cpp_ms_ocs_marginal_grad(Rcpp::List spec,
 // [[Rcpp::export]]
 double cpp_ms_ocs_marginal_ll(Rcpp::List spec, Rcpp::NumericVector theta_inner) {
     tulpaObs::MsOcsData d = tulpaObs::ms_ocs_build_data(spec);
+    tulpaObs::ms_ocs_check_theta(theta_inner, tulpaObs::ms_ocs_inner_total(d),
+                                 "theta_inner");
     const int P = d.P_occ + d.P_p + d.P_pos;
     const int N = d.n_sites, S = d.S, K = d.K;
     const double* th = theta_inner.begin();
@@ -485,9 +512,6 @@ struct PriScalars : CommunityCholPri {
            logit_h_mean, logit_h_sd;
 };
 
-// Free triangular-loading length: K*S - K(K-1)/2 (matches .ms_ocs_lfree_dim).
-inline int ms_ocs_lfree_dim(int S, int K) { return K * S - K * (K - 1) / 2; }
-
 // Free triangular vector -> full S x K loading matrix (col-major), exp() on the
 // diagonal, zeros above it. Mirrors .ms_ocs_lfree_to_L.
 inline void lfree_to_L_cpp(const double* lf, int S, int K, double* L) {
@@ -511,16 +535,14 @@ inline void gL_to_glfree_cpp(const double* gL, const double* L, int S, int K,
     }
 }
 
-// Length of the full NUTS coordinate vector. `constrain` swaps the S*K
-// unconstrained loading block for the K*S - K(K-1)/2 triangular free block.
+// Length of the full NUTS coordinate vector: the packed inner latent plus the
+// three per-arm community Cholesky blocks, the K field log-precisions and, on a
+// hyperparameterised field, the K logit_h coordinates.
 inline int ms_ocs_nuts_total(const MsOcsData& d, bool constrain = false) {
-    const int P = d.P_occ + d.P_p + d.P_pos;
-    const int Lbase = constrain ? ms_ocs_lfree_dim(d.S, d.K) : d.S * d.K;
-    const int Lw = Lbase + (d.cover_factor ? d.S * d.K : 0);
     const int chol = d.P_occ * (d.P_occ + 1) / 2 + d.P_p * (d.P_p + 1) / 2
                    + d.P_pos * (d.P_pos + 1) / 2;
     const int hyper = d.has_hyper ? d.K : 0;       // logit_h block
-    return P + d.S * P + Lw + d.n_sites * d.K + 1 + chol + d.K + hyper;
+    return ms_ocs_inner_total(d, constrain) + chol + d.K + hyper;
 }
 
 // Full-vector joint log-posterior + gradient core (icar, unconstrained). `g` is a
@@ -787,6 +809,7 @@ Rcpp::List cpp_ms_ocs_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
     const double field_rank = Rcpp::as<double>(spec["field_rank"]);
     tulpaObs::PriScalars pr = tulpaObs::ms_ocs_pri_from_list(pri);
     const int total = tulpaObs::ms_ocs_nuts_total(d, constrain);
+    tulpaObs::ms_ocs_check_theta(theta, total, "theta");
     Rcpp::NumericVector grad(total);
     const double lp = tulpaObs::ms_ocs_joint_eval_c(
         d, Q, field_rank, pr, sigma_beta, sd_L, constrain,
@@ -813,8 +836,7 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     m.pr = tulpaObs::ms_ocs_pri_from_list(pri);
     m.constrain = constrain;
     m.total = tulpaObs::ms_ocs_nuts_total(m.d, constrain);
-    if ((int) theta0.size() != m.total)
-        Rcpp::stop("theta0 length %d != expected %d", (int) theta0.size(), m.total);
+    tulpaObs::ms_ocs_check_theta(theta0, m.total, "theta0");
 
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_ocs_full_grad, &m, m.total,
