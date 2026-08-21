@@ -124,6 +124,21 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
     covered[s] <- sim$truth$mu_log_r >= lo && sim$truth$mu_log_r <= hi
   }
   # Nominal 95%; allow Monte-Carlo slack over 20 seeds.
+  #
+  # This measures 0.800 and so does not pass. The threshold carries no
+  # measurement (79e5eb7 recorded none) and the shortfall is understood rather
+  # than mysterious: coverage here is conditional on the dispersion variance
+  # being recovered. Across 39 fits at 8 and 36 species, those returning
+  # sigma_log_r >= 0.30 covered 33/34 while those below covered 2/5, with the
+  # point estimate 2.2x further out and the interval 28% narrower together. The
+  # misses are variance-component collapse, not a uniform SE miss -- dropping the
+  # four largest |z| from the 59-fit pool takes sqrt(mean(z^2)) from 1.189 to
+  # 1.003, and the body's robust scale is 0.885 (IQR) / 0.931 (MAD).
+  #
+  # What this assertion should be instead needs a decision about what the family
+  # claims, and the conditional form needs sigma_log_r recorded at S = 18, which
+  # this fixture's earlier runs did not keep. Left as-is deliberately rather than
+  # retuned to pass. See gcol33/tulpaObs#250 and NOTES_measurements.md.
   expect_gt(mean(covered), 0.8)
 })
 
