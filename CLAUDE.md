@@ -530,6 +530,21 @@ S3).
   fix, not just a seed rescue: mean bias +0.0482 -> +0.0109 over the 19 seeds that never
   collapsed. Does NOT turn `test-ms-abun-nb-rs.R:94` green on its own (16/20 = 0.800 vs
   `> 0.8`) — see #235.
+- **`mu_log_r` Wald calibration is CONDITIONAL on `sigma_log_r` (#235).** NOT a uniform
+  SE miss — the filed "~24% too small" is wrong. 4 of 59 fits carry 34% of `sum(z^2)`;
+  drop them and `k_hat` 1.189 → **1.003**, and the body's robust scale is BELOW 1 (IQR
+  0.885, MAD 0.931). Conditioning on the recovered variance component (n=39, S=8+36,
+  truth 0.5): `sigma_log_r >= 0.30` → **33/34 = 0.971**, k 0.88; `< 0.30` → **2/5**,
+  k 2.12, mean |err| 2.2x worse AND SE 28% narrower (both fire together, which is why
+  pooled stats read as a clean scale miss). Threshold-free: spearman(|z|, sigma) −0.470
+  p=0.003; spearman(|err|, sigma) −0.353 p=0.028 (so NOT an SE artefact). = the
+  `sigma_omega` boundary collapse on the sibling block that keeps pure ML. REFUTED en
+  route: finite-sample-in-S (k peaks at S=18, bias doesn't decay), t(S−1) df correction
+  (0.864 → 0.881, still p=0.027 vs nominal). **No gate ships**: needs `SE(log sigma)`,
+  and `tulpa_re_aghq()` discards the joint inverse's variance-component block →
+  `gcol33/tulpa#418`. Anything else = an invented absolute cut on `sigma_hat`. Measured
+  conditioning documented on `?ms_abun` instead. Threshold at `:94` deliberately
+  UNTOUCHED (what it should assert depends on fix-vs-report, a claim decision).
 - **NUTS** (`method="nuts"`, #14; `R/ms_abun_nuts.R`, `src/ms_abun_nuts.cpp`): samples
   EXACT joint posterior over closed-form Royle marginal -> calibrated intervals +
   per-(species,site) WAIC/LOO (`.tobs_ploglik_ms_nmix`). NON-CENTERED: per-species block

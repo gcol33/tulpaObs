@@ -1037,3 +1037,102 @@ fit.
 
 Probes: `dev_notes/nbrs_bisect/` (`dissect_s515_nq3.txt`, `dissect_s516_nq3.txt`, the
 `nq5x_*` / `def5_*` arms).
+
+## mu_log_r Wald calibration is conditional on sigma_log_r (`ms_abun(negbin)`, #235)
+
+The residual after #234's quadrature floor. Filed as a ~24% understatement of the
+`mu_log_r` SE; it is not that, and the correction matters because a uniform
+inflation would over-widen the ~90% of fits that are already right.
+
+Three arms, all `n_quad = 3` / `n_quad_scalar = 3`, fixture
+`simulate_ms_abun(N = 100, J = 5, size = 5, sigma_logr = 0.5, ...)`, seeds
+501-520, truth `mu_log_r = log(5)`:
+
+```
+ S    n   mean(z)   t p     k_hat   chi2 p   coverage        sd/mean(se)
+ 8   19   +0.376    0.172   1.182   0.116    17/19 = 0.895   0.970
+18   20   +0.104    0.733   1.311   0.024    16/20 = 0.800   1.251
+36   20   +0.376    0.114   1.060   0.315    18/20 = 0.900   0.895
+
+pooled 59 fits:  k_hat 1.189  95% CI [1.008, 1.450]  chi2 p 0.020
+                 mean(z) +0.284 (t p 0.066)   coverage 51/59 = 0.864
+```
+
+**NOT a finite-sample-in-S effect.** `k_hat` peaks at the shipped fixture instead
+of decaying, and the raw bias does not decay either (+0.0681 / +0.0160 / +0.0431
+at S = 8 / 18 / 36). The positive test that hypothesis predicted fails.
+
+**NOT a t-df effect either.** Re-reading the same z values against `t(S-1)`
+rather than 1.96 moves pooled coverage only 0.864 -> 0.881 and still rejects
+nominal (binomial p = 0.027 against 0.95). A Hartung-Knapp-style df correction
+does not account for it.
+
+**NOT a uniform scale miss.** The whole excess sits in four fits:
+
+```
+                        k_hat    share of sum(z^2) removed
+all 59                  1.189
+drop 1 largest |z|      1.142    9.3%
+drop 2                  1.095    18.0%
+drop 3                  1.046    26.6%
+drop 4                  1.003    33.6%
+```
+
+and the robust scale of the body is BELOW 1 (IQR-based 0.885, MAD-based 0.931).
+z passes normality (Shapiro p = 0.48, KS vs N(0,1) p = 0.18) but those tests have
+little power at n = 59, so they do not separate "mild uniform inflation" from
+"calibrated body plus a few large errors" on their own. The conditioning below
+does.
+
+**It is `sigma_log_r` collapsing toward its boundary.** `sigma_logr` is recorded
+per fit in the S = 8 and S = 36 arms (n = 39; the S = 18 runner predates that
+column). Truth 0.5.
+
+```
+spearman(|z|,             sigma_log_r) = -0.470   p = 0.0028
+spearman(|mu_hat - truth|, sigma_log_r) = -0.353   p = 0.0279
+spearman(SE,              sigma_log_r) = +0.373   p = 0.0198
+
+                     n    k_hat   mean |err|   mean SE   |err|/SE   coverage
+sigma_log_r < 0.30   5    2.117     0.2287      0.1144     2.00      2/5  = 0.400
+sigma_log_r >= 0.30  34   0.884     0.1055      0.1590     0.66     33/34 = 0.971
+```
+
+Split is stable for any threshold in 0.20-0.35 (the same five fits). Conditional
+on the variance component being recovered the Wald interval is calibrated and
+slightly conservative. The two failure modes fire together -- the point estimate
+is 2.2x worse AND the interval 28% narrower -- which is why the pooled statistics
+read as a clean multiplicative miss. It is not an SE artefact of a smaller sigma:
+the raw error carries its own significant correlation.
+
+This is the `sigma_omega` boundary collapse already documented at
+`R/nmix_laplace_re.R`, on the sibling block that comment deliberately leaves at
+pure ML. The S = 8 arm's hard failure (seed 502, `singular marginal Hessian or
+non-finite optimum`) is the end state of the same collapse; that arm's
+`sigma_log_r` minimum is 0.012. `theta_cov` marginalising over the variance
+components does not protect against it -- marginalising accounts for uncertainty
+in `sigma` GIVEN the data, not for a marginal Hessian evaluated where `sigma_hat`
+sits against the boundary.
+
+**Why no gate ships yet.** Detecting the collapse from the fit needs the variance
+component's own uncertainty, `log(sigma)` against 0. `tulpa_re_aghq()` computes
+the joint inverse `V` over `c(theta, log-Cholesky Sigma)` and returns only its
+top-left block, so `SE(log sigma_log_r)` is discarded and neither `V` nor
+`opt$hessian` is on the return to rebuild it from. Filed as gcol33/tulpa#418.
+Without it the only available gate is an absolute cut on `sigma_hat`, which is a
+number with nothing behind it and does not transfer off this fixture. The
+measured conditioning is documented on `?ms_abun` instead.
+
+**Threshold power, unchanged from #234's note.** `test-ms-abun-nb-rs.R:94` asserts
+`mean(covered) > 0.8` on 20 seeds; at genuinely nominal coverage that still fails
+about 1 run in 60, and at this seed count it cannot separate 0.90 from 0.95. The
+threshold has no measurement behind it (written in 79e5eb7 with none recorded)
+and is deliberately left untouched here: what it should assert depends on whether
+the collapse is fixed or only reported, which is a decision about what the
+package claims.
+
+Probes: `dev_notes/nbrs_bisect/` (`Ssweep_S{8,36}_*.csv`, `fix3b*_nq3_*.csv`),
+runners `dev_notes/_nbrs_S_probe.R`, analysis `dev_notes/_nbrs_nuts_analyse.R`.
+A NUTS reference posterior on the S = 8 fixture was started and abandoned at 2 of
+20 seeds (86 min per fit, ~5x per-seed spread, projecting 4-6 h);
+`NUTSref_S8_*.csv` holds the two, width ratios 1.023 and 1.197.

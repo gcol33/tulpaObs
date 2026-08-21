@@ -1188,6 +1188,25 @@ dyn_int_occu <- function() {
 #'   path alongside the abundance / detection coefficients. Zero-inflation is a
 #'   non-spatial `laplace` fit with an intercept-only structural-zero logit; a
 #'   shared field stays Poisson / negbin.
+#' @section Reading the negbin community dispersion:
+#' Under `mixture = "negbin"` the community mean `mu_log_r` reaches
+#' `coef()` / `vcov()` / `confint()` with a marginal Wald SE, and the variance
+#' component `sigma_log_r` is reported on `fit$ms_dispersion`. That interval is
+#' calibrated **conditional on the variance component being recovered**, and the
+#' two are not independent: `sigma_log_r` is a scalar variance over species and
+#' at few species it can settle near its lower boundary, which shifts
+#' `mu_log_r` and narrows its SE at the same time.
+#'
+#' Measured on simulated data (39 `laplace` fits at 8 and 36 species,
+#' `sigma_logr = 0.5`, gcol33/tulpaObs#235): where `sigma_log_r` came back at
+#' least 0.30, the nominal 95% interval covered 33 of 34 with a
+#' `sqrt(mean(z^2))` of 0.88; where it came back below, it covered 2 of 5, the
+#' point estimate was 2.2x further from the truth and the SE 28% narrower. So
+#' read `fit$ms_dispersion$sigma_log_r` before quoting a `mu_log_r` interval: a
+#' value near zero, well under what the data should support, means the interval
+#' is not trustworthy even though the fit converged and reported no warning.
+#' Those thresholds are the ones this fixture separated on and are not a general
+#' rule; what transfers is the conditioning, not the number.
 #' @return A `tobs_family` object.
 #' @export
 ms_abun <- function(K_max = NULL,
