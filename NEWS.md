@@ -2,6 +2,20 @@
 
 ## 0.0.235 (2026-08-17)
 
+* **`control$sigma.logr` is reachable on the NUTS routes.** The prior SD on the
+  community-mean log-dispersion `mu_log_r` was read from `control` by the
+  `ms_count()` and `jsdm()` dispatchers, but the name was in no group of the
+  control allowlist, so `tobs()` rejected it with *"'sigma.logr' is not a known
+  control option"* before either read saw a value. The `ms_abun()` NUTS branches
+  did not take it from `control` at all -- the spatial one passed a literal
+  `1.5` beside a `sigma.beta` that was read from `control`, and the non-spatial
+  one omitted it. All three now behave the way `sigma.beta` already does. Unset
+  is unchanged: `control[["sigma.logr"]]` is `NULL` and resolves to the engine
+  table's `1.5`, which is the value the spatial branch hardcoded. `?tobs` now
+  documents it, and `sigma.beta`, in the NUTS control block. Note the default is
+  informative on the dispersion scale, so raise it to compare the sampler
+  against a maximum-likelihood target.
+
 * **Scalar nuisance AGHQ blocks are floored at 3 nodes (#234).** BEHAVIOUR
   CHANGE on every `ms_abun(mixture = "negbin" / "zip" / "zinb")` Laplace fit.
   `control$n.quad.scalar` defaulted to 2 and was clamped into `[2, n.quad]`, so
