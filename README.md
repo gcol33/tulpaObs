@@ -237,14 +237,17 @@ interpolate to new coordinates through `tobs_predict_spatial()`. `$` accessors
 ## Diagnostics and identifiability
 
 ```r
-tobs_check(fit, coords = xy)     # roll-up: sampler, WAIC, PPC, zero-inflation, Moran's I
-tobs_check_id(model, fit)        # confounding, low detection, sparse data
+check_model(fit, coords = xy)    # roll-up: sampler, WAIC, PPC, zero-inflation, Moran's I
+tobs_check_id(fit$model)         # confounding, low detection, sparse data
 
-tobs_waic(fit); tobs_dic(fit); tobs_cpo(fit)
-tobs_ppc(fit, fit.stat = "chi-squared")
-tobs_test_dispersion(fit); tobs_test_zero_inflation(fit); tobs_test_outliers(fit)
-tobs_test_uniformity(tobs_pit_residuals(fit))
+waic(fit); dic(fit); cpo(fit)
+ppc(fit, fit.stat = "chi-squared")
+test_dispersion(fit); test_zero_inflation(fit); test_outliers(fit)
+test_uniformity(pit_residuals(fit))
 ```
+
+`waic()` and `loo()` are the loo generics, so `loo::loo_compare()` reads a `tobs_fit`
+directly.
 
 Moran's I, Durbin-Watson, variograms, and `spatial_range` / `temporal_corr` for the latent
 structure come through from tulpa. `tobs_stack()` LOO-weights two or more fits on the same
