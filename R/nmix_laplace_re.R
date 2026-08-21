@@ -107,11 +107,13 @@
 #'   (`lambda`, `p`); the scalar nuisance blocks use `n_quad_scalar`.
 #' @param n_quad_scalar Quadrature points for the scalar nuisance random-effect
 #'   blocks -- the negative-binomial dispersion `log_r` and the zero-inflation
-#'   `logit_omega` (default 2). These integrate a 1-D near-Gaussian posterior, so
+#'   `logit_omega` (default 3). These integrate a 1-D posterior, so
 #'   [tulpa_re_aghq()]'s per-block quadrature runs them at this coarser order
 #'   rather than the full `n_quad`, trimming the `n_quad^(NB + ZI)` factor the
-#'   nuisance axes would otherwise multiply into the tensor grid. Clamped to
-#'   `[2, n_quad]`.
+#'   nuisance axes would otherwise multiply into the tensor grid. Floored at 3
+#'   (and the floor wins over a smaller `n_quad`): the rule is converged there,
+#'   and below it the reported community-mean SE on that block can collapse by an
+#'   order of magnitude with no other symptom.
 #' @param lkj_eta LKJ shape regularizing each *correlated* community covariance
 #'   block's correlation off the boundary (default 1, no penalty); passed
 #'   through to [tulpa_re_aghq()]. Does not touch the marginal SDs.
@@ -159,7 +161,9 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   mixture = c("P", "NB", "ZIP", "ZINB"),
                                   r_init = 10, sigma_logr_init = 0.5,
                                   omega_init = 0.2, sigma_omega_init = 0.5,
-                                  n_quad = 1L, n_quad_scalar = 2L, lkj_eta = 1,
+                                  n_quad = 1L,
+                                  n_quad_scalar = .TOBS_MIN_SCALAR_NQUAD,
+                                  lkj_eta = 1,
                                   sigma_beta = 100,
                                   omega_sigma_prior = c(1, 0.05),
                                   verbose = FALSE) {
@@ -381,14 +385,19 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   }
   # Per-block quadrature order (tulpa_re_aghq accepts a per-RE-block n_quad
   # vector). The correlated coefficient blocks (lambda, p) use the requested
-  # n_quad; the scalar nuisance blocks (log_r, omega) integrate a 1-D
-  # near-Gaussian posterior, so they use the coarser n_quad_scalar. The tensor
-  # grid is prod_b n_quad_b^dim_b, so trimming each scalar axis removes the extra
-  # n_quad factor it would otherwise multiply in (e.g. ZINB at n_quad = 3,
-  # n_quad_scalar = 2 gives 3^2 * 3^2 * 2 * 2 = 324 nodes vs 3^6 = 729). Kept at
-  # >= 2 so every axis carries the quadrature the joint analytic gradient needs.
+  # n_quad; the scalar nuisance blocks (log_r, omega) integrate a 1-D posterior
+  # on which the Gauss-Hermite rule is converged at .TOBS_MIN_SCALAR_NQUAD, so
+  # they run at the coarser n_quad_scalar. The tensor grid is
+  # prod_b n_quad_b^dim_b, so trimming each scalar axis removes the extra n_quad
+  # factor it would otherwise multiply in (e.g. ZINB at n_quad = 5,
+  # n_quad_scalar = 3 gives 5^2 * 5^2 * 3 * 3 = 5625 nodes vs 5^6 = 15625).
+  # Floored at .TOBS_MIN_SCALAR_NQUAD rather than clamped into [2, n_quad]:
+  # below that order the rule does not represent the integrand, and what it
+  # returns is a silently collapsed community-mean SE (#234). The floor overrides
+  # a smaller n_quad for the same reason -- a coefficient block may be run at the
+  # plain Laplace order, a scalar block whose marginal SE is reported may not.
   nq_vec <- rep(as.integer(n_quad), length(re_terms))
-  nqs    <- max(2L, min(as.integer(n_quad), as.integer(n_quad_scalar)))
+  nqs    <- .nmix_scalar_nquad(n_quad, n_quad_scalar)
   if (!is.na(logr_blk))  nq_vec[logr_blk]  <- nqs
   if (!is.na(omega_blk)) nq_vec[omega_blk] <- nqs
   # Regularize the weakly-identified structural-zero variance component. sigma_omega

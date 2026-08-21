@@ -236,7 +236,7 @@ test_that("n.quad names one control across several marginals, each enumerated", 
   # reader could find out which number applied (gcol33/tulpaObs#189).
   expect_identical(.tobs_n_quad("re_aghq"), 9L)
   expect_identical(.tobs_n_quad("ms_nmix"), 1L)
-  expect_identical(.tobs_n_quad("ms_nmix_scalar"), 2L)
+  expect_identical(.tobs_n_quad("ms_nmix_scalar"), 3L)
   expect_identical(.tobs_n_quad("ms_occu_cover"), 5L)
   expect_identical(.tobs_n_quad("community_latent"), 5L)
   # The lognormal per-unit cover marginal is closed form, so it needs no
@@ -245,4 +245,34 @@ test_that("n.quad names one control across several marginals, each enumerated", 
   expect_identical(.tobs_n_quad("cover_latent_beta"), 15L)
   # An unknown route errors rather than returning a plausible NULL.
   expect_error(.tobs_n_quad("no_such_route"), "no n.quad default")
+})
+
+test_that("the scalar nuisance block cannot be run below the converged rule", {
+  # gcol33/tulpaObs#234. Two Gauss-Hermite nodes place two points and leave no
+  # freedom for curvature, so on a 1-D posterior that is not near-Gaussian the
+  # marginal can come out arbitrarily sharp -- measured as a 17x collapse of the
+  # reported SE on `mu_log_r`, with the fit converged and the point estimate
+  # ordinary. Three nodes are converged (3 / 5 / 9 agree to ten decimals), so the
+  # order is floored rather than clamped into [2, n_quad].
+  expect_identical(.TOBS_MIN_SCALAR_NQUAD, 3L)
+  expect_identical(.tobs_n_quad("ms_nmix_scalar"), .TOBS_MIN_SCALAR_NQUAD)
+
+  # A caller asking for the collapsing order does not get it.
+  expect_identical(.nmix_scalar_nquad(3L, 2L), .TOBS_MIN_SCALAR_NQUAD)
+  expect_identical(.nmix_scalar_nquad(5L, 1L), .TOBS_MIN_SCALAR_NQUAD)
+  # Nor does a coefficient-block order below the floor drag the scalar block
+  # down with it: n_quad = 1 is the plain Laplace and a valid request there.
+  expect_identical(.nmix_scalar_nquad(1L, 5L), .TOBS_MIN_SCALAR_NQUAD)
+
+  # Above the floor the scalar block still tracks the coarser of the two, so a
+  # deliberate refinement is passed through rather than pinned at the floor.
+  expect_identical(.nmix_scalar_nquad(5L, 9L), 5L)
+  expect_identical(.nmix_scalar_nquad(9L, 5L), 5L)
+
+  # The fitter's own signatures resolve to the floor, so a default-argument
+  # literal cannot drift away from the constant.
+  expect_identical(eval(formals(nmix_laplace_re)$n_quad_scalar),
+                   .TOBS_MIN_SCALAR_NQUAD)
+  expect_identical(eval(formals(.tobs_fit_ms_nmix)$n_quad_scalar),
+                   .TOBS_MIN_SCALAR_NQUAD)
 })

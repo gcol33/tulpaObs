@@ -518,6 +518,18 @@ S3).
   trailing `log_r_s`, community `mu_log_r` joins means), joint_grad / AGHQ
   (`n_quad=5` default). `coef()`/`vcov()` report `mu_log_r`; `ms_dispersion` carries
   `r`/`r_s`/`sigma_log_r`.
+- **Scalar nuisance AGHQ blocks floored at 3 nodes** (`.TOBS_MIN_SCALAR_NQUAD`,
+  `.nmix_scalar_nquad()`, #234). `log_r` (NB) + `logit_omega` (ZI). A 2-node
+  Gauss-Hermite rule places 2 nodes and has no freedom left for curvature, so on a
+  non-Gaussian 1-D posterior the marginal can come out arbitrarily sharp: measured
+  **17x SE collapse** on `mu_log_r` (0.0110 vs 0.1886, seed 515), fit converged, point
+  estimate ordinary, no warning, every downstream Wald CI / SBC rank inherits it.
+  Converged at 3 (nqs 3/5/9 bit-identical to 10 dp), so floor NOT clamp — and the floor
+  beats a smaller `n_quad` (a coefficient block may run at plain Laplace, a block whose
+  marginal SE is REPORTED may not). Cost 1.5x on that axis at `n_quad=5`. Also a bias
+  fix, not just a seed rescue: mean bias +0.0482 -> +0.0109 over the 19 seeds that never
+  collapsed. Does NOT turn `test-ms-abun-nb-rs.R:94` green on its own (16/20 = 0.800 vs
+  `> 0.8`) — see #235.
 - **NUTS** (`method="nuts"`, #14; `R/ms_abun_nuts.R`, `src/ms_abun_nuts.cpp`): samples
   EXACT joint posterior over closed-form Royle marginal -> calibrated intervals +
   per-(species,site) WAIC/LOO (`.tobs_ploglik_ms_nmix`). NON-CENTERED: per-species block

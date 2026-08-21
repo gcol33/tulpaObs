@@ -920,3 +920,120 @@ ratio tracks the excursion margin and the mixture's tail weight, both tuning, so
 pinned ratio would need re-deriving whenever either moved. Correctness is the
 separate assertion -- capped == uncapped to 1e-8, and C++ == R oracle to 1e-9 WITH
 the ceiling present, both of which the binding check keeps non-vacuous.
+
+## Scalar nuisance AGHQ order floored at 3 (`ms_abun(mixture = "negbin")`, #234)
+
+Fixture verbatim from `test-ms-abun-nb-rs.R:78-93`: `simulate_ms_abun(n_species = 18,
+N = 100, J = 5, mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3), sd_lambda = 0.4,
+sd_p = 0.35, mixture = "negbin", size = 5, sigma_logr = 0.5)`, seeds 501-520, fitted
+`method = "laplace"`, `control = list(n.quad = 3L)`, tulpaObs 0.0.235 / 343f425.
+Truth `mu_log_r = log(5) = 1.60944`. One fit is 12-59 min at 2 threads (mean 27.6),
+measured 10-wide.
+
+**The 2-node rule is not a coarse setting, it is below the order that represents the
+integrand.** Holding `n.quad = 3` and moving ONLY `n.quad.scalar` -- the axis the
+collapse is on -- seed 515:
+
+```
+n.quad.scalar   mu_log_r        se_log_r        z         covered
+2               1.8494206734    0.0110225163    +21.772   no
+3               1.7231670271    0.1886464461     +0.603   yes
+5               1.7231670271    0.1886464461     +0.603   yes
+9               1.7231670271    0.1886464461     +0.603   yes
+```
+
+3 / 5 / 9 are identical to all ten recorded decimals, not merely close: a cliff
+between 2 and 3, then a flat plateau. So this is NOT an accuracy/cost tradeoff along
+that axis and there is no reason to expose 2. Across the other 19 seeds the SE ranges
+0.090-0.186 (mean 0.139), so 0.011 is off-scale, not a tail.
+
+**Mechanism.** A 2-node Gauss-Hermite rule places two nodes and has no freedom left to
+represent curvature; where the 1-D `log_r` posterior is not near-Gaussian the marginal
+it returns can come out arbitrarily sharp. Seed 515 is exactly that regime -- one
+species with `max(y) = 122` against seventeen ordinary ones (`K_max` 222; the healthy
+control seed 516 tops out at 56), `sigma_log_r` 0.730 against 516's 0.373. The fit
+does not complain because from the optimizer's side nothing went wrong.
+
+`vcov` at seed 515 vs 516 (coordinate 5 is `log_r`), `sqrt(diag)`:
+
+```
+                    515 (2 nodes)   516 (2 nodes)
+lambda_(Intercept)      0.158789        0.122560
+lambda_abund_cov1       0.124808        0.090861
+p_(Intercept)           0.175050        0.077682
+p_det_cov1              0.070857        0.088662
+log_r                   0.010901        0.122535
+eigen min               1.065e-04       5.916e-03
+eigen max               3.072e-02       1.546e-02
+condition               2.884e+02       2.613e+00
+```
+
+The four coefficient coordinates are ordinary in both -- 515's are if anything WIDER.
+Only `log_r` moves, its variance 126x smaller (1.1883e-04 vs 1.5015e-02), and it lands
+essentially ON the matrix's minimum eigenvalue while nearly decoupled from everything
+else (off-diagonals ~1e-4). So the marginal is not going singular; inverted, it says
+the likelihood is extraordinarily peaked in `log_r`.
+
+**Two candidate mechanisms were measured and REFUTED, do not revisit them.**
+`sigma_log_r` does NOT collapse to the boundary (the `sigma_omega` failure the PC prior
+at `R/nmix_laplace_re.R` addresses): it reads 0.730 against a target of 0.5, and the
+per-species spread is recovered almost exactly (`sd(log r_s)` 0.6734 against that
+seed's realised truth 0.6715 -- BETTER than the healthy control, 0.2899 against 0.4224).
+Only the SE on the community mean is wrong, so a PC prior on that variance is the wrong
+lever. Second, `n.quad` alone is NOT an escape hatch, because the scalar order was
+clamped to `min(n_quad, n_quad_scalar)`: the family's own documented default
+`n.quad = 5` still ran the `log_r` block at 2. That clamp is why the fix is a FLOOR
+that overrides `n_quad`, not a raised default.
+
+**Cost.** The tensor grid is `prod_b n_quad_b^dim_b` = `n_quad^4 * n_quad_scalar` for
+this model (`p_lambda` = 2, `p_p` = 2, `log_r` scalar):
+
+```
+                          n.quad = 3   n.quad = 5
+n.quad.scalar = 2              162         1250
+floor 3                        243         1875   (1.5x)
+scalar order = n_quad          243         3125   (2.5x)
+```
+
+So the floor gives back only part of the per-block-quadrature saving -- 1.5x on one
+axis at `n.quad = 5`, where abandoning per-block quadrature entirely would be 2.5x.
+
+**It is a bias fix as well as a seed rescue.** All 20 seeds, `n.quad = 3`:
+
+```
+                      n    bias      sd(mu)   mean(se)   ratio   coverage
+nqs = 2               20   +0.0578   0.1740   0.1328     1.310   15/20 = 0.750
+nqs = 2, excl 515     19   +0.0482   0.1733   0.1392     1.245   15/19 = 0.789
+nqs = 3               20   +0.0160   0.1687   0.1348     1.251   16/20 = 0.800
+nqs = 3, excl 515     19   +0.0109   0.1717   0.1320     1.301   15/19 = 0.789
+```
+
+Bias drops 77% (+0.0482 -> +0.0109) on the nineteen seeds that never had the collapse,
+and EVERY seed's SE moves under the floor -- median -4.6%, range -10.6% to -0.5%
+excluding 515, which moves +1611%. The 2-node rule was distorting all twenty fits
+mildly and one of them catastrophically. Residual bias afterwards is +0.016 against a
+sampling sd of 0.169, about 0.09 SE.
+
+**This does NOT turn `test-ms-abun-nb-rs.R:94` green and the threshold was not
+touched.** Coverage goes 15/20 -> 16/20 = 0.800 and the assertion is
+`expect_gt(mean(covered), 0.8)`; 0.800 is not greater than 0.8. What remains is a pure
+multiplicative miss on the SE with no bias left (`mean(z)` +0.104, t p = 0.73), carried
+in #235. Max `|z|` over all 20 seeds is 2.421 and scaling every SE by 1.2512 gives
+20/20, so no seed misses for any other reason.
+
+**Threshold power, for whoever sizes #235.** The assertion needs >= 17 of 20:
+
+```
+true coverage 0.95 -> P(pass) 0.984
+              0.93 -> 0.953
+              0.90 -> 0.867
+              0.85 -> 0.648
+              0.80 -> 0.411
+```
+
+At genuinely nominal coverage the test still fails about 1 run in 60, and at 20 seeds
+it cannot separate 0.90 from 0.95. Seed count is the only lever, against 27.6 min per
+fit.
+
+Probes: `dev_notes/nbrs_bisect/` (`dissect_s515_nq3.txt`, `dissect_s516_nq3.txt`, the
+`nq5x_*` / `def5_*` arms).

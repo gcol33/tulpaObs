@@ -26,7 +26,7 @@ nmix_laplace_re(
   omega_init = 0.2,
   sigma_omega_init = 0.5,
   n_quad = 1L,
-  n_quad_scalar = 2L,
+  n_quad_scalar = .TOBS_MIN_SCALAR_NQUAD,
   lkj_eta = 1,
   sigma_beta = 100,
   omega_sigma_prior = c(1, 0.05),
@@ -117,11 +117,13 @@ large. This sets the order of the correlated coefficient blocks
 
 \item{n_quad_scalar}{Quadrature points for the scalar nuisance random-effect
 blocks -- the negative-binomial dispersion \code{log_r} and the zero-inflation
-\code{logit_omega} (default 2). These integrate a 1-D near-Gaussian posterior, so
+\code{logit_omega} (default 3). These integrate a 1-D posterior, so
 \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}}'s per-block quadrature runs them at this coarser order
 rather than the full \code{n_quad}, trimming the \code{n_quad^(NB + ZI)} factor the
-nuisance axes would otherwise multiply into the tensor grid. Clamped to
-\verb{[2, n_quad]}.}
+nuisance axes would otherwise multiply into the tensor grid. Floored at 3
+(and the floor wins over a smaller \code{n_quad}): the rule is converged there,
+and below it the reported community-mean SE on that block can collapse by an
+order of magnitude with no other symptom.}
 
 \item{lkj_eta}{LKJ shape regularizing each \emph{correlated} community covariance
 block's correlation off the boundary (default 1, no penalty); passed

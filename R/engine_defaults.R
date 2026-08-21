@@ -131,6 +131,20 @@
 # routes do not use.
 #
 # `.tobs_n_quad(route)` is the accessor; each entry names the marginal.
+
+# Minimum Gauss-Hermite order on a scalar nuisance random-effect block (the
+# negative-binomial dispersion `log_r`, the zero-inflation `logit_omega`). A
+# 2-node rule places two nodes and has no freedom left to represent curvature:
+# where the 1-D posterior is not near-Gaussian, the marginal it returns can come
+# out arbitrarily sharp and the reported community-mean SE collapses with it
+# (gcol33/tulpaObs#234: a 17x collapse on `mu_log_r`, with the fit converged and
+# the point estimate ordinary). The rule is converged at 3 -- on the `log_r`
+# block, 3 / 5 / 9 nodes agree to ten decimal places -- so 3 is both the order
+# below which the integrand is not represented and the order above which nothing
+# on that axis moves. `nmix_laplace_re()` applies it as a floor, not only as a
+# default, because nothing downstream can detect the collapse.
+.TOBS_MIN_SCALAR_NQUAD <- 3L
+
 .TOBS_NQUAD_ROUTES <- list(
   # Formula random effect under method = "laplace": adaptive Gauss-Hermite over
   # the exact per-group marginal, debiasing the Laplace small-cluster
@@ -145,9 +159,11 @@
   # sparse / rare-species regime.
   ms_nmix = 1L,
 
-  # The trailing scalar coordinate (a per-species log-dispersion) of that same
-  # community fit, integrated separately and cheaply.
-  ms_nmix_scalar = 2L,
+  # The trailing scalar coordinates of that same community fit (a per-species
+  # log-dispersion under NB, a per-species structural-zero logit under ZI),
+  # integrated separately. Both the default and the floor, since the rule is
+  # converged here and unusable below.
+  ms_nmix_scalar = .TOBS_MIN_SCALAR_NQUAD,
 
   # Community joint occupancy-cover (`ms_occu_cover()`): tensor AGHQ over the
   # joint per-species RE vector, so the node count is raised to a power of the
@@ -172,6 +188,16 @@
     stop(sprintf("no n.quad default for route \"%s\".", route), call. = FALSE)
   }
   .TOBS_NQUAD_ROUTES[[route]]
+}
+
+# Resolve the AGHQ order of a scalar nuisance random-effect block from the
+# requested coefficient-block order and the requested scalar order. The scalar
+# blocks track the coarser of the two, then take .TOBS_MIN_SCALAR_NQUAD as a hard
+# floor -- including over `n_quad` itself, which may legitimately sit at the
+# plain-Laplace order while a block whose marginal SE is reported may not.
+.nmix_scalar_nquad <- function(n_quad, n_quad_scalar) {
+  max(.TOBS_MIN_SCALAR_NQUAD,
+      min(as.integer(n_quad), as.integer(n_quad_scalar)))
 }
 
 

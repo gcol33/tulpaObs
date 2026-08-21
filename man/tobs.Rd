@@ -255,8 +255,9 @@ many nodes.
 Community N-mixture (\code{ms_abun()}): 1, i.e. the EM default. Each species'
 count marginal is already informative, so the AGHQ refine barely moves
 the community covariances; it is opt-in via \code{optimizer = "joint_fd"} for
-the sparse / rare-species regime. \code{n.quad.scalar} (default 2) is the
-trailing per-species log-dispersion coordinate, integrated separately.
+the sparse / rare-species regime. \code{n.quad.scalar} (default 3, and floored
+there) is the trailing per-species log-dispersion / structural-zero-logit
+coordinate, integrated separately.
 Community joint occupancy-cover (\code{ms_occu_cover()}): 5. Tensor AGHQ over
 the joint per-species RE vector, so the node count is raised to a power
 of the RE dimension and stays small.

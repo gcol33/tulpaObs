@@ -2,6 +2,33 @@
 
 ## 0.0.235 (2026-08-17)
 
+* **Scalar nuisance AGHQ blocks are floored at 3 nodes (#234).** BEHAVIOUR
+  CHANGE on every `ms_abun(mixture = "negbin" / "zip" / "zinb")` Laplace fit.
+  `control$n.quad.scalar` defaulted to 2 and was clamped into `[2, n.quad]`, so
+  the negative-binomial dispersion block `log_r` and the zero-inflation block
+  `logit_omega` integrated at two Gauss-Hermite nodes regardless of `n.quad` --
+  the family's own documented `n.quad = 5` included. A 2-node rule places two
+  nodes and has no freedom left to represent curvature, so where the 1-D
+  posterior is not near-Gaussian the marginal it returns can come out
+  arbitrarily sharp: on one seed of the `test-ms-abun-nb-rs.R` fixture the
+  reported SE on `mu_log_r` read 0.0110 against 0.1886 at three nodes, a 17x
+  collapse, with the fit converged, the point estimate ordinary and no warning
+  emitted. Every downstream Wald CI, `confint()`, coverage check and SBC rank
+  built on that coordinate inherited it. The rule is converged at three nodes --
+  3, 5 and 9 agree to ten decimal places on that block -- so `n.quad.scalar` now
+  defaults to 3 and takes 3 as a hard floor rather than a default, and the floor
+  overrides a smaller `n.quad` (a coefficient block may legitimately run at the
+  plain-Laplace order; a block whose marginal SE is reported may not). The
+  per-block quadrature saving is mostly preserved: the tensor grid grows 1.5x on
+  that one axis at `n.quad = 5`, where integrating it at the full `n.quad` would
+  be 2.5x. It is also a point-estimate fix, not only a rescue of the pathological
+  seed -- across the nineteen fixture seeds that never collapsed, every SE moves
+  under the floor (median -4.6%) and mean bias on `mu_log_r` drops 77%, from
+  +0.0482 to +0.0109. Measurements in `NOTES_measurements.md`. The residual is a
+  multiplicative understatement of the `mu_log_r` SE with no bias left, tracked
+  separately in #235; `test-ms-abun-nb-rs.R:94` measures 0.800 against its
+  `> 0.8` assertion and stays red until that one is resolved.
+
 * **BYM2 uses the Riebler marginal-variance scale factor (#232).** BEHAVIOUR
   CHANGE on every `bym2()` fit. `.bym2_scale()` returned the geometric mean of
   the non-zero eigenvalues of the intrinsic precision `Q = D - W`; the constant

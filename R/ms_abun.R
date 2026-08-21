@@ -172,7 +172,8 @@
 
 .tobs_fit_ms_nmix <- function(model, mixture = "poisson", K_max = NULL,
                               max_iter = 100L, optimizer = "em",
-                              n_quad = 1L, n_quad_scalar = 2L,
+                              n_quad = 1L,
+                              n_quad_scalar = .TOBS_MIN_SCALAR_NQUAD,
                               lkj_eta = 1, omega_sigma_prior = c(1, 0.05),
                               verbose = TRUE) {
   # tulpaObs vocabulary ("poisson" / "negbin" / "zip" / "zinb") ->
@@ -694,7 +695,13 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
       Cinv = raw$blup_cov_g %||% NULL,
       Bf   = raw$blup_cross_g %||% NULL,
       optimizer = raw$optimizer %||% "em",
-      n_quad = raw$n_quad %||% 1L, lkj_eta = raw$lkj_eta %||% 1
+      # `n_quad` is the COEFFICIENT-block order; the scalar nuisance blocks
+      # (log_r, logit_omega) run at their own floored order, so a reader who has
+      # only the headline number cannot tell what any one block was integrated
+      # at. `n_quad_grid` is the per-block vector the engine actually used,
+      # ordered [lambda | p | log_r? | omega?].
+      n_quad = raw$n_quad %||% 1L, n_quad_grid = raw$n_quad_grid %||% NULL,
+      lkj_eta = raw$lkj_eta %||% 1
     ),
     ms_dispersion = ms_dispersion,
     ms_zi = ms_zi,
