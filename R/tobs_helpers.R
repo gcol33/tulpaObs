@@ -456,7 +456,8 @@
 .tobs_control_groups <- list(
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
                  "re.aghq", "n.quad", "n.quad.scalar", "re.lkj", "optimizer",
-                 "omega.sigma.prior", "hessian", "inner_solver", "integration"),
+                 "omega.sigma.prior", "logr.sigma.prior",
+                 "hessian", "inner_solver", "integration"),
   # The community latent routes -- a shared areal field and/or latent() factors
   # on a community family -- fit by block coordinate ascent between the
   # community Laplace-EM and the field / factor updates (R/community_latent.R).

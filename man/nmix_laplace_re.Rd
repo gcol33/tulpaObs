@@ -30,6 +30,7 @@ nmix_laplace_re(
   lkj_eta = 1,
   sigma_beta = 100,
   omega_sigma_prior = c(1, 0.05),
+  logr_sigma_prior = NULL,
   verbose = FALSE
 )
 }
@@ -141,6 +142,18 @@ can collapse to the boundary, flattening the marginal Hessian and attenuating
 the recovered SD; the weak prior adds curvature there (passed to
 \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}}'s \code{sigma_prior}) without biasing an identified fit. \code{NULL}
 restores pure ML on the structural-zero variance. Ignored for Poisson / NB.}
+
+\item{logr_sigma_prior}{Penalized-Complexity prior \code{c(U, alpha)}
+(\code{P(sigma_log_r > U) = alpha}) on the per-species log-dispersion random
+effect SD (\code{mixture = "NB"} / \code{"ZINB"} only; default \code{NULL}, pure ML).
+\code{sigma_log_r} is the same shape of parameter as \code{sigma_omega} -- one scalar
+variance over species -- and collapses the same way at few species, taking
+the \code{mu_log_r} interval with it: at 8 and 36 species with a simulated
+\code{sigma_logr = 0.5}, fits recovering \code{sigma_log_r >= 0.30} covered \code{mu_log_r}
+33/34 while those below covered 2/5 (gcol33/tulpaObs#235). When both this and
+\code{omega_sigma_prior} are set they must be equal: the engine applies one
+Penalized-Complexity prior across every block it regularizes.
+Ignored for Poisson / ZIP.}
 
 \item{verbose}{Unused (kept for backward compatibility); the engine is silent.}
 }

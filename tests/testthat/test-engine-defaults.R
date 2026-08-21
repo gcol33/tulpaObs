@@ -267,6 +267,32 @@ test_that("sigma.logr is reachable from control on the sampler routes", {
   expect_identical(.tobs_default("nuts", "sigma.logr"), 1.5)
 })
 
+test_that("logr.sigma.prior is a laplace control and defaults to pure ML", {
+  # gcol33/tulpaObs#235. sigma_log_r is the same shape of parameter as
+  # sigma_omega -- one scalar variance over species -- and collapses the same way
+  # at few species, taking the mu_log_r interval with it. The PC prior that
+  # regularizes the omega block is now reachable for the log_r block too.
+  expect_true("logr.sigma.prior" %in% .tobs_control_groups$laplace_em)
+  # It is a Laplace-path knob: the sampler routes have their own priors and
+  # reject it rather than ignoring it.
+  expect_false("logr.sigma.prior" %in% .tobs_control_groups$sampler)
+
+  lap <- list(engine = "laplace", correction = "none")
+  expect_silent(.tobs_validate_control(list(logr.sigma.prior = c(1, 0.05)), lap))
+  expect_error(
+    .tobs_validate_control(list(logr.sigma.prior = c(1, 0.05)),
+                           list(engine = "nuts", correction = "none")),
+    "logr.sigma.prior")
+
+  # Default is NULL, i.e. pure ML on the dispersion variance: turning the prior
+  # on is opt-in and no existing fit moves.
+  expect_null(eval(formals(nmix_laplace_re)$logr_sigma_prior))
+  expect_null(eval(formals(.tobs_fit_ms_nmix)$logr_sigma_prior))
+  # The omega block keeps its own default, which is NOT NULL -- the two blocks
+  # are deliberately not symmetric yet.
+  expect_identical(eval(formals(nmix_laplace_re)$omega_sigma_prior), c(1, 0.05))
+})
+
 test_that("the scalar nuisance block cannot be run below the converged rule", {
   # gcol33/tulpaObs#234. Two Gauss-Hermite nodes place two points and leave no
   # freedom for curvature, so on a 1-D posterior that is not near-Gaussian the

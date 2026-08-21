@@ -989,6 +989,10 @@
     lkj_eta       = control[["re.lkj"]] %||% .tobs_default("laplace", "re.lkj"),
     omega_sigma_prior = if ("omega.sigma.prior" %in% names(control))
                           control[["omega.sigma.prior"]] else c(1, 0.05),
+    # NULL (pure ML) unless asked for, so `%in% names()` rather than %||%: an
+    # explicit NULL has to stay NULL.
+    logr_sigma_prior = if ("logr.sigma.prior" %in% names(control))
+                         control[["logr.sigma.prior"]] else NULL,
     verbose       = isTRUE(control[["verbose"]]))
 }
 

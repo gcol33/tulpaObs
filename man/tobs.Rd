@@ -244,6 +244,16 @@ model average.
 Laplace controls (\code{method = "laplace"} / \code{"laplace_sla"} /
 \code{"nested_laplace"}): \code{max.iter}, \code{tol}, \code{damping}, \code{sigma.beta}.
 \itemize{
+\item \code{logr.sigma.prior} — Penalized-Complexity prior \code{c(U, alpha)}
+(\code{P(sigma_log_r > U) = alpha}) on the per-species log-dispersion SD under
+\code{ms_abun(mixture = "negbin" / "zinb")}. Default \code{NULL}, pure maximum
+likelihood. \code{sigma_log_r} is one scalar variance over species and at few
+species can settle near its lower boundary, which shifts \code{mu_log_r} and
+narrows its interval together (see \code{?ms_abun}); the prior adds curvature
+there. \code{omega.sigma.prior} is the same knob for the structural-zero
+variance and does default to \code{c(1, 0.05)}; when both are set they must be
+equal, since one Penalized-Complexity prior is applied across every
+regularized block.
 \item \code{re.aghq} — for a formula random effect under \code{method = "laplace"}, run
 the adaptive Gauss-Hermite debias of the variance components after the
 EM converges (default \code{TRUE}). Removes the Laplace small-cluster

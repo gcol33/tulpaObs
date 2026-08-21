@@ -219,6 +219,16 @@
 #'
 #'   Laplace controls (`method = "laplace"` / `"laplace_sla"` /
 #'   `"nested_laplace"`): `max.iter`, `tol`, `damping`, `sigma.beta`.
+#'   * `logr.sigma.prior` — Penalized-Complexity prior `c(U, alpha)`
+#'     (`P(sigma_log_r > U) = alpha`) on the per-species log-dispersion SD under
+#'     `ms_abun(mixture = "negbin" / "zinb")`. Default `NULL`, pure maximum
+#'     likelihood. `sigma_log_r` is one scalar variance over species and at few
+#'     species can settle near its lower boundary, which shifts `mu_log_r` and
+#'     narrows its interval together (see `?ms_abun`); the prior adds curvature
+#'     there. `omega.sigma.prior` is the same knob for the structural-zero
+#'     variance and does default to `c(1, 0.05)`; when both are set they must be
+#'     equal, since one Penalized-Complexity prior is applied across every
+#'     regularized block.
 #'   * `re.aghq` — for a formula random effect under `method = "laplace"`, run
 #'     the adaptive Gauss-Hermite debias of the variance components after the
 #'     EM converges (default `TRUE`). Removes the Laplace small-cluster

@@ -128,6 +128,17 @@
 #'   the recovered SD; the weak prior adds curvature there (passed to
 #'   [tulpa_re_aghq()]'s `sigma_prior`) without biasing an identified fit. `NULL`
 #'   restores pure ML on the structural-zero variance. Ignored for Poisson / NB.
+#' @param logr_sigma_prior Penalized-Complexity prior `c(U, alpha)`
+#'   (`P(sigma_log_r > U) = alpha`) on the per-species log-dispersion random
+#'   effect SD (`mixture = "NB"` / `"ZINB"` only; default `NULL`, pure ML).
+#'   `sigma_log_r` is the same shape of parameter as `sigma_omega` -- one scalar
+#'   variance over species -- and collapses the same way at few species, taking
+#'   the `mu_log_r` interval with it: at 8 and 36 species with a simulated
+#'   `sigma_logr = 0.5`, fits recovering `sigma_log_r >= 0.30` covered `mu_log_r`
+#'   33/34 while those below covered 2/5 (gcol33/tulpaObs#235). When both this and
+#'   `omega_sigma_prior` are set they must be equal: the engine applies one
+#'   Penalized-Complexity prior across every block it regularizes.
+#'   Ignored for Poisson / ZIP.
 #' @param verbose Unused (kept for backward compatibility); the engine is silent.
 #'
 #' @return A list of class `nmix_re_fit`: `mu_lambda`, `mu_p` (community
@@ -166,6 +177,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   lkj_eta = 1,
                                   sigma_beta = 100,
                                   omega_sigma_prior = c(1, 0.05),
+                                  logr_sigma_prior = NULL,
                                   verbose = FALSE) {
   mixture <- match.arg(mixture)
   is_nb <- mixture %in% c("NB", "ZINB")   # negative-binomial abundance (log_r RE)
@@ -400,16 +412,43 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   nqs    <- .nmix_scalar_nquad(n_quad, n_quad_scalar)
   if (!is.na(logr_blk))  nq_vec[logr_blk]  <- nqs
   if (!is.na(omega_blk)) nq_vec[omega_blk] <- nqs
-  # Regularize the weakly-identified structural-zero variance component. sigma_omega
-  # is the softest AGHQ direction and at few species can collapse to the boundary,
-  # flattening the marginal Hessian (a singular joint optimum) and attenuating the
-  # recovered SD. A weak Penalized-Complexity prior on the omega block adds
-  # curvature there without biasing an identified fit (the +log sigma Jacobian
-  # repels sigma -> 0, the -lambda sigma term caps inflation). omega_sigma_prior =
-  # NULL restores pure ML on the structural-zero variance. The NB log_r block keeps
-  # pure ML (its Poisson-limit path stays byte-identical to the non-ZI fit).
-  sigma_prior <- if (is_zi && !is.null(omega_sigma_prior) && !is.na(omega_blk))
-    list(blocks = omega_blk, prior_sigma = omega_sigma_prior) else NULL
+  # Regularize a weakly-identified scalar variance component. Both scalar blocks
+  # are a single variance over species, both are among the softest AGHQ
+  # directions, and at few species either can settle near its lower boundary,
+  # flattening the marginal Hessian and attenuating the recovered SD. A weak
+  # Penalized-Complexity prior adds curvature there without biasing an identified
+  # fit (the +log sigma Jacobian repels sigma -> 0, the -lambda sigma term caps
+  # inflation). Passing NULL for a block restores pure ML on that variance.
+  #
+  # The collapse is not cosmetic on the log_r block: at 8 and 36 species with a
+  # simulated sigma_logr = 0.5, the fits recovering sigma_log_r >= 0.30 cover
+  # mu_log_r 33/34 while those below cover 2/5, with the point estimate 2.2x
+  # further out and the interval 28% narrower (#235, NOTES_measurements.md).
+  #
+  # tulpa_re_aghq()'s `sigma_prior` carries ONE `prior_sigma` for every block its
+  # `blocks` vector lists, so two blocks can be regularized together only at the
+  # same (U, alpha); asking for different ones is an error rather than a silent
+  # choice of one.
+  pri_blk <- integer(0)
+  pri_val <- NULL
+  if (is_zi && !is.na(omega_blk) && !is.null(omega_sigma_prior)) {
+    pri_blk <- c(pri_blk, omega_blk)
+    pri_val <- omega_sigma_prior
+  }
+  if (is_nb && !is.na(logr_blk) && !is.null(logr_sigma_prior)) {
+    if (!is.null(pri_val) && !isTRUE(all.equal(as.numeric(pri_val),
+                                               as.numeric(logr_sigma_prior)))) {
+      stop("omega_sigma_prior and logr_sigma_prior must be equal when both are ",
+           "set: the engine applies one Penalized-Complexity prior across every ",
+           "regularized block. Got c(", paste(pri_val, collapse = ", "),
+           ") and c(", paste(logr_sigma_prior, collapse = ", "), ").",
+           call. = FALSE)
+    }
+    pri_blk <- c(pri_blk, logr_blk)
+    pri_val <- logr_sigma_prior
+  }
+  sigma_prior <- if (length(pri_blk))
+    list(blocks = pri_blk, prior_sigma = pri_val) else NULL
   fit <- tulpa::tulpa_re_aghq(
     theta0  = theta0,
     re_terms = re_terms,
