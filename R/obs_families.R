@@ -1207,6 +1207,18 @@ dyn_int_occu <- function() {
 #' is not trustworthy even though the fit converged and reported no warning.
 #' Those thresholds are the ones this fixture separated on and are not a general
 #' rule; what transfers is the conditioning, not the number.
+#'
+#' `control$logr.sigma.prior` puts a Penalized-Complexity prior on that variance,
+#' which adds curvature at `sigma_log_r -> 0`. Measured on the same fixture at
+#' `c(1, 0.05)`, it is worth reaching for when a fit reports a `sigma_log_r` near
+#' zero or fails outright with a singular marginal Hessian -- one seed that
+#' errored under pure maximum likelihood converged and covered under the prior,
+#' and variance components near 0.01-0.06 lifted by an order of magnitude. It
+#' does **not** repair coverage: on 19 paired seeds the nominal 95% interval
+#' covered 17 either way, with the same two seeds missing, because the prior
+#' bites near the boundary while those misses sit at `sigma_log_r` around 0.2.
+#' It is off by default because the fits that were already calibrated pick up a
+#' small systematic shift under it (`mu_log_r` by -0.006, p = 0.001).
 #' @return A `tobs_family` object.
 #' @export
 ms_abun <- function(K_max = NULL,

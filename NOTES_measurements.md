@@ -1136,3 +1136,62 @@ runners `dev_notes/_nbrs_S_probe.R`, analysis `dev_notes/_nbrs_nuts_analyse.R`.
 A NUTS reference posterior on the S = 8 fixture was started and abandoned at 2 of
 20 seeds (86 min per fit, ~5x per-seed spread, projecting 4-6 h);
 `NUTSref_S8_*.csv` holds the two, width ratios 1.023 and 1.197.
+
+### PC prior on the log_r block: measured, and NOT made the default (#235)
+
+`logr_sigma_prior = c(1, 0.05)` (the omega block's own default), 20 seeds at
+S = 8 / N = 100 / J = 5, `n_quad = 3` / `n_quad_scalar = 3`, paired seed for seed
+against the pure-ML arm. 19 pairs -- seed 502 has no ML row, see below.
+
+```
+                       n    k_hat   bias      mean sigma   coverage
+pure ML               19   1.182   +0.0681     0.432       17/19 = 0.895
+PC prior              19   1.126   +0.0649     0.427       17/19 = 0.895
+
+collapsed under ML     4   2.124   +0.1767     0.117 -> 0.208   2/4 both arms
+healthy  under ML     15   0.752 -> 0.780      0.516 -> 0.485  15/15 both arms
+```
+
+**Coverage does not move: 17/19 either way, and the same two seeds miss.** The
+prior is graded purely by proximity to zero, which is what a PC prior does and
+also why it is mistargeted here:
+
+```
+seed  sigma_ml -> sigma_pc     z_ml -> z_pc        covered
+502   FAILED   -> 0.385        (none) -> +0.784    rescued: ML hit a singular
+                                                   marginal Hessian and errored
+518   0.0116   -> 0.180        -1.321 -> -0.924    covered both
+515   0.0612   -> 0.175        +2.684 -> +2.354    MISS -> MISS
+513   0.1981   -> 0.238        +1.154 -> +1.141    covered both
+507   0.1982   -> 0.238        +2.788 -> +2.695    MISS -> MISS
+```
+
+It bites hard at sigma ~ 0.01-0.06 (an order of magnitude lift) and barely at
+sigma ~ 0.2 -- and sigma ~ 0.2 is where the misses live. Both misses improve and
+neither crosses back.
+
+**What it does buy.** Seed 502 under pure ML does not return a bad interval, it
+`stop()`s with `singular marginal Hessian or non-finite optimum`; under the prior
+it converges and covers. That is the failure mode the curvature at the boundary
+is for, and it is worth having on its own -- but it is a robustness gain, not a
+calibration one.
+
+**What it costs.** The healthy 15 are not free: `k_hat` 0.752 -> 0.780, SEs a
+median 4.2% narrower, sigma a median 0.031 lower, and a paired shift in
+`mu_log_r` of -0.0061, 95% CI [-0.0092, -0.0029], p = 0.001. Small, but
+systematic and in the wrong direction on the subgroup that was already
+calibrated.
+
+**Therefore the default stays `NULL` (pure ML).** Coverage unchanged, a
+significant if small bias added to 15 of 19 fits, and the benefit confined to the
+boundary cases. Turning it on by default would trade a documented failure on a
+few fits for an undocumented shift on all of them. It ships opt-in
+(`control$logr.sigma.prior`) and is worth recommending where a negbin community
+fit at few species reports a `sigma_log_r` near zero or fails outright.
+
+Deliberately NOT done: tuning `U` / `alpha` until coverage improves. The only
+data available to tune against is the same 20 seeds used to judge the result, so
+a strength chosen that way is fitted to the test rather than measured.
+
+Probe: `dev_notes/nbrs_bisect/PCprior_S8_s*.csv`, runner `_nbrs_S_probe.R` (10th
+argument, "U;alpha"), comparison `_nbrs_pcprior_compare.R`.
