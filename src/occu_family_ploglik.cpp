@@ -12,12 +12,14 @@
 #include <vector>
 #include <cmath>
 #include "tobs_math.h"
+#include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
 using tulpaObs::logsumexp2;
+namespace shape = tulpaObs::shape;
 
 namespace {
 
@@ -43,9 +45,8 @@ Rcpp::NumericMatrix cpp_occu_single_ploglik(
   const int S = eta_psi.nrow();
   const int N = eta_psi.ncol();
   const int mv = y.ncol();
-  if (eta_p.nrow() != S || eta_p.ncol() != N)
-    Rcpp::stop("eta_p must match eta_psi dims.");
-  if (y.nrow() != N) Rcpp::stop("y must have N rows.");
+  shape::check_dim(eta_p, S, N, "eta_p");
+  shape::check_nrow(y, N, "y");
 
   Rcpp::NumericMatrix ll(S, N);
   const double* ppsi = eta_psi.begin();
@@ -102,6 +103,16 @@ Rcpp::NumericMatrix cpp_occu_dynamic_ploglik(
   const int S = eta_psi1.nrow();
   const int mv = max_visits, Tn = n_seasons;
   const double NEG = -1e10;
+  shape::check_dim_arg(n_sites, "n_sites");
+  shape::check_dim_arg(max_visits, "max_visits");
+  shape::check_dim_arg(n_seasons, "n_seasons");
+  shape::check_dim(eta_psi1, S, n_sites, "eta_psi1");
+  shape::check_dim(eta_p,   S, n_sites, "eta_p");
+  shape::check_dim(eta_gam, S, n_sites, "eta_gam");
+  shape::check_dim(eta_eps, S, n_sites, "eta_eps");
+  shape::check_len(y, (R_xlen_t) n_sites * mv * Tn, "y");
+  shape::check_len(n_visits, (R_xlen_t) n_sites * Tn, "n_visits");
+  shape::check_len(any_detected, (R_xlen_t) n_sites * Tn, "any_detected");
   Rcpp::NumericMatrix out(S, n_sites);
   const double* ppsi = eta_psi1.begin();
   const double* pp   = eta_p.begin();
@@ -174,6 +185,10 @@ Rcpp::NumericMatrix cpp_occu_integrated_ploglik(
 ) {
   const int S = eta_psi.nrow();
   const int N = eta_psi.ncol();
+  shape::check_dim_arg(n_sources, "n_sources");
+  shape::check_len(eta_src, (R_xlen_t) S * N * n_sources, "eta_src");
+  shape::check_dim(K1, N, n_sources, "K1");
+  shape::check_dim(K0, N, n_sources, "K0");
   Rcpp::NumericMatrix ll(S, N);
   const double* ppsi = eta_psi.begin();
   const double* psrc = eta_src.begin();

@@ -1,10 +1,10 @@
 // single_diag.cpp
 // C++ kernels for the single-season occupancy posterior diagnostics whose
 // per-draw / per-site loops were pure R:
-//   * cpp_single_ppc -- posterior predictive check (tobs_ppc, single). Per
+//   * cpp_single_ppc -- posterior predictive check (ppc(), single). Per
 //     selected draw: latent z ~ Bernoulli(full conditional), detection replicate
 //     y_rep ~ Bernoulli(z p), Freeman-Tukey / chi-squared discrepancy.
-//   * cpp_single_pit -- randomized PIT residuals (tobs_pit_residuals). Per site:
+//   * cpp_single_pit -- randomized PIT residuals (pit_residuals()). Per site:
 //     the posterior-mean predictive CDF plus a uniform jitter.
 // The posterior draw SELECTION (sample.int) stays in R and its indices are
 // passed in; the per-draw RNG (z, y_rep, the PIT jitter) is drawn here from R's
@@ -15,10 +15,12 @@
 #include <vector>
 #include <cmath>
 #include "tobs_math.h"
+#include "tobs_shape.h"
 using namespace Rcpp;
 using tulpaObs::stable_plogis;
 using tulpaObs::row_draw_dot;
 using tulpaObs::ppc_stat;
+namespace shape = tulpaObs::shape;
 
 
 // [[Rcpp::export]]
@@ -37,6 +39,12 @@ Rcpp::List cpp_single_ppc(
   const int max_v = y.ncol();
   const int ndr = draws.nrow();
   const int nsamp = draw_idx.size();
+  shape::check_nrow(X_det, n_sites, "X_det");
+  shape::check_nrow(y, n_sites, "y");
+  shape::check_ncol_min(draws, (R_xlen_t) p_occ + p_det, "draws");
+  shape::check_index1(draw_idx, ndr, "draw_idx");
+  shape::check_len(n_valid, n_sites, "n_valid");
+  shape::check_len(any_det, n_sites, "any_det");
   Rcpp::RNGScope scope;
   Rcpp::NumericVector fit_y(nsamp), fit_rep(nsamp);
   const double* pXo = X_occ.begin(); const double* pXd = X_det.begin();
@@ -96,6 +104,15 @@ Rcpp::List cpp_single_pit_cdf(
   const int p_occ = X_occ.ncol(), p_det = X_det.ncol();
   const int max_v = y.ncol(); const int ndr = draws.nrow();
   const int n_draws = draw_idx.size();
+  shape::check_nrow(X_det, n_sites, "X_det");
+  shape::check_nrow(y, n_sites, "y");
+  shape::check_ncol_min(draws, (R_xlen_t) p_occ + p_det, "draws");
+  shape::check_index1(draw_idx, ndr, "draw_idx");
+  // The site limit is a posterior mean over the selected draws, so an empty
+  // selection has no value to report.
+  if (n_draws < 1) {
+    Rcpp::stop("draw_idx must select at least one draw; got 0.");
+  }
   Rcpp::NumericVector lower(n_sites), upper(n_sites);
   const double* pXo = X_occ.begin(); const double* pXd = X_det.begin();
   const double* pdr = draws.begin(); const int* py = y.begin();

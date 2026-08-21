@@ -24,6 +24,7 @@
 #include <cmath>
 #include "tobs_math.h"
 #include "occu_cover_ragged.h"
+#include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -33,6 +34,7 @@ using tulpaObs::stable_plogis;
 using tulpaObs::clamp_eta;
 using tulpaObs::ppc_stat;
 using tulpaObs::occu_cover_ragged::Arms;
+namespace shape = tulpaObs::shape;
 
 namespace {
 // Positive-arm response-scale mean / replicate draw. `positive` follows the
@@ -72,9 +74,7 @@ Rcpp::List cpp_occu_cover_cdf_limits(
   arms.off_det_visit = tulpaObs::occu_cover_ragged::visit_offset(
       off_det, arms.V, arms.S, "off_det");
   const int S = arms.S, n_sites = arms.n_sites, V = arms.V;
-  if (any_det.size() != n_sites) {
-    Rcpp::stop("any_det must be length n_sites.");
-  }
+  shape::check_len(any_det, n_sites, "any_det");
 
   Rcpp::NumericMatrix Fl(S, n_sites), Fu(S, n_sites);
   const int* pad = any_det.begin();
@@ -155,12 +155,11 @@ Rcpp::List cpp_occu_cover_ppc(
   arms.off_pos_visit = tulpaObs::occu_cover_ragged::visit_offset(
       off_pos, arms.V, arms.S, "off_pos");
   const int S = arms.S, n_sites = arms.n_sites, V = arms.V;
-  if (y_det_visit.size() != V || y_pos_visit.size() != V) {
-    Rcpp::stop("y_det_visit / y_pos_visit must be length V.");
-  }
-  if (any_det.size() != n_sites || n_valid.size() != n_sites) {
-    Rcpp::stop("any_det / n_valid must be length n_sites.");
-  }
+  shape::check_len(y_det_visit, V, "y_det_visit");
+  shape::check_len(y_pos_visit, V, "y_pos_visit");
+  shape::check_len(any_det, n_sites, "any_det");
+  shape::check_len(n_valid, n_sites, "n_valid");
+  shape::check_len(disp, S, "disp");
   Rcpp::RNGScope scope;                      // ties to R's RNG stream
 
   Rcpp::NumericVector fit_y(S), fit_rep(S);
@@ -257,6 +256,32 @@ Rcpp::List cpp_occu_cover_ppc_agg(
 ) {
   const int S = psi_all.ncol(), n_sites = psi_all.nrow(), max_v = valid.ncol();
   const int n_units = pos_site.size();
+  shape::check_nrow(valid, n_sites, "valid");
+  shape::check_dim(y, n_sites, max_v, "y");
+  shape::check_dim(p_all, n_sites, (R_xlen_t) S * max_v, "p_all");
+  shape::check_dim(ep_all, n_sites, (R_xlen_t) S * max_v, "ep_all");
+  shape::check_len(any_det, n_sites, "any_det");
+  shape::check_len(n_valid, n_sites, "n_valid");
+  shape::check_len(disp, S, "disp");
+  // A unit sits at one site; its cover predictor is read at the row of that
+  // site in the per-draw [n_sites x max_visits] slab.
+  shape::check_index0(pos_site, n_sites, "pos_site");
+  if (mode_code == 1) {
+    shape::check_len(yv, n_units, "yv");
+  } else {
+    // CSR: unit u owns vals_flat[unit_off[u] .. unit_off[u + 1]).
+    shape::check_len(unit_off, (R_xlen_t) n_units + 1, "unit_off");
+    if (unit_off[0] != 0) {
+      Rcpp::stop("unit_off[1] must be 0; got %d.", (int) unit_off[0]);
+    }
+    for (int u = 0; u < n_units; ++u) {
+      if (unit_off[u + 1] < unit_off[u]) {
+        Rcpp::stop("unit_off must be non-decreasing; unit_off[%d] = %d follows "
+                   "%d.", u + 2, (int) unit_off[u + 1], (int) unit_off[u]);
+      }
+    }
+    shape::check_len(vals_flat, (R_xlen_t) unit_off[n_units], "vals_flat");
+  }
   Rcpp::RNGScope scope;
   Rcpp::NumericVector fit_y(S), fit_rep(S);
   const int* pv = valid.begin(); const int* py = y.begin();
