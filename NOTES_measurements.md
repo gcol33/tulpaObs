@@ -1195,3 +1195,101 @@ a strength chosen that way is fitted to the test rather than measured.
 
 Probe: `dev_notes/nbrs_bisect/PCprior_S8_s*.csv`, runner `_nbrs_S_probe.R` (10th
 argument, "U;alpha"), comparison `_nbrs_pcprior_compare.R`.
+
+## Scalar nuisance AGHQ node floor (`ms_abun(mixture="negbin")` / ZI, #234)
+
+Rule is in `CLAUDE.md` under "Community / multispecies N-mixture". Measurements:
+
+- **The collapse.** A 2-node rule on `mu_log_r` gave SE 0.0110 against 0.1886 at
+  `n_quad >= 3` (seed 515) -- a **17x** collapse, on a fit that converged with an
+  ordinary point estimate and no warning.
+- **Converged at 3, not clamped.** `n_quad` 3 / 5 / 9 agree to 10 decimal places.
+- **Cost.** 1.5x on that axis at `n_quad = 5`.
+- **Bias, not only the one seed.** Mean bias on `mu_log_r` +0.0482 -> +0.0109 over
+  the 19 seeds that never collapsed.
+- **Not sufficient for the gate.** `test-ms-abun-nb-rs.R:94` still reads 16/20 =
+  0.800 against `> 0.8`; see the #235 note below.
+
+## `mu_log_r` Wald calibration conditions on `sigma_log_r` (#235)
+
+Rule is in `CLAUDE.md` under "Community / multispecies N-mixture". Measurements
+(n = 59 fits pooled; conditioning subset n = 39, S = 8 + 36, truth `sigma` 0.5):
+
+- **Not a uniform scale miss.** 4 of 59 fits carry 34% of `sum(z^2)`. Dropping them
+  takes `k_hat` 1.189 -> **1.003**, and the body's robust scale is below 1
+  (IQR 0.885, MAD 0.931). The filed "~24% too small" does not hold.
+- **Conditioned on the recovered variance component.** `sigma_log_r >= 0.30` ->
+  **33/34 = 0.971** covered, k 0.88. `sigma_log_r < 0.30` -> **2/5**, k 2.12, mean
+  |err| 2.2x worse and SE 28% narrower -- both fire together, which is what makes
+  the pooled statistics read as a clean scale miss.
+- **Threshold-free.** spearman(|z|, sigma) -0.470, p = 0.003; spearman(|err|, sigma)
+  -0.353, p = 0.028 -- so the effect is in the ERROR too, not an SE artefact alone.
+- **Refuted en route.** Finite-sample-in-S: k peaks at S = 18 and the bias does not
+  decay. t(S-1) df correction: coverage 0.864 -> 0.881, still p = 0.027 vs nominal.
+- **Why no gate ships.** A detector needs `SE(log sigma)`, and `tulpa_re_aghq()`
+  discards the joint inverse's variance-component block (`gcol33/tulpa#418`).
+
+## Grouped-RE AGHQ debias, occupancy arms (`R/re_aghq.R`)
+
+Rule is in `CLAUDE.md` under "RE both engines". Measured at n = 8 groups:
+
+- Occupancy arm: sigma bias ~18% (raw EM variance component) -> ~4% (AGHQ).
+- Detection arm: ~70% attenuation -> ~1%, with 88-96% interval coverage.
+
+## Community variance under `pg_gibbs` vs the Laplace-EM
+
+Rule is in `CLAUDE.md`'s "What works" rows: the Laplace-EM community SD is a
+documented lower bound, the PG-Gibbs posterior is calibrated. SD reported as the
+posterior MEDIAN (robust to the variance skew). Measured:
+
+| family | arm SDs, truth | Gibbs | Laplace-EM |
+|---|---|---|---|
+| `ms_occu` | 0.6 / 0.4 (`sd_psi` / `sd_p`) | 0.667 / 0.417 | 0.595 / 0.342 |
+| `jsdm` / `ms_count("bernoulli")` | 0.7 / 0.5 (`sd_mu`) | 0.674 / 0.439 | 0.635 / 0.401 |
+| `ms_int_occu` | 0.5 (`sd_psi`) | ~0.53 | attenuates |
+
+## AR1 year effect `rho` at few seasons (`t_occu()`, #124)
+
+Rule is in `CLAUDE.md`'s `t_occu` row: `rho` is weakly identified at few seasons
+and is reported, not asserted tightly. Even GIVEN the true year effects, `rho_hat`
+for truth 0.6 climbs ~0.08 (T=8) -> 0.43 (T=20) -> 0.59 (T=200) -- a property of
+the short AR1 series, not of the sampler.
+
+## Per-species Hessian for `ms_distance` (#161)
+
+Rule is in `CLAUDE.md`'s "Community distance spatial-factor" row. Before
+`.tobs_ms_distance_info_block()`, the community EM finite-differenced the
+per-species Hessian at `2U` sweeps per species per Newton step, each sweep summing
+over the latent N: `test-ms-distance.R` ran **5.12 h** at tier 3 = **88%** of
+`full-recovery.yaml`'s 350-min cap on its own. Assembling the block from what
+`cpp_distance_site_sweep` already returns made the community EM **2.3x** faster
+with the fit UNCHANGED to ~1e-13.
+
+## Structured terms missing from the criteria (#211 / #215)
+
+Rule is in `CLAUDE.md` under "`occu_cover()` detail": a term the scorer cannot see
+is scored at ZERO. How far the scores moved once each term reached the kernels:
+
+- Sampled (NUTS) route: elpd moved **31 nats** on a detection-arm RE and **549
+  nats** on a sampled field.
+- Grid-integrated (`nested_laplace`) route: `elpd_waic` moved **11.5 nats** on a
+  detection-arm RE at `sigma` 1.1 and **61.5 nats** on a cover-arm RE.
+- Occupancy-arm RE (#56, per site, via `model$re_psi`): `elpd_waic` **9.34**,
+  `elpd_loo` **9.41**, at `sigma_re` 1.57. A fit carrying none stays byte-identical.
+
+## Sampler-default divergences removed at #188
+
+Rule is in `CLAUDE.md` under `engine_defaults.R`. Two shipped defaults were
+proven artifacts rather than calibrated values, and were deleted:
+
+- `n.iter` 2000 -> 1000 on the occu / cover / occu_cover NUTS paths. Commit
+  8975470 changed `n.iter` from TOTAL to kept-post-warmup on exactly those paths
+  and left the literal, so a default that had always kept 2000 - 1000 = 1000
+  silently began keeping 2000. That commit's message records the behaviour change.
+- occu `pg_gibbs` 2000/1000 -> the shared 3000/1500. It kept 1000 where every
+  `ms_*` sibling kept 1500, with no recorded reason;
+  `test-occu-pg-gibbs{,-spatial}.R` 29/29 green after.
+
+Symptom that located the dead formals: `abun(method = "nuts")` ran
+`.tobs_fit_model()`'s `n.iter = 2000` rather than its own `1000L` -- measured 2050
+iterations, 2000 kept.

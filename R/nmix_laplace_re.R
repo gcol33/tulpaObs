@@ -132,12 +132,26 @@
 #'   (`P(sigma_log_r > U) = alpha`) on the per-species log-dispersion random
 #'   effect SD (`mixture = "NB"` / `"ZINB"` only; default `NULL`, pure ML).
 #'   `sigma_log_r` is the same shape of parameter as `sigma_omega` -- one scalar
-#'   variance over species -- and collapses the same way at few species, taking
-#'   the `mu_log_r` interval with it: at 8 and 36 species with a simulated
-#'   `sigma_logr = 0.5`, fits recovering `sigma_log_r >= 0.30` covered `mu_log_r`
-#'   33/34 while those below covered 2/5 (gcol33/tulpaObs#235). When both this and
-#'   `omega_sigma_prior` are set they must be equal: the engine applies one
-#'   Penalized-Complexity prior across every block it regularizes.
+#'   variance over species -- and settles near its lower boundary the same way at
+#'   few species, taking the `mu_log_r` interval with it: at 8 and 36 species with
+#'   a simulated `sigma_logr = 0.5`, `n_quad = 3` and `n_quad_scalar = 3`, fits
+#'   recovering `sigma_log_r >= 0.30` covered `mu_log_r` 33/34 while those below
+#'   covered 2/5 (gcol33/tulpaObs#235).
+#'
+#'   What the penalty reaches on this block appears to be the boundary rather
+#'   than the calibration. Measured on 20 seeds of that fixture at 8 species with
+#'   `c(U, alpha) = c(1, 0.05)`: a `sigma_log_r` of 0.01-0.06 lifts by an order of
+#'   magnitude and a seed that stopped at a singular marginal Hessian under pure
+#'   ML converges and covers, while paired coverage holds at 17 of 19 with the
+#'   same two seeds missing, both of them at `sigma_log_r` around 0.2 where the
+#'   penalty is weak. The fits that were already calibrated take a small
+#'   systematic shift (`mu_log_r` by -0.006, p = 0.001; SEs a median 4.2%
+#'   narrower). Hence the `NULL` default: it is a lever for a fit whose dispersion
+#'   variance came back near zero or that failed outright, rather than a
+#'   correction expected to hold across fits.
+#'
+#'   When both this and `omega_sigma_prior` are set they must be equal: the engine
+#'   applies one Penalized-Complexity prior across every block it regularizes.
 #'   Ignored for Poisson / ZIP.
 #' @param verbose Unused (kept for backward compatibility); the engine is silent.
 #'
@@ -416,14 +430,23 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # are a single variance over species, both are among the softest AGHQ
   # directions, and at few species either can settle near its lower boundary,
   # flattening the marginal Hessian and attenuating the recovered SD. A weak
-  # Penalized-Complexity prior adds curvature there without biasing an identified
-  # fit (the +log sigma Jacobian repels sigma -> 0, the -lambda sigma term caps
-  # inflation). Passing NULL for a block restores pure ML on that variance.
+  # Penalized-Complexity prior adds curvature there (the +log sigma Jacobian
+  # repels sigma -> 0, the -lambda sigma term caps inflation). Passing NULL for a
+  # block restores pure ML on that variance.
   #
   # The collapse is not cosmetic on the log_r block: at 8 and 36 species with a
   # simulated sigma_logr = 0.5, the fits recovering sigma_log_r >= 0.30 cover
   # mu_log_r 33/34 while those below cover 2/5, with the point estimate 2.2x
   # further out and the interval 28% narrower (#235, NOTES_measurements.md).
+  #
+  # The penalty is graded by proximity to zero, and on that block it reaches the
+  # boundary rather than the calibration: at c(1, 0.05) a sigma_log_r of 0.01-0.06
+  # lifts by an order of magnitude and a fit that stopped at a singular marginal
+  # Hessian comes back, while paired coverage holds at 17 of 19 with the same two
+  # seeds missing at sigma_log_r around 0.2, and the already-calibrated fits take
+  # a small systematic shift (mu_log_r by -0.006, SEs a median 4.2% narrower).
+  # Hence NULL here, against c(1, 0.05) on omega, where the identified fits
+  # measured unmoved (dev_notes/finding_ms_abun_zip_regularization.md).
   #
   # tulpa_re_aghq()'s `sigma_prior` carries ONE `prior_sigma` for every block its
   # `blocks` vector lists, so two blocks can be regularized together only at the

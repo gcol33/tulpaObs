@@ -61,8 +61,8 @@ Raw EM variance components carry Laplace small-cluster bias for binary; FE SEs d
 not. Default `re.aghq=TRUE` (`control=list(n.quad=)`) debiases via adaptive GH on
 exact per-group marginal (single grouping factor, one arm, dim<=3; else EM
 fallback). Engine `tulpa::tulpa_re_aghq()`; `R/re_aghq.R` (`.tobs_re_aghq()`)
-wraps, supplies occ/det site marginal as `make_site`. Measured occ arm: n=8 sigma
-bias ~18%(EM)->~4%(AGHQ); det arm ~70% attenuation->~1%, 88-96% coverage. Det-arm
+wraps, supplies occ/det site marginal as `make_site`. AGHQ removes most of the
+small-cluster sigma bias on both arms (`NOTES_measurements.md`). Det-arm
 RE params named for det process (`sigma_p<t>_*`, `re_p<t>_*`). Default LKJ
 (`re.lkj=1.5`) per corr block regularizes weak correlation off +-1 (SDs untouched;
 `re.lkj=1` disables). RE naming + BLUP recon both engines in `R/re_effects.R`
@@ -102,8 +102,7 @@ Do NOT run on every edit. Ladder:
    0.0.93): 3322 assertions, 629 skips, **0 fail, 0 error**. Earlier 5 errors =
    #148 (tulpa fed its own nested-Laplace validator a length-1 `re_idx`), fixed
    tulpa 0.0.93; assertion count rose b/c those blocks now run. Wall time NOT
-   measured (box shared) -- time it yourself, do NOT trust old ~153s / ~22s
-   figures. `skip_if_fast()` gates every fitting block (628 sites, 166 files);
+   measured (box shared) -- time it yourself, do NOT trust old figures. `skip_if_fast()` gates every fitting block (628 sites, 166 files);
    no-op when env var unset.
 3. **Full recovery suite** (all seeds, NUTS, spatial) -> CI cron
    (`full-recovery.yaml`), or on request. NOT a release gate, NOT pre-commit:
@@ -414,34 +413,26 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   **The cap is verified, NOT assumed.** Exact where the posterior over N decays
   inside its window, wrong where it does not; no fixed headroom survives `p -> 0`
   (never-detected count ~`Poisson(lambda (1-p)^J)`). Guard is NOT the boundary mass
-  `nmix_laplace()` warns on -- that bounds the error where the fit STOPPED, and a
-  fixture passed it cleanly while sitting well below the uncapped optimum, b/c the
-  optimiser's PATH ran through the truncated region. What IS tested: the answer is
-  also stationary under the shared ceiling -- score at the fitted coefficients under
-  both truncations must agree to `.NMIX_SCORE_TOL` (1e-4). Separates by eight orders
-  of magnitude where boundary mass separated by nothing. Failing that -> window
+  `nmix_laplace()` warns on -- that bounds the error where the fit STOPPED, and the
+  optimiser's PATH can run through the truncated region while boundary mass reads
+  clean. What IS tested: the score at the fitted coefficients must agree under the
+  capped AND the shared ceiling to `.NMIX_SCORE_TOL` (1e-4). Failing that -> window
   widens 4x, fit redone, escalating to uncapped -> a guarded fit is NEVER worse than
-  the shared-ceiling fit, at worst it costs the extra fits. Verified bit-identical
-  (0.000e+00 under the uncapped likelihood) on ordinary counts (guard never fires),
-  an unidentified lambda/p ridge (escalates to uncapped), and an identified
-  high-abundance fixture (settles at 400). Wired into `nmix_laplace()`,
-  `nmix_laplace_re()` + the `ms_abun() + latent()` path (scores at the predictor the
-  fit ran on, field + factor offsets included -- a latent surface can push a site
-  above what its own counts suggest = the direction that exhausts a window). NB /
-  zero-inflated keep the shared ceiling: the check runs a Poisson marginal, would
-  understate a heavier tail. Dedicated C++ areal community path (#12) + the removal /
-  distance kernels untouched + uncapped -- a capped oracle beside an uncapped field
-  solve in ONE fit is worse than neither.
-  **The guard is live, not just wired.** `.nmix_community_score_gap()` sits behind a
-  `tryCatch(error = NA)` and `is.finite(NA)` is FALSE -> an ERRORING guard and a
-  PASSING guard both leave the fit untouched and look identical from outside; a
-  capped fit matching its uncapped twin is NOT evidence the check ran. Measured live
-  on a fitted `ms_abun() + latent()`: finite on every call, gap rises further when
-  the fit's own factor offset is included -- design rationale showing up in the
-  measurement, since the latent surface lifts exactly the sites a tight window
-  starves. **What it buys** is confined to heavy-tailed seeds and is NOTHING
-  where counts are not heavy-tailed, so this is a tier-3 fix, NOT a way to
-  shrink `test-ms-abun-factor.R` -- its lever is `factor.starts`. Numbers in
+  the shared-ceiling fit, at worst it costs the extra fits. Wired into
+  `nmix_laplace()`, `nmix_laplace_re()` + the `ms_abun() + latent()` path (scores at
+  the predictor the fit ran on, field + factor offsets included -- a latent surface
+  can push a site above what its own counts suggest = the direction that exhausts a
+  window). NB / zero-inflated keep the shared ceiling: the check runs a Poisson
+  marginal, would understate a heavier tail. Dedicated C++ areal community path (#12)
+  + the removal / distance kernels untouched + uncapped -- a capped oracle beside an
+  uncapped field solve in ONE fit is worse than neither.
+  **A capped fit matching its uncapped twin is NOT evidence the guard ran.**
+  `.nmix_community_score_gap()` sits behind a `tryCatch(error = NA)` and
+  `is.finite(NA)` is FALSE -> an ERRORING guard and a PASSING guard both leave the
+  fit untouched and look identical from outside; assert on the gap itself. What it
+  buys is confined to heavy-tailed seeds and is NOTHING where counts are not
+  heavy-tailed, so this is a tier-3 fix, NOT a way to shrink
+  `test-ms-abun-factor.R` -- its lever is `factor.starts`. Numbers in
   `NOTES_measurements.md`.
 - **Areal** (`nested_laplace`): icar/bym2/car_proper on abundance ->
   `.tobs_fit_nmix_spatial()` -> `nmix_laplace_{icar,bym2,car_proper}` (one unit/site).
@@ -521,30 +512,29 @@ S3).
 - **Scalar nuisance AGHQ blocks floored at 3 nodes** (`.TOBS_MIN_SCALAR_NQUAD`,
   `.nmix_scalar_nquad()`, #234). `log_r` (NB) + `logit_omega` (ZI). A 2-node
   Gauss-Hermite rule places 2 nodes and has no freedom left for curvature, so on a
-  non-Gaussian 1-D posterior the marginal can come out arbitrarily sharp: measured
-  **17x SE collapse** on `mu_log_r` (0.0110 vs 0.1886, seed 515), fit converged, point
-  estimate ordinary, no warning, every downstream Wald CI / SBC rank inherits it.
-  Converged at 3 (nqs 3/5/9 bit-identical to 10 dp), so floor NOT clamp — and the floor
-  beats a smaller `n_quad` (a coefficient block may run at plain Laplace, a block whose
-  marginal SE is REPORTED may not). Cost 1.5x on that axis at `n_quad=5`. Also a bias
-  fix, not just a seed rescue: mean bias +0.0482 -> +0.0109 over the 19 seeds that never
-  collapsed. Does NOT turn `test-ms-abun-nb-rs.R:94` green on its own (16/20 = 0.800 vs
-  `> 0.8`) — see #235.
-- **`mu_log_r` Wald calibration is CONDITIONAL on `sigma_log_r` (#235).** NOT a uniform
-  SE miss — the filed "~24% too small" is wrong. 4 of 59 fits carry 34% of `sum(z^2)`;
-  drop them and `k_hat` 1.189 → **1.003**, and the body's robust scale is BELOW 1 (IQR
-  0.885, MAD 0.931). Conditioning on the recovered variance component (n=39, S=8+36,
-  truth 0.5): `sigma_log_r >= 0.30` → **33/34 = 0.971**, k 0.88; `< 0.30` → **2/5**,
-  k 2.12, mean |err| 2.2x worse AND SE 28% narrower (both fire together, which is why
-  pooled stats read as a clean scale miss). Threshold-free: spearman(|z|, sigma) −0.470
-  p=0.003; spearman(|err|, sigma) −0.353 p=0.028 (so NOT an SE artefact). = the
-  `sigma_omega` boundary collapse on the sibling block that keeps pure ML. REFUTED en
-  route: finite-sample-in-S (k peaks at S=18, bias doesn't decay), t(S−1) df correction
-  (0.864 → 0.881, still p=0.027 vs nominal). **No gate ships**: needs `SE(log sigma)`,
-  and `tulpa_re_aghq()` discards the joint inverse's variance-component block →
-  `gcol33/tulpa#418`. Anything else = an invented absolute cut on `sigma_hat`. Measured
-  conditioning documented on `?ms_abun` instead. Threshold at `:94` deliberately
-  UNTOUCHED (what it should assert depends on fix-vs-report, a claim decision).
+  non-Gaussian 1-D posterior the marginal can come out arbitrarily sharp -- a
+  converged fit, an ordinary point estimate, no warning, and every downstream Wald
+  CI / SBC rank inheriting a collapsed SE. Converged at 3, so floor NOT clamp -- and
+  the floor beats a smaller `n_quad` (a coefficient block may run at plain Laplace,
+  a block whose marginal SE is REPORTED may not). Also a bias fix, not just a seed
+  rescue. Does NOT turn `test-ms-abun-nb-rs.R:94` green on its own -- see #235.
+  Numbers in `NOTES_measurements.md`.
+- **`mu_log_r` Wald calibration is CONDITIONAL on `sigma_log_r` (#235).** NOT a
+  uniform SE miss -- the filed "~24% too small" is wrong: a handful of fits carry a
+  third of `sum(z^2)`, and with those dropped the pooled `k_hat` is ~1 while the
+  body's robust scale sits BELOW 1. Conditioning on the recovered variance
+  component, fits with a healthy `sigma_log_r` cover at nominal and fits near the
+  boundary do not, with mean |err| worse AND the SE narrower (both fire together,
+  which is why pooled stats read as a clean scale miss); threshold-free, the rank
+  correlation of |z| and of |err| against sigma is negative and significant, so NOT
+  an SE artefact. = the `sigma_omega` boundary collapse on the sibling block that
+  keeps pure ML. REFUTED en route: finite-sample-in-S, t(S-1) df correction. **No
+  gate ships**: needs `SE(log sigma)`, and `tulpa_re_aghq()` discards the joint
+  inverse's variance-component block -> `gcol33/tulpa#418`. Anything else = an
+  invented absolute cut on `sigma_hat`. Measured conditioning documented on
+  `?ms_abun` instead. Threshold at `:94` deliberately UNTOUCHED (what it should
+  assert depends on fix-vs-report, a claim decision). Numbers in
+  `NOTES_measurements.md`.
 - **NUTS** (`method="nuts"`, #14; `R/ms_abun_nuts.R`, `src/ms_abun_nuts.cpp`): samples
   EXACT joint posterior over closed-form Royle marginal -> calibrated intervals +
   per-(species,site) WAIC/LOO (`.tobs_ploglik_ms_nmix`). NON-CENTERED: per-species block
@@ -649,13 +639,13 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 |---|---|---|---|
 | Single-season occupancy | Yes | Yes | parity w/ inlaocc. **`method="pg_gibbs"`** (#126, spOccupancy `PGOcc`): a REAL Polya-Gamma Gibbs chain over the exact posterior via PG data augmentation (Polson-Scott-Windle, tulpa `cpp_rpg`), NOT the stochastic-EM `laplace_gibbs`. z\|. Bernoulli, then omega~PG conjugate-Gaussian beta updates both arms (`R/occu_pg_gibbs.R`, `.tobs_fit_occu_pg_gibbs`). Posterior MATCHES the Laplace observed-Fisher fit (means <1 SE, SDs <20%); Rhat~1.00, ESS 700-900; nominal 95% coverage (15 seeds). Wired via method route table + `.tobs_control_allow(pg_gibbs="sampler")`. **spPGOcc** (`occu() + icar()` + pg_gibbs, `.tobs_fit_occu_pg_gibbs_spatial`): intrinsic ICAR field on the psi logit, jointly updated w/ beta as a GMRF (dense `(p+n)x(p+n)` precision `t(W)Omega W + blkdiag(B0inv, tau Q)`, W=[X\|I]); conjugate Gamma tau; field sum-to-zero'd each sweep, level moved to the intercept (else eta leaks). Field cor ~0.74, intercept/detection recover, Rhat~1.00. NB: site-level occupancy covariate spatially-confounds w/ the saturated 1-node-per-site field (known property, spOccupancy too) -> recovery target = field+intercept+detection. icar only (bym2/car follow-ups). `test-occu-pg-gibbs.R` + `test-occu-pg-gibbs-spatial.R` |
 | Dynamic (HMM) | Yes | Yes | colonization/extinction. **Season-varying gamma/epsilon (#124)**: a covariate carried as a `[n_sites x (T-1)]` matrix column of `data` drives interval-indexed colonization/extinction (`colonization = ~ cov`), the dyn_abun #80 recipe ported to the colext forward. Detected via `.tobs_interval_arm_design` (shared w/ dyn_abun); the arm design unrolls long-form `[(site x interval) x p]`. E-step forward-backward uses per-interval transition matrices `A**[i, iv]` (constant rates recycle -> byte-identical to pre-#124); M-step encodes the transition arm as a WEIGHTED LOGISTIC (response = transition prob given origin state `xi/n_mat`, weight = origin-state prob `n_mat`) NOT the per-site M=1000 pseudo-binomial (which, applied per interval, makes each row near-separable so the inner Newton returns ~0 slope). The exact-marginal refine handles SV via a pure-R season-varying HMM-forward marginal `.tobs_dyn_occu_marginal_nlp_sv` (`R/dyn_occu_marginal.R`; the cpp `cpp_occu_dynamic_ploglik` reads one rate/site) -- escapes the EM local optimum AND calibrates SEs. `simulate_dyn_occu(beta_gamma=, beta_epsilon=)`. **Season-varying DETECTION (#124)**: a `[n_sites x T]` matrix column of `data` on the `detection` formula (`detection=~det_cov`) drives per-SEASON detection `logit p_it`. Shares the period-agnostic unroller (`.tobs_interval_arm_design` -> `.tobs_period_arm_design`, w/ a season (T) wrapper `.tobs_season_arm_design`; single source of truth): E-step emission reads per-`(site,season)` `p_mat[i,t]`, M-step (+ `hard_encode`) encodes one detection row per `(site,season)`, marginal refine + gate carry `det_season_varying`. `.tobs_dynamic_smoothed_z` (`fitted()$z`) indexes detection per season + transitions per interval (also FIXED the smoothed state for season-varying colext). `simulate_dyn_occu(beta_det_season=)`. Laplace/gibbs/mi only; NUTS+SV gated (C++ forward per-site). 20-seed recovery + coverage (`test-dyn-occ.R`) |
-| Multi-season AR1 year effect (`t_occu`) | — | — | `t_occu()` (#124, spOccupancy `tPGOcc`): NOT colext -- per-`(site,season)` Bernoulli `z_{i,t}~Bern(psi_{i,t})`, `logit psi = X beta + eta_t` w/ a SHARED AR1 year effect `eta_t = rho eta_{t-1} + w_t` on the logit, NO colonization/extinction. Given the year effects the seasons factorise -> EXACT Polya-Gamma Gibbs (`method="pg_gibbs"`, the engine spOccupancy uses; `R/t_occu.R`, `.tobs_fit_t_occu_pg_gibbs`): draw z (Bernoulli), then joint `(beta_occ, eta)` as ONE GMRF update -- dense precision `blkdiag(t(Xf)Omega Xf + B0inv, Z'Omega Z + Q/sigma^2)` w/ stationary AR1 precision `Q` (`.t_occu_ar1_Q`, tridiag) as the year-effect prior (as spPGOcc's ICAR precision is for a spatial field), then `beta_p`, then AR1 hypers (`sigma^2` conjugate Inverse-Gamma, `rho` on a grid over the AR1 log-density). Year effect sum-to-zero'd each sweep, level moved to the intercept; AR1 hypers update on RAW `eta_raw` BEFORE centering (else centering distorts the AR1 increments -> rho collapses). `fit$temporal_field` = posterior-mean year effect. Recovers year-effect surface (cor ~0.97), occ/det coefs, `sigma`, `Rhat`~1.00 (20-seed `test-t-occu.R`). AR1 correlation `rho` WEAKLY IDENTIFIED at few seasons -- even given true year effects `rho_hat` climbs ~0.08 (T=8) -> 0.43 (T=20) -> 0.59 (T=200) for truth 0.6, a property of the short AR1 series NOT the sampler -> reported, not asserted tightly. `y` = 3D `[n_sites x n_seasons x max_visits]` or list of per-season matrices; `simulate_t_occu()`. v1 = site-level occ/det covariates, `pg_gibbs` only (season-varying covariates, areal psi field, NUTS = follow-ups) |
-| Community single-season (`ms_occu`) | Yes | Yes | per-arm community RE, shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); msPGOcc. **`method="pg_gibbs"`** (#115/#126, spOccupancy `msPGOcc`): hierarchical Polya-Gamma Gibbs (`R/ms_occu_pg_gibbs.R`) -- per-species PG-augmented conjugate coef updates + conjugate community mean + Inverse-Gamma (near-Jeffreys) community variance draws (diagonal per-arm covariance), tulpa `cpp_rpg`. Gives a CALIBRATED community-VARIANCE posterior: Laplace-EM `sd_psi`/`sd_p` attenuate (documented lower bound), Gibbs recovers them (sd_psi 0.667/0.417 vs truth 0.6/0.4 vs Laplace 0.595/0.342; sd = posterior MEDIAN, robust to the variance skew). Community means + per-species coefs (cor ~0.9) recover; Rhat~1.00. `test-ms-occu-pg-gibbs.R`. NUTS non-spatial samples community means/deviations/covariances jointly (#69, `R/ms_occu_nuts.R`); shared areal field icar/bym2/car_proper on occ arm via n-L (#75, `R/ms_occu_spatial.R`, sfMsNMix analogue). NUTS+field -> n-L. **SVC (`svcMsPGOcc`, #118)**: varying-coefficient bar `spatial(~ 1 + w \|\| cell, graph)` on the occ arm -> intercept + SVC field(s) via BLOCK COORDINATE ascent (`R/ms_occu_field.R`, `.ms_occu_field_solve` = two-state-marginal occupancy field Newton + ICAR prior; community occ EM w/ field as psi offset). Both fields recover ~0.96. icar only; plain intercept field stays on the C++ path (no regression). `test-ms-occu-field.R` |
+| Multi-season AR1 year effect (`t_occu`) | — | — | `t_occu()` (#124, spOccupancy `tPGOcc`): NOT colext -- per-`(site,season)` Bernoulli `z_{i,t}~Bern(psi_{i,t})`, `logit psi = X beta + eta_t` w/ a SHARED AR1 year effect `eta_t = rho eta_{t-1} + w_t` on the logit, NO colonization/extinction. Given the year effects the seasons factorise -> EXACT Polya-Gamma Gibbs (`method="pg_gibbs"`, the engine spOccupancy uses; `R/t_occu.R`, `.tobs_fit_t_occu_pg_gibbs`): draw z (Bernoulli), then joint `(beta_occ, eta)` as ONE GMRF update -- dense precision `blkdiag(t(Xf)Omega Xf + B0inv, Z'Omega Z + Q/sigma^2)` w/ stationary AR1 precision `Q` (`.t_occu_ar1_Q`, tridiag) as the year-effect prior (as spPGOcc's ICAR precision is for a spatial field), then `beta_p`, then AR1 hypers (`sigma^2` conjugate Inverse-Gamma, `rho` on a grid over the AR1 log-density). Year effect sum-to-zero'd each sweep, level moved to the intercept; AR1 hypers update on RAW `eta_raw` BEFORE centering (else centering distorts the AR1 increments -> rho collapses). `fit$temporal_field` = posterior-mean year effect. Recovers year-effect surface (cor ~0.97), occ/det coefs, `sigma`, `Rhat`~1.00 (20-seed `test-t-occu.R`). AR1 correlation `rho` WEAKLY IDENTIFIED at few seasons -- even given the true year effects `rho_hat` only climbs toward truth as T grows, a property of the short AR1 series NOT the sampler -> reported, not asserted tightly. `y` = 3D `[n_sites x n_seasons x max_visits]` or list of per-season matrices; `simulate_t_occu()`. v1 = site-level occ/det covariates, `pg_gibbs` only (season-varying covariates, areal psi field, NUTS = follow-ups) |
+| Community single-season (`ms_occu`) | Yes | Yes | per-arm community RE, shared community Laplace-EM (`R/community_em.R`, `R/ms_occu.R`); msPGOcc. **`method="pg_gibbs"`** (#115/#126, spOccupancy `msPGOcc`): hierarchical Polya-Gamma Gibbs (`R/ms_occu_pg_gibbs.R`) -- per-species PG-augmented conjugate coef updates + conjugate community mean + Inverse-Gamma (near-Jeffreys) community variance draws (diagonal per-arm covariance), tulpa `cpp_rpg`. Gives a CALIBRATED community-VARIANCE posterior: Laplace-EM `sd_psi`/`sd_p` attenuate (documented lower bound), Gibbs recovers them (sd = posterior MEDIAN, robust to the variance skew). Community means + per-species coefs (cor ~0.9) recover; Rhat~1.00. `test-ms-occu-pg-gibbs.R`. NUTS non-spatial samples community means/deviations/covariances jointly (#69, `R/ms_occu_nuts.R`); shared areal field icar/bym2/car_proper on occ arm via n-L (#75, `R/ms_occu_spatial.R`, sfMsNMix analogue). NUTS+field -> n-L. **SVC (`svcMsPGOcc`, #118)**: varying-coefficient bar `spatial(~ 1 + w \|\| cell, graph)` on the occ arm -> intercept + SVC field(s) via BLOCK COORDINATE ascent (`R/ms_occu_field.R`, `.ms_occu_field_solve` = two-state-marginal occupancy field Newton + ICAR prior; community occ EM w/ field as psi offset). Both fields recover ~0.96. icar only; plain intercept field stays on the C++ path (no regression). `test-ms-occu-field.R` |
 | Community dynamic (`ms_dyn_occu`) | Yes | Yes | per-species psi1/p RE + shared gamma/eps; HMM-forward; `R/ms_dyn_occu.R`. **NUTS (`method="nuts"`, #115, `R/ms_dyn_occu_nuts.R`, `src/ms_dyn_occu_nuts.cpp`)**: non-spatial community sampler over the exact per-(species,site) HMM-forward marginal via an in-tree C++ FullGradFn -- samples community means, per-species psi1/p deviations, the two independent per-arm community covariances, AND the shared gamma/eps globals jointly. Non-centered `b_{s,arm}=C_arm z_{s,arm}` (dynamic analogue of the `ms_occu` #69 target; data term is the HMM-forward marginal `.ms_dyn_occu_fwd_ll_vec` + two extra SHARED transition arms carrying no RE; per-arm eta scores from `.ms_dyn_occu_fb_vec`, shared verbatim w/ the stMsPGOcc field fitter). Byte-exact vs the R oracle; warm-started at the Laplace-EM mode; 0 divergences; de-attenuates the community variance the EM under-reports. Non-spatial only (a structured term -> nested_laplace). `test-ms-dyn-occu-nuts.R`. **`method="pg_gibbs"`** (#115/#126, spOccupancy `tMsPGOcc`, `R/ms_dyn_occu_pg_gibbs.R`): the msPGOcc community PG machinery + a 2-state HMM forward-filter backward-sample latent step (per-species psi1/p RE w/ community hyperpriors; SHARED gamma/eps from the aggregated 0->/1-> transitions across all species). Calibrated community-variance posterior (Laplace-EM attenuates); shared gamma/eps recover tightly (informed by all species), sd_psi1 recovers, Rhat~1.00. Constant transitions, site-level detection. `test-ms-dyn-occu-pg-gibbs.R`. **Shared areal field on psi1 (stMsPGOcc, #123)**: `~ 1 + icar(graph=adj)` under `nested_laplace` -> `R/ms_dyn_occu_spatial.R`. KEY MATH: psi1 sets ONLY the initial HMM mixing weight, so the per-(species,site) marginal is LINEAR in psi1 -- `L=(1-psi1)A+psi1 B` w/ A/B = HMM-forward likelihood cond on season-1 state 0/1 -- IDENTICAL mixture to the single-season `ms_occu` field oracle, so the Louis score/curv (`score=r-psi1`, `curv=psi1(1-psi1)-r(1-r)`, `r=psi1 B/L`) carry over verbatim (only A/B differ). Routed through the shared block-coordinate driver (`R/community_latent.R`, `.tobs_community_latent_ascent`): community EM (field=psi1 offset) alternated w/ areal Newton. Kernels VECTORIZED over sites (`.ms_dyn_occu_condAB_vec`/`.ms_dyn_occu_fb_vec`) + ANALYTIC Fisher-identity gradient (fwd-bwd smoothed w1/pairwise xi -> grad_psi1=X'(w1-psi1), grad_p=X'(sum_t w_t(ndet-nvalid p)), grad_gamma=X'(col_y-gamma col_n)) so the community EM skips its O(U^2) FD Hessian (a per-site-loop version was ~10x too slow). icar only; field cor ~0.94, community-mean coverage >=0.85. `simulate_ms_dyn_occu(field=)`. **svcTMsPGOcc (#123)**: a weighted areal bar `spatial(~ 1 + w || cell, graph)` adds a shared covariate-weighted field alongside the intercept field -- NO new code, the psi1 oracle already returns per-site/species score+curv and the K-field weighted-ICAR block solve is the SAME `community_latent.R` machinery as svcMsAbund, so it flows through the existing dynamic-spatial dispatch unchanged. Both fields recover (cor ~0.90/0.89). `simulate_ms_dyn_occu(trend=)`. NUTS/bym2/car follow-ups |
-| Community integrated (`ms_int_occu`) | Yes | Yes | per-species psi + per-source det RE; multi-source two-state marginal; `R/ms_int_occu.R`. **NUTS (`method="nuts"`, #115, `R/ms_int_occu_nuts.R`, `src/ms_int_occu_nuts.cpp`)**: multi-source generalisation of the `ms_occu`/`ms_dyn_occu` community samplers -- samples community means, per-species occupancy/per-source detection deviations, and the D+1 independent per-arm community covariances jointly over the exact multi-source two-state per-(species,site) marginal via in-tree C++ FullGradFn (per-arm non-centered `b=Cz`, NO shared globals), warm-started at the Laplace-EM mode; reuses shared `.ms_ocs_*` epilogue (#128). Byte-exact vs R oracle; 0 divergences; de-attenuates the community variance the Laplace-EM under-reports. Non-spatial only. `test-ms-int-occu-nuts.R`. **`method="pg_gibbs"`** (#115/#126, `R/ms_int_occu_pg_gibbs.R`): msPGOcc generalized to D detection arms -- per species draw the single latent z (occupied if any source detects, else Bernoulli on the pooled occupied-undetected mass), PG-conjugate `beta_psi_s` + D per-source `beta_pd_s` (each at that species' occupied covered sites), conjugate community mean + IG variance per arm. Calibrated community-VARIANCE posterior (sd_psi ~0.53 vs truth 0.5; Laplace-EM attenuates), community means recover, Rhat<1.1. `ms_community` layout matches the Laplace fit (`Sigma_/sd_/coef_/blup_<arm>`). `test-ms-int-occu-pg-gibbs.R` |
+| Community integrated (`ms_int_occu`) | Yes | Yes | per-species psi + per-source det RE; multi-source two-state marginal; `R/ms_int_occu.R`. **NUTS (`method="nuts"`, #115, `R/ms_int_occu_nuts.R`, `src/ms_int_occu_nuts.cpp`)**: multi-source generalisation of the `ms_occu`/`ms_dyn_occu` community samplers -- samples community means, per-species occupancy/per-source detection deviations, and the D+1 independent per-arm community covariances jointly over the exact multi-source two-state per-(species,site) marginal via in-tree C++ FullGradFn (per-arm non-centered `b=Cz`, NO shared globals), warm-started at the Laplace-EM mode; reuses shared `.ms_ocs_*` epilogue (#128). Byte-exact vs R oracle; 0 divergences; de-attenuates the community variance the Laplace-EM under-reports. Non-spatial only. `test-ms-int-occu-nuts.R`. **`method="pg_gibbs"`** (#115/#126, `R/ms_int_occu_pg_gibbs.R`): msPGOcc generalized to D detection arms -- per species draw the single latent z (occupied if any source detects, else Bernoulli on the pooled occupied-undetected mass), PG-conjugate `beta_psi_s` + D per-source `beta_pd_s` (each at that species' occupied covered sites), conjugate community mean + IG variance per arm. Calibrated community-VARIANCE posterior (Laplace-EM attenuates), community means recover, Rhat<1.1. `ms_community` layout matches the Laplace fit (`Sigma_/sd_/coef_/blup_<arm>`). `test-ms-int-occu-pg-gibbs.R` |
 | Integrated multi-source | Yes | Yes | shared psi |
 | Multi-season integrated occupancy | Yes | — | `dyn_int_occu()` (#122, spOccupancy `tIntPGOcc`): product of dynamic occupancy (multi-season HMM: psi1/gamma/eps) + integrated occupancy (per-season emission pooling S detection sources). Pure-R two-state HMM forward w/ multi-source pooled emission (`R/dyn_int_occu.R`, the `dyn_occu_marginal.R` forward generalised), optim BFGS + observed-Fisher vcov, no new C++. `y`=list of S `[sites x visits x seasons]` arrays; `colonization=~`/`extinction=~` required (as dyn_occu); shared per-source detection design (`p_<src>` arms). Recovers psi1/gamma/eps + per-source detection (20 seeds + pooled 95% coverage). **Partial season overlap**: source absent at a (site,season) -> NA -> contributes nothing to that season's emission (nvalid=0); a (site,season) unobserved by EVERY source is marginalised (e0=e1=1) by the forward -> staggered surveys NA-padded to the common `[n_sites x max_visits x T]` grid (`simulate_dyn_int_occu(source_seasons=list(1:4, 3:6))`, 20-seed recovery). Two boundary ANCHORS pin the reduction: one source (others all-NA) reproduces `dyn_occu()`; one season of data (`T=2`, season 2 all-NA) reproduces `int_occu()` (both to ~0.001). `fit$means` names `psi1_*`/`gamma_*`/`eps_*`/`p_<src>_*`. **stIntPGOcc**: `~ 1 + icar(graph)` on the occupancy formula loads a shared areal field on psi1 via the areal-BFGS driver (`.tobs_fit_dyn_int_occu_spatial`); field gradient = Fisher-identity psi1 score `w1 - psi1` (`.dio_fb`, FD-validated; also sped the non-spatial fit); field cor ~0.8. **svcTIntPGOcc (#122)**: a `spatial(~ 1 + w || cell, graph)` bar adds a covariate-weighted (SVC) field alongside the intercept field -- the areal-BFGS driver already takes a LIST of field blocks and scatters `w1 - psi1` to each, so the weighted block = ICAR field w/ a `w`-weighted loading (`.areal_field_car(weight=)`, byte-identical unweighted). `fit$spatial_field`=intercept, `fit$trend_field(s)`=SVC surface; both recover by cor (~0.85 / ~0.72). `simulate_dyn_int_occu(field=, trend=)`. icar only. v1 = constant transitions, site-level detection; season-varying rates (the #124 recipe) + bym2/car_proper + NUTS = follow-ups. Full S3 + WAIC. `test-dyn-int-occu.R` + `test-dyn-int-occu-areal-recovery.R` |
-| JSDM (`jsdm`) | Yes | Yes | `jsdm()` = COMMUNITY GLMM on observed presence/absence (#121): per-species coefs + Gaussian community covariance, NO detection/latent state = `ms_count()` w/ logit link -> SHARES that binder (`.tobs_build_ms_count(response="bernoulli")`, model_type `ms_count`), community EM, latent driver, NUTS target + S3. `latent(n)` = lfJSDM; + shared field = sfJSDM; icar/car_proper/bym2/spde field via n-L. NUTS = exact joint community posterior over the Bernoulli response (`MSC_BERN` in `src/ms_count_nuts.cpp`, byte-exact vs R oracle). **`method="pg_gibbs"`** (#126): hierarchical Polya-Gamma Gibbs -- community logistic GLMM has NO latent state -> pure per-species conjugate coef update + community mean + near-Jeffreys Inverse-Gamma community variance (`R/ms_count_pg_gibbs.R`, `.tobs_fit_ms_count_pg_gibbs`, tulpa `cpp_rpg`), shared w/ `ms_count("binomial")` (n=trials, jsdm n=1). Recovers the community variance the Laplace-EM attenuates (sd_mu 0.674/0.439 vs truth 0.7/0.5 vs Laplace 0.635/0.401); community means + per-species cor (~0.9) recover; Rhat~1.00. Non-spatial (bernoulli/binomial only; poisson/negbin/gaussian rejected w/ pointer). `test-ms-count-pg-gibbs.R`. laplace_sla/gibbs/mi were single-block routes, dropped |
+| JSDM (`jsdm`) | Yes | Yes | `jsdm()` = COMMUNITY GLMM on observed presence/absence (#121): per-species coefs + Gaussian community covariance, NO detection/latent state = `ms_count()` w/ logit link -> SHARES that binder (`.tobs_build_ms_count(response="bernoulli")`, model_type `ms_count`), community EM, latent driver, NUTS target + S3. `latent(n)` = lfJSDM; + shared field = sfJSDM; icar/car_proper/bym2/spde field via n-L. NUTS = exact joint community posterior over the Bernoulli response (`MSC_BERN` in `src/ms_count_nuts.cpp`, byte-exact vs R oracle). **`method="pg_gibbs"`** (#126): hierarchical Polya-Gamma Gibbs -- community logistic GLMM has NO latent state -> pure per-species conjugate coef update + community mean + near-Jeffreys Inverse-Gamma community variance (`R/ms_count_pg_gibbs.R`, `.tobs_fit_ms_count_pg_gibbs`, tulpa `cpp_rpg`), shared w/ `ms_count("binomial")` (n=trials, jsdm n=1). Recovers the community variance the Laplace-EM attenuates; community means + per-species cor (~0.9) recover; Rhat~1.00. Non-spatial (bernoulli/binomial only; poisson/negbin/gaussian rejected w/ pointer). `test-ms-count-pg-gibbs.R`. laplace_sla/gibbs/mi were single-block routes, dropped |
 | Cover hurdle (joint) | Yes | Yes | `family_cover_hurdle.R`, `sla_cover_*`, NUTS `R/cover_nuts.R` + `src/cover_nuts.cpp` (no `laplace_gibbs`/`laplace_mi`). positive = beta/lognormal/lognormal_trunc/ordinal/`beta_oi`. `beta_oi` (#108) = one-inflated Beta: ceiling (cover=1) plots = a point mass (constant pi = ceiling share, binomial SE), interior Beta on (0,1); encode splits `is_pos` to interior, `enc$oi` carries pi, decode reports `pi_one`, predict conditional cover = `pi + (1-pi)*mu` (`.tobs_cover_mu`). `control$aggregate.occ` (ON, #48) collapses occ arm to Binomial suff-stat; `control$aggregate.pos` (ON beta arm, #49) collapses beta pos arm to grouped suff-stat (tulpa `slog_y`/`slog_1my`), errors on non-beta. Both byte-identical to per-plot |
 | Cover hurdle spatial coef fields (`\|\|` / `\|`) | n-L | — | `spatial(~ 1 + w \|\| node, graph, to=)` independent (#61, two coupled ICAR blocks, per-field alpha) OR `\| ` correlated (#64, one separable-MCAR block sharing free Sigma). `\|` both-arm `to=c("presence","positive")` = copied to pos arm w/ one alpha (#64); `\|` single-arm `to="presence"`/`"positive"` = free-Sigma field on that arm alone, NO copy (#109, 0-sentinel `spatial_idx` on the other arm via `mc$to`, `copy=NULL`, `alpha_mcar`=NA). `\|` -> `.cover_build_mcar_spec`/`.fit_cover_hurdle_joint_mcar` (tulpa `type="mcar"` block, copy only when both-arm); reports `sigma_mcar`/`rho_mcar`/`alpha_mcar`. SLA on `\|` no-op. icar only |
 | Cover hurdle arm-specific fields (single-arm `to`) | n-L | — | `spatial(~ 1 + w \|\| cell, graph, to="positive")` (or `"presence"`); separate single-arm calls = independent per-arm fields, NO cross-arm copy (#65). NO engine change: per-arm `spatial_idx=0` makes the other arm's rows skip the block (tulpa `l_b>0` scatter guard), own precision grid-integrated. `.tobs_armspecific_bar_fields` (formula_terms.R) -> `enc$armspec` -> `.fit_cover_hurdle_joint_armspecific` (non-copied per-arm blocks, no `copy=`). `armspec_blocks` carries per-block arm/slot/type; `.tobs_joint_draws_cover_armspecific` scatters each block onto its arm only (amp 0 on other). icar/car/car_proper AND bym2 (#107): a bym2 block is the non-copied length-2 (phi ICAR + iid theta) block, paired (sigma,rho) grid; the draw projection reconstructs the rho-mixed unit field `z = sqrt(rho)*sf*phi + sqrt(1-rho)*theta` so predict/WAIC see the full mix. `\|\|` only (`\|` arm-specific undefined: copy-only). No mix w/ shared field/trend/temporal/re; one field per arm. SLA no-op |
@@ -684,7 +674,7 @@ Detail in Architecture above + per-family detail sections below. `n-L` = nested_
 | N-mixture + grouped RE | Yes | — | `abun()`+`(1\|g)`/`(x\|g)` either arm (#13); non-species grouping; Pois/NB; `NMixGroupedOracle`. Gated: RE+spatial, RE+visit-det, RE both arms |
 | Community distance (`ms_distance`) | Yes | — | `ms_distance(key=, transect=, cutpoints=)` (spAbundance `msDS`; #117): per-species binned distance sampling w/ Gaussian community hyperpriors on the abundance (`log lambda`) + detection-scale (`log sigma`) coefs. `y` = `[n_sites x n_bins x n_species]` or named list. NO new C++ — latent N marginalises closed-form per species-site, and `cpp_distance_site_sweep` already returns `log_lik`/`grad_lam`/`info_lam`/`var_N`/`swl` -> shared community Laplace-EM (`R/ms_distance.R`) reads its per-species score straight off it. Hazard-key log-shape = community `global` (shared across species) via the EM `global` slot. Community means UNBIASED over 10 seeds, 95% Wald coverage 1.0/0.8/0.9; single-species `distance()` control agrees. NB: a single seed shows a ~0.18 paired lambda-down/sigma-up shift that LOOKS like bias and is NOT -- one draw on the lambda/sigma ridge. Poisson only (negbin size not yet a per-species RE); NUTS not wired. `simulate_ms_distance()` draws through `cpp_simulate_distance` (a separate R-side quadrature would simulate from a pi the model is not fit against). `test-ms-distance.R` |
 | Community distance latent factor (`ms_distance`) | Yes | — | `ms_distance()` + `latent(n)` (`lfMsDS`, #117). Factors ALONE = plain block-coordinate Laplace-EM, so `method="laplace"`; `.dispatch_ms_distance` REJECTS `nested_laplace` without a field ("needs a shared field ... use method = \"laplace\""). Same shared driver + oracle as the spatial-factor row below |
-| Community distance spatial-factor (`ms_distance`) | n-L | — | `ms_distance()` + `icar()`/`car_proper()`/`bym2()`/`spde()` (`sfMsDS`, #117), optionally + `latent(n)`. Shared field REQUIRES `method="nested_laplace"` (`.dispatch_ms_distance` errors under `laplace`) — same gate as sibling `ms_count`/`ms_abun` spatial-factor rows. Field on the ABUNDANCE arm only; a `spatial()`/`latent()` term on the detection formula errors. Working oracle = SAME Louis formula as `ms_abun` -- `score = grad_lam`, `curv = info_lam - var_N * swl^2` (both count marginals w/ `B_i = diag(info) - var_N v v'`; only the kernel supplying the pieces differs). Oracle FD-validated. Poisson only; temporal/re/svc not wired. **Per-species Hessian IS assembled now (#161)**: used to be left to the community EM finite difference at `2U` sweeps per species per Newton step, every sweep summing over the latent N -> `test-ms-distance.R` the most expensive file in the recovery tier (5.12h at tier 3 = 88% of `full-recovery.yaml`'s 350-min cap on its own). `.tobs_ms_distance_info_block()` builds the per-site Louis block `B_i = diag(info_lam, info_sig) - Var(N_i|y) v v'` from what `cpp_distance_site_sweep` already returns (`info_lam`, `info_sig_obs`, `var_N`, `swl`, `vN_sig`); distance has ONE unit per site -> three `crossprod`s against diagonal weights, no per-site loop (N-mixture needs one only b/c its visit count varies). Community EM **2.3x** faster, fit UNCHANGED to ~1e-13. **Sign inside `v` is NOT the sibling's**: `v = (-swl, -vN_sig)` -- distance kernel stores `vN_d` already negated (`-p_k/(1-p)`) where `nmix_site_marginal()`'s `v` carries `+p`. Invisible on the diagonal, wrong by ~2x on the cross block -> asserted against the finite difference, NOT reasoned across (`test-ms-distance-info.R`, which also asserts the cross block >10% of the diagonal so the agreement cannot be vacuous, and that the flipped convention is REJECTED). Half-normal only: under the hazard key `grad_b`/`info_b` come back already summed over sites + per-site detection cross terms are not exported -> shared log-shape global cannot be sandwiched, that key keeps the FD fallback |
+| Community distance spatial-factor (`ms_distance`) | n-L | — | `ms_distance()` + `icar()`/`car_proper()`/`bym2()`/`spde()` (`sfMsDS`, #117), optionally + `latent(n)`. Shared field REQUIRES `method="nested_laplace"` (`.dispatch_ms_distance` errors under `laplace`) — same gate as sibling `ms_count`/`ms_abun` spatial-factor rows. Field on the ABUNDANCE arm only; a `spatial()`/`latent()` term on the detection formula errors. Working oracle = SAME Louis formula as `ms_abun` -- `score = grad_lam`, `curv = info_lam - var_N * swl^2` (both count marginals w/ `B_i = diag(info) - var_N v v'`; only the kernel supplying the pieces differs). Oracle FD-validated. Poisson only; temporal/re/svc not wired. **Per-species Hessian IS assembled now (#161)**: used to be left to the community EM finite difference at `2U` sweeps per species per Newton step, every sweep summing over the latent N, which made `test-ms-distance.R` the most expensive file in the recovery tier. `.tobs_ms_distance_info_block()` builds the per-site Louis block `B_i = diag(info_lam, info_sig) - Var(N_i|y) v v'` from what `cpp_distance_site_sweep` already returns (`info_lam`, `info_sig_obs`, `var_N`, `swl`, `vN_sig`); distance has ONE unit per site -> three `crossprod`s against diagonal weights, no per-site loop (N-mixture needs one only b/c its visit count varies). Community EM markedly faster, fit UNCHANGED. **Sign inside `v` is NOT the sibling's**: `v = (-swl, -vN_sig)` -- distance kernel stores `vN_d` already negated (`-p_k/(1-p)`) where `nmix_site_marginal()`'s `v` carries `+p`. Invisible on the diagonal, wrong by ~2x on the cross block -> asserted against the finite difference, NOT reasoned across (`test-ms-distance-info.R`, which also asserts the cross block >10% of the diagonal so the agreement cannot be vacuous, and that the flipped convention is REJECTED). Half-normal only: under the hazard key `grad_b`/`info_b` come back already summed over sites + per-site detection cross terms are not exported -> shared log-shape global cannot be sandwiched, that key keeps the FD fallback |
 | Removal (Pois/NB) | Yes | Yes | `removal()` (#39) — see Architecture. **continuous NNGP `svc()` varying coefficients on the abundance arm under laplace/nested_laplace, composing with the areal/temporal blocks (#144)**; NUTS single intercept RE; Laplace grouped RE one arm; areal icar/car_proper/bym2 abundance arm; **detection-arm areal field on the capture logit (`detection=~icar()`, #114)**; areal+temporal AND temporal-only AR1/RW1/RW2/iid on abundance arm via shared areal-BFGS (#78/#114); NUTS+areal icar/car_proper/bym2 field on abundance arm (#72; intrinsic icar/bym2 via the #71 sum-to-zero reparam, #113) |
 | Distance (Pois/NB) | Yes | Yes | `distance(key=, transect=, cutpoints=)` (#38); `formula`=log lambda, `detection`=log sigma, `y`=`n_sites x n_bins` — see Architecture. **continuous NNGP `svc()` varying coefficients on the abundance arm under laplace/nested_laplace (#144)**; NUTS single abundance intercept RE; Laplace grouped RE abundance arm (half-normal AND hazard key -- hazard log-shape profiled over the AGHQ log-marginal, #114); areal field (half-normal + hazard key); areal+temporal AND temporal-only on abundance arm (#78/#114); DETECTION-arm areal field on log sigma (`detection=~icar()`, spatially-varying detection scale, half-normal AND hazard key, #114); NUTS+areal icar/car_proper/bym2 field on abundance arm (#72; intrinsic icar/bym2 via the #71 sum-to-zero reparam, #113) |
 | False-positive occupancy | Yes | Yes | `fp_occu()` (#40) — see Architecture. **continuous NNGP `svc()` varying coefficients on the psi arm under laplace/nested_laplace (#144)**; NUTS single psi intercept RE; Laplace grouped RE psi OR p11; areal psi arm; **detection-arm areal field on the p11 logit (`detection=~icar()`, #114)**; areal+temporal AND temporal-only on psi arm (#78/#114); NUTS+areal icar/car_proper/bym2 field on psi arm (#72; intrinsic icar/bym2 via the #71 sum-to-zero reparam, #113) |
@@ -730,91 +720,79 @@ NUTS==Laplace mode, recovery + 95% coverage (`test-occu-cover-nuts.R`). **Spatia
 — psi-arm field `z` (one/cell) enters psi linearly, copied to pos arm w/ amplitude `alpha`.
 Param vector `c(beta_psi, beta_p, beta_pos, log_disp, raw_field, u_sigma?, u_rho?, u_alpha?)`.
 
-**Hypers SAMPLED, not pinned (#204)** — the point being that a fit conditioned on the outer
-grid's own point estimate cannot serve as an independent reference for that grid. Every areal
-kind's loading factors as a FIXED basis w/ hyper-dependent column weights, so a leapfrog step
+**Hypers SAMPLED, not pinned (#204).** A fit conditioned on the outer grid's own point
+estimate cannot serve as an independent reference for that grid. Every areal kind's
+loading factors as a FIXED basis w/ hyper-dependent column weights, so a leapfrog step
 costs a rescale, never a re-decomposition (`src/nuts_field_hyper.h`, R mirror `.ochf_*` in
-`occu_cover_nuts.R`):
-`z = sigma*(B1 %*% (s1(rho)*raw1) + s2(rho)*raw2)`.
+`occu_cover_nuts.R`): `z = sigma*(B1 %*% (s1(rho)*raw1) + s2(rho)*raw2)`.
 icar `B1` = sum-to-zero eigen-loading of intrinsic `Q` (#71), `s1=1`, no `raw2`;
 bym2 same `B1`, `s1=sqrt(rho/sf)`, `raw2` iid w/ `s2=sqrt(1-rho)` (Riebler);
 car_proper `Q(rho)=D-rho W = D^{1/2}(I-rho Lambda)D^{1/2}` in the eigenbasis of the
 symmetrically normalised adjacency `D^{-1/2} W D^{-1/2}=U Lambda U'` -> `B1 = D^{-1/2}U`
-FIXED, `s1_j=(1-rho lambda_j)^{-1/2}`. That last one is why car_proper rho is NOT the O(n^3)
-per-step Cholesky the issue scoped it as (measured dense `chol` at n=2025: 0.974 s/call ->
-27.1 h per 1e5 leapfrog steps; the eigen route pays 9.7 s once and nothing per step).
-Each sampled hyper rides `t = t_lo + (t_hi-t_lo)*plogis(u)`, `value = inv_link(t)` (log for
-sigma/alpha, logit for rho) — bounded, so no wall, Jacobian in the target.
+FIXED, `s1_j=(1-rho lambda_j)^{-1/2}` -- which is why car_proper rho is NOT the O(n^3)
+per-step Cholesky the issue scoped it as. Each sampled hyper rides
+`t = t_lo + (t_hi-t_lo)*plogis(u)`, `value = inv_link(t)` (log for sigma/alpha, logit for
+rho) -- bounded, so no wall, Jacobian in the target.
 **Prior = flat in `t` over the WARM FIT'S OWN outer-grid span** (`fit$theta_grid` column
-range), which is the measure the nested-Laplace grid integrates against (tulpa defaults to
-equal weight per cell over log-spaced sigma/alpha + logit-spaced rho nodes;
-`R/nested_laplace_joint_hyperpriors.R` shows the optional pc.prec/half_normal families are
-NOT set by this path). So `control$sigma.grid`/`alpha.grid`/`rho.car.grid` move BOTH backends.
-Flat prior + change of variables = normalised `log(e)+log(1-e)`, `e=plogis(u)`.
-alpha's grid `0` atom is not HMC-representable -> bounds take the positive nodes only.
-icar pins `rho=1` (intrinsic precision has no mixing param); an axis the grid pinned to one
-node stays pinned. `fit$nuts$sampled_hyper` / `$fixed_hyper` (CHARACTER vectors, empty when
-nothing pinned — deliberately a type change from the old `fixed_hyper=TRUE`, so a stale
-`isTRUE()` read fails loudly) + `$fixed_hyper_values`; `fit$hyper_draws` cols
-`sigma|rho|alpha|field_sd`. **`field_sd`** = geo-mean marginal SD the block implies at that
-draw = the ONLY field-scale summary comparable across kinds (the three normalise their
-precisions differently), so it is what a simulation truth is stated in: the simulator's `f`
-carries geo-mean marginal variance 1 (Sorbye-Rue), truth = `sigma`. `control$fixed.hyper=TRUE`
+range) = the measure the nested-Laplace grid integrates against, so
+`control$sigma.grid`/`alpha.grid`/`rho.car.grid` move BOTH backends. Flat prior + change of
+variables = normalised `log(e)+log(1-e)`, `e=plogis(u)`. alpha's grid `0` atom is not
+HMC-representable -> bounds take the positive nodes only. icar pins `rho=1` (intrinsic
+precision has no mixing param); an axis the grid pinned to one node stays pinned.
+`fit$nuts$sampled_hyper` / `$fixed_hyper` = CHARACTER vectors, empty when nothing pinned
+(deliberately a type change from the old `fixed_hyper=TRUE`, so a stale `isTRUE()` read
+fails loudly) + `$fixed_hyper_values`; `fit$hyper_draws` cols `sigma|rho|alpha|field_sd`.
+**`field_sd`** = geo-mean marginal SD the block implies at that draw = the ONLY
+field-scale summary comparable across kinds (the three normalise their precisions
+differently), so it is what a simulation truth is stated in (the simulator's `f` carries
+geo-mean marginal variance 1, Sorbye-Rue, truth = `sigma`). `control$fixed.hyper=TRUE`
 restores #74 conditioning, byte-identical to the old loading (pinned = the degenerate
-configuration of the same block, not a second path).
-Validated: C++ == R oracle to ~1e-13, analytic == central FD to ~1e-9 incl. every hyper
-coordinate, prior verified flat in `t` by holding `raw=0` (field vanishes -> the target IS the
-prior; catches a missing Jacobian, which the gradient check cannot).
-Was: `inv_metric` sized `n_cells` while bym2's `n_raw = 2n-1` -> the engine took a
-short metric pointer w/o a length check; now sized `n_raw + n_hyper`.
-**Sampled terms reach the criteria (#211).** `.tobs_occu_cover_components()` returns the
-structured terms as OFFSETS beside the coefficient draws: per SITE `field_occ`/`field_pos`
-(#204's sampled field off `fit$field_draws` + the per-draw `alpha`; the v3 route still reads
-`field_table`), per VISIT `off_det`/`off_pos` (#205's sampled obs-arm RE, `re_draws` ->
-`sigma_re*z` mapped through the view's `flat_idx`). All four diagnostics fold them in --
-ploglik (WAIC/LOO/CPO), PPC, PIT/LOO-PIT -- b/c the per-visit offset enters the SHARED `Arms`
-view (`src/occu_cover_ragged.h`, `eta_p_visit`/`eta_pos_visit`), so ONE change reaches all
-three kernels and dense == compact by construction (#185). A 0-column matrix = "arm carries
-none" -> null pointer -> the no-offset path byte-identical. Cell-aggregated cover scores one
-cover row per detected UNIT, so a per-visit offset errors there w/ a pointer. `test-occu-cover-nuts-ic.R`.
-Was: `fit$draws` = the coefficient block + `ncol(draws)` read positionally as `log_disp`, so
-the RE draws never reached the scorer, and `.tobs_occu_cover_v3_field()` read only
-`field_table` -> both terms scored at ZERO on a fit that carried them (elpd moved 31 nats on a
-det-arm RE, 549 on a sampled field). The grid-integrated (`nested_laplace`) route reaches the
-same criteria (#215): `.tobs_joint_draws()` returns its RE latents on `bundle$re` in the layout
-the offset builder already reads, so the components builder feeds them through the same
-per-visit path (elpd_waic moved 11.5 nats on a det-arm RE at sigma 1.1, 61.5 on a cover-arm
-RE). An occupancy-arm RE (#56) is per SITE, so the dispatcher stores its group codes on the
-model (`model$re_psi`, the occupancy counterpart of `model$re_det`/`re_pos`) and the components
-builder adds the per-group draw to `field_occ` -- the per-site offset every kernel already reads
-(elpd_waic moved 9.34 nats, elpd_loo 9.41, at sigma_re 1.57; a fit carrying none byte-identical).
-`.occu_cover_spatial_fields()` also carries the term's `var` + factor `levels` through, so
-`fit$re$psi`/`ranef()` label the grouping like the obs arms and `predict(newdata=)` matches it.
-**A SECOND (SVC / trend) field samples too (#214).** The block is a LIST now
+configuration of the same block, not a second path). Validated C++ == R oracle, analytic
+== central FD on every hyper coordinate, and the prior verified flat in `t` by holding
+`raw=0` (field vanishes -> the target IS the prior; catches a missing Jacobian, which the
+gradient check cannot). `inv_metric` MUST be sized `n_raw + n_hyper`: the engine takes a
+short metric pointer w/o a length check and bym2's `n_raw = 2n-1`.
+**Sampled terms reach the criteria (#211/#215).** A structured term the scorer cannot see
+is scored at ZERO. `.tobs_occu_cover_components()` returns them as OFFSETS beside the
+coefficient draws: per SITE `field_occ`/`field_pos` (#204's sampled field off
+`fit$field_draws` + the per-draw `alpha`; the v3 route still reads `field_table`), per
+VISIT `off_det`/`off_pos` (#205's sampled obs-arm RE, `re_draws` -> `sigma_re*z` mapped
+through the view's `flat_idx`). All four diagnostics fold them in -- ploglik (WAIC/LOO/CPO),
+PPC, PIT/LOO-PIT -- b/c the per-visit offset enters the SHARED `Arms` view
+(`src/occu_cover_ragged.h`, `eta_p_visit`/`eta_pos_visit`), so ONE change reaches all three
+kernels and dense == compact by construction (#185). A 0-column matrix = "arm carries none"
+-> null pointer -> the no-offset path byte-identical. Cell-aggregated cover scores one cover
+row per detected UNIT, so a per-visit offset errors there w/ a pointer. The grid-integrated
+(`nested_laplace`) route reaches the same criteria: `.tobs_joint_draws()` returns its RE
+latents on `bundle$re` in the layout the offset builder already reads. An occupancy-arm RE
+(#56) is per SITE, so the dispatcher stores its group codes on `model$re_psi` (the
+occupancy counterpart of `model$re_det`/`re_pos`) and the builder adds the per-group draw
+to `field_occ`. `.occu_cover_spatial_fields()` also carries the term's `var` + factor
+`levels` through, so `fit$re$psi`/`ranef()` label the grouping like the obs arms and
+`predict(newdata=)` matches it. `test-occu-cover-nuts-ic.R`.
+**A SECOND (SVC / trend) field samples too (#214).** The block is a LIST
 (`hyper_field_build_list()`, `src/nuts_field_hyper.h`): each field carries its own basis,
 site->node map, per-site design WEIGHT (`field_weight`; absent = the intercept field) and
 its own sampled `(sigma, rho, alpha)` -- two fields share no hyper. Site i loads
 `sum_b w_b(i) z_b[cell(i)]` on psi and `sum_b alpha_b w_b(i) z_b[cell(i)]` on cover; the
 three places that loading is written are `hyper_field_site_{value,offsets,score}()`, so the
 eta assembly and the score cannot express it differently. Spec spelling `field_blocks`
-(list); the top-level entries still read as one block, and a one-block fit is
-`expect_identical` on lp+grad AND on a whole fit's means/sds/field/draws. Layout per block
-`[raw, sampled hypers]`, blocks back to back, RE blocks after -- so `n.iter`-for-`n.iter`
-the one-field vector is unchanged. **The warm fit is the multi-block coupled path**
-(`multi = TRUE` arms + one `icar/bym2/car_proper` block per field w/ `svc_weight` + a copy
-spec per block, `alpha.grid` / `alpha.grid.trend`), and it FORCES `integration = "grid"`:
-above 3 axes the engine switches to a mode-centred CCD star whose column range is a design
-radius, not an integrated span, and the sampler reads each axis's span as its flat prior's
-support (measured: a CCD warm put alpha bounds at 1.49-4.70 for a requested 0.2-2 axis, and
-the fit sampled alpha to 2.79). A DEFAULTED axis is thinned to 3 nodes over the SAME span
-when a second field is present (the prior is defined by the span alone -> unchanged; the
-tensor is a product over blocks). Reported: `fit$trend_field`/`trend_fields` (named by
-weight column), `fit$trend_field_draws`, per-block suffixed hypers (`sigma_trend`,
-`alpha_trend`, `field_sd_trend`, indexed when several) in `hyper_draws` / `sampled_hyper` /
-`fixed_hyper`, and `fit$spatial$field_suffix`/`field_weights` so
-`.tobs_occu_cover_sampled_field()` sums every block's loading into the criteria (#211 rule:
-a block the scorer cannot see is scored at ZERO). Both surfaces recover w/ 0 divergences;
-numbers (+ the CCD-vs-tensor measurement) in `NOTES_measurements.md`.
+(list); a one-block fit is `expect_identical` on lp+grad AND on a whole fit's
+means/sds/field/draws. Layout per block `[raw, sampled hypers]`, blocks back to back, RE
+blocks after -- so `n.iter`-for-`n.iter` the one-field vector is unchanged. **The warm fit
+is the multi-block coupled path** (`multi = TRUE` arms + one `icar/bym2/car_proper` block
+per field w/ `svc_weight` + a copy spec per block, `alpha.grid` / `alpha.grid.trend`), and
+it FORCES `integration = "grid"`: above 3 axes the engine switches to a mode-centred CCD
+star whose column range is a design radius, not an integrated span, and the sampler reads
+each axis's span as its flat prior's support. A DEFAULTED axis is thinned to 3 nodes over
+the SAME span when a second field is present (the prior is defined by the span alone ->
+unchanged; the tensor is a product over blocks). Reported:
+`fit$trend_field`/`trend_fields` (named by weight column), `fit$trend_field_draws`,
+per-block suffixed hypers (`sigma_trend`, `alpha_trend`, `field_sd_trend`, indexed when
+several) in `hyper_draws` / `sampled_hyper` / `fixed_hyper`, and
+`fit$spatial$field_suffix`/`field_weights` so `.tobs_occu_cover_sampled_field()` sums every
+block's loading into the criteria. Both surfaces recover w/ 0 divergences; numbers in
+`NOTES_measurements.md`.
 `test-occu-cover-nuts-svc.R`. Correlated `|` (one free-Sigma MCAR block), temporal + RE
 still gated -> n-L. group_var maps sites>cells; predict() needs the joint object
 (non-spatial laplace AND nuts both error w/ pointer); sampled-field (estimated-variance) route =
@@ -1034,10 +1012,8 @@ per-parameter `fit$sds`, so those blocks read the 95% CI off `fit$draws` via
 `.nuts_ci_cover_draws`). **`n.iter` = POST-WARMUP samples kept per chain on ALL
 NUTS paths; the total run per chain is `n.iter + n.warmup`** (every R sampler
 call site passes `n_iter = n.iter + n.warmup` to the engine, which returns
-`n_iter - n_warmup` draws). The occu/dyn_occu/int_occu + cover/occu_cover paths
-used to pass `n_iter = n.iter` (n.iter = TOTAL) -> kept `n.iter - n.warmup` and
-returned ZERO draws (NaN means) at `n.iter == n.warmup`; unified to the sampling
-convention (bugfix, occu_fit.R/cover_nuts.R/occu_cover_nuts.R).
+`n_iter - n_warmup` draws). Under `pg_gibbs` it means the OPPOSITE
+(TOTAL sweeps, warmup taken out of it) -- see `engine_defaults.R`.
 
 **Convergence diagnostics on EVERY NUTS path** (#174): ONE writer
 `.tobs_nuts_attach_convergence()` (`R/nuts_chains.R`) fills the record
@@ -1203,8 +1179,7 @@ R/
   tobs_dispatch.R           — the per-family `.dispatch_<family>()` bodies (~1370 lines). tobs.R routes HERE; it does not hold the dispatch itself
   tobs_helpers.R            — `.tobs_family_methods` (the method-support single source of truth) + shared dispatch helpers. NOT tobs.R
   engine_defaults.R         — `.TOBS_ENGINE_DEFAULTS` / `.TOBS_FAMILY_DEFAULTS` (#183): per-engine SAMPLER defaults, ONE table. `.tobs_control_defaults(control, engine, family)` fills every knob left unset (resolve once per dispatcher branch); `.tobs_default(engine, knob, family)` reads one knob inline. Scope = sampler knobs ONLY -- `max.iter`/`tol` are per-ROUTE Laplace-EM values (`ms_occu_cover()` iterates 30 at 1e-3 on its own EM, warm-starts its sampler at 200/1e-4; `ms_occu()` plain areal C++ EM 100, its latent fitter 200) -> stay at their call sites. Log-link families (`ms_count`/`jsdm`/`ms_abun`) `sigma.beta=10` under nuts, logit-link occupancy families 5 (matches C++ model defaults) -> a `.TOBS_FAMILY_DEFAULTS` row, NOT a uniform "community NUTS" value. `test-engine-defaults.R` pins every resolved profile.
-    **Every sampler fitter reads it now (#188)** -- table used to be read by the 14 community dispatch branches ONLY, while 29 fitters restated knobs in their own formals. Everything routed through `.tobs_fit_model()` (occu/dyn_occu/int_occu + abun/removal/distance/fp_occu/dyn_abun/count) had DEAD formals: that entry forwards explicit values, so `abun(method="nuts")` ran `.tobs_fit_model`'s `n.iter = 2000`, never its own `1000L` (measured 2050 iterations, 2000 kept). `cover_nuts`/`occu_cover_nuts`/`occu_multiscale_cover_nuts` have own dispatch -> THEIR formals live + diverged. Now every sampler knob = `NULL` formal + `.tobs_fill_sampler(environment(), engine, ...)` as first statement; `test-engine-defaults.R` asserts structurally that no fitter carries a literal + each calls the filler -> new sampler family cannot reopen it.
-    Divergences DELETED (proven artifacts): `n.iter` 2000 -> 1000 on occu/cover/occu_cover NUTS (commit 8975470 changed `n.iter` TOTAL -> kept-post-warmup on exactly those paths, left the literal -> a default that always kept 2000-1000=1000 silently began keeping 2000; that commit's message records the behaviour change); occu `pg_gibbs` 2000/1000 -> shared 3000/1500 (was keeping 1000 where every `ms_*` sibling kept 1500, no recorded reason; `test-occu-pg-gibbs{,-spatial}.R` 29/29 green after).
+    **Every sampler knob is a `NULL` formal filled by `.tobs_fill_sampler(environment(), engine, ...)` as the fitter's first statement (#188)** -- a fitter restating a literal has a DEAD formal wherever a caller forwards explicit values (`.tobs_fit_model()` does), so its own default never runs. `test-engine-defaults.R` asserts structurally that no fitter carries a literal + each calls the filler -> a new sampler family cannot reopen it.
     Divergences RECORDED (`.TOBS_SINGLE_SPECIES_NUTS` / `_LAPLACE`, via `.tobs_single_species_defaults(engine)`): `.tobs_fit_model()` entry keeps `sigma.beta = 10` (vs community 5, on laplace/nested_laplace too), `adapt.delta = 0.8` (vs 0.9), `seed = 42` (vs 1). Each = value the single-species recovery/coverage tests were calibrated against; override belongs to the ENTRY, not the nine families passing through -> one constant, not nine family rows.
     **`n.iter` means the OPPOSITE thing under `pg_gibbs`**: TOTAL sweeps, warmup taken out of it (kept = `length(seq.int(n.warmup+1, n.iter, by=n.thin))` = 1500); under `nuts` it is the KEPT count and the run = `n.iter + n.warmup`. Stated in the table's `pg_gibbs` block, pinned by a test recomputing the kept count from the profile.
     **`sd.load` (1.0) + `re.lkj` (1.5) = laplace rows (#189)**; `n.quad` NOT one number, deliberately -- `.TOBS_NQUAD_ROUTES` / `.tobs_n_quad(route)` enumerates seven marginals (`re_aghq` 9, `ms_nmix` 1, `ms_nmix_scalar` 2, `ms_occu_cover` 5, `cover_latent_beta` 15 vs `cover_latent_lognormal` 1 (closed form, needs none), `community_latent` 5). `?tobs` lists per route, no single default most routes do not use

@@ -147,12 +147,26 @@ restores pure ML on the structural-zero variance. Ignored for Poisson / NB.}
 (\code{P(sigma_log_r > U) = alpha}) on the per-species log-dispersion random
 effect SD (\code{mixture = "NB"} / \code{"ZINB"} only; default \code{NULL}, pure ML).
 \code{sigma_log_r} is the same shape of parameter as \code{sigma_omega} -- one scalar
-variance over species -- and collapses the same way at few species, taking
-the \code{mu_log_r} interval with it: at 8 and 36 species with a simulated
-\code{sigma_logr = 0.5}, fits recovering \code{sigma_log_r >= 0.30} covered \code{mu_log_r}
-33/34 while those below covered 2/5 (gcol33/tulpaObs#235). When both this and
-\code{omega_sigma_prior} are set they must be equal: the engine applies one
-Penalized-Complexity prior across every block it regularizes.
+variance over species -- and settles near its lower boundary the same way at
+few species, taking the \code{mu_log_r} interval with it: at 8 and 36 species with
+a simulated \code{sigma_logr = 0.5}, \code{n_quad = 3} and \code{n_quad_scalar = 3}, fits
+recovering \code{sigma_log_r >= 0.30} covered \code{mu_log_r} 33/34 while those below
+covered 2/5 (gcol33/tulpaObs#235).
+
+What the penalty reaches on this block appears to be the boundary rather
+than the calibration. Measured on 20 seeds of that fixture at 8 species with
+\code{c(U, alpha) = c(1, 0.05)}: a \code{sigma_log_r} of 0.01-0.06 lifts by an order of
+magnitude and a seed that stopped at a singular marginal Hessian under pure
+ML converges and covers, while paired coverage holds at 17 of 19 with the
+same two seeds missing, both of them at \code{sigma_log_r} around 0.2 where the
+penalty is weak. The fits that were already calibrated take a small
+systematic shift (\code{mu_log_r} by -0.006, p = 0.001; SEs a median 4.2\%
+narrower). Hence the \code{NULL} default: it is a lever for a fit whose dispersion
+variance came back near zero or that failed outright, rather than a
+correction expected to hold across fits.
+
+When both this and \code{omega_sigma_prior} are set they must be equal: the engine
+applies one Penalized-Complexity prior across every block it regularizes.
 Ignored for Poisson / ZIP.}
 
 \item{verbose}{Unused (kept for backward compatibility); the engine is silent.}
