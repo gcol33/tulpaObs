@@ -354,11 +354,13 @@
 .tobs_fit_ms_abun_nuts <- function(model, mixture = "poisson", K_max = NULL,
                                    sigma.beta = NULL, sigma.logr = NULL,
                                    n.iter = NULL, n.warmup = NULL,
-                                   n.chains = NULL, max.treedepth = NULL,
+                                   n.chains = NULL, n.thin = NULL,
+                                   n.threads = NULL,
+                                   n.threads.grad = NULL, max.treedepth = NULL,
                                    adapt.delta = NULL, seed = NULL,
                                    lkj_eta = 1.5, n.quad = 5L, max.iter = 100L,
                                    verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", family = "ms_abun")
 
   if (!identical(mixture, "poisson") && !identical(mixture, "negbin")) {
@@ -420,7 +422,8 @@
                species_idx = as.integer(lf$species_idx),
                X_lambda = X_lambda, X_p = lf$X_p,
                n_sites = model$n_sites, n_species = n_species,
-               K_max = K_max, is_nb = is_nb)
+               K_max = K_max, is_nb = is_nb,
+               n_threads = as.integer(n.threads.grad))
   if (!is.null(K_site)) spec$K_site <- K_site
   inv_metric <- .ms_ocs_fd_metric(
     function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri, sigma.beta,
@@ -439,7 +442,8 @@
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
 
-  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+                           n.threads = n.threads)
   draws <- rc$draws
 
   # ---- reconstruct the build_ms_nmix_fit `raw` shape from the draws ----
@@ -506,7 +510,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Spatial community N-mixture NUTS (shared fixed-hyper areal field; tulpaObs#73)
+# Spatial community N-mixture NUTS (shared fixed-hyper areal field)
 # ---------------------------------------------------------------------------
 
 # Sample the exact joint posterior of a spatial community N-mixture: the
@@ -517,23 +521,25 @@
 # the in-tree C++ FullGradFn (the shared-field block in src/ms_abun_nuts.cpp).
 # proper-CAR uses its full-rank inverse-Cholesky loading; intrinsic icar / bym2
 # fields sample via the sum-to-zero eigen-loading that drops the precision
-# null-space (constant) direction (gcol33/tulpaObs#71/#113), the same reparam the
-# single-species abun() NUTS+areal path uses.
+# null-space (constant) direction (/#113), the same reparam the single-species
+# abun() NUTS+areal path uses.
 .tobs_fit_ms_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                            K_max = NULL, sigma.beta = NULL,
                                            sigma.logr = NULL, n.iter = NULL,
-                                           n.warmup = NULL, n.chains = NULL,
+                                           n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                           n.threads = NULL,
+                                           n.threads.grad = NULL,
                                            max.treedepth = NULL, adapt.delta = NULL,
                                            seed = NULL, max.iter = 100L,
                                            verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", family = "ms_abun")
 
   .tobs_reject_weighted_spatial(spatial, "ms_abun NUTS abundance spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(
       "ms_abun() NUTS + areal spatial supports icar() / car_proper() / bym2() ",
-      "on the shared abundance field; got '%s'. (gcol33/tulpaObs#73, #113)"),
+      "on the shared abundance field; got '%s'."),
       spatial$type), call. = FALSE)
   }
   if (!identical(mixture, "poisson")) {
@@ -559,7 +565,7 @@
   # Warm the field precision + community means / covariances / field from the
   # matching nested-Laplace community-spatial (sfMsNMix) fit (#12), then build the
   # whitened-field loading (square inverse Cholesky for car_proper, sum-to-zero
-  # for the intrinsic icar / bym2 fields, gcol33/tulpaObs#71/#113).
+  # for the intrinsic icar / bym2 fields/#113).
   warm_common <- list(
     lf = lf, X_lambda = X_lambda, n_sites = n_sites, n_species = n_species,
     csr = csr, n_spatial = n_sites, mixture = "P", K_max = K_warm,
@@ -617,7 +623,8 @@
                X_lambda = X_lambda, X_p = lf$X_p,
                n_sites = n_sites, n_species = n_species, K_max = K_max,
                is_nb = FALSE, n_field_units = n_sites,
-               field_map = seq_len(n_sites), field_load = field_load)
+               field_map = seq_len(n_sites), field_load = field_load,
+               n_threads = as.integer(n.threads.grad))
   if (!is.null(K_site)) spec$K_site <- K_site
   inv_metric <- .ms_ocs_fd_metric(
     function(th) cpp_ms_abun_nuts_joint_logpost(spec, th, pri, sigma.beta,
@@ -631,7 +638,8 @@
     max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
     seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
 
-  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+                           n.threads = n.threads)
   draws <- rc$draws
 
   # Reconstruct the community block (drop the trailing raw columns).

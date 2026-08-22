@@ -20,8 +20,7 @@
 // are the shared community_chol.h. An NA entry in the response matrix is a missing
 // site x species observation: it is masked out of the (species, site) data sum
 // (matching the Laplace-EM per-species valid subsets), so a species contributes
-// only its observed sites. Byte-exact vs the R oracle .tobs_ms_count_nuts_logpost
-// (gcol33/tulpaObs#117).
+// only its observed sites. Byte-exact vs the R oracle .tobs_ms_count_nuts_logpost.
 
 #include <Rcpp.h>
 #include <vector>
@@ -31,6 +30,9 @@
 #include <tulpa/model_data.h>
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include <tulpa/nuts_api.h>
 #include "community_chol.h"
 #include "tobs_math.h"
@@ -48,6 +50,12 @@ enum MsCountFamily { MSC_POIS = 0, MSC_NB = 1, MSC_GAUSS = 2, MSC_BERN = 3 };
 
 struct MsCountNutsData {
     int n_sites = 0, n_species = 0, p_beta = 0;
+
+    // Threads for the per-species gradient loop below. 0 leaves the count to
+    // OpenMP, which is what an omitted `n_threads` means; a positive value is
+    // the ceiling the caller asked for. The reduction after the loop is
+    // serial and order-fixed, so the gradient is the same at any count.
+    int n_threads = 0;
     int family = MSC_POIS;
     std::vector<double> y;          // n_sites x n_species, column-major (species-major)
     std::vector<double> lgy;        // lgamma(y + 1) (Poisson only), same layout
@@ -76,6 +84,8 @@ inline void ms_count_nuts_layout(MsCountNutsData& d) {
 
 inline MsCountNutsData ms_count_nuts_build_data(const Rcpp::List& spec) {
     MsCountNutsData d;
+    d.n_threads = spec.containsElementNamed("n_threads")
+                  ? Rcpp::as<int>(spec["n_threads"]) : 0;
     d.X = Rcpp::as<NumericMatrix>(spec["X"]);
     NumericMatrix ym = Rcpp::as<NumericMatrix>(spec["y"]);   // n_sites x n_species
     d.n_sites = d.X.nrow(); d.p_beta = d.X.ncol(); d.n_species = ym.ncol();
@@ -138,7 +148,10 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
     // Scratch sized once per thread and reused across species (widths are known
     // before the loop). b_beta is fully overwritten each pass; gbb accumulates
     // and is re-zeroed explicitly.
-    #pragma omp parallel
+    #ifdef _OPENMP
+    const int omp_n = d.n_threads > 0 ? d.n_threads : omp_get_max_threads();
+    #pragma omp parallel num_threads(omp_n)
+    #endif
     {
     std::vector<double> b_beta(pb), gbb(pb);
 

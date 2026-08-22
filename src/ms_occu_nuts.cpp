@@ -47,6 +47,9 @@
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
 #include <tulpa/nuts_api.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include "ms_occu_kernel.h"
 #include "community_chol.h"
 
@@ -60,6 +63,12 @@ namespace tulpaObs {
 // per-species site summaries (n_valid, n_det) drive the occupancy marginal.
 struct MsOccuNutsData {
     int n_sites = 0, n_species = 0, p_psi = 0, p_p = 0;
+
+    // Threads for the per-species gradient loop below. 0 leaves the count to
+    // OpenMP, which is what an omitted `n_threads` means; a positive value is
+    // the ceiling the caller asked for. The reduction after the loop is
+    // serial and order-fixed, so the gradient is the same at any count.
+    int n_threads = 0;
     NumericMatrix X_psi;                          // n_sites x p_psi
     NumericMatrix X_p;                            // n_sites x p_p
     std::vector<MsOccuSiteSummary> summ;          // [s]
@@ -82,6 +91,8 @@ inline void ms_occu_nuts_layout(MsOccuNutsData& d) {
 
 inline MsOccuNutsData ms_occu_nuts_build_data(const Rcpp::List& spec) {
     MsOccuNutsData d;
+    d.n_threads = spec.containsElementNamed("n_threads")
+                  ? Rcpp::as<int>(spec["n_threads"]) : 0;
     d.X_psi     = Rcpp::as<NumericMatrix>(spec["X_psi"]);
     d.X_p       = Rcpp::as<NumericMatrix>(spec["X_p"]);
     d.n_sites   = Rcpp::as<int>(spec["n_sites"]);
@@ -151,7 +162,10 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
     // known before the loop, and the per-species work below is O(n_sites), so a
     // fresh allocation per iteration buys nothing. b_* and eta_* are fully
     // overwritten each pass; gb* accumulate and are re-zeroed explicitly.
-    #pragma omp parallel
+    #ifdef _OPENMP
+    const int omp_n = d.n_threads > 0 ? d.n_threads : omp_get_max_threads();
+    #pragma omp parallel num_threads(omp_n)
+    #endif
     {
     std::vector<double> b_psi(p_psi), b_p(p_p), gbpsi(p_psi), gbp(p_p);
     std::vector<double> eta_psi(n_sites), eta_p(n_sites);

@@ -304,11 +304,13 @@
                                        priors = NULL,
                                        sigma.beta = NULL,
                                        n.iter = NULL, n.warmup = NULL,
-                                       n.chains = NULL, max.treedepth = NULL,
+                                       n.chains = NULL, n.thin = NULL,
+                                       n.threads = NULL,
+                                       n.threads.grad = NULL, max.treedepth = NULL,
                                        adapt.delta = NULL, seed = NULL,
                                        max.iter = 200L, tol = 1e-4,
                                        verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts")
 
   dots <- list(...)
@@ -331,7 +333,8 @@
   spec <- list(X_psi1 = pieces$X_psi1, X_p = pieces$X_p,
                X_gamma = pieces$X_gamma, X_eps = pieces$X_eps,
                n_sites = pieces$Ns, n_seasons = pieces$T, n_species = pieces$S,
-               n_valid = pieces$nv_list, n_det = pieces$nd_list)
+               n_valid = pieces$nv_list, n_det = pieces$nd_list,
+               n_threads = as.integer(n.threads.grad))
   inv_metric <- .ms_ocs_fd_metric(
     function(th) cpp_ms_dyn_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
     theta0)
@@ -347,7 +350,8 @@
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
 
-  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+                           n.threads = n.threads)
   draws <- rc$draws
 
   # ---- reconstruct the .tobs_community_em `res` shape from the draws ----

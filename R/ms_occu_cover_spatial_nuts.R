@@ -1,6 +1,5 @@
 # ms_occu_cover_spatial_nuts.R - full-vector joint log-posterior for the
-# reduced-rank spatial-factor community occu_cover (gcol33/tulpa#67), the NUTS
-# target density.
+# reduced-rank spatial-factor community occu_cover, the NUTS target density.
 #
 # The Laplace-EM fitter (ms_occu_cover_spatial.R) profiles the community
 # covariances Sigma, the field precisions tau_w, and the field hyperparameters
@@ -484,7 +483,7 @@
 .ms_ocs_rhat_ess <- function(chains) .tobs_nuts_rhat_ess(chains)
 
 # ---------------------------------------------------------------------------
-# Shared community-NUTS R epilogue helpers (gcol33/tulpaObs#128)
+# Shared community-NUTS R epilogue helpers
 #
 # Every in-tree community-NUTS fitter (ms_occu / ms_dyn_occu / ms_abun /
 # ms_count) shares the same warm-start metric, multi-chain harness, and
@@ -507,8 +506,8 @@
   list(idx = idx, chol = chol, p = as.integer(p))
 }
 
-# The block-offset walk every community NUTS layout performs
-# (gcol33/tulpaObs#231). One recipe:
+# The block-offset walk every community NUTS layout performs. One
+# recipe:
 #
 #   mu [P] | {z_s} species-major [S*P] | per-arm chol blocks, arm order
 #          | trailing family blocks
@@ -638,28 +637,22 @@
 # `draws`, `accept_prob`, `divergent`, `treedepth`, `epsilon`. `chains` (the list
 # of per-chain draw matrices) is also returned so a caller that reports diagnostics
 # unconditionally (single chain included) can recompute them.
-.ms_ocs_run_chains <- function(run_chain, n_chains) {
-  n_chains <- as.integer(n_chains)
-  if (n_chains > 1L) {
-    rcs    <- lapply(seq_len(n_chains), run_chain)
-    chains <- lapply(rcs, `[[`, "draws")
-    list(draws     = do.call(rbind, chains),
-         accept    = unlist(lapply(rcs, `[[`, "accept_prob")),
-         divergent = unlist(lapply(rcs, `[[`, "divergent")),
-         treedepth = as.integer(unlist(lapply(rcs, `[[`, "treedepth"))),
-         epsilon   = mean(vapply(rcs, `[[`, 0, "epsilon")),
-         chains    = chains,
-         rhat_ess  = .ms_ocs_rhat_ess(chains))
-  } else {
-    res <- run_chain(1L)
-    list(draws     = res$draws,
-         accept    = res$accept_prob,
-         divergent = res$divergent,
-         treedepth = as.integer(res$treedepth),
-         epsilon   = res$epsilon,
-         chains    = list(res$draws),
-         rhat_ess  = NULL)
-  }
+.ms_ocs_run_chains <- function(run_chain, n_chains, n.thin = 1L,
+                               n.threads = 1L) {
+  n_chains <- max(1L, as.integer(n_chains))
+  n.thin   <- max(1L, as.integer(n.thin %||% 1L))
+  rcs      <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
+                     .tobs_nuts_thin_chain, n.thin = n.thin)
+  chains   <- lapply(rcs, `[[`, "draws")
+  list(draws     = if (n_chains > 1L) do.call(rbind, chains) else chains[[1L]],
+       accept    = unlist(lapply(rcs, `[[`, "accept_prob")),
+       divergent = unlist(lapply(rcs, `[[`, "divergent")),
+       treedepth = as.integer(unlist(lapply(rcs, `[[`, "treedepth"))),
+       epsilon   = mean(vapply(rcs, function(r) r$epsilon %||% NA_real_,
+                               numeric(1)), na.rm = TRUE),
+       chains    = chains,
+       n_thin    = n.thin,
+       rhat_ess  = if (n_chains > 1L) .ms_ocs_rhat_ess(chains) else NULL)
 }
 
 # Attach the `$nuts` slot to a reconstructed community-NUTS fit from a
@@ -668,7 +661,7 @@
 # count, and the split-Rhat/bulk-ESS tail when >1 chain ran); the only per-family
 # differences are the layout `lay` and any extra scalar hyperparameters (e.g. the
 # NB `sigma_logr`), passed through `...` into the block. Single source for the
-# rc-unpack + fit$nuts glue the families used to re-inline (gcol33/tulpaObs#136).
+# rc-unpack + fit$nuts glue the families used to re-inline.
 #
 # `par_cols` are the sampler coordinates the fit REPORTS, in the order its
 # `fixed_names` list them; every layout puts the community means first as
@@ -676,7 +669,7 @@
 # carries the shared globals (or a differently named mean block) pass their own.
 # The reported draws are moment-matched around the posterior mean on most of
 # these builders, so the convergence record has to be computed from the sampler's
-# own chains, not from `fit$draws` (gcol33/tulpaObs#174).
+# own chains, not from `fit$draws`.
 .ms_ocs_finalize_nuts_fit <- function(fit, rc, lay, n_chains, par_cols = lay$mu,
                                       ...) {
   fit$nuts <- c(list(
@@ -742,9 +735,9 @@
     # Independent chains from the shared warm start under offset seeds, via the
     # single-chain engine. (tulpa's across-chain OpenMP runner ignores the
     # caller's ParamLayout and recomputes it from the minimal ModelData, so it
-    # segfaults on the FullGradFn pathway -- gcol33/tulpa#70. The per-chain loop
-    # is robust and the warm-started chains are short, so the sequential cost is
-    # acceptable; switch to the native runner once #70 lands.)
+    # segfaults on the FullGradFn pathway --. The per-chain loop is robust and
+    # the warm-started chains are short, so the sequential cost is acceptable;
+    # switch to the native runner once #70 lands.)
     rcs <- lapply(seq_len(n_chains), function(c) run_chain(seed + c - 1L))
     chains <- lapply(rcs, function(r) r$draws)
     rhat_ess <- .ms_ocs_rhat_ess(chains)

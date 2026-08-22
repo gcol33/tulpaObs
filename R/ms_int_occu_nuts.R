@@ -184,12 +184,13 @@
 .tobs_fit_ms_int_occu_nuts <- function(model,
                                        sigma.beta = NULL,
                                        n.iter = NULL, n.warmup = NULL,
-                                       n.chains = NULL, max.treedepth = NULL,
+                                       n.chains = NULL, n.thin = NULL,
+                                       n.threads = NULL, max.treedepth = NULL,
                                        adapt.delta = NULL, seed = NULL,
                                        max.iter = 100L, tol = 1e-4,
                                        newton.max = 30L, verbose = FALSE,
                                        ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts")
 
   pi_list <- model$process_info
@@ -269,7 +270,8 @@
       adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
       verbose = isTRUE(verbose))
   }
-  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+                           n.threads = n.threads)
   draws <- rc$draws
 
   # ---- reconstruct the .tobs_community_em `fit` shape from the draws ----

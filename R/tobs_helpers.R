@@ -2,15 +2,15 @@
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Resolve a response on the top formula LHS (gcol33/tulpaObs#66). When `formula`
-# is two-sided, the LHS is the response: it is the clean alternative to a
-# separate `y =` for a single-vector-response family (`family$response ==
-# "vector"`, the cover hurdle). The LHS expression is evaluated against `data`
-# first, then the calling environment, so it may be a bare column (`cover.flat`)
-# or an expression (`log(cover + 1)`). The formula is stripped to one-sided so
-# every downstream consumer (dispatchers, family encoders, the structured-term
-# parser, which all assume a one-sided process formula with the response in `y`)
-# is unchanged; the RHS -- spatial() / bars / other terms -- still flows through
+# Resolve a response on the top formula LHS. When `formula` is two-sided, the
+# LHS is the response: it is the clean alternative to a separate `y =` for a
+# single-vector-response family (`family$response == "vector"`, the cover
+# hurdle). The LHS expression is evaluated against `data` first, then the
+# calling environment, so it may be a bare column (`cover.flat`) or an
+# expression (`log(cover + 1)`). The formula is stripped to one-sided so every
+# downstream consumer (dispatchers, family encoders, the structured-term parser,
+# which all assume a one-sided process formula with the response in `y`) is
+# unchanged; the RHS -- spatial() / bars / other terms -- still flows through
 # the existing parser untouched.
 #
 # Returns list(formula =, y =). A one-sided formula passes through unchanged
@@ -157,10 +157,10 @@
   # via the in-tree C++ FullGradFn (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp) --
   # samples the community means, per-species deviations, AND the two independent
   # per-arm community covariances jointly, non-centered, warm-started at the
-  # Laplace-EM mode (gcol33/tulpaObs#69). nested_laplace: a shared areal field
-  # (icar/bym2/car_proper) on the occupancy arm via the in-tree community-spatial
-  # nested Laplace-EM (R/ms_occu_spatial.R, src/ms_occu_spatial.cpp) -- the
-  # occupancy analogue of sfMsNMix (gcol33/tulpaObs#75).
+  # Laplace-EM mode. nested_laplace: a shared areal field (icar/bym2/car_proper)
+  # on the occupancy arm via the in-tree community-spatial nested Laplace-EM
+  # (R/ms_occu_spatial.R, src/ms_occu_spatial.cpp) -- the occupancy analogue of
+  # sfMsNMix.
   ms_occu  = c("laplace", "nuts", "pg_gibbs", "nested_laplace"),
   int_occu = c("laplace", "laplace_sla", "laplace_gibbs", "laplace_mi",
                "nested_laplace", "nuts"),
@@ -168,14 +168,13 @@
   # (no detection process), with per-species coefficients under a Gaussian
   # community covariance -- the spOccupancy lfJSDM / sfJSDM model class, i.e. the
   # community GLMM of ms_count() with a logit link, so it shares that binder,
-  # community Laplace-EM, latent driver and NUTS target (gcol33/tulpaObs#121).
-  # nested_laplace: a shared areal field (icar/car_proper/bym2), optionally with
-  # latent() factors (sfJSDM), via block coordinate ascent. laplace: the
-  # non-spatial community EM, or latent() factors alone (lfJSDM). nuts: the exact
-  # joint community posterior over the Bernoulli response.
-  # The single-block correction routes (laplace_sla / laplace_gibbs / laplace_mi)
-  # belonged to the former shared-FE + scalar-species-intercept model and do not
-  # apply to the community EM.
+  # community Laplace-EM, latent driver and NUTS target. nested_laplace: a shared
+  # areal field (icar/car_proper/bym2), optionally with latent() factors
+  # (sfJSDM), via block coordinate ascent. laplace: the non-spatial community EM,
+  # or latent() factors alone (lfJSDM). nuts: the exact joint community posterior
+  # over the Bernoulli response. The single-block correction routes (laplace_sla
+  # / laplace_gibbs / laplace_mi) belonged to the former shared-FE +
+  # scalar-species-intercept model and do not apply to the community EM.
   jsdm     = c("laplace", "nuts", "pg_gibbs",
                "nested_laplace"),
   # count: GLMM on the observed count / continuous response directly (no
@@ -183,11 +182,11 @@
   # (abund). Non-spatial Laplace only for the first ship: a single tulpa GLMM
   # block (Poisson / neg_binomial_2 / gaussian). The negbin size / gaussian
   # residual variance is estimated by an outer dispersion loop in .dispatch_count
-  # (tulpa_laplace takes a fixed phi). nested_laplace: a plain areal field
-  # (icar / bym2 / car_proper) on the abundance formula (the spAbund analogue) --
-  # the field is a latent GMRF prior on the count block, integrated over its
+  # (tulpa_laplace takes a fixed phi). nested_laplace: a plain areal field (icar
+  # / bym2 / car_proper) on the abundance formula (the spAbund analogue) -- the
+  # field is a latent GMRF prior on the count block, integrated over its
   # hyperparameters via the shared nested-Laplace EM machinery. Community
-  # (msAbund) / NUTS are the documented follow-ups (gcol33/tulpaObs#117).
+  # (msAbund) / NUTS are the documented follow-ups.
   count    = c("laplace", "nested_laplace"),
   # ms_count: community relative-abundance GLMM (msAbund) via the shared community
   # Laplace-EM (R/community_em.R) -- per-species coefficient RE with a Gaussian
@@ -199,17 +198,17 @@
   # count posterior via the in-tree C++ FullGradFn (R/ms_count_nuts.R,
   # src/ms_count_nuts.cpp), warm-started at the Laplace-EM mode; Poisson.
   ms_count = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
-  # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial
-  # offset (nested_laplace: icar / bym2 / car_proper on the abundance arm).
-  # tulpa's spatial fitters return the grid-integrated coefficient covariance, so
-  # the spatial SEs are calibrated (law-of-total-covariance over the
-  # hyperparameter grid). nuts: the non-spatial sampler over the closed-form
-  # marginal via the in-tree C++ FullGradFn (R/abun_nuts.R, src/abun_nuts.cpp);
-  # Poisson or negbin (log_r sampled), warm-started at the Laplace mode. NUTS +
-  # areal: a fixed-hyper non-centered field on the abundance arm -- car_proper via
-  # the square inverse Cholesky, icar / bym2 via the sum-to-zero reparameterisation
-  # (the intrinsic field's null-space direction dropped, tulpaObs#71). A single
-  # intercept RE samples non-spatially; spatial XOR RE.
+  # abun: non-spatial N-mixture (laplace; Poisson or negbin) + areal-spatial offset
+  # (nested_laplace: icar / bym2 / car_proper on the abundance arm). tulpa's
+  # spatial fitters return the grid-integrated coefficient covariance, so the
+  # spatial SEs are calibrated (law-of-total-covariance over the hyperparameter
+  # grid). nuts: the non-spatial sampler over the closed-form marginal via the
+  # in-tree C++ FullGradFn (R/abun_nuts.R, src/abun_nuts.cpp); Poisson or negbin
+  # (log_r sampled), warm-started at the Laplace mode. NUTS + areal: a fixed-hyper
+  # non-centered field on the abundance arm -- car_proper via the square inverse
+  # Cholesky, icar / bym2 via the sum-to-zero reparameterisation (the intrinsic
+  # field's null-space direction dropped). A single intercept RE samples
+  # non-spatially; spatial XOR RE.
   abun     = c("laplace", "nested_laplace", "nuts"),
   # royle_nichols: Royle-Nichols occupancy (abundance-induced detection
   # heterogeneity). Latent N ~ Poisson marginalised in closed form; the exact
@@ -270,44 +269,42 @@
   # Polya-Gamma Gibbs sampler is exact (the engine spOccupancy uses). pg_gibbs only.
   t_occu = c("pg_gibbs"),
   # ms_abun: community / multispecies N-mixture via the in-tree C++ Laplace-EM
-  # (per-species coefficient RE with Gaussian community covariances). A shared
-  # areal field (icar / bym2 / car_proper) on the abundance arm fits under
-  # nested_laplace (gcol33/tulpaObs#12); Poisson or grid-integrated negbin size.
-  # nuts: the non-spatial community sampler over the closed-form per-(species,
-  # site) marginal via the in-tree C++ FullGradFn (R/ms_abun_nuts.R,
-  # src/ms_abun_nuts.cpp) -- samples the community means, per-species deviations,
-  # AND community covariances jointly; Poisson or per-species negbin (log_r_s
-  # sampled), warm-started at the Laplace-EM mode (gcol33/tulpaObs#14). nuts +
-  # a shared areal field (car_proper, Poisson) joins a fixed-hyper non-centered
-  # proper-CAR field on the abundance arm (gcol33/tulpaObs#73); icar/bym2 + temporal
-  # / RE NUTS not yet wired.
+  # (per-species coefficient RE with Gaussian community covariances). A shared areal
+  # field (icar / bym2 / car_proper) on the abundance arm fits under nested_laplace;
+  # Poisson or grid-integrated negbin size. nuts: the non-spatial community sampler
+  # over the closed-form per-(species, site) marginal via the in-tree C++ FullGradFn
+  # (R/ms_abun_nuts.R, src/ms_abun_nuts.cpp) -- samples the community means,
+  # per-species deviations, AND community covariances jointly; Poisson or
+  # per-species negbin (log_r_s sampled), warm-started at the Laplace-EM mode. nuts
+  # + a shared areal field (car_proper, Poisson) joins a fixed-hyper non-centered
+  # proper-CAR field on the abundance arm; icar/bym2 + temporal / RE NUTS not yet
+  # wired.
   ms_abun  = c("laplace", "nested_laplace", "nuts"),
-  # removal: sequential-depletion removal sampling. Non-spatial closed-form
-  # marginal Laplace (Poisson or negbin; the depleting-binomial product summed
-  # over latent N), grouped-RE AGHQ Laplace, the in-tree C++ FullGradFn NUTS over
-  # the same marginal, and an areal icar()/car_proper() field on the abundance arm
-  # via nested_laplace (the shared count-marginal spatial driver, tulpaObs#51). A
-  # temporal() AR1/RW1/RW2/iid field composes WITH the areal field on the
-  # abundance arm under nested_laplace via the shared areal-BFGS driver (a second
-  # latent block, both grid-integrated; tulpaObs#78), OR rides the family NUTS field
-  # block on its own (temporal-only, no simultaneous areal field; tulpaObs#114).
-  # spde not yet wired (R/removal.R, R/removal_spatial.R).
+  # removal: sequential-depletion removal sampling. Non-spatial closed-form marginal
+  # Laplace (Poisson or negbin; the depleting-binomial product summed over latent
+  # N), grouped-RE AGHQ Laplace, the in-tree C++ FullGradFn NUTS over the same
+  # marginal, and an areal icar()/car_proper() field on the abundance arm via
+  # nested_laplace (the shared count-marginal spatial driver). A temporal()
+  # AR1/RW1/RW2/iid field composes WITH the areal field on the abundance arm under
+  # nested_laplace via the shared areal-BFGS driver (a second latent block, both
+  # grid-integrated), OR rides the family NUTS field block on its own
+  # (temporal-only, no simultaneous areal field). spde not yet wired (R/removal.R,
+  # R/removal_spatial.R).
   removal  = c("laplace", "nested_laplace", "nuts"),
-  # distance: binned distance sampling (half-normal / hazard-rate key, line /
-  # point transect). Non-spatial closed-form marginal Laplace (Poisson or negbin),
-  # grouped-RE AGHQ Laplace (abundance arm), the in-tree C++ FullGradFn NUTS, and
-  # an areal icar()/car_proper()/bym2() field on the abundance arm via
-  # nested_laplace (the per-site var_N rank-1 cross-arm from distance_kernel.h,
-  # tulpaObs#51). The hazard-rate scalar log-shape is threaded into the areal-BFGS
-  # fixed block (tulpaObs#79), so a hazard-key areal fit recovers both the
-  # abundance field and the shape. A temporal() AR1/RW1/RW2/iid field composes
-  # WITH the areal field on the abundance arm under nested_laplace via the shared
-  # areal-BFGS driver (a second latent block; tulpaObs#78), OR rides the family NUTS
-  # field block on its own (temporal-only; tulpaObs#114). The hazard-rate key's
-  # global log-shape rides alongside the NUTS field block (areal or temporal), so a
-  # hazard-key NUTS+field fit recovers both the abundance field and the shape
-  # (tulpaObs#114). Grouped-RE hazard and hazard-key DETECTION-arm areal not yet
-  # wired (R/distance.R, R/distance_spatial.R, src/distance_*.cpp).
+  # distance: binned distance sampling (half-normal / hazard-rate key, line / point
+  # transect). Non-spatial closed-form marginal Laplace (Poisson or negbin),
+  # grouped-RE AGHQ Laplace (abundance arm), the in-tree C++ FullGradFn NUTS, and an
+  # areal icar()/car_proper()/bym2() field on the abundance arm via nested_laplace
+  # (the per-site var_N rank-1 cross-arm from distance_kernel.h). The hazard-rate
+  # scalar log-shape is threaded into the areal-BFGS fixed block, so a hazard-key
+  # areal fit recovers both the abundance field and the shape. A temporal()
+  # AR1/RW1/RW2/iid field composes WITH the areal field on the abundance arm under
+  # nested_laplace via the shared areal-BFGS driver (a second latent block), OR
+  # rides the family NUTS field block on its own (temporal-only). The hazard-rate
+  # key's global log-shape rides alongside the NUTS field block (areal or temporal),
+  # so a hazard-key NUTS+field fit recovers both the abundance field and the shape.
+  # Grouped-RE hazard and hazard-key DETECTION-arm areal not yet wired
+  # (R/distance.R, R/distance_spatial.R, src/distance_*.cpp).
   distance = c("laplace", "nested_laplace", "nuts"),
   # ms_distance: community binned distance sampling (the spAbundance msDS
   # analogue) -- per-species distance sampling with Gaussian community
@@ -319,20 +316,19 @@
   # (icar/car_proper/bym2/spde) with or without factors (sfMsDS), via the same
   # block coordinate ascent as every other community family
   # (R/community_latent.R). Poisson only (the negbin size is not yet a
-  # per-species RE); NUTS not wired (gcol33/tulpaObs#117).
+  # per-species RE); NUTS not wired.
   ms_distance = c("laplace", "nested_laplace"),
   # fp_occu: multistate false-positive occupancy (Miller et al. 2011). Latent
-  # occupancy z summed out in closed form (two states); four site-level logit
-  # arms (psi, true detection p11, false-positive p10, certain-classification b).
+  # occupancy z summed out in closed form (two states); four site-level logit arms
+  # (psi, true detection p11, false-positive p10, certain-classification b).
   # Non-spatial analytic-gradient BFGS over the exact marginal with an
   # observed-information vcov (laplace), grouped-RE AGHQ Laplace (psi or p11 arm),
   # the in-tree C++ FullGradFn NUTS, and an areal icar()/car_proper() field on the
   # occupancy arm via nested_laplace (BFGS over the marginal + CAR prior, FD-Hessian
-  # observed info; tulpaObs#51). A temporal() AR1/RW1/RW2/iid field composes WITH
-  # the areal field on the psi arm under nested_laplace via the shared areal-BFGS
-  # driver (a second latent block; tulpaObs#78), OR rides the family NUTS field block
-  # on its own (temporal-only, no simultaneous areal field; tulpaObs#114).
-  # (R/fp_occu.R, R/fp_occu_spatial.R, src/fp_occu_*.cpp).
+  # observed info). A temporal() AR1/RW1/RW2/iid field composes WITH the areal field
+  # on the psi arm under nested_laplace via the shared areal-BFGS driver (a second
+  # latent block), OR rides the family NUTS field block on its own (temporal-only, no
+  # simultaneous areal field). (R/fp_occu.R, R/fp_occu_spatial.R, src/fp_occu_*.cpp).
   fp_occu  = c("laplace", "nested_laplace", "nuts"),
   # dyn_abun: Dail-Madsen open-population N-mixture (Poisson initial abundance,
   # binomial survival, Poisson recruitment, binomial detection). The latent
@@ -342,15 +338,14 @@
   # vcov (laplace), grouped-RE AGHQ Laplace (initial-abundance arm), the in-tree
   # C++ FullGradFn NUTS, and an areal icar()/car_proper() field on the initial-
   # abundance arm via nested_laplace (BFGS over the forward marginal + CAR prior,
-  # FD-Hessian observed info; tulpaObs#51). A temporal() AR1/RW1/RW2/iid field
-  # composes WITH the areal field on the initial-abundance arm under nested_laplace
-  # via the shared areal-BFGS driver (a second latent block; tulpaObs#78).
-  # Season-varying survival / recruitment: a covariate on omega_formula /
-  # gamma_formula carried as a [n_sites x (T-1)] matrix column gives interval-
-  # indexed vital rates in the forward kernel, on every backend (laplace, NUTS,
-  # nested_laplace areal on the initial-abundance arm; R/dyn_abun.R,
-  # src/dyn_abun_kernel.h). NUTS+temporal not yet wired (R/dyn_abun.R,
-  # R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
+  # FD-Hessian observed info). A temporal() AR1/RW1/RW2/iid field composes WITH the
+  # areal field on the initial-abundance arm under nested_laplace via the shared
+  # areal-BFGS driver (a second latent block). Season-varying survival /
+  # recruitment: a covariate on omega_formula / gamma_formula carried as a [n_sites
+  # x (T-1)] matrix column gives interval- indexed vital rates in the forward
+  # kernel, on every backend (laplace, NUTS, nested_laplace areal on the
+  # initial-abundance arm; R/dyn_abun.R, src/dyn_abun_kernel.h). NUTS+temporal not
+  # yet wired (R/dyn_abun.R, R/dyn_abun_spatial.R, src/dyn_abun_*.cpp).
   dyn_abun = c("laplace", "nested_laplace", "nuts"),
   # cover: standalone vegetation-cover hurdle (presence Bernoulli + beta /
   # lognormal positive arm). Non-spatial Laplace via two independent
@@ -391,32 +386,32 @@
   # marginal) and the per-species deviations are integrated by a Laplace-EM.
   # Non-spatial only -- the community analogue of the joint-coupled spatial
   # engine (per-species RE layered on the shared coupled field) needs upstream
-  # tulpa support, so nested_laplace is not offered.
-  # nuts: the reduced-rank spatial-factor path (a shared icar/car/bym2 field with
-  # per-species loadings) samples the exact joint posterior via tulpa's NUTS +
-  # the in-tree C++ FullGradFn (gcol33/tulpa#67). Non-spatial ms_occu_cover has
-  # no NUTS path (gated in the dispatcher).
+  # tulpa support, so nested_laplace is not offered. nuts: the reduced-rank
+  # spatial-factor path (a shared icar/car/bym2 field with per-species loadings)
+  # samples the exact joint posterior via tulpa's NUTS + the in-tree C++
+  # FullGradFn. Non-spatial ms_occu_cover has no NUTS path (gated in the
+  # dispatcher).
   ms_occu_cover = c("laplace", "nuts"),
   # ms_dyn_occu / ms_int_occu: community dynamic / integrated occupancy. Per-
-  # species coefficient RE with per-arm Gaussian community covariances, fit by
-  # the shared community Laplace-EM (R/community_em.R). The latent occupancy
-  # path (HMM forward for dynamic, two-state mixture for integrated) marginalizes
-  # in closed form. nuts (ms_dyn_occu): the non-spatial community sampler over
-  # the exact HMM-forward per-species marginal via the in-tree C++ FullGradFn
+  # species coefficient RE with per-arm Gaussian community covariances, fit by the
+  # shared community Laplace-EM (R/community_em.R). The latent occupancy path (HMM
+  # forward for dynamic, two-state mixture for integrated) marginalizes in closed
+  # form. nuts (ms_dyn_occu): the non-spatial community sampler over the exact
+  # HMM-forward per-species marginal via the in-tree C++ FullGradFn
   # (R/ms_dyn_occu_nuts.R, src/ms_dyn_occu_nuts.cpp) -- samples the community
   # means, per-species first-season / detection deviations, the two independent
-  # per-arm community covariances, AND the shared colonisation / extinction
-  # globals jointly, non-centered, warm-started at the Laplace-EM mode
-  # (gcol33/tulpaObs#115). Non-spatial only (NUTS + areal field -> nested_laplace).
+  # per-arm community covariances, AND the shared colonisation / extinction globals
+  # jointly, non-centered, warm-started at the Laplace-EM mode. Non-spatial only
+  # (NUTS + areal field -> nested_laplace).
   ms_dyn_occu = c("laplace", "pg_gibbs", "nested_laplace", "nuts"),
   ms_int_occu = c("laplace", "pg_gibbs", "nuts"),
-  # occu_categorical: presence + nominal K-class hurdle (gcol33/tulpaObs#106).
-  # A Bernoulli presence arm and a baseline-category multinomial logit on the
-  # class given present (the FD-validated tulpa multinomial kernel; the
-  # non-spatial fit is the vectorised R Newton over the same closed forms).
-  # Non-spatial Laplace only for the first ship; the native multi-process
-  # LikelihoodSpec path (spatial fields / NUTS) and the latent-class confusion
-  # variant (the K-class generalisation of fp_occu) are the documented follow-ups.
+  # occu_categorical: presence + nominal K-class hurdle. A Bernoulli presence arm
+  # and a baseline-category multinomial logit on the class given present (the
+  # FD-validated tulpa multinomial kernel; the non-spatial fit is the vectorised R
+  # Newton over the same closed forms). Non-spatial Laplace only for the first
+  # ship; the native multi-process LikelihoodSpec path (spatial fields / NUTS) and
+  # the latent-class confusion variant (the K-class generalisation of fp_occu) are
+  # the documented follow-ups.
   occu_categorical = c("laplace")
 )
 
@@ -462,18 +457,17 @@
   # The community latent routes -- a shared areal field and/or latent() factors
   # on a community family -- fit by block coordinate ascent between the
   # community Laplace-EM and the field / factor updates (R/community_latent.R).
-  # `max.outer` caps that outer alternation. Admitted on both Laplace routes:
-  # a factor-only model is method = "laplace", a shared field "nested_laplace".
+  # `max.outer` caps that outer alternation. Admitted on both Laplace routes: a
+  # factor-only model is method = "laplace", a shared field "nested_laplace".
   # `factor.starts` sets how many candidate starting directions the first factor
   # pass selects over; each costs a full loading-EM run against the family's own
   # oracle, so it is the dominant cost on families whose oracle marginalises a
-  # latent state.
-  # Opted into per family via `obs_family(control_groups=)`, NOT admitted
-  # route-wide: only the community families fit by
+  # latent state. Opted into per family via `obs_family(control_groups=)`, NOT
+  # admitted route-wide: only the community families fit by
   # `.tobs_community_latent_ascent()` have an outer alternation to cap, and a
   # route-wide allowance let `max.outer` be passed to every Laplace family and
-  # dropped (gcol33/tulpaObs#160). Still route-gated, so it is rejected under
-  # "nuts" as a wrong-method control rather than an unknown one.
+  # dropped. Still route-gated, so it is rejected under "nuts" as a wrong-method
+  # control rather than an unknown one.
   block_coordinate = "max.outer",
   # Split from `block_coordinate` because the two are not co-extensive:
   # `ms_dyn_occu` reaches the driver with `latent = NULL`, so it has an outer
@@ -481,10 +475,10 @@
   block_coordinate_factor = "factor.starts",
   # Outer-grid knobs for the standalone occu() varying-coefficient (SVC) bar,
   # which reroutes from the EM fixed-point path onto the joint direct-grid engine
-  # under method = "nested_laplace" (gcol33/tulpaObs#81). They are no-ops on the
-  # EM path (a plain intercept field, temporal / re structure), which the SVC
-  # reroute predicate skips; admitted on the nested_laplace route so a SVC fit can
-  # tune the grid / threading without a separate method name.
+  # under method = "nested_laplace". They are no-ops on the EM path (a plain
+  # intercept field, temporal / re structure), which the SVC reroute predicate
+  # skips; admitted on the nested_laplace route so a SVC fit can tune the grid /
+  # threading without a separate method name.
   nested_laplace_joint = c("sigma.grid", "n.threads", "n.threads.outer",
                            "adaptive.grid", "adaptive.grid.edge.thresh",
                            "adaptive.grid.max.passes", "var.of.means.consistency",
@@ -497,6 +491,11 @@
                            "prior.sigma", "prior.alpha", "prior.phi"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
+                 # OpenMP threads inside ONE gradient evaluation of the
+                 # community NUTS targets, whose per-species loop is
+                 # parallel. Distinct from `n.threads`, which spreads whole
+                 # chains. 0 leaves the count to OpenMP.
+                 "n.threads.grad",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",
                  "sigma.re.scale", "n.seeds",
                  # Community-mean prior SD on the log-dispersion mu_log_r, for
@@ -526,8 +525,7 @@
 
 # Family-opted capability groups, gated by route. A family declares these via
 # `obs_family(control_groups=)`; they are admitted only on the engines that host
-# them, so a Laplace-only group stays rejected under a sampler route
-# (gcol33/tulpaObs#160).
+# them, so a Laplace-only group stays rejected under a sampler route.
 .tobs_family_group_hosts <- list(
   block_coordinate        = c("laplace", "nested_laplace"),
   block_coordinate_factor = c("laplace", "nested_laplace"))
@@ -553,7 +551,7 @@
     r <- .tobs_method_table[[m]]
     # A family-opted group belongs to the methods whose engine hosts it, even
     # though no route admits it unconditionally -- otherwise a key in such a group
-    # would report as applying to no method at all (gcol33/tulpaObs#160).
+    # would report as applying to no method at all.
     hosted <- names(Filter(function(h) r$engine %in% h, .tobs_family_group_hosts))
     any(c(.tobs_control_allow(r$engine, r$correction), hosted) %in% groups)
   }, logical(1))
@@ -916,7 +914,7 @@ print.tobs_fit <- function(x, ...) {
     }
   }
   # Surface attenuated community variance components so the reported between-
-  # species spread is not read as unbiased (tulpaObs#47). Means are unaffected.
+  # species spread is not read as unbiased. Means are unaffected.
   va <- x$ms_community$var_attenuation
   if (!is.null(va) && !identical(va$debias, "aghq")) {
     cat(sprintf("  Note: %s\n", va$note))

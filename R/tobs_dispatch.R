@@ -51,17 +51,17 @@
     ext_formula  = dots$extinction
   )
   # Season-varying colonization / extinction (a [n_sites x (T-1)] matrix column)
-  # and season-varying detection (a [n_sites x T] matrix column; gcol33/tulpaObs
-  # #124) are wired for the Laplace-EM engines only. The C++ NUTS forward reads one
-  # linear predictor per site per arm, so an interval- / season-indexed rate is
-  # gated there with a pointer.
+  # and season-varying detection (a [n_sites x T] matrix column) are wired for the
+  # Laplace-EM engines only. The C++ NUTS forward reads one linear predictor per
+  # site per arm, so an interval- / season-indexed rate is gated there with a
+  # pointer.
   if ((isTRUE(model$col_season_varying) || isTRUE(model$ext_season_varying) ||
        isTRUE(model$det_season_varying)) && identical(engine, "nuts")) {
     stop("dyn_occu(): season-varying colonization / extinction (a ",
          "[n_sites x (T-1)] matrix covariate) or season-varying detection (a ",
          "[n_sites x T] matrix covariate) is not yet wired for ",
-         "method = \"nuts\"; use method = \"laplace\" ",
-         "(gcol33/tulpaObs#124).", call. = FALSE)
+         "method = \"nuts\"; use method = \"laplace\".",
+         call. = FALSE)
   }
   do.call(.tobs_fit_model, c(
     list(model = model,
@@ -124,14 +124,14 @@
   }
 
   # The binomial community response is wired for the non-spatial Laplace-EM only
-  # (community svcPGBinom, gcol33/tulpaObs#125). NUTS needs a binomial family in
-  # the in-tree C++ FullGradFn, and a shared field / latent factor needs the
-  # binomial working callback in the block-coordinate driver -- both follow-ups.
+  # (community svcPGBinom). NUTS needs a binomial family in the in-tree C++
+  # FullGradFn, and a shared field / latent factor needs the binomial working
+  # callback in the block-coordinate driver -- both follow-ups.
   if (identical(response, "binomial")) {
     if (identical(engine, "nuts")) {
       stop("ms_count(response = \"binomial\"): NUTS is not yet wired for the ",
-           "binomial community response; use method = \"laplace\" ",
-           "(gcol33/tulpaObs#125).", call. = FALSE)
+           "binomial community response; use method = \"laplace\".",
+           call. = FALSE)
     }
     structs_b <- .tobs_structures_from_model(model)
     if (!is.null(structs_b$spatial) || !is.null(structs_b$latent)) {
@@ -139,20 +139,20 @@
            "factor is not yet wired for the binomial community response; use ",
            "method = \"laplace\" without a structured term. The single-species ",
            "binomial areal field (svcPGBinom) is count(response = ",
-           "\"binomial\") + icar() (gcol33/tulpaObs#125).", call. = FALSE)
+           "\"binomial\") + icar().", call. = FALSE)
     }
   }
 
   # A shared areal field (icar()) on the abundance formula routes to the
   # community-spatial fitter (the sfMsAbund analogue) under nested_laplace; a
   # non-areal structured term (temporal / re / svc / latent) or a non-icar field
-  # is not yet wired -- error rather than silently drop (gcol33/tulpaObs#117).
+  # is not yet wired -- error rather than silently drop.
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
       !is.null(structs$svc)) {
     stop("ms_count(): temporal / re / svc terms are not yet wired for the ",
          "community count family; a shared areal field icar() or a latent() ",
-         "factor term are the structured terms supported (gcol33/tulpaObs#117).",
+         "factor term are the structured terms supported.",
          call. = FALSE)
   }
   # A shared latent structure -- a shared areal field icar()/SVC bar (the
@@ -192,7 +192,7 @@
     control <- .tobs_control_defaults(control, "nuts", "ms_count")
     # NUTS over the exact joint community count posterior (community means,
     # per-species deviations, community covariance) via the in-tree C++
-    # FullGradFn, warm-started at the Laplace-EM mode (gcol33/tulpaObs#117).
+    # FullGradFn, warm-started at the Laplace-EM mode.
     return(.tobs_fit_ms_count_nuts(
       model,
       sigma.beta    = control[["sigma.beta"]],
@@ -200,6 +200,9 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),
@@ -248,7 +251,7 @@
 
   # A shared areal field (icar()/bym2()/car_proper()) on the occupancy formula
   # routes to the nested-Laplace community-occupancy fitter (the occupancy
-  # analogue of sfMsNMix; tulpaObs#75). It must sit on the occupancy arm only.
+  # analogue of sfMsNMix). It must sit on the occupancy arm only.
   if (!is.null(structs$spatial)) {
     if (identical(engine, "nuts")) {
       stop("method = \"nuts\" for ms_occu() is the non-spatial community ",
@@ -264,11 +267,10 @@
            "the detection formula is not supported.", call. = FALSE)
     }
     # A varying-coefficient bar spatial(~ 1 + w || cell, graph) (the svcMsPGOcc
-    # analogue, gcol33/tulpaObs#118), or latent() factors alongside the field
-    # (the sfMsPGOcc analogue: a shared field plus per-species factor loadings,
-    # gcol33/tulpaObs#119), route to the block-coordinate latent fitter. A plain
-    # intercept field alone keeps the in-tree C++ community-spatial nested
-    # Laplace-EM.
+    # analogue), or latent() factors alongside the field (the sfMsPGOcc
+    # analogue: a shared field plus per-species factor loadings), route to the
+    # block-coordinate latent fitter. A plain intercept field alone keeps the
+    # in-tree C++ community-spatial nested Laplace-EM.
     if (isTRUE(structs$spatial$is_bar) || isTRUE(structs$spatial$is_multifield) ||
         !is.null(structs$latent)) {
       return(.tobs_fit_ms_occu_field(
@@ -290,8 +292,7 @@
 
   # latent() factors with no shared field: the lfMsPGOcc analogue -- residual
   # species co-occurrence on the occupancy arm via Q per-site latent factors with
-  # per-species loadings, by the block-coordinate community Laplace-EM
-  # (gcol33/tulpaObs#119).
+  # per-species loadings, by the block-coordinate community Laplace-EM.
   if (!is.null(structs$latent)) {
     if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
       stop("ms_occu(): a latent() factor model uses method = \"laplace\" (the ",
@@ -314,11 +315,11 @@
          "non-spatial community fit use method = \"laplace\".", call. = FALSE)
   }
 
-  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy msPGOcc; tulpaObs#115,
-  # #126): a hierarchical PG Gibbs over the exact community posterior -- per-
-  # species PG-augmented conjugate coefficient updates with conjugate community
-  # mean + Inverse-Gamma community variance draws. Gives a CALIBRATED community-
-  # variance posterior (the Laplace-EM leaves those attenuated).
+  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy msPGOcc): a hierarchical
+  # PG Gibbs over the exact community posterior -- per- species PG-augmented
+  # conjugate coefficient updates with conjugate community mean + Inverse-Gamma
+  # community variance draws. Gives a CALIBRATED community- variance posterior
+  # (the Laplace-EM leaves those attenuated).
   if (identical(engine, "pg_gibbs")) {
     control <- .tobs_control_defaults(control, "pg_gibbs", "ms_occu")
     return(.tobs_fit_ms_occu_pg_gibbs(
@@ -332,11 +333,11 @@
       verbose  = isTRUE(control[["verbose"]])))
   }
 
-  # NUTS (method = "nuts", tulpaObs#69): sample the exact joint posterior of the
-  # non-spatial community single-season occupancy (community means, per-species
-  # deviations, and the two independent per-arm community covariances) via the
-  # in-tree C++ FullGradFn over the closed-form occupancy two-state per-(species,
-  # site) marginal (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp), warm-started at the
+  # NUTS (method = "nuts"): sample the exact joint posterior of the non-spatial
+  # community single-season occupancy (community means, per-species deviations,
+  # and the two independent per-arm community covariances) via the in-tree C++
+  # FullGradFn over the closed-form occupancy two-state per-(species, site)
+  # marginal (R/ms_occu_nuts.R, src/ms_occu_nuts.cpp), warm-started at the
   # community Laplace-EM mode.
   if (identical(engine, "nuts")) {
     control <- .tobs_control_defaults(control, "nuts", "ms_occu")
@@ -346,6 +347,9 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),
@@ -393,9 +397,9 @@
   # same model class as ms_count() (per-species coefficients with a Gaussian
   # community covariance, no detection, no latent state) with a logit link. It
   # therefore shares the binder, the community Laplace-EM, the latent-structure
-  # driver, the NUTS target, and every S3 method (gcol33/tulpaObs#121), which is
-  # what makes latent() factors (lfJSDM) and a shared field + factors (sfJSDM)
-  # fall out with no separate fitter.
+  # driver, the NUTS target, and every S3 method, which is what makes latent()
+  # factors (lfJSDM) and a shared field + factors (sfJSDM) fall out with no
+  # separate fitter.
   bind  <- .tobs_bind_formulas(list(mu = formula), data)
   model <- .tobs_build_ms_count(
     formula = bind$fe$mu, data = data, y = y, species = dots$species,
@@ -466,6 +470,9 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),
@@ -502,13 +509,13 @@
   # the count GLMM block, integrated over its hyperparameters. Every other
   # structured term (temporal / re / svc / latent) and the varying-coefficient /
   # bar, bym2, or group_var areal forms are not yet wired for the count family --
-  # error with a pointer rather than silently drop them (gcol33/tulpaObs#117).
+  # error with a pointer rather than silently drop them.
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
       !is.null(structs$svc) || !is.null(structs$latent)) {
     stop("count(): temporal / re / svc / latent terms are not yet wired for ",
          "the count family; a plain areal field (icar()/car_proper()) ",
-         "is the only structured term supported (gcol33/tulpaObs#117).",
+         "is the only structured term supported.",
          call. = FALSE)
   }
   spatial_areal <- FALSE
@@ -516,10 +523,10 @@
     sp <- structs$spatial
     # A bar spatial(~ 1 + w || cell, graph) -- or the explicit two-term form --
     # carries an intercept field plus one varying-coefficient field per covariate
-    # (the spAbundance svcAbund analogue, gcol33/tulpaObs#120). Resolve the
-    # ordered field list and validate each field's OWN kind: the bar's `type` is
-    # not the per-field kind. A plain intercept field resolves to a length-1 list,
-    # so both forms share one validation path.
+    # (the spAbundance svcAbund analogue). Resolve the ordered field list and
+    # validate each field's OWN kind: the bar's `type` is not the per-field kind.
+    # A plain intercept field resolves to a length-1 list, so both forms share one
+    # validation path.
     sp_fields <- .tobs_resolve_occu_spatial_fields(sp, model)
     ftypes <- vapply(sp_fields, function(f) f$type %||% "unknown", character(1))
     # icar / car_proper only: their eta contribution is exactly w * f[cell]
@@ -535,8 +542,7 @@
         "count(): a spatial field on the count formula supports the areal ",
         "icar(), car_proper(), bym2(), the continuous-mesh spde(), or the ",
         "continuous NNGP gp(); got '%s'. The improper car() and the two-scale ",
-        "multiscale_gp() are not yet wired for the count family ",
-        "(gcol33/tulpaObs#117)."),
+        "multiscale_gp() are not yet wired for the count family."),
         paste(unique(setdiff(ftypes,
               c("icar", "car_proper", "bym2", "spde", "gp"))),
               collapse = "' / '")), call. = FALSE)
@@ -550,7 +556,7 @@
     if (any(!is.na(n_nodes) & n_nodes < nrow(data))) {
       stop("count(): a spatial group_var mapping several sites to one field ",
            "node (sites > cells) is not yet wired for the count family; one ",
-           "field node per site is required (gcol33/tulpaObs#117).",
+           "field node per site is required.",
            call. = FALSE)
     }
     # Areal count is Poisson- OR binomial-only. With one field node per site the
@@ -566,7 +572,7 @@
     # cleanly identified. The BINOMIAL response is also cleanly identified: its
     # variance is pinned by the trial count n, so there is no free dispersion for
     # the field to absorb -- this is exactly spOccupancy's svcPGBinom, which fits
-    # a per-node field even at trials = 1 (gcol33/tulpaObs#125).
+    # a per-node field even at trials = 1.
     if (!response %in% c("poisson", "binomial")) {
       stop(sprintf(paste0(
         "count(response = \"%s\") with an areal field is not identifiable: with ",
@@ -574,7 +580,7 @@
         "(the field absorbs all overdispersion). Use a Poisson areal count -- ",
         "count() -- or drop the areal term for a non-spatial %s fit; for ",
         "overdispersion with a spatial signal use abun() (N-mixture, replicated ",
-        "counts) instead (gcol33/tulpaObs#117)."),
+        "counts) instead."),
         response,
         if (identical(response, "negbin")) "negbin size"
         else "gaussian residual variance",
@@ -667,10 +673,10 @@
   }
   vd <- .normalize_visits(visits, detection, n_sites = nrow(y),
                           max_visits = ncol(y))
-  # Zero-inflated N-mixture (zip / zinb, gcol33/tulpaObs#116) is the non-spatial
-  # laplace path only in v1; gate here (before engine routing) so a nuts /
-  # nested_laplace request errors with a pointer instead of silently dropping the
-  # structural-zero component down a non-ZI sampler.
+  # Zero-inflated N-mixture (zip / zinb) is the non-spatial laplace path only in
+  # v1; gate here (before engine routing) so a nuts / nested_laplace request
+  # errors with a pointer instead of silently dropping the structural-zero
+  # component down a non-ZI sampler.
   if ((family$params$mixture %||% "poisson") %in% c("zip", "zinb") &&
       !identical(engine %||% "laplace", "laplace")) {
     stop(sprintf(paste0("abun(mixture = \"%s\") supports method = \"laplace\" ",
@@ -831,12 +837,12 @@
     det_visit_formula = dots$det_visit_formula,
     det_visit_data    = dots$det_visit_data)
 
-  # NUTS (method = "nuts", tulpaObs#14): sample the exact joint posterior of the
-  # non-spatial community N-mixture (community means, per-species deviations, and
-  # community covariances) via the in-tree C++ FullGradFn over the closed-form
-  # per-(species, site) marginal (R/ms_abun_nuts.R, src/ms_abun_nuts.cpp),
-  # warm-started at the Laplace-EM mode. Spatial / temporal / RE terms are not yet
-  # wired on the sampler.
+  # NUTS (method = "nuts"): sample the exact joint posterior of the non-spatial
+  # community N-mixture (community means, per-species deviations, and community
+  # covariances) via the in-tree C++ FullGradFn over the closed-form per-(species,
+  # site) marginal (R/ms_abun_nuts.R, src/ms_abun_nuts.cpp), warm-started at the
+  # Laplace-EM mode. Spatial / temporal / RE terms are not yet wired on the
+  # sampler.
   if (identical(engine, "nuts")) {
     control <- .tobs_control_defaults(control, "nuts", "ms_abun")
     structs <- .tobs_structures_from_model(model)
@@ -848,8 +854,8 @@
            "sampler. Use method = \"laplace\".", call. = FALSE)
     }
     # A shared areal field on the abundance formula joins the community sampler as
-    # a fixed-hyper non-centered field (proper-CAR only; tulpaObs#73). icar/bym2
-    # stay on nested_laplace (their intrinsic field needs a sum-to-zero reparam).
+    # a fixed-hyper non-centered field (proper-CAR only). icar/bym2 stay on
+    # nested_laplace (their intrinsic field needs a sum-to-zero reparam).
     if (!is.null(structs$spatial)) {
       if (isTRUE(structs$spatial$shared[2L])) {
         stop("ms_abun() areal field sits on the abundance arm only; a field on ",
@@ -864,6 +870,13 @@
         n.iter        = as.integer(control[["n.iter"]]),
         n.warmup      = as.integer(control[["n.warmup"]]),
         n.chains      = as.integer(control[["n.chains"]]),
+        n.thin        = as.integer(control[["n.thin"]]),
+        n.threads     = as.integer(control[["n.threads"]]),
+        n.threads.grad = as.integer(control[["n.threads.grad"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
         max.treedepth = as.integer(control[["max.treedepth"]]),
         adapt.delta   = control[["adapt.delta"]],
         seed          = as.integer(control[["seed"]]),
@@ -878,6 +891,9 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),
@@ -885,12 +901,12 @@
   }
 
   # A spatial term on the abundance formula (icar() / bym2() / car_proper())
-  # routes to the shared-field community N-mixture (gcol33/tulpaObs#12). The fit
-  # is driven directly by the in-tree community-spatial C++ grid driver, so it
-  # reads the dotted controls here (mirroring the non-spatial community path
-  # below). control$inner_solver picks the inner method: "em" (default, the
-  # closed-form Laplace-EM) or "newton" (the exact-Newton shared-field solve +
-  # AGHQ community debias; areal Poisson only).
+  # routes to the shared-field community N-mixture. The fit is driven directly
+  # by the in-tree community-spatial C++ grid driver, so it reads the dotted
+  # controls here (mirroring the non-spatial community path below).
+  # control$inner_solver picks the inner method: "em" (default, the closed-form
+  # Laplace-EM) or "newton" (the exact-Newton shared-field solve + AGHQ
+  # community debias; areal Poisson only).
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
       !is.null(structs$svc)) {
@@ -909,13 +925,13 @@
          "zero-inflated count families. Drop the structured term, or use ",
          "mixture = \"poisson\" / \"negbin\" with the field.", call. = FALSE)
   }
-  # latent() factors -- residual species co-occurrence on the abundance arm via
-  # Q per-site factors with per-species loadings (the lfMsNMix analogue), on
-  # their own or alongside a shared field (the spatial-factor case) -- route to
-  # the shared block-coordinate latent fitter (R/ms_abun_latent.R, over the
-  # generic driver in R/community_latent.R). A plain shared field with NO factors
-  # keeps its dedicated in-tree C++ nested Laplace-EM (tulpaObs#12) below: that
-  # route is faster and already recovery-tested.
+  # latent() factors -- residual species co-occurrence on the abundance arm via Q
+  # per-site factors with per-species loadings (the lfMsNMix analogue), on their
+  # own or alongside a shared field (the spatial-factor case) -- route to the
+  # shared block-coordinate latent fitter (R/ms_abun_latent.R, over the generic
+  # driver in R/community_latent.R). A plain shared field with NO factors keeps
+  # its dedicated in-tree C++ nested Laplace-EM below: that route is faster and
+  # already recovery-tested.
   if (!is.null(structs$latent)) {
     if (isTRUE(structs$latent$shared[2L])) {
       stop("ms_abun() latent() factors sit on the abundance arm only; a latent ",
@@ -1098,11 +1114,10 @@
   # A single icar() shared field on the occupancy arm routes to the K=1
   # reduced-rank spatial-factor community fitter (Laplace-EM): per-species
   # loadings on one ICAR field give correlated, range-shifted occupancy maps
-  # the plain per-species RE cannot produce (gcol33/tulpa#67). Detected on the
-  # user formulas before visit-normalization (which would move covariates off
-  # the formula). The detector also gates the remaining structured terms
-  # (errors), so the non-spatial path below is reached only when no arm carries
-  # one.
+  # the plain per-species RE cannot produce. Detected on the user formulas
+  # before visit-normalization (which would move covariates off the formula).
+  # The detector also gates the remaining structured terms (errors), so the
+  # non-spatial path below is reached only when no arm carries one.
   sp <- .tobs_ms_ocs_spatial_request(formula, detection, pos_formula, data)
 
   # Site / visit dimensions, robust to y being a 3D array or a list of matrices.
@@ -1222,13 +1237,13 @@
     pos_visit_data    = vd_pos$visits
   )
 
-  # NUTS (method = "nuts"; tulpaObs#115 part B7): the non-spatial community
-  # sampler over the exact per-(species, cell) two-state occu_cover marginal via
-  # the in-tree C++ FullGradFn (R/ms_occu_cover_nuts.R, src/ms_occu_cover_nuts.cpp),
-  # warm-started at the Laplace-EM mode. Samples the community means, per-species
-  # occ/p/pos deviations, the three per-arm community covariances, AND the shared
-  # log-dispersion jointly -> removes the Laplace variance attenuation. (The
-  # spatial-factor NUTS route with a shared field is handled above.)
+  # NUTS (method = "nuts"): the non-spatial community sampler over the exact
+  # per-(species, cell) two-state occu_cover marginal via the in-tree C++ FullGradFn
+  # (R/ms_occu_cover_nuts.R, src/ms_occu_cover_nuts.cpp), warm-started at the
+  # Laplace-EM mode. Samples the community means, per-species occ/p/pos deviations,
+  # the three per-arm community covariances, AND the shared log-dispersion jointly
+  # -> removes the Laplace variance attenuation. (The spatial-factor NUTS route with
+  # a shared field is handled above.)
   if (identical(engine, "nuts")) {
     control <- .tobs_control_defaults(control, "nuts", "ms_occu_cover")
     return(.tobs_fit_ms_occu_cover_nuts(
@@ -1237,6 +1252,8 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),
@@ -1266,9 +1283,9 @@
   }
   # Resolve structured terms: a shared areal field on the first-season occupancy
   # formula routes to the community dynamic-spatial fitter (stMsPGOcc /
-  # svcTMsPGOcc; gcol33/tulpaObs#123). Bind the occupancy AND detection formulas
-  # so a field on either arm is parsed (the FE part is what model.matrix sees);
-  # `shared[2]` then identifies a detection-arm field to reject.
+  # svcTMsPGOcc). Bind the occupancy AND detection formulas so a field on either
+  # arm is parsed (the FE part is what model.matrix sees); `shared[2]` then
+  # identifies a detection-arm field to reject.
   bind <- .tobs_bind_formulas(list(psi1 = formula, p = detection), data)
   model <- .tobs_build_ms_dyn_occu(
     occ_formula = bind$fe$psi1, det_formula = bind$fe$p,
@@ -1282,7 +1299,7 @@
     stop("ms_dyn_occu(): temporal / re / svc / latent terms are not wired for ",
          "the community dynamic occupancy family; a shared areal field ",
          "(icar()) on the first-season occupancy formula is the structured ",
-         "term supported (gcol33/tulpaObs#123).", call. = FALSE)
+         "term supported.", call. = FALSE)
   }
 
   if (!is.null(structs$spatial)) {
@@ -1311,10 +1328,10 @@
          "community dynamic fit use method = \"laplace\".", call. = FALSE)
   }
 
-  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy tMsPGOcc; tulpaObs#115,
-  # #126): the community PG machinery (msPGOcc) + a 2-state HMM FFBS latent step,
-  # giving a calibrated community-variance posterior (vs the attenuated
-  # Laplace-EM). Constant transitions, site-level detection, no structured terms.
+  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy tMsPGOcc): the community
+  # PG machinery (msPGOcc) + a 2-state HMM FFBS latent step, giving a calibrated
+  # community-variance posterior (vs the attenuated Laplace-EM). Constant
+  # transitions, site-level detection, no structured terms.
   if (identical(engine, "pg_gibbs")) {
     control <- .tobs_control_defaults(control, "pg_gibbs", "ms_dyn_occu")
     return(.tobs_fit_ms_dyn_occu_pg_gibbs(
@@ -1328,13 +1345,13 @@
       verbose  = isTRUE(control[["verbose"]])))
   }
 
-  # NUTS (method = "nuts", gcol33/tulpaObs#115): the non-spatial community
-  # sampler over the exact per-species HMM-forward marginal via the in-tree C++
-  # FullGradFn (R/ms_dyn_occu_nuts.R, src/ms_dyn_occu_nuts.cpp), warm-started at
-  # the Laplace-EM mode. Samples the community means, per-species deviations, the
-  # two per-arm community covariances, and the shared gamma / eps globals jointly
-  # -> calibrated (de-attenuated) community-covariance posteriors. Non-spatial
-  # only (a structured term routes to nested_laplace above).
+  # NUTS (method = "nuts"): the non-spatial community sampler over the exact
+  # per-species HMM-forward marginal via the in-tree C++ FullGradFn
+  # (R/ms_dyn_occu_nuts.R, src/ms_dyn_occu_nuts.cpp), warm-started at the
+  # Laplace-EM mode. Samples the community means, per-species deviations, the two
+  # per-arm community covariances, and the shared gamma / eps globals jointly ->
+  # calibrated (de-attenuated) community-covariance posteriors. Non-spatial only
+  # (a structured term routes to nested_laplace above).
   if (identical(engine, "nuts")) {
     control <- .tobs_control_defaults(control, "nuts", "ms_dyn_occu")
     return(.tobs_fit_ms_dyn_occu_nuts(
@@ -1343,6 +1360,9 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
+      n.threads.grad = as.integer(control[["n.threads.grad"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),
@@ -1373,9 +1393,9 @@
     occ_formula = formula, det_formula = detection,
     data = data, y = y, species = dots$species, site_map = dots$site_map)
 
-  # Polya-Gamma Gibbs (method = "pg_gibbs"; tulpaObs#115, #126): the community
-  # integrated PG sampler, giving a calibrated community-variance posterior (vs
-  # the attenuated Laplace-EM). Site-level per-source detection, no structured
+  # Polya-Gamma Gibbs (method = "pg_gibbs"): the community integrated PG
+  # sampler, giving a calibrated community-variance posterior (vs the
+  # attenuated Laplace-EM). Site-level per-source detection, no structured
   # terms.
   if (identical(engine, "pg_gibbs")) {
     control <- .tobs_control_defaults(control, "pg_gibbs", "ms_int_occu")
@@ -1390,12 +1410,12 @@
       verbose  = isTRUE(control[["verbose"]])))
   }
 
-  # NUTS (method = "nuts"; tulpaObs#115): the community integrated sampler over
-  # the exact multi-source two-state per-(species, site) marginal via the in-tree
-  # C++ FullGradFn (R/ms_int_occu_nuts.R, src/ms_int_occu_nuts.cpp), warm-started
-  # at the Laplace-EM mode. Samples the community means, per-species deviations,
-  # and the D + 1 per-arm community covariances jointly -> calibrated
-  # (de-attenuated) community-covariance posteriors. Non-spatial only.
+  # NUTS (method = "nuts"): the community integrated sampler over the exact
+  # multi-source two-state per-(species, site) marginal via the in-tree C++
+  # FullGradFn (R/ms_int_occu_nuts.R, src/ms_int_occu_nuts.cpp), warm-started at
+  # the Laplace-EM mode. Samples the community means, per-species deviations, and
+  # the D + 1 per-arm community covariances jointly -> calibrated (de-attenuated)
+  # community-covariance posteriors. Non-spatial only.
   if (identical(engine, "nuts")) {
     control <- .tobs_control_defaults(control, "nuts", "ms_int_occu")
     return(.tobs_fit_ms_int_occu_nuts(
@@ -1404,6 +1424,8 @@
       n.iter        = as.integer(control[["n.iter"]]),
       n.warmup      = as.integer(control[["n.warmup"]]),
       n.chains      = as.integer(control[["n.chains"]]),
+      n.thin        = as.integer(control[["n.thin"]]),
+      n.threads     = as.integer(control[["n.threads"]]),
       max.treedepth = as.integer(control[["max.treedepth"]]),
       adapt.delta   = control[["adapt.delta"]],
       seed          = as.integer(control[["seed"]]),

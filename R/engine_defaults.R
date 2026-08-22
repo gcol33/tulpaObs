@@ -7,7 +7,7 @@
 # and they used to be written out at every dispatcher branch that reads them --
 # six sites for the Polya-Gamma Gibbs profile alone. Changing one meant editing
 # all six, and missing one produced a family whose chain was shorter than its
-# siblings with no test failing (gcol33/tulpaObs#183).
+# siblings with no test failing.
 #
 # Scope. This table covers the SAMPLER knobs only. `max.iter` and `tol` are
 # deliberately NOT here: they are Laplace-EM knobs, they are read inside the
@@ -32,7 +32,7 @@
   #               sigma.beta, and its copies must move together: the auto-K
   #               ladder selects a rank by marginal evidence under sd.load, so a
   #               value that drifted between the selection fit and the final fit
-  #               would select a rank the fit does not use (gcol33/tulpaObs#189).
+  #               would select a rank the fit does not use.
   #   re.lkj      LKJ shape regularizing a CORRELATED random slope's correlation
   #               in the AGHQ refine; pulls a weakly-identified correlation off
   #               the +-1 boundary without touching the marginal SDs. 1 disables
@@ -44,8 +44,9 @@
   # adaptation knobs. `n.iter` is POST-WARMUP draws kept per chain, so a run is
   # n.iter + n.warmup iterations long.
   nuts = list(n.iter = 1000L, n.warmup = 1000L, n.chains = 1L, n.thin = 1L,
-              max.treedepth = 10L, adapt.delta = 0.9, seed = 1L,
-              sigma.beta = 5, sigma.logr = 1.5),
+              n.threads = 1L, n.threads.grad = 0L, max.treedepth = 10L,
+              adapt.delta = 0.9, seed = 1L, sigma.beta = 5,
+              sigma.logr = 1.5),
 
   # Polya-Gamma Gibbs. A conjugate sweep costs far less than a NUTS trajectory,
   # so the chain is three times longer; two chains so split-Rhat is available
@@ -56,11 +57,11 @@
   # pg_gibbs".
   #
   # CONVENTION, and it is the OPPOSITE of the nuts block above: here `n.iter` is
-  # the TOTAL sweep count and warmup comes out of it, so the chain keeps
-  # `n.iter - n.warmup` = 1500 draws. Every pg_gibbs fitter computes its kept
-  # count as `length(seq.int(n.warmup + 1L, n.iter, by = n.thin))`; they agree
-  # with each other, and the flip relative to NUTS is why it is stated here
-  # rather than left to the reader (gcol33/tulpaObs#188).
+  # the TOTAL sweep count and warmup comes out of it, so the chain keeps `n.iter
+  # - n.warmup` = 1500 draws. Every pg_gibbs fitter computes its kept count as
+  # `length(seq.int(n.warmup + 1L, n.iter, by = n.thin))`; they agree with each
+  # other, and the flip relative to NUTS is why it is stated here rather than
+  # left to the reader.
   pg_gibbs = list(n.iter = 3000L, n.warmup = 1500L, n.chains = 2L,
                   n.thin = 1L, seed = 1L, sigma.beta = 2.5)
 )
@@ -70,7 +71,7 @@
 # (occu / dyn_occu / int_occu) and every observation family (abun, removal,
 # distance, fp_occu, dyn_abun, count). It forwards explicit sampler arguments
 # down to each family fitter, so the family fitter's own formals never apply and
-# THIS is the live answer for those families (gcol33/tulpaObs#188).
+# THIS is the live answer for those families.
 #
 # The three knobs below predate the table and are kept on the record rather than
 # aligned, because each is a calibrated value on a recovery-tested path and
@@ -108,27 +109,27 @@
     ms_occu_cover_spatial = list(n.warmup = 500L, adapt.delta = 0.95),
 
     # The single-species occu_cover sampler with a coupled areal field, whose
-    # field hyperparameters are sampled (gcol33/tulpaObs#204). A proper-CAR
-    # precision Q(rho) = D - rho W approaches the INTRINSIC (rank-deficient)
-    # limit as rho -> 1, and the data on an ICAR-simulated field pushes rho
-    # there, so the field's near-null direction stretches against the psi
-    # intercept -- a funnel the profile's step size cannot walk. Measured over
-    # four seeds at N = 64, the divergence count falls 4 / 1 / 16 / 13 (0.80) ->
-    # 6 / 0 / 2 / 0 (0.95) -> 0 / 0 / 0 / 0 (0.99) while the posterior does not
-    # move (rho mean identical to three decimals, field_sd within Monte Carlo
-    # noise) -- a step-size artifact, not a region the chain was missing. The
-    # cost is roughly 2x wall time, which a reference posterior is worth.
+    # field hyperparameters are sampled. A proper-CAR precision Q(rho) = D - rho
+    # W approaches the INTRINSIC (rank-deficient) limit as rho -> 1, and the
+    # data on an ICAR-simulated field pushes rho there, so the field's near-null
+    # direction stretches against the psi intercept -- a funnel the profile's
+    # step size cannot walk. Measured over four seeds at N = 64, the divergence
+    # count falls 4 / 1 / 16 / 13 (0.80) -> 6 / 0 / 2 / 0 (0.95) -> 0 / 0 / 0 /
+    # 0 (0.99) while the posterior does not move (rho mean identical to three
+    # decimals, field_sd within Monte Carlo noise) -- a step-size artifact, not
+    # a region the chain was missing. The cost is roughly 2x wall time, which a
+    # reference posterior is worth.
     occu_cover_spatial = list(adapt.delta = 0.99)
   )
 )
 
 
-# `n.quad` -- one control name, five routes, and deliberately NOT one number
-# (gcol33/tulpaObs#189). Every route below integrates a different marginal over
-# a different latent dimension, so the node count that suffices differs by an
-# order of magnitude; what was wrong was not the spread but that no reader could
-# find out which number applied, while `?tobs` stated a single default that most
-# routes do not use.
+# `n.quad` -- one control name, five routes, and deliberately NOT one number.
+# Every route below integrates a different marginal over a different latent
+# dimension, so the node count that suffices differs by an order of magnitude;
+# what was wrong was not the spread but that no reader could find out which
+# number applied, while `?tobs` stated a single default that most routes do not
+# use.
 #
 # `.tobs_n_quad(route)` is the accessor; each entry names the marginal.
 
@@ -137,12 +138,12 @@
 # 2-node rule places two nodes and has no freedom left to represent curvature:
 # where the 1-D posterior is not near-Gaussian, the marginal it returns can come
 # out arbitrarily sharp and the reported community-mean SE collapses with it
-# (gcol33/tulpaObs#234: a 17x collapse on `mu_log_r`, with the fit converged and
-# the point estimate ordinary). The rule is converged at 3 -- on the `log_r`
-# block, 3 / 5 / 9 nodes agree to ten decimal places -- so 3 is both the order
-# below which the integrand is not represented and the order above which nothing
-# on that axis moves. `nmix_laplace_re()` applies it as a floor, not only as a
-# default, because nothing downstream can detect the collapse.
+# (measured: a 17x collapse on `mu_log_r`, with the fit converged and the point
+# estimate ordinary). The rule is converged at 3 -- on the `log_r` block, 3 / 5 / 9 nodes
+# agree to ten decimal places -- so 3 is both the order below which the
+# integrand is not represented and the order above which nothing on that axis
+# moves. `nmix_laplace_re()` applies it as a floor, not only as a default,
+# because nothing downstream can detect the collapse.
 .TOBS_MIN_SCALAR_NQUAD <- 3L
 
 .TOBS_NQUAD_ROUTES <- list(
@@ -207,7 +208,7 @@
 # rows. `pg_gibbs` deliberately has none: `occu(method = "pg_gibbs")` used to
 # keep 1000 draws where every `ms_*` sibling kept 1500, which is verbatim the
 # failure this table exists to prevent, and no reason for the shorter chain was
-# ever recorded (gcol33/tulpaObs#188). It now reads the shared profile.
+# ever recorded. It now reads the shared profile.
 .tobs_single_species_defaults <- function(engine) {
   base <- .TOBS_ENGINE_DEFAULTS[[engine]] %||% list()
   ov <- switch(engine,
@@ -255,7 +256,7 @@
 # n.iter here" -- a literal formal alongside the table is a second answer, and
 # for the fitters reached through `.tobs_fit_model()` it was an unreachable one
 # (that entry forwards explicit values, so the formal never applied) while for
-# the rest it was the live one and disagreed (gcol33/tulpaObs#188).
+# the rest it was the live one and disagreed.
 #
 # Only knobs the fitter actually declares are touched, so one call serves
 # fitters with different knob sets. `single_species = TRUE` selects the

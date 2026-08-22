@@ -49,6 +49,9 @@
 #include <tulpa/model_data.h>
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include <tulpa/nuts_api.h>
 #include "nmix_kernel.h"
 #include "community_chol.h"
@@ -66,6 +69,12 @@ namespace tulpaObs {
 // species-site's counts / detection etas contiguously for compute_nmix_site().
 struct MsNmixNutsData {
     int n_sites = 0, n_obs = 0, n_species = 0, p_lam = 0, p_p = 0, K_max = 0;
+
+    // Threads for the per-species gradient loop below. 0 leaves the count to
+    // OpenMP, which is what an omitted `n_threads` means; a positive value is
+    // the ceiling the caller asked for. The reduction after the loop is
+    // serial and order-fixed, so the gradient is the same at any count.
+    int n_threads = 0;
     bool is_nb = false;
     std::vector<int> y;                                 // length n_obs (long form)
     NumericMatrix X_lambda;                             // n_sites x p_lam
@@ -84,13 +93,12 @@ struct MsNmixNutsData {
     std::vector<int> K_site;
 
     // Optional fixed-hyper areal field SHARED across species on the abundance
-    // arm (tulpaObs#73): the non-centered Gaussian field f = Linv %*% raw,
-    // raw ~ N(0, I), with Linv the inverse Cholesky of the FIXED field precision
-    // tau Q(rho) (the nested-Laplace #12 estimate). eta_lambda_{s,i} += f[u(i)]
-    // for every species. The flat vector grows by `raw` (length n_field_units)
-    // appended after the chol blocks.
-    // The field is f = L %*% raw, raw ~ N(0, I_{n_raw}), with L a (possibly non-
-    // square) n_field_units x n_raw loading (gcol33/tulpaObs#71/#113): the square
+    // arm: the non-centered Gaussian field f = Linv %*% raw, raw ~ N(0, I), with
+    // Linv the inverse Cholesky of the FIXED field precision tau Q(rho) (the
+    // nested-Laplace #12 estimate). eta_lambda_{s,i} += f[u(i)] for every
+    // species. The flat vector grows by `raw` (length n_field_units) appended
+    // after the chol blocks. The field is f = L %*% raw, raw ~ N(0, I_{n_raw}),
+    // with L a (possibly non- square) n_field_units x n_raw loading: the square
     // inverse Cholesky for a full-rank proper-CAR field (n_raw == n_field_units),
     // or the sum-to-zero eigen-loading for an intrinsic icar (n_raw =
     // n_field_units - 1) / bym2 (n_raw = 2 n_field_units - 1) field.
@@ -119,6 +127,8 @@ inline void ms_abun_nuts_layout(MsNmixNutsData& d) {
 
 inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
     MsNmixNutsData d;
+    d.n_threads = spec.containsElementNamed("n_threads")
+                  ? Rcpp::as<int>(spec["n_threads"]) : 0;
     IntegerVector y        = spec["y"];
     IntegerVector site_idx = spec["site_idx"];        // 1-based, into X_lambda rows
     IntegerVector sp_idx   = spec["species_idx"];     // 1-based
@@ -143,7 +153,7 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
             for (int i = 0; i < d.n_sites; ++i)
                 d.K_site[(size_t)s * d.n_sites + i] = Ks(s, i);
     }
-    // Optional shared areal field block (tulpaObs#73).
+    // Optional shared areal field block.
     if (spec.containsElementNamed("n_field_units")) {
         d.n_field_units = Rcpp::as<int>(spec["n_field_units"]);
         if (d.n_field_units > 0) {
@@ -239,10 +249,10 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
                         A_p((std::size_t) p_p * p_p, 0.0);
     double A_lr = 0.0;
 
-    // Shared areal field (tulpaObs#73): reconstruct f = Linv %*% raw once. Every
-    // species' eta_lambda gains the per-site offset f[field_map[site]]; the field
-    // score accumulates grad_eta_lambda over species (and over the sites mapping
-    // to each unit), then maps back to raw via Linv'.
+    // Shared areal field: reconstruct f = Linv %*% raw once. Every species'
+    // eta_lambda gains the per-site offset f[field_map[site]]; the field score
+    // accumulates grad_eta_lambda over species (and over the sites mapping to
+    // each unit), then maps back to raw via Linv'.
     const int NF = d.n_field_units;
     const int NR = d.n_raw;
     std::vector<double> f_field(NF, 0.0);
@@ -275,7 +285,10 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
     // Scratch sized once per thread and reused across species. b_* are fully
     // overwritten each pass and eta_p_site is resized then written per site;
     // gbl/gbp accumulate and are re-zeroed explicitly.
-    #pragma omp parallel
+    #ifdef _OPENMP
+    const int omp_n = d.n_threads > 0 ? d.n_threads : omp_get_max_threads();
+    #pragma omp parallel num_threads(omp_n)
+    #endif
     {
     std::vector<double> b_lam(p_lam), b_p(p_p), gbl(p_lam), gbp(p_p), eta_p_site;
 

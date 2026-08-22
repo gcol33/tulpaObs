@@ -193,11 +193,20 @@ Sampler controls (\code{method = "nuts"}):
 the total run per chain is \code{n.iter + n.warmup}.
 \item \code{n.warmup} — warmup / adaptation iterations per chain, discarded
 (default 1000).
-\item \code{n.thin} — keep every \code{n.thin}-th post-warmup draw (default 1).
+\item \code{n.thin} — keep every \code{n.thin}-th post-warmup draw (default 1). The
+kept draws and the per-iteration diagnostics (\code{divergent},
+\code{accept_prob}, \code{treedepth}) are thinned by the same stride.
 \item \code{n.chains} — number of chains, run with offset seeds and pooled
 (default 1). Split-Rhat / bulk / tail ESS are reported on \verb{$convergence}.
 \item \code{n.threads} — chains to run in parallel (default 1, sequential). Values
-\verb{> 1} use a PSOCK cluster and require tulpaObs to be installed.
+\verb{> 1} use a PSOCK cluster and require tulpaObs to be installed. This is
+chain parallelism; it does not change the thread count inside a single
+gradient evaluation.
+\item \code{n.threads.grad} — OpenMP threads inside ONE gradient evaluation of a
+community NUTS target (\code{ms_occu()}, \code{ms_count()} / \code{jsdm()},
+\code{ms_abun()}, \code{ms_dyn_occu()}), whose per-species loop is parallel.
+Default 0 leaves the count to OpenMP. The per-species reduction is
+serial and order-fixed, so the gradient is the same at any count.
 \item \code{adapt.delta} — target acceptance probability (default 0.8 on the
 single-species families, 0.9 on the community samplers).
 \item \code{max.treedepth} — NUTS maximum tree depth (default 10).
@@ -330,12 +339,12 @@ multi-axis hyperparameter posterior is well identified.
 \code{occu()} spatial, \code{occu_multiscale_cover()}), whether to score the outer
 hyperparameter Gaussian summary with an importance-sampling Pareto-k.
 Defaults \code{FALSE} (it re-solves the inner Laplace on the full field
-\code{k.samples} times; gcol33/tulpaObs#101). When \code{TRUE}, the fit carries
+\code{k.samples} times). When \code{TRUE}, the fit carries
 \code{pareto_k} (\verb{< 0.7} = reliable summary), \code{pareto_k_is_ess} (the
 importance-sampling ESS on the PSIS-smoothed weights; \verb{/ k.samples} is the
 relative IS efficiency), and
 \code{pareto_k_proposal_source} at the top level (and in \code{\link[=glance]{glance()}}).
-\code{pareto_k_proposal_source} (gcol33/tulpa#116) is \code{"mode_hessian"} when the
+\code{pareto_k_proposal_source} is \code{"mode_hessian"} when the
 importance proposal came from the Laplace curvature at the hyperparameter
 mode -- curvature-backed, so the k-hat stays trustworthy even when a sharp
 posterior collapses the integration grid -- or \code{"grid_moment"} when it came

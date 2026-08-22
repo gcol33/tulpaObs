@@ -198,10 +198,12 @@
 # mode, then samples the exact joint posterior. Poisson / negbin / gaussian.
 .tobs_fit_ms_count_nuts <- function(model, sigma.beta = NULL, sigma.logr = NULL,
                                     n.iter = NULL, n.warmup = NULL,
-                                    n.chains = NULL, max.treedepth = NULL,
+                                    n.chains = NULL, n.thin = NULL,
+                                    n.threads = NULL,
+                                    n.threads.grad = NULL, max.treedepth = NULL,
                                     adapt.delta = NULL, seed = NULL,
                                     verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", family = "ms_count")
 
   response <- model$response %||% "poisson"
@@ -241,7 +243,8 @@
     mu_logr = mu_logr, sigma_logr = sigma_logr_w, b_logr = b_logr,
     logphi = logphi_w)
 
-  spec <- list(X = X, y = Y, family = response)
+  spec <- list(X = X, y = Y, family = response,
+               n_threads = as.integer(n.threads.grad))
   if (is_gauss) {
     spec$logphi_mean <- priors$logphi_mean
     spec$logphi_sd   <- priors$logphi_sd
@@ -255,7 +258,8 @@
                       as.integer(max.treedepth), adapt.delta,
                       as.integer(seed + ch - 1L), isTRUE(verbose))
   }
-  rc <- .ms_ocs_run_chains(run_chain, n.chains)
+  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+                           n.threads = n.threads)
   chains    <- rc$chains
   draws_all <- rc$draws                             # (n_chains*n_sample) x total
   accept    <- rc$accept

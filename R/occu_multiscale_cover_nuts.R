@@ -1,5 +1,5 @@
 # occu_multiscale_cover_nuts.R - non-spatial NUTS for the three-level occupancy
-# + cover hurdle (occu_multiscale_cover(), gcol33/tulpaObs#70).
+# + cover hurdle (occu_multiscale_cover()).
 #
 # The non-spatial Laplace path (.tobs_fit_occu_multiscale_cover_laplace) sums z
 # (cells) and a (plots) out in closed form and returns a Gaussian observed-Fisher
@@ -89,10 +89,11 @@
                                                  sigma.beta = NULL,
                                                  n.iter = NULL, n.warmup = NULL,
                                                  n.chains = NULL, n.thin = NULL,
+                                                 n.threads = NULL,
                                                  max.treedepth = NULL,
                                                  adapt.delta = NULL, seed = NULL,
                                                  verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts")
 
   lay     <- .tobs_occu_mscale_cover_nuts_layout(model)
@@ -123,7 +124,7 @@
       max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
   }
-  chains <- lapply(seq_len(as.integer(n.chains)), run_chain)
+  chains <- .tobs_nuts_run_parallel(run_chain, n.chains, n.threads)
   per_chain <- lapply(chains, function(ch) .tobs_thin(ch$draws, n.thin))
   draws <- do.call(rbind, per_chain)
   colnames(draws) <- par_names

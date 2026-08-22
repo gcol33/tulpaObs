@@ -14,7 +14,8 @@
                             sigma.beta = NULL, sigma.re.scale = 1,
                             max.iter = 100L, tol = 1e-4, damping = 0.7,
                             n.iter = NULL, n.warmup = NULL, n.thin = NULL,
-                            n.chains = NULL, n.threads = 1L,
+                            n.chains = NULL, n.threads = NULL,
+                            sigma.logr = NULL,
                             max.treedepth = NULL, adapt.delta = NULL,
                             seed = NULL,
                             approx = c("gaussian_laplace", "simplified_laplace"),
@@ -33,14 +34,13 @@
     stop("model must be a tobs_model object (from `.tobs_build_model()`)")
   }
 
-  # Sampler knobs come from the one engine table (gcol33/tulpaObs#183, #188).
-  # They arrive as NULL sentinels rather than literal formals because this entry
-  # serves several engines and the profile is only known once `method` is: a
-  # literal formal here would be a second answer to "what is the default
-  # n.iter", and it was -- the whole family fitter roster below is handed
-  # explicit values from this frame, so their own formals never applied and this
-  # was the live answer for every one of them, at 2000 draws against the table's
-  # 1000.
+  # Sampler knobs come from the one engine table. They arrive as NULL sentinels
+  # rather than literal formals because this entry serves several engines and
+  # the profile is only known once `method` is: a literal formal here would be a
+  # second answer to "what is the default n.iter", and it was -- the whole
+  # family fitter roster below is handed explicit values from this frame, so
+  # their own formals never applied and this was the live answer for every one
+  # of them, at 2000 draws against the table's 1000.
   #
   # That 2000 was not a decision. Commit 8975470 fixed `n.iter` from meaning the
   # TOTAL run to meaning kept post-warmup draws on exactly these paths, and left
@@ -61,12 +61,12 @@
   if (is.null(max.treedepth)) max.treedepth <- prof$max.treedepth %||% 10L
   if (is.null(adapt.delta))   adapt.delta   <- prof$adapt.delta   %||% 0.9
   if (is.null(seed))          seed          <- prof$seed          %||% 1L
-  # A regularization strength is an engine-level value like the ridge beside it
-  # (gcol33/tulpaObs#189); it is read on the Laplace routes, so the profile is
-  # the Laplace one regardless of `method`.
+  # A regularization strength is an engine-level value like the ridge beside
+  # it; it is read on the Laplace routes, so the profile is the Laplace one
+  # regardless of `method`.
   if (is.null(re.lkj)) re.lkj <- .tobs_default("laplace", "re.lkj")
   # `n.quad` names one control across several marginals; this entry's route is
-  # the formula-RE AGHQ debias (gcol33/tulpaObs#189).
+  # the formula-RE AGHQ debias.
   if (is.null(n.quad))  n.quad  <- .tobs_n_quad("re_aghq")
 
   # Engine-shaped structure specs derived from the formula's structured terms.
@@ -81,15 +81,14 @@
   # block on the state arm, so every family whose marginal exposes a per-site eta
   # gradient to the shared areal-BFGS nested-Laplace driver (R/areal_bfgs.R) fits
   # it: single-season occu(), and the observation families removal / distance /
-  # fp_occu / dyn_abun (gcol33/tulpaObs#143, #144). Single-season occu() also
-  # samples it on the NUTS path, in the compiled tulpa engine (populate_svc,
-  # src/occu_fit.cpp). The remaining fitters -- the N-mixture families, whose
-  # areal path is the C++ count-spatial driver rather than the areal-BFGS one, and
-  # every family NUTS target -- would silently drop the term and fit a model
-  # missing what the user asked for, so those error with a pointer
-  # (gcol33/tulpaObs#118). The areal analogue of a spatially-varying coefficient
-  # is the weighted areal bar (spatial(~ 1 + w || cell, graph)), which arrives as
-  # a `spatial` term, not `svc`.
+  # fp_occu / dyn_abun. Single-season occu() also samples it on the NUTS path, in
+  # the compiled tulpa engine (populate_svc, src/occu_fit.cpp). The remaining
+  # fitters -- the N-mixture families, whose areal path is the C++ count-spatial
+  # driver rather than the areal-BFGS one, and every family NUTS target -- would
+  # silently drop the term and fit a model missing what the user asked for, so
+  # those error with a pointer. The areal analogue of a spatially-varying
+  # coefficient is the weighted areal bar (spatial(~ 1 + w || cell, graph)), which
+  # arrives as a `spatial` term, not `svc`.
   svc_bfgs <- c("removal", "distance", "fp_occu", "dyn_abun")
   svc_wired <-
     (identical(model$model_type, "single") &&
@@ -104,20 +103,20 @@
       "\"laplace\" / \"nested_laplace\"; it is silently unsupported for ",
       "model_type = \"%s\"%s. For an areal spatially-varying coefficient use a ",
       "weighted areal bar -- spatial(~ 1 + w || cell, graph = adj) with method = ",
-      "\"nested_laplace\" -- which is recovery-tested (tulpaObs#118, #143, #144)."),
+      "\"nested_laplace\" -- which is recovery-tested."),
       model$model_type,
       if (!method %in% c("laplace", "nested_laplace", "nuts"))
         sprintf(" under method = \"%s\"", method) else ""),
       call. = FALSE)
   }
 
-  # Polya-Gamma Gibbs (spOccupancy PGOcc, gcol33/tulpaObs#126): a REAL MCMC chain
-  # over the exact single-season occupancy posterior via PG data augmentation
-  # (distinct from method = "laplace_gibbs", the stochastic-EM variance
-  # correction). Runs on the natural-scale design (the conjugate Gaussian update
-  # needs no autoscaling). v1: single-season, site-level detection, no structured
-  # terms (the PG-spatial extensions -- tulpa's pg_binomial_{icar,bym2,...} -- are
-  # the documented follow-up).
+  # Polya-Gamma Gibbs (spOccupancy PGOcc): a REAL MCMC chain over the exact
+  # single-season occupancy posterior via PG data augmentation (distinct from
+  # method = "laplace_gibbs", the stochastic-EM variance correction). Runs on the
+  # natural-scale design (the conjugate Gaussian update needs no autoscaling). v1:
+  # single-season, site-level detection, no structured terms (the PG-spatial
+  # extensions -- tulpa's pg_binomial_{icar,bym2,...} -- are the documented
+  # follow-up).
   if (identical(method, "pg_gibbs")) {
     if (!identical(model$model_type, "single"))
       stop("method = \"pg_gibbs\" is currently wired for single-season occu() ",
@@ -125,7 +124,7 @@
     if (!is.null(temporal) || !is.null(re) || !is.null(latent) || !is.null(svc))
       stop("method = \"pg_gibbs\" does not yet support temporal / RE / latent / ",
            "svc terms (an areal icar() field IS supported -- spPGOcc, ",
-           "tulpaObs#126).", call. = FALSE)
+           ").", call. = FALSE)
     if (!is.null(spatial)) {
       # spPGOcc: an intrinsic areal (ICAR) field on the occupancy logit, jointly
       # updated with the coefficients as a Gaussian Markov random field.
@@ -140,12 +139,12 @@
       n.thin = n.thin, seed = seed, verbose = verbose))
   }
 
-  # Autoscale every per-process design matrix before the engine sees it
-  # (gcol33/tulpaObs#9). The engine optimizes on the centered+scaled
-  # design; per-process betas / SEs / draws are transformed back to the
-  # user-facing natural scale below. `model` (natural-scale) is restored
-  # on the returned fit so `fitted()`, `residuals()`, `predict()`, and
-  # diagnostics see the same X they would have without this hook.
+  # Autoscale every per-process design matrix before the engine sees it.
+  # The engine optimizes on the centered+scaled design; per-process
+  # betas / SEs / draws are transformed back to the user-facing natural
+  # scale below. `model` (natural-scale) is restored on the returned fit
+  # so `fitted()`, `residuals()`, `predict()`, and diagnostics see the
+  # same X they would have without this hook.
   scale_info   <- .autoscale_model_X(model)
   fit_model    <- scale_info$model
   scales       <- scale_info$scales
@@ -166,23 +165,27 @@
              "(#51); use method = \"laplace\".", call. = FALSE)
       }
       if (!is.null(spatial)) {
-        # Areal field on the abundance arm sampled by NUTS (tulpaObs#51): a
-        # fixed-hyper non-centered icar()/car_proper() field (the field precision
-        # fixed at the nested-Laplace estimate), jointly with the coefficients.
+        # Areal field on the abundance arm sampled by NUTS: a fixed-hyper
+        # non-centered icar()/car_proper() field (the field precision fixed at
+        # the nested-Laplace estimate), jointly with the coefficients.
         fit <- .tobs_fit_abun_nuts_spatial(
           fit_model, spatial, mixture = mixture, K_max = K.max,
-          sigma.beta = sigma.beta, sigma.logr = 1.5,
+          sigma.beta = sigma.beta, sigma.logr = sigma.logr,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          n.thin = n.thin, n.threads = n.threads,
+        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
-      # Random effects (tulpaObs#51): a single intercept RE on one arm samples
-      # under NUTS (non-centered per-site offset + log_sigma hyperparameter).
-      # Slopes / multi-term / both-arm RE stay on the AGHQ Laplace path.
+      # Random effects: a single intercept RE on one arm samples under NUTS
+      # (non-centered per-site offset + log_sigma hyperparameter). Slopes /
+      # multi-term / both-arm RE stay on the AGHQ Laplace path.
       fit <- .tobs_fit_abun_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
+        sigma.logr = sigma.logr,
         re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        n.thin = n.thin, n.threads = n.threads,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
       }
@@ -209,7 +212,7 @@
 
   # Removal sampling: the sequential-depletion abundance marginal (its latent N
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
-  # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
+  # only this round; "laplace" or "nuts".
   if (identical(model$model_type, "removal")) {
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "removal", "abundance",
@@ -219,16 +222,17 @@
       # Areal field on the abundance arm: icar() / car_proper() / bym2() under
       # the nested-Laplace driver, optionally composed with a temporal() block
       # or continuous varying-coefficient surfaces via the shared areal-BFGS
-      # driver (gcol33/tulpaObs#78, #144), or a fixed-hyper non-centered
-      # car_proper() field sampled jointly with the coefficients under NUTS. A
-      # temporal() or svc() term on its own runs the same areal-BFGS driver with
-      # just that block (gcol33/tulpaObs#114, #144).
+      # driver, or a fixed-hyper non-centered car_proper() field sampled jointly
+      # with the coefficients under NUTS. A temporal() or svc() term on its own
+      # runs the same areal-BFGS driver with just that block.
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_removal_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal,
           mixture = mixture, K_max = K.max,
-          sigma.beta = sigma.beta, sigma.logr = 1.5,
+          sigma.beta = sigma.beta, sigma.logr = sigma.logr,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          n.thin = n.thin, n.threads = n.threads,
+        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else if (is.null(spatial)) {
@@ -246,14 +250,15 @@
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_removal_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
-        re = re,
+        sigma.logr = sigma.logr, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        n.thin = n.thin, n.threads = n.threads,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
     } else if (!is.null(re)) {
       # Site-level grouped RE on the abundance OR detection arm via the shared
-      # count-model AGHQ path (tulpaObs#51). n_quad = 1 is the joint Laplace
-      # (the small-cluster sigma attenuation regime); n_quad > 1 debiases it.
+      # count-model AGHQ path. n_quad = 1 is the joint Laplace (the
+      # small-cluster sigma attenuation regime); n_quad > 1 debiases it.
       fit <- .tobs_fit_removal_re(fit_model, re = re, mixture = mixture,
                                   K_max = K.max, max_iter = max.iter, tol = tol,
                                   n_quad = n.quad, lkj_eta = re.lkj,
@@ -271,7 +276,7 @@
 
   # Distance sampling: the binned multinomial-over-N marginal (its latent N
   # summed out in closed form, like the N-mixture). Non-spatial fixed effects
-  # only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
+  # only this round; "laplace" or "nuts".
   if (identical(model$model_type, "distance")) {
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "distance", "abundance",
@@ -281,16 +286,17 @@
       # Areal field on the abundance arm: icar() / car_proper() (half-normal or
       # hazard key) under the nested-Laplace driver, optionally composed with a
       # temporal() block or continuous varying-coefficient surfaces via the shared
-      # areal-BFGS driver (gcol33/tulpaObs#78, #144), or a fixed-hyper
-      # non-centered car_proper() field sampled under NUTS (half-normal key). A
-      # temporal() or svc() term on its own runs the same areal-BFGS driver with
-      # just that block (gcol33/tulpaObs#114, #144).
+      # areal-BFGS driver, or a fixed-hyper non-centered car_proper() field
+      # sampled under NUTS (half-normal key). A temporal() or svc() term on its
+      # own runs the same areal-BFGS driver with just that block.
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_distance_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal,
           mixture = mixture, K_max = K.max,
           sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          n.thin = n.thin, n.threads = n.threads,
+        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
@@ -303,14 +309,15 @@
     } else if (identical(method, "nuts")) {
       fit <- .tobs_fit_distance_nuts(
         fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
-        re = re,
+        sigma.logr = sigma.logr, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        n.thin = n.thin, n.threads = n.threads,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
     } else if (!is.null(re)) {
       # Site-level grouped RE on the abundance arm via the shared count-model
-      # AGHQ path (tulpaObs#51; half-normal key, abundance arm only). n_quad = 1
-      # is the joint Laplace, n_quad > 1 debiases the small-cluster attenuation.
+      # AGHQ path (half-normal key, abundance arm only). n_quad = 1 is the joint
+      # Laplace, n_quad > 1 debiases the small-cluster attenuation.
       fit <- .tobs_fit_distance_re(fit_model, re = re, mixture = mixture,
                                    K_max = K.max, max_iter = max.iter, tol = tol,
                                    n_quad = n.quad, lkj_eta = re.lkj,
@@ -328,12 +335,12 @@
 
   # Open-population (Dail-Madsen) N-mixture: the latent abundance sequence summed
   # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
-  # effects only this round (gcol33/tulpaObs#51); "laplace" or "nuts".
+  # effects only this round; "laplace" or "nuts".
   if (identical(model$model_type, "dyn_abun")) {
     # Zero-inflated open N-mixture (zip / zinb): a pure-R structural-zero layer
-    # over the Dail-Madsen marginal (gcol33/tulpaObs#116). v1 is non-spatial
-    # laplace with an intercept-only structural-zero probability; a field, an RE,
-    # or NUTS stay Poisson / negbin.
+    # over the Dail-Madsen marginal. v1 is non-spatial laplace with an
+    # intercept-only structural-zero probability; a field, an RE, or NUTS stay
+    # Poisson / negbin.
     if (model$mixture %in% c("zip", "zinb")) {
       if (!is.null(spatial) || !is.null(temporal) || !is.null(re) ||
           identical(method, "nuts")) {
@@ -354,26 +361,31 @@
                                  "initial-abundance", allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
-      # Areal field on the initial-abundance arm: icar() / car_proper() under
-      # the nested-Laplace forward-HMM driver, optionally composed with a
-      # temporal() block or continuous varying-coefficient surfaces via the shared
-      # areal-BFGS driver (gcol33/tulpaObs#78, #144), or a fixed-hyper
-      # non-centered car_proper() field sampled jointly with the coefficients
-      # under NUTS. A temporal() or svc() term on its own runs the same areal-BFGS
-      # driver with just that block (#114, #144), or -- for temporal -- a
-      # fixed-hyper non-centered temporal field on the NUTS field block (#114).
+      # Areal field on the initial-abundance arm: icar() / car_proper() under the
+      # nested-Laplace forward-HMM driver, optionally composed with a temporal()
+      # block or continuous varying-coefficient surfaces via the shared areal-BFGS
+      # driver, or a fixed-hyper non-centered car_proper() field sampled jointly
+      # with the coefficients under NUTS. A temporal() or svc() term on its own
+      # runs the same areal-BFGS driver with just that block (#114, #144), or --
+      # for temporal -- a fixed-hyper non-centered temporal field on the NUTS
+      # field block (#114).
       if (identical(method, "nuts")) {
         fit <- if (is.null(spatial))
           .tobs_fit_dyn_abun_nuts_temporal(
             fit_model, temporal, mixture = model$mixture %||% "poisson",
             K_max = K.max, sigma.beta = sigma.beta,
             n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+            n.thin = n.thin, n.threads = n.threads,
+          n.thin = n.thin, n.threads = n.threads,
+        n.thin = n.thin, n.threads = n.threads,
             max.treedepth = max.treedepth, adapt.delta = adapt.delta,
             seed = seed, verbose = verbose)
         else .tobs_fit_dyn_abun_nuts_spatial(
           fit_model, spatial, mixture = model$mixture %||% "poisson",
           K_max = K.max, sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          n.thin = n.thin, n.threads = n.threads,
+        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
@@ -387,13 +399,13 @@
       fit <- .tobs_fit_dyn_abun_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        n.thin = n.thin, n.threads = n.threads,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
     } else if (!is.null(re)) {
       # Site-level grouped RE on the initial-abundance (lambda) arm via the
-      # exact HMM-forward AGHQ path (tulpaObs#51). n_quad = 1 is the joint
-      # Laplace (the small-cluster sigma attenuation regime); n_quad > 1
-      # debiases it.
+      # exact HMM-forward AGHQ path. n_quad = 1 is the joint Laplace (the
+      # small-cluster sigma attenuation regime); n_quad > 1 debiases it.
       fit <- .tobs_fit_dyn_abun_re(fit_model, re = re, max_iter = 300L,
                                    tol = 1e-8, verbose = verbose,
                                    n_quad = n.quad, lkj_eta = re.lkj,
@@ -411,8 +423,8 @@
 
   # False-positive occupancy: the Miller et al. (2011) multistate marginal (its
   # latent occupancy z summed out in closed form). Non-spatial fixed effects only
-  # this round (gcol33/tulpaObs#51); "laplace" (analytic-gradient BFGS over the
-  # exact marginal) or "nuts".
+  # this round; "laplace" (analytic-gradient BFGS over the exact marginal) or
+  # "nuts".
   if (identical(model$model_type, "fp_occu")) {
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "fp_occu", "occupancy",
@@ -422,14 +434,15 @@
       # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
       # nested-Laplace two-state driver, optionally composed with a temporal()
       # block or continuous varying-coefficient surfaces via the shared areal-BFGS
-      # driver (gcol33/tulpaObs#78, #144), or a fixed-hyper non-centered
-      # car_proper() field sampled jointly with the coefficients under NUTS. A
-      # temporal() or svc() term on its own runs the same areal-BFGS driver with
-      # just that block (#114, #144).
+      # driver, or a fixed-hyper non-centered car_proper() field sampled jointly
+      # with the coefficients under NUTS. A temporal() or svc() term on its own
+      # runs the same areal-BFGS driver with just that block (#114, #144).
       if (identical(method, "nuts")) {
         fit <- .tobs_fit_fp_occu_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal, sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+          n.thin = n.thin, n.threads = n.threads,
+        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
@@ -442,12 +455,13 @@
       fit <- .tobs_fit_fp_occu_nuts(
         fit_model, sigma.beta = sigma.beta, re = re,
         n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
+        n.thin = n.thin, n.threads = n.threads,
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
     } else if (!is.null(re)) {
       # Site-level grouped RE on the occupancy (psi) arm via the pure-R make_site
-      # AGHQ path (tulpaObs#51). n_quad = 1 is the joint Laplace, n_quad > 1
-      # debiases the small-cluster variance-component attenuation.
+      # AGHQ path. n_quad = 1 is the joint Laplace, n_quad > 1 debiases the
+      # small-cluster variance-component attenuation.
       fit <- .tobs_fit_fp_occu_re(fit_model, re = re, max_iter = max.iter,
                                   tol = tol, n_quad = n.quad, lkj_eta = re.lkj,
                                   sigma.beta = sigma.beta, verbose = verbose)
@@ -463,19 +477,19 @@
   }
 
   # Continuous NNGP varying coefficient(s) on single-season occupancy under the
-  # deterministic backends (gcol33/tulpaObs#143). The surfaces are latent field
-  # blocks on the occupancy logit, so the fit rides the shared areal-BFGS
-  # nested-Laplace driver: the field hyperparameters (marginal SD, range) are
-  # integrated on an outer grid either way, so `laplace` and `nested_laplace`
-  # land on the same fitter and the fit reports `nested_laplace`. A structured
-  # term alongside svc() would need a second field family in the same block list
-  # and is not wired, so it errors instead of being dropped.
+  # deterministic backends. The surfaces are latent field blocks on the
+  # occupancy logit, so the fit rides the shared areal-BFGS nested-Laplace
+  # driver: the field hyperparameters (marginal SD, range) are integrated on an
+  # outer grid either way, so `laplace` and `nested_laplace` land on the same
+  # fitter and the fit reports `nested_laplace`. A structured term alongside
+  # svc() would need a second field family in the same block list and is not
+  # wired, so it errors instead of being dropped.
   if (!is.null(svc) && method %in% c("laplace", "nested_laplace")) {
     if (!is.null(spatial) || !is.null(temporal) || !is.null(re)) {
       stop("occu() + svc() on the Laplace backends fits the varying-coefficient ",
            "surface(s) alone; a spatial() / temporal() / re() term alongside it ",
            "is not wired. Use method = \"nuts\", or drop the extra term. ",
-           "(tulpaObs#143)", call. = FALSE)
+           "", call. = FALSE)
     }
     fit <- do.call(.tobs_fit_occu_svc, c(
       list(model = fit_model, svc = svc, priors = priors,
@@ -530,20 +544,20 @@
     # Areal count / relative-abundance GLMM: the response is observed directly
     # (no latent state), so a count areal fit is a single tulpa_nested_laplace()
     # call over the count block with the areal field as its prior -- not the
-    # occupancy EM (gcol33/tulpaObs#117). Grid-integrated fixed effects + field.
+    # occupancy EM. Grid-integrated fixed effects + field.
     if (identical(model$model_type, "count")) {
       fit <- .tobs_fit_count_spatial(fit_model, spatial,
                                      max_iter = as.integer(max.iter), tol = tol,
                                      verbose = verbose)
       fit <- .unscale_fit_per_process(fit, scales, process_info)
       fit$model      <- model
-      # The latent field is a per-site eta offset (scale-invariant), carried on
-      # the model so the field-aware fitted() / WAIC read it (gcol33/tulpaObs#117).
-      # Swapping in the unscaled model drops any slot the fitter attached, so the
-      # offset is (re)built here against that model. With a varying-coefficient
-      # bar the contribution is the WEIGHTED sum over the intercept and trend
-      # fields, sum_k W[i,k] f_k[i] -- not the intercept field alone
-      # (gcol33/tulpaObs#120); a plain intercept field reduces to spatial_field.
+      # The latent field is a per-site eta offset (scale-invariant), carried on the
+      # model so the field-aware fitted() / WAIC read it. Swapping in the unscaled
+      # model drops any slot the fitter attached, so the offset is (re)built here
+      # against that model. With a varying-coefficient bar the contribution is the
+      # WEIGHTED sum over the intercept and trend fields, sum_k W[i,k] f_k[i] --
+      # not the intercept field alone; a plain intercept field reduces to
+      # spatial_field.
       fit$model$count_field_offset <-
         .count_spatial_field_offset(fit, spatial, model)
       fit$intercepts <- compute_intercepts(model, fit$means)
@@ -552,12 +566,12 @@
     # Standalone occu() varying-coefficient (SVC) spatial bar: route through the
     # joint direct-grid engine, single-arm (occupancy + detection, no cover arm),
     # which integrates the field hyperparameters on a direct outer grid. The EM
-    # fixed-point path oscillates / does not converge on this case at EVA scale
-    # (gcol33/tulpaObs#81); the reroute is scoped to the SVC occupancy fit the
-    # single-arm joint engine covers (`.tobs_occu_reroute_to_joint`). The joint
-    # route consumes the autoscaled `fit_model`; the per-process betas / SEs /
-    # draws are transformed back to natural scale by the shared unscale below,
-    # exactly as the EM path's output is.
+    # fixed-point path oscillates / does not converge on this case at EVA scale;
+    # the reroute is scoped to the SVC occupancy fit the single-arm joint engine
+    # covers (`.tobs_occu_reroute_to_joint`). The joint route consumes the
+    # autoscaled `fit_model`; the per-process betas / SEs / draws are transformed
+    # back to natural scale by the shared unscale below, exactly as the EM path's
+    # output is.
     if (.tobs_occu_reroute_to_joint(fit_model, spatial, temporal, re)) {
       fields <- .tobs_resolve_occu_spatial_fields(spatial, fit_model)
       fit <- do.call(.tobs_fit_occu_joint, c(
@@ -633,7 +647,7 @@
     verbose = verbose
   )
 
-  # ---- Process design matrices (autoscaled; gcol33/tulpaObs#9) ----
+  # ---- Process design matrices (autoscaled) ----
   spec$X_processes <- fit_model$X_processes
 
   # ---- Process names for column labels ----
@@ -699,13 +713,13 @@
   if (!is.null(svc)) {
     # Build X_svc from the design matrix columns. Pull from the
     # (autoscaled) `fit_model` so the SVC base column values match the
-    # global beta's parameterization seen by the optimizer
-    # (gcol33/tulpaObs#9). For svc on the intercept the values are 1.0 in
-    # both natural and scaled spaces; for svc on a non-intercept numeric
-    # column the per-location offsets land on the scaled-column scale.
+    # global beta's parameterization seen by the optimizer. For svc on
+    # the intercept the values are 1.0 in both natural and scaled spaces;
+    # for svc on a non-intercept numeric column the per-location offsets
+    # land on the scaled-column scale.
     X_occ <- fit_model$X_processes[[1]]
     # `coefficients = ` names the columns, `indices = ` gives their positions;
-    # both resolve here against the same design (gcol33/tulpaObs#146).
+    # both resolve here against the same design.
     svc_cols <- .tobs_svc_columns(svc, X_occ, "occu")
     svc_indices_0based <- svc_cols - 1L  # C++ 0-based
     X_svc_flat <- numeric(nrow(X_occ) * svc$n_svc)
@@ -743,7 +757,7 @@
                           n.threads = n.threads, verbose = verbose)
 
   # Unscale per-process beta slices in means / sds / draws (the engine
-  # optimized on the centered+scaled design; gcol33/tulpaObs#9).
+  # optimized on the centered+scaled design).
   fit <- .unscale_fit_per_process(fit, scales, process_info)
 
   # ---- Build R parameter names ----
@@ -754,8 +768,8 @@
 
   # Name the random-effect block (log_sigma / chol / z, type-blocked per
   # tulpa's layout) and reconstruct per-group BLUPs into `re_effects` so
-  # summary() / ranef() label them instead of showing param[i]
-  # (gcol33/tulpaObs#11). Counts and positions are unchanged.
+  # summary() / ranef() label them instead of showing param[i]. Counts
+  # and positions are unchanged.
   if (!is.null(re)) {
     re_design <- .tobs_re_design(if (inherits(re, "tobs_re")) list(re) else re,
                                  model)
@@ -785,20 +799,20 @@
   if (!is.null(svc)) {
     # `svc_cols` was resolved above against the design the surfaces were packed
     # against; reporting it rather than re-resolving keeps the reported columns
-    # and the sampled ones the same object (gcol33/tulpaObs#146).
+    # and the sampled ones the same object.
     fit$svc_indices <- svc_cols
     fit$svc_coefficients <- svc$coefficients
   }
-  # The fitted per-location SVC surface (gcol33/tulpaObs#118). `fit$svc` is the
-  # term the user passed in; `fit$svc_field` is what was estimated, mirroring
-  # `fit$spatial_field` on the areal path. Without it the surface was in the
-  # draws but unreadable, so the term could only ever be smoke-tested.
+  # The fitted per-location SVC surface. `fit$svc` is the term the user passed
+  # in; `fit$svc_field` is what was estimated, mirroring `fit$spatial_field` on
+  # the areal path. Without it the surface was in the draws but unreadable, so
+  # the term could only ever be smoke-tested.
   fit$svc_field <- .tobs_svc_field(fit)
   # The fitted areal (icar/car_proper) field, mirroring the nested-Laplace
-  # `fit$spatial_field` (gcol33/tulpaObs#142). NULL when there is no areal term.
+  # `fit$spatial_field`. NULL when there is no areal term.
   fit$spatial_field <- .tobs_areal_field(fit)
-  # The fitted continuous GP field (gcol33/tulpaObs#152). Same slot as the areal
-  # surface -- they are alternative spatial terms, never both present.
+  # The fitted continuous GP field. Same slot as the areal surface -- they are
+  # alternative spatial terms, never both present.
   if (is.null(fit$spatial_field)) fit$spatial_field <- .tobs_gp_field(fit)
   # Every sampled spatial surface enters the psi logit in the sampler, so it has
   # to enter the linear predictor `fitted()` rebuilds as well. Before this the
@@ -822,7 +836,7 @@
   fit
 }
 
-# Fitted per-location SVC surface from a NUTS fit (gcol33/tulpaObs#118).
+# Fitted per-location SVC surface from a NUTS fit.
 #
 # The engine exports the SVC block's offsets on `ParamLayout` and the fitter
 # returns them as `svc_layout`, so the surface is sliced by position rather than
@@ -856,7 +870,7 @@
   surf
 }
 
-# Fitted areal field from a single-season occupancy NUTS fit (gcol33/tulpaObs#142).
+# Fitted areal field from a single-season occupancy NUTS fit.
 #
 # The engine exports the field block's offsets on `ParamLayout` (emitted as
 # `spatial_layout` in occu_fit.cpp), so the field is sliced by position rather
@@ -883,7 +897,7 @@
   field
 }
 
-# Fitted continuous GP field from a NUTS fit (gcol33/tulpaObs#152).
+# Fitted continuous GP field from a NUTS fit.
 #
 # Sliced by position off `gp_layout`, the same way the areal and SVC surfaces
 # are. NOT centred, unlike the intrinsic areal field: a GP's prior is
@@ -904,7 +918,7 @@
 }
 
 # The per-site occupancy-logit offset a sampled spatial surface contributes, for
-# the in-sample linear predictor `fitted()` rebuilds (gcol33/tulpaObs#152).
+# the in-sample linear predictor `fitted()` rebuilds.
 #
 # The RAW field, not the centred one reported as `fit$spatial_field`: the
 # sampler's intercept was drawn against the uncentred surface, so subtracting
@@ -1191,7 +1205,7 @@ build_spatial_params <- function(spatial, n_sites) {
     params$spatial_shared_det <- spatial$shared[2]
     # The compiled sampler is tulpa's, and its `scale_factor` multiplies the
     # structured block (`sigma * sqrt(rho) * scale_factor`), where the term
-    # carries the Riebler constant itself -- gcol33/tulpaObs#232.
+    # carries the Riebler constant itself --.
     if (spatial$type == "bym2") {
       params$scale_factor <- .bym2_engine_scale(spatial$scale_factor)
     }

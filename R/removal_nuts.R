@@ -81,10 +81,11 @@
 # the caller .tobs_fit_model() unscales the means / draws / vcov back to natural.
 .tobs_fit_removal_nuts <- function(model, mixture = "poisson", K_max = NULL,
                                    sigma.beta = NULL, sigma.logr = NULL, re = NULL,
-                                   n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                   n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                   n.threads = NULL,
                                    max.treedepth = NULL, adapt.delta = NULL,
                                    seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   is_nb    <- identical(mixture, "negbin")
@@ -102,8 +103,8 @@
   }
   K_max <- as.integer(K_max)
 
-  # Single intercept RE on one arm (tulpaObs#51), via the shared count-NUTS RE
-  # helpers (same machinery as abun()).
+  # Single intercept RE on one arm, via the shared count-NUTS RE helpers (same
+  # machinery as abun()).
   re_info <- .tobs_count_nuts_re_info(re, model)
   n_re_groups <- if (!is.null(re_info)) re_info$n_groups else 0L
   lay <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb, re_groups = n_re_groups)
@@ -133,7 +134,9 @@
            paste0("p_",      model$process_info[[2]]$coef_names),
            if (is_nb) "log_r",
            .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
+                              n.thin = n.thin,
+                              n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_removal_nuts_marginal(model, mixture = mix_code, K_max = K_max)

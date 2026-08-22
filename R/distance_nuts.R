@@ -7,9 +7,8 @@
 # plus weak Gaussian priors. The C++ FullGradFn (src/distance_nuts.cpp) mirrors
 # this R target and is cross-checked against it; this R version is the oracle.
 
-# Parameter layout.
-# `re_groups` > 0 appends a trailing [z_1..z_G, log_sigma_re] block (a single
-# intercept RE on the abundance arm, tulpaObs#51).
+# Parameter layout. `re_groups` > 0 appends a trailing [z_1..z_G,
+# log_sigma_re] block (a single intercept RE on the abundance arm).
 .tobs_distance_nuts_layout <- function(p_lam, p_sig, hazard, is_nb, re_groups = 0L) {
   base <- p_lam + p_sig + (if (hazard) 1L else 0L) + (if (is_nb) 1L else 0L)
   off <- p_lam + p_sig
@@ -28,10 +27,10 @@
 
 # Per-site distance marginal closure (the NUTS oracle's data + eval_beta).
 # `headroom`: the per-site K_hi cap the caller's warm-start Laplace fit already
-# verified against the shared ceiling (gcol33/tulpaObs#168); `eval_beta`'s own
-# `headroom` argument lets a caller re-evaluate at a DIFFERENT cap (-1L, the
-# uncapped comparison) without rebuilding the marginal, for the post-hoc guard
-# in .tobs_fit_distance_nuts().
+# verified against the shared ceiling; `eval_beta`'s own `headroom` argument
+# lets a caller re-evaluate at a DIFFERENT cap (-1L, the uncapped comparison)
+# without rebuilding the marginal, for the post-hoc guard in
+# .tobs_fit_distance_nuts().
 .tobs_distance_nuts_marginal <- function(model, mixture = "P", K_max = NULL,
                                          headroom = -1L) {
   headroom0 <- as.integer(headroom)
@@ -105,10 +104,11 @@
                                     headroom = NULL,
                                     sigma.beta = NULL, sigma.shape = 1.5,
                                     sigma.logr = NULL, re = NULL,
-                                    n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                    n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                    n.threads = NULL,
                                     max.treedepth = NULL, adapt.delta = NULL,
                                     seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   is_nb    <- identical(mixture, "negbin")
@@ -125,9 +125,9 @@
   # ceiling under NB (mirrors nmix_laplace(), R/nmix_laplace.R).
   if (is_nb) headroom <- -1L
 
-  # Single intercept RE on the abundance arm (tulpaObs#51), via the shared
-  # count-NUTS RE helpers. distance's detection arm is the log-sigma scale; an RE
-  # there is not wired, so only the abundance (lambda) arm is supported.
+  # Single intercept RE on the abundance arm, via the shared count-NUTS RE
+  # helpers. distance's detection arm is the log-sigma scale; an RE there is not
+  # wired, so only the abundance (lambda) arm is supported.
   re_info <- .tobs_count_nuts_re_info(re, model)
   if (!is.null(re_info) && re_info$arm != 0L)
     stop("distance() NUTS supports a random effect on the abundance arm only; ",
@@ -146,8 +146,8 @@
   # The warm-start Laplace fit's OWN score-gap guard already verified (and, if
   # needed, widened) this headroom at its mode; every leapfrog gradient below
   # reuses that verified window rather than re-checking it thousands of times
-  # per chain (gcol33/tulpaObs#168). A single post-hoc check at the posterior
-  # mean, after sampling, is the guard for the region NUTS actually explored.
+  # per chain. A single post-hoc check at the posterior mean, after sampling,
+  # is the guard for the region NUTS actually explored.
   headroom <- warm$headroom %||% headroom
   theta0 <- c(as.numeric(warm$beta_lambda), as.numeric(warm$beta_sigma))
   if (hazard) theta0 <- c(theta0, as.numeric(warm$eta_b))
@@ -183,7 +183,9 @@
            paste0("sigma_",  model$process_info[[2]]$coef_names),
            if (hazard) "log_shape", if (is_nb) "log_r",
            .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
+                              n.thin = n.thin,
+                              n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_distance_nuts_marginal(model, mixture = mix_code, K_max = K_max,
@@ -193,13 +195,12 @@
   ll_mean <- marg$eval_beta(par[lay$lambda], par[lay$sigma],
                             eta_b = eta_b_hat, r = r_hat)$log_lik
 
-  # Post-hoc guard at the posterior mean (gcol33/tulpaObs#168): the capped
-  # headroom was verified at the WARM-START mode, not at the region NUTS
-  # actually sampled, so check once more here and re-run the whole chain set
-  # at a wider window on disagreement -- the same escalate-and-refit the other
-  # distance fitters use, just run once per chain set instead of per leapfrog
-  # step (a fixed headroom is cheap to evaluate at every gradient; verifying it
-  # at every gradient is not).
+  # Post-hoc guard at the posterior mean: the capped headroom was verified at
+  # the WARM-START mode, not at the region NUTS actually sampled, so check once
+  # more here and re-run the whole chain set at a wider window on disagreement
+  # -- the same escalate-and-refit the other distance fitters use, just run
+  # once per chain set instead of per leapfrog step (a fixed headroom is cheap
+  # to evaluate at every gradient; verifying it at every gradient is not).
   if (headroom >= 0L) {
     gap <- tryCatch({
       ev_h <- marg$eval_beta(par[lay$lambda], par[lay$sigma], eta_b = eta_b_hat,

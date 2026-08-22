@@ -101,16 +101,46 @@
 # reported diagnostics is made once.
 # ---------------------------------------------------------------------------
 
+# Run `n_chains` chains of a prepared sampler closure, in parallel when asked,
+# and thin every per-iteration series the fit reports by the same stride.
+#
+# `run_chain(ch)` closes over the family's own spec, so a worker gets the whole
+# closure: parallel chains need tulpaObs loaded in the worker and the closure's
+# environment to be serialisable, which is why the cluster is only built when
+# there is more than one chain to spread.
+.tobs_nuts_run_parallel <- function(run_chain, n_chains, n.threads = 1L) {
+  n_chains  <- max(1L, as.integer(n_chains))
+  n.threads <- max(1L, as.integer(n.threads %||% 1L))
+  if (n_chains == 1L || n.threads == 1L)
+    return(lapply(seq_len(n_chains), run_chain))
+  cl <- parallel::makeCluster(min(n.threads, n_chains))
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  parallel::clusterEvalQ(cl, requireNamespace("tulpaObs", quietly = TRUE))
+  parallel::parLapply(cl, seq_len(n_chains), run_chain)
+}
+
+# Thin one chain's draw matrix and its per-iteration diagnostic vectors.
+.tobs_nuts_thin_chain <- function(ch, n.thin) {
+  if (n.thin <= 1L) return(ch)
+  for (nm in c("draws", "divergent", "accept_prob", "treedepth"))
+    if (!is.null(ch[[nm]])) ch[[nm]] <- .tobs_thin(ch[[nm]], n.thin)
+  ch
+}
+
 # Run the per-chain sampler, pool the draws under `nms`, and collect the
 # posterior moments plus the raw sampler diagnostics.
-.tobs_count_nuts_run <- function(run_chain, n_chains, nms) {
-  chains <- lapply(seq_len(as.integer(n_chains)), run_chain)
+.tobs_count_nuts_run <- function(run_chain, n_chains, nms, n.thin = 1L,
+                                 n.threads = 1L) {
+  n.thin <- max(1L, as.integer(n.thin %||% 1L))
+  chains <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
+                   .tobs_nuts_thin_chain, n.thin = n.thin)
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   colnames(draws) <- nms
   par <- colMeans(draws); names(par) <- nms
   list(chains    = chains,
        draws     = draws,
        nms       = nms,
+       n_thin    = n.thin,
        par       = par,
        cov       = stats::cov(draws),
        accept    = unlist(lapply(chains, `[[`, "accept_prob")),
@@ -254,8 +284,8 @@
 .tobs_run_chains <- function(spec, n.chains = 1L, n.thin = 1L,
                              n.threads = 1L, verbose = TRUE) {
   n.chains  <- max(1L, as.integer(n.chains))
-  n.thin    <- max(1L, as.integer(n.thin))
-  n.threads <- max(1L, as.integer(n.threads))
+  n.thin    <- max(1L, as.integer(n.thin %||% 1L))
+  n.threads <- max(1L, as.integer(n.threads %||% 1L))
   base_seed <- as.integer(spec$seed %||% 42L)
 
   run_one <- function(chain_id) {

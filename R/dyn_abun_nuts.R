@@ -7,7 +7,7 @@
 
 # `use_nb` appends a single trailing log r coordinate (NB initial abundance);
 # `re_groups` > 0 then appends [z_1..z_G, log_sigma_re] (a single intercept RE on
-# the initial-abundance arm, tulpaObs#51).
+# the initial-abundance arm).
 .tobs_dyn_abun_nuts_layout <- function(p_lam, p_p, p_om, p_gm, use_nb = FALSE,
                                        re_groups = 0L) {
   idx <- .tobs_nuts_arm_idx(c("lambda", "p", "omega", "gamma"),
@@ -74,20 +74,21 @@
 # ---------------------------------------------------------------------------
 
 .tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = NULL, re = NULL,
-                                    n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                    n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                    n.threads = NULL,
                                     max.treedepth = NULL, adapt.delta = NULL,
                                     seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
   use_nb <- identical(model$mixture %||% "poisson", "negbin")
 
-  # Single intercept RE on the initial-abundance (lambda, tulpaObs#51) OR the
-  # detection (p, tulpaObs#82) arm, via the shared count-NUTS RE helpers. The
-  # offset is non-centered and routed to eta_lambda or eta_p in the C++ eval; the
-  # survival / recruitment arms never carry structured terms (rejected upstream).
+  # Single intercept RE on the initial-abundance (lambda) OR the detection (p)
+  # arm, via the shared count-NUTS RE helpers. The offset is non-centered and
+  # routed to eta_lambda or eta_p in the C++ eval; the survival / recruitment
+  # arms never carry structured terms (rejected upstream).
   re_info <- .tobs_count_nuts_re_info(re, model)
   n_re_groups <- if (!is.null(re_info)) re_info$n_groups else 0L
   lay <- .tobs_dyn_abun_nuts_layout(ncol(X_lambda), ncol(X_p), ncol(X_omega),
@@ -129,7 +130,9 @@
            paste0("gamma_",  model$process_info[[4]]$coef_names))
   if (use_nb) nms <- c(nms, "log_r")
   nms <- c(nms, .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
+                              n.thin = n.thin,
+                              n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_dyn_abun_nuts_marginal(model)

@@ -45,6 +45,9 @@
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
 #include <tulpa/nuts_api.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include "community_chol.h"
 
 #include "nuts_engine.h"
@@ -65,6 +68,12 @@ inline double mdo_plogis(double e) { return 1.0 / (1.0 + std::exp(-e)); }
 // column-major (index i + t * n_sites) to match the R matrices.
 struct MsDynOccuNutsData {
     int n_sites = 0, n_seasons = 0, n_species = 0;
+
+    // Threads for the per-species gradient loop below. 0 leaves the count to
+    // OpenMP, which is what an omitted `n_threads` means; a positive value is
+    // the ceiling the caller asked for. The reduction after the loop is
+    // serial and order-fixed, so the gradient is the same at any count.
+    int n_threads = 0;
     int p_psi1 = 0, p_p = 0, p_gam = 0, p_eps = 0;
     NumericMatrix X_psi1, X_p, X_gamma, X_eps;
     std::vector<std::vector<int>> nvalid;         // [s][i + t*n_sites]
@@ -90,6 +99,8 @@ inline void ms_dyn_occu_nuts_layout(MsDynOccuNutsData& d) {
 
 inline MsDynOccuNutsData ms_dyn_occu_nuts_build_data(const Rcpp::List& spec) {
     MsDynOccuNutsData d;
+    d.n_threads = spec.containsElementNamed("n_threads")
+                  ? Rcpp::as<int>(spec["n_threads"]) : 0;
     d.X_psi1    = Rcpp::as<NumericMatrix>(spec["X_psi1"]);
     d.X_p       = Rcpp::as<NumericMatrix>(spec["X_p"]);
     d.X_gamma   = Rcpp::as<NumericMatrix>(spec["X_gamma"]);
@@ -280,7 +291,10 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
     // s_psi1/s_p are fully overwritten each pass (ms_dyn_occu_fb assigns its four
     // score outputs, it does not accumulate); gbpsi1/gbp accumulate and are
     // re-zeroed explicitly.
-    #pragma omp parallel
+    #ifdef _OPENMP
+    const int omp_n = d.n_threads > 0 ? d.n_threads : omp_get_max_threads();
+    #pragma omp parallel num_threads(omp_n)
+    #endif
     {
     std::vector<double> b_psi1(p_psi1), b_p(p_p);
     std::vector<double> psi1(n_sites), pp(n_sites), s_psi1(n_sites), s_p(n_sites);

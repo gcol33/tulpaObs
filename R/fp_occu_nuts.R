@@ -6,7 +6,7 @@
 # (src/fp_occu_nuts.cpp) mirrors this R target and is cross-checked against it.
 
 # `re_groups` > 0 appends a trailing [z_1..z_G, log_sigma_re] block (a single
-# intercept RE on the occupancy (psi) arm, tulpaObs#51).
+# intercept RE on the occupancy (psi) arm).
 .tobs_fp_occu_nuts_layout <- function(p_psi, p_p11, p_p10, p_b, re_groups = 0L) {
   idx <- .tobs_nuts_arm_idx(c("psi", "p11", "p10", "b"),
                             c(p_psi, p_p11, p_p10, p_b))
@@ -53,18 +53,19 @@
 # ---------------------------------------------------------------------------
 
 .tobs_fit_fp_occu_nuts <- function(model, sigma.beta = NULL, re = NULL,
-                                   n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                   n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                   n.threads = NULL,
                                    max.treedepth = NULL, adapt.delta = NULL,
                                    seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
 
-  # Single intercept RE on the occupancy (psi) arm (tulpaObs#51), via the shared
-  # count-NUTS RE helpers. The false-positive arms (p11 / p10 / b) keep fixed
-  # effects; a non-psi RE is rejected with a pointer.
+  # Single intercept RE on the occupancy (psi) arm, via the shared count-NUTS RE
+  # helpers. The false-positive arms (p11 / p10 / b) keep fixed effects; a
+  # non-psi RE is rejected with a pointer.
   re_info <- .tobs_count_nuts_re_info(re, model, arms = c("psi", "p11"))
   if (!is.null(re_info) && re_info$arm != 0L)
     stop("fp_occu() NUTS supports a random effect on the occupancy (psi) arm ",
@@ -104,7 +105,9 @@
            paste0("p10_", model$process_info[[3]]$coef_names),
            paste0("b_",   model$process_info[[4]]$coef_names),
            .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
+                              n.thin = n.thin,
+                              n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_fp_occu_nuts_marginal(model)

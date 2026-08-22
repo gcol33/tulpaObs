@@ -9,6 +9,9 @@ test_that("the NUTS profile resolves to the shipped defaults", {
   expect_identical(d$n.iter, 1000L)
   expect_identical(d$n.warmup, 1000L)
   expect_identical(d$n.chains, 1L)
+  expect_identical(d$n.thin, 1L)
+  expect_identical(d$n.threads, 1L)
+  expect_identical(d$n.threads.grad, 0L)
   expect_identical(d$max.treedepth, 10L)
   expect_identical(d$adapt.delta, 0.9)
   expect_identical(d$seed, 1L)
@@ -66,10 +69,10 @@ test_that("the field-sampling occu_cover sampler keeps its own adaptation (#204)
 test_that("the Laplace-EM prior / regularization scales are one value each", {
   expect_identical(.tobs_default("laplace", "sigma.beta"), 5)
   # A loading prior width and an LKJ shape are engine-level values of the same
-  # kind as the ridge (gcol33/tulpaObs#189). sd.load in particular had three
-  # copies that must move together: the auto-K ladder selects a rank by marginal
-  # evidence under it, so a value drifting between the selection fit and the
-  # final fit selects a rank the fit does not use.
+  # kind as the ridge. sd.load in particular had three copies that must move
+  # together: the auto-K ladder selects a rank by marginal evidence under it, so
+  # a value drifting between the selection fit and the final fit selects a rank
+  # the fit does not use.
   expect_identical(.tobs_default("laplace", "sd.load"), 1.0)
   expect_identical(.tobs_default("laplace", "re.lkj"), 1.5)
   # max.iter / tol are per-route, not profile-shaped, so the table does not
@@ -101,7 +104,7 @@ test_that("an engine with no profile leaves control untouched", {
 })
 
 # =========================================================================== #
-# Past the table: what a FITTER runs (gcol33/tulpaObs#188)                     #
+# Past the table: what a FITTER runs #
 #                                                                             #
 # Everything above asserts what the table RESOLVES. None of it could see a     #
 # fitter that ignores the table, and 21 of them did -- each restating the      #
@@ -136,6 +139,7 @@ test_that("an engine with no profile leaves control untouched", {
 )
 
 .ed_sampler_knobs <- c("n.iter", "n.warmup", "n.chains", "n.thin",
+                       "n.threads", "n.threads.grad",
                        "max.treedepth", "adapt.delta", "seed",
                        "sigma.beta", "sigma.logr")
 
@@ -233,7 +237,7 @@ test_that("the pg_gibbs n.iter convention is the opposite of the NUTS one", {
 test_that("n.quad names one control across several marginals, each enumerated", {
   # Not one number, and deliberately so: each route integrates a different
   # marginal over a different latent dimension. What was wrong was that no
-  # reader could find out which number applied (gcol33/tulpaObs#189).
+  # reader could find out which number applied.
   expect_identical(.tobs_n_quad("re_aghq"), 9L)
   expect_identical(.tobs_n_quad("ms_nmix"), 1L)
   expect_identical(.tobs_n_quad("ms_nmix_scalar"), 3L)
@@ -268,10 +272,10 @@ test_that("sigma.logr is reachable from control on the sampler routes", {
 })
 
 test_that("logr.sigma.prior is a laplace control and defaults to pure ML", {
-  # gcol33/tulpaObs#235. sigma_log_r is the same shape of parameter as
-  # sigma_omega -- one scalar variance over species -- and collapses the same way
-  # at few species, taking the mu_log_r interval with it. The PC prior that
-  # regularizes the omega block is now reachable for the log_r block too.
+  # . sigma_log_r is the same shape of parameter as sigma_omega -- one scalar
+  # variance over species -- and collapses the same way at few species, taking
+  # the mu_log_r interval with it. The PC prior that regularizes the omega block
+  # is now reachable for the log_r block too.
   expect_true("logr.sigma.prior" %in% .tobs_control_groups$laplace_em)
   # It is a Laplace-path knob: the sampler routes have their own priors and
   # reject it rather than ignoring it.
@@ -294,12 +298,12 @@ test_that("logr.sigma.prior is a laplace control and defaults to pure ML", {
 })
 
 test_that("the scalar nuisance block cannot be run below the converged rule", {
-  # gcol33/tulpaObs#234. Two Gauss-Hermite nodes place two points and leave no
-  # freedom for curvature, so on a 1-D posterior that is not near-Gaussian the
-  # marginal can come out arbitrarily sharp -- measured as a 17x collapse of the
-  # reported SE on `mu_log_r`, with the fit converged and the point estimate
-  # ordinary. Three nodes are converged (3 / 5 / 9 agree to ten decimals), so the
-  # order is floored rather than clamped into [2, n_quad].
+  # . Two Gauss-Hermite nodes place two points and leave no freedom for
+  # curvature, so on a 1-D posterior that is not near-Gaussian the marginal can
+  # come out arbitrarily sharp -- measured as a 17x collapse of the reported SE
+  # on `mu_log_r`, with the fit converged and the point estimate ordinary. Three
+  # nodes are converged (3 / 5 / 9 agree to ten decimals), so the order is
+  # floored rather than clamped into [2, n_quad].
   expect_identical(.TOBS_MIN_SCALAR_NQUAD, 3L)
   expect_identical(.tobs_n_quad("ms_nmix_scalar"), .TOBS_MIN_SCALAR_NQUAD)
 

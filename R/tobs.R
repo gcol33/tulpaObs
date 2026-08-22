@@ -172,11 +172,20 @@
 #'     the total run per chain is `n.iter + n.warmup`.
 #'   * `n.warmup` — warmup / adaptation iterations per chain, discarded
 #'     (default 1000).
-#'   * `n.thin` — keep every `n.thin`-th post-warmup draw (default 1).
+#'   * `n.thin` — keep every `n.thin`-th post-warmup draw (default 1). The
+#'     kept draws and the per-iteration diagnostics (`divergent`,
+#'     `accept_prob`, `treedepth`) are thinned by the same stride.
 #'   * `n.chains` — number of chains, run with offset seeds and pooled
 #'     (default 1). Split-Rhat / bulk / tail ESS are reported on `$convergence`.
 #'   * `n.threads` — chains to run in parallel (default 1, sequential). Values
-#'     `> 1` use a PSOCK cluster and require tulpaObs to be installed.
+#'     `> 1` use a PSOCK cluster and require tulpaObs to be installed. This is
+#'     chain parallelism; it does not change the thread count inside a single
+#'     gradient evaluation.
+#'   * `n.threads.grad` — OpenMP threads inside ONE gradient evaluation of a
+#'     community NUTS target (`ms_occu()`, `ms_count()` / `jsdm()`,
+#'     `ms_abun()`, `ms_dyn_occu()`), whose per-species loop is parallel.
+#'     Default 0 leaves the count to OpenMP. The per-species reduction is
+#'     serial and order-fixed, so the gradient is the same at any count.
 #'   * `adapt.delta` — target acceptance probability (default 0.8 on the
 #'     single-species families, 0.9 on the community samplers).
 #'   * `max.treedepth` — NUTS maximum tree depth (default 10).
@@ -305,12 +314,12 @@
 #'     `occu()` spatial, `occu_multiscale_cover()`), whether to score the outer
 #'     hyperparameter Gaussian summary with an importance-sampling Pareto-k.
 #'     Defaults `FALSE` (it re-solves the inner Laplace on the full field
-#'     `k.samples` times; gcol33/tulpaObs#101). When `TRUE`, the fit carries
+#'     `k.samples` times). When `TRUE`, the fit carries
 #'     `pareto_k` (`< 0.7` = reliable summary), `pareto_k_is_ess` (the
 #'     importance-sampling ESS on the PSIS-smoothed weights; `/ k.samples` is the
 #'     relative IS efficiency), and
 #'     `pareto_k_proposal_source` at the top level (and in [glance()]).
-#'     `pareto_k_proposal_source` (gcol33/tulpa#116) is `"mode_hessian"` when the
+#'     `pareto_k_proposal_source` is `"mode_hessian"` when the
 #'     importance proposal came from the Laplace curvature at the hyperparameter
 #'     mode -- curvature-backed, so the k-hat stays trustworthy even when a sharp
 #'     posterior collapses the integration grid -- or `"grid_moment"` when it came
@@ -480,15 +489,15 @@ tobs <- function(formula,
       by = by, dots = fwd_dots))
   }
 
-  # Single occu_cover() fit from a long / plot-level frame (gcol33/tulpaObs#107):
-  # the same long-frame contract the by= batch path accepts, minus the species
-  # split. The signal is `response = "<col>"` (a column name) on an occu_cover()
-  # family handed a data-frame `data`; build the paired occurrence / cover arms
-  # and the shared site / visit design with the SAME builder the by= loop uses,
-  # then fall through to the normal single-fit dispatch -- so a user no longer
-  # hand-rolls tobs_data() twice plus the alignment check. `compact` defaults on
-  # for the nested-Laplace route (the joint engine reads the ragged arms with no
-  # per-site visit cap) and is overridable via control$compact.
+  # Single occu_cover() fit from a long / plot-level frame: the same long-frame
+  # contract the by= batch path accepts, minus the species split. The signal is
+  # `response = "<col>"` (a column name) on an occu_cover() family handed a
+  # data-frame `data`; build the paired occurrence / cover arms and the shared
+  # site / visit design with the SAME builder the by= loop uses, then fall
+  # through to the normal single-fit dispatch -- so a user no longer hand-rolls
+  # tobs_data() twice plus the alignment check. `compact` defaults on for the
+  # nested-Laplace route (the joint engine reads the ragged arms with no per-site
+  # visit cap) and is overridable via control$compact.
   if (is.null(by) && identical(family$name, "occu_cover") &&
       is.data.frame(data) && !is.null(fwd_dots$response)) {
     if (!is.null(y)) {
@@ -512,24 +521,23 @@ tobs <- function(formula,
     fwd_dots$coords   <- NULL
   }
 
-  # Response on the top formula LHS (gcol33/tulpaObs#66). A single-vector-response
-  # family (cover hurdle; family$response == "vector") may carry its response on
-  # the formula LHS -- `cover.flat ~ predictors` -- and drop `y =`. Resolve the
-  # LHS to `y` and strip `formula` to one-sided here, so the rest of the pipeline
-  # (dispatchers, encoders, structured-term parser) sees the unchanged one-sided
-  # interface. Matrix / array / list families take their response via `y =` only;
-  # a two-sided formula for those errors with a pointer to `?tobs`.
+  # Response on the top formula LHS. A single-vector-response family (cover
+  # hurdle; family$response == "vector") may carry its response on the formula LHS
+  # -- `cover.flat ~ predictors` -- and drop `y =`. Resolve the LHS to `y` and
+  # strip `formula` to one-sided here, so the rest of the pipeline (dispatchers,
+  # encoders, structured-term parser) sees the unchanged one-sided interface.
+  # Matrix / array / list families take their response via `y =` only; a two-sided
+  # formula for those errors with a pointer to `?tobs`.
   resolved <- .tobs_resolve_response_lhs(formula, y, family, data)
   formula  <- resolved$formula
   y        <- resolved$y
 
-  # Batched multi-response (gcol33/tulpa#66): occu_cover with `y` a list of >= 2
-  # response matrices (or a 3D array [n_sites x max_visits x B]) fits B species,
-  # each with the per-species model, and returns a `tobs_batch`. Intercept here
-  # so each species replays the full single-species tobs() pipeline below --
-  # making every per-species fit byte-identical to an independent fit (the
-  # validation oracle for the fused block-diagonal backend; see
-  # R/occu_cover_batch.R).
+  # Batched multi-response: occu_cover with `y` a list of >= 2 response matrices
+  # (or a 3D array [n_sites x max_visits x B]) fits B species, each with the
+  # per-species model, and returns a `tobs_batch`. Intercept here so each
+  # species replays the full single-species tobs() pipeline below -- making
+  # every per-species fit byte-identical to an independent fit (the validation
+  # oracle for the fused block-diagonal backend; see R/occu_cover_batch.R).
   if (identical(family$name, "occu_cover")) {
     B <- .tobs_multiresponse_n(y)
     if (!is.null(B) && B >= 2L) {
@@ -551,17 +559,17 @@ tobs <- function(formula,
   # silently swallowing them via the splat into `.tobs_fit_model()`'s `...`.
   .tobs_validate_control(control, route, family)
 
-  # Outer-grid progress (tulpaObs#25). Surface control$progress[.every/.throttle/
-  # .file] to every nested-Laplace grid below -- tulpa's nested fitters and the
-  # tulpaObs N-mixture spatial fitters read the scoped `tulpa.nl_progress` option.
-  # Restored on exit so it never leaks past this fit.
+  # Outer-grid progress. Surface control$progress[.every/.throttle/ .file] to
+  # every nested-Laplace grid below -- tulpa's nested fitters and the tulpaObs
+  # N-mixture spatial fitters read the scoped `tulpa.nl_progress` option. Restored
+  # on exit so it never leaks past this fit.
   .op_nl_progress <- options(tulpa.nl_progress = .tobs_progress_opt(control))
   on.exit(options(.op_nl_progress), add = TRUE)
 
-  # Gibbs / MI corrections thread the fixed-effect prior through their refits
-  # (gcol33/tulpa#27), so the `"laplace_gibbs"` / `"laplace_mi"` routes use the
-  # same weakly-informative default prior as `"laplace"`. Pass `priors = FALSE`
-  # to recover the unpenalised correction.
+  # Gibbs / MI corrections thread the fixed-effect prior through their refits,
+  # so the `"laplace_gibbs"` / `"laplace_mi"` routes use the same
+  # weakly-informative default prior as `"laplace"`. Pass `priors = FALSE` to
+  # recover the unpenalised correction.
 
   # Backend coverage is enforced centrally: each working family declares the
   # methods it actually supports (`.tobs_family_methods`). Reject an unsupported
@@ -675,11 +683,11 @@ tobs <- function(formula,
 
 # Normalize the outer-grid progress knobs from a `control` list into the scoped
 # `tulpa.nl_progress` option value read by tulpa's nested-Laplace fitters and the
-# tulpaObs N-mixture spatial fitters (tulpaObs#25 / gcol33/tulpa#45). The
-# flushed cell-k/n_grid + ETA reporter is ON by default (tulpaObs#43), matching
-# the cover()/occu_cover() hurdle paths; set control$progress = FALSE to silence
-# it. `progress.file` adds a heartbeat file for detached runs, written whenever
-# it is non-empty regardless of the console bar.
+# tulpaObs N-mixture spatial fitters ( /). The flushed cell-k/n_grid + ETA
+# reporter is ON by default, matching the cover()/occu_cover() hurdle paths; set
+# control$progress = FALSE to silence it. `progress.file` adds a heartbeat file
+# for detached runs, written whenever it is non-empty regardless of the console
+# bar.
 .tobs_progress_opt <- function(control) {
   list(
     # `[[` (exact) not `$`: `control$progress` prefix-matches `progress.file`,

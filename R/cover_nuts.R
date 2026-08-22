@@ -147,15 +147,16 @@
 # mode, the sampler draws, and the returned betas are all on the natural
 # coefficient scale with no unscale round-trip. `sigma.logdisp` is an internal
 # weak-prior width (no control knob, like abun's sigma.logr). `...` absorbs
-# unused sampler controls (n.thin / n.threads / progress.*).
+# unused sampler controls (progress.*).
 .tobs_fit_cover_nuts <- function(formula, data, y, positive, family,
                                  priors = NULL,
                                  sigma.beta = NULL, sigma.logdisp = 5,
                                  n.iter = NULL, n.warmup = NULL,
-                                 n.chains = NULL, max.treedepth = NULL,
+                                 n.chains = NULL, n.thin = NULL,
+                                 n.threads = NULL, max.treedepth = NULL,
                                  adapt.delta = NULL, seed = NULL,
                                  verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts")
 
   # Natural-scale encoding: the NUTS spec and the warm-start mode share the same
@@ -212,7 +213,8 @@
       verbose = isTRUE(verbose) && ch == 1L)
   }
   n_chains <- max(1L, as.integer(n.chains))
-  chains   <- lapply(seq_len(n_chains), run_chain)
+  chains   <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
+                     .tobs_nuts_thin_chain, n.thin = n.thin)
   per_chain_draws <- lapply(chains, `[[`, "draws")
   draws    <- do.call(rbind, per_chain_draws)
   colnames(draws) <- par_names

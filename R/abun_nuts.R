@@ -127,10 +127,11 @@
 # single, unscaled posterior copy).
 .tobs_fit_abun_nuts <- function(model, mixture = "poisson", K_max = NULL,
                                 sigma.beta = NULL, sigma.logr = NULL, re = NULL,
-                                n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                n.threads = NULL,
                                 max.treedepth = NULL, adapt.delta = NULL,
                                 seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   is_nb    <- identical(mixture, "negbin")
@@ -143,8 +144,8 @@
   if (is.null(K_max)) K_max <- max(y_long) + 100L
   K_max <- as.integer(K_max)
 
-  # Single intercept random effect on one arm (tulpaObs#51), via the shared
-  # count-NUTS RE helpers.
+  # Single intercept random effect on one arm, via the shared count-NUTS RE
+  # helpers.
   re_info <- .tobs_count_nuts_re_info(re, model)
   has_re  <- !is.null(re_info)
   n_re_groups <- if (has_re) re_info$n_groups else 0L
@@ -176,7 +177,9 @@
            paste0("p_",      model$process_info[[2]]$coef_names),
            if (is_nb) "log_r",
            .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms)
+  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
+                              n.thin = n.thin,
+                              n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   # Data log-likelihood at the posterior mean (scale-invariant), so logLik() on
@@ -213,30 +216,31 @@
 }
 
 
-# Areal-spatial N-mixture via NUTS (gcol33/tulpaObs#51, #71): a FIXED-HYPER non-
-# centered field on the abundance arm. The field precision (tau, rho) is fixed at
-# the nested-Laplace posterior mean; the whitened field raw ~ N(0, I) with
-# z = L %*% raw is sampled jointly with the coefficients (the tulpa#87 fixed-hyper
-# pattern -- avoids the field-hyperparameter funnel and the log|Q(rho)| gradient).
-# car_proper uses the square inverse Cholesky of tau Q(rho); the intrinsic
-# icar / bym2 fields use the SUM-TO-ZERO reparameterisation (#71): L drops the
-# precision null-space (constant) direction, so z is automatically centred and
-# the geometry is well conditioned (no flat field-mean direction maxing the tree
-# depth). bym2 combines the structured (centred eigen-loading, scaled by
-# sigma sqrt(rho / scale)) and unstructured (iid, sigma sqrt(1 - rho)) blocks into
-# one loading. Spatial XOR RE. Poisson or NB.
+# Areal-spatial N-mixture via NUTS: a FIXED-HYPER non- centered field on the
+# abundance arm. The field precision (tau, rho) is fixed at the nested-Laplace
+# posterior mean; the whitened field raw ~ N(0, I) with z = L %*% raw is sampled
+# jointly with the coefficients (the fixed-hyper pattern -- avoids the
+# field-hyperparameter funnel and the log|Q(rho)| gradient). car_proper uses the
+# square inverse Cholesky of tau Q(rho); the intrinsic icar / bym2 fields use the
+# SUM-TO-ZERO reparameterisation (#71): L drops the precision null-space
+# (constant) direction, so z is automatically centred and the geometry is well
+# conditioned (no flat field-mean direction maxing the tree depth). bym2 combines
+# the structured (centred eigen-loading, scaled by sigma sqrt(rho / scale)) and
+# unstructured (iid, sigma sqrt(1 - rho)) blocks into one loading. Spatial XOR RE.
+# Poisson or NB.
 .tobs_fit_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                         K_max = NULL, sigma.beta = NULL, sigma.logr = NULL,
-                                        n.iter = NULL, n.warmup = NULL, n.chains = NULL,
+                                        n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                        n.threads = NULL,
                                         max.treedepth = NULL, adapt.delta = NULL,
                                         seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   .tobs_reject_weighted_spatial(spatial, "abun NUTS abundance spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf(paste0("abun() NUTS + areal spatial supports icar() / car_proper() / ",
-                        "bym2() on the abundance arm; got '%s'. (tulpaObs#71)"),
+                        "bym2() on the abundance arm; got '%s'."),
                  spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites) {
