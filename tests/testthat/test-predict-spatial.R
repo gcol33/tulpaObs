@@ -169,15 +169,32 @@ test_that("the summary columns are computed over the draws", {
   pr <- tobs_predict_spatial(obj, matrix(c(0.5, 0), 1, 2))
   expect_equal(pr$mean, mean(truth))
   expect_equal(pr$sd, stats::sd(truth))
-  expect_equal(pr$q500, unname(stats::quantile(truth, 0.5)))
+  expect_equal(pr$q50, unname(stats::quantile(truth, 0.5)))
 
-  # The quantile columns are named from the requested probabilities: the
-  # percentage with its decimal point deleted, so 0.025 -> q25, 0.5 -> q500.
-  expect_named(pr, c("mean", "sd", "q25", "q500", "q975"))
+  # The quantile columns are named from the requested probabilities as a
+  # percentage, on stats::quantile()'s own convention: 0.025 -> q2.5, 0.5 ->
+  # q50. predict() and predict_terms() name theirs the same way, so one level
+  # reads as one column name across the three predictors (#242).
+  expect_named(pr, c("mean", "sd", "q2.5", "q50", "q97.5"))
+  expect_equal(attr(pr, "quantiles"), c(0.025, 0.5, 0.975))
+
+  # A non-default `quantiles` names its columns for the levels it was given,
+  # and those columns hold the values of those levels.
   pr2 <- tobs_predict_spatial(obj, matrix(c(0.5, 0), 1, 2),
                               quantiles = c(0.1, 0.9))
-  expect_named(pr2, c("mean", "sd", "q100", "q900"))
-  expect_equal(pr2$q100, unname(stats::quantile(truth, 0.1)))
+  expect_named(pr2, c("mean", "sd", "q10", "q90"))
+  expect_equal(pr2$q10, unname(stats::quantile(truth, 0.1)))
+  expect_equal(pr2$q90, unname(stats::quantile(truth, 0.9)))
+  expect_equal(attr(pr2, "quantiles"), c(0.1, 0.9))
+
+  # A malformed `quantiles` is named as the bad argument rather than reaching
+  # quantile() as an NA.
+  bad <- function(q) tobs_predict_spatial(obj, matrix(c(0.5, 0), 1, 2),
+                                          quantiles = q)
+  expect_error(bad(c(0.9, 0.1)), "strictly increasing")
+  expect_error(bad(c(0, 0.5)), "strictly inside")
+  expect_error(bad(c(0.1, NA)), "no NA")
+  expect_error(bad("0.5"), "numeric vector")
 
   # One row per requested location.
   expect_s3_class(pr, "data.frame")
@@ -185,21 +202,32 @@ test_that("the summary columns are computed over the draws", {
 })
 
 
-test_that("fixed effects enter through newocc.covs", {
-  # Intercept 0.5 and slope 2 held fixed across draws, no field columns, so the
-  # prediction is beta0 + beta1 * x exactly.
-  d <- cbind(rep(0.5, 3), rep(2, 3))
-  colnames(d) <- c("psi_(Intercept)", "psi_x")
-  # An identically-zero field, so whatever the interpolation does it adds 0 and
-  # the fixed-effect half is what is being read.
-  obj <- structure(list(
-    draws = d, spatial = list(type = "icar"), spatial_field = rep(0, 3),
-    model = list(process_info = list(list(name = "psi", p = 2L,
-                                          link = "identity")))),
+# A spatial fit whose fixed effects are held at `betas` across draws, with an
+# identically-zero field: whatever the interpolation does it adds 0, so the
+# fixed-effect half is what is being read. Carries the state formula and the
+# fitted data, which is where the design is expanded from (#243).
+.tps_fe_obj <- function(formula, data, coef_names, betas,
+                        n_nodes = 3L, n_draws = 3L) {
+  d <- matrix(rep(betas, each = n_draws), n_draws, length(betas))
+  colnames(d) <- paste0("psi_", coef_names)
+  structure(list(
+    draws = d, spatial = list(type = "icar"),
+    spatial_field = rep(0, n_nodes),
+    model = list(
+      formulas = list(occ = formula, det = ~ 1),
+      data = data,
+      process_info = list(list(name = "psi", p = length(betas),
+                               link = "identity",
+                               coef_names = coef_names)))),
     class = c("tobs_fit", "tulpa_fit"))
+}
+
+test_that("fixed effects enter through newocc.covs", {
+  x <- c(0, 1, -0.5)
+  obj <- .tps_fe_obj(~ x, data.frame(x = x - mean(x)),
+                     c("(Intercept)", "x"), c(0.5, 2))
   nodes <- cbind(0:2, 0)
 
-  x <- c(0, 1, -0.5)
   pr <- tobs_predict_spatial(obj, cbind(x, 0), newocc.covs = data.frame(x = x),
                              node.coords = nodes)
   expect_equal(pr$mean, 0.5 + 2 * x)
@@ -215,6 +243,82 @@ test_that("fixed effects enter through newocc.covs", {
   no_field$spatial_field <- NULL
   expect_error(tobs_predict_spatial(no_field, cbind(x, 0), node.coords = nodes),
                "no fitted field")
+})
+
+
+test_that("newocc.covs is paired with the coefficients by name, not position", {
+  # beta_x = 2 and beta_z = -2, so swapping the two columns is visible in the
+  # prediction if they are read positionally (#243).
+  fit_d <- data.frame(x = c(-1, 0, 1), z = c(1, 0, -1))
+  obj <- .tps_fe_obj(~ x + z, fit_d, c("(Intercept)", "x", "z"),
+                     c(0.5, 2, -2))
+  nodes <- cbind(0:2, 0)
+
+  right <- data.frame(x = c(1, 0, 0.5), z = c(0, 1, -0.5))
+  wrong <- right[, c("z", "x")]          # same data, user's column order
+
+  pr_right <- tobs_predict_spatial(obj, cbind(0:2, 0), newocc.covs = right,
+                                   node.coords = nodes)
+  pr_wrong <- tobs_predict_spatial(obj, cbind(0:2, 0), newocc.covs = wrong,
+                                   node.coords = nodes)
+  expect_equal(pr_right$mean, 0.5 + 2 * right$x - 2 * right$z)
+  expect_equal(pr_wrong$mean, pr_right$mean)
+})
+
+
+test_that("factor and poly terms expand on the basis the fit used", {
+  nodes <- cbind(0:2, 0)
+
+  # A factor expands through the fitted levels, so a character column and the
+  # dummy the fit coded agree.
+  fit_g <- data.frame(g = factor(c("a", "b", "a", "b")))
+  obj_g <- .tps_fe_obj(~ g, fit_g, c("(Intercept)", "gb"), c(0.5, 1.5))
+  g_new <- c("a", "b", "a")
+  pr_g <- tobs_predict_spatial(obj_g, cbind(0:2, 0),
+                               newocc.covs = data.frame(g = g_new),
+                               node.coords = nodes)
+  expect_equal(pr_g$mean, 0.5 + 1.5 * (g_new == "b"))
+
+  # An unseen factor level cannot be placed on the fitted contrast.
+  expect_error(tobs_predict_spatial(obj_g, cbind(0:2, 0),
+                                    newocc.covs = data.frame(g = c("a", "c", "b")),
+                                    node.coords = nodes),
+               "new levels")
+
+  # poly() is orthogonal on the FIT data, so its basis must come from there. If
+  # it were rebuilt from whatever frame is passed, predicting at a subset would
+  # not agree with the same rows of a prediction over the whole frame.
+  fit_x <- data.frame(x = c(-2, -1, 0, 1, 2))
+  obj_p <- .tps_fe_obj(~ poly(x, 2), fit_x,
+                       c("(Intercept)", "poly(x, 2)1", "poly(x, 2)2"),
+                       c(0.5, 2, -1), n_nodes = 5L)
+  n5 <- cbind(0:4, 0)
+  full <- tobs_predict_spatial(obj_p, cbind(0:4, 0), newocc.covs = fit_x,
+                               node.coords = n5)
+  sub  <- tobs_predict_spatial(obj_p, cbind(0:2, 0),
+                               newocc.covs = fit_x[1:3, , drop = FALSE],
+                               node.coords = n5)
+  expect_equal(sub$mean, full$mean[1:3])
+})
+
+
+test_that("newocc.covs = NULL predicts at the fitted means, or says it cannot", {
+  nodes <- cbind(0:2, 0)
+
+  # Centred covariate: the intercept-only design IS the covariate mean.
+  centred <- .tps_fe_obj(~ x, data.frame(x = c(-1, 0, 1)),
+                         c("(Intercept)", "x"), c(0.5, 2))
+  expect_equal(
+    tobs_predict_spatial(centred, cbind(0:2, 0), node.coords = nodes)$mean,
+    rep(0.5, 3))
+
+  # Uncentred: zeros are not the mean, so predicting there would report at a
+  # covariate value the fit never saw. That is refused rather than assumed.
+  uncentred <- .tps_fe_obj(~ x, data.frame(x = c(1, 2, 3)),
+                           c("(Intercept)", "x"), c(0.5, 2))
+  expect_error(
+    tobs_predict_spatial(uncentred, cbind(0:2, 0), node.coords = nodes),
+    "not centred")
 })
 
 

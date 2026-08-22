@@ -46,6 +46,10 @@ test_that("t_occu() gates + S3 surface", {
   expect_length(fit$temporal_field, 6L)          # one year effect per season
   expect_true(is.finite(coef(fit)$psi[["(Intercept)"]]))
   expect_true(all(is.finite(fit$rhat)))
+
+  # nobs() counts the surveyed (site, season, visit) cells, which is what the
+  # per-(site, season) detection sufficient statistics sum over.
+  expect_identical(nobs(fit), sum(!is.na(sim$y) & sim$y >= 0))
 })
 
 test_that("t_occu() accepts a list of per-season matrices", {

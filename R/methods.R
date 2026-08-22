@@ -80,28 +80,94 @@ summary.tobs_fit <- function(object, ...) {
 .TOBS_PREDICT_NO_TERMS <- c("distance", "fp_occu", "dyn_abun",
                             names(.TOBS_PREDICT_NEWDATA_TYPE))
 
+# A family's observation count registers as `.tobs_nobs_<model_type>()`, the
+# same naming rule `.tobs_s3_handler()` resolves for every other per-family S3
+# surface, so a family wires `nobs()` beside its `fitted` / `predict` /
+# `simulate` handlers. `.TOBS_NOBS_ALIAS` points a model type at the handler of
+# a family that stores its response the same way.
+.TOBS_NOBS_ALIAS <- c(
+  # Long-form response, one row per (site, pass / visit).
+  removal = "nmix", fp_occu = "nmix",
+  # Padded response grid, NA marking an unsampled cell.
+  dyn_abun = "distance", ms_nmix = "distance", ms_distance = "distance",
+  ms_occu_cover = "distance", ms_occu_cover_spatial = "distance",
+  occu_multiscale_cover = "distance", occu_ttd = "distance",
+  double_observer = "distance", distsamp_open = "distance",
+  # Explicit validity mask alongside the response.
+  ms_dyn_occu = "ms_occu", ms_count = "ms_occu")
+
 #' Number of observations
+#'
+#' The count of observed response entries the fit's likelihood reads, which is
+#' the sample size `stats::AIC()` and `stats::BIC()` form an information
+#' criterion at. What one entry is follows the family's own response layout: a
+#' surveyed (site, visit) cell for the occupancy families, a (site, band) count
+#' for distance sampling, a (site, visit, source) cell for the integrated ones.
+#'
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
-#' @return Integer count of non-NA detection history entries.
+#' @return Integer count of the fit's observed response entries. A model type
+#'   with no registered count is an error naming that type.
 #' @export
 nobs.tobs_fit <- function(object, ...) {
-  model <- object$model
-  switch(model$model_type,
-    single  = sum(model$y >= 0),
-    dynamic = sum(model$y_flat >= 0),
-    # Long-form response: one row per (site, pass / visit).
-    nmix = , removal = , fp_occu = length(model$y_long),
-    count = length(model$y_count),
-    # Padded response grid: NA marks an unsampled cell.
-    distance = , dyn_abun = , ms_nmix = , ms_distance = , ms_occu_cover = ,
-    ms_occu_cover_spatial = , occu_multiscale_cover = sum(!is.na(model$y)),
-    # Explicit validity mask alongside the response.
-    ms_occu = , ms_dyn_occu = , ms_count = sum(model$valid),
-    # One validity mask per detection source.
-    ms_int_occu = sum(vapply(model$valid, sum, integer(1))),
-    NA_integer_)
+  mt <- object$model$model_type %||% NA_character_
+  fn <- if (!is.na(mt)) .tobs_s3_handler("nobs", mt, .TOBS_NOBS_ALIAS)
+  if (is.null(fn)) {
+    stop("nobs() has no observation count registered for model type '", mt,
+         "'. Register one as `.tobs_nobs_", mt, "(model)` in R/methods.R, or ",
+         "add a `.TOBS_NOBS_ALIAS` row pointing this type at a family that ",
+         "stores its response the same way.", call. = FALSE)
+  }
+  as.integer(fn(object$model))
 }
+
+# Integer detection grid, -1 marking an unsampled cell.
+.tobs_nobs_single <- function(model) sum(model$y >= 0)
+
+.tobs_nobs_dynamic <- function(model) sum(model$y_flat >= 0)
+
+# One such grid per detection source.
+.tobs_nobs_integrated <- function(model)
+  sum(vapply(model$y_sources, function(y) sum(y >= 0), integer(1)))
+
+# Long-form response, one row per (site, pass / visit).
+.tobs_nobs_nmix <- function(model) length(model$y_long)
+
+# One value per site.
+.tobs_nobs_count <- function(model) length(model$y_count)
+
+# Padded response grid, NA marking an unsampled cell.
+.tobs_nobs_distance <- function(model) sum(!is.na(model$y))
+
+# Distance bands and removal periods cross-classify the same detected birds, and
+# each allocation is its own multinomial factor of the likelihood, so both
+# response tables count.
+.tobs_nobs_gdistremoval <- function(model)
+  sum(!is.na(model$y)) + sum(!is.na(model$y_rem))
+
+# Explicit validity mask alongside the response.
+.tobs_nobs_ms_occu <- function(model) sum(model$valid)
+
+# One validity mask per detection source.
+.tobs_nobs_ms_int_occu <- function(model)
+  sum(vapply(model$valid, sum, integer(1)))
+
+# Per-source [n_sites x n_seasons] counts of the visits that source conducted.
+.tobs_nobs_dyn_int_occu <- function(model)
+  sum(unlist(model$nvalid, use.names = FALSE))
+
+# [n_sites x n_seasons] count of the visits conducted.
+.tobs_nobs_t_occu <- function(model) sum(model$nvis)
+
+# [n_sites x n_species] count of the visits conducted.
+.tobs_nobs_occu_multi <- function(model) sum(model$n_mat)
+
+# Per-site count of the visits conducted.
+.tobs_nobs_royle_nichols <- function(model) sum(model$n_site)
+
+# The valid visit rows of either layout, dense or compact, read through the one
+# visit view every per-visit occu_cover diagnostic shares.
+.tobs_nobs_occu_cover <- function(model) .occu_cover_visit_view(model)$V
 
 # Re-export tulpa's ranef() generic so it is reachable as tulpaObs::ranef()
 # / after library(tulpaObs) without attaching tulpa (which is Imports-only).
@@ -694,6 +760,52 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (nsim == 1) res[[1]] else res
 }
 
+# `quantiles` states the credible levels a predictor reports, and it drives both
+# the numbers and the column names through the two helpers below, so a column
+# always states the level its values carry. The name is the level as a
+# percentage on `stats::quantile()`'s own convention (0.025 -> `q2.5`,
+# 0.5 -> `q50`, 0.05 -> `q5`).
+.tobs_quantile_names <- function(quantiles)
+  paste0("q", formatC(100 * quantiles, format = "fg", width = 1L, digits = 7L))
+
+# `n` pins the length a fixed lower / middle / upper table needs; leave it NULL
+# where the caller reports one column per level and any length is meaningful.
+.tobs_check_quantiles <- function(quantiles, n = NULL, arg = "quantiles") {
+  if (!is.numeric(quantiles) || !length(quantiles) || anyNA(quantiles)) {
+    stop("`", arg, "` must be a numeric vector of probabilities, with no NA.",
+         call. = FALSE)
+  }
+  shown <- paste(format(quantiles), collapse = ", ")
+  if (any(quantiles <= 0 | quantiles >= 1)) {
+    stop("`", arg, "` must lie strictly inside (0, 1); got ", shown, ".",
+         call. = FALSE)
+  }
+  if (is.unsorted(quantiles, strictly = TRUE)) {
+    stop("`", arg, "` must be strictly increasing, lowest level first; got ",
+         shown, ".", call. = FALSE)
+  }
+  if (!is.null(n) && length(quantiles) != n) {
+    stop("`", arg, "` must have length ", n, " here -- this table reports a ",
+         "lower, a middle and an upper level -- and got ", length(quantiles),
+         " (", shown, "). For an 80% interval pass c(0.1, 0.5, 0.9).",
+         call. = FALSE)
+  }
+  as.numeric(quantiles)
+}
+
+# Posterior summary of an [n_draws x n_units] response-scale draw matrix: mean,
+# sd, and one column per requested level, named from that level.
+.tobs_quantile_df <- function(pr_draws, quantiles) {
+  out <- data.frame(mean = colMeans(pr_draws),
+                    sd = apply(pr_draws, 2L, stats::sd))
+  qn <- .tobs_quantile_names(quantiles)
+  for (i in seq_along(quantiles)) {
+    out[[qn[i]]] <- unname(apply(pr_draws, 2L, stats::quantile, quantiles[i]))
+  }
+  attr(out, "quantiles") <- quantiles
+  out
+}
+
 #' Predict from occupancy model
 #'
 #' Four modes:
@@ -750,7 +862,11 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   order) for an `int_occu()` fit -- matching `fitted()$p`'s per-source
 #'   shape. In-sample locations only: like the state-arm `svc()`/`spde()`
 #'   surfaces, this does not krige a spatial detection field to unseen points.
-#' @param quantiles Quantile levels for credible intervals.
+#' @param quantiles Quantile levels for credible intervals: a strictly
+#'   increasing length-3 vector (lower, middle, upper), each in (0, 1). The
+#'   levels name the columns they fill, so `c(0.05, 0.5, 0.95)` reports
+#'   `q5` / `q50` / `q95`, and the levels used travel on the returned table in
+#'   `attr(, "quantiles")`.
 #' @param terms Name of a single term to vary: one column of the predicted
 #'   process's design matrix, every other column held at its column mean. A
 #'   vector of more than one term is an error, since a second term would be
@@ -790,6 +906,9 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
                                  X_det.0 = NULL,
                                  ...) {
+  # Every family route below reports its interval at these levels, so they are
+  # checked once here rather than reaching `quantile()` as an NA.
+  quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
   # `terms` names one design column, and every family reading it does so
   # through this generic, so validate here rather than in each fitter.
   if (!is.null(terms)) terms <- .tobs_predict_term(terms)
@@ -942,16 +1061,6 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   n_draws <- nrow(draws)
   p_occ <- pi_list[[1]]$p
 
-  .quantile_df <- function(pr_draws) {
-    data.frame(
-      mean = colMeans(pr_draws),
-      sd = apply(pr_draws, 2, sd),
-      q2.5 = apply(pr_draws, 2, quantile, quantiles[1]),
-      q50 = apply(pr_draws, 2, quantile, quantiles[2]),
-      q97.5 = apply(pr_draws, 2, quantile, quantiles[3])
-    )
-  }
-
   want_occ <- type %in% c("occupancy", "both")
   want_det <- type %in% c("detection", "both")
 
@@ -967,7 +1076,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     }
     # Occupancy probability draws at the new design (shared with the ensemble
     # stacked-predictive path; see .tobs_psi_draws()).
-    occ_out <- .quantile_df(.tobs_psi_draws(draws, X.0, p_occ))
+    occ_out <- .tobs_quantile_df(.tobs_psi_draws(draws, X.0, p_occ), quantiles)
   }
 
   # Out-of-sample detection prediction (gcol33/tulpaObs#223): the design-matrix
@@ -1019,7 +1128,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
             "X_det.0[[\"%s\"]] has %d columns but source %s has %d detection coefficients",
             src_nm[s], ncol(Xs), src_nm[s], pp$p))
         }
-        det_out[[s]] <- .quantile_df(.tobs_psi_draws(draws, Xs, pp$p, offset = off))
+        det_out[[s]] <- .tobs_quantile_df(
+          .tobs_psi_draws(draws, Xs, pp$p, offset = off), quantiles)
         off <- off + pp$p
       }
     } else {
@@ -1028,7 +1138,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
         stop(sprintf("X_det.0 has %d columns but model has %d detection coefficients",
                      ncol(X_det.0), p_det))
       }
-      det_out <- .quantile_df(.tobs_psi_draws(draws, X_det.0, p_det, offset = p_occ))
+      det_out <- .tobs_quantile_df(
+        .tobs_psi_draws(draws, X_det.0, p_det, offset = p_occ), quantiles)
     }
   }
 
@@ -1071,6 +1182,7 @@ predict_terms <- function(object, terms, type, quantiles, n_points) {
 
   # Also reached directly from tobs_marginal_effect(), so validate here too.
   term_var <- .tobs_predict_term(terms)
+  quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
   col_idx <- match(term_var, coef_names)
   if (is.na(col_idx)) {
     stop(sprintf("term '%s' not found in %s coefficients: %s",
@@ -1098,12 +1210,17 @@ predict_terms <- function(object, terms, type, quantiles, n_points) {
     pred_draws[s, ] <- inv_link(as.vector(X_pred %*% beta))
   }
 
+  # `estimate` is the posterior mean, so the middle level gets its own column
+  # named from its value rather than being dropped.
   result <- data.frame(
     x = x_grid,
     estimate = colMeans(pred_draws),
-    lower = apply(pred_draws, 2, quantile, quantiles[1]),
-    upper = apply(pred_draws, 2, quantile, quantiles[3])
+    lower = unname(apply(pred_draws, 2L, stats::quantile, quantiles[1L])),
+    upper = unname(apply(pred_draws, 2L, stats::quantile, quantiles[3L]))
   )
+  result[[.tobs_quantile_names(quantiles)[2L]]] <-
+    unname(apply(pred_draws, 2L, stats::quantile, quantiles[2L]))
+  attr(result, "quantiles") <- quantiles
   attr(result, "term") <- term_var
   attr(result, "process") <- pi_list[[proc_idx]]$name
   class(result) <- c("tobs_prediction", "data.frame")
@@ -1416,6 +1533,108 @@ tobs_check_id <- function(model, fit = NULL) {
   co
 }
 
+# The state-process formula of a fitted model. Every binder stores its arm
+# formulas under `formulas`, state arm first and under that arm's own name
+# (`occ` / `psi` / `state` / `lambda` / `mu`), matching `process_info[[1]]`.
+# Callers key the design it expands to against that arm's `coef_names`, which is
+# what catches a family whose order ever differed.
+.tobs_state_formula <- function(model) {
+  fs <- model$formulas
+  if (is.null(fs) || !length(fs)) return(NULL)
+  f <- fs[[1L]]
+  if (inherits(f, "formula")) f else NULL
+}
+
+# Design matrix for an arm's formula at new data. The fitted model frame carries
+# the factor levels and the `predvars` of any transform, so `poly()` / `scale()`
+# / `factor()` re-evaluate on the basis the fit used rather than on whatever the
+# new frame alone implies.
+.tobs_newdata_design <- function(formula, fit_data, newdata) {
+  if (is.null(fit_data)) return(stats::model.matrix(formula, data = newdata))
+  mf <- stats::model.frame(formula, data = fit_data)
+  tt <- stats::terms(mf)
+  stats::model.matrix(
+    tt, stats::model.frame(tt, data = newdata,
+                           xlev = stats::.getXlevels(tt, mf)))
+}
+
+# Pair an expanded design with an arm's coefficients BY NAME, so a covariate
+# meets the coefficient of the same name rather than of the same position.
+.tobs_match_coef_columns <- function(X, proc, arg) {
+  nm <- proc$coef_names
+  arm <- proc$name %||% "state"
+  if (is.null(nm)) {
+    if (ncol(X) != proc$p) {
+      stop(sprintf(paste0("`%s` expands to %d design columns but the %s arm ",
+                          "has %d coefficients."), arg, ncol(X), arm, proc$p),
+           call. = FALSE)
+    }
+    return(X)
+  }
+  miss <- setdiff(nm, colnames(X))
+  if (length(miss)) {
+    stop(sprintf(paste0("`%s` expands to [%s], which does not cover the fitted ",
+                        "%s design [%s]. Missing: %s."),
+                 arg, paste(colnames(X), collapse = ", "), arm,
+                 paste(nm, collapse = ", "), paste(miss, collapse = ", ")),
+         call. = FALSE)
+  }
+  X[, nm, drop = FALSE]
+}
+
+# The state design at new locations: the user's covariate frame expanded through
+# the fit's own state formula, then keyed to that arm's coefficient names.
+.tobs_spatial_newdata_design <- function(model, newocc.covs, n_new, proc) {
+  if (!is.data.frame(newocc.covs)) newocc.covs <- as.data.frame(newocc.covs)
+  if (nrow(newocc.covs) != n_new) {
+    stop(sprintf(paste0("tobs_predict_spatial: `newocc.covs` has %d rows and ",
+                        "`newcoords` %d. Supply one covariate row per ",
+                        "prediction location."), nrow(newocc.covs), n_new),
+         call. = FALSE)
+  }
+  fml <- .tobs_state_formula(model)
+  if (is.null(fml)) {
+    stop("tobs_predict_spatial: the fit stores no state-process formula, so ",
+         "`newocc.covs` cannot be expanded into the fitted design. Pass ",
+         "`newocc.covs = NULL` to predict at the fitted covariate means.",
+         call. = FALSE)
+  }
+  X <- .tobs_newdata_design(fml, model$data, newocc.covs)
+  if (nrow(X) != n_new) {
+    stop("tobs_predict_spatial: `newocc.covs` has missing values in the ",
+         "state-process covariates, so the expanded design covers fewer rows ",
+         "than `newcoords`.", call. = FALSE)
+  }
+  .tobs_match_coef_columns(X, proc, "newocc.covs")
+}
+
+# The state design with every covariate at its fitted mean. Zeros express that
+# only for a centred design, so an uncentred fit is told to name the covariate
+# values it wants rather than handed a prediction at an arbitrary point.
+.tobs_spatial_mean_design <- function(model, n_new, p_occ) {
+  X.0 <- matrix(0, n_new, p_occ)
+  X.0[, 1L] <- 1
+  if (p_occ == 1L) return(X.0)
+  fml <- .tobs_state_formula(model)
+  if (is.null(fml) || is.null(model$data)) {
+    stop("tobs_predict_spatial: the fit stores no state-process formula and ",
+         "data, so whether its covariates are centred cannot be established. ",
+         "Pass `newocc.covs` naming the covariate values to predict at.",
+         call. = FALSE)
+  }
+  mu <- colMeans(.tobs_newdata_design(fml, model$data, model$data))[-1L]
+  off <- names(mu)[abs(mu) > 1e-8]
+  if (length(off)) {
+    stop(sprintf(paste0("tobs_predict_spatial: `newocc.covs = NULL` predicts ",
+                        "at the fitted covariate means, and the state ",
+                        "covariates [%s] are not centred, so an intercept-only ",
+                        "design would predict at values the fit never saw. ",
+                        "Pass `newocc.covs`, or centre those covariates."),
+                 paste(off, collapse = ", ")), call. = FALSE)
+  }
+  X.0
+}
+
 #' Predict the state process at new spatial locations
 #'
 #' Generates state-process predictions at new coordinates, including the fitted
@@ -1439,15 +1658,30 @@ tobs_check_id <- function(model, fit = NULL) {
 #' element of `object$spatial_field`. Without it the call is an error rather
 #' than a prediction that quietly drops the field.
 #'
+#' `newocc.covs` is expanded through the fit's own state-process formula and its
+#' columns are then keyed to the fitted coefficient names, so the frame may hold
+#' its covariates in any order and may carry factors, interactions and
+#' transforms. It needs one row per row of `newcoords`.
+#'
+#' `newocc.covs = NULL` predicts at the fitted covariate MEANS, which the
+#' intercept-plus-zeros design expresses only where the state covariates were
+#' centred. A fit whose state design is not centred is an error rather than a
+#' prediction at covariate values the caller did not choose.
+#'
 #' @param object A `tobs_fit` object fitted with a spatial component.
 #' @param newcoords Matrix of new coordinates (n_new x 2).
-#' @param newocc.covs Optional data.frame of covariates at new locations.
-#' @param quantiles Quantiles for credible intervals (default 0.025, 0.5, 0.975).
+#' @param newocc.covs Optional data.frame of state-process covariates at the new
+#'   locations, one row per row of `newcoords`, on the scale and in the variables
+#'   the fit's state formula names.
+#' @param quantiles Quantile levels for credible intervals (default 0.025, 0.5,
+#'   0.975). Strictly increasing, each in (0, 1); one column is reported per
+#'   level, named from that level (`q2.5`, `q50`, `q97.5`).
 #' @param node.coords Optional matrix of coordinates for the fitted field's
 #'   nodes (n_nodes x 2), required for an areal field and ignored when the term
 #'   already carries its own coordinates.
-#' @return A data.frame with `mean`, `sd`, and quantile columns (on the response
-#'   scale: occupancy probability or abundance intensity).
+#' @return A data.frame with `mean`, `sd`, and one column per requested quantile
+#'   level (on the response scale: occupancy probability or abundance
+#'   intensity), carrying the levels used in `attr(, "quantiles")`.
 #' @export
 tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
                                  quantiles = c(0.025, 0.5, 0.975),
@@ -1455,29 +1689,22 @@ tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
   if (is.null(object$spatial)) {
     stop("tobs_predict_spatial requires a model fitted with a spatial component", call. = FALSE)
   }
+  quantiles <- .tobs_check_quantiles(quantiles)
 
-  # Build design matrix at new locations
-  if (!is.null(newocc.covs)) {
-    # Use model's formula to build X
-    model <- object$model
-    occ_formula <- model$occ_formula
-    if (!is.null(occ_formula)) {
-      X.0 <- model.matrix(occ_formula, data = newocc.covs)
-    } else {
-      X.0 <- as.matrix(cbind(1, newocc.covs))
-    }
+  model <- object$model
+  proc <- model$process_info[[1L]]
+  p_occ <- proc$p
+  n_new <- nrow(newcoords)
+
+  X.0 <- if (is.null(newocc.covs)) {
+    .tobs_spatial_mean_design(model, n_new, p_occ)
   } else {
-    n_new <- nrow(newcoords)
-    p_occ <- object$model$process_info[[1]]$p
-    X.0 <- matrix(0, n_new, p_occ)
-    X.0[, 1] <- 1  # Intercept only
+    .tobs_spatial_newdata_design(model, newocc.covs, n_new, proc)
   }
 
   # Fixed effect prediction
   draws <- object$draws
-  p_occ <- object$model$process_info[[1]]$p
   n_draws <- nrow(draws)
-  n_new <- nrow(newcoords)
 
   eta_draws <- matrix(NA_real_, n_draws, n_new)
   for (s in seq_len(n_draws)) {
@@ -1526,7 +1753,7 @@ tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
   # Apply the state process's inverse link so the returned scale is correct for
   # the family: occupancy (logit -> probability), abundance (log -> intensity).
   # Otherwise a count fit would silently report logit-of-log-lambda.
-  link <- object$model$process_info[[1]]$link %||% "logit"
+  link <- proc$link %||% "logit"
   inv_link <- switch(link,
     logit    = plogis,
     log      = exp,
@@ -1535,13 +1762,5 @@ tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
          call. = FALSE))
   psi_draws <- inv_link(eta_draws)
 
-  result <- data.frame(
-    mean = colMeans(psi_draws),
-    sd = apply(psi_draws, 2, sd)
-  )
-  for (q in quantiles) {
-    qname <- paste0("q", gsub("\\.", "", format(q * 100, nsmall = 1)))
-    result[[qname]] <- apply(psi_draws, 2, quantile, q)
-  }
-  result
+  .tobs_quantile_df(psi_draws, quantiles)
 }

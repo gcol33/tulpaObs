@@ -92,6 +92,10 @@ test_that("a gdistremoval fit recovers a single data set and wires S3", {
   expect_length(residuals(fit)$occ, 300L)
   expect_true(is.finite(waic(fit)$waic))
   expect_true(is.matrix(simulate(fit)$yDist))
+
+  # nobs() counts both response tables: the band allocation and the period
+  # allocation are separate multinomial factors of the marginal.
+  expect_identical(nobs(fit), sum(!is.na(sim$y)) + sum(!is.na(sim$y_rem)))
 })
 
 

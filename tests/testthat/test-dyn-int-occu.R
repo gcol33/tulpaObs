@@ -59,6 +59,10 @@ test_that("dyn_int_occu() fits + full S3 surface", {
   expect_length(s2, 2L)
   expect_equal(dim(s2[[1]]), dim(sim$y[[1]]))
   expect_length(residuals(fit)$occ, 250L)
+
+  # nobs() counts every surveyed (site, visit, season) cell, over all sources.
+  expect_identical(nobs(fit),
+                   sum(vapply(sim$y, function(a) sum(!is.na(a)), integer(1))))
 })
 
 test_that("dyn_int_occu() recovers psi1 / gamma / eps + per-source detection", {

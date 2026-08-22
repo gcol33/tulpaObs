@@ -42,6 +42,10 @@ test_that("fitted() z posterior on an int_occu() fit pools all sources, not the 
   # prior marginal (more non-detection evidence than the marginal alone).
   expect_true(mean(f$z[!any_det]) < mean(f$psi[!any_det]))
   expect_true(all(f$z >= 0 & f$z <= 1))
+
+  # nobs() counts every surveyed (site, visit) cell, pooled over the sources.
+  expect_identical(nobs(fit),
+                   sum(vapply(sim$y, function(m) sum(!is.na(m)), integer(1))))
 })
 
 test_that("fitted() z posterior matches a hand-rolled multi-source Bayes update", {

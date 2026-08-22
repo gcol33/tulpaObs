@@ -44,6 +44,10 @@ test_that("occu_multi() fits + full S3 surface (S = 2)", {
   s2 <- simulate(fit, nsim = 1)
   expect_length(s2, 2L)
   expect_equal(dim(residuals(fit)$occ), c(300L, 2L))
+
+  # nobs() counts every surveyed (site, visit) cell, over all species.
+  expect_identical(nobs(fit),
+                   sum(vapply(sim$y, function(m) sum(!is.na(m)), integer(1))))
 })
 
 test_that("occu_multi() recovers the interaction sign + marginal occupancy", {

@@ -48,6 +48,10 @@ test_that("double_observer() fits + full S3 surface", {
   s2 <- simulate(fit, nsim = 1)
   expect_equal(dim(s2), c(200L, 3L))
   expect_length(residuals(fit)$occ, 200L)
+
+  # nobs() counts the observed capture-history cells: each is an independent
+  # Poisson under the thinning, so all three per site count.
+  expect_identical(nobs(fit), sum(!is.na(sim$y)))
 })
 
 test_that("double_observer() recovers lambda + per-observer detection (multi-seed)", {

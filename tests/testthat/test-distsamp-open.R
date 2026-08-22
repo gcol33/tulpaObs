@@ -91,6 +91,9 @@ test_that("a distsamp_open fit recovers a single data set and wires S3", {
   expect_length(residuals(fit)$occ, 100L)
   expect_true(is.finite(waic(fit)$waic))
   expect_identical(dim(simulate(fit)), dim(sim$y))
+
+  # nobs() counts the observed (site, band, period) counts.
+  expect_identical(nobs(fit), sum(!is.na(sim$y)))
 })
 
 

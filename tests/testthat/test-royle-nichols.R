@@ -71,6 +71,10 @@ test_that("royle_nichols() S3 surface works", {
 
   co <- coef(fit)
   expect_true(is.list(co) || is.numeric(co))
+
+  # nobs() counts the surveyed (site, visit) cells, which is what feeds the
+  # per-site (k, n) sufficient statistics.
+  expect_identical(nobs(fit), sum(!is.na(sim$y)))
 })
 
 test_that("royle_nichols() visit marginal reduces to the site marginal", {

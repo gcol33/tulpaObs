@@ -50,6 +50,10 @@ test_that("occu_ttd() fits + full S3 surface", {
   s2 <- simulate(fit, nsim = 1)
   expect_true(all(s2[!is.na(s2)] >= 0 & s2[!is.na(s2)] <= 3))   # in [0, Tmax]
   expect_length(residuals(fit)$occ, fit$model$n_sites)
+
+  # nobs() counts the surveyed (site, visit) cells -- a censored visit is an
+  # observation, an unsurveyed one (NA) is not.
+  expect_identical(nobs(fit), sum(!is.na(sim$y)))
 })
 
 test_that("occu_ttd() recovers psi + rate coefficients (multi-seed)", {

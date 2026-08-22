@@ -219,13 +219,198 @@ test_that("predict(terms=) varies one term and rejects a longer vector", {
   expect_error(tobs_marginal_effect(fit, c("elev", "slope")), "one term")
 
   # plot() reads its input shape from this table alone (x / estimate / lower /
-  # upper plus the term and process attributes) and returns it invisibly.
-  expect_named(as.data.frame(pr), c("x", "estimate", "lower", "upper"))
+  # upper plus the term and process attributes) and returns it invisibly. The
+  # middle level travels beside them under its own name.
+  expect_named(as.data.frame(pr),
+               c("x", "estimate", "lower", "upper", "q50"))
   expect_identical(attr(pr, "process"), "psi")
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)
   expect_s3_class(plot(pr), "tobs_prediction")
 })
+
+test_that("predict(quantiles=) drives the levels AND the column names", {
+  res <- .fit_simple()
+  fit <- res$fit
+  X0 <- model.matrix(~ elev, data.frame(elev = c(-1, 0, 1)))
+
+  # Default layout, with the levels recorded on the table so a downstream
+  # consumer can read what the interval columns mean.
+  pd <- predict(fit, X.0 = X0)
+  expect_named(pd, c("mean", "sd", "q2.5", "q50", "q97.5"))
+  expect_equal(attr(pd, "quantiles"), c(0.025, 0.5, 0.975))
+
+  # A non-default request names its own levels and fills them with those
+  # levels' values, checked against quantile() on the same draws.
+  pr <- predict(fit, X.0 = X0, quantiles = c(0.1, 0.5, 0.9))
+  expect_named(pr, c("mean", "sd", "q10", "q50", "q90"))
+  expect_equal(attr(pr, "quantiles"), c(0.1, 0.5, 0.9))
+  psi <- tulpaObs:::.tobs_psi_draws(fit$draws, X0,
+                                    fit$model$process_info[[1]]$p)
+  expect_equal(pr$q10, unname(apply(psi, 2, stats::quantile, 0.1)))
+  expect_equal(pr$q50, unname(apply(psi, 2, stats::quantile, 0.5)))
+  expect_equal(pr$q90, unname(apply(psi, 2, stats::quantile, 0.9)))
+
+  # Narrowing the interval moves the endpoints, it does not only relabel them
+  # (the failure was a table whose columns stated the default level whatever
+  # was asked for, gcol33/tulpaObs#242).
+  expect_true(all(pr$q10 > pd$q2.5))
+  expect_true(all(pr$q90 < pd$q97.5))
+
+  # A length-2 vector used to put the 10% point in q2.5 and leave q97.5 all NA.
+  expect_error(predict(fit, X.0 = X0, quantiles = c(0.1, 0.9)), "length 3")
+  expect_error(predict(fit, X.0 = X0, quantiles = c(0.9, 0.5, 0.1)),
+               "strictly increasing")
+  expect_error(predict(fit, X.0 = X0, quantiles = c(0, 0.5, 1)),
+               "strictly inside")
+  expect_error(predict(fit, X.0 = X0, quantiles = c(0.025, NA, 0.975)),
+               "no NA")
+
+  # The terms route reports the same levels: lower / upper at the requested
+  # ends, and the middle level as its own named column rather than dropped.
+  tm <- predict(fit, terms = "elev", n_points = 8L,
+                quantiles = c(0.1, 0.5, 0.9))
+  expect_named(as.data.frame(tm),
+               c("x", "estimate", "lower", "upper", "q50"))
+  expect_equal(attr(tm, "quantiles"), c(0.1, 0.5, 0.9))
+  expect_true(all(tm$lower <= tm$q50 & tm$q50 <= tm$upper))
+  wide <- predict(fit, terms = "elev", n_points = 8L)
+  expect_true(all(tm$lower > wide$lower))
+  expect_true(all(tm$upper < wide$upper))
+  expect_error(predict(fit, terms = "elev", quantiles = c(0.1, 0.9)),
+               "length 3")
+})
+
+
+test_that("tobs_predict_spatial builds newocc.covs from the fitted formula", {
+  # Minimal object carrying what the predictor reads plus the fitted state
+  # formula and its data. Identity link and an all-zero field, so the
+  # prediction is the linear predictor exactly.
+  fit_data <- data.frame(x = c(0, 1, 0, 1), z = c(0, 0, 1, 1))
+  d <- cbind(rep(0.5, 3), rep(2, 3), rep(-2, 3))
+  colnames(d) <- c("psi_(Intercept)", "psi_x", "psi_z")
+  obj <- structure(list(
+    draws = d, spatial = list(type = "icar"), spatial_field = rep(0, 3),
+    model = list(
+      process_info = list(list(name = "psi", p = 3L, link = "identity",
+                               coef_names = c("(Intercept)", "x", "z"))),
+      formulas = list(occ = ~ x + z), data = fit_data)),
+    class = c("tobs_fit", "tulpa_fit"))
+  nodes <- cbind(0:2, 0)
+  nc <- cbind(c(0, 1), 0)
+
+  right <- data.frame(x = c(1, 0), z = c(0, 1))
+  wrong <- right[, c("z", "x")]           # same data, the user's column order
+
+  pr <- tobs_predict_spatial(obj, nc, newocc.covs = right, node.coords = nodes)
+  expect_equal(pr$mean, c(0.5 + 2, 0.5 - 2))
+
+  # `newocc.covs` is a data.frame, so its column order is the user's. The
+  # covariate has to meet the coefficient of the same NAME (tulpaObs#243).
+  expect_equal(tobs_predict_spatial(obj, nc, newocc.covs = wrong,
+                                    node.coords = nodes)$mean, pr$mean)
+
+  # The quantile columns are named from the levels, the same spelling the
+  # design-matrix predictor uses (tulpaObs#242).
+  expect_named(pr, c("mean", "sd", "q2.5", "q50", "q97.5"))
+  expect_named(tobs_predict_spatial(obj, nc, newocc.covs = right,
+                                    node.coords = nodes,
+                                    quantiles = c(0.1, 0.9)),
+               c("mean", "sd", "q10", "q90"))
+
+  # Fewer covariate rows than coordinates used to recycle silently.
+  expect_error(
+    tobs_predict_spatial(obj, cbind(c(0, 0.3, 0.6, 0.9), 0),
+                         newocc.covs = right, node.coords = nodes),
+    "one covariate row per prediction location")
+
+  # A frame missing a fitted term fails rather than shifting the pairing.
+  expect_error(
+    tobs_predict_spatial(obj, nc, newocc.covs = data.frame(x = c(1, 0)),
+                         node.coords = nodes),
+    "not found")
+
+  # newocc.covs = NULL predicts at the fitted covariate means, which the
+  # intercept-plus-zeros design expresses only for a centred fit.
+  expect_error(tobs_predict_spatial(obj, nc, node.coords = nodes),
+               "not centred")
+  cobj <- obj
+  cobj$model$data <- data.frame(x = c(-1, 1, -1, 1), z = c(-1, -1, 1, 1))
+  expect_equal(tobs_predict_spatial(cobj, nc, node.coords = nodes)$mean,
+               rep(0.5, 2))
+
+  # A factor reaches model.matrix() on the fit's own levels, so a newdata frame
+  # holding a subset of them still fills the right columns. The raw columns as
+  # a design matrix could not represent this at all.
+  fdat <- data.frame(g = factor(c("a", "b", "c", "a")))
+  df <- cbind(rep(0.1, 3), rep(1, 3), rep(-1, 3))
+  colnames(df) <- c("psi_(Intercept)", "psi_gb", "psi_gc")
+  fobj <- structure(list(
+    draws = df, spatial = list(type = "icar"), spatial_field = rep(0, 3),
+    model = list(
+      process_info = list(list(name = "psi", p = 3L, link = "identity",
+                               coef_names = c("(Intercept)", "gb", "gc"))),
+      formulas = list(occ = ~ g), data = fdat)),
+    class = c("tobs_fit", "tulpa_fit"))
+  expect_equal(
+    tobs_predict_spatial(fobj, nc, node.coords = nodes,
+                         newocc.covs = data.frame(g = factor(c("c", "a"))))$mean,
+    c(0.1 - 1, 0.1))
+
+  # A poly() term re-evaluates on the basis the fit used, so predicting at
+  # three of the fitted rows reproduces those rows of the fitted design.
+  # Rebuilding the basis from those rows alone is a different answer.
+  pdat <- data.frame(x = c(0, 1, 2, 3))
+  X_fit <- model.matrix(~ poly(x, 2), pdat)
+  beta <- c(0.1, 1, -1)
+  dp <- matrix(rep(beta, each = 3L), nrow = 3L)
+  colnames(dp) <- paste0("psi_", colnames(X_fit))
+  pobj <- structure(list(
+    draws = dp, spatial = list(type = "icar"), spatial_field = rep(0, 3),
+    model = list(
+      process_info = list(list(name = "psi", p = 3L, link = "identity",
+                               coef_names = colnames(X_fit))),
+      formulas = list(occ = ~ poly(x, 2)), data = pdat)),
+    class = c("tobs_fit", "tulpa_fit"))
+  rows <- c(1L, 2L, 4L)
+  pp <- tobs_predict_spatial(pobj, cbind(c(0, 1, 2), 0), node.coords = nodes,
+                             newocc.covs = pdat[rows, , drop = FALSE])
+  expect_equal(pp$mean, as.numeric(X_fit[rows, ] %*% beta))
+  naive <- model.matrix(~ poly(x, 2), pdat[rows, , drop = FALSE])
+  expect_false(isTRUE(all.equal(pp$mean, as.numeric(naive %*% beta))))
+})
+
+
+test_that("nobs() resolves a per-family handler and refuses an unknown type", {
+  bare <- function(mt) structure(list(model = list(model_type = mt)),
+                                 class = c("tobs_fit", "tulpa_fit"))
+
+  # An unregistered model type used to return NA, which AIC() / BIC() then
+  # carried with no indication why (gcol33/tulpaObs#245).
+  expect_error(nobs(bare("not_a_family")), "no observation count registered")
+  expect_error(nobs(bare("not_a_family")), "not_a_family")
+
+  # Every alias points at a model type that does carry a handler, so the table
+  # cannot drift into naming a target that was renamed or removed.
+  for (target in unique(unname(tulpaObs:::.TOBS_NOBS_ALIAS))) {
+    expect_type(tulpaObs:::.tobs_s3_handler("nobs", target), "closure")
+  }
+
+  # Every model type the package builds resolves one, directly or by alias.
+  built <- c("single", "dynamic", "integrated", "nmix", "removal", "fp_occu",
+             "count", "distance", "dyn_abun", "ms_nmix", "ms_distance",
+             "ms_occu_cover", "ms_occu_cover_spatial",
+             "occu_multiscale_cover", "ms_occu", "ms_dyn_occu", "ms_count",
+             "ms_int_occu", "dyn_int_occu", "occu_cover", "occu_multi",
+             "occu_ttd", "royle_nichols", "double_observer", "gdistremoval",
+             "distsamp_open", "t_occu")
+  for (mt in built) {
+    expect_type(
+      tulpaObs:::.tobs_s3_handler("nobs", mt, tulpaObs:::.TOBS_NOBS_ALIAS),
+      "closure")
+  }
+})
+
 
 test_that("predict(terms=) on the N-mixture route holds the same contract", {
   sim <- simulate_abun(N = 40, J = 3, n_abund_covs = 2, n_det_covs = 1,
