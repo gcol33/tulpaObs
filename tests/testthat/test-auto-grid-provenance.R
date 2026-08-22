@@ -277,10 +277,14 @@ test_that("the EM-path iid RE block declares its own sigma axis", {
                                         site_of_row = seq_len(12L))
   expect_true(tulpa::is_auto_grid(blk$sigma_grid))
 
-  # A user-supplied axis on the same block stays a pin.
-  re$sigma_grid <- c(0.3, 1, 3)
+  # A user-supplied axis on the same block stays a pin. The override arrives as
+  # the `grids` argument, which is where `control$sigma.grid` is threaded to,
+  # and the value has to land as well as read as a pin -- a knob admitted by the
+  # control validator and then dropped is what this path is guarding against.
   blk2 <- tulpaObs:::.tobs_block_from_re(re, model = list(), n_sites = 12L,
-                                         site_of_row = seq_len(12L))
+                                         site_of_row = seq_len(12L),
+                                         grids = list(sigma = c(0.3, 1, 3)))
+  expect_equal(as.numeric(blk2$sigma_grid), c(0.3, 1, 3))
   expect_false(tulpa::is_auto_grid(blk2$sigma_grid))
 })
 

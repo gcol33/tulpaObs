@@ -117,12 +117,17 @@ test_that(".map_engine routes nested_laplace for the multi-block families, error
     expect_identical(.map_engine("nested_laplace", family = fam),
                      "nested_laplace")
   }
-  # Families with no nested-Laplace driver: the registry rejects them before
-  # dispatch, so reaching .map_engine is an internal mis-wire (not a silent
-  # downgrade to single-Laplace). jsdm has no nested driver; ms_occu is
-  # Laplace-only (community nested-Laplace needs upstream per-arm RE + shared
-  # field support).
-  for (fam in c("jsdm", "ms_occu")) {
+  # A family with no nested-Laplace driver is rejected by the registry before
+  # dispatch, so reaching .map_engine with one is an internal mis-wire -- what
+  # is asserted here is that it ERRORS rather than silently downgrading to
+  # single-Laplace. Which families those are is `.tobs_family_methods`'s answer
+  # and is read from it: naming them here is the second family list that drifted
+  # from the registry in both directions and that .map_engine no longer keeps.
+  unsupported <- Filter(
+    function(f) !("nested_laplace" %in% tulpaObs:::.tobs_family_methods[[f]]),
+    names(tulpaObs:::.tobs_family_methods))
+  expect_gt(length(unsupported), 0L)
+  for (fam in unsupported) {
     expect_error(
       .map_engine("nested_laplace", family = fam),
       "Internal error"
