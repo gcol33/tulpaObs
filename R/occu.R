@@ -37,13 +37,24 @@
 #' formula; on a detection formula they error with a pointer rather than being
 #' fit against the wrong arm.
 #'
+#' Each source of an integrated response surveys its own subset of the sites in
+#' `data`, in its own order, so a source's rows are joined to the site-level
+#' frame on a site key rather than read in row order. The key is `site.map` when
+#' given -- a list of one entry per source, each naming or indexing one site of
+#' `data` per source row -- otherwise `rownames(y[[s]])` matched against
+#' `rownames(data)`. A source carrying neither key is keyed by row position,
+#' which requires one row per site; a shorter one errors with a pointer to
+#' `site.map`. [simulate_int_occu()] names its response rows, so its output
+#' joins on that key.
+#'
 #' @keywords internal
 .tobs_build_model <- function(occ_formula, det_formula = NULL, data, y,
                               col_formula = NULL, ext_formula = NULL,
                               species = NULL, integrated = FALSE,
                               abundance = FALSE, count = FALSE,
                               count_response = "poisson", count_trials = NULL,
-                              det_visit_formula = NULL, det_visit_data = NULL) {
+                              det_visit_formula = NULL, det_visit_data = NULL,
+                              site.map = NULL) {
 
   is_dynamic   <- !is.null(col_formula) || !is.null(ext_formula)
   is_integrated <- isTRUE(integrated)
@@ -57,7 +68,8 @@
   }
   if (is_count)      return(.tobs_build_count(occ_formula, data, y, count_response,
                                               trials = count_trials))
-  if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y))
+  if (is_integrated) return(.tobs_build_integrated(occ_formula, det_formula, data, y,
+                                                   site.map = site.map))
   if (is_dynamic)    return(.tobs_build_dynamic(occ_formula, det_formula, data, y,
                                                 col_formula, ext_formula))
 
@@ -280,7 +292,112 @@
   invisible()
 }
 
-.tobs_build_integrated <- function(occ_formula, det_formula, data, y) {
+# ---------------------------------------------------------------------------
+# Per-source site key for the integrated response
+#
+# A source of an integrated model surveys its own subset of the sites in `data`,
+# in its own order, so the site a source row measures is a join on a site key,
+# not the row's position. One resolver produces the row -> site map every
+# integrated consumer reads as `model$site_maps`.
+# ---------------------------------------------------------------------------
+
+# Match site names against the site-level frame's row names, naming every site
+# the frame does not carry instead of returning an NA index into it.
+.tobs_match_site_key <- function(site_names, site_key, what, hint) {
+  site_names <- as.character(site_names)
+  idx <- match(site_names, site_key)
+  if (anyNA(idx)) {
+    bad   <- unique(site_names[is.na(idx)])
+    shown <- paste0("'", bad[seq_len(min(10L, length(bad)))], "'", collapse = ", ")
+    if (length(bad) > 10L) {
+      shown <- sprintf("%s, ... (%d in all)", shown, length(bad))
+    }
+    stop(sprintf("%s names %d site%s that rownames(data) does not carry: %s. %s",
+                 what, length(bad), if (length(bad) == 1L) "" else "s",
+                 shown, hint), call. = FALSE)
+  }
+  idx
+}
+
+
+# 1-based row -> site map for each source of an integrated response. Resolution
+# order, most explicit first: `site.map[[s]]`, then `rownames(y[[s]])` matched
+# against `rownames(data)`, then row position for a source carrying one row per
+# site. A source that resolves by none of the three is rejected, rather than
+# assigned the leading block of sites its row count would span.
+.tobs_resolve_site_maps <- function(y, data, site.map = NULL) {
+  n_sources <- length(y)
+  n_sites   <- nrow(data)
+  site_key  <- rownames(data)
+
+  if (!is.null(site.map) &&
+      (!is.list(site.map) || length(site.map) != n_sources)) {
+    stop(sprintf("`site.map` must be a list of %d entries, one per source in `y`.",
+                 n_sources), call. = FALSE)
+  }
+
+  maps <- vector("list", n_sources)
+  for (s in seq_len(n_sources)) {
+    label <- if (!is.null(names(y)) && nzchar(names(y)[s])) {
+      sprintf("y[[\"%s\"]]", names(y)[s])
+    } else {
+      sprintf("y[[%d]]", s)
+    }
+    n_rows    <- NROW(y[[s]])
+    row_names <- rownames(y[[s]])
+
+    if (!is.null(site.map)) {
+      what <- sprintf("site.map[[%d]]", s)
+      m    <- site.map[[s]]
+      if (length(m) != n_rows) {
+        stop(sprintf("%s has %d entries but %s has %d rows.",
+                     what, length(m), label, n_rows), call. = FALSE)
+      }
+      idx <- if (is.character(m) || is.factor(m)) {
+        .tobs_match_site_key(
+          m, site_key, what,
+          "Give each entry as a name in rownames(data) or as a site index.")
+      } else {
+        suppressWarnings(as.integer(m))
+      }
+    } else if (!is.null(row_names)) {
+      what <- sprintf("rownames(%s)", label)
+      idx  <- .tobs_match_site_key(
+        row_names, site_key, what,
+        paste0("A source is joined to `data` on its row names; rename its ",
+               "rows, pass `site.map`, or drop the row names to key the ",
+               "source by position."))
+    } else if (n_rows == n_sites) {
+      what <- label
+      idx  <- seq_len(n_sites)
+    } else {
+      stop(sprintf(paste0(
+        "%s has %d rows but data has %d, and carries no site key. Name its ",
+        "rows with the rownames(data) of the sites it surveyed, or pass ",
+        "`site.map` (one site per source row, by name or by index in 1..%d)."),
+        label, n_rows, n_sites, n_sites), call. = FALSE)
+    }
+
+    if (anyNA(idx) || any(idx < 1L) || any(idx > n_sites)) {
+      stop(sprintf("%s must index sites in 1..%d.", what, n_sites), call. = FALSE)
+    }
+    if (anyDuplicated(idx)) {
+      dup <- unique(idx[duplicated(idx)])
+      stop(sprintf(paste0(
+        "%s puts more than one source row on site%s %s; each row of a source ",
+        "is one distinct site."),
+        what, if (length(dup) == 1L) "" else "s",
+        paste(dup[seq_len(min(10L, length(dup)))], collapse = ", ")),
+        call. = FALSE)
+    }
+    maps[[s]] <- as.integer(idx)
+  }
+  maps
+}
+
+
+.tobs_build_integrated <- function(occ_formula, det_formula, data, y,
+                                   site.map = NULL) {
   if (!is.list(y) || is.array(y)) {
     stop("For integrated models, y must be a list of detection matrices (one per source)")
   }
@@ -321,22 +438,20 @@
   .tobs_validate_integrated_terms(bind$terms)
   X_occ <- model.matrix(bind$fe$psi, data)
 
+  for (s in seq_len(n_sources)) {
+    if (!is.matrix(y[[s]])) stop(sprintf("y[[%d]] must be a matrix", s))
+  }
+  # 1-based for the R-side design assembly below, 0-based on the model object
+  # the C++ likelihood and every integrated diagnostic read.
+  src_site_rows <- .tobs_resolve_site_maps(y, data, site.map)
+  site_maps <- lapply(src_site_rows, function(m) m - 1L)
+
   y_sources <- vector("list", n_sources)
   X_det_list <- vector("list", n_sources)
   det_fe     <- vector("list", n_sources)
-  site_maps <- vector("list", n_sources)
 
   for (s in seq_len(n_sources)) {
     ys <- y[[s]]
-    if (!is.matrix(ys)) stop(sprintf("y[[%d]] must be a matrix", s))
-
-    if (nrow(ys) == n_sites) {
-      site_maps[[s]] <- as.integer(seq_len(n_sites) - 1L)
-    } else if (!is.null(rownames(ys))) {
-      site_maps[[s]] <- as.integer(match(rownames(ys), rownames(data)) - 1L)
-    } else {
-      site_maps[[s]] <- as.integer(seq_len(nrow(ys)) - 1L)
-    }
 
     y_int <- matrix(as.integer(ys), nrow = nrow(ys), ncol = ncol(ys))
     y_int[is.na(y_int)] <- -1L
@@ -355,7 +470,7 @@
       }
       det_fe[[s]] <- det_parsed$fe_formula
     }
-    src_rows <- site_maps[[s]] + 1L
+    src_rows <- src_site_rows[[s]]
     X_det_list[[s]] <- model.matrix(det_fe[[s]], data[src_rows, , drop = FALSE])
   }
 
@@ -369,7 +484,7 @@
   for (s in seq_len(n_sources)) {
     X_det_s <- matrix(0, n_sites, ncol(X_det_list[[s]]))
     colnames(X_det_s) <- colnames(X_det_list[[s]])
-    src_rows <- site_maps[[s]] + 1L
+    src_rows <- src_site_rows[[s]]
     X_det_s[src_rows, ] <- X_det_list[[s]]
     X_processes[[1 + s]] <- X_det_s
 

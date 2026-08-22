@@ -1001,7 +1001,8 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
 #' @param beta_occ Occupancy coefficients (default c(0.5, 0.3)).
 #' @param beta_det List of detection coefficient vectors per source.
 #' @param seed Random seed.
-#' @return A list with `y` (list of matrices), `data`, `site_maps`, and `truth`.
+#' @return A list with `y` (list of matrices, each row named by the site of
+#'   `data` it measures), `data`, `site_maps`, and `truth`.
 #' @export
 simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
                       n_shared = 20,
@@ -1038,6 +1039,10 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
     for (i in seq_len(ns)) {
       y_s[i, ] <- rbinom(J[s], 1, z[source_sites[i]] * p_s)
     }
+    # A source covers a non-contiguous subset of the sites from source 2 on, so
+    # its rows carry the names of the sites they measure: the key tobs() joins
+    # each source to `data` on.
+    rownames(y_s) <- rownames(data)[source_sites]
     y_list[[s]] <- y_s
   }
 

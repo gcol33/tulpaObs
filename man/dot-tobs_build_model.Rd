@@ -18,7 +18,8 @@
   count_response = "poisson",
   count_trials = NULL,
   det_visit_formula = NULL,
-  det_visit_data = NULL
+  det_visit_data = NULL,
+  site.map = NULL
 )
 }
 \description{
@@ -51,5 +52,15 @@ areal kinds and the temporal / re / svc / latent classes are grid-integrated
 as latent blocks on the state arm, so they are written on the occupancy
 formula; on a detection formula they error with a pointer rather than being
 fit against the wrong arm.
+
+Each source of an integrated response surveys its own subset of the sites in
+\code{data}, in its own order, so a source's rows are joined to the site-level
+frame on a site key rather than read in row order. The key is \code{site.map} when
+given -- a list of one entry per source, each naming or indexing one site of
+\code{data} per source row -- otherwise \code{rownames(y[[s]])} matched against
+\code{rownames(data)}. A source carrying neither key is keyed by row position,
+which requires one row per site; a shorter one errors with a pointer to
+\code{site.map}. \code{\link[=simulate_int_occu]{simulate_int_occu()}} names its response rows, so its output
+joins on that key.
 }
 \keyword{internal}

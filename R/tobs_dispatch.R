@@ -365,7 +365,8 @@
     det_formula = detection,
     data        = data,
     y           = y,
-    integrated  = TRUE
+    integrated  = TRUE,
+    site.map    = list(...)[["site.map"]]
   )
   do.call(.tobs_fit_model, c(
     list(model = model,

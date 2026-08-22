@@ -30,7 +30,8 @@ simulate_int_occu(
 \item{seed}{Random seed.}
 }
 \value{
-A list with \code{y} (list of matrices), \code{data}, \code{site_maps}, and \code{truth}.
+A list with \code{y} (list of matrices, each row named by the site of
+\code{data} it measures), \code{data}, \code{site_maps}, and \code{truth}.
 }
 \description{
 Simulate integrated (multi-source) occupancy data
