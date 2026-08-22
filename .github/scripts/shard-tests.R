@@ -37,8 +37,11 @@
 # Number of buckets the non-isolated files are packed into. Higher costs only
 # runner concurrency (the repository is public, so job minutes are free) and
 # buys resilience: an unmeasured expensive file that overruns takes out 1/N of
-# the pooled evidence rather than all of it.
-TIER3_POOLS <- 4L
+# the pooled evidence rather than all of it. The 21 SBC acceptance files carry
+# an equal-share weight rather than a per-file measurement, so the pooled
+# makespan is only as balanced as that assumption; the extra pools are the
+# headroom that costs nothing.
+TIER3_POOLS <- 6L
 
 # Weight for a file with no measurement, used only to spread the unmeasured
 # majority evenly. Order of magnitude, from the numbers already on record: the
