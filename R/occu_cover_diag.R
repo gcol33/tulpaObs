@@ -2,13 +2,18 @@
 # Pointwise log-likelihood (WAIC / PSIS-LOO) -- gcol33/tulpaObs#26
 # ---------------------------------------------------------------------------
 
-# Positive-arm family code shared by the occu_cover C++ WAIC / PPC kernels,
-# following the cover scheme (lognormal 0, beta 3, gaussian 4). Only these three
-# reach the joint occu_cover engine (gcol33/tulpaObs#112).
+# Integer code for the positive-arm policy: 0 = lognormal, 3 = beta,
+# 4 = gaussian. The single R-side map, shared with the C++ dispatch in
+# src/occu_coupling_shared.h (pos_log_density / pos_grad_eta / pos_grad_logdisp),
+# the cover / occu_cover NUTS specs, the WAIC / PPC kernels and the simulate
+# draws. Only these three arms reach a compiled kernel; the ordinal and truncated
+# arms are nested-Laplace only, so an unlisted family errors here rather than
+# falling back to lognormal and scoring a density the fit never used.
 .occu_cover_pos_code <- function(positive) {
   switch(positive, lognormal = 0L, beta = 3L, gaussian = 4L,
-         stop("occu_cover pointwise loglik/PPC: unsupported positive family '",
-              positive, "'.", call. = FALSE))
+         stop("Cover positive family '", positive, "' has no compiled density ",
+              "code; lognormal, beta and gaussian are the sampled / scored ",
+              "arms.", call. = FALSE))
 }
 
 # Per-draw arm coefficients + dispersion + structured-term contributions for an

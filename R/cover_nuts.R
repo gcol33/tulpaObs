@@ -39,7 +39,7 @@
   p_pres <- ncol(X_pres)
   p_pos  <- ncol(X_pos)
   total  <- p_pres + p_pos + 1L
-  pos_code <- .tobs_cover_pos_code(enc$positive)
+  pos_code <- .occu_cover_pos_code(enc$positive)
 
   b_pres   <- theta[seq_len(p_pres)]
   b_pos    <- theta[p_pres + seq_len(p_pos)]
@@ -109,18 +109,12 @@
   else exp(enc$pos_data$y)
 }
 
-# Positive-arm density code shared with the C++ NUTS spec (0 lognormal, 3 beta,
-# 4 gaussian; the ordinal / truncated arms are nested-Laplace only, not sampled).
-.tobs_cover_pos_code <- function(positive) {
-  switch(positive, beta = 3L, gaussian = 4L, 0L)
-}
-
 # Build the C++ NUTS spec list from a natural-scale cover encoding. The presence
 # and positive designs are passed straight through (raw natural scale), so the
 # draws land on the natural coefficient scale.
 .tobs_cover_nuts_spec <- function(enc) {
   list(
-    pos_code = .tobs_cover_pos_code(enc$positive),
+    pos_code = .occu_cover_pos_code(enc$positive),
     present = as.integer(enc$occ_data$y),
     y_pos   = as.numeric(.tobs_cover_pos_response(enc)),
     X_pres  = enc$occ_data$X,

@@ -279,7 +279,7 @@
   bpos_visit <- if (p_pos_visit > 0L) theta[p_occ + p_p + p_pos_site + seq_len(p_pos_visit)] else numeric(0)
   log_disp   <- theta[total]
   disp       <- exp(log_disp)
-  pos_code   <- .tobs_cover_pos_code(model$positive)
+  pos_code   <- .occu_cover_pos_code(model$positive)
 
   N <- model$n_sites; J <- model$max_visits
   sgm <- function(e) 1 / (1 + exp(-e))
@@ -497,7 +497,7 @@
   list(
     n_sites     = as.integer(N),
     max_visits  = as.integer(J),
-    pos_code    = .tobs_cover_pos_code(model$positive),
+    pos_code    = .occu_cover_pos_code(model$positive),
     y           = matrix(as.integer(model$y), N, J),
     y_pos       = matrix(as.numeric(model$y_pos), N, J),
     valid       = matrix(as.integer(model$valid), N, J),

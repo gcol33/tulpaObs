@@ -639,18 +639,6 @@
   list(pos_site = pos_site, vals = vals)
 }
 
-# Positive-arm log-density of cover value(s) `y` at cover predictor `eta`
-# (link scale) and dispersion `disp` (lognormal residual SD or beta precision).
-# Vectorised over y / eta (and matrices), so the per-visit and the per-unit
-# aggregated cover terms read one formula. Beta clamps the predictor before the
-# logistic; lognormal uses the raw predictor (matching the historical kernels).
-# Integer code for the positive-arm policy, shared with the C++ dispatch in
-# src/occu_coupling_shared.h (pos_log_density / pos_grad_eta / pos_grad_logdisp)
-# and the simulate draws: 0 = lognormal, 3 = beta, 4 = gaussian.
-.occu_cover_pos_code <- function(positive) {
-  switch(positive, beta = 3L, gaussian = 4L, lognormal = 0L, 0L)
-}
-
 # Positive-arm log-density. Single source of truth with the fit kernel
 # src/occu_coupling_shared.h::pos_log_density: no eta clamp (the coupling kernel
 # does not clamp -- at |eta| <= the converged mode the +-30 clamp never bit, and

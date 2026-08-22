@@ -132,6 +132,15 @@
            "term in the formula is not yet wired for method = 'nuts'. Use ",
            "method = 'nested_laplace' for structured terms.", call. = FALSE)
     }
+    # Only the arms with a compiled density (.occu_cover_pos_code) are sampled.
+    # ordinal / lognormal_trunc are already rejected above; beta_oi carries a
+    # point mass at the ceiling that the sampled kernels have no code for, so
+    # reject it rather than sampling the plain beta / lognormal density instead.
+    if (!positive %in% c("lognormal", "beta", "gaussian")) {
+      stop("cover(response = \"", positive, "\") is not sampled: ",
+           "method = 'nuts' covers the lognormal, beta and gaussian positive ",
+           "arms. Use method = 'nested_laplace' for this arm.", call. = FALSE)
+    }
     return(.tobs_fit_cover_nuts_dispatch(formula, data, y, positive, family,
                                          priors, control))
   }

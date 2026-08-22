@@ -289,3 +289,30 @@ test_that("cover NUTS fit supports the S3 method surface", {
   expect_equal(e_hat, p_hat * m_hat, tolerance = 1e-8)
   expect_true(all(p_hat >= 0 & p_hat <= 1))
 })
+
+test_that("the positive-arm density code has one definition and one policy", {
+  # .occu_cover_pos_code() used to be defined twice at top level, with different
+  # unknown-input policies, and a third time under a second name on the NUTS
+  # path; file collation order decided which ran (gcol33/tulpaObs#267).
+  expect_equal(.occu_cover_pos_code("lognormal"), 0L)
+  expect_equal(.occu_cover_pos_code("beta"),      3L)
+  expect_equal(.occu_cover_pos_code("gaussian"),  4L)
+  # An arm with no compiled density errors instead of falling back to lognormal.
+  expect_error(.occu_cover_pos_code("beta_oi"), "no compiled density")
+  expect_false(exists(".tobs_cover_pos_code", envir = asNamespace("tulpaObs"),
+                      inherits = FALSE))
+
+  # cover(response = "beta_oi") reaches the NUTS branch (ordinal and
+  # lognormal_trunc are rejected earlier), so it needs its own gate rather than
+  # being sampled as a plain beta.
+  set.seed(3); n <- 60L
+  dat <- data.frame(
+    x = stats::rnorm(n),
+    y = ifelse(stats::runif(n) < 0.4, 0,
+               pmin(1, stats::rbeta(n, 2, 5) +
+                      0.2 * (stats::runif(n) < 0.3))))
+  expect_error(
+    tobs(y ~ x, data = dat, family = cover(response = "beta_oi"),
+         method = "nuts", control = list(verbose = FALSE, progress = FALSE)),
+    "nested_laplace")
+})
