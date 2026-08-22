@@ -96,6 +96,7 @@
       laplace        = "laplace",
       nested_laplace = "nested_laplace",
       nuts           = "nuts",
+      pg_gibbs       = "pg_gibbs",
       stop(sprintf("Family '%s' has an unknown default_engine '%s'.",
                    family$name, family$default_engine), call. = FALSE)
     )

@@ -24,7 +24,8 @@
 #' @param observation observation likelihood, e.g. `"binomial_detection"`,
 #'   `"binomial_N"`, `"beta"`, `"distance_binned"`.
 #' @param replicates one of `"required"`, `"optional"`, `"single"`.
-#' @param default_engine `"laplace"`, `"nested_laplace"`, or `"nuts"`.
+#' @param default_engine `"laplace"`, `"nested_laplace"`, `"nuts"`, or
+#'   `"pg_gibbs"`. This is the route `method = "auto"` resolves to.
 #' @param status `"working"`, `"planned"`, or `"experimental"`.
 #' @param response shape of the family's response: `"vector"` for a plain
 #'   length-N response vector (the cover hurdle), or `"matrix"` (the default)

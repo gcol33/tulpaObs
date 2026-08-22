@@ -135,3 +135,38 @@ test_that("tobs() rejects gibbs/mi for the cover hurdle (no EM correction engine
     "not available for cover"
   )
 })
+
+# ---- method = "auto" ------------------------------------------------------
+
+test_that("every family's default_engine resolves under method = 'auto'", {
+  # The "auto" branch had no `pg_gibbs` case, so `t_occu()` -- the one family
+  # declaring it -- could not be fitted at the documented default at all
+  # (gcol33/tulpaObs#253).
+  ctors <- list(occu = occu, dyn_occu = dyn_occu, int_occu = int_occu,
+                abun = abun, cover = cover, occu_cover = occu_cover,
+                t_occu = t_occu, count = count, jsdm = jsdm)
+  for (nm in names(ctors)) {
+    fam <- ctors[[nm]]()
+    route <- .tobs_resolve_method("auto", fam)
+    expect_equal(route$engine, fam$default_engine,
+                 info = sprintf("family %s", nm))
+    # The resolved public name, not the literal "auto" the caller passed.
+    expect_false(identical(route$method, "auto"), info = sprintf("family %s", nm))
+  }
+})
+
+test_that("a fit records the resolved route, not the literal 'auto'", {
+  skip_on_cran()
+  # `fit$method` is branched on downstream (`identical(object$method, "nuts")`),
+  # so recording "auto" for a default fit clobbers the concrete label the fitter
+  # already set.
+  sim <- simulate_occu(N = 80, J = 3, seed = 1)
+  auto <- tobs(~ occ_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
+               family = occu(), control = list(verbose = FALSE, progress = FALSE))
+  expect_equal(auto$method, "laplace")
+  explicit <- tobs(~ occ_cov1, data = sim$data, detection = ~ det_cov1,
+                   y = sim$y, family = occu(), method = "laplace",
+                   control = list(verbose = FALSE, progress = FALSE))
+  expect_equal(explicit$method, "laplace")
+  expect_equal(auto$means, explicit$means)
+})

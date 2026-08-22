@@ -31,7 +31,8 @@ obs_family(
 
 \item{replicates}{one of \code{"required"}, \code{"optional"}, \code{"single"}.}
 
-\item{default_engine}{\code{"laplace"}, \code{"nested_laplace"}, or \code{"nuts"}.}
+\item{default_engine}{\code{"laplace"}, \code{"nested_laplace"}, \code{"nuts"}, or
+\code{"pg_gibbs"}. This is the route \code{method = "auto"} resolves to.}
 
 \item{status}{\code{"working"}, \code{"planned"}, or \code{"experimental"}.}
 

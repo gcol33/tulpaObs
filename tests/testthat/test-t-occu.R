@@ -52,6 +52,21 @@ test_that("t_occu() gates + S3 surface", {
   expect_identical(nobs(fit), sum(!is.na(sim$y) & sim$y >= 0))
 })
 
+test_that("t_occu() fits at the documented default method = 'auto'", {
+  # t_occu() is the one family whose default_engine is "pg_gibbs"; every other
+  # block here passes `method` explicitly, so the default route needs its own
+  # assertion (gcol33/tulpaObs#253).
+  sim <- simulate_t_occu(N = 60, T_seasons = 5, J = 3, seed = 1)
+  expect_equal(t_occu()$default_engine, "pg_gibbs")
+  expect_equal(.tobs_resolve_method("auto", t_occu())$engine, "pg_gibbs")
+  fit <- tobs(~ 1, family = t_occu(), detection = ~ 1, y = sim$y,
+              data = sim$data,
+              control = list(n.iter = 400L, n.warmup = 200L, n.chains = 1L,
+                             seed = 1))
+  expect_s3_class(fit, "tobs_fit")
+  expect_equal(fit$method, "pg_gibbs")
+})
+
 test_that("t_occu() accepts a list of per-season matrices", {
   sim <- simulate_t_occu(N = 50, T_seasons = 5, J = 3, seed = 2)
   ylist <- lapply(seq_len(5L), function(t) sim$y[, t, ])

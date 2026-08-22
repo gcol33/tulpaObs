@@ -663,8 +663,11 @@ tobs <- function(formula,
     class(fit) <- c("tobs_fit", class(fit))
   }
   attr(fit, "tobs_family") <- family
-  # Record the resolved public route for provenance / reproducibility.
-  fit$method <- method
+  # Record the resolved public route for provenance / reproducibility: `method`
+  # is still "auto" when the caller took the family's default, and the fitters
+  # branch on this field (`identical(object$method, "nuts")`), so writing the
+  # unresolved name here clobbered the concrete label they had already set.
+  fit$method <- route$method
   fit$dims   <- dims
   fit
 }
