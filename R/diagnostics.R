@@ -550,6 +550,17 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   az
 }
 
+# The same indicator from dyn_abun's flat response, which the kernel is handed
+# directly: `y_flat` is aperm(y, c(2, 3, 1)), so each site owns a contiguous
+# block of max_visits * n_seasons entries, and a missing visit is stored as -1
+# rather than NA. A count is non-negative, so a block with no positive entry is
+# the structural-zero candidate -- which covers a site whose visits are all
+# missing. Matches the `az` the ZIP fitter builds (R/dyn_abun.R:237).
+.tobs_count_all_zero_flat <- function(y_flat, n_per_site) {
+  blocks <- matrix(as.integer(y_flat), nrow = as.integer(n_per_site))
+  apply(blocks, 2L, function(v) all(v <= 0L))
+}
+
 # N-mixture: per site, the latent abundance N integrated out in closed form (the
 # Royle 2004 marginal). The observation unit is the site (the per-site marginal
 # pools that site's visits), so the pointwise log-likelihood is [n_draws x
@@ -670,12 +681,15 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
                                    eta_lambda, eta_p, eta_omega, eta_gamma, use_nb,
                                    eta_logr, max(1L, as.integer(n.threads)))
   # Zero-inflation (zip / zinb): a site is a structural-zero candidate when it
-  # has no detection in any season, matching the `az` the ZIP fitter builds.
-  # The ZI logit is named `zi_logit`; `omega_*` is dyn_abun's SURVIVAL arm.
-  all_zero <- apply(model$y, 1L, function(m) {
-    v <- m[!is.na(m)]; length(v) == 0L || all(v == 0L)
-  })
-  .tobs_count_zi_mix(ll, all_zero, draws, "zi_logit")
+  # has no detection in any season. The ZI logit is named `zi_logit`; `omega_*`
+  # is dyn_abun's SURVIVAL arm. Passed as an argument rather than bound first,
+  # so a fit with no `zi_logit` column never builds a mask it cannot use, and
+  # read off the same `y_flat` the kernel scored rather than a second copy of
+  # the response.
+  .tobs_count_zi_mix(ll,
+                     .tobs_count_all_zero_flat(model$y_flat,
+                                               model$max_visits * model$n_seasons),
+                     draws, "zi_logit")
 }
 
 # Community N-mixture (ms_abun): per (species, site), the latent abundance N

@@ -910,23 +910,33 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   #   Var[N_t] = omega^2 Var[N_{t-1}] + omega (1 - omega) E[N_{t-1}] + gamma,
   # started at Var[N_1] = lambda (Poisson) or lambda + lambda^2 / r (negbin). A
   # count is then Binomial(N_t, p), so Var[y] = p^2 Var[N_t] + p (1 - p) E[N_t].
-  # Under a Poisson initial abundance Var[N_t] == E[N_t] at every season, which
-  # collapses that to mu -- the Poisson path is unchanged to the bit. This is why
   # dyn_abun does NOT route through .tobs_count_residual(): its estimated size
   # describes the INITIAL abundance, and N_t for t > 1 is a convolution that is
   # not negative binomial, so mu + mu^2/r would be a different distribution's
   # variance.
   is_nb  <- (object$mixture %||% "poisson") %in% c("negbin", "zinb")
   r_size <- object$dispersion$r %||% NA_real_
-  lam    <- fitv$lambda
-  VN <- matrix(0, model$n_sites, T)
-  VN[, 1] <- if (is_nb && is.finite(r_size)) lam + lam^2 / r_size else lam
-  for (t in seq_len(T - 1L)) {
-    om <- fitv$omega[, t]
-    VN[, t + 1L] <- om^2 * VN[, t] + om * (1 - om) * fitv$EN[, t] +
-                    fitv$gamma[, t]
+  var_t <- if (!(is_nb && is.finite(r_size))) {
+    # A Poisson initial abundance stays Poisson at every season: binomial
+    # thinning of a Poisson is Poisson and recruitment is an independent
+    # Poisson, so Var[N_t] == E[N_t] and the recursion below returns
+    # p^2 EN + p (1 - p) EN = p EN = mu. Reading mu is what keeps the Poisson
+    # path identical to the plain count form TO THE BIT; running the recursion
+    # reaches the same real number by a different sequence of operations, so it
+    # agrees only to rounding, and which way the last bit falls is a property of
+    # the platform's arithmetic rather than of this model.
+    mu_t
+  } else {
+    lam <- fitv$lambda
+    VN  <- matrix(0, model$n_sites, T)
+    VN[, 1] <- lam + lam^2 / r_size
+    for (t in seq_len(T - 1L)) {
+      om <- fitv$omega[, t]
+      VN[, t + 1L] <- om^2 * VN[, t] + om * (1 - om) * fitv$EN[, t] +
+                      fitv$gamma[, t]
+    }
+    fitv$p^2 * VN + fitv$p * (1 - fitv$p) * fitv$EN          # [n_sites x T]
   }
-  var_t <- fitv$p^2 * VN + fitv$p * (1 - fitv$p) * fitv$EN   # [n_sites x T]
 
   out <- array(NA_real_, dim = dim(y))
   for (t in seq_len(T)) {
