@@ -299,7 +299,24 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (!is.null(n.draws) && n.draws < nrow(draws)) {
     draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
   }
-  .tobs_ploglik_from_draws(object$model, draws, n.threads = n.threads)
+  .tobs_ploglik_from_draws(.tobs_model_with_nb_size(object), draws,
+                           n.threads = n.threads)
+}
+
+# An areal count fit integrates the negative-binomial size over the outer
+# hyperparameter grid rather than estimating it as a draw coordinate, so the
+# per-family kernels cannot read it off the draw matrix and would otherwise score
+# the Poisson marginal for a negbin fit. Hand them a model carrying the
+# grid-integrated posterior mean, which .tobs_count_nb_size() reads when there is
+# no log_r column. `.tobs_fit_model()` re-attaches the outer model to the fit
+# after the family builder returns, so this is the boundary where the size and
+# the model are both in scope.
+.tobs_model_with_nb_size <- function(object) {
+  model <- object[["model"]]
+  if (is.null(model) || "log_r" %in% colnames(object[["draws"]])) return(model)
+  r <- object[["nmix_dispersion"]]$r %||% NA_real_
+  if (is.finite(r)) model$nb_r <- as.numeric(r)
+  model
 }
 
 # Per-family pointwise log-likelihood given an explicit [n_draws x p] draw
@@ -363,8 +380,13 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
          "posterior mean; `object$draws` is missing or not a matrix.",
          call. = FALSE)
   }
-  mean_draw <- matrix(colMeans(draws), nrow = 1L)
-  as.numeric(.tobs_ploglik_from_draws(object$model, mean_draw))
+  # Carry the draw names onto the mean row: the count kernels read their trailing
+  # coordinates (log_r, logit_omega, zi_logit) by name, so an unnamed row would
+  # score the plain Poisson marginal for a negbin / zero-inflated fit.
+  mean_draw <- matrix(colMeans(draws), nrow = 1L,
+                      dimnames = list(NULL, colnames(draws)))
+  as.numeric(.tobs_ploglik_from_draws(.tobs_model_with_nb_size(object),
+                                      mean_draw))
 }
 
 # Total marginal log-likelihood at a fixed-effect point estimate -- the value
@@ -481,38 +503,86 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
          "'.", call. = FALSE))
 }
 
+# Negative-binomial size per draw for a count family, read BY NAME. The fit
+# appends up to three things after the (lambda, p) coefficient block -- the
+# structural-zero logit, the random-effect variance / BLUP block, and log_r --
+# each conditionally and in that order, so the coordinate one past the
+# coefficients is log_r only when the other two are absent. An areal fit
+# integrates the size over the outer hyperparameter grid rather than estimating
+# it jointly, so it carries no log_r coordinate at all; its grid-integrated
+# posterior mean travels on the model as `nb_r`. Poisson -> Inf.
+.tobs_count_nb_size <- function(model, draws) {
+  n <- nrow(draws)
+  if ("log_r" %in% colnames(draws)) return(exp(as.numeric(draws[, "log_r"])))
+  r_grid <- model$nb_r %||% NA_real_
+  if (is.finite(r_grid)) return(rep(as.numeric(r_grid), n))
+  rep(Inf, n)
+}
+
+# Structural-zero mixture layer over a per-site pointwise log-likelihood: a site
+# with any detection cannot be a structural zero, an all-zero site mixes the
+# point mass in. `ll` is [n_draws x n_sites]; the omega draws are one per row, so
+# a vector of that length recycles down each column. This is the same two-
+# component mixture the ZIP / ZINB fitters build over the same per-site marginal
+# (R/nmix_zip.R, .tobs_fit_dyn_abun_zip), applied in R over what the kernel
+# returns rather than inside it. A fit whose draws carry no `coord` column is a
+# plain Poisson / NB fit and is returned unchanged.
+.tobs_count_zi_mix <- function(ll, all_zero, draws, coord) {
+  if (!(coord %in% colnames(draws))) return(ll)
+  omega <- stats::plogis(as.numeric(draws[, coord]))
+  out <- ll + log1p(-omega)
+  if (any(all_zero)) {
+    a  <- out[, all_zero, drop = FALSE]
+    b  <- log(omega)
+    mx <- pmax(a, b)
+    out[, all_zero] <- mx + log(exp(a - mx) + exp(b - mx))
+  }
+  out
+}
+
+# Per-site all-zero indicator from a long-form (y, site_idx) response: TRUE where
+# the site has no detection at any visit, and for a site contributing no row at
+# all. Matches the `az` the ZIP fitter builds (R/nmix_zip.R:30-33).
+.tobs_count_all_zero <- function(y, site_idx, n_sites) {
+  az  <- rep(TRUE, n_sites)
+  agg <- tapply(as.integer(y), as.integer(site_idx), function(v) all(v == 0L))
+  az[as.integer(names(agg))] <- as.logical(agg)
+  az
+}
+
 # N-mixture: per site, the latent abundance N integrated out in closed form (the
 # Royle 2004 marginal). The observation unit is the site (the per-site marginal
 # pools that site's visits), so the pointwise log-likelihood is [n_draws x
-# n_sites]. NB is detected by the trailing log_r draw column; the per-draw size is
-# r = exp(log_r). Reuses the same nmix_site_marginal() kernel the fit used, so the
+# n_sites]. Reuses the same nmix_site_marginal() kernel the fit used, so the
 # WAIC / LOO scoring is on one source of truth. (For NUTS fits the draws are the
 # exact posterior; the laplace path's Gaussian draws also score, the N-mixture
-# coefficient marginal being well-behaved.)
+# coefficient marginal being well-behaved.) A zero-inflated fit adds the
+# structural-zero mixture over that marginal, as the ZIP fitter does.
 .tobs_ploglik_nmix <- function(model, draws, n.threads = 1L) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
-  is_nb <- ("log_r" %in% colnames(draws)) || (ncol(draws) > p_lam + p_p)
   K_max <- as.integer(max(model$y_long) + 100L)
   # Per-draw linear predictors by BLAS; the per-site Royle marginal (the former
   # R loop, still via compute_nmix_site) is batched over draws in the kernel.
   eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
   eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p) # [S x n_obs]
-  r_vec <- if (is_nb) exp(draws[, p_lam + p_p + 1L]) else rep(Inf, nrow(draws))
-  cpp_nmix_ploglik_batch(as.integer(model$y_long), as.integer(model$site_idx),
-                         eta_p, eta_lambda, K_max, as.numeric(r_vec),
-                         max(1L, as.integer(n.threads)))
+  r_vec <- .tobs_count_nb_size(model, draws)
+  ll <- cpp_nmix_ploglik_batch(as.integer(model$y_long), as.integer(model$site_idx),
+                               eta_p, eta_lambda, K_max, as.numeric(r_vec),
+                               max(1L, as.integer(n.threads)))
+  .tobs_count_zi_mix(ll, .tobs_count_all_zero(model$y_long, model$site_idx,
+                                              ncol(ll)),
+                     draws, "logit_omega")
 }
 
 # Removal sampling: per site, the latent abundance N integrated out in closed
 # form over the depleting-binomial removal likelihood (the same marginal the fit
 # used). The observation unit is the site (its passes are pooled), so the
-# pointwise log-likelihood is [n_draws x n_sites]. NB is detected by the trailing
-# log_r draw column.
+# pointwise log-likelihood is [n_draws x n_sites]. The NB size is read from the
+# draws by name (.tobs_count_nb_size).
 .tobs_ploglik_removal <- function(model, draws, n.threads = 1L) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
-  is_nb <- ("log_r" %in% colnames(draws)) || (ncol(draws) > p_lam + p_p)
   y <- as.integer(model$y_long); site_idx <- as.integer(model$site_idx)
   n_sites <- model$n_sites
   # K_max from per-site removal totals, matching .tobs_removal_nuts_marginal.
@@ -521,7 +591,7 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   K_max <- as.integer(max(as.integer(site_tot)) + 100L)
   eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)
   eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p)
-  r_vec <- if (is_nb) exp(draws[, p_lam + p_p + 1L]) else rep(Inf, nrow(draws))
+  r_vec <- .tobs_count_nb_size(model, draws)
   cpp_removal_ploglik_batch(y, site_idx, eta_p, eta_lambda, K_max,
                             as.numeric(r_vec), max(1L, as.integer(n.threads)))
 }
@@ -588,13 +658,24 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   eta_p      <- draws[, lay$p,      drop = FALSE] %*% t(X_p)
   eta_omega  <- draws[, lay$omega,  drop = FALSE] %*% t(X_omega)
   eta_gamma  <- draws[, lay$gamma,  drop = FALSE] %*% t(X_gamma)
-  use_nb <- identical(model$mixture %||% "poisson", "negbin")
-  # eta_logr = 0 mirrors the former loop, which called eval_beta without the log
-  # r argument (default 0); the per-site HMM marginal is otherwise unchanged.
-  cpp_dyn_abun_ploglik_batch(as.integer(model$y_flat), model$n_sites,
-                             model$n_seasons, model$max_visits, model$K_max,
-                             eta_lambda, eta_p, eta_omega, eta_gamma, use_nb,
-                             rep(0, nrow(draws)), max(1L, as.integer(n.threads)))
+  # The NB size is estimated jointly with the coefficients and stored as the
+  # `log_r` draw column (R/dyn_abun.R), so the kernel is handed the per-draw
+  # log size rather than the 0 (size 1) it used before log_r was estimated.
+  # "zinb" carries the same dispersion as "negbin" under a structural-zero layer.
+  use_nb <- (model$mixture %||% "poisson") %in% c("negbin", "zinb")
+  eta_logr <- if ("log_r" %in% colnames(draws)) as.numeric(draws[, "log_r"])
+              else rep(0, nrow(draws))
+  ll <- cpp_dyn_abun_ploglik_batch(as.integer(model$y_flat), model$n_sites,
+                                   model$n_seasons, model$max_visits, model$K_max,
+                                   eta_lambda, eta_p, eta_omega, eta_gamma, use_nb,
+                                   eta_logr, max(1L, as.integer(n.threads)))
+  # Zero-inflation (zip / zinb): a site is a structural-zero candidate when it
+  # has no detection in any season, matching the `az` the ZIP fitter builds.
+  # The ZI logit is named `zi_logit`; `omega_*` is dyn_abun's SURVIVAL arm.
+  all_zero <- apply(model$y, 1L, function(m) {
+    v <- m[!is.na(m)]; length(v) == 0L || all(v == 0L)
+  })
+  .tobs_count_zi_mix(ll, all_zero, draws, "zi_logit")
 }
 
 # Community N-mixture (ms_abun): per (species, site), the latent abundance N
