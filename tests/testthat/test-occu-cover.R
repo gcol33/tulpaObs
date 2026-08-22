@@ -60,6 +60,39 @@ test_that("occu_cover() rejects structured terms in v1", {
 })
 
 
+test_that("occu_cover() nobs() counts the valid visit rows", {
+  skip_on_cran()
+  skip_if_fast()
+
+  N <- 60L; J <- 4L
+  sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L,
+                             n_pos_covs = 1L, positive = "lognormal",
+                             seed = 4242L)
+  long <- data.frame(
+    site_id  = rep(seq_len(N), each = J),
+    visit    = rep(seq_len(J), times = N),
+    y        = as.vector(t(sim$y)),
+    det_cov1 = sim$visit_data$det_cov1,
+    pos_cov1 = sim$visit_data$pos_cov1
+  )
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                  det.covs = c("det_cov1", "pos_cov1"))
+  cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
+  y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+
+  fit <- tobs(formula = ~ occ_cov1, data = cell_dat,
+              family = occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = od$y, y_pos = y_pos,
+              visits = od$det.covs, method = "laplace",
+              control = list(verbose = FALSE, max.iter = 200L))
+
+  # One observation per surveyed visit, read through the shared visit view so
+  # the dense and compact layouts of the same data report the same count.
+  expect_identical(nobs(fit), sum(!is.na(sim$y)))
+  expect_gt(nobs(fit), 0L)
+})
+
+
 test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
   skip_on_cran()
   skip_if_fast()
