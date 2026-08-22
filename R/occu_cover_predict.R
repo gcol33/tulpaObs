@@ -18,11 +18,47 @@
 # posterior means.
 
 
+# Where one arm's fitted design lives on the fit: the arm's formula, the
+# cell-level (site) coefficient count the fit carried, the visit-level formula
+# whose columns trail the site block (NULL when the arm carries none), and the
+# front-door name the width-mismatch message reports. occu_cover() stores a
+# per-arm site design plus its visit formulas; the standalone occu() SVC fit
+# stores the occupancy / detection designs in `X_processes` and holds any
+# visit-level detection columns at their reference.
+.tobs_joint_arm_slots <- function(object, arm) {
+  model <- object$model
+  if (isTRUE(object$occu_only_joint)) {
+    occ <- identical(arm, "occ")
+    return(list(
+      formula = if (occ) model$formulas$occ else model$formulas$det,
+      p_site  = ncol(model$X_processes[[if (occ) 1L else 2L]]),
+      visit   = NULL,
+      label   = "occu"))
+  }
+  list(
+    formula = switch(arm, occ = model$formulas$occ,
+                          det = model$formulas$det,
+                          pos = model$formulas$pos),
+    p_site  = switch(arm, occ = ncol(model$X_occ),
+                          det = ncol(model$X_det_site),
+                          pos = ncol(model$X_pos_site)),
+    visit   = switch(arm, det = model$formulas$det_visit,
+                          pos = model$formulas$pos_visit, NULL),
+    label   = "occu_cover")
+}
+
 # Build the per-arm design matrix at `newdata`, matching the fitted coefficient
-# count `p_arm`. occu_cover() arms carry distinct occupancy / cover formulas
-# (the cover arm padding any visit-level columns at the reference); the cover()
-# hurdle shares one formula across both arms but autoscales each arm separately,
-# so the design is rescaled with that arm's stored scaling.
+# count `p_arm`. The cover() hurdle shares one formula across both arms but
+# autoscales each arm separately, so its design is rescaled with that arm's
+# stored scaling. Every other arm takes its own formula: the cell-level block is
+# checked against the width the fit carried, and any remaining coefficients are
+# visit-level covariates (e.g. the time axis). When the arm carries a visit
+# formula those are rebuilt from `newdata` -- one prediction row per cell -- with
+# the same builder, reference (k - 1) coding, and column order as the fit, so a
+# covariate supplied in `newdata` enters the linear predictor (the change map
+# varies the time covariate this way). A covariate ABSENT from `newdata`, and
+# every trailing column on an arm carrying no visit formula, is held at its
+# reference (numeric 0 / factor base level via the zero columns).
 .tobs_joint_arm_design <- function(object, newdata, arm, p_arm) {
   if (inherits(object, "cover_fit")) {
     enc   <- object$encoding
@@ -37,41 +73,20 @@
     }
     return(.apply_scale_to_X(X, scale))
   }
-  .occu_cover_arm_design(object$model, newdata, arm, p_arm)
-}
-
-# occu_cover() per-arm design at `newdata`. Occupancy ("occ") is cell-level and
-# uses its whole design. The cover arm ("pos") is a cell-level (site) block plus,
-# when the fit carried visit covariates, trailing visit-level columns held at the
-# reference (0) for a per-cell prediction.
-.occu_cover_arm_design <- function(model, newdata, arm, p_arm) {
-  formula <- switch(arm, occ = model$formulas$occ,
-                         det = model$formulas$det,
-                         pos = model$formulas$pos)
-  p_site <- switch(arm, occ = ncol(model$X_occ),
-                        det = ncol(model$X_det_site),
-                        pos = ncol(model$X_pos_site))
-  X_site <- .tobs_arm_site_design(formula, newdata, p_site, arm, "occu_cover")
-  if (p_site == p_arm) return(X_site)
-  # The remaining coefficients are visit-level detection / positive covariates
-  # (e.g. the time axis). Rebuild their design from `newdata` -- one prediction
-  # row per cell -- with the same builder, reference (k - 1) coding, and column
-  # order as the fit, so a covariate supplied in `newdata` enters the linear
-  # predictor (the change map varies the time covariate this way). A covariate
-  # ABSENT from `newdata` is held at its reference (numeric 0 / factor base level
-  # via the zero columns), the long-standing per-cell default.
-  vf <- switch(arm, det = model$formulas$det_visit,
-                    pos = model$formulas$pos_visit, NULL)
-  if (!is.null(vf)) {
+  slots  <- .tobs_joint_arm_slots(object, arm)
+  X_site <- .tobs_arm_site_design(slots$formula, newdata, slots$p_site, arm,
+                                  slots$label)
+  if (slots$p_site == p_arm) return(X_site)
+  if (!is.null(slots$visit)) {
     nd <- newdata
-    for (v in setdiff(all.vars(vf), names(nd))) nd[[v]] <- 0
+    for (v in setdiff(all.vars(slots$visit), names(nd))) nd[[v]] <- 0
     X_visit <- tryCatch(
-      .tobs_build_visit_X(vf, nd, nrow(nd), 1L, arm = arm),
+      .tobs_build_visit_X(slots$visit, nd, nrow(nd), 1L, arm = arm),
       error = function(e) NULL)
     if (!is.null(X_visit) && ncol(X_site) + ncol(X_visit) == p_arm)
       return(cbind(X_site, X_visit))
   }
-  cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
+  cbind(X_site, matrix(0.0, nrow(X_site), p_arm - slots$p_site))
 }
 
 # Per-arm RE BLUP offset at `newdata` (gcol33/tulpaObs#102, #103): an
@@ -189,6 +204,135 @@
              upr  = qs[, 2L])
 }
 
+# RE arm key per bundle arm slot: a fit records its random effects under the
+# predictor name ("psi" occupancy, "p" detection, "pos" cover) while the draw
+# bundle keys the coefficient blocks by arm slot.
+.TOBS_JOINT_RE_ARM <- c(occ = "psi", det = "p", pos = "pos")
+
+# Point the fit's shared trend (time-varying) field blocks at the prediction's
+# time column and return the bundle. A shared trend block is weighted by a
+# per-cell covariate and a single `time_col` drives every one of them (it is also
+# the change map's time column), so it is required as soon as the fit carries
+# one. `field_specs` labels each block's arm and weight; a fit that carries none
+# (the standalone occu() route, older cover fits) follows the ordering the field
+# assembly guarantees, block 1 the unweighted intercept field and blocks 2.. the
+# trend fields. cover() arm-specific fits (gcol33/tulpaObs#65) and occu_cover()
+# arm-specific cover fields (gcol33/tulpaObs#110) carry their own per-block
+# weight column and keep it -- an intercept-only arm-specific field needs no
+# time_col (gcol33/tulpaObs#95); a pos-arm trend field resolves its weight from
+# newdata.
+.tobs_joint_trend_blocks <- function(object, bundle, time_col) {
+  n_field <- length(bundle$blocks)
+  if (n_field <= 1L || isTRUE(object$armspecific)) return(bundle)
+  specs <- object$field_specs
+  shared_trend <- if (!is.null(specs) && length(specs) >= n_field) {
+    vapply(seq_len(n_field), function(b)
+      identical(specs[[b]]$arm, "shared") && !is.null(specs[[b]]$weight),
+      logical(1))
+  } else {
+    c(FALSE, rep(TRUE, n_field - 1L))
+  }
+  if (!any(shared_trend)) return(bundle)
+  if (is.null(time_col)) time_col <- object$trend_weight
+  if (is.null(time_col)) {
+    stop("predict(): this fit has ", sum(shared_trend),
+         " shared time-varying (trend) field(s); pass `time_col = ",
+         "\"<column>\"`, the per-cell covariate that weights the trend ",
+         "field(s) (the same column used at fit time).", call. = FALSE)
+  }
+  for (b in which(shared_trend)) bundle$blocks[[b]]$weight <- time_col
+  bundle
+}
+
+# Prediction frame and its cell map. `newdata` defaults to the fit's own data
+# (one row per spatial unit); an explicit `cell` column indexes the field cells,
+# otherwise row i is field cell i.
+.tobs_joint_predict_cells <- function(object, newdata, n_cells) {
+  if (is.null(newdata)) {
+    newdata <- object$model$data
+    if (is.null(newdata)) {
+      stop("predict(): `newdata` is required (one row per spatial unit, or a ",
+           "`cell` column indexing the field cells).", call. = FALSE)
+    }
+  }
+  cell <- if (!is.null(newdata$cell)) as.integer(newdata$cell)
+          else seq_len(nrow(newdata))
+  if (anyNA(cell) || any(cell < 1L) || any(cell > n_cells)) {
+    stop("predict(): `cell` must index field cells 1..", n_cells,
+         " (add a `cell` column to `newdata`, or pass one row per field cell ",
+         "in cell order).", call. = FALSE)
+  }
+  list(newdata = newdata, cell = cell)
+}
+
+# Per-draw quantities at `nd` for the arms the fit carries. `bundle$b` is the
+# roster: the occupancy arm ("occ") is always present, the detection arm ("det")
+# on occu() and occu_cover() fits, the cover arm ("pos") on occu_cover() and
+# cover() fits. `arms` narrows the evaluation to the arms the caller reads, so a
+# quantity is never charged the design of an arm it does not use. Returns `p`
+# (occupancy), `p_det` (detection), `mu` (conditional cover) and `E` (expected
+# cover) for whichever arms were evaluated.
+#
+# Each arm's linear predictor is the fitted betas, plus the shared-field
+# contribution, plus that arm's RE BLUP offset (gcol33/tulpaObs#102): the group's
+# latent draws are added when the fit carries an RE on the arm AND `newdata`
+# supplies the grouping column; otherwise the term shrinks to the population mean
+# (offset 0), the field-only behaviour.
+.tobs_joint_arm_states <- function(object, bundle, nd, cell, arms = NULL) {
+  present <- names(bundle$b)[!vapply(bundle$b, is.null, logical(1))]
+  arms    <- if (is.null(arms)) present else intersect(arms, present)
+  wf <- function(nm) {
+    if (!nm %in% names(nd)) {
+      stop("predict(): trend-field weight column '", nm,
+           "' is not in `newdata`.", call. = FALSE)
+    }
+    as.numeric(nd[[nm]])
+  }
+  eta <- function(arm) {
+    X <- .tobs_joint_arm_design(object, nd, arm, ncol(bundle$b[[arm]]))
+    .tobs_joint_arm_eta(bundle, X, arm, cell, wf) +
+      .occu_cover_re_offset(bundle, .TOBS_JOINT_RE_ARM[[arm]], nd, nrow(X),
+                            bundle$n)
+  }
+  out <- list()
+  if ("occ" %in% arms) out$p     <- stats::plogis(eta("occ"))
+  if ("det" %in% arms) out$p_det <- stats::plogis(eta("det"))
+  if ("pos" %in% arms) {
+    out$mu <- .tobs_cover_mu(eta("pos"), bundle, object)
+    if (!is.null(out$p)) out$E <- out$p * out$mu
+  }
+  out
+}
+
+# The two prediction frames a change map differences: `newdata` with the time
+# covariate held at `times[1]` and at `times[2]`.
+.tobs_joint_change_frames <- function(object, newdata, times, time_col) {
+  if (is.null(times) || length(times) != 2L) {
+    stop("predict(type = \"change\") needs `times = c(t1, t2)`.", call. = FALSE)
+  }
+  if (is.null(time_col)) time_col <- object$trend_weight
+  if (is.null(time_col)) {
+    stop("predict(type = \"change\") needs the name of the time covariate. ",
+         "Pass `time_col = \"<column>\"` (the covariate whose change between ",
+         "`times[1]` and `times[2]` drives the prediction).", call. = FALSE)
+  }
+  if (!time_col %in% names(newdata)) {
+    stop("predict(): `time_col = \"", time_col, "\"` is not a column of ",
+         "`newdata`.", call. = FALSE)
+  }
+  nd1 <- newdata; nd1[[time_col]] <- times[1L]
+  nd2 <- newdata; nd2[[time_col]] <- times[2L]
+  list(nd1, nd2)
+}
+
+# Per-row summaries over a draw matrix: the `level` central-interval endpoints
+# and the posterior SD.
+.tobs_draw_lwr <- function(m, level)
+  apply(m, 1L, stats::quantile, probs = (1 - level) / 2, names = FALSE)
+.tobs_draw_upr <- function(m, level)
+  apply(m, 1L, stats::quantile, probs = 1 - (1 - level) / 2, names = FALSE)
+.tobs_draw_sd <- function(m) apply(m, 1L, stats::sd)
+
 # Core predict handler for the joint cover-family fits. `object` is an
 # occu_cover() fit (3-arm) or a cover() hurdle fit on the nested-Laplace path
 # (2-arm); both expose a joint nested-Laplace object via `.tobs_joint_fit()`.
@@ -204,86 +348,13 @@
          call. = FALSE)
   }
 
-  bundle  <- .tobs_joint_draws(object, n = nsim)
-  n_cells <- bundle$n_cells
-  n_field <- length(bundle$blocks)
+  bundle <- .tobs_joint_trend_blocks(
+    object, .tobs_joint_draws(object, n = nsim), time_col)
+  nc      <- .tobs_joint_predict_cells(object, newdata, bundle$n_cells)
+  newdata <- nc$newdata
+  cell    <- nc$cell
 
-  # Trend (time-varying field) fits weight the SHARED occupancy trend blocks by a
-  # per-cell covariate. A single `time_col` drives those blocks (and is the change
-  # map's time column); require it when the fit has a shared trend field. cover()
-  # arm-specific fits (gcol33/tulpaObs#65) and occu_cover() arm-specific cover
-  # fields (gcol33/tulpaObs#110) carry their own per-block weight column and keep
-  # it -- an intercept-only arm-specific field needs no time_col
-  # (gcol33/tulpaObs#95); a pos-arm trend field resolves its weight from newdata.
-  if (n_field > 1L && !isTRUE(object$armspecific)) {
-    specs <- object$field_specs
-    shared_trend <- if (!is.null(specs) && length(specs) >= n_field) {
-      vapply(seq_len(n_field), function(b)
-        identical(specs[[b]]$arm, "shared") && !is.null(specs[[b]]$weight),
-        logical(1))
-    } else {
-      c(FALSE, rep(TRUE, n_field - 1L))   # legacy: blocks 2.. are shared trends
-    }
-    if (any(shared_trend)) {
-      if (is.null(time_col)) time_col <- object$trend_weight
-      if (is.null(time_col)) {
-        stop("predict(): this fit has ", sum(shared_trend),
-             " shared time-varying (trend) field(s); pass `time_col = ",
-             "\"<column>\"`, the per-cell covariate that weights the trend ",
-             "field(s) (the same column used at fit time).", call. = FALSE)
-      }
-      for (b in which(shared_trend)) bundle$blocks[[b]]$weight <- time_col
-    }
-  }
-
-  if (is.null(newdata)) {
-    newdata <- object$model$data
-    if (is.null(newdata)) {
-      stop("predict(): `newdata` is required (one row per spatial unit, or a ",
-           "`cell` column indexing the field cells).", call. = FALSE)
-    }
-  }
-
-  # cell map: explicit `cell` column, else row i -> field cell i.
-  if (!is.null(newdata$cell)) {
-    cell <- as.integer(newdata$cell)
-  } else {
-    cell <- seq_len(nrow(newdata))
-  }
-  if (anyNA(cell) || any(cell < 1L) || any(cell > n_cells)) {
-    stop("predict(): `cell` must index field cells 1..", n_cells,
-         " (add a `cell` column to `newdata`, or pass one row per field cell ",
-         "in cell order).", call. = FALSE)
-  }
-
-  state <- function(nd) {
-    X_occ <- .tobs_joint_arm_design(object, nd, "occ", ncol(bundle$b$occ))
-    X_pos <- .tobs_joint_arm_design(object, nd, "pos", ncol(bundle$b$pos))
-    wf <- function(nm) {
-      if (!nm %in% names(nd)) {
-        stop("predict(): trend-field weight column '", nm,
-             "' is not in `newdata`.", call. = FALSE)
-      }
-      as.numeric(nd[[nm]])
-    }
-    # Per-arm RE BLUP offset (gcol33/tulpaObs#102): added when the fit carries an
-    # RE on that arm AND `newdata` supplies the grouping column; otherwise the
-    # prediction is at the population mean (offset 0), the field-only behaviour.
-    eta_occ <- .tobs_joint_arm_eta(bundle, X_occ, "occ", cell, wf) +
-               .occu_cover_re_offset(bundle, "psi", nd, nrow(X_occ), bundle$n)
-    eta_pos <- .tobs_joint_arm_eta(bundle, X_pos, "pos", cell, wf) +
-               .occu_cover_re_offset(bundle, "pos", nd, nrow(X_pos), bundle$n)
-    p <- stats::plogis(eta_occ)
-    mu <- .tobs_cover_mu(eta_pos, bundle, object)
-    out <- list(p = p, mu = mu, E = p * mu)
-    if (!is.null(bundle$b$det)) {
-      X_det   <- .tobs_joint_arm_design(object, nd, "det", ncol(bundle$b$det))
-      eta_det <- .tobs_joint_arm_eta(bundle, X_det, "det", cell) +
-                 .occu_cover_re_offset(bundle, "p", nd, nrow(X_det), bundle$n)
-      out$p_det <- stats::plogis(eta_det)
-    }
-    out
-  }
+  state <- function(nd) .tobs_joint_arm_states(object, bundle, nd, cell)
 
   # --- single-time quantities ---------------------------------------------
   if (type != "change") {
@@ -306,24 +377,9 @@
   }
 
   # --- change between two values of the time covariate ---------------------
-  if (is.null(times) || length(times) != 2L) {
-    stop("predict(type = \"change\") needs `times = c(t1, t2)`.", call. = FALSE)
-  }
-  if (is.null(time_col)) time_col <- object$trend_weight
-  if (is.null(time_col)) {
-    stop("predict(type = \"change\") needs the name of the time covariate. ",
-         "Pass `time_col = \"<column>\"` (the covariate whose change between ",
-         "`times[1]` and `times[2]` drives the prediction).", call. = FALSE)
-  }
-  if (!time_col %in% names(newdata)) {
-    stop("predict(): `time_col = \"", time_col, "\"` is not a column of ",
-         "`newdata`.", call. = FALSE)
-  }
-
-  nd1 <- newdata; nd1[[time_col]] <- times[1L]
-  nd2 <- newdata; nd2[[time_col]] <- times[2L]
-  s1 <- state(nd1)
-  s2 <- state(nd2)
+  nds <- .tobs_joint_change_frames(object, newdata, times, time_col)
+  s1  <- state(nds[[1L]])
+  s2  <- state(nds[[2L]])
 
   # Per-draw deltas + the exact additive decomposition
   #   delta_exp = p2 mu2 - p1 mu1 = (p2 - p1) mu1 + p2 (mu2 - mu1).
@@ -333,9 +389,8 @@
   d_occ  <- (s2$p - s1$p) * s1$mu
   d_ab   <- s2$p * (s2$mu - s1$mu)
 
-  a <- (1 - level) / 2
-  qlo <- function(m) apply(m, 1L, stats::quantile, probs = a,     names = FALSE)
-  qhi <- function(m) apply(m, 1L, stats::quantile, probs = 1 - a, names = FALSE)
+  qlo <- function(m) .tobs_draw_lwr(m, level)
+  qhi <- function(m) .tobs_draw_upr(m, level)
 
   tbl <- data.frame(
     cell             = cell,
@@ -364,7 +419,7 @@
   # than a plug-in of the means (the marginalize-derived-quantities rule). These
   # are the per-cell change-certainty quantities a spatially-varying-trend
   # occupancy fit reports; they are pure additions to the table.
-  qsd <- function(m) apply(m, 1L, stats::sd)
+  qsd <- .tobs_draw_sd
   tbl$p_T1.sd <- qsd(s1$p); tbl$p_T1.lwr <- qlo(s1$p); tbl$p_T1.upr <- qhi(s1$p)
   tbl$p_T2.sd <- qsd(s2$p); tbl$p_T2.lwr <- qlo(s2$p); tbl$p_T2.upr <- qhi(s2$p)
   tbl$delta_p.prob_pos          <- rowMeans(d_p    > 0)
@@ -386,29 +441,6 @@
 }
 
 
-# Occupancy ("occ") arm design at `newdata` for the rerouted standalone occu()
-# SVC joint fit. The single-season occu() model carries the occupancy formula at
-# `model$formulas$occ` (the fixed-effects psi formula the spatial term was
-# stripped from) and the fitted design at `model$X_processes[[1]]`; the field is
-# added separately by `.tobs_joint_arm_eta`, not by this design. Detection
-# ("det") uses the detection formula / `model$X_processes[[2]]`; visit-level
-# columns (if any) are held at the reference (0) for a per-cell prediction.
-.occu_joint_arm_design <- function(model, newdata, arm) {
-  if (identical(arm, "occ")) {
-    formula <- model$formulas$occ
-    p_arm   <- ncol(model$X_processes[[1L]])
-  } else {
-    formula <- model$formulas$det
-    p_arm   <- ncol(model$X_processes[[2L]]) +
-               (if (is.null(model$X_det_visit)) 0L else ncol(model$X_det_visit))
-  }
-  p_site <- if (identical(arm, "occ")) ncol(model$X_processes[[1L]])
-            else ncol(model$X_processes[[2L]])
-  X_site <- .tobs_arm_site_design(formula, newdata, p_site, arm, "occu")
-  if (p_site == p_arm) return(X_site)
-  cbind(X_site, matrix(0.0, nrow(X_site), p_arm - p_site))
-}
-
 # Site-level design at `newdata` for one arm, checked against the width the fit
 # carried. A mismatch means `newdata` is missing a covariate, or carries a factor
 # with different levels, which would otherwise shift every coefficient onto the
@@ -428,11 +460,11 @@
 }
 
 # Core predict handler for the rerouted standalone occu() SVC joint fit
-# (gcol33/tulpaObs#81): the occupancy-only twin of `.tobs_predict_joint`. The
-# occupancy psi and detection p are computed PER DRAW from the grid-integrated
-# joint posterior (betas + shared field) and only then summarized -- the
-# marginalize-derived-quantities rule, so the per-cell psi carries the joint
-# posterior's correlation, including the spatial field at each cell. Supports
+# (gcol33/tulpaObs#81). The occupancy psi and detection p are computed PER DRAW
+# from the grid-integrated joint posterior (betas + shared field + the arm's RE
+# BLUP offset) and only then summarized -- the marginalize-derived-quantities
+# rule, so the per-cell psi carries the joint posterior's correlation, including
+# the spatial field at each cell. Supports
 # `type = "occupancy" | "detection" | "both" | "change"`; "change" reads the
 # occupancy difference between two values of the trend-field weight covariate.
 .tobs_predict_occu_joint <- function(object, newdata = NULL,
@@ -445,57 +477,16 @@
          "carries no joint object.", call. = FALSE)
   }
 
-  bundle  <- .tobs_joint_draws(object, n = nsim)
-  n_cells <- bundle$n_cells
-  n_field <- length(bundle$blocks)
+  bundle <- .tobs_joint_trend_blocks(
+    object, .tobs_joint_draws(object, n = nsim), time_col)
+  nc      <- .tobs_joint_predict_cells(object, newdata, bundle$n_cells)
+  newdata <- nc$newdata
+  cell    <- nc$cell
 
-  if (n_field > 1L) {
-    if (is.null(time_col)) time_col <- object$trend_weight
-    if (is.null(time_col)) {
-      stop("predict(): this fit has ", n_field - 1L,
-           " time-varying (trend) field(s); pass `time_col = \"<column>\"`, ",
-           "the per-cell covariate that weights the trend field(s).",
-           call. = FALSE)
-    }
-    for (b in 2:n_field) bundle$blocks[[b]]$weight <- time_col
-  }
-
-  if (is.null(newdata)) {
-    newdata <- object$model$data
-    if (is.null(newdata)) {
-      stop("predict(): `newdata` is required (one row per spatial unit, or a ",
-           "`cell` column indexing the field cells).", call. = FALSE)
-    }
-  }
-
-  if (!is.null(newdata$cell)) {
-    cell <- as.integer(newdata$cell)
-  } else {
-    cell <- seq_len(nrow(newdata))
-  }
-  if (anyNA(cell) || any(cell < 1L) || any(cell > n_cells)) {
-    stop("predict(): `cell` must index field cells 1..", n_cells,
-         " (add a `cell` column to `newdata`, or pass one row per field cell ",
-         "in cell order).", call. = FALSE)
-  }
-
-  occ_state <- function(nd) {
-    X_occ <- .occu_joint_arm_design(object$model, nd, "occ")
-    wf <- function(nm) {
-      if (!nm %in% names(nd)) {
-        stop("predict(): trend-field weight column '", nm,
-             "' is not in `newdata`.", call. = FALSE)
-      }
-      as.numeric(nd[[nm]])
-    }
-    eta_occ <- .tobs_joint_arm_eta(bundle, X_occ, "occ", cell, wf)
-    stats::plogis(eta_occ)
-  }
-  det_state <- function(nd) {
-    X_det <- .occu_joint_arm_design(object$model, nd, "det")
-    eta_det <- .tobs_joint_arm_eta(bundle, X_det, "det", cell)
-    stats::plogis(eta_det)
-  }
+  occ_state <- function(nd)
+    .tobs_joint_arm_states(object, bundle, nd, cell, "occ")$p
+  det_state <- function(nd)
+    .tobs_joint_arm_states(object, bundle, nd, cell, "det")$p_det
 
   if (type %in% c("occupancy", "detection", "both")) {
     out <- list()
@@ -521,28 +512,13 @@
   }
 
   # type == "change": occupancy difference between two trend-weight values.
-  if (is.null(times) || length(times) != 2L) {
-    stop("predict(type = \"change\") needs `times = c(t1, t2)`.", call. = FALSE)
-  }
-  if (is.null(time_col)) time_col <- object$trend_weight
-  if (is.null(time_col)) {
-    stop("predict(type = \"change\") needs the name of the time covariate. ",
-         "Pass `time_col = \"<column>\"` (the covariate whose change between ",
-         "`times[1]` and `times[2]` drives the prediction).", call. = FALSE)
-  }
-  if (!time_col %in% names(newdata)) {
-    stop("predict(): `time_col = \"", time_col, "\"` is not a column of ",
-         "`newdata`.", call. = FALSE)
-  }
-  nd1 <- newdata; nd1[[time_col]] <- times[1L]
-  nd2 <- newdata; nd2[[time_col]] <- times[2L]
-  p1 <- occ_state(nd1)
-  p2 <- occ_state(nd2)
+  nds <- .tobs_joint_change_frames(object, newdata, times, time_col)
+  p1  <- occ_state(nds[[1L]])
+  p2  <- occ_state(nds[[2L]])
   d_p <- p2 - p1
-  a <- (1 - level) / 2
-  qlo <- function(m) apply(m, 1L, stats::quantile, probs = a,     names = FALSE)
-  qhi <- function(m) apply(m, 1L, stats::quantile, probs = 1 - a, names = FALSE)
-  qsd <- function(m) apply(m, 1L, stats::sd)
+  qlo <- function(m) .tobs_draw_lwr(m, level)
+  qhi <- function(m) .tobs_draw_upr(m, level)
+  qsd <- .tobs_draw_sd
   # Start / end occupancy uncertainty and the directional posterior probability
   # P(delta > 0), both over draws (marginalize-derived-quantities); pure additions
   # alongside delta_psi.
