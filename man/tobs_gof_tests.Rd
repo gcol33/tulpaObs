@@ -21,8 +21,11 @@
 \item{...}{Unused.}
 }
 \value{
-A list with the observed statistic, its posterior-predictive
-expectation, and a tail p-value.
+A list with the observed statistic (\code{observed}), its
+posterior-predictive expectation (\code{expected}), their ratio (\code{ratio})
+and a tail p-value (\code{p.value}). The names are the same on every
+family, so a caller can read the statistic without branching on the
+model type.
 }
 \description{
 The \pkg{tulpa} goodness-of-fit generics for \code{tobs_fit}: dispersion,

@@ -213,7 +213,11 @@ single-species families, 0.9 on the community samplers).
 \item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42 on the
 single-species families, 1 on the community samplers).
 The resolved per-chain seeds are stored on \verb{$seeds}.
-\item \code{sigma.beta} — prior SD on the community-mean coefficients (default 5).
+\item \code{sigma.beta} — prior SD on the coefficients (default 10 on the
+single-species families and on the log-link community samplers
+\code{ms_count()} / \code{jsdm()} / \code{ms_abun()}, whose unit change is
+multiplicative; 5 on the logit-link community samplers \code{ms_occu()},
+\code{ms_dyn_occu()}, \code{ms_int_occu()}, \code{ms_occu_cover()}).
 \item \code{sigma.logr} — prior SD on the community-mean log-dispersion \code{mu_log_r}
 (default 1.5), on the negative-binomial samplers that carry one
 (\code{ms_abun()}, \code{ms_count()}, \code{jsdm()}). At the default this is an

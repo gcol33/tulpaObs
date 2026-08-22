@@ -1335,14 +1335,28 @@ update.tobs_fit <- function(object, ..., evaluate = TRUE) {
   do.call(.tobs_fit_model, args)
 }
 
+# Model types whose response is a site-by-visit grid with a site-level state
+# design, which is what the pre-fit checks below read. Everything else (a
+# multi-season array, a per-source list, a species stack, a binned or
+# cross-classified response) needs its own naive-occupancy and replication
+# summaries rather than these.
+.TOBS_CHECK_ID_TYPES <- c("single", "nmix", "removal", "fp_occu")
+
 #' Check model identifiability
 #'
-#' Diagnostics for potential identifiability issues in occupancy models.
-#' Checks for: confounded covariates, low detection rates, sparse data.
+#' Diagnostics for potential identifiability issues. Checks for confounded
+#' covariates, low detection or detection-free sites, and sparse replication.
+#'
+#' Applies to the families whose response is a site-by-visit grid:
+#' [occu()], [abun()], [removal()] and [fp_occu()]. On any other family the
+#' pre-fit checks are reported as not applicable rather than silently skipped
+#' -- an empty `issues` on a family the checks never ran on is not a clean bill
+#' of health. The post-fit sampler checks apply to any NUTS fit.
 #'
 #' @param model A `tobs_model` object (before fitting).
 #' @param fit Optional `tobs_fit` object (for post-fit diagnostics).
-#' @return A list with diagnostic messages and flags.
+#' @return A list with `identifiable`, the `issues` messages, and
+#'   `prefit_checked` (`FALSE` where the family carries no site-by-visit grid).
 #' @export
 tobs_check_id <- function(model, fit = NULL) {
   issues <- character()
@@ -1351,14 +1365,20 @@ tobs_check_id <- function(model, fit = NULL) {
     stop("model must be a tobs_model object")
   }
 
+  mt <- model$model_type %||% NA_character_
+  prefit <- isTRUE(mt %in% .TOBS_CHECK_ID_TYPES) &&
+            is.matrix(model$y) && length(model$X_processes)
+
   # Pre-fit checks
-  if (model$model_type %in% c("single", "community")) {
+  if (prefit) {
     y <- model$y
     n_sites <- nrow(y)
     max_visits <- ncol(y)
 
     # Naive occupancy
-    n_detected <- sum(apply(y, 1, function(row) any(row[row >= 0] == 1)))
+    # `> 0` rather than `== 1`: on a count or multistate grid the analogue of
+    # "detected here" is a nonzero entry, and on a 0/1 grid the two agree.
+    n_detected <- sum(apply(y, 1, function(row) any(row[row >= 0] > 0)))
     naive_occ <- n_detected / n_sites
     if (naive_occ < 0.05) {
       issues <- c(issues, sprintf("Very low naive occupancy (%.1f%%). Model may struggle to estimate occupancy coefficients.", 100 * naive_occ))
@@ -1401,11 +1421,17 @@ tobs_check_id <- function(model, fit = NULL) {
   }
 
   result <- list(
-    identifiable = length(issues) == 0,
-    issues = issues
+    identifiable   = length(issues) == 0,
+    issues         = issues,
+    prefit_checked = prefit
   )
   if (length(issues) > 0) {
     for (msg in issues) message("- ", msg)
+  } else if (!prefit) {
+    message("No identifiability issues detected in the sampler diagnostics. ",
+            "The pre-fit checks (naive occupancy, replication, collinearity) ",
+            "read a site-by-visit response grid, which the '", mt,
+            "' family does not carry, so they did not run.")
   } else {
     message("No identifiability issues detected.")
   }

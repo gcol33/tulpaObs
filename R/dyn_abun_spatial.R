@@ -116,7 +116,8 @@
 .tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                             K_max = NULL, sigma.beta = NULL,
                                             n.iter = NULL, n.warmup = NULL,
-                                            n.chains = NULL, max.treedepth = NULL,
+                                            n.chains = NULL, n.thin = NULL,
+                                            n.threads = NULL, max.treedepth = NULL,
                                             adapt.delta = NULL, seed = NULL,
                                             verbose = FALSE) {
   # Sampler defaults come from the one engine table.
@@ -181,7 +182,9 @@
                       adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
                       verbose = isTRUE(verbose))
   nms <- .tobs_dyn_abun_nuts_names(model, use_nb, n_raw)
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+                                field_load, n.thin = n.thin,
+                                n.threads = n.threads)
 
   ev  <- .tobs_dyn_abun_nuts_eval(model, run$par, X_lam, X_p, X_om, X_gm, use_nb)
   fit <- build_dyn_abun_fit(
@@ -232,7 +235,8 @@
 .tobs_fit_dyn_abun_nuts_temporal <- function(model, temporal, mixture = "poisson",
                                              K_max = NULL, sigma.beta = NULL,
                                              n.iter = NULL, n.warmup = NULL,
-                                             n.chains = NULL, max.treedepth = NULL,
+                                             n.chains = NULL, n.thin = NULL,
+                                             n.threads = NULL, max.treedepth = NULL,
                                              adapt.delta = NULL, seed = NULL,
                                              verbose = FALSE) {
   # Sampler defaults come from the one engine table.
@@ -282,7 +286,9 @@
                       adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
                       verbose = isTRUE(verbose))
   nms <- .tobs_dyn_abun_nuts_names(model, use_nb, n_raw)
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+                                field_load, n.thin = n.thin,
+                                n.threads = n.threads)
 
   ev  <- .tobs_dyn_abun_nuts_eval(model, run$par, X_lam, X_p, X_om, X_gm, use_nb)
   fit <- build_dyn_abun_fit(

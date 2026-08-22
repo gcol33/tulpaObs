@@ -80,5 +80,8 @@ jobs:
       - name: Install package
         run: R CMD INSTALL --no-multiarch --with-keep.source .
 
+      - name: Check API.md against the package
+        run: Rscript .github/scripts/check-api-md.R
+
       - name: Smoke suite
         run: Rscript .github/scripts/run-tests.R

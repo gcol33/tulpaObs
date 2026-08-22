@@ -123,7 +123,8 @@
 .tobs_fit_fp_occu_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                            sigma.beta = NULL,
                                            n.iter = NULL, n.warmup = NULL,
-                                           n.chains = NULL, max.treedepth = NULL,
+                                           n.chains = NULL, n.thin = NULL,
+                                           n.threads = NULL, max.treedepth = NULL,
                                            adapt.delta = NULL, seed = NULL,
                                            verbose = FALSE) {
   # Sampler defaults come from the one engine table.
@@ -215,7 +216,9 @@
            paste0("p10_", model$process_info[[3]]$coef_names),
            paste0("b_",   model$process_info[[4]]$coef_names),
            paste0("raw_", seq_len(n_raw)))
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+                                field_load, n.thin = n.thin,
+                                n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   lay <- .tobs_fp_occu_nuts_layout(ncol(X_psi), ncol(X_p11), ncol(X_p10), ncol(X_b))

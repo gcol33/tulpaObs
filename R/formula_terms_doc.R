@@ -188,19 +188,38 @@
 #' @aliases icar bym2 car_proper gp multiscale_gp spde svc re temporal latent spatial
 #' @seealso \code{\link{tobs}} for the model front door.
 #' @examples
-#' \dontrun{
-#' # Areal field on occupancy, detection random effect by observer
-#' tobs(occu(), y ~ elev + icar(graph = adj), detection = ~ (1 | observer),
-#'      data = d, visits = v)
+#' # `occu()` takes the detection history as `y` and a ONE-sided state formula:
+#' # a two-sided formula would be resolved against a response the family does
+#' # not carry. `data` is site-level, `visits` visit-level.
+#' sim <- simulate_occu(N = 60, J = 3, seed = 1)
+#' d   <- transform(sim$data, cell = seq_len(nrow(sim$data)))
 #'
-#' # Areal spatially varying coefficient on `year` (the broadly supported form)
-#' tobs(occu(), y ~ year + spatial(~ 1 + year || cell, graph = adj),
-#'      data = d, visits = v, method = "nested_laplace")
+#' # A chain graph over the 60 cells: neighbours are consecutive indices.
+#' adj <- matrix(0L, 60, 60)
+#' adj[cbind(1:59, 2:60)] <- 1L
+#' adj[cbind(2:60, 1:59)] <- 1L
+#'
+#' # Areal field on occupancy
+#' fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+#'             data = d, family = occu(), detection = ~ 1, y = sim$y,
+#'             method = "nested_laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' fit$spatial_field[1:5]
+#'
+#' \dontrun{
+#' # Detection random effect by observer (a visit-level grouping)
+#' tobs(~ occ_cov1, data = d, family = occu(),
+#'      detection = ~ (1 | observer), y = sim$y, visits = v)
+#'
+#' # Areal spatially varying coefficient on `year`
+#' tobs(~ year + spatial(~ 1 + year || cell, graph = adj),
+#'      data = d, family = occu(), detection = ~ 1, y = sim$y,
+#'      method = "nested_laplace")
 #'
 #' # Continuous NNGP varying coefficient on the elev slope
-#' tobs(occu(), y ~ elev + spatial(lon, lat, model = "svc",
-#'                                 coefficients = "elev",
-#'                                 prior_range = c(50, 0.05)),
-#'      data = d, visits = v, method = "laplace")
+#' tobs(~ elev + spatial(lon, lat, model = "svc", coefficients = "elev",
+#'                       prior_range = c(50, 0.05)),
+#'      data = d, family = occu(), detection = ~ 1, y = sim$y,
+#'      method = "laplace")
 #' }
 NULL

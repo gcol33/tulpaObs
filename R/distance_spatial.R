@@ -178,7 +178,8 @@
                                             K_max = NULL, sigma.beta = NULL,
                                             sigma.shape = 1.5, sigma.logr = NULL,
                                             n.iter = NULL, n.warmup = NULL,
-                                            n.chains = NULL, max.treedepth = NULL,
+                                            n.chains = NULL, n.thin = NULL,
+                                            n.threads = NULL, max.treedepth = NULL,
                                             adapt.delta = NULL, seed = NULL,
                                             verbose = FALSE) {
   # Sampler defaults come from the one engine table.
@@ -290,7 +291,9 @@
            paste0("sigma_",  model$process_info[[2]]$coef_names),
            if (hazard) "log_shape", if (is_nb) "log_r",
            paste0("raw_", seq_len(n_raw)))
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+                                field_load, n.thin = n.thin,
+                                n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   lay <- .tobs_distance_nuts_layout(p_lam, p_sig, hazard, is_nb)

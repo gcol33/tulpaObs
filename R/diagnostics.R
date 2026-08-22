@@ -831,11 +831,36 @@ ppc.tobs_fit <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
 #'
 #' @param object A `tobs_fit` object.
 #' @param n.samples Number of posterior samples (default 250).
+#' @param nsim Alias for `n.samples`, and the name [tulpa::test_uniformity()]
+#'   forwards under. An explicit `nsim` wins, so a uniformity test run at
+#'   `nsim = 2000` draws 2000 samples rather than the default 250.
+#' @param seed Optional RNG seed for the posterior-draw selection, forwarded by
+#'   [tulpa::test_uniformity()]. Set it and repeated calls return the same
+#'   residuals; the caller's RNG stream is restored afterwards.
+#' @param observed Accepted and ignored: [tulpa::test_uniformity()] forwards it
+#'   for models whose response is supplied separately, and a latent-state fit
+#'   carries its own.
 #' @param ... Unused.
 #' @return Numeric vector of PIT residuals.
 #' @seealso [tulpa::test_uniformity()] for the uniformity test on the result.
 #' @export
-pit_residuals.tobs_fit <- function(object, n.samples = 250, ...) {
+pit_residuals.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
+                                   seed = NULL, observed = NULL, ...) {
+  # tulpa::test_uniformity() calls pit_residuals(object, observed=, nsim=,
+  # seed=). None of those is a prefix of `n.samples`, so without these formals
+  # all three fell into `...`: `nsim = 2000` ran at 250 draws and `seed` did not
+  # reach the unseeded draw selection, so the same call gave a different KS
+  # statistic each time.
+  if (!is.null(nsim)) n.samples <- as.integer(nsim)
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+      old <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
+      on.exit(assign(".Random.seed", old, envir = globalenv()), add = TRUE)
+    } else {
+      on.exit(rm(".Random.seed", envir = globalenv()), add = TRUE)
+    }
+    set.seed(as.integer(seed))
+  }
   if (inherits(object, "cover_fit")) {
     return(.tobs_pit_cover(object, n.samples))
   }
@@ -873,8 +898,11 @@ pit_residuals.tobs_fit <- function(object, n.samples = 250, ...) {
 #' @param object A fitted `tobs_fit`.
 #' @param n.samples Number of posterior-predictive replicates to simulate.
 #' @param ... Unused.
-#' @return A list with the observed statistic, its posterior-predictive
-#'   expectation, and a tail p-value.
+#' @return A list with the observed statistic (`observed`), its
+#'   posterior-predictive expectation (`expected`), their ratio (`ratio`)
+#'   and a tail p-value (`p.value`). The names are the same on every
+#'   family, so a caller can read the statistic without branching on the
+#'   model type.
 #' @name tobs_gof_tests
 NULL
 
@@ -944,7 +972,12 @@ test_outliers.tobs_fit <- function(object, n.samples = 250, ...) {
   lower <- apply(sim_det, 1, quantile, 0.025); upper <- apply(sim_det, 1, quantile, 0.975)
   n_out <- sum(obs_det < lower | obs_det > upper)
   sim_out <- vapply(seq_len(n.samples), function(s) sum(sim_det[,s] < lower | sim_det[,s] > upper), integer(1))
-  list(n_outliers = n_out, expected = mean(sim_out), p.value = mean(sim_out >= n_out))
+  # `observed` / `ratio` are the names the count branch and the two sibling
+  # tests already return, so a caller reads the statistic the same way on
+  # every family.
+  list(observed = n_out, expected = mean(sim_out),
+       ratio = n_out / max(mean(sim_out), 1),
+       p.value = mean(sim_out >= n_out))
 }
 
 #' Comprehensive model checking

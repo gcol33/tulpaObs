@@ -302,7 +302,9 @@
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
            if (is_nb) "log_r", paste0("raw_", seq_len(n_raw)))
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+                                field_load, n.thin = n.thin,
+                                n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_abun_nuts_marginal(model, mixture = mix_code, K_max = K_max)

@@ -4,12 +4,31 @@
 \alias{pit_residuals.tobs_fit}
 \title{PIT residuals for a tobs fit}
 \usage{
-\method{pit_residuals}{tobs_fit}(object, n.samples = 250, ...)
+\method{pit_residuals}{tobs_fit}(
+  object,
+  n.samples = 250,
+  nsim = NULL,
+  seed = NULL,
+  observed = NULL,
+  ...
+)
 }
 \arguments{
 \item{object}{A \code{tobs_fit} object.}
 
 \item{n.samples}{Number of posterior samples (default 250).}
+
+\item{nsim}{Alias for \code{n.samples}, and the name \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}}
+forwards under. An explicit \code{nsim} wins, so a uniformity test run at
+\code{nsim = 2000} draws 2000 samples rather than the default 250.}
+
+\item{seed}{Optional RNG seed for the posterior-draw selection, forwarded by
+\code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}}. Set it and repeated calls return the same
+residuals; the caller's RNG stream is restored afterwards.}
+
+\item{observed}{Accepted and ignored: \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}} forwards it
+for models whose response is supplied separately, and a latent-state fit
+carries its own.}
 
 \item{...}{Unused.}
 }

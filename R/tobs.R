@@ -192,7 +192,11 @@
 #'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42 on the
 #'     single-species families, 1 on the community samplers).
 #'     The resolved per-chain seeds are stored on `$seeds`.
-#'   * `sigma.beta` — prior SD on the community-mean coefficients (default 5).
+#'   * `sigma.beta` — prior SD on the coefficients (default 10 on the
+#'     single-species families and on the log-link community samplers
+#'     `ms_count()` / `jsdm()` / `ms_abun()`, whose unit change is
+#'     multiplicative; 5 on the logit-link community samplers `ms_occu()`,
+#'     `ms_dyn_occu()`, `ms_int_occu()`, `ms_occu_cover()`).
 #'   * `sigma.logr` — prior SD on the community-mean log-dispersion `mu_log_r`
 #'     (default 1.5), on the negative-binomial samplers that carry one
 #'     (`ms_abun()`, `ms_count()`, `jsdm()`). At the default this is an

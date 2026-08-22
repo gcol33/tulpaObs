@@ -1,5 +1,92 @@
 # tulpaObs NEWS
 
+## 0.0.236 (2026-08-22)
+
+* **API.md, `?tobs_terms` and three diagnostic doors match the package again
+  (#278).** README calls API.md the full reference; it was 25 exports stale,
+  named a `tobs_check` that does not exist, omitted `pg_gibbs` entirely and the
+  `occurrence` / `positive` / `by` formals, listed 8 of 31 simulators, and
+  inverted `n.iter` (documented as total iterations at a default of 2000; it is
+  the post-warmup draws KEPT, default 1000). Its export list and simulator
+  table are regenerated from NAMESPACE, and
+  `.github/scripts/check-api-md.R` (a step in the smoke and tarball workflows)
+  now fails when the export list, the simulator table, the `tobs()` signature
+  or a sampler default drifts from the package. The three `?tobs_terms`
+  examples all failed on two counts each -- two positional arguments filled
+  `formula` and `family` in order, and the two-sided formula was resolved
+  against a response `occu()` does not carry -- and are now a runnable areal
+  fit plus corrected `\dontrun{}` sketches. The `?tobs` `sigma.beta` bullet
+  gave one number where the table resolves two.
+
+  Three behaviour halves came with it. `test_outliers()` returned
+  `$n_outliers` on the single-season branch and `$observed` / `$ratio` on the
+  count branch, so no caller could read the statistic by name across families;
+  the names are now the same everywhere. `pit_residuals.tobs_fit()` accepts the
+  `nsim` / `seed` / `observed` arguments `tulpa::test_uniformity()` forwards --
+  none was a prefix of `n.samples`, so `test_uniformity(fit, nsim = 2000,
+  seed = 7)` ran at 250 draws with an unseeded draw selection and gave a
+  different KS statistic on every call; the caller's RNG stream is restored
+  afterwards. And `tobs_check_id()` gated its pre-fit checks on
+  `model_type %in% c("single", "community")`, a type no family assigns, so
+  every family except single-season occupancy skipped all of them and still
+  printed "No identifiability issues detected."; the gate is now the four
+  families whose response IS a site-by-visit grid, and elsewhere it says the
+  checks did not run.
+
+* **`residuals()` scores a negative-binomial count fit at its own variance
+  (#260).** `abun()`, `removal()` and `distance()` computed the Pearson and
+  deviance residual from a Poisson variance whatever the fitted mixture, so a
+  negbin fit was scored at `mu` where its marginal variance is
+  `mu + mu^2 / r`. The negative binomial is closed under binomial thinning with
+  the same size, so those three per-cell marginals are `NB(r, lambda * pi)` and
+  now share one helper with `count()`, `.tobs_count_residual()`.
+  `dyn_abun()` deliberately does NOT use that helper: its estimated size
+  describes the INITIAL abundance, and `N_t` for `t > 1` is a survival-thinning
+  plus recruitment convolution that is not negative binomial. Its Pearson
+  residual uses the exact moment recursion
+  `Var[N_t] = omega^2 Var[N_{t-1}] + omega (1 - omega) E[N_{t-1}] + gamma`,
+  `Var[y] = p^2 Var[N_t] + p (1 - p) E[N_t]`, validated against 150k-draw Monte
+  Carlo (max relative error 0.0043 Poisson, 0.0088 negbin). Under a Poisson
+  initial abundance `Var[N_t]` collapses to `E[N_t]` at every season, which is
+  why every Poisson path is byte-identical rather than merely close.
+
+* **`control$n.thin` and `control$n.threads` reach every NUTS route (#273).**
+  Both were documented in `?tobs`, admitted by the control validator and
+  carried in the engine table, and exactly one route -- the occupancy families
+  -- read either one, so a user thinning a long community chain got the
+  unthinned chain and no warning. Every chain loop now runs through
+  `.tobs_nuts_run_parallel()` / `.tobs_nuts_thin_chain()`, and thinning applies
+  to the per-iteration `divergent` / `accept_prob` / `treedepth` series as well
+  as to the draws, so a diagnostic cannot end up misaligned with the draws it
+  describes. `n.threads = 1L` joins the NUTS table. Two more instances of the
+  same mechanism: `.tobs_fit_model()` had no `sigma.logr` formal, so
+  `control$sigma.logr` fell into `...` for `abun()` / `removal()` /
+  `distance()` under NUTS while a hardcoded `1.5` won; and its
+  `n.threads = 1L` literal suppressed the fitter-side filler. Both are NULL
+  sentinels resolved from the table now.
+
+* **The community NUTS gradient targets take a thread cap (#265).** The four
+  per-species gradient loops (`ms_occu()`, `ms_count()` / `jsdm()`,
+  `ms_abun()`, `ms_dyn_occu()`) opened `#pragma omp parallel` with no
+  `num_threads` clause, so every leapfrog step spawned `OMP_NUM_THREADS`
+  threads with no ceiling. New `control$n.threads.grad` caps the region; the
+  default `0` leaves the count with OpenMP, so the shipped behaviour is
+  unchanged. It is deliberately not `n.threads`, which on a sampler means whole
+  chains run in parallel. The per-species reduction is serial and order-fixed,
+  so the chain is identical at any thread count -- asserted to the bit.
+
+* **Issue-tracker references removed from source, documentation and tests
+  (#249).** 954 of them: comments, roxygen (23 of which rendered into 16
+  shipped `.Rd` files), 29 inside `stop()` messages that printed to users, and
+  197 in the bare `tulpaObs#NNN` spellings. A comment states what the code does
+  or why the domain demands it; a tracker pointer is neither, and it does not
+  survive a renumbering. Where a reference sat beside a fact worth keeping the
+  fact stays; where the sentence stopped making sense without it the sentence
+  states the reason directly. `NEWS.md` keeps its references, which is what a
+  changelog citation is for, and
+  `.github/scripts/check-issue-refs.R` (a step in all three workflows) fails on
+  any that reappear elsewhere.
+
 ## 0.0.235 (2026-08-17)
 
 * **`control$sigma.logr` is reachable on the NUTS routes.** The prior SD on the

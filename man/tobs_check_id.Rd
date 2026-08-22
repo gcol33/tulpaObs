@@ -12,9 +12,17 @@ tobs_check_id(model, fit = NULL)
 \item{fit}{Optional \code{tobs_fit} object (for post-fit diagnostics).}
 }
 \value{
-A list with diagnostic messages and flags.
+A list with \code{identifiable}, the \code{issues} messages, and
+\code{prefit_checked} (\code{FALSE} where the family carries no site-by-visit grid).
 }
 \description{
-Diagnostics for potential identifiability issues in occupancy models.
-Checks for: confounded covariates, low detection rates, sparse data.
+Diagnostics for potential identifiability issues. Checks for confounded
+covariates, low detection or detection-free sites, and sparse replication.
+}
+\details{
+Applies to the families whose response is a site-by-visit grid:
+\code{\link[=occu]{occu()}}, \code{\link[=abun]{abun()}}, \code{\link[=removal]{removal()}} and \code{\link[=fp_occu]{fp_occu()}}. On any other family the
+pre-fit checks are reported as not applicable rather than silently skipped
+-- an empty \code{issues} on a family the checks never ran on is not a clean bill
+of health. The post-fit sampler checks apply to any NUTS fit.
 }

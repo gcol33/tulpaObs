@@ -24,10 +24,12 @@ fit <- tobs(
 
 ```r
 tobs(formula, data, family,
-     detection = NULL, y = NULL, visits = NULL,
+     occurrence = NULL, detection = NULL, positive = NULL,
+     y = NULL, visits = NULL,
      method = c("auto", "laplace", "laplace_sla", "laplace_gibbs",
-                "laplace_mi", "nested_laplace", "nested_laplace_sla", "nuts"),
-     priors = NULL, control = list(), ...)
+                "laplace_mi", "pg_gibbs", "nested_laplace",
+                "nested_laplace_sla", "nuts"),
+     priors = NULL, control = list(), by = NULL, ...)
 ```
 
 | Argument    | Meaning |
@@ -38,6 +40,9 @@ tobs(formula, data, family,
 | `detection` | Detection-process formula. Required for `occu()`/`abun()`; ignored by `jsdm()` and `cover()`. |
 | `y`         | Response; shape depends on family (see §2). |
 | `visits`    | Optional visit-level detection covariates (named list of `[n_sites, max_visits]` matrices, or a long data frame in site-major order). |
+| `occurrence` | Occurrence-arm formula for the cover hurdle (`cover()`, `occu_cover()`); the presence half of the two-part response. |
+| `positive`  | Positive-arm formula for the cover hurdle: the magnitude given presence. |
+| `by`        | Optional grouping for a batched multi-response fit (one fit per level, shared code path). |
 | `method`    | Inference route — one fully-specified path, not orthogonal knobs (see §4). |
 | `priors`    | `occu_priors()` / list for the Laplace methods; `FALSE` disables the default penalty; forwarded to tulpa under NUTS. The `laplace_gibbs`/`laplace_mi` routes disable it automatically. |
 | `control`   | Low-level engine controls (see §5). |
@@ -223,8 +228,9 @@ is silently ignored (e.g. there is no NUTS-with-SLA-marginal combination).
 | `"laplace_mi"`         | Laplace | Gaussian | MI | Post-EM multiple imputation, Rubin-pooled. Same prior/seed behaviour. |
 | `"nested_laplace"`     | nested Laplace | Gaussian | none | Multi-block (non-conjugate hyperpriors, areal spatial fields, cover-hurdle joint). Supported by most families (`occu`, `dyn_occu`, `int_occu`, `ms_occu`, `jsdm`, `abun`, `ms_abun`, `removal`, `distance`, `fp_occu`, `dyn_abun`, `cover`, `occu_cover`, `ms_occu_cover`, `occu_multiscale_cover`). The per-family support set is `.tobs_family_methods`; an unsupported `method` errors with a pointer rather than silently downgrading. |
 | `"nested_laplace_sla"` | nested Laplace | skew (SLA) | none | Nested Laplace with skew-corrected marginals. |
+| `"pg_gibbs"`           | Polya-Gamma Gibbs | — | — | A conjugate Gibbs chain over the exact posterior via Polya-Gamma data augmentation, NOT the stochastic-EM `laplace_gibbs`. Wired on `occu`, `t_occu`, `ms_occu`, `ms_dyn_occu`, `ms_int_occu`, `jsdm` and `ms_count`. Recovers the community variance the Laplace-EM attenuates. |
 | `"nuts"`               | NUTS | — | — | HMC via tulpa. Fits every structure, incl. correlated slopes and stacked spatial+RE. Reports split-Rhat / bulk / tail ESS on `$convergence`. |
-| `"auto"`               | — | — | — | Resolves to the family's `default_engine`. |
+| `"auto"`               | — | — | — | Resolves to the family's `default_engine`, which `fit$method` then records as the concrete route. |
 
 `fit$method` records the resolved route.
 
@@ -232,23 +238,37 @@ is silently ignored (e.g. there is no NUTS-with-SLA-marginal combination).
 
 ## 5. `control` list
 
-Sampler controls (`method = "nuts"`):
+Sampler controls (`method = "nuts"`).
 
-| Name             | Default | Meaning |
-|------------------|---------|---------|
-| `n.iter`         | 2000    | Total iterations per chain (incl. warmup) |
-| `n.warmup`       | 1000    | Warmup / adaptation iterations |
-| `n.thin`         | 1       | Keep every `n.thin`-th post-warmup draw |
-| `n.chains`       | 1       | Chains (offset seeds, pooled). Resolved seeds stored on `$seeds`. |
-| `n.threads`      | 1       | Chains run in parallel (PSOCK cluster if `> 1`) |
-| `adapt.delta`    | 0.8     | Target acceptance probability |
-| `max.treedepth`  | 10      | NUTS maximum tree depth |
-| `seed`           | 42      | Base RNG seed; chain `c` uses `seed + c - 1` |
-| `n.seeds`        | 1       | Fit K seed-offset refits and LOO-stack them into a `tobs_stack` (see §9). Member `k` uses base seed `seed + k - 1`. |
+Every default is resolved from one table, `.TOBS_ENGINE_DEFAULTS`. Where the
+single-species entry differs from the community one, both are given.
+
+| Name              | Default | Meaning |
+|-------------------|---------|---------|
+| `n.iter`          | 1000    | Post-warmup draws KEPT per chain; a run is `n.iter + n.warmup` iterations long |
+| `n.warmup`        | 1000    | Warmup / adaptation iterations, discarded |
+| `n.thin`          | 1       | Keep every `n.thin`-th post-warmup draw. Thins the per-iteration `divergent` / `accept_prob` / `treedepth` series by the same stride. |
+| `n.chains`        | 1       | Chains (offset seeds, pooled). Resolved seeds stored on `$seeds`. |
+| `n.threads`       | 1       | Whole chains run in parallel (PSOCK cluster if `> 1`) |
+| `n.threads.grad`  | 0       | OpenMP threads inside ONE gradient evaluation of a community target; `0` leaves the count to OpenMP |
+| `adapt.delta`     | 0.8 single-species / 0.9 community | Target acceptance probability |
+| `max.treedepth`   | 10      | NUTS maximum tree depth |
+| `seed`            | 42 single-species / 1 community | Base RNG seed; chain `c` uses `seed + c - 1` |
+| `sigma.beta`      | 10 single-species and log-link community (`ms_count()`, `jsdm()`, `ms_abun()`) / 5 logit-link community | Prior SD on the coefficients |
+| `sigma.logr`      | 1.5     | Prior SD on the community-mean log-dispersion `mu_log_r`, on the negative-binomial samplers that carry one |
+| `n.seeds`         | 1       | Fit K seed-offset refits and LOO-stack them into a `tobs_stack` (see §9). Member `k` uses base seed `seed + k - 1`. |
+
+Polya-Gamma Gibbs controls (`method = "pg_gibbs"`, on `occu()`, `t_occu()`,
+`ms_occu()`, `ms_dyn_occu()`, `ms_int_occu()`, `jsdm()` and `ms_count()`):
+`n.iter` (3000), `n.warmup` (1500), `n.chains` (2), `n.thin` (1), `seed` (1)
+and `sigma.beta` (2.5). **`n.iter` means the opposite thing here**: TOTAL
+sweeps, with warmup taken out of it, so the default keeps 1500 draws. There is
+deliberately no `adapt.delta` or `max.treedepth` — those are HMC knobs, and a
+conjugate sweep has neither.
 
 Laplace controls (`method = "laplace"` / `"laplace_sla"` / `"nested_laplace"` /
-`"nested_laplace_sla"`): `max.iter`, `tol`, `damping`, `sigma.beta`,
-`sigma.re.scale`. Stochastic-correction controls (`"laplace_gibbs"` /
+`"nested_laplace_sla"`): `max.iter`, `tol`, `damping`, `sigma.beta`, `n.quad`,
+`re.aghq`, `re.lkj`. Stochastic-correction controls (`"laplace_gibbs"` /
 `"laplace_mi"`): `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and
 `seed` (stored on `$seed`).
 
@@ -337,16 +357,42 @@ Load with `data(peatland_occu)`; see `?peatland_occu` for the generative model.
 All return a list with `y`, `data`, and `truth` (component truths for
 parameter-recovery tests).
 
-| Function                  | Generates |
-|---------------------------|-----------|
-| `simulate_occu()`         | Single-season occupancy |
-| `simulate_ms_occu()`      | Multispecies occupancy (3D array) |
-| `simulate_dyn_occu()`     | Dynamic occupancy (colonisation / extinction) |
-| `simulate_int_occu()`     | Integrated multi-source (list of matrices + `site_maps`) |
-| `simulate_ms_dyn_occu()`  | Dynamic multispecies (4D array) |
-| `simulate_ms_int_occu()`  | Integrated multispecies (list of 3D arrays) |
-| `simulate_cover()`        | Cover hurdle (optional exponential-kernel spatial field) |
-| `simulate_cover_joint()`  | Cover hurdle with a **shared demeaned BYM2 field** (matches the joint nested-Laplace parameterisation) |
+One per shipped family, plus two spatial variants. Each is named for the family
+it feeds, so `simulate_<family>()` fits with `family = <family>()`.
+
+| Function | Generates |
+|----------|-----------|
+| `simulate_occu()` | Single-season occupancy |
+| `simulate_t_occu()` | Multi-season occupancy with a shared AR1 year effect |
+| `simulate_dyn_occu()` | Dynamic occupancy (colonisation / extinction) |
+| `simulate_int_occu()` | Integrated multi-source (list of matrices + `site_maps`) |
+| `simulate_dyn_int_occu()` | Multi-season integrated occupancy |
+| `simulate_ms_occu()` | Multispecies occupancy (3D array) |
+| `simulate_ms_dyn_occu()` | Dynamic multispecies (4D array) |
+| `simulate_ms_int_occu()` | Integrated multispecies (list of 3D arrays) |
+| `simulate_jsdm()` | Community GLMM on observed presence / absence |
+| `simulate_occu_categorical()` | Presence plus an unordered class |
+| `simulate_occu_multi()` | Multi-species co-occurrence (joint state) |
+| `simulate_occu_ttd()` | Time-to-detection occupancy |
+| `simulate_royle_nichols()` | Abundance-induced detection heterogeneity |
+| `simulate_fp_occu()` | False-positive (multistate) occupancy |
+| `simulate_abun()` | N-mixture abundance |
+| `simulate_ms_abun()` | Community N-mixture |
+| `simulate_dyn_abun()` | Open N-mixture (Dail-Madsen) |
+| `simulate_count()` | Count / relative-abundance GLMM (no latent state) |
+| `simulate_ms_count()` | Community count GLMM |
+| `simulate_distance()` | Binned distance sampling |
+| `simulate_ms_distance()` | Community binned distance sampling |
+| `simulate_removal()` | Removal sampling (sequential depletion) |
+| `simulate_gdistremoval()` | Joint distance plus removal |
+| `simulate_distsamp_open()` | Open-population distance sampling |
+| `simulate_double_observer()` | Double-observer abundance |
+| `simulate_cover()` | Cover hurdle (optional exponential-kernel spatial field) |
+| `simulate_cover_joint()` | Cover hurdle with a **shared demeaned BYM2 field** (matches the joint nested-Laplace parameterisation) |
+| `simulate_occu_cover()` | Joint occupancy plus cover |
+| `simulate_ms_occu_cover()` | Community joint occupancy plus cover |
+| `simulate_ms_occu_cover_spatial()` | The same with a shared spatial factor |
+| `simulate_occu_multiscale_cover()` | Three-level occupancy plus cover |
 
 ---
 
@@ -456,25 +502,31 @@ a JSDM / community-factor fit (the spatial-factor `ms_occu_cover()` loadings).
 
 ## Quick reference: full export list
 
-**Fitter** `tobs` · **Families** `occu` `dyn_occu` `ms_occu` `ms_dyn_occu`
-`int_occu` `ms_int_occu` `jsdm` `fp_occu` `occu_categorical` `abun` `ms_abun`
-`dyn_abun` `distance` `removal` `cover` `occu_cover` `ms_occu_cover`
-`occu_multiscale_cover` `obs_family` · **Priors** `occu_priors` `cover_priors` ·
-**Data** `tobs_format` `tobs_data` `tobs_format_ms` `occu_cover_inputs` `tobs_get`
-· **Simulators** `simulate_occu` `simulate_ms_occu` `simulate_dyn_occu`
-`simulate_ms_dyn_occu` `simulate_int_occu` `simulate_ms_int_occu`
-`simulate_occu_categorical` `simulate_abun` `simulate_ms_abun`
-`simulate_dyn_abun` `simulate_distance` `simulate_removal` `simulate_fp_occu`
-`simulate_cover` `simulate_cover_joint` `simulate_occu_cover`
-`simulate_ms_occu_cover` `simulate_ms_occu_cover_spatial`
-`simulate_occu_multiscale_cover` · **Diagnostics** `waic` `loo` `cpo`
-`dic` `ppc` `pit_residuals` `test_uniformity`
-`test_dispersion` `test_zero_inflation` `test_outliers` `sbc`
-`tobs_check` `tobs_check_id` · **Prediction / effects** `tobs_predict_spatial`
-`tobs_marginal_effect` `tobs_richness` `tobs_associations`
-`occu_aggregation_scan` `within_between` · **Ensembles** `tobs_stack` ·
-**Convergence** `converged` `convergence` · **Generic re-exports** `ranef`
-`tidy` `glance`
+**Fitter** `tobs` · **Families** `occu` `dyn_occu` `t_occu` `ms_occu`
+`ms_dyn_occu` `int_occu` `ms_int_occu` `dyn_int_occu` `jsdm` `count`
+`ms_count` `occu_categorical` `occu_multi` `royle_nichols` `occu_ttd`
+`fp_occu` `abun` `ms_abun` `dyn_abun` `distance` `ms_distance` `removal`
+`gdistremoval` `distsamp_open` `double_observer` `cover` `occu_cover`
+`ms_occu_cover` `occu_multiscale_cover` `obs_family` · **Priors**
+`occu_priors` `cover_priors` · **Data** `tobs_format` `tobs_data`
+`tobs_format_ms` `occu_cover_inputs` `tobs_get` `fem_matrices` ·
+**Simulators** `simulate_abun` `simulate_count` `simulate_cover`
+`simulate_cover_joint` `simulate_distance` `simulate_distsamp_open`
+`simulate_double_observer` `simulate_dyn_abun` `simulate_dyn_int_occu`
+`simulate_dyn_occu` `simulate_fp_occu` `simulate_gdistremoval`
+`simulate_int_occu` `simulate_jsdm` `simulate_ms_abun` `simulate_ms_count`
+`simulate_ms_distance` `simulate_ms_dyn_occu` `simulate_ms_int_occu`
+`simulate_ms_occu` `simulate_ms_occu_cover` `simulate_ms_occu_cover_spatial`
+`simulate_occu` `simulate_occu_categorical` `simulate_occu_cover`
+`simulate_occu_multi` `simulate_occu_multiscale_cover` `simulate_occu_ttd`
+`simulate_removal` `simulate_royle_nichols` `simulate_t_occu` ·
+**Diagnostics** `waic` `loo` `cpo` `dic` `ppc` `pit_residuals`
+`test_uniformity` `test_dispersion` `test_zero_inflation` `test_outliers`
+`sbc` `check_model` `tobs_check_id` · **Prediction / effects**
+`tobs_predict_spatial` `tobs_marginal_effect` `tobs_richness`
+`tobs_associations` `occu_aggregation_scan` `within_between` · **Ensembles**
+`tobs_stack` · **Convergence** `converged` `convergence` · **Generic
+re-exports** `ranef` `tidy` `glance`
 
 > Structured terms (`icar`, `bym2`, `car`, `car_proper`, `gp`, `multiscale_gp`,
 > `spde`, `re`, `temporal`, `svc`, `latent`, `copy`) are **not exported** — they

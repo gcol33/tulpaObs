@@ -361,7 +361,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                            mixture = "poisson",
                                            K_max = NULL, sigma.beta = NULL,
                                            sigma.logr = NULL, n.iter = NULL,
-                                           n.warmup = NULL, n.chains = NULL,
+                                           n.warmup = NULL, n.chains = NULL, n.thin = NULL,
+                                           n.threads = NULL,
                                            max.treedepth = NULL, adapt.delta = NULL,
                                            seed = NULL, verbose = FALSE) {
   # Sampler defaults come from the one engine table.
@@ -471,7 +472,9 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("p_",      model$process_info[[2]]$coef_names),
            if (is_nb) "log_r", paste0("raw_", seq_len(n_raw)))
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw, field_load)
+  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+                                field_load, n.thin = n.thin,
+                                n.threads = n.threads)
   par <- run$par; cov <- run$cov
 
   lay  <- .tobs_abun_nuts_layout(p_lam, p_p, is_nb)

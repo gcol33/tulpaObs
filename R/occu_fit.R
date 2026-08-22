@@ -173,7 +173,6 @@
           sigma.beta = sigma.beta, sigma.logr = sigma.logr,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           n.thin = n.thin, n.threads = n.threads,
-        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
@@ -232,7 +231,6 @@
           sigma.beta = sigma.beta, sigma.logr = sigma.logr,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           n.thin = n.thin, n.threads = n.threads,
-        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else if (is.null(spatial)) {
@@ -296,7 +294,6 @@
           sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           n.thin = n.thin, n.threads = n.threads,
-        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
@@ -376,8 +373,6 @@
             K_max = K.max, sigma.beta = sigma.beta,
             n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
             n.thin = n.thin, n.threads = n.threads,
-          n.thin = n.thin, n.threads = n.threads,
-        n.thin = n.thin, n.threads = n.threads,
             max.treedepth = max.treedepth, adapt.delta = adapt.delta,
             seed = seed, verbose = verbose)
         else .tobs_fit_dyn_abun_nuts_spatial(
@@ -385,7 +380,6 @@
           K_max = K.max, sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           n.thin = n.thin, n.threads = n.threads,
-        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {
@@ -442,7 +436,6 @@
           fit_model, spatial = spatial, temporal = temporal, sigma.beta = sigma.beta,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           n.thin = n.thin, n.threads = n.threads,
-        n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,
           seed = seed, verbose = verbose)
       } else {

@@ -31,8 +31,10 @@
 # covariance are reported) and the whitened field block, whose posterior mean
 # maps back through `field_load` to the fitted field.
 .tobs_nuts_field_draws <- function(run_chain, n_chains, nms, n_base, n_raw,
-                                   field_load) {
-  chains <- lapply(seq_len(as.integer(n_chains)), run_chain)
+                                   field_load, n.thin = 1L, n.threads = 1L) {
+  chains <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
+                   .tobs_nuts_thin_chain,
+                   n.thin = max(1L, as.integer(n.thin %||% 1L)))
   draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
   colnames(draws) <- nms
   b_idx   <- seq_len(n_base)

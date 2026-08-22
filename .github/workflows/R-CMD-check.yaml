@@ -106,6 +106,9 @@ jobs:
       - name: Check for issue-tracker references
         run: Rscript .github/scripts/check-issue-refs.R
 
+      - name: Check API.md against the package
+        run: Rscript .github/scripts/check-api-md.R
+
       - name: Verify engine pin
         run: Rscript .github/scripts/check-engine-pin.R
 
