@@ -33,6 +33,7 @@
 #include "nmix_spatial_kernel.h"   // nmix_kernel_sweep_spatial / _log_lik_only_spatial
 #include "nmix_linalg.h"
 #include "nmix_progress.h"
+#include "newton_step.h"           // newton_backtrack / solve_with_fisher_fallback
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -283,52 +284,44 @@ SpdeInnerResult inner_newton_spde(
         nmix_add_diagonal_ridge(H);
 
         VectorXd delta;
-        Eigen::LLT<MatrixXd> chol(H);
-        if (chol.info() == Eigen::Success) {
-            delta = chol.solve(grad);
-        } else {
-            MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-            assemble_complete_fisher_spde(p_lam, p_p, n_mesh, Xl, Xp, A,
-                                          obs_by_site, info_eta_lam,
-                                          info_eta_p, H_f);
-            H_f.block(u_start, u_start, n_mesh, n_mesh) += Q;
-            nmix_add_diagonal_ridge(H_f);
-            Eigen::LLT<MatrixXd> chol_f(H_f);
-            if (chol_f.info() != Eigen::Success) {
-                Rcpp::warning("Cholesky failure (complete-data fallback) at iter %d.",
-                              iter);
-                break;
-            }
-            delta = chol_f.solve(grad);
-            if (verbose) Rcpp::Rcout << "    (Fisher fallback)\n";
-        }
+        const bool solved = tulpaObs::solve_with_fisher_fallback(
+            H, grad,
+            [&]() {
+                MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
+                assemble_complete_fisher_spde(p_lam, p_p, n_mesh, Xl, Xp, A,
+                                              obs_by_site, info_eta_lam,
+                                              info_eta_p, H_f);
+                H_f.block(u_start, u_start, n_mesh, n_mesh) += Q;
+                nmix_add_diagonal_ridge(H_f);
+                return H_f;
+            },
+            "the SPDE grid point", iter, verbose, delta);
+        if (!solved) break;
 
         const VectorXd delta_lam = delta.segment(0, p_lam);
         const VectorXd delta_p   = delta.segment(p_lam, p_p);
         const VectorXd delta_u   = delta.segment(u_start, n_mesh);
 
-        double step = 1.0;
-        bool stepped = false;
+        VectorXd beta_lam_try, beta_p_try, u_try;
         VectorXd eta_lam_try(n_sites), eta_p_try(n_obs);
         const double obj_cur = log_lik + field_log_prior(res.u);
-        for (int h = 0; h < 12; ++h) {
-            const VectorXd beta_lam_try = res.beta_lambda + step * delta_lam;
-            const VectorXd beta_p_try   = res.beta_p      + step * delta_p;
-            const VectorXd u_try        = res.u           + step * delta_u;
-            compute_eta_lambda_spde(Xl, beta_lam_try, A, u_try, eta_lam_try);
-            eta_p_try.noalias() = Xp * beta_p_try;
-            const double ll_try = tulpaObs::nmix_kernel_log_lik_only_spatial(
-                obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r);
-            const double obj_try = ll_try + field_log_prior(u_try);
-            if (R_finite(obj_try) && obj_try >= obj_cur - 1e-10) {
+        const bool stepped = tulpaObs::newton_backtrack(
+            obj_cur,
+            [&](double step) {
+                beta_lam_try = res.beta_lambda + step * delta_lam;
+                beta_p_try   = res.beta_p      + step * delta_p;
+                u_try        = res.u           + step * delta_u;
+                compute_eta_lambda_spde(Xl, beta_lam_try, A, u_try, eta_lam_try);
+                eta_p_try.noalias() = Xp * beta_p_try;
+                const double ll_try = tulpaObs::nmix_kernel_log_lik_only_spatial(
+                    obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r);
+                return ll_try + field_log_prior(u_try);
+            },
+            [&](double) {
                 res.beta_lambda = beta_lam_try;
                 res.beta_p      = beta_p_try;
                 res.u           = u_try;
-                stepped = true;
-                break;
-            }
-            step *= 0.5;
-        }
+            });
         if (!stepped) {
             if (verbose) Rcpp::Rcout << "    (step halving exhausted)\n";
             break;

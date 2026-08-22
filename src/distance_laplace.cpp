@@ -15,6 +15,7 @@
 // probabilities integrated by quadrature) is distance-specific.
 
 #include "distance_kernel.h"
+#include "newton_step.h"   // newton_backtrack / solve_with_fisher_fallback
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Dense>
@@ -32,12 +33,6 @@ namespace {
 using tulpaObs::DistSiteResult;
 using tulpaObs::DistQuad;
 using tulpaObs::compute_distance_site;
-
-// Slack on the backtracking accept test. A Newton step at a converged mode moves
-// the objective by less than the rounding error of the sweep that measures it, so
-// a strict `ll_try >= ll` would reject the final step and exhaust the halving
-// loop; accepting a decrease this small lets the step through instead.
-constexpr double kLineSearchSlack = 1e-10;
 
 // Floor on the negative-binomial size r during the profile. As r grows the NB
 // tends to the Poisson, so the log-r axis is only weakly identified from below
@@ -214,35 +209,29 @@ Rcpp::List cpp_distance_laplace_fixed(
 
             MatrixXd H = dist_hess_beta(Xl, Xs, p_lam, p_sig, hazard, st, true);
             VectorXd delta;
-            Eigen::LLT<MatrixXd> chol(H);
-            if (chol.info() == Eigen::Success) {
-                delta = chol.solve(grad);
-            } else {
-                MatrixXd Hf = dist_hess_beta(Xl, Xs, p_lam, p_sig, hazard, st, false);
-                Eigen::LLT<MatrixXd> cf(Hf);
-                if (cf.info() != Eigen::Success) {
-                    Rcpp::warning("Fisher fallback Cholesky failure at beta iter %d.", iter);
-                    break;
-                }
-                delta = cf.solve(grad);
-                if (verbose) Rcpp::Rcout << "      (Fisher-scoring fallback)\n";
-            }
+            const bool solved = tulpaObs::solve_with_fisher_fallback(
+                H, grad,
+                [&]() {
+                    return dist_hess_beta(Xl, Xs, p_lam, p_sig, hazard, st, false);
+                },
+                "the fixed-effect block", iter, verbose, delta);
+            if (!solved) break;
             VectorXd dl = delta.segment(0, p_lam);
             VectorXd ds = delta.segment(p_lam, p_sig);
             double db = hazard ? delta(p_lam + p_sig) : 0.0;
 
-            double step = 1.0; bool stepped = false;
-            for (int h = 0; h < 12; ++h) {
-                VectorXd bl = beta_lam + step * dl;
-                VectorXd bs = beta_sig + step * ds;
-                double eb = eta_b + step * db;
-                double ll_try = dist_loglik(y, Xl, Xs, bl, bs, eb, key, quad, K_max, r,
-                                           comb_table, scratch, headroom);
-                if (R_finite(ll_try) && ll_try >= log_lik - kLineSearchSlack) {
-                    beta_lam = bl; beta_sig = bs; eta_b = eb; stepped = true; break;
-                }
-                step *= 0.5;
-            }
+            VectorXd bl, bs;
+            double eb = eta_b;
+            const bool stepped = tulpaObs::newton_backtrack(
+                log_lik,
+                [&](double step) {
+                    bl = beta_lam + step * dl;
+                    bs = beta_sig + step * ds;
+                    eb = eta_b + step * db;
+                    return dist_loglik(y, Xl, Xs, bl, bs, eb, key, quad, K_max, r,
+                                       comb_table, scratch, headroom);
+                },
+                [&](double) { beta_lam = bl; beta_sig = bs; eta_b = eb; });
             if (!stepped) { Rcpp::warning("beta step halving exhausted at iter %d.", iter); break; }
         }
         log_lik = dist_sweep(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
@@ -267,18 +256,20 @@ Rcpp::List cpp_distance_laplace_fixed(
         double dth = (info_theta_tot > 1e-8) ? grad_theta / info_theta_tot
                                              : (grad_theta > 0 ? 0.5 : -0.5);
         if (dth > 1.5) dth = 1.5; if (dth < -1.5) dth = -1.5;
-        double ll_cur = log_lik, step = 1.0; bool stepped = false;
-        for (int h = 0; h < 25; ++h) {
-            double th_try = std::min(std::max(theta + step * dth, theta_min), theta_max);
-            if (th_try == theta) break;
-            double r_try = std::exp(th_try);
-            double ll_try = dist_loglik(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad, K_max, r_try,
-                                       comb_table, scratch, headroom);
-            if (R_finite(ll_try) && ll_try >= ll_cur - kLineSearchSlack) {
-                theta = th_try; r = r_try; stepped = true; break;
-            }
-            step *= 0.5;
-        }
+        double th_try = theta, r_try = r;
+        const bool stepped = tulpaObs::newton_backtrack(
+            log_lik,
+            [&](double step) {
+                th_try = std::min(std::max(theta + step * dth, theta_min), theta_max);
+                // A step the clamp pins back onto the current log-r moves
+                // nothing, and no smaller step escapes the clamp either.
+                if (th_try == theta) return R_NegInf;
+                r_try = std::exp(th_try);
+                return dist_loglik(y, Xl, Xs, beta_lam, beta_sig, eta_b, key, quad,
+                                   K_max, r_try, comb_table, scratch, headroom);
+            },
+            [&](double) { theta = th_try; r = r_try; },
+            tulpaObs::kDispersionMaxHalvings);
         if (!stepped) {
             dispersion_boundary = (theta >= theta_max - 1e-6);
             theta_converged = dispersion_boundary || (std::abs(grad_theta) < 1e-2);

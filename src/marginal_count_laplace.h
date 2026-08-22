@@ -23,6 +23,7 @@
 
 #include "nmix_kernel.h"   // NMixSiteResult
 #include "nmix_progress.h" // make_grid_progress_from_option
+#include "newton_step.h"   // newton_backtrack / solve_with_fisher_fallback
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -269,36 +270,29 @@ void inner_newton_beta(
         grad_total.segment(p_lam, p_p) = grad_beta_p;
 
         VectorXd delta;
-        Eigen::LLT<MatrixXd> chol(H);
-        if (chol.info() == Eigen::Success) {
-            delta = chol.solve(grad_total);
-        } else {
-            MatrixXd Hf = MatrixXd::Zero(pb, pb);
-            assemble_beta_fisher(p_lam, p_p, Xl, Xp, obs_by_site, st, Hf);
-            Hf = Hf.selfadjointView<Eigen::Lower>();
-            Eigen::LLT<MatrixXd> chol_f(Hf);
-            if (chol_f.info() != Eigen::Success) {
-                Rcpp::warning("Fallback Cholesky failure at beta iter %d -- aborting.", iter);
-                break;
-            }
-            delta = chol_f.solve(grad_total);
-            if (verbose) Rcpp::Rcout << "      (Fisher fallback)\n";
-        }
+        const bool solved = solve_with_fisher_fallback(
+            H, grad_total,
+            [&]() {
+                MatrixXd Hf = MatrixXd::Zero(pb, pb);
+                assemble_beta_fisher(p_lam, p_p, Xl, Xp, obs_by_site, st, Hf);
+                Hf = Hf.selfadjointView<Eigen::Lower>();
+                return Hf;
+            },
+            "the fixed-effect block", iter, verbose, delta);
+        if (!solved) break;
         VectorXd delta_lam = delta.segment(0, p_lam);
         VectorXd delta_p   = delta.segment(p_lam, p_p);
 
-        double step = 1.0;
-        bool stepped = false;
-        for (int h = 0; h < 12; ++h) {
-            VectorXd bl = beta_lam + step * delta_lam;
-            VectorXd bp = beta_p   + step * delta_p;
-            double ll_try = kernel_log_lik_only(obs_by_site, y, Xl * bl, Xp * bp,
-                                                K_max, r, kern);
-            if (R_finite(ll_try) && ll_try >= log_lik - 1e-10) {
-                beta_lam = bl; beta_p = bp; stepped = true; break;
-            }
-            step *= 0.5;
-        }
+        VectorXd bl, bp;
+        const bool stepped = newton_backtrack(
+            log_lik,
+            [&](double step) {
+                bl = beta_lam + step * delta_lam;
+                bp = beta_p   + step * delta_p;
+                return kernel_log_lik_only(obs_by_site, y, Xl * bl, Xp * bp,
+                                           K_max, r, kern);
+            },
+            [&](double) { beta_lam = bl; beta_p = bp; });
         if (!stepped) {
             Rcpp::warning("beta step halving exhausted at iter %d -- aborting.", iter);
             break;
@@ -400,20 +394,20 @@ Rcpp::List marginal_count_laplace_fixed(
 
         VectorXd eta_lam    = Xl * beta_lam;
         VectorXd eta_p_long = Xp * beta_p;
-        double ll_cur = log_lik;
-        double step = 1.0;
-        bool stepped = false;
-        for (int h = 0; h < 25; ++h) {
-            double th_try = std::min(std::max(theta + step * dth, theta_min), theta_max);
-            if (th_try == theta) break;
-            double r_try = std::exp(th_try);
-            double ll_try = kernel_log_lik_only(obs_by_site, y, eta_lam, eta_p_long,
-                                                K_max, r_try, kern);
-            if (R_finite(ll_try) && ll_try >= ll_cur - 1e-10) {
-                theta = th_try; r = r_try; stepped = true; break;
-            }
-            step *= 0.5;
-        }
+        double th_try = theta, r_try = r;
+        const bool stepped = newton_backtrack(
+            log_lik,
+            [&](double step) {
+                th_try = std::min(std::max(theta + step * dth, theta_min), theta_max);
+                // A step the clamp pins back onto the current log-r moves
+                // nothing, and no smaller step escapes the clamp either.
+                if (th_try == theta) return R_NegInf;
+                r_try = std::exp(th_try);
+                return kernel_log_lik_only(obs_by_site, y, eta_lam, eta_p_long,
+                                           K_max, r_try, kern);
+            },
+            [&](double) { theta = th_try; r = r_try; },
+            kDispersionMaxHalvings);
         if (!stepped) {
             dispersion_boundary = (theta >= theta_max - 1e-6);
             theta_converged = dispersion_boundary || (std::abs(grad_theta) < 1e-2);

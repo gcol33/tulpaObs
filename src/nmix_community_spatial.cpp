@@ -48,6 +48,7 @@
 #include "nmix_progress.h"
 #include "nmix_spatial_kernel.h"        // nmix_icar/car_proper prior, Q-adds, centering
 #include "nmix_spatial_kernel_bym2.h"   // bym2 prior, Q+I-adds, centering
+#include "newton_step.h"                // newton_backtrack
 #include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
@@ -501,20 +502,22 @@ CommSpatialResult community_spatial_em(
 
             // Step halving on the joint objective. obj_cur reuses the data
             // log-lik just assembled (no redundant likelihood pass).
-            double step = 1.0;
-            bool stepped = false;
             double obj_cur = ll_cur
                 + field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
                                   adj_row_ptr, adj_col_idx, n_neighbors, field, spde);
             for (int s = 0; s < S; ++s) obj_cur -= 0.5 * bvec[s].dot(P * bvec[s]);
+            VectorXd mu_try, field_try;
+            std::vector<VectorXd> b_try(S);
             double max_step = 0.0;
-            for (int h = 0; h < 12; ++h) {
-                VectorXd mu_try = mu + step * dmu;
-                VectorXd field_try = field + step * dfield;
-                std::vector<VectorXd> b_try(S);
-                for (int s = 0; s < S; ++s) b_try[s] = bvec[s] + step * delta_b[s];
-                const double obj_try = objective(mu_try, field_try, b_try, P);
-                if (R_finite(obj_try) && obj_try >= obj_cur - 1e-10) {
+            const bool stepped = tulpaObs::newton_backtrack(
+                obj_cur,
+                [&](double step) {
+                    mu_try = mu + step * dmu;
+                    field_try = field + step * dfield;
+                    for (int s = 0; s < S; ++s) b_try[s] = bvec[s] + step * delta_b[s];
+                    return objective(mu_try, field_try, b_try, P);
+                },
+                [&](double step) {
                     mu = mu_try; field = field_try; bvec = b_try;
                     center_field(kind, p_lam, p_p, n_spatial, field);
                     double dmax = std::max(dmu.cwiseAbs().maxCoeff(),
@@ -522,11 +525,7 @@ CommSpatialResult community_spatial_em(
                     for (int s = 0; s < S; ++s)
                         dmax = std::max(dmax, delta_b[s].cwiseAbs().maxCoeff());
                     max_step = step * dmax;
-                    stepped = true;
-                    break;
-                }
-                step *= 0.5;
-            }
+                });
             if (!stepped) break;
             if (max_step < inner_tol) break;
         }

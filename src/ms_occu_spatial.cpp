@@ -36,6 +36,7 @@
 #include "nmix_spatial_kernel_bym2.h"
 #include "nmix_linalg.h"
 #include "community_grid_pack.h"
+#include "newton_step.h"
 
 using namespace Rcpp;
 using tulpaObs::clamp_eta;
@@ -337,29 +338,30 @@ OccCommResult occ_community_spatial_em(
             const VectorXd dmu = delta_top.head(d);
             const VectorXd dfield = delta_top.segment(d, field_len);
 
-            double step = 1.0; bool stepped = false;
             double obj_cur = ll_cur
                 + occ_field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
                                       adj_row_ptr, adj_col_idx, n_neighbors, field);
             for (int s = 0; s < S; ++s) obj_cur -= 0.5 * bvec[s].dot(P * bvec[s]);
+            VectorXd mu_try, field_try;
+            std::vector<VectorXd> b_try(S);
             double max_step = 0.0;
-            for (int h = 0; h < 12; ++h) {
-                VectorXd mu_try = mu + step * dmu;
-                VectorXd field_try = field + step * dfield;
-                std::vector<VectorXd> b_try(S);
-                for (int s = 0; s < S; ++s) b_try[s] = bvec[s] + step * delta_b[s];
-                const double obj_try = objective(mu_try, field_try, b_try, P);
-                if (R_finite(obj_try) && obj_try >= obj_cur - 1e-10) {
+            const bool stepped = newton_backtrack(
+                obj_cur,
+                [&](double step) {
+                    mu_try = mu + step * dmu;
+                    field_try = field + step * dfield;
+                    for (int s = 0; s < S; ++s) b_try[s] = bvec[s] + step * delta_b[s];
+                    return objective(mu_try, field_try, b_try, P);
+                },
+                [&](double step) {
                     mu = mu_try; field = field_try; bvec = b_try;
                     occ_center_field(kind, p_psi, p_p, n_spatial, field);
                     double dmax = std::max(dmu.cwiseAbs().maxCoeff(),
                                            dfield.cwiseAbs().maxCoeff());
                     for (int s = 0; s < S; ++s)
                         dmax = std::max(dmax, delta_b[s].cwiseAbs().maxCoeff());
-                    max_step = step * dmax; stepped = true; break;
-                }
-                step *= 0.5;
-            }
+                    max_step = step * dmax;
+                });
             if (!stepped) break;
             if (max_step < inner_tol) break;
         }

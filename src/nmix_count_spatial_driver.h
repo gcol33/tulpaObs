@@ -23,6 +23,7 @@
 #include "nmix_spatial_kernel_bym2.h"  // BYM2 eta / assembler / prior helpers
 #include "nmix_linalg.h"
 #include "nmix_spatial_grid.h"     // prep_nmix_spatial / run_nmix_spatial_grid / NmixSpatialPoint
+#include "newton_step.h"           // newton_backtrack / solve_with_fisher_fallback
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <Eigen/Cholesky>
@@ -124,6 +125,7 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
 
     double log_lik = R_NegInf;
     double grad_norm = R_PosInf;
+    const std::string grid_label = newton_grid_label("tau", tau, "rho", rho);
 
     for (int iter = 0; iter < max_iter; ++iter) {
         compute_eta_lambda_spatial(Xl, res.beta_lambda, res.z,
@@ -170,60 +172,55 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
 
         nmix_add_diagonal_ridge(H);
         VectorXd delta;
-        Eigen::LLT<MatrixXd> chol(H);
-        if (chol.info() == Eigen::Success) {
-            delta = chol.solve(grad);
-        } else {
-            MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-            nmix_assemble_complete_fisher_spatial(
-                p_lam, p_p, n_spatial,
-                Xl, Xp, obs_by_site, map_site_to_unit,
-                info_eta_lam, info_eta_p, H_f
-            );
-            nmix_add_car_to_H_only(
-                p_lam, p_p, n_spatial, tau, rho,
-                adj_row_ptr, adj_col_idx, n_neighbors, H_f
-            );
-            nmix_add_diagonal_ridge(H_f);
-            Eigen::LLT<MatrixXd> chol_f(H_f);
-            if (chol_f.info() != Eigen::Success) {
-                Rcpp::warning("Cholesky failure (complete-data fallback) at iter %d, tau %.4f, rho %.4f.",
-                              iter, tau, rho);
-                break;
-            }
-            delta = chol_f.solve(grad);
-            if (verbose) Rcpp::Rcout << "    (Fisher fallback)\n";
-        }
+        const bool solved = solve_with_fisher_fallback(
+            H, grad,
+            [&]() {
+                MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
+                nmix_assemble_complete_fisher_spatial(
+                    p_lam, p_p, n_spatial,
+                    Xl, Xp, obs_by_site, map_site_to_unit,
+                    info_eta_lam, info_eta_p, H_f
+                );
+                nmix_add_car_to_H_only(
+                    p_lam, p_p, n_spatial, tau, rho,
+                    adj_row_ptr, adj_col_idx, n_neighbors, H_f
+                );
+                nmix_add_diagonal_ridge(H_f);
+                return H_f;
+            },
+            grid_label, iter, verbose, delta);
+        if (!solved) break;
 
         VectorXd delta_lam = delta.segment(0, p_lam);
         VectorXd delta_p   = delta.segment(p_lam, p_p);
         VectorXd delta_z   = delta.segment(p_lam + p_p, n_spatial);
 
-        double step = 1.0;
-        bool stepped = false;
         VectorXd beta_lam_try, beta_p_try, z_try;
         VectorXd eta_lam_try(n_sites), eta_p_try(n_obs);
-        for (int h = 0; h < 12; ++h) {
-            beta_lam_try = res.beta_lambda + step * delta_lam;
-            beta_p_try   = res.beta_p      + step * delta_p;
-            z_try        = res.z           + step * delta_z;
+        const double obj_cur = log_lik + count_car_log_prior_dispatch(
+            kind, n_spatial, tau, rho, log_det_Q_rho,
+            adj_row_ptr, adj_col_idx, n_neighbors, res.z
+        );
+        const bool stepped = newton_backtrack(
+            obj_cur,
+            [&](double step) {
+                beta_lam_try = res.beta_lambda + step * delta_lam;
+                beta_p_try   = res.beta_p      + step * delta_p;
+                z_try        = res.z           + step * delta_z;
 
-            compute_eta_lambda_spatial(Xl, beta_lam_try, z_try,
-                                       map_site_to_unit, eta_lam_try);
-            eta_p_try.noalias() = Xp * beta_p_try;
-            double ll_try = count_kernel_log_lik_only_spatial(
-                obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r, site_fn
-            );
-            double lp_try = count_car_log_prior_dispatch(
-                kind, n_spatial, tau, rho, log_det_Q_rho,
-                adj_row_ptr, adj_col_idx, n_neighbors, z_try
-            );
-            double obj_try = ll_try + lp_try;
-            double obj_cur = log_lik + count_car_log_prior_dispatch(
-                kind, n_spatial, tau, rho, log_det_Q_rho,
-                adj_row_ptr, adj_col_idx, n_neighbors, res.z
-            );
-            if (R_finite(obj_try) && obj_try >= obj_cur - 1e-10) {
+                compute_eta_lambda_spatial(Xl, beta_lam_try, z_try,
+                                           map_site_to_unit, eta_lam_try);
+                eta_p_try.noalias() = Xp * beta_p_try;
+                double ll_try = count_kernel_log_lik_only_spatial(
+                    obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r, site_fn
+                );
+                double lp_try = count_car_log_prior_dispatch(
+                    kind, n_spatial, tau, rho, log_det_Q_rho,
+                    adj_row_ptr, adj_col_idx, n_neighbors, z_try
+                );
+                return ll_try + lp_try;
+            },
+            [&](double) {
                 res.beta_lambda = beta_lam_try;
                 res.beta_p      = beta_p_try;
                 res.z           = z_try;
@@ -235,11 +232,7 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
                     nmix_center_field(p_lam, p_p, n_spatial, x_holder);
                     res.z = x_holder.segment(p_lam + p_p, n_spatial);
                 }
-                stepped = true;
-                break;
-            }
-            step *= 0.5;
-        }
+            });
         if (!stepped) {
             if (verbose) Rcpp::Rcout << "    (step halving exhausted)\n";
             break;
@@ -477,6 +470,7 @@ CountBYM2InnerResult inner_newton_count_bym2(
     VectorXd eta_lam(n_sites), eta_p_long(n_obs);
 
     double log_lik = R_NegInf, grad_norm = R_PosInf;
+    const std::string grid_label = newton_grid_label("a", a, "b", b);
 
     for (int iter = 0; iter < max_iter; ++iter) {
         compute_eta_lambda_bym2(Xl, res.beta_lambda, res.v, res.w, a, b,
@@ -510,50 +504,47 @@ CountBYM2InnerResult inner_newton_count_bym2(
 
         nmix_add_diagonal_ridge(H);
         VectorXd delta;
-        Eigen::LLT<MatrixXd> chol(H);
-        if (chol.info() == Eigen::Success) {
-            delta = chol.solve(grad);
-        } else {
-            MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-            nmix_assemble_complete_fisher_bym2(p_lam, p_p, n_spatial, a, b,
-                Xl, Xp, obs_by_site, map_site_to_unit,
-                info_eta_lam, info_eta_p, H_f);
-            nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
-                adj_row_ptr, adj_col_idx, n_neighbors, H_f);
-            nmix_add_diagonal_ridge(H_f);
-            Eigen::LLT<MatrixXd> chol_f(H_f);
-            if (chol_f.info() != Eigen::Success) {
-                Rcpp::warning("Cholesky failure (complete-data fallback) at iter %d, a %.4f, b %.4f.",
-                              iter, a, b);
-                break;
-            }
-            delta = chol_f.solve(grad);
-            if (verbose) Rcpp::Rcout << "    (Fisher fallback)\n";
-        }
+        const bool solved = solve_with_fisher_fallback(
+            H, grad,
+            [&]() {
+                MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
+                nmix_assemble_complete_fisher_bym2(p_lam, p_p, n_spatial, a, b,
+                    Xl, Xp, obs_by_site, map_site_to_unit,
+                    info_eta_lam, info_eta_p, H_f);
+                nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
+                    adj_row_ptr, adj_col_idx, n_neighbors, H_f);
+                nmix_add_diagonal_ridge(H_f);
+                return H_f;
+            },
+            grid_label, iter, verbose, delta);
+        if (!solved) break;
 
         VectorXd delta_lam = delta.segment(0, p_lam);
         VectorXd delta_p   = delta.segment(p_lam, p_p);
         VectorXd delta_v   = delta.segment(v_start, n_spatial);
         VectorXd delta_w   = delta.segment(w_start, n_spatial);
 
-        double step = 1.0; bool stepped = false;
         VectorXd beta_lam_try, beta_p_try, v_try, w_try;
         VectorXd eta_lam_try(n_sites), eta_p_try(n_obs);
-        for (int h = 0; h < 12; ++h) {
-            beta_lam_try = res.beta_lambda + step * delta_lam;
-            beta_p_try   = res.beta_p      + step * delta_p;
-            v_try        = res.v           + step * delta_v;
-            w_try        = res.w           + step * delta_w;
-            compute_eta_lambda_bym2(Xl, beta_lam_try, v_try, w_try, a, b,
-                                    map_site_to_unit, eta_lam_try);
-            eta_p_try.noalias() = Xp * beta_p_try;
-            double ll_try = count_kernel_log_lik_only_spatial(
-                obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r, site_fn);
-            double lp_try = nmix_bym2_log_prior(n_spatial, adj_row_ptr,
-                adj_col_idx, n_neighbors, v_try, w_try);
-            double obj_cur = log_lik + nmix_bym2_log_prior(n_spatial, adj_row_ptr,
-                adj_col_idx, n_neighbors, res.v, res.w);
-            if (R_finite(ll_try + lp_try) && (ll_try + lp_try) >= obj_cur - 1e-10) {
+        const double obj_cur = log_lik + nmix_bym2_log_prior(n_spatial, adj_row_ptr,
+            adj_col_idx, n_neighbors, res.v, res.w);
+        const bool stepped = newton_backtrack(
+            obj_cur,
+            [&](double step) {
+                beta_lam_try = res.beta_lambda + step * delta_lam;
+                beta_p_try   = res.beta_p      + step * delta_p;
+                v_try        = res.v           + step * delta_v;
+                w_try        = res.w           + step * delta_w;
+                compute_eta_lambda_bym2(Xl, beta_lam_try, v_try, w_try, a, b,
+                                        map_site_to_unit, eta_lam_try);
+                eta_p_try.noalias() = Xp * beta_p_try;
+                double ll_try = count_kernel_log_lik_only_spatial(
+                    obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r, site_fn);
+                double lp_try = nmix_bym2_log_prior(n_spatial, adj_row_ptr,
+                    adj_col_idx, n_neighbors, v_try, w_try);
+                return ll_try + lp_try;
+            },
+            [&](double) {
                 res.beta_lambda = beta_lam_try; res.beta_p = beta_p_try;
                 res.v = v_try; res.w = w_try;
                 VectorXd x_holder(n_x);
@@ -563,10 +554,7 @@ CountBYM2InnerResult inner_newton_count_bym2(
                 x_holder.segment(w_start, n_spatial) = res.w;
                 nmix_center_field(p_lam, p_p, n_spatial, x_holder);
                 res.v = x_holder.segment(v_start, n_spatial);
-                stepped = true; break;
-            }
-            step *= 0.5;
-        }
+            });
         if (!stepped) { if (verbose) Rcpp::Rcout << "    (step halving exhausted)\n"; break; }
         res.n_iter = iter + 1;
     }
