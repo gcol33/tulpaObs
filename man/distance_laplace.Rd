@@ -56,7 +56,7 @@ starts.}
 \code{NULL} (default) derives it from \code{K_max}: an unset \code{K_max} caps each site
 at its own total plus \verb{2 * max(site total) + 100}, an explicit \code{K_max}
 truncates globally and uncapped. A negative value disables the per-site
-cap (gcol33/tulpaObs#168).}
+cap.}
 
 \item{quad_order}{Gauss-Legendre nodes per bin (default 64).}
 

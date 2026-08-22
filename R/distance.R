@@ -114,7 +114,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Grouped random effect on the abundance arm (gcol33/tulpaObs#51)
+# Grouped random effect on the abundance arm
 # ---------------------------------------------------------------------------
 
 # Warm start for the distance RE fit: the no-RE distance Laplace fit, normalized
@@ -142,8 +142,8 @@
     beta_sigma  = ref$beta_p,
     log_r       = ref$log_r,
     r           = ref$r,
-    # Hazard-rate key: the profiled log-shape (gcol33/tulpaObs#114); the AGHQ vcov
-    # already carries its row/col (inserted by .tobs_distance_re_aghq).
+    # Hazard-rate key: the profiled log-shape; the AGHQ vcov already carries its
+    # row/col (inserted by .tobs_distance_re_aghq).
     eta_b       = if (hazard) ref$eta_b %||% NA_real_ else NA_real_,
     shape       = if (hazard) ref$shape %||% NA_real_ else NA_real_,
     vcov        = ref$vcov,
@@ -161,14 +161,13 @@
 }
 
 # Fit a binned distance-sampling model with a site-level grouped random effect on
-# the abundance arm under the Laplace / AGHQ path (one grouping factor, RE dim
-# <= 3; tulpaObs#51). Abundance-arm only -- a detection RE couples a site's
-# distance bins through the shared latent N, so it does not factorize into the
-# per-site scalar offset the AGHQ engine assumes, and is rejected here with a
-# pointer. Half-normal AND hazard-rate keys: the hazard shape is a global scalar
-# not expressible in the count-family theta layout, so it is PROFILED over the
-# AGHQ log-marginal in .tobs_distance_re_aghq (gcol33/tulpaObs#114) rather than
-# gated.
+# the abundance arm under the Laplace / AGHQ path (one grouping factor, RE dim <=
+# 3; tulpaObs#51). Abundance-arm only -- a detection RE couples a site's distance
+# bins through the shared latent N, so it does not factorize into the per-site
+# scalar offset the AGHQ engine assumes, and is rejected here with a pointer.
+# Half-normal AND hazard-rate keys: the hazard shape is a global scalar not
+# expressible in the count-family theta layout, so it is PROFILED over the AGHQ
+# log-marginal in .tobs_distance_re_aghq rather than gated.
 .tobs_fit_distance_re <- function(model, re, mixture = "poisson", K_max = NULL,
                                   max_iter = 100L, tol = 1e-6, verbose = TRUE,
                                   n_quad = 1L, lkj_eta = 1.5,
@@ -233,7 +232,7 @@
 #'   `NULL` (default) derives it from `K_max`: an unset `K_max` caps each site
 #'   at its own total plus `2 * max(site total) + 100`, an explicit `K_max`
 #'   truncates globally and uncapped. A negative value disables the per-site
-#'   cap (gcol33/tulpaObs#168).
+#'   cap.
 #' @param quad_order Gauss-Legendre nodes per bin (default 64).
 #' @param max_iter Newton iteration budget (default 100).
 #' @param tol Gradient-norm convergence tolerance (default 1e-6).
@@ -313,8 +312,7 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
   # `quad_xptr`: a caller that fits several species/starts against the SAME
   # (cutpoints, transect, quad_order) -- e.g. ms_distance()'s per-species warm
   # start -- builds the Gauss-Legendre quadrature ONCE and passes it through,
-  # instead of every call Newton-Raphson root-finding it fresh
-  # (gcol33/tulpaObs#165).
+  # instead of every call Newton-Raphson root-finding it fresh.
   qptr <- quad_xptr %||%
     cpp_distance_build_quad(as.numeric(cutpoints), .dist_transect_code(transect),
                             as.integer(quad_order))
@@ -357,13 +355,13 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
             "the data are consistent with Poisson. Consider mixture = \"P\"."), r_max),
             call. = FALSE)
   }
-  # Guard the per-site truncation (gcol33/tulpaObs#168): the answer has to be
-  # stationary under the UNCAPPED (shared-ceiling) likelihood too, so compare
-  # the total-log-lik score at the fitted coefficients under both truncations
-  # and widen the window when they disagree. Escalates to the shared ceiling,
-  # so this can only move the fit back toward the untruncated answer -- never
-  # worse than the shared-ceiling fit it replaces, at worst it costs the extra
-  # fits (the same guard nmix_laplace() runs, R/nmix_site_marginal.R).
+  # Guard the per-site truncation: the answer has to be stationary under the
+  # UNCAPPED (shared-ceiling) likelihood too, so compare the total-log-lik
+  # score at the fitted coefficients under both truncations and widen the
+  # window when they disagree. Escalates to the shared ceiling, so this can
+  # only move the fit back toward the untruncated answer -- never worse than
+  # the shared-ceiling fit it replaces, at worst it costs the extra fits (the
+  # same guard nmix_laplace() runs, R/nmix_site_marginal.R).
   if (headroom >= 0L) {
     gap <- tryCatch({
       eta_lam <- as.numeric(X_lambda %*% fit$beta_lambda)
@@ -431,11 +429,11 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   draws <- .rmvn(n_pseudo, means, vcov)
   colnames(draws) <- nms
 
-  # Grouped random effect on the abundance arm (gcol33/tulpaObs#51): append the
-  # variance components (sigma_g_*, cor_g_*_* for a correlated block) and the
-  # per-group BLUPs after the fixed block, exactly as the N-mixture path does.
-  # The fixed block (n_fixed leading coordinates) still governs coef() / vcov() /
-  # confint(); the trailing RE columns are read by ranef() / summary() by name.
+  # Grouped random effect on the abundance arm: append the variance components
+  # (sigma_g_*, cor_g_*_* for a correlated block) and the per-group BLUPs after
+  # the fixed block, exactly as the N-mixture path does. The fixed block (n_fixed
+  # leading coordinates) still governs coef() / vcov() / confint(); the trailing
+  # RE columns are read by ranef() / summary() by name.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,
@@ -591,13 +589,11 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
     numeric(n_bins)))
   mu_mat <- pmax(lambda * pi_mat, 1e-10)
   y <- model$y
-  r_mat <- switch(type,
-    response = y - mu_mat,
-    pearson  = (y - mu_mat) / sqrt(mu_mat),
-    deviance = {
-      d <- 2 * (ifelse(y > 0, y * log(y / mu_mat), 0) - (y - mu_mat))
-      sign(y - mu_mat) * sqrt(pmax(d, 0))
-    })
+  # NB is closed under binomial thinning with the same size, so a negbin fit's
+  # per-bin marginal is NB(r, lambda * pi_b) and is scored at its own variance.
+  r_mat <- .tobs_count_residual(y, mu_mat, type,
+                                size = object$nmix_dispersion$r %||% Inf,
+                                eps = 1e-10)
   r_mat
 }
 

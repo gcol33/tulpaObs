@@ -140,7 +140,7 @@
 }
 
 # Fit a removal model with a site-level grouped random effect on the abundance
-# (lambda) OR detection (p) arm (gcol33/tulpaObs#51). Routes through the shared
+# (lambda) OR detection (p) arm. Routes through the shared
 # count-model RE path: the per-site removal marginal carries the same
 # (lambda, p[, log_r]) coefficient layout and REGroupOracle interface as the
 # N-mixture, so the only family-specific pieces are the removal warm start and
@@ -352,13 +352,11 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   mu_long <- mu_mat[cbind(site_idx, visit_idx)]
   mu_long <- pmax(mu_long, 1e-10)
 
-  r_long <- switch(type,
-    response = y_long - mu_long,
-    pearson  = (y_long - mu_long) / sqrt(mu_long),
-    deviance = {
-      d <- 2 * (ifelse(y_long > 0, y_long * log(y_long / mu_long), 0) - (y_long - mu_long))
-      sign(y_long - mu_long) * sqrt(pmax(d, 0))
-    })
+  # NB is closed under binomial thinning with the same size, so a negbin fit's
+  # per-pass marginal is NB(r, lambda * pi_k) and is scored at its own variance.
+  r_long <- .tobs_count_residual(y_long, mu_long, type,
+                                 size = object$nmix_dispersion$r %||% Inf,
+                                 eps = 1e-10)
   out <- matrix(NA_real_, n_sites, n_pass)
   out[cbind(site_idx, visit_idx)] <- r_long
   out

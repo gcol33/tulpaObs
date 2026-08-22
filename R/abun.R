@@ -115,11 +115,11 @@
                            verbose = TRUE) {
   method <- match.arg(method)
 
-  # Zero-inflated N-mixture (ZIP / ZINB, gcol33/tulpaObs#116): a structural-zero
-  # mixture over the Royle marginal, fit by a pure-R additive layer. v1 is the
-  # non-spatial laplace path with an intercept-only structural-zero probability;
-  # a spatial field / RE / NUTS on the ZI path are follow-ups (error rather than
-  # silently dropping the requested structure).
+  # Zero-inflated N-mixture (ZIP / ZINB): a structural-zero mixture over the
+  # Royle marginal, fit by a pure-R additive layer. v1 is the non-spatial
+  # laplace path with an intercept-only structural-zero probability; a spatial
+  # field / RE / NUTS on the ZI path are follow-ups (error rather than silently
+  # dropping the requested structure).
   if (mixture %in% c("zip", "zinb")) {
     if (!identical(method, "laplace")) {
       stop(sprintf(paste0("abun(mixture = \"%s\") supports method = \"laplace\" ",
@@ -144,9 +144,9 @@
                                   mixture), call. = FALSE))
 
   # Capability gates. tulpa's N-mixture engine carries fixed effects plus an
-  # optional areal spatial offset and (since gcol33/tulpaObs#13) site-level
-  # random effects on one arm; temporal is the open upstream extension. Error
-  # with a pointer rather than silently dropping the requested structure.
+  # optional areal spatial offset and (since) site-level random effects on
+  # one arm; temporal is the open upstream extension. Error with a pointer
+  # rather than silently dropping the requested structure.
   if (!is.null(temporal)) {
     stop("A temporal term on N-mixture abundance is not yet supported. ",
          "For temporal (open-population) count dynamics use dyn_abun() ",
@@ -332,10 +332,10 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   beta_p      <- if (!is.null(raw$beta_p))      raw$beta_p      else raw$beta_p_mean
   means <- c(as.numeric(beta_lambda), as.numeric(beta_p))
 
-  # Zero-inflation structural-zero logit (gcol33/tulpaObs#116). Present only on
-  # the ZIP / ZINB path; the guard keeps the Poisson / NB layout byte-identical.
-  # It sits between the (lambda, p) block and the trailing log_r, matching the
-  # ZIP fitter's theta order [beta_lambda | beta_p | logit_omega | log_r].
+  # Zero-inflation structural-zero logit. Present only on the ZIP / ZINB path;
+  # the guard keeps the Poisson / NB layout byte-identical. It sits between the
+  # (lambda, p) block and the trailing log_r, matching the ZIP fitter's theta
+  # order [beta_lambda | beta_p | logit_omega | log_r].
   has_omega <- is.finite(raw$logit_omega %||% NA_real_)
   if (has_omega) {
     nms   <- c(nms, "logit_omega")
@@ -381,18 +381,18 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   draws <- .rmvn(n_pseudo, means, vcov)
   colnames(draws) <- nms
 
-  # Random-effect block (gcol33/tulpaObs#13): append the variance components
-  # (sigma_g_*, cor_g_*_* for a correlated block) and per-group BLUPs to the
-  # public parameter layout the same way the occupancy RE path does. The
-  # per-group BLUPs carry their AGHQ marginal posterior SD, so their pseudo-draws
-  # are Gaussian at the BLUP mean with that SD. The variance components are AGHQ
-  # marginal-optimum point estimates whose joint posterior covariance with the
-  # fixed effects the marginal-Hessian path does not surface; their SD is NA, so
-  # their draws are left NA rather than a fabricated near-degenerate column that
-  # would read as "known almost exactly" (NA-on-unavailable, the same rule as the
-  # NUTS-only sampler diagnostics, tulpaObs#17). ranef() / summary() read the
-  # point estimate and BLUP SE by name; no consumer of the fixed-effect draws
-  # touches these trailing columns.
+  # Random-effect block: append the variance components (sigma_g_*, cor_g_*_* for
+  # a correlated block) and per-group BLUPs to the public parameter layout the
+  # same way the occupancy RE path does. The per-group BLUPs carry their AGHQ
+  # marginal posterior SD, so their pseudo-draws are Gaussian at the BLUP mean
+  # with that SD. The variance components are AGHQ marginal-optimum point
+  # estimates whose joint posterior covariance with the fixed effects the
+  # marginal-Hessian path does not surface; their SD is NA, so their draws are
+  # left NA rather than a fabricated near-degenerate column that would read as
+  # "known almost exactly" (NA-on-unavailable, the same rule as the NUTS-only
+  # sampler diagnostics, tulpaObs#17). ranef() / summary() read the point
+  # estimate and BLUP SE by name; no consumer of the fixed-effect draws touches
+  # these trailing columns.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,
@@ -652,14 +652,11 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 
   mu <- lambda[site_idx] * p_obs
   mu <- pmax(mu, 1e-10)
-  r_long <- switch(type,
-    response = y_long - mu,
-    pearson  = (y_long - mu) / sqrt(mu),
-    deviance = {
-      d <- 2 * (ifelse(y_long > 0, y_long * log(y_long / mu), 0) - (y_long - mu))
-      sign(y_long - mu) * sqrt(pmax(d, 0))
-    }
-  )
+  # NB is closed under binomial thinning with the same size, so a negbin fit's
+  # per-visit marginal is NB(r, lambda * p) and is scored at its own variance.
+  r_long <- .tobs_count_residual(y_long, mu, type,
+                                 size = object$nmix_dispersion$r %||% Inf,
+                                 eps = 1e-10)
   out <- matrix(NA_real_, model$n_sites, model$max_visits)
   out[cbind(site_idx, visit_idx)] <- r_long
   out

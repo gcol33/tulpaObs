@@ -48,8 +48,7 @@
 # the constant path. `period_label` names the axis in the error / is purely
 # cosmetic. The two named wrappers below fix the axis: transition INTERVALS (T-1,
 # survival / recruitment / colonization / extinction) vs primary SEASONS (T,
-# season-varying detection / occupancy). Single source of truth (gcol33/tulpaObs
-# #80, #124).
+# season-varying detection / occupancy). Single source of truth.
 .tobs_period_arm_design <- function(fe_formula, data, n_sites, n_periods,
                                     arm, period_label, fam = "dyn_abun") {
   vars <- all.vars(fe_formula)
@@ -203,7 +202,7 @@
 
 # ---------------------------------------------------------------------------
 # Zero-inflated open N-mixture (ZIP / ZINB) for dyn_abun(mixture = "zip" /
-# "zinb"; gcol33/tulpaObs#116)
+# "zinb")
 # ---------------------------------------------------------------------------
 
 # A structural-zero site is one that is NEVER occupied across any season -- so
@@ -367,7 +366,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Grouped random effect on the initial-abundance arm (gcol33/tulpaObs#51)
+# Grouped random effect on the initial-abundance arm
 # ---------------------------------------------------------------------------
 
 # AGHQ refinement of a dyn_abun fit with a site-level grouped RE on the
@@ -727,9 +726,9 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
   theta0[idx$gamma[1]]  <- log(0.5)
   if (is_nb) theta0[ir] <- if (is.null(log_r_init)) log(2) else as.numeric(log_r_init)
 
-  # Progress + ETA (gcol33/tulpaObs#43); ON by default. BFGS calls the gradient
-  # ~once per quasi-Newton iteration, so ticking there approximates iteration
-  # progress (maxit is the ETA denominator); finalised after optim returns.
+  # Progress + ETA; ON by default. BFGS calls the gradient ~once per
+  # quasi-Newton iteration, so ticking there approximates iteration progress
+  # (maxit is the ETA denominator); finalised after optim returns.
   .prog <- tulpa:::.tulpa_iter_progress("dyn-abun-laplace", as.integer(max_iter), unit = "iter")
   neg_grad_p <- function(theta) { .prog$tick(); neg_grad(theta) }
   opt <- stats::optim(theta0, neg_ll, neg_grad_p, method = "BFGS",
@@ -781,12 +780,11 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
 
-  # Grouped random effect on the initial-abundance (gcol33/tulpaObs#51) or the
-  # detection arm (gcol33/tulpaObs#82): append the variance components (sigma_g_*,
-  # cor_g_*_* for a correlated block) and the per-group BLUPs after the fixed
-  # block, exactly as the other count families do. The fixed block (n_fixed
-  # leading coords) still governs coef() / vcov() / confint(); ranef() / summary()
-  # read the trailing RE columns by name.
+  # Grouped random effect on the initial-abundance or the detection arm: append
+  # the variance components (sigma_g_*, cor_g_*_* for a correlated block) and the
+  # per-group BLUPs after the fixed block, exactly as the other count families do.
+  # The fixed block (n_fixed leading coords) still governs coef() / vcov() /
+  # confint(); ranef() / summary() read the trailing RE columns by name.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,
@@ -906,13 +904,42 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   T <- model$n_seasons; J <- model$max_visits
   mu_t <- fitv$EN * fitv$p                       # [n_sites x T]
   y <- model$y                                   # [n_sites x J x T]
+
+  # Marginal variance of the latent abundance, season by season. Survival is a
+  # binomial thinning of N_{t-1} and recruitment an independent Poisson, so
+  #   Var[N_t] = omega^2 Var[N_{t-1}] + omega (1 - omega) E[N_{t-1}] + gamma,
+  # started at Var[N_1] = lambda (Poisson) or lambda + lambda^2 / r (negbin). A
+  # count is then Binomial(N_t, p), so Var[y] = p^2 Var[N_t] + p (1 - p) E[N_t].
+  # Under a Poisson initial abundance Var[N_t] == E[N_t] at every season, which
+  # collapses that to mu -- the Poisson path is unchanged to the bit. This is why
+  # dyn_abun does NOT route through .tobs_count_residual(): its estimated size
+  # describes the INITIAL abundance, and N_t for t > 1 is a convolution that is
+  # not negative binomial, so mu + mu^2/r would be a different distribution's
+  # variance.
+  is_nb  <- (object$mixture %||% "poisson") %in% c("negbin", "zinb")
+  r_size <- object$dispersion$r %||% NA_real_
+  lam    <- fitv$lambda
+  VN <- matrix(0, model$n_sites, T)
+  VN[, 1] <- if (is_nb && is.finite(r_size)) lam + lam^2 / r_size else lam
+  for (t in seq_len(T - 1L)) {
+    om <- fitv$omega[, t]
+    VN[, t + 1L] <- om^2 * VN[, t] + om * (1 - om) * fitv$EN[, t] +
+                    fitv$gamma[, t]
+  }
+  var_t <- fitv$p^2 * VN + fitv$p * (1 - fitv$p) * fitv$EN   # [n_sites x T]
+
   out <- array(NA_real_, dim = dim(y))
   for (t in seq_len(T)) {
     mu <- pmax(matrix(mu_t[, t], model$n_sites, J), 1e-10)
     yt <- y[, , t]
     out[, , t] <- switch(type,
       response = yt - mu,
-      pearson  = (yt - mu) / sqrt(mu),
+      pearson  = (yt - mu) /
+                 sqrt(pmax(matrix(var_t[, t], model$n_sites, J), 1e-10)),
+      # The Poisson saturated-model form. A season's marginal is not a named
+      # count family once survival and recruitment have mixed, so there is no
+      # negative-binomial deviance to write here; Pearson, which needs only the
+      # variance above, carries the overdispersion instead.
       deviance = {
         d <- 2 * (ifelse(yt > 0, yt * log(yt / mu), 0) - (yt - mu))
         sign(yt - mu) * sqrt(pmax(d, 0))

@@ -57,6 +57,32 @@
   .tobs_count_mu(object, .tobs_count_eta(object, X))
 }
 
+# Poisson / negative-binomial residual on a count response, given the fitted
+# mean and the estimated NB size (`size = Inf` is Poisson). The single source of
+# truth for the count families that score a thinned-abundance mean: count()
+# below, and the latent-N families whose per-cell marginal is the abundance
+# distribution thinned by a detection probability -- abun() (Binomial(N, p)),
+# removal() (depleting binomial) and distance() (bin multinomial). The negative
+# binomial is closed under binomial thinning with the SAME size, so a per-cell
+# marginal of an NB(r, lambda) abundance is NB(r, lambda * pi) and the variance
+# is mu + mu^2/r; scoring it at the Poisson variance inflates every residual by
+# exactly the overdispersion the fit estimated. `eps` floors the mean inside the
+# logs and the variance only; `mu` itself is used for y - mu and its sign, so a
+# caller that already floored its mean passes the same value for both.
+.tobs_count_residual <- function(y, mu, type, size = Inf, eps = 1e-8) {
+  mup <- pmax(mu, eps)
+  switch(type,
+    response = y - mu,
+    pearson  = (y - mu) / sqrt(if (is.finite(size)) mup + mup^2 / size else mup),
+    deviance = {
+      term <- ifelse(y > 0, y * log(y / mup), 0)
+      d <- if (is.finite(size))
+             2 * (term - (y + size) * log((y + size) / (mup + size)))
+           else 2 * (term - (y - mu))
+      sign(y - mu) * sqrt(pmax(d, 0))
+    })
+}
+
 # residuals(): deviance (default), Pearson, or response (raw y - mu), per the
 # family. Poisson / negbin deviance uses the standard GLM saturated-model form;
 # the Gaussian deviance residual is the raw y - mu.
@@ -73,23 +99,21 @@
   nt   <- as.numeric(object$model$n_trials %||% rep(1, length(mu)))
   ntp  <- pmax(nt, 1)
 
+  # The Poisson / negbin branches are .tobs_count_residual(); gaussian and
+  # binomial are count()'s own responses and stay here.
+  pois_nb <- function() .tobs_count_residual(
+    y, mu, type, size = if (identical(response, "negbin")) size else Inf)
+
   r <- switch(type,
     response = y - mu,
-    pearson  = (y - mu) / sqrt(switch(response,
-                 poisson  = mup,
-                 negbin   = mup + mup^2 / size,
-                 gaussian = rep(max(phi, 1e-8), length(mu)),
-                 binomial = pmax(mu * (1 - mu / ntp), 1e-8))),
+    pearson  = switch(response,
+                 poisson  = pois_nb(),
+                 negbin   = pois_nb(),
+                 gaussian = (y - mu) / sqrt(rep(max(phi, 1e-8), length(mu))),
+                 binomial = (y - mu) / sqrt(pmax(mu * (1 - mu / ntp), 1e-8))),
     deviance = switch(response,
-      poisson  = {
-        term <- ifelse(y > 0, y * log(y / mup), 0)
-        sign(y - mu) * sqrt(pmax(2 * (term - (y - mu)), 0))
-      },
-      negbin   = {
-        term <- ifelse(y > 0, y * log(y / mup), 0)
-        d <- 2 * (term - (y + size) * log((y + size) / (mup + size)))
-        sign(y - mu) * sqrt(pmax(d, 0))
-      },
+      poisson  = pois_nb(),
+      negbin   = pois_nb(),
       gaussian = y - mu,
       binomial = {
         # Standard binomial deviance residual with n - y failures; the
