@@ -32,7 +32,11 @@
 \code{"change"}. \code{"detection"} / \code{"both"} on a \code{single}/\code{int_occu()} fit needs
 \code{X_det.0}.}
 
-\item{quantiles}{Quantile levels for credible intervals.}
+\item{quantiles}{Quantile levels for credible intervals: a strictly
+increasing length-3 vector (lower, middle, upper), each in (0, 1). The
+levels name the columns they fill, so \code{c(0.05, 0.5, 0.95)} reports
+\code{q5} / \code{q50} / \code{q95}, and the levels used travel on the returned table in
+\code{attr(, "quantiles")}.}
 
 \item{terms}{Name of a single term to vary: one column of the predicted
 process's design matrix, every other column held at its column mean. A

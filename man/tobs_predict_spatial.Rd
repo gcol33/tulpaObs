@@ -17,17 +17,22 @@ tobs_predict_spatial(
 
 \item{newcoords}{Matrix of new coordinates (n_new x 2).}
 
-\item{newocc.covs}{Optional data.frame of covariates at new locations.}
+\item{newocc.covs}{Optional data.frame of state-process covariates at the new
+locations, one row per row of \code{newcoords}, on the scale and in the variables
+the fit's state formula names.}
 
-\item{quantiles}{Quantiles for credible intervals (default 0.025, 0.5, 0.975).}
+\item{quantiles}{Quantile levels for credible intervals (default 0.025, 0.5,
+0.975). Strictly increasing, each in (0, 1); one column is reported per
+level, named from that level (\code{q2.5}, \code{q50}, \code{q97.5}).}
 
 \item{node.coords}{Optional matrix of coordinates for the fitted field's
 nodes (n_nodes x 2), required for an areal field and ignored when the term
 already carries its own coordinates.}
 }
 \value{
-A data.frame with \code{mean}, \code{sd}, and quantile columns (on the response
-scale: occupancy probability or abundance intensity).
+A data.frame with \code{mean}, \code{sd}, and one column per requested quantile
+level (on the response scale: occupancy probability or abundance
+intensity), carrying the levels used in \code{attr(, "quantiles")}.
 }
 \description{
 Generates state-process predictions at new coordinates, including the fitted
@@ -51,4 +56,14 @@ own nodes, so nothing extra is needed. An areal term (\code{icar()}, \code{bym2(
 is only defined once the nodes are placed: pass \code{node.coords}, one row per
 element of \code{object$spatial_field}. Without it the call is an error rather
 than a prediction that quietly drops the field.
+
+\code{newocc.covs} is expanded through the fit's own state-process formula and its
+columns are then keyed to the fitted coefficient names, so the frame may hold
+its covariates in any order and may carry factors, interactions and
+transforms. It needs one row per row of \code{newcoords}.
+
+\code{newocc.covs = NULL} predicts at the fitted covariate MEANS, which the
+intercept-plus-zeros design expresses only where the state covariates were
+centred. A fit whose state design is not centred is an error rather than a
+prediction at covariate values the caller did not choose.
 }
