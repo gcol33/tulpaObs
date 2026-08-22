@@ -35,6 +35,12 @@ constexpr int kBacktrackMaxHalvings = 12;
 // the coefficient blocks do before it moves at all.
 constexpr int kDispersionMaxHalvings = 25;
 
+// Halvings the shared community field solve tries. Each trial re-sweeps every
+// species over the whole field, so the step is cheap to shrink relative to the
+// sweep that scores it, and the field enters the objective through a sum over
+// species that a single overshooting node can dominate.
+constexpr int kFieldMaxHalvings = 20;
+
 // Slack on the backtracking accept test. A Newton step at a converged mode moves
 // the objective by less than the rounding error of the sweep that measures it, so
 // a strict `obj_try >= obj_cur` would reject the final step and exhaust the

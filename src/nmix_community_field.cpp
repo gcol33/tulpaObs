@@ -23,6 +23,7 @@
 
 #include "nmix_kernel.h"
 #include "nmix_spatial_kernel.h"
+#include "newton_step.h"                // newton_backtrack
 #include "tobs_math.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
@@ -43,6 +44,8 @@ using Eigen::Map;
 using tulpaObs::compute_nmix_site;
 using tulpaObs::NMixSiteResult;
 using tulpaObs::nmix_car_quadratic_form;
+using tulpaObs::newton_backtrack;
+using tulpaObs::kFieldMaxHalvings;
 
 namespace {
 
@@ -266,25 +269,24 @@ Rcpp::List cpp_nmix_community_field_solve(
         VectorXd delta = chol.solve(grad);
 
         // Step halving on the field objective (z-dependent ll + field prior).
-        double step = 1.0;
-        bool stepped = false;
         const double obj_cur = log_lik + z_log_prior(z);
         VectorXd z_try(n_spatial), g_dummy(n_spatial);
         MatrixXd H_dummy(0, 0);
         double bd_dummy;
-        for (int h = 0; h < 20; ++h) {
-            z_try = z + step * delta;
-            if (is_icar) {           // sum-to-zero centering
-                double mean = z_try.mean();
-                z_try.array() -= mean;
-            }
-            double ll_try = sweep(z_try, g_dummy, H_dummy, bd_dummy, false);
-            double obj_try = ll_try + z_log_prior(z_try);
-            if (R_finite(obj_try) && obj_try >= obj_cur - 1e-10) {
-                z = z_try; stepped = true; break;
-            }
-            step *= 0.5;
-        }
+        const bool stepped = newton_backtrack(
+            obj_cur,
+            [&](double step) {
+                z_try = z + step * delta;
+                if (is_icar) {       // sum-to-zero centering
+                    double mean = z_try.mean();
+                    z_try.array() -= mean;
+                }
+                const double ll_try = sweep(z_try, g_dummy, H_dummy, bd_dummy,
+                                            false);
+                return ll_try + z_log_prior(z_try);
+            },
+            [&](double) { z = z_try; },
+            kFieldMaxHalvings);
         if (!stepped) { if (verbose) Rcpp::Rcout << "  (field step halving exhausted)\n"; break; }
         n_iter = iter + 1;
     }
