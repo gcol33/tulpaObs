@@ -1,5 +1,6 @@
 // cell_coupling_occu_cover.cpp
-// Registration of `OccuCoverLognormalCoupling` + `OccuCoverBetaCoupling`
+// Registration of the per-visit and cell-aggregated `OccuCoverCoupling` specs
+// over their three positive-arm policies (lognormal, beta, identity-Gaussian)
 // against tulpa's CellCouplingSpec registry via the
 // `tulpa_register_cell_coupling` registered C callable, plus Rcpp-export'd
 // direct evaluators used by tests/testthat/test-occu-cover-coupling.R to
@@ -35,8 +36,8 @@ inline tulpa::RegisterCellCouplingFn lookup_registrar() {
 
 // Shared body: builds CellEtas / CellResponse / CellDerivs views over a
 // single synthetic cell and dispatches into `spec.evaluate_cell()`. The
-// caller picks the spec (lognormal or beta). Used by both direct
-// evaluators below.
+// caller picks the spec (lognormal, beta or gaussian; per-visit or
+// cell-aggregated). Used by every direct evaluator below.
 template <class Spec>
 Rcpp::List eval_one_cell_(double                eta_psi,
                           Rcpp::NumericVector   eta_p,
@@ -335,6 +336,22 @@ Rcpp::List cpp_eval_occu_cover_beta_agg_cell(
 ) {
     return eval_one_cell_<tulpaObs::OccuCoverBetaAggCoupling>(
         eta_psi, eta_p, eta_pos, y_det, y_pos, phi_pos, "beta",
+        parse_curvature_(curvature)
+    );
+}
+
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_cover_gaussian_agg_cell(
+    double                     eta_psi,
+    Rcpp::NumericVector        eta_p,
+    Rcpp::NumericVector        eta_pos,
+    Rcpp::IntegerVector        y_det,
+    Rcpp::NumericVector        y_pos,
+    double                     sigma_pos,
+    std::string                curvature = "observed"
+) {
+    return eval_one_cell_<tulpaObs::OccuCoverGaussianAggCoupling>(
+        eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, "gaussian",
         parse_curvature_(curvature)
     );
 }

@@ -1,134 +1,151 @@
-# FD-checks for every closed-form derivative of the
-# OccuCoverLognormalCoupling CellCouplingSpec
-# (tulpaObs consumer of gcol33/tulpa#32 Layer B.2).
+# FD-checks for every closed-form derivative of the OccuCoverCoupling
+# CellCouplingSpec (tulpaObs consumer of gcol33/tulpa#32 Layer B.2), across its
+# three positive-arm policies -- lognormal, beta and identity-Gaussian -- and
+# both cover granularities (per-visit and cell-aggregated).
 #
-# The spec lives in src/cell_coupling_occu_cover.h; the direct evaluator
-# `cpp_eval_occu_cover_lognormal_cell` returns the cell log-density at
-# given etas + every nonzero derivative buffer the kernel would read
-# (gradients, diagonal neg-Hess, cross-Hess (psi, p_v), (p_v, p_w)). We
-# FD-check each against numerical 1st / 2nd derivatives of cell_ll.
+# The spec lives in src/cell_coupling_occu_cover.h; the direct evaluators
+# `cpp_eval_occu_cover_{lognormal,beta,gaussian}[_agg]_cell` return the cell
+# log-density at given etas plus every nonzero derivative buffer the kernel
+# reads (gradients, diagonal neg-Hess, cross-Hess (psi, p_v), (p_v, p_w)). Each
+# is compared against a central finite difference of cell_ll under an explicit
+# tolerance, so a failure reports the size of the disagreement.
+#
+# Curvature modes. The det branch is complete-data (z is known once a visit
+# detects), so Observed and Expected coincide there and both have to clear the
+# FD checks on every arm, cover arm included. The nodet branch's Expected
+# curvature is the complete-data Fisher information, which is not the second
+# derivative of the mixture, so it is checked against its closed form instead.
 
-cell_ll_at <- function(eta_psi, eta_p, eta_pos,
-                       y_det, y_pos, sigma_pos) {
-    cpp_eval_occu_cover_lognormal_cell(
-        eta_psi  = eta_psi,
-        eta_p    = eta_p,
-        eta_pos  = eta_pos,
-        y_det    = y_det,
-        y_pos    = y_pos,
-        sigma_pos = sigma_pos
-    )$cell_ll
-}
-
-cell_ll_at_beta <- function(eta_psi, eta_p, eta_pos,
-                            y_det, y_pos, phi_pos) {
-    cpp_eval_occu_cover_beta_cell(
-        eta_psi = eta_psi,
-        eta_p   = eta_p,
-        eta_pos = eta_pos,
-        y_det   = y_det,
-        y_pos   = y_pos,
-        phi_pos = phi_pos
-    )$cell_ll
-}
-
-fd1 <- function(f, h = 1e-5) {
-    (f(+h) - f(-h)) / (2 * h)
-}
-
-fd2 <- function(f, h = 1e-4) {
-    (f(+h) - 2 * f(0) + f(-h)) / (h * h)
-}
-
+fd1 <- function(f, h = 1e-5) (f(+h) - f(-h)) / (2 * h)
+fd2 <- function(f, h = 1e-4) (f(+h) - 2 * f(0) + f(-h)) / (h * h)
 fd_cross <- function(g, h = 1e-3) {
-    # g(a, b) returns cell_ll at offset (a, b)
     (g(+h, +h) - g(+h, -h) - g(-h, +h) + g(-h, -h)) / (4 * h * h)
 }
 
-setup_cell <- function(seed, Jc, any_det) {
+bump <- function(vec, i, h) { vec[i] <- vec[i] + h; vec }
+
+# Per-family FD settings. `tol1` bounds the gradient checks and `tol2` the
+# curvature checks: the beta arm carries a digamma / trigamma evaluation and
+# holds a decade looser than the two arms whose curvature is the closed-form
+# 1 / sigma^2. `seed` roots that family's synthetic cells.
+oc_fam <- list(
+    lognormal = list(tol1 = 1e-6, tol2 = 1e-4, seed = 101L),
+    beta      = list(tol1 = 1e-5, tol2 = 1e-3, seed = 707L),
+    gaussian  = list(tol1 = 1e-6, tol2 = 1e-4, seed = 313L)
+)
+oc_fams <- names(oc_fam)
+
+# Family-agnostic evaluator. `disp` is the pos arm's dispersion: the SD on the
+# log scale for lognormal, the SD on the response scale for gaussian, the
+# precision for beta. `agg = TRUE` selects the cell-aggregated spec, whose
+# eta_pos / y_pos are length 1. The dispersion formal is named `phi_pos` on the
+# beta evaluators and `sigma_pos` on the other four, so arguments go
+# positionally and this stays one call site.
+eval_oc <- function(fam, eta_psi, eta_p, eta_pos, y_det, y_pos, disp,
+                    curvature = "observed", agg = FALSE) {
+    f <- switch(paste0(fam, if (agg) "_agg" else ""),
+        lognormal     = cpp_eval_occu_cover_lognormal_cell,
+        beta          = cpp_eval_occu_cover_beta_cell,
+        gaussian      = cpp_eval_occu_cover_gaussian_cell,
+        lognormal_agg = cpp_eval_occu_cover_lognormal_agg_cell,
+        beta_agg      = cpp_eval_occu_cover_beta_agg_cell,
+        gaussian_agg  = cpp_eval_occu_cover_gaussian_agg_cell)
+    f(eta_psi, eta_p, eta_pos, y_det, y_pos, disp, curvature)
+}
+
+cell_ll_oc <- function(fam, d, eta_psi = d$eta_psi, eta_p = d$eta_p,
+                       eta_pos = d$eta_pos, agg = FALSE) {
+    eval_oc(fam, eta_psi, eta_p, eta_pos, d$y_det, d$y_pos, d$disp,
+            agg = agg)$cell_ll
+}
+
+# R twin of PosPolicy::log_density, for the value checks.
+oc_logdens <- function(fam, y, eta, disp) {
+    switch(fam,
+        beta     = dbeta(y, plogis(eta) * disp, (1 - plogis(eta)) * disp,
+                         log = TRUE),
+        gaussian = dnorm(y, eta, disp, log = TRUE),
+        dlnorm(y, eta, disp, log = TRUE))
+}
+
+# Response-scale centre of the positive arm at eta: lognormal median, beta
+# mean, gaussian mean.
+oc_centre <- function(fam, eta) {
+    switch(fam, beta = plogis(eta), gaussian = eta, exp(eta))
+}
+
+# Build a synthetic cell. `any_det = FALSE` forces the all-undetected branch.
+# y_pos is drawn on the family's response scale at detected visits and left at
+# 0 elsewhere, where the spec never reads it.
+setup_cell <- function(seed, Jc, any_det, fam) {
     set.seed(seed)
     eta_psi <- rnorm(1, 0, 0.5)
     eta_p   <- rnorm(Jc, -0.3, 0.6)
-    eta_pos <- rnorm(Jc, 1.2, 0.4)
+    eta_pos <- if (fam == "beta") rnorm(Jc, 0.4, 0.4) else rnorm(Jc, 1.2, 0.4)
     if (any_det) {
         y_det <- rbinom(Jc, 1, 0.6)
         if (all(y_det == 0)) y_det[1] <- 1L
     } else {
         y_det <- rep(0L, Jc)
     }
-    y_pos <- rlnorm(Jc, eta_pos, 0.3) * ifelse(y_det == 1, 1, 0)
-    sigma_pos <- 0.35
-    list(eta_psi = eta_psi,
-         eta_p   = eta_p,
-         eta_pos = eta_pos,
-         y_det   = as.integer(y_det),
-         y_pos   = y_pos,
-         sigma_pos = sigma_pos)
+    disp  <- if (fam == "beta") 12 else 0.35
+    y_pos <- switch(fam,
+        beta = vapply(seq_len(Jc), function(v) {
+            if (y_det[v] == 1L) {
+                mu <- plogis(eta_pos[v])
+                rbeta(1, mu * disp, (1 - mu) * disp)
+            } else 0
+        }, numeric(1)),
+        gaussian = rnorm(Jc, eta_pos, 0.3) * ifelse(y_det == 1, 1, 0),
+        rlnorm(Jc, eta_pos, 0.3) * ifelse(y_det == 1, 1, 0))
+    list(eta_psi = eta_psi, eta_p = eta_p, eta_pos = eta_pos,
+         y_det = as.integer(y_det), y_pos = y_pos, disp = disp)
 }
 
-check_grad_diag <- function(d, label, tol1 = 1e-6, tol2 = 1e-4) {
-    res <- cpp_eval_occu_cover_lognormal_cell(
-        eta_psi   = d$eta_psi,
-        eta_p     = d$eta_p,
-        eta_pos   = d$eta_pos,
-        y_det     = d$y_det,
-        y_pos     = d$y_pos,
-        sigma_pos = d$sigma_pos
-    )
+# Score and diagonal negative Hessian of every arm against central differences
+# of the same cell density. Drives both granularities: the pos loop runs over
+# the pos arm's own row count, which is Jc per-visit and 1 aggregated.
+check_grad_diag_oc <- function(fam, d, label, curvature = "observed",
+                               agg = FALSE) {
+    tol1 <- oc_fam[[fam]]$tol1
+    tol2 <- oc_fam[[fam]]$tol2
+    res  <- eval_oc(fam, d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos,
+                    d$disp, curvature = curvature, agg = agg)
 
-    grad_psi_fd <- fd1(function(h) cell_ll_at(
-        d$eta_psi + h, d$eta_p, d$eta_pos,
-        d$y_det, d$y_pos, d$sigma_pos
-    ))
-    expect_equal(res$grad_psi, grad_psi_fd,
+    expect_equal(res$grad_psi,
+                 fd1(function(h) cell_ll_oc(fam, d, eta_psi = d$eta_psi + h,
+                                            agg = agg)),
                  tolerance = tol1, info = paste0(label, ": grad_psi"))
-
-    nh_psi_fd <- -fd2(function(h) cell_ll_at(
-        d$eta_psi + h, d$eta_p, d$eta_pos,
-        d$y_det, d$y_pos, d$sigma_pos
-    ))
-    expect_equal(res$neg_hess_psi, nh_psi_fd,
+    expect_equal(res$neg_hess_psi,
+                 -fd2(function(h) cell_ll_oc(fam, d, eta_psi = d$eta_psi + h,
+                                             agg = agg)),
                  tolerance = tol2, info = paste0(label, ": neg_hess_psi"))
 
-    Jc <- length(d$eta_p)
-    for (v in seq_len(Jc)) {
-        grad_p_fd <- fd1(function(h) {
-            eta_p_perturb <- d$eta_p
-            eta_p_perturb[v] <- eta_p_perturb[v] + h
-            cell_ll_at(d$eta_psi, eta_p_perturb, d$eta_pos,
-                       d$y_det, d$y_pos, d$sigma_pos)
-        })
-        expect_equal(res$grad_p[v], grad_p_fd,
-                     tolerance = tol1,
-                     info = paste0(label, ": grad_p[", v, "]"))
-
-        nh_p_fd <- -fd2(function(h) {
-            eta_p_perturb <- d$eta_p
-            eta_p_perturb[v] <- eta_p_perturb[v] + h
-            cell_ll_at(d$eta_psi, eta_p_perturb, d$eta_pos,
-                       d$y_det, d$y_pos, d$sigma_pos)
-        })
-        expect_equal(res$neg_hess_p[v], nh_p_fd,
+    for (v in seq_along(d$eta_p)) {
+        expect_equal(res$grad_p[v],
+                     fd1(function(h) cell_ll_oc(fam, d,
+                                                eta_p = bump(d$eta_p, v, h),
+                                                agg = agg)),
+                     tolerance = tol1, info = paste0(label, ": grad_p[", v, "]"))
+        expect_equal(res$neg_hess_p[v],
+                     -fd2(function(h) cell_ll_oc(fam, d,
+                                                 eta_p = bump(d$eta_p, v, h),
+                                                 agg = agg)),
                      tolerance = tol2,
                      info = paste0(label, ": neg_hess_p[", v, "]"))
+    }
 
-        grad_pos_fd <- fd1(function(h) {
-            eta_pos_perturb <- d$eta_pos
-            eta_pos_perturb[v] <- eta_pos_perturb[v] + h
-            cell_ll_at(d$eta_psi, d$eta_p, eta_pos_perturb,
-                       d$y_det, d$y_pos, d$sigma_pos)
-        })
-        expect_equal(res$grad_pos[v], grad_pos_fd,
+    for (v in seq_along(d$eta_pos)) {
+        expect_equal(res$grad_pos[v],
+                     fd1(function(h) cell_ll_oc(fam, d,
+                                                eta_pos = bump(d$eta_pos, v, h),
+                                                agg = agg)),
                      tolerance = tol1,
                      info = paste0(label, ": grad_pos[", v, "]"))
-
-        nh_pos_fd <- -fd2(function(h) {
-            eta_pos_perturb <- d$eta_pos
-            eta_pos_perturb[v] <- eta_pos_perturb[v] + h
-            cell_ll_at(d$eta_psi, d$eta_p, eta_pos_perturb,
-                       d$y_det, d$y_pos, d$sigma_pos)
-        })
-        expect_equal(res$neg_hess_pos[v], nh_pos_fd,
+        expect_equal(res$neg_hess_pos[v],
+                     -fd2(function(h) cell_ll_oc(fam, d,
+                                                 eta_pos = bump(d$eta_pos, v, h),
+                                                 agg = agg)),
                      tolerance = tol2,
                      info = paste0(label, ": neg_hess_pos[", v, "]"))
     }
@@ -136,329 +153,217 @@ check_grad_diag <- function(d, label, tol1 = 1e-6, tol2 = 1e-4) {
     res
 }
 
-test_that("det case: gradients + diagonal neg-Hess match FD", {
-    d <- setup_cell(seed = 101L, Jc = 4L, any_det = TRUE)
-    res <- check_grad_diag(d, label = "det")
-    # det case: every cross-Hessian buffer is zero
-    expect_true(all(res$cross_psi_p == 0))
-    expect_true(all(res$cross_p_p == 0))
-})
-
-test_that("nodet case: gradients + diagonal neg-Hess match FD", {
-    d <- setup_cell(seed = 202L, Jc = 4L, any_det = FALSE)
-    res <- check_grad_diag(d, label = "nodet")
-
-    # Cross-Hess (psi, p_v) FD vs closed form
+# Cross-Hessian checks (-d2 cell_ll / d eta_a d eta_b). Nonzero only in the
+# nodet branch, where the occupancy mixture couples psi to every p_v and the
+# p_v to one another.
+check_cross_oc <- function(fam, d, res, label, tol = 1e-3) {
     Jc <- length(d$eta_p)
     for (v in seq_len(Jc)) {
-        nh_cross_psi_pv_fd <- -fd_cross(function(a, b) {
-            eta_p_perturb <- d$eta_p
-            eta_p_perturb[v] <- eta_p_perturb[v] + b
-            cell_ll_at(d$eta_psi + a, eta_p_perturb, d$eta_pos,
-                       d$y_det, d$y_pos, d$sigma_pos)
-        })
-        expect_equal(res$cross_psi_p[v], nh_cross_psi_pv_fd,
-                     tolerance = 1e-3,
-                     info = paste0("nodet: cross_psi_p[", v, "]"))
+        fdv <- -fd_cross(function(a, b) cell_ll_oc(
+            fam, d, eta_psi = d$eta_psi + a, eta_p = bump(d$eta_p, v, b)))
+        expect_equal(res$cross_psi_p[v], fdv, tolerance = tol,
+                     info = paste0(label, ": cross_psi_p[", v, "]"))
     }
+    for (v in seq_len(Jc)) for (w in seq_len(Jc)) if (v != w) {
+        fdv <- -fd_cross(function(a, b) cell_ll_oc(
+            fam, d, eta_p = bump(bump(d$eta_p, v, a), w, b)))
+        expect_equal(res$cross_p_p[v, w], fdv, tolerance = tol,
+                     info = paste0(label, ": cross_p_p[", v, ",", w, "]"))
+    }
+}
 
-    # Cross-Hess (p_v, p_w) FD vs closed form
-    for (v in seq_len(Jc)) {
-        for (w in seq_len(Jc)) {
-            if (v == w) {
-                next  # diagonal is in neg_hess_p, checked above
-            }
-            nh_cross_pp_fd <- -fd_cross(function(a, b) {
-                eta_p_perturb <- d$eta_p
-                eta_p_perturb[v] <- eta_p_perturb[v] + a
-                eta_p_perturb[w] <- eta_p_perturb[w] + b
-                cell_ll_at(d$eta_psi, eta_p_perturb, d$eta_pos,
-                           d$y_det, d$y_pos, d$sigma_pos)
-            })
-            expect_equal(res$cross_p_p[v, w], nh_cross_pp_fd,
-                         tolerance = 1e-3,
-                         info = paste0("nodet: cross_p_p[", v, ",", w, "]"))
+
+# ---------------------------------------------------------------------------
+# Per-visit cover.
+# ---------------------------------------------------------------------------
+
+for (fam in oc_fams) {
+
+    seed0 <- oc_fam[[fam]]$seed
+
+    test_that(paste0(fam, " det case: value, gradients + diagonal neg-Hess match FD"), {
+        d   <- setup_cell(seed0 + 0L, Jc = 4L, any_det = TRUE, fam = fam)
+        res <- check_grad_diag_oc(fam, d, label = paste0(fam, "-det"))
+
+        # cell_ll against the closed-form det density: log psi + the detection
+        # terms + one log f_pos per detected visit.
+        det <- d$y_det == 1L
+        p_v <- plogis(d$eta_p)
+        expect_equal(res$cell_ll,
+                     log(plogis(d$eta_psi)) +
+                         sum(log(ifelse(det, p_v, 1 - p_v))) +
+                         sum(oc_logdens(fam, d$y_pos[det], d$eta_pos[det], d$disp)),
+                     tolerance = 1e-10, info = paste0(fam, "-det: cell_ll"))
+
+        # The det branch factorises: every cross-Hessian buffer stays zero.
+        expect_true(all(res$cross_psi_p == 0))
+        expect_true(all(res$cross_p_p == 0))
+
+        # z is known here, so the Fisher curvature is the observed Hessian and
+        # has to clear the same FD checks on every arm, cover arm included.
+        res_e <- check_grad_diag_oc(fam, d, label = paste0(fam, "-det-fisher"),
+                                    curvature = "expected")
+        expect_equal(res_e$neg_hess_psi, res$neg_hess_psi, tolerance = 1e-12)
+        expect_equal(res_e$neg_hess_p,   res$neg_hess_p,   tolerance = 1e-12)
+        expect_equal(res_e$neg_hess_pos, res$neg_hess_pos, tolerance = 1e-12)
+        expect_true(all(res_e$cross_psi_p == 0))
+        expect_true(all(res_e$cross_p_p == 0))
+    })
+
+    test_that(paste0(fam, " nodet case: value, gradients, diagonal + cross neg-Hess match FD"), {
+        d   <- setup_cell(seed0 + 1L, Jc = 4L, any_det = FALSE, fam = fam)
+        res <- check_grad_diag_oc(fam, d, label = paste0(fam, "-nodet"))
+        check_cross_oc(fam, d, res, label = paste0(fam, "-nodet"))
+
+        psi <- plogis(d$eta_psi)
+        P0  <- prod(1 - plogis(d$eta_p))
+        expect_equal(res$cell_ll, log(psi * P0 + (1 - psi)), tolerance = 1e-10,
+                     info = paste0(fam, "-nodet: cell_ll"))
+    })
+
+    test_that(paste0(fam, " nodet Fisher curvature: block-diagonal PSD, shares the gradient"), {
+        d     <- setup_cell(seed0 + 1L, Jc = 4L, any_det = FALSE, fam = fam)
+        res_o <- eval_oc(fam, d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos,
+                         d$disp, curvature = "observed")
+        res_e <- eval_oc(fam, d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos,
+                         d$disp, curvature = "expected")
+
+        # Fisher scoring changes the curvature, not the score.
+        expect_equal(res_e$grad_psi, res_o$grad_psi, tolerance = 1e-12)
+        expect_equal(res_e$grad_p,   res_o$grad_p,   tolerance = 1e-12)
+
+        # Complete-data Fisher diagonals: psi(1-psi) and gamma_c p_v(1-p_v),
+        # gamma_c = P(z = 1 | all undetected) = psi P0 / L.
+        psi     <- plogis(d$eta_psi)
+        p       <- plogis(d$eta_p)
+        P0      <- prod(1 - p)
+        L       <- psi * P0 + (1 - psi)
+        gamma_c <- psi * P0 / L
+        expect_equal(res_e$neg_hess_psi, psi * (1 - psi), tolerance = 1e-10)
+        for (v in seq_along(p)) {
+            expect_equal(res_e$neg_hess_p[v], gamma_c * p[v] * (1 - p[v]),
+                         tolerance = 1e-10,
+                         info = paste0(fam, "-fisher: neg_hess_p[", v, "]"))
+        }
+
+        # Block-diagonal (no cross-Hessian) and PSD (non-negative diagonals).
+        expect_true(all(res_e$cross_psi_p == 0))
+        expect_true(all(res_e$cross_p_p == 0))
+        expect_true(res_e$neg_hess_psi >= 0)
+        expect_true(all(res_e$neg_hess_p >= 0))
+    })
+
+    test_that(paste0(fam, " nodet case with a single visit: derivs match FD"), {
+        d   <- setup_cell(seed0 + 2L, Jc = 1L, any_det = FALSE, fam = fam)
+        res <- check_grad_diag_oc(fam, d, label = paste0(fam, "-nodet-J1"))
+        check_cross_oc(fam, d, res, label = paste0(fam, "-nodet-J1"))
+    })
+
+    test_that(paste0(fam, " det case with one detection out of five visits: derivs match FD"), {
+        d <- setup_cell(seed0 + 3L, Jc = 5L, any_det = TRUE, fam = fam)
+        d$y_det <- c(0L, 0L, 1L, 0L, 0L)
+        # Cover observed exactly at the arm's response-scale centre.
+        d$y_pos <- oc_centre(fam, d$eta_pos) * d$y_det
+        check_grad_diag_oc(fam, d, label = paste0(fam, "-det-1of5"))
+    })
+}
+
+
+# ---------------------------------------------------------------------------
+# Cell-aggregated cover (tulpaObs#33). The pos arm carries ONE row per cell (the
+# mean / median cover over the cell's detected visits), so the det branch adds a
+# single log f_pos(ybar; eta_pos_cell). eta_pos / y_pos are length 1; eta_p and
+# y_det stay length J.
+# ---------------------------------------------------------------------------
+
+setup_cell_agg <- function(seed, Jc, y_det, fam) {
+    set.seed(seed)
+    eta_psi <- rnorm(1, 0, 0.5)
+    eta_p   <- rnorm(Jc, -0.2, 0.6)
+    eta_pos <- if (fam == "beta") rnorm(1, 0.3, 0.4) else rnorm(1, 1.0, 0.4)
+    disp    <- if (fam == "beta") 14 else 0.35
+    y_pos   <- switch(fam,
+        beta = {
+            mu <- plogis(eta_pos)
+            rbeta(1, mu * disp, (1 - mu) * disp)
+        },
+        gaussian = eta_pos + rnorm(1, 0, 0.2),
+        exp(eta_pos + rnorm(1, 0, 0.2)))
+    list(eta_psi = eta_psi, eta_p = eta_p, eta_pos = eta_pos,
+         y_det = as.integer(y_det), y_pos = y_pos, disp = disp)
+}
+
+for (fam in oc_fams) {
+
+    seed0 <- oc_fam[[fam]]$seed
+
+    test_that(paste0("aggregated ", fam, " det case: pos derivs match FD, psi/p match the per-visit spec"), {
+        d   <- setup_cell_agg(seed0 + 4L, Jc = 5L,
+                              y_det = c(1L, 0L, 1L, 1L, 0L), fam = fam)
+        res <- check_grad_diag_oc(fam, d, label = paste0(fam, "-agg-det"),
+                                  agg = TRUE)
+        expect_length(res$grad_pos, 1L)
+        expect_length(res$neg_hess_pos, 1L)
+
+        # Complete data again, so Fisher has to clear the same FD checks.
+        res_e <- check_grad_diag_oc(fam, d, agg = TRUE, curvature = "expected",
+                                    label = paste0(fam, "-agg-det-fisher"))
+        expect_equal(res_e$neg_hess_pos, res$neg_hess_pos, tolerance = 1e-12)
+
+        # psi / p block is independent of the cover granularity: equal to the
+        # per-visit spec fed the same psi / p etas and the aggregate at each
+        # detected visit. The densities then differ by the (n_det - 1) repeated
+        # cover factors the per-visit spec adds.
+        Jc <- length(d$eta_p)
+        pv <- eval_oc(fam, d$eta_psi, d$eta_p, rep(d$eta_pos, Jc), d$y_det,
+                      ifelse(d$y_det == 1L, d$y_pos, 0), d$disp)
+        expect_equal(res$grad_psi,     pv$grad_psi,     tolerance = 1e-12)
+        expect_equal(res$grad_p,       pv$grad_p,       tolerance = 1e-12)
+        expect_equal(res$neg_hess_psi, pv$neg_hess_psi, tolerance = 1e-12)
+        expect_equal(res$neg_hess_p,   pv$neg_hess_p,   tolerance = 1e-12)
+
+        n_det <- sum(d$y_det == 1L)
+        lf    <- oc_logdens(fam, d$y_pos, d$eta_pos, d$disp)
+        expect_equal(res$cell_ll, pv$cell_ll - (n_det - 1) * lf,
+                     tolerance = 1e-9, info = paste0(fam, "-agg: cell_ll"))
+    })
+
+    test_that(paste0("aggregated ", fam, " nodet case: pos arm contributes nothing"), {
+        d   <- setup_cell_agg(seed0 + 5L, Jc = 4L, y_det = rep(0L, 4L), fam = fam)
+        res <- eval_oc(fam, d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos,
+                       d$disp, agg = TRUE)
+        expect_equal(res$grad_pos[1], 0, tolerance = 1e-12)
+        expect_equal(res$neg_hess_pos[1], 0, tolerance = 1e-12)
+
+        # cell_ll equals the per-visit spec's nodet density (pos ignored either way).
+        Jc <- length(d$eta_p)
+        pv <- eval_oc(fam, d$eta_psi, d$eta_p, rep(d$eta_pos, Jc), d$y_det,
+                      rep(0, Jc), d$disp)
+        expect_equal(res$cell_ll, pv$cell_ll, tolerance = 1e-12)
+    })
+}
+
+
+test_that("nodet derivatives are family-independent (pos arm idle)", {
+    d   <- setup_cell(oc_fam$lognormal$seed + 1L, Jc = 4L, any_det = FALSE,
+                      fam = "lognormal")
+    ref <- eval_oc("lognormal", d$eta_psi, d$eta_p, d$eta_pos, d$y_det,
+                   d$y_pos, d$disp)
+    for (fam in setdiff(oc_fams, "lognormal")) {
+        alt <- eval_oc(fam, d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos,
+                       if (fam == "beta") 12 else d$disp)
+        for (nm in c("cell_ll", "grad_psi", "grad_p", "neg_hess_psi",
+                     "neg_hess_p", "cross_psi_p", "cross_p_p")) {
+            expect_equal(alt[[nm]], ref[[nm]], tolerance = 1e-12,
+                         info = paste0(fam, " vs lognormal: ", nm))
         }
     }
 })
 
-test_that("nodet case: Fisher (expected) curvature is block-diagonal PSD, shares the gradient", {
-    d <- setup_cell(seed = 202L, Jc = 4L, any_det = FALSE)
-    res_o <- cpp_eval_occu_cover_lognormal_cell(
-        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
-        curvature = "observed")
-    res_e <- cpp_eval_occu_cover_lognormal_cell(
-        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
-        curvature = "expected")
-
-    # Fisher scoring changes the curvature, not the score: gradient identical.
-    expect_equal(res_e$grad_psi, res_o$grad_psi, tolerance = 1e-12)
-    expect_equal(res_e$grad_p,   res_o$grad_p,   tolerance = 1e-12)
-
-    # Complete-data Fisher diagonals: psi(1-psi) and gamma_c * p_v(1-p_v),
-    # gamma_c = P(z = 1 | all undetected) = psi*P0 / L.
-    psi     <- plogis(d$eta_psi)
-    p       <- plogis(d$eta_p)
-    P0      <- prod(1 - p)
-    L       <- psi * P0 + (1 - psi)
-    gamma_c <- psi * P0 / L
-    expect_equal(res_e$neg_hess_psi, psi * (1 - psi), tolerance = 1e-10)
-    for (v in seq_along(p)) {
-        expect_equal(res_e$neg_hess_p[v], gamma_c * p[v] * (1 - p[v]),
-                     tolerance = 1e-10,
-                     info = paste0("fisher: neg_hess_p[", v, "]"))
+test_that("every occu_cover coupling spec is registered at package load", {
+    for (nm in c("occu_cover_lognormal", "occu_cover_beta", "occu_cover_gaussian",
+                 "occu_cover_lognormal_agg", "occu_cover_beta_agg",
+                 "occu_cover_gaussian_agg")) {
+        expect_true(tulpa:::cpp_cell_coupling_registry_has(nm), info = nm)
     }
-
-    # Block-diagonal (no cross-Hessian) and PSD (non-negative diagonals).
-    expect_true(all(res_e$cross_psi_p == 0))
-    expect_true(all(res_e$cross_p_p == 0))
-    expect_true(res_e$neg_hess_psi >= 0)
-    expect_true(all(res_e$neg_hess_p >= 0))
-})
-
-test_that("det case: Fisher (expected) equals observed (already complete-data, z known)", {
-    d <- setup_cell(seed = 101L, Jc = 4L, any_det = TRUE)
-    res_o <- cpp_eval_occu_cover_lognormal_cell(
-        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
-        curvature = "observed")
-    res_e <- cpp_eval_occu_cover_lognormal_cell(
-        d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos, d$sigma_pos,
-        curvature = "expected")
-    expect_equal(res_e$neg_hess_psi, res_o$neg_hess_psi, tolerance = 1e-12)
-    expect_equal(res_e$neg_hess_p,   res_o$neg_hess_p,   tolerance = 1e-12)
-    expect_equal(res_e$neg_hess_pos, res_o$neg_hess_pos, tolerance = 1e-12)
-    expect_true(all(res_e$cross_psi_p == 0))
-    expect_true(all(res_e$cross_p_p == 0))
-})
-
-test_that("nodet case with single visit: derivs match FD", {
-    d <- setup_cell(seed = 303L, Jc = 1L, any_det = FALSE)
-    check_grad_diag(d, label = "nodet-J1")
-})
-
-test_that("det case with single detection out of many visits: derivs match FD", {
-    d <- setup_cell(seed = 404L, Jc = 5L, any_det = TRUE)
-    d$y_det <- c(0L, 0L, 1L, 0L, 0L)
-    d$y_pos <- ifelse(d$y_det == 1, exp(d$eta_pos), 0)
-    check_grad_diag(d, label = "det-1of5")
-})
-
-test_that("spec is registered under occu_cover_lognormal at package load", {
-    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_lognormal"))
-})
-
-
-# ---------------------------------------------------------------------------
-# Beta-positive-arm FD checks. Mirrors the lognormal helpers but uses
-# `cpp_eval_occu_cover_beta_cell` and beta-distributed y_pos in (0, 1).
-# ---------------------------------------------------------------------------
-
-setup_cell_beta <- function(seed, Jc, any_det) {
-    set.seed(seed)
-    eta_psi <- rnorm(1, 0, 0.5)
-    eta_p   <- rnorm(Jc, -0.3, 0.6)
-    eta_pos <- rnorm(Jc, 0.4, 0.4)
-    if (any_det) {
-        y_det <- rbinom(Jc, 1, 0.6)
-        if (all(y_det == 0)) y_det[1] <- 1L
-    } else {
-        y_det <- rep(0L, Jc)
-    }
-    phi_pos <- 12
-    y_pos <- vapply(seq_len(Jc), function(v) {
-        if (y_det[v] == 1L) {
-            mu <- plogis(eta_pos[v])
-            rbeta(1, mu * phi_pos, (1 - mu) * phi_pos)
-        } else 0
-    }, numeric(1))
-    list(eta_psi = eta_psi, eta_p = eta_p, eta_pos = eta_pos,
-         y_det = as.integer(y_det), y_pos = y_pos, phi_pos = phi_pos)
-}
-
-check_grad_diag_beta <- function(d, label, tol1 = 1e-5, tol2 = 1e-3) {
-    res <- cpp_eval_occu_cover_beta_cell(
-        eta_psi = d$eta_psi, eta_p = d$eta_p, eta_pos = d$eta_pos,
-        y_det = d$y_det, y_pos = d$y_pos, phi_pos = d$phi_pos
-    )
-
-    grad_psi_fd <- fd1(function(h) cell_ll_at_beta(
-        d$eta_psi + h, d$eta_p, d$eta_pos,
-        d$y_det, d$y_pos, d$phi_pos
-    ))
-    expect_equal(res$grad_psi, grad_psi_fd, tolerance = tol1,
-                 info = paste0(label, ": grad_psi"))
-
-    nh_psi_fd <- -fd2(function(h) cell_ll_at_beta(
-        d$eta_psi + h, d$eta_p, d$eta_pos,
-        d$y_det, d$y_pos, d$phi_pos
-    ))
-    expect_equal(res$neg_hess_psi, nh_psi_fd, tolerance = tol2,
-                 info = paste0(label, ": neg_hess_psi"))
-
-    Jc <- length(d$eta_p)
-    for (v in seq_len(Jc)) {
-        grad_p_fd <- fd1(function(h) {
-            eta_p_perturb <- d$eta_p
-            eta_p_perturb[v] <- eta_p_perturb[v] + h
-            cell_ll_at_beta(d$eta_psi, eta_p_perturb, d$eta_pos,
-                            d$y_det, d$y_pos, d$phi_pos)
-        })
-        expect_equal(res$grad_p[v], grad_p_fd, tolerance = tol1,
-                     info = paste0(label, ": grad_p[", v, "]"))
-
-        nh_p_fd <- -fd2(function(h) {
-            eta_p_perturb <- d$eta_p
-            eta_p_perturb[v] <- eta_p_perturb[v] + h
-            cell_ll_at_beta(d$eta_psi, eta_p_perturb, d$eta_pos,
-                            d$y_det, d$y_pos, d$phi_pos)
-        })
-        expect_equal(res$neg_hess_p[v], nh_p_fd, tolerance = tol2,
-                     info = paste0(label, ": neg_hess_p[", v, "]"))
-
-        grad_pos_fd <- fd1(function(h) {
-            eta_pos_perturb <- d$eta_pos
-            eta_pos_perturb[v] <- eta_pos_perturb[v] + h
-            cell_ll_at_beta(d$eta_psi, d$eta_p, eta_pos_perturb,
-                            d$y_det, d$y_pos, d$phi_pos)
-        })
-        expect_equal(res$grad_pos[v], grad_pos_fd, tolerance = tol1,
-                     info = paste0(label, ": grad_pos[", v, "]"))
-
-        nh_pos_fd <- -fd2(function(h) {
-            eta_pos_perturb <- d$eta_pos
-            eta_pos_perturb[v] <- eta_pos_perturb[v] + h
-            cell_ll_at_beta(d$eta_psi, d$eta_p, eta_pos_perturb,
-                            d$y_det, d$y_pos, d$phi_pos)
-        })
-        expect_equal(res$neg_hess_pos[v], nh_pos_fd, tolerance = tol2,
-                     info = paste0(label, ": neg_hess_pos[", v, "]"))
-    }
-
-    res
-}
-
-test_that("beta det case: gradients + diagonal neg-Hess match FD", {
-    d <- setup_cell_beta(seed = 707L, Jc = 4L, any_det = TRUE)
-    res <- check_grad_diag_beta(d, label = "beta-det")
-    expect_true(all(res$cross_psi_p == 0))
-    expect_true(all(res$cross_p_p == 0))
-})
-
-test_that("beta nodet case: gradients + diagonal neg-Hess match FD (family-indep)", {
-    d <- setup_cell_beta(seed = 808L, Jc = 4L, any_det = FALSE)
-    res <- check_grad_diag_beta(d, label = "beta-nodet")
-    # The nodet branch ignores the pos arm, so its psi/p derivatives must
-    # match the lognormal spec's exactly under the same eta_psi / eta_p.
-    res_lnrm <- cpp_eval_occu_cover_lognormal_cell(
-        eta_psi = d$eta_psi, eta_p = d$eta_p, eta_pos = d$eta_pos,
-        y_det = d$y_det, y_pos = d$y_pos, sigma_pos = 0.35
-    )
-    expect_equal(res$cell_ll,       res_lnrm$cell_ll,       tolerance = 1e-12)
-    expect_equal(res$grad_psi,      res_lnrm$grad_psi,      tolerance = 1e-12)
-    expect_equal(res$grad_p,        res_lnrm$grad_p,        tolerance = 1e-12)
-    expect_equal(res$neg_hess_psi,  res_lnrm$neg_hess_psi,  tolerance = 1e-12)
-    expect_equal(res$neg_hess_p,    res_lnrm$neg_hess_p,    tolerance = 1e-12)
-    expect_equal(res$cross_psi_p,   res_lnrm$cross_psi_p,   tolerance = 1e-12)
-    expect_equal(res$cross_p_p,     res_lnrm$cross_p_p,     tolerance = 1e-12)
-})
-
-test_that("beta spec is registered under occu_cover_beta at package load", {
-    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_beta"))
-})
-
-
-# ---------------------------------------------------------------------------
-# Cell-aggregated cover (tulpaObs#33). The pos arm carries ONE row per cell
-# (the mean / median cover over the cell's detected visits), so the det branch
-# adds a single log f_pos(ybar; eta_pos_cell). eta_pos / y_pos are length 1;
-# eta_p / y_det stay length J. FD-check the single pos gradient + neg-Hess and
-# confirm the psi / p block is byte-identical to the per-visit spec (the
-# aggregation changes only the pos evaluation count).
-# ---------------------------------------------------------------------------
-
-test_that("aggregated lognormal det case: pos deriv matches FD, psi/p match per-visit", {
-    set.seed(511L)
-    Jc <- 5L
-    eta_psi <- rnorm(1, 0, 0.5)
-    eta_p   <- rnorm(Jc, -0.2, 0.6)
-    y_det   <- c(1L, 0L, 1L, 1L, 0L)
-    eta_pos_cell <- rnorm(1, 1.0, 0.4)
-    ybar    <- exp(eta_pos_cell + rnorm(1, 0, 0.2))     # one aggregated cover
-    sigma_pos <- 0.35
-
-    agg <- function(ep) cpp_eval_occu_cover_lognormal_agg_cell(
-        eta_psi = eta_psi, eta_p = eta_p, eta_pos = ep,
-        y_det = y_det, y_pos = ybar, sigma_pos = sigma_pos)
-    res <- agg(eta_pos_cell)
-    expect_length(res$grad_pos, 1L)
-    expect_length(res$neg_hess_pos, 1L)
-
-    g_fd  <- fd1(function(h) agg(eta_pos_cell + h)$cell_ll)
-    nh_fd <- -fd2(function(h) agg(eta_pos_cell + h)$cell_ll)
-    expect_equal(res$grad_pos[1],     g_fd,  tolerance = 1e-6)
-    expect_equal(res$neg_hess_pos[1], nh_fd, tolerance = 1e-4)
-
-    # psi / p block independent of the cover granularity: equal to the per-visit
-    # spec fed the same psi / p etas (pos arm zeroed there).
-    pv <- cpp_eval_occu_cover_lognormal_cell(
-        eta_psi = eta_psi, eta_p = eta_p, eta_pos = rep(eta_pos_cell, Jc),
-        y_det = y_det, y_pos = ifelse(y_det == 1, ybar, 0), sigma_pos = sigma_pos)
-    expect_equal(res$grad_psi,     pv$grad_psi,     tolerance = 1e-12)
-    expect_equal(res$grad_p,       pv$grad_p,       tolerance = 1e-12)
-    expect_equal(res$neg_hess_psi, pv$neg_hess_psi, tolerance = 1e-12)
-    expect_equal(res$neg_hess_p,   pv$neg_hess_p,   tolerance = 1e-12)
-
-    # One detected visit's cover, aggregated, equals adding that single log f_pos
-    # on top of the psi/p-only density.
-    base_ll <- pv$cell_ll -
-        sum(vapply(which(y_det == 1L), function(v)
-            dlnorm(ifelse(y_det[v] == 1, ybar, 1), eta_pos_cell, sigma_pos,
-                   log = TRUE), numeric(1)))
-    expect_equal(res$cell_ll,
-                 base_ll + dlnorm(ybar, eta_pos_cell, sigma_pos, log = TRUE),
-                 tolerance = 1e-9)
-})
-
-test_that("aggregated beta det case: pos deriv matches FD", {
-    set.seed(622L)
-    Jc <- 4L
-    eta_psi <- rnorm(1, 0, 0.5)
-    eta_p   <- rnorm(Jc, -0.2, 0.6)
-    y_det   <- c(1L, 1L, 0L, 1L)
-    eta_pos_cell <- rnorm(1, 0.3, 0.4)
-    mu <- plogis(eta_pos_cell); phi_pos <- 14
-    ybar <- rbeta(1, mu * phi_pos, (1 - mu) * phi_pos)
-
-    agg <- function(ep) cpp_eval_occu_cover_beta_agg_cell(
-        eta_psi = eta_psi, eta_p = eta_p, eta_pos = ep,
-        y_det = y_det, y_pos = ybar, phi_pos = phi_pos)
-    res <- agg(eta_pos_cell)
-    expect_length(res$grad_pos, 1L)
-
-    g_fd  <- fd1(function(h) agg(eta_pos_cell + h)$cell_ll)
-    nh_fd <- -fd2(function(h) agg(eta_pos_cell + h)$cell_ll)
-    expect_equal(res$grad_pos[1],     g_fd,  tolerance = 1e-5)
-    expect_equal(res$neg_hess_pos[1], nh_fd, tolerance = 1e-3)
-})
-
-test_that("aggregated nodet case: pos arm contributes nothing", {
-    set.seed(733L)
-    Jc <- 4L
-    eta_psi <- rnorm(1, 0, 0.5)
-    eta_p   <- rnorm(Jc, -0.3, 0.6)
-    res <- cpp_eval_occu_cover_lognormal_agg_cell(
-        eta_psi = eta_psi, eta_p = eta_p, eta_pos = 0.7,
-        y_det = rep(0L, Jc), y_pos = 1.0, sigma_pos = 0.35)
-    expect_equal(res$grad_pos[1], 0, tolerance = 1e-12)
-    expect_equal(res$neg_hess_pos[1], 0, tolerance = 1e-12)
-    # cell_ll equals the per-visit spec's nodet density (pos ignored either way).
-    pv <- cpp_eval_occu_cover_lognormal_cell(
-        eta_psi = eta_psi, eta_p = eta_p, eta_pos = rep(0.7, Jc),
-        y_det = rep(0L, Jc), y_pos = rep(0, Jc), sigma_pos = 0.35)
-    expect_equal(res$cell_ll, pv$cell_ll, tolerance = 1e-12)
-})
-
-test_that("aggregated specs are registered at package load", {
-    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_lognormal_agg"))
-    expect_true(tulpa:::cpp_cell_coupling_registry_has("occu_cover_beta_agg"))
 })

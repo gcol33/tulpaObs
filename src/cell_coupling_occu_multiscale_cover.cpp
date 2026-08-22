@@ -3,7 +3,8 @@
 // against tulpa's CellCouplingSpec registry, plus Rcpp-export'd direct
 // single-cell evaluators used by
 // tests/testthat/test-occu-multiscale-cover-coupling.R to FD-check every
-// closed-form derivative against numerical derivatives of the cell density.
+// closed-form derivative against numerical derivatives of the cell density,
+// one evaluator per positive-arm policy (lognormal, beta, identity-Gaussian).
 //
 // Unlike the 2-level occu_cover specs (stateless, registered once at .onLoad),
 // the multiscale spec carries the fit's per-cell plot structure, so the R
@@ -284,4 +285,22 @@ Rcpp::List cpp_eval_occu_multiscale_cover_beta_cell(
     return eval_one_cell_ms_<tulpaObs::OccuMultiscaleCoverBetaCoupling>(
         eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes,
         phi_pos, "beta", parse_curvature_(curvature));
+}
+
+// Identity-Gaussian twin. `sigma_pos` is the SD on the response scale (the
+// pos-arm mean is eta_pos, no log transform).
+// [[Rcpp::export]]
+Rcpp::List cpp_eval_occu_multiscale_cover_gaussian_cell(
+    double                eta_psi,
+    Rcpp::NumericVector   eta_theta,
+    Rcpp::NumericVector   eta_p,
+    Rcpp::NumericVector   eta_pos,
+    Rcpp::IntegerVector   y_det,
+    Rcpp::NumericVector   y_pos,
+    Rcpp::IntegerVector   plot_sizes,
+    double                sigma_pos,
+    std::string           curvature = "observed") {
+    return eval_one_cell_ms_<tulpaObs::OccuMultiscaleCoverGaussianCoupling>(
+        eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes,
+        sigma_pos, "gaussian", parse_curvature_(curvature));
 }

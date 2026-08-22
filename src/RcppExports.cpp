@@ -185,6 +185,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_eval_occu_cover_gaussian_agg_cell
+Rcpp::List cpp_eval_occu_cover_gaussian_agg_cell(double eta_psi, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos, double sigma_pos, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_cover_gaussian_agg_cell(SEXP eta_psiSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_posSEXP, SEXP sigma_posSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_pos(sigma_posSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_cover_gaussian_agg_cell(eta_psi, eta_p, eta_pos, y_det, y_pos, sigma_pos, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_register_occu_cover_lognormal_latent_coupling
 void cpp_register_occu_cover_lognormal_latent_coupling(Rcpp::List cover_values, double sigma_eps, int n_quad);
 RcppExport SEXP _tulpaObs_cpp_register_occu_cover_lognormal_latent_coupling(SEXP cover_valuesSEXP, SEXP sigma_epsSEXP, SEXP n_quadSEXP) {
@@ -294,6 +311,25 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type phi_pos(phi_posSEXP);
     Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
     rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_multiscale_cover_beta_cell(eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, phi_pos, curvature));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_eval_occu_multiscale_cover_gaussian_cell
+Rcpp::List cpp_eval_occu_multiscale_cover_gaussian_cell(double eta_psi, Rcpp::NumericVector eta_theta, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_pos, Rcpp::IntegerVector y_det, Rcpp::NumericVector y_pos, Rcpp::IntegerVector plot_sizes, double sigma_pos, std::string curvature);
+RcppExport SEXP _tulpaObs_cpp_eval_occu_multiscale_cover_gaussian_cell(SEXP eta_psiSEXP, SEXP eta_thetaSEXP, SEXP eta_pSEXP, SEXP eta_posSEXP, SEXP y_detSEXP, SEXP y_posSEXP, SEXP plot_sizesSEXP, SEXP sigma_posSEXP, SEXP curvatureSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type eta_psi(eta_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_theta(eta_thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_pos(eta_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_det(y_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y_pos(y_posSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type plot_sizes(plot_sizesSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_pos(sigma_posSEXP);
+    Rcpp::traits::input_parameter< std::string >::type curvature(curvatureSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_eval_occu_multiscale_cover_gaussian_cell(eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes, sigma_pos, curvature));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2437,6 +2473,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_eval_occu_cover_gaussian_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_gaussian_cell, 7},
     {"_tulpaObs_cpp_eval_occu_cover_lognormal_agg_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_lognormal_agg_cell, 7},
     {"_tulpaObs_cpp_eval_occu_cover_beta_agg_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_beta_agg_cell, 7},
+    {"_tulpaObs_cpp_eval_occu_cover_gaussian_agg_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_gaussian_agg_cell, 7},
     {"_tulpaObs_cpp_register_occu_cover_lognormal_latent_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_lognormal_latent_coupling, 3},
     {"_tulpaObs_cpp_register_occu_cover_beta_latent_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_cover_beta_latent_coupling, 3},
     {"_tulpaObs_cpp_eval_occu_cover_lognormal_latent_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_cover_lognormal_latent_cell, 8},
@@ -2444,6 +2481,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_register_occu_multiscale_cover_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_multiscale_cover_coupling, 3},
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_lognormal_cell, 9},
     {"_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_beta_cell, 9},
+    {"_tulpaObs_cpp_eval_occu_multiscale_cover_gaussian_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_multiscale_cover_gaussian_cell, 9},
     {"_tulpaObs_cpp_register_occu_only_coupling", (DL_FUNC) &_tulpaObs_cpp_register_occu_only_coupling, 0},
     {"_tulpaObs_cpp_eval_occu_only_cell", (DL_FUNC) &_tulpaObs_cpp_eval_occu_only_cell, 4},
     {"_tulpaObs_cpp_cover_pit_cdf", (DL_FUNC) &_tulpaObs_cpp_cover_pit_cdf, 10},

@@ -1,16 +1,22 @@
 # FD-checks for every closed-form derivative of the
-# OccuMultiscaleCover{Lognormal,Beta}Coupling CellCouplingSpec
+# OccuMultiscaleCover{Lognormal,Beta,Gaussian}Coupling CellCouplingSpec
 # (three-level occupancy + cover hurdle, gcol33/tulpaObs#29).
 #
 # The spec lives in src/cell_coupling_occu_multiscale_cover.h; the direct
-# evaluators `cpp_eval_occu_multiscale_cover_{lognormal,beta}_cell` return the
-# cell log-density at given etas + every nonzero derivative buffer the kernel
-# reads (gradients; diagonal neg-Hess; cross-Hess (psi,theta), (psi,p),
-# (theta,theta), (theta,p), (p,p)). We FD-check each against numerical 1st / 2nd
-# derivatives of cell_ll, in three cell regimes:
+# evaluators `cpp_eval_occu_multiscale_cover_{lognormal,beta,gaussian}_cell`
+# return the cell log-density at given etas + every nonzero derivative buffer
+# the kernel reads (gradients; diagonal neg-Hess; cross-Hess (psi,theta),
+# (psi,p), (theta,theta), (theta,p), (p,p)). We FD-check each against numerical
+# 1st / 2nd derivatives of cell_ll, in three cell regimes:
 #   * branch A, mixed: some plots detect, some do not (cell occupied)
 #   * branch A, all plots detect (fully factorized -> zero cross)
 #   * branch B: no detection anywhere (nested z-over-cell, a-over-plot mixture)
+#
+# Curvature modes. The all-detect regime is complete-data (z and every a are
+# known), so Observed and Expected coincide and both have to clear the FD
+# checks on all four arms, cover arm included. The regimes carrying a mixture
+# have an Expected curvature that is the complete-data Fisher information, not
+# the second derivative, so that is checked against its closed form instead.
 
 fd1 <- function(f, h = 1e-5) (f(+h) - f(-h)) / (2 * h)
 fd2 <- function(f, h = 1e-4) (f(+h) - 2 * f(0) + f(-h)) / (h * h)
@@ -18,18 +24,21 @@ fd_cross <- function(g, h = 1e-3) {
     (g(+h, +h) - g(+h, -h) - g(-h, +h) + g(-h, -h)) / (4 * h * h)
 }
 
-# Family-agnostic evaluator wrappers. `fam` is "lognormal" or "beta".
+ms_fams <- c("lognormal", "beta", "gaussian")
+
+# Family-agnostic evaluator wrapper. `disp` is the pos arm's dispersion: the SD
+# on the log scale for lognormal, the SD on the response scale for gaussian,
+# the precision for beta. That formal is named `phi_pos` on the beta evaluator
+# and `sigma_pos` on the other two, so arguments go positionally and this stays
+# one call site.
 eval_ms <- function(fam, eta_psi, eta_theta, eta_p, eta_pos,
                     y_det, y_pos, plot_sizes, disp, curvature = "observed") {
-    if (fam == "beta") {
-        cpp_eval_occu_multiscale_cover_beta_cell(
-            eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos,
-            plot_sizes, phi_pos = disp, curvature = curvature)
-    } else {
-        cpp_eval_occu_multiscale_cover_lognormal_cell(
-            eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos,
-            plot_sizes, sigma_pos = disp, curvature = curvature)
-    }
+    f <- switch(fam,
+        beta     = cpp_eval_occu_multiscale_cover_beta_cell,
+        gaussian = cpp_eval_occu_multiscale_cover_gaussian_cell,
+        cpp_eval_occu_multiscale_cover_lognormal_cell)
+    f(eta_psi, eta_theta, eta_p, eta_pos, y_det, y_pos, plot_sizes,
+      disp, curvature)
 }
 cell_ll_ms <- function(fam, d, eta_psi = d$eta_psi, eta_theta = d$eta_theta,
                        eta_p = d$eta_p, eta_pos = d$eta_pos) {
@@ -57,6 +66,10 @@ setup_cell_ms <- function(seed, det_pattern, fam = "lognormal") {
                 mu <- plogis(eta_pos[v]); rbeta(1, mu * disp, (1 - mu) * disp)
             } else 0
         }, numeric(1))
+    } else if (fam == "gaussian") {
+        eta_pos <- rnorm(Jc, 1.1, 0.4)
+        disp    <- 0.35
+        y_pos   <- rnorm(Jc, eta_pos, 0.3) * ifelse(y_det == 1, 1, 0)
     } else {
         eta_pos <- rnorm(Jc, 1.1, 0.4)
         disp    <- 0.35
@@ -70,9 +83,11 @@ setup_cell_ms <- function(seed, det_pattern, fam = "lognormal") {
 # Perturb-one-eta helpers returning modified eta vectors.
 bump <- function(vec, i, h) { vec[i] <- vec[i] + h; vec }
 
-check_grad_diag_ms <- function(fam, d, label, tol1 = 1e-5, tol2 = 1e-3) {
+check_grad_diag_ms <- function(fam, d, label, tol1 = 1e-5, tol2 = 1e-3,
+                               curvature = "observed") {
     res <- eval_ms(fam, d$eta_psi, d$eta_theta, d$eta_p, d$eta_pos,
-                   d$y_det, d$y_pos, d$plot_sizes, d$disp)
+                   d$y_det, d$y_pos, d$plot_sizes, d$disp,
+                   curvature = curvature)
 
     # psi
     expect_equal(res$grad_psi,
@@ -149,7 +164,7 @@ check_cross_ms <- function(fam, d, res, label, tol = 2e-3) {
     }
 }
 
-for (fam in c("lognormal", "beta")) {
+for (fam in ms_fams) {
 
     test_that(paste0(fam, " branch B (no detection): grad/diag/cross match FD"), {
         # 3 plots, 2/1/2 visits, none detect -> nested z/a mixture, all cross
@@ -179,6 +194,15 @@ for (fam in c("lognormal", "beta")) {
         expect_true(all(res$cross_theta_theta == 0))
         expect_true(all(res$cross_theta_p == 0))
         expect_true(all(res$cross_p_p == 0))
+
+        # z and every a are known here, so the Fisher curvature is the observed
+        # Hessian and has to clear the same FD checks on all four arms.
+        res_e <- check_grad_diag_ms(fam, d, label = paste0(fam, "-Aall-fisher"),
+                                    curvature = "expected")
+        expect_equal(res_e$neg_hess_psi,   res$neg_hess_psi,   tolerance = 1e-12)
+        expect_equal(res_e$neg_hess_theta, res$neg_hess_theta, tolerance = 1e-12)
+        expect_equal(res_e$neg_hess_p,     res$neg_hess_p,     tolerance = 1e-12)
+        expect_equal(res_e$neg_hess_pos,   res$neg_hess_pos,   tolerance = 1e-12)
     })
 
     test_that(paste0(fam, " single plot single visit: derivs match FD"), {
@@ -236,35 +260,55 @@ test_that("Expected (Fisher) curvature: block-diagonal, PSD, shares the gradient
 })
 
 test_that("branch B nodet derivatives are family-independent (pos arm idle)", {
-    d_ln <- setup_cell_ms(seed = 66L,
-                          det_pattern = list(c(0, 0), c(0)), fam = "lognormal")
-    res_ln <- eval_ms("lognormal", d_ln$eta_psi, d_ln$eta_theta, d_ln$eta_p,
-                      d_ln$eta_pos, d_ln$y_det, d_ln$y_pos, d_ln$plot_sizes, d_ln$disp)
-    res_bt <- eval_ms("beta", d_ln$eta_psi, d_ln$eta_theta, d_ln$eta_p,
-                      d_ln$eta_pos, d_ln$y_det, d_ln$y_pos, d_ln$plot_sizes, 12)
-    expect_equal(res_ln$cell_ll,       res_bt$cell_ll,       tolerance = 1e-12)
-    expect_equal(res_ln$grad_psi,      res_bt$grad_psi,      tolerance = 1e-12)
-    expect_equal(res_ln$grad_theta,    res_bt$grad_theta,    tolerance = 1e-12)
-    expect_equal(res_ln$grad_p,        res_bt$grad_p,        tolerance = 1e-12)
-    expect_equal(res_ln$neg_hess_psi,  res_bt$neg_hess_psi,  tolerance = 1e-12)
-    expect_equal(res_ln$cross_p_p,     res_bt$cross_p_p,     tolerance = 1e-12)
+    d      <- setup_cell_ms(seed = 66L,
+                            det_pattern = list(c(0, 0), c(0)), fam = "lognormal")
+    res_ln <- eval_ms("lognormal", d$eta_psi, d$eta_theta, d$eta_p,
+                      d$eta_pos, d$y_det, d$y_pos, d$plot_sizes, d$disp)
+    for (fam in setdiff(ms_fams, "lognormal")) {
+        alt <- eval_ms(fam, d$eta_psi, d$eta_theta, d$eta_p, d$eta_pos,
+                       d$y_det, d$y_pos, d$plot_sizes,
+                       if (fam == "beta") 12 else d$disp)
+        for (nm in c("cell_ll", "grad_psi", "grad_theta", "grad_p",
+                     "neg_hess_psi", "cross_p_p")) {
+            expect_equal(alt[[nm]], res_ln[[nm]], tolerance = 1e-12,
+                         info = paste0(fam, " vs lognormal: ", nm))
+        }
+    }
 })
 
-test_that("multiscale specs register and reduce to 2-level when theta -> 1, one plot", {
+test_that("multiscale specs reduce to the 2-level occu_cover when theta -> 1, one plot", {
     # One plot holding all visits, theta -> +Inf (availability = 1): the plot
     # layer collapses and the cell density matches the 2-level occu_cover.
-    set.seed(77L)
-    Jc <- 4L
-    eta_psi <- 0.3; eta_p <- rnorm(Jc, -0.2, 0.5); eta_pos <- rnorm(Jc, 1.0, 0.3)
-    y_det <- c(1L, 0L, 1L, 0L)
-    y_pos <- rlnorm(Jc, eta_pos, 0.3) * ifelse(y_det == 1, 1, 0)
-    ms <- cpp_eval_occu_multiscale_cover_lognormal_cell(
-        eta_psi, eta_theta = 30, eta_p = eta_p, eta_pos = eta_pos,
-        y_det = y_det, y_pos = y_pos, plot_sizes = Jc, sigma_pos = 0.35)
-    oc <- cpp_eval_occu_cover_lognormal_cell(
-        eta_psi, eta_p = eta_p, eta_pos = eta_pos,
-        y_det = y_det, y_pos = y_pos, sigma_pos = 0.35)
-    expect_equal(ms$cell_ll, oc$cell_ll, tolerance = 1e-8)
-    expect_equal(ms$grad_p,  oc$grad_p,  tolerance = 1e-6)
-    expect_equal(ms$grad_pos, oc$grad_pos, tolerance = 1e-6)
+    eval_oc2 <- function(fam, ...) {
+        f <- switch(fam,
+            beta     = cpp_eval_occu_cover_beta_cell,
+            gaussian = cpp_eval_occu_cover_gaussian_cell,
+            cpp_eval_occu_cover_lognormal_cell)
+        f(...)
+    }
+    for (fam in ms_fams) {
+        d  <- setup_cell_ms(seed = 77L, det_pattern = list(c(1, 0, 1, 0)),
+                            fam = fam)
+        ms <- eval_ms(fam, d$eta_psi, 30, d$eta_p, d$eta_pos,
+                      d$y_det, d$y_pos, d$plot_sizes, d$disp)
+        oc <- eval_oc2(fam, d$eta_psi, d$eta_p, d$eta_pos, d$y_det, d$y_pos,
+                       d$disp, "observed")
+        expect_equal(ms$cell_ll,  oc$cell_ll,  tolerance = 1e-8, info = fam)
+        expect_equal(ms$grad_p,   oc$grad_p,   tolerance = 1e-6, info = fam)
+        expect_equal(ms$grad_pos, oc$grad_pos, tolerance = 1e-6, info = fam)
+        expect_equal(ms$neg_hess_pos, oc$neg_hess_pos, tolerance = 1e-6,
+                     info = fam)
+    }
+})
+
+test_that("the per-fit registrar accepts each positive arm", {
+    # Stateful spec: registered under a fixed per-family name immediately before
+    # each joint fit (last-writer-wins), so registering here is what the driver
+    # itself does at R/occu_multiscale_cover_joint.R.
+    for (fam in ms_fams) {
+        nm <- cpp_register_occu_multiscale_cover_coupling(
+            positive = fam, n_plots_per_cell = 1L, plot_sizes_flat = 2L)
+        expect_equal(nm, paste0("occu_multiscale_cover_", fam))
+        expect_true(tulpa:::cpp_cell_coupling_registry_has(nm), info = fam)
+    }
 })
