@@ -245,9 +245,6 @@
     stop("royle_nichols() requires `y` (an N x J 0/1 detection-history ",
          "matrix).", call. = FALSE)
   }
-  if (!identical(.map_engine(engine, family = "royle_nichols"), "laplace")) {
-    stop("royle_nichols() supports method = \"laplace\" only.", call. = FALSE)
-  }
   # Split `detection` into a site-level design and (if `visits` is supplied) a
   # visit-level design, exactly as the occupancy / N-mixture front doors do.
   vd <- .normalize_visits(visits, detection, n_sites = nrow(y),

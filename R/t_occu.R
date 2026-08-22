@@ -204,9 +204,6 @@ t_occu <- function() {
   if (is.null(y))
     stop("t_occu() requires `y` (a 3D array [n_sites x n_seasons x max_visits] ",
          "or a list of per-season matrices).", call. = FALSE)
-  if (!identical(engine, "pg_gibbs"))
-    stop("t_occu() supports method = \"pg_gibbs\" only (the Polya-Gamma Gibbs ",
-         "sampler spOccupancy's tPGOcc uses).", call. = FALSE)
   model <- .tobs_build_t_occu(occ_formula = formula, det_formula = detection,
                               data = data, y = y)
   control <- .tobs_control_defaults(control, "pg_gibbs", "t_occu")

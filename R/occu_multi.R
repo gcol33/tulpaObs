@@ -239,8 +239,6 @@
   if (!is.null(visits))
     stop("occu_multi() detection is site-level; visit-level detection ",
          "covariates (`visits`) are not yet supported.", call. = FALSE)
-  if (!identical(.map_engine(engine, family = "occu_multi"), "laplace"))
-    stop("occu_multi() supports method = \"laplace\" only.", call. = FALSE)
   model <- .tobs_build_occu_multi(
     state_formula = formula, det_formula = detection, data = data, y = y,
     species = species)

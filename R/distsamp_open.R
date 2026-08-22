@@ -606,8 +606,6 @@
   if (!is.null(visits))
     stop("distsamp_open() detection is site-level; visit-level covariates ",
          "(`visits`) are not yet supported.", call. = FALSE)
-  if (!identical(.map_engine(engine, family = "distsamp_open"), "laplace"))
-    stop("distsamp_open() supports method = \"laplace\" only.", call. = FALSE)
   cutpoints <- family$params$cutpoints
   if (is.null(cutpoints))
     stop("distsamp_open() requires `cutpoints` (the distance-bin edges); pass ",

@@ -1,3 +1,11 @@
+# Pack the outer-grid control knobs into the named list every latent block
+# reads. Absent knobs stay absent, so a block keeps its own default grid.
+.tobs_outer_grids <- function(sigma = NULL, rho = NULL, tau = NULL,
+                              range = NULL) {
+  Filter(Negate(is.null),
+         list(sigma = sigma, rho = rho, tau = tau, range = range))
+}
+
 #' Internal engine entry point
 #'
 #' Dispatches to Laplace (default) or NUTS for a built `tobs_model`. Not
@@ -24,6 +32,8 @@
                             re.aghq = TRUE, n.quad = NULL, re.lkj = NULL,
                             K.max = NULL, mixture = "poisson",
                             integration = c("grid", "ccd"),
+                            sigma.grid = NULL, rho.grid = NULL,
+                            tau.grid = NULL, range.grid = NULL,
                             verbose = TRUE, ...) {
 
   method <- match.arg(method)
@@ -541,6 +551,9 @@
     if (identical(model$model_type, "count")) {
       fit <- .tobs_fit_count_spatial(fit_model, spatial,
                                      max_iter = as.integer(max.iter), tol = tol,
+                                     sigma.grid = sigma.grid,
+                                     rho.grid = rho.grid, tau.grid = tau.grid,
+                                     range.grid = range.grid,
                                      verbose = verbose)
       fit <- .unscale_fit_per_process(fit, scales, process_info)
       fit$model      <- model
@@ -603,6 +616,9 @@
       tol      = tol,
       damping  = damping,
       heldout_state = heldout_state,
+      # Outer-grid overrides, the same `control` names the joint cover route
+      # takes; the validator already admits them on a nested-Laplace route.
+      grids    = .tobs_outer_grids(sigma.grid, rho.grid, tau.grid, range.grid),
       verbose  = verbose
     )
     fit <- .unscale_fit_per_process(fit, scales, process_info)

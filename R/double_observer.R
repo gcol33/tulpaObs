@@ -210,8 +210,6 @@
   if (!is.null(visits))
     stop("double_observer() detection is site-level; visit-level detection ",
          "covariates (`visits`) are not yet supported.", call. = FALSE)
-  if (!identical(.map_engine(engine, family = "double_observer"), "laplace"))
-    stop("double_observer() supports method = \"laplace\" only.", call. = FALSE)
   model <- .tobs_build_double_observer(
     abund_formula = formula, det_formula = detection, data = data, y = y,
     type = type, primary = dots$primary)

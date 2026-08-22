@@ -172,9 +172,6 @@
     stop("occu_ttd() detection is site-level; visit-level rate covariates ",
          "(`visits`) are not yet supported.", call. = FALSE)
   }
-  if (!identical(.map_engine(engine, family = "occu_ttd"), "laplace")) {
-    stop("occu_ttd() supports method = \"laplace\" only.", call. = FALSE)
-  }
   model <- .tobs_build_occu_ttd(
     state_formula = formula, rate_formula = detection, data = data, y = y,
     surveyLength = family$params$surveyLength %||% 1)

@@ -2,6 +2,50 @@
 
 ## 0.0.236 (2026-08-22)
 
+* **Six R sites that stated one fact twice, or guarded on a field nothing sets
+  (#274).** Three were defects rather than duplication:
+
+  - **`control$sigma.grid` / `rho.grid` / `tau.grid` now reach the multi-block
+    nested-Laplace route.** `.tobs_block_from_spatial()` / `_temporal()` /
+    `_re()` read their outer-grid overrides off the TERM object
+    (`spatial$sigma_grid`), and no constructor or binder ever wrote those
+    fields, so twelve guards were dead and the route had no grid override at
+    all -- while the control validator ADMITTED the names, so a user setting
+    one had it silently dropped and `cover()` / `occu_cover()` drove the same
+    engine with a working knob. The grids arrive as an argument now, and
+    `rho.grid` / `tau.grid` / `range.grid` join the allowlist beside
+    `sigma.grid`.
+  - **The SBC visit-design gate cannot be omitted.** Six community specs called
+    the structured-term gate and not the visit-design one, and one
+    (`occu_categorical`) called neither. On `ms_abun()`, whose binder stores
+    `X_det_visit` and appends its columns to the detection coefficient names
+    while `formulas$det` keeps only the site-level arm, that omission drew
+    theta from a posterior carrying visit-level coefficients and refit a model
+    that had none, with nothing in the ranks saying so. Both checks are one
+    call now, made by all twenty specs.
+  - **One ridge ladder behind every singular-Hessian retry in
+    `community_latent.R`**, replacing three that disagreed on the ridge scale,
+    the tier count and the failure value. The relative one guarded its second
+    tier on a finite mean diagonal and reused the same value unguarded on its
+    third, so a non-finite diagonal gave `max(NaN, 1e-6)` = NaN as the ridge --
+    in exactly the near-singular case the retry exists for. The field Newton
+    also applied its step unconditionally, so a non-finite step poisoned the
+    field, made `max(abs(step)) < tol` NA so the loop never broke early, and
+    reached the tau M-step with no error and no flag; it holds the step now,
+    as the factor Newton beside it already did.
+
+  The rest is duplication removed: eight family dispatchers restated a method
+  rejection `.tobs_validate_family_method()` already makes before dispatch
+  (each of those families lists exactly one method, so the branches were
+  unreachable); `.map_engine()` kept a second `nested_laplace` family list that
+  had drifted from the registry in both directions -- carrying two families
+  that dispatch directly and never reach it, missing seven the registry does
+  list -- and now reads the registry; and the positive-arm log density had
+  three boundary policies across R (`log_safe`, a raw `log`, and a clamp on the
+  RESPONSE), so at a cover of exactly 1 the NUTS oracle and the sampler it is
+  asserted byte-for-byte against differed by `-Inf` against a finite value. All
+  three now use the policy of the C++ kernel they mirror.
+
 * **API.md, `?tobs_terms` and three diagnostic doors match the package again
   (#278).** README calls API.md the full reference; it was 25 exports stale,
   named a `tobs_check` that does not exist, omitted `pg_gibbs` entirely and the

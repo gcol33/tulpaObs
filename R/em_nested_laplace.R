@@ -33,8 +33,16 @@
 #'   defaults around (`.NL_REGISTRY[[type]]$defaults`).
 #'
 #' @keywords internal
+# `grids` carries the caller's outer-grid overrides -- `sigma`, `rho`, `tau`,
+# `range` -- one named list for every block this prior builds. The block
+# builders below used to read those off the term object itself
+# (`spatial$sigma_grid`), and no constructor or binder ever wrote them there, so
+# the whole set of guards was dead and this route had no grid override at all
+# while `cover()` and `occu_cover()` drove the same engine with one. The names
+# are the `control$sigma.grid` / `rho.grid` / `tau.grid` / `range.grid` the
+# validator already admits on a nested-Laplace route.
 .tobs_to_multi_block_prior <- function(spatial = NULL, temporal = NULL,
-                                       re = NULL, model) {
+                                       re = NULL, model, grids = list()) {
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object", call. = FALSE)
   }
@@ -66,18 +74,20 @@
     sp_fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
     for (sf in sp_fields) {
       blocks <- c(blocks,
-                  list(.tobs_block_from_spatial(sf, n_sites, site_of_row, model)))
+                  list(.tobs_block_from_spatial(sf, n_sites, site_of_row,
+                                                model, grids)))
     }
   }
   if (!is.null(temporal)) {
     blocks <- c(blocks,
                 list(.tobs_block_from_temporal(temporal, model, n_sites,
-                                               site_of_row)))
+                                               site_of_row, grids)))
   }
   if (!is.null(re)) {
     for (r in re) {
       blocks <- c(blocks,
-                  list(.tobs_block_from_re(r, model, n_sites, site_of_row)))
+                  list(.tobs_block_from_re(r, model, n_sites, site_of_row,
+                                           grids)))
     }
   }
 
@@ -554,7 +564,7 @@
 # pass `*_grid` overrides directly via the tobs_* spec attributes (when
 # present) -- the helper passes them through if set.
 .tobs_block_from_spatial <- function(spatial, n_sites, site_of_row,
-                                     model = NULL) {
+                                     model = NULL, grids = list()) {
   if (!inherits(spatial, "tobs_spatial")) {
     stop("`spatial` must be a tobs_spatial object", call. = FALSE)
   }
@@ -592,8 +602,8 @@
       prior_range = as.numeric(sp$prior_range),
       prior_sigma = as.numeric(sp$prior_sigma)
     )
-    if (!is.null(spatial$range_grid)) out$range_grid <- as.numeric(spatial$range_grid)
-    if (!is.null(spatial$sigma_grid)) out$sigma_grid <- as.numeric(spatial$sigma_grid)
+    if (!is.null(grids$range)) out$range_grid <- as.numeric(grids$range)
+    if (!is.null(grids$sigma)) out$sigma_grid <- as.numeric(grids$sigma)
     return(out)
   }
   if (type %in% c("gp", "multiscale_gp")) {
@@ -673,8 +683,8 @@
     # this, where the term carries the Riebler constant.
     out$scale_factor <- if (is.null(spatial$scale_factor)) 1.0 else
       .bym2_engine_scale(as.numeric(spatial$scale_factor))
-    if (!is.null(spatial$sigma_grid)) out$sigma_grid <- spatial$sigma_grid
-    if (!is.null(spatial$rho_grid))   out$rho_grid   <- spatial$rho_grid
+    if (!is.null(grids$sigma)) out$sigma_grid <- grids$sigma
+    if (!is.null(grids$rho))   out$rho_grid   <- grids$rho
     if (is.null(out$sigma_grid) && is.null(out$rho_grid)) {
       sg <- exp(seq(log(0.2), log(2.0), length.out = 3))
       rg <- c(0.3, 0.7)
@@ -685,10 +695,10 @@
       out$rho_grid   <- tulpa::auto_grid(gr$rho)
     }
   } else if (type == "icar") {
-    if (!is.null(spatial$tau_grid)) out$tau_grid <- spatial$tau_grid
+    if (!is.null(grids$tau)) out$tau_grid <- grids$tau
   } else if (type == "car_proper") {
-    if (!is.null(spatial$tau_grid)) out$tau_grid <- spatial$tau_grid
-    if (!is.null(spatial$rho_grid)) out$rho_grid <- spatial$rho_grid
+    if (!is.null(grids$tau)) out$tau_grid <- grids$tau
+    if (!is.null(grids$rho)) out$rho_grid <- grids$rho
   }
   out
 }
@@ -697,7 +707,8 @@
 # Build a multi-block temporal block from a tobs_temporal spec. Resolves
 # the time variable from model$data when given as a string; passes integer
 # indices through. `model = "iid"` becomes an iid block (no Q assembly).
-.tobs_block_from_temporal <- function(temporal, model, n_sites, site_of_row) {
+.tobs_block_from_temporal <- function(temporal, model, n_sites, site_of_row,
+                                      grids = list()) {
   if (!inherits(temporal, "tobs_temporal")) {
     stop("`temporal` must be a tobs_temporal object", call. = FALSE)
   }
@@ -721,7 +732,7 @@
 
   if (type == "iid") {
     out <- list(type = "iid", obs_idx = time_idx, n_units = as.integer(n_times))
-    if (!is.null(temporal$sigma_grid)) out$sigma_grid <- temporal$sigma_grid
+    if (!is.null(grids$sigma)) out$sigma_grid <- grids$sigma
     return(out)
   }
 
@@ -731,9 +742,9 @@
     n_times      = as.integer(n_times)
   )
   if (type == "rw1") out$cyclic <- isTRUE(temporal$cyclic)
-  if (!is.null(temporal$tau_grid)) out$tau_grid <- temporal$tau_grid
+  if (!is.null(grids$tau)) out$tau_grid <- grids$tau
   if (type == "ar1") {
-    if (!is.null(temporal$rho_grid)) out$rho_grid <- temporal$rho_grid
+    if (!is.null(grids$rho)) out$rho_grid <- grids$rho
     if (is.null(out$tau_grid) && is.null(out$rho_grid)) {
       # 3 x 2 = 6 cells per block keeps a BYM2 + AR1 + IID combo under cap.
       tg <- exp(seq(log(0.5), log(20), length.out = 3))
@@ -751,7 +762,8 @@
 # A bare `tobs_re(group = "x")` (default model = "iid") becomes an iid block.
 # If the user asks for ar1/rw1/rw2 on the group, route through the temporal
 # block builder so the same dispatch logic handles both.
-.tobs_block_from_re <- function(re, model, n_sites, site_of_row) {
+.tobs_block_from_re <- function(re, model, n_sites, site_of_row,
+                                grids = list()) {
   if (!inherits(re, "tobs_re")) {
     stop("`re` element must be a tobs_re object", call. = FALSE)
   }
@@ -777,8 +789,8 @@
   model_name <- re$model %||% "iid"
   if (model_name == "iid") {
     out <- list(type = "iid", obs_idx = grp_idx, n_units = as.integer(n_units))
-    if (!is.null(re$sigma_grid)) {
-      out$sigma_grid <- re$sigma_grid
+    if (!is.null(grids$sigma)) {
+      out$sigma_grid <- grids$sigma
     } else {
       # 3-point grid keeps multi-block combos comfortably under the cap.
       out$sigma_grid <- tulpa::auto_grid(exp(seq(log(0.2), log(2.0), length.out = 3)))
@@ -788,7 +800,7 @@
     out <- list(type = model_name, temporal_idx = grp_idx,
                 n_times = as.integer(n_units))
     if (model_name == "rw1") out$cyclic <- FALSE
-    if (!is.null(re$tau_grid)) out$tau_grid <- re$tau_grid
+    if (!is.null(grids$tau)) out$tau_grid <- grids$tau
     out
   } else {
     stop("RE model '", model_name, "' is not supported by the multi-block ",
@@ -867,13 +879,15 @@
                                     max_iter = 25L, tol = 1e-3,
                                     damping = 0.3,
                                     heldout_state = NULL,
+                                    grids = list(),
                                     verbose = TRUE) {
   if (!inherits(model, "tobs_model")) {
     stop("model must be a tobs_model object", call. = FALSE)
   }
 
   multi_prior <- .tobs_to_multi_block_prior(
-    spatial = spatial, temporal = temporal, re = re, model = model
+    spatial = spatial, temporal = temporal, re = re, model = model,
+    grids = grids
   )
   if (is.null(multi_prior)) {
     stop("nested_laplace engine requires at least one latent block ",

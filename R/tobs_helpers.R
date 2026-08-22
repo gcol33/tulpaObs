@@ -479,7 +479,12 @@
   # intercept field, temporal / re structure), which the SVC reroute predicate
   # skips; admitted on the nested_laplace route so a SVC fit can tune the grid /
   # threading without a separate method name.
-  nested_laplace_joint = c("sigma.grid", "n.threads", "n.threads.outer",
+  nested_laplace_joint = c("sigma.grid",
+                           # The other three outer-grid axes a latent block
+                           # can carry: the mixing / correlation parameter,
+                           # the precision, and an SPDE range.
+                           "rho.grid", "tau.grid", "range.grid",
+                           "n.threads", "n.threads.outer",
                            "adaptive.grid", "adaptive.grid.edge.thresh",
                            "adaptive.grid.max.passes", "var.of.means.consistency",
                            "var.of.means.tolerance", "diagnose.k", "diagnose.draws",
@@ -619,16 +624,17 @@
 
 .map_engine <- function(engine, family = NULL) {
   # Engine name translation between the tobs vocabulary and what the underlying
-  # fitter currently understands. The nested-Laplace engine (`.tobs_fit_model()`
-  # -> `.tobs_em_nested_laplace()`) is wired for single-season, integrated,
-  # and dynamic occupancy; the per-family method registry
-  # (`.tobs_family_methods`) rejects `nested_laplace` for every other family
-  # before dispatch, so reaching here with an unsupported family is an internal
-  # mis-wire rather than a user error to downgrade silently.
+  # fitter currently understands.
+  #
+  # Which families the nested-Laplace engine serves is `.tobs_family_methods`'s
+  # answer, read here rather than restated: the two lists had already drifted
+  # apart in both directions, this one carrying two families that dispatch
+  # directly and never reach it, and missing seven the registry does list.
+  # `tobs()` runs `.tobs_validate_family_method()` before dispatch, so an
+  # unsupported family arriving here is an internal mis-wire rather than a user
+  # error to downgrade silently.
   if (engine == "nested_laplace") {
-    if (family %in% c("occu", "int_occu", "dyn_occu", "abun", "removal",
-                       "distance", "dyn_abun", "fp_occu", "occu_cover",
-                       "occu_multiscale_cover", "dyn_int_occu")) {
+    if (isTRUE("nested_laplace" %in% .tobs_family_methods[[family]])) {
       return("nested_laplace")
     }
     stop(sprintf(

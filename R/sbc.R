@@ -465,11 +465,24 @@
 #   truth and every reference are scored in ONE kernel call.
 # ---------------------------------------------------------------------------
 
+# The two rejections every registered spec needs, in ONE call so a spec cannot
+# carry one and omit the other.
+#
 # A structured term makes a latent quantity that theta does not carry shared
-# across sites, which is the one thing this construction denies. Refused with a
-# pointer rather than scored on the coefficients alone, which would report a
+# across sites, which is the one thing this construction denies. A visit-level
+# observation design is rebuilt by no family's simulate() kernel, so the refit
+# would score coefficients absent from the data it sees. Either is refused with
+# a pointer rather than scored on the coefficients alone, which would report a
 # calibration the experiment did not measure.
-.tobs_sbc_reject_structure <- function(fit) {
+#
+# Six community specs called the structure gate and not the visit one; on
+# ms_abun(), whose binder stores `X_det_visit` and appends its columns to the
+# detection coefficient names while `formulas$det` keeps only the site-level
+# arm, that omission drew theta from a posterior carrying visit-level
+# coefficients and refit a model that had none, with nothing in the ranks
+# saying so.
+.tobs_sbc_reject_unsupported <- function(fit) {
+  .tobs_sbc_reject_visit_design(fit)
   st <- fit$model$structured_terms
   present <- character(0)
   if (is.list(st)) present <- names(Filter(Negate(is.null), st))
@@ -533,8 +546,7 @@
 }
 
 .tobs_sbc_spec_simple <- function(fit, fit.control, state, det) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   if (is.null(m$formulas[[state]])) {
     stop("SBC rebuilds the fitting call from the model's own arm formulas; ",
@@ -859,8 +871,7 @@
 }
 
 .tobs_sbc_spec_dyn_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   .tobs_sbc_reject_season_varying(fit)
   m <- fit$model
   list(model   = m,
@@ -973,8 +984,7 @@
 }
 
 .tobs_sbc_spec_dyn_abun <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   .tobs_sbc_reject_dyn_abun_season_varying(fit)
   m <- fit$model
   list(model     = m,
@@ -1014,8 +1024,7 @@
 }
 
 .tobs_sbc_spec_int_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   full <- vapply(seq_len(m$n_sources), function(s)
     identical(as.integer(m$site_maps[[s]]), seq_len(m$n_sites) - 1L), logical(1))
@@ -1110,8 +1119,7 @@
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_gdistremoval <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model   = m,
        fit_obs = fit,
@@ -1215,6 +1223,7 @@
 }
 
 .tobs_sbc_spec_occu_categorical <- function(fit, fit.control) {
+  .tobs_sbc_reject_unsupported(fit)
   list(formula = fit$encoding$formula, class_labels = fit$class_labels,
        control = utils::modifyList(list(), as.list(fit.control)),
        fit_obs = fit)
@@ -1317,8 +1326,7 @@
 }
 
 .tobs_sbc_spec_distsamp_open <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   .tobs_sbc_reject_distsamp_open_scope(fit)
   m <- fit$model
   list(model     = m,
@@ -1370,8 +1378,7 @@
 }
 
 .tobs_sbc_spec_occu_multi <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model     = m,
        fit_obs   = fit,
@@ -1443,8 +1450,7 @@
 }
 
 .tobs_sbc_spec_dyn_int_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model     = m,
        fit_obs   = fit,
@@ -1516,8 +1522,7 @@
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_t_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model   = m,
        fit_obs = fit,
@@ -1664,8 +1669,7 @@
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_ms_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model   = m,
        fit_obs = fit,
@@ -1751,8 +1755,7 @@
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_ms_occu_cover <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   if (!identical(m$positive, "lognormal")) {
     stop("SBC on ms_occu_cover() is registered for positive = \"lognormal\" ",
@@ -1847,7 +1850,7 @@
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_cover <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   if (!identical(fit$positive, "lognormal")) {
     stop("SBC on cover() is registered for positive = \"lognormal\" only ",
          "(got \"", fit$positive, "\"); the beta/beta_oi/lognormal_trunc/",
@@ -1952,7 +1955,7 @@
 }
 
 .tobs_sbc_spec_ms_int_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   full <- vapply(m$site_maps, function(mp)
     identical(as.integer(mp), seq_len(m$n_sites)), logical(1))
@@ -2056,8 +2059,7 @@
 }
 
 .tobs_sbc_spec_occu_mscale_cover <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
-  .tobs_sbc_reject_visit_design(fit)
+  .tobs_sbc_reject_unsupported(fit)
   .tobs_sbc_reject_occu_mscale_cover_scope(fit)
   m <- fit$model
   list(model   = m,
@@ -2177,7 +2179,7 @@
 }
 
 .tobs_sbc_spec_ms_count <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   if (!identical(m$response, "poisson")) {
     stop("SBC on ms_count() is registered for response = \"poisson\" only ",
@@ -2229,7 +2231,7 @@
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_jsdm <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model   = m,
        fit_obs = fit,
@@ -2289,7 +2291,7 @@
 }
 
 .tobs_sbc_spec_ms_distance <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   .tobs_sbc_reject_ms_distance_scope(fit)
   m <- fit$model
   list(model     = m,
@@ -2393,7 +2395,7 @@
 }
 
 .tobs_sbc_spec_ms_dyn_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   m <- fit$model
   list(model   = m,
        fit_obs = fit,
@@ -2490,7 +2492,7 @@
 # theta column names: `<species>_lambda_<coef>` / `<species>_p_<coef>`, one
 # block of length P per species, species-major.
 .tobs_sbc_spec_ms_abun <- function(fit, fit.control) {
-  .tobs_sbc_reject_structure(fit)
+  .tobs_sbc_reject_unsupported(fit)
   .tobs_sbc_reject_ms_abun_scope(fit)
   m <- fit$model
   cm <- fit$ms_community

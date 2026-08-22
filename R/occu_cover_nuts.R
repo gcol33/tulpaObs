@@ -335,7 +335,12 @@
         ev <- eta_pos[i, v]; yy <- y_pos[i, v]
         if (pos_code == 3L) {            # beta
           mu <- sgm(ev); a <- mu * disp; b <- (1 - mu) * disp
-          ly <- log(yy); l1my <- log(1 - yy)
+          # `.tobs_log_safe`, matching src/tobs_math.h::log_safe, which the
+          # C++ target this oracle is asserted byte-for-byte against uses. A
+          # raw log() made the two differ by -Inf against a finite value at a
+          # cover of exactly 0 or 1, so an FD gradient check on boundary data
+          # compared a different function than the sampler ran.
+          ly <- .tobs_log_safe(yy); l1my <- .tobs_log_safe(1 - yy)
           lp_data <- lp_data + lgamma(disp) - lgamma(a) - lgamma(b) +
                      (a - 1) * ly + (b - 1) * l1my
           g_eta_pos[i, v] <- disp * mu * (1 - mu) *
@@ -344,12 +349,14 @@
                        (1 - mu) * digamma(b) + mu * ly + (1 - mu) * l1my)
         } else if (pos_code == 4L) {     # identity-Gaussian (#112): raw response
           sig <- disp; r <- (yy - ev) / sig
-          lp_data <- lp_data - log(sig) - 0.5 * log(2 * pi) - 0.5 * r * r
+          lp_data <- lp_data - .tobs_log_safe(sig) -
+                     0.5 * log(2 * pi) - 0.5 * r * r
           g_eta_pos[i, v] <- r / sig
           g_logdisp <- g_logdisp + (r * r - 1)
         } else {                         # lognormal: Gaussian on log(cover)
-          sig <- disp; r <- (log(yy) - ev) / sig
-          lp_data <- lp_data - log(yy) - log(sig) - 0.5 * log(2 * pi) - 0.5 * r * r
+          sig <- disp; lyy <- .tobs_log_safe(yy); r <- (lyy - ev) / sig
+          lp_data <- lp_data - lyy - .tobs_log_safe(sig) -
+                     0.5 * log(2 * pi) - 0.5 * r * r
           g_eta_pos[i, v] <- r / sig
           g_logdisp <- g_logdisp + (r * r - 1)
         }

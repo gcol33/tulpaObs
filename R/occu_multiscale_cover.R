@@ -265,17 +265,14 @@
   cover_lf <- matrix(0, n_plots, J)
   if (any(det_v)) {
     ep <- eta_pos[det_v]; cv <- ypos[det_v]
-    if (is_beta) {
-      phi <- exp(par[idx$disp]); mu <- clp(stats::plogis(ep))
-      cvc <- pmin(pmax(cv, 1e-9), 1 - 1e-9)
-      cover_lf[det_v] <- stats::dbeta(cvc, mu * phi, (1 - mu) * phi, log = TRUE)
-    } else if (is_gauss) {
-      sigma <- exp(par[idx$disp])
-      cover_lf[det_v] <- stats::dnorm(cv, ep, sigma, log = TRUE)
-    } else {
-      sigma <- exp(par[idx$disp])
-      cover_lf[det_v] <- stats::dnorm(log(cv), ep, sigma, log = TRUE) - log(cv)
-    }
+    # One boundary policy for the positive arm, shared with the coupling
+    # kernel and the samplers: `.tobs_log_safe` on every log, no clamp on the
+    # RESPONSE. Nudging the cover to 1e-9 evaluated a density at a value the
+    # data does not carry; the shared policy keeps the density finite at a
+    # cover of exactly 0 or 1 and leaves the response alone.
+    cover_lf[det_v] <- .occu_cover_pos_logdens(
+      cv, ep, exp(par[idx$disp]),
+      if (is_beta) "beta" else if (is_gauss) "gaussian" else "lognormal")
   }
 
   sum_hdet  <- rowSums(log_hdet)

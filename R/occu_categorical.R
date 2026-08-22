@@ -93,10 +93,6 @@
                                        visits, engine, priors, control,
                                        approx = "gaussian_laplace",
                                        correction = "none", ...) {
-  if (!identical(engine, "laplace")) {
-    stop("occu_categorical() currently supports method = 'laplace' only (got '",
-         engine, "'). Spatial / NUTS paths are not yet wired.", call. = FALSE)
-  }
   if (!is.null(detection)) {
     stop("occu_categorical() does not use a `detection` formula ",
          "(one observation per unit). Drop it.", call. = FALSE)

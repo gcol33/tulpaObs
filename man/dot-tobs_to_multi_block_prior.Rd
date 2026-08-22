@@ -4,7 +4,13 @@
 \alias{.tobs_to_multi_block_prior}
 \title{Build a multi-block latent prior list for tulpa::tulpa_nested_laplace()}
 \usage{
-.tobs_to_multi_block_prior(spatial = NULL, temporal = NULL, re = NULL, model)
+.tobs_to_multi_block_prior(
+  spatial = NULL,
+  temporal = NULL,
+  re = NULL,
+  model,
+  grids = list()
+)
 }
 \arguments{
 \item{spatial}{Optional \code{tobs_spatial} term (from an \code{icar()} / \code{bym2()}

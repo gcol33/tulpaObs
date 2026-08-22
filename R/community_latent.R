@@ -718,6 +718,32 @@
 # (k,l) block M diag(W[,k] W[,l] curv) M' + (k==l) tau_k Q), then a per-field
 # closed-form tau M-step. Each field is demeaned: the intrinsic null space is the
 # constant and the fixed effects own the level.
+# One ridge ladder for every singular-Hessian retry in this file: the field
+# Newton, the field covariance and the factor Newton. They used to be written
+# three times with different ridges (relative vs absolute), different tier
+# counts and different failure values, and the relative one reused an unguarded
+# mean diagonal in its last tier -- so a non-finite `d` gave `max(NaN, 1e-6)`
+# = NaN as the ridge, in exactly the near-singular case the retry exists for.
+#
+# Tiers are relative-then-absolute against the mean diagonal, each guarded.
+# `g` absent solves for the inverse. A solve that fails at every tier returns
+# NA (matching what the factor Newton's callers already test) rather than
+# throwing, so the caller decides.
+.tobs_ridge_solve <- function(H, g = NULL) {
+  n  <- nrow(H)
+  d  <- mean(Matrix::diag(H))
+  dd <- if (is.finite(d) && d > 0) d else 1
+  out <- function(r) {
+    Hr <- if (is.null(r)) H else H + Matrix::Diagonal(n, r)
+    if (is.null(g)) Matrix::solve(Hr) else as.numeric(Matrix::solve(Hr, g))
+  }
+  for (r in list(NULL, 1e-8 * dd, max(1e-4 * dd, 1e-6))) {
+    v <- tryCatch(out(r), error = function(e) NULL)
+    if (!is.null(v)) return(v)
+  }
+  if (is.null(g)) NULL else rep(NA_real_, length(g))
+}
+
 .tobs_latent_field_solve <- function(oracle, eta_base, Q, F, tau, W, M = NULL,
                                      max_iter = 50L, tol = 1e-8,
                                      constrain_mean = TRUE, rankdef = 1L) {
@@ -740,22 +766,18 @@
   # that makes H full rank -- a small tau then leaves H near-singular and the
   # factorization fails. Retry with a tiny relative ridge (the same guard the
   # BYM2 solve uses for its intrinsic null direction).
-  safe_solve <- function(H, g) {
-    tryCatch(as.numeric(Matrix::solve(H, g)), error = function(e) {
-      d <- mean(Matrix::diag(H))
-      r <- if (is.finite(d) && d > 0) 1e-8 * d else 1e-8
-      tryCatch(as.numeric(Matrix::solve(H + Matrix::Diagonal(nrow(H), r), g)),
-               error = function(e2)
-                 as.numeric(Matrix::solve(
-                   H + Matrix::Diagonal(nrow(H), max(1e-4 * d, 1e-6)), g)))
-    })
-  }
+  safe_solve <- function(H, g) .tobs_ridge_solve(H, g)
   for (it in seq_len(max_iter)) {
     wk <- oracle$working(eta_base + field_off_of(F))
     sc <- rowSums(wk$score); cw <- rowSums(wk$curv)
     g  <- unlist(lapply(seq_len(K), function(k)
       as.numeric(M %*% (W[, k] * sc)) - tau[k] * as.numeric(Q %*% F[, k])))
     step <- safe_solve(build_H(cw), g)
+    # A non-finite step is held rather than applied: adding it would poison F,
+    # make `max(abs(step)) < tol` NA so the loop never breaks early, and reach
+    # the tau M-step with no error and no flag. The factor Newton below guards
+    # the same way.
+    if (!all(is.finite(step))) break
     F <- F + matrix(step, Nn, K)
     if (isTRUE(constrain_mean)) {
       for (k in seq_len(K)) F[, k] <- F[, k] - mean(F[, k])
@@ -770,12 +792,7 @@
   cw  <- rowSums(if (is.null(oracle$cov_curv)) oracle$working(eta_full)$curv
                  else oracle$cov_curv(eta_full))
   Hc  <- build_H(cw)
-  Cov <- tryCatch(Matrix::solve(Hc), error = function(e) {
-    d <- mean(Matrix::diag(Hc))
-    Matrix::solve(Hc + Matrix::Diagonal(nrow(Hc),
-                                        if (is.finite(d) && d > 0) 1e-8 * d
-                                        else 1e-8))
-  })
+  Cov <- .tobs_ridge_solve(Hc)
   tau_new <- numeric(K)
   df <- Nn - as.integer(rankdef)
   for (k in seq_len(K)) {
@@ -911,11 +928,7 @@
 
   # Newton step against the curvature the family supplies, bumped by a small
   # ridge when that curvature is singular.
-  nstep <- function(H, g) {
-    tryCatch(as.numeric(solve(H, g)), error = function(e)
-      tryCatch(as.numeric(solve(H + diag(1e-6, nrow(H)), g)),
-               error = function(e2) rep(NA_real_, length(g))))
-  }
+  nstep <- function(H, g) .tobs_ridge_solve(H, g)
 
   # A Newton step is not guaranteed to ascend: the count marginals (N-mixture,
   # distance) are exp-linked, so an overshoot drives exp(eta) past overflow and

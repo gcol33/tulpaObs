@@ -61,6 +61,8 @@
 # Returns a `tobs_fit`; the caller (`.tobs_fit_model`) transforms the per-process
 # betas / SEs / draws back to natural scale via `.unscale_fit_per_process`.
 .tobs_fit_count_spatial <- function(model, spatial, max_iter = 50L, tol = 1e-6,
+                                    sigma.grid = NULL, rho.grid = NULL,
+                                    tau.grid = NULL, range.grid = NULL,
                                     verbose = FALSE, ...) {
   if (!identical(model$model_type, "count")) {
     stop("`.tobs_fit_count_spatial` expects a count model.", call. = FALSE)
@@ -78,7 +80,9 @@
          "a one-scale NNGP field, or spde() for a mesh-based continuous Matern ",
          "field with a reconstructed per-cell map.", call. = FALSE)
   }
-  prior <- .tobs_to_multi_block_prior(spatial = spatial, model = model)
+  prior <- .tobs_to_multi_block_prior(
+    spatial = spatial, model = model,
+    grids = .tobs_outer_grids(sigma.grid, rho.grid, tau.grid, range.grid))
   if (is.null(prior)) {
     stop("Areal count needs an areal field block (icar / car_proper); none was ",
          "resolved from the spatial term.", call. = FALSE)

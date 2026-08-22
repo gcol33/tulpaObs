@@ -233,8 +233,6 @@
   if (!is.null(visits))
     stop("gdistremoval() detection is site-level; visit-level covariates ",
          "(`visits`) are not yet supported.", call. = FALSE)
-  if (!identical(.map_engine(engine, family = "gdistremoval"), "laplace"))
-    stop("gdistremoval() supports method = \"laplace\" only.", call. = FALSE)
   cutpoints <- family$params$cutpoints
   if (is.null(cutpoints))
     stop("gdistremoval() requires `cutpoints` (the distance-bin edges); pass ",

@@ -32,6 +32,10 @@
   K.max = NULL,
   mixture = "poisson",
   integration = c("grid", "ccd"),
+  sigma.grid = NULL,
+  rho.grid = NULL,
+  tau.grid = NULL,
+  range.grid = NULL,
   verbose = TRUE,
   ...
 )

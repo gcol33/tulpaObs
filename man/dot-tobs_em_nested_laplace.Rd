@@ -15,6 +15,7 @@
   tol = 0.001,
   damping = 0.3,
   heldout_state = NULL,
+  grids = list(),
   verbose = TRUE
 )
 }
