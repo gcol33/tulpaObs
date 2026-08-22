@@ -187,22 +187,37 @@ csr_to_adjacency <- function(csr, n) {
 # Nearest-neighbor structure for the NNGP approximation: for each location
 # (in a coordinate ordering) its `k` nearest predecessors, their distances,
 # and the pairwise distances among those neighbors.
+#
+# Every step reads whatever coordinate dimension it is handed. The neighbour
+# SELECTION here and the neighbour COVARIANCE the kernels build from it have to
+# be computed under the same metric, and the kernels read every column
+# (gcol33/tulpa#389), so a selection pinned to two columns would order by a
+# projection of the domain the covariance does not use.
 compute_nngp_neighbors <- function(coords, k) {
   N <- nrow(coords)
-  order_idx <- order(coords[, 1], coords[, 2])
+  d <- ncol(coords)
+
+  # Lexicographic ordering over every coordinate column: a valid NNGP ordering
+  # that conditions better than the raw input order.
+  order_idx <- do.call(order, lapply(seq_len(d), function(j) coords[, j]))
   coords_ordered <- coords[order_idx, , drop = FALSE]
 
   nn_idx <- matrix(0L, nrow = N, ncol = k)
   nn_dist <- matrix(Inf, nrow = N, ncol = k)
   nn_neighbor_dist <- array(0, dim = c(N, k, k))
 
-  for (i in 2:N) {
+  # `seq_len(N)[-1]` is empty at N <= 1, where `2:N` counts DOWN to c(2, 1) and
+  # indexes a row that does not exist.
+  for (i in seq_len(N)[-1]) {
     n_candidates <- min(i - 1, k)
     if (n_candidates > 0) {
-      dists <- sqrt(
-        (coords_ordered[1:(i-1), 1] - coords_ordered[i, 1])^2 +
-        (coords_ordered[1:(i-1), 2] - coords_ordered[i, 2])^2
-      )
+      # Euclidean distance from every earlier location to this one. The point is
+      # laid out column-major by `each = `, the layout `prev` already has, so
+      # this is one vectorised subtraction rather than a sweep.
+      prev <- coords_ordered[1:(i-1), , drop = FALSE]
+      dists <- sqrt(rowSums(
+        (prev - rep(as.numeric(coords_ordered[i, ]), each = nrow(prev)))^2
+      ))
 
       if (length(dists) <= k) {
         nn_order <- order(dists)
@@ -218,16 +233,10 @@ compute_nngp_neighbors <- function(coords, k) {
       if (n_neighbors > 1) {
         neighbor_indices <- nn_idx[i, 1:n_neighbors]
         neighbor_coords <- coords_ordered[neighbor_indices, , drop = FALSE]
-        for (j1 in 1:n_neighbors) {
-          for (j2 in 1:n_neighbors) {
-            if (j1 != j2) {
-              nn_neighbor_dist[i, j1, j2] <- sqrt(
-                (neighbor_coords[j1, 1] - neighbor_coords[j2, 1])^2 +
-                (neighbor_coords[j1, 2] - neighbor_coords[j2, 2])^2
-              )
-            }
-          }
-        }
+        # The whole pairwise block in one assignment, over every coordinate
+        # column. The diagonal is exactly 0 by construction.
+        nn_neighbor_dist[i, seq_len(n_neighbors), seq_len(n_neighbors)] <-
+          as.matrix(stats::dist(neighbor_coords))
       }
     }
   }
