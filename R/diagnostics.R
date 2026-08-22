@@ -43,18 +43,29 @@
 #'   `"obs"` (default) is the family's pointwise unit -- one column of the
 #'   log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
 #'   to the call without the argument. `"cell"` switches to leave-one-group-out
-#'   cross-validation (LOGO-CV): the fit's own per-observation cell map is
-#'   supplied to [tulpa::tulpa_criteria()] as `group`, so each spatial cell is one
-#'   fold instead of each plot / site. Implemented for `cover()` (the areal field
-#'   node, when sites are grouped via `group_var`) and `occu_cover()` (the
-#'   `site_cell` map); a non-spatial fit has no cells, so `"cell"` errors there.
-#'   Equivalent to passing `group =` the cell map directly, without hand-building
-#'   it.
+#'   cross-validation (LOGO-CV): the fit's own per-observation cell map folds the
+#'   log-likelihood columns of a spatial cell into one, so each cell is a fold
+#'   instead of each plot / site. `waic()` and `cpo()` hand the map to
+#'   [tulpa::tulpa_criteria()] as `group`; `loo()` applies the same fold itself
+#'   and runs PSIS on the resulting `[n_draws x n_cells]` matrix, whose column is
+#'   the cell's joint conditional log-likelihood per draw, so the importance
+#'   ratio inverts the whole cell's likelihood. A whole cell is a larger
+#'   perturbation of the posterior than a single row, so the Pareto k values are
+#'   correspondingly higher and are the diagnostic to read before trusting the
+#'   cell-level number. Implemented for `cover()` (the areal field node, when
+#'   sites are grouped via `group_var`) and `occu_cover()` (the `site_cell` map);
+#'   a non-spatial fit has no cells, so `"cell"` errors there. Equivalent to
+#'   passing `group =` the cell map directly, without hand-building it. `dic()`
+#'   has no cross-validation unit -- it is a plug-in deviance over all
+#'   observations -- and rejects `loo.unit`.
 #' @param ... Forwarded to [tulpa::tulpa_criteria()] (e.g. `chunk_size`, or an
-#'   explicit `group =` for a custom leave-one-group-out unit).
+#'   explicit `group =` for a custom leave-one-group-out unit). `loo()` builds
+#'   its object through [loo::loo()] rather than the criteria layer, so it reads
+#'   `group =` and ignores the rest.
 #' @return `dic()` and `cpo()` return a `tulpa_criteria` object; `waic()`
 #'   returns one carrying `$elpd` as an alias for `elpd_waic`. `loo()` returns
-#'   a `loo` object from the \pkg{loo} package.
+#'   a `loo` object from the \pkg{loo} package, carrying the cross-validation
+#'   unit it scored in its `"loo_unit"` attribute.
 #' @seealso [tulpa::tulpa_criteria()], [loo::loo_compare()]
 #' @name tobs_criteria
 NULL
@@ -75,18 +86,34 @@ waic.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
 
 # The PSIS door. loo::loo() wants the pointwise matrix and the relative
 # effective sample sizes off the chain layout, which is what the stacking path
-# assembles per member, so both go through `.tobs_loo_one()`.
+# assembles per member, so both go through `.tobs_loo_one()`. The LOO unit is one
+# column of that matrix, so `loo.unit` acts on the matrix rather than on the
+# call: the group resolved by `.tobs_criteria_group()` folds the columns before
+# PSIS sees them, and the fold count becomes the number of PSIS folds.
 #' @rdname tobs_criteria
 #' @export
-loo.tobs_fit <- function(x, n.draws = 1000L, n.threads = NULL, ...) {
+loo.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
+                         n.threads = NULL, ...) {
+  loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
-  .tobs_loo_one(ll_mat, x$chain_id)
+  dots <- .tobs_criteria_group(x, loo.unit, list(...))
+  out <- .tobs_loo_one(.tobs_loglik_fold_group(ll_mat, dots$group), x$chain_id)
+  attr(out, "loo_unit") <- loo.unit
+  out
 }
 
 #' @rdname tobs_criteria
 #' @export
 dic.tobs_fit <- function(object, n.draws = 1000L, n.threads = NULL, ...) {
+  # DIC is a plug-in deviance over all observations, so it has no fold and
+  # tulpa_criteria() takes no `loo.unit`. Reject it at the door rather than
+  # letting it reach that call as an unused argument.
+  if ("loo.unit" %in% names(list(...))) {
+    stop("`dic()` has no cross-validation unit: DIC is a plug-in deviance over ",
+         "all observations, unaffected by the LOO fold. `loo.unit` applies to ",
+         "waic(), loo() and cpo().", call. = FALSE)
+  }
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
   lam <- .tobs_loglik_at_mean(object, n.draws = n.draws)
@@ -119,7 +146,7 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # each cell's pointwise log-likelihood columns into one fold. The cell map is
 # auto-supplied from the fit, so the caller need not hand-build it. The
 # loo.unit -> group plumbing and the explicit-`group` conflict check live here so
-# waic() / cpo() share one path; "obs" leaves `...` untouched (so an
+# waic() / loo() / cpo() share one path; "obs" leaves `...` untouched (so an
 # explicit `group =` still flows through, byte-identical to the ungrouped call).
 .tobs_criteria_group <- function(object, loo.unit, dots) {
   if (identical(loo.unit, "obs")) return(dots)
@@ -138,9 +165,30 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   dots
 }
 
+# The group fold on the PSIS side. tulpa_criteria() reduces a grouped call
+# internally, but loo::loo() scores the matrix it is handed, so the same
+# reduction is applied here first: sum each group's per-draw pointwise
+# log-likelihoods into one column, giving the group's joint conditional
+# log-likelihood given each draw. PSIS on that column is leave-one-group-out --
+# the importance ratio is 1 / p(y_group | theta_s) instead of
+# 1 / p(y_i | theta_s). Column order follows sort(unique(group)), the same order
+# factor(group) gives tulpa_criteria(), so the two agree fold for fold. A NULL
+# group is the ungrouped matrix, returned untouched.
+.tobs_loglik_fold_group <- function(ll, group = NULL) {
+  if (is.null(group)) return(ll)
+  if (length(group) != ncol(ll)) {
+    stop("`group` must have length n_obs = ", ncol(ll), "; got ", length(group),
+         ".", call. = FALSE)
+  }
+  folded <- t(rowsum(t(ll), group = group, reorder = TRUE))
+  dimnames(folded) <- NULL
+  folded
+}
+
 # Per-observation -> cell map matching the column order of the family's pointwise
 # log-likelihood (.tobs_pointwise_loglik). cpo() / waic() pass it as
-# tulpa_criteria(group =) for cell-level LOGO-CV. Each .tobs_ploglik_* builder
+# tulpa_criteria(group =) and loo() folds the matrix by it, both for cell-level
+# LOGO-CV. Each .tobs_ploglik_* builder
 # fixes its own column order, so the map is family-specific:
 #   * cover()      -- columns are the occupancy-arm rows (enc$occ_data$y order);
 #                     spi_full is the per-row spatial node (cell) in that order.

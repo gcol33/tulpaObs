@@ -272,7 +272,7 @@
     stop("ppc() is not defined for cover(response = \"gaussian\"): the ",
          "Freeman-Tukey and chi-squared discrepancies assume a non-negative ",
          "response, but the identity-Gaussian arm is unbounded. Use waic() ",
-         "/ tobs_loo() for model comparison.", call. = FALSE)
+         "/ loo() for model comparison.", call. = FALSE)
   }
   e <- .tobs_cover_eta_draws(object, n.draws = n.samples)
   S <- nrow(e$eta_occ)

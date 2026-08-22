@@ -10,7 +10,7 @@
 \usage{
 \method{waic}{tobs_fit}(x, n.draws = 1000L, loo.unit = c("obs", "cell"), n.threads = NULL, ...)
 
-\method{loo}{tobs_fit}(x, n.draws = 1000L, n.threads = NULL, ...)
+\method{loo}{tobs_fit}(x, n.draws = 1000L, loo.unit = c("obs", "cell"), n.threads = NULL, ...)
 
 \method{dic}{tobs_fit}(object, n.draws = 1000L, n.threads = NULL, ...)
 
@@ -33,13 +33,21 @@ the first \code{n.draws} stored draws). Default 1000.}
 \code{"obs"} (default) is the family's pointwise unit -- one column of the
 log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
 to the call without the argument. \code{"cell"} switches to leave-one-group-out
-cross-validation (LOGO-CV): the fit's own per-observation cell map is
-supplied to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} as \code{group}, so each spatial cell is one
-fold instead of each plot / site. Implemented for \code{cover()} (the areal field
-node, when sites are grouped via \code{group_var}) and \code{occu_cover()} (the
-\code{site_cell} map); a non-spatial fit has no cells, so \code{"cell"} errors there.
-Equivalent to passing \verb{group =} the cell map directly, without hand-building
-it.}
+cross-validation (LOGO-CV): the fit's own per-observation cell map folds the
+log-likelihood columns of a spatial cell into one, so each cell is a fold
+instead of each plot / site. \code{waic()} and \code{cpo()} hand the map to
+\code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} as \code{group}; \code{loo()} applies the same fold itself
+and runs PSIS on the resulting \verb{[n_draws x n_cells]} matrix, whose column is
+the cell's joint conditional log-likelihood per draw, so the importance
+ratio inverts the whole cell's likelihood. A whole cell is a larger
+perturbation of the posterior than a single row, so the Pareto k values are
+correspondingly higher and are the diagnostic to read before trusting the
+cell-level number. Implemented for \code{cover()} (the areal field node, when
+sites are grouped via \code{group_var}) and \code{occu_cover()} (the \code{site_cell} map);
+a non-spatial fit has no cells, so \code{"cell"} errors there. Equivalent to
+passing \verb{group =} the cell map directly, without hand-building it. \code{dic()}
+has no cross-validation unit -- it is a plug-in deviance over all
+observations -- and rejects \code{loo.unit}.}
 
 \item{n.threads}{Threads for the parallel \code{occu_cover()} pointwise
 log-likelihood (the compact / ragged path). The draw loop is embarrassingly
@@ -48,12 +56,15 @@ parallel, so this is the WAIC / LOO analogue of the fit's \code{n.threads.outer}
 fit's own outer-grid default; other families ignore it.}
 
 \item{...}{Forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} (e.g. \code{chunk_size}, or an
-explicit \verb{group =} for a custom leave-one-group-out unit).}
+explicit \verb{group =} for a custom leave-one-group-out unit). \code{loo()} builds
+its object through \code{\link[loo:loo]{loo::loo()}} rather than the criteria layer, so it reads
+\verb{group =} and ignores the rest.}
 }
 \value{
 \code{dic()} and \code{cpo()} return a \code{tulpa_criteria} object; \code{waic()}
 returns one carrying \verb{$elpd} as an alias for \code{elpd_waic}. \code{loo()} returns
-a \code{loo} object from the \pkg{loo} package.
+a \code{loo} object from the \pkg{loo} package, carrying the cross-validation
+unit it scored in its \code{"loo_unit"} attribute.
 }
 \description{
 \code{waic()}, \code{loo()}, \code{dic()}, and \code{cpo()} on a \code{tobs_fit} build the family

@@ -624,7 +624,7 @@
     stop("ppc() is not defined for occu_cover(response = \"gaussian\"): the ",
          "Freeman-Tukey and chi-squared discrepancies assume a non-negative ",
          "response, but the identity-Gaussian arm is unbounded. Use waic() ",
-         "/ tobs_loo() for model comparison.", call. = FALSE)
+         "/ loo() for model comparison.", call. = FALSE)
   }
   pos_code <- .occu_cover_pos_code(positive)
   c0   <- .tobs_occu_cover_components(object, n.samples)
